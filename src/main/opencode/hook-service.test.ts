@@ -114,8 +114,10 @@ describe('OpenCode hook plugin source', () => {
     const source = _internals.getOpenCodePluginSource()
 
     expect(source).toContain(
-      'await post("MessagePart", { role, text: part.text, messageID: part.messageID, sessionID });'
+      'await post("MessagePart", { role, text: capMessagePartText(part.text), messageID: part.messageID, sessionID });'
     )
+    expect(source).toContain('messageID: pending.messageID,')
+    expect(source).toContain('sessionID: pending.sessionID,')
     expect(source).toContain('await setStatus("busy", { sessionID });')
     expect(source.match(/await setStatus\("idle", \{ sessionID \}\);/g) ?? []).toHaveLength(2)
   })

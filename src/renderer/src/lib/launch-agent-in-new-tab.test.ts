@@ -95,6 +95,21 @@ describe('launchAgentInNewTab', () => {
     })
   })
 
+  it('passes quick command labels only to locally-created agent tabs', async () => {
+    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
+
+    launchAgentInNewTab({
+      agent: 'codex',
+      worktreeId: 'wt-1',
+      quickCommandLabel: 'Review'
+    })
+
+    expect(mockCreateTab).toHaveBeenCalledWith('wt-1', undefined, undefined, {
+      launchAgent: 'codex',
+      quickCommandLabel: 'Review'
+    })
+  })
+
   it('delegates agent quick launch to the host runtime in paired web clients', async () => {
     mockIsWebRuntimeSessionActive.mockReturnValue(true)
     store.settings = { agentCmdOverrides: {}, activeRuntimeEnvironmentId: 'web-runtime' }

@@ -17,7 +17,7 @@ import {
   getAgentCatalogForAction,
   getSourceControlAgentArgsPlaceholder
 } from './source-control-action-recipe-options'
-import { COMMIT_MESSAGE_AI_PANE_SEARCH_ENTRIES } from './commit-message-ai-search'
+import { getCommitMessageAiPaneSearchEntries } from './commit-message-ai-search'
 import { TooltipProvider } from '../ui/tooltip'
 
 function renderPane(settings: GlobalSettings): string {
@@ -313,7 +313,7 @@ describe('CommitMessageAiPane', () => {
   })
 
   it('keeps action recipes discoverable in settings search metadata', () => {
-    const actionRecipesEntry = COMMIT_MESSAGE_AI_PANE_SEARCH_ENTRIES.find(
+    const actionRecipesEntry = getCommitMessageAiPaneSearchEntries().find(
       (entry) => entry.title === 'Action recipes'
     )
 

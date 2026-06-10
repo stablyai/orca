@@ -9,21 +9,43 @@ import {
   getCommitMessageAgentCapability,
   listCommitMessageAgentCapabilities
 } from '../../../../shared/commit-message-agent-spec'
-import { AGENT_CATALOG } from '@/lib/agent-catalog'
+import { getAgentCatalog, type AgentCatalogEntry } from '@/lib/agent-catalog'
+import { createLocalizedCatalog } from '@/i18n/localized-catalog'
+import { translate } from '@/i18n/i18n'
 
 export const SOURCE_CONTROL_TEXT_ACTION_ID_SET = new Set<string>(SOURCE_CONTROL_TEXT_ACTION_IDS)
 const TEXT_GENERATION_AGENT_ID_SET = new Set(
   listCommitMessageAgentCapabilities().map((capability) => capability.id)
 )
 
-export const ACTION_DESCRIPTIONS: Record<SourceControlActionId, string> = {
-  commitMessage: 'Generate the commit message from staged changes.',
-  pullRequest: 'Generate the hosted review title and description.',
-  branchName: 'Rename Orca-created branches from the initial agent task.',
-  fixCommitFailure: 'Start an agent when a commit hook or git commit fails.',
-  fixChecks: 'Start an agent from failed hosted-review checks.',
-  resolveConflicts: 'Start an agent for local or hosted-review merge conflicts.'
-}
+export const getActionDescriptions = createLocalizedCatalog(
+  (): Record<SourceControlActionId, string> => ({
+    commitMessage: translate(
+      'auto.components.settings.source.control.action.recipe.options.commitMessage',
+      'Generate the commit message from staged changes.'
+    ),
+    pullRequest: translate(
+      'auto.components.settings.source.control.action.recipe.options.pullRequest',
+      'Generate the hosted review title and description.'
+    ),
+    branchName: translate(
+      'auto.components.settings.source.control.action.recipe.options.branchName',
+      'Rename Orca-created branches from the initial agent task.'
+    ),
+    fixCommitFailure: translate(
+      'auto.components.settings.source.control.action.recipe.options.fixCommitFailure',
+      'Start an agent when a commit hook or git commit fails.'
+    ),
+    fixChecks: translate(
+      'auto.components.settings.source.control.action.recipe.options.fixChecks',
+      'Start an agent from failed hosted-review checks.'
+    ),
+    resolveConflicts: translate(
+      'auto.components.settings.source.control.action.recipe.options.resolveConflicts',
+      'Start an agent for local or hosted-review merge conflicts.'
+    )
+  })
+)
 
 const FALLBACK_AGENT_ARGS_PLACEHOLDER = '--model sonnet'
 
@@ -68,11 +90,11 @@ export function getSourceControlAgentArgsPlaceholder(
 export function getAgentCatalogForAction(
   actionId: SourceControlActionId,
   selectedAgent: TuiAgent | CustomAgentId | null | undefined
-): typeof AGENT_CATALOG {
+): AgentCatalogEntry[] {
   if (!SOURCE_CONTROL_TEXT_ACTION_ID_SET.has(actionId)) {
-    return AGENT_CATALOG
+    return getAgentCatalog()
   }
-  return AGENT_CATALOG.filter(
+  return getAgentCatalog().filter(
     (agent) => TEXT_GENERATION_AGENT_ID_SET.has(agent.id) || agent.id === selectedAgent
   )
 }

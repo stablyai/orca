@@ -137,23 +137,43 @@ export function resolveTextGenerationParams(
   return resolveCommitMessageSettings(settings, discoveryHostKey, operation, repo)
 }
 
-function sanitizeAgentFailureDetail(detail: string | null): string | null {
-  const trimmed = detail?.replace(/\p{Cc}+/gu, ' ').trim()
-  if (!trimmed) {
-    return null
-  }
-  return trimmed.length > 240 ? `${trimmed.slice(0, 240).trimEnd()}...` : trimmed
-}
-
-function userFacingAgentFailure(
+function formatAgentCliFailureMessage(
   label: string,
-  detail?: string | null,
+  stdout: string,
+  stderr: string,
+  exitCode: number | null,
   options?: { includeLocalMacDnsHint?: boolean }
 ): string {
-  const message = `${label} failed. Check the agent CLI configuration and try again.`
+  const detail = sanitizeAgentFailureDetail(extractAgentErrorMessage(stdout, stderr))
+  const message = detail
+    ? `${label} CLI command failed: ${detail}`
+    : `${label} CLI command failed with code ${exitCode}.`
   return options?.includeLocalMacDnsHint === false
     ? message
     : withMacTailscaleDnsHint(message, detail)
+}
+
+function sanitizeAgentFailureDetail(detail: string | null): string | null {
+  const trimmed = detail
+    ?.replace(/\p{Cc}+/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+  if (!trimmed) {
+    return null
+  }
+  // Why: agent stderr often includes local or SSH repo paths. Persisting those
+  // into worktree metadata leaks environment details into synced renderer state.
+  const redacted = trimmed
+    .replace(
+      /\\\\[^\s"'`<>\\]+\\(?:[^\s"'`<>\\]+(?:\s+[^\s"'`<>\\]+)*(?=\\)\\)*[^\s"'`<>\\]+/g,
+      '[path]'
+    )
+    .replace(
+      /[A-Za-z]:[\\/](?:[^\s"'`<>\\/|:*?]+(?:\s+[^\s"'`<>\\/|:*?]+)*(?=[\\/])[\\/])*[^\s"'`<>\\/|:*?]+/g,
+      '[path]'
+    )
+    .replace(/(^|[\s"'`(])\/(?:[^\s"'`<>/]+(?:\s+[^\s"'`<>/]+)*(?=\/)\/)*[^\s"'`<>/]+/g, '$1[path]')
+  return redacted.length > 240 ? `${redacted.slice(0, 240).trimEnd()}...` : redacted
 }
 
 function userFacingUnsafeWindowsBatchArgs(label: string): string {
@@ -186,20 +206,15 @@ function finalizeModelDiscoveryOutput(
   code: number | null
 ): DiscoverCommitMessageModelsResult {
   if (code !== 0) {
-    const safeDetail = sanitizeAgentFailureDetail(extractAgentErrorMessage(stdout, stderr))
     console.error('[commit-message] Model discovery failed:', {
       label: spec.label,
       exitCode: code,
-      safeDetail,
       stdout,
       stderr
     })
     return {
       success: false,
-      error: withMacTailscaleDnsHint(
-        `${spec.label} model discovery failed. Check the agent CLI configuration and try again.`,
-        safeDetail
-      )
+      error: formatAgentCliFailureMessage(spec.label, stdout, stderr, code)
     }
   }
   let models = spec.modelDiscovery?.parse(stdout) ?? []
@@ -583,7 +598,10 @@ async function runLocalPlan(
         return
       }
       if (outputLimitExceeded) {
-        finalize({ success: false, error: userFacingAgentFailure(label) })
+        finalize({
+          success: false,
+          error: `${label} CLI command produced too much output. Check the agent CLI configuration and try again.`
+        })
         return
       }
       finalizeFromAgentOutput({ code, stdout, stderr, label, emptyResultName, finalize })
@@ -614,34 +632,35 @@ function finalizeFromAgentOutput(args: {
 }): void {
   const { code, stdout, stderr, label, emptyResultName, finalize, includeLocalMacDnsHint } = args
   if (code !== 0) {
-    const safeDetail = sanitizeAgentFailureDetail(extractAgentErrorMessage(stdout, stderr))
     console.error('[commit-message] Generator failed:', {
       label,
       exitCode: code,
-      safeDetail,
       stdout,
       stderr
     })
     finalize({
       success: false,
-      error: userFacingAgentFailure(label, safeDetail, { includeLocalMacDnsHint })
+      error: formatAgentCliFailureMessage(label, stdout, stderr, code, {
+        includeLocalMacDnsHint
+      })
     })
     return
   }
   const cleaned = cleanGeneratedCommitMessage(stdout)
   if (!cleaned) {
-    const safeDetail = sanitizeAgentFailureDetail(extractAgentErrorMessage(stdout, stderr))
-    if (safeDetail) {
+    const detail = sanitizeAgentFailureDetail(extractAgentErrorMessage(stdout, stderr))
+    if (detail) {
       console.error('[commit-message] Generator returned no stdout but reported an error:', {
         label,
         exitCode: code,
-        safeDetail,
         stdout,
         stderr
       })
       finalize({
         success: false,
-        error: userFacingAgentFailure(label, safeDetail, { includeLocalMacDnsHint })
+        error: formatAgentCliFailureMessage(label, stdout, stderr, code, {
+          includeLocalMacDnsHint
+        })
       })
       return
     }

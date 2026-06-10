@@ -1389,6 +1389,42 @@ describe('orca cli worktree awareness', () => {
     })
   })
 
+  it('prints terminal.read fallback screen lines in json mode', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_terminal_read', {
+        terminal: {
+          handle: 'term_worker',
+          status: 'running',
+          tail: ['Claude Code', 'Checking files', 'Waiting for input'],
+          truncated: false,
+          limited: true,
+          oldestCursor: '0',
+          nextCursor: '3000',
+          latestCursor: '3000',
+          returnedLineCount: 3
+        }
+      })
+    )
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      ['terminal', 'read', '--terminal', 'term_worker', '--limit', '120', '--json'],
+      '/tmp/repo'
+    )
+
+    expect(callMock).toHaveBeenCalledWith('terminal.read', {
+      terminal: 'term_worker',
+      limit: 120
+    })
+    const printed = JSON.parse(String(logSpy.mock.calls[0]?.[0]))
+    expect(printed.result.terminal.tail).toEqual([
+      'Claude Code',
+      'Checking files',
+      'Waiting for input'
+    ])
+  })
+
   it('keeps interactive Codex startup commands backgrounded unless focus is explicit', async () => {
     queueFixtures(
       callMock,
@@ -2128,9 +2164,9 @@ describe('orca cli worktree awareness', () => {
 
   it('passes emulator gesture points through to the runtime', async () => {
     const points = [
-      { type: 'begin', x: 0.5, y: 0.8 },
-      { type: 'move', x: 0.5, y: 0.4 },
-      { type: 'end', x: 0.5, y: 0.2 }
+      { type: 'begin', x: 0.5, y: 0.98, edge: 3 },
+      { type: 'move', x: 0.5, y: 0.4, edge: 3 },
+      { type: 'end', x: 0.5, y: 0.2, edge: 3 }
     ]
     queueFixtures(callMock, okFixture('req_emulator_gesture', { ok: true }))
     vi.spyOn(console, 'log').mockImplementation(() => {})
@@ -2176,6 +2212,37 @@ describe('orca cli worktree awareness', () => {
       }
     })
     expect(process.exitCode).toBe(1)
+
+    process.exitCode = priorExitCode
+  })
+
+  it('rejects emulator gesture points with invalid edge markers', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const priorExitCode = process.exitCode
+
+    await main(
+      [
+        'emulator',
+        'gesture',
+        JSON.stringify([
+          { type: 'begin', x: 0.5, y: 0.98, edge: 8 },
+          { type: 'end', x: 0.5, y: 0.2, edge: 8 }
+        ]),
+        '--worktree',
+        'id:wt-1',
+        '--json'
+      ],
+      '/tmp/repo'
+    )
+
+    expect(callMock).not.toHaveBeenCalled()
+    expect(JSON.parse(String(logSpy.mock.calls[0]?.[0]))).toMatchObject({
+      ok: false,
+      error: {
+        code: 'invalid_argument',
+        message: 'gesture point 0 edge must be an integer between 0 and 4'
+      }
+    })
 
     process.exitCode = priorExitCode
   })

@@ -7,6 +7,7 @@ import {
   RESET_TERMINAL_CURSOR_STYLE
 } from './layout-serialization'
 import type * as UseNotificationDispatchModule from './use-notification-dispatch'
+import { getEagerPtyBufferHandle } from './pty-dispatcher'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import type { TerminalLayoutSnapshot } from '../../../../shared/types'
 
@@ -65,6 +66,7 @@ type StoreState = {
       suppressWhenFocused?: boolean
       customSoundPath?: string | null
     }
+    agentCmdOverrides?: Record<string, string>
   } | null
   codexRestartNoticeByPtyId: Record<
     string,
@@ -90,6 +92,7 @@ type StoreState = {
 
 type ConnectCallbacks = {
   onData?: (data: string, meta?: { seq?: number; rawLength?: number }) => void
+  onReplayData?: (data: string) => void
   onError?: (msg: string) => void
 }
 
@@ -207,6 +210,18 @@ vi.mock('./remote-runtime-pty-transport', () => ({
   )
 }))
 
+// Why: the adopt-vs-reattach decision consults the eager-PTY buffer registry to
+// tell a still-live locally-spawned PTY (attach + replay) from a daemon session
+// to re-connect. Keep the real module but stub the lookup so tests can simulate
+// a live eager buffer without standing up the real IPC dispatcher.
+vi.mock('./pty-dispatcher', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>()
+  return {
+    ...actual,
+    getEagerPtyBufferHandle: vi.fn(() => undefined)
+  }
+})
+
 function createMockTransport(initialPtyId: string | null = null): MockTransport {
   let ptyId = initialPtyId
   const transport = {
@@ -299,6 +314,7 @@ function createManager(paneCount = 1) {
   return {
     setPaneGpuRendering: vi.fn(),
     markPaneHasComplexScriptOutput: vi.fn(),
+    rebuildPaneWebgl: vi.fn(),
     getPanes: vi.fn(() =>
       Array.from({ length: paneCount }, (_, index) => ({
         id: index + 1,
@@ -2551,6 +2567,96 @@ describe('connectPanePty', () => {
     expect(deps.syncPanePtyLayoutBinding).toHaveBeenCalledWith(2, 'leaf-pty-2')
   })
 
+  it('adopts a still-live background PTY via attach instead of reattaching when an eager buffer exists', async () => {
+    // Why: background automation tabs spawn the agent PTY eagerly and register an
+    // eager buffer, then never mount until opened. On first mount the restored
+    // ptyId equals the tab ptyId, so without this guard the pane mis-routes into
+    // the daemon-reattach branch (connect) and spawns a fresh shell, orphaning the
+    // live agent PTY. A live eager buffer means "attach + replay", not "reattach".
+    const eagerPtyId = 'auto-eager-pty'
+    vi.mocked(getEagerPtyBufferHandle).mockImplementation((ptyId: string) =>
+      ptyId === eagerPtyId ? { flush: () => '', dispose: () => {} } : undefined
+    )
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport()
+    transportFactoryQueue.push(transport)
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: eagerPtyId }] },
+      ptyIdsByTabId: { 'tab-1': [eagerPtyId] },
+      terminalLayoutsByTabId: {
+        'tab-1': {
+          root: { type: 'leaf', leafId: LEAF_1 },
+          activeLeafId: LEAF_1,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [LEAF_1]: eagerPtyId }
+        }
+      }
+    } as StoreState
+    const deps = createDeps({
+      restoredLeafId: LEAF_1,
+      restoredPtyIdByLeafId: { [LEAF_1]: eagerPtyId }
+    })
+
+    connectPanePty(createPane(1) as never, createManager(1) as never, deps as never)
+    await flushAsyncTicks()
+
+    expect(transport.attach).toHaveBeenCalledWith(
+      expect.objectContaining({ existingPtyId: eagerPtyId })
+    )
+    expect(transport.connect).not.toHaveBeenCalledWith(
+      expect.objectContaining({ sessionId: eagerPtyId })
+    )
+    const { hasPtySerializer } = await import('./pty-buffer-serializer')
+    expect(hasPtySerializer(eagerPtyId)).toBe(true)
+  })
+
+  it('does not adopt another tab live eager PTY from a stale restored leaf binding', async () => {
+    // Why: restored leaf bindings can outlive tab ownership. A global eager
+    // buffer only proves the PTY is alive; ptyIdsByTabId proves this tab owns it.
+    const otherTabPtyId = 'other-tab-eager-pty'
+    vi.mocked(getEagerPtyBufferHandle).mockImplementation((ptyId: string) =>
+      ptyId === otherTabPtyId ? { flush: () => '', dispose: () => {} } : undefined
+    )
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport()
+    transport.connect.mockImplementation(async (opts: { sessionId?: string }) => {
+      if (opts.sessionId) {
+        return { id: opts.sessionId }
+      }
+      return 'fresh-pty'
+    })
+    transportFactoryQueue.push(transport)
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: {
+        'wt-1': [
+          { id: 'tab-1', ptyId: 'tab-pty' },
+          { id: 'tab-2', ptyId: otherTabPtyId }
+        ]
+      },
+      ptyIdsByTabId: {
+        'tab-1': ['tab-pty'],
+        'tab-2': [otherTabPtyId]
+      }
+    } as StoreState
+    const deps = createDeps({
+      restoredLeafId: LEAF_1,
+      restoredPtyIdByLeafId: { [LEAF_1]: otherTabPtyId }
+    })
+
+    connectPanePty(createPane(1) as never, createManager(1) as never, deps as never)
+    await flushAsyncTicks()
+
+    expect(transport.attach).not.toHaveBeenCalledWith(
+      expect.objectContaining({ existingPtyId: otherTabPtyId })
+    )
+    expect(transport.connect).not.toHaveBeenCalledWith(
+      expect.objectContaining({ sessionId: otherTabPtyId })
+    )
+    expect(deps.updateTabPtyId).not.toHaveBeenCalledWith('tab-1', otherTabPtyId)
+  })
+
   it('spawns a fresh PTY when a restored daemon split session cannot reattach', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport()
@@ -2846,6 +2952,100 @@ describe('connectPanePty', () => {
     // the daemon does not redeliver the cold-restore payload on the next
     // reattach.
     expect(window.api.pty.ackColdRestore).toHaveBeenCalledWith('tab-pty')
+  })
+
+  it('resumes the provider agent session when daemon reattach cold-restores a fresh shell', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport('fresh-pty')
+    transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) => {
+      if (sessionId) {
+        return {
+          id: 'fresh-pty',
+          coldRestore: { scrollback: 'cold-payload', cwd: '/tmp/wt-1' }
+        }
+      }
+      return 'fresh-pty'
+    })
+    transportFactoryQueue.push(transport)
+    const paneKey = makePaneKey('tab-1', LEAF_1)
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: {
+        'wt-1': [{ id: 'tab-1', ptyId: 'lost-pty' }]
+      },
+      settings: {
+        ...mockStoreState.settings,
+        agentCmdOverrides: {}
+      },
+      agentStatusByPaneKey: {
+        [paneKey]: {
+          state: 'working',
+          prompt: 'finish the task',
+          agentType: 'codex',
+          paneKey,
+          updatedAt: 1,
+          stateStartedAt: 1,
+          stateHistory: [],
+          providerSession: { key: 'session_id', id: 'codex-session-1' }
+        }
+      }
+    } as StoreState
+
+    const pane = createPane(1)
+    const manager = createManager(1)
+    const deps = createDeps({
+      restoredLeafId: LEAF_1,
+      restoredPtyIdByLeafId: { [LEAF_1]: 'lost-pty' }
+    })
+
+    connectPanePty(pane as never, manager as never, deps as never)
+    await flushAsyncTicks(20)
+    await new Promise((resolve) => setTimeout(resolve, 70))
+
+    expect(pane.terminal.write).toHaveBeenCalledWith('cold-payload', expect.any(Function))
+    expect(transport.sendInput).toHaveBeenCalledWith("codex 'resume' 'codex-session-1'\r")
+  })
+
+  it('does not resume the provider session when daemon reattach returns a live snapshot', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport('tab-pty')
+    transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) => {
+      if (sessionId) {
+        return { id: sessionId, snapshot: 'live-snapshot' }
+      }
+      return null
+    })
+    transportFactoryQueue.push(transport)
+    const paneKey = makePaneKey('tab-1', LEAF_1)
+    mockStoreState = {
+      ...mockStoreState,
+      agentStatusByPaneKey: {
+        [paneKey]: {
+          state: 'working',
+          prompt: 'finish the task',
+          agentType: 'codex',
+          paneKey,
+          updatedAt: 1,
+          stateStartedAt: 1,
+          stateHistory: [],
+          providerSession: { key: 'session_id', id: 'codex-session-1' }
+        }
+      }
+    } as StoreState
+
+    const pane = createPane(1)
+    const manager = createManager(1)
+    const deps = createDeps({
+      restoredLeafId: LEAF_1,
+      restoredPtyIdByLeafId: { [LEAF_1]: 'tab-pty' }
+    })
+
+    connectPanePty(pane as never, manager as never, deps as never)
+    await flushAsyncTicks(20)
+    await new Promise((resolve) => setTimeout(resolve, 70))
+
+    expect(pane.terminal.write).toHaveBeenCalledWith('live-snapshot', expect.any(Function))
+    expect(transport.sendInput).not.toHaveBeenCalled()
   })
 
   it('keeps non-visible local PTY bytes on the live xterm path for release', async () => {
@@ -4024,6 +4224,42 @@ describe('connectPanePty', () => {
     // after xterm parses the snapshot so stale WebGL cells cannot survive.
     expect(refresh).toHaveBeenCalledWith(0, 39, true)
     expect(deps.replayingPanesRef.current.size).toBe(0)
+    disposable.dispose()
+  })
+
+  it('rebuilds WebGL after remote buffered replay arrives on an already-open pane', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    enableActiveRuntimeEnvironment()
+    const transport = createMockTransport('remote:env-1@@terminal-1')
+    const capturedReplayCallback: {
+      current: ((data: string) => void) | null
+    } = { current: null }
+    transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+      capturedReplayCallback.current = callbacks.onReplayData ?? null
+      return { id: 'remote:env-1@@terminal-1', replay: '' }
+    })
+    transportFactoryQueue.push(transport)
+
+    const pane = createPane(1)
+    const refresh = vi.fn()
+    const terminal = pane.terminal as typeof pane.terminal & {
+      _core?: { refresh: typeof refresh }
+    }
+    terminal._core = { refresh }
+    terminal.write = vi.fn((_data: string, callback?: () => void) => {
+      callback?.()
+    })
+    const manager = createManager(1)
+    const deps = createDeps()
+    const disposable = connectPanePty(pane as never, manager as never, deps as never)
+    await flushAsyncTicks(6)
+
+    capturedReplayCallback.current?.('remote prompt\r\n$ ')
+    await flushAsyncTicks(6)
+
+    expect(pane.terminal.write).toHaveBeenCalledWith('remote prompt\r\n$ ', expect.any(Function))
+    expect(refresh).toHaveBeenCalledWith(0, 39, true)
+    expect(manager.rebuildPaneWebgl).toHaveBeenCalledWith(1)
     disposable.dispose()
   })
 
@@ -5441,6 +5677,35 @@ describe('connectPanePty', () => {
     expect(deps.clearTerminalPaneUnread).toHaveBeenCalledWith(makePaneKey('tab-1', LEAF_1))
     expect(deps.clearWorktreeUnread).toHaveBeenCalledWith('wt-1')
     expect(transport.sendInput).not.toHaveBeenCalled()
+  })
+
+  it('clears tab, pane, and worktree unread on plain Escape keydown', async () => {
+    // Why: plain Escape produces real terminal input (\x1b) and so is a genuine
+    // "user is here" signal. The interrupt-intent early return must not skip the
+    // unread clears, or the attention dot would linger after the user presses Escape.
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport()
+    transportFactoryQueue.push(transport)
+
+    const pane = createPane(1)
+    pane.terminal.element = createPaneContainer()
+    const manager = createManager(1)
+    const deps = createDeps()
+
+    connectPanePty(pane as never, manager as never, deps as never)
+
+    const keydown = new Event('keydown')
+    Object.defineProperty(keydown, 'key', { value: 'Escape' })
+    Object.defineProperty(keydown, 'repeat', { value: false })
+    Object.defineProperty(keydown, 'ctrlKey', { value: false })
+    Object.defineProperty(keydown, 'metaKey', { value: false })
+    Object.defineProperty(keydown, 'altKey', { value: false })
+    Object.defineProperty(keydown, 'shiftKey', { value: false })
+    ;(pane.terminal.element as EventTarget).dispatchEvent(keydown)
+
+    expect(deps.clearTerminalTabUnread).toHaveBeenCalledWith('tab-1')
+    expect(deps.clearTerminalPaneUnread).toHaveBeenCalledWith(makePaneKey('tab-1', LEAF_1))
+    expect(deps.clearWorktreeUnread).toHaveBeenCalledWith('wt-1')
   })
 
   it('does not clear pane attention from raw onData after a bell', async () => {

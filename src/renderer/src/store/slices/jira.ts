@@ -11,6 +11,7 @@ import type {
   JiraViewer
 } from '../../../../shared/types'
 import type { CacheEntry } from './github'
+import { isIntegrationCredentialDecryptionError } from '../../../../shared/integration-credential-errors'
 import {
   jiraConnect,
   jiraDisconnect,
@@ -99,6 +100,7 @@ export const createJiraSlice: StateCreator<AppState, [], [], JiraSlice> = (set, 
       const prev = get().jiraStatus
       if (
         prev.connected !== status.connected ||
+        prev.credentialError !== status.credentialError ||
         prev.viewer?.email !== status.viewer?.email ||
         getSelectedSiteId(prev) !== getSelectedSiteId(status) ||
         (prev.sites?.length ?? 0) !== (status.sites?.length ?? 0)
@@ -187,7 +189,9 @@ export const createJiraSlice: StateCreator<AppState, [], [], JiraSlice> = (set, 
       })
       .catch((error) => {
         console.warn('[jira] fetchJiraIssue failed:', error)
-        if (looksLikeAuthError(error)) {
+        if (isIntegrationCredentialDecryptionError(error)) {
+          void get().checkJiraConnection()
+        } else if (looksLikeAuthError(error)) {
           set({ jiraStatus: { connected: false, viewer: null } })
         }
         return null
@@ -222,7 +226,9 @@ export const createJiraSlice: StateCreator<AppState, [], [], JiraSlice> = (set, 
       })
       .catch((error) => {
         console.warn('[jira] searchJiraIssues failed:', error)
-        if (looksLikeAuthError(error)) {
+        if (isIntegrationCredentialDecryptionError(error)) {
+          void get().checkJiraConnection()
+        } else if (looksLikeAuthError(error)) {
           set({ jiraStatus: { connected: false, viewer: null } })
         }
         return []
@@ -257,7 +263,9 @@ export const createJiraSlice: StateCreator<AppState, [], [], JiraSlice> = (set, 
       })
       .catch((error) => {
         console.warn('[jira] listJiraIssues failed:', error)
-        if (looksLikeAuthError(error)) {
+        if (isIntegrationCredentialDecryptionError(error)) {
+          void get().checkJiraConnection()
+        } else if (looksLikeAuthError(error)) {
           set({ jiraStatus: { connected: false, viewer: null } })
         }
         return []

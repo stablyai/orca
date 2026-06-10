@@ -14,6 +14,7 @@ import {
   consumePrelaunchedSimulatorSession,
   isManualSimulatorLaunchPending
 } from '@/lib/simulator-launch-coordination'
+import { shutdownManagedSimulatorIfNoPane } from '@/lib/simulator-pane-shutdown-scheduler'
 import { buildPrelaunchedEmulatorSessionState } from './emulator-prelaunched-session'
 import { useEmulatorPaneManualLaunchEvents } from './use-emulator-pane-manual-launch-events'
 import { buildEmulatorPaneSessionView } from './emulator-pane-session-view'
@@ -185,6 +186,9 @@ export function useEmulatorPaneSession({
           focus: false
         })) as { attached?: boolean; info?: EmulatorPaneSession['info'] }
         if (!mountedRef.current) {
+          // Why: attach can finish after the tab closes, after the earlier
+          // unmount shutdown already no-op'd because the session was not registered yet.
+          await shutdownManagedSimulatorIfNoPane(worktreeId, tabId)
           return
         }
         const attached = !!res?.attached

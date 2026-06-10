@@ -7,7 +7,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
-import { AGENT_CATALOG } from '@/lib/agent-catalog'
+import { getAgentCatalog } from '@/lib/agent-catalog'
 import {
   parseGitHubIssueOrPRNumber,
   parseGitHubIssueOrPRLink,
@@ -74,6 +74,7 @@ import {
   getSmartGitHubSubmitResolution,
   type SmartGitHubSubmitResolution
 } from '@/lib/smart-github-submit'
+import { isWorkItemLookupText } from '@/lib/work-item-lookup-text'
 import {
   canUseRepoBackedComposerSources,
   getSelectedRepoSshGate,
@@ -104,6 +105,7 @@ import {
   resolveComposerBranchNameOverrideForCreate,
   resolveComposerBranchSelection
 } from './composer-branch-selection'
+import { translate } from '@/i18n/i18n'
 
 export type UseComposerStateOptions = {
   initialRepoId?: string
@@ -185,6 +187,7 @@ export type ComposerCardProps = {
   advancedOpen: boolean
   onToggleAdvanced: () => void
   createDisabled: boolean
+  projectError: string | null
   creating: boolean
   onCreate: () => void
   note: string
@@ -334,6 +337,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   })
 
   const [internalRepoId, setInternalRepoId] = useState<string>(resolvedInitialRepoId)
+  const [projectError, setProjectError] = useState<string | null>(null)
   const repoId = repoIdOverride ?? internalRepoId
   const selectedRepo = eligibleRepos.find((repo) => repo.id === repoId)
   const selectedRepoIsGit = selectedRepo ? isGitRepoKind(selectedRepo) : false
@@ -439,7 +443,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   const enabledCatalogAgents = useMemo(
     () =>
       filterEnabledTuiAgents(
-        AGENT_CATALOG.map((agent) => agent.id),
+        getAgentCatalog().map((agent) => agent.id),
         disabledTuiAgents
       ),
     [disabledTuiAgents]
@@ -867,12 +871,12 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       }
       const enabledIds = filterEnabledTuiAgents(ids, disabledTuiAgents)
       if (!newWorkspaceDraft?.agent && !settings?.defaultTuiAgent && enabledIds.length > 0) {
-        const firstInCatalogOrder = AGENT_CATALOG.find((a) => enabledIds.includes(a.id))
+        const firstInCatalogOrder = getAgentCatalog().find((a) => enabledIds.includes(a.id))
         if (firstInCatalogOrder) {
           setTuiAgent(firstInCatalogOrder.id)
         }
       } else if (!isTuiAgentEnabled(tuiAgent, disabledTuiAgents)) {
-        const firstEnabledDetected = AGENT_CATALOG.find((a) => enabledIds.includes(a.id))
+        const firstEnabledDetected = getAgentCatalog().find((a) => enabledIds.includes(a.id))
         setTuiAgent(firstEnabledDetected?.id ?? fallbackDefaultAgent)
       }
     })
@@ -968,7 +972,11 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     try {
       await window.api.ssh.connect({ targetId })
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to connect to project.')
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : translate('auto.hooks.useComposerState.ba6cb77082', 'Failed to connect to project.')
+      )
     }
   }, [])
 
@@ -1156,7 +1164,13 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       })
       const suggestedName =
         getLinkedWorkItemWorkspaceName(item)?.seedName ?? getLinkedWorkItemSuggestedName(item)
-      if (suggestedName && (!name.trim() || name === lastAutoNameRef.current)) {
+      // Why: a pasted URL/#123 in the field is the lookup query that found
+      // this item, not a deliberate name — replace it with the title-derived
+      // name or it silently becomes a slugified-URL workspace name.
+      if (
+        suggestedName &&
+        (!name.trim() || name === lastAutoNameRef.current || isWorkItemLookupText(name))
+      ) {
         setName(suggestedName)
         lastAutoNameRef.current = suggestedName
       }
@@ -1244,7 +1258,10 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         title: item.title
       })
       const nextName = titleName?.seedName ?? suggestedName
-      if (nextName && (!name.trim() || name === lastAutoNameRef.current)) {
+      if (
+        nextName &&
+        (!name.trim() || name === lastAutoNameRef.current || isWorkItemLookupText(name))
+      ) {
         setName(nextName)
         lastAutoNameRef.current = nextName
       }
@@ -1387,7 +1404,12 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         return null
       }
       if (!targetRepoPath) {
-        toast.error('No remote project path is available for attachments.')
+        toast.error(
+          translate(
+            'auto.hooks.useComposerState.3db83fc58a',
+            'No remote project path is available for attachments.'
+          )
+        )
         return { filePaths: [], folderPaths: [] }
       }
       const destinationDir = joinPath(targetRepoPath, '.orca/drops')
@@ -1417,7 +1439,12 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         }
       }
       if (skippedOrFailed > 0) {
-        toast.error('Some attachments could not be uploaded.')
+        toast.error(
+          translate(
+            'auto.hooks.useComposerState.a9ff236145',
+            'Some attachments could not be uploaded.'
+          )
+        )
       }
       return { filePaths, folderPaths }
     },
@@ -1522,6 +1549,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
 
   const handleRepoChange = useCallback(
     (value: string): void => {
+      setProjectError(null)
       if (value === repoId) {
         setRepoId(value)
         return
@@ -1567,6 +1595,17 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     },
     [baseBranch, linkedWorkItem, repoId, setRepoId]
   )
+
+  const showProjectRequiredError = useCallback((): void => {
+    setProjectError('Choose or add a project before creating a workspace.')
+    requestAnimationFrame(() => {
+      document
+        .querySelector<HTMLElement>(
+          '[data-contextual-tour-target="workspace-creation-project"] [data-repo-combobox-root="true"][role="combobox"]'
+        )
+        ?.focus()
+    })
+  }, [])
 
   const handleSparseSelectPreset = useCallback((preset: SparsePreset | null): void => {
     if (preset) {
@@ -1703,7 +1742,11 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         .catch((error: unknown) => {
           setBaseBranch(undefined)
           setPushTarget(undefined)
-          toast.error(error instanceof Error ? error.message : 'Failed to resolve PR base.')
+          toast.error(
+            error instanceof Error
+              ? error.message
+              : translate('auto.hooks.useComposerState.b2ead86962', 'Failed to resolve PR base.')
+          )
         })
     },
     [applyLinkedWorkItem, eligibleRepos, handleBaseBranchPrSelect, selectedRepo, settings]
@@ -1776,7 +1819,14 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       setLinkedPR(null)
       setLinkedWorkItem(buildLinearIssueLinkedWorkItem(issue))
       const suggestedName = getLinearIssueWorkspaceName(issue)
-      if (!name.trim() || name === lastAutoNameRef.current) {
+      // Why: same lookup-text rule as applyLinkedWorkItem, plus the typed
+      // Linear identifier ("STA-123") that matched this issue.
+      if (
+        !name.trim() ||
+        name === lastAutoNameRef.current ||
+        isWorkItemLookupText(name) ||
+        name.trim().toLowerCase() === issue.identifier.toLowerCase()
+      ) {
         setName(suggestedName)
         lastAutoNameRef.current = suggestedName
       }
@@ -1861,10 +1911,12 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   )
 
   const submit = useCallback(async (): Promise<void> => {
+    if (!repoId || !selectedRepo) {
+      showProjectRequiredError()
+      return
+    }
     if (
-      !repoId ||
       !workspaceSeedName ||
-      !selectedRepo ||
       selectedRepoRequiresConnection ||
       shouldWaitForSetupCheck ||
       shouldWaitForIssueAutomationCheck ||
@@ -1875,7 +1927,12 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     }
     if (!isTuiAgentEnabled(tuiAgent, disabledTuiAgents)) {
       setTuiAgent(fallbackDefaultAgent)
-      toast.error('Selected agent is disabled. Choose an enabled agent before creating.')
+      toast.error(
+        translate(
+          'auto.hooks.useComposerState.7eb3f44ff7',
+          'Selected agent is disabled. Choose an enabled agent before creating.'
+        )
+      )
       return
     }
 
@@ -1890,7 +1947,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       const submitTitleName = submitLinkedWorkItem
         ? getLinkedWorkItemWorkspaceName(submitLinkedWorkItem)
         : null
-      const nameIsAutoManaged = !name.trim() || name === lastAutoNameRef.current
+      const nameIsAutoManaged =
+        !name.trim() || name === lastAutoNameRef.current || isWorkItemLookupText(name)
       const workspaceName =
         smartGitHubResolution?.workspaceName ??
         (nameIsAutoManaged && submitTitleName ? submitTitleName.seedName : workspaceSeedName)
@@ -2130,6 +2188,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     selectedRepo,
     selectedRepoIsGit,
     selectedRepoRequiresConnection,
+    showProjectRequiredError,
     settings?.agentCmdOverrides,
     settings?.autoRenameBranchFromWork,
     setSidebarOpen,
@@ -2159,10 +2218,12 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         linkedPR,
         fallbackName: fallbackCreatureName
       })
+      if (!repoId || !selectedRepo) {
+        showProjectRequiredError()
+        return
+      }
       if (
-        !repoId ||
         !workspaceNameSeed ||
-        !selectedRepo ||
         selectedRepoRequiresConnection ||
         (requiresExplicitSetupChoice && !setupDecision) ||
         sparseError !== null
@@ -2181,7 +2242,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         const submitTitleName = submitLinkedWorkItem
           ? getLinkedWorkItemWorkspaceName(submitLinkedWorkItem)
           : null
-        const nameIsAutoManaged = !name.trim() || name === lastAutoNameRef.current
+        const nameIsAutoManaged =
+          !name.trim() || name === lastAutoNameRef.current || isWorkItemLookupText(name)
         const workspaceName =
           smartGitHubResolution?.workspaceName ??
           (nameIsAutoManaged && submitTitleName ? submitTitleName.seedName : workspaceNameSeed)
@@ -2396,6 +2458,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       selectedRepo,
       selectedRepoIsGit,
       selectedRepoRequiresConnection,
+      showProjectRequiredError,
       settings?.agentCmdOverrides,
       settings?.autoRenameBranchFromWork,
       disabledTuiAgents,
@@ -2466,6 +2529,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     advancedOpen,
     onToggleAdvanced: () => setAdvancedOpen((current) => !current),
     createDisabled,
+    projectError,
     creating,
     onCreate: () => void submit(),
     baseBranch,

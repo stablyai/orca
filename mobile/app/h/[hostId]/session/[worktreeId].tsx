@@ -14,8 +14,7 @@ import {
   Platform,
   ActivityIndicator,
   type KeyboardEvent,
-  type ListRenderItem,
-  type TextStyle
+  type ListRenderItem
 } from 'react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
@@ -47,7 +46,13 @@ import {
 } from 'lucide-react-native'
 import type { RpcClient } from '../../../../src/transport/rpc-client'
 import { loadHosts } from '../../../../src/transport/host-store'
-import { useHostClient } from '../../../../src/transport/client-context'
+import {
+  useHostClient,
+  useForceReconnect,
+  useReconnectAttempt,
+  useLastConnectedAt
+} from '../../../../src/transport/client-context'
+import { classifyConnection } from '../../../../src/transport/connection-health'
 import type { ConnectionState, RpcFailure, RpcSuccess } from '../../../../src/transport/types'
 import { useMobileDictation } from '../../../../src/hooks/use-mobile-dictation'
 import {
@@ -85,6 +90,7 @@ import { MobileAgentIcon } from '../../../../src/components/MobileAgentIcon'
 import { TextInputModal } from '../../../../src/components/TextInputModal'
 import { ConfirmModal } from '../../../../src/components/ConfirmModal'
 import { MobileRichMarkdownEditor } from '../../../../src/components/MobileRichMarkdownEditor'
+import { MobileSyntaxSegments } from '../../../../src/components/MobileSyntaxSegments'
 import {
   CustomKeyModal,
   loadCustomKeys,
@@ -108,8 +114,7 @@ import {
   highlightMobileDiffLines,
   resolveMobileSyntaxLanguage,
   type MobileHighlightedDiffLine,
-  type MobileSyntaxSegment,
-  type MobileSyntaxTokenKind
+  type MobileSyntaxSegment
 } from '../../../../src/session/mobile-file-syntax'
 import {
   getTerminalRecordsFromSessionTabs,
@@ -124,6 +129,7 @@ import {
   type MobileNewTabAgentOption,
   type MobileNewTabAgentSettings
 } from '../../../../src/session/mobile-new-tab-agent-options'
+import { resolveMarkdownFloatingActionsBottom } from '../../../../src/session/markdown-floating-actions-layout'
 import {
   createMobileSessionCreateWarningState,
   dismissMobileSessionCreateWarningState,
@@ -412,7 +418,8 @@ function MarkdownReader({
   onChange,
   onSave,
   onCopy,
-  onDiscard
+  onDiscard,
+  keyboardLift
 }: {
   documentId: string
   doc: MarkdownDocState | undefined
@@ -421,6 +428,7 @@ function MarkdownReader({
   onSave: () => void
   onCopy: () => void
   onDiscard: () => void
+  keyboardLift: number
 }) {
   if (!doc || doc.status === 'loading') {
     return (
@@ -462,7 +470,21 @@ function MarkdownReader({
         onChange={onChange}
       />
       {showFloatingActions ? (
-        <View pointerEvents="box-none" style={styles.markdownFloatingBar}>
+        <View
+          pointerEvents="box-none"
+          style={[
+            styles.markdownFloatingBar,
+            // Why: the editor focus lives inside a WebView, so keep native
+            // Save/Discard controls lifted instead of resizing that surface.
+            {
+              bottom: resolveMarkdownFloatingActionsBottom({
+                keyboardLift,
+                restingBottom: spacing.lg,
+                liftedClearance: spacing.md
+              })
+            }
+          ]}
+        >
           {statusText ? (
             <Text
               style={[styles.markdownFloatingStatus, doc.saveError ? styles.markdownError : null]}
@@ -509,18 +531,6 @@ function MarkdownReader({
         </View>
       ) : null}
     </View>
-  )
-}
-
-function SyntaxSegments({ segments }: { segments: MobileSyntaxSegment[] }) {
-  return (
-    <>
-      {segments.map((segment, index) => (
-        <Text key={`${index}:${segment.kind}`} style={syntaxTokenStyles[segment.kind]}>
-          {segment.text}
-        </Text>
-      ))}
-    </>
   )
 }
 
@@ -581,7 +591,7 @@ function DiffLineRow({
           >
             {line.kind === 'add' ? '+ ' : line.kind === 'delete' ? '- ' : '  '}
           </Text>
-          <SyntaxSegments segments={line.segments} />
+          <MobileSyntaxSegments segments={line.segments} />
         </Text>
         {canComment ? (
           <Pressable
@@ -888,7 +898,7 @@ function FileReader({
         contentContainerStyle={styles.filePreviewContent}
       >
         <Text selectable style={styles.filePreviewText} accessibilityLabel={`${title} preview`}>
-          <SyntaxSegments
+          <MobileSyntaxSegments
             segments={
               fileSyntax?.doc === doc && fileSyntax.language === syntaxLanguage
                 ? fileSyntax.segments
@@ -920,6 +930,9 @@ export default function SessionScreen() {
   // Why: shared client per host owned by RpcClientProvider. See
   // docs/mobile-shared-client-per-host.md.
   const { client, state: connState } = useHostClient(hostId)
+  const reconnectAttempts = useReconnectAttempt(hostId)
+  const lastConnectedAt = useLastConnectedAt(hostId)
+  const forceReconnectHost = useForceReconnect()
   const initialCreateWarning = typeof createdWarning === 'string' ? createdWarning.trim() : ''
   const [terminals, setTerminals] = useState<Terminal[]>([])
   const terminalsRef = useRef<Terminal[]>([])
@@ -3636,6 +3649,17 @@ export default function SessionScreen() {
     void handleCreateTerminal()
   }, [client, creating, creatingBrowser, creatingMarkdown, showEmptyState, worktreeId])
 
+  // Why: the reconnect loop parks at its give-up cap; without an in-session
+  // affordance the only recovery is leaving the screen or restarting the
+  // app (issue #5049). Surface tap-to-retry once the verdict escalates.
+  const connectionVerdict = classifyConnection({
+    state: connState,
+    reconnectAttempts,
+    lastConnectedAt
+  })
+  const showConnectionRetry =
+    connectionVerdict.kind === 'warning' || connectionVerdict.kind === 'unreachable'
+
   const terminalSummary =
     connState === 'connected'
       ? showLoadingState
@@ -3643,7 +3667,9 @@ export default function SessionScreen() {
         : visibleTabs.length === 1
           ? '1 tab'
           : `${visibleTabs.length} tabs`
-      : STATUS_LABELS[connState]
+      : showConnectionRetry
+        ? `${connectionVerdict.label} — tap to retry`
+        : STATUS_LABELS[connState]
 
   // Why: keep safe-area padding in layout at all times, then visually translate
   // the controls over the terminal when the keyboard appears. iOS keyboard
@@ -3786,12 +3812,22 @@ export default function SessionScreen() {
               <Text style={styles.sessionTitle} numberOfLines={1}>
                 {worktreeName || 'Terminal'}
               </Text>
-              <View style={styles.sessionMetaRow}>
+              <Pressable
+                style={styles.sessionMetaRow}
+                disabled={!showConnectionRetry}
+                onPress={() => {
+                  if (hostId) {
+                    void forceReconnectHost(hostId)
+                  }
+                }}
+                accessibilityRole={showConnectionRetry ? 'button' : undefined}
+                accessibilityLabel={showConnectionRetry ? 'Reconnect to desktop' : undefined}
+              >
                 <StatusDot state={connState} />
                 <Text style={styles.sessionMetaText} numberOfLines={1}>
                   {terminalSummary}
                 </Text>
-              </View>
+              </Pressable>
             </View>
             <Pressable
               style={({ pressed }) => [styles.filesButton, pressed && styles.filesButtonPressed]}
@@ -3948,7 +3984,7 @@ export default function SessionScreen() {
             </View>
           </View>
         ) : activeMarkdownTab ? (
-          <View style={[styles.markdownFrame, { paddingBottom: keyboardLift }]}>
+          <View style={styles.markdownFrame}>
             <MarkdownReader
               documentId={activeMarkdownTab.id}
               doc={markdownDocs.get(activeMarkdownTab.id)}
@@ -3957,6 +3993,7 @@ export default function SessionScreen() {
               onSave={() => void saveMarkdownTab(activeMarkdownTab)}
               onCopy={() => void copyMarkdownLocalContent(activeMarkdownTab.id)}
               onDiscard={() => discardMarkdownLocalContent(activeMarkdownTab)}
+              keyboardLift={keyboardLift}
             />
             {toastMessage && (
               <Animated.View pointerEvents="none" style={[styles.toast, toastAnimatedStyle]}>
@@ -5288,35 +5325,5 @@ const styles = StyleSheet.create({
   },
   sendButtonDisabled: {
     opacity: 0.35
-  }
-})
-
-const syntaxTokenStyles: Record<MobileSyntaxTokenKind, TextStyle> = StyleSheet.create({
-  plain: {
-    color: colors.textPrimary
-  },
-  comment: {
-    color: colors.syntaxComment
-  },
-  keyword: {
-    color: colors.syntaxKeyword
-  },
-  string: {
-    color: colors.syntaxString
-  },
-  number: {
-    color: colors.syntaxNumber
-  },
-  type: {
-    color: colors.syntaxType
-  },
-  function: {
-    color: colors.syntaxFunction
-  },
-  variable: {
-    color: colors.syntaxVariable
-  },
-  meta: {
-    color: colors.syntaxMeta
   }
 })

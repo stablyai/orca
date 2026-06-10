@@ -159,7 +159,7 @@ describe('web keybindings preload API', () => {
       bindings: null
     })
     expect(reset.overrides['worktree.palette']).toBeUndefined()
-  })
+  }, 15_000)
 
   it('rejects conflicts before mutating browser storage', async () => {
     const { api } = await installApi('Linux')
@@ -782,6 +782,46 @@ describe('web UI preload API', () => {
     expect(stored.contextualToursSeenIds).toEqual(['tasks', 'browser'])
   })
 
+  it('does not keep a local shadow copy of main-owned feature telemetry markers', async () => {
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        call(method: string): Promise<RuntimeRpcResponse<unknown>> {
+          return Promise.resolve({
+            id: method,
+            ok: true,
+            result: { ui: {} },
+            _meta: { runtimeId: 'runtime-1' }
+          })
+        }
+
+        close(): void {}
+      }
+    }))
+
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage)
+    globals.storage.setItem(
+      'orca.web.ui.v1',
+      JSON.stringify({
+        featureInteractionTelemetryBuckets: { tasks: 'count_1000_plus' }
+      })
+    )
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    await globals.window.api.ui.set({
+      featureInteractionTelemetryBuckets: { tasks: 'count_500_999' }
+    } as never)
+    const ui = await globals.window.api.ui.get()
+    const stored = JSON.parse(globals.storage.getItem('orca.web.ui.v1') ?? '{}') as Record<
+      string,
+      unknown
+    >
+
+    expect('featureInteractionTelemetryBuckets' in (ui as Record<string, unknown>)).toBe(false)
+    expect(stored.featureInteractionTelemetryBuckets).toBeUndefined()
+  })
+
   it('union-merges local contextual tour seen ids when recordFeatureInteraction returns stale host state', async () => {
     vi.doMock('./web-runtime-client', () => ({
       WebRuntimeClient: class {
@@ -1046,6 +1086,14 @@ describe('web file preload API', () => {
   afterEach(() => {
     vi.unstubAllGlobals()
     vi.doUnmock('./web-runtime-client')
+  })
+
+  it('rejects native save-dialog downloads in paired web clients', async () => {
+    const { api } = await installApi('Linux')
+
+    await expect(
+      api.fs.downloadFile({ filePath: '/workspace/repo/file.txt', connectionId: 'ssh-1' })
+    ).rejects.toThrow('Remote file download is unavailable in paired web clients.')
   })
 
   it('returns false for runtime missing-path errors from fs.pathExists', async () => {

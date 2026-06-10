@@ -367,8 +367,8 @@ export function registerPreflightHandlers(): void {
 
   // Why: remote worktrees need agent detection on the SSH host, not the local
   // machine. This handler forwards the same KNOWN_AGENT_COMMANDS list to the
-  // relay's preflight.detectAgents RPC, which runs `which` inside a login shell
-  // on the remote host to match the PATH users see in PTY sessions.
+  // relay's preflight.detectAgents RPC, whose lookup command is selected on
+  // the remote host so native Windows OpenSSH does not require a POSIX shell.
   ipcMain.handle(
     'preflight:detectRemoteAgents',
     async (_event, args: { connectionId: string }): Promise<string[]> => {

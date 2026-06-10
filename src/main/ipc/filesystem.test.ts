@@ -5,12 +5,16 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const handlers = new Map<string, (_event: unknown, args: unknown) => Promise<unknown> | unknown>()
 const {
   handleMock,
+  showSaveDialogMock,
+  fromWebContentsMock,
   trashItemMock,
   readdirMock,
   readFileMock,
   writeFileMock,
   statMock,
   openMock,
+  renameMock,
+  rmMock,
   realpathMock,
   lstatMock,
   commitChangesMock,
@@ -40,12 +44,16 @@ const {
   getSshGitProviderMock
 } = vi.hoisted(() => ({
   handleMock: vi.fn(),
+  showSaveDialogMock: vi.fn(),
+  fromWebContentsMock: vi.fn(),
   trashItemMock: vi.fn(),
   readdirMock: vi.fn(),
   readFileMock: vi.fn(),
   writeFileMock: vi.fn(),
   statMock: vi.fn(),
   openMock: vi.fn(),
+  renameMock: vi.fn(),
+  rmMock: vi.fn(),
   realpathMock: vi.fn(),
   lstatMock: vi.fn(),
   commitChangesMock: vi.fn(),
@@ -76,6 +84,12 @@ const {
 }))
 
 vi.mock('electron', () => ({
+  BrowserWindow: {
+    fromWebContents: fromWebContentsMock
+  },
+  dialog: {
+    showSaveDialog: showSaveDialogMock
+  },
   ipcMain: {
     handle: handleMock
   },
@@ -90,6 +104,8 @@ vi.mock('fs/promises', () => ({
   writeFile: writeFileMock,
   stat: statMock,
   open: openMock,
+  rename: renameMock,
+  rm: rmMock,
   realpath: realpathMock,
   lstat: lstatMock
 }))
@@ -200,12 +216,16 @@ describe('registerFilesystemHandlers', () => {
     handlers.clear()
     for (const mock of [
       handleMock,
+      showSaveDialogMock,
+      fromWebContentsMock,
       trashItemMock,
       readdirMock,
       readFileMock,
       writeFileMock,
       statMock,
       openMock,
+      renameMock,
+      rmMock,
       realpathMock,
       lstatMock,
       commitChangesMock,
@@ -255,8 +275,12 @@ describe('registerFilesystemHandlers', () => {
       }
     ])
     trashItemMock.mockResolvedValue(undefined)
+    showSaveDialogMock.mockResolvedValue({ canceled: true })
+    fromWebContentsMock.mockReturnValue(null)
     getSshGitProviderMock.mockReturnValue(null)
     statMock.mockResolvedValue({ size: 10, isDirectory: () => false, mtimeMs: 123 })
+    renameMock.mockResolvedValue(undefined)
+    rmMock.mockResolvedValue(undefined)
     openMock.mockResolvedValue({
       read: vi.fn(async (buffer: Buffer) => {
         buffer.fill(0x61)
@@ -275,6 +299,256 @@ describe('registerFilesystemHandlers', () => {
     ).rejects.toThrow(
       'Remote connection dropped. Click Reconnect on the SSH target before retrying.'
     )
+  })
+
+  it('rejects remote downloads with missing required arguments', async () => {
+    registerFilesystemHandlers(store as never)
+
+    await expect(
+      handlers.get('fs:downloadFile')!({ sender: {} }, { filePath: '  ', connectionId: 'ssh-1' })
+    ).rejects.toThrow('filePath is required')
+    await expect(
+      handlers.get('fs:downloadFile')!({ sender: {} }, { filePath: '/remote/file.txt' })
+    ).rejects.toThrow('connectionId is required')
+
+    expect(showSaveDialogMock).not.toHaveBeenCalled()
+  })
+
+  it('surfaces provider lookup errors for remote downloads before opening a dialog', async () => {
+    registerFilesystemHandlers(store as never)
+
+    await expect(
+      handlers.get('fs:downloadFile')!(
+        { sender: {} },
+        {
+          filePath: '/remote/file.txt',
+          connectionId: 'ssh-1'
+        }
+      )
+    ).rejects.toThrow(
+      'Remote connection dropped. Click Reconnect on the SSH target before retrying.'
+    )
+
+    expect(showSaveDialogMock).not.toHaveBeenCalled()
+  })
+
+  it('rejects remote download directories before opening a dialog', async () => {
+    const provider = {
+      stat: vi.fn().mockResolvedValue({ size: 0, type: 'directory', mtime: 123 }),
+      downloadFile: vi.fn()
+    }
+    getSshFilesystemProviderMock.mockReturnValue(provider)
+    registerFilesystemHandlers(store as never)
+
+    await expect(
+      handlers.get('fs:downloadFile')!(
+        { sender: {} },
+        {
+          filePath: '/remote/src',
+          connectionId: 'ssh-1'
+        }
+      )
+    ).rejects.toThrow('Cannot download a directory')
+
+    expect(showSaveDialogMock).not.toHaveBeenCalled()
+    expect(provider.downloadFile).not.toHaveBeenCalled()
+  })
+
+  it('returns canceled remote downloads without transferring', async () => {
+    const provider = {
+      stat: vi.fn().mockResolvedValue({ size: 10, type: 'file', mtime: 123 }),
+      downloadFile: vi.fn()
+    }
+    getSshFilesystemProviderMock.mockReturnValue(provider)
+    showSaveDialogMock.mockResolvedValue({ canceled: true })
+    registerFilesystemHandlers(store as never)
+
+    await expect(
+      handlers.get('fs:downloadFile')!(
+        { sender: {} },
+        {
+          filePath: '/remote/report.pdf',
+          connectionId: 'ssh-1'
+        }
+      )
+    ).resolves.toEqual({ canceled: true })
+
+    expect(showSaveDialogMock).toHaveBeenCalledWith({ defaultPath: 'report.pdf' })
+    expect(statMock).not.toHaveBeenCalled()
+    expect(provider.downloadFile).not.toHaveBeenCalled()
+  })
+
+  it('parents the remote download save dialog and sanitizes reserved filename suggestions', async () => {
+    const parentWindow = { id: 7 }
+    const sender = { id: 42 }
+    const provider = {
+      stat: vi.fn().mockResolvedValue({ size: 10, type: 'file', mtime: 123 }),
+      downloadFile: vi.fn()
+    }
+    getSshFilesystemProviderMock.mockReturnValue(provider)
+    fromWebContentsMock.mockReturnValue(parentWindow)
+    showSaveDialogMock.mockResolvedValue({ canceled: true })
+    registerFilesystemHandlers(store as never)
+
+    await handlers.get('fs:downloadFile')!(
+      { sender },
+      {
+        filePath: 'C:\\repo\\CON.txt',
+        connectionId: 'ssh-1'
+      }
+    )
+
+    expect(fromWebContentsMock).toHaveBeenCalledWith(sender)
+    expect(showSaveDialogMock).toHaveBeenCalledWith(parentWindow, { defaultPath: 'download' })
+  })
+
+  it('rejects remote downloads when raw provider transfer is unavailable', async () => {
+    const provider = {
+      stat: vi.fn().mockResolvedValue({ size: 10, type: 'file', mtime: 123 })
+    }
+    getSshFilesystemProviderMock.mockReturnValue(provider)
+    registerFilesystemHandlers(store as never)
+
+    await expect(
+      handlers.get('fs:downloadFile')!(
+        { sender: {} },
+        {
+          filePath: '/remote/file.txt',
+          connectionId: 'ssh-1'
+        }
+      )
+    ).rejects.toThrow('Remote file download is unavailable. Reconnect the SSH target and retry.')
+
+    expect(showSaveDialogMock).not.toHaveBeenCalled()
+  })
+
+  it('rejects selected local directories before transferring a remote download', async () => {
+    const provider = {
+      stat: vi.fn().mockResolvedValue({ size: 10, type: 'file', mtime: 123 }),
+      downloadFile: vi.fn()
+    }
+    getSshFilesystemProviderMock.mockReturnValue(provider)
+    showSaveDialogMock.mockResolvedValue({ canceled: false, filePath: '/downloads/report.pdf' })
+    statMock.mockResolvedValue({ isDirectory: () => true })
+    registerFilesystemHandlers(store as never)
+
+    await expect(
+      handlers.get('fs:downloadFile')!(
+        { sender: {} },
+        {
+          filePath: '/remote/report.pdf',
+          connectionId: 'ssh-1'
+        }
+      )
+    ).rejects.toThrow('Cannot download to a directory')
+
+    expect(provider.downloadFile).not.toHaveBeenCalled()
+  })
+
+  it('downloads to a temp sibling then promotes a new destination', async () => {
+    const provider = {
+      stat: vi.fn().mockResolvedValue({ size: 10, type: 'file', mtime: 123 }),
+      downloadFile: vi.fn().mockResolvedValue(undefined)
+    }
+    getSshFilesystemProviderMock.mockReturnValue(provider)
+    showSaveDialogMock.mockResolvedValue({ canceled: false, filePath: '/downloads/report.pdf' })
+    statMock.mockRejectedValue(Object.assign(new Error('missing'), { code: 'ENOENT' }))
+    registerFilesystemHandlers(store as never)
+
+    await expect(
+      handlers.get('fs:downloadFile')!(
+        { sender: {} },
+        {
+          filePath: '/remote/report.pdf',
+          connectionId: 'ssh-1'
+        }
+      )
+    ).resolves.toEqual({ canceled: false, destinationPath: '/downloads/report.pdf' })
+
+    const tempPath = provider.downloadFile.mock.calls[0][1]
+    expect(tempPath).toContain('/downloads')
+    expect(provider.downloadFile).toHaveBeenCalledWith('/remote/report.pdf', tempPath)
+    expect(renameMock).toHaveBeenCalledWith(tempPath, '/downloads/report.pdf')
+    expect(rmMock).not.toHaveBeenCalledWith(tempPath, expect.anything())
+  })
+
+  it('cleans up the temp sibling when remote download transfer fails', async () => {
+    const provider = {
+      stat: vi.fn().mockResolvedValue({ size: 10, type: 'file', mtime: 123 }),
+      downloadFile: vi.fn().mockRejectedValue(new Error('transfer failed'))
+    }
+    getSshFilesystemProviderMock.mockReturnValue(provider)
+    showSaveDialogMock.mockResolvedValue({ canceled: false, filePath: '/downloads/report.pdf' })
+    statMock.mockRejectedValue(Object.assign(new Error('missing'), { code: 'ENOENT' }))
+    registerFilesystemHandlers(store as never)
+
+    await expect(
+      handlers.get('fs:downloadFile')!(
+        { sender: {} },
+        {
+          filePath: '/remote/report.pdf',
+          connectionId: 'ssh-1'
+        }
+      )
+    ).rejects.toThrow('transfer failed')
+
+    const tempPath = provider.downloadFile.mock.calls[0][1]
+    expect(renameMock).not.toHaveBeenCalled()
+    expect(rmMock).toHaveBeenCalledWith(tempPath, { force: true })
+  })
+
+  it('fails rather than overwriting a destination that appears after the dialog', async () => {
+    const provider = {
+      stat: vi.fn().mockResolvedValue({ size: 10, type: 'file', mtime: 123 }),
+      downloadFile: vi.fn().mockResolvedValue(undefined)
+    }
+    getSshFilesystemProviderMock.mockReturnValue(provider)
+    showSaveDialogMock.mockResolvedValue({ canceled: false, filePath: '/downloads/report.pdf' })
+    statMock
+      .mockRejectedValueOnce(Object.assign(new Error('missing'), { code: 'ENOENT' }))
+      .mockResolvedValueOnce({ isDirectory: () => false })
+    registerFilesystemHandlers(store as never)
+
+    await expect(
+      handlers.get('fs:downloadFile')!(
+        { sender: {} },
+        {
+          filePath: '/remote/report.pdf',
+          connectionId: 'ssh-1'
+        }
+      )
+    ).rejects.toThrow('Destination file appeared before download completed')
+
+    const tempPath = provider.downloadFile.mock.calls[0][1]
+    expect(renameMock).not.toHaveBeenCalled()
+    expect(rmMock).toHaveBeenCalledWith(tempPath, { force: true })
+  })
+
+  it('uses a backup swap when overwriting an existing destination', async () => {
+    const provider = {
+      stat: vi.fn().mockResolvedValue({ size: 10, type: 'file', mtime: 123 }),
+      downloadFile: vi.fn().mockResolvedValue(undefined)
+    }
+    getSshFilesystemProviderMock.mockReturnValue(provider)
+    showSaveDialogMock.mockResolvedValue({ canceled: false, filePath: '/downloads/report.pdf' })
+    statMock.mockResolvedValue({ isDirectory: () => false })
+    registerFilesystemHandlers(store as never)
+
+    await expect(
+      handlers.get('fs:downloadFile')!(
+        { sender: {} },
+        {
+          filePath: '/remote/report.pdf',
+          connectionId: 'ssh-1'
+        }
+      )
+    ).resolves.toEqual({ canceled: false, destinationPath: '/downloads/report.pdf' })
+
+    const tempPath = provider.downloadFile.mock.calls[0][1]
+    const backupPath = renameMock.mock.calls[0][1]
+    expect(renameMock.mock.calls[0]).toEqual(['/downloads/report.pdf', backupPath])
+    expect(renameMock.mock.calls[1]).toEqual([tempPath, '/downloads/report.pdf'])
+    expect(rmMock).toHaveBeenCalledWith(backupPath, { force: true })
   })
 
   it('rejects readFile when the real path escapes allowed roots', async () => {

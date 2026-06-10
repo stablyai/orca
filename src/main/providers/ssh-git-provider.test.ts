@@ -216,6 +216,40 @@ describe('SshGitProvider', () => {
     expect(mux.request).toHaveBeenCalledTimes(2)
   })
 
+  it('getStagedCommitContext falls back when the remote staged patch overflows', async () => {
+    mux.request.mockImplementation(async (_method, payload) => {
+      if (payload.args[1] === '--show-current') {
+        return { stdout: 'feature/ai-commit\n' }
+      }
+      if (payload.args[2] === '--name-status') {
+        return { stdout: 'A\thuge.jsonl\n' }
+      }
+      throw Object.assign(new Error('git stdout exceeded maxBuffer.'), { code: 'ENOBUFS' })
+    })
+
+    await expect(provider.getStagedCommitContext('/home/user/repo')).resolves.toEqual({
+      branch: 'feature/ai-commit',
+      stagedSummary: 'A\thuge.jsonl',
+      stagedPatch: ''
+    })
+  })
+
+  it('getStagedCommitContext rethrows remote patch failures that are not buffer overflows', async () => {
+    mux.request.mockImplementation(async (_method, payload) => {
+      if (payload.args[1] === '--show-current') {
+        return { stdout: 'feature/ai-commit\n' }
+      }
+      if (payload.args[2] === '--name-status') {
+        return { stdout: 'M\tREADME.md\n' }
+      }
+      throw new Error('fatal: bad revision')
+    })
+
+    await expect(provider.getStagedCommitContext('/home/user/repo')).rejects.toThrow(
+      'fatal: bad revision'
+    )
+  })
+
   it('executeCommitMessagePlan delegates the prepared plan to the relay', async () => {
     const execResult = {
       stdout: 'Update docs',

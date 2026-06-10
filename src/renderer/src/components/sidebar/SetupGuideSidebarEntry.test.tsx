@@ -49,12 +49,13 @@ function makeProgress(overrides: Partial<FeatureWallSetupProgress> = {}): Featur
       notifications: false,
       'split-terminal': false,
       'two-worktrees': false,
+      browser: false,
       'task-sources': false,
       'agent-capabilities': false,
       'setup-script': false
     },
     coreDoneCount: 0,
-    coreTotal: 8,
+    coreTotal: 9,
     ...overrides
   }
 }
@@ -69,13 +70,25 @@ function makeAllDoneProgress(
       notifications: true,
       'split-terminal': true,
       'two-worktrees': true,
+      browser: true,
       'task-sources': true,
       'agent-capabilities': true,
       'setup-script': true
     },
-    coreDoneCount: 8,
-    coreTotal: 8,
+    coreDoneCount: 9,
+    coreTotal: 9,
     ...overrides
+  })
+}
+
+function makeOnlyBrowserIncompleteProgress(): FeatureWallSetupProgress {
+  return makeAllDoneProgress({
+    stepDone: {
+      ...makeAllDoneProgress().stepDone,
+      browser: false
+    },
+    coreDoneCount: 8,
+    coreTotal: 9
   })
 }
 
@@ -122,7 +135,14 @@ describe('SetupGuideSidebarEntry', () => {
     expect(renderToStaticMarkup(<SetupGuideSidebarEntry />)).not.toContain('Onboarding checklist')
   })
 
-  it('does not render when the sidebar entry was dismissed', () => {
+  it('renders for fresh active users when only the browser step is incomplete', () => {
+    mocks.useSetupGuideProgress.mockReturnValue(makeOnlyBrowserIncompleteProgress())
+
+    expect(renderToStaticMarkup(<SetupGuideSidebarEntry />)).toContain('Onboarding checklist')
+  })
+
+  it('does not render when the sidebar entry was dismissed with only browser incomplete', () => {
+    mocks.useSetupGuideProgress.mockReturnValue(makeOnlyBrowserIncompleteProgress())
     setupGuideSidebarDismissed = true
 
     expect(renderToStaticMarkup(<SetupGuideSidebarEntry />)).not.toContain('Onboarding checklist')

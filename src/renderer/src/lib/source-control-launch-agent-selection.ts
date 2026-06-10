@@ -1,4 +1,4 @@
-import { AGENT_CATALOG } from '@/lib/agent-catalog'
+import { getAgentCatalog } from '@/lib/agent-catalog'
 import { isCustomAgentId } from '../../../shared/commit-message-agent-spec'
 import type { SourceControlActionRecipe } from '../../../shared/source-control-ai-actions'
 import { filterEnabledTuiAgents } from '../../../shared/tui-agent-selection'
@@ -28,5 +28,5 @@ export function pickSourceControlLaunchAgent(args: {
   ) {
     return args.defaultAgent
   }
-  return AGENT_CATALOG.find((entry) => enabledAgents.includes(entry.id))?.id ?? null
+  return getAgentCatalog().find((entry) => enabledAgents.includes(entry.id))?.id ?? null
 }

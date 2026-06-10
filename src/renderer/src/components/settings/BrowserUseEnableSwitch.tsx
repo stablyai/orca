@@ -1,3 +1,4 @@
+import { translate } from '@/i18n/i18n'
 export function BrowserUseEnableSwitch({
   enabled,
   onToggle
@@ -9,7 +10,10 @@ export function BrowserUseEnableSwitch({
     <button
       role="switch"
       aria-checked={enabled}
-      aria-label="Enable Agent Browser Use"
+      aria-label={translate(
+        'auto.components.settings.BrowserUseEnableSwitch.aea3f45349',
+        'Enable Agent Browser Use'
+      )}
       onClick={onToggle}
       className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border border-transparent transition-colors ${
         enabled ? 'bg-foreground' : 'bg-muted-foreground/30'

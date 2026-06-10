@@ -1,6 +1,6 @@
-import { FIRST_PANE_ID } from '../../../../shared/pane-key'
-import { isTerminalLeafId } from '../../../../shared/stable-pane-id'
-import type { TerminalLayoutSnapshot, TerminalPaneLayoutNode } from '../../../../shared/types'
+import { FIRST_PANE_ID } from '../../../shared/pane-key'
+import { isTerminalLeafId } from '../../../shared/stable-pane-id'
+import type { TerminalLayoutSnapshot, TerminalPaneLayoutNode } from '../../../shared/types'
 
 function getLeftmostLeafId(node: TerminalPaneLayoutNode): string {
   return node.type === 'leaf' ? node.leafId : getLeftmostLeafId(node.first)
@@ -38,7 +38,7 @@ function collectLeafIdsInReplayCreationOrder(
 }
 
 export function resolveRuntimePaneTitleLeafId(
-  tabLayout: TerminalLayoutSnapshot | undefined,
+  tabLayout: { root?: TerminalLayoutSnapshot['root'] } | undefined,
   runtimePaneId: string
 ): string | null {
   return resolveRuntimePaneTitleLeafIdFromRoot(tabLayout?.root, runtimePaneId)

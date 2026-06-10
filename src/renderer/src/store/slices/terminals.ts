@@ -84,6 +84,7 @@ function consumePendingActivationSpawn(
 function getFallbackTabTitle(tab: TerminalTab, index?: number): string {
   return (
     tab.customTitle?.trim() ||
+    tab.quickCommandLabel?.trim() ||
     tab.defaultTitle?.trim() ||
     tab.title ||
     `Terminal ${(index ?? 0) + 1}`
@@ -318,6 +319,7 @@ export type TerminalSlice = {
       /** Coding-harness agent being launched in this tab, recorded so the tab
        *  bar can show the provider icon before the agent's first hook event. */
       launchAgent?: TuiAgent
+      quickCommandLabel?: string | null
     }
   ) => TerminalTab
   openNewTerminalTabInActiveWorkspace: (groupId: string) => Promise<void>
@@ -578,6 +580,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       const shouldActivate = options?.activate !== false
       const nextOrdinal = getNextTerminalOrdinal(existing)
       const defaultTitle = `Terminal ${nextOrdinal}`
+      const quickCommandLabel = options?.quickCommandLabel?.trim()
       const createdShellOverride = resolveCreatedTabShellOverride(
         shellOverride,
         s.settings?.terminalWindowsShell,
@@ -600,6 +603,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         // keeps a lone fresh terminal at "Terminal 1" after older tabs close.
         title: defaultTitle,
         defaultTitle,
+        ...(quickCommandLabel ? { quickCommandLabel } : {}),
         customTitle: null,
         color: null,
         sortOrder: existing.length,
@@ -644,6 +648,9 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         worktreeId,
         contentType: 'terminal' as const,
         label: tab.title,
+        ...(tab.quickCommandLabel?.trim()
+          ? { quickCommandLabel: tab.quickCommandLabel.trim() }
+          : {}),
         customLabel: tab.customTitle,
         color: tab.color,
         sortOrder: dedupeTabOrder(group.tabOrder).length,
@@ -1101,7 +1108,12 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       const tabs = s.tabsByWorktree[ownerWorktreeId] ?? []
       const tabIndex = tabs.findIndex((tab) => tab.id === tabId)
       const currentTab = tabs[tabIndex]
-      if (!currentTab || currentTab.customTitle?.trim() || currentTab.generatedTitle?.trim()) {
+      if (
+        !currentTab ||
+        currentTab.customTitle?.trim() ||
+        currentTab.quickCommandLabel?.trim() ||
+        currentTab.generatedTitle?.trim()
+      ) {
         return s
       }
       const generatedTitle = deriveGeneratedTabTitle(prompt)
@@ -1985,21 +1997,33 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       const tabsByWorktree: Record<string, TerminalTab[]> = Object.fromEntries(
         Object.entries(session.tabsByWorktree)
           .filter(([worktreeId]) => validWorktreeIds.has(worktreeId))
-          .map(([worktreeId, tabs]) => [
-            worktreeId,
-            [...tabs]
-              .filter((tab) => {
-                // Why: old web-client mirrors could persist host surface ids
-                // with "::"; makePaneKey reserves ":" as its separator.
-                return isValidTerminalTabId(tab.id)
-              })
-              .sort((a, b) => a.sortOrder - b.sortOrder || a.createdAt - b.createdAt)
-              .map((tab, index) => ({
-                ...clearTransientTerminalState(tab, index),
-                sortOrder: index,
-                pendingActivationSpawn: true
-              }))
-          ])
+          .map(([worktreeId, tabs]) => {
+            const quickCommandLabelByTerminalId = new Map(
+              (session.unifiedTabs?.[worktreeId] ?? [])
+                .filter((tab) => tab.contentType === 'terminal' && tab.quickCommandLabel?.trim())
+                .map((tab) => [tab.entityId, tab.quickCommandLabel!.trim()])
+            )
+            return [
+              worktreeId,
+              [...tabs]
+                .filter((tab) => {
+                  // Why: old web-client mirrors could persist host surface ids
+                  // with "::"; makePaneKey reserves ":" as its separator.
+                  return isValidTerminalTabId(tab.id)
+                })
+                .sort((a, b) => a.sortOrder - b.sortOrder || a.createdAt - b.createdAt)
+                .map((tab, index) => {
+                  const quickCommandLabel =
+                    tab.quickCommandLabel?.trim() || quickCommandLabelByTerminalId.get(tab.id)
+                  return {
+                    ...clearTransientTerminalState(tab, index),
+                    ...(quickCommandLabel ? { quickCommandLabel } : {}),
+                    sortOrder: index,
+                    pendingActivationSpawn: true
+                  }
+                })
+            ]
+          })
           .filter(([, tabs]) => tabs.length > 0)
       )
 

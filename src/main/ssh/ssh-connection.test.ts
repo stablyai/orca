@@ -140,6 +140,8 @@ import {
   type SshConnectionCallbacks
 } from './ssh-connection'
 import { resolveWithSshG } from './ssh-config-parser'
+import { uploadDirectoryViaSystemSsh, writeFileViaSystemSsh } from './ssh-system-fallback'
+import { getRemoteHostPlatform } from './ssh-remote-platform'
 import type { SshTarget } from '../../shared/ssh-types'
 
 function createTarget(overrides?: Partial<SshTarget>): SshTarget {
@@ -194,6 +196,10 @@ describe('SshConnection', () => {
     clientInstances = []
     spawnSystemSshCommandMock.mockReset()
     spawnSystemSshCommandMock.mockImplementation(() => createSystemCommandChannel())
+    vi.mocked(uploadDirectoryViaSystemSsh).mockReset()
+    vi.mocked(uploadDirectoryViaSystemSsh).mockResolvedValue(undefined)
+    vi.mocked(writeFileViaSystemSsh).mockReset()
+    vi.mocked(writeFileViaSystemSsh).mockResolvedValue(undefined)
     vi.mocked(resolveWithSshG).mockReset()
     vi.mocked(resolveWithSshG).mockResolvedValue(null)
     vi.unstubAllEnvs()
@@ -562,6 +568,17 @@ describe('SshConnection', () => {
     )
   })
 
+  it('can execute native remote commands without the POSIX shell wrapper', async () => {
+    const conn = new SshConnection(createTarget(), createCallbacks())
+    await conn.connect()
+
+    await conn.exec('powershell.exe -NoProfile -EncodedCommand AAAA', { wrapCommand: false })
+
+    expect(clientInstances[0].lastExecCommand).toBe(
+      'powershell.exe -NoProfile -EncodedCommand AAAA'
+    )
+  })
+
   it('times out when ssh2 never opens an exec channel', async () => {
     const conn = new SshConnection(createTarget(), createCallbacks())
     await conn.connect()
@@ -668,7 +685,8 @@ describe('SshConnection', () => {
     expect(clientInstances).toHaveLength(0)
     expect(spawnSystemSshCommandMock).toHaveBeenCalledWith(
       expect.objectContaining({ configHost: 'fdpass-host' }),
-      'printf ORCA-SYSTEM-SSH-OK'
+      'echo ORCA-SYSTEM-SSH-OK',
+      { wrapCommand: false }
     )
   })
 
@@ -685,7 +703,42 @@ describe('SshConnection', () => {
     expect(clientInstances).toHaveLength(0)
     expect(spawnSystemSshCommandMock).toHaveBeenCalledWith(
       expect.objectContaining({ proxyCommand: 'ssh -W %h:%p bastion.example.com' }),
-      'printf ORCA-SYSTEM-SSH-OK'
+      'echo ORCA-SYSTEM-SSH-OK',
+      { wrapCommand: false }
+    )
+  })
+
+  it('passes the detected host platform to system SSH file operations', async () => {
+    vi.mocked(resolveWithSshG).mockResolvedValueOnce({
+      hostname: 'example.com',
+      port: 22,
+      identityFile: [],
+      forwardAgent: false,
+      identitiesOnly: false,
+      proxyUseFdpass: true
+    })
+    const conn = new SshConnection(createTarget({ configHost: 'fdpass-host' }), createCallbacks())
+    const hostPlatform = getRemoteHostPlatform('win32-x64')
+
+    await conn.connect()
+    await conn.uploadDirectory('/tmp/local-relay', 'C:/Users/me/.orca-remote/relay', {
+      hostPlatform
+    })
+    await conn.writeFile('C:/Users/me/.orca-remote/relay/.version', '0.1.0', {
+      hostPlatform
+    })
+
+    expect(uploadDirectoryViaSystemSsh).toHaveBeenCalledWith(
+      expect.objectContaining({ configHost: 'fdpass-host' }),
+      '/tmp/local-relay',
+      'C:/Users/me/.orca-remote/relay',
+      expect.objectContaining({ hostPlatform })
+    )
+    expect(writeFileViaSystemSsh).toHaveBeenCalledWith(
+      expect.objectContaining({ configHost: 'fdpass-host' }),
+      'C:/Users/me/.orca-remote/relay/.version',
+      '0.1.0',
+      expect.objectContaining({ hostPlatform })
     )
   })
 

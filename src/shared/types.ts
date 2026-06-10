@@ -14,7 +14,10 @@ import type { GitLabProjectSettings } from './gitlab-types'
 import type { TaskProvider } from './task-providers'
 import type { FeatureTipId } from './feature-tips'
 import type { ContextualTourId } from './contextual-tours'
-import type { FeatureInteractionState } from './feature-interactions'
+import type {
+  FeatureInteractionState,
+  FeatureInteractionTelemetryBucketState
+} from './feature-interactions'
 import type { GitBranchChangeStatus } from './git-status-types'
 import type { KeybindingOverrides, TerminalShortcutPolicy } from './keybindings'
 import type { RepoIcon } from './repo-icon'
@@ -26,6 +29,8 @@ import type {
 import type { AgentKind, LaunchSource, RequestKind } from './telemetry-events'
 import type { SleepingAgentSessionRecord } from './agent-session-resume'
 import type { ClaudeAgentTeamsMode } from './claude-agent-teams-tmux-compat'
+import type { TerminalCustomTheme } from './terminal-custom-themes'
+import type { UiLanguage } from './ui-language'
 
 // Re-exported for backward compat with renderer call sites that import
 // `WorkspaceCreateTelemetrySource` from '../../../shared/types'.
@@ -274,6 +279,10 @@ export type Worktree = {
   /** True while an auto-named workspace is waiting for the first agent message
    *  to drive the branch/title rename. */
   pendingFirstAgentMessageRename?: boolean
+  /** Holds the last auto-rename generation failure message so the sidebar can
+   *  show a "rename failed" badge. null/undefined when there is no failure
+   *  (never attempted, succeeded, or only a benign skip). */
+  firstAgentMessageRenameError?: string | null
   sparseDirectories?: string[]
   sparseBaseRef?: string
   /** ID of the saved preset this worktree was created from, if any. Cleared
@@ -334,6 +343,8 @@ export type WorktreeMeta = {
   createdWithAgent?: TuiAgent
   /** See {@link Worktree.pendingFirstAgentMessageRename}. */
   pendingFirstAgentMessageRename?: boolean
+  /** See {@link Worktree.firstAgentMessageRenameError}. */
+  firstAgentMessageRenameError?: string | null
   sparseDirectories?: string[]
   sparseBaseRef?: string
   sparsePresetId?: string
@@ -469,6 +480,7 @@ export type Tab = {
   contentType: TabContentType
   label: string // display title (auto-derived from PTY or filename)
   generatedLabel?: string | null
+  quickCommandLabel?: string | null
   customLabel: string | null
   color: string | null
   sortOrder: number
@@ -503,6 +515,8 @@ export type TerminalTab = {
   defaultTitle?: string
   /** Stable opt-in label derived from the first known agent prompt. */
   generatedTitle?: string | null
+  /** Stable label from the tab-bar Quick Command that created this terminal. */
+  quickCommandLabel?: string | null
   customTitle: string | null
   color: string | null
   sortOrder: number
@@ -1154,6 +1168,9 @@ export type LinearConnectionStatus = {
   workspaces?: LinearWorkspace[]
   activeWorkspaceId?: string | null
   selectedWorkspaceId?: LinearWorkspaceSelection | null
+  // Set when a stored token file exists but could not be decrypted, so the
+  // UI can explain reads failing while the connection still looks saved.
+  credentialError?: string
 }
 
 export type LinearIssue = {
@@ -1994,6 +2011,7 @@ export type GlobalSettings = {
   branchPrefixCustom: string
   enableGitHubAttribution: boolean
   theme: 'system' | 'dark' | 'light'
+  uiLanguage: UiLanguage
   appIcon: AppIconId
   appFontFamily: string
   editorAutoSave: boolean
@@ -2015,8 +2033,8 @@ export type GlobalSettings = {
   terminalFontFamily: string
   terminalFontWeight: number
   terminalLineHeight: number
-  /** Mirrors VS Code's terminal.integrated.gpuAcceleration shape.
-   *  - 'auto': use DOM on Linux; otherwise try xterm WebGL and fall back to DOM if the renderer fails.
+  /** Terminal renderer policy.
+   *  - 'auto': try xterm WebGL and fall back to DOM when unsupported or risky.
    *  - 'on': always try xterm WebGL.
    *  - 'off': keep terminal rendering on xterm's DOM renderer. */
   terminalGpuAcceleration: 'auto' | 'on' | 'off'
@@ -2034,6 +2052,7 @@ export type GlobalSettings = {
   terminalCursorStyleDefaultedToBlock?: boolean
   terminalCursorBlink: boolean
   terminalThemeDark: string
+  terminalCustomThemes?: TerminalCustomTheme[]
   terminalDividerColorDark: string
   terminalUseSeparateLightTheme: boolean
   terminalThemeLight: string
@@ -2660,6 +2679,13 @@ export type PersistedUIState = {
   /** User-hidden sidebar entry for the setup guide. The Help menu remains
    *  available so this is a reversible declutter preference, not completion. */
   setupGuideSidebarDismissed?: boolean
+  /** One-shot migration marker for the browser setup-guide milestone. Existing
+   *  profiles missing this marker are evaluated once in the renderer because
+   *  full checklist completion depends on runtime probes. */
+  setupGuideBrowserMilestoneMigrated?: boolean
+  /** Existing users who completed or dismissed the pre-browser checklist stay
+   *  complete after the browser milestone is added. */
+  setupGuideBrowserMilestoneLegacyComplete?: boolean
   /** User-dismissed browser import hint in the browser toolbar. Import remains
    *  available from Settings > Browser and the toolbar overflow menu. */
   browserImportHintHidden?: boolean
@@ -2863,6 +2889,8 @@ export type PersistedState = {
   automations: Automation[]
   automationRuns: AutomationRun[]
   onboarding: OnboardingState
+  /** Main-owned telemetry de-dupe marker; never exposed through PersistedUIState. */
+  featureInteractionTelemetryBuckets?: FeatureInteractionTelemetryBucketState
 }
 
 // ─── Filesystem ─────────────────────────────────────────────

@@ -1,11 +1,84 @@
-import { describe, expect, it } from 'vitest'
+import React, { type ReactNode } from 'react'
+import { renderToStaticMarkup } from 'react-dom/server'
+import { describe, expect, it, vi } from 'vitest'
 import { buildCommitMessageGenerationParams } from './SourceControlTextGenerationDialog'
+import {
+  getDefaultSourceControlTextGenerationSaveTargetKey,
+  SourceControlTextGenerationDialogForm
+} from './SourceControlTextGenerationDialogForm'
 import {
   applyCommitMessageGenerationDefaults,
   applySourceControlTextGenerationDefaults
 } from './SourceControlTextGenerationDefaults'
 
+vi.mock('../source-control/SourceControlActionVariableChips', () => ({
+  SourceControlActionVariableChips: ({
+    variablePreviews
+  }: {
+    variablePreviews?: Partial<Record<string, string>>
+  }) =>
+    React.createElement('div', {
+      'data-variable-previews': JSON.stringify(variablePreviews ?? {})
+    })
+}))
+
+vi.mock('@/components/ui/dialog', () => ({
+  DialogFooter: ({ children }: { children?: ReactNode }) =>
+    React.createElement('div', null, children)
+}))
+
+vi.mock('@/components/ui/select', () => ({
+  Select: ({ children }: { children?: ReactNode }) => React.createElement('div', null, children),
+  SelectContent: ({ children }: { children?: ReactNode }) =>
+    React.createElement('div', null, children),
+  SelectItem: ({ children }: { children?: ReactNode }) =>
+    React.createElement('div', null, children),
+  SelectTrigger: ({ children }: { children?: ReactNode }) =>
+    React.createElement('button', null, children),
+  SelectValue: () => React.createElement('span')
+}))
+
 describe('buildCommitMessageGenerationParams', () => {
+  it('defaults saved text-generation recipes to the global target when repo and global are available', () => {
+    expect(
+      getDefaultSourceControlTextGenerationSaveTargetKey([
+        {
+          target: { type: 'repo', repoId: 'repo-1' },
+          label: 'Save for this repository only',
+          successMessage: ''
+        },
+        {
+          target: { type: 'global' },
+          label: 'Save as default for all repositories',
+          successMessage: ''
+        }
+      ])
+    ).toBe('global')
+  })
+
+  it('passes the base prompt preview to variable chips in text generation dialogs', () => {
+    const markup = renderToStaticMarkup(
+      React.createElement(SourceControlTextGenerationDialogForm, {
+        actionId: 'commitMessage',
+        generateLabel: 'Generate',
+        settings: null,
+        repo: null,
+        baseParams: {
+          agentId: 'codex',
+          model: 'gpt-5.4-mini',
+          commandInputTemplate: '{basePrompt}'
+        },
+        basePromptPreview: 'You are generating a single git commit message.',
+        saveTargets: [],
+        onGenerate: () => {},
+        onOpenChange: () => {},
+        onSaveDefaults: () => {}
+      })
+    )
+
+    expect(markup).toContain('You are generating a single git commit message.')
+  })
+
   it('preserves the resolved model and thinking level for the selected agent', () => {
     expect(
       buildCommitMessageGenerationParams({

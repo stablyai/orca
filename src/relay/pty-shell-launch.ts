@@ -1,6 +1,6 @@
 import { chmodSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
 import { homedir } from 'os'
-import { basename, dirname, join } from 'path'
+import { dirname, join } from 'path'
 import { getPosixOmpShellWrapper } from '../main/pty/omp-shell-wrapper'
 import {
   getZshFinalZdotdirRestoreBlock,
@@ -17,6 +17,23 @@ export type RelayShellLaunchConfig = {
 
 function quotePosixSingle(value: string): string {
   return `'${value.replace(/'/g, `'\\''`)}'`
+}
+
+function shellBasename(shellPath: string): string {
+  return shellPath.replace(/\\/g, '/').split('/').pop()?.toLowerCase() ?? ''
+}
+
+function windowsShellArgs(shellName: string): string[] | null {
+  if (shellName === 'powershell.exe' || shellName === 'powershell') {
+    return ['-NoLogo']
+  }
+  if (shellName === 'pwsh.exe' || shellName === 'pwsh') {
+    return ['-NoLogo']
+  }
+  if (shellName === 'cmd.exe' || shellName === 'cmd') {
+    return []
+  }
+  return null
 }
 
 function hasOverlayRestoreEnv(env: Record<string, string>): boolean {
@@ -226,13 +243,16 @@ trap '__orca_osc133_preexec' DEBUG
 
 export function getRelayShellLaunchConfig(
   shellPath: string,
-  env: Record<string, string>
+  env: Record<string, string>,
+  platform: NodeJS.Platform = process.platform
 ): RelayShellLaunchConfig {
-  if (process.platform === 'win32') {
-    return { args: POSIX_LOGIN_ARGS, env: {} }
+  const shellName = shellBasename(shellPath)
+  if (platform === 'win32') {
+    // Why: pwsh also exists on POSIX remotes; Windows-specific shell args must
+    // only apply when the relay itself is running on native Windows.
+    return { args: windowsShellArgs(shellName) ?? [], env: {} }
   }
 
-  const shellName = basename(shellPath).toLowerCase()
   if (shellName !== 'zsh' && shellName !== 'bash') {
     return { args: POSIX_LOGIN_ARGS, env: {} }
   }

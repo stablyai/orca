@@ -31,6 +31,7 @@ import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
 import { isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { cn } from '@/lib/utils'
+import { useAppStore } from '@/store'
 import type {
   GitLabAssignableUser,
   GitLabPipelineJob,
@@ -39,6 +40,7 @@ import type {
   GitLabWorkItemDetails,
   MRComment
 } from '../../../shared/types'
+import { translate } from '@/i18n/i18n'
 
 type Props = {
   item: GitLabWorkItem | null
@@ -173,7 +175,7 @@ function CommentCard({
           <span className="font-medium text-foreground">{comment.author}</span>
           {comment.isResolved ? (
             <span className="rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700 dark:text-emerald-300">
-              resolved
+              {translate('auto.components.GitLabItemDialog.f23ea85341', 'resolved')}
             </span>
           ) : null}
         </div>
@@ -188,7 +190,9 @@ function CommentCard({
               className="h-6"
             >
               {resolving ? <LoaderCircle className="size-3 animate-spin" /> : null}
-              {comment.isResolved ? 'Reopen' : 'Resolve'}
+              {comment.isResolved
+                ? translate('auto.components.GitLabItemDialog.65e784c1f1', 'Reopen')
+                : translate('auto.components.GitLabItemDialog.4168eb2c51', 'Resolve')}
             </Button>
           ) : null}
           <span>{comment.createdAt ? new Date(comment.createdAt).toLocaleDateString() : ''}</span>
@@ -260,7 +264,7 @@ function PipelineJobRow({
               className="h-6"
             >
               {retrying ? <LoaderCircle className="size-3 animate-spin" /> : null}
-              Retry
+              {translate('auto.components.GitLabItemDialog.fa3e042203', 'Retry')}
             </Button>
           ) : null}
           {job.webUrl ? (
@@ -269,7 +273,7 @@ function PipelineJobRow({
               variant="ghost"
               size="icon-xs"
               onClick={() => void window.api.shell.openUrl(job.webUrl)}
-              title="Open job in GitLab"
+              title={translate('auto.components.GitLabItemDialog.032ae1312b', 'Open job in GitLab')}
             >
               <ExternalLink className="size-3" />
             </Button>
@@ -279,21 +283,23 @@ function PipelineJobRow({
       {expanded ? (
         <div className="mx-3 mb-2 rounded-md border border-border/50 bg-muted/20">
           <div className="flex items-center justify-between border-b border-border/40 px-2.5 py-1.5 text-[11px] text-muted-foreground">
-            <span>Job log</span>
+            <span>{translate('auto.components.GitLabItemDialog.2f9b27f838', 'Job log')}</span>
             <Button type="button" variant="ghost" size="xs" onClick={() => onToggleTrace(job)}>
-              Hide
+              {translate('auto.components.GitLabItemDialog.028bde664e', 'Hide')}
             </Button>
           </div>
           {traceState?.loading ? (
             <div className="flex items-center gap-2 px-2.5 py-3 text-xs text-muted-foreground">
               <LoaderCircle className="size-3.5 animate-spin" />
-              Loading log
+              {translate('auto.components.GitLabItemDialog.d600c2619a', 'Loading log')}
             </div>
           ) : traceState?.error ? (
             <div className="px-2.5 py-3 text-xs text-destructive">{traceState.error}</div>
           ) : (
             <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-words px-2.5 py-2 font-mono text-[11px] leading-4 text-foreground scrollbar-sleek">
-              {traceState?.trace?.trim() ? traceState.trace : 'No log output.'}
+              {traceState?.trace?.trim()
+                ? traceState.trace
+                : translate('auto.components.GitLabItemDialog.32f8bef818', 'No log output.')}
             </pre>
           )}
         </div>
@@ -487,7 +493,7 @@ export default function GitLabItemDialog({
     const nextBody = bodyDraft
     const nextLabels = parseGitLabLabelDraft(labelDraft)
     if (!nextTitle) {
-      toast.error('MR title is required.')
+      toast.error(translate('auto.components.GitLabItemDialog.98718490e4', 'MR title is required.'))
       return
     }
 
@@ -534,6 +540,7 @@ export default function GitLabItemDialog({
           setTitleDraft('')
           setBodyDraft('')
           setLabelDraft('')
+          useAppStore.getState().recordFeatureInteraction('gitlab-tasks')
         }
       } else if (mountedRef.current) {
         toast.error(res.error)
@@ -614,7 +621,11 @@ export default function GitLabItemDialog({
           return
         }
         if (result.ok) {
-          toast.success(`Retried ${job.name}`)
+          toast.success(
+            translate('auto.components.GitLabItemDialog.f7cb495a12', 'Retried {{value0}}', {
+              value0: job.name
+            })
+          )
           if (result.job) {
             setDetails((current) =>
               current
@@ -649,7 +660,12 @@ export default function GitLabItemDialog({
         .map((reviewer) => reviewer.id)
         .filter((id): id is number => typeof id === 'number')
       if (reviewerIds.length !== nextReviewers.length) {
-        toast.error('Reviewer id is unavailable for this GitLab user.')
+        toast.error(
+          translate(
+            'auto.components.GitLabItemDialog.ceaf7c30c7',
+            'Reviewer id is unavailable for this GitLab user.'
+          )
+        )
         return
       }
       setReviewerUpdating(true)
@@ -671,6 +687,7 @@ export default function GitLabItemDialog({
           setReviewerOptions((current) =>
             current ? dedupeGitLabUsers([...current, ...result.reviewers]) : current
           )
+          useAppStore.getState().recordFeatureInteraction('gitlab-tasks')
         } else {
           toast.error(result.error)
         }
@@ -691,11 +708,21 @@ export default function GitLabItemDialog({
     const line = Number.parseInt(inlineCommentLine, 10)
     const body = inlineCommentBody.trim()
     if (!file || !Number.isFinite(line) || line <= 0 || !body) {
-      toast.error('File, line, and comment are required.')
+      toast.error(
+        translate(
+          'auto.components.GitLabItemDialog.00d0d25825',
+          'File, line, and comment are required.'
+        )
+      )
       return
     }
     if (!details.baseSha || !details.startSha || !details.headSha) {
-      toast.error('MR diff refs are unavailable for inline comments.')
+      toast.error(
+        translate(
+          'auto.components.GitLabItemDialog.ffdd9a78e1',
+          'MR diff refs are unavailable for inline comments.'
+        )
+      )
       return
     }
     setInlineCommentSubmitting(true)
@@ -722,7 +749,10 @@ export default function GitLabItemDialog({
           current ? { ...current, comments: [...current.comments, result.comment] } : current
         )
         setInlineCommentBody('')
-        toast.success('Inline comment added')
+        useAppStore.getState().recordFeatureInteraction('gitlab-tasks')
+        toast.success(
+          translate('auto.components.GitLabItemDialog.60c13320c4', 'Inline comment added')
+        )
       } else {
         toast.error(result.error)
       }
@@ -750,7 +780,12 @@ export default function GitLabItemDialog({
       const res = await window.api.gl.closeMR({ repoPath, iid: item.number })
       if (res.ok) {
         if (mountedRef.current) {
-          toast.success(`Closed MR !${item.number}`)
+          useAppStore.getState().recordFeatureInteraction('gitlab-tasks')
+          toast.success(
+            translate('auto.components.GitLabItemDialog.9b11cd233f', 'Closed MR !{{value0}}', {
+              value0: item.number
+            })
+          )
           handleRefresh()
         }
       } else {
@@ -774,7 +809,12 @@ export default function GitLabItemDialog({
       const res = await window.api.gl.reopenMR({ repoPath, iid: item.number })
       if (res.ok) {
         if (mountedRef.current) {
-          toast.success(`Reopened MR !${item.number}`)
+          useAppStore.getState().recordFeatureInteraction('gitlab-tasks')
+          toast.success(
+            translate('auto.components.GitLabItemDialog.865ea2703e', 'Reopened MR !{{value0}}', {
+              value0: item.number
+            })
+          )
           handleRefresh()
         }
       } else {
@@ -798,7 +838,12 @@ export default function GitLabItemDialog({
       const res = await window.api.gl.mergeMR({ repoPath, iid: item.number })
       if (res.ok) {
         if (mountedRef.current) {
-          toast.success(`Merged MR !${item.number}`)
+          useAppStore.getState().recordFeatureInteraction('gitlab-tasks')
+          toast.success(
+            translate('auto.components.GitLabItemDialog.e089f62594', 'Merged MR !{{value0}}', {
+              value0: item.number
+            })
+          )
           handleRefresh()
         }
       } else {
@@ -831,6 +876,7 @@ export default function GitLabItemDialog({
           setCommentDraftState((current) =>
             current.itemId === itemId ? { itemId, value: '' } : current
           )
+          useAppStore.getState().recordFeatureInteraction('gitlab-tasks')
           handleRefresh()
         }
       } else {
@@ -870,6 +916,7 @@ export default function GitLabItemDialog({
                   }
                 : current
             )
+            useAppStore.getState().recordFeatureInteraction('gitlab-tasks')
           }
         } else if (mountedRef.current) {
           toast.error(res.error)
@@ -910,8 +957,14 @@ export default function GitLabItemDialog({
     <Sheet open={item !== null} onOpenChange={(open) => !open && onClose()}>
       <SheetContent side="right" className="flex w-full flex-col gap-0 p-0 sm:max-w-2xl">
         <VisuallyHidden.Root>
-          <SheetTitle>{item ? visibleTitle : 'Work item'}</SheetTitle>
-          <SheetDescription>GitLab work item detail</SheetDescription>
+          <SheetTitle>
+            {item
+              ? visibleTitle
+              : translate('auto.components.GitLabItemDialog.3a051b8ade', 'Work item')}
+          </SheetTitle>
+          <SheetDescription>
+            {translate('auto.components.GitLabItemDialog.30c97083c2', 'GitLab work item detail')}
+          </SheetDescription>
         </VisuallyHidden.Root>
 
         {item ? (
@@ -926,7 +979,12 @@ export default function GitLabItemDialog({
                       {item.number}
                     </span>
                     <StateBadge state={item.state} />
-                    {item.author ? <span>by {item.author}</span> : null}
+                    {item.author ? (
+                      <span>
+                        {translate('auto.components.GitLabItemDialog.9bfb4a24d7', 'by')}
+                        {item.author}
+                      </span>
+                    ) : null}
                   </div>
                   <h2 className="mt-1.5 text-lg font-semibold leading-tight text-foreground">
                     {visibleTitle}
@@ -947,7 +1005,7 @@ export default function GitLabItemDialog({
                 <Button
                   variant="ghost"
                   size="icon-sm"
-                  aria-label="Refresh"
+                  aria-label={translate('auto.components.GitLabItemDialog.b3c156dd51', 'Refresh')}
                   disabled={loading}
                   onClick={handleRefresh}
                   className="size-7"
@@ -963,9 +1021,11 @@ export default function GitLabItemDialog({
 
             <Tabs defaultValue="description" className="flex min-h-0 flex-1 flex-col">
               <TabsList className="mx-5 mt-3 self-start">
-                <TabsTrigger value="description">Description</TabsTrigger>
+                <TabsTrigger value="description">
+                  {translate('auto.components.GitLabItemDialog.908d8d2a73', 'Description')}
+                </TabsTrigger>
                 <TabsTrigger value="conversation">
-                  Conversation
+                  {translate('auto.components.GitLabItemDialog.c996e2962c', 'Conversation')}
                   {details?.comments?.length ? (
                     <span className="ml-1.5 rounded-full bg-muted px-1.5 text-[10px] font-medium">
                       {details.comments.length}
@@ -974,7 +1034,7 @@ export default function GitLabItemDialog({
                 </TabsTrigger>
                 {isMR ? (
                   <TabsTrigger value="files">
-                    Files
+                    {translate('auto.components.GitLabItemDialog.be3d291837', 'Files')}
                     {details?.files?.length ? (
                       <span className="ml-1.5 rounded-full bg-muted px-1.5 text-[10px] font-medium">
                         {details.files.length}
@@ -984,7 +1044,7 @@ export default function GitLabItemDialog({
                 ) : null}
                 {isMR ? (
                   <TabsTrigger value="pipeline">
-                    Pipeline
+                    {translate('auto.components.GitLabItemDialog.02cbe2de44', 'Pipeline')}
                     {details?.pipelineJobs?.length ? (
                       <span className="ml-1.5 rounded-full bg-muted px-1.5 text-[10px] font-medium">
                         {details.pipelineJobs.length}
@@ -1006,16 +1066,30 @@ export default function GitLabItemDialog({
                     <div className="mb-4 rounded-md border border-border/50 bg-muted/20 p-3">
                       <div className="flex items-center justify-between gap-2">
                         <div>
-                          <div className="text-xs font-medium text-foreground">Reviewers</div>
+                          <div className="text-xs font-medium text-foreground">
+                            {translate('auto.components.GitLabItemDialog.4f9313984d', 'Reviewers')}
+                          </div>
                           {approvalState ? (
                             <div className="mt-0.5 text-[11px] text-muted-foreground">
                               {approvalState.approvalsLeft === 0
-                                ? 'Approved'
-                                : `${approvalState.approvalsLeft ?? 0} approval${
-                                    approvalState.approvalsLeft === 1 ? '' : 's'
-                                  } remaining`}
+                                ? translate(
+                                    'auto.components.GitLabItemDialog.22511537d2',
+                                    'Approved'
+                                  )
+                                : translate(
+                                    'auto.components.GitLabItemDialog.40c56b95e2',
+                                    '{{value0}} approval{{value1}} remaining',
+                                    {
+                                      value0: approvalState.approvalsLeft ?? 0,
+                                      value1: approvalState.approvalsLeft === 1 ? '' : 's'
+                                    }
+                                  )}
                               {typeof approvalState.approvalsRequired === 'number'
-                                ? ` of ${approvalState.approvalsRequired} required`
+                                ? translate(
+                                    'auto.components.GitLabItemDialog.00f3bab87b',
+                                    ' of {{value0}} required',
+                                    { value0: approvalState.approvalsRequired }
+                                  )
                                 : ''}
                             </div>
                           ) : null}
@@ -1030,7 +1104,7 @@ export default function GitLabItemDialog({
                           {reviewerOptionsLoading ? (
                             <LoaderCircle className="size-3 animate-spin" />
                           ) : null}
-                          Manage
+                          {translate('auto.components.GitLabItemDialog.cb55b0390f', 'Manage')}
                         </Button>
                       </div>
                       <div className="mt-2 flex flex-wrap gap-1.5">
@@ -1052,14 +1126,23 @@ export default function GitLabItemDialog({
                                   )
                                 }
                                 className="rounded-full p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-50"
-                                aria-label={`Remove reviewer ${reviewer.username}`}
+                                aria-label={translate(
+                                  'auto.components.GitLabItemDialog.1b19cdc510',
+                                  'Remove reviewer {{value0}}',
+                                  { value0: reviewer.username }
+                                )}
                               >
                                 <X className="size-3" />
                               </button>
                             </span>
                           ))
                         ) : (
-                          <span className="text-[11px] text-muted-foreground">No reviewers.</span>
+                          <span className="text-[11px] text-muted-foreground">
+                            {translate(
+                              'auto.components.GitLabItemDialog.474b50d988',
+                              'No reviewers.'
+                            )}
+                          </span>
                         )}
                       </div>
                       {reviewerOptions ? (
@@ -1070,7 +1153,12 @@ export default function GitLabItemDialog({
                             onChange={(event) => setReviewerDraftId(event.target.value)}
                             className="h-8 min-w-0 flex-1 rounded-md border border-input bg-background px-2 text-xs text-foreground"
                           >
-                            <option value="">Add reviewer</option>
+                            <option value="">
+                              {translate(
+                                'auto.components.GitLabItemDialog.05939e977d',
+                                'Add reviewer'
+                              )}
+                            </option>
                             {reviewerOptionRows.map((reviewer) => (
                               <option key={gitLabUserKey(reviewer)} value={gitLabUserKey(reviewer)}>
                                 {reviewer.username}
@@ -1093,7 +1181,7 @@ export default function GitLabItemDialog({
                             {reviewerUpdating ? (
                               <LoaderCircle className="size-3 animate-spin" />
                             ) : null}
-                            Add
+                            {translate('auto.components.GitLabItemDialog.7a2117129a', 'Add')}
                           </Button>
                         </div>
                       ) : null}
@@ -1106,7 +1194,16 @@ export default function GitLabItemDialog({
                             >
                               <span className="min-w-0 truncate">{rule.name}</span>
                               <span>
-                                {rule.approved ? 'Approved' : `${rule.approvalsRequired} required`}
+                                {rule.approved
+                                  ? translate(
+                                      'auto.components.GitLabItemDialog.22511537d2',
+                                      'Approved'
+                                    )
+                                  : translate(
+                                      'auto.components.GitLabItemDialog.6de8ce0cc6',
+                                      '{{value0}} required',
+                                      { value0: rule.approvalsRequired }
+                                    )}
                               </span>
                             </div>
                           ))}
@@ -1122,7 +1219,7 @@ export default function GitLabItemDialog({
                     <div className="space-y-3">
                       <div>
                         <label className="mb-1 block text-xs font-medium text-muted-foreground">
-                          Title
+                          {translate('auto.components.GitLabItemDialog.89f3f19368', 'Title')}
                         </label>
                         <input
                           value={titleDraft}
@@ -1133,7 +1230,7 @@ export default function GitLabItemDialog({
                       </div>
                       <div>
                         <label className="mb-1 block text-xs font-medium text-muted-foreground">
-                          Description
+                          {translate('auto.components.GitLabItemDialog.908d8d2a73', 'Description')}
                         </label>
                         <textarea
                           value={bodyDraft}
@@ -1145,13 +1242,16 @@ export default function GitLabItemDialog({
                       </div>
                       <div>
                         <label className="mb-1 block text-xs font-medium text-muted-foreground">
-                          Labels
+                          {translate('auto.components.GitLabItemDialog.dde24ade55', 'Labels')}
                         </label>
                         <input
                           value={labelDraft}
                           onChange={(event) => setLabelDraft(event.target.value)}
                           disabled={detailsSaving}
-                          placeholder="bug, backend"
+                          placeholder={translate(
+                            'auto.components.GitLabItemDialog.3c0b6ccca7',
+                            'bug, backend'
+                          )}
                           className="h-9 w-full rounded-md border border-input bg-transparent px-2.5 text-sm shadow-xs focus:border-ring focus:outline-none focus:ring-[3px] focus:ring-ring/50"
                         />
                         {labelOptionsLoading || labelSuggestionOptions.length > 0 ? (
@@ -1159,7 +1259,10 @@ export default function GitLabItemDialog({
                             {labelOptionsLoading ? (
                               <span className="inline-flex h-6 items-center gap-1 rounded-full border border-border/50 px-2 text-[11px] text-muted-foreground">
                                 <LoaderCircle className="size-3 animate-spin" />
-                                Loading labels
+                                {translate(
+                                  'auto.components.GitLabItemDialog.717b706849',
+                                  'Loading labels'
+                                )}
                               </span>
                             ) : null}
                             {labelSuggestionOptions.map((label) => {
@@ -1198,7 +1301,7 @@ export default function GitLabItemDialog({
                           onClick={handleCancelDetailsEdit}
                         >
                           <X className="size-3.5" />
-                          Cancel
+                          {translate('auto.components.GitLabItemDialog.f72fad3b16', 'Cancel')}
                         </Button>
                         <Button
                           type="button"
@@ -1211,7 +1314,7 @@ export default function GitLabItemDialog({
                           ) : (
                             <Check className="size-3.5" />
                           )}
-                          Save
+                          {translate('auto.components.GitLabItemDialog.93f79a3fc1', 'Save')}
                         </Button>
                       </div>
                     </div>
@@ -1227,7 +1330,7 @@ export default function GitLabItemDialog({
                             className="gap-1.5"
                           >
                             <Pencil className="size-3.5" />
-                            Edit
+                            {translate('auto.components.GitLabItemDialog.da4174b00f', 'Edit')}
                           </Button>
                         </div>
                       ) : null}
@@ -1245,11 +1348,16 @@ export default function GitLabItemDialog({
                             className="gap-1.5"
                           >
                             <Pencil className="size-3.5" />
-                            Edit
+                            {translate('auto.components.GitLabItemDialog.da4174b00f', 'Edit')}
                           </Button>
                         </div>
                       ) : null}
-                      <p className="text-sm text-muted-foreground">No description.</p>
+                      <p className="text-sm text-muted-foreground">
+                        {translate(
+                          'auto.components.GitLabItemDialog.14423484db',
+                          'No description.'
+                        )}
+                      </p>
                     </div>
                   )}
                 </TabsContent>
@@ -1272,7 +1380,9 @@ export default function GitLabItemDialog({
                       />
                     ))
                   ) : (
-                    <p className="text-sm text-muted-foreground">No comments yet.</p>
+                    <p className="text-sm text-muted-foreground">
+                      {translate('auto.components.GitLabItemDialog.85a8170279', 'No comments yet.')}
+                    </p>
                   )}
                 </TabsContent>
 
@@ -1291,7 +1401,9 @@ export default function GitLabItemDialog({
                               onChange={(event) => setInlineCommentFilePath(event.target.value)}
                               className="h-8 min-w-0 rounded-md border border-input bg-background px-2 text-xs text-foreground"
                             >
-                              <option value="">File</option>
+                              <option value="">
+                                {translate('auto.components.GitLabItemDialog.ceb08a733d', 'File')}
+                              </option>
                               {details.files.map((file) => (
                                 <option key={file.path} value={file.path}>
                                   {file.path}
@@ -1302,7 +1414,10 @@ export default function GitLabItemDialog({
                               value={inlineCommentLine}
                               onChange={(event) => setInlineCommentLine(event.target.value)}
                               inputMode="numeric"
-                              placeholder="Line"
+                              placeholder={translate(
+                                'auto.components.GitLabItemDialog.7a7204417f',
+                                'Line'
+                              )}
                               className="h-8 rounded-md border border-input bg-background px-2 text-xs text-foreground"
                             />
                           </div>
@@ -1310,7 +1425,10 @@ export default function GitLabItemDialog({
                             value={inlineCommentBody}
                             onChange={(event) => setInlineCommentBody(event.target.value)}
                             rows={2}
-                            placeholder="Inline comment"
+                            placeholder={translate(
+                              'auto.components.GitLabItemDialog.21f8dde18a',
+                              'Inline comment'
+                            )}
                             className="mt-2 w-full resize-none rounded-md border border-input bg-background px-2.5 py-1.5 text-sm shadow-xs focus:border-ring focus:outline-none focus:ring-[3px] focus:ring-ring/50"
                           />
                           <div className="mt-2 flex justify-end">
@@ -1330,7 +1448,7 @@ export default function GitLabItemDialog({
                               ) : (
                                 <Send className="size-3.5" />
                               )}
-                              Comment
+                              {translate('auto.components.GitLabItemDialog.84012fa8fb', 'Comment')}
                             </Button>
                           </div>
                         </div>
@@ -1347,7 +1465,11 @@ export default function GitLabItemDialog({
                                   </div>
                                   {file.oldPath ? (
                                     <div className="break-all font-mono text-[11px] text-muted-foreground">
-                                      from {file.oldPath}
+                                      {translate(
+                                        'auto.components.GitLabItemDialog.a7eb4f4916',
+                                        'from'
+                                      )}
+                                      {file.oldPath}
                                     </div>
                                   ) : null}
                                 </div>
@@ -1362,7 +1484,10 @@ export default function GitLabItemDialog({
                                 </pre>
                               ) : (
                                 <div className="px-3 py-3 text-xs text-muted-foreground">
-                                  Diff content unavailable.
+                                  {translate(
+                                    'auto.components.GitLabItemDialog.007423f585',
+                                    'Diff content unavailable.'
+                                  )}
                                 </div>
                               )}
                             </div>
@@ -1370,7 +1495,12 @@ export default function GitLabItemDialog({
                         </div>
                       </>
                     ) : (
-                      <p className="text-sm text-muted-foreground">No changed files.</p>
+                      <p className="text-sm text-muted-foreground">
+                        {translate(
+                          'auto.components.GitLabItemDialog.808b1ca1ba',
+                          'No changed files.'
+                        )}
+                      </p>
                     )}
                   </TabsContent>
                 ) : null}
@@ -1396,7 +1526,12 @@ export default function GitLabItemDialog({
                         ))}
                       </div>
                     ) : (
-                      <p className="text-sm text-muted-foreground">No pipeline runs for this MR.</p>
+                      <p className="text-sm text-muted-foreground">
+                        {translate(
+                          'auto.components.GitLabItemDialog.f11e3e7675',
+                          'No pipeline runs for this MR.'
+                        )}
+                      </p>
                     )}
                   </TabsContent>
                 ) : null}
@@ -1410,7 +1545,11 @@ export default function GitLabItemDialog({
                 <textarea
                   value={commentDraft}
                   onChange={(e) => updateCommentDraft(e.target.value)}
-                  placeholder={`Comment on ${prefix}${item.number}…`}
+                  placeholder={translate(
+                    'auto.components.GitLabItemDialog.c08e1d5a57',
+                    'Comment on {{value0}}{{value1}}…',
+                    { value0: prefix, value1: item.number }
+                  )}
                   rows={2}
                   disabled={commentSubmitting}
                   className="min-h-9 w-full resize-none rounded-md border border-input bg-transparent px-2.5 py-1.5 text-sm shadow-xs focus:border-ring focus:outline-none focus:ring-[3px] focus:ring-ring/50"
@@ -1434,7 +1573,7 @@ export default function GitLabItemDialog({
                   ) : (
                     <Send className="size-3.5" />
                   )}
-                  Comment
+                  {translate('auto.components.GitLabItemDialog.84012fa8fb', 'Comment')}
                 </Button>
               </div>
 
@@ -1446,12 +1585,12 @@ export default function GitLabItemDialog({
                   className="gap-1.5"
                 >
                   <ExternalLink className="size-3.5" />
-                  Open in GitLab
+                  {translate('auto.components.GitLabItemDialog.f2e64d1c20', 'Open in GitLab')}
                 </Button>
                 <div className="flex items-center gap-2">
                   {onCreateWorkspace ? (
                     <Button variant="outline" size="sm" onClick={() => onCreateWorkspace(item)}>
-                      Create workspace
+                      {translate('auto.components.GitLabItemDialog.131865e231', 'Create workspace')}
                     </Button>
                   ) : null}
                   {canMerge ? (
@@ -1463,7 +1602,7 @@ export default function GitLabItemDialog({
                       {actionInFlight === 'merge' ? (
                         <LoaderCircle className="size-3.5 animate-spin" />
                       ) : null}
-                      Merge
+                      {translate('auto.components.GitLabItemDialog.16b3412570', 'Merge')}
                     </Button>
                   ) : null}
                   {canClose ? (
@@ -1476,7 +1615,7 @@ export default function GitLabItemDialog({
                       {actionInFlight === 'close' ? (
                         <LoaderCircle className="size-3.5 animate-spin" />
                       ) : null}
-                      Close
+                      {translate('auto.components.GitLabItemDialog.a199eb364b', 'Close')}
                     </Button>
                   ) : null}
                   {canReopen ? (
@@ -1489,7 +1628,7 @@ export default function GitLabItemDialog({
                       {actionInFlight === 'reopen' ? (
                         <LoaderCircle className="size-3.5 animate-spin" />
                       ) : null}
-                      Reopen
+                      {translate('auto.components.GitLabItemDialog.65e784c1f1', 'Reopen')}
                     </Button>
                   ) : null}
                 </div>

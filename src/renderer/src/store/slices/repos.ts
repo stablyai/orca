@@ -22,6 +22,7 @@ import { toRuntimeWorktreeSelector } from '../../runtime/runtime-worktree-select
 import { buildDismissedOnboardingFolderAgentStartup } from '@/lib/onboarding-folder-agent-startup'
 import { markOnboardingProjectAdded } from '@/lib/onboarding-project-checklist'
 import { filterSetupScriptPromptDismissalsToValidRepos } from '@/lib/setup-script-prompt'
+import { translate } from '@/i18n/i18n'
 
 const ERROR_TOAST_DURATION = 60_000
 
@@ -284,9 +285,12 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
       return result
     } catch (err) {
       console.error('Failed to import nested repos:', err)
-      toast.error('Failed to import repositories', {
-        description: err instanceof Error ? err.message : String(err)
-      })
+      toast.error(
+        translate('auto.store.slices.repos.6d3318e813', 'Failed to import repositories'),
+        {
+          description: err instanceof Error ? err.message : String(err)
+        }
+      )
       return null
     }
   },
@@ -452,18 +456,25 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
         return { repos: [...s.repos, repo] }
       })
       if (alreadyAdded) {
-        toast.info('Project already added', { description: repo.displayName })
-      } else {
-        toast.success(isGitRepoKind(repo) ? 'Project added' : 'Folder added', {
+        toast.info(translate('auto.store.slices.repos.a8e4b3af5b', 'Project already added'), {
           description: repo.displayName
         })
+      } else {
+        toast.success(
+          isGitRepoKind(repo)
+            ? translate('auto.store.slices.repos.8bb3ad7935', 'Project added')
+            : translate('auto.store.slices.repos.90d129b48b', 'Folder added'),
+          {
+            description: repo.displayName
+          }
+        )
       }
       return repo
     } catch (err) {
       console.error('Failed to add project:', err)
       const message = err instanceof Error ? err.message : String(err)
       const duration = ERROR_TOAST_DURATION
-      toast.error('Failed to add project', {
+      toast.error(translate('auto.store.slices.repos.c6e022ddfc', 'Failed to add project'), {
         description: message,
         duration
       })
@@ -476,7 +487,12 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
     if (target.kind !== 'local') {
       // Why: OS folder pickers return client-local paths. Remote environments
       // need an explicit server path, which the Add Project dialog handles.
-      toast.error('Use a server path to add projects from a remote runtime.')
+      toast.error(
+        translate(
+          'auto.store.slices.repos.e649269645',
+          'Use a server path to add projects from a remote runtime.'
+        )
+      )
       return null
     }
     const path = await window.api.repos.pickFolder()
@@ -522,7 +538,10 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
     } catch (err) {
       console.error('Failed to add folder:', err)
       const message = err instanceof Error ? err.message : String(err)
-      toast.error('Failed to add folder', { description: message, duration: ERROR_TOAST_DURATION })
+      toast.error(translate('auto.store.slices.repos.b7e14472ae', 'Failed to add folder'), {
+        description: message,
+        duration: ERROR_TOAST_DURATION
+      })
       return null
     }
   },

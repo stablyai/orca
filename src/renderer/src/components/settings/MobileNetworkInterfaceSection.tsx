@@ -4,6 +4,7 @@ import { Button } from '../ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
 import type { MobileNetworkInterface } from './mobile-network-interface-selection'
+import { translate } from '@/i18n/i18n'
 
 const TAILSCALE_DOWNLOAD_URL = 'https://tailscale.com/download'
 
@@ -36,18 +37,29 @@ export function MobileNetworkInterfaceSection({
     <div className="rounded-lg border border-border/60 p-4">
       <div className="mb-3 flex items-center gap-2">
         <Wifi className="size-4 text-muted-foreground" />
-        <span className="text-sm font-medium">Network Interface</span>
+        <span className="text-sm font-medium">
+          {translate(
+            'auto.components.settings.MobileNetworkInterfaceSection.406a35121c',
+            'Network Interface'
+          )}
+        </span>
       </div>
       <p className="text-muted-foreground mb-3 text-xs">
-        Choose which network address to advertise in the QR code. Use your LAN address for
-        same-network pairing, or an overlay network address (Tailscale, ZeroTier) for cross-network
-        access.
+        {translate(
+          'auto.components.settings.MobileNetworkInterfaceSection.d536b5e20d',
+          'Choose which network address to advertise in the QR code. Use your LAN address for same-network pairing, or an overlay network address (Tailscale, ZeroTier) for cross-network access.'
+        )}
       </p>
       <div className="space-y-3">
         <div className="flex flex-wrap items-center gap-3">
           <Select value={selectedAddress} onValueChange={onSelectedAddressChange}>
             <SelectTrigger size="sm" className="min-w-[220px]">
-              <SelectValue placeholder="No interfaces found" />
+              <SelectValue
+                placeholder={translate(
+                  'auto.components.settings.MobileNetworkInterfaceSection.b2c384cfd6',
+                  'No interfaces found'
+                )}
+              />
             </SelectTrigger>
             <SelectContent>
               {networkInterfaces.map((iface) => (
@@ -67,14 +79,20 @@ export function MobileNetworkInterfaceSection({
                 size="icon-sm"
                 onClick={onRefreshNetworkInterfaces}
                 disabled={refreshingNetworkInterfaces}
-                aria-label="Refresh network interfaces"
+                aria-label={translate(
+                  'auto.components.settings.MobileNetworkInterfaceSection.a9db5d771d',
+                  'Refresh network interfaces'
+                )}
                 className="text-muted-foreground"
               >
                 <RefreshCw className={refreshingNetworkInterfaces ? 'animate-spin' : ''} />
               </Button>
             </TooltipTrigger>
             <TooltipContent side="bottom" sideOffset={6}>
-              Refresh network interfaces
+              {translate(
+                'auto.components.settings.MobileNetworkInterfaceSection.a9db5d771d',
+                'Refresh network interfaces'
+              )}
             </TooltipContent>
           </Tooltip>
         </div>
@@ -91,39 +109,72 @@ export function MobileNetworkInterfaceSection({
           ) : (
             <QrCode className="size-3.5" />
           )}
-          {hasQrCode ? 'Regenerate' : 'Generate QR Code'}
+          {hasQrCode
+            ? translate(
+                'auto.components.settings.MobileNetworkInterfaceSection.1e64659126',
+                'Regenerate'
+              )
+            : translate(
+                'auto.components.settings.MobileNetworkInterfaceSection.c541f67790',
+                'Generate QR Code'
+              )}
         </Button>
       </div>
       <Accordion type="single" collapsible className="mt-4 border-t border-border/60 pt-2">
         <AccordionItem value="remote-pairing-guide">
           <AccordionTrigger className="py-2 text-xs">
-            Connect outside your Wi-Fi with a tailnet
+            {translate(
+              'auto.components.settings.MobileNetworkInterfaceSection.39fad211d9',
+              'Connect outside your Wi-Fi with a tailnet'
+            )}
           </AccordionTrigger>
           <AccordionContent className="space-y-3 text-xs text-muted-foreground">
             <p>
-              Orca Mobile connects directly to this computer. To use it away from the same local
-              network, put your computer and phone on the same private overlay network, then
-              generate the QR code with that network address selected.
+              {translate(
+                'auto.components.settings.MobileNetworkInterfaceSection.9fc5d203ff',
+                'Orca Mobile connects directly to this computer. To use it away from the same local network, put your computer and phone on the same private overlay network, then generate the QR code with that network address selected.'
+              )}
             </p>
             <ol className="list-decimal space-y-1 pl-4">
               <li>
-                Install{' '}
+                {translate(
+                  'auto.components.settings.MobileNetworkInterfaceSection.51d29927eb',
+                  'Install'
+                )}{' '}
                 <button
                   type="button"
                   onClick={() => void window.api.shell.openUrl(TAILSCALE_DOWNLOAD_URL)}
                   className="inline-flex items-center gap-1 font-medium text-foreground underline-offset-2 hover:underline"
                 >
-                  Tailscale
+                  {translate(
+                    'auto.components.settings.MobileNetworkInterfaceSection.1dc87a7fbc',
+                    'Tailscale'
+                  )}
                   <ExternalLink className="size-3" />
                 </button>{' '}
-                on your computer and phone.
+                {translate(
+                  'auto.components.settings.MobileNetworkInterfaceSection.668016be7a',
+                  'on your computer and phone.'
+                )}
               </li>
-              <li>Sign in to the same tailnet on both devices.</li>
               <li>
-                In this Network Interface menu, choose the Tailscale address, usually a 100.x.y.z
-                IP.
+                {translate(
+                  'auto.components.settings.MobileNetworkInterfaceSection.1f7c26d36a',
+                  'Sign in to the same tailnet on both devices.'
+                )}
               </li>
-              <li>Regenerate the QR code and scan it from the Orca mobile app.</li>
+              <li>
+                {translate(
+                  'auto.components.settings.MobileNetworkInterfaceSection.87985ba6f5',
+                  'In this Network Interface menu, choose the Tailscale address, usually a 100.x.y.z IP.'
+                )}
+              </li>
+              <li>
+                {translate(
+                  'auto.components.settings.MobileNetworkInterfaceSection.63d5e4ae1e',
+                  'Regenerate the QR code and scan it from the Orca mobile app.'
+                )}
+              </li>
             </ol>
           </AccordionContent>
         </AccordionItem>

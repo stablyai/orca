@@ -42,8 +42,10 @@ describe('terminal viewport refit', () => {
 
   it('prefers the in-place updateViewport RPC over resubscribe', () => {
     const rpcIndex = hookSource.indexOf("sendRequest('terminal.updateViewport'")
+    const cacheUpdateIndex = hookSource.indexOf('updateTerminalSubscriptionViewport(handle, dims)')
     const resubscribeIndex = hookSource.indexOf('subscribeToTerminal(handle)')
     expect(rpcIndex).toBeGreaterThanOrEqual(0)
+    expect(cacheUpdateIndex).toBeGreaterThan(rpcIndex)
     expect(resubscribeIndex).toBeGreaterThan(rpcIndex)
   })
 

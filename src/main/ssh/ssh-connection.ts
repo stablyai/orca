@@ -26,9 +26,15 @@ import {
   resolveEffectiveProxy,
   spawnProxyCommand,
   wrapRemoteCommandForPosixShell,
+  type SshExecOptions,
   type SshConnectionCallbacks
 } from './ssh-connection-utils'
+import type { RemoteHostPlatform } from './ssh-remote-platform'
 export type { SshConnectionCallbacks } from './ssh-connection-utils'
+
+type SshRemoteFileOptions = {
+  hostPlatform?: RemoteHostPlatform
+}
 
 export class SshConnection {
   private client: SshClient | null = null
@@ -84,20 +90,21 @@ export class SshConnection {
     return this.cachedPassphrase != null || this.cachedPassword != null
   }
 
-  async exec(cmd: string): Promise<ClientChannel> {
+  async exec(cmd: string, options?: SshExecOptions): Promise<ClientChannel> {
     if (this.useSystemSshTransport) {
       if (this.disposed || this.state.status !== 'connected') {
         throw new Error('Not connected')
       }
-      return this.spawnTrackedSystemSshCommand(cmd)
+      return this.spawnTrackedSystemSshCommand(cmd, options)
     }
     if (!this.client) {
       throw new Error('Not connected')
     }
     const client = this.client
+    const remoteCommand = options?.wrapCommand === false ? cmd : wrapRemoteCommandForPosixShell(cmd)
     return this.waitForSshCallback(
       'SSH exec channel timed out',
-      (callback) => client.exec(wrapRemoteCommandForPosixShell(cmd), callback),
+      (callback) => client.exec(remoteCommand, callback),
       (channel) => channel.close()
     )
   }
@@ -161,7 +168,11 @@ export class SshConnection {
     })
   }
 
-  async uploadDirectory(localDir: string, remoteDir: string): Promise<void> {
+  async uploadDirectory(
+    localDir: string,
+    remoteDir: string,
+    options?: SshRemoteFileOptions
+  ): Promise<void> {
     if (!this.useSystemSshTransport) {
       const sftp = await this.sftp()
       try {
@@ -173,11 +184,16 @@ export class SshConnection {
       return
     }
     await uploadDirectoryViaSystemSsh(this.target, localDir, remoteDir, {
-      signal: this.systemOperationAbortController.signal
+      signal: this.systemOperationAbortController.signal,
+      hostPlatform: options?.hostPlatform
     })
   }
 
-  async writeFile(remotePath: string, contents: string): Promise<void> {
+  async writeFile(
+    remotePath: string,
+    contents: string,
+    options?: SshRemoteFileOptions
+  ): Promise<void> {
     if (!this.useSystemSshTransport) {
       const sftp = await this.sftp()
       const swallowLateSftpError = (): void => {}
@@ -221,7 +237,8 @@ export class SshConnection {
       return
     }
     await writeFileViaSystemSsh(this.target, remotePath, contents, {
-      signal: this.systemOperationAbortController.signal
+      signal: this.systemOperationAbortController.signal,
+      hostPlatform: options?.hostPlatform
     })
   }
 
@@ -418,7 +435,11 @@ export class SshConnection {
     this.proxyProcess?.kill()
     this.proxyProcess = null
 
-    const channel = this.spawnTrackedSystemSshCommand('printf ORCA-SYSTEM-SSH-OK')
+    // Why: this probe runs before remote platform detection. A raw echo works
+    // under POSIX shells, cmd.exe, and PowerShell; `/bin/sh` wrapping does not.
+    const channel = this.spawnTrackedSystemSshCommand('echo ORCA-SYSTEM-SSH-OK', {
+      wrapCommand: false
+    })
     try {
       await new Promise<void>((resolve, reject) => {
         let stdout = ''
@@ -485,8 +506,11 @@ export class SshConnection {
     }
   }
 
-  private spawnTrackedSystemSshCommand(command: string): ClientChannel {
-    const channel = spawnSystemSshCommand(this.target, command)
+  private spawnTrackedSystemSshCommand(command: string, options?: SshExecOptions): ClientChannel {
+    const channel =
+      options === undefined
+        ? spawnSystemSshCommand(this.target, command)
+        : spawnSystemSshCommand(this.target, command, options)
     this.systemCommandChannels.add(channel)
     const cleanup = (): void => {
       this.systemCommandChannels.delete(channel)

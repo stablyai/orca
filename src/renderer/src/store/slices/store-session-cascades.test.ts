@@ -305,6 +305,54 @@ describe('hydrateWorkspaceSession', () => {
     expect(s.workspaceSessionReady).toBe(false)
   })
 
+  it('hydrates quick command labels from unified tabs back to terminal tabs', () => {
+    const store = createTestStore()
+    const wt = 'repo1::/path/wt1'
+
+    store.setState({
+      repos: [
+        { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
+      ],
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+      }
+    })
+
+    store.getState().hydrateWorkspaceSession({
+      activeRepoId: 'repo1',
+      activeWorktreeId: wt,
+      activeTabId: 'tab-1',
+      tabsByWorktree: {
+        [wt]: [makeTab({ id: 'tab-1', worktreeId: wt, title: 'pnpm test' })]
+      },
+      terminalLayoutsByTabId: {
+        'tab-1': makeLayout()
+      },
+      unifiedTabs: {
+        [wt]: [
+          {
+            id: 'tab-1',
+            entityId: 'tab-1',
+            groupId: 'group-1',
+            worktreeId: wt,
+            contentType: 'terminal',
+            label: 'pnpm test',
+            quickCommandLabel: 'Run tests',
+            customLabel: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1
+          }
+        ]
+      },
+      tabGroups: {
+        [wt]: [{ id: 'group-1', worktreeId: wt, activeTabId: 'tab-1', tabOrder: ['tab-1'] }]
+      }
+    })
+
+    expect(store.getState().tabsByWorktree[wt][0].quickCommandLabel).toBe('Run tests')
+  })
+
   it('preserves tabs for a known repo whose worktrees have not loaded yet', () => {
     // Why (#1158): empty per-repo worktrees can mean a degraded local fetch or
     // SSH reconnect race, not that every persisted tab for the repo is stale.

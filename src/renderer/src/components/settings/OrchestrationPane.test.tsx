@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
-import { ORCHESTRATION_USAGE_EXAMPLES } from '@/lib/orchestration-usage-examples'
+import { getOrchestrationUsageExamples } from '@/lib/orchestration-usage-examples'
 import { OrchestrationPane } from './OrchestrationPane'
 
 vi.mock('@/hooks/useInstalledAgentSkills', () => ({
@@ -51,8 +51,9 @@ describe('OrchestrationPane', () => {
     expect(markup).toContain('Ready')
     expect(markup).toContain('How to use it')
     expect(markup).not.toContain('See examples')
-    expect(ORCHESTRATION_USAGE_EXAMPLES).toHaveLength(5)
-    for (const example of ORCHESTRATION_USAGE_EXAMPLES) {
+    const examples = getOrchestrationUsageExamples()
+    expect(examples).toHaveLength(5)
+    for (const example of examples) {
       expect(markup).toContain(example.title)
     }
     expect(markup).toMatch(/<button\b[^>]*>[\s\S]*?Update[\s\S]*?<\/button>/)

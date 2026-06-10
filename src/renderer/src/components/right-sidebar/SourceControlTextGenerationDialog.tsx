@@ -14,10 +14,14 @@ import {
 import type { SourceControlTextActionId } from '../../../../shared/source-control-ai-actions'
 import type { GlobalSettings, Repo } from '../../../../shared/types'
 import type { SourceControlAiWriteTarget } from '../../../../shared/source-control-ai-recipe-save'
+import { buildBranchNamePrompt } from '../../../../shared/branch-name-from-work'
+import { buildCommitMessagePrompt } from '../../../../shared/commit-message-generation'
+import { buildPullRequestFieldsPrompt } from '../../../../shared/pull-request-generation'
 import {
   SourceControlTextGenerationDialogForm,
   type SourceControlTextGenerationSaveTarget
 } from './SourceControlTextGenerationDialogForm'
+import { translate } from '@/i18n/i18n'
 
 export { buildCommitMessageGenerationParams } from './SourceControlTextGenerationParams'
 
@@ -39,6 +43,40 @@ type SourceControlTextGenerationDialogProps = SourceControlTextGenerationBaseDia
   title: string
   description: string
   generateLabel: string
+}
+
+function buildBasePromptPreview(actionId: SourceControlTextActionId): string {
+  switch (actionId) {
+    case 'commitMessage':
+      return buildCommitMessagePrompt(
+        {
+          branch: 'feature/example',
+          stagedSummary: 'M src/example.ts',
+          stagedPatch: 'diff --git a/src/example.ts b/src/example.ts\n+addSourceControlAiPreview()'
+        },
+        ''
+      )
+    case 'pullRequest':
+      return buildPullRequestFieldsPrompt(
+        {
+          branch: 'feature/example',
+          base: 'main',
+          branchChangedByPreparation: false,
+          currentTitle: 'Draft title',
+          currentBody: 'Draft description',
+          currentDraft: false,
+          commitSummary: 'a1b2c3d Add Source Control AI prompt previews',
+          changeSummary: 'src/example.ts | 12 ++++++++++--',
+          patch: 'diff --git a/src/example.ts b/src/example.ts\n+addSourceControlAiPreview()'
+        },
+        ''
+      )
+    case 'branchName':
+      return buildBranchNamePrompt({
+        firstPrompt: 'Add source-control AI prompt previews',
+        assistantMessage: 'I will update the generation dialog variable chip preview.'
+      })
+  }
 }
 
 export function SourceControlTextGenerationDialog({
@@ -63,7 +101,13 @@ export function SourceControlTextGenerationDialog({
             operation: actionId,
             discoveryHostKey
           })
-        : { ok: false as const, error: 'Settings are not loaded.' },
+        : {
+            ok: false as const,
+            error: translate(
+              'auto.components.right.sidebar.SourceControlTextGenerationDialog.d054d5e0a0',
+              'Settings are not loaded.'
+            )
+          },
     [actionId, discoveryHostKey, repo, settings]
   )
   const baseParams = resolved.ok ? resolved.value.params : null
@@ -77,19 +121,28 @@ export function SourceControlTextGenerationDialog({
     ? [
         {
           target: { type: 'repo', repoId: repo.id },
-          label: 'Save for this repository only',
+          label: translate(
+            'auto.components.right.sidebar.SourceControlTextGenerationDialog.5959da1e4d',
+            'Save for this repository only'
+          ),
           successMessage: `Saved ${recipeLabel} for this repository.`
         },
         {
           target: { type: 'global' },
-          label: 'Save as default for all repositories',
+          label: translate(
+            'auto.components.right.sidebar.SourceControlTextGenerationDialog.7f1ec309a4',
+            'Save as default for all repositories'
+          ),
           successMessage: `Saved ${recipeLabel} as a global default.`
         }
       ]
     : [
         {
           target: { type: 'global' },
-          label: 'Save as global default',
+          label: translate(
+            'auto.components.right.sidebar.SourceControlTextGenerationDialog.c5b7fa7cb6',
+            'Save as global default'
+          ),
           successMessage: `Saved ${recipeLabel} as a global default.`
         }
       ]
@@ -105,7 +158,7 @@ export function SourceControlTextGenerationDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-xl">
+      <DialogContent className="min-w-0 overflow-x-hidden sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle className="text-sm">{title}</DialogTitle>
           <DialogDescription className="text-xs">{description}</DialogDescription>
@@ -123,7 +176,9 @@ export function SourceControlTextGenerationDialog({
           actionId={actionId}
           generateLabel={generateLabel}
           settings={settings}
+          repo={repo ?? null}
           baseParams={baseParams}
+          basePromptPreview={buildBasePromptPreview(actionId)}
           saveTargets={saveTargets}
           onGenerate={onGenerate}
           onOpenChange={onOpenChange}

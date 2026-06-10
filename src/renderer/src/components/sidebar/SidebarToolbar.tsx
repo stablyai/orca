@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { ScrollToCurrentWorkspaceToolbarButton } from './ScrollToCurrentWorkspaceToolbarButton'
 import { SidebarSettingsHelpMenu } from './SidebarSettingsHelpMenu'
+import { translate } from '@/i18n/i18n'
 
 const SidebarToolbar = React.memo(function SidebarToolbar() {
   const openModal = useAppStore((s) => s.openModal)
@@ -21,11 +22,16 @@ const SidebarToolbar = React.memo(function SidebarToolbar() {
               className="gap-1.5 text-muted-foreground"
             >
               <FolderPlus className="size-3.5" />
-              <span className="text-[11px]">Add Project</span>
+              <span className="text-[11px]">
+                {translate('auto.components.sidebar.SidebarToolbar.abc62b6328', 'Add Project')}
+              </span>
             </Button>
           </TooltipTrigger>
           <TooltipContent side="top" sideOffset={4}>
-            Open folder picker to add a project
+            {translate(
+              'auto.components.sidebar.SidebarToolbar.19e32d0e5f',
+              'Open folder picker to add a project'
+            )}
           </TooltipContent>
         </Tooltip>
         <div className="flex items-center gap-1">

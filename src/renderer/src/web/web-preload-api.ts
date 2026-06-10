@@ -40,6 +40,8 @@ import { toRuntimeWorktreeSelector } from '../runtime/runtime-worktree-selector'
 import { normalizeDisabledTuiAgents } from '../../../shared/tui-agent-selection'
 import { normalizeAutoRenameBranchFromWorkDefaultOn } from '../../../shared/auto-rename-branch-from-work-settings'
 import { normalizeTerminalCursorStyleDefault } from '../../../shared/terminal-cursor-style-settings'
+import { normalizeTerminalCustomThemes } from '../../../shared/terminal-custom-themes'
+import { normalizeUiLanguage } from '../../../shared/ui-language'
 import type { RateLimitState } from '../../../shared/rate-limit-types'
 import type { RuntimeStatus, RuntimeSyncWindowGraph } from '../../../shared/runtime-types'
 import {
@@ -74,6 +76,7 @@ import {
   type FeatureInteractionState
 } from '../../../shared/feature-interactions'
 import { normalizeContextualTourIds, type ContextualTourId } from '../../../shared/contextual-tours'
+import { translate } from '@/i18n/i18n'
 
 const SETTINGS_STORAGE_KEY = 'orca.web.settings.v1'
 const UI_STORAGE_KEY = 'orca.web.ui.v1'
@@ -415,6 +418,7 @@ function createWebPreloadApi(): Partial<PreloadApi> {
       relaunch: () => Promise.resolve(window.location.reload()),
       restart: () => Promise.resolve(window.location.reload()),
       reload: () => Promise.resolve(window.location.reload()),
+      awaitFirstWindowStartupServices: () => Promise.resolve(),
       getKeyboardInputSourceId: () => Promise.resolve(null),
       setUnreadDockBadgeCount: () => Promise.resolve(),
       getFloatingTerminalCwd: () => Promise.resolve(''),
@@ -462,9 +466,13 @@ function createWebPreloadApi(): Partial<PreloadApi> {
         Promise.resolve({
           ok: false,
           status: null,
-          error: 'Unavailable on web.'
+          error: translate('auto.web.web.preload.api.fb290366b2', 'Unavailable on web.')
         }),
-      copyLatestDiagnostics: () => Promise.resolve({ ok: false, error: 'Unavailable on web.' })
+      copyLatestDiagnostics: () =>
+        Promise.resolve({
+          ok: false,
+          error: translate('auto.web.web.preload.api.fb290366b2', 'Unavailable on web.')
+        })
     },
     diagnostics: {
       getStatus: () =>
@@ -639,7 +647,13 @@ function normalizeStoredWebOverrides(
     return {}
   }
   if (!isJsonObject(value)) {
-    diagnostics.push({ severity: 'error', section, message: `${section} must be an object.` })
+    diagnostics.push({
+      severity: 'error',
+      section,
+      message: translate('auto.web.web.preload.api.d2e43e426a', '{{value0}} must be an object.', {
+        value0: section
+      })
+    })
     return {}
   }
 
@@ -650,7 +664,11 @@ function normalizeStoredWebOverrides(
         severity: 'warning',
         section,
         actionId,
-        message: `Unknown keybinding action "${actionId}" was ignored.`
+        message: translate(
+          'auto.web.web.preload.api.36761d9604',
+          'Unknown keybinding action "{{value0}}" was ignored.',
+          { value0: actionId }
+        )
       })
       continue
     }
@@ -662,7 +680,11 @@ function normalizeStoredWebOverrides(
         severity: 'error',
         section,
         actionId,
-        message: `Shortcut for "${actionId}" was ignored: Use a string array.`
+        message: translate(
+          'auto.web.web.preload.api.10898045f3',
+          'Shortcut for "{{value0}}" was ignored: Use a string array.',
+          { value0: actionId }
+        )
       })
       continue
     }
@@ -673,7 +695,11 @@ function normalizeStoredWebOverrides(
         severity: 'error',
         section,
         actionId,
-        message: `Shortcut for "${actionId}" was ignored: ${error}`
+        message: translate(
+          'auto.web.web.preload.api.76122208ca',
+          'Shortcut for "{{value0}}" was ignored: {{value1}}',
+          { value0: actionId, value1: error }
+        )
       })
       continue
     }
@@ -693,7 +719,10 @@ function normalizeWebPlatformOverrides(
     diagnostics.push({
       severity: 'error',
       section: 'platforms',
-      message: 'platforms must be an object with darwin, linux, or win32 sections.'
+      message: translate(
+        'auto.web.web.preload.api.0a69fcd8bc',
+        'platforms must be an object with darwin, linux, or win32 sections.'
+      )
     })
     return {}
   }
@@ -704,7 +733,11 @@ function normalizeWebPlatformOverrides(
       diagnostics.push({
         severity: 'warning',
         section: `platforms.${platform}`,
-        message: `Unknown platform "${platform}" was ignored.`
+        message: translate(
+          'auto.web.web.preload.api.32f15bdb0f',
+          'Unknown platform "{{value0}}" was ignored.',
+          { value0: platform }
+        )
       })
       continue
     }
@@ -741,9 +774,15 @@ function removeConflictingWebOverrides(
     }
     diagnostics.push({
       severity: 'error',
-      message: `Conflicting custom shortcuts were ignored: ${Array.from(conflictingOverrides)
-        .map((actionId) => actionId)
-        .join(', ')}.`
+      message: translate(
+        'auto.web.web.preload.api.52bee9d8a0',
+        'Conflicting custom shortcuts were ignored: {{value0}}.',
+        {
+          value0: Array.from(conflictingOverrides)
+            .map((actionId) => actionId)
+            .join(', ')
+        }
+      )
     })
   }
   return next
@@ -1122,6 +1161,9 @@ function createFileApi(): NonNullable<Partial<PreloadApi>['fs']> {
         relativePath: file.relativePath
       })
     },
+    downloadFile: async () => {
+      throw new Error('Remote file download is unavailable in paired web clients.')
+    },
     listMarkdownDocuments: async ({ rootPath }) => {
       const file = await resolveRuntimeFilePath(rootPath)
       return callRuntimeResult('files.listMarkdownDocuments', {
@@ -1368,16 +1410,25 @@ function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
     },
     generateCommitMessage: async () => ({
       success: false,
-      error: 'Commit message generation is unavailable in the web client.'
+      error: translate(
+        'auto.web.web.preload.api.9fc90740b6',
+        'Commit message generation is unavailable in the web client.'
+      )
     }),
     discoverCommitMessageModels: async () => ({
       success: false,
-      error: 'Commit message model discovery is unavailable in the web client.'
+      error: translate(
+        'auto.web.web.preload.api.e57c82d276',
+        'Commit message model discovery is unavailable in the web client.'
+      )
     }),
     cancelGenerateCommitMessage: () => Promise.resolve(),
     generatePullRequestFields: async () => ({
       success: false,
-      error: 'Pull request detail generation is unavailable in the web client.'
+      error: translate(
+        'auto.web.web.preload.api.b8a1618172',
+        'Pull request detail generation is unavailable in the web client.'
+      )
     }),
     cancelGeneratePullRequestFields: () => Promise.resolve(),
     stage: async ({ worktreePath, filePath }) => mutateGitPath('git.stage', worktreePath, filePath),
@@ -1428,17 +1479,38 @@ function createBrowserApi(): NonNullable<Partial<PreloadApi>['browser']> {
       Promise.resolve({ ok: false, reason: 'Downloads are handled by the server browser.' }),
     cancelDownload: () => Promise.resolve(false),
     setGrabMode: () =>
-      Promise.resolve({ ok: false, error: 'Grab mode is unavailable in the web client.' }),
+      Promise.resolve({
+        ok: false,
+        error: translate(
+          'auto.web.web.preload.api.31bea294d5',
+          'Grab mode is unavailable in the web client.'
+        )
+      }),
     awaitGrabSelection: () =>
-      Promise.resolve({ ok: false, error: 'Grab mode is unavailable in the web client.' }),
+      Promise.resolve({
+        ok: false,
+        error: translate(
+          'auto.web.web.preload.api.31bea294d5',
+          'Grab mode is unavailable in the web client.'
+        )
+      }),
     cancelGrab: () => Promise.resolve(false),
     captureSelectionScreenshot: () =>
       Promise.resolve({
         ok: false,
-        error: 'Selection screenshots are unavailable in the web client.'
+        error: translate(
+          'auto.web.web.preload.api.8dfcb7a351',
+          'Selection screenshots are unavailable in the web client.'
+        )
       }),
     extractHoverPayload: () =>
-      Promise.resolve({ ok: false, error: 'Hover extraction is unavailable in the web client.' }),
+      Promise.resolve({
+        ok: false,
+        error: translate(
+          'auto.web.web.preload.api.275a776357',
+          'Hover extraction is unavailable in the web client.'
+        )
+      }),
     onGrabModeToggle: () => noopUnsubscribe,
     onGrabActionShortcut: () => noopUnsubscribe,
     sessionListProfiles: () => Promise.resolve([]),
@@ -1448,7 +1520,10 @@ function createBrowserApi(): NonNullable<Partial<PreloadApi>['browser']> {
       Promise.resolve({
         ok: false,
         summary: null,
-        error: 'Cookie import is unavailable in the web client.'
+        error: translate(
+          'auto.web.web.preload.api.67ec964791',
+          'Cookie import is unavailable in the web client.'
+        )
       }),
     sessionResolvePartition: () => Promise.resolve(null),
     sessionDetectBrowsers: () => Promise.resolve([]),
@@ -1456,7 +1531,10 @@ function createBrowserApi(): NonNullable<Partial<PreloadApi>['browser']> {
       Promise.resolve({
         ok: false,
         summary: null,
-        error: 'Cookie import is unavailable in the web client.'
+        error: translate(
+          'auto.web.web.preload.api.67ec964791',
+          'Cookie import is unavailable in the web client.'
+        )
       }),
     sessionClearDefaultCookies: () => Promise.resolve(false),
     notifyActiveTabChanged: () => Promise.resolve(false)
@@ -1567,7 +1645,10 @@ function createGitHubApi(): WebGitHubApi {
     rateLimit: (args) =>
       route<WebGitHubResult<'rateLimit'>>(GITHUB_WEB_RPC_METHODS.rateLimit, args),
     diagnoseAuth: () =>
-      Promise.resolve({ ok: false, message: 'Unavailable in the web client.' } as never),
+      Promise.resolve({
+        ok: false,
+        message: translate('auto.web.web.preload.api.31bfe8ae1a', 'Unavailable in the web client.')
+      } as never),
     listAccessibleProjects: () =>
       route<WebGitHubResult<'listAccessibleProjects'>>(
         GITHUB_WEB_RPC_METHODS.listAccessibleProjects
@@ -2231,7 +2312,10 @@ function createSshApi(): NonNullable<Partial<PreloadApi>['ssh']> {
     getState: () => Promise.resolve(null),
     needsPassphrasePrompt: () => Promise.resolve(false),
     testConnection: () =>
-      Promise.resolve({ success: false, error: 'Unavailable in the web client.' }),
+      Promise.resolve({
+        success: false,
+        error: translate('auto.web.web.preload.api.31bfe8ae1a', 'Unavailable in the web client.')
+      }),
     onStateChanged: () => noopUnsubscribe,
     addPortForward: () =>
       Promise.reject(new Error('SSH port forwarding is unavailable in the web client.')),
@@ -2420,7 +2504,9 @@ function getStoredSettings(): GlobalSettings {
   const migratedStored = {
     ...stored,
     ...normalizeAutoRenameBranchFromWorkDefaultOn(stored),
-    ...normalizeTerminalCursorStyleDefault(stored)
+    ...normalizeTerminalCursorStyleDefault(stored),
+    terminalCustomThemes: normalizeTerminalCustomThemes(stored.terminalCustomThemes),
+    uiLanguage: normalizeUiLanguage(stored.uiLanguage)
   }
   if (
     rawStoredSettings &&
@@ -2429,7 +2515,9 @@ function getStoredSettings(): GlobalSettings {
         migratedStored.autoRenameBranchFromWorkDefaultedOn ||
       stored.terminalCursorStyle !== migratedStored.terminalCursorStyle ||
       stored.terminalCursorStyleDefaultedToBlock !==
-        migratedStored.terminalCursorStyleDefaultedToBlock)
+        migratedStored.terminalCursorStyleDefaultedToBlock ||
+      stored.terminalCustomThemes !== migratedStored.terminalCustomThemes ||
+      stored.uiLanguage !== migratedStored.uiLanguage)
   ) {
     try {
       const parsed = JSON.parse(rawStoredSettings) as unknown
@@ -2519,11 +2607,16 @@ function mergeWebUIState(
   base: PersistedUIState,
   updates: Partial<PersistedUIState>
 ): PersistedUIState {
+  const { featureInteractionTelemetryBuckets: _reserved, ...safeUpdates } =
+    updates as Partial<PersistedUIState> & {
+      featureInteractionTelemetryBuckets?: unknown
+    }
+  void _reserved
   return {
     ...base,
-    ...updates,
+    ...safeUpdates,
     agentActivityDisplayMode: normalizeAgentActivityDisplayMode(
-      updates.agentActivityDisplayMode ?? base.agentActivityDisplayMode
+      safeUpdates.agentActivityDisplayMode ?? base.agentActivityDisplayMode
     )
   }
 }
@@ -2589,7 +2682,11 @@ function mergeSettings(
       ...(base.voice ?? defaults.voice),
       ...updates.voice
     } as NonNullable<GlobalSettings['voice']>,
-    activeRuntimeEnvironmentId: activeEnvironment?.id ?? updates.activeRuntimeEnvironmentId ?? null
+    activeRuntimeEnvironmentId: activeEnvironment?.id ?? updates.activeRuntimeEnvironmentId ?? null,
+    terminalCustomThemes: normalizeTerminalCustomThemes(
+      updates.terminalCustomThemes ?? base.terminalCustomThemes
+    ),
+    uiLanguage: normalizeUiLanguage(updates.uiLanguage ?? base.uiLanguage)
   }
   return {
     ...merged,

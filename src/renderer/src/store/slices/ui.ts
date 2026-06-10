@@ -92,6 +92,7 @@ import {
 } from '../../lib/running-agent-targets'
 import { buildAgentNotificationId } from '../../../../shared/agent-notification-id'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
+import { translate } from '@/i18n/i18n'
 
 export type PendingSidebarWorktreeReveal = {
   worktreeId: string
@@ -628,7 +629,10 @@ export type UISlice = {
     // Absent means "use the repo's effective base ref".
     baseBranch?: string
   } | null
-  openTaskPage: (data?: UISlice['taskPageData']) => void
+  openTaskPage: (
+    data?: UISlice['taskPageData'],
+    options?: { recordTasksInteraction?: boolean }
+  ) => void
   closeTaskPage: () => void
   openActivityPage: () => void
   closeActivityPage: () => void
@@ -687,6 +691,7 @@ export type UISlice = {
   activeContextualTourSource: string | null
   activeContextualTourSourceDetached: boolean
   activeContextualTourWasFeaturePreviouslyInteracted: boolean
+  contextualTourNavigationInteractionSnapshot: Partial<Record<ContextualTourId, boolean>>
   activeContextualTourSuppressed: boolean
   contextualTourShownThisSession: boolean
   contextualToursOnboardingVisible: boolean
@@ -721,6 +726,9 @@ export type UISlice = {
   dismissSetupScriptPrompt: (repoId: string) => void
   setupGuideSidebarDismissed: boolean
   setSetupGuideSidebarDismissed: (dismissed: boolean) => void
+  setupGuideBrowserMilestoneMigrated: boolean
+  setupGuideBrowserMilestoneLegacyComplete: boolean
+  markSetupGuideBrowserMilestoneMigrated: (legacyComplete: boolean) => void
   browserImportHintHidden: boolean
   setBrowserImportHintHidden: (hidden: boolean) => void
   usageEmptyStateDismissed: boolean
@@ -809,6 +817,10 @@ export type UISlice = {
   // rich content (title/media/description) during downloading, error, and downloaded
   // states. Cleared on idle/checking/not-available to prevent stale leakage.
   updateChangelog: ChangelogData | null
+  // Why: UpdateCard is lazy-loaded, so it may miss the transient
+  // checking/userInitiated status. Keep manual-check intent in the store until
+  // the resulting available/error/not-available state can consume it.
+  updateUserInitiatedCycle: boolean
   dismissedUpdateVersion: string | null
   dismissUpdate: (versionOverride?: string) => void
   clearDismissedUpdateVersion: () => void
@@ -932,7 +944,12 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
           : s
       )
       const { toast } = await import('sonner')
-      toast.error(`Couldn't send to ${label}`, { description: message })
+      toast.error(
+        translate('auto.store.slices.ui.53883b7bc3', "Couldn't send to {{value0}}", {
+          value0: label
+        }),
+        { description: message }
+      )
       return false
     }
 
@@ -943,7 +960,9 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
       launch_source: mode.launchSource,
       request_kind: 'followup'
     })
-    toast.success(`Sent to ${label}`)
+    toast.success(
+      translate('auto.store.slices.ui.66e3bd7ce6', 'Sent to {{value0}}', { value0: label })
+    )
     get().closeAgentSendPopoverTargetMode(mode.id, mode.instanceId)
     return true
   },
@@ -1030,7 +1049,23 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
   taskResumeState: undefined,
   githubTaskDrawerWorkItem: null,
   newWorkspaceDraft: null,
-  openTaskPage: (data = {}) => {
+  openTaskPage: (data = {}, options = {}) => {
+    if (options.recordTasksInteraction !== false) {
+      const wasTasksPreviouslyInteracted = hasFeatureInteraction(get().featureInteractions, 'tasks')
+      set((state) => ({
+        contextualTourNavigationInteractionSnapshot: {
+          ...state.contextualTourNavigationInteractionSnapshot,
+          tasks: wasTasksPreviouslyInteracted
+        }
+      }))
+      get().recordFeatureInteraction?.('tasks')
+    }
+    if (data.openGitHubWorkItem) {
+      get().recordFeatureInteraction?.('github-tasks')
+    }
+    if (data.openLinearIssue) {
+      get().recordFeatureInteraction?.('linear-tasks')
+    }
     // Why: record a Tasks visit in the shared back/forward history so the
     // titlebar Back/Forward buttons can return to Tasks. All task-source
     // variants (github/linear presets) collapse to a single 'tasks' entry;
@@ -1369,6 +1404,7 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
   activeContextualTourSource: null,
   activeContextualTourSourceDetached: false,
   activeContextualTourWasFeaturePreviouslyInteracted: false,
+  contextualTourNavigationInteractionSnapshot: {},
   activeContextualTourSuppressed: false,
   contextualTourShownThisSession: false,
   contextualToursOnboardingVisible: false,
@@ -1412,15 +1448,28 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         targetExists: hasContextualTourTarget
       })
       if (decision.kind !== 'start') {
-        return s
+        if (s.contextualTourNavigationInteractionSnapshot[id] === undefined) {
+          return s
+        }
+        const { [id]: _consumed, ...remainingNavigationSnapshot } =
+          s.contextualTourNavigationInteractionSnapshot
+        void _consumed
+        return { contextualTourNavigationInteractionSnapshot: remainingNavigationSnapshot }
       }
+      const navigationSnapshot = s.contextualTourNavigationInteractionSnapshot[id]
+      const { [id]: _consumed, ...remainingNavigationSnapshot } =
+        s.contextualTourNavigationInteractionSnapshot
+      void _consumed
       return {
         activeContextualTourId: id,
         activeContextualTourStepIndex: decision.stepIndex,
         activeContextualTourSource: source,
         activeContextualTourSourceDetached: false,
         activeContextualTourWasFeaturePreviouslyInteracted:
-          wasFeaturePreviouslyInteracted ?? hasFeatureInteraction(s.featureInteractions, id),
+          wasFeaturePreviouslyInteracted ??
+          navigationSnapshot ??
+          hasFeatureInteraction(s.featureInteractions, id),
+        contextualTourNavigationInteractionSnapshot: remainingNavigationSnapshot,
         activeContextualTourSuppressed: false,
         contextualTourShownThisSession: true,
         lastCompletedContextualTourId: null
@@ -1632,6 +1681,23 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
       }
       window.api.ui.set({ setupGuideSidebarDismissed: dismissed }).catch(console.error)
       return { setupGuideSidebarDismissed: dismissed }
+    }),
+  setupGuideBrowserMilestoneMigrated: true,
+  setupGuideBrowserMilestoneLegacyComplete: false,
+  markSetupGuideBrowserMilestoneMigrated: (legacyComplete) =>
+    set((s) => {
+      if (
+        s.setupGuideBrowserMilestoneMigrated &&
+        s.setupGuideBrowserMilestoneLegacyComplete === legacyComplete
+      ) {
+        return s
+      }
+      const updates = {
+        setupGuideBrowserMilestoneMigrated: true,
+        setupGuideBrowserMilestoneLegacyComplete: legacyComplete
+      }
+      window.api.ui.set(updates).catch(console.error)
+      return updates
     }),
   browserImportHintHidden: false,
   setBrowserImportHintHidden: (hidden) =>
@@ -1999,6 +2065,9 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
           validRepoIds
         ),
         setupGuideSidebarDismissed: ui.setupGuideSidebarDismissed === true,
+        setupGuideBrowserMilestoneMigrated: ui.setupGuideBrowserMilestoneMigrated === true,
+        setupGuideBrowserMilestoneLegacyComplete:
+          ui.setupGuideBrowserMilestoneLegacyComplete === true,
         browserImportHintHidden: ui.browserImportHintHidden === true,
         // Why: default false when undefined so existing users still see the CTA;
         // only an explicit dismissal persists true.
@@ -2024,9 +2093,17 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
   setUpdateStatus: (status) => {
     const prevState = get().updateStatus.state
     const update: Partial<
-      Pick<UISlice, 'updateStatus' | 'updateChangelog' | 'updateCardCollapsed'>
+      Pick<
+        UISlice,
+        'updateStatus' | 'updateChangelog' | 'updateCardCollapsed' | 'updateUserInitiatedCycle'
+      >
     > = {
       updateStatus: status
+    }
+    if (status.state === 'checking') {
+      update.updateUserInitiatedCycle = status.userInitiated === true
+    } else if (status.state === 'idle') {
+      update.updateUserInitiatedCycle = false
     }
     if (status.state === 'available') {
       // Why: cache changelog from each 'available' payload so the card retains
@@ -2053,6 +2130,7 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
     set(update)
   },
   updateChangelog: null,
+  updateUserInitiatedCycle: false,
   dismissedUpdateVersion: null,
   clearDismissedUpdateVersion: () => {
     set({ dismissedUpdateVersion: null })
@@ -2075,7 +2153,7 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
       if (activeNudgeId) {
         void window.api.updater.dismissNudge().catch(console.error)
       }
-      return { dismissedUpdateVersion }
+      return { dismissedUpdateVersion, updateUserInitiatedCycle: false }
     }),
   updateCardCollapsed: false,
   setUpdateCardCollapsed: (collapsed) => set({ updateCardCollapsed: collapsed }),

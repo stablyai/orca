@@ -49,6 +49,7 @@ import { settingsForRuntimeOwner } from '@/runtime/runtime-rpc-client'
 import { findWorktreeById, getRepoIdFromWorktreeId } from './worktree-helpers'
 import { createUntitledMarkdownFileWithTemplateSelection } from '@/lib/create-untitled-markdown'
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
+import { translate } from '@/i18n/i18n'
 
 export type { RightSidebarTab } from '../../../../shared/types'
 
@@ -1704,6 +1705,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         return
       }
       get().openFile(fileInfo, { preview: false, targetGroupId: groupId })
+      get().recordFeatureInteraction('markdown-file-created')
     } catch (err) {
       toast.error(extractIpcErrorMessage(err, 'Failed to create untitled markdown file.'))
     }
@@ -3678,11 +3680,19 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         try {
           stats = await statRuntimePath(fileContext, target.absolutePath)
         } catch {
-          toast.error(`File not found: ${target.relativePath}`)
+          toast.error(
+            translate('auto.store.slices.editor.f2e00db373', 'File not found: {{value0}}', {
+              value0: target.relativePath
+            })
+          )
           return
         }
         if (stats.isDirectory) {
-          toast.error(`Cannot open directory: ${target.relativePath}`)
+          toast.error(
+            translate('auto.store.slices.editor.51f15c37d3', 'Cannot open directory: {{value0}}', {
+              value0: target.relativePath
+            })
+          )
           return
         }
       }
@@ -3715,11 +3725,19 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
     try {
       stats = await statRuntimePath(fileContext, absolutePath)
     } catch {
-      toast.error(`File not found: ${relativePath}`)
+      toast.error(
+        translate('auto.store.slices.editor.f2e00db373', 'File not found: {{value0}}', {
+          value0: relativePath
+        })
+      )
       return
     }
     if (stats.isDirectory) {
-      toast.error(`Cannot open directory: ${relativePath}`)
+      toast.error(
+        translate('auto.store.slices.editor.51f15c37d3', 'Cannot open directory: {{value0}}', {
+          value0: relativePath
+        })
+      )
       return
     }
 
@@ -3987,7 +4005,10 @@ function toOpenConflictMetadata(entry: GitStatusEntry): OpenConflictMetadata | u
         conflictKind: entry.conflictKind,
         conflictStatus: entry.conflictStatus,
         conflictStatusSource: entry.conflictStatusSource,
-        message: 'This file is in a conflict state, but no working-tree file is available to edit.',
+        message: translate(
+          'auto.store.slices.editor.dcb521ed29',
+          'This file is in a conflict state, but no working-tree file is available to edit.'
+        ),
         guidance: 'Resolve the conflict in Git or restore one side before reopening it.'
       }
 }

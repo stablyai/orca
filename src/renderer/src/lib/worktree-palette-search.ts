@@ -13,7 +13,7 @@ export type PaletteMatchedField =
   | 'port'
 
 export type PaletteSupportingText = {
-  label: 'Comment' | 'PR' | 'Issue' | 'Port'
+  labelKind: 'comment' | 'pr' | 'issue' | 'port'
   text: string
   matchRange: MatchRange | null
 }
@@ -182,7 +182,7 @@ export function searchWorktrees(
         results.push(
           makeResult(worktree.id, 'comment', {
             supportingText: {
-              label: 'Comment',
+              labelKind: 'comment',
               text: snippet.text,
               matchRange: snippet.matchRange
             }
@@ -206,7 +206,7 @@ export function searchWorktrees(
         results.push(
           makeResult(worktree.id, 'port', {
             supportingText: {
-              label: 'Port',
+              labelKind: 'port',
               text: label,
               matchRange: {
                 start: portIndex,
@@ -234,7 +234,7 @@ export function searchWorktrees(
         results.push(
           makeResult(worktree.id, 'pr', {
             supportingText: {
-              label: 'PR',
+              labelKind: 'pr',
               text: prText,
               matchRange: {
                 start: 'PR #'.length + prNumberIndex,
@@ -251,7 +251,7 @@ export function searchWorktrees(
         results.push(
           makeResult(worktree.id, 'pr', {
             supportingText: {
-              label: 'PR',
+              labelKind: 'pr',
               text: pr.title,
               matchRange: { start: prTitleIndex, end: prTitleIndex + q.length }
             }
@@ -266,7 +266,7 @@ export function searchWorktrees(
         results.push(
           makeResult(worktree.id, 'pr', {
             supportingText: {
-              label: 'PR',
+              labelKind: 'pr',
               text: prText,
               matchRange: {
                 start: 'PR #'.length + prNumberIndex,
@@ -289,7 +289,7 @@ export function searchWorktrees(
       results.push(
         makeResult(worktree.id, 'issue', {
           supportingText: {
-            label: 'Issue',
+            labelKind: 'issue',
             text: issueText,
             matchRange: {
               start: 'Issue #'.length + issueNumberIndex,
@@ -312,7 +312,7 @@ export function searchWorktrees(
       results.push(
         makeResult(worktree.id, 'issue', {
           supportingText: {
-            label: 'Issue',
+            labelKind: 'issue',
             text: issue.title,
             matchRange: { start: issueTitleIndex, end: issueTitleIndex + q.length }
           }

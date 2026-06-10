@@ -5,7 +5,7 @@ import {
 } from '../../../../shared/feature-wall-setup-steps'
 import type { FeatureWallSetupStepId } from '../../../../shared/feature-wall-setup-steps'
 import { FeatureWallSetupChecklist } from '../feature-wall/FeatureWallSetupChecklist'
-import { useSetupGuideProgress } from '../setup-guide/use-setup-guide-progress'
+import { useSettingsSetupGuideFullProgress } from './settings-setup-guide-progress'
 
 export function SettingsSetupGuidePane(): React.JSX.Element {
   const setupSteps = useMemo(() => getFeatureWallSetupSteps(), [])
@@ -15,7 +15,7 @@ export function SettingsSetupGuidePane(): React.JSX.Element {
   const [userSelectedStep, setUserSelectedStep] = useState(false)
   const [orchestrationSkillInstalled, setOrchestrationSkillInstalled] = useState(false)
   const [browserUseSkillInstalled, setBrowserUseSkillInstalled] = useState(false)
-  const progress = useSetupGuideProgress(
+  const progress = useSettingsSetupGuideFullProgress(
     true,
     orchestrationSkillInstalled,
     browserUseSkillInstalled

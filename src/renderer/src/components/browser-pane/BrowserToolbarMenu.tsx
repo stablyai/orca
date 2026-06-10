@@ -1,39 +1,16 @@
 import { useLayoutEffect, useState } from 'react'
-import { Check, Ellipsis, Import, Monitor, Plus, Settings } from 'lucide-react'
 import { toast } from 'sonner'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle
-} from '@/components/ui/dialog'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuPortal,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
-  DropdownMenuSeparator,
-  DropdownMenuSub,
-  DropdownMenuSubContent,
-  DropdownMenuSubTrigger,
-  DropdownMenuTrigger
-} from '@/components/ui/dropdown-menu'
 import { useAppStore } from '@/store'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { shouldShowBrowserImportHint } from './browser-import-hint-visibility'
-import { BROWSER_FAMILY_LABELS } from '../../../../shared/constants'
 import type { BrowserViewportPresetId } from '../../../../shared/types'
 import {
-  BROWSER_VIEWPORT_PRESETS,
   browserViewportPresetToOverride,
   getBrowserViewportPreset
 } from '../../../../shared/browser-viewport-presets'
+import { BrowserToolbarMenuDropdown } from './browser-toolbar-menu-dropdown'
+import { BrowserToolbarProfileDialogs } from './browser-toolbar-profile-dialogs'
+import { translate } from '@/i18n/i18n'
 
 type BrowserToolbarMenuProps = {
   currentProfileId: string | null
@@ -131,7 +108,13 @@ export function BrowserToolbarMenu({
     onDestroyWebview()
     switchBrowserTabProfile(workspaceId, pendingSwitchProfileId)
     const profile = browserSessionProfiles.find((p) => p.id === targetId)
-    toast.success(`Switched to ${profile?.label ?? 'Default'} profile`)
+    toast.success(
+      translate(
+        'auto.components.browser.pane.BrowserToolbarMenu.3ccd29d771',
+        'Switched to {{value0}} profile',
+        { value0: profile?.label ?? 'Default' }
+      )
+    )
     setPendingSwitchProfileId(undefined)
   }
 
@@ -146,7 +129,12 @@ export function BrowserToolbarMenu({
       const profile = await createBrowserSessionProfile('isolated', trimmed)
       if (!profile) {
         if (mountedRef.current) {
-          toast.error('Failed to create profile.')
+          toast.error(
+            translate(
+              'auto.components.browser.pane.BrowserToolbarMenu.4d2f9f13a7',
+              'Failed to create profile.'
+            )
+          )
         }
         return
       }
@@ -160,7 +148,13 @@ export function BrowserToolbarMenu({
 
       onDestroyWebview()
       switchBrowserTabProfile(workspaceId, profile.id)
-      toast.success(`Created and switched to ${profile.label} profile`)
+      toast.success(
+        translate(
+          'auto.components.browser.pane.BrowserToolbarMenu.a7a86702b3',
+          'Created and switched to {{value0}} profile',
+          { value0: profile.label }
+        )
+      )
     } finally {
       if (mountedRef.current) {
         setIsCreatingProfile(false)
@@ -176,7 +170,24 @@ export function BrowserToolbarMenu({
     if (result.ok) {
       const browser = detectedBrowsers.find((b) => b.family === browserFamily)
       toast.success(
-        `Imported ${result.summary.importedCookies} cookies from ${browser?.label ?? browserFamily}${browserProfile ? ` (${browserProfile})` : ''}.`
+        browserProfile
+          ? translate(
+              'auto.components.browser.pane.BrowserToolbarMenu.c5f0e4d3b2a1',
+              'Imported {{value0}} cookies from {{value1}} ({{value2}}).',
+              {
+                value0: result.summary.importedCookies,
+                value1: browser?.label ?? browserFamily,
+                value2: browserProfile
+              }
+            )
+          : translate(
+              'auto.components.browser.pane.BrowserToolbarMenu.d6a1f5e4c3b2',
+              'Imported {{value0}} cookies from {{value1}}.',
+              {
+                value0: result.summary.importedCookies,
+                value1: browser?.label ?? browserFamily
+              }
+            )
       )
     } else {
       toast.error(result.reason)
@@ -186,7 +197,13 @@ export function BrowserToolbarMenu({
   const handleImportFromFile = async (): Promise<void> => {
     const result = await importCookiesToProfile(effectiveProfileId)
     if (result.ok) {
-      toast.success(`Imported ${result.summary.importedCookies} cookies from file.`)
+      toast.success(
+        translate(
+          'auto.components.browser.pane.BrowserToolbarMenu.53bbe3dab4',
+          'Imported {{value0}} cookies from file.',
+          { value0: result.summary.importedCookies }
+        )
+      )
     } else if (result.reason !== 'canceled') {
       toast.error(result.reason)
     }
@@ -194,218 +211,39 @@ export function BrowserToolbarMenu({
 
   return (
     <>
-      <DropdownMenu modal={false} open={menuOpen} onOpenChange={handleMenuOpenChange}>
-        <DropdownMenuTrigger asChild>
-          <Button size="icon" variant="ghost" className="h-8 w-8" title="Browser menu">
-            <Ellipsis className="size-4" />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-56">
-          {allProfiles.map((profile) => {
-            const isSelectedProfile = profile.id === effectiveProfileId
-            return (
-              <DropdownMenuItem
-                key={profile.id}
-                onSelect={() => handleSwitchProfile(profile.id === 'default' ? null : profile.id)}
-              >
-                <Check
-                  className={`mr-2 size-3.5 shrink-0 ${isSelectedProfile ? 'opacity-100' : 'opacity-0'}`}
-                />
-                <span className="truncate">{profile.label}</span>
-                {profile.source?.browserFamily && (
-                  <span className="ml-auto pl-2 text-[10px] text-muted-foreground">
-                    {BROWSER_FAMILY_LABELS[profile.source.browserFamily] ??
-                      profile.source.browserFamily}
-                  </span>
-                )}
-              </DropdownMenuItem>
-            )
-          })}
+      <BrowserToolbarMenuDropdown
+        menuOpen={menuOpen}
+        onMenuOpenChange={handleMenuOpenChange}
+        allProfiles={allProfiles}
+        effectiveProfileId={effectiveProfileId}
+        onSwitchProfile={handleSwitchProfile}
+        onNewProfile={() => setNewProfileDialogOpen(true)}
+        detectedBrowsers={detectedBrowsers}
+        onFetchDetectedBrowsers={() => void fetchDetectedBrowsers()}
+        browserSessionImportState={browserSessionImportState}
+        onImportFromBrowser={(browserFamily, browserProfile) =>
+          void handleImportFromBrowser(browserFamily, browserProfile)
+        }
+        onImportFromFile={() => void handleImportFromFile()}
+        viewportPresetId={viewportPresetId}
+        onApplyViewportPreset={applyViewportPreset}
+      />
 
-          <DropdownMenuSeparator />
-
-          <DropdownMenuItem onSelect={() => setNewProfileDialogOpen(true)}>
-            <Plus className="mr-2 size-3.5" />
-            New Profile…
-          </DropdownMenuItem>
-
-          <DropdownMenuSeparator />
-
-          <DropdownMenuSub
-            onOpenChange={(open) => {
-              if (open) {
-                // Why: macOS treats other browsers' profile folders as app
-                // data. Only probe them when the user opens the import menu.
-                void fetchDetectedBrowsers()
-              }
-            }}
-          >
-            <DropdownMenuSubTrigger
-              disabled={
-                browserSessionImportState?.profileId === effectiveProfileId &&
-                browserSessionImportState.status === 'importing'
-              }
-              data-contextual-tour-target="browser-import-cookies-control"
-            >
-              <Import className="mr-2 size-3.5" />
-              Import Cookies
-            </DropdownMenuSubTrigger>
-            <DropdownMenuPortal>
-              <DropdownMenuSubContent>
-                {detectedBrowsers.map((browser) =>
-                  browser.profiles.length > 1 ? (
-                    <DropdownMenuSub key={browser.family}>
-                      <DropdownMenuSubTrigger>From {browser.label}</DropdownMenuSubTrigger>
-                      <DropdownMenuPortal>
-                        <DropdownMenuSubContent>
-                          {browser.profiles.map((profile) => (
-                            <DropdownMenuItem
-                              key={profile.directory}
-                              onSelect={() =>
-                                void handleImportFromBrowser(browser.family, profile.directory)
-                              }
-                            >
-                              {profile.name}
-                            </DropdownMenuItem>
-                          ))}
-                        </DropdownMenuSubContent>
-                      </DropdownMenuPortal>
-                    </DropdownMenuSub>
-                  ) : (
-                    <DropdownMenuItem
-                      key={browser.family}
-                      onSelect={() => void handleImportFromBrowser(browser.family)}
-                    >
-                      From {browser.label}
-                    </DropdownMenuItem>
-                  )
-                )}
-                {detectedBrowsers.length > 0 && <DropdownMenuSeparator />}
-                <DropdownMenuItem onSelect={() => void handleImportFromFile()}>
-                  From File…
-                </DropdownMenuItem>
-              </DropdownMenuSubContent>
-            </DropdownMenuPortal>
-          </DropdownMenuSub>
-
-          <DropdownMenuSeparator />
-
-          <DropdownMenuSub>
-            <DropdownMenuSubTrigger>
-              <Monitor className="mr-2 size-3.5" />
-              Viewport Size
-            </DropdownMenuSubTrigger>
-            <DropdownMenuPortal>
-              <DropdownMenuSubContent>
-                {/* Why: Viewport is a "pick one of N" control, so use a radio group
-                    for proper a11y semantics (role="menuitemradio", aria-checked).
-                    The "Default" option represents a null preset (no override),
-                    encoded as the sentinel string 'default' because
-                    DropdownMenuRadioGroup values must be strings. */}
-                <DropdownMenuRadioGroup
-                  value={viewportPresetId ?? 'default'}
-                  onValueChange={(v) =>
-                    applyViewportPreset(v === 'default' ? null : (v as BrowserViewportPresetId))
-                  }
-                >
-                  <DropdownMenuRadioItem value="default">Default</DropdownMenuRadioItem>
-                  <DropdownMenuSeparator />
-                  {BROWSER_VIEWPORT_PRESETS.map((preset) => (
-                    <DropdownMenuRadioItem key={preset.id} value={preset.id}>
-                      <span className="truncate">{preset.label}</span>
-                    </DropdownMenuRadioItem>
-                  ))}
-                </DropdownMenuRadioGroup>
-              </DropdownMenuSubContent>
-            </DropdownMenuPortal>
-          </DropdownMenuSub>
-
-          <DropdownMenuSeparator />
-
-          <DropdownMenuItem
-            onSelect={() => {
-              useAppStore.getState().openSettingsTarget({ pane: 'browser', repoId: null })
-              useAppStore.getState().openSettingsPage()
-            }}
-          >
-            <Settings className="mr-2 size-3.5" />
-            Browser Settings…
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
-
-      <Dialog
-        open={pendingSwitchProfileId !== undefined}
-        onOpenChange={(open) => {
-          if (!open) {
-            setPendingSwitchProfileId(undefined)
-          }
+      <BrowserToolbarProfileDialogs
+        pendingSwitchProfileId={pendingSwitchProfileId}
+        onPendingSwitchChange={() => setPendingSwitchProfileId(undefined)}
+        onConfirmSwitch={confirmSwitchProfile}
+        newProfileDialogOpen={newProfileDialogOpen}
+        onNewProfileDialogOpenChange={setNewProfileDialogOpen}
+        newProfileName={newProfileName}
+        onNewProfileNameChange={setNewProfileName}
+        isCreatingProfile={isCreatingProfile}
+        onCreateProfile={() => void handleCreateProfile()}
+        onCancelNewProfile={() => {
+          setNewProfileDialogOpen(false)
+          setNewProfileName('')
         }}
-      >
-        <DialogContent className="sm:max-w-sm" showCloseButton={false}>
-          <DialogHeader>
-            <DialogTitle className="text-base">Switch Profile</DialogTitle>
-            <DialogDescription className="text-xs">
-              Switching profiles will reload this page. Any unsaved form data will be lost.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setPendingSwitchProfileId(undefined)}
-            >
-              Cancel
-            </Button>
-            <Button size="sm" onClick={confirmSwitchProfile}>
-              Switch
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={newProfileDialogOpen} onOpenChange={setNewProfileDialogOpen}>
-        <DialogContent className="sm:max-w-sm" showCloseButton={false}>
-          <DialogHeader>
-            <DialogTitle className="text-base">New Browser Profile</DialogTitle>
-          </DialogHeader>
-          <form
-            onSubmit={(e) => {
-              e.preventDefault()
-              void handleCreateProfile()
-            }}
-          >
-            <Input
-              value={newProfileName}
-              onChange={(e) => setNewProfileName(e.target.value)}
-              placeholder="Profile name"
-              autoFocus
-              maxLength={50}
-              className="mb-4"
-            />
-            <DialogFooter>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  setNewProfileDialogOpen(false)
-                  setNewProfileName('')
-                }}
-              >
-                Cancel
-              </Button>
-              <Button
-                type="submit"
-                size="sm"
-                disabled={!newProfileName.trim() || isCreatingProfile}
-              >
-                {isCreatingProfile ? 'Creating…' : 'Create'}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+      />
     </>
   )
 }

@@ -11,6 +11,7 @@ import {
 } from '../../../../shared/nested-repo-telemetry'
 import type { AddRepoExistingWorkspaceSource } from '../../../../shared/telemetry-events'
 import type { NestedRepoScanResult, ProjectGroupImportResult } from '../../../../shared/types'
+import { translate } from '@/i18n/i18n'
 
 export function useAddRepoNestedImportFlow({
   nestedAttemptId,
@@ -150,9 +151,15 @@ export function useAddRepoNestedImportFlow({
         if (!firstRepoId) {
           const firstFailure = result.projects.find((entry) => entry.status === 'failed')?.error
           if (gen === nestedImportGenRef.current) {
-            toast.error('No repositories imported', {
-              description: firstFailure ?? undefined
-            })
+            toast.error(
+              translate(
+                'auto.components.sidebar.useAddRepoNestedImportFlow.1b33c5f090',
+                'No repositories imported'
+              ),
+              {
+                description: firstFailure ?? undefined
+              }
+            )
           }
           return
         }
@@ -165,9 +172,19 @@ export function useAddRepoNestedImportFlow({
           return
         }
         if (result.failedCount > 0) {
-          toast.warning('Some repositories could not be imported', {
-            description: `${result.failedCount} failed`
-          })
+          toast.warning(
+            translate(
+              'auto.components.sidebar.useAddRepoNestedImportFlow.cbfbc7a797',
+              'Some repositories could not be imported'
+            ),
+            {
+              description: translate(
+                'auto.components.sidebar.useAddRepoNestedImportFlow.680cac2c82',
+                '{{value0}} failed',
+                { value0: result.failedCount }
+              )
+            }
+          )
         }
         const repo = useAppStore.getState().repos.find((entry) => entry.id === firstRepoId)
         if (repo) {

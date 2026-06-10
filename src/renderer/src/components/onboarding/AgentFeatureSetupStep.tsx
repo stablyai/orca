@@ -6,6 +6,7 @@ import {
   hasSelectedOnboardingFeatureSetup,
   type OnboardingFeatureSetupSelection
 } from './onboarding-feature-setup'
+import { translate } from '@/i18n/i18n'
 
 type AgentFeatureSetupStepProps = {
   featureSetup: OnboardingFeatureSetupSelection
@@ -40,7 +41,11 @@ export function AgentFeatureSetupStep({
             onClick={onStartFeatureSetup}
           >
             {setupBusyLabel ? <Loader2 className="size-4 animate-spin" /> : null}
-            {setupBusyLabel ?? 'Enable capabilities'}
+            {setupBusyLabel ??
+              translate(
+                'auto.components.onboarding.AgentFeatureSetupStep.97dcdc010f',
+                'Enable capabilities'
+              )}
           </Button>
         </div>
       ) : null}

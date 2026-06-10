@@ -832,6 +832,34 @@ describe('getStagedCommitContext', () => {
       }
     )
   })
+
+  it('falls back to the file summary when the staged patch overflows the buffer', async () => {
+    gitExecFileAsyncMock
+      .mockResolvedValueOnce({ stdout: 'feature/ai\n' })
+      .mockResolvedValueOnce({ stdout: 'A\thuge.jsonl\n' })
+      .mockRejectedValueOnce(
+        Object.assign(new Error('stdout maxBuffer length exceeded'), {
+          code: 'ENOBUFS'
+        })
+      )
+
+    const result = await getStagedCommitContext('/repo')
+
+    expect(result).toEqual({
+      branch: 'feature/ai',
+      stagedSummary: 'A\thuge.jsonl',
+      stagedPatch: ''
+    })
+  })
+
+  it('rethrows staged patch failures that are not buffer overflows', async () => {
+    gitExecFileAsyncMock
+      .mockResolvedValueOnce({ stdout: 'feature/ai\n' })
+      .mockResolvedValueOnce({ stdout: 'M\tREADME.md\n' })
+      .mockRejectedValueOnce(new Error('fatal: bad revision'))
+
+    await expect(getStagedCommitContext('/repo')).rejects.toThrow('fatal: bad revision')
+  })
 })
 
 describe('detectConflictOperation', () => {

@@ -102,6 +102,7 @@ export function useTerminalViewportRefit(options: TerminalViewportRefitOptions):
               viewport: dims
             })
             if (isTerminalUpdateViewportApplied(response)) {
+              rpc.updateTerminalSubscriptionViewport(handle, dims)
               return
             }
           } catch {

@@ -7,10 +7,13 @@ type SimulatorTabReference = {
   contentType: string
 }
 
-type ScheduleSimulatorPaneShutdownOptions = {
-  delayMs?: number
+type SimulatorPaneShutdownOptions = {
   getTabsForWorktree?: (worktreeId: string) => SimulatorTabReference[]
   shutdownManagedSimulator?: (worktreeId: string) => Promise<unknown> | unknown
+}
+
+type ScheduleSimulatorPaneShutdownOptions = SimulatorPaneShutdownOptions & {
+  delayMs?: number
 }
 
 const DEFAULT_SHUTDOWN_GRACE_MS = 1_500
@@ -26,6 +29,20 @@ function shutdownManagedSimulator(worktreeId: string): Promise<unknown> {
     worktree: worktreeId,
     managedOnly: true
   })
+}
+
+export async function shutdownManagedSimulatorIfNoPane(
+  worktreeId: string,
+  tabId?: string,
+  options: SimulatorPaneShutdownOptions = {}
+): Promise<boolean> {
+  const getTabsForWorktree = options.getTabsForWorktree ?? getUnifiedTabsForWorktree
+  if (!shouldShutdownSimulatorForPaneUnmountFromTabs(getTabsForWorktree(worktreeId), tabId)) {
+    return false
+  }
+  const shutdown = options.shutdownManagedSimulator ?? shutdownManagedSimulator
+  await Promise.resolve(shutdown(worktreeId)).catch(() => {})
+  return true
 }
 
 export function cancelPendingSimulatorPaneShutdown(worktreeId: string): void {
@@ -57,7 +74,10 @@ export function scheduleSimulatorPaneManagedShutdown(
     }
     // Why: closing/reopening or moving a simulator tab briefly unmounts the pane.
     // Delaying avoids killing a stream that the replacement pane is about to reuse.
-    void Promise.resolve(shutdown(worktreeId)).catch(() => {})
+    void shutdownManagedSimulatorIfNoPane(worktreeId, undefined, {
+      getTabsForWorktree,
+      shutdownManagedSimulator: shutdown
+    })
   }, delayMs)
   pendingShutdownTimersByWorktree.set(worktreeId, timer)
   return true

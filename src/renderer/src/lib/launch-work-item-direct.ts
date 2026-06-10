@@ -30,6 +30,7 @@ import {
   resolveDirectSetupDecision
 } from '@/lib/launch-work-item-direct-preflight'
 import { resolveSourceControlLaunchPlatform } from '@/lib/source-control-launch-platform'
+import { translate } from '@/i18n/i18n'
 
 export type LaunchableWorkItem = {
   title: string
@@ -192,7 +193,11 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
       resolvedPushTarget = result.pushTarget
       resolvedBranchNameOverride = result.branchNameOverride
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to resolve PR head.')
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : translate('auto.lib.launch.work.item.direct.8bc45efdbc', 'Failed to resolve PR head.')
+      )
       openModalFallback()
       return false
     }
@@ -256,7 +261,12 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
           sidebarRevealBehavior: 'auto',
           setup: result.setup
         })
-        toast.error('Selected agent is not available in the created workspace.')
+        toast.error(
+          translate(
+            'auto.lib.launch.work.item.direct.19c7683acf',
+            'Selected agent is not available in the created workspace.'
+          )
+        )
         return false
       }
       effectiveAgent = agentOverride
@@ -348,7 +358,12 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
     if (!activation) {
       // Worktree vanished between create and activate — extremely unlikely but
       // worth handling explicitly rather than silently dropping the draft.
-      toast.error('Workspace created but could not be activated.')
+      toast.error(
+        translate(
+          'auto.lib.launch.work.item.direct.67e103dd60',
+          'Workspace created but could not be activated.'
+        )
+      )
       return false
     }
     primaryTabId = activation.primaryTabId
@@ -361,7 +376,12 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
   store.setSidebarOpen(true)
 
   if (startupPlanFailed) {
-    toast.error('Could not build the agent launch command.')
+    toast.error(
+      translate(
+        'auto.lib.launch.work.item.direct.3de6371df3',
+        'Could not build the agent launch command.'
+      )
+    )
     return false
   }
 

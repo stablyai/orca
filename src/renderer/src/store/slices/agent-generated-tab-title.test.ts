@@ -81,4 +81,31 @@ describe('generated agent tab titles', () => {
     expect(resolveTerminalTabTitle(tab, true)).toBe('Status tests')
     expect(tab.generatedTitle).toBe('Fix the flaky status tests')
   })
+
+  it('does not generate a title for quick command labeled tabs', () => {
+    vi.useFakeTimers()
+    const store = createTestStore()
+    seedStore(store, {
+      settings: {
+        ...getDefaultSettings('/tmp'),
+        tabAutoGenerateTitle: true
+      },
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: WORKTREE_ID, repoId: 'repo1', path: '/path/wt1' })]
+      }
+    })
+    const tabId = store
+      .getState()
+      .createTab(WORKTREE_ID, undefined, undefined, { quickCommandLabel: 'Run tests' }).id
+
+    store.getState().setAgentStatus(makePaneKey(tabId, LEAF_ID), {
+      state: 'working',
+      prompt: 'Fix the flaky status tests',
+      agentType: 'claude'
+    })
+
+    const tab = store.getState().tabsByWorktree[WORKTREE_ID][0]
+    expect(tab.generatedTitle).toBeUndefined()
+    expect(resolveTerminalTabTitle(tab, true)).toBe('Run tests')
+  })
 })
