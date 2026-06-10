@@ -94,7 +94,11 @@ import { normalizeTerminalShortcutPolicy } from '../shared/keybindings'
 import { normalizeAppIconId } from '../shared/app-icon'
 import { normalizeTerminalCustomThemes } from '../shared/terminal-custom-themes'
 import {
+  compareFeatureInteractionUsageBuckets,
+  getFeatureInteractionCategory,
+  getFeatureInteractionUsageBucket,
   normalizeFeatureInteractions,
+  normalizeFeatureInteractionTelemetryBuckets,
   type FeatureInteractionId
 } from '../shared/feature-interactions'
 import { normalizeContextualTourIds } from '../shared/contextual-tours'
@@ -134,6 +138,8 @@ import {
   migrateWorkspaceSessionTerminalScrollbackSnapshots,
   readTerminalScrollbackSnapshotSync
 } from './terminal-scrollback-snapshots'
+import { track } from './telemetry/client'
+import { getCohortAtEmit } from './telemetry/cohort-classifier'
 
 function encrypt(plaintext: string): string {
   if (!plaintext || !safeStorage.isEncryptionAvailable()) {
@@ -322,6 +328,21 @@ function mergeContextualTourSeenIds(
     merged.add(id)
   }
   return [...merged]
+}
+
+function stripMainOwnedTelemetryMarkerFromUI(
+  value: Partial<PersistedState['ui']> | undefined
+): Partial<PersistedState['ui']> {
+  if (!value || typeof value !== 'object') {
+    return {}
+  }
+  const { featureInteractionTelemetryBuckets: _reserved, ...ui } = value as Partial<
+    PersistedState['ui']
+  > & {
+    featureInteractionTelemetryBuckets?: unknown
+  }
+  void _reserved
+  return ui
 }
 
 function normalizeSortBy(sortBy: unknown): PersistedState['ui']['sortBy'] {
@@ -1900,6 +1921,9 @@ export class Store {
         result = {
           ...defaults,
           ...parsed,
+          featureInteractionTelemetryBuckets: normalizeFeatureInteractionTelemetryBuckets(
+            parsed.featureInteractionTelemetryBuckets
+          ),
           projectGroups: normalizeProjectGroups(parsed.projectGroups),
           worktreeLineageById: parsed.worktreeLineageById ?? {},
           settings: {
@@ -2106,7 +2130,7 @@ export class Store {
             }
             return {
               ...defaults.ui,
-              ...parsed.ui,
+              ...stripMainOwnedTelemetryMarkerFromUI(parsed.ui),
               // Why: migrate once from the retired Appearance setting only
               // when no explicit persisted chrome preference exists yet.
               rightSidebarOpen,
@@ -3175,9 +3199,10 @@ export class Store {
   // ── UI State ───────────────────────────────────────────────────────
 
   getUI(): PersistedState['ui'] {
+    const uiState = stripMainOwnedTelemetryMarkerFromUI(this.state.ui)
     return {
       ...getDefaultUIState(),
-      ...this.state.ui,
+      ...uiState,
       groupBy: normalizeGroupBy(this.state.ui?.groupBy),
       sortBy: normalizeSortBy(this.state.ui?.sortBy),
       projectOrderBy: normalizeProjectOrderBy(this.state.ui?.projectOrderBy),
@@ -3206,39 +3231,44 @@ export class Store {
   }
 
   updateUI(updates: Partial<PersistedState['ui']>): void {
+    const sanitizedUpdates = stripMainOwnedTelemetryMarkerFromUI(updates)
+    const currentUI = {
+      ...getDefaultUIState(),
+      ...stripMainOwnedTelemetryMarkerFromUI(this.state.ui)
+    }
     this.state.ui = {
-      ...this.state.ui,
-      ...updates,
-      groupBy: updates.groupBy
-        ? normalizeGroupBy(updates.groupBy)
+      ...currentUI,
+      ...sanitizedUpdates,
+      groupBy: sanitizedUpdates.groupBy
+        ? normalizeGroupBy(sanitizedUpdates.groupBy)
         : normalizeGroupBy(this.state.ui?.groupBy),
-      sortBy: updates.sortBy
-        ? normalizeSortBy(updates.sortBy)
+      sortBy: sanitizedUpdates.sortBy
+        ? normalizeSortBy(sanitizedUpdates.sortBy)
         : normalizeSortBy(this.state.ui?.sortBy),
       projectOrderBy: updates.projectOrderBy
         ? normalizeProjectOrderBy(updates.projectOrderBy)
         : normalizeProjectOrderBy(this.state.ui?.projectOrderBy),
       rightSidebarTab:
-        updates.rightSidebarTab !== undefined
-          ? normalizeRightSidebarTab(updates.rightSidebarTab)
+        sanitizedUpdates.rightSidebarTab !== undefined
+          ? normalizeRightSidebarTab(sanitizedUpdates.rightSidebarTab)
           : normalizeRightSidebarTab(this.state.ui?.rightSidebarTab),
       worktreeCardProperties:
-        updates.worktreeCardProperties !== undefined
-          ? normalizeWorktreeCardProperties(updates.worktreeCardProperties)
+        sanitizedUpdates.worktreeCardProperties !== undefined
+          ? normalizeWorktreeCardProperties(sanitizedUpdates.worktreeCardProperties)
           : normalizeWorktreeCardProperties(this.state.ui?.worktreeCardProperties),
       agentActivityDisplayMode:
         updates.agentActivityDisplayMode !== undefined
           ? normalizeAgentActivityDisplayMode(updates.agentActivityDisplayMode)
           : normalizeAgentActivityDisplayMode(this.state.ui?.agentActivityDisplayMode),
       workspaceStatuses:
-        updates.workspaceStatuses !== undefined
-          ? normalizeWorkspaceStatuses(updates.workspaceStatuses)
+        sanitizedUpdates.workspaceStatuses !== undefined
+          ? normalizeWorkspaceStatuses(sanitizedUpdates.workspaceStatuses)
           : normalizeWorkspaceStatuses(this.state.ui?.workspaceStatuses),
       workspaceBoardOpacity: clampWorkspaceBoardOpacity(
-        updates.workspaceBoardOpacity ?? this.state.ui?.workspaceBoardOpacity
+        sanitizedUpdates.workspaceBoardOpacity ?? this.state.ui?.workspaceBoardOpacity
       ),
       workspaceBoardColumnWidth: clampWorkspaceBoardColumnWidth(
-        updates.workspaceBoardColumnWidth ?? this.state.ui?.workspaceBoardColumnWidth
+        sanitizedUpdates.workspaceBoardColumnWidth ?? this.state.ui?.workspaceBoardColumnWidth
       ),
       browserDefaultZoomLevel: normalizeBrowserPageZoomLevel(
         updates.browserDefaultZoomLevel ?? this.state.ui?.browserDefaultZoomLevel
@@ -3248,8 +3278,8 @@ export class Store {
           ? normalizeShowDotfilesByWorktree(updates.showDotfilesByWorktree)
           : normalizeShowDotfilesByWorktree(this.state.ui?.showDotfilesByWorktree),
       featureTipsSeenIds:
-        updates.featureTipsSeenIds !== undefined
-          ? normalizeFeatureTipIds(updates.featureTipsSeenIds)
+        sanitizedUpdates.featureTipsSeenIds !== undefined
+          ? normalizeFeatureTipIds(sanitizedUpdates.featureTipsSeenIds)
           : normalizeFeatureTipIds(this.state.ui?.featureTipsSeenIds),
       // Why: renderer and paired clients can mark different tours seen from
       // stale UI snapshots; union them so completed tours stay suppressed.
@@ -3264,10 +3294,10 @@ export class Store {
       // Merge instead of replacing so a stale renderer snapshot cannot erase
       // runtime-only feature interactions.
       featureInteractions:
-        updates.featureInteractions !== undefined
+        sanitizedUpdates.featureInteractions !== undefined
           ? mergeFeatureInteractions(
               this.state.ui?.featureInteractions,
-              updates.featureInteractions
+              sanitizedUpdates.featureInteractions
             )
           : normalizeFeatureInteractions(this.state.ui?.featureInteractions)
     }
@@ -3276,16 +3306,46 @@ export class Store {
 
   recordFeatureInteraction(id: FeatureInteractionId): PersistedState['ui'] {
     const featureInteractions = normalizeFeatureInteractions(this.state.ui?.featureInteractions)
+    const telemetryBuckets = normalizeFeatureInteractionTelemetryBuckets(
+      this.state.featureInteractionTelemetryBuckets
+    )
     const existing = featureInteractions[id]
+    const previousCount = existing?.interactionCount ?? 0
+    const nextCount = previousCount + 1
+    const previousBucket = getFeatureInteractionUsageBucket(previousCount)
+    const nextBucket = getFeatureInteractionUsageBucket(nextCount)
+    const lastEmittedBucket = telemetryBuckets[id] ?? null
+    const shouldEmit =
+      nextBucket !== null &&
+      (lastEmittedBucket === null ||
+        compareFeatureInteractionUsageBuckets(nextBucket, lastEmittedBucket) > 0)
+
     this.updateUI({
       featureInteractions: {
         ...featureInteractions,
         [id]: {
           firstInteractedAt: existing?.firstInteractedAt ?? Date.now(),
-          interactionCount: (existing?.interactionCount ?? 0) + 1
+          interactionCount: nextCount
         }
       }
     })
+    this.state.featureInteractionTelemetryBuckets = shouldEmit
+      ? { ...telemetryBuckets, [id]: nextBucket }
+      : telemetryBuckets
+    this.scheduleSave()
+
+    if (shouldEmit) {
+      track('feature_interaction_usage_bucket_reached', {
+        feature_id: id,
+        feature_category: getFeatureInteractionCategory(id),
+        count_bucket: nextBucket,
+        bucket_source:
+          lastEmittedBucket === null && previousBucket !== null && previousBucket === nextBucket
+            ? 'observed_existing'
+            : 'crossed_now',
+        ...getCohortAtEmit()
+      })
+    }
     return this.getUI()
   }
 

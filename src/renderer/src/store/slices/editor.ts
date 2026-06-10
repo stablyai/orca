@@ -1705,6 +1705,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         return
       }
       get().openFile(fileInfo, { preview: false, targetGroupId: groupId })
+      get().recordFeatureInteraction('markdown-file-created')
     } catch (err) {
       toast.error(extractIpcErrorMessage(err, 'Failed to create untitled markdown file.'))
     }
