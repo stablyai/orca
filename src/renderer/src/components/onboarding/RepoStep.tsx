@@ -76,9 +76,7 @@ export function RepoStep({
               <FolderOpen className="size-5" />
             </div>
             <div className="min-w-0 flex-1">
-              <div className="text-base font-semibold text-foreground">
-                {translate('auto.components.onboarding.RepoStep.2d20200346', 'Import repositories')}
-              </div>
+              <div className="text-base font-semibold text-foreground">{translate("auto.components.onboarding.RepoStep.2d20200346", "Import repositories")}</div>
               <div className="mt-0.5 flex min-w-0 items-center gap-1.5 text-[13px] text-muted-foreground">
                 {nestedScanInProgress ? (
                   <Tooltip>
@@ -88,14 +86,8 @@ export function RepoStep({
                         variant="ghost"
                         size="icon-xs"
                         className="group text-muted-foreground hover:bg-destructive/10 hover:text-destructive focus-visible:bg-destructive/10 focus-visible:text-destructive focus-visible:ring-destructive/40"
-                        aria-label={translate(
-                          'auto.components.onboarding.RepoStep.c3d9d44ca2',
-                          'Stop scan'
-                        )}
-                        title={translate(
-                          'auto.components.onboarding.RepoStep.c7af322fc3',
-                          'Stop scanning'
-                        )}
+                        aria-label={translate("auto.components.onboarding.RepoStep.c3d9d44ca2", "Stop scan")}
+                        title={translate("auto.components.onboarding.RepoStep.c7af322fc3", "Stop scanning")}
                         onClick={onStopNestedScan}
                       >
                         <Loader2 className="size-3.5 animate-spin text-annotation-highlight group-hover:hidden group-focus-visible:hidden" />
@@ -103,28 +95,15 @@ export function RepoStep({
                       </Button>
                     </TooltipTrigger>
                     <TooltipContent side="top" sideOffset={4}>
-                      {translate(
-                        'auto.components.onboarding.RepoStep.e8fdb36338',
-                        'Scanning repositories. Click to stop.'
-                      )}
-                    </TooltipContent>
+                      {translate("auto.components.onboarding.RepoStep.e8fdb36338", "Scanning repositories. Click to stop.")}</TooltipContent>
                   </Tooltip>
                 ) : null}
                 <span className="min-w-0 truncate">
-                  {translate(
-                    'auto.components.onboarding.RepoStep.2e6438dd34',
-                    '{{value0}}Found {{value1}} {{value2}} in this folder.',
-                    {
-                      value0: nestedScanInProgress ? 'Scanning... ' : '',
-                      value1: nestedScan.repos.length,
-                      value2: nestedScan.repos.length === 1 ? 'repository' : 'repositories'
-                    }
-                  )}
+                  {translate("auto.components.onboarding.RepoStep.2e6438dd34", "{{value0}}Found {{value1}} {{value2}} in this folder.", { value0: nestedScanInProgress ? 'Scanning... ' : '', value1: nestedScan.repos.length, value2: nestedScan.repos.length === 1 ? 'repository' : 'repositories' })}
                 </span>
               </div>
               <div className="mt-0.5 truncate text-[11px] text-muted-foreground">
-                {translate('auto.components.onboarding.RepoStep.cecd6593fa', 'Scanned folder:')}{' '}
-                {folderName} - {nestedScan.selectedPath}
+                {translate("auto.components.onboarding.RepoStep.cecd6593fa", "Scanned folder:")} {folderName} - {nestedScan.selectedPath}
               </div>
             </div>
           </div>
@@ -151,16 +130,14 @@ export function RepoStep({
               onClick={onCancelNested}
             >
               <ArrowLeft className="size-3.5" />
-              {translate('auto.components.onboarding.RepoStep.27ca610db1', 'Back')}
-            </button>
+              {translate("auto.components.onboarding.RepoStep.27ca610db1", "Back")}</button>
             <button
               type="button"
               className="ml-auto rounded-lg bg-primary px-4 py-3 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-40"
               disabled={nestedImportDisabled || nestedSelectedPaths.size === 0}
               onClick={onImportNested}
             >
-              {translate('auto.components.onboarding.RepoStep.2d20200346', 'Import repositories')}
-            </button>
+              {translate("auto.components.onboarding.RepoStep.2d20200346", "Import repositories")}</button>
           </div>
         </div>
         {busyLabel && (
@@ -191,27 +168,15 @@ export function RepoStep({
               <FolderOpen className="size-5" />
             </div>
             <div className="min-w-0 flex-1">
-              <div className="text-base font-semibold text-foreground">
-                {translate(
-                  'auto.components.onboarding.RepoStep.8cab104e3c',
-                  'Open a server project'
-                )}
-              </div>
+              <div className="text-base font-semibold text-foreground">{translate("auto.components.onboarding.RepoStep.8cab104e3c", "Open a server project")}</div>
               <div className="mt-0.5 text-[13px] text-muted-foreground">
-                {translate(
-                  'auto.components.onboarding.RepoStep.466108ab89',
-                  'Enter a path that exists on the runtime server.'
-                )}
-              </div>
+                {translate("auto.components.onboarding.RepoStep.466108ab89", "Enter a path that exists on the runtime server.")}</div>
             </div>
           </div>
           <div className="mt-4 flex flex-col gap-2 sm:flex-row">
             <input
               className="min-w-0 flex-1 rounded-lg border border-border bg-background px-4 py-3 font-mono text-sm text-foreground outline-none transition focus:border-foreground/50 focus:ring-2 focus:ring-foreground/15"
-              placeholder={translate(
-                'auto.components.onboarding.RepoStep.2ebbc26343',
-                '/home/user/project'
-              )}
+              placeholder={translate("auto.components.onboarding.RepoStep.2ebbc26343", "/home/user/project")}
               value={serverPath}
               disabled={disabled}
               spellCheck={false}
@@ -222,16 +187,14 @@ export function RepoStep({
               className="shrink-0 rounded-lg bg-primary px-4 py-3 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-40"
               disabled={!serverPath.trim() || disabled}
             >
-              {translate('auto.components.onboarding.RepoStep.3863747c56', 'Add Git Project')}
-            </button>
+              {translate("auto.components.onboarding.RepoStep.3863747c56", "Add Git Project")}</button>
             <button
               type="button"
               className="shrink-0 rounded-lg border border-border bg-background px-4 py-3 text-sm font-medium text-foreground hover:bg-muted/60 disabled:opacity-40"
               disabled={!serverPath.trim() || disabled}
               onClick={() => onOpenServerFolder('folder')}
             >
-              {translate('auto.components.onboarding.RepoStep.e8214aa632', 'Open as Folder')}
-            </button>
+              {translate("auto.components.onboarding.RepoStep.e8214aa632", "Open as Folder")}</button>
           </div>
         </form>
       ) : (
@@ -249,31 +212,18 @@ export function RepoStep({
             <div className="min-w-0 flex-1">
               <div className="flex min-w-0 items-center gap-2">
                 <div className="min-w-0 text-base font-semibold text-foreground">
-                  {translate(
-                    'auto.components.onboarding.RepoStep.f4e9c8dcf8',
-                    'Browse for a folder'
-                  )}
-                </div>
+                  {translate("auto.components.onboarding.RepoStep.f4e9c8dcf8", "Browse for a folder")}</div>
                 <ArrowRight className="size-4 shrink-0 text-muted-foreground transition group-hover:translate-x-0.5 group-hover:text-foreground" />
               </div>
               <div className="mt-0.5 text-[13px] text-muted-foreground">
-                {translate(
-                  'auto.components.onboarding.RepoStep.831524961f',
-                  'Choose any local directory, git repo or not.'
-                )}
-              </div>
+                {translate("auto.components.onboarding.RepoStep.831524961f", "Choose any local directory, git repo or not.")}</div>
             </div>
           </div>
           <div className="ml-[3.75rem] mt-3 flex w-fit max-w-[calc(100%-3.75rem)] items-center gap-2 rounded-lg border border-border bg-muted px-3 py-2 text-[12px] text-muted-foreground">
             <span className="grid size-6 shrink-0 place-items-center rounded-md border border-border bg-background text-foreground">
               <Lightbulb className="size-3.5" />
             </span>
-            <span>
-              {translate(
-                'auto.components.onboarding.RepoStep.6558d50c69',
-                'Want to import many repos at once? Select the parent folder.'
-              )}
-            </span>
+            <span>{translate("auto.components.onboarding.RepoStep.6558d50c69", "Want to import many repos at once? Select the parent folder.")}</span>
           </div>
         </button>
       )}
@@ -290,24 +240,15 @@ export function RepoStep({
             <GitBranch className="size-5" />
           </div>
           <div className="min-w-0 flex-1">
-            <div className="text-base font-semibold text-foreground">
-              {translate('auto.components.onboarding.RepoStep.132425a3e3', 'Clone a repo')}
-            </div>
+            <div className="text-base font-semibold text-foreground">{translate("auto.components.onboarding.RepoStep.132425a3e3", "Clone a repo")}</div>
             <div className="mt-0.5 text-[13px] text-muted-foreground">
-              {translate(
-                'auto.components.onboarding.RepoStep.288d8444b7',
-                'Paste an HTTPS or SSH URL.'
-              )}
-            </div>
+              {translate("auto.components.onboarding.RepoStep.288d8444b7", "Paste an HTTPS or SSH URL.")}</div>
           </div>
         </div>
         <div className="mt-4 flex gap-2">
           <input
             className="min-w-0 flex-1 rounded-lg border border-border bg-background px-4 py-3 font-mono text-sm text-foreground outline-none transition focus:border-foreground/50 focus:ring-2 focus:ring-foreground/15"
-            placeholder={translate(
-              'auto.components.onboarding.RepoStep.955134915e',
-              'git@github.com:org/repo.git'
-            )}
+            placeholder={translate("auto.components.onboarding.RepoStep.955134915e", "git@github.com:org/repo.git")}
             value={cloneUrl}
             disabled={disabled}
             onChange={(event) => onCloneUrlChange(event.target.value)}
@@ -317,23 +258,15 @@ export function RepoStep({
             className="shrink-0 rounded-lg bg-primary px-5 py-3 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-40"
             disabled={!cloneUrl.trim() || (runtimeActive && !cloneDestination.trim()) || disabled}
           >
-            {translate('auto.components.onboarding.RepoStep.7932e95f68', 'Clone')}
-          </button>
+            {translate("auto.components.onboarding.RepoStep.7932e95f68", "Clone")}</button>
         </div>
         {runtimeActive && (
           <div className="mt-2 space-y-1">
             <label className="text-[11px] font-medium text-muted-foreground">
-              {translate(
-                'auto.components.onboarding.RepoStep.24c7c8696c',
-                'Clone into server path'
-              )}
-            </label>
+              {translate("auto.components.onboarding.RepoStep.24c7c8696c", "Clone into server path")}</label>
             <input
               className="w-full rounded-lg border border-border bg-background px-4 py-3 font-mono text-sm text-foreground outline-none transition focus:border-foreground/50 focus:ring-2 focus:ring-foreground/15"
-              placeholder={translate(
-                'auto.components.onboarding.RepoStep.7ec3f48820',
-                '/home/user'
-              )}
+              placeholder={translate("auto.components.onboarding.RepoStep.7ec3f48820", "/home/user")}
               value={cloneDestination}
               disabled={disabled}
               spellCheck={false}
@@ -345,19 +278,15 @@ export function RepoStep({
 
       <div className="flex flex-wrap items-center justify-between gap-3 px-1 pt-1 text-xs text-muted-foreground">
         <div className="flex min-w-0 items-center gap-2">
-          <span>{translate('auto.components.onboarding.RepoStep.7b679207e4', 'Workspace')}</span>
+          <span>{translate("auto.components.onboarding.RepoStep.7b679207e4", "Workspace")}</span>
           <span className="truncate font-mono text-foreground">
-            {runtimeActive
-              ? translate('auto.components.onboarding.RepoStep.cf23006ba7', 'Runtime server')
-              : workspaceDir}
+            {runtimeActive ? translate("auto.components.onboarding.RepoStep.cf23006ba7", "Runtime server") : workspaceDir}
           </span>
         </div>
         {runtimeActive ? (
           <div className="flex items-center gap-1.5">
             <Server className="size-3.5" />
-            <span>
-              {translate('auto.components.onboarding.RepoStep.c33b190ca3', 'Server paths only')}
-            </span>
+            <span>{translate("auto.components.onboarding.RepoStep.c33b190ca3", "Server paths only")}</span>
           </div>
         ) : (
           <button
@@ -367,12 +296,7 @@ export function RepoStep({
             onClick={onOpenSshSettings}
           >
             <Server className="size-3.5 shrink-0" />
-            <span className="truncate">
-              {translate(
-                'auto.components.onboarding.RepoStep.b7c4da0504',
-                'SSH? Set hosts up in Settings'
-              )}
-            </span>
+            <span className="truncate">{translate("auto.components.onboarding.RepoStep.b7c4da0504", "SSH? Set hosts up in Settings")}</span>
             <ArrowRight className="size-3.5 shrink-0" />
           </button>
         )}
@@ -389,14 +313,8 @@ export function RepoStep({
                   variant="ghost"
                   size="icon-xs"
                   className="group text-muted-foreground hover:bg-destructive/10 hover:text-destructive focus-visible:bg-destructive/10 focus-visible:text-destructive focus-visible:ring-destructive/40"
-                  aria-label={translate(
-                    'auto.components.onboarding.RepoStep.c3d9d44ca2',
-                    'Stop scan'
-                  )}
-                  title={translate(
-                    'auto.components.onboarding.RepoStep.c7af322fc3',
-                    'Stop scanning'
-                  )}
+                  aria-label={translate("auto.components.onboarding.RepoStep.c3d9d44ca2", "Stop scan")}
+                  title={translate("auto.components.onboarding.RepoStep.c7af322fc3", "Stop scanning")}
                   onClick={onStopNestedScan}
                 >
                   <Loader2 className="size-3.5 animate-spin text-annotation-highlight group-hover:hidden group-focus-visible:hidden" />
@@ -404,11 +322,7 @@ export function RepoStep({
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="top" sideOffset={4}>
-                {translate(
-                  'auto.components.onboarding.RepoStep.e8fdb36338',
-                  'Scanning repositories. Click to stop.'
-                )}
-              </TooltipContent>
+                {translate("auto.components.onboarding.RepoStep.e8fdb36338", "Scanning repositories. Click to stop.")}</TooltipContent>
             </Tooltip>
           ) : null}
         </div>
