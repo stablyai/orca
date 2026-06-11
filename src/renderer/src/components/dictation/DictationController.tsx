@@ -63,12 +63,7 @@ export function DictationController() {
       await waitForStoppedSession(sessionId, stoppedSessionIdsRef, stoppedResolversRef)
       const sessionErrored = erroredSessionIdsRef.current.delete(sessionId)
       if (!sessionErrored && !finalTranscriptReceivedRef.current && getCapturedChunkCount() > 0) {
-        toast.message(
-          translate(
-            'auto.components.dictation.DictationController.5d2c3e7ae3',
-            'No speech detected.'
-          )
-        )
+        toast.message(translate("auto.components.dictation.DictationController.5d2c3e7ae3", "No speech detected."))
       }
       insertionTargetRef.current = null
       finalTranscriptReceivedRef.current = false
@@ -94,10 +89,7 @@ export function DictationController() {
     if (!modelId) {
       toast('No speech model selected. Download one in Settings > Voice.', {
         action: {
-          label: translate(
-            'auto.components.dictation.DictationController.bb7f599ee7',
-            'Open Settings'
-          ),
+          label: translate("auto.components.dictation.DictationController.bb7f599ee7", "Open Settings"),
           onClick: () => {
             useAppStore.getState().openSettingsTarget({ pane: 'voice', repoId: null })
             useAppStore.getState().openSettingsPage()
@@ -196,21 +188,13 @@ export function DictationController() {
       dictationStateRef.current = 'error'
       setDictationState('error')
       if (message.includes('Permission') || message.includes('NotAllowed')) {
-        toast.error(
-          translate(
-            'auto.components.dictation.DictationController.2d5b9fabf9',
-            'Microphone access denied. Grant access in system settings, then restart Orca.'
-          )
-        )
+        toast.error(translate("auto.components.dictation.DictationController.2d5b9fabf9", "Microphone access denied. Grant access in system settings, then restart Orca."))
       } else if (message.includes('not ready')) {
         toast('Speech model not ready. Download it in Settings > Voice.')
       } else if (message.includes('Unknown model')) {
         toast('Selected model is no longer available. Please choose another in Settings > Voice.', {
           action: {
-            label: translate(
-              'auto.components.dictation.DictationController.bb7f599ee7',
-              'Open Settings'
-            ),
+            label: translate("auto.components.dictation.DictationController.bb7f599ee7", "Open Settings"),
             onClick: () => {
               useAppStore.getState().openSettingsTarget({ pane: 'voice', repoId: null })
               useAppStore.getState().openSettingsPage()
@@ -218,13 +202,7 @@ export function DictationController() {
           }
         })
       } else {
-        toast.error(
-          translate(
-            'auto.components.dictation.DictationController.55127a3706',
-            'Dictation failed: {{value0}}',
-            { value0: message }
-          )
-        )
+        toast.error(translate("auto.components.dictation.DictationController.55127a3706", "Dictation failed: {{value0}}", { value0: message }))
       }
       dictationStateRef.current = 'idle'
       setDictationState('idle')
@@ -395,12 +373,7 @@ export function DictationController() {
         insertText(textToInsert, target)
         insertedFinalTranscriptRef.current += textToInsert
       } else if (!intentionalTargetCancellationRef.current) {
-        toast.message(
-          translate(
-            'auto.components.dictation.DictationController.7afff43472',
-            'Dictation finished, but no text field was focused.'
-          )
-        )
+        toast.message(translate("auto.components.dictation.DictationController.7afff43472", "Dictation finished, but no text field was focused."))
       }
     })
 
@@ -416,13 +389,7 @@ export function DictationController() {
       erroredSessionIdsRef.current.add(sessionId)
       dictationRunRef.current += 1
       activeSessionIdRef.current = null
-      toast.error(
-        translate(
-          'auto.components.dictation.DictationController.de136f1199',
-          'Speech error: {{value0}}',
-          { value0: data.error }
-        )
-      )
+      toast.error(translate("auto.components.dictation.DictationController.de136f1199", "Speech error: {{value0}}", { value0: data.error }))
       dictationStateRef.current = 'stopping'
       setDictationState('stopping')
       stopCapture()

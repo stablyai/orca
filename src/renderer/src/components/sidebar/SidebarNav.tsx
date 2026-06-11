@@ -51,8 +51,7 @@ function HideSidebarMenu({ onHide }: { onHide: () => void }): React.JSX.Element 
     <ContextMenuContent>
       <ContextMenuItem onSelect={onHide}>
         <EyeOff className="size-3.5" />
-        {translate('auto.components.sidebar.SidebarNav.d599269755', 'Hide from sidebar')}
-      </ContextMenuItem>
+        {translate("auto.components.sidebar.SidebarNav.d599269755", "Hide from sidebar")}</ContextMenuItem>
     </ContextMenuContent>
   )
 }
@@ -252,17 +251,12 @@ const SidebarNav = React.memo(function SidebarNav() {
                 )}
                 strokeWidth={tasksActive ? 2.25 : 1.75}
               />
-              <span className="flex-1">
-                {translate('auto.components.sidebar.SidebarNav.fee535205b', 'Tasks')}
-              </span>
+              <span className="flex-1">{translate("auto.components.sidebar.SidebarNav.fee535205b", "Tasks")}</span>
               <span className="flex items-center gap-1">
                 {visibleTaskProviders.includes('github') ? (
                   <TaskProviderShortcut
                     canBrowseTasks={canBrowseTasks}
-                    label={translate(
-                      'auto.components.sidebar.SidebarNav.0ccba862b8',
-                      'Open GitHub tasks'
-                    )}
+                    label={translate("auto.components.sidebar.SidebarNav.0ccba862b8", "Open GitHub tasks")}
                     onOpen={() => {
                       openTaskPage({ taskSource: 'github' })
                     }}
@@ -273,10 +267,7 @@ const SidebarNav = React.memo(function SidebarNav() {
                 {visibleTaskProviders.includes('gitlab') ? (
                   <TaskProviderShortcut
                     canBrowseTasks={canBrowseTasks}
-                    label={translate(
-                      'auto.components.sidebar.SidebarNav.196c1b5362',
-                      'Open GitLab tasks'
-                    )}
+                    label={translate("auto.components.sidebar.SidebarNav.196c1b5362", "Open GitLab tasks")}
                     onOpen={() => {
                       openTaskPage({ taskSource: 'gitlab' })
                     }}
@@ -287,10 +278,7 @@ const SidebarNav = React.memo(function SidebarNav() {
                 {visibleTaskProviders.includes('linear') ? (
                   <TaskProviderShortcut
                     canBrowseTasks={canBrowseTasks}
-                    label={translate(
-                      'auto.components.sidebar.SidebarNav.c39ab10000',
-                      'Open Linear tasks'
-                    )}
+                    label={translate("auto.components.sidebar.SidebarNav.c39ab10000", "Open Linear tasks")}
                     onOpen={() => {
                       openTaskPage({ taskSource: 'linear' })
                     }}
@@ -301,10 +289,7 @@ const SidebarNav = React.memo(function SidebarNav() {
                 {visibleTaskProviders.includes('jira') ? (
                   <TaskProviderShortcut
                     canBrowseTasks={canBrowseTasks}
-                    label={translate(
-                      'auto.components.sidebar.SidebarNav.e7ad3c540d',
-                      'Open Jira tasks'
-                    )}
+                    label={translate("auto.components.sidebar.SidebarNav.e7ad3c540d", "Open Jira tasks")}
                     onOpen={() => {
                       openTaskPage({ taskSource: 'jira' })
                     }}
@@ -339,9 +324,7 @@ const SidebarNav = React.memo(function SidebarNav() {
                 )}
                 strokeWidth={automationsActive ? 2.25 : 1.75}
               />
-              <span className="flex-1">
-                {translate('auto.components.sidebar.SidebarNav.f323383e9a', 'Automations')}
-              </span>
+              <span className="flex-1">{translate("auto.components.sidebar.SidebarNav.f323383e9a", "Automations")}</span>
             </button>
           </ContextMenuTrigger>
           <HideSidebarMenu onHide={hideAutomationsButton} />
@@ -366,9 +349,7 @@ const SidebarNav = React.memo(function SidebarNav() {
             )}
             strokeWidth={activityActive ? 2.25 : 1.75}
           />
-          <span className="flex-1">
-            {translate('auto.components.sidebar.SidebarNav.9c95e1ce91', 'Agents')}
-          </span>
+          <span className="flex-1">{translate("auto.components.sidebar.SidebarNav.9c95e1ce91", "Agents")}</span>
           {activityUnreadCount > 0 ? (
             <span className="rounded-full bg-primary px-1.5 py-px text-[10px] font-semibold text-primary-foreground">
               {activityUnreadCount}
@@ -400,13 +381,10 @@ const SidebarNav = React.memo(function SidebarNav() {
                 )}
                 strokeWidth={mobileActive ? 2.25 : 1.75}
               />
-              <span className="flex-1">
-                {translate('auto.components.sidebar.SidebarNav.1b5c41caee', 'Orca Mobile')}
-              </span>
+              <span className="flex-1">{translate("auto.components.sidebar.SidebarNav.1b5c41caee", "Orca Mobile")}</span>
               {mobileOnboardingBadge.visible ? (
                 <span className="rounded-full bg-primary px-1.5 py-px text-[10px] font-semibold text-primary-foreground">
-                  {translate('auto.components.sidebar.SidebarNav.c86d83b5c3', 'New')}
-                </span>
+                  {translate("auto.components.sidebar.SidebarNav.c86d83b5c3", "New")}</span>
               ) : null}
             </button>
           </ContextMenuTrigger>
@@ -416,19 +394,14 @@ const SidebarNav = React.memo(function SidebarNav() {
       <button
         type="button"
         onClick={() => openModal('worktree-palette')}
-        aria-label={translate(
-          'auto.components.sidebar.SidebarNav.0c3395fd32',
-          'Search worktrees and browser tabs'
-        )}
+        aria-label={translate("auto.components.sidebar.SidebarNav.0c3395fd32", "Search worktrees and browser tabs")}
         className="group flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] font-medium tracking-tight text-worktree-sidebar-foreground/60 transition-colors hover:bg-worktree-sidebar-foreground/8"
       >
         <Search
           className="size-4 shrink-0 text-worktree-sidebar-foreground/30"
           strokeWidth={1.75}
         />
-        <span className="flex-1">
-          {translate('auto.components.sidebar.SidebarNav.80611a8b10', 'Search')}
-        </span>
+        <span className="flex-1">{translate("auto.components.sidebar.SidebarNav.80611a8b10", "Search")}</span>
         <kbd className="hidden rounded border border-border/60 bg-background/40 px-1.5 py-px font-mono text-[10px] font-medium text-muted-foreground group-hover:inline-flex items-center">
           {worktreePaletteShortcut}
         </kbd>
