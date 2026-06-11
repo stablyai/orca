@@ -34,6 +34,42 @@ function writeLegacyLinearToken(token: string | Buffer, viewer: Record<string, u
   })
 }
 
+function workspaceTokenPath(workspaceId: string): string {
+  return join(
+    tempHome,
+    '.orca',
+    'linear-tokens',
+    `${Buffer.from(workspaceId).toString('base64url')}.enc`
+  )
+}
+
+function writeMultiWorkspaceFiles(
+  workspaces: { id: string; token: string | Buffer }[],
+  selectedWorkspaceId: string
+): void {
+  const orcaDir = join(tempHome, '.orca')
+  mkdirSync(join(orcaDir, 'linear-tokens'), { recursive: true })
+  writeFileSync(
+    join(orcaDir, 'linear-workspaces.json'),
+    JSON.stringify({
+      version: 1,
+      activeWorkspaceId: workspaces[0]?.id ?? null,
+      selectedWorkspaceId,
+      workspaces: workspaces.map((workspace) => ({
+        id: workspace.id,
+        organizationId: workspace.id,
+        organizationName: workspace.id,
+        displayName: 'Ada',
+        email: 'ada@example.com'
+      }))
+    }),
+    { encoding: 'utf-8' }
+  )
+  for (const workspace of workspaces) {
+    writeFileSync(workspaceTokenPath(workspace.id), workspace.token)
+  }
+}
+
 async function loadClientModule(options: SafeStorageMockOptions = {}) {
   vi.resetModules()
   linearClientMock = vi.fn(function LinearClient(
@@ -301,5 +337,52 @@ describe('Linear client workspace storage', () => {
 
     expect(linearClientMock).not.toHaveBeenCalled()
     expect(linear.getStatus()).toMatchObject({ connected: false })
+  })
+
+  it('keeps healthy workspaces under the "all" selection when one cannot be decrypted', async () => {
+    writeMultiWorkspaceFiles(
+      [
+        { id: 'good', token: 'token-good' },
+        { id: 'bad', token: Buffer.from([0x76, 0x31, 0x30, 0xff, 0xfe]) }
+      ],
+      'all'
+    )
+    fixtures.set('token-good', {
+      displayName: 'Ada',
+      email: 'ada@example.com',
+      organizationId: 'good',
+      organizationName: 'good',
+      organizationUrlKey: 'good'
+    })
+    const linear = await loadClientModule({
+      encryptionAvailable: true,
+      // Why: the plaintext "token-good" falls back through the legacy path;
+      // the binary "bad" token throws CredentialDecryptionError.
+      decryptString: () => {
+        throw new Error('userCanceledErr')
+      }
+    })
+
+    const clients = linear.getClients('all')
+    expect(clients.map((client) => client.workspace.id)).toEqual(['good'])
+    expect(linear.getStatus().credentialError).toContain('Could not decrypt')
+  })
+
+  it('rethrows the decrypt error for a specific workspace selection', async () => {
+    writeMultiWorkspaceFiles(
+      [
+        { id: 'good', token: 'token-good' },
+        { id: 'bad', token: Buffer.from([0x76, 0x31, 0x30, 0xff, 0xfe]) }
+      ],
+      'bad'
+    )
+    const linear = await loadClientModule({
+      encryptionAvailable: true,
+      decryptString: () => {
+        throw new Error('userCanceledErr')
+      }
+    })
+
+    expect(() => linear.getClients('bad')).toThrow('Could not decrypt')
   })
 })
