@@ -65,15 +65,15 @@ describe('buildLinearLaunchContextBlock', () => {
   it('emits the trusted header and an imperative CLI hint when the CLI is available', () => {
     const block = buildLinearLaunchContextBlock({
       identifier: 'ENG-123',
-      title: LINEAR_ITEM.title,
       url: LINEAR_ITEM.url,
       cliAvailable: true
     })
 
-    expect(block).toContain('Linked Linear issue: ENG-123 — Fix launch context handoff')
+    expect(block).toContain('Linked Linear issue: ENG-123')
+    expect(block).not.toContain('Fix launch context handoff')
     expect(block).toContain('https://linear.app/acme/issue/ENG-123/test')
     expect(block).toContain('Before planning or editing, fetch the full ticket with:')
-    expect(block).toContain('orca linear issue ENG-123 --full --json')
+    expect(block).toContain('orca linear issue --current --full --json')
     expect(block).toContain('check `meta` for caps, `partial`, and `includeErrors`')
   })
 
@@ -89,17 +89,17 @@ describe('buildLinearLaunchContextBlock', () => {
   it('points at Settings instead of a missing command when the CLI is unavailable', () => {
     const block = buildLinearLaunchContextBlock({
       identifier: 'ENG-123',
-      title: LINEAR_ITEM.title,
       url: LINEAR_ITEM.url,
       cliAvailable: false
     })
 
-    expect(block).toContain('Linked Linear issue: ENG-123 — Fix launch context handoff')
+    expect(block).toContain('Linked Linear issue: ENG-123')
+    expect(block).not.toContain('Fix launch context handoff')
     expect(block).not.toContain('orca linear issue')
     expect(block).toContain('enable it from Orca Settings')
   })
 
-  it('flattens and escapes ticket-authored titles to one bounded line', () => {
+  it('keeps ticket-authored titles out of trusted launch prompts', () => {
     const block = buildLinearLaunchContextBlock({
       identifier: 'ENG-123',
       title: `line one\nline two\u0007 ${'x'.repeat(400)}`,
@@ -107,9 +107,9 @@ describe('buildLinearLaunchContextBlock', () => {
     })
 
     const headerLine = block?.split('\n')[0] ?? ''
-    expect(headerLine).toContain('line one line two\\x07')
-    expect(headerLine).not.toContain('\u0007')
-    expect(headerLine.endsWith('…')).toBe(true)
+    expect(headerLine).toBe('Linked Linear issue: ENG-123')
+    expect(block).not.toContain('line one')
+    expect(block).not.toContain('\u0007')
   })
 
   it('returns null without an identifier', () => {
@@ -123,7 +123,7 @@ describe('getLinkedWorkItemPromptContext', () => {
 
     expect(result.linkedUrls).toEqual([])
     expect(result.linkedContextBlocks).toHaveLength(1)
-    expect(result.linkedContextBlocks[0]).toContain('orca linear issue ENG-123 --full --json')
+    expect(result.linkedContextBlocks[0]).toContain('orca linear issue --current --full --json')
     expect(result.linkedContextBlocks[0]).not.toContain('LINKED WORK ITEM CONTEXT')
   })
 
@@ -162,7 +162,7 @@ describe('resolveQuickCreateLinkedWorkItemPrompt', () => {
 
     expect(result.prompt).toBe('')
     expect(result.draftPrompt).toContain('typed fallback note')
-    expect(result.draftPrompt).toContain('orca linear issue ENG-123 --full --json')
+    expect(result.draftPrompt).toContain('orca linear issue --current --full --json')
     expect(result.draftPrompt).not.toContain('LINKED WORK ITEM CONTEXT')
     expect(result.draftPrompt).toMatch(/\n$/)
   })
@@ -207,8 +207,9 @@ describe('getLaunchableWorkItemDraftContent', () => {
       cliAvailable: true
     })
 
-    expect(draft).toContain('Linked Linear issue: ENG-123 — Fix launch context handoff')
-    expect(draft).toContain('orca linear issue ENG-123 --full --json')
+    expect(draft).toContain('Linked Linear issue: ENG-123')
+    expect(draft).not.toContain('Fix launch context handoff')
+    expect(draft).toContain('orca linear issue --current --full --json')
     expect(draft).not.toContain('LINKED WORK ITEM CONTEXT')
     expect(draft).toMatch(/\n$/)
   })

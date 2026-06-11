@@ -19,6 +19,7 @@ import {
 import type { ResolvedIssue } from './issue-context-client'
 import { getRequiredEntry, withLinearRead } from './issue-context-client'
 import { includeErrorCode } from './issue-context-errors'
+import { readConnectionPages } from './issue-context-pagination'
 import {
   ATTACHMENTS_QUERY,
   CHILDREN_QUERY,
@@ -115,14 +116,16 @@ async function readComments(resolved: ResolvedIssue): Promise<{
   meta: LinearCollectionMeta
 }> {
   const entry = getRequiredEntry(resolved.workspace.id)
-  const response = await withLinearRead(entry, async () => {
-    const raw = await entry.client.client.rawRequest<RawCommentsResponse, Record<string, unknown>>(
-      COMMENTS_QUERY,
-      { id: resolved.issue.id, first: LINEAR_COMMENTS_CAP }
-    )
-    return raw.data?.issue?.comments ?? null
+  const response = await readConnectionPages(LINEAR_COMMENTS_CAP, async (page) => {
+    return await withLinearRead(entry, async () => {
+      const raw = await entry.client.client.rawRequest<
+        RawCommentsResponse,
+        Record<string, unknown>
+      >(COMMENTS_QUERY, { id: resolved.issue.id, ...page })
+      return raw.data?.issue?.comments ?? null
+    })
   })
-  const nodes = response?.nodes ?? []
+  const nodes = response.nodes
   const items = nodes.slice(0, LINEAR_COMMENTS_CAP).map((comment) => {
     const body = comment.body ?? ''
     return {
@@ -137,7 +140,7 @@ async function readComments(resolved: ResolvedIssue): Promise<{
   })
   return {
     items,
-    meta: collectionMeta(items.length, LINEAR_COMMENTS_CAP, response?.pageInfo?.hasNextPage)
+    meta: collectionMeta(items.length, LINEAR_COMMENTS_CAP, response.hasMore)
   }
 }
 
@@ -159,36 +162,43 @@ async function readChildren(
       return []
     }
     const remaining = LINEAR_CHILDREN_NODE_CAP - returned
-    const response = await withLinearRead(entry, async () => {
-      const raw = await entry.client.client.rawRequest<
-        RawChildrenResponse,
-        Record<string, unknown>
-      >(CHILDREN_QUERY, { id: issueId, first: remaining })
-      return raw.data?.issue?.children ?? null
+    const response = await readConnectionPages(remaining, async (page) => {
+      return await withLinearRead(entry, async () => {
+        const raw = await entry.client.client.rawRequest<
+          RawChildrenResponse,
+          Record<string, unknown>
+        >(CHILDREN_QUERY, { id: issueId, ...page })
+        return raw.data?.issue?.children ?? null
+      })
     })
-    const nodes = response?.nodes ?? []
-    if (response?.pageInfo?.hasNextPage || nodes.length > remaining) {
+    const nodes = response.nodes
+    if (response.hasMore || nodes.length > remaining) {
       capReached = true
     }
-    const children: LinearIssueChildNode[] = []
-    for (const node of nodes.slice(0, remaining)) {
+    const children = nodes.slice(0, remaining).map((node) => {
       returned += 1
-      const child: LinearIssueChildNode = mapIssue(node)
-      const nested = await readLevel(node.id, level + 1)
+      return { raw: node, child: mapIssue(node) as LinearIssueChildNode }
+    })
+    if (returned >= LINEAR_CHILDREN_NODE_CAP) {
+      capReached = true
+    }
+
+    // Why: when the current level already exhausts the output cap, fetching
+    // grandchildren would add latency without returning any additional nodes.
+    const canReadNested = level < depth && returned < LINEAR_CHILDREN_NODE_CAP
+    if (!canReadNested && level >= depth && children.length > 0) {
+      depthReached = true
+    }
+    const mappedChildren: LinearIssueChildNode[] = []
+    for (const { raw, child } of children) {
+      const nested = canReadNested ? await readLevel(raw.id, level + 1) : []
       if (nested.length > 0) {
         child.children = nested
       }
-      child.mayHaveMore =
-        level >= depth ||
-        returned >= LINEAR_CHILDREN_NODE_CAP ||
-        Boolean(response?.pageInfo?.hasNextPage)
-      children.push(child)
-      if (returned >= LINEAR_CHILDREN_NODE_CAP) {
-        capReached = true
-        break
-      }
+      child.mayHaveMore = level >= depth || returned >= LINEAR_CHILDREN_NODE_CAP || response.hasMore
+      mappedChildren.push(child)
     }
-    return children
+    return mappedChildren
   }
 
   const items = await readLevel(resolved.issue.id, 1)
@@ -207,14 +217,16 @@ async function readAttachments(
   resolved: ResolvedIssue
 ): Promise<{ items: LinearIssueAttachment[]; meta: LinearCollectionMeta }> {
   const entry = getRequiredEntry(resolved.workspace.id)
-  const response = await withLinearRead(entry, async () => {
-    const raw = await entry.client.client.rawRequest<
-      RawAttachmentsResponse,
-      Record<string, unknown>
-    >(ATTACHMENTS_QUERY, { id: resolved.issue.id, first: LINEAR_ATTACHMENTS_CAP })
-    return raw.data?.issue?.attachments ?? null
+  const response = await readConnectionPages(LINEAR_ATTACHMENTS_CAP, async (page) => {
+    return await withLinearRead(entry, async () => {
+      const raw = await entry.client.client.rawRequest<
+        RawAttachmentsResponse,
+        Record<string, unknown>
+      >(ATTACHMENTS_QUERY, { id: resolved.issue.id, ...page })
+      return raw.data?.issue?.attachments ?? null
+    })
   })
-  const items = (response?.nodes ?? []).slice(0, LINEAR_ATTACHMENTS_CAP).map((node) => ({
+  const items = response.nodes.slice(0, LINEAR_ATTACHMENTS_CAP).map((node) => ({
     id: node.id,
     title: node.title,
     url: node.url,
@@ -225,7 +237,7 @@ async function readAttachments(
   }))
   return {
     items,
-    meta: collectionMeta(items.length, LINEAR_ATTACHMENTS_CAP, response?.pageInfo?.hasNextPage)
+    meta: collectionMeta(items.length, LINEAR_ATTACHMENTS_CAP, response.hasMore)
   }
 }
 
@@ -233,14 +245,16 @@ async function readRelations(
   resolved: ResolvedIssue
 ): Promise<{ items: LinearIssueRelation[]; meta: LinearCollectionMeta }> {
   const entry = getRequiredEntry(resolved.workspace.id)
-  const response = await withLinearRead(entry, async () => {
-    const raw = await entry.client.client.rawRequest<RawRelationsResponse, Record<string, unknown>>(
-      RELATIONS_QUERY,
-      { id: resolved.issue.id, first: LINEAR_RELATIONS_CAP }
-    )
-    return raw.data?.issue?.relations ?? null
+  const response = await readConnectionPages(LINEAR_RELATIONS_CAP, async (page) => {
+    return await withLinearRead(entry, async () => {
+      const raw = await entry.client.client.rawRequest<
+        RawRelationsResponse,
+        Record<string, unknown>
+      >(RELATIONS_QUERY, { id: resolved.issue.id, ...page })
+      return raw.data?.issue?.relations ?? null
+    })
   })
-  const items = (response?.nodes ?? []).slice(0, LINEAR_RELATIONS_CAP).map((node) => ({
+  const items = response.nodes.slice(0, LINEAR_RELATIONS_CAP).map((node) => ({
     id: node.id,
     type: node.type,
     relatedIssue: node.relatedIssue
@@ -254,6 +268,6 @@ async function readRelations(
   }))
   return {
     items,
-    meta: collectionMeta(items.length, LINEAR_RELATIONS_CAP, response?.pageInfo?.hasNextPage)
+    meta: collectionMeta(items.length, LINEAR_RELATIONS_CAP, response.hasMore)
   }
 }

@@ -12,6 +12,7 @@ export function isLinearLinkedWorkItem(
 // title, URL) — never a ticket snapshot. Agents fetch full ticket data via
 // the `orca linear` CLI, so no rendered context rides on the work item.
 export function buildLinearIssueLinkedWorkItem(issue: LinearIssue): LinkedWorkItemSummary {
+  const organizationUrlKey = getLinearOrganizationUrlKeyFromIssueUrl(issue.url)
   return {
     type: 'issue',
     provider: 'linear',
@@ -22,9 +23,9 @@ export function buildLinearIssueLinkedWorkItem(issue: LinearIssue): LinkedWorkIt
     url: issue.url,
     linearIdentifier: issue.identifier,
     ...(issue.workspaceId ? { linearWorkspaceId: issue.workspaceId } : {}),
-    ...(getLinearOrganizationUrlKeyFromIssueUrl(issue.url)
+    ...(organizationUrlKey
       ? {
-          linearOrganizationUrlKey: getLinearOrganizationUrlKeyFromIssueUrl(issue.url) ?? undefined
+          linearOrganizationUrlKey: organizationUrlKey
         }
       : {})
   }

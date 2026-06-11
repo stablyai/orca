@@ -59,6 +59,11 @@ export function printLinearSearchWarnings(result: LinearSearchResult): void {
   if (result.meta.limitReached) {
     console.error(`warning: showing first ${result.meta.returned} Linear issues`)
   }
+  for (const error of result.meta.workspaceErrors ?? []) {
+    console.error(
+      `warning: ${error.workspace.name} unavailable for Linear search: ${error.message}`
+    )
+  }
 }
 
 function formatSearchRow(issue: LinearSearchIssueSummary): string {

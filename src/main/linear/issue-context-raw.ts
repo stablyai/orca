@@ -138,9 +138,9 @@ export const SEARCH_QUERY = `
 `
 
 export const COMMENTS_QUERY = `
-  query OrcaAgentLinearIssueComments($id: String!, $first: Int) {
+  query OrcaAgentLinearIssueComments($id: String!, $first: Int, $after: String) {
     issue(id: $id) {
-      comments(first: $first) {
+      comments(first: $first, after: $after) {
         nodes {
           id
           body
@@ -156,9 +156,9 @@ export const COMMENTS_QUERY = `
 `
 
 export const CHILDREN_QUERY = `
-  query OrcaAgentLinearIssueChildren($id: String!, $first: Int) {
+  query OrcaAgentLinearIssueChildren($id: String!, $first: Int, $after: String) {
     issue(id: $id) {
-      children(first: $first) {
+      children(first: $first, after: $after) {
         nodes {
           ${ISSUE_FIELDS}
         }
@@ -169,9 +169,9 @@ export const CHILDREN_QUERY = `
 `
 
 export const ATTACHMENTS_QUERY = `
-  query OrcaAgentLinearIssueAttachments($id: String!, $first: Int) {
+  query OrcaAgentLinearIssueAttachments($id: String!, $first: Int, $after: String) {
     issue(id: $id) {
-      attachments(first: $first) {
+      attachments(first: $first, after: $after) {
         nodes { id title url source subtitle createdAt }
         pageInfo { hasNextPage endCursor }
       }
@@ -180,9 +180,9 @@ export const ATTACHMENTS_QUERY = `
 `
 
 export const RELATIONS_QUERY = `
-  query OrcaAgentLinearIssueRelations($id: String!, $first: Int) {
+  query OrcaAgentLinearIssueRelations($id: String!, $first: Int, $after: String) {
     issue(id: $id) {
-      relations(first: $first) {
+      relations(first: $first, after: $after) {
         nodes {
           id
           type

@@ -173,6 +173,12 @@ export type LinearSearchResult = {
     limit: number
     returned: number
     limitReached: boolean
+    partial: boolean
+    workspaceErrors: {
+      workspace: LinearWorkspaceCandidate
+      code: LinearErrorCode
+      message: string
+    }[]
   }
 }
 
