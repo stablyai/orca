@@ -7256,7 +7256,10 @@
                   "branchName": "Rename Orca-created branches from the initial agent task.",
                   "fixCommitFailure": "Start an agent when a commit hook or git commit fails.",
                   "fixChecks": "Start an agent from failed hosted-review checks.",
-                  "resolveConflicts": "Start an agent for local or hosted-review merge conflicts."
+                  "resolveConflicts": "Start an agent for local or hosted-review merge conflicts.",
+                  "customCommand": "Custom command",
+                  "supportedAgents": "Supported agents for this recipe: {{value0}}.",
+                  "unsupportedSavedAgent": "{{value0}} cannot run this text-generation recipe. Pick one of the supported agents below."
                 }
               }
             }

@@ -7220,7 +7220,10 @@
                   "branchName": "Cambie el nombre de las ramas creadas por Orca desde la tarea inicial del agente.",
                   "fixCommitFailure": "Inicie un agente cuando falle un enlace de confirmación o una confirmación de git.",
                   "fixChecks": "Inicie un agente a partir de comprobaciones fallidas de revisión alojada.",
-                  "resolveConflicts": "Inicie un agente para conflictos de fusión de revisión local o alojada."
+                  "resolveConflicts": "Inicie un agente para conflictos de fusión de revisión local o alojada.",
+                  "customCommand": "Custom command",
+                  "supportedAgents": "Supported agents for this recipe: {{value0}}.",
+                  "unsupportedSavedAgent": "{{value0}} cannot run this text-generation recipe. Pick one of the supported agents below."
                 }
               }
             }

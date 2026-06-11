@@ -7241,7 +7241,10 @@
                   "branchName": "Orca が最初のエージェント タスクから作成したブランチの名前を変更します。",
                   "fixCommitFailure": "コミットフックまたは git コミットが失敗したときにエージェントを開始します。",
                   "fixChecks": "失敗したホスト型レビュー チェックからエージェントを開始します。",
-                  "resolveConflicts": "ローカルまたはホストされたレビューのマージ競合に対してエージェントを開始します。"
+                  "resolveConflicts": "ローカルまたはホストされたレビューのマージ競合に対してエージェントを開始します。",
+                  "customCommand": "Custom command",
+                  "supportedAgents": "Supported agents for this recipe: {{value0}}.",
+                  "unsupportedSavedAgent": "{{value0}} cannot run this text-generation recipe. Pick one of the supported agents below."
                 }
               }
             }

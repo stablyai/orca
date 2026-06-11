@@ -7205,7 +7205,10 @@
                   "branchName": "重命名 Orca 从初始代理任务创建的分支。",
                   "fixCommitFailure": "当提交挂钩或 git 提交失败时启动代理。",
                   "fixChecks": "从失败的托管评审检查中启动代理。",
-                  "resolveConflicts": "启动用于解决本地或托管评审合并冲突的代理。"
+                  "resolveConflicts": "启动用于解决本地或托管评审合并冲突的代理。",
+                  "customCommand": "Custom command",
+                  "supportedAgents": "Supported agents for this recipe: {{value0}}.",
+                  "unsupportedSavedAgent": "{{value0}} cannot run this text-generation recipe. Pick one of the supported agents below."
                 }
               }
             }

@@ -7205,7 +7205,10 @@
                   "branchName": "초기 에이전트 작업에서 Orca가 생성한 브랜치의 이름을 바꿉니다.",
                   "fixCommitFailure": "커밋 후크 또는 git 커밋이 실패하면 에이전트를 시작합니다.",
                   "fixChecks": "실패한 호스팅 PR 체크에서 에이전트를 시작합니다.",
-                  "resolveConflicts": "로컬 또는 호스팅 PR 병합 충돌에 대한 에이전트를 시작합니다."
+                  "resolveConflicts": "로컬 또는 호스팅 PR 병합 충돌에 대한 에이전트를 시작합니다.",
+                  "customCommand": "Custom command",
+                  "supportedAgents": "Supported agents for this recipe: {{value0}}.",
+                  "unsupportedSavedAgent": "{{value0}} cannot run this text-generation recipe. Pick one of the supported agents below."
                 }
               }
             }
