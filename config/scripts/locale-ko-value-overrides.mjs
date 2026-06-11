@@ -204,6 +204,8 @@ export const KO_VALUE_OVERRIDES = {
   'to submit.': '제출.',
   'Install the Orca skill so agents know to use the Orca CLI.':
     '에이전트가 Orca CLI를 사용하도록 Orca 스킬을 설치하세요.',
+  'Local project, Git repo, or folder with many repos':
+    '로컬 프로젝트, Git repo 또는 repos가 많은 폴더',
   'Linear, GitLab, Bitbucket, Azure DevOps, Gitea, and Jira live in Settings > Integrations.':
     'Linear, GitLab, Bitbucket, Azure DevOps, Gitea 및 Jira는 설정 > 연동에 있습니다.',
   'changed since you last approved. Re-review before it runs':

@@ -3351,7 +3351,10 @@
           "2991a0106c": "Help",
           "4e8f5710d3": "Couldn't restart Orca.",
           "5161eef55d": "Restarting Orca…",
-          "d396773ef0": "checking"
+          "d396773ef0": "checking",
+          "f8a2c91d4e": "Milestones",
+          "b7e4d2a19c": "Onboarding",
+          "c4f8e1b72a": "X"
         },
         "SidebarToolbar": {
           "19e32d0e5f": "Open folder picker to add a project",
@@ -7749,6 +7752,9 @@
             "7a09d7f9d2": "base",
             "383cf92c73": "tree",
             "d7ae61269b": "Committed on Branch",
+            "48a003c1b1": "Staged Changes",
+            "d4ef4bafc5": "Changes",
+            "522f44dce5": "Untracked Files",
             "3636d0f686": "ready",
             "d2e9189866": "all",
             "a0cc0e6b4e": "loading",

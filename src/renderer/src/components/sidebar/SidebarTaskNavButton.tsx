@@ -184,7 +184,7 @@ export function SidebarTaskNavButton(): React.JSX.Element | null {
           aria-current={tasksActive ? 'page' : undefined}
           data-contextual-tour-target="sidebar-tasks"
           className={cn(
-            'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] font-medium tracking-tight transition-colors',
+            'group flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] font-medium tracking-tight transition-colors',
             tasksActive
               ? 'bg-worktree-sidebar-accent text-worktree-sidebar-accent-foreground'
               : 'text-worktree-sidebar-foreground/60 hover:bg-worktree-sidebar-foreground/8',
@@ -198,7 +198,7 @@ export function SidebarTaskNavButton(): React.JSX.Element | null {
           <span className="flex-1">
             {translate('auto.components.sidebar.SidebarNav.fee535205b', 'Tasks')}
           </span>
-          <span className="flex items-center gap-1">
+          <span className="hidden items-center gap-1 group-hover:flex group-focus-within:flex">
             {visibleTaskProviders.includes('github') ? (
               <TaskProviderShortcut
                 canBrowseTasks={canBrowseTasks}
