@@ -31,6 +31,16 @@ type WorktreeListComponent = React.ComponentType<{
 
 let WorktreeList: WorktreeListComponent
 
+function makeFolderWorkspacePathStatusMockState(): Record<string, unknown> {
+  return {
+    fetchFolderWorkspacePathStatus: vi.fn(),
+    folderWorkspaces: [],
+    folderWorkspacePathStatuses: {},
+    getFolderWorkspacePathStatusCacheKey: (request: unknown) => JSON.stringify(request),
+    getFreshFolderWorkspacePathStatus: () => null
+  }
+}
+
 vi.mock('@/store', () => {
   const useAppStore = ((selector: (state: Record<string, unknown>) => unknown) =>
     selector(mockStore.state)) as ((
@@ -224,6 +234,7 @@ function setLineageState(options: { deletingChild?: boolean } = {}): void {
     }
   })
   mockStore.state = {
+    ...makeFolderWorkspacePathStatusMockState(),
     activeModal: '',
     activeView: 'terminal',
     activeWorktreeId: null,
