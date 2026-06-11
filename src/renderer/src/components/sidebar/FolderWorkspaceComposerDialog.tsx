@@ -335,17 +335,10 @@ export function FolderWorkspaceComposerDialog({
             repoId={repoId}
             selectedRepoIsGit={true}
             onRepoChange={handleRepoChange}
-            primaryActionLabel={
-              quickAgent
-                ? translate(
-                    'auto.components.sidebar.FolderWorkspaceComposerDialog.createStart',
-                    'Create & Start Agent'
-                  )
-                : translate(
-                    'auto.components.sidebar.FolderWorkspaceComposerDialog.create',
-                    'Create Workspace'
-                  )
-            }
+            primaryActionLabel={translate(
+              'auto.components.sidebar.FolderWorkspaceComposerDialog.create',
+              'Create Workspace'
+            )}
             projectLabel={translate(
               'auto.components.sidebar.FolderWorkspaceComposerDialog.sourceProject',
               'Task Source'

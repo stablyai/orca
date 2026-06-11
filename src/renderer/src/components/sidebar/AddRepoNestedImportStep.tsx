@@ -1,4 +1,4 @@
-import { useId, type Dispatch, type SetStateAction } from 'react'
+import { useEffect, useId, useState, type Dispatch, type SetStateAction } from 'react'
 import { CircleStop, Loader2 } from 'lucide-react'
 import { DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
@@ -36,6 +36,20 @@ export function AddRepoNestedImportStep({
 }: AddRepoNestedImportStepProps): React.JSX.Element {
   const folderName = getRuntimePathBasename(scan.selectedPath) || scan.selectedPath
   const groupNameInputId = useId()
+  const [pendingImportMode, setPendingImportMode] = useState<'group' | 'separate' | null>(null)
+  const showSeparateSpinner = isAdding && pendingImportMode === 'separate'
+  const showGroupSpinner = isAdding && pendingImportMode === 'group'
+
+  useEffect(() => {
+    if (!isAdding) {
+      setPendingImportMode(null)
+    }
+  }, [isAdding])
+
+  const handleImport = (mode: 'group' | 'separate'): void => {
+    setPendingImportMode(mode)
+    onImport(mode)
+  }
   const repoCountLabel =
     scan.repos.length === 1
       ? translate('auto.components.sidebar.AddRepoNestedImportStep.8401a7a0d0', '1 repository')
@@ -125,19 +139,21 @@ export function AddRepoNestedImportStep({
         </div>
         <div className="flex shrink-0 flex-wrap justify-end gap-2">
           <Button
-            onClick={() => onImport('separate')}
+            onClick={() => handleImport('separate')}
             disabled={isAdding || scanInProgress || selectedPaths.size === 0}
             variant="outline"
           >
+            {showSeparateSpinner ? <Loader2 className="size-3.5 animate-spin" /> : null}
             {translate(
               'auto.components.sidebar.AddRepoNestedImportStep.aa0247680d',
               'No, import separately'
             )}
           </Button>
           <Button
-            onClick={() => onImport('group')}
+            onClick={() => handleImport('group')}
             disabled={isAdding || scanInProgress || selectedPaths.size === 0}
           >
+            {showGroupSpinner ? <Loader2 className="size-3.5 animate-spin" /> : null}
             {translate(
               'auto.components.sidebar.AddRepoNestedImportStep.a0bc4d1f8e',
               'Import as group'

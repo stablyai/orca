@@ -4,6 +4,7 @@ import {
   type LinkedWorkItemSummary
 } from '@/lib/new-workspace'
 import { getLinkedWorkItemPromptContext } from '@/lib/linked-work-item-context'
+import { isOrcaCliAvailableForLaunch } from '@/lib/orca-cli-launch-availability'
 import { buildAgentStartupPlan } from '@/lib/tui-agent-startup'
 import { tuiAgentToAgentKind } from '@/lib/telemetry'
 import { activateAndRevealFolderWorkspace } from '@/lib/worktree-activation'
@@ -67,7 +68,12 @@ export async function submitFolderWorkspaceCreate({
     return
   }
 
-  const linkedPromptContext = getLinkedWorkItemPromptContext(linkedWorkItem)
+  const linearCliAvailable = linkedWorkItem?.linearIdentifier
+    ? await isOrcaCliAvailableForLaunch({ remote: projectGroup.connectionId != null })
+    : false
+  const linkedPromptContext = getLinkedWorkItemPromptContext(linkedWorkItem, {
+    cliAvailable: linearCliAvailable
+  })
   const startupPrompt = buildAgentPromptWithContext(
     note,
     [],
@@ -95,6 +101,12 @@ export async function submitFolderWorkspaceCreate({
           }
         }
       : undefined
-  activateAndRevealFolderWorkspace(workspace.id, startup ? { startup } : undefined)
   onOpenChange(false)
+  try {
+    activateAndRevealFolderWorkspace(workspace.id, startup ? { startup } : undefined)
+  } catch (error) {
+    // Why: creation already succeeded. Do not leave the completed create modal
+    // open if the follow-up reveal/startup path hits a transient issue.
+    console.error('Failed to activate folder workspace after create:', error)
+  }
 }
