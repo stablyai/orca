@@ -1,5 +1,4 @@
 import React, { useCallback, useId, useRef, useState } from 'react'
-import { Check } from 'lucide-react'
 import {
   Dialog,
   DialogContent,
@@ -9,8 +8,9 @@ import {
   DialogTitle
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Label } from '@/components/ui/label'
 import { translate } from '@/i18n/i18n'
-import { cn } from '@/lib/utils'
 
 type ProjectGroupDeleteDialogProps = {
   open: boolean
@@ -38,12 +38,17 @@ export function ProjectGroupDeleteDialog({
   const mountedRef = useRef(true)
   const confirmButtonRef = useRef<HTMLButtonElement>(null)
   const removeProjectsId = useId()
-  const projectLabel = projectCount === 1 ? 'project' : 'projects'
-  const removeContainedProjectCopy = translate(
-    'auto.components.sidebar.ProjectGroupDeleteDialog.e8e48d9e7b',
-    'Remove {{value0}} contained {{value1}}',
-    { value0: projectCount, value1: projectLabel }
-  )
+  const removeContainedProjectCopy =
+    projectCount === 1
+      ? translate(
+          'auto.components.sidebar.ProjectGroupDeleteDialog.removeContainedProjectSingular',
+          'Remove 1 contained project'
+        )
+      : translate(
+          'auto.components.sidebar.ProjectGroupDeleteDialog.removeContainedProjectPlural',
+          'Remove {{value0}} contained projects',
+          { value0: projectCount }
+        )
 
   const handleDialogContentRef = useCallback((node: HTMLDivElement | null): void => {
     // Why: deleting can resolve after the dialog closes; the content ref keeps
@@ -147,30 +152,22 @@ export function ProjectGroupDeleteDialog({
                 </ul>
               </div>
             )}
-            <button
-              type="button"
-              role="checkbox"
-              aria-checked={removeContainedProjects}
-              aria-describedby={`${removeProjectsId}-description`}
-              disabled={deleting}
-              onClick={() => onRemoveContainedProjectsChange(!removeContainedProjects)}
-              className={cn(
-                'flex w-full items-start gap-2 rounded-sm px-1 py-1 text-left text-foreground/85 transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                deleting && 'cursor-not-allowed opacity-70'
-              )}
-            >
-              <span
-                className={cn(
-                  'mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-sm border transition-colors',
-                  removeContainedProjects
-                    ? 'border-foreground bg-foreground text-background'
-                    : 'border-muted-foreground bg-transparent'
-                )}
-              >
-                {removeContainedProjects ? <Check className="size-3" strokeWidth={3} /> : null}
-              </span>
+            <div className="flex w-full items-start gap-2 rounded-sm px-1 py-1 text-foreground/85">
+              <Checkbox
+                id={removeProjectsId}
+                checked={removeContainedProjects}
+                disabled={deleting}
+                onCheckedChange={(checked) => onRemoveContainedProjectsChange(checked === true)}
+                aria-describedby={`${removeProjectsId}-description`}
+                className="mt-0.5"
+              />
               <span className="min-w-0 flex-1">
-                <span className="block font-medium">{removeContainedProjectCopy}</span>
+                <Label
+                  htmlFor={removeProjectsId}
+                  className="block cursor-pointer text-xs leading-4 font-medium"
+                >
+                  {removeContainedProjectCopy}
+                </Label>
                 <span
                   id={`${removeProjectsId}-description`}
                   className="mt-0.5 block text-muted-foreground"
@@ -181,7 +178,7 @@ export function ProjectGroupDeleteDialog({
                   )}
                 </span>
               </span>
-            </button>
+            </div>
           </div>
         )}
         <DialogFooter>

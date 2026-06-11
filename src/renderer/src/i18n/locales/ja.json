@@ -3183,10 +3183,14 @@
           "69f5cb97d0": "削除",
           "591f330288": "プロジェクトグループの削除",
           "2c14ce677a": "削除中...",
-          "eeabb8e8e4": "Remove {{value0}} contained {{value1}} from Orca",
-          "55f75628c0": "Project folders on disk are not deleted.",
-          "897e5d3d4c": "Delete Group and Remove Projects",
-          "fec7e9c8ae": "Delete Group"
+          "0e0e6764af": "含まれるプロジェクト",
+          "ad407c2d55": "件以上",
+          "removeContainedProjectSingular": "含まれるプロジェクトを1件削除",
+          "removeContainedProjectPlural": "含まれるプロジェクトを{{value0}}件削除",
+          "eeabb8e8e4": "含まれる{{value1}}を{{value0}}件Orcaから削除",
+          "55f75628c0": "ディスク上のプロジェクトフォルダーは削除されません。",
+          "897e5d3d4c": "グループを削除してプロジェクトを削除",
+          "fec7e9c8ae": "グループを削除"
         },
         "ProjectGroupNameDialog": {
           "d99a034073": "キャンセル",

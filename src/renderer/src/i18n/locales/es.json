@@ -3202,10 +3202,14 @@
           "69f5cb97d0": "Borrar",
           "591f330288": "Eliminar grupo de proyectos",
           "2c14ce677a": "Eliminando...",
-          "eeabb8e8e4": "Remove {{value0}} contained {{value1}} from Orca",
-          "55f75628c0": "Project folders on disk are not deleted.",
-          "897e5d3d4c": "Delete Group and Remove Projects",
-          "fec7e9c8ae": "Delete Group"
+          "0e0e6764af": "Proyectos contenidos",
+          "ad407c2d55": "más",
+          "removeContainedProjectSingular": "Quitar 1 proyecto contenido",
+          "removeContainedProjectPlural": "Quitar {{value0}} proyectos contenidos",
+          "eeabb8e8e4": "Quitar {{value0}} {{value1}} contenidos de Orca",
+          "55f75628c0": "Las carpetas de los proyectos en el disco no se eliminan.",
+          "897e5d3d4c": "Eliminar grupo y quitar proyectos",
+          "fec7e9c8ae": "Eliminar grupo"
         },
         "ProjectGroupNameDialog": {
           "d99a034073": "Cancelar",

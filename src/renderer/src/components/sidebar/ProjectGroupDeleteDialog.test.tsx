@@ -51,12 +51,10 @@ function findButton(label: string): HTMLButtonElement {
   return button
 }
 
-function getCheckbox(label: string): HTMLButtonElement {
-  const checkbox = Array.from(document.body.querySelectorAll('[role="checkbox"]')).find((entry) =>
-    entry.textContent?.includes(label)
-  )
+function getCheckbox(): HTMLButtonElement {
+  const checkbox = document.body.querySelector('[role="checkbox"]')
   if (!(checkbox instanceof HTMLButtonElement)) {
-    throw new Error(`Checkbox not rendered: ${label}`)
+    throw new Error('Checkbox not rendered')
   }
   return checkbox
 }
@@ -76,7 +74,7 @@ describe('ProjectGroupDeleteDialog', () => {
     expect(document.body.textContent).toContain('Delete Platform.')
     expect(document.body.textContent).toContain('Contained projects')
     expect(document.body.textContent).not.toContain('unless selected below')
-    expect(getCheckbox('Remove 2 contained projects').getAttribute('aria-checked')).toBe('false')
+    expect(getCheckbox().getAttribute('aria-checked')).toBe('false')
     expect(document.body.textContent).toContain('Remove 2 contained projects')
     expect(document.body.textContent).not.toContain('Remove 2 contained projects from Orca')
     expect(document.body.textContent).toContain('Project folders on disk are not deleted.')
@@ -84,7 +82,7 @@ describe('ProjectGroupDeleteDialog', () => {
     expect(document.body.textContent).toContain('Web app')
 
     act(() => {
-      getCheckbox('Remove 2 contained projects').click()
+      getCheckbox().click()
     })
 
     expect(onRemoveContainedProjectsChange).toHaveBeenCalledWith(true)
@@ -103,7 +101,7 @@ describe('ProjectGroupDeleteDialog', () => {
     expect(document.body.textContent).not.toContain('will stay in Orca')
     expect(document.body.textContent).not.toContain('will be removed from Orca')
     expect(document.body.textContent).not.toContain('unless selected below')
-    expect(getCheckbox('Remove 2 contained projects').getAttribute('aria-checked')).toBe('true')
+    expect(getCheckbox().getAttribute('aria-checked')).toBe('true')
     expect(findButton('Delete Group')).toBeTruthy()
     expect(document.body.textContent).not.toContain('Delete Group and Remove Projects')
   })
@@ -122,7 +120,7 @@ describe('ProjectGroupDeleteDialog', () => {
       findButton('Delete Group').click()
     })
 
-    expect(getCheckbox('Remove 2 contained projects').disabled).toBe(true)
+    expect(getCheckbox().disabled).toBe(true)
     expect(findButton('Cancel').disabled).toBe(true)
     expect(findButton('Deleting...').disabled).toBe(true)
 
