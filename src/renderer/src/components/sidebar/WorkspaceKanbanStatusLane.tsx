@@ -101,7 +101,10 @@ export default function WorkspaceKanbanStatusLane({
         data-workspace-board-column-resize-handle=""
         role="separator"
         aria-orientation="vertical"
-        aria-label={translate("auto.components.sidebar.WorkspaceKanbanStatusLane.3611d1ae7f", "Resize workspace board columns")}
+        aria-label={translate(
+          'auto.components.sidebar.WorkspaceKanbanStatusLane.3611d1ae7f',
+          'Resize workspace board columns'
+        )}
         aria-valuemin={WORKSPACE_BOARD_COLUMN_WIDTH_MIN}
         aria-valuemax={WORKSPACE_BOARD_COLUMN_WIDTH_MAX}
         aria-valuenow={columnWidth}
@@ -169,7 +172,8 @@ export default function WorkspaceKanbanStatusLane({
           </div>
         ) : (
           <div className="flex h-20 items-center justify-center rounded-md border border-dashed border-border/70 text-[11px] text-muted-foreground">
-            {translate("auto.components.sidebar.WorkspaceKanbanStatusLane.8ad104642b", "Empty")}</div>
+            {translate('auto.components.sidebar.WorkspaceKanbanStatusLane.8ad104642b', 'Empty')}
+          </div>
         )}
         <Tooltip>
           <TooltipTrigger asChild>

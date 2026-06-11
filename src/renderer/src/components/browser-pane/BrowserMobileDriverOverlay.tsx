@@ -53,15 +53,33 @@ export function BrowserMobileDriverOverlay({ driver, onTakeBack }: Props): React
       <div className="pointer-events-auto flex w-full max-w-[30rem] flex-col gap-3 rounded-lg border border-border bg-card p-6 pb-5 text-card-foreground shadow-xs">
         <div className="flex items-center gap-1.5 text-xs font-medium text-foreground">
           <span aria-hidden="true">●</span>
-          <span>{translate("auto.components.browser.pane.BrowserMobileDriverOverlay.20539eca03", "Mobile is driving this browser")}</span>
+          <span>
+            {translate(
+              'auto.components.browser.pane.BrowserMobileDriverOverlay.20539eca03',
+              'Mobile is driving this browser'
+            )}
+          </span>
         </div>
-        <div className="text-base font-semibold leading-tight">{translate("auto.components.browser.pane.BrowserMobileDriverOverlay.d9768ec642", "Browser input is paused")}</div>
+        <div className="text-base font-semibold leading-tight">
+          {translate(
+            'auto.components.browser.pane.BrowserMobileDriverOverlay.d9768ec642',
+            'Browser input is paused'
+          )}
+        </div>
         <div className="text-sm leading-relaxed text-muted-foreground">
-          {translate("auto.components.browser.pane.BrowserMobileDriverOverlay.f4ecd61552", "This tab is being controlled from your phone. Take back to use it on desktop.")}</div>
+          {translate(
+            'auto.components.browser.pane.BrowserMobileDriverOverlay.f4ecd61552',
+            'This tab is being controlled from your phone. Take back to use it on desktop.'
+          )}
+        </div>
         <div className="mt-1 flex justify-end">
           {/* autoFocus puts keyboard users on the recovery action when the lock appears. */}
           <Button type="button" size="sm" onClick={handleTakeBack} disabled={pending} autoFocus>
-            {translate("auto.components.browser.pane.BrowserMobileDriverOverlay.a6914ee43f", "Take back")}</Button>
+            {translate(
+              'auto.components.browser.pane.BrowserMobileDriverOverlay.a6914ee43f',
+              'Take back'
+            )}
+          </Button>
         </div>
       </div>
     </div>

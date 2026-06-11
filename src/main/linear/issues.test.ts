@@ -1,15 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { LinearClientForWorkspace } from './client'
+import { credentialDecryptionMessage } from '../../shared/integration-credential-errors'
 
 const rawRequest = vi.fn()
 const getClients = vi.fn()
 const clearToken = vi.fn()
+const isAuthError = vi.fn()
 
 vi.mock('./client', () => ({
   acquire: vi.fn().mockResolvedValue(undefined),
   release: vi.fn(),
   getClients: (...args: unknown[]) => getClients(...args),
-  isAuthError: vi.fn().mockReturnValue(false),
+  isAuthError: (...args: unknown[]) => isAuthError(...args),
   clearToken: (...args: unknown[]) => clearToken(...args)
 }))
 
@@ -87,6 +89,7 @@ function datedIssues(prefix: string, count: number, startMs: number, startIndex 
 describe('Linear issue queries', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    isAuthError.mockReturnValue(false)
     getClients.mockReturnValue([makeEntry()])
   })
 
@@ -165,6 +168,20 @@ describe('Linear issue queries', () => {
         }
       ]
     })
+  })
+
+  it('surfaces Linear credential decrypt errors on active issue reads and mutations', async () => {
+    const error = new Error(credentialDecryptionMessage('Linear'))
+    getClients.mockImplementation(() => {
+      throw error
+    })
+    const { createIssue, listIssues, searchIssues } = await import('./issues')
+
+    await expect(searchIssues('bug', 20, 'workspace-1')).rejects.toThrow(error.message)
+    await expect(listIssues('all', 20, 'workspace-1')).rejects.toThrow(error.message)
+    await expect(createIssue('team-1', 'Fix auth', undefined, 'workspace-1')).rejects.toThrow(
+      error.message
+    )
   })
 
   it('marks plain list results as having more when Linear has a next page', async () => {

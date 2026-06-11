@@ -113,22 +113,22 @@ export const PR_GROUP_META: Record<
   }
 > = {
   done: {
-    label: translate("auto.components.sidebar.worktree.list.groups.5076efc3d2", "Done"),
+    label: translate('auto.components.sidebar.worktree.list.groups.5076efc3d2', 'Done'),
     icon: ConductorDoneIcon,
     tone: 'text-[#c7a594]'
   },
   'in-review': {
-    label: translate("auto.components.sidebar.worktree.list.groups.6798dc7c94", "In review"),
+    label: translate('auto.components.sidebar.worktree.list.groups.6798dc7c94', 'In review'),
     icon: ConductorReviewIcon,
     tone: 'text-[#16a34a]'
   },
   'in-progress': {
-    label: translate("auto.components.sidebar.worktree.list.groups.7c2f009786", "In progress"),
+    label: translate('auto.components.sidebar.worktree.list.groups.7c2f009786', 'In progress'),
     icon: ConductorProgressIcon,
     tone: 'text-[#d4a300]'
   },
   closed: {
-    label: translate("auto.components.sidebar.worktree.list.groups.682ed5d551", "Closed"),
+    label: translate('auto.components.sidebar.worktree.list.groups.682ed5d551', 'Closed'),
     icon: CircleX,
     tone: 'text-zinc-600 dark:text-zinc-300'
   }
@@ -146,7 +146,7 @@ export function getProjectGroupHeaderKey(groupId: string | null): string {
 export const PINNED_GROUP_KEY = 'pinned'
 
 export const PINNED_GROUP_META = {
-  label: translate("auto.components.sidebar.worktree.list.groups.4aeefc5996", "Pinned"),
+  label: translate('auto.components.sidebar.worktree.list.groups.4aeefc5996', 'Pinned'),
   tone: 'text-foreground',
   icon: Pin
 } as const
@@ -154,7 +154,7 @@ export const PINNED_GROUP_META = {
 export const ALL_GROUP_KEY = 'all'
 
 export const ALL_GROUP_META = {
-  label: translate("auto.components.sidebar.worktree.list.groups.0ed04075b8", "All"),
+  label: translate('auto.components.sidebar.worktree.list.groups.0ed04075b8', 'All'),
   tone: 'text-foreground',
   icon: List
 } as const

@@ -96,8 +96,14 @@ export function WorktreeSymlinksSection({
 
   return (
     <SearchableSetting
-      title={translate("auto.components.settings.WorktreeSymlinksSection.4755f120b6", "Worktree Symlinks")}
-      description={translate("auto.components.settings.WorktreeSymlinksSection.b07ef5a8b6", "Paths to symlink from the primary checkout into newly created worktrees.")}
+      title={translate(
+        'auto.components.settings.WorktreeSymlinksSection.4755f120b6',
+        'Worktree Symlinks'
+      )}
+      description={translate(
+        'auto.components.settings.WorktreeSymlinksSection.b07ef5a8b6',
+        'Paths to symlink from the primary checkout into newly created worktrees.'
+      )}
       keywords={[
         repo.displayName,
         'symlink',
@@ -112,25 +118,43 @@ export function WorktreeSymlinksSection({
     >
       <div className="flex items-start justify-between gap-4">
         <div className="space-y-1">
-          <h3 className="text-sm font-semibold">{translate("auto.components.settings.WorktreeSymlinksSection.4755f120b6", "Worktree Symlinks")}</h3>
+          <h3 className="text-sm font-semibold">
+            {translate(
+              'auto.components.settings.WorktreeSymlinksSection.4755f120b6',
+              'Worktree Symlinks'
+            )}
+          </h3>
           <p className="text-xs text-muted-foreground">
-            {translate("auto.components.settings.WorktreeSymlinksSection.7ff265071d", "When a new worktree is created, each path listed here will be symlinked from the primary checkout.")}</p>
+            {translate(
+              'auto.components.settings.WorktreeSymlinksSection.7ff265071d',
+              'When a new worktree is created, each path listed here will be symlinked from the primary checkout.'
+            )}
+          </p>
         </div>
         <Popover open={open} onOpenChange={setOpen}>
           <PopoverTrigger asChild>
             <Button type="button" variant="outline" size="sm">
               <Plus className="size-3.5" />
-              {translate("auto.components.settings.WorktreeSymlinksSection.241325302c", "Add Path")}</Button>
+              {translate('auto.components.settings.WorktreeSymlinksSection.241325302c', 'Add Path')}
+            </Button>
           </PopoverTrigger>
           <PopoverContent align="end" className="w-72 p-0">
             <Command shouldFilter={false}>
               <CommandInput
-                placeholder={translate("auto.components.settings.WorktreeSymlinksSection.4cd2a4c077", "Type a path (e.g. .env or node_modules)…")}
+                placeholder={translate(
+                  'auto.components.settings.WorktreeSymlinksSection.4cd2a4c077',
+                  'Type a path (e.g. .env or node_modules)…'
+                )}
                 value={query}
                 onValueChange={setQuery}
               />
               <CommandList>
-                <CommandEmpty>{translate("auto.components.settings.WorktreeSymlinksSection.ab40b8a5f1", "No matches. Keep typing to add a custom path.")}</CommandEmpty>
+                <CommandEmpty>
+                  {translate(
+                    'auto.components.settings.WorktreeSymlinksSection.ab40b8a5f1',
+                    'No matches. Keep typing to add a custom path.'
+                  )}
+                </CommandEmpty>
                 {showLiteralItem ? (
                   <CommandItem
                     value={`__literal__:${queryTrimmed}`}
@@ -139,7 +163,10 @@ export function WorktreeSymlinksSection({
                   >
                     <Plus className="size-3.5 text-muted-foreground" />
                     <span className="text-xs">
-                      {translate("auto.components.settings.WorktreeSymlinksSection.b2429aeb31", "Add")}{' '}
+                      {translate(
+                        'auto.components.settings.WorktreeSymlinksSection.b2429aeb31',
+                        'Add'
+                      )}{' '}
                       <code className="rounded bg-muted px-1 py-0.5 text-[11px]">
                         {queryTrimmed}
                       </code>
@@ -165,7 +192,11 @@ export function WorktreeSymlinksSection({
                       <span className="truncate text-xs">{entry.name}</span>
                       {alreadyAdded ? (
                         <span className="ml-auto text-[10px] uppercase tracking-wide text-muted-foreground">
-                          {translate("auto.components.settings.WorktreeSymlinksSection.ea06227efa", "added")}</span>
+                          {translate(
+                            'auto.components.settings.WorktreeSymlinksSection.ea06227efa',
+                            'added'
+                          )}
+                        </span>
                       ) : null}
                     </CommandItem>
                   )
@@ -178,7 +209,11 @@ export function WorktreeSymlinksSection({
 
       {paths.length === 0 ? (
         <div className="rounded-xl border border-dashed border-border/60 bg-background/60 px-4 py-6 text-sm text-muted-foreground">
-          {translate("auto.components.settings.WorktreeSymlinksSection.31ebab5403", "No symlink paths configured for this repository.")}</div>
+          {translate(
+            'auto.components.settings.WorktreeSymlinksSection.31ebab5403',
+            'No symlink paths configured for this repository.'
+          )}
+        </div>
       ) : (
         <div className="rounded-xl border border-border/50 bg-background/70 px-4 py-3 shadow-sm">
           <div className="flex items-start gap-3">
@@ -187,9 +222,23 @@ export function WorktreeSymlinksSection({
             </div>
             <div className="min-w-0 flex-1 space-y-2">
               <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                <h4 className="text-sm font-medium">{translate("auto.components.settings.WorktreeSymlinksSection.b814c618e2", "Linked paths")}</h4>
+                <h4 className="text-sm font-medium">
+                  {translate(
+                    'auto.components.settings.WorktreeSymlinksSection.b814c618e2',
+                    'Linked paths'
+                  )}
+                </h4>
                 <span className="text-[11px] text-muted-foreground">
-                  {paths.length === 1 ? translate("auto.components.settings.WorktreeSymlinksSection.9ea912d811", "1 path") : translate("auto.components.settings.WorktreeSymlinksSection.d72ba8dc68", "{{value0}} paths", { value0: paths.length })}
+                  {paths.length === 1
+                    ? translate(
+                        'auto.components.settings.WorktreeSymlinksSection.9ea912d811',
+                        '1 path'
+                      )
+                    : translate(
+                        'auto.components.settings.WorktreeSymlinksSection.d72ba8dc68',
+                        '{{value0}} paths',
+                        { value0: paths.length }
+                      )}
                 </span>
               </div>
               <div className="flex flex-wrap gap-1.5">
@@ -204,7 +253,11 @@ export function WorktreeSymlinksSection({
                       size="icon-xs"
                       variant="ghost"
                       onClick={() => handleRemove(path)}
-                      aria-label={translate("auto.components.settings.WorktreeSymlinksSection.1c1e35b219", "Remove {{value0}}", { value0: path })}
+                      aria-label={translate(
+                        'auto.components.settings.WorktreeSymlinksSection.1c1e35b219',
+                        'Remove {{value0}}',
+                        { value0: path }
+                      )}
                       className="size-4 shrink-0 rounded-sm"
                     >
                       <X className="size-3" />

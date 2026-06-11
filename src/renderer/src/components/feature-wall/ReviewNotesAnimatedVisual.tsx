@@ -340,10 +340,19 @@ export function ReviewNotesAnimatedVisual(props: { reducedMotion: boolean }): JS
   return (
     <div ref={rootRef} className="ravs-window" data-page="notes">
       <div className="ravs-difftoolbar">
-        <span className="ravs-diff-path">{translate("auto.components.feature.wall.ReviewNotesAnimatedVisual.1eee3a397e", "src/server/migrate.ts (diff)")}</span>
+        <span className="ravs-diff-path">
+          {translate(
+            'auto.components.feature.wall.ReviewNotesAnimatedVisual.1eee3a397e',
+            'src/server/migrate.ts (diff)'
+          )}
+        </span>
         <span className="ravs-ai-chip" data-ai-notes-chip>
           <button type="button" className="ravs-count-btn">
-            <MessageIcon /> {translate("auto.components.feature.wall.ReviewNotesAnimatedVisual.5cb213f967", "AI notes")}{' '}
+            <MessageIcon />{' '}
+            {translate(
+              'auto.components.feature.wall.ReviewNotesAnimatedVisual.5cb213f967',
+              'AI notes'
+            )}{' '}
             <span className="ravs-count-num" data-ai-count>
               0
             </span>
@@ -372,26 +381,50 @@ export function ReviewNotesAnimatedVisual(props: { reducedMotion: boolean }): JS
         </button>
         <div className="ravs-popover" data-note-popover>
           <div className="ravs-pop-label">
-            {translate("auto.components.feature.wall.ReviewNotesAnimatedVisual.a7a89d8f94", "Line")}<span data-pop-line>?</span>
+            {translate('auto.components.feature.wall.ReviewNotesAnimatedVisual.a7a89d8f94', 'Line')}
+            <span data-pop-line>?</span>
           </div>
           <div className="ravs-pop-input" data-pop-input />
           <div className="ravs-pop-footer">
             <button type="button" className="ravs-pop-btn is-cancel">
-              {translate("auto.components.feature.wall.ReviewNotesAnimatedVisual.271ea0cbf3", "Cancel")}</button>
+              {translate(
+                'auto.components.feature.wall.ReviewNotesAnimatedVisual.271ea0cbf3',
+                'Cancel'
+              )}
+            </button>
             <button type="button" className="ravs-pop-btn is-add">
-              {translate("auto.components.feature.wall.ReviewNotesAnimatedVisual.ea4e45b71b", "Add note")}<CornerEnterIcon />
+              {translate(
+                'auto.components.feature.wall.ReviewNotesAnimatedVisual.ea4e45b71b',
+                'Add note'
+              )}
+              <CornerEnterIcon />
             </button>
           </div>
         </div>
         <div className="ravs-send-menu" data-send-menu>
-          <div className="ravs-menu-section">{translate("auto.components.feature.wall.ReviewNotesAnimatedVisual.294aaff104", "Send notes to")}</div>
+          <div className="ravs-menu-section">
+            {translate(
+              'auto.components.feature.wall.ReviewNotesAnimatedVisual.294aaff104',
+              'Send notes to'
+            )}
+          </div>
           <div className="ravs-menu-row" data-send-row="claude">
             <ClaudeLogo />
-            <span>{translate("auto.components.feature.wall.ReviewNotesAnimatedVisual.09094f25e2", "Claude Code")}</span>
+            <span>
+              {translate(
+                'auto.components.feature.wall.ReviewNotesAnimatedVisual.09094f25e2',
+                'Claude Code'
+              )}
+            </span>
           </div>
           <div className="ravs-menu-row" data-send-row="codex">
             <CodexLogo />
-            <span>{translate("auto.components.feature.wall.ReviewNotesAnimatedVisual.5dbd27c4c2", "Codex")}</span>
+            <span>
+              {translate(
+                'auto.components.feature.wall.ReviewNotesAnimatedVisual.5dbd27c4c2',
+                'Codex'
+              )}
+            </span>
           </div>
         </div>
       </div>

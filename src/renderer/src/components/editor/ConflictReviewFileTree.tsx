@@ -73,14 +73,18 @@ export function ConflictReviewFileTree({
     <aside className="flex w-72 shrink-0 flex-col border-r border-border bg-background">
       <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-1.5">
         <div className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
-          {translate("auto.components.editor.ConflictReviewFileTree.99496bab6e", "Files")}</div>
+          {translate('auto.components.editor.ConflictReviewFileTree.99496bab6e', 'Files')}
+        </div>
         <div className="flex items-center gap-2">
           <div className="text-[11px] text-muted-foreground tabular-nums">{entries.length}</div>
           <Button
             type="button"
             variant="ghost"
             size="icon-xs"
-            aria-label={translate("auto.components.editor.ConflictReviewFileTree.a54551c5a6", "Collapse file tree")}
+            aria-label={translate(
+              'auto.components.editor.ConflictReviewFileTree.a54551c5a6',
+              'Collapse file tree'
+            )}
             onClick={() => onCollapsedChange(true)}
           >
             <PanelLeftClose className="size-3.5" />
@@ -90,7 +94,11 @@ export function ConflictReviewFileTree({
       <div className="min-h-0 flex-1 overflow-auto py-1 scrollbar-sleek">
         {rows.length === 0 ? (
           <div className="px-3 py-6 text-center text-xs text-muted-foreground">
-            {translate("auto.components.editor.ConflictReviewFileTree.3449521a8c", "No conflicts in this snapshot.")}</div>
+            {translate(
+              'auto.components.editor.ConflictReviewFileTree.3449521a8c',
+              'No conflicts in this snapshot.'
+            )}
+          </div>
         ) : (
           rows.map((node) => (
             <ConflictReviewFileTreeRow
@@ -182,7 +190,11 @@ function ConflictReviewFileTreeRow({
             : 'bg-muted text-muted-foreground'
         )}
       >
-        {isStillUnresolved ? translate("auto.components.editor.ConflictReviewFileTree.69d4e210bb", "Unresolved") : liveEntry ? translate("auto.components.editor.ConflictReviewFileTree.8528a5eaf5", "Resolved") : translate("auto.components.editor.ConflictReviewFileTree.496e28a932", "Gone")}
+        {isStillUnresolved
+          ? translate('auto.components.editor.ConflictReviewFileTree.69d4e210bb', 'Unresolved')
+          : liveEntry
+            ? translate('auto.components.editor.ConflictReviewFileTree.8528a5eaf5', 'Resolved')
+            : translate('auto.components.editor.ConflictReviewFileTree.496e28a932', 'Gone')}
       </span>
     </button>
   )

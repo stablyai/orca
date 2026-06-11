@@ -26,9 +26,16 @@ export function DashboardAgentRowMessage({
       {isInterrupted ? (
         <span
           className="shrink-0 text-[10px] leading-snug text-muted-foreground/80"
-          aria-label={translate("auto.components.dashboard.DashboardAgentRowMessage.1ec01cef03", "Interrupted by user")}
+          aria-label={translate(
+            'auto.components.dashboard.DashboardAgentRowMessage.1ec01cef03',
+            'Interrupted by user'
+          )}
         >
-          {translate("auto.components.dashboard.DashboardAgentRowMessage.0a01046763", "interrupted")}</span>
+          {translate(
+            'auto.components.dashboard.DashboardAgentRowMessage.0a01046763',
+            'interrupted'
+          )}
+        </span>
       ) : null}
       {lastAssistantMessage ? (
         <CommentMarkdown

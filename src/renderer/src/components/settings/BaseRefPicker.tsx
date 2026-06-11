@@ -116,14 +116,25 @@ export function BaseRefPicker({
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <div className="text-sm font-medium text-foreground">
-            {effectiveBaseRef ?? translate("auto.components.settings.BaseRefPicker.ee110e1830", "No default base ref")}
+            {effectiveBaseRef ??
+              translate('auto.components.settings.BaseRefPicker.ee110e1830', 'No default base ref')}
           </div>
           <p className="text-xs text-muted-foreground">
             {currentBaseRef
-              ? translate("auto.components.settings.BaseRefPicker.2f3cda96f5", "Pinned for this repo")
+              ? translate(
+                  'auto.components.settings.BaseRefPicker.2f3cda96f5',
+                  'Pinned for this repo'
+                )
               : defaultBaseRef
-                ? translate("auto.components.settings.BaseRefPicker.086ce7f369", "Following primary branch ({{value0}})", { value0: defaultBaseRef })
-                : translate("auto.components.settings.BaseRefPicker.9a14ec7400", "Pick a base branch below")}
+                ? translate(
+                    'auto.components.settings.BaseRefPicker.086ce7f369',
+                    'Following primary branch ({{value0}})',
+                    { value0: defaultBaseRef }
+                  )
+                : translate(
+                    'auto.components.settings.BaseRefPicker.9a14ec7400',
+                    'Pick a base branch below'
+                  )}
           </p>
           {/* Why: passive hint that fork workflows have other remotes worth
               searching (e.g. `upstream`). Host-agnostic and remote-name-agnostic
@@ -137,24 +148,48 @@ export function BaseRefPicker({
             // whenever remoteCount>1, not a dynamic status update. aria-live would
             // cause screen readers to re-announce it on every mount/repo switch.
             <p className="text-xs text-muted-foreground">
-              {translate("auto.components.settings.BaseRefPicker.a5c16712c1", "Multiple remotes detected. Type a remote name (e.g.")}<code>{translate("auto.components.settings.BaseRefPicker.915ad97875", "upstream")}</code>{translate("auto.components.settings.BaseRefPicker.80f7c82303", ") or a full ref (e.g.")}<code>{translate("auto.components.settings.BaseRefPicker.b468f46726", "upstream/main")}</code>{translate("auto.components.settings.BaseRefPicker.ade9a5bb03", ") to scope results.")}</p>
+              {translate(
+                'auto.components.settings.BaseRefPicker.a5c16712c1',
+                'Multiple remotes detected. Type a remote name (e.g.'
+              )}
+              <code>
+                {translate('auto.components.settings.BaseRefPicker.915ad97875', 'upstream')}
+              </code>
+              {translate(
+                'auto.components.settings.BaseRefPicker.80f7c82303',
+                ') or a full ref (e.g.'
+              )}
+              <code>
+                {translate('auto.components.settings.BaseRefPicker.b468f46726', 'upstream/main')}
+              </code>
+              {translate(
+                'auto.components.settings.BaseRefPicker.ade9a5bb03',
+                ') to scope results.'
+              )}
+            </p>
           ) : null}
         </div>
         {onUsePrimary && (
           <Button variant="outline" size="sm" onClick={onUsePrimary} disabled={!currentBaseRef}>
-            {translate("auto.components.settings.BaseRefPicker.773a5687a3", "Use Primary")}</Button>
+            {translate('auto.components.settings.BaseRefPicker.773a5687a3', 'Use Primary')}
+          </Button>
         )}
       </div>
 
       <Input
         value={baseRefQuery}
         onChange={(e) => setBaseRefQuery(e.target.value)}
-        placeholder={translate("auto.components.settings.BaseRefPicker.7db7fb87e5", "Search branches by name...")}
+        placeholder={translate(
+          'auto.components.settings.BaseRefPicker.7db7fb87e5',
+          'Search branches by name...'
+        )}
         className="max-w-md"
       />
 
       {isSearchingBaseRefs ? (
-        <p className="text-xs text-muted-foreground">{translate("auto.components.settings.BaseRefPicker.a4a9372eb2", "Searching branches...")}</p>
+        <p className="text-xs text-muted-foreground">
+          {translate('auto.components.settings.BaseRefPicker.a4a9372eb2', 'Searching branches...')}
+        </p>
       ) : null}
 
       {!isSearchingBaseRefs && baseRefQuery.trim().length >= 2 ? (
@@ -182,14 +217,21 @@ export function BaseRefPicker({
                 >
                   <span className="truncate">{ref}</span>
                   {effectiveBaseRef === ref ? (
-                    <span className="text-[10px] uppercase tracking-[0.18em]">{translate("auto.components.settings.BaseRefPicker.d166ff883d", "Current")}</span>
+                    <span className="text-[10px] uppercase tracking-[0.18em]">
+                      {translate('auto.components.settings.BaseRefPicker.d166ff883d', 'Current')}
+                    </span>
                   ) : null}
                 </button>
               ))}
             </div>
           </ScrollArea>
         ) : (
-          <p className="text-xs text-muted-foreground">{translate("auto.components.settings.BaseRefPicker.1b8e54151f", "No matching branches found.")}</p>
+          <p className="text-xs text-muted-foreground">
+            {translate(
+              'auto.components.settings.BaseRefPicker.1b8e54151f',
+              'No matching branches found.'
+            )}
+          </p>
         )
       ) : null}
     </div>

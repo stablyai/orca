@@ -4,32 +4,66 @@ export function TerminalSlide(): React.JSX.Element {
     <div className="mp-device-screen">
       <div className="mp-session-chrome">
         <div className="mp-session-topbar">
-          <button type="button" className="mp-session-back" aria-label={translate("auto.components.mobile.slides.TerminalSlide.8fd998acd3", "Back")}>
+          <button
+            type="button"
+            className="mp-session-back"
+            aria-label={translate('auto.components.mobile.slides.TerminalSlide.8fd998acd3', 'Back')}
+          >
             <ChevronLeftIcon />
           </button>
           <div className="mp-session-title-block">
-            <div className="mp-session-title">{translate("auto.components.mobile.slides.TerminalSlide.8432787c4e", "feat/mobile-page")}</div>
+            <div className="mp-session-title">
+              {translate(
+                'auto.components.mobile.slides.TerminalSlide.8432787c4e',
+                'feat/mobile-page'
+              )}
+            </div>
             <div className="mp-session-meta-row">
               <span className="mp-status-dot is-green" />
-              <span>{translate("auto.components.mobile.slides.TerminalSlide.8d6516312d", "2 terminals · claude active")}</span>
+              <span>
+                {translate(
+                  'auto.components.mobile.slides.TerminalSlide.8d6516312d',
+                  '2 terminals · claude active'
+                )}
+              </span>
             </div>
           </div>
-          <button type="button" className="mp-session-iconbtn" aria-label={translate("auto.components.mobile.slides.TerminalSlide.94febb0976", "Source control")}>
+          <button
+            type="button"
+            className="mp-session-iconbtn"
+            aria-label={translate(
+              'auto.components.mobile.slides.TerminalSlide.94febb0976',
+              'Source control'
+            )}
+          >
             <BranchIcon />
           </button>
-          <button type="button" className="mp-session-iconbtn" aria-label={translate("auto.components.mobile.slides.TerminalSlide.606aa93192", "Files")}>
+          <button
+            type="button"
+            className="mp-session-iconbtn"
+            aria-label={translate(
+              'auto.components.mobile.slides.TerminalSlide.606aa93192',
+              'Files'
+            )}
+          >
             <FolderIcon />
           </button>
         </div>
 
         <div className="mp-session-tabbar">
-          <div className="mp-session-tab is-active">{translate("auto.components.mobile.slides.TerminalSlide.2c10d43745", "claude")}</div>
+          <div className="mp-session-tab is-active">
+            {translate('auto.components.mobile.slides.TerminalSlide.2c10d43745', 'claude')}
+          </div>
           <div className="mp-session-tab">
-            <span>{translate("auto.components.mobile.slides.TerminalSlide.e4befee569", "shell")}</span>
+            <span>
+              {translate('auto.components.mobile.slides.TerminalSlide.e4befee569', 'shell')}
+            </span>
           </div>
           <div className="mp-session-tab">
             <FileIcon />
-            <span>{translate("auto.components.mobile.slides.TerminalSlide.da121ba48d", "PLAN.md")}</span>
+            <span>
+              {translate('auto.components.mobile.slides.TerminalSlide.da121ba48d', 'PLAN.md')}
+            </span>
           </div>
           <div className="mp-session-tab-add">
             <PlusIcon />
@@ -39,60 +73,139 @@ export function TerminalSlide(): React.JSX.Element {
 
       <div className="mp-terminal">
         <span className="mp-term-line">
-          <span className="mp-term-prompt">{translate("auto.components.mobile.slides.TerminalSlide.2defc05141", "dev@mac")}</span>{' '}
-          <span className="mp-term-dim">{translate("auto.components.mobile.slides.TerminalSlide.e0f98be657", "orca/feat-mobile-page")}</span>{' '}
-          <span className="mp-term-prompt">$</span> <span className="mp-term-cmd">{translate("auto.components.mobile.slides.TerminalSlide.2c10d43745", "claude")}</span>
+          <span className="mp-term-prompt">
+            {translate('auto.components.mobile.slides.TerminalSlide.2defc05141', 'dev@mac')}
+          </span>{' '}
+          <span className="mp-term-dim">
+            {translate(
+              'auto.components.mobile.slides.TerminalSlide.e0f98be657',
+              'orca/feat-mobile-page'
+            )}
+          </span>{' '}
+          <span className="mp-term-prompt">$</span>{' '}
+          <span className="mp-term-cmd">
+            {translate('auto.components.mobile.slides.TerminalSlide.2c10d43745', 'claude')}
+          </span>
         </span>
         <span className="mp-term-line" />
         <span className="mp-term-line">
-          <span className="mp-term-tool">●</span> <span className="mp-term-mid">{translate("auto.components.mobile.slides.TerminalSlide.80cc356591", "Read")}</span>{' '}
-          <span className="mp-term-dim">{translate("auto.components.mobile.slides.TerminalSlide.336c0e070e", "mobile/orca-mobile-sidebar-mock-v3.html")}</span>
+          <span className="mp-term-tool">●</span>{' '}
+          <span className="mp-term-mid">
+            {translate('auto.components.mobile.slides.TerminalSlide.80cc356591', 'Read')}
+          </span>{' '}
+          <span className="mp-term-dim">
+            {translate(
+              'auto.components.mobile.slides.TerminalSlide.336c0e070e',
+              'mobile/orca-mobile-sidebar-mock-v3.html'
+            )}
+          </span>
         </span>
         <span className="mp-term-line">
           {'  '}
-          <span className="mp-term-comment">{translate("auto.components.mobile.slides.TerminalSlide.fc83e0d5ef", "⎿ Read 2103 lines")}</span>
+          <span className="mp-term-comment">
+            {translate(
+              'auto.components.mobile.slides.TerminalSlide.fc83e0d5ef',
+              '⎿ Read 2103 lines'
+            )}
+          </span>
         </span>
         <span className="mp-term-line" />
         <span className="mp-term-line">
-          <span className="mp-term-tool">●</span> <span className="mp-term-mid">{translate("auto.components.mobile.slides.TerminalSlide.6d4ebd5833", "Edit")}</span>{' '}
-          <span className="mp-term-dim">{translate("auto.components.mobile.slides.TerminalSlide.336c0e070e", "mobile/orca-mobile-sidebar-mock-v3.html")}</span>
+          <span className="mp-term-tool">●</span>{' '}
+          <span className="mp-term-mid">
+            {translate('auto.components.mobile.slides.TerminalSlide.6d4ebd5833', 'Edit')}
+          </span>{' '}
+          <span className="mp-term-dim">
+            {translate(
+              'auto.components.mobile.slides.TerminalSlide.336c0e070e',
+              'mobile/orca-mobile-sidebar-mock-v3.html'
+            )}
+          </span>
         </span>
         <span className="mp-term-line">
           {'  '}
-          <span className="mp-term-comment">{translate("auto.components.mobile.slides.TerminalSlide.d6d1041a1c", "⎿ Replaced pair-scan slide with terminal session")}</span>
+          <span className="mp-term-comment">
+            {translate(
+              'auto.components.mobile.slides.TerminalSlide.d6d1041a1c',
+              '⎿ Replaced pair-scan slide with terminal session'
+            )}
+          </span>
         </span>
         <span className="mp-term-line" />
         <span className="mp-term-line">
-          <span className="mp-term-tool">●</span> <span className="mp-term-mid">{translate("auto.components.mobile.slides.TerminalSlide.21b67dfc92", "Bash")}</span>{' '}
-          <span className="mp-term-dim">{translate("auto.components.mobile.slides.TerminalSlide.a6e7cdc688", "pnpm test --filter mobile")}</span>
+          <span className="mp-term-tool">●</span>{' '}
+          <span className="mp-term-mid">
+            {translate('auto.components.mobile.slides.TerminalSlide.21b67dfc92', 'Bash')}
+          </span>{' '}
+          <span className="mp-term-dim">
+            {translate(
+              'auto.components.mobile.slides.TerminalSlide.a6e7cdc688',
+              'pnpm test --filter mobile'
+            )}
+          </span>
         </span>
         <span className="mp-term-line">
           {'  '}
           <span className="mp-term-comment">⎿ </span>
-          <span className="mp-term-ok">{translate("auto.components.mobile.slides.TerminalSlide.1d448b69f7", "PASS")}</span>
-          <span className="mp-term-comment"> {translate("auto.components.mobile.slides.TerminalSlide.d39445686a", "src/transport/host-store.test.ts")}</span>
+          <span className="mp-term-ok">
+            {translate('auto.components.mobile.slides.TerminalSlide.1d448b69f7', 'PASS')}
+          </span>
+          <span className="mp-term-comment">
+            {' '}
+            {translate(
+              'auto.components.mobile.slides.TerminalSlide.d39445686a',
+              'src/transport/host-store.test.ts'
+            )}
+          </span>
         </span>
         <span className="mp-term-line">
           {'     '}
-          <span className="mp-term-ok">{translate("auto.components.mobile.slides.TerminalSlide.1d448b69f7", "PASS")}</span>
-          <span className="mp-term-comment"> {translate("auto.components.mobile.slides.TerminalSlide.4b3666f9a9", "src/cache/worktree-cache.test.ts")}</span>
+          <span className="mp-term-ok">
+            {translate('auto.components.mobile.slides.TerminalSlide.1d448b69f7', 'PASS')}
+          </span>
+          <span className="mp-term-comment">
+            {' '}
+            {translate(
+              'auto.components.mobile.slides.TerminalSlide.4b3666f9a9',
+              'src/cache/worktree-cache.test.ts'
+            )}
+          </span>
         </span>
         <span className="mp-term-line">
           {'     '}
           <span className="mp-term-warn">●</span>
-          <span className="mp-term-comment"> {translate("auto.components.mobile.slides.TerminalSlide.3ce3e8c892", "14 passed, 1 skipped (1.8s)")}</span>
+          <span className="mp-term-comment">
+            {' '}
+            {translate(
+              'auto.components.mobile.slides.TerminalSlide.3ce3e8c892',
+              '14 passed, 1 skipped (1.8s)'
+            )}
+          </span>
         </span>
         <span className="mp-term-line" />
         <span className="mp-term-line">
           <span className="mp-term-mid">
-            {translate("auto.components.mobile.slides.TerminalSlide.e75112c834", "I've replaced the pair-scan slide with a high-fidelity")}</span>
+            {translate(
+              'auto.components.mobile.slides.TerminalSlide.e75112c834',
+              "I've replaced the pair-scan slide with a high-fidelity"
+            )}
+          </span>
         </span>
         <span className="mp-term-line">
           <span className="mp-term-mid">
-            {translate("auto.components.mobile.slides.TerminalSlide.aa64b519c6", "terminal screen. Tokyonight palette, Menlo, real claude")}</span>
+            {translate(
+              'auto.components.mobile.slides.TerminalSlide.aa64b519c6',
+              'terminal screen. Tokyonight palette, Menlo, real claude'
+            )}
+          </span>
         </span>
         <span className="mp-term-line">
-          <span className="mp-term-mid">{translate("auto.components.mobile.slides.TerminalSlide.58a9ee6003", "tool-call formatting. Want me to add the diff next?")}</span>
+          <span className="mp-term-mid">
+            {translate(
+              'auto.components.mobile.slides.TerminalSlide.58a9ee6003',
+              'tool-call formatting. Want me to add the diff next?'
+            )}
+          </span>
         </span>
         <span className="mp-term-line" />
         <span className="mp-term-line">
@@ -102,27 +215,52 @@ export function TerminalSlide(): React.JSX.Element {
 
       <div className="mp-accessory-bar">
         <div className="mp-accessory-content">
-          <div className="mp-accessory-key is-icon" aria-label={translate("auto.components.mobile.slides.TerminalSlide.985373052e", "Switch to phone mode")}>
+          <div
+            className="mp-accessory-key is-icon"
+            aria-label={translate(
+              'auto.components.mobile.slides.TerminalSlide.985373052e',
+              'Switch to phone mode'
+            )}
+          >
             <PhoneIcon />
           </div>
-          <div className="mp-accessory-key">{translate("auto.components.mobile.slides.TerminalSlide.fa22927f13", "Paste")}</div>
-          <div className="mp-accessory-key">{translate("auto.components.mobile.slides.TerminalSlide.4930eaaae7", "Esc")}</div>
-          <div className="mp-accessory-key">{translate("auto.components.mobile.slides.TerminalSlide.53ff909568", "Tab")}</div>
+          <div className="mp-accessory-key">
+            {translate('auto.components.mobile.slides.TerminalSlide.fa22927f13', 'Paste')}
+          </div>
+          <div className="mp-accessory-key">
+            {translate('auto.components.mobile.slides.TerminalSlide.4930eaaae7', 'Esc')}
+          </div>
+          <div className="mp-accessory-key">
+            {translate('auto.components.mobile.slides.TerminalSlide.53ff909568', 'Tab')}
+          </div>
           <div className="mp-accessory-key">⌫</div>
           <div className="mp-accessory-key">↑</div>
           <div className="mp-accessory-key">↓</div>
           <div className="mp-accessory-key">←</div>
           <div className="mp-accessory-key">→</div>
-          <div className="mp-accessory-key">{translate("auto.components.mobile.slides.TerminalSlide.817090af40", "Ctrl+C")}</div>
+          <div className="mp-accessory-key">
+            {translate('auto.components.mobile.slides.TerminalSlide.817090af40', 'Ctrl+C')}
+          </div>
         </div>
       </div>
 
       <div className="mp-input-bar">
-        <div className="mp-text-input">{translate("auto.components.mobile.slides.TerminalSlide.29f2d13839", "Type a command…")}</div>
-        <div className="mp-round-button" aria-label={translate("auto.components.mobile.slides.TerminalSlide.69334b4b10", "Voice dictation")}>
+        <div className="mp-text-input">
+          {translate('auto.components.mobile.slides.TerminalSlide.29f2d13839', 'Type a command…')}
+        </div>
+        <div
+          className="mp-round-button"
+          aria-label={translate(
+            'auto.components.mobile.slides.TerminalSlide.69334b4b10',
+            'Voice dictation'
+          )}
+        >
           <MicIcon />
         </div>
-        <div className="mp-round-button" aria-label={translate("auto.components.mobile.slides.TerminalSlide.0bb39f8fe6", "Send")}>
+        <div
+          className="mp-round-button"
+          aria-label={translate('auto.components.mobile.slides.TerminalSlide.0bb39f8fe6', 'Send')}
+        >
           <ArrowUpIcon />
         </div>
       </div>

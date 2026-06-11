@@ -275,20 +275,25 @@ export default function BrowserTab({
         >
           <DropdownMenuItem onSelect={() => onSplitGroup('up', tab.id)}>
             <Rows2 className="mr-1.5 size-3.5" />
-            {translate("auto.components.tab.bar.BrowserTab.96354ed249", "Split Up")}</DropdownMenuItem>
+            {translate('auto.components.tab.bar.BrowserTab.96354ed249', 'Split Up')}
+          </DropdownMenuItem>
           <DropdownMenuItem onSelect={() => onSplitGroup('down', tab.id)}>
             <Rows2 className="mr-1.5 size-3.5" />
-            {translate("auto.components.tab.bar.BrowserTab.2186a8407c", "Split Down")}</DropdownMenuItem>
+            {translate('auto.components.tab.bar.BrowserTab.2186a8407c', 'Split Down')}
+          </DropdownMenuItem>
           <DropdownMenuItem onSelect={() => onSplitGroup('left', tab.id)}>
             <Columns2 className="mr-1.5 size-3.5" />
-            {translate("auto.components.tab.bar.BrowserTab.7e8106899f", "Split Left")}</DropdownMenuItem>
+            {translate('auto.components.tab.bar.BrowserTab.7e8106899f', 'Split Left')}
+          </DropdownMenuItem>
           <DropdownMenuItem onSelect={() => onSplitGroup('right', tab.id)}>
             <Columns2 className="mr-1.5 size-3.5" />
-            {translate("auto.components.tab.bar.BrowserTab.966feb9ad5", "Split Right")}</DropdownMenuItem>
+            {translate('auto.components.tab.bar.BrowserTab.966feb9ad5', 'Split Right')}
+          </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem onSelect={onDuplicate}>
             <Copy className="mr-1.5 size-3.5" />
-            {translate("auto.components.tab.bar.BrowserTab.5d6e89891f", "Duplicate Tab")}</DropdownMenuItem>
+            {translate('auto.components.tab.bar.BrowserTab.5d6e89891f', 'Duplicate Tab')}
+          </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem onSelect={onTogglePin}>
             {isPinned ? (
@@ -296,19 +301,24 @@ export default function BrowserTab({
             ) : (
               <Pin className="mr-1.5 size-3.5" />
             )}
-            {isPinned ? translate("auto.components.tab.bar.BrowserTab.c5aaee8c39", "Unpin Tab") : translate("auto.components.tab.bar.BrowserTab.911542656f", "Pin Tab")}
+            {isPinned
+              ? translate('auto.components.tab.bar.BrowserTab.c5aaee8c39', 'Unpin Tab')
+              : translate('auto.components.tab.bar.BrowserTab.911542656f', 'Pin Tab')}
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem onSelect={() => !isPinned && onClose()} disabled={isPinned}>
-            {translate("auto.components.tab.bar.BrowserTab.1611a1324b", "Close")}</DropdownMenuItem>
+            {translate('auto.components.tab.bar.BrowserTab.1611a1324b', 'Close')}
+          </DropdownMenuItem>
           <DropdownMenuItem onSelect={onCloseToRight} disabled={!hasTabsToRight}>
-            {translate("auto.components.tab.bar.BrowserTab.9dd880bd56", "Close Tabs To The Right")}</DropdownMenuItem>
+            {translate('auto.components.tab.bar.BrowserTab.9dd880bd56', 'Close Tabs To The Right')}
+          </DropdownMenuItem>
           <DropdownMenuItem
             onSelect={() => void window.api.shell.openUrl(openInBrowserUrl)}
             disabled={!isHttpUrl}
           >
             <ExternalLink className="w-3.5 h-3.5 mr-1.5" />
-            {translate("auto.components.tab.bar.BrowserTab.6e0bc8f3a8", "Open In Browser")}</DropdownMenuItem>
+            {translate('auto.components.tab.bar.BrowserTab.6e0bc8f3a8', 'Open In Browser')}
+          </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
     </>

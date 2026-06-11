@@ -125,9 +125,19 @@ export function TabBarQuickCommandsButton({
   const handleDeleteCommand = async (command: TerminalQuickCommand): Promise<void> => {
     setMenuOpen(false)
     const confirmed = await confirm({
-      title: translate("auto.components.tab.bar.TabBarQuickCommandsButton.e8e1a52edb", "Delete \"{{value0}}\"?", { value0: command.label }),
-      description: translate("auto.components.tab.bar.TabBarQuickCommandsButton.3220e2da27", "This quick command will be removed from your saved list."),
-      confirmLabel: translate("auto.components.tab.bar.TabBarQuickCommandsButton.be8f0ff166", "Delete"),
+      title: translate(
+        'auto.components.tab.bar.TabBarQuickCommandsButton.e8e1a52edb',
+        'Delete "{{value0}}"?',
+        { value0: command.label }
+      ),
+      description: translate(
+        'auto.components.tab.bar.TabBarQuickCommandsButton.3220e2da27',
+        'This quick command will be removed from your saved list.'
+      ),
+      confirmLabel: translate(
+        'auto.components.tab.bar.TabBarQuickCommandsButton.be8f0ff166',
+        'Delete'
+      ),
       confirmVariant: 'destructive'
     })
     if (!confirmed) {
@@ -160,14 +170,26 @@ export function TabBarQuickCommandsButton({
                 })
               }
               className="my-auto flex h-7 shrink-0 items-center gap-1 rounded-md px-1.5 text-muted-foreground hover:bg-accent/50 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-              aria-label={translate("auto.components.tab.bar.TabBarQuickCommandsButton.8f1e971966", "Add quick command")}
+              aria-label={translate(
+                'auto.components.tab.bar.TabBarQuickCommandsButton.8f1e971966',
+                'Add quick command'
+              )}
             >
               <Plus className="size-3.5" />
-              <span className="text-[12px] font-medium">{translate("auto.components.tab.bar.TabBarQuickCommandsButton.a2c7a33831", "Add command")}</span>
+              <span className="text-[12px] font-medium">
+                {translate(
+                  'auto.components.tab.bar.TabBarQuickCommandsButton.a2c7a33831',
+                  'Add command'
+                )}
+              </span>
             </button>
           </TooltipTrigger>
           <TooltipContent side="bottom" sideOffset={6}>
-            {translate("auto.components.tab.bar.TabBarQuickCommandsButton.1d411fb6a5", "Save a quick command for this repo")}</TooltipContent>
+            {translate(
+              'auto.components.tab.bar.TabBarQuickCommandsButton.1d411fb6a5',
+              'Save a quick command for this repo'
+            )}
+          </TooltipContent>
         </Tooltip>
         <TerminalQuickCommandDialog
           open={editor !== null}
@@ -221,7 +243,11 @@ export function TabBarQuickCommandsButton({
             setEditor({ mode: 'edit', command })
           }}
           className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
-          aria-label={translate("auto.components.tab.bar.TabBarQuickCommandsButton.15529ede69", "Edit {{value0}}", { value0: command.label })}
+          aria-label={translate(
+            'auto.components.tab.bar.TabBarQuickCommandsButton.15529ede69',
+            'Edit {{value0}}',
+            { value0: command.label }
+          )}
         >
           <Pencil className="size-3" />
         </button>
@@ -232,7 +258,11 @@ export function TabBarQuickCommandsButton({
             void handleDeleteCommand(command)
           }}
           className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-destructive"
-          aria-label={translate("auto.components.tab.bar.TabBarQuickCommandsButton.196593b6a9", "Remove {{value0}}", { value0: command.label })}
+          aria-label={translate(
+            'auto.components.tab.bar.TabBarQuickCommandsButton.196593b6a9',
+            'Remove {{value0}}',
+            { value0: command.label }
+          )}
         >
           <Trash2 className="size-3" />
         </button>
@@ -251,21 +281,45 @@ export function TabBarQuickCommandsButton({
               disabled={!mostRecent}
               className={cn(innerButtonBase, 'gap-1.5 rounded-l-md rounded-r-none px-1.5')}
               aria-label={
-                mostRecent ? translate("auto.components.tab.bar.TabBarQuickCommandsButton.b775303755", "Run quick command: {{value0}}", { value0: mostRecent.label }) : translate("auto.components.tab.bar.TabBarQuickCommandsButton.85482c57bc", "Run quick command")
+                mostRecent
+                  ? translate(
+                      'auto.components.tab.bar.TabBarQuickCommandsButton.b775303755',
+                      'Run quick command: {{value0}}',
+                      { value0: mostRecent.label }
+                    )
+                  : translate(
+                      'auto.components.tab.bar.TabBarQuickCommandsButton.85482c57bc',
+                      'Run quick command'
+                    )
               }
             >
               <Play className="size-3 shrink-0" fill="currentColor" strokeWidth={0} />
               <span className="max-w-[160px] truncate text-[12px] font-medium">
-                {mostRecent?.label ?? translate("auto.components.tab.bar.TabBarQuickCommandsButton.7b1c9d6ae1", "Run")}
+                {mostRecent?.label ??
+                  translate('auto.components.tab.bar.TabBarQuickCommandsButton.7b1c9d6ae1', 'Run')}
               </span>
             </button>
           </TooltipTrigger>
           <TooltipContent side="bottom" sideOffset={6}>
             {mostRecent
               ? isTerminalAgentQuickCommand(mostRecent)
-                ? translate("auto.components.tab.bar.TabBarQuickCommandsButton.77ac113df0", "Start {{value0}}: {{value1}}", { value0: getAgentLabel(mostRecent.agent), value1: getTerminalQuickCommandBody(mostRecent) })
-                : translate("auto.components.tab.bar.TabBarQuickCommandsButton.37e1bb90ce", "Run: {{value0}}", { value0: getTerminalQuickCommandBody(mostRecent) })
-              : translate("auto.components.tab.bar.TabBarQuickCommandsButton.85482c57bc", "Run quick command")}
+                ? translate(
+                    'auto.components.tab.bar.TabBarQuickCommandsButton.77ac113df0',
+                    'Start {{value0}}: {{value1}}',
+                    {
+                      value0: getAgentLabel(mostRecent.agent),
+                      value1: getTerminalQuickCommandBody(mostRecent)
+                    }
+                  )
+                : translate(
+                    'auto.components.tab.bar.TabBarQuickCommandsButton.37e1bb90ce',
+                    'Run: {{value0}}',
+                    { value0: getTerminalQuickCommandBody(mostRecent) }
+                  )
+              : translate(
+                  'auto.components.tab.bar.TabBarQuickCommandsButton.85482c57bc',
+                  'Run quick command'
+                )}
           </TooltipContent>
         </Tooltip>
         <DropdownMenu modal={false} open={menuOpen} onOpenChange={handleOpenChange}>
@@ -276,7 +330,10 @@ export function TabBarQuickCommandsButton({
                 innerButtonBase,
                 'justify-center rounded-l-none rounded-r-md border-l border-border/60 px-1'
               )}
-              aria-label={translate("auto.components.tab.bar.TabBarQuickCommandsButton.b82e237a4b", "More quick commands")}
+              aria-label={translate(
+                'auto.components.tab.bar.TabBarQuickCommandsButton.b82e237a4b',
+                'More quick commands'
+              )}
             >
               <ChevronDown className="size-3" strokeWidth={2.5} />
             </button>
@@ -290,7 +347,12 @@ export function TabBarQuickCommandsButton({
             >
               <CommandList className="max-h-72 py-1">
                 {totalVisible === 0 ? (
-                  <CommandEmpty className="py-4 text-center text-[11px]">{translate("auto.components.tab.bar.TabBarQuickCommandsButton.20bbd75896", "No commands")}</CommandEmpty>
+                  <CommandEmpty className="py-4 text-center text-[11px]">
+                    {translate(
+                      'auto.components.tab.bar.TabBarQuickCommandsButton.20bbd75896',
+                      'No commands'
+                    )}
+                  </CommandEmpty>
                 ) : null}
                 {repoCommands.map(renderItem)}
                 {repoCommands.length > 0 && globalCommands.length > 0 ? (
@@ -311,7 +373,11 @@ export function TabBarQuickCommandsButton({
                   className="flex w-full items-center gap-2 rounded-[5px] px-2 py-1.5 text-[12px] text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                 >
                   <Plus className="size-3.5" />
-                  {translate("auto.components.tab.bar.TabBarQuickCommandsButton.a2c7a33831", "Add command")}</button>
+                  {translate(
+                    'auto.components.tab.bar.TabBarQuickCommandsButton.a2c7a33831',
+                    'Add command'
+                  )}
+                </button>
               </div>
             </Command>
           </DropdownMenuContent>

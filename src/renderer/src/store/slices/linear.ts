@@ -19,6 +19,7 @@ import type {
 } from '../../../../shared/types'
 import type { CacheEntry } from './github'
 import { clampLinearIssueListLimit } from '../../../../shared/linear-issue-read-limits'
+import { isIntegrationCredentialDecryptionError } from '../../../../shared/integration-credential-errors'
 import { clearLinearMetadataCache } from '../../hooks/useIssueMetadata'
 import {
   linearConnect,
@@ -39,6 +40,8 @@ import {
   linearStatus,
   linearTestConnection
 } from '@/runtime/runtime-linear-client'
+import { getProviderRuntimeContextKey } from '@/lib/provider-runtime-context'
+import { translate } from '@/i18n/i18n'
 
 const CACHE_TTL = 60_000 // 60s — same as GitHub work-items revalidation TTL
 const TEAM_CACHE_TTL = 10 * 60_000 // Teams change rarely and block visible Linear rows.
@@ -72,6 +75,8 @@ function looksLikeAuthError(error: unknown): boolean {
 type InflightLinearIssueRequest = {
   promise: Promise<LinearIssue | null>
   generation: number
+  contextKey: string
+  mutationGeneration: number
 }
 
 function workspaceErrorType(error: unknown): LinearWorkspaceError['type'] {
@@ -104,20 +109,28 @@ type InflightLinearListRequest = {
   promise: Promise<LinearIssue[]>
   force: boolean
   generation: number
+  contextKey: string
+  mutationGeneration: number
 }
 type InflightLinearPlainListRequest = {
   promise: Promise<LinearCollectionResult<LinearIssue>>
   force: boolean
   generation: number
+  contextKey: string
+  mutationGeneration: number
 }
 type InflightLinearCollectionRequest<T> = {
   promise: Promise<LinearCollectionResult<T>>
   force: boolean
   generation: number
+  contextKey: string
+  mutationGeneration: number
 }
 type InflightLinearDetailRequest<T> = {
   promise: Promise<T>
   force: boolean
+  contextKey: string
+  mutationGeneration: number
 }
 
 const inflightSearchRequests = new Map<string, InflightLinearListRequest>()
@@ -126,6 +139,8 @@ type InflightLinearTeamRequest = {
   promise: Promise<LinearTeam[]>
   force: boolean
   generation: number
+  contextKey: string
+  mutationGeneration: number
 }
 
 const inflightTeamRequests = new Map<string, InflightLinearTeamRequest>()
@@ -154,7 +169,7 @@ const inflightCustomViewProjectRequests = new Map<
   string,
   InflightLinearCollectionRequest<LinearProjectSummary>
 >()
-let inflightStatusRequest: Promise<void> | null = null
+let inflightStatusRequest: { contextKey: string; promise: Promise<void> } | null = null
 let linearStatusReadGeneration = 0
 let linearMutationGeneration = 0
 let linearCacheGeneration = 0
@@ -198,6 +213,7 @@ function linearWorkspaceSignature(workspace: LinearWorkspace): string {
 function linearStatusScopeSignature(status: LinearConnectionStatus): string {
   return JSON.stringify({
     connected: status.connected,
+    credentialError: status.credentialError ?? null,
     activeWorkspaceId: status.activeWorkspaceId ?? null,
     selectedWorkspaceId: getSelectedWorkspaceId(status),
     viewer: status.viewer
@@ -339,9 +355,30 @@ function isCurrentLinearMutation(generation: number): boolean {
   return generation === linearMutationGeneration
 }
 
+function isCurrentLinearRuntimeContext(
+  contextKey: string,
+  settings: AppState['settings']
+): boolean {
+  return getProviderRuntimeContextKey(settings) === contextKey
+}
+
+function canWriteLinearReadResult(
+  contextKey: string,
+  generation: number,
+  mutationGeneration: number,
+  settings: AppState['settings']
+): boolean {
+  return (
+    generation === linearCacheGeneration &&
+    mutationGeneration === linearMutationGeneration &&
+    isCurrentLinearRuntimeContext(contextKey, settings)
+  )
+}
+
 export type LinearSlice = {
   linearStatus: LinearConnectionStatus
   linearStatusChecked: boolean
+  linearStatusContextKey: string | null
   linearIssueCache: Record<string, CacheEntry<LinearIssue>>
   linearSearchCache: Record<string, CacheEntry<LinearIssue[]>>
   linearListCache: Record<string, CacheEntry<LinearCollectionResult<LinearIssue>>>
@@ -444,6 +481,7 @@ export type LinearSlice = {
 export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (set, get) => ({
   linearStatus: { connected: false, viewer: null },
   linearStatusChecked: false,
+  linearStatusContextKey: null,
   linearIssueCache: {},
   linearSearchCache: {},
   linearListCache: {},
@@ -457,17 +495,22 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
   linearCustomViewProjectCache: {},
 
   checkLinearConnection: async (force = false) => {
-    if (inflightStatusRequest && !force) {
-      return inflightStatusRequest
+    const contextKey = getProviderRuntimeContextKey(get().settings)
+    if (inflightStatusRequest && !force && inflightStatusRequest.contextKey === contextKey) {
+      return inflightStatusRequest.promise
+    }
+    if (get().linearStatusContextKey !== contextKey) {
+      set({ linearStatusChecked: false })
     }
 
     const mutationGeneration = linearMutationGeneration
     const statusReadGeneration = (linearStatusReadGeneration += 1)
-    inflightStatusRequest = linearStatus(get().settings)
+    const request = linearStatus(get().settings)
       .then((status) => {
         if (
           mutationGeneration !== linearMutationGeneration ||
-          statusReadGeneration !== linearStatusReadGeneration
+          statusReadGeneration !== linearStatusReadGeneration ||
+          !isCurrentLinearRuntimeContext(contextKey, get().settings)
         ) {
           return
         }
@@ -490,16 +533,20 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
             linearCustomViewDetailCache: {},
             linearCustomViewIssueCache: {},
             linearCustomViewProjectCache: {},
-            linearStatusChecked: true
+            linearStatusChecked: true,
+            linearStatusContextKey: contextKey
           })
         } else if (!get().linearStatusChecked) {
-          set({ linearStatusChecked: true })
+          set({ linearStatusChecked: true, linearStatusContextKey: contextKey })
+        } else if (get().linearStatusContextKey !== contextKey) {
+          set({ linearStatusContextKey: contextKey })
         }
       })
       .catch(() => {
         if (
           mutationGeneration !== linearMutationGeneration ||
-          statusReadGeneration !== linearStatusReadGeneration
+          statusReadGeneration !== linearStatusReadGeneration ||
+          !isCurrentLinearRuntimeContext(contextKey, get().settings)
         ) {
           return
         }
@@ -518,29 +565,46 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
             linearCustomViewDetailCache: {},
             linearCustomViewIssueCache: {},
             linearCustomViewProjectCache: {},
-            linearStatusChecked: true
+            linearStatusChecked: true,
+            linearStatusContextKey: contextKey
           })
         } else if (!get().linearStatusChecked) {
-          set({ linearStatusChecked: true })
+          set({ linearStatusChecked: true, linearStatusContextKey: contextKey })
+        } else if (get().linearStatusContextKey !== contextKey) {
+          set({ linearStatusContextKey: contextKey })
         }
       })
       .finally(() => {
-        if (statusReadGeneration === linearStatusReadGeneration) {
+        if (
+          statusReadGeneration === linearStatusReadGeneration &&
+          inflightStatusRequest?.promise === request
+        ) {
           inflightStatusRequest = null
         }
       })
+    inflightStatusRequest = { contextKey, promise: request }
 
-    return inflightStatusRequest
+    return request
   },
 
   testLinearConnection: async (workspaceId) => {
     const requestGeneration = beginLinearMutation()
+    const contextKey = getProviderRuntimeContextKey(get().settings)
     try {
       const result = (await linearTestConnection(get().settings, workspaceId)) as
         | { ok: true; viewer: LinearViewer }
         | { ok: false; error: string }
+      if (
+        !isCurrentLinearMutation(requestGeneration) ||
+        !isCurrentLinearRuntimeContext(contextKey, get().settings)
+      ) {
+        return result
+      }
       const status = await linearStatus(get().settings)
-      if (isCurrentLinearMutation(requestGeneration)) {
+      if (
+        isCurrentLinearMutation(requestGeneration) &&
+        isCurrentLinearRuntimeContext(contextKey, get().settings)
+      ) {
         const prev = get().linearStatus
         if (linearStatusScopeSignature(prev) !== linearStatusScopeSignature(status)) {
           invalidateLinearCaches()
@@ -557,10 +621,15 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
             linearCustomViewDetailCache: {},
             linearCustomViewIssueCache: {},
             linearCustomViewProjectCache: {},
-            linearStatusChecked: true
+            linearStatusChecked: true,
+            linearStatusContextKey: contextKey
           })
         } else {
-          set({ linearStatus: status, linearStatusChecked: true })
+          set({
+            linearStatus: status,
+            linearStatusChecked: true,
+            linearStatusContextKey: contextKey
+          })
         }
       }
       return result
@@ -572,9 +641,14 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
 
   connectLinear: async (apiKey: string) => {
     const requestGeneration = beginLinearMutation()
+    const contextKey = getProviderRuntimeContextKey(get().settings)
     try {
       const result = await linearConnect(get().settings, apiKey)
-      if (result.ok && isCurrentLinearMutation(requestGeneration)) {
+      if (
+        result.ok &&
+        isCurrentLinearMutation(requestGeneration) &&
+        isCurrentLinearRuntimeContext(contextKey, get().settings)
+      ) {
         invalidateLinearCaches()
         set({
           linearIssueCache: {},
@@ -590,13 +664,31 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
           linearCustomViewProjectCache: {}
         })
         const status = await linearStatus(get().settings)
-        if (!isCurrentLinearMutation(requestGeneration)) {
-          return result as { ok: true; viewer: LinearViewer } | { ok: false; error: string }
+        if (
+          !isCurrentLinearMutation(requestGeneration) ||
+          !isCurrentLinearRuntimeContext(contextKey, get().settings)
+        ) {
+          return {
+            ok: false as const,
+            error: translate(
+              'auto.store.slices.linear.37d36984d0',
+              'Linear connection was superseded by a newer request.'
+            )
+          }
         }
         set({
           linearStatus: status,
-          linearStatusChecked: true
+          linearStatusChecked: true,
+          linearStatusContextKey: contextKey
         })
+      } else if (result.ok) {
+        return {
+          ok: false as const,
+          error: translate(
+            'auto.store.slices.linear.37d36984d0',
+            'Linear connection was superseded by a newer request.'
+          )
+        }
       }
       return result as { ok: true; viewer: LinearViewer } | { ok: false; error: string }
     } catch (error) {
@@ -607,8 +699,12 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
 
   selectLinearWorkspace: async (workspaceId) => {
     const requestGeneration = beginLinearMutation()
+    const contextKey = getProviderRuntimeContextKey(get().settings)
     const status = await linearSelectWorkspace(get().settings, workspaceId)
-    if (!isCurrentLinearMutation(requestGeneration)) {
+    if (
+      !isCurrentLinearMutation(requestGeneration) ||
+      !isCurrentLinearRuntimeContext(contextKey, get().settings)
+    ) {
       return
     }
     invalidateLinearCaches()
@@ -625,14 +721,19 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
       linearCustomViewDetailCache: {},
       linearCustomViewIssueCache: {},
       linearCustomViewProjectCache: {},
-      linearStatusChecked: true
+      linearStatusChecked: true,
+      linearStatusContextKey: contextKey
     })
   },
 
   disconnectLinear: async () => {
     const requestGeneration = beginLinearMutation()
+    const contextKey = getProviderRuntimeContextKey(get().settings)
     await linearDisconnect(get().settings)
-    if (!isCurrentLinearMutation(requestGeneration)) {
+    if (
+      !isCurrentLinearMutation(requestGeneration) ||
+      !isCurrentLinearRuntimeContext(contextKey, get().settings)
+    ) {
       return
     }
     invalidateLinearCaches()
@@ -649,15 +750,26 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
       linearCustomViewDetailCache: {},
       linearCustomViewIssueCache: {},
       linearCustomViewProjectCache: {},
-      linearStatusChecked: true
+      linearStatusChecked: true,
+      linearStatusContextKey: contextKey
     })
   },
 
   disconnectLinearWorkspace: async (workspaceId) => {
     const requestGeneration = beginLinearMutation()
+    const contextKey = getProviderRuntimeContextKey(get().settings)
     await linearDisconnectWorkspace(get().settings, workspaceId)
+    if (
+      !isCurrentLinearMutation(requestGeneration) ||
+      !isCurrentLinearRuntimeContext(contextKey, get().settings)
+    ) {
+      return
+    }
     const status = await linearStatus(get().settings)
-    if (!isCurrentLinearMutation(requestGeneration)) {
+    if (
+      !isCurrentLinearMutation(requestGeneration) ||
+      !isCurrentLinearRuntimeContext(contextKey, get().settings)
+    ) {
       return
     }
     invalidateLinearCaches()
@@ -674,11 +786,13 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
       linearCustomViewDetailCache: {},
       linearCustomViewIssueCache: {},
       linearCustomViewProjectCache: {},
-      linearStatusChecked: true
+      linearStatusChecked: true,
+      linearStatusContextKey: contextKey
     })
   },
 
   fetchLinearIssue: async (id: string, workspaceId?: string | null) => {
+    const contextKey = getProviderRuntimeContextKey(get().settings)
     const issueCacheKey = `${workspaceId ?? 'selected'}::${id}`
     const cached = get().linearIssueCache[issueCacheKey] ?? get().linearIssueCache[id]
     if (isFresh(cached)) {
@@ -686,18 +800,28 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
     }
 
     const inflight = inflightIssueRequests.get(issueCacheKey)
-    if (inflight) {
+    if (
+      inflight &&
+      inflight.contextKey === contextKey &&
+      inflight.mutationGeneration === linearMutationGeneration
+    ) {
       return inflight.promise
     }
 
     let entry: InflightLinearIssueRequest
     const requestCacheGeneration = linearCacheGeneration
+    const requestMutationGeneration = linearMutationGeneration
     const promise = linearGetIssue(get().settings, id, workspaceId)
       .then((issue) => {
         const data = issue as LinearIssue | null
         if (
           inflightIssueRequests.get(issueCacheKey) === entry &&
-          requestCacheGeneration === linearCacheGeneration
+          canWriteLinearReadResult(
+            contextKey,
+            requestCacheGeneration,
+            requestMutationGeneration,
+            get().settings
+          )
         ) {
           set((s) => ({
             linearIssueCache: evictStaleEntries({
@@ -710,7 +834,15 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
       })
       .catch((error) => {
         console.warn('[linear] fetchLinearIssue failed:', error)
-        if (looksLikeAuthError(error)) {
+        if (
+          (isIntegrationCredentialDecryptionError(error) || looksLikeAuthError(error)) &&
+          canWriteLinearReadResult(
+            contextKey,
+            requestCacheGeneration,
+            requestMutationGeneration,
+            get().settings
+          )
+        ) {
           void get().checkLinearConnection(true)
         }
         return null
@@ -721,7 +853,12 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
         }
       })
 
-    entry = { promise, generation: requestCacheGeneration }
+    entry = {
+      promise,
+      generation: requestCacheGeneration,
+      contextKey,
+      mutationGeneration: requestMutationGeneration
+    }
     inflightIssueRequests.set(issueCacheKey, entry)
     return promise
   },
@@ -738,11 +875,18 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
   },
 
   prefetchLinearIssues: (args) => {
+    const contextKey = getProviderRuntimeContextKey(get().settings)
     const workspaceId = getSelectedWorkspaceId(get().linearStatus)
     if (args.kind === 'search') {
       const limit = args.limit ?? 20
       const cacheKey = linearSearchCacheKey(workspaceId, args.query, limit)
-      if (isFresh(get().linearSearchCache[cacheKey]) || inflightSearchRequests.has(cacheKey)) {
+      const inflight = inflightSearchRequests.get(cacheKey)
+      if (
+        isFresh(get().linearSearchCache[cacheKey]) ||
+        (inflight &&
+          inflight.contextKey === contextKey &&
+          inflight.mutationGeneration === linearMutationGeneration)
+      ) {
         return
       }
       void get()
@@ -752,7 +896,13 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
     }
     const limit = clampLinearIssueListLimit(args.limit)
     const cacheKey = linearListCacheKey(workspaceId, args.filter ?? 'assigned', limit)
-    if (isFresh(get().linearListCache[cacheKey]) || inflightListRequests.has(cacheKey)) {
+    const inflight = inflightListRequests.get(cacheKey)
+    if (
+      isFresh(get().linearListCache[cacheKey]) ||
+      (inflight &&
+        inflight.contextKey === contextKey &&
+        inflight.mutationGeneration === linearMutationGeneration)
+    ) {
       return
     }
     void get()
@@ -761,6 +911,7 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
   },
 
   searchLinearIssues: async (query: string, limit = 20, options) => {
+    const contextKey = getProviderRuntimeContextKey(get().settings)
     const workspaceId = getSelectedWorkspaceId(get().linearStatus)
     const cacheKey = linearSearchCacheKey(workspaceId, query, limit)
     const cached = get().linearSearchCache[cacheKey]
@@ -769,18 +920,29 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
     }
 
     const inflight = inflightSearchRequests.get(cacheKey)
-    if (inflight && (!options?.force || inflight.force)) {
+    if (
+      inflight &&
+      inflight.contextKey === contextKey &&
+      inflight.mutationGeneration === linearMutationGeneration &&
+      (!options?.force || inflight.force)
+    ) {
       return inflight.promise
     }
 
     let entry: InflightLinearListRequest
     const requestCacheGeneration = linearCacheGeneration
+    const requestMutationGeneration = linearMutationGeneration
     const promise = linearSearchIssues(get().settings, query, limit, workspaceId)
       .then((issues) => {
         const data = issues as LinearIssue[]
         if (
           inflightSearchRequests.get(cacheKey) === entry &&
-          requestCacheGeneration === linearCacheGeneration
+          canWriteLinearReadResult(
+            contextKey,
+            requestCacheGeneration,
+            requestMutationGeneration,
+            get().settings
+          )
         ) {
           set((s) => ({
             linearSearchCache: evictStaleEntries({
@@ -793,7 +955,15 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
       })
       .catch((error) => {
         console.warn('[linear] searchLinearIssues failed:', error)
-        if (looksLikeAuthError(error)) {
+        if (
+          (isIntegrationCredentialDecryptionError(error) || looksLikeAuthError(error)) &&
+          canWriteLinearReadResult(
+            contextKey,
+            requestCacheGeneration,
+            requestMutationGeneration,
+            get().settings
+          )
+        ) {
           if (!shouldRefreshStatusAfterRead(workspaceId)) {
             void get().checkLinearConnection(true)
           }
@@ -807,18 +977,30 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
         }
         if (
           shouldRefreshStatusAfterRead(workspaceId) &&
-          requestCacheGeneration === linearCacheGeneration
+          canWriteLinearReadResult(
+            contextKey,
+            requestCacheGeneration,
+            requestMutationGeneration,
+            get().settings
+          )
         ) {
           void get().checkLinearConnection(true)
         }
       })
 
-    entry = { promise, force: Boolean(options?.force), generation: requestCacheGeneration }
+    entry = {
+      promise,
+      force: Boolean(options?.force),
+      generation: requestCacheGeneration,
+      contextKey,
+      mutationGeneration: requestMutationGeneration
+    }
     inflightSearchRequests.set(cacheKey, entry)
     return promise
   },
 
   listLinearIssues: async (filter = 'assigned', limit = 20, options) => {
+    const contextKey = getProviderRuntimeContextKey(get().settings)
     const workspaceId = getSelectedWorkspaceId(get().linearStatus)
     const effectiveLimit = clampLinearIssueListLimit(limit)
     const cacheKey = linearListCacheKey(workspaceId, filter, effectiveLimit)
@@ -828,12 +1010,18 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
     }
 
     const inflight = inflightListRequests.get(cacheKey)
-    if (inflight && (!options?.force || inflight.force)) {
+    if (
+      inflight &&
+      inflight.contextKey === contextKey &&
+      inflight.mutationGeneration === linearMutationGeneration &&
+      (!options?.force || inflight.force)
+    ) {
       return inflight.promise
     }
 
     let entry: InflightLinearPlainListRequest
     const requestCacheGeneration = linearCacheGeneration
+    const requestMutationGeneration = linearMutationGeneration
     const promise: Promise<LinearCollectionResult<LinearIssue>> = linearListIssues(
       get().settings,
       filter,
@@ -844,7 +1032,12 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
         const data = result as LinearCollectionResult<LinearIssue>
         if (
           inflightListRequests.get(cacheKey) === entry &&
-          requestCacheGeneration === linearCacheGeneration
+          canWriteLinearReadResult(
+            contextKey,
+            requestCacheGeneration,
+            requestMutationGeneration,
+            get().settings
+          )
         ) {
           set((s) => ({
             linearListCache: evictStaleEntries({
@@ -857,7 +1050,15 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
       })
       .catch((error) => {
         console.warn('[linear] listLinearIssues failed:', error)
-        if (looksLikeAuthError(error)) {
+        if (
+          (isIntegrationCredentialDecryptionError(error) || looksLikeAuthError(error)) &&
+          canWriteLinearReadResult(
+            contextKey,
+            requestCacheGeneration,
+            requestMutationGeneration,
+            get().settings
+          )
+        ) {
           if (!shouldRefreshStatusAfterRead(workspaceId)) {
             void get().checkLinearConnection(true)
           }
@@ -871,13 +1072,24 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
         }
         if (
           shouldRefreshStatusAfterRead(workspaceId) &&
-          requestCacheGeneration === linearCacheGeneration
+          canWriteLinearReadResult(
+            contextKey,
+            requestCacheGeneration,
+            requestMutationGeneration,
+            get().settings
+          )
         ) {
           void get().checkLinearConnection(true)
         }
       })
 
-    entry = { promise, force: Boolean(options?.force), generation: requestCacheGeneration }
+    entry = {
+      promise,
+      force: Boolean(options?.force),
+      generation: requestCacheGeneration,
+      contextKey,
+      mutationGeneration: requestMutationGeneration
+    }
     inflightListRequests.set(cacheKey, entry)
     return promise
   },
@@ -888,6 +1100,7 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
   },
 
   listLinearTeams: async (workspaceId, options) => {
+    const contextKey = getProviderRuntimeContextKey(get().settings)
     const resolvedWorkspaceId = workspaceId ?? getSelectedWorkspaceId(get().linearStatus)
     const cacheKey = linearTeamsCacheKey(resolvedWorkspaceId)
     const cached = get().linearTeamCache[cacheKey]
@@ -896,18 +1109,29 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
     }
 
     const inflight = inflightTeamRequests.get(cacheKey)
-    if (inflight && (!options?.force || inflight.force)) {
+    if (
+      inflight &&
+      inflight.contextKey === contextKey &&
+      inflight.mutationGeneration === linearMutationGeneration &&
+      (!options?.force || inflight.force)
+    ) {
       return inflight.promise
     }
 
     let entry: InflightLinearTeamRequest
     const requestCacheGeneration = linearCacheGeneration
+    const requestMutationGeneration = linearMutationGeneration
     const promise = linearListTeams(get().settings, resolvedWorkspaceId)
       .then((teams) => {
         const data = teams as LinearTeam[]
         if (
           inflightTeamRequests.get(cacheKey) === entry &&
-          requestCacheGeneration === linearCacheGeneration
+          canWriteLinearReadResult(
+            contextKey,
+            requestCacheGeneration,
+            requestMutationGeneration,
+            get().settings
+          )
         ) {
           set((s) => ({
             linearTeamCache: evictStaleEntries({
@@ -920,7 +1144,15 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
       })
       .catch((error) => {
         console.warn('[linear] listLinearTeams failed:', error)
-        if (looksLikeAuthError(error)) {
+        if (
+          (isIntegrationCredentialDecryptionError(error) || looksLikeAuthError(error)) &&
+          canWriteLinearReadResult(
+            contextKey,
+            requestCacheGeneration,
+            requestMutationGeneration,
+            get().settings
+          )
+        ) {
           if (!shouldRefreshStatusAfterRead(resolvedWorkspaceId)) {
             void get().checkLinearConnection(true)
           }
@@ -934,13 +1166,24 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
         }
         if (
           shouldRefreshStatusAfterRead(resolvedWorkspaceId) &&
-          requestCacheGeneration === linearCacheGeneration
+          canWriteLinearReadResult(
+            contextKey,
+            requestCacheGeneration,
+            requestMutationGeneration,
+            get().settings
+          )
         ) {
           void get().checkLinearConnection(true)
         }
       })
 
-    entry = { promise, force: Boolean(options?.force), generation: requestCacheGeneration }
+    entry = {
+      promise,
+      force: Boolean(options?.force),
+      generation: requestCacheGeneration,
+      contextKey,
+      mutationGeneration: requestMutationGeneration
+    }
     inflightTeamRequests.set(cacheKey, entry)
     return promise
   },
@@ -952,6 +1195,7 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
   },
 
   listLinearProjects: async (query, limit = 20, workspaceId, options) => {
+    const contextKey = getProviderRuntimeContextKey(get().settings)
     const resolvedWorkspaceId = workspaceId ?? getSelectedWorkspaceId(get().linearStatus)
     const trimmed = query?.trim() || undefined
     const cacheKey = linearCollectionCacheKey(resolvedWorkspaceId, 'projects', trimmed, limit)
@@ -961,19 +1205,30 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
     }
 
     const inflight = inflightProjectRequests.get(cacheKey)
-    if (inflight && (!options?.force || inflight.force)) {
+    if (
+      inflight &&
+      inflight.contextKey === contextKey &&
+      inflight.mutationGeneration === linearMutationGeneration &&
+      (!options?.force || inflight.force)
+    ) {
       return inflight.promise
     }
 
     let entry: InflightLinearCollectionRequest<LinearProjectSummary>
     const requestCacheGeneration = linearCacheGeneration
+    const requestMutationGeneration = linearMutationGeneration
     const promise = linearListProjects(get().settings, trimmed, limit, resolvedWorkspaceId, {
       force: options?.force
     })
       .then((result) => {
         if (
           inflightProjectRequests.get(cacheKey) === entry &&
-          requestCacheGeneration === linearCacheGeneration
+          canWriteLinearReadResult(
+            contextKey,
+            requestCacheGeneration,
+            requestMutationGeneration,
+            get().settings
+          )
         ) {
           set((s) => ({
             linearProjectCache: evictStaleEntries({
@@ -986,8 +1241,16 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
       })
       .catch((error) => {
         console.warn('[linear] listLinearProjects failed:', error)
-        if (looksLikeAuthError(error)) {
-          set({ linearStatus: { connected: false, viewer: null } })
+        if (
+          (isIntegrationCredentialDecryptionError(error) || looksLikeAuthError(error)) &&
+          canWriteLinearReadResult(
+            contextKey,
+            requestCacheGeneration,
+            requestMutationGeneration,
+            get().settings
+          )
+        ) {
+          void get().checkLinearConnection(true)
         }
         const fallback =
           get().linearProjectCache[cacheKey]?.data ?? emptyLinearCollection<LinearProjectSummary>()
@@ -999,18 +1262,30 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
         }
         if (
           shouldRefreshStatusAfterRead(resolvedWorkspaceId) &&
-          requestCacheGeneration === linearCacheGeneration
+          canWriteLinearReadResult(
+            contextKey,
+            requestCacheGeneration,
+            requestMutationGeneration,
+            get().settings
+          )
         ) {
           void get().checkLinearConnection(true)
         }
       })
 
-    entry = { promise, force: Boolean(options?.force), generation: requestCacheGeneration }
+    entry = {
+      promise,
+      force: Boolean(options?.force),
+      generation: requestCacheGeneration,
+      contextKey,
+      mutationGeneration: requestMutationGeneration
+    }
     inflightProjectRequests.set(cacheKey, entry)
     return promise
   },
 
   fetchLinearProject: async (id, workspaceId, options) => {
+    const contextKey = getProviderRuntimeContextKey(get().settings)
     const cacheKey = linearCollectionCacheKey(workspaceId, 'project-detail', id)
     const cached = get().linearProjectDetailCache[cacheKey]
     if (!options?.force && isFresh(cached)) {
@@ -1018,16 +1293,31 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
     }
 
     const inflight = inflightProjectDetailRequests.get(cacheKey)
-    if (inflight && (!options?.force || inflight.force)) {
+    if (
+      inflight &&
+      inflight.contextKey === contextKey &&
+      inflight.mutationGeneration === linearMutationGeneration &&
+      (!options?.force || inflight.force)
+    ) {
       return inflight.promise
     }
 
     let entry: InflightLinearDetailRequest<LinearProjectDetail | null>
+    const requestCacheGeneration = linearCacheGeneration
+    const requestMutationGeneration = linearMutationGeneration
     const promise = linearGetProject(get().settings, id, workspaceId, {
       force: options?.force
     })
       .then((project) => {
-        if (inflightProjectDetailRequests.get(cacheKey) === entry) {
+        if (
+          inflightProjectDetailRequests.get(cacheKey) === entry &&
+          canWriteLinearReadResult(
+            contextKey,
+            requestCacheGeneration,
+            requestMutationGeneration,
+            get().settings
+          )
+        ) {
           set((s) => ({
             linearProjectDetailCache: evictStaleEntries({
               ...s.linearProjectDetailCache,
@@ -1039,8 +1329,16 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
       })
       .catch((error) => {
         console.warn('[linear] fetchLinearProject failed:', error)
-        if (looksLikeAuthError(error)) {
-          set({ linearStatus: { connected: false, viewer: null } })
+        if (
+          (isIntegrationCredentialDecryptionError(error) || looksLikeAuthError(error)) &&
+          canWriteLinearReadResult(
+            contextKey,
+            requestCacheGeneration,
+            requestMutationGeneration,
+            get().settings
+          )
+        ) {
+          void get().checkLinearConnection(true)
         }
         if (options?.force) {
           throw error
@@ -1057,12 +1355,18 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
         }
       })
 
-    entry = { promise, force: Boolean(options?.force) }
+    entry = {
+      promise,
+      force: Boolean(options?.force),
+      contextKey,
+      mutationGeneration: requestMutationGeneration
+    }
     inflightProjectDetailRequests.set(cacheKey, entry)
     return promise
   },
 
   listLinearProjectIssues: async (projectId, workspaceId, limit = 20, options) => {
+    const contextKey = getProviderRuntimeContextKey(get().settings)
     const effectiveLimit = clampLinearIssueListLimit(limit)
     const cacheKey = linearCollectionCacheKey(
       workspaceId,
@@ -1076,12 +1380,18 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
     }
 
     const inflight = inflightProjectIssueRequests.get(cacheKey)
-    if (inflight && (!options?.force || inflight.force)) {
+    if (
+      inflight &&
+      inflight.contextKey === contextKey &&
+      inflight.mutationGeneration === linearMutationGeneration &&
+      (!options?.force || inflight.force)
+    ) {
       return inflight.promise
     }
 
     let entry: InflightLinearCollectionRequest<LinearIssue>
     const requestCacheGeneration = linearCacheGeneration
+    const requestMutationGeneration = linearMutationGeneration
     const promise = linearListProjectIssues(
       get().settings,
       projectId,
@@ -1094,7 +1404,12 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
       .then((result) => {
         if (
           inflightProjectIssueRequests.get(cacheKey) === entry &&
-          requestCacheGeneration === linearCacheGeneration
+          canWriteLinearReadResult(
+            contextKey,
+            requestCacheGeneration,
+            requestMutationGeneration,
+            get().settings
+          )
         ) {
           set((s) => ({
             linearProjectIssueCache: evictStaleEntries({
@@ -1107,8 +1422,16 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
       })
       .catch((error) => {
         console.warn('[linear] listLinearProjectIssues failed:', error)
-        if (looksLikeAuthError(error)) {
-          set({ linearStatus: { connected: false, viewer: null } })
+        if (
+          (isIntegrationCredentialDecryptionError(error) || looksLikeAuthError(error)) &&
+          canWriteLinearReadResult(
+            contextKey,
+            requestCacheGeneration,
+            requestMutationGeneration,
+            get().settings
+          )
+        ) {
+          void get().checkLinearConnection(true)
         }
         const fallback =
           get().linearProjectIssueCache[cacheKey]?.data ??
@@ -1128,7 +1451,13 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
         }
       })
 
-    entry = { promise, force: Boolean(options?.force), generation: requestCacheGeneration }
+    entry = {
+      promise,
+      force: Boolean(options?.force),
+      generation: requestCacheGeneration,
+      contextKey,
+      mutationGeneration: requestMutationGeneration
+    }
     inflightProjectIssueRequests.set(cacheKey, entry)
     return promise
   },
@@ -1140,6 +1469,7 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
   },
 
   listLinearCustomViews: async (model, limit = 20, workspaceId, options) => {
+    const contextKey = getProviderRuntimeContextKey(get().settings)
     const resolvedWorkspaceId = workspaceId ?? getSelectedWorkspaceId(get().linearStatus)
     const cacheKey = linearCollectionCacheKey(resolvedWorkspaceId, 'custom-views', model, limit)
     const cached = get().linearCustomViewCache[cacheKey]
@@ -1148,19 +1478,30 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
     }
 
     const inflight = inflightCustomViewRequests.get(cacheKey)
-    if (inflight && (!options?.force || inflight.force)) {
+    if (
+      inflight &&
+      inflight.contextKey === contextKey &&
+      inflight.mutationGeneration === linearMutationGeneration &&
+      (!options?.force || inflight.force)
+    ) {
       return inflight.promise
     }
 
     let entry: InflightLinearCollectionRequest<LinearCustomViewSummary>
     const requestCacheGeneration = linearCacheGeneration
+    const requestMutationGeneration = linearMutationGeneration
     const promise = linearListCustomViews(get().settings, model, limit, resolvedWorkspaceId, {
       force: options?.force
     })
       .then((result) => {
         if (
           inflightCustomViewRequests.get(cacheKey) === entry &&
-          requestCacheGeneration === linearCacheGeneration
+          canWriteLinearReadResult(
+            contextKey,
+            requestCacheGeneration,
+            requestMutationGeneration,
+            get().settings
+          )
         ) {
           set((s) => ({
             linearCustomViewCache: evictStaleEntries({
@@ -1173,8 +1514,16 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
       })
       .catch((error) => {
         console.warn('[linear] listLinearCustomViews failed:', error)
-        if (looksLikeAuthError(error)) {
-          set({ linearStatus: { connected: false, viewer: null } })
+        if (
+          (isIntegrationCredentialDecryptionError(error) || looksLikeAuthError(error)) &&
+          canWriteLinearReadResult(
+            contextKey,
+            requestCacheGeneration,
+            requestMutationGeneration,
+            get().settings
+          )
+        ) {
+          void get().checkLinearConnection(true)
         }
         const fallback =
           get().linearCustomViewCache[cacheKey]?.data ??
@@ -1187,18 +1536,30 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
         }
         if (
           shouldRefreshStatusAfterRead(resolvedWorkspaceId) &&
-          requestCacheGeneration === linearCacheGeneration
+          canWriteLinearReadResult(
+            contextKey,
+            requestCacheGeneration,
+            requestMutationGeneration,
+            get().settings
+          )
         ) {
           void get().checkLinearConnection(true)
         }
       })
 
-    entry = { promise, force: Boolean(options?.force), generation: requestCacheGeneration }
+    entry = {
+      promise,
+      force: Boolean(options?.force),
+      generation: requestCacheGeneration,
+      contextKey,
+      mutationGeneration: requestMutationGeneration
+    }
     inflightCustomViewRequests.set(cacheKey, entry)
     return promise
   },
 
   fetchLinearCustomView: async (viewId, workspaceId, model, options) => {
+    const contextKey = getProviderRuntimeContextKey(get().settings)
     const cacheKey = linearCollectionCacheKey(workspaceId, 'custom-view-detail', model, viewId)
     const cached = get().linearCustomViewDetailCache[cacheKey]
     if (!options?.force && isFresh(cached)) {
@@ -1206,16 +1567,31 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
     }
 
     const inflight = inflightCustomViewDetailRequests.get(cacheKey)
-    if (inflight && (!options?.force || inflight.force)) {
+    if (
+      inflight &&
+      inflight.contextKey === contextKey &&
+      inflight.mutationGeneration === linearMutationGeneration &&
+      (!options?.force || inflight.force)
+    ) {
       return inflight.promise
     }
 
     let entry: InflightLinearDetailRequest<LinearCustomViewSummary | null>
+    const requestCacheGeneration = linearCacheGeneration
+    const requestMutationGeneration = linearMutationGeneration
     const promise = linearGetCustomView(get().settings, viewId, model, workspaceId, {
       force: options?.force
     })
       .then((view) => {
-        if (inflightCustomViewDetailRequests.get(cacheKey) === entry) {
+        if (
+          inflightCustomViewDetailRequests.get(cacheKey) === entry &&
+          canWriteLinearReadResult(
+            contextKey,
+            requestCacheGeneration,
+            requestMutationGeneration,
+            get().settings
+          )
+        ) {
           set((s) => ({
             linearCustomViewDetailCache: evictStaleEntries({
               ...s.linearCustomViewDetailCache,
@@ -1227,8 +1603,16 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
       })
       .catch((error) => {
         console.warn('[linear] fetchLinearCustomView failed:', error)
-        if (looksLikeAuthError(error)) {
-          set({ linearStatus: { connected: false, viewer: null } })
+        if (
+          (isIntegrationCredentialDecryptionError(error) || looksLikeAuthError(error)) &&
+          canWriteLinearReadResult(
+            contextKey,
+            requestCacheGeneration,
+            requestMutationGeneration,
+            get().settings
+          )
+        ) {
+          void get().checkLinearConnection(true)
         }
         if (options?.force) {
           throw error
@@ -1245,12 +1629,18 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
         }
       })
 
-    entry = { promise, force: Boolean(options?.force) }
+    entry = {
+      promise,
+      force: Boolean(options?.force),
+      contextKey,
+      mutationGeneration: requestMutationGeneration
+    }
     inflightCustomViewDetailRequests.set(cacheKey, entry)
     return promise
   },
 
   listLinearCustomViewIssues: async (viewId, workspaceId, limit = 20, options) => {
+    const contextKey = getProviderRuntimeContextKey(get().settings)
     const effectiveLimit = clampLinearIssueListLimit(limit)
     const cacheKey = linearCollectionCacheKey(
       workspaceId,
@@ -1264,12 +1654,18 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
     }
 
     const inflight = inflightCustomViewIssueRequests.get(cacheKey)
-    if (inflight && (!options?.force || inflight.force)) {
+    if (
+      inflight &&
+      inflight.contextKey === contextKey &&
+      inflight.mutationGeneration === linearMutationGeneration &&
+      (!options?.force || inflight.force)
+    ) {
       return inflight.promise
     }
 
     let entry: InflightLinearCollectionRequest<LinearIssue>
     const requestCacheGeneration = linearCacheGeneration
+    const requestMutationGeneration = linearMutationGeneration
     const promise = linearListCustomViewIssues(
       get().settings,
       viewId,
@@ -1282,7 +1678,12 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
       .then((result) => {
         if (
           inflightCustomViewIssueRequests.get(cacheKey) === entry &&
-          requestCacheGeneration === linearCacheGeneration
+          canWriteLinearReadResult(
+            contextKey,
+            requestCacheGeneration,
+            requestMutationGeneration,
+            get().settings
+          )
         ) {
           set((s) => ({
             linearCustomViewIssueCache: evictStaleEntries({
@@ -1295,8 +1696,16 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
       })
       .catch((error) => {
         console.warn('[linear] listLinearCustomViewIssues failed:', error)
-        if (looksLikeAuthError(error)) {
-          set({ linearStatus: { connected: false, viewer: null } })
+        if (
+          (isIntegrationCredentialDecryptionError(error) || looksLikeAuthError(error)) &&
+          canWriteLinearReadResult(
+            contextKey,
+            requestCacheGeneration,
+            requestMutationGeneration,
+            get().settings
+          )
+        ) {
+          void get().checkLinearConnection(true)
         }
         const fallback =
           get().linearCustomViewIssueCache[cacheKey]?.data ??
@@ -1316,12 +1725,19 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
         }
       })
 
-    entry = { promise, force: Boolean(options?.force), generation: requestCacheGeneration }
+    entry = {
+      promise,
+      force: Boolean(options?.force),
+      generation: requestCacheGeneration,
+      contextKey,
+      mutationGeneration: requestMutationGeneration
+    }
     inflightCustomViewIssueRequests.set(cacheKey, entry)
     return promise
   },
 
   listLinearCustomViewProjects: async (viewId, workspaceId, limit = 20, options) => {
+    const contextKey = getProviderRuntimeContextKey(get().settings)
     const cacheKey = linearCollectionCacheKey(workspaceId, 'custom-view-projects', viewId, limit)
     const cached = get().linearCustomViewProjectCache[cacheKey]
     if (!options?.force && isFresh(cached)) {
@@ -1329,19 +1745,30 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
     }
 
     const inflight = inflightCustomViewProjectRequests.get(cacheKey)
-    if (inflight && (!options?.force || inflight.force)) {
+    if (
+      inflight &&
+      inflight.contextKey === contextKey &&
+      inflight.mutationGeneration === linearMutationGeneration &&
+      (!options?.force || inflight.force)
+    ) {
       return inflight.promise
     }
 
     let entry: InflightLinearCollectionRequest<LinearProjectSummary>
     const requestCacheGeneration = linearCacheGeneration
+    const requestMutationGeneration = linearMutationGeneration
     const promise = linearListCustomViewProjects(get().settings, viewId, limit, workspaceId, {
       force: options?.force
     })
       .then((result) => {
         if (
           inflightCustomViewProjectRequests.get(cacheKey) === entry &&
-          requestCacheGeneration === linearCacheGeneration
+          canWriteLinearReadResult(
+            contextKey,
+            requestCacheGeneration,
+            requestMutationGeneration,
+            get().settings
+          )
         ) {
           set((s) => ({
             linearCustomViewProjectCache: evictStaleEntries({
@@ -1354,8 +1781,16 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
       })
       .catch((error) => {
         console.warn('[linear] listLinearCustomViewProjects failed:', error)
-        if (looksLikeAuthError(error)) {
-          set({ linearStatus: { connected: false, viewer: null } })
+        if (
+          (isIntegrationCredentialDecryptionError(error) || looksLikeAuthError(error)) &&
+          canWriteLinearReadResult(
+            contextKey,
+            requestCacheGeneration,
+            requestMutationGeneration,
+            get().settings
+          )
+        ) {
+          void get().checkLinearConnection(true)
         }
         const fallback =
           get().linearCustomViewProjectCache[cacheKey]?.data ??
@@ -1368,7 +1803,13 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
         }
       })
 
-    entry = { promise, force: Boolean(options?.force), generation: requestCacheGeneration }
+    entry = {
+      promise,
+      force: Boolean(options?.force),
+      generation: requestCacheGeneration,
+      contextKey,
+      mutationGeneration: requestMutationGeneration
+    }
     inflightCustomViewProjectRequests.set(cacheKey, entry)
     return promise
   },

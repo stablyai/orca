@@ -112,7 +112,7 @@ export default function ProjectCell({
       <TextCell
         value={text}
         editable={editable && !isRedacted}
-        placeholder={translate("auto.components.github.project.ProjectCell.9cb1a0c984", "Add text")}
+        placeholder={translate('auto.components.github.project.ProjectCell.9cb1a0c984', 'Add text')}
         onCommit={(next) => {
           if (next === '') {
             onEditField?.(field.id, null)
@@ -130,7 +130,10 @@ export default function ProjectCell({
         value={num}
         editable={editable && !isRedacted}
         numeric
-        placeholder={translate("auto.components.github.project.ProjectCell.bb7ebc11e3", "Add number")}
+        placeholder={translate(
+          'auto.components.github.project.ProjectCell.bb7ebc11e3',
+          'Add number'
+        )}
         onCommit={(next) => {
           if (next === '') {
             onEditField?.(field.id, null)
@@ -194,7 +197,9 @@ function TitleCell({
     return (
       <div className="flex items-center gap-2 text-muted-foreground">
         <Lock className="size-3.5" />
-        <span className="italic">{translate("auto.components.github.project.ProjectCell.af5d8c912a", "Restricted item")}</span>
+        <span className="italic">
+          {translate('auto.components.github.project.ProjectCell.af5d8c912a', 'Restricted item')}
+        </span>
       </div>
     )
   }
@@ -203,7 +208,7 @@ function TitleCell({
   // already read as issues), so it's omitted.
   const content = (
     <div className="flex min-w-0 items-center gap-2">
-      {row.itemType === "PULL_REQUEST" ? (
+      {row.itemType === 'PULL_REQUEST' ? (
         <GitPullRequest className="size-3.5 shrink-0 text-muted-foreground" />
       ) : null}
       {row.content.number != null ? (
@@ -245,10 +250,19 @@ function TypeCell({
   }
   const meta =
     row.itemType === 'PULL_REQUEST'
-      ? { Icon: GitPullRequest, label: translate("auto.components.github.project.ProjectCell.d0d0e13a5a", "PR") }
+      ? {
+          Icon: GitPullRequest,
+          label: translate('auto.components.github.project.ProjectCell.d0d0e13a5a', 'PR')
+        }
       : row.itemType === 'DRAFT_ISSUE'
-        ? { Icon: FileText, label: translate("auto.components.github.project.ProjectCell.6efdc0d920", "Draft") }
-        : { Icon: Lock, label: translate("auto.components.github.project.ProjectCell.8d669084f6", "Restricted") }
+        ? {
+            Icon: FileText,
+            label: translate('auto.components.github.project.ProjectCell.6efdc0d920', 'Draft')
+          }
+        : {
+            Icon: Lock,
+            label: translate('auto.components.github.project.ProjectCell.8d669084f6', 'Restricted')
+          }
   const { Icon, label } = meta
   return (
     <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
@@ -325,7 +339,9 @@ function IssueTypeCell({
           )
         })()
       ) : (
-        <span className="text-muted-foreground">{translate("auto.components.github.project.ProjectCell.c5f949e489", "Issue")}</span>
+        <span className="text-muted-foreground">
+          {translate('auto.components.github.project.ProjectCell.c5f949e489', 'Issue')}
+        </span>
       )}
     </span>
   )
@@ -339,7 +355,10 @@ function IssueTypeCell({
       <PopoverTrigger asChild>
         <button
           type="button"
-          aria-label={translate("auto.components.github.project.ProjectCell.c7b059cf07", "Issue type")}
+          aria-label={translate(
+            'auto.components.github.project.ProjectCell.c7b059cf07',
+            'Issue type'
+          )}
           className="flex h-full w-full cursor-pointer items-center px-1 text-left"
         >
           {trigger}
@@ -347,12 +366,23 @@ function IssueTypeCell({
       </PopoverTrigger>
       <PopoverContent className="w-64 p-1" align="start">
         {!owner || !repo ? (
-          <div className="px-2 py-1 text-xs text-muted-foreground">{translate("auto.components.github.project.ProjectCell.54cac64427", "Row has no repo slug.")}</div>
+          <div className="px-2 py-1 text-xs text-muted-foreground">
+            {translate(
+              'auto.components.github.project.ProjectCell.54cac64427',
+              'Row has no repo slug.'
+            )}
+          </div>
         ) : loading ? (
-          <div className="px-2 py-1 text-xs text-muted-foreground">{translate("auto.components.github.project.ProjectCell.2219e945ef", "Loading…")}</div>
+          <div className="px-2 py-1 text-xs text-muted-foreground">
+            {translate('auto.components.github.project.ProjectCell.2219e945ef', 'Loading…')}
+          </div>
         ) : options.length === 0 ? (
           <div className="px-2 py-1 text-xs text-muted-foreground">
-            {translate("auto.components.github.project.ProjectCell.943b3dadc9", "This repo has no Issue Types.")}</div>
+            {translate(
+              'auto.components.github.project.ProjectCell.943b3dadc9',
+              'This repo has no Issue Types.'
+            )}
+          </div>
         ) : (
           options.map((t) => (
             <button
@@ -388,7 +418,8 @@ function IssueTypeCell({
               setOpen(false)
             }}
           >
-            {translate("auto.components.github.project.ProjectCell.ebde486e3c", "Clear")}</button>
+            {translate('auto.components.github.project.ProjectCell.ebde486e3c', 'Clear')}
+          </button>
         ) : null}
       </PopoverContent>
     </Popover>
@@ -441,7 +472,11 @@ function SingleSelectCell({
           aria-label={field.name}
           className="flex h-full w-full cursor-pointer items-center px-1 text-left"
         >
-          {label ?? <EmptyCellPrompt label={translate("auto.components.github.project.ProjectCell.e369bf4fec", "Select")} />}
+          {label ?? (
+            <EmptyCellPrompt
+              label={translate('auto.components.github.project.ProjectCell.e369bf4fec', 'Select')}
+            />
+          )}
         </button>
       </PopoverTrigger>
       <PopoverContent className="w-56 p-1">
@@ -470,7 +505,8 @@ function SingleSelectCell({
             setOpen(false)
           }}
         >
-          {translate("auto.components.github.project.ProjectCell.ebde486e3c", "Clear")}</button>
+          {translate('auto.components.github.project.ProjectCell.ebde486e3c', 'Clear')}
+        </button>
       </PopoverContent>
     </Popover>
   )
@@ -509,13 +545,18 @@ function IterationCell({
           aria-label={field.name}
           className="flex h-full w-full cursor-pointer items-center px-1 text-left"
         >
-          {label ?? <EmptyCellPrompt label={translate("auto.components.github.project.ProjectCell.e369bf4fec", "Select")} />}
+          {label ?? (
+            <EmptyCellPrompt
+              label={translate('auto.components.github.project.ProjectCell.e369bf4fec', 'Select')}
+            />
+          )}
         </button>
       </PopoverTrigger>
       <PopoverContent className="w-64 p-1">
         {completed.length > 0 ? (
           <div className="px-2 pt-1 text-[10px] uppercase tracking-wide text-muted-foreground">
-            {translate("auto.components.github.project.ProjectCell.e17bb96881", "Completed")}</div>
+            {translate('auto.components.github.project.ProjectCell.e17bb96881', 'Completed')}
+          </div>
         ) : null}
         {completed.map((it) => (
           <IterationRow
@@ -529,7 +570,11 @@ function IterationCell({
         ))}
         {active.length > 0 ? (
           <div className="px-2 pt-1 text-[10px] uppercase tracking-wide text-muted-foreground">
-            {translate("auto.components.github.project.ProjectCell.191905e20e", "Current & upcoming")}</div>
+            {translate(
+              'auto.components.github.project.ProjectCell.191905e20e',
+              'Current & upcoming'
+            )}
+          </div>
         ) : null}
         {active.map((it) => (
           <IterationRow
@@ -549,7 +594,8 @@ function IterationCell({
             setOpen(false)
           }}
         >
-          {translate("auto.components.github.project.ProjectCell.ebde486e3c", "Clear")}</button>
+          {translate('auto.components.github.project.ProjectCell.ebde486e3c', 'Clear')}
+        </button>
       </PopoverContent>
     </Popover>
   )
@@ -776,19 +822,33 @@ function AssigneesCell({
       <PopoverTrigger asChild>
         <button
           type="button"
-          aria-label={translate("auto.components.github.project.ProjectCell.f7cdb78efb", "Assignees")}
+          aria-label={translate(
+            'auto.components.github.project.ProjectCell.f7cdb78efb',
+            'Assignees'
+          )}
           className={cn(
             'flex h-full w-full flex-wrap items-center gap-1 cursor-pointer px-1 text-xs text-muted-foreground hover:text-foreground'
           )}
         >
-          {labelContent ?? <EmptyCellPrompt label={translate("auto.components.github.project.ProjectCell.36341ffc66", "Assign")} />}
+          {labelContent ?? (
+            <EmptyCellPrompt
+              label={translate('auto.components.github.project.ProjectCell.36341ffc66', 'Assign')}
+            />
+          )}
         </button>
       </PopoverTrigger>
       <PopoverContent className="w-64 p-1">
         {!owner || !repo ? (
-          <div className="px-2 py-1 text-xs text-muted-foreground">{translate("auto.components.github.project.ProjectCell.54cac64427", "Row has no repo slug.")}</div>
+          <div className="px-2 py-1 text-xs text-muted-foreground">
+            {translate(
+              'auto.components.github.project.ProjectCell.54cac64427',
+              'Row has no repo slug.'
+            )}
+          </div>
         ) : metadata.loading ? (
-          <div className="px-2 py-1 text-xs text-muted-foreground">{translate("auto.components.github.project.ProjectCell.2219e945ef", "Loading…")}</div>
+          <div className="px-2 py-1 text-xs text-muted-foreground">
+            {translate('auto.components.github.project.ProjectCell.2219e945ef', 'Loading…')}
+          </div>
         ) : (
           metadata.data.map((u) => {
             const isOn = assignees.some((a) => a.login === u.login)
@@ -852,19 +912,38 @@ function LabelsCell({
       <PopoverTrigger asChild>
         <button
           type="button"
-          aria-label={translate("auto.components.github.project.ProjectCell.8ae56a88a6", "Labels")}
+          aria-label={translate('auto.components.github.project.ProjectCell.8ae56a88a6', 'Labels')}
           className={cn('flex h-full w-full flex-wrap items-center gap-1 cursor-pointer px-1')}
         >
-          {labelContent ?? <EmptyCellPrompt label={translate("auto.components.github.project.ProjectCell.2e26a06c70", "Add label")} />}
+          {labelContent ?? (
+            <EmptyCellPrompt
+              label={translate(
+                'auto.components.github.project.ProjectCell.2e26a06c70',
+                'Add label'
+              )}
+            />
+          )}
         </button>
       </PopoverTrigger>
       <PopoverContent className="w-64 p-1">
         {!owner || !repo ? (
-          <div className="px-2 py-1 text-xs text-muted-foreground">{translate("auto.components.github.project.ProjectCell.54cac64427", "Row has no repo slug.")}</div>
+          <div className="px-2 py-1 text-xs text-muted-foreground">
+            {translate(
+              'auto.components.github.project.ProjectCell.54cac64427',
+              'Row has no repo slug.'
+            )}
+          </div>
         ) : metadata.loading ? (
-          <div className="px-2 py-1 text-xs text-muted-foreground">{translate("auto.components.github.project.ProjectCell.2219e945ef", "Loading…")}</div>
+          <div className="px-2 py-1 text-xs text-muted-foreground">
+            {translate('auto.components.github.project.ProjectCell.2219e945ef', 'Loading…')}
+          </div>
         ) : metadata.data.length === 0 ? (
-          <div className="px-2 py-1 text-xs text-muted-foreground">{translate("auto.components.github.project.ProjectCell.4b5b871da8", "No labels in this repo.")}</div>
+          <div className="px-2 py-1 text-xs text-muted-foreground">
+            {translate(
+              'auto.components.github.project.ProjectCell.4b5b871da8',
+              'No labels in this repo.'
+            )}
+          </div>
         ) : (
           metadata.data.map((name) => {
             const isOn = labels.some((l) => l.name === name)

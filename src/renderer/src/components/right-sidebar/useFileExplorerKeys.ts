@@ -149,7 +149,14 @@ export function useFileExplorerKeys(opts: {
         e.preventDefault()
         const run = wantRedo ? redoFileExplorer() : undoFileExplorer()
         void run.catch((err: unknown) => {
-          toast.error(err instanceof Error ? err.message : translate("auto.components.right.sidebar.useFileExplorerKeys.8adb953095", "Operation failed"))
+          toast.error(
+            err instanceof Error
+              ? err.message
+              : translate(
+                  'auto.components.right.sidebar.useFileExplorerKeys.8adb953095',
+                  'Operation failed'
+                )
+          )
         })
         return
       }

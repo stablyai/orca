@@ -50,10 +50,18 @@ export function FileExplorerBackgroundMenu({
       >
         <DropdownMenuItem onSelect={() => onStartNew('file', worktreePath, 0)}>
           <FilePlus />
-          {translate("auto.components.right.sidebar.FileExplorerBackgroundMenu.21fe46ed36", "New File")}</DropdownMenuItem>
+          {translate(
+            'auto.components.right.sidebar.FileExplorerBackgroundMenu.21fe46ed36',
+            'New File'
+          )}
+        </DropdownMenuItem>
         <DropdownMenuItem onSelect={() => onStartNew('folder', worktreePath, 0)}>
           <FolderPlus />
-          {translate("auto.components.right.sidebar.FileExplorerBackgroundMenu.3b5e2dcb8d", "New Folder")}</DropdownMenuItem>
+          {translate(
+            'auto.components.right.sidebar.FileExplorerBackgroundMenu.3b5e2dcb8d',
+            'New Folder'
+          )}
+        </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   )

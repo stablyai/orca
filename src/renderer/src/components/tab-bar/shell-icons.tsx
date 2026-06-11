@@ -73,7 +73,8 @@ function WslIcon({ size = 14 }: { size?: number }): React.JSX.Element {
         fill="#1F1F1F"
         fontFamily="system-ui, -apple-system, sans-serif"
       >
-        {translate("auto.components.tab.bar.shell.icons.e9b2e70613", "WSL")}</text>
+        {translate('auto.components.tab.bar.shell.icons.e9b2e70613', 'WSL')}
+      </text>
     </svg>
   )
 }
@@ -97,7 +98,8 @@ function GitBashIcon({ size = 14 }: { size?: number }): React.JSX.Element {
         fill="#ffffff"
         fontFamily="system-ui, -apple-system, sans-serif"
       >
-        {translate("auto.components.tab.bar.shell.icons.d4ceaa227c", "Git")}</text>
+        {translate('auto.components.tab.bar.shell.icons.d4ceaa227c', 'Git')}
+      </text>
     </svg>
   )
 }

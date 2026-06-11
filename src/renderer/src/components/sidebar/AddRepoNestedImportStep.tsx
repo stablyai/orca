@@ -45,12 +45,24 @@ export function AddRepoNestedImportStep({
   return (
     <>
       <DialogHeader>
-        <DialogTitle>{translate("auto.components.sidebar.AddRepoNestedImportStep.8db50afe1a", "Import repositories from folder")}</DialogTitle>
+        <DialogTitle>
+          {translate(
+            'auto.components.sidebar.AddRepoNestedImportStep.8db50afe1a',
+            'Import repositories from folder'
+          )}
+        </DialogTitle>
         <div className="flex min-w-0 items-center gap-1.5">
           {scanInProgress ? <AddRepoNestedImportStopButton onStopScan={onStopScan} /> : null}
           <DialogDescription className="min-w-0 truncate">
-            {scanInProgress ? translate("auto.components.sidebar.AddRepoNestedImportStep.220dd32d83", "Scanning...") : null}
-            {translate("auto.components.sidebar.AddRepoNestedImportStep.4df0d08cc5", "Found")} {repoCountLabel} {translate("auto.components.sidebar.AddRepoNestedImportStep.5f857ba8e6", "in")}{' '}
+            {scanInProgress
+              ? translate(
+                  'auto.components.sidebar.AddRepoNestedImportStep.220dd32d83',
+                  'Scanning...'
+                )
+              : null}
+            {translate('auto.components.sidebar.AddRepoNestedImportStep.4df0d08cc5', 'Found')}{' '}
+            {repoCountLabel}{' '}
+            {translate('auto.components.sidebar.AddRepoNestedImportStep.5f857ba8e6', 'in')}{' '}
             <span className="font-mono text-[11px] text-foreground" title={scan.selectedPath}>
               {scan.selectedPath}
             </span>
@@ -75,26 +87,40 @@ export function AddRepoNestedImportStep({
           <div className="min-w-0 shrink-0 space-y-1">
             <div className="flex shrink-0 items-center gap-1">
               <Label htmlFor={groupNameInputId} className="text-[11px] text-muted-foreground">
-                {translate("auto.components.sidebar.AddRepoNestedImportStep.40199ef7b3", "Group name")}</Label>
+                {translate(
+                  'auto.components.sidebar.AddRepoNestedImportStep.40199ef7b3',
+                  'Group name'
+                )}
+              </Label>
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
                     type="button"
                     variant="ghost"
                     size="icon-xs"
-                    aria-label={translate("auto.components.sidebar.AddRepoNestedImportStep.787412361a", "What is a group name?")}
+                    aria-label={translate(
+                      'auto.components.sidebar.AddRepoNestedImportStep.787412361a',
+                      'What is a group name?'
+                    )}
                     className="size-5 text-muted-foreground hover:text-foreground"
                   >
                     <CircleHelp className="size-3.5" />
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent side="top" sideOffset={4} className="max-w-64">
-                  {translate("auto.components.sidebar.AddRepoNestedImportStep.b20bb7c24f", "Keeps these repos together in one group. Best for related repos like microservices.")}</TooltipContent>
+                  {translate(
+                    'auto.components.sidebar.AddRepoNestedImportStep.b20bb7c24f',
+                    'Keeps these repos together in one group. Best for related repos like microservices.'
+                  )}
+                </TooltipContent>
               </Tooltip>
             </div>
             <Input
               id={groupNameInputId}
-              aria-label={translate("auto.components.sidebar.AddRepoNestedImportStep.40199ef7b3", "Group name")}
+              aria-label={translate(
+                'auto.components.sidebar.AddRepoNestedImportStep.40199ef7b3',
+                'Group name'
+              )}
               value={groupName}
               onChange={(event) => onGroupNameChange(event.target.value)}
               disabled={isAdding || scanInProgress}
@@ -109,14 +135,23 @@ export function AddRepoNestedImportStep({
             disabled={isAdding || scanInProgress || selectedPaths.size === 0}
             variant={isFirstRepoImport ? 'default' : 'outline'}
           >
-            {isFirstRepoImport ? translate("auto.components.sidebar.AddRepoNestedImportStep.cf9d382ca1", "Import") : translate("auto.components.sidebar.AddRepoNestedImportStep.5b2e6fe3c8", "Import separately")}
+            {isFirstRepoImport
+              ? translate('auto.components.sidebar.AddRepoNestedImportStep.cf9d382ca1', 'Import')
+              : translate(
+                  'auto.components.sidebar.AddRepoNestedImportStep.5b2e6fe3c8',
+                  'Import separately'
+                )}
           </Button>
           {!isFirstRepoImport ? (
             <Button
               onClick={() => onImport('group')}
               disabled={isAdding || scanInProgress || selectedPaths.size === 0}
             >
-              {translate("auto.components.sidebar.AddRepoNestedImportStep.c157f31a95", "Import as group")}</Button>
+              {translate(
+                'auto.components.sidebar.AddRepoNestedImportStep.c157f31a95',
+                'Import as group'
+              )}
+            </Button>
           ) : null}
         </div>
       </div>
@@ -137,8 +172,14 @@ function AddRepoNestedImportStopButton({
           variant="ghost"
           size="icon-xs"
           className="group text-muted-foreground hover:bg-destructive/10 hover:text-destructive focus-visible:bg-destructive/10 focus-visible:text-destructive focus-visible:ring-destructive/40"
-          aria-label={translate("auto.components.sidebar.AddRepoNestedImportStep.2f8298f3c3", "Stop scan")}
-          title={translate("auto.components.sidebar.AddRepoNestedImportStep.a32bef9516", "Stop scanning")}
+          aria-label={translate(
+            'auto.components.sidebar.AddRepoNestedImportStep.2f8298f3c3',
+            'Stop scan'
+          )}
+          title={translate(
+            'auto.components.sidebar.AddRepoNestedImportStep.a32bef9516',
+            'Stop scanning'
+          )}
           onClick={onStopScan}
         >
           <Loader2 className="size-3.5 animate-spin text-annotation-highlight group-hover:hidden group-focus-visible:hidden" />
@@ -146,7 +187,11 @@ function AddRepoNestedImportStopButton({
         </Button>
       </TooltipTrigger>
       <TooltipContent side="top" sideOffset={4}>
-        {translate("auto.components.sidebar.AddRepoNestedImportStep.496f68cf8c", "Scanning repositories. Click to stop.")}</TooltipContent>
+        {translate(
+          'auto.components.sidebar.AddRepoNestedImportStep.496f68cf8c',
+          'Scanning repositories. Click to stop.'
+        )}
+      </TooltipContent>
     </Tooltip>
   )
 }

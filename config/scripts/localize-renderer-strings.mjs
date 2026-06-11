@@ -74,7 +74,9 @@ function editForCandidate(candidate, key, translation, sourceFile) {
 }
 
 function sourceKindForPath(filePath) {
-  return filePath.endsWith('.tsx') || filePath.endsWith('.jsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS
+  return filePath.endsWith('.tsx') || filePath.endsWith('.jsx')
+    ? ts.ScriptKind.TSX
+    : ts.ScriptKind.TS
 }
 
 function findNodeByRange(sourceFile, start, end) {
@@ -201,7 +203,9 @@ async function collectCandidateFiles(root) {
     for (const entry of entries) {
       const fullPath = path.join(dir, entry.name)
       if (entry.isDirectory()) {
-        if (!['.git', 'assets', 'dist', 'node_modules', 'out', '__snapshots__'].includes(entry.name)) {
+        if (
+          !['.git', 'assets', 'dist', 'node_modules', 'out', '__snapshots__'].includes(entry.name)
+        ) {
           stack.push(fullPath)
         }
         continue

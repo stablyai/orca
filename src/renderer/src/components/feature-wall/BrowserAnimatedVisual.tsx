@@ -129,9 +129,13 @@ const TERM_ENTRIES: readonly { entry: TermEntry; minPhase: Phase }[] = [
       kind: 'ok',
       html: (
         <>
-          {translate("auto.components.feature.wall.BrowserAnimatedVisual.4fa59ca545", "✓ Updated")}{' '}
+          {translate('auto.components.feature.wall.BrowserAnimatedVisual.4fa59ca545', '✓ Updated')}{' '}
           <code className="text-emerald-600 dark:text-emerald-400">
-            {translate("auto.components.feature.wall.BrowserAnimatedVisual.051c97d15a", ".pp-card[data-card=\"starter\"] .pp-cta")}</code>
+            {translate(
+              'auto.components.feature.wall.BrowserAnimatedVisual.051c97d15a',
+              '.pp-card[data-card="starter"] .pp-cta'
+            )}
+          </code>
         </>
       )
     },
@@ -152,7 +156,14 @@ const TERM_ENTRIES: readonly { entry: TermEntry; minPhase: Phase }[] = [
   {
     entry: {
       kind: 'ok',
-      html: <>{translate("auto.components.feature.wall.BrowserAnimatedVisual.eb88125c6f", "✓ Verified — Try free still works.")}</>
+      html: (
+        <>
+          {translate(
+            'auto.components.feature.wall.BrowserAnimatedVisual.eb88125c6f',
+            '✓ Verified — Try free still works.'
+          )}
+        </>
+      )
     },
     minPhase: 'verified'
   }
@@ -496,10 +507,20 @@ export function BrowserAnimatedVisual(props: {
                 <BrowserTab
                   minimized={terminalTabMinimized}
                   icon={<TerminalGlyph />}
-                  title={translate("auto.components.feature.wall.BrowserAnimatedVisual.04096318ab", "Terminal 1")}
+                  title={translate(
+                    'auto.components.feature.wall.BrowserAnimatedVisual.04096318ab',
+                    'Terminal 1'
+                  )}
                 />
                 {browserTabVisible ? (
-                  <BrowserTab incoming icon={<GlobeGlyph />} title={translate("auto.components.feature.wall.BrowserAnimatedVisual.7da6eed7bf", "localhost:3000")} />
+                  <BrowserTab
+                    incoming
+                    icon={<GlobeGlyph />}
+                    title={translate(
+                      'auto.components.feature.wall.BrowserAnimatedVisual.7da6eed7bf',
+                      'localhost:3000'
+                    )}
+                  />
                 ) : null}
                 <span
                   ref={newtabBtnRef}
@@ -539,7 +560,12 @@ export function BrowserAnimatedVisual(props: {
                   <span className="inline-flex size-[13px] items-center justify-center text-popover-foreground">
                     <GlobeGlyph />
                   </span>
-                  <span className="text-[11.5px] text-popover-foreground">{translate("auto.components.feature.wall.BrowserAnimatedVisual.0a2bd01c02", "New Browser Tab")}</span>
+                  <span className="text-[11.5px] text-popover-foreground">
+                    {translate(
+                      'auto.components.feature.wall.BrowserAnimatedVisual.0a2bd01c02',
+                      'New Browser Tab'
+                    )}
+                  </span>
                   <span className="font-mono text-[10.5px] text-muted-foreground">
                     {newBrowserShortcutLabel}
                   </span>
@@ -566,9 +592,22 @@ export function BrowserAnimatedVisual(props: {
                   </span>
                 ) : (
                   <>
-                    <span className="truncate text-foreground">{translate("auto.components.feature.wall.BrowserAnimatedVisual.7da6eed7bf", "localhost:3000")}</span>
+                    <span className="truncate text-foreground">
+                      {translate(
+                        'auto.components.feature.wall.BrowserAnimatedVisual.7da6eed7bf',
+                        'localhost:3000'
+                      )}
+                    </span>
                     <span className="truncate text-muted-foreground transition-colors duration-200">
-                      {showSignup ? translate("auto.components.feature.wall.BrowserAnimatedVisual.f39be6ca14", "/signup") : translate("auto.components.feature.wall.BrowserAnimatedVisual.73bbb46073", "/pricing")}
+                      {showSignup
+                        ? translate(
+                            'auto.components.feature.wall.BrowserAnimatedVisual.f39be6ca14',
+                            '/signup'
+                          )
+                        : translate(
+                            'auto.components.feature.wall.BrowserAnimatedVisual.73bbb46073',
+                            '/pricing'
+                          )}
                     </span>
                   </>
                 )}
@@ -612,7 +651,11 @@ export function BrowserAnimatedVisual(props: {
                   style={{ left: annotateAnchor.left, top: annotateAnchor.top, width: 188 }}
                 >
                   <span className="block w-full shrink-0 truncate font-mono text-[9.5px] leading-none text-muted-foreground">
-                    {translate("auto.components.feature.wall.BrowserAnimatedVisual.d8856b604a", "div.pricing-grid > div.card.starter:nth-of-type(1) > a.cta")}</span>
+                    {translate(
+                      'auto.components.feature.wall.BrowserAnimatedVisual.d8856b604a',
+                      'div.pricing-grid > div.card.starter:nth-of-type(1) > a.cta'
+                    )}
+                  </span>
                   <span aria-hidden className="h-px w-full shrink-0 bg-popover-foreground/10" />
                   <div className="min-h-[28px] flex-1 break-words font-sans text-[10px] leading-[1.35] text-popover-foreground">
                     {typedChars > 0 ? (
@@ -621,13 +664,21 @@ export function BrowserAnimatedVisual(props: {
                         <span className="ml-px inline-block h-2 w-px translate-y-[1px] bg-popover-foreground align-baseline" />
                       </>
                     ) : (
-                      <span className="text-muted-foreground">{translate("auto.components.feature.wall.BrowserAnimatedVisual.3d2352f94b", "Describe the change…")}</span>
+                      <span className="text-muted-foreground">
+                        {translate(
+                          'auto.components.feature.wall.BrowserAnimatedVisual.3d2352f94b',
+                          'Describe the change…'
+                        )}
+                      </span>
                     )}
                   </div>
                   <div className="flex justify-end">
                     <span
                       ref={sendBtnRef}
-                      aria-label={translate("auto.components.feature.wall.BrowserAnimatedVisual.0f8481e1a7", "Send to Claude")}
+                      aria-label={translate(
+                        'auto.components.feature.wall.BrowserAnimatedVisual.0f8481e1a7',
+                        'Send to Claude'
+                      )}
                       className={cn(
                         'inline-flex size-5 shrink-0 items-center justify-center rounded border border-border bg-muted text-foreground transition-[background-color,transform] duration-150',
                         sendPressed ? 'scale-[0.92] bg-foreground/[0.12]' : null
@@ -671,7 +722,12 @@ export function BrowserAnimatedVisual(props: {
           >
             <div className="flex h-5 shrink-0 items-center gap-1.5 border-b border-border bg-muted/40 px-2 text-[9.5px] font-medium text-foreground">
               <ClaudeIcon size={11} />
-              <span>{translate("auto.components.feature.wall.BrowserAnimatedVisual.6e4616d039", "Claude")}</span>
+              <span>
+                {translate(
+                  'auto.components.feature.wall.BrowserAnimatedVisual.6e4616d039',
+                  'Claude'
+                )}
+              </span>
             </div>
             <div className="flex flex-1 flex-col gap-1 px-2 py-2 leading-snug">
               {TERM_ENTRIES.map(({ entry, minPhase }, i) => (
@@ -683,7 +739,12 @@ export function BrowserAnimatedVisual(props: {
           </div>
         </div>
       </div>
-      <style>{translate("auto.components.feature.wall.BrowserAnimatedVisual.1bec24acc1", "@keyframes browserFlash { 0% { opacity: 0; } 20% { opacity: 0.85; } 100% { opacity: 0; } } @keyframes browserTabIn { from { opacity: 0; transform: translateY(-2px); } to { opacity: 1; transform: none; } } @keyframes browserViewIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }")}</style>
+      <style>
+        {translate(
+          'auto.components.feature.wall.BrowserAnimatedVisual.1bec24acc1',
+          '@keyframes browserFlash { 0% { opacity: 0; } 20% { opacity: 0.85; } 100% { opacity: 0; } } @keyframes browserTabIn { from { opacity: 0; transform: translateY(-2px); } to { opacity: 1; transform: none; } } @keyframes browserViewIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }'
+        )}
+      </style>
     </div>
   )
 }
@@ -734,7 +795,10 @@ function TermEntryView(props: { entry: TermEntry }): JSX.Element {
   if (entry.kind === 'prompt') {
     return (
       <span className="text-card-foreground">
-        <span className="text-muted-foreground">{translate("auto.components.feature.wall.BrowserAnimatedVisual.f2034c4930", ">")}</span> {entry.text}
+        <span className="text-muted-foreground">
+          {translate('auto.components.feature.wall.BrowserAnimatedVisual.f2034c4930', '>')}
+        </span>{' '}
+        {entry.text}
       </span>
     )
   }
@@ -742,7 +806,8 @@ function TermEntryView(props: { entry: TermEntry }): JSX.Element {
     return (
       <span className="inline-flex items-center gap-1.5 text-muted-foreground">
         <span className="size-1.5 animate-pulse rounded-full bg-emerald-500 dark:bg-emerald-400" />
-        {translate("auto.components.feature.wall.BrowserAnimatedVisual.0ce7c24b4d", "Working…")}</span>
+        {translate('auto.components.feature.wall.BrowserAnimatedVisual.0ce7c24b4d', 'Working…')}
+      </span>
     )
   }
   if (entry.kind === 'ok') {
@@ -783,20 +848,29 @@ function PricingView(props: {
 }): JSX.Element {
   return (
     <>
-      <div className="text-[15px] font-bold leading-tight">{translate("auto.components.feature.wall.BrowserAnimatedVisual.9e0f530390", "Pricing")}</div>
+      <div className="text-[15px] font-bold leading-tight">
+        {translate('auto.components.feature.wall.BrowserAnimatedVisual.9e0f530390', 'Pricing')}
+      </div>
       <div className="h-2 w-4/5 rounded bg-foreground/10" />
       <div className="mt-1 grid grid-cols-2 gap-2.5">
         <PricingCard
           cardRef={props.cardRef}
           ctaRef={props.ctaRef}
-          label={translate("auto.components.feature.wall.BrowserAnimatedVisual.59ae327405", "Starter")}
+          label={translate(
+            'auto.components.feature.wall.BrowserAnimatedVisual.59ae327405',
+            'Starter'
+          )}
           cta="Try free"
           target
           ringActive={props.ringStarter}
           ctaHighlighted={props.ctaHighlighted}
           ctaPressing={props.ctaPressing}
         />
-        <PricingCard label={translate("auto.components.feature.wall.BrowserAnimatedVisual.25f15c2219", "Pro")} cta="Get Pro" highlighted />
+        <PricingCard
+          label={translate('auto.components.feature.wall.BrowserAnimatedVisual.25f15c2219', 'Pro')}
+          cta="Get Pro"
+          highlighted
+        />
       </div>
     </>
   )
@@ -805,7 +879,12 @@ function PricingView(props: {
 function SignupView(): JSX.Element {
   return (
     <div className="flex animate-[browserViewIn_360ms_cubic-bezier(.2,.8,.2,1)_both] flex-col gap-3">
-      <div className="text-[15px] font-bold leading-tight">{translate("auto.components.feature.wall.BrowserAnimatedVisual.46df009982", "Start your free trial")}</div>
+      <div className="text-[15px] font-bold leading-tight">
+        {translate(
+          'auto.components.feature.wall.BrowserAnimatedVisual.46df009982',
+          'Start your free trial'
+        )}
+      </div>
       <div className="h-2 w-[70%] rounded bg-foreground/10" />
       <div className="-mt-1 h-2 w-[55%] rounded bg-foreground/10" />
     </div>

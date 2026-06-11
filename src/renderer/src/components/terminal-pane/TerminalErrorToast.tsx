@@ -56,16 +56,27 @@ export function TerminalErrorToast({
           {showDaemonRestart ? (
             <>
               {'\n'}
-              {translate("auto.components.terminal.pane.TerminalErrorToast.cc6d997c65", "Restart the terminal daemon from here to clear stale daemon state.")}</>
+              {translate(
+                'auto.components.terminal.pane.TerminalErrorToast.cc6d997c65',
+                'Restart the terminal daemon from here to clear stale daemon state.'
+              )}
+            </>
           ) : !ssh ? (
             <>
               {'\n'}
-              {translate("auto.components.terminal.pane.TerminalErrorToast.5c8ce20be6", "If this persists, please")}{' '}
+              {translate(
+                'auto.components.terminal.pane.TerminalErrorToast.5c8ce20be6',
+                'If this persists, please'
+              )}{' '}
               <a
                 href="https://github.com/stablyai/orca/issues"
                 style={{ color: '#fca5a5', textDecoration: 'underline' }}
               >
-                {translate("auto.components.terminal.pane.TerminalErrorToast.a7e2fd2699", "file an issue")}</a>
+                {translate(
+                  'auto.components.terminal.pane.TerminalErrorToast.a7e2fd2699',
+                  'file an issue'
+                )}
+              </a>
               .
             </>
           ) : null}
@@ -86,7 +97,11 @@ export function TerminalErrorToast({
               flexShrink: 0
             }}
           >
-            {translate("auto.components.terminal.pane.TerminalErrorToast.e4aa243f8c", "Restart daemon")}</button>
+            {translate(
+              'auto.components.terminal.pane.TerminalErrorToast.e4aa243f8c',
+              'Restart daemon'
+            )}
+          </button>
         ) : null}
         <button
           onClick={onDismiss}

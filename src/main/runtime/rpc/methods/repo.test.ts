@@ -33,6 +33,22 @@ describe('repo RPC methods', () => {
     })
   })
 
+  it('reports runtime Git availability without exposing command details', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      isGitAvailable: vi.fn().mockResolvedValue(true)
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: REPO_METHODS })
+
+    const response = await dispatcher.dispatch(makeRequest('repo.gitAvailable'))
+
+    expect(runtime.isGitAvailable).toHaveBeenCalled()
+    expect(response).toMatchObject({
+      ok: true,
+      result: { available: true }
+    })
+  })
+
   it('clones a repo on the runtime server', async () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',

@@ -12,6 +12,7 @@ import type {
   LinearTeam,
   LinearViewer
 } from '../../../../shared/types'
+import { credentialDecryptionMessage } from '../../../../shared/integration-credential-errors'
 import { createLinearSlice } from './linear'
 
 const linearStatus = vi.fn()
@@ -195,6 +196,45 @@ describe('createLinearSlice caching', () => {
     ).resolves.toMatchObject({ items: [{ id: 'LIN-CACHED' }] })
   })
 
+  it('returns an empty list and refreshes status on Linear decrypt errors during list reads', async () => {
+    const store = createTestStore()
+    const error = new Error(credentialDecryptionMessage('Linear'))
+    store.setState({
+      linearStatus: { connected: true, viewer: null, selectedWorkspaceId: 'workspace-1' },
+      linearListCache: {
+        'workspace-1::list::all::36': { data: { items: [issue('LIN-CACHED')] }, fetchedAt: 1 }
+      }
+    })
+    linearStatus.mockResolvedValue({
+      connected: true,
+      viewer: null,
+      credentialError: error.message
+    })
+    linearListIssues.mockRejectedValueOnce(error)
+
+    await expect(
+      store.getState().listLinearIssues('all', 36, { force: true })
+    ).resolves.toMatchObject({ items: [] })
+    expect(linearStatus).toHaveBeenCalled()
+  })
+
+  it('returns an empty list and refreshes status on Linear decrypt errors during searches', async () => {
+    const store = createTestStore()
+    const error = new Error(credentialDecryptionMessage('Linear'))
+    store.setState({
+      linearStatus: { connected: true, viewer: null, selectedWorkspaceId: 'workspace-1' }
+    })
+    linearStatus.mockResolvedValue({
+      connected: true,
+      viewer: null,
+      credentialError: error.message
+    })
+    linearSearchIssues.mockRejectedValueOnce(error)
+
+    await expect(store.getState().searchLinearIssues('bug', 36)).resolves.toEqual([])
+    expect(linearStatus).toHaveBeenCalled()
+  })
+
   it('surfaces scoped project issue failures alongside cached rows', async () => {
     const store = createTestStore()
     store.setState({
@@ -214,6 +254,33 @@ describe('createLinearSlice caching', () => {
       errors: [{ workspaceId: 'workspace-1', type: 'unknown', message: 'network down' }]
     })
     expect(linearListProjectIssues.mock.calls[0][4]).toEqual({ force: true })
+  })
+
+  it('surfaces Linear decrypt errors as workspace errors on project issue reads', async () => {
+    const store = createTestStore()
+    const error = new Error(credentialDecryptionMessage('Linear'))
+    store.setState({
+      linearProjectIssueCache: {
+        'workspace-1::project-issues::project-1::20': {
+          data: { items: [issue('LIN-CACHED')] },
+          fetchedAt: 1
+        }
+      }
+    })
+    linearStatus.mockResolvedValue({
+      connected: true,
+      viewer: null,
+      credentialError: error.message
+    })
+    linearListProjectIssues.mockRejectedValueOnce(error)
+
+    await expect(
+      store.getState().listLinearProjectIssues('project-1', 'workspace-1', 20, { force: true })
+    ).resolves.toMatchObject({
+      items: [{ id: 'LIN-CACHED' }],
+      errors: [{ message: error.message }]
+    })
+    expect(linearStatus).toHaveBeenCalled()
   })
 
   it('falls back to the largest smaller cached project issue limit when expansion fails', async () => {
@@ -690,6 +757,61 @@ describe('createLinearSlice', () => {
     expect(store.getState().linearStatus.viewer?.email).toBe('test@example.com')
   })
 
+  it('ignores stale status responses after the active runtime changes', async () => {
+    const localStatus = deferred<LinearConnectionStatus>()
+    const remoteStatus = deferred<LinearConnectionStatus>()
+    const localViewer = {
+      displayName: 'Local User',
+      email: 'local@example.com',
+      organizationName: 'Local Org'
+    }
+    const remoteViewer = {
+      displayName: 'Remote User',
+      email: 'remote@example.com',
+      organizationName: 'Remote Org'
+    }
+    linearStatus.mockReturnValueOnce(localStatus.promise).mockReturnValueOnce(remoteStatus.promise)
+    const store = createTestStore()
+
+    const localRequest = store.getState().checkLinearConnection()
+    store.setState({ settings: { activeRuntimeEnvironmentId: 'runtime-1' } as never })
+    const remoteRequest = store.getState().checkLinearConnection()
+
+    remoteStatus.resolve({ connected: true, viewer: remoteViewer })
+    await remoteRequest
+    expect(store.getState().linearStatus.viewer?.email).toBe('remote@example.com')
+    expect(store.getState().linearStatusContextKey).toBe('runtime:runtime-1#0')
+
+    localStatus.resolve({ connected: true, viewer: localViewer })
+    await localRequest
+    expect(store.getState().linearStatus.viewer?.email).toBe('remote@example.com')
+    expect(store.getState().linearStatusContextKey).toBe('runtime:runtime-1#0')
+  })
+
+  it('ignores stale list cache writes after the active runtime changes', async () => {
+    const localList = deferred<LinearCollectionResult<LinearIssue>>()
+    const remoteList = deferred<LinearCollectionResult<LinearIssue>>()
+    linearListIssues.mockReturnValueOnce(localList.promise).mockReturnValueOnce(remoteList.promise)
+    const store = createTestStore()
+    store.setState({ linearStatus: { connected: true, viewer: null } })
+
+    const localRequest = store.getState().listLinearIssues('assigned', 20)
+    store.setState({ settings: { activeRuntimeEnvironmentId: 'runtime-1' } as never })
+    const remoteRequest = store.getState().listLinearIssues('assigned', 20)
+
+    remoteList.resolve({ items: [issue('LIN-REMOTE')] })
+    await remoteRequest
+    expect(
+      store.getState().getCachedLinearIssues({ kind: 'list', filter: 'assigned', limit: 20 })
+    ).toMatchObject({ items: [{ id: 'LIN-REMOTE' }] })
+
+    localList.resolve({ items: [issue('LIN-LOCAL')] })
+    await localRequest
+    expect(
+      store.getState().getCachedLinearIssues({ kind: 'list', filter: 'assigned', limit: 20 })
+    ).toMatchObject({ items: [{ id: 'LIN-REMOTE' }] })
+  })
+
   it('ignores stale status checks after a successful connect', async () => {
     const staleMountCheck = deferred<LinearConnectionStatus>()
     const freshConnectCheck = deferred<LinearConnectionStatus>()
@@ -718,6 +840,29 @@ describe('createLinearSlice', () => {
 
     expect(store.getState().linearStatus.connected).toBe(true)
     expect(store.getState().linearStatus.viewer?.email).toBe('test@example.com')
+  })
+
+  it('ignores stale connect results after the active runtime changes', async () => {
+    const connectResult = deferred<{ ok: true; viewer: LinearViewer }>()
+    const viewer = {
+      displayName: 'Local User',
+      email: 'local@example.com',
+      organizationName: 'Local Org'
+    }
+    linearConnect.mockReturnValueOnce(connectResult.promise)
+    const store = createTestStore()
+
+    const connectPromise = store.getState().connectLinear('linear-key')
+    store.setState({ settings: { activeRuntimeEnvironmentId: 'runtime-1' } as never })
+
+    connectResult.resolve({ ok: true, viewer })
+    await expect(connectPromise).resolves.toEqual({
+      ok: false,
+      error: 'Linear connection was superseded by a newer request.'
+    })
+
+    expect(store.getState().linearStatus.connected).toBe(false)
+    expect(store.getState().linearStatusContextKey).toBeNull()
   })
 
   it('does not let a background status refresh cancel an in-flight connect', async () => {

@@ -23,11 +23,23 @@ export function DeleteWorktreeLineageNotice({
       <div className="flex items-start gap-2">
         <Workflow className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
         <div className="min-w-0 flex-1">
-          <div className="font-medium text-foreground">{translate("auto.components.sidebar.DeleteWorktreeLineageNotice.a940f3c96e", "Child workspaces will be deleted")}</div>
+          <div className="font-medium text-foreground">
+            {translate(
+              'auto.components.sidebar.DeleteWorktreeLineageNotice.a940f3c96e',
+              'Child workspaces will be deleted'
+            )}
+          </div>
           <div className="mt-1 text-muted-foreground">
             {childWorkspaceCount === 1
-              ? translate("auto.components.sidebar.DeleteWorktreeLineageNotice.66798cc6a2", "Deleting this workspace also deletes 1 child workspace.")
-              : translate("auto.components.sidebar.DeleteWorktreeLineageNotice.29b98bf9cd", "Deleting this workspace also deletes {{value0}} child workspaces.", { value0: childWorkspaceCount })}
+              ? translate(
+                  'auto.components.sidebar.DeleteWorktreeLineageNotice.66798cc6a2',
+                  'Deleting this workspace also deletes 1 child workspace.'
+                )
+              : translate(
+                  'auto.components.sidebar.DeleteWorktreeLineageNotice.29b98bf9cd',
+                  'Deleting this workspace also deletes {{value0}} child workspaces.',
+                  { value0: childWorkspaceCount }
+                )}
           </div>
           {/* Why: long nowrap paths can otherwise give this grid child an
              intrinsic width wider than the modal. */}
@@ -42,7 +54,13 @@ export function DeleteWorktreeLineageNotice({
               </div>
             ))}
             {descendants.length > 4 ? (
-              <div className="text-muted-foreground">+{descendants.length - 4} {translate("auto.components.sidebar.DeleteWorktreeLineageNotice.ad407c2d55", "more")}</div>
+              <div className="text-muted-foreground">
+                +{descendants.length - 4}{' '}
+                {translate(
+                  'auto.components.sidebar.DeleteWorktreeLineageNotice.ad407c2d55',
+                  'more'
+                )}
+              </div>
             ) : null}
           </div>
         </div>

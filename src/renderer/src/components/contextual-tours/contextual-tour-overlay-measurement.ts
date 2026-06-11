@@ -118,7 +118,13 @@ export function measureContextualTourOverlayRenderState(args: {
   const sidebarAlreadyVisible =
     activeStep.primaryAction?.kind === 'show-worktrees' && args.sidebarOpen
   const primaryAction = sidebarAlreadyVisible
-    ? ({ kind: 'next', label: translate("auto.components.contextual.tours.contextual.tour.overlay.measurement.38b3155418", "Next") } as const)
+    ? ({
+        kind: 'next',
+        label: translate(
+          'auto.components.contextual.tours.contextual.tour.overlay.measurement.38b3155418',
+          'Next'
+        )
+      } as const)
     : activeStep.primaryAction
   const secondaryAction = sidebarAlreadyVisible ? undefined : activeStep.secondaryAction
 

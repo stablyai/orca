@@ -144,7 +144,15 @@ export async function runSleepWorktrees(worktreeIds: readonly string[]): Promise
     // otherwise continue — the active-worktree reset already happened so we
     // don't leave the UI in a stale state.
     toast.error(
-      worktreeIds.length === 1 ? translate("auto.components.sidebar.sleep.worktree.flow.8bc3fc0671", "Failed to sleep workspace") : translate("auto.components.sidebar.sleep.worktree.flow.c460fecc4a", "Failed to sleep some workspaces"),
+      worktreeIds.length === 1
+        ? translate(
+            'auto.components.sidebar.sleep.worktree.flow.8bc3fc0671',
+            'Failed to sleep workspace'
+          )
+        : translate(
+            'auto.components.sidebar.sleep.worktree.flow.c460fecc4a',
+            'Failed to sleep some workspaces'
+          ),
       {
         description: errors.join('\n')
       }

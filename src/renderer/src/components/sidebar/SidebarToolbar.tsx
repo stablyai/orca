@@ -22,11 +22,17 @@ const SidebarToolbar = React.memo(function SidebarToolbar() {
               className="gap-1.5 text-muted-foreground"
             >
               <FolderPlus className="size-3.5" />
-              <span className="text-[11px]">{translate("auto.components.sidebar.SidebarToolbar.abc62b6328", "Add Project")}</span>
+              <span className="text-[11px]">
+                {translate('auto.components.sidebar.SidebarToolbar.abc62b6328', 'Add Project')}
+              </span>
             </Button>
           </TooltipTrigger>
           <TooltipContent side="top" sideOffset={4}>
-            {translate("auto.components.sidebar.SidebarToolbar.19e32d0e5f", "Open folder picker to add a project")}</TooltipContent>
+            {translate(
+              'auto.components.sidebar.SidebarToolbar.19e32d0e5f',
+              'Open folder picker to add a project'
+            )}
+          </TooltipContent>
         </Tooltip>
         <div className="flex items-center gap-1">
           <ScrollToCurrentWorkspaceToolbarButton />

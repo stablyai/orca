@@ -911,7 +911,13 @@ export function getActivityThreadGroup(
   if (groupBy === 'project') {
     return thread.repo
       ? { key: `project:${thread.repo.id}`, label: thread.repo.displayName }
-      : { key: 'project:unknown', label: translate("auto.components.activity.ActivityPrototypePage.5651b216c6", "Unknown project") }
+      : {
+          key: 'project:unknown',
+          label: translate(
+            'auto.components.activity.ActivityPrototypePage.5651b216c6',
+            'Unknown project'
+          )
+        }
   }
   if (groupBy === 'worktree') {
     return { key: `worktree:${thread.worktree.id}`, label: thread.worktree.displayName }
@@ -1162,7 +1168,10 @@ function ThreadRow({
             {thread.unread ? (
               <FilledBellIcon
                 className="size-[13px] shrink-0 text-amber-500 drop-shadow-sm"
-                aria-label={translate("auto.components.activity.ActivityPrototypePage.beb2c19173", "Unread")}
+                aria-label={translate(
+                  'auto.components.activity.ActivityPrototypePage.beb2c19173',
+                  'Unread'
+                )}
               />
             ) : (
               <Tooltip>
@@ -1179,12 +1188,20 @@ function ThreadRow({
                       'hover:bg-accent/80 active:scale-95',
                       'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring'
                     )}
-                    aria-label={translate("auto.components.activity.ActivityPrototypePage.59b131fbd9", "Mark thread unread")}
+                    aria-label={translate(
+                      'auto.components.activity.ActivityPrototypePage.59b131fbd9',
+                      'Mark thread unread'
+                    )}
                   >
                     <Bell className="size-3 text-muted-foreground/40 opacity-0 transition-opacity group-hover:opacity-100 group-hover/unread:opacity-100" />
                   </button>
                 </TooltipTrigger>
-                <TooltipContent side="left">{translate("auto.components.activity.ActivityPrototypePage.59b131fbd9", "Mark thread unread")}</TooltipContent>
+                <TooltipContent side="left">
+                  {translate(
+                    'auto.components.activity.ActivityPrototypePage.59b131fbd9',
+                    'Mark thread unread'
+                  )}
+                </TooltipContent>
               </Tooltip>
             )}
           </span>
@@ -1216,7 +1233,10 @@ function ThreadRow({
                   type="button"
                   variant="outline"
                   size="icon-xs"
-                  aria-label={translate("auto.components.activity.ActivityPrototypePage.4616ea39fd", "Jump to workspace")}
+                  aria-label={translate(
+                    'auto.components.activity.ActivityPrototypePage.4616ea39fd',
+                    'Jump to workspace'
+                  )}
                   onClick={(event) => {
                     event.stopPropagation()
                     onJump()
@@ -1226,7 +1246,12 @@ function ThreadRow({
                   <ExternalLink className="size-3" />
                 </Button>
               </TooltipTrigger>
-              <TooltipContent side="left">{translate("auto.components.activity.ActivityPrototypePage.4616ea39fd", "Jump to workspace")}</TooltipContent>
+              <TooltipContent side="left">
+                {translate(
+                  'auto.components.activity.ActivityPrototypePage.4616ea39fd',
+                  'Jump to workspace'
+                )}
+              </TooltipContent>
             </Tooltip>
           </span>
         ) : null}
@@ -1615,7 +1640,10 @@ export default function ActivityPrototypePage(): React.JSX.Element {
                 <Input
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
-                  placeholder={translate("auto.components.activity.ActivityPrototypePage.795cbf26e2", "Filter...")}
+                  placeholder={translate(
+                    'auto.components.activity.ActivityPrototypePage.795cbf26e2',
+                    'Filter...'
+                  )}
                   className="h-8 w-full pl-7 text-xs"
                 />
               </div>
@@ -1626,15 +1654,38 @@ export default function ActivityPrototypePage(): React.JSX.Element {
                 <SelectTrigger
                   size="sm"
                   className="h-8 w-[128px] shrink-0 px-2 text-xs"
-                  aria-label={translate("auto.components.activity.ActivityPrototypePage.770d458144", "Group agent activity by")}
+                  aria-label={translate(
+                    'auto.components.activity.ActivityPrototypePage.770d458144',
+                    'Group agent activity by'
+                  )}
                 >
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent align="end">
-                  <SelectItem value="status">{translate("auto.components.activity.ActivityPrototypePage.4a3986b200", "Status")}</SelectItem>
-                  <SelectItem value="project">{translate("auto.components.activity.ActivityPrototypePage.8c3b621ddf", "Project")}</SelectItem>
-                  <SelectItem value="worktree">{translate("auto.components.activity.ActivityPrototypePage.b29191b3e0", "Worktree")}</SelectItem>
-                  <SelectItem value="agent">{translate("auto.components.activity.ActivityPrototypePage.f6396e1f85", "Agent")}</SelectItem>
+                  <SelectItem value="status">
+                    {translate(
+                      'auto.components.activity.ActivityPrototypePage.4a3986b200',
+                      'Status'
+                    )}
+                  </SelectItem>
+                  <SelectItem value="project">
+                    {translate(
+                      'auto.components.activity.ActivityPrototypePage.8c3b621ddf',
+                      'Project'
+                    )}
+                  </SelectItem>
+                  <SelectItem value="worktree">
+                    {translate(
+                      'auto.components.activity.ActivityPrototypePage.b29191b3e0',
+                      'Worktree'
+                    )}
+                  </SelectItem>
+                  <SelectItem value="agent">
+                    {translate(
+                      'auto.components.activity.ActivityPrototypePage.f6396e1f85',
+                      'Agent'
+                    )}
+                  </SelectItem>
                 </SelectContent>
               </Select>
               <Tooltip>
@@ -1650,12 +1701,20 @@ export default function ActivityPrototypePage(): React.JSX.Element {
                         ? '!border-primary !bg-primary !text-primary-foreground shadow-xs ring-2 ring-primary/35 hover:!bg-primary/90 hover:!text-primary-foreground'
                         : 'text-muted-foreground hover:text-foreground'
                     )}
-                    aria-label={translate("auto.components.activity.ActivityPrototypePage.d1a88df9a8", "Show unread threads only")}
+                    aria-label={translate(
+                      'auto.components.activity.ActivityPrototypePage.d1a88df9a8',
+                      'Show unread threads only'
+                    )}
                   >
                     <BellDot className="size-3.5" />
                   </Toggle>
                 </TooltipTrigger>
-                <TooltipContent side="bottom">{translate("auto.components.activity.ActivityPrototypePage.d1a88df9a8", "Show unread threads only")}</TooltipContent>
+                <TooltipContent side="bottom">
+                  {translate(
+                    'auto.components.activity.ActivityPrototypePage.d1a88df9a8',
+                    'Show unread threads only'
+                  )}
+                </TooltipContent>
               </Tooltip>
               {/* Why (overflow menu): "Mark all read" is a low-frequency,
                   destructive-feeling action — parking it behind a `…` keeps
@@ -1671,13 +1730,21 @@ export default function ActivityPrototypePage(): React.JSX.Element {
                         variant="outline"
                         size="sm"
                         className="size-8 shrink-0 border-input bg-transparent p-0 text-muted-foreground shadow-xs hover:bg-accent hover:text-accent-foreground dark:bg-transparent dark:hover:bg-accent dark:hover:text-accent-foreground"
-                        aria-label={translate("auto.components.activity.ActivityPrototypePage.db8a1878b5", "Thread list options")}
+                        aria-label={translate(
+                          'auto.components.activity.ActivityPrototypePage.db8a1878b5',
+                          'Thread list options'
+                        )}
                       >
                         <MoreVertical className="size-3.5" />
                       </Button>
                     </DropdownMenuTrigger>
                   </TooltipTrigger>
-                  <TooltipContent side="bottom">{translate("auto.components.activity.ActivityPrototypePage.a472a14700", "More options")}</TooltipContent>
+                  <TooltipContent side="bottom">
+                    {translate(
+                      'auto.components.activity.ActivityPrototypePage.a472a14700',
+                      'More options'
+                    )}
+                  </TooltipContent>
                 </Tooltip>
                 <DropdownMenuContent align="end" sideOffset={6}>
                   <DropdownMenuCheckboxItem
@@ -1685,20 +1752,35 @@ export default function ActivityPrototypePage(): React.JSX.Element {
                     onCheckedChange={(checked) => setCompactMode(checked === true)}
                     onSelect={(event) => event.preventDefault()}
                   >
-                    {translate("auto.components.activity.ActivityPrototypePage.f70e4bec47", "Compact mode")}</DropdownMenuCheckboxItem>
+                    {translate(
+                      'auto.components.activity.ActivityPrototypePage.f70e4bec47',
+                      'Compact mode'
+                    )}
+                  </DropdownMenuCheckboxItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem
                     onSelect={() => markAllThreadsRead()}
                     disabled={!hasUnreadThreads}
                   >
-                    {translate("auto.components.activity.ActivityPrototypePage.023ff75afe", "Mark all read")}</DropdownMenuItem>
+                    {translate(
+                      'auto.components.activity.ActivityPrototypePage.023ff75afe',
+                      'Mark all read'
+                    )}
+                  </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
           </div>
           <div className="min-h-0 flex-1 overflow-auto scrollbar-sleek">
             {visibleThreadGroups.map((group) => (
-              <section key={group.key} aria-label={translate("auto.components.activity.ActivityPrototypePage.a2b4437bfb", "{{value0}} activity", { value0: group.label })}>
+              <section
+                key={group.key}
+                aria-label={translate(
+                  'auto.components.activity.ActivityPrototypePage.a2b4437bfb',
+                  '{{value0}} activity',
+                  { value0: group.label }
+                )}
+              >
                 <ActivityStatusGroupHeader group={group} />
                 {group.threads.map((thread) => (
                   <ThreadRow
@@ -1716,12 +1798,22 @@ export default function ActivityPrototypePage(): React.JSX.Element {
             ))}
             {visibleThreads.length === 0 ? (
               <div className="px-3 py-8 text-sm text-muted-foreground">
-                {translate("auto.components.activity.ActivityPrototypePage.7cd632006b", "No agent activity matches these filters.")}</div>
+                {translate(
+                  'auto.components.activity.ActivityPrototypePage.7cd632006b',
+                  'No agent activity matches these filters.'
+                )}
+              </div>
             ) : null}
           </div>
           <div
-            aria-label={translate("auto.components.activity.ActivityPrototypePage.443690186e", "Resize activity thread list")}
-            title={translate("auto.components.activity.ActivityPrototypePage.866083500b", "Drag to resize")}
+            aria-label={translate(
+              'auto.components.activity.ActivityPrototypePage.443690186e',
+              'Resize activity thread list'
+            )}
+            title={translate(
+              'auto.components.activity.ActivityPrototypePage.866083500b',
+              'Drag to resize'
+            )}
             className={cn(
               'group absolute -right-1.5 top-0 z-20 flex h-full w-3 cursor-col-resize items-stretch justify-center',
               isThreadListResizing && 'bg-ring/10'
@@ -1778,8 +1870,14 @@ export default function ActivityPrototypePage(): React.JSX.Element {
                     <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-2 p-4 text-sm text-muted-foreground">
                       <TerminalSquare className="size-7" />
                       {storeData.worktreeMap.has(selectedThread.worktree.id)
-                        ? translate("auto.components.activity.ActivityPrototypePage.afdc2139a8", "Agent terminal closed. Open a new terminal in this workspace to continue.")
-                        : translate("auto.components.activity.ActivityPrototypePage.22b22034bc", "Standalone terminal unavailable in Activity.")}
+                        ? translate(
+                            'auto.components.activity.ActivityPrototypePage.afdc2139a8',
+                            'Agent terminal closed. Open a new terminal in this workspace to continue.'
+                          )
+                        : translate(
+                            'auto.components.activity.ActivityPrototypePage.22b22034bc',
+                            'Standalone terminal unavailable in Activity.'
+                          )}
                     </div>
                   )
                 }
@@ -1815,12 +1913,22 @@ export default function ActivityPrototypePage(): React.JSX.Element {
                         {visiblePortalUnavailable ? (
                           <div className="ml-3 mt-3 inline-flex items-center gap-2 rounded-md border border-border bg-background/85 px-2 py-1 text-xs text-muted-foreground shadow-xs">
                             <span className="h-3 w-1.5 rounded-sm bg-muted-foreground/70" />
-                            <span>{translate("auto.components.activity.ActivityPrototypePage.8de7c5beaa", "Terminal unavailable")}</span>
+                            <span>
+                              {translate(
+                                'auto.components.activity.ActivityPrototypePage.8de7c5beaa',
+                                'Terminal unavailable'
+                              )}
+                            </span>
                           </div>
                         ) : showTerminalLoadingLabel ? (
                           <div className="ml-3 mt-3 inline-flex items-center gap-2 rounded-md border border-border bg-background/85 px-2 py-1 text-xs text-muted-foreground shadow-xs">
                             <span className="h-3 w-1.5 animate-pulse rounded-sm bg-muted-foreground/70" />
-                            <span>{translate("auto.components.activity.ActivityPrototypePage.1b633f5c1e", "Connecting terminal...")}</span>
+                            <span>
+                              {translate(
+                                'auto.components.activity.ActivityPrototypePage.1b633f5c1e',
+                                'Connecting terminal...'
+                              )}
+                            </span>
                           </div>
                         ) : null}
                       </div>
@@ -1834,11 +1942,19 @@ export default function ActivityPrototypePage(): React.JSX.Element {
               {visibleThreads.length === 0 ? (
                 <>
                   <MessageSquareText className="size-7" />
-                  {translate("auto.components.activity.ActivityPrototypePage.e3db9892f6", "No activity yet.")}</>
+                  {translate(
+                    'auto.components.activity.ActivityPrototypePage.e3db9892f6',
+                    'No activity yet.'
+                  )}
+                </>
               ) : (
                 <>
                   <TerminalSquare className="size-7" />
-                  {translate("auto.components.activity.ActivityPrototypePage.cf780197a1", "Select an agent to view its activity")}</>
+                  {translate(
+                    'auto.components.activity.ActivityPrototypePage.cf780197a1',
+                    'Select an agent to view its activity'
+                  )}
+                </>
               )}
             </div>
           )}

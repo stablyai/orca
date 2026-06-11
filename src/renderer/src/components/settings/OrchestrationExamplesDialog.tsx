@@ -51,9 +51,21 @@ export function OrchestrationExampleDialog(props: {
   const copyPrompt = async (prompt: string): Promise<void> => {
     try {
       await window.api.ui.writeClipboardText(prompt)
-      toast.success(translate("auto.components.settings.OrchestrationExamplesDialog.80c6f2feb8", "Copied example prompt."))
+      toast.success(
+        translate(
+          'auto.components.settings.OrchestrationExamplesDialog.80c6f2feb8',
+          'Copied example prompt.'
+        )
+      )
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : translate("auto.components.settings.OrchestrationExamplesDialog.4e46da1889", "Failed to copy prompt."))
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : translate(
+              'auto.components.settings.OrchestrationExamplesDialog.4e46da1889',
+              'Failed to copy prompt.'
+            )
+      )
     }
   }
 
@@ -88,7 +100,11 @@ export function OrchestrationExampleDialog(props: {
               variant="ghost"
               size="icon-xs"
               className="absolute top-2 right-2 shrink-0 opacity-70 transition-opacity group-hover:opacity-100"
-              aria-label={translate("auto.components.settings.OrchestrationExamplesDialog.969cec9739", "Copy {{value0}} example prompt", { value0: example.title })}
+              aria-label={translate(
+                'auto.components.settings.OrchestrationExamplesDialog.969cec9739',
+                'Copy {{value0}} example prompt',
+                { value0: example.title }
+              )}
               onClick={() => void copyPrompt(example.prompt)}
             >
               <Copy className="size-3.5" />
@@ -98,10 +114,15 @@ export function OrchestrationExampleDialog(props: {
 
         <DialogFooter className="gap-2 border-t border-border/60 bg-muted/10 px-6 py-4">
           <Button type="button" variant="ghost" size="sm" onClick={() => onOpenChange(false)}>
-            {translate("auto.components.settings.OrchestrationExamplesDialog.9b4c004998", "Done")}</Button>
+            {translate('auto.components.settings.OrchestrationExamplesDialog.9b4c004998', 'Done')}
+          </Button>
           <Button type="button" size="sm" onClick={() => void copyPrompt(example.prompt)}>
             <Copy className="size-4" />
-            {translate("auto.components.settings.OrchestrationExamplesDialog.3d1aa105e3", "Copy prompt")}</Button>
+            {translate(
+              'auto.components.settings.OrchestrationExamplesDialog.3d1aa105e3',
+              'Copy prompt'
+            )}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

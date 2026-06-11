@@ -57,7 +57,10 @@ export function TopActivityOverflowMenu({
             'relative flex h-[36px] w-8 shrink-0 items-center justify-center text-muted-foreground/60 transition-colors hover:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
             RIGHT_SIDEBAR_HEADER_NO_DRAG_CLASS_NAME
           )}
-          aria-label={translate("auto.components.right.sidebar.activity.bar.buttons.1fd284e931", "More sidebar tabs")}
+          aria-label={translate(
+            'auto.components.right.sidebar.activity.bar.buttons.1fd284e931',
+            'More sidebar tabs'
+          )}
         >
           <MoreHorizontal size={16} />
           {hiddenChecksStatus && (
@@ -124,7 +127,7 @@ export function ActivityBarButton({
         >
           <Icon size={isTop ? 16 : 18} />
 
-          {statusIndicator && statusIndicator !== "neutral" && (
+          {statusIndicator && statusIndicator !== 'neutral' && (
             <div
               className={cn(
                 'absolute rounded-full size-[7px] ring-1 ring-sidebar',

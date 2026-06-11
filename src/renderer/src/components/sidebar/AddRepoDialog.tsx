@@ -3,7 +3,7 @@ import { useAppStore } from '@/store'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
 import { track } from '@/lib/telemetry'
 import { useRemoteRepo } from './AddRepoSteps'
-import { useCreateRepo } from './AddRepoCreateStep'
+import { useCreateRepo } from './useCreateRepo'
 import { buildNestedRepoScanTelemetry } from '../../../../shared/nested-repo-telemetry'
 import type { AddRepoExistingWorkspaceSource } from '../../../../shared/telemetry-events'
 import { AddRepoStepIndicator } from './AddRepoStepIndicator'
@@ -14,11 +14,9 @@ import { useAddRepoCloneFlow } from './useAddRepoCloneFlow'
 import { useAddRepoLocalFolderFlow } from './useAddRepoLocalFolderFlow'
 import { useAddRepoServerPathFlow } from './useAddRepoServerPathFlow'
 import { useAddRepoNestedImportFlow } from './useAddRepoNestedImportFlow'
-import {
-  buildAddRepoExistingWorkspacesTelemetry,
-  shouldTrackAddRepoExistingWorkspacesDetected
-} from './add-repo-existing-workspaces-telemetry'
+import { buildAddRepoExistingWorkspacesDetectedEvent } from './add-repo-existing-workspaces-telemetry'
 import { finishProjectAddWithDefaultCheckout } from './project-added-default-checkout'
+import { useCreateProjectDefaults } from './useCreateProjectDefaults'
 
 const AddRepoDialog = React.memo(function AddRepoDialog() {
   const activeModal = useAppStore((s) => s.activeModal)
@@ -68,21 +66,11 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
   const completeGitRepoAdd = useCallback(
     async (repoId: string, source: AddRepoExistingWorkspaceSource): Promise<void> => {
       const worktrees = useAppStore.getState().worktreesByRepo[repoId] ?? []
-      const sortedWorktrees = [...worktrees].sort((a, b) => {
-        if (a.lastActivityAt !== b.lastActivityAt) {
-          return b.lastActivityAt - a.lastActivityAt
-        }
-        return a.displayName.localeCompare(b.displayName)
-      })
-      const existingWorkspaceTelemetry = buildAddRepoExistingWorkspacesTelemetry(
+      const existingWorkspaceTelemetry = buildAddRepoExistingWorkspacesDetectedEvent(
         source,
-        sortedWorktrees
+        worktrees
       )
-      if (
-        existingWorkspaceTelemetry &&
-        shouldTrackAddRepoExistingWorkspacesDetected(existingWorkspaceTelemetry) &&
-        !detectedTelemetryTrackedRef.current.has(repoId)
-      ) {
+      if (existingWorkspaceTelemetry && !detectedTelemetryTrackedRef.current.has(repoId)) {
         detectedTelemetryTrackedRef.current.add(repoId)
         track('add_repo_existing_workspaces_detected', existingWorkspaceTelemetry)
       }
@@ -158,6 +146,22 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
   } = useCreateRepo(fetchWorktrees, closeModal, (repoId) =>
     completeGitRepoAdd(repoId, 'create_project')
   )
+
+  const {
+    createDefaultParent,
+    createGitAvailability,
+    createRuntimeParentStatus,
+    createParentDefaultPending,
+    resetCreateDefaultState,
+    markCreateParentTouched,
+    markCreateKindTouched
+  } = useCreateProjectDefaults({
+    step,
+    activeRuntimeEnvironmentId: settings?.activeRuntimeEnvironmentId,
+    createParent,
+    setCreateParent,
+    setCreateKind
+  })
 
   const {
     cloneUrl,
@@ -252,12 +256,14 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
     resetCloneFlow()
     resetNestedImportFlow()
     resetNestedRepoReviewState()
+    resetCreateDefaultState()
     resetCreateState()
     resetRemoteState()
   }, [
     resetCloneFlow,
     resetLocalFolderFlow,
     resetNestedRepoReviewState,
+    resetCreateDefaultState,
     resetServerPathFlow,
     resetNestedImportFlow,
     resetRemoteState,
@@ -329,6 +335,10 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
           createKind={createKind}
           createError={createError}
           isCreating={isCreating}
+          createDefaultParent={createDefaultParent}
+          createGitAvailability={createGitAvailability}
+          createRuntimeParentStatus={createRuntimeParentStatus}
+          createParentDefaultPending={createParentDefaultPending}
           onBrowse={handleBrowse}
           onOpenCloneStep={() => {
             setCloneError(null)
@@ -376,14 +386,22 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
             setCreateError(null)
           }}
           onCreateParentChange={(value) => {
+            markCreateParentTouched(value)
             setCreateParent(value)
             setCreateError(null)
           }}
           onCreateKindChange={(kind) => {
+            markCreateKindTouched()
             setCreateKind(kind)
             setCreateError(null)
           }}
-          onPickCreateParent={handlePickParent}
+          onPickCreateParent={() => {
+            void handlePickParent().then((dir) => {
+              if (dir) {
+                markCreateParentTouched(dir)
+              }
+            })
+          }}
           onCreate={handleCreate}
         />
       </DialogContent>

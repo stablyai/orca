@@ -35,6 +35,8 @@ import {
   removeSafeUntrackedDiscardTarget,
   removeSafeUntrackedDiscardTargets
 } from '../../shared/git-discard-path-safety'
+import { resolveWorktreeAddBaseRef } from '../../shared/worktree-base-ref'
+import { hasWorktreeBaseCommitRef } from './worktree-base-ref-probe'
 
 const MAX_GIT_SHOW_BYTES = 10 * 1024 * 1024
 const MAX_STAGED_COMMIT_CONTEXT_BYTES = MAX_GIT_SHOW_BYTES
@@ -702,6 +704,11 @@ export async function getBranchCompare(
 
   const compareRef = await resolveCompareRef(worktreePath)
   summary.compareRef = compareRef
+  // Why: short remote display refs like "origin/main" can collide with a local
+  // branch of the same name. Compare against the proven remote-tracking ref.
+  const resolvedBaseRef = await resolveWorktreeAddBaseRef(baseRef, (qualifiedRef) =>
+    hasWorktreeBaseCommitRef(worktreePath, qualifiedRef)
+  )
 
   let headOid = ''
   let baseOid = ''
@@ -710,7 +717,7 @@ export async function getBranchCompare(
     summary.headOid = headOid
   } catch {
     try {
-      baseOid = await resolveRefOid(worktreePath, baseRef)
+      baseOid = await resolveRefOid(worktreePath, resolvedBaseRef)
       summary.baseOid = baseOid
       // Why: new remote worktrees can be on an unborn branch until the first
       // commit. There are no committed branch changes yet; surfacing this as a
@@ -730,7 +737,7 @@ export async function getBranchCompare(
   }
 
   try {
-    baseOid = await resolveRefOid(worktreePath, baseRef)
+    baseOid = await resolveRefOid(worktreePath, resolvedBaseRef)
     summary.baseOid = baseOid
   } catch {
     summary.status = 'invalid-base'

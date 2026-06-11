@@ -50,7 +50,8 @@ export function UIZoomControl(): React.JSX.Element {
         className="ml-1 gap-1.5"
       >
         <RotateCcw className="size-3" />
-        {translate("auto.components.settings.UIZoomControl.c2c64b24d0", "Reset")}</Button>
+        {translate('auto.components.settings.UIZoomControl.c2c64b24d0', 'Reset')}
+      </Button>
     </div>
   )
 }

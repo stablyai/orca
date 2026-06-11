@@ -257,7 +257,12 @@ export async function launchAgentBackgroundSession(
       agent,
       submit: true,
       onTimeout: () => {
-        toast.message(translate("auto.lib.launch.agent.background.session.4ca0651d56", "Your automation prompt wasn't sent — open the workspace and paste it."))
+        toast.message(
+          translate(
+            'auto.lib.launch.agent.background.session.4ca0651d56',
+            "Your automation prompt wasn't sent — open the workspace and paste it."
+          )
+        )
         track('agent_error', {
           error_class: 'paste_readiness_timeout',
           agent_kind: tuiAgentToAgentKind(agent)

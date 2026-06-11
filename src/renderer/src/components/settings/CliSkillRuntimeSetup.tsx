@@ -31,7 +31,10 @@ export function getSelectedAgentRuntime(
     selectedRuntime === 'wsl' &&
     (wslAvailable || wslCapabilitiesLoading)
   ) {
-    return { runtime: 'wsl', label: translate("auto.components.settings.CliSkillRuntimeSetup.c47127f222", "WSL default") }
+    return {
+      runtime: 'wsl',
+      label: translate('auto.components.settings.CliSkillRuntimeSetup.c47127f222', 'WSL default')
+    }
   }
   return { runtime: 'host', label: getHostRuntimeLabel() }
 }
@@ -67,25 +70,52 @@ export async function ensureWslCliAvailableForAgentSkillTerminal(): Promise<CliI
   try {
     const status = await window.api.cli.getWslInstallStatus()
     if (!status.supported) {
-      toast.warning(translate("auto.components.settings.CliSkillRuntimeSetup.775a4cfbb8", "WSL shell command registration is unavailable"), {
-        description: status.detail ?? translate("auto.components.settings.CliSkillRuntimeSetup.fc0fcf72fd", "Register the WSL shell command before skill setup.")
-      })
+      toast.warning(
+        translate(
+          'auto.components.settings.CliSkillRuntimeSetup.775a4cfbb8',
+          'WSL shell command registration is unavailable'
+        ),
+        {
+          description:
+            status.detail ??
+            translate(
+              'auto.components.settings.CliSkillRuntimeSetup.fc0fcf72fd',
+              'Register the WSL shell command before skill setup.'
+            )
+        }
+      )
       return status
     }
     if (status.state !== 'installed' || !status.pathConfigured) {
       await showOrcaCliRegistrationPromptToast()
       const next = await window.api.cli.installWsl()
       if (!isOrcaCliAvailableOnPath(next)) {
-        toast.warning(translate("auto.components.settings.CliSkillRuntimeSetup.3728a94fb6", "WSL shell command needs attention"), {
-          description: next.detail ?? translate("auto.components.settings.CliSkillRuntimeSetup.fc0fcf72fd", "Register the WSL shell command before skill setup.")
-        })
+        toast.warning(
+          translate(
+            'auto.components.settings.CliSkillRuntimeSetup.3728a94fb6',
+            'WSL shell command needs attention'
+          ),
+          {
+            description:
+              next.detail ??
+              translate(
+                'auto.components.settings.CliSkillRuntimeSetup.fc0fcf72fd',
+                'Register the WSL shell command before skill setup.'
+              )
+          }
+        )
       }
       return next
     }
     return status
   } catch (error) {
     toast.error(
-      error instanceof Error ? error.message : translate("auto.components.settings.CliSkillRuntimeSetup.0ed08febc5", "Failed to register the WSL shell command.")
+      error instanceof Error
+        ? error.message
+        : translate(
+            'auto.components.settings.CliSkillRuntimeSetup.0ed08febc5',
+            'Failed to register the WSL shell command.'
+          )
     )
     return null
   }
@@ -113,16 +143,27 @@ export function CliSkillRuntimeControl({
   return (
     <div className="mt-3 flex flex-wrap items-start justify-between gap-3">
       <div className="min-w-0 flex-1 space-y-0.5">
-        <Label>{translate("auto.components.settings.CliSkillRuntimeSetup.a58ba464ad", "Skill location")}</Label>
+        <Label>
+          {translate('auto.components.settings.CliSkillRuntimeSetup.a58ba464ad', 'Skill location')}
+        </Label>
         <p className="text-xs text-muted-foreground">
-          {runtime.runtime === "wsl" && !wslAvailable && !wslCapabilitiesLoading
-            ? translate("auto.components.settings.CliSkillRuntimeSetup.f00d6aa9b5", "WSL is not available on this machine.")
-            : translate("auto.components.settings.CliSkillRuntimeSetup.0c9f3cf9da", "Choose where Orca checks and installs global agent skills.")}
+          {runtime.runtime === 'wsl' && !wslAvailable && !wslCapabilitiesLoading
+            ? translate(
+                'auto.components.settings.CliSkillRuntimeSetup.f00d6aa9b5',
+                'WSL is not available on this machine.'
+              )
+            : translate(
+                'auto.components.settings.CliSkillRuntimeSetup.0c9f3cf9da',
+                'Choose where Orca checks and installs global agent skills.'
+              )}
         </p>
       </div>
       <div className="w-44 shrink-0">
         <SettingsSegmentedControl
-          ariaLabel={translate("auto.components.settings.CliSkillRuntimeSetup.a58ba464ad", "Skill location")}
+          ariaLabel={translate(
+            'auto.components.settings.CliSkillRuntimeSetup.a58ba464ad',
+            'Skill location'
+          )}
           value={runtime.runtime}
           onChange={(value) =>
             updateSettings({
@@ -135,7 +176,7 @@ export function CliSkillRuntimeControl({
             { value: 'host', label: getHostRuntimeLabel() },
             {
               value: 'wsl',
-              label: translate("auto.components.settings.CliSkillRuntimeSetup.04325573f8", "WSL"),
+              label: translate('auto.components.settings.CliSkillRuntimeSetup.04325573f8', 'WSL'),
               disabled: wslCapabilitiesLoading || !wslAvailable
             }
           ]}

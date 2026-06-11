@@ -23,10 +23,18 @@ type TeamMultiComboboxProps = {
 
 function renderTriggerLabel(teams: LinearTeam[], selected: ReadonlySet<string>): React.JSX.Element {
   if (teams.length === 0) {
-    return <span className="inline-flex min-w-0 items-center gap-1.5">{translate("auto.components.ui.team.multi.combobox.301f2a796e", "All teams")}</span>
+    return (
+      <span className="inline-flex min-w-0 items-center gap-1.5">
+        {translate('auto.components.ui.team.multi.combobox.301f2a796e', 'All teams')}
+      </span>
+    )
   }
   if (selected.size === teams.length) {
-    return <span className="inline-flex min-w-0 items-center gap-1.5">{translate("auto.components.ui.team.multi.combobox.301f2a796e", "All teams")}</span>
+    return (
+      <span className="inline-flex min-w-0 items-center gap-1.5">
+        {translate('auto.components.ui.team.multi.combobox.301f2a796e', 'All teams')}
+      </span>
+    )
   }
   const selectedTeams = teams.filter((t) => selected.has(t.id))
   const [first, second, ...rest] = selectedTeams
@@ -120,7 +128,10 @@ export default function TeamMultiCombobox({
         <Command shouldFilter={false} value={commandValue} onValueChange={setCommandValue}>
           <CommandInput
             autoFocus
-            placeholder={translate("auto.components.ui.team.multi.combobox.18ec58881e", "Search teams...")}
+            placeholder={translate(
+              'auto.components.ui.team.multi.combobox.18ec58881e',
+              'Search teams...'
+            )}
             value={query}
             onValueChange={setQuery}
             className="text-xs"
@@ -142,11 +153,18 @@ export default function TeamMultiCombobox({
                   allSelected ? 'opacity-70' : 'opacity-0'
                 )}
               />
-              <span>{translate("auto.components.ui.team.multi.combobox.301f2a796e", "All teams")}</span>
+              <span>
+                {translate('auto.components.ui.team.multi.combobox.301f2a796e', 'All teams')}
+              </span>
             </button>
           </div>
           <CommandList>
-            <CommandEmpty>{translate("auto.components.ui.team.multi.combobox.de83523bf9", "No teams match your search.")}</CommandEmpty>
+            <CommandEmpty>
+              {translate(
+                'auto.components.ui.team.multi.combobox.de83523bf9',
+                'No teams match your search.'
+              )}
+            </CommandEmpty>
             {filteredTeams.map((team) => {
               const isSelected = selected.has(team.id)
               const isLastSelected = isSelected && selected.size <= 1

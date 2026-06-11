@@ -1255,10 +1255,7 @@ export default function TerminalPane({
         pasteText: (text, options) => {
           pasteTerminalText(pane.terminal, text, options)
           if (options?.forceBracketedPaste) {
-            const manager = managerRef.current
-            if (manager) {
-              scheduleImagePasteWebglAtlasRecovery(manager)
-            }
+            scheduleImagePasteWebglAtlasRecovery()
           }
         },
         onImagePasteError: (error) => setTerminalError(formatClipboardImagePasteError(error))

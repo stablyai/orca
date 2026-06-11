@@ -78,13 +78,21 @@ export function SidebarSettingsHelpMenu(): React.JSX.Element {
       return
     }
     setIsRestartingOrca(true)
-    toast.info(translate("auto.components.sidebar.SidebarSettingsHelpMenu.5161eef55d", "Restarting Orca…"))
+    toast.info(
+      translate('auto.components.sidebar.SidebarSettingsHelpMenu.5161eef55d', 'Restarting Orca…')
+    )
     void window.api.app.restart().catch((error) => {
       if (mountedRef.current) {
         setIsRestartingOrca(false)
-        toast.error(translate("auto.components.sidebar.SidebarSettingsHelpMenu.4e8f5710d3", "Couldn't restart Orca."), {
-          description: error instanceof Error ? error.message : undefined
-        })
+        toast.error(
+          translate(
+            'auto.components.sidebar.SidebarSettingsHelpMenu.4e8f5710d3',
+            "Couldn't restart Orca."
+          ),
+          {
+            description: error instanceof Error ? error.message : undefined
+          }
+        )
       }
     })
   }
@@ -109,7 +117,10 @@ export function SidebarSettingsHelpMenu(): React.JSX.Element {
                 variant="ghost"
                 size="icon-xs"
                 type="button"
-                aria-label={translate("auto.components.sidebar.SidebarSettingsHelpMenu.2991a0106c", "Help")}
+                aria-label={translate(
+                  'auto.components.sidebar.SidebarSettingsHelpMenu.2991a0106c',
+                  'Help'
+                )}
                 className="text-muted-foreground"
                 onPointerDown={(event) => revealAdminOptions(event.altKey)}
                 onClick={(event) => revealAdminOptions(event.altKey)}
@@ -119,26 +130,52 @@ export function SidebarSettingsHelpMenu(): React.JSX.Element {
             </DropdownMenuTrigger>
           </TooltipTrigger>
           <TooltipContent side="top" sideOffset={4}>
-            {translate("auto.components.sidebar.SidebarSettingsHelpMenu.2991a0106c", "Help")}</TooltipContent>
+            {translate('auto.components.sidebar.SidebarSettingsHelpMenu.2991a0106c', 'Help')}
+          </TooltipContent>
         </Tooltip>
         <DropdownMenuContent side="top" align="start" sideOffset={8} className="w-48">
           <DropdownMenuItem onSelect={openSettingsPage}>
             <Settings className="size-3.5" />
-            {translate("auto.components.sidebar.SidebarSettingsHelpMenu.a428c25998", "Settings")}<span className="ml-auto text-xs tracking-wide opacity-60">{settingsShortcut}</span>
+            {translate('auto.components.sidebar.SidebarSettingsHelpMenu.a428c25998', 'Settings')}
+            <span className="ml-auto text-xs tracking-wide opacity-60">{settingsShortcut}</span>
           </DropdownMenuItem>
           <DropdownMenuItem onSelect={() => setFeedbackOpen(true)}>
             <MessageSquareText className="size-3.5" />
-            {translate("auto.components.sidebar.SidebarSettingsHelpMenu.4cf5b868d7", "Send Feedback")}</DropdownMenuItem>
+            {translate(
+              'auto.components.sidebar.SidebarSettingsHelpMenu.4cf5b868d7',
+              'Send Feedback'
+            )}
+          </DropdownMenuItem>
           <DropdownMenuItem onSelect={openShortcutsSettings}>
             <ExternalLink className="size-3.5" />
-            {translate("auto.components.sidebar.SidebarSettingsHelpMenu.e565171a7c", "Keyboard Shortcuts")}</DropdownMenuItem>
+            {translate(
+              'auto.components.sidebar.SidebarSettingsHelpMenu.e565171a7c',
+              'Keyboard Shortcuts'
+            )}
+          </DropdownMenuItem>
           <DropdownMenuSeparator />
-          <ExternalMenuItem label={translate("auto.components.sidebar.SidebarSettingsHelpMenu.cdc87f897e", "Docs")} url={DOCS_URL} />
-          <ExternalMenuItem label={translate("auto.components.sidebar.SidebarSettingsHelpMenu.5f83d86d92", "Changelog")} url={CHANGELOG_URL} />
-          <ExternalMenuItem label={translate("auto.components.sidebar.SidebarSettingsHelpMenu.5687ab246a", "GitHub")} url={GITHUB_URL} />
+          <ExternalMenuItem
+            label={translate('auto.components.sidebar.SidebarSettingsHelpMenu.cdc87f897e', 'Docs')}
+            url={DOCS_URL}
+          />
+          <ExternalMenuItem
+            label={translate(
+              'auto.components.sidebar.SidebarSettingsHelpMenu.5f83d86d92',
+              'Changelog'
+            )}
+            url={CHANGELOG_URL}
+          />
+          <ExternalMenuItem
+            label={translate(
+              'auto.components.sidebar.SidebarSettingsHelpMenu.5687ab246a',
+              'GitHub'
+            )}
+            url={GITHUB_URL}
+          />
           <DropdownMenuItem onSelect={() => openExternalUrl(DISCORD_URL)}>
             <DiscordIcon />
-            {translate("auto.components.sidebar.SidebarSettingsHelpMenu.eb9884e55b", "Discord")}<ExternalLink className="ml-auto size-3 text-muted-foreground" />
+            {translate('auto.components.sidebar.SidebarSettingsHelpMenu.eb9884e55b', 'Discord')}
+            <ExternalLink className="ml-auto size-3 text-muted-foreground" />
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem
@@ -150,13 +187,21 @@ export function SidebarSettingsHelpMenu(): React.JSX.Element {
             ) : (
               <RefreshCw className="size-3.5" />
             )}
-            {translate("auto.components.sidebar.SidebarSettingsHelpMenu.29c56f30ee", "Check for Updates")}</DropdownMenuItem>
+            {translate(
+              'auto.components.sidebar.SidebarSettingsHelpMenu.29c56f30ee',
+              'Check for Updates'
+            )}
+          </DropdownMenuItem>
           {showAdminOptions ? (
             <>
               <DropdownMenuSeparator />
               <DropdownMenuItem onSelect={handleRestartOrca} disabled={isRestartingOrca}>
                 <RotateCw className="size-3.5" />
-                {translate("auto.components.sidebar.SidebarSettingsHelpMenu.ad3d3ed7f1", "Restart Orca")}</DropdownMenuItem>
+                {translate(
+                  'auto.components.sidebar.SidebarSettingsHelpMenu.ad3d3ed7f1',
+                  'Restart Orca'
+                )}
+              </DropdownMenuItem>
             </>
           ) : null}
         </DropdownMenuContent>

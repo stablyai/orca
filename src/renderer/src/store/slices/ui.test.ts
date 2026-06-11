@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultUIState } from '../../../../shared/constants'
 import type {
   GitHubWorkItem,
+  LinearIssue,
   PersistedUIState,
   TerminalTab,
   Worktree,
@@ -115,6 +116,26 @@ function makeGitHubWorkItem(overrides: Partial<GitHubWorkItem> = {}): GitHubWork
     repoId: 'repo-1',
     ...overrides
   }
+}
+
+function makeLinearIssue(overrides: Partial<LinearIssue> = {}): LinearIssue {
+  return {
+    id: 'lin-1',
+    identifier: 'ORC-1',
+    title: 'Fix task flow',
+    url: 'https://linear.app/orca/issue/ORC-1/fix-task-flow',
+    state: { name: 'Todo', type: 'unstarted', color: '#999' },
+    priority: 0,
+    estimate: null,
+    assignee: null,
+    labels: [],
+    labelIds: [],
+    team: { id: 'team-1', name: 'Orca', key: 'ORC' },
+    workspaceId: 'workspace-1',
+    updatedAt: '2026-05-30T00:00:00.000Z',
+    createdAt: '2026-05-30T00:00:00.000Z',
+    ...overrides
+  } as LinearIssue
 }
 
 function makePersistedUI(overrides: Partial<PersistedUIState> = {}): PersistedUIState {
@@ -1366,6 +1387,46 @@ describe('createUISlice page navigation history', () => {
     expect(store.getState().taskPageData).toEqual({})
     expect(store.getState().githubTaskDrawerWorkItem).toBeNull()
     expect(store.getState().worktreeNavHistoryIndex).toBe(0)
+  })
+
+  it('records provider-depth interactions for direct Tasks detail opens', () => {
+    const store = createUIStore()
+    const recordFeatureInteraction = vi.fn()
+    store.setState({ recordFeatureInteraction } as Partial<AppState>)
+    const workItem = makeGitHubWorkItem()
+    const linearIssue = makeLinearIssue()
+
+    store.getState().openTaskPage({ taskSource: 'github', openGitHubWorkItem: workItem })
+    store.getState().openTaskPage({ taskSource: 'linear', openLinearIssue: linearIssue })
+
+    expect(recordFeatureInteraction).toHaveBeenCalledWith('tasks')
+    expect(recordFeatureInteraction).toHaveBeenCalledWith('github-tasks')
+    expect(recordFeatureInteraction).toHaveBeenCalledWith('linear-tasks')
+  })
+
+  it('can suppress the Tasks surface interaction for in-page provider navigation', () => {
+    const store = createUIStore()
+    const recordFeatureInteraction = vi.fn()
+    store.setState({ recordFeatureInteraction } as Partial<AppState>)
+    const workItem = makeGitHubWorkItem()
+    const linearIssue = makeLinearIssue()
+
+    store
+      .getState()
+      .openTaskPage(
+        { taskSource: 'github', openGitHubWorkItem: workItem },
+        { recordTasksInteraction: false }
+      )
+    store
+      .getState()
+      .openTaskPage(
+        { taskSource: 'linear', openLinearIssue: linearIssue },
+        { recordTasksInteraction: false }
+      )
+
+    expect(recordFeatureInteraction).not.toHaveBeenCalledWith('tasks')
+    expect(recordFeatureInteraction).toHaveBeenCalledWith('github-tasks')
+    expect(recordFeatureInteraction).toHaveBeenCalledWith('linear-tasks')
   })
 
   it('skips the whole Tasks detail stack on close', () => {

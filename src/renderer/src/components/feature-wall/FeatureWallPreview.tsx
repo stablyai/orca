@@ -67,7 +67,11 @@ export function RelatedFeatures(props: {
   return (
     <div className="border-t border-border pt-3.5">
       <h4 className="mb-2 text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
-        {translate("auto.components.feature.wall.FeatureWallPreview.a666384798", "Also in this workflow")}</h4>
+        {translate(
+          'auto.components.feature.wall.FeatureWallPreview.a666384798',
+          'Also in this workflow'
+        )}
+      </h4>
       <ul className="flex flex-col gap-1" role="list">
         {items.map((tile) => (
           <li key={tile.id}>

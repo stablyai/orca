@@ -10,16 +10,46 @@ import type { TerminalTab } from '../../../../shared/types'
 import { translate } from '@/i18n/i18n'
 
 const TAB_COLORS = [
-  { label: translate("auto.components.tab.bar.SortableTabContextMenu.20baa43c05", "None"), value: null },
-  { label: translate("auto.components.tab.bar.SortableTabContextMenu.cb3eadefd2", "Blue"), value: '#3b82f6' },
-  { label: translate("auto.components.tab.bar.SortableTabContextMenu.c2d8b0991f", "Purple"), value: '#a855f7' },
-  { label: translate("auto.components.tab.bar.SortableTabContextMenu.03cf6dab1a", "Pink"), value: '#ec4899' },
-  { label: translate("auto.components.tab.bar.SortableTabContextMenu.620aec6729", "Red"), value: '#ef4444' },
-  { label: translate("auto.components.tab.bar.SortableTabContextMenu.a47629b3cf", "Orange"), value: '#f97316' },
-  { label: translate("auto.components.tab.bar.SortableTabContextMenu.69682e2ce4", "Yellow"), value: '#eab308' },
-  { label: translate("auto.components.tab.bar.SortableTabContextMenu.be905e9b0a", "Green"), value: '#22c55e' },
-  { label: translate("auto.components.tab.bar.SortableTabContextMenu.845576bed1", "Teal"), value: '#14b8a6' },
-  { label: translate("auto.components.tab.bar.SortableTabContextMenu.7703990447", "Gray"), value: '#9ca3af' }
+  {
+    label: translate('auto.components.tab.bar.SortableTabContextMenu.20baa43c05', 'None'),
+    value: null
+  },
+  {
+    label: translate('auto.components.tab.bar.SortableTabContextMenu.cb3eadefd2', 'Blue'),
+    value: '#3b82f6'
+  },
+  {
+    label: translate('auto.components.tab.bar.SortableTabContextMenu.c2d8b0991f', 'Purple'),
+    value: '#a855f7'
+  },
+  {
+    label: translate('auto.components.tab.bar.SortableTabContextMenu.03cf6dab1a', 'Pink'),
+    value: '#ec4899'
+  },
+  {
+    label: translate('auto.components.tab.bar.SortableTabContextMenu.620aec6729', 'Red'),
+    value: '#ef4444'
+  },
+  {
+    label: translate('auto.components.tab.bar.SortableTabContextMenu.a47629b3cf', 'Orange'),
+    value: '#f97316'
+  },
+  {
+    label: translate('auto.components.tab.bar.SortableTabContextMenu.69682e2ce4', 'Yellow'),
+    value: '#eab308'
+  },
+  {
+    label: translate('auto.components.tab.bar.SortableTabContextMenu.be905e9b0a', 'Green'),
+    value: '#22c55e'
+  },
+  {
+    label: translate('auto.components.tab.bar.SortableTabContextMenu.845576bed1', 'Teal'),
+    value: '#14b8a6'
+  },
+  {
+    label: translate('auto.components.tab.bar.SortableTabContextMenu.7703990447', 'Gray'),
+    value: '#9ca3af'
+  }
 ] as const
 
 type SortableTabContextMenuProps = {
@@ -68,32 +98,48 @@ export function SortableTabContextMenu({
       <DropdownMenuContent className="w-48" sideOffset={0} align="start">
         <DropdownMenuItem onSelect={() => onSplitGroup('up', tab.id)}>
           <Rows2 className="mr-1.5 size-3.5" />
-          {translate("auto.components.tab.bar.SortableTabContextMenu.591f9b12c1", "Split Up")}</DropdownMenuItem>
+          {translate('auto.components.tab.bar.SortableTabContextMenu.591f9b12c1', 'Split Up')}
+        </DropdownMenuItem>
         <DropdownMenuItem onSelect={() => onSplitGroup('down', tab.id)}>
           <Rows2 className="mr-1.5 size-3.5" />
-          {translate("auto.components.tab.bar.SortableTabContextMenu.af80ed83c1", "Split Down")}</DropdownMenuItem>
+          {translate('auto.components.tab.bar.SortableTabContextMenu.af80ed83c1', 'Split Down')}
+        </DropdownMenuItem>
         <DropdownMenuItem onSelect={() => onSplitGroup('left', tab.id)}>
           <Columns2 className="mr-1.5 size-3.5" />
-          {translate("auto.components.tab.bar.SortableTabContextMenu.0ce4bae39d", "Split Left")}</DropdownMenuItem>
+          {translate('auto.components.tab.bar.SortableTabContextMenu.0ce4bae39d', 'Split Left')}
+        </DropdownMenuItem>
         <DropdownMenuItem onSelect={() => onSplitGroup('right', tab.id)}>
           <Columns2 className="mr-1.5 size-3.5" />
-          {translate("auto.components.tab.bar.SortableTabContextMenu.21132389e9", "Split Right")}</DropdownMenuItem>
+          {translate('auto.components.tab.bar.SortableTabContextMenu.21132389e9', 'Split Right')}
+        </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={onTogglePin}>
           {isPinned ? <PinOff className="mr-1.5 size-3.5" /> : <Pin className="mr-1.5 size-3.5" />}
-          {isPinned ? translate("auto.components.tab.bar.SortableTabContextMenu.417722e9c2", "Unpin Tab") : translate("auto.components.tab.bar.SortableTabContextMenu.60f958ec75", "Pin Tab")}
+          {isPinned
+            ? translate('auto.components.tab.bar.SortableTabContextMenu.417722e9c2', 'Unpin Tab')
+            : translate('auto.components.tab.bar.SortableTabContextMenu.60f958ec75', 'Pin Tab')}
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={() => !isPinned && onClose(tab.id)} disabled={isPinned}>
-          {translate("auto.components.tab.bar.SortableTabContextMenu.89359a36f7", "Close")}</DropdownMenuItem>
+          {translate('auto.components.tab.bar.SortableTabContextMenu.89359a36f7', 'Close')}
+        </DropdownMenuItem>
         <DropdownMenuItem onSelect={() => onCloseOthers(tab.id)} disabled={tabCount <= 1}>
-          {translate("auto.components.tab.bar.SortableTabContextMenu.8d16f9cd30", "Close Others")}</DropdownMenuItem>
+          {translate('auto.components.tab.bar.SortableTabContextMenu.8d16f9cd30', 'Close Others')}
+        </DropdownMenuItem>
         <DropdownMenuItem onSelect={() => onCloseToRight(tab.id)} disabled={!hasTabsToRight}>
-          {translate("auto.components.tab.bar.SortableTabContextMenu.c1ee099c7e", "Close Tabs To The Right")}</DropdownMenuItem>
+          {translate(
+            'auto.components.tab.bar.SortableTabContextMenu.c1ee099c7e',
+            'Close Tabs To The Right'
+          )}
+        </DropdownMenuItem>
         <DropdownMenuSeparator />
-        <DropdownMenuItem onSelect={onRenameOpen}>{translate("auto.components.tab.bar.SortableTabContextMenu.2f697b3c31", "Change Title")}</DropdownMenuItem>
+        <DropdownMenuItem onSelect={onRenameOpen}>
+          {translate('auto.components.tab.bar.SortableTabContextMenu.2f697b3c31', 'Change Title')}
+        </DropdownMenuItem>
         <div className="px-2 pt-1.5 pb-1">
-          <div className="text-xs font-medium text-muted-foreground mb-1.5">{translate("auto.components.tab.bar.SortableTabContextMenu.35e8892fd0", "Tab Color")}</div>
+          <div className="text-xs font-medium text-muted-foreground mb-1.5">
+            {translate('auto.components.tab.bar.SortableTabContextMenu.35e8892fd0', 'Tab Color')}
+          </div>
           <div className="flex flex-wrap gap-2">
             {TAB_COLORS.map((color) => {
               const isSelected = tab.color === color.value

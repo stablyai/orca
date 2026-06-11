@@ -2,7 +2,6 @@
    it owns app lifecycle, service wiring, window creation, and hook/daemon
    startup. Splitting by line count would fragment tightly coupled startup
    logic across files without a cleaner ownership seam. */
-import { grantDirAcl } from './win32-utils'
 import { existsSync } from 'fs'
 import { join } from 'path'
 import os from 'node:os'
@@ -71,7 +70,9 @@ import {
   logSingleInstanceLockFailure,
   shouldBypassSingleInstanceLock
 } from './startup/single-instance-lock'
+import { startEventLoopStallProbe } from './startup/event-loop-stall-probe'
 import { isStartupDiagnosticsEnabled, logStartupDiagnostic } from './startup/startup-diagnostics'
+import { ensureWindowsUserDataAclGrant } from './startup/windows-user-data-acl'
 import { RateLimitService } from './rate-limits/service'
 import { getInitialClaudeRateLimitTarget } from './rate-limits/claude-rate-limit-target'
 import { getInitialCodexRateLimitTarget } from './rate-limits/codex-rate-limit-target'
@@ -279,6 +280,15 @@ if (startupDiagnosticsEnabled) {
     userData: app.getPath('userData'),
     e2eUserData: Boolean(process.env.ORCA_E2E_USER_DATA_DIR)
   })
+  startEventLoopStallProbe()
+}
+
+// Why: startup benchmarking needs in-process timestamps — harness-side stderr
+// arrival times include pipe buffering jitter. `t` is ms since process start.
+function logStartupMilestone(event: string, details: Record<string, unknown> = {}): void {
+  if (startupDiagnosticsEnabled) {
+    logStartupDiagnostic(event, { t: Math.round(performance.now()), ...details })
+  }
 }
 
 function focusExistingWindow(): void {
@@ -467,6 +477,7 @@ function prepareCodexRuntimeHomeForLaunch(target?: CodexAccountSelectionTarget):
 }
 
 function openMainWindow(): BrowserWindow {
+  logStartupMilestone('open-main-window-start')
   if (!store) {
     throw new Error('Store must be initialized before opening the main window')
   }
@@ -510,16 +521,21 @@ function openMainWindow(): BrowserWindow {
   }
 
   // Why: Chromium's BrowserWindow constructor resets the userData DACL to a
-  // Protected DACL. Grant explicit Full Control ACEs on all existing children
-  // before the constructor runs so they survive the upcoming DACL reset.
-  // Per-write EPERM retries in fs-utils/installer-utils serve as the backstop
-  // for any directories created after startup.
+  // Protected DACL, breaking writes in pre-existing subdirs. Explicit ACEs on
+  // userData + immediate children fix the tree permanently; the grant runs in
+  // the background on first launch only (marker-gated) because the previous
+  // synchronous recursive walk blocked startup ~60s on large profiles. See
+  // startup/windows-user-data-acl.ts; per-write EPERM retries are the backstop.
   if (process.platform === 'win32') {
-    try {
-      grantDirAcl(app.getPath('userData'), { recursive: true })
-    } catch {
-      // Non-fatal; per-call retries are the backstop.
-    }
+    logStartupMilestone('acl-grant-start')
+    ensureWindowsUserDataAclGrant(app.getPath('userData'), {
+      onDone: (result) => {
+        logStartupMilestone('acl-grant-done', { mode: result.mode })
+        if (result.mode === 'failed') {
+          console.warn('[win32-acl] userData ACL grant failed:', result.reason)
+        }
+      }
+    })
   }
 
   const window = createMainWindow(store, {
@@ -564,6 +580,10 @@ function openMainWindow(): BrowserWindow {
     }
   })
   recordCrashBreadcrumb('main_window_created')
+  logStartupMilestone('window-created')
+  window.once('ready-to-show', () => {
+    logStartupMilestone('ready-to-show')
+  })
 
   // Why: telemetry-plan.md§First-launch experience anchors default-on
   // `app_opened` to the first main-window load. Existing users in the
@@ -573,6 +593,7 @@ function openMainWindow(): BrowserWindow {
   const onFirstWindowLoad = (): void => {
     clearExpectedRendererReload(rendererWebContentsId)
     recordCrashBreadcrumb('main_window_loaded')
+    logStartupMilestone('did-finish-load')
     if (!store) {
       return
     }
@@ -715,6 +736,7 @@ function openMainWindow(): BrowserWindow {
       })
     }
   })
+  logStartupMilestone('load-start')
   loadMainWindow(window)
   return window
 }
@@ -1112,10 +1134,12 @@ function driveSyntheticTitleFromHook(
 }
 
 app.whenReady().then(async () => {
+  logStartupMilestone('app-ready')
   electronApp.setAppUserModelId(devInstanceIdentity.appUserModelId)
   app.setName(devInstanceIdentity.name)
 
   store = new Store()
+  logStartupMilestone('store-loaded')
   applyAppIcon(store.getSettings().appIcon)
   if (shouldSuppressDevEducation({ isDev: is.dev })) {
     suppressDevEducationForStore(store)
@@ -1276,8 +1300,10 @@ app.whenReady().then(async () => {
     })
   })
 
+  logStartupMilestone('services-initialized')
   await ensureMainI18n()
   await setMainUiLanguage(store.getSettings().uiLanguage)
+  logStartupMilestone('i18n-ready')
 
   registerAppMenu({
     onCheckForUpdates: (options) => checkForUpdatesFromMenu(options),

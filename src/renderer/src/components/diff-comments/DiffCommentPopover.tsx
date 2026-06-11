@@ -130,8 +130,16 @@ export function DiffCommentPopover({
         <div id={labelId} className="orca-diff-comment-popover-label">
           {title ??
             (startLine && startLine !== lineNumber
-              ? translate("auto.components.diff.comments.DiffCommentPopover.c845170b3b", "Lines {{value0}}-{{value1}}", { value0: startLine, value1: lineNumber })
-              : translate("auto.components.diff.comments.DiffCommentPopover.e05063cfc1", "Line {{value0}}", { value0: lineNumber }))}
+              ? translate(
+                  'auto.components.diff.comments.DiffCommentPopover.c845170b3b',
+                  'Lines {{value0}}-{{value1}}',
+                  { value0: startLine, value1: lineNumber }
+                )
+              : translate(
+                  'auto.components.diff.comments.DiffCommentPopover.e05063cfc1',
+                  'Line {{value0}}',
+                  { value0: lineNumber }
+                ))}
         </div>
         <textarea
           ref={focusTextareaRef}
@@ -170,7 +178,8 @@ export function DiffCommentPopover({
         />
         <div className="orca-diff-comment-popover-footer">
           <Button variant="ghost" size="sm" onClick={onCancel}>
-            {translate("auto.components.diff.comments.DiffCommentPopover.2b3ce6d394", "Cancel")}</Button>
+            {translate('auto.components.diff.comments.DiffCommentPopover.2b3ce6d394', 'Cancel')}
+          </Button>
           <Button
             size="sm"
             onClick={handleSubmit}

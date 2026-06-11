@@ -115,7 +115,8 @@ export function SelectedTextCopyMenu({
               onClick={handleCopy}
             >
               <Copy className="size-3.5 text-muted-foreground" />
-              {translate("auto.components.SelectedTextCopyMenu.9b40d7b018", "Copy")}</button>
+              {translate('auto.components.SelectedTextCopyMenu.9b40d7b018', 'Copy')}
+            </button>
           </div>,
           document.body
         )}

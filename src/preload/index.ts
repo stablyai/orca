@@ -460,6 +460,11 @@ const api = {
 
     create: (args) => ipcRenderer.invoke('repos:create', args),
 
+    isGitAvailable: (): Promise<boolean> => ipcRenderer.invoke('repos:isGitAvailable'),
+
+    getDefaultCreateProjectParent: (): Promise<string> =>
+      ipcRenderer.invoke('repos:getDefaultCreateProjectParent'),
+
     remove: (args) => ipcRenderer.invoke('repos:remove', args),
 
     reorder: (args) => ipcRenderer.invoke('repos:reorder', args),

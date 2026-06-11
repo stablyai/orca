@@ -3842,6 +3842,38 @@ describe('OpenCode hook normalization', () => {
     expect(result?.payload.lastAssistantMessage).toBe('Hello! How can I help?')
   })
 
+  it('caps oversized MessagePart text from stale (pre-throttle) plugin builds', () => {
+    // Why: plugin builds installed before the throttle/cap fix re-post the
+    // full accumulated reply on every streamed part update. The listener must
+    // bound the text so each event's status compare, IPC fanout, and renderer
+    // store update stay O(cap) instead of O(reply length).
+    const assistant = _internals.normalizeHookPayload(
+      'opencode',
+      buildBody({
+        hook_event_name: 'MessagePart',
+        role: 'assistant',
+        text: 'a'.repeat(500_000)
+      }),
+      'production'
+    )
+    expect(assistant?.payload.lastAssistantMessage?.length).toBe(8_000)
+
+    // Why: prompt has always been single-line-capped at 200 by
+    // normalizeAgentStatusObject; this asserts the oversized input still
+    // flows through without blowing past that bound.
+    const user = _internals.normalizeHookPayload(
+      'opencode',
+      buildBody({
+        hook_event_name: 'MessagePart',
+        role: 'user',
+        text: 'u'.repeat(500_000),
+        messageID: 'msg-cap'
+      }),
+      'production'
+    )
+    expect(user?.payload.prompt?.length).toBe(200)
+  })
+
   it('subsequent SessionIdle preserves cached prompt + assistant message', () => {
     _internals.normalizeHookPayload(
       'opencode',

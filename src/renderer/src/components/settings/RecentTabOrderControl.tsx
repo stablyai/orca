@@ -16,13 +16,16 @@ export function RecentTabOrderControl({
 }): React.JSX.Element {
   return (
     <SearchableSetting
-      title={translate("auto.components.settings.RecentTabOrderControl.7a546f2309", "Tab Order")}
-      description={translate("auto.components.settings.RecentTabOrderControl.a867a0889f", "Recent or tab strip.")}
+      title={translate('auto.components.settings.RecentTabOrderControl.7a546f2309', 'Tab Order')}
+      description={translate(
+        'auto.components.settings.RecentTabOrderControl.a867a0889f',
+        'Recent or tab strip.'
+      )}
       keywords={keywords}
       className="max-w-none"
     >
       <SettingsRow
-        label={translate("auto.components.settings.RecentTabOrderControl.7a546f2309", "Tab Order")}
+        label={translate('auto.components.settings.RecentTabOrderControl.7a546f2309', 'Tab Order')}
         control={
           <Select
             value={ctrlTabOrderMode}
@@ -34,8 +37,18 @@ export function RecentTabOrderControl({
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="mru">{translate("auto.components.settings.RecentTabOrderControl.6e6a3fcc61", "Most recent")}</SelectItem>
-              <SelectItem value="sequential">{translate("auto.components.settings.RecentTabOrderControl.3b17c81ede", "Tab strip order")}</SelectItem>
+              <SelectItem value="mru">
+                {translate(
+                  'auto.components.settings.RecentTabOrderControl.6e6a3fcc61',
+                  'Most recent'
+                )}
+              </SelectItem>
+              <SelectItem value="sequential">
+                {translate(
+                  'auto.components.settings.RecentTabOrderControl.3b17c81ede',
+                  'Tab strip order'
+                )}
+              </SelectItem>
             </SelectContent>
           </Select>
         }

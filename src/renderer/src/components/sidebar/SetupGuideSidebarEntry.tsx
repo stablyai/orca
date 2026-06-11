@@ -92,14 +92,23 @@ export function SetupGuideSidebarEntry(): React.JSX.Element | null {
             sizeClassName="size-4"
           />
           <span className="flex min-w-0 flex-1 flex-col">
-            <span className="truncate">{translate("auto.components.sidebar.SetupGuideSidebarEntry.88d402b71d", "Onboarding checklist")}</span>
+            <span className="truncate">
+              {translate(
+                'auto.components.sidebar.SetupGuideSidebarEntry.88d402b71d',
+                'Onboarding checklist'
+              )}
+            </span>
           </span>
         </button>
       </ContextMenuTrigger>
       <ContextMenuContent>
         <ContextMenuItem onSelect={handleHideSetupGuide}>
           <EyeOff className="size-3.5" />
-          {translate("auto.components.sidebar.SetupGuideSidebarEntry.b0a7bfc34c", "Hide from sidebar")}</ContextMenuItem>
+          {translate(
+            'auto.components.sidebar.SetupGuideSidebarEntry.b0a7bfc34c',
+            'Hide from sidebar'
+          )}
+        </ContextMenuItem>
       </ContextMenuContent>
     </ContextMenu>
   )

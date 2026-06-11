@@ -41,7 +41,10 @@ createRoot(rootElement).render(
       boundaryId="app.root"
       surface="app-root"
       title={translate('app.recoverableError.rootTitle', 'Orca hit a renderer error.')}
-      description={translate('app.recoverableError.rootDescription', 'The app shell could not finish rendering. Retry to remount it, or relaunch Orca if the error persists.')}
+      description={translate(
+        'app.recoverableError.rootDescription',
+        'The app shell could not finish rendering. Retry to remount it, or relaunch Orca if the error persists.'
+      )}
     >
       <I18nProvider>
         <App />

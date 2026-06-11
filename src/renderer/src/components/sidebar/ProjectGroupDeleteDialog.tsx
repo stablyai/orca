@@ -77,9 +77,20 @@ export function ProjectGroupDeleteDialog({
         showCloseButton={false}
       >
         <DialogHeader>
-          <DialogTitle className="text-sm">{translate("auto.components.sidebar.ProjectGroupDeleteDialog.591f330288", "Delete Project Group")}</DialogTitle>
+          <DialogTitle className="text-sm">
+            {translate(
+              'auto.components.sidebar.ProjectGroupDeleteDialog.591f330288',
+              'Delete Project Group'
+            )}
+          </DialogTitle>
           <DialogDescription className="text-xs">
-            {translate("auto.components.sidebar.ProjectGroupDeleteDialog.69f5cb97d0", "Delete")}<span className="break-all font-medium text-foreground">{groupName}</span> {translate("auto.components.sidebar.ProjectGroupDeleteDialog.9be10d49ea", "and ungroup its projects.")}</DialogDescription>
+            {translate('auto.components.sidebar.ProjectGroupDeleteDialog.69f5cb97d0', 'Delete')}
+            <span className="break-all font-medium text-foreground">{groupName}</span>{' '}
+            {translate(
+              'auto.components.sidebar.ProjectGroupDeleteDialog.9be10d49ea',
+              'and ungroup its projects.'
+            )}
+          </DialogDescription>
         </DialogHeader>
         <DialogFooter>
           <Button
@@ -89,7 +100,8 @@ export function ProjectGroupDeleteDialog({
             className="text-xs"
             onClick={() => onOpenChange(false)}
           >
-            {translate("auto.components.sidebar.ProjectGroupDeleteDialog.ca65b78f78", "Cancel")}</Button>
+            {translate('auto.components.sidebar.ProjectGroupDeleteDialog.ca65b78f78', 'Cancel')}
+          </Button>
           <Button
             type="button"
             variant="destructive"
@@ -98,7 +110,12 @@ export function ProjectGroupDeleteDialog({
             disabled={deleting}
             onClick={handleConfirm}
           >
-            {deleting ? translate("auto.components.sidebar.ProjectGroupDeleteDialog.2c14ce677a", "Deleting...") : translate("auto.components.sidebar.ProjectGroupDeleteDialog.69f5cb97d0", "Delete")}
+            {deleting
+              ? translate(
+                  'auto.components.sidebar.ProjectGroupDeleteDialog.2c14ce677a',
+                  'Deleting...'
+                )
+              : translate('auto.components.sidebar.ProjectGroupDeleteDialog.69f5cb97d0', 'Delete')}
           </Button>
         </DialogFooter>
       </DialogContent>

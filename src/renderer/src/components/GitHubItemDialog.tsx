@@ -716,6 +716,7 @@ function PRReviewersPanel({
       patchWorkItem(item.id, { reviewRequests: nextReviewRequests }, item.repoId)
       onReviewersRequested(nextReviewRequests)
       setReviewerInput('')
+      useAppStore.getState().recordFeatureInteraction('github-tasks')
       toast.success(
         logins.length === 1
           ? translate('auto.components.GitHubItemDialog.ea985e657f', 'Reviewer requested')
@@ -789,6 +790,7 @@ function PRReviewersPanel({
       patchWorkItem(item.id, { reviewRequests: nextReviewRequests }, item.repoId)
       onReviewersRequested(nextReviewRequests)
       setReviewerInput('')
+      useAppStore.getState().recordFeatureInteraction('github-tasks')
       toast.success(
         logins.length === 1
           ? translate('auto.components.GitHubItemDialog.69515bff81', 'Reviewer removed')
@@ -2571,6 +2573,7 @@ function ConversationTab({
       })
       onBodyUpdated(resolvedBodyDraft)
       setBodyEditing(false)
+      useAppStore.getState().recordFeatureInteraction('github-tasks')
       toast.success(
         translate('auto.components.GitHubItemDialog.5221548274', 'Description updated.')
       )
@@ -3116,6 +3119,7 @@ function PRActionsPanel({
         number: item.number,
         updates: { state: nextState }
       })
+      useAppStore.getState().recordFeatureInteraction('github-tasks')
       toast.success(
         nextState === 'closed'
           ? translate('auto.components.GitHubItemDialog.9f88657c4e', 'Pull request closed')
@@ -3170,6 +3174,7 @@ function PRActionsPanel({
         return
       }
       applyStatePatch('merged')
+      useAppStore.getState().recordFeatureInteraction('github-tasks')
       toast.success(translate('auto.components.GitHubItemDialog.dbe5e2448e', 'Pull request merged'))
       onMutated()
     } catch {
@@ -3199,6 +3204,7 @@ function PRActionsPanel({
         toast.error(result.error)
         return
       }
+      useAppStore.getState().recordFeatureInteraction('github-tasks')
       toast.success(
         enabled
           ? translate('auto.components.GitHubItemDialog.a35ea5a0f6', 'Auto-merge enabled')
@@ -4550,6 +4556,7 @@ function GHEditSection({
           patchProjectRowIfNeeded({ state: prevState })
         },
         onSuccess: () => {
+          useAppStore.getState().recordFeatureInteraction('github-tasks')
           patchWorkItem(item.id, { state: newState }, item.repoId)
           patchProjectRowIfNeeded({ state: newState })
           onMutated()
@@ -4594,6 +4601,7 @@ function GHEditSection({
             patchProjectRowIfNeeded({ labels: newLabels })
           },
           onSuccess: () => {
+            useAppStore.getState().recordFeatureInteraction('github-tasks')
             onMutated()
           },
           onRevert: () => {
@@ -4624,6 +4632,7 @@ function GHEditSection({
             patchProjectRowIfNeeded({ labels: prevLabels })
           },
           onSuccess: () => {
+            useAppStore.getState().recordFeatureInteraction('github-tasks')
             onMutated()
           },
           onError: (err) => toast.error(err)
@@ -4675,6 +4684,7 @@ function GHEditSection({
             patchProjectRowIfNeeded({ assignees: prevAssignees })
           },
           onSuccess: () => {
+            useAppStore.getState().recordFeatureInteraction('github-tasks')
             onMutated()
           },
           onError: (err) => toast.error(err)
@@ -4694,6 +4704,7 @@ function GHEditSection({
             patchProjectRowIfNeeded({ assignees: newAssignees })
           },
           onSuccess: () => {
+            useAppStore.getState().recordFeatureInteraction('github-tasks')
             onMutated()
           },
           onRevert: () => {
@@ -5798,6 +5809,7 @@ export default function GitHubItemDialog({
 
   const appendOptimisticComment = useCallback(
     (comment: PRComment) => {
+      useAppStore.getState().recordFeatureInteraction('github-tasks')
       // Why: skip refreshDetails() — gh api --cache 60s returns stale data
       // that overwrites the optimistic comment. The next dialog open (after
       // cache expiry) will pick up the server-confirmed version.

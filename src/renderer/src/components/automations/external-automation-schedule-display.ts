@@ -41,6 +41,9 @@ export function getExternalAutomationScheduleDisplay(
   }
 
   return {
-    label: translate("auto.components.automations.external.automation.schedule.display.a8e92b815a", "Schedule unavailable")
+    label: translate(
+      'auto.components.automations.external.automation.schedule.display.a8e92b815a',
+      'Schedule unavailable'
+    )
   }
 }

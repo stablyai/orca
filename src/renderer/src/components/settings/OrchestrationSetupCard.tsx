@@ -19,8 +19,14 @@ export function OrchestrationSetupCard(props: {
   const setupPanel = (
     <AgentSkillSetupPanel
       className={compact ? 'w-full max-w-[520px]' : undefined}
-      title={translate("auto.components.settings.OrchestrationSetupCard.2777ff0fdc", "Orchestration skill")}
-      description={translate("auto.components.settings.OrchestrationSetupCard.e7d2a5146c", "Enables agents to hand off context and coordinate work through Orca.")}
+      title={translate(
+        'auto.components.settings.OrchestrationSetupCard.2777ff0fdc',
+        'Orchestration skill'
+      )}
+      description={translate(
+        'auto.components.settings.OrchestrationSetupCard.e7d2a5146c',
+        'Enables agents to hand off context and coordinate work through Orca.'
+      )}
       command={ORCHESTRATION_SKILL_INSTALL_COMMAND}
       terminalTitle="Orchestration setup"
       terminalAriaLabel="Orchestration skill install terminal"

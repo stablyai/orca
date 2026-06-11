@@ -89,17 +89,41 @@ export function getDailySegments(
 export function getLegendItems(provider: 'claude' | 'codex') {
   if (provider === 'claude') {
     return [
-      { label: translate("auto.components.stats.share.card.utils.c2d7b23d57", "Input"), color: 'rgba(56, 189, 248, 0.8)' },
-      { label: translate("auto.components.stats.share.card.utils.33d38e2177", "Output"), color: 'rgba(52, 211, 153, 0.8)' },
-      { label: translate("auto.components.stats.share.card.utils.cc28cb965e", "Cache read"), color: 'rgba(251, 191, 36, 0.7)' },
-      { label: translate("auto.components.stats.share.card.utils.9d166247ee", "Cache write"), color: 'rgba(217, 70, 239, 0.7)' }
+      {
+        label: translate('auto.components.stats.share.card.utils.c2d7b23d57', 'Input'),
+        color: 'rgba(56, 189, 248, 0.8)'
+      },
+      {
+        label: translate('auto.components.stats.share.card.utils.33d38e2177', 'Output'),
+        color: 'rgba(52, 211, 153, 0.8)'
+      },
+      {
+        label: translate('auto.components.stats.share.card.utils.cc28cb965e', 'Cache read'),
+        color: 'rgba(251, 191, 36, 0.7)'
+      },
+      {
+        label: translate('auto.components.stats.share.card.utils.9d166247ee', 'Cache write'),
+        color: 'rgba(217, 70, 239, 0.7)'
+      }
     ]
   }
   return [
-    { label: translate("auto.components.stats.share.card.utils.c2d7b23d57", "Input"), color: 'rgba(56, 189, 248, 0.8)' },
-    { label: translate("auto.components.stats.share.card.utils.33d38e2177", "Output"), color: 'rgba(52, 211, 153, 0.8)' },
-    { label: translate("auto.components.stats.share.card.utils.4ee864629a", "Cached input"), color: 'rgba(251, 191, 36, 0.7)' },
-    { label: translate("auto.components.stats.share.card.utils.7080aeaebb", "Reasoning"), color: 'rgba(217, 70, 239, 0.7)' }
+    {
+      label: translate('auto.components.stats.share.card.utils.c2d7b23d57', 'Input'),
+      color: 'rgba(56, 189, 248, 0.8)'
+    },
+    {
+      label: translate('auto.components.stats.share.card.utils.33d38e2177', 'Output'),
+      color: 'rgba(52, 211, 153, 0.8)'
+    },
+    {
+      label: translate('auto.components.stats.share.card.utils.4ee864629a', 'Cached input'),
+      color: 'rgba(251, 191, 36, 0.7)'
+    },
+    {
+      label: translate('auto.components.stats.share.card.utils.7080aeaebb', 'Reasoning'),
+      color: 'rgba(217, 70, 239, 0.7)'
+    }
   ]
 }
 
@@ -168,10 +192,13 @@ export function CardFooter(props: {
     >
       <div style={{ display: 'table-cell', verticalAlign: 'middle' }}>
         <span style={{ fontSize: 12, color: '#888' }}>
-          <strong style={{ color: '#ccc' }}>{formatTokens(props.summary.inputTokens)}</strong> {translate("auto.components.stats.share.card.utils.5d66fdd7c2", "input")}</span>
+          <strong style={{ color: '#ccc' }}>{formatTokens(props.summary.inputTokens)}</strong>{' '}
+          {translate('auto.components.stats.share.card.utils.5d66fdd7c2', 'input')}
+        </span>
         <span style={{ fontSize: 12, color: '#888', marginLeft: 16 }}>
           <strong style={{ color: '#ccc' }}>{formatTokens(props.summary.outputTokens)}</strong>{' '}
-          {translate("auto.components.stats.share.card.utils.d864fc5f98", "output")}</span>
+          {translate('auto.components.stats.share.card.utils.d864fc5f98', 'output')}
+        </span>
       </div>
       <div style={{ display: 'table-cell', verticalAlign: 'middle', textAlign: 'right' }}>
         <span style={{ display: 'inline-block', verticalAlign: 'middle' }}>
@@ -186,7 +213,11 @@ export function CardFooter(props: {
             marginLeft: 5
           }}
         >
-          {translate("auto.components.stats.share.card.utils.19f4b4dc75", "github.com/stablyai/orca")}</span>
+          {translate(
+            'auto.components.stats.share.card.utils.19f4b4dc75',
+            'github.com/stablyai/orca'
+          )}
+        </span>
       </div>
     </div>
   )

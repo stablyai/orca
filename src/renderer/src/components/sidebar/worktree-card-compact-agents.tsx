@@ -178,7 +178,17 @@ export function CompactAgentSummaryButton({
           : 'border border-worktree-sidebar-border/70 bg-worktree-sidebar-accent/35'
       )}
       aria-label={
-        expanded ? translate("auto.components.sidebar.worktree.card.compact.agents.0c1debfe84", "Collapse {{value0}}", { value0: subjectLabel }) : translate("auto.components.sidebar.worktree.card.compact.agents.289a1d2ca7", "Expand {{value0}}. {{value1}}", { value0: summary, value1: agentIdentitySummary })
+        expanded
+          ? translate(
+              'auto.components.sidebar.worktree.card.compact.agents.0c1debfe84',
+              'Collapse {{value0}}',
+              { value0: subjectLabel }
+            )
+          : translate(
+              'auto.components.sidebar.worktree.card.compact.agents.289a1d2ca7',
+              'Expand {{value0}}. {{value1}}',
+              { value0: summary, value1: agentIdentitySummary }
+            )
       }
       aria-expanded={expanded}
       onClick={handleToggle}
@@ -298,7 +308,15 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
         <button
           type="button"
           className="compact-agent-child-disclosure-button flex size-4 shrink-0 items-center justify-center rounded-sm text-muted-foreground hover:bg-worktree-sidebar-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-worktree-sidebar-ring"
-          aria-label={translate("auto.components.sidebar.worktree.card.compact.agents.a128d7006b", "{{value0}} {{value1}} child {{value2}}", { value0: childAgentsExpanded ? 'Hide' : 'Show', value1: childAgentCount, value2: childAgentCount === 1 ? 'agent' : 'agents' })}
+          aria-label={translate(
+            'auto.components.sidebar.worktree.card.compact.agents.a128d7006b',
+            '{{value0}} {{value1}} child {{value2}}',
+            {
+              value0: childAgentsExpanded ? 'Hide' : 'Show',
+              value1: childAgentCount,
+              value2: childAgentCount === 1 ? 'agent' : 'agents'
+            }
+          )}
           aria-expanded={childAgentsExpanded}
           onClick={handleToggleChildren}
           onKeyDown={stopActivationKeyPropagation}

@@ -132,7 +132,17 @@ export function ContextualTourOverlaySurface({
           type="button"
           variant="ghost"
           size="icon-xs"
-          aria-label={renderState.isLastStep ? translate("auto.components.contextual.tours.ContextualTourOverlaySurface.d974f32a83", "Dismiss tour") : translate("auto.components.contextual.tours.ContextualTourOverlaySurface.4f86e2a10b", "Skip tour")}
+          aria-label={
+            renderState.isLastStep
+              ? translate(
+                  'auto.components.contextual.tours.ContextualTourOverlaySurface.d974f32a83',
+                  'Dismiss tour'
+                )
+              : translate(
+                  'auto.components.contextual.tours.ContextualTourOverlaySurface.4f86e2a10b',
+                  'Skip tour'
+                )
+          }
           onClick={() => onSkip(activeTourId)}
           className="absolute right-2 top-2 text-muted-foreground hover:text-foreground"
         >
@@ -150,9 +160,22 @@ export function ContextualTourOverlaySurface({
           />
           <div className="flex items-center gap-1.5">
             {!renderState.isFirstStep ? (
-              <Button type="button" variant="ghost" size="xs" aria-label={translate("auto.components.contextual.tours.ContextualTourOverlaySurface.4a9568f773", "Back")} onClick={onBack}>
+              <Button
+                type="button"
+                variant="ghost"
+                size="xs"
+                aria-label={translate(
+                  'auto.components.contextual.tours.ContextualTourOverlaySurface.4a9568f773',
+                  'Back'
+                )}
+                onClick={onBack}
+              >
                 <ArrowLeft />
-                {translate("auto.components.contextual.tours.ContextualTourOverlaySurface.4a9568f773", "Back")}</Button>
+                {translate(
+                  'auto.components.contextual.tours.ContextualTourOverlaySurface.4a9568f773',
+                  'Back'
+                )}
+              </Button>
             ) : null}
             {renderState.secondaryAction ? (
               <Button
@@ -176,7 +199,7 @@ export function ContextualTourOverlaySurface({
                 }
               >
                 {primaryAction.label}
-                {primaryAction.kind === "next" && !renderState.isLastStep ? <ArrowRight /> : null}
+                {primaryAction.kind === 'next' && !renderState.isLastStep ? <ArrowRight /> : null}
               </Button>
             ) : null}
           </div>

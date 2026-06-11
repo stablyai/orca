@@ -53,7 +53,11 @@ export function PrivacyDiagnosticBundleControls({
           onClick={() => void onCopyTicket()}
         >
           <ActionIcon busy={copyingTicket} icon={<Clipboard className="size-3.5" />} />
-          {translate("auto.components.settings.PrivacyDiagnosticBundleControls.2801d4ce22", "Copy ticket")}</Button>
+          {translate(
+            'auto.components.settings.PrivacyDiagnosticBundleControls.2801d4ce22',
+            'Copy ticket'
+          )}
+        </Button>
         <Button
           variant="destructive"
           size="sm"
@@ -61,10 +65,15 @@ export function PrivacyDiagnosticBundleControls({
           onClick={() => void onDeleteUploadedBundle()}
         >
           <ActionIcon busy={deletingTicket} icon={<Trash2 className="size-3.5" />} />
-          {translate("auto.components.settings.PrivacyDiagnosticBundleControls.7f14a1733c", "Delete bundle")}</Button>
+          {translate(
+            'auto.components.settings.PrivacyDiagnosticBundleControls.7f14a1733c',
+            'Delete bundle'
+          )}
+        </Button>
         <Button variant="ghost" size="sm" disabled={deletingTicket} onClick={onDismissTicket}>
           <Check className="size-3.5" />
-          {translate("auto.components.settings.PrivacyDiagnosticBundleControls.2ae9a6b63e", "Done")}</Button>
+          {translate('auto.components.settings.PrivacyDiagnosticBundleControls.2ae9a6b63e', 'Done')}
+        </Button>
       </>
     )
   }
@@ -79,13 +88,25 @@ export function PrivacyDiagnosticBundleControls({
           onClick={() => void onOpenPreview()}
         >
           <ActionIcon busy={openingPreview} icon={<Eye className="size-3.5" />} />
-          {translate("auto.components.settings.PrivacyDiagnosticBundleControls.798b6f0be5", "Open preview")}</Button>
+          {translate(
+            'auto.components.settings.PrivacyDiagnosticBundleControls.798b6f0be5',
+            'Open preview'
+          )}
+        </Button>
         <Button size="sm" disabled={!previewOpened || uploading} onClick={() => void onUpload()}>
           <ActionIcon busy={uploading} icon={<UploadCloud className="size-3.5" />} />
-          {translate("auto.components.settings.PrivacyDiagnosticBundleControls.aca2c8a367", "Upload")}</Button>
+          {translate(
+            'auto.components.settings.PrivacyDiagnosticBundleControls.aca2c8a367',
+            'Upload'
+          )}
+        </Button>
         <Button variant="ghost" size="sm" disabled={discarding} onClick={() => void onDiscard()}>
           <ActionIcon busy={discarding} icon={<X className="size-3.5" />} />
-          {translate("auto.components.settings.PrivacyDiagnosticBundleControls.a5acaffdb6", "Discard")}</Button>
+          {translate(
+            'auto.components.settings.PrivacyDiagnosticBundleControls.a5acaffdb6',
+            'Discard'
+          )}
+        </Button>
       </>
     )
   }
@@ -98,7 +119,11 @@ export function PrivacyDiagnosticBundleControls({
       onClick={() => void onCollect()}
     >
       <ActionIcon busy={collecting} icon={<FileText className="size-3.5" />} />
-      {translate("auto.components.settings.PrivacyDiagnosticBundleControls.dc8404a930", "Create preview")}</Button>
+      {translate(
+        'auto.components.settings.PrivacyDiagnosticBundleControls.dc8404a930',
+        'Create preview'
+      )}
+    </Button>
   )
 }
 

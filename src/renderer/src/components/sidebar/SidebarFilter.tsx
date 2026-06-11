@@ -120,7 +120,16 @@ const SidebarFilter = React.memo(function SidebarFilter({
               size="icon-xs"
               type="button"
               aria-label={
-                hasAnyFilter ? translate("auto.components.sidebar.SidebarFilter.75405270ed", "Edit filters ({{value0}} active)", { value0: activeFilterCount }) : translate("auto.components.sidebar.SidebarFilter.f506a1262a", "Filter workspaces")
+                hasAnyFilter
+                  ? translate(
+                      'auto.components.sidebar.SidebarFilter.75405270ed',
+                      'Edit filters ({{value0}} active)',
+                      { value0: activeFilterCount }
+                    )
+                  : translate(
+                      'auto.components.sidebar.SidebarFilter.f506a1262a',
+                      'Filter workspaces'
+                    )
               }
               className="relative text-muted-foreground"
               data-workspace-board-preserve-open={preserveWorkspaceBoardOpen ? '' : undefined}
@@ -140,7 +149,9 @@ const SidebarFilter = React.memo(function SidebarFilter({
           </DropdownMenuTrigger>
         </TooltipTrigger>
         <TooltipContent side={tooltipSide} sideOffset={6}>
-          {hasAnyFilter ? translate("auto.components.sidebar.SidebarFilter.ee240a39eb", "Edit filters") : translate("auto.components.sidebar.SidebarFilter.f506a1262a", "Filter workspaces")}
+          {hasAnyFilter
+            ? translate('auto.components.sidebar.SidebarFilter.ee240a39eb', 'Edit filters')
+            : translate('auto.components.sidebar.SidebarFilter.f506a1262a', 'Filter workspaces')}
         </TooltipContent>
       </Tooltip>
       <DropdownMenuContent
@@ -152,13 +163,16 @@ const SidebarFilter = React.memo(function SidebarFilter({
       >
         <FilterToggleRow
           icon={<Moon className="size-3.5" />}
-          label={translate("auto.components.sidebar.SidebarFilter.638a2d221d", "Hide sleeping")}
+          label={translate('auto.components.sidebar.SidebarFilter.638a2d221d', 'Hide sleeping')}
           checked={!showSleepingWorkspaces}
           onChange={(hideSleeping) => setShowSleepingWorkspaces(!hideSleeping)}
         />
         <FilterToggleRow
           icon={<GitBranch className="size-3.5" />}
-          label={translate("auto.components.sidebar.SidebarFilter.e5cb32a898", "Hide default branch")}
+          label={translate(
+            'auto.components.sidebar.SidebarFilter.e5cb32a898',
+            'Hide default branch'
+          )}
           checked={hideDefaultBranchWorkspace}
           onChange={setHideDefaultBranchWorkspace}
         />
@@ -168,7 +182,8 @@ const SidebarFilter = React.memo(function SidebarFilter({
             <DropdownMenuSeparator />
             <div className="flex items-center justify-between px-2 py-1">
               <span className="text-[11px] font-semibold tracking-wide uppercase text-muted-foreground">
-                {translate("auto.components.sidebar.SidebarFilter.5f7085a077", "Projects")}{hasRepoFilter && (
+                {translate('auto.components.sidebar.SidebarFilter.5f7085a077', 'Projects')}
+                {hasRepoFilter && (
                   <span className="ml-1.5 normal-case tracking-normal font-medium text-foreground">
                     · {selectedCount}
                   </span>
@@ -181,14 +196,16 @@ const SidebarFilter = React.memo(function SidebarFilter({
                   className="rounded-full px-2 py-0.5 text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-40 disabled:hover:bg-transparent"
                   disabled={allSelected}
                 >
-                  {translate("auto.components.sidebar.SidebarFilter.139877b384", "Select all")}</button>
+                  {translate('auto.components.sidebar.SidebarFilter.139877b384', 'Select all')}
+                </button>
                 <button
                   type="button"
                   onClick={clearRepos}
                   className="rounded-full px-2 py-0.5 text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-40 disabled:hover:bg-transparent"
                   disabled={!hasRepoFilter}
                 >
-                  {translate("auto.components.sidebar.SidebarFilter.779b7ba05d", "Clear")}</button>
+                  {translate('auto.components.sidebar.SidebarFilter.779b7ba05d', 'Clear')}
+                </button>
               </div>
             </div>
 
@@ -200,7 +217,10 @@ const SidebarFilter = React.memo(function SidebarFilter({
             >
               <CommandInput
                 autoFocus
-                placeholder={translate("auto.components.sidebar.SidebarFilter.489d1c8c9f", "Search projects...")}
+                placeholder={translate(
+                  'auto.components.sidebar.SidebarFilter.489d1c8c9f',
+                  'Search projects...'
+                )}
                 value={query}
                 onValueChange={(nextQuery) => {
                   // Why: typing creates a new filtered list, so keyboard
@@ -214,7 +234,12 @@ const SidebarFilter = React.memo(function SidebarFilter({
                 iconClassName="h-3.5 w-3.5"
               />
               <CommandList className="max-h-64 py-1">
-                <CommandEmpty className="py-4 text-[11px]">{translate("auto.components.sidebar.SidebarFilter.b9e8802e73", "No projects match")}</CommandEmpty>
+                <CommandEmpty className="py-4 text-[11px]">
+                  {translate(
+                    'auto.components.sidebar.SidebarFilter.b9e8802e73',
+                    'No projects match'
+                  )}
+                </CommandEmpty>
                 {filteredRepos.map((r) => {
                   const checked = selectedRepoIdSet.has(r.id)
                   return (
@@ -233,7 +258,8 @@ const SidebarFilter = React.memo(function SidebarFilter({
                         {r.connectionId && (
                           <span className="shrink-0 inline-flex items-center gap-0.5 rounded bg-muted px-1 py-0.5 text-[9px] font-medium leading-none text-muted-foreground">
                             <Server className="size-2.5" />
-                            {translate("auto.components.sidebar.SidebarFilter.81ded53722", "SSH")}</span>
+                            {translate('auto.components.sidebar.SidebarFilter.81ded53722', 'SSH')}
+                          </span>
                         )}
                       </span>
                       {checked && (
@@ -258,7 +284,8 @@ const SidebarFilter = React.memo(function SidebarFilter({
               onClick={clearAll}
               className="rounded-[5px] px-2 py-1 text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
             >
-              {translate("auto.components.sidebar.SidebarFilter.92a23e6d07", "Reset filters")}</button>
+              {translate('auto.components.sidebar.SidebarFilter.92a23e6d07', 'Reset filters')}
+            </button>
           ) : (
             <span />
           )}
@@ -268,7 +295,8 @@ const SidebarFilter = React.memo(function SidebarFilter({
             className="inline-flex items-center gap-1.5 rounded-[5px] px-2 py-1 text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
           >
             <FolderPlus className="size-3.5" />
-            {translate("auto.components.sidebar.SidebarFilter.e3b3898218", "Add project")}</button>
+            {translate('auto.components.sidebar.SidebarFilter.e3b3898218', 'Add project')}
+          </button>
         </div>
       </DropdownMenuContent>
     </DropdownMenu>

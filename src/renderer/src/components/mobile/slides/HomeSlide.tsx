@@ -8,34 +8,63 @@ export function HomeSlide({ tapping }: { tapping: boolean }): React.JSX.Element 
       <div className="mp-app-topbar">
         <div className="mp-app-brand">
           <OrcaLogo />
-          <span className="mp-app-brand-name">{translate("auto.components.mobile.slides.HomeSlide.5d94e8ddcc", "Orca")}</span>
+          <span className="mp-app-brand-name">
+            {translate('auto.components.mobile.slides.HomeSlide.5d94e8ddcc', 'Orca')}
+          </span>
         </div>
-        <button type="button" className="mp-icon-button" aria-label={translate("auto.components.mobile.slides.HomeSlide.af761a0c0d", "Settings")}>
+        <button
+          type="button"
+          className="mp-icon-button"
+          aria-label={translate('auto.components.mobile.slides.HomeSlide.af761a0c0d', 'Settings')}
+        >
           <SettingsIcon />
         </button>
       </div>
 
       <div className="mp-scroll-region">
         <div className="mp-greeting">
-          <div className="mp-greeting-title">{translate("auto.components.mobile.slides.HomeSlide.c0e2e9dcd9", "Welcome back")}</div>
+          <div className="mp-greeting-title">
+            {translate('auto.components.mobile.slides.HomeSlide.c0e2e9dcd9', 'Welcome back')}
+          </div>
         </div>
 
         <div className="mp-stat-row">
-          <Stat value="1,284" label={translate("auto.components.mobile.slides.HomeSlide.00a6903322", "Agents spawned")} />
-          <Stat value="142h" label={translate("auto.components.mobile.slides.HomeSlide.4a40af029b", "Agent time")} />
-          <Stat value="96" label={translate("auto.components.mobile.slides.HomeSlide.156db8a68a", "PRs created")} />
+          <Stat
+            value="1,284"
+            label={translate(
+              'auto.components.mobile.slides.HomeSlide.00a6903322',
+              'Agents spawned'
+            )}
+          />
+          <Stat
+            value="142h"
+            label={translate('auto.components.mobile.slides.HomeSlide.4a40af029b', 'Agent time')}
+          />
+          <Stat
+            value="96"
+            label={translate('auto.components.mobile.slides.HomeSlide.156db8a68a', 'PRs created')}
+          />
         </div>
 
-        <div className="mp-section-label">{translate("auto.components.mobile.slides.HomeSlide.2f1a1d10c4", "Desktops")}</div>
+        <div className="mp-section-label">
+          {translate('auto.components.mobile.slides.HomeSlide.2f1a1d10c4', 'Desktops')}
+        </div>
         <div className={cn('mp-host-card', tapping && 'is-tapping')}>
           <div className="mp-host-icon">
             <DesktopIcon />
           </div>
           <div className="mp-host-main">
-            <div className="mp-host-name">{translate("auto.components.mobile.slides.HomeSlide.19c212e25e", "MacBook Pro")}</div>
+            <div className="mp-host-name">
+              {translate('auto.components.mobile.slides.HomeSlide.19c212e25e', 'MacBook Pro')}
+            </div>
             <div className="mp-host-meta">
               <span className="mp-status-dot is-green" />
-              <span>{translate("auto.components.mobile.slides.HomeSlide.0bc1881bc4", "Connected · 40 worktrees · 5 active")}</span>
+              <span>
+                {translate(
+                  'auto.components.mobile.slides.HomeSlide.0bc1881bc4',
+                  'Connected · 40 worktrees · 5 active'
+                )}
+              </span>
             </div>
           </div>
           <div className="mp-chevron-right">
@@ -47,10 +76,14 @@ export function HomeSlide({ tapping }: { tapping: boolean }): React.JSX.Element 
             <DesktopIcon />
           </div>
           <div className="mp-host-main">
-            <div className="mp-host-name is-dim">{translate("auto.components.mobile.slides.HomeSlide.091355da3d", "M1 Mini · home")}</div>
+            <div className="mp-host-name is-dim">
+              {translate('auto.components.mobile.slides.HomeSlide.091355da3d', 'M1 Mini · home')}
+            </div>
             <div className="mp-host-meta">
               <span className="mp-status-dot is-muted" />
-              <span>{translate("auto.components.mobile.slides.HomeSlide.cf3f98fa3f", "Disconnected")}</span>
+              <span>
+                {translate('auto.components.mobile.slides.HomeSlide.cf3f98fa3f', 'Disconnected')}
+              </span>
             </div>
           </div>
           <div className="mp-chevron-right">
@@ -59,16 +92,24 @@ export function HomeSlide({ tapping }: { tapping: boolean }): React.JSX.Element 
         </div>
 
         <div className="mp-section-label" style={{ marginTop: 14 }}>
-          {translate("auto.components.mobile.slides.HomeSlide.c791677f2f", "Resume")}</div>
+          {translate('auto.components.mobile.slides.HomeSlide.c791677f2f', 'Resume')}
+        </div>
         <div className="mp-resume-card">
           <div className="mp-resume-icon">
             <ResumeIcon />
           </div>
           <div className="mp-host-main">
-            <div className="mp-resume-title">{translate("auto.components.mobile.slides.HomeSlide.25d6e8a491", "feat/mobile-page")}</div>
+            <div className="mp-resume-title">
+              {translate('auto.components.mobile.slides.HomeSlide.25d6e8a491', 'feat/mobile-page')}
+            </div>
             <div className="mp-resume-sub">
               <span className="mp-repo-dot" style={{ background: '#3b82f6' }} />
-              <span>{translate("auto.components.mobile.slides.HomeSlide.d33d7a9c29", "orca&nbsp;&nbsp;·&nbsp;&nbsp;feat/mobile-page")}</span>
+              <span>
+                {translate(
+                  'auto.components.mobile.slides.HomeSlide.d33d7a9c29',
+                  'orca&nbsp;&nbsp;·&nbsp;&nbsp;feat/mobile-page'
+                )}
+              </span>
             </div>
           </div>
           <div className="mp-chevron-right">
@@ -77,16 +118,27 @@ export function HomeSlide({ tapping }: { tapping: boolean }): React.JSX.Element 
         </div>
 
         <div className="mp-section-label" style={{ marginTop: 10 }}>
-          {translate("auto.components.mobile.slides.HomeSlide.a4c3f7b7aa", "Tasks")}</div>
+          {translate('auto.components.mobile.slides.HomeSlide.a4c3f7b7aa', 'Tasks')}
+        </div>
         <div className="mp-task-home-card">
           <div className="mp-task-home-icon">
             <ListTodoIcon />
           </div>
           <div className="mp-host-main">
-            <div className="mp-task-home-title">{translate("auto.components.mobile.slides.HomeSlide.a4c3f7b7aa", "Tasks")}</div>
-            <div className="mp-task-home-subtitle">{translate("auto.components.mobile.slides.HomeSlide.d047197480", "GitHub · Linear")}</div>
+            <div className="mp-task-home-title">
+              {translate('auto.components.mobile.slides.HomeSlide.a4c3f7b7aa', 'Tasks')}
+            </div>
+            <div className="mp-task-home-subtitle">
+              {translate('auto.components.mobile.slides.HomeSlide.d047197480', 'GitHub · Linear')}
+            </div>
           </div>
-          <div className="mp-task-home-providers" aria-label={translate("auto.components.mobile.slides.HomeSlide.0bad5b07c8", "GitHub and Linear")}>
+          <div
+            className="mp-task-home-providers"
+            aria-label={translate(
+              'auto.components.mobile.slides.HomeSlide.0bad5b07c8',
+              'GitHub and Linear'
+            )}
+          >
             <div className="mp-task-home-provider-button">
               <GithubIcon />
             </div>
@@ -100,24 +152,30 @@ export function HomeSlide({ tapping }: { tapping: boolean }): React.JSX.Element 
         </div>
 
         <div className="mp-section-label" style={{ marginTop: 14 }}>
-          {translate("auto.components.mobile.slides.HomeSlide.0b00c98506", "Quick Actions")}</div>
+          {translate('auto.components.mobile.slides.HomeSlide.0b00c98506', 'Quick Actions')}
+        </div>
         <div className="mp-quick-actions">
           <div className="mp-quick-action">
             <div className="mp-quick-action-icon">
               <QrSmallIcon />
             </div>
-            <div className="mp-quick-action-label">{translate("auto.components.mobile.slides.HomeSlide.4405f3c440", "Pair Desktop")}</div>
+            <div className="mp-quick-action-label">
+              {translate('auto.components.mobile.slides.HomeSlide.4405f3c440', 'Pair Desktop')}
+            </div>
           </div>
           <div className="mp-quick-action">
             <div className="mp-quick-action-icon">
               <PlusIcon />
             </div>
-            <div className="mp-quick-action-label">{translate("auto.components.mobile.slides.HomeSlide.e27fdaee51", "New Workspace")}</div>
+            <div className="mp-quick-action-label">
+              {translate('auto.components.mobile.slides.HomeSlide.e27fdaee51', 'New Workspace')}
+            </div>
           </div>
         </div>
 
         <div className="mp-section-label" style={{ marginTop: 14 }}>
-          {translate("auto.components.mobile.slides.HomeSlide.8a350a4784", "Account usage")}</div>
+          {translate('auto.components.mobile.slides.HomeSlide.8a350a4784', 'Account usage')}
+        </div>
         <div className="mp-accounts-card">
           <AccountRow
             icon={<ClaudeIcon size={18} />}
@@ -163,8 +221,14 @@ function AccountRow({
       <div className="mp-accounts-info">
         <div className="mp-accounts-email">{email}</div>
         <div className="mp-accounts-bars">
-          <UsageBar label={translate("auto.components.mobile.slides.HomeSlide.a3d5476811", "5h")} pct={sessionPct} />
-          <UsageBar label={translate("auto.components.mobile.slides.HomeSlide.a7d9e2c44d", "7d")} pct={weekPct} />
+          <UsageBar
+            label={translate('auto.components.mobile.slides.HomeSlide.a3d5476811', '5h')}
+            pct={sessionPct}
+          />
+          <UsageBar
+            label={translate('auto.components.mobile.slides.HomeSlide.a7d9e2c44d', '7d')}
+            pct={weekPct}
+          />
         </div>
       </div>
     </div>

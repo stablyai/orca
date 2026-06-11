@@ -41,7 +41,10 @@ export default function WorkspaceKanbanSettingsMenu({
             <Button
               variant="ghost"
               size="icon-xs"
-              aria-label={translate("auto.components.sidebar.WorkspaceKanbanSettingsMenu.26cbc92150", "Workspace board settings")}
+              aria-label={translate(
+                'auto.components.sidebar.WorkspaceKanbanSettingsMenu.26cbc92150',
+                'Workspace board settings'
+              )}
               data-contextual-tour-target="workspace-board-settings"
               className="text-muted-foreground"
             >
@@ -50,7 +53,11 @@ export default function WorkspaceKanbanSettingsMenu({
           </DropdownMenuTrigger>
         </TooltipTrigger>
         <TooltipContent side="top" sideOffset={4}>
-          {translate("auto.components.sidebar.WorkspaceKanbanSettingsMenu.34f03eb0de", "Board settings")}</TooltipContent>
+          {translate(
+            'auto.components.sidebar.WorkspaceKanbanSettingsMenu.34f03eb0de',
+            'Board settings'
+          )}
+        </TooltipContent>
       </Tooltip>
       <DropdownMenuContent
         align="end"
@@ -67,7 +74,9 @@ export default function WorkspaceKanbanSettingsMenu({
           }
         }}
       >
-        <DropdownMenuLabel>{translate("auto.components.sidebar.WorkspaceKanbanSettingsMenu.395e541d5d", "Statuses")}</DropdownMenuLabel>
+        <DropdownMenuLabel>
+          {translate('auto.components.sidebar.WorkspaceKanbanSettingsMenu.395e541d5d', 'Statuses')}
+        </DropdownMenuLabel>
         <div className="space-y-2 px-1 pb-1">
           {workspaceStatuses.map((status, index) => {
             const meta = getWorkspaceStatusVisualMeta(status)
@@ -88,7 +97,11 @@ export default function WorkspaceKanbanSettingsMenu({
                       }
                     }}
                     className="h-7 min-w-0 flex-1 rounded-md border border-input bg-background px-2 text-[12px] text-foreground outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                    aria-label={translate("auto.components.sidebar.WorkspaceKanbanSettingsMenu.8ce44af9a8", "Rename {{value0}}", { value0: status.label })}
+                    aria-label={translate(
+                      'auto.components.sidebar.WorkspaceKanbanSettingsMenu.8ce44af9a8',
+                      'Rename {{value0}}',
+                      { value0: status.label }
+                    )}
                   />
                   <WorkspaceStatusAppearancePopover
                     status={status}
@@ -102,7 +115,11 @@ export default function WorkspaceKanbanSettingsMenu({
                     className="size-7"
                     disabled={index === 0}
                     onClick={() => onMoveStatus(status.id, -1)}
-                    aria-label={translate("auto.components.sidebar.WorkspaceKanbanSettingsMenu.b45b350eb0", "Move {{value0}} left", { value0: status.label })}
+                    aria-label={translate(
+                      'auto.components.sidebar.WorkspaceKanbanSettingsMenu.b45b350eb0',
+                      'Move {{value0}} left',
+                      { value0: status.label }
+                    )}
                   >
                     <ArrowUp className="size-3.5" />
                   </Button>
@@ -113,7 +130,11 @@ export default function WorkspaceKanbanSettingsMenu({
                     className="size-7"
                     disabled={index === workspaceStatuses.length - 1}
                     onClick={() => onMoveStatus(status.id, 1)}
-                    aria-label={translate("auto.components.sidebar.WorkspaceKanbanSettingsMenu.b45b350eb0", "Move {{value0}} right", { value0: status.label })}
+                    aria-label={translate(
+                      'auto.components.sidebar.WorkspaceKanbanSettingsMenu.b45b350eb0',
+                      'Move {{value0}} right',
+                      { value0: status.label }
+                    )}
                   >
                     <ArrowDown className="size-3.5" />
                   </Button>
@@ -124,7 +145,11 @@ export default function WorkspaceKanbanSettingsMenu({
                     className="size-7 text-muted-foreground hover:text-destructive"
                     disabled={workspaceStatuses.length <= 1}
                     onClick={() => onRemoveStatus(status.id)}
-                    aria-label={translate("auto.components.sidebar.WorkspaceKanbanSettingsMenu.054cb50df7", "Remove {{value0}}", { value0: status.label })}
+                    aria-label={translate(
+                      'auto.components.sidebar.WorkspaceKanbanSettingsMenu.054cb50df7',
+                      'Remove {{value0}}',
+                      { value0: status.label }
+                    )}
                   >
                     <Trash2 className="size-3.5" />
                   </Button>
@@ -140,7 +165,11 @@ export default function WorkspaceKanbanSettingsMenu({
             onClick={onAddStatus}
           >
             <Plus className="size-3.5" />
-            {translate("auto.components.sidebar.WorkspaceKanbanSettingsMenu.79eb990aa4", "Add status")}</Button>
+            {translate(
+              'auto.components.sidebar.WorkspaceKanbanSettingsMenu.79eb990aa4',
+              'Add status'
+            )}
+          </Button>
         </div>
       </DropdownMenuContent>
     </DropdownMenu>

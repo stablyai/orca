@@ -28,9 +28,27 @@ export function RepositorySourceControlAiEnablement({
   return (
     <div className="flex flex-col gap-2 rounded-md border border-border px-3 py-3 sm:flex-row sm:items-center sm:justify-between">
       <div className="min-w-0 space-y-0.5">
-        <Label className="text-xs font-medium">{translate("auto.components.settings.RepositorySourceControlAiEnablement.cf5959c834", "Source Control AI enabled")}</Label>
+        <Label className="text-xs font-medium">
+          {translate(
+            'auto.components.settings.RepositorySourceControlAiEnablement.cf5959c834',
+            'Source Control AI enabled'
+          )}
+        </Label>
         <p className="text-[11px] text-muted-foreground">
-          {translate("auto.components.settings.RepositorySourceControlAiEnablement.30ae6dcce8", "Global default is")}{source.enabled ? translate("auto.components.settings.RepositorySourceControlAiEnablement.bea897eec2", "On") : translate("auto.components.settings.RepositorySourceControlAiEnablement.84233d1bb3", "Off")}.
+          {translate(
+            'auto.components.settings.RepositorySourceControlAiEnablement.30ae6dcce8',
+            'Global default is'
+          )}
+          {source.enabled
+            ? translate(
+                'auto.components.settings.RepositorySourceControlAiEnablement.bea897eec2',
+                'On'
+              )
+            : translate(
+                'auto.components.settings.RepositorySourceControlAiEnablement.84233d1bb3',
+                'Off'
+              )}
+          .
         </p>
       </div>
       <Select
@@ -43,9 +61,24 @@ export function RepositorySourceControlAiEnablement({
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value="inherit">{translate("auto.components.settings.RepositorySourceControlAiEnablement.62511a575d", "Use global")}</SelectItem>
-          <SelectItem value="on">{translate("auto.components.settings.RepositorySourceControlAiEnablement.bea897eec2", "On")}</SelectItem>
-          <SelectItem value="off">{translate("auto.components.settings.RepositorySourceControlAiEnablement.84233d1bb3", "Off")}</SelectItem>
+          <SelectItem value="inherit">
+            {translate(
+              'auto.components.settings.RepositorySourceControlAiEnablement.62511a575d',
+              'Use global'
+            )}
+          </SelectItem>
+          <SelectItem value="on">
+            {translate(
+              'auto.components.settings.RepositorySourceControlAiEnablement.bea897eec2',
+              'On'
+            )}
+          </SelectItem>
+          <SelectItem value="off">
+            {translate(
+              'auto.components.settings.RepositorySourceControlAiEnablement.84233d1bb3',
+              'Off'
+            )}
+          </SelectItem>
         </SelectContent>
       </Select>
     </div>

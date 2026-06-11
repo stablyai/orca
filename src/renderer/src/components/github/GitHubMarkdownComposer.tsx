@@ -256,7 +256,12 @@ export function GitHubMarkdownComposer({
       return
     }
     if (!isHttpImageUrl(trimmed)) {
-      toast.error(translate("auto.components.github.GitHubMarkdownComposer.ec6310b731", "Use an http:// or https:// image URL."))
+      toast.error(
+        translate(
+          'auto.components.github.GitHubMarkdownComposer.ec6310b731',
+          'Use an http:// or https:// image URL.'
+        )
+      )
       return
     }
     editor
@@ -312,14 +317,19 @@ export function GitHubMarkdownComposer({
                 setImageInputOpen(false)
               }
             }}
-            placeholder={translate("auto.components.github.GitHubMarkdownComposer.f24783f470", "https://...")}
+            placeholder={translate(
+              'auto.components.github.GitHubMarkdownComposer.f24783f470',
+              'https://...'
+            )}
             disabled={disabled}
             className="h-8 min-w-0 text-xs"
           />
           <Button type="submit" size="xs" disabled={disabled || !imageUrl.trim()}>
-            {translate("auto.components.github.GitHubMarkdownComposer.e3bd59143c", "Insert")}</Button>
+            {translate('auto.components.github.GitHubMarkdownComposer.e3bd59143c', 'Insert')}
+          </Button>
           <Button type="button" variant="ghost" size="xs" onClick={() => setImageInputOpen(false)}>
-            {translate("auto.components.github.GitHubMarkdownComposer.015b4e607d", "Cancel")}</Button>
+            {translate('auto.components.github.GitHubMarkdownComposer.015b4e607d', 'Cancel')}
+          </Button>
         </form>
       ) : null}
       <div className="max-h-[360px] overflow-y-auto scrollbar-sleek">

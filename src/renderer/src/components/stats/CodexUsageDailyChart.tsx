@@ -32,34 +32,46 @@ export function CodexUsageDailyChart({ daily }: CodexUsageDailyChartProps): Reac
   return (
     <section className="rounded-lg border border-border/60 bg-card/40 p-4">
       <div className="mb-3">
-        <h4 className="text-sm font-semibold text-foreground">{translate("auto.components.stats.CodexUsageDailyChart.609aa96e8b", "Daily usage")}</h4>
+        <h4 className="text-sm font-semibold text-foreground">
+          {translate('auto.components.stats.CodexUsageDailyChart.609aa96e8b', 'Daily usage')}
+        </h4>
         <p className="text-xs text-muted-foreground">
-          {translate("auto.components.stats.CodexUsageDailyChart.c756cda6a8", "Input, cached input, output, and reasoning totals by day.")}</p>
+          {translate(
+            'auto.components.stats.CodexUsageDailyChart.c756cda6a8',
+            'Input, cached input, output, and reasoning totals by day.'
+          )}
+        </p>
       </div>
       <div className="grid h-56 grid-cols-10 items-end gap-3">
         {daily.slice(-10).map((entry) => {
           const segments = [
             {
               key: 'input',
-              label: translate("auto.components.stats.CodexUsageDailyChart.99a91d3143", "Input"),
+              label: translate('auto.components.stats.CodexUsageDailyChart.99a91d3143', 'Input'),
               value: entry.inputTokens,
               className: 'bg-sky-500/80'
             },
             {
               key: 'output',
-              label: translate("auto.components.stats.CodexUsageDailyChart.7b596a88b2", "Output"),
+              label: translate('auto.components.stats.CodexUsageDailyChart.7b596a88b2', 'Output'),
               value: entry.outputTokens,
               className: 'bg-emerald-500/80'
             },
             {
               key: 'cached-input',
-              label: translate("auto.components.stats.CodexUsageDailyChart.c646e1783c", "Cached input"),
+              label: translate(
+                'auto.components.stats.CodexUsageDailyChart.c646e1783c',
+                'Cached input'
+              ),
               value: entry.cachedInputTokens,
               className: 'bg-amber-500/70'
             },
             {
               key: 'reasoning',
-              label: translate("auto.components.stats.CodexUsageDailyChart.1e6f62d7e3", "Reasoning"),
+              label: translate(
+                'auto.components.stats.CodexUsageDailyChart.1e6f62d7e3',
+                'Reasoning'
+              ),
               value: entry.reasoningOutputTokens,
               className: 'bg-fuchsia-500/70'
             }
@@ -86,7 +98,12 @@ export function CodexUsageDailyChart({ daily }: CodexUsageDailyChartProps): Reac
                               <div className="text-xs">
                                 <div>{entry.day}</div>
                                 <div>
-                                  {segment.label}: {segment.value.toLocaleString()} {translate("auto.components.stats.CodexUsageDailyChart.e4bdcf0071", "tokens")}</div>
+                                  {segment.label}: {segment.value.toLocaleString()}{' '}
+                                  {translate(
+                                    'auto.components.stats.CodexUsageDailyChart.e4bdcf0071',
+                                    'tokens'
+                                  )}
+                                </div>
                               </div>
                             </TooltipContent>
                           </Tooltip>
@@ -106,16 +123,20 @@ export function CodexUsageDailyChart({ daily }: CodexUsageDailyChartProps): Reac
       <div className="mt-3 flex flex-wrap gap-4 text-xs text-muted-foreground">
         <span className="inline-flex items-center gap-2">
           <span className="size-2 rounded-full bg-sky-500/80" />
-          {translate("auto.components.stats.CodexUsageDailyChart.99a91d3143", "Input")}</span>
+          {translate('auto.components.stats.CodexUsageDailyChart.99a91d3143', 'Input')}
+        </span>
         <span className="inline-flex items-center gap-2">
           <span className="size-2 rounded-full bg-emerald-500/80" />
-          {translate("auto.components.stats.CodexUsageDailyChart.7b596a88b2", "Output")}</span>
+          {translate('auto.components.stats.CodexUsageDailyChart.7b596a88b2', 'Output')}
+        </span>
         <span className="inline-flex items-center gap-2">
           <span className="size-2 rounded-full bg-amber-500/70" />
-          {translate("auto.components.stats.CodexUsageDailyChart.c646e1783c", "Cached input")}</span>
+          {translate('auto.components.stats.CodexUsageDailyChart.c646e1783c', 'Cached input')}
+        </span>
         <span className="inline-flex items-center gap-2">
           <span className="size-2 rounded-full bg-fuchsia-500/70" />
-          {translate("auto.components.stats.CodexUsageDailyChart.1e6f62d7e3", "Reasoning")}</span>
+          {translate('auto.components.stats.CodexUsageDailyChart.1e6f62d7e3', 'Reasoning')}
+        </span>
       </div>
     </section>
   )

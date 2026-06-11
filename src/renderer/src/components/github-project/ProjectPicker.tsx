@@ -304,7 +304,13 @@ export default function ProjectPicker({ activeProject, onSelect }: Props): React
         // a transport-level message so the user can retry or paste again.
         if (mountedRef.current) {
           setViewList([])
-          toast.error(translate("auto.components.github.project.ProjectPicker.44b2c6326b", "Failed to load views: {{value0}}", { value0: err instanceof Error ? err.message : String(err) }))
+          toast.error(
+            translate(
+              'auto.components.github.project.ProjectPicker.44b2c6326b',
+              'Failed to load views: {{value0}}',
+              { value0: err instanceof Error ? err.message : String(err) }
+            )
+          )
         }
       } finally {
         if (mountedRef.current) {
@@ -407,7 +413,10 @@ export default function ProjectPicker({ activeProject, onSelect }: Props): React
                 <Input
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
-                  placeholder={translate("auto.components.github.project.ProjectPicker.f492e1b539", "Search projects")}
+                  placeholder={translate(
+                    'auto.components.github.project.ProjectPicker.f492e1b539',
+                    'Search projects'
+                  )}
                   className="h-8 pl-7 text-xs"
                 />
               </div>
@@ -418,7 +427,12 @@ export default function ProjectPicker({ activeProject, onSelect }: Props): React
             ) : null}
             <div className="max-h-[340px] overflow-y-auto p-1 scrollbar-sleek">
               {projectSettings.pinned.length > 0 ? (
-                <Section label={translate("auto.components.github.project.ProjectPicker.707843206c", "Pinned")}>
+                <Section
+                  label={translate(
+                    'auto.components.github.project.ProjectPicker.707843206c',
+                    'Pinned'
+                  )}
+                >
                   {projectSettings.pinned.map((p) => {
                     const key = `${p.ownerType}:${p.owner}:${p.number}`
                     const knownGood = projectSettings.lastViewByProject[key]?.viewId != null
@@ -453,7 +467,12 @@ export default function ProjectPicker({ activeProject, onSelect }: Props): React
                 </Section>
               ) : null}
               {projectSettings.recent.length > 0 ? (
-                <Section label={translate("auto.components.github.project.ProjectPicker.b3044b7a25", "Recent")}>
+                <Section
+                  label={translate(
+                    'auto.components.github.project.ProjectPicker.b3044b7a25',
+                    'Recent'
+                  )}
+                >
                   {projectSettings.recent
                     .filter(
                       (r) =>
@@ -498,10 +517,27 @@ export default function ProjectPicker({ activeProject, onSelect }: Props): React
                     })}
                 </Section>
               ) : null}
-              <Section label={browseLoading ? translate("auto.components.github.project.ProjectPicker.ba0ab9a117", "Browse all (loading…)") : translate("auto.components.github.project.ProjectPicker.b787682111", "Browse all")}>
+              <Section
+                label={
+                  browseLoading
+                    ? translate(
+                        'auto.components.github.project.ProjectPicker.ba0ab9a117',
+                        'Browse all (loading…)'
+                      )
+                    : translate(
+                        'auto.components.github.project.ProjectPicker.b787682111',
+                        'Browse all'
+                      )
+                }
+              >
                 {browseLoading ? (
                   <div className="flex items-center gap-2 px-2 py-2 text-xs text-muted-foreground">
-                    <Loader className="size-3 animate-spin" /> {translate("auto.components.github.project.ProjectPicker.7b6d39627e", "Loading…")}</div>
+                    <Loader className="size-3 animate-spin" />{' '}
+                    {translate(
+                      'auto.components.github.project.ProjectPicker.7b6d39627e',
+                      'Loading…'
+                    )}
+                  </div>
                 ) : null}
                 {filteredBrowse.map((p) => (
                   <PickerRow
@@ -533,7 +569,10 @@ export default function ProjectPicker({ activeProject, onSelect }: Props): React
                       void handlePaste()
                     }
                   }}
-                  placeholder={translate("auto.components.github.project.ProjectPicker.5113ecc298", "Add by URL or owner/number")}
+                  placeholder={translate(
+                    'auto.components.github.project.ProjectPicker.5113ecc298',
+                    'Add by URL or owner/number'
+                  )}
                   className="h-8 text-xs"
                 />
                 <Button
@@ -542,7 +581,8 @@ export default function ProjectPicker({ activeProject, onSelect }: Props): React
                   disabled={pasteBusy || !pasteInput.trim()}
                   className="h-8"
                 >
-                  {translate("auto.components.github.project.ProjectPicker.fce99a24a7", "Add")}</Button>
+                  {translate('auto.components.github.project.ProjectPicker.fce99a24a7', 'Add')}
+                </Button>
               </div>
               {pasteError ? (
                 <div className="mt-1 text-[11px] text-destructive">{pasteError}</div>
@@ -603,13 +643,14 @@ function PickerRow({
             className="text-[10px] text-muted-foreground hover:text-foreground"
             onClick={onRemovePin}
           >
-            {translate("auto.components.github.project.ProjectPicker.5009ffc2f3", "Remove pin")}</button>
+            {translate('auto.components.github.project.ProjectPicker.5009ffc2f3', 'Remove pin')}
+          </button>
         </div>
       ) : null}
       {canPin ? (
         <button
           type="button"
-          title={translate("auto.components.github.project.ProjectPicker.8ab5447c64", "Pin")}
+          title={translate('auto.components.github.project.ProjectPicker.8ab5447c64', 'Pin')}
           className="opacity-0 group-hover:opacity-100"
           onClick={onPin}
         >
@@ -639,16 +680,26 @@ function ViewPickStep({
           onClick={onBack}
           className="text-xs text-muted-foreground hover:text-foreground"
         >
-          {translate("auto.components.github.project.ProjectPicker.a51b3337ab", "← Back")}</button>
-        <span className="text-xs font-medium">{translate("auto.components.github.project.ProjectPicker.9bf55fa1e8", "Choose a view")}</span>
+          {translate('auto.components.github.project.ProjectPicker.a51b3337ab', '← Back')}
+        </button>
+        <span className="text-xs font-medium">
+          {translate('auto.components.github.project.ProjectPicker.9bf55fa1e8', 'Choose a view')}
+        </span>
         <span />
       </div>
       <div className="max-h-[340px] overflow-y-auto p-1 scrollbar-sleek">
         {loading ? (
           <div className="flex items-center gap-2 px-2 py-2 text-xs text-muted-foreground">
-            <Loader className="size-3 animate-spin" /> {translate("auto.components.github.project.ProjectPicker.72a05c04a6", "Loading views…")}</div>
+            <Loader className="size-3 animate-spin" />{' '}
+            {translate('auto.components.github.project.ProjectPicker.72a05c04a6', 'Loading views…')}
+          </div>
         ) : views.length === 0 ? (
-          <div className="px-2 py-2 text-xs text-muted-foreground">{translate("auto.components.github.project.ProjectPicker.9b36829267", "No views found.")}</div>
+          <div className="px-2 py-2 text-xs text-muted-foreground">
+            {translate(
+              'auto.components.github.project.ProjectPicker.9b36829267',
+              'No views found.'
+            )}
+          </div>
         ) : (
           views.map((v) => {
             const supported = v.layout === 'TABLE_LAYOUT'
@@ -665,11 +716,17 @@ function ViewPickStep({
               >
                 <span className="text-sm">{v.name}</span>
                 <span className="text-[10px] text-muted-foreground">
-                  {v.layout === "TABLE_LAYOUT"
-                    ? translate("auto.components.github.project.ProjectPicker.1a2b8e512e", "Table")
-                    : v.layout === "BOARD_LAYOUT"
-                      ? translate("auto.components.github.project.ProjectPicker.d34ef9b554", "Board (unsupported)")
-                      : translate("auto.components.github.project.ProjectPicker.ab1a2c357d", "Roadmap (unsupported)")}
+                  {v.layout === 'TABLE_LAYOUT'
+                    ? translate('auto.components.github.project.ProjectPicker.1a2b8e512e', 'Table')
+                    : v.layout === 'BOARD_LAYOUT'
+                      ? translate(
+                          'auto.components.github.project.ProjectPicker.d34ef9b554',
+                          'Board (unsupported)'
+                        )
+                      : translate(
+                          'auto.components.github.project.ProjectPicker.ab1a2c357d',
+                          'Roadmap (unsupported)'
+                        )}
                 </span>
               </button>
             )
@@ -706,7 +763,11 @@ function PartialFailuresBanner({
         <div>
           <div>{summary}</div>
           <div className="mt-0.5 text-[11px] opacity-80">
-            {translate("auto.components.github.project.ProjectPicker.96739284c3", "Paste a project URL below to reach missing ones.")}</div>
+            {translate(
+              'auto.components.github.project.ProjectPicker.96739284c3',
+              'Paste a project URL below to reach missing ones.'
+            )}
+          </div>
         </div>
       </div>
     </div>

@@ -19,8 +19,16 @@ export function getRepoHeaderCreateState(input: {
   if (!isGitRepoKind(input.repo)) {
     return {
       disabled: false,
-      tooltip: translate("auto.components.sidebar.repo.header.create.state.62e71f2d5d", "Create workspace for {{value0}}", { value0: input.label }),
-      ariaLabel: translate("auto.components.sidebar.repo.header.create.state.62e71f2d5d", "Create workspace for {{value0}}", { value0: input.label }),
+      tooltip: translate(
+        'auto.components.sidebar.repo.header.create.state.62e71f2d5d',
+        'Create workspace for {{value0}}',
+        { value0: input.label }
+      ),
+      ariaLabel: translate(
+        'auto.components.sidebar.repo.header.create.state.62e71f2d5d',
+        'Create workspace for {{value0}}',
+        { value0: input.label }
+      ),
       requiresSshReconnect: false
     }
   }
@@ -32,16 +40,31 @@ export function getRepoHeaderCreateState(input: {
   if (sshGate.selectedRepoRequiresConnection) {
     return {
       disabled: true,
-      tooltip: translate("auto.components.sidebar.repo.header.create.state.6d022563a8", "Reconnect SSH target before creating workspaces"),
-      ariaLabel: translate("auto.components.sidebar.repo.header.create.state.3a70acd808", "Reconnect SSH target before creating workspaces for {{value0}}", { value0: input.label }),
+      tooltip: translate(
+        'auto.components.sidebar.repo.header.create.state.6d022563a8',
+        'Reconnect SSH target before creating workspaces'
+      ),
+      ariaLabel: translate(
+        'auto.components.sidebar.repo.header.create.state.3a70acd808',
+        'Reconnect SSH target before creating workspaces for {{value0}}',
+        { value0: input.label }
+      ),
       requiresSshReconnect: true
     }
   }
 
   return {
     disabled: false,
-    tooltip: translate("auto.components.sidebar.repo.header.create.state.992cfbc44b", "Create new worktree for {{value0}}", { value0: input.label }),
-    ariaLabel: translate("auto.components.sidebar.repo.header.create.state.992cfbc44b", "Create new worktree for {{value0}}", { value0: input.label }),
+    tooltip: translate(
+      'auto.components.sidebar.repo.header.create.state.992cfbc44b',
+      'Create new worktree for {{value0}}',
+      { value0: input.label }
+    ),
+    ariaLabel: translate(
+      'auto.components.sidebar.repo.header.create.state.992cfbc44b',
+      'Create new worktree for {{value0}}',
+      { value0: input.label }
+    ),
     requiresSshReconnect: false
   }
 }

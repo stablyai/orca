@@ -50,17 +50,32 @@ export function KagiSessionLinkForm(): React.JSX.Element {
     if (!trimmed) {
       setBrowserKagiSessionLink(null)
       setDraftState(createKagiSessionLinkDraftState(''))
-      toast.success(translate("auto.components.settings.KagiSessionLinkForm.9f741627a7", "Kagi session link cleared."))
+      toast.success(
+        translate(
+          'auto.components.settings.KagiSessionLinkForm.9f741627a7',
+          'Kagi session link cleared.'
+        )
+      )
       return
     }
     const normalized = normalizeKagiSessionLink(trimmed)
     if (!normalized) {
-      toast.error(translate("auto.components.settings.KagiSessionLinkForm.0911d5fa4c", "Enter a Kagi private session link from https://kagi.com/search?token=..."))
+      toast.error(
+        translate(
+          'auto.components.settings.KagiSessionLinkForm.0911d5fa4c',
+          'Enter a Kagi private session link from https://kagi.com/search?token=...'
+        )
+      )
       return
     }
     setBrowserKagiSessionLink(normalized)
     setDraftState(createKagiSessionLinkDraftState(normalized))
-    toast.success(translate("auto.components.settings.KagiSessionLinkForm.3e5b7c6c25", "Kagi session link saved."))
+    toast.success(
+      translate(
+        'auto.components.settings.KagiSessionLinkForm.3e5b7c6c25',
+        'Kagi session link saved.'
+      )
+    )
   }
 
   return (
@@ -72,22 +87,33 @@ export function KagiSessionLinkForm(): React.JSX.Element {
       }}
     >
       <p className="max-w-72 text-right text-[11px] leading-snug text-muted-foreground">
-        {translate("auto.components.settings.KagiSessionLinkForm.81409d9362", "Optional private session link for Kagi auth.")}</p>
+        {translate(
+          'auto.components.settings.KagiSessionLinkForm.81409d9362',
+          'Optional private session link for Kagi auth.'
+        )}
+      </p>
       <div className="flex items-center gap-2">
         <Input
           type="password"
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
-          placeholder={translate("auto.components.settings.KagiSessionLinkForm.e383683485", "https://kagi.com/search?token=...")}
+          placeholder={translate(
+            'auto.components.settings.KagiSessionLinkForm.e383683485',
+            'https://kagi.com/search?token=...'
+          )}
           spellCheck={false}
           autoCapitalize="none"
           autoCorrect="off"
           autoComplete="off"
-          aria-label={translate("auto.components.settings.KagiSessionLinkForm.ff450194cd", "Kagi private session link")}
+          aria-label={translate(
+            'auto.components.settings.KagiSessionLinkForm.ff450194cd',
+            'Kagi private session link'
+          )}
           className="h-7 w-72 text-xs"
         />
         <Button type="submit" size="sm" variant="outline" className="h-7 text-xs">
-          {translate("auto.components.settings.KagiSessionLinkForm.d5c8b94c5b", "Save")}</Button>
+          {translate('auto.components.settings.KagiSessionLinkForm.d5c8b94c5b', 'Save')}
+        </Button>
         {browserKagiSessionLink ? (
           <Button
             type="button"
@@ -97,10 +123,16 @@ export function KagiSessionLinkForm(): React.JSX.Element {
             onClick={() => {
               setBrowserKagiSessionLink(null)
               setDraftState(createKagiSessionLinkDraftState(''))
-              toast.success(translate("auto.components.settings.KagiSessionLinkForm.9f741627a7", "Kagi session link cleared."))
+              toast.success(
+                translate(
+                  'auto.components.settings.KagiSessionLinkForm.9f741627a7',
+                  'Kagi session link cleared.'
+                )
+              )
             }}
           >
-            {translate("auto.components.settings.KagiSessionLinkForm.92f0b4e472", "Clear")}</Button>
+            {translate('auto.components.settings.KagiSessionLinkForm.92f0b4e472', 'Clear')}
+          </Button>
         ) : null}
       </div>
     </form>

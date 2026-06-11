@@ -109,14 +109,20 @@ function GitLabRateLimitRows({
   if (!rest) {
     return (
       <div className="text-xs text-muted-foreground">
-        {translate("auto.components.gitlab.gitlab.rate.limit.display.953f7c6062", "This GitLab host did not return rate-limit headers.")}</div>
+        {translate(
+          'auto.components.gitlab.gitlab.rate.limit.display.953f7c6062',
+          'This GitLab host did not return rate-limit headers.'
+        )}
+      </div>
     )
   }
   const tone = toneForGitLabBucket(rest.remaining, rest.limit)
   return (
     <div className="flex flex-col gap-1 text-xs">
       <div className="flex items-center justify-between gap-3">
-        <span className="text-muted-foreground">{translate("auto.components.gitlab.gitlab.rate.limit.display.0a891e8935", "REST API")}</span>
+        <span className="text-muted-foreground">
+          {translate('auto.components.gitlab.gitlab.rate.limit.display.0a891e8935', 'REST API')}
+        </span>
         <span
           className={cn(
             'tabular-nums text-foreground',
@@ -124,7 +130,13 @@ function GitLabRateLimitRows({
             tone === 'warn' && 'text-amber-700 dark:text-amber-300'
           )}
         >
-          {rest.remaining} {translate("auto.components.gitlab.gitlab.rate.limit.display.ea8ad0bae8", "of")}{rest.limit} {translate("auto.components.gitlab.gitlab.rate.limit.display.3e2c982cfa", "left, resets in")}{' '}
+          {rest.remaining}{' '}
+          {translate('auto.components.gitlab.gitlab.rate.limit.display.ea8ad0bae8', 'of')}
+          {rest.limit}{' '}
+          {translate(
+            'auto.components.gitlab.gitlab.rate.limit.display.3e2c982cfa',
+            'left, resets in'
+          )}{' '}
           {formatGitLabRateLimitReset(rest.resetAt)}
         </span>
       </div>
@@ -141,8 +153,17 @@ export function GitLabRateLimitPanel({ className }: { className?: string }): Rea
         <div className="space-y-0.5">
           <div className="flex items-center gap-1.5 text-sm font-medium text-foreground">
             <Gauge className="size-4" />
-            {translate("auto.components.gitlab.gitlab.rate.limit.display.14e144f7a7", "GitLab API Budget")}</div>
-          <p className="text-xs text-muted-foreground">{translate("auto.components.gitlab.gitlab.rate.limit.display.2f9c16d6c3", "Orca uses REST through the GitLab CLI.")}</p>
+            {translate(
+              'auto.components.gitlab.gitlab.rate.limit.display.14e144f7a7',
+              'GitLab API Budget'
+            )}
+          </div>
+          <p className="text-xs text-muted-foreground">
+            {translate(
+              'auto.components.gitlab.gitlab.rate.limit.display.2f9c16d6c3',
+              'Orca uses REST through the GitLab CLI.'
+            )}
+          </p>
         </div>
         <Button
           type="button"
@@ -150,17 +171,30 @@ export function GitLabRateLimitPanel({ className }: { className?: string }): Rea
           size="icon-xs"
           onClick={() => void refresh(true)}
           disabled={isFetching}
-          aria-label={translate("auto.components.gitlab.gitlab.rate.limit.display.a2f68645ac", "Refresh GitLab API budget")}
+          aria-label={translate(
+            'auto.components.gitlab.gitlab.rate.limit.display.a2f68645ac',
+            'Refresh GitLab API budget'
+          )}
         >
           <RefreshCw className={cn('size-3.5', isFetching && 'animate-spin')} />
         </Button>
       </div>
       {hasError ? (
-        <div className="text-xs text-muted-foreground">{translate("auto.components.gitlab.gitlab.rate.limit.display.a2d3d1fdde", "GitLab API budget is unavailable.")}</div>
+        <div className="text-xs text-muted-foreground">
+          {translate(
+            'auto.components.gitlab.gitlab.rate.limit.display.a2d3d1fdde',
+            'GitLab API budget is unavailable.'
+          )}
+        </div>
       ) : snapshot ? (
         <GitLabRateLimitRows snapshot={snapshot} />
       ) : (
-        <div className="text-xs text-muted-foreground">{translate("auto.components.gitlab.gitlab.rate.limit.display.ebc0e8ecf1", "Loading GitLab API budget...")}</div>
+        <div className="text-xs text-muted-foreground">
+          {translate(
+            'auto.components.gitlab.gitlab.rate.limit.display.ebc0e8ecf1',
+            'Loading GitLab API budget...'
+          )}
+        </div>
       )}
     </div>
   )

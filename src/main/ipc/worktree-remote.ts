@@ -1402,6 +1402,9 @@ export async function createRemoteWorktree(
 
   const worktreeId = `${repo.id}::${created.path}`
   const now = Date.now()
+  // Why: persisted compare refs must survive local branches whose names look
+  // like remote labels, e.g. a local branch literally named "origin/main".
+  const metadataBaseRef = remoteTrackingBase?.ref ?? baseBranch
   let configuredPushTarget: GitPushTarget | undefined
   if (preparedPushTarget) {
     configuredPushTarget = await configureCreatedWorktreePushTargetSsh(
@@ -1427,7 +1430,7 @@ export async function createRemoteWorktree(
     orcaCreatedAt: now,
     orcaCreationSource: 'ssh',
     orcaCreationWorkspaceLayout: getWorktreeCreationLayout(repo, settings),
-    baseRef: baseBranch,
+    baseRef: metadataBaseRef,
     ...(checkoutExistingBranch ? { preserveBranchOnDelete: true } : {}),
     ...(configuredPushTarget ? { pushTarget: configuredPushTarget } : {}),
     ...(requestedDisplayName
@@ -1442,7 +1445,7 @@ export async function createRemoteWorktree(
     ...(sparseDirectories.length > 0
       ? {
           sparseDirectories,
-          sparseBaseRef: baseBranch,
+          sparseBaseRef: metadataBaseRef,
           sparsePresetId
         }
       : {}),
@@ -1905,6 +1908,9 @@ export async function createLocalWorktree(
 
   const worktreeId = `${repo.id}::${created.path}`
   const now = Date.now()
+  // Why: persisted compare refs must survive local branches whose names look
+  // like remote labels, e.g. a local branch literally named "origin/main".
+  const metadataBaseRef = remoteTrackingBase?.ref ?? baseBranch
   const metaUpdates: Partial<WorktreeMeta> = {
     // Why: path-derived worktree IDs can be reused after external deletion.
     // Fresh creations must rotate instance identity so stale lineage cannot
@@ -1920,7 +1926,7 @@ export async function createLocalWorktree(
     orcaCreatedAt: now,
     orcaCreationSource: 'desktop',
     orcaCreationWorkspaceLayout: getWorktreeCreationLayout(repo, settings),
-    baseRef: baseBranch,
+    baseRef: metadataBaseRef,
     ...(checkoutExistingBranch ? { preserveBranchOnDelete: true } : {}),
     ...(configuredPushTarget ? { pushTarget: configuredPushTarget } : {}),
     ...(requestedDisplayName
@@ -1931,7 +1937,7 @@ export async function createLocalWorktree(
     ...(sparseDirectories.length > 0
       ? {
           sparseDirectories,
-          sparseBaseRef: baseBranch,
+          sparseBaseRef: metadataBaseRef,
           sparsePresetId
         }
       : {}),

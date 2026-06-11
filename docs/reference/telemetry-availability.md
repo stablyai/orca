@@ -327,6 +327,35 @@ Dashboard caveats:
 - Use `add_repo_existing_workspaces_detected` to estimate how often added projects had non-main existing workspaces, but do not infer the user selected "use existing worktrees" because that choice no longer exists in the normal flow.
 - Use `add_repo_default_checkout_handoff` for the current handoff outcome. `result = 'opened_default_checkout'` is the expected path; `result = 'revealed_project'` is the graceful fallback. Break down fallback rows by `source` and `reason`.
 
+### 2026-06-10 - Repo Added Git-vs-Folder Signal
+
+Scope: `repo_added.is_git_repo` replaces the retired `onboarding_completed.is_git_repo` split for git-vs-folder analysis. Project selection moved out of onboarding in the 1.4.46 flow, so `onboarding_completed` now fires before any repo is chosen. After that boundary, the old `onboarding_completed.is_git_repo` value is not a valid git-vs-folder signal.
+
+`repo_added.is_git_repo` is sourced from git detection at the add point. It is optional so SSH/remote paths that genuinely cannot determine git-ness can omit the property instead of defaulting to `false`.
+
+| Field                    | Value                                                                                       |
+| ------------------------ | ------------------------------------------------------------------------------------------- |
+| PR                       | `#5121`                                                                                     |
+| Merge commit             | `TBD`                                                                                       |
+| `code_merged_at_utc`     | `TBD`                                                                                       |
+| First release            | `TBD`                                                                                       |
+| First release commit     | `TBD`                                                                                       |
+| `first_released_at_utc`  | `TBD`                                                                                       |
+| `first_seen_at_utc`      | `TBD` on `repo_added.is_git_repo`                                                           |
+| `dashboard_ready_at_utc` | `TBD`; use only after first-seen rows exist and field coverage has been checked in PostHog. |
+
+PostHog evidence checked at `2026-06-10T19:00:00Z`:
+
+- Dashboard tile "Fresh-install onboarding completion over time" (`JlIt5J1N`, insight id `9076383`, project `406068`) showed the git-repo share collapse to about 4% while plain-folder completions spiked to about 88% on 2026-06-05.
+- Raw `onboarding_completed.is_git_repo` counts by `app_version` showed a version cliff: versions through `1.4.45` were about 80% true, while `1.4.46`, `1.4.47`, and `1.4.48` had zero true rows in the sampled data.
+
+Dashboard caveats:
+
+- Treat `onboarding_completed.is_git_repo` as historical only after app version `1.4.45`.
+- Do not stitch historical `onboarding_completed.is_git_repo` and new `repo_added.is_git_repo` series without an explicit version boundary and label change; they are emitted at different funnel moments.
+- Repoint dashboard tile `JlIt5J1N` to use `repo_added.is_git_repo` once the new field is observed in release telemetry.
+- Omitted `repo_added.is_git_repo` means unknown/degraded detection, not plain folder. Only explicit `false` means plain folder.
+
 ## Updating This File
 
 When adding or changing telemetry that dashboard authors will depend on:
