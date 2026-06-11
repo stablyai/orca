@@ -23,6 +23,7 @@ import type {
   PendingWorktreeCreation,
   WorktreeCreationPhase
 } from '@/lib/pending-worktree-creation'
+import { getRepoIdFromWorktreeId } from '../../../../shared/worktree-id'
 export { getRepoIdFromWorktreeId } from '../../../../shared/worktree-id'
 
 export type WorktreeDeleteState = {
@@ -248,24 +249,24 @@ export function applyWorktreeUpdates(
   worktreeId: string,
   updates: Partial<WorktreeMeta>
 ): Record<string, Worktree[]> {
-  let changed = false
-  const next: Record<string, Worktree[]> = {}
-
-  for (const [repoId, worktrees] of Object.entries(worktreesByRepo)) {
-    let repoChanged = false
-    const nextWorktrees = worktrees.map((worktree) => {
-      if (worktree.id !== worktreeId) {
-        return worktree
-      }
-
-      const updatedWorktree = { ...worktree, ...updates }
-      repoChanged = true
-      changed = true
-      return updatedWorktree
-    })
-
-    next[repoId] = repoChanged ? nextWorktrees : worktrees
+  const repoId = getRepoIdFromWorktreeId(worktreeId)
+  const worktrees = worktreesByRepo[repoId]
+  if (!worktrees) {
+    return worktreesByRepo
   }
 
-  return changed ? next : worktreesByRepo
+  let changed = false
+  const nextWorktrees = worktrees.map((worktree) => {
+    if (worktree.id !== worktreeId) {
+      return worktree
+    }
+
+    changed = true
+    return { ...worktree, ...updates }
+  })
+  if (!changed) {
+    return worktreesByRepo
+  }
+
+  return { ...worktreesByRepo, [repoId]: nextWorktrees }
 }
