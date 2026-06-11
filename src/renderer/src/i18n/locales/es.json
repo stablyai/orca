@@ -869,7 +869,8 @@
         "9c00bd4adf": "Seleccione un espacio de trabajo de la barra lateral para comenzar.",
         "16e9e3df89": "sembrado de estrellas",
         "0d0ace8861": "Estrella en GitHub",
-        "ec43b38ba7": "Destacado en GitHub"
+        "ec43b38ba7": "Destacado en GitHub",
+        "157bb5ecbb": "Open GitHub"
       },
       "LinearIssueMarkdownDescriptionEditor": {
         "d9c47069ef": "Markdown",
@@ -1201,7 +1202,13 @@
         "b5e685e4d9": "Despedir",
         "5f6df21046": "¿Disfrutando de Orca?",
         "2d67b6c849": "Estrella en GitHub",
-        "af3c9bbb37": "Protagonizada…"
+        "af3c9bbb37": "Protagonizada…",
+        "68a41bc3aa": "Could not star with",
+        "996bf76e46": "Open GitHub to finish in your browser.",
+        "d32015fec7": "Opening...",
+        "157bb5ecbb": "Open GitHub",
+        "8c967b4d15": "Not now",
+        "73dfd4eb8d": "Don't ask again"
       },
       "TaskPage": {
         "513cddfa7a": "Verificando…",
@@ -3344,7 +3351,10 @@
           "2991a0106c": "Ayuda",
           "4e8f5710d3": "No se pudo reiniciar Orca.",
           "5161eef55d": "Reiniciando Orca...",
-          "d396773ef0": "de cheques"
+          "d396773ef0": "de cheques",
+          "f8a2c91d4e": "Milestones",
+          "b7e4d2a19c": "Onboarding",
+          "c4f8e1b72a": "X"
         },
         "SidebarToolbar": {
           "19e32d0e5f": "Abra el selector de carpetas para agregar un proyecto",
@@ -4369,7 +4379,9 @@
           "1e29570462": "protagonizada",
           "9d181300e3": "sembrado de estrellas",
           "5c49f02662": "oculto",
-          "b3f0584f5d": "cargando"
+          "b3f0584f5d": "cargando",
+          "cb65c75b11": "Opening...",
+          "f2d4f877b2": "Open GitHub"
         },
         "GeneralUpdateSettingsSection": {
           "8a52ca1d02": "Notas de la versión",

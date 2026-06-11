@@ -1576,9 +1576,10 @@ export type PreloadApi = {
     listTransitions: (args: { key: string; siteId?: string }) => Promise<JiraTransition[]>
   }
   starNag: {
-    onShow: (callback: () => void) => () => void
+    onShow: (callback: (payload?: { mode?: 'gh' | 'web' }) => void) => () => void
     dismiss: () => Promise<void>
     complete: () => Promise<void>
+    disable: () => Promise<void>
     forceShow: () => Promise<void>
   }
   /** Fire-and-forget track. Loose typing at the IPC boundary on purpose —

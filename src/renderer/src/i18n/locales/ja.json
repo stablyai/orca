@@ -869,7 +869,8 @@
         "9c00bd4adf": "開始するには、サイドバーからワークスペースを選択します。",
         "16e9e3df89": "星付き",
         "0d0ace8861": "GitHub でスターを付ける",
-        "ec43b38ba7": "GitHub でスターを獲得"
+        "ec43b38ba7": "GitHub でスターを獲得",
+        "157bb5ecbb": "Open GitHub"
       },
       "LinearIssueMarkdownDescriptionEditor": {
         "d9c47069ef": "Markdown",
@@ -1201,7 +1202,13 @@
         "b5e685e4d9": "閉じる",
         "5f6df21046": "Orcaを楽しんでいますか？",
         "2d67b6c849": "GitHub でスターを付ける",
-        "af3c9bbb37": "主演…"
+        "af3c9bbb37": "主演…",
+        "68a41bc3aa": "Could not star with",
+        "996bf76e46": "Open GitHub to finish in your browser.",
+        "d32015fec7": "Opening...",
+        "157bb5ecbb": "Open GitHub",
+        "8c967b4d15": "Not now",
+        "73dfd4eb8d": "Don't ask again"
       },
       "TaskPage": {
         "513cddfa7a": "確認中…",
@@ -3325,7 +3332,10 @@
           "2991a0106c": "ヘルプ",
           "4e8f5710d3": "Orca を再起動できませんでした。",
           "5161eef55d": "Orca を再起動しています…",
-          "d396773ef0": "チェック中"
+          "d396773ef0": "チェック中",
+          "f8a2c91d4e": "Milestones",
+          "b7e4d2a19c": "Onboarding",
+          "c4f8e1b72a": "X"
         },
         "SidebarToolbar": {
           "19e32d0e5f": "フォルダーピッカーを開いてプロジェクトを追加します",
@@ -4354,7 +4364,9 @@
           "1e29570462": "主演",
           "9d181300e3": "星付き",
           "5c49f02662": "隠れた",
-          "b3f0584f5d": "読み込み中"
+          "b3f0584f5d": "読み込み中",
+          "cb65c75b11": "Opening...",
+          "f2d4f877b2": "Open GitHub"
         },
         "GeneralUpdateSettingsSection": {
           "8a52ca1d02": "リリースノート",

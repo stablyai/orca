@@ -1455,13 +1455,17 @@ const api = {
   },
 
   starNag: {
-    onShow: (callback: () => void): (() => void) => {
-      const listener = (_event: Electron.IpcRendererEvent): void => callback()
+    onShow: (callback: (payload?: { mode?: 'gh' | 'web' }) => void): (() => void) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        payload?: { mode?: 'gh' | 'web' }
+      ): void => callback(payload)
       ipcRenderer.on('star-nag:show', listener)
       return () => ipcRenderer.removeListener('star-nag:show', listener)
     },
     dismiss: (): Promise<void> => ipcRenderer.invoke('star-nag:dismiss'),
     complete: (): Promise<void> => ipcRenderer.invoke('star-nag:complete'),
+    disable: (): Promise<void> => ipcRenderer.invoke('star-nag:disable'),
     forceShow: (): Promise<void> => ipcRenderer.invoke('star-nag:forceShow')
   },
 

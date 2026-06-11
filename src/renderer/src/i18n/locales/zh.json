@@ -869,7 +869,8 @@
         "9c00bd4adf": "从侧边栏中选择一个工作区开始。",
         "16e9e3df89": "已加星标",
         "0d0ace8861": "在 GitHub 上加星标",
-        "ec43b38ba7": "在 GitHub 上加星标"
+        "ec43b38ba7": "在 GitHub 上加星标",
+        "157bb5ecbb": "Open GitHub"
       },
       "LinearIssueMarkdownDescriptionEditor": {
         "d9c47069ef": "Markdown",
@@ -1201,7 +1202,13 @@
         "b5e685e4d9": "关闭",
         "5f6df21046": "喜欢 Orca 吗？",
         "2d67b6c849": "在 GitHub 上加星标",
-        "af3c9bbb37": "主演…"
+        "af3c9bbb37": "主演…",
+        "68a41bc3aa": "Could not star with",
+        "996bf76e46": "Open GitHub to finish in your browser.",
+        "d32015fec7": "Opening...",
+        "157bb5ecbb": "Open GitHub",
+        "8c967b4d15": "Not now",
+        "73dfd4eb8d": "Don't ask again"
       },
       "TaskPage": {
         "513cddfa7a": "正在验证...",
@@ -3325,7 +3332,10 @@
           "2991a0106c": "帮助",
           "4e8f5710d3": "无法重新启动 Orca。",
           "5161eef55d": "正在重启 Orca…",
-          "d396773ef0": "检查中"
+          "d396773ef0": "检查中",
+          "f8a2c91d4e": "Milestones",
+          "b7e4d2a19c": "Onboarding",
+          "c4f8e1b72a": "X"
         },
         "SidebarToolbar": {
           "19e32d0e5f": "打开文件夹选择器以添加项目",
@@ -4354,7 +4364,9 @@
           "1e29570462": "主演",
           "9d181300e3": "已加星标",
           "5c49f02662": "隐",
-          "b3f0584f5d": "加载中"
+          "b3f0584f5d": "加载中",
+          "cb65c75b11": "Opening...",
+          "f2d4f877b2": "Open GitHub"
         },
         "GeneralUpdateSettingsSection": {
           "8a52ca1d02": "发行说明",

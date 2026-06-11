@@ -869,7 +869,8 @@
         "9c00bd4adf": "Select a workspace from the sidebar to begin.",
         "16e9e3df89": "starred",
         "0d0ace8861": "Star on GitHub",
-        "ec43b38ba7": "Starred on GitHub"
+        "ec43b38ba7": "Starred on GitHub",
+        "157bb5ecbb": "Open GitHub"
       },
       "LinearIssueMarkdownDescriptionEditor": {
         "d9c47069ef": "Markdown",
@@ -1201,7 +1202,13 @@
         "b5e685e4d9": "Dismiss",
         "5f6df21046": "Enjoying Orca?",
         "2d67b6c849": "Star on GitHub",
-        "af3c9bbb37": "Starring…"
+        "af3c9bbb37": "Starring…",
+        "68a41bc3aa": "Could not star with",
+        "996bf76e46": "Open GitHub to finish in your browser.",
+        "d32015fec7": "Opening...",
+        "157bb5ecbb": "Open GitHub",
+        "8c967b4d15": "Not now",
+        "73dfd4eb8d": "Don't ask again"
       },
       "TaskPage": {
         "513cddfa7a": "Verifying…",
@@ -3344,7 +3351,10 @@
           "2991a0106c": "Help",
           "4e8f5710d3": "Couldn't restart Orca.",
           "5161eef55d": "Restarting Orca…",
-          "d396773ef0": "checking"
+          "d396773ef0": "checking",
+          "f8a2c91d4e": "Milestones",
+          "b7e4d2a19c": "Onboarding",
+          "c4f8e1b72a": "X"
         },
         "SidebarToolbar": {
           "19e32d0e5f": "Open folder picker to add a project",
@@ -4369,7 +4379,9 @@
           "1e29570462": "starring",
           "9d181300e3": "starred",
           "5c49f02662": "hidden",
-          "b3f0584f5d": "loading"
+          "b3f0584f5d": "loading",
+          "cb65c75b11": "Opening...",
+          "f2d4f877b2": "Open GitHub"
         },
         "GeneralUpdateSettingsSection": {
           "8a52ca1d02": "Release notes",

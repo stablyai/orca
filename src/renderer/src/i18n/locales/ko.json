@@ -869,7 +869,8 @@
         "9c00bd4adf": "시작하려면 사이드바에서 워크스페이스를 선택하세요.",
         "16e9e3df89": "별표가 붙은",
         "0d0ace8861": "GitHub의 스타",
-        "ec43b38ba7": "GitHub에 별표 표시됨"
+        "ec43b38ba7": "GitHub에 별표 표시됨",
+        "157bb5ecbb": "Open GitHub"
       },
       "LinearIssueMarkdownDescriptionEditor": {
         "d9c47069ef": "Markdown",
@@ -1201,7 +1202,13 @@
         "b5e685e4d9": "닫기",
         "5f6df21046": "Orca를 즐기고 있나요?",
         "2d67b6c849": "GitHub의 스타",
-        "af3c9bbb37": "스타 표시 중…"
+        "af3c9bbb37": "스타 표시 중…",
+        "68a41bc3aa": "Could not star with",
+        "996bf76e46": "Open GitHub to finish in your browser.",
+        "d32015fec7": "Opening...",
+        "157bb5ecbb": "Open GitHub",
+        "8c967b4d15": "Not now",
+        "73dfd4eb8d": "Don't ask again"
       },
       "TaskPage": {
         "513cddfa7a": "확인 중…",
@@ -3325,7 +3332,10 @@
           "2991a0106c": "돕다",
           "4e8f5710d3": "Orca를 다시 시작할 수 없습니다.",
           "5161eef55d": "Orca를 다시 시작하는 중…",
-          "d396773ef0": "확인 중"
+          "d396773ef0": "확인 중",
+          "f8a2c91d4e": "Milestones",
+          "b7e4d2a19c": "Onboarding",
+          "c4f8e1b72a": "X"
         },
         "SidebarToolbar": {
           "19e32d0e5f": "폴더 선택기를 열어 프로젝트를 추가하세요.",
@@ -4354,7 +4364,9 @@
           "1e29570462": "스타 표시",
           "9d181300e3": "별표가 붙은",
           "5c49f02662": "숨겨진",
-          "b3f0584f5d": "로드 중"
+          "b3f0584f5d": "로드 중",
+          "cb65c75b11": "Opening...",
+          "f2d4f877b2": "Open GitHub"
         },
         "GeneralUpdateSettingsSection": {
           "8a52ca1d02": "릴리스 노트",

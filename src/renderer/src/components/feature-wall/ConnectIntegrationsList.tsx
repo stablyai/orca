@@ -28,8 +28,14 @@ function TaskSourceNameList(props: { names: readonly string[] }): React.JSX.Elem
           {index > 0
             ? index === props.names.length - 1
               ? props.names.length > 2
-                ? translate('auto.components.feature.wall.ConnectIntegrationsList.list_end', ', and ')
-                : translate('auto.components.feature.wall.ConnectIntegrationsList.list_pair', ' and ')
+                ? translate(
+                    'auto.components.feature.wall.ConnectIntegrationsList.list_end',
+                    ', and '
+                  )
+                : translate(
+                    'auto.components.feature.wall.ConnectIntegrationsList.list_pair',
+                    ' and '
+                  )
               : translate('auto.components.feature.wall.ConnectIntegrationsList.list_mid', ', ')
             : null}
           <span className="font-semibold text-foreground">{name}</span>
