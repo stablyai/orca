@@ -3,6 +3,8 @@ import { basename, dirname, join } from 'path'
 import { readFile } from 'fs/promises'
 
 const SESSION_PREVIEW_TEXT_LIMIT = 220
+const HIDDEN_USER_CONTEXT_BLOCK_PATTERN =
+  /<(?:codex_internal_context\b[^>]*|goal_context)>[\s\S]*?<\/(?:codex_internal_context|goal_context)>/gi
 
 export function timestampMs(value: unknown): number {
   if (typeof value === 'string') {
@@ -96,6 +98,7 @@ export function extractContentText(value: unknown): string | null {
 export function normalizeTitleText(value: string): string | null {
   const withoutReminders = value
     .replace(/<system-reminder>[\s\S]*?<\/system-reminder>/gi, ' ')
+    .replace(HIDDEN_USER_CONTEXT_BLOCK_PATTERN, ' ')
     .replace(/\s+/g, ' ')
     .trim()
   if (!withoutReminders) {
@@ -135,6 +138,7 @@ export function extractPreviewContentText(value: unknown): string | null {
 export function normalizePreviewText(value: string): string | null {
   const normalized = value
     .replace(/<system-reminder>[\s\S]*?<\/system-reminder>/gi, ' ')
+    .replace(HIDDEN_USER_CONTEXT_BLOCK_PATTERN, ' ')
     .replace(/\s+/g, ' ')
     .trim()
   if (!normalized) {

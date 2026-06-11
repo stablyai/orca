@@ -248,6 +248,59 @@ describe('scanAiVaultSessions', () => {
     })
   })
 
+  it('skips hidden Codex context blocks when choosing session titles', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-codex-hidden-context-'))
+    tempRoots.push(root)
+    const roots = isolatedScanRoots(root)
+    await mkdir(join(roots.codexSessionsDir, '2026', '06', '11'), { recursive: true })
+
+    await writeFile(
+      join(roots.codexSessionsDir, '2026', '06', '11', 'rollout-hidden-context.jsonl'),
+      jsonLines([
+        {
+          timestamp: '2026-06-11T10:00:00.000Z',
+          type: 'session_meta',
+          payload: { id: 'hidden-context-session', cwd: '/repo/app' }
+        },
+        {
+          timestamp: '2026-06-11T10:00:01.000Z',
+          type: 'response_item',
+          payload: {
+            type: 'message',
+            role: 'user',
+            content: [
+              {
+                type: 'text',
+                text: '<codex_internal_context source="goal">\\nKeep going\\n</codex_internal_context>'
+              }
+            ]
+          }
+        },
+        {
+          timestamp: '2026-06-11T10:00:02.000Z',
+          type: 'response_item',
+          payload: {
+            type: 'message',
+            role: 'user',
+            content: [{ type: 'text', text: 'Fix the title shown in the session list' }]
+          }
+        }
+      ])
+    )
+
+    const result = await scanAiVaultSessions({
+      ...roots,
+      platform: 'darwin'
+    })
+
+    expect(result.issues).toEqual([])
+    expect(result.sessions).toHaveLength(1)
+    expect(result.sessions[0]?.title).toBe('Fix the title shown in the session list')
+    expect(result.sessions[0]?.previewMessages.map((message) => message.text)).toEqual([
+      'Fix the title shown in the session list'
+    ])
+  })
+
   it('indexes every supported agent transcript format with native resume commands', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-all-agents-'))
     tempRoots.push(root)
