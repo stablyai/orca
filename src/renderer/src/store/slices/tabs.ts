@@ -1260,11 +1260,13 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
   },
 
   ungroupTabFolderGroup: (folderGroupId) => {
+    let ungrouped = false
     set((state) => {
       const found = findFolderGroupAndWorktree(state.tabFolderGroupsByWorktree, folderGroupId)
       if (!found) {
         return {}
       }
+      ungrouped = true
       const { folderGroup, worktreeId } = found
       const memberIds = new Set(folderGroup.tabOrder)
       const nextTabs = (state.unifiedTabsByWorktree[worktreeId] ?? []).map((tab) =>
@@ -1283,7 +1285,9 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
         }
       }
     })
-    get().recordFeatureInteraction?.('terminal-tabs')
+    if (ungrouped) {
+      get().recordFeatureInteraction?.('terminal-tabs')
+    }
   },
 
   closeTabsInFolderGroup: (folderGroupId) => {
