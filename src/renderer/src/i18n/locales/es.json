@@ -1630,8 +1630,8 @@
               "b169f943e1": "Fusionar cuando esté listo",
               "62703b1dc4": "La fusión automática de GitHub está habilitada para esta solicitud de extracción",
               "48d75ae118": "Deshabilitar la fusión automática",
-              "a5b66afb58": "Checks passed",
-              "fbd4f57f0a": "Checks passed. Merge eligibility will be checked again before merging."
+              "a5b66afb58": "Comprobaciones aprobadas",
+              "fbd4f57f0a": "Comprobaciones aprobadas. La elegibilidad de fusión se volverá a comprobar antes de fusionar."
             }
           }
         },

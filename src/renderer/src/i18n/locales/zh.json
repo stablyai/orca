@@ -1630,8 +1630,8 @@
               "b169f943e1": "准备好后合并",
               "62703b1dc4": "为此PR启用了 GitHub 自动合并",
               "48d75ae118": "禁用自动合并",
-              "a5b66afb58": "Checks passed",
-              "fbd4f57f0a": "Checks passed. Merge eligibility will be checked again before merging."
+              "a5b66afb58": "检查已通过",
+              "fbd4f57f0a": "检查已通过。合并资格将在合并前再次验证。"
             }
           }
         },
