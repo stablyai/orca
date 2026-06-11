@@ -132,6 +132,7 @@ import { normalizeDisabledTuiAgents } from '../shared/tui-agent-selection'
 import {
   DEFAULT_TUI_AGENT_ARGS,
   DEFAULT_TUI_AGENT_ENV,
+  hasUnsupportedTuiAgentArgs,
   normalizeTuiAgentArgsRecord,
   normalizeTuiAgentEnvRecord
 } from '../shared/tui-agent-launch-defaults'
@@ -1957,7 +1958,11 @@ export class Store {
           parsed.settings?.disabledTuiAgents
         )
         const migratedAgentYoloDefaults = migrateAgentYoloDefaults(parsed.settings)
-        if (parsed.settings?.agentYoloDefaultsMigrated !== true) {
+        if (
+          parsed.settings?.agentYoloDefaultsMigrated !== true ||
+          hasUnsupportedTuiAgentArgs('opencode', parsed.settings?.agentDefaultArgs?.opencode) ||
+          hasUnsupportedTuiAgentArgs('kilo', parsed.settings?.agentDefaultArgs?.kilo)
+        ) {
           this.loadNeedsSave = true
         }
         if (

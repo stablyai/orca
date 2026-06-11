@@ -2663,6 +2663,34 @@ describe('Store', () => {
     expect(store.getSettings().agentDefaultArgs?.claude).toBe('--dangerously-skip-permissions')
   })
 
+  it('removes unsupported TUI skip-permissions args from migrated profiles', async () => {
+    writeFileSync(
+      join(testState.dir, 'orca-data.json'),
+      JSON.stringify({
+        settings: {
+          agentYoloDefaultsMigrated: true,
+          agentDefaultArgs: {
+            opencode: '--dangerously-skip-permissions --model opencode/gpt-5',
+            kilo: '--dangerously-skip-permissions',
+            codex: '--dangerously-bypass-approvals-and-sandbox'
+          }
+        }
+      })
+    )
+    const store = await createStore()
+    store.flush()
+
+    expect(store.getSettings().agentDefaultArgs?.opencode).toBe('--model opencode/gpt-5')
+    expect(store.getSettings().agentDefaultArgs?.kilo).toBe('')
+    expect(store.getSettings().agentDefaultArgs?.codex).toBe(
+      '--dangerously-bypass-approvals-and-sandbox'
+    )
+    expect((readDataFile() as PersistedState).settings.agentDefaultArgs?.opencode).toBe(
+      '--model opencode/gpt-5'
+    )
+    expect((readDataFile() as PersistedState).settings.agentDefaultArgs?.kilo).toBe('')
+  })
+
   it('normalizes app icon on load and update', async () => {
     writeFileSync(
       join(testState.dir, 'orca-data.json'),

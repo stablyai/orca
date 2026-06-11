@@ -163,7 +163,10 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
     // TuiAgent id as 'kiro' for stored preferences, but detect/launch/identify
     // the real binary name so the agent is recognized as active.
     detectCmd: 'kiro-cli',
-    launchCmd: 'kiro-cli',
+    // Why: trust flags are accepted by Kiro's chat subcommand, not the
+    // top-level kiro-cli command. Keep TUI startup explicit so default args
+    // like --trust-all-tools are appended where the installed CLI accepts them.
+    launchCmd: 'kiro-cli chat --tui',
     expectedProcess: 'kiro-cli',
     promptInjectionMode: 'stdin-after-start'
   },
@@ -209,9 +212,12 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
     promptInjectionMode: 'argv'
   },
   continue: {
-    detectCmd: 'continue',
-    launchCmd: 'continue',
-    expectedProcess: 'continue',
+    // Why: Continue's CLI binary is `cn`; `continue` is a shell builtin in
+    // bash/zsh, so using it here can resolve to the shell keyword instead of
+    // the coding agent.
+    detectCmd: 'cn',
+    launchCmd: 'cn',
+    expectedProcess: 'cn',
     promptInjectionMode: 'stdin-after-start'
   },
   cursor: {

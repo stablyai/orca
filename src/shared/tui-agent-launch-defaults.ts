@@ -1,17 +1,20 @@
 import { isTuiAgent } from './tui-agent-config'
 import type { TuiAgent } from './types'
 
+const UNSUPPORTED_TUI_AGENT_ARGS: Partial<Record<TuiAgent, readonly string[]>> = {
+  opencode: ['--dangerously-skip-permissions'],
+  kilo: ['--dangerously-skip-permissions']
+}
+
 export const DEFAULT_TUI_AGENT_ARGS: Partial<Record<TuiAgent, string>> = {
   claude: '--dangerously-skip-permissions',
   'claude-agent-teams': '--dangerously-skip-permissions',
   openclaude: '--dangerously-skip-permissions',
   codex: '--dangerously-bypass-approvals-and-sandbox',
-  opencode: '--dangerously-skip-permissions',
   gemini: '--yolo',
   antigravity: '--dangerously-skip-permissions',
   aider: '--yes-always',
   amp: '--dangerously-allow-all',
-  kilo: '--dangerously-skip-permissions',
   kiro: '--trust-all-tools',
   crush: '--yolo',
   autohand: '--unrestricted',
@@ -32,6 +35,27 @@ export const DEFAULT_TUI_AGENT_ENV: Partial<Record<TuiAgent, Record<string, stri
   goose: { GOOSE_MODE: 'auto' }
 }
 
+function argPattern(arg: string): RegExp {
+  return new RegExp(`(^|\\s)${arg.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?=\\s|$)`, 'g')
+}
+
+export function hasUnsupportedTuiAgentArgs(agent: TuiAgent, value: unknown): boolean {
+  if (typeof value !== 'string') {
+    return false
+  }
+  return (UNSUPPORTED_TUI_AGENT_ARGS[agent] ?? []).some((arg) => argPattern(arg).test(value))
+}
+
+function sanitizeTuiAgentLaunchArgs(agent: TuiAgent, args: string): string {
+  const unsupportedArgs = UNSUPPORTED_TUI_AGENT_ARGS[agent]
+  if (!unsupportedArgs) {
+    return args.trim()
+  }
+  // Why: a few agents have removed, relocated, or never exposed Claude-style
+  // skip-permission flags on the interactive TUI command Orca launches.
+  return unsupportedArgs.reduce((next, arg) => next.replace(argPattern(arg), ' '), args).trim()
+}
+
 export function normalizeTuiAgentArgsRecord(value: unknown): Partial<Record<TuiAgent, string>> {
   const normalized: Partial<Record<TuiAgent, string>> = {}
   if (!value || typeof value !== 'object') {
@@ -41,7 +65,7 @@ export function normalizeTuiAgentArgsRecord(value: unknown): Partial<Record<TuiA
     if (!isTuiAgent(agent) || typeof args !== 'string') {
       continue
     }
-    normalized[agent] = args.trim()
+    normalized[agent] = sanitizeTuiAgentLaunchArgs(agent, args)
   }
   return normalized
 }

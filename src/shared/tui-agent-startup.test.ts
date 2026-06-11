@@ -5,6 +5,7 @@ import {
   buildAgentStartupPlan,
   buildShellCommandFromArgv
 } from './tui-agent-startup'
+import { normalizeTuiAgentArgsRecord, resolveTuiAgentLaunchArgs } from './tui-agent-launch-defaults'
 
 describe('tui agent startup plans', () => {
   it('uses POSIX quoting when the target shell is Linux', () => {
@@ -184,6 +185,45 @@ describe('tui agent startup plans', () => {
 
     expect(plan?.launchCommand).toBe('goose')
     expect(plan?.env).toEqual({ GOOSE_MODE: 'auto' })
+  })
+
+  it('does not append the unsupported OpenCode TUI skip-permissions arg', () => {
+    const agentDefaultArgs = normalizeTuiAgentArgsRecord({
+      opencode: '--dangerously-skip-permissions'
+    })
+    const plan = buildAgentStartupPlan({
+      agent: 'opencode',
+      prompt: 'fix it',
+      cmdOverrides: {},
+      agentArgs: resolveTuiAgentLaunchArgs('opencode', agentDefaultArgs),
+      platform: 'linux'
+    })
+
+    expect(plan?.launchCommand).toBe("opencode --prompt 'fix it'")
+  })
+
+  it('appends Kiro trust defaults to the chat subcommand that accepts them', () => {
+    const plan = buildAgentStartupPlan({
+      agent: 'kiro',
+      prompt: 'fix it',
+      cmdOverrides: {},
+      agentArgs: '--trust-all-tools',
+      platform: 'linux'
+    })
+
+    expect(plan?.launchCommand).toBe("kiro-cli chat --tui '--trust-all-tools'")
+  })
+
+  it('launches Continue through the documented cn binary', () => {
+    const plan = buildAgentStartupPlan({
+      agent: 'continue',
+      prompt: 'fix it',
+      cmdOverrides: {},
+      agentArgs: '--allow "*"',
+      platform: 'linux'
+    })
+
+    expect(plan?.launchCommand).toBe("cn '--allow' '*'")
   })
 
   it('clears draft environment variables with the target shell syntax', () => {

@@ -68,6 +68,8 @@ describe('getDefaultSettings', () => {
       copilot: '--yolo',
       grok: '--permission-mode bypassPermissions'
     })
+    expect(settings.agentDefaultArgs).not.toHaveProperty('opencode')
+    expect(settings.agentDefaultArgs).not.toHaveProperty('kilo')
     expect(settings.agentDefaultEnv).toMatchObject({
       goose: { GOOSE_MODE: 'auto' }
     })
