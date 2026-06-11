@@ -134,6 +134,8 @@ export const JA_VALUE_OVERRIDES = {
   'Add a project first': 'まずプロジェクトを追加',
   'Pick a base branch below': '以下のベースブランチを選択',
   'Choose floating workspace directory': 'フローティング ワークスペース ディレクトリを選択',
+  'Local project, Git repo, or folder with many repos':
+    'ローカルプロジェクト、Git repo、または多数の repos を含むフォルダー',
   'Enter passphrase': 'パスフレーズを入力',
   'Enter password': 'パスワードを入力',
   'Enter the passphrase for': 'のパスフレーズを入力',

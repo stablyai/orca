@@ -2426,19 +2426,19 @@ const hasDivergentSources = (
   sources: { issues: GitHubOwnerRepo; prs: GitHubOwnerRepo }
 } => !!s.sources?.issues && !!s.sources.prs && !sameGitHubOwnerRepo(s.sources.issues, s.sources.prs)
 
-// Why: the selector keeps rendering even after the user picks 'origin' (which
-// collapses `sources.issues` onto origin). Upstream-candidate divergence is
-// the right render gate — a repo that has an `upstream` remote pointing
-// somewhere different from origin is always a candidate for the toggle,
-// regardless of the current effective preference.
+// Why: the selector keeps rendering even after the user picks 'upstream' (which
+// makes effective `sources.prs` point at upstream). Raw-candidate divergence is the
+// right render gate — a repo that has an `upstream` remote pointing somewhere
+// different from origin is always a candidate for the toggle, regardless of
+// the current effective preference.
 const hasUpstreamCandidateDivergence = (
   s: TaskPageRepoSourceState
 ): s is TaskPageRepoSourceState & {
-  sources: { prs: GitHubOwnerRepo; upstreamCandidate: GitHubOwnerRepo }
+  sources: { originCandidate: GitHubOwnerRepo; upstreamCandidate: GitHubOwnerRepo }
 } =>
-  !!s.sources?.prs &&
+  !!s.sources?.originCandidate &&
   !!s.sources.upstreamCandidate &&
-  !sameGitHubOwnerRepo(s.sources.prs, s.sources.upstreamCandidate)
+  !sameGitHubOwnerRepo(s.sources.originCandidate, s.sources.upstreamCandidate)
 
 export default function TaskPage(): React.JSX.Element {
   useTranslation()
@@ -2788,6 +2788,7 @@ export default function TaskPage(): React.JSX.Element {
   // collapse onto a stale in-flight request that resolved against the
   // pre-flip source).
   const lastFetchedInvalidationNonceRef = useRef(0)
+  const paginationGenerationRef = useRef(0)
   // Why: entering Tasks with fresh cache should still verify remote status
   // once, but the result is reconciled into existing rows to avoid a full
   // table shuffle when only status/key fields changed.
@@ -2817,6 +2818,12 @@ export default function TaskPage(): React.JSX.Element {
   const [totalItemCount, setTotalItemCount] = useState<number | null>(null)
   const fetchWorkItemsNextPage = useAppStore((s) => s.fetchWorkItemsNextPage)
   const countWorkItemsAcrossRepos = useAppStore((s) => s.countWorkItemsAcrossRepos)
+
+  useEffect(() => {
+    paginationGenerationRef.current += 1
+    setPaginationLoading(false)
+    setLoadingTargetPage(null)
+  }, [selectedRepos, appliedTaskSearch, workItemsInvalidationNonce])
 
   // Why: clicking a GitHub row (or completing the create-issue flow) opens
   // this dialog for a read/review surface. The dialog's "Use" button routes
@@ -4846,6 +4853,7 @@ export default function TaskPage(): React.JSX.Element {
       }
       const q = stripRepoQualifiers(appliedTaskSearch.trim())
       const repoArgs = selectedRepos.map((r) => ({ repoId: r.id, path: r.path }))
+      const requestGeneration = paginationGenerationRef.current
 
       const target = targetPage ?? pages.length
       setPaginationLoading(true)
@@ -4863,6 +4871,9 @@ export default function TaskPage(): React.JSX.Element {
             q,
             cursor
           )
+          if (paginationGenerationRef.current !== requestGeneration) {
+            return
+          }
           if (items.length === 0) {
             break
           }
@@ -4878,8 +4889,10 @@ export default function TaskPage(): React.JSX.Element {
       } catch (err) {
         console.error('Failed to load next page:', err)
       } finally {
-        setPaginationLoading(false)
-        setLoadingTargetPage(null)
+        if (paginationGenerationRef.current === requestGeneration) {
+          setPaginationLoading(false)
+          setLoadingTargetPage(null)
+        }
       }
     },
     [paginationLoading, selectedRepos, pages, appliedTaskSearch, fetchWorkItemsNextPage]
@@ -6413,8 +6426,8 @@ export default function TaskPage(): React.JSX.Element {
   // strings (e.g. "ENG-123") so we use 0 as a placeholder number since the
   // provider-generic work item shape still expects numeric issue metadata.
   const openComposerForLinearItem = useCallback(
-    (issue: LinearIssue, renderedText?: string): void => {
-      const linkedWorkItem = buildLinearIssueLinkedWorkItem(issue, renderedText)
+    (issue: LinearIssue): void => {
+      const linkedWorkItem = buildLinearIssueLinkedWorkItem(issue)
       openModal('new-workspace-composer', {
         linkedWorkItem,
         prefilledName: getLinearIssueWorkspaceName(issue),
@@ -6425,13 +6438,13 @@ export default function TaskPage(): React.JSX.Element {
   )
 
   const handleUseLinearItem = useCallback(
-    (issue: LinearIssue, renderedText?: string): void => {
+    (issue: LinearIssue): void => {
       // Why: same rationale as handleUseWorkItem — open the New Workspace
       // dialog pre-filled rather than yolo-creating the worktree, so the
       // user can confirm name / agent / setup before the worktree lands in
       // the sidebar. Telemetry attribution flows via openComposerForLinearItem.
       useAppStore.getState().recordFeatureInteraction('linear-tasks')
-      openComposerForLinearItem(issue, renderedText)
+      openComposerForLinearItem(issue)
     },
     [openComposerForLinearItem]
   )
@@ -7086,7 +7099,7 @@ export default function TaskPage(): React.JSX.Element {
                                 ) : null}
                                 <IssueSourceSelector
                                   preference={repo.issueSourcePreference}
-                                  origin={s.sources.prs}
+                                  origin={s.sources.originCandidate}
                                   upstream={s.sources.upstreamCandidate}
                                   onChange={(next) => {
                                     void setIssueSourcePreference(repo.id, repo.path, next)
@@ -9691,17 +9704,19 @@ export default function TaskPage(): React.JSX.Element {
                 return null
               }
               const entry = perRepoSourceState.find((s) => s.repoId === newIssueTargetRepo.id)
-              if (!entry || !entry.sources?.upstreamCandidate || !entry.sources?.prs) {
+              if (!entry || !entry.sources?.upstreamCandidate || !entry.sources?.originCandidate) {
                 return null
               }
-              if (sameGitHubOwnerRepo(entry.sources.prs, entry.sources.upstreamCandidate)) {
+              if (
+                sameGitHubOwnerRepo(entry.sources.originCandidate, entry.sources.upstreamCandidate)
+              ) {
                 return null
               }
               return (
                 <div className="mt-1">
                   <IssueSourceSelector
                     preference={newIssueTargetRepo.issueSourcePreference}
-                    origin={entry.sources.prs}
+                    origin={entry.sources.originCandidate}
                     upstream={entry.sources.upstreamCandidate}
                     disabled={newIssueSubmitting}
                     // Why: the composer only files issues, so the "Issues from

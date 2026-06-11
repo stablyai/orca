@@ -1,5 +1,5 @@
 /* oxlint-disable react-doctor/no-adjust-state-on-prop-change -- Why: feedback viewer details are loaded through GitHub IPC after the dialog receives the issue URL. */
-import React, { useState } from 'react'
+import React, { useRef, useState } from 'react'
 import { ExternalLink, Github } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -58,6 +58,7 @@ export function SidebarFeedbackDialog({
   const [isViewerLoading, setIsViewerLoading] = useState(false)
   const [submitAnonymously, setSubmitAnonymously] = useState(false)
   const mountedRef = useMountedRef()
+  const feedbackTextareaRef = useRef<HTMLTextAreaElement>(null)
 
   React.useEffect(() => {
     if (!open) {
@@ -151,7 +152,13 @@ export function SidebarFeedbackDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent
+        className="sm:max-w-lg"
+        onOpenAutoFocus={(event) => {
+          event.preventDefault()
+          feedbackTextareaRef.current?.focus()
+        }}
+      >
         <DialogHeader>
           <DialogTitle className="text-sm">
             {translate('auto.components.sidebar.SidebarFeedbackDialog.0eb643f07f', 'Send Feedback')}
@@ -219,7 +226,7 @@ export function SidebarFeedbackDialog({
         </div>
 
         <textarea
-          autoFocus
+          ref={feedbackTextareaRef}
           value={feedback}
           onChange={(event) => setFeedback(event.target.value)}
           placeholder={translate(

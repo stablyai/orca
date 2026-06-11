@@ -294,7 +294,15 @@ export function McpConfigSection({ repo }: McpConfigSectionProps): React.JSX.Ele
         { targetGroupId }
       )
       setActiveView('terminal')
-      toast.success(translate("auto.components.settings.McpConfigSection.1f3665e35a", "MCP config created"), { description: translate("auto.components.settings.McpConfigSection.9ee215caf6", ".mcp.json") })
+      toast.success(
+        translate('auto.components.settings.McpConfigSection.1f3665e35a', 'MCP config created'),
+        {
+          description: translate(
+            'auto.components.settings.McpConfigSection.9ee215caf6',
+            '.mcp.json'
+          )
+        }
+      )
     } catch (error) {
       toast.error(extractIpcErrorMessage(error, 'Failed to create MCP config.'))
     }
@@ -304,12 +312,22 @@ export function McpConfigSection({ repo }: McpConfigSectionProps): React.JSX.Ele
     <section className="space-y-4">
       <div className="flex items-start justify-between gap-4">
         <div className="space-y-1">
-          <h3 className="text-sm font-semibold">{translate("auto.components.settings.McpConfigSection.55eea3ef47", "MCP Configs")}</h3>
+          <h3 className="text-sm font-semibold">
+            {translate('auto.components.settings.McpConfigSection.55eea3ef47', 'MCP Configs')}
+          </h3>
           <p className="text-xs text-muted-foreground">
-            {translate("auto.components.settings.McpConfigSection.96f5609b04", "Inspect MCP server definitions that agents can use while working in this repo.")}</p>
+            {translate(
+              'auto.components.settings.McpConfigSection.96f5609b04',
+              'Inspect MCP server definitions that agents can use while working in this repo.'
+            )}
+          </p>
           {repo.connectionId ? (
             <p className="text-xs text-muted-foreground">
-              {translate("auto.components.settings.McpConfigSection.6bac9ddfc6", "SSH repos are read through the remote filesystem. Starter creation is limited to the workspace root config.")}</p>
+              {translate(
+                'auto.components.settings.McpConfigSection.6bac9ddfc6',
+                'SSH repos are read through the remote filesystem. Starter creation is limited to the workspace root config.'
+              )}
+            </p>
           ) : null}
         </div>
         <div className="flex shrink-0 items-center gap-2">
@@ -317,7 +335,10 @@ export function McpConfigSection({ repo }: McpConfigSectionProps): React.JSX.Ele
             variant="ghost"
             size="icon-sm"
             onClick={() => void loadConfigs()}
-            aria-label={translate("auto.components.settings.McpConfigSection.f34c152dc0", "Refresh MCP configs")}
+            aria-label={translate(
+              'auto.components.settings.McpConfigSection.f34c152dc0',
+              'Refresh MCP configs'
+            )}
           >
             {loading ? (
               <LoaderCircle className="size-3.5 animate-spin" />
@@ -333,7 +354,15 @@ export function McpConfigSection({ repo }: McpConfigSectionProps): React.JSX.Ele
               onClick={() => void handleCreateStarter()}
             >
               <Plus className="size-3.5" />
-              {createConfirm ? translate("auto.components.settings.McpConfigSection.0a5c1ead54", "Create empty config") : translate("auto.components.settings.McpConfigSection.82436439eb", "Add MCP config")}
+              {createConfirm
+                ? translate(
+                    'auto.components.settings.McpConfigSection.0a5c1ead54',
+                    'Create empty config'
+                  )
+                : translate(
+                    'auto.components.settings.McpConfigSection.82436439eb',
+                    'Add MCP config'
+                  )}
             </Button>
           ) : null}
         </div>
@@ -342,7 +371,11 @@ export function McpConfigSection({ repo }: McpConfigSectionProps): React.JSX.Ele
       <div className="rounded-md border border-border/50 bg-muted/20">
         <div className="flex items-center justify-between border-b border-border/50 px-3 py-2 text-xs text-muted-foreground">
           <span>
-            {detectedCount} {translate("auto.components.settings.McpConfigSection.251b96564a", "detected ·")}{serverCount} {translate("auto.components.settings.McpConfigSection.3b224167ff", "server")}{serverCount === 1 ? '' : 's'}
+            {detectedCount}{' '}
+            {translate('auto.components.settings.McpConfigSection.251b96564a', 'detected ·')}{' '}
+            {serverCount}{' '}
+            {translate('auto.components.settings.McpConfigSection.3b224167ff', 'server')}
+            {serverCount === 1 ? '' : 's'}
           </span>
           {loading ? <LoaderCircle className="size-3.5 animate-spin" /> : null}
         </div>
@@ -358,7 +391,11 @@ export function McpConfigSection({ repo }: McpConfigSectionProps): React.JSX.Ele
                 <span>{inspectionUnavailableMessage}</span>
               ) : (
                 <span>
-                  {translate("auto.components.settings.McpConfigSection.b900cd6282", "No MCP config found. Add an empty workspace config when you want this repo to define its own MCP servers.")}</span>
+                  {translate(
+                    'auto.components.settings.McpConfigSection.b900cd6282',
+                    'No MCP config found. Add an empty workspace config when you want this repo to define its own MCP servers.'
+                  )}
+                </span>
               )}
             </div>
           ) : (
@@ -375,7 +412,9 @@ export function McpConfigSection({ repo }: McpConfigSectionProps): React.JSX.Ele
 
           {missingConfigs.length > 0 && !inspectionUnavailable ? (
             <div className="space-y-1.5 border-t border-border/50 px-3 py-2">
-              <p className="text-[11px] text-muted-foreground">{translate("auto.components.settings.McpConfigSection.4d16a0d9ac", "Checked")}</p>
+              <p className="text-[11px] text-muted-foreground">
+                {translate('auto.components.settings.McpConfigSection.4d16a0d9ac', 'Checked')}
+              </p>
               <div className="flex flex-wrap gap-1.5">
                 {missingConfigs.map((config) => (
                   <span

@@ -104,9 +104,10 @@ describe('AddRepoNestedImportStep', () => {
 
   it('maps the monorepo choice to grouped import and the non-monorepo choice to separate import', () => {
     const onImport = vi.fn()
-    container = document.createElement('div')
-    document.body.appendChild(container)
-    root = createRoot(container)
+    const host = document.createElement('div')
+    container = host
+    document.body.appendChild(host)
+    root = createRoot(host)
 
     act(() => {
       root?.render(
@@ -129,8 +130,8 @@ describe('AddRepoNestedImportStep', () => {
     })
 
     act(() => {
-      findButton(container, 'Yes, import as monorepo').click()
-      findButton(container, 'No, import separately').click()
+      findButton(host, 'Yes, import as monorepo').click()
+      findButton(host, 'No, import separately').click()
     })
 
     expect(onImport).toHaveBeenNthCalledWith(1, 'group')

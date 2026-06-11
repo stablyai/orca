@@ -177,8 +177,16 @@ export default function HostedReviewActions({
       const confirmed = await confirm({
         title: `${label} ${shortLabel} ${isGitLab ? '!' : '#'}${review.number}?`,
         description: isClosing
-          ? translate("auto.components.right.sidebar.HostedReviewActions.a3d572a4de", "This will close the {{value0}}.", { value0: reviewLabel })
-          : translate("auto.components.right.sidebar.HostedReviewActions.78f5ff294c", "This will reopen the {{value0}}.", { value0: reviewLabel }),
+          ? translate(
+              'auto.components.right.sidebar.HostedReviewActions.a3d572a4de',
+              'This will close the {{value0}}.',
+              { value0: reviewLabel }
+            )
+          : translate(
+              'auto.components.right.sidebar.HostedReviewActions.78f5ff294c',
+              'This will reopen the {{value0}}.',
+              { value0: reviewLabel }
+            ),
         confirmLabel: label,
         confirmVariant: isClosing ? 'destructive' : 'default'
       })
@@ -202,7 +210,19 @@ export default function HostedReviewActions({
           setActionError(result.error)
           toast.error(result.error)
         } else {
-          toast.success(isClosing ? translate("auto.components.right.sidebar.HostedReviewActions.fa3ee9a515", "{{value0}} closed", { value0: shortLabel }) : translate("auto.components.right.sidebar.HostedReviewActions.377269db6f", "{{value0}} reopened", { value0: shortLabel }))
+          toast.success(
+            isClosing
+              ? translate(
+                  'auto.components.right.sidebar.HostedReviewActions.fa3ee9a515',
+                  '{{value0}} closed',
+                  { value0: shortLabel }
+                )
+              : translate(
+                  'auto.components.right.sidebar.HostedReviewActions.377269db6f',
+                  '{{value0}} reopened',
+                  { value0: shortLabel }
+                )
+          )
           await onRefreshReview()
         }
       } catch (err) {
@@ -272,7 +292,10 @@ export default function HostedReviewActions({
                       <GitMerge className="size-3.5" />
                     )}
                     {merging
-                      ? translate("auto.components.right.sidebar.HostedReviewActions.d2ca293f3d", "Working...")
+                      ? translate(
+                          'auto.components.right.sidebar.HostedReviewActions.d2ca293f3d',
+                          'Working...'
+                        )
                       : mergePresentation.directMergeAvailable
                         ? mergeMethods.defaultLabel
                         : (mergePresentation.autoMergeAction?.label ?? mergePresentation.label)}
@@ -296,8 +319,15 @@ export default function HostedReviewActions({
                     'disabled:opacity-50 disabled:cursor-not-allowed'
                   )}
                   disabled={menuDisabled}
-                  aria-label={translate("auto.components.right.sidebar.HostedReviewActions.2bfaf4379c", "More {{value0}} actions", { value0: reviewLabel })}
-                  title={translate("auto.components.right.sidebar.HostedReviewActions.9845a71e17", "More actions")}
+                  aria-label={translate(
+                    'auto.components.right.sidebar.HostedReviewActions.2bfaf4379c',
+                    'More {{value0}} actions',
+                    { value0: reviewLabel }
+                  )}
+                  title={translate(
+                    'auto.components.right.sidebar.HostedReviewActions.9845a71e17',
+                    'More actions'
+                  )}
                 >
                   {stateUpdating === 'closed' ? (
                     <LoaderCircle className="size-3.5 animate-spin" />
@@ -336,7 +366,11 @@ export default function HostedReviewActions({
                   onSelect={() => void handleCloseReview()}
                 >
                   <GitPullRequestClosed className="size-3.5" />
-                  {translate("auto.components.right.sidebar.HostedReviewActions.4d5fb5a284", "Close")}{shortLabel}
+                  {translate(
+                    'auto.components.right.sidebar.HostedReviewActions.4d5fb5a284',
+                    'Close'
+                  )}{' '}
+                  {shortLabel}
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -363,7 +397,16 @@ export default function HostedReviewActions({
           ) : (
             <CircleDot className="size-3.5" />
           )}
-          {stateUpdating === 'open' ? translate("auto.components.right.sidebar.HostedReviewActions.6645ac7dd1", "Reopening...") : translate("auto.components.right.sidebar.HostedReviewActions.3ce211ece6", "Reopen {{value0}}", { value0: shortLabel })}
+          {stateUpdating === 'open'
+            ? translate(
+                'auto.components.right.sidebar.HostedReviewActions.6645ac7dd1',
+                'Reopening...'
+              )
+            : translate(
+                'auto.components.right.sidebar.HostedReviewActions.3ce211ece6',
+                'Reopen {{value0}}',
+                { value0: shortLabel }
+              )}
         </Button>
         {actionError && <div className="text-[10px] text-rose-500 break-words">{actionError}</div>}
       </div>
@@ -385,7 +428,12 @@ export default function HostedReviewActions({
         ) : (
           <Trash2 className="size-3.5" />
         )}
-        {isDeletingWorktree ? translate("auto.components.right.sidebar.HostedReviewActions.eefd50457e", "Deleting...") : translate("auto.components.right.sidebar.HostedReviewActions.e4aca40024", "Delete Workspace")}
+        {isDeletingWorktree
+          ? translate('auto.components.right.sidebar.HostedReviewActions.eefd50457e', 'Deleting...')
+          : translate(
+              'auto.components.right.sidebar.HostedReviewActions.e4aca40024',
+              'Delete Workspace'
+            )}
       </Button>
     )
   }

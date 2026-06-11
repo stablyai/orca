@@ -24,6 +24,7 @@ import type {
 } from '../../../shared/runtime-types'
 import { isTerminalLeafId, makePaneKey } from '../../../shared/stable-pane-id'
 import { isWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
+import { isClaudeManagementTitle } from '../../../shared/agent-detection'
 import type {
   TabGroup,
   TabGroupLayoutNode,
@@ -1074,15 +1075,20 @@ function buildMobileTerminalSurfaceTabs(
           ? paneTitles[Number(legacyPaneId)]
           : undefined
     const paneKey = isTerminalLeafId(leafId) ? makePaneKey(terminal.id, leafId) : null
-    const agentStatus = paneKey ? state.agentStatusByPaneKey?.[paneKey] : undefined
+    const title = resolveRuntimeTerminalTitle(
+      terminal,
+      generatedTitlesEnabled,
+      paneTitle ?? terminal.title ?? 'Terminal'
+    )
+    const agentStatusTitle = paneTitle ?? terminal.title ?? ''
+    const agentStatus =
+      paneKey && !isClaudeManagementTitle(agentStatusTitle)
+        ? state.agentStatusByPaneKey?.[paneKey]
+        : undefined
     return {
       type: 'terminal' as const,
       id: mobileTerminalSurfaceId(terminal.id, leafId),
-      title: resolveRuntimeTerminalTitle(
-        terminal,
-        generatedTitlesEnabled,
-        paneTitle ?? terminal.title ?? 'Terminal'
-      ),
+      title,
       ...(terminal.quickCommandLabel?.trim()
         ? { quickCommandLabel: terminal.quickCommandLabel.trim() }
         : {}),

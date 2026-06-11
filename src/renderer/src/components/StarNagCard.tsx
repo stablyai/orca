@@ -1,10 +1,13 @@
 import { useEffect, useState } from 'react'
-import { Star, X } from 'lucide-react'
+import { ExternalLink, Star, X } from 'lucide-react'
 import { Card } from './ui/card'
 import { Button } from './ui/button'
 import { useAppStore } from '../store'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { translate } from '@/i18n/i18n'
+
+const ORCA_STARGAZERS_URL = 'https://github.com/stablyai/orca/stargazers'
+type StarNagMode = 'gh' | 'web'
 
 /**
  * Persistent "star Orca on GitHub" notification card.
@@ -20,7 +23,7 @@ import { translate } from '@/i18n/i18n'
 export function StarNagCard(): React.JSX.Element | null {
   const [visible, setVisible] = useState(false)
   const [busy, setBusy] = useState(false)
-  const [error, setError] = useState(false)
+  const [mode, setMode] = useState<StarNagMode>('gh')
   const mountedRef = useMountedRef()
   // Why: UpdateCard lives at the same bottom-right slot. When it is visible
   // (any non-idle / non-not-available state), stack the star-nag card above
@@ -30,8 +33,8 @@ export function StarNagCard(): React.JSX.Element | null {
   const updateCardVisible = updateStatus.state !== 'idle' && updateStatus.state !== 'not-available'
 
   useEffect(() => {
-    return window.api.starNag.onShow(() => {
-      setError(false)
+    return window.api.starNag.onShow((payload) => {
+      setMode(payload?.mode === 'web' ? 'web' : 'gh')
       setVisible(true)
     })
   }, [])
@@ -42,6 +45,11 @@ export function StarNagCard(): React.JSX.Element | null {
     // is we re-fire the same threshold on next launch — not worth blocking
     // the close animation on.
     void window.api.starNag.dismiss()
+  }
+
+  const handleDisable = (): void => {
+    setVisible(false)
+    void window.api.starNag.disable()
   }
 
   useEffect(() => {
@@ -67,15 +75,24 @@ export function StarNagCard(): React.JSX.Element | null {
     if (busy) {
       return
     }
+    if (mode === 'web') {
+      setBusy(true)
+      await window.api.shell.openUrl(ORCA_STARGAZERS_URL)
+      await window.api.starNag.disable()
+      if (mountedRef.current) {
+        setBusy(false)
+        setVisible(false)
+      }
+      return
+    }
     setBusy(true)
-    setError(false)
     const ok = await window.api.gh.starOrca('star_nag')
     if (mountedRef.current) {
       setBusy(false)
     }
     if (!ok) {
       if (mountedRef.current) {
-        setError(true)
+        setMode('web')
       }
       return
     }
@@ -122,20 +139,6 @@ export function StarNagCard(): React.JSX.Element | null {
             )}
           </p>
 
-          {error ? (
-            <p className="text-xs text-destructive">
-              {translate(
-                'auto.components.StarNagCard.cf82170065',
-                'Could not star the repo. Make sure'
-              )}
-              <code>{translate('auto.components.StarNagCard.cd8c34aac1', 'gh')}</code>{' '}
-              {translate(
-                'auto.components.StarNagCard.92b0f9d921',
-                'is authenticated and try again.'
-              )}
-            </p>
-          ) : null}
-
           <Button
             variant="default"
             size="sm"
@@ -143,11 +146,23 @@ export function StarNagCard(): React.JSX.Element | null {
             disabled={busy}
             className="mt-0.5 w-full gap-1.5"
           >
-            <Star className="size-3.5" />
+            {mode === 'web' ? <ExternalLink className="size-3.5" /> : <Star className="size-3.5" />}
             {busy
-              ? translate('auto.components.StarNagCard.af3c9bbb37', 'Starring…')
-              : translate('auto.components.StarNagCard.2d67b6c849', 'Star on GitHub')}
+              ? mode === 'web'
+                ? translate('auto.components.StarNagCard.d32015fec7', 'Opening...')
+                : translate('auto.components.StarNagCard.af3c9bbb37', 'Starring…')
+              : mode === 'web'
+                ? translate('auto.components.StarNagCard.157bb5ecbb', 'Open GitHub')
+                : translate('auto.components.StarNagCard.2d67b6c849', 'Star on GitHub')}
           </Button>
+          <div className="flex items-center justify-between gap-2">
+            <Button variant="ghost" size="sm" className="h-7 px-2" onClick={handleClose}>
+              {translate('auto.components.StarNagCard.8c967b4d15', 'Not now')}
+            </Button>
+            <Button variant="ghost" size="sm" className="h-7 px-2" onClick={handleDisable}>
+              {translate('auto.components.StarNagCard.73dfd4eb8d', "Don't ask again")}
+            </Button>
+          </div>
         </div>
       </Card>
     </div>

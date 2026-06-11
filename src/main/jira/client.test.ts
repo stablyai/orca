@@ -50,6 +50,37 @@ function writeJiraFiles(siteId: string, token: string | Buffer): void {
   writeFileSync(tokenPathForSite(siteId), token)
 }
 
+function writeMultiSiteFiles(
+  sites: { id: string; token: string | Buffer }[],
+  selectedSiteId: string
+): void {
+  const orcaDir = join(tempHome, '.orca')
+  mkdirSync(join(orcaDir, 'jira-tokens'), { recursive: true })
+  writeFileSync(
+    join(orcaDir, 'jira-sites.json'),
+    JSON.stringify(
+      {
+        version: 1,
+        activeSiteId: sites[0]?.id ?? null,
+        selectedSiteId,
+        sites: sites.map((site) => ({
+          id: site.id,
+          siteUrl: `https://${site.id}.atlassian.net`,
+          email: `${site.id}@example.com`,
+          displayName: site.id,
+          accountId: `account-${site.id}`
+        }))
+      },
+      null,
+      2
+    ),
+    { encoding: 'utf-8' }
+  )
+  for (const site of sites) {
+    writeFileSync(tokenPathForSite(site.id), site.token)
+  }
+}
+
 async function loadClientModule(options: SafeStorageMockOptions = {}) {
   vi.resetModules()
   vi.doMock('electron', () => ({
@@ -236,5 +267,46 @@ describe('Jira client credential storage', () => {
 
     expect(fetchMock).not.toHaveBeenCalled()
     expect(jira.getStatus()).toMatchObject({ connected: false })
+  })
+
+  it('keeps healthy sites under the "all" selection when one site cannot be decrypted', async () => {
+    writeMultiSiteFiles(
+      [
+        { id: 'good', token: 'token-good' },
+        { id: 'bad', token: Buffer.from([0x76, 0x31, 0x30, 0xff, 0xfe]) }
+      ],
+      'all'
+    )
+    const jira = await loadClientModule({
+      encryptionAvailable: true,
+      // Why: only the binary "bad" token throws on decrypt; the plaintext
+      // "good" token falls back through the legacy path.
+      decryptString: () => {
+        throw new Error('userCanceledErr')
+      }
+    })
+
+    const clients = jira.getClients('all')
+    expect(clients.map((client) => client.site.id)).toEqual(['good'])
+    // The bad site's decrypt error is still recorded for the status banner.
+    expect(jira.getStatus().credentialError).toContain('Could not decrypt')
+  })
+
+  it('rethrows the decrypt error for a specific site selection', async () => {
+    writeMultiSiteFiles(
+      [
+        { id: 'good', token: 'token-good' },
+        { id: 'bad', token: Buffer.from([0x76, 0x31, 0x30, 0xff, 0xfe]) }
+      ],
+      'bad'
+    )
+    const jira = await loadClientModule({
+      encryptionAvailable: true,
+      decryptString: () => {
+        throw new Error('userCanceledErr')
+      }
+    })
+
+    expect(() => jira.getClients('bad')).toThrow('Could not decrypt')
   })
 })

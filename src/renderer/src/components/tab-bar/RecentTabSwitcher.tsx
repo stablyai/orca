@@ -4,7 +4,10 @@ import { FileText, GitCompare, Globe2, TerminalSquare } from 'lucide-react'
 import { useAppStore } from '../../store'
 import { activateCyclableTab } from '../../hooks/ipc-tab-switch'
 import { getShortcutPlatform } from '../../hooks/useShortcutLabel'
-import { matchesRecentTabSwitcherChord } from '../../../../shared/window-shortcut-policy'
+import {
+  isRecentTabSwitcherCommitRelease,
+  matchesRecentTabSwitcherChord
+} from '../../../../shared/window-shortcut-policy'
 import {
   buildRecentTabSwitcherModel,
   getNextRecentTabSwitcherIndex,
@@ -16,6 +19,11 @@ import { translate } from '@/i18n/i18n'
 type SwitcherState = {
   items: RecentTabSwitcherItem[]
   selectedIndex: number
+}
+
+function consumeKeyboardEvent(event: KeyboardEvent): void {
+  event.preventDefault()
+  event.stopPropagation()
 }
 
 function TabIcon({ item }: { item: RecentTabSwitcherItem }): React.JSX.Element {
@@ -105,36 +113,32 @@ export default function RecentTabSwitcher(): React.JSX.Element | null {
         // Why: Electron's native before-input-event path is authoritative, but
         // CDP/test-dispatched keys can reach the renderer directly. Respect the
         // keybinding registry here too so tests do not bypass user customization.
-        event.preventDefault()
-        event.stopPropagation()
+        consumeKeyboardEvent(event)
         openOrAdvance(event.shiftKey ? -1 : 1)
         return
       }
-      if (!switcherRef.current || event.key !== 'Escape') {
+      if (!switcherRef.current) {
         return
       }
-      event.preventDefault()
-      cancel()
+      if (event.key === 'Escape') {
+        consumeKeyboardEvent(event)
+        cancel()
+      }
     }
     const onKeyUp = (event: KeyboardEvent): void => {
-      if (
-        !switcherRef.current ||
-        (event.code !== 'ControlLeft' && event.code !== 'ControlRight' && event.key !== 'Control')
-      ) {
+      if (!switcherRef.current || !isRecentTabSwitcherCommitRelease(event)) {
         return
       }
-      event.preventDefault()
-      event.stopPropagation()
+      consumeKeyboardEvent(event)
       commit()
     }
-    const onBlur = (): void => cancel()
     window.addEventListener('keydown', onKeyDown, { capture: true })
     window.addEventListener('keyup', onKeyUp, { capture: true })
-    window.addEventListener('blur', onBlur)
+    window.addEventListener('blur', cancel)
     return () => {
       window.removeEventListener('keydown', onKeyDown, { capture: true })
       window.removeEventListener('keyup', onKeyUp, { capture: true })
-      window.removeEventListener('blur', onBlur)
+      window.removeEventListener('blur', cancel)
     }
   }, [cancel, commit, openOrAdvance])
 

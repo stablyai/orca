@@ -420,6 +420,47 @@ describe('setupGuestShortcutForwarding', () => {
     guestOffMock = vi.fn()
   })
 
+  it('commits Ctrl+Tab switching from focused guest pages on generic release events', () => {
+    setupGuestShortcutForwarding({
+      browserTabId,
+      guest: makeGuest(),
+      resolveRenderer: () => makeRenderer()
+    })
+
+    const ctrlTabInput = { code: 'Tab', key: 'Tab', control: true, meta: false }
+    const releaseInputs: Partial<Electron.Input>[] = [
+      {
+        type: 'keyUp',
+        code: 'Control',
+        key: 'Control',
+        control: false,
+        meta: false
+      },
+      {
+        type: 'keyUp',
+        code: 'Tab',
+        key: 'Tab',
+        control: false,
+        meta: false
+      }
+    ]
+
+    for (const releaseInput of releaseInputs) {
+      rendererSendMock.mockClear()
+      const keyDownPreventDefault = triggerBeforeInput(ctrlTabInput)
+      const tabReleasePreventDefault = triggerBeforeInput({ ...ctrlTabInput, type: 'keyUp' })
+      const keyUpPreventDefault = triggerBeforeInput(releaseInput)
+
+      expect(keyDownPreventDefault).toHaveBeenCalledTimes(1)
+      expect(tabReleasePreventDefault).not.toHaveBeenCalled()
+      expect(keyUpPreventDefault).toHaveBeenCalledTimes(1)
+      expect(rendererSendMock).toHaveBeenNthCalledWith(1, 'ui:ctrlTabKeyDown', {
+        shiftKey: false
+      })
+      expect(rendererSendMock).toHaveBeenNthCalledWith(2, 'ui:ctrlTabKeyUp')
+    }
+  })
+
   it('forwards browser page zoom shortcuts from focused guest pages', () => {
     setupGuestShortcutForwarding({
       browserTabId,

@@ -727,6 +727,80 @@ describe('connectPanePty', () => {
     expect(manager.closePane).not.toHaveBeenCalled()
   })
 
+  it('keeps a fresh split pane mounted when its newborn PTY exits before output or input', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport('pty-pane-2')
+    transportFactoryQueue.push(transport)
+    const manager = createManager(2)
+    const deps = createDeps({
+      restoredLeafId: LEAF_2,
+      paneTransportsRef: { current: new Map([[1, createMockTransport('pty-pane-1')]]) }
+    })
+
+    connectPanePty(createPane(2) as never, manager as never, deps as never)
+    const onPtyExit = createdTransportOptions[0]?.onPtyExit as ((ptyId: string) => void) | undefined
+    expect(onPtyExit).toBeTypeOf('function')
+
+    onPtyExit?.('pty-pane-2')
+
+    expect(deps.syncPanePtyLayoutBinding).toHaveBeenCalledWith(2, null)
+    expect(deps.clearTabPtyId).toHaveBeenCalledWith('tab-1', 'pty-pane-2')
+    expect(deps.onPtyExitRef.current).not.toHaveBeenCalled()
+    expect(manager.closePane).not.toHaveBeenCalled()
+  })
+
+  it('closes a split pane when an established PTY exits after output', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
+    const transport = createMockTransport('pty-pane-2')
+    transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+      capturedDataCallback.current = callbacks.onData ?? null
+      return 'pty-pane-2'
+    })
+    transportFactoryQueue.push(transport)
+    const manager = createManager(2)
+    const deps = createDeps({
+      restoredLeafId: LEAF_2,
+      paneTransportsRef: { current: new Map([[1, createMockTransport('pty-pane-1')]]) }
+    })
+
+    connectPanePty(createPane(2) as never, manager as never, deps as never)
+    const onPtyExit = createdTransportOptions[0]?.onPtyExit as ((ptyId: string) => void) | undefined
+    expect(onPtyExit).toBeTypeOf('function')
+    expect(capturedDataCallback.current).toBeTypeOf('function')
+
+    capturedDataCallback.current?.('shell prompt')
+    onPtyExit?.('pty-pane-2')
+
+    expect(manager.closePane).toHaveBeenCalledWith(2)
+  })
+
+  it('closes a split pane when an established PTY exits after terminal input', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const pane = createPane(2)
+    const transport = createMockTransport('pty-pane-2')
+    transportFactoryQueue.push(transport)
+    const manager = createManager(2)
+    const deps = createDeps({
+      restoredLeafId: LEAF_2,
+      paneTransportsRef: { current: new Map([[1, createMockTransport('pty-pane-1')]]) }
+    })
+
+    connectPanePty(pane as never, manager as never, deps as never)
+    const onDataMock = pane.terminal.onData as unknown as {
+      mock: { calls: [[(data: string) => void] | []] }
+    }
+    const terminalInputHandler = onDataMock.mock.calls[0]?.[0]
+    const onPtyExit = createdTransportOptions[0]?.onPtyExit as ((ptyId: string) => void) | undefined
+    expect(terminalInputHandler).toBeTypeOf('function')
+    expect(onPtyExit).toBeTypeOf('function')
+
+    terminalInputHandler?.('exit\r')
+    onPtyExit?.('pty-pane-2')
+
+    expect(manager.closePane).toHaveBeenCalledWith(2)
+  })
+
   it('does not send startup command via sendInput for local connections', async () => {
     // Why: the local PTY provider already writes the command via
     // writeStartupCommandWhenShellReady — sending it again from the renderer
@@ -3003,7 +3077,9 @@ describe('connectPanePty', () => {
     await new Promise((resolve) => setTimeout(resolve, 70))
 
     expect(pane.terminal.write).toHaveBeenCalledWith('cold-payload', expect.any(Function))
-    expect(transport.sendInput).toHaveBeenCalledWith("codex 'resume' 'codex-session-1'\r")
+    expect(transport.sendInput).toHaveBeenCalledWith(
+      "codex '--dangerously-bypass-approvals-and-sandbox' 'resume' 'codex-session-1'\r"
+    )
   })
 
   it('does not resume the provider session when daemon reattach returns a live snapshot', async () => {

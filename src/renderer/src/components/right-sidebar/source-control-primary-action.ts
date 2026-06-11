@@ -61,7 +61,8 @@ export function resolvePrimaryAction(inputs: PrimaryActionInputs): PrimaryAction
     prState,
     isPRStateLoading,
     hostedReviewCreation,
-    branchCommitsAhead
+    branchCommitsAhead,
+    hasCurrentBranch = true
   } = inputs
 
   // 1. Commit in flight — lock the primary no matter what else is true.
@@ -193,6 +194,21 @@ export function resolvePrimaryAction(inputs: PrimaryActionInputs): PrimaryAction
   }
 
   if (!upstreamStatus.hasUpstream) {
+    if (!hasCurrentBranch) {
+      return {
+        kind: 'commit',
+        label: translate(
+          'auto.components.right.sidebar.source.control.primary.action.ed93b4f14f',
+          'Commit'
+        ),
+        title: translate(
+          'auto.components.right.sidebar.source.control.primary.action.e61b0d7a3c',
+          'Check out a branch before publishing commits.'
+        ),
+        disabled: true
+      }
+    }
+
     if (branchCommitsAhead === 0) {
       return {
         kind: 'commit',

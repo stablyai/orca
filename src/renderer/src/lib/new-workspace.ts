@@ -47,11 +47,12 @@ export const CLIENT_PLATFORM: NodeJS.Platform = navigator.userAgent.includes('Wi
     ? 'darwin'
     : 'linux'
 
-export type { LinkedWorkItemContext } from '@/lib/linked-work-item-context'
 export { getLinkedWorkItemProvider, isGitLabIssueUrl } from './linked-work-item-provider'
 
 export type LinkedWorkItemSummary = Omit<FolderWorkspaceLinkedTask, 'provider'> & {
   provider?: FolderWorkspaceLinkedTask['provider']
+  linearWorkspaceId?: string
+  linearOrganizationUrlKey?: string
   linkedContext?: LinkedWorkItemContext
 }
 

@@ -4,6 +4,10 @@ import { buildAgentStartupPlan, type AgentStartupPlan } from '@/lib/tui-agent-st
 import { CLIENT_PLATFORM } from '@/lib/new-workspace'
 import { track, tuiAgentToAgentKind } from '@/lib/telemetry'
 import { pasteDraftWhenAgentReady } from '@/lib/agent-paste-draft'
+import {
+  resolveTuiAgentLaunchArgs,
+  resolveTuiAgentLaunchEnv
+} from '../../../shared/tui-agent-launch-defaults'
 import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
 import type { TuiAgent } from '../../../shared/types'
 import type { LaunchSource } from '../../../shared/telemetry-events'
@@ -65,6 +69,8 @@ export async function launchAgentBackgroundSession(
     }
   }
   const cmdOverrides = store.settings?.agentCmdOverrides ?? {}
+  const agentArgs = resolveTuiAgentLaunchArgs(agent, store.settings?.agentDefaultArgs)
+  const agentEnv = resolveTuiAgentLaunchEnv(agent, store.settings?.agentDefaultEnv)
   const trimmedPrompt = prompt?.trim() ?? ''
   const hasPrompt = trimmedPrompt.length > 0
   const isFollowupPath = TUI_AGENT_CONFIG[agent].promptInjectionMode === 'stdin-after-start'
@@ -76,6 +82,8 @@ export async function launchAgentBackgroundSession(
       agent,
       prompt: '',
       cmdOverrides,
+      agentArgs,
+      agentEnv,
       platform: CLIENT_PLATFORM,
       allowEmptyPromptLaunch: true
     })
@@ -85,6 +93,8 @@ export async function launchAgentBackgroundSession(
       agent,
       prompt: hasPrompt ? trimmedPrompt : '',
       cmdOverrides,
+      agentArgs,
+      agentEnv,
       platform: CLIENT_PLATFORM,
       allowEmptyPromptLaunch: !hasPrompt
     })

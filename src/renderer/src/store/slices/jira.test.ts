@@ -226,4 +226,78 @@ describe('createJiraSlice credential errors', () => {
     await expect(store.getState().fetchJiraIssue('ALP-1', 'site-1')).resolves.toBeNull()
     expect(jiraStatus).toHaveBeenCalled()
   })
+
+  it('refreshes status after all-site Jira list reads partially succeed', async () => {
+    const store = createTestStore()
+    const error = new Error(credentialDecryptionMessage('Jira'))
+    store.setState({
+      jiraStatus: { connected: true, viewer: null, selectedSiteId: 'all' }
+    })
+    jiraListIssues.mockResolvedValueOnce([issue('ALP-1')])
+    jiraStatus.mockResolvedValueOnce({
+      connected: true,
+      viewer: null,
+      selectedSiteId: 'all',
+      credentialError: error.message
+    })
+
+    await expect(store.getState().listJiraIssues('assigned', 30)).resolves.toMatchObject([
+      { key: 'ALP-1' }
+    ])
+    await vi.waitFor(() => {
+      expect(store.getState().jiraStatus.credentialError).toBe(error.message)
+    })
+  })
+
+  it('clears stale Jira credential errors after successful site list reads', async () => {
+    const store = createTestStore()
+    const staleError = credentialDecryptionMessage('Jira')
+    store.setState({
+      jiraStatus: {
+        connected: true,
+        viewer: null,
+        selectedSiteId: 'site-1',
+        credentialError: staleError
+      }
+    })
+    jiraListIssues.mockResolvedValueOnce([issue('ALP-1')])
+    jiraStatus.mockResolvedValueOnce({
+      connected: true,
+      viewer: null,
+      selectedSiteId: 'site-1'
+    })
+
+    await expect(store.getState().listJiraIssues('assigned', 30)).resolves.toMatchObject([
+      { key: 'ALP-1' }
+    ])
+    await vi.waitFor(() => {
+      expect(store.getState().jiraStatus.credentialError).toBeUndefined()
+    })
+  })
+
+  it('clears stale Jira credential errors after successful issue detail reads', async () => {
+    const store = createTestStore()
+    const staleError = credentialDecryptionMessage('Jira')
+    store.setState({
+      jiraStatus: {
+        connected: true,
+        viewer: null,
+        selectedSiteId: 'site-1',
+        credentialError: staleError
+      }
+    })
+    jiraGetIssue.mockResolvedValueOnce(issue('ALP-1'))
+    jiraStatus.mockResolvedValueOnce({
+      connected: true,
+      viewer: null,
+      selectedSiteId: 'site-1'
+    })
+
+    await expect(store.getState().fetchJiraIssue('ALP-1', 'site-1')).resolves.toMatchObject({
+      key: 'ALP-1'
+    })
+    await vi.waitFor(() => {
+      expect(store.getState().jiraStatus.credentialError).toBeUndefined()
+    })
+  })
 })

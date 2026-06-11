@@ -4,7 +4,11 @@ import type { TuiAgent } from './types'
 
 export type SourceControlTextActionId = 'commitMessage' | 'pullRequest' | 'branchName'
 
-export type SourceControlLaunchActionId = 'fixCommitFailure' | 'fixChecks' | 'resolveConflicts'
+export type SourceControlLaunchActionId =
+  | 'fixCommitFailure'
+  | 'fixChecks'
+  | 'resolveConflicts'
+  | 'resolveComments'
 
 export type SourceControlActionId = SourceControlTextActionId | SourceControlLaunchActionId
 
@@ -27,7 +31,8 @@ export const SOURCE_CONTROL_TEXT_ACTION_IDS = [
 export const SOURCE_CONTROL_LAUNCH_ACTION_IDS = [
   'fixCommitFailure',
   'fixChecks',
-  'resolveConflicts'
+  'resolveConflicts',
+  'resolveComments'
 ] as const satisfies readonly SourceControlLaunchActionId[]
 
 export const SOURCE_CONTROL_ACTION_IDS = [
@@ -44,7 +49,8 @@ export const SOURCE_CONTROL_TEXT_ACTION_LABELS: Record<SourceControlTextActionId
 export const SOURCE_CONTROL_LAUNCH_ACTION_LABELS: Record<SourceControlLaunchActionId, string> = {
   fixCommitFailure: 'Commit failure fixes',
   fixChecks: 'Broken checks fixes',
-  resolveConflicts: 'Conflict resolution'
+  resolveConflicts: 'Conflict resolution',
+  resolveComments: 'Review comment resolution'
 }
 
 export const SOURCE_CONTROL_ACTION_LABELS: Record<SourceControlActionId, string> = {
@@ -61,7 +67,8 @@ export const DEFAULT_SOURCE_CONTROL_ACTION_COMMAND_TEMPLATES: Record<
   branchName: '{basePrompt}',
   fixCommitFailure: '{basePrompt}',
   fixChecks: '{basePrompt}',
-  resolveConflicts: '{basePrompt}'
+  resolveConflicts: '{basePrompt}',
+  resolveComments: '{basePrompt}'
 }
 
 export const SOURCE_CONTROL_ACTION_VARIABLES: Record<SourceControlActionId, string[]> = {
@@ -79,7 +86,8 @@ export const SOURCE_CONTROL_ACTION_VARIABLES: Record<SourceControlActionId, stri
   branchName: ['basePrompt', 'firstPrompt', 'assistantMessage'],
   fixCommitFailure: ['basePrompt'],
   fixChecks: ['basePrompt'],
-  resolveConflicts: ['basePrompt']
+  resolveConflicts: ['basePrompt'],
+  resolveComments: ['basePrompt']
 }
 
 export type SourceControlActionVariableInfo = {

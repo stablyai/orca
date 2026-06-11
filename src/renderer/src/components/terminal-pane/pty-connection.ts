@@ -87,6 +87,10 @@ import {
 import { CLIENT_PLATFORM } from '@/lib/new-workspace'
 import { buildAgentResumeStartupPlan } from '@/lib/tui-agent-startup'
 import {
+  resolveTuiAgentLaunchArgs,
+  resolveTuiAgentLaunchEnv
+} from '../../../../shared/tui-agent-launch-defaults'
+import {
   isResumableTuiAgent,
   normalizeAgentProviderSession
 } from '../../../../shared/agent-session-resume'
@@ -1022,6 +1026,16 @@ export function connectPanePty(
       deps.onPtyExitRef.current(ptyId)
       return
     }
+    if (
+      hadExistingPaneTransportAtConnect &&
+      !restoredPtyIdForTransport &&
+      !Number.isFinite(lastTerminalInputAt) &&
+      !hasReceivedPtyOutput
+    ) {
+      // Why: a freshly split pane can lose its newborn PTY during setup; keep
+      // the split visible so the failed session does not immediately collapse.
+      return
+    }
     manager.closePane(pane.id)
   }
 
@@ -1450,7 +1464,9 @@ export function connectPanePty(
   const runtimeEnvironmentId = remoteRuntimeOwnerForTransport ?? activeRuntimeEnvironmentId
   const shouldOwnAgentStatusInRenderer = runtimeEnvironmentId !== null
   const shouldDeliverStartupViaTerminalPaste = paneStartup?.delivery === 'terminal-paste'
+  const hadExistingPaneTransportAtConnect = deps.paneTransportsRef.current.size > 0
   let lastTerminalInputAt = Number.NEGATIVE_INFINITY
+  let hasReceivedPtyOutput = false
   const markTerminalInputSent = (): void => {
     lastTerminalInputAt = performance.now()
   }
@@ -1504,7 +1520,6 @@ export function connectPanePty(
   const transport = runtimeEnvironmentId
     ? createRemoteRuntimePtyTransport(runtimeEnvironmentId, transportOptions)
     : createIpcPtyTransport(transportOptions)
-  const hasExistingPaneTransport = deps.paneTransportsRef.current.size > 0
   deps.paneTransportsRef.current.set(pane.id, transport)
   const conptyDeviceAttributesDisposable = isNativeWindowsConpty
     ? installConptyDeviceAttributesHandler({
@@ -1793,6 +1808,14 @@ export function connectPanePty(
         agent: entry.agentType,
         providerSession,
         cmdOverrides: useAppStore.getState().settings?.agentCmdOverrides ?? {},
+        agentArgs: resolveTuiAgentLaunchArgs(
+          entry.agentType,
+          useAppStore.getState().settings?.agentDefaultArgs
+        ),
+        agentEnv: resolveTuiAgentLaunchEnv(
+          entry.agentType,
+          useAppStore.getState().settings?.agentDefaultEnv
+        ),
         platform: getColdRestoreAgentResumePlatform()
       })
       if (!startupPlan) {
@@ -2609,6 +2632,9 @@ export function connectPanePty(
     }
 
     const dataCallback = (data: string, meta?: PtyDataMeta): void => {
+      if (data.length > 0) {
+        hasReceivedPtyOutput = true
+      }
       resetHiddenOutputRestoreIfPtyChanged()
       observeTerminalBracketedPasteModeOutput(pane.terminal, data)
       for (const link of observeTerminalGitHubPRLink(data)) {
@@ -3032,7 +3058,7 @@ export function connectPanePty(
 
     const restoredSessionId = restoredPtyId ?? null
     const detachedLivePtyId =
-      existingPtyId && !hasExistingPaneTransport
+      existingPtyId && !hadExistingPaneTransportAtConnect
         ? restoredSessionId
           ? restoredSessionId === existingPtyId
             ? restoredSessionId
@@ -3076,7 +3102,7 @@ export function connectPanePty(
         ? candidateReattachSessionId
         : null
     recordPtyConnectDiagnostic(
-      `pane=${pane.id} tab=${deps.tabId} restored=${restoredPtyId} existing=${existingPtyId} detached=${detachedRemoteLeafPtyId ?? detachedLivePtyId} reattach=${deferredReattachSessionId} hasTransport=${hasExistingPaneTransport} pendingKey=${pendingSpawnKey}`
+      `pane=${pane.id} tab=${deps.tabId} restored=${restoredPtyId} existing=${existingPtyId} detached=${detachedRemoteLeafPtyId ?? detachedLivePtyId} reattach=${deferredReattachSessionId} hasTransport=${hadExistingPaneTransportAtConnect} pendingKey=${pendingSpawnKey}`
     )
 
     if (deferredReattachSessionId) {

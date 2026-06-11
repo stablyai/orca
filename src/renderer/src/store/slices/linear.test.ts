@@ -235,6 +235,86 @@ describe('createLinearSlice caching', () => {
     expect(linearStatus).toHaveBeenCalled()
   })
 
+  it('clears stale Linear credential errors after successful workspace list reads', async () => {
+    const store = createTestStore()
+    const staleError = credentialDecryptionMessage('Linear')
+    store.setState({
+      linearStatus: {
+        connected: true,
+        viewer: null,
+        selectedWorkspaceId: 'workspace-1',
+        credentialError: staleError
+      }
+    })
+    linearListIssues.mockResolvedValueOnce({ items: [issue('LIN-OK')] })
+    linearStatus.mockResolvedValueOnce({
+      connected: true,
+      viewer: null,
+      selectedWorkspaceId: 'workspace-1'
+    })
+
+    await expect(
+      store.getState().listLinearIssues('all', 36, { force: true })
+    ).resolves.toMatchObject({ items: [{ id: 'LIN-OK' }] })
+    await vi.waitFor(() => {
+      expect(store.getState().linearStatus.credentialError).toBeUndefined()
+    })
+  })
+
+  it('clears stale Linear credential errors after successful issue detail reads', async () => {
+    const store = createTestStore()
+    const staleError = credentialDecryptionMessage('Linear')
+    store.setState({
+      linearStatus: {
+        connected: true,
+        viewer: null,
+        selectedWorkspaceId: 'workspace-1',
+        credentialError: staleError
+      }
+    })
+    linearGetIssue.mockResolvedValueOnce(issue('LIN-OK'))
+    linearStatus.mockResolvedValueOnce({
+      connected: true,
+      viewer: null,
+      selectedWorkspaceId: 'workspace-1'
+    })
+
+    await expect(store.getState().fetchLinearIssue('LIN-OK', 'workspace-1')).resolves.toMatchObject(
+      {
+        id: 'LIN-OK'
+      }
+    )
+    await vi.waitFor(() => {
+      expect(store.getState().linearStatus.credentialError).toBeUndefined()
+    })
+  })
+
+  it('clears stale Linear credential errors after successful scoped collection reads', async () => {
+    const store = createTestStore()
+    const staleError = credentialDecryptionMessage('Linear')
+    store.setState({
+      linearStatus: {
+        connected: true,
+        viewer: null,
+        selectedWorkspaceId: 'workspace-1',
+        credentialError: staleError
+      }
+    })
+    linearListProjectIssues.mockResolvedValueOnce({ items: [issue('LIN-OK')] })
+    linearStatus.mockResolvedValueOnce({
+      connected: true,
+      viewer: null,
+      selectedWorkspaceId: 'workspace-1'
+    })
+
+    await expect(
+      store.getState().listLinearProjectIssues('project-1', 'workspace-1', 20, { force: true })
+    ).resolves.toMatchObject({ items: [{ id: 'LIN-OK' }] })
+    await vi.waitFor(() => {
+      expect(store.getState().linearStatus.credentialError).toBeUndefined()
+    })
+  })
+
   it('surfaces scoped project issue failures alongside cached rows', async () => {
     const store = createTestStore()
     store.setState({
@@ -484,13 +564,27 @@ describe('createLinearSlice caching', () => {
     expect(linearListCustomViews.mock.calls[0][4]).toEqual({ force: true })
   })
 
-  it('fetches custom views by exact id for saved-context restore', async () => {
+  it('fetches custom views by exact id and clears stale credential errors', async () => {
     const store = createTestStore()
+    const staleError = credentialDecryptionMessage('Linear')
+    store.setState({
+      linearStatus: {
+        connected: true,
+        viewer: null,
+        selectedWorkspaceId: 'workspace-1',
+        credentialError: staleError
+      }
+    })
     linearGetCustomView.mockResolvedValueOnce({
       id: 'view-1',
       name: 'Burn views',
       model: 'project',
       workspaceId: 'workspace-1'
+    })
+    linearStatus.mockResolvedValueOnce({
+      connected: true,
+      viewer: null,
+      selectedWorkspaceId: 'workspace-1'
     })
 
     await expect(
@@ -499,6 +593,9 @@ describe('createLinearSlice caching', () => {
 
     expect(linearGetCustomView).toHaveBeenCalledWith(null, 'view-1', 'project', 'workspace-1', {
       force: true
+    })
+    await vi.waitFor(() => {
+      expect(store.getState().linearStatus.credentialError).toBeUndefined()
     })
   })
 

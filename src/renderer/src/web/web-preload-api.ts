@@ -38,6 +38,10 @@ import { createE2EConfig } from '../../../shared/e2e-config'
 import { relativePathInsideRoot } from '../../../shared/cross-platform-path'
 import { toRuntimeWorktreeSelector } from '../runtime/runtime-worktree-selector'
 import { normalizeDisabledTuiAgents } from '../../../shared/tui-agent-selection'
+import {
+  normalizeTuiAgentArgsRecord,
+  normalizeTuiAgentEnvRecord
+} from '../../../shared/tui-agent-launch-defaults'
 import { normalizeAutoRenameBranchFromWorkDefaultOn } from '../../../shared/auto-rename-branch-from-work-settings'
 import { normalizeTerminalCursorStyleDefault } from '../../../shared/terminal-cursor-style-settings'
 import { normalizeTerminalCustomThemes } from '../../../shared/terminal-custom-themes'
@@ -567,6 +571,14 @@ function createWebPreloadApi(): Partial<PreloadApi> {
     memory: {
       getSnapshot: () => Promise.resolve(createEmptyMemorySnapshot())
     },
+    aiVault: {
+      listSessions: () =>
+        Promise.resolve({
+          sessions: [],
+          issues: [],
+          scannedAt: new Date().toISOString()
+        })
+    },
     preflight: createPreflightApi(),
     notifications: createNotificationsApi(),
     rateLimits: createRateLimitsApi(),
@@ -1071,6 +1083,8 @@ function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees']> {
         linkedIssue: args.linkedIssue,
         linkedPR: args.linkedPR,
         linkedLinearIssue: args.linkedLinearIssue,
+        linkedLinearIssueWorkspaceId: args.linkedLinearIssueWorkspaceId,
+        linkedLinearIssueOrganizationUrlKey: args.linkedLinearIssueOrganizationUrlKey,
         linkedGitLabIssue: args.linkedGitLabIssue,
         linkedGitLabMR: args.linkedGitLabMR,
         displayName: args.displayName,
@@ -2685,6 +2699,10 @@ function mergeSettings(
     disabledTuiAgents: normalizeDisabledTuiAgents(
       updates.disabledTuiAgents ?? base.disabledTuiAgents
     ),
+    agentDefaultArgs: normalizeTuiAgentArgsRecord(
+      updates.agentDefaultArgs ?? base.agentDefaultArgs
+    ),
+    agentDefaultEnv: normalizeTuiAgentEnvRecord(updates.agentDefaultEnv ?? base.agentDefaultEnv),
     voice: {
       ...(base.voice ?? defaults.voice),
       ...updates.voice

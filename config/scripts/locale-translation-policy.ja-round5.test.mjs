@@ -101,4 +101,56 @@ describe('locale-translation-policy ja round 5', () => {
       })
     ).toBe('まずプロジェクトを追加')
   })
+
+  it('keeps protected workflow terms in English', () => {
+    expect(
+      repairTranslatedValue({
+        key: 'auto.components.status.bar.WorkspaceSpaceManagerPanel.e9528a89b3',
+        enValue: 'Terminals',
+        localeValue: '端子',
+        locale: 'ja'
+      })
+    ).toBe('Terminals')
+    expect(
+      repairTranslatedValue({
+        key: 'auto.components.skills.SkillsPage.38e0951c3a',
+        enValue: 'Agent Skills',
+        localeValue: 'エージェントのスキル',
+        locale: 'ja'
+      })
+    ).toBe('Agent のスキル')
+    expect(
+      repairTranslatedValue({
+        key: 'auto.components.tab.bar.TabBar.3d5d6c960d',
+        enValue: 'New Markdown',
+        localeValue: '新規マークダウン',
+        locale: 'ja'
+      })
+    ).toBe('新規 Markdown')
+    expect(
+      repairTranslatedValue({
+        key: 'auto.components.sidebar.local.base.ref.suggestion.toast.commits',
+        enValue: 'commits',
+        localeValue: 'コミット',
+        locale: 'ja'
+      })
+    ).toBe('commits')
+    expect(
+      repairTranslatedValue({
+        key: 'auto.components.mobile.slides.WorktreeListSlide.22971156df',
+        enValue: 'Repo',
+        localeValue: 'リポ',
+        locale: 'ja'
+      })
+    ).toBe('Repo')
+    expect(
+      repairTranslatedValue({
+        key: 'auto.components.sidebar.add.repo.local.start.actions.fb4fc5380e',
+        enValue: 'Local project, Git repo, or folder with many repos',
+        localeValue:
+          'ローカル プロジェクト、Git リポジトリ、または多数のリポジトリを含むフォルダー',
+        locale: 'ja'
+      })
+    ).toBe('ローカルプロジェクト、Git repo、または多数の repos を含むフォルダー')
+  })
 })

@@ -175,7 +175,7 @@ describe('launchAgentInNewTab', () => {
     expect(mockQueueTabStartupCommand).toHaveBeenCalledWith(
       'tab-1',
       expect.objectContaining({
-        command: "command-code --trust 'fix the spinner'",
+        command: "command-code --trust '--yolo' 'fix the spinner'",
         initialAgentStatus: {
           agent: 'command-code',
           prompt: 'fix the spinner'
@@ -224,7 +224,7 @@ describe('launchAgentInNewTab', () => {
     expect(mockQueueTabStartupCommand).toHaveBeenCalledWith(
       'tab-1',
       expect.objectContaining({
-        command: "claude --prefill 'review Bob''s change'"
+        command: "claude '--dangerously-skip-permissions' --prefill 'review Bob''s change'"
       })
     )
   })
@@ -244,7 +244,7 @@ describe('launchAgentInNewTab', () => {
     expect(mockQueueTabStartupCommand).toHaveBeenCalledWith(
       'tab-1',
       expect.objectContaining({
-        command: 'claude'
+        command: "claude '--dangerously-skip-permissions'"
       })
     )
     expect(mockPasteDraftWhenAgentReady).toHaveBeenCalledWith(
@@ -273,7 +273,7 @@ describe('launchAgentInNewTab', () => {
     expect(mockQueueTabStartupCommand).toHaveBeenCalledWith(
       'tab-1',
       expect.objectContaining({
-        command: 'command-code --trust'
+        command: "command-code --trust '--yolo'"
       })
     )
     expect(mockPasteDraftWhenAgentReady).toHaveBeenCalledWith(

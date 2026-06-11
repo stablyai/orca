@@ -67,6 +67,8 @@ function createUIStore(): StoreApi<AppState> {
     worktreesByRepo: {},
     rightSidebarOpen: false,
     rightSidebarWidth: 280,
+    rightSidebarTab: 'explorer',
+    rightSidebarExplorerView: 'files',
     ...createSettingsSearchState(args[0]),
     ...createWorktreeNavHistorySlice(...(args as Parameters<typeof createWorktreeNavHistorySlice>)),
     ...createUISlice(...(args as Parameters<typeof createUISlice>))
@@ -614,6 +616,29 @@ describe('createUISlice hydratePersistedUI', () => {
     store.getState().hydratePersistedUI(makePersistedUI({ rightSidebarTab: 'checks' }))
 
     expect(store.getState().rightSidebarTab).toBe('checks')
+    expect(store.getState().rightSidebarExplorerView).toBe('files')
+  })
+
+  it('hydrates legacy persisted search tab as Explorer search', () => {
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(makePersistedUI({ rightSidebarTab: 'search' }))
+
+    expect(store.getState().rightSidebarTab).toBe('explorer')
+    expect(store.getState().rightSidebarExplorerView).toBe('search')
+  })
+
+  it('hydrates persisted Explorer search view', () => {
+    const store = createUIStore()
+
+    store
+      .getState()
+      .hydratePersistedUI(
+        makePersistedUI({ rightSidebarTab: 'explorer', rightSidebarExplorerView: 'search' })
+      )
+
+    expect(store.getState().rightSidebarTab).toBe('explorer')
+    expect(store.getState().rightSidebarExplorerView).toBe('search')
   })
 
   it('hydrates persisted per-worktree dotfile visibility', () => {
@@ -680,6 +705,7 @@ describe('createUISlice hydratePersistedUI', () => {
       )
 
     expect(store.getState().rightSidebarTab).toBe('explorer')
+    expect(store.getState().rightSidebarExplorerView).toBe('files')
   })
 
   it('clamps persisted sidebar widths into the supported range', () => {
@@ -1284,7 +1310,7 @@ describe('createUISlice settings navigation', () => {
 })
 
 describe('createUISlice new workspace draft', () => {
-  it('preserves Linear linked work item metadata and context', () => {
+  it('preserves Linear linked work item metadata', () => {
     const store = createUIStore()
 
     store.getState().setNewWorkspaceDraft({
@@ -1298,12 +1324,7 @@ describe('createUISlice new workspace draft', () => {
         number: 0,
         title: 'Fix launch context handoff',
         url: 'https://linear.app/acme/issue/ENG-123/fix-launch-context-handoff',
-        linearIdentifier: 'ENG-123',
-        linkedContext: {
-          provider: 'linear',
-          version: 1,
-          renderedText: 'Identifier: ENG-123'
-        }
+        linearIdentifier: 'ENG-123'
       },
       agent: 'claude',
       linkedIssue: '',
@@ -1313,12 +1334,7 @@ describe('createUISlice new workspace draft', () => {
     })
 
     expect(store.getState().newWorkspaceDraft?.linkedWorkItem).toMatchObject({
-      linearIdentifier: 'ENG-123',
-      linkedContext: {
-        provider: 'linear',
-        version: 1,
-        renderedText: 'Identifier: ENG-123'
-      }
+      linearIdentifier: 'ENG-123'
     })
   })
 

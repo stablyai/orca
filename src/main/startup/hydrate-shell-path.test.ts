@@ -198,12 +198,7 @@ describe('mergePathSegments', () => {
   })
 
   it('moves user-local shell paths ahead of packaged Homebrew fallbacks', () => {
-    process.env.PATH = joinPath(
-      '/opt/homebrew/bin',
-      '/Users/tester/.local/bin',
-      '/usr/bin',
-      '/bin'
-    )
+    process.env.PATH = joinPath('/opt/homebrew/bin', '/Users/tester/.local/bin', '/usr/bin', '/bin')
 
     const added = mergePathSegments(['/Users/tester/.local/bin', '/opt/homebrew/bin'])
 

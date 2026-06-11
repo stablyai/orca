@@ -5,6 +5,8 @@ export type ChecksPanelGitStatusContextInput = {
   worktreeId: string | null | undefined
   worktreePath: string | null | undefined
   branch: string
+  linkedGitHubPR?: number | null
+  linkedGitLabMR?: number | null
   runtimeEnvironmentId: string | null
   repoConnectionId: string | null
   pushTarget: GitPushTarget | null | undefined
@@ -29,6 +31,10 @@ export function buildChecksPanelGitStatusContextKey(
     worktreeId: input.worktreeId ?? '',
     worktreePath: input.worktreePath ?? '',
     branch: input.branch,
+    // Why: this key gates right-sidebar async commits too; link/unlink must
+    // make pre-change PR refreshes stale even when repo/branch are unchanged.
+    linkedGitHubPR: input.linkedGitHubPR ?? null,
+    linkedGitLabMR: input.linkedGitLabMR ?? null,
     runtimeEnvironmentId: input.runtimeEnvironmentId ?? '',
     repoConnectionId: input.repoConnectionId ?? '',
     pushTarget: input.pushTarget

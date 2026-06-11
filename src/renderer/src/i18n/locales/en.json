@@ -869,7 +869,8 @@
         "9c00bd4adf": "Select a workspace from the sidebar to begin.",
         "16e9e3df89": "starred",
         "0d0ace8861": "Star on GitHub",
-        "ec43b38ba7": "Starred on GitHub"
+        "ec43b38ba7": "Starred on GitHub",
+        "157bb5ecbb": "Open GitHub"
       },
       "LinearIssueMarkdownDescriptionEditor": {
         "d9c47069ef": "Markdown",
@@ -1201,7 +1202,13 @@
         "b5e685e4d9": "Dismiss",
         "5f6df21046": "Enjoying Orca?",
         "2d67b6c849": "Star on GitHub",
-        "af3c9bbb37": "Starring…"
+        "af3c9bbb37": "Starring…",
+        "68a41bc3aa": "Could not star with",
+        "996bf76e46": "Open GitHub to finish in your browser.",
+        "d32015fec7": "Opening...",
+        "157bb5ecbb": "Open GitHub",
+        "8c967b4d15": "Not now",
+        "73dfd4eb8d": "Don't ask again"
       },
       "TaskPage": {
         "513cddfa7a": "Verifying…",
@@ -2233,6 +2240,13 @@
             "1bce81dba6": "simulator",
             "1ff1c77616": "browser",
             "586d2ac445": "terminal"
+          },
+          "AiVaultSessionDropLayer": {
+            "dropOntoTerminalPane": "Drop onto a terminal pane to resume this session.",
+            "couldNotReadPayload": "Could not read the session drag payload.",
+            "localWorkspacesOnly": "Resume from history is only available in local workspaces.",
+            "openLocalWorkspace": "Open a local workspace before resuming a session.",
+            "sessionQueued": "Session queued"
           }
         },
         "bar": {
@@ -2678,7 +2692,10 @@
             "2c35eca8d4": "Unable to fetch usage",
             "1292d4f2ee": "Unavailable",
             "7567cd1c6b": "Usage unavailable",
-            "a9a318b7a3": "Refresh failed — showing cached data"
+            "a9a318b7a3": "Refresh failed — showing cached data",
+            "7ad719c4bf": "Limited",
+            "e740f92596": "Refresh failed",
+            "8418ec448d": "{{value0}} usage could not be refreshed. Agent sessions may still be signed in."
           }
         }
       },
@@ -3217,7 +3234,15 @@
           "9be10d49ea": "and ungroup its projects.",
           "69f5cb97d0": "Delete",
           "591f330288": "Delete Project Group",
-          "2c14ce677a": "Deleting..."
+          "2c14ce677a": "Deleting...",
+          "0e0e6764af": "Contained projects",
+          "ad407c2d55": "more",
+          "removeContainedProjectSingular": "Remove 1 contained project",
+          "removeContainedProjectPlural": "Remove {{value0}} contained projects",
+          "eeabb8e8e4": "Remove {{value0}} contained {{value1}} from Orca",
+          "55f75628c0": "Project folders on disk are not deleted.",
+          "897e5d3d4c": "Delete Group and Remove Projects",
+          "fec7e9c8ae": "Delete Group"
         },
         "ProjectGroupNameDialog": {
           "d99a034073": "Cancel",
@@ -3311,6 +3336,7 @@
           "ee240a39eb": "Edit filters"
         },
         "SidebarHeader": {
+          "25a95899c9": "Add Project",
           "92154beb7e": "New workspace",
           "49f62c5665": "Workspace board",
           "5c9c7c16aa": "Add a project to create workspaces",
@@ -3354,9 +3380,15 @@
           "2991a0106c": "Help",
           "4e8f5710d3": "Couldn't restart Orca.",
           "5161eef55d": "Restarting Orca…",
-          "d396773ef0": "checking"
+          "d396773ef0": "checking",
+          "f8a2c91d4e": "Milestones",
+          "b7e4d2a19c": "Onboarding",
+          "c4f8e1b72a": "X"
         },
         "SidebarToolbar": {
+          "87d0064026": "Workspace board moved to the bottom bar",
+          "a30e34eb5c": "Close workspace board",
+          "49f62c5665": "Workspace board",
           "19e32d0e5f": "Open folder picker to add a project",
           "abc62b6328": "Add Project"
         },
@@ -3567,7 +3599,11 @@
           "c1f4a31623": "Show {{value0}} child workspaces",
           "e97297cb75": "Hide {{value0}} child workspace",
           "0cd15956d4": "Hide {{value0}} child workspaces",
-          "bd37a57ac8": "Create workspace for {{value0}}"
+          "bd37a57ac8": "Create workspace for {{value0}}",
+          "b667b59632": "Some projects could not be removed from Orca",
+          "f94466bc39": "{{value0}} of {{value1}} contained project{{value2}} remained after deleting the group.",
+          "groupDeleteFailed": "Failed to delete group",
+          "groupDeleteFailedDesc": "Something went wrong while deleting the group. No projects were removed."
         },
         "WorktreeMetaDialog": {
           "3db0a2a593": "Cancel",
@@ -3949,7 +3985,7 @@
           "92033495ff": "Auto",
           "9b175d0f5e": "Pre-selected agent when opening a new workspace.",
           "385212c7a1": "Default Agent",
-          "f9f127d664": "Override the binary path or name used to launch this agent.",
+          "f9f127d664": "Override the binary path or name, and edit the default launch arguments or environment for this agent.",
           "f95b5c79b8": "Install",
           "fe4d630c94": "Docs",
           "8dc0192e48": "Disabled",
@@ -3968,7 +4004,11 @@
           "959b67385b": "Set default",
           "24e032fa34": "Default",
           "5f986a9b92": "Set as default",
-          "d7625cf8b2": "Default agent"
+          "d7625cf8b2": "Default agent",
+          "cfb3f35775": "Arguments",
+          "6f99bf5dd0": "No default arguments",
+          "8fbe1f37c1": "Environment",
+          "2d133152fa": "No default environment"
         },
         "AppIconSelector": {
           "d5a112dc9b": "Next icon",
@@ -4390,7 +4430,9 @@
           "1e29570462": "starring",
           "9d181300e3": "starred",
           "5c49f02662": "hidden",
-          "b3f0584f5d": "loading"
+          "b3f0584f5d": "loading",
+          "cb65c75b11": "Opening...",
+          "f2d4f877b2": "Open GitHub"
         },
         "GeneralUpdateSettingsSection": {
           "8a52ca1d02": "Release notes",
@@ -7287,7 +7329,11 @@
                   "branchName": "Rename Orca-created branches from the initial agent task.",
                   "fixCommitFailure": "Start an agent when a commit hook or git commit fails.",
                   "fixChecks": "Start an agent from failed hosted-review checks.",
-                  "resolveConflicts": "Start an agent for local or hosted-review merge conflicts."
+                  "resolveConflicts": "Start an agent for local or hosted-review merge conflicts.",
+                  "customCommand": "Custom command",
+                  "supportedAgents": "Supported agents for this recipe: {{value0}}.",
+                  "unsupportedSavedAgent": "{{value0}} cannot run this text-generation recipe. Pick one of the supported agents below.",
+                  "resolveComments": "Start an agent from selected unresolved PR or MR comments."
                 }
               }
             }
@@ -7435,11 +7481,21 @@
             "71026ca2cb": "Refreshing…",
             "889cdfba04": "Create {{value0}}",
             "98f4c37b33": "Push & Create {{value0}}",
+            "b6ce28da5b": "{{value0}} #{{value1}} is already open",
+            "cf9e69f3be": "{{value0}} is already open",
+            "192e686e57": "Open on {{value0}}",
             "6633c7a1fb": "Publish Branch",
             "fdb27637f2": "Publishing…",
             "e56c42122e": "destructive",
             "786e3c143f": "Delete",
-            "653c105ecc": "More PR actions"
+            "653c105ecc": "More PR actions",
+            "f316a8ca2b": "No unresolved comments selected.",
+            "d00ebdc402": "Resolve {{value0}} Comments With AI",
+            "ed3f79c031": "Review the prompt before starting an agent. Selected threads are marked resolved after launch.",
+            "f273f2271c": "Started the agent. Marked {{value0}} resolved, skipped {{value1}}, failed {{value2}}.",
+            "aa95b81a3a": "Started the agent. Marked {{value0}} resolved, skipped {{value1}}, failed {{value2}}.",
+            "495b2f8c4b": "Started the agent, but could not mark the selected comments resolved.",
+            "3c3ad3a1d2": "Started the agent. No selected comments can be marked resolved on the host."
           },
           "CreatePullRequestDialog": {
             "2bc1b4345e": "Cancel",
@@ -7462,6 +7518,9 @@
             "21c7a1daa0": "{{value0}} is already open",
             "db9cee18f7": "Create {{value0}}"
           },
+          "CreateHostedReviewComposer": {
+            "741ff8a0d2": "Push & Create {{value0}}"
+          },
           "CreatePullRequestGenerateButton": {
             "4012459f8a": "Generate with AI",
             "a0501572c1": "Generate {{value0}} details with AI",
@@ -7473,7 +7532,9 @@
             "e041998cad": "Stop generating"
           },
           "FileExplorer": {
-            "79b1537dd3": "Select a workspace to browse files"
+            "79b1537dd3": "Select a workspace to browse files",
+            "4da4d89845": "Back to Explorer",
+            "6ed5ce817b": "Search"
           },
           "FileExplorerBackgroundMenu": {
             "3b5e2dcb8d": "New Folder",
@@ -7509,7 +7570,8 @@
             "78f133232c": "Show Dotfiles",
             "31b4c3195d": "More Explorer Actions",
             "d95e30fe28": "Refresh Explorer",
-            "6026b16950": "Collapse All"
+            "6026b16950": "Collapse All",
+            "693cbeadd0": "Search"
           },
           "FileExplorerTreeStatus": {
             "ce03835e1f": "No files in this workspace",
@@ -7680,6 +7742,9 @@
             "30b8d4f181": "Fix commit failure with AI",
             "4b37ae99b0": "Start the default AI agent to fix this commit failure",
             "ae743199cd": "Choose a different base branch before creating a {{value0}}.",
+            "318e2a7f88": "Wait for AI generation to finish.",
+            "f76307c1f7": "Choose a base branch.",
+            "4f76c0a9de": "Base branch must differ from the head branch.",
             "c5e4175139": "More {{value0}} and remote actions",
             "78ddfd0bb4": "Create as draft",
             "e64a632456": "main",
@@ -7758,6 +7823,9 @@
             "7a09d7f9d2": "base",
             "383cf92c73": "tree",
             "d7ae61269b": "Committed on Branch",
+            "48a003c1b1": "Staged Changes",
+            "d4ef4bafc5": "Changes",
+            "522f44dce5": "Untracked Files",
             "3636d0f686": "ready",
             "d2e9189866": "all",
             "a0cc0e6b4e": "loading",
@@ -7818,7 +7886,10 @@
             "3e8f21954f": "error",
             "74168d7ada": "idle",
             "1d47db9bf0": "No enabled agents",
-            "c7ff8cef11": "Detecting agents..."
+            "c7ff8cef11": "Detecting agents...",
+            "b0da3a4d3e": "Launch recipe already saved",
+            "bff4795a6d": "Change the agent, arguments, or prompt template to update the saved recipe.",
+            "5c75b24735": "Customize what the agent receives before Orca starts it."
           },
           "SourceControlTextGenerationDialog": {
             "c5b7fa7cb6": "Save as global default",
@@ -7913,7 +7984,13 @@
                 "cdbfda4dec": "Annotation",
                 "066fedd446": "Failed jobs",
                 "ae8a04ef17": "Conflict file details are unavailable",
-                "73d0675356": "Refreshing conflict details…"
+                "73d0675356": "Refreshing conflict details…",
+                "5dc3af25c0": "Select comment",
+                "d7a2f9c401": "Send unresolved {{value0}} comments",
+                "d91f2a6c39": "Send {{value0}} queued comments",
+                "a6de3e5a20": "Clear queued comments",
+                "49ea0937e4": "Add comment to resolve list",
+                "9fecebb29d": "Add"
               },
               "empty": {
                 "state": {
@@ -7974,7 +8051,8 @@
             "9f83375839": "checks",
             "6306b48afd": "source-control",
             "ef182dcb12": "search",
-            "fc3095d2ed": "explorer"
+            "fc3095d2ed": "explorer",
+            "aiVaultSessionHistory": "Agents"
           },
           "right": {
             "panel": {
@@ -8063,7 +8141,8 @@
                   "a6457b46a7": "Resolve conflicts before committing",
                   "484f45c439": "{{value0}} in progress…",
                   "74fc171e99": "Force Push in progress…",
-                  "16aee3a5c1": "Commit in progress…"
+                  "16aee3a5c1": "Commit in progress…",
+                  "e61b0d7a3c": "Check out a branch before publishing commits."
                 }
               }
             }
@@ -8108,6 +8187,100 @@
                 }
               }
             }
+          },
+          "AiVaultPanel": {
+            "resumeCommandCopied": "Resume command copied",
+            "valueCopied": "{{value0}} copied",
+            "openWorkspaceBeforeResuming": "Open a workspace before resuming a session.",
+            "localWorkspacesOnly": "Resume from history is only available in local workspaces.",
+            "agentSessionQueued": "{{value0}} session queued",
+            "sessionHistory": "Agent Session History",
+            "shownRecent": "{{value0}} shown · {{value1}} recent",
+            "resumePastSessions": "Resume past sessions",
+            "refreshSessionHistory": "Refresh Session History",
+            "searchSessions": "Search sessions",
+            "clearSearch": "Clear search",
+            "remoteBrowseLocalHistory": "Remote workspaces can browse local history. Resume actions run from local workspaces.",
+            "transcriptsSkipped": "{{count}} transcript skipped",
+            "noAgentSessionsFound": "No agent sessions found",
+            "noSessionsMatchFilters": "No sessions match the current filters",
+            "sessionId": "Session ID",
+            "logPath": "Log path"
+          },
+          "AiVaultPanelControls": {
+            "scanningSessions": "Scanning sessions",
+            "scopeAriaLabel": "Session History scope: {{value0}}",
+            "currentWorkspaceLower": "current workspace",
+            "currentWorktreeLower": "current worktree",
+            "allSessionsLower": "all sessions",
+            "thisScope": "This",
+            "allScope": "All",
+            "scope": "Scope",
+            "currentWorkspace": "Current workspace",
+            "allSessions": "All sessions",
+            "viewOptionsAriaLabel": "Session History view options",
+            "viewOptions": "View options",
+            "agents": "Agents",
+            "sort": "Sort",
+            "lastUpdated": "Last updated",
+            "created": "Created",
+            "group": "Group",
+            "folder": "Folder",
+            "agent": "Agent",
+            "resetView": "Reset view",
+            "hideEmptySessions": "Hide empty sessions",
+            "workspaceScope": "Workspace",
+            "worktreeScope": "Worktree",
+            "globalScope": "Global"
+          },
+          "AiVaultSessionDetails": {
+            "updated": "Updated",
+            "created": "Created",
+            "workingDir": "Working dir",
+            "unknownLocation": "Unknown location",
+            "branch": "Branch",
+            "model": "Model",
+            "usage": "Usage",
+            "usageValue": "{{value0}} msgs{{value1}}",
+            "tokenSuffix": " · {{value0}} tok",
+            "session": "Session",
+            "copyDetailValue": "Copy {{value0}}",
+            "latestLog": "Latest log",
+            "noReadablePreview": "No readable message preview in this transcript.",
+            "resumeCommand": "Resume command",
+            "sessionActions": "{{value0}} session actions",
+            "resumeInNewTab": "Resume in New Tab",
+            "copyResumeCommand": "Copy Resume Command",
+            "openLog": "Open Log",
+            "revealLog": "Reveal Log",
+            "openWorkingDirectory": "Open Working Directory",
+            "copySessionId": "Copy Session ID",
+            "copyLogPath": "Copy Log Path",
+            "unknownTime": "Unknown time",
+            "unknown": "Unknown",
+            "user": "User",
+            "assistant": "Assistant",
+            "tool": "Tool",
+            "system": "System",
+            "log": "Log",
+            "justNow": "Just now",
+            "minutesAgo": "{{value0}}m ago",
+            "hoursAgo": "{{value0}}h ago",
+            "daysAgo": "{{value0}}d ago",
+            "monthsAgo": "{{value0}}mo ago",
+            "yearsAgo": "{{value0}}y ago"
+          },
+          "AiVaultSessionRow": {
+            "resumeAgentSession": "Resume {{value0}} session",
+            "resumeInNewTab": "Resume in New Tab",
+            "copyResumeCommand": "Copy Resume Command",
+            "openLog": "Open Log",
+            "revealLog": "Reveal Log",
+            "openWorkingDirectory": "Open Working Directory",
+            "copySessionId": "Copy Session ID",
+            "copyLogPath": "Copy Log Path",
+            "messageCount": "{{value0}} msgs",
+            "tokenCount": "{{value0}} tok"
           }
         }
       },

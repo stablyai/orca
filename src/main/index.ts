@@ -70,6 +70,7 @@ import {
   logSingleInstanceLockFailure,
   shouldBypassSingleInstanceLock
 } from './startup/single-instance-lock'
+import { startEventLoopStallProbe } from './startup/event-loop-stall-probe'
 import { isStartupDiagnosticsEnabled, logStartupDiagnostic } from './startup/startup-diagnostics'
 import { ensureWindowsUserDataAclGrant } from './startup/windows-user-data-acl'
 import { RateLimitService } from './rate-limits/service'
@@ -332,6 +333,7 @@ if (startupDiagnosticsEnabled) {
     userData: app.getPath('userData'),
     e2eUserData: Boolean(process.env.ORCA_E2E_USER_DATA_DIR)
   })
+  startEventLoopStallProbe()
 }
 
 // Why: startup benchmarking needs in-process timestamps — harness-side stderr
@@ -676,6 +678,8 @@ function openMainWindow(): BrowserWindow {
     crashReports ?? undefined,
     keybindings,
     {
+      getAdditionalAiVaultCodexHomePaths: () =>
+        codexRuntimeHome ? [codexRuntimeHome.getHostRuntimeHomePath()] : [],
       onBeforeRelaunch: () => {
         isQuitting = true
         store?.flush()

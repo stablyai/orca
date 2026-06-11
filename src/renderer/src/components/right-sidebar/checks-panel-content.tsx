@@ -15,15 +15,18 @@ import {
   Plus,
   ChevronDown,
   ChevronRight,
+  SendHorizontal,
   Sparkles,
   RefreshCw,
   AlertTriangle,
   MoreHorizontal,
   Pencil,
-  Trash
+  Trash,
+  X
 } from 'lucide-react'
 import { ExternalLink } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import {
   Accordion,
@@ -80,6 +83,7 @@ import {
   RightPanelCommentComposer,
   type RightPanelCommentSubmitResult
 } from './right-panel-comment-composer'
+import { usePRCommentsListSelection } from './pr-comments-list-selection'
 import { translate } from '@/i18n/i18n'
 
 export const PullRequestIcon = GitPullRequest
@@ -1555,6 +1559,8 @@ function CommentRow({
   isReply,
   showResolve,
   showReply,
+  selectionControl,
+  resolveSelectionAction,
   replyDisabled,
   replyDisabledReason,
   onResolve,
@@ -1566,6 +1572,8 @@ function CommentRow({
   isReply: boolean
   showResolve: boolean
   showReply?: boolean
+  selectionControl?: React.ReactNode
+  resolveSelectionAction?: React.ReactNode
   replyDisabled?: boolean
   replyDisabledReason?: string
   onResolve?: (threadId: string, resolve: boolean) => boolean | Promise<boolean>
@@ -1635,6 +1643,7 @@ function CommentRow({
         comment.isResolved && PR_COMMENT_RESOLVED_CONTAINER_CLASS
       )}
     >
+      {selectionControl}
       <div className="flex-1 min-w-0">
         {/* Author line: avatar + name + file badge aligned on center */}
         <div className="flex items-center gap-1.5 min-w-0">
@@ -1669,6 +1678,7 @@ function CommentRow({
             </span>
           )}
           <div className="flex-1" />
+          {!editing && resolveSelectionAction}
           {!editing && (
             <div className="flex items-center gap-0.5 opacity-0 group-hover/comment:opacity-100 transition-opacity">
               {showResolve && comment.threadId != null && onResolve && (
@@ -1760,6 +1770,8 @@ function CommentRow({
 function PRCommentGroupView({
   group,
   replyingGroupId,
+  selectionControl,
+  resolveSelectionAction,
   replyDisabled,
   replyDisabledReason,
   onResolve,
@@ -1771,6 +1783,8 @@ function PRCommentGroupView({
 }: {
   group: PRCommentGroup
   replyingGroupId: string | null
+  selectionControl?: React.ReactNode
+  resolveSelectionAction?: React.ReactNode
   replyDisabled?: boolean
   replyDisabledReason?: string
   onResolve?: (threadId: string, resolve: boolean) => boolean | Promise<boolean>
@@ -1810,6 +1824,8 @@ function PRCommentGroupView({
           isReply={false}
           showResolve={false}
           showReply={Boolean(onReply)}
+          selectionControl={selectionControl}
+          resolveSelectionAction={resolveSelectionAction}
           replyDisabled={replyDisabled}
           replyDisabledReason={replyDisabledReason}
           onResolve={onResolve}
@@ -1828,6 +1844,8 @@ function PRCommentGroupView({
         isReply={false}
         showResolve={true}
         showReply={Boolean(onReply)}
+        selectionControl={selectionControl}
+        resolveSelectionAction={resolveSelectionAction}
         replyDisabled={replyDisabled}
         replyDisabledReason={replyDisabledReason}
         onResolve={onResolve}
@@ -1962,9 +1980,14 @@ function scrollElementBottomIntoView(element: HTMLElement): void {
 export function PRCommentsList({
   comments,
   commentsLoading,
+  reviewKind = 'PR',
   commentsDisabled,
   commentsDisabledReason,
+  selectionContextKey,
+  resolveCommentsWithAIDisabled,
+  resolveCommentsWithAIDisabledReason,
   onAddComment,
+  onResolveSelectedCommentsWithAI,
   onReply,
   onResolve,
   onEditComment,
@@ -1972,9 +1995,14 @@ export function PRCommentsList({
 }: {
   comments: PRComment[]
   commentsLoading: boolean
+  reviewKind?: 'PR' | 'MR'
   commentsDisabled?: boolean
   commentsDisabledReason?: string
+  selectionContextKey?: string
+  resolveCommentsWithAIDisabled?: boolean
+  resolveCommentsWithAIDisabledReason?: string
   onAddComment?: (body: string) => Promise<RightPanelCommentSubmitResult>
+  onResolveSelectedCommentsWithAI?: (groups: PRCommentGroup[]) => void
   onReply?: (comment: PRComment, body: string) => Promise<RightPanelCommentSubmitResult>
   onResolve?: (threadId: string, resolve: boolean) => boolean | Promise<boolean>
   onEditComment?: (comment: PRComment, body: string) => Promise<boolean>
@@ -1986,11 +2014,26 @@ export function PRCommentsList({
   const addCommentSurfaceRef = useRef<HTMLDivElement>(null)
   const shouldScrollAddCommentRef = useRef(false)
   const commentCounts = React.useMemo(() => getPRCommentAudienceCounts(comments), [comments])
+  const {
+    isSelectingForAI,
+    selectedGroupIds,
+    selectableGroups,
+    selectableGroupsById,
+    selectedGroups,
+    addGroupToSelection,
+    clearSelection,
+    toggleGroupSelection
+  } = usePRCommentsListSelection(comments, selectionContextKey)
   const visibleComments = React.useMemo(
     () => filterPRCommentsByAudience(comments, commentFilter),
     [commentFilter, comments]
   )
   const groups = React.useMemo(() => groupPRComments(visibleComments), [visibleComments])
+  const canShowResolveWithAI = Boolean(
+    onResolveSelectedCommentsWithAI && selectableGroups.length > 0
+  )
+  const selectedCommentQueueCount = selectedGroups.length
+
   useEffect(() => {
     if (!isAddingComment || !shouldScrollAddCommentRef.current) {
       return
@@ -2027,6 +2070,61 @@ export function PRCommentsList({
     shouldScrollAddCommentRef.current = false
     setIsAddingComment(false)
   }, [])
+
+  const renderSelectionControl = (group: PRCommentGroup): React.ReactNode => {
+    if (!isSelectingForAI || !selectableGroupsById.has(getPRCommentGroupId(group))) {
+      return null
+    }
+    const groupId = getPRCommentGroupId(group)
+    const checked = selectedGroupIds.has(groupId)
+    return (
+      <Checkbox
+        aria-label={translate(
+          'auto.components.right.sidebar.checks.panel.content.5dc3af25c0',
+          'Select comment'
+        )}
+        checked={checked}
+        onCheckedChange={(value) => toggleGroupSelection(groupId, value === true)}
+        className="mt-0.5"
+      />
+    )
+  }
+
+  const renderResolveSelectionAction = (group: PRCommentGroup): React.ReactNode => {
+    if (isSelectingForAI || !selectableGroupsById.has(getPRCommentGroupId(group))) {
+      return null
+    }
+    const groupId = getPRCommentGroupId(group)
+    return (
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            type="button"
+            variant="ghost"
+            size="xs"
+            className="shrink-0 text-muted-foreground hover:text-foreground"
+            aria-label={translate(
+              'auto.components.right.sidebar.checks.panel.content.49ea0937e4',
+              'Add comment to resolve list'
+            )}
+            onClick={(event) => {
+              event.stopPropagation()
+              addGroupToSelection(groupId)
+            }}
+          >
+            <Sparkles className="size-3" />
+            {translate('auto.components.right.sidebar.checks.panel.content.9fecebb29d', 'Add')}
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent side="top" sideOffset={4}>
+          {translate(
+            'auto.components.right.sidebar.checks.panel.content.49ea0937e4',
+            'Add comment to resolve list'
+          )}
+        </TooltipContent>
+      </Tooltip>
+    )
+  }
 
   const renderAddCommentComposer = (empty: boolean): React.JSX.Element => (
     <div
@@ -2067,7 +2165,7 @@ export function PRCommentsList({
   return (
     <div className="border-t border-border">
       {/* Header */}
-      <div className="border-b border-border px-3 py-2">
+      <div className="flex flex-col gap-2.5 border-b border-border px-3 py-2.5">
         <div className="flex min-w-0 items-center gap-2">
           <MessageSquare className="size-3.5 text-muted-foreground" />
           <span className="text-[11px] font-medium text-foreground">
@@ -2076,15 +2174,141 @@ export function PRCommentsList({
           {comments.length > 0 && (
             <span className="text-[10px] text-muted-foreground">{comments.length}</span>
           )}
-          {onAddComment && !isAddingComment && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-xs"
-                  aria-label={
-                    comments.length === 0
+          <div className="-mr-1 ml-auto flex items-center gap-0.5">
+            {canShowResolveWithAI && (
+              <>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-xs"
+                      className="text-muted-foreground hover:text-foreground"
+                      aria-label={translate(
+                        'auto.components.right.sidebar.checks.panel.content.d7a2f9c401',
+                        'Send unresolved {{value0}} comments',
+                        { value0: reviewKind }
+                      )}
+                      disabled={commentsLoading || resolveCommentsWithAIDisabled}
+                      title={
+                        resolveCommentsWithAIDisabled
+                          ? resolveCommentsWithAIDisabledReason
+                          : undefined
+                      }
+                      onClick={() => onResolveSelectedCommentsWithAI?.(selectableGroups)}
+                    >
+                      <Sparkles className="size-3" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="top" sideOffset={4}>
+                    {resolveCommentsWithAIDisabled && resolveCommentsWithAIDisabledReason
+                      ? resolveCommentsWithAIDisabledReason
+                      : translate(
+                          'auto.components.right.sidebar.checks.panel.content.d7a2f9c401',
+                          'Send unresolved {{value0}} comments',
+                          { value0: reviewKind }
+                        )}
+                  </TooltipContent>
+                </Tooltip>
+                {isSelectingForAI && (
+                  <>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="default"
+                          size="icon-xs"
+                          className="relative"
+                          aria-label={translate(
+                            'auto.components.right.sidebar.checks.panel.content.d91f2a6c39',
+                            'Send {{value0}} queued comments',
+                            { value0: selectedCommentQueueCount }
+                          )}
+                          disabled={
+                            selectedCommentQueueCount === 0 ||
+                            commentsLoading ||
+                            resolveCommentsWithAIDisabled
+                          }
+                          title={
+                            resolveCommentsWithAIDisabled
+                              ? resolveCommentsWithAIDisabledReason
+                              : undefined
+                          }
+                          onClick={() => onResolveSelectedCommentsWithAI?.(selectedGroups)}
+                        >
+                          <SendHorizontal className="size-3" />
+                          <span className="absolute -right-1 -top-1 flex h-3.5 min-w-3.5 items-center justify-center rounded-full border border-border bg-background px-0.5 text-[9px] leading-none text-foreground tabular-nums">
+                            {selectedCommentQueueCount}
+                          </span>
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="top" sideOffset={4}>
+                        {resolveCommentsWithAIDisabled && resolveCommentsWithAIDisabledReason
+                          ? resolveCommentsWithAIDisabledReason
+                          : translate(
+                              'auto.components.right.sidebar.checks.panel.content.d91f2a6c39',
+                              'Send {{value0}} queued comments',
+                              { value0: selectedCommentQueueCount }
+                            )}
+                      </TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon-xs"
+                          className="text-muted-foreground hover:text-foreground"
+                          aria-label={translate(
+                            'auto.components.right.sidebar.checks.panel.content.a6de3e5a20',
+                            'Clear queued comments'
+                          )}
+                          onClick={clearSelection}
+                        >
+                          <X className="size-3" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="top" sideOffset={4}>
+                        {translate(
+                          'auto.components.right.sidebar.checks.panel.content.a6de3e5a20',
+                          'Clear queued comments'
+                        )}
+                      </TooltipContent>
+                    </Tooltip>
+                  </>
+                )}
+              </>
+            )}
+            {onAddComment && !isAddingComment && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-xs"
+                    aria-label={
+                      comments.length === 0
+                        ? translate(
+                            'auto.components.right.sidebar.checks.panel.content.7440d09d2c',
+                            'Start conversation'
+                          )
+                        : translate(
+                            'auto.components.right.sidebar.checks.panel.content.2b2be92919',
+                            'Add comment'
+                          )
+                    }
+                    disabled={commentsDisabled}
+                    title={commentsDisabled ? commentsDisabledReason : undefined}
+                    className="text-muted-foreground hover:text-foreground"
+                    onClick={startAddComment}
+                  >
+                    <Plus className="size-3" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="top" sideOffset={4}>
+                  {commentsDisabled && commentsDisabledReason
+                    ? commentsDisabledReason
+                    : comments.length === 0
                       ? translate(
                           'auto.components.right.sidebar.checks.panel.content.7440d09d2c',
                           'Start conversation'
@@ -2092,34 +2316,14 @@ export function PRCommentsList({
                       : translate(
                           'auto.components.right.sidebar.checks.panel.content.2b2be92919',
                           'Add comment'
-                        )
-                  }
-                  disabled={commentsDisabled}
-                  title={commentsDisabled ? commentsDisabledReason : undefined}
-                  className="-mr-1 ml-auto text-muted-foreground hover:text-foreground"
-                  onClick={startAddComment}
-                >
-                  <Plus className="size-3" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="top" sideOffset={4}>
-                {commentsDisabled && commentsDisabledReason
-                  ? commentsDisabledReason
-                  : comments.length === 0
-                    ? translate(
-                        'auto.components.right.sidebar.checks.panel.content.7440d09d2c',
-                        'Start conversation'
-                      )
-                    : translate(
-                        'auto.components.right.sidebar.checks.panel.content.2b2be92919',
-                        'Add comment'
-                      )}
-              </TooltipContent>
-            </Tooltip>
-          )}
+                        )}
+                </TooltipContent>
+              </Tooltip>
+            )}
+          </div>
         </div>
         {comments.length > 0 && (
-          <div className="mt-2 grid grid-cols-3 rounded-md border border-border bg-background p-0.5">
+          <div className="grid grid-cols-3 rounded-md border border-border bg-background p-0.5">
             {getPrCommentAudienceFilters().map((filter) => {
               const isActive = commentFilter === filter.value
               return (
@@ -2195,6 +2399,8 @@ export function PRCommentsList({
                 key={getPRCommentGroupId(group)}
                 group={group}
                 replyingGroupId={replyingGroupId}
+                selectionControl={renderSelectionControl(group)}
+                resolveSelectionAction={renderResolveSelectionAction(group)}
                 replyDisabled={commentsDisabled}
                 replyDisabledReason={commentsDisabledReason}
                 onResolve={onResolve}

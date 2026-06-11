@@ -246,7 +246,7 @@ test('can stop a nested repo scan and import repositories found so far', async (
   const importDialog = orcaPage.getByRole('dialog', {
     name: /Import repositories from folder/i
   })
-  await expect(importDialog.getByText(/Scanning\.\.\. Found 1 repository in/)).toBeVisible()
+  await expect(importDialog.getByText(/Scanning\.\.\.\s*Found 1 repository in/)).toBeVisible()
   await expect(importDialog.getByRole('button', { name: /Import as group/i })).toBeDisabled()
   await importDialog.getByRole('button', { name: /Stop scan/i }).click()
   await expect(importDialog.getByText('Scan stopped early.')).toBeVisible()

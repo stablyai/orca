@@ -22,6 +22,7 @@ import { DEFAULT_APP_ICON_ID } from './app-icon'
 import { DEFAULT_OPEN_IN_APPLICATIONS } from './open-in-applications'
 import { DEFAULT_BROWSER_PAGE_ZOOM_LEVEL } from './browser-page-zoom'
 import { DEFAULT_DISABLED_TUI_AGENTS } from './tui-agent-selection'
+import { DEFAULT_TUI_AGENT_ARGS, DEFAULT_TUI_AGENT_ENV } from './tui-agent-launch-defaults'
 import { UI_LANGUAGE_SYSTEM } from './ui-language'
 
 export { DEFAULT_STATUS_BAR_ITEMS } from './status-bar-defaults'
@@ -289,6 +290,9 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     opencodeWorkspaceId: '',
     geminiCliOAuthEnabled: false,
     agentCmdOverrides: {},
+    agentDefaultArgs: { ...DEFAULT_TUI_AGENT_ARGS },
+    agentDefaultEnv: { ...DEFAULT_TUI_AGENT_ENV },
+    agentYoloDefaultsMigrated: true,
     agentStatusHooksEnabled: true,
     tabAutoGenerateTitle: false,
     keepComputerAwakeWhileAgentsRun: false,
@@ -404,6 +408,7 @@ export function getDefaultUIState(): PersistedUIState {
     sidebarWidth: 280,
     rightSidebarOpen: true,
     rightSidebarTab: 'explorer',
+    rightSidebarExplorerView: 'files',
     rightSidebarWidth: 350,
     groupBy: 'repo',
     sortBy: 'recent',

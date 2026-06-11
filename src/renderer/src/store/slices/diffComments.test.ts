@@ -136,6 +136,7 @@ import { createDetectedAgentsSlice } from './detected-agents'
 import { createWorktreeNavHistorySlice } from './worktree-nav-history'
 import { createDictationSlice } from './dictation'
 import { createWorkspaceCleanupSlice } from './workspace-cleanup'
+import { createPullRequestGenerationSlice } from './pull-request-generation'
 
 function createTestStore() {
   return create<AppState>()((...a) => ({
@@ -167,7 +168,8 @@ function createTestStore() {
     ...createDetectedAgentsSlice(...a),
     ...createWorktreeNavHistorySlice(...a),
     ...createDictationSlice(...a),
-    ...createWorkspaceCleanupSlice(...a)
+    ...createWorkspaceCleanupSlice(...a),
+    ...createPullRequestGenerationSlice(...a)
   }))
 }
 

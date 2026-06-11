@@ -22,6 +22,7 @@ import { sanitizeRepoIcon } from '../../../../shared/repo-icon'
 import { normalizeRepoBadgeColor } from '../../../../shared/repo-badge-color'
 import { getProjectGroupSubtreeIds } from '../../../../shared/project-groups'
 import { isPathInsideOrEqual } from '../../../../shared/cross-platform-path'
+import { selectProjectGroupRemovalTargets } from './project-group-removal-targets'
 import { getRepoIdFromWorktreeId } from './worktree-helpers'
 import { reconcileFetchedRepos } from './repo-identity-reconcile'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '../../runtime/runtime-rpc-client'
@@ -65,6 +66,31 @@ export type FolderWorkspacePathStatusCacheEntry = {
   checkedAt: number
   requestSnapshot: string
 }
+
+export type DeleteProjectGroupWithContainedProjectsOptions = {
+  removeContainedProjects: boolean
+}
+
+export type ProjectRemovalFailure = {
+  projectId: string
+  reason: string
+}
+
+export type DeleteProjectGroupWithContainedProjectsResult =
+  | {
+      status: 'deleted-group'
+      groupId: string
+      requestedProjectIds: string[]
+      removedProjectIds: string[]
+      failedProjectRemovals: ProjectRemovalFailure[]
+    }
+  | {
+      status: 'missing-group' | 'group-delete-failed'
+      groupId: string
+      requestedProjectIds: string[]
+      removedProjectIds: []
+      failedProjectRemovals: []
+    }
 
 function normalizeNestedRepoScanResult(scan: NestedRepoScanResult): NestedRepoScanResult {
   return {
@@ -301,6 +327,10 @@ export type RepoSlice = {
     updates: Partial<Pick<ProjectGroup, 'name' | 'isCollapsed' | 'tabOrder' | 'color'>>
   ) => Promise<boolean>
   deleteProjectGroup: (groupId: string) => Promise<boolean>
+  deleteProjectGroupWithContainedProjects: (
+    groupId: string,
+    options: DeleteProjectGroupWithContainedProjectsOptions
+  ) => Promise<DeleteProjectGroupWithContainedProjectsResult>
   moveProjectToGroup: (
     projectId: string,
     groupId: string | null,
@@ -715,6 +745,71 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
     } catch (err) {
       console.error('Failed to delete project group:', err)
       return false
+    }
+  },
+
+  deleteProjectGroupWithContainedProjects: async (groupId, options) => {
+    const targets = selectProjectGroupRemovalTargets(get().projectGroups, get().repos, groupId)
+    const requestedProjectIds = options.removeContainedProjects ? targets.projectIds : []
+    if (!targets.groupExists) {
+      return {
+        status: 'missing-group',
+        groupId,
+        requestedProjectIds,
+        removedProjectIds: [],
+        failedProjectRemovals: []
+      }
+    }
+
+    const deleted = await get().deleteProjectGroup(groupId)
+    if (!deleted) {
+      return {
+        status: 'group-delete-failed',
+        groupId,
+        requestedProjectIds,
+        removedProjectIds: [],
+        failedProjectRemovals: []
+      }
+    }
+
+    if (!options.removeContainedProjects) {
+      return {
+        status: 'deleted-group',
+        groupId,
+        requestedProjectIds,
+        removedProjectIds: [],
+        failedProjectRemovals: []
+      }
+    }
+
+    const removedProjectIds: string[] = []
+    const failedProjectRemovals: ProjectRemovalFailure[] = []
+    for (const projectId of targets.projectIds) {
+      const existedBeforeRemoval = get().repos.some((repo) => repo.id === projectId)
+      try {
+        if (existedBeforeRemoval) {
+          await get().removeProject(projectId)
+        }
+      } catch (err) {
+        console.error('Failed to remove contained project:', err)
+      }
+      const stillExists = get().repos.some((repo) => repo.id === projectId)
+      if (stillExists) {
+        failedProjectRemovals.push({
+          projectId,
+          reason: 'Project remained in Orca after removeProject completed.'
+        })
+      } else {
+        removedProjectIds.push(projectId)
+      }
+    }
+
+    return {
+      status: 'deleted-group',
+      groupId,
+      requestedProjectIds,
+      removedProjectIds,
+      failedProjectRemovals
     }
   },
 

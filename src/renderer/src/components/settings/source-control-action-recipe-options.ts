@@ -7,6 +7,7 @@ import {
   CUSTOM_AGENT_ID,
   type CustomAgentId,
   getCommitMessageAgentCapability,
+  isCustomAgentId,
   listCommitMessageAgentCapabilities
 } from '../../../../shared/commit-message-agent-spec'
 import { getAgentCatalog, type AgentCatalogEntry } from '@/lib/agent-catalog'
@@ -43,6 +44,10 @@ export const getActionDescriptions = createLocalizedCatalog(
     resolveConflicts: translate(
       'auto.components.settings.source.control.action.recipe.options.resolveConflicts',
       'Start an agent for local or hosted-review merge conflicts.'
+    ),
+    resolveComments: translate(
+      'auto.components.settings.source.control.action.recipe.options.resolveComments',
+      'Start an agent from selected unresolved PR or MR comments.'
     )
   })
 )
@@ -97,4 +102,50 @@ export function getAgentCatalogForAction(
   return getAgentCatalog().filter(
     (agent) => TEXT_GENERATION_AGENT_ID_SET.has(agent.id) || agent.id === selectedAgent
   )
+}
+
+function formatSupportedAgentLabels(): string {
+  return [
+    ...listCommitMessageAgentCapabilities().map((capability) => capability.label),
+    translate(
+      'auto.components.settings.source.control.action.recipe.options.customCommand',
+      'Custom command'
+    )
+  ].join(', ')
+}
+
+export function getSourceControlActionAgentSupportText(
+  actionId: SourceControlActionId
+): string | null {
+  if (!SOURCE_CONTROL_TEXT_ACTION_ID_SET.has(actionId)) {
+    return null
+  }
+  return translate(
+    'auto.components.settings.source.control.action.recipe.options.supportedAgents',
+    'Supported agents for this recipe: {{value0}}.',
+    { value0: formatSupportedAgentLabels() }
+  )
+}
+
+export function getSourceControlActionAgentWarningText(
+  actionId: SourceControlActionId,
+  selectedAgent: TuiAgent | CustomAgentId | null | undefined
+): string | null {
+  if (!SOURCE_CONTROL_TEXT_ACTION_ID_SET.has(actionId)) {
+    return null
+  }
+
+  if (selectedAgent && !isCustomAgentId(selectedAgent)) {
+    if (TEXT_GENERATION_AGENT_ID_SET.has(selectedAgent)) {
+      return null
+    }
+    const agentLabel = getAgentCatalog().find((agent) => agent.id === selectedAgent)?.label
+    return translate(
+      'auto.components.settings.source.control.action.recipe.options.unsupportedSavedAgent',
+      '{{value0}} cannot run this text-generation recipe. Pick one of the supported agents below.',
+      { value0: agentLabel ?? selectedAgent }
+    )
+  }
+
+  return null
 }

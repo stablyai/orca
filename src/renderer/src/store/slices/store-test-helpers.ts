@@ -37,6 +37,7 @@ import { createDetectedAgentsSlice } from './detected-agents'
 import { createWorktreeNavHistorySlice } from './worktree-nav-history'
 import { createDictationSlice } from './dictation'
 import { createWorkspaceCleanupSlice } from './workspace-cleanup'
+import { createPullRequestGenerationSlice } from './pull-request-generation'
 import { translate } from '@/i18n/i18n'
 
 export const TEST_REPO = {
@@ -77,7 +78,8 @@ export function createTestStore() {
     ...createDetectedAgentsSlice(...a),
     ...createWorktreeNavHistorySlice(...a),
     ...createDictationSlice(...a),
-    ...createWorkspaceCleanupSlice(...a)
+    ...createWorkspaceCleanupSlice(...a),
+    ...createPullRequestGenerationSlice(...a)
   }))
 }
 

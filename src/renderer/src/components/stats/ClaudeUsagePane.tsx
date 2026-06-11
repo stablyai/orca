@@ -31,8 +31,14 @@ import { translate } from '@/i18n/i18n'
 
 const RANGE_OPTIONS: ClaudeUsageRange[] = ['7d', '30d', '90d', 'all']
 const SCOPE_OPTIONS: { value: ClaudeUsageScope; label: string }[] = [
-  { value: 'orca', label: translate("auto.components.stats.ClaudeUsagePane.4f8368c272", "Orca worktrees only") },
-  { value: 'all', label: translate("auto.components.stats.ClaudeUsagePane.5ce4842c2c", "All local Claude usage") }
+  {
+    value: 'orca',
+    label: translate('auto.components.stats.ClaudeUsagePane.4f8368c272', 'Orca worktrees only')
+  },
+  {
+    value: 'all',
+    label: translate('auto.components.stats.ClaudeUsagePane.5ce4842c2c', 'All local Claude usage')
+  }
 ]
 const RANGE_LABELS: Record<ClaudeUsageRange, string> = {
   '7d': 'Last 7 days',
@@ -108,15 +114,27 @@ export function ClaudeUsagePane(): React.JSX.Element {
       <div className="rounded-lg border border-border/60 bg-card/40 p-4">
         <div className="flex items-start justify-between gap-4">
           <div className="space-y-2">
-            <h3 className="text-sm font-semibold text-foreground">{translate("auto.components.stats.ClaudeUsagePane.6afacbee37", "Claude Usage Tracking")}</h3>
+            <h3 className="text-sm font-semibold text-foreground">
+              {translate(
+                'auto.components.stats.ClaudeUsagePane.6afacbee37',
+                'Claude Usage Tracking'
+              )}
+            </h3>
             <p className="text-sm text-muted-foreground">
-              {translate("auto.components.stats.ClaudeUsagePane.0cb1a36d7d", "Reads local Claude usage logs to show token, model, and session stats.")}</p>
+              {translate(
+                'auto.components.stats.ClaudeUsagePane.0cb1a36d7d',
+                'Reads local Claude usage logs to show token, model, and session stats.'
+              )}
+            </p>
           </div>
           <button
             type="button"
             role="switch"
             aria-checked={false}
-            aria-label={translate("auto.components.stats.ClaudeUsagePane.424cd50412", "Enable Claude usage analytics")}
+            aria-label={translate(
+              'auto.components.stats.ClaudeUsagePane.424cd50412',
+              'Enable Claude usage analytics'
+            )}
             onClick={() => handleSetEnabled(true)}
             className="relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border border-transparent bg-muted-foreground/30 transition-colors"
           >
@@ -137,10 +155,18 @@ export function ClaudeUsagePane(): React.JSX.Element {
     <div className="space-y-4 rounded-lg border border-border/60 bg-card/30 p-4">
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0 flex-1">
-          <h3 className="text-sm font-semibold text-foreground">{translate("auto.components.stats.ClaudeUsagePane.6afacbee37", "Claude Usage Tracking")}</h3>
+          <h3 className="text-sm font-semibold text-foreground">
+            {translate('auto.components.stats.ClaudeUsagePane.6afacbee37', 'Claude Usage Tracking')}
+          </h3>
           <p className="mt-1 text-xs text-muted-foreground">
             {formatUpdatedAt(scanState.lastScanCompletedAt)}
-            {scanState.lastScanError ? translate("auto.components.stats.ClaudeUsagePane.2d41fd45c6", " • Last scan error: {{value0}}", { value0: scanState.lastScanError }) : ''}
+            {scanState.lastScanError
+              ? translate(
+                  'auto.components.stats.ClaudeUsagePane.2d41fd45c6',
+                  ' • Last scan error: {{value0}}',
+                  { value0: scanState.lastScanError }
+                )
+              : ''}
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-2 self-start">
@@ -152,17 +178,27 @@ export function ClaudeUsagePane(): React.JSX.Element {
               <Tooltip>
                 <TooltipTrigger asChild>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon-xs" aria-label={translate("auto.components.stats.ClaudeUsagePane.e9bf9fce0e", "Claude usage options")}>
+                    <Button
+                      variant="ghost"
+                      size="icon-xs"
+                      aria-label={translate(
+                        'auto.components.stats.ClaudeUsagePane.e9bf9fce0e',
+                        'Claude usage options'
+                      )}
+                    >
                       <SlidersHorizontal className="size-3.5" />
                     </Button>
                   </DropdownMenuTrigger>
                 </TooltipTrigger>
                 <TooltipContent side="bottom" sideOffset={6}>
-                  {translate("auto.components.stats.ClaudeUsagePane.dd29209b21", "Filters")}</TooltipContent>
+                  {translate('auto.components.stats.ClaudeUsagePane.dd29209b21', 'Filters')}
+                </TooltipContent>
               </Tooltip>
             </TooltipProvider>
             <DropdownMenuContent align="end" className="w-60">
-              <DropdownMenuLabel>{translate("auto.components.stats.ClaudeUsagePane.f61cffb9c8", "Scope")}</DropdownMenuLabel>
+              <DropdownMenuLabel>
+                {translate('auto.components.stats.ClaudeUsagePane.f61cffb9c8', 'Scope')}
+              </DropdownMenuLabel>
               <DropdownMenuRadioGroup
                 value={scope}
                 onValueChange={(value) => void setClaudeUsageScope(value as ClaudeUsageScope)}
@@ -174,7 +210,9 @@ export function ClaudeUsagePane(): React.JSX.Element {
                 ))}
               </DropdownMenuRadioGroup>
               <DropdownMenuSeparator />
-              <DropdownMenuLabel>{translate("auto.components.stats.ClaudeUsagePane.505be9aac4", "Range")}</DropdownMenuLabel>
+              <DropdownMenuLabel>
+                {translate('auto.components.stats.ClaudeUsagePane.505be9aac4', 'Range')}
+              </DropdownMenuLabel>
               <DropdownMenuRadioGroup
                 value={range}
                 onValueChange={(value) => void setClaudeUsageRange(value as ClaudeUsageRange)}
@@ -195,20 +233,27 @@ export function ClaudeUsagePane(): React.JSX.Element {
                   size="icon-xs"
                   onClick={() => void refreshClaudeUsage()}
                   disabled={scanState.isScanning}
-                  aria-label={translate("auto.components.stats.ClaudeUsagePane.c5b9b344d0", "Refresh Claude usage")}
+                  aria-label={translate(
+                    'auto.components.stats.ClaudeUsagePane.c5b9b344d0',
+                    'Refresh Claude usage'
+                  )}
                 >
                   <RefreshCw className={`size-3.5 ${scanState.isScanning ? 'animate-spin' : ''}`} />
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="bottom" sideOffset={6}>
-                {translate("auto.components.stats.ClaudeUsagePane.8d18bbb771", "Refresh")}</TooltipContent>
+                {translate('auto.components.stats.ClaudeUsagePane.8d18bbb771', 'Refresh')}
+              </TooltipContent>
             </Tooltip>
           </TooltipProvider>
           <button
             type="button"
             role="switch"
             aria-checked={true}
-            aria-label={translate("auto.components.stats.ClaudeUsagePane.424cd50412", "Enable Claude usage analytics")}
+            aria-label={translate(
+              'auto.components.stats.ClaudeUsagePane.424cd50412',
+              'Enable Claude usage analytics'
+            )}
             onClick={() => handleSetEnabled(false)}
             className="relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border border-transparent bg-foreground transition-colors"
           >
@@ -225,32 +270,39 @@ export function ClaudeUsagePane(): React.JSX.Element {
 
       {!hasAnyData ? (
         <div className="rounded-lg border border-dashed border-border/60 bg-card/30 px-4 py-6 text-sm text-muted-foreground">
-          {translate("auto.components.stats.ClaudeUsagePane.7dde9331fd", "No local Claude usage found yet for this scope.")}</div>
+          {translate(
+            'auto.components.stats.ClaudeUsagePane.7dde9331fd',
+            'No local Claude usage found yet for this scope.'
+          )}
+        </div>
       ) : (
         <>
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
             <StatCard
-              label={translate("auto.components.stats.ClaudeUsagePane.ea71fae8fc", "Input tokens")}
+              label={translate('auto.components.stats.ClaudeUsagePane.ea71fae8fc', 'Input tokens')}
               value={formatTokens(summary?.inputTokens ?? 0)}
               icon={<Sparkles className="size-4" />}
             />
             <StatCard
-              label={translate("auto.components.stats.ClaudeUsagePane.2b8a2f14aa", "Output tokens")}
+              label={translate('auto.components.stats.ClaudeUsagePane.2b8a2f14aa', 'Output tokens')}
               value={formatTokens(summary?.outputTokens ?? 0)}
               icon={<Activity className="size-4" />}
             />
             <StatCard
-              label={translate("auto.components.stats.ClaudeUsagePane.268cf0af51", "Cache read")}
+              label={translate('auto.components.stats.ClaudeUsagePane.268cf0af51', 'Cache read')}
               value={formatTokens(summary?.cacheReadTokens ?? 0)}
               icon={<DatabaseZap className="size-4" />}
             />
             <StatCard
-              label={translate("auto.components.stats.ClaudeUsagePane.b786fb4a70", "Cache write")}
+              label={translate('auto.components.stats.ClaudeUsagePane.b786fb4a70', 'Cache write')}
               value={formatTokens(summary?.cacheWriteTokens ?? 0)}
               icon={<Waypoints className="size-4" />}
             />
             <StatCard
-              label={translate("auto.components.stats.ClaudeUsagePane.1634c4f404", "Cache reuse rate")}
+              label={translate(
+                'auto.components.stats.ClaudeUsagePane.1634c4f404',
+                'Cache reuse rate'
+              )}
               value={
                 summary?.cacheReuseRate !== null && summary?.cacheReuseRate !== undefined
                   ? `${Math.round(summary.cacheReuseRate * 100)}%`
@@ -259,7 +311,10 @@ export function ClaudeUsagePane(): React.JSX.Element {
               icon={<Gauge className="size-4" />}
             />
             <StatCard
-              label={translate("auto.components.stats.ClaudeUsagePane.8cc23be4a3", "Zero-cache-read turns")}
+              label={translate(
+                'auto.components.stats.ClaudeUsagePane.8cc23be4a3',
+                'Zero-cache-read turns'
+              )}
               value={
                 summary && summary.turns > 0
                   ? `${Math.round((summary.zeroCacheReadTurns / summary.turns) * 100)}%`
@@ -268,27 +323,41 @@ export function ClaudeUsagePane(): React.JSX.Element {
               icon={<DatabaseZap className="size-4" />}
             />
             <StatCard
-              label={translate("auto.components.stats.ClaudeUsagePane.0f3e696ca9", "Sessions / Turns")}
+              label={translate(
+                'auto.components.stats.ClaudeUsagePane.0f3e696ca9',
+                'Sessions / Turns'
+              )}
               value={`${(summary?.sessions ?? 0).toLocaleString()} / ${(summary?.turns ?? 0).toLocaleString()}`}
               icon={<FolderKanban className="size-4" />}
             />
             <StatCard
-              label={translate("auto.components.stats.ClaudeUsagePane.b26d4ddb58", "Est. API-equivalent cost")}
+              label={translate(
+                'auto.components.stats.ClaudeUsagePane.b26d4ddb58',
+                'Est. API-equivalent cost'
+              )}
               value={formatCost(summary?.estimatedCostUsd ?? null)}
               icon={<Coins className="size-4" />}
             />
           </div>
           <p className="px-1 text-xs text-muted-foreground">
-            {translate("auto.components.stats.ClaudeUsagePane.51ae85fa00", "Cache reuse rate is calculated as cache read tokens / (input tokens + cache read tokens).")}</p>
+            {translate(
+              'auto.components.stats.ClaudeUsagePane.51ae85fa00',
+              'Cache reuse rate is calculated as cache read tokens / (input tokens + cache read tokens).'
+            )}
+          </p>
 
           <ClaudeUsageDailyChart daily={daily} />
 
           <div className="grid gap-4 xl:grid-cols-2">
             <section className="rounded-lg border border-border/60 bg-card/40 p-4">
               <div className="mb-3">
-                <h4 className="text-sm font-semibold text-foreground">{translate("auto.components.stats.ClaudeUsagePane.0f394c24e3", "By model")}</h4>
+                <h4 className="text-sm font-semibold text-foreground">
+                  {translate('auto.components.stats.ClaudeUsagePane.0f394c24e3', 'By model')}
+                </h4>
                 <p className="text-xs text-muted-foreground">
-                  {translate("auto.components.stats.ClaudeUsagePane.c3fdbc5474", "Top model:")}{summary?.topModel ?? translate("auto.components.stats.ClaudeUsagePane.7765a4c3e1", "n/a")}
+                  {translate('auto.components.stats.ClaudeUsagePane.c3fdbc5474', 'Top model:')}{' '}
+                  {summary?.topModel ??
+                    translate('auto.components.stats.ClaudeUsagePane.7765a4c3e1', 'n/a')}
                 </p>
               </div>
               <div className="space-y-3">
@@ -301,7 +370,11 @@ export function ClaudeUsagePane(): React.JSX.Element {
                       </span>
                     </div>
                     <div className="text-xs text-muted-foreground">
-                      {row.sessions} {translate("auto.components.stats.ClaudeUsagePane.02a046792e", "sessions •")}{row.turns} {translate("auto.components.stats.ClaudeUsagePane.32176e1d44", "turns")}</div>
+                      {row.sessions}{' '}
+                      {translate('auto.components.stats.ClaudeUsagePane.02a046792e', 'sessions •')}{' '}
+                      {row.turns}{' '}
+                      {translate('auto.components.stats.ClaudeUsagePane.32176e1d44', 'turns')}
+                    </div>
                   </div>
                 ))}
               </div>
@@ -309,9 +382,13 @@ export function ClaudeUsagePane(): React.JSX.Element {
 
             <section className="rounded-lg border border-border/60 bg-card/40 p-4">
               <div className="mb-3">
-                <h4 className="text-sm font-semibold text-foreground">{translate("auto.components.stats.ClaudeUsagePane.7dc9e5613b", "By project")}</h4>
+                <h4 className="text-sm font-semibold text-foreground">
+                  {translate('auto.components.stats.ClaudeUsagePane.7dc9e5613b', 'By project')}
+                </h4>
                 <p className="text-xs text-muted-foreground">
-                  {translate("auto.components.stats.ClaudeUsagePane.f97435845c", "Top project:")}{summary?.topProject ?? translate("auto.components.stats.ClaudeUsagePane.7765a4c3e1", "n/a")}
+                  {translate('auto.components.stats.ClaudeUsagePane.f97435845c', 'Top project:')}{' '}
+                  {summary?.topProject ??
+                    translate('auto.components.stats.ClaudeUsagePane.7765a4c3e1', 'n/a')}
                 </p>
               </div>
               <div className="space-y-3">
@@ -324,7 +401,11 @@ export function ClaudeUsagePane(): React.JSX.Element {
                       </span>
                     </div>
                     <div className="text-xs text-muted-foreground">
-                      {row.sessions} {translate("auto.components.stats.ClaudeUsagePane.02a046792e", "sessions •")}{row.turns} {translate("auto.components.stats.ClaudeUsagePane.32176e1d44", "turns")}</div>
+                      {row.sessions}{' '}
+                      {translate('auto.components.stats.ClaudeUsagePane.02a046792e', 'sessions •')}{' '}
+                      {row.turns}{' '}
+                      {translate('auto.components.stats.ClaudeUsagePane.32176e1d44', 'turns')}
+                    </div>
                   </div>
                 ))}
               </div>
@@ -333,25 +414,41 @@ export function ClaudeUsagePane(): React.JSX.Element {
 
           <section className="rounded-lg border border-border/60 bg-card/40 p-4">
             <div className="mb-3">
-              <h4 className="text-sm font-semibold text-foreground">{translate("auto.components.stats.ClaudeUsagePane.7e76c84153", "Recent sessions")}</h4>
+              <h4 className="text-sm font-semibold text-foreground">
+                {translate('auto.components.stats.ClaudeUsagePane.7e76c84153', 'Recent sessions')}
+              </h4>
               <p className="text-xs text-muted-foreground">
-                {translate("auto.components.stats.ClaudeUsagePane.abfc4a4943", "Cache reuse rate:")}{' '}
+                {translate('auto.components.stats.ClaudeUsagePane.abfc4a4943', 'Cache reuse rate:')}{' '}
                 {summary?.cacheReuseRate !== null && summary?.cacheReuseRate !== undefined
                   ? `${Math.round(summary.cacheReuseRate * 100)}%`
-                  : translate("auto.components.stats.ClaudeUsagePane.7765a4c3e1", "n/a")}
+                  : translate('auto.components.stats.ClaudeUsagePane.7765a4c3e1', 'n/a')}
               </p>
             </div>
             <div className="overflow-x-auto">
               <table className="min-w-full text-sm">
                 <thead>
                   <tr className="border-b border-border/60 text-left text-xs text-muted-foreground">
-                    <th className="px-2 py-2 font-medium">{translate("auto.components.stats.ClaudeUsagePane.01476891c7", "Last active")}</th>
-                    <th className="px-2 py-2 font-medium">{translate("auto.components.stats.ClaudeUsagePane.c17bed0416", "Project")}</th>
-                    <th className="px-2 py-2 font-medium">{translate("auto.components.stats.ClaudeUsagePane.1afc25eb06", "Model")}</th>
-                    <th className="px-2 py-2 font-medium">{translate("auto.components.stats.ClaudeUsagePane.0f03975d59", "Turns")}</th>
-                    <th className="px-2 py-2 font-medium">{translate("auto.components.stats.ClaudeUsagePane.faf3444859", "Input")}</th>
-                    <th className="px-2 py-2 font-medium">{translate("auto.components.stats.ClaudeUsagePane.a8b7487ff7", "Output")}</th>
-                    <th className="px-2 py-2 font-medium">{translate("auto.components.stats.ClaudeUsagePane.21ea00bfa8", "Cache")}</th>
+                    <th className="px-2 py-2 font-medium">
+                      {translate('auto.components.stats.ClaudeUsagePane.01476891c7', 'Last active')}
+                    </th>
+                    <th className="px-2 py-2 font-medium">
+                      {translate('auto.components.stats.ClaudeUsagePane.c17bed0416', 'Project')}
+                    </th>
+                    <th className="px-2 py-2 font-medium">
+                      {translate('auto.components.stats.ClaudeUsagePane.1afc25eb06', 'Model')}
+                    </th>
+                    <th className="px-2 py-2 font-medium">
+                      {translate('auto.components.stats.ClaudeUsagePane.0f03975d59', 'Turns')}
+                    </th>
+                    <th className="px-2 py-2 font-medium">
+                      {translate('auto.components.stats.ClaudeUsagePane.faf3444859', 'Input')}
+                    </th>
+                    <th className="px-2 py-2 font-medium">
+                      {translate('auto.components.stats.ClaudeUsagePane.a8b7487ff7', 'Output')}
+                    </th>
+                    <th className="px-2 py-2 font-medium">
+                      {translate('auto.components.stats.ClaudeUsagePane.21ea00bfa8', 'Cache')}
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
@@ -361,7 +458,10 @@ export function ClaudeUsagePane(): React.JSX.Element {
                         {formatSessionTime(row.lastActiveAt)}
                       </td>
                       <td className="px-2 py-2 text-foreground">{row.projectLabel}</td>
-                      <td className="px-2 py-2 text-muted-foreground">{row.model ?? translate("auto.components.stats.ClaudeUsagePane.cfe2282ffa", "Unknown")}</td>
+                      <td className="px-2 py-2 text-muted-foreground">
+                        {row.model ??
+                          translate('auto.components.stats.ClaudeUsagePane.cfe2282ffa', 'Unknown')}
+                      </td>
                       <td className="px-2 py-2 text-muted-foreground">{row.turns}</td>
                       <td className="px-2 py-2 text-muted-foreground">
                         {formatTokens(row.inputTokens)}

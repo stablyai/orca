@@ -373,13 +373,26 @@ export async function jiraRequest<T>(
 export function getClients(selection?: JiraSiteSelection | null): JiraClientForSite[] {
   const file = getSiteFile()
   const selected = selection ?? file.selectedSiteId ?? file.activeSiteId
-  const sites =
-    selected === 'all'
-      ? file.sites
-      : file.sites.filter((site) => site.id === (selected ?? file.activeSiteId))
+  const isAllSelection = selected === 'all'
+  const sites = isAllSelection
+    ? file.sites
+    : file.sites.filter((site) => site.id === (selected ?? file.activeSiteId))
 
   return sites.flatMap((site) => {
-    const token = readToken(site.id)
+    let token: string | null
+    try {
+      token = readToken(site.id)
+    } catch (error) {
+      // Why: under an 'all' selection one un-decryptable site must not collapse
+      // reads for the healthy ones. readToken already recorded the per-site
+      // credentialError for getStatus to surface, so skip this site like a
+      // missing token. A specific-site selection still rethrows so the renderer
+      // can surface the decrypt banner promptly.
+      if (isAllSelection && error instanceof CredentialDecryptionError) {
+        return []
+      }
+      throw error
+    }
     return token ? [{ site, authorization: authHeader(site.email, token) }] : []
   })
 }

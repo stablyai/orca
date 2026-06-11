@@ -69,7 +69,9 @@ function getPreflightIssues(status: {
   return issues
 }
 
-type StarState = 'loading' | 'starred' | 'not-starred' | 'hidden'
+const ORCA_STARGAZERS_URL = 'https://github.com/stablyai/orca/stargazers'
+
+type StarState = 'loading' | 'starred' | 'not-starred' | 'web-fallback' | 'hidden'
 
 function GitHubStarButton({ hasRepos }: { hasRepos: boolean }): React.JSX.Element | null {
   const [state, setState] = useState<StarState>('loading')
@@ -84,7 +86,7 @@ function GitHubStarButton({ hasRepos }: { hasRepos: boolean }): React.JSX.Elemen
         return
       }
       if (result === null) {
-        setState('hidden')
+        setState('web-fallback')
       } else {
         setState(result ? 'starred' : 'not-starred')
       }
@@ -112,6 +114,11 @@ function GitHubStarButton({ hasRepos }: { hasRepos: boolean }): React.JSX.Elemen
       setMenuOpen((v) => !v)
       return
     }
+    if (state === 'web-fallback') {
+      await window.api.shell.openUrl(ORCA_STARGAZERS_URL)
+      await window.api.starNag.complete()
+      return
+    }
     if (state !== 'not-starred') {
       return
     }
@@ -119,7 +126,7 @@ function GitHubStarButton({ hasRepos }: { hasRepos: boolean }): React.JSX.Elemen
     const ok = await window.api.gh.starOrca('landing')
     if (!ok) {
       if (mountedRef.current) {
-        setState('not-starred')
+        setState('web-fallback')
       }
       return
     }
@@ -129,7 +136,7 @@ function GitHubStarButton({ hasRepos }: { hasRepos: boolean }): React.JSX.Elemen
     await window.api.starNag.complete()
   }
 
-  // Hide if gh CLI is unavailable, or if the user has already starred and added a repo
+  // Hide once the user has already starred and added a repo.
   if (state === 'hidden' || (state === 'starred' && hasRepos)) {
     return null
   }
@@ -140,7 +147,7 @@ function GitHubStarButton({ hasRepos }: { hasRepos: boolean }): React.JSX.Elemen
         className={cn(
           'inline-flex items-center gap-2 rounded-full border px-4 py-1.5 text-[13px] font-medium transition-all duration-300',
           state === 'loading' && 'pointer-events-none opacity-0',
-          state === 'not-starred' &&
+          state !== 'starred' &&
             'cursor-pointer border-amber-500/60 text-amber-700 hover:border-amber-500/80 hover:bg-amber-400/10 dark:border-amber-400/30 dark:text-amber-300/90 dark:hover:border-amber-400/50 dark:hover:bg-amber-400/[0.08]',
           state === 'starred' &&
             'cursor-pointer border-amber-500/50 bg-amber-400/10 text-amber-700 dark:border-amber-400/25 dark:bg-amber-400/[0.06] dark:text-amber-400/60'
@@ -148,17 +155,23 @@ function GitHubStarButton({ hasRepos }: { hasRepos: boolean }): React.JSX.Elemen
         onClick={handleClick}
         disabled={state === 'loading'}
       >
-        <Star
-          className={cn(
-            'size-3.5 transition-all duration-300',
-            state === 'starred'
-              ? 'fill-amber-500/70 text-amber-500/70 dark:fill-amber-400/60 dark:text-amber-400/60'
-              : 'text-amber-600 dark:text-amber-400/80'
-          )}
-        />
+        {state === 'web-fallback' ? (
+          <ExternalLink className="size-3.5 text-amber-600 transition-all duration-300 dark:text-amber-400/80" />
+        ) : (
+          <Star
+            className={cn(
+              'size-3.5 transition-all duration-300',
+              state === 'starred'
+                ? 'fill-amber-500/70 text-amber-500/70 dark:fill-amber-400/60 dark:text-amber-400/60'
+                : 'text-amber-600 dark:text-amber-400/80'
+            )}
+          />
+        )}
         {state === 'starred'
           ? translate('auto.components.Landing.ec43b38ba7', 'Starred on GitHub')
-          : translate('auto.components.Landing.0d0ace8861', 'Star on GitHub')}
+          : state === 'web-fallback'
+            ? translate('auto.components.Landing.157bb5ecbb', 'Open GitHub')
+            : translate('auto.components.Landing.0d0ace8861', 'Star on GitHub')}
       </button>
       {state === 'starred' && menuOpen && (
         <div className="absolute right-0 top-[calc(100%+4px)] z-10 min-w-[100px] rounded-md border border-border bg-popover py-1 shadow-md">

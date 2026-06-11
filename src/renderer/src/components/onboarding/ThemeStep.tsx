@@ -134,7 +134,12 @@ export function ThemeStep({ theme, onThemeChange, settings, updateSettings }: Th
       const resolved = preview.found ? preview : await window.api.settings.previewGhosttyImport()
       if (!resolved.found || Object.keys(resolved.diff).length === 0) {
         if (mountedRef.current) {
-          toast.info(translate("auto.components.onboarding.ThemeStep.16a9f0446a", "No Ghostty settings found to import"))
+          toast.info(
+            translate(
+              'auto.components.onboarding.ThemeStep.16a9f0446a',
+              'No Ghostty settings found to import'
+            )
+          )
         }
         track('onboarding_ghostty_import_failed', { reason: 'empty_diff' })
         return
@@ -165,9 +170,15 @@ export function ThemeStep({ theme, onThemeChange, settings, updateSettings }: Th
       })
     } catch (err) {
       if (mountedRef.current) {
-        toast.error(translate("auto.components.onboarding.ThemeStep.699ddf83c2", "Failed to import Ghostty settings"), {
-          description: err instanceof Error ? err.message : String(err)
-        })
+        toast.error(
+          translate(
+            'auto.components.onboarding.ThemeStep.699ddf83c2',
+            'Failed to import Ghostty settings'
+          ),
+          {
+            description: err instanceof Error ? err.message : String(err)
+          }
+        )
       }
       track('onboarding_ghostty_import_failed', { reason: 'unknown' })
     } finally {
@@ -183,9 +194,24 @@ export function ThemeStep({ theme, onThemeChange, settings, updateSettings }: Th
     hint: string
     icon: typeof Monitor
   }[] = [
-    { id: 'system', label: translate("auto.components.onboarding.ThemeStep.827ea7b4a2", "System"), hint: 'Match OS', icon: Monitor },
-    { id: 'dark', label: translate("auto.components.onboarding.ThemeStep.fa7b673ea9", "Dark"), hint: 'Easy on the eyes', icon: Moon },
-    { id: 'light', label: translate("auto.components.onboarding.ThemeStep.ad192706e6", "Light"), hint: 'Bright & crisp', icon: Sun }
+    {
+      id: 'system',
+      label: translate('auto.components.onboarding.ThemeStep.827ea7b4a2', 'System'),
+      hint: 'Match OS',
+      icon: Monitor
+    },
+    {
+      id: 'dark',
+      label: translate('auto.components.onboarding.ThemeStep.fa7b673ea9', 'Dark'),
+      hint: 'Easy on the eyes',
+      icon: Moon
+    },
+    {
+      id: 'light',
+      label: translate('auto.components.onboarding.ThemeStep.ad192706e6', 'Light'),
+      hint: 'Bright & crisp',
+      icon: Sun
+    }
   ]
 
   return (
@@ -234,8 +260,13 @@ export function ThemeStep({ theme, onThemeChange, settings, updateSettings }: Th
       <div className="flex items-center gap-2 px-1 text-[12px] text-muted-foreground">
         <Settings2 className="size-3.5" />
         <span>
-          {translate("auto.components.onboarding.ThemeStep.dd5c16ad1b", "More terminal options, including font, cursor, and palette, in")}{' '}
-          <span className="font-medium text-foreground">{translate("auto.components.onboarding.ThemeStep.94b9dc561d", "Settings → Terminal")}</span>
+          {translate(
+            'auto.components.onboarding.ThemeStep.dd5c16ad1b',
+            'More terminal options, including font, cursor, and palette, in'
+          )}{' '}
+          <span className="font-medium text-foreground">
+            {translate('auto.components.onboarding.ThemeStep.94b9dc561d', 'Settings → Terminal')}
+          </span>
         </span>
       </div>
     </div>
@@ -264,7 +295,11 @@ function GhosttyDiscoveryRow({
     return (
       <div className="flex items-center gap-2.5 rounded-lg border border-dashed border-border bg-transparent px-3.5 py-2.5 text-[12px] text-muted-foreground">
         <span className="size-1.5 animate-pulse rounded-full bg-muted-foreground/60" />
-        {translate("auto.components.onboarding.ThemeStep.2c3aa538f8", "Looking for a Ghostty config…")}</div>
+        {translate(
+          'auto.components.onboarding.ThemeStep.2c3aa538f8',
+          'Looking for a Ghostty config…'
+        )}
+      </div>
     )
   }
 
@@ -273,7 +308,9 @@ function GhosttyDiscoveryRow({
       <div className="flex items-center gap-2.5 rounded-lg border border-emerald-500/30 bg-emerald-500/[0.07] px-3.5 py-2.5 text-[12px] text-foreground">
         <Check className="size-3.5 text-emerald-600 dark:text-emerald-400" strokeWidth={3} />
         <span className="flex-1">
-          <span className="font-medium">{translate("auto.components.onboarding.ThemeStep.78b6386140", "Imported from Ghostty.")}</span>
+          <span className="font-medium">
+            {translate('auto.components.onboarding.ThemeStep.78b6386140', 'Imported from Ghostty.')}
+          </span>
           {discovery.fields.length > 0 && (
             <span className="text-muted-foreground"> {discovery.fields.join(' · ')}</span>
           )}
@@ -288,9 +325,18 @@ function GhosttyDiscoveryRow({
       <img src={ghosttyIcon} alt="" className="size-4 shrink-0" />
       <div className="min-w-0 flex-1">
         <div className="text-[12px] text-foreground">
-          <span className="font-medium">{translate("auto.components.onboarding.ThemeStep.7ee9234e54", "Ghostty config detected.")}</span>{' '}
+          <span className="font-medium">
+            {translate(
+              'auto.components.onboarding.ThemeStep.7ee9234e54',
+              'Ghostty config detected.'
+            )}
+          </span>{' '}
           <span className="text-muted-foreground">
-            {translate("auto.components.onboarding.ThemeStep.248c812283", "Import")}{fields.length > 0 ? fields.map((f) => f.toLowerCase()).join(', ') : translate("auto.components.onboarding.ThemeStep.906c4373fe", "settings")}?
+            {translate('auto.components.onboarding.ThemeStep.248c812283', 'Import')}{' '}
+            {fields.length > 0
+              ? fields.map((f) => f.toLowerCase()).join(', ')
+              : translate('auto.components.onboarding.ThemeStep.906c4373fe', 'settings')}
+            ?
           </span>
         </div>
         {preview.configPath && (
@@ -307,7 +353,9 @@ function GhosttyDiscoveryRow({
         disabled={importing || disabled}
         onClick={() => onImport(preview)}
       >
-        {importing ? translate("auto.components.onboarding.ThemeStep.ad19e5c916", "Importing…") : translate("auto.components.onboarding.ThemeStep.248c812283", "Import")}
+        {importing
+          ? translate('auto.components.onboarding.ThemeStep.ad19e5c916', 'Importing…')
+          : translate('auto.components.onboarding.ThemeStep.248c812283', 'Import')}
       </button>
     </div>
   )
@@ -391,24 +439,42 @@ function humanFields(diff: Partial<GlobalSettings>): string[] {
   // stays tidy. Anything in the diff that doesn't match a label still gets
   // imported; it just isn't surfaced as a chip.
   const groups: { label: string; keys: (keyof GlobalSettings)[] }[] = [
-    { label: translate("auto.components.onboarding.ThemeStep.cc1858e19e", "Font"), keys: ['terminalFontFamily', 'terminalFontSize', 'terminalFontWeight'] },
     {
-      label: translate("auto.components.onboarding.ThemeStep.ab2a583a97", "Cursor"),
+      label: translate('auto.components.onboarding.ThemeStep.cc1858e19e', 'Font'),
+      keys: ['terminalFontFamily', 'terminalFontSize', 'terminalFontWeight']
+    },
+    {
+      label: translate('auto.components.onboarding.ThemeStep.ab2a583a97', 'Cursor'),
       keys: ['terminalCursorStyle', 'terminalCursorBlink', 'terminalCursorOpacity']
     },
-    { label: translate("auto.components.onboarding.ThemeStep.c021e9dddd", "Theme palette"), keys: ['terminalThemeDark', 'terminalThemeLight'] },
-    { label: translate("auto.components.onboarding.ThemeStep.06a24f4f2d", "Colors"), keys: ['terminalColorOverrides'] },
-    { label: translate("auto.components.onboarding.ThemeStep.86c0f1caa2", "Padding"), keys: ['terminalPaddingX', 'terminalPaddingY'] },
     {
-      label: translate("auto.components.onboarding.ThemeStep.b3a99a2d29", "Window"),
+      label: translate('auto.components.onboarding.ThemeStep.c021e9dddd', 'Theme palette'),
+      keys: ['terminalThemeDark', 'terminalThemeLight']
+    },
+    {
+      label: translate('auto.components.onboarding.ThemeStep.06a24f4f2d', 'Colors'),
+      keys: ['terminalColorOverrides']
+    },
+    {
+      label: translate('auto.components.onboarding.ThemeStep.86c0f1caa2', 'Padding'),
+      keys: ['terminalPaddingX', 'terminalPaddingY']
+    },
+    {
+      label: translate('auto.components.onboarding.ThemeStep.b3a99a2d29', 'Window'),
       keys: ['terminalBackgroundOpacity', 'windowBackgroundBlur', 'terminalInactivePaneOpacity']
     },
     {
-      label: translate("auto.components.onboarding.ThemeStep.8ca01945f2", "Dividers"),
+      label: translate('auto.components.onboarding.ThemeStep.8ca01945f2', 'Dividers'),
       keys: ['terminalDividerColorDark', 'terminalDividerColorLight']
     },
-    { label: translate("auto.components.onboarding.ThemeStep.6c51398942", "Mouse"), keys: ['terminalMouseHideWhileTyping', 'terminalFocusFollowsMouse'] },
-    { label: translate("auto.components.onboarding.ThemeStep.a4b254779d", "macOS Option key"), keys: ['terminalMacOptionAsAlt'] }
+    {
+      label: translate('auto.components.onboarding.ThemeStep.6c51398942', 'Mouse'),
+      keys: ['terminalMouseHideWhileTyping', 'terminalFocusFollowsMouse']
+    },
+    {
+      label: translate('auto.components.onboarding.ThemeStep.a4b254779d', 'macOS Option key'),
+      keys: ['terminalMacOptionAsAlt']
+    }
   ]
   return groups.filter(({ keys }) => keys.some((k) => k in diff)).map(({ label }) => label)
 }

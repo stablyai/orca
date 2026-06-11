@@ -755,15 +755,10 @@ export default function TerminalPane({
     [executeClosePane]
   )
 
-  const handleSearchSelectedText = useCallback(
-    (selectedText: string): void => {
-      const state = useAppStore.getState()
-      state.seedFileSearchQuery(worktreeId, selectedText)
-      state.setRightSidebarTab('search')
-      state.setRightSidebarOpen(true)
-    },
-    [worktreeId]
-  )
+  const handleSearchSelectedText = useCallback((selectedText: string): void => {
+    const state = useAppStore.getState()
+    state.showRightSidebarSearch({ query: selectedText })
+  }, [])
 
   const handleConfirmClose = useCallback(() => {
     if (closeConfirmPaneId === null) {

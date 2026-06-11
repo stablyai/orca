@@ -33,7 +33,9 @@ function createMockSubprocess(): SubprocessHandle & {
   let onDataCb: ((data: string) => void) | null = null
   let onExitCb: ((code: number) => void) | null = null
   return {
-    pid: 66666,
+    // Why: getCwd falls back to OS pid lookup; a plausible fake pid can
+    // collide with an unrelated local process and leak its cwd into tests.
+    pid: 999_999_999,
     getForegroundProcess: vi.fn(() => null),
     write: vi.fn(),
     resize: vi.fn(),

@@ -138,6 +138,22 @@ describe('buildTitleDerivedAgentRows', () => {
     expect(rows).toHaveLength(0)
   })
 
+  it('does not add title-derived rows for the Claude agents management screen', () => {
+    const rows = buildWorktreeAgentRows({
+      tabs: [makeTab('tab-1')],
+      entries: [],
+      retained: [],
+      runtimePaneTitlesByTabId: {
+        'tab-1': { 1: 'claude agents' }
+      },
+      ptyIdsByTabId: { 'tab-1': ['pty-claude-agents'] },
+      terminalLayoutsByTabId: { 'tab-1': makeSingleLayout(LEAF_ID_1) },
+      now: 2000
+    })
+
+    expect(rows).toHaveLength(0)
+  })
+
   it('does not turn generic Codex-launched task titles into Claude Code rows', () => {
     const launchAgent: TuiAgent = 'codex'
     const rows = buildWorktreeAgentRows({

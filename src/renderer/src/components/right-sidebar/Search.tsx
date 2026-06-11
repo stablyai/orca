@@ -1,5 +1,4 @@
 import React, { useCallback, useDeferredValue, useEffect, useMemo, useRef } from 'react'
-import { useVirtualizer } from '@tanstack/react-virtual'
 import { useAppStore } from '@/store'
 import { useActiveWorktree } from '@/store/selectors'
 import { getConnectionId } from '@/lib/connection-context'
@@ -8,12 +7,11 @@ import type { SearchFileResult, SearchMatch } from '../../../../shared/types'
 import { buildSearchRows } from './search-rows'
 import { cancelRevealFrame, openMatchResult } from './search-match-open'
 import { SearchHeader } from './SearchHeader'
-import { FileResultRow, MatchResultRow } from './SearchResultItems'
+import { SearchResultsPane } from './SearchResultsPane'
 import { translate } from '@/i18n/i18n'
 
 const SEARCH_DEBOUNCE_MS = 300
 const SEARCH_MAX_RESULTS = 2000
-const SEARCH_VIRTUAL_OVERSCAN = 12
 const EMPTY_COLLAPSED_FILES = new Set<string>()
 
 export default function Search(): React.JSX.Element {
@@ -35,6 +33,7 @@ export default function Search(): React.JSX.Element {
   const fileSearchLoading = searchState?.loading ?? false
   const fileSearchCollapsedFiles = searchState?.collapsedFiles ?? EMPTY_COLLAPSED_FILES
   const fileSearchSeedRequestId = searchState?.seedRequestId
+  const fileSearchFocusRequestId = searchState?.focusRequestId
 
   const updateFileSearchState = useAppStore((s) => s.updateFileSearchState)
   const consumeFileSearchSeedRequest = useAppStore((s) => s.consumeFileSearchSeedRequest)
@@ -164,38 +163,6 @@ export default function Search(): React.JSX.Element {
     [deferredSearchResults, fileSearchCollapsedFiles, fileSearchQuery, worktreePath]
   )
 
-  const virtualizer = useVirtualizer({
-    count: searchRows.length,
-    getScrollElement: () => resultsScrollRef.current,
-    estimateSize: (index) => {
-      const row = searchRows[index]
-      if (!row) {
-        return 20
-      }
-      // Why: file rows include pt-1.5 (6 px) for inter-group spacing, so
-      // their estimate is taller than match rows.
-      if (row.type === 'file') {
-        return 28
-      }
-      return 20
-    },
-    // Why: paddingEnd adds visible breathing room after the last result row.
-    // paddingStart is unnecessary because each file row already includes
-    // pt-1.5 for inter-group spacing (which also covers the first row).
-    paddingEnd: 8,
-    overscan: SEARCH_VIRTUAL_OVERSCAN,
-    getItemKey: (index) => {
-      const row = searchRows[index]
-      if (!row) {
-        return `missing:${index}`
-      }
-      if (row.type === 'file') {
-        return `file:${row.fileResult.filePath}`
-      }
-      return `match:${row.fileResult.filePath}:${row.match.line}:${row.match.column}:${row.matchIndex}`
-    }
-  })
-
   // Execute search with debounce — reads fresh state inside setTimeout
   // to avoid stale closures when options change during debounce
   const executeSearch = useCallback(
@@ -282,6 +249,13 @@ export default function Search(): React.JSX.Element {
     scheduleSeededInputSelection
   ])
 
+  useEffect(() => {
+    if (!activeWorktreeId || fileSearchFocusRequestId === undefined) {
+      return
+    }
+    inputRef.current?.focus()
+  }, [activeWorktreeId, fileSearchFocusRequestId])
+
   const handleClearSearch = useCallback(() => {
     cancelPendingSearch()
     clearActiveSearch()
@@ -339,7 +313,11 @@ export default function Search(): React.JSX.Element {
   if (!activeWorktreeId) {
     return (
       <div className="flex items-center justify-center h-full text-muted-foreground text-xs">
-        {translate("auto.components.right.sidebar.Search.98c8435e36", "Select a workspace to search")}</div>
+        {translate(
+          'auto.components.right.sidebar.Search.98c8435e36',
+          'Select a workspace to search'
+        )}
+      </div>
     )
   }
 
@@ -381,68 +359,16 @@ export default function Search(): React.JSX.Element {
         }}
       />
 
-      {/* Why: the summary is rendered outside the virtualizer so it stays
-         pinned at the top while the user scrolls through results. */}
-      {deferredSearchResults && searchRows.length > 0 && (
-        <div className="px-2 py-1 text-[10px] text-muted-foreground border-b border-border">
-          {deferredSearchResults.totalMatches} {translate("auto.components.right.sidebar.Search.6aeda362ed", "result")}{deferredSearchResults.totalMatches !== 1 ? 's' : ''} {translate("auto.components.right.sidebar.Search.4107975b3a", "in")}{' '}
-          {deferredSearchResults.files.length} {translate("auto.components.right.sidebar.Search.0b8104eaf2", "file")}{deferredSearchResults.files.length !== 1 ? 's' : ''}
-          {deferredSearchResults.truncated && translate("auto.components.right.sidebar.Search.dcc294f28d", "(results truncated)")}
-        </div>
-      )}
-
-      <div ref={resultsScrollRef} className="flex-1 min-h-0 overflow-y-auto scrollbar-sleek">
-        {searchRows.length > 0 && (
-          <div
-            className="relative w-full"
-            style={{
-              height: virtualizer.getTotalSize()
-            }}
-          >
-            {virtualizer.getVirtualItems().map((virtualRow) => {
-              const row = searchRows[virtualRow.index]
-              if (!row) {
-                return null
-              }
-
-              return (
-                <div
-                  key={virtualRow.key}
-                  className="absolute left-0 top-0 w-full"
-                  style={{
-                    transform: `translateY(${virtualRow.start}px)`
-                  }}
-                >
-                  {row.type === 'file' && (
-                    <FileResultRow
-                      fileResult={row.fileResult}
-                      collapsed={row.collapsed}
-                      onToggleCollapse={() => toggleActiveCollapsedFile(row.fileResult.filePath)}
-                    />
-                  )}
-                  {row.type === 'match' && (
-                    <MatchResultRow
-                      match={row.match}
-                      relativePath={row.fileResult.relativePath}
-                      onClick={() => handleMatchClick(row.fileResult, row.match)}
-                    />
-                  )}
-                </div>
-              )
-            })}
-          </div>
-        )}
-
-        {!fileSearchResults && fileSearchQuery && !fileSearchLoading && (
-          <div className="flex items-center justify-center h-32 text-muted-foreground text-xs">
-            {translate("auto.components.right.sidebar.Search.d56d140747", "Press Enter to search")}</div>
-        )}
-
-        {!fileSearchQuery && (
-          <div className="flex items-center justify-center h-32 text-muted-foreground text-xs">
-            {translate("auto.components.right.sidebar.Search.1abfb25a66", "Type to search in files")}</div>
-        )}
-      </div>
+      <SearchResultsPane
+        results={deferredSearchResults}
+        hasCommittedResults={fileSearchResults !== null}
+        query={fileSearchQuery}
+        loading={fileSearchLoading}
+        rows={searchRows}
+        scrollRef={resultsScrollRef}
+        onToggleCollapsedFile={toggleActiveCollapsedFile}
+        onMatchClick={handleMatchClick}
+      />
     </div>
   )
 }

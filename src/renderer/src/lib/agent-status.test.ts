@@ -10,6 +10,7 @@ import {
   getAgentLabel,
   isGeminiTerminalTitle,
   isClaudeAgent,
+  isClaudeManagementTitle,
   normalizeTerminalTitle,
   isExplicitAgentStatusFresh,
   mapAgentStatusStateToVisualStatus,
@@ -168,6 +169,22 @@ describe('detectAgentStatusFromTitle', () => {
     expect(detectAgentStatusFromTitle('OpenClaude running')).toBe('working')
     expect(detectAgentStatusFromTitle('OpenClaude - action required')).toBe('permission')
     expect(detectAgentStatusFromTitle('⠋ OpenClaude')).toBe('working')
+  })
+
+  it('excludes the exact Claude agents management title', () => {
+    expect(detectAgentStatusFromTitle('claude agents')).toBeNull()
+    expect(detectAgentStatusFromTitle('  Claude Agents  ')).toBeNull()
+    expect(detectAgentStatusFromTitle('claude.exe agents')).toBeNull()
+    expect(detectAgentStatusFromTitle('Claude.CMD agents')).toBeNull()
+    expect(detectAgentStatusFromTitle('claude.bat agents')).toBeNull()
+    expect(detectAgentStatusFromTitle('Claude.PS1 agents')).toBeNull()
+    expect(
+      detectAgentStatusFromTitle('C:\\Users\\dev\\AppData\\Roaming\\npm\\claude.cmd agents')
+    ).toBeNull()
+    expect(
+      detectAgentStatusFromTitle('"C:\\Users\\dev\\AppData\\Roaming\\npm\\claude.cmd" agents')
+    ).toBeNull()
+    expect(detectAgentStatusFromTitle('claude agents working')).toBe('working')
   })
 
   it('detects Pi idle titles', () => {
@@ -409,6 +426,10 @@ describe('getAgentLabel', () => {
     expect(getAgentLabel('Hermes ready')).toBe('Hermes')
   })
 
+  it('does not label the Claude agents management title', () => {
+    expect(getAgentLabel('claude agents')).toBeNull()
+  })
+
   it('labels GitHub Copilot CLI', () => {
     expect(getAgentLabel('copilot working')).toBe('GitHub Copilot')
     expect(getAgentLabel('copilot idle')).toBe('GitHub Copilot')
@@ -451,6 +472,21 @@ describe('isClaudeAgent', () => {
   it('does not classify non-prefix Claude mentions as Claude agent titles', () => {
     expect(isClaudeAgent('ask claude later')).toBe(false)
     expect(getAgentLabel('ask claude later')).toBeNull()
+  })
+
+  it('does not classify the Claude agents management title as a Claude agent', () => {
+    expect(isClaudeManagementTitle('  Claude Agents  ')).toBe(true)
+    expect(isClaudeManagementTitle('claude.exe agents')).toBe(true)
+    expect(isClaudeManagementTitle('claude.cmd agents')).toBe(true)
+    expect(isClaudeManagementTitle('claude.bat agents')).toBe(true)
+    expect(isClaudeManagementTitle('claude.ps1 agents')).toBe(true)
+    expect(
+      isClaudeManagementTitle('C:\\Users\\dev\\AppData\\Roaming\\npm\\claude.cmd agents')
+    ).toBe(true)
+    expect(
+      isClaudeManagementTitle('"C:\\Users\\dev\\AppData\\Roaming\\npm\\claude.cmd" agents')
+    ).toBe(true)
+    expect(isClaudeAgent('claude agents')).toBe(false)
   })
 })
 

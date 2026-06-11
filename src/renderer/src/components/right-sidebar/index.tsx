@@ -1,5 +1,6 @@
+/* eslint-disable max-lines -- Why: the right sidebar owns activity-bar visibility, routing, and resize behavior as one interaction surface; splitting the tab table away would make hidden-tab fallbacks harder to audit. */
 import React, { useEffect, useMemo, useState } from 'react'
-import { Plug, Files, Search, GitBranch, ListChecks, PanelRight } from 'lucide-react'
+import { Plug, Files, GitBranch, ListChecks, PanelRight } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { useRepoById } from '@/store/selectors'
 import { cn } from '@/lib/utils'
@@ -38,6 +39,8 @@ import {
 import { translate } from '@/i18n/i18n'
 import { RightSidebarPanelContent } from './right-sidebar-panel-content'
 import { useMeasuredWidth } from './right-sidebar-measured-width'
+import { normalizeRightSidebarRoute } from '@/store/right-sidebar-route'
+import { AgentSessionHistoryIcon } from './agent-session-history-icon'
 
 const ACTIVITY_BAR_SIDE_WIDTH = 40
 
@@ -45,7 +48,6 @@ const isWindows = typeof navigator !== 'undefined' && navigator.userAgent.includ
 function RightSidebarInner(): React.JSX.Element {
   const rightSidebarShortcut = useShortcutLabel('sidebar.right.toggle')
   const explorerShortcut = useShortcutLabel('sidebar.explorer.toggle')
-  const searchShortcut = useShortcutLabel('sidebar.search.toggle')
   const sourceControlShortcut = useShortcutLabel('sidebar.sourceControl.toggle')
   const checksShortcut = useShortcutLabel('sidebar.checks.toggle')
   const portsShortcut = useShortcutLabel('sidebar.ports.toggle')
@@ -54,6 +56,7 @@ function RightSidebarInner(): React.JSX.Element {
   const setRightSidebarWidth = useAppStore((s) => s.setRightSidebarWidth)
   const rightSidebarTab = useAppStore((s) => s.rightSidebarTab)
   const setRightSidebarTab = useAppStore((s) => s.setRightSidebarTab)
+  const showRightSidebarFiles = useAppStore((s) => s.showRightSidebarFiles)
   const toggleRightSidebar = useAppStore((s) => s.toggleRightSidebar)
   const checksStatus = useAppStore((s) => (s.rightSidebarOpen ? getActiveChecksStatus(s) : null))
   const activityBarPosition = useAppStore((s) => s.activityBarPosition)
@@ -80,10 +83,10 @@ function RightSidebarInner(): React.JSX.Element {
         shortcut: explorerShortcut === 'Unassigned' ? '' : explorerShortcut
       },
       {
-        id: 'search',
-        icon: Search,
-        title: translate('auto.components.right.sidebar.index.06219e4cb1', 'Search'),
-        shortcut: searchShortcut === 'Unassigned' ? '' : searchShortcut
+        id: 'vault',
+        icon: AgentSessionHistoryIcon,
+        title: translate('auto.components.right.sidebar.index.aiVaultSessionHistory', 'Agents'),
+        shortcut: ''
       },
       {
         id: 'source-control',
@@ -107,7 +110,7 @@ function RightSidebarInner(): React.JSX.Element {
         sshOnly: true
       }
     ],
-    [checksShortcut, explorerShortcut, portsShortcut, searchShortcut, sourceControlShortcut]
+    [checksShortcut, explorerShortcut, portsShortcut, sourceControlShortcut]
   )
 
   const visibleItems = useMemo(
@@ -117,8 +120,9 @@ function RightSidebarInner(): React.JSX.Element {
 
   // If the active tab is hidden (e.g. switched from a git repo to a folder),
   // fall back to the first visible tab.
-  const effectiveTab = visibleItems.some((item) => item.id === rightSidebarTab)
-    ? rightSidebarTab
+  const normalizedActiveTab = normalizeRightSidebarRoute(rightSidebarTab).rightSidebarTab
+  const effectiveTab = visibleItems.some((item) => item.id === normalizedActiveTab)
+    ? normalizedActiveTab
     : visibleItems[0].id
   useEffect(() => {
     if (effectiveTab !== rightSidebarTab) {
@@ -127,6 +131,13 @@ function RightSidebarInner(): React.JSX.Element {
       setRightSidebarTab(effectiveTab)
     }
   }, [effectiveTab, rightSidebarTab, setRightSidebarTab])
+  const selectActivityTab = (tab: typeof effectiveTab): void => {
+    if (tab === 'explorer') {
+      showRightSidebarFiles()
+      return
+    }
+    setRightSidebarTab(tab)
+  }
 
   const activityBarSideWidth = activityBarPosition === 'side' ? ACTIVITY_BAR_SIDE_WIDTH : 0
   const windowWidth = useWindowWidth()
@@ -174,7 +185,7 @@ function RightSidebarInner(): React.JSX.Element {
       key={item.id}
       item={item}
       active={effectiveTab === item.id}
-      onClick={() => setRightSidebarTab(item.id)}
+      onClick={() => selectActivityTab(item.id)}
       layout="side"
       statusIndicator={item.id === 'checks' ? checksStatus : null}
     />
@@ -251,7 +262,7 @@ function RightSidebarInner(): React.JSX.Element {
                               key={item.id}
                               item={item}
                               active={effectiveTab === item.id}
-                              onClick={() => setRightSidebarTab(item.id)}
+                              onClick={() => selectActivityTab(item.id)}
                               layout="top"
                               statusIndicator={item.id === 'checks' ? checksStatus : null}
                             />
@@ -261,7 +272,7 @@ function RightSidebarInner(): React.JSX.Element {
                           <TopActivityOverflowMenu
                             items={topActivityLayout.overflowItems}
                             activeTab={effectiveTab}
-                            onSelect={setRightSidebarTab}
+                            onSelect={selectActivityTab}
                             checksStatus={checksStatus}
                           />
                         )}
@@ -307,7 +318,7 @@ function RightSidebarInner(): React.JSX.Element {
                           key={item.id}
                           item={item}
                           active={effectiveTab === item.id}
-                          onClick={() => setRightSidebarTab(item.id)}
+                          onClick={() => selectActivityTab(item.id)}
                           layout="top"
                           statusIndicator={item.id === 'checks' ? checksStatus : null}
                         />
@@ -317,7 +328,7 @@ function RightSidebarInner(): React.JSX.Element {
                       <TopActivityOverflowMenu
                         items={topActivityLayout.overflowItems}
                         activeTab={effectiveTab}
-                        onSelect={setRightSidebarTab}
+                        onSelect={selectActivityTab}
                         checksStatus={checksStatus}
                       />
                     )}

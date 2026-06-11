@@ -398,9 +398,7 @@ export default function MonacoEditor({
             return
           }
           const state = useAppStore.getState()
-          state.seedFileSearchQuery(worktreeId, query)
-          state.setRightSidebarTab('search')
-          state.setRightSidebarOpen(true)
+          state.showRightSidebarSearch({ query })
         }
       })
 

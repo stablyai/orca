@@ -164,6 +164,61 @@ describe('CommitMessageAiPane', () => {
     expect(getAgentCatalogForAction('fixChecks', null).map((agent) => agent.id)).toContain('aider')
   })
 
+  it('explains which agents are supported for text-generation recipes', () => {
+    const markup = renderPane(
+      buildSettings({
+        sourceControlAi: {
+          enabled: true,
+          agentId: null,
+          selectedModelByAgent: {},
+          selectedModelByAgentByHost: {},
+          discoveredModelsByAgent: {},
+          discoveredModelsByAgentByHost: {},
+          selectedThinkingByModel: {},
+          instructionsByOperation: {},
+          customAgentCommand: '',
+          actions: {},
+          prCreationDefaults: {},
+          launchActionDefaults: {}
+        }
+      })
+    )
+
+    expect(markup).toContain('Supported agents for this recipe:')
+    expect(markup).toContain('Claude, Codex')
+    expect(markup).toContain('Custom command')
+  })
+
+  it('marks an unsupported saved text-recipe agent with the supported alternatives', () => {
+    const markup = renderPane(
+      buildSettings({
+        sourceControlAi: {
+          enabled: true,
+          agentId: null,
+          selectedModelByAgent: {},
+          selectedModelByAgentByHost: {},
+          discoveredModelsByAgent: {},
+          discoveredModelsByAgentByHost: {},
+          selectedThinkingByModel: {},
+          instructionsByOperation: {},
+          customAgentCommand: '',
+          actions: {
+            commitMessage: {
+              agentId: 'aider'
+            }
+          },
+          prCreationDefaults: {},
+          launchActionDefaults: {}
+        }
+      })
+    )
+
+    expect(markup).toContain(
+      'Aider cannot run this text-generation recipe. Pick one of the supported agents below.'
+    )
+    expect(markup).toContain('Supported agents for this recipe:')
+  })
+
   it('keeps action agent selectors constrained for long labels', () => {
     const markup = renderPane(
       buildSettings({

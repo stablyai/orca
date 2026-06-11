@@ -20,7 +20,7 @@ export function ScrollToCurrentWorkspaceToolbarButton(): React.JSX.Element {
           onClick={requestScrollToCurrentWorkspaceReveal}
           className="text-muted-foreground"
         >
-          <Crosshair className="size-3.5" />
+          <Crosshair className="size-4" />
         </Button>
       </TooltipTrigger>
       <TooltipContent side="top" sideOffset={4}>

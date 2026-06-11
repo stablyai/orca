@@ -61,7 +61,7 @@ import { translate } from '@/i18n/i18n'
 
 type LinearIssueWorkspaceProps = {
   issue: LinearIssue | null
-  onUse: (issue: LinearIssue, renderedText?: string) => void
+  onUse: (issue: LinearIssue) => void
   onOpenIssue: (issue: LinearIssue) => void
   onClose: () => void
   variant?: 'sheet' | 'page'
@@ -624,8 +624,8 @@ export default function LinearIssueWorkspace({
     if (!displayed) {
       return
     }
-    onUse(displayed, buildLinearIssueContextSnapshot(displayed, comments))
-  }, [comments, displayed, onUse])
+    onUse(displayed)
+  }, [displayed, onUse])
 
   const handleCommentAdded = useCallback((comment: LinearLocalComment) => {
     const newComment: LinearComment = {

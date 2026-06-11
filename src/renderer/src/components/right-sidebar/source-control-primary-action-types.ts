@@ -62,6 +62,9 @@ export type PrimaryActionInputs = {
   // carries commits beyond the compare base. Undefined preserves the old
   // behavior while the branch compare request is still unavailable/loading.
   branchCommitsAhead?: number
+  // Why: detached HEAD can look like an unpublished branch from upstream
+  // status alone, but it has no branch ref that Publish Branch can push.
+  hasCurrentBranch?: boolean
 }
 
 export const PRIMARY_LABEL_BY_KIND: Record<Exclude<PrimaryActionKind, 'commit'>, string> = {

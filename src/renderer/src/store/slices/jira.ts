@@ -69,6 +69,15 @@ function getSelectedSiteId(status: JiraConnectionStatus): JiraSiteSelection | nu
   return status.selectedSiteId ?? status.activeSiteId ?? null
 }
 
+function shouldRefreshStatusAfterRead(
+  siteId: JiraSiteSelection | null | undefined,
+  status: JiraConnectionStatus
+): boolean {
+  // Why: 'all' reads can hide per-site decrypt failures, and a visible
+  // credential error may have been cleared by a successful credential read.
+  return siteId === 'all' || status.credentialError !== undefined
+}
+
 function clearJiraInflight(): void {
   inflightIssueRequests.clear()
   inflightSearchRequests.clear()
@@ -324,7 +333,9 @@ export const createJiraSlice: StateCreator<AppState, [], [], JiraSlice> = (set, 
           isIntegrationCredentialDecryptionError(error) &&
           canWriteJiraReadResult(contextKey, requestMutationGeneration, get().settings)
         ) {
-          void get().checkJiraConnection()
+          if (!shouldRefreshStatusAfterRead(siteId, get().jiraStatus)) {
+            void get().checkJiraConnection()
+          }
         } else if (
           looksLikeAuthError(error) &&
           canWriteJiraReadResult(contextKey, requestMutationGeneration, get().settings)
@@ -336,6 +347,12 @@ export const createJiraSlice: StateCreator<AppState, [], [], JiraSlice> = (set, 
       .finally(() => {
         if (inflightIssueRequests.get(issueCacheKey) === entry) {
           inflightIssueRequests.delete(issueCacheKey)
+        }
+        if (
+          shouldRefreshStatusAfterRead(siteId, get().jiraStatus) &&
+          canWriteJiraReadResult(contextKey, requestMutationGeneration, get().settings)
+        ) {
+          void get().checkJiraConnection()
         }
       })
     entry = { promise, contextKey, mutationGeneration: requestMutationGeneration }
@@ -382,7 +399,9 @@ export const createJiraSlice: StateCreator<AppState, [], [], JiraSlice> = (set, 
           isIntegrationCredentialDecryptionError(error) &&
           canWriteJiraReadResult(contextKey, requestMutationGeneration, get().settings)
         ) {
-          void get().checkJiraConnection()
+          if (!shouldRefreshStatusAfterRead(siteId, get().jiraStatus)) {
+            void get().checkJiraConnection()
+          }
         } else if (
           looksLikeAuthError(error) &&
           canWriteJiraReadResult(contextKey, requestMutationGeneration, get().settings)
@@ -394,6 +413,12 @@ export const createJiraSlice: StateCreator<AppState, [], [], JiraSlice> = (set, 
       .finally(() => {
         if (inflightSearchRequests.get(cacheKey) === entry) {
           inflightSearchRequests.delete(cacheKey)
+        }
+        if (
+          shouldRefreshStatusAfterRead(siteId, get().jiraStatus) &&
+          canWriteJiraReadResult(contextKey, requestMutationGeneration, get().settings)
+        ) {
+          void get().checkJiraConnection()
         }
       })
     entry = { promise, contextKey, mutationGeneration: requestMutationGeneration }
@@ -440,7 +465,9 @@ export const createJiraSlice: StateCreator<AppState, [], [], JiraSlice> = (set, 
           isIntegrationCredentialDecryptionError(error) &&
           canWriteJiraReadResult(contextKey, requestMutationGeneration, get().settings)
         ) {
-          void get().checkJiraConnection()
+          if (!shouldRefreshStatusAfterRead(siteId, get().jiraStatus)) {
+            void get().checkJiraConnection()
+          }
         } else if (
           looksLikeAuthError(error) &&
           canWriteJiraReadResult(contextKey, requestMutationGeneration, get().settings)
@@ -452,6 +479,12 @@ export const createJiraSlice: StateCreator<AppState, [], [], JiraSlice> = (set, 
       .finally(() => {
         if (inflightListRequests.get(cacheKey) === entry) {
           inflightListRequests.delete(cacheKey)
+        }
+        if (
+          shouldRefreshStatusAfterRead(siteId, get().jiraStatus) &&
+          canWriteJiraReadResult(contextKey, requestMutationGeneration, get().settings)
+        ) {
+          void get().checkJiraConnection()
         }
       })
     entry = { promise, contextKey, mutationGeneration: requestMutationGeneration }

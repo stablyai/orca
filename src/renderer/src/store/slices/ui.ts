@@ -1,6 +1,7 @@
 /* eslint-disable max-lines */
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
+import { normalizeRightSidebarRoute } from '../right-sidebar-route'
 import {
   findPrevLiveNonTaskStackHistoryIndex,
   findPrevLiveWorktreeHistoryIndex
@@ -241,21 +242,6 @@ function migrateStatusBarItems(items: readonly string[] | undefined): StatusBarI
 
 const DEFAULT_ON_PORTS_STATUS_BAR_ITEM: StatusBarItem = 'ports'
 const DEFAULT_ON_KIMI_STATUS_BAR_ITEM: StatusBarItem = 'kimi'
-
-function normalizePersistedRightSidebarTab(
-  tab: PersistedUIState['rightSidebarTab'] | unknown
-): PersistedUIState['rightSidebarTab'] {
-  if (
-    tab === 'explorer' ||
-    tab === 'search' ||
-    tab === 'source-control' ||
-    tab === 'checks' ||
-    tab === 'ports'
-  ) {
-    return tab
-  }
-  return 'explorer'
-}
 
 const MIN_SIDEBAR_WIDTH = 220
 const MAX_LEFT_SIDEBAR_WIDTH = 500
@@ -617,11 +603,6 @@ export type UISlice = {
       title: string
       url: string
       linearIdentifier?: string
-      linkedContext?: {
-        provider: TaskProvider
-        version: 1
-        renderedText: string
-      }
     } | null
     agent: TuiAgent
     linkedIssue: string
@@ -1983,6 +1964,10 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
           })
           .catch(console.error)
       }
+      const rightSidebarRoute = normalizeRightSidebarRoute(
+        ui.rightSidebarTab,
+        ui.rightSidebarExplorerView
+      )
       return {
         // Why: persisted UI data comes from disk and may be stale, corrupted,
         // or manually edited. Clamp widths during hydration so invalid values
@@ -1999,7 +1984,8 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
           MAX_RIGHT_SIDEBAR_WIDTH
         ),
         rightSidebarOpen: typeof ui.rightSidebarOpen === 'boolean' ? ui.rightSidebarOpen : true,
-        rightSidebarTab: normalizePersistedRightSidebarTab(ui.rightSidebarTab),
+        rightSidebarTab: rightSidebarRoute.rightSidebarTab,
+        rightSidebarExplorerView: rightSidebarRoute.rightSidebarExplorerView,
         groupBy: (ui.groupBy as UISlice['groupBy'] | 'parent') === 'parent' ? 'repo' : ui.groupBy,
         sortBy,
         // Why: main-process getUI() already normalized this to a valid value

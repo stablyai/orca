@@ -22,9 +22,11 @@ import {
   resolveSourceControlAiForOperation
 } from '../../../../shared/source-control-ai'
 import type { SourceControlAiPrCreationDefaults } from '../../../../shared/source-control-ai-types'
+import type {
+  PullRequestFieldName,
+  PullRequestFieldRevisions
+} from '@/store/slices/pull-request-generation'
 
-type PullRequestFieldName = 'base' | 'title' | 'body' | 'draft'
-export type PullRequestFieldRevisions = Record<PullRequestFieldName, number>
 type PullRequestDraftFields = {
   base: string
   title: string
@@ -230,6 +232,18 @@ export function useCreatePullRequestDialogFields({
     const initializationKey = `${repoId}:${worktreeId ?? worktreePath}:${branch}`
     if (initializedFromEligibilityRef.current === initializationKey) {
       return
+    }
+    if (!hasExternalGeneration) {
+      // Why: a branch/context switch invalidates any local AI request; cancel
+      // it before reseeding fields so stale generated text cannot land later.
+      generationRequestIdRef.current += 1
+      const requestContext = generationSeedRef.current?.context
+      if (generateInFlightRef.current && requestContext?.worktreePath) {
+        void cancelRuntimeGeneratePullRequestFields(requestContext)
+      }
+      generateInFlightRef.current = false
+      generationSeedRef.current = null
+      setGenerating(false)
     }
     // Why: eligibility refreshes while the dialog is open; only seed fields
     // once per branch so late refreshes do not overwrite user edits.

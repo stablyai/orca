@@ -32,6 +32,10 @@ import {
   setWorktreeNavActivator,
   setWorktreeNavViewActivator
 } from '@/store/slices/worktree-nav-history'
+import {
+  resolveTuiAgentLaunchArgs,
+  resolveTuiAgentLaunchEnv
+} from '../../../shared/tui-agent-launch-defaults'
 import { isTuiAgent } from '../../../shared/tui-agent-config'
 import { resumeSleepingAgentSessionsForWorktree } from '@/lib/resume-sleeping-agent-session'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
@@ -200,6 +204,8 @@ function buildCreatedAgentReopenStartup(worktree: Worktree): WorktreeStartupPayl
     agent,
     prompt: '',
     cmdOverrides: useAppStore.getState().settings?.agentCmdOverrides ?? {},
+    agentArgs: resolveTuiAgentLaunchArgs(agent, useAppStore.getState().settings?.agentDefaultArgs),
+    agentEnv: resolveTuiAgentLaunchEnv(agent, useAppStore.getState().settings?.agentDefaultEnv),
     platform: CLIENT_PLATFORM,
     allowEmptyPromptLaunch: true
   })

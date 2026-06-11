@@ -22,6 +22,10 @@ import { normalizeTaskProviderSettings } from '../../../../shared/task-providers
 import { normalizeOpenInApplications } from '../../../../shared/open-in-applications'
 import { createSettingsSearchState, type SettingsSearchState } from './settings-search-state'
 import { normalizeDisabledTuiAgents } from '../../../../shared/tui-agent-selection'
+import {
+  normalizeTuiAgentArgsRecord,
+  normalizeTuiAgentEnvRecord
+} from '../../../../shared/tui-agent-launch-defaults'
 import { bumpProviderRuntimeSessionGeneration } from '@/lib/provider-runtime-context'
 import { normalizeUiLanguage } from '../../../../shared/ui-language'
 import { translate } from '@/i18n/i18n'
@@ -314,6 +318,14 @@ export const createSettingsSlice: StateCreator<AppState, [], [], SettingsSlice> 
       }
       if ('disabledTuiAgents' in updates) {
         sanitizedUpdates.disabledTuiAgents = normalizeDisabledTuiAgents(updates.disabledTuiAgents)
+      }
+      if ('agentDefaultArgs' in updates) {
+        sanitizedUpdates.agentDefaultArgs = normalizeTuiAgentArgsRecord(updates.agentDefaultArgs)
+        sanitizedUpdates.agentYoloDefaultsMigrated = true
+      }
+      if ('agentDefaultEnv' in updates) {
+        sanitizedUpdates.agentDefaultEnv = normalizeTuiAgentEnvRecord(updates.agentDefaultEnv)
+        sanitizedUpdates.agentYoloDefaultsMigrated = true
       }
       if ('uiLanguage' in updates) {
         sanitizedUpdates.uiLanguage = normalizeUiLanguage(updates.uiLanguage)

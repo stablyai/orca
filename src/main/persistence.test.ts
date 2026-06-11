@@ -2980,6 +2980,82 @@ describe('Store', () => {
     expect(updated.disabledTuiAgents).toEqual(['gemini', 'opencode'])
   })
 
+  it('enables Claude Agent Teams by default for fresh installs', async () => {
+    const store = await createStore()
+
+    expect(store.getSettings().disabledTuiAgents).toEqual([])
+    expect(store.getSettings().claudeAgentTeamsDefaultDisabledMigrated).toBe(true)
+  })
+
+  it('migrates yolo default args onto untouched agent launch settings', async () => {
+    writeFileSync(
+      join(testState.dir, 'orca-data.json'),
+      JSON.stringify({
+        settings: {
+          agentCmdOverrides: {}
+        }
+      })
+    )
+    const store = await createStore()
+
+    expect(store.getSettings().agentDefaultArgs).toMatchObject({
+      claude: '--dangerously-skip-permissions',
+      codex: '--dangerously-bypass-approvals-and-sandbox',
+      cursor: '--yolo'
+    })
+    expect(store.getSettings().agentDefaultEnv).toMatchObject({
+      goose: { GOOSE_MODE: 'auto' }
+    })
+    expect(store.getSettings().agentYoloDefaultsMigrated).toBe(true)
+  })
+
+  it('does not add yolo defaults for legacy agents with command overrides', async () => {
+    writeFileSync(
+      join(testState.dir, 'orca-data.json'),
+      JSON.stringify({
+        settings: {
+          agentCmdOverrides: {
+            codex: 'codex --profile work',
+            goose: 'goose'
+          }
+        }
+      })
+    )
+    const store = await createStore()
+
+    expect(store.getSettings().agentDefaultArgs?.codex).toBe('')
+    expect(store.getSettings().agentDefaultEnv?.goose).toEqual({})
+    expect(store.getSettings().agentDefaultArgs?.claude).toBe('--dangerously-skip-permissions')
+  })
+
+  it('removes unsupported TUI skip-permissions args from migrated profiles', async () => {
+    writeFileSync(
+      join(testState.dir, 'orca-data.json'),
+      JSON.stringify({
+        settings: {
+          agentYoloDefaultsMigrated: true,
+          agentDefaultArgs: {
+            opencode: '--dangerously-skip-permissions --model opencode/gpt-5',
+            kilo: '--dangerously-skip-permissions',
+            codex: '--dangerously-bypass-approvals-and-sandbox'
+          }
+        }
+      })
+    )
+    const store = await createStore()
+    store.flush()
+
+    expect(store.getSettings().agentDefaultArgs?.opencode).toBe('--model opencode/gpt-5')
+    expect(store.getSettings().agentDefaultArgs?.kilo).toBe('')
+    expect(store.getSettings().agentDefaultArgs?.codex).toBe(
+      '--dangerously-bypass-approvals-and-sandbox'
+    )
+    expect((readDataFile() as PersistedState).settings.agentDefaultArgs?.opencode).toBe(
+      '--model opencode/gpt-5'
+    )
+    expect((readDataFile() as PersistedState).settings.agentDefaultArgs?.kilo).toBe('')
+  })
+
   it('normalizes app icon on load and update', async () => {
     writeFileSync(
       join(testState.dir, 'orca-data.json'),
@@ -3338,6 +3414,38 @@ describe('Store', () => {
 
     const store = await createStore()
     expect(store.getUI().rightSidebarTab).toBe('checks')
+  })
+
+  it('preserves explicit rightSidebarExplorerView in persisted UI', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: {},
+      ui: { rightSidebarTab: 'explorer', rightSidebarExplorerView: 'search' },
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+
+    const store = await createStore()
+    expect(store.getUI().rightSidebarTab).toBe('explorer')
+    expect(store.getUI().rightSidebarExplorerView).toBe('search')
+  })
+
+  it('maps legacy persisted search tab to the Explorer search view', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: {},
+      ui: { rightSidebarTab: 'search' },
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+
+    const store = await createStore()
+    expect(store.getUI().rightSidebarTab).toBe('search')
+    expect(store.getUI().rightSidebarExplorerView).toBe('search')
   })
 
   it('normalizes invalid rightSidebarTab in persisted UI', async () => {

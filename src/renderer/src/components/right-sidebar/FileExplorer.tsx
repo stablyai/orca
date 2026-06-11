@@ -1,11 +1,14 @@
 /* eslint-disable max-lines -- Why: FileExplorer coordinates tree data, selection, drag/drop, and virtual rows; splitting it during this merge would obscure the interaction invariants. */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
+import { ArrowLeft } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { useActiveWorktree, useRepoById } from '@/store/selectors'
 import { basename, dirname } from '@/lib/path'
 import { folderRelativePathToIncludeGlob } from './file-search-include-pattern'
+import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import { shouldResetFileExplorerForVisibleWorktree } from './file-explorer-reset'
@@ -36,8 +39,46 @@ import type { TreeNode } from './file-explorer-types'
 import { useFileExplorerSelection } from './useFileExplorerSelection'
 import { useFileExplorerVisibleRowProjection } from './useFileExplorerVisibleRowProjection'
 import { translate } from '@/i18n/i18n'
+import SearchPanel from './Search'
 
-function FileExplorerInner(): React.JSX.Element {
+function ExplorerSearchSubview(): React.JSX.Element {
+  const showRightSidebarFiles = useAppStore((s) => s.showRightSidebarFiles)
+
+  return (
+    <div className="flex h-full min-h-0 flex-col">
+      <div className="flex h-8 min-h-8 items-center gap-2 border-b border-border px-2">
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-xs"
+              className="shrink-0 text-muted-foreground hover:text-foreground"
+              aria-label={translate(
+                'auto.components.right.sidebar.FileExplorer.4da4d89845',
+                'Back to Explorer'
+              )}
+              onClick={showRightSidebarFiles}
+            >
+              <ArrowLeft className="size-3" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" sideOffset={4}>
+            {translate('auto.components.right.sidebar.FileExplorer.4da4d89845', 'Back to Explorer')}
+          </TooltipContent>
+        </Tooltip>
+        <span className="min-w-0 flex-1 truncate text-xs font-medium text-foreground">
+          {translate('auto.components.right.sidebar.FileExplorer.6ed5ce817b', 'Search')}
+        </span>
+      </div>
+      <div className="min-h-0 flex-1">
+        <SearchPanel />
+      </div>
+    </div>
+  )
+}
+
+function FileExplorerFiles(): React.JSX.Element {
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
   const activeWorktree = useActiveWorktree()
   const activeRepo = useRepoById(activeWorktree?.repoId ?? null)
@@ -46,6 +87,7 @@ function FileExplorerInner(): React.JSX.Element {
   const collapseAllDirs = useAppStore((s) => s.collapseAllDirs)
   const collapseDirSubtree = useAppStore((s) => s.collapseDirSubtree)
   const toggleDir = useAppStore((s) => s.toggleDir)
+  const showRightSidebarSearch = useAppStore((s) => s.showRightSidebarSearch)
   const pendingExplorerReveal = useAppStore((s) => s.pendingExplorerReveal)
   const clearPendingExplorerReveal = useAppStore((s) => s.clearPendingExplorerReveal)
   const openFile = useAppStore((s) => s.openFile)
@@ -397,22 +439,19 @@ function FileExplorerInner(): React.JSX.Element {
     },
     [activeWorktreeId, collapseDirSubtree]
   )
-  const seedFileSearchIncludePattern = useAppStore((s) => s.seedFileSearchIncludePattern)
-  const setRightSidebarTab = useAppStore((s) => s.setRightSidebarTab)
-  const setRightSidebarOpen = useAppStore((s) => s.setRightSidebarOpen)
+  const handleOpenSearch = useCallback(() => {
+    showRightSidebarSearch()
+  }, [showRightSidebarSearch])
   const handleFindInFolder = useCallback(
     (node: TreeNode) => {
       if (!activeWorktreeId || !node.isDirectory) {
         return
       }
-      seedFileSearchIncludePattern(
-        activeWorktreeId,
-        folderRelativePathToIncludeGlob(node.relativePath)
-      )
-      setRightSidebarTab('search')
-      setRightSidebarOpen(true)
+      showRightSidebarSearch({
+        includePattern: folderRelativePathToIncludeGlob(node.relativePath)
+      })
     },
-    [activeWorktreeId, seedFileSearchIncludePattern, setRightSidebarTab, setRightSidebarOpen]
+    [activeWorktreeId, showRightSidebarSearch]
   )
 
   const handleAddFolderAsProject = useCallback(
@@ -470,6 +509,7 @@ function FileExplorerInner(): React.JSX.Element {
           onToggleGitIgnoredFiles={toggleGitIgnoredFiles}
           showDotfiles={showDotfiles}
           onToggleDotfiles={handleToggleDotfiles}
+          onSearch={handleOpenSearch}
         />
         <ScrollArea
           className={cn(
@@ -575,4 +615,11 @@ function FileExplorerInner(): React.JSX.Element {
   )
 }
 
-export default React.memo(FileExplorerInner)
+const FileExplorerFilesMemo = React.memo(FileExplorerFiles)
+
+function FileExplorer(): React.JSX.Element {
+  const explorerView = useAppStore((s) => s.rightSidebarExplorerView)
+  return explorerView === 'search' ? <ExplorerSearchSubview /> : <FileExplorerFilesMemo />
+}
+
+export default React.memo(FileExplorer)

@@ -101,4 +101,20 @@ describe('deriveWorktreeCardStatus', () => {
 
     expect(status).toBe('done')
   })
+
+  it('stays active when the only live terminal signal is the Claude agents screen', () => {
+    const status = deriveWorktreeCardStatus({
+      tabs: [makeTerminalTab('claude agents')],
+      browserTabs: [],
+      worktreeAgentEntries: [],
+      runtimePaneTitlesByTabId: {
+        'tab-1': {
+          1: 'claude agents'
+        }
+      },
+      now: 1_000
+    })
+
+    expect(status).toBe('active')
+  })
 })
