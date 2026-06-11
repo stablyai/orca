@@ -156,6 +156,17 @@ export const ZH_VALUE_OVERRIDES = {
     '自您上次批准以来已发生变化。运行前请重新评审',
   'Run the weekly dependency audit and summarize risky changes.':
     '每周运行依赖项审计并总结有风险的更改。',
+  'This turns on a process-wide Electron networking switch after restart. Use it for corporate VPNs or proxies that reject HTTP/2 update downloads.':
+    '这将在重启后启用进程级 Electron 网络开关。适用于拒绝 HTTP/2 更新下载的企业 VPN 或代理。',
+  'Use only when a corporate VPN or proxy breaks update downloads with HTTP/2 protocol errors. It affects all Electron networking after restart.':
+    '仅当企业 VPN 或代理因 HTTP/2 协议错误而中断更新下载时使用。重启后会影响所有 Electron 网络。',
+  'Use HTTP/1.1 for Electron networking when HTTP/2 fails behind a proxy.':
+    '当 HTTP/2 在代理后面失败时，使用 HTTP/1.1 进行 Electron 网络。',
+  'Proxy Bypass Rules': '代理绕过规则',
+  'Hosts that should bypass the configured HTTP proxy.': '应绕过配置的 HTTP 代理的主机。',
+  'Leave empty to use system proxy settings and inherited proxy environment variables.':
+    '留空以使用系统代理设置和继承的代理环境变量。',
+  'Proxy Command': '代理命令',
   "Give agents direct access to Orca's browser so they can test pages, capture screenshots, and act on what they see.":
     '让代理直接访问 Orca 的浏览器，以便测试页面、捕获屏幕截图并根据所见内容执行操作。',
   'X finishes, send it the review task.”': 'X 完成后，把评审任务发给它。”',
@@ -176,6 +187,17 @@ export const ZH_VALUE_OVERRIDES = {
     '每个已连接的 Linear 工作区都有一个由活动运行时存储的密钥。全权限密钥可覆盖密钥所有者可访问的所有团队；受限密钥可随时更换。',
   'Show Linear in the Tasks source picker and sidebar shortcuts.':
     '在任务源选择器和侧边栏快捷方式中显示 Linear。',
+  'Local project, Git repo, or folder with many repos':
+    '本地项目、Git repo 或包含多个 repos 的文件夹',
+  'Staged Changes': '已暂存的更改',
+  Changes: '更改',
+  'Untracked Files': '未跟踪文件',
+  'Split Up': '向上拆分',
+  'Split Down': '向下拆分',
+  'Split Left': '向左拆分',
+  'Split Right': '向右拆分',
+  'Split Terminal Down': '向下拆分 Terminal',
+  'Split Terminal Right': '向右拆分 Terminal',
   'Optional account switching for Claude while preserving shared chat context.':
     'Claude 的可选账户切换，同时保留共享聊天上下文。',
   'Countdown timer showing time until prompt cache expires (Claude agents).':

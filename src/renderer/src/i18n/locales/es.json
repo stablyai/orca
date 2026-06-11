@@ -137,8 +137,8 @@
             "8dfcb7a351": "Las capturas de pantalla de selección no están disponibles en el cliente web.",
             "31bea294d5": "El modo Grab no está disponible en el cliente web.",
             "b8a1618172": "La generación de detalles de solicitudes de extracción no está disponible en el cliente web.",
-            "e57c82d276": "La confirmación del descubrimiento del modelo de mensaje no está disponible en el cliente web.",
-            "9fc90740b6": "La generación de mensajes de confirmación no está disponible en el cliente web.",
+            "e57c82d276": "La Commit del descubrimiento del modelo de mensaje no está disponible en el cliente web.",
+            "9fc90740b6": "La generación de mensajes de Commit no está disponible en el cliente web.",
             "52bee9d8a0": "Se ignoraron los atajos personalizados en conflicto: {{value0}}.",
             "32f15bdb0f": "Se ignoró la plataforma desconocida \"{{value0}}\".",
             "0a69fcd8bc": "plataformas debe ser un objeto con secciones darwin, linux o win32.",
@@ -169,11 +169,11 @@
         },
         "github": {
           "f129c42773": "GitHub no devolvió el nuevo comentario.",
-          "683a21264b": "La fila no tiene propietario/repositorio/número.",
+          "683a21264b": "La fila no tiene propietario/repo/número.",
           "83f9b126ad": "El tipo de problema solo se puede configurar en problemas.",
           "f963485d37": "Fila no encontrada",
           "a967f23983": "Vista del proyecto no cargada",
-          "87020f6605": "La fila no tiene propietario/repositorio/número: no se puede parchear el elemento subyacente",
+          "87020f6605": "La fila no tiene propietario/repo/número: no se puede parchear el elemento subyacente",
           "d49ef4b944": "No se pudo guardar la preferencia de fuente del problema"
         },
         "sparse": {
@@ -201,13 +201,13 @@
         },
         "worktrees": {
           "5a58e03a26": "Se eliminó \"{{value0}}\".",
-          "d1d78a7baa": "Git no pudo eliminar de forma segura la rama \"{{value0}}\"{{value1}}, por lo que Orca la mantuvo para evitar perder confirmaciones locales.",
+          "d1d78a7baa": "Git no pudo eliminar de forma segura la rama \"{{value0}}\"{{value1}}, por lo que Orca la mantuvo para evitar perder commits locales.",
           "4e6496f3d2": "{{value0}} eliminado, rama mantenida",
           "e50495aae6": "Forzar eliminación de rama",
           "889487d8bb": "Despedir",
           "f4503ca505": "Abra Configuración > Git e inténtelo de nuevo.",
           "34a03a6565": "Mantenga {{value0}} actualizado",
-          "fa9299a66f": "Su nuevo árbol de trabajo está actualizado, pero el {{value0}} local está {{value1}} {{value2}} atrasado. Las diferencias de IA pueden pasar por alto las confirmaciones recientes.",
+          "fa9299a66f": "Su nuevo árbol de trabajo está actualizado, pero el {{value0}} local está {{value1}} {{value2}} atrasado. Las diferencias de IA pueden pasar por alto las commits recientes.",
           "14bc053a47": "El local {{value0}} no se actualizó",
           "4a18052018": "El local {{value0}} está detrás de {{value1}}",
           "903b51c2ed": "Espacio de trabajo creado a partir de {{value0}}, pero Orca no pudo adelantar el {{value1}} local porque {{value2}}",
@@ -345,7 +345,7 @@
               "19c7683acf": "El agente seleccionado no está disponible en el espacio de trabajo creado.",
               "8bc45efdbc": "No se pudo resolver el jefe de relaciones públicas.",
               "agent": {
-                "ceeeb509b5": "El agente tardó demasiado en comenzar. El espacio de trabajo está listo: pegue {{value0}} cuando el agente esté inactivo."
+                "ceeeb509b5": "El Agent tardó demasiado en comenzar. El espacio de trabajo está listo: pegue {{value0}} cuando el Agent esté inactivo."
               }
             }
           }
@@ -428,7 +428,7 @@
       "sparse": {
         "preset": {
           "draft": {
-            "5915a0a1f6": "Utilice directorios relativos al repositorio, no raíz, rutas absolutas ni segmentos principales.",
+            "5915a0a1f6": "Utilice directorios relativos al repo, no raíz, rutas absolutas ni segmentos principales.",
             "efc05d1820": "Agregue al menos un directorio."
           }
         }
@@ -489,7 +489,7 @@
         "291c8ed902": "Las pestañas del navegador no están disponibles mientras un tiempo de ejecución remoto está activo",
         "f45fa2b03c": "Los perfiles del navegador no están disponibles mientras un tiempo de ejecución remoto está activo",
         "f000b2ff76": "Ningún árbol de trabajo activo",
-        "56d3ec4203": "No se pudo crear el archivo de rebajas sin título.",
+        "56d3ec4203": "No se pudo crear el archivo de markdowns sin título.",
         "f6300deb8b": "Nueva pestaña del navegador",
         "7a64b31991": "La creación de terminal local no está disponible mientras un tiempo de ejecución remoto está activo",
         "60428567b4": "La revelación de terminal local no está disponible mientras un tiempo de ejecución remoto está activo",
@@ -508,7 +508,7 @@
         "3618579df6": "Privacidad y telemetría",
         "65ec7d1968": "Acceso a la privacidad de macOS para herramientas de desarrollo lanzadas en terminales.",
         "d91ae31fbd": "Permisos de macOS",
-        "95a1886d94": "Controla terminales y agentes desde tu teléfono.",
+        "95a1886d94": "Controla terminales y agents desde tu teléfono.",
         "1cd25673df": "Móvil",
         "31e57d1c70": "Hosts SSH remotos para archivos, terminales y git.",
         "94a5afe910": "Anfitriones SSH",
@@ -524,9 +524,9 @@
         "0c6ee88a5f": "Entrada y edición",
         "b11a5a48a2": "Tema, zoom, apariencia de la aplicación y del terminal, barras laterales y barra de estado.",
         "93d88d20bf": "Apariencia",
-        "2d0659f6f0": "Terminal global, navegador y pestañas de rebajas.",
+        "2d0659f6f0": "Terminal global, navegador y pestañas de markdowns.",
         "65b19f5bde": "Espacio de trabajo flotante",
-        "3d65d3f1b9": "Configure la compatibilidad con el emulador móvil para Orca y agentes de codificación.",
+        "3d65d3f1b9": "Configure la compatibilidad con el emulador móvil para Orca y agents de codificación.",
         "1e761cff2b": "Emulador móvil",
         "e815fd01bd": "Página de inicio, enrutamiento de enlaces y cookies de sesión.",
         "8c197f74a1": "Navegador",
@@ -550,15 +550,15 @@
         "5f32ac08f3": "Complete la lista de verificación de incorporación para los flujos de trabajo principales de Orca.",
         "8ac3de82f5": "Dictado local de voz a texto con modelos en el dispositivo.",
         "6a50cdcd7c": "Voz",
-        "0059bd17f3": "Permita que los agentes controlen cualquier aplicación en su computadora.",
+        "0059bd17f3": "Permita que los agents controlen cualquier aplicación en su computadora.",
         "b35e92364b": "Uso de la computadora",
-        "cd50cec5d7": "Coordine múltiples agentes de codificación a través de Orca.",
+        "cd50cec5d7": "Coordine múltiples agents de codificación a través de Orca.",
         "58a868e8e4": "Orquestación",
         "7c79d3b7bf": "Opcional",
         "b1c2f8b0ac": "Cambio de cuenta opcional para Claude, Codex, Gemini y OpenCode Go.",
         "f70ac54d38": "Cuentas de proveedores de IA",
-        "4121f7a0a2": "Administre agentes de IA, establezca un valor predeterminado y personalice comandos.",
-        "b49abbd2f7": "Agentes"
+        "4121f7a0a2": "Administre agents de IA, establezca un valor predeterminado y personalice comandos.",
+        "b49abbd2f7": "Agents"
       }
     },
     "components": {
@@ -689,7 +689,7 @@
         "1257d1435d": "Mostrar árbol de archivos",
         "a341343303": "Se agregó el comentario de revisión.",
         "d1fa2cf888": "No se puede comentar sin el jefe de relaciones públicas SHA.",
-        "829674460a": "La diferencia no está disponible porque faltan los SHA de confirmación de relaciones públicas.",
+        "829674460a": "La diferencia no está disponible porque faltan los SHA de commit de relaciones públicas.",
         "af924014f8": "Visto",
         "2d89a38d9d": "{{value0}} {{value1}} tal como se ve",
         "70e84e3d0b": "No hay revisores que coincidan.",
@@ -709,7 +709,7 @@
         "73487fb975": "No se pudo eliminar al revisor",
         "2e69540652": "Revisores eliminados",
         "69515bff81": "Revisor eliminado",
-        "b4af16bf43": "No hay contexto de repositorio disponible para esta solicitud de extracción.",
+        "b4af16bf43": "No hay contexto de repo disponible para esta solicitud de extracción.",
         "c42d942b75": "No se pudo solicitar el revisor",
         "c016e4bac3": "Revisores solicitados",
         "ea985e657f": "Revisor solicitado",
@@ -733,7 +733,7 @@
         "5752c25aff": "Destino…",
         "ec5c4b3ab2": "Reabrir relaciones públicas",
         "21860b58d0": "Cerrar solicitud de extracción",
-        "5932578f51": "La fusión requiere un repositorio local registrado",
+        "5932578f51": "La fusión requiere un repo local registrado",
         "ce8a85d209": "por defecto",
         "924c2fe05e": "destructivo",
         "e2bf3e41a9": "comentario",
@@ -872,7 +872,7 @@
         "ec43b38ba7": "Destacado en GitHub"
       },
       "LinearIssueMarkdownDescriptionEditor": {
-        "d9c47069ef": "Reducción",
+        "d9c47069ef": "Markdown",
         "a7301a11f3": "ahorrar",
         "632096eb1c": "Enlace",
         "340160f4e8": "Quitar enlace",
@@ -979,9 +979,9 @@
         "0ee17638fe": "Nombre del espacio de trabajo",
         "2688050e4b": "Nombre",
         "f0470c7383": "Avanzado",
-        "ba64270bdb": "Configurar agentes",
+        "ba64270bdb": "Configurar agents",
         "ab63f25397": "Abrir configuración del agente",
-        "01d1e8f601": "Agente",
+        "01d1e8f601": "Agent",
         "0c5d6a479c": "[Opcional]",
         "b5a0796911": "Conectar",
         "dccd26d4e4": "Elige proyecto",
@@ -1110,7 +1110,7 @@
         "319cf2d54b": "Mostrar árbol de archivos",
         "eff839f438": "Se agregó el comentario de revisión.",
         "d8c3ba91c4": "No se puede comentar sin el jefe de relaciones públicas SHA.",
-        "74660bd80b": "La diferencia no está disponible porque faltan los SHA de confirmación de relaciones públicas.",
+        "74660bd80b": "La diferencia no está disponible porque faltan los SHA de commit de relaciones públicas.",
         "2e528e1c2d": "Visto",
         "ff84e1f54c": "{{value0}} {{value1}} tal como se ve",
         "5ad00c7a0e": "No hay revisores que coincidan.",
@@ -1130,7 +1130,7 @@
         "c798fa0ec7": "No se pudo eliminar al revisor",
         "1e6d089420": "Revisores eliminados",
         "2c1d93da43": "Revisor eliminado",
-        "1ae11c905c": "No hay contexto de repositorio disponible para esta solicitud de extracción.",
+        "1ae11c905c": "No hay contexto de repo disponible para esta solicitud de extracción.",
         "102d3d177f": "Revisores solicitados",
         "03282ff3b9": "Revisor solicitado",
         "8f369a6b6b": "Puedes solicitar hasta 15 revisores",
@@ -1149,7 +1149,7 @@
         "9d5425918e": "Reabrir relaciones públicas",
         "96d013ed28": "Cerrar solicitud de extracción",
         "d65f70786e": "cerrado",
-        "eca289e593": "La fusión requiere un repositorio local registrado",
+        "eca289e593": "La fusión requiere un repo local registrado",
         "6568ae8ece": "por defecto",
         "19f19560d5": "destructivo",
         "aae99c6c04": "pr",
@@ -1196,7 +1196,7 @@
       "StarNagCard": {
         "92b0f9d921": "está autenticado y vuelve a intentarlo.",
         "cd8c34aac1": "gh",
-        "cf82170065": "No se pudo destacar el repositorio. Cerciorarse",
+        "cf82170065": "No se pudo destacar el repo. Cerciorarse",
         "30c36231c1": "Si Orca te ha ahorrado tiempo, una estrella de GitHub es de gran ayuda. Ayuda a otros desarrolladores a descubrir el proyecto y mantiene al equipo motivado para implementar mejoras.",
         "b5e685e4d9": "Despedir",
         "5f6df21046": "¿Disfrutando de Orca?",
@@ -1262,7 +1262,7 @@
         "02f67c0d09": "Nuevo proyecto",
         "bdebffcbfe": "Crea un proyecto Linear para el equipo seleccionado.",
         "1361275ec3": "Nuevo proyecto Linear",
-        "7f3f7b4c18": "Descripción (opcional, rebaja)",
+        "7f3f7b4c18": "Descripción (opcional, markdown)",
         "9f2b4c03a6": "Presentando",
         "d3d0998b7d": "Nuevo problema de GitHub",
         "d1e243795c": "asuntos",
@@ -1397,7 +1397,7 @@
         "969e26577c": "Puedes solicitar hasta 15 revisores",
         "d00571d9b1": "Introduzca un revisor",
         "edf4bc4135": "No hay usuarios asignables.",
-        "53e002d895": "La emisión no tiene slug de repositorio.",
+        "53e002d895": "La emisión no tiene slug de repo.",
         "7f94eb6395": "Asignar problema",
         "bb63046423": "Asignado a {{value0}}",
         "ca63694b4c": "No se pudieron actualizar los asignados.",
@@ -1502,7 +1502,7 @@
         "0037b21794": "No guardar",
         "21295c6b8c": "Cambios no guardados",
         "5c1d2a32bb": "Cargando editor...",
-        "f0600556b3": "No se pudo crear el archivo de rebajas sin título.",
+        "f0600556b3": "No se pudo crear el archivo de markdowns sin título.",
         "37da0d736f": "Nueva pestaña del navegador",
         "a2a279b32a": "Se agotó el tiempo de guardado o falló. Corregir errores antes de cerrar.",
         "46e08bc5c8": "Este archivo tiene cambios no guardados.",
@@ -1644,15 +1644,15 @@
             "df636f5886": "Compruebe si está configurado (PowerShell)"
           },
           "ProjectCell": {
-            "4b5b871da8": "No hay etiquetas en este repositorio.",
+            "4b5b871da8": "No hay etiquetas en este repo.",
             "2219e945ef": "Cargando…",
-            "54cac64427": "Row no tiene slug de repositorio.",
+            "54cac64427": "Row no tiene slug de repo.",
             "8ae56a88a6": "Etiquetas",
             "f7cdb78efb": "Cesionarios",
             "ebde486e3c": "Claro",
             "191905e20e": "Actual y próximo",
             "e17bb96881": "Terminado",
-            "943b3dadc9": "Este repositorio no tiene tipos de problemas.",
+            "943b3dadc9": "Este repo no tiene tipos de problemas.",
             "c7b059cf07": "Tipo de problema",
             "c5f949e489": "Asunto",
             "8d669084f6": "Restringido",
@@ -1717,7 +1717,7 @@
             "2edf5e7e77": "{{value0}}: Orca aún no admite vistas del proyecto {{value1}}. Presente una solicitud de función en {{value2}}.",
             "7245c3d7ac": "Borrar búsqueda",
             "c5bc7ec007": "Ver filtro: {{value0}}",
-            "840c268665": "Agregar repositorio",
+            "840c268665": "Agregar repo",
             "dffa899f36": "Cancelar",
             "7037c8f5f1": "Repositorio no en Orca",
             "512fc171d6": "Elija un proyecto para comenzar.",
@@ -1976,18 +1976,18 @@
             "c4f4782c02": "No sugerido",
             "0a2e3c7cba": "Revisar",
             "e97e4580c7": "Sucio",
-            "9623a5107d": "confirmaciones no enviadas",
+            "9623a5107d": "commits no enviadas",
             "e8b3741ff7": "ignorado",
             "a9957007eb": "Ignorar {{value0}}",
             "1bffc07ba7": "Ver {{value0}}",
             "bef0adef9b": "Rama",
-            "0b1766738a": "repositorio",
+            "0b1766738a": "Repo",
             "bbb1ab6a6f": "Seleccione {{value0}}",
             "d1094dd529": "Necesita revisión",
             "4b93a235d8": "sugerido",
             "f68d538c63": "No hay espacios de trabajo en este conjunto de limpieza.",
             "4719327c9c": "Se ignoran todas las sugerencias de limpieza.",
-            "a19040cd67": "Ningún espacio de trabajo inactivo coincide con los repositorios seleccionados.",
+            "a19040cd67": "Ningún espacio de trabajo inactivo coincide con los repos seleccionados.",
             "97c772c4fe": "No se encontraron espacios de trabajo inactivos en los repositorios marcados.",
             "d3eef9463d": "No hay espacios de trabajo inactivos para eliminar.",
             "aaee139eab": "Restaurar sugerencias ignoradas",
@@ -2058,7 +2058,7 @@
         "quick": {
           "commands": {
             "TerminalQuickCommandActionToggle": {
-              "b0d58e37ed": "Mensaje del agente",
+              "b0d58e37ed": "Mensaje del Agent",
               "b5ea4d64f6": "Comando terminal"
             },
             "TerminalQuickCommandAppendEnterSwitch": {
@@ -2074,7 +2074,7 @@
               "577a342c7d": "Pídale al agente que investigue este espacio de trabajo.",
               "026cfb232a": "No admite comandos rápidos",
               "346d409ab2": "Elige agente",
-              "0adba8fa0c": "Agente",
+              "0adba8fa0c": "Agent",
               "ec8f081919": "Acción",
               "ed04233b3e": "Guarde los comandos del terminal o las indicaciones del agente para un acceso rápido.",
               "ca414324ee": "Texto de comando",
@@ -2099,7 +2099,7 @@
               "3834d24243": "Proyecto",
               "b83efc79e2": "Global",
               "c25cf350ef": "Alcance",
-              "f0631e4999": "repositorio"
+              "f0631e4999": "repo"
             }
           }
         },
@@ -2122,7 +2122,7 @@
             "0c8a8629b1": "La bifurcación aparece como su propio espacio de trabajo, no como un hijo anidado. El nuevo agente recibe una transcripción encuadernada como borrador editable.",
             "620461df22": "Bifurcación de nivel superior",
             "619b5a35d2": "Cree una bifurcación del espacio de trabajo de nivel superior e inicie una nueva pestaña de agente con contexto capturado.",
-            "64e292e8e3": "Sesión de agente de bifurcación",
+            "64e292e8e3": "Sesión de Agent de bifurcación",
             "9d25de2920": "crear bifurcación",
             "2b10412cfc": "Creando..."
           },
@@ -2134,7 +2134,7 @@
             "06c2b0f043": "Igualar tamaños de paneles",
             "98bccf4fa2": "Terminal dividido hacia abajo",
             "20e565d865": "Terminal dividido a la derecha",
-            "8a7ddb8b8a": "Sesión de agente de bifurcación...",
+            "8a7ddb8b8a": "Sesión de Agent de bifurcación...",
             "0a82b0608c": "Agregar comando rápido…",
             "9528a65ef8": "Sin comandos rápidos",
             "3ce594a4a0": "Global",
@@ -2178,7 +2178,7 @@
           "stale": {
             "agent": {
               "row": {
-                "ad991ece5c": "El panel del agente ya no está disponible.",
+                "ad991ece5c": "El panel del Agent ya no está disponible.",
                 "090d607412": "fila-agente-obsoleto-{{value0}}"
               }
             }
@@ -2232,7 +2232,7 @@
             "9acaf92093": "Acciones del panel",
             "1bce81dba6": "simulador",
             "1ff1c77616": "navegador",
-            "586d2ac445": "Terminal"
+            "586d2ac445": "terminal"
           }
         },
         "bar": {
@@ -2254,7 +2254,7 @@
           "EditorFileTabContextMenu": {
             "52ce4f4605": "Copiar ruta relativa",
             "5b85754786": "Copiar ruta",
-            "bfd5797ef4": "Abrir vista previa de rebajas",
+            "bfd5797ef4": "Abrir vista previa de Markdowns",
             "e5ff31ccaf": "Cerrar pestañas a la derecha",
             "ba1369dd24": "Cerrar todas las pestañas del editor",
             "1ba8492c5b": "Cerca",
@@ -2267,11 +2267,11 @@
             "8e9d603a09": "Desanclar pestaña"
           },
           "QuickLaunchButton": {
-            "348a04c1ad": "Configuración del agente...",
+            "348a04c1ad": "Configuración del Agent...",
             "ec2adf093e": "Inicie {{value0}} en una nueva terminal",
             "465e432ef1": "No se pudo generar el comando de inicio para {{value0}}.",
-            "e518f544b1": "No se detectaron agentes",
-            "8dea9b5cdf": "No hay agentes habilitados"
+            "e518f544b1": "No se detectaron agents",
+            "8dea9b5cdf": "No hay agents habilitados"
           },
           "RecentTabSwitcher": {
             "329638ff6f": "Cambiar pestaña",
@@ -2307,8 +2307,8 @@
           },
           "TabBar": {
             "b1a132357f": "Nueva pestaña",
-            "4f327c8b3d": "Abrir rebajas...",
-            "3d5d6c960d": "Nueva rebaja",
+            "4f327c8b3d": "Abrir Markdowns...",
+            "3d5d6c960d": "Nueva Markdown",
             "fd2b42aaa3": "Nuevo emulador móvil",
             "aea43b5748": "Abra la pestaña del emulador existente.",
             "b426bb2615": "Ir al emulador móvil",
@@ -2336,7 +2336,7 @@
             "b775303755": "Ejecutar comando rápido: {{value0}}",
             "196593b6a9": "Quitar {{value0}}",
             "15529ede69": "Editar {{value0}}",
-            "1d411fb6a5": "Guarde un comando rápido para este repositorio",
+            "1d411fb6a5": "Guarde un comando rápido para este repo",
             "8f1e971966": "Agregar comando rápido",
             "3220e2da27": "Este comando rápido se eliminará de su lista guardada.",
             "e8e1a52edb": "¿Eliminar \"{{value0}}\"?",
@@ -2365,7 +2365,7 @@
               },
               "menu": {
                 "options": {
-                  "5501c2fb7a": "Terminal",
+                  "5501c2fb7a": "terminal",
                   "9630dd5494": "caparazón",
                   "a094576900": "nueva terminal",
                   "4f23f4d01d": "nuevo caparazón",
@@ -2373,12 +2373,12 @@
                   "6d0e6a4b7a": "nuevo navegador",
                   "c87ad57785": "pestaña del navegador",
                   "cce7ef1d2c": "web",
-                  "5f17fb9d0c": "reducción",
+                  "5f17fb9d0c": "markdown",
                   "44caaf7b36": "Maryland",
-                  "fb50e3d874": "nueva rebaja",
+                  "fb50e3d874": "nueva markdown",
                   "6d8b6b4117": "nuevo archivo",
                   "b330f72434": "marca",
-                  "37ff3ddca1": "rebaja abierta",
+                  "37ff3ddca1": "markdown abierta",
                   "164c394bab": "abrir archivo",
                   "bbaf4f85a4": "emulador móvil",
                   "3784b83bd4": "emulador",
@@ -2453,8 +2453,8 @@
             "c9382662bb": "Reiniciar demonio",
             "59f178fe11": "{{value0}}, demonio inalcanzable",
             "21cacb16d1": "· remoto",
-            "73a3fd68a9": "Contraer repositorio",
-            "b12e31dfcb": "Expandir repositorio",
+            "73a3fd68a9": "Contraer repo",
+            "b12e31dfcb": "Expandir repo",
             "d659d71d2d": "Reanudar el espacio de trabajo {{value0}}",
             "bbcd9b7b85": "Contraer espacio de trabajo",
             "c4a8968bdd": "Ampliar el espacio de trabajo",
@@ -2546,7 +2546,7 @@
             "caa0f39811": "Soporta:",
             "97957ad3a3": "Conecte las cuentas de su proveedor de IA para ver su uso en tiempo real y cambiar fácilmente entre cuentas.",
             "9a542f46c7": "Ocultar de la barra de estado",
-            "84c3b15dca": "Límites de uso del agente",
+            "84c3b15dca": "Límites de uso del Agent",
             "d663430cf9": "Conecte una cuenta de IA para ver el uso"
           },
           "UpdateStatusSegment": {
@@ -2616,8 +2616,8 @@
             "b9b4a3a25d": "Rama",
             "c432278ec7": "Búfers del editor",
             "0bc756efaf": "cambios de git",
-            "e9528a89b3": "Terminales",
-            "a8d9e0de79": "Agentes",
+            "e9528a89b3": "Terminals",
+            "a8d9e0de79": "Agents",
             "d384a4ce9f": "Eliminar decisión",
             "7d7745bb8f": "puede eliminar",
             "720870a18e": "Mantener: vinculado",
@@ -2843,8 +2843,8 @@
           "42d3e0bdf7": "Proveedor de análisis de uso: {{value0}}",
           "c79f073d4c": "Análisis de uso",
           "a58aba506f": "RP creados",
-          "1c96f433e2": "Tiempo que trabajaron los agentes",
-          "9dbec9e675": "Agentes generados",
+          "1c96f433e2": "Tiempo que trabajaron los agents",
+          "9dbec9e675": "Agents generados",
           "73ed07859c": "Inicie su primer agente para comenzar a rastrear",
           "1e696db2f6": "OpenCode",
           "7d26110cea": "Codex",
@@ -2899,7 +2899,7 @@
             "8efeae0b22": "seguimiento",
             "5acbe1fdf2": "tiempo",
             "ef8bbf7739": "prs",
-            "ce8533f02e": "agentes",
+            "ce8533f02e": "agents",
             "0bba8ca244": "estadística",
             "0e2a0b6431": "uso",
             "372debfac0": "estadísticas",
@@ -2976,7 +2976,7 @@
           "aa59462502": "Repositorio",
           "571c5818c1": "Hogar",
           "0bc1379f4c": "Todas las fuentes",
-          "38e0951c3a": "Habilidades del agente",
+          "38e0951c3a": "Habilidades del Agent",
           "fb6bf60b52": "Claude",
           "426be2aac6": "Codex",
           "39b6998ddb": "Todos los proveedores",
@@ -3050,7 +3050,7 @@
           "2f8298f3c3": "Detener escaneo",
           "c157f31a95": "Importar como grupo",
           "40199ef7b3": "Nombre del grupo",
-          "b20bb7c24f": "Mantiene estos repositorios juntos en un grupo. Lo mejor para repositorios relacionados como microservicios.",
+          "b20bb7c24f": "Mantiene estos repos juntos en un grupo. Lo mejor para repos relacionados como microservicios.",
           "787412361a": "¿Qué es el nombre de un grupo?",
           "5f857ba8e6": "en",
           "4df0d08cc5": "Encontró",
@@ -3083,8 +3083,8 @@
           "423b5d3d31": "Agregue un repositorio o carpeta de Git que ya exista en el servidor de ejecución seleccionado.",
           "3d0c035483": "Proyecto de servidor abierto",
           "438493f214": "O ingrese una ruta de servidor manualmente",
-          "6b9958492a": "¿Quieres importar muchos repositorios a la vez? Busque la carpeta principal.",
-          "d40d751517": "Nuevo repositorio o carpeta",
+          "6b9958492a": "¿Quieres importar muchos repos a la vez? Busque la carpeta principal.",
+          "d40d751517": "Nuevo repo o carpeta",
           "a81ffa0a99": "Crear en el servidor",
           "a2ea37d549": "Repositorio remoto de Git",
           "47759c9491": "Clonar desde URL",
@@ -3256,8 +3256,8 @@
           "aef6c0a213": "Guarde el comando detectado para ejecutarlo cada vez que Orca cree un árbol de trabajo.",
           "660cdc17f8": "guiones de configuración. Agregue un comando local o cambie la fuente en Configuración.",
           "8f6be51aa1": "orca.yaml",
-          "bb879db364": "Este repositorio ignora lo compartido",
-          "0155fb9ed3": "No se pudo verificar el script de configuración de este repositorio en este momento.",
+          "bb879db364": "Este repo ignora lo compartido",
+          "0155fb9ed3": "No se pudo verificar el script de configuración de este repo en este momento.",
           "eefa756190": "Configurar manualmente",
           "ca4efcbc25": "Ahorrar",
           "d02e6a42b1": "Detectado desde",
@@ -3312,7 +3312,7 @@
           "0c3395fd32": "Buscar árboles de trabajo y pestañas del navegador",
           "c86d83b5c3": "Nuevo",
           "1b5c41caee": "Orca Móvil",
-          "9c95e1ce91": "Agentes",
+          "9c95e1ce91": "Agents",
           "f323383e9a": "Automatizaciones",
           "e7ad3c540d": "Abrir tareas de Jira",
           "c39ab10000": "Abrir tareas Lineares",
@@ -3356,7 +3356,7 @@
           "82594419ba": "Filtros"
         },
         "SidebarWorkspaceOptionsMenu": {
-          "95c9754653": "Diseño de actividad del agente",
+          "95c9754653": "Diseño de actividad del Agent",
           "3d4b9c4997": "Flotar",
           "ba87080fb7": "Mostrar propiedades",
           "320b675c9a": "Diseño de tarjeta",
@@ -3371,12 +3371,12 @@
           "7b316bdd51": "Manual",
           "7153d07485": "Arrastre los espacios de trabajo para organizarlos dentro de cada grupo.",
           "2170d553cf": "Proyecto",
-          "b759bb87ee": "Agentes que necesitan atención, luego actividad más reciente.",
-          "503462f2b4": "Actividad del agente",
+          "b759bb87ee": "Agents que necesitan atención, luego actividad más reciente.",
+          "503462f2b4": "Actividad del Agent",
           "3728165cdd": "Nombre",
           "2a81e07366": "Lista completa",
           "25105b28cb": "Compacto",
-          "d7084e8bc8": "Actividad del agente",
+          "d7084e8bc8": "Actividad del Agent",
           "b64d8bcca0": "Puertos",
           "26c71e536c": "Notas",
           "b8dcc6f321": "Enlace PR/MR",
@@ -3387,7 +3387,7 @@
           "e029a2d775": "Estado",
           "c2c7a45cda": "Ninguno",
           "680043342f": "compacto",
-          "c7591b6014": "repositorio"
+          "c7591b6014": "repo"
         },
         "SshDisconnectedDialog": {
           "ca4a7892af": "Conectando...",
@@ -3459,7 +3459,7 @@
           "021538e1d1": "SSH desconectado"
         },
         "WorktreeCardAgents": {
-          "1b0a156717": "Agentes"
+          "1b0a156717": "Agents"
         },
         "WorktreeCardMeta": {
           "3e65e11cc6": "Metadatos del espacio de trabajo",
@@ -3549,7 +3549,7 @@
           "ebc5c7dcef": "Ocultar espacios de trabajo secundarios",
           "84a2238242": "Mostrar espacios de trabajo secundarios",
           "045a8aed48": "niños",
-          "2ca6e29a3c": "repositorio",
+          "2ca6e29a3c": "repo",
           "bb85cd86ba": "Crear espacio de trabajo para {{value0}}",
           "ebadb7eadb": "{{value0}} {{value1}} niño {{value2}}",
           "20bebf9c7f": "Mostrar {{value0}} espacio de trabajo secundario",
@@ -3560,7 +3560,7 @@
         "WorktreeMetaDialog": {
           "3db0a2a593": "Cancelar",
           "b48c271d39": "para guardar, Mayús+Entrar para una nueva línea.",
-          "7f0be5e9a6": "Admite **rebajas**: negrita, listas, \"código\", enlaces. Presione Entrar o",
+          "7f0be5e9a6": "Admite **markdowns**: negrita, listas, \"código\", enlaces. Presione Entrar o",
           "030d484fc0": "Notas sobre este árbol de trabajo...",
           "9c1d1e9b71": "Comentario",
           "5ae06f40fd": "Pegue una URL de solicitud de extracción o ingrese un número. Déjelo en blanco para eliminar el enlace.",
@@ -3613,7 +3613,7 @@
                   "7edb8ebe24": "Clonar desde URL",
                   "a6c20dca96": "Abrir un proyecto desde un destino SSH",
                   "3d162cc76f": "Proyecto remoto",
-                  "fb4fc5380e": "Proyecto local, repositorio de Git o carpeta con muchos repositorios",
+                  "fb4fc5380e": "Proyecto local, repo de Git o carpeta con muchos repos",
                   "2281fdc8c7": "Explorar carpeta"
                 }
               }
@@ -3902,8 +3902,8 @@
           "92f4238f1a": "WSL predeterminado",
           "fc806485ae": "Cargando WSL",
           "43663b5e69": "WSL",
-          "9bccf48906": "Ubicación del agente",
-          "d00949e59b": "Mostrar agentes instalados desde {{value0}}. Actualizar vuelve a verificar la RUTA en ese entorno.",
+          "9bccf48906": "Ubicación del Agent",
+          "d00949e59b": "Mostrar agents instalados desde {{value0}}. Actualizar vuelve a verificar la RUTA en ese entorno.",
           "c7c516946f": "WSL no está disponible en esta máquina.",
           "f97b986b7f": "wsl"
         },
@@ -3919,8 +3919,8 @@
           "378ad26865": "Comando de instalación copiado."
         },
         "AgentsPane": {
-          "d83834f5e6": "Detectando agentes instalados…",
-          "024bd95089": "agentes",
+          "d83834f5e6": "Detectando agents instalados…",
+          "024bd95089": "agents",
           "e8da2af684": "Disponible para instalar",
           "ed3e110e61": "detectado",
           "02e0143be5": "Instalado",
@@ -3940,7 +3940,7 @@
           "1c9a9679ec": "{{value0}} disponibilidad",
           "0d9e293a02": "Refrescar",
           "c9b33eb5c0": "Refrescante…",
-          "13647f9f80": "Vuelva a leer la RUTA de su shell y vuelva a detectar los agentes instalados",
+          "13647f9f80": "Vuelva a leer la RUTA de su shell y vuelva a detectar los agents instalados",
           "dc4a2ffdc0": "Ampliar anulación del comando",
           "cea7d97be1": "Anulación del comando Contraer",
           "db9e9e5887": "Personalizar comando",
@@ -4040,7 +4040,7 @@
           "a5c16712c1": "Se detectaron varios controles remotos. Escriba un nombre remoto (p. ej.",
           "9a14ec7400": "Elija una rama base a continuación",
           "086ce7f369": "Siguiente rama principal ({{value0}})",
-          "2f3cda96f5": "Fijado para este repositorio",
+          "2f3cda96f5": "Fijado para este repo",
           "ee110e1830": "Sin referencia base predeterminada"
         },
         "BrowserDefaultZoomSetting": {
@@ -4095,7 +4095,7 @@
           "333984cf90": "Utilice una sesión de navegador existente"
         },
         "BrowserUseEnableSwitch": {
-          "aea3f45349": "Habilitar el uso del navegador del agente"
+          "aea3f45349": "Habilitar el uso del navegador del Agent"
         },
         "BrowserUseExamples": {
           "1199258ace": "Copiar",
@@ -4112,18 +4112,18 @@
           "e44c5d681e": "De",
           "67d9a53f47": "Administrar perfiles para inicios de sesión separados",
           "112f70adc4": "Última importación desde",
-          "72d4815523": "Incorpore sus inicios de sesión existentes a Orca para que los agentes puedan acceder a páginas autenticadas. Importa al perfil predeterminado.",
+          "72d4815523": "Incorpore sus inicios de sesión existentes a Orca para que los agents puedan acceder a páginas autenticadas. Importa al perfil predeterminado.",
           "2eb906706c": "Importar cookies del navegador",
-          "af8c83ed61": "Importe cookies de Chrome, Edge u otros navegadores para que los agentes puedan reutilizar sus inicios de sesión.",
-          "68ea76eb71": "Instale la habilidad Uso del navegador para que los agentes puedan operar el navegador de Orca.",
+          "af8c83ed61": "Importe cookies de Chrome, Edge u otros navegadores para que los agents puedan reutilizar sus inicios de sesión.",
+          "68ea76eb71": "Instale la habilidad Uso del navegador para que los agents puedan operar el navegador de Orca.",
           "2d6ead9ab2": "Instalar la habilidad de uso del navegador",
           "e9f3f3b488": "Instalado en",
-          "9fca1f7f5d": "Registra el comando CLI de Orca para que los agentes puedan organizar el navegador desde su shell.",
+          "9fca1f7f5d": "Registra el comando CLI de Orca para que los agents puedan organizar el navegador desde su shell.",
           "c6065d205d": "Habilitar CLI de Orca",
-          "c79eff0213": "Registre la CLI de Orca para que los agentes puedan controlar el navegador.",
-          "702488a5f7": "Deje que los agentes de codificación controlen este navegador con sus inicios de sesión. Complete los tres pasos siguientes.",
-          "b8a1f2d84d": "Uso del navegador del agente",
-          "96b91c6349": "Deje que los agentes de codificación controlen este navegador con sus inicios de sesión.",
+          "c79eff0213": "Registre la CLI de Orca para que los agents puedan controlar el navegador.",
+          "702488a5f7": "Deje que los agents de codificación controlen este navegador con sus inicios de sesión. Complete los tres pasos siguientes.",
+          "b8a1f2d84d": "Uso del navegador del Agent",
+          "96b91c6349": "Deje que los agents de codificación controlen este navegador con sus inicios de sesión.",
           "2ea4617e3a": "Se importaron {{value0}} cookies de {{value1}}{{value2}}.",
           "721aee31b4": "Registré Orca CLI en PATH.",
           "180a9abf3a": "No se pudo cargar el estado de CLI.",
@@ -4136,16 +4136,16 @@
           "8f2675c2f3": "Se importaron {{value0}} cookies del archivo."
         },
         "BrowserUseSkillStep": {
-          "0871b6998d": "Permite a los agentes navegar y verificar páginas en el navegador de Orca.",
+          "0871b6998d": "Permite a los agents navegar y verificar páginas en el navegador de Orca.",
           "459e24eebc": "Habilidad de uso del navegador"
         },
         "CliSection": {
           "8671e406f0": "Cancelar",
           "a4aafe46e3": "Ruta de destino:",
-          "e8012c03a1": "Permite a los agentes utilizar el espacio de trabajo, la terminal y los comandos de progreso de Orca.",
+          "e8012c03a1": "Permite a los agents utilizar el espacio de trabajo, la terminal y los comandos de progreso de Orca.",
           "6053cf736c": "Habilidad CLI",
-          "36a6f919ba": "Ofrezca a los agentes espacios de trabajo, terminales y flujos de trabajo de progreso compatibles con Orca.",
-          "04873eea3e": "Habilidades del agente",
+          "36a6f919ba": "Ofrezca a los agents espacios de trabajo, terminales y flujos de trabajo de progreso compatibles con Orca.",
+          "04873eea3e": "Habilidades del Agent",
           "7f2747f7dd": "Actualmente no está visible en PATH para este shell.",
           "b0c310ab46": "Objetivo del lanzador existente:",
           "15eaad0d31": "Ruta de comando:",
@@ -4201,17 +4201,17 @@
           "6ba48f07a4": "Borrador por defecto",
           "15b60d54b2": "p.ej. ollama ejecuta llama3.1 {rápido}",
           "3f1b26cc91": "pasar la entrada del comando como argumento; de lo contrario, Orca lo canaliza en stdin.",
-          "4f722a5f53": "Usado por recetas de mensaje de confirmación, solicitud de extracción y nombre de rama que seleccionan el comando Personalizado. Usar",
+          "4f722a5f53": "Usado por recetas de mensaje de commit, solicitud de extracción y nombre de rama que seleccionan el comando Personalizado. Usar",
           "47e45cbd5a": "Comando personalizado",
           "1ef29f8c29": "Línea de comando Orca se ejecuta cuando una receta de texto usa un comando personalizado.",
           "2339a89104": "Agrega botones AI que ejecutan el agente seleccionado con la plantilla de comando para esa acción.",
           "d5b45a3628": "Mostrar acciones de IA de control de código fuente",
-          "7bcad2b200": "Agrega recetas de acciones para acciones de confirmación de control de código fuente, solicitud de extracción, nombre de rama y reparación.",
+          "7bcad2b200": "Agrega recetas de acciones para acciones de commit de control de código fuente, solicitud de extracción, nombre de rama y reparación.",
           "d54c64163d": "activado",
-          "4ec89c319e": "agente",
+          "4ec89c319e": "agent",
           "34d0348e34": "generar",
           "8cd2be0948": "mensaje",
-          "ca433708cb": "comprometerse",
+          "ca433708cb": "commit",
           "0b7eafe55f": "ai",
           "2c5436c018": "abierto",
           "6c84ba6de3": "plantilla",
@@ -4229,7 +4229,7 @@
           "25350d670f": "costumbre"
         },
         "ComputerUsePane": {
-          "1735461723": "Permite a los agentes inspeccionar y operar aplicaciones de escritorio locales.",
+          "1735461723": "Permite a los agents inspeccionar y operar aplicaciones de escritorio locales.",
           "93255aaf18": "Habilidad de uso de computadora",
           "45f8e22c2e": "Abierto",
           "d95d1cfab8": "Refrescar",
@@ -4241,7 +4241,7 @@
           "740766c291": "La configuración de uso de la computadora ya está completa",
           "697005758f": "Privacidad y seguridad de macOS abiertas",
           "2168fa5ab0": "No se pudieron cargar los permisos de uso de la computadora",
-          "0c9a33f468": "Capture ventanas de aplicaciones para que los agentes puedan inspeccionar el estado visual.",
+          "0c9a33f468": "Capture ventanas de aplicaciones para que los agents puedan inspeccionar el estado visual.",
           "07bbe4c4cb": "Capturas de pantalla",
           "4d03dec2d0": "Lea los árboles de la interfaz de la aplicación y realice las acciones solicitadas.",
           "6b5a2cd3a5": "Accesibilidad",
@@ -4285,8 +4285,8 @@
           "a20d5ea365": "Mantiene visible un resaltado a nivel de panel después de que suena la terminal o los eventos de finalización del agente hasta que interactúa con ese panel. Experimental mientras sintonizamos la señal.",
           "ec897e8d89": "Atención terminal",
           "88b7613afb": "Resaltado de panel persistente para eventos de finalización de agente y timbre de terminal.",
-          "0277901cf7": "Agrega una entrada de Agentes a la barra lateral izquierda con una fuente de árbol de trabajo encadenada para agentes completados, preguntas de bloqueo, estado no leído y eventos de creación de árbol de trabajo. Experimental: el modelo de evento y la interfaz de usuario pueden cambiar.",
-          "a05bcdaf57": "Vista de agentes",
+          "0277901cf7": "Agrega una entrada de Agents a la barra lateral izquierda con una fuente de árbol de trabajo encadenada para Agents completados, preguntas de bloqueo, estado no leído y eventos de creación de árbol de trabajo. Experimental: el modelo de evento y la interfaz de usuario pueden cambiar.",
+          "a05bcdaf57": "Vista de Agents",
           "f63ea281e3": "Feed integrado en la barra lateral izquierda para completar agentes y estados de bloqueo.",
           "ca2219fe5e": "Muestra una pequeña mascota animada fijada en la esquina inferior derecha. Elige un personaje (Claudino, OpenCode, Gremlin) o carga tu propio PNG, APNG, GIF, WebP, JPG o SVG desde el menú de mascotas de la barra de estado. Ocultarlo en cualquier momento desde el mismo menú sin desactivar esta configuración.",
           "dd6f0a1d45": "Mascota",
@@ -4318,9 +4318,9 @@
           "80c454e8a6": "Haga coincidir esto con el TTL de caché de su proveedor."
         },
         "GeneralEditorSettingsSection": {
-          "f80603d293": "Muestre controles de notas de rebajas locales en modo de editor enriquecido y acciones de transferencia de agentes.",
-          "4edc104f0f": "Notas de revisión de rebajas",
-          "5f02e6fb21": "Muestre los controles de notas de revisión de rebajas locales en el modo de editor enriquecido.",
+          "f80603d293": "Muestre controles de notas de markdowns locales en modo de editor enriquecido y acciones de transferencia de agentes.",
+          "4edc104f0f": "Notas de revisión de Markdowns",
+          "5f02e6fb21": "Muestre los controles de notas de revisión de markdowns locales en el modo de editor enriquecido.",
           "51161d1647": "Muestra la descripción general del minimapa al editar un archivo.",
           "6690b1ffb9": "Minimapa",
           "5a1ea6eaa2": "Oculto",
@@ -4406,7 +4406,7 @@
           "28bc3d085e": "Muestra una confirmación antes de eliminar un espacio de trabajo del menú contextual. Las eliminaciones fallidas aún muestran un recurso de Forzar eliminación.",
           "9f380934cf": "Preguntar antes de eliminar espacios de trabajo",
           "5734db82af": "Muestra un cuadro de diálogo de confirmación antes de eliminar un espacio de trabajo.",
-          "4fbf910ded": "Cree espacios de trabajo dentro de una subcarpeta con nombre de repositorio.",
+          "4fbf910ded": "Cree espacios de trabajo dentro de una subcarpeta con nombre de repo.",
           "ba3480642f": "Espacios de trabajo anidados",
           "a246f5ce6f": "Directorio raíz donde se crean las carpetas del espacio de trabajo.",
           "5567191a6e": "Navegar",
@@ -4430,7 +4430,7 @@
           "1f744a72f4": "configuración"
         },
         "GitPane": {
-          "d2eede4c54": "Agregue la atribución de Orca a confirmaciones, relaciones públicas y problemas.",
+          "d2eede4c54": "Agregue la atribución de Orca a commits, relaciones públicas y problemas.",
           "e02ea23a32": "Atribución de Orca",
           "e71ce09c42": "orca",
           "b9b5771bb1": "atribución",
@@ -4449,7 +4449,7 @@
           "aa204f185f": "Límites de velocidad actuales de GitHub CLI REST, Search y GraphQL.",
           "612a440e57": "Presupuesto de la API de GitHub",
           "2cde9044a8": "graficoql",
-          "36e3de3619": "de comparar con la historia obsoleta. Orca omite la actualización si esa rama tiene cambios no confirmados o confirmaciones solo locales.",
+          "36e3de3619": "de comparar con la historia obsoleta. Orca omite la actualización si esa rama tiene cambios no confirmados o commits solo locales.",
           "d072a12995": "git diff principal...CABEZA",
           "db3a127eb1": ". Esto mantiene comandos como",
           "3ae3de8898": "maestro",
@@ -4538,9 +4538,9 @@
           "45bf5e6e4b": "Error de autenticación",
           "e1bd5364e6": "Configuración opcional",
           "e7a961e1c5": "Configurado",
-          "6bd148dcb5": "Solicitudes de extracción y estados de confirmación a través de la API REST de Gitea.",
-          "6355fe585e": "Solicitudes de extracción y estados de confirmación para repositorios detectados",
-          "1fac9b4910": "{{value0}} · Solicitudes de extracción y estados de confirmación",
+          "6bd148dcb5": "Solicitudes de extracción y estados de commit a través de la API REST de Gitea.",
+          "6355fe585e": "Solicitudes de extracción y estados de commit para repositorios detectados",
+          "1fac9b4910": "{{value0}} · Solicitudes de extracción y estados de commit",
           "f92fbf11aa": "No configurado",
           "6791d7af95": "Solicitudes de extracción y estados de compilación a través de tokens de API REST de Azure DevOps.",
           "e3d5a24979": "Solicitudes de extracción y estados de compilación para Azure Repos detectados",
@@ -4613,12 +4613,12 @@
         },
         "McpConfigSection": {
           "4d16a0d9ac": "Comprobado",
-          "b900cd6282": "No se encontró ninguna configuración de MCP. Agregue una configuración de espacio de trabajo vacío cuando desee que este repositorio defina sus propios servidores MCP.",
+          "b900cd6282": "No se encontró ninguna configuración de MCP. Agregue una configuración de espacio de trabajo vacío cuando desee que este repo defina sus propios servidores MCP.",
           "3b224167ff": "servidor",
           "251b96564a": "detectado ·",
           "f34c152dc0": "Actualizar configuraciones de MCP",
-          "6bac9ddfc6": "Los repositorios SSH se leen a través del sistema de archivos remoto. La creación inicial se limita a la configuración raíz del espacio de trabajo.",
-          "96f5609b04": "Inspeccione las definiciones del servidor MCP que los agentes pueden usar mientras trabajan en este repositorio.",
+          "6bac9ddfc6": "Los repos SSH se leen a través del sistema de archivos remoto. La creación inicial se limita a la configuración raíz del espacio de trabajo.",
+          "96f5609b04": "Inspeccione las definiciones del servidor MCP que los agents pueden usar mientras trabajan en este repo.",
           "55eea3ef47": "Configuraciones de MCP",
           "9ee215caf6": ".mcp.json",
           "1f3665e35a": "Configuración de MCP creada",
@@ -4629,13 +4629,13 @@
           "1861982430": "No se pudo cargar el estado de CLI.",
           "8af7a8bc38": "Los comandos apuntan al emulador activo del árbol de trabajo actual. Las coordenadas están normalizadas de 0 a 1.",
           "c7f3fe0a6e": "Comandos comunes del emulador",
-          "d94ca6a623": "Permite a los agentes utilizar comandos CLI de Orca, incluido el control del emulador móvil.",
+          "d94ca6a623": "Permite a los agents utilizar comandos CLI de Orca, incluido el control del emulador móvil.",
           "67e19ee03c": "Habilidad CLI de Orca",
           "aaf62a3dd2": "Instalado en",
-          "2fef055608": "Registra el comando CLI de Orca para que los agentes puedan controlar el emulador activo desde su shell.",
+          "2fef055608": "Registra el comando CLI de Orca para que los agents puedan controlar el emulador activo desde su shell.",
           "4f2205f3b6": "Habilitar CLI de Orca",
-          "ff4b7e65d6": "Deje que los agentes de codificación controlen el emulador móvil activo con los comandos CLI de Orca.",
-          "2a674aa810": "Control del emulador móvil del agente",
+          "ff4b7e65d6": "Deje que los agents de codificación controlen el emulador móvil activo con los comandos CLI de Orca.",
+          "2a674aa810": "Control del emulador móvil del Agent",
           "cdeaed9e37": "Registré Orca CLI en PATH."
         },
         "MobileEmulatorExamples": {
@@ -4649,14 +4649,14 @@
           "2b077b5544": "Mensaje copiado."
         },
         "MobileEmulatorSettingsPane": {
-          "19d39113b6": "Deje que los agentes de codificación controlen el emulador móvil activo con los comandos CLI de Orca.",
-          "f2f8d97bb6": "Control del emulador móvil del agente",
+          "19d39113b6": "Deje que los agents de codificación controlen el emulador móvil activo con los comandos CLI de Orca.",
+          "f2f8d97bb6": "Control del emulador móvil del Agent",
           "143961d031": "Dispositivo predeterminado",
           "8aec2f99a0": "Actualizar la disponibilidad del emulador",
           "ae1612c58c": "Disponibilidad",
-          "f9af91ea26": "Muestra la acción Nuevo emulador móvil y permite que los agentes se conecten al emulador activo.",
+          "f9af91ea26": "Muestra la acción Nuevo emulador móvil y permite que los agents se conecten al emulador activo.",
           "700ddbf9b1": "Habilitar emulador móvil",
-          "bc39d0f115": "Configure la compatibilidad con el emulador móvil para Orca y agentes de codificación.",
+          "bc39d0f115": "Configure la compatibilidad con el emulador móvil para Orca y agents de codificación.",
           "6593c9ddd3": "Emulador móvil",
           "a4f1c82d90": "Desactivado",
           "b5e2d93e01": "De cheques...",
@@ -4708,7 +4708,7 @@
           "b5a2ed83ff": "Tienda de aplicaciones",
           "c8491c17ef": "Controla Orca desde tu teléfono escaneando un código QR. Beta/vista previa anticipada: espere errores y cambios importantes. Obtenga la aplicación para iOS desde",
           "e7a3ae8c4e": "Móvil",
-          "174f4a3c6d": "Controla terminales y agentes desde tu teléfono."
+          "174f4a3c6d": "Controla terminales y agents desde tu teléfono."
         },
         "NotificationsPane": {
           "906b4afebf": "Enviar notificación de prueba",
@@ -4722,7 +4722,7 @@
           "b6fc369244": "Un terminal en segundo plano emite un carácter de campana.",
           "591fe605b9": "Campana terminal",
           "55f901a59b": "Un agente de codificación finaliza y queda inactivo.",
-          "ca76d06fd2": "Tarea del agente completada",
+          "ca76d06fd2": "Tarea del Agent completada",
           "deff6d30da": "Notificaciones nativas del sistema para eventos en segundo plano.",
           "841c8c549f": "Habilitar notificaciones",
           "0fadad17ce": "No se pudo reproducir el sonido de notificación",
@@ -4785,21 +4785,21 @@
           "80c6f2feb8": "Mensaje de ejemplo copiado."
         },
         "OrchestrationPane": {
-          "52e0634e2c": "Solicite a un agente coordinador que utilice la orquestación para traspasos, traspasos de árboles de trabajo y agentes secundarios secuenciales o paralelos.",
+          "52e0634e2c": "Solicite a un agente coordinador que utilice la orquestación para traspasos, traspasos de árboles de trabajo y agents secundarios secuenciales o paralelos.",
           "ae79504732": "como usarlo",
           "7bc082f4de": "Copiar comando de instalación",
           "832f1f3ee6": "¿Prefieres tu propia terminal?",
-          "9bedd2a6e5": "Permite a los agentes traspasar contexto y coordinar el trabajo a través de Orca.",
+          "9bedd2a6e5": "Permite a los agents traspasar contexto y coordinar el trabajo a través de Orca.",
           "07641b9768": "Habilidad de orquestación",
-          "2aacdb0517": "Coordine a los agentes de codificación en traspasos, traspasos de árboles de trabajo y trabajo de agentes secundarios.",
-          "191ac34567": "Orquestación de agentes"
+          "2aacdb0517": "Coordine a los agents de codificación en traspasos, traspasos de árboles de trabajo y trabajo de agents secundarios.",
+          "191ac34567": "Orquestación de Agents"
         },
         "OrchestrationSetupCard": {
-          "e7d2a5146c": "Permite a los agentes traspasar contexto y coordinar el trabajo a través de Orca.",
+          "e7d2a5146c": "Permite a los agents traspasar contexto y coordinar el trabajo a través de Orca.",
           "2777ff0fdc": "Habilidad de orquestación"
         },
         "OrchestrationSkillAgentCoverage": {
-          "6dec5ce2d2": "Cobertura del agente",
+          "6dec5ce2d2": "Cobertura del Agent",
           "ffe13e36fb": "Desaparecido",
           "1e8f8d8fae": "Listo"
         },
@@ -4807,7 +4807,7 @@
           "f08d45293d": "comando copiar",
           "35550f3b3b": "Hecho",
           "1bdce1911e": "Copiar comando de instalación de habilidad de orquestación",
-          "b99f375eb2": "Ejecute este comando en una terminal para instalar la habilidad de orquestación para sus agentes.",
+          "b99f375eb2": "Ejecute este comando en una terminal para instalar la habilidad de orquestación para sus agents.",
           "2914abcfa2": "Instalar habilidad de orquestación",
           "d3dc559225": "No se pudo copiar el comando de instalación.",
           "239bf9132b": "Comando de instalación copiado."
@@ -4863,9 +4863,9 @@
           "3edf3deaf8": "¿Eliminar \"{{value0}}\"?",
           "9fcfc29519": "Insertar",
           "9b3e338d62": "Ingresar",
-          "4ccc63da87": "Agente",
+          "4ccc63da87": "Agent",
           "0252ddd578": "Sin texto de comando",
-          "7784912ed6": "repositorio",
+          "7784912ed6": "repo",
           "2bb9e38e93": "Intitulado",
           "3eb9897ab0": "No hay comandos en los ámbitos seleccionados.",
           "38d61927e6": "No se guardaron comandos rápidos.",
@@ -4888,7 +4888,7 @@
           "bbbd6e0bc4": "Fuente de comando y orca.yaml",
           "c9bc1bfd8f": "Avanzado",
           "610d90fdbd": "Fuente del comando y detalles de orca.yaml.",
-          "52aef29e69": "Déjelo en blanco para usar el repositorio predeterminado desde",
+          "52aef29e69": "Déjelo en blanco para usar el repo predeterminado desde",
           "4084720f47": "Completo {{artifact_url}}",
           "13394103bd": "Comando de problema personalizado de GitHub",
           "70ad20f883": "para el problema vinculado o la URL de PR.",
@@ -4916,7 +4916,7 @@
           "b2b06c7ce8": "Variables de entorno disponibles (pase el cursor para obtener más detalles):",
           "95a0411b3e": "plantilla",
           "175daba180": "Ejemplo",
-          "b20c5df6ca": "Agregue un archivo `orca.yaml` para habilitar los valores predeterminados de configuración, archivo o automatización de problemas compartidos para este repositorio. Plantilla de ejemplo:",
+          "b20c5df6ca": "Agregue un archivo `orca.yaml` para habilitar los valores predeterminados de configuración, archivo o automatización de problemas compartidos para este repo. Plantilla de ejemplo:",
           "56f9a4a1d0": "Using `orca.yaml`",
           "623e0c9f31": "`orca.yaml` could not be parsed",
           "5a67e4793d": "No `orca.yaml` detected",
@@ -4924,16 +4924,16 @@
           "787ca433ef": "Define only the supported keys: `scripts`, `setup`, `archive`, and `issueCommand`.",
           "ecc73d9125": "Compare your file against the working template below and copy that shape if needed.",
           "925f9e0dc4": "texto-primer plano",
-          "0cc712b823": "El archivo de configuración principal existe en la raíz del repositorio, pero Orca aún no pudo analizar las definiciones de gancho admitidas.",
+          "0cc712b823": "El archivo de configuración principal existe en la raíz del repo, pero Orca aún no pudo analizar las definiciones de gancho admitidas.",
           "c90b858573": "texto-ámbar-700 oscuro:texto-ámbar-300",
           "aba825233f": "El archivo contiene claves de configuración que esta versión de Orca no reconoce. Es posible que necesites actualizar Orca o revisar el archivo en busca de errores tipográficos.",
-          "ca424ff135": "Los valores predeterminados de automatización de problemas y gancho compartido se definen en el repositorio y están disponibles para todos los que lo usan.",
+          "ca424ff135": "Los valores predeterminados de automatización de problemas y gancho compartido se definen en el repo y están disponibles para todos los que lo usan.",
           "32f417fe17": "texto-esmeralda-700 oscuro:texto-esmeralda-300",
           "8bfe65fc60": "Usar comandos locales",
           "8d6c56bff8": "Ejecute ambos",
           "0fa21e19ec": "Nombre del espacio de trabajo, normalmente basado en el nombre de la sucursal.",
           "54c73d88d0": "Ruta al árbol de trabajo que se está creando. Los comandos de configuración se ejecutan desde este directorio.",
-          "30952c4aa4": "Ruta al pago del repositorio principal. Útil para copiar archivos compartidos, como .env, en un árbol de trabajo.",
+          "30952c4aa4": "Ruta al pago del repo principal. Útil para copiar archivos compartidos, como .env, en un árbol de trabajo.",
           "9b821fa19d": "# p.ej. echo \"Limpiando $ORCA_WORKSPACE_NAME\"",
           "6f90ebe3fd": "Se ejecuta antes de archivar o eliminar un árbol de trabajo.",
           "a3fc966677": "# p.ej. pnpm instalar cp \"$ORCA_ROOT_PATH/.env\" \"$ORCA_WORKTREE_PATH/.env\"",
@@ -4941,7 +4941,7 @@
           "8561b0665f": "orca.yaml primero, luego tus comandos locales.",
           "0e8b2a520d": "Ignorar orca.yaml; ejecute solo sus comandos locales.",
           "83dc78202a": "Sólo locales",
-          "29397e8bbc": "Ejecute solo comandos de repositorio comprometidos; ignorar los comandos locales.",
+          "29397e8bbc": "Ejecute solo comandos de repo comprometidos; ignorar los comandos locales.",
           "d88b6ff88f": "orca.yaml solamente",
           "99e3264a49": "Ejecute la configuración solo cuando lo elija.",
           "15debc1fd9": "Saltar por defecto",
@@ -4967,7 +4967,7 @@
           "3149964b66": "copiado"
         },
         "RepositoryIconPicker": {
-          "2b7d27b93c": "Utilice el color del repositorio {{value0}}",
+          "2b7d27b93c": "Utilice el color del repo {{value0}}",
           "fde066a63b": "Las cargas PNG deben tener un tamaño de 256 KB o menos.",
           "cc1286e263": "favicon",
           "03ca1a4e9b": "ejemplo.com",
@@ -4977,16 +4977,16 @@
           "c490787d24": "emojis",
           "b2d7fd2116": "Icono",
           "2d8bd302fa": "Avatar",
-          "913c55833d": "Color de repositorio personalizado {{value0}}",
-          "0e5f0693c1": "Elija un color de repositorio personalizado",
+          "913c55833d": "Color de repo personalizado {{value0}}",
+          "0e5f0693c1": "Elija un color de repo personalizado",
           "642dc29c6d": "Color",
           "549d126081": "Reiniciar",
-          "4e2a14f967": "Icono de repositorio",
-          "d71df44587": "No se pudo resolver el repositorio de GitHub.",
-          "f79972271a": "No se encontró ningún control remoto de GitHub para este repositorio.",
+          "4e2a14f967": "Icono de Repo",
+          "d71df44587": "No se pudo resolver el repo de GitHub.",
+          "f79972271a": "No se encontró ningún control remoto de GitHub para este repo.",
           "4d039317f4": "favicon del sitio web",
           "acf31559a0": "Ingrese una URL de sitio web válida.",
-          "868c5c9b56": "No se pudo importar el icono del repositorio"
+          "868c5c9b56": "No se pudo importar el icono del repo"
         },
         "RepositoryPane": {
           "15a99d9b9f": "Las rutas relativas se resuelven desde la raíz de este proyecto.",
@@ -5010,7 +5010,7 @@
           "7a3a8e431d": "Argumentos CLI",
           "2b2f38652b": "Comando personalizado",
           "0ffb081b3a": "Usar agente predeterminado",
-          "f4310cf63f": "Agente",
+          "f4310cf63f": "Agent",
           "1cd88d470a": "Personalizar",
           "403876bb48": "Usar global",
           "f0aa2cfaea": "Recetas de acción"
@@ -5018,7 +5018,7 @@
         "RepositorySourceControlAiCustomCommand": {
           "0704dd55cd": "Comando de repositorio",
           "e56668c291": "Usar global",
-          "fbb77e122a": "Reserva de repositorio para acciones de texto que seleccionan el comando personalizado.",
+          "fbb77e122a": "Reserva de Repo para acciones de texto que seleccionan el comando personalizado.",
           "ebffc5a28c": "Comando personalizado",
           "f9941f0caf": "p.ej. ollama ejecuta llama3.1 {rápido}"
         },
@@ -5145,7 +5145,7 @@
           "d7e3f62d70": "Privacidad y telemetría",
           "9b83cc62c2": "Acceso a la privacidad de macOS para herramientas de desarrollo lanzadas en terminales.",
           "65660d4548": "Permisos de macOS",
-          "c6c01ac209": "Controla terminales y agentes desde tu teléfono.",
+          "c6c01ac209": "Controla terminales y agents desde tu teléfono.",
           "c40dadaac8": "Móvil",
           "c2ee313198": "Hosts SSH remotos para archivos, terminales y git.",
           "9b02492d1f": "Anfitriones SSH",
@@ -5162,9 +5162,9 @@
           "d7a3e635b6": "Entrada y edición",
           "6d1a27e193": "Tema, zoom, apariencia de la aplicación y del terminal, barras laterales y barra de estado.",
           "2b4474780a": "Apariencia",
-          "3d9adfe6a5": "Terminal global, navegador y pestañas de rebajas.",
+          "3d9adfe6a5": "Terminal global, navegador y pestañas de markdowns.",
           "3eb22a3ada": "Espacio de trabajo flotante",
-          "01f9d36292": "Configure la compatibilidad con el emulador móvil para Orca y agentes de codificación.",
+          "01f9d36292": "Configure la compatibilidad con el emulador móvil para Orca y agents de codificación.",
           "f75daf1002": "Emulador móvil",
           "ad9788036f": "Página de inicio, enrutamiento de enlaces y cookies de sesión.",
           "c46215ea03": "Navegador",
@@ -5184,14 +5184,14 @@
           "6d119427ef": "Lista de verificación de incorporación",
           "eb1176a14e": "Dictado local de voz a texto con modelos en el dispositivo.",
           "5063bb47a5": "Voz",
-          "7118953f14": "Permita que los agentes controlen cualquier aplicación en su computadora.",
+          "7118953f14": "Permita que los agents controlen cualquier aplicación en su computadora.",
           "c9841721cb": "Uso de la computadora",
-          "475980f53d": "Coordine múltiples agentes de codificación a través de Orca.",
+          "475980f53d": "Coordine múltiples agents de codificación a través de Orca.",
           "00c3a7950d": "Orquestación",
           "21f09426ea": "Opcional. Orca trabaja con los inicios de sesión de su proveedor existente; agregue cuentas solo si desea que Orca le ayude a cambiar entre ellas.",
           "ad6c529693": "Cuentas de proveedores de IA",
-          "ec1ba547f7": "Administre agentes de IA, establezca un valor predeterminado y personalice comandos.",
-          "8afa676615": "Agentes",
+          "ec1ba547f7": "Administre agents de IA, establezca un valor predeterminado y personalice comandos.",
+          "8afa676615": "Agents",
           "add3b97ee6": "\"",
           "3c88ec55d6": "No se encontraron configuraciones para \"",
           "c7ad095d96": "Cargando configuración...",
@@ -5298,7 +5298,7 @@
           "9d3cc627f8": "Guardado",
           "817128d94e": "Cambios no guardados",
           "7ab1437a12": "solicitud de extracción",
-          "e5b24893ba": "comprometerse",
+          "e5b24893ba": "commit",
           "06a9dab64d": "cheques",
           "cb67b938c5": "arreglar",
           "2037c78a6f": "plantilla",
@@ -5306,7 +5306,7 @@
           "d74fdc776c": "dominio",
           "673369fe0c": "cli",
           "db9bd75d10": "argumentos",
-          "926d58e87f": "agente"
+          "926d58e87f": "agent"
         },
         "SparsePresetSettingsSection": {
           "6fa754d20f": "Borrar",
@@ -5317,7 +5317,7 @@
           "388513be2d": "Ajustes preestablecidos de pago dispersos",
           "a05bc9183f": "Guardar preestablecido",
           "2d7d45e991": "Cancelar",
-          "c240a16f25": "Utilice rutas relativas al repositorio como paquetes/web o aplicaciones/api.",
+          "c240a16f25": "Utilice rutas relativas al repo como paquetes/web o aplicaciones/api.",
           "fde7ff2cc3": "paquetes/web compartida/ui",
           "caf33029cc": "Directorios",
           "3b6f1abd3e": "p.ej. solo web",
@@ -5831,11 +5831,11 @@
             "d608654c03": "wsl",
             "77c02fa3c3": "ventanas",
             "d2952dfd74": "ubicación",
-            "96ba2373b6": "agente",
-            "cbdd7f3b9e": "Elija si los agentes instalados se detectan en este dispositivo o en WSL.",
-            "ef804b7337": "Ubicación del agente",
-            "01926b9d8c": "Configure agentes de codificación de IA, agente predeterminado y anulaciones de comandos.",
-            "bb9ad95777": "Agentes",
+            "96ba2373b6": "agent",
+            "cbdd7f3b9e": "Elija si los agents instalados se detectan en este dispositivo o en WSL.",
+            "ef804b7337": "Ubicación del Agent",
+            "01926b9d8c": "Configure agents de codificación de IA, agente predeterminado y anulaciones de comandos.",
+            "bb9ad95777": "Agents",
             "d8f3a8b8a0": "por defecto",
             "167daeb5e9": "dominio",
             "be59907510": "anular",
@@ -5945,7 +5945,7 @@
             "cf409b6c4d": "Puertos",
             "cb1cc62cf8": "espacio",
             "90bdc043ea": "disco",
-            "96b4fb0064": "Terminal",
+            "96b4fb0064": "terminal",
             "4ddbde4999": "UPC",
             "4355f18ac6": "memoria",
             "9c4d5f0894": "gerente",
@@ -6000,11 +6000,11 @@
                 "50139297e6": "aviso incorporado",
                 "502aa57681": "instrucciones",
                 "40d21f2efc": "inmediato",
-                "672387fb77": "Plantilla de comando del agente utilizada al generar nombres de sucursales.",
+                "672387fb77": "Plantilla de comando del Agent utilizada al generar nombres de sucursales.",
                 "722551c5b3": "Plantilla de comando de nombre de sucursal",
                 "f41833025e": "generar",
                 "ed677944cc": "árbol de trabajo",
-                "3ef3cbe98c": "agente",
+                "3ef3cbe98c": "agent",
                 "f0acf64301": "nombre de la criatura",
                 "7803423877": "auto",
                 "55a1860e47": "rebautizar",
@@ -6031,7 +6031,7 @@
             "96afedcb5c": "Sesión y cookies",
             "a7a07d5415": "editor",
             "8dd4805991": "archivo",
-            "68d1db8929": "reducción",
+            "68d1db8929": "markdown",
             "90425d313c": "cambio",
             "72c58f7792": "vista web",
             "82ba1c80ea": "servidor local",
@@ -6084,16 +6084,16 @@
               "02837ee497": "sesión",
               "fb8178824f": "galletas",
               "ba4eb53b72": "uso del navegador",
-              "2fb24d17db": "Importe cookies de Chrome, Edge u otros navegadores para que los agentes puedan reutilizar sus inicios de sesión.",
+              "2fb24d17db": "Importe cookies de Chrome, Edge u otros navegadores para que los agents puedan reutilizar sus inicios de sesión.",
               "614c756ab1": "Importar cookies del navegador",
               "cee44fb442": "automatización",
               "a57c2172dc": "navegador-agente",
               "6ea88e5206": "npx",
               "f5b8fdddf5": "orca-cli",
               "e5a784bc54": "instalar",
-              "9d97446873": "agente",
+              "9d97446873": "agent",
               "a2d489263e": "habilidad",
-              "a7e82445fa": "Instale la habilidad Uso del navegador para que los agentes puedan operar el navegador de Orca.",
+              "a7e82445fa": "Instale la habilidad Uso del navegador para que los agents puedan operar el navegador de Orca.",
               "a1414dcefb": "Instalar la habilidad de uso del navegador",
               "e56c7b55c9": "configuración",
               "034c5e8d7f": "permitir",
@@ -6102,7 +6102,7 @@
               "30c74aaa1f": "camino",
               "ff05cbc344": "orca",
               "85fab5e12c": "cli",
-              "890ddf943d": "Registre la CLI de Orca para que los agentes puedan controlar el navegador.",
+              "890ddf943d": "Registre la CLI de Orca para que los agents puedan controlar el navegador.",
               "50f0860e18": "Habilitar CLI de Orca"
             }
           }
@@ -6111,7 +6111,7 @@
           "message": {
             "ai": {
               "search": {
-                "3766941527": "agente",
+                "3766941527": "agent",
                 "181cdb0637": "abierto",
                 "8e9cc598d7": "generar",
                 "b7d50da4d8": "plantilla",
@@ -6121,7 +6121,7 @@
                 "001ca3f2af": "Valores predeterminados utilizados cuando se abre el compositor Crear PR.",
                 "eefd33788c": "Valores predeterminados de creación de relaciones públicas",
                 "d32936bb2a": "rama",
-                "127d512e75": "comprometerse",
+                "127d512e75": "commit",
                 "d22a6459e4": "conflictos",
                 "53e8504fb2": "ci",
                 "c46e665f7e": "cheques",
@@ -6140,7 +6140,7 @@
                 "f121bec167": "claude",
                 "93e5210da8": "mensaje",
                 "c33cb1b982": "ai",
-                "0b946b2abe": "Agrega recetas de acciones para acciones de confirmación de control de código fuente, solicitud de extracción, nombre de rama y reparación.",
+                "0b946b2abe": "Agrega recetas de acciones para acciones de commit de control de código fuente, solicitud de extracción, nombre de rama y reparación.",
                 "24dbdfca78": "Mostrar acciones de IA de control de código fuente"
               }
             }
@@ -6155,7 +6155,7 @@
               "26c1290d83": "grabación de pantalla",
               "82f01c2d2c": "accesibilidad",
               "fefb452f5b": "uso de la computadora",
-              "9210db582b": "Permita que los agentes inspeccionen capturas de pantalla y operen aplicaciones locales cuando usted lo solicite.",
+              "9210db582b": "Permita que los agents inspeccionen capturas de pantalla y operen aplicaciones locales cuando usted lo solicite.",
               "442bec10fe": "Uso de la computadora"
             }
           }
@@ -6221,23 +6221,23 @@
             "78c2a8dc74": "Enlaces simbólicos en árboles de trabajo",
             "7b79081695": "no leído",
             "f10d307468": "terminación",
-            "5f067ba0f9": "agente",
+            "5f067ba0f9": "agent",
             "7695fd30e9": "notificación",
             "8facf10138": "campana",
             "edc49480a1": "cristal",
             "268e99d957": "destacar",
             "01567f19ca": "atención",
-            "9bb3bd5098": "Terminal",
+            "9bb3bd5098": "terminal",
             "11877246fc": "Resaltado de panel persistente para eventos de finalización de agente y timbre de terminal.",
             "9e4ddf776d": "Atención terminal",
             "fe5688b761": "barra lateral",
             "ca5d1f3f46": "línea de tiempo",
             "d01b3882ba": "notificaciones",
             "244a0ecd3d": "actividad",
-            "92a9357d1f": "vista de agentes",
-            "fa72e71f05": "agentes",
+            "92a9357d1f": "vista de agents",
+            "fa72e71f05": "agents",
             "4d63251595": "Feed integrado en la barra lateral izquierda para completar agentes y estados de bloqueo.",
-            "ccc5548ac5": "Vista de agentes",
+            "ccc5548ac5": "Vista de Agents",
             "9af7a518db": "personaje",
             "791fefc0b0": "esquina",
             "65df471ab2": "animado",
@@ -6258,9 +6258,9 @@
               "a38bfc3f77": "panel rápido",
               "52db6e3baf": "notas",
               "156ffeee08": "nota",
-              "884e5e6132": "reducción",
+              "884e5e6132": "markdown",
               "49db74a92d": "navegador",
-              "6410fe83d8": "Terminal",
+              "6410fe83d8": "terminal",
               "2b5efa55c9": "global",
               "ebeedb2f6a": "terminal rápido",
               "6f183fa1b9": "terminal flotante",
@@ -6291,7 +6291,7 @@
             "aea7d2cccb": "claudia abierta",
             "95b63edde7": "claude",
             "41c2f9a025": "por defecto",
-            "8ea37a05bc": "agente",
+            "8ea37a05bc": "agent",
             "e2da948f59": "Preseleccione un agente de codificación de IA en el compositor del nuevo espacio de trabajo.",
             "db11502270": "Agente predeterminado",
             "3462308bd3": "fichas",
@@ -6300,7 +6300,7 @@
             "0efc9d96ad": "inmediato",
             "939b80f5fd": "minutero",
             "b2601a778c": "cache",
-            "40c9585e43": "Temporizador de cuenta regresiva que muestra el tiempo hasta que caduque el caché de mensajes (agentes Claude).",
+            "40c9585e43": "Temporizador de cuenta regresiva que muestra el tiempo hasta que caduque el caché de mensajes (agents Claude).",
             "1e0f28c6f1": "Temporizador de caché rápido",
             "e49e739a59": "descargar",
             "c9d8c1ce66": "notas de lanzamiento",
@@ -6309,13 +6309,13 @@
             "79ff46776e": "Busque actualizaciones de la aplicación e instale una versión más reciente de Orca.",
             "e15af4eb64": "Buscar actualizaciones",
             "6382fe9724": "npx",
-            "baa263d6d8": "agentes",
+            "baa263d6d8": "agents",
             "bda108e66c": "habilidad",
-            "244e3fb4c8": "Instale la habilidad Orca para que los agentes sepan cómo usar la CLI de Orca.",
-            "2d9f7b42df": "Habilidad del agente",
+            "244e3fb4c8": "Instale la habilidad Orca para que los agents sepan cómo usar la CLI de Orca.",
+            "2d9f7b42df": "Habilidad del Agent",
             "0a00691c06": "comando de shell",
             "dbeb1f348e": "dominio",
-            "88d3df9ce9": "Terminal",
+            "88d3df9ce9": "terminal",
             "fb4f338a3d": "camino",
             "924a660a78": "cli",
             "ca529079bf": "Registre o elimine el comando CLI de Orca.",
@@ -6333,9 +6333,9 @@
             "22572e99c1": "anotaciones",
             "1ff67ba40c": "notas",
             "4dd5684836": "revisar",
-            "d05f629d2c": "reducción",
-            "694613d47f": "Muestre los controles de notas de revisión de rebajas locales en el modo de editor enriquecido.",
-            "128bc09325": "Notas de revisión de rebajas",
+            "d05f629d2c": "markdown",
+            "694613d47f": "Muestre los controles de notas de revisión de markdowns locales en el modo de editor enriquecido.",
+            "128bc09325": "Notas de revisión de Markdowns",
             "a0014961ae": "voluta",
             "3ca5ab78a5": "código",
             "e3919429c0": "descripción general",
@@ -6400,7 +6400,7 @@
             "93f6ec5e70": "directorio",
             "9bde064915": "subcarpeta",
             "ec5049e510": "anidado",
-            "b9cffd374d": "Cree espacios de trabajo dentro de una subcarpeta con nombre de repositorio.",
+            "b9cffd374d": "Cree espacios de trabajo dentro de una subcarpeta con nombre de repo.",
             "141f71c69f": "Espacios de trabajo anidados",
             "7887a2c262": "carpeta",
             "7baf524b04": "espacio de trabajo",
@@ -6418,7 +6418,7 @@
             "6bdea421bb": "pr",
             "16f53f7323": "gh",
             "d088806071": "github",
-            "118c23484b": "Agregue la atribución de Orca a confirmaciones, relaciones públicas y problemas.",
+            "118c23484b": "Agregue la atribución de Orca a commits, relaciones públicas y problemas.",
             "bc7d9f69ce": "Atribución de Orca",
             "40f9b815fd": "presupuesto API",
             "b7e52124c7": "límite de tasa",
@@ -6441,7 +6441,7 @@
             "564942ffc5": "origen/principal",
             "28192e3a63": "maestro",
             "e3e9adde59": "principal",
-            "0e993bf00f": "Cuando crea un espacio de trabajo, Orca actualiza la base remota y adelanta de forma segura su rama local coincidente, como principal o maestra. Esto evita que comandos como git diff main...HEAD se comparen con el historial obsoleto. Orca omite la actualización si esa rama tiene cambios no confirmados o confirmaciones solo locales.",
+            "0e993bf00f": "Cuando crea un espacio de trabajo, Orca actualiza la base remota y adelanta de forma segura su rama local coincidente, como principal o maestra. Esto evita que comandos como git diff main...HEAD se comparen con el historial obsoleto. Orca omite la actualización si esa rama tiene cambios no confirmados o commits solo locales.",
             "f8bda25f29": "Mantenga actualizado el principal local",
             "769ddd7f81": "costumbre",
             "1d2fae1fa2": "nombre de usuario git",
@@ -6488,7 +6488,7 @@
             "d0d019dc29": "Autenticación de Gitea a través de variables de entorno de token API.",
             "aab86d64e5": "Integración de Gitea",
             "03a7b275be": "alharaca",
-            "ed63380247": "repositorios azules",
+            "ed63380247": "repos azules",
             "b38b5d27f1": "devops azules",
             "7b1f3984bb": "Autenticación de Azure DevOps Repos mediante variables de entorno de token.",
             "af6611fa6e": "Integración de Azure DevOps",
@@ -6547,7 +6547,7 @@
               "6f728f1456": "grifo del emulador",
               "f8b871d655": "agente cli",
               "2e0b45b2ba": "Utilice los comandos de Orca CLI para enumerar, adjuntar, tocar y escribir en un emulador móvil.",
-              "ea3eac39bb": "Control CLI del agente",
+              "ea3eac39bb": "Control CLI del Agent",
               "8ef0f08d36": "tiempo de ejecución",
               "27397fe8e9": "herramientas de línea de comando xcode",
               "7650063d17": "simctl",
@@ -6574,7 +6574,7 @@
               "2d67f708ce": "simulador",
               "c5eca29310": "simulador de ios",
               "25159de808": "emulador móvil",
-              "9595354cff": "Configure la compatibilidad con el emulador móvil para Orca y agentes de codificación.",
+              "9595354cff": "Configure la compatibilidad con el emulador móvil para Orca y agents de codificación.",
               "cdd3c31918": "Emulador móvil"
             }
           },
@@ -6589,7 +6589,7 @@
               "fadcbfdd99": "adaptar",
               "ad08035c5f": "teléfono",
               "6cd2bfdb0e": "restaurar",
-              "b34ad5b3a7": "Terminal",
+              "b34ad5b3a7": "terminal",
               "6db86f445f": "móvil",
               "707fc78052": "Elija qué sucede con los terminales que estaba viendo en el móvil después de cerrar la aplicación o salir.",
               "1e711aca11": "Cuando sales de la aplicación móvil",
@@ -6633,7 +6633,7 @@
               "cf2c93b479": "par",
               "f4ed142753": "teléfono",
               "f213400800": "móvil",
-              "671eb4173c": "Controla terminales y agentes desde tu teléfono.",
+              "671eb4173c": "Controla terminales y agents desde tu teléfono.",
               "ffd52a96e4": "Móvil"
             }
           }
@@ -6667,15 +6667,15 @@
             "96562a72c6": "Suprimir mientras estás concentrado",
             "a2ab73b325": "atención",
             "ae0487f8fd": "campana",
-            "c638ae989d": "Terminal",
+            "c638ae989d": "terminal",
             "d3f1c48677": "Notificar cuando un terminal en segundo plano emite un carácter de campana.",
             "a5edee1d99": "Campana terminal",
             "193e1f107c": "tarea",
             "dd9d3e5f0f": "idle",
             "5f7472d3fb": "completo",
-            "7fa07e9600": "agente",
+            "7fa07e9600": "agent",
             "10d83ef8dc": "Notificar cuando un agente de codificación pasa de estar en funcionamiento a estar inactivo.",
-            "bdc1edaeb4": "Tarea del agente completada",
+            "bdc1edaeb4": "Tarea del Agent completada",
             "adbc3a0fcf": "nativo",
             "72539aede4": "sistema",
             "51ae2183e1": "de oficina",
@@ -6685,7 +6685,7 @@
         },
         "orchestration": {
           "search": {
-            "f5d39af41e": "agentes infantiles",
+            "f5d39af41e": "agents infantiles",
             "c766a01978": "manos libres",
             "08c65b12a2": "ejemplos",
             "f278fd04db": "codex",
@@ -6697,11 +6697,11 @@
             "eee028ae14": "despacho",
             "9a5ebdca31": "mensajería",
             "91fc8ab7e5": "coordinación",
-            "13ba5c6cbd": "agentes",
+            "13ba5c6cbd": "agents",
             "d86705ba77": "multiagente",
             "a7f76b4ca7": "orquestación",
-            "e05ff36753": "Coordine múltiples agentes de codificación a través de mensajes, DAG de tareas, despacho y puertas de decisión.",
-            "c34045764e": "Orquestación de agentes"
+            "e05ff36753": "Coordine múltiples agents de codificación a través de mensajes, DAG de tareas, despacho y puertas de decisión.",
+            "c34045764e": "Orquestación de Agents"
           }
         },
         "privacy": {
@@ -6749,12 +6749,12 @@
               "0b78c4a165": "lanzamiento",
               "2d8aff42be": "correr",
               "1c5bdcd0f2": "repositorio",
-              "89d2a9ad9f": "repositorio",
+              "89d2a9ad9f": "repo",
               "f58b92a48f": "proyecto",
               "8bf43c2dad": "global",
               "a26ecdb77b": "retazo",
               "d07d130849": "atajo",
-              "0073cf8ce9": "Terminal",
+              "0073cf8ce9": "terminal",
               "cfffa6cdb6": "comandos",
               "fecb031823": "dominio",
               "236d4cfac8": "rápido",
@@ -6824,7 +6824,7 @@
             "917dce844a": "nombre de la sucursal",
             "8068d8d0f1": "pr",
             "5ff7fe1ade": "solicitud de extracción",
-            "eec39b3de6": "mensaje de confirmación",
+            "eec39b3de6": "mensaje de commit",
             "cfad7ce5f3": "ai",
             "a47f51127e": "control de fuente",
             "6cc5c65e64": "Anulaciones de generación de git específicas del proyecto.",
@@ -6896,10 +6896,10 @@
             "4811a8264a": "terminal primero",
             "afda131738": "orca primero",
             "0ecfc47434": "conflicto",
-            "0f8cb15582": "agente",
+            "0f8cb15582": "agent",
             "f1adebbe8c": "caparazón",
             "7f1b38f59a": "tui",
-            "7e3fc707aa": "Terminal",
+            "7e3fc707aa": "terminal",
             "0ecba9aa5f": "teclado",
             "ebd7d81e1d": "Elija si Orca o el terminal enfocado gana cuando los atajos se superponen.",
             "f052906167": "Atajos en la Terminal"
@@ -7020,7 +7020,7 @@
             "d4daf4f612": "descongelar",
             "88561b3499": "congelado",
             "0a05629060": "recuperar",
-            "f66a7cf715": "Terminal",
+            "f66a7cf715": "terminal",
             "6892fb1019": "Reanudar",
             "cde233f5da": "desplazarse hacia atrás",
             "3982d88725": "historia",
@@ -7160,7 +7160,7 @@
               "fcfa53920b": "pasta",
               "e55186fe2b": "clic derecho",
               "28ff08ed35": "ventanas",
-              "e7d2793b03": "Terminal",
+              "e7d2793b03": "terminal",
               "8ba875c132": "En Windows, haga clic derecho y pegue el portapapeles en la terminal. Utilice Ctrl+clic derecho para abrir el menú contextual.",
               "f0b8448570": "Haga clic derecho para pegar",
               "04994f6929": "por defecto",
@@ -7225,10 +7225,10 @@
             "action": {
               "recipe": {
                 "options": {
-                  "commitMessage": "Genere el mensaje de confirmación a partir de cambios preparados.",
+                  "commitMessage": "Genere el mensaje de commit a partir de cambios preparados.",
                   "pullRequest": "Genere el título y la descripción de la reseña alojada.",
                   "branchName": "Cambie el nombre de las ramas creadas por Orca desde la tarea inicial del agente.",
-                  "fixCommitFailure": "Inicie un agente cuando falle un enlace de confirmación o una confirmación de git.",
+                  "fixCommitFailure": "Inicie un agente cuando falle un enlace de commit o una commit de git.",
                   "fixChecks": "Inicie un agente a partir de comprobaciones fallidas de revisión alojada.",
                   "resolveConflicts": "Inicie un agente para conflictos de fusión de revisión local o alojada.",
                   "customCommand": "Custom command",
@@ -7240,12 +7240,12 @@
           }
         },
         "agent-awake-copy": {
-          "e5995ce268": "Mantener la computadora activa mientras los agentes están trabajando",
-          "95d3031db2": "Mantiene esta computadora y pantalla activas mientras los agentes están trabajando. El comportamiento de cierre de la tapa sigue la configuración de energía de este dispositivo.",
-          "a42f6fbdd8": "Mantiene esta computadora y pantalla activas mientras los agentes están trabajando. Orca también le pide a este dispositivo que permanezca despierto cuando la tapa está cerrada, sujeto a su política de energía."
+          "e5995ce268": "Mantener la computadora activa mientras los agents están trabajando",
+          "95d3031db2": "Mantiene esta computadora y pantalla activas mientras los agents están trabajando. El comportamiento de cierre de la tapa sigue la configuración de energía de este dispositivo.",
+          "a42f6fbdd8": "Mantiene esta computadora y pantalla activas mientras los agents están trabajando. Orca también le pide a este dispositivo que permanezca despierto cuando la tapa está cerrada, sujeto a su política de energía."
         },
         "agent-status-hooks-copy": {
-          "7707c15abb": "Ganchos de estado del agente",
+          "7707c15abb": "Ganchos de estado del Agent",
           "a68a642835": "Muestra los estados de trabajo, espera y finalización en Orca. Apague para quitar los ganchos administrados por Orca y deje de reinstalarlos."
         },
         "agent-generated-tab-title-copy": {
@@ -7466,7 +7466,7 @@
             "fc747429bf": "Rebautizar",
             "0df0e5abac": "Buscar en la carpeta",
             "d6a25618aa": "Contraer carpeta",
-            "d87a4c42e1": "Abrir vista previa de rebajas",
+            "d87a4c42e1": "Abrir vista previa de Markdowns",
             "c2112579f6": "Descargar",
             "dd112c81d2": "Abrir en el navegador Orca",
             "1bb9be455c": "Agregar como proyecto...",
@@ -7479,7 +7479,7 @@
             "e26010014a": "Ignorado por .gitignore",
             "a06551beee": "Ingresar",
             "128a99ed5e": "No asignado",
-            "2de3b21934": "reducción",
+            "2de3b21934": "markdown",
             "66a29dde82": "Copiar ruta relativa",
             "42e10cbf57": "Copiar rutas relativas",
             "b5d436aa30": "Copiar ruta",
@@ -7498,17 +7498,17 @@
             "c76693e456": "No se pudieron cargar archivos para este espacio de trabajo:"
           },
           "GitHistoryPanel": {
-            "cf7cad58d2": "Aún no hay compromisos",
+            "cf7cad58d2": "Aún no hay commits",
             "781a8bcf7b": "Cargando gráfico...",
-            "d0fb0f4bf2": "Actualizar confirmaciones",
-            "9f7535d22b": "Las referencias son nombres de ramas o etiquetas que apuntan a esa confirmación exacta. Solo aparecen cuando Git tiene una referencia con nombre para la confirmación.",
+            "d0fb0f4bf2": "Actualizar commits",
+            "9f7535d22b": "Las referencias son nombres de ramas o etiquetas que apuntan a esa commit exacta. Solo aparecen cuando Git tiene una referencia con nombre para la commit.",
             "9289ba0cb9": "¿Qué son los árbitros?",
-            "d836037d02": "Se compromete",
+            "d836037d02": "Commits",
             "8232c8b2f2": "Confirmación abierta {{value0}}: {{value1}}",
             "9a8b85882d": "cargando",
             "62e685d5ec": "idle",
             "111e1d0db4": "error",
-            "e5e81e59a6": "Cambiar el tamaño de las confirmaciones"
+            "e5e81e59a6": "Cambiar el tamaño de las commits"
           },
           "HostedReviewActions": {
             "4d5fb5a284": "Cerca",
@@ -7645,22 +7645,22 @@
             "3278b2767b": "adelante",
             "11b5dd8e41": "Comparando contra",
             "783a808870": "Cerca",
-            "a9bf7c171a": "Confirmación fallida",
+            "a9bf7c171a": "Commit fallida",
             "03d238218c": "Detalles",
-            "011f9713fc": "Confirmación bloqueada",
-            "cc199ccc5f": "Más compromisos y acciones remotas",
+            "011f9713fc": "Commit bloqueada",
+            "cc199ccc5f": "Más commits y acciones remotas",
             "4d6e1fd7f3": "Más acciones",
-            "37a81f29ad": "Generando mensaje de confirmación. Haga clic para detener.",
-            "b94112eb9e": "mensaje de confirmación",
+            "37a81f29ad": "Generando mensaje de commit. Haga clic para detener.",
+            "b94112eb9e": "mensaje de Commit",
             "0d0a8359d3": "Mensaje",
             "15b7f210d7": "Revise el mensaje antes de iniciar un agente.",
-            "054ead86b1": "Solucionar errores de confirmación con IA",
-            "9e5ccd00aa": "Contexto de error de confirmación no disponible",
+            "054ead86b1": "Solucionar errores de Commit con IA",
+            "9e5ccd00aa": "Contexto de error de Commit no disponible",
             "f0a2dc9e46": "Personalizar el lanzamiento...",
-            "ec7bfced55": "Elija un agente para solucionar el error de confirmación",
-            "dd43c47089": "Elija un agente para este error de confirmación",
-            "30b8d4f181": "Soluciona el error de confirmación con IA",
-            "4b37ae99b0": "Inicie el agente de IA predeterminado para solucionar este error de confirmación",
+            "ec7bfced55": "Elija un agente para solucionar el error de commit",
+            "dd43c47089": "Elija un agente para este error de commit",
+            "30b8d4f181": "Soluciona el error de commit con IA",
+            "4b37ae99b0": "Inicie el agente de IA predeterminado para solucionar este error de commit",
             "ae743199cd": "Elija una rama base diferente antes de crear un {{value0}}.",
             "c5e4175139": "Más {{value0}} y acciones remotas",
             "78ddfd0bb4": "Crear como borrador",
@@ -7680,7 +7680,7 @@
             "e1970d327d": "Nuevo {{value0}}",
             "f4c766f1ca": "Elija el agente y la plantilla de comando para esta ejecución.",
             "1a6a6e0bc5": "Generar detalles de reseña alojada",
-            "6b122529d4": "Generar mensaje de confirmación",
+            "6b122529d4": "Generar mensaje de Commit",
             "e48caaf0dd": "Inició un agente de IA para los conflictos.",
             "901140f47d": "Revise el mensaje antes de iniciar un agente.",
             "19652ddd76": "Resolver conflictos con IA",
@@ -7699,7 +7699,7 @@
             "dc5a6465fc": "{{value0}} (por ejemplo, {{value1}}{{value2}})",
             "8eb3782a0c": "No se pudo descartar el archivo {{value0}}{{value1}}",
             "a5e5a11090": "Descartar todo falló: no se pueden eliminar los archivos antes de descartarlos",
-            "8a5ba6a988": "No se pudo cargar la diferencia de confirmación",
+            "8a5ba6a988": "No se pudo cargar la diferencia de commit",
             "fe5bd1a610": "Creando {{value0}}...",
             "812cb992ee": "Abierto el {{value0}}",
             "eef5446523": "{{value0}} #{{value1}} ya está abierto",
@@ -7725,21 +7725,24 @@
             "d7a5942e41": "{{value0}}: {{value1}} sin resolver",
             "c56ba7fa06": "diferencia",
             "94c42b252e": "Maryland",
-            "e59bca888a": "reducción",
+            "e59bca888a": "markdown",
             "b6922abb13": "No se puede cargar la comparación de ramas.",
             "715d229c86": "Comparación de sucursales no disponible",
             "97d8b03cdf": "Error en la comparación de sucursales",
             "424ee0e5bf": "error",
             "834cb3f23d": "Arreglar con IA",
             "60bd988f0b": "Corrección de IA",
-            "461575b9bc": "Generar mensaje de confirmación con IA",
-            "ddc1fbd690": "Dejar de generar mensaje de confirmación",
+            "461575b9bc": "Generar mensaje de commit con IA",
+            "ddc1fbd690": "Dejar de generar mensaje de commit",
             "5acbcedc1a": "Crear {{value0}}",
             "aaf1451654": "Crear borrador {{value0}}",
             "26511c22b4": "Creando...",
             "7a09d7f9d2": "base",
             "383cf92c73": "árbol",
             "d7ae61269b": "Comprometidos en Sucursal",
+            "48a003c1b1": "Cambios preparados",
+            "d4ef4bafc5": "Cambios",
+            "522f44dce5": "Archivos sin seguimiento",
             "3636d0f686": "listo",
             "d2e9189866": "todo",
             "a0cc0e6b4e": "cargando",
@@ -7796,11 +7799,11 @@
             "fe119187bb": "--soneto modelo",
             "bc8dc39f4b": "Argumentos CLI",
             "b99c33cec5": "Ajustes",
-            "15c5d85706": "Agente",
+            "15c5d85706": "Agent",
             "3e8f21954f": "error",
             "74168d7ada": "idle",
-            "1d47db9bf0": "No hay agentes habilitados",
-            "c7ff8cef11": "Detectando agentes..."
+            "1d47db9bf0": "No hay agents habilitados",
+            "c7ff8cef11": "Detectando agents..."
           },
           "SourceControlTextGenerationDialog": {
             "c5b7fa7cb6": "Guardar como valor predeterminado global",
@@ -7816,7 +7819,7 @@
             "4eab815004": "Argumentos CLI",
             "914c8f6ac2": "Comando personalizado",
             "cce2cbd01d": "Elige agente",
-            "9c14186dd2": "Agente"
+            "9c14186dd2": "Agent"
           },
           "activity": {
             "bar": {
@@ -7829,7 +7832,7 @@
           "checks": {
             "panel": {
               "content": {
-                "3916814392": "detrás (compromiso base:",
+                "3916814392": "detrás (commit base:",
                 "755be805f6": "Sin comentarios",
                 "751f7c6e5c": "Mostrando los primeros 100 comentarios por fuente",
                 "94557d68e2": "Comentarios",
@@ -7883,7 +7886,7 @@
                 "b652f38caf": "cheque fallido",
                 "87cd07c69a": "Esta rama tiene conflictos que deben ser resueltos.",
                 "0975eeaaef": "Archivos conflictivos",
-                "6fa7f8723f": "comprometerse",
+                "6fa7f8723f": "commit",
                 "2b2be92919": "Añadir comentario",
                 "7440d09d2c": "Iniciar conversación",
                 "b37ebdc51c": "Comentarios no disponibles.",
@@ -7909,7 +7912,7 @@
                   "2bdd7aaf2d": "No se pudo actualizar el estado de GitHub. Se conservaron los datos almacenados en caché existentes.",
                   "5f478ab3d3": "No se pudo actualizar la solicitud de extracción",
                   "6ce9d4e069": "Empuje su rama antes de crear un {{value0}}.",
-                  "76e15946a9": "La rama tiene confirmaciones no enviadas",
+                  "76e15946a9": "La rama tiene commits no enviadas",
                   "f8543140cc": "Publique esta rama antes de crear un {{value0}}.",
                   "41252bc53f": "Sucursal no publicada",
                   "05e4aec17b": "{{value0}} cheques estarán disponibles una vez completada la operación.",
@@ -7979,11 +7982,11 @@
                 "commit": {
                   "failure": {
                     "launch": {
-                      "a8b97d2318": "Se inició un agente de IA para el error de confirmación.",
+                      "a8b97d2318": "Se inició un agente de IA para el error de commit.",
                       "5540ff50cc": "No se pudo generar el comando de inicio del agente.",
-                      "9bbd9077a2": "No hay agentes de IA habilitados. Configure los agentes en Configuración.",
+                      "9bbd9077a2": "No hay agents de IA habilitados. Configure los agents en Configuración.",
                       "d481ab22f9": "El agente de IA guardado no está disponible. Utilice Personalizar inicio para elegir otro agente.",
-                      "f2b47026e8": "El mensaje de error de confirmación está vacío. Actualice la configuración de AI de control de fuente.",
+                      "f2b47026e8": "El mensaje de error de Commit está vacío. Actualice la configuración de AI de control de fuente.",
                       "4f4e0418a0": "No se pudo generar el mensaje del agente.",
                       "216f762bd7": "No se puede resolver la conexión del espacio de trabajo."
                     }
@@ -8018,13 +8021,13 @@
                   "7aad2c0240": "Operación de revisión alojada en curso...",
                   "9e779995dd": "Crear {{value0}}",
                   "226b85a3a7": "Buscar",
-                  "323bb614aa": "Confirmar y sincronizar",
-                  "2b8e6595fd": "Comprometerse"
+                  "323bb614aa": "Commit y sincronizar",
+                  "2b8e6595fd": "Commit"
                 }
               },
               "primary": {
                 "action": {
-                  "ed93b4f14f": "Comprometerse",
+                  "ed93b4f14f": "Commit",
                   "946a8a05ea": "Crea un {{value0}} para esta rama",
                   "e7ffa46946": "Crear {{value0}}",
                   "95550cff15": "Empujar",
@@ -8036,10 +8039,10 @@
                   "3d5dccef0b": "Nada que comprometer. PR ya está fusionado.",
                   "41d4bcf157": "Comprobando el estado de las relaciones públicas...",
                   "acce237921": "Nada que comprometer. La sucursal no tiene cambios para publicar.",
-                  "fa3bd4f40c": "Prepare al menos un archivo para confirmar",
+                  "fa3bd4f40c": "Prepare al menos un archivo para commit",
                   "5a477d80cb": "Organiza todos los cambios",
                   "18a0fca877": "Escenario todo",
-                  "f01f16d77f": "Ingrese un mensaje de confirmación para confirmar",
+                  "f01f16d77f": "Ingrese un mensaje de commit para commit",
                   "ab41fb926b": "Realizar cambios por etapas",
                   "2d8f185fbc": "Prepare todos los cambios antes de enviar archivos parcialmente preparados",
                   "a6457b46a7": "Resolver conflictos antes de comprometerse",
@@ -8131,7 +8134,7 @@
             "3c5a593bc8": "Web",
             "477b28c948": "Base de datos",
             "787490e9bd": "Paquete",
-            "07012dc113": "Agente",
+            "07012dc113": "Agent",
             "3eba7387ab": "Terminal",
             "65b437c381": "Código",
             "bed2674f9d": "Carpeta"
@@ -8157,17 +8160,17 @@
           "d7b3ef168b": "Detectado en su sistema",
           "9c163bb0e0": "Instrucciones de instalación",
           "69af7e9c1c": "aún no está en tu RUTA. Orca lo configurará como predeterminado y podrás instalarlo en cualquier momento.",
-          "1eee1c7bd8": "No se detectaron agentes en su RUTA. Elija uno para instalarlo más tarde o continúe con un terminal en blanco.",
-          "hideAgents": "Ocultar agentes",
-          "showMoreAgents": "Mostrar {{value0}} más agentes→"
+          "1eee1c7bd8": "No se detectaron agents en su RUTA. Elija uno para instalarlo más tarde o continúe con un terminal en blanco.",
+          "hideAgents": "Ocultar agents",
+          "showMoreAgents": "Mostrar {{value0}} más agents→"
         },
         "FeatureSetupChecklist": {
-          "77f74946f5": "Los agentes pueden enviarse mensajes entre sí, realizar tareas y coordinar traspasos.",
-          "399cf885c0": "Orquestación de agentes",
-          "c5292c409d": "Los agentes pueden inspeccionar las ventanas de las aplicaciones y operar aplicaciones locales cuando usted lo solicite.",
+          "77f74946f5": "Los Agents pueden enviarse mensajes entre sí, realizar tareas y coordinar traspasos.",
+          "399cf885c0": "Orquestación de Agents",
+          "c5292c409d": "Los Agents pueden inspeccionar las ventanas de las aplicaciones y operar aplicaciones locales cuando usted lo solicite.",
           "1ecfb490ac": "Uso de la computadora",
-          "01426f3a23": "Los agentes pueden navegar por sitios, inspeccionar páginas y realizar tareas del navegador.",
-          "ea85d9e628": "Uso del navegador del agente"
+          "01426f3a23": "Los Agents pueden navegar por sitios, inspeccionar páginas y realizar tareas del navegador.",
+          "ea85d9e628": "Uso del navegador del Agent"
         },
         "FeatureSetupInlineTerminal": {
           "789b59936e": "Presione Enter para ejecutar el comando y confirme npx si se le solicita. También puedes configurar esto más tarde en Configuración.",
@@ -8222,7 +8225,7 @@
           "277ba45540": "Incorporación de Orca",
           "97c42cda00": "Instale la CLI de GitHub para:",
           "ae3b00ca82": "Configurar tareas de GitHub",
-          "ff92d15436": "Orca le notificará cuando los agentes hayan terminado o necesiten ayuda.",
+          "ff92d15436": "Orca le notificará cuando los agents hayan terminado o necesiten ayuda.",
           "b054332836": "Configurar notificaciones",
           "04ae28d8ca": "Elige el look que quieras mirar durante horas.",
           "f396db9f20": "Haz que te sientas como en casa",
@@ -8231,7 +8234,7 @@
           "a5e5da02f7": "integraciones",
           "35bbaf5ae0": "notificaciones",
           "984338477a": "tema",
-          "c47e1bd149": "agente"
+          "c47e1bd149": "agent"
         },
         "OnboardingFooter": {
           "ba58547306": "Atrás",
@@ -8257,9 +8260,9 @@
           "7932e95f68": "Clon",
           "955134915e": "git@github.com:org/repo.git",
           "288d8444b7": "Pegue una URL HTTPS o SSH.",
-          "132425a3e3": "Clonar un repositorio",
-          "6558d50c69": "¿Quieres importar muchos repositorios a la vez? Seleccione la carpeta principal.",
-          "831524961f": "Elija cualquier directorio local, repositorio git o no.",
+          "132425a3e3": "Clonar un repo",
+          "6558d50c69": "¿Quieres importar muchos repos a la vez? Seleccione la carpeta principal.",
+          "831524961f": "Elija cualquier directorio local, repo git o no.",
           "f4e9c8dcf8": "Buscar una carpeta",
           "e8214aa632": "Abrir como carpeta",
           "3863747c56": "Agregar proyecto Git",
@@ -8384,7 +8387,7 @@
           "10d27b4cba": "empezar",
           "da1d5e5ed0": "Disponible en",
           "ec0607bf66": "Plataformas móviles compatibles",
-          "b4ccce5cb7": "Controla Orca desde tu teléfono. Consulte a los agentes, revise los cambios e inicie tareas mientras no está en su escritorio.",
+          "b4ccce5cb7": "Controla Orca desde tu teléfono. Consulte a los agents, revise los cambios e inicie tareas mientras no está en su escritorio.",
           "cd4e5e816f": "Tus espacios de trabajo, en tu bolsillo.",
           "a6cffbbb0b": "Generar código",
           "e59a252eca": "regenerar código",
@@ -8443,8 +8446,8 @@
             "19c212e25e": "macbook pro",
             "2f1a1d10c4": "Escritorios",
             "156db8a68a": "RP creados",
-            "4a40af029b": "tiempo del agente",
-            "00a6903322": "Agentes generados",
+            "4a40af029b": "tiempo del Agent",
+            "00a6903322": "Agents generados",
             "c0e2e9dcd9": "Bienvenido de nuevo",
             "af761a0c0d": "Ajustes",
             "5d94e8ddcc": "Orca"
@@ -8486,7 +8489,7 @@
           "WorktreeListSlide": {
             "357a519567": "Activo",
             "79a24ff530": "Fijado",
-            "22971156df": "repositorio",
+            "22971156df": "Repo",
             "17f9e0d226": "Reciente",
             "0e3e809a4b": "Filtrar",
             "b4271864bd": "macbook pro",
@@ -8522,9 +8525,9 @@
             "0ee79e0674": "Mover a la barra de estado"
           },
           "FloatingTerminalOrchestrationDialog": {
-            "f726054620": "Permite a los agentes traspasar contexto y coordinar el trabajo a través de Orca.",
+            "f726054620": "Permite a los agents traspasar contexto y coordinar el trabajo a través de Orca.",
             "1cd3f8af64": "Habilidad de orquestación",
-            "6f0aed26b8": "Instale la CLI de Orca y la habilidad de orquestación para que los agentes puedan coordinarse a través de Orca.",
+            "6f0aed26b8": "Instale la CLI de Orca y la habilidad de orquestación para que los agents puedan coordinarse a través de Orca.",
             "05d7aabc20": "No instalado",
             "630c0ac8c8": "Instalado",
             "dfd021ce46": "De cheques...",
@@ -8533,8 +8536,8 @@
           "FloatingTerminalPanel": {
             "fc1042e92b": "Minimizar",
             "8b07759314": "Nuevo navegador",
-            "88ffb502e5": "Abrir nota de rebajas",
-            "629528690b": "Nueva nota de rebajas",
+            "88ffb502e5": "Abrir nota de Markdowns",
+            "629528690b": "Nueva nota de Markdowns",
             "3215fc73e9": "Nueva Terminal",
             "da508bd7f5": "Ahorrar",
             "918c2139f3": "No guardar",
@@ -8542,13 +8545,13 @@
             "690b6fb98a": "Cambios no guardados",
             "bbc177f98f": "Permitir",
             "adc281394d": "Despedir",
-            "8cf80db43b": "Configure la CLI de Orca y la habilidad del agente para que los agentes puedan coordinarse a través de Orca.",
+            "8cf80db43b": "Configure la CLI de Orca y la habilidad del agente para que los agents puedan coordinarse a través de Orca.",
             "2a3c5ddf5e": "Habilitar orquestación",
             "d6b563ae24": "Cargando editor...",
             "8b14ba6c17": "Nueva pestaña del navegador",
             "b085fb58b5": "Este archivo tiene cambios no guardados.",
             "5ddc688c52": "\"{{value0}}\" tiene cambios no guardados. ¿Quieres guardar antes de cerrar?",
-            "25d7817f79": "Terminal"
+            "25d7817f79": "terminal"
           },
           "FloatingTerminalToggleButton": {
             "3b04b065b5": "Mostrar espacio de trabajo flotante",
@@ -8572,12 +8575,12 @@
         "wall": {
           "AgentCapabilitiesSetupAction": {
             "b8dc9dd8a2": "Instalado",
-            "1b51644c2d": "Deje que los agentes controlen el escritorio, muevan el cursor, hagan clic y escriban en cualquier aplicación.",
+            "1b51644c2d": "Deje que los agents controlen el escritorio, muevan el cursor, hagan clic y escriban en cualquier aplicación.",
             "362a07517d": "Uso de la computadora",
-            "5e8fe5a72d": "Ofrezca a los agentes acceso directo al navegador de Orca para que puedan probar páginas, realizar capturas de pantalla y actuar en función de lo que ven.",
-            "e638da007a": "Uso del navegador del agente",
-            "c61c91e642": "Permita que los agentes se coordinen a través de Orca para que las tareas grandes de varios pasos avancen hasta su finalización.",
-            "ac07f8887f": "Orquestación de agentes",
+            "5e8fe5a72d": "Ofrezca a los agents acceso directo al navegador de Orca para que puedan probar páginas, realizar capturas de pantalla y actuar en función de lo que ven.",
+            "e638da007a": "Uso del navegador del Agent",
+            "c61c91e642": "Permita que los agents se coordinen a través de Orca para que las tareas grandes de varios pasos avancen hasta su finalización.",
+            "ac07f8887f": "Orquestación de Agents",
             "e9eb197e12": "Permisos de uso de computadora abiertos",
             "3a59452a67": "Comando de habilidad copiado e insertado a continuación para su revisión.",
             "c605f51f2b": "Configuración de capacidad lista",
@@ -8591,7 +8594,7 @@
             "be8917699e": "Modelo",
             "4d9b6d84df": "sin soporte. Elija Claude, Codex o Personalizado.",
             "560d4feb00": "Costumbre",
-            "29d119fe95": "Agente",
+            "29d119fe95": "Agent",
             "f9382b48a1": "Habilitar autor de IA",
             "1c0cb4fabb": "autor de IA",
             "bd14e9c42a": "No configurado",
@@ -8619,7 +8622,7 @@
             "f39be6ca14": "/inscribirse"
           },
           "BrowserUseSkillSetupCard": {
-            "cbc45022d4": "Permite a los agentes navegar y verificar páginas en el navegador de Orca.",
+            "cbc45022d4": "Permite a los agents navegar y verificar páginas en el navegador de Orca.",
             "d5bb1cd4ba": "Habilidad de uso del navegador"
           },
           "ComputerUseAnimatedVisual": {
@@ -8677,9 +8680,9 @@
             "fc0cc0b267": "#1842",
             "0688842445": "GH #1799",
             "bee6b4088d": "GitHub y tareas Lineares",
-            "5171768676": "orquestando 3 agentes",
+            "5171768676": "orquestando 3 agents",
             "cebc7769cd": "rediseñar el flujo de autenticación",
-            "e44269e97d": "Orquestación de agentes",
+            "e44269e97d": "Orquestación de Agents",
             "ec4a73f5e6": "PR 3/3",
             "cfdfd4d6b4": "PR 2/3",
             "b1f17bcc74": "PR 1/3",
@@ -8776,10 +8779,10 @@
             "c30cd930ff": "Crear solicitud de extracción",
             "ea0100dd15": "Ver todo",
             "e725000cd7": "Cambios",
-            "a079083a6c": "Comprometerse",
+            "a079083a6c": "Commit",
             "7347fa5839": "Mensaje",
-            "d1a7f15876": "Generar mensaje de confirmación con IA",
-            "cd8a3a39d7": "3 compromisos por delante"
+            "d1a7f15876": "Generar mensaje de commit con IA",
+            "cd8a3a39d7": "3 commits por delante"
           },
           "TasksAnimatedVisual": {
             "efba6f77eb": "Número de lectura #",
@@ -8864,7 +8867,7 @@
                 },
                 "ship": {
                   "styles": {
-                    "90cdcd2ecc": ".ravs-ship-root { posición: absoluta; recuadro: 0; } .ravs-ship-stack { posición: absoluta; recuadro: 0; pantalla: cuadrícula; columnas-plantilla-cuadrícula: 232px minmax(0,1fr); espacio: 14px; relleno: 4px 2px; /* Por qué: las tarjetas se ajustan al tamaño de su contenido en lugar de extenderse hasta la altura total del padre, para que las dos tarjetas no muestren espacios vacíos debajo de su contenido. */ alinear-elementos: inicio; } /* Minibarra lateral de control de código fuente: encabezado de recuento anticipado, área de texto de confirmación + botón de confirmación dividido, luego una sección de CAMBIOS con filas de archivos. Las filas del archivo son la superficie sobre la que se anima el pulso de \"lectura\". */ .ravs-sc-card { pantalla: flex; dirección flexible: columna; fondo: var(--card, #fff); borde: 1px var sólido (--borde); radio del borde: 10px; desbordamiento: oculto; sombra de cuadro: 0 1px 2px rgba(24,24,27,0.04); } /* Ambos encabezados de tarjetas comparten la misma altura fija, por lo que la tarjeta SC y el cuadro de diálogo PR se alinean en el borde superior independientemente del contenido del encabezado. */ .ravs-sc-header, .ravs-pr-head { altura: 36px; tamaño de caja: cuadro de borde; } .ravs-sc-header { pantalla: flex; alinear elementos: centro; justificar contenido: espacio entre; relleno: 0 10px; borde inferior: var sólido de 1 px (--borde); } .ravs-sc-ahead { mostrar: inline-flex; alinear elementos: centro; espacio: 5px; tamaño de fuente: 11px; peso de fuente: 500; color: var(--primer plano, #18181b); } .ravs-sc-ahead svg { color: var(--silenciado-primer plano, #71717a); } .ravs-sc-commit-area { pantalla: flex; dirección flexible: columna; espacio: 6px; relleno: 8px 10px; } .ravs-sc-textarea { posición: relativa; borde: 1px var sólido (--borde); radio del borde: 6px; fondo: var(--editor-surface, var(--card)); relleno: 6px 26px 6px 8px; altura mínima: 56px; tamaño de fuente: 12px; altura de línea: 1,45; color: var(--primer plano, #18181b); espacio en blanco: preenvoltura; salto de palabra: salto de palabra; desbordamiento: oculto; } .ravs-sc-textarea .ravs-placeholder { color: rgba(113,113,122,0.7); } .ravs-sc-sparkle { posición: absoluta; derecha: 6px; arriba: 6px; ancho: 20px; altura: 20 píxeles; pantalla: flexible en línea; alinear elementos: centro; justificar-contenido: centro; radio del borde: 4px; color: var(--primer plano silenciado, #71717a); fondo: transparente; transición: color con 160 ms de facilidad, fondo con 160 ms de facilidad; } .ravs-sc-sparkle.is-scanning { color: rgb(109 40 217); fondo: mezcla de colores (en srgb, rgb(139 92 246) 18%, transparente); } .ravs-sc-split { pantalla: flex; alinear elementos: estirar; } /* Por qué: Comprometerse y crear relaciones públicas rodean a Chrome; las posibilidades violetas de la IA son los puntos focales. Representelos como botones secundarios silenciosos para que no compitan con las señales de brillo/escaneo. */ .ravs-sc-split .ravs-primary { flex: 1; pantalla: flexible en línea; alinear elementos: centro; justificar-contenido: centro; espacio: 5px; relleno: 5px 10px; fondo: var(--secundario, #f5f5f5); color: var(--primer plano secundario, #171717); tamaño de fuente: 11px; peso de fuente: 500; radio de borde: 6px 0 0 6px; borde: 1px var sólido (--borde); transición: fondo con 240 ms de facilidad, color de borde con 240 ms de facilidad, color con 240 ms de facilidad; } .ravs-sc-split .ravs-chev { pantalla: inline-flex; alinear elementos: centro; justificar-contenido: centro; ancho: 22px; fondo: var(--secundario, #f5f5f5); color: var(--primer plano silenciado, #71717a); radio de borde: 0 6px 6px 0; borde: 1px var sólido (--borde); borde izquierdo: var sólido de 1 px (--borde); transición: fondo con 240 ms de facilidad, color de borde con 240 ms de facilidad, color con 240 ms de facilidad; } /* Por qué: cuando la IA haya completado el mensaje de confirmación, tiñe el botón Confirmar de verde para indicar \"listo para confirmar\". Utiliza la misma familia de éxito verde que el flash PR para que los dos tiempos rimen. La mezcla es intencionalmente fuerte (~28%): al 14% desapareció junto al brillo violeta y el flash PR, por lo que los usuarios solo vieron el PR cambiar de color. */ .ravs-sc-split.is-ready .ravs-primary, .ravs-sc-split.is-ready .ravs-chev { fondo: mezcla de colores (en srgb, rgb(34 197 94) 28%, var(--secundario, #f5f5f5)); color del borde: rgb(34 197 94); color: rgb(21 128 61); transición: fondo con 220 ms de facilidad, color de borde con 220 ms de facilidad, color con 220 ms de facilidad; } .ravs-sc-split.is-ready .ravs-chev { borde-izquierdo-color: rgba(34, 197, 94, 0,55); } .ravs-sc-changes-header { pantalla: flex; alinear elementos: centro; justificar contenido: espacio entre; relleno: 8px 10px 4px; tamaño de fuente: 10px; peso de fuente: 600; transformación de texto: mayúsculas; espacio entre letras: 0,05 em; color: var(--primer plano silenciado, #71717a); } .ravs-sc-changes-count { color: var(--primer plano, #18181b); peso de fuente: 600; margen izquierdo: 2px; } .ravs-sc-view-all { tamaño de fuente: 10px; peso de fuente: 500; transformación de texto: ninguna; espacio entre letras: 0; color: var(--primer plano silenciado, #71717a); } .ravs-sc-files { mostrar: flex; dirección flexible: columna; relleno: 2px 6px 8px; flexión: 1; altura mínima: 0; desbordamiento: oculto; } .ravs-sc-file { mostrar: cuadrícula; columnas-plantilla-cuadrícula: 14px minmax(0,1fr) 12px; alinear elementos: centro; espacio: 6px; relleno: 3px 6px; radio del borde: 4px; tamaño de fuente: 11px; altura de línea: 1,35; color: var(--primer plano, #18181b); posición: relativa; transición: facilidad de fondo 220 ms; } .ravs-sc-ficon { color: rgb(180 83 9); pantalla: flexible en línea; } .ravs-sc-fname { ancho mínimo: 0; desbordamiento: oculto; desbordamiento de texto: puntos suspensivos; espacio en blanco: nowrap; } .ravs-sc-fmark { familia de fuentes: ui-monospace, SFMono-Regular, Menlo, monospace; tamaño de fuente: 10px; alineación de texto: derecha; color: rgb(180 83 9); } .ravs-sc-file.is-reading { fondo: color-mix(en srgb, rgb(139 92 246) 14%, transparente); sombra de cuadro: inserción 0 0 0 1px mezcla de colores (en srgb, rgb (139 92 246) 28%, transparente); } /* Cuadro de diálogo PR: coincide con el cromo de la tarjeta .ravs-sc (mismo borde, radio, elevación) para que las dos tarjetas se lean como un solo lenguaje de diseño. */ .ravs-pr-dialog { fondo: var(--card, #fff); borde: 1px var sólido (--borde); radio del borde: 10px; sombra de cuadro: 0 1px 2px rgba(24,24,27,0.04); pantalla: flexible; dirección flexible: columna; ancho mínimo: 0; desbordamiento: oculto; } .ravs-pr-head { pantalla: flex; alinear elementos: centro; justificar contenido: espacio entre; espacio: 6px; relleno: 0 10px; borde inferior: var sólido de 1 px (--borde); } .ravs-pr-title-text { tamaño de fuente: 11px; peso de fuente: 500; color: var(--primer plano, #18181b); } /* Chip de asistencia de IA de solo íconos: refleja .ravs-sc-sparkle para que la capacidad se lea de manera idéntica en ambas tarjetas. */ .ravs-pr-gen-btn { pantalla: inline-flex; alinear elementos: centro; justificar-contenido: centro; ancho: 22px; altura: 22 píxeles; relleno: 0; radio del borde: 4px; color: var(--primer plano silenciado, #71717a); fondo: transparente; borde: 0; cursor: puntero; transición: color con 160 ms de facilidad, fondo con 160 ms de facilidad; } .ravs-pr-gen-btn:hover { fondo: rgba(24,24,27,0.06); color: var(--primer plano, #18181b); } .ravs-pr-gen-btn.is-scanning { color: rgb(109 40 217); fondo: mezcla de colores (en srgb, rgb(139 92 246) 18%, transparente); } .ravs-pr-body { pantalla: flex; dirección flexible: columna; espacio: 8px; relleno: 10px; } .ravs-pr-field { pantalla: flex; dirección flexible: columna; espacio: 4px; } .ravs-pr-field-label { tamaño de fuente: 10px; peso de fuente: 600; transformación de texto: mayúsculas; espacio entre letras: 0,05 em; color: var(--primer plano silenciado, #71717a); } .ravs-pr-base { mostrar: inline-flex; alinear elementos: centro; espacio: 5px; relleno: 4px 9px; borde: 1px var sólido (--borde); radio del borde: 6px; tamaño de fuente: 11px; familia de fuentes: ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--primer plano, #18181b); fondo: var(--editor-surface, var(--card)); alineación propia: inicio flexible; } .ravs-pr-base svg { color: var(--primer plano silenciado, #71717a); } .ravs-pr-input { posición: relativa; relleno: 6px 8px; borde: 1px var sólido (--borde); radio del borde: 6px; fondo: var(--editor-surface, var(--card)); altura mínima: 28px; tamaño de fuente: 12px; altura de línea: 1,45; color: var(--primer plano, #18181b); espacio en blanco: preenvoltura; salto de palabra: salto de palabra; desbordamiento: oculto; } .ravs-pr-input.is-body { altura mínima: 50px; tamaño de fuente: 11px; altura de línea: 1,4; } .ravs-pr-input .ravs-placeholder { color: rgba(113,113,122,0.7); } .ravs-pr-footer { pantalla: flex; alinear elementos: centro; espacio: 6px; justificar contenido: extremo flexible; margen superior: 2px; } .ravs-pr-btn { tamaño de fuente: 11px; peso de fuente: 500; relleno: 5px 10px; radio del borde: 6px; altura de línea: 1; borde: 1px sólido transparente; esquema: ninguno; } .ravs-pr-btn:focus, .ravs-pr-btn:focus-visible { esquema: ninguno; } /* Cancelar se lee como un botón fantasma silencioso para que no compita con la acción afirmativa Crear PR. */ .ravs-pr-btn.is-outline { fondo: transparente; color: var(--primer plano silenciado, #71717a); color del borde: transparente; } .ravs-pr-btn.is-outline:hover { fondo: rgba(24,24,27,0.05); color: var(--primer plano, #18181b); } /* Relleno secundario silencioso: consulte la nota .ravs-sc-split anterior. El anillo de destello todavía usa el color verde exitoso para que se lea el ritmo \"PR creado\". El botón Crear-PR es ligeramente más grande que Cancelar, por lo que la acción afirmativa sigue siendo el objetivo más importante. */ .ravs-pr-btn.is-solid { fondo: var(--secundario, #f5f5f5); color: var(--primer plano secundario, #171717); color del borde: var(--borde); tamaño de fuente: 12px; relleno: 7px 14px; transición: fondo con 220 ms de facilidad, color de borde con 220 ms de facilidad, color con 220 ms de facilidad, cuadro de sombra con 220 ms de facilidad; } .ravs-pr-btn.is-solid.is-ready { fondo: color-mix(en srgb, rgb(34 197 94) 28%, var(--secundario, #f5f5f5)); color del borde: rgb(34 197 94); color: rgb(21 128 61); } .ravs-pr-btn.is-solid.is-flash { box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.30); } .ravs-cursor { posición: absoluta; índice z: 40; eventos de puntero: ninguno; transición: transformar 600 ms cúbico-bezier (.45, .05, .2,1), opacidad 200 ms facilidad; transformar: traducir (-30px, 220px); opacidad: 0; } .ravs-cursor.is-visible { opacidad: 1; } .ravs-cursor .ravs-ripple { posición: absoluta; izquierda: -6px; arriba: -6px; ancho: 28px; altura: 28 píxeles; radio del borde: 999px; borde: 2px rgba sólido (24,24,27,0.5); opacidad: 0; } .ravs-cursor.is-clicking .ravs-ripple { animación: ravs-ripple 460 ms hacia adelante; } @keyframes ravs-ripple { 0% { transformar: escala(0.4); opacidad: 0,9; } 100% { transformar: escala(1.4); opacidad: 0; } } .ravs-caret { mostrar: bloque en línea; ancho: 1,5 px; altura: 1em; fondo: color actual; alineación vertical: -2px; margen izquierdo: 1px; animación: ravs-caret-blink 1,05s pasos(1) infinito; } @keyframes ravs-caret-blink { 0%, 50% { opacidad: 1 } 51%, 100% { opacidad: 0 } }"
+                    "90cdcd2ecc": ".ravs-ship-root { posición: absoluta; recuadro: 0; } .ravs-ship-stack { posición: absoluta; recuadro: 0; pantalla: cuadrícula; columnas-plantilla-cuadrícula: 232px minmax(0,1fr); espacio: 14px; relleno: 4px 2px; /* Por qué: las tarjetas se ajustan al tamaño de su contenido en lugar de extenderse hasta la altura total del padre, para que las dos tarjetas no muestren espacios vacíos debajo de su contenido. */ alinear-elementos: inicio; } /* Minibarra lateral de control de código fuente: encabezado de recuento anticipado, área de texto de Commit + botón de Commit dividido, luego una sección de CAMBIOS con filas de archivos. Las filas del archivo son la superficie sobre la que se anima el pulso de \"lectura\". */ .ravs-sc-card { pantalla: flex; dirección flexible: columna; fondo: var(--card, #fff); borde: 1px var sólido (--borde); radio del borde: 10px; desbordamiento: oculto; sombra de cuadro: 0 1px 2px rgba(24,24,27,0.04); } /* Ambos encabezados de tarjetas comparten la misma altura fija, por lo que la tarjeta SC y el cuadro de diálogo PR se alinean en el borde superior independientemente del contenido del encabezado. */ .ravs-sc-header, .ravs-pr-head { altura: 36px; tamaño de caja: cuadro de borde; } .ravs-sc-header { pantalla: flex; alinear elementos: centro; justificar contenido: espacio entre; relleno: 0 10px; borde inferior: var sólido de 1 px (--borde); } .ravs-sc-ahead { mostrar: inline-flex; alinear elementos: centro; espacio: 5px; tamaño de fuente: 11px; peso de fuente: 500; color: var(--primer plano, #18181b); } .ravs-sc-ahead svg { color: var(--silenciado-primer plano, #71717a); } .ravs-sc-commit-area { pantalla: flex; dirección flexible: columna; espacio: 6px; relleno: 8px 10px; } .ravs-sc-textarea { posición: relativa; borde: 1px var sólido (--borde); radio del borde: 6px; fondo: var(--editor-surface, var(--card)); relleno: 6px 26px 6px 8px; altura mínima: 56px; tamaño de fuente: 12px; altura de línea: 1,45; color: var(--primer plano, #18181b); espacio en blanco: preenvoltura; salto de palabra: salto de palabra; desbordamiento: oculto; } .ravs-sc-textarea .ravs-placeholder { color: rgba(113,113,122,0.7); } .ravs-sc-sparkle { posición: absoluta; derecha: 6px; arriba: 6px; ancho: 20px; altura: 20 píxeles; pantalla: flexible en línea; alinear elementos: centro; justificar-contenido: centro; radio del borde: 4px; color: var(--primer plano silenciado, #71717a); fondo: transparente; transición: color con 160 ms de facilidad, fondo con 160 ms de facilidad; } .ravs-sc-sparkle.is-scanning { color: rgb(109 40 217); fondo: mezcla de colores (en srgb, rgb(139 92 246) 18%, transparente); } .ravs-sc-split { pantalla: flex; alinear elementos: estirar; } /* Por qué: Commit y crear relaciones públicas rodean a Chrome; las posibilidades violetas de la IA son los puntos focales. Representelos como botones secundarios silenciosos para que no compitan con las señales de brillo/escaneo. */ .ravs-sc-split .ravs-primary { flex: 1; pantalla: flexible en línea; alinear elementos: centro; justificar-contenido: centro; espacio: 5px; relleno: 5px 10px; fondo: var(--secundario, #f5f5f5); color: var(--primer plano secundario, #171717); tamaño de fuente: 11px; peso de fuente: 500; radio de borde: 6px 0 0 6px; borde: 1px var sólido (--borde); transición: fondo con 240 ms de facilidad, color de borde con 240 ms de facilidad, color con 240 ms de facilidad; } .ravs-sc-split .ravs-chev { pantalla: inline-flex; alinear elementos: centro; justificar-contenido: centro; ancho: 22px; fondo: var(--secundario, #f5f5f5); color: var(--primer plano silenciado, #71717a); radio de borde: 0 6px 6px 0; borde: 1px var sólido (--borde); borde izquierdo: var sólido de 1 px (--borde); transición: fondo con 240 ms de facilidad, color de borde con 240 ms de facilidad, color con 240 ms de facilidad; } /* Por qué: cuando la IA haya completado el mensaje de Commit, tiñe el botón Commit de verde para indicar \"listo para confirmar\". Utiliza la misma familia de éxito verde que el flash PR para que los dos tiempos rimen. La mezcla es intencionalmente fuerte (~28%): al 14% desapareció junto al brillo violeta y el flash PR, por lo que los usuarios solo vieron el PR cambiar de color. */ .ravs-sc-split.is-ready .ravs-primary, .ravs-sc-split.is-ready .ravs-chev { fondo: mezcla de colores (en srgb, rgb(34 197 94) 28%, var(--secundario, #f5f5f5)); color del borde: rgb(34 197 94); color: rgb(21 128 61); transición: fondo con 220 ms de facilidad, color de borde con 220 ms de facilidad, color con 220 ms de facilidad; } .ravs-sc-split.is-ready .ravs-chev { borde-izquierdo-color: rgba(34, 197, 94, 0,55); } .ravs-sc-changes-header { pantalla: flex; alinear elementos: centro; justificar contenido: espacio entre; relleno: 8px 10px 4px; tamaño de fuente: 10px; peso de fuente: 600; transformación de texto: mayúsculas; espacio entre letras: 0,05 em; color: var(--primer plano silenciado, #71717a); } .ravs-sc-changes-count { color: var(--primer plano, #18181b); peso de fuente: 600; margen izquierdo: 2px; } .ravs-sc-view-all { tamaño de fuente: 10px; peso de fuente: 500; transformación de texto: ninguna; espacio entre letras: 0; color: var(--primer plano silenciado, #71717a); } .ravs-sc-files { mostrar: flex; dirección flexible: columna; relleno: 2px 6px 8px; flexión: 1; altura mínima: 0; desbordamiento: oculto; } .ravs-sc-file { mostrar: cuadrícula; columnas-plantilla-cuadrícula: 14px minmax(0,1fr) 12px; alinear elementos: centro; espacio: 6px; relleno: 3px 6px; radio del borde: 4px; tamaño de fuente: 11px; altura de línea: 1,35; color: var(--primer plano, #18181b); posición: relativa; transición: facilidad de fondo 220 ms; } .ravs-sc-ficon { color: rgb(180 83 9); pantalla: flexible en línea; } .ravs-sc-fname { ancho mínimo: 0; desbordamiento: oculto; desbordamiento de texto: puntos suspensivos; espacio en blanco: nowrap; } .ravs-sc-fmark { familia de fuentes: ui-monospace, SFMono-Regular, Menlo, monospace; tamaño de fuente: 10px; alineación de texto: derecha; color: rgb(180 83 9); } .ravs-sc-file.is-reading { fondo: color-mix(en srgb, rgb(139 92 246) 14%, transparente); sombra de cuadro: inserción 0 0 0 1px mezcla de colores (en srgb, rgb (139 92 246) 28%, transparente); } /* Cuadro de diálogo PR: coincide con el cromo de la tarjeta .ravs-sc (mismo borde, radio, elevación) para que las dos tarjetas se lean como un solo lenguaje de diseño. */ .ravs-pr-dialog { fondo: var(--card, #fff); borde: 1px var sólido (--borde); radio del borde: 10px; sombra de cuadro: 0 1px 2px rgba(24,24,27,0.04); pantalla: flexible; dirección flexible: columna; ancho mínimo: 0; desbordamiento: oculto; } .ravs-pr-head { pantalla: flex; alinear elementos: centro; justificar contenido: espacio entre; espacio: 6px; relleno: 0 10px; borde inferior: var sólido de 1 px (--borde); } .ravs-pr-title-text { tamaño de fuente: 11px; peso de fuente: 500; color: var(--primer plano, #18181b); } /* Chip de asistencia de IA de solo íconos: refleja .ravs-sc-sparkle para que la capacidad se lea de manera idéntica en ambas tarjetas. */ .ravs-pr-gen-btn { pantalla: inline-flex; alinear elementos: centro; justificar-contenido: centro; ancho: 22px; altura: 22 píxeles; relleno: 0; radio del borde: 4px; color: var(--primer plano silenciado, #71717a); fondo: transparente; borde: 0; cursor: puntero; transición: color con 160 ms de facilidad, fondo con 160 ms de facilidad; } .ravs-pr-gen-btn:hover { fondo: rgba(24,24,27,0.06); color: var(--primer plano, #18181b); } .ravs-pr-gen-btn.is-scanning { color: rgb(109 40 217); fondo: mezcla de colores (en srgb, rgb(139 92 246) 18%, transparente); } .ravs-pr-body { pantalla: flex; dirección flexible: columna; espacio: 8px; relleno: 10px; } .ravs-pr-field { pantalla: flex; dirección flexible: columna; espacio: 4px; } .ravs-pr-field-label { tamaño de fuente: 10px; peso de fuente: 600; transformación de texto: mayúsculas; espacio entre letras: 0,05 em; color: var(--primer plano silenciado, #71717a); } .ravs-pr-base { mostrar: inline-flex; alinear elementos: centro; espacio: 5px; relleno: 4px 9px; borde: 1px var sólido (--borde); radio del borde: 6px; tamaño de fuente: 11px; familia de fuentes: ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--primer plano, #18181b); fondo: var(--editor-surface, var(--card)); alineación propia: inicio flexible; } .ravs-pr-base svg { color: var(--primer plano silenciado, #71717a); } .ravs-pr-input { posición: relativa; relleno: 6px 8px; borde: 1px var sólido (--borde); radio del borde: 6px; fondo: var(--editor-surface, var(--card)); altura mínima: 28px; tamaño de fuente: 12px; altura de línea: 1,45; color: var(--primer plano, #18181b); espacio en blanco: preenvoltura; salto de palabra: salto de palabra; desbordamiento: oculto; } .ravs-pr-input.is-body { altura mínima: 50px; tamaño de fuente: 11px; altura de línea: 1,4; } .ravs-pr-input .ravs-placeholder { color: rgba(113,113,122,0.7); } .ravs-pr-footer { pantalla: flex; alinear elementos: centro; espacio: 6px; justificar contenido: extremo flexible; margen superior: 2px; } .ravs-pr-btn { tamaño de fuente: 11px; peso de fuente: 500; relleno: 5px 10px; radio del borde: 6px; altura de línea: 1; borde: 1px sólido transparente; esquema: ninguno; } .ravs-pr-btn:focus, .ravs-pr-btn:focus-visible { esquema: ninguno; } /* Cancelar se lee como un botón fantasma silencioso para que no compita con la acción afirmativa Crear PR. */ .ravs-pr-btn.is-outline { fondo: transparente; color: var(--primer plano silenciado, #71717a); color del borde: transparente; } .ravs-pr-btn.is-outline:hover { fondo: rgba(24,24,27,0.05); color: var(--primer plano, #18181b); } /* Relleno secundario silencioso: consulte la nota .ravs-sc-split anterior. El anillo de destello todavía usa el color verde exitoso para que se lea el ritmo \"PR creado\". El botón Crear-PR es ligeramente más grande que Cancelar, por lo que la acción afirmativa sigue siendo el objetivo más importante. */ .ravs-pr-btn.is-solid { fondo: var(--secundario, #f5f5f5); color: var(--primer plano secundario, #171717); color del borde: var(--borde); tamaño de fuente: 12px; relleno: 7px 14px; transición: fondo con 220 ms de facilidad, color de borde con 220 ms de facilidad, color con 220 ms de facilidad, cuadro de sombra con 220 ms de facilidad; } .ravs-pr-btn.is-solid.is-ready { fondo: color-mix(en srgb, rgb(34 197 94) 28%, var(--secundario, #f5f5f5)); color del borde: rgb(34 197 94); color: rgb(21 128 61); } .ravs-pr-btn.is-solid.is-flash { box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.30); } .ravs-cursor { posición: absoluta; índice z: 40; eventos de puntero: ninguno; transición: transformar 600 ms cúbico-bezier (.45, .05, .2,1), opacidad 200 ms facilidad; transformar: traducir (-30px, 220px); opacidad: 0; } .ravs-cursor.is-visible { opacidad: 1; } .ravs-cursor .ravs-ripple { posición: absoluta; izquierda: -6px; arriba: -6px; ancho: 28px; altura: 28 píxeles; radio del borde: 999px; borde: 2px rgba sólido (24,24,27,0.5); opacidad: 0; } .ravs-cursor.is-clicking .ravs-ripple { animación: ravs-ripple 460 ms hacia adelante; } @keyframes ravs-ripple { 0% { transformar: escala(0.4); opacidad: 0,9; } 100% { transformar: escala(1.4); opacidad: 0; } } .ravs-caret { mostrar: bloque en línea; ancho: 1,5 px; altura: 1em; fondo: color actual; alineación vertical: -2px; margen izquierdo: 1px; animación: ravs-caret-blink 1,05s pasos(1) infinito; } @keyframes ravs-caret-blink { 0%, 50% { opacidad: 1 } 51%, 100% { opacidad: 0 } }"
                   }
                 }
               }
@@ -8970,7 +8973,7 @@
             "22e62f3bab": "Sesión de Claude Code iniciada"
           },
           "CliSkillSetupTerminal": {
-            "1953e90447": "Presione Entrar para instalar la habilidad de orquestación CLI de Orca para sus agentes.",
+            "1953e90447": "Presione Entrar para instalar la habilidad de orquestación CLI de Orca para sus agents.",
             "43b60ec5c3": "Terminal de instalación de habilidades de orquestación y CLI de Orca",
             "84e9576dac": "Configuración de habilidades",
             "5c3aee22c0": "comando copiar",
@@ -9186,7 +9189,7 @@
         },
         "EditorPanelHeader": {
           "fb8331694e": "Abrir vista previa al lado",
-          "4157f3cbf3": "Abrir vista previa de rebajas",
+          "4157f3cbf3": "Abrir vista previa de Markdowns",
           "269ce4842b": "Copiar ruta relativa",
           "7c08a1f990": "Copiar ruta",
           "84cdc0794b": "Rebautizar",
@@ -9197,7 +9200,7 @@
           "94756f08ba": "Cambiar a diferencia en línea",
           "c98ce191da": "Esta diferenciación no tiene ningún archivo del lado modificado para abrir",
           "9b80bbe1de": "Abrir pestaña de archivo",
-          "f0fd4174b5": "Abra la pestaña de archivo para utilizar la edición de rebajas enriquecida",
+          "f0fd4174b5": "Abra la pestaña de archivo para utilizar la edición de markdowns enriquecida",
           "a10d9b8337": "Abrir archivo"
         },
         "EditorPanelMarkdownActionsMenu": {
@@ -9250,17 +9253,17 @@
           "c1601b23b2": "No se puede renderizar el cuaderno",
           "66a3f7d330": "Salida HTML del cuaderno",
           "781abd6926": "Eliminar celda",
-          "b42f6a9547": "Insertar celda de rebajas a continuación",
-          "ffc1ac2699": "Insertar celda de rebajas arriba",
+          "b42f6a9547": "Insertar celda de markdowns a continuación",
+          "ffc1ac2699": "Insertar celda de markdowns arriba",
           "b4208cad7e": "Inserte la celda de código a continuación",
           "53b839b8a0": "Insertar celda de código arriba",
           "27e064e2db": "Mover celda hacia abajo",
           "fd8ac707bc": "Mover celda hacia arriba",
           "3e4cbf15ea": "Crudo",
-          "1833dbbc43": "Reducción",
+          "1833dbbc43": "Markdown",
           "7005960d73": "Código",
           "59b6cd874b": "código",
-          "ba149053d5": "reducción"
+          "ba149053d5": "markdown"
         },
         "MarkdownPreview": {
           "e4683f70c4": "Cancelar",
@@ -9274,7 +9277,7 @@
           "12052c639c": "Cerrar búsqueda",
           "b42c41bd0d": "Próximo partido",
           "1febd97f5c": "Partido anterior",
-          "ec77985138": "Buscar en vista previa de rebajas",
+          "ec77985138": "Buscar en vista previa de markdowns",
           "517aea303b": "Buscar en vista previa",
           "f961e94057": "Copiar nota para el agente",
           "94b520a96a": "nota copiada",
@@ -9300,11 +9303,11 @@
         },
         "MarkdownTemplatePicker": {
           "22cd94426f": "sin título.md",
-          "6e2e6c04ad": "Rebaja en blanco",
+          "6e2e6c04ad": "Markdown en blanco",
           "df667919ca": "No hay plantillas coincidentes.",
           "22fd4890ad": "Buscar plantillas...",
           "7b458e0b7f": "Elija una plantilla de Markdown.",
-          "1829437fce": "Nueva rebaja"
+          "1829437fce": "Nueva Markdown"
         },
         "MermaidBlock": {
           "dcc132e691": "Error de diagrama:"
@@ -9363,7 +9366,7 @@
           "96182a2f64": "Rubí",
           "2391f9cda9": "Pitón",
           "89d6cc14fb": "Sirena",
-          "983b9576b4": "Reducción",
+          "983b9576b4": "Markdown",
           "bcb236e2d8": "Kotlin",
           "78eba32de4": "JSON",
           "a209c57063": "javascript",
@@ -9382,13 +9385,13 @@
           "90c5f0e1e4": "de",
           "2aaf7d9678": "Demostración",
           "63ced7cb9b": "No se encontraron documentos",
-          "0e8489bc11": "Enlaces de documentos de rebajas",
+          "0e8489bc11": "Enlaces de documentos de Markdowns",
           "142a7d51cd": "documento"
         },
         "RichMarkdownErrorBoundary": {
           "aad0998127": "Rever",
           "4a5de9f2f0": "Cambie al modo fuente o haga clic en Reintentar para recargar la vista enriquecida.",
-          "dfdf1cacd4": "El editor de rebajas enriquecido sufrió un error inesperado y se restableció para que el resto de Orca siguiera respondiendo."
+          "dfdf1cacd4": "El editor de markdowns enriquecido sufrió un error inesperado y se restableció para que el resto de Orca siguiera respondiendo."
         },
         "RichMarkdownLinkBubble": {
           "1c99b726e0": "Quitar enlace",
@@ -9412,7 +9415,7 @@
           "de68b75bde": "Cerrar búsqueda",
           "f7bcecbe26": "Próximo partido",
           "32ae8d7d57": "Partido anterior",
-          "158c645829": "Buscar en el editor de rebajas enriquecido",
+          "158c645829": "Buscar en el editor de markdowns enriquecido",
           "98b89276f3": "Buscar en editor enriquecido",
           "a86958d508": "Sin resultados"
         },
@@ -9447,7 +9450,7 @@
           "2d7d39dc63": ".Maryland",
           "c8ac7868e6": "Nombre del archivo",
           "b6ed807cc6": "Nombre",
-          "e365f3c638": "Asigne un nombre a su archivo de rebajas y elija una carpeta.",
+          "e365f3c638": "Asigne un nombre a su archivo de markdowns y elija una carpeta.",
           "674b046582": "Guardar como"
         },
         "export": {
@@ -9489,7 +9492,7 @@
                 "2bf5544faf": "Matemáticas en línea",
                 "0ed9a7b38c": "Inserta un bloque vallado de sirena.",
                 "e516d3f6e3": "Diagrama de sirena",
-                "67faab829b": "Inserte una tabla de rebajas de 3x3.",
+                "67faab829b": "Inserte una tabla de markdowns de 3x3.",
                 "19ea597868": "Mesa",
                 "fae45ef4d3": "Inserta una regla horizontal.",
                 "ae8377cf6b": "Divisor",
@@ -9636,8 +9639,8 @@
               "52ac9da671": "Crear árbol de trabajo",
               "f70812764a": "Abra una pestaña de terminal en el espacio de trabajo activo.",
               "34980395d4": "Nueva pestaña de terminal",
-              "f2a1b33f8d": "Cree un archivo de rebajas sin título en el espacio de trabajo activo.",
-              "25349b66fc": "Nuevo archivo de rebajas",
+              "f2a1b33f8d": "Cree un archivo de markdowns sin título en el espacio de trabajo activo.",
+              "25349b66fc": "Nuevo archivo de Markdowns",
               "784812ca24": "Abra una pestaña del navegador en el espacio de trabajo activo.",
               "892bfa9339": "Nueva pestaña del navegador",
               "verbs": {
@@ -9645,11 +9648,11 @@
                 "newBrowserTab": "nueva pestaña del navegador",
                 "openBrowser": "abrir el navegador",
                 "browserTab": "pestaña del navegador",
-                "newMarkdown": "nueva rebaja",
-                "newMarkdownFile": "nuevo archivo de rebajas",
+                "newMarkdown": "nueva markdown",
+                "newMarkdownFile": "nuevo archivo de markdowns",
                 "newMark": "nueva marca",
                 "newFile": "nuevo archivo",
-                "markdownFile": "archivo de rebajas",
+                "markdownFile": "archivo de markdowns",
                 "newTerminal": "nueva terminal",
                 "newTerminalTab": "nueva pestaña de terminal",
                 "newShell": "nuevo caparazón",
@@ -9837,7 +9840,7 @@
           "449fc83bf7": "Fichas",
           "401f40ae79": "Est. gastar",
           "a7c312430d": "última ejecución",
-          "2df8970cd5": "Agente",
+          "2df8970cd5": "Agent",
           "e353ab9516": "verificación previa",
           "620b22145e": "Gracia",
           "15ea446b93": "Sesión",
@@ -9859,7 +9862,7 @@
         },
         "AutomationEditorDialog": {
           "fb1896a5e7": "Cancelar",
-          "57b722cbba": "Agente",
+          "57b722cbba": "Agent",
           "6ff66f9012": "Nueva carrera",
           "a2e688226d": "árbol de trabajo",
           "6f9610e667": "Worktree se ejecuta en el espacio de trabajo seleccionado. La nueva ejecución crea un espacio de trabajo nuevo a partir de la rama seleccionada cada vez.",
@@ -9882,7 +9885,7 @@
           "7e35393632": "Hermes",
           "6f309eef8d": "Orca",
           "58f56b73d9": "Nombre de la automatización",
-          "1d9826933e": "Auditoría de repositorios entre semana",
+          "1d9826933e": "Auditoría de repos entre semana",
           "4133d33862": "Crear automatización",
           "0a75e5e2fa": "Crear automatización Hermes",
           "03142e7721": "Editar la automatización de Hermes",
@@ -10013,7 +10016,7 @@
           "5918020edc": "correr"
         },
         "CreateFromPicker": {
-          "f061f49e3f": "Buscar sucursales de repositorio...",
+          "f061f49e3f": "Buscar sucursales de repo...",
           "dd3841b442": "Derivarse de",
           "ef6d762538": "Valor predeterminado del proyecto",
           "e53d306056": "{{value0}} (predeterminado)",
@@ -10080,10 +10083,10 @@
             "513401db93": "Prepare un resumen semanal del riesgo de liberación del estado actual del proyecto.",
             "39ed39280a": "Preparación para el lanzamiento",
             "a7fbd32ddb": "Verifique las dependencias, las pruebas fallidas y los cambios abiertos riesgosos todos los días de la semana.",
-            "b84757677d": "Auditoría de repositorios entre semana",
+            "b84757677d": "Auditoría de repos entre semana",
             "repoHealth": {
-              "category": "Salud del repositorio",
-              "name": "Auditoría de repositorios entre semana",
+              "category": "Salud del Repo",
+              "name": "Auditoría de repos entre semana",
               "prompt": "Revisar el estado del repositorio. Verifique las actualizaciones de dependencia, las pruebas fallidas, el estado de pelusa/verificación de tipos y los cambios abiertos riesgosos. Resuma los hallazgos y sugiera la siguiente acción."
             },
             "releasePrep": {
@@ -10115,7 +10118,7 @@
       },
       "agent": {
         "AgentCombobox": {
-          "19522e25ee": "Administrar agentes",
+          "19522e25ee": "Administrar agents",
           "986f946354": "Terminal en blanco",
           "579c768bde": "Ningún agente coincide con su búsqueda.",
           "48c6a5a9b4": "Agentes de búsqueda...",
@@ -10123,8 +10126,8 @@
           "1b0d6965fa": "Valor predeterminado actual"
         },
         "AgentSettingsDialog": {
-          "50cdb57c03": "Administre agentes de IA, establezca un valor predeterminado y personalice comandos.",
-          "fc0268e4ed": "Agentes"
+          "50cdb57c03": "Administre agents de IA, establezca un valor predeterminado y personalice comandos.",
+          "fc0268e4ed": "Agents"
         }
       },
       "activity": {
@@ -10142,7 +10145,7 @@
           "a472a14700": "Más opciones",
           "db8a1878b5": "Opciones de lista de hilos",
           "d1a88df9a8": "Mostrar solo hilos no leídos",
-          "f6396e1f85": "Agente",
+          "f6396e1f85": "Agent",
           "b29191b3e0": "árbol de trabajo",
           "8c3b621ddf": "Proyecto",
           "4a3986b200": "Estado",
@@ -10153,11 +10156,11 @@
           "beb2c19173": "No leído",
           "5651b216c6": "Proyecto desconocido",
           "22b22034bc": "Terminal independiente no disponible en Actividad.",
-          "afdc2139a8": "Terminal de agente cerrada. Abra una nueva terminal en este espacio de trabajo para continuar."
+          "afdc2139a8": "Terminal de Agent cerrada. Abra una nueva terminal en este espacio de trabajo para continuar."
         },
         "ActivityTitlebarControls": {
           "f915168c8e": "no leído",
-          "d6a8de3934": "agentes",
+          "d6a8de3934": "agents",
           "dc708f3eff": "Agentes cercanos"
         }
       },

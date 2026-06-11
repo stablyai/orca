@@ -15,6 +15,8 @@ const OPEN_IN_APP_CATALOG_PREFIX = 'auto.lib.open.in.app.catalog.'
 export const ENGLISH_ONLY_KEY_PREFIXES = [AGENT_CATALOG_PREFIX, OPEN_IN_APP_CATALOG_PREFIX]
 
 export const NEVER_TRANSLATE_VALUES = new Set([
+  'Agent',
+  'Agents',
   'Aider',
   'Amp',
   'Antigravity',
@@ -48,12 +50,28 @@ export const NEVER_TRANSLATE_VALUES = new Set([
   'Pi',
   'PostHog',
   'Qwen Code',
+  'Repo',
+  'Repos',
   'Rovo Dev',
+  'Commit',
+  'Commits',
+  'Markdown',
+  'Terminal',
+  'Terminals',
   'VS Code',
   'Zed',
+  'agent',
+  'agents',
   'codex',
+  'commit',
+  'commits',
   'gemini',
   'claude',
+  'markdown',
+  'repo',
+  'repos',
+  'terminal',
+  'terminals',
   'gh',
   'idle',
   'anthropic',
@@ -63,6 +81,7 @@ export const NEVER_TRANSLATE_VALUES = new Set([
   'darwin',
   'Nautilus',
   'GitHub',
+  'no_proxy',
   'Beta'
 ])
 
@@ -84,7 +103,25 @@ export const BRAND_MISTRANSLATIONS = {
     Pi: ['파이'],
     'GitHub Copilot': ['GitHub 코파일럿', '코파일럿'],
     Discord: ['디스코드'],
-    Linear: ['선형']
+    Linear: ['선형'],
+    Agent: ['에이전트'],
+    Agents: ['에이전트'],
+    agent: ['에이전트'],
+    agents: ['에이전트'],
+    Commit: ['커밋'],
+    Commits: ['커밋'],
+    commit: ['커밋'],
+    commits: ['커밋'],
+    Markdown: ['마크다운', '가격 인하'],
+    markdown: ['마크다운', '가격 인하'],
+    Repo: ['저장소', '레포'],
+    Repos: ['저장소', '레포'],
+    repo: ['저장소', '레포'],
+    repos: ['저장소', '레포'],
+    Terminal: ['터미널'],
+    Terminals: ['터미널'],
+    terminal: ['터미널'],
+    terminals: ['터미널']
   },
   zh: {
     Codex: ['法典'],
@@ -104,7 +141,25 @@ export const BRAND_MISTRANSLATIONS = {
     Droid: ['机器人'],
     'GitHub Copilot': ['GitHub 副驾驶', '副驾驶'],
     Linear: ['线性', '线形'],
-    Jira: ['吉拉']
+    Jira: ['吉拉'],
+    Agent: ['代理', '智能体'],
+    Agents: ['代理', '智能体'],
+    agent: ['代理', '智能体'],
+    agents: ['代理', '智能体'],
+    Commit: ['提交'],
+    Commits: ['提交'],
+    commit: ['提交'],
+    commits: ['提交'],
+    Markdown: ['降价'],
+    markdown: ['降价'],
+    Repo: ['存储库', '仓库', '回购协议', '回购'],
+    Repos: ['存储库', '仓库', '回购协议', '回购'],
+    repo: ['存储库', '仓库', '回购协议', '回购'],
+    repos: ['存储库', '仓库', '回购协议', '回购'],
+    Terminal: ['终端', '端子'],
+    Terminals: ['终端', '端子'],
+    terminal: ['终端', '端子'],
+    terminals: ['终端', '端子']
   },
   ja: {
     Codex: ['法典', 'コーデックス'],
@@ -124,7 +179,25 @@ export const BRAND_MISTRANSLATIONS = {
     Droid: ['ロボット', 'ドロイド'],
     'GitHub Copilot': ['GitHub コパイロット', 'コパイロット'],
     Discord: ['不和'],
-    Linear: ['線形']
+    Linear: ['線形'],
+    Agent: ['エージェント'],
+    Agents: ['エージェント'],
+    agent: ['エージェント'],
+    agents: ['エージェント'],
+    Commit: ['コミット'],
+    Commits: ['コミット'],
+    commit: ['コミット'],
+    commits: ['コミット'],
+    Markdown: ['マークダウン'],
+    markdown: ['マークダウン'],
+    Repo: ['リポジトリ', 'リポ'],
+    Repos: ['リポジトリ', 'リポ'],
+    repo: ['リポジトリ', 'リポ'],
+    repos: ['リポジトリ', 'リポ'],
+    Terminal: ['ターミナル', '端子'],
+    Terminals: ['ターミナル', '端子'],
+    terminal: ['ターミナル', '端子'],
+    terminals: ['ターミナル', '端子']
   },
   es: {
     Codex: ['códice', 'Códice'],
@@ -137,7 +210,21 @@ export const BRAND_MISTRANSLATIONS = {
     'GitHub Copilot': ['Copiloto de GitHub'],
     Discord: ['discordia'],
     Linear: ['lineal', 'Lineal'],
-    Jira: ['jira']
+    Jira: ['jira'],
+    Agent: ['Agente', 'agente'],
+    Agents: ['Agentes', 'agentes'],
+    agent: ['agente'],
+    agents: ['agentes'],
+    Commit: ['Confirmación', 'confirmación', 'Confirmar', 'Comprometerse'],
+    Commits: ['Confirmaciones', 'confirmaciones', 'Compromisos', 'compromisos', 'Se compromete'],
+    commit: ['confirmación', 'confirmar', 'comprometerse', 'compromiso'],
+    commits: ['confirmaciones', 'compromisos'],
+    Markdown: ['Reducción', 'reducción', 'Rebaja', 'rebaja', 'rebajas'],
+    markdown: ['reducción', 'rebaja', 'rebajas'],
+    Repo: ['Repositorio', 'repositorio'],
+    Repos: ['Repositorios', 'repositorios'],
+    repo: ['repositorio'],
+    repos: ['repositorios']
   }
 }
 
@@ -147,6 +234,34 @@ export const NATIVE_PICKER_LABELS = {
   ja: { chinese: '中文（简体）', korean: '한국어', japanese: '日本語', spanish: 'Español' },
   es: { chinese: '中文（简体）', korean: '한국어', japanese: '日本語', spanish: 'Español' }
 }
+
+const CJK_LATIN_SPACED_TERMS = [
+  'Terminal',
+  'Terminals',
+  'terminal',
+  'terminals',
+  'Agents',
+  'Agent',
+  'agents',
+  'agent',
+  'Markdown',
+  'markdown',
+  'Repos',
+  'Repo',
+  'repos',
+  'repo',
+  'Commits',
+  'Commit',
+  'commits',
+  'commit',
+  'Linear',
+  'Claude',
+  'Codex',
+  'Orca',
+  'Cursor'
+]
+
+const CJK_LATIN_SPACED_TERM_PATTERN = CJK_LATIN_SPACED_TERMS.join('|')
 
 export function isEnglishOnlyKey(key) {
   return ENGLISH_ONLY_KEY_PREFIXES.some((prefix) => key.startsWith(prefix))
@@ -165,15 +280,28 @@ export function shouldPreserveEnglishValue(enValue, key = '') {
   return NEVER_TRANSLATE_VALUES.has(enValue)
 }
 
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+function includesPreservedLatinTerm(value, term) {
+  if (!/^[A-Za-z_]+$/.test(term)) {
+    return value.includes(term)
+  }
+  return new RegExp(`(^|[^A-Za-z_])${escapeRegExp(term)}($|[^A-Za-z_])`).test(value)
+}
+
 function applyBrandMistranslationFixes(enValue, localeValue, locale) {
   let result = localeValue
   const mistranslations = BRAND_MISTRANSLATIONS[locale] ?? {}
 
-  for (const [brand, wrongForms] of Object.entries(mistranslations)) {
+  for (const [brand, wrongForms] of Object.entries(mistranslations).sort(
+    ([left], [right]) => right.length - left.length
+  )) {
     if (!enValue.includes(brand)) {
       continue
     }
-    if (result.includes(brand)) {
+    if (includesPreservedLatinTerm(result, brand)) {
       continue
     }
     for (const wrong of wrongForms) {
@@ -191,6 +319,39 @@ function applyBrandMistranslationFixes(enValue, localeValue, locale) {
   return result
 }
 
+function applyCjkLatinTermSpacing(localeValue, locale) {
+  // Why: CJK UI copy should keep protected Latin workflow terms readable when MT glues them to native text.
+  let result = localeValue
+    .replace(
+      new RegExp(
+        `(${CJK_LATIN_SPACED_TERM_PATTERN})([\\u3040-\\u30ff\\u3400-\\u9fff\\uac00-\\ud7af])`,
+        'g'
+      ),
+      '$1 $2'
+    )
+    .replace(
+      new RegExp(
+        `([\\u3040-\\u30ff\\u3400-\\u9fff\\uac00-\\ud7af])(${CJK_LATIN_SPACED_TERM_PATTERN})`,
+        'g'
+      ),
+      '$1 $2'
+    )
+    .replace(
+      new RegExp(`(${CJK_LATIN_SPACED_TERM_PATTERN})(${CJK_LATIN_SPACED_TERM_PATTERN})`, 'g'),
+      '$1 $2'
+    )
+  if (locale === 'ko') {
+    result = result.replace(
+      new RegExp(
+        `(${CJK_LATIN_SPACED_TERM_PATTERN}) (가|이|은|는|을|를|와|과|의|로|으로|에서|에게|도|만|부터|까지)`,
+        'g'
+      ),
+      '$1$2'
+    )
+  }
+  return result
+}
+
 function applyPhraseFixes(enValue, localeValue, locale) {
   let result = localeValue
   for (const fix of LOCALE_PHRASE_FIXES[locale] ?? []) {
@@ -205,28 +366,33 @@ function applyPhraseFixes(enValue, localeValue, locale) {
 export function repairTranslatedValue({ key, enValue, localeValue, locale }) {
   const keyOverride = LOCALE_KEY_OVERRIDES[key]?.[locale]
   if (keyOverride) {
-    return keyOverride
+    // Why: exact key overrides can still carry stale MT output, so glossary repairs remain the final gate.
+    let result = applyBrandMistranslationFixes(enValue, keyOverride, locale)
+    result = applyPhraseFixes(enValue, result, locale)
+    if (['zh', 'ja', 'ko'].includes(locale)) {
+      result = applyCjkLatinTermSpacing(result, locale)
+    }
+    return result
   }
 
   if (shouldPreserveEnglishValue(enValue, key)) {
     return enValue
   }
 
-  const override = LOCALE_VALUE_OVERRIDES[locale]?.[enValue]
-  if (override) {
-    return override
-  }
+  let result = LOCALE_VALUE_OVERRIDES[locale]?.[enValue] ?? localeValue
 
   if (key.includes('.search.')) {
     const searchOverride = SEARCH_KEYWORD_OVERRIDES[locale]?.[enValue]
     if (searchOverride) {
-      return searchOverride
+      result = searchOverride
     }
   }
 
-  let result = localeValue
   result = applyBrandMistranslationFixes(enValue, result, locale)
   result = applyPhraseFixes(enValue, result, locale)
+  if (['zh', 'ja', 'ko'].includes(locale)) {
+    result = applyCjkLatinTermSpacing(result, locale)
+  }
 
   if (enValue.includes('orca://')) {
     result = result.replace(/虎鲸:\/\//g, 'orca://')
