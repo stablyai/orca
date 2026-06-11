@@ -106,8 +106,8 @@ describe('AddRepoDialogStepContent nested imports', () => {
     const html = renderNestedStep(0)
 
     expect(html).toContain('Is this a monorepo?')
-    expect(html).toContain('aria-label="Monorepo name"')
-    expect(html).toContain('Yes, import as monorepo')
+    expect(html).toContain('aria-label="Group name"')
+    expect(html).toContain('Import as group')
     expect(html).toContain('No, import separately')
     expect(html).not.toContain('>Import</button>')
   })
@@ -116,8 +116,8 @@ describe('AddRepoDialogStepContent nested imports', () => {
     const html = renderNestedStep(1)
 
     expect(html).toContain('Is this a monorepo?')
-    expect(html).toContain('aria-label="Monorepo name"')
-    expect(html).toContain('Yes, import as monorepo')
+    expect(html).toContain('aria-label="Group name"')
+    expect(html).toContain('Import as group')
     expect(html).toContain('No, import separately')
     expect(html).not.toContain('>Import</button>')
   })

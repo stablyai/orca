@@ -1,12 +1,5 @@
 import React, { useCallback, useMemo, useState } from 'react'
-import {
-  LoaderCircle,
-  GitMerge,
-  ChevronDown,
-  Trash2,
-  GitPullRequestClosed,
-  CircleDot
-} from 'lucide-react'
+import { LoaderCircle, GitMerge, ChevronDown, GitPullRequestClosed } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
@@ -27,6 +20,11 @@ import type { GitHubPRMergeMethod } from '../../../../shared/types'
 import { resolveGitHubPRMergeMethods } from '../../../../shared/github-pr-merge-methods'
 import { runWorktreeDelete } from '../sidebar/delete-worktree-flow'
 import { presentGitLabMRMergeState } from './gitlab-mr-merge-state'
+import {
+  ClosedReviewActions,
+  HostedReviewActionError,
+  MergedReviewActions
+} from './HostedReviewStateActions'
 import { translate } from '@/i18n/i18n'
 
 type HostedReviewActionInfo = Pick<
@@ -376,65 +374,28 @@ export default function HostedReviewActions({
             </DropdownMenu>
           </div>
         </TooltipProvider>
-        {actionError && <div className="text-[10px] text-rose-500 break-words">{actionError}</div>}
+        <HostedReviewActionError message={actionError} />
       </div>
     )
   }
 
   if (review.state === 'closed') {
     return (
-      <div className="space-y-1.5">
-        <Button
-          type="button"
-          variant="outline"
-          size="xs"
-          className="w-full cursor-pointer text-[11px] hover:cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-          onClick={() => void handleReopenReview()}
-          disabled={isUpdatingReviewState}
-        >
-          {stateUpdating === 'open' ? (
-            <LoaderCircle className="size-3.5 animate-spin" />
-          ) : (
-            <CircleDot className="size-3.5" />
-          )}
-          {stateUpdating === 'open'
-            ? translate(
-                'auto.components.right.sidebar.HostedReviewActions.6645ac7dd1',
-                'Reopening...'
-              )
-            : translate(
-                'auto.components.right.sidebar.HostedReviewActions.3ce211ece6',
-                'Reopen {{value0}}',
-                { value0: shortLabel }
-              )}
-        </Button>
-        {actionError && <div className="text-[10px] text-rose-500 break-words">{actionError}</div>}
-      </div>
+      <ClosedReviewActions
+        shortLabel={shortLabel}
+        stateUpdating={stateUpdating}
+        actionError={actionError}
+        onReopenReview={() => void handleReopenReview()}
+      />
     )
   }
 
   if (review.state === 'merged') {
     return (
-      <Button
-        type="button"
-        variant="secondary"
-        size="xs"
-        className="w-full cursor-pointer text-[11px] hover:cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-        onClick={handleDeleteWorktree}
-        disabled={isDeletingWorktree}
-      >
-        {isDeletingWorktree ? (
-          <LoaderCircle className="size-3.5 animate-spin" />
-        ) : (
-          <Trash2 className="size-3.5" />
-        )}
-        {isDeletingWorktree
-          ? translate('auto.components.right.sidebar.HostedReviewActions.eefd50457e', 'Deleting...')
-          : translate(
-              'auto.components.right.sidebar.HostedReviewActions.e4aca40024',
-              'Delete Workspace'
-            )}
-      </Button>
+      <MergedReviewActions
+        isDeletingWorktree={isDeletingWorktree}
+        onDeleteWorktree={handleDeleteWorktree}
+      />
     )
   }
 

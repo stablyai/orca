@@ -25,8 +25,10 @@ import {
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip'
 import { ClaudeUsageDailyChart } from './ClaudeUsageDailyChart'
 import { ClaudeUsageLoadingState } from './ClaudeUsageLoadingState'
+import { ClaudeUsageRecentSessionsTable } from './ClaudeUsageRecentSessionsTable'
 import { ShareUsageButton } from './ShareUsageButton'
 import { StatCard } from './StatCard'
+import { formatCost, formatTokens, formatUpdatedAt } from './usage-formatters'
 import { translate } from '@/i18n/i18n'
 
 const RANGE_OPTIONS: ClaudeUsageRange[] = ['7d', '30d', '90d', 'all']
@@ -45,43 +47,6 @@ const RANGE_LABELS: Record<ClaudeUsageRange, string> = {
   '30d': 'Last 30 days',
   '90d': 'Last 90 days',
   all: 'All time'
-}
-
-function formatTokens(value: number): string {
-  if (value >= 1_000_000) {
-    return `${(value / 1_000_000).toFixed(1)}M`
-  }
-  if (value >= 1_000) {
-    return `${(value / 1_000).toFixed(1)}k`
-  }
-  return value.toLocaleString()
-}
-
-function formatCost(value: number | null): string {
-  if (value === null) {
-    return 'n/a'
-  }
-  return value < 0.01 ? `$${value.toFixed(4)}` : `$${value.toFixed(2)}`
-}
-
-function formatUpdatedAt(timestamp: number | null): string {
-  if (!timestamp) {
-    return 'Not scanned yet'
-  }
-  return `Updated ${new Date(timestamp).toLocaleString()}`
-}
-
-function formatSessionTime(timestamp: string): string {
-  const parsed = new Date(timestamp)
-  if (Number.isNaN(parsed.getTime())) {
-    return timestamp
-  }
-  return parsed.toLocaleString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit'
-  })
 }
 
 export function ClaudeUsagePane(): React.JSX.Element {
@@ -412,72 +377,7 @@ export function ClaudeUsagePane(): React.JSX.Element {
             </section>
           </div>
 
-          <section className="rounded-lg border border-border/60 bg-card/40 p-4">
-            <div className="mb-3">
-              <h4 className="text-sm font-semibold text-foreground">
-                {translate('auto.components.stats.ClaudeUsagePane.7e76c84153', 'Recent sessions')}
-              </h4>
-              <p className="text-xs text-muted-foreground">
-                {translate('auto.components.stats.ClaudeUsagePane.abfc4a4943', 'Cache reuse rate:')}{' '}
-                {summary?.cacheReuseRate !== null && summary?.cacheReuseRate !== undefined
-                  ? `${Math.round(summary.cacheReuseRate * 100)}%`
-                  : translate('auto.components.stats.ClaudeUsagePane.7765a4c3e1', 'n/a')}
-              </p>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="min-w-full text-sm">
-                <thead>
-                  <tr className="border-b border-border/60 text-left text-xs text-muted-foreground">
-                    <th className="px-2 py-2 font-medium">
-                      {translate('auto.components.stats.ClaudeUsagePane.01476891c7', 'Last active')}
-                    </th>
-                    <th className="px-2 py-2 font-medium">
-                      {translate('auto.components.stats.ClaudeUsagePane.c17bed0416', 'Project')}
-                    </th>
-                    <th className="px-2 py-2 font-medium">
-                      {translate('auto.components.stats.ClaudeUsagePane.1afc25eb06', 'Model')}
-                    </th>
-                    <th className="px-2 py-2 font-medium">
-                      {translate('auto.components.stats.ClaudeUsagePane.0f03975d59', 'Turns')}
-                    </th>
-                    <th className="px-2 py-2 font-medium">
-                      {translate('auto.components.stats.ClaudeUsagePane.faf3444859', 'Input')}
-                    </th>
-                    <th className="px-2 py-2 font-medium">
-                      {translate('auto.components.stats.ClaudeUsagePane.a8b7487ff7', 'Output')}
-                    </th>
-                    <th className="px-2 py-2 font-medium">
-                      {translate('auto.components.stats.ClaudeUsagePane.21ea00bfa8', 'Cache')}
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {recentSessions.map((row) => (
-                    <tr key={row.sessionId} className="border-b border-border/40 last:border-b-0">
-                      <td className="px-2 py-2 text-muted-foreground">
-                        {formatSessionTime(row.lastActiveAt)}
-                      </td>
-                      <td className="px-2 py-2 text-foreground">{row.projectLabel}</td>
-                      <td className="px-2 py-2 text-muted-foreground">
-                        {row.model ??
-                          translate('auto.components.stats.ClaudeUsagePane.cfe2282ffa', 'Unknown')}
-                      </td>
-                      <td className="px-2 py-2 text-muted-foreground">{row.turns}</td>
-                      <td className="px-2 py-2 text-muted-foreground">
-                        {formatTokens(row.inputTokens)}
-                      </td>
-                      <td className="px-2 py-2 text-muted-foreground">
-                        {formatTokens(row.outputTokens)}
-                      </td>
-                      <td className="px-2 py-2 text-muted-foreground">
-                        {formatTokens(row.cacheReadTokens + row.cacheWriteTokens)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </section>
+          <ClaudeUsageRecentSessionsTable recentSessions={recentSessions} summary={summary} />
         </>
       )}
     </div>

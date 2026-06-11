@@ -20,6 +20,7 @@ import { extractIpcErrorMessage } from '../../lib/ipc-error'
 import { Button } from '../ui/button'
 import { isWindowsUserAgent } from '../terminal-pane/pane-helpers'
 import { McpConfigFileRow, type LoadedMcpConfigInspection } from './McpConfigFileRow'
+import { McpMissingConfigList } from './McpMissingConfigList'
 import { translate } from '@/i18n/i18n'
 
 type McpConfigSectionProps = {
@@ -410,23 +411,7 @@ export function McpConfigSection({ repo }: McpConfigSectionProps): React.JSX.Ele
             </div>
           )}
 
-          {missingConfigs.length > 0 && !inspectionUnavailable ? (
-            <div className="space-y-1.5 border-t border-border/50 px-3 py-2">
-              <p className="text-[11px] text-muted-foreground">
-                {translate('auto.components.settings.McpConfigSection.4d16a0d9ac', 'Checked')}
-              </p>
-              <div className="flex flex-wrap gap-1.5">
-                {missingConfigs.map((config) => (
-                  <span
-                    key={config.candidate.relativePath}
-                    className="rounded-md border border-border/50 bg-background/40 px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground"
-                  >
-                    {config.candidate.relativePath}
-                  </span>
-                ))}
-              </div>
-            </div>
-          ) : null}
+          {!inspectionUnavailable ? <McpMissingConfigList missingConfigs={missingConfigs} /> : null}
         </div>
       </div>
     </section>

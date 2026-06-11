@@ -24,8 +24,10 @@ import {
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip'
 import { ClaudeUsageLoadingState } from './ClaudeUsageLoadingState'
 import { CodexUsageDailyChart } from './CodexUsageDailyChart'
+import { CodexUsageRecentSessionsTable } from './CodexUsageRecentSessionsTable'
 import { ShareUsageButton } from './ShareUsageButton'
 import { StatCard } from './StatCard'
+import { formatCost, formatTokens, formatUpdatedAt } from './usage-formatters'
 import { translate } from '@/i18n/i18n'
 
 const RANGE_OPTIONS: CodexUsageRange[] = ['7d', '30d', '90d', 'all']
@@ -44,43 +46,6 @@ const RANGE_LABELS: Record<CodexUsageRange, string> = {
   '30d': 'Last 30 days',
   '90d': 'Last 90 days',
   all: 'All time'
-}
-
-function formatTokens(value: number): string {
-  if (value >= 1_000_000) {
-    return `${(value / 1_000_000).toFixed(1)}M`
-  }
-  if (value >= 1_000) {
-    return `${(value / 1_000).toFixed(1)}k`
-  }
-  return value.toLocaleString()
-}
-
-function formatCost(value: number | null): string {
-  if (value === null) {
-    return 'n/a'
-  }
-  return value < 0.01 ? `$${value.toFixed(4)}` : `$${value.toFixed(2)}`
-}
-
-function formatUpdatedAt(timestamp: number | null): string {
-  if (!timestamp) {
-    return 'Not scanned yet'
-  }
-  return `Updated ${new Date(timestamp).toLocaleString()}`
-}
-
-function formatSessionTime(timestamp: string): string {
-  const parsed = new Date(timestamp)
-  if (Number.isNaN(parsed.getTime())) {
-    return timestamp
-  }
-  return parsed.toLocaleString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit'
-  })
 }
 
 export function CodexUsagePane(): React.JSX.Element {
@@ -396,73 +361,7 @@ export function CodexUsagePane(): React.JSX.Element {
             </section>
           </div>
 
-          <section className="rounded-lg border border-border/60 bg-card/40 p-4">
-            <div className="mb-3">
-              <h4 className="text-sm font-semibold text-foreground">
-                {translate('auto.components.stats.CodexUsagePane.0cb0983c07', 'Recent sessions')}
-              </h4>
-              <p className="text-xs text-muted-foreground">
-                {translate(
-                  'auto.components.stats.CodexUsagePane.0bd8655475',
-                  'Most recent local Codex sessions in this scope.'
-                )}
-              </p>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="min-w-full text-sm">
-                <thead>
-                  <tr className="border-b border-border/60 text-left text-xs text-muted-foreground">
-                    <th className="px-2 py-2 font-medium">
-                      {translate('auto.components.stats.CodexUsagePane.0c36b100be', 'Last active')}
-                    </th>
-                    <th className="px-2 py-2 font-medium">
-                      {translate('auto.components.stats.CodexUsagePane.1a65900aea', 'Project')}
-                    </th>
-                    <th className="px-2 py-2 font-medium">
-                      {translate('auto.components.stats.CodexUsagePane.c2478bcc3c', 'Model')}
-                    </th>
-                    <th className="px-2 py-2 font-medium">
-                      {translate('auto.components.stats.CodexUsagePane.bd0822ca47', 'Events')}
-                    </th>
-                    <th className="px-2 py-2 font-medium">
-                      {translate('auto.components.stats.CodexUsagePane.3acc582214', 'Input')}
-                    </th>
-                    <th className="px-2 py-2 font-medium">
-                      {translate('auto.components.stats.CodexUsagePane.bbd20344b8', 'Output')}
-                    </th>
-                    <th className="px-2 py-2 font-medium">
-                      {translate('auto.components.stats.CodexUsagePane.e0b988599d', 'Total')}
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {recentSessions.map((row) => (
-                    <tr key={row.sessionId} className="border-b border-border/40 last:border-b-0">
-                      <td className="px-2 py-2 text-muted-foreground">
-                        {formatSessionTime(row.lastActiveAt)}
-                      </td>
-                      <td className="px-2 py-2 text-foreground">{row.projectLabel}</td>
-                      <td className="px-2 py-2 text-muted-foreground">
-                        {row.model ??
-                          translate('auto.components.stats.CodexUsagePane.bf6cf2d4dd', 'Unknown')}
-                        {row.hasInferredPricing ? ' *' : ''}
-                      </td>
-                      <td className="px-2 py-2 text-muted-foreground">{row.events}</td>
-                      <td className="px-2 py-2 text-muted-foreground">
-                        {formatTokens(row.inputTokens)}
-                      </td>
-                      <td className="px-2 py-2 text-muted-foreground">
-                        {formatTokens(row.outputTokens)}
-                      </td>
-                      <td className="px-2 py-2 text-muted-foreground">
-                        {formatTokens(row.totalTokens)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </section>
+          <CodexUsageRecentSessionsTable recentSessions={recentSessions} />
         </>
       )}
     </div>
