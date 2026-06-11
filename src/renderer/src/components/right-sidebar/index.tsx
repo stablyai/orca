@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils'
 import { useSidebarResize } from '@/hooks/useSidebarResize'
 import type { ActivityBarPosition } from '@/store/slices/editor'
 import { isFolderRepo } from '../../../../shared/repo-kind'
+import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip'
 import {
   ContextMenu,
@@ -36,6 +37,7 @@ import {
 } from './right-sidebar-width'
 import { translate } from '@/i18n/i18n'
 import { RightSidebarPanelContent } from './right-sidebar-panel-content'
+import { useMeasuredWidth } from './right-sidebar-measured-width'
 
 const ACTIVITY_BAR_SIDE_WIDTH = 40
 
@@ -48,11 +50,6 @@ function RightSidebarInner(): React.JSX.Element {
   const checksShortcut = useShortcutLabel('sidebar.checks.toggle')
   const portsShortcut = useShortcutLabel('sidebar.ports.toggle')
   const rightSidebarOpen = useAppStore((s) => s.rightSidebarOpen)
-  const activeWorktree = useAppStore((s) =>
-    rightSidebarOpen && s.activeWorktreeId
-      ? (s.getKnownWorktreeById(s.activeWorktreeId) ?? null)
-      : null
-  )
   const rightSidebarWidth = useAppStore((s) => s.rightSidebarWidth)
   const setRightSidebarWidth = useAppStore((s) => s.setRightSidebarWidth)
   const rightSidebarTab = useAppStore((s) => s.rightSidebarTab)
@@ -62,10 +59,16 @@ function RightSidebarInner(): React.JSX.Element {
   const activityBarPosition = useAppStore((s) => s.activityBarPosition)
   const setActivityBarPosition = useAppStore((s) => s.setActivityBarPosition)
   const [topActivityStripWidth, setTopActivityStripWidth] = useState<number | null>(null)
+  const activeWorktreeId = useAppStore((s) => (rightSidebarOpen ? s.activeWorktreeId : null))
   // Why: source control and checks are meaningless for non-git folders.
   // Hide those tabs so the activity bar only shows relevant actions.
+  const activeWorktree = useAppStore((s) =>
+    activeWorktreeId ? (s.getKnownWorktreeById(activeWorktreeId) ?? null) : null
+  )
   const activeRepo = useRepoById(activeWorktree?.repoId ?? null)
-  const isFolder = activeRepo ? isFolderRepo(activeRepo) : false
+  const isFolder =
+    parseWorkspaceKey(activeWorktreeId ?? '')?.type === 'folder' ||
+    (activeRepo ? isFolderRepo(activeRepo) : false)
   const isSshRepo = Boolean(activeRepo?.connectionId)
 
   const activityItems = useMemo<ActivityBarItem[]>(
@@ -117,6 +120,13 @@ function RightSidebarInner(): React.JSX.Element {
   const effectiveTab = visibleItems.some((item) => item.id === rightSidebarTab)
     ? rightSidebarTab
     : visibleItems[0].id
+  useEffect(() => {
+    if (effectiveTab !== rightSidebarTab) {
+      // Why: folder workspaces hide git-only panels. Persist the fallback so
+      // panels and activity-button refs do not churn against a hidden tab.
+      setRightSidebarTab(effectiveTab)
+    }
+  }, [effectiveTab, rightSidebarTab, setRightSidebarTab])
 
   const activityBarSideWidth = activityBarPosition === 'side' ? ACTIVITY_BAR_SIDE_WIDTH : 0
   const windowWidth = useWindowWidth()
@@ -389,31 +399,6 @@ function getWindowWidth(): number | null {
     return null
   }
   return window.innerWidth
-}
-
-function useMeasuredWidth(onWidth: (width: number | null) => void) {
-  const observerRef = React.useRef<ResizeObserver | null>(null)
-
-  return React.useCallback(
-    (node: HTMLDivElement | null) => {
-      observerRef.current?.disconnect()
-      observerRef.current = null
-
-      if (!node || typeof ResizeObserver === 'undefined') {
-        onWidth(node ? node.getBoundingClientRect().width : null)
-        return
-      }
-
-      const updateWidth = (): void => {
-        onWidth(node.getBoundingClientRect().width)
-      }
-      updateWidth()
-      const observer = new ResizeObserver(updateWidth)
-      observer.observe(node)
-      observerRef.current = observer
-    },
-    [onWidth]
-  )
 }
 
 // ─── Context Menu for Activity Bar Position ───────────

@@ -70,6 +70,7 @@ import type {
   LinearWorkspaceSelection,
   NestedRepoScanResult,
   ProjectGroup,
+  FolderWorkspace,
   ProjectGroupImportMode,
   ProjectGroupImportResult,
   MemorySnapshot,
@@ -111,6 +112,8 @@ import {
   isPathInsideOrEqual,
   normalizeRuntimePathForComparison
 } from '../../shared/cross-platform-path'
+import { getProjectGroupSubtreeIds } from '../../shared/project-groups'
+import { folderWorkspaceKey, parseWorkspaceKey } from '../../shared/workspace-scope'
 import {
   buildKnownOrcaWorkspaceLayouts,
   isLegacyRepoForExternalWorktreeVisibility,
@@ -524,6 +527,10 @@ type RuntimeStore = {
   updateProjectGroup?: Store['updateProjectGroup']
   deleteProjectGroup?: Store['deleteProjectGroup']
   moveProjectToGroup?: Store['moveProjectToGroup']
+  getFolderWorkspaces?: Store['getFolderWorkspaces']
+  createFolderWorkspace?: Store['createFolderWorkspace']
+  updateFolderWorkspace?: Store['updateFolderWorkspace']
+  removeFolderWorkspace?: Store['removeFolderWorkspace']
   removeProject?: Store['removeProject']
   reorderRepos?: Store['reorderRepos']
   getAllWorktreeMeta: Store['getAllWorktreeMeta']
@@ -1166,6 +1173,13 @@ type ResolvedWorktree = Worktree & {
   childWorktreeIds: string[]
   lineage: WorktreeLineage | null
   git: GitWorktreeInfo
+}
+
+type TerminalWorkspaceLaunchScope = {
+  id: string
+  path: string
+  connectionId: string | null
+  folderWorkspace: FolderWorkspace | null
 }
 
 type WorktreeLineageInput = {
@@ -6434,6 +6448,10 @@ export class OrcaRuntimeService {
     return this.store?.getProjectGroups?.() ?? []
   }
 
+  listFolderWorkspaces(): FolderWorkspace[] {
+    return this.store?.getFolderWorkspaces?.() ?? []
+  }
+
   async createProjectGroup(input: {
     name: string
     parentPath?: string | null
@@ -6495,6 +6513,65 @@ export class OrcaRuntimeService {
     return moved
   }
 
+  async createFolderWorkspace(input: {
+    projectGroupId: string
+    name?: string
+    folderPath?: string | null
+    linkedTask?: FolderWorkspace['linkedTask']
+    createdWithAgent?: FolderWorkspace['createdWithAgent']
+    pendingFirstAgentMessageRename?: boolean
+  }): Promise<FolderWorkspace> {
+    if (!this.store?.createFolderWorkspace) {
+      throw new Error('runtime_unavailable')
+    }
+    const workspace = this.store.createFolderWorkspace(input)
+    this.notifyReposChanged()
+    return workspace
+  }
+
+  async updateFolderWorkspace(
+    folderWorkspaceId: string,
+    updates: Partial<
+      Pick<
+        FolderWorkspace,
+        | 'name'
+        | 'folderPath'
+        | 'linkedTask'
+        | 'comment'
+        | 'isArchived'
+        | 'isUnread'
+        | 'isPinned'
+        | 'sortOrder'
+        | 'manualOrder'
+        | 'workspaceStatus'
+        | 'createdWithAgent'
+        | 'pendingFirstAgentMessageRename'
+        | 'firstAgentMessageRenameError'
+        | 'lastActivityAt'
+      >
+    >
+  ): Promise<FolderWorkspace | null> {
+    if (!this.store?.updateFolderWorkspace) {
+      throw new Error('runtime_unavailable')
+    }
+    const updated = this.store.updateFolderWorkspace(folderWorkspaceId, updates)
+    if (updated) {
+      this.notifyReposChanged()
+    }
+    return updated
+  }
+
+  async deleteFolderWorkspace(folderWorkspaceId: string): Promise<{ deleted: boolean }> {
+    if (!this.store?.removeFolderWorkspace) {
+      throw new Error('runtime_unavailable')
+    }
+    const deleted = this.store.removeFolderWorkspace(folderWorkspaceId)
+    if (deleted) {
+      this.notifyReposChanged()
+    }
+    return { deleted }
+  }
+
   async scanNestedRepos(path: string): Promise<NestedRepoScanResult> {
     if (!isAbsolute(path)) {
       throw new Error('Project path must be an absolute path')
@@ -6552,6 +6629,7 @@ export class OrcaRuntimeService {
       parentPath: args.parentPath,
       groupName: args.groupName,
       mode: args.mode,
+      repoPaths: selection.selectedPaths,
       createGroup: (input) => this.store!.createProjectGroup!(input)
     })
     const results: ProjectGroupImportResult['projects'] = selection.rejectedPaths.map(
@@ -11066,8 +11144,7 @@ export class OrcaRuntimeService {
       if (!this.ptyController?.spawn) {
         throw new Error('runtime_unavailable')
       }
-      const worktree = await this.resolveWorktreeSelector(worktreeSelector)
-      const repo = this.store?.getRepo(worktree.repoId)
+      const workspace = await this.resolveTerminalWorkspaceLaunchScope(worktreeSelector)
       const preAllocatedHandle = this.createPreAllocatedTerminalHandle()
       // Why: mint tabId in main before spawn so paneKey is known at PTY env
       // build time. Hook-based agent status (Claude/Codex/Cursor/Gemini) keys
@@ -11103,23 +11180,23 @@ export class OrcaRuntimeService {
             shimBin
           }).env
       })
-      const env = {
-        ...baseEnv,
-        ...agentTeamsPlan?.env,
-        ORCA_PANE_KEY: paneKey,
-        ORCA_TAB_ID: tabId,
-        ORCA_WORKTREE_ID: worktree.id
-      }
+      const env = this.buildTerminalWorkspaceEnv(
+        workspace,
+        baseEnv,
+        paneKey,
+        tabId,
+        agentTeamsPlan?.env
+      )
       const result = await this.ptyController.spawn({
         cols: 120,
         rows: 40,
-        cwd: worktree.path,
+        cwd: workspace.path,
         command: agentTeamsPlan?.command ?? opts.command,
         env,
         envToDelete: agentTeamsPlan?.envToDelete,
         telemetry: opts.telemetry,
-        connectionId: repo?.connectionId ?? null,
-        worktreeId: worktree.id,
+        connectionId: workspace.connectionId,
+        worktreeId: workspace.id,
         preAllocatedHandle,
         tabId,
         leafId,
@@ -11127,7 +11204,7 @@ export class OrcaRuntimeService {
         ...(opts.persistHostSessionBinding ? { persistHostSessionBinding: true } : {})
       })
       this.registerPreAllocatedHandleForPty(result.id, preAllocatedHandle)
-      this.registerPty(result.id, worktree.id, repo?.connectionId ?? null)
+      this.registerPty(result.id, workspace.id, workspace.connectionId)
       const pty = this.getOrCreatePtyWorktreeRecord(result.id)
       if (pty) {
         pty.title = opts.title ?? null
@@ -11136,7 +11213,7 @@ export class OrcaRuntimeService {
       }
       const handle = pty ? this.issuePtyHandle(pty) : preAllocatedHandle
       if (pty) {
-        this.publishPtyBackedMobileSessionTerminal(worktree.id, pty, {
+        this.publishPtyBackedMobileSessionTerminal(workspace.id, pty, {
           tabId,
           leafId,
           title: opts.title ?? null,
@@ -11150,7 +11227,7 @@ export class OrcaRuntimeService {
           // failing here must not strand a live process without returning a handle.
           // Pass the pre-minted tabId so the renderer adopts under the same id
           // already baked into the PTY env — keeps paneKey hook attribution intact.
-          await this.notifier.revealTerminalSession(worktree.id, {
+          await this.notifier.revealTerminalSession(workspace.id, {
             ptyId: result.id,
             title: opts.title ?? null,
             activate: opts.activate === true,
@@ -11162,7 +11239,7 @@ export class OrcaRuntimeService {
           console.warn(`[terminal-create] failed to create inactive tab for ${result.id}:`, err)
         }
       }
-      return { handle, worktreeId: worktree.id, title: opts.title ?? null, surface }
+      return { handle, worktreeId: workspace.id, title: opts.title ?? null, surface }
     }
 
     this.assertGraphReady()
@@ -11170,7 +11247,7 @@ export class OrcaRuntimeService {
     // Why: mirrors browserTabCreate — when no worktree is specified, pass
     // undefined so the renderer uses its current active worktree.
     const worktreeId = worktreeSelector
-      ? (await this.resolveWorktreeSelector(worktreeSelector)).id
+      ? (await this.resolveTerminalWorkspaceLaunchScope(worktreeSelector)).id
       : undefined
     const requestId = randomUUID()
 
@@ -11723,29 +11800,23 @@ export class OrcaRuntimeService {
       throw new Error('terminal_handle_stale')
     }
     const direction = opts.direction ?? 'horizontal'
-    const worktree = await this.resolveWorktreeSelector(`id:${pty.worktreeId}`)
-    const repo = this.store?.getRepo(worktree.repoId)
+    const workspace = await this.resolveTerminalWorkspaceLaunchScope(`id:${pty.worktreeId}`)
     const leafId = randomUUID()
     const preAllocatedHandle = this.createPreAllocatedTerminalHandle()
     const paneKey = makePaneKey(parentTabId, leafId)
     const result = await this.ptyController.spawn({
       cols: 120,
       rows: 40,
-      cwd: worktree.path,
+      cwd: workspace.path,
       command: opts.command,
-      env: {
-        ...opts.env,
-        ORCA_PANE_KEY: paneKey,
-        ORCA_TAB_ID: parentTabId,
-        ORCA_WORKTREE_ID: worktree.id
-      },
+      env: this.buildTerminalWorkspaceEnv(workspace, opts.env ?? {}, paneKey, parentTabId),
       envToDelete: opts.envToDelete,
-      connectionId: repo?.connectionId ?? null,
-      worktreeId: worktree.id,
+      connectionId: workspace.connectionId,
+      worktreeId: workspace.id,
       preAllocatedHandle
     })
     this.registerPreAllocatedHandleForPty(result.id, preAllocatedHandle)
-    this.registerPty(result.id, worktree.id, repo?.connectionId ?? null)
+    this.registerPty(result.id, workspace.id, workspace.connectionId)
     const createdPty = this.getOrCreatePtyWorktreeRecord(result.id)
     if (createdPty) {
       createdPty.tabId = parentTabId
@@ -11753,7 +11824,7 @@ export class OrcaRuntimeService {
     }
 
     try {
-      await this.notifier?.revealTerminalSession?.(worktree.id, {
+      await this.notifier?.revealTerminalSession?.(workspace.id, {
         ptyId: result.id,
         title: null,
         activate: opts.activate !== false,
@@ -11768,7 +11839,7 @@ export class OrcaRuntimeService {
       throw error
     }
     if (createdPty) {
-      this.publishPtyBackedMobileSessionTerminal(worktree.id, createdPty, {
+      this.publishPtyBackedMobileSessionTerminal(workspace.id, createdPty, {
         tabId: parentTabId,
         leafId,
         title: null,
@@ -11969,6 +12040,95 @@ export class OrcaRuntimeService {
   private assertStableReadyGraph(expectedGraphEpoch: number): void {
     if (this.graphStatus !== 'ready' || this.rendererGraphEpoch !== expectedGraphEpoch) {
       throw new Error('runtime_unavailable')
+    }
+  }
+
+  private resolveFolderWorkspaceConnectionId(workspace: FolderWorkspace): string | null {
+    const repos = this.store?.getRepos() ?? []
+    const projectGroups = this.store?.getProjectGroups?.() ?? []
+    const groupIds = getProjectGroupSubtreeIds(projectGroups, workspace.projectGroupId)
+    const candidateRepos = repos.filter(
+      (repo) =>
+        (typeof repo.projectGroupId === 'string' && groupIds.has(repo.projectGroupId)) ||
+        isPathInsideOrEqual(workspace.folderPath, repo.path)
+    )
+    const connectionIds = new Set<string>()
+    for (const repo of candidateRepos) {
+      if (repo.connectionId) {
+        connectionIds.add(repo.connectionId)
+      }
+    }
+    if (connectionIds.size > 1) {
+      // Why: a single PTY can only be spawned on one runtime target; mixed
+      // child repo connections need an explicit V2 routing decision.
+      throw new Error('folder_workspace_connection_ambiguous')
+    }
+    return connectionIds.size === 1 ? [...connectionIds][0] : null
+  }
+
+  private resolveFolderWorkspaceLaunchScope(selector: string): TerminalWorkspaceLaunchScope | null {
+    const workspaceSelector = selector.startsWith('id:') ? selector.slice(3) : selector
+    const parsed = parseWorkspaceKey(workspaceSelector)
+    if (parsed?.type !== 'folder') {
+      return null
+    }
+    const workspace = this.store
+      ?.getFolderWorkspaces?.()
+      .find((entry) => entry.id === parsed.folderWorkspaceId)
+    if (!workspace) {
+      throw new Error('selector_not_found')
+    }
+    return {
+      id: folderWorkspaceKey(workspace.id),
+      path: workspace.folderPath,
+      connectionId: this.resolveFolderWorkspaceConnectionId(workspace),
+      folderWorkspace: workspace
+    }
+  }
+
+  private async resolveTerminalWorkspaceLaunchScope(
+    selector: string
+  ): Promise<TerminalWorkspaceLaunchScope> {
+    const folderScope = this.resolveFolderWorkspaceLaunchScope(selector)
+    if (folderScope) {
+      return folderScope
+    }
+
+    const workspaceSelector = selector.startsWith('id:') ? selector.slice(3) : selector
+    const parsed = parseWorkspaceKey(workspaceSelector)
+    const worktreeSelector = parsed?.type === 'worktree' ? `id:${parsed.worktreeId}` : selector
+    const worktree = await this.resolveWorktreeSelector(worktreeSelector)
+    const repo = this.store?.getRepo(worktree.repoId) ?? null
+    return {
+      id: worktree.id,
+      path: worktree.path,
+      connectionId: repo?.connectionId ?? null,
+      folderWorkspace: null
+    }
+  }
+
+  private buildTerminalWorkspaceEnv(
+    scope: TerminalWorkspaceLaunchScope,
+    baseEnv: Record<string, string>,
+    paneKey: string,
+    tabId: string,
+    agentTeamsEnv?: Record<string, string>
+  ): Record<string, string> {
+    const env = {
+      ...baseEnv,
+      ...agentTeamsEnv,
+      ORCA_PANE_KEY: paneKey,
+      ORCA_TAB_ID: tabId,
+      ORCA_WORKTREE_ID: scope.id
+    }
+    if (!scope.folderWorkspace) {
+      return env
+    }
+    return {
+      ...env,
+      ORCA_WORKSPACE_ID: scope.id,
+      ORCA_PROJECT_GROUP_ID: scope.folderWorkspace.projectGroupId,
+      ORCA_WORKSPACE_ROOT: scope.folderWorkspace.folderPath
     }
   }
 
@@ -12594,6 +12754,11 @@ export class OrcaRuntimeService {
   notifyBranchRenamed(repoId: string): void {
     this.invalidateResolvedWorktreeCache()
     this.notifyWorktreesChanged(repoId)
+  }
+
+  notifyFolderWorkspaceChanged(): void {
+    this.invalidateResolvedWorktreeCache()
+    this.notifyReposChanged()
   }
 
   private recordPtyWorktree(

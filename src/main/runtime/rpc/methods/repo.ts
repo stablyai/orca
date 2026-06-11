@@ -4,6 +4,7 @@ import { OptionalFiniteNumber, OptionalString, requiredString } from '../schemas
 import { sanitizeRepoIcon } from '../../../../shared/repo-icon'
 import { normalizeRepoBadgeColor } from '../../../../shared/repo-badge-color'
 import { normalizeRepoSourceControlAiOverrides } from '../../../../shared/source-control-ai'
+import { FOLDER_WORKSPACE_METHODS } from './folder-workspace'
 
 const RepoSelector = z.object({
   repo: requiredString('Missing repo selector')
@@ -187,6 +188,7 @@ export const REPO_METHODS: RpcMethod[] = [
       repo: await runtime.moveProjectToGroup(params.repo, params.groupId ?? null, params.order)
     })
   }),
+  ...FOLDER_WORKSPACE_METHODS,
   defineMethod({
     name: 'projectGroup.scanNested',
     params: ProjectGroupScanNested,

@@ -8,6 +8,7 @@ import type { AppState } from '../types'
 import type {
   Repo,
   ProjectGroup,
+  FolderWorkspace,
   ProjectGroupImportResult,
   NestedRepoScanResult
 } from '../../../../shared/types'
@@ -19,10 +20,11 @@ import { getRepoIdFromWorktreeId } from './worktree-helpers'
 import { reconcileFetchedRepos } from './repo-identity-reconcile'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '../../runtime/runtime-rpc-client'
 import { toRuntimeWorktreeSelector } from '../../runtime/runtime-worktree-selector'
-import { buildDismissedOnboardingFolderAgentStartup } from '@/lib/onboarding-folder-agent-startup'
-import { markOnboardingProjectAdded } from '@/lib/onboarding-project-checklist'
-import { filterSetupScriptPromptDismissalsToValidRepos } from '@/lib/setup-script-prompt'
-import { translate } from '@/i18n/i18n'
+import { buildDismissedOnboardingFolderAgentStartup } from '../../lib/onboarding-folder-agent-startup'
+import { markOnboardingProjectAdded } from '../../lib/onboarding-project-checklist'
+import { filterSetupScriptPromptDismissalsToValidRepos } from '../../lib/setup-script-prompt'
+import { translate } from '../../i18n/i18n'
+import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 
 const ERROR_TOAST_DURATION = 60_000
 
@@ -110,9 +112,11 @@ function getKnownRepoWorktreeIds(state: AppState, projectId: string): string[] {
 export type RepoSlice = {
   repos: Repo[]
   projectGroups: ProjectGroup[]
+  folderWorkspaces: FolderWorkspace[]
   activeRepoId: string | null
   fetchRepos: () => Promise<void>
   fetchProjectGroups: () => Promise<void>
+  fetchFolderWorkspaces: () => Promise<void>
   addRepo: () => Promise<Repo | null>
   addRepoPath: (path: string, kind?: 'git' | 'folder') => Promise<Repo | null>
   addNonGitFolder: (path: string) => Promise<Repo | null>
@@ -131,6 +135,37 @@ export type RepoSlice = {
     mode: 'group' | 'separate'
   }) => Promise<ProjectGroupImportResult | null>
   createProjectGroup: (name: string) => Promise<ProjectGroup | null>
+  createFolderWorkspace: (args: {
+    projectGroupId: string
+    name?: string
+    folderPath?: string | null
+    linkedTask?: FolderWorkspace['linkedTask']
+    createdWithAgent?: FolderWorkspace['createdWithAgent']
+    pendingFirstAgentMessageRename?: boolean
+  }) => Promise<FolderWorkspace | null>
+  updateFolderWorkspace: (
+    folderWorkspaceId: string,
+    updates: Partial<
+      Pick<
+        FolderWorkspace,
+        | 'name'
+        | 'folderPath'
+        | 'linkedTask'
+        | 'comment'
+        | 'isArchived'
+        | 'isUnread'
+        | 'isPinned'
+        | 'sortOrder'
+        | 'manualOrder'
+        | 'workspaceStatus'
+        | 'createdWithAgent'
+        | 'pendingFirstAgentMessageRename'
+        | 'firstAgentMessageRenameError'
+        | 'lastActivityAt'
+      >
+    >
+  ) => Promise<boolean>
+  deleteFolderWorkspace: (folderWorkspaceId: string) => Promise<boolean>
   updateProjectGroup: (
     groupId: string,
     updates: Partial<Pick<ProjectGroup, 'name' | 'isCollapsed' | 'tabOrder' | 'color'>>
@@ -150,6 +185,7 @@ export type RepoSlice = {
 export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, get) => ({
   repos: [],
   projectGroups: [],
+  folderWorkspaces: [],
   activeRepoId: null,
 
   fetchRepos: async () => {
@@ -206,6 +242,26 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
       set({ projectGroups })
     } catch (err) {
       console.error('Failed to fetch project groups:', err)
+    }
+  },
+
+  fetchFolderWorkspaces: async () => {
+    try {
+      const target = getActiveRuntimeTarget(get().settings)
+      const folderWorkspaces =
+        target.kind === 'local'
+          ? await window.api.folderWorkspaces.list()
+          : (
+              await callRuntimeRpc<{ folderWorkspaces: FolderWorkspace[] }>(
+                target,
+                'folderWorkspace.list',
+                undefined,
+                { timeoutMs: 15_000 }
+              )
+            ).folderWorkspaces
+      set({ folderWorkspaces })
+    } catch (err) {
+      console.error('Failed to fetch folder workspaces:', err)
     }
   },
 
@@ -281,6 +337,7 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
               { timeoutMs: 60_000 }
             )
       await get().fetchProjectGroups()
+      await get().fetchFolderWorkspaces()
       await get().fetchRepos()
       return result
     } catch (err) {
@@ -317,6 +374,88 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
     } catch (err) {
       console.error('Failed to create project group:', err)
       return null
+    }
+  },
+
+  createFolderWorkspace: async (args) => {
+    try {
+      const target = getActiveRuntimeTarget(get().settings)
+      const workspace =
+        target.kind === 'local'
+          ? await window.api.folderWorkspaces.create(args)
+          : (
+              await callRuntimeRpc<{ folderWorkspace: FolderWorkspace }>(
+                target,
+                'folderWorkspace.create',
+                args,
+                { timeoutMs: 15_000 }
+              )
+            ).folderWorkspace
+      set((s) => ({ folderWorkspaces: [workspace, ...s.folderWorkspaces] }))
+      return workspace
+    } catch (err) {
+      console.error('Failed to create folder workspace:', err)
+      return null
+    }
+  },
+
+  updateFolderWorkspace: async (folderWorkspaceId, updates) => {
+    try {
+      const target = getActiveRuntimeTarget(get().settings)
+      const updated =
+        target.kind === 'local'
+          ? await window.api.folderWorkspaces.update({ folderWorkspaceId, updates })
+          : (
+              await callRuntimeRpc<{ folderWorkspace: FolderWorkspace | null }>(
+                target,
+                'folderWorkspace.update',
+                { folderWorkspaceId, updates },
+                { timeoutMs: 15_000 }
+              )
+            ).folderWorkspace
+      if (!updated) {
+        return false
+      }
+      set((s) => ({
+        folderWorkspaces: s.folderWorkspaces.map((workspace) =>
+          workspace.id === folderWorkspaceId ? updated : workspace
+        )
+      }))
+      return true
+    } catch (err) {
+      console.error('Failed to update folder workspace:', err)
+      return false
+    }
+  },
+
+  deleteFolderWorkspace: async (folderWorkspaceId) => {
+    try {
+      const target = getActiveRuntimeTarget(get().settings)
+      const deleted =
+        target.kind === 'local'
+          ? await window.api.folderWorkspaces.delete({ folderWorkspaceId })
+          : (
+              await callRuntimeRpc<{ deleted: boolean }>(
+                target,
+                'folderWorkspace.delete',
+                { folderWorkspaceId },
+                { timeoutMs: 15_000 }
+              )
+            ).deleted
+      if (!deleted) {
+        return false
+      }
+      const workspaceKey = folderWorkspaceKey(folderWorkspaceId)
+      set((s) => ({
+        folderWorkspaces: s.folderWorkspaces.filter(
+          (workspace) => workspace.id !== folderWorkspaceId
+        )
+      }))
+      get().purgeWorktreeTerminalState([workspaceKey])
+      return true
+    } catch (err) {
+      console.error('Failed to delete folder workspace:', err)
+      return false
     }
   },
 
@@ -368,6 +507,9 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
         const deletedGroupIds = getProjectGroupSubtreeIds(s.projectGroups, groupId)
         return {
           projectGroups: s.projectGroups.filter((group) => !deletedGroupIds.has(group.id)),
+          folderWorkspaces: s.folderWorkspaces.filter(
+            (workspace) => !deletedGroupIds.has(workspace.projectGroupId)
+          ),
           repos: s.repos.map((repo) =>
             repo.projectGroupId && deletedGroupIds.has(repo.projectGroupId)
               ? { ...repo, projectGroupId: null }
@@ -665,6 +807,7 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
             ? {
                 activeView: 'terminal' as const,
                 activeWorktreeId: null,
+                activeWorkspaceKey: null,
                 activeRepoId: null
               }
             : {})

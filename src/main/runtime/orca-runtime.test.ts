@@ -6,6 +6,8 @@ import { tmpdir } from 'os'
 import { join } from 'path'
 import { ipcMain } from 'electron'
 import type {
+  FolderWorkspace,
+  ProjectGroup,
   TerminalLayoutSnapshot,
   WorktreeLineage,
   WorktreeMeta,
@@ -506,6 +508,10 @@ const TEST_REPO_ID = 'repo-1'
 const TEST_REPO_PATH = '/tmp/repo'
 const TEST_WORKTREE_PATH = '/tmp/worktree-a'
 const TEST_WORKTREE_ID = `${TEST_REPO_ID}::${TEST_WORKTREE_PATH}`
+const TEST_FOLDER_PROJECT_GROUP_ID = 'folder-project-group-1'
+const TEST_FOLDER_WORKSPACE_ID = 'folder-workspace-1'
+const TEST_FOLDER_WORKSPACE_KEY = `folder:${TEST_FOLDER_WORKSPACE_ID}`
+const TEST_FOLDER_WORKSPACE_PATH = '/tmp/platform'
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
 const HEADLESS_LEAF_ID = '11111111-1111-4111-8111-111111111111'
 const HEADLESS_SECOND_LEAF_ID = '22222222-2222-4222-8222-222222222222'
@@ -621,6 +627,52 @@ function expectStablePaneKeyEnv(env: Record<string, string>): string {
 
 function createRuntime(): OrcaRuntimeService {
   return new OrcaRuntimeService(store)
+}
+
+function makeFolderProjectGroup(overrides: Partial<ProjectGroup> = {}): ProjectGroup {
+  return {
+    id: TEST_FOLDER_PROJECT_GROUP_ID,
+    name: 'Platform',
+    parentPath: TEST_FOLDER_WORKSPACE_PATH,
+    parentGroupId: null,
+    createdFrom: 'folder-scan',
+    tabOrder: 0,
+    isCollapsed: false,
+    color: null,
+    createdAt: 1,
+    updatedAt: 1,
+    ...overrides
+  }
+}
+
+function makeFolderWorkspace(overrides: Partial<FolderWorkspace> = {}): FolderWorkspace {
+  return {
+    ...overrides,
+    id: overrides.id ?? TEST_FOLDER_WORKSPACE_ID,
+    projectGroupId: overrides.projectGroupId ?? TEST_FOLDER_PROJECT_GROUP_ID,
+    name: overrides.name ?? 'Refund fix',
+    folderPath: overrides.folderPath ?? TEST_FOLDER_WORKSPACE_PATH,
+    linkedTask: overrides.linkedTask ?? null,
+    comment: overrides.comment ?? '',
+    isArchived: overrides.isArchived ?? false,
+    isUnread: overrides.isUnread ?? false,
+    isPinned: overrides.isPinned ?? false,
+    sortOrder: overrides.sortOrder ?? 0,
+    lastActivityAt: overrides.lastActivityAt ?? 1,
+    createdAt: overrides.createdAt ?? 1,
+    updatedAt: overrides.updatedAt ?? 1
+  }
+}
+
+function createFolderWorkspaceRuntimeStore(
+  folderWorkspace: FolderWorkspace = makeFolderWorkspace(),
+  projectGroup: ProjectGroup = makeFolderProjectGroup()
+) {
+  return {
+    ...store,
+    getProjectGroups: () => [projectGroup],
+    getFolderWorkspaces: () => [folderWorkspace]
+  }
 }
 
 function makeRpcRequest(method: string, params?: unknown): RpcRequest {
@@ -3950,6 +4002,45 @@ describe('OrcaRuntimeService', () => {
     })
   })
 
+  it.each([
+    { label: 'canonical folder workspace selector', selector: TEST_FOLDER_WORKSPACE_KEY },
+    { label: 'id-prefixed folder workspace selector', selector: `id:${TEST_FOLDER_WORKSPACE_KEY}` }
+  ])('creates background terminal sessions for a $label', async ({ selector }) => {
+    const spawn = vi.fn().mockResolvedValue({ id: 'pty-folder' })
+    const runtime = new OrcaRuntimeService(createFolderWorkspaceRuntimeStore() as never)
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+
+    await expect(
+      runtime.createTerminal(selector, {
+        command: 'codex',
+        title: 'multi-repo worker'
+      })
+    ).resolves.toMatchObject({
+      worktreeId: TEST_FOLDER_WORKSPACE_KEY,
+      title: 'multi-repo worker',
+      surface: 'background'
+    })
+
+    const spawnCall = spawn.mock.calls[0]?.[0] as
+      | { cwd?: string; env?: Record<string, string>; worktreeId?: string }
+      | undefined
+    const spawnedEnv = spawnCall?.env ?? {}
+    expect(spawnCall).toMatchObject({
+      cwd: TEST_FOLDER_WORKSPACE_PATH,
+      worktreeId: TEST_FOLDER_WORKSPACE_KEY
+    })
+    expectStablePaneKeyEnv(spawnedEnv)
+    expect(spawnedEnv.ORCA_WORKSPACE_ID).toBe(TEST_FOLDER_WORKSPACE_KEY)
+    expect(spawnedEnv.ORCA_PROJECT_GROUP_ID).toBe(TEST_FOLDER_PROJECT_GROUP_ID)
+    expect(spawnedEnv.ORCA_WORKSPACE_ROOT).toBe(TEST_FOLDER_WORKSPACE_PATH)
+    expect(spawnedEnv.ORCA_WORKTREE_ID).toBe(TEST_FOLDER_WORKSPACE_KEY)
+  })
+
   it('enables Claude Agent Teams only for direct Claude launches when configured in-process', async () => {
     const spawn = vi.fn().mockResolvedValue({ id: 'pty-bg' })
     const runtimeStore = {
@@ -4155,6 +4246,79 @@ describe('OrcaRuntimeService', () => {
     expect(splitEnv.ORCA_WORKTREE_ID).toBe(TEST_WORKTREE_ID)
     expect(revealTerminalSession).toHaveBeenLastCalledWith(TEST_WORKTREE_ID, {
       ptyId: 'pty-split',
+      title: null,
+      activate: true,
+      tabId: sourceEnv.ORCA_TAB_ID,
+      leafId: splitLeafId,
+      splitFromLeafId: sourceLeafId,
+      splitDirection: 'vertical'
+    })
+  })
+
+  it('splits folder workspace pty-backed terminal sessions with folder cwd and env', async () => {
+    const spawn = vi
+      .fn()
+      .mockResolvedValueOnce({ id: 'pty-folder-source' })
+      .mockResolvedValueOnce({ id: 'pty-folder-split' })
+    const revealTerminalSession = vi.fn().mockResolvedValue({ tabId: 'tab-folder' })
+    const runtime = new OrcaRuntimeService(createFolderWorkspaceRuntimeStore() as never)
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    runtime.setNotifier({
+      worktreesChanged: vi.fn(),
+      reposChanged: vi.fn(),
+      activateWorktree: vi.fn(),
+      createTerminal: vi.fn(),
+      revealTerminalSession,
+      splitTerminal: vi.fn(),
+      renameTerminal: vi.fn(),
+      focusTerminal: vi.fn(),
+      closeTerminal: vi.fn(),
+      sleepWorktree: vi.fn(),
+      terminalFitOverrideChanged: vi.fn(),
+      terminalDriverChanged: vi.fn()
+    })
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+
+    const { handle } = await runtime.createTerminal(TEST_FOLDER_WORKSPACE_KEY)
+    const sourceCall = spawn.mock.calls[0]?.[0] as
+      | { cwd?: string; env?: Record<string, string>; worktreeId?: string }
+      | undefined
+    const sourceEnv = sourceCall?.env ?? {}
+    const sourceLeafId = sourceEnv.ORCA_PANE_KEY.slice(`${sourceEnv.ORCA_TAB_ID}:`.length)
+
+    await expect(runtime.splitTerminal(handle, { direction: 'vertical' })).resolves.toMatchObject({
+      handle: expect.stringMatching(/^term_/),
+      tabId: sourceEnv.ORCA_TAB_ID,
+      paneRuntimeId: -1
+    })
+
+    const splitCall = spawn.mock.calls[1]?.[0] as
+      | { cwd?: string; env?: Record<string, string>; worktreeId?: string }
+      | undefined
+    const splitEnv = splitCall?.env ?? {}
+    const splitLeafId = splitEnv.ORCA_PANE_KEY.slice(`${sourceEnv.ORCA_TAB_ID}:`.length)
+    expect(sourceCall).toMatchObject({
+      cwd: TEST_FOLDER_WORKSPACE_PATH,
+      worktreeId: TEST_FOLDER_WORKSPACE_KEY
+    })
+    expect(splitCall).toMatchObject({
+      cwd: TEST_FOLDER_WORKSPACE_PATH,
+      worktreeId: TEST_FOLDER_WORKSPACE_KEY
+    })
+    expectStablePaneKeyEnv(splitEnv)
+    expect(splitEnv.ORCA_TAB_ID).toBe(sourceEnv.ORCA_TAB_ID)
+    expect(splitEnv.ORCA_WORKSPACE_ID).toBe(TEST_FOLDER_WORKSPACE_KEY)
+    expect(splitEnv.ORCA_PROJECT_GROUP_ID).toBe(TEST_FOLDER_PROJECT_GROUP_ID)
+    expect(splitEnv.ORCA_WORKSPACE_ROOT).toBe(TEST_FOLDER_WORKSPACE_PATH)
+    expect(splitEnv.ORCA_WORKTREE_ID).toBe(TEST_FOLDER_WORKSPACE_KEY)
+    expect(revealTerminalSession).toHaveBeenLastCalledWith(TEST_FOLDER_WORKSPACE_KEY, {
+      ptyId: 'pty-folder-split',
       title: null,
       activate: true,
       tabId: sourceEnv.ORCA_TAB_ID,

@@ -8,9 +8,15 @@ import type {
   TerminalTab,
   TuiAgent,
   Worktree,
+  WorkspaceKey,
   WorkspaceSessionState
 } from '../../../../shared/types'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
+import {
+  folderWorkspaceKey,
+  parseWorkspaceKey,
+  worktreeWorkspaceKey
+} from '../../../../shared/workspace-scope'
 import { deriveGeneratedTabTitle } from '../../../../shared/agent-tab-title'
 import { parseLegacyNumericPaneKey, parsePaneKey } from '../../../../shared/stable-pane-id'
 import { isValidHostTerminalTabId, isValidTerminalTabId } from '../../../../shared/terminal-tab-id'
@@ -39,6 +45,7 @@ import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-cl
 import { parseRemoteRuntimePtyId } from '@/runtime/runtime-terminal-stream'
 import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
 import { createBrowserUuid } from '@/lib/browser-uuid'
+import { getFolderWorkspaceConnectionId } from '@/lib/folder-workspace-connection'
 import { hasWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'
 import { sanitizeTerminalLayoutPaneTitles } from '@/lib/terminal-pane-title-sanitization'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
@@ -171,9 +178,16 @@ function resolveCreatedTabShellOverride(
 }
 
 function worktreeUsesWslPath(
-  state: Pick<AppState, 'worktreesByRepo'>,
+  state: Pick<AppState, 'folderWorkspaces' | 'worktreesByRepo'>,
   worktreeId: string
 ): boolean {
+  const parsed = parseWorkspaceKey(worktreeId)
+  if (parsed?.type === 'folder') {
+    const folderWorkspace = state.folderWorkspaces.find(
+      (workspace) => workspace.id === parsed.folderWorkspaceId
+    )
+    return folderWorkspace ? isWslUncPath(folderWorkspace.folderPath) : false
+  }
   const worktree = Object.values(state.worktreesByRepo)
     .flat()
     .find((entry) => entry.id === worktreeId)
@@ -181,9 +195,13 @@ function worktreeUsesWslPath(
 }
 
 export function worktreeUsesRemoteConnection(
-  state: Pick<AppState, 'repos' | 'worktreesByRepo'>,
+  state: Pick<AppState, 'folderWorkspaces' | 'projectGroups' | 'repos' | 'worktreesByRepo'>,
   worktreeId: string
 ): boolean {
+  const parsedWorkspaceKey = parseWorkspaceKey(worktreeId)
+  if (parsedWorkspaceKey?.type === 'folder') {
+    return Boolean(getFolderWorkspaceConnectionId(state, parsedWorkspaceKey.folderWorkspaceId))
+  }
   const directRepoId = getRepoIdFromWorktreeId(worktreeId)
   const directRepo = state.repos.find((repo) => repo.id === directRepoId)
   if (directRepo) {
@@ -1968,7 +1986,14 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       // its tabs still use the normal terminal session pipeline so daemon PTYs
       // can survive app restart just like workspace terminals.
       validWorktreeIds.add(FLOATING_TERMINAL_WORKTREE_ID)
+      for (const workspace of s.folderWorkspaces) {
+        validWorktreeIds.add(folderWorkspaceKey(workspace.id))
+      }
       for (const worktreeId of Object.keys(session.tabsByWorktree)) {
+        const parsedWorkspaceKey = parseWorkspaceKey(worktreeId)
+        if (parsedWorkspaceKey?.type === 'folder') {
+          continue
+        }
         if (!validWorktreeIds.has(worktreeId)) {
           const repoId = getRepoIdFromWorktreeId(worktreeId)
           // Why (#1158): an empty/missing list can mean degraded hydration; a
@@ -2041,6 +2066,14 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         session.activeWorktreeId && validWorktreeIds.has(session.activeWorktreeId)
           ? session.activeWorktreeId
           : null
+      const activeWorkspaceKey: WorkspaceKey | null =
+        session.activeWorkspaceKey && validWorktreeIds.has(session.activeWorkspaceKey)
+          ? session.activeWorkspaceKey
+          : activeWorktreeId
+            ? parseWorkspaceKey(activeWorktreeId)
+              ? (activeWorktreeId as WorkspaceKey)
+              : worktreeWorkspaceKey(activeWorktreeId)
+            : null
       const activeTabId =
         session.activeTabId && validTabIds.has(session.activeTabId) ? session.activeTabId : null
       const activeRepoId =
@@ -2193,6 +2226,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       return {
         activeRepoId,
         activeWorktreeId,
+        activeWorkspaceKey,
         activeTabId,
         activeTabIdByWorktree,
         tabsByWorktree,

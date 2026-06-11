@@ -122,6 +122,7 @@ import type {
   PRRefreshOutcome,
   Repo,
   ProjectGroup,
+  FolderWorkspace,
   ProjectGroupImportResult,
   ProjectGroupImportMode,
   ShellHydrationFailureReason,
@@ -813,6 +814,40 @@ export type PreloadApi = {
       scanId?: string
       mode: ProjectGroupImportMode
     }) => Promise<ProjectGroupImportResult>
+  }
+  folderWorkspaces: {
+    list: () => Promise<FolderWorkspace[]>
+    create: (args: {
+      projectGroupId: string
+      name?: string
+      folderPath?: string | null
+      linkedTask?: FolderWorkspace['linkedTask']
+      createdWithAgent?: FolderWorkspace['createdWithAgent']
+      pendingFirstAgentMessageRename?: boolean
+    }) => Promise<FolderWorkspace>
+    update: (args: {
+      folderWorkspaceId: string
+      updates: Partial<
+        Pick<
+          FolderWorkspace,
+          | 'name'
+          | 'folderPath'
+          | 'linkedTask'
+          | 'comment'
+          | 'isArchived'
+          | 'isUnread'
+          | 'isPinned'
+          | 'sortOrder'
+          | 'manualOrder'
+          | 'workspaceStatus'
+          | 'createdWithAgent'
+          | 'pendingFirstAgentMessageRename'
+          | 'firstAgentMessageRenameError'
+          | 'lastActivityAt'
+        >
+      >
+    }) => Promise<FolderWorkspace | null>
+    delete: (args: { folderWorkspaceId: string }) => Promise<boolean>
   }
   sparsePresets: {
     list: (args: { repoId: string }) => Promise<SparsePreset[]>

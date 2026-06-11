@@ -36,6 +36,7 @@ import type {
   PersistedState,
   Repo,
   ProjectGroup,
+  FolderWorkspace,
   SparsePreset,
   WorktreeMeta,
   WorktreeLineage,
@@ -85,7 +86,10 @@ import { agentHookServer } from './agent-hooks/server'
 import { pruneLocalTerminalScrollbackBuffers } from '../shared/workspace-session-terminal-buffers'
 import { pruneWorkspaceSessionBrowserHistory } from '../shared/workspace-session-browser-history'
 import { getRepoIdFromWorktreeId, getWorktreePathBasenameFromId } from '../shared/worktree-id'
-import { normalizeRuntimePathForComparison } from '../shared/cross-platform-path'
+import {
+  isPathInsideOrEqual,
+  normalizeRuntimePathForComparison
+} from '../shared/cross-platform-path'
 import { normalizeTerminalQuickCommands } from '../shared/terminal-quick-commands'
 import { normalizeTaskProviderSettings } from '../shared/task-providers'
 import { normalizeAutoRenameBranchFromWorkDefaultOn } from '../shared/auto-rename-branch-from-work-settings'
@@ -121,6 +125,7 @@ import {
   normalizeProjectGroupName,
   normalizeProjectGroups
 } from '../shared/project-groups'
+import { createNestedProjectGroupResolver } from './project-groups/nested-repo-import'
 import {
   mergeLegacyCommitMessageAiIntoSourceControlAi,
   normalizeRepoSourceControlAiOverrides,
@@ -132,6 +137,11 @@ import { normalizeDisabledTuiAgents } from '../shared/tui-agent-selection'
 import { normalizeTerminalCursorStyleDefault } from '../shared/terminal-cursor-style-settings'
 import { normalizeUiLanguage } from '../shared/ui-language'
 import { normalizeBrowserPageZoomLevel } from '../shared/browser-page-zoom'
+import {
+  normalizeFolderWorkspaceName,
+  normalizeFolderWorkspaces
+} from '../shared/folder-workspaces'
+import { folderWorkspaceKey } from '../shared/workspace-scope'
 import {
   collectTerminalScrollbackSnapshotRefs,
   deleteTerminalScrollbackSnapshotSync,
@@ -1573,6 +1583,86 @@ function cloneWorkspaceSessionState(session: WorkspaceSessionState): WorkspaceSe
   return structuredClone(session)
 }
 
+function removeWorkspaceSessionOwner(
+  session: WorkspaceSessionState | undefined,
+  ownerKey: string
+): WorkspaceSessionState | undefined {
+  if (!session) {
+    return session
+  }
+  const next = cloneWorkspaceSessionState(session)
+  const removedTerminalTabs = next.tabsByWorktree?.[ownerKey] ?? []
+  if (next.tabsByWorktree) {
+    delete next.tabsByWorktree[ownerKey]
+  }
+  for (const tab of removedTerminalTabs) {
+    delete next.terminalLayoutsByTabId[tab.id]
+    if (next.activeTabId === tab.id) {
+      next.activeTabId = null
+    }
+  }
+
+  if (next.openFilesByWorktree) {
+    delete next.openFilesByWorktree[ownerKey]
+  }
+  if (next.activeFileIdByWorktree) {
+    delete next.activeFileIdByWorktree[ownerKey]
+  }
+  const browserWorkspaces = next.browserTabsByWorktree?.[ownerKey] ?? []
+  if (next.browserTabsByWorktree) {
+    delete next.browserTabsByWorktree[ownerKey]
+  }
+  if (next.browserPagesByWorkspace) {
+    for (const workspace of browserWorkspaces) {
+      delete next.browserPagesByWorkspace[workspace.id]
+    }
+  }
+  if (next.activeBrowserTabIdByWorktree) {
+    delete next.activeBrowserTabIdByWorktree[ownerKey]
+  }
+  if (next.activeTabTypeByWorktree) {
+    delete next.activeTabTypeByWorktree[ownerKey]
+  }
+  if (next.activeTabIdByWorktree) {
+    delete next.activeTabIdByWorktree[ownerKey]
+  }
+  if (next.unifiedTabs) {
+    delete next.unifiedTabs[ownerKey]
+  }
+  if (next.tabGroups) {
+    delete next.tabGroups[ownerKey]
+  }
+  if (next.tabGroupLayouts) {
+    delete next.tabGroupLayouts[ownerKey]
+  }
+  if (next.activeGroupIdByWorktree) {
+    delete next.activeGroupIdByWorktree[ownerKey]
+  }
+  if (next.lastVisitedAtByWorktreeId) {
+    delete next.lastVisitedAtByWorktreeId[ownerKey]
+  }
+  if (next.defaultTerminalTabsAppliedByWorktreeId) {
+    delete next.defaultTerminalTabsAppliedByWorktreeId[ownerKey]
+  }
+  if (next.sleepingAgentSessionsByPaneKey) {
+    for (const [paneKey, record] of Object.entries(next.sleepingAgentSessionsByPaneKey)) {
+      if (record.worktreeId === ownerKey) {
+        delete next.sleepingAgentSessionsByPaneKey[paneKey]
+      }
+    }
+  }
+  if (next.activeWorkspaceKey === ownerKey) {
+    next.activeWorkspaceKey = null
+  }
+  if (next.activeWorktreeId === ownerKey) {
+    next.activeWorktreeId = null
+  }
+  next.activeWorktreeIdsOnShutdown = next.activeWorktreeIdsOnShutdown?.filter(
+    (worktreeId) => worktreeId !== ownerKey
+  )
+  return next
+}
+
 function deleteRemovedTerminalScrollbackSnapshots(
   prior: WorkspaceSessionState | undefined,
   next: WorkspaceSessionState
@@ -1607,6 +1697,7 @@ export class Store {
     const loaded = this.load()
     const normalized = normalizePersistedPaneIdentityState(loaded)
     this.state = normalized.state
+    const adaptedProjectGroups = this.adaptFlatFolderScanProjectGroups()
     for (const entry of normalized.migrationUnsupportedEntries) {
       setMigrationUnsupportedPty(entry)
     }
@@ -1627,13 +1718,93 @@ export class Store {
       this.state.legacyPaneKeyAliasEntries = entries
       this.scheduleSave()
     })
-    if (normalized.changed || this.loadNeedsSave) {
+    if (normalized.changed || this.loadNeedsSave || adaptedProjectGroups) {
       // Why: upgraded sessions may contain legacy pane:1 leaves. Rewrite them at
       // the main persistence boundary so older renderer writes cannot revive them.
       // Other one-shot load migrations also set loadNeedsSave to persist their
       // guard flags before the next restart.
       this.scheduleSave()
     }
+  }
+
+  private adaptFlatFolderScanProjectGroups(): boolean {
+    // Why: older folder imports persisted a real parent path but kept all repos
+    // flat. Upgrade that shape into v1 sparse folder scopes on load.
+    const groups = this.state.projectGroups ?? []
+    const repos = this.state.repos
+    if (groups.length === 0 || repos.length === 0) {
+      return false
+    }
+
+    let changed = false
+    let maxOrder = -1
+    for (const group of groups) {
+      maxOrder = Math.max(maxOrder, group.tabOrder)
+    }
+
+    const childGroupIds = new Set(
+      groups.flatMap((group) => (group.parentGroupId ? [group.parentGroupId] : []))
+    )
+    const initialGroupCount = groups.length
+    for (let groupIndex = 0; groupIndex < initialGroupCount; groupIndex += 1) {
+      const rootGroup = groups[groupIndex]
+      if (!rootGroup) {
+        continue
+      }
+      if (
+        rootGroup.createdFrom !== 'folder-scan' ||
+        !rootGroup.parentPath ||
+        rootGroup.parentGroupId ||
+        childGroupIds.has(rootGroup.id)
+      ) {
+        continue
+      }
+      const rootPath = rootGroup.parentPath
+      const repoCandidates = repos.filter(
+        (repo) =>
+          !isFolderRepo(repo) &&
+          repo.projectGroupId === rootGroup.id &&
+          isPathInsideOrEqual(rootPath, repo.path)
+      )
+      if (repoCandidates.length < 2) {
+        continue
+      }
+
+      const resolver = createNestedProjectGroupResolver({
+        parentPath: rootPath,
+        groupName: rootGroup.name,
+        mode: 'group',
+        repoPaths: repoCandidates.map((repo) => repo.path),
+        createGroup: (input) => {
+          if (!input.parentGroupId) {
+            return rootGroup
+          }
+          maxOrder += 1
+          const group = createProjectGroup({
+            ...input,
+            tabOrder: maxOrder
+          })
+          groups.push(group)
+          changed = true
+          return group
+        }
+      })
+      const nextOrderByGroupId = new Map<string, number>()
+      for (const repo of repoCandidates) {
+        const group = resolver.getGroupForRepo(repo.path)
+        if (!group) {
+          continue
+        }
+        const nextOrder = nextOrderByGroupId.get(group.id) ?? 0
+        nextOrderByGroupId.set(group.id, nextOrder + 1)
+        if (repo.projectGroupId !== group.id || repo.projectGroupOrder !== nextOrder) {
+          repo.projectGroupId = group.id
+          repo.projectGroupOrder = nextOrder
+          changed = true
+        }
+      }
+    }
+    return changed
   }
 
   // Why (issue #1158): debounced writes fire as often as every 300ms during
@@ -1918,13 +2089,18 @@ export class Store {
         if (!parsed.onboarding) {
           this.loadNeedsSave = true
         }
+        const normalizedProjectGroups = normalizeProjectGroups(parsed.projectGroups)
         result = {
           ...defaults,
           ...parsed,
           featureInteractionTelemetryBuckets: normalizeFeatureInteractionTelemetryBuckets(
             parsed.featureInteractionTelemetryBuckets
           ),
-          projectGroups: normalizeProjectGroups(parsed.projectGroups),
+          projectGroups: normalizedProjectGroups,
+          folderWorkspaces: normalizeFolderWorkspaces(
+            parsed.folderWorkspaces,
+            normalizedProjectGroups
+          ),
           worktreeLineageById: parsed.worktreeLineageById ?? {},
           settings: {
             ...defaults.settings,
@@ -2535,6 +2711,163 @@ export class Store {
         ? { ...repo, projectGroupId: null }
         : repo
     )
+    for (const workspace of this.state.folderWorkspaces ?? []) {
+      if (deletedGroupIds.has(workspace.projectGroupId)) {
+        this.state.workspaceSession = removeWorkspaceSessionOwner(
+          this.state.workspaceSession,
+          folderWorkspaceKey(workspace.id)
+        )!
+      }
+    }
+    this.state.folderWorkspaces = (this.state.folderWorkspaces ?? []).filter(
+      (workspace) => !deletedGroupIds.has(workspace.projectGroupId)
+    )
+    this.scheduleSave()
+    return true
+  }
+
+  getFolderWorkspaces(): FolderWorkspace[] {
+    return [...(this.state.folderWorkspaces ?? [])].sort(
+      (left, right) => right.sortOrder - left.sortOrder || left.name.localeCompare(right.name)
+    )
+  }
+
+  getFolderWorkspace(id: string): FolderWorkspace | undefined {
+    return (this.state.folderWorkspaces ?? []).find((workspace) => workspace.id === id)
+  }
+
+  createFolderWorkspace(input: {
+    projectGroupId: string
+    name?: string
+    folderPath?: string | null
+    linkedTask?: FolderWorkspace['linkedTask']
+    createdWithAgent?: FolderWorkspace['createdWithAgent']
+    pendingFirstAgentMessageRename?: boolean
+  }): FolderWorkspace {
+    const group = (this.state.projectGroups ?? []).find(
+      (entry) => entry.id === input.projectGroupId
+    )
+    const folderPath =
+      typeof input.folderPath === 'string' && input.folderPath.trim().length > 0
+        ? input.folderPath
+        : group?.parentPath
+    if (!group || !folderPath) {
+      throw new Error('Folder-backed project group not found.')
+    }
+    const now = Date.now()
+    const workspace: FolderWorkspace = {
+      id: randomUUID(),
+      projectGroupId: group.id,
+      name: normalizeFolderWorkspaceName(input.name, `${group.name} workspace`),
+      folderPath,
+      linkedTask: input.linkedTask ?? null,
+      comment: '',
+      isArchived: false,
+      isUnread: false,
+      isPinned: false,
+      sortOrder: now,
+      ...(input.createdWithAgent ? { createdWithAgent: input.createdWithAgent } : {}),
+      ...(input.pendingFirstAgentMessageRename === true && input.createdWithAgent
+        ? { pendingFirstAgentMessageRename: true }
+        : {}),
+      lastActivityAt: 0,
+      createdAt: now,
+      updatedAt: now
+    }
+    this.state.folderWorkspaces = [workspace, ...(this.state.folderWorkspaces ?? [])]
+    this.scheduleSave()
+    return workspace
+  }
+
+  updateFolderWorkspace(
+    id: string,
+    updates: Partial<
+      Pick<
+        FolderWorkspace,
+        | 'name'
+        | 'folderPath'
+        | 'linkedTask'
+        | 'comment'
+        | 'isArchived'
+        | 'isUnread'
+        | 'isPinned'
+        | 'sortOrder'
+        | 'manualOrder'
+        | 'workspaceStatus'
+        | 'createdWithAgent'
+        | 'pendingFirstAgentMessageRename'
+        | 'firstAgentMessageRenameError'
+        | 'lastActivityAt'
+      >
+    >
+  ): FolderWorkspace | null {
+    const workspace = this.getFolderWorkspace(id)
+    if (!workspace) {
+      return null
+    }
+    if (updates.name !== undefined) {
+      workspace.name = normalizeFolderWorkspaceName(updates.name, workspace.name)
+    }
+    if (typeof updates.folderPath === 'string' && updates.folderPath.trim().length > 0) {
+      workspace.folderPath = updates.folderPath
+    }
+    if (updates.linkedTask !== undefined) {
+      workspace.linkedTask = updates.linkedTask
+    }
+    if (updates.comment !== undefined) {
+      workspace.comment = updates.comment
+    }
+    if (updates.isArchived !== undefined) {
+      workspace.isArchived = updates.isArchived
+    }
+    if (updates.isUnread !== undefined) {
+      workspace.isUnread = updates.isUnread
+    }
+    if (updates.isPinned !== undefined) {
+      workspace.isPinned = updates.isPinned
+    }
+    if (updates.sortOrder !== undefined && Number.isFinite(updates.sortOrder)) {
+      workspace.sortOrder = updates.sortOrder
+    }
+    if (updates.manualOrder !== undefined) {
+      if (Number.isFinite(updates.manualOrder)) {
+        workspace.manualOrder = updates.manualOrder
+      } else {
+        delete workspace.manualOrder
+      }
+    }
+    if (updates.workspaceStatus !== undefined) {
+      workspace.workspaceStatus = updates.workspaceStatus
+    }
+    if (updates.createdWithAgent !== undefined) {
+      workspace.createdWithAgent = updates.createdWithAgent
+    }
+    if (updates.pendingFirstAgentMessageRename !== undefined) {
+      workspace.pendingFirstAgentMessageRename = updates.pendingFirstAgentMessageRename
+    }
+    if (updates.firstAgentMessageRenameError !== undefined) {
+      workspace.firstAgentMessageRenameError = updates.firstAgentMessageRenameError
+    }
+    if (updates.lastActivityAt !== undefined && Number.isFinite(updates.lastActivityAt)) {
+      workspace.lastActivityAt = updates.lastActivityAt
+    }
+    workspace.updatedAt = Date.now()
+    this.scheduleSave()
+    return workspace
+  }
+
+  removeFolderWorkspace(id: string): boolean {
+    const before = this.state.folderWorkspaces?.length ?? 0
+    this.state.folderWorkspaces = (this.state.folderWorkspaces ?? []).filter(
+      (workspace) => workspace.id !== id
+    )
+    if ((this.state.folderWorkspaces?.length ?? 0) === before) {
+      return false
+    }
+    this.state.workspaceSession = removeWorkspaceSessionOwner(
+      this.state.workspaceSession,
+      folderWorkspaceKey(id)
+    )!
     this.scheduleSave()
     return true
   }

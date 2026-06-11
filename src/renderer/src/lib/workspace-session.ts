@@ -33,6 +33,7 @@ export function shouldPersistWorkspaceSession(
 export type WorkspaceSessionSnapshot = Pick<
   AppState,
   | 'activeRepoId'
+  | 'activeWorkspaceKey'
   | 'activeWorktreeId'
   | 'activeTabId'
   | 'tabsByWorktree'
@@ -70,6 +71,7 @@ export type WorkspaceSessionSnapshot = Pick<
 // time, preventing the gate from silently going stale.
 export const SESSION_RELEVANT_FIELDS = [
   'activeRepoId',
+  'activeWorkspaceKey',
   'activeWorktreeId',
   'activeTabId',
   'tabsByWorktree',
@@ -333,6 +335,7 @@ export function buildWorkspaceSessionPayload(
 
   const payload = {
     activeRepoId: snapshot.activeRepoId,
+    activeWorkspaceKey: snapshot.activeWorkspaceKey,
     activeWorktreeId: snapshot.activeWorktreeId,
     activeTabId: snapshot.activeTabId,
     tabsByWorktree: buildSanitizedTabsByWorktree(snapshot.tabsByWorktree),

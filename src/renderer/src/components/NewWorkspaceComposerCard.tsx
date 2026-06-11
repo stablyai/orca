@@ -54,6 +54,10 @@ type NewWorkspaceComposerCardProps = {
   selectedRepoIsGit: boolean
   onRepoChange: (value: string) => void
   primaryActionLabel: string
+  projectLabel?: string
+  projectPlaceholder?: string
+  emptyProjectMessage?: string
+  showAddProjectButton?: boolean
   name: string
   onNameValueChange: (value: string) => void
   onSmartGitHubItemSelect: (item: GitHubWorkItem) => void
@@ -86,10 +90,13 @@ type NewWorkspaceComposerCardProps = {
   selectedRepoRequiresConnection: boolean
   selectedRepoConnectInProgress: boolean
   onConnectSelectedRepo: () => Promise<void>
+  branchesEnabled?: boolean
+  setupControlsEnabled?: boolean
   canUseSparseCheckout: boolean
   sparsePresets: SparsePreset[]
   sparseSelectedPresetId: string | null
   onSparseSelectPreset: (preset: SparsePreset | null) => void
+  sparseControlsEnabled?: boolean
 }
 
 const SSH_STATUS_LABELS: Record<SshConnectionStatus, string> = {
@@ -234,6 +241,10 @@ export default function NewWorkspaceComposerCard({
   selectedRepoIsGit,
   onRepoChange,
   primaryActionLabel,
+  projectLabel,
+  projectPlaceholder,
+  emptyProjectMessage,
+  showAddProjectButton = true,
   name,
   onNameValueChange,
   onSmartGitHubItemSelect,
@@ -265,10 +276,13 @@ export default function NewWorkspaceComposerCard({
   selectedRepoRequiresConnection,
   selectedRepoConnectInProgress,
   onConnectSelectedRepo,
+  branchesEnabled = true,
+  setupControlsEnabled = true,
   canUseSparseCheckout,
   sparsePresets,
   sparseSelectedPresetId,
-  onSparseSelectPreset
+  onSparseSelectPreset,
+  sparseControlsEnabled = true
 }: NewWorkspaceComposerCardProps): React.JSX.Element {
   const { isFileDragOver, dragHandlers } = useComposerFileDragOver()
   const openModal = useAppStore((s) => s.openModal)
@@ -402,38 +416,41 @@ export default function NewWorkspaceComposerCard({
         <div className="space-y-1" data-contextual-tour-target="workspace-creation-project">
           <div className="flex items-center justify-between gap-2">
             <label className="text-xs font-medium text-muted-foreground">
-              {translate('auto.components.NewWorkspaceComposerCard.969a8bff66', 'Project')}
+              {projectLabel ??
+                translate('auto.components.NewWorkspaceComposerCard.969a8bff66', 'Project')}
             </label>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-xs"
-                  onClick={handleAddRepo}
-                  className="size-5 shrink-0 rounded-sm text-muted-foreground hover:text-foreground"
-                  aria-label={translate(
-                    'auto.components.NewWorkspaceComposerCard.d6b0a96f32',
-                    'Add project'
-                  )}
-                >
-                  <FolderPlus className="size-3" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="top" sideOffset={6}>
-                {translate('auto.components.NewWorkspaceComposerCard.d6b0a96f32', 'Add project')}
-              </TooltipContent>
-            </Tooltip>
+            {showAddProjectButton ? (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-xs"
+                    onClick={handleAddRepo}
+                    className="size-5 shrink-0 rounded-sm text-muted-foreground hover:text-foreground"
+                    aria-label={translate(
+                      'auto.components.NewWorkspaceComposerCard.d6b0a96f32',
+                      'Add project'
+                    )}
+                  >
+                    <FolderPlus className="size-3" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="top" sideOffset={6}>
+                  {translate('auto.components.NewWorkspaceComposerCard.d6b0a96f32', 'Add project')}
+                </TooltipContent>
+              </Tooltip>
+            ) : null}
           </div>
           <RepoCombobox
             repos={eligibleRepos}
             value={repoId}
             onValueChange={onRepoChange}
             onValueSelected={focusNameInput}
-            placeholder={translate(
-              'auto.components.NewWorkspaceComposerCard.dccd26d4e4',
-              'Choose project'
-            )}
+            placeholder={
+              projectPlaceholder ??
+              translate('auto.components.NewWorkspaceComposerCard.dccd26d4e4', 'Choose project')
+            }
             // Why: programmatic .focus() from the Dialog's onOpenAutoFocus
             // handler does not reliably trigger :focus-visible in Chromium.
             // Mirror the Input component's standard ring (border-ring +
@@ -451,10 +468,11 @@ export default function NewWorkspaceComposerCard({
             </p>
           ) : eligibleRepos.length === 0 ? (
             <p id={projectDescriptionId} className="text-[11px] text-muted-foreground">
-              {translate(
-                'auto.components.NewWorkspaceComposerCard.addProjectBeforeWorkspace',
-                'Add a project before creating a workspace.'
-              )}
+              {emptyProjectMessage ??
+                translate(
+                  'auto.components.NewWorkspaceComposerCard.addProjectBeforeWorkspace',
+                  'Add a project before creating a workspace.'
+                )}
             </p>
           ) : null}
           {selectedRepoRequiresConnection && selectedRepoConnectionId ? (
@@ -522,6 +540,7 @@ export default function NewWorkspaceComposerCard({
             disabled={selectedRepoRequiresConnection}
             disabledPlaceholder="Connect this repo first"
             textOnly={!selectedRepoIsGit}
+            branchesEnabled={branchesEnabled}
             onPlainEnter={() => {
               // Why: Enter on the workspace name advances focus to the next
               // field (Agent combobox) rather than submitting, letting the user
@@ -669,7 +688,7 @@ export default function NewWorkspaceComposerCard({
                 />
               </div>
 
-              {setupConfig ? (
+              {setupControlsEnabled && setupConfig ? (
                 <div className="space-y-2">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <label className="text-xs font-medium text-muted-foreground">
@@ -771,29 +790,31 @@ export default function NewWorkspaceComposerCard({
                 </div>
               ) : null}
 
-              <div className="space-y-1.5">
-                <label className="text-xs font-medium text-muted-foreground">
-                  {translate(
-                    'auto.components.NewWorkspaceComposerCard.d861de981b',
-                    'Sparse checkout'
-                  )}
-                </label>
-                <SparseCheckoutPresetSelect
-                  repoId={repoId}
-                  presets={sparsePresets}
-                  selectedPresetId={sparseSelectedPresetId}
-                  onSelectPreset={onSparseSelectPreset}
-                  disabled={!canUseSparseCheckout}
-                />
-                {!canUseSparseCheckout ? (
-                  <p className="text-[11px] text-muted-foreground">
+              {sparseControlsEnabled ? (
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-muted-foreground">
                     {translate(
-                      'auto.components.NewWorkspaceComposerCard.cbb47ee0dc',
-                      'Only available for local Git projects.'
+                      'auto.components.NewWorkspaceComposerCard.d861de981b',
+                      'Sparse checkout'
                     )}
-                  </p>
-                ) : null}
-              </div>
+                  </label>
+                  <SparseCheckoutPresetSelect
+                    repoId={repoId}
+                    presets={sparsePresets}
+                    selectedPresetId={sparseSelectedPresetId}
+                    onSelectPreset={onSparseSelectPreset}
+                    disabled={!canUseSparseCheckout}
+                  />
+                  {!canUseSparseCheckout ? (
+                    <p className="text-[11px] text-muted-foreground">
+                      {translate(
+                        'auto.components.NewWorkspaceComposerCard.cbb47ee0dc',
+                        'Only available for local Git projects.'
+                      )}
+                    </p>
+                  ) : null}
+                </div>
+              ) : null}
             </div>
           </div>
         </div>

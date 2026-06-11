@@ -7,6 +7,7 @@ import type {
   TerminalPaneLayoutNode,
   LocalBaseRefRefreshResult,
   ForceDeleteWorktreeBranchResult,
+  FolderWorkspace,
   GitHubPrStartPoint,
   Worktree,
   WorkspaceVisibleTabType,
@@ -40,6 +41,12 @@ import { markInputQuietSchedulerInput, scheduleAfterInputQuiet } from '@/lib/inp
 import { showLocalBaseRefUpdateSuggestionToast } from '@/components/sidebar/local-base-ref-suggestion-toast'
 import { translate } from '@/i18n/i18n'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
+import {
+  folderWorkspaceKey,
+  parseWorkspaceKey,
+  worktreeWorkspaceKey
+} from '../../../../shared/workspace-scope'
+import { folderWorkspaceToWorktree } from '../../../../shared/folder-workspace-worktree'
 export type { WorktreeSlice, WorktreeDeleteState } from './worktree-helpers'
 
 // Why: old runtime servers only have `worktree.list`; preserve the large-list
@@ -50,6 +57,7 @@ const ACTIVE_WORKTREE_TERMINAL_PREP_INPUT_QUIET_MS = 450
 const ACTIVE_WORKTREE_TERMINAL_PREP_IDLE_TIMEOUT_MS = 180
 const pendingActivationTerminalPrepCancels = new Map<string, () => void>()
 const detachedHeadAutoDerivedDisplayNames = new Map<string, string>()
+const folderWorkspaceWorktreeCache = new WeakMap<FolderWorkspace, Worktree>()
 
 function countTerminalLayoutLeaves(node: TerminalPaneLayoutNode | null | undefined): number {
   if (!node) {
@@ -387,9 +395,25 @@ function applyDetectedWorktreeUpdates(
 }
 
 function findKnownWorktreeById(
-  state: Pick<AppState, 'worktreesByRepo' | 'detectedWorktreesByRepo'>,
+  state: Pick<AppState, 'worktreesByRepo' | 'detectedWorktreesByRepo' | 'folderWorkspaces'>,
   worktreeId: string
 ): Worktree | DetectedWorktreeListResult['worktrees'][number] | undefined {
+  const workspaceScope = parseWorkspaceKey(worktreeId)
+  if (workspaceScope?.type === 'folder') {
+    const folderWorkspace = state.folderWorkspaces.find(
+      (workspace) => workspace.id === workspaceScope.folderWorkspaceId
+    )
+    if (!folderWorkspace) {
+      return undefined
+    }
+    const cached = folderWorkspaceWorktreeCache.get(folderWorkspace)
+    if (cached) {
+      return cached
+    }
+    const worktree = folderWorkspaceToWorktree(folderWorkspace)
+    folderWorkspaceWorktreeCache.set(folderWorkspace, worktree)
+    return worktree
+  }
   const visible = findWorktreeById(state.worktreesByRepo, worktreeId)
   if (visible) {
     return visible
@@ -401,6 +425,84 @@ function findKnownWorktreeById(
     }
   }
   return undefined
+}
+
+function getFolderWorkspaceMetaUpdates(
+  updates: Partial<WorktreeMeta>
+): Partial<
+  Pick<
+    FolderWorkspace,
+    | 'name'
+    | 'comment'
+    | 'isArchived'
+    | 'isUnread'
+    | 'isPinned'
+    | 'sortOrder'
+    | 'manualOrder'
+    | 'lastActivityAt'
+    | 'workspaceStatus'
+    | 'createdWithAgent'
+    | 'pendingFirstAgentMessageRename'
+    | 'firstAgentMessageRenameError'
+  >
+> {
+  const next: Partial<
+    Pick<
+      FolderWorkspace,
+      | 'name'
+      | 'comment'
+      | 'isArchived'
+      | 'isUnread'
+      | 'isPinned'
+      | 'sortOrder'
+      | 'manualOrder'
+      | 'lastActivityAt'
+      | 'workspaceStatus'
+      | 'createdWithAgent'
+      | 'pendingFirstAgentMessageRename'
+      | 'firstAgentMessageRenameError'
+    >
+  > = {}
+  if (updates.displayName !== undefined) {
+    next.name = updates.displayName
+    next.pendingFirstAgentMessageRename = false
+    next.firstAgentMessageRenameError = null
+  }
+  if (updates.comment !== undefined) {
+    next.comment = updates.comment
+    next.lastActivityAt = Date.now()
+  }
+  if (updates.isArchived !== undefined) {
+    next.isArchived = updates.isArchived
+  }
+  if (updates.isUnread !== undefined) {
+    next.isUnread = updates.isUnread
+  }
+  if (updates.isPinned !== undefined) {
+    next.isPinned = updates.isPinned
+  }
+  if (updates.sortOrder !== undefined) {
+    next.sortOrder = updates.sortOrder
+  }
+  if (updates.manualOrder !== undefined) {
+    next.manualOrder = updates.manualOrder
+  }
+  if (updates.lastActivityAt !== undefined) {
+    next.lastActivityAt = updates.lastActivityAt
+  }
+  if (updates.workspaceStatus !== undefined) {
+    next.workspaceStatus = updates.workspaceStatus
+  }
+  if (updates.createdWithAgent !== undefined) {
+    next.createdWithAgent = updates.createdWithAgent
+  }
+  if (updates.pendingFirstAgentMessageRename !== undefined) {
+    next.pendingFirstAgentMessageRename = updates.pendingFirstAgentMessageRename
+  }
+  if (updates.firstAgentMessageRenameError !== undefined) {
+    next.firstAgentMessageRenameError = updates.firstAgentMessageRenameError
+  }
+  return next
 }
 
 function isRuntimeSelectorNotFoundError(error: unknown): boolean {
@@ -585,10 +687,14 @@ function buildWorktreePurgeState(s: AppState, worktreeIds: string[]): Partial<Ap
 
   // Collect every tab id (and removed file id) we are about to orphan.
   const doomedTabIds = new Set<string>()
+  const doomedBrowserWorkspaceIds = new Set<string>()
   const removedFileIds = new Set<string>()
   for (const id of worktreeIdSet) {
     for (const tab of s.tabsByWorktree[id] ?? []) {
       doomedTabIds.add(tab.id)
+    }
+    for (const workspace of s.browserTabsByWorktree[id] ?? []) {
+      doomedBrowserWorkspaceIds.add(workspace.id)
     }
   }
   for (const file of s.openFiles) {
@@ -617,6 +723,17 @@ function buildWorktreePurgeState(s: AppState, worktreeIds: string[]): Partial<Ap
     for (const tabId of doomedTabIds) {
       if (tabId in out) {
         delete out[tabId]
+        changed = true
+      }
+    }
+    return changed ? out : obj
+  }
+  const omitByBrowserWorkspaceId = <T>(obj: Record<string, T>): Record<string, T> => {
+    let changed = false
+    const out = { ...obj }
+    for (const workspaceId of doomedBrowserWorkspaceIds) {
+      if (workspaceId in out) {
+        delete out[workspaceId]
         changed = true
       }
     }
@@ -675,6 +792,7 @@ function buildWorktreePurgeState(s: AppState, worktreeIds: string[]): Partial<Ap
     fileSearchStateByWorktree: omitByWorktree(s.fileSearchStateByWorktree),
     // Browser state
     browserTabsByWorktree: omitByWorktree(s.browserTabsByWorktree),
+    browserPagesByWorkspace: omitByBrowserWorkspaceId(s.browserPagesByWorkspace),
     recentlyClosedBrowserTabsByWorktree: omitByWorktree(s.recentlyClosedBrowserTabsByWorktree),
     activeBrowserTabIdByWorktree: omitByWorktree(s.activeBrowserTabIdByWorktree),
     // Editor state
@@ -708,6 +826,8 @@ function buildWorktreePurgeState(s: AppState, worktreeIds: string[]): Partial<Ap
     everActivatedWorktreeIds: nextEverActivatedWorktreeIds,
     lastVisitedAtByWorktreeId: omitByWorktree(s.lastVisitedAtByWorktreeId),
     activeWorktreeId: removedActive ? null : s.activeWorktreeId,
+    activeWorkspaceKey:
+      s.activeWorkspaceKey && worktreeIdSet.has(s.activeWorkspaceKey) ? null : s.activeWorkspaceKey,
     activeFileId: activeFileCleared ? null : s.activeFileId,
     activeBrowserTabId: removedActive ? null : s.activeBrowserTabId,
     activeTabId: activeTabCleared ? null : s.activeTabId,
@@ -720,6 +840,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
   detectedWorktreesByRepo: {},
   worktreeLineageById: {},
   activeWorktreeId: null,
+  activeWorkspaceKey: null,
   pendingWorktreeCreations: {},
   activePendingCreationId: null,
   renamingWorktreeId: null,
@@ -1612,6 +1733,14 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     if (shouldApplyUpdate && !shouldApplyUpdate(existingWorktree)) {
       return
     }
+    const workspaceScope = parseWorkspaceKey(worktreeId)
+    if (workspaceScope?.type === 'folder') {
+      const folderUpdates = getFolderWorkspaceMetaUpdates(updates)
+      if (Object.keys(folderUpdates).length > 0) {
+        await get().updateFolderWorkspace(workspaceScope.folderWorkspaceId, folderUpdates)
+      }
+      return
+    }
     // Why: manual PR linking only supplies the PR number. Resolve the PR head
     // branch here so Push targets the review branch, but don't repeat that
     // network lookup for no-op linkedPR metadata saves.
@@ -1826,7 +1955,12 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       if (!current || current.isPinned === isPinned) {
         continue
       }
-      updates.set(worktreeId, { isPinned })
+      const workspaceScope = parseWorkspaceKey(worktreeId)
+      if (workspaceScope?.type === 'folder') {
+        void get().updateWorktreeMeta(worktreeId, { isPinned })
+      } else {
+        updates.set(worktreeId, { isPinned })
+      }
       if (revealWorktreeId === null) {
         revealWorktreeId = worktreeId
       }
@@ -2162,6 +2296,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       if (!worktreeId) {
         return {
           activeWorktreeId: null,
+          activeWorkspaceKey: null,
           // Why: activating any real worktree (or clearing it) must dismiss the
           // background-creation panel so the user isn't stranded on it.
           activePendingCreationId: null
@@ -2377,6 +2512,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
 
       return {
         activeWorktreeId: worktreeId,
+        activeWorkspaceKey: worktreeWorkspaceKey(worktreeId),
         activePendingCreationId: null,
         activeFileId,
         activeBrowserTabId,
@@ -2465,6 +2601,115 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         console.error('Failed to persist worktree activation state:', err)
         void get().fetchWorktrees(getRepoIdFromWorktreeId(worktreeId))
       })
+    }
+  },
+
+  setActiveFolderWorkspace: (folderWorkspaceId) => {
+    const workspaceKey = folderWorkspaceKey(folderWorkspaceId)
+    const workspace = get().folderWorkspaces.find((entry) => entry.id === folderWorkspaceId)
+    if (!workspace) {
+      return
+    }
+    if (shouldDeferActivationTerminalPrep()) {
+      markInputQuietSchedulerInput()
+    }
+    if (get().activeWorktreeId !== workspaceKey) {
+      moveFocusToRendererBeforeFocusedWebviewHidden()
+    }
+    const reconciledActiveTabId =
+      get().reconcileWorktreeTabModel(workspaceKey).activeRenderableTabId
+    set((s) => {
+      const restoredFileId = s.activeFileIdByWorktree[workspaceKey] ?? null
+      const restoredBrowserTabId = s.activeBrowserTabIdByWorktree[workspaceKey] ?? null
+      const restoredTabType = s.activeTabTypeByWorktree[workspaceKey] ?? 'terminal'
+      const activeGroupId =
+        s.activeGroupIdByWorktree[workspaceKey] ?? s.groupsByWorktree[workspaceKey]?.[0]?.id ?? null
+      const activeGroup = activeGroupId
+        ? ((s.groupsByWorktree[workspaceKey] ?? []).find((group) => group.id === activeGroupId) ??
+          null)
+        : null
+      const activeUnifiedTabId = reconciledActiveTabId ?? activeGroup?.activeTabId ?? null
+      const activeUnifiedTab =
+        activeUnifiedTabId != null
+          ? ((s.unifiedTabsByWorktree[workspaceKey] ?? []).find(
+              (tab) =>
+                tab.id === activeUnifiedTabId && (!activeGroup || tab.groupId === activeGroup.id)
+            ) ?? null)
+          : null
+      const fileStillOpen = restoredFileId
+        ? s.openFiles.some((file) => file.id === restoredFileId && file.worktreeId === workspaceKey)
+        : false
+      const browserTabs = s.browserTabsByWorktree[workspaceKey] ?? []
+      const browserTabStillOpen = restoredBrowserTabId
+        ? browserTabs.some((tab) => tab.id === restoredBrowserTabId)
+        : false
+      const worktreeTabs = s.tabsByWorktree[workspaceKey] ?? []
+      const restoredTabId = s.activeTabIdByWorktree[workspaceKey] ?? null
+      const tabStillExists = restoredTabId
+        ? worktreeTabs.some((tab) => tab.id === restoredTabId)
+        : false
+      const activeFileId =
+        activeUnifiedTab?.contentType === 'editor' ||
+        activeUnifiedTab?.contentType === 'diff' ||
+        activeUnifiedTab?.contentType === 'conflict-review'
+          ? activeUnifiedTab.entityId
+          : fileStillOpen
+            ? restoredFileId
+            : null
+      const activeBrowserTabId =
+        activeUnifiedTab?.contentType === 'browser'
+          ? activeUnifiedTab.entityId
+          : browserTabStillOpen
+            ? restoredBrowserTabId
+            : (browserTabs[0]?.id ?? null)
+      const activeTabType =
+        activeUnifiedTab?.contentType === 'terminal'
+          ? 'terminal'
+          : activeUnifiedTab?.contentType === 'browser'
+            ? 'browser'
+            : activeUnifiedTab
+              ? 'editor'
+              : restoredTabType === 'browser' && browserTabStillOpen
+                ? 'browser'
+                : restoredTabType === 'editor' && fileStillOpen
+                  ? 'editor'
+                  : fileStillOpen
+                    ? 'editor'
+                    : browserTabs.length > 0
+                      ? 'browser'
+                      : 'terminal'
+      const activeTabId =
+        activeUnifiedTab?.contentType === 'terminal'
+          ? activeUnifiedTab.entityId
+          : tabStillExists
+            ? restoredTabId
+            : (worktreeTabs[0]?.id ?? null)
+      const nextEverActivated = s.everActivatedWorktreeIds.has(workspaceKey)
+        ? s.everActivatedWorktreeIds
+        : new Set([...s.everActivatedWorktreeIds, workspaceKey])
+      return {
+        activeRepoId: null,
+        activeWorktreeId: workspaceKey,
+        activeWorkspaceKey: workspaceKey,
+        activePendingCreationId: null,
+        activeFileId,
+        activeBrowserTabId,
+        activeTabType,
+        activeTabTypeByWorktree:
+          s.activeTabTypeByWorktree[workspaceKey] === activeTabType
+            ? s.activeTabTypeByWorktree
+            : { ...s.activeTabTypeByWorktree, [workspaceKey]: activeTabType },
+        activeTabId,
+        everActivatedWorktreeIds: nextEverActivated,
+        folderWorkspaces: workspace.isUnread
+          ? s.folderWorkspaces.map((entry) =>
+              entry.id === folderWorkspaceId ? { ...entry, isUnread: false } : entry
+            )
+          : s.folderWorkspaces
+      }
+    })
+    if (workspace.isUnread) {
+      void get().updateFolderWorkspace(folderWorkspaceId, { isUnread: false })
     }
   },
 

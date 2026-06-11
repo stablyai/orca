@@ -43,6 +43,7 @@ import { getWorkspaceStatus, getWorkspaceStatusVisualMeta } from './workspace-st
 import { WorktreeOpenInSubMenu } from './WorktreeOpenInMenu'
 import { ProjectGroupNameDialog } from './ProjectGroupNameDialog'
 import { translate } from '@/i18n/i18n'
+import { folderWorkspaceKey, parseWorkspaceKey } from '../../../../shared/workspace-scope'
 
 type Props = {
   worktree: Worktree
@@ -217,6 +218,8 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
   const projectGroups = useAppStore((s) => s.projectGroups)
   const createProjectGroup = useAppStore((s) => s.createProjectGroup)
   const moveProjectToGroup = useAppStore((s) => s.moveProjectToGroup)
+  const deleteFolderWorkspace = useAppStore((s) => s.deleteFolderWorkspace)
+  const setActiveWorktree = useAppStore((s) => s.setActiveWorktree)
   const repo = useRepoById(worktree.repoId)
   const deleteState = useAppStore((s) => s.deleteStateByWorktreeId[worktree.id])
   const [menuOpen, setMenuOpen] = useState(false)
@@ -238,6 +241,9 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
   const contextMenuOpenedAtRef = useRef<number | null>(null)
   const activeContextWorktrees = menuOpen ? contextWorktrees : effectiveSelectedWorktrees
   const isMultiContext = activeContextWorktrees.length > 1
+  const workspaceScope = parseWorkspaceKey(worktree.id)
+  const folderWorkspaceId =
+    workspaceScope?.type === 'folder' ? workspaceScope.folderWorkspaceId : null
   const sleepableWorktrees = useMemo(
     () =>
       activeContextWorktrees.filter((item) =>
@@ -408,13 +414,33 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
         restoreSidebarPosition()
         return
       }
+      if (folderWorkspaceId) {
+        void deleteFolderWorkspace(folderWorkspaceId).then((deleted) => {
+          if (
+            deleted &&
+            useAppStore.getState().activeWorktreeId === folderWorkspaceKey(folderWorkspaceId)
+          ) {
+            setActiveWorktree(null)
+          }
+        })
+        restoreSidebarPosition()
+        return
+      }
       // Why delegate to runWorktreeDelete: keeps the delete-vs-project-removal
       // decision tree (and its rationale) in one place shared with command
       // surfaces and the memory popover's inline Delete action.
       runWorktreeDelete(worktree.id)
       restoreSidebarPosition()
     }, 50)
-  }, [batchDeleteWorktrees, isMultiContext, setMenuOpenState, worktree.id])
+  }, [
+    batchDeleteWorktrees,
+    deleteFolderWorkspace,
+    folderWorkspaceId,
+    isMultiContext,
+    setActiveWorktree,
+    setMenuOpenState,
+    worktree.id
+  ])
 
   const handleOpenParent = useCallback(() => {
     if (validParentWorktreeId) {
@@ -703,12 +729,17 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
               ? translate('auto.components.sidebar.WorktreeContextMenu.b42391d8bf', 'Deleting…')
               : isMultiContext
                 ? deleteLabel
-                : removesProject
+                : folderWorkspaceId
                   ? translate(
-                      'auto.components.sidebar.WorktreeContextMenu.f5ac91531d',
-                      'Remove Project from Orca'
+                      'auto.components.sidebar.WorktreeContextMenu.250de158fd',
+                      'Remove Workspace'
                     )
-                  : translate('auto.components.sidebar.WorktreeContextMenu.f4475537d8', 'Delete')}
+                  : removesProject
+                    ? translate(
+                        'auto.components.sidebar.WorktreeContextMenu.f5ac91531d',
+                        'Remove Project from Orca'
+                      )
+                    : translate('auto.components.sidebar.WorktreeContextMenu.f4475537d8', 'Delete')}
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>

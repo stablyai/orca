@@ -1,5 +1,6 @@
 /* eslint-disable max-lines -- Why: worktree activation is a single ordered flow spanning startup, setup, issue commands, and default tabs; splitting it would obscure sequencing guarantees. */
 import type {
+  FolderWorkspace,
   SetupSplitDirection,
   TuiAgent,
   Worktree,
@@ -33,6 +34,7 @@ import {
 } from '@/store/slices/worktree-nav-history'
 import { isTuiAgent } from '../../../shared/tui-agent-config'
 import { resumeSleepingAgentSessionsForWorktree } from '@/lib/resume-sleeping-agent-session'
+import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 
 /** Telemetry payload threaded from the launch site to `pty:spawn`. Main
  *  fires `agent_started` only after the spawn succeeds — see
@@ -115,6 +117,61 @@ export type ActivateAndRevealResult = {
    *  `activeTabIdByWorktree`, which may point at another tab if setup or
    *  issue-command scripts opened their own. */
   primaryTabId: string | null
+}
+
+function ensureFolderWorkspaceInitialTerminal(
+  folderWorkspace: FolderWorkspace,
+  startup?: WorktreeStartupPayload
+): string | null {
+  const state = useAppStore.getState()
+  const workspaceKey = folderWorkspaceKey(folderWorkspace.id)
+  const primaryTabId = ensureWorktreeHasInitialTerminal(
+    state,
+    workspaceKey,
+    startup,
+    undefined,
+    undefined,
+    undefined
+  )
+  return primaryTabId
+}
+
+export function activateAndRevealFolderWorkspace(
+  folderWorkspaceId: string,
+  opts?: {
+    sidebarRevealBehavior?: PendingSidebarWorktreeReveal['behavior']
+    startup?: WorktreeStartupPayload
+  }
+): ActivateAndRevealResult | false {
+  const state = useAppStore.getState()
+  const folderWorkspace = state.folderWorkspaces.find(
+    (workspace) => workspace.id === folderWorkspaceId
+  )
+  if (!folderWorkspace) {
+    return false
+  }
+
+  if (state.activeView !== 'terminal') {
+    state.setActiveView('terminal')
+  }
+
+  state.setActiveFolderWorkspace(folderWorkspaceId)
+
+  const workspaceKey = folderWorkspaceKey(folderWorkspaceId)
+  state.markWorktreeVisited(workspaceKey)
+  if (!state.isNavigatingHistory) {
+    state.recordWorktreeVisit(workspaceKey)
+  }
+  resumeSleepingAgentSessionsForWorktree(workspaceKey)
+  const primaryTabId = ensureFolderWorkspaceInitialTerminal(folderWorkspace, opts?.startup)
+
+  if (opts?.sidebarRevealBehavior) {
+    state.revealWorktreeInSidebar(workspaceKey, { behavior: opts.sidebarRevealBehavior })
+  } else {
+    state.revealWorktreeInSidebar(workspaceKey)
+  }
+
+  return { primaryTabId }
 }
 
 function buildCreatedAgentReopenStartup(worktree: Worktree): WorktreeStartupPayload | undefined {

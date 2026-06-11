@@ -329,6 +329,7 @@ function App(): React.JSX.Element {
       toggleSidebar: s.toggleSidebar,
       fetchRepos: s.fetchRepos,
       fetchProjectGroups: s.fetchProjectGroups,
+      fetchFolderWorkspaces: s.fetchFolderWorkspaces,
       fetchAllWorktrees: s.fetchAllWorktrees,
       fetchWorktreeLineage: s.fetchWorktreeLineage,
       fetchSettings: s.fetchSettings,
@@ -731,6 +732,7 @@ function App(): React.JSX.Element {
         await actions.fetchSettings()
         await actions.fetchRepos()
         await actions.fetchProjectGroups()
+        await actions.fetchFolderWorkspaces()
         await actions.fetchAllWorktrees()
         await actions.fetchWorktreeLineage()
         const persistedUI = await window.api.ui.get()

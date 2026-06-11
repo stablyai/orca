@@ -7,6 +7,7 @@ import { create } from 'zustand'
 import type { AppState } from '../types'
 import type {
   DetectedWorktreeListResult,
+  FolderWorkspace,
   LocalBaseRefRefreshResult,
   Worktree,
   WorktreeLineage
@@ -89,6 +90,7 @@ import {
   unregisterPersistentWebview
 } from '../../components/browser-pane/webview-registry'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
+import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 
 function resetRemoteRuntimeMocks() {
   clearRuntimeCompatibilityCacheForTests()
@@ -199,6 +201,44 @@ function makeLineage(overrides: Partial<WorktreeLineage> = {}): WorktreeLineage 
     ...overrides
   }
 }
+
+function makeFolderWorkspace(overrides: Partial<FolderWorkspace> = {}): FolderWorkspace {
+  return {
+    id: 'folder-1',
+    projectGroupId: 'group-1',
+    name: 'platform workspace',
+    folderPath: '/work/platform',
+    comment: '',
+    isArchived: false,
+    isUnread: false,
+    isPinned: false,
+    sortOrder: 0,
+    manualOrder: 0,
+    lastActivityAt: 0,
+    createdAt: 0,
+    updatedAt: 0,
+    workspaceStatus: 'active',
+    ...overrides
+  }
+}
+
+describe('folder workspace lookups', () => {
+  it('returns a stable synthetic worktree for repeated folder workspace lookups', () => {
+    const store = createTestStore()
+    const folderWorkspace = makeFolderWorkspace()
+    store.setState({ folderWorkspaces: [folderWorkspace] } as Partial<AppState>)
+
+    const first = store.getState().getKnownWorktreeById(folderWorkspaceKey(folderWorkspace.id))
+    const second = store.getState().getKnownWorktreeById(folderWorkspaceKey(folderWorkspace.id))
+
+    expect(second).toBe(first)
+    expect(first).toMatchObject({
+      id: folderWorkspaceKey(folderWorkspace.id),
+      displayName: folderWorkspace.name,
+      path: folderWorkspace.folderPath
+    })
+  })
+})
 
 describe('setActiveWorktree focus handling', () => {
   beforeEach(() => {

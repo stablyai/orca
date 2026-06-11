@@ -5,6 +5,7 @@
 // summarize the prompt via the configured agent, and rename.
 import type { GlobalSettings, Repo } from '../../shared/types'
 import { getRepoIdFromWorktreeId, splitWorktreeId } from '../../shared/worktree-id'
+import { parseWorkspaceKey } from '../../shared/workspace-scope'
 import { parsePaneKey } from '../../shared/stable-pane-id'
 import {
   humanizeBranchSlug,
@@ -50,6 +51,10 @@ export type FirstWorkBranchRenameDeps = {
   getAgentEnvResolvers: () => CommitMessageAgentEnvironmentResolvers | undefined
   /** Current sidebar display name for the worktree, if one is stored. */
   getCurrentDisplayName: (worktreeId: string) => string | undefined
+  /** Current workspace path for non-git folder workspaces. */
+  getFolderWorkspacePath?: (worktreeId: string) => string | undefined
+  /** True while a workspace title is waiting for the first agent message. */
+  isPendingFirstAgentMessageRename?: (worktreeId: string) => boolean
   /** True only for Orca-created worktrees whose branch Orca is allowed to rename. */
   canRenameOrcaCreatedBranch: (worktreeId: string) => boolean
   /** Persist a new sidebar display name for the worktree. */
@@ -164,6 +169,18 @@ async function runAutoRename(
     return false
   }
 
+  const workspaceScope = parseWorkspaceKey(worktreeId)
+  if (workspaceScope?.type === 'folder') {
+    return runFolderWorkspaceTitleAutoRename(
+      worktreeId,
+      prompt,
+      assistantMessage,
+      deps,
+      stop,
+      retry
+    )
+  }
+
   const repo = deps.getRepo(getRepoIdFromWorktreeId(worktreeId))
   const parsed = splitWorktreeId(worktreeId)
   if (!repo || !parsed) {
@@ -273,6 +290,59 @@ async function runAutoRename(
     ? `display "${currentDisplayName ?? ''}" -> "${newDisplayName}"`
     : `display kept ("${currentDisplayName}")`
   console.info(`[auto-branch-rename] renamed ${currentBranch} -> ${newBranch}; ${displayLog}`)
+  return true
+}
+
+async function runFolderWorkspaceTitleAutoRename(
+  worktreeId: string,
+  prompt: string,
+  assistantMessage: string | undefined,
+  deps: FirstWorkBranchRenameDeps,
+  stop: (reason: string, clearError?: boolean) => true,
+  retry: (reason: string) => false
+): Promise<boolean> {
+  if (deps.isPendingFirstAgentMessageRename?.(worktreeId) !== true) {
+    return stop('folder workspace is not pending title rename', true)
+  }
+  const folderPath = deps.getFolderWorkspacePath?.(worktreeId)
+  if (!folderPath) {
+    return stop('folder workspace path unavailable')
+  }
+
+  const settings = deps.getSettings()
+  const resolvedParams = resolveTextGenerationParams(settings, 'local', 'branchName', null)
+  if (!resolvedParams.ok) {
+    deps.setRenameError(worktreeId, resolvedParams.error)
+    return stop(`no generation agent: ${resolvedParams.error}`)
+  }
+  const target = await resolveGenerationTarget(
+    folderPath,
+    resolvedParams.params.agentId,
+    null,
+    deps
+  )
+  if (!target) {
+    deps.setRenameError(worktreeId, 'Could not prepare the workspace-name generation environment.')
+    return retry('could not prepare generation environment')
+  }
+
+  const generated = await generateBranchNameFromContext(
+    { firstPrompt: prompt, assistantMessage },
+    resolvedParams.params,
+    target
+  )
+  if (!generated.success) {
+    if (!generated.canceled) {
+      deps.setRenameError(worktreeId, generated.error)
+    }
+    return retry(`generation failed: ${generated.error}`)
+  }
+
+  const newDisplayName = humanizeBranchSlug(generated.slug)
+  deps.setDisplayName(worktreeId, newDisplayName)
+  deps.setRenameError(worktreeId, null)
+  deps.onRenamed(worktreeId)
+  console.info(`[auto-branch-rename] renamed folder workspace title -> "${newDisplayName}"`)
   return true
 }
 

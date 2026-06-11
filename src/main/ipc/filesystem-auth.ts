@@ -7,6 +7,9 @@ import { realpath } from 'fs/promises'
 import type { Store } from '../persistence'
 import { isRepoRoot, listRepoWorktrees } from '../repo-worktrees'
 import { computeWorkspaceRoot, getWorktreePathSettings } from './worktree-logic'
+import { isPathInsideOrEqual } from '../../shared/cross-platform-path'
+import { getProjectGroupSubtreeIds } from '../../shared/project-groups'
+import type { ProjectGroup, Repo } from '../../shared/types'
 
 export const PATH_ACCESS_DENIED_MESSAGE =
   'Access denied: path resolves outside allowed directories. If this blocks a legitimate workflow, please file a GitHub issue.'
@@ -17,6 +20,8 @@ const registeredWorktreeRootRepoIds = new Set<string>()
 let registeredWorktreeRootsDirty = true
 let registeredWorktreeRootsRefresh: Promise<void> | null = null
 const AUTHORIZED_ROOTS_REBUILD_CONCURRENCY = 8
+type FolderScopeStore = Pick<Store, 'getRepos'> &
+  Partial<Pick<Store, 'getProjectGroups' | 'getFolderWorkspaces'>>
 
 export function authorizeExternalPath(targetPath: string): void {
   const resolvedTarget = resolve(targetPath)
@@ -43,6 +48,54 @@ function getLocalRepos(store: Store) {
   return store.getRepos().filter((repo) => !repo.connectionId)
 }
 
+function getFolderScopeCandidateRepos(
+  folderPath: string,
+  projectGroupId: string,
+  projectGroups: readonly ProjectGroup[],
+  repos: readonly Repo[]
+): Repo[] {
+  const groupIds = getProjectGroupSubtreeIds(projectGroups, projectGroupId)
+  return repos.filter(
+    (repo) =>
+      (typeof repo.projectGroupId === 'string' && groupIds.has(repo.projectGroupId)) ||
+      isPathInsideOrEqual(folderPath, repo.path)
+  )
+}
+
+function isRemoteOnlyFolderScope(
+  folderPath: string,
+  projectGroupId: string,
+  projectGroups: readonly ProjectGroup[],
+  repos: readonly Repo[]
+): boolean {
+  const candidates = getFolderScopeCandidateRepos(folderPath, projectGroupId, projectGroups, repos)
+  return candidates.length > 0 && candidates.every((repo) => Boolean(repo.connectionId))
+}
+
+function getLocalFolderScopeRoots(store: Store): string[] {
+  const scopeStore = store as FolderScopeStore
+  const repos = scopeStore.getRepos()
+  // Why: many filesystem tests use narrow Store doubles; folder scopes are additive.
+  const projectGroups = scopeStore.getProjectGroups?.() ?? []
+  const roots: string[] = []
+  for (const group of projectGroups) {
+    if (
+      group.parentPath &&
+      !isRemoteOnlyFolderScope(group.parentPath, group.id, projectGroups, repos)
+    ) {
+      roots.push(resolve(group.parentPath))
+    }
+  }
+  for (const workspace of scopeStore.getFolderWorkspaces?.() ?? []) {
+    if (
+      !isRemoteOnlyFolderScope(workspace.folderPath, workspace.projectGroupId, projectGroups, repos)
+    ) {
+      roots.push(resolve(workspace.folderPath))
+    }
+  }
+  return roots
+}
+
 /**
  * Check whether resolvedTarget is equal to or a descendant of resolvedBase.
  * Uses relative() so it works with both `/` (Unix) and `\` (Windows) separators.
@@ -63,7 +116,10 @@ export function isDescendantOrEqual(resolvedTarget: string, resolvedBase: string
 export function getAllowedRoots(store: Store): string[] {
   const localRepos = getLocalRepos(store)
   const settings = store.getSettings()
-  const roots = localRepos.map((repo) => resolve(repo.path))
+  const roots = [
+    ...localRepos.map((repo) => resolve(repo.path)),
+    ...getLocalFolderScopeRoots(store)
+  ]
   if (settings.workspaceDir) {
     if (localRepos.length === 0) {
       roots.push(resolve(settings.workspaceDir))

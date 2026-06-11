@@ -20,6 +20,31 @@ describe('Branch source results', () => {
     ).toEqual({ repoId: 'repo-1', query: '', limit: 12 })
   })
 
+  it('does not request branch results when branches are disabled', () => {
+    expect(
+      getBranchSearchRequest({
+        branchesEnabled: false,
+        disabled: false,
+        textOnly: false,
+        mode: 'branches',
+        selectedRepoId: 'repo-1',
+        query: '',
+        limit: 12
+      })
+    ).toBeNull()
+    expect(
+      getBranchSearchRequest({
+        branchesEnabled: false,
+        disabled: false,
+        textOnly: false,
+        mode: 'smart',
+        selectedRepoId: 'repo-1',
+        query: 'refund',
+        limit: 12
+      })
+    ).toBeNull()
+  })
+
   it('keeps Smart mode in its start-typing state for an empty query', () => {
     expect(
       getBranchSearchRequest({

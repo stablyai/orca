@@ -92,6 +92,7 @@ import { StarNagService } from './star-nag/service'
 import { agentHookServer } from './agent-hooks/server'
 import { maybeAutoRenameBranchOnFirstWork } from './agent-hooks/first-work-branch-rename'
 import { getRepoIdFromWorktreeId } from '../shared/worktree-id'
+import { parseWorkspaceKey } from '../shared/workspace-scope'
 import { setMigrationUnsupportedPtyListener } from './agent-hooks/migration-unsupported-pty-state'
 import {
   clearProviderPtyState,
@@ -206,7 +207,29 @@ function maybeAutoRenameBranchOnFirstWorkFromHook(event: {
       getSettings: () => currentStore.getSettings(),
       getRepo: (repoId) => currentStore.getRepo(repoId),
       getAgentEnvResolvers: () => currentRuntime.getCommitMessageAgentEnvironmentResolvers(),
-      getCurrentDisplayName: (worktreeId) => currentStore.getWorktreeMeta(worktreeId)?.displayName,
+      getCurrentDisplayName: (worktreeId) => {
+        const scope = parseWorkspaceKey(worktreeId)
+        if (scope?.type === 'folder') {
+          return currentStore.getFolderWorkspace(scope.folderWorkspaceId)?.name
+        }
+        return currentStore.getWorktreeMeta(worktreeId)?.displayName
+      },
+      getFolderWorkspacePath: (worktreeId) => {
+        const scope = parseWorkspaceKey(worktreeId)
+        return scope?.type === 'folder'
+          ? currentStore.getFolderWorkspace(scope.folderWorkspaceId)?.folderPath
+          : undefined
+      },
+      isPendingFirstAgentMessageRename: (worktreeId) => {
+        const scope = parseWorkspaceKey(worktreeId)
+        if (scope?.type === 'folder') {
+          return (
+            currentStore.getFolderWorkspace(scope.folderWorkspaceId)
+              ?.pendingFirstAgentMessageRename === true
+          )
+        }
+        return currentStore.getWorktreeMeta(worktreeId)?.pendingFirstAgentMessageRename === true
+      },
       canRenameOrcaCreatedBranch: (worktreeId) => {
         const meta = currentStore.getWorktreeMeta(worktreeId)
         // Why: a user/imported branch can coincidentally be named after a creature.
@@ -214,6 +237,16 @@ function maybeAutoRenameBranchOnFirstWorkFromHook(event: {
         return !!meta?.orcaCreationSource && meta.preserveBranchOnDelete !== true
       },
       setDisplayName: (worktreeId, displayName) => {
+        const scope = parseWorkspaceKey(worktreeId)
+        if (scope?.type === 'folder') {
+          currentStore.updateFolderWorkspace(scope.folderWorkspaceId, {
+            name: displayName,
+            pendingFirstAgentMessageRename: false,
+            firstAgentMessageRenameError: null
+          })
+          currentRuntime.notifyFolderWorkspaceChanged()
+          return
+        }
         currentStore.setWorktreeMeta(worktreeId, {
           displayName,
           pendingFirstAgentMessageRename: false,
@@ -225,6 +258,20 @@ function maybeAutoRenameBranchOnFirstWorkFromHook(event: {
       setRenameError: (worktreeId, error) => {
         // Skip the write + renderer push when nothing changes — benign skips
         // clear the error on every settled worktree, most of which never had one.
+        const scope = parseWorkspaceKey(worktreeId)
+        if (scope?.type === 'folder') {
+          const current = currentStore.getFolderWorkspace(
+            scope.folderWorkspaceId
+          )?.firstAgentMessageRenameError
+          if ((current ?? null) === (error ?? null)) {
+            return
+          }
+          currentStore.updateFolderWorkspace(scope.folderWorkspaceId, {
+            firstAgentMessageRenameError: error
+          })
+          currentRuntime.notifyFolderWorkspaceChanged()
+          return
+        }
         const current = currentStore.getWorktreeMeta(worktreeId)?.firstAgentMessageRenameError
         if ((current ?? null) === (error ?? null)) {
           return
@@ -235,7 +282,13 @@ function maybeAutoRenameBranchOnFirstWorkFromHook(event: {
         currentRuntime.notifyBranchRenamed(getRepoIdFromWorktreeId(worktreeId))
       },
       resolveWorktreeIdForTab: (tabId) => currentStore.getWorktreeIdForTab(tabId),
-      onRenamed: (repoId) => currentRuntime.notifyBranchRenamed(repoId)
+      onRenamed: (repoIdOrWorktreeId) => {
+        if (parseWorkspaceKey(repoIdOrWorktreeId)?.type === 'folder') {
+          currentRuntime.notifyFolderWorkspaceChanged()
+          return
+        }
+        currentRuntime.notifyBranchRenamed(repoIdOrWorktreeId)
+      }
     }
   )
 }

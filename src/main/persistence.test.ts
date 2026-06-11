@@ -31,6 +31,7 @@ import {
   ONBOARDING_FINAL_STEP,
   ONBOARDING_FLOW_VERSION
 } from '../shared/constants'
+import { folderWorkspaceKey } from '../shared/workspace-scope'
 import { SshConnectionStore } from './ssh/ssh-connection-store'
 
 // Shared mutable state so the electron mock can reference a per-test directory
@@ -2144,6 +2145,57 @@ describe('Store', () => {
     expect(store.getRepo('sibling')?.projectGroupId).toBe(sibling.id)
   })
 
+  it('adapts flat folder-scan groups into sparse nested folder scopes on load', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [
+        makeRepo({ id: 'api', path: '/workspace/platform/api', projectGroupId: 'root' }),
+        makeRepo({ id: 'web', path: '/workspace/platform/web', projectGroupId: 'root' }),
+        makeRepo({
+          id: 'repo1',
+          path: '/workspace/platform/packages/shared/repo1',
+          projectGroupId: 'root'
+        }),
+        makeRepo({
+          id: 'repo2',
+          path: '/workspace/platform/packages/shared/repo2',
+          projectGroupId: 'root'
+        })
+      ],
+      worktreeMeta: {},
+      settings: {},
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      projectGroups: [
+        {
+          id: 'root',
+          name: 'Platform',
+          parentPath: '/workspace/platform',
+          parentGroupId: null,
+          createdFrom: 'folder-scan',
+          tabOrder: 0,
+          isCollapsed: false,
+          color: null,
+          createdAt: 1,
+          updatedAt: 1
+        }
+      ]
+    })
+
+    const store = await createStore()
+    const groups = store.getProjectGroups()
+    const shared = groups.find((group) => group.name === 'packages/shared')
+
+    expect(groups.map((group) => [group.name, group.parentGroupId, group.parentPath])).toEqual([
+      ['Platform', null, '/workspace/platform'],
+      ['packages/shared', 'root', '/workspace/platform/packages/shared']
+    ])
+    expect(store.getRepo('api')?.projectGroupId).toBe('root')
+    expect(store.getRepo('web')?.projectGroupId).toBe('root')
+    expect(store.getRepo('repo1')?.projectGroupId).toBe(shared?.id)
+    expect(store.getRepo('repo2')?.projectGroupId).toBe(shared?.id)
+  })
+
   it('creates a project group when persisted group history is very large', async () => {
     const projectGroups: ProjectGroup[] = Array.from({ length: 130_000 }, (_, index) => ({
       id: `group-${index}`,
@@ -2523,6 +2575,193 @@ describe('Store', () => {
 
     expect(updated.displayName).toBe('first')
     expect(updated.comment).toBe('updated')
+  })
+
+  it('creates and updates folder workspaces from folder-backed project groups', async () => {
+    const store = await createStore()
+    const group = store.createProjectGroup({
+      name: 'Platform',
+      parentPath: '/workspace/platform',
+      createdFrom: 'folder-scan'
+    })
+    const linkedTask = {
+      provider: 'linear' as const,
+      type: 'issue' as const,
+      number: 0,
+      title: 'Refund fix',
+      url: 'https://linear.app/acme/issue/ENG-123',
+      linearIdentifier: 'ENG-123'
+    }
+
+    const workspace = store.createFolderWorkspace({
+      projectGroupId: group.id,
+      name: 'Refund fix',
+      linkedTask
+    })
+    const updated = store.updateFolderWorkspace(workspace.id, {
+      comment: 'Coordinate api and web',
+      isPinned: true,
+      lastActivityAt: 123
+    })
+
+    expect(workspace.folderPath).toBe('/workspace/platform')
+    expect(updated).toMatchObject({
+      id: workspace.id,
+      projectGroupId: group.id,
+      name: 'Refund fix',
+      folderPath: '/workspace/platform',
+      linkedTask,
+      comment: 'Coordinate api and web',
+      isPinned: true,
+      lastActivityAt: 123
+    })
+    expect(store.getFolderWorkspaces()).toHaveLength(1)
+  })
+
+  it('rejects folder workspace creation for non-folder-backed project groups', async () => {
+    const store = await createStore()
+    const group = store.createProjectGroup({ name: 'Manual', createdFrom: 'manual' })
+
+    expect(() => store.createFolderWorkspace({ projectGroupId: group.id })).toThrow(
+      'Folder-backed project group not found.'
+    )
+  })
+
+  it('normalizes persisted folder workspaces and drops orphaned records', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: {},
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      projectGroups: [
+        {
+          id: 'root',
+          name: 'Platform',
+          parentPath: '/workspace/platform',
+          parentGroupId: null,
+          createdFrom: 'folder-scan',
+          tabOrder: 0,
+          isCollapsed: false,
+          color: null,
+          createdAt: 1,
+          updatedAt: 1
+        }
+      ],
+      folderWorkspaces: [
+        {
+          id: 'fw-1',
+          projectGroupId: 'root',
+          name: '  ',
+          folderPath: '',
+          comment: 42,
+          isArchived: true,
+          isUnread: true,
+          isPinned: false,
+          sortOrder: 10,
+          lastActivityAt: 5,
+          createdAt: 2,
+          updatedAt: 3
+        },
+        {
+          id: 'orphan',
+          projectGroupId: 'missing',
+          name: 'Orphan',
+          folderPath: '/missing'
+        }
+      ]
+    })
+
+    const store = await createStore()
+
+    expect(store.getFolderWorkspaces()).toEqual([
+      expect.objectContaining({
+        id: 'fw-1',
+        projectGroupId: 'root',
+        name: 'Untitled workspace',
+        folderPath: '/workspace/platform',
+        comment: '',
+        isArchived: true,
+        isUnread: true
+      })
+    ])
+  })
+
+  it('removes folder workspace metadata and its scoped session state only', async () => {
+    const store = await createStore()
+    const group = store.createProjectGroup({
+      name: 'Platform',
+      parentPath: '/workspace/platform',
+      createdFrom: 'folder-scan'
+    })
+    store.addRepo(
+      makeRepo({ id: 'api', path: '/workspace/platform/api', projectGroupId: group.id })
+    )
+    const workspace = store.createFolderWorkspace({ projectGroupId: group.id, name: 'Refund fix' })
+    const key = folderWorkspaceKey(workspace.id)
+    const tab = makeTerminalTab({ id: 'folder-tab', worktreeId: key })
+    store.setWorkspaceSession({
+      ...getDefaultWorkspaceSession(),
+      activeWorkspaceKey: key,
+      activeWorktreeId: key,
+      activeTabId: tab.id,
+      tabsByWorktree: { [key]: [tab], 'repo::/wt': [makeTerminalTab({ id: 'repo-tab' })] },
+      terminalLayoutsByTabId: {
+        [tab.id]: { root: null, activeLeafId: null, expandedLeafId: null },
+        'repo-tab': { root: null, activeLeafId: null, expandedLeafId: null }
+      },
+      browserTabsByWorktree: {
+        [key]: [
+          {
+            id: 'browser-workspace',
+            worktreeId: key,
+            url: 'about:blank',
+            title: 'Blank',
+            loading: false,
+            faviconUrl: null,
+            canGoBack: false,
+            canGoForward: false,
+            loadError: null,
+            createdAt: 1
+          }
+        ]
+      },
+      browserPagesByWorkspace: {
+        'browser-workspace': [
+          {
+            id: 'page-1',
+            workspaceId: 'browser-workspace',
+            worktreeId: key,
+            url: 'about:blank',
+            title: 'Blank',
+            loading: false,
+            faviconUrl: null,
+            canGoBack: false,
+            canGoForward: false,
+            loadError: null,
+            createdAt: 1
+          }
+        ]
+      },
+      activeTabIdByWorktree: { [key]: tab.id },
+      lastVisitedAtByWorktreeId: { [key]: 10 }
+    })
+
+    expect(store.removeFolderWorkspace(workspace.id)).toBe(true)
+
+    const session = store.getWorkspaceSession()
+    expect(store.getFolderWorkspaces()).toEqual([])
+    expect(store.getProjectGroups()).toHaveLength(1)
+    expect(store.getRepo('api')?.projectGroupId).toBe(group.id)
+    expect(session.activeWorkspaceKey).toBeNull()
+    expect(session.activeWorktreeId).toBeNull()
+    expect(session.activeTabId).toBeNull()
+    expect(session.tabsByWorktree[key]).toBeUndefined()
+    expect(session.tabsByWorktree['repo::/wt']).toHaveLength(1)
+    expect(session.terminalLayoutsByTabId['folder-tab']).toBeUndefined()
+    expect(session.terminalLayoutsByTabId['repo-tab']).toBeDefined()
+    expect(session.browserPagesByWorkspace?.['browser-workspace']).toBeUndefined()
   })
 
   // ── 9. Settings: get/update ────────────────────────────────────────

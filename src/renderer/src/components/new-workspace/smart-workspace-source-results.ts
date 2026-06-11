@@ -32,6 +32,7 @@ export function getSmartWorkspaceEmptyHint(mode: SmartNameMode): string {
 }
 
 export function getBranchSearchRequest({
+  branchesEnabled,
   disabled,
   textOnly,
   mode,
@@ -39,6 +40,7 @@ export function getBranchSearchRequest({
   query,
   limit
 }: {
+  branchesEnabled?: boolean
   disabled: boolean
   textOnly: boolean
   mode: SmartNameMode
@@ -48,7 +50,13 @@ export function getBranchSearchRequest({
 }): { repoId: string; query: string; limit: number } | null {
   const trimmedQuery = query.trim()
   const shouldSearchBranches = mode === 'branches' || (mode === 'smart' && trimmedQuery.length > 0)
-  if (disabled || textOnly || !selectedRepoId || !shouldSearchBranches) {
+  if (
+    branchesEnabled === false ||
+    disabled ||
+    textOnly ||
+    !selectedRepoId ||
+    !shouldSearchBranches
+  ) {
     return null
   }
   return { repoId: selectedRepoId, query: trimmedQuery, limit }

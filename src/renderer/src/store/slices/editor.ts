@@ -30,6 +30,7 @@ import type {
 } from '../../../../shared/types'
 import { stripCredentialsFromMessage } from '../../../../shared/git-remote-error'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
+import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 import type { RemoteOpKind } from '@/components/right-sidebar/source-control-primary-action'
 import { shouldForcePushWithLeaseForUpstream } from '../../../../shared/git-upstream-status'
 import {
@@ -3786,6 +3787,9 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
           .map((w) => w.id)
       )
       validWorktreeIds.add(FLOATING_TERMINAL_WORKTREE_ID)
+      for (const workspace of s.folderWorkspaces) {
+        validWorktreeIds.add(folderWorkspaceKey(workspace.id))
+      }
 
       const openFiles: OpenFile[] = []
       const editorDrafts: Record<string, string> = {}

@@ -8,10 +8,12 @@ import {
 } from '@/lib/agent-status'
 import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
 import { useAppStore } from '@/store'
-import { getRepoMapFromState, getWorktreeMapFromState } from '@/store/selectors'
+import { getWorktreeMapFromState } from '@/store/selectors'
+import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import type { PtyBufferSnapshot, PtyConnectResult } from './pty-transport'
 import { createIpcPtyTransport } from './pty-transport'
 import { createRemoteRuntimePtyTransport } from './remote-runtime-pty-transport'
+import { getConnectionId } from '@/lib/connection-context'
 import { shouldSeedCacheTimerOnInitialTitle } from './cache-timer-seeding'
 import type { PtyConnectionDeps } from './pty-connection-types'
 import { safeFit } from '@/lib/pane-manager/pane-tree-ops'
@@ -1400,19 +1402,31 @@ export function connectPanePty(
   // callbacks to the correct Orca pane without resolving worktrees from cwd.
   // The key matches the `${tabId}:${leafId}` composite used for cacheTimerByKey
   // and agentStatusByPaneKey. Treat it as opaque outside Orca.
+  const state = useAppStore.getState()
+  const parsedWorkspaceKey = parseWorkspaceKey(deps.worktreeId)
+  const folderWorkspace =
+    parsedWorkspaceKey?.type === 'folder'
+      ? state.folderWorkspaces.find(
+          (workspace) => workspace.id === parsedWorkspaceKey.folderWorkspaceId
+        )
+      : null
+  const workspaceEnv: Record<string, string> = { ORCA_WORKSPACE_ID: deps.worktreeId }
+  if (folderWorkspace) {
+    workspaceEnv.ORCA_PROJECT_GROUP_ID = folderWorkspace.projectGroupId
+    workspaceEnv.ORCA_WORKSPACE_ROOT = folderWorkspace.folderPath
+  }
   const paneEnv = {
     ...paneStartup?.env,
+    ...workspaceEnv,
     ORCA_PANE_KEY: cacheKey,
     ORCA_TAB_ID: deps.tabId,
     ORCA_WORKTREE_ID: deps.worktreeId
   }
 
-  // Why: remote repos route PTY spawn through the SSH provider. Resolve the
-  // repo's connectionId from the store so the transport passes it to pty:spawn.
-  const state = useAppStore.getState()
+  // Why: folder workspaces can inherit their SSH target from child repos, so
+  // use the shared resolver instead of only looking up repo-backed worktrees.
   const worktree = getWorktreeMapFromState(state).get(deps.worktreeId)
-  const repo = worktree ? getRepoMapFromState(state).get(worktree.repoId) : null
-  const connectionId = repo?.connectionId ?? null
+  const connectionId = getConnectionId(deps.worktreeId) ?? null
   const tab = (state.tabsByWorktree[deps.worktreeId] ?? []).find((t) => t.id === deps.tabId)
   const shellOverride = tab?.shellOverride
   const isNativeWindowsConpty = isLocalNativeWindowsPty({

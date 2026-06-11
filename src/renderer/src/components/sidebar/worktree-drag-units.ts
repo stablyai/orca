@@ -10,6 +10,7 @@ type WorktreeDragUnitRow =
   | { type: 'item'; worktree: { id: string }; depth: number }
   | { type: 'imported-worktrees-card' }
   | { type: 'pending-creation' }
+  | { type: 'folder-workspace' }
 
 export function getWorktreeDragUnitGroups(
   rows: readonly WorktreeDragUnitRow[]
@@ -27,7 +28,11 @@ export function getWorktreeDragUnitGroups(
       })
       continue
     }
-    if (row.type === 'imported-worktrees-card' || row.type === 'pending-creation') {
+    if (
+      row.type === 'imported-worktrees-card' ||
+      row.type === 'pending-creation' ||
+      row.type === 'folder-workspace'
+    ) {
       continue
     }
     if (!current) {
