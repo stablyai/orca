@@ -87,6 +87,22 @@ describe('buildAgentStartupPlan', () => {
     })
   })
 
+  it('launches Ante first and injects the draft prompt after startup', () => {
+    expect(
+      buildAgentStartupPlan({
+        agent: 'ante',
+        prompt: 'Summarize the failing tests',
+        cmdOverrides: {},
+        platform: 'linux'
+      })
+    ).toEqual({
+      agent: 'ante',
+      launchCommand: 'ante',
+      expectedProcess: 'ante',
+      followupPrompt: 'Summarize the failing tests'
+    })
+  })
+
   it('uses cursor-agent as the actual launch binary', () => {
     expect(
       buildAgentStartupPlan({

@@ -2194,6 +2194,7 @@ export type TuiAgent =
   | 'copilot' // GitHub Copilot CLI
   | 'grok' // xAI Grok CLI
   | 'devin' // Devin CLI
+  | 'ante' // Ante (Antigma Labs)
 
 export type TaskViewPresetId = 'all' | 'issues' | 'review' | 'my-issues' | 'my-prs' | 'prs'
 
