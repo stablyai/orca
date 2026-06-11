@@ -490,6 +490,7 @@ export default function WorkspaceKanbanDrawer({
           } as React.CSSProperties
         }
         data-contextual-tour-target="workspace-board-surface"
+        data-workspace-board-sheet=""
         onOpenAutoFocus={(event) => {
           // Why: Radix focuses the first toolbar button on open, which opens
           // its tooltip without hover and makes the drawer feel noisy.

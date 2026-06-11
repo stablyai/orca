@@ -273,6 +273,17 @@ describe('SidebarNav', () => {
     expect(mocks.updateSettings).toHaveBeenCalledWith({ showMobileButton: false })
   })
 
+  it('hides task source shortcuts until the Tasks row is hovered or focused', async () => {
+    const container = await renderSidebarNav()
+
+    const tasksButton = getButtonByText(container, 'Tasks')
+    const shortcuts = tasksButton.querySelector('[aria-label="Open GitHub tasks"]')?.parentElement
+
+    expect(shortcuts?.className).toContain('hidden')
+    expect(shortcuts?.className).toContain('group-hover:flex')
+    expect(shortcuts?.className).toContain('group-focus-within:flex')
+  })
+
   it('hides available Tasks from its sidebar context menu', async () => {
     const container = await renderSidebarNav()
 

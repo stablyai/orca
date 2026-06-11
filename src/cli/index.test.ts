@@ -143,6 +143,47 @@ describe('orca root help', () => {
     )
     expect(callMock).not.toHaveBeenCalled()
   })
+
+  it('progressively discloses Linear commands', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(['--help'], '/tmp/repo')
+
+    const rootHelp = String(logSpy.mock.calls[0][0])
+    expect(rootHelp).toContain('Linear:')
+    expect(rootHelp).toContain('linear                    Read Linear ticket context for agents')
+    expect(rootHelp).not.toContain('linear issue')
+    expect(rootHelp).not.toContain('linear search')
+
+    logSpy.mockClear()
+    await main(['linear', '--help'], '/tmp/repo')
+
+    const groupHelp = String(logSpy.mock.calls[0][0])
+    expect(groupHelp).toContain('orca linear')
+    expect(groupHelp).toContain('issue')
+    expect(groupHelp).toContain('search')
+    expect(groupHelp).not.toContain('--comments')
+    expect(groupHelp).not.toContain('--attachments')
+
+    logSpy.mockClear()
+    await main(['linear', 'issue', '--help'], '/tmp/repo')
+
+    const issueHelp = String(logSpy.mock.calls[0][0])
+    expect(issueHelp).toContain('orca linear issue [<id>]')
+    expect(issueHelp).toContain('--comments             Include threaded Linear comments')
+    expect(issueHelp).toContain('--attachments          Include attachment metadata and URLs')
+    expect(issueHelp).toContain('--workspace <id>      Connected Linear workspace id')
+    expect(issueHelp).toContain('--id <id>             Linear issue key, id, or URL')
+
+    logSpy.mockClear()
+    await main(['linear', 'search', '--help'], '/tmp/repo')
+
+    const searchHelp = String(logSpy.mock.calls[0][0])
+    expect(searchHelp).toContain('orca linear search <query>')
+    expect(searchHelp).toContain('--workspace <id|all>  Connected Linear workspace id, or all')
+    expect(searchHelp).toContain('--query <text>        Text to search across Linear issues')
+    expect(callMock).not.toHaveBeenCalled()
+  })
 })
 
 describe('orca cli worktree awareness', () => {

@@ -34,7 +34,10 @@ export function AutomationRunPageFrame({
               type="button"
               variant="ghost"
               size="icon-xs"
-              aria-label={translate("auto.components.automations.AutomationRunPageFrame.33741dd973", "Back to runs")}
+              aria-label={translate(
+                'auto.components.automations.AutomationRunPageFrame.33741dd973',
+                'Back to runs'
+              )}
               onClick={onBack}
             >
               <ArrowLeft className="size-3.5" />
@@ -46,7 +49,10 @@ export function AutomationRunPageFrame({
             </div>
             {breadcrumbs.length > 0 ? (
               <ol
-                aria-label={translate("auto.components.automations.AutomationRunPageFrame.40a511bed4", "Run context")}
+                aria-label={translate(
+                  'auto.components.automations.AutomationRunPageFrame.40a511bed4',
+                  'Run context'
+                )}
                 className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs text-muted-foreground"
               >
                 {breadcrumbs.map((breadcrumb, index) => (

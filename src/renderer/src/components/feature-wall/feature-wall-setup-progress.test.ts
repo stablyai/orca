@@ -297,6 +297,12 @@ describe('getFeatureWallSetupProgress', () => {
     expect(progress.stepDone['task-sources']).toBe(true)
   })
 
+  it('does not mark task sources complete while provider checks are pending', () => {
+    const progress = getFeatureWallSetupProgress(makeInput({ hasConnectedTaskSource: false }))
+
+    expect(progress.stepDone['task-sources']).toBe(false)
+  })
+
   it('does not mark agent capabilities complete from setup-start interactions alone', () => {
     const progress = getFeatureWallSetupProgress(
       makeInput({

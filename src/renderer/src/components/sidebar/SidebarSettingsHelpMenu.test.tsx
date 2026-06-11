@@ -4,12 +4,19 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { SidebarSettingsHelpMenu } from './SidebarSettingsHelpMenu'
 
 const mocks = vi.hoisted(() => ({
+  openModal: vi.fn(),
   openSettingsPage: vi.fn(),
   openSettingsTarget: vi.fn(),
   appRestart: vi.fn(),
   updaterCheck: vi.fn(),
   shellOpenUrl: vi.fn(),
-  useShortcutLabel: vi.fn()
+  useShortcutLabel: vi.fn(),
+  setupProgress: {
+    ready: true,
+    coreDoneCount: 2,
+    coreTotal: 5,
+    stepDone: {}
+  }
 }))
 
 let updateStatus = { state: 'idle' } as const
@@ -17,6 +24,7 @@ let updateStatus = { state: 'idle' } as const
 vi.mock('@/store', () => ({
   useAppStore: (selector: (state: unknown) => unknown) =>
     selector({
+      openModal: mocks.openModal,
       openSettingsPage: mocks.openSettingsPage,
       openSettingsTarget: mocks.openSettingsTarget,
       updateStatus
@@ -29,6 +37,18 @@ vi.mock('@/hooks/useShortcutLabel', () => ({
 
 vi.mock('@/hooks/useMountedRef', () => ({
   useMountedRef: () => ({ current: true })
+}))
+
+vi.mock('../onboarding/show-onboarding-event', () => ({
+  showOnboardingFromRenderer: vi.fn()
+}))
+
+vi.mock('../setup-guide/use-setup-guide-progress', () => ({
+  useSetupGuideProgress: () => mocks.setupProgress
+}))
+
+vi.mock('../setup-guide/SetupGuideProgressRing', () => ({
+  SetupGuideProgressRing: () => <span data-testid="setup-guide-progress-ring" />
 }))
 
 vi.mock('@/components/ui/dropdown-menu', () => ({
@@ -79,10 +99,15 @@ describe('SidebarSettingsHelpMenu', () => {
     vi.clearAllMocks()
     mocks.useShortcutLabel.mockReturnValue('⌘,')
     updateStatus = { state: 'idle' }
+    mocks.setupProgress = {
+      ready: true,
+      coreDoneCount: 2,
+      coreTotal: 5,
+      stepDone: {}
+    }
   })
 
   it('renders the help button with correct aria-label', () => {
-    updateStatus = { state: 'idle' }
     const html = renderToStaticMarkup(<SidebarSettingsHelpMenu />)
     expect(html).toContain('Help')
   })
@@ -100,6 +125,28 @@ describe('SidebarSettingsHelpMenu', () => {
   it('renders Keyboard Shortcuts menu item', () => {
     const html = renderToStaticMarkup(<SidebarSettingsHelpMenu />)
     expect(html).toContain('Keyboard Shortcuts')
+  })
+
+  it('renders Milestones with progress when setup is incomplete', () => {
+    const html = renderToStaticMarkup(<SidebarSettingsHelpMenu />)
+    expect(html).toContain('Milestones')
+    expect(html).toContain('data-testid="setup-guide-progress-ring"')
+  })
+
+  it('hides Milestones when setup is complete', () => {
+    mocks.setupProgress = {
+      ready: true,
+      coreDoneCount: 5,
+      coreTotal: 5,
+      stepDone: {}
+    }
+    const html = renderToStaticMarkup(<SidebarSettingsHelpMenu />)
+    expect(html).not.toContain('Milestones')
+  })
+
+  it('hides the Onboarding admin entry by default', () => {
+    const html = renderToStaticMarkup(<SidebarSettingsHelpMenu />)
+    expect(html).not.toContain('Onboarding')
   })
 
   it('renders Docs link', () => {
@@ -120,6 +167,11 @@ describe('SidebarSettingsHelpMenu', () => {
   it('renders Discord link', () => {
     const html = renderToStaticMarkup(<SidebarSettingsHelpMenu />)
     expect(html).toContain('Discord')
+  })
+
+  it('renders X link', () => {
+    const html = renderToStaticMarkup(<SidebarSettingsHelpMenu />)
+    expect(html).toContain('>X<')
   })
 
   it('renders Check for Updates menu item', () => {

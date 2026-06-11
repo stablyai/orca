@@ -336,7 +336,7 @@ export default function HostedReviewActions({
                   onSelect={() => void handleCloseReview()}
                 >
                   <GitPullRequestClosed className="size-3.5" />
-                  {translate("auto.components.right.sidebar.HostedReviewActions.4d5fb5a284", "Close")}{shortLabel}
+                  {translate("auto.components.right.sidebar.HostedReviewActions.4d5fb5a284", "Close")} {shortLabel}
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>

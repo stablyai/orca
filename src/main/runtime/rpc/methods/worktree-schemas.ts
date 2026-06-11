@@ -59,6 +59,8 @@ export const WorktreeCreate = z
     linkedIssue: TriStateLinkedIssue,
     linkedPR: TriStateLinkedIssue,
     linkedLinearIssue: z.string().optional(),
+    linkedLinearIssueWorkspaceId: z.union([z.string(), z.null()]).optional(),
+    linkedLinearIssueOrganizationUrlKey: z.union([z.string(), z.null()]).optional(),
     linkedGitLabMR: TriStateLinkedIssue,
     linkedGitLabIssue: TriStateLinkedIssue,
     comment: OptionalString,

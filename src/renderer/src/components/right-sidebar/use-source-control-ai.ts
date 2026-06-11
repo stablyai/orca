@@ -160,7 +160,12 @@ export function useSourceControlAi({
       return
     }
     if (unresolvedConflicts.length === 0) {
-      toast.message(translate("auto.components.right.sidebar.use.source.control.ai.cfafa92509", "No unresolved conflicts to send."))
+      toast.message(
+        translate(
+          'auto.components.right.sidebar.use.source.control.ai.cfafa92509',
+          'No unresolved conflicts to send.'
+        )
+      )
       return
     }
     setResolveConflictsComposerOpen(true)

@@ -29,12 +29,26 @@ export function LabelsEditor({
           disabled={disabled}
           className="rounded-md border border-border/50 bg-muted/30 px-2 py-0.5 text-[11px] hover:bg-muted disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-muted/30"
         >
-          {translate("auto.components.github.project.slug.dialog.LabelsEditor.a7b182fcda", "Labels:")}{selected.length === 0 ? translate("auto.components.github.project.slug.dialog.LabelsEditor.1a5366b5be", "none") : selected.join(', ')}
+          {translate(
+            'auto.components.github.project.slug.dialog.LabelsEditor.a7b182fcda',
+            'Labels:'
+          )}
+          {selected.length === 0
+            ? translate(
+                'auto.components.github.project.slug.dialog.LabelsEditor.1a5366b5be',
+                'none'
+              )
+            : selected.join(', ')}
         </button>
       </PopoverTrigger>
       <PopoverContent className="w-64 p-1">
         {metadata.loading ? (
-          <div className="px-2 py-1 text-xs text-muted-foreground">{translate("auto.components.github.project.slug.dialog.LabelsEditor.34dd57d6c8", "Loading…")}</div>
+          <div className="px-2 py-1 text-xs text-muted-foreground">
+            {translate(
+              'auto.components.github.project.slug.dialog.LabelsEditor.34dd57d6c8',
+              'Loading…'
+            )}
+          </div>
         ) : (
           metadata.data.map((name) => {
             const isOn = selected.includes(name)

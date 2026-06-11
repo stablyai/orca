@@ -27,6 +27,12 @@ import {
   isTuiAgentEnabled,
   normalizeDisabledTuiAgents
 } from '../../../../shared/tui-agent-selection'
+import {
+  getTuiAgentDefaultArgs,
+  getTuiAgentDefaultEnv,
+  resolveTuiAgentLaunchArgs,
+  resolveTuiAgentLaunchEnv
+} from '../../../../shared/tui-agent-launch-defaults'
 import { translate } from '@/i18n/i18n'
 
 export { getAgentsPaneSearchEntries } from './agents-search'
@@ -55,19 +61,37 @@ type AgentRowProps = {
   label: string
   homepageUrl: string
   defaultCmd: string
+  defaultArgs: string
+  defaultEnv: Record<string, string>
   isDetected: boolean
   isEnabled: boolean
   isDefault: boolean
   cmdOverride: string | undefined
+  argsOverride: string
+  envOverride: Record<string, string>
   onSetDefault: () => void
   onSetEnabled: (enabled: boolean) => void
   onSaveOverride: (value: string) => void
+  onSaveArgs: (value: string) => void
+  onSaveEnv: (value: Record<string, string>) => void
 }
 
 type AgentCommandOverrideInputProps = {
   defaultCmd: string
   cmdOverride: string | undefined
   onSaveOverride: (value: string) => void
+}
+
+type AgentDefaultArgsInputProps = {
+  defaultArgs: string
+  argsOverride: string
+  onSaveArgs: (value: string) => void
+}
+
+type AgentDefaultEnvInputProps = {
+  defaultEnv: Record<string, string>
+  envOverride: Record<string, string>
+  onSaveEnv: (value: Record<string, string>) => void
 }
 
 type AgentAvailability = 'enabled' | 'disabled'
@@ -211,20 +235,165 @@ function AgentCommandOverrideInput({
   )
 }
 
+function AgentDefaultArgsInput({
+  defaultArgs,
+  argsOverride,
+  onSaveArgs
+}: AgentDefaultArgsInputProps): React.JSX.Element {
+  const draftSeed = argsOverride
+  const [argsDraft, setArgsDraft] = useState(draftSeed)
+
+  const commitArgs = (): void => {
+    onSaveArgs(argsDraft.trim())
+  }
+
+  return (
+    <div className="flex items-center gap-2">
+      <span className="shrink-0 text-xs text-muted-foreground">
+        {translate('auto.components.settings.AgentsPane.cfb3f35775', 'Arguments')}
+      </span>
+      <Input
+        value={argsDraft}
+        onChange={(e) => setArgsDraft(e.target.value)}
+        onBlur={commitArgs}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            commitArgs()
+            e.currentTarget.blur()
+          }
+          if (e.key === 'Escape') {
+            setArgsDraft(draftSeed)
+            e.currentTarget.blur()
+          }
+        }}
+        placeholder={
+          defaultArgs ||
+          translate('auto.components.settings.AgentsPane.6f99bf5dd0', 'No default arguments')
+        }
+        spellCheck={false}
+        className="h-7 flex-1 font-mono text-xs"
+      />
+      {argsOverride !== defaultArgs && (
+        <Button
+          type="button"
+          variant="ghost"
+          size="xs"
+          onClick={() => {
+            onSaveArgs(defaultArgs)
+            setArgsDraft(defaultArgs)
+          }}
+          className="h-7 shrink-0 text-xs text-muted-foreground hover:text-foreground"
+        >
+          {translate('auto.components.settings.AgentsPane.5200dac9da', 'Reset')}
+        </Button>
+      )}
+    </div>
+  )
+}
+
+function stringifyAgentEnv(env: Record<string, string>): string {
+  return Object.entries(env)
+    .map(([name, value]) => `${name}=${value}`)
+    .join(' ')
+}
+
+function parseAgentEnvDraft(value: string): Record<string, string> {
+  const env: Record<string, string> = {}
+  for (const pair of value.trim().split(/\s+/)) {
+    const separatorIndex = pair.indexOf('=')
+    if (separatorIndex <= 0) {
+      continue
+    }
+    const name = pair.slice(0, separatorIndex).trim()
+    if (!name) {
+      continue
+    }
+    env[name] = pair.slice(separatorIndex + 1)
+  }
+  return env
+}
+
+function AgentDefaultEnvInput({
+  defaultEnv,
+  envOverride,
+  onSaveEnv
+}: AgentDefaultEnvInputProps): React.JSX.Element {
+  const defaultEnvText = stringifyAgentEnv(defaultEnv)
+  const draftSeed = stringifyAgentEnv(envOverride)
+  const [envDraft, setEnvDraft] = useState(draftSeed)
+
+  const commitEnv = (): void => {
+    onSaveEnv(parseAgentEnvDraft(envDraft))
+  }
+
+  return (
+    <div className="flex items-center gap-2">
+      <span className="shrink-0 text-xs text-muted-foreground">
+        {translate('auto.components.settings.AgentsPane.8fbe1f37c1', 'Environment')}
+      </span>
+      <Input
+        value={envDraft}
+        onChange={(e) => setEnvDraft(e.target.value)}
+        onBlur={commitEnv}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            commitEnv()
+            e.currentTarget.blur()
+          }
+          if (e.key === 'Escape') {
+            setEnvDraft(draftSeed)
+            e.currentTarget.blur()
+          }
+        }}
+        placeholder={
+          defaultEnvText ||
+          translate('auto.components.settings.AgentsPane.2d133152fa', 'No default environment')
+        }
+        spellCheck={false}
+        className="h-7 flex-1 font-mono text-xs"
+      />
+      {draftSeed !== defaultEnvText && (
+        <Button
+          type="button"
+          variant="ghost"
+          size="xs"
+          onClick={() => {
+            onSaveEnv(defaultEnv)
+            setEnvDraft(defaultEnvText)
+          }}
+          className="h-7 shrink-0 text-xs text-muted-foreground hover:text-foreground"
+        >
+          {translate('auto.components.settings.AgentsPane.5200dac9da', 'Reset')}
+        </Button>
+      )}
+    </div>
+  )
+}
+
 function AgentRow({
   agentId,
   label,
   homepageUrl,
   defaultCmd,
+  defaultArgs,
+  defaultEnv,
   isDetected,
   isEnabled,
   isDefault,
   cmdOverride,
+  argsOverride,
+  envOverride,
   onSetDefault,
   onSetEnabled,
-  onSaveOverride
+  onSaveOverride,
+  onSaveArgs,
+  onSaveEnv
 }: AgentRowProps): React.JSX.Element {
-  const [cmdOpen, setCmdOpen] = useState(Boolean(cmdOverride))
+  const envSummary = stringifyAgentEnv(envOverride)
+  const defaultEnvSummary = stringifyAgentEnv(defaultEnv)
+  const [cmdOpen, setCmdOpen] = useState(
+    Boolean(cmdOverride) || argsOverride !== defaultArgs || envSummary !== defaultEnvSummary
+  )
 
   return (
     <div className={cn('py-3', !isDetected && 'opacity-70')}>
@@ -260,6 +429,8 @@ function AgentRow({
             ) : (
               defaultCmd
             )}
+            {argsOverride && <span className="ml-1.5 text-foreground/70">{argsOverride}</span>}
+            {envSummary && <span className="ml-1.5 text-foreground/60">{envSummary}</span>}
           </div>
         </div>
 
@@ -366,10 +537,28 @@ function AgentRow({
             cmdOverride={cmdOverride}
             onSaveOverride={onSaveOverride}
           />
+          <div className="mt-2">
+            <AgentDefaultArgsInput
+              key={`${agentId}:${argsOverride}`}
+              defaultArgs={defaultArgs}
+              argsOverride={argsOverride}
+              onSaveArgs={onSaveArgs}
+            />
+          </div>
+          {(defaultEnvSummary || envSummary) && (
+            <div className="mt-2">
+              <AgentDefaultEnvInput
+                key={`${agentId}:${envSummary}`}
+                defaultEnv={defaultEnv}
+                envOverride={envOverride}
+                onSaveEnv={onSaveEnv}
+              />
+            </div>
+          )}
           <p className="mt-1.5 text-[11px] text-muted-foreground">
             {translate(
               'auto.components.settings.AgentsPane.f9f127d664',
-              'Override the binary path or name used to launch this agent.'
+              'Override the binary path or name, and edit the default launch arguments or environment for this agent.'
             )}
           </p>
         </div>
@@ -424,6 +613,8 @@ export function AgentsPane({
 
   const defaultAgent = settings.defaultTuiAgent
   const cmdOverrides = settings.agentCmdOverrides ?? {}
+  const agentDefaultArgs = settings.agentDefaultArgs ?? {}
+  const agentDefaultEnv = settings.agentDefaultEnv ?? {}
   const disabledAgents = normalizeDisabledTuiAgents(settings.disabledTuiAgents)
 
   const setDefault = (id: TuiAgent | 'blank' | null): void => {
@@ -448,6 +639,24 @@ export function AgentsPane({
       delete next[id]
     }
     updateSettings({ agentCmdOverrides: next })
+  }
+
+  const saveAgentArgs = (id: TuiAgent, value: string): void => {
+    updateSettings({
+      agentDefaultArgs: {
+        ...agentDefaultArgs,
+        [id]: value
+      }
+    })
+  }
+
+  const saveAgentEnv = (id: TuiAgent, value: Record<string, string>): void => {
+    updateSettings({
+      agentDefaultEnv: {
+        ...agentDefaultEnv,
+        [id]: value
+      }
+    })
   }
 
   // Why: null means detection is in flight, not "all agents are installed".
@@ -575,13 +784,19 @@ export function AgentsPane({
                 label={agent.label}
                 homepageUrl={agent.homepageUrl}
                 defaultCmd={agent.cmd}
+                defaultArgs={getTuiAgentDefaultArgs(agent.id)}
+                defaultEnv={getTuiAgentDefaultEnv(agent.id)}
                 isDetected
                 isEnabled={isTuiAgentEnabled(agent.id, disabledAgents)}
                 isDefault={defaultAgent === agent.id}
                 cmdOverride={cmdOverrides[agent.id]}
+                argsOverride={resolveTuiAgentLaunchArgs(agent.id, agentDefaultArgs)}
+                envOverride={resolveTuiAgentLaunchEnv(agent.id, agentDefaultEnv)}
                 onSetDefault={() => setDefault(agent.id)}
                 onSetEnabled={(enabled) => setAgentEnabled(agent.id, enabled)}
                 onSaveOverride={(v) => saveOverride(agent.id, v)}
+                onSaveArgs={(v) => saveAgentArgs(agent.id, v)}
+                onSaveEnv={(v) => saveAgentEnv(agent.id, v)}
               />
             ))}
           </div>
@@ -613,13 +828,19 @@ export function AgentsPane({
                 label={agent.label}
                 homepageUrl={agent.homepageUrl}
                 defaultCmd={agent.cmd}
+                defaultArgs={getTuiAgentDefaultArgs(agent.id)}
+                defaultEnv={getTuiAgentDefaultEnv(agent.id)}
                 isDetected={false}
                 isEnabled={isTuiAgentEnabled(agent.id, disabledAgents)}
                 isDefault={false}
                 cmdOverride={undefined}
+                argsOverride={resolveTuiAgentLaunchArgs(agent.id, agentDefaultArgs)}
+                envOverride={resolveTuiAgentLaunchEnv(agent.id, agentDefaultEnv)}
                 onSetDefault={() => {}}
                 onSetEnabled={(enabled) => setAgentEnabled(agent.id, enabled)}
                 onSaveOverride={() => {}}
+                onSaveArgs={(v) => saveAgentArgs(agent.id, v)}
+                onSaveEnv={(v) => saveAgentEnv(agent.id, v)}
               />
             ))}
           </div>

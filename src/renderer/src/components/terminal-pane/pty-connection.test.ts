@@ -3003,7 +3003,9 @@ describe('connectPanePty', () => {
     await new Promise((resolve) => setTimeout(resolve, 70))
 
     expect(pane.terminal.write).toHaveBeenCalledWith('cold-payload', expect.any(Function))
-    expect(transport.sendInput).toHaveBeenCalledWith("codex 'resume' 'codex-session-1'\r")
+    expect(transport.sendInput).toHaveBeenCalledWith(
+      "codex '--dangerously-bypass-approvals-and-sandbox' 'resume' 'codex-session-1'\r"
+    )
   })
 
   it('does not resume the provider session when daemon reattach returns a live snapshot', async () => {

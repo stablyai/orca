@@ -39,8 +39,14 @@ export function EditorPanelMarkdownActionsMenu({
         <button
           type="button"
           className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-colors flex-shrink-0"
-          aria-label={translate("auto.components.editor.EditorPanelMarkdownActionsMenu.561251019a", "More actions")}
-          title={translate("auto.components.editor.EditorPanelMarkdownActionsMenu.561251019a", "More actions")}
+          aria-label={translate(
+            'auto.components.editor.EditorPanelMarkdownActionsMenu.561251019a',
+            'More actions'
+          )}
+          title={translate(
+            'auto.components.editor.EditorPanelMarkdownActionsMenu.561251019a',
+            'More actions'
+          )}
         >
           <MoreHorizontal size={14} />
         </button>
@@ -54,7 +60,15 @@ export function EditorPanelMarkdownActionsMenu({
                 onToggleMarkdownFrontmatter()
               }}
             >
-              {markdownFrontmatterVisible ? translate("auto.components.editor.EditorPanelMarkdownActionsMenu.10c39d58c1", "Hide front matter") : translate("auto.components.editor.EditorPanelMarkdownActionsMenu.8c8b7f5ff5", "Show front matter")}
+              {markdownFrontmatterVisible
+                ? translate(
+                    'auto.components.editor.EditorPanelMarkdownActionsMenu.10c39d58c1',
+                    'Hide front matter'
+                  )
+                : translate(
+                    'auto.components.editor.EditorPanelMarkdownActionsMenu.8c8b7f5ff5',
+                    'Show front matter'
+                  )}
             </DropdownMenuItem>
             {hasViewModeToggle ? <DropdownMenuSeparator /> : null}
           </>
@@ -67,7 +81,11 @@ export function EditorPanelMarkdownActionsMenu({
             disabled={mdViewMode === 'source'}
             onSelect={onExportMarkdownToPdf}
           >
-            {translate("auto.components.editor.EditorPanelMarkdownActionsMenu.3e0ce48c24", "Export as PDF")}</DropdownMenuItem>
+            {translate(
+              'auto.components.editor.EditorPanelMarkdownActionsMenu.3e0ce48c24',
+              'Export as PDF'
+            )}
+          </DropdownMenuItem>
         ) : null}
       </DropdownMenuContent>
     </DropdownMenu>

@@ -431,7 +431,11 @@ function FileExplorerInner(): React.JSX.Element {
   if (!worktreePath) {
     return (
       <div className="flex h-full items-center justify-center text-[11px] text-muted-foreground px-4 text-center">
-        {translate("auto.components.right.sidebar.FileExplorer.79b1537dd3", "Select a workspace to browse files")}</div>
+        {translate(
+          'auto.components.right.sidebar.FileExplorer.79b1537dd3',
+          'Select a workspace to browse files'
+        )}
+      </div>
     )
   }
 

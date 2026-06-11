@@ -65,7 +65,11 @@ export default function CacheTimer({
           )}
         >
           <Timer className="size-2.5" />
-          <span>{expired ? translate("auto.components.sidebar.CacheTimer.07729cc155", "expired") : label}</span>
+          <span>
+            {expired
+              ? translate('auto.components.sidebar.CacheTimer.07729cc155', 'expired')
+              : label}
+          </span>
         </div>
       </TooltipTrigger>
       <TooltipContent side="right" sideOffset={8}>

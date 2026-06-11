@@ -19,14 +19,26 @@ export function ShortcutTerminalPolicyControl({
   return (
     <SearchableSetting
       id="terminal-shortcut-policy"
-      title={translate("auto.components.settings.ShortcutTerminalPolicyControl.c3a554288e", "Shortcuts in Terminal")}
-      description={translate("auto.components.settings.ShortcutTerminalPolicyControl.0f55c6f15c", "Choose whether Orca or the focused terminal wins when shortcuts overlap.")}
+      title={translate(
+        'auto.components.settings.ShortcutTerminalPolicyControl.c3a554288e',
+        'Shortcuts in Terminal'
+      )}
+      description={translate(
+        'auto.components.settings.ShortcutTerminalPolicyControl.0f55c6f15c',
+        'Choose whether Orca or the focused terminal wins when shortcuts overlap.'
+      )}
       keywords={keywords}
       className="max-w-none"
     >
       <SettingsRow
-        label={translate("auto.components.settings.ShortcutTerminalPolicyControl.c3a554288e", "Shortcuts in Terminal")}
-        description={translate("auto.components.settings.ShortcutTerminalPolicyControl.c43c7ff5f9", "Decide who first intercepts shortcuts")}
+        label={translate(
+          'auto.components.settings.ShortcutTerminalPolicyControl.c3a554288e',
+          'Shortcuts in Terminal'
+        )}
+        description={translate(
+          'auto.components.settings.ShortcutTerminalPolicyControl.c43c7ff5f9',
+          'Decide who first intercepts shortcuts'
+        )}
         control={
           <Select
             value={terminalShortcutPolicy}
@@ -40,8 +52,18 @@ export function ShortcutTerminalPolicyControl({
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="orca-first">{translate("auto.components.settings.ShortcutTerminalPolicyControl.63308571d8", "Orca first")}</SelectItem>
-              <SelectItem value="terminal-first">{translate("auto.components.settings.ShortcutTerminalPolicyControl.0762983d13", "Terminal first")}</SelectItem>
+              <SelectItem value="orca-first">
+                {translate(
+                  'auto.components.settings.ShortcutTerminalPolicyControl.63308571d8',
+                  'Orca first'
+                )}
+              </SelectItem>
+              <SelectItem value="terminal-first">
+                {translate(
+                  'auto.components.settings.ShortcutTerminalPolicyControl.0762983d13',
+                  'Terminal first'
+                )}
+              </SelectItem>
             </SelectContent>
           </Select>
         }

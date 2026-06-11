@@ -172,6 +172,20 @@ describe('tui agent startup plans', () => {
     expect(plan?.launchCommand).toBe("claude '--model' 'sonnet' '--name' 'Bob''s' 'fix it'")
   })
 
+  it('carries agent launch environment defaults into startup plans', () => {
+    const plan = buildAgentStartupPlan({
+      agent: 'goose',
+      prompt: '',
+      cmdOverrides: {},
+      agentEnv: { GOOSE_MODE: 'auto' },
+      platform: 'linux',
+      allowEmptyPromptLaunch: true
+    })
+
+    expect(plan?.launchCommand).toBe('goose')
+    expect(plan?.env).toEqual({ GOOSE_MODE: 'auto' })
+  })
+
   it('clears draft environment variables with the target shell syntax', () => {
     expect(
       buildAgentDraftLaunchPlan({

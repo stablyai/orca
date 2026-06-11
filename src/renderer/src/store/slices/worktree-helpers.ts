@@ -131,7 +131,9 @@ export type WorktreeSlice = {
     pendingFirstAgentMessageRename?: boolean,
     /** When set, correlates the backend's `createWorktree:progress` events to a
      *  renderer pending creation. Synchronous callers omit it. */
-    creationId?: string
+    creationId?: string,
+    linkedLinearIssueWorkspaceId?: string | null,
+    linkedLinearIssueOrganizationUrlKey?: string | null
   ) => Promise<CreateWorktreeResult>
   /** Register an in-flight background creation and make it the active surface. */
   beginPendingWorktreeCreation: (entry: PendingWorktreeCreation) => void

@@ -10,8 +10,14 @@ import {
 import { translate } from '@/i18n/i18n'
 
 export const ONBOARDING_SKIP_CONFIRMATION_COPY = {
-  title: translate("auto.components.onboarding.OnboardingSkipConfirmationDialog.e4726b2d50", "Skip onboarding?"),
-  description: translate("auto.components.onboarding.OnboardingSkipConfirmationDialog.9f47f345a4", "It won't take long!"),
+  title: translate(
+    'auto.components.onboarding.OnboardingSkipConfirmationDialog.e4726b2d50',
+    'Skip onboarding?'
+  ),
+  description: translate(
+    'auto.components.onboarding.OnboardingSkipConfirmationDialog.9f47f345a4',
+    "It won't take long!"
+  ),
   skipLabel: 'Skip',
   keepGoingLabel: 'No, keep going'
 } as const

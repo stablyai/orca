@@ -59,6 +59,7 @@ describe('filesystem-search-git', () => {
     expect(result.truncated).toBe(false)
 
     expect(result.files[0].relativePath).toBe('src/index.ts')
+    expect(result.files[0].matchCount).toBe(1)
     expect(result.files[0].matches[0]).toEqual({
       line: 5,
       column: 16,
@@ -67,6 +68,7 @@ describe('filesystem-search-git', () => {
     })
 
     expect(result.files[1].relativePath).toBe('src/main.ts')
+    expect(result.files[1].matchCount).toBe(1)
     expect(result.files[1].matches[0].line).toBe(12)
   })
 
@@ -85,6 +87,7 @@ describe('filesystem-search-git', () => {
 
     expect(result.files).toHaveLength(1)
     expect(result.totalMatches).toBe(3)
+    expect(result.files[0].matchCount).toBe(3)
     expect(result.files[0].matches).toEqual([
       { line: 1, column: 1, matchLength: 2, lineContent: 'ab cd ab ef ab' },
       { line: 1, column: 7, matchLength: 2, lineContent: 'ab cd ab ef ab' },
@@ -110,6 +113,7 @@ describe('filesystem-search-git', () => {
 
     expect(result.totalMatches).toBe(2)
     expect(result.truncated).toBe(true)
+    expect(result.files.map((file) => file.matchCount)).toEqual([1, 1])
   })
 
   it('passes correct flags for case-insensitive fixed-string search', async () => {
@@ -187,6 +191,7 @@ describe('filesystem-search-git', () => {
       const result = await promise
       expect(result.truncated).toBe(true)
       expect(result.files).toHaveLength(1)
+      expect(result.files[0].matchCount).toBe(1)
       expect(proc.kill).toHaveBeenCalled()
       expect((proc.stdout as unknown as EventEmitter).listenerCount('data')).toBe(0)
       expect((proc.stderr as unknown as EventEmitter).listenerCount('data')).toBe(0)

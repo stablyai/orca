@@ -58,18 +58,30 @@ export default function WorkspaceSpacePage(): React.JSX.Element {
       <div className="flex shrink-0 items-center gap-3 border-b border-border px-5 py-3">
         <Button variant="outline" size="sm" onClick={closeSpacePage} className="shrink-0 gap-1.5">
           <ArrowLeft className="size-3.5" />
-          {translate("auto.components.workspace.space.WorkspaceSpacePage.ecf72fdc3b", "Back")}</Button>
+          {translate('auto.components.workspace.space.WorkspaceSpacePage.ecf72fdc3b', 'Back')}
+        </Button>
         <div className="flex min-w-0 items-center gap-3">
           <div className="flex size-8 shrink-0 items-center justify-center rounded-md border border-border bg-muted/30">
             <HardDrive className="size-4 text-muted-foreground" />
           </div>
           <div className="min-w-0">
             <div className="flex min-w-0 items-center gap-2">
-              <h1 className="truncate text-base font-semibold text-foreground">{translate("auto.components.workspace.space.WorkspaceSpacePage.45f6302dbc", "Space")}</h1>
-              <Badge variant="secondary">{translate("auto.components.workspace.space.WorkspaceSpacePage.e8d6ba11ab", "Beta")}</Badge>
+              <h1 className="truncate text-base font-semibold text-foreground">
+                {translate(
+                  'auto.components.workspace.space.WorkspaceSpacePage.45f6302dbc',
+                  'Space'
+                )}
+              </h1>
+              <Badge variant="secondary">
+                {translate('auto.components.workspace.space.WorkspaceSpacePage.e8d6ba11ab', 'Beta')}
+              </Badge>
             </div>
             <p className="truncate text-xs text-muted-foreground">
-              {translate("auto.components.workspace.space.WorkspaceSpacePage.8d0048e1cb", "Workspace disk usage and reclaimable worktree storage.")}</p>
+              {translate(
+                'auto.components.workspace.space.WorkspaceSpacePage.8d0048e1cb',
+                'Workspace disk usage and reclaimable worktree storage.'
+              )}
+            </p>
           </div>
         </div>
       </div>

@@ -29,6 +29,8 @@ const projectGroup: ProjectGroup = {
 }
 
 const reposList = vi.fn()
+const reposRemove = vi.fn()
+const ptyKill = vi.fn()
 const projectGroupsList = vi.fn()
 const projectGroupsCreate = vi.fn()
 const projectGroupsDelete = vi.fn()
@@ -43,6 +45,9 @@ const runtimeEnvironmentTransportCall = vi.fn()
 beforeEach(() => {
   clearRuntimeCompatibilityCacheForTests()
   reposList.mockReset()
+  reposRemove.mockReset()
+  reposRemove.mockResolvedValue(undefined)
+  ptyKill.mockReset()
   projectGroupsList.mockReset()
   projectGroupsCreate.mockReset()
   projectGroupsDelete.mockReset()
@@ -60,8 +65,10 @@ beforeEach(() => {
   vi.stubGlobal('window', {
     api: {
       repos: {
-        list: reposList
+        list: reposList,
+        remove: reposRemove
       },
+      pty: { kill: ptyKill },
       projectGroups: {
         list: projectGroupsList,
         create: projectGroupsCreate,
@@ -326,5 +333,133 @@ describe('project group store routing', () => {
       timeoutMs: 15_000
     })
     expect(projectGroupsDelete).not.toHaveBeenCalled()
+  })
+
+  it('deletes only the group when contained project removal is not requested', async () => {
+    projectGroupsDelete.mockResolvedValue(true)
+    const groupedRepo = { ...remoteRepo, id: 'direct', projectGroupId: projectGroup.id }
+    const store = createTestStore()
+    store.setState({
+      projectGroups: [projectGroup],
+      repos: [groupedRepo]
+    })
+
+    await expect(
+      store.getState().deleteProjectGroupWithContainedProjects(projectGroup.id, {
+        removeContainedProjects: false
+      })
+    ).resolves.toEqual({
+      status: 'deleted-group',
+      groupId: projectGroup.id,
+      requestedProjectIds: [],
+      removedProjectIds: [],
+      failedProjectRemovals: []
+    })
+
+    expect(reposRemove).not.toHaveBeenCalled()
+    expect(store.getState().repos).toMatchObject([{ id: 'direct', projectGroupId: null }])
+  })
+
+  it('removes direct and nested child projects after deleting a group', async () => {
+    const childGroup: ProjectGroup = {
+      ...projectGroup,
+      id: 'child',
+      parentGroupId: projectGroup.id
+    }
+    const siblingRepo = { ...remoteRepo, id: 'sibling', projectGroupId: null }
+    projectGroupsDelete.mockResolvedValue(true)
+    const store = createTestStore()
+    store.setState({
+      projectGroups: [projectGroup, childGroup],
+      repos: [
+        { ...remoteRepo, id: 'direct', projectGroupId: projectGroup.id },
+        { ...remoteRepo, id: 'nested', projectGroupId: childGroup.id },
+        siblingRepo
+      ]
+    })
+
+    await expect(
+      store.getState().deleteProjectGroupWithContainedProjects(projectGroup.id, {
+        removeContainedProjects: true
+      })
+    ).resolves.toEqual({
+      status: 'deleted-group',
+      groupId: projectGroup.id,
+      requestedProjectIds: ['direct', 'nested'],
+      removedProjectIds: ['direct', 'nested'],
+      failedProjectRemovals: []
+    })
+
+    expect(reposRemove).toHaveBeenCalledWith({ repoId: 'direct' })
+    expect(reposRemove).toHaveBeenCalledWith({ repoId: 'nested' })
+    expect(store.getState().repos).toEqual([siblingRepo])
+  })
+
+  it('does not remove contained projects when group deletion fails', async () => {
+    projectGroupsDelete.mockResolvedValue(false)
+    const groupedRepo = { ...remoteRepo, id: 'direct', projectGroupId: projectGroup.id }
+    const store = createTestStore()
+    store.setState({
+      projectGroups: [projectGroup],
+      repos: [groupedRepo]
+    })
+
+    await expect(
+      store.getState().deleteProjectGroupWithContainedProjects(projectGroup.id, {
+        removeContainedProjects: true
+      })
+    ).resolves.toEqual({
+      status: 'group-delete-failed',
+      groupId: projectGroup.id,
+      requestedProjectIds: ['direct'],
+      removedProjectIds: [],
+      failedProjectRemovals: []
+    })
+
+    expect(reposRemove).not.toHaveBeenCalled()
+    expect(store.getState().repos).toEqual([groupedRepo])
+  })
+
+  it('reports project removal failures by comparing store state after removeProject', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    reposRemove.mockImplementation(async ({ repoId }: { repoId: string }) => {
+      if (repoId === 'nested') {
+        throw new Error('remove failed')
+      }
+    })
+    const childGroup: ProjectGroup = {
+      ...projectGroup,
+      id: 'child',
+      parentGroupId: projectGroup.id
+    }
+    projectGroupsDelete.mockResolvedValue(true)
+    const store = createTestStore()
+    store.setState({
+      projectGroups: [projectGroup, childGroup],
+      repos: [
+        { ...remoteRepo, id: 'direct', projectGroupId: projectGroup.id },
+        { ...remoteRepo, id: 'nested', projectGroupId: childGroup.id }
+      ]
+    })
+
+    await expect(
+      store.getState().deleteProjectGroupWithContainedProjects(projectGroup.id, {
+        removeContainedProjects: true
+      })
+    ).resolves.toEqual({
+      status: 'deleted-group',
+      groupId: projectGroup.id,
+      requestedProjectIds: ['direct', 'nested'],
+      removedProjectIds: ['direct'],
+      failedProjectRemovals: [
+        {
+          projectId: 'nested',
+          reason: 'Project remained in Orca after removeProject completed.'
+        }
+      ]
+    })
+
+    expect(store.getState().repos.map((repo) => repo.id)).toEqual(['nested'])
+    consoleError.mockRestore()
   })
 })

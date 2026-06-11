@@ -288,7 +288,8 @@ export function ClaudeUsagePane(): React.JSX.Element {
               <div className="mb-3">
                 <h4 className="text-sm font-semibold text-foreground">{translate("auto.components.stats.ClaudeUsagePane.0f394c24e3", "By model")}</h4>
                 <p className="text-xs text-muted-foreground">
-                  {translate("auto.components.stats.ClaudeUsagePane.c3fdbc5474", "Top model:")}{summary?.topModel ?? translate("auto.components.stats.ClaudeUsagePane.7765a4c3e1", "n/a")}
+                  {translate("auto.components.stats.ClaudeUsagePane.c3fdbc5474", "Top model:")}{' '}
+                  {summary?.topModel ?? translate("auto.components.stats.ClaudeUsagePane.7765a4c3e1", "n/a")}
                 </p>
               </div>
               <div className="space-y-3">
@@ -301,7 +302,9 @@ export function ClaudeUsagePane(): React.JSX.Element {
                       </span>
                     </div>
                     <div className="text-xs text-muted-foreground">
-                      {row.sessions} {translate("auto.components.stats.ClaudeUsagePane.02a046792e", "sessions •")}{row.turns} {translate("auto.components.stats.ClaudeUsagePane.32176e1d44", "turns")}</div>
+                      {row.sessions} {translate("auto.components.stats.ClaudeUsagePane.02a046792e", "sessions •")} {row.turns}{' '}
+                      {translate("auto.components.stats.ClaudeUsagePane.32176e1d44", "turns")}
+                    </div>
                   </div>
                 ))}
               </div>
@@ -311,7 +314,8 @@ export function ClaudeUsagePane(): React.JSX.Element {
               <div className="mb-3">
                 <h4 className="text-sm font-semibold text-foreground">{translate("auto.components.stats.ClaudeUsagePane.7dc9e5613b", "By project")}</h4>
                 <p className="text-xs text-muted-foreground">
-                  {translate("auto.components.stats.ClaudeUsagePane.f97435845c", "Top project:")}{summary?.topProject ?? translate("auto.components.stats.ClaudeUsagePane.7765a4c3e1", "n/a")}
+                  {translate("auto.components.stats.ClaudeUsagePane.f97435845c", "Top project:")}{' '}
+                  {summary?.topProject ?? translate("auto.components.stats.ClaudeUsagePane.7765a4c3e1", "n/a")}
                 </p>
               </div>
               <div className="space-y-3">
@@ -324,7 +328,9 @@ export function ClaudeUsagePane(): React.JSX.Element {
                       </span>
                     </div>
                     <div className="text-xs text-muted-foreground">
-                      {row.sessions} {translate("auto.components.stats.ClaudeUsagePane.02a046792e", "sessions •")}{row.turns} {translate("auto.components.stats.ClaudeUsagePane.32176e1d44", "turns")}</div>
+                      {row.sessions} {translate("auto.components.stats.ClaudeUsagePane.02a046792e", "sessions •")} {row.turns}{' '}
+                      {translate("auto.components.stats.ClaudeUsagePane.32176e1d44", "turns")}
+                    </div>
                   </div>
                 ))}
               </div>

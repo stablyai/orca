@@ -56,7 +56,7 @@ export function DiffSectionHeader({
               console.error('Failed to copy diff path:', error)
             })
           }}
-          title={translate("auto.components.editor.DiffSectionHeader.8915726e93", "Copy path")}
+          title={translate('auto.components.editor.DiffSectionHeader.8915726e93', 'Copy path')}
         >
           {path}
         </span>

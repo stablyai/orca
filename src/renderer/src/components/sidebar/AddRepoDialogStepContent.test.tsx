@@ -56,6 +56,10 @@ function renderStepContent(overrides: Partial<StepContentProps>): string {
     createKind: 'git',
     createError: null,
     isCreating: false,
+    createDefaultParent: '',
+    createGitAvailability: 'unknown',
+    createRuntimeParentStatus: 'idle',
+    createParentDefaultPending: false,
     onBrowse: vi.fn(),
     onOpenCloneStep: vi.fn(),
     onOpenCreateStep: vi.fn(),
@@ -123,8 +127,8 @@ describe('AddRepoDialogStepContent nested imports', () => {
       activeRuntimeEnvironmentId: 'env-1'
     })
 
-    expect(html).toContain('Start a new project')
-    expect(html).toContain('aria-label="Browse server filesystem"')
+    expect(html).toContain('Create a new project')
+    expect(html).toContain('server folder not selected')
   })
 
   it('offers server browsing for remote clone destinations', () => {

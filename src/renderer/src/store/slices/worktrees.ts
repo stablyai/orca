@@ -1053,7 +1053,9 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     linkedGitLabIssue,
     startup,
     pendingFirstAgentMessageRename,
-    creationId
+    creationId,
+    linkedLinearIssueWorkspaceId,
+    linkedLinearIssueOrganizationUrlKey
   ) => {
     const retryableConflictPatterns = [
       /already exists locally/i,
@@ -1096,6 +1098,10 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
               ? { pendingFirstAgentMessageRename: true }
               : {}),
             ...(linkedLinearIssue !== undefined ? { linkedLinearIssue } : {}),
+            ...(linkedLinearIssueWorkspaceId !== undefined ? { linkedLinearIssueWorkspaceId } : {}),
+            ...(linkedLinearIssueOrganizationUrlKey !== undefined
+              ? { linkedLinearIssueOrganizationUrlKey }
+              : {}),
             ...(manualOrder !== undefined ? { manualOrder } : {}),
             ...(workspaceStatus !== undefined ? { workspaceStatus } : {}),
             ...(linkedGitLabMR !== undefined ? { linkedGitLabMR } : {}),
@@ -1127,6 +1133,12 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
                       ? { pendingFirstAgentMessageRename: true }
                       : {}),
                     ...(linkedLinearIssue !== undefined ? { linkedLinearIssue } : {}),
+                    ...(linkedLinearIssueWorkspaceId !== undefined
+                      ? { linkedLinearIssueWorkspaceId }
+                      : {}),
+                    ...(linkedLinearIssueOrganizationUrlKey !== undefined
+                      ? { linkedLinearIssueOrganizationUrlKey }
+                      : {}),
                     ...(manualOrder !== undefined ? { manualOrder } : {}),
                     ...(workspaceStatus !== undefined ? { workspaceStatus } : {}),
                     ...(linkedGitLabMR !== undefined ? { linkedGitLabMR } : {}),

@@ -124,7 +124,7 @@ export function makeTab(
 ): TerminalTab {
   return {
     ptyId: null,
-    title: translate("auto.store.slices.store.test.helpers.b9a8117c33", "Terminal 1"),
+    title: translate('auto.store.slices.store.test.helpers.b9a8117c33', 'Terminal 1'),
     customTitle: null,
     color: null,
     sortOrder: 0,
@@ -156,7 +156,7 @@ export function makeUnifiedTab(
   return {
     entityId: overrides.id,
     contentType: 'terminal',
-    label: translate("auto.store.slices.store.test.helpers.b9a8117c33", "Terminal 1"),
+    label: translate('auto.store.slices.store.test.helpers.b9a8117c33', 'Terminal 1'),
     customLabel: null,
     color: null,
     sortOrder: 0,

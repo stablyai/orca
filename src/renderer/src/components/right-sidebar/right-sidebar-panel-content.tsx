@@ -6,6 +6,7 @@ const SearchPanel = lazy(() => import('./Search'))
 const SourceControl = lazy(() => import('./SourceControl'))
 const ChecksPanel = lazy(() => import('./ChecksPanel'))
 const PortsPanel = lazy(() => import('./PortsPanel'))
+const AiVaultPanel = lazy(() => import('./AiVaultPanel'))
 
 type RightSidebarPanelContentProps = {
   effectiveTab: RightSidebarTab
@@ -29,6 +30,7 @@ export function RightSidebarPanelContent({
         {effectiveTab === 'ports' && (
           <PortsPanel isVisible={rightSidebarOpen && effectiveTab === 'ports'} />
         )}
+        {effectiveTab === 'vault' && <AiVaultPanel />}
       </Suspense>
     </div>
   )

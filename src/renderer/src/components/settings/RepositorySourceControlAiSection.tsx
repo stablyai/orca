@@ -296,14 +296,31 @@ export function RepositorySourceControlAiSection({
     >
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0 space-y-1">
-          <h3 className="text-sm font-semibold">{translate("auto.components.settings.RepositorySourceControlAiSection.71b003b62b", "Source Control AI")}</h3>
+          <h3 className="text-sm font-semibold">
+            {translate(
+              'auto.components.settings.RepositorySourceControlAiSection.71b003b62b',
+              'Source Control AI'
+            )}
+          </h3>
           <p className="text-xs text-muted-foreground">
-            {translate("auto.components.settings.RepositorySourceControlAiSection.8b8bc5913a", "Repository action recipes. Global settings are used until this repository customizes them.")}</p>
+            {translate(
+              'auto.components.settings.RepositorySourceControlAiSection.8b8bc5913a',
+              'Repository action recipes. Global settings are used until this repository customizes them.'
+            )}
+          </p>
           {saveError ? <p className="text-xs text-destructive">{saveError}</p> : null}
         </div>
         <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
           <span className="text-[11px] text-muted-foreground">
-            {isDirty ? translate("auto.components.settings.RepositorySourceControlAiSection.e57dde9d93", "Unsaved changes") : translate("auto.components.settings.RepositorySourceControlAiSection.ccb07dd027", "Saved")}
+            {isDirty
+              ? translate(
+                  'auto.components.settings.RepositorySourceControlAiSection.e57dde9d93',
+                  'Unsaved changes'
+                )
+              : translate(
+                  'auto.components.settings.RepositorySourceControlAiSection.ccb07dd027',
+                  'Saved'
+                )}
           </span>
           {isDirty ? (
             <Button
@@ -313,7 +330,11 @@ export function RepositorySourceControlAiSection({
               onClick={discardDraft}
               disabled={isSaving}
             >
-              {translate("auto.components.settings.RepositorySourceControlAiSection.67b3ff5467", "Discard")}</Button>
+              {translate(
+                'auto.components.settings.RepositorySourceControlAiSection.67b3ff5467',
+                'Discard'
+              )}
+            </Button>
           ) : null}
           <Button
             type="button"
@@ -322,7 +343,15 @@ export function RepositorySourceControlAiSection({
             onClick={() => void saveDraft()}
             disabled={!isDirty || isSaving}
           >
-            {isSaving ? translate("auto.components.settings.RepositorySourceControlAiSection.57e6e9d4b1", "Saving...") : translate("auto.components.settings.RepositorySourceControlAiSection.152268c295", "Save")}
+            {isSaving
+              ? translate(
+                  'auto.components.settings.RepositorySourceControlAiSection.57e6e9d4b1',
+                  'Saving...'
+                )
+              : translate(
+                  'auto.components.settings.RepositorySourceControlAiSection.152268c295',
+                  'Save'
+                )}
           </Button>
         </div>
       </div>

@@ -229,6 +229,11 @@ export const REPO_METHODS: RpcMethod[] = [
       runtime.createRepo(params.parentPath, params.name, params.kind)
   }),
   defineMethod({
+    name: 'repo.gitAvailable',
+    params: null,
+    handler: async (_params, { runtime }) => ({ available: await runtime.isGitAvailable() })
+  }),
+  defineMethod({
     name: 'repo.clone',
     params: RepoClone,
     handler: async (params, { runtime }) => ({

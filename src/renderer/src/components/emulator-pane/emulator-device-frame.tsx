@@ -351,7 +351,7 @@ export function EmulatorDeviceFrame({
           height: frameLayout ? `${frameLayout.height}px` : undefined
         }}
       >
-        {frameLayout?.kind === "phone" ? <PhoneHardwareButtons layout={frameLayout} /> : null}
+        {frameLayout?.kind === 'phone' ? <PhoneHardwareButtons layout={frameLayout} /> : null}
         <div
           data-orca-emulator-frame="true"
           className="relative overflow-hidden bg-black shadow-lg ring-1 ring-black/25"
@@ -389,8 +389,14 @@ export function EmulatorDeviceFrame({
             aria-label={
               isLive
                 ? keyboardCaptureActive
-                  ? translate("auto.components.emulator.pane.emulator.device.frame.8f25ffaf8a", "Emulator screen, keyboard captured. Press Escape to release.")
-                  : translate("auto.components.emulator.pane.emulator.device.frame.9406c15775", "Emulator screen")
+                  ? translate(
+                      'auto.components.emulator.pane.emulator.device.frame.8f25ffaf8a',
+                      'Emulator screen, keyboard captured. Press Escape to release.'
+                    )
+                  : translate(
+                      'auto.components.emulator.pane.emulator.device.frame.9406c15775',
+                      'Emulator screen'
+                    )
                 : undefined
             }
           >

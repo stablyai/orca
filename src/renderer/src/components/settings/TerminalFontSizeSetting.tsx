@@ -15,13 +15,22 @@ export function TerminalFontSizeSetting({
 }): React.JSX.Element {
   return (
     <SearchableSetting
-      title={translate("auto.components.settings.TerminalFontSizeSetting.a4a352b1e9", "Font Size")}
-      description={translate("auto.components.settings.TerminalFontSizeSetting.0f4c92e595", "Default terminal font size for new panes and live updates.")}
+      title={translate('auto.components.settings.TerminalFontSizeSetting.a4a352b1e9', 'Font Size')}
+      description={translate(
+        'auto.components.settings.TerminalFontSizeSetting.0f4c92e595',
+        'Default terminal font size for new panes and live updates.'
+      )}
       keywords={['terminal', 'typography', 'text size']}
     >
       <SettingsRow
-        label={translate("auto.components.settings.TerminalFontSizeSetting.a4a352b1e9", "Font Size")}
-        description={translate("auto.components.settings.TerminalFontSizeSetting.0f4c92e595", "Default terminal font size for new panes and live updates.")}
+        label={translate(
+          'auto.components.settings.TerminalFontSizeSetting.a4a352b1e9',
+          'Font Size'
+        )}
+        description={translate(
+          'auto.components.settings.TerminalFontSizeSetting.0f4c92e595',
+          'Default terminal font size for new panes and live updates.'
+        )}
         control={
           <div className="flex items-center gap-2">
             <Button
@@ -59,7 +68,9 @@ export function TerminalFontSizeSetting({
             >
               <Plus className="size-3" />
             </Button>
-            <span className="text-xs text-muted-foreground">{translate("auto.components.settings.TerminalFontSizeSetting.9b5252c85a", "px")}</span>
+            <span className="text-xs text-muted-foreground">
+              {translate('auto.components.settings.TerminalFontSizeSetting.9b5252c85a', 'px')}
+            </span>
           </div>
         }
       />

@@ -17,21 +17,41 @@ import { translate } from '@/i18n/i18n'
 
 const stepCopy = {
   agent: {
-    title: translate("auto.components.onboarding.OnboardingFlow.198b148b3c", "Pick your default agent"),
-    subtitle:
-      translate("auto.components.onboarding.OnboardingFlow.322fc50a18", "Orca works with every CLI agent. Choose the one you'll reach for most. Switch any time.")
+    title: translate(
+      'auto.components.onboarding.OnboardingFlow.198b148b3c',
+      'Pick your default agent'
+    ),
+    subtitle: translate(
+      'auto.components.onboarding.OnboardingFlow.322fc50a18',
+      "Orca works with every CLI agent. Choose the one you'll reach for most. Switch any time."
+    )
   },
   theme: {
-    title: translate("auto.components.onboarding.OnboardingFlow.f396db9f20", "Make it feel like home"),
-    subtitle: translate("auto.components.onboarding.OnboardingFlow.04ae28d8ca", "Pick the look you want to stare at for hours.")
+    title: translate(
+      'auto.components.onboarding.OnboardingFlow.f396db9f20',
+      'Make it feel like home'
+    ),
+    subtitle: translate(
+      'auto.components.onboarding.OnboardingFlow.04ae28d8ca',
+      'Pick the look you want to stare at for hours.'
+    )
   },
   notifications: {
-    title: translate("auto.components.onboarding.OnboardingFlow.b054332836", "Set up notifications"),
-    subtitle: translate("auto.components.onboarding.OnboardingFlow.ff92d15436", "Orca will notify you know when agents are done or need help.")
+    title: translate(
+      'auto.components.onboarding.OnboardingFlow.b054332836',
+      'Set up notifications'
+    ),
+    subtitle: translate(
+      'auto.components.onboarding.OnboardingFlow.ff92d15436',
+      'Orca will notify you know when agents are done or need help.'
+    )
   },
   integrations: {
-    title: translate("auto.components.onboarding.OnboardingFlow.ae3b00ca82", "Set up GitHub tasks"),
-    subtitle: translate("auto.components.onboarding.OnboardingFlow.97c42cda00", "Install the GitHub CLI to:")
+    title: translate('auto.components.onboarding.OnboardingFlow.ae3b00ca82', 'Set up GitHub tasks'),
+    subtitle: translate(
+      'auto.components.onboarding.OnboardingFlow.97c42cda00',
+      'Install the GitHub CLI to:'
+    )
   }
 } as const
 
@@ -137,7 +157,10 @@ export default function OnboardingFlow({
       <section
         ref={flow.setLifecycleRootRef}
         role="dialog"
-        aria-label={translate("auto.components.onboarding.OnboardingFlow.277ba45540", "Orca onboarding")}
+        aria-label={translate(
+          'auto.components.onboarding.OnboardingFlow.277ba45540',
+          'Orca onboarding'
+        )}
         aria-modal="true"
         data-onboarding-modal
         className={cn(
@@ -153,7 +176,7 @@ export default function OnboardingFlow({
               aria-hidden="true"
               className="h-7 w-auto shrink-0 invert dark:invert-0"
             />
-            <span>{translate("auto.components.onboarding.OnboardingFlow.a249f81538", "Orca")}</span>
+            <span>{translate('auto.components.onboarding.OnboardingFlow.a249f81538', 'Orca')}</span>
           </div>
 
           <div className="mt-10 flex items-center gap-2 transition-[margin-top] duration-[760ms] ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none">
@@ -176,7 +199,11 @@ export default function OnboardingFlow({
                               ? 'w-6 bg-muted-foreground/70 hover:bg-foreground/80'
                               : 'w-6 bg-muted-foreground/25 hover:bg-muted-foreground/45'
                         )}
-                        aria-label={translate("auto.components.onboarding.OnboardingFlow.adaa0aa627", "Go to onboarding step {{value0}}: {{value1}}", { value0: visibleIdx + 1, value1: stepCopy[step.id].title })}
+                        aria-label={translate(
+                          'auto.components.onboarding.OnboardingFlow.adaa0aa627',
+                          'Go to onboarding step {{value0}}: {{value1}}',
+                          { value0: visibleIdx + 1, value1: stepCopy[step.id].title }
+                        )}
                         aria-current={isActive ? 'step' : undefined}
                         onClick={() => flow.jumpToStep(realStepIndex)}
                       />
@@ -189,7 +216,8 @@ export default function OnboardingFlow({
               })}
             </TooltipProvider>
             <span className="ml-3 text-xs font-medium text-muted-foreground">
-              {flow.visibleStepIndex + 1} {translate("auto.components.onboarding.OnboardingFlow.4db04f2f57", "of")}{' '}
+              {flow.visibleStepIndex + 1}{' '}
+              {translate('auto.components.onboarding.OnboardingFlow.4db04f2f57', 'of')}{' '}
               {flow.visibleSteps.length}
             </span>
           </div>
@@ -197,7 +225,11 @@ export default function OnboardingFlow({
           <div className="mt-8 shrink-0">
             {stepIndex === 0 && (
               <div className="mb-2 text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
-                {translate("auto.components.onboarding.OnboardingFlow.1b5e182e9f", "Welcome to Orca")}</div>
+                {translate(
+                  'auto.components.onboarding.OnboardingFlow.1b5e182e9f',
+                  'Welcome to Orca'
+                )}
+              </div>
             )}
             <h1 className="text-[34px] font-semibold leading-[1.15] tracking-tight text-foreground">
               {copy.title}
@@ -217,7 +249,7 @@ export default function OnboardingFlow({
               cn('scrollbar-sleek overflow-y-auto pr-1', 'mt-10')
             )}
           >
-            {currentStep.id === "agent" && (
+            {currentStep.id === 'agent' && (
               <AgentStep
                 selectedAgent={flow.selectedAgent}
                 onSelect={flow.setSelectedAgent}
@@ -225,7 +257,7 @@ export default function OnboardingFlow({
                 isDetecting={flow.isDetectingAgents}
               />
             )}
-            {currentStep.id === "theme" && (
+            {currentStep.id === 'theme' && (
               <ThemeStep
                 theme={flow.theme}
                 onThemeChange={flow.setTheme}
@@ -233,10 +265,10 @@ export default function OnboardingFlow({
                 updateSettings={flow.updateSettings}
               />
             )}
-            {currentStep.id === "notifications" && (
+            {currentStep.id === 'notifications' && (
               <NotificationStep settings={flow.settings} updateSettings={flow.updateSettings} />
             )}
-            {currentStep.id === "integrations" && <IntegrationsStep />}
+            {currentStep.id === 'integrations' && <IntegrationsStep />}
           </div>
 
           <OnboardingFooter

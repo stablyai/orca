@@ -36,14 +36,28 @@ export default function WorkspaceKanbanDrawerHeader({
     <>
       <SheetHeader className="border-b border-worktree-sidebar-border px-4 py-3 pr-32">
         <SheetTitle className="flex items-center gap-2 text-sm">
-          <span>{translate("auto.components.sidebar.WorkspaceKanbanDrawerHeader.c6a77ab0f4", "Workspace board")}</span>
+          <span>
+            {translate(
+              'auto.components.sidebar.WorkspaceKanbanDrawerHeader.c6a77ab0f4',
+              'Workspace board'
+            )}
+          </span>
           {selectedCount > 1 ? (
             <span className="rounded-full bg-worktree-sidebar-accent px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
-              {selectedCount} {translate("auto.components.sidebar.WorkspaceKanbanDrawerHeader.81870af08f", "selected")}</span>
+              {selectedCount}{' '}
+              {translate(
+                'auto.components.sidebar.WorkspaceKanbanDrawerHeader.81870af08f',
+                'selected'
+              )}
+            </span>
           ) : null}
         </SheetTitle>
         <SheetDescription className="sr-only">
-          {translate("auto.components.sidebar.WorkspaceKanbanDrawerHeader.e1a34450fc", "Organize workspaces by status and open workspace cards.")}</SheetDescription>
+          {translate(
+            'auto.components.sidebar.WorkspaceKanbanDrawerHeader.e1a34450fc',
+            'Organize workspaces by status and open workspace cards.'
+          )}
+        </SheetDescription>
       </SheetHeader>
 
       <div className="absolute right-3 top-2.5 flex items-center gap-1">
@@ -62,7 +76,15 @@ export default function WorkspaceKanbanDrawerHeader({
           onRemoveStatus={onRemoveStatus}
           onAddStatus={onAddStatus}
         />
-        <Button variant="ghost" size="icon-xs" aria-label={translate("auto.components.sidebar.WorkspaceKanbanDrawerHeader.f369f5c5a3", "Close")} onClick={onClose}>
+        <Button
+          variant="ghost"
+          size="icon-xs"
+          aria-label={translate(
+            'auto.components.sidebar.WorkspaceKanbanDrawerHeader.f369f5c5a3',
+            'Close'
+          )}
+          onClick={onClose}
+        >
           <X className="size-3.5" />
         </Button>
       </div>

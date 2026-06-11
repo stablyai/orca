@@ -126,7 +126,11 @@ function TargetRow({
       await window.api.ssh.connect({ targetId })
       recordFeatureInteraction('ssh')
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : translate("auto.components.status.bar.SshStatusSegment.2c29e2de68", "Connection failed"))
+      toast.error(
+        err instanceof Error
+          ? err.message
+          : translate('auto.components.status.bar.SshStatusSegment.2c29e2de68', 'Connection failed')
+      )
     } finally {
       if (mountedRef.current) {
         setBusy(false)
@@ -140,7 +144,11 @@ function TargetRow({
       await window.api.ssh.disconnect({ targetId })
       recordFeatureInteraction('ssh')
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : translate("auto.components.status.bar.SshStatusSegment.bf07aee59e", "Disconnect failed"))
+      toast.error(
+        err instanceof Error
+          ? err.message
+          : translate('auto.components.status.bar.SshStatusSegment.bf07aee59e', 'Disconnect failed')
+      )
     } finally {
       if (mountedRef.current) {
         setBusy(false)
@@ -157,9 +165,9 @@ function TargetRow({
           <span>{STATUS_LABELS[status]}</span>
           <span aria-hidden="true">·</span>
           <span className={`inline-flex min-w-0 items-center gap-1 ${syncStatusTone(syncStatus)}`}>
-            {syncStatus?.phase === "pulling" || syncStatus?.phase === "pushing" ? (
+            {syncStatus?.phase === 'pulling' || syncStatus?.phase === 'pushing' ? (
               <Loader2 className="size-2.5 shrink-0 animate-spin" />
-            ) : syncStatus?.phase === "conflict" || syncStatus?.phase === 'error' ? (
+            ) : syncStatus?.phase === 'conflict' || syncStatus?.phase === 'error' ? (
               <AlertTriangle className="size-2.5 shrink-0" />
             ) : (
               <Cloud className="size-2.5 shrink-0" />
@@ -176,14 +184,16 @@ function TargetRow({
           onClick={() => void handleConnect()}
           className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium text-foreground hover:bg-accent/70"
         >
-          {translate("auto.components.status.bar.SshStatusSegment.63f36455cc", "Connect")}</button>
-      ) : status === "connected" ? (
+          {translate('auto.components.status.bar.SshStatusSegment.63f36455cc', 'Connect')}
+        </button>
+      ) : status === 'connected' ? (
         <button
           type="button"
           onClick={() => void handleDisconnect()}
           className="shrink-0 rounded px-1.5 py-0.5 text-[10px] text-muted-foreground hover:bg-accent/70 hover:text-foreground"
         >
-          {translate("auto.components.status.bar.SshStatusSegment.59b553e2aa", "Disconnect")}</button>
+          {translate('auto.components.status.bar.SshStatusSegment.59b553e2aa', 'Disconnect')}
+        </button>
       ) : null}
     </div>
   )
@@ -243,7 +253,10 @@ export function SshStatusSegment({
         <button
           type="button"
           className="inline-flex items-center gap-1.5 cursor-pointer rounded px-1 py-0.5 hover:bg-accent/70"
-          aria-label={translate("auto.components.status.bar.SshStatusSegment.fdc57e9970", "SSH connection status")}
+          aria-label={translate(
+            'auto.components.status.bar.SshStatusSegment.fdc57e9970',
+            'SSH connection status'
+          )}
         >
           {iconOnly ? (
             <span className="inline-flex items-center gap-1">
@@ -266,16 +279,16 @@ export function SshStatusSegment({
                 <AlertTriangle className="size-3 text-destructive" />
               ) : anyConnecting ? (
                 <Loader2 className="size-3 animate-spin text-yellow-500" />
-              ) : overall === "connected" ? (
+              ) : overall === 'connected' ? (
                 <Server className="size-3 text-emerald-500" />
-              ) : overall === "partial" ? (
+              ) : overall === 'partial' ? (
                 <Server className="size-3 text-muted-foreground" />
               ) : (
                 <ServerOff className="size-3 text-muted-foreground" />
               )}
               {!compact && (
                 <span className="text-[11px]">
-                  {translate("auto.components.status.bar.SshStatusSegment.d09ec41831", "SSH")}{' '}
+                  {translate('auto.components.status.bar.SshStatusSegment.d09ec41831', 'SSH')}{' '}
                   <span className={syncProblem ? 'text-destructive' : 'text-muted-foreground'}>
                     {syncProblemLabel ?? overallLabel(overall)}
                   </span>
@@ -297,7 +310,8 @@ export function SshStatusSegment({
         className="w-[min(20rem,calc(100vw-1rem))]"
       >
         <div className="px-2 pt-1.5 pb-1 text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
-          {translate("auto.components.status.bar.SshStatusSegment.6e8a9a4242", "SSH Connections")}</div>
+          {translate('auto.components.status.bar.SshStatusSegment.6e8a9a4242', 'SSH Connections')}
+        </div>
         {targets.map((t) => (
           <TargetRow
             key={t.id}
@@ -315,7 +329,8 @@ export function SshStatusSegment({
             setActiveView('settings')
           }}
         >
-          {translate("auto.components.status.bar.SshStatusSegment.3ad70e0365", "Manage SSH…")}</DropdownMenuItem>
+          {translate('auto.components.status.bar.SshStatusSegment.3ad70e0365', 'Manage SSH…')}
+        </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   )

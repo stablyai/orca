@@ -318,6 +318,7 @@ import type {
   OpenCodeUsageSnapshot,
   OpenCodeUsageSummary
 } from '../shared/opencode-usage-types'
+import type { AiVaultListArgs, AiVaultListResult } from '../shared/ai-vault-types'
 import type { TelemetryConsentState } from '../shared/telemetry-consent-types'
 import type { AgentKind, LaunchSource, RequestKind } from '../shared/telemetry-events'
 import type { AppStarSource } from '../shared/gh-star-source'
@@ -666,6 +667,10 @@ export type OpenCodeUsageApi = {
   }) => Promise<OpenCodeUsageSessionRow[]>
 }
 
+export type AiVaultApi = {
+  listSessions: (args?: AiVaultListArgs) => Promise<AiVaultListResult>
+}
+
 export type AppApi = {
   /** Returns the app identity currently exposed to native chrome and the titlebar. */
   getIdentity: () => Promise<AppIdentity>
@@ -764,6 +769,8 @@ export type PreloadApi = {
       name: string
       kind: 'git' | 'folder'
     }) => Promise<{ repo: Repo } | { error: string }>
+    isGitAvailable: () => Promise<boolean>
+    getDefaultCreateProjectParent: () => Promise<string>
     onCloneProgress: (callback: (data: { phase: string; percent: number }) => void) => () => void
     getGitUsername: (args: { repoId: string }) => Promise<string>
     getBaseRefDefault: (args: { repoId: string }) => Promise<BaseRefDefaultResult>
@@ -1574,9 +1581,10 @@ export type PreloadApi = {
     listTransitions: (args: { key: string; siteId?: string }) => Promise<JiraTransition[]>
   }
   starNag: {
-    onShow: (callback: () => void) => () => void
+    onShow: (callback: (payload?: { mode?: 'gh' | 'web' }) => void) => () => void
     dismiss: () => Promise<void>
     complete: () => Promise<void>
+    disable: () => Promise<void>
     forceShow: () => Promise<void>
   }
   /** Fire-and-forget track. Loose typing at the IPC boundary on purpose —
@@ -1831,6 +1839,7 @@ export type PreloadApi = {
   claudeUsage: ClaudeUsageApi
   codexUsage: CodexUsageApi
   openCodeUsage: OpenCodeUsageApi
+  aiVault: AiVaultApi
   fs: {
     readDir: (args: { dirPath: string; connectionId?: string }) => Promise<DirEntry[]>
     readFile: (args: {

@@ -172,7 +172,12 @@ export function AutomationSchedulePicker({
         className="popover-scroll-content scrollbar-sleek max-h-[var(--radix-popover-content-available-height)] w-[min(var(--radix-popover-trigger-width),calc(100vw-2rem))] min-w-[min(22rem,calc(100vw-2rem))] max-w-[calc(100vw-2rem)] overflow-y-auto p-3"
       >
         <div className="grid gap-3">
-          <Field label={translate("auto.components.automations.AutomationSchedulePicker.233b8c94b6", "Cadence")}>
+          <Field
+            label={translate(
+              'auto.components.automations.AutomationSchedulePicker.233b8c94b6',
+              'Cadence'
+            )}
+          >
             <Select
               value={draft.preset}
               onValueChange={(preset) =>
@@ -194,7 +199,7 @@ export function AutomationSchedulePicker({
               </SelectContent>
             </Select>
           </Field>
-          {draft.preset === "custom" ? (
+          {draft.preset === 'custom' ? (
             <AutomationCustomCronPanel
               draft={draft}
               customScheduleInvalid={customScheduleInvalid}
@@ -203,8 +208,13 @@ export function AutomationSchedulePicker({
             />
           ) : (
             <>
-              {draft.preset === "weekly" ? (
-                <Field label={translate("auto.components.automations.AutomationSchedulePicker.6b914c5fbb", "Day")}>
+              {draft.preset === 'weekly' ? (
+                <Field
+                  label={translate(
+                    'auto.components.automations.AutomationSchedulePicker.6b914c5fbb',
+                    'Day'
+                  )}
+                >
                   <Select
                     value={draft.dayOfWeek}
                     onValueChange={(dayOfWeek) =>
@@ -224,8 +234,13 @@ export function AutomationSchedulePicker({
                   </Select>
                 </Field>
               ) : null}
-              {draft.preset === "hourly" ? (
-                <Field label={translate("auto.components.automations.AutomationSchedulePicker.9e677335b0", "Minute")}>
+              {draft.preset === 'hourly' ? (
+                <Field
+                  label={translate(
+                    'auto.components.automations.AutomationSchedulePicker.9e677335b0',
+                    'Minute'
+                  )}
+                >
                   <Select
                     value={String(clockParts.minute)}
                     onValueChange={(minute) =>
@@ -249,7 +264,12 @@ export function AutomationSchedulePicker({
                   </Select>
                 </Field>
               ) : (
-                <Field label={translate("auto.components.automations.AutomationSchedulePicker.d90981f766", "Time")}>
+                <Field
+                  label={translate(
+                    'auto.components.automations.AutomationSchedulePicker.d90981f766',
+                    'Time'
+                  )}
+                >
                   <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,0.8fr)] gap-2">
                     <Select
                       value={String(clockParts.hour12)}
@@ -262,7 +282,10 @@ export function AutomationSchedulePicker({
                       }
                     >
                       <SelectTrigger
-                        aria-label={translate("auto.components.automations.AutomationSchedulePicker.6b802ecc99", "Hour")}
+                        aria-label={translate(
+                          'auto.components.automations.AutomationSchedulePicker.6b802ecc99',
+                          'Hour'
+                        )}
                         className={cn('w-full min-w-0', FIELD_CONTROL_CLASS)}
                       >
                         <SelectValue />
@@ -286,7 +309,10 @@ export function AutomationSchedulePicker({
                       }
                     >
                       <SelectTrigger
-                        aria-label={translate("auto.components.automations.AutomationSchedulePicker.9e677335b0", "Minute")}
+                        aria-label={translate(
+                          'auto.components.automations.AutomationSchedulePicker.9e677335b0',
+                          'Minute'
+                        )}
                         className={cn('w-full min-w-0', FIELD_CONTROL_CLASS)}
                       >
                         <SelectValue />
@@ -310,7 +336,10 @@ export function AutomationSchedulePicker({
                       }
                     >
                       <SelectTrigger
-                        aria-label={translate("auto.components.automations.AutomationSchedulePicker.22359b186a", "AM or PM")}
+                        aria-label={translate(
+                          'auto.components.automations.AutomationSchedulePicker.22359b186a',
+                          'AM or PM'
+                        )}
                         className={cn('w-full min-w-0', FIELD_CONTROL_CLASS)}
                       >
                         <SelectValue />

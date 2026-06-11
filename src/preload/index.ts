@@ -139,6 +139,7 @@ import type {
   AutomationUpdateInput
 } from '../shared/automations-types'
 import type { KeybindingActionId, KeybindingFileSnapshot } from '../shared/keybindings'
+import type { AiVaultListArgs } from '../shared/ai-vault-types'
 import {
   ORCA_EDITOR_PREPARE_HOT_EXIT_EVENT,
   type EditorPrepareHotExitDetail
@@ -459,6 +460,11 @@ const api = {
     addRemote: (args) => ipcRenderer.invoke('repos:addRemote', args),
 
     create: (args) => ipcRenderer.invoke('repos:create', args),
+
+    isGitAvailable: (): Promise<boolean> => ipcRenderer.invoke('repos:isGitAvailable'),
+
+    getDefaultCreateProjectParent: (): Promise<string> =>
+      ipcRenderer.invoke('repos:getDefaultCreateProjectParent'),
 
     remove: (args) => ipcRenderer.invoke('repos:remove', args),
 
@@ -1450,13 +1456,17 @@ const api = {
   },
 
   starNag: {
-    onShow: (callback: () => void): (() => void) => {
-      const listener = (_event: Electron.IpcRendererEvent): void => callback()
+    onShow: (callback: (payload?: { mode?: 'gh' | 'web' }) => void): (() => void) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        payload?: { mode?: 'gh' | 'web' }
+      ): void => callback(payload)
       ipcRenderer.on('star-nag:show', listener)
       return () => ipcRenderer.removeListener('star-nag:show', listener)
     },
     dismiss: (): Promise<void> => ipcRenderer.invoke('star-nag:dismiss'),
     complete: (): Promise<void> => ipcRenderer.invoke('star-nag:complete'),
+    disable: (): Promise<void> => ipcRenderer.invoke('star-nag:disable'),
     forceShow: (): Promise<void> => ipcRenderer.invoke('star-nag:forceShow')
   },
 
@@ -3224,6 +3234,11 @@ const api = {
       ipcRenderer.invoke('openCodeUsage:getBreakdown', args),
     getRecentSessions: (args: { scope: string; range: string; limit?: number }): Promise<unknown> =>
       ipcRenderer.invoke('openCodeUsage:getRecentSessions', args)
+  },
+
+  aiVault: {
+    listSessions: (args?: AiVaultListArgs): Promise<unknown> =>
+      ipcRenderer.invoke('aiVault:listSessions', args)
   },
 
   runtime: {

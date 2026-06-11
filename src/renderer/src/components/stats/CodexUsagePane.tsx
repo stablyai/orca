@@ -275,7 +275,8 @@ export function CodexUsagePane(): React.JSX.Element {
               <div className="mb-3">
                 <h4 className="text-sm font-semibold text-foreground">{translate("auto.components.stats.CodexUsagePane.5a0d1d69cd", "By model")}</h4>
                 <p className="text-xs text-muted-foreground">
-                  {translate("auto.components.stats.CodexUsagePane.95d2d89285", "Top model:")}{summary?.topModel ?? translate("auto.components.stats.CodexUsagePane.ae255c3dba", "n/a")}
+                  {translate("auto.components.stats.CodexUsagePane.95d2d89285", "Top model:")}{' '}
+                  {summary?.topModel ?? translate("auto.components.stats.CodexUsagePane.ae255c3dba", "n/a")}
                 </p>
               </div>
               <div className="space-y-3">
@@ -288,7 +289,11 @@ export function CodexUsagePane(): React.JSX.Element {
                       </span>
                     </div>
                     <div className="text-xs text-muted-foreground">
-                      {row.sessions} {translate("auto.components.stats.CodexUsagePane.bf1bf2f674", "sessions •")}{row.events} {translate("auto.components.stats.CodexUsagePane.79a69522a5", "events")}{row.hasInferredPricing ? translate("auto.components.stats.CodexUsagePane.247c93ca92", "• inferred pricing") : ''}
+                      {row.sessions} {translate("auto.components.stats.CodexUsagePane.bf1bf2f674", "sessions •")} {row.events}{' '}
+                      {translate("auto.components.stats.CodexUsagePane.79a69522a5", "events")}
+                      {row.hasInferredPricing
+                        ? ` ${translate("auto.components.stats.CodexUsagePane.247c93ca92", "• inferred pricing")}`
+                        : ''}
                     </div>
                   </div>
                 ))}
@@ -299,7 +304,8 @@ export function CodexUsagePane(): React.JSX.Element {
               <div className="mb-3">
                 <h4 className="text-sm font-semibold text-foreground">{translate("auto.components.stats.CodexUsagePane.b98718aaab", "By project")}</h4>
                 <p className="text-xs text-muted-foreground">
-                  {translate("auto.components.stats.CodexUsagePane.829ee743f2", "Top project:")}{summary?.topProject ?? translate("auto.components.stats.CodexUsagePane.ae255c3dba", "n/a")}
+                  {translate("auto.components.stats.CodexUsagePane.829ee743f2", "Top project:")}{' '}
+                  {summary?.topProject ?? translate("auto.components.stats.CodexUsagePane.ae255c3dba", "n/a")}
                 </p>
               </div>
               <div className="space-y-3">
@@ -312,7 +318,9 @@ export function CodexUsagePane(): React.JSX.Element {
                       </span>
                     </div>
                     <div className="text-xs text-muted-foreground">
-                      {row.sessions} {translate("auto.components.stats.CodexUsagePane.bf1bf2f674", "sessions •")}{row.events} {translate("auto.components.stats.CodexUsagePane.79a69522a5", "events")}</div>
+                      {row.sessions} {translate("auto.components.stats.CodexUsagePane.bf1bf2f674", "sessions •")} {row.events}{' '}
+                      {translate("auto.components.stats.CodexUsagePane.79a69522a5", "events")}
+                    </div>
                   </div>
                 ))}
               </div>

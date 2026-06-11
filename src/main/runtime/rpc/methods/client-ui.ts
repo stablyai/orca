@@ -4,6 +4,10 @@ import {
   type FeatureInteractionId
 } from '../../../../shared/feature-interactions'
 import { isFeatureTipId } from '../../../../shared/feature-tips'
+import {
+  normalizeTuiAgentArgsRecord,
+  normalizeTuiAgentEnvRecord
+} from '../../../../shared/tui-agent-launch-defaults'
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import { isTaskProvider } from '../../../../shared/task-providers'
 import { normalizeDisabledTuiAgents } from '../../../../shared/tui-agent-selection'
@@ -114,6 +118,14 @@ const SettingsUpdate = z
       .unknown()
       .transform((value) => normalizeDisabledTuiAgents(value))
       .optional(),
+    agentDefaultArgs: z
+      .unknown()
+      .transform((value) => normalizeTuiAgentArgsRecord(value))
+      .optional(),
+    agentDefaultEnv: z
+      .unknown()
+      .transform((value) => normalizeTuiAgentEnvRecord(value))
+      .optional(),
     defaultTaskSource: TaskProviderParam.optional(),
     visibleTaskProviders: z.array(TaskProviderParam).optional(),
     defaultTaskViewPreset: z
@@ -133,7 +145,9 @@ const UiUpdate = z
     lastActiveWorktreeId: NullableString.optional(),
     sidebarWidth: z.number().finite().optional(),
     rightSidebarOpen: z.boolean().optional(),
-    rightSidebarTab: z.enum(['explorer', 'search', 'source-control', 'checks', 'ports']).optional(),
+    rightSidebarTab: z
+      .enum(['explorer', 'search', 'vault', 'source-control', 'checks', 'ports'])
+      .optional(),
     rightSidebarWidth: z.number().finite().optional(),
     groupBy: z.enum(['none', 'workspace-status', 'repo', 'pr-status']).optional(),
     showWorkspaceLineage: z.boolean().optional(),

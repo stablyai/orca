@@ -91,7 +91,8 @@ export function HeroPaired({
               <div className="mp-paired-main">
                 <div className="mp-paired-name">{device.name}</div>
                 <div className="mp-paired-meta">
-                  {translate("auto.components.mobile.MobileHero.94829abdb1", "Paired")}{new Date(device.pairedAt).toLocaleDateString()}
+                  {translate("auto.components.mobile.MobileHero.94829abdb1", "Paired")}{' '}
+                  {new Date(device.pairedAt).toLocaleDateString()}
                 </div>
               </div>
               <button
@@ -218,9 +219,14 @@ export function HeroFlow({
                 <div className="mp-step-num">2</div>
                 <span className="mp-eyebrow">{translate("auto.components.mobile.MobileHero.3960f5c339", "Step 2 of 2")}</span>
               </div>
-              <h2 className="mp-h2">{translate("auto.components.mobile.MobileHero.901c98bb93", "Pair this")}{getDeviceLabel()}.</h2>
+              <h2 className="mp-h2">
+                {translate("auto.components.mobile.MobileHero.901c98bb93", "Pair this")} {getDeviceLabel()}.
+              </h2>
               <p className="mp-lead-sm">
-                {translate("auto.components.mobile.MobileHero.d1495e5e64", "Open Orca Mobile, tap")}<strong>{translate("auto.components.mobile.MobileHero.3aa7bb2d8b", "Pair Desktop")}</strong>{translate("auto.components.mobile.MobileHero.2f077ef4eb", ", and scan the code.")}</p>
+                {translate("auto.components.mobile.MobileHero.d1495e5e64", "Open Orca Mobile, tap")}{' '}
+                <strong>{translate("auto.components.mobile.MobileHero.3aa7bb2d8b", "Pair Desktop")}</strong>
+                {translate("auto.components.mobile.MobileHero.2f077ef4eb", ", and scan the code.")}
+              </p>
 
               <div className="mp-network-row">
                 <span className="mp-network-label">{translate("auto.components.mobile.MobileHero.dfd2aa9d5d", "Network")}</span>

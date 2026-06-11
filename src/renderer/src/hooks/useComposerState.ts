@@ -18,6 +18,10 @@ import { runBackgroundWorktreeCreation } from '@/lib/worktree-creation-flow'
 import type { WorktreeCreationRequest } from '@/lib/pending-worktree-creation'
 import { buildAgentDraftLaunchPlan, buildAgentStartupPlan } from '@/lib/tui-agent-startup'
 import { filterEnabledTuiAgents, isTuiAgentEnabled } from '../../../shared/tui-agent-selection'
+import {
+  resolveTuiAgentLaunchArgs,
+  resolveTuiAgentLaunchEnv
+} from '../../../shared/tui-agent-launch-defaults'
 import { tuiAgentToAgentKind } from '@/lib/telemetry'
 import { isGitRepoKind } from '../../../shared/repo-kind'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
@@ -58,6 +62,7 @@ import {
   getLinkedWorkItemPromptContext,
   resolveQuickCreateLinkedWorkItemPrompt
 } from '@/lib/linked-work-item-context'
+import { isOrcaCliAvailableForLaunch } from '@/lib/orca-cli-launch-availability'
 import {
   buildLinearIssueLinkedWorkItem,
   isLinearLinkedWorkItem
@@ -1970,7 +1975,15 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
               }
             )
           : ''
-      const linkedPromptContext = getLinkedWorkItemPromptContext(submitLinkedWorkItem)
+      // Why: the hint must never point agents at a command that cannot run;
+      // SSH worktrees always have the relay shim, local launches need the
+      // installed CLI on PATH.
+      const linearCliAvailable = submitLinkedWorkItem?.linearIdentifier
+        ? await isOrcaCliAvailableForLaunch({ remote: isRemote })
+        : false
+      const linkedPromptContext = getLinkedWorkItemPromptContext(submitLinkedWorkItem, {
+        cliAvailable: linearCliAvailable
+      })
       const submitStartupPrompt = submitShouldApplyLinkedOnlyTemplate
         ? buildAgentPromptWithContext(
             submitLinkedOnlyTemplatePrompt,
@@ -2010,6 +2023,14 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         submitLinkedWorkItem && getLinkedWorkItemProvider(submitLinkedWorkItem) === 'linear'
           ? submitLinkedWorkItem.linearIdentifier
           : undefined
+      const linkedLinearIssueWorkspaceId =
+        submitLinkedWorkItem && getLinkedWorkItemProvider(submitLinkedWorkItem) === 'linear'
+          ? submitLinkedWorkItem.linearWorkspaceId
+          : undefined
+      const linkedLinearIssueOrganizationUrlKey =
+        submitLinkedWorkItem && getLinkedWorkItemProvider(submitLinkedWorkItem) === 'linear'
+          ? submitLinkedWorkItem.linearOrganizationUrlKey
+          : undefined
       const effectiveBranchNameOverride = resolveComposerBranchNameOverrideForCreate({
         branchNameOverride,
         branchAutoName: branchAutoNameRef.current,
@@ -2032,6 +2053,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         agent: tuiAgent,
         prompt: submitStartupPrompt,
         cmdOverrides: settings?.agentCmdOverrides ?? {},
+        agentArgs: resolveTuiAgentLaunchArgs(tuiAgent, settings?.agentDefaultArgs),
+        agentEnv: resolveTuiAgentLaunchEnv(tuiAgent, settings?.agentDefaultEnv),
         platform: CLIENT_PLATFORM
       })
 
@@ -2074,7 +2097,10 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         linkedGitLabMR ?? undefined,
         linkedGitLabIssue ?? undefined,
         backendStartup,
-        pendingFirstAgentMessageRename
+        pendingFirstAgentMessageRename,
+        undefined,
+        linkedLinearIssueWorkspaceId,
+        linkedLinearIssueOrganizationUrlKey
       )
       const worktree = result.worktree
 
@@ -2149,6 +2175,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     issueCommandTemplate,
     effectiveLinkedPR,
     hasLoadedIssueCommand,
+    isRemote,
     linkedGitLabIssue,
     linkedGitLabMR,
     linkedWorkItem,
@@ -2169,6 +2196,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     selectedRepoRequiresConnection,
     showProjectRequiredError,
     settings?.agentCmdOverrides,
+    settings?.agentDefaultArgs,
+    settings?.agentDefaultEnv,
     settings?.autoRenameBranchFromWork,
     setSidebarOpen,
     setupDecision,
@@ -2268,6 +2297,14 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
           submitLinkedWorkItem && getLinkedWorkItemProvider(submitLinkedWorkItem) === 'linear'
             ? submitLinkedWorkItem.linearIdentifier
             : undefined
+        const linkedLinearIssueWorkspaceId =
+          submitLinkedWorkItem && getLinkedWorkItemProvider(submitLinkedWorkItem) === 'linear'
+            ? submitLinkedWorkItem.linearWorkspaceId
+            : undefined
+        const linkedLinearIssueOrganizationUrlKey =
+          submitLinkedWorkItem && getLinkedWorkItemProvider(submitLinkedWorkItem) === 'linear'
+            ? submitLinkedWorkItem.linearOrganizationUrlKey
+            : undefined
         const effectiveBranchNameOverride = resolveComposerBranchNameOverrideForCreate({
           branchNameOverride,
           branchAutoName: branchAutoNameRef.current,
@@ -2290,8 +2327,13 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         // Why: backend startup is safe only when the launch command is
         // self-contained. Agents that need post-ready paste/follow-up stay on
         // the renderer path so prompt delivery is not skipped.
+        const quickLinearCliAvailable = submitLinkedWorkItem?.linearIdentifier
+          ? await isOrcaCliAvailableForLaunch({ remote: isRemote })
+          : false
         const { prompt: quickPrompt, draftPrompt: quickDraftPrompt } =
-          resolveQuickCreateLinkedWorkItemPrompt(submitLinkedWorkItem, trimmedNote)
+          resolveQuickCreateLinkedWorkItemPrompt(submitLinkedWorkItem, trimmedNote, {
+            cliAvailable: quickLinearCliAvailable
+          })
         const draftLaunchPlan =
           agent === null || !quickDraftPrompt
             ? null
@@ -2299,6 +2341,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
                 agent,
                 draft: quickDraftPrompt,
                 cmdOverrides: settings?.agentCmdOverrides ?? {},
+                agentArgs: resolveTuiAgentLaunchArgs(agent, settings?.agentDefaultArgs),
+                agentEnv: resolveTuiAgentLaunchEnv(agent, settings?.agentDefaultEnv),
                 platform: CLIENT_PLATFORM
               })
 
@@ -2316,6 +2360,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
             agent,
             prompt: quickPrompt,
             cmdOverrides: settings?.agentCmdOverrides ?? {},
+            agentArgs: resolveTuiAgentLaunchArgs(agent, settings?.agentDefaultArgs),
+            agentEnv: resolveTuiAgentLaunchEnv(agent, settings?.agentDefaultEnv),
             platform: CLIENT_PLATFORM,
             allowEmptyPromptLaunch: true
           })
@@ -2361,6 +2407,10 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
           ...(pushTarget ? { pushTarget } : {}),
           agent,
           ...(linkedLinearIssue ? { linkedLinearIssue } : {}),
+          ...(linkedLinearIssueWorkspaceId !== undefined ? { linkedLinearIssueWorkspaceId } : {}),
+          ...(linkedLinearIssueOrganizationUrlKey !== undefined
+            ? { linkedLinearIssueOrganizationUrlKey }
+            : {}),
           ...(effectiveBranchNameOverride
             ? { branchNameOverride: effectiveBranchNameOverride }
             : {}),
@@ -2400,6 +2450,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       clearNewWorkspaceDraft,
       fallbackCreatureName,
       effectiveLinkedPR,
+      isRemote,
       linkedGitLabIssue,
       linkedGitLabMR,
       linkedPR,
@@ -2421,6 +2472,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       selectedRepoRequiresConnection,
       showProjectRequiredError,
       settings?.agentCmdOverrides,
+      settings?.agentDefaultArgs,
+      settings?.agentDefaultEnv,
       settings?.autoRenameBranchFromWork,
       disabledTuiAgents,
       setupDecision,

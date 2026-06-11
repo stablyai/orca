@@ -454,7 +454,7 @@ describe('installNativeDeps (via deployAndLaunchRelay)', () => {
       '', // remove probe stderr file
       '', // no persisted active pipe marker
       'WAITING',
-      '', // Start-Process launch
+      '', // WMI relay launch
       'READY',
       '' // persist active pipe marker
     ])
@@ -465,7 +465,8 @@ describe('installNativeDeps (via deployAndLaunchRelay)', () => {
       vi
         .mocked(execCommand)
         .mock.calls.map(([, c]) => c)
-        .find((command) => decodePowerShellCommand(command)?.includes('require("node-pty")')) ?? ''
+        .find((command) => decodePowerShellCommand(command)?.includes('require(\\"node-pty\\")')) ??
+      ''
     const probeScript = decodePowerShellCommand(probeCommand) ?? ''
     expect(probeScript).toContain('$LASTEXITCODE -ne 0')
     expect(probeScript).toContain("'MISSING'")

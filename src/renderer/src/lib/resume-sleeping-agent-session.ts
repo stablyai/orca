@@ -5,6 +5,10 @@ import { buildAgentResumeStartupPlan } from '@/lib/tui-agent-startup'
 import { tuiAgentToAgentKind } from '@/lib/telemetry'
 import { reconcileTabOrder } from '@/components/tab-bar/reconcile-order'
 import { isWslUncPath } from '../../../shared/wsl-paths'
+import {
+  resolveTuiAgentLaunchArgs,
+  resolveTuiAgentLaunchEnv
+} from '../../../shared/tui-agent-launch-defaults'
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
 import { translate } from '@/i18n/i18n'
 
@@ -42,10 +46,17 @@ function launchSleepingAgentSession(record: SleepingAgentSessionRecord): boolean
     agent: record.agent,
     providerSession: record.providerSession,
     cmdOverrides: state.settings?.agentCmdOverrides ?? {},
+    agentArgs: resolveTuiAgentLaunchArgs(record.agent, state.settings?.agentDefaultArgs),
+    agentEnv: resolveTuiAgentLaunchEnv(record.agent, state.settings?.agentDefaultEnv),
     platform: getResumeLaunchPlatform(record.worktreeId)
   })
   if (!startupPlan) {
-    toast.error(translate("auto.lib.resume.sleeping.agent.session.f235f604fd", "This agent session cannot be resumed."))
+    toast.error(
+      translate(
+        'auto.lib.resume.sleeping.agent.session.f235f604fd',
+        'This agent session cannot be resumed.'
+      )
+    )
     return false
   }
 

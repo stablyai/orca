@@ -100,7 +100,9 @@ export function ConflictBanner({
             <CircleCheck className="size-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" />
           )}
           <span className="min-w-0 truncate font-medium text-foreground">
-            {label} {translate("auto.components.editor.ConflictComponents.55d61a0ccd", "conflict ·")}{CONFLICT_KIND_LABELS[conflict.conflictKind]}
+            {label}{' '}
+            {translate('auto.components.editor.ConflictComponents.55d61a0ccd', 'conflict ·')}
+            {CONFLICT_KIND_LABELS[conflict.conflictKind]}
           </span>
           {conflictNavigation && conflictNavigation.total > 0 && (
             <span className="shrink-0 px-1 text-[11px] tabular-nums text-muted-foreground">
@@ -116,14 +118,21 @@ export function ConflictBanner({
                   type="button"
                   variant="ghost"
                   size="icon-xs"
-                  aria-label={translate("auto.components.editor.ConflictComponents.41d9af2e7a", "Previous conflict")}
+                  aria-label={translate(
+                    'auto.components.editor.ConflictComponents.41d9af2e7a',
+                    'Previous conflict'
+                  )}
                   onClick={() => conflictNavigation.onJump('previous')}
                 >
                   <ChevronUp className="size-3.5" />
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="bottom" sideOffset={6}>
-                {translate("auto.components.editor.ConflictComponents.41d9af2e7a", "Previous conflict")}</TooltipContent>
+                {translate(
+                  'auto.components.editor.ConflictComponents.41d9af2e7a',
+                  'Previous conflict'
+                )}
+              </TooltipContent>
             </Tooltip>
             <Tooltip>
               <TooltipTrigger asChild>
@@ -131,14 +140,18 @@ export function ConflictBanner({
                   type="button"
                   variant="ghost"
                   size="icon-xs"
-                  aria-label={translate("auto.components.editor.ConflictComponents.9c2901ef8a", "Next conflict")}
+                  aria-label={translate(
+                    'auto.components.editor.ConflictComponents.9c2901ef8a',
+                    'Next conflict'
+                  )}
                   onClick={() => conflictNavigation.onJump('next')}
                 >
                   <ChevronDown className="size-3.5" />
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="bottom" sideOffset={6}>
-                {translate("auto.components.editor.ConflictComponents.9c2901ef8a", "Next conflict")}</TooltipContent>
+                {translate('auto.components.editor.ConflictComponents.9c2901ef8a', 'Next conflict')}
+              </TooltipContent>
             </Tooltip>
           </div>
         )}
@@ -150,10 +163,17 @@ export function ConflictBanner({
          list where it provides actionable guidance. */}
       {!isUnresolved && (
         <div className="mt-1 text-muted-foreground">
-          {translate("auto.components.editor.ConflictComponents.6e459867ad", "Session-local continuity state. Git is no longer reporting this file as unmerged.")}</div>
+          {translate(
+            'auto.components.editor.ConflictComponents.6e459867ad',
+            'Session-local continuity state. Git is no longer reporting this file as unmerged.'
+          )}
+        </div>
       )}
       {entry?.oldPath && (
-        <div className="mt-1 text-muted-foreground">{translate("auto.components.editor.ConflictComponents.d5edd81755", "Renamed from")}{entry.oldPath}</div>
+        <div className="mt-1 text-muted-foreground">
+          {translate('auto.components.editor.ConflictComponents.d5edd81755', 'Renamed from')}
+          {entry.oldPath}
+        </div>
       )}
     </div>
   )
@@ -172,7 +192,11 @@ export function ConflictPlaceholderView({ file }: { file: OpenFile }): React.JSX
           {CONFLICT_KIND_LABELS[conflict.conflictKind]}
         </div>
         <div className="text-xs text-muted-foreground">
-          {conflict.message ?? translate("auto.components.editor.ConflictComponents.da539359b6", "No working-tree file is available to edit for this conflict.")}
+          {conflict.message ??
+            translate(
+              'auto.components.editor.ConflictComponents.da539359b6',
+              'No working-tree file is available to edit for this conflict.'
+            )}
         </div>
         <div className="text-xs text-muted-foreground">
           {conflict.guidance ?? CONFLICT_HINT_MAP[conflict.conflictKind]}
@@ -233,16 +257,27 @@ export function ConflictReviewPanel({
     return (
       <div className="flex h-full items-center justify-center px-6 text-center">
         <div className="max-w-md space-y-3">
-          <div className="text-sm font-medium text-foreground">{translate("auto.components.editor.ConflictComponents.992145ff5a", "All conflicts resolved")}</div>
+          <div className="text-sm font-medium text-foreground">
+            {translate(
+              'auto.components.editor.ConflictComponents.992145ff5a',
+              'All conflicts resolved'
+            )}
+          </div>
           <div className="text-xs text-muted-foreground">
-            {translate("auto.components.editor.ConflictComponents.31931dec46", "This review snapshot no longer has any live unresolved conflicts.")}</div>
+            {translate(
+              'auto.components.editor.ConflictComponents.31931dec46',
+              'This review snapshot no longer has any live unresolved conflicts.'
+            )}
+          </div>
           <div className="flex items-center justify-center gap-2">
             <Button type="button" size="sm" variant="outline" onClick={onReturnToSourceControl}>
               <GitMerge className="size-3.5" />
-              {translate("auto.components.editor.ConflictComponents.28e7db4a90", "Source Control")}</Button>
+              {translate('auto.components.editor.ConflictComponents.28e7db4a90', 'Source Control')}
+            </Button>
             <Button type="button" size="sm" variant="ghost" onClick={onDismiss}>
               <X className="size-3.5" />
-              {translate("auto.components.editor.ConflictComponents.58ad5ad431", "Dismiss")}</Button>
+              {translate('auto.components.editor.ConflictComponents.58ad5ad431', 'Dismiss')}
+            </Button>
           </div>
         </div>
       </div>
@@ -268,34 +303,55 @@ export function ConflictReviewPanel({
                     type="button"
                     variant="ghost"
                     size="icon-xs"
-                    aria-label={translate("auto.components.editor.ConflictComponents.c8ca989aea", "Show file tree")}
+                    aria-label={translate(
+                      'auto.components.editor.ConflictComponents.c8ca989aea',
+                      'Show file tree'
+                    )}
                     onClick={() => setFileTreeCollapsed(false)}
                   >
                     <PanelLeftOpen className="size-3.5" />
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent side="bottom" sideOffset={6}>
-                  {translate("auto.components.editor.ConflictComponents.c8ca989aea", "Show file tree")}</TooltipContent>
+                  {translate(
+                    'auto.components.editor.ConflictComponents.c8ca989aea',
+                    'Show file tree'
+                  )}
+                </TooltipContent>
               </Tooltip>
             )}
             <div className="flex min-w-0 flex-wrap items-baseline gap-x-1.5">
               <span className="text-sm font-medium text-foreground">
-                {unresolvedCount} {translate("auto.components.editor.ConflictComponents.4be41eaafc", "unresolved conflict")}{unresolvedCount === 1 ? '' : 's'}
+                {unresolvedCount}{' '}
+                {translate(
+                  'auto.components.editor.ConflictComponents.4be41eaafc',
+                  'unresolved conflict'
+                )}
+                {unresolvedCount === 1 ? '' : 's'}
               </span>
               <span className="text-muted-foreground/50">·</span>
               <span className="text-xs text-muted-foreground">
-                {translate("auto.components.editor.ConflictComponents.a1ce36f77d", "Snapshot captured at")}{snapshotTime}.
+                {translate(
+                  'auto.components.editor.ConflictComponents.a1ce36f77d',
+                  'Snapshot captured at'
+                )}
+                {snapshotTime}.
               </span>
             </div>
           </div>
           <Button type="button" size="sm" variant="outline" onClick={onRefreshSnapshot}>
             <RefreshCw className="size-3.5" />
-            {translate("auto.components.editor.ConflictComponents.90d576adb2", "Refresh")}</Button>
+            {translate('auto.components.editor.ConflictComponents.90d576adb2', 'Refresh')}
+          </Button>
         </div>
         <div className="flex min-h-0 flex-1 flex-col">
           {selectedContent ?? (
             <div className="flex h-full min-h-0 items-center justify-center px-6 text-center text-sm text-muted-foreground">
-              {translate("auto.components.editor.ConflictComponents.f338288514", "Loading conflict contents...")}</div>
+              {translate(
+                'auto.components.editor.ConflictComponents.f338288514',
+                'Loading conflict contents...'
+              )}
+            </div>
           )}
         </div>
       </div>

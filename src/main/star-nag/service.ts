@@ -5,6 +5,7 @@ import type { Store } from '../persistence'
 import type { StatsCollector } from '../stats/collector'
 
 type StarNagPromptSource = 'threshold' | 'force_show'
+type StarNagPromptMode = 'gh' | 'web'
 
 type StarNagPromptSession = {
   source: StarNagPromptSource
@@ -13,7 +14,7 @@ type StarNagPromptSession = {
 /**
  * Service that decides when to prompt the user with the "star Orca on GitHub"
  * notification. Counts agents spawned since the current app version was first
- * seen; crosses a doubling threshold (default 50 → 100 → 200 …) to fire the
+ * seen; crosses a doubling threshold (default 35 → 70 → 140 …) to fire the
  * renderer notification via 'star-nag:show'.
  *
  * State lives in PersistedUIState so it survives restarts alongside the rest
@@ -27,7 +28,7 @@ export class StarNagService {
   // dismisses or stars. Without this in-memory guard, every subsequent
   // agent_start past the threshold would re-enter maybeShow() and spawn a new
   // `gh api` subprocess on each spawn — cheap individually, but a power user
-  // at 55 agents with threshold 50 would fork gh on every spawn until they
+  // at 40 agents with threshold 35 would fork gh on every spawn until they
   // act on the card.
   private promptVisible = false
   // Why: prevent concurrent gh invocations if agents spawn rapidly during the
@@ -64,6 +65,7 @@ export class StarNagService {
   registerIpcHandlers(): void {
     ipcMain.handle('star-nag:dismiss', () => this.dismiss())
     ipcMain.handle('star-nag:complete', () => this.markCompleted())
+    ipcMain.handle('star-nag:disable', () => this.markCompleted())
     ipcMain.handle('star-nag:forceShow', () => this.forceShow())
   }
 
@@ -118,14 +120,17 @@ export class StarNagService {
     }
     this.evaluating = true
     try {
-      // Why: the notification is only useful for users whose gh CLI can
-      // actually perform the star. Calling checkOrcaStarred both gates on gh
-      // availability and skips users who already starred outside the app.
-      // Errors (network, gh missing) map to null — skip silently and leave
-      // state unchanged so we retry on the next spawn without racing forward
-      // to the next threshold.
+      // Why: checkOrcaStarred lets us skip users who already starred outside
+      // the app. When gh cannot tell us, keep the prompt available but route
+      // the renderer to the browser fallback instead of a dead direct-star
+      // button.
       const starred = await checkOrcaStarred()
+      if (this.store.getUI().starNagCompleted) {
+        this.pendingForceShow = false
+        return
+      }
       if (starred === null) {
+        this.broadcastShow(source, 'web')
         return
       }
       if (starred) {
@@ -134,14 +139,10 @@ export class StarNagService {
         this.markCompleted()
         return
       }
-      if (this.store.getUI().starNagCompleted) {
-        this.pendingForceShow = false
-        return
-      }
       if (this.promptVisible) {
         return
       }
-      this.broadcastShow(source)
+      this.broadcastShow(source, 'gh')
     } finally {
       this.evaluating = false
       this.flushPendingForceShow()
@@ -156,17 +157,17 @@ export class StarNagService {
     if (this.promptVisible) {
       return
     }
-    this.broadcastShow('force_show')
+    this.broadcastShow('force_show', 'gh')
   }
 
-  private broadcastShow(source: StarNagPromptSource): boolean {
+  private broadcastShow(source: StarNagPromptSource, mode: StarNagPromptMode): boolean {
     const win = BrowserWindow.getAllWindows().find((w) => !w.isDestroyed())
     if (!win) {
       this.promptVisible = false
       this.promptSession = null
       return false
     }
-    win.webContents.send('star-nag:show')
+    win.webContents.send('star-nag:show', { mode })
     this.promptVisible = true
     this.promptSession = { source }
     this.logConsoleEvent('star_nag_shown', source)
@@ -198,7 +199,7 @@ export class StarNagService {
    * User closed the notification without starring → double the threshold and
    * rebase the baseline so the next fire is "threshold more agents since this
    * dismissal" (not "threshold total since install"). This matches the
-   * product intent of exponential back-off: 50 more, then 100 more, then 200
+   * product intent of exponential back-off: 35 more, then 70 more, then 140
    * more, etc.
    */
   private dismiss(): void {
@@ -219,7 +220,7 @@ export class StarNagService {
     this.promptSession = null
   }
 
-  /** User successfully starred → never nag again. */
+  /** User successfully starred or opted out → never nag again. */
   private markCompleted(): void {
     this.store.updateUI({ starNagCompleted: true })
     this.promptVisible = false
@@ -236,6 +237,6 @@ export class StarNagService {
       this.pendingForceShow = true
       return
     }
-    this.broadcastShow('force_show')
+    this.broadcastShow('force_show', 'gh')
   }
 }

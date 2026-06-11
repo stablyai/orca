@@ -38,12 +38,26 @@ export function AssigneesEditor({
           disabled={disabled}
           className="rounded-md border border-border/50 bg-muted/30 px-2 py-0.5 text-[11px] hover:bg-muted disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-muted/30"
         >
-          {translate("auto.components.github.project.slug.dialog.AssigneesEditor.98914e6b36", "Assignees:")}{selected.length === 0 ? translate("auto.components.github.project.slug.dialog.AssigneesEditor.94a4e6e4fa", "none") : selected.join(', ')}
+          {translate(
+            'auto.components.github.project.slug.dialog.AssigneesEditor.98914e6b36',
+            'Assignees:'
+          )}
+          {selected.length === 0
+            ? translate(
+                'auto.components.github.project.slug.dialog.AssigneesEditor.94a4e6e4fa',
+                'none'
+              )
+            : selected.join(', ')}
         </button>
       </PopoverTrigger>
       <PopoverContent className="w-64 p-1">
         {metadata.loading ? (
-          <div className="px-2 py-1 text-xs text-muted-foreground">{translate("auto.components.github.project.slug.dialog.AssigneesEditor.529fec247b", "Loading…")}</div>
+          <div className="px-2 py-1 text-xs text-muted-foreground">
+            {translate(
+              'auto.components.github.project.slug.dialog.AssigneesEditor.529fec247b',
+              'Loading…'
+            )}
+          </div>
         ) : (
           metadata.data.map((u) => {
             const isOn = selected.includes(u.login)

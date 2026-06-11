@@ -3036,51 +3036,20 @@ html.onboarding-tour-start-transition::view-transition-new(root) {
   margin-top: 4px;
 }
 
-/* Why: a tour panel must read as elevated above the chrome it is teaching about
-   without resorting to color. A 1px inner top highlight plus the documented
-   floating shadow keeps it above the surface in both light and dark modes. */
+/* Why: tours need a distinct item surface without highlighting the underlying target. */
 .orca-contextual-tour-panel {
-  background: linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--foreground) 4%, var(--popover)) 0%,
-    var(--popover) 12%
-  );
+  --contextual-tour-panel-surface: color-mix(in srgb, var(--foreground) 7%, var(--popover));
+  --contextual-tour-panel-border: color-mix(in srgb, var(--foreground) 14%, var(--border));
+  background: var(--contextual-tour-panel-surface);
+  border-color: var(--contextual-tour-panel-border);
   box-shadow:
     inset 0 1px 0 0 color-mix(in srgb, var(--foreground) 10%, transparent),
     0 10px 24px rgba(0, 0, 0, 0.18);
 }
 
 .dark .orca-contextual-tour-panel {
-  background: linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--foreground) 4%, var(--popover)) 0%,
-    var(--popover) 14%
-  );
-  box-shadow:
-    inset 0 1px 0 0 color-mix(in srgb, var(--foreground) 5%, transparent),
-    0 10px 24px rgba(0, 0, 0, 0.18);
-}
-
-/* Why: a tour panel must read as elevated above the chrome it is teaching about
-   without resorting to color. A 1px inner top highlight plus the documented
-   floating shadow keeps it above the surface in both light and dark modes. */
-.orca-contextual-tour-panel {
-  background: linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--foreground) 4%, var(--popover)) 0%,
-    var(--popover) 12%
-  );
-  box-shadow:
-    inset 0 1px 0 0 color-mix(in srgb, var(--foreground) 10%, transparent),
-    0 10px 24px rgba(0, 0, 0, 0.18);
-}
-
-.dark .orca-contextual-tour-panel {
-  background: linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--foreground) 4%, var(--popover)) 0%,
-    var(--popover) 14%
-  );
+  --contextual-tour-panel-surface: color-mix(in srgb, var(--foreground) 10%, var(--popover));
+  --contextual-tour-panel-border: color-mix(in srgb, var(--foreground) 16%, var(--border));
   box-shadow:
     inset 0 1px 0 0 color-mix(in srgb, var(--foreground) 5%, transparent),
     0 10px 24px rgba(0, 0, 0, 0.18);

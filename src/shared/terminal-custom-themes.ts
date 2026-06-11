@@ -1,4 +1,3 @@
-import type { ITheme } from '@xterm/xterm'
 import type { TerminalColorOverrides } from './types'
 import { HEX_COLOR_RE } from './color-validation'
 
@@ -233,6 +232,8 @@ export function normalizeTerminalCustomThemes(value: unknown): TerminalCustomThe
   return [...byId.values()].slice(-MAX_TERMINAL_CUSTOM_THEMES)
 }
 
-export function terminalCustomThemeToXtermTheme(theme: TerminalCustomTheme): ITheme {
+export function terminalCustomThemeToXtermTheme(
+  theme: TerminalCustomTheme
+): TerminalColorOverrides {
   return { ...theme.terminal }
 }

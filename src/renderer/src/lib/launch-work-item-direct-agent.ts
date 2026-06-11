@@ -47,7 +47,11 @@ export async function pasteDirectWorkItemDraftWhenAgentReady(args: {
     onTimeout: () => {
       const label = submit ? 'prompt' : 'work item context'
       toast.message(
-        translate("auto.lib.launch.work.item.direct.agent.ceeeb509b5", "Agent took too long to start. The workspace is ready — paste the {{value0}} when the agent is idle.", { value0: label })
+        translate(
+          'auto.lib.launch.work.item.direct.agent.ceeeb509b5',
+          'Agent took too long to start. The workspace is ready — paste the {{value0}} when the agent is idle.',
+          { value0: label }
+        )
       )
       // Why: process-startup timeout has no v1 enum slot; the `unknown` slice
       // on the dashboard is the trigger to add one.

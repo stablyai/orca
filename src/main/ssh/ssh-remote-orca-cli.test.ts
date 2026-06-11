@@ -54,7 +54,38 @@ describe('runRemoteOrcaCli', () => {
       }),
       getOrchestrationDb: () => db,
       deliverPendingMessagesForHandle: vi.fn(),
-      notifyMessageArrived: vi.fn()
+      notifyMessageArrived: vi.fn(),
+      linearIssueContext: vi.fn(async (request: unknown) => ({
+        request,
+        issue: {
+          id: 'issue-1',
+          identifier: 'ENG-123',
+          title: 'Fix thing',
+          url: 'https://linear.app/acme/issue/ENG-123',
+          labels: []
+        },
+        meta: {
+          requested: {
+            current: true,
+            include: { comments: true, children: true, attachments: true, relations: true },
+            depth: 2
+          },
+          resolved: {
+            id: 'issue-1',
+            identifier: 'ENG-123',
+            workspaceId: 'workspace-1',
+            workspaceName: 'Acme'
+          },
+          partial: false,
+          includeErrors: [],
+          sections: {}
+        }
+      })),
+      linearSearchForAgents: vi.fn(async (request: unknown) => ({
+        request,
+        issues: [],
+        meta: { query: 'auth bug', limit: 5, returned: 0, limitReached: false }
+      }))
     } as unknown as OrcaRuntimeService
     return { runtime, db }
   }

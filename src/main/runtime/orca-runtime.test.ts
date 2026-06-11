@@ -1397,7 +1397,10 @@ describe('OrcaRuntimeService', () => {
           }
         }
       )
-      expect(result.worktree).toMatchObject({ path: createdWorktree.path })
+      expect(result.worktree).toMatchObject({
+        path: createdWorktree.path,
+        baseRef: 'refs/remotes/origin/main'
+      })
     } finally {
       gitSpy.mockRestore()
     }
@@ -2209,7 +2212,7 @@ describe('OrcaRuntimeService', () => {
       expect(spawn).toHaveBeenCalledWith(
         expect.objectContaining({
           cwd: '/remote/agent-feature',
-          command: "codex 'hi'",
+          command: "codex '--dangerously-bypass-approvals-and-sandbox' 'hi'",
           worktreeId: result.worktree.id
         })
       )
@@ -2317,7 +2320,7 @@ describe('OrcaRuntimeService', () => {
       expect(spawn).toHaveBeenCalledWith(
         expect.objectContaining({
           cwd: 'C:/remote/agent-feature',
-          command: "codex 'fix Bob''s branch'"
+          command: "codex '--dangerously-bypass-approvals-and-sandbox' 'fix Bob''s branch'"
         })
       )
       expect(addWorktree).not.toHaveBeenCalled()
@@ -3173,6 +3176,33 @@ describe('OrcaRuntimeService', () => {
       expect(added).toEqual([expect.objectContaining({ badgeColor: DEFAULT_REPO_BADGE_COLOR })])
     } finally {
       await rm(parentDir, { recursive: true, force: true })
+    }
+  })
+
+  it('creates a missing runtime parent before creating the project directory', async () => {
+    const added: Record<string, unknown>[] = []
+    const createStore = {
+      ...store,
+      getRepos: () => [...added] as never,
+      addRepo: (repo: Record<string, unknown>) => {
+        added.push(repo)
+      },
+      getRepo: (id: string) => added.find((repo) => repo.id === id) as never
+    }
+    const runtime = new OrcaRuntimeService(createStore as never)
+    const tempRoot = await mkdtemp('/tmp/orca-runtime-create-parent-')
+    const parentDir = join(tempRoot, 'orca', 'projects')
+    try {
+      const result = await runtime.createRepo(parentDir, 'first-project', 'folder')
+      if ('error' in result) {
+        throw new Error(result.error)
+      }
+
+      expect((await lstat(parentDir)).isDirectory()).toBe(true)
+      expect((await lstat(join(parentDir, 'first-project'))).isDirectory()).toBe(true)
+      expect(result).toHaveProperty('repo.path', join(parentDir, 'first-project'))
+    } finally {
+      await rm(tempRoot, { recursive: true, force: true })
     }
   })
 
@@ -8396,7 +8426,7 @@ describe('OrcaRuntimeService', () => {
 
     expect(spawn).toHaveBeenCalledWith(
       expect.objectContaining({
-        command: 'command-code --profile mobile',
+        command: "command-code --profile mobile '--yolo'",
         cwd: TEST_WORKTREE_PATH,
         worktreeId: TEST_WORKTREE_ID
       })
@@ -11195,7 +11225,7 @@ describe('OrcaRuntimeService', () => {
     expect(spawn).toHaveBeenCalledWith(
       expect.objectContaining({
         cwd: '/tmp/workspaces/runtime-startup-draft',
-        command: 'codex --profile work',
+        command: "codex --profile work '--dangerously-bypass-approvals-and-sandbox'",
         worktreeId: result.worktree.id
       })
     )
@@ -11298,7 +11328,7 @@ describe('OrcaRuntimeService', () => {
     expect(spawn).toHaveBeenCalledWith(
       expect.objectContaining({
         cwd: '/tmp/workspaces/runtime-cli-agent-startup',
-        command: "codex 'hi'",
+        command: "codex '--dangerously-bypass-approvals-and-sandbox' 'hi'",
         worktreeId: result.worktree.id
       })
     )
@@ -11367,7 +11397,7 @@ describe('OrcaRuntimeService', () => {
     expect(spawn).toHaveBeenCalledWith(
       expect.objectContaining({
         cwd: '/tmp/workspaces/runtime-cli-aider-startup',
-        command: 'aider',
+        command: "aider '--yes-always'",
         worktreeId: result.worktree.id
       })
     )
@@ -11600,7 +11630,7 @@ describe('OrcaRuntimeService', () => {
       1,
       expect.objectContaining({
         cwd: '/tmp/workspaces/runtime-startup-setup-split',
-        command: 'codex',
+        command: "codex '--dangerously-bypass-approvals-and-sandbox'",
         worktreeId: result.worktree.id
       })
     )
@@ -11703,7 +11733,7 @@ describe('OrcaRuntimeService', () => {
     expect(spawn).toHaveBeenCalledWith(
       expect.objectContaining({
         cwd: '/tmp/workspaces/runtime-explicit-draft',
-        command: 'codex',
+        command: "codex '--dangerously-bypass-approvals-and-sandbox'",
         worktreeId: result.worktree.id
       })
     )
@@ -11873,7 +11903,7 @@ describe('OrcaRuntimeService', () => {
     expect(spawn).toHaveBeenCalledWith(
       expect.objectContaining({
         cwd: '/remote/mobile-startup-draft',
-        command: `claude --prefill '${draftUrl}'`,
+        command: `claude '--dangerously-skip-permissions' --prefill '${draftUrl}'`,
         connectionId: 'ssh-1',
         worktreeId: result.worktree.id
       })
@@ -11981,7 +12011,7 @@ describe('OrcaRuntimeService', () => {
       expect(spawn).toHaveBeenCalledWith(
         expect.objectContaining({
           cwd: '/remote/mobile-codex-draft',
-          command: 'codex',
+          command: "codex '--dangerously-bypass-approvals-and-sandbox'",
           connectionId: 'ssh-1',
           worktreeId: result.worktree.id
         })

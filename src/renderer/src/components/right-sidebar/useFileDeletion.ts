@@ -84,9 +84,16 @@ export function useFileDeletion({
           ? `Permanently delete '${node.name}' and all its contents? This cannot be undone.`
           : `Permanently delete '${node.name}'? This cannot be undone.`
         const confirmed = await confirm({
-          title: translate("auto.components.right.sidebar.useFileDeletion.d979a4fbb5", "Permanently delete '{{value0}}'?", { value0: node.name }),
+          title: translate(
+            'auto.components.right.sidebar.useFileDeletion.d979a4fbb5',
+            "Permanently delete '{{value0}}'?",
+            { value0: node.name }
+          ),
           description: message,
-          confirmLabel: translate("auto.components.right.sidebar.useFileDeletion.92276aceb7", "Delete"),
+          confirmLabel: translate(
+            'auto.components.right.sidebar.useFileDeletion.92276aceb7',
+            'Delete'
+          ),
           confirmVariant: 'destructive'
         })
         if (!confirmed) {
@@ -185,15 +192,35 @@ export function useFileDeletion({
         // to reflect that so users aren't misled into thinking they can
         // recover a remote file from a Trash/Recycle Bin that doesn't exist.
         if (isRemote) {
-          toast.success(translate("auto.components.right.sidebar.useFileDeletion.74727df633", "'{{value0}}' deleted", { value0: node.name }))
+          toast.success(
+            translate(
+              'auto.components.right.sidebar.useFileDeletion.74727df633',
+              "'{{value0}}' deleted",
+              { value0: node.name }
+            )
+          )
         } else {
           const destination = isWindows ? 'Recycle Bin' : 'Trash'
-          toast.success(translate("auto.components.right.sidebar.useFileDeletion.96affe1302", "'{{value0}}' moved to {{value1}}", { value0: node.name, value1: destination }))
+          toast.success(
+            translate(
+              'auto.components.right.sidebar.useFileDeletion.96affe1302',
+              "'{{value0}}' moved to {{value1}}",
+              { value0: node.name, value1: destination }
+            )
+          )
         }
         return true
       } catch (error) {
         const action = isRemote ? 'delete' : isWindows ? 'move to Recycle Bin' : 'move to Trash'
-        toast.error(error instanceof Error ? error.message : translate("auto.components.right.sidebar.useFileDeletion.72691dfebc", "Failed to {{value0}} '{{value1}}'.", { value0: action, value1: node.name }))
+        toast.error(
+          error instanceof Error
+            ? error.message
+            : translate(
+                'auto.components.right.sidebar.useFileDeletion.72691dfebc',
+                "Failed to {{value0}} '{{value1}}'.",
+                { value0: action, value1: node.name }
+              )
+        )
         return false
       } finally {
         inFlightRef.current.delete(node.path)

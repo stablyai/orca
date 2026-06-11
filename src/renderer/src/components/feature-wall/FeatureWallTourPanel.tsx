@@ -116,7 +116,11 @@ export function FeatureWallTourPanel(props: {
               </h3>
               {props.activeStepCopy?.optional ? (
                 <span className="rounded-full border border-border bg-background px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
-                  {translate("auto.components.feature.wall.FeatureWallTourPanel.af7d622f6f", "Optional")}</span>
+                  {translate(
+                    'auto.components.feature.wall.FeatureWallTourPanel.af7d622f6f',
+                    'Optional'
+                  )}
+                </span>
               ) : null}
             </div>
             <p className="mx-auto mt-3 max-w-[56ch] text-sm leading-relaxed text-muted-foreground">

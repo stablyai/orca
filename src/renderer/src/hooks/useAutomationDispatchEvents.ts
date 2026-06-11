@@ -72,7 +72,10 @@ export function useAutomationDispatchEvents(): void {
           status: 'skipped_unavailable',
           workspaceId: run.workspaceId,
           workspaceDisplayName: run.workspaceDisplayName ?? null,
-          error: translate("auto.hooks.useAutomationDispatchEvents.386db94f3e", "The target project is no longer available.")
+          error: translate(
+            'auto.hooks.useAutomationDispatchEvents.386db94f3e',
+            'The target project is no longer available.'
+          )
         })
         return
       }
@@ -87,7 +90,10 @@ export function useAutomationDispatchEvents(): void {
             status: 'skipped_needs_interactive_auth',
             workspaceId: dispatchWorkspaceId,
             workspaceDisplayName: dispatchWorkspaceDisplayName,
-            error: translate("auto.hooks.useAutomationDispatchEvents.16a21d6413", "SSH reconnect requires interactive credentials.")
+            error: translate(
+              'auto.hooks.useAutomationDispatchEvents.16a21d6413',
+              'SSH reconnect requires interactive credentials.'
+            )
           })
           return
         }
@@ -117,7 +123,10 @@ export function useAutomationDispatchEvents(): void {
           status: 'skipped_unavailable',
           workspaceId: automation.workspaceId,
           workspaceDisplayName: dispatchWorkspaceDisplayName,
-          error: translate("auto.hooks.useAutomationDispatchEvents.59718b120b", "The target workspace is no longer available.")
+          error: translate(
+            'auto.hooks.useAutomationDispatchEvents.59718b120b',
+            'The target workspace is no longer available.'
+          )
         })
         return
       }
@@ -170,7 +179,10 @@ export function useAutomationDispatchEvents(): void {
             status: 'skipped_unavailable',
             workspaceId: automation.workspaceId,
             workspaceDisplayName: dispatchWorkspaceDisplayName,
-            error: translate("auto.hooks.useAutomationDispatchEvents.59718b120b", "The target workspace is no longer available.")
+            error: translate(
+              'auto.hooks.useAutomationDispatchEvents.59718b120b',
+              'The target workspace is no longer available.'
+            )
           })
           return
         }

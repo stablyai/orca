@@ -82,6 +82,10 @@ import type {
 } from '../../shared/types'
 import type { RuntimeClientEvent } from '../../shared/runtime-client-events'
 import { toRuntimeActivateWorktreeEvent } from '../../shared/runtime-client-events'
+import type {
+  LinearCurrentIssueContextHints,
+  LinearIssueRequest
+} from '../../shared/linear-agent-access'
 import type { FeatureInteractionId } from '../../shared/feature-interactions'
 import type { TerminalPaneSplitSource } from '../../shared/feature-education-telemetry'
 import { FOLDER_WORKSPACE_INSTANCE_SEPARATOR, splitWorktreeId } from '../../shared/worktree-id'
@@ -97,7 +101,11 @@ import { isValidHostTerminalTabId } from '../../shared/terminal-tab-id'
 import { buildAgentDraftLaunchPlan, buildAgentStartupPlan } from '../../shared/tui-agent-startup'
 import { isExpectedAgentProcess } from '../../shared/agent-process-recognition'
 import { isTuiAgentEnabled, pickTuiAgent } from '../../shared/tui-agent-selection'
-import { TUI_AGENT_CONFIG, isTuiAgent } from '../../shared/tui-agent-config'
+import {
+  resolveTuiAgentLaunchArgs,
+  resolveTuiAgentLaunchEnv
+} from '../../shared/tui-agent-launch-defaults'
+import { isTuiAgent, TUI_AGENT_CONFIG } from '../../shared/tui-agent-config'
 import { detectInstalledAgents, detectRemoteAgents } from '../ipc/preflight'
 import {
   markCodexProjectTrusted,
@@ -306,6 +314,13 @@ import {
   updateIssue as updateLinearIssue,
   type LinearListFilter
 } from '../linear/issues'
+import {
+  LinearAgentAccessError,
+  getLinearCurrentIssueFromWorktree,
+  readLinearIssueContext,
+  resolveLegacyLinearLinkWorkspace,
+  searchLinearIssuesForAgents
+} from '../linear/issue-context'
 import {
   createProject as createLinearProject,
   getCustomView as getLinearCustomView,
@@ -558,6 +573,8 @@ type RuntimeStore = {
     defaultTuiAgent?: GlobalSettings['defaultTuiAgent']
     disabledTuiAgents?: GlobalSettings['disabledTuiAgents']
     agentCmdOverrides?: GlobalSettings['agentCmdOverrides']
+    agentDefaultArgs?: GlobalSettings['agentDefaultArgs']
+    agentDefaultEnv?: GlobalSettings['agentDefaultEnv']
     agentStatusHooksEnabled?: GlobalSettings['agentStatusHooksEnabled']
     defaultTaskSource?: GlobalSettings['defaultTaskSource']
     defaultTaskViewPreset?: GlobalSettings['defaultTaskViewPreset']
@@ -972,6 +989,8 @@ function mergeRuntimeFolderWorkspace(repo: Repo, worktreeId: string, meta: Workt
     linkedIssue: meta.linkedIssue ?? null,
     linkedPR: meta.linkedPR ?? null,
     linkedLinearIssue: meta.linkedLinearIssue ?? null,
+    linkedLinearIssueWorkspaceId: meta.linkedLinearIssueWorkspaceId ?? null,
+    linkedLinearIssueOrganizationUrlKey: meta.linkedLinearIssueOrganizationUrlKey ?? null,
     linkedGitLabMR: meta.linkedGitLabMR ?? null,
     linkedGitLabIssue: meta.linkedGitLabIssue ?? null,
     isArchived: meta.isArchived ?? false,
@@ -1663,6 +1682,8 @@ export class OrcaRuntimeService {
     | 'defaultTuiAgent'
     | 'disabledTuiAgents'
     | 'agentCmdOverrides'
+    | 'agentDefaultArgs'
+    | 'agentDefaultEnv'
     | 'agentStatusHooksEnabled'
     | 'defaultTaskSource'
     | 'defaultTaskViewPreset'
@@ -1679,6 +1700,8 @@ export class OrcaRuntimeService {
       defaultTuiAgent: settings.defaultTuiAgent ?? null,
       disabledTuiAgents: settings.disabledTuiAgents ?? [],
       agentCmdOverrides: settings.agentCmdOverrides ?? {},
+      agentDefaultArgs: settings.agentDefaultArgs ?? {},
+      agentDefaultEnv: settings.agentDefaultEnv ?? {},
       agentStatusHooksEnabled: settings.agentStatusHooksEnabled !== false,
       defaultTaskSource: settings.defaultTaskSource ?? 'github',
       defaultTaskViewPreset: settings.defaultTaskViewPreset ?? 'issues',
@@ -1695,6 +1718,8 @@ export class OrcaRuntimeService {
       | 'agentStatusHooksEnabled'
       | 'defaultTuiAgent'
       | 'disabledTuiAgents'
+      | 'agentDefaultArgs'
+      | 'agentDefaultEnv'
       | 'defaultTaskSource'
       | 'defaultTaskViewPreset'
       | 'visibleTaskProviders'
@@ -1707,6 +1732,8 @@ export class OrcaRuntimeService {
     | 'defaultTuiAgent'
     | 'disabledTuiAgents'
     | 'agentCmdOverrides'
+    | 'agentDefaultArgs'
+    | 'agentDefaultEnv'
     | 'agentStatusHooksEnabled'
     | 'defaultTaskSource'
     | 'defaultTaskViewPreset'
@@ -6525,6 +6552,15 @@ export class OrcaRuntimeService {
     return { resolvedPath: dirPath, entries: mapped }
   }
 
+  async isGitAvailable(): Promise<boolean> {
+    try {
+      await gitExecFileAsync(['--version'], { cwd: process.cwd(), timeout: 3000 })
+      return true
+    } catch {
+      return false
+    }
+  }
+
   async importNestedRepos(args: {
     parentPath: string
     groupName: string
@@ -6722,6 +6758,9 @@ export class OrcaRuntimeService {
 
     let createdDir = false
     try {
+      // Why: default create-project parents are host-home based and may not exist
+      // before the first project is created on a fresh runtime.
+      await mkdir(trimmedParentPath, { recursive: true })
       const existingStat = await stat(targetPath).catch((error: unknown) => {
         if (isENOENT(error)) {
           return null
@@ -8582,6 +8621,8 @@ export class OrcaRuntimeService {
       agent,
       draft: content,
       cmdOverrides: settings.agentCmdOverrides ?? {},
+      agentArgs: resolveTuiAgentLaunchArgs(agent, settings.agentDefaultArgs),
+      agentEnv: resolveTuiAgentLaunchEnv(agent, settings.agentDefaultEnv),
       platform: agentLaunchPlatform
     })
     if (draftLaunchPlan) {
@@ -8598,6 +8639,8 @@ export class OrcaRuntimeService {
       agent,
       prompt: '',
       cmdOverrides: settings.agentCmdOverrides ?? {},
+      agentArgs: resolveTuiAgentLaunchArgs(agent, settings.agentDefaultArgs),
+      agentEnv: resolveTuiAgentLaunchEnv(agent, settings.agentDefaultEnv),
       platform: agentLaunchPlatform,
       allowEmptyPromptLaunch: true
     })
@@ -8633,6 +8676,8 @@ export class OrcaRuntimeService {
       agent,
       prompt: prompt ?? '',
       cmdOverrides: settings.agentCmdOverrides ?? {},
+      agentArgs: resolveTuiAgentLaunchArgs(agent, settings.agentDefaultArgs),
+      agentEnv: resolveTuiAgentLaunchEnv(agent, settings.agentDefaultEnv),
       platform: agentLaunchPlatform,
       allowEmptyPromptLaunch: true
     })
@@ -8907,6 +8952,8 @@ export class OrcaRuntimeService {
     linkedIssue?: number | null
     linkedPR?: number | null
     linkedLinearIssue?: string
+    linkedLinearIssueWorkspaceId?: string | null
+    linkedLinearIssueOrganizationUrlKey?: string | null
     linkedGitLabMR?: number | null
     linkedGitLabIssue?: number | null
     comment?: string
@@ -8985,6 +9032,12 @@ export class OrcaRuntimeService {
         ...(args.linkedPR !== undefined ? { linkedPR: args.linkedPR } : {}),
         ...(args.linkedLinearIssue !== undefined
           ? { linkedLinearIssue: args.linkedLinearIssue }
+          : {}),
+        ...(args.linkedLinearIssueWorkspaceId !== undefined
+          ? { linkedLinearIssueWorkspaceId: args.linkedLinearIssueWorkspaceId }
+          : {}),
+        ...(args.linkedLinearIssueOrganizationUrlKey !== undefined
+          ? { linkedLinearIssueOrganizationUrlKey: args.linkedLinearIssueOrganizationUrlKey }
           : {}),
         ...(args.linkedGitLabIssue !== undefined
           ? { linkedGitLabIssue: args.linkedGitLabIssue }
@@ -9335,6 +9388,9 @@ export class OrcaRuntimeService {
 
     const worktreeId = `${repo.id}::${created.path}`
     const now = Date.now()
+    // Why: persisted compare refs must survive local branches whose names look
+    // like remote labels, e.g. a local branch literally named "origin/main".
+    const metadataBaseRef = remoteTrackingBase?.ref ?? baseBranch
     const displayNameMeta = requestedDisplayName
       ? { displayName: requestedDisplayName }
       : shouldSetDisplayName(effectiveRequestedName, branchName, effectiveSanitizedName)
@@ -9355,13 +9411,13 @@ export class OrcaRuntimeService {
       orcaCreationSource: 'runtime',
       orcaCreationWorkspaceLayout: getWorktreeCreationLayout(repo, settings),
       ...displayNameMeta,
-      baseRef: baseBranch,
+      baseRef: metadataBaseRef,
       ...(checkoutExistingBranch ? { preserveBranchOnDelete: true } : {}),
       ...(configuredPushTarget ? { pushTarget: configuredPushTarget } : {}),
       ...(sparseDirectories.length > 0
         ? {
             sparseDirectories,
-            sparseBaseRef: baseBranch,
+            sparseBaseRef: metadataBaseRef,
             sparsePresetId: args.sparseCheckout?.presetId
           }
         : {}),
@@ -9369,6 +9425,12 @@ export class OrcaRuntimeService {
       ...(args.linkedPR !== undefined ? { linkedPR: args.linkedPR } : {}),
       ...(args.linkedLinearIssue !== undefined
         ? { linkedLinearIssue: args.linkedLinearIssue }
+        : {}),
+      ...(args.linkedLinearIssueWorkspaceId !== undefined
+        ? { linkedLinearIssueWorkspaceId: args.linkedLinearIssueWorkspaceId }
+        : {}),
+      ...(args.linkedLinearIssueOrganizationUrlKey !== undefined
+        ? { linkedLinearIssueOrganizationUrlKey: args.linkedLinearIssueOrganizationUrlKey }
         : {}),
       ...(args.linkedGitLabIssue !== undefined
         ? { linkedGitLabIssue: args.linkedGitLabIssue }
@@ -9612,6 +9674,8 @@ export class OrcaRuntimeService {
       linkedIssue?: number | null
       linkedPR?: number | null
       linkedLinearIssue?: string
+      linkedLinearIssueWorkspaceId?: string | null
+      linkedLinearIssueOrganizationUrlKey?: string | null
       linkedGitLabMR?: number | null
       linkedGitLabIssue?: number | null
       comment?: string
@@ -9655,6 +9719,12 @@ export class OrcaRuntimeService {
         ...(args.linkedIssue != null ? { linkedIssue: args.linkedIssue } : {}),
         ...(args.linkedPR != null ? { linkedPR: args.linkedPR } : {}),
         ...(args.linkedLinearIssue ? { linkedLinearIssue: args.linkedLinearIssue } : {}),
+        ...(args.linkedLinearIssueWorkspaceId !== undefined
+          ? { linkedLinearIssueWorkspaceId: args.linkedLinearIssueWorkspaceId }
+          : {}),
+        ...(args.linkedLinearIssueOrganizationUrlKey !== undefined
+          ? { linkedLinearIssueOrganizationUrlKey: args.linkedLinearIssueOrganizationUrlKey }
+          : {}),
         ...(args.linkedGitLabMR != null ? { linkedGitLabMR: args.linkedGitLabMR } : {}),
         ...(args.linkedGitLabIssue != null ? { linkedGitLabIssue: args.linkedGitLabIssue } : {}),
         ...(args.pushTarget ? { pushTarget: args.pushTarget } : {}),
@@ -11295,6 +11365,8 @@ export class OrcaRuntimeService {
       agent: opts.agent,
       prompt: '',
       cmdOverrides: settings.agentCmdOverrides ?? {},
+      agentArgs: resolveTuiAgentLaunchArgs(opts.agent, settings.agentDefaultArgs),
+      agentEnv: resolveTuiAgentLaunchEnv(opts.agent, settings.agentDefaultEnv),
       platform,
       allowEmptyPromptLaunch: true
     })
@@ -14258,6 +14330,99 @@ export class OrcaRuntimeService {
     workspaceId?: LinearWorkspaceSelection
   ): ReturnType<typeof searchLinearIssues> {
     return searchLinearIssues(query, Math.min(Math.max(1, limit), 50), workspaceId)
+  }
+
+  linearSearchForAgents(args: {
+    query: string
+    limit?: number
+    workspaceId?: string | 'all'
+  }): ReturnType<typeof searchLinearIssuesForAgents> {
+    return searchLinearIssuesForAgents(args)
+  }
+
+  linearIssueContext(request: LinearIssueRequest): ReturnType<typeof readLinearIssueContext> {
+    return readLinearIssueContext(request, (context) => this.linearResolveCurrentIssue(context))
+  }
+
+  async linearResolveCurrentIssue(
+    context?: LinearCurrentIssueContextHints
+  ): Promise<ReturnType<typeof getLinearCurrentIssueFromWorktree>> {
+    if (!this.store) {
+      throw new Error('runtime_unavailable')
+    }
+
+    let worktree: ResolvedWorktree | null = null
+    if (context?.terminalHandle) {
+      try {
+        const terminal = await this.showTerminal(context.terminalHandle)
+        if (context.worktreeId && context.worktreeId !== terminal.worktreeId) {
+          throw new LinearAgentAccessError(
+            'linear_permission_denied',
+            'The provided Linear worktree context does not match the caller terminal.'
+          )
+        }
+        worktree = await this.resolveWorktreeSelector(`id:${terminal.worktreeId}`)
+      } catch (error) {
+        if (error instanceof LinearAgentAccessError) {
+          throw error
+        }
+        if (context.remote === true || context.worktreeId) {
+          throw new LinearAgentAccessError(
+            'linear_issue_required',
+            'Could not verify the current Linear-linked worktree.'
+          )
+        }
+      }
+    }
+
+    if (!worktree && context?.remote !== true && context?.cwd) {
+      worktree = await this.resolveWorktreeForContainedPath(context.cwd)
+      if (!worktree) {
+        throw new LinearAgentAccessError(
+          'linear_issue_required',
+          'Run --current from inside an Orca-managed worktree or pass an issue id.'
+        )
+      }
+    }
+
+    if (!worktree) {
+      throw new LinearAgentAccessError(
+        'linear_issue_required',
+        'Run --current from inside an Orca-managed worktree or pass an issue id.'
+      )
+    }
+
+    const link = getLinearCurrentIssueFromWorktree(worktree)
+    if (!link.workspaceId) {
+      const backfill = resolveLegacyLinearLinkWorkspace(worktree.linkedLinearIssue ?? '')
+      if (backfill?.workspaceId) {
+        this.store.setWorktreeMeta(worktree.id, {
+          linkedLinearIssueWorkspaceId: backfill.workspaceId,
+          linkedLinearIssueOrganizationUrlKey: backfill.organizationUrlKey ?? null
+        })
+        return {
+          ...link,
+          workspaceId: backfill.workspaceId,
+          organizationUrlKey: backfill.organizationUrlKey ?? link.organizationUrlKey,
+          backfill
+        }
+      }
+    }
+    return link
+  }
+
+  private async resolveWorktreeForContainedPath(cwd: string): Promise<ResolvedWorktree | null> {
+    const currentPath = resolve(cwd)
+    let best: ResolvedWorktree | null = null
+    for (const candidate of await this.listResolvedWorktrees()) {
+      if (!isPathInsideOrEqual(candidate.path, currentPath)) {
+        continue
+      }
+      if (!best || candidate.path.length > best.path.length) {
+        best = candidate
+      }
+    }
+    return best
   }
 
   linearListIssues(

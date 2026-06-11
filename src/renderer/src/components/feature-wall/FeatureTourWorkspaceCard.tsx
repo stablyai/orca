@@ -26,7 +26,7 @@ export function FeatureTourWorkspaceCard({
       )}
     >
       <div className="flex items-center gap-2">
-        {status === "working" ? (
+        {status === 'working' ? (
           <WorkingSpinner />
         ) : (
           <span className="size-2 rounded-full bg-emerald-500" />
@@ -43,14 +43,14 @@ export function FeatureTourWorkspaceCard({
       <div className="mt-2 flex flex-col gap-1.5 pl-3.5">
         {agents.map((agent, idx) => (
           <div key={idx} className="flex items-center gap-1.5">
-            {agent.state === "working" ? (
+            {agent.state === 'working' ? (
               <WorkingSpinner size="xs" />
             ) : (
               <span className="inline-block size-1.5 rounded-full bg-emerald-500" />
             )}
-            {agent.kind === "claude" ? (
+            {agent.kind === 'claude' ? (
               <ClaudeIcon size={13} />
-            ) : agent.kind === "codex" ? (
+            ) : agent.kind === 'codex' ? (
               <CodexInlineIcon />
             ) : (
               <OpenCodeGoIcon size={13} />

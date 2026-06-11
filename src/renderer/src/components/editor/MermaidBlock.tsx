@@ -84,7 +84,10 @@ export default function MermaidBlock({
   if (error) {
     return (
       <div className="mermaid-block">
-        <div className="mermaid-error">{translate("auto.components.editor.MermaidBlock.dcc132e691", "Diagram error:")}{error}</div>
+        <div className="mermaid-error">
+          {translate('auto.components.editor.MermaidBlock.dcc132e691', 'Diagram error:')}
+          {error}
+        </div>
         <pre>
           <code>{content}</code>
         </pre>

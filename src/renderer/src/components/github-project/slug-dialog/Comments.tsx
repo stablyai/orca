@@ -31,7 +31,12 @@ export function CommentsList({
   return (
     <div className="flex flex-col gap-3">
       {comments.length === 0 ? (
-        <div className="text-xs italic text-muted-foreground">{translate("auto.components.github.project.slug.dialog.Comments.5f104bf855", "No comments yet.")}</div>
+        <div className="text-xs italic text-muted-foreground">
+          {translate(
+            'auto.components.github.project.slug.dialog.Comments.5f104bf855',
+            'No comments yet.'
+          )}
+        </div>
       ) : (
         comments.map((c) => (
           <CommentRow
@@ -115,9 +120,11 @@ function CommentRow({
               setEditing(true)
             }}
           >
-            {translate("auto.components.github.project.slug.dialog.Comments.8564f58542", "Edit")}</button>
+            {translate('auto.components.github.project.slug.dialog.Comments.8564f58542', 'Edit')}
+          </button>
           <button type="button" className="hover:underline" onClick={() => void onDelete()}>
-            {translate("auto.components.github.project.slug.dialog.Comments.463d030ae4", "Delete")}</button>
+            {translate('auto.components.github.project.slug.dialog.Comments.463d030ae4', 'Delete')}
+          </button>
         </div>
       </div>
       {editing ? (
@@ -136,9 +143,14 @@ function CommentRow({
                 void onEdit(draft)
               }}
             >
-              {translate("auto.components.github.project.slug.dialog.Comments.c3e829b4d9", "Save")}</Button>
+              {translate('auto.components.github.project.slug.dialog.Comments.c3e829b4d9', 'Save')}
+            </Button>
             <Button size="sm" variant="ghost" onClick={() => setEditing(false)}>
-              {translate("auto.components.github.project.slug.dialog.Comments.c0e576e96b", "Cancel")}</Button>
+              {translate(
+                'auto.components.github.project.slug.dialog.Comments.c0e576e96b',
+                'Cancel'
+              )}
+            </Button>
           </div>
         </div>
       ) : (
@@ -166,7 +178,10 @@ export function NewCommentForm({
       <textarea
         value={draft}
         onChange={(e) => setDraft(e.target.value)}
-        placeholder={translate("auto.components.github.project.slug.dialog.Comments.1c95937c8b", "Write a comment…")}
+        placeholder={translate(
+          'auto.components.github.project.slug.dialog.Comments.1c95937c8b',
+          'Write a comment…'
+        )}
         className="min-h-[80px] w-full rounded border border-border/50 bg-background p-2 text-sm"
       />
       <div className="flex justify-end">
@@ -201,7 +216,9 @@ export function NewCommentForm({
             }
           }}
         >
-          <Send className="mr-1 size-3.5" /> {translate("auto.components.github.project.slug.dialog.Comments.fd5cccd138", "Comment")}</Button>
+          <Send className="mr-1 size-3.5" />{' '}
+          {translate('auto.components.github.project.slug.dialog.Comments.fd5cccd138', 'Comment')}
+        </Button>
       </div>
     </div>
   )

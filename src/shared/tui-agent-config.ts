@@ -51,12 +51,6 @@ export type TuiAgentConfig = {
   draftPasteReadySignal?: DraftPasteReadySignal
 }
 
-// Why: the new-workspace handoff depends on three pieces of per-agent
-// knowledge staying in sync: how Orca detects the agent on PATH, which binary
-// it actually launches, and whether the initial prompt should be passed as an
-// argv flag/argument or typed into the interactive session after startup.
-// Centralizing that metadata prevents the picker, launcher, and preflight
-// checks from quietly drifting apart as new agents are added.
 export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
   claude: {
     detectCmd: 'claude',
@@ -91,11 +85,6 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
     launchCmd: 'codex',
     expectedProcess: 'codex',
     promptInjectionMode: 'argv',
-    // Why: Codex's positional prompt auto-submits the first turn, so Orca
-    // must still paste a draft. The Codex TUI enables bracketed paste before
-    // the first render, then chat_composer.rs emits `›` when the composer row
-    // is visible. Waiting for that prompt skips the generic quiet timer while
-    // avoiding startup/onboarding screens that ignore paste.
     preflightTrust: 'codex',
     draftPasteReadySignal: 'codex-composer-prompt'
   },
@@ -126,16 +115,6 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
     draftPromptEnvVar: 'ORCA_PI_PREFILL'
   },
   omp: {
-    // Why: OMP (omp.sh) is a Pi fork with its own binary (`omp`), brand,
-    // default config dir (~/.omp/agent), and overlay tree. It re-uses
-    // Pi's argv prompt-injection contract because the OMP binary inherits
-    // Pi's command-line parser, but every Orca-owned env var (overlay
-    // shadow, prefill) is scoped to OMP - see ORCA_OMP_* in
-    // src/main/pi/titlebar-extension-service.ts. The one var that MUST
-    // stay shared is `PI_CODING_AGENT_DIR`: OMP's CHANGELOG documents
-    // the deliberate rename of `OMP_CODING_AGENT_DIR` -> `PI_CODING_AGENT_DIR`
-    // (packages/ai/CHANGELOG.md), so the binary itself reads the PI-prefixed
-    // name and we have to set that to point at the OMP overlay dir.
     detectCmd: 'omp',
     launchCmd: 'omp',
     expectedProcess: 'omp',

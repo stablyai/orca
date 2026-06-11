@@ -69,7 +69,12 @@ export function useAddRepoLocalFolderFlow({
   const handleAddLocalPath = useCallback(
     async (path: string, source: AddRepoExistingWorkspaceSource): Promise<void> => {
       if (activeRuntimeEnvironmentId?.trim()) {
-        toast.error(translate("auto.components.sidebar.useAddRepoLocalFolderFlow.7ab10e4974", "Use a server path to add projects from a remote runtime."))
+        toast.error(
+          translate(
+            'auto.components.sidebar.useAddRepoLocalFolderFlow.7ab10e4974',
+            'Use a server path to add projects from a remote runtime.'
+          )
+        )
         closeModal()
         return
       }

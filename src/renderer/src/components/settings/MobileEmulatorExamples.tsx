@@ -14,9 +14,18 @@ const EMULATOR_EXAMPLE_PROMPTS = [
 async function copyPrompt(prompt: string): Promise<void> {
   try {
     await window.api.ui.writeClipboardText(prompt)
-    toast.success(translate("auto.components.settings.MobileEmulatorExamples.2b077b5544", "Copied prompt."))
+    toast.success(
+      translate('auto.components.settings.MobileEmulatorExamples.2b077b5544', 'Copied prompt.')
+    )
   } catch (error) {
-    toast.error(error instanceof Error ? error.message : translate("auto.components.settings.MobileEmulatorExamples.1f608e7d60", "Failed to copy prompt."))
+    toast.error(
+      error instanceof Error
+        ? error.message
+        : translate(
+            'auto.components.settings.MobileEmulatorExamples.1f608e7d60',
+            'Failed to copy prompt.'
+          )
+    )
   }
 }
 
@@ -35,10 +44,19 @@ export function MobileEmulatorExamples({
     >
       <div className="flex items-center gap-2">
         <Sparkles className="size-3.5 text-muted-foreground" />
-        <p className="text-sm font-medium">{translate("auto.components.settings.MobileEmulatorExamples.0820b3f84f", "Try it — example prompts")}</p>
+        <p className="text-sm font-medium">
+          {translate(
+            'auto.components.settings.MobileEmulatorExamples.0820b3f84f',
+            'Try it — example prompts'
+          )}
+        </p>
       </div>
       <p className="mt-1 text-xs text-muted-foreground">
-        {translate("auto.components.settings.MobileEmulatorExamples.4daa95f25a", "Paste any of these into Claude Code, Codex, or another agent in a project where the Orca CLI skill is installed.")}</p>
+        {translate(
+          'auto.components.settings.MobileEmulatorExamples.4daa95f25a',
+          'Paste any of these into Claude Code, Codex, or another agent in a project where the Orca CLI skill is installed.'
+        )}
+      </p>
       <ul className="mt-3 space-y-2">
         {EMULATOR_EXAMPLE_PROMPTS.map((prompt) => (
           <li
@@ -46,7 +64,10 @@ export function MobileEmulatorExamples({
             className="flex items-start gap-2 rounded-lg border border-border bg-background px-3 py-2"
           >
             <p className="flex-1 text-[11px] leading-relaxed text-foreground/90">
-              {translate("auto.components.settings.MobileEmulatorExamples.b525ff2b12", "\"")}{prompt}{translate("auto.components.settings.MobileEmulatorExamples.d151e25078", "\"")}</p>
+              {translate('auto.components.settings.MobileEmulatorExamples.b525ff2b12', '"')}
+              {prompt}
+              {translate('auto.components.settings.MobileEmulatorExamples.d151e25078', '"')}
+            </p>
             <TooltipProvider delayDuration={250}>
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -54,14 +75,18 @@ export function MobileEmulatorExamples({
                     type="button"
                     variant="ghost"
                     size="icon-xs"
-                    aria-label={translate("auto.components.settings.MobileEmulatorExamples.c12b253997", "Copy example prompt")}
+                    aria-label={translate(
+                      'auto.components.settings.MobileEmulatorExamples.c12b253997',
+                      'Copy example prompt'
+                    )}
                     onClick={() => void copyPrompt(prompt)}
                   >
                     <Copy className="size-3.5" />
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent side="left" sideOffset={6}>
-                  {translate("auto.components.settings.MobileEmulatorExamples.edf13dd03b", "Copy")}</TooltipContent>
+                  {translate('auto.components.settings.MobileEmulatorExamples.edf13dd03b', 'Copy')}
+                </TooltipContent>
               </Tooltip>
             </TooltipProvider>
           </li>

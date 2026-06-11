@@ -97,6 +97,9 @@ Computer Use:
   computer paste-text       Paste text through the native clipboard path
   computer set-value        Set the value of a settable app element
 
+Linear:
+  linear                    Read Linear ticket context for agents
+
 Mobile Emulator (iOS Simulator):
   emulator list             List available/running emulators (Orca-managed + raw serve-sim)
   emulator attach <device>  Attach/start helper and make active for the worktree
@@ -356,6 +359,18 @@ export function formatGroupHelp(specs: CommandSpec[], group: string): string {
 
 function formatCommandFlagHelp(flag: string, commandPath: string[]): string {
   const command = commandPath.join(' ')
+  if (command === 'linear issue' && flag === 'id') {
+    return '--id <id>             Linear issue key, id, or URL'
+  }
+  if (command === 'linear issue' && flag === 'workspace') {
+    return '--workspace <id>      Connected Linear workspace id'
+  }
+  if (command === 'linear search' && flag === 'query') {
+    return '--query <text>        Text to search across Linear issues'
+  }
+  if (command === 'linear search' && flag === 'workspace') {
+    return '--workspace <id|all>  Connected Linear workspace id, or all'
+  }
   if (flag === 'key' && command === 'computer hotkey') {
     return '--key <key-combo>      Modifier chord with one key, e.g. CmdOrCtrl+A'
   }
@@ -457,6 +472,28 @@ export function formatFlagHelp(flag: string): string {
     profile: '--profile <id>        Browser profile id',
     'show-profile': '--show-profile        Include tab profile in text output',
     format: '--format <png|jpeg>    Screenshot image format'
+  }
+
+  if (flag === 'current') {
+    return '--current              Use the current Orca worktree linked Linear issue'
+  }
+  if (flag === 'comments') {
+    return '--comments             Include threaded Linear comments'
+  }
+  if (flag === 'children') {
+    return '--children             Include recursive child issues'
+  }
+  if (flag === 'depth') {
+    return '--depth <n>            Child issue depth for --children/--full'
+  }
+  if (flag === 'attachments') {
+    return '--attachments          Include attachment metadata and URLs'
+  }
+  if (flag === 'relations') {
+    return '--relations            Include blocking, related, and duplicate links'
+  }
+  if (flag === 'full') {
+    return '--full                 Include all supported V1 issue context within caps'
   }
 
   return helpByFlag[flag] ?? `--${flag}`

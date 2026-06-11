@@ -5,8 +5,8 @@ import {
   readFileSync,
   existsSync,
   rmSync,
-  renameSync,
-  unlinkSync
+  unlinkSync,
+  promises as fsPromises
 } from 'fs'
 import { getHistorySessionDirName } from './history-paths'
 import type { TerminalSnapshot } from './types'
@@ -139,10 +139,14 @@ export class HistoryManager {
       })
       // Why: atomic write via tmp+rename prevents half-written checkpoints
       // on crash. Reading a corrupt checkpoint is worse than reading a
-      // slightly stale one.
+      // slightly stale one. Async IO — this runs every ~5s per dirty session
+      // on the Electron main process, and a sync ~MB write (worse under
+      // antivirus scanning on Windows) would stall input/IPC for its
+      // duration. Overlap is prevented by the adapter's checkpointInFlight
+      // guard, which awaits this promise before the next tick.
       const tmpPath = `${writer.checkpointPath}.tmp`
-      writeFileSync(tmpPath, data)
-      renameSync(tmpPath, writer.checkpointPath)
+      await fsPromises.writeFile(tmpPath, data)
+      await fsPromises.rename(tmpPath, writer.checkpointPath)
     } catch (err) {
       this.handleWriteError(sessionId, err)
     }

@@ -9,6 +9,7 @@ import {
   redactKagiSessionToken
 } from '../../shared/browser-url'
 import {
+  isRecentTabSwitcherCommitRelease,
   matchesRecentTabSwitcherChord,
   resolveWindowShortcutAction
 } from '../../shared/window-shortcut-policy'
@@ -49,10 +50,6 @@ export function resolveGuestMouseWheelZoomDirection(
     return null
   }
   return deltaY < 0 ? 'in' : 'out'
-}
-
-function isControlKeyRelease(input: Electron.Input): boolean {
-  return input.type === 'keyUp' && (input.code === 'ControlLeft' || input.code === 'ControlRight')
 }
 
 export function setupGuestContextMenu(args: {
@@ -268,17 +265,18 @@ export function setupGuestShortcutForwarding(args: {
   let ctrlTabSwitching = false
   const handler = (event: Electron.Event, input: Electron.Input): void => {
     const keybindings = getKeybindings?.()
-    if (matchesRecentTabSwitcherChord(input, process.platform, keybindings)) {
+    if (
+      input.type === 'keyDown' &&
+      matchesRecentTabSwitcherChord(input, process.platform, keybindings)
+    ) {
       event.preventDefault()
-      if (input.type === 'keyDown') {
-        ctrlTabSwitching = true
-        const renderer = resolveRenderer(browserTabId)
-        renderer?.send('ui:ctrlTabKeyDown', { shiftKey: input.shift === true })
-      }
+      ctrlTabSwitching = true
+      const renderer = resolveRenderer(browserTabId)
+      renderer?.send('ui:ctrlTabKeyDown', { shiftKey: input.shift === true })
       return
     }
 
-    if (ctrlTabSwitching && isControlKeyRelease(input)) {
+    if (ctrlTabSwitching && isRecentTabSwitcherCommitRelease(input)) {
       event.preventDefault()
       ctrlTabSwitching = false
       const renderer = resolveRenderer(browserTabId)

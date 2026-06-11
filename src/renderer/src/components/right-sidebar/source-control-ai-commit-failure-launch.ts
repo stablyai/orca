@@ -42,7 +42,12 @@ export async function launchCommitFailureAgentWithDefault({
 }): Promise<boolean> {
   const connectionId = getConnectionId(activeWorktreeId) ?? sourceRepoConnectionId ?? null
   if (connectionId === undefined) {
-    toast.error(translate("auto.components.right.sidebar.source.control.ai.commit.failure.launch.216f762bd7", "Unable to resolve the workspace connection."))
+    toast.error(
+      translate(
+        'auto.components.right.sidebar.source.control.ai.commit.failure.launch.216f762bd7',
+        'Unable to resolve the workspace connection.'
+      )
+    )
     return false
   }
 
@@ -59,7 +64,12 @@ export async function launchCommitFailureAgentWithDefault({
     return false
   }
   if (!commitFailureRecoveryPrompt) {
-    toast.error(translate("auto.components.right.sidebar.source.control.ai.commit.failure.launch.4f4e0418a0", "Could not build the agent prompt."))
+    toast.error(
+      translate(
+        'auto.components.right.sidebar.source.control.ai.commit.failure.launch.4f4e0418a0',
+        'Could not build the agent prompt.'
+      )
+    )
     return false
   }
   const prompt = buildCommitFailureAgentCommandInput({
@@ -68,7 +78,12 @@ export async function launchCommitFailureAgentWithDefault({
     basePrompt: commitFailureRecoveryPrompt
   })
   if (!prompt) {
-    toast.error(translate("auto.components.right.sidebar.source.control.ai.commit.failure.launch.f2b47026e8", "Commit failure prompt is empty. Update Source Control AI settings."))
+    toast.error(
+      translate(
+        'auto.components.right.sidebar.source.control.ai.commit.failure.launch.f2b47026e8',
+        'Commit failure prompt is empty. Update Source Control AI settings.'
+      )
+    )
     return false
   }
 
@@ -82,7 +97,12 @@ export async function launchCommitFailureAgentWithDefault({
     (!detectedAgents.includes(savedAgent) ||
       !isTuiAgentEnabled(savedAgent, store.settings?.disabledTuiAgents))
   ) {
-    toast.error(translate("auto.components.right.sidebar.source.control.ai.commit.failure.launch.d481ab22f9", "Saved AI agent is unavailable. Use Customize launch to choose another agent."))
+    toast.error(
+      translate(
+        'auto.components.right.sidebar.source.control.ai.commit.failure.launch.d481ab22f9',
+        'Saved AI agent is unavailable. Use Customize launch to choose another agent.'
+      )
+    )
     return false
   }
   const agent = pickSourceControlLaunchAgent({
@@ -92,7 +112,12 @@ export async function launchCommitFailureAgentWithDefault({
     disabledAgents: store.settings?.disabledTuiAgents
   })
   if (!agent) {
-    toast.error(translate("auto.components.right.sidebar.source.control.ai.commit.failure.launch.9bbd9077a2", "No enabled AI agents. Configure agents in Settings."))
+    toast.error(
+      translate(
+        'auto.components.right.sidebar.source.control.ai.commit.failure.launch.9bbd9077a2',
+        'No enabled AI agents. Configure agents in Settings.'
+      )
+    )
     return false
   }
   const result = launchAgentInNewTab({
@@ -106,13 +131,23 @@ export async function launchCommitFailureAgentWithDefault({
     launchSource: 'source_control_recovery'
   })
   if (!result) {
-    toast.error(translate("auto.components.right.sidebar.source.control.ai.commit.failure.launch.5540ff50cc", "Could not build the agent launch command."))
+    toast.error(
+      translate(
+        'auto.components.right.sidebar.source.control.ai.commit.failure.launch.5540ff50cc',
+        'Could not build the agent launch command.'
+      )
+    )
     return false
   }
 
   if (result.tabId) {
     focusTerminalTabSurface(result.tabId)
   }
-  toast.success(translate("auto.components.right.sidebar.source.control.ai.commit.failure.launch.a8b97d2318", "Started an AI agent for the commit failure."))
+  toast.success(
+    translate(
+      'auto.components.right.sidebar.source.control.ai.commit.failure.launch.a8b97d2318',
+      'Started an AI agent for the commit failure.'
+    )
+  )
   return true
 }

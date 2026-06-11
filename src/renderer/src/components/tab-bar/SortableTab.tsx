@@ -309,7 +309,11 @@ export default function SortableTab({
           ref={setRenameInputElement}
           data-tab-rename-input="true"
           value={renameValue}
-          aria-label={translate("auto.components.tab.bar.SortableTab.ab19f603eb", "Rename tab {{value0}}", { value0: tabTitle })}
+          aria-label={translate(
+            'auto.components.tab.bar.SortableTab.ab19f603eb',
+            'Rename tab {{value0}}',
+            { value0: tabTitle }
+          )}
           onChange={(event) => setRenameValue(event.target.value)}
           onBlur={commitRename}
           onKeyDown={(event) => {
@@ -379,8 +383,8 @@ export default function SortableTab({
             e.stopPropagation()
             onToggleExpand(tab.id)
           }}
-          title={translate("auto.components.tab.bar.SortableTab.fdb2691425", "Collapse pane")}
-          aria-label={translate("auto.components.tab.bar.SortableTab.fdb2691425", "Collapse pane")}
+          title={translate('auto.components.tab.bar.SortableTab.fdb2691425', 'Collapse pane')}
+          aria-label={translate('auto.components.tab.bar.SortableTab.fdb2691425', 'Collapse pane')}
         >
           <Minimize2 className="w-3 h-3" />
         </button>
@@ -397,7 +401,11 @@ export default function SortableTab({
           // instead of bypassing the render layer by calling closeTab() on
           // the store — a store-only assertion would pass even if this
           // button had been accidentally unmounted.
-          aria-label={translate("auto.components.tab.bar.SortableTab.6df69d9388", "Close tab {{value0}}", { value0: tabTitle })}
+          aria-label={translate(
+            'auto.components.tab.bar.SortableTab.6df69d9388',
+            'Close tab {{value0}}',
+            { value0: tabTitle }
+          )}
           type="button"
           data-tab-close-button="true"
           onPointerDown={(e) => {

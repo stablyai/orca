@@ -27,29 +27,29 @@ type ViewModeMetadata = { label: string; icon: LucideIcon; title?: string }
 
 const DEFAULT_VIEW_MODE_METADATA: Record<EditorToggleValue, ViewModeMetadata> = {
   source: {
-    label: translate("auto.components.editor.EditorViewToggle.4d6ccb7ba6", "Source"),
+    label: translate('auto.components.editor.EditorViewToggle.4d6ccb7ba6', 'Source'),
     icon: Code
   },
   rich: {
-    label: translate("auto.components.editor.EditorViewToggle.aff15f94f5", "Rich Editor"),
+    label: translate('auto.components.editor.EditorViewToggle.aff15f94f5', 'Rich Editor'),
     icon: Pencil
   },
   preview: {
-    label: translate("auto.components.editor.EditorViewToggle.0d193dc03c", "Preview"),
+    label: translate('auto.components.editor.EditorViewToggle.0d193dc03c', 'Preview'),
     icon: Eye
   },
   edit: {
-    label: translate("auto.components.editor.EditorViewToggle.ac3bb87913", "Edit"),
+    label: translate('auto.components.editor.EditorViewToggle.ac3bb87913', 'Edit'),
     icon: FileText
   },
   changes: {
-    label: translate("auto.components.editor.EditorViewToggle.4837f3f578", "Changes"),
+    label: translate('auto.components.editor.EditorViewToggle.4837f3f578', 'Changes'),
     icon: GitCompareArrows,
     // Why: "Changes" collides with the Source Control sidebar's "Branch
     // Changes" section, which diffs against the base ref. This toggle shows
     // uncommitted changes (working tree vs HEAD), so disambiguate in the
     // hover title without repeating the button label.
-    title: translate("auto.components.editor.EditorViewToggle.167f45888c", "Uncommitted changes")
+    title: translate('auto.components.editor.EditorViewToggle.167f45888c', 'Uncommitted changes')
   }
 }
 
@@ -58,14 +58,14 @@ const DEFAULT_VIEW_MODE_METADATA: Record<EditorToggleValue, ViewModeMetadata> = 
 // which we don't offer, so callers can override the per-mode presentation.
 export const CSV_VIEW_MODE_METADATA: Partial<Record<MarkdownViewMode, ViewModeMetadata>> = {
   rich: {
-    label: translate("auto.components.editor.EditorViewToggle.e408aa9cd5", "Table"),
+    label: translate('auto.components.editor.EditorViewToggle.e408aa9cd5', 'Table'),
     icon: TableIcon
   }
 }
 
 export const NOTEBOOK_VIEW_MODE_METADATA: Partial<Record<MarkdownViewMode, ViewModeMetadata>> = {
   rich: {
-    label: translate("auto.components.editor.EditorViewToggle.b3410cd5e0", "Notebook"),
+    label: translate('auto.components.editor.EditorViewToggle.b3410cd5e0', 'Notebook'),
     icon: NotebookText
   }
 }

@@ -52,7 +52,19 @@ function MarkdownTocRow({
           <button
             type="button"
             className="markdown-toc-disclosure"
-            aria-label={expanded ? translate("auto.components.editor.MarkdownTableOfContentsPanel.97ad46f11f", "Collapse {{value0}}", { value0: item.title }) : translate("auto.components.editor.MarkdownTableOfContentsPanel.65b036a6c8", "Expand {{value0}}", { value0: item.title })}
+            aria-label={
+              expanded
+                ? translate(
+                    'auto.components.editor.MarkdownTableOfContentsPanel.97ad46f11f',
+                    'Collapse {{value0}}',
+                    { value0: item.title }
+                  )
+                : translate(
+                    'auto.components.editor.MarkdownTableOfContentsPanel.65b036a6c8',
+                    'Expand {{value0}}',
+                    { value0: item.title }
+                  )
+            }
             aria-expanded={expanded}
             onClick={() => onToggleCollapsed(item.id)}
           >
@@ -108,12 +120,30 @@ export function MarkdownTableOfContentsPanel({
   }
 
   return (
-    <aside className="markdown-toc-panel" aria-label={translate("auto.components.editor.MarkdownTableOfContentsPanel.27d0a9c49a", "Table of contents")}>
+    <aside
+      className="markdown-toc-panel"
+      aria-label={translate(
+        'auto.components.editor.MarkdownTableOfContentsPanel.27d0a9c49a',
+        'Table of contents'
+      )}
+    >
       <div className="markdown-toc-header">
         <ListTree className="size-3.5 text-muted-foreground" />
-        <span>{translate("auto.components.editor.MarkdownTableOfContentsPanel.06357eea60", "Table of Contents")}</span>
+        <span>
+          {translate(
+            'auto.components.editor.MarkdownTableOfContentsPanel.06357eea60',
+            'Table of Contents'
+          )}
+        </span>
         <div className="markdown-toc-header-actions">
-          <div className="markdown-toc-level-controls" role="group" aria-label={translate("auto.components.editor.MarkdownTableOfContentsPanel.0dc7b2f05a", "Collapse by level")}>
+          <div
+            className="markdown-toc-level-controls"
+            role="group"
+            aria-label={translate(
+              'auto.components.editor.MarkdownTableOfContentsPanel.0dc7b2f05a',
+              'Collapse by level'
+            )}
+          >
             {TOC_LEVELS.map((level) => (
               <Button
                 key={level}
@@ -122,9 +152,29 @@ export function MarkdownTableOfContentsPanel({
                 size="icon-xs"
                 className="markdown-toc-level-button"
                 aria-label={
-                  level === 3 ? translate("auto.components.editor.MarkdownTableOfContentsPanel.f3de856175", "Expand all heading levels") : translate("auto.components.editor.MarkdownTableOfContentsPanel.111e66b85d", "Collapse to heading level {{value0}}", { value0: level })
+                  level === 3
+                    ? translate(
+                        'auto.components.editor.MarkdownTableOfContentsPanel.f3de856175',
+                        'Expand all heading levels'
+                      )
+                    : translate(
+                        'auto.components.editor.MarkdownTableOfContentsPanel.111e66b85d',
+                        'Collapse to heading level {{value0}}',
+                        { value0: level }
+                      )
                 }
-                title={level === 3 ? translate("auto.components.editor.MarkdownTableOfContentsPanel.a5daadd68b", "Expand all") : translate("auto.components.editor.MarkdownTableOfContentsPanel.4680a4b808", "Collapse to H{{value0}}", { value0: level })}
+                title={
+                  level === 3
+                    ? translate(
+                        'auto.components.editor.MarkdownTableOfContentsPanel.a5daadd68b',
+                        'Expand all'
+                      )
+                    : translate(
+                        'auto.components.editor.MarkdownTableOfContentsPanel.4680a4b808',
+                        'Collapse to H{{value0}}',
+                        { value0: level }
+                      )
+                }
                 onClick={() => collapseToLevel(level)}
               >
                 H{level}
@@ -135,8 +185,14 @@ export function MarkdownTableOfContentsPanel({
             type="button"
             variant="ghost"
             size="icon-xs"
-            aria-label={translate("auto.components.editor.MarkdownTableOfContentsPanel.bbe8369097", "Close table of contents")}
-            title={translate("auto.components.editor.MarkdownTableOfContentsPanel.bbe8369097", "Close table of contents")}
+            aria-label={translate(
+              'auto.components.editor.MarkdownTableOfContentsPanel.bbe8369097',
+              'Close table of contents'
+            )}
+            title={translate(
+              'auto.components.editor.MarkdownTableOfContentsPanel.bbe8369097',
+              'Close table of contents'
+            )}
             onClick={onClose}
           >
             <X className="size-3.5" />
@@ -156,7 +212,12 @@ export function MarkdownTableOfContentsPanel({
             />
           ))
         ) : (
-          <div className="markdown-toc-empty">{translate("auto.components.editor.MarkdownTableOfContentsPanel.de3928b6e4", "No headings")}</div>
+          <div className="markdown-toc-empty">
+            {translate(
+              'auto.components.editor.MarkdownTableOfContentsPanel.de3928b6e4',
+              'No headings'
+            )}
+          </div>
         )}
       </div>
     </aside>

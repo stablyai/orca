@@ -342,7 +342,9 @@ export function McpConfigSection({ repo }: McpConfigSectionProps): React.JSX.Ele
       <div className="rounded-md border border-border/50 bg-muted/20">
         <div className="flex items-center justify-between border-b border-border/50 px-3 py-2 text-xs text-muted-foreground">
           <span>
-            {detectedCount} {translate("auto.components.settings.McpConfigSection.251b96564a", "detected ·")}{serverCount} {translate("auto.components.settings.McpConfigSection.3b224167ff", "server")}{serverCount === 1 ? '' : 's'}
+            {detectedCount} {translate("auto.components.settings.McpConfigSection.251b96564a", "detected ·")} {serverCount}{' '}
+            {translate("auto.components.settings.McpConfigSection.3b224167ff", "server")}
+            {serverCount === 1 ? '' : 's'}
           </span>
           {loading ? <LoaderCircle className="size-3.5 animate-spin" /> : null}
         </div>

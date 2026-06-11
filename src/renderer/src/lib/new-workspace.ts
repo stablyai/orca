@@ -6,7 +6,6 @@ import {
 } from '@/runtime/runtime-terminal-inspection'
 import type { AgentStartupPlan } from '@/lib/tui-agent-startup'
 import { isShellProcess } from '@/lib/tui-agent-startup'
-import type { LinkedWorkItemContext } from '@/lib/linked-work-item-context'
 import type { OrcaHooks, TaskViewPresetId } from '../../../shared/types'
 import { resolveHookCommandSourcePolicy } from '../../../shared/hook-command-source-policy'
 import { isExpectedAgentProcess } from '../../../shared/agent-process-recognition'
@@ -47,7 +46,6 @@ export const CLIENT_PLATFORM: NodeJS.Platform = navigator.userAgent.includes('Wi
     ? 'darwin'
     : 'linux'
 
-export type { LinkedWorkItemContext } from '@/lib/linked-work-item-context'
 export { getLinkedWorkItemProvider, isGitLabIssueUrl } from './linked-work-item-provider'
 
 export type LinkedWorkItemSummary = {
@@ -57,8 +55,9 @@ export type LinkedWorkItemSummary = {
   title: string
   url: string
   linearIdentifier?: string
+  linearWorkspaceId?: string
+  linearOrganizationUrlKey?: string
   jiraIdentifier?: string
-  linkedContext?: LinkedWorkItemContext
 }
 
 // Why: when a repo has no `orca.yaml` issueCommand and no per-user override,

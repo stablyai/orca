@@ -42,7 +42,8 @@ function ImageDiffPane({
             isIntrinsicLayout ? 'min-h-32' : 'flex-1'
           )}
         >
-          {translate("auto.components.editor.ImageDiffViewer.fb0ae4f3c0", "No preview")}</div>
+          {translate('auto.components.editor.ImageDiffViewer.fb0ae4f3c0', 'No preview')}
+        </div>
       </div>
     )
   }
@@ -94,14 +95,14 @@ export default function ImageDiffViewer({
       style={gridRowStyle}
     >
       <ImageDiffPane
-        label={translate("auto.components.editor.ImageDiffViewer.57aac3979a", "Original")}
+        label={translate('auto.components.editor.ImageDiffViewer.57aac3979a', 'Original')}
         content={originalContent}
         filePath={filePath}
         mimeType={mimeType}
         layout={layout}
       />
       <ImageDiffPane
-        label={translate("auto.components.editor.ImageDiffViewer.a651be62b0", "Modified")}
+        label={translate('auto.components.editor.ImageDiffViewer.a651be62b0', 'Modified')}
         content={modifiedContent}
         filePath={filePath}
         mimeType={mimeType}

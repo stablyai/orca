@@ -229,7 +229,11 @@ function QuickTabBody({
       <DialogHeader className="gap-1">
         <DialogTitle className="text-base font-semibold">{primaryActionLabel}</DialogTitle>
         <DialogDescription className="sr-only">
-          {translate("auto.components.NewWorkspaceComposerModal.fa90f739a5", "Choose the project, workspace name, and agent before creating the workspace.")}</DialogDescription>
+          {translate(
+            'auto.components.NewWorkspaceComposerModal.fa90f739a5',
+            'Choose the project, workspace name, and agent before creating the workspace.'
+          )}
+        </DialogDescription>
       </DialogHeader>
       <NewWorkspaceComposerCard
         contextualTourSource={modalData.contextualTourSource}
