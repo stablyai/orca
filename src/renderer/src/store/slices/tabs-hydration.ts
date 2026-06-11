@@ -1,5 +1,6 @@
 import type {
   Tab,
+  TabFolderGroup,
   TabGroup,
   TabGroupLayoutNode,
   WorkspaceSessionState
@@ -13,10 +14,15 @@ import {
   sanitizeRecentTabIds,
   selectHydratedActiveGroupId
 } from './tab-group-state'
+import {
+  clearMissingFolderAssignments,
+  sanitizeFolderGroupsForWorktree
+} from './tab-folder-group-state'
 
 type HydratedTabState = {
   unifiedTabsByWorktree: Record<string, Tab[]>
   groupsByWorktree: Record<string, TabGroup[]>
+  tabFolderGroupsByWorktree: Record<string, TabFolderGroup[]>
   activeGroupIdByWorktree: Record<string, string>
   layoutByWorktree: Record<string, TabGroupLayoutNode>
 }
@@ -51,6 +57,7 @@ function hydrateUnifiedFormat(
 ): HydratedTabState {
   const tabsByWorktree: Record<string, Tab[]> = {}
   const groupsByWorktree: Record<string, TabGroup[]> = {}
+  const tabFolderGroupsByWorktree: Record<string, TabFolderGroup[]> = {}
   const activeGroupIdByWorktree: Record<string, string> = {}
   const layoutByWorktree: Record<string, TabGroupLayoutNode> = {}
   const persistedEditFileIdsByWorktree = getPersistedEditFileIdsByWorktree(session)
@@ -178,9 +185,29 @@ function hydrateUnifiedFormat(
     }
   }
 
+  for (const [worktreeId, folderGroups] of Object.entries(session.tabFolderGroups ?? {})) {
+    if (!validWorktreeIds.has(worktreeId) || folderGroups.length === 0) {
+      continue
+    }
+    const splitGroupIds = new Set((groupsByWorktree[worktreeId] ?? []).map((group) => group.id))
+    const candidateGroups = folderGroups.filter((group) => splitGroupIds.has(group.splitGroupId))
+    if (candidateGroups.length === 0) {
+      continue
+    }
+    const tabs = tabsByWorktree[worktreeId] ?? []
+    const hydratedFolderGroups = sanitizeFolderGroupsForWorktree(tabs, candidateGroups)
+    if (hydratedFolderGroups.length === 0) {
+      tabsByWorktree[worktreeId] = clearMissingFolderAssignments(tabs, [])
+      continue
+    }
+    tabFolderGroupsByWorktree[worktreeId] = hydratedFolderGroups
+    tabsByWorktree[worktreeId] = clearMissingFolderAssignments(tabs, hydratedFolderGroups)
+  }
+
   return {
     unifiedTabsByWorktree: tabsByWorktree,
     groupsByWorktree,
+    tabFolderGroupsByWorktree,
     activeGroupIdByWorktree,
     layoutByWorktree
   }
@@ -192,6 +219,7 @@ function hydrateLegacyFormat(
 ): HydratedTabState {
   const tabsByWorktree: Record<string, Tab[]> = {}
   const groupsByWorktree: Record<string, TabGroup[]> = {}
+  const tabFolderGroupsByWorktree: Record<string, TabFolderGroup[]> = {}
   const activeGroupIdByWorktree: Record<string, string> = {}
   const layoutByWorktree: Record<string, TabGroupLayoutNode> = {}
 
@@ -278,6 +306,7 @@ function hydrateLegacyFormat(
   return {
     unifiedTabsByWorktree: tabsByWorktree,
     groupsByWorktree,
+    tabFolderGroupsByWorktree,
     activeGroupIdByWorktree,
     layoutByWorktree
   }

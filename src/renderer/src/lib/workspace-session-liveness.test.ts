@@ -24,6 +24,7 @@ function createSnapshot(
     browserUrlHistory: [],
     unifiedTabsByWorktree: {},
     groupsByWorktree: {},
+    tabFolderGroupsByWorktree: {},
     layoutByWorktree: {},
     activeGroupIdByWorktree: {},
     sshConnectionStates: new Map(),

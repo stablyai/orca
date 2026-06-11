@@ -8,8 +8,10 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { useAppStore } from '@/store'
 import { showLocalPathOpenBlockedToast } from '@/lib/local-path-open-guard'
+import type { TabFolderGroup } from '../../../../shared/types'
 import type { OpenFile } from '../../store/slices/editor'
 import { shouldBlockEditorTabLocalOpen } from './editor-tab-local-open-guard'
+import { TabFolderMenuItems } from './TabFolderMenuItems'
 import { translate } from '@/i18n/i18n'
 
 const isMac = navigator.userAgent.includes('Mac')
@@ -27,6 +29,8 @@ type EditorFileTabContextMenuProps = {
   menuPoint: { x: number; y: number }
   file: OpenFile & { tabId?: string }
   isPinned: boolean
+  currentFolderGroupId?: string | null
+  folderGroups: readonly TabFolderGroup[]
   isRenaming: boolean
   hasTabsToRight: boolean
   canRename: boolean
@@ -38,6 +42,9 @@ type EditorFileTabContextMenuProps = {
   onActivate: () => void
   onOpenRenameInput: () => void
   onTogglePin: () => void
+  onCreateGroup: (tabId: string) => void
+  onAddToGroup: (folderGroupId: string, tabId: string) => void
+  onRemoveFromGroup: (tabId: string) => void
   onClose: () => void
   onCloseAll: () => void
   onCloseToRight: () => void
@@ -59,6 +66,8 @@ export function EditorFileTabContextMenu({
   menuPoint,
   file,
   isPinned,
+  currentFolderGroupId,
+  folderGroups,
   isRenaming,
   hasTabsToRight,
   canRename,
@@ -70,6 +79,9 @@ export function EditorFileTabContextMenu({
   onActivate,
   onOpenRenameInput,
   onTogglePin,
+  onCreateGroup,
+  onAddToGroup,
+  onRemoveFromGroup,
   onClose,
   onCloseAll,
   onCloseToRight,
@@ -135,6 +147,13 @@ export function EditorFileTabContextMenu({
             ? translate('auto.components.tab.bar.EditorFileTabContextMenu.8e9d603a09', 'Unpin Tab')
             : translate('auto.components.tab.bar.EditorFileTabContextMenu.fdd29eb669', 'Pin Tab')}
         </DropdownMenuItem>
+        <TabFolderMenuItems
+          currentFolderGroupId={currentFolderGroupId}
+          folderGroups={folderGroups}
+          onCreateGroup={() => onCreateGroup(sourceVisibleTabId)}
+          onAddToGroup={(folderGroupId) => onAddToGroup(folderGroupId, sourceVisibleTabId)}
+          onRemoveFromGroup={() => onRemoveFromGroup(sourceVisibleTabId)}
+        />
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={() => !isPinned && onClose()} disabled={isPinned}>
           {translate('auto.components.tab.bar.EditorFileTabContextMenu.1ba8492c5b', 'Close')}

@@ -10,6 +10,7 @@ import { toast } from 'sonner'
 import type {
   BrowserTab as BrowserTabState,
   Tab,
+  TabFolderGroup,
   TerminalTab,
   TuiAgent,
   WorkspaceVisibleTabType
@@ -28,6 +29,7 @@ import type { HoveredTabInsertion, TabDragItemData } from '../tab-group/useTabDr
 import { resolveTabIndicatorEdges } from '../tab-group/tab-insertion'
 import { getEditorDisplayLabel } from '@/components/editor/editor-labels'
 import TabBarCreateEntry from './TabBarCreateEntry'
+import { TabFolderGroupChip } from './TabFolderGroupChip'
 import { ShellIcon } from './shell-icons'
 import { resolveWindowsShellLaunchTarget } from './windows-shell-launch'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
@@ -65,6 +67,7 @@ type GitStatusEntries = ReturnType<typeof useAppStore.getState>['gitStatusByWork
 const EMPTY_GIT_STATUS_ENTRIES: GitStatusEntries = []
 const EMPTY_AGENT_CMD_OVERRIDES: Partial<Record<TuiAgent, string>> = {}
 const EMPTY_UNIFIED_TABS: readonly Tab[] = []
+const EMPTY_TAB_FOLDER_GROUPS: readonly TabFolderGroup[] = []
 
 type TabBarProps = {
   tabs: (TerminalTab & { unifiedTabId?: string })[]
@@ -120,6 +123,7 @@ type TabItem =
       id: string
       unifiedTabId: string
       isPinned: boolean
+      color: string | null
       data: TerminalTab & { unifiedTabId?: string }
     }
   | {
@@ -127,6 +131,7 @@ type TabItem =
       id: string
       unifiedTabId: string
       isPinned: boolean
+      color: string | null
       data: OpenFile & { tabId?: string }
     }
   | {
@@ -134,6 +139,7 @@ type TabItem =
       id: string
       unifiedTabId: string
       isPinned: boolean
+      color: string | null
       data: BrowserTabState & { tabId?: string }
     }
   | {
@@ -141,8 +147,11 @@ type TabItem =
       id: string
       unifiedTabId: string
       isPinned: boolean
+      color: string | null
       data: Tab
     }
+
+type TabRenderEntry = { type: 'folder'; group: TabFolderGroup; memberCount: number } | TabItem
 
 function getTabDragLabel(item: TabItem, generatedTitlesEnabled: boolean): string {
   if (item.type === 'terminal') {
@@ -155,6 +164,19 @@ function getTabDragLabel(item: TabItem, generatedTitlesEnabled: boolean): string
     return item.data.label || 'Mobile Emulator'
   }
   return getEditorDisplayLabel(item.data)
+}
+
+// A tab's folder group color (if grouped) wins over its own color; otherwise fall
+// back to the tab's color, then any content-specific fallback (e.g. terminal color).
+function resolveTabFolderColor(
+  unifiedTab: Tab | undefined,
+  folderGroupById: Map<string, TabFolderGroup>,
+  fallbackColor?: string | null
+): string | null {
+  if (unifiedTab?.folderGroupId) {
+    return folderGroupById.get(unifiedTab.folderGroupId)?.color ?? unifiedTab.color ?? null
+  }
+  return unifiedTab?.color ?? fallbackColor ?? null
 }
 
 function createUnifiedTabLookup(tabs: readonly Tab[], groupId: string): Map<string, Tab> {
@@ -224,8 +246,19 @@ function TabBarInner({
     (s) => s.gitStatusByWorktree[worktreeId] ?? EMPTY_GIT_STATUS_ENTRIES
   )
   const unifiedTabs = useAppStore((s) => s.unifiedTabsByWorktree[worktreeId] ?? EMPTY_UNIFIED_TABS)
+  const tabFolderGroups = useAppStore(
+    (s) => s.tabFolderGroupsByWorktree?.[worktreeId] ?? EMPTY_TAB_FOLDER_GROUPS
+  )
   const pinTab = useAppStore((s) => s.pinTab)
   const unpinTab = useAppStore((s) => s.unpinTab)
+  const createTabFolderGroup = useAppStore((s) => s.createTabFolderGroup)
+  const addTabsToFolderGroup = useAppStore((s) => s.addTabsToFolderGroup)
+  const moveTabOutOfFolderGroup = useAppStore((s) => s.moveTabOutOfFolderGroup)
+  const setTabFolderGroupName = useAppStore((s) => s.setTabFolderGroupName)
+  const setTabFolderGroupColor = useAppStore((s) => s.setTabFolderGroupColor)
+  const setTabFolderGroupCollapsed = useAppStore((s) => s.setTabFolderGroupCollapsed)
+  const ungroupTabFolderGroup = useAppStore((s) => s.ungroupTabFolderGroup)
+  const closeTabsInFolderGroup = useAppStore((s) => s.closeTabsInFolderGroup)
   const activeGroupIdForWorktree = useAppStore((s) => s.activeGroupIdByWorktree[worktreeId])
   const defaultWindowsShell = useAppStore(
     (s) => s.settings?.terminalWindowsShell ?? 'powershell.exe'
@@ -293,6 +326,19 @@ function TabBarInner({
   const unifiedTabByVisibleId = useMemo(
     () => createUnifiedTabLookup(unifiedTabs, resolvedGroupId),
     [resolvedGroupId, unifiedTabs]
+  )
+  const folderGroupById = useMemo(() => {
+    const lookup = new Map<string, TabFolderGroup>()
+    for (const group of tabFolderGroups) {
+      if (group.splitGroupId === resolvedGroupId) {
+        lookup.set(group.id, group)
+      }
+    }
+    return lookup
+  }, [resolvedGroupId, tabFolderGroups])
+  const folderGroupsForCurrentSplit = useMemo(
+    () => [...folderGroupById.values()],
+    [folderGroupById]
   )
   const workspaceHasSimulatorTab = useMemo(
     () => unifiedTabs.some((tab) => tab.contentType === 'simulator'),
@@ -701,6 +747,7 @@ function TabBarInner({
           id,
           unifiedTabId: terminal.unifiedTabId ?? unifiedTab?.id ?? terminal.id,
           isPinned: unifiedTab?.isPinned === true,
+          color: resolveTabFolderColor(unifiedTab, folderGroupById, terminal.color),
           data: terminal
         })
         continue
@@ -713,6 +760,7 @@ function TabBarInner({
           id,
           unifiedTabId: file.tabId ?? unifiedTab?.id ?? file.id,
           isPinned: unifiedTab?.isPinned === true,
+          color: resolveTabFolderColor(unifiedTab, folderGroupById),
           data: file
         })
         continue
@@ -725,6 +773,7 @@ function TabBarInner({
           id,
           unifiedTabId: browserTab.tabId ?? unifiedTab?.id ?? browserTab.id,
           isPinned: unifiedTab?.isPinned === true,
+          color: resolveTabFolderColor(unifiedTab, folderGroupById),
           data: browserTab
         })
         continue
@@ -736,6 +785,7 @@ function TabBarInner({
           id,
           unifiedTabId: simUnified.id,
           isPinned: simUnified.isPinned === true,
+          color: resolveTabFolderColor(simUnified, folderGroupById),
           data: simUnified
         })
         continue
@@ -751,23 +801,52 @@ function TabBarInner({
     terminalMap,
     editorMap,
     browserMap,
+    folderGroupById,
     unifiedTabByVisibleId
   ])
 
-  const sortableIds = useMemo(() => orderedItems.map((item) => item.id), [orderedItems])
+  const visibleEntries = useMemo<TabRenderEntry[]>(() => {
+    const itemByUnifiedId = new Map(orderedItems.map((item) => [item.unifiedTabId, item]))
+    const seenFolderGroups = new Set<string>()
+    const entries: TabRenderEntry[] = []
+
+    for (const item of orderedItems) {
+      const unifiedTab = unifiedTabByVisibleId.get(item.unifiedTabId)
+      const folderGroupId = unifiedTab?.folderGroupId ?? null
+      const folderGroup = folderGroupId ? folderGroupById.get(folderGroupId) : null
+      if (!folderGroup) {
+        entries.push(item)
+        continue
+      }
+      if (seenFolderGroups.has(folderGroup.id)) {
+        continue
+      }
+      seenFolderGroups.add(folderGroup.id)
+      const memberItems = folderGroup.tabOrder
+        .map((tabId) => itemByUnifiedId.get(tabId))
+        .filter((member): member is TabItem => member !== undefined)
+      entries.push({ type: 'folder', group: folderGroup, memberCount: memberItems.length })
+      if (!folderGroup.collapsed) {
+        entries.push(...memberItems)
+      }
+    }
+
+    return entries
+  }, [folderGroupById, orderedItems, unifiedTabByVisibleId])
+  const sortableIds = useMemo(
+    () => visibleEntries.flatMap((entry) => (entry.type === 'folder' ? [] : [entry.id])),
+    [visibleEntries]
+  )
 
   const activeIndicator =
     hoveredTabInsertion?.groupId === resolvedGroupId ? hoveredTabInsertion : null
   const dropIndicatorByVisibleId = useMemo(() => {
     const indicators = new Map<string, DropIndicator>()
-    for (const edge of resolveTabIndicatorEdges(
-      orderedItems.map((item) => item.id),
-      activeIndicator
-    )) {
+    for (const edge of resolveTabIndicatorEdges(sortableIds, activeIndicator)) {
       indicators.set(edge.visibleTabId, edge.side)
     }
     return indicators
-  }, [activeIndicator, orderedItems])
+  }, [activeIndicator, sortableIds])
 
   const togglePinned = (item: TabItem): void => {
     if (item.isPinned) {
@@ -910,17 +989,38 @@ function TabBarInner({
           className="terminal-tab-strip flex items-stretch overflow-x-auto overflow-y-hidden border-r border-border"
           style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
         >
-          {orderedItems.map((item, index) => {
+          {visibleEntries.map((entry, index) => {
+            if (entry.type === 'folder') {
+              const folder = entry.group
+              return (
+                <TabFolderGroupChip
+                  key={folder.id}
+                  group={folder}
+                  memberCount={entry.memberCount}
+                  onToggleCollapsed={() => setTabFolderGroupCollapsed(folder.id, !folder.collapsed)}
+                  onRename={(name) => setTabFolderGroupName(folder.id, name)}
+                  onChangeColor={(color) => setTabFolderGroupColor(folder.id, color)}
+                  onUngroup={() => ungroupTabFolderGroup(folder.id)}
+                  onCloseAll={() => {
+                    closeTabsInFolderGroup(folder.id)
+                  }}
+                />
+              )
+            }
+            const item = entry
+            const currentFolderGroupId =
+              unifiedTabByVisibleId.get(item.unifiedTabId)?.folderGroupId ?? null
             const dragData: TabDragItemData = {
               kind: 'tab',
               worktreeId,
               groupId: resolvedGroupId,
+              folderGroupId: currentFolderGroupId,
               unifiedTabId: item.unifiedTabId,
               visibleTabId: item.id,
               tabType: item.type,
               label: getTabDragLabel(item, generatedTabTitlesEnabled),
               iconPath: item.type === 'editor' ? item.data.filePath : undefined,
-              color: item.type === 'terminal' ? (item.data.color ?? null) : null
+              color: item.color
             }
             if (item.type === 'terminal') {
               const terminalTab = {
@@ -929,12 +1029,14 @@ function TabBarInner({
                   item.data,
                   generatedTabTitlesEnabled,
                   item.data.title
-                )
+                ),
+                color: item.color
               }
               return (
                 <SortableTab
                   key={item.id}
                   tab={terminalTab}
+                  unifiedTabId={item.unifiedTabId}
                   tabCount={orderedItems.length}
                   hasTabsToRight={index < orderedItems.length - 1}
                   isActive={
@@ -942,6 +1044,8 @@ function TabBarInner({
                     item.id === activeTabId
                   }
                   isPinned={item.isPinned}
+                  currentFolderGroupId={currentFolderGroupId}
+                  folderGroups={folderGroupsForCurrentSplit}
                   isExpanded={expandedPaneByTabId[item.id] === true}
                   onActivate={onActivate}
                   onClose={onClose}
@@ -950,6 +1054,11 @@ function TabBarInner({
                   onSetCustomTitle={onSetCustomTitle}
                   onSetTabColor={onSetTabColor}
                   onTogglePin={() => togglePinned(item)}
+                  onCreateGroup={(tabId) => createTabFolderGroup([tabId])}
+                  onAddToGroup={(folderGroupId, tabId) =>
+                    addTabsToFolderGroup(folderGroupId, [tabId])
+                  }
+                  onRemoveFromGroup={(tabId) => moveTabOutOfFolderGroup(tabId)}
                   onToggleExpand={onTogglePaneExpand}
                   onSplitGroup={(direction, sourceVisibleTabId) =>
                     onCreateSplitGroup?.(direction, sourceVisibleTabId)
@@ -965,6 +1074,10 @@ function TabBarInner({
                 <BrowserTab
                   key={item.id}
                   tab={item.data}
+                  unifiedTabId={item.unifiedTabId}
+                  color={item.color}
+                  currentFolderGroupId={currentFolderGroupId}
+                  folderGroups={folderGroupsForCurrentSplit}
                   isActive={activeTabType === 'browser' && activeBrowserTabId === item.id}
                   isPinned={item.isPinned}
                   hasTabsToRight={index < orderedItems.length - 1}
@@ -976,6 +1089,11 @@ function TabBarInner({
                   }
                   onDuplicate={() => onDuplicateBrowserTab?.(item.id)}
                   onTogglePin={() => togglePinned(item)}
+                  onCreateGroup={(tabId) => createTabFolderGroup([tabId])}
+                  onAddToGroup={(folderGroupId, tabId) =>
+                    addTabsToFolderGroup(folderGroupId, [tabId])
+                  }
+                  onRemoveFromGroup={(tabId) => moveTabOutOfFolderGroup(tabId)}
                   dragData={dragData}
                   dropIndicator={dropIndicatorByVisibleId.get(item.id) ?? null}
                   includeTopTabBorder={includeTopTabBorder}
@@ -999,6 +1117,9 @@ function TabBarInner({
                 <EditorFileTab
                   key={item.id}
                   file={simFile}
+                  color={item.color}
+                  currentFolderGroupId={currentFolderGroupId}
+                  folderGroups={folderGroupsForCurrentSplit}
                   isActive={activeTabType === 'simulator' && item.id === activeSimulatorTabId}
                   isPinned={item.isPinned}
                   hasTabsToRight={index < orderedItems.length - 1}
@@ -1009,6 +1130,11 @@ function TabBarInner({
                   onCloseAll={() => onCloseAllFiles?.()}
                   onMakePermanent={() => {}}
                   onTogglePin={() => togglePinned(item)}
+                  onCreateGroup={(tabId) => createTabFolderGroup([tabId])}
+                  onAddToGroup={(folderGroupId, tabId) =>
+                    addTabsToFolderGroup(folderGroupId, [tabId])
+                  }
+                  onRemoveFromGroup={(tabId) => moveTabOutOfFolderGroup(tabId)}
                   onSplitGroup={(direction, sourceVisibleTabId) =>
                     onCreateSplitGroup?.(direction, sourceVisibleTabId)
                   }
@@ -1022,6 +1148,9 @@ function TabBarInner({
               <EditorFileTab
                 key={item.id}
                 file={item.data}
+                color={item.color}
+                currentFolderGroupId={currentFolderGroupId}
+                folderGroups={folderGroupsForCurrentSplit}
                 isActive={
                   (activeTabType === 'editor' || activeTabType === 'simulator') &&
                   activeFileId === item.id
@@ -1035,6 +1164,11 @@ function TabBarInner({
                 onCloseAll={() => onCloseAllFiles?.()}
                 onMakePermanent={() => onMakePreviewFilePermanent?.(item.data.id, item.data.tabId)}
                 onTogglePin={() => togglePinned(item)}
+                onCreateGroup={(tabId) => createTabFolderGroup([tabId])}
+                onAddToGroup={(folderGroupId, tabId) =>
+                  addTabsToFolderGroup(folderGroupId, [tabId])
+                }
+                onRemoveFromGroup={(tabId) => moveTabOutOfFolderGroup(tabId)}
                 onSplitGroup={(direction, sourceVisibleTabId) =>
                   onCreateSplitGroup?.(direction, sourceVisibleTabId)
                 }

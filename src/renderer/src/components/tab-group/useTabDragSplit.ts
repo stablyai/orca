@@ -38,6 +38,7 @@ export type TabDragItemData = {
   kind: 'tab'
   worktreeId: string
   groupId: string
+  folderGroupId?: string | null
   unifiedTabId: string
   visibleTabId: string
   tabType: 'terminal' | 'editor' | 'browser' | 'simulator'
@@ -59,6 +60,13 @@ export type TabPaneDropData = {
   kind: 'pane-body'
   worktreeId: string
   groupId: string
+}
+
+export type TabFolderGroupDropData = {
+  kind: 'folder-group'
+  worktreeId: string
+  groupId: string
+  folderGroupId: string
 }
 
 export type HoveredTabDropTarget = {
@@ -119,6 +127,14 @@ function isTabDragData(value: unknown): value is TabDragItemData {
 function isPaneDropData(value: unknown): value is TabPaneDropData {
   return (
     Boolean(value) && typeof value === 'object' && (value as TabPaneDropData).kind === 'pane-body'
+  )
+}
+
+function isFolderGroupDropData(value: unknown): value is TabFolderGroupDropData {
+  return (
+    Boolean(value) &&
+    typeof value === 'object' &&
+    (value as TabFolderGroupDropData).kind === 'folder-group'
   )
 }
 
@@ -184,6 +200,10 @@ export function getTabPaneBodyDroppableId(groupId: string): UniqueIdentifier {
   return `tab-group-pane-body:${groupId}`
 }
 
+export function getTabFolderGroupDroppableId(folderGroupId: string): UniqueIdentifier {
+  return `tab-folder-group:${folderGroupId}`
+}
+
 export function useTabDragSplit({
   worktreeId,
   enabled = true
@@ -207,6 +227,8 @@ export function useTabDragSplit({
   setDragRootNode: (node: HTMLDivElement | null) => void
 } {
   const reorderUnifiedTabs = useAppStore((state) => state.reorderUnifiedTabs)
+  const addTabsToFolderGroup = useAppStore((state) => state.addTabsToFolderGroup)
+  const moveTabOutOfFolderGroup = useAppStore((state) => state.moveTabOutOfFolderGroup)
   const dropUnifiedTab = useAppStore((state) => state.dropUnifiedTab)
   const [activeDrag, setActiveDrag] = useState<TabDragItemData | null>(null)
   const [hoveredDropTarget, setHoveredDropTarget] = useState<HoveredTabDropTarget | null>(null)
@@ -364,6 +386,23 @@ export function useTabDragSplit({
         const insertion = resolveTabInsertion(event, isTabDragData, getDragCenter)
         const overIndex = targetGroup.tabOrder.indexOf(overData.unifiedTabId)
         const rawInsertIndex = overIndex + (insertion?.side === 'right' ? 1 : 0)
+        const resolveFolderInsertIndex = (folderGroupId: string): number | null => {
+          const folderGroup = (state.tabFolderGroupsByWorktree[worktreeId] ?? []).find(
+            (group) => group.id === folderGroupId
+          )
+          if (!folderGroup) {
+            return null
+          }
+          const overFolderIndex = folderGroup.tabOrder.indexOf(overData.unifiedTabId)
+          if (overFolderIndex === -1) {
+            return folderGroup.tabOrder.length
+          }
+          const rawFolderInsertIndex = overFolderIndex + (insertion?.side === 'right' ? 1 : 0)
+          const oldFolderIndex = folderGroup.tabOrder.indexOf(activeData.unifiedTabId)
+          return oldFolderIndex !== -1 && oldFolderIndex < rawFolderInsertIndex
+            ? rawFolderInsertIndex - 1
+            : rawFolderInsertIndex
+        }
 
         if (activeData.groupId === overData.groupId) {
           const oldIndex = targetGroup.tabOrder.indexOf(activeData.unifiedTabId)
@@ -383,6 +422,21 @@ export function useTabDragSplit({
               tabOrder: nextOrder
             })
           }
+          if (overData.folderGroupId && overData.folderGroupId !== activeData.folderGroupId) {
+            addTabsToFolderGroup(overData.folderGroupId, [activeData.unifiedTabId], {
+              index: resolveFolderInsertIndex(overData.folderGroupId) ?? undefined
+            })
+          } else if (overData.folderGroupId) {
+            // Reorder within the same folder group.
+            const folderInsertIndex = resolveFolderInsertIndex(overData.folderGroupId)
+            if (folderInsertIndex !== null) {
+              addTabsToFolderGroup(overData.folderGroupId, [activeData.unifiedTabId], {
+                index: folderInsertIndex
+              })
+            }
+          } else if (activeData.folderGroupId) {
+            moveTabOutOfFolderGroup(activeData.unifiedTabId, { index: Math.max(0, nextIndex) })
+          }
         } else {
           const index = overIndex === -1 ? targetGroup.tabOrder.length : rawInsertIndex
           const moved = dropUnifiedTab(activeData.unifiedTabId, {
@@ -400,6 +454,30 @@ export function useTabDragSplit({
           }
         }
 
+        clearDragState()
+        return
+      }
+
+      if (isFolderGroupDropData(overData)) {
+        if (overData.worktreeId !== worktreeId || activeData.worktreeId !== overData.worktreeId) {
+          clearDragState()
+          return
+        }
+
+        if (activeData.groupId !== overData.groupId) {
+          const moved = dropUnifiedTab(activeData.unifiedTabId, {
+            groupId: overData.groupId
+          })
+          if (moved) {
+            mirrorWebRuntimeTabMove({
+              kind: 'move-to-group',
+              worktreeId,
+              tabId: activeData.unifiedTabId,
+              targetGroupId: overData.groupId
+            })
+          }
+        }
+        addTabsToFolderGroup(overData.folderGroupId, [activeData.unifiedTabId])
         clearDragState()
         return
       }
@@ -455,7 +533,14 @@ export function useTabDragSplit({
 
       clearDragState()
     },
-    [clearDragState, dropUnifiedTab, reorderUnifiedTabs, worktreeId]
+    [
+      addTabsToFolderGroup,
+      clearDragState,
+      dropUnifiedTab,
+      moveTabOutOfFolderGroup,
+      reorderUnifiedTabs,
+      worktreeId
+    ]
   )
 
   // Why: dnd-kit fires onDragCancel (not onDragEnd) when the user presses

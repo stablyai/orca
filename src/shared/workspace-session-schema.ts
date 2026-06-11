@@ -145,6 +145,7 @@ const tabSchema = z.object({
   id: z.string(),
   entityId: z.string(),
   groupId: z.string(),
+  folderGroupId: z.string().nullable().optional(),
   worktreeId: z.string(),
   contentType: tabContentTypeSchema,
   label: z.string(),
@@ -164,6 +165,18 @@ const tabGroupSchema = z.object({
   activeTabId: z.string().nullable(),
   tabOrder: z.array(z.string()),
   recentTabIds: z.array(z.string()).optional()
+})
+
+const tabFolderGroupSchema = z.object({
+  id: z.string(),
+  worktreeId: z.string(),
+  splitGroupId: z.string(),
+  name: z.string(),
+  color: z.string(),
+  collapsed: z.boolean(),
+  tabOrder: z.array(z.string()),
+  sortOrder: z.number(),
+  createdAt: z.number()
 })
 
 const tabGroupSplitDirectionSchema = z.enum(['horizontal', 'vertical'])
@@ -285,6 +298,7 @@ export const workspaceSessionStateSchema: z.ZodType<WorkspaceSessionState> = z.o
   unifiedTabs: z.record(z.string(), z.array(tabSchema)).optional(),
   tabGroups: z.record(z.string(), z.array(tabGroupSchema)).optional(),
   tabGroupLayouts: z.record(z.string(), tabGroupLayoutNodeSchema).optional(),
+  tabFolderGroups: z.record(z.string(), z.array(tabFolderGroupSchema)).optional(),
   activeGroupIdByWorktree: z.record(z.string(), z.string()).optional(),
   activeConnectionIdsAtShutdown: z.array(z.string()).optional(),
   remoteSessionIdsByTabId: z.record(terminalTabIdSchema, z.string()).optional(),

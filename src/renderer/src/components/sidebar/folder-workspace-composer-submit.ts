@@ -67,7 +67,9 @@ export async function submitFolderWorkspaceCreate({
     return
   }
 
-  const linkedPromptContext = getLinkedWorkItemPromptContext(linkedWorkItem)
+  const linkedPromptContext = getLinkedWorkItemPromptContext(linkedWorkItem, {
+    cliAvailable: false
+  })
   const startupPrompt = buildAgentPromptWithContext(
     note,
     [],

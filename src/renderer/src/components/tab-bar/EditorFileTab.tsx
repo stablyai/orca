@@ -11,7 +11,7 @@ import { getFileTypeIcon } from '@/lib/file-type-icons'
 import { useRepoById, useWorktreeById } from '@/store/selectors'
 import { useAppStore } from '@/store'
 import { STATUS_COLORS, STATUS_LABELS } from '../right-sidebar/status-display'
-import type { GitFileStatus } from '../../../../shared/types'
+import type { GitFileStatus, TabFolderGroup } from '../../../../shared/types'
 import type { OpenFile } from '../../store/slices/editor'
 import { getUntitledFileRoot } from '@/components/editor/untitled-file-rename-path'
 import { preventMiddleButtonDefault } from './middle-button-default-guard'
@@ -26,10 +26,18 @@ import {
 } from './drop-indicator'
 import { canOpenMarkdownPreview } from '@/components/editor/markdown-preview-controls'
 import { EditorFileTabContextMenu } from './EditorFileTabContextMenu'
+import {
+  EMPTY_FOLDER_GROUPS,
+  noopAddToGroupAction,
+  noopTabGroupAction
+} from './tab-folder-group-defaults'
 import { translate } from '@/i18n/i18n'
 
 export default function EditorFileTab({
   file,
+  color,
+  currentFolderGroupId,
+  folderGroups = EMPTY_FOLDER_GROUPS,
   isActive,
   isPinned,
   hasTabsToRight,
@@ -40,12 +48,18 @@ export default function EditorFileTab({
   onCloseAll,
   onMakePermanent,
   onTogglePin,
+  onCreateGroup = noopTabGroupAction,
+  onAddToGroup = noopAddToGroupAction,
+  onRemoveFromGroup = noopTabGroupAction,
   onSplitGroup,
   dragData,
   dropIndicator,
   includeTopTabBorder = true
 }: {
   file: OpenFile & { tabId?: string }
+  color?: string | null
+  currentFolderGroupId?: string | null
+  folderGroups?: readonly TabFolderGroup[]
   isActive: boolean
   isPinned: boolean
   hasTabsToRight: boolean
@@ -56,6 +70,9 @@ export default function EditorFileTab({
   onCloseAll: () => void
   onMakePermanent?: () => void
   onTogglePin: () => void
+  onCreateGroup?: (tabId: string) => void
+  onAddToGroup?: (folderGroupId: string, tabId: string) => void
+  onRemoveFromGroup?: (tabId: string) => void
   onSplitGroup: (direction: 'left' | 'right' | 'up' | 'down', sourceVisibleTabId: string) => void
   dragData: TabDragItemData
   dropIndicator?: DropIndicator
@@ -323,6 +340,9 @@ export default function EditorFileTab({
           </span>
         )}
       </span>
+      {color && !isRenaming && (
+        <span className="mr-1.5 size-2 shrink-0 rounded-full" style={{ backgroundColor: color }} />
+      )}
       {/* Dirty dot and close button share the same slot to prevent tab width shift during auto-save.
          When dirty: dot is shown, close button appears on hover (replacing the dot).
          When clean: close button is shown normally (visible on active tab, on hover for others). */}
@@ -383,6 +403,8 @@ export default function EditorFileTab({
         menuPoint={menuPoint}
         file={file}
         isPinned={isPinned}
+        currentFolderGroupId={currentFolderGroupId}
+        folderGroups={folderGroups}
         isRenaming={isRenaming}
         hasTabsToRight={hasTabsToRight}
         canRename={canRename}
@@ -394,6 +416,9 @@ export default function EditorFileTab({
         onActivate={onActivate}
         onOpenRenameInput={openRenameInput}
         onTogglePin={onTogglePin}
+        onCreateGroup={onCreateGroup}
+        onAddToGroup={onAddToGroup}
+        onRemoveFromGroup={onRemoveFromGroup}
         onClose={onClose}
         onCloseAll={onCloseAll}
         onCloseToRight={onCloseToRight}

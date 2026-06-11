@@ -51,6 +51,7 @@ export type WorkspaceSessionSnapshot = Pick<
   | 'browserUrlHistory'
   | 'unifiedTabsByWorktree'
   | 'groupsByWorktree'
+  | 'tabFolderGroupsByWorktree'
   | 'layoutByWorktree'
   | 'activeGroupIdByWorktree'
   | 'sshConnectionStates'
@@ -89,6 +90,7 @@ export const SESSION_RELEVANT_FIELDS = [
   'browserUrlHistory',
   'unifiedTabsByWorktree',
   'groupsByWorktree',
+  'tabFolderGroupsByWorktree',
   'layoutByWorktree',
   'activeGroupIdByWorktree',
   'sshConnectionStates',
