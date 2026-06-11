@@ -100,6 +100,12 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
     expectedProcess: 'opencode',
     promptInjectionMode: 'flag-prompt'
   },
+  mimo: {
+    detectCmd: 'mimo',
+    launchCmd: 'mimo',
+    expectedProcess: 'mimo',
+    promptInjectionMode: 'flag-prompt'
+  },
   pi: {
     detectCmd: 'pi',
     launchCmd: 'pi',

@@ -20,6 +20,7 @@ const TITLE_LABEL_TO_AGENT: Partial<Record<string, TuiAgent>> = {
   Grok: 'grok',
   Antigravity: 'antigravity',
   OpenCode: 'opencode',
+  Mimo: 'mimo',
   Aider: 'aider',
   Cursor: 'cursor',
   Droid: 'droid',

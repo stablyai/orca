@@ -53,6 +53,10 @@ const OPENCODE_STORAGE_DIR = join(
   process.env.OPENCODE_CONFIG_DIR?.trim() || join(homedir(), '.local', 'share', 'opencode'),
   'storage'
 )
+const MIMO_STORAGE_DIR = join(
+  process.env.MIMO_CONFIG_DIR?.trim() || join(homedir(), '.local', 'share', 'mimo'),
+  'storage'
+)
 const HERMES_SESSIONS_DIR = join(homedir(), '.hermes', 'sessions')
 const ROVO_SESSIONS_DIR = join(homedir(), '.rovodev', 'sessions')
 const OPENCLAW_STATE_DIR = process.env.OPENCLAW_STATE_DIR?.trim() || join(homedir(), '.openclaw')
@@ -118,6 +122,13 @@ export async function scanAiVaultSessions(
       rootDir: join(options.opencodeStorageDir ?? OPENCODE_STORAGE_DIR, 'session'),
       limit: limitPerAgent,
       agent: 'opencode',
+      issues,
+      extensions: ['.json']
+    }),
+    discoverFiles({
+      rootDir: join(options.mimoStorageDir ?? MIMO_STORAGE_DIR, 'session'),
+      limit: limitPerAgent,
+      agent: 'mimo',
       issues,
       extensions: ['.json']
     }),
@@ -274,6 +285,8 @@ async function parseAgentSessionFile(
       return parseCursorSessionFile(candidate.file, platform)
     case 'opencode':
       return parseOpenCodeSessionFile(candidate.file, platform)
+    case 'mimo':
+      return parseOpenCodeSessionFile(candidate.file, platform, 'mimo')
     case 'hermes':
       return parseHermesSessionFile(candidate.file, platform)
     case 'rovo':

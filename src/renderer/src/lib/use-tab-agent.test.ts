@@ -62,6 +62,21 @@ describe('resolveTabAgentFromSignals', () => {
     ).toBe('openclaude')
   })
 
+  it('maps Mimo titles to the Mimo tab icon', () => {
+    expect(
+      resolveTabAgentFromSignals({
+        foreground: undefined,
+        hasObservedAgentSignal: false,
+        shellForegroundAfterAgentSignal: false,
+        isRemote: false,
+        title: '⠋ Mimo',
+        hookAgent: null,
+        hasCompletedHook: false,
+        launchAgent: 'opencode'
+      })
+    ).toBe('mimo')
+  })
+
   it("uses completed OpenClaude hook identity over Claude's generic task-title heuristic", () => {
     expect(
       resolveTabAgentFromSignals({

@@ -1,5 +1,15 @@
 import { describe, expect, it } from 'vitest'
-import { normalizeDisabledTuiAgents, pickTuiAgent } from './tui-agent-selection'
+import {
+  normalizeDisabledTuiAgents,
+  pickTuiAgent,
+  TUI_AGENT_AUTO_PICK_ORDER
+} from './tui-agent-selection'
+
+describe('TUI_AGENT_AUTO_PICK_ORDER', () => {
+  it('includes mimo', () => {
+    expect(TUI_AGENT_AUTO_PICK_ORDER).toContain('mimo')
+  })
+})
 
 describe('pickTuiAgent', () => {
   it('uses an installed preferred agent', () => {

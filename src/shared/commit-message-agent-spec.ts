@@ -367,6 +367,38 @@ export const COMMIT_MESSAGE_AGENT_SPECS: Partial<Record<TuiAgent, CommitMessageA
     ],
     defaultModelId: 'opencode/deepseek-v4-flash-free'
   },
+  mimo: {
+    id: 'mimo',
+    label: 'Mimo',
+    binary: 'mimo',
+    // Why: Mimo is treated as an OpenCode-compatible fork, so stdin avoids the
+    // same cross-platform argv limits for large Source Control AI diffs.
+    promptDelivery: 'stdin',
+    buildArgs: ({ model, thinkingLevel }) => [
+      'run',
+      '--model',
+      model,
+      '--agent',
+      'build',
+      '--format',
+      'default',
+      ...(thinkingLevel ? ['--variant', thinkingLevel] : [])
+    ],
+    modelSource: 'dynamic',
+    modelDiscovery: { binary: 'mimo', args: ['models'], parse: parseLineModels },
+    models: [
+      {
+        id: 'opencode/deepseek-v4-flash-free',
+        label: 'OpenCode DeepSeek V4 Flash Free'
+      },
+      {
+        id: 'opencode/gpt-5.4-mini',
+        label: 'OpenCode GPT 5.4 Mini',
+        ...withOpenAiThinking('gpt-5.4-mini')
+      }
+    ],
+    defaultModelId: 'opencode/deepseek-v4-flash-free'
+  },
   pi: {
     id: 'pi',
     label: 'Pi',

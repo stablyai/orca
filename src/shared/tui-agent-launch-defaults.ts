@@ -7,6 +7,7 @@ export const DEFAULT_TUI_AGENT_ARGS: Partial<Record<TuiAgent, string>> = {
   openclaude: '--dangerously-skip-permissions',
   codex: '--dangerously-bypass-approvals-and-sandbox',
   opencode: '--dangerously-skip-permissions',
+  mimo: '--dangerously-skip-permissions',
   gemini: '--yolo',
   antigravity: '--dangerously-skip-permissions',
   aider: '--yes-always',

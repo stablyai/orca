@@ -29,6 +29,7 @@ describe('COMMIT_MESSAGE_AGENT_SPECS', () => {
       'copilot',
       'cursor',
       'kimi',
+      'mimo',
       'opencode',
       'pi'
     ])
@@ -335,6 +336,60 @@ describe('buildArgs (OpenCode)', () => {
   const spec = getCommitMessageAgentSpec('opencode')!
 
   it('runs `opencode run` without passing the prompt via argv', () => {
+    const prompt = `PROMPT ${'x'.repeat(1024)}`
+    const args = spec.buildArgs({
+      prompt,
+      model: 'opencode/deepseek-v4-flash-free'
+    })
+
+    expect(args).toEqual([
+      'run',
+      '--model',
+      'opencode/deepseek-v4-flash-free',
+      '--agent',
+      'build',
+      '--format',
+      'default'
+    ])
+    expect(args).not.toContain(prompt)
+    expect(args).not.toContain('')
+    expect(spec.promptDelivery).toBe('stdin')
+  })
+
+  it('emits --variant <level> when thinking level is supplied', () => {
+    const args = spec.buildArgs({
+      prompt: 'PROMPT',
+      model: 'opencode/gpt-5.4-mini',
+      thinkingLevel: 'high'
+    })
+
+    expect(args).toEqual([
+      'run',
+      '--model',
+      'opencode/gpt-5.4-mini',
+      '--agent',
+      'build',
+      '--format',
+      'default',
+      '--variant',
+      'high'
+    ])
+  })
+
+  it('omits --variant when no thinking level is supplied', () => {
+    const args = spec.buildArgs({
+      prompt: 'PROMPT',
+      model: 'opencode/gpt-5.4-mini'
+    })
+
+    expect(args).not.toContain('--variant')
+  })
+})
+
+describe('buildArgs (Mimo)', () => {
+  const spec = getCommitMessageAgentSpec('mimo')!
+
+  it('runs `mimo run` without passing the prompt via argv', () => {
     const prompt = `PROMPT ${'x'.repeat(1024)}`
     const args = spec.buildArgs({
       prompt,

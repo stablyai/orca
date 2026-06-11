@@ -30,9 +30,11 @@ function prepareShellConfigDirEnv(agentId: string): { ok: true; env?: NodeJS.Pro
   const configVar =
     agentId === 'opencode'
       ? 'OPENCODE_CONFIG_DIR'
-      : agentId === 'pi' || agentId === 'omp'
-        ? 'PI_CODING_AGENT_DIR'
-        : null
+      : agentId === 'mimo'
+        ? 'MIMO_CONFIG_DIR'
+        : agentId === 'pi' || agentId === 'omp'
+          ? 'PI_CODING_AGENT_DIR'
+          : null
   if (!configVar) {
     return null
   }
@@ -43,11 +45,13 @@ function prepareShellConfigDirEnv(agentId: string): { ok: true; env?: NodeJS.Pro
   const sourceVar =
     agentId === 'opencode'
       ? 'ORCA_OPENCODE_SOURCE_CONFIG_DIR'
-      : agentId === 'pi'
-        ? 'ORCA_PI_SOURCE_AGENT_DIR'
-        : agentId === 'omp'
-          ? 'ORCA_OMP_SOURCE_AGENT_DIR'
-          : undefined
+      : agentId === 'mimo'
+        ? 'ORCA_MIMO_SOURCE_CONFIG_DIR'
+        : agentId === 'pi'
+          ? 'ORCA_PI_SOURCE_AGENT_DIR'
+          : agentId === 'omp'
+            ? 'ORCA_OMP_SOURCE_AGENT_DIR'
+            : undefined
 
   const value = readInheritedOrShellEnvVar(configVar, sourceVar)
   if (!value) {

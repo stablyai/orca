@@ -75,6 +75,14 @@ export const getAgentCatalog = createLocalizedCatalog((): AgentCatalogEntry[] =>
     homepageUrl: 'https://opencode.ai/docs/cli/'
   },
   {
+    id: 'mimo',
+    label: translate('auto.lib.agent.catalog.mimo', 'Mimo'),
+    cmd: 'mimo',
+    // Why: Mimo is an OpenCode-compatible fork and does not yet have a known
+    // public install URL; keep the catalog link useful until official docs exist.
+    homepageUrl: 'https://opencode.ai/docs/cli/'
+  },
+  {
     id: 'pi',
     label: translate('auto.lib.agent.catalog.302934c5d9', 'Pi'),
     cmd: 'pi',

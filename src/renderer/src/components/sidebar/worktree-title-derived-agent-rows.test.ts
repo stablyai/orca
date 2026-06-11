@@ -154,4 +154,20 @@ describe('buildTitleDerivedAgentRows', () => {
 
     expect(rows).toHaveLength(0)
   })
+
+  it('adds title-derived rows for Mimo panes', () => {
+    const rows = buildWorktreeAgentRows({
+      tabs: [makeTab('tab-1')],
+      entries: [],
+      retained: [],
+      runtimePaneTitlesByTabId: {
+        'tab-1': { 1: '⠋ Mimo' }
+      },
+      ptyIdsByTabId: { 'tab-1': ['pty-1'] },
+      terminalLayoutsByTabId: { 'tab-1': makeSingleLayout(LEAF_ID_1) },
+      now: 2000
+    })
+
+    expect(rows.map((row) => [row.agentType, row.state])).toEqual([['mimo', 'working']])
+  })
 })

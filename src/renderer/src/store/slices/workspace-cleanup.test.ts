@@ -327,6 +327,32 @@ describe('workspace cleanup viewed rows', () => {
     expect(candidate.blockers).toContain('running-terminal')
   })
 
+  it('does not block cleanup when Mimo has an idle title', async () => {
+    ;(globalThis as { window: unknown }).window = {
+      api: {
+        pty: {
+          hasChildProcesses: vi.fn().mockResolvedValue(true),
+          getForegroundProcess: vi.fn().mockResolvedValue('mimo')
+        }
+      }
+    }
+
+    const [candidate] = await enrichWorkspaceCleanupCandidates(
+      [makeCandidate()],
+      makeState({
+        tabsByWorktree: {
+          [WORKTREE_ID]: [
+            { id: 'tab-1', title: 'Mimo ready' }
+          ] as AppState['tabsByWorktree'][string]
+        },
+        ptyIdsByTabId: { 'tab-1': ['pty-1'] }
+      }),
+      { applyDismissals: false }
+    )
+
+    expect(candidate.blockers).not.toContain('running-terminal')
+  })
+
   it('does not let an idle title in another tab mask a running agent process', async () => {
     ;(globalThis as { window: unknown }).window = {
       api: {

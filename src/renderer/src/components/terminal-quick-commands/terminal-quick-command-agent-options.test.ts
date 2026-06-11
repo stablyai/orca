@@ -28,4 +28,8 @@ describe('terminal quick command agent options', () => {
       new Set(AGENT_CATALOG.map((entry) => entry.id))
     )
   })
+
+  it('includes mimo in quick command agent options', () => {
+    expect(getTerminalQuickCommandAgentOptions().map((entry) => entry.id)).toContain('mimo')
+  })
 })

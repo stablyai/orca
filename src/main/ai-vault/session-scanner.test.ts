@@ -2,7 +2,11 @@ import { mkdtemp, mkdir, rm, writeFile } from 'fs/promises'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { AI_VAULT_AGENTS, buildAiVaultResumeCommand } from '../../shared/ai-vault-types'
+import {
+  AI_VAULT_AGENTS,
+  aiVaultAgentLabel,
+  buildAiVaultResumeCommand
+} from '../../shared/ai-vault-types'
 import { scanAiVaultSessions } from './session-scanner'
 
 let tempRoots: string[] = []
@@ -26,7 +30,8 @@ function isolatedScanRoots(root: string) {
     openclawLegacyStateDir: join(root, 'openclaw-legacy-state'),
     piSessionsDir: join(root, 'pi-sessions'),
     droidSessionsDir: join(root, 'droid-sessions'),
-    droidProjectsDir: join(root, 'droid-projects')
+    droidProjectsDir: join(root, 'droid-projects'),
+    mimoStorageDir: join(root, 'mimo-storage')
   }
 }
 
@@ -463,6 +468,27 @@ describe('scanAiVaultSessions', () => {
       ])
     )
 
+    await mkdir(join(roots.mimoStorageDir, 'session', 'project'), { recursive: true })
+    await mkdir(join(roots.mimoStorageDir, 'message', 'mimo-session'), { recursive: true })
+    await writeFile(
+      join(roots.mimoStorageDir, 'session', 'project', 'ses_mimo.json'),
+      JSON.stringify({
+        id: 'mimo-session',
+        directory: '/tmp/mimo',
+        title: 'Mimo title',
+        time: { created: 1_777_634_000_000, updated: 1_777_634_001_000 }
+      })
+    )
+    await writeFile(
+      join(roots.mimoStorageDir, 'message', 'mimo-session', 'msg_1.json'),
+      JSON.stringify({
+        role: 'user',
+        summary: { title: 'Mimo title' },
+        time: { created: 1_777_634_000_000 },
+        tokens: { input: 7, output: 3 }
+      })
+    )
+
     const result = await scanAiVaultSessions({
       ...roots,
       platform: 'darwin',
@@ -502,6 +528,7 @@ describe('scanAiVaultSessions', () => {
     )
     expect(commandByAgent.get('pi')).toBe("cd '/tmp/pi' && pi --session 'pi-session'")
     expect(commandByAgent.get('droid')).toBe("cd '/tmp/droid' && droid --resume 'droid-session'")
+    expect(commandByAgent.get('mimo')).toBe("cd '/tmp/mimo' && mimo --session 'mimo-session'")
   })
 })
 
@@ -541,5 +568,24 @@ describe('buildAiVaultResumeCommand', () => {
     ).toBe(
       'cmd /d /s /c "cd /d ""C:\\Users\\Ada Lovelace\\repo"" && set ""CODEX_HOME=C:\\Users\\Ada\\AppData\\Roaming\\Orca\\codex-runtime-home\\home"" && codex resume ""session-1"""'
     )
+  })
+
+  it('includes mimo in supported AI vault agents', () => {
+    expect(AI_VAULT_AGENTS).toContain('mimo')
+  })
+
+  it('labels mimo as Mimo', () => {
+    expect(aiVaultAgentLabel('mimo')).toBe('Mimo')
+  })
+
+  it('builds mimo resume command with --session flag', () => {
+    expect(
+      buildAiVaultResumeCommand({
+        agent: 'mimo',
+        sessionId: 's1',
+        cwd: null,
+        platform: 'linux'
+      })
+    ).toBe("mimo --session 's1'")
   })
 })

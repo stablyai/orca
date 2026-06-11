@@ -88,6 +88,7 @@ const AGENT_PROCESS_NAMES = new Set([
   'gemini',
   'gemini-cli',
   'goose',
+  'mimo',
   'opencode'
 ])
 

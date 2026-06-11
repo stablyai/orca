@@ -19,7 +19,9 @@ const {
   getPathMock,
   spawnMock,
   openCodeBuildPtyEnvMock,
+  mimoBuildPtyEnvMock,
   openCodeClearPtyMock,
+  mimoClearPtyMock,
   buildAgentHookEnvMock,
   clearAgentHookPaneStateMock,
   registerPaneKeyAliasMock,
@@ -49,8 +51,10 @@ const {
   getPathMock: vi.fn(),
   spawnMock: vi.fn(),
   openCodeBuildPtyEnvMock: vi.fn(),
+  mimoBuildPtyEnvMock: vi.fn(),
   isPwshAvailableMock: vi.fn(),
   openCodeClearPtyMock: vi.fn(),
+  mimoClearPtyMock: vi.fn(),
   buildAgentHookEnvMock: vi.fn(),
   clearAgentHookPaneStateMock: vi.fn(),
   registerPaneKeyAliasMock: vi.fn(),
@@ -103,6 +107,13 @@ vi.mock('../opencode/hook-service', () => ({
   openCodeHookService: {
     buildPtyEnv: openCodeBuildPtyEnvMock,
     clearPty: openCodeClearPtyMock
+  }
+}))
+
+vi.mock('../mimo/hook-service', () => ({
+  mimoHookService: {
+    buildPtyEnv: mimoBuildPtyEnvMock,
+    clearPty: mimoClearPtyMock
   }
 }))
 
@@ -204,6 +215,9 @@ describe('registerPtyHandlers', () => {
   const savedOpenCodeConfigDir = process.env.OPENCODE_CONFIG_DIR
   const savedOrcaOpenCodeConfigDir = process.env.ORCA_OPENCODE_CONFIG_DIR
   const savedOrcaOpenCodeSourceConfigDir = process.env.ORCA_OPENCODE_SOURCE_CONFIG_DIR
+  const savedMimoConfigDir = process.env.MIMO_CONFIG_DIR
+  const savedOrcaMimoConfigDir = process.env.ORCA_MIMO_CONFIG_DIR
+  const savedOrcaMimoSourceConfigDir = process.env.ORCA_MIMO_SOURCE_CONFIG_DIR
   const savedPiAgentDir = process.env.PI_CODING_AGENT_DIR
   const savedOrcaPiAgentDir = process.env.ORCA_PI_CODING_AGENT_DIR
   const savedOrcaPiSourceAgentDir = process.env.ORCA_PI_SOURCE_AGENT_DIR
@@ -219,6 +233,9 @@ describe('registerPtyHandlers', () => {
     delete process.env.ORCA_OPENCODE_CONFIG_DIR
     delete process.env.ORCA_AGENT_HOOK_ENDPOINT
     delete process.env.ORCA_CLAUDE_AGENT_STATUS_SETTINGS
+    delete process.env.MIMO_CONFIG_DIR
+    delete process.env.ORCA_MIMO_SOURCE_CONFIG_DIR
+    delete process.env.ORCA_MIMO_CONFIG_DIR
     delete process.env.PI_CODING_AGENT_DIR
     delete process.env.ORCA_PI_SOURCE_AGENT_DIR
     delete process.env.ORCA_PI_CODING_AGENT_DIR
@@ -241,7 +258,9 @@ describe('registerPtyHandlers', () => {
     getPathMock.mockReset()
     spawnMock.mockReset()
     openCodeBuildPtyEnvMock.mockReset()
+    mimoBuildPtyEnvMock.mockReset()
     openCodeClearPtyMock.mockReset()
+    mimoClearPtyMock.mockReset()
     buildAgentHookEnvMock.mockReset()
     clearAgentHookPaneStateMock.mockReset()
     registerPaneKeyAliasMock.mockReset()
@@ -273,6 +292,9 @@ describe('registerPtyHandlers', () => {
       OPENCODE_CONFIG_DIR: existingConfigDir
         ? '/tmp/orca-opencode-overlay'
         : '/tmp/orca-opencode-config'
+    }))
+    mimoBuildPtyEnvMock.mockImplementation((_ptyId: string, existingConfigDir?: string) => ({
+      MIMO_CONFIG_DIR: existingConfigDir ? '/tmp/orca-mimo-overlay' : '/tmp/orca-mimo-config'
     }))
     buildAgentHookEnvMock.mockReturnValue({
       ORCA_AGENT_HOOK_PORT: '5678',
@@ -314,6 +336,21 @@ describe('registerPtyHandlers', () => {
       process.env.ORCA_OPENCODE_SOURCE_CONFIG_DIR = savedOrcaOpenCodeSourceConfigDir
     } else {
       delete process.env.ORCA_OPENCODE_SOURCE_CONFIG_DIR
+    }
+    if (savedMimoConfigDir !== undefined) {
+      process.env.MIMO_CONFIG_DIR = savedMimoConfigDir
+    } else {
+      delete process.env.MIMO_CONFIG_DIR
+    }
+    if (savedOrcaMimoConfigDir !== undefined) {
+      process.env.ORCA_MIMO_CONFIG_DIR = savedOrcaMimoConfigDir
+    } else {
+      delete process.env.ORCA_MIMO_CONFIG_DIR
+    }
+    if (savedOrcaMimoSourceConfigDir !== undefined) {
+      process.env.ORCA_MIMO_SOURCE_CONFIG_DIR = savedOrcaMimoSourceConfigDir
+    } else {
+      delete process.env.ORCA_MIMO_SOURCE_CONFIG_DIR
     }
     if (savedPiAgentDir !== undefined) {
       process.env.PI_CODING_AGENT_DIR = savedPiAgentDir
@@ -717,6 +754,35 @@ describe('registerPtyHandlers', () => {
       expect(env.OPENCODE_CONFIG_DIR).toBeUndefined()
       expect(env.ORCA_OPENCODE_CONFIG_DIR).toBeUndefined()
       expect(env.ORCA_OPENCODE_SOURCE_CONFIG_DIR).toBeUndefined()
+    })
+
+    it('injects Mimo plugin env when hooks are enabled', async () => {
+      const env = await spawnAndGetEnv(undefined, { MIMO_CONFIG_DIR: undefined })
+      expect(env.MIMO_CONFIG_DIR).toBe('/tmp/orca-mimo-config')
+      expect(env.ORCA_MIMO_CONFIG_DIR).toBe('/tmp/orca-mimo-config')
+    })
+
+    it('mirrors a user-provided MIMO_CONFIG_DIR into a per-PTY overlay', async () => {
+      const env = await spawnAndGetEnv(undefined, { MIMO_CONFIG_DIR: '/user/custom/mimo' })
+      expect(env.MIMO_CONFIG_DIR).toBe('/tmp/orca-mimo-overlay')
+      expect(env.ORCA_MIMO_CONFIG_DIR).toBe('/tmp/orca-mimo-overlay')
+      expect(env.ORCA_MIMO_SOURCE_CONFIG_DIR).toBe('/user/custom/mimo')
+    })
+
+    it('restores inherited Mimo source config when hooks are disabled', async () => {
+      const env = await spawnAndGetEnv(
+        {
+          MIMO_CONFIG_DIR: '/tmp/parent-orca-mimo-overlay',
+          ORCA_MIMO_CONFIG_DIR: '/tmp/parent-orca-mimo-overlay',
+          ORCA_MIMO_SOURCE_CONFIG_DIR: '/user/custom/mimo'
+        },
+        undefined,
+        undefined,
+        () => ({ agentStatusHooksEnabled: false })
+      )
+      expect(env.MIMO_CONFIG_DIR).toBe('/user/custom/mimo')
+      expect(env.ORCA_MIMO_CONFIG_DIR).toBeUndefined()
+      expect(env.ORCA_MIMO_SOURCE_CONFIG_DIR).toBeUndefined()
     })
 
     it('reproduces issue #1534: GUI-launched Orca mirrors zshrc-only OpenCode config', async () => {

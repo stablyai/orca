@@ -11,6 +11,7 @@ import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type { Store } from '../persistence'
 import type { GlobalSettings } from '../../shared/types'
 import { openCodeHookService } from '../opencode/hook-service'
+import { mimoHookService } from '../mimo/hook-service'
 import { agentHookServer } from '../agent-hooks/server'
 import { isAgentStatusHooksEnabled } from '../agent-hooks/managed-agent-hook-controls'
 import { piTitlebarExtensionService } from '../pi/titlebar-extension-service'
@@ -566,6 +567,32 @@ function resolveOpenCodeSourceConfigDir(baseEnv: Record<string, string>): string
   )
 }
 
+function resolveMimoSourceConfigDir(baseEnv: Record<string, string>): string | undefined {
+  const sourceDir = baseEnv.ORCA_MIMO_SOURCE_CONFIG_DIR ?? process.env.ORCA_MIMO_SOURCE_CONFIG_DIR
+  if (sourceDir) {
+    return sourceDir
+  }
+
+  const configDir = baseEnv.MIMO_CONFIG_DIR ?? process.env.MIMO_CONFIG_DIR
+  const orcaConfigDir = baseEnv.ORCA_MIMO_CONFIG_DIR ?? process.env.ORCA_MIMO_CONFIG_DIR
+  // Why: nested Orca terminals inherit MIMO_CONFIG_DIR from the parent
+  // PTY. If there is no recorded source dir, that value is Orca-owned, not a
+  // user config. Treating it as user config makes child Orcas mirror Orca's
+  // hook dir and can create large Mimo runtime trees per terminal.
+  if (configDir && orcaConfigDir && configDir === orcaConfigDir) {
+    return undefined
+  }
+
+  return (
+    configDir ??
+    readShellStartupEnvVar(
+      'MIMO_CONFIG_DIR',
+      baseEnv.HOME ?? process.env.HOME,
+      baseEnv.SHELL ?? process.env.SHELL
+    )
+  )
+}
+
 /**
  * Mutates `baseEnv` in place with all host-local PTY env vars and returns it.
  *
@@ -631,6 +658,36 @@ export function buildPtyHostEnv(
       primary: 'OPENCODE_CONFIG_DIR',
       overlay: 'ORCA_OPENCODE_CONFIG_DIR',
       source: 'ORCA_OPENCODE_SOURCE_CONFIG_DIR'
+    })
+  }
+
+  const preexistingMimoConfigDir = resolveMimoSourceConfigDir(baseEnv)
+
+  if (opts.agentStatusHooksEnabled) {
+    // Why: MIMO_CONFIG_DIR is a singular path, not a colon-list, so a user
+    // value cannot coexist with an Orca-only injection. Hand the user's value
+    // (when present) to the hook service and let it materialize a per-PTY
+    // mirror overlay that lets the user's plugins and Orca's status plugin
+    // load together — same pattern OpenCode uses above.
+    Object.assign(baseEnv, mimoHookService.buildPtyEnv(id, preexistingMimoConfigDir))
+    if (baseEnv.MIMO_CONFIG_DIR) {
+      // Why: ~/.zshrc can re-export the user's default after spawn; shell-ready
+      // wrappers restore this PTY-scoped value after user startup files run.
+      baseEnv.ORCA_MIMO_CONFIG_DIR = baseEnv.MIMO_CONFIG_DIR
+      if (preexistingMimoConfigDir) {
+        // Why: terminals launched from another Orca terminal inherit the overlay
+        // as MIMO_CONFIG_DIR; keep the original source so overlays do not
+        // mirror overlays and drop the user's real config.
+        baseEnv.ORCA_MIMO_SOURCE_CONFIG_DIR = preexistingMimoConfigDir
+      } else {
+        delete baseEnv.ORCA_MIMO_SOURCE_CONFIG_DIR
+      }
+    }
+  } else {
+    restoreOrStripOverlayEnv(baseEnv, {
+      primary: 'MIMO_CONFIG_DIR',
+      overlay: 'ORCA_MIMO_CONFIG_DIR',
+      source: 'ORCA_MIMO_SOURCE_CONFIG_DIR'
     })
   }
 
@@ -833,6 +890,7 @@ export function clearProviderPtyState(id: string): void {
   // node-pty process table. Centralizing provider cleanup avoids drift where a
   // new teardown path forgets to remove one provider's overlay/hook state.
   openCodeHookService.clearPty(id)
+  mimoHookService.clearPty(id)
   piTitlebarExtensionService.clearPty(id)
   // Why: SSH exit and connection-teardown paths bypass pty.ts's local onExit
   // callback but still need to release Claude account-switch guards.

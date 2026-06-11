@@ -1882,6 +1882,7 @@ export type TuiAgent =
   | 'codex' // OpenAI Codex
   | 'autohand' // Autohand Code CLI
   | 'opencode' // OpenCode
+  | 'mimo' // Mimo
   | 'pi' // Pi (pi.dev)
   | 'omp' // OMP (omp.sh)
   | 'gemini' // Gemini CLI

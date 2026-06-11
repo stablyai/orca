@@ -38,6 +38,7 @@ export type AgentHookSource =
   | 'antigravity'
   | 'amp'
   | 'opencode'
+  | 'mimo'
   | 'cursor'
   | 'pi'
   | 'omp'

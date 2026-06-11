@@ -14,4 +14,9 @@ describe('synthetic agent titles', () => {
     expect(shouldDriveSyntheticAgentTitleFromHook('codex', 'working')).toBe(false)
     expect(shouldDriveSyntheticAgentTitleFromHook('codex', 'done')).toBe(true)
   })
+
+  it('provides terminal-state titles for Mimo hook completion', () => {
+    expect(getSyntheticAgentTerminalTitle('mimo', 'done')).toBe('Mimo ready')
+    expect(getSyntheticAgentTerminalTitle('mimo', 'waiting')).toBe('Mimo - action required')
+  })
 })

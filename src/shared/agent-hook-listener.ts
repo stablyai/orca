@@ -338,6 +338,31 @@ function extractPromptText(hookPayload: Record<string, unknown>): ExtractedPromp
       return { text: trimmed, source: 'role_user_text' }
     }
   }
+  // Why: Mimo mirrors OpenCode but nests the user message under a `message`
+  // key with a `parts` array instead of a flat `text` field.
+  const message = hookPayload.message
+  if (
+    typeof message === 'object' &&
+    message !== null &&
+    (message as Record<string, unknown>).role === 'user'
+  ) {
+    const parts = (message as Record<string, unknown>).parts
+    if (Array.isArray(parts)) {
+      const textPart = parts.find(
+        (part) =>
+          typeof part === 'object' &&
+          part !== null &&
+          (part as Record<string, unknown>).type === 'text' &&
+          typeof (part as Record<string, unknown>).text === 'string'
+      ) as Record<string, unknown> | undefined
+      if (textPart) {
+        const trimmed = capOpenCodeHookText((textPart.text as string).trim())
+        if (trimmed.length > 0) {
+          return { text: trimmed, source: 'role_user_text' }
+        }
+      }
+    }
+  }
   return { text: '', source: null }
 }
 
@@ -1814,6 +1839,7 @@ function isNewTurnEvent(source: AgentHookSource, eventName: unknown): boolean {
     case 'amp':
       return eventName === 'agent.start'
     case 'opencode':
+    case 'mimo':
       return false
     case 'cursor':
       return eventName === 'beforeSubmitPrompt' || eventName === 'sessionStart'
@@ -1861,7 +1887,7 @@ function hasExplicitUserPrompt(
     return true
   }
   if (extractedPrompt.source === 'role_user_text') {
-    return source === 'opencode' && eventName === 'MessagePart'
+    return (source === 'opencode' || source === 'mimo') && eventName === 'MessagePart'
   }
   if (extractedPrompt.text.length === 0) {
     return false
@@ -1900,6 +1926,7 @@ function extractToolFields(
     case 'amp':
       return extractAmpToolFields(eventName, hookPayload)
     case 'opencode':
+    case 'mimo':
       return extractOpenCodeToolFields(eventName, hookPayload)
     case 'cursor':
       return extractCursorToolFields(eventName, hookPayload)
@@ -2306,8 +2333,9 @@ function normalizeCodexEvent(
   )
 }
 
-function normalizeOpenCodeEvent(
+function normalizeOpenCodeCompatibleEvent(
   state: HookListenerState,
+  agentType: 'opencode' | 'mimo',
   eventName: unknown,
   promptText: string,
   paneKey: string,
@@ -2329,21 +2357,38 @@ function normalizeOpenCodeEvent(
   const snapshot = resolveToolState(
     state,
     paneKey,
-    extractToolFields('opencode', eventName, hookPayload),
-    { resetOnNewTurn: isNewTurnEvent('opencode', eventName) }
+    extractToolFields(agentType, eventName, hookPayload),
+    { resetOnNewTurn: isNewTurnEvent(agentType, eventName) }
   )
 
   return parseAgentStatusPayload(
     JSON.stringify({
       state: stateName,
       prompt: resolvePrompt(state, paneKey, promptText, {
-        resetOnNewTurn: isNewTurnEvent('opencode', eventName)
+        resetOnNewTurn: isNewTurnEvent(agentType, eventName)
       }),
-      agentType: 'opencode',
+      agentType,
       toolName: snapshot.toolName,
       toolInput: snapshot.toolInput,
       lastAssistantMessage: snapshot.lastAssistantMessage
     })
+  )
+}
+
+function normalizeOpenCodeEvent(
+  state: HookListenerState,
+  eventName: unknown,
+  promptText: string,
+  paneKey: string,
+  hookPayload: Record<string, unknown>
+): ParsedAgentStatusPayload | null {
+  return normalizeOpenCodeCompatibleEvent(
+    state,
+    'opencode',
+    eventName,
+    promptText,
+    paneKey,
+    hookPayload
   )
 }
 
@@ -2849,6 +2894,24 @@ export function normalizeHookPayload(
       }
       payload = normalizeOpenCodeEvent(state, eventName, promptText, paneKey, hookPayloadRecord)
       break
+    case 'mimo':
+      if (extractedPrompt.source === 'role_user_text') {
+        const messageId = readFirstString(hookPayloadRecord, [
+          'messageID',
+          'messageId',
+          'message_id'
+        ])
+        promptInteractionKey = messageId ? `mimo-message-${messageId}` : undefined
+      }
+      payload = normalizeOpenCodeCompatibleEvent(
+        state,
+        'mimo',
+        eventName,
+        promptText,
+        paneKey,
+        hookPayloadRecord
+      )
+      break
     case 'cursor':
       payload = normalizeCursorEvent(state, eventName, promptText, paneKey, hookPayloadRecord)
       break
@@ -2949,6 +3012,7 @@ export const HOOK_SOURCE_BY_PATHNAME: Readonly<Record<string, AgentHookSource>> 
   '/hook/antigravity': 'antigravity',
   '/hook/amp': 'amp',
   '/hook/opencode': 'opencode',
+  '/hook/mimo': 'mimo',
   '/hook/cursor': 'cursor',
   '/hook/pi': 'pi',
   '/hook/omp': 'omp',

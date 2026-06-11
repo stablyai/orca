@@ -33,6 +33,37 @@ describe('planCommitMessageGeneration', () => {
     })
   })
 
+  it('plans Mimo run with prompt on stdin and model variant', () => {
+    const result = planCommitMessageGeneration(
+      {
+        agentId: 'mimo',
+        model: 'opencode/gpt-5.4-mini',
+        thinkingLevel: 'high'
+      },
+      'PROMPT'
+    )
+
+    expect(result).toEqual({
+      ok: true,
+      plan: {
+        binary: 'mimo',
+        args: [
+          'run',
+          '--model',
+          'opencode/gpt-5.4-mini',
+          '--agent',
+          'build',
+          '--format',
+          'default',
+          '--variant',
+          'high'
+        ],
+        stdinPayload: 'PROMPT',
+        label: 'Mimo'
+      }
+    })
+  })
+
   it('plans OpenCode run with prompt on stdin and model variant', () => {
     const result = planCommitMessageGeneration(
       {

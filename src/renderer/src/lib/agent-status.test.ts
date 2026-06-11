@@ -16,6 +16,7 @@ import {
   formatAgentTypeLabel,
   agentTypeToIconAgent
 } from './agent-status'
+import { titleHasExplicitAgentIdentity } from '../components/terminal-pane/title-agent-identity'
 import { extractLastOscTitle } from '../components/terminal-pane/pty-transport'
 
 describe('detectAgentStatusFromTitle', () => {
@@ -766,12 +767,22 @@ describe('formatAgentTypeLabel', () => {
     expect(formatAgentTypeLabel('hermes')).toBe('Hermes')
   })
 
+  it("maps 'mimo' to 'Mimo'", () => {
+    expect(formatAgentTypeLabel('mimo')).toBe('Mimo')
+  })
+
   it("maps 'command-code' to 'Command Code'", () => {
     expect(formatAgentTypeLabel('command-code')).toBe('Command Code')
   })
 
   it('passes through arbitrary custom agent names as-is', () => {
     expect(formatAgentTypeLabel('weirdo')).toBe('weirdo')
+  })
+})
+
+describe('titleHasExplicitAgentIdentity', () => {
+  it('detects Mimo titles with spinner prefix', () => {
+    expect(titleHasExplicitAgentIdentity('⠋ Mimo')).toBe(true)
   })
 })
 
@@ -793,6 +804,7 @@ describe('agentTypeToIconAgent', () => {
     expect(agentTypeToIconAgent('openclaude')).toBe('openclaude')
     expect(agentTypeToIconAgent('antigravity')).toBe('antigravity')
     expect(agentTypeToIconAgent('command-code')).toBe('command-code')
+    expect(agentTypeToIconAgent('mimo')).toBe('mimo')
   })
 
   it('returns null for arbitrary non-iconable strings', () => {

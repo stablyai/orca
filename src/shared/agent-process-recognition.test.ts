@@ -58,4 +58,12 @@ describe('agent process recognition', () => {
     })
     expect(isRecognizedAgentType('vibe')).toBe(true)
   })
+
+  it('recognizes mimo', () => {
+    expect(recognizeAgentProcess('mimo')).toEqual({
+      agent: 'mimo',
+      processName: 'mimo'
+    })
+    expect(isRecognizedAgentType('mimo')).toBe(true)
+  })
 })

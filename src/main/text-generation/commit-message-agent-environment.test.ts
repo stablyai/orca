@@ -64,6 +64,20 @@ describe('prepareLocalCommitMessageAgentEnv', () => {
     })
   })
 
+  it('prefers the original Mimo config root over inherited PTY overlays', async () => {
+    process.env.MIMO_CONFIG_DIR = '/tmp/orca-mimo-overlay'
+    process.env.ORCA_MIMO_SOURCE_CONFIG_DIR = '/Users/tester/company/mimo'
+
+    const result = await prepareLocalCommitMessageAgentEnv('mimo', undefined)
+
+    expect(result).toEqual({
+      ok: true,
+      env: expect.objectContaining({
+        MIMO_CONFIG_DIR: '/Users/tester/company/mimo'
+      })
+    })
+  })
+
   it('hydrates Pi agent dir from shell startup files for headless generation', async () => {
     const home = makeHome()
     delete process.env.PI_CODING_AGENT_DIR

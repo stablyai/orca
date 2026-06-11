@@ -137,14 +137,15 @@ export async function parseCursorSessionFile(
 
 export async function parseOpenCodeSessionFile(
   file: FileWithMtime,
-  platform: NodeJS.Platform = process.platform
+  platform: NodeJS.Platform = process.platform,
+  agent: 'opencode' | 'mimo' = 'opencode'
 ): Promise<AiVaultSession | null> {
   const record = asRecord(JSON.parse(await readFile(file.path, 'utf-8')) as unknown)
   if (!record) {
     return null
   }
   const sessionId = extractString(record.id) ?? sessionIdFromFileName(file.path)
-  const accumulator = createAccumulator({ agent: 'opencode', file, sessionId })
+  const accumulator = createAccumulator({ agent, file, sessionId })
   accumulator.title = normalizeTitleText(extractString(record.title) ?? '')
   accumulator.cwd = extractString(record.directory)
   updateTimeline(accumulator, timeObjectValue(record.time, 'created'))

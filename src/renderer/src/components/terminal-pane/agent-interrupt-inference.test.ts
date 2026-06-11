@@ -147,7 +147,7 @@ describe('agent interrupt inference', () => {
     entry = undefined
   })
 
-  it.each(['opencode', 'copilot'] as const)(
+  it.each(['opencode', 'mimo', 'copilot'] as const)(
     'infers immediately on double Escape for %s',
     (agentType) => {
       vi.useFakeTimers()
@@ -200,7 +200,7 @@ describe('agent interrupt inference', () => {
     entry = undefined
   })
 
-  it.each(['opencode', 'copilot'] as const)(
+  it.each(['opencode', 'mimo', 'copilot'] as const)(
     'does not count a %s Escape after the double-Escape window expires',
     (agentType) => {
       vi.useFakeTimers()

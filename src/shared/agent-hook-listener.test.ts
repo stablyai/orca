@@ -91,6 +91,7 @@ describe('shared agent-hook-listener', () => {
     expect(resolveHookSource('/hook/pi')).toBe('pi')
     expect(resolveHookSource('/hook/omp')).toBe('omp')
     expect(resolveHookSource('/hook/command-code')).toBe('command-code')
+    expect(resolveHookSource('/hook/mimo')).toBe('mimo')
     expect(resolveHookSource('/hook/unknown')).toBeNull()
     expect(resolveHookSource('/')).toBeNull()
   })
@@ -1257,6 +1258,34 @@ describe('shared agent-hook-listener', () => {
     expect(done?.payload.state).toBe('done')
     expect(done?.payload.prompt).toBe('summarize')
     expect(done?.payload.lastAssistantMessage).toBe('Hermes is wired up.')
+  })
+
+  it('normalizes Mimo hooks mirroring OpenCode with Mimo attribution', () => {
+    const result = normalizeHookPayload(
+      state,
+      'mimo',
+      {
+        paneKey: PANE_KEY,
+        tabId: 'tab-1',
+        worktreeId: 'wt',
+        env: 'production',
+        version: '1',
+        payload: {
+          hook_event_name: 'SessionBusy',
+          sessionID: 'mimo-session',
+          messageID: 'msg-1',
+          message: { role: 'user', parts: [{ type: 'text', text: 'build it' }] }
+        }
+      },
+      'production'
+    )
+    expect(result?.payload).toMatchObject({
+      state: 'working',
+      prompt: 'build it',
+      agentType: 'mimo'
+    })
+    expect(result?.providerSession).toEqual({ key: 'session_id', id: 'mimo-session' })
+    expect(result?.promptInteractionKey).toBe('mimo-message-msg-1')
   })
 
   describe('writeEndpointFile', () => {

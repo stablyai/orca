@@ -4,7 +4,7 @@ import {
   getAgentPickerCommandValue,
   searchAgentPickerEntries
 } from './agent-picker-search'
-import { AGENT_CATALOG, type AgentCatalogEntry } from './agent-catalog'
+import { AGENT_CATALOG, getAgentCatalog, type AgentCatalogEntry } from './agent-catalog'
 
 const agents = [
   entry('claude', 'Claude', 'claude'),
@@ -48,6 +48,13 @@ describe('agent picker search', () => {
     for (const agent of AGENT_CATALOG) {
       expect(searchAgentPickerEntries(AGENT_CATALOG, agent.cmd)[0]?.id).toBe(agent.id)
     }
+  })
+
+  it('includes mimo in the agent catalog', () => {
+    expect(getAgentCatalog().find((entry) => entry.id === 'mimo')).toMatchObject({
+      label: 'Mimo',
+      cmd: 'mimo'
+    })
   })
 
   it('returns no entries for unrelated text', () => {

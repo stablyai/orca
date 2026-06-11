@@ -37,7 +37,10 @@ function requiresDoubleEscapeForAgent(
   agentType: AgentStatusEntry['agentType'],
   intent: AgentInterruptInputIntent
 ): boolean {
-  return (agentType === 'opencode' || agentType === 'copilot') && intent === 'plain-escape'
+  return (
+    (agentType === 'opencode' || agentType === 'mimo' || agentType === 'copilot') &&
+    intent === 'plain-escape'
+  )
 }
 
 function shouldFlushInterruptImmediately(
