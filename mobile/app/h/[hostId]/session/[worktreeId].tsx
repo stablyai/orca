@@ -81,6 +81,7 @@ import {
   isTerminalLiveInputWithinByteLimit,
   scheduleTerminalLiveInputFocus
 } from '../../../../src/terminal/terminal-live-input'
+import { normalizeTerminalTextInput } from '../../../../src/terminal/terminal-text-input-normalization'
 import { countTerminalGestureInputSequences } from '../../../../src/terminal/terminal-gesture-input'
 import { MobileBrowserPane, type MobileBrowserTab } from '../../../../src/browser/MobileBrowserPane'
 import { isBlankBrowserUrl, normalizeBrowserUrl } from '../../../../src/browser/browser-url'
@@ -2663,7 +2664,7 @@ export default function SessionScreen() {
     }
     sendingRef.current = true
 
-    const text = input
+    const text = normalizeTerminalTextInput(input)
     setInput('')
 
     try {
@@ -2706,10 +2707,11 @@ export default function SessionScreen() {
 
   const sendLiveTerminalInput = useCallback(
     (handle: string, bytes: string) => {
-      if (bytes.length === 0) {
+      const text = normalizeTerminalTextInput(bytes)
+      if (text.length === 0) {
         return
       }
-      if (!isTerminalLiveInputWithinByteLimit(bytes)) {
+      if (!isTerminalLiveInputWithinByteLimit(text)) {
         triggerError()
         showToast('Input too large (max 256 KiB)', 1500)
         return
@@ -2726,7 +2728,7 @@ export default function SessionScreen() {
       void rpc
         .sendRequest('terminal.send', {
           terminal: handle,
-          text: bytes,
+          text,
           enter: false,
           ...(deviceTokenRef.current
             ? { client: { id: deviceTokenRef.current, type: 'mobile' as const } }
@@ -2791,8 +2793,9 @@ export default function SessionScreen() {
         liveInputRef.current?.setNativeProps({ text: '' })
         return
       }
-      if (text.length > 0) {
-        sendLiveTerminalInput(activeHandle, text)
+      const normalizedText = normalizeTerminalTextInput(text)
+      if (normalizedText.length > 0) {
+        sendLiveTerminalInput(activeHandle, normalizedText)
       }
       setLiveInputCapture('')
       // Why: the field is only a keyboard capture surface. Clearing the
@@ -4279,6 +4282,7 @@ export default function SessionScreen() {
                   autoCapitalize="none"
                   autoCorrect={false}
                   spellCheck={false}
+                  smartInsertDelete={false}
                   keyboardType={Platform.OS === 'ios' ? 'ascii-capable' : 'visible-password'}
                   returnKeyType="default"
                   blurOnSubmit={false}
@@ -4292,11 +4296,13 @@ export default function SessionScreen() {
                 <TextInput
                   style={styles.textInput}
                   value={input}
-                  onChangeText={setInput}
+                  onChangeText={(text) => setInput(normalizeTerminalTextInput(text))}
                   placeholder="Type a command…"
                   placeholderTextColor={colors.textMuted}
                   autoCapitalize="none"
                   autoCorrect={false}
+                  spellCheck={false}
+                  smartInsertDelete={false}
                   returnKeyType="send"
                   editable={canSend}
                   onSubmitEditing={() => void handleSend()}
@@ -4363,6 +4369,7 @@ export default function SessionScreen() {
         visible={showCreateTabDrawer}
         title="New Tab"
         actions={[
+          ...createTabAgentActions,
           {
             label: 'Terminal',
             icon: SquareTerminal,
@@ -4390,8 +4397,7 @@ export default function SessionScreen() {
               setShowCreateTabDrawer(false)
               void handleCreateMarkdownNote()
             }
-          },
-          ...createTabAgentActions
+          }
         ]}
         onClose={() => setShowCreateTabDrawer(false)}
       />
