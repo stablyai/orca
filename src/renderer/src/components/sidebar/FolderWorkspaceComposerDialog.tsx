@@ -38,6 +38,7 @@ import {
   toGitLabLinkedWorkItem,
   toLinearLinkedWorkItem
 } from './folder-workspace-composer-helpers'
+import { useFolderWorkspaceComposerPathStatus } from './folder-workspace-composer-path-status'
 import { submitFolderWorkspaceCreate } from './folder-workspace-composer-submit'
 
 type FolderWorkspaceComposerDialogProps = {
@@ -61,13 +62,19 @@ export function FolderWorkspaceComposerDialog({
         sshConnectionStates: s.sshConnectionStates
       }))
     )
+  const { pathStatusBlocksCreate, pathStatusProjectError } = useFolderWorkspaceComposerPathStatus(
+    projectGroup,
+    open
+  )
   const sourceRepos = useMemo(
     () => getFolderSourceRepos(repos, projectGroups, projectGroup),
     [projectGroup, projectGroups, repos]
   )
   const [repoId, setRepoId] = useState('')
   const selectedRepo = sourceRepos.find((repo) => repo.id === repoId) ?? null
-  const selectedRepoConnectionId = selectedRepo?.connectionId ?? null
+  const selectedRepoConnectionId =
+    selectedRepo?.connectionId ??
+    (sourceRepos.length === 0 ? (projectGroup?.connectionId ?? null) : null)
   const selectedRepoSshState = selectedRepoConnectionId
     ? (sshConnectionStates.get(selectedRepoConnectionId) ?? null)
     : null
@@ -206,7 +213,12 @@ export function FolderWorkspaceComposerDialog({
   }, [selectedRepoConnectionId])
 
   const handleCreate = useCallback(async (): Promise<void> => {
-    if (!projectGroup?.parentPath || submitting) {
+    if (
+      !projectGroup?.parentPath ||
+      submitting ||
+      pathStatusBlocksCreate ||
+      selectedRepoRequiresConnection
+    ) {
       return
     }
     setSubmitting(true)
@@ -236,7 +248,9 @@ export function FolderWorkspaceComposerDialog({
     quickAgent,
     settings?.agentCmdOverrides,
     settings?.autoRenameBranchFromWork,
-    submitting
+    submitting,
+    pathStatusBlocksCreate,
+    selectedRepoRequiresConnection
   ])
 
   useEffect(() => {
@@ -355,8 +369,13 @@ export function FolderWorkspaceComposerDialog({
             onOpenAgentSettings={() => setAgentSettingsOpen(true)}
             advancedOpen={advancedOpen}
             onToggleAdvanced={() => setAdvancedOpen((value) => !value)}
-            createDisabled={submitting || !projectGroup?.parentPath}
-            projectError={null}
+            createDisabled={
+              submitting ||
+              !projectGroup?.parentPath ||
+              pathStatusBlocksCreate ||
+              selectedRepoRequiresConnection
+            }
+            projectError={pathStatusProjectError}
             creating={submitting}
             onCreate={() => void handleCreate()}
             note={note}

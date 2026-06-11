@@ -3038,7 +3038,17 @@
           "8db50afe1a": "从文件夹导入存储库",
           "5b2e6fe3c8": "单独导入",
           "cf9d382ca1": "导入",
-          "220dd32d83": "扫描..."
+          "220dd32d83": "扫描...",
+          "fb33359f69": "这是 Monorepo 吗？",
+          "d75170194e": "如果这些项目属于同一组，请选择此项。Orca 会将它们分组，并让你从父文件夹开始工作。",
+          "39d51212cc": "Monorepo 名称",
+          "e907ec8935": "什么是 Monorepo 名称？",
+          "aa0247680d": "否，单独导入",
+          "a0bc4d1f8e": "是，作为 Monorepo 导入",
+          "8401a7a0d0": "1 个仓库",
+          "d4f1df62ef": "{{value0}} 个仓库",
+          "b4263a2ac4": "在 {{value1}} 中找到 {{value0}}。",
+          "24eda6c8b2": "正在扫描... {{value0}}"
         },
         "AddRepoRemoteStep": {
           "5b205b5281": "停止扫描",
@@ -3503,7 +3513,8 @@
           "f50603c6b2": "标记为未读",
           "8dacff1fe0": "马克·里德",
           "3baa7d6507": "别针",
-          "697d0f6e1b": "取消固定"
+          "697d0f6e1b": "取消固定",
+          "250de158fd": "Remove Workspace"
         },
         "WorktreeList": {
           "d880ea0744": "创建一个组并将该项目移入其中。",
@@ -3536,7 +3547,8 @@
           "20bebf9c7f": "显示 {{value0}} 个子工作区",
           "c1f4a31623": "显示 {{value0}} 个子工作区",
           "e97297cb75": "隐藏 {{value0}} 个子工作区",
-          "0cd15956d4": "隐藏 {{value0}} 个子工作区"
+          "0cd15956d4": "隐藏 {{value0}} 个子工作区",
+          "bd37a57ac8": "Create workspace for {{value0}}"
         },
         "WorktreeMetaDialog": {
           "3db0a2a593": "取消",
@@ -3759,6 +3771,15 @@
               }
             }
           }
+        },
+        "FolderWorkspaceComposerDialog": {
+          "connectFailed": "Failed to connect to project.",
+          "noRepos": "Add a Git project under this folder to attach GitHub or GitLab tasks.",
+          "title": "Create Folder Workspace",
+          "createStart": "Create & Start Agent",
+          "create": "Create Workspace",
+          "sourceProject": "Task Source",
+          "chooseSourceProject": "Choose task source"
         }
       },
       "shared": {

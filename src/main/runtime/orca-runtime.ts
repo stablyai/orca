@@ -112,8 +112,11 @@ import {
   isPathInsideOrEqual,
   normalizeRuntimePathForComparison
 } from '../../shared/cross-platform-path'
-import { getProjectGroupSubtreeIds } from '../../shared/project-groups'
 import { folderWorkspaceKey, parseWorkspaceKey } from '../../shared/workspace-scope'
+import type {
+  FolderWorkspacePathStatus,
+  FolderWorkspacePathStatusRequest
+} from '../../shared/folder-workspace-path-status'
 import {
   buildKnownOrcaWorkspaceLayouts,
   isLegacyRepoForExternalWorktreeVisibility,
@@ -474,6 +477,12 @@ import { killAllProcessesForWorktree } from './worktree-teardown'
 import { MOBILE_SUBSCRIBE_SCROLLBACK_ROWS } from './scrollback-limits'
 import type { IFilesystemProvider, IPtyProvider } from '../providers/types'
 import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
+import {
+  assertFolderWorkspacePathUsable,
+  getFolderWorkspacePathStatus,
+  getFolderWorkspacePathStatusForPath,
+  inferFolderWorkspacePathConnection
+} from '../project-groups/folder-workspace-path-status'
 import { getSshGitProvider, requireSshGitProvider } from '../providers/ssh-git-dispatch'
 import { detectRepoIconAndUpstream } from '../repo-icon-autodetect'
 import { githubAvatarIcon } from '../../shared/repo-icon'
@@ -6455,6 +6464,7 @@ export class OrcaRuntimeService {
   async createProjectGroup(input: {
     name: string
     parentPath?: string | null
+    connectionId?: string | null
     parentGroupId?: string | null
     createdFrom?: ProjectGroup['createdFrom']
   }): Promise<ProjectGroup> {
@@ -6464,6 +6474,7 @@ export class OrcaRuntimeService {
     const group = this.store.createProjectGroup({
       name: input.name,
       parentPath: input.parentPath ?? null,
+      connectionId: input.connectionId ?? null,
       parentGroupId: input.parentGroupId ?? null,
       createdFrom: input.createdFrom ?? 'manual'
     })
@@ -6517,6 +6528,7 @@ export class OrcaRuntimeService {
     projectGroupId: string
     name?: string
     folderPath?: string | null
+    connectionId?: string | null
     linkedTask?: FolderWorkspace['linkedTask']
     createdWithAgent?: FolderWorkspace['createdWithAgent']
     pendingFirstAgentMessageRename?: boolean
@@ -6524,9 +6536,38 @@ export class OrcaRuntimeService {
     if (!this.store?.createFolderWorkspace) {
       throw new Error('runtime_unavailable')
     }
+    const projectGroups = this.store.getProjectGroups?.() ?? []
+    const group = projectGroups.find((entry) => entry.id === input.projectGroupId)
+    const folderPath =
+      typeof input.folderPath === 'string' && input.folderPath.trim().length > 0
+        ? input.folderPath
+        : group?.parentPath
+    if (!group || !folderPath) {
+      throw new Error('folder_workspace_project_group_not_found')
+    }
+    const status = await getFolderWorkspacePathStatusForPath(
+      {
+        folderPath,
+        projectGroupId: group.id,
+        connectionId: input.connectionId ?? group.connectionId ?? null,
+        projectGroups,
+        repos: this.store.getRepos()
+      },
+      { getSshFilesystemProvider }
+    )
+    assertFolderWorkspacePathUsable(status)
     const workspace = this.store.createFolderWorkspace(input)
     this.notifyReposChanged()
     return workspace
+  }
+
+  async getFolderWorkspacePathStatus(
+    request: FolderWorkspacePathStatusRequest
+  ): Promise<FolderWorkspacePathStatus> {
+    if (!this.store) {
+      throw new Error('runtime_unavailable')
+    }
+    return getFolderWorkspacePathStatus(this.store, request, { getSshFilesystemProvider })
   }
 
   async updateFolderWorkspace(
@@ -6553,6 +6594,29 @@ export class OrcaRuntimeService {
   ): Promise<FolderWorkspace | null> {
     if (!this.store?.updateFolderWorkspace) {
       throw new Error('runtime_unavailable')
+    }
+    if (typeof updates.folderPath === 'string' && updates.folderPath.trim().length > 0) {
+      const workspace = this.store
+        .getFolderWorkspaces?.()
+        .find((entry) => entry.id === folderWorkspaceId)
+      if (!workspace) {
+        return null
+      }
+      const projectGroups = this.store.getProjectGroups?.() ?? []
+      const status = await getFolderWorkspacePathStatusForPath(
+        {
+          folderPath: updates.folderPath,
+          projectGroupId: workspace.projectGroupId,
+          connectionId:
+            workspace.connectionId ??
+            projectGroups.find((entry) => entry.id === workspace.projectGroupId)?.connectionId ??
+            null,
+          projectGroups,
+          repos: this.store.getRepos()
+        },
+        { getSshFilesystemProvider }
+      )
+      assertFolderWorkspacePathUsable(status)
     }
     const updated = this.store.updateFolderWorkspace(folderWorkspaceId, updates)
     if (updated) {
@@ -6629,6 +6693,7 @@ export class OrcaRuntimeService {
       parentPath: args.parentPath,
       groupName: args.groupName,
       mode: args.mode,
+      connectionId: null,
       repoPaths: selection.selectedPaths,
       createGroup: (input) => this.store!.createProjectGroup!(input)
     })
@@ -12046,27 +12111,24 @@ export class OrcaRuntimeService {
   private resolveFolderWorkspaceConnectionId(workspace: FolderWorkspace): string | null {
     const repos = this.store?.getRepos() ?? []
     const projectGroups = this.store?.getProjectGroups?.() ?? []
-    const groupIds = getProjectGroupSubtreeIds(projectGroups, workspace.projectGroupId)
-    const candidateRepos = repos.filter(
-      (repo) =>
-        (typeof repo.projectGroupId === 'string' && groupIds.has(repo.projectGroupId)) ||
-        isPathInsideOrEqual(workspace.folderPath, repo.path)
-    )
-    const connectionIds = new Set<string>()
-    for (const repo of candidateRepos) {
-      if (repo.connectionId) {
-        connectionIds.add(repo.connectionId)
-      }
-    }
-    if (connectionIds.size > 1) {
+    const connection = inferFolderWorkspacePathConnection({
+      folderPath: workspace.folderPath,
+      projectGroupId: workspace.projectGroupId,
+      connectionId: workspace.connectionId ?? null,
+      projectGroups,
+      repos
+    })
+    if (connection.kind === 'ambiguous') {
       // Why: a single PTY can only be spawned on one runtime target; mixed
       // child repo connections need an explicit V2 routing decision.
       throw new Error('folder_workspace_connection_ambiguous')
     }
-    return connectionIds.size === 1 ? [...connectionIds][0] : null
+    return connection.kind === 'ssh' ? connection.connectionId : null
   }
 
-  private resolveFolderWorkspaceLaunchScope(selector: string): TerminalWorkspaceLaunchScope | null {
+  private async resolveFolderWorkspaceLaunchScope(
+    selector: string
+  ): Promise<TerminalWorkspaceLaunchScope | null> {
     const workspaceSelector = selector.startsWith('id:') ? selector.slice(3) : selector
     const parsed = parseWorkspaceKey(workspaceSelector)
     if (parsed?.type !== 'folder') {
@@ -12078,6 +12140,15 @@ export class OrcaRuntimeService {
     if (!workspace) {
       throw new Error('selector_not_found')
     }
+    if (!this.store) {
+      throw new Error('runtime_unavailable')
+    }
+    const status = await getFolderWorkspacePathStatus(
+      this.store,
+      { scope: 'folder-workspace', folderWorkspaceId: workspace.id },
+      { getSshFilesystemProvider }
+    )
+    assertFolderWorkspacePathUsable(status)
     return {
       id: folderWorkspaceKey(workspace.id),
       path: workspace.folderPath,
@@ -12089,7 +12160,7 @@ export class OrcaRuntimeService {
   private async resolveTerminalWorkspaceLaunchScope(
     selector: string
   ): Promise<TerminalWorkspaceLaunchScope> {
-    const folderScope = this.resolveFolderWorkspaceLaunchScope(selector)
+    const folderScope = await this.resolveFolderWorkspaceLaunchScope(selector)
     if (folderScope) {
       return folderScope
     }

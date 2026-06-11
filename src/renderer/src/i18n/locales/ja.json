@@ -3038,7 +3038,17 @@
           "8db50afe1a": "フォルダーからリポジトリをインポートする",
           "5b2e6fe3c8": "個別にインポート",
           "cf9d382ca1": "輸入",
-          "220dd32d83": "走査..."
+          "220dd32d83": "走査...",
+          "fb33359f69": "これはモノレポですか？",
+          "d75170194e": "これらのプロジェクトがまとまっている場合は、これを選択してください。Orca がグループ化し、親フォルダーから作業できるようにします。",
+          "39d51212cc": "モノレポ名",
+          "e907ec8935": "モノレポ名とは何ですか？",
+          "aa0247680d": "いいえ、個別にインポート",
+          "a0bc4d1f8e": "はい、モノレポとしてインポート",
+          "8401a7a0d0": "1 個のリポジトリ",
+          "d4f1df62ef": "{{value0}} 個のリポジトリ",
+          "b4263a2ac4": "{{value1}} で {{value0}} が見つかりました。",
+          "24eda6c8b2": "スキャン中... {{value0}}"
         },
         "AddRepoRemoteStep": {
           "5b205b5281": "スキャンの停止",
@@ -3503,7 +3513,8 @@
           "f50603c6b2": "未読としてマークする",
           "8dacff1fe0": "既読マークを付ける",
           "3baa7d6507": "ピン",
-          "697d0f6e1b": "固定を解除する"
+          "697d0f6e1b": "固定を解除する",
+          "250de158fd": "Remove Workspace"
         },
         "WorktreeList": {
           "d880ea0744": "グループを作成し、このプロジェクトをそのグループに移動します。",
@@ -3536,7 +3547,8 @@
           "20bebf9c7f": "{{value0}} 個の子ワークスペースを表示",
           "c1f4a31623": "{{value0}} 個の子ワークスペースを表示",
           "e97297cb75": "{{value0}} 個の子ワークスペースを非表示",
-          "0cd15956d4": "{{value0}} 個の子ワークスペースを非表示"
+          "0cd15956d4": "{{value0}} 個の子ワークスペースを非表示",
+          "bd37a57ac8": "Create workspace for {{value0}}"
         },
         "WorktreeMetaDialog": {
           "3db0a2a593": "キャンセル",
@@ -3759,6 +3771,15 @@
               }
             }
           }
+        },
+        "FolderWorkspaceComposerDialog": {
+          "connectFailed": "Failed to connect to project.",
+          "noRepos": "Add a Git project under this folder to attach GitHub or GitLab tasks.",
+          "title": "Create Folder Workspace",
+          "createStart": "Create & Start Agent",
+          "create": "Create Workspace",
+          "sourceProject": "Task Source",
+          "chooseSourceProject": "Choose task source"
         }
       },
       "shared": {

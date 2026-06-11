@@ -64,6 +64,12 @@ import { addOrcaWslInteropEnv } from '../pty/wsl-orca-env'
 import type { CodexAccountSelectionTarget } from '../codex-accounts/runtime-selection'
 import { isHostCodexHomeForWsl, isWslCodexHomeForHost } from '../pty/codex-home-wsl-env'
 import { buildConfiguredProxyEnv, type NetworkProxySettings } from '../../shared/network-proxy'
+import { parseWorkspaceKey } from '../../shared/workspace-scope'
+import {
+  assertFolderWorkspacePathUsable,
+  getFolderWorkspacePathStatus
+} from '../project-groups/folder-workspace-path-status'
+import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
 
 // ─── Provider Registry ──────────────────────────────────────────────
 // Routes PTY operations by connectionId. null = local provider.
@@ -1569,6 +1575,21 @@ export function registerPtyHandlers(
     mainWindow.webContents.on('did-finish-load', didFinishLoadHandler)
   }
 
+  const assertFolderWorkspacePtyPathUsable = async (
+    worktreeId: string | undefined
+  ): Promise<void> => {
+    const workspaceScope = typeof worktreeId === 'string' ? parseWorkspaceKey(worktreeId) : null
+    if (!store || workspaceScope?.type !== 'folder') {
+      return
+    }
+    const status = await getFolderWorkspacePathStatus(
+      store,
+      { scope: 'folder-workspace', folderWorkspaceId: workspaceScope.folderWorkspaceId },
+      { getSshFilesystemProvider }
+    )
+    assertFolderWorkspacePathUsable(status)
+  }
+
   // Why: the runtime controller must route through getProviderForPty() so that
   // CLI commands (terminal.send, terminal.stop) work for both local and remote PTYs.
   // Hardcoding localProvider.getPtyProcess() would silently fail for remote PTYs.
@@ -1578,6 +1599,7 @@ export function registerPtyHandlers(
       if (startupPromise) {
         await startupPromise
       }
+      await assertFolderWorkspacePtyPathUsable(args.worktreeId)
       const provider = getProvider(args.connectionId)
       const isClaudeLaunch = !args.connectionId && isClaudeLaunchCommand(args.command)
       if (isClaudeLaunch && isClaudeAuthSwitchInProgress()) {
@@ -2030,6 +2052,7 @@ export function registerPtyHandlers(
       if (startupPromise) {
         await startupPromise
       }
+      await assertFolderWorkspacePtyPathUsable(args.worktreeId)
       const provider = getProvider(args.connectionId)
       const isClaudeLaunch = !args.connectionId && isClaudeLaunchCommand(args.command)
       if (isClaudeLaunch && isClaudeAuthSwitchInProgress()) {

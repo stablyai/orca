@@ -12,6 +12,7 @@ import {
 } from '../../runtime/runtime-compatibility-test-fixture'
 import { clearRuntimeCompatibilityCacheForTests } from '../../runtime/runtime-rpc-client'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
+import type { SshConnectionState } from '../../../../shared/ssh-types'
 
 const remoteRepo: Repo = {
   id: 'remote-repo',
@@ -44,11 +45,21 @@ const projectGroupsScanNested = vi.fn()
 const projectGroupsCancelNestedScan = vi.fn()
 const projectGroupsOnNestedScanProgress = vi.fn()
 const folderWorkspacesList = vi.fn()
+const folderWorkspacesGetPathStatus = vi.fn()
 const folderWorkspacesCreate = vi.fn()
 const folderWorkspacesUpdate = vi.fn()
 const folderWorkspacesDelete = vi.fn()
 const runtimeEnvironmentCall = vi.fn()
 const runtimeEnvironmentTransportCall = vi.fn()
+
+function makeSshConnectionState(status: SshConnectionState['status']): SshConnectionState {
+  return {
+    targetId: 'ssh-1',
+    status,
+    error: null,
+    reconnectAttempt: 0
+  }
+}
 
 beforeEach(() => {
   clearRuntimeCompatibilityCacheForTests()
@@ -63,6 +74,8 @@ beforeEach(() => {
   projectGroupsOnNestedScanProgress.mockReset()
   projectGroupsOnNestedScanProgress.mockReturnValue(vi.fn())
   folderWorkspacesList.mockReset()
+  folderWorkspacesGetPathStatus.mockReset()
+  folderWorkspacesGetPathStatus.mockResolvedValue({ path: '/workspace/platform', exists: true })
   folderWorkspacesCreate.mockReset()
   folderWorkspacesUpdate.mockReset()
   folderWorkspacesDelete.mockReset()
@@ -88,6 +101,7 @@ beforeEach(() => {
       },
       folderWorkspaces: {
         list: folderWorkspacesList,
+        getPathStatus: folderWorkspacesGetPathStatus,
         create: folderWorkspacesCreate,
         update: folderWorkspacesUpdate,
         delete: folderWorkspacesDelete
@@ -167,6 +181,185 @@ describe('project group store routing', () => {
     })
     expect(store.getState().folderWorkspaces).toEqual([])
     expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+  })
+
+  it('caches local folder workspace path status by scope', async () => {
+    const folderGroup = { ...projectGroup, parentPath: '/workspace/platform' }
+    folderWorkspacesGetPathStatus.mockResolvedValue({
+      path: '/workspace/platform',
+      exists: false,
+      reason: 'missing'
+    })
+    const store = createTestStore()
+    store.setState({ projectGroups: [folderGroup] })
+
+    await expect(
+      store.getState().fetchFolderWorkspacePathStatus({
+        scope: 'project-group',
+        projectGroupId: folderGroup.id
+      })
+    ).resolves.toEqual({
+      path: '/workspace/platform',
+      exists: false,
+      reason: 'missing'
+    })
+
+    const cacheKey = store.getState().getFolderWorkspacePathStatusCacheKey({
+      scope: 'project-group',
+      projectGroupId: folderGroup.id
+    })
+    expect(store.getState().folderWorkspacePathStatuses[cacheKey]?.status).toEqual({
+      path: '/workspace/platform',
+      exists: false,
+      reason: 'missing'
+    })
+    expect(folderWorkspacesGetPathStatus).toHaveBeenCalledTimes(1)
+  })
+
+  it('ignores stale folder path status responses after a group path changes', async () => {
+    let resolveStatus: (status: { path: string; exists: boolean }) => void = () => {}
+    folderWorkspacesGetPathStatus.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveStatus = resolve
+        })
+    )
+    const store = createTestStore()
+    store.setState({
+      projectGroups: [{ ...projectGroup, parentPath: '/workspace/old-platform' }]
+    })
+    const request = { scope: 'project-group' as const, projectGroupId: projectGroup.id }
+    const statusPromise = store.getState().fetchFolderWorkspacePathStatus(request)
+
+    store.setState({
+      projectGroups: [{ ...projectGroup, parentPath: '/workspace/new-platform' }]
+    })
+    resolveStatus({ path: '/workspace/old-platform', exists: true })
+    await statusPromise
+
+    const cacheKey = store.getState().getFolderWorkspacePathStatusCacheKey(request)
+    expect(store.getState().folderWorkspacePathStatuses[cacheKey]).toBeUndefined()
+  })
+
+  it('ignores stale folder path status responses after repo ownership changes', async () => {
+    let resolveStatus: (status: { path: string; exists: boolean }) => void = () => {}
+    folderWorkspacesGetPathStatus.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveStatus = resolve
+        })
+    )
+    const store = createTestStore()
+    store.setState({
+      projectGroups: [{ ...projectGroup, parentPath: '/workspace/platform' }],
+      repos: [{ ...remoteRepo, id: 'local-repo', path: '/workspace/platform/api' }]
+    })
+    const request = { scope: 'project-group' as const, projectGroupId: projectGroup.id }
+    const statusPromise = store.getState().fetchFolderWorkspacePathStatus(request)
+
+    store.setState({
+      repos: [
+        {
+          ...remoteRepo,
+          id: 'ssh-repo',
+          path: '/workspace/platform/api',
+          connectionId: 'ssh-1'
+        }
+      ]
+    })
+    resolveStatus({ path: '/workspace/platform', exists: true })
+    await statusPromise
+
+    const cacheKey = store.getState().getFolderWorkspacePathStatusCacheKey(request)
+    expect(store.getState().folderWorkspacePathStatuses[cacheKey]).toBeUndefined()
+  })
+
+  it('treats expired folder path status cache entries as unknown', async () => {
+    vi.useFakeTimers()
+    try {
+      const store = createTestStore()
+      store.setState({
+        projectGroups: [{ ...projectGroup, parentPath: '/workspace/platform' }]
+      })
+      const request = { scope: 'project-group' as const, projectGroupId: projectGroup.id }
+      await store.getState().fetchFolderWorkspacePathStatus(request)
+
+      expect(store.getState().getFreshFolderWorkspacePathStatus(request)).toEqual({
+        path: '/workspace/platform',
+        exists: true
+      })
+
+      vi.setSystemTime(Date.now() + 10_001)
+
+      expect(store.getState().getFreshFolderWorkspacePathStatus(request)).toBeNull()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('treats current-state mismatched folder path cache entries as unknown', async () => {
+    const store = createTestStore()
+    store.setState({
+      projectGroups: [
+        { ...projectGroup, parentPath: '/workspace/platform', connectionId: 'ssh-1' }
+      ],
+      sshConnectionStates: new Map([['ssh-1', makeSshConnectionState('connected')]])
+    })
+    const request = { scope: 'project-group' as const, projectGroupId: projectGroup.id }
+    await store.getState().fetchFolderWorkspacePathStatus(request)
+
+    expect(store.getState().getFreshFolderWorkspacePathStatus(request)).toEqual({
+      path: '/workspace/platform',
+      exists: true
+    })
+
+    store.setState({
+      sshConnectionStates: new Map([['ssh-1', makeSshConnectionState('disconnected')]])
+    })
+
+    expect(store.getState().getFreshFolderWorkspacePathStatus(request)).toBeNull()
+  })
+
+  it('ignores stale folder path status responses after SSH connection state changes', async () => {
+    const resolvers: ((status: { path: string; exists: boolean; reason?: string }) => void)[] = []
+    folderWorkspacesGetPathStatus.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolvers.push(resolve)
+        })
+    )
+    const store = createTestStore()
+    store.setState({
+      projectGroups: [
+        { ...projectGroup, parentPath: '/workspace/platform', connectionId: 'ssh-1' }
+      ],
+      sshConnectionStates: new Map([['ssh-1', makeSshConnectionState('connected')]])
+    })
+    const request = { scope: 'project-group' as const, projectGroupId: projectGroup.id }
+    const connectedStatusPromise = store.getState().fetchFolderWorkspacePathStatus(request)
+
+    store.setState({
+      sshConnectionStates: new Map([['ssh-1', makeSshConnectionState('disconnected')]])
+    })
+    const disconnectedStatusPromise = store
+      .getState()
+      .fetchFolderWorkspacePathStatus(request, { force: true })
+
+    resolvers[1]?.({
+      path: '/workspace/platform',
+      exists: false,
+      reason: 'unavailable'
+    })
+    await disconnectedStatusPromise
+    resolvers[0]?.({ path: '/workspace/platform', exists: true })
+    await connectedStatusPromise
+
+    const cacheKey = store.getState().getFolderWorkspacePathStatusCacheKey(request)
+    expect(store.getState().folderWorkspacePathStatuses[cacheKey]?.status).toEqual({
+      path: '/workspace/platform',
+      exists: false,
+      reason: 'unavailable'
+    })
   })
 
   it('purges renderer session state when deleting a local folder workspace', async () => {

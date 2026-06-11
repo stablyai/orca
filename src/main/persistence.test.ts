@@ -2688,6 +2688,132 @@ describe('Store', () => {
     ])
   })
 
+  it('backfills folder-scope SSH provenance from unambiguous child repos on load', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [
+        makeRepo({
+          id: 'api',
+          path: '/workspace/platform/api',
+          projectGroupId: 'root',
+          connectionId: 'ssh-1'
+        })
+      ],
+      worktreeMeta: {},
+      settings: {},
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      projectGroups: [
+        {
+          id: 'root',
+          name: 'Platform',
+          parentPath: '/workspace/platform',
+          parentGroupId: null,
+          createdFrom: 'folder-scan',
+          tabOrder: 0,
+          isCollapsed: false,
+          color: null,
+          createdAt: 1,
+          updatedAt: 1
+        }
+      ],
+      folderWorkspaces: [
+        {
+          id: 'fw-1',
+          projectGroupId: 'root',
+          name: 'Refund fix',
+          folderPath: '/workspace/platform',
+          comment: '',
+          isArchived: false,
+          isUnread: false,
+          isPinned: false,
+          sortOrder: 1,
+          lastActivityAt: 1,
+          createdAt: 1,
+          updatedAt: 1
+        }
+      ]
+    })
+
+    const store = await createStore()
+
+    expect(store.getProjectGroups()[0]).toMatchObject({ id: 'root', connectionId: 'ssh-1' })
+    expect(store.getFolderWorkspaces()[0]).toMatchObject({ id: 'fw-1', connectionId: 'ssh-1' })
+  })
+
+  it('backfills folder-scope SSH provenance from grouped repos despite unrelated same-path SSH repos', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [
+        makeRepo({
+          id: 'api-ssh-1',
+          path: '/workspace/platform/api',
+          projectGroupId: 'root',
+          connectionId: 'ssh-1'
+        }),
+        makeRepo({
+          id: 'api-ssh-2',
+          path: '/workspace/platform/api',
+          projectGroupId: 'other-root',
+          connectionId: 'ssh-2'
+        })
+      ],
+      worktreeMeta: {},
+      settings: {},
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      projectGroups: [
+        {
+          id: 'root',
+          name: 'Platform',
+          parentPath: '/workspace/platform',
+          parentGroupId: null,
+          createdFrom: 'folder-scan',
+          tabOrder: 0,
+          isCollapsed: false,
+          color: null,
+          createdAt: 1,
+          updatedAt: 1
+        },
+        {
+          id: 'other-root',
+          name: 'Platform other',
+          parentPath: '/workspace/platform',
+          parentGroupId: null,
+          createdFrom: 'folder-scan',
+          tabOrder: 1,
+          isCollapsed: false,
+          color: null,
+          createdAt: 1,
+          updatedAt: 1
+        }
+      ],
+      folderWorkspaces: [
+        {
+          id: 'fw-1',
+          projectGroupId: 'root',
+          name: 'Refund fix',
+          folderPath: '/workspace/platform',
+          comment: '',
+          isArchived: false,
+          isUnread: false,
+          isPinned: false,
+          sortOrder: 1,
+          lastActivityAt: 1,
+          createdAt: 1,
+          updatedAt: 1
+        }
+      ]
+    })
+
+    const store = await createStore()
+
+    expect(store.getProjectGroups().find((group) => group.id === 'root')).toMatchObject({
+      connectionId: 'ssh-1'
+    })
+    expect(store.getFolderWorkspaces()[0]).toMatchObject({ id: 'fw-1', connectionId: 'ssh-1' })
+  })
+
   it('removes folder workspace metadata and its scoped session state only', async () => {
     const store = await createStore()
     const group = store.createProjectGroup({

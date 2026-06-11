@@ -1663,6 +1663,87 @@ function removeWorkspaceSessionOwner(
   return next
 }
 
+function inferFolderScopeConnectionIdForMigration(args: {
+  folderPath: string
+  projectGroupId: string
+  projectGroups: readonly ProjectGroup[]
+  repos: readonly Repo[]
+}): string | null {
+  const groupIds = getProjectGroupSubtreeIds(args.projectGroups, args.projectGroupId)
+  const groupRepos = args.repos.filter(
+    (repo) => typeof repo.projectGroupId === 'string' && groupIds.has(repo.projectGroupId)
+  )
+  const candidateRepos =
+    groupRepos.length > 0
+      ? groupRepos
+      : args.repos.filter((repo) => isPathInsideOrEqual(args.folderPath, repo.path))
+  if (candidateRepos.length === 0) {
+    return null
+  }
+  let hasLocalRepo = false
+  const connectionIds = new Set<string>()
+  for (const repo of candidateRepos) {
+    if (repo.connectionId) {
+      connectionIds.add(repo.connectionId)
+    } else {
+      hasLocalRepo = true
+    }
+  }
+  if (hasLocalRepo || connectionIds.size !== 1) {
+    return null
+  }
+  return [...connectionIds][0]
+}
+
+function backfillFolderScopeConnectionIds(state: PersistedState): {
+  state: PersistedState
+  changed: boolean
+} {
+  const groups = state.projectGroups ?? []
+  const repos = state.repos ?? []
+  let changed = false
+  const projectGroups = groups.map((group) => {
+    if (group.connectionId || !group.parentPath) {
+      return group
+    }
+    const connectionId = inferFolderScopeConnectionIdForMigration({
+      folderPath: group.parentPath,
+      projectGroupId: group.id,
+      projectGroups: groups,
+      repos
+    })
+    if (!connectionId) {
+      return group
+    }
+    changed = true
+    return { ...group, connectionId }
+  })
+  const groupsById = new Map(projectGroups.map((group) => [group.id, group]))
+  const folderWorkspaces = (state.folderWorkspaces ?? []).map((workspace) => {
+    if (workspace.connectionId) {
+      return workspace
+    }
+    const groupConnectionId = groupsById.get(workspace.projectGroupId)?.connectionId ?? null
+    const connectionId =
+      groupConnectionId ??
+      inferFolderScopeConnectionIdForMigration({
+        folderPath: workspace.folderPath,
+        projectGroupId: workspace.projectGroupId,
+        projectGroups,
+        repos
+      })
+    if (!connectionId) {
+      return workspace
+    }
+    changed = true
+    return { ...workspace, connectionId }
+  })
+  return {
+    changed,
+    state: changed ? { ...state, projectGroups, folderWorkspaces } : state
+  }
+}
+
 function deleteRemovedTerminalScrollbackSnapshots(
   prior: WorkspaceSessionState | undefined,
   next: WorkspaceSessionState
@@ -2411,11 +2492,15 @@ export class Store {
       this.loadNeedsSave = true
     }
 
-    result = {
+    const folderScopeConnectionMigration = backfillFolderScopeConnectionIds({
       ...result,
       repos: clearMissingProjectGroupMemberships(result.repos, result.projectGroups ?? []),
       workspaceSession: migratedScrollback.session
+    })
+    if (folderScopeConnectionMigration.changed) {
+      this.loadNeedsSave = true
     }
+    result = folderScopeConnectionMigration.state
 
     return this.migrateTelemetry(result, fileExistedOnLoad)
   }
@@ -2653,6 +2738,7 @@ export class Store {
   createProjectGroup(input: {
     name: string
     parentPath?: string | null
+    connectionId?: string | null
     parentGroupId?: string | null
     createdFrom: ProjectGroup['createdFrom']
   }): ProjectGroup {
@@ -2741,6 +2827,7 @@ export class Store {
     name?: string
     folderPath?: string | null
     linkedTask?: FolderWorkspace['linkedTask']
+    connectionId?: string | null
     createdWithAgent?: FolderWorkspace['createdWithAgent']
     pendingFirstAgentMessageRename?: boolean
   }): FolderWorkspace {
@@ -2760,6 +2847,7 @@ export class Store {
       projectGroupId: group.id,
       name: normalizeFolderWorkspaceName(input.name, `${group.name} workspace`),
       folderPath,
+      connectionId: input.connectionId ?? group.connectionId ?? null,
       linkedTask: input.linkedTask ?? null,
       comment: '',
       isArchived: false,

@@ -3038,7 +3038,17 @@
           "8db50afe1a": "폴더에서 저장소 가져오기",
           "5b2e6fe3c8": "별도로 가져오기",
           "cf9d382ca1": "수입",
-          "220dd32d83": "스캐닝..."
+          "220dd32d83": "스캐닝...",
+          "fb33359f69": "이 폴더가 모노레포인가요?",
+          "d75170194e": "이 프로젝트들이 함께 속한다면 이것을 선택하세요. Orca가 그룹으로 묶고 상위 폴더에서 작업할 수 있게 합니다.",
+          "39d51212cc": "모노레포 이름",
+          "e907ec8935": "모노레포 이름이란 무엇인가요?",
+          "aa0247680d": "아니요, 별도로 가져오기",
+          "a0bc4d1f8e": "예, 모노레포로 가져오기",
+          "8401a7a0d0": "저장소 1개",
+          "d4f1df62ef": "저장소 {{value0}}개",
+          "b4263a2ac4": "{{value1}}에서 {{value0}}을(를) 찾았습니다.",
+          "24eda6c8b2": "스캔 중... {{value0}}"
         },
         "AddRepoRemoteStep": {
           "5b205b5281": "스캔 중지",
@@ -3503,7 +3513,8 @@
           "f50603c6b2": "읽지 않은 것으로 표시",
           "8dacff1fe0": "마크 리드",
           "3baa7d6507": "핀",
-          "697d0f6e1b": "고정 해제"
+          "697d0f6e1b": "고정 해제",
+          "250de158fd": "Remove Workspace"
         },
         "WorktreeList": {
           "d880ea0744": "그룹을 만들고 이 프로젝트를 그룹으로 이동하세요.",
@@ -3536,7 +3547,8 @@
           "20bebf9c7f": "{{value0}}개 하위 워크스페이스 표시",
           "c1f4a31623": "{{value0}}개 하위 워크스페이스 표시",
           "e97297cb75": "{{value0}}개 하위 워크스페이스 숨기기",
-          "0cd15956d4": "{{value0}}개 하위 워크스페이스 숨기기"
+          "0cd15956d4": "{{value0}}개 하위 워크스페이스 숨기기",
+          "bd37a57ac8": "Create workspace for {{value0}}"
         },
         "WorktreeMetaDialog": {
           "3db0a2a593": "취소",
@@ -3759,6 +3771,15 @@
               }
             }
           }
+        },
+        "FolderWorkspaceComposerDialog": {
+          "connectFailed": "Failed to connect to project.",
+          "noRepos": "Add a Git project under this folder to attach GitHub or GitLab tasks.",
+          "title": "Create Folder Workspace",
+          "createStart": "Create & Start Agent",
+          "create": "Create Workspace",
+          "sourceProject": "Task Source",
+          "chooseSourceProject": "Choose task source"
         }
       },
       "shared": {

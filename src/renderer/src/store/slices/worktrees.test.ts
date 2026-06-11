@@ -204,21 +204,22 @@ function makeLineage(overrides: Partial<WorktreeLineage> = {}): WorktreeLineage 
 
 function makeFolderWorkspace(overrides: Partial<FolderWorkspace> = {}): FolderWorkspace {
   return {
-    id: 'folder-1',
-    projectGroupId: 'group-1',
-    name: 'platform workspace',
-    folderPath: '/work/platform',
-    comment: '',
-    isArchived: false,
-    isUnread: false,
-    isPinned: false,
-    sortOrder: 0,
-    manualOrder: 0,
-    lastActivityAt: 0,
-    createdAt: 0,
-    updatedAt: 0,
-    workspaceStatus: 'active',
-    ...overrides
+    ...overrides,
+    id: overrides.id ?? 'folder-1',
+    projectGroupId: overrides.projectGroupId ?? 'group-1',
+    name: overrides.name ?? 'platform workspace',
+    folderPath: overrides.folderPath ?? '/work/platform',
+    linkedTask: overrides.linkedTask ?? null,
+    comment: overrides.comment ?? '',
+    isArchived: overrides.isArchived ?? false,
+    isUnread: overrides.isUnread ?? false,
+    isPinned: overrides.isPinned ?? false,
+    sortOrder: overrides.sortOrder ?? 0,
+    manualOrder: overrides.manualOrder ?? 0,
+    lastActivityAt: overrides.lastActivityAt ?? 0,
+    createdAt: overrides.createdAt ?? 0,
+    updatedAt: overrides.updatedAt ?? 0,
+    workspaceStatus: overrides.workspaceStatus ?? 'active'
   }
 }
 

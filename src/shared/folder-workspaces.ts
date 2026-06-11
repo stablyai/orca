@@ -62,10 +62,10 @@ export function normalizeFolderWorkspaces(
   if (!Array.isArray(value)) {
     return []
   }
-  const folderGroupPaths = new Map<string, string>()
+  const folderGroups = new Map<string, ProjectGroup>()
   for (const group of projectGroups) {
     if (group.parentPath) {
-      folderGroupPaths.set(group.id, group.parentPath)
+      folderGroups.set(group.id, group)
     }
   }
 
@@ -81,14 +81,15 @@ export function normalizeFolderWorkspaces(
       raw.id.trim().length === 0 ||
       seen.has(raw.id) ||
       typeof raw.projectGroupId !== 'string' ||
-      !folderGroupPaths.has(raw.projectGroupId)
+      !folderGroups.has(raw.projectGroupId)
     ) {
       continue
     }
+    const group = folderGroups.get(raw.projectGroupId)
     const folderPath =
       typeof raw.folderPath === 'string' && raw.folderPath.trim().length > 0
         ? raw.folderPath
-        : folderGroupPaths.get(raw.projectGroupId)
+        : group?.parentPath
     if (!folderPath) {
       continue
     }
@@ -99,6 +100,12 @@ export function normalizeFolderWorkspaces(
       projectGroupId: raw.projectGroupId,
       name: normalizeFolderWorkspaceName(raw.name),
       folderPath,
+      connectionId:
+        typeof raw.connectionId === 'string'
+          ? raw.connectionId
+          : raw.connectionId === null
+            ? null
+            : (group?.connectionId ?? null),
       linkedTask: normalizeFolderWorkspaceLinkedTask(raw.linkedTask),
       comment: typeof raw.comment === 'string' ? raw.comment : '',
       isArchived: raw.isArchived === true,

@@ -3057,7 +3057,17 @@
           "8db50afe1a": "Importar repositorios desde la carpeta",
           "5b2e6fe3c8": "Importar por separado",
           "cf9d382ca1": "Importar",
-          "220dd32d83": "Exploración..."
+          "220dd32d83": "Exploración...",
+          "fb33359f69": "¿Es esto un monorepo?",
+          "d75170194e": "Elige esto si estos proyectos pertenecen juntos. Orca los agrupará y te permitirá trabajar desde la carpeta principal.",
+          "39d51212cc": "Nombre del monorepo",
+          "e907ec8935": "¿Qué es un nombre de monorepo?",
+          "aa0247680d": "No, importar por separado",
+          "a0bc4d1f8e": "Sí, importar como monorepo",
+          "8401a7a0d0": "1 repositorio",
+          "d4f1df62ef": "{{value0}} repositorios",
+          "b4263a2ac4": "Se encontraron {{value0}} en {{value1}}.",
+          "24eda6c8b2": "Explorando... {{value0}}"
         },
         "AddRepoRemoteStep": {
           "5b205b5281": "Detener escaneo",
@@ -3522,7 +3532,8 @@
           "f50603c6b2": "Marcar como no leído",
           "8dacff1fe0": "Marcar como leído",
           "3baa7d6507": "Alfiler",
-          "697d0f6e1b": "Desprender"
+          "697d0f6e1b": "Desprender",
+          "250de158fd": "Remove Workspace"
         },
         "WorktreeList": {
           "d880ea0744": "Crea un grupo y mueve este proyecto a él.",
@@ -3555,7 +3566,8 @@
           "20bebf9c7f": "Mostrar {{value0}} espacio de trabajo secundario",
           "c1f4a31623": "Mostrar {{value0}} espacios de trabajo secundarios",
           "e97297cb75": "Ocultar {{value0}} espacio de trabajo secundario",
-          "0cd15956d4": "Ocultar {{value0}} espacios de trabajo secundarios"
+          "0cd15956d4": "Ocultar {{value0}} espacios de trabajo secundarios",
+          "bd37a57ac8": "Create workspace for {{value0}}"
         },
         "WorktreeMetaDialog": {
           "3db0a2a593": "Cancelar",
@@ -3759,6 +3771,15 @@
         },
         "index": {
           "b826a98b6f": "ocupado"
+        },
+        "FolderWorkspaceComposerDialog": {
+          "connectFailed": "Failed to connect to project.",
+          "noRepos": "Add a Git project under this folder to attach GitHub or GitLab tasks.",
+          "title": "Create Folder Workspace",
+          "createStart": "Create & Start Agent",
+          "create": "Create Workspace",
+          "sourceProject": "Task Source",
+          "chooseSourceProject": "Choose task source"
         }
       },
       "shared": {

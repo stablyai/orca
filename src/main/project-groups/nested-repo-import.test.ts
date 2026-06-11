@@ -11,6 +11,7 @@ function createGroupRecorder(): {
   createGroup: (input: {
     name: string
     parentPath?: string | null
+    connectionId?: string | null
     parentGroupId?: string | null
     createdFrom: ProjectGroup['createdFrom']
   }) => ProjectGroup
@@ -23,6 +24,7 @@ function createGroupRecorder(): {
         id: `group-${groups.length}`,
         name: input.name,
         parentPath: input.parentPath ?? null,
+        connectionId: input.connectionId ?? null,
         parentGroupId: input.parentGroupId ?? null,
         createdFrom: input.createdFrom,
         tabOrder: groups.length,
@@ -54,6 +56,7 @@ describe('createNestedProjectGroupResolver', () => {
           id: `group-${groups.length}`,
           name: input.name,
           parentPath: input.parentPath ?? null,
+          connectionId: input.connectionId ?? null,
           parentGroupId: input.parentGroupId ?? null,
           createdFrom: input.createdFrom,
           tabOrder: groups.length,
@@ -229,6 +232,28 @@ describe('createNestedProjectGroupResolver', () => {
     expect(groups.map((group) => [group.name, group.parentGroupId, group.parentPath])).toEqual([
       ['Platform', null, 'C:/workspace/platform'],
       ['packages/shared', 'group-0', 'C:/workspace/platform/packages/shared']
+    ])
+  })
+
+  it('preserves SSH provenance on grouped folder scopes', () => {
+    const { groups, createGroup } = createGroupRecorder()
+    const resolver = createNestedProjectGroupResolver({
+      parentPath: '/workspace/platform',
+      groupName: 'Platform',
+      mode: 'group',
+      connectionId: 'ssh-1',
+      repoPaths: [
+        '/workspace/platform/packages/shared/repo1',
+        '/workspace/platform/packages/shared/repo2'
+      ],
+      createGroup
+    })
+
+    resolver.getGroupForRepo('/workspace/platform/packages/shared/repo1')
+
+    expect(groups.map((group) => [group.name, group.connectionId])).toEqual([
+      ['Platform', 'ssh-1'],
+      ['packages/shared', 'ssh-1']
     ])
   })
 

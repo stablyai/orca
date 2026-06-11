@@ -102,21 +102,23 @@ function renderNestedStep(repoCount: number): string {
 }
 
 describe('AddRepoDialogStepContent nested imports', () => {
-  it('uses the first-import nested repo action when no repos exist yet', () => {
+  it('asks the monorepo question when no repos exist yet', () => {
     const html = renderNestedStep(0)
 
-    expect(html).toContain('>Import</button>')
-    expect(html).not.toContain('Import as group')
-    expect(html).not.toContain('Import separately')
-    expect(html).not.toContain('aria-label="Group name"')
+    expect(html).toContain('Is this a monorepo?')
+    expect(html).toContain('aria-label="Monorepo name"')
+    expect(html).toContain('Yes, import as monorepo')
+    expect(html).toContain('No, import separately')
+    expect(html).not.toContain('>Import</button>')
   })
 
-  it('shows group import controls after a repo already exists', () => {
+  it('shows the same monorepo import controls after a repo already exists', () => {
     const html = renderNestedStep(1)
 
-    expect(html).toContain('aria-label="Group name"')
-    expect(html).toContain('Import separately')
-    expect(html).toContain('Import as group')
+    expect(html).toContain('Is this a monorepo?')
+    expect(html).toContain('aria-label="Monorepo name"')
+    expect(html).toContain('Yes, import as monorepo')
+    expect(html).toContain('No, import separately')
     expect(html).not.toContain('>Import</button>')
   })
 

@@ -136,6 +136,8 @@ export type ProjectGroup = {
   id: string
   name: string
   parentPath: string | null
+  /** SSH target ID for folder-backed groups imported from a remote root. */
+  connectionId?: string | null
   parentGroupId: string | null
   createdFrom: ProjectGroupCreatedFrom
   tabOrder: number
@@ -156,6 +158,8 @@ export type FolderWorkspace = {
   projectGroupId: string
   name: string
   folderPath: string
+  /** SSH target ID for folder workspaces whose folder path lives remotely. */
+  connectionId?: string | null
   linkedTask: FolderWorkspaceLinkedTask | null
   comment: string
   isArchived: boolean

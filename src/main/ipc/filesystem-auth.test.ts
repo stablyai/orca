@@ -219,6 +219,28 @@ describe('filesystem-auth path containment', () => {
     }
   })
 
+  it('does not authorize repo-less SSH-provenance folder roots as local paths', async () => {
+    const tempRoot = await mkdtemp(join(tmpdir(), 'orca-auth-remote-folder-provenance-'))
+    try {
+      const folderPath = join(tempRoot, 'remote-platform')
+      await mkdir(folderPath, { recursive: true })
+      const projectGroup = makeProjectGroup({ parentPath: folderPath, connectionId: 'ssh-1' })
+      const folderWorkspace = makeFolderWorkspace({
+        folderPath,
+        projectGroupId: projectGroup.id,
+        connectionId: 'ssh-1'
+      })
+      const store = makeStore([], {
+        projectGroups: [projectGroup],
+        folderWorkspaces: [folderWorkspace]
+      })
+
+      await expect(resolveAuthorizedPath(folderPath, store)).rejects.toThrow('Access denied')
+    } finally {
+      await rm(tempRoot, { recursive: true, force: true })
+    }
+  })
+
   it('does not authorize SSH-only folder-backed project group roots as local paths', async () => {
     const tempRoot = await mkdtemp(join(tmpdir(), 'orca-auth-remote-project-group-'))
     try {

@@ -3057,7 +3057,17 @@
           "8db50afe1a": "Import repositories from folder",
           "5b2e6fe3c8": "Import separately",
           "cf9d382ca1": "Import",
-          "220dd32d83": "Scanning..."
+          "220dd32d83": "Scanning...",
+          "fb33359f69": "Is this a monorepo?",
+          "d75170194e": "Choose this if these projects belong together. Orca will group them and let you work from the parent folder.",
+          "39d51212cc": "Monorepo name",
+          "e907ec8935": "What is a monorepo name?",
+          "aa0247680d": "No, import separately",
+          "a0bc4d1f8e": "Yes, import as monorepo",
+          "8401a7a0d0": "1 repository",
+          "d4f1df62ef": "{{value0}} repositories",
+          "b4263a2ac4": "Found {{value0}} in {{value1}}.",
+          "24eda6c8b2": "Scanning... {{value0}}"
         },
         "AddRepoRemoteStep": {
           "5b205b5281": "Stop scan",
@@ -3522,7 +3532,8 @@
           "f50603c6b2": "Mark Unread",
           "8dacff1fe0": "Mark Read",
           "3baa7d6507": "Pin",
-          "697d0f6e1b": "Unpin"
+          "697d0f6e1b": "Unpin",
+          "250de158fd": "Remove Workspace"
         },
         "WorktreeList": {
           "d880ea0744": "Create a group and move this project into it.",
@@ -3555,7 +3566,8 @@
           "20bebf9c7f": "Show {{value0}} child workspace",
           "c1f4a31623": "Show {{value0}} child workspaces",
           "e97297cb75": "Hide {{value0}} child workspace",
-          "0cd15956d4": "Hide {{value0}} child workspaces"
+          "0cd15956d4": "Hide {{value0}} child workspaces",
+          "bd37a57ac8": "Create workspace for {{value0}}"
         },
         "WorktreeMetaDialog": {
           "3db0a2a593": "Cancel",
@@ -3759,6 +3771,15 @@
         },
         "index": {
           "b826a98b6f": "busy"
+        },
+        "FolderWorkspaceComposerDialog": {
+          "connectFailed": "Failed to connect to project.",
+          "noRepos": "Add a Git project under this folder to attach GitHub or GitLab tasks.",
+          "title": "Create Folder Workspace",
+          "createStart": "Create & Start Agent",
+          "create": "Create Workspace",
+          "sourceProject": "Task Source",
+          "chooseSourceProject": "Choose task source"
         }
       },
       "shared": {

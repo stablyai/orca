@@ -35,6 +35,12 @@ import {
 import { isTuiAgent } from '../../../shared/tui-agent-config'
 import { resumeSleepingAgentSessionsForWorktree } from '@/lib/resume-sleeping-agent-session'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
+import {
+  folderWorkspaceActivationBlocked,
+  getFolderWorkspacePathStatusDescription,
+  getFolderWorkspacePathStatusTitle
+} from './folder-workspace-path-status'
+import { toast } from 'sonner'
 
 /** Telemetry payload threaded from the launch site to `pty:spawn`. Main
  *  fires `agent_started` only after the spawn succeeds — see
@@ -148,6 +154,16 @@ export function activateAndRevealFolderWorkspace(
     (workspace) => workspace.id === folderWorkspaceId
   )
   if (!folderWorkspace) {
+    return false
+  }
+  const pathStatus = state.getFreshFolderWorkspacePathStatus({
+    scope: 'folder-workspace',
+    folderWorkspaceId
+  })
+  if (folderWorkspaceActivationBlocked(pathStatus)) {
+    toast.error(getFolderWorkspacePathStatusTitle(pathStatus) ?? 'Cannot open folder workspace', {
+      description: getFolderWorkspacePathStatusDescription(pathStatus) ?? folderWorkspace.folderPath
+    })
     return false
   }
 

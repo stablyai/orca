@@ -11,6 +11,7 @@ import {
 type CreateGroupInput = {
   name: string
   parentPath?: string | null
+  connectionId?: string | null
   parentGroupId?: string | null
   createdFrom: ProjectGroup['createdFrom']
 }
@@ -140,6 +141,7 @@ export function createNestedProjectGroupResolver(args: {
   parentPath: string
   groupName: string
   mode: ProjectGroupImportMode
+  connectionId?: string | null
   repoPaths?: readonly string[]
   createGroup: (input: CreateGroupInput) => ProjectGroup
 }): NestedProjectGroupResolver {
@@ -165,6 +167,7 @@ export function createNestedProjectGroupResolver(args: {
     rootGroup = args.createGroup({
       name: args.groupName.trim() || fallbackName,
       parentPath: trimPathSeparators(args.parentPath),
+      connectionId: args.connectionId ?? null,
       parentGroupId: null,
       createdFrom: 'folder-scan'
     })
@@ -191,6 +194,7 @@ export function createNestedProjectGroupResolver(args: {
     const group = args.createGroup({
       name: scope.name,
       parentPath: scope.folderPath,
+      connectionId: args.connectionId ?? null,
       parentGroupId: parentGroup?.id ?? root.id,
       createdFrom: 'folder-scan'
     })

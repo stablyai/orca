@@ -12,6 +12,7 @@ import {
   Eye,
   FolderInput,
   FolderPlus,
+  FolderX,
   Plus,
   Shapes,
   SlidersHorizontal,
@@ -113,6 +114,11 @@ import {
   type VirtualizedScrollAnchor
 } from '@/hooks/useVirtualizedScrollAnchor'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
+import { useFolderWorkspacePathStatusCacheExpiryTick } from '@/lib/folder-workspace-path-status-cache-expiry'
+import {
+  getFolderWorkspacePathStatusDescription,
+  getFolderWorkspacePathStatusTitle
+} from '@/lib/folder-workspace-path-status'
 import { getShortcutPlatform } from '@/lib/shortcut-platform'
 import {
   SCROLL_TO_CURRENT_WORKSPACE_REVEAL_REQUEST_EVENT,
@@ -199,6 +205,10 @@ import {
 } from './worktree-list-indentation'
 import { translate } from '@/i18n/i18n'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
+import {
+  isConfirmedStaleFolderPathStatus,
+  type FolderWorkspacePathStatus
+} from '../../../../shared/folder-workspace-path-status'
 import {
   getFolderWorkspaceRevealGroupKeys,
   getKnownSidebarWorktreeById,
@@ -468,6 +478,41 @@ function SectionMetricsBadge({ count }: { count: number }): React.JSX.Element {
         </TooltipContent>
       </Tooltip>
     </span>
+  )
+}
+
+function FolderPathStatusIndicator({
+  status
+}: {
+  status: FolderWorkspacePathStatus | null | undefined
+}): React.JSX.Element | null {
+  const title = getFolderWorkspacePathStatusTitle(status)
+  if (!status || status.exists || !title) {
+    return null
+  }
+  const destructive = isConfirmedStaleFolderPathStatus(status)
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span
+          className={cn(
+            'inline-flex size-4 shrink-0 items-center justify-center rounded-[4px]',
+            destructive ? 'text-destructive' : 'text-muted-foreground'
+          )}
+          aria-label={title}
+        >
+          <FolderX className="size-3.5" />
+        </span>
+      </TooltipTrigger>
+      <TooltipContent side="bottom" sideOffset={6} className="max-w-72">
+        <div className="space-y-1">
+          <div className="font-medium">{title}</div>
+          <div className="text-muted-foreground">
+            {getFolderWorkspacePathStatusDescription(status)}
+          </div>
+        </div>
+      </TooltipContent>
+    </Tooltip>
   )
 }
 
@@ -1018,6 +1063,82 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
     [renderRows, activeWorktreeId]
   )
   const sshConnectionStates = useAppStore((s) => s.sshConnectionStates)
+  const {
+    folderWorkspacePathStatuses,
+    fetchFolderWorkspacePathStatus,
+    getFolderWorkspacePathStatusCacheKey,
+    getFreshFolderWorkspacePathStatus,
+    activeRuntimeEnvironmentId
+  } = useAppStore(
+    useShallow((s) => ({
+      folderWorkspacePathStatuses: s.folderWorkspacePathStatuses,
+      fetchFolderWorkspacePathStatus: s.fetchFolderWorkspacePathStatus,
+      getFolderWorkspacePathStatusCacheKey: s.getFolderWorkspacePathStatusCacheKey,
+      getFreshFolderWorkspacePathStatus: s.getFreshFolderWorkspacePathStatus,
+      activeRuntimeEnvironmentId: s.settings?.activeRuntimeEnvironmentId ?? null
+    }))
+  )
+  const folderPathStatusRepoMembershipKey = useMemo(
+    () =>
+      allRepoIds
+        .map((repoId) => {
+          const repo = repoMap.get(repoId)
+          return `${repoId}:${repo?.path ?? ''}:${repo?.projectGroupId ?? ''}:${repo?.connectionId ?? ''}`
+        })
+        .join('\0'),
+    [allRepoIds, repoMap]
+  )
+  const folderPathStatusSshConnectionKey = useMemo(
+    () =>
+      [...sshConnectionStates.entries()]
+        .map(([connectionId, state]) => `${connectionId}:${state.status}`)
+        .sort()
+        .join('\0'),
+    [sshConnectionStates]
+  )
+  const folderPathStatusCacheExpiryTick = useFolderWorkspacePathStatusCacheExpiryTick(
+    folderWorkspacePathStatuses
+  )
+  useEffect(() => {
+    const requests = new Map<string, Parameters<typeof fetchFolderWorkspacePathStatus>[0]>()
+    for (const group of projectGroups) {
+      if (group.parentPath) {
+        const request = { scope: 'project-group' as const, projectGroupId: group.id }
+        requests.set(getFolderWorkspacePathStatusCacheKey(request), request)
+      }
+    }
+    for (const workspace of folderWorkspaces) {
+      const request = { scope: 'folder-workspace' as const, folderWorkspaceId: workspace.id }
+      requests.set(getFolderWorkspacePathStatusCacheKey(request), request)
+    }
+    for (const request of requests.values()) {
+      void fetchFolderWorkspacePathStatus(request, { force: true })
+    }
+  }, [
+    activeRuntimeEnvironmentId,
+    fetchFolderWorkspacePathStatus,
+    folderPathStatusRepoMembershipKey,
+    folderPathStatusSshConnectionKey,
+    folderWorkspaces,
+    getFolderWorkspacePathStatusCacheKey,
+    projectGroups
+  ])
+  const getCachedFolderWorkspacePathStatus = useCallback(
+    (request: Parameters<typeof fetchFolderWorkspacePathStatus>[0]) => {
+      const cacheKey = getFolderWorkspacePathStatusCacheKey(request)
+      // Why: expired negative statuses should not keep disabling folder
+      // workspaces while a fresh status request is in flight.
+      void folderWorkspacePathStatuses[cacheKey]
+      void folderPathStatusCacheExpiryTick
+      return getFreshFolderWorkspacePathStatus(request)
+    },
+    [
+      folderWorkspacePathStatuses,
+      folderPathStatusCacheExpiryTick,
+      getFolderWorkspacePathStatusCacheKey,
+      getFreshFolderWorkspacePathStatus
+    ]
+  )
   const renderRowsRef = useRef(renderRows)
   renderRowsRef.current = renderRows
   const getVirtualItemKey = useCallback(
@@ -2812,6 +2933,20 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                       : null
                   })
                 : null
+              const projectGroupPathStatus =
+                isProjectGroupHeader &&
+                row.projectGroup &&
+                'parentPath' in row.projectGroup &&
+                row.projectGroup.parentPath
+                  ? getCachedFolderWorkspacePathStatus({
+                      scope: 'project-group',
+                      projectGroupId: row.projectGroup.id
+                    })
+                  : null
+              const folderWorkspaceCreateDisabled =
+                projectGroupPathStatus?.exists === false &&
+                (isConfirmedStaleFolderPathStatus(projectGroupPathStatus) ||
+                  projectGroupPathStatus.reason === 'ambiguous-connection')
               const projectGroupDepth = row.projectGroupDepth ?? 0
               // Why: non-project section headers like "All" are labels for the
               // flat list, so they should not reserve project hierarchy indent.
@@ -2940,6 +3075,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                           {row.label}
                         </div>
                         <RepoForkIndicator upstream={row.repo?.upstream} />
+                        <FolderPathStatusIndicator status={projectGroupPathStatus} />
                         <SectionMetricsBadge count={row.count} />
                       </div>
                     </div>
@@ -3029,17 +3165,25 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                             variant="ghost"
                             size="icon-xs"
                             data-repo-header-action=""
-                            className="size-5 shrink-0 rounded-md text-muted-foreground opacity-0 transition-opacity hover:bg-accent/70 hover:text-foreground focus:opacity-100 group-hover:opacity-100"
+                            className={cn(
+                              'size-5 shrink-0 rounded-md text-muted-foreground opacity-0 transition-opacity hover:bg-accent/70 hover:text-foreground focus:opacity-100 group-hover:opacity-100',
+                              folderWorkspaceCreateDisabled &&
+                                'cursor-not-allowed text-muted-foreground/60 hover:bg-transparent hover:text-muted-foreground/60'
+                            )}
                             aria-label={translate(
                               'auto.components.sidebar.WorktreeList.bd37a57ac8',
                               'Create workspace for {{value0}}',
                               { value0: row.label }
                             )}
+                            aria-disabled={folderWorkspaceCreateDisabled}
                             onKeyDown={stopRepoHeaderKeyboardToggle}
                             onPointerDown={handleRepoHeaderActionPointerDown}
                             onClick={(event) => {
                               event.preventDefault()
                               event.stopPropagation()
+                              if (folderWorkspaceCreateDisabled) {
+                                return
+                              }
                               if (
                                 row.projectGroup &&
                                 'parentPath' in row.projectGroup &&
@@ -3053,11 +3197,13 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                           </Button>
                         </TooltipTrigger>
                         <TooltipContent side="bottom" sideOffset={6}>
-                          {translate(
-                            'auto.components.sidebar.WorktreeList.bd37a57ac8',
-                            'Create workspace for {{value0}}',
-                            { value0: row.label }
-                          )}
+                          {projectGroupPathStatus?.exists === false
+                            ? getFolderWorkspacePathStatusDescription(projectGroupPathStatus)
+                            : translate(
+                                'auto.components.sidebar.WorktreeList.bd37a57ac8',
+                                'Create workspace for {{value0}}',
+                                { value0: row.label }
+                              )}
                         </TooltipContent>
                       </Tooltip>
                     ) : null}
@@ -3528,6 +3674,14 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
             if (row.type === 'folder-workspace') {
               const folderWorkspaceRow = row as FolderWorkspaceItemRow
               const folderWorktree = folderWorkspaceToWorktree(folderWorkspaceRow.folderWorkspace)
+              const folderWorkspacePathStatus = getCachedFolderWorkspacePathStatus({
+                scope: 'folder-workspace',
+                folderWorkspaceId: folderWorkspaceRow.folderWorkspace.id
+              })
+              const folderWorkspaceActivationDisabled =
+                folderWorkspacePathStatus?.exists === false &&
+                (isConfirmedStaleFolderPathStatus(folderWorkspacePathStatus) ||
+                  folderWorkspacePathStatus.reason === 'ambiguous-connection')
               const contentIndent = getWorktreeCardContentIndent({
                 isGrouped: groupBy !== 'none',
                 groupDepth: folderWorkspaceRow.groupDepth,
@@ -3558,7 +3712,10 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                   onClickCapture={handleWorktreeRowClickCapture}
                   onPointerDown={(event) => handleWorktreeRowPointerDown(event, folderWorktree.id)}
                 >
-                  <div style={surfaceInset > 0 ? { paddingLeft: surfaceInset } : undefined}>
+                  <div
+                    className="relative"
+                    style={surfaceInset > 0 ? { paddingLeft: surfaceInset } : undefined}
+                  >
                     <WorktreeCard
                       worktree={folderWorktree}
                       repo={undefined}
@@ -3567,10 +3724,15 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                       contentIndent={insetContentIndent}
                       flushSurface
                       nativeDragEnabled={false}
-                      onImmediateActivate={onImmediateWorktreeActivate}
+                      onImmediateActivate={
+                        folderWorkspaceActivationDisabled ? undefined : onImmediateWorktreeActivate
+                      }
                       onSelectionGesture={onSelectionGesture}
                       onContextMenuSelect={onContextMenuSelect}
                     />
+                    <div className="pointer-events-auto absolute right-3 top-1.5">
+                      <FolderPathStatusIndicator status={folderWorkspacePathStatus} />
+                    </div>
                   </div>
                 </div>
               )

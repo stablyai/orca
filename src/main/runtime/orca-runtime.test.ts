@@ -1,6 +1,7 @@
 /* eslint-disable max-lines -- Why: runtime behavior is stateful and cross-cutting, so these tests stay in one file to preserve the end-to-end invariants around handles, waits, and graph sync. */
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { EventEmitter } from 'events'
+import { randomUUID } from 'crypto'
 import { lstat, mkdir, mkdtemp, rm, writeFile } from 'fs/promises'
 import { tmpdir } from 'os'
 import { join } from 'path'
@@ -4006,8 +4007,13 @@ describe('OrcaRuntimeService', () => {
     { label: 'canonical folder workspace selector', selector: TEST_FOLDER_WORKSPACE_KEY },
     { label: 'id-prefixed folder workspace selector', selector: `id:${TEST_FOLDER_WORKSPACE_KEY}` }
   ])('creates background terminal sessions for a $label', async ({ selector }) => {
+    const folderPath = await mkdtemp(join(tmpdir(), 'orca-runtime-folder-workspace-'))
     const spawn = vi.fn().mockResolvedValue({ id: 'pty-folder' })
-    const runtime = new OrcaRuntimeService(createFolderWorkspaceRuntimeStore() as never)
+    const folderWorkspace = makeFolderWorkspace({ folderPath })
+    const projectGroup = makeFolderProjectGroup({ parentPath: folderPath })
+    const runtime = new OrcaRuntimeService(
+      createFolderWorkspaceRuntimeStore(folderWorkspace, projectGroup) as never
+    )
     runtime.setPtyController({
       spawn,
       write: () => true,
@@ -4031,14 +4037,50 @@ describe('OrcaRuntimeService', () => {
       | undefined
     const spawnedEnv = spawnCall?.env ?? {}
     expect(spawnCall).toMatchObject({
-      cwd: TEST_FOLDER_WORKSPACE_PATH,
+      cwd: folderPath,
       worktreeId: TEST_FOLDER_WORKSPACE_KEY
     })
     expectStablePaneKeyEnv(spawnedEnv)
     expect(spawnedEnv.ORCA_WORKSPACE_ID).toBe(TEST_FOLDER_WORKSPACE_KEY)
     expect(spawnedEnv.ORCA_PROJECT_GROUP_ID).toBe(TEST_FOLDER_PROJECT_GROUP_ID)
-    expect(spawnedEnv.ORCA_WORKSPACE_ROOT).toBe(TEST_FOLDER_WORKSPACE_PATH)
+    expect(spawnedEnv.ORCA_WORKSPACE_ROOT).toBe(folderPath)
     expect(spawnedEnv.ORCA_WORKTREE_ID).toBe(TEST_FOLDER_WORKSPACE_KEY)
+  })
+
+  it('rejects folder workspace terminal creation when the backing path is missing', async () => {
+    const missingPath = join(tmpdir(), `orca-missing-folder-workspace-${randomUUID()}`)
+    const spawn = vi.fn().mockResolvedValue({ id: 'pty-folder' })
+    const folderWorkspace = makeFolderWorkspace({ folderPath: missingPath })
+    const projectGroup = makeFolderProjectGroup({ parentPath: missingPath })
+    const runtime = new OrcaRuntimeService(
+      createFolderWorkspaceRuntimeStore(folderWorkspace, projectGroup) as never
+    )
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+
+    await expect(runtime.createTerminal(TEST_FOLDER_WORKSPACE_KEY)).rejects.toThrow(
+      'folder_workspace_path_missing'
+    )
+    expect(spawn).not.toHaveBeenCalled()
+  })
+
+  it('rejects folder workspace folderPath updates when the new path is missing', async () => {
+    const missingPath = join(tmpdir(), `orca-missing-folder-update-${randomUUID()}`)
+    const folderWorkspace = makeFolderWorkspace()
+    const runtimeStore = {
+      ...createFolderWorkspaceRuntimeStore(folderWorkspace),
+      updateFolderWorkspace: vi.fn()
+    }
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+
+    await expect(
+      runtime.updateFolderWorkspace(TEST_FOLDER_WORKSPACE_ID, { folderPath: missingPath })
+    ).rejects.toThrow('folder_workspace_path_missing')
+    expect(runtimeStore.updateFolderWorkspace).not.toHaveBeenCalled()
   })
 
   it('enables Claude Agent Teams only for direct Claude launches when configured in-process', async () => {
@@ -4256,12 +4298,17 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('splits folder workspace pty-backed terminal sessions with folder cwd and env', async () => {
+    const folderPath = await mkdtemp(join(tmpdir(), 'orca-runtime-folder-split-'))
     const spawn = vi
       .fn()
       .mockResolvedValueOnce({ id: 'pty-folder-source' })
       .mockResolvedValueOnce({ id: 'pty-folder-split' })
     const revealTerminalSession = vi.fn().mockResolvedValue({ tabId: 'tab-folder' })
-    const runtime = new OrcaRuntimeService(createFolderWorkspaceRuntimeStore() as never)
+    const folderWorkspace = makeFolderWorkspace({ folderPath })
+    const projectGroup = makeFolderProjectGroup({ parentPath: folderPath })
+    const runtime = new OrcaRuntimeService(
+      createFolderWorkspaceRuntimeStore(folderWorkspace, projectGroup) as never
+    )
     runtime.setPtyController({
       spawn,
       write: () => true,
@@ -4304,18 +4351,18 @@ describe('OrcaRuntimeService', () => {
     const splitEnv = splitCall?.env ?? {}
     const splitLeafId = splitEnv.ORCA_PANE_KEY.slice(`${sourceEnv.ORCA_TAB_ID}:`.length)
     expect(sourceCall).toMatchObject({
-      cwd: TEST_FOLDER_WORKSPACE_PATH,
+      cwd: folderPath,
       worktreeId: TEST_FOLDER_WORKSPACE_KEY
     })
     expect(splitCall).toMatchObject({
-      cwd: TEST_FOLDER_WORKSPACE_PATH,
+      cwd: folderPath,
       worktreeId: TEST_FOLDER_WORKSPACE_KEY
     })
     expectStablePaneKeyEnv(splitEnv)
     expect(splitEnv.ORCA_TAB_ID).toBe(sourceEnv.ORCA_TAB_ID)
     expect(splitEnv.ORCA_WORKSPACE_ID).toBe(TEST_FOLDER_WORKSPACE_KEY)
     expect(splitEnv.ORCA_PROJECT_GROUP_ID).toBe(TEST_FOLDER_PROJECT_GROUP_ID)
-    expect(splitEnv.ORCA_WORKSPACE_ROOT).toBe(TEST_FOLDER_WORKSPACE_PATH)
+    expect(splitEnv.ORCA_WORKSPACE_ROOT).toBe(folderPath)
     expect(splitEnv.ORCA_WORKTREE_ID).toBe(TEST_FOLDER_WORKSPACE_KEY)
     expect(revealTerminalSession).toHaveBeenLastCalledWith(TEST_FOLDER_WORKSPACE_KEY, {
       ptyId: 'pty-folder-split',

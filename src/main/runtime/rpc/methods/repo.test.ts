@@ -306,7 +306,10 @@ describe('repo RPC methods', () => {
       ]),
       createFolderWorkspace: vi.fn().mockResolvedValue({ id: 'folder-workspace-2' }),
       updateFolderWorkspace: vi.fn().mockResolvedValue({ id: 'folder-workspace-1', comment: 'x' }),
-      deleteFolderWorkspace: vi.fn().mockResolvedValue({ deleted: true })
+      deleteFolderWorkspace: vi.fn().mockResolvedValue({ deleted: true }),
+      getFolderWorkspacePathStatus: vi
+        .fn()
+        .mockResolvedValue({ path: '/srv/platform', exists: true })
     } as unknown as OrcaRuntimeService
     const dispatcher = new RpcDispatcher({ runtime, methods: REPO_METHODS })
 
@@ -348,6 +351,12 @@ describe('repo RPC methods', () => {
     await dispatcher.dispatch(
       makeRequest('folderWorkspace.delete', { folderWorkspaceId: 'folder-workspace-1' })
     )
+    const statusResponse = await dispatcher.dispatch(
+      makeRequest('folderWorkspace.getPathStatus', {
+        scope: 'folder-workspace',
+        folderWorkspaceId: 'folder-workspace-1'
+      })
+    )
 
     expect(runtime.listProjectGroups).toHaveBeenCalled()
     expect(runtime.createProjectGroup).toHaveBeenCalledWith({
@@ -370,6 +379,10 @@ describe('repo RPC methods', () => {
       comment: 'x'
     })
     expect(runtime.deleteFolderWorkspace).toHaveBeenCalledWith('folder-workspace-1')
+    expect(runtime.getFolderWorkspacePathStatus).toHaveBeenCalledWith({
+      scope: 'folder-workspace',
+      folderWorkspaceId: 'folder-workspace-1'
+    })
     expect(moveResponse).toMatchObject({
       ok: true,
       result: { repo: { id: 'repo-1', projectGroupId: group.id } }
@@ -379,6 +392,10 @@ describe('repo RPC methods', () => {
       result: {
         folderWorkspaces: [expect.objectContaining({ id: 'folder-workspace-1' })]
       }
+    })
+    expect(statusResponse).toMatchObject({
+      ok: true,
+      result: { status: { path: '/srv/platform', exists: true } }
     })
   })
 

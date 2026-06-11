@@ -20,6 +20,7 @@ const FolderWorkspaceCreate = z.object({
   projectGroupId: requiredString('Missing project group id'),
   name: OptionalString,
   folderPath: OptionalString.nullable().optional(),
+  connectionId: OptionalString.nullable().optional(),
   linkedTask: FolderWorkspaceLinkedTask.optional(),
   createdWithAgent: z.string().refine(isTuiAgent).optional(),
   pendingFirstAgentMessageRename: z.boolean().optional()
@@ -49,6 +50,17 @@ const FolderWorkspaceSelector = z.object({
   folderWorkspaceId: requiredString('Missing folder workspace id')
 })
 
+const FolderWorkspacePathStatus = z.discriminatedUnion('scope', [
+  z.object({
+    scope: z.literal('folder-workspace'),
+    folderWorkspaceId: requiredString('Missing folder workspace id')
+  }),
+  z.object({
+    scope: z.literal('project-group'),
+    projectGroupId: requiredString('Missing project group id')
+  })
+])
+
 export const FOLDER_WORKSPACE_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'folderWorkspace.list',
@@ -75,5 +87,12 @@ export const FOLDER_WORKSPACE_METHODS: RpcMethod[] = [
     name: 'folderWorkspace.delete',
     params: FolderWorkspaceSelector,
     handler: async (params, { runtime }) => runtime.deleteFolderWorkspace(params.folderWorkspaceId)
+  }),
+  defineMethod({
+    name: 'folderWorkspace.getPathStatus',
+    params: FolderWorkspacePathStatus,
+    handler: async (params, { runtime }) => ({
+      status: await runtime.getFolderWorkspacePathStatus(params)
+    })
   })
 ]
