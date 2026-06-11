@@ -1,11 +1,9 @@
 /* eslint-disable max-lines -- Why: model download, checksum, extraction, and cleanup share one state machine so progress/error transitions stay coupled. */
-import { app } from 'electron'
+import { app, net } from 'electron'
 import { join, resolve, relative } from 'path'
 import { existsSync, mkdirSync, createWriteStream, createReadStream, rmSync } from 'fs'
 import { readdir, rm } from 'fs/promises'
 import { createHash } from 'crypto'
-import { get as httpsGet } from 'https'
-import type { IncomingMessage } from 'http'
 import { pipeline } from 'stream/promises'
 import { spawn } from 'child_process'
 import type {
@@ -22,6 +20,12 @@ type DownloadHandle = {
 }
 
 type ProgressCallback = (modelId: string, progress: number) => void
+type DownloadIncomingMessage = Electron.IncomingMessage &
+  NodeJS.ReadableStream & {
+    headers: Record<string, string | string[] | undefined>
+    resume: () => void
+    destroy?: () => void
+  }
 
 const DOWNLOAD_IDLE_TIMEOUT_MS = 120_000
 
@@ -287,15 +291,34 @@ export class ModelManager {
       }
 
       let settled = false
-      let request: ReturnType<typeof httpsGet> | null = null
+      let request: Electron.ClientRequest | null = null
+      let idleTimeout: ReturnType<typeof setTimeout> | null = null
+      const onSignalAbort = (): void => {
+        const activeRequest = request
+        rejectOnce(new Error('Aborted'))
+        activeRequest?.abort()
+      }
+      const clearIdleTimeout = (): void => {
+        if (idleTimeout) {
+          clearTimeout(idleTimeout)
+          idleTimeout = null
+        }
+      }
       const cleanupRequestListeners = (): void => {
         const activeRequest = request
+        clearIdleTimeout()
         if (!activeRequest) {
           return
         }
         activeRequest.off('error', onRequestError)
-        activeRequest.off('timeout', onRequestTimeout)
+        activeRequest.off('response', onResponse)
+        activeRequest.off('redirect', onRedirect)
+        signal?.removeEventListener('abort', onSignalAbort)
         request = null
+      }
+      const resetIdleTimeout = (): void => {
+        clearIdleTimeout()
+        idleTimeout = setTimeout(onRequestTimeout, DOWNLOAD_IDLE_TIMEOUT_MS)
       }
       const resolveOnce = (): void => {
         if (settled) {
@@ -321,62 +344,57 @@ export class ModelManager {
             `Model download timed out after ${DOWNLOAD_IDLE_TIMEOUT_MS / 1000} seconds without network activity`
           )
         )
-        activeRequest?.destroy()
+        activeRequest?.abort()
       }
-      const onResponse = (response: IncomingMessage): void => {
-        if (
-          response.statusCode === 301 ||
-          response.statusCode === 302 ||
-          response.statusCode === 303 ||
-          response.statusCode === 307 ||
-          response.statusCode === 308
-        ) {
-          const redirectUrl = response.headers.location
-          if (!redirectUrl) {
-            response.resume()
-            rejectOnce(new Error('Redirect without location'))
-            return
-          }
-          if (redirectCount >= 5) {
-            response.resume()
-            rejectOnce(new Error('Too many redirects'))
-            return
-          }
-          let resolvedRedirect: URL
-          try {
-            resolvedRedirect = new URL(redirectUrl, parsedUrl)
-          } catch {
-            response.resume()
-            rejectOnce(new Error('Invalid redirect URL'))
-            return
-          }
-          if (resolvedRedirect.protocol !== 'https:') {
-            response.resume()
-            rejectOnce(new Error('Model download redirect must use HTTPS'))
-            return
-          }
-          response.resume()
-          this.downloadFile(
-            resolvedRedirect.toString(),
-            dest,
-            expectedSize,
-            modelId,
-            isAborted,
-            signal,
-            redirectCount + 1
-          )
-            .then(resolveOnce)
-            .catch(rejectOnce)
+      const onRedirect = (_statusCode: number, _method: string, redirectUrl: string): void => {
+        if (redirectCount >= 5) {
+          const activeRequest = request
+          rejectOnce(new Error('Too many redirects'))
+          activeRequest?.abort()
           return
         }
-
+        let resolvedRedirect: URL
+        try {
+          resolvedRedirect = new URL(redirectUrl, parsedUrl)
+        } catch {
+          const activeRequest = request
+          rejectOnce(new Error('Invalid redirect URL'))
+          activeRequest?.abort()
+          return
+        }
+        if (resolvedRedirect.protocol !== 'https:') {
+          const activeRequest = request
+          rejectOnce(new Error('Model download redirect must use HTTPS'))
+          activeRequest?.abort()
+          return
+        }
+        const activeRequest = request
+        cleanupRequestListeners()
+        activeRequest?.abort()
+        this.downloadFile(
+          resolvedRedirect.toString(),
+          dest,
+          expectedSize,
+          modelId,
+          isAborted,
+          signal,
+          redirectCount + 1
+        )
+          .then(resolveOnce)
+          .catch(rejectOnce)
+      }
+      const onResponse = (incoming: Electron.IncomingMessage): void => {
+        const response = incoming as DownloadIncomingMessage
         if (response.statusCode !== 200) {
           response.resume()
           rejectOnce(new Error(`HTTP ${response.statusCode}`))
           return
         }
 
-        const totalSize = parseInt(response.headers['content-length'] || '0', 10) || expectedSize
+        const contentLength = response.headers['content-length']
+        const totalSize =
+          parseInt(Array.isArray(contentLength) ? contentLength[0] : contentLength || '0', 10) ||
+          expectedSize
         let downloaded = 0
 
         const fileStream = createWriteStream(dest)
@@ -385,9 +403,10 @@ export class ModelManager {
           response.off('data', onResponseData)
         }
         const onResponseData = (chunk: Buffer): void => {
+          resetIdleTimeout()
           if (isAborted()) {
-            request?.destroy(new Error('Aborted'))
-            response.destroy()
+            request?.abort()
+            response.destroy?.()
             fileStream.destroy()
             return
           }
@@ -412,15 +431,18 @@ export class ModelManager {
           })
       }
 
-      request = signal
-        ? httpsGet(parsedUrl, { signal }, onResponse)
-        : httpsGet(parsedUrl, onResponse)
+      request = net.request({ method: 'GET', url: parsedUrl.toString() })
 
-      // Why: cancellation only helps after the user presses cancel; a peer
-      // that accepts the socket and goes silent must not leave the model stuck
-      // in "downloading" forever.
-      request.setTimeout(DOWNLOAD_IDLE_TIMEOUT_MS, onRequestTimeout)
+      // Why: Electron's net stack honors app proxy settings, unlike Node's
+      // https client, but it does not expose request.setTimeout().
+      resetIdleTimeout()
       request.on('error', onRequestError)
+      request.on('response', onResponse)
+      request.on('redirect', onRedirect)
+      if (signal) {
+        signal.addEventListener('abort', onSignalAbort, { once: true })
+      }
+      request.end()
     })
   }
 

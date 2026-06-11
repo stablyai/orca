@@ -5,24 +5,22 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { SPEECH_MODEL_CATALOG } from './model-catalog'
 import { ModelManager } from './model-manager'
 
-const { httpsGetMock } = vi.hoisted(() => ({
-  httpsGetMock: vi.fn()
+const { netRequestMock } = vi.hoisted(() => ({
+  netRequestMock: vi.fn()
 }))
 
 vi.mock('electron', () => ({
   app: {
     getPath: () => '/tmp/orca-speech-models-test'
+  },
+  net: {
+    request: netRequestMock
   }
 }))
 
-vi.mock('https', async () => {
-  const actual = await vi.importActual('https')
-  return { ...(actual as Record<string, unknown>), get: httpsGetMock }
-})
-
 describe('ModelManager download failures', () => {
   beforeEach(() => {
-    httpsGetMock.mockReset()
+    netRequestMock.mockReset()
   })
 
   it('rejects failed model downloads so the caller can surface the error', async () => {
@@ -31,8 +29,15 @@ describe('ModelManager download failures', () => {
       const manifest = SPEECH_MODEL_CATALOG[0]
       const errorHandlers: ((err: Error) => void)[] = []
       const request = {
-        destroy: vi.fn(() => request),
-        setTimeout: vi.fn(() => request),
+        abort: vi.fn(() => request),
+        end: vi.fn(() => {
+          queueMicrotask(() => {
+            for (const handler of errorHandlers) {
+              handler(new Error('network down'))
+            }
+          })
+          return request
+        }),
         on: vi.fn((event: string, cb: (err: Error) => void) => {
           if (event === 'error') {
             errorHandlers.push(cb)
@@ -49,14 +54,7 @@ describe('ModelManager download failures', () => {
           return request
         })
       }
-      httpsGetMock.mockImplementation(() => {
-        queueMicrotask(() => {
-          for (const handler of errorHandlers) {
-            handler(new Error('network down'))
-          }
-        })
-        return request
-      })
+      netRequestMock.mockReturnValue(request)
       const manager = new ModelManager(dir)
 
       await expect(manager.downloadModel(manifest.id)).rejects.toThrow('network down')
