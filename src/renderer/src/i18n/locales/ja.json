@@ -1629,7 +1629,9 @@
               "331ebe1170": "このPRを GitHub マージ キューに追加します",
               "b169f943e1": "準備ができたらマージ",
               "62703b1dc4": "このPRでは GitHub 自動マージが有効になっています",
-              "48d75ae118": "自動マージを無効にする"
+              "48d75ae118": "自動マージを無効にする",
+              "a5b66afb58": "Checks passed",
+              "fbd4f57f0a": "Checks passed. Merge eligibility will be checked again before merging."
             }
           }
         },
