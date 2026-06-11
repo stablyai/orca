@@ -70,7 +70,7 @@ describe('daemon bundle staleness', () => {
         { mode: 0o600 }
       )
 
-      expect(isDaemonStaleForCurrentBundle(dir, socketPath, tokenPath, '1.2.3')).toBe(true)
+      expect(await isDaemonStaleForCurrentBundle(dir, socketPath, tokenPath, '1.2.3')).toBe(true)
     } finally {
       child.kill('SIGKILL')
     }
@@ -101,7 +101,7 @@ describe('daemon bundle staleness', () => {
         { mode: 0o600 }
       )
 
-      expect(isDaemonStaleForCurrentBundle(dir, socketPath, tokenPath, '1.2.3')).toBe(false)
+      expect(await isDaemonStaleForCurrentBundle(dir, socketPath, tokenPath, '1.2.3')).toBe(false)
     } finally {
       child.kill('SIGKILL')
     }
@@ -131,7 +131,7 @@ describe('daemon bundle staleness', () => {
         { mode: 0o600 }
       )
 
-      expect(isDaemonStaleForCurrentBundle(dir, socketPath, tokenPath, '1.2.3')).toBe(true)
+      expect(await isDaemonStaleForCurrentBundle(dir, socketPath, tokenPath, '1.2.3')).toBe(true)
     } finally {
       child.kill('SIGKILL')
     }

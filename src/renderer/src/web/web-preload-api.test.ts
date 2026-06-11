@@ -997,6 +997,53 @@ describe('web UI preload API', () => {
   })
 })
 
+describe('web repos preload API', () => {
+  beforeEach(() => {
+    vi.resetModules()
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.doUnmock('./web-runtime-client')
+  })
+
+  it.each([
+    ['/home/alice', '/home/alice/orca/projects'],
+    ['/', '/orca/projects'],
+    ['C:\\', 'C:\\orca\\projects']
+  ])(
+    'resolves the default create-project parent from runtime host home %s',
+    async (resolvedPath, expectedParent) => {
+      const runtimeCalls: { method: string; params: unknown }[] = []
+      vi.doMock('./web-runtime-client', () => ({
+        WebRuntimeClient: class {
+          call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
+            runtimeCalls.push({ method, params })
+            return Promise.resolve({
+              id: method,
+              ok: true,
+              result: { resolvedPath, entries: [] },
+              _meta: { runtimeId: 'runtime-1' }
+            })
+          }
+
+          close(): void {}
+        }
+      }))
+
+      const globals = installBrowserGlobals('Linux')
+      writeStoredRuntimeEnvironment(globals.storage)
+      const { installWebPreloadApi } = await import('./web-preload-api')
+      installWebPreloadApi()
+
+      await expect(globals.window.api.repos.getDefaultCreateProjectParent()).resolves.toBe(
+        expectedParent
+      )
+      expect(runtimeCalls).toEqual([{ method: 'files.browseServerDir', params: { path: '~' } }])
+    }
+  )
+})
+
 describe('web worktree preload API', () => {
   beforeEach(() => {
     vi.resetModules()

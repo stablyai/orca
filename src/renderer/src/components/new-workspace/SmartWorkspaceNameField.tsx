@@ -41,6 +41,7 @@ import {
 } from '@/lib/github-links'
 import { lookupSmartGitHubSubmitItem } from '@/lib/smart-github-submit'
 import { parseGitLabIssueOrMRLink } from '@/lib/gitlab-links'
+import { getLocalPreflightContext, localPreflightContextKey } from '@/lib/local-preflight-context'
 import { cn } from '@/lib/utils'
 import { LinearIcon } from '@/components/icons/LinearIcon'
 import { JiraIcon } from '@/components/icons/JiraIcon'
@@ -189,6 +190,8 @@ export default function SmartWorkspaceNameField({
     listLinearIssues,
     preflightStatus,
     preflightStatusChecked,
+    preflightStatusContextKey,
+    expectedPreflightContextKey,
     refreshPreflightStatus,
     searchLinearIssues,
     settings
@@ -203,6 +206,8 @@ export default function SmartWorkspaceNameField({
       listLinearIssues: s.listLinearIssues,
       preflightStatus: s.preflightStatus,
       preflightStatusChecked: s.preflightStatusChecked,
+      preflightStatusContextKey: s.preflightStatusContextKey,
+      expectedPreflightContextKey: localPreflightContextKey(getLocalPreflightContext(s)),
       refreshPreflightStatus: s.refreshPreflightStatus,
       searchLinearIssues: s.searchLinearIssues,
       settings: s.settings
@@ -239,13 +244,14 @@ export default function SmartWorkspaceNameField({
     link: NonNullable<ReturnType<typeof parseGitHubIssueOrPRLink>>
     matchingRepo: RepoOption | null
   } | null>(null)
+  const preflightStatusCurrent = preflightStatusContextKey === expectedPreflightContextKey
   const availableTaskProviders = useMemo(
     () =>
       filterAvailableTaskProviders(['github', 'gitlab', 'linear'], {
-        gitlabInstalled: preflightStatus?.glab?.installed === true,
+        gitlabInstalled: preflightStatusCurrent && preflightStatus?.glab?.installed === true,
         linearConnected: linearStatus.connected === true
       }),
-    [linearStatus.connected, preflightStatus?.glab?.installed]
+    [linearStatus.connected, preflightStatus?.glab?.installed, preflightStatusCurrent]
   )
   const gitlabAvailable = availableTaskProviders.includes('gitlab')
   const linearAvailable = availableTaskProviders.includes('linear')
@@ -314,7 +320,7 @@ export default function SmartWorkspaceNameField({
     if (disabled || textOnly) {
       return
     }
-    if (!preflightStatusChecked) {
+    if (!preflightStatusChecked || !preflightStatusCurrent) {
       void refreshPreflightStatus()
     }
     if (!linearStatusChecked) {
@@ -325,6 +331,7 @@ export default function SmartWorkspaceNameField({
     disabled,
     linearStatusChecked,
     preflightStatusChecked,
+    preflightStatusCurrent,
     refreshPreflightStatus,
     textOnly
   ])

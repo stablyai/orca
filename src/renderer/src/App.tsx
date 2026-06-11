@@ -55,6 +55,7 @@ import {
   isFloatingWorkspaceTerminalInputTarget,
   shouldMinimizeFloatingWorkspacePanelOnCloseShortcut
 } from '@/lib/floating-workspace-terminal-actions'
+import { createFloatingWorkspaceTourInteractionSnapshot } from '@/lib/floating-workspace-tour-interaction-snapshot'
 import { requestScrollToCurrentWorkspaceRevealAndRename } from '@/lib/scroll-to-current-workspace-status'
 import { WorkspacePortScanner } from './components/ports/WorkspacePortScanner'
 import { CrashReportDialog } from './components/crash-report/CrashReportDialog'
@@ -313,6 +314,11 @@ function App(): React.JSX.Element {
   useRadixBodyPointerEventsRecovery()
   useWebSessionTabsSync()
   const [floatingTerminalOpen, setFloatingTerminalOpen] = useState(false)
+  const floatingWorkspaceTourInteractionSnapshotRef = useRef<{
+    wasPreviouslyInteracted?: boolean
+    persisted?: Promise<void>
+    recordFeatureInteractionForTour: boolean
+  } | null>(null)
 
   // Why: Zustand actions are referentially stable, but each individual
   // useAppStore(s => s.someAction) still registers a subscription that React
@@ -477,7 +483,9 @@ function App(): React.JSX.Element {
       // Why: recordFeatureInteraction updates Zustand subscribers; doing it
       // inside React's state updater logs a render-phase update warning.
       if (resolvedOpen && !floatingTerminalOpen) {
-        useAppStore.getState().recordFeatureInteraction('floating-workspace')
+        const state = useAppStore.getState()
+        floatingWorkspaceTourInteractionSnapshotRef.current =
+          createFloatingWorkspaceTourInteractionSnapshot(state)
         rememberFloatingTerminalReturnFocus()
       } else if (!resolvedOpen && floatingTerminalOpen) {
         restoreFloatingTerminalReturnFocus()
@@ -2017,6 +2025,7 @@ function App(): React.JSX.Element {
                 <FloatingTerminalPanel
                   open={floatingTerminalOpen}
                   onOpenChange={setFloatingTerminalOpenWithFocus}
+                  tourInteractionSnapshot={floatingWorkspaceTourInteractionSnapshotRef.current}
                 />
               </RecoverableRenderErrorBoundary>
             </Suspense>

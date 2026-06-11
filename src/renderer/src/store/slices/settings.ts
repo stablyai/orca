@@ -22,6 +22,7 @@ import { normalizeTaskProviderSettings } from '../../../../shared/task-providers
 import { normalizeOpenInApplications } from '../../../../shared/open-in-applications'
 import { createSettingsSearchState, type SettingsSearchState } from './settings-search-state'
 import { normalizeDisabledTuiAgents } from '../../../../shared/tui-agent-selection'
+import { bumpProviderRuntimeSessionGeneration } from '@/lib/provider-runtime-context'
 import { normalizeUiLanguage } from '../../../../shared/ui-language'
 import { translate } from '@/i18n/i18n'
 
@@ -133,6 +134,7 @@ function runtimeScopedStateReset(): Partial<AppState> {
     projectViewCache: {},
     linearStatus: { connected: false, viewer: null },
     linearStatusChecked: false,
+    linearStatusContextKey: null,
     linearIssueCache: {},
     linearSearchCache: {},
     linearListCache: {},
@@ -146,6 +148,7 @@ function runtimeScopedStateReset(): Partial<AppState> {
     linearCustomViewProjectCache: {},
     jiraStatus: { connected: false, viewer: null },
     jiraStatusChecked: false,
+    jiraStatusContextKey: null,
     jiraIssueCache: {},
     jiraSearchCache: {}
   }
@@ -348,6 +351,7 @@ export const createSettingsSlice: StateCreator<AppState, [], [], SettingsSlice> 
       const nextSettings = await window.api.settings.set({
         activeRuntimeEnvironmentId: nextId
       })
+      bumpProviderRuntimeSessionGeneration()
       set((s) => ({
         ...runtimeScopedStateReset(),
         settings:

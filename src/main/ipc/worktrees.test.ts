@@ -547,10 +547,10 @@ describe('registerWorktreeHandlers', () => {
       }
     ])
 
-    const result = await handlers['worktrees:create'](null, {
+    const result = (await handlers['worktrees:create'](null, {
       repoId: 'repo-1',
       name: 'improve-dashboard'
-    })
+    })) as CreateWorktreeResult
 
     expect(addWorktreeMock).toHaveBeenCalledWith(
       '/workspace/repo',
@@ -2155,7 +2155,8 @@ describe('registerWorktreeHandlers', () => {
       'repo-ssh::/remote/sparse-dashboard',
       expect.objectContaining({
         sparseDirectories: ['apps/mobile', 'packages/shared'],
-        sparseBaseRef: 'origin/main',
+        baseRef: 'refs/remotes/origin/main',
+        sparseBaseRef: 'refs/remotes/origin/main',
         sparsePresetId: 'preset-1'
       })
     )
@@ -2163,7 +2164,7 @@ describe('registerWorktreeHandlers', () => {
       worktree: expect.objectContaining({
         isSparse: true,
         sparseDirectories: ['apps/mobile', 'packages/shared'],
-        sparseBaseRef: 'origin/main',
+        sparseBaseRef: 'refs/remotes/origin/main',
         sparsePresetId: 'preset-1'
       })
     })
@@ -2880,12 +2881,12 @@ describe('registerWorktreeHandlers', () => {
     )
     expect(runtimeStub.fetchRemoteWithCache).not.toHaveBeenCalled()
     resolveFetch()
-    const result = await createPromise
+    const result = (await createPromise) as CreateWorktreeResult
     expect(addWorktreeMock).toHaveBeenCalled()
-    expect(result).toEqual(
-      expect.objectContaining({
-        worktree: expect.objectContaining({ id: 'repo-1::/workspace/improve-dashboard' })
-      })
+    expect(result.worktree.id).toBe('repo-1::/workspace/improve-dashboard')
+    expect(store.setWorktreeMeta).toHaveBeenCalledWith(
+      'repo-1::/workspace/improve-dashboard',
+      expect.objectContaining({ baseRef: 'refs/remotes/origin/main' })
     )
   })
 
@@ -2935,10 +2936,10 @@ describe('registerWorktreeHandlers', () => {
     ])
     gitExecFileAsyncMock.mockResolvedValue({ stdout: 'created-sha\n', stderr: '' })
 
-    const result = await handlers['worktrees:create'](null, {
+    const result = (await handlers['worktrees:create'](null, {
       repoId: 'repo-1',
       name: 'improve-dashboard'
-    })
+    })) as CreateWorktreeResult
 
     expect(runtimeStub.getOrStartRemoteTrackingBaseRefresh).toHaveBeenCalledWith(
       '/workspace/repo',
@@ -2978,10 +2979,10 @@ describe('registerWorktreeHandlers', () => {
     ])
     gitExecFileAsyncMock.mockResolvedValue({ stdout: 'created-sha\n', stderr: '' })
 
-    const result = await handlers['worktrees:create'](null, {
+    const result = (await handlers['worktrees:create'](null, {
       repoId: 'repo-1',
       name: 'improve-dashboard'
-    })
+    })) as CreateWorktreeResult
 
     expect(addWorktreeMock).toHaveBeenCalledWith(
       '/workspace/repo',
@@ -3000,15 +3001,15 @@ describe('registerWorktreeHandlers', () => {
         }
       }
     )
-    expect(result).toEqual(
-      expect.objectContaining({
-        localBaseRefUpdateSuggestion: {
-          baseRef: 'origin/main',
-          localBranch: 'main',
-          behind: 2
-        }
-      })
+    expect(store.setWorktreeMeta).toHaveBeenCalledWith(
+      'repo-1::/workspace/improve-dashboard',
+      expect.objectContaining({ baseRef: 'refs/remotes/origin/main' })
     )
+    expect(result.localBaseRefUpdateSuggestion).toEqual({
+      baseRef: 'origin/main',
+      localBranch: 'main',
+      behind: 2
+    })
   })
 
   it('throws a clear error when no default base ref can be resolved', async () => {

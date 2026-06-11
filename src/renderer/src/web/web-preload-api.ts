@@ -77,6 +77,7 @@ import {
 } from '../../../shared/feature-interactions'
 import { normalizeContextualTourIds, type ContextualTourId } from '../../../shared/contextual-tours'
 import { translate } from '@/i18n/i18n'
+import { getDefaultCreateProjectParent } from '@/components/sidebar/create-project-defaults'
 
 const SETTINGS_STORAGE_KEY = 'orca.web.settings.v1'
 const UI_STORAGE_KEY = 'orca.web.ui.v1'
@@ -1013,6 +1014,14 @@ function createReposApi(): NonNullable<Partial<PreloadApi>['repos']> {
     create: async ({ parentPath, name, kind }) => {
       invalidateRuntimeWorktreeCaches()
       return callRuntimeResult('repo.create', { parentPath, name, kind })
+    },
+    isGitAvailable: async () =>
+      (await callRuntimeResult<{ available: boolean }>('repo.gitAvailable')).available,
+    getDefaultCreateProjectParent: async () => {
+      const result = await callRuntimeResult<{ resolvedPath: string }>('files.browseServerDir', {
+        path: '~'
+      })
+      return getDefaultCreateProjectParent(result.resolvedPath)
     },
     onCloneProgress: () => noopUnsubscribe,
     getGitUsername: () => Promise.resolve(''),

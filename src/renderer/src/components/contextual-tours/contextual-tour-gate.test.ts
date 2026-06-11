@@ -40,6 +40,26 @@ describe('contextual tour gate', () => {
     expect(decision).toEqual({ kind: 'blocked', reason: 'missing-start-target' })
   })
 
+  it('can start the floating workspace tour from the non-empty surface fallback', () => {
+    const tour = getContextualTour('floating-workspace')
+    const fallbackSelector =
+      '[data-contextual-tour-target="floating-workspace-new-terminal"], [data-contextual-tour-target="floating-workspace-surface"]'
+    const decision = getContextualTourRequestDecision({
+      tour,
+      persistedUIReady: true,
+      autoEligible: true,
+      onboardingVisible: false,
+      seenIds: [],
+      sessionConsumed: false,
+      activeTourId: null,
+      activeModal: 'none',
+      blockingSurfaceVisible: false,
+      targetExists: (selector) => selector === fallbackSelector
+    })
+
+    expect(decision).toEqual({ kind: 'start', stepIndex: 0 })
+  })
+
   it('returns null when selector lookup or measurement throws', () => {
     expect(
       getMeasurableContextualTourTarget('[', {

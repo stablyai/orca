@@ -757,6 +757,61 @@ describe('createLinearSlice', () => {
     expect(store.getState().linearStatus.viewer?.email).toBe('test@example.com')
   })
 
+  it('ignores stale status responses after the active runtime changes', async () => {
+    const localStatus = deferred<LinearConnectionStatus>()
+    const remoteStatus = deferred<LinearConnectionStatus>()
+    const localViewer = {
+      displayName: 'Local User',
+      email: 'local@example.com',
+      organizationName: 'Local Org'
+    }
+    const remoteViewer = {
+      displayName: 'Remote User',
+      email: 'remote@example.com',
+      organizationName: 'Remote Org'
+    }
+    linearStatus.mockReturnValueOnce(localStatus.promise).mockReturnValueOnce(remoteStatus.promise)
+    const store = createTestStore()
+
+    const localRequest = store.getState().checkLinearConnection()
+    store.setState({ settings: { activeRuntimeEnvironmentId: 'runtime-1' } as never })
+    const remoteRequest = store.getState().checkLinearConnection()
+
+    remoteStatus.resolve({ connected: true, viewer: remoteViewer })
+    await remoteRequest
+    expect(store.getState().linearStatus.viewer?.email).toBe('remote@example.com')
+    expect(store.getState().linearStatusContextKey).toBe('runtime:runtime-1#0')
+
+    localStatus.resolve({ connected: true, viewer: localViewer })
+    await localRequest
+    expect(store.getState().linearStatus.viewer?.email).toBe('remote@example.com')
+    expect(store.getState().linearStatusContextKey).toBe('runtime:runtime-1#0')
+  })
+
+  it('ignores stale list cache writes after the active runtime changes', async () => {
+    const localList = deferred<LinearCollectionResult<LinearIssue>>()
+    const remoteList = deferred<LinearCollectionResult<LinearIssue>>()
+    linearListIssues.mockReturnValueOnce(localList.promise).mockReturnValueOnce(remoteList.promise)
+    const store = createTestStore()
+    store.setState({ linearStatus: { connected: true, viewer: null } })
+
+    const localRequest = store.getState().listLinearIssues('assigned', 20)
+    store.setState({ settings: { activeRuntimeEnvironmentId: 'runtime-1' } as never })
+    const remoteRequest = store.getState().listLinearIssues('assigned', 20)
+
+    remoteList.resolve({ items: [issue('LIN-REMOTE')] })
+    await remoteRequest
+    expect(
+      store.getState().getCachedLinearIssues({ kind: 'list', filter: 'assigned', limit: 20 })
+    ).toMatchObject({ items: [{ id: 'LIN-REMOTE' }] })
+
+    localList.resolve({ items: [issue('LIN-LOCAL')] })
+    await localRequest
+    expect(
+      store.getState().getCachedLinearIssues({ kind: 'list', filter: 'assigned', limit: 20 })
+    ).toMatchObject({ items: [{ id: 'LIN-REMOTE' }] })
+  })
+
   it('ignores stale status checks after a successful connect', async () => {
     const staleMountCheck = deferred<LinearConnectionStatus>()
     const freshConnectCheck = deferred<LinearConnectionStatus>()
@@ -785,6 +840,29 @@ describe('createLinearSlice', () => {
 
     expect(store.getState().linearStatus.connected).toBe(true)
     expect(store.getState().linearStatus.viewer?.email).toBe('test@example.com')
+  })
+
+  it('ignores stale connect results after the active runtime changes', async () => {
+    const connectResult = deferred<{ ok: true; viewer: LinearViewer }>()
+    const viewer = {
+      displayName: 'Local User',
+      email: 'local@example.com',
+      organizationName: 'Local Org'
+    }
+    linearConnect.mockReturnValueOnce(connectResult.promise)
+    const store = createTestStore()
+
+    const connectPromise = store.getState().connectLinear('linear-key')
+    store.setState({ settings: { activeRuntimeEnvironmentId: 'runtime-1' } as never })
+
+    connectResult.resolve({ ok: true, viewer })
+    await expect(connectPromise).resolves.toEqual({
+      ok: false,
+      error: 'Linear connection was superseded by a newer request.'
+    })
+
+    expect(store.getState().linearStatus.connected).toBe(false)
+    expect(store.getState().linearStatusContextKey).toBeNull()
   })
 
   it('does not let a background status refresh cancel an in-flight connect', async () => {

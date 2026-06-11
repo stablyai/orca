@@ -92,4 +92,43 @@ describe('contextual tour panel position', () => {
     expect(position.top).toBe(465)
     expect(position.left).toBe(560)
   })
+
+  it('keeps the floating workspace surface fallback panel outside the taught surface', () => {
+    const targetRect = { left: 360, right: 1080, top: 96, bottom: 536, width: 720, height: 440 }
+    const position = clampContextualTourPanelPosition({
+      targetRect,
+      viewport: { width: 1280, height: 720 },
+      panel: { width: 320, height: 160 },
+      preferredPlacement: 'left'
+    })
+
+    expect(position.placement).toBe('left')
+    expect(position.left + 320).toBeLessThanOrEqual(targetRect.left - 12)
+  })
+
+  it('flips a preferred side placement instead of clamping over the target', () => {
+    const targetRect = { left: 12, right: 360, top: 96, bottom: 536, width: 348, height: 440 }
+    const position = clampContextualTourPanelPosition({
+      targetRect,
+      viewport: { width: 1280, height: 720 },
+      panel: { width: 320, height: 160 },
+      preferredPlacement: 'left'
+    })
+
+    expect(position.placement).toBe('right')
+    expect(position.left).toBeGreaterThanOrEqual(targetRect.right + 12)
+  })
+
+  it('uses side room when a preferred vertical placement cannot fit above or below', () => {
+    const targetRect = { left: 120, right: 220, top: 40, bottom: 680, width: 100, height: 640 }
+    const position = clampContextualTourPanelPosition({
+      targetRect,
+      viewport: { width: 1280, height: 720 },
+      panel: { width: 320, height: 160 },
+      preferredPlacement: 'bottom'
+    })
+
+    expect(position.placement).toBe('right')
+    expect(position.left).toBeGreaterThanOrEqual(targetRect.right + 12)
+  })
 })

@@ -15,6 +15,7 @@ import {
 } from '../../../../shared/task-providers'
 import { useActivityUnreadCount } from '@/components/activity/useActivityUnreadCount'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
+import { getLocalPreflightContext, localPreflightContextKey } from '@/lib/local-preflight-context'
 import { useMobileSidebarOnboardingBadge } from './mobile-sidebar-onboarding-badge'
 import {
   ContextMenu,
@@ -109,7 +110,11 @@ const SidebarNav = React.memo(function SidebarNav() {
   const defaultTaskSource = useAppStore((s) => s.settings?.defaultTaskSource ?? 'github')
   const preflightStatus = useAppStore((s) => s.preflightStatus)
   const preflightStatusChecked = useAppStore((s) => s.preflightStatusChecked)
+  const preflightStatusContextKey = useAppStore((s) => s.preflightStatusContextKey)
   const refreshPreflightStatus = useAppStore((s) => s.refreshPreflightStatus)
+  const expectedPreflightContextKey = useAppStore((s) =>
+    localPreflightContextKey(getLocalPreflightContext(s))
+  )
   const linearStatus = useAppStore((s) => s.linearStatus)
   const linearStatusChecked = useAppStore((s) => s.linearStatusChecked)
   const checkLinearConnection = useAppStore((s) => s.checkLinearConnection)
@@ -120,12 +125,13 @@ const SidebarNav = React.memo(function SidebarNav() {
     () => normalizeVisibleTaskProviders(rawVisibleTaskProviders),
     [rawVisibleTaskProviders]
   )
+  const preflightStatusCurrent = preflightStatusContextKey === expectedPreflightContextKey
   const visibleTaskProviders = React.useMemo(
     () =>
       restoreAvailableDefaultTaskProvider(
         preferredVisibleTaskProviders,
         {
-          gitlabInstalled: preflightStatus?.glab?.installed === true,
+          gitlabInstalled: preflightStatusCurrent && preflightStatus?.glab?.installed === true,
           linearConnected: linearStatus.connected === true
         },
         defaultTaskSource
@@ -134,6 +140,7 @@ const SidebarNav = React.memo(function SidebarNav() {
       defaultTaskSource,
       linearStatus.connected,
       preferredVisibleTaskProviders,
+      preflightStatusCurrent,
       preflightStatus?.glab?.installed
     ]
   )
@@ -143,13 +150,19 @@ const SidebarNav = React.memo(function SidebarNav() {
   )
 
   React.useEffect(() => {
-    if (!preflightStatusChecked) {
+    if (!preflightStatusChecked || !preflightStatusCurrent) {
       void refreshPreflightStatus()
     }
     if (!linearStatusChecked) {
       void checkLinearConnection()
     }
-  }, [checkLinearConnection, linearStatusChecked, preflightStatusChecked, refreshPreflightStatus])
+  }, [
+    checkLinearConnection,
+    linearStatusChecked,
+    preflightStatusChecked,
+    preflightStatusCurrent,
+    refreshPreflightStatus
+  ])
 
   // Why: warm the GitHub work-item cache on hover/focus so by the time the
   // user's click finishes the round-trip has either completed or is already

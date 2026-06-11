@@ -41,6 +41,8 @@ import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { useAllWorktrees, useRepoMap } from '@/store/selectors'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
+import { getLocalPreflightContext, localPreflightContextKey } from '@/lib/local-preflight-context'
+import { getProviderRuntimeContextKey } from '@/lib/provider-runtime-context'
 import { Button } from '@/components/ui/button'
 import { ButtonGroup } from '@/components/ui/button-group'
 import { Input } from '@/components/ui/input'
@@ -2464,8 +2466,10 @@ export default function TaskPage(): React.JSX.Element {
   const workItemsInvalidationNonce = useAppStore((s) => s.workItemsInvalidationNonce)
   const linearStatus = useAppStore((s) => s.linearStatus)
   const linearStatusChecked = useAppStore((s) => s.linearStatusChecked)
+  const linearStatusContextKey = useAppStore((s) => s.linearStatusContextKey)
   const preflightStatus = useAppStore((s) => s.preflightStatus)
   const preflightStatusChecked = useAppStore((s) => s.preflightStatusChecked)
+  const preflightStatusContextKey = useAppStore((s) => s.preflightStatusContextKey)
   const selectLinearWorkspace = useAppStore((s) => s.selectLinearWorkspace)
   const searchLinearIssues = useAppStore((s) => s.searchLinearIssues)
   const listLinearIssues = useAppStore((s) => s.listLinearIssues)
@@ -2484,13 +2488,27 @@ export default function TaskPage(): React.JSX.Element {
   const patchLinearIssue = useAppStore((s) => s.patchLinearIssue)
   const checkLinearConnection = useAppStore((s) => s.checkLinearConnection)
   const refreshPreflightStatus = useAppStore((s) => s.refreshPreflightStatus)
+  const expectedPreflightContextKey = useAppStore((s) =>
+    localPreflightContextKey(getLocalPreflightContext(s))
+  )
   const jiraStatus = useAppStore((s) => s.jiraStatus)
   const jiraStatusChecked = useAppStore((s) => s.jiraStatusChecked)
+  const jiraStatusContextKey = useAppStore((s) => s.jiraStatusContextKey)
   const connectJira = useAppStore((s) => s.connectJira)
   const selectJiraSite = useAppStore((s) => s.selectJiraSite)
   const searchJiraIssues = useAppStore((s) => s.searchJiraIssues)
   const listJiraIssues = useAppStore((s) => s.listJiraIssues)
   const checkJiraConnection = useAppStore((s) => s.checkJiraConnection)
+  const providerRuntimeContextKey = getProviderRuntimeContextKey(settings)
+  const providerRuntimeContextKeyRef = useRef(providerRuntimeContextKey)
+  providerRuntimeContextKeyRef.current = providerRuntimeContextKey
+  const linearStatusCurrent = linearStatusContextKey === providerRuntimeContextKey
+  const jiraStatusCurrent = jiraStatusContextKey === providerRuntimeContextKey
+  const preflightStatusCurrent = preflightStatusContextKey === expectedPreflightContextKey
+  const linearStatusReady = linearStatusCurrent && linearStatusChecked
+  const jiraStatusReady = jiraStatusCurrent && jiraStatusChecked
+  const linearConnected = linearStatusCurrent && linearStatus.connected
+  const jiraConnected = jiraStatusCurrent && jiraStatus.connected
   const submitShortcutLabel = getScreenSubmitShortcutLabel()
   const eligibleRepos = useMemo(() => repos.filter((repo) => isGitRepoKind(repo)), [repos])
 
@@ -2585,15 +2603,16 @@ export default function TaskPage(): React.JSX.Element {
       restoreAvailableDefaultTaskProvider(
         preferredVisibleTaskProviders,
         {
-          gitlabInstalled: preflightStatus?.glab?.installed === true,
-          linearConnected: linearStatus.connected === true
+          gitlabInstalled: preflightStatusCurrent && preflightStatus?.glab?.installed === true,
+          linearConnected: linearConnected === true
         },
         defaultTaskSource
       ),
     [
       defaultTaskSource,
-      linearStatus.connected,
+      linearConnected,
       preferredVisibleTaskProviders,
+      preflightStatusCurrent,
       preflightStatus?.glab?.installed
     ]
   )
@@ -3405,7 +3424,7 @@ export default function TaskPage(): React.JSX.Element {
       linearContextResumeAttemptedRef.current ||
       !taskResumeApplied ||
       taskSource !== 'linear' ||
-      !linearStatus.connected ||
+      !linearConnected ||
       !context
     ) {
       return
@@ -3482,7 +3501,7 @@ export default function TaskPage(): React.JSX.Element {
     fetchLinearCustomView,
     fetchLinearProject,
     listLinearCustomViews,
-    linearStatus.connected,
+    linearConnected,
     setTaskResumeState,
     taskResumeApplied,
     taskResumeState?.linearContext,
@@ -3499,7 +3518,7 @@ export default function TaskPage(): React.JSX.Element {
     if (!taskResumeApplied) {
       return
     }
-    if (taskSource !== 'linear' || !linearStatus.connected) {
+    if (taskSource !== 'linear' || !linearConnected) {
       setAvailableTeams([])
       return
     }
@@ -3526,7 +3545,7 @@ export default function TaskPage(): React.JSX.Element {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     taskSource,
-    linearStatus.connected,
+    linearConnected,
     selectedLinearWorkspaceId,
     linearTeamRefreshNonce,
     taskResumeApplied,
@@ -3541,7 +3560,7 @@ export default function TaskPage(): React.JSX.Element {
     if (!taskResumeApplied) {
       return
     }
-    if (taskSource !== 'jira' || !jiraStatus.connected) {
+    if (taskSource !== 'jira' || !jiraConnected) {
       setAvailableJiraProjects([])
       setJiraProjectsLoading(false)
       return
@@ -3568,7 +3587,7 @@ export default function TaskPage(): React.JSX.Element {
     return () => {
       cancelled = true
     }
-  }, [settings, taskSource, jiraStatus.connected, selectedJiraSiteId, taskResumeApplied])
+  }, [settings, taskSource, jiraConnected, selectedJiraSiteId, taskResumeApplied])
 
   // Why: stable key for `selectedRepos` so the GitLab fetch effect below
   // doesn't re-run on every parent re-render just because the array
@@ -4321,7 +4340,7 @@ export default function TaskPage(): React.JSX.Element {
 
   useEffect(() => {
     let cancelled = false
-    if (!newLinearIssueTargetTeam) {
+    if (!newLinearIssueOpen || !linearConnected || !newLinearIssueTargetTeam) {
       setNewLinearIssueProjects([])
       setNewLinearIssueProjectsLoading(false)
       return
@@ -4347,7 +4366,13 @@ export default function TaskPage(): React.JSX.Element {
       // populate the composer after a team/workspace switch.
       cancelled = true
     }
-  }, [newLinearIssueTargetTeam, settings, selectedLinearWorkspaceId])
+  }, [
+    linearConnected,
+    newLinearIssueOpen,
+    newLinearIssueTargetTeam,
+    settings,
+    selectedLinearWorkspaceId
+  ])
 
   useEffect(() => {
     // Why: the selected team can change indirectly when the available Linear
@@ -4367,17 +4392,17 @@ export default function TaskPage(): React.JSX.Element {
   }, [newLinearIssueTargetTeam?.id, newLinearIssueTargetTeam?.workspaceId, selectedLinearProject])
 
   const newLinearStates = useTeamStates(
-    newLinearIssueTargetTeam?.id || null,
+    linearConnected ? newLinearIssueTargetTeam?.id || null : null,
     settings,
     newLinearIssueTargetTeam?.workspaceId
   )
   const newLinearMembers = useTeamMembers(
-    newLinearIssueTargetTeam?.id || null,
+    linearConnected ? newLinearIssueTargetTeam?.id || null : null,
     settings,
     newLinearIssueTargetTeam?.workspaceId
   )
   const newLinearLabels = useTeamLabels(
-    newLinearIssueTargetTeam?.id || null,
+    linearConnected ? newLinearIssueTargetTeam?.id || null : null,
     settings,
     newLinearIssueTargetTeam?.workspaceId
   )
@@ -4447,6 +4472,45 @@ export default function TaskPage(): React.JSX.Element {
   const [jiraConnectState, setJiraConnectState] = useState<'idle' | 'connecting' | 'error'>('idle')
   const [jiraConnectError, setJiraConnectError] = useState<string | null>(null)
   const includeJiraSiteNameInProjectLabel = selectedJiraSiteId === 'all'
+  const previousProviderRuntimeContextKeyRef = useRef(providerRuntimeContextKey)
+
+  useEffect(() => {
+    if (previousProviderRuntimeContextKeyRef.current === providerRuntimeContextKey) {
+      return
+    }
+    previousProviderRuntimeContextKeyRef.current = providerRuntimeContextKey
+    if (newLinearIssueOpen) {
+      setNewLinearIssueOpen(false)
+      setNewLinearIssueTitle('')
+      setNewLinearIssueBody('')
+      setNewLinearIssueTeamId(null)
+      setNewLinearIssueStateId(null)
+      setNewLinearIssueAssigneeId(null)
+      setNewLinearIssuePriority(0)
+      setNewLinearIssueProjectId(null)
+      setNewLinearIssueLabelIds([])
+      setNewLinearIssueProjects([])
+      setNewLinearIssueProjectsLoading(false)
+      setNewLinearIssueSubmitting(false)
+    }
+    if (newJiraIssueOpen) {
+      setNewJiraIssueOpen(false)
+      setNewJiraIssueTitle('')
+      setNewJiraIssueBody('')
+      setNewJiraIssueProjectId(null)
+      setNewJiraIssueProjectComboboxOpen(false)
+      setNewJiraIssueProjectQuery('')
+      setNewJiraIssueProjectCommandValue('')
+      setNewJiraIssueTypeId(null)
+      setAvailableJiraIssueTypes([])
+      setJiraIssueTypesLoading(false)
+      setJiraCreateFields([])
+      setJiraCreateFieldsLoading(false)
+      setJiraCreateFieldsError(null)
+      setNewJiraIssueCustomFieldValues({})
+      setNewJiraIssueSubmitting(false)
+    }
+  }, [newJiraIssueOpen, newLinearIssueOpen, providerRuntimeContextKey])
 
   const sortedAvailableJiraProjects = useMemo(
     () =>
@@ -4562,7 +4626,7 @@ export default function TaskPage(): React.JSX.Element {
   )
 
   useEffect(() => {
-    if (!newJiraIssueOpen || !newJiraIssueTargetProject) {
+    if (!newJiraIssueOpen || !jiraConnected || !newJiraIssueTargetProject) {
       setAvailableJiraIssueTypes([])
       setJiraIssueTypesLoading(false)
       return
@@ -4597,10 +4661,15 @@ export default function TaskPage(): React.JSX.Element {
     return () => {
       cancelled = true
     }
-  }, [settings, newJiraIssueOpen, newJiraIssueTargetProject])
+  }, [settings, jiraConnected, newJiraIssueOpen, newJiraIssueTargetProject])
 
   useEffect(() => {
-    if (!newJiraIssueOpen || !newJiraIssueTargetProject || !newJiraIssueTargetType) {
+    if (
+      !newJiraIssueOpen ||
+      !jiraConnected ||
+      !newJiraIssueTargetProject ||
+      !newJiraIssueTargetType
+    ) {
       setJiraCreateFields([])
       setJiraCreateFieldsLoading(false)
       setJiraCreateFieldsError(null)
@@ -4638,7 +4707,7 @@ export default function TaskPage(): React.JSX.Element {
       // responses after the user switches either selector.
       cancelled = true
     }
-  }, [settings, newJiraIssueOpen, newJiraIssueTargetProject, newJiraIssueTargetType])
+  }, [settings, jiraConnected, newJiraIssueOpen, newJiraIssueTargetProject, newJiraIssueTargetType])
 
   // Why: defense-in-depth safety net applied to the current page's items.
   // The active tab scopes requests to issues or PRs, and this keeps stale
@@ -5536,6 +5605,7 @@ export default function TaskPage(): React.JSX.Element {
       return
     }
     setNewLinearIssueSubmitting(true)
+    const submitProviderRuntimeContextKey = providerRuntimeContextKey
     try {
       const result = await linearCreateIssue(settings, {
         teamId: newLinearIssueTargetTeam.id,
@@ -5548,6 +5618,9 @@ export default function TaskPage(): React.JSX.Element {
         projectId: newLinearIssueProjectId || null,
         labelIds: newLinearIssueLabelIds.length > 0 ? newLinearIssueLabelIds : undefined
       })
+      if (submitProviderRuntimeContextKey !== providerRuntimeContextKeyRef.current) {
+        return
+      }
       if (!result.ok) {
         toast.error(
           result.error ||
@@ -5583,13 +5656,18 @@ export default function TaskPage(): React.JSX.Element {
       // sees exactly what was filed, mirroring the GitHub create-issue flow.
       void linearGetIssue(settings, result.id, newLinearIssueTargetTeam.workspaceId)
         .then((full) => {
+          if (submitProviderRuntimeContextKey !== providerRuntimeContextKeyRef.current) {
+            return
+          }
           if (full) {
             setSelectedLinearIssue(full, { allowOutsideList: true })
           }
         })
         .catch(() => {})
     } finally {
-      setNewLinearIssueSubmitting(false)
+      if (submitProviderRuntimeContextKey === providerRuntimeContextKeyRef.current) {
+        setNewLinearIssueSubmitting(false)
+      }
     }
   }, [
     newLinearIssueBody,
@@ -5601,6 +5679,7 @@ export default function TaskPage(): React.JSX.Element {
     newLinearIssueAssigneeId,
     newLinearIssueProjectId,
     newLinearIssueLabelIds,
+    providerRuntimeContextKey,
     selectedLinearProject,
     setSelectedLinearIssue,
     settings
@@ -5619,6 +5698,7 @@ export default function TaskPage(): React.JSX.Element {
       newJiraIssueCustomFieldValues
     )
     setNewJiraIssueSubmitting(true)
+    const submitProviderRuntimeContextKey = providerRuntimeContextKey
     try {
       const result = await jiraCreateIssue(settings, {
         siteId: newJiraIssueTargetProject.siteId,
@@ -5628,6 +5708,9 @@ export default function TaskPage(): React.JSX.Element {
         description: newJiraIssueBody || undefined,
         customFields
       })
+      if (submitProviderRuntimeContextKey !== providerRuntimeContextKeyRef.current) {
+        return
+      }
       if (!result.ok) {
         toast.error(
           result.error ||
@@ -5656,6 +5739,9 @@ export default function TaskPage(): React.JSX.Element {
 
       void jiraGetIssue(settings, result.key, newJiraIssueTargetProject.siteId)
         .then((full) => {
+          if (submitProviderRuntimeContextKey !== providerRuntimeContextKeyRef.current) {
+            return
+          }
           if (full) {
             // Why: the list cache may still be fresh after create; insert the
             // new row locally before selecting it so the inspector stays open.
@@ -5665,7 +5751,9 @@ export default function TaskPage(): React.JSX.Element {
         })
         .catch(() => {})
     } finally {
-      setNewJiraIssueSubmitting(false)
+      if (submitProviderRuntimeContextKey === providerRuntimeContextKeyRef.current) {
+        setNewJiraIssueSubmitting(false)
+      }
     }
   }, [
     hasMissingJiraCreateField,
@@ -5676,6 +5764,7 @@ export default function TaskPage(): React.JSX.Element {
     newJiraIssueTargetProject,
     newJiraIssueTargetType,
     newJiraIssueTitle,
+    providerRuntimeContextKey,
     settings,
     setSelectedJiraIssue,
     visibleJiraCreateFields
@@ -5737,21 +5826,27 @@ export default function TaskPage(): React.JSX.Element {
   ])
 
   useEffect(() => {
-    if (!preflightStatusChecked) {
+    if (!preflightStatusCurrent || !preflightStatusChecked) {
       void refreshPreflightStatus()
     }
-    if (!linearStatusChecked) {
+    if (!linearStatusReady) {
       void checkLinearConnection()
     }
-    if (!jiraStatusChecked) {
+    if (!jiraStatusReady) {
       void checkJiraConnection()
     }
   }, [
     checkJiraConnection,
     checkLinearConnection,
-    jiraStatusChecked,
-    linearStatusChecked,
+    expectedPreflightContextKey,
+    jiraStatusContextKey,
+    jiraStatusReady,
+    linearStatusContextKey,
+    linearStatusReady,
+    providerRuntimeContextKey,
+    preflightStatusContextKey,
     preflightStatusChecked,
+    preflightStatusCurrent,
     refreshPreflightStatus
   ])
 
@@ -5804,7 +5899,7 @@ export default function TaskPage(): React.JSX.Element {
     if (linearMode !== 'issues') {
       return
     }
-    if (!linearStatus.connected) {
+    if (!linearConnected) {
       return
     }
 
@@ -5918,7 +6013,7 @@ export default function TaskPage(): React.JSX.Element {
   }, [
     taskSource,
     linearMode,
-    linearStatus.connected,
+    linearConnected,
     selectedLinearWorkspaceId,
     appliedLinearSearch,
     linearIssueLimit,
@@ -5941,7 +6036,7 @@ export default function TaskPage(): React.JSX.Element {
     if (!taskResumeApplied || taskSource !== 'linear' || linearMode !== 'projects') {
       return
     }
-    if (!linearStatus.connected || selectedLinearProject) {
+    if (!linearConnected || selectedLinearProject) {
       return
     }
     let cancelled = false
@@ -5978,7 +6073,7 @@ export default function TaskPage(): React.JSX.Element {
     taskResumeApplied,
     taskSource,
     linearMode,
-    linearStatus.connected,
+    linearConnected,
     selectedLinearWorkspaceId,
     selectedLinearProject,
     appliedLinearProjectSearch,
@@ -6066,7 +6161,7 @@ export default function TaskPage(): React.JSX.Element {
     if (!taskResumeApplied || taskSource !== 'linear' || linearMode !== 'views') {
       return
     }
-    if (!linearStatus.connected || selectedLinearCustomView) {
+    if (!linearConnected || selectedLinearCustomView) {
       return
     }
     let cancelled = false
@@ -6111,7 +6206,7 @@ export default function TaskPage(): React.JSX.Element {
     taskResumeApplied,
     taskSource,
     linearMode,
-    linearStatus.connected,
+    linearConnected,
     selectedLinearWorkspaceId,
     selectedLinearCustomView,
     linearRefreshNonce,
@@ -6179,7 +6274,7 @@ export default function TaskPage(): React.JSX.Element {
       return
     }
 
-    if (!linearStatus.connected) {
+    if (!linearConnected) {
       clearSelectedLinearIssue()
       return
     }
@@ -6205,7 +6300,7 @@ export default function TaskPage(): React.JSX.Element {
   }, [
     clearSelectedLinearIssue,
     filteredLinearIssues,
-    linearStatus.connected,
+    linearConnected,
     selectedLinearIssueCanFloat,
     selectedLinearIssueId,
     taskResumeApplied,
@@ -6240,7 +6335,7 @@ export default function TaskPage(): React.JSX.Element {
     if (taskSource !== 'jira') {
       return
     }
-    if (!jiraStatus.connected) {
+    if (!jiraConnected) {
       return
     }
 
@@ -6276,7 +6371,7 @@ export default function TaskPage(): React.JSX.Element {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     taskSource,
-    jiraStatus.connected,
+    jiraConnected,
     selectedJiraSiteId,
     appliedJiraSearch,
     activeJiraPreset,
@@ -6288,7 +6383,7 @@ export default function TaskPage(): React.JSX.Element {
     if (!taskResumeApplied || taskSource !== 'jira') {
       return
     }
-    if (!jiraStatus.connected || displayedJiraIssues.length === 0) {
+    if (!jiraConnected || displayedJiraIssues.length === 0) {
       if (selectedJiraIssueKey !== null) {
         setSelectedJiraIssueKey(null)
       }
@@ -6306,7 +6401,7 @@ export default function TaskPage(): React.JSX.Element {
     }
   }, [
     displayedJiraIssues,
-    jiraStatus.connected,
+    jiraConnected,
     selectedJiraIssueFallback,
     selectedJiraIssueKey,
     taskResumeApplied,
@@ -6557,7 +6652,7 @@ export default function TaskPage(): React.JSX.Element {
                       )
                     })}
                   </div>
-                  {taskSource === 'linear' && linearStatus.connected ? (
+                  {taskSource === 'linear' && linearConnected ? (
                     <div className="flex items-center gap-2">
                       <LinearScopeSelector
                         workspaces={linearWorkspaces}
@@ -6615,7 +6710,7 @@ export default function TaskPage(): React.JSX.Element {
                       </Tooltip>
                     </div>
                   ) : null}
-                  {taskSource === 'jira' && jiraStatus.connected ? (
+                  {taskSource === 'jira' && jiraConnected ? (
                     <div className="flex items-center gap-2">
                       {jiraSites.length > 1 ? (
                         <Select
@@ -7004,7 +7099,7 @@ export default function TaskPage(): React.JSX.Element {
                       )
                     })()}
                   </div>
-                ) : taskSource === 'linear' && linearStatus.connected ? (
+                ) : taskSource === 'linear' && linearConnected ? (
                   <div
                     className="min-w-0 rounded-md rounded-b-none border border-border/50 bg-muted/50 p-3 shadow-sm"
                     data-contextual-tour-target="tasks-search-presets"
@@ -7232,7 +7327,7 @@ export default function TaskPage(): React.JSX.Element {
                       </div>
                     ) : null}
                   </div>
-                ) : taskSource === 'jira' && jiraStatus.connected ? (
+                ) : taskSource === 'jira' && jiraConnected ? (
                   <div className="rounded-md rounded-b-none border border-border/50 bg-muted/50 p-3 shadow-sm">
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <div className="flex flex-wrap gap-2">
@@ -8305,11 +8400,11 @@ export default function TaskPage(): React.JSX.Element {
               </div>
             </div>
           ) : taskSource === 'jira' ? (
-            !jiraStatusChecked ? (
+            !jiraStatusReady ? (
               <div className="mt-4 flex items-center justify-center py-14">
                 <LoaderCircle className="size-5 animate-spin text-muted-foreground" />
               </div>
-            ) : !jiraStatus.connected ? (
+            ) : !jiraConnected ? (
               <div className="mt-4 flex flex-col items-center justify-center rounded-md border border-border/50 bg-muted/50 px-6 py-14 text-center shadow-sm">
                 <JiraIcon className="mb-4 size-8 text-muted-foreground/60" />
                 <p className="text-base font-medium text-foreground">
@@ -8602,11 +8697,11 @@ export default function TaskPage(): React.JSX.Element {
               onOpenIssue={openRelatedLinearIssue}
               onClose={closeTaskDetailPage}
             />
-          ) : !linearStatusChecked ? (
+          ) : !linearStatusReady ? (
             <div className="mt-4 flex items-center justify-center py-14">
               <LoaderCircle className="size-5 animate-spin text-muted-foreground" />
             </div>
-          ) : !linearStatus.connected ? (
+          ) : !linearConnected ? (
             <div className="mt-4 flex flex-col items-center justify-center rounded-md border border-border/50 bg-muted/50 px-6 py-14 text-center shadow-sm">
               <LinearIcon className="mb-4 size-8 text-muted-foreground/60" />
               <p className="text-base font-medium text-foreground">
