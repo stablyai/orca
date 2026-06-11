@@ -867,10 +867,10 @@
         "e5b7296d9d": "git no está instalado",
         "cd21242762": "Agregue un proyecto para comenzar.",
         "9c00bd4adf": "Seleccione un espacio de trabajo de la barra lateral para comenzar.",
-        "16e9e3df89": "sembrado de estrellas",
-        "0d0ace8861": "Estrella en GitHub",
-        "ec43b38ba7": "Destacado en GitHub",
-        "157bb5ecbb": "Open GitHub"
+        "16e9e3df89": "con estrella",
+        "0d0ace8861": "Dar estrella en GitHub",
+        "ec43b38ba7": "Con estrella en GitHub",
+        "157bb5ecbb": "Abrir GitHub"
       },
       "LinearIssueMarkdownDescriptionEditor": {
         "d9c47069ef": "Markdown",
@@ -1201,14 +1201,14 @@
         "30c36231c1": "Si Orca te ha ahorrado tiempo, una estrella de GitHub es de gran ayuda. Ayuda a otros desarrolladores a descubrir el proyecto y mantiene al equipo motivado para implementar mejoras.",
         "b5e685e4d9": "Despedir",
         "5f6df21046": "¿Disfrutando de Orca?",
-        "2d67b6c849": "Estrella en GitHub",
-        "af3c9bbb37": "Protagonizada…",
-        "68a41bc3aa": "Could not star with",
-        "996bf76e46": "Open GitHub to finish in your browser.",
-        "d32015fec7": "Opening...",
-        "157bb5ecbb": "Open GitHub",
-        "8c967b4d15": "Not now",
-        "73dfd4eb8d": "Don't ask again"
+        "2d67b6c849": "Dar estrella en GitHub",
+        "af3c9bbb37": "Dando estrella...",
+        "68a41bc3aa": "No se pudo dar estrella con",
+        "996bf76e46": "Abre GitHub para terminar en tu navegador.",
+        "d32015fec7": "Abriendo...",
+        "157bb5ecbb": "Abrir GitHub",
+        "8c967b4d15": "Ahora no",
+        "73dfd4eb8d": "No volver a preguntar"
       },
       "TaskPage": {
         "513cddfa7a": "Verificando…",
@@ -3352,8 +3352,8 @@
           "4e8f5710d3": "No se pudo reiniciar Orca.",
           "5161eef55d": "Reiniciando Orca...",
           "d396773ef0": "de cheques",
-          "f8a2c91d4e": "Milestones",
-          "b7e4d2a19c": "Onboarding",
+          "f8a2c91d4e": "Hitos",
+          "b7e4d2a19c": "Introducción",
           "c4f8e1b72a": "X"
         },
         "SidebarToolbar": {
@@ -4372,16 +4372,16 @@
           "6922c1fa2b": "Orca estrella en GitHub",
           "511782265b": "Apoye el proyecto con una estrella de GitHub a través de la CLI de gh.",
           "55a87e5fd1": "Apoya a la Orca",
-          "964acc6bb4": "Estrella",
+          "964acc6bb4": "Dar estrella",
           "73b327e793": "Intentar otra vez",
           "c9f96d4234": "error",
-          "397719bee5": "Protagonizada...",
-          "1e29570462": "protagonizada",
-          "9d181300e3": "sembrado de estrellas",
+          "397719bee5": "Dando estrella...",
+          "1e29570462": "dando estrella",
+          "9d181300e3": "con estrella",
           "5c49f02662": "oculto",
           "b3f0584f5d": "cargando",
-          "cb65c75b11": "Opening...",
-          "f2d4f877b2": "Open GitHub"
+          "cb65c75b11": "Abriendo...",
+          "f2d4f877b2": "Abrir GitHub"
         },
         "GeneralUpdateSettingsSection": {
           "8a52ca1d02": "Notas de la versión",
