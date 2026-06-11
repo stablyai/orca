@@ -8,7 +8,7 @@ export type DirectLaunchIssueLike = {
 }
 
 export function gitLabIssueNumber(item: DirectLaunchIssueLike): number | undefined {
-  return item.type === 'issue' && item.number && item.url && isGitLabIssueUrl(item.url)
+  return item.type === 'issue' && item.number != null && item.url && isGitLabIssueUrl(item.url)
     ? item.number
     : undefined
 }

@@ -7,8 +7,8 @@ export function formatRemoteCli(response: RpcResponse): { stdout: string; stderr
     return { stdout: '', stderr: `${response.error.message}\n` }
   }
   const result = response.result
-  const record = result as Record<string, unknown>
-  if ('app' in record && 'runtime' in record && 'graph' in record) {
+  if (isRecord(result) && 'app' in result && 'runtime' in result && 'graph' in result) {
+    const record = result as Record<string, unknown>
     return formatStatusResult(record as CliStatusResult)
   }
   if (isLinearIssueContextResult(result)) {
@@ -41,25 +41,37 @@ function formatStatusResult(status: CliStatusResult): { stdout: string; stderr: 
 }
 
 function isLinearIssueContextResult(result: unknown): result is LinearIssueContextResult {
+  if (!isRecord(result)) {
+    return false
+  }
+  const issue = result.issue
+  const meta = result.meta
+  if (!isRecord(issue) || !isRecord(meta)) {
+    return false
+  }
   return (
-    Boolean(result) &&
-    result !== null &&
-    typeof result === 'object' &&
-    'issue' in result &&
-    'meta' in result &&
-    typeof (result as { meta?: { includeErrors?: unknown } }).meta?.includeErrors === 'object'
+    typeof issue.identifier === 'string' &&
+    typeof issue.title === 'string' &&
+    typeof issue.url === 'string' &&
+    Array.isArray(issue.labels) &&
+    Array.isArray(meta.includeErrors) &&
+    isRecord(meta.sections)
   )
 }
 
 function isLinearSearchResult(result: unknown): result is LinearSearchResult {
+  if (!isRecord(result) || !isRecord(result.meta)) {
+    return false
+  }
   return (
-    Boolean(result) &&
-    result !== null &&
-    typeof result === 'object' &&
-    Array.isArray((result as { issues?: unknown }).issues) &&
-    'meta' in result &&
-    typeof (result as { meta?: { query?: unknown } }).meta?.query === 'string'
+    Array.isArray(result.issues) &&
+    typeof result.meta.query === 'string' &&
+    typeof result.meta.returned === 'number'
   )
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object'
 }
 
 function formatLinearIssue(result: LinearIssueContextResult): string {

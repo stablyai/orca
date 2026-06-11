@@ -217,6 +217,62 @@ describe('Linear agent issue context client', () => {
     ).rejects.toMatchObject({ code: 'linear_network_error' })
   })
 
+  it('normalizes explicit issue workspace credential-load failures', async () => {
+    getStatus.mockReturnValue({
+      workspaces: [
+        {
+          id: 'workspace-selected',
+          organizationId: 'workspace-selected',
+          organizationName: 'Selected',
+          displayName: 'Brennan',
+          email: 'brennan@example.com'
+        }
+      ]
+    })
+    getClients.mockImplementation((workspaceId: string) => {
+      if (workspaceId === 'workspace-selected') {
+        throw new Error('Could not decrypt Linear credential')
+      }
+      return []
+    })
+    const { resolveIssue } = await import('./issue-context-client')
+
+    await expect(
+      resolveIssue('ENG-123', { workspaceId: 'workspace-selected' })
+    ).rejects.toMatchObject({
+      code: 'linear_network_error',
+      message: 'Could not decrypt Linear credential'
+    })
+  })
+
+  it('normalizes explicit search workspace credential-load failures', async () => {
+    getStatus.mockReturnValue({
+      workspaces: [
+        {
+          id: 'workspace-selected',
+          organizationId: 'workspace-selected',
+          organizationName: 'Selected',
+          displayName: 'Brennan',
+          email: 'brennan@example.com'
+        }
+      ]
+    })
+    getClients.mockImplementation((workspaceId: string) => {
+      if (workspaceId === 'workspace-selected') {
+        throw new Error('Could not decrypt Linear credential')
+      }
+      return []
+    })
+    const { searchLinearIssuesForAgents } = await import('./issue-context-client')
+
+    await expect(
+      searchLinearIssuesForAgents({ query: 'auth', workspaceId: 'workspace-selected' })
+    ).rejects.toMatchObject({
+      code: 'linear_network_error',
+      message: 'Could not decrypt Linear credential'
+    })
+  })
+
   it('reports an invalid workspace for explicit search workspace typos', async () => {
     getStatus.mockReturnValue({
       workspaces: [

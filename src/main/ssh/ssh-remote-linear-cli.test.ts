@@ -144,6 +144,35 @@ describe('runRemoteOrcaCli Linear commands', () => {
     expect(result.stdout).not.toContain('"issue"')
   })
 
+  it('falls back to JSON for malformed SSH Linear issue results in non-json mode', async () => {
+    const runtime = createRuntime()
+    const linearIssueContext = (
+      runtime as unknown as { linearIssueContext: ReturnType<typeof vi.fn> }
+    ).linearIssueContext
+    linearIssueContext.mockResolvedValueOnce({
+      issue: {
+        identifier: 'ENG-123',
+        title: 'Fix thing',
+        url: 'https://linear.app/acme/issue/ENG-123',
+        labels: []
+      },
+      meta: {
+        includeErrors: null,
+        sections: {}
+      }
+    })
+
+    const result = await runRemoteOrcaCli(runtime, {
+      argv: ['linear', 'issue', '--current'],
+      cwd: '/home/alice/remote-repo',
+      env: { ORCA_TERMINAL_HANDLE: 'term_ssh' }
+    })
+
+    expect(result.exitCode).toBe(0)
+    expect(result.stdout).toContain('"includeErrors":null')
+    expect(result.stderr).toBe('')
+  })
+
   it('prints SSH Linear search partial warnings to stderr in non-json mode', async () => {
     const runtime = createRuntime()
     const linearSearchForAgents = (
@@ -176,6 +205,30 @@ describe('runRemoteOrcaCli Linear commands', () => {
     expect(result.exitCode).toBe(0)
     expect(result.stdout).toBe('No Linear issues found.\n')
     expect(result.stderr).toContain('warning: Stale unavailable for Linear search: fetch failed')
+  })
+
+  it('falls back to JSON for malformed SSH Linear search results in non-json mode', async () => {
+    const runtime = createRuntime()
+    const linearSearchForAgents = (
+      runtime as unknown as { linearSearchForAgents: ReturnType<typeof vi.fn> }
+    ).linearSearchForAgents
+    linearSearchForAgents.mockResolvedValueOnce({
+      issues: [],
+      meta: {
+        query: 'auth',
+        returned: '0'
+      }
+    })
+
+    const result = await runRemoteOrcaCli(runtime, {
+      argv: ['linear', 'search', 'auth'],
+      cwd: '/home/alice/remote-repo',
+      env: { ORCA_TERMINAL_HANDLE: 'term_ssh' }
+    })
+
+    expect(result.exitCode).toBe(0)
+    expect(result.stdout).toContain('"returned":"0"')
+    expect(result.stderr).toBe('')
   })
 
   it('formats older SSH Linear search results without workspaceErrors in non-json mode', async () => {

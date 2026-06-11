@@ -47,9 +47,7 @@ export async function searchLinearIssuesForAgents(args: {
   const limit = clampLinearSearchLimit(args.limit)
   const workspaceId = resolveSearchWorkspaceId(args.workspaceId)
   const { entries, failures: entryFailures } =
-    workspaceId === 'all'
-      ? getFanoutClientEntries()
-      : { entries: getClients(workspaceId), failures: [] }
+    workspaceId === 'all' ? getFanoutClientEntries() : getExplicitClientEntries(workspaceId)
   if (entries.length === 0) {
     throwIfExplicitWorkspaceHasConnectedAlternatives(workspaceId)
     if (entryFailures[0]) {
@@ -96,9 +94,7 @@ export async function resolveIssue(
   const workspace = resolveWorkspaceSelector(selectors, getConnectedWorkspaces())
   const selection = workspace?.id ?? selectors.workspaceId ?? 'all'
   const { entries, failures: entryFailures } =
-    selection === 'all'
-      ? getFanoutClientEntries()
-      : { entries: getClients(selection), failures: [] }
+    selection === 'all' ? getFanoutClientEntries() : getExplicitClientEntries(selection)
   if (entries.length === 0) {
     throwIfExplicitWorkspaceHasConnectedAlternatives(selection)
     if (entryFailures[0]) {
@@ -131,6 +127,20 @@ export function getRequiredEntry(workspaceId: string): LinearClientForWorkspace 
     throw linearError('linear_not_connected', 'Linear is not connected.')
   }
   return entry
+}
+
+function getExplicitClientEntries(workspaceId?: string): {
+  entries: LinearClientForWorkspace[]
+  failures: WorkspaceReadFailure[]
+} {
+  try {
+    return { entries: getClients(workspaceId), failures: [] }
+  } catch (error) {
+    if (error instanceof LinearAgentAccessError) {
+      throw error
+    }
+    throw linearError(classifyLinearError(error), linearMessage(error))
+  }
 }
 
 function resolveSearchWorkspaceId(workspaceId?: string | 'all'): string | 'all' | undefined {
