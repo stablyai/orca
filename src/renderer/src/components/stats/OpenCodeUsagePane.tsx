@@ -274,7 +274,8 @@ export function OpenCodeUsagePane(): React.JSX.Element {
               <div className="mb-3">
                 <h4 className="text-sm font-semibold text-foreground">{translate("auto.components.stats.OpenCodeUsagePane.040c044d39", "By model")}</h4>
                 <p className="text-xs text-muted-foreground">
-                  {translate("auto.components.stats.OpenCodeUsagePane.a15206a63a", "Top model:")}{summary?.topModel ?? translate("auto.components.stats.OpenCodeUsagePane.8095a63426", "n/a")}
+                  {translate("auto.components.stats.OpenCodeUsagePane.a15206a63a", "Top model:")}{' '}
+                  {summary?.topModel ?? translate("auto.components.stats.OpenCodeUsagePane.8095a63426", "n/a")}
                 </p>
               </div>
               <div className="space-y-3">
@@ -287,9 +288,9 @@ export function OpenCodeUsagePane(): React.JSX.Element {
                       </span>
                     </div>
                     <div className="text-xs text-muted-foreground">
-                      {row.sessions} {translate("auto.components.stats.OpenCodeUsagePane.bc0cb89901", "sessions •")}{row.events} {translate("auto.components.stats.OpenCodeUsagePane.1e5d410df0", "events")}{row.estimatedCostUsd !== null
-                        ? ` • ${formatCost(row.estimatedCostUsd)}`
-                        : ''}
+                      {row.sessions} {translate("auto.components.stats.OpenCodeUsagePane.bc0cb89901", "sessions •")} {row.events}{' '}
+                      {translate("auto.components.stats.OpenCodeUsagePane.1e5d410df0", "events")}
+                      {row.estimatedCostUsd !== null ? ` • ${formatCost(row.estimatedCostUsd)}` : ''}
                     </div>
                   </div>
                 ))}
@@ -300,7 +301,8 @@ export function OpenCodeUsagePane(): React.JSX.Element {
               <div className="mb-3">
                 <h4 className="text-sm font-semibold text-foreground">{translate("auto.components.stats.OpenCodeUsagePane.0f0a1684bb", "By project")}</h4>
                 <p className="text-xs text-muted-foreground">
-                  {translate("auto.components.stats.OpenCodeUsagePane.048ffe4d65", "Top project:")}{summary?.topProject ?? translate("auto.components.stats.OpenCodeUsagePane.8095a63426", "n/a")}
+                  {translate("auto.components.stats.OpenCodeUsagePane.048ffe4d65", "Top project:")}{' '}
+                  {summary?.topProject ?? translate("auto.components.stats.OpenCodeUsagePane.8095a63426", "n/a")}
                 </p>
               </div>
               <div className="space-y-3">
@@ -313,7 +315,9 @@ export function OpenCodeUsagePane(): React.JSX.Element {
                       </span>
                     </div>
                     <div className="text-xs text-muted-foreground">
-                      {row.sessions} {translate("auto.components.stats.OpenCodeUsagePane.bc0cb89901", "sessions •")}{row.events} {translate("auto.components.stats.OpenCodeUsagePane.1e5d410df0", "events")}</div>
+                      {row.sessions} {translate("auto.components.stats.OpenCodeUsagePane.bc0cb89901", "sessions •")} {row.events}{' '}
+                      {translate("auto.components.stats.OpenCodeUsagePane.1e5d410df0", "events")}
+                    </div>
                   </div>
                 ))}
               </div>
