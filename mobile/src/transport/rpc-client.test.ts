@@ -217,6 +217,23 @@ describe('mobile rpc-client connection timeout', () => {
     client.close()
   })
 
+  it('does not resend a stream subscribed from the connected-state listener', () => {
+    const client = connect('ws://desktop.invalid', 'token', 'server-key', (state) => {
+      if (state === 'connected') {
+        client.subscribe('notifications.subscribe', {}, () => {})
+      }
+    })
+    const socket = mockSockets[0]!
+
+    socket.open()
+    socket.receive(JSON.stringify({ type: 'e2ee_ready' }))
+    socket.receive('encrypted:{"type":"e2ee_authenticated"}')
+
+    expect(sentRequests(socket, 'notifications.subscribe')).toHaveLength(1)
+
+    client.close()
+  })
+
   it('routes browser screencast binary frames to the browser subscriber', async () => {
     const client = connect('ws://desktop.invalid', 'token', 'server-key')
     const socket = mockSockets[0]!
