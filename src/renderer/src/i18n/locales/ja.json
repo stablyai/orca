@@ -8091,7 +8091,8 @@
                   "a6457b46a7": "コミットする前に競合を解決する",
                   "484f45c439": "{{value0}} が進行中です…",
                   "74fc171e99": "強制プッシュ中です…",
-                  "16aee3a5c1": "Commit 中です…"
+                  "16aee3a5c1": "Commit 中です…",
+                  "e61b0d7a3c": "Check out a branch before publishing commits."
                 }
               }
             }

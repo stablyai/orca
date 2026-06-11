@@ -8091,7 +8091,8 @@
                   "a6457b46a7": "Resolver conflictos antes de comprometerse",
                   "484f45c439": "{{value0}} en progreso…",
                   "74fc171e99": "Empuje forzado en progreso...",
-                  "16aee3a5c1": "Compromiso en progreso..."
+                  "16aee3a5c1": "Compromiso en progreso...",
+                  "e61b0d7a3c": "Check out a branch before publishing commits."
                 }
               }
             }

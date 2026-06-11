@@ -2387,13 +2387,15 @@ export default function ChecksPanel(): React.JSX.Element {
       (!publishActionHasUncommittedChanges &&
         shouldShowChecksPanelPublishBranchAction({
           hostedReviewBlockedReason: hostedReviewCreation?.blockedReason,
-          hasUpstream: publishActionRemoteStatus?.hasUpstream
+          hasUpstream: publishActionRemoteStatus?.hasUpstream,
+          hasCurrentBranch: Boolean(branch)
         }))
     const emptyStateCopy = getChecksPanelEmptyStateCopy({
       operationLabel,
       prRefreshStatus: emptyReviewIsGitLab ? undefined : prRefreshState?.status,
       hostedReviewBlockedReason: hostedReviewCreation?.blockedReason,
       hasUpstream: publishActionRemoteStatus?.hasUpstream,
+      hasCurrentBranch: Boolean(branch),
       reviewLabel: emptyReviewLabel,
       reviewShortLabel: emptyReviewShortLabel
     })

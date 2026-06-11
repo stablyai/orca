@@ -8091,7 +8091,8 @@
                   "a6457b46a7": "提交前解决冲突",
                   "484f45c439": "{{value0}} 正在进行中...",
                   "74fc171e99": "强制推送正在进行中...",
-                  "16aee3a5c1": "正在进行中……"
+                  "16aee3a5c1": "正在进行中……",
+                  "e61b0d7a3c": "Check out a branch before publishing commits."
                 }
               }
             }
