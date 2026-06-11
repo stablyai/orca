@@ -2731,7 +2731,7 @@ export type PersistedUIState = {
    *  spawn — effectively restarting the nag countdown after each update. */
   starNagAppVersion?: string | null
   /** Next threshold (agents spawned since baseline) at which the star-nag
-   *  notification should fire. Starts at 50 and doubles each time the user
+   *  notification should fire. Starts at 35 and doubles each time the user
    *  dismisses the notification without starring. */
   starNagNextThreshold?: number
   /** Once the user has starred Orca (from any entry point) we permanently

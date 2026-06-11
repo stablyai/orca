@@ -150,7 +150,7 @@ describe('StarNagService', () => {
     emitAgentStarted(46)
 
     expect(window.webContents.send).toHaveBeenCalledTimes(1)
-    expect(window.webContents.send).toHaveBeenCalledWith('star-nag:show')
+    expect(window.webContents.send).toHaveBeenCalledWith('star-nag:show', { mode: 'gh' })
     expect(consoleInfoMock).toHaveBeenCalledTimes(1)
     expect(consoleInfoMock).toHaveBeenCalledWith({
       event: 'star_nag_shown',
@@ -161,22 +161,39 @@ describe('StarNagService', () => {
     })
   })
 
-  it.each([null, true])(
-    'does not log a threshold exposure when checkOrcaStarred returns %s',
-    async (result) => {
-      const window = createWindow()
-      browserWindowMock.getAllWindows.mockReturnValue([window])
-      checkOrcaStarredMock.mockResolvedValue(result)
-      const { service, emitAgentStarted } = createHarness()
+  it('shows the browser fallback when checkOrcaStarred cannot determine star state', async () => {
+    const window = createWindow()
+    browserWindowMock.getAllWindows.mockReturnValue([window])
+    checkOrcaStarredMock.mockResolvedValue(null)
+    const { service, emitAgentStarted } = createHarness()
 
-      service.start()
-      emitAgentStarted(45)
-      await flushAsyncWork()
+    service.start()
+    emitAgentStarted(45)
+    await flushAsyncWork()
 
-      expect(window.webContents.send).not.toHaveBeenCalled()
-      expect(consoleInfoMock).not.toHaveBeenCalled()
-    }
-  )
+    expect(window.webContents.send).toHaveBeenCalledWith('star-nag:show', { mode: 'web' })
+    expect(consoleInfoMock).toHaveBeenCalledWith({
+      event: 'star_nag_shown',
+      app_version: '1.2.3',
+      threshold: STAR_NAG_INITIAL_THRESHOLD,
+      agents_since_baseline: 35,
+      source: 'threshold'
+    })
+  })
+
+  it('does not log a threshold exposure when checkOrcaStarred returns true', async () => {
+    const window = createWindow()
+    browserWindowMock.getAllWindows.mockReturnValue([window])
+    checkOrcaStarredMock.mockResolvedValue(true)
+    const { service, emitAgentStarted } = createHarness()
+
+    service.start()
+    emitAgentStarted(45)
+    await flushAsyncWork()
+
+    expect(window.webContents.send).not.toHaveBeenCalled()
+    expect(consoleInfoMock).not.toHaveBeenCalled()
+  })
 
   it('does not block a later real prompt after crossing the threshold with no window', async () => {
     const { service, emitAgentStarted } = createHarness()
@@ -192,7 +209,7 @@ describe('StarNagService', () => {
     emitAgentStarted(46)
     await flushAsyncWork()
 
-    expect(window.webContents.send).toHaveBeenCalledWith('star-nag:show')
+    expect(window.webContents.send).toHaveBeenCalledWith('star-nag:show', { mode: 'gh' })
     expect(consoleInfoMock).toHaveBeenCalledWith({
       event: 'star_nag_shown',
       app_version: '1.2.3',
@@ -265,7 +282,7 @@ describe('StarNagService', () => {
     browserWindowMock.getAllWindows.mockReturnValue([window])
     forceShow()
 
-    expect(window.webContents.send).toHaveBeenCalledWith('star-nag:show')
+    expect(window.webContents.send).toHaveBeenCalledWith('star-nag:show', { mode: 'gh' })
     expect(consoleInfoMock).toHaveBeenCalledWith({
       event: 'star_nag_shown',
       app_version: '1.2.3',
@@ -320,7 +337,7 @@ describe('StarNagService', () => {
     await flushAsyncWork()
     getIpcHandler('star-nag:dismiss')()
 
-    emitAgentStarted(115)
+    emitAgentStarted(114)
     await flushAsyncWork()
 
     expect(window.webContents.send).toHaveBeenCalledTimes(1)
@@ -368,7 +385,7 @@ describe('StarNagService', () => {
     expect(consoleInfoMock).not.toHaveBeenCalled()
   })
 
-  it('replays force_show after an in-flight threshold evaluation exits without showing', async () => {
+  it('keeps threshold source when an in-flight star check falls back to the browser', async () => {
     const window = createWindow()
     browserWindowMock.getAllWindows.mockReturnValue([window])
     const deferredStarCheck = createDeferred<boolean | null>()
@@ -388,12 +405,13 @@ describe('StarNagService', () => {
 
     expect(window.webContents.send).toHaveBeenCalledTimes(1)
     expect(consoleInfoMock).toHaveBeenCalledTimes(1)
+    expect(window.webContents.send).toHaveBeenCalledWith('star-nag:show', { mode: 'web' })
     expect(consoleInfoMock).toHaveBeenCalledWith({
       event: 'star_nag_shown',
       app_version: '1.2.3',
       threshold: STAR_NAG_INITIAL_THRESHOLD,
       agents_since_baseline: 35,
-      source: 'force_show'
+      source: 'threshold'
     })
   })
 
