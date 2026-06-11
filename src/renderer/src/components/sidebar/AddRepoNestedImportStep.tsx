@@ -1,5 +1,5 @@
 import { useId, type Dispatch, type SetStateAction } from 'react'
-import { CircleHelp, CircleStop, Loader2 } from 'lucide-react'
+import { CircleStop, Loader2 } from 'lucide-react'
 import { DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -97,7 +97,7 @@ export function AddRepoNestedImportStep({
           <p className="text-xs text-muted-foreground">
             {translate(
               'auto.components.sidebar.AddRepoNestedImportStep.d75170194e',
-              'Choose this if these projects belong together. Orca will group them and let you work from the parent folder.'
+              "Import them as a group if they're a monorepo or otherwise belong together. Orca will group them and let you work from the parent folder."
             )}
           </p>
         </div>
@@ -106,37 +106,15 @@ export function AddRepoNestedImportStep({
             <Label htmlFor={groupNameInputId} className="text-[11px] text-muted-foreground">
               {translate(
                 'auto.components.sidebar.AddRepoNestedImportStep.39d51212cc',
-                'Monorepo name'
+                'Group name'
               )}
             </Label>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-xs"
-                  aria-label={translate(
-                    'auto.components.sidebar.AddRepoNestedImportStep.e907ec8935',
-                    'What is a monorepo name?'
-                  )}
-                  className="size-5 text-muted-foreground hover:text-foreground"
-                >
-                  <CircleHelp className="size-3.5" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="top" sideOffset={4} className="max-w-64">
-                {translate(
-                  'auto.components.sidebar.AddRepoNestedImportStep.b20bb7c24f',
-                  'Keeps these repos together in one group. Best for related repos like microservices.'
-                )}
-              </TooltipContent>
-            </Tooltip>
           </div>
           <Input
             id={groupNameInputId}
             aria-label={translate(
               'auto.components.sidebar.AddRepoNestedImportStep.39d51212cc',
-              'Monorepo name'
+              'Group name'
             )}
             value={groupName}
             onChange={(event) => onGroupNameChange(event.target.value)}
@@ -162,7 +140,7 @@ export function AddRepoNestedImportStep({
           >
             {translate(
               'auto.components.sidebar.AddRepoNestedImportStep.a0bc4d1f8e',
-              'Yes, import as monorepo'
+              'Import as group'
             )}
           </Button>
         </div>
