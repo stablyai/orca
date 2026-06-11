@@ -4296,13 +4296,16 @@ export default function SessionScreen() {
                 <TextInput
                   style={styles.textInput}
                   value={input}
-                  onChangeText={(text) => setInput(normalizeTerminalTextInput(text))}
+                  onChangeText={(text) =>
+                    setInput((previousText) => normalizeTerminalTextInput(text, previousText))
+                  }
                   placeholder="Type a command…"
                   placeholderTextColor={colors.textMuted}
                   autoCapitalize="none"
                   autoCorrect={false}
                   spellCheck={false}
                   smartInsertDelete={false}
+                  keyboardType={Platform.OS === 'ios' ? 'ascii-capable' : 'visible-password'}
                   returnKeyType="send"
                   editable={canSend}
                   onSubmitEditing={() => void handleSend()}
