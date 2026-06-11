@@ -59,6 +59,15 @@ function getSelectedSiteId(status: JiraConnectionStatus): JiraSiteSelection | nu
   return status.selectedSiteId ?? status.activeSiteId ?? null
 }
 
+function shouldRefreshStatusAfterRead(
+  siteId: JiraSiteSelection | null | undefined,
+  status: JiraConnectionStatus
+): boolean {
+  // Why: 'all' reads can hide per-site decrypt failures, and a visible
+  // credential error may have been cleared by a successful credential read.
+  return siteId === 'all' || status.credentialError !== undefined
+}
+
 function clearJiraInflight(): void {
   inflightIssueRequests.clear()
   inflightSearchRequests.clear()
@@ -198,6 +207,9 @@ export const createJiraSlice: StateCreator<AppState, [], [], JiraSlice> = (set, 
       })
       .finally(() => {
         inflightIssueRequests.delete(issueCacheKey)
+        if (shouldRefreshStatusAfterRead(siteId, get().jiraStatus)) {
+          void get().checkJiraConnection()
+        }
       })
     inflightIssueRequests.set(issueCacheKey, promise)
     return promise
@@ -227,7 +239,9 @@ export const createJiraSlice: StateCreator<AppState, [], [], JiraSlice> = (set, 
       .catch((error) => {
         console.warn('[jira] searchJiraIssues failed:', error)
         if (isIntegrationCredentialDecryptionError(error)) {
-          void get().checkJiraConnection()
+          if (!shouldRefreshStatusAfterRead(siteId, get().jiraStatus)) {
+            void get().checkJiraConnection()
+          }
         } else if (looksLikeAuthError(error)) {
           set({ jiraStatus: { connected: false, viewer: null } })
         }
@@ -235,6 +249,9 @@ export const createJiraSlice: StateCreator<AppState, [], [], JiraSlice> = (set, 
       })
       .finally(() => {
         inflightSearchRequests.delete(cacheKey)
+        if (shouldRefreshStatusAfterRead(siteId, get().jiraStatus)) {
+          void get().checkJiraConnection()
+        }
       })
     inflightSearchRequests.set(cacheKey, promise)
     return promise
@@ -264,7 +281,9 @@ export const createJiraSlice: StateCreator<AppState, [], [], JiraSlice> = (set, 
       .catch((error) => {
         console.warn('[jira] listJiraIssues failed:', error)
         if (isIntegrationCredentialDecryptionError(error)) {
-          void get().checkJiraConnection()
+          if (!shouldRefreshStatusAfterRead(siteId, get().jiraStatus)) {
+            void get().checkJiraConnection()
+          }
         } else if (looksLikeAuthError(error)) {
           set({ jiraStatus: { connected: false, viewer: null } })
         }
@@ -272,6 +291,9 @@ export const createJiraSlice: StateCreator<AppState, [], [], JiraSlice> = (set, 
       })
       .finally(() => {
         inflightListRequests.delete(cacheKey)
+        if (shouldRefreshStatusAfterRead(siteId, get().jiraStatus)) {
+          void get().checkJiraConnection()
+        }
       })
     inflightListRequests.set(cacheKey, promise)
     return promise

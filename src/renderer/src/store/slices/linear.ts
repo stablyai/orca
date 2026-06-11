@@ -236,9 +236,12 @@ function invalidateLinearCaches(): void {
 }
 
 function shouldRefreshStatusAfterRead(
-  workspaceId: LinearWorkspaceSelection | null | undefined
+  workspaceId: LinearWorkspaceSelection | null | undefined,
+  status: LinearConnectionStatus
 ): boolean {
-  return workspaceId === 'all'
+  // Why: 'all' reads can hide per-workspace decrypt failures, and a visible
+  // credential error may have been cleared by a successful credential read.
+  return workspaceId === 'all' || status.credentialError !== undefined
 }
 
 function linearCollectionCacheKey(
@@ -721,6 +724,12 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
         if (inflightIssueRequests.get(issueCacheKey) === entry) {
           inflightIssueRequests.delete(issueCacheKey)
         }
+        if (
+          shouldRefreshStatusAfterRead(workspaceId, get().linearStatus) &&
+          requestCacheGeneration === linearCacheGeneration
+        ) {
+          void get().checkLinearConnection(true)
+        }
       })
 
     entry = { promise, generation: requestCacheGeneration }
@@ -796,7 +805,7 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
       .catch((error) => {
         console.warn('[linear] searchLinearIssues failed:', error)
         if (isIntegrationCredentialDecryptionError(error) || looksLikeAuthError(error)) {
-          if (!shouldRefreshStatusAfterRead(workspaceId)) {
+          if (!shouldRefreshStatusAfterRead(workspaceId, get().linearStatus)) {
             void get().checkLinearConnection(true)
           }
           return []
@@ -808,7 +817,7 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
           inflightSearchRequests.delete(cacheKey)
         }
         if (
-          shouldRefreshStatusAfterRead(workspaceId) &&
+          shouldRefreshStatusAfterRead(workspaceId, get().linearStatus) &&
           requestCacheGeneration === linearCacheGeneration
         ) {
           void get().checkLinearConnection(true)
@@ -860,7 +869,7 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
       .catch((error) => {
         console.warn('[linear] listLinearIssues failed:', error)
         if (isIntegrationCredentialDecryptionError(error) || looksLikeAuthError(error)) {
-          if (!shouldRefreshStatusAfterRead(workspaceId)) {
+          if (!shouldRefreshStatusAfterRead(workspaceId, get().linearStatus)) {
             void get().checkLinearConnection(true)
           }
           return emptyLinearCollection<LinearIssue>()
@@ -872,7 +881,7 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
           inflightListRequests.delete(cacheKey)
         }
         if (
-          shouldRefreshStatusAfterRead(workspaceId) &&
+          shouldRefreshStatusAfterRead(workspaceId, get().linearStatus) &&
           requestCacheGeneration === linearCacheGeneration
         ) {
           void get().checkLinearConnection(true)
@@ -923,7 +932,7 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
       .catch((error) => {
         console.warn('[linear] listLinearTeams failed:', error)
         if (isIntegrationCredentialDecryptionError(error) || looksLikeAuthError(error)) {
-          if (!shouldRefreshStatusAfterRead(resolvedWorkspaceId)) {
+          if (!shouldRefreshStatusAfterRead(resolvedWorkspaceId, get().linearStatus)) {
             void get().checkLinearConnection(true)
           }
           return []
@@ -935,7 +944,7 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
           inflightTeamRequests.delete(cacheKey)
         }
         if (
-          shouldRefreshStatusAfterRead(resolvedWorkspaceId) &&
+          shouldRefreshStatusAfterRead(resolvedWorkspaceId, get().linearStatus) &&
           requestCacheGeneration === linearCacheGeneration
         ) {
           void get().checkLinearConnection(true)
@@ -1002,7 +1011,7 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
           inflightProjectRequests.delete(cacheKey)
         }
         if (
-          shouldRefreshStatusAfterRead(resolvedWorkspaceId) &&
+          shouldRefreshStatusAfterRead(resolvedWorkspaceId, get().linearStatus) &&
           requestCacheGeneration === linearCacheGeneration
         ) {
           void get().checkLinearConnection(true)
@@ -1060,6 +1069,9 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
       .finally(() => {
         if (inflightProjectDetailRequests.get(cacheKey) === entry) {
           inflightProjectDetailRequests.delete(cacheKey)
+        }
+        if (shouldRefreshStatusAfterRead(workspaceId, get().linearStatus)) {
+          void get().checkLinearConnection(true)
         }
       })
 
@@ -1134,6 +1146,12 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
         if (inflightProjectIssueRequests.get(cacheKey) === entry) {
           inflightProjectIssueRequests.delete(cacheKey)
         }
+        if (
+          shouldRefreshStatusAfterRead(workspaceId, get().linearStatus) &&
+          requestCacheGeneration === linearCacheGeneration
+        ) {
+          void get().checkLinearConnection(true)
+        }
       })
 
     entry = { promise, force: Boolean(options?.force), generation: requestCacheGeneration }
@@ -1196,7 +1214,7 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
           inflightCustomViewRequests.delete(cacheKey)
         }
         if (
-          shouldRefreshStatusAfterRead(resolvedWorkspaceId) &&
+          shouldRefreshStatusAfterRead(resolvedWorkspaceId, get().linearStatus) &&
           requestCacheGeneration === linearCacheGeneration
         ) {
           void get().checkLinearConnection(true)
@@ -1254,6 +1272,9 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
       .finally(() => {
         if (inflightCustomViewDetailRequests.get(cacheKey) === entry) {
           inflightCustomViewDetailRequests.delete(cacheKey)
+        }
+        if (shouldRefreshStatusAfterRead(workspaceId, get().linearStatus)) {
+          void get().checkLinearConnection(true)
         }
       })
 
@@ -1328,6 +1349,12 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
         if (inflightCustomViewIssueRequests.get(cacheKey) === entry) {
           inflightCustomViewIssueRequests.delete(cacheKey)
         }
+        if (
+          shouldRefreshStatusAfterRead(workspaceId, get().linearStatus) &&
+          requestCacheGeneration === linearCacheGeneration
+        ) {
+          void get().checkLinearConnection(true)
+        }
       })
 
     entry = { promise, force: Boolean(options?.force), generation: requestCacheGeneration }
@@ -1381,6 +1408,12 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
       .finally(() => {
         if (inflightCustomViewProjectRequests.get(cacheKey) === entry) {
           inflightCustomViewProjectRequests.delete(cacheKey)
+        }
+        if (
+          shouldRefreshStatusAfterRead(workspaceId, get().linearStatus) &&
+          requestCacheGeneration === linearCacheGeneration
+        ) {
+          void get().checkLinearConnection(true)
         }
       })
 
