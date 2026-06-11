@@ -8,6 +8,11 @@ vi.mock('sonner', () => ({ toast: { error: vi.fn(), info: vi.fn(), success: vi.f
 
 const WT = 'repo1::/tmp/feature'
 const GROUP = 'split-group-1'
+const OTHER_GROUP = 'split-group-2'
+const BLUE = 'var(--color-blue-500)'
+const GREEN = 'var(--color-green-500)'
+const PURPLE = 'var(--color-purple-500)'
+const RED = 'var(--color-red-500)'
 
 function makeTab(id: string, sortOrder: number, overrides: Partial<Tab> = {}): Tab {
   return {
@@ -60,14 +65,14 @@ describe('tab folder groups', () => {
 
   it('creates, renames, recolors, and collapses a folder group', () => {
     const folder = store.getState().createTabFolderGroup(['tab-1', 'tab-2'], {
-      color: '#22c55e',
+      color: GREEN,
       name: 'Feature'
     })
 
     expect(folder).not.toBeNull()
     expect(store.getState().tabFolderGroupsByWorktree[WT][0]).toMatchObject({
       name: 'Feature',
-      color: '#22c55e',
+      color: GREEN,
       collapsed: false,
       tabOrder: ['tab-1', 'tab-2']
     })
@@ -78,12 +83,12 @@ describe('tab folder groups', () => {
     ])
 
     store.getState().setTabFolderGroupName(folder!.id, 'Review')
-    store.getState().setTabFolderGroupColor(folder!.id, '#ef4444')
+    store.getState().setTabFolderGroupColor(folder!.id, RED)
     store.getState().setTabFolderGroupCollapsed(folder!.id, true)
 
     expect(store.getState().tabFolderGroupsByWorktree[WT][0]).toMatchObject({
       name: 'Review',
-      color: '#ef4444',
+      color: RED,
       collapsed: true
     })
   })
@@ -149,7 +154,7 @@ describe('tab folder groups', () => {
 
   it('round-trips folder groups through persisted session hydration', () => {
     const folder = store.getState().createTabFolderGroup(['tab-1', 'tab-2'], {
-      color: '#a855f7',
+      color: PURPLE,
       collapsed: true,
       name: 'Persisted'
     })!
@@ -172,7 +177,7 @@ describe('tab folder groups', () => {
     expect(hydrated.tabFolderGroupsByWorktree[WT][0]).toMatchObject({
       id: folder.id,
       name: 'Persisted',
-      color: '#a855f7',
+      color: PURPLE,
       collapsed: true,
       tabOrder: ['tab-1', 'tab-2']
     })
@@ -195,7 +200,7 @@ describe('tab folder groups', () => {
               worktreeId: WT,
               splitGroupId: GROUP,
               name: 'Folder',
-              color: '#3b82f6',
+              color: BLUE,
               collapsed: false,
               tabOrder: ['missing-tab'],
               sortOrder: 0,
@@ -209,5 +214,44 @@ describe('tab folder groups', () => {
 
     expect(hydrated.tabFolderGroupsByWorktree[WT]).toBeUndefined()
     expect(hydrated.unifiedTabsByWorktree[WT][0].folderGroupId).toBeUndefined()
+  })
+
+  it('drops folder assignments that point at a group in another split', () => {
+    const hydrated = buildHydratedTabState(
+      makeSession({
+        unifiedTabs: {
+          [WT]: [
+            makeTab('tab-1', 0, { folderGroupId: 'folder-1' }),
+            makeTab('tab-2', 1, { groupId: OTHER_GROUP, folderGroupId: 'folder-1' })
+          ]
+        },
+        tabGroups: {
+          [WT]: [
+            { id: GROUP, worktreeId: WT, activeTabId: 'tab-1', tabOrder: ['tab-1'] },
+            { id: OTHER_GROUP, worktreeId: WT, activeTabId: 'tab-2', tabOrder: ['tab-2'] }
+          ]
+        },
+        tabFolderGroups: {
+          [WT]: [
+            {
+              id: 'folder-1',
+              worktreeId: WT,
+              splitGroupId: GROUP,
+              name: 'Folder',
+              color: BLUE,
+              collapsed: false,
+              tabOrder: ['tab-1', 'tab-2'],
+              sortOrder: 0,
+              createdAt: 1
+            }
+          ]
+        }
+      }),
+      new Set([WT])
+    )
+
+    expect(hydrated.tabFolderGroupsByWorktree[WT][0].tabOrder).toEqual(['tab-1'])
+    expect(hydrated.unifiedTabsByWorktree[WT][0].folderGroupId).toBe('folder-1')
+    expect(hydrated.unifiedTabsByWorktree[WT][1].folderGroupId).toBeNull()
   })
 })

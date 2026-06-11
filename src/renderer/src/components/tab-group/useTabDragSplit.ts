@@ -468,14 +468,16 @@ export function useTabDragSplit({
           const moved = dropUnifiedTab(activeData.unifiedTabId, {
             groupId: overData.groupId
           })
-          if (moved) {
-            mirrorWebRuntimeTabMove({
-              kind: 'move-to-group',
-              worktreeId,
-              tabId: activeData.unifiedTabId,
-              targetGroupId: overData.groupId
-            })
+          if (!moved) {
+            clearDragState()
+            return
           }
+          mirrorWebRuntimeTabMove({
+            kind: 'move-to-group',
+            worktreeId,
+            tabId: activeData.unifiedTabId,
+            targetGroupId: overData.groupId
+          })
         }
         addTabsToFolderGroup(overData.folderGroupId, [activeData.unifiedTabId])
         clearDragState()

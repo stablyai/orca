@@ -24,7 +24,7 @@ describe('TabFolderGroupChip', () => {
           worktreeId: 'wt-1',
           splitGroupId: 'split-1',
           name: 'Review',
-          color: '#3b82f6',
+          color: 'var(--color-blue-500)',
           collapsed: true,
           tabOrder: ['tab-1', 'tab-2', 'tab-3'],
           sortOrder: 0,

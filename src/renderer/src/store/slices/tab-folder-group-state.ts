@@ -1,7 +1,7 @@
-import type { Tab, TabFolderGroup } from '../../../../shared/types'
 import { dedupeTabOrder } from './tab-group-state'
+import type { Tab, TabFolderGroup } from '../../../../shared/types'
 
-export const DEFAULT_TAB_FOLDER_GROUP_COLOR = '#3b82f6'
+export const DEFAULT_TAB_FOLDER_GROUP_COLOR = 'var(--color-blue-500)'
 
 export function findFolderGroupAndWorktree(
   folderGroupsByWorktree: Record<string, TabFolderGroup[]>,
@@ -28,11 +28,15 @@ export function sanitizeFolderGroupsForWorktree(
   folderGroups: readonly TabFolderGroup[]
 ): TabFolderGroup[] {
   const tabById = new Map(tabs.map((tab) => [tab.id, tab]))
-  const groupIds = new Set(folderGroups.map((group) => group.id))
+  const groupById = new Map(folderGroups.map((group) => [group.id, group]))
   const assignedTabIdsByGroup = new Map<string, string[]>()
 
   for (const tab of tabs) {
-    if (!tab.folderGroupId || !groupIds.has(tab.folderGroupId)) {
+    if (!tab.folderGroupId) {
+      continue
+    }
+    const folderGroup = groupById.get(tab.folderGroupId)
+    if (!folderGroup || tab.groupId !== folderGroup.splitGroupId) {
       continue
     }
     const current = assignedTabIdsByGroup.get(tab.folderGroupId) ?? []
@@ -65,10 +69,18 @@ export function clearMissingFolderAssignments(
   tabs: readonly Tab[],
   folderGroups: readonly TabFolderGroup[]
 ): Tab[] {
-  const folderGroupIds = new Set(folderGroups.map((group) => group.id))
+  const folderGroupById = new Map(folderGroups.map((group) => [group.id, group]))
   let changed = false
   const nextTabs = tabs.map((tab) => {
-    if (!tab.folderGroupId || folderGroupIds.has(tab.folderGroupId)) {
+    if (!tab.folderGroupId) {
+      return tab
+    }
+    const folderGroup = folderGroupById.get(tab.folderGroupId)
+    if (
+      folderGroup &&
+      tab.groupId === folderGroup.splitGroupId &&
+      folderGroup.tabOrder.includes(tab.id)
+    ) {
       return tab
     }
     changed = true

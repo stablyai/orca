@@ -7,39 +7,39 @@ export const TAB_COLORS = [
   },
   {
     label: translate('auto.components.tab.bar.tab.color.palette.blue', 'Blue'),
-    value: '#3b82f6'
+    value: 'var(--color-blue-500)'
   },
   {
     label: translate('auto.components.tab.bar.tab.color.palette.purple', 'Purple'),
-    value: '#a855f7'
+    value: 'var(--color-purple-500)'
   },
   {
     label: translate('auto.components.tab.bar.tab.color.palette.pink', 'Pink'),
-    value: '#ec4899'
+    value: 'var(--color-pink-500)'
   },
   {
     label: translate('auto.components.tab.bar.tab.color.palette.red', 'Red'),
-    value: '#ef4444'
+    value: 'var(--color-red-500)'
   },
   {
     label: translate('auto.components.tab.bar.tab.color.palette.orange', 'Orange'),
-    value: '#f97316'
+    value: 'var(--color-orange-500)'
   },
   {
     label: translate('auto.components.tab.bar.tab.color.palette.yellow', 'Yellow'),
-    value: '#eab308'
+    value: 'var(--color-yellow-500)'
   },
   {
     label: translate('auto.components.tab.bar.tab.color.palette.green', 'Green'),
-    value: '#22c55e'
+    value: 'var(--color-green-500)'
   },
   {
     label: translate('auto.components.tab.bar.tab.color.palette.teal', 'Teal'),
-    value: '#14b8a6'
+    value: 'var(--color-teal-500)'
   },
   {
     label: translate('auto.components.tab.bar.tab.color.palette.gray', 'Gray'),
-    value: '#9ca3af'
+    value: 'var(--color-gray-500)'
   }
 ] as const
 
