@@ -3810,7 +3810,7 @@
           "connectFailed": "Failed to connect to project.",
           "noRepos": "Add a Git project under this folder to attach GitHub or GitLab tasks.",
           "title": "Create Folder Workspace",
-          "create": "Create Workspace",
+          "create": "Create workspace",
           "sourceProject": "Task Source",
           "chooseSourceProject": "Choose task source"
         }

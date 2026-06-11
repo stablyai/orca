@@ -337,7 +337,7 @@ export function FolderWorkspaceComposerDialog({
             onRepoChange={handleRepoChange}
             primaryActionLabel={translate(
               'auto.components.sidebar.FolderWorkspaceComposerDialog.create',
-              'Create Workspace'
+              'Create workspace'
             )}
             projectLabel={translate(
               'auto.components.sidebar.FolderWorkspaceComposerDialog.sourceProject',
