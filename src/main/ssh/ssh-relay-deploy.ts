@@ -919,7 +919,7 @@ function windowsRelayLaunchCommand(
   const relayScript = joinRemotePath(hostPlatform, remoteDir, 'relay.js')
   // Why: Windows sshd kills the exec channel's process tree when the channel
   // closes. WMI re-parents the detached relay so the named pipe stays alive.
-  const quoted = (value: string): string => `"${value}"`
+  const quoted = (value: string): string => `"${value.replace(/"/g, '\\"')}"`
   const relayCommandLine = [
     quoted(nodePath),
     quoted(relayScript),

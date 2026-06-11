@@ -20,10 +20,6 @@ const LIVE_IDENTITY = resolveSshConfigHomePath(
 const rawLivePort = process.env.ORCA_LIVE_SSH_PORT
 const LIVE_PORT = rawLivePort ? Number.parseInt(rawLivePort, 10) : 22
 
-if (!Number.isInteger(LIVE_PORT) || LIVE_PORT < 1 || LIVE_PORT > 65535) {
-  throw new Error(`Invalid ORCA_LIVE_SSH_PORT: ${rawLivePort}`)
-}
-
 const startedAt = Date.now()
 function log(step: string): void {
   const elapsed = ((Date.now() - startedAt) / 1000).toFixed(1)
@@ -37,13 +33,18 @@ describe.skipIf(!LIVE_HOST)('live ssh:connect pipeline', () => {
     for (const cleanup of cleanups.reverse()) {
       try {
         await cleanup()
-      } catch {
+      } catch (err) {
         // Best-effort teardown; the relay grace period reaps leftovers.
+        log(`cleanup error: ${err instanceof Error ? err.message : String(err)}`)
       }
     }
   })
 
   it('connects, deploys the relay, and spawns a real PTY', { timeout: 360_000 }, async () => {
+    if (!Number.isInteger(LIVE_PORT) || LIVE_PORT < 1 || LIVE_PORT > 65535) {
+      throw new Error(`Invalid ORCA_LIVE_SSH_PORT: ${rawLivePort}`)
+    }
+
     const target: SshTarget = {
       id: 'live-connect-harness',
       label: 'live-connect-harness',

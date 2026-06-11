@@ -330,10 +330,10 @@ describe('deployAndLaunchRelay', () => {
     expect(launchScript).toContain(
       '"C:/Users/me user/.orca-remote/relay-0.1.0+abcdef012345/relay.js"'
     )
-    expect(launchScript).toContain('--endpoint-dir')
     expect(launchScript).toContain(
       '"C:/Users/me user/.orca-remote/relay-0.1.0+abcdef012345/agent-hooks/orca-relay-'
     )
+    expect(launchScript).toContain('--endpoint-dir')
     expect(launchScript).not.toContain('\\\\.\\pipe\\agent-hooks')
     const waitScript = decodedScripts.find((script) => script.includes('deadline=Date.now()')) ?? ''
     expect(waitScript).toContain('setTimeout(attempt,intervalMs)')
