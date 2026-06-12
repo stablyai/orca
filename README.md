@@ -5,9 +5,11 @@
 <p align="center">
   <a href="https://github.com/stablyai/orca/stargazers"><img src="https://badgen.net/github/stars/stablyai/orca?label=%E2%98%85" alt="GitHub stars" /></a>
   <a href="https://github.com/stablyai/orca/releases"><img src="https://img.shields.io/github/downloads/stablyai/orca/total?label=downloads" alt="Total downloads across all releases" /></a>
-  <img src="https://badgen.net/github/release/stablyai/orca/stable" alt="Latest stable release" />
   <img src="https://badgen.net/github/license/stablyai/orca" alt="License" />
-  <img src="https://img.shields.io/badge/macOS%20%7C%20Windows%20%7C%20Linux-4493F8?style=flat-square" alt="Supported platforms: macOS, Windows, and Linux" />
+  <a href="https://discord.gg/fzjDKHxv8Q"><img src="https://img.shields.io/badge/Discord-5865F2?logo=discord&logoColor=white" alt="Join the Orca Discord" /></a>
+  <img src="https://img.shields.io/badge/macOS-333333?logo=apple&logoColor=white" alt="macOS" />
+  <img src="https://img.shields.io/badge/Windows-0078D4?logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PHBhdGggZmlsbD0id2hpdGUiIGQ9Ik0wIDMuNDVMOS43NSAyLjF2OS40NUgwem0xMC45NS0xLjVMMjQgMHYxMS41NUgxMC45NXpNMCAxMi40NWg5Ljc1djkuNDVMMCAyMC41NXptMTAuOTUgMEgyNFYyNGwtMTMuMDUtMS44eiIvPjwvc3ZnPg==" alt="Windows" />
+  <img src="https://img.shields.io/badge/Linux-FCC624?logo=linux&logoColor=black" alt="Linux" />
 </p>
 
 <p align="center">
@@ -20,19 +22,13 @@
 </p>
 
 <p align="center">
-  <a href="#install"><strong>Download Orca</strong></a> &nbsp;·&nbsp; <a href="https://www.onorca.dev/docs">Docs</a> &nbsp;·&nbsp; <a href="https://discord.gg/fzjDKHxv8Q">Discord</a> &nbsp;·&nbsp; <a href="https://github.com/stablyai/orca/releases">Changelog</a><br/>
+  <a href="https://onorca.dev/download"><strong>Download Orca</strong></a><br/>
   <sub>Mobile companion: <a href="https://apps.apple.com/us/app/orca-ide/id6766130217">iOS App Store</a> · <a href="https://github.com/stablyai/orca/releases/download/mobile-v0.0.12/app-release.apk">Android APK</a></sub>
 </p>
 
 <p align="center">
   <img src="docs/assets/readme-hero.jpg" alt="Orca desktop app running agents in parallel worktrees, with the Orca mobile companion app in the corner" width="960" />
 </p>
-
-## Why Orca
-
-Traditional IDEs weren't built for agents, and parallel-agent wrappers stop at a terminal. Orca is the whole environment: worktree-isolated agents, Ghostty-class terminals, an embedded browser with Design Mode, GitHub and Linear built in, remote worktrees over SSH, and a mobile companion app — powered by the agent subscriptions you already pay for. Free and open source (MIT), shipping new features daily.
-
----
 
 ## Features
 
@@ -215,15 +211,29 @@ Works with **any CLI agent** — if it runs in a terminal, it runs in Orca.
 
 ## Install
 
-| Platform | Download | Package manager |
-|:---------|:---------|:----------------|
-| **macOS** | [Apple Silicon (.dmg)](https://github.com/stablyai/orca/releases/latest/download/orca-macos-arm64.dmg) · [Intel (.dmg)](https://github.com/stablyai/orca/releases/latest/download/orca-macos-x64.dmg) | `brew install --cask stablyai/orca/orca` |
-| **Windows** | [Installer (.exe)](https://github.com/stablyai/orca/releases/latest/download/orca-windows-setup.exe) | — |
-| **Linux** | [AppImage](https://github.com/stablyai/orca/releases/latest/download/orca-linux.AppImage) · [.deb](https://github.com/stablyai/orca/releases/latest) | `yay -S stably-orca-bin` (AUR, or `stably-orca-git` to build from source) |
-| **iOS** | [App Store](https://apps.apple.com/us/app/orca-ide/id6766130217) | — |
-| **Android** | [APK](https://github.com/stablyai/orca/releases/download/mobile-v0.0.12/app-release.apk) | — |
+### Desktop — macOS, Windows, Linux
 
-Download once — Orca auto-updates. Also available at **[onOrca.dev](https://onOrca.dev)**.
+- **[Download from onOrca.dev](https://onorca.dev/download)**
+- Or grab a build directly: [macOS Apple Silicon](https://github.com/stablyai/orca/releases/latest/download/orca-macos-arm64.dmg) · [macOS Intel](https://github.com/stablyai/orca/releases/latest/download/orca-macos-x64.dmg) · [Windows (.exe)](https://github.com/stablyai/orca/releases/latest/download/orca-windows-setup.exe) · [Linux AppImage](https://github.com/stablyai/orca/releases/latest/download/orca-linux.AppImage) · [all builds](https://github.com/stablyai/orca/releases/latest)
+
+_Or via a package manager:_
+
+```bash
+# macOS (Homebrew)
+brew install --cask stablyai/orca/orca
+
+# Arch Linux (AUR) — or stably-orca-git to build from source
+yay -S stably-orca-bin
+```
+
+Download once — Orca auto-updates.
+
+### Mobile Companion — iOS, Android
+
+A separate app that pairs with the desktop app, so you can monitor and steer your agents from your phone.
+
+- **iOS:** [Download on the App Store](https://apps.apple.com/us/app/orca-ide/id6766130217)
+- **Android:** [Download the APK](https://github.com/stablyai/orca/releases/download/mobile-v0.0.12/app-release.apk)
 
 ---
 
