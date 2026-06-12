@@ -48,6 +48,11 @@ import type {
   WarpThemeImportPreview,
   WarpThemeImportSource
 } from '../shared/terminal-custom-themes'
+import type {
+  SettingsExportResult,
+  SettingsImportPreview,
+  SettingsImportResult
+} from '../shared/settings-portability'
 import type { GitHistoryOptions, GitHistoryResult } from '../shared/git-history'
 import type { ShellOpenLocalPathResult } from '../shared/shell-open-types'
 import type { SkillDiscoveryResult, SkillDiscoveryTarget } from '../shared/skills'
@@ -1520,6 +1525,15 @@ const api = {
 
     set: (args: Record<string, unknown>): Promise<unknown> =>
       ipcRenderer.invoke('settings:set', args),
+
+    exportPortable: (): Promise<SettingsExportResult> =>
+      ipcRenderer.invoke('settings:exportPortable'),
+
+    previewPortableImport: (): Promise<SettingsImportPreview> =>
+      ipcRenderer.invoke('settings:previewPortableImport'),
+
+    importPortable: (filePath: string): Promise<SettingsImportResult> =>
+      ipcRenderer.invoke('settings:importPortable', filePath),
 
     listFonts: (): Promise<string[]> => ipcRenderer.invoke('settings:listFonts'),
 

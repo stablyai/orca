@@ -1,42 +1,37 @@
-import { BrowserWindow, ipcMain, nativeTheme } from 'electron'
+import { BrowserWindow, dialog, ipcMain, type OpenDialogOptions } from 'electron'
+import { readFile, writeFile } from 'node:fs/promises'
 import type { Store } from '../persistence'
 import type { GlobalSettings, PersistedState } from '../../shared/types'
+import type { KeybindingService } from '../keybindings/keybinding-service'
 import { listSystemFontFamilies } from '../system-fonts'
 import { previewGhosttyImport } from '../ghostty/index'
 import { previewWarpThemeImport } from '../warp-themes'
-import { setMainUiLanguage } from '../i18n/main-i18n'
-import { rebuildAppMenu } from '../menu/register-app-menu'
-import { track } from '../telemetry/client'
-import { SETTINGS_CHANGED_WHITELIST, type SettingsChangedKey } from '../../shared/telemetry-events'
 import type { AgentAwakeService } from '../agent-awake-service'
-import { sanitizeFloatingWorkspaceDirectorySetting } from './floating-workspace-directory'
-import { applyAgentStatusHooksEnabled } from '../agent-hooks/managed-agent-hook-controls'
-import { applyElectronProxySettings } from '../network/proxy-settings'
-import { normalizeProxyBypassRules, normalizeProxyUrl } from '../../shared/network-proxy'
-import { normalizeAppIconId } from '../../shared/app-icon'
-import { normalizeUiLanguage } from '../../shared/ui-language'
-import { applyAppIcon } from '../app-icon'
-import { normalizeTerminalCustomThemes } from '../../shared/terminal-custom-themes'
+import { createSettingsUpdateApplier } from '../settings/apply-settings-updates'
+import { applyPortableSettingsDocument } from '../settings/apply-portable-document'
+import {
+  createSettingsExportDocument,
+  previewSettingsExportImport,
+  readSettingsExportDocument,
+  type SettingsExportResult,
+  type SettingsImportPreview,
+  type SettingsImportResult
+} from '../../shared/settings-portability'
 
-// Why: the whitelist is the source-of-truth for which keys we emit on. Casting
-// to a Set once at module load lets the IPC handler's per-key membership
-// check stay O(1) without re-coercing the readonly tuple on every call.
-const SETTINGS_CHANGED_WHITELIST_SET = new Set<string>(SETTINGS_CHANGED_WHITELIST)
-
-// Why: fields that appear in the View > Appearance submenu need the menu
-// rebuilt after any update so the checkbox `checked` state stays in sync
-// with the persisted value. Electron doesn't reactively re-render menu
-// items when the backing state changes.
-const APPEARANCE_MENU_KEYS: readonly (keyof GlobalSettings)[] = [
-  'showTasksButton',
-  'showAutomationsButton',
-  'showMobileButton',
-  'showTitlebarAppName'
-]
+function getPortableKeybindingSnapshot(keybindings?: KeybindingService): unknown {
+  const snapshot = keybindings?.getSnapshot()
+  return snapshot
+    ? {
+        keybindings: snapshot.commonOverrides,
+        platforms: snapshot.platformOverrides
+      }
+    : undefined
+}
 
 export function registerSettingsHandlers(
   store: Store,
-  agentAwakeService?: AgentAwakeService
+  agentAwakeService?: AgentAwakeService,
+  keybindings?: KeybindingService
 ): void {
   store.onSettingsChanged((updates, _settings, originWebContentsId) => {
     for (const window of BrowserWindow.getAllWindows()) {
@@ -52,105 +47,129 @@ export function registerSettingsHandlers(
     return store.getSettings()
   })
 
+  const applySettingsUpdates = createSettingsUpdateApplier(store, agentAwakeService)
+
   ipcMain.handle('settings:set', async (event, args: Partial<GlobalSettings>) => {
-    const sanitizedArgs = { ...args }
-    // Why: Floating Workspace grants are trusted only when written by the
-    // main-process directory picker, never by renderer-provided settings IPC.
-    delete sanitizedArgs.floatingTerminalTrustedCwds
-    if (typeof args.floatingTerminalCwd === 'string') {
-      sanitizedArgs.floatingTerminalCwd = await sanitizeFloatingWorkspaceDirectorySetting(
-        store,
-        args.floatingTerminalCwd
-      )
-    }
-    if ('httpProxyUrl' in args) {
-      const proxyUrl = normalizeProxyUrl(args.httpProxyUrl)
-      sanitizedArgs.httpProxyUrl = proxyUrl.ok ? proxyUrl.value : ''
-    }
-    if ('httpProxyBypassRules' in args) {
-      sanitizedArgs.httpProxyBypassRules = normalizeProxyBypassRules(args.httpProxyBypassRules)
-    }
-    if ('appIcon' in args) {
-      sanitizedArgs.appIcon = normalizeAppIconId(args.appIcon)
-    }
-    if ('terminalCustomThemes' in args) {
-      sanitizedArgs.terminalCustomThemes = normalizeTerminalCustomThemes(args.terminalCustomThemes)
-    }
-    if ('uiLanguage' in args) {
-      sanitizedArgs.uiLanguage = normalizeUiLanguage(args.uiLanguage)
-    }
-    if (args.theme) {
-      nativeTheme.themeSource = args.theme
-    }
-    // Why: capture the pre-update value so we only emit when the value
-    // actually changes. The settings UI sometimes re-saves the same value
-    // (e.g. blur after a no-op edit), and a `settings_changed` event for a
-    // no-op flip would inflate the experimental-feature-adoption signal.
-    const before = store.getSettings()
-    const result = store.updateSettings(sanitizedArgs, {
-      notifyListeners: true,
-      originWebContentsId: event.sender.id
-    })
-    if ('keepComputerAwakeWhileAgentsRun' in sanitizedArgs) {
-      agentAwakeService?.setEnabled(result.keepComputerAwakeWhileAgentsRun)
-    }
-    if (
-      'agentStatusHooksEnabled' in sanitizedArgs &&
-      before.agentStatusHooksEnabled !== result.agentStatusHooksEnabled
-    ) {
-      try {
-        applyAgentStatusHooksEnabled(result.agentStatusHooksEnabled)
-      } catch (error) {
-        console.warn('[settings] failed to apply agentStatusHooksEnabled:', error)
-      }
-    }
-    if ('uiLanguage' in sanitizedArgs && before.uiLanguage !== result.uiLanguage) {
-      await setMainUiLanguage(result.uiLanguage)
-      rebuildAppMenu()
-    }
-    if (APPEARANCE_MENU_KEYS.some((key) => key in sanitizedArgs)) {
-      rebuildAppMenu()
-    }
-    if ('httpProxyUrl' in sanitizedArgs || 'httpProxyBypassRules' in sanitizedArgs) {
-      try {
-        await applyElectronProxySettings(result)
-      } catch {
-        console.warn('[settings] failed to apply network proxy settings')
-      }
-    }
-    if ('appIcon' in sanitizedArgs && before.appIcon !== result.appIcon) {
-      applyAppIcon(result.appIcon)
-    }
-
-    // Why: telemetry-plan.md§Settings — fire `settings_changed` only for
-    // whitelisted keys, with `value_kind` distinguishing booleans from
-    // string-enum settings. We deliberately do NOT send the raw value for
-    // non-enum settings; the whitelist is currently scoped to experimental
-    // toggles, all of which are booleans, so `value_kind === 'bool'` is
-    // the path the v1 enum has a slot for. If a non-bool whitelisted
-    // setting is ever added, extend the discriminator here at the same
-    // time the schema's `value_kind` enum gains the new value.
-    for (const key of Object.keys(sanitizedArgs)) {
-      if (!SETTINGS_CHANGED_WHITELIST_SET.has(key)) {
-        continue
-      }
-      const beforeValue = (before as Record<string, unknown>)[key]
-      const afterValue = (result as Record<string, unknown>)[key]
-      if (beforeValue === afterValue) {
-        continue
-      }
-      if (typeof afterValue !== 'boolean') {
-        // No non-bool whitelist entries today; skip rather than guess.
-        continue
-      }
-      track('settings_changed', {
-        setting_key: key as SettingsChangedKey,
-        value_kind: 'bool'
-      })
-    }
-
-    return result
+    return applySettingsUpdates(args, event.sender.id)
   })
+
+  ipcMain.handle('settings:exportPortable', async (event): Promise<SettingsExportResult> => {
+    try {
+      const keybindingSnapshot = getPortableKeybindingSnapshot(keybindings)
+      const document = createSettingsExportDocument(store.getSettings(), {
+        keybindings: keybindingSnapshot
+      })
+      const parent = BrowserWindow.fromWebContents(event.sender) ?? undefined
+      const options = {
+        defaultPath: 'orca-settings.json',
+        filters: [{ name: 'Orca Settings', extensions: ['json'] }]
+      }
+      const { canceled, filePath } = parent
+        ? await dialog.showSaveDialog(parent, options)
+        : await dialog.showSaveDialog(options)
+      if (canceled || !filePath) {
+        return { success: false, cancelled: true }
+      }
+      await writeFile(filePath, `${JSON.stringify(document, null, 2)}\n`, 'utf8')
+      return {
+        success: true,
+        filePath,
+        portableSettingCount: Object.keys(document.settings).length,
+        includesKeybindings: document.keybindings !== undefined
+      }
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to export settings'
+      }
+    }
+  })
+
+  const pickSettingsImportFile = async (
+    event: Electron.IpcMainInvokeEvent
+  ): Promise<string | undefined> => {
+    const parent = BrowserWindow.fromWebContents(event.sender) ?? undefined
+    const options: OpenDialogOptions = {
+      properties: ['openFile'],
+      filters: [{ name: 'Orca Settings', extensions: ['json'] }]
+    }
+    const { canceled, filePaths } = parent
+      ? await dialog.showOpenDialog(parent, options)
+      : await dialog.showOpenDialog(options)
+    const filePath = filePaths[0]
+    return canceled || !filePath ? undefined : filePath
+  }
+
+  const readPortableSettingsFile = async (filePath: string): Promise<unknown> => {
+    const raw = await readFile(filePath, 'utf8')
+    try {
+      return JSON.parse(raw) as unknown
+    } catch {
+      throw new Error('The selected file is not valid JSON.')
+    }
+  }
+
+  ipcMain.handle(
+    'settings:previewPortableImport',
+    async (event): Promise<SettingsImportPreview> => {
+      const emptyPreview = {
+        portableSettingCount: 0,
+        changedSettingKeys: [],
+        skippedSettingKeys: [],
+        includesKeybindings: false,
+        changedKeybindings: false
+      }
+      try {
+        const filePath = await pickSettingsImportFile(event)
+        if (!filePath) {
+          return { ok: false, cancelled: true, ...emptyPreview }
+        }
+        const parsed = await readPortableSettingsFile(filePath)
+        return {
+          ...previewSettingsExportImport(parsed, store.getSettings(), {
+            currentKeybindings: getPortableKeybindingSnapshot(keybindings)
+          }),
+          filePath
+        }
+      } catch (error) {
+        return {
+          ok: false,
+          ...emptyPreview,
+          error: error instanceof Error ? error.message : 'Failed to preview settings import'
+        }
+      }
+    }
+  )
+
+  // Why: import re-reads and re-validates the file the preview picked instead
+  // of trusting renderer-cached contents, so a file edited between preview and
+  // apply still goes through the portable allowlist.
+  ipcMain.handle(
+    'settings:importPortable',
+    async (_event, filePath: unknown): Promise<SettingsImportResult> => {
+      try {
+        if (typeof filePath !== 'string' || filePath.length === 0) {
+          return { success: false, error: 'No settings file selected.' }
+        }
+        const parsed = readSettingsExportDocument(await readPortableSettingsFile(filePath))
+        if (!parsed.document) {
+          return { success: false, error: parsed.error }
+        }
+        const applied = await applyPortableSettingsDocument(
+          parsed.document,
+          applySettingsUpdates,
+          store.getSettings(),
+          keybindings
+        )
+        return { success: true, ...applied }
+      } catch (error) {
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : 'Failed to import settings'
+        }
+      }
+    }
+  )
 
   ipcMain.handle('settings:listFonts', () => {
     return listSystemFontFamilies()

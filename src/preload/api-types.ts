@@ -11,6 +11,11 @@ import type { NativeFileDropPayload } from '../shared/native-file-drop'
 import type { AppIdentity } from '../shared/app-identity'
 import type { TerminalPaneSplitSource } from '../shared/feature-education-telemetry'
 import type {
+  SettingsExportResult,
+  SettingsImportPreview,
+  SettingsImportResult
+} from '../shared/settings-portability'
+import type {
   FolderWorkspacePathStatus,
   FolderWorkspacePathStatusRequest
 } from '../shared/folder-workspace-path-status'
@@ -1670,6 +1675,9 @@ export type PreloadApi = {
   settings: {
     get: () => Promise<GlobalSettings>
     set: (args: Partial<GlobalSettings>) => Promise<GlobalSettings>
+    exportPortable: () => Promise<SettingsExportResult>
+    previewPortableImport: () => Promise<SettingsImportPreview>
+    importPortable: (filePath: string) => Promise<SettingsImportResult>
     listFonts: () => Promise<string[]>
     previewGhosttyImport: () => Promise<GhosttyImportPreview>
     previewWarpThemeImport: (source: WarpThemeImportSource) => Promise<WarpThemeImportPreview>

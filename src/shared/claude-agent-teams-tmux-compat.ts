@@ -1,4 +1,4 @@
-export type ClaudeAgentTeamsMode = 'off' | 'in-process' | 'native-panes-shim'
+export type ClaudeAgentTeamsMode = 'off' | 'in-process' | 'native-panes-shim' | 'orca-managed-tmux'
 
 export type ParsedTmuxCommand = {
   command: string

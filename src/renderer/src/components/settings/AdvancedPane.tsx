@@ -6,6 +6,7 @@ import { Button } from '../ui/button'
 import { Label } from '../ui/label'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip'
 import { SearchableSetting } from './SearchableSetting'
+import { SettingsPortabilitySection } from './SettingsPortabilitySection'
 import { SettingsSubsectionHeader, SettingsSwitch } from './SettingsFormControls'
 import { getAdvancedPaneSearchEntries, getAdvancedSearchEntry } from './advanced-search'
 import { translate } from '@/i18n/i18n'
@@ -15,9 +16,14 @@ export { getAdvancedPaneSearchEntries }
 type AdvancedPaneProps = {
   settings: GlobalSettings
   updateSettings: (updates: Partial<GlobalSettings>) => void
+  fetchSettings?: () => Promise<void>
 }
 
-export function AdvancedPane({ settings, updateSettings }: AdvancedPaneProps): React.JSX.Element {
+export function AdvancedPane({
+  settings,
+  updateSettings,
+  fetchSettings
+}: AdvancedPaneProps): React.JSX.Element {
   const mountedRef = useMountedRef()
   const http1CompatibilityInitialRef = useRef(Boolean(settings.electronHttp1CompatibilityMode))
   const [http1CompatibilityRelaunching, setHttp1CompatibilityRelaunching] = useState(false)
@@ -41,6 +47,8 @@ export function AdvancedPane({ settings, updateSettings }: AdvancedPaneProps): R
 
   return (
     <div className="space-y-4">
+      <SettingsPortabilitySection fetchSettings={fetchSettings} />
+
       <section className="space-y-3">
         <SettingsSubsectionHeader
           title={translate('auto.components.settings.AdvancedPane.8d8d8ac599', 'Compatibility')}

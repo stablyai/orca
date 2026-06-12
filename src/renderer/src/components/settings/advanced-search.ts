@@ -39,6 +39,29 @@ export const getAdvancedPaneSearchEntries = createLocalizedCatalog((): SettingsS
       ...translateSearchKeyword('auto.components.settings.advanced.search.e61ed8ab33', 'updates'),
       ...translateSearchKeyword('auto.components.settings.advanced.search.a7002e1ac4', 'updater')
     ]
+  },
+  {
+    title: translate(
+      'auto.components.settings.advanced.search.385eca8985',
+      'Settings Import & Export'
+    ),
+    description: translate(
+      'auto.components.settings.advanced.search.2ec4f12e52',
+      'Move portable Orca preferences and shortcuts between machines.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.advanced.search.09e8d65408', 'settings'),
+      ...translateSearchKeyword('auto.components.settings.advanced.search.735dca7219', 'transfer'),
+      ...translateSearchKeyword('auto.components.settings.advanced.search.e372d43640', 'export'),
+      ...translateSearchKeyword('auto.components.settings.advanced.search.8eb749fc33', 'import'),
+      ...translateSearchKeyword('auto.components.settings.advanced.search.ad20e91a14', 'portable'),
+      ...translateSearchKeyword('auto.components.settings.advanced.search.d22c801503', 'backup'),
+      ...translateSearchKeyword('auto.components.settings.advanced.search.568b19b6d0', 'shortcuts'),
+      ...translateSearchKeyword(
+        'auto.components.settings.advanced.search.68806106b6',
+        'keybindings'
+      )
+    ]
   }
 ])
 
@@ -54,6 +77,9 @@ export function getAdvancedSearchEntry() {
   return {
     http1Compatibility: findEntry(
       translate('auto.components.settings.advanced.search.11eea3da72', 'HTTP/1.1 Compatibility')
+    ),
+    settingsPortability: findEntry(
+      translate('auto.components.settings.advanced.search.385eca8985', 'Settings Import & Export')
     )
   } as const
 }

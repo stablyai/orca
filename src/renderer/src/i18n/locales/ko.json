@@ -6025,7 +6025,17 @@
             "2b4d26d11e": "네트워킹",
             "e04e9db503": "고급의",
             "585f56fae0": "프록시 뒤에서 HTTP/2가 실패하는 경우 Electron 네트워킹에 HTTP/1.1을 사용하십시오.",
-            "11eea3da72": "HTTP/1.1 호환성"
+            "11eea3da72": "HTTP/1.1 호환성",
+            "385eca8985": "Settings Import & Export",
+            "2ec4f12e52": "Move portable Orca preferences and shortcuts between machines.",
+            "09e8d65408": "settings",
+            "735dca7219": "transfer",
+            "e372d43640": "export",
+            "8eb749fc33": "import",
+            "ad20e91a14": "portable",
+            "d22c801503": "backup",
+            "568b19b6d0": "shortcuts",
+            "68806106b6": "keybindings"
           }
         },
         "agents": {
@@ -7615,6 +7625,13 @@
               }
             }
           }
+        },
+        "SettingsPortabilitySection": {
+          "e6a24b08ec": "Settings imported, but refresh failed."
+        },
+        "PortableSettingsChangeSummary": {
+          "49ca021159": "가져오지 않은 설정",
+          "c4d57c56aa": "이 설정은 이 버전의 Orca에서 지원되지 않거나 다른 컴퓨터에만 해당됩니다."
         }
       },
       "right": {

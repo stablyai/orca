@@ -387,3 +387,40 @@ export function writeKeybindingOverride(
   writeJsonDocument(path, document)
   return readKeybindingFile(path, platform)
 }
+
+export function writeKeybindingPortableOverrides(
+  path: string,
+  platform: NodeJS.Platform,
+  value: unknown
+): KeybindingFileSnapshot {
+  const document = createPortableKeybindingDocument(value)
+  writeJsonDocument(path, document)
+  return readKeybindingFile(path, platform)
+}
+
+export function validateKeybindingPortableOverrides(value: unknown): void {
+  createPortableKeybindingDocument(value)
+}
+
+function createPortableKeybindingDocument(value: unknown): JsonObject {
+  if (!isJsonObject(value)) {
+    throw new Error('Keybindings export must contain a JSON object.')
+  }
+  const diagnostics: KeybindingFileDiagnostic[] = []
+  const commonOverrides = parseBindingSection(value.keybindings, 'keybindings', diagnostics)
+  const platformOverrides = parsePlatformOverrides(value, diagnostics)
+  const error = diagnostics.find((diagnostic) => diagnostic.severity === 'error')
+  if (error) {
+    throw new Error(error.message)
+  }
+
+  return {
+    version: FILE_VERSION,
+    keybindings: commonOverrides,
+    platforms: {
+      darwin: platformOverrides.darwin ?? {},
+      linux: platformOverrides.linux ?? {},
+      win32: platformOverrides.win32 ?? {}
+    }
+  }
+}

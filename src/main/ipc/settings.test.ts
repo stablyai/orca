@@ -1,27 +1,50 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
+import { join } from 'node:path'
 
 const {
   applyAppIconMock,
   applyElectronProxySettingsMock,
   browserWindowGetAllWindowsMock,
+  browserWindowFromWebContentsMock,
+  dialogShowOpenDialogMock,
+  dialogShowSaveDialogMock,
   handleMock,
   previewGhosttyImportMock,
   previewWarpThemeImportMock,
-  rebuildAppMenuMock
+  readFileMock,
+  rebuildAppMenuMock,
+  writeFileMock
 } = vi.hoisted(() => ({
   applyAppIconMock: vi.fn(),
   applyElectronProxySettingsMock: vi.fn(),
   browserWindowGetAllWindowsMock: vi.fn(),
+  browserWindowFromWebContentsMock: vi.fn(),
+  dialogShowOpenDialogMock: vi.fn(),
+  dialogShowSaveDialogMock: vi.fn(),
   handleMock: vi.fn(),
   previewGhosttyImportMock: vi.fn(),
   previewWarpThemeImportMock: vi.fn(),
-  rebuildAppMenuMock: vi.fn()
+  readFileMock: vi.fn(),
+  rebuildAppMenuMock: vi.fn(),
+  writeFileMock: vi.fn()
 }))
 
 vi.mock('electron', () => ({
-  BrowserWindow: { getAllWindows: browserWindowGetAllWindowsMock },
+  BrowserWindow: {
+    fromWebContents: browserWindowFromWebContentsMock,
+    getAllWindows: browserWindowGetAllWindowsMock
+  },
+  dialog: {
+    showOpenDialog: dialogShowOpenDialogMock,
+    showSaveDialog: dialogShowSaveDialogMock
+  },
   ipcMain: { handle: handleMock },
   nativeTheme: { themeSource: 'system' }
+}))
+
+vi.mock('node:fs/promises', () => ({
+  readFile: readFileMock,
+  writeFile: writeFileMock
 }))
 
 vi.mock('../ghostty/index', () => ({
@@ -45,6 +68,8 @@ vi.mock('../menu/register-app-menu', () => ({
 }))
 
 import { registerSettingsHandlers } from './settings'
+import { getDefaultSettings } from '../../shared/constants'
+import { createSettingsExportDocument } from '../../shared/settings-portability'
 
 const settingsInvokeEvent = { sender: { id: 1 } }
 type SettingsChangedListener = (
@@ -71,6 +96,11 @@ describe('registerSettingsHandlers', () => {
     previewWarpThemeImportMock.mockClear()
     rebuildAppMenuMock.mockClear()
     browserWindowGetAllWindowsMock.mockReset()
+    browserWindowFromWebContentsMock.mockReset()
+    dialogShowOpenDialogMock.mockReset()
+    dialogShowSaveDialogMock.mockReset()
+    readFileMock.mockReset()
+    writeFileMock.mockReset()
     store.getSettings.mockReset()
     store.updateSettings.mockReset()
     store.onSettingsChanged.mockClear()
@@ -86,6 +116,237 @@ describe('registerSettingsHandlers', () => {
     registerSettingsHandlers(store as never)
     const channels = handleMock.mock.calls.map((call) => call[0])
     expect(channels).toContain('settings:previewWarpThemeImport')
+  })
+
+  it('exports portable settings and keybindings to a JSON file', async () => {
+    const keybindings = {
+      getSnapshot: vi.fn(() => ({
+        commonOverrides: { 'app.settings': ['Ctrl+,'] },
+        platformOverrides: { darwin: { 'app.settings': ['Cmd+,'] } }
+      }))
+    }
+    const settings = {
+      ...getDefaultSettings(join('Users', 'test')),
+      theme: 'dark' as const,
+      workspaceDir: join('Users', 'test', 'private-workspaces')
+    }
+    store.getSettings.mockReturnValue(settings)
+    const exportPath = join('tmp', 'orca.json')
+    dialogShowSaveDialogMock.mockResolvedValue({ canceled: false, filePath: exportPath })
+    registerSettingsHandlers(store as never, undefined, keybindings as never)
+
+    const handler = handleMock.mock.calls.find(
+      (call) => call[0] === 'settings:exportPortable'
+    )?.[1] as (_event: typeof settingsInvokeEvent) => Promise<unknown>
+
+    const result = await handler(settingsInvokeEvent)
+
+    expect(result).toMatchObject({ success: true, filePath: exportPath })
+    expect(writeFileMock).toHaveBeenCalledTimes(1)
+    const exported = JSON.parse(writeFileMock.mock.calls[0][1])
+    expect(exported.settings.theme).toBe('dark')
+    expect(exported.settings.workspaceDir).toBeUndefined()
+    expect(exported.keybindings).toEqual({
+      keybindings: { 'app.settings': ['Ctrl+,'] },
+      platforms: { darwin: { 'app.settings': ['Cmd+,'] } }
+    })
+  })
+
+  it('previews a freshly exported settings file as no changes', async () => {
+    const userPath = join('Users', 'test')
+    const settings = {
+      ...getDefaultSettings(userPath),
+      claudeAgentTeamsMode: 'orca-managed-tmux' as const,
+      terminalQuickCommands: [
+        {
+          id: 'global-command',
+          label: 'Global command',
+          scope: { type: 'global' as const },
+          action: 'terminal-command' as const,
+          command: 'ls',
+          appendEnter: true
+        },
+        {
+          id: 'repo-command',
+          label: 'Repo command',
+          scope: { type: 'repo' as const, repoId: 'local-repo-id' },
+          action: 'terminal-command' as const,
+          command: 'npm test',
+          appendEnter: true
+        }
+      ],
+      sourceControlAi: {
+        ...getDefaultSettings(userPath).sourceControlAi!,
+        enabled: true,
+        agentId: 'claude' as const,
+        selectedModelByAgent: { claude: 'claude-opus-4-7' },
+        selectedThinkingByModel: { 'claude-opus-4-7': 'low' }
+      },
+      voice: {
+        ...getDefaultSettings(userPath).voice!,
+        enabled: true,
+        sttModel: 'zipformer-bilingual-zh-en',
+        modelsDir: join(userPath, 'models'),
+        userModels: [
+          { id: 'custom-model', type: 'whisper' as const, dir: join(userPath, 'model') }
+        ],
+        openAiApiKeyConfigured: true
+      }
+    }
+    const keybindingSnapshot = {
+      commonOverrides: { 'terminal.search': ['Ctrl+Shift+F'] },
+      platformOverrides: { darwin: {}, linux: {}, win32: {} }
+    }
+    const keybindings = {
+      getSnapshot: vi.fn(() => keybindingSnapshot)
+    }
+    const exportPath = join('tmp', 'orca.json')
+    store.getSettings.mockReturnValue(settings)
+    dialogShowSaveDialogMock.mockResolvedValue({ canceled: false, filePath: exportPath })
+    registerSettingsHandlers(store as never, undefined, keybindings as never)
+
+    const exportHandler = handleMock.mock.calls.find(
+      (call) => call[0] === 'settings:exportPortable'
+    )?.[1] as (_event: typeof settingsInvokeEvent) => Promise<unknown>
+
+    await exportHandler(settingsInvokeEvent)
+    const exportedJson = writeFileMock.mock.calls[0][1]
+
+    dialogShowOpenDialogMock.mockResolvedValue({ canceled: false, filePaths: [exportPath] })
+    readFileMock.mockResolvedValue(exportedJson)
+    const previewHandler = handleMock.mock.calls.find(
+      (call) => call[0] === 'settings:previewPortableImport'
+    )?.[1] as (_event: typeof settingsInvokeEvent) => Promise<unknown>
+
+    expect(await previewHandler(settingsInvokeEvent)).toMatchObject({
+      ok: true,
+      filePath: exportPath,
+      changedSettingKeys: [],
+      skippedSettingKeys: [],
+      includesKeybindings: true,
+      changedKeybindings: false
+    })
+  })
+
+  it('previews a portable import with changed and skipped keys plus the picked path', async () => {
+    const importPath = join('tmp', 'orca.json')
+    const userPath = join('Users', 'test')
+    dialogShowOpenDialogMock.mockResolvedValue({ canceled: false, filePaths: [importPath] })
+    readFileMock.mockResolvedValue(
+      JSON.stringify({
+        ...createSettingsExportDocument(getDefaultSettings(userPath)),
+        settings: {
+          theme: 'dark',
+          workspaceDir: join(userPath, 'should-not-import')
+        },
+        keybindings: { keybindings: {}, platforms: {} }
+      })
+    )
+    store.getSettings.mockReturnValue({ theme: 'system' })
+    registerSettingsHandlers(store as never)
+
+    const handler = handleMock.mock.calls.find(
+      (call) => call[0] === 'settings:previewPortableImport'
+    )?.[1] as (_event: typeof settingsInvokeEvent) => Promise<unknown>
+
+    expect(await handler(settingsInvokeEvent)).toMatchObject({
+      ok: true,
+      filePath: importPath,
+      portableSettingCount: 1,
+      changedSettingKeys: ['theme'],
+      skippedSettingKeys: ['workspaceDir'],
+      includesKeybindings: true,
+      changedKeybindings: true
+    })
+  })
+
+  it('reports a cancelled preview when the open dialog is dismissed', async () => {
+    dialogShowOpenDialogMock.mockResolvedValue({ canceled: true, filePaths: [] })
+    registerSettingsHandlers(store as never)
+
+    const handler = handleMock.mock.calls.find(
+      (call) => call[0] === 'settings:previewPortableImport'
+    )?.[1] as (_event: typeof settingsInvokeEvent) => Promise<unknown>
+
+    expect(await handler(settingsInvokeEvent)).toMatchObject({ ok: false, cancelled: true })
+    expect(readFileMock).not.toHaveBeenCalled()
+  })
+
+  it('imports only portable settings and keybindings from a JSON file', async () => {
+    const keybindings = {
+      replacePortableOverrides: vi.fn(() => ({ overrides: {} })),
+      validatePortableOverrides: vi.fn()
+    }
+    const send = vi.fn()
+    browserWindowGetAllWindowsMock.mockReturnValue([
+      { isDestroyed: () => false, webContents: { send } }
+    ])
+    readFileMock.mockResolvedValue(
+      JSON.stringify({
+        ...createSettingsExportDocument(getDefaultSettings(join('Users', 'test')), {
+          keybindings: { keybindings: { 'app.settings': ['Ctrl+,'] }, platforms: {} }
+        }),
+        settings: {
+          theme: 'dark',
+          workspaceDir: join('Users', 'test', 'should-not-import')
+        }
+      })
+    )
+    store.getSettings.mockReturnValue({ theme: 'system' })
+    store.updateSettings.mockReturnValue({ theme: 'dark' })
+    registerSettingsHandlers(store as never, undefined, keybindings as never)
+
+    const handler = handleMock.mock.calls.find(
+      (call) => call[0] === 'settings:importPortable'
+    )?.[1] as (_event: typeof settingsInvokeEvent, filePath: string) => Promise<unknown>
+
+    const result = await handler(settingsInvokeEvent, join('tmp', 'orca.json'))
+
+    expect(result).toMatchObject({
+      success: true,
+      portableSettingCount: 1,
+      skippedSettingKeys: ['workspaceDir'],
+      includesKeybindings: true
+    })
+    expect(store.updateSettings).toHaveBeenCalledWith(
+      { theme: 'dark' },
+      { notifyListeners: true, originWebContentsId: undefined }
+    )
+    expect(keybindings.replacePortableOverrides).toHaveBeenCalledWith({
+      keybindings: { 'app.settings': ['Ctrl+,'] },
+      platforms: {}
+    })
+    expect(send).toHaveBeenCalledWith('keybindings:changed', { overrides: {} })
+  })
+
+  it('does not apply settings when portable keybinding validation fails', async () => {
+    const keybindings = {
+      replacePortableOverrides: vi.fn(),
+      validatePortableOverrides: vi.fn(() => {
+        throw new Error('Bad shortcut')
+      })
+    }
+    readFileMock.mockResolvedValue(
+      JSON.stringify({
+        ...createSettingsExportDocument(getDefaultSettings(join('Users', 'test')), {
+          keybindings: { keybindings: { 'app.settings': ['not-a-shortcut'] }, platforms: {} }
+        }),
+        settings: { theme: 'dark' }
+      })
+    )
+    store.getSettings.mockReturnValue({ theme: 'system' })
+    registerSettingsHandlers(store as never, undefined, keybindings as never)
+
+    const handler = handleMock.mock.calls.find(
+      (call) => call[0] === 'settings:importPortable'
+    )?.[1] as (_event: typeof settingsInvokeEvent, filePath: string) => Promise<unknown>
+
+    await expect(handler(settingsInvokeEvent, join('tmp', 'orca.json'))).resolves.toMatchObject({
+      success: false,
+      error: 'Bad shortcut'
+    })
+    expect(store.updateSettings).not.toHaveBeenCalled()
+    expect(keybindings.replacePortableOverrides).not.toHaveBeenCalled()
   })
 
   it('settings:previewGhosttyImport returns preview result', async () => {

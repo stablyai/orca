@@ -6076,7 +6076,17 @@
             "2b4d26d11e": "networking",
             "e04e9db503": "advanced",
             "585f56fae0": "Use HTTP/1.1 for Electron networking when HTTP/2 fails behind a proxy.",
-            "11eea3da72": "HTTP/1.1 Compatibility"
+            "11eea3da72": "HTTP/1.1 Compatibility",
+            "385eca8985": "Settings Import & Export",
+            "2ec4f12e52": "Move portable Orca preferences and shortcuts between machines.",
+            "09e8d65408": "settings",
+            "735dca7219": "transfer",
+            "e372d43640": "export",
+            "8eb749fc33": "import",
+            "ad20e91a14": "portable",
+            "d22c801503": "backup",
+            "568b19b6d0": "shortcuts",
+            "68806106b6": "keybindings"
           }
         },
         "agents": {
@@ -7615,6 +7625,33 @@
               }
             }
           }
+        },
+        "PortableSettingsChangeSummary": {
+          "97e44cc133": "File",
+          "1368c68d2e": "Settings to update",
+          "2b30a0cec0": "Keyboard shortcuts will be replaced with the shortcuts in this file.",
+          "93f591a367": "No changes to apply — your current settings already match.",
+          "49ca021159": "Settings not imported",
+          "c4d57c56aa": "These settings are not supported by this version of Orca or are specific to another machine."
+        },
+        "SettingsImportModal": {
+          "3772e1968c": "Import Settings",
+          "ce0d60225c": "Review what will change before applying.",
+          "b0ba6b1dbb": "Cancel",
+          "5896752bad": "Import"
+        },
+        "SettingsPortabilitySection": {
+          "8ea7a22e4a": "Settings exported.",
+          "be8ec0228d": "Failed to read settings file.",
+          "f95c1e1ae7": "Failed to import settings.",
+          "23ddedc680": "Settings imported.",
+          "3c528a3c77": "Settings Portability",
+          "30c14c6a9f": "Move portable preferences and keyboard shortcuts between Orca installs.",
+          "3635a8a67b": "Import & Export",
+          "d1168dcfa5": "Skips accounts, tokens, workspace paths, and other machine-specific values.",
+          "39ffc19d3c": "Import",
+          "fdb8c7d1da": "Export",
+          "e6a24b08ec": "Settings imported, but refresh failed."
         }
       },
       "right": {

@@ -132,7 +132,7 @@ export function registerCoreHandlers(
   // not load-bearing; both register independent ipcMain channels.
   registerDiagnosticsHandlers()
   registerComputerUsePermissionHandlers()
-  registerSettingsHandlers(store, agentAwakeService)
+  registerSettingsHandlers(store, agentAwakeService, keybindings)
   registerSkillsHandlers(store)
   if (automations) {
     registerAutomationHandlers(store, automations)
