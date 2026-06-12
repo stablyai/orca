@@ -16,12 +16,11 @@
 
 <p align="center">
   <strong>The AI Orchestrator for 100x builders.</strong><br/>
-  Run Claude Code, OpenClaude, Codex, Grok, Antigravity, or OpenCode side-by-side across repos — each in its own worktree, tracked in one place.<br/>
-  Available for <strong>macOS, Windows, and Linux</strong>.
+  Run Claude Code, OpenClaude, Codex, Grok, Antigravity, or OpenCode side-by-side across repos — each in its own worktree, tracked in one place.
 </p>
 
 <p align="center">
-  <a href="https://onOrca.dev"><strong>Download Orca</strong></a> &nbsp;·&nbsp; <a href="https://apps.apple.com/us/app/orca-ide/id6766130217">iOS</a> &nbsp;·&nbsp; <a href="https://github.com/stablyai/orca/releases/download/mobile-v0.0.12/app-release.apk">Android</a> &nbsp;·&nbsp; <a href="https://www.onorca.dev/docs">Docs</a> &nbsp;·&nbsp; <a href="https://discord.gg/fzjDKHxv8Q">Discord</a> &nbsp;·&nbsp; <a href="https://github.com/stablyai/orca/releases">Changelog</a>
+  <a href="https://onOrca.dev"><strong>Download Orca</strong></a> &nbsp;·&nbsp; <a href="https://www.onorca.dev/docs">Docs</a> &nbsp;·&nbsp; <a href="https://discord.gg/fzjDKHxv8Q">Discord</a> &nbsp;·&nbsp; <a href="https://github.com/stablyai/orca/releases">Changelog</a>
 </p>
 
 <p align="center">
