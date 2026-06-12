@@ -12,7 +12,7 @@
 
 <p align="center">
   <strong>The AI Orchestrator for 100x builders.</strong><br/>
-  Run Claude Code, OpenClaude, Codex, Grok, Antigravity, or OpenCode side-by-side across repos — each in its own worktree, tracked in one place.
+  Run Claude Code, OpenClaude, Codex, or OpenCode side-by-side — each in its own worktree, tracked in one place.
 </p>
 
 <p align="center">
