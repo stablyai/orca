@@ -211,6 +211,7 @@ export async function scanWarpThemeDirectory(
   rootReadable: boolean
   files: ThemeFileCandidate[]
   skippedFiles: WarpThemeImportSkippedFile[]
+  themeFileLimitHit: boolean
 }> {
   const sourceLabel = path.basename(directoryPath) || 'Warp themes'
   const themeFileLimit = options.themeFileLimit ?? MAX_THEME_FILES
@@ -242,5 +243,11 @@ export async function scanWarpThemeDirectory(
       reason: `Only the first ${themeFileLimit} theme files were scanned.`
     })
   }
-  return { sourceLabel, rootReadable: state.rootReadable, files, skippedFiles }
+  return {
+    sourceLabel,
+    rootReadable: state.rootReadable,
+    files,
+    skippedFiles,
+    themeFileLimitHit: budget.themeFileLimitHit
+  }
 }

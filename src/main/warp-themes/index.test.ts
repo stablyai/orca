@@ -290,6 +290,45 @@ describe('previewWarpThemeImport', () => {
     })
   })
 
+  it('keeps scanning later directories for unique themes after duplicate canonical files', async () => {
+    const stableDirectory = '/Users/alice/.warp/themes'
+    const previewDirectory = '/Users/alice/.warp-preview/themes'
+    getWarpThemeDirectoriesMock.mockReturnValue([stableDirectory, previewDirectory])
+    opendirMock.mockImplementation((directoryPath: string) => {
+      if (directoryPath === stableDirectory) {
+        return Promise.resolve(
+          mockDirectory(
+            Array.from({ length: 199 }, (_, index) => fileEntry(`stable-${index}.yaml`))
+          )
+        )
+      }
+      if (directoryPath === previewDirectory) {
+        return Promise.resolve(
+          mockDirectory([
+            fileEntry('duplicate-a.yaml'),
+            fileEntry('duplicate-b.yaml'),
+            fileEntry('unique.yaml')
+          ])
+        )
+      }
+      return Promise.resolve(mockDirectory([]))
+    })
+    realpathMock.mockImplementation((filePath: string) => {
+      if (filePath.endsWith('duplicate-a.yaml')) {
+        return Promise.resolve(path.join(stableDirectory, 'stable-0.yaml'))
+      }
+      if (filePath.endsWith('duplicate-b.yaml')) {
+        return Promise.resolve(path.join(stableDirectory, 'stable-1.yaml'))
+      }
+      return Promise.resolve(filePath)
+    })
+
+    const preview = await previewWarpThemeImport({} as Store, { kind: 'auto' })
+
+    expect(preview.themes).toHaveLength(200)
+    expect(readFileMock).toHaveBeenCalledWith(path.join(previewDirectory, 'unique.yaml'), 'utf-8')
+  })
+
   it('reports bounded skips when local Warp folders are unreadable', async () => {
     opendirMock.mockRejectedValue(
       new Error("EACCES: permission denied, scandir '/Users/alice/.warp/themes'")
@@ -299,8 +338,23 @@ describe('previewWarpThemeImport', () => {
 
     expect(preview.found).toBe(false)
     expect(preview.sourceLabel).toBe('Warp themes')
-    expect(preview.skippedFiles).toEqual([{ label: 'themes', reason: 'Could not read folder.' }])
+    expect(preview.skippedFiles).toEqual([{ label: '.warp', reason: 'Could not read folder.' }])
     expect(preview.themes).toEqual([])
+  })
+
+  it('labels root skipped entries by auto-discovered Warp data home', async () => {
+    getWarpThemeDirectoriesMock.mockReturnValue([
+      '/Users/alice/.warp/themes',
+      '/Users/alice/.warp-preview/themes'
+    ])
+    opendirMock.mockRejectedValue(new Error('permission denied'))
+
+    const preview = await previewWarpThemeImport({} as Store, { kind: 'auto' })
+
+    expect(preview.skippedFiles).toEqual([
+      { label: '.warp', reason: 'Could not read folder.' },
+      { label: '.warp-preview', reason: 'Could not read folder.' }
+    ])
   })
 
   it('labels auto-discovered themes by Warp data home', async () => {
@@ -497,7 +551,7 @@ describe('previewWarpThemeImport', () => {
 
     expect(preview.themes).toHaveLength(79)
     expect(preview.skippedFiles).toContainEqual({
-      label: 'themes',
+      label: '.warp',
       reason: 'Only the first 80 folders were scanned.'
     })
   })
@@ -527,7 +581,7 @@ describe('previewWarpThemeImport', () => {
       label: 'Warp themes',
       reason: 'Only the first 200 theme files were scanned.'
     })
-    expect(opendirMock).toHaveBeenCalledWith(
+    expect(opendirMock).not.toHaveBeenCalledWith(
       path.join('/Users/alice/.warp/themes', 'warp_bundled'),
       expect.anything()
     )
@@ -544,7 +598,7 @@ describe('previewWarpThemeImport', () => {
     expect(preview.skippedFiles).toEqual(
       expect.arrayContaining([
         {
-          label: 'themes',
+          label: '.warp',
           reason: 'Only the first 500 folder entries were scanned.'
         },
         {
@@ -677,7 +731,7 @@ describe('previewWarpThemeImport', () => {
 
     const preview = await previewWarpThemeImport({} as Store, { kind: 'auto' })
 
-    expect(preview.skippedFiles).toEqual([{ label: 'themes', reason: 'Could not read folder.' }])
+    expect(preview.skippedFiles).toEqual([{ label: '.warp', reason: 'Could not read folder.' }])
   })
 
   it('does not copy absolute file paths into skipped reasons', async () => {

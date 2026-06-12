@@ -58,7 +58,11 @@ function getMacWarpThemeDirectories(home: string): string[] {
 }
 
 function getLinuxWarpThemeDirectories(home: string): string[] {
-  const dataHome = process.env.XDG_DATA_HOME || path.join(home, '.local', 'share')
+  const xdgDataHome = process.env.XDG_DATA_HOME
+  // Why: XDG_DATA_HOME is only valid as an absolute path; relative values would
+  // make discovery depend on Orca's launch directory.
+  const dataHome =
+    xdgDataHome && path.isAbsolute(xdgDataHome) ? xdgDataHome : path.join(home, '.local', 'share')
   return warpThemeDirectoriesFromDataHomes([
     ...WARP_CHANNELS.map((channel) => path.join(dataHome, channel.linuxName)),
     ...readDirectoryEntries(dataHome)

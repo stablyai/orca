@@ -39,6 +39,7 @@ type ThemeSourceSelection =
       files: ThemeFileCandidate[]
       skippedFiles: WarpThemeImportSkippedFile[]
       rootReadable?: boolean
+      themeFileLimitHit?: boolean
     }
 
 type ThemeSourceResolution = {
@@ -53,18 +54,18 @@ async function filesFromDirectory(
   themeFileLimit = MAX_THEME_FILES,
   reportThemeFileLimit = true
 ): Promise<ThemeSourceSelection> {
-  const { sourceLabel, rootReadable, files, skippedFiles } = await scanWarpThemeDirectory(
-    directoryPath,
-    budget,
-    { themeFileLimit, reportThemeFileLimit }
-  )
+  const { sourceLabel, rootReadable, files, skippedFiles, themeFileLimitHit } =
+    await scanWarpThemeDirectory(directoryPath, budget, { themeFileLimit, reportThemeFileLimit })
   const effectiveSourceLabel = sourceLabelOverride ?? sourceLabel
   return {
     canceled: false,
     sourceLabel: effectiveSourceLabel,
     files: files.map((file) => ({ ...file, sourceLabel: effectiveSourceLabel })),
-    skippedFiles,
-    rootReadable
+    skippedFiles: skippedFiles.map((file) =>
+      file.label === sourceLabel ? { ...file, label: effectiveSourceLabel } : file
+    ),
+    rootReadable,
+    themeFileLimitHit
   }
 }
 
@@ -132,7 +133,7 @@ async function filesFromAutoDirectories(
       directoryPath,
       warpThemeSourceLabelForDirectory(directoryPath),
       budget,
-      remainingThemeFileSlots + 1,
+      MAX_THEME_FILES,
       false
     )
     if (selection.canceled) {
@@ -140,6 +141,7 @@ async function filesFromAutoDirectories(
     }
     globalThemeFileLimitHit =
       (await appendUniqueThemeFiles(mergedFiles, seenFilePaths, selection.files)) ||
+      selection.themeFileLimitHit ||
       globalThemeFileLimitHit
     skippedFiles.push(...selection.skippedFiles)
   }

@@ -109,6 +109,23 @@ describe('getWarpThemeDirectories', () => {
     ])
   })
 
+  it('ignores relative Linux XDG data home values', () => {
+    platformMock.mockReturnValue('linux')
+    vi.stubEnv('XDG_DATA_HOME', 'relative-data-home')
+
+    expect(getWarpThemeDirectories()).toEqual([
+      '/Users/alice/.local/share/warp-terminal/themes',
+      '/Users/alice/.local/share/warp-terminal-preview/themes',
+      '/Users/alice/.local/share/warp-oss/themes',
+      '/Users/alice/.local/share/warp-terminal-dev/themes',
+      '/Users/alice/.local/share/warp-terminal-local/themes',
+      '/Users/alice/.local/share/warp-terminal-integration/themes'
+    ])
+    expect(readdirSyncMock).toHaveBeenCalledWith('/Users/alice/.local/share', {
+      withFileTypes: true
+    })
+  })
+
   it('returns Windows app data channel directories with Windows separators', () => {
     platformMock.mockReturnValue('win32')
     homedirMock.mockReturnValue('C:\\Users\\alice')
