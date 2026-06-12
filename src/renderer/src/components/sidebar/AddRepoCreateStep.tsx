@@ -145,7 +145,7 @@ export function CreateStep({
             <p className="text-sm text-muted-foreground">
               {translate(
                 'auto.components.sidebar.AddRepoCreateStep.createsGitRepoHelp',
-                'Creates Git repo'
+                'Git repo:'
               )}{' '}
               <span className="rounded-md bg-muted px-1.5 py-0.5 font-mono">{repoNamePreview}</span>
             </p>

@@ -44,7 +44,7 @@ describe('CreateStep', () => {
 
     expect(html).toContain('Create project')
     expect(html).toContain('Project name')
-    expect(html).not.toContain('Creates Git repo')
+    expect(html).not.toContain('Git repo:')
     expect(html).not.toContain('>project-name</span>')
     expect(html).toContain('Parent folder')
     expect(html).toContain('Browse')
@@ -55,7 +55,7 @@ describe('CreateStep', () => {
   it('shows the repo name in the helper only after a project name is entered', () => {
     const html = renderCreateStep({ createName: 'demo-project' })
 
-    expect(html).toContain('Creates Git repo')
+    expect(html).toContain('Git repo:')
     expect(html).toContain('demo-project')
   })
 

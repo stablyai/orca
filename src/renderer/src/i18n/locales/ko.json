@@ -3044,7 +3044,7 @@
           "createProjectTitle": "프로젝트 생성",
           "createProjectDescription": "로컬 Git 저장소와 첫 번째 작업 공간을 만듭니다.",
           "projectNameLabel": "프로젝트 이름",
-          "createsGitRepoHelp": "Git 저장소 생성",
+          "createsGitRepoHelp": "Git 저장소:",
           "parentFolderLabel": "상위 폴더",
           "browseParentFolder": "찾아보기",
           "gitRequiredError": "프로젝트를 만들려면 Git이 필요합니다.",
@@ -3651,7 +3651,7 @@
                   "fb4fc5380e": "로컬 프로젝트, Git repo 또는 repos가 많은 폴더",
                   "2281fdc8c7": "폴더 찾아보기",
                   "createProjectTitle": "프로젝트 생성",
-                  "createGitProjectDescription": "로컬 Git 저장소 만들기"
+                  "createGitProjectDescription": "로컬 Git 저장소 생성"
                 }
               }
             }

@@ -3063,7 +3063,7 @@
           "createProjectTitle": "Create project",
           "createProjectDescription": "Create a local Git repo and first workspace.",
           "projectNameLabel": "Project name",
-          "createsGitRepoHelp": "Creates Git repo",
+          "createsGitRepoHelp": "Git repo:",
           "parentFolderLabel": "Parent folder",
           "browseParentFolder": "Browse",
           "gitRequiredError": "Git is required to create a project.",

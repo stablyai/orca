@@ -3042,9 +3042,9 @@
           "3a13f6e88b": "未选择位置",
           "6ed14c0281": "未选择服务器文件夹",
           "createProjectTitle": "创建项目",
-          "createProjectDescription": "创建本地 Git 仓库和第一个工作区。",
+          "createProjectDescription": "创建本地 Git 存储库和第一个工作区。",
           "projectNameLabel": "项目名称",
-          "createsGitRepoHelp": "将创建 Git 仓库",
+          "createsGitRepoHelp": "Git 存储库：",
           "parentFolderLabel": "父文件夹",
           "browseParentFolder": "浏览",
           "gitRequiredError": "创建项目需要 Git。",
@@ -3651,7 +3651,7 @@
                   "fb4fc5380e": "本地项目、Git repo 或包含多个 repos 的文件夹",
                   "2281fdc8c7": "浏览文件夹",
                   "createProjectTitle": "创建项目",
-                  "createGitProjectDescription": "创建本地 Git 仓库"
+                  "createGitProjectDescription": "创建本地 Git 存储库"
                 }
               }
             }

@@ -3044,7 +3044,7 @@
           "createProjectTitle": "プロジェクトの作成",
           "createProjectDescription": "ローカルの Git リポジトリと最初のワークスペースを作成します。",
           "projectNameLabel": "プロジェクト名",
-          "createsGitRepoHelp": "Git リポジトリを作成",
+          "createsGitRepoHelp": "Git リポジトリ：",
           "parentFolderLabel": "親フォルダ",
           "browseParentFolder": "参照",
           "gitRequiredError": "プロジェクトを作成するには Git が必要です。",

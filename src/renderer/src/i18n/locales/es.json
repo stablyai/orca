@@ -3063,7 +3063,7 @@
           "createProjectTitle": "Crear proyecto",
           "createProjectDescription": "Crea un repositorio Git local y el primer espacio de trabajo.",
           "projectNameLabel": "Nombre del proyecto",
-          "createsGitRepoHelp": "Crea un repositorio Git",
+          "createsGitRepoHelp": "Repositorio Git:",
           "parentFolderLabel": "Carpeta principal",
           "browseParentFolder": "Explorar",
           "gitRequiredError": "Git es necesario para crear un proyecto.",
