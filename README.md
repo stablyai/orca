@@ -224,7 +224,7 @@ Works with **any CLI agent** — if it runs in a terminal, it runs in Orca.
 | **iOS** | [App Store](https://apps.apple.com/us/app/orca-ide/id6766130217) | — |
 | **Android** | [APK](https://github.com/stablyai/orca/releases/download/mobile-v0.0.12/app-release.apk) | — |
 
-Download once — Orca auto-updates on the stable channel. Older versions and all builds are on [GitHub Releases](https://github.com/stablyai/orca/releases), and you can always grab it from **[onOrca.dev](https://onOrca.dev)**.
+Download once — Orca auto-updates on the stable channel.
 
 ---
 
