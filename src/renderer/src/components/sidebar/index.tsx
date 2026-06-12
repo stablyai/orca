@@ -7,10 +7,12 @@ import SidebarNav from './SidebarNav'
 import SetupScriptPromptCard from './SetupScriptPromptCard'
 import WorktreeList from './WorktreeList'
 import SidebarToolbar from './SidebarToolbar'
+import WorkspaceKanbanDrawer from './WorkspaceKanbanDrawer'
 import type { VirtualizedScrollAnchor } from '@/hooks/useVirtualizedScrollAnchor'
 import { cn } from '@/lib/utils'
 import { FolderPlus, Loader2 } from 'lucide-react'
 import { useSidebarProjectDrop } from './useSidebarProjectDrop'
+import { useWorkspaceBoardPanel } from './useWorkspaceBoardPanel'
 
 const WorktreeMetaDialog = React.lazy(() => import('./WorktreeMetaDialog'))
 const NonGitFolderDialog = React.lazy(() => import('./NonGitFolderDialog'))
@@ -45,6 +47,14 @@ function Sidebar({
   const { nativeDropTarget, dropHandlers, affordance } = useSidebarProjectDrop()
   const [shouldMountAddRepoDialog, setShouldMountAddRepoDialog] = React.useState(false)
   const unmountAddRepoDialogTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null)
+  const {
+    workspaceBoardOpen,
+    workspaceBoardMenuOpen,
+    toggleWorkspaceBoard,
+    handleWorkspaceBoardOpenChange,
+    setWorkspaceBoardMenuOpen,
+    closeWorkspaceBoard
+  } = useWorkspaceBoardPanel()
 
   const setLiveSidebarWidth = React.useCallback((width: number) => {
     document.documentElement.style.setProperty('--workspace-sidebar-live-width', `${width}px`)
@@ -83,6 +93,12 @@ function Sidebar({
     }
   }, [activeModal, shouldMountAddRepoDialog])
 
+  useEffect(() => {
+    if (!sidebarOpen && workspaceBoardOpen) {
+      closeWorkspaceBoard()
+    }
+  }, [closeWorkspaceBoard, sidebarOpen, workspaceBoardOpen])
+
   const { containerRef, onResizeStart } = useSidebarResize<HTMLDivElement>({
     isOpen: sidebarOpen,
     width: sidebarWidth,
@@ -105,7 +121,7 @@ function Sidebar({
           <>
             {/* Fixed controls */}
             <SidebarNav />
-            <SidebarHeader />
+            <SidebarHeader onWorkspaceBoardMenuOpenChange={setWorkspaceBoardMenuOpen} />
 
             <WorktreeList
               scrollOffsetRef={worktreeScrollOffsetRef}
@@ -115,7 +131,10 @@ function Sidebar({
             <SetupScriptPromptCard />
 
             {/* Fixed bottom toolbar */}
-            <SidebarToolbar />
+            <SidebarToolbar
+              workspaceBoardOpen={workspaceBoardOpen}
+              onWorkspaceBoardToggle={toggleWorkspaceBoard}
+            />
           </>
         )}
 
@@ -160,6 +179,14 @@ function Sidebar({
         {activeModal === 'worktree-visibility' ? <WorktreeVisibilityDialog /> : null}
         {activeModal === 'confirm-orca-yaml-hooks' ? <OrcaYamlTrustDialog /> : null}
       </React.Suspense>
+      {sidebarOpen ? (
+        <WorkspaceKanbanDrawer
+          open={workspaceBoardOpen}
+          preserveOpenForMenu={workspaceBoardMenuOpen}
+          onOpenChange={handleWorkspaceBoardOpenChange}
+          onMenuOpenChange={setWorkspaceBoardMenuOpen}
+        />
+      ) : null}
     </TooltipProvider>
   )
 }

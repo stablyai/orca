@@ -1,6 +1,6 @@
 {
   "name": "orca",
-  "version": "1.4.56",
+  "version": "1.4.64-rc.0",
   "description": "Next-gen IDE for parallel agentic development",
   "homepage": "https://github.com/stablyai/orca",
   "author": "stablyai",
@@ -45,6 +45,7 @@
     "verify:computer-native": "node config/scripts/verify-computer-native.mjs",
     "verify:cli-bin": "node config/scripts/verify-cli-bin.mjs",
     "verify:localization-catalog": "node config/scripts/verify-localization-catalog.mjs",
+    "sync:localization-catalog": "node config/scripts/verify-localization-catalog.mjs --fix",
     "bootstrap:locale-catalog": "node config/scripts/bootstrap-locale-catalog.mjs",
     "bootstrap:zh-catalog": "node config/scripts/bootstrap-zh-catalog.mjs",
     "bootstrap:ko-catalog": "node config/scripts/bootstrap-locale-catalog.mjs --locale ko",
@@ -83,6 +84,7 @@
   "dependencies": {
     "@electron-toolkit/preload": "^3.0.2",
     "@electron-toolkit/utils": "^4.0.0",
+    "@floating-ui/dom": "1.7.6",
     "@linear/sdk": "^82.1.0",
     "@parcel/watcher": "^2.5.6",
     "@xterm/addon-serialize": "0.15.0-beta.285",

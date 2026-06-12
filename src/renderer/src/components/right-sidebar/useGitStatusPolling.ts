@@ -26,6 +26,7 @@ export function useGitStatusPolling(options: { enabled?: boolean } = {}): void {
   const sshConnectionStates = useAppStore((s) => s.sshConnectionStates)
   const rightSidebarOpen = useAppStore((s) => s.rightSidebarOpen)
   const rightSidebarTab = useAppStore((s) => s.rightSidebarTab)
+  const rightSidebarExplorerView = useAppStore((s) => s.rightSidebarExplorerView)
   const openFiles = useAppStore((s) => s.openFiles)
   const repoMap = useRepoMap()
   const statusPollInFlightRef = useRef(false)
@@ -79,6 +80,7 @@ export function useGitStatusPolling(options: { enabled?: boolean } = {}): void {
         worktreePath,
         rightSidebarOpen,
         rightSidebarTab,
+        rightSidebarExplorerView,
         openFiles
       }) ||
       !activeRepoSupportsGit
@@ -115,6 +117,7 @@ export function useGitStatusPolling(options: { enabled?: boolean } = {}): void {
     fetchUpstreamStatus,
     isConnectionReady,
     openFiles,
+    rightSidebarExplorerView,
     rightSidebarOpen,
     rightSidebarTab,
     worktreePath,

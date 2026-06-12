@@ -10,6 +10,7 @@ import {
   type BackgroundMountTerminalWorktreeDetail
 } from '@/constants/terminal'
 import { useAppStore } from '../store'
+import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 import { useAllWorktrees } from '../store/selectors'
 import { getConnectionId } from '../lib/connection-context'
 import { basename } from '../lib/path'
@@ -52,6 +53,7 @@ import {
   handleSwitchTerminalTab
 } from '../hooks/ipc-tab-switch'
 import TabGroupSplitLayout from './tab-group/TabGroupSplitLayout'
+import AiVaultSessionDropLayer from './tab-group/AiVaultSessionDropLayer'
 import { shouldAutoCreateInitialTerminal } from './terminal/initial-terminal'
 import { shouldRepairActiveTerminalTab } from './terminal/active-terminal-repair'
 import { addBackgroundMountedTerminalWorktree } from './terminal/background-terminal-worktree-mount'
@@ -187,6 +189,17 @@ function Terminal(): React.JSX.Element | null {
   const mountedWorktreeIdsRef = useRef(new Set<string>())
   const measurableBackgroundWorktreeIdsRef = useRef(new Set<string>())
   const allWorktrees = useAllWorktrees()
+  const folderWorkspaces = useAppStore((s) => s.folderWorkspaces)
+  const workspaceSurfaces = useMemo(
+    () => [
+      ...allWorktrees.map((worktree) => ({ id: worktree.id, path: worktree.path })),
+      ...folderWorkspaces.map((workspace) => ({
+        id: folderWorkspaceKey(workspace.id),
+        path: workspace.folderPath
+      }))
+    ],
+    [allWorktrees, folderWorkspaces]
+  )
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
   const renderedActiveWorktreeId = activeWorktreeId
   const activeView = useAppStore((s) => s.activeView)
@@ -722,14 +735,14 @@ function Terminal(): React.JSX.Element | null {
     mountedWorktreeIdsRef.current.add(renderedActiveWorktreeId)
   }
   // Prune IDs of worktrees that no longer exist (deleted/removed)
-  const allWorktreeIds = new Set(allWorktrees.map((wt) => wt.id))
+  const allWorktreeIds = new Set(workspaceSurfaces.map((workspace) => workspace.id))
   for (const id of mountedWorktreeIdsRef.current) {
     if (!allWorktreeIds.has(id)) {
       mountedWorktreeIdsRef.current.delete(id)
     }
   }
   const anyMountedWorktreeHasLayout = computeAnyMountedWorktreeHasLayout(
-    allWorktrees.map((wt) => wt.id),
+    workspaceSurfaces.map((workspace) => workspace.id),
     mountedWorktreeIdsRef.current,
     layoutByWorktree,
     groupsByWorktree,
@@ -1644,26 +1657,26 @@ function Terminal(): React.JSX.Element | null {
               can preserve hidden trees without reflowing the active one. Keep
               a relative anchor here so those panes size to the workspace body
               rather than some outer ancestor when split groups are enabled. */}
-          {allWorktrees
-            .filter((wt) => mountedWorktreeIdsRef.current.has(wt.id))
-            .map((worktree) => {
-              const layout = getEffectiveLayoutForWorktree(worktree.id)
+          {workspaceSurfaces
+            .filter((workspace) => mountedWorktreeIdsRef.current.has(workspace.id))
+            .map((workspace) => {
+              const layout = getEffectiveLayoutForWorktree(workspace.id)
               if (!layout) {
                 return null
               }
               // Why: use strict equality with 'terminal' instead of !== 'settings'
               // so the terminal/browser surface hides on the tasks page too.
               const isVisible =
-                activeView === 'terminal' && worktree.id === renderedActiveWorktreeId
+                activeView === 'terminal' && workspace.id === renderedActiveWorktreeId
               const shouldMeasureHiddenWorktree =
-                !isVisible && measurableBackgroundWorktreeIdsRef.current.has(worktree.id)
+                !isVisible && measurableBackgroundWorktreeIdsRef.current.has(workspace.id)
               return (
                 <WorktreeSplitSurface
-                  key={`tab-groups-${worktree.id}`}
-                  worktreeId={worktree.id}
-                  worktreePath={worktree.path}
+                  key={`tab-groups-${workspace.id}`}
+                  worktreeId={workspace.id}
+                  worktreePath={workspace.path}
                   layout={layout}
-                  focusedGroupId={activeGroupIdByWorktree[worktree.id]}
+                  focusedGroupId={activeGroupIdByWorktree[workspace.id]}
                   isVisible={isVisible}
                   shouldMeasureHiddenWorktree={shouldMeasureHiddenWorktree}
                   activityTerminalPortals={activityTerminalPortals}
@@ -1708,18 +1721,18 @@ function Terminal(): React.JSX.Element | null {
                 : ''
             }`}
           >
-            {allWorktrees
-              .filter((wt) => mountedWorktreeIdsRef.current.has(wt.id))
-              .map((worktree) => {
+            {workspaceSurfaces
+              .filter((workspace) => mountedWorktreeIdsRef.current.has(workspace.id))
+              .map((workspace) => {
                 // Why: use strict equality with 'terminal' instead of !== 'settings'
                 // so the terminal/browser surface hides on the tasks page too.
                 const isVisible =
-                  activeView === 'terminal' && worktree.id === renderedActiveWorktreeId
+                  activeView === 'terminal' && workspace.id === renderedActiveWorktreeId
                 const shouldMeasureHiddenWorktree =
-                  !isVisible && measurableBackgroundWorktreeIdsRef.current.has(worktree.id)
+                  !isVisible && measurableBackgroundWorktreeIdsRef.current.has(workspace.id)
                 return (
                   <div
-                    key={worktree.id}
+                    key={workspace.id}
                     className={
                       isVisible
                         ? 'absolute inset-0'
@@ -1729,11 +1742,11 @@ function Terminal(): React.JSX.Element | null {
                     }
                     aria-hidden={!isVisible}
                   >
-                    <CodexRestartChip worktreeId={worktree.id} />
-                    {(tabsByWorktree[worktree.id] ?? []).map((tab) => {
+                    <CodexRestartChip worktreeId={workspace.id} />
+                    {(tabsByWorktree[workspace.id] ?? []).map((tab) => {
                       const activityTerminalPortal = findActivityTerminalPortal(
                         activityTerminalPortals,
-                        { worktreeId: worktree.id, tabId: tab.id }
+                        { worktreeId: workspace.id, tabId: tab.id }
                       )
                       const isActivityPortalTab = activityTerminalPortal !== null
                       const isActiveTerminalTab =
@@ -1742,8 +1755,8 @@ function Terminal(): React.JSX.Element | null {
                         <TerminalPane
                           key={`${tab.id}-${tab.generation ?? 0}`}
                           tabId={tab.id}
-                          worktreeId={worktree.id}
-                          cwd={worktree.path}
+                          worktreeId={workspace.id}
+                          cwd={workspace.path}
                           isActive={isActiveTerminalTab || activityTerminalPortal?.active === true}
                           // Why: the activity page hosts this existing pane via
                           // portal while the workspace surface remains hidden.
@@ -1780,18 +1793,18 @@ function Terminal(): React.JSX.Element | null {
               activeTabType !== 'browser' ? 'hidden' : ''
             }`}
           >
-            {allWorktrees.map((worktree) => {
-              const browserTabs = browserTabsByWorktree[worktree.id] ?? []
+            {workspaceSurfaces.map((workspace) => {
+              const browserTabs = browserTabsByWorktree[workspace.id] ?? []
               // Why: use strict equality with 'terminal' instead of !== 'settings'
               // so browser panes also hide on the tasks page.
               const isVisibleWorktree =
-                activeView === 'terminal' && worktree.id === renderedActiveWorktreeId
+                activeView === 'terminal' && workspace.id === renderedActiveWorktreeId
               if (browserTabs.length === 0) {
                 return null
               }
               return (
                 <div
-                  key={`browser-${worktree.id}`}
+                  key={`browser-${workspace.id}`}
                   className={isVisibleWorktree ? 'absolute inset-0' : 'absolute inset-0 hidden'}
                   aria-hidden={!isVisibleWorktree}
                 >
@@ -1989,6 +2002,7 @@ const WorktreeSplitSurface = React.memo(function WorktreeSplitSurface({
       />
       <BrowserPaneOverlayLayer worktreeId={worktreeId} isWorktreeActive={isVisible} />
       <EmulatorPaneOverlayLayer worktreeId={worktreeId} isWorktreeActive={isVisible} />
+      <AiVaultSessionDropLayer worktreeId={worktreeId} enabled={isVisible} />
     </div>
   )
 })

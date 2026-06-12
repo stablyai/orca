@@ -4,6 +4,7 @@ navigation, new-workspace tab routing). Splitting across files would
 fragment the test of a single pure function. */
 import { describe, expect, it } from 'vitest'
 import {
+  isRecentTabSwitcherCommitRelease,
   isWindowShortcutModifierChord,
   matchesRecentTabSwitcherChord,
   resolveWindowShortcutAction,
@@ -327,6 +328,49 @@ describe('resolveWindowShortcutAction', () => {
     })
 
     expect(matchesRecentTabSwitcherChord(eventInput, 'linux')).toBe(true)
+  })
+
+  it('recognizes Ctrl+Tab commit releases across Electron surfaces', () => {
+    expect(
+      isRecentTabSwitcherCommitRelease({
+        type: 'keyUp',
+        code: 'ControlLeft',
+        key: 'Control',
+        control: false
+      })
+    ).toBe(true)
+    expect(
+      isRecentTabSwitcherCommitRelease({
+        type: 'keyUp',
+        code: 'Control',
+        key: 'Control',
+        control: false
+      })
+    ).toBe(true)
+    expect(
+      isRecentTabSwitcherCommitRelease({
+        type: 'keyUp',
+        code: 'Tab',
+        key: 'Tab',
+        control: false
+      })
+    ).toBe(true)
+    expect(
+      isRecentTabSwitcherCommitRelease({
+        type: 'keyUp',
+        code: 'Tab',
+        key: 'Tab',
+        control: true
+      })
+    ).toBe(false)
+    expect(
+      isRecentTabSwitcherCommitRelease({
+        type: 'keyup',
+        code: 'ControlLeft',
+        key: 'Control',
+        ctrlKey: false
+      })
+    ).toBe(true)
   })
 
   it('accepts all supported zoom key variants', () => {

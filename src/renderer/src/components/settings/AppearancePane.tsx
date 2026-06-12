@@ -38,7 +38,9 @@ import {
 import { getTerminalAppearanceSearchEntries } from './terminal-search'
 import { TerminalAppearanceSection } from './TerminalAppearanceSection'
 import type { UseGhosttyImportReturn } from './useGhosttyImport'
+import type { UseWarpThemeImportReturn } from './useWarpThemeImport'
 import { AppIconSelector } from './AppIconSelector'
+import { isWebClientLocation } from '@/hooks/useSettingsNavigationMetadata'
 import {
   getUiLanguageChoiceLabel,
   SHOW_UI_LANGUAGE_SETTING,
@@ -56,6 +58,7 @@ type AppearancePaneProps = {
   terminalFontSuggestions: string[]
   systemPrefersDark: boolean
   ghostty: UseGhosttyImportReturn
+  warpThemes: UseWarpThemeImportReturn
 }
 
 function ShortcutHintList({ combos }: { combos: string[][] }): React.JSX.Element {
@@ -88,7 +91,8 @@ export function AppearancePane({
   fontSuggestions,
   terminalFontSuggestions,
   systemPrefersDark,
-  ghostty
+  ghostty,
+  warpThemes
 }: AppearancePaneProps): React.JSX.Element {
   const searchQuery = useAppStore((state) => state.settingsSearchQuery)
   const zoomInKeyCombos = useShortcutKeyCombos('zoom.in')
@@ -97,6 +101,9 @@ export function AppearancePane({
   const toggleStatusBarItem = useAppStore((state) => state.toggleStatusBarItem)
   const recordFeatureInteraction = useAppStore((state) => state.recordFeatureInteraction)
   const visibleStatusBarToggles = useAvailableStatusBarToggles(getStatusBarToggles())
+  const terminalAppearanceSearchEntries = getTerminalAppearanceSearchEntries({
+    showWarpImport: !isWebClientLocation()
+  })
   const visibleSections = [
     matchesSettingsSearch(searchQuery, getThemeEntries()) ||
     (SHOW_UI_LANGUAGE_SETTING && matchesSettingsSearch(searchQuery, getLanguageEntries())) ||
@@ -256,7 +263,7 @@ export function AppearancePane({
         ) : null}
       </section>
     ) : null,
-    matchesSettingsSearch(searchQuery, getTerminalAppearanceSearchEntries()) ? (
+    matchesSettingsSearch(searchQuery, terminalAppearanceSearchEntries) ? (
       <TerminalAppearanceSection
         key="terminal-appearance"
         settings={settings}
@@ -264,6 +271,7 @@ export function AppearancePane({
         systemPrefersDark={systemPrefersDark}
         terminalFontSuggestions={terminalFontSuggestions}
         ghostty={ghostty}
+        warpThemes={warpThemes}
       />
     ) : null,
     matchesSettingsSearch(searchQuery, getLayoutEntries()) ? (

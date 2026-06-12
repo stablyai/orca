@@ -16,6 +16,7 @@ import { FileText, Globe, Minus, TerminalSquare } from 'lucide-react'
 import { toast } from 'sonner'
 import BrowserPane from '@/components/browser-pane/BrowserPane'
 import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
+import { useContextualTour } from '@/components/contextual-tours/use-contextual-tour'
 import TabBar from '@/components/tab-bar/TabBar'
 import { resolveGroupTabFromVisibleId } from '@/components/tab-group/tab-group-visible-id'
 import TerminalPane from '@/components/terminal-pane/TerminalPane'
@@ -106,6 +107,13 @@ const EditorPanel = lazy(() => import('@/components/editor/EditorPanel'))
 type FloatingTerminalPanelProps = {
   open: boolean
   onOpenChange: (open: boolean) => void
+  tourInteractionSnapshot?: FloatingWorkspaceTourInteractionSnapshot | null | undefined
+}
+
+type FloatingWorkspaceTourInteractionSnapshot = {
+  wasPreviouslyInteracted?: boolean
+  persisted?: Promise<void>
+  recordFeatureInteractionForTour: boolean
 }
 
 const FLOATING_TERMINAL_NO_DRAG_SELECTOR =
@@ -150,7 +158,8 @@ function areFloatingTerminalPanelCommittedBoundsEqual(
 
 export function FloatingTerminalPanel({
   open,
-  onOpenChange
+  onOpenChange,
+  tourInteractionSnapshot
 }: FloatingTerminalPanelProps): React.JSX.Element | null {
   const tabsByWorktree = useAppStore((s) => s.tabsByWorktree)
   const browserTabsByWorktree = useAppStore((s) => s.browserTabsByWorktree)
@@ -342,6 +351,13 @@ export function FloatingTerminalPanel({
       : activeTab?.contentType === 'terminal'
         ? 'terminal'
         : 'editor'
+
+  useContextualTour('floating-workspace', open, 'floating_workspace_visible', {
+    recordFeatureInteraction: tourInteractionSnapshot?.recordFeatureInteractionForTour ?? false,
+    featureInteractionPersisted: tourInteractionSnapshot?.persisted,
+    wasFeaturePreviouslyInteracted: tourInteractionSnapshot?.wasPreviouslyInteracted
+  })
+
   const {
     saveDialogFileId,
     saveDialogFile,
@@ -1349,7 +1365,12 @@ export function FloatingTerminalPanel({
           />
         </div>
 
-        <div className="relative min-h-0 flex-1 overflow-hidden bg-background">
+        <div
+          className="relative min-h-0 flex-1 overflow-hidden bg-background"
+          data-contextual-tour-target={
+            hasVisibleFloatingTabs ? 'floating-workspace-surface' : undefined
+          }
+        >
           {cwd
             ? tabs.map((tab) => {
                 const isActive = tab.id === activeTerminalId
@@ -1592,6 +1613,7 @@ function FloatingTerminalEmptyState({
           type="button"
           variant="ghost"
           className="grid h-8 w-full grid-cols-[1rem_minmax(0,1fr)_auto] items-center gap-2.5 rounded-md px-3 py-0 text-sm font-normal text-foreground hover:bg-muted/40 hover:text-foreground"
+          data-contextual-tour-target="floating-workspace-new-terminal"
           onClick={onNewTerminal}
         >
           <TerminalSquare className="size-3.5 opacity-90" />
@@ -1607,6 +1629,7 @@ function FloatingTerminalEmptyState({
           type="button"
           variant="ghost"
           className="grid h-8 w-full grid-cols-[1rem_minmax(0,1fr)_auto] items-center gap-2.5 rounded-md px-3 py-0 text-sm font-normal text-foreground hover:bg-muted/40 hover:text-foreground"
+          data-contextual-tour-target="floating-workspace-new-markdown"
           onClick={onNewMarkdown}
         >
           <FileText className="size-3.5 opacity-90" />

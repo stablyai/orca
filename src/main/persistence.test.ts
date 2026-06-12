@@ -31,6 +31,7 @@ import {
   ONBOARDING_FINAL_STEP,
   ONBOARDING_FLOW_VERSION
 } from '../shared/constants'
+import { folderWorkspaceKey } from '../shared/workspace-scope'
 import { SshConnectionStore } from './ssh/ssh-connection-store'
 
 // Shared mutable state so the electron mock can reference a per-test directory
@@ -81,6 +82,11 @@ const WORKFLOW_DEFAULT_WORKSPACE_STATUSES = [
   { id: 'todo', label: 'Todo', color: 'neutral', icon: 'circle' }
 ]
 
+const { trackMock, getCohortAtEmitMock } = vi.hoisted(() => ({
+  trackMock: vi.fn(),
+  getCohortAtEmitMock: vi.fn()
+}))
+
 vi.mock('electron', () => ({
   app: {
     getPath: () => testState.dir
@@ -100,6 +106,14 @@ vi.mock('electron', () => ({
 
 vi.mock('./git/repo', () => ({
   getGitUsername: vi.fn().mockReturnValue('testuser')
+}))
+
+vi.mock('./telemetry/client', () => ({
+  track: trackMock
+}))
+
+vi.mock('./telemetry/cohort-classifier', () => ({
+  getCohortAtEmit: getCohortAtEmitMock
 }))
 
 /** Reset modules and dynamically import Store so the data-file path picks up the current testState.dir */
@@ -257,6 +271,9 @@ function makeBalancedLegacyPaneLayout(start: number, end: number): TerminalPaneL
 describe('Store', () => {
   beforeEach(() => {
     testState.dir = mkdtempSync(join(tmpdir(), 'orca-test-'))
+    trackMock.mockReset()
+    getCohortAtEmitMock.mockReset()
+    getCohortAtEmitMock.mockReturnValue({ nth_repo_added: 2 })
   })
 
   afterEach(() => {
@@ -268,7 +285,7 @@ describe('Store', () => {
   it('returns empty repos when no data file exists', async () => {
     const store = await createStore()
     expect(store.getRepos()).toEqual([])
-  })
+  }, 15_000)
 
   it('returns default settings when no data file exists', async () => {
     const store = await createStore()
@@ -2154,6 +2171,57 @@ describe('Store', () => {
     expect(store.getRepo('sibling')?.projectGroupId).toBe(sibling.id)
   })
 
+  it('adapts flat folder-scan groups into sparse nested folder scopes on load', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [
+        makeRepo({ id: 'api', path: '/workspace/platform/api', projectGroupId: 'root' }),
+        makeRepo({ id: 'web', path: '/workspace/platform/web', projectGroupId: 'root' }),
+        makeRepo({
+          id: 'repo1',
+          path: '/workspace/platform/packages/shared/repo1',
+          projectGroupId: 'root'
+        }),
+        makeRepo({
+          id: 'repo2',
+          path: '/workspace/platform/packages/shared/repo2',
+          projectGroupId: 'root'
+        })
+      ],
+      worktreeMeta: {},
+      settings: {},
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      projectGroups: [
+        {
+          id: 'root',
+          name: 'Platform',
+          parentPath: '/workspace/platform',
+          parentGroupId: null,
+          createdFrom: 'folder-scan',
+          tabOrder: 0,
+          isCollapsed: false,
+          color: null,
+          createdAt: 1,
+          updatedAt: 1
+        }
+      ]
+    })
+
+    const store = await createStore()
+    const groups = store.getProjectGroups()
+    const shared = groups.find((group) => group.name === 'packages/shared')
+
+    expect(groups.map((group) => [group.name, group.parentGroupId, group.parentPath])).toEqual([
+      ['Platform', null, '/workspace/platform'],
+      ['packages/shared', 'root', '/workspace/platform/packages/shared']
+    ])
+    expect(store.getRepo('api')?.projectGroupId).toBe('root')
+    expect(store.getRepo('web')?.projectGroupId).toBe('root')
+    expect(store.getRepo('repo1')?.projectGroupId).toBe(shared?.id)
+    expect(store.getRepo('repo2')?.projectGroupId).toBe(shared?.id)
+  })
+
   it('creates a project group when persisted group history is very large', async () => {
     const projectGroups: ProjectGroup[] = Array.from({ length: 130_000 }, (_, index) => ({
       id: `group-${index}`,
@@ -2535,6 +2603,319 @@ describe('Store', () => {
     expect(updated.comment).toBe('updated')
   })
 
+  it('creates and updates folder workspaces from folder-backed project groups', async () => {
+    const store = await createStore()
+    const group = store.createProjectGroup({
+      name: 'Platform',
+      parentPath: '/workspace/platform',
+      createdFrom: 'folder-scan'
+    })
+    const linkedTask = {
+      provider: 'linear' as const,
+      type: 'issue' as const,
+      number: 0,
+      title: 'Refund fix',
+      url: 'https://linear.app/acme/issue/ENG-123',
+      linearIdentifier: 'ENG-123'
+    }
+
+    const workspace = store.createFolderWorkspace({
+      projectGroupId: group.id,
+      name: 'Refund fix',
+      linkedTask
+    })
+    const updated = store.updateFolderWorkspace(workspace.id, {
+      comment: 'Coordinate api and web',
+      isPinned: true,
+      lastActivityAt: 123
+    })
+
+    expect(workspace.folderPath).toBe('/workspace/platform')
+    expect(updated).toMatchObject({
+      id: workspace.id,
+      projectGroupId: group.id,
+      name: 'Refund fix',
+      folderPath: '/workspace/platform',
+      linkedTask,
+      comment: 'Coordinate api and web',
+      isPinned: true,
+      lastActivityAt: 123
+    })
+    expect(store.getFolderWorkspaces()).toHaveLength(1)
+  })
+
+  it('rejects folder workspace creation for non-folder-backed project groups', async () => {
+    const store = await createStore()
+    const group = store.createProjectGroup({ name: 'Manual', createdFrom: 'manual' })
+
+    expect(() => store.createFolderWorkspace({ projectGroupId: group.id })).toThrow(
+      'Folder-backed project group not found.'
+    )
+  })
+
+  it('normalizes persisted folder workspaces and drops orphaned records', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: {},
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      projectGroups: [
+        {
+          id: 'root',
+          name: 'Platform',
+          parentPath: '/workspace/platform',
+          parentGroupId: null,
+          createdFrom: 'folder-scan',
+          tabOrder: 0,
+          isCollapsed: false,
+          color: null,
+          createdAt: 1,
+          updatedAt: 1
+        }
+      ],
+      folderWorkspaces: [
+        {
+          id: 'fw-1',
+          projectGroupId: 'root',
+          name: '  ',
+          folderPath: '',
+          comment: 42,
+          isArchived: true,
+          isUnread: true,
+          isPinned: false,
+          sortOrder: 10,
+          lastActivityAt: 5,
+          createdAt: 2,
+          updatedAt: 3
+        },
+        {
+          id: 'orphan',
+          projectGroupId: 'missing',
+          name: 'Orphan',
+          folderPath: '/missing'
+        }
+      ]
+    })
+
+    const store = await createStore()
+
+    expect(store.getFolderWorkspaces()).toEqual([
+      expect.objectContaining({
+        id: 'fw-1',
+        projectGroupId: 'root',
+        name: 'Untitled workspace',
+        folderPath: '/workspace/platform',
+        comment: '',
+        isArchived: true,
+        isUnread: true
+      })
+    ])
+  })
+
+  it('backfills folder-scope SSH provenance from unambiguous child repos on load', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [
+        makeRepo({
+          id: 'api',
+          path: '/workspace/platform/api',
+          projectGroupId: 'root',
+          connectionId: 'ssh-1'
+        })
+      ],
+      worktreeMeta: {},
+      settings: {},
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      projectGroups: [
+        {
+          id: 'root',
+          name: 'Platform',
+          parentPath: '/workspace/platform',
+          parentGroupId: null,
+          createdFrom: 'folder-scan',
+          tabOrder: 0,
+          isCollapsed: false,
+          color: null,
+          createdAt: 1,
+          updatedAt: 1
+        }
+      ],
+      folderWorkspaces: [
+        {
+          id: 'fw-1',
+          projectGroupId: 'root',
+          name: 'Refund fix',
+          folderPath: '/workspace/platform',
+          comment: '',
+          isArchived: false,
+          isUnread: false,
+          isPinned: false,
+          sortOrder: 1,
+          lastActivityAt: 1,
+          createdAt: 1,
+          updatedAt: 1
+        }
+      ]
+    })
+
+    const store = await createStore()
+
+    expect(store.getProjectGroups()[0]).toMatchObject({ id: 'root', connectionId: 'ssh-1' })
+    expect(store.getFolderWorkspaces()[0]).toMatchObject({ id: 'fw-1', connectionId: 'ssh-1' })
+  })
+
+  it('backfills folder-scope SSH provenance from grouped repos despite unrelated same-path SSH repos', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [
+        makeRepo({
+          id: 'api-ssh-1',
+          path: '/workspace/platform/api',
+          projectGroupId: 'root',
+          connectionId: 'ssh-1'
+        }),
+        makeRepo({
+          id: 'api-ssh-2',
+          path: '/workspace/platform/api',
+          projectGroupId: 'other-root',
+          connectionId: 'ssh-2'
+        })
+      ],
+      worktreeMeta: {},
+      settings: {},
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      projectGroups: [
+        {
+          id: 'root',
+          name: 'Platform',
+          parentPath: '/workspace/platform',
+          parentGroupId: null,
+          createdFrom: 'folder-scan',
+          tabOrder: 0,
+          isCollapsed: false,
+          color: null,
+          createdAt: 1,
+          updatedAt: 1
+        },
+        {
+          id: 'other-root',
+          name: 'Platform other',
+          parentPath: '/workspace/platform',
+          parentGroupId: null,
+          createdFrom: 'folder-scan',
+          tabOrder: 1,
+          isCollapsed: false,
+          color: null,
+          createdAt: 1,
+          updatedAt: 1
+        }
+      ],
+      folderWorkspaces: [
+        {
+          id: 'fw-1',
+          projectGroupId: 'root',
+          name: 'Refund fix',
+          folderPath: '/workspace/platform',
+          comment: '',
+          isArchived: false,
+          isUnread: false,
+          isPinned: false,
+          sortOrder: 1,
+          lastActivityAt: 1,
+          createdAt: 1,
+          updatedAt: 1
+        }
+      ]
+    })
+
+    const store = await createStore()
+
+    expect(store.getProjectGroups().find((group) => group.id === 'root')).toMatchObject({
+      connectionId: 'ssh-1'
+    })
+    expect(store.getFolderWorkspaces()[0]).toMatchObject({ id: 'fw-1', connectionId: 'ssh-1' })
+  })
+
+  it('removes folder workspace metadata and its scoped session state only', async () => {
+    const store = await createStore()
+    const group = store.createProjectGroup({
+      name: 'Platform',
+      parentPath: '/workspace/platform',
+      createdFrom: 'folder-scan'
+    })
+    store.addRepo(
+      makeRepo({ id: 'api', path: '/workspace/platform/api', projectGroupId: group.id })
+    )
+    const workspace = store.createFolderWorkspace({ projectGroupId: group.id, name: 'Refund fix' })
+    const key = folderWorkspaceKey(workspace.id)
+    const tab = makeTerminalTab({ id: 'folder-tab', worktreeId: key })
+    store.setWorkspaceSession({
+      ...getDefaultWorkspaceSession(),
+      activeWorkspaceKey: key,
+      activeWorktreeId: key,
+      activeTabId: tab.id,
+      tabsByWorktree: { [key]: [tab], 'repo::/wt': [makeTerminalTab({ id: 'repo-tab' })] },
+      terminalLayoutsByTabId: {
+        [tab.id]: { root: null, activeLeafId: null, expandedLeafId: null },
+        'repo-tab': { root: null, activeLeafId: null, expandedLeafId: null }
+      },
+      browserTabsByWorktree: {
+        [key]: [
+          {
+            id: 'browser-workspace',
+            worktreeId: key,
+            url: 'about:blank',
+            title: 'Blank',
+            loading: false,
+            faviconUrl: null,
+            canGoBack: false,
+            canGoForward: false,
+            loadError: null,
+            createdAt: 1
+          }
+        ]
+      },
+      browserPagesByWorkspace: {
+        'browser-workspace': [
+          {
+            id: 'page-1',
+            workspaceId: 'browser-workspace',
+            worktreeId: key,
+            url: 'about:blank',
+            title: 'Blank',
+            loading: false,
+            faviconUrl: null,
+            canGoBack: false,
+            canGoForward: false,
+            loadError: null,
+            createdAt: 1
+          }
+        ]
+      },
+      activeTabIdByWorktree: { [key]: tab.id },
+      lastVisitedAtByWorktreeId: { [key]: 10 }
+    })
+
+    expect(store.removeFolderWorkspace(workspace.id)).toBe(true)
+
+    const session = store.getWorkspaceSession()
+    expect(store.getFolderWorkspaces()).toEqual([])
+    expect(store.getProjectGroups()).toHaveLength(1)
+    expect(store.getRepo('api')?.projectGroupId).toBe(group.id)
+    expect(session.activeWorkspaceKey).toBeNull()
+    expect(session.activeWorktreeId).toBeNull()
+    expect(session.activeTabId).toBeNull()
+    expect(session.tabsByWorktree[key]).toBeUndefined()
+    expect(session.tabsByWorktree['repo::/wt']).toHaveLength(1)
+    expect(session.terminalLayoutsByTabId['folder-tab']).toBeUndefined()
+    expect(session.terminalLayoutsByTabId['repo-tab']).toBeDefined()
+    expect(session.browserPagesByWorkspace?.['browser-workspace']).toBeUndefined()
+  })
+
   // ── 9. Settings: get/update ────────────────────────────────────────
 
   it('updateSettings merges partial updates', async () => {
@@ -2623,6 +3004,82 @@ describe('Store', () => {
       disabledTuiAgents: ['gemini', 'not-real', 'gemini', 'opencode'] as never
     })
     expect(updated.disabledTuiAgents).toEqual(['gemini', 'opencode'])
+  })
+
+  it('enables Claude Agent Teams by default for fresh installs', async () => {
+    const store = await createStore()
+
+    expect(store.getSettings().disabledTuiAgents).toEqual([])
+    expect(store.getSettings().claudeAgentTeamsDefaultDisabledMigrated).toBe(true)
+  })
+
+  it('migrates yolo default args onto untouched agent launch settings', async () => {
+    writeFileSync(
+      join(testState.dir, 'orca-data.json'),
+      JSON.stringify({
+        settings: {
+          agentCmdOverrides: {}
+        }
+      })
+    )
+    const store = await createStore()
+
+    expect(store.getSettings().agentDefaultArgs).toMatchObject({
+      claude: '--dangerously-skip-permissions',
+      codex: '--dangerously-bypass-approvals-and-sandbox',
+      cursor: '--yolo'
+    })
+    expect(store.getSettings().agentDefaultEnv).toMatchObject({
+      goose: { GOOSE_MODE: 'auto' }
+    })
+    expect(store.getSettings().agentYoloDefaultsMigrated).toBe(true)
+  })
+
+  it('does not add yolo defaults for legacy agents with command overrides', async () => {
+    writeFileSync(
+      join(testState.dir, 'orca-data.json'),
+      JSON.stringify({
+        settings: {
+          agentCmdOverrides: {
+            codex: 'codex --profile work',
+            goose: 'goose'
+          }
+        }
+      })
+    )
+    const store = await createStore()
+
+    expect(store.getSettings().agentDefaultArgs?.codex).toBe('')
+    expect(store.getSettings().agentDefaultEnv?.goose).toEqual({})
+    expect(store.getSettings().agentDefaultArgs?.claude).toBe('--dangerously-skip-permissions')
+  })
+
+  it('removes unsupported TUI skip-permissions args from migrated profiles', async () => {
+    writeFileSync(
+      join(testState.dir, 'orca-data.json'),
+      JSON.stringify({
+        settings: {
+          agentYoloDefaultsMigrated: true,
+          agentDefaultArgs: {
+            opencode: '--dangerously-skip-permissions --model opencode/gpt-5',
+            kilo: '--dangerously-skip-permissions',
+            codex: '--dangerously-bypass-approvals-and-sandbox'
+          }
+        }
+      })
+    )
+    const store = await createStore()
+    store.flush()
+
+    expect(store.getSettings().agentDefaultArgs?.opencode).toBe('--model opencode/gpt-5')
+    expect(store.getSettings().agentDefaultArgs?.kilo).toBe('')
+    expect(store.getSettings().agentDefaultArgs?.codex).toBe(
+      '--dangerously-bypass-approvals-and-sandbox'
+    )
+    expect((readDataFile() as PersistedState).settings.agentDefaultArgs?.opencode).toBe(
+      '--model opencode/gpt-5'
+    )
+    expect((readDataFile() as PersistedState).settings.agentDefaultArgs?.kilo).toBe('')
   })
 
   it('normalizes app icon on load and update', async () => {
@@ -2985,6 +3442,38 @@ describe('Store', () => {
     expect(store.getUI().rightSidebarTab).toBe('checks')
   })
 
+  it('preserves explicit rightSidebarExplorerView in persisted UI', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: {},
+      ui: { rightSidebarTab: 'explorer', rightSidebarExplorerView: 'search' },
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+
+    const store = await createStore()
+    expect(store.getUI().rightSidebarTab).toBe('explorer')
+    expect(store.getUI().rightSidebarExplorerView).toBe('search')
+  })
+
+  it('maps legacy persisted search tab to the Explorer search view', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: {},
+      ui: { rightSidebarTab: 'search' },
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+
+    const store = await createStore()
+    expect(store.getUI().rightSidebarTab).toBe('search')
+    expect(store.getUI().rightSidebarExplorerView).toBe('search')
+  })
+
   it('normalizes invalid rightSidebarTab in persisted UI', async () => {
     writeDataFile({
       schemaVersion: 1,
@@ -3063,6 +3552,61 @@ describe('Store', () => {
     })
   })
 
+  it('normalizes malformed main-owned feature telemetry bucket markers on read', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: {},
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {},
+      featureInteractionTelemetryBuckets: {
+        tasks: 'count_2',
+        browser: 'count_4',
+        unknown: 'count_1'
+      }
+    })
+
+    const store = await createStore()
+    store.flush()
+
+    const persisted = readDataFile() as PersistedState
+    expect(persisted.featureInteractionTelemetryBuckets).toEqual({ tasks: 'count_2' })
+  })
+
+  it('does not expose or accept UI shadow writes for main-owned feature telemetry markers', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: {},
+      ui: {
+        featureInteractionTelemetryBuckets: { tasks: 'count_1000_plus' }
+      },
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {},
+      featureInteractionTelemetryBuckets: { tasks: 'count_2' }
+    })
+
+    const store = await createStore()
+
+    expect('featureInteractionTelemetryBuckets' in (store.getUI() as Record<string, unknown>)).toBe(
+      false
+    )
+
+    store.updateUI({
+      featureInteractionTelemetryBuckets: { tasks: 'count_500_999' }
+    } as never)
+    store.flush()
+
+    const persisted = readDataFile() as PersistedState & {
+      ui: Record<string, unknown>
+    }
+    expect(persisted.featureInteractionTelemetryBuckets).toEqual({ tasks: 'count_2' })
+    expect(persisted.ui.featureInteractionTelemetryBuckets).toBeUndefined()
+  })
+
   it('normalizes feature tip ids from direct UI writes', async () => {
     const store = await createStore()
 
@@ -3092,6 +3636,179 @@ describe('Store', () => {
       firstInteractedAt: 100,
       interactionCount: 3
     })
+  })
+
+  it('emits feature interaction telemetry only when a higher bucket is reached', async () => {
+    const store = await createStore()
+
+    store.recordFeatureInteraction('tasks')
+    store.recordFeatureInteraction('tasks')
+    store.recordFeatureInteraction('tasks')
+    store.recordFeatureInteraction('tasks')
+    store.flush()
+
+    expect(trackMock).toHaveBeenCalledTimes(3)
+    expect(trackMock).toHaveBeenNthCalledWith(1, 'feature_interaction_usage_bucket_reached', {
+      feature_id: 'tasks',
+      feature_category: 'task_management',
+      count_bucket: 'count_1',
+      bucket_source: 'crossed_now',
+      nth_repo_added: 2
+    })
+    expect(trackMock).toHaveBeenNthCalledWith(2, 'feature_interaction_usage_bucket_reached', {
+      feature_id: 'tasks',
+      feature_category: 'task_management',
+      count_bucket: 'count_2',
+      bucket_source: 'crossed_now',
+      nth_repo_added: 2
+    })
+    expect(trackMock).toHaveBeenNthCalledWith(3, 'feature_interaction_usage_bucket_reached', {
+      feature_id: 'tasks',
+      feature_category: 'task_management',
+      count_bucket: 'count_3_4',
+      bucket_source: 'crossed_now',
+      nth_repo_added: 2
+    })
+    expect((readDataFile() as PersistedState).featureInteractionTelemetryBuckets).toEqual({
+      tasks: 'count_3_4'
+    })
+  })
+
+  it('emits one observed-existing bucket for pre-rollout interaction counts', async () => {
+    const store = await createStore()
+    store.updateUI({
+      featureInteractions: {
+        tasks: { firstInteractedAt: 100, interactionCount: 137 }
+      }
+    })
+    trackMock.mockClear()
+
+    store.recordFeatureInteraction('tasks')
+    store.recordFeatureInteraction('tasks')
+    store.flush()
+
+    expect(trackMock).toHaveBeenCalledTimes(1)
+    expect(trackMock).toHaveBeenCalledWith('feature_interaction_usage_bucket_reached', {
+      feature_id: 'tasks',
+      feature_category: 'task_management',
+      count_bucket: 'count_100_199',
+      bucket_source: 'observed_existing',
+      nth_repo_added: 2
+    })
+    expect((readDataFile() as PersistedState).featureInteractionTelemetryBuckets).toEqual({
+      tasks: 'count_100_199'
+    })
+  })
+
+  it('emits only the top-coded observed-existing bucket for pre-rollout power users', async () => {
+    const store = await createStore()
+    store.updateUI({
+      featureInteractions: {
+        tasks: { firstInteractedAt: 100, interactionCount: 1200 }
+      }
+    })
+    trackMock.mockClear()
+
+    store.recordFeatureInteraction('tasks')
+
+    expect(trackMock).toHaveBeenCalledTimes(1)
+    expect(trackMock).toHaveBeenCalledWith('feature_interaction_usage_bucket_reached', {
+      feature_id: 'tasks',
+      feature_category: 'task_management',
+      count_bucket: 'count_1000_plus',
+      bucket_source: 'observed_existing',
+      nth_repo_added: 2
+    })
+  })
+
+  it('emits high bucket crossings once and ignores same-range increments', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: {},
+      ui: {
+        featureInteractions: {
+          tasks: { firstInteractedAt: 100, interactionCount: 198 }
+        }
+      },
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {},
+      featureInteractionTelemetryBuckets: { tasks: 'count_100_199' }
+    })
+    const store = await createStore()
+
+    store.recordFeatureInteraction('tasks')
+    store.recordFeatureInteraction('tasks')
+
+    expect(trackMock).toHaveBeenCalledTimes(1)
+    expect(trackMock).toHaveBeenCalledWith('feature_interaction_usage_bucket_reached', {
+      feature_id: 'tasks',
+      feature_category: 'task_management',
+      count_bucket: 'count_200_499',
+      bucket_source: 'crossed_now',
+      nth_repo_added: 2
+    })
+  })
+
+  it('does not emit for count 4 but emits the count_1000_plus crossing', async () => {
+    const store = await createStore()
+
+    store.recordFeatureInteraction('tasks')
+    store.recordFeatureInteraction('tasks')
+    store.recordFeatureInteraction('tasks')
+    trackMock.mockClear()
+
+    store.recordFeatureInteraction('tasks')
+    expect(trackMock).not.toHaveBeenCalled()
+
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: {},
+      ui: {
+        featureInteractions: {
+          tasks: { firstInteractedAt: 100, interactionCount: 999 }
+        }
+      },
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {},
+      featureInteractionTelemetryBuckets: { tasks: 'count_500_999' }
+    })
+    const reloaded = await createStore()
+
+    reloaded.recordFeatureInteraction('tasks')
+    expect(trackMock).toHaveBeenCalledTimes(1)
+    expect(trackMock).toHaveBeenCalledWith('feature_interaction_usage_bucket_reached', {
+      feature_id: 'tasks',
+      feature_category: 'task_management',
+      count_bucket: 'count_1000_plus',
+      bucket_source: 'crossed_now',
+      nth_repo_added: 2
+    })
+  })
+
+  it('dedupes against the persisted bucket marker', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: {},
+      ui: {
+        featureInteractions: {
+          tasks: { firstInteractedAt: 100, interactionCount: 100 }
+        }
+      },
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {},
+      featureInteractionTelemetryBuckets: { tasks: 'count_100_199' }
+    })
+    const store = await createStore()
+
+    store.recordFeatureInteraction('tasks')
+
+    expect(trackMock).not.toHaveBeenCalled()
   })
 
   it('updateUI restores fixed card properties from direct UI writes', async () => {

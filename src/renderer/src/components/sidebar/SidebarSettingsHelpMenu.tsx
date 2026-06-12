@@ -1,14 +1,20 @@
 import React, { useState } from 'react'
 import {
+  BookOpen,
   CircleHelp,
   ExternalLink,
+  Github,
+  Keyboard,
   Loader2,
   MessageSquareText,
   RefreshCw,
   RotateCw,
+  School,
+  ScrollText,
   Settings
 } from 'lucide-react'
 import { toast } from 'sonner'
+import logo from '../../../../../resources/logo.svg'
 import { useAppStore } from '@/store'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -21,6 +27,9 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
+import { showOnboardingFromRenderer } from '../onboarding/show-onboarding-event'
+import { SetupGuideProgressRing } from '../setup-guide/SetupGuideProgressRing'
+import { useSetupGuideProgress } from '../setup-guide/use-setup-guide-progress'
 import { SidebarFeedbackDialog } from './SidebarFeedbackDialog'
 import { translate } from '@/i18n/i18n'
 
@@ -28,6 +37,7 @@ const DOCS_URL = 'https://www.onorca.dev/docs'
 const CHANGELOG_URL = 'https://onorca.dev/changelog'
 const GITHUB_URL = 'https://github.com/stablyai/orca'
 const DISCORD_URL = 'https://discord.gg/fzjDKHxv8Q'
+const X_URL = 'https://x.com/orca_build'
 
 function openExternalUrl(url: string): void {
   void window.api.shell.openUrl(url)
@@ -41,9 +51,26 @@ function DiscordIcon(): React.JSX.Element {
   )
 }
 
-function ExternalMenuItem({ label, url }: { label: string; url: string }): React.JSX.Element {
+function XIcon(): React.JSX.Element {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" className="size-3.5 fill-current">
+      <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+    </svg>
+  )
+}
+
+function ExternalMenuItem({
+  label,
+  url,
+  icon
+}: {
+  label: string
+  url: string
+  icon: React.ReactNode
+}): React.JSX.Element {
   return (
     <DropdownMenuItem onSelect={() => openExternalUrl(url)}>
+      {icon}
       {label}
       <ExternalLink className="ml-auto size-3 text-muted-foreground" />
     </DropdownMenuItem>
@@ -51,16 +78,22 @@ function ExternalMenuItem({ label, url }: { label: string; url: string }): React
 }
 
 export function SidebarSettingsHelpMenu(): React.JSX.Element {
+  const openModal = useAppStore((s) => s.openModal)
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
   const updateStatus = useAppStore((s) => s.updateStatus)
+  const setupProgress = useSetupGuideProgress(true, false, false)
 
   const settingsShortcut = useShortcutLabel('app.settings')
   const [menuOpen, setMenuOpen] = useState(false)
   const [feedbackOpen, setFeedbackOpen] = useState(false)
   const [showAdminOptions, setShowAdminOptions] = useState(false)
   const [isRestartingOrca, setIsRestartingOrca] = useState(false)
+  const lastShowOnboardingAtRef = React.useRef(0)
   const mountedRef = useMountedRef()
+
+  const showMilestones =
+    setupProgress.ready && setupProgress.coreDoneCount < setupProgress.coreTotal
 
   const handleMenuOpenChange = (open: boolean): void => {
     setMenuOpen(open)
@@ -70,7 +103,18 @@ export function SidebarSettingsHelpMenu(): React.JSX.Element {
   }
 
   const revealAdminOptions = (altKey: boolean): void => {
+    // Why: onboarding replay and restart stay off the default Help menu; holding
+    // Option/Alt before opening is an intentional power-user affordance.
     setShowAdminOptions(altKey)
+  }
+
+  const handleShowOnboarding = (): void => {
+    const now = Date.now()
+    if (now - lastShowOnboardingAtRef.current < 500) {
+      return
+    }
+    lastShowOnboardingAtRef.current = now
+    void showOnboardingFromRenderer()
   }
 
   const handleRestartOrca = (): void => {
@@ -107,6 +151,10 @@ export function SidebarSettingsHelpMenu(): React.JSX.Element {
     void window.api.updater.check({ includePrerelease: shiftKey })
   }
 
+  const openMilestones = (): void => {
+    openModal('setup-guide', { telemetrySource: 'help_menu' })
+  }
+
   return (
     <>
       <DropdownMenu modal={false} open={menuOpen} onOpenChange={handleMenuOpenChange}>
@@ -133,12 +181,20 @@ export function SidebarSettingsHelpMenu(): React.JSX.Element {
             {translate('auto.components.sidebar.SidebarSettingsHelpMenu.2991a0106c', 'Help')}
           </TooltipContent>
         </Tooltip>
-        <DropdownMenuContent side="top" align="start" sideOffset={8} className="w-48">
+        <DropdownMenuContent side="top" align="start" sideOffset={8} className="w-52">
           <DropdownMenuItem onSelect={openSettingsPage}>
             <Settings className="size-3.5" />
             {translate('auto.components.sidebar.SidebarSettingsHelpMenu.a428c25998', 'Settings')}
             <span className="ml-auto text-xs tracking-wide opacity-60">{settingsShortcut}</span>
           </DropdownMenuItem>
+          <DropdownMenuItem onSelect={openShortcutsSettings}>
+            <Keyboard className="size-3.5" />
+            {translate(
+              'auto.components.sidebar.SidebarSettingsHelpMenu.e565171a7c',
+              'Keyboard Shortcuts'
+            )}
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
           <DropdownMenuItem onSelect={() => setFeedbackOpen(true)}>
             <MessageSquareText className="size-3.5" />
             {translate(
@@ -146,17 +202,43 @@ export function SidebarSettingsHelpMenu(): React.JSX.Element {
               'Send Feedback'
             )}
           </DropdownMenuItem>
-          <DropdownMenuItem onSelect={openShortcutsSettings}>
-            <ExternalLink className="size-3.5" />
-            {translate(
-              'auto.components.sidebar.SidebarSettingsHelpMenu.e565171a7c',
-              'Keyboard Shortcuts'
-            )}
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
+          {showMilestones ? (
+            <DropdownMenuItem onSelect={openMilestones}>
+              <img
+                src={logo}
+                alt=""
+                aria-hidden="true"
+                className="size-3.5 object-contain invert opacity-55 dark:invert-0"
+              />
+              {translate(
+                'auto.components.sidebar.SidebarSettingsHelpMenu.f8a2c91d4e',
+                'Milestones'
+              )}
+              <SetupGuideProgressRing
+                done={setupProgress.coreDoneCount}
+                total={setupProgress.coreTotal}
+                sizeClassName="size-4"
+                className="ml-auto"
+              />
+            </DropdownMenuItem>
+          ) : null}
+          {showAdminOptions ? (
+            <DropdownMenuItem
+              className="whitespace-nowrap"
+              onClick={handleShowOnboarding}
+              onSelect={handleShowOnboarding}
+            >
+              <School className="size-3.5" />
+              {translate(
+                'auto.components.sidebar.SidebarSettingsHelpMenu.b7e4d2a19c',
+                'Onboarding'
+              )}
+            </DropdownMenuItem>
+          ) : null}
           <ExternalMenuItem
             label={translate('auto.components.sidebar.SidebarSettingsHelpMenu.cdc87f897e', 'Docs')}
             url={DOCS_URL}
+            icon={<BookOpen className="size-3.5" />}
           />
           <ExternalMenuItem
             label={translate(
@@ -164,17 +246,25 @@ export function SidebarSettingsHelpMenu(): React.JSX.Element {
               'Changelog'
             )}
             url={CHANGELOG_URL}
+            icon={<ScrollText className="size-3.5" />}
           />
+          <DropdownMenuSeparator />
           <ExternalMenuItem
             label={translate(
               'auto.components.sidebar.SidebarSettingsHelpMenu.5687ab246a',
               'GitHub'
             )}
             url={GITHUB_URL}
+            icon={<Github className="size-3.5" />}
           />
           <DropdownMenuItem onSelect={() => openExternalUrl(DISCORD_URL)}>
             <DiscordIcon />
             {translate('auto.components.sidebar.SidebarSettingsHelpMenu.eb9884e55b', 'Discord')}
+            <ExternalLink className="ml-auto size-3 text-muted-foreground" />
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => openExternalUrl(X_URL)}>
+            <XIcon />
+            {translate('auto.components.sidebar.SidebarSettingsHelpMenu.c4f8e1b72a', 'X')}
             <ExternalLink className="ml-auto size-3 text-muted-foreground" />
           </DropdownMenuItem>
           <DropdownMenuSeparator />

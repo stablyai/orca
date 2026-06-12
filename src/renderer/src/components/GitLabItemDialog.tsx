@@ -31,6 +31,7 @@ import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
 import { isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { cn } from '@/lib/utils'
+import { useAppStore } from '@/store'
 import type {
   GitLabAssignableUser,
   GitLabPipelineJob,
@@ -539,6 +540,7 @@ export default function GitLabItemDialog({
           setTitleDraft('')
           setBodyDraft('')
           setLabelDraft('')
+          useAppStore.getState().recordFeatureInteraction('gitlab-tasks')
         }
       } else if (mountedRef.current) {
         toast.error(res.error)
@@ -685,6 +687,7 @@ export default function GitLabItemDialog({
           setReviewerOptions((current) =>
             current ? dedupeGitLabUsers([...current, ...result.reviewers]) : current
           )
+          useAppStore.getState().recordFeatureInteraction('gitlab-tasks')
         } else {
           toast.error(result.error)
         }
@@ -746,6 +749,7 @@ export default function GitLabItemDialog({
           current ? { ...current, comments: [...current.comments, result.comment] } : current
         )
         setInlineCommentBody('')
+        useAppStore.getState().recordFeatureInteraction('gitlab-tasks')
         toast.success(
           translate('auto.components.GitLabItemDialog.60c13320c4', 'Inline comment added')
         )
@@ -776,6 +780,7 @@ export default function GitLabItemDialog({
       const res = await window.api.gl.closeMR({ repoPath, iid: item.number })
       if (res.ok) {
         if (mountedRef.current) {
+          useAppStore.getState().recordFeatureInteraction('gitlab-tasks')
           toast.success(
             translate('auto.components.GitLabItemDialog.9b11cd233f', 'Closed MR !{{value0}}', {
               value0: item.number
@@ -804,6 +809,7 @@ export default function GitLabItemDialog({
       const res = await window.api.gl.reopenMR({ repoPath, iid: item.number })
       if (res.ok) {
         if (mountedRef.current) {
+          useAppStore.getState().recordFeatureInteraction('gitlab-tasks')
           toast.success(
             translate('auto.components.GitLabItemDialog.865ea2703e', 'Reopened MR !{{value0}}', {
               value0: item.number
@@ -832,6 +838,7 @@ export default function GitLabItemDialog({
       const res = await window.api.gl.mergeMR({ repoPath, iid: item.number })
       if (res.ok) {
         if (mountedRef.current) {
+          useAppStore.getState().recordFeatureInteraction('gitlab-tasks')
           toast.success(
             translate('auto.components.GitLabItemDialog.e089f62594', 'Merged MR !{{value0}}', {
               value0: item.number
@@ -869,6 +876,7 @@ export default function GitLabItemDialog({
           setCommentDraftState((current) =>
             current.itemId === itemId ? { itemId, value: '' } : current
           )
+          useAppStore.getState().recordFeatureInteraction('gitlab-tasks')
           handleRefresh()
         }
       } else {
@@ -908,6 +916,7 @@ export default function GitLabItemDialog({
                   }
                 : current
             )
+            useAppStore.getState().recordFeatureInteraction('gitlab-tasks')
           }
         } else if (mountedRef.current) {
           toast.error(res.error)

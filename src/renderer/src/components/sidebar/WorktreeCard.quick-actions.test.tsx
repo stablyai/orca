@@ -157,7 +157,7 @@ describe('WorktreeCard quick actions', () => {
     expect(markup).toContain('data-worktree-card-meta-row=""')
   })
 
-  it('renders folder kind in the detailed metadata row', () => {
+  it('renders folder kind and directory in the detailed metadata row', () => {
     const markup = renderToStaticMarkup(
       <WorktreeCard
         worktree={makeWorktree({ displayName: 'Docs folder', branch: '' })}
@@ -168,6 +168,27 @@ describe('WorktreeCard quick actions', () => {
 
     expect(markup).toContain('Docs folder')
     expect(markup).toContain('>Folder</span>')
+    expect(markup).toContain('>quick-action</span>')
+    expect(markup).toContain('data-worktree-card-meta-row=""')
+  })
+
+  it('renders synthetic folder workspace directory in the detailed metadata row', () => {
+    const markup = renderToStaticMarkup(
+      <WorktreeCard
+        worktree={makeWorktree({
+          id: 'folder:folder-1',
+          displayName: 'Docs folder',
+          branch: '',
+          path: '/repo/worktrees/quick-action'
+        })}
+        repo={undefined}
+        isActive={false}
+      />
+    )
+
+    expect(markup).toContain('Docs folder')
+    expect(markup).toContain('>Folder</span>')
+    expect(markup).toContain('>quick-action</span>')
     expect(markup).toContain('data-worktree-card-meta-row=""')
   })
 

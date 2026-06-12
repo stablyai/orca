@@ -56,6 +56,7 @@ export function SourceControlAgentActionDialog(
     actionId,
     title,
     description,
+    baseCommandInput,
     savedCommandInputTemplate,
     onOpenSettings,
     startLabel = 'Start agent',
@@ -88,13 +89,14 @@ export function SourceControlAgentActionDialog(
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="flex h-[70vh] min-w-0 flex-col overflow-hidden sm:max-w-2xl">
+      <DialogContent className="flex max-h-[min(82vh,42rem)] min-w-0 flex-col overflow-hidden sm:max-w-2xl">
         <DialogHeader className="shrink-0">
           <DialogTitle className="text-sm">{title}</DialogTitle>
           <DialogDescription className="text-xs">{description}</DialogDescription>
         </DialogHeader>
         <SourceControlAgentActionDialogForm
           actionId={actionId}
+          baseCommandInput={baseCommandInput}
           agentOptions={agentOptions}
           selectedAgent={selectedAgent}
           hasEnabledAgents={hasEnabledAgents}

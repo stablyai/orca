@@ -546,14 +546,14 @@ describe('registerPtyHandlers', () => {
     }
   }
 
-  function spawnAndGetCall(args?: {
+  async function spawnAndGetCall(args?: {
     cwd?: string
     env?: Record<string, string>
     command?: string
-  }): [string, string[], { cwd: string; env: Record<string, string> }] {
+  }): Promise<[string, string[], { cwd: string; env: Record<string, string> }]> {
     handlers.clear()
     registerPtyHandlers(mainWindow as never)
-    handlers.get('pty:spawn')!(null, {
+    await handlers.get('pty:spawn')!(null, {
       cols: 80,
       rows: 24,
       ...args
@@ -3811,11 +3811,11 @@ describe('registerPtyHandlers', () => {
       delete process.env.PYTHONUTF8
     })
 
-    it('passes chcp 65001 to cmd.exe for UTF-8 console output', () => {
+    it('passes chcp 65001 to cmd.exe for UTF-8 console output', async () => {
       process.env.COMSPEC = 'C:\\Windows\\system32\\cmd.exe'
 
       registerPtyHandlers(mainWindow as never)
-      handlers.get('pty:spawn')!(null, { cols: 80, rows: 24 })
+      await handlers.get('pty:spawn')!(null, { cols: 80, rows: 24 })
 
       expect(spawnMock).toHaveBeenCalledWith(
         'C:\\Windows\\system32\\cmd.exe',
@@ -3824,11 +3824,11 @@ describe('registerPtyHandlers', () => {
       )
     })
 
-    it('sets Console encoding for powershell.exe', () => {
+    it('sets Console encoding for powershell.exe', async () => {
       process.env.COMSPEC = 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe'
 
       registerPtyHandlers(mainWindow as never)
-      handlers.get('pty:spawn')!(null, { cols: 80, rows: 24 })
+      await handlers.get('pty:spawn')!(null, { cols: 80, rows: 24 })
 
       expect(spawnMock).toHaveBeenCalledWith(
         'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe',
@@ -3837,11 +3837,11 @@ describe('registerPtyHandlers', () => {
       )
     })
 
-    it('sets Console encoding for pwsh.exe', () => {
+    it('sets Console encoding for pwsh.exe', async () => {
       process.env.COMSPEC = 'C:\\Program Files\\PowerShell\\7\\pwsh.exe'
 
       registerPtyHandlers(mainWindow as never)
-      handlers.get('pty:spawn')!(null, { cols: 80, rows: 24 })
+      await handlers.get('pty:spawn')!(null, { cols: 80, rows: 24 })
 
       expect(spawnMock).toHaveBeenCalledWith(
         'C:\\Program Files\\PowerShell\\7\\pwsh.exe',
@@ -3850,34 +3850,34 @@ describe('registerPtyHandlers', () => {
       )
     })
 
-    it('sets PYTHONUTF8=1 in the spawn environment on Windows', () => {
+    it('sets PYTHONUTF8=1 in the spawn environment on Windows', async () => {
       process.env.COMSPEC = 'C:\\Windows\\system32\\cmd.exe'
 
       registerPtyHandlers(mainWindow as never)
-      handlers.get('pty:spawn')!(null, { cols: 80, rows: 24 })
+      await handlers.get('pty:spawn')!(null, { cols: 80, rows: 24 })
 
       const spawnCall = spawnMock.mock.calls.at(-1)!
       const env = spawnCall[2].env as Record<string, string>
       expect(env.PYTHONUTF8).toBe('1')
     })
 
-    it('does not override an existing PYTHONUTF8 value', () => {
+    it('does not override an existing PYTHONUTF8 value', async () => {
       process.env.COMSPEC = 'C:\\Windows\\system32\\cmd.exe'
       process.env.PYTHONUTF8 = '0'
 
       registerPtyHandlers(mainWindow as never)
-      handlers.get('pty:spawn')!(null, { cols: 80, rows: 24 })
+      await handlers.get('pty:spawn')!(null, { cols: 80, rows: 24 })
 
       const spawnCall = spawnMock.mock.calls.at(-1)!
       const env = spawnCall[2].env as Record<string, string>
       expect(env.PYTHONUTF8).toBe('0')
     })
 
-    it('launches Git Bash from COMSPEC as an interactive login shell', () => {
+    it('launches Git Bash from COMSPEC as an interactive login shell', async () => {
       process.env.COMSPEC = 'C:\\Program Files\\Git\\bin\\bash.exe'
 
       registerPtyHandlers(mainWindow as never)
-      handlers.get('pty:spawn')!(null, { cols: 80, rows: 24 })
+      await handlers.get('pty:spawn')!(null, { cols: 80, rows: 24 })
 
       expect(spawnMock).toHaveBeenCalledWith(
         'C:\\Program Files\\Git\\bin\\bash.exe',
@@ -3888,7 +3888,7 @@ describe('registerPtyHandlers', () => {
       )
     })
 
-    it('uses terminalWindowsShell setting over COMSPEC when provided', () => {
+    it('uses terminalWindowsShell setting over COMSPEC when provided', async () => {
       // Why: COMSPEC always points to cmd.exe on stock Windows, so without the
       // setting the terminal would ignore the user's shell preference.
       process.env.COMSPEC = 'C:\\Windows\\system32\\cmd.exe'
@@ -3902,7 +3902,7 @@ describe('registerPtyHandlers', () => {
             terminalWindowsShell: 'powershell.exe'
           }) as never
       )
-      handlers.get('pty:spawn')!(null, { cols: 80, rows: 24 })
+      await handlers.get('pty:spawn')!(null, { cols: 80, rows: 24 })
 
       expect(spawnMock).toHaveBeenCalledWith(
         'powershell.exe',
@@ -3911,7 +3911,7 @@ describe('registerPtyHandlers', () => {
       )
     })
 
-    it('spawns powershell.exe when PowerShell family keeps the inbox implementation', () => {
+    it('spawns powershell.exe when PowerShell family keeps the inbox implementation', async () => {
       process.env.COMSPEC = 'C:\\Windows\\system32\\cmd.exe'
 
       registerPtyHandlers(
@@ -3924,7 +3924,7 @@ describe('registerPtyHandlers', () => {
             terminalWindowsPowerShellImplementation: 'powershell.exe'
           }) as never
       )
-      handlers.get('pty:spawn')!(null, { cols: 80, rows: 24 })
+      await handlers.get('pty:spawn')!(null, { cols: 80, rows: 24 })
 
       expect(spawnMock).toHaveBeenCalledWith(
         'powershell.exe',
@@ -3933,7 +3933,7 @@ describe('registerPtyHandlers', () => {
       )
     })
 
-    it('spawns pwsh.exe when PowerShell 7 is selected and available', () => {
+    it('spawns pwsh.exe when PowerShell 7 is selected and available', async () => {
       process.env.COMSPEC = 'C:\\Windows\\system32\\cmd.exe'
       isPwshAvailableMock.mockReturnValue(true)
 
@@ -3947,12 +3947,12 @@ describe('registerPtyHandlers', () => {
             terminalWindowsPowerShellImplementation: 'pwsh.exe'
           }) as never
       )
-      handlers.get('pty:spawn')!(null, { cols: 80, rows: 24 })
+      await handlers.get('pty:spawn')!(null, { cols: 80, rows: 24 })
 
       expect(spawnMock).toHaveBeenCalledWith('pwsh.exe', POWERSHELL_OSC133_ARGS, expect.any(Object))
     })
 
-    it('falls back to powershell.exe when PowerShell 7 is selected but unavailable', () => {
+    it('falls back to powershell.exe when PowerShell 7 is selected but unavailable', async () => {
       process.env.COMSPEC = 'C:\\Windows\\system32\\cmd.exe'
       isPwshAvailableMock.mockReturnValue(false)
 
@@ -3966,7 +3966,7 @@ describe('registerPtyHandlers', () => {
             terminalWindowsPowerShellImplementation: 'pwsh.exe'
           }) as never
       )
-      handlers.get('pty:spawn')!(null, { cols: 80, rows: 24 })
+      await handlers.get('pty:spawn')!(null, { cols: 80, rows: 24 })
 
       expect(spawnMock).toHaveBeenCalledWith(
         'powershell.exe',
@@ -3975,7 +3975,7 @@ describe('registerPtyHandlers', () => {
       )
     })
 
-    it('falls back to powershell.exe when shellOverride requests pwsh.exe but pwsh is unavailable', () => {
+    it('falls back to powershell.exe when shellOverride requests pwsh.exe but pwsh is unavailable', async () => {
       process.env.COMSPEC = 'C:\\Windows\\system32\\cmd.exe'
       isPwshAvailableMock.mockReturnValue(false)
 
@@ -3989,7 +3989,7 @@ describe('registerPtyHandlers', () => {
             terminalWindowsPowerShellImplementation: 'pwsh.exe'
           }) as never
       )
-      handlers.get('pty:spawn')!(null, { cols: 80, rows: 24, shellOverride: 'pwsh.exe' })
+      await handlers.get('pty:spawn')!(null, { cols: 80, rows: 24, shellOverride: 'pwsh.exe' })
 
       expect(spawnMock).toHaveBeenCalledWith(
         'powershell.exe',
@@ -3998,7 +3998,7 @@ describe('registerPtyHandlers', () => {
       )
     })
 
-    it('ignores the PowerShell implementation setting for cmd.exe', () => {
+    it('ignores the PowerShell implementation setting for cmd.exe', async () => {
       process.env.COMSPEC = 'C:\\Windows\\system32\\powershell.exe'
       isPwshAvailableMock.mockReturnValue(true)
 
@@ -4012,7 +4012,7 @@ describe('registerPtyHandlers', () => {
             terminalWindowsPowerShellImplementation: 'pwsh.exe'
           }) as never
       )
-      handlers.get('pty:spawn')!(null, { cols: 80, rows: 24 })
+      await handlers.get('pty:spawn')!(null, { cols: 80, rows: 24 })
 
       expect(spawnMock).toHaveBeenCalledWith(
         'cmd.exe',
@@ -4021,7 +4021,7 @@ describe('registerPtyHandlers', () => {
       )
     })
 
-    it('ignores the PowerShell implementation setting for wsl.exe', () => {
+    it('ignores the PowerShell implementation setting for wsl.exe', async () => {
       process.env.COMSPEC = 'C:\\Windows\\system32\\powershell.exe'
       isPwshAvailableMock.mockReturnValue(true)
 
@@ -4035,7 +4035,7 @@ describe('registerPtyHandlers', () => {
             terminalWindowsPowerShellImplementation: 'pwsh.exe'
           }) as never
       )
-      handlers.get('pty:spawn')!(null, { cols: 80, rows: 24 })
+      await handlers.get('pty:spawn')!(null, { cols: 80, rows: 24 })
 
       const spawnOptions = spawnMock.mock.calls.at(-1)?.[2] as { env: Record<string, string> }
       expect(spawnMock).toHaveBeenCalledWith('wsl.exe', expect.any(Array), expect.any(Object))
@@ -4043,7 +4043,7 @@ describe('registerPtyHandlers', () => {
       expect(spawnOptions.env.ORCA_CODEX_HOME).toBeUndefined()
     })
 
-    it('keeps shellOverride priority for one-off tabs', () => {
+    it('keeps shellOverride priority for one-off tabs', async () => {
       process.env.COMSPEC = 'C:\\Windows\\system32\\cmd.exe'
       isPwshAvailableMock.mockReturnValue(false)
 
@@ -4057,7 +4057,7 @@ describe('registerPtyHandlers', () => {
             terminalWindowsPowerShellImplementation: 'pwsh.exe'
           }) as never
       )
-      handlers.get('pty:spawn')!(null, {
+      await handlers.get('pty:spawn')!(null, {
         cols: 80,
         rows: 24,
         shellOverride: 'wsl.exe'
@@ -4113,7 +4113,7 @@ describe('registerPtyHandlers', () => {
     }
   })
 
-  it('spawns a plain POSIX login shell and queues startup commands for the live session', () => {
+  it('spawns a plain POSIX login shell and queues startup commands for the live session', async () => {
     const originalPlatform = process.platform
     const originalShell = process.env.SHELL
     const originalZdotdir = process.env.ZDOTDIR
@@ -4126,7 +4126,10 @@ describe('registerPtyHandlers', () => {
     delete process.env.ZDOTDIR
 
     try {
-      const [shell, args, options] = spawnAndGetCall({ cwd: '/tmp', command: 'printf "hello"' })
+      const [shell, args, options] = await spawnAndGetCall({
+        cwd: '/tmp',
+        command: 'printf "hello"'
+      })
       expect(shell).toBe('/bin/zsh')
       expect(args).toEqual(['-l'])
       expect(options.env.ZDOTDIR).toBe('/tmp/orca-user-data/shell-ready/zsh')
@@ -4149,7 +4152,7 @@ describe('registerPtyHandlers', () => {
     }
   })
 
-  it('uses the POSIX shell wrapper so OpenCode config survives shell startup files', () => {
+  it('uses the POSIX shell wrapper so OpenCode config survives shell startup files', async () => {
     const originalPlatform = process.platform
     const originalShell = process.env.SHELL
 
@@ -4160,7 +4163,7 @@ describe('registerPtyHandlers', () => {
     process.env.SHELL = '/bin/zsh'
 
     try {
-      const [shell, args, options] = spawnAndGetCall({ cwd: '/tmp' })
+      const [shell, args, options] = await spawnAndGetCall({ cwd: '/tmp' })
       expect(shell).toBe('/bin/zsh')
       expect(args).toEqual(['-l'])
       expect(options.env.OPENCODE_CONFIG_DIR).toBe('/tmp/orca-opencode-config')
@@ -4180,7 +4183,7 @@ describe('registerPtyHandlers', () => {
     }
   })
 
-  it('uses the POSIX shell wrapper so Pi config survives shell startup files', () => {
+  it('uses the POSIX shell wrapper so Pi config survives shell startup files', async () => {
     const originalPlatform = process.platform
     const originalShell = process.env.SHELL
 
@@ -4196,7 +4199,7 @@ describe('registerPtyHandlers', () => {
     }))
 
     try {
-      const [shell, args, options] = spawnAndGetCall({
+      const [shell, args, options] = await spawnAndGetCall({
         cwd: '/tmp',
         env: { PI_CODING_AGENT_DIR: '/tmp/user-pi-agent' }
       })
@@ -4233,7 +4236,7 @@ describe('registerPtyHandlers', () => {
     process.env.SHELL = '/bin/bash'
 
     try {
-      spawnAndGetCall({ cwd: '/tmp', command: 'echo hello' })
+      await spawnAndGetCall({ cwd: '/tmp', command: 'echo hello' })
 
       const { getBashShellReadyRcfileContent } = await import('./pty')
       const bashRcContent = getBashShellReadyRcfileContent()
@@ -4259,7 +4262,7 @@ describe('registerPtyHandlers', () => {
 
     try {
       registerPtyHandlers(mainWindow as never)
-      handlers.get('pty:spawn')!(null, {
+      await handlers.get('pty:spawn')!(null, {
         cols: 80,
         rows: 24,
         cwd: '/tmp',
@@ -4288,7 +4291,7 @@ describe('registerPtyHandlers', () => {
 
     try {
       registerPtyHandlers(mainWindow as never)
-      handlers.get('pty:spawn')!(null, {
+      await handlers.get('pty:spawn')!(null, {
         cols: 80,
         rows: 24,
         cwd: '/tmp',

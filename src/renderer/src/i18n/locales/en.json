@@ -232,6 +232,12 @@
         "ui": {
           "66e3bd7ce6": "Sent to {{value0}}",
           "53883b7bc3": "Couldn't send to {{value0}}"
+        },
+        "jira": {
+          "856083302c": "Jira connection was superseded by a newer request."
+        },
+        "linear": {
+          "37d36984d0": "Linear connection was superseded by a newer request."
         }
       }
     },
@@ -863,7 +869,8 @@
         "9c00bd4adf": "Select a workspace from the sidebar to begin.",
         "16e9e3df89": "starred",
         "0d0ace8861": "Star on GitHub",
-        "ec43b38ba7": "Starred on GitHub"
+        "ec43b38ba7": "Starred on GitHub",
+        "157bb5ecbb": "Open GitHub"
       },
       "LinearIssueMarkdownDescriptionEditor": {
         "d9c47069ef": "Markdown",
@@ -1195,7 +1202,13 @@
         "b5e685e4d9": "Dismiss",
         "5f6df21046": "Enjoying Orca?",
         "2d67b6c849": "Star on GitHub",
-        "af3c9bbb37": "Starring…"
+        "af3c9bbb37": "Starring…",
+        "68a41bc3aa": "Could not star with",
+        "996bf76e46": "Open GitHub to finish in your browser.",
+        "d32015fec7": "Opening...",
+        "157bb5ecbb": "Open GitHub",
+        "8c967b4d15": "Not now",
+        "73dfd4eb8d": "Don't ask again"
       },
       "TaskPage": {
         "513cddfa7a": "Verifying…",
@@ -1674,7 +1687,9 @@
               "331ebe1170": "Add this pull request to the GitHub merge queue",
               "b169f943e1": "Merge when ready",
               "62703b1dc4": "GitHub auto-merge is enabled for this pull request",
-              "48d75ae118": "Disable auto-merge"
+              "48d75ae118": "Disable auto-merge",
+              "a5b66afb58": "Checks passed",
+              "fbd4f57f0a": "Checks passed. Merge eligibility will be checked again before merging."
             }
           }
         },
@@ -2285,6 +2300,13 @@
             "1bce81dba6": "simulator",
             "1ff1c77616": "browser",
             "586d2ac445": "terminal"
+          },
+          "AiVaultSessionDropLayer": {
+            "dropOntoTerminalPane": "Drop onto a terminal pane to resume this session.",
+            "couldNotReadPayload": "Could not read the session drag payload.",
+            "localWorkspacesOnly": "Resume from history is only available in local workspaces.",
+            "openLocalWorkspace": "Open a local workspace before resuming a session.",
+            "sessionQueued": "Session queued"
           }
         },
         "bar": {
@@ -2730,7 +2752,10 @@
             "2c35eca8d4": "Unable to fetch usage",
             "1292d4f2ee": "Unavailable",
             "7567cd1c6b": "Usage unavailable",
-            "a9a318b7a3": "Refresh failed — showing cached data"
+            "a9a318b7a3": "Refresh failed — showing cached data",
+            "7ad719c4bf": "Limited",
+            "e740f92596": "Refresh failed",
+            "8418ec448d": "{{value0}} usage could not be refreshed. Agent sessions may still be signed in."
           }
         }
       },
@@ -3082,8 +3107,14 @@
           "038729c107": "Folder",
           "11fd2a7db8": "Git repository",
           "180e9b5e48": "Project kind",
-          "d877ece0d6": "Create a Git repository or a plain folder and open it in Orca.",
-          "db9be12229": "Start a new project",
+          "c7b9f94456": "Create a new project",
+          "b100311784": "Name it and Orca will create a real project with sensible defaults.",
+          "685b5eefe1": "{{kind}} in {{parent}}",
+          "2a762f3b19": "Checking Git on this host...",
+          "fe1e616c5b": "Git isn't installed, so a plain folder is the default.",
+          "c234df77f7": "Choose or enter a server parent folder before creating.",
+          "3a13f6e88b": "location not selected",
+          "6ed14c0281": "server folder not selected",
           "5e97f0c4b9": "Project created",
           "2c12db1511": "Project already added",
           "875dda0995": "Enter a server parent path.",
@@ -3096,14 +3127,22 @@
           "2f8298f3c3": "Stop scan",
           "c157f31a95": "Import as group",
           "40199ef7b3": "Group name",
-          "b20bb7c24f": "Keeps these repos together in one group. Best for related repos like microservices.",
           "787412361a": "What is a group name?",
           "5f857ba8e6": "in",
           "4df0d08cc5": "Found",
           "8db50afe1a": "Import repositories from folder",
           "5b2e6fe3c8": "Import separately",
           "cf9d382ca1": "Import",
-          "220dd32d83": "Scanning..."
+          "220dd32d83": "Scanning...",
+          "fb33359f69": "Is this a monorepo?",
+          "d75170194e": "Import them as a group if they're a monorepo or otherwise belong together. Orca will group them and let you work from the parent folder.",
+          "39d51212cc": "Group name",
+          "aa0247680d": "No, import separately",
+          "a0bc4d1f8e": "Import as group",
+          "8401a7a0d0": "1 repository",
+          "d4f1df62ef": "{{value0}} repositories",
+          "b4263a2ac4": "Found {{value0}} in {{value1}}.",
+          "24eda6c8b2": "Scanning... {{value0}}"
         },
         "AddRepoRemoteStep": {
           "5b205b5281": "Stop scan",
@@ -3253,7 +3292,15 @@
           "9be10d49ea": "and ungroup its projects.",
           "69f5cb97d0": "Delete",
           "591f330288": "Delete Project Group",
-          "2c14ce677a": "Deleting..."
+          "2c14ce677a": "Deleting...",
+          "0e0e6764af": "Contained projects",
+          "ad407c2d55": "more",
+          "removeContainedProjectSingular": "Remove 1 contained project",
+          "removeContainedProjectPlural": "Remove {{value0}} contained projects",
+          "eeabb8e8e4": "Remove {{value0}} contained {{value1}} from Orca",
+          "55f75628c0": "Project folders on disk are not deleted.",
+          "897e5d3d4c": "Delete Group and Remove Projects",
+          "fec7e9c8ae": "Delete Group"
         },
         "ProjectGroupNameDialog": {
           "d99a034073": "Cancel",
@@ -3347,6 +3394,7 @@
           "ee240a39eb": "Edit filters"
         },
         "SidebarHeader": {
+          "25a95899c9": "Add Project",
           "92154beb7e": "New workspace",
           "49f62c5665": "Workspace board",
           "5c9c7c16aa": "Add a project to create workspaces",
@@ -3391,9 +3439,15 @@
           "2991a0106c": "Help",
           "4e8f5710d3": "Couldn't restart Orca.",
           "5161eef55d": "Restarting Orca…",
-          "d396773ef0": "checking"
+          "d396773ef0": "checking",
+          "f8a2c91d4e": "Milestones",
+          "b7e4d2a19c": "Onboarding",
+          "c4f8e1b72a": "X"
         },
         "SidebarToolbar": {
+          "87d0064026": "Workspace board moved to the bottom bar",
+          "a30e34eb5c": "Close workspace board",
+          "49f62c5665": "Workspace board",
           "19e32d0e5f": "Open folder picker to add a project",
           "abc62b6328": "Add Project"
         },
@@ -3569,7 +3623,8 @@
           "f50603c6b2": "Mark Unread",
           "8dacff1fe0": "Mark Read",
           "3baa7d6507": "Pin",
-          "697d0f6e1b": "Unpin"
+          "697d0f6e1b": "Unpin",
+          "250de158fd": "Remove Workspace"
         },
         "WorktreeList": {
           "d880ea0744": "Create a group and move this project into it.",
@@ -3602,7 +3657,12 @@
           "20bebf9c7f": "Show {{value0}} child workspace",
           "c1f4a31623": "Show {{value0}} child workspaces",
           "e97297cb75": "Hide {{value0}} child workspace",
-          "0cd15956d4": "Hide {{value0}} child workspaces"
+          "0cd15956d4": "Hide {{value0}} child workspaces",
+          "bd37a57ac8": "Create workspace for {{value0}}",
+          "b667b59632": "Some projects could not be removed from Orca",
+          "f94466bc39": "{{value0}} of {{value1}} contained project{{value2}} remained after deleting the group.",
+          "groupDeleteFailed": "Failed to delete group",
+          "groupDeleteFailedDesc": "Something went wrong while deleting the group. No projects were removed."
         },
         "WorktreeMetaDialog": {
           "3db0a2a593": "Cancel",
@@ -3806,6 +3866,14 @@
         },
         "index": {
           "b826a98b6f": "busy"
+        },
+        "FolderWorkspaceComposerDialog": {
+          "connectFailed": "Failed to connect to project.",
+          "noRepos": "Add a Git project under this folder to attach GitHub or GitLab tasks.",
+          "title": "Create Folder Workspace",
+          "create": "Create workspace",
+          "sourceProject": "Task Source",
+          "chooseSourceProject": "Choose task source"
         }
       },
       "shared": {
@@ -3883,8 +3951,7 @@
           "36223200ac": "OpenCode Go Session Cookie",
           "ea631977b5": "Configure OpenCode Go provider settings.",
           "4ac10b4d08": "OpenCode Go",
-          "d708749337": ". This uses credentials issued to the Gemini CLI app, not Orca. May break if Google updates the CLI. Use at your own risk.",
-          "c2aee76420": "Extracts OAuth credentials from your local Gemini CLI installation to authenticate with Google for",
+          "c2aee76420": "Extracts OAuth credentials from your local Gemini CLI installation to authenticate with Google for {{value0}}. This uses credentials issued to the Gemini CLI app, not Orca. May break if Google updates the CLI. Use at your own risk.",
           "96f3649526": "Use Gemini CLI credentials (experimental)",
           "d676c41fc6": "Extracts OAuth credentials from your local Gemini CLI installation to authenticate with Google. This uses credentials issued to the Gemini CLI app, not Orca. May break if Google updates the CLI. Use at your own risk.",
           "0c7f915b01": "Use Gemini CLI credentials",
@@ -3895,21 +3962,18 @@
           "3d245ef7d9": "Codex reported this sign-in is out of date",
           "589eba1eee": "Needs re-auth",
           "e74831fb6b": "Active",
-          "d46f735a85": ". Orca will use that environment's system default Codex login until you add one here.",
-          "b4c9450319": "No managed Codex accounts for",
+          "b4c9450319": "No managed Codex accounts for {{value0}}. Orca will use that environment's system default Codex login until you add one here.",
           "93c47b333a": "Needs sign-in",
           "f2a265f8c7": "System default",
           "b0e948a4f9": "Add Account",
-          "5568bb6d5c": "accounts. New accounts are added there.",
-          "c0a52abfc5": "Showing",
+          "c0a52abfc5": "Showing accounts for {{value0}}. New accounts are added there.",
           "94d351af4a": "Accounts",
           "d0d53b7eb0": "Manage which Codex account Orca uses for live rate limit fetching.",
           "3180536c7a": "Codex Accounts",
           "340d6f7a85": "Each account keeps its own local sign-in context in Orca. Account auth stays on this device.",
           "cedfab35ab": "Optional. Orca can use your normal Codex login; add accounts only if you want quick switching in Orca.",
           "ef91cfa06b": "Codex",
-          "dea08560b4": ". Orca will use that environment's system default Claude login until you add one here.",
-          "3fe7862418": "No managed Claude accounts for",
+          "3fe7862418": "No managed Claude accounts for {{value0}}. Orca will use that environment's system default Claude login until you add one here.",
           "3455cf43fa": "Claude login.",
           "fcc4093fc1": "Use your current {{value0}} Codex login.",
           "79e484c3b2": "Optional account switcher for the shared Claude auth files.",
@@ -3920,6 +3984,7 @@
           "b15ce90870": "{{value0}} -> {{value1}}. Restart live Claude terminals before continuing old sessions.",
           "f921d32606": "Claude account updated.",
           "5bf8764953": "Codex account update failed.",
+          "9baf45d071": "This device",
           "2358ac71d2": "WSL default",
           "ad47a33f72": "Loading WSL",
           "8619f9afa9": "WSL",
@@ -3978,7 +4043,7 @@
           "92033495ff": "Auto",
           "9b175d0f5e": "Pre-selected agent when opening a new workspace.",
           "385212c7a1": "Default Agent",
-          "f9f127d664": "Override the binary path or name used to launch this agent.",
+          "f9f127d664": "Override the binary path or name, and edit the default launch arguments or environment for this agent.",
           "f95b5c79b8": "Install",
           "fe4d630c94": "Docs",
           "8dc0192e48": "Disabled",
@@ -3997,7 +4062,11 @@
           "959b67385b": "Set default",
           "24e032fa34": "Default",
           "5f986a9b92": "Set as default",
-          "d7625cf8b2": "Default agent"
+          "d7625cf8b2": "Default agent",
+          "cfb3f35775": "Arguments",
+          "6f99bf5dd0": "No default arguments",
+          "8fbe1f37c1": "Environment",
+          "2d133152fa": "No default environment"
         },
         "AppIconSelector": {
           "d5a112dc9b": "Next icon",
@@ -4054,7 +4123,7 @@
           "e784ea62dc": "Advanced",
           "d9b65054ef": ") to a short name summarizing the task. Only branches Orca named itself are renamed, and never after they have been pushed.",
           "12ea4a408d": "When an agent starts working in a new workspace, Orca renames its auto-generated branch (e.g.",
-          "ef787db0e3": "Auto-Rename Branch",
+          "ef787db0e3": "Auto-rename branch & worktree",
           "6a051586d2": "Rename the auto-generated branch based on the work once an agent starts.",
           "ec3e0c388e": "Save",
           "cfd82406dd": "Saving...",
@@ -4419,7 +4488,9 @@
           "1e29570462": "starring",
           "9d181300e3": "starred",
           "5c49f02662": "hidden",
-          "b3f0584f5d": "loading"
+          "b3f0584f5d": "loading",
+          "cb65c75b11": "Opening...",
+          "f2d4f877b2": "Open GitHub"
         },
         "GeneralUpdateSettingsSection": {
           "8a52ca1d02": "Release notes",
@@ -4478,6 +4549,42 @@
           "d2f33670a9": "Import from Ghostty",
           "273e7e81fe": "Configs",
           "1f744a72f4": "Config"
+        },
+        "WarpThemeImportModal": {
+          "title": "Import themes from Warp",
+          "description": "Import Warp themes as Orca terminal themes.",
+          "yaml_title": "Import theme YAML",
+          "yaml_description": "Import theme YAML files (Warp format) as Orca terminal themes.",
+          "yaml_no_themes_found": "No themes found in the selected files.",
+          "choose_file": "Choose File",
+          "choose_folder": "Choose Folder",
+          "loading": "Loading Warp themes...",
+          "found_theme_one": "Found 1 theme",
+          "found_theme_other": "Found {{value0}} themes",
+          "found_in_source": " in {{value0}}",
+          "clear_all": "Clear all",
+          "select_all": "Select all",
+          "colors_only": "Colors only",
+          "no_themes_found": "No custom Warp themes found.",
+          "builtin_themes_hint": "Warp's preloaded themes are part of the Warp app and can't be read from disk. Orca already includes most of them, like Dracula, Gruvbox, Solarized, and Tokyo Night.",
+          "choose_manually": "Choose a theme YAML file or folder to import manually.",
+          "skipped_files": "Skipped files",
+          "more_skipped_files": "{{value0}} more skipped files.",
+          "cancel": "Cancel",
+          "import_theme_one": "Import 1 Theme",
+          "import_theme_other": "Import {{value0}} Themes",
+          "import_themes": "Import Themes"
+        },
+        "useWarpThemeImport": {
+          "unknown_error": "Unknown error",
+          "imported_one": "Imported 1 theme",
+          "imported_other": "Imported {{value0}} themes",
+          "import_failed": "Failed to import themes",
+          "over_limit_one": "Importing these themes would exceed the {{value0}} custom terminal theme limit. Deselect 1 new theme and try again.",
+          "over_limit_other": "Importing these themes would exceed the {{value0}} custom terminal theme limit. Deselect {{value1}} new themes and try again."
+        },
+        "YamlThemeImportButton": {
+          "label": "Import from YAML"
         },
         "GitPane": {
           "d2eede4c54": "Add Orca attribution to commits, PRs, and issues.",
@@ -4600,7 +4707,11 @@
           "9707523939": "Pull requests and build statuses",
           "a565377c38": "not-installed",
           "15cf990798": "Not authenticated",
-          "f7eb5f0b24": "Not installed"
+          "f7eb5f0b24": "Not installed",
+          "3ba07f933b": "Connect issue trackers Orca can use to browse tasks and start workspaces with linked context.",
+          "70e885705b": "Task providers",
+          "1683acbac4": "Connect the source hosts Orca can use for pull requests, merge requests, checks, and review status.",
+          "298c65ecac": "Review providers"
         },
         "KagiSessionLinkForm": {
           "92f0b4e472": "Clear",
@@ -5260,11 +5371,15 @@
           "74bcecd5ec": "Clear",
           "a4ff6143f8": "Clear font selection",
           "b661b034ec": "· Default:",
+          "builtin_themes": "Built-in",
           "ceefb9d7f1": "No themes found.",
+          "imported_from": "Imported from {{value0}}",
+          "imported_themes": "Imported",
           "9119fb2268": "Current",
           "4e11f87ca6": "Showing",
           "fbb428db98": "Selected:",
           "fac59213fc": "Search builtin themes",
+          "search_terminal_themes": "Search terminal themes",
           "cb330ef7f8": " of {{value0}}",
           "c822571b2e": " matching \"{{value0}}\"",
           "3119c012a5": "string"
@@ -5633,6 +5748,8 @@
           "d06664e889": "dark"
         },
         "TerminalThemeSections": {
+          "import_themes_title": "Import Themes",
+          "import_themes_description": "Imported themes are available in both the dark and light theme pickers.",
           "db210115c5": "Light Mode Preview",
           "5e0c24b5c8": "Controls the split divider line between panes in light mode.",
           "ec2e33ad80": "Light Divider Color",
@@ -6052,7 +6169,7 @@
                 "55a1860e47": "rename",
                 "9319bd9827": "branch",
                 "ea94b9da8a": "Rename the auto-generated branch based on the work once an agent starts.",
-                "427f2cd1eb": "Auto-Rename Branch"
+                "427f2cd1eb": "Auto-rename branch & worktree"
               }
             }
           }
@@ -7091,6 +7208,19 @@
             "82b63d07fe": "ghostty",
             "73e9422f19": "One-time import of supported Ghostty terminal settings.",
             "a979df0083": "Import from Ghostty",
+            "warp_import": {
+              "title": "Import themes from Warp",
+              "description": "Import Warp themes as Orca terminal themes.",
+              "keyword_warp": "warp",
+              "keyword_themes": "themes",
+              "keyword_yaml": "yaml"
+            },
+            "yaml_import": {
+              "title": "Import from YAML",
+              "description": "Import theme YAML files as Orca terminal themes.",
+              "keyword_yaml": "yaml",
+              "keyword_custom": "custom"
+            },
             "4cec42dbf7": "intl",
             "b495dc6a9f": "jis",
             "d8d6f7a3c5": "macos",
@@ -7269,7 +7399,11 @@
                   "branchName": "Rename Orca-created branches from the initial agent task.",
                   "fixCommitFailure": "Start an agent when a commit hook or git commit fails.",
                   "fixChecks": "Start an agent from failed hosted-review checks.",
-                  "resolveConflicts": "Start an agent for local or hosted-review merge conflicts."
+                  "resolveConflicts": "Start an agent for local or hosted-review merge conflicts.",
+                  "customCommand": "Custom command",
+                  "supportedAgents": "Supported agents for this recipe: {{value0}}.",
+                  "unsupportedSavedAgent": "{{value0}} cannot run this text-generation recipe. Pick one of the supported agents below.",
+                  "resolveComments": "Start an agent from selected unresolved PR or MR comments."
                 }
               }
             }
@@ -7287,6 +7421,103 @@
         "agent-generated-tab-title-copy": {
           "19ad21615a": "Auto-generate tab titles",
           "b036c7a409": "Derive short stable tab names from the first known agent prompt. Manual renames always win."
+        },
+        "cli": {
+          "source": {
+            "control": {
+              "integration": {
+                "cards": {
+                  "d5b3be8ecd": "Re-check",
+                  "8cbc39f862": "Learn more",
+                  "707180d09c": "glab auth login",
+                  "4be0616873": "The GitLab CLI is installed but not authenticated. Run this command in a terminal:",
+                  "54a640af7a": "Install GitLab CLI",
+                  "b56fd5676a": "Install the GitLab CLI to enable merge requests, issues, and pipelines.",
+                  "faddeb763d": "GitLab CLI status is not available in this runtime yet.",
+                  "a47f71e357": "CLI.",
+                  "2a6b359e75": "glab",
+                  "1f2b347bd3": "Merge requests, issues, todos, and pipelines via the",
+                  "8d90249d22": "gh auth login",
+                  "2e44dda68a": "The GitHub CLI is installed but not authenticated. Run this command in a terminal:",
+                  "7755c28af5": "Install GitHub CLI",
+                  "23cb5a0dee": "Install the GitHub CLI to enable pull requests, issues, and checks.",
+                  "6f30fc4216": "GitHub CLI status is not available in this runtime yet.",
+                  "6b2cfb52b4": "gh",
+                  "b4d900e7f1": "Pull requests, issues, and checks via the"
+                }
+              }
+            }
+          }
+        },
+        "task": {
+          "tracker": {
+            "integration": {
+              "cards": {
+                "c90f2ef419": "Re-check",
+                "dd3529015d": "Disconnect {{value0}}",
+                "8b2408a8e5": "Jira is connected for this runtime. Re-check if the connected site list looks stale.",
+                "8c20e76308": "Each connected Jira site has one token stored by the active runtime.",
+                "c24e56c532": "Test",
+                "3e7c10d286": "Testing...",
+                "a2c0015fb8": "Verified",
+                "e2ff968276": "Connect Jira",
+                "60996beda6": "Add Jira site",
+                "7ca5ffffdb": "Browse, create, and start work from Jira Cloud issues.",
+                "a1093a06c7": "Checking Jira access before showing setup actions.",
+                "9fa04a032e": "{{value0}} site{{value1}} connected",
+                "cef18762a2": "Add access with a Personal API key from your Linear settings. Full-access keys can see every team the key owner can reach.",
+                "6224fe9d34": "Each connected Linear workspace has one key stored by the active runtime. Full-access keys can cover all teams the key owner can access; restricted keys can be replaced any time.",
+                "1a12e33fe5": "Add Linear access",
+                "622c224082": "Add workspace access",
+                "eae4a9f16b": "Add Linear access to browse and link issues.",
+                "fe9231215b": "Checking Linear access before showing setup actions.",
+                "e1f5e6424c": "{{value0}} workspace{{value1}} connected",
+                "disconnect_all": "Disconnect"
+              }
+            }
+          }
+        },
+        "token": {
+          "source": {
+            "control": {
+              "integration": {
+                "cards": {
+                  "793a06e899": "Re-check",
+                  "1a9475dace": "Learn more",
+                  "19fb419c12": "Gitea credentials are configured but could not authenticate. Check the token, API base URL, and repository permissions, then restart Orca if environment variables changed.",
+                  "60708f23da": "only when Orca cannot derive the API URL from the remote.",
+                  "709057ad91": "ORCA_GITEA_API_BASE_URL",
+                  "6da9dfa5de": "for private repositories, and set",
+                  "6d5c2a3005": "ORCA_GITEA_TOKEN",
+                  "fcbe0469fd": "Public repositories are detected from their git remote. Set",
+                  "0613928cb3": "Gitea status is not available in this runtime yet.",
+                  "05863d2599": "Pull requests and commit statuses via the Gitea REST API.",
+                  "52f75876be": "Pull requests and commit statuses for detected repositories",
+                  "0b5242f8a2": "{{value0}} · Pull requests and commit statuses",
+                  "40f678df73": "Azure DevOps credentials are configured but could not authenticate. Check the token, API base URL, and repository permissions, then restart Orca if environment variables changed.",
+                  "7bd345e3f6": "only when Orca cannot derive the API base URL from the git remote.",
+                  "186a6689df": "ORCA_AZURE_DEVOPS_API_BASE_URL",
+                  "b8a10b07c1": ". Set",
+                  "fbfd237f5e": "ORCA_AZURE_DEVOPS_ACCESS_TOKEN",
+                  "087feb92f1": ", or set",
+                  "48842720d2": "ORCA_AZURE_DEVOPS_TOKEN",
+                  "7bbc9c64f0": "Set",
+                  "f3f47dc7de": "Azure DevOps status is not available in this runtime yet.",
+                  "0eb50d5593": "Pull requests and build statuses via Azure DevOps REST API tokens.",
+                  "54636c65d4": "Pull requests and build statuses for detected Azure Repos",
+                  "ea204f5e03": "{{value0}} · Pull requests and build statuses",
+                  "6154b02093": "Bitbucket credentials are configured but could not authenticate. Check the token and repository permissions, then restart Orca if environment variables changed.",
+                  "e63fe8f627": "ORCA_BITBUCKET_ACCESS_TOKEN",
+                  "19416c874c": "ORCA_BITBUCKET_API_TOKEN",
+                  "fc71a0e7aa": "and",
+                  "63a7f47392": "ORCA_BITBUCKET_EMAIL",
+                  "24ac1c69dc": "Bitbucket status is not available in this runtime yet.",
+                  "a924e8dcd1": "Pull requests and build statuses via Bitbucket Cloud API tokens.",
+                  "0fa5629dad": "Pull requests and build statuses"
+                }
+              }
+            }
+          }
         },
         "asana": {
           "integration": {
@@ -7342,11 +7573,21 @@
             "71026ca2cb": "Refreshing…",
             "889cdfba04": "Create {{value0}}",
             "98f4c37b33": "Push & Create {{value0}}",
+            "b6ce28da5b": "{{value0}} #{{value1}} is already open",
+            "cf9e69f3be": "{{value0}} is already open",
+            "192e686e57": "Open on {{value0}}",
             "6633c7a1fb": "Publish Branch",
             "fdb27637f2": "Publishing…",
             "e56c42122e": "destructive",
             "786e3c143f": "Delete",
-            "653c105ecc": "More PR actions"
+            "653c105ecc": "More PR actions",
+            "f316a8ca2b": "No unresolved comments selected.",
+            "d00ebdc402": "Resolve {{value0}} Comments With AI",
+            "ed3f79c031": "Review the prompt before starting an agent. Selected threads are marked resolved after launch.",
+            "f273f2271c": "Started the agent. Marked {{value0}} resolved, skipped {{value1}}, failed {{value2}}.",
+            "aa95b81a3a": "Started the agent. Marked {{value0}} resolved, skipped {{value1}}, failed {{value2}}.",
+            "495b2f8c4b": "Started the agent, but could not mark the selected comments resolved.",
+            "3c3ad3a1d2": "Started the agent. No selected comments can be marked resolved on the host."
           },
           "CreatePullRequestDialog": {
             "2bc1b4345e": "Cancel",
@@ -7369,6 +7610,9 @@
             "21c7a1daa0": "{{value0}} is already open",
             "db9cee18f7": "Create {{value0}}"
           },
+          "CreateHostedReviewComposer": {
+            "741ff8a0d2": "Push & Create {{value0}}"
+          },
           "CreatePullRequestGenerateButton": {
             "4012459f8a": "Generate with AI",
             "a0501572c1": "Generate {{value0}} details with AI",
@@ -7380,7 +7624,9 @@
             "e041998cad": "Stop generating"
           },
           "FileExplorer": {
-            "79b1537dd3": "Select a workspace to browse files"
+            "79b1537dd3": "Select a workspace to browse files",
+            "4da4d89845": "Back to Explorer",
+            "6ed5ce817b": "Search"
           },
           "FileExplorerBackgroundMenu": {
             "3b5e2dcb8d": "New Folder",
@@ -7416,7 +7662,8 @@
             "78f133232c": "Show Dotfiles",
             "31b4c3195d": "More Explorer Actions",
             "d95e30fe28": "Refresh Explorer",
-            "6026b16950": "Collapse All"
+            "6026b16950": "Collapse All",
+            "693cbeadd0": "Search"
           },
           "FileExplorerTreeStatus": {
             "ce03835e1f": "No files in this workspace",
@@ -7587,6 +7834,9 @@
             "30b8d4f181": "Fix commit failure with AI",
             "4b37ae99b0": "Start the default AI agent to fix this commit failure",
             "ae743199cd": "Choose a different base branch before creating a {{value0}}.",
+            "318e2a7f88": "Wait for AI generation to finish.",
+            "f76307c1f7": "Choose a base branch.",
+            "4f76c0a9de": "Base branch must differ from the head branch.",
             "c5e4175139": "More {{value0}} and remote actions",
             "78ddfd0bb4": "Create as draft",
             "e64a632456": "main",
@@ -7665,6 +7915,9 @@
             "7a09d7f9d2": "base",
             "383cf92c73": "tree",
             "d7ae61269b": "Committed on Branch",
+            "48a003c1b1": "Staged Changes",
+            "d4ef4bafc5": "Changes",
+            "522f44dce5": "Untracked Files",
             "3636d0f686": "ready",
             "d2e9189866": "all",
             "a0cc0e6b4e": "loading",
@@ -7725,7 +7978,10 @@
             "3e8f21954f": "error",
             "74168d7ada": "idle",
             "1d47db9bf0": "No enabled agents",
-            "c7ff8cef11": "Detecting agents..."
+            "c7ff8cef11": "Detecting agents...",
+            "b0da3a4d3e": "Launch recipe already saved",
+            "bff4795a6d": "Change the agent, arguments, or prompt template to update the saved recipe.",
+            "5c75b24735": "Customize what the agent receives before Orca starts it."
           },
           "SourceControlTextGenerationDialog": {
             "c5b7fa7cb6": "Save as global default",
@@ -7820,7 +8076,13 @@
                 "cdbfda4dec": "Annotation",
                 "066fedd446": "Failed jobs",
                 "ae8a04ef17": "Conflict file details are unavailable",
-                "73d0675356": "Refreshing conflict details…"
+                "73d0675356": "Refreshing conflict details…",
+                "5dc3af25c0": "Select comment",
+                "d7a2f9c401": "Send all unresolved",
+                "d91f2a6c39": "Send {{value0}} queued comments",
+                "a6de3e5a20": "Clear queued comments",
+                "49ea0937e4": "Add comment to resolve list",
+                "9fecebb29d": "Add"
               },
               "empty": {
                 "state": {
@@ -7881,7 +8143,8 @@
             "9f83375839": "checks",
             "6306b48afd": "source-control",
             "ef182dcb12": "search",
-            "fc3095d2ed": "explorer"
+            "fc3095d2ed": "explorer",
+            "aiVaultSessionHistory": "Agents"
           },
           "right": {
             "panel": {
@@ -7970,7 +8233,8 @@
                   "a6457b46a7": "Resolve conflicts before committing",
                   "484f45c439": "{{value0}} in progress…",
                   "74fc171e99": "Force Push in progress…",
-                  "16aee3a5c1": "Commit in progress…"
+                  "16aee3a5c1": "Commit in progress…",
+                  "e61b0d7a3c": "Check out a branch before publishing commits."
                 }
               }
             }
@@ -8015,6 +8279,100 @@
                 }
               }
             }
+          },
+          "AiVaultPanel": {
+            "resumeCommandCopied": "Resume command copied",
+            "valueCopied": "{{value0}} copied",
+            "openWorkspaceBeforeResuming": "Open a workspace before resuming a session.",
+            "localWorkspacesOnly": "Resume from history is only available in local workspaces.",
+            "agentSessionQueued": "{{value0}} session queued",
+            "sessionHistory": "Agent Session History",
+            "shownRecent": "{{value0}} shown · {{value1}} recent",
+            "resumePastSessions": "Resume past sessions",
+            "refreshSessionHistory": "Refresh Session History",
+            "searchSessions": "Search sessions",
+            "clearSearch": "Clear search",
+            "remoteBrowseLocalHistory": "Remote workspaces can browse local history. Resume actions run from local workspaces.",
+            "transcriptsSkipped": "{{count}} transcript skipped",
+            "noAgentSessionsFound": "No agent sessions found",
+            "noSessionsMatchFilters": "No sessions match the current filters",
+            "sessionId": "Session ID",
+            "logPath": "Log path"
+          },
+          "AiVaultPanelControls": {
+            "scanningSessions": "Scanning sessions",
+            "scopeAriaLabel": "Session History scope: {{value0}}",
+            "currentWorkspaceLower": "current workspace",
+            "currentWorktreeLower": "current worktree",
+            "allSessionsLower": "all sessions",
+            "thisScope": "This",
+            "allScope": "All",
+            "scope": "Scope",
+            "currentWorkspace": "Current workspace",
+            "allSessions": "All sessions",
+            "viewOptionsAriaLabel": "Session History view options",
+            "viewOptions": "View options",
+            "agents": "Agents",
+            "sort": "Sort",
+            "lastUpdated": "Last updated",
+            "created": "Created",
+            "group": "Group",
+            "folder": "Folder",
+            "agent": "Agent",
+            "resetView": "Reset view",
+            "hideEmptySessions": "Hide empty sessions",
+            "workspaceScope": "Workspace",
+            "worktreeScope": "Worktree",
+            "globalScope": "Global"
+          },
+          "AiVaultSessionDetails": {
+            "updated": "Updated",
+            "created": "Created",
+            "workingDir": "Working dir",
+            "unknownLocation": "Unknown location",
+            "branch": "Branch",
+            "model": "Model",
+            "usage": "Usage",
+            "usageValue": "{{value0}} msgs{{value1}}",
+            "tokenSuffix": " · {{value0}} tok",
+            "session": "Session",
+            "copyDetailValue": "Copy {{value0}}",
+            "latestLog": "Latest log",
+            "noReadablePreview": "No readable message preview in this transcript.",
+            "resumeCommand": "Resume command",
+            "sessionActions": "{{value0}} session actions",
+            "resumeInNewTab": "Resume in New Tab",
+            "copyResumeCommand": "Copy Resume Command",
+            "openLog": "Open Log",
+            "revealLog": "Reveal Log",
+            "openWorkingDirectory": "Open Working Directory",
+            "copySessionId": "Copy Session ID",
+            "copyLogPath": "Copy Log Path",
+            "unknownTime": "Unknown time",
+            "unknown": "Unknown",
+            "user": "User",
+            "assistant": "Assistant",
+            "tool": "Tool",
+            "system": "System",
+            "log": "Log",
+            "justNow": "Just now",
+            "minutesAgo": "{{value0}}m ago",
+            "hoursAgo": "{{value0}}h ago",
+            "daysAgo": "{{value0}}d ago",
+            "monthsAgo": "{{value0}}mo ago",
+            "yearsAgo": "{{value0}}y ago"
+          },
+          "AiVaultSessionRow": {
+            "resumeAgentSession": "Resume {{value0}} session",
+            "resumeInNewTab": "Resume in New Tab",
+            "copyResumeCommand": "Copy Resume Command",
+            "openLog": "Open Log",
+            "revealLog": "Reveal Log",
+            "openWorkingDirectory": "Open Working Directory",
+            "copySessionId": "Copy Session ID",
+            "copyLogPath": "Copy Log Path",
+            "messageCount": "{{value0}} msgs",
+            "tokenCount": "{{value0}} tok"
           }
         }
       },
@@ -8863,6 +9221,30 @@
             "b7345c18db": "An unexpected error occurred.",
             "5f97caf76b": "Installing…",
             "c2df599513": "Install CLI & Skill"
+          },
+          "ConnectIntegrationsList": {
+            "3dddb2d565": "connected for tasks",
+            "33b650af52": "Connect where your team tracks work. Orca starts workspaces with the issue title, link, and context already attached.",
+            "5b3577a492": "connected for review status",
+            "3a1fcdddad": "Two quick steps: connect where your code is reviewed, then where your team plans work.",
+            "list_end": ", and ",
+            "list_pair": " and ",
+            "list_mid": ", ",
+            "code_host_tasks_summary": "issues available as tasks · add Linear or Jira if your team plans work there",
+            "code_host_tasks_caption": "Your code host's issues also work as tasks.",
+            "review_step_title": "See PR status while agents work",
+            "review_step_description": "Connect a review provider so Orca can show PR or MR status, checks, and reviews.",
+            "task_step_title": "Start agents on your tasks without leaving Orca"
+          },
+          "connect": {
+            "integration": {
+              "step": {
+                "0f47ff17c6": "Change",
+                "5538eb6743": "Done",
+                "open_step": "Open",
+                "close_step": "Close"
+              }
+            }
           }
         },
         "tips": {
@@ -9583,7 +9965,7 @@
             "05e675fe96": "Hide Hint",
             "77351d22f5": "Browser Settings",
             "e0e125e074": "From File…",
-            "0c6d254eca": "From",
+            "0c6d254eca": "From {{value0}}",
             "244266c122": "Import…",
             "e52a955e6f": "You can always find this in Settings > Browser.",
             "4f5ffaa6a1": "Import browser data",
@@ -10066,6 +10448,25 @@
         "dialog": {
           "8490e5d36a": "Confirm",
           "56f5c60e0c": "Cancel"
+        }
+      },
+      "jira": {
+        "connect": {
+          "dialog": {
+            "63ce735809": "Connect",
+            "4a2ab52781": "Verifying…",
+            "79e7aaed39": "Cancel",
+            "fdd26d81cc": "Atlassian account settings",
+            "8090504a3e": "Create a token in",
+            "7b3967c12f": "Atlassian API token",
+            "3d81bf3ab3": "API token",
+            "e91b9a4073": "you@example.com",
+            "2849ddb295": "Atlassian email",
+            "70fcd360c4": "https://example.atlassian.net",
+            "e176f9d0c5": "Jira Cloud site URL",
+            "d785c42b8b": "Use a Jira Cloud site URL, Atlassian email, and API token to browse issues.",
+            "8388bdea2b": "Connect Jira site"
+          }
         }
       },
       "AsanaIssueWorkspace": {

@@ -936,6 +936,26 @@ function assertSshRepoHasResolvedGitHubSource(args: {
   throw new Error(GITHUB_WORK_ITEMS_SSH_REMOTE_REQUIRED_MESSAGE)
 }
 
+type ResolvedPrWorkItemSource = {
+  source: OwnerRepo | null
+  originCandidate: OwnerRepo | null
+  upstreamCandidate: OwnerRepo | null
+}
+
+async function resolvePrWorkItemSource(
+  repoPath: string,
+  preference: IssueSourcePreference | undefined,
+  connectionId?: string | null
+): Promise<ResolvedPrWorkItemSource> {
+  const [originCandidate, upstreamCandidate] = await Promise.all([
+    getOwnerRepo(repoPath, connectionId),
+    getOwnerRepoForRemote(repoPath, 'upstream', connectionId)
+  ])
+  const source =
+    preference === 'upstream' ? (upstreamCandidate ?? originCandidate) : originCandidate
+  return { source, originCandidate, upstreamCandidate }
+}
+
 async function listRecentWorkItems(
   repoPath: string,
   issueOwnerRepo: OwnerRepo | null,
@@ -1194,17 +1214,12 @@ export async function listWorkItems(
   connectionId?: string | null,
   noCache?: boolean
 ): Promise<ListWorkItemsResult<MainWorkItem>> {
-  // Why: resolve the raw upstream candidate alongside the preference-aware
-  // issue source. The selector needs to know whether an upstream remote
-  // *exists* to decide whether to render — independent of whether the user
-  // has picked 'origin' (which would otherwise make `sources.issues` equal
-  // origin and hide the selector permanently).
-  const [issueResolved, prOwnerRepo, upstreamCandidate] = await Promise.all([
+  const [issueResolved, prResolved] = await Promise.all([
     resolveIssueSource(repoPath, preference, connectionId),
-    getOwnerRepo(repoPath, connectionId),
-    getOwnerRepoForRemote(repoPath, 'upstream', connectionId)
+    resolvePrWorkItemSource(repoPath, preference, connectionId)
   ])
   const issueOwnerRepo = issueResolved.source
+  const prOwnerRepo = prResolved.source
   const trimmedQuery = query?.trim() ?? ''
   await acquire()
   try {
@@ -1237,7 +1252,8 @@ export async function listWorkItems(
       sources: {
         issues: issueOwnerRepo,
         prs: prOwnerRepo,
-        upstreamCandidate: upstreamCandidate ?? null
+        originCandidate: prResolved.originCandidate,
+        upstreamCandidate: prResolved.upstreamCandidate
       },
       ...(errors ? { errors } : {}),
       ...(issueResolved.fellBack ? { issueSourceFellBack: true } : {})
@@ -1352,11 +1368,12 @@ export async function countWorkItems(
   preference?: IssueSourcePreference,
   connectionId?: string | null
 ): Promise<number> {
-  const [issueResolved, prOwnerRepo] = await Promise.all([
+  const [issueResolved, prResolved] = await Promise.all([
     resolveIssueSource(repoPath, preference, connectionId),
-    getOwnerRepo(repoPath, connectionId)
+    resolvePrWorkItemSource(repoPath, preference, connectionId)
   ])
   const issueOwnerRepo = issueResolved.source
+  const prOwnerRepo = prResolved.source
   const ownerRepo = prOwnerRepo ?? issueOwnerRepo
   if (!ownerRepo) {
     return 0

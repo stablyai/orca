@@ -187,7 +187,7 @@ export default function MobileFileExplorerScreen() {
         setOpeningPath(null)
       }
     },
-    [client, hostId, name, router, worktreeId]
+    [client, router, worktreeId]
   )
 
   const renderItem: ListRenderItem<TreeNode> = ({ item }) => {
@@ -348,9 +348,7 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     fontSize: typography.metaSize
   },
-  list: {
-    flex: 1
-  },
+  list: { flex: 1 },
   listContent: {
     paddingVertical: spacing.sm
   },

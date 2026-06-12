@@ -38,8 +38,13 @@ import { createE2EConfig } from '../../../shared/e2e-config'
 import { relativePathInsideRoot } from '../../../shared/cross-platform-path'
 import { toRuntimeWorktreeSelector } from '../runtime/runtime-worktree-selector'
 import { normalizeDisabledTuiAgents } from '../../../shared/tui-agent-selection'
+import {
+  normalizeTuiAgentArgsRecord,
+  normalizeTuiAgentEnvRecord
+} from '../../../shared/tui-agent-launch-defaults'
 import { normalizeAutoRenameBranchFromWorkDefaultOn } from '../../../shared/auto-rename-branch-from-work-settings'
 import { normalizeTerminalCursorStyleDefault } from '../../../shared/terminal-cursor-style-settings'
+import { normalizeTerminalCustomThemes } from '../../../shared/terminal-custom-themes'
 import { normalizeUiLanguage } from '../../../shared/ui-language'
 import type { RateLimitState } from '../../../shared/rate-limit-types'
 import type { RuntimeStatus, RuntimeSyncWindowGraph } from '../../../shared/runtime-types'
@@ -76,6 +81,7 @@ import {
 } from '../../../shared/feature-interactions'
 import { normalizeContextualTourIds, type ContextualTourId } from '../../../shared/contextual-tours'
 import { translate } from '@/i18n/i18n'
+import { getDefaultCreateProjectParent } from '@/components/sidebar/create-project-defaults'
 
 const SETTINGS_STORAGE_KEY = 'orca.web.settings.v1'
 const UI_STORAGE_KEY = 'orca.web.ui.v1'
@@ -565,6 +571,14 @@ function createWebPreloadApi(): Partial<PreloadApi> {
     memory: {
       getSnapshot: () => Promise.resolve(createEmptyMemorySnapshot())
     },
+    aiVault: {
+      listSessions: () =>
+        Promise.resolve({
+          sessions: [],
+          issues: [],
+          scannedAt: new Date().toISOString()
+        })
+    },
     preflight: createPreflightApi(),
     notifications: createNotificationsApi(),
     rateLimits: createRateLimitsApi(),
@@ -1013,6 +1027,14 @@ function createReposApi(): NonNullable<Partial<PreloadApi>['repos']> {
       invalidateRuntimeWorktreeCaches()
       return callRuntimeResult('repo.create', { parentPath, name, kind })
     },
+    isGitAvailable: async () =>
+      (await callRuntimeResult<{ available: boolean }>('repo.gitAvailable')).available,
+    getDefaultCreateProjectParent: async () => {
+      const result = await callRuntimeResult<{ resolvedPath: string }>('files.browseServerDir', {
+        path: '~'
+      })
+      return getDefaultCreateProjectParent(result.resolvedPath)
+    },
     onCloneProgress: () => noopUnsubscribe,
     getGitUsername: () => Promise.resolve(''),
     getBaseRefDefault: async ({ repoId }) =>
@@ -1061,6 +1083,8 @@ function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees']> {
         linkedIssue: args.linkedIssue,
         linkedPR: args.linkedPR,
         linkedLinearIssue: args.linkedLinearIssue,
+        linkedLinearIssueWorkspaceId: args.linkedLinearIssueWorkspaceId,
+        linkedLinearIssueOrganizationUrlKey: args.linkedLinearIssueOrganizationUrlKey,
         linkedGitLabIssue: args.linkedGitLabIssue,
         linkedGitLabMR: args.linkedGitLabMR,
         displayName: args.displayName,
@@ -2502,6 +2526,7 @@ function getStoredSettings(): GlobalSettings {
     ...stored,
     ...normalizeAutoRenameBranchFromWorkDefaultOn(stored),
     ...normalizeTerminalCursorStyleDefault(stored),
+    terminalCustomThemes: normalizeTerminalCustomThemes(stored.terminalCustomThemes),
     uiLanguage: normalizeUiLanguage(stored.uiLanguage)
   }
   if (
@@ -2512,6 +2537,7 @@ function getStoredSettings(): GlobalSettings {
       stored.terminalCursorStyle !== migratedStored.terminalCursorStyle ||
       stored.terminalCursorStyleDefaultedToBlock !==
         migratedStored.terminalCursorStyleDefaultedToBlock ||
+      stored.terminalCustomThemes !== migratedStored.terminalCustomThemes ||
       stored.uiLanguage !== migratedStored.uiLanguage)
   ) {
     try {
@@ -2602,11 +2628,16 @@ function mergeWebUIState(
   base: PersistedUIState,
   updates: Partial<PersistedUIState>
 ): PersistedUIState {
+  const { featureInteractionTelemetryBuckets: _reserved, ...safeUpdates } =
+    updates as Partial<PersistedUIState> & {
+      featureInteractionTelemetryBuckets?: unknown
+    }
+  void _reserved
   return {
     ...base,
-    ...updates,
+    ...safeUpdates,
     agentActivityDisplayMode: normalizeAgentActivityDisplayMode(
-      updates.agentActivityDisplayMode ?? base.agentActivityDisplayMode
+      safeUpdates.agentActivityDisplayMode ?? base.agentActivityDisplayMode
     )
   }
 }
@@ -2668,11 +2699,18 @@ function mergeSettings(
     disabledTuiAgents: normalizeDisabledTuiAgents(
       updates.disabledTuiAgents ?? base.disabledTuiAgents
     ),
+    agentDefaultArgs: normalizeTuiAgentArgsRecord(
+      updates.agentDefaultArgs ?? base.agentDefaultArgs
+    ),
+    agentDefaultEnv: normalizeTuiAgentEnvRecord(updates.agentDefaultEnv ?? base.agentDefaultEnv),
     voice: {
       ...(base.voice ?? defaults.voice),
       ...updates.voice
     } as NonNullable<GlobalSettings['voice']>,
     activeRuntimeEnvironmentId: activeEnvironment?.id ?? updates.activeRuntimeEnvironmentId ?? null,
+    terminalCustomThemes: normalizeTerminalCustomThemes(
+      updates.terminalCustomThemes ?? base.terminalCustomThemes
+    ),
     uiLanguage: normalizeUiLanguage(updates.uiLanguage ?? base.uiLanguage)
   }
   return {

@@ -2872,7 +2872,7 @@ describe('ClaudeRuntimeAuthService', () => {
     expect(readFileSync(runtimeCredentialsPath, 'utf-8')).toBe(account2Credentials)
   })
 
-  it('does not clobber unverified live runtime credentials when switching accounts', async () => {
+  it('switches accounts without persisting unverified live runtime credentials', async () => {
     const runtimeCredentialsPath = join(testState.fakeHomeDir, '.claude', '.credentials.json')
     const account1Original = createClaudeCredentialsJson('one@example.com', 'one-original', 'org-a')
     const unverifiedLiveCredentials = createClaudeCredentialsWithoutEmail('one-live', 'org-b')
@@ -2912,15 +2912,16 @@ describe('ClaudeRuntimeAuthService', () => {
       writeFileSync(runtimeCredentialsPath, unverifiedLiveCredentials, 'utf-8')
       settings.activeClaudeManagedAccountId = 'account-2'
 
-      await expect(service.syncForCurrentSelection()).rejects.toThrow(
-        'live Claude terminal has unverified refreshed auth'
-      )
+      await service.syncForCurrentSelection()
     } finally {
       markClaudePtyExited('live-claude-pty')
     }
 
     expect(readManagedCredentialsForTest('account-1', managedAuthPath1)).toBe(account1Original)
-    expect(readFileSync(runtimeCredentialsPath, 'utf-8')).toBe(unverifiedLiveCredentials)
+    expect(readFileSync(runtimeCredentialsPath, 'utf-8')).toBe(account2Credentials)
+    if (process.platform === 'darwin') {
+      expect(testState.scopedKeychainCredentials).toBe(account2Credentials)
+    }
   })
 
   it('routes refreshed Claude credentials to the matching managed account', async () => {

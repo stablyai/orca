@@ -14,7 +14,10 @@ import type { GitLabProjectSettings } from './gitlab-types'
 import type { TaskProvider } from './task-providers'
 import type { FeatureTipId } from './feature-tips'
 import type { ContextualTourId } from './contextual-tours'
-import type { FeatureInteractionState } from './feature-interactions'
+import type {
+  FeatureInteractionState,
+  FeatureInteractionTelemetryBucketState
+} from './feature-interactions'
 import type { GitBranchChangeStatus } from './git-status-types'
 import type { KeybindingOverrides, TerminalShortcutPolicy } from './keybindings'
 import type { RepoIcon } from './repo-icon'
@@ -26,6 +29,7 @@ import type {
 import type { AgentKind, LaunchSource, RequestKind } from './telemetry-events'
 import type { SleepingAgentSessionRecord } from './agent-session-resume'
 import type { ClaudeAgentTeamsMode } from './claude-agent-teams-tmux-compat'
+import type { TerminalCustomTheme } from './terminal-custom-themes'
 import type { UiLanguage } from './ui-language'
 
 // Re-exported for backward compat with renderer call sites that import
@@ -132,6 +136,8 @@ export type ProjectGroup = {
   id: string
   name: string
   parentPath: string | null
+  /** SSH target ID for folder-backed groups imported from a remote root. */
+  connectionId?: string | null
   parentGroupId: string | null
   createdFrom: ProjectGroupCreatedFrom
   tabOrder: number
@@ -139,6 +145,48 @@ export type ProjectGroup = {
   color: string | null
   createdAt: number
   updatedAt: number
+}
+
+export type WorkspaceScope =
+  | { type: 'worktree'; worktreeId: string }
+  | { type: 'folder'; folderWorkspaceId: string }
+
+export type WorkspaceKey = `worktree:${string}` | `folder:${string}`
+
+export type FolderWorkspace = {
+  id: string
+  projectGroupId: string
+  name: string
+  folderPath: string
+  /** SSH target ID for folder workspaces whose folder path lives remotely. */
+  connectionId?: string | null
+  linkedTask: FolderWorkspaceLinkedTask | null
+  comment: string
+  isArchived: boolean
+  isUnread: boolean
+  isPinned: boolean
+  sortOrder: number
+  /** User-authored sidebar ordering. Higher values render earlier in Manual sort. */
+  manualOrder?: number
+  workspaceStatus?: WorkspaceStatus
+  createdWithAgent?: TuiAgent
+  pendingFirstAgentMessageRename?: boolean
+  firstAgentMessageRenameError?: string | null
+  lastActivityAt: number
+  createdAt: number
+  updatedAt: number
+}
+
+export type FolderWorkspaceLinkedTask = {
+  provider: 'github' | 'gitlab' | 'linear' | 'jira' | 'asana'
+  type: 'issue' | 'pr' | 'mr'
+  number: number
+  title: string
+  url: string
+  linearIdentifier?: string
+  jiraIdentifier?: string
+  asanaIdentifier?: string
+  repoId?: string
 }
 
 export type NestedRepoScanOptions = {
@@ -244,6 +292,8 @@ export type Worktree = {
   linkedIssue: number | null
   linkedPR: number | null
   linkedLinearIssue: string | null
+  linkedLinearIssueWorkspaceId?: string | null
+  linkedLinearIssueOrganizationUrlKey?: string | null
   // Why: parallel slots for GitLab work-item references. Kept as separate
   // fields (rather than reusing linkedIssue / linkedPR with a provider
   // discriminator) so the persistence layer is unambiguous when a user
@@ -318,6 +368,8 @@ export type WorktreeMeta = {
   linkedIssue: number | null
   linkedPR: number | null
   linkedLinearIssue: string | null
+  linkedLinearIssueWorkspaceId?: string | null
+  linkedLinearIssueOrganizationUrlKey?: string | null
   /** Optional for backward compatibility — see Worktree.linkedGitLabMR. */
   linkedGitLabMR?: number | null
   /** Optional for backward compatibility — see Worktree.linkedGitLabIssue. */
@@ -691,8 +743,11 @@ export type PersistedOpenFile = {
 
 export type WorkspaceSessionState = {
   activeRepoId: string | null
+  /** Scope-aware active owner for folder workspaces. Legacy worktree UI still reads activeWorktreeId. */
+  activeWorkspaceKey?: WorkspaceKey | null
   activeWorktreeId: string | null
   activeTabId: string | null
+  /** Keys may be legacy raw worktree IDs or canonical WorkspaceKey values. */
   tabsByWorktree: Record<string, TerminalTab[]>
   terminalLayoutsByTabId: Record<string, TerminalLayoutSnapshot>
   /** Worktree IDs that had at least one tab with a live PTY at shutdown.
@@ -1160,6 +1215,9 @@ export type LinearConnectionStatus = {
   workspaces?: LinearWorkspace[]
   activeWorkspaceId?: string | null
   selectedWorkspaceId?: LinearWorkspaceSelection | null
+  // Set when a stored token file exists but could not be decrypted, so the
+  // UI can explain reads failing while the connection still looks saved.
+  credentialError?: string
 }
 
 export type LinearIssue = {
@@ -1501,6 +1559,11 @@ export type ListWorkItemsResult<T> = {
   sources: {
     issues: GitHubOwnerRepo | null
     prs: GitHubOwnerRepo | null
+    /** Raw `origin` remote resolved for this repo, independent of the
+     *  user's preference. Required-nullable so the renderer can compare raw
+     *  remote candidates without inferring origin from the effective PR
+     *  source. */
+    originCandidate: GitHubOwnerRepo | null
     /** Raw `upstream` remote resolved for this repo, independent of the
      *  user's preference. Present so the renderer's issue-source selector
      *  can always decide whether to render (upstream exists & differs from
@@ -1642,6 +1705,8 @@ export type CreateWorktreeArgs = {
   linkedIssue?: number
   linkedPR?: number
   linkedLinearIssue?: string
+  linkedLinearIssueWorkspaceId?: string | null
+  linkedLinearIssueOrganizationUrlKey?: string | null
   linkedGitLabIssue?: number
   linkedGitLabMR?: number
   pushTarget?: GitPushTarget
@@ -2058,6 +2123,7 @@ export type GlobalSettings = {
   terminalCursorStyleDefaultedToBlock?: boolean
   terminalCursorBlink: boolean
   terminalThemeDark: string
+  terminalCustomThemes?: TerminalCustomTheme[]
   terminalDividerColorDark: string
   terminalUseSeparateLightTheme: boolean
   terminalThemeLight: string
@@ -2267,6 +2333,12 @@ export type GlobalSettings = {
   geminiCliOAuthEnabled: boolean
   /** Per-agent CLI command overrides. A missing key means use the catalog default binary name. */
   agentCmdOverrides: Partial<Record<TuiAgent, string>>
+  /** Per-agent default CLI arguments appended after the binary/path and before prompts. */
+  agentDefaultArgs?: Partial<Record<TuiAgent, string>>
+  /** Per-agent launch environment defaults used when yolo mode is exposed as env. */
+  agentDefaultEnv?: Partial<Record<TuiAgent, Record<string, string>>>
+  /** One-shot guard for adding yolo-mode default args to untouched agent launch profiles. */
+  agentYoloDefaultsMigrated?: boolean
   /** Why: disabling must persist so startup does not reinstall global agent
    *  hook entries right after the user removes them from Settings or CLI. */
   agentStatusHooksEnabled: boolean
@@ -2609,7 +2681,15 @@ export type TaskResumeState = {
   asanaProjectId?: string
 }
 
-export type RightSidebarTab = 'explorer' | 'search' | 'source-control' | 'checks' | 'ports'
+export type RightSidebarTab =
+  | 'explorer'
+  | 'search'
+  | 'vault'
+  | 'source-control'
+  | 'checks'
+  | 'ports'
+export type ActiveRightSidebarTab = Exclude<RightSidebarTab, 'search'>
+export type RightSidebarExplorerView = 'files' | 'search'
 
 export type ProjectOrderBy = 'manual' | 'recent'
 
@@ -2619,6 +2699,7 @@ export type PersistedUIState = {
   sidebarWidth: number
   rightSidebarOpen: boolean
   rightSidebarTab: RightSidebarTab
+  rightSidebarExplorerView: RightSidebarExplorerView
   rightSidebarWidth: number
   groupBy: 'none' | 'workspace-status' | 'repo' | 'pr-status'
   sortBy: 'name' | 'smart' | 'recent' | 'repo' | 'manual'
@@ -2754,7 +2835,7 @@ export type PersistedUIState = {
    *  spawn — effectively restarting the nag countdown after each update. */
   starNagAppVersion?: string | null
   /** Next threshold (agents spawned since baseline) at which the star-nag
-   *  notification should fire. Starts at 50 and doubles each time the user
+   *  notification should fire. Starts at 35 and doubles each time the user
    *  dismisses the notification without starring. */
   starNagNextThreshold?: number
   /** Once the user has starred Orca (from any entry point) we permanently
@@ -2881,6 +2962,7 @@ export type PersistedState = {
   schemaVersion: number
   repos: Repo[]
   projectGroups: ProjectGroup[]
+  folderWorkspaces: FolderWorkspace[]
   /** Sparse-checkout presets keyed by repoId. Empty record on first launch;
    *  presets are managed from the new-workspace composer and repo settings. */
   sparsePresetsByRepo: Record<string, SparsePreset[]>
@@ -2900,6 +2982,8 @@ export type PersistedState = {
   automations: Automation[]
   automationRuns: AutomationRun[]
   onboarding: OnboardingState
+  /** Main-owned telemetry de-dupe marker; never exposed through PersistedUIState. */
+  featureInteractionTelemetryBuckets?: FeatureInteractionTelemetryBucketState
 }
 
 // ─── Filesystem ─────────────────────────────────────────────
@@ -3010,6 +3094,7 @@ export type SearchFileResult = {
   filePath: string
   relativePath: string
   matches: SearchMatch[]
+  matchCount?: number
 }
 
 export type SearchResult = {

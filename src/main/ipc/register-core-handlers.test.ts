@@ -27,6 +27,7 @@ const {
   registerFilesystemHandlersMock,
   registerRuntimeHandlersMock,
   registerRuntimeEnvironmentHandlersMock,
+  registerAiVaultHandlersMock,
   registerCodexAccountHandlersMock,
   registerAgentHookHandlersMock,
   registerAgentTrustHandlersMock,
@@ -76,6 +77,7 @@ const {
   registerFilesystemHandlersMock: vi.fn(),
   registerRuntimeHandlersMock: vi.fn(),
   registerRuntimeEnvironmentHandlersMock: vi.fn(),
+  registerAiVaultHandlersMock: vi.fn(),
   registerCodexAccountHandlersMock: vi.fn(),
   registerAgentHookHandlersMock: vi.fn(),
   registerAgentTrustHandlersMock: vi.fn(),
@@ -234,6 +236,10 @@ vi.mock('./runtime-environments', () => ({
   registerRuntimeEnvironmentHandlers: registerRuntimeEnvironmentHandlersMock
 }))
 
+vi.mock('./ai-vault', () => ({
+  registerAiVaultHandlers: registerAiVaultHandlersMock
+}))
+
 vi.mock('./codex-accounts', () => ({
   registerCodexAccountHandlers: registerCodexAccountHandlersMock
 }))
@@ -315,6 +321,7 @@ describe('registerCoreHandlers', () => {
     registerFilesystemHandlersMock.mockReset()
     registerRuntimeHandlersMock.mockReset()
     registerRuntimeEnvironmentHandlersMock.mockReset()
+    registerAiVaultHandlersMock.mockReset()
     registerCodexAccountHandlersMock.mockReset()
     registerAgentHookHandlersMock.mockReset()
     registerAgentTrustHandlersMock.mockReset()
@@ -352,6 +359,7 @@ describe('registerCoreHandlers', () => {
     const rateLimits = { marker: 'rateLimits' }
     const agentAwakeService = { marker: 'agentAwakeService' }
     const onBeforeRelaunch = vi.fn()
+    const getAdditionalAiVaultCodexHomePaths = vi.fn(() => ['/runtime/codex/home'])
 
     registerCoreHandlers(
       store as never,
@@ -369,7 +377,7 @@ describe('registerCoreHandlers', () => {
       agentAwakeService as never,
       undefined,
       undefined,
-      { onBeforeRelaunch }
+      { getAdditionalAiVaultCodexHomePaths, onBeforeRelaunch }
     )
 
     expect(registerClaudeUsageHandlersMock).toHaveBeenCalledWith(claudeUsage)
@@ -405,6 +413,9 @@ describe('registerCoreHandlers', () => {
     expect(registerFilesystemHandlersMock).toHaveBeenCalledWith(store)
     expect(registerRuntimeHandlersMock).toHaveBeenCalledWith(runtime)
     expect(registerRuntimeEnvironmentHandlersMock).toHaveBeenCalled()
+    expect(registerAiVaultHandlersMock).toHaveBeenCalledWith({
+      getAdditionalCodexHomePaths: getAdditionalAiVaultCodexHomePaths
+    })
     expect(registerCliHandlersMock).toHaveBeenCalled()
     expect(registerPreflightHandlersMock).toHaveBeenCalled()
     expect(registerShellHandlersMock).toHaveBeenCalled()

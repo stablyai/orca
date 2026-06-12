@@ -35,7 +35,7 @@ import type {
   RateLimitRuntimeTarget,
   RateLimitWindow
 } from '../../../../shared/rate-limit-types'
-import { ProviderIcon, ProviderPanel, barColor } from './tooltip'
+import { ProviderIcon, ProviderPanel, barColor, getProviderUsageStatusLabel } from './tooltip'
 import { ClaudeIcon, GeminiIcon, OpenAIIcon, OpenCodeGoIcon } from './icons'
 import { AgentIcon } from '@/lib/agent-catalog'
 import { formatWindowLabel } from '@/lib/window-label-formatter'
@@ -1024,7 +1024,7 @@ function ProviderSegment({
   compact: boolean
 }): React.JSX.Element {
   const provider = p?.provider ?? 'claude'
-  const statusLabel = p?.error && /rate limit/i.test(p.error) ? 'Limited' : 'Unavailable'
+  const statusLabel = p ? getProviderUsageStatusLabel(p) : ''
 
   // Idle / initial load
   if (!p || p.status === 'idle') {

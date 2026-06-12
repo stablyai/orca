@@ -215,9 +215,9 @@ export function BrowserImportHintButton({
                       <DropdownMenuSubTrigger>
                         {translate(
                           'auto.components.browser.pane.BrowserImportHintButton.0c6d254eca',
-                          'From'
+                          'From {{value0}}',
+                          { value0: browser.label }
                         )}
-                        {browser.label}
                       </DropdownMenuSubTrigger>
                       <DropdownMenuPortal>
                         <DropdownMenuSubContent>
@@ -241,9 +241,9 @@ export function BrowserImportHintButton({
                     >
                       {translate(
                         'auto.components.browser.pane.BrowserImportHintButton.0c6d254eca',
-                        'From'
+                        'From {{value0}}',
+                        { value0: browser.label }
                       )}
-                      {browser.label}
                     </DropdownMenuItem>
                   )
                 )}

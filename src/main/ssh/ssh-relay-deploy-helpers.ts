@@ -237,13 +237,17 @@ export function waitForSentinel(channel: ClientChannel): Promise<MultiplexerTran
 // ── Remote command execution ──────────────────────────────────────────
 
 const EXEC_TIMEOUT_MS = 30_000
+type ExecCommandOptions = SshExecOptions & {
+  timeoutMs?: number
+}
 
 export async function execCommand(
   conn: SshConnection,
   command: string,
-  options?: SshExecOptions
+  options?: ExecCommandOptions
 ): Promise<string> {
-  const channel = await conn.exec(command, options)
+  const { timeoutMs = EXEC_TIMEOUT_MS, ...execOptions } = options ?? {}
+  const channel = await conn.exec(command, execOptions)
   return new Promise((resolve, reject) => {
     let stdout = ''
     let stderr = ''
@@ -283,8 +287,8 @@ export async function execCommand(
     }
     const timeout = setTimeout(() => {
       channel.close()
-      settle(reject, new Error(`Command "${command}" timed out after ${EXEC_TIMEOUT_MS / 1000}s`))
-    }, EXEC_TIMEOUT_MS)
+      settle(reject, new Error(`Command "${command}" timed out after ${timeoutMs / 1000}s`))
+    }, timeoutMs)
 
     // Why: remote reboot tears down exec channels with stream errors. Without
     // scoped listeners, Node treats those as uncaught exceptions.

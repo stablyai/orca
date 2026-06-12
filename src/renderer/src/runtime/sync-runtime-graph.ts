@@ -5,6 +5,7 @@ import {
   normalizeTerminalLayoutSnapshot
 } from '@/components/terminal-pane/layout-serialization'
 import { warnTerminalLifecycleAnomaly } from '@/components/terminal-pane/terminal-lifecycle-diagnostics'
+import { getEagerPtyBufferHandle } from '@/components/terminal-pane/pty-dispatcher'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import { resolveLeafIdForManager } from '@/lib/pane-manager/pane-key-resolution'
@@ -23,6 +24,7 @@ import type {
 } from '../../../shared/runtime-types'
 import { isTerminalLeafId, makePaneKey } from '../../../shared/stable-pane-id'
 import { isWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
+import { isClaudeManagementTitle } from '../../../shared/agent-detection'
 import type {
   TabGroup,
   TabGroupLayoutNode,
@@ -570,6 +572,55 @@ async function syncRuntimeGraph(): Promise<void> {
     }
   }
 
+  // Why: background automation tabs spawn their agent PTY eagerly and are created
+  // inactive, so they never mount a TerminalPane and never enter `registeredTabs`.
+  // Without this pass their leaf+ptyId is never published, so the runtime treats
+  // the live agent PTY as orphaned (surfaced as a synthetic `pty:<id>` terminal)
+  // and `orca terminal list` / session-reuse can't see the real tab. Publish them
+  // from the persisted layout, gated on a live eager buffer so we only adopt a
+  // still-running unmounted PTY (never a stale saved ptyId).
+  for (const [worktreeId, tabs] of Object.entries(state.tabsByWorktree)) {
+    for (const tab of tabs) {
+      if (registeredTabs.has(tab.id) || isWebOnlyMirroredTerminalTab(state, tab)) {
+        continue
+      }
+      const layout = state.terminalLayoutsByTabId[tab.id]
+      const savedPtyIdsByLeafId = layout?.ptyIdsByLeafId
+      if (!savedPtyIdsByLeafId) {
+        continue
+      }
+      const liveLeaves = Object.entries(savedPtyIdsByLeafId).filter(
+        ([leafId, ptyId]) =>
+          typeof ptyId === 'string' &&
+          ptyId.length > 0 &&
+          isTerminalLeafId(leafId) &&
+          Boolean(getEagerPtyBufferHandle(ptyId))
+      )
+      if (liveLeaves.length === 0) {
+        continue
+      }
+      const title = resolveRuntimeTerminalTitle(tab, generatedTitlesEnabled)
+      graph.tabs.push({
+        tabId: tab.id,
+        worktreeId,
+        title,
+        activeLeafId: layout?.activeLeafId ?? liveLeaves[0][0],
+        layout: layout?.root ?? fallbackLayoutForLeafIds(liveLeaves.map(([leafId]) => leafId))
+      })
+      liveLeaves.forEach(([leafId, ptyId], index) => {
+        graph.leaves.push({
+          tabId: tab.id,
+          worktreeId,
+          leafId,
+          paneRuntimeId: index + 1,
+          ptyId,
+          paneTitle: null,
+          title
+        })
+      })
+    }
+  }
+
   try {
     const result = await window.api.runtime.syncWindowGraph(graph)
     getStoreState()?.setRuntimeAgentOrchestrationByPaneKey?.(
@@ -1024,15 +1075,20 @@ function buildMobileTerminalSurfaceTabs(
           ? paneTitles[Number(legacyPaneId)]
           : undefined
     const paneKey = isTerminalLeafId(leafId) ? makePaneKey(terminal.id, leafId) : null
-    const agentStatus = paneKey ? state.agentStatusByPaneKey?.[paneKey] : undefined
+    const title = resolveRuntimeTerminalTitle(
+      terminal,
+      generatedTitlesEnabled,
+      paneTitle ?? terminal.title ?? 'Terminal'
+    )
+    const agentStatusTitle = paneTitle ?? terminal.title ?? ''
+    const agentStatus =
+      paneKey && !isClaudeManagementTitle(agentStatusTitle)
+        ? state.agentStatusByPaneKey?.[paneKey]
+        : undefined
     return {
       type: 'terminal' as const,
       id: mobileTerminalSurfaceId(terminal.id, leafId),
-      title: resolveRuntimeTerminalTitle(
-        terminal,
-        generatedTitlesEnabled,
-        paneTitle ?? terminal.title ?? 'Terminal'
-      ),
+      title,
       ...(terminal.quickCommandLabel?.trim()
         ? { quickCommandLabel: terminal.quickCommandLabel.trim() }
         : {}),

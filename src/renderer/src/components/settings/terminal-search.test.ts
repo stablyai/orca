@@ -84,6 +84,15 @@ describe('getTerminalPaneSearchEntries', () => {
     )
   })
 
+  it('omits the Warp import appearance entry when desktop-only controls are hidden', () => {
+    const desktopEntries = getAppearancePaneSearchEntries({ showWarpImport: true })
+    const webEntries = getAppearancePaneSearchEntries({ showWarpImport: false })
+
+    expect(desktopEntries.some((entry) => entry.title === 'Import themes from Warp')).toBe(true)
+    expect(webEntries.some((entry) => entry.title === 'Import themes from Warp')).toBe(false)
+    expect(webEntries.some((entry) => entry.title === 'Import from Ghostty')).toBe(true)
+  })
+
   it('keeps sidebar shortcut restore settings in the Appearance search index', () => {
     const automationsEntry = getSidebarEntries().find(
       (entry) => entry.title === 'Show Automations Button'

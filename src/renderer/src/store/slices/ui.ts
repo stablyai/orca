@@ -1,6 +1,7 @@
 /* eslint-disable max-lines */
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
+import { normalizeRightSidebarRoute } from '../right-sidebar-route'
 import {
   findPrevLiveNonTaskStackHistoryIndex,
   findPrevLiveWorktreeHistoryIndex
@@ -241,21 +242,6 @@ function migrateStatusBarItems(items: readonly string[] | undefined): StatusBarI
 
 const DEFAULT_ON_PORTS_STATUS_BAR_ITEM: StatusBarItem = 'ports'
 const DEFAULT_ON_KIMI_STATUS_BAR_ITEM: StatusBarItem = 'kimi'
-
-function normalizePersistedRightSidebarTab(
-  tab: PersistedUIState['rightSidebarTab'] | unknown
-): PersistedUIState['rightSidebarTab'] {
-  if (
-    tab === 'explorer' ||
-    tab === 'search' ||
-    tab === 'source-control' ||
-    tab === 'checks' ||
-    tab === 'ports'
-  ) {
-    return tab
-  }
-  return 'explorer'
-}
 
 const MIN_SIDEBAR_WIDTH = 220
 const MAX_LEFT_SIDEBAR_WIDTH = 500
@@ -634,11 +620,6 @@ export type UISlice = {
       title: string
       url: string
       linearIdentifier?: string
-      linkedContext?: {
-        provider: TaskProvider
-        version: 1
-        renderedText: string
-      }
     } | null
     agent: TuiAgent
     linkedIssue: string
@@ -651,7 +632,10 @@ export type UISlice = {
     // Absent means "use the repo's effective base ref".
     baseBranch?: string
   } | null
-  openTaskPage: (data?: UISlice['taskPageData']) => void
+  openTaskPage: (
+    data?: UISlice['taskPageData'],
+    options?: { recordTasksInteraction?: boolean }
+  ) => void
   closeTaskPage: () => void
   openActivityPage: () => void
   closeActivityPage: () => void
@@ -710,6 +694,7 @@ export type UISlice = {
   activeContextualTourSource: string | null
   activeContextualTourSourceDetached: boolean
   activeContextualTourWasFeaturePreviouslyInteracted: boolean
+  contextualTourNavigationInteractionSnapshot: Partial<Record<ContextualTourId, boolean>>
   activeContextualTourSuppressed: boolean
   contextualTourShownThisSession: boolean
   contextualToursOnboardingVisible: boolean
@@ -1067,7 +1052,23 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
   taskResumeState: undefined,
   githubTaskDrawerWorkItem: null,
   newWorkspaceDraft: null,
-  openTaskPage: (data = {}) => {
+  openTaskPage: (data = {}, options = {}) => {
+    if (options.recordTasksInteraction !== false) {
+      const wasTasksPreviouslyInteracted = hasFeatureInteraction(get().featureInteractions, 'tasks')
+      set((state) => ({
+        contextualTourNavigationInteractionSnapshot: {
+          ...state.contextualTourNavigationInteractionSnapshot,
+          tasks: wasTasksPreviouslyInteracted
+        }
+      }))
+      get().recordFeatureInteraction?.('tasks')
+    }
+    if (data.openGitHubWorkItem) {
+      get().recordFeatureInteraction?.('github-tasks')
+    }
+    if (data.openLinearIssue) {
+      get().recordFeatureInteraction?.('linear-tasks')
+    }
     // Why: record a Tasks visit in the shared back/forward history so the
     // titlebar Back/Forward buttons can return to Tasks. All task-source
     // variants (github/linear presets) collapse to a single 'tasks' entry;
@@ -1406,6 +1407,7 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
   activeContextualTourSource: null,
   activeContextualTourSourceDetached: false,
   activeContextualTourWasFeaturePreviouslyInteracted: false,
+  contextualTourNavigationInteractionSnapshot: {},
   activeContextualTourSuppressed: false,
   contextualTourShownThisSession: false,
   contextualToursOnboardingVisible: false,
@@ -1449,15 +1451,28 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         targetExists: hasContextualTourTarget
       })
       if (decision.kind !== 'start') {
-        return s
+        if (s.contextualTourNavigationInteractionSnapshot[id] === undefined) {
+          return s
+        }
+        const { [id]: _consumed, ...remainingNavigationSnapshot } =
+          s.contextualTourNavigationInteractionSnapshot
+        void _consumed
+        return { contextualTourNavigationInteractionSnapshot: remainingNavigationSnapshot }
       }
+      const navigationSnapshot = s.contextualTourNavigationInteractionSnapshot[id]
+      const { [id]: _consumed, ...remainingNavigationSnapshot } =
+        s.contextualTourNavigationInteractionSnapshot
+      void _consumed
       return {
         activeContextualTourId: id,
         activeContextualTourStepIndex: decision.stepIndex,
         activeContextualTourSource: source,
         activeContextualTourSourceDetached: false,
         activeContextualTourWasFeaturePreviouslyInteracted:
-          wasFeaturePreviouslyInteracted ?? hasFeatureInteraction(s.featureInteractions, id),
+          wasFeaturePreviouslyInteracted ??
+          navigationSnapshot ??
+          hasFeatureInteraction(s.featureInteractions, id),
+        contextualTourNavigationInteractionSnapshot: remainingNavigationSnapshot,
         activeContextualTourSuppressed: false,
         contextualTourShownThisSession: true,
         lastCompletedContextualTourId: null
@@ -1966,6 +1981,10 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
           })
           .catch(console.error)
       }
+      const rightSidebarRoute = normalizeRightSidebarRoute(
+        ui.rightSidebarTab,
+        ui.rightSidebarExplorerView
+      )
       return {
         // Why: persisted UI data comes from disk and may be stale, corrupted,
         // or manually edited. Clamp widths during hydration so invalid values
@@ -1982,7 +2001,8 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
           MAX_RIGHT_SIDEBAR_WIDTH
         ),
         rightSidebarOpen: typeof ui.rightSidebarOpen === 'boolean' ? ui.rightSidebarOpen : true,
-        rightSidebarTab: normalizePersistedRightSidebarTab(ui.rightSidebarTab),
+        rightSidebarTab: rightSidebarRoute.rightSidebarTab,
+        rightSidebarExplorerView: rightSidebarRoute.rightSidebarExplorerView,
         groupBy: (ui.groupBy as UISlice['groupBy'] | 'parent') === 'parent' ? 'repo' : ui.groupBy,
         sortBy,
         // Why: main-process getUI() already normalized this to a valid value

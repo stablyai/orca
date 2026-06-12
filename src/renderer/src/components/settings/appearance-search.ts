@@ -247,15 +247,39 @@ export const getAppIconEntries = createLocalizedCatalog((): SettingsSearchEntry[
   }
 ])
 
-export const getAppearancePaneSearchEntries = createLocalizedCatalog((): SettingsSearchEntry[] => [
-  ...getThemeEntries(),
-  ...(SHOW_UI_LANGUAGE_SETTING ? getLanguageEntries() : []),
-  ...getTypographyEntries(),
-  ...getZoomEntries(),
-  ...getTerminalAppearanceSearchEntries(),
-  ...getLayoutEntries(),
-  ...getTitlebarEntries(),
-  ...getStatusBarEntries(),
-  ...getSidebarEntries(),
-  ...getAppIconEntries()
-])
+type AppearancePaneSearchOptions = {
+  showWarpImport?: boolean
+}
+
+function buildAppearancePaneSearchEntries(
+  options: AppearancePaneSearchOptions
+): SettingsSearchEntry[] {
+  return [
+    ...getThemeEntries(),
+    ...(SHOW_UI_LANGUAGE_SETTING ? getLanguageEntries() : []),
+    ...getTypographyEntries(),
+    ...getZoomEntries(),
+    ...getTerminalAppearanceSearchEntries(options),
+    ...getLayoutEntries(),
+    ...getTitlebarEntries(),
+    ...getStatusBarEntries(),
+    ...getSidebarEntries(),
+    ...getAppIconEntries()
+  ]
+}
+
+const getAppearancePaneSearchEntriesWithWarp = createLocalizedCatalog(() =>
+  buildAppearancePaneSearchEntries({ showWarpImport: true })
+)
+
+const getAppearancePaneSearchEntriesWithoutWarp = createLocalizedCatalog(() =>
+  buildAppearancePaneSearchEntries({ showWarpImport: false })
+)
+
+export function getAppearancePaneSearchEntries(
+  options: AppearancePaneSearchOptions = {}
+): SettingsSearchEntry[] {
+  return (options.showWarpImport ?? true)
+    ? getAppearancePaneSearchEntriesWithWarp()
+    : getAppearancePaneSearchEntriesWithoutWarp()
+}

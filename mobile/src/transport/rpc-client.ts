@@ -475,6 +475,12 @@ export function connect(
                 removeStreamListener(id)
                 continue
               }
+              // Why: setState('connected') notifies UI listeners synchronously;
+              // a listener may subscribe and send immediately before this
+              // reconnect replay loop resumes.
+              if (stream.sent) {
+                continue
+              }
               if (stream.method === 'browser.screencast') {
                 pendingBrowserScreencastRequestId = id
                 activeBrowserScreencastRequestId = null
@@ -704,6 +710,9 @@ export function connect(
     sharedKey = null
     activeBrowserScreencastRequestId = null
     pendingBrowserScreencastRequestId = null
+    for (const stream of streamListeners.values()) {
+      stream.sent = false
+    }
     if (handshakeTimer) {
       clearTimeout(handshakeTimer)
       handshakeTimer = null

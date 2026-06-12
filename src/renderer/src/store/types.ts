@@ -28,6 +28,7 @@ import type { DetectedAgentsSlice } from './slices/detected-agents'
 import type { WorktreeNavHistorySlice } from './slices/worktree-nav-history'
 import type { DictationSlice } from './slices/dictation'
 import type { WorkspaceCleanupSlice } from './slices/workspace-cleanup'
+import type { PullRequestGenerationSlice } from './slices/pull-request-generation'
 
 export type AppState = RepoSlice &
   SparsePresetsSlice &
@@ -58,4 +59,5 @@ export type AppState = RepoSlice &
   DetectedAgentsSlice &
   WorktreeNavHistorySlice &
   DictationSlice &
-  WorkspaceCleanupSlice
+  WorkspaceCleanupSlice &
+  PullRequestGenerationSlice

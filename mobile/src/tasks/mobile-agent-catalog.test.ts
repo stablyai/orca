@@ -38,4 +38,10 @@ describe('mobile agent catalog', () => {
       new Set(parseDesktopConfiguredAgents())
     )
   })
+
+  it('uses the bundled Claude icon path for Claude Agent Teams', () => {
+    expect(MOBILE_AGENT_CATALOG.find((agent) => agent.id === 'claude-agent-teams')).toEqual(
+      expect.not.objectContaining({ faviconDomain: expect.any(String) })
+    )
+  })
 })

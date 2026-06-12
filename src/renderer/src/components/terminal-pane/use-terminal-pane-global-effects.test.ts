@@ -2,6 +2,10 @@
 import type * as ReactModule from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { SYNC_FIT_PANES_EVENT } from '@/constants/terminal'
+import {
+  registerLivePaneManager,
+  unregisterLivePaneManager
+} from '@/lib/pane-manager/pane-manager-registry'
 import { useTerminalPaneGlobalEffects } from './use-terminal-pane-global-effects'
 
 const mocks = vi.hoisted(() => ({
@@ -135,6 +139,16 @@ function useMountForFileDrop(
 }
 
 describe('useTerminalPaneGlobalEffects', () => {
+  // Why: the live-manager registry is module-global; unregister in afterEach
+  // so a failed assertion cannot leak fake managers into later tests.
+  const registeredManagers: { resetWebglTextureAtlases(): void }[] = []
+
+  function registerManagerForReset<T extends { resetWebglTextureAtlases(): void }>(manager: T): T {
+    registerLivePaneManager(manager)
+    registeredManagers.push(manager)
+    return manager
+  }
+
   beforeEach(() => {
     resetHookRefs()
     vi.clearAllMocks()
@@ -154,6 +168,9 @@ describe('useTerminalPaneGlobalEffects', () => {
   })
 
   afterEach(() => {
+    for (const manager of registeredManagers.splice(0)) {
+      unregisterLivePaneManager(manager)
+    }
     delete (globalThis as unknown as { window?: unknown }).window
     delete (globalThis as unknown as { ResizeObserver?: unknown }).ResizeObserver
   })
@@ -189,6 +206,10 @@ describe('useTerminalPaneGlobalEffects', () => {
     })
     mocks.fitAndFocusPanes.mockImplementation(() => order.push('fit-focus'))
 
+    // Why: the resume path resets atlases through the live-manager registry
+    // (shared glyph atlas), so the fake manager must be registered to observe
+    // its reset in the ordering assertion.
+    registerManagerForReset(manager)
     const isActiveRef = { current: false }
     const isVisibleRef = { current: false }
     beginHookRender()
@@ -328,6 +349,9 @@ describe('useTerminalPaneGlobalEffects', () => {
       getActivePane: vi.fn(() => null)
     }
 
+    // Why: focus recovery resets every registered manager (shared glyph
+    // atlas), so the fake manager observes the reset through the registry.
+    registerManagerForReset(manager)
     beginHookRender()
     useTerminalPaneGlobalEffects({
       tabId: 'tab-1',

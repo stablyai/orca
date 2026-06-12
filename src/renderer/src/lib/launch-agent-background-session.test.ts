@@ -126,7 +126,7 @@ describe('launchAgentBackgroundSession', () => {
     expect(mockSpawn).toHaveBeenCalledWith(
       expect.objectContaining({
         cwd: '/repo/worktree',
-        command: "claude 'run the automation'",
+        command: "claude '--dangerously-skip-permissions' 'run the automation'",
         env: expect.objectContaining({
           ORCA_TAB_ID: 'tab-1',
           ORCA_WORKTREE_ID: 'wt-1'
@@ -261,7 +261,9 @@ describe('launchAgentBackgroundSession', () => {
       prompt: 'run the automation'
     })
 
-    expect(mockSpawn).toHaveBeenCalledWith(expect.objectContaining({ command: 'aider' }))
+    expect(mockSpawn).toHaveBeenCalledWith(
+      expect.objectContaining({ command: "aider '--yes-always'" })
+    )
     expect(mockPasteDraftWhenAgentReady).toHaveBeenCalledWith(
       expect.objectContaining({
         tabId: 'tab-1',
@@ -290,7 +292,10 @@ describe('launchAgentBackgroundSession', () => {
       dataSidecar('user@remote repo % ')
       vi.advanceTimersByTime(50)
 
-      expect(mockWrite).toHaveBeenCalledWith('pty-1', "claude 'run the automation'\r")
+      expect(mockWrite).toHaveBeenCalledWith(
+        'pty-1',
+        "claude '--dangerously-skip-permissions' 'run the automation'\r"
+      )
     } finally {
       vi.useRealTimers()
     }
@@ -324,7 +329,7 @@ describe('launchAgentBackgroundSession', () => {
       method: 'terminal.create',
       params: expect.objectContaining({
         worktree: 'id:wt-1',
-        command: "claude 'run the automation'",
+        command: "claude '--dangerously-skip-permissions' 'run the automation'",
         env: expect.objectContaining({
           ORCA_PANE_KEY: `tab-1:${leafId}`,
           ORCA_TAB_ID: 'tab-1',

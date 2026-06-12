@@ -7,6 +7,7 @@ import {
   type PasteTerminalTextDetail
 } from '@/constants/terminal'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
+import { resetAllTerminalWebglAtlases } from '@/lib/pane-manager/pane-manager-registry'
 import { fitAndFocusPanes, fitPanes } from './pane-helpers'
 import type { PtyTransport } from './pty-transport'
 import { handleTerminalFileDrop } from './terminal-drop-handler'
@@ -118,7 +119,9 @@ export function useTerminalPaneGlobalEffects({
             restoreScrollStateAfterLayout(pane.terminal, position)
           }
         }
-        manager.resetWebglTextureAtlases()
+        // Why: this clear wipes the glyph atlas shared with other same-config
+        // terminals; the global reset rebuilds their render models too.
+        resetAllTerminalWebglAtlases()
       })
       wasVisibleRef.current = true
       applyPendingFollowOutputRequests()
@@ -143,11 +146,13 @@ export function useTerminalPaneGlobalEffects({
     const onFocus = (): void => {
       // Why: WebGL atlas corruption does not always raise context loss; window
       // focus regain is a low-cost recovery point for agent TUI glyph damage.
-      managerRef.current?.resetWebglTextureAtlases()
+      // Reset globally — a per-manager reset clears the shared glyph atlas
+      // under every other visible same-config terminal and garbles it.
+      resetAllTerminalWebglAtlases()
     }
     window.addEventListener('focus', onFocus)
     return () => window.removeEventListener('focus', onFocus)
-  }, [isActive, isVisible, managerRef])
+  }, [isActive, isVisible])
 
   useEffect(() => {
     const manager = managerRef.current

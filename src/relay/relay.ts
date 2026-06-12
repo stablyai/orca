@@ -57,6 +57,8 @@ import {
 import { assertPluginSourceUnderByteCap } from './plugin-source-limit'
 import { resolveOpenCodeSourceConfigDir, resolvePiSourceAgentDir } from './plugin-overlay-env'
 import { detectPiAgentKindFromCommand } from '../shared/pi-agent-kind'
+import { pickRemoteCliEnv } from './remote-cli-env'
+import { remoteCliRequestTimeoutMs } from './remote-cli-timeout'
 
 const DEFAULT_GRACE_MS = DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS * 1000
 const SOCK_NAME = 'relay.sock'
@@ -297,17 +299,6 @@ function runOrcaCliMode(sockPath: string, argv: string[]): void {
   })
 }
 
-function pickRemoteCliEnv(env: NodeJS.ProcessEnv): Record<string, string> {
-  const picked: Record<string, string> = {}
-  for (const key of ['ORCA_TERMINAL_HANDLE', 'ORCA_USER_DATA_PATH', 'PATH', 'Path']) {
-    const value = env[key]
-    if (typeof value === 'string') {
-      picked[key] = value
-    }
-  }
-  return picked
-}
-
 // ── Normal mode ──────────────────────────────────────────────────────
 
 async function main(): Promise<void> {
@@ -439,7 +430,8 @@ async function main(): Promise<void> {
 
   dispatcher.onRequest('orca.cli', async (params, context) => {
     return await dispatcher.requestAnyClient('orca.cli', params, {
-      excludeClientId: context.clientId
+      excludeClientId: context.clientId,
+      timeoutMs: remoteCliRequestTimeoutMs(params)
     })
   })
 

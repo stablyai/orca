@@ -231,7 +231,7 @@ export function CustomKeyModal({ visible, onClose, onKeysChanged, onManageShortc
                 onPress={onManageShortcuts}
               >
                 <Text style={styles.rowLabel}>Manage Shortcuts</Text>
-                <Text style={styles.rowHint}>Show or hide default shortcut keys</Text>
+                <Text style={styles.rowHint}>Show, hide, or reorder shortcut keys</Text>
               </Pressable>
             </>
           ) : null}

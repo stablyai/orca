@@ -56,6 +56,10 @@ function renderStepContent(overrides: Partial<StepContentProps>): string {
     createKind: 'git',
     createError: null,
     isCreating: false,
+    createDefaultParent: '',
+    createGitAvailability: 'unknown',
+    createRuntimeParentStatus: 'idle',
+    createParentDefaultPending: false,
     onBrowse: vi.fn(),
     onOpenCloneStep: vi.fn(),
     onOpenCreateStep: vi.fn(),
@@ -98,21 +102,23 @@ function renderNestedStep(repoCount: number): string {
 }
 
 describe('AddRepoDialogStepContent nested imports', () => {
-  it('uses the first-import nested repo action when no repos exist yet', () => {
+  it('asks the monorepo question when no repos exist yet', () => {
     const html = renderNestedStep(0)
 
-    expect(html).toContain('>Import</button>')
-    expect(html).not.toContain('Import as group')
-    expect(html).not.toContain('Import separately')
-    expect(html).not.toContain('aria-label="Group name"')
+    expect(html).toContain('Is this a monorepo?')
+    expect(html).toContain('aria-label="Group name"')
+    expect(html).toContain('Import as group')
+    expect(html).toContain('No, import separately')
+    expect(html).not.toContain('>Import</button>')
   })
 
-  it('shows group import controls after a repo already exists', () => {
+  it('shows the same monorepo import controls after a repo already exists', () => {
     const html = renderNestedStep(1)
 
+    expect(html).toContain('Is this a monorepo?')
     expect(html).toContain('aria-label="Group name"')
-    expect(html).toContain('Import separately')
     expect(html).toContain('Import as group')
+    expect(html).toContain('No, import separately')
     expect(html).not.toContain('>Import</button>')
   })
 
@@ -123,8 +129,8 @@ describe('AddRepoDialogStepContent nested imports', () => {
       activeRuntimeEnvironmentId: 'env-1'
     })
 
-    expect(html).toContain('Start a new project')
-    expect(html).toContain('aria-label="Browse server filesystem"')
+    expect(html).toContain('Create a new project')
+    expect(html).toContain('server folder not selected')
   })
 
   it('offers server browsing for remote clone destinations', () => {

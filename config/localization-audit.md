@@ -46,6 +46,18 @@ Run the maintained coverage gate:
 pnpm run verify:localization-coverage
 ```
 
+Sync catalog keys after adding or removing `translate(...)` calls:
+
+```sh
+pnpm run sync:localization-catalog
+```
+
+The sync command adds missing `en.json` entries from each call's string fallback,
+copies untranslated English placeholders into other locale catalogs to keep
+parity, removes locale entries whose English key was deleted, and repairs
+placeholder mismatches. Run the machine-translation bootstrap commands only when
+refreshing real translations, not for ordinary UI copy changes.
+
 The coverage gate compares current candidates against
 `config/localization-coverage-allowlist.json`. The committed allowlist is empty:
 new candidates fail the check and must be localized or added with a reviewed

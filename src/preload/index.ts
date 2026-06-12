@@ -44,6 +44,10 @@ import type {
   WorktreeDefaultTabsLaunch,
   WorktreeRemoteBranchConflictEvent
 } from '../shared/types'
+import type {
+  WarpThemeImportPreview,
+  WarpThemeImportSource
+} from '../shared/terminal-custom-themes'
 import type { GitHistoryOptions, GitHistoryResult } from '../shared/git-history'
 import type { ShellOpenLocalPathResult } from '../shared/shell-open-types'
 import type { SkillDiscoveryResult, SkillDiscoveryTarget } from '../shared/skills'
@@ -135,6 +139,7 @@ import type {
   AutomationUpdateInput
 } from '../shared/automations-types'
 import type { KeybindingActionId, KeybindingFileSnapshot } from '../shared/keybindings'
+import type { AiVaultListArgs } from '../shared/ai-vault-types'
 import {
   ORCA_EDITOR_PREPARE_HOT_EXIT_EVENT,
   type EditorPrepareHotExitDetail
@@ -456,6 +461,11 @@ const api = {
 
     create: (args) => ipcRenderer.invoke('repos:create', args),
 
+    isGitAvailable: (): Promise<boolean> => ipcRenderer.invoke('repos:isGitAvailable'),
+
+    getDefaultCreateProjectParent: (): Promise<string> =>
+      ipcRenderer.invoke('repos:getDefaultCreateProjectParent'),
+
     remove: (args) => ipcRenderer.invoke('repos:remove', args),
 
     reorder: (args) => ipcRenderer.invoke('repos:reorder', args),
@@ -521,6 +531,14 @@ const api = {
     },
     importNested: (args) => ipcRenderer.invoke('projectGroups:importNested', args)
   } satisfies PreloadApi['projectGroups'],
+
+  folderWorkspaces: {
+    list: () => ipcRenderer.invoke('folderWorkspaces:list'),
+    getPathStatus: (args) => ipcRenderer.invoke('folderWorkspaces:getPathStatus', args),
+    create: (args) => ipcRenderer.invoke('folderWorkspaces:create', args),
+    update: (args) => ipcRenderer.invoke('folderWorkspaces:update', args),
+    delete: (args) => ipcRenderer.invoke('folderWorkspaces:delete', args)
+  } satisfies PreloadApi['folderWorkspaces'],
 
   sparsePresets: {
     list: (args) => ipcRenderer.invoke('sparsePresets:list', args),
@@ -1517,13 +1535,17 @@ const api = {
   },
 
   starNag: {
-    onShow: (callback: () => void): (() => void) => {
-      const listener = (_event: Electron.IpcRendererEvent): void => callback()
+    onShow: (callback: (payload?: { mode?: 'gh' | 'web' }) => void): (() => void) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        payload?: { mode?: 'gh' | 'web' }
+      ): void => callback(payload)
       ipcRenderer.on('star-nag:show', listener)
       return () => ipcRenderer.removeListener('star-nag:show', listener)
     },
     dismiss: (): Promise<void> => ipcRenderer.invoke('star-nag:dismiss'),
     complete: (): Promise<void> => ipcRenderer.invoke('star-nag:complete'),
+    disable: (): Promise<void> => ipcRenderer.invoke('star-nag:disable'),
     forceShow: (): Promise<void> => ipcRenderer.invoke('star-nag:forceShow')
   },
 
@@ -1572,6 +1594,9 @@ const api = {
 
     previewGhosttyImport: (): Promise<GhosttyImportPreview> =>
       ipcRenderer.invoke('settings:previewGhosttyImport'),
+
+    previewWarpThemeImport: (source: WarpThemeImportSource): Promise<WarpThemeImportPreview> =>
+      ipcRenderer.invoke('settings:previewWarpThemeImport', source),
 
     onChanged: (callback: (updates: Record<string, unknown>) => void): (() => void) => {
       const listener = (
@@ -3288,6 +3313,11 @@ const api = {
       ipcRenderer.invoke('openCodeUsage:getBreakdown', args),
     getRecentSessions: (args: { scope: string; range: string; limit?: number }): Promise<unknown> =>
       ipcRenderer.invoke('openCodeUsage:getRecentSessions', args)
+  },
+
+  aiVault: {
+    listSessions: (args?: AiVaultListArgs): Promise<unknown> =>
+      ipcRenderer.invoke('aiVault:listSessions', args)
   },
 
   runtime: {

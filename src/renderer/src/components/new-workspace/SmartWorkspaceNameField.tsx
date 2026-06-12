@@ -41,6 +41,7 @@ import {
 } from '@/lib/github-links'
 import { lookupSmartGitHubSubmitItem } from '@/lib/smart-github-submit'
 import { parseGitLabIssueOrMRLink } from '@/lib/gitlab-links'
+import { getLocalPreflightContext, localPreflightContextKey } from '@/lib/local-preflight-context'
 import { cn } from '@/lib/utils'
 import { LinearIcon } from '@/components/icons/LinearIcon'
 import { JiraIcon } from '@/components/icons/JiraIcon'
@@ -107,6 +108,7 @@ type SmartWorkspaceNameFieldProps = {
   disabled?: boolean
   disabledPlaceholder?: string
   textOnly?: boolean
+  branchesEnabled?: boolean
 }
 
 export type SmartWorkspaceNameSelection = {
@@ -177,7 +179,8 @@ export default function SmartWorkspaceNameField({
   onPlainEnter,
   disabled = false,
   disabledPlaceholder,
-  textOnly = false
+  textOnly = false,
+  branchesEnabled = true
 }: SmartWorkspaceNameFieldProps): React.JSX.Element {
   const {
     addRepo,
@@ -189,6 +192,8 @@ export default function SmartWorkspaceNameField({
     listLinearIssues,
     preflightStatus,
     preflightStatusChecked,
+    preflightStatusContextKey,
+    expectedPreflightContextKey,
     refreshPreflightStatus,
     searchLinearIssues,
     settings
@@ -203,6 +208,8 @@ export default function SmartWorkspaceNameField({
       listLinearIssues: s.listLinearIssues,
       preflightStatus: s.preflightStatus,
       preflightStatusChecked: s.preflightStatusChecked,
+      preflightStatusContextKey: s.preflightStatusContextKey,
+      expectedPreflightContextKey: localPreflightContextKey(getLocalPreflightContext(s)),
       refreshPreflightStatus: s.refreshPreflightStatus,
       searchLinearIssues: s.searchLinearIssues,
       settings: s.settings
@@ -239,13 +246,14 @@ export default function SmartWorkspaceNameField({
     link: NonNullable<ReturnType<typeof parseGitHubIssueOrPRLink>>
     matchingRepo: RepoOption | null
   } | null>(null)
+  const preflightStatusCurrent = preflightStatusContextKey === expectedPreflightContextKey
   const availableTaskProviders = useMemo(
     () =>
       filterAvailableTaskProviders(['github', 'gitlab', 'linear'], {
-        gitlabInstalled: preflightStatus?.glab?.installed === true,
+        gitlabInstalled: preflightStatusCurrent && preflightStatus?.glab?.installed === true,
         linearConnected: linearStatus.connected === true
       }),
-    [linearStatus.connected, preflightStatus?.glab?.installed]
+    [linearStatus.connected, preflightStatus?.glab?.installed, preflightStatusCurrent]
   )
   const gitlabAvailable = availableTaskProviders.includes('gitlab')
   const linearAvailable = availableTaskProviders.includes('linear')
@@ -261,9 +269,12 @@ export default function SmartWorkspaceNameField({
         if (item.id === 'linear') {
           return linearAvailable
         }
+        if (item.id === 'branches') {
+          return branchesEnabled
+        }
         return true
       }),
-    [gitlabAvailable, linearAvailable, textOnly]
+    [branchesEnabled, gitlabAvailable, linearAvailable, textOnly]
   )
 
   const selectedSourceFocusKey = selectedSource
@@ -314,7 +325,7 @@ export default function SmartWorkspaceNameField({
     if (disabled || textOnly) {
       return
     }
-    if (!preflightStatusChecked) {
+    if (!preflightStatusChecked || !preflightStatusCurrent) {
       void refreshPreflightStatus()
     }
     if (!linearStatusChecked) {
@@ -325,6 +336,7 @@ export default function SmartWorkspaceNameField({
     disabled,
     linearStatusChecked,
     preflightStatusChecked,
+    preflightStatusCurrent,
     refreshPreflightStatus,
     textOnly
   ])
@@ -524,13 +536,14 @@ export default function SmartWorkspaceNameField({
     () =>
       getBranchSearchRequest({
         disabled,
+        branchesEnabled,
         textOnly,
         mode,
         selectedRepoId: selectedRepo?.id ?? null,
         query: debouncedQuery,
         limit: RESULT_LIMIT
       }),
-    [debouncedQuery, disabled, mode, selectedRepo?.id, textOnly]
+    [branchesEnabled, debouncedQuery, disabled, mode, selectedRepo?.id, textOnly]
   )
 
   useEffect(() => {
@@ -906,8 +919,12 @@ export default function SmartWorkspaceNameField({
     ? (disabledPlaceholder ?? 'Unavailable')
     : mode === 'smart'
       ? linearAvailable
-        ? 'Type a name, #1234, branch, GitHub or Linear URL'
-        : 'Type a name, #1234, branch, or GitHub URL'
+        ? branchesEnabled
+          ? 'Type a name, #1234, branch, GitHub or Linear URL'
+          : 'Type a name, #1234, GitHub or Linear URL'
+        : branchesEnabled
+          ? 'Type a name, #1234, branch, or GitHub URL'
+          : 'Type a name, #1234, or GitHub URL'
       : mode === 'github'
         ? 'Search GitHub PRs and issues'
         : mode === 'branches'
@@ -1229,7 +1246,7 @@ export default function SmartWorkspaceNameField({
               {translate(
                 'auto.components.new.workspace.SmartWorkspaceNameField.ad188067ae',
                 'The GitHub URL points to'
-              )}
+              )}{' '}
               {crossRepoPrompt?.link.slug.owner}/{crossRepoPrompt?.link.slug.repo}
               {translate(
                 'auto.components.new.workspace.SmartWorkspaceNameField.9ef1a7c4b0',
@@ -1248,7 +1265,7 @@ export default function SmartWorkspaceNameField({
               {translate(
                 'auto.components.new.workspace.SmartWorkspaceNameField.eadf877af5',
                 'Keep'
-              )}
+              )}{' '}
               {selectedRepo?.displayName ??
                 translate(
                   'auto.components.new.workspace.SmartWorkspaceNameField.fda67f0b61',
@@ -1260,7 +1277,7 @@ export default function SmartWorkspaceNameField({
                 {translate(
                   'auto.components.new.workspace.SmartWorkspaceNameField.a76fcb4fa0',
                   'Switch to'
-                )}
+                )}{' '}
                 {crossRepoPrompt.matchingRepo.displayName}
               </Button>
             ) : (

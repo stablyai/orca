@@ -160,6 +160,12 @@ describe('telemetry IPC handlers', () => {
     registerWith({ installId: 'x', existedBeforeTelemetryRelease: false, optedIn: true })
     const handler = handlers.get('telemetry:track')!
     handler({}, 'app_starred_orca', { source: 'settings' })
+    handler({}, 'feature_interaction_usage_bucket_reached', {
+      feature_id: 'tasks',
+      feature_category: 'task_management',
+      count_bucket: 'count_1',
+      bucket_source: 'crossed_now'
+    })
     expect(trackMock).not.toHaveBeenCalled()
     expect(getCohortAtEmitMock).not.toHaveBeenCalled()
   })

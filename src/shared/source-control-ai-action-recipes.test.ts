@@ -403,4 +403,31 @@ describe('source-control AI action recipes', () => {
       error: 'Command template is empty for commit messages.'
     })
   })
+
+  it('lists supported agents when a text action uses an unsupported saved agent', () => {
+    const base = settings()
+    base.sourceControlAi = {
+      ...base.sourceControlAi!,
+      actions: {
+        ...base.sourceControlAi!.actions,
+        commitMessage: {
+          agentId: 'aider',
+          commandInputTemplate: '{basePrompt}'
+        }
+      }
+    }
+
+    expect(
+      resolveSourceControlAiForOperation({
+        settings: base,
+        repo: null,
+        operation: 'commitMessage',
+        discoveryHostKey: 'local'
+      })
+    ).toEqual({
+      ok: false,
+      error:
+        'Agent "aider" does not support Source Control AI commit messages. Supported agents: Claude, Codex, OpenCode, Pi, Amp, Cursor, Kimi, GitHub Copilot, Antigravity, or Custom command.'
+    })
+  })
 })

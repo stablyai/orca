@@ -80,7 +80,7 @@ describe('locale-translation-policy', () => {
         localeValue: '壊れた小切手に対して AI エージェントを開始しました。',
         locale: 'ja'
       })
-    ).toBe('失敗したチェックに対して AI エージェントを開始しました。')
+    ).toBe('失敗したチェックに対して AI agent を開始しました。')
     expect(
       repairTranslatedValue({
         key: 'auto.hooks.useSettingsNavigationMetadata.95a1886d94',
@@ -88,7 +88,7 @@ describe('locale-translation-policy', () => {
         localeValue: '電話機からターミナルとエージェントを制御します。',
         locale: 'ja'
       })
-    ).toBe('スマートフォンからターミナルとエージェントを操作')
+    ).toBe('スマートフォンから terminals と agents を操作')
     expect(
       repairTranslatedValue({
         key: 'auto.components.GitHubItemDialog.934add88b6',
@@ -267,7 +267,7 @@ describe('locale-translation-policy', () => {
         localeValue: '未已检测代理',
         locale: 'zh'
       })
-    ).toBe('未检测到代理')
+    ).toBe('未检测到 agents')
     expect(
       repairTranslatedValue({
         key: 'auto.components.skills.SkillsPage.38e0951c3a',
@@ -275,7 +275,7 @@ describe('locale-translation-policy', () => {
         localeValue: '代理技巧',
         locale: 'zh'
       })
-    ).toBe('代理技能')
+    ).toBe('Agent 技能')
     expect(
       repairTranslatedValue({
         key: 'auto.components.settings.appearance.search.9ae151b26b',
@@ -358,7 +358,7 @@ describe('locale-translation-policy', () => {
         localeValue: 'コミットするものは何もありません。 PR はすでに統合されています。',
         locale: 'ja'
       })
-    ).toBe('コミットするものはありません。PR はすでにマージされています。')
+    ).toBe('commit するものはありません。PR はすでにマージされています。')
     expect(
       repairTranslatedValue({
         key: 'auto.components.settings.integrations.search.581844769a',

@@ -2,7 +2,7 @@
 
 ## Build the App With `--mode e2e` Before Running Tests
 
-E2E tests read Zustand state via `window.__store`. That global is only assigned when the renderer is built with `VITE_EXPOSE_STORE=true`, which is set by `.env.e2e` and only applied when you pass `--mode e2e` to `electron-vite build`. A plain `pnpm build` or `pnpm build:electron-vite` produces an `out/` tree **without** the store exposed, so reusing it with `SKIP_BUILD=1` makes every spec hang on `waitForFunction(() => Boolean(window.__store))` and time out at 30s.
+E2E tests read Zustand state via `window.__store`. That global is only assigned when the preload bundle is built in `e2e` mode, which is applied when you pass `--mode e2e` to `electron-vite build`. A plain `pnpm build` or `pnpm build:electron-vite` produces an `out/` tree **without** the store exposed, so reusing it with `SKIP_BUILD=1` makes every spec hang on `waitForFunction(() => Boolean(window.__store))` and time out at 30s.
 
 - Default path: `pnpm run test:e2e` — `globalSetup` runs `electron-vite build --mode e2e` for you.
 - Fast iteration: `pnpm exec electron-vite build --mode e2e` once, then `SKIP_BUILD=1 pnpm run test:e2e …`.

@@ -20,6 +20,7 @@ import { ENVIRONMENT_HANDLERS } from './handlers/environment'
 import { AGENT_HOOK_HANDLERS } from './handlers/agent-hooks'
 import { DIAGNOSTICS_HANDLERS } from './handlers/diagnostics'
 import { EMULATOR_HANDLERS } from './handlers/emulator'
+import { LINEAR_HANDLERS } from './handlers/linear'
 
 export type HandlerContext = {
   flags: Map<string, string | boolean>
@@ -53,7 +54,8 @@ function buildHandlers(): Map<string, CommandHandler> {
     COMPUTER_HANDLERS,
     AGENT_HOOK_HANDLERS,
     DIAGNOSTICS_HANDLERS,
-    ENVIRONMENT_HANDLERS
+    ENVIRONMENT_HANDLERS,
+    LINEAR_HANDLERS
   ]
   for (const group of groups) {
     for (const [key, handler] of Object.entries(group)) {

@@ -129,6 +129,7 @@ describe('client UI RPC methods', () => {
       ...getDefaultUIState(),
       rightSidebarOpen: false,
       rightSidebarTab: 'checks',
+      rightSidebarExplorerView: 'search',
       showActiveOnly: true,
       filterRepoIds: ['repo-1']
     }
@@ -142,6 +143,7 @@ describe('client UI RPC methods', () => {
       makeRequest('ui.set', {
         rightSidebarOpen: false,
         rightSidebarTab: 'checks',
+        rightSidebarExplorerView: 'search',
         showActiveOnly: true,
         hideSleepingWorkspaces: true,
         filterRepoIds: ['repo-1']
@@ -151,6 +153,7 @@ describe('client UI RPC methods', () => {
     expect(runtime.updateUIState).toHaveBeenCalledWith({
       rightSidebarOpen: false,
       rightSidebarTab: 'checks',
+      rightSidebarExplorerView: 'search',
       showActiveOnly: true,
       hideSleepingWorkspaces: true,
       filterRepoIds: ['repo-1']

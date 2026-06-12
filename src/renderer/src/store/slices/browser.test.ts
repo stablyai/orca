@@ -38,6 +38,8 @@ function createTestStore() {
     (...a) =>
       ({
         settings: { activeRuntimeEnvironmentId: null } as AppState['settings'],
+        activeWorktreeId: 'wt-1',
+        browserDefaultUrl: 'about:blank',
         unifiedTabsByWorktree: {},
         tabBarOrderByWorktree: {},
         tabsByWorktree: {},
@@ -49,6 +51,7 @@ function createTestStore() {
         closeUnifiedTab: vi.fn(),
         activateTab: vi.fn(),
         setTabLabel: vi.fn(),
+        recordFeatureInteraction: vi.fn(),
         ...createBrowserSlice(...a)
       }) as unknown as AppState
   )
@@ -143,6 +146,19 @@ function makeAnnotation(pageId: string, id = 'annotation-1'): BrowserPageAnnotat
 }
 
 describe('createBrowserSlice annotations', () => {
+  it('records browser-tab-created only for the explicit new-tab action', async () => {
+    const store = createTestStore()
+
+    store.getState().createBrowserTab('wt-1', 'https://example.com')
+    expect(store.getState().recordFeatureInteraction).not.toHaveBeenCalledWith(
+      'browser-tab-created'
+    )
+
+    await store.getState().openNewBrowserTabInActiveWorkspace('group-1')
+
+    expect(store.getState().recordFeatureInteraction).toHaveBeenCalledWith('browser-tab-created')
+  })
+
   it('clears page annotations when the browser page URL changes', () => {
     const store = createTestStore()
     const tab = store.getState().createBrowserTab('wt-1', 'https://example.com')

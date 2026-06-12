@@ -18,6 +18,7 @@ export {
   normalizeTerminalTitle,
   isGeminiTerminalTitle,
   isClaudeAgent,
+  isClaudeManagementTitle,
   getAgentLabel
 } from '../../../shared/agent-detection'
 import {

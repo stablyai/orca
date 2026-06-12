@@ -193,6 +193,9 @@ export function LinearIssueEditSection({
           onEditStateChange({ state: prevState })
           patchLinearIssue(issue.id, { state: prevState })
         },
+        onSuccess: () => {
+          useAppStore.getState().recordFeatureInteraction('linear-tasks')
+        },
         onError: (err) => toast.error(err)
       })
     },
@@ -222,6 +225,9 @@ export function LinearIssueEditSection({
           onEditStateChange({ priority: prevPriority })
           patchLinearIssue(issue.id, { priority: prevPriority })
         },
+        onSuccess: () => {
+          useAppStore.getState().recordFeatureInteraction('linear-tasks')
+        },
         onError: (err) => toast.error(err)
       })
     },
@@ -241,6 +247,9 @@ export function LinearIssueEditSection({
         onRevert: () => {
           onEditStateChange({ estimate: prevEstimate })
           patchLinearIssue(issue.id, { estimate: prevEstimate })
+        },
+        onSuccess: () => {
+          useAppStore.getState().recordFeatureInteraction('linear-tasks')
         },
         onError: (err) => toast.error(err)
       })
@@ -287,6 +296,9 @@ export function LinearIssueEditSection({
           onEditStateChange({ assignee: prevAssignee })
           patchLinearIssue(issue.id, { assignee: prevAssignee })
         },
+        onSuccess: () => {
+          useAppStore.getState().recordFeatureInteraction('linear-tasks')
+        },
         onError: (err) => toast.error(err)
       })
     },
@@ -324,6 +336,9 @@ export function LinearIssueEditSection({
         onRevert: () => {
           onEditStateChange({ labelIds: prevLabelIds, labels: prevLabels })
           patchLinearIssue(issue.id, { labelIds: prevLabelIds, labels: prevLabels })
+        },
+        onSuccess: () => {
+          useAppStore.getState().recordFeatureInteraction('linear-tasks')
         },
         onError: (err) => toast.error(err)
       })
@@ -1022,6 +1037,7 @@ export function LinearIssueCommentFooter({
       }
       if (typed.ok) {
         setBody('')
+        useAppStore.getState().recordFeatureInteraction('linear-tasks')
         onCommentAdded({
           id: typed.id ?? createBrowserUuid(),
           body: trimmed,

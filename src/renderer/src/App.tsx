@@ -55,6 +55,7 @@ import {
   isFloatingWorkspaceTerminalInputTarget,
   shouldMinimizeFloatingWorkspacePanelOnCloseShortcut
 } from '@/lib/floating-workspace-terminal-actions'
+import { createFloatingWorkspaceTourInteractionSnapshot } from '@/lib/floating-workspace-tour-interaction-snapshot'
 import { requestScrollToCurrentWorkspaceRevealAndRename } from '@/lib/scroll-to-current-workspace-status'
 import { WorkspacePortScanner } from './components/ports/WorkspacePortScanner'
 import { CrashReportDialog } from './components/crash-report/CrashReportDialog'
@@ -313,6 +314,11 @@ function App(): React.JSX.Element {
   useRadixBodyPointerEventsRecovery()
   useWebSessionTabsSync()
   const [floatingTerminalOpen, setFloatingTerminalOpen] = useState(false)
+  const floatingWorkspaceTourInteractionSnapshotRef = useRef<{
+    wasPreviouslyInteracted?: boolean
+    persisted?: Promise<void>
+    recordFeatureInteractionForTour: boolean
+  } | null>(null)
 
   // Why: Zustand actions are referentially stable, but each individual
   // useAppStore(s => s.someAction) still registers a subscription that React
@@ -323,6 +329,7 @@ function App(): React.JSX.Element {
       toggleSidebar: s.toggleSidebar,
       fetchRepos: s.fetchRepos,
       fetchProjectGroups: s.fetchProjectGroups,
+      fetchFolderWorkspaces: s.fetchFolderWorkspaces,
       fetchAllWorktrees: s.fetchAllWorktrees,
       fetchWorktreeLineage: s.fetchWorktreeLineage,
       fetchSettings: s.fetchSettings,
@@ -350,8 +357,8 @@ function App(): React.JSX.Element {
       toggleRightSidebar: s.toggleRightSidebar,
       setRightSidebarOpen: s.setRightSidebarOpen,
       setRightSidebarTab: s.setRightSidebarTab,
-      seedFileSearchQuery: s.seedFileSearchQuery,
-      seedFileSearchIncludePattern: s.seedFileSearchIncludePattern,
+      showRightSidebarFiles: s.showRightSidebarFiles,
+      showRightSidebarSearch: s.showRightSidebarSearch,
       setActiveView: s.setActiveView,
       updateSettings: s.updateSettings,
       pruneLastVisitedTimestamps: s.pruneLastVisitedTimestamps,
@@ -477,7 +484,9 @@ function App(): React.JSX.Element {
       // Why: recordFeatureInteraction updates Zustand subscribers; doing it
       // inside React's state updater logs a render-phase update warning.
       if (resolvedOpen && !floatingTerminalOpen) {
-        useAppStore.getState().recordFeatureInteraction('floating-workspace')
+        const state = useAppStore.getState()
+        floatingWorkspaceTourInteractionSnapshotRef.current =
+          createFloatingWorkspaceTourInteractionSnapshot(state)
         rememberFloatingTerminalReturnFocus()
       } else if (!resolvedOpen && floatingTerminalOpen) {
         restoreFloatingTerminalReturnFocus()
@@ -519,6 +528,7 @@ function App(): React.JSX.Element {
   const rightSidebarWidth = useAppStore((s) => s.rightSidebarWidth)
   const rightSidebarOpen = useAppStore((s) => s.rightSidebarOpen)
   const rightSidebarTab = useAppStore((s) => s.rightSidebarTab)
+  const rightSidebarExplorerView = useAppStore((s) => s.rightSidebarExplorerView)
   const isFullScreen = useAppStore((s) => s.isFullScreen)
   const settings = useAppStore((s) => s.settings)
   const dictationState = useAppStore((s) => s.dictationState)
@@ -723,6 +733,7 @@ function App(): React.JSX.Element {
         await actions.fetchSettings()
         await actions.fetchRepos()
         await actions.fetchProjectGroups()
+        await actions.fetchFolderWorkspaces()
         await actions.fetchAllWorktrees()
         await actions.fetchWorktreeLineage()
         const persistedUI = await window.api.ui.get()
@@ -1109,6 +1120,7 @@ function App(): React.JSX.Element {
         sidebarWidth,
         rightSidebarOpen,
         rightSidebarTab,
+        rightSidebarExplorerView,
         rightSidebarWidth,
         groupBy,
         sortBy,
@@ -1134,6 +1146,7 @@ function App(): React.JSX.Element {
     sidebarWidth,
     rightSidebarOpen,
     rightSidebarTab,
+    rightSidebarExplorerView,
     rightSidebarWidth,
     groupBy,
     sortBy,
@@ -1285,11 +1298,7 @@ function App(): React.JSX.Element {
       const canRevealRightSidebar = canShowRightSidebarForView(activeView)
 
       const openSearchSidebar = (query: string | null): void => {
-        if (query && activeWorktreeId) {
-          actions.seedFileSearchQuery(activeWorktreeId, query)
-        }
-        actions.setRightSidebarTab('search')
-        actions.setRightSidebarOpen(true)
+        actions.showRightSidebarSearch(query ? { query } : undefined)
       }
 
       if (matchShortcut('sidebar.search.toggle') && canRevealRightSidebar) {
@@ -1303,12 +1312,9 @@ function App(): React.JSX.Element {
         if (selectedFolderRelativePath !== null && activeWorktreeId) {
           e.preventDefault()
           notifyTerminalCapture('sidebar.search.toggle')
-          actions.seedFileSearchIncludePattern(
-            activeWorktreeId,
-            folderRelativePathToIncludeGlob(selectedFolderRelativePath)
-          )
-          actions.setRightSidebarTab('search')
-          actions.setRightSidebarOpen(true)
+          actions.showRightSidebarSearch({
+            includePattern: folderRelativePathToIncludeGlob(selectedFolderRelativePath)
+          })
           return
         }
 
@@ -1463,8 +1469,7 @@ function App(): React.JSX.Element {
       if (matchShortcut('sidebar.explorer.toggle')) {
         e.preventDefault()
         notifyTerminalCapture('sidebar.explorer.toggle')
-        actions.setRightSidebarTab('explorer')
-        actions.setRightSidebarOpen(true)
+        actions.showRightSidebarFiles()
         return
       }
 
@@ -1989,7 +1994,11 @@ function App(): React.JSX.Element {
                 <RecoverableRenderErrorBoundary
                   boundaryId="right-sidebar"
                   surface="right-sidebar"
-                  resetKey={rightSidebarTab}
+                  resetKey={
+                    rightSidebarTab === 'explorer'
+                      ? `${rightSidebarTab}:${rightSidebarExplorerView}`
+                      : rightSidebarTab
+                  }
                   title={translate('auto.App.ed6b168d00', 'The right sidebar hit an error.')}
                   description={translate(
                     'auto.App.8d1e160ed1',
@@ -2017,6 +2026,7 @@ function App(): React.JSX.Element {
                 <FloatingTerminalPanel
                   open={floatingTerminalOpen}
                   onOpenChange={setFloatingTerminalOpenWithFocus}
+                  tourInteractionSnapshot={floatingWorkspaceTourInteractionSnapshotRef.current}
                 />
               </RecoverableRenderErrorBoundary>
             </Suspense>

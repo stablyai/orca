@@ -45,8 +45,27 @@ function checksState(item: GitHubPRMergeStateInput): CheckStatus | 'none' | unde
   return item.checksStatus
 }
 
+function checksPassed(item: GitHubPRMergeStateInput): boolean {
+  return checksState(item) === 'success'
+}
+
 function hasFullMergeMetadata(item: GitHubPRMergeStateInput): boolean {
   return item.mergeable !== undefined || item.mergeStateStatus !== undefined
+}
+
+function passedChecksMergePresentation(
+  autoMergeAction: GitHubPRAutoMergeAction | null
+): GitHubPRMergeStatePresentation {
+  return {
+    label: translate('auto.components.github.pr.merge.state.a5b66afb58', 'Checks passed'),
+    tone: SUCCESS_TONE,
+    tooltip: translate(
+      'auto.components.github.pr.merge.state.fbd4f57f0a',
+      'Checks passed. Merge eligibility will be checked again before merging.'
+    ),
+    directMergeAvailable: true,
+    autoMergeAction
+  }
 }
 
 export function presentGitHubPRMergeState(
@@ -154,6 +173,11 @@ export function presentGitHubPRMergeState(
     }
   }
   if (!hasFullMergeMetadata(item)) {
+    // Why: GitHub can omit merge metadata while checks are already green; let
+    // users attempt merge and rely on the main-process preflight for blockers.
+    if (checksPassed(item)) {
+      return passedChecksMergePresentation(autoMergeAction)
+    }
     return {
       label: translate('auto.components.github.pr.merge.state.bd4f27b50e', 'Merge'),
       tone: MUTED_TONE,
@@ -237,6 +261,11 @@ export function presentGitHubPRMergeState(
       directMergeAvailable: true,
       autoMergeAction
     }
+  }
+  // Why: GitHub may still report intermediate mergeability while checks are
+  // green; the merge command re-checks authoritative blockers before merging.
+  if (checksPassed(item)) {
+    return passedChecksMergePresentation(autoMergeAction)
   }
   return {
     label: translate('auto.components.github.pr.merge.state.f958920f3a', 'Checking'),

@@ -7,6 +7,7 @@ import { create } from 'zustand'
 import type { AppState } from '../types'
 import type {
   DetectedWorktreeListResult,
+  FolderWorkspace,
   LocalBaseRefRefreshResult,
   Worktree,
   WorktreeLineage
@@ -89,6 +90,7 @@ import {
   unregisterPersistentWebview
 } from '../../components/browser-pane/webview-registry'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
+import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 
 function resetRemoteRuntimeMocks() {
   clearRuntimeCompatibilityCacheForTests()
@@ -199,6 +201,45 @@ function makeLineage(overrides: Partial<WorktreeLineage> = {}): WorktreeLineage 
     ...overrides
   }
 }
+
+function makeFolderWorkspace(overrides: Partial<FolderWorkspace> = {}): FolderWorkspace {
+  return {
+    ...overrides,
+    id: overrides.id ?? 'folder-1',
+    projectGroupId: overrides.projectGroupId ?? 'group-1',
+    name: overrides.name ?? 'platform workspace',
+    folderPath: overrides.folderPath ?? '/work/platform',
+    linkedTask: overrides.linkedTask ?? null,
+    comment: overrides.comment ?? '',
+    isArchived: overrides.isArchived ?? false,
+    isUnread: overrides.isUnread ?? false,
+    isPinned: overrides.isPinned ?? false,
+    sortOrder: overrides.sortOrder ?? 0,
+    manualOrder: overrides.manualOrder ?? 0,
+    lastActivityAt: overrides.lastActivityAt ?? 0,
+    createdAt: overrides.createdAt ?? 0,
+    updatedAt: overrides.updatedAt ?? 0,
+    workspaceStatus: overrides.workspaceStatus ?? 'active'
+  }
+}
+
+describe('folder workspace lookups', () => {
+  it('returns a stable synthetic worktree for repeated folder workspace lookups', () => {
+    const store = createTestStore()
+    const folderWorkspace = makeFolderWorkspace()
+    store.setState({ folderWorkspaces: [folderWorkspace] } as Partial<AppState>)
+
+    const first = store.getState().getKnownWorktreeById(folderWorkspaceKey(folderWorkspace.id))
+    const second = store.getState().getKnownWorktreeById(folderWorkspaceKey(folderWorkspace.id))
+
+    expect(second).toBe(first)
+    expect(first).toMatchObject({
+      id: folderWorkspaceKey(folderWorkspace.id),
+      displayName: folderWorkspace.name,
+      path: folderWorkspace.folderPath
+    })
+  })
+})
 
 describe('setActiveWorktree focus handling', () => {
   beforeEach(() => {
@@ -422,8 +463,12 @@ describe('fetchWorktrees', () => {
       worktreesByRepo: { repo1: [removed, surviving] },
       sortEpoch: 7,
       rightSidebarTabByWorktree: {
-        [removed.id]: 'search',
+        [removed.id]: 'search' as never,
         [surviving.id]: 'checks'
+      },
+      rightSidebarExplorerViewByWorktree: {
+        [removed.id]: 'search',
+        [surviving.id]: 'files'
       }
     } as Partial<AppState>)
 
@@ -431,6 +476,9 @@ describe('fetchWorktrees', () => {
 
     expect(store.getState().worktreesByRepo.repo1).toEqual([surviving])
     expect(store.getState().rightSidebarTabByWorktree).toEqual({ [surviving.id]: 'checks' })
+    expect(store.getState().rightSidebarExplorerViewByWorktree).toEqual({
+      [surviving.id]: 'files'
+    })
     expect(store.getState().sortEpoch).toBe(8)
   })
 
@@ -459,6 +507,10 @@ describe('fetchWorktrees', () => {
       sortEpoch: 7,
       rightSidebarTabByWorktree: {
         [visible.id]: 'checks',
+        [hidden.id]: 'search' as never
+      },
+      rightSidebarExplorerViewByWorktree: {
+        [visible.id]: 'files',
         [hidden.id]: 'search'
       },
       tabsByWorktree: {
@@ -470,6 +522,7 @@ describe('fetchWorktrees', () => {
 
     expect(store.getState().worktreesByRepo.repo1).toEqual([visible])
     expect(store.getState().rightSidebarTabByWorktree).toEqual({ [visible.id]: 'checks' })
+    expect(store.getState().rightSidebarExplorerViewByWorktree).toEqual({ [visible.id]: 'files' })
     expect(store.getState().tabsByWorktree[hidden.id]).toBeUndefined()
     expect(store.getState().sortEpoch).toBe(7)
   })
@@ -546,7 +599,7 @@ describe('fetchWorktrees', () => {
       worktreesByRepo: { repo1: [missingFromFallback, fallback] },
       sortEpoch: 7,
       rightSidebarTabByWorktree: {
-        [missingFromFallback.id]: 'search',
+        [missingFromFallback.id]: 'search' as never,
         [fallback.id]: 'checks'
       },
       tabsByWorktree: {
@@ -581,7 +634,7 @@ describe('fetchWorktrees', () => {
     store.setState({
       worktreesByRepo: { repo1: [existing] },
       sortEpoch: 7,
-      rightSidebarTabByWorktree: { [existing.id]: 'search' }
+      rightSidebarTabByWorktree: { [existing.id]: 'search' as never }
     } as Partial<AppState>)
 
     const result = await store.getState().fetchWorktrees('repo1')
@@ -2403,6 +2456,7 @@ describe('worktree remote runtime mutations', () => {
     expect(fetchPRForBranch).toHaveBeenCalledWith('/repos/orca', 'feature/pr-link', {
       force: true,
       repoId: 'repo1',
+      worktreeId: wt.id,
       linkedPRNumber: null,
       fallbackPRNumber: null,
       fallbackPRSource: 'explicit'
@@ -2448,6 +2502,7 @@ describe('worktree remote runtime mutations', () => {
     expect(fetchPRForBranch).toHaveBeenCalledWith('/repos/orca', 'feature/pr-link', {
       force: true,
       repoId: 'repo1',
+      worktreeId: wt.id,
       linkedPRNumber: null,
       fallbackPRNumber: null,
       fallbackPRSource: 'explicit'
@@ -2637,6 +2692,7 @@ describe('worktree remote runtime mutations', () => {
     expect(fetchPRForBranch).toHaveBeenCalledWith('/repos/orca', 'feature/pr-link', {
       force: true,
       repoId: 'repo1',
+      worktreeId: wt.id,
       linkedPRNumber: null,
       fallbackPRNumber: null,
       fallbackPRSource: 'explicit'
@@ -3286,7 +3342,7 @@ describe('purgeWorktreeTerminalState direct (design §4.4)', () => {
         'repoA::/a/wt2': ['coverage/']
       },
       rightSidebarTabByWorktree: {
-        'repoA::/a/wt1': 'search',
+        'repoA::/a/wt1': 'search' as never,
         'repoA::/a/wt2': 'checks'
       },
       activeWorktreeId: 'repoA::/a/wt1',

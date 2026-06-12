@@ -1,14 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { LinearClientForWorkspace } from './client'
+import { credentialDecryptionMessage } from '../../shared/integration-credential-errors'
 
 const getClients = vi.fn()
 const clearToken = vi.fn()
+const isAuthError = vi.fn()
 
 vi.mock('./client', () => ({
   acquire: vi.fn().mockResolvedValue(undefined),
   release: vi.fn(),
   getClients: (...args: unknown[]) => getClients(...args),
-  isAuthError: vi.fn().mockReturnValue(false),
+  isAuthError: (...args: unknown[]) => isAuthError(...args),
   clearToken: (...args: unknown[]) => clearToken(...args)
 }))
 
@@ -65,6 +67,7 @@ function makeEntry(
 describe('Linear teams', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    isAuthError.mockReturnValue(false)
   })
 
   it('fetches every page of teams for a workspace', async () => {
@@ -96,5 +99,15 @@ describe('Linear teams', () => {
       { id: 'team-a', workspaceId: 'workspace-1', workspaceName: 'Alpha' },
       { id: 'team-b', workspaceId: 'workspace-2', workspaceName: 'Beta' }
     ])
+  })
+
+  it('surfaces Linear credential decrypt errors on active team reads', async () => {
+    const error = new Error(credentialDecryptionMessage('Linear'))
+    getClients.mockImplementation(() => {
+      throw error
+    })
+    const { listTeams } = await import('./teams')
+
+    await expect(listTeams('workspace-1')).rejects.toThrow(error.message)
   })
 })

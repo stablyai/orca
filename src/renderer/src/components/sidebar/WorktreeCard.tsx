@@ -61,6 +61,7 @@ import {
 import { DetachedHeadBadge } from '@/components/DetachedHeadBadge'
 import { getWorktreeGitIdentityDisplay } from '@/lib/worktree-git-identity-display'
 import { translate } from '@/i18n/i18n'
+import { folderWorkspaceKey, parseWorkspaceKey } from '../../../../shared/workspace-scope'
 
 type WorktreeCardProps = {
   worktree: Worktree
@@ -105,6 +106,12 @@ function formatSparseDirectoryPreview(directories: string[]): string {
 
 function isWebClient(): boolean {
   return Boolean((window as unknown as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__)
+}
+
+function getDirectoryName(folderPath: string): string {
+  const normalized = folderPath.replace(/[\\/]+$/, '')
+  const parts = normalized.split(/[\\/]+/)
+  return parts.at(-1) || normalized || folderPath
 }
 
 // Why: the pinned repo icon and the compact inline badge share one chip shell;
@@ -165,6 +172,8 @@ const WorktreeCard = React.memo(function WorktreeCard({
   const openModal = useAppStore((s) => s.openModal)
   const openTaskPage = useAppStore((s) => s.openTaskPage)
   const updateWorktreeMeta = useAppStore((s) => s.updateWorktreeMeta)
+  const deleteFolderWorkspace = useAppStore((s) => s.deleteFolderWorkspace)
+  const setActiveWorktree = useAppStore((s) => s.setActiveWorktree)
   const renamingWorktreeId = useAppStore((s) => s.renamingWorktreeId)
   const setRenamingWorktreeId = useAppStore((s) => s.setRenamingWorktreeId)
   const fetchHostedReviewForBranch = useAppStore((s) => s.fetchHostedReviewForBranch)
@@ -247,7 +256,10 @@ const WorktreeCard = React.memo(function WorktreeCard({
   const gitIdentityDisplay = getWorktreeGitIdentityDisplay(worktree)
   const detachedHeadDisplay = gitIdentityDisplay?.kind === 'detached' ? gitIdentityDisplay : null
   const branch = gitIdentityDisplay?.kind === 'branch' ? gitIdentityDisplay.branchName : ''
-  const isFolder = repo ? isFolderRepo(repo) : false
+  const workspaceScope = parseWorkspaceKey(worktree.id)
+  const folderWorkspaceId =
+    workspaceScope?.type === 'folder' ? workspaceScope.folderWorkspaceId : null
+  const isFolder = repo ? isFolderRepo(repo) : folderWorkspaceId !== null
   const hostedReviewCacheKey =
     repo && branch
       ? getHostedReviewCacheKey(repo.path, branch, settings, repo.id, repo.connectionId)
@@ -555,10 +567,27 @@ const WorktreeCard = React.memo(function WorktreeCard({
       event.preventDefault()
       event.stopPropagation()
       if (showDeleteQuickAction) {
+        if (folderWorkspaceId) {
+          void deleteFolderWorkspace(folderWorkspaceId).then((deleted) => {
+            if (
+              deleted &&
+              useAppStore.getState().activeWorktreeId === folderWorkspaceKey(folderWorkspaceId)
+            ) {
+              setActiveWorktree(null)
+            }
+          })
+          return
+        }
         runWorktreeDelete(worktree.id)
       }
     },
-    [showDeleteQuickAction, worktree.id]
+    [
+      deleteFolderWorkspace,
+      folderWorkspaceId,
+      setActiveWorktree,
+      showDeleteQuickAction,
+      worktree.id
+    ]
   )
   const handlePendingFirstAgentMessageRenameInfo = useCallback(
     (event: React.MouseEvent<HTMLButtonElement>) => {
@@ -965,6 +994,17 @@ const WorktreeCard = React.memo(function WorktreeCard({
               onBeginEditingConsumed={() => setRenamingWorktreeId(null)}
             />
 
+            {isFolder && (
+              <Badge
+                variant="secondary"
+                className="h-[16px] px-1.5 text-[10px] font-medium rounded shrink-0 text-muted-foreground bg-accent border border-border dark:bg-accent/80 dark:border-border/50 leading-none"
+              >
+                {repo
+                  ? getRepoKindLabel(repo)
+                  : translate('auto.components.sidebar.WorktreeCard.93aebe4529', 'Folder')}
+              </Badge>
+            )}
+
             {typeof worktree.firstAgentMessageRenameError === 'string' &&
             worktree.firstAgentMessageRenameError.length > 0 &&
             !titleRenaming ? (
@@ -1155,14 +1195,12 @@ const WorktreeCard = React.memo(function WorktreeCard({
               )}
 
               {isFolder ? (
-                <Badge
-                  variant="secondary"
-                  className="h-[16px] px-1.5 text-[10px] font-medium rounded shrink-0 text-muted-foreground bg-accent border border-border dark:bg-accent/80 dark:border-border/50 leading-none"
+                <span
+                  className="min-w-0 truncate font-mono text-[11px] leading-none text-muted-foreground"
+                  title={worktree.path}
                 >
-                  {repo
-                    ? getRepoKindLabel(repo)
-                    : translate('auto.components.sidebar.WorktreeCard.93aebe4529', 'Folder')}
-                </Badge>
+                  {getDirectoryName(worktree.path)}
+                </span>
               ) : showBranch ? (
                 <span className="min-w-0 text-[11px] text-muted-foreground truncate leading-none">
                   {branch}

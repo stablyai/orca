@@ -81,6 +81,7 @@ import {
   isTerminalLiveInputWithinByteLimit,
   scheduleTerminalLiveInputFocus
 } from '../../../../src/terminal/terminal-live-input'
+import { normalizeTerminalTextInput } from '../../../../src/terminal/terminal-text-input-normalization'
 import { countTerminalGestureInputSequences } from '../../../../src/terminal/terminal-gesture-input'
 import { MobileBrowserPane, type MobileBrowserTab } from '../../../../src/browser/MobileBrowserPane'
 import { isBlankBrowserUrl, normalizeBrowserUrl } from '../../../../src/browser/browser-url'
@@ -2663,7 +2664,7 @@ export default function SessionScreen() {
     }
     sendingRef.current = true
 
-    const text = input
+    const text = normalizeTerminalTextInput(input)
     setInput('')
 
     try {
@@ -2706,10 +2707,11 @@ export default function SessionScreen() {
 
   const sendLiveTerminalInput = useCallback(
     (handle: string, bytes: string) => {
-      if (bytes.length === 0) {
+      const text = normalizeTerminalTextInput(bytes)
+      if (text.length === 0) {
         return
       }
-      if (!isTerminalLiveInputWithinByteLimit(bytes)) {
+      if (!isTerminalLiveInputWithinByteLimit(text)) {
         triggerError()
         showToast('Input too large (max 256 KiB)', 1500)
         return
@@ -2726,7 +2728,7 @@ export default function SessionScreen() {
       void rpc
         .sendRequest('terminal.send', {
           terminal: handle,
-          text: bytes,
+          text,
           enter: false,
           ...(deviceTokenRef.current
             ? { client: { id: deviceTokenRef.current, type: 'mobile' as const } }
@@ -2791,8 +2793,9 @@ export default function SessionScreen() {
         liveInputRef.current?.setNativeProps({ text: '' })
         return
       }
-      if (text.length > 0) {
-        sendLiveTerminalInput(activeHandle, text)
+      const normalizedText = normalizeTerminalTextInput(text)
+      if (normalizedText.length > 0) {
+        sendLiveTerminalInput(activeHandle, normalizedText)
       }
       setLiveInputCapture('')
       // Why: the field is only a keyboard capture surface. Clearing the
@@ -3859,11 +3862,16 @@ export default function SessionScreen() {
 
           {visibleTabs.length > 0 && (
             <View style={styles.tabBar}>
+              {/* Why: tab taps must register on the first press while the live
+                  keyboard is open instead of being eaten by keyboard dismissal
+                  (#5106); leaving a non-live tab still closes the keyboard
+                  because the live input unmounts. */}
               <ScrollView
                 horizontal
                 showsHorizontalScrollIndicator={false}
                 style={styles.tabScroll}
                 contentContainerStyle={styles.tabContent}
+                keyboardShouldPersistTaps="handled"
               >
                 {visibleTabs.map((t) => (
                   <Pressable
@@ -4099,10 +4107,14 @@ export default function SessionScreen() {
           >
             {/* Accessory keys */}
             <View style={styles.accessoryBar}>
+              {/* Why: with default tap handling the first tap on any accessory
+                  key dismisses the open keyboard and is swallowed, so live
+                  input lost its keyboard on every Esc/Tab press (#5106). */}
               <ScrollView
                 horizontal
                 showsHorizontalScrollIndicator={false}
                 contentContainerStyle={styles.accessoryContent}
+                keyboardShouldPersistTaps="always"
               >
                 <Pressable
                   style={({ pressed }) => [
@@ -4270,6 +4282,7 @@ export default function SessionScreen() {
                   autoCapitalize="none"
                   autoCorrect={false}
                   spellCheck={false}
+                  smartInsertDelete={false}
                   keyboardType={Platform.OS === 'ios' ? 'ascii-capable' : 'visible-password'}
                   returnKeyType="default"
                   blurOnSubmit={false}
@@ -4283,11 +4296,16 @@ export default function SessionScreen() {
                 <TextInput
                   style={styles.textInput}
                   value={input}
-                  onChangeText={setInput}
+                  onChangeText={(text) =>
+                    setInput((previousText) => normalizeTerminalTextInput(text, previousText))
+                  }
                   placeholder="Type a command…"
                   placeholderTextColor={colors.textMuted}
                   autoCapitalize="none"
                   autoCorrect={false}
+                  spellCheck={false}
+                  smartInsertDelete={false}
+                  keyboardType={Platform.OS === 'ios' ? 'ascii-capable' : 'visible-password'}
                   returnKeyType="send"
                   editable={canSend}
                   onSubmitEditing={() => void handleSend()}
@@ -4354,6 +4372,7 @@ export default function SessionScreen() {
         visible={showCreateTabDrawer}
         title="New Tab"
         actions={[
+          ...createTabAgentActions,
           {
             label: 'Terminal',
             icon: SquareTerminal,
@@ -4381,8 +4400,7 @@ export default function SessionScreen() {
               setShowCreateTabDrawer(false)
               void handleCreateMarkdownNote()
             }
-          },
-          ...createTabAgentActions
+          }
         ]}
         onClose={() => setShowCreateTabDrawer(false)}
       />

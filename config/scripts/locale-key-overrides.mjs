@@ -590,5 +590,7 @@ export const LOCALE_KEY_OVERRIDES = {
     zh: '已添加评审评论。',
     ja: 'レビューコメントを追加しました。'
   },
+  // Port forwarding "Forward" is 転送, not the browser-navigation 進む.
+  'auto.components.right.sidebar.PortsPanel.c9d106547a': { ja: '転送' },
   ...KO_KEY_OVERRIDES
 }

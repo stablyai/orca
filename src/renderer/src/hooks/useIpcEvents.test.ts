@@ -345,16 +345,8 @@ describe('buildNewWorkspaceShortcutModalData', () => {
       number: 0,
       title: 'Fix Linear context handoff',
       url: 'https://linear.app/acme/issue/ENG-123/fix-linear-context-handoff',
-      linearIdentifier: 'ENG-123',
-      linkedContext: {
-        provider: 'linear',
-        version: 1
-      }
+      linearIdentifier: 'ENG-123'
     })
-    expect(data.linkedWorkItem?.linkedContext?.renderedText).toContain('Identifier: ENG-123')
-    expect(data.linkedWorkItem?.linkedContext?.renderedText).toContain(
-      'URL: https://linear.app/acme/issue/ENG-123/fix-linear-context-handoff'
-    )
   })
 
   it('does not reuse stale task context outside the Tasks view', () => {

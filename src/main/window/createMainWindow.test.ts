@@ -147,6 +147,9 @@ describe('createMainWindow', () => {
       })
     )
     const browserWindowOptions = browserWindowMock.mock.calls[0]?.[0]
+    // Why: macOS swallows the app-activating click unless the window accepts
+    // first mouse, forcing a second click to focus the floating workspace.
+    expect(browserWindowOptions.acceptFirstMouse).toBe(true)
     if (process.platform === 'darwin') {
       expect(browserWindowOptions).toMatchObject({
         titleBarStyle: 'hiddenInset'
@@ -456,7 +459,7 @@ describe('createMainWindow', () => {
     expect(webContents.send).toHaveBeenCalledWith('ui:jumpToTabIndex', 4)
   })
 
-  it('forwards Ctrl+Tab keydown and Ctrl release to the renderer switcher', () => {
+  it('lets main-window Ctrl+Tab flow to the renderer held switcher', () => {
     const windowHandlers: Record<string, (...args: any[]) => void> = {}
     const webContents = {
       on: vi.fn((event, handler) => {
@@ -491,52 +494,30 @@ describe('createMainWindow', () => {
     createMainWindow(null)
 
     const beforeInputEvent = windowHandlers['before-input-event']
-    const firstPreventDefault = vi.fn()
-    beforeInputEvent(
-      { preventDefault: firstPreventDefault } as never,
-      {
-        type: 'keyDown',
-        code: 'Tab',
-        key: 'Tab',
-        control: true,
-        meta: false,
-        alt: false,
-        shift: false
-      } as never
-    )
-    const secondPreventDefault = vi.fn()
-    beforeInputEvent(
-      { preventDefault: secondPreventDefault } as never,
-      {
-        type: 'keyDown',
-        code: 'Tab',
-        key: 'Tab',
-        control: true,
-        meta: false,
-        alt: false,
-        shift: true
-      } as never
-    )
-    const releasePreventDefault = vi.fn()
-    beforeInputEvent(
-      { preventDefault: releasePreventDefault } as never,
-      {
-        type: 'keyUp',
-        code: 'ControlLeft',
-        key: 'Control',
-        control: false,
-        meta: false,
-        alt: false,
-        shift: false
-      } as never
-    )
+    const dispatchInput = (input: Electron.Input): ReturnType<typeof vi.fn> => {
+      const preventDefault = vi.fn()
+      beforeInputEvent({ preventDefault } as never, input as never)
+      return preventDefault
+    }
+    const ctrlTabInput = {
+      code: 'Tab',
+      key: 'Tab',
+      control: true,
+      meta: false,
+      alt: false
+    }
+    const preventDefaults = [
+      { type: 'keyDown', shift: false },
+      { type: 'keyDown', shift: true },
+      { type: 'keyUp', shift: true },
+      { type: 'keyUp', code: 'ControlLeft', key: 'Control', control: false, shift: false }
+    ].map((input) => dispatchInput({ ...ctrlTabInput, ...input } as Electron.Input))
 
-    expect(firstPreventDefault).toHaveBeenCalledTimes(1)
-    expect(secondPreventDefault).toHaveBeenCalledTimes(1)
-    expect(releasePreventDefault).toHaveBeenCalledTimes(1)
-    expect(webContents.send).toHaveBeenNthCalledWith(1, 'ui:ctrlTabKeyDown', { shiftKey: false })
-    expect(webContents.send).toHaveBeenNthCalledWith(2, 'ui:ctrlTabKeyDown', { shiftKey: true })
-    expect(webContents.send).toHaveBeenNthCalledWith(3, 'ui:ctrlTabKeyUp')
+    for (const preventDefault of preventDefaults) {
+      expect(preventDefault).not.toHaveBeenCalled()
+    }
+    expect(webContents.send).not.toHaveBeenCalledWith('ui:ctrlTabKeyDown', expect.anything())
+    expect(webContents.send).not.toHaveBeenCalledWith('ui:ctrlTabKeyUp')
   })
 
   it('does not hardcode Ctrl+Tab when the recent-tab binding is disabled', () => {

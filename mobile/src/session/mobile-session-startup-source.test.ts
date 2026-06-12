@@ -28,4 +28,18 @@ describe('mobile session startup', () => {
     expect(autoCreateEffect).toContain("setCreateError('')")
     expect(autoCreateEffect).toContain('void handleCreateTerminal()')
   })
+
+  it('keeps dynamic agent rows above fixed New Tab actions', () => {
+    const newTabActions = sliceBetween('title="New Tab"', 'onClose={() => setShowCreateTabDrawer')
+
+    expect(newTabActions.indexOf('...createTabAgentActions')).toBeLessThan(
+      newTabActions.indexOf("label: 'Terminal'")
+    )
+    expect(newTabActions.indexOf("label: 'Terminal'")).toBeLessThan(
+      newTabActions.indexOf("label: 'Browser'")
+    )
+    expect(newTabActions.indexOf("label: 'Browser'")).toBeLessThan(
+      newTabActions.indexOf("label: 'Markdown Note'")
+    )
+  })
 })

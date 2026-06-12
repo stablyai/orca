@@ -1,5 +1,6 @@
 /* eslint-disable max-lines -- Why: worktree activation is a single ordered flow spanning startup, setup, issue commands, and default tabs; splitting it would obscure sequencing guarantees. */
 import type {
+  FolderWorkspace,
   SetupSplitDirection,
   TuiAgent,
   Worktree,
@@ -31,8 +32,19 @@ import {
   setWorktreeNavActivator,
   setWorktreeNavViewActivator
 } from '@/store/slices/worktree-nav-history'
+import {
+  resolveTuiAgentLaunchArgs,
+  resolveTuiAgentLaunchEnv
+} from '../../../shared/tui-agent-launch-defaults'
 import { isTuiAgent } from '../../../shared/tui-agent-config'
 import { resumeSleepingAgentSessionsForWorktree } from '@/lib/resume-sleeping-agent-session'
+import { folderWorkspaceKey } from '../../../shared/workspace-scope'
+import {
+  folderWorkspaceActivationBlocked,
+  getFolderWorkspacePathStatusDescription,
+  getFolderWorkspacePathStatusTitle
+} from './folder-workspace-path-status'
+import { toast } from 'sonner'
 
 /** Telemetry payload threaded from the launch site to `pty:spawn`. Main
  *  fires `agent_started` only after the spawn succeeds — see
@@ -117,6 +129,71 @@ export type ActivateAndRevealResult = {
   primaryTabId: string | null
 }
 
+function ensureFolderWorkspaceInitialTerminal(
+  folderWorkspace: FolderWorkspace,
+  startup?: WorktreeStartupPayload
+): string | null {
+  const state = useAppStore.getState()
+  const workspaceKey = folderWorkspaceKey(folderWorkspace.id)
+  const primaryTabId = ensureWorktreeHasInitialTerminal(
+    state,
+    workspaceKey,
+    startup,
+    undefined,
+    undefined,
+    undefined
+  )
+  return primaryTabId
+}
+
+export function activateAndRevealFolderWorkspace(
+  folderWorkspaceId: string,
+  opts?: {
+    sidebarRevealBehavior?: PendingSidebarWorktreeReveal['behavior']
+    startup?: WorktreeStartupPayload
+  }
+): ActivateAndRevealResult | false {
+  const state = useAppStore.getState()
+  const folderWorkspace = state.folderWorkspaces.find(
+    (workspace) => workspace.id === folderWorkspaceId
+  )
+  if (!folderWorkspace) {
+    return false
+  }
+  const pathStatus = state.getFreshFolderWorkspacePathStatus({
+    scope: 'folder-workspace',
+    folderWorkspaceId
+  })
+  if (folderWorkspaceActivationBlocked(pathStatus)) {
+    toast.error(getFolderWorkspacePathStatusTitle(pathStatus) ?? 'Cannot open folder workspace', {
+      description: getFolderWorkspacePathStatusDescription(pathStatus) ?? folderWorkspace.folderPath
+    })
+    return false
+  }
+
+  if (state.activeView !== 'terminal') {
+    state.setActiveView('terminal')
+  }
+
+  state.setActiveFolderWorkspace(folderWorkspaceId)
+
+  const workspaceKey = folderWorkspaceKey(folderWorkspaceId)
+  state.markWorktreeVisited(workspaceKey)
+  if (!state.isNavigatingHistory) {
+    state.recordWorktreeVisit(workspaceKey)
+  }
+  resumeSleepingAgentSessionsForWorktree(workspaceKey)
+  const primaryTabId = ensureFolderWorkspaceInitialTerminal(folderWorkspace, opts?.startup)
+
+  if (opts?.sidebarRevealBehavior) {
+    state.revealWorktreeInSidebar(workspaceKey, { behavior: opts.sidebarRevealBehavior })
+  } else {
+    state.revealWorktreeInSidebar(workspaceKey)
+  }
+
+  return { primaryTabId }
+}
+
 function buildCreatedAgentReopenStartup(worktree: Worktree): WorktreeStartupPayload | undefined {
   const agent = worktree.createdWithAgent
   if (!isTuiAgent(agent)) {
@@ -127,6 +204,8 @@ function buildCreatedAgentReopenStartup(worktree: Worktree): WorktreeStartupPayl
     agent,
     prompt: '',
     cmdOverrides: useAppStore.getState().settings?.agentCmdOverrides ?? {},
+    agentArgs: resolveTuiAgentLaunchArgs(agent, useAppStore.getState().settings?.agentDefaultArgs),
+    agentEnv: resolveTuiAgentLaunchEnv(agent, useAppStore.getState().settings?.agentDefaultEnv),
     platform: CLIENT_PLATFORM,
     allowEmptyPromptLaunch: true
   })

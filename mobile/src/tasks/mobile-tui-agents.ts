@@ -72,7 +72,6 @@ export const MOBILE_TUI_AGENT_LABELS: Record<TuiAgent, string> = {
 }
 
 export const MOBILE_TUI_AGENT_FAVICON_DOMAINS: Partial<Record<TuiAgent, string>> = {
-  'claude-agent-teams': 'anthropic.com',
   openclaude: 'openclaude.gitlawb.com',
   grok: 'x.ai',
   copilot: 'github.com',

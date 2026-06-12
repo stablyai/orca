@@ -22,6 +22,9 @@ importers:
       '@electron-toolkit/utils':
         specifier: ^4.0.0
         version: 4.0.0(electron@42.3.3)
+      '@floating-ui/dom':
+        specifier: 1.7.6
+        version: 1.7.6
       '@linear/sdk':
         specifier: ^82.1.0
         version: 82.1.0(graphql@16.13.2)

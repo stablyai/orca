@@ -47,6 +47,19 @@ const MAX_WARNED_KEYS = 32
 /** Slowloris cap: drop requests that have not finished sending after 5 s. */
 export const HOOK_REQUEST_SLOWLORIS_MS = 5_000
 
+/** Why: OpenCode plugin builds installed before the throttle/cap fix re-post
+ *  the full accumulated reply text on every streamed part update (O(n²) bytes
+ *  per turn). Capping at ingest bounds the per-event cost of the status
+ *  compare, IPC fanout, renderer store update, and disk persist regardless of
+ *  which plugin version is running inside the OpenCode process. */
+export const OPENCODE_HOOK_TEXT_MAX_CHARS = 8_000
+
+function capOpenCodeHookText(text: string): string {
+  return text.length > OPENCODE_HOOK_TEXT_MAX_CHARS
+    ? text.slice(0, OPENCODE_HOOK_TEXT_MAX_CHARS)
+    : text
+}
+
 /** Bound paneKey size — `${tabId}:${leafUuid}` is well under 200 chars in
  *  practice; cap defends per-pane caches against pathological input.
  *  Exported so non-HTTP ingest paths (e.g. Orca's `ingestRemote`) can apply
@@ -320,7 +333,7 @@ function extractPromptText(hookPayload: Record<string, unknown>): ExtractedPromp
   // role === 'user', the text *is* the prompt — surface it even though
   // OpenCode has no UserPromptSubmit-equivalent.
   if (hookPayload.role === 'user' && typeof hookPayload.text === 'string') {
-    const trimmed = hookPayload.text.trim()
+    const trimmed = capOpenCodeHookText(hookPayload.text.trim())
     if (trimmed.length > 0) {
       return { text: trimmed, source: 'role_user_text' }
     }
@@ -1207,7 +1220,7 @@ function extractOpenCodeToolFields(
   if (eventName === 'MessagePart' && hookPayload.role === 'assistant') {
     const text = readString(hookPayload, 'text')
     if (text) {
-      return { lastAssistantMessage: text }
+      return { lastAssistantMessage: capOpenCodeHookText(text) }
     }
   }
   return {}

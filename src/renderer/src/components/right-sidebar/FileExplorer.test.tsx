@@ -1,6 +1,6 @@
 /* eslint-disable max-lines -- File Explorer toolbar and row tests share element-walking fixtures. */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { Ellipsis, ListCollapse, Loader2, RefreshCw } from 'lucide-react'
+import { Ellipsis, ListCollapse, Loader2, RefreshCw, Search } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { DropdownMenuCheckboxItem } from '@/components/ui/dropdown-menu'
 import { WorktreeOpenInMenuItems } from '@/components/sidebar/WorktreeOpenInMenu'
@@ -57,6 +57,19 @@ function findRefreshButton(node: unknown): ReactElementLike {
   })
   if (!found) {
     throw new Error('refresh button not found')
+  }
+  return found
+}
+
+function findSearchButton(node: unknown): ReactElementLike {
+  let found: ReactElementLike | null = null
+  visit(node, (entry) => {
+    if (entry.type === Button && entry.props['aria-label'] === 'Search') {
+      found = entry
+    }
+  })
+  if (!found) {
+    throw new Error('search button not found')
   }
   return found
 }
@@ -226,6 +239,7 @@ function makeToolbar(overrides: Partial<Parameters<typeof FileExplorerToolbar>[0
     onToggleGitIgnoredFiles: vi.fn(),
     showDotfiles: true,
     onToggleDotfiles: vi.fn(),
+    onSearch: vi.fn(),
     ...overrides
   })
 }
@@ -261,6 +275,17 @@ describe('FileExplorerToolbar', () => {
     expect(label.props.className).toContain('min-w-0')
   })
 
+  it('fires the search action from the icon button', () => {
+    const onSearch = vi.fn()
+    const element = makeToolbar({ onSearch })
+
+    const button = findSearchButton(element)
+    ;(button.props.onClick as () => void)()
+
+    expect(onSearch).toHaveBeenCalledTimes(1)
+    expect(hasIcon(button, Search)).toBe(true)
+  })
+
   it('disables the refresh button and shows a spinner while refreshing', () => {
     const element = makeToolbar({
       refresh: makeRefreshState({ isRefreshing: true, showRefreshSpinner: true })
@@ -284,7 +309,8 @@ describe('FileExplorerToolbar', () => {
     ;(button.props.onClick as () => void)()
 
     expect(onCollapseAll).toHaveBeenCalledTimes(1)
-    expect(button.props.disabled).toBe(false)
+    expect(button.props.disabled).toBeUndefined()
+    expect(button.props['aria-disabled']).toBe(false)
     expect(hasIcon(button, ListCollapse)).toBe(true)
   })
 
@@ -293,8 +319,23 @@ describe('FileExplorerToolbar', () => {
 
     const button = findCollapseAllButton(element)
 
-    expect(button.props.disabled).toBe(true)
+    expect(button.props.disabled).toBeUndefined()
+    expect(button.props['aria-disabled']).toBe(true)
+    expect(button.props.className).toContain('opacity-50')
+    expect(button.props.className).toContain('cursor-not-allowed')
     expect(hasIcon(button, ListCollapse)).toBe(true)
+  })
+
+  it('keeps disabled collapse all clicks from firing', () => {
+    const onCollapseAll = vi.fn()
+    const preventDefault = vi.fn()
+    const element = makeToolbar({ canCollapseAll: false, onCollapseAll })
+
+    const button = findCollapseAllButton(element)
+    ;(button.props.onClick as (event: { preventDefault: () => void }) => void)({ preventDefault })
+
+    expect(preventDefault).toHaveBeenCalledTimes(1)
+    expect(onCollapseAll).not.toHaveBeenCalled()
   })
 
   it('puts the git ignored visibility toggle in the overflow menu', () => {
@@ -334,6 +375,7 @@ describe('FileExplorerToolbar', () => {
     const element = makeToolbar()
 
     expect(getToolbarButtonLabels(element)).toEqual([
+      'Search',
       'Collapse All',
       'Refresh Explorer',
       'More Explorer Actions'

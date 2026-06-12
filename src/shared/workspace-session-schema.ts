@@ -14,12 +14,14 @@ import type {
   TabGroupLayoutNode,
   TerminalPaneLayoutNode,
   TuiAgent,
+  WorkspaceKey,
   WorkspaceSessionState
 } from './types'
 import { isValidTerminalTabId } from './terminal-tab-id'
 import { isTuiAgent } from './tui-agent-config'
 import { normalizeBrowserHistoryEntries } from './workspace-session-browser-history'
 import { normalizeAgentProviderSession, RESUMABLE_TUI_AGENTS } from './agent-session-resume'
+import { isWorkspaceKey } from './workspace-scope'
 
 // ─── Terminal pane layout (recursive) ───────────────────────────────
 
@@ -28,6 +30,9 @@ const terminalTabIdSchema = z
   .string()
   .min(1)
   .refine(isValidTerminalTabId, 'terminal tab id must not contain ":"')
+const workspaceKeySchema = z.custom<WorkspaceKey>(
+  (value) => typeof value === 'string' && isWorkspaceKey(value)
+)
 
 // Why: z.lazy + type annotation keeps the recursive inference working without
 // forcing zod to resolve the whole tree at definition time.
@@ -262,6 +267,7 @@ const browserHistoryEntriesSchema = z
 
 export const workspaceSessionStateSchema: z.ZodType<WorkspaceSessionState> = z.object({
   activeRepoId: z.string().nullable(),
+  activeWorkspaceKey: workspaceKeySchema.nullable().optional(),
   activeWorktreeId: z.string().nullable(),
   activeTabId: z.string().nullable(),
   tabsByWorktree: z.record(z.string(), z.array(terminalTabSchema)),
