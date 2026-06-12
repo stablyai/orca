@@ -10,6 +10,7 @@ export const TUI_AGENT_DISPLAY_NAMES: Record<TuiAgent, string> = {
   'claude-agent-teams': 'Claude Agent Teams',
   openclaude: 'OpenClaude',
   codex: 'Codex',
+  devin: 'Devin',
   autohand: 'Autohand Code',
   opencode: 'OpenCode',
   pi: 'Pi',
