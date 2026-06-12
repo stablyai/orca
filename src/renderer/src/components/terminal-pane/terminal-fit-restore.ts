@@ -5,11 +5,16 @@ import {
   getRemoteRuntimeTerminalHandle
 } from '@/runtime/runtime-terminal-stream'
 
-type TerminalFitRestoreSettings = Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null
+type TerminalFitRestoreSettings = Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | undefined
+
+const restoreFailedResult = (): { restored: boolean } => {
+  // Why: terminal fit restore is best-effort when mobile/remote transports disappear.
+  return { restored: false }
+}
 
 export async function restoreTerminalFitToDesktop(
   ptyId: string,
-  settings: TerminalFitRestoreSettings | undefined
+  settings: TerminalFitRestoreSettings
 ): Promise<boolean> {
   const remoteHandle = getRemoteRuntimeTerminalHandle(ptyId)
   const environmentId =
@@ -21,15 +26,15 @@ export async function restoreTerminalFitToDesktop(
           'terminal.restoreFit',
           { terminal: remoteHandle },
           { timeoutMs: 15_000 }
-        ).catch(() => ({ restored: false }))
-      : await window.api.runtime.restoreTerminalFit(ptyId).catch(() => ({ restored: false }))
+        ).catch(restoreFailedResult)
+      : await window.api.runtime.restoreTerminalFit(ptyId).catch(restoreFailedResult)
 
   return result.restored
 }
 
 export async function restoreTerminalFitsToDesktop(
   ptyIds: Iterable<string>,
-  settings: TerminalFitRestoreSettings | undefined
+  settings: TerminalFitRestoreSettings
 ): Promise<boolean> {
   const uniquePtyIds = [...new Set(ptyIds)]
   const results = await Promise.all(

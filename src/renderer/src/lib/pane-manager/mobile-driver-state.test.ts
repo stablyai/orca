@@ -30,6 +30,10 @@ describe('mobile-driver-state', () => {
     setDriverForPty('pty-2', { kind: 'desktop' })
 
     const drivers = getAllDrivers()
+    expect([...drivers.entries()]).toEqual([
+      ['pty-1', { kind: 'mobile', clientId: 'phone-1' }],
+      ['pty-2', { kind: 'desktop' }]
+    ])
     drivers.clear()
 
     expect(getDriverForPty('pty-1')).toEqual({ kind: 'mobile', clientId: 'phone-1' })

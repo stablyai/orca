@@ -49,7 +49,7 @@ describe('terminal-fit-restore', () => {
     vi.mocked(getRemoteRuntimePtyEnvironmentId).mockReturnValue('env-one')
     vi.mocked(callRuntimeRpc).mockResolvedValue({ restored: true })
 
-    await expect(restoreTerminalFitToDesktop('remote:pty-1', null)).resolves.toBe(true)
+    await expect(restoreTerminalFitToDesktop('remote:pty-1', undefined)).resolves.toBe(true)
 
     expect(callRuntimeRpc).toHaveBeenCalledWith(
       { kind: 'environment', environmentId: 'env-one' },
@@ -83,19 +83,27 @@ describe('terminal-fit-restore', () => {
       restored: ptyId === 'pty-2'
     }))
 
-    await expect(restoreTerminalFitsToDesktop(['pty-1', 'pty-1', 'pty-2'], null)).resolves.toBe(
-      true
-    )
+    await expect(
+      restoreTerminalFitsToDesktop(['pty-1', 'pty-1', 'pty-2'], undefined)
+    ).resolves.toBe(true)
 
     expect(restoreTerminalFit).toHaveBeenCalledTimes(2)
     expect(restoreTerminalFit).toHaveBeenNthCalledWith(1, 'pty-1')
     expect(restoreTerminalFit).toHaveBeenNthCalledWith(2, 'pty-2')
   })
 
-  it('treats failed restore transports as not restored', async () => {
+  it('treats failed local restore transport as not restored', async () => {
     vi.mocked(getRemoteRuntimeTerminalHandle).mockReturnValue(null)
     restoreTerminalFit.mockRejectedValue(new Error('restore failed'))
 
     await expect(restoreTerminalFitToDesktop('pty-local', undefined)).resolves.toBe(false)
+  })
+
+  it('treats failed remote RPC restore transport as not restored', async () => {
+    vi.mocked(getRemoteRuntimeTerminalHandle).mockReturnValue('terminal-fail')
+    vi.mocked(getRemoteRuntimePtyEnvironmentId).mockReturnValue('env-fail')
+    vi.mocked(callRuntimeRpc).mockRejectedValue(new Error('RPC failed'))
+
+    await expect(restoreTerminalFitToDesktop('remote:pty-fail', undefined)).resolves.toBe(false)
   })
 })

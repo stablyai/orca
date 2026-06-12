@@ -1705,7 +1705,7 @@ export default function TerminalPane({
     if (!id) {
       return
     }
-    const restored = await restoreTerminalFitToDesktop(id, settingsRef.current)
+    const restored = await restoreTerminalFitToDesktop(id, settingsRef.current ?? undefined)
     if (restored) {
       // Why: after the overlay unmounts, focus would otherwise stay on the
       // removed button/body instead of the terminal the user just reclaimed.
@@ -1719,7 +1719,7 @@ export default function TerminalPane({
       // restore follows the same reclaim path as the per-pane button.
       const restored = await restoreTerminalFitsToDesktop(
         getMobileOwnedTerminalPtyIds(),
-        settingsRef.current
+        settingsRef.current ?? undefined
       )
       if (restored) {
         focusPane.terminal.focus()
