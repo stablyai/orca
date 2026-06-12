@@ -4,7 +4,7 @@
 
 <p align="center">
   <a href="https://github.com/stablyai/orca/stargazers"><img src="https://badgen.net/github/stars/stablyai/orca?label=%E2%98%85" alt="GitHub stars" /></a>
-  <a href="https://github.com/stablyai/orca/releases"><img src="https://badgen.net/github/assets-dl/stablyai/orca" alt="Total downloads" /></a>
+  <a href="https://github.com/stablyai/orca/releases"><img src="https://img.shields.io/github/downloads/stablyai/orca/total?label=downloads" alt="Total downloads across all releases" /></a>
   <img src="https://badgen.net/github/release/stablyai/orca/stable" alt="Latest stable release" />
   <img src="https://badgen.net/github/license/stablyai/orca" alt="License" />
   <img src="https://img.shields.io/badge/macOS%20%7C%20Windows%20%7C%20Linux-4493F8?style=flat-square" alt="Supported platforms: macOS, Windows, and Linux" />
