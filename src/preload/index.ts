@@ -1680,10 +1680,12 @@ const api = {
     commandCodeStatus: (): Promise<AgentHookInstallStatus> =>
       ipcRenderer.invoke('agentHooks:commandCodeStatus'),
     grokStatus: (): Promise<AgentHookInstallStatus> => ipcRenderer.invoke('agentHooks:grokStatus'),
+    devinStatus: (): Promise<AgentHookInstallStatus> =>
+      ipcRenderer.invoke('agentHooks:devinStatus'),
     copilotStatus: (): Promise<AgentHookInstallStatus> =>
       ipcRenderer.invoke('agentHooks:copilotStatus'),
     hermesStatus: (): Promise<AgentHookInstallStatus> =>
-      ipcRenderer.invoke('agentHooks:hermesStatus')
+      ipcRenderer.invoke('agentHooks:hermesStatus'),
   },
 
   agentTrust: {
