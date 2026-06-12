@@ -58,6 +58,24 @@ const ACTIVE_WORKTREE_TERMINAL_PREP_IDLE_TIMEOUT_MS = 180
 const pendingActivationTerminalPrepCancels = new Map<string, () => void>()
 const detachedHeadAutoDerivedDisplayNames = new Map<string, string>()
 const folderWorkspaceWorktreeCache = new WeakMap<FolderWorkspace, Worktree>()
+let nextWorktreeRefreshRequestId = 0
+const activeWorktreeRefreshRequestByRepo = new Map<string, number>()
+
+function beginWorktreeRefresh(repoId: string): number {
+  nextWorktreeRefreshRequestId += 1
+  activeWorktreeRefreshRequestByRepo.set(repoId, nextWorktreeRefreshRequestId)
+  return nextWorktreeRefreshRequestId
+}
+
+function isCurrentWorktreeRefresh(repoId: string, requestId: number): boolean {
+  return activeWorktreeRefreshRequestByRepo.get(repoId) === requestId
+}
+
+function finishWorktreeRefresh(repoId: string, requestId: number): void {
+  if (isCurrentWorktreeRefresh(repoId, requestId)) {
+    activeWorktreeRefreshRequestByRepo.delete(repoId)
+  }
+}
 
 function countTerminalLayoutLeaves(node: TerminalPaneLayoutNode | null | undefined): number {
   if (!node) {
@@ -893,9 +911,15 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
   },
 
   fetchWorktrees: async (repoId, options) => {
+    const refreshRequestId = beginWorktreeRefresh(repoId)
     try {
       const settings = get().settings
       const detected = await listDetectedWorktreesForRepo(settings, repoId)
+      if (!isCurrentWorktreeRefresh(repoId, refreshRequestId)) {
+        // Why: worktree creation can trigger overlapping watcher/runtime
+        // refreshes. Older scans must not hide a newer agent-created worktree.
+        return get().detectedWorktreesByRepo[repoId]?.authoritative === true
+      }
       if (options?.requireAuthoritative && !detected.authoritative) {
         return false
       }
@@ -954,6 +978,8 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     } catch (err) {
       console.error(`Failed to fetch worktrees for repo ${repoId}:`, err)
       return false
+    } finally {
+      finishWorktreeRefresh(repoId, refreshRequestId)
     }
   },
 

@@ -33,6 +33,16 @@ const runtimeEnvironmentCall = vi.fn()
 const runtimeEnvironmentTransportCall = vi.fn()
 const worktreeListMock = vi.fn().mockResolvedValue([])
 
+function deferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void
+  let reject!: (reason?: unknown) => void
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res
+    reject = rej
+  })
+  return { promise, resolve, reject }
+}
+
 function makeDetectedResult(
   repoId: string,
   worktrees: Worktree[],
@@ -443,6 +453,54 @@ describe('fetchWorktrees', () => {
     expect(store.getState().detectedWorktreesByRepo.repo1).toBeUndefined()
     expect(store.getState().sortEpoch).toBe(7)
     expect(result).toBe(false)
+  })
+
+  it('keeps a newer worktree refresh when an older scan resolves last', async () => {
+    const store = createTestStore()
+    const existing = makeWorktree({
+      id: 'repo1::/path/existing',
+      repoId: 'repo1',
+      path: '/path/existing'
+    })
+    const created = makeWorktree({
+      id: 'repo1::/path/created-by-agent',
+      repoId: 'repo1',
+      path: '/path/created-by-agent'
+    })
+    const olderScan = deferred<DetectedWorktreeListResult>()
+    const newerScan = deferred<DetectedWorktreeListResult>()
+    const initialDetected = makeDetectedResult('repo1', [existing])
+
+    mockApi.worktrees.listDetected
+      .mockImplementationOnce(() => olderScan.promise)
+      .mockImplementationOnce(() => newerScan.promise)
+    store.setState({
+      worktreesByRepo: { repo1: [existing] },
+      detectedWorktreesByRepo: { repo1: initialDetected },
+      sortEpoch: 7
+    } as Partial<AppState>)
+
+    const olderRefresh = store.getState().fetchWorktrees('repo1')
+    const newerRefresh = store.getState().fetchWorktrees('repo1')
+
+    expect(mockApi.worktrees.listDetected).toHaveBeenCalledTimes(2)
+
+    newerScan.resolve(makeDetectedResult('repo1', [existing, created]))
+    await newerRefresh
+
+    expect(store.getState().worktreesByRepo.repo1.map((worktree) => worktree.id)).toEqual([
+      existing.id,
+      created.id
+    ])
+
+    olderScan.resolve(makeDetectedResult('repo1', [existing]))
+    await olderRefresh
+
+    expect(store.getState().worktreesByRepo.repo1.map((worktree) => worktree.id)).toEqual([
+      existing.id,
+      created.id
+    ])
+    expect(store.getState().sortEpoch).toBe(8)
   })
 
   it('purges remembered right sidebar tabs for worktrees removed by a committed refresh', async () => {
