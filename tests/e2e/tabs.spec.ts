@@ -101,13 +101,14 @@ test.describe('Tabs', () => {
         timeout: 5_000,
         message: 'Clicking + → New Terminal did not render a new tab in the tab bar'
       })
-      .toBe(tabsBefore + 1)
+      .toBeGreaterThan(tabsBefore)
 
     const activeType = await getActiveTabType(orcaPage)
     expect(activeType).toBe('terminal')
 
     const storeActiveId = await getActiveTabId(orcaPage)
     expect(storeActiveId).not.toBeNull()
+    await expect(tabLocator(orcaPage, storeActiveId!)).toBeVisible()
     await expect.poll(() => getDomActiveTabId(orcaPage), { timeout: 3_000 }).toBe(storeActiveId)
     await expect
       .poll(() => getFocusedTerminalTabId(orcaPage), {

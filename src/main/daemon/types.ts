@@ -182,11 +182,6 @@ export type SystemResolverHealthRequest = {
   type: 'systemResolverHealth'
 }
 
-export type PtySpawnHealthRequest = {
-  id: string
-  type: 'ptySpawnHealth'
-}
-
 export type GetSnapshotRequest = {
   id: string
   type: 'getSnapshot'
@@ -210,7 +205,6 @@ export type DaemonRequest =
   | ShutdownRequest
   | PingRequest
   | SystemResolverHealthRequest
-  | PtySpawnHealthRequest
   | GetSnapshotRequest
 
 // ─── RPC Responses (Daemon → Client, on control socket) ────────────

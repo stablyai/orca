@@ -941,6 +941,61 @@
   background: color-mix(in srgb, var(--sidebar-foreground) 12%, var(--sidebar));
 }
 
+/* Why: one-shot sidebar education cards need stronger separation than
+   worktree-sidebar-accent, which sits almost on top of the sidebar fill. */
+.worktree-sidebar-notice-card {
+  position: relative;
+  border: 1px solid
+    color-mix(in srgb, var(--worktree-sidebar-foreground) 24%, var(--worktree-sidebar-border));
+  background: color-mix(in srgb, var(--worktree-sidebar-foreground) 9%, var(--worktree-sidebar));
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--worktree-sidebar-foreground) 8%, transparent),
+    0 1px 2px color-mix(in srgb, var(--worktree-sidebar-foreground) 10%, transparent);
+}
+
+.dark .worktree-sidebar-notice-card {
+  border-color: color-mix(
+    in srgb,
+    var(--worktree-sidebar-foreground) 32%,
+    var(--worktree-sidebar-border)
+  );
+  background: color-mix(in srgb, var(--worktree-sidebar-foreground) 14%, var(--worktree-sidebar));
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--worktree-sidebar-foreground) 12%, transparent),
+    0 1px 4px rgb(0 0 0 / 0.28);
+}
+
+/* Why: the project-order notice sits directly under the Projects header; a
+   caret aligned to that label reads as a callout instead of a random card. */
+.worktree-sidebar-notice-card--to-section-title::before {
+  content: '';
+  position: absolute;
+  top: -5px;
+  left: 1.75rem;
+  width: 10px;
+  height: 10px;
+  transform: rotate(45deg);
+  border-left: 1px solid
+    color-mix(in srgb, var(--worktree-sidebar-foreground) 24%, var(--worktree-sidebar-border));
+  border-top: 1px solid
+    color-mix(in srgb, var(--worktree-sidebar-foreground) 24%, var(--worktree-sidebar-border));
+  background: color-mix(in srgb, var(--worktree-sidebar-foreground) 9%, var(--worktree-sidebar));
+}
+
+.dark .worktree-sidebar-notice-card--to-section-title::before {
+  border-left-color: color-mix(
+    in srgb,
+    var(--worktree-sidebar-foreground) 32%,
+    var(--worktree-sidebar-border)
+  );
+  border-top-color: color-mix(
+    in srgb,
+    var(--worktree-sidebar-foreground) 32%,
+    var(--worktree-sidebar-border)
+  );
+  background: color-mix(in srgb, var(--worktree-sidebar-foreground) 14%, var(--worktree-sidebar));
+}
+
 /* Why: the detected command is editable, but a pure app-background fill reads
    like a black box in dark mode and overpowers the prompt card. */
 .setup-script-prompt-command {

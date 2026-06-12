@@ -83,7 +83,10 @@ import {
   RightPanelCommentComposer,
   type RightPanelCommentSubmitResult
 } from './right-panel-comment-composer'
-import { usePRCommentsListSelection } from './pr-comments-list-selection'
+import {
+  type PRCommentsListSelectionClearRequest,
+  usePRCommentsListSelection
+} from './pr-comments-list-selection'
 import { translate } from '@/i18n/i18n'
 
 export const PullRequestIcon = GitPullRequest
@@ -1229,7 +1232,7 @@ export function ChecksList({
         <div className="flex items-center justify-center py-8 text-[11px] text-muted-foreground">
           {translate(
             'auto.components.right.sidebar.checks.panel.content.991f50c7e4',
-            'No checks configured'
+            'No checks reported yet'
           )}
         </div>
       ) : !checksExpanded ? null : (
@@ -1980,10 +1983,10 @@ function scrollElementBottomIntoView(element: HTMLElement): void {
 export function PRCommentsList({
   comments,
   commentsLoading,
-  reviewKind = 'PR',
   commentsDisabled,
   commentsDisabledReason,
   selectionContextKey,
+  selectionClearRequest,
   resolveCommentsWithAIDisabled,
   resolveCommentsWithAIDisabledReason,
   onAddComment,
@@ -1995,10 +1998,10 @@ export function PRCommentsList({
 }: {
   comments: PRComment[]
   commentsLoading: boolean
-  reviewKind?: 'PR' | 'MR'
   commentsDisabled?: boolean
   commentsDisabledReason?: string
   selectionContextKey?: string
+  selectionClearRequest?: PRCommentsListSelectionClearRequest | null
   resolveCommentsWithAIDisabled?: boolean
   resolveCommentsWithAIDisabledReason?: string
   onAddComment?: (body: string) => Promise<RightPanelCommentSubmitResult>
@@ -2023,7 +2026,7 @@ export function PRCommentsList({
     addGroupToSelection,
     clearSelection,
     toggleGroupSelection
-  } = usePRCommentsListSelection(comments, selectionContextKey)
+  } = usePRCommentsListSelection(comments, selectionContextKey, selectionClearRequest)
   const visibleComments = React.useMemo(
     () => filterPRCommentsByAudience(comments, commentFilter),
     [commentFilter, comments]
@@ -2165,7 +2168,7 @@ export function PRCommentsList({
   return (
     <div className="border-t border-border">
       {/* Header */}
-      <div className="flex flex-col gap-2.5 border-b border-border px-3 py-2.5">
+      <div className="sticky top-0 z-10 flex flex-col gap-2.5 border-b border-border bg-background px-3 py-2.5">
         <div className="flex min-w-0 items-center gap-2">
           <MessageSquare className="size-3.5 text-muted-foreground" />
           <span className="text-[11px] font-medium text-foreground">
@@ -2186,8 +2189,7 @@ export function PRCommentsList({
                       className="text-muted-foreground hover:text-foreground"
                       aria-label={translate(
                         'auto.components.right.sidebar.checks.panel.content.d7a2f9c401',
-                        'Send unresolved {{value0}} comments',
-                        { value0: reviewKind }
+                        'Send all unresolved'
                       )}
                       disabled={commentsLoading || resolveCommentsWithAIDisabled}
                       title={
@@ -2205,8 +2207,7 @@ export function PRCommentsList({
                       ? resolveCommentsWithAIDisabledReason
                       : translate(
                           'auto.components.right.sidebar.checks.panel.content.d7a2f9c401',
-                          'Send unresolved {{value0}} comments',
-                          { value0: reviewKind }
+                          'Send all unresolved'
                         )}
                   </TooltipContent>
                 </Tooltip>

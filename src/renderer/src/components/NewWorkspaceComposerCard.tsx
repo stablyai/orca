@@ -2,6 +2,7 @@
 composer card markup together so the inline and modal variants share one UI
 surface without splitting the controlled form into hard-to-follow fragments. */
 import React from 'react'
+import { useTranslation } from 'react-i18next'
 import {
   AlertTriangle,
   Check,
@@ -99,15 +100,50 @@ type NewWorkspaceComposerCardProps = {
   sparseControlsEnabled?: boolean
 }
 
-const SSH_STATUS_LABELS: Record<SshConnectionStatus, string> = {
-  disconnected: 'SSH not connected',
-  connecting: 'Connecting SSH...',
-  'auth-failed': 'SSH authentication failed',
-  'deploying-relay': 'Preparing SSH connection...',
-  connected: 'Connected',
-  reconnecting: 'Reconnecting SSH...',
-  'reconnection-failed': 'SSH reconnection failed',
-  error: translate('auto.components.NewWorkspaceComposerCard.a239038146', 'SSH connection error')
+const SSH_STATUS_LABELS: Partial<Record<SshConnectionStatus, string>> = {
+  get disconnected() {
+    return translate(
+      'auto.components.NewWorkspaceComposerCard.sshNotConnected',
+      'SSH not connected'
+    )
+  },
+  get connecting() {
+    return translate('auto.components.NewWorkspaceComposerCard.connectingSsh', 'Connecting SSH...')
+  },
+  get 'auth-failed'() {
+    return translate(
+      'auto.components.NewWorkspaceComposerCard.sshAuthenticationFailed',
+      'SSH authentication failed'
+    )
+  },
+  get 'deploying-relay'() {
+    return translate(
+      'auto.components.NewWorkspaceComposerCard.preparingSshConnection',
+      'Preparing SSH connection...'
+    )
+  },
+  get connected() {
+    return translate('auto.components.NewWorkspaceComposerCard.connected', 'Connected')
+  },
+  get reconnecting() {
+    return translate(
+      'auto.components.NewWorkspaceComposerCard.reconnectingSsh',
+      'Reconnecting SSH...'
+    )
+  },
+  get 'reconnection-failed'() {
+    return translate(
+      'auto.components.NewWorkspaceComposerCard.sshReconnectionFailed',
+      'SSH reconnection failed'
+    )
+  },
+  get error() {
+    return translate('auto.components.NewWorkspaceComposerCard.a239038146', 'SSH connection error')
+  }
+}
+
+function getSshStatusLabel(status: SshConnectionStatus): string {
+  return SSH_STATUS_LABELS[status] ?? status
 }
 
 function SetupCommandPreview({
@@ -284,6 +320,9 @@ export default function NewWorkspaceComposerCard({
   onSparseSelectPreset,
   sparseControlsEnabled = true
 }: NewWorkspaceComposerCardProps): React.JSX.Element {
+  // Why: this form uses the lightweight translate() helper directly; subscribe
+  // so an already-open create dialog repaints when the UI language changes.
+  useTranslation()
   const { isFileDragOver, dragHandlers } = useComposerFileDragOver()
   const openModal = useAppStore((s) => s.openModal)
   const activeModal = useAppStore((s) => s.activeModal)
@@ -297,8 +336,8 @@ export default function NewWorkspaceComposerCard({
     return repo?.displayName ?? repo?.path ?? 'This project'
   }, [eligibleRepos, repoId])
   const sshStatusLabel = selectedRepoSshStatus
-    ? SSH_STATUS_LABELS[selectedRepoSshStatus]
-    : 'Not connected'
+    ? getSshStatusLabel(selectedRepoSshStatus)
+    : translate('auto.components.NewWorkspaceComposerCard.notConnected', 'Not connected')
   const connectButtonLabel =
     selectedRepoSshStatus === 'disconnected' || selectedRepoSshStatus === null
       ? 'Connect'

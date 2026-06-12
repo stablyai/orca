@@ -3,17 +3,15 @@ import { describe, expect, it, vi } from 'vitest'
 import { Dialog } from '@/components/ui/dialog'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { CreateStep } from './AddRepoCreateStep'
-import type { GitAvailability, RepoKind } from './create-project-defaults'
+import type { GitAvailability } from './create-project-defaults'
 
 function renderCreateStep({
   createName = '',
-  createKind = 'git',
   gitAvailability = 'available',
   createParent = '/Users/alice/orca/projects',
   parentDefaultPending = false
 }: {
   createName?: string
-  createKind?: RepoKind
   gitAvailability?: GitAvailability
   createParent?: string
   parentDefaultPending?: boolean
@@ -24,7 +22,6 @@ function renderCreateStep({
         <CreateStep
           createName={createName}
           createParent={createParent}
-          createKind={createKind}
           createError={null}
           isCreating={false}
           defaultParent="/Users/alice/orca/projects"
@@ -33,7 +30,6 @@ function renderCreateStep({
           parentDefaultPending={parentDefaultPending}
           onNameChange={vi.fn()}
           onParentChange={vi.fn()}
-          onKindChange={vi.fn()}
           onPickParent={vi.fn()}
           onCreate={vi.fn()}
         />
@@ -43,24 +39,31 @@ function renderCreateStep({
 }
 
 describe('CreateStep', () => {
-  it('renders the name-first create UI with advanced controls collapsed', () => {
+  it('renders the conductor-style Git project form without templates or kind selection', () => {
     const html = renderCreateStep()
 
-    expect(html).toContain('Create a new project')
-    expect(html).toContain('Name')
-    expect(html).toContain('Git repository in ~/orca/projects')
-    // The summary card itself is the collapsed disclosure for the uncommon settings.
-    expect(html).toContain('aria-expanded="false"')
+    expect(html).toContain('Create project')
+    expect(html).toContain('Project name')
+    expect(html).not.toContain('Git repo:')
+    expect(html).not.toContain('>project-name</span>')
+    expect(html).toContain('Parent folder')
+    expect(html).toContain('Browse')
+    expect(html).not.toContain('Template')
     expect(html).not.toContain('Project kind')
-    expect(html).not.toContain('Location</span>')
-    expect(html).not.toContain('aria-label="Browse server filesystem"')
   })
 
-  it('shows the Git fallback explanation in the collapsed summary', () => {
-    const html = renderCreateStep({ createKind: 'folder', gitAvailability: 'unavailable' })
+  it('shows the repo name in the helper only after a project name is entered', () => {
+    const html = renderCreateStep({ createName: 'demo-project' })
 
-    expect(html).toContain('Folder in ~/orca/projects')
-    expect(html).toContain('Git isn&#x27;t installed, so a plain folder is the default.')
+    expect(html).toContain('Git repo:')
+    expect(html).toContain('demo-project')
+  })
+
+  it('requires Git instead of falling back to folder creation', () => {
+    const html = renderCreateStep({ gitAvailability: 'unavailable' })
+
+    expect(html).toContain('Git is required to create a project.')
+    expect(html).toContain('disabled=""')
   })
 
   it('disables create while an auto-filled parent belongs to a previous target', () => {

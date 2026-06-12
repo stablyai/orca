@@ -17,41 +17,60 @@ import { translate } from '@/i18n/i18n'
 
 const stepCopy = {
   agent: {
-    title: translate(
-      'auto.components.onboarding.OnboardingFlow.198b148b3c',
-      'Pick your default agent'
-    ),
-    subtitle: translate(
-      'auto.components.onboarding.OnboardingFlow.322fc50a18',
-      "Orca works with every CLI agent. Choose the one you'll reach for most. Switch any time."
-    )
+    get title() {
+      return translate(
+        'auto.components.onboarding.OnboardingFlow.198b148b3c',
+        'Pick your default agent'
+      )
+    },
+    get subtitle() {
+      return translate(
+        'auto.components.onboarding.OnboardingFlow.322fc50a18',
+        "Orca works with every CLI agent. Choose the one you'll reach for most. Switch any time."
+      )
+    }
   },
   theme: {
-    title: translate(
-      'auto.components.onboarding.OnboardingFlow.f396db9f20',
-      'Make it feel like home'
-    ),
-    subtitle: translate(
-      'auto.components.onboarding.OnboardingFlow.04ae28d8ca',
-      'Pick the look you want to stare at for hours.'
-    )
+    get title() {
+      return translate(
+        'auto.components.onboarding.OnboardingFlow.f396db9f20',
+        'Make it feel like home'
+      )
+    },
+    get subtitle() {
+      return translate(
+        'auto.components.onboarding.OnboardingFlow.04ae28d8ca',
+        'Pick the look you want to stare at for hours.'
+      )
+    }
   },
   notifications: {
-    title: translate(
-      'auto.components.onboarding.OnboardingFlow.b054332836',
-      'Set up notifications'
-    ),
-    subtitle: translate(
-      'auto.components.onboarding.OnboardingFlow.ff92d15436',
-      'Orca will notify you know when agents are done or need help.'
-    )
+    get title() {
+      return translate(
+        'auto.components.onboarding.OnboardingFlow.b054332836',
+        'Set up notifications'
+      )
+    },
+    get subtitle() {
+      return translate(
+        'auto.components.onboarding.OnboardingFlow.ff92d15436',
+        'Orca will notify you when agents are done or need help.'
+      )
+    }
   },
   integrations: {
-    title: translate('auto.components.onboarding.OnboardingFlow.ae3b00ca82', 'Set up GitHub tasks'),
-    subtitle: translate(
-      'auto.components.onboarding.OnboardingFlow.97c42cda00',
-      'Install the GitHub CLI to:'
-    )
+    get title() {
+      return translate(
+        'auto.components.onboarding.OnboardingFlow.ae3b00ca82',
+        'Set up GitHub tasks'
+      )
+    },
+    get subtitle() {
+      return translate(
+        'auto.components.onboarding.OnboardingFlow.97c42cda00',
+        'Install the GitHub CLI to:'
+      )
+    }
   }
 } as const
 

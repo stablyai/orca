@@ -62,7 +62,7 @@ describe('contained linked context block (user-initiated copy)', () => {
 })
 
 describe('buildLinearLaunchContextBlock', () => {
-  it('emits the trusted header and an imperative CLI hint when the CLI is available', () => {
+  it('emits the trusted header and a CLI hint when the CLI is available', () => {
     const block = buildLinearLaunchContextBlock({
       identifier: 'ENG-123',
       url: LINEAR_ITEM.url,
@@ -72,9 +72,9 @@ describe('buildLinearLaunchContextBlock', () => {
     expect(block).toContain('Linked Linear issue: ENG-123')
     expect(block).not.toContain('Fix launch context handoff')
     expect(block).toContain('https://linear.app/acme/issue/ENG-123/test')
-    expect(block).toContain('Before planning or editing, fetch the full ticket with:')
+    expect(block).toContain('Full ticket context is available with:')
     expect(block).toContain('orca linear issue --current --full --json')
-    expect(block).toContain('check `meta` for caps, `partial`, and `includeErrors`')
+    expect(block).not.toContain('meta')
   })
 
   it('falls back to --current when the identifier is not a Linear key', () => {

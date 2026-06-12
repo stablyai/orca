@@ -37,9 +37,8 @@ export const CONTEXTUAL_TOUR_ARROW_SIZE = {
   height: ARROW_HEIGHT
 } as const
 
-// Why: the arrow overlaps the panel by exactly the border width so its fill
-// covers the border segment beneath it — the panel outline then flows around
-// the arrow tip instead of cutting across its base.
+// Why: keep the arrow just outside the panel border. Letting it overlap the
+// border makes the callout look like it is colliding with the tip card outline.
 export const CONTEXTUAL_TOUR_PANEL_BORDER_WIDTH = 1
 
 export async function getContextualTourFloatingPosition(args: {
@@ -141,6 +140,6 @@ function getContextualTourArrowPosition(args: {
   return {
     left: args.arrowX,
     top: args.arrowY,
-    [staticSide]: -(ARROW_HEIGHT - CONTEXTUAL_TOUR_PANEL_BORDER_WIDTH)
+    [staticSide]: -ARROW_HEIGHT
   }
 }

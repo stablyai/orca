@@ -463,6 +463,35 @@
             "7d732521ec": "Comment"
           }
         }
+      },
+      "folderWorkspacePathStatus": {
+        "title": {
+          "missing": "Folder not found",
+          "notDirectory": "Path is not a folder",
+          "ambiguousConnection": "Cannot determine connection",
+          "unavailable": "Cannot check folder"
+        },
+        "description": {
+          "missing": "Orca cannot find {{path}}. Remove and re-import this folder workspace.",
+          "notDirectory": "{{path}} exists, but it is not a folder.",
+          "ambiguousConnection": "Orca cannot tell which SSH connection owns this folder scope.",
+          "unavailable": "Orca cannot verify this folder right now. Check the runtime or SSH connection and try again."
+        },
+        "createError": {
+          "title": {
+            "missing": "Folder not found",
+            "notDirectory": "Path is not a folder",
+            "ambiguousConnection": "Cannot determine connection",
+            "unavailable": "Cannot check folder",
+            "generic": "Failed to create folder workspace"
+          },
+          "description": {
+            "missing": "Orca cannot find {{path}}. Remove and re-import the folder.",
+            "notDirectory": "{{path}} exists, but it is not a folder.",
+            "ambiguousConnection": "Orca cannot tell which SSH connection owns this folder scope.",
+            "unavailable": "Orca cannot verify this folder right now. Check the runtime or SSH connection and try again."
+          }
+        }
       }
     },
     "hooks": {
@@ -1000,7 +1029,15 @@
         "f660aa1454": "Connecting",
         "7711ad5122": "Local setup command",
         "e5db1b0419": "Combined setup command",
-        "addProjectBeforeWorkspace": "Add a project before creating a workspace."
+        "addProjectBeforeWorkspace": "Add a project before creating a workspace.",
+        "sshNotConnected": "SSH not connected",
+        "connectingSsh": "Connecting SSH...",
+        "sshAuthenticationFailed": "SSH authentication failed",
+        "preparingSshConnection": "Preparing SSH connection...",
+        "connected": "Connected",
+        "reconnectingSsh": "Reconnecting SSH...",
+        "sshReconnectionFailed": "SSH reconnection failed",
+        "notConnected": "Not connected"
       },
       "NewWorkspaceComposerModal": {
         "fa90f739a5": "Choose the project, workspace name, and agent before creating the workspace."
@@ -1629,7 +1666,9 @@
               "331ebe1170": "Add this pull request to the GitHub merge queue",
               "b169f943e1": "Merge when ready",
               "62703b1dc4": "GitHub auto-merge is enabled for this pull request",
-              "48d75ae118": "Disable auto-merge"
+              "48d75ae118": "Disable auto-merge",
+              "a5b66afb58": "Checks passed",
+              "fbd4f57f0a": "Checks passed. Merge eligibility will be checked again before merging."
             }
           }
         },
@@ -1773,7 +1812,11 @@
           "015b4e607d": "Cancel",
           "e3bd59143c": "Insert",
           "f24783f470": "https://...",
-          "ec6310b731": "Use an http:// or https:// image URL."
+          "ec6310b731": "Use an http:// or https:// image URL.",
+          "b7e4a1c902": "Paste, drop, or click to add files",
+          "8f1c2d4e6a": "Nothing to preview",
+          "c91f0a2b14": "Write",
+          "d82b1e3f05": "Preview"
         },
         "IssueSourceSelector": {
           "d6aeb2012b": "Showing issues from",
@@ -1846,6 +1889,47 @@
                 "bb227706a6": "REST"
               }
             }
+          }
+        },
+        "CloseReasonDropdown": {
+          "e1f2a3b4c5": "Choose close reason"
+        },
+        "GitHubIssueCommentComposer": {
+          "082515176a": "Failed to add comment",
+          "9f88657c4e": "Issue closed",
+          "e9b7cb7d17": "Failed to close issue",
+          "bd3b4492a0": "Issue reopened",
+          "f2a8c1d903": "Failed to reopen issue",
+          "a1b2c3d4e5": "Add a comment",
+          "c5c117270e": "Add your comment here, be kind",
+          "f6a7b8c9d0": "Close issue",
+          "b1c2d3e4f5": "Reopen issue",
+          "0a73f59e85": "Send comment",
+          "bf43425540": "Comment"
+        },
+        "GitHubWorkItemAssigneePopoverContent": {
+          "cddd9b04a7": "Loading assignees",
+          "a00830d3f7": "No users",
+          "4f8b6f2c1d": "Filter assignees..."
+        },
+        "GitHubWorkItemLabelPopoverContent": {
+          "2aa9acdf34": "Edit labels on GitHub",
+          "cddd9b04a7": "Loading labels",
+          "de26e2eb06": "No labels",
+          "8b0d52ee3a": "Filter labels..."
+        },
+        "githubIssueCloseReasons": {
+          "completed": {
+            "label": "Close as completed",
+            "description": "Done, closed, fixed, resolved"
+          },
+          "notPlanned": {
+            "label": "Close as not planned",
+            "description": "Won't fix, can't repro, stale"
+          },
+          "duplicate": {
+            "label": "Close as duplicate",
+            "description": "Duplicate of another issue"
           }
         }
       },
@@ -2122,7 +2206,8 @@
             "c44659e09f": "Mobile driving",
             "7cffad954c": "Collapse",
             "3eed73394f": "Your keyboard is paused",
-            "faa367dc74": "This terminal is sized for your mobile app"
+            "faa367dc74": "This terminal is sized for your mobile app",
+            "54f7d6f69d": "Resize all terminals"
           },
           "TerminalAgentSessionForkDialog": {
             "17fc841e59": "Copy context",
@@ -2748,7 +2833,11 @@
           "4f8368c272": "Orca worktrees only",
           "cfe2282ffa": "Unknown",
           "7765a4c3e1": "n/a",
-          "2d41fd45c6": " • Last scan error: {{value0}}"
+          "2d41fd45c6": " • Last scan error: {{value0}}",
+          "rangeLast7Days": "Last 7 days",
+          "rangeLast30Days": "Last 30 days",
+          "rangeLast90Days": "Last 90 days",
+          "rangeAllTime": "All time"
         },
         "CodexUsageDailyChart": {
           "1e6f62d7e3": "Reasoning",
@@ -2797,7 +2886,11 @@
           "bf6cf2d4dd": "Unknown",
           "ae255c3dba": "n/a",
           "247c93ca92": "• inferred pricing",
-          "8a6655f7a2": " • Last scan error: {{value0}}"
+          "8a6655f7a2": " • Last scan error: {{value0}}",
+          "rangeLast7Days": "Last 7 days",
+          "rangeLast30Days": "Last 30 days",
+          "rangeLast90Days": "Last 90 days",
+          "rangeAllTime": "All time"
         },
         "OpenCodeUsagePane": {
           "349f7c3f5c": "Total",
@@ -2836,7 +2929,11 @@
           "e04c58327c": "Orca worktrees only",
           "362231082f": "Unknown",
           "8095a63426": "n/a",
-          "6cc7782458": " • Last scan error: {{value0}}"
+          "6cc7782458": " • Last scan error: {{value0}}",
+          "rangeLast7Days": "Last 7 days",
+          "rangeLast30Days": "Last 30 days",
+          "rangeLast90Days": "Last 90 days",
+          "rangeAllTime": "All time"
         },
         "ShareUsageButton": {
           "7d6b25323d": "Share on X",
@@ -2955,6 +3052,22 @@
               "d9a4b3e2f1c5": "events"
             }
           }
+        },
+        "UsageBreakdownSection": {
+          "7765a4c3e1": "n/a",
+          "247c93ca92": "• inferred pricing"
+        },
+        "UsageSessionsTable": {
+          "1afc25eb06": "Turns",
+          "0f03975d59": "Events",
+          "21ea00bfa8": "Cache",
+          "e0b988599d": "Total",
+          "01476891c7": "Last active",
+          "c17bed0416": "Project",
+          "f6a2c8d019": "Model",
+          "faf3444859": "Input",
+          "a8b7487ff7": "Output",
+          "cfe2282ffa": "Unknown"
         }
       },
       "sparse": {
@@ -3059,7 +3172,15 @@
           "2c12db1511": "Project already added",
           "875dda0995": "Enter a server parent path.",
           "45b7c26034": "Create project",
-          "85085d74d2": "Creating…"
+          "85085d74d2": "Creating…",
+          "createProjectTitle": "Create project",
+          "createProjectDescription": "Create a local Git repo and first workspace.",
+          "projectNameLabel": "Project name",
+          "createsGitRepoHelp": "Git repo:",
+          "parentFolderLabel": "Parent folder",
+          "browseParentFolder": "Browse",
+          "gitRequiredError": "Git is required to create a project.",
+          "createAction": "Create"
         },
         "AddRepoNestedImportStep": {
           "496f68cf8c": "Scanning repositories. Click to stop.",
@@ -3067,7 +3188,6 @@
           "2f8298f3c3": "Stop scan",
           "c157f31a95": "Import as group",
           "40199ef7b3": "Group name",
-          "b20bb7c24f": "Keeps these repos together in one group. Best for related repos like microservices.",
           "787412361a": "What is a group name?",
           "5f857ba8e6": "in",
           "4df0d08cc5": "Found",
@@ -3076,11 +3196,10 @@
           "cf9d382ca1": "Import",
           "220dd32d83": "Scanning...",
           "fb33359f69": "Is this a monorepo?",
-          "d75170194e": "Choose this if these projects belong together. Orca will group them and let you work from the parent folder.",
-          "39d51212cc": "Monorepo name",
-          "e907ec8935": "What is a monorepo name?",
+          "d75170194e": "Import them as a group if they're a monorepo or otherwise belong together. Orca will group them and let you work from the parent folder.",
+          "39d51212cc": "Group name",
           "aa0247680d": "No, import separately",
-          "a0bc4d1f8e": "Yes, import as monorepo",
+          "a0bc4d1f8e": "Import as group",
           "8401a7a0d0": "1 repository",
           "d4f1df62ef": "{{value0}} repositories",
           "b4263a2ac4": "Found {{value0}} in {{value1}}.",
@@ -3438,7 +3557,11 @@
           "376bed88e5": "The connection to the remote host encountered an error.",
           "4afcca1d24": "Reconnect",
           "11552bf786": "SSH Disconnected",
-          "cb5938ae79": "Reconnecting..."
+          "cb5938ae79": "Reconnecting...",
+          "disconnected": "This remote repository is not connected.",
+          "reconnecting": "Reconnecting to the remote host...",
+          "reconnectionFailed": "Reconnection to the remote host failed.",
+          "authFailed": "Authentication to the remote host failed."
         },
         "SshTargetRow": {
           "4677394048": "Connecting…",
@@ -3662,7 +3785,9 @@
                   "a6c20dca96": "Open a project from an SSH target",
                   "3d162cc76f": "Remote project",
                   "fb4fc5380e": "Local project, Git repo, or folder with many repos",
-                  "2281fdc8c7": "Browse folder"
+                  "2281fdc8c7": "Browse folder",
+                  "createProjectTitle": "Create project",
+                  "createGitProjectDescription": "Create a local Git repository"
                 }
               }
             }
@@ -3812,10 +3937,15 @@
           "connectFailed": "Failed to connect to project.",
           "noRepos": "Add a Git project under this folder to attach GitHub or GitLab tasks.",
           "title": "Create Folder Workspace",
-          "createStart": "Create & Start Agent",
-          "create": "Create Workspace",
+          "create": "Create workspace",
           "sourceProject": "Task Source",
           "chooseSourceProject": "Choose task source"
+        },
+        "ProjectOrderManualDefaultNotice": {
+          "a1f4c2d8e0": "Manual project order is now the default",
+          "822ff300ad": "Dismiss",
+          "b7e3a91c4f": "Drag project headers to reorder, or switch to",
+          "e8c1f4a2b9": "in workspace options."
         }
       },
       "shared": {
@@ -4065,7 +4195,7 @@
           "e784ea62dc": "Advanced",
           "d9b65054ef": ") to a short name summarizing the task. Only branches Orca named itself are renamed, and never after they have been pushed.",
           "12ea4a408d": "When an agent starts working in a new workspace, Orca renames its auto-generated branch (e.g.",
-          "ef787db0e3": "Auto-Rename Branch",
+          "ef787db0e3": "Auto-rename branch & worktree",
           "6a051586d2": "Rename the auto-generated branch based on the work once an agent starts.",
           "ec3e0c388e": "Save",
           "cfd82406dd": "Saving...",
@@ -6109,7 +6239,7 @@
                 "55a1860e47": "rename",
                 "9319bd9827": "branch",
                 "ea94b9da8a": "Rename the auto-generated branch based on the work once an agent starts.",
-                "427f2cd1eb": "Auto-Rename Branch"
+                "427f2cd1eb": "Auto-rename branch & worktree"
               }
             }
           }
@@ -7495,7 +7625,9 @@
             "f273f2271c": "Started the agent. Marked {{value0}} resolved, skipped {{value1}}, failed {{value2}}.",
             "aa95b81a3a": "Started the agent. Marked {{value0}} resolved, skipped {{value1}}, failed {{value2}}.",
             "495b2f8c4b": "Started the agent, but could not mark the selected comments resolved.",
-            "3c3ad3a1d2": "Started the agent. No selected comments can be marked resolved on the host."
+            "3c3ad3a1d2": "Started the agent. No selected comments can be marked resolved on the host.",
+            "b4f3ec62a1": "More {{value0}} actions",
+            "a9d7c128e4": "unlink {{value0}}"
           },
           "CreatePullRequestDialog": {
             "2bc1b4345e": "Cancel",
@@ -7858,7 +7990,8 @@
             "31f6d46278": "Unresolved",
             "2c417432b7": "Resolved locally",
             "f3a8b2c1d0e5": "Enter a {{value0}} title.",
-            "e2b7a1c0d9f4": "Failed to create {{value0}}"
+            "e2b7a1c0d9f4": "Failed to create {{value0}}",
+            "e9e238b260": "Custom command is empty. Add one in Settings -> Git -> Source Control AI."
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "Could not start the selected agent.",
@@ -7938,7 +8071,7 @@
                 "74c6885b8a": "More comment actions",
                 "cbcc4ab3db": "Showing first 100 checks",
                 "0dca6bfab5": "Open check details",
-                "991f50c7e4": "No checks configured",
+                "991f50c7e4": "No checks reported yet",
                 "9ad98f2a17": "pending",
                 "5e52f4ef7f": "failing",
                 "02ca4f9074": "passing",
@@ -7986,7 +8119,7 @@
                 "ae8a04ef17": "Conflict file details are unavailable",
                 "73d0675356": "Refreshing conflict details…",
                 "5dc3af25c0": "Select comment",
-                "d7a2f9c401": "Send unresolved {{value0}} comments",
+                "d7a2f9c401": "Send all unresolved",
                 "d91f2a6c39": "Send {{value0}} queued comments",
                 "a6de3e5a20": "Clear queued comments",
                 "49ea0937e4": "Add comment to resolve list",
@@ -8879,7 +9012,11 @@
             "3c4adfd821": "fix login race condition",
             "56a0271428": "Isolated workspaces",
             "ef737dcee1": "GitHub & Linear tasks",
-            "ac51c061e2": "codex"
+            "ac51c061e2": "codex",
+            "47f16ecf34": "Ship several things at once. Each workspace keeps its branch, terminal, and agent activity together.",
+            "70aa182266": "Hand off a goal and walk away. A coordinator agent fans out and ships parallel PRs.",
+            "f10c14dd9d": "Skip the tab-switching. Pick from your GitHub or Linear backlog and start a workspace in one click.",
+            "5d6ee181b6": "Open any workspace to return to its terminal, then split panes for tests, logs, and agents."
           },
           "FeatureWallBody": {
             "25ec5356d6": "Setup"
@@ -8952,7 +9089,9 @@
             "6e3f5223c5": "Explorer",
             "ab2901bce6": "Checks",
             "d7f80060ca": "Source Control",
-            "8e715588e4": "Search"
+            "8e715588e4": "Search",
+            "a6c8b9e32f": "Checks passed",
+            "f4d5e1a7b2": "3 checks"
           },
           "ReviewShipAnimatedVisual": {
             "4d99496b8c": "Create PR",

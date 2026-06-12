@@ -1399,8 +1399,12 @@ export type GitHubCreateIssueFields = {
   assignees?: string[]
 }
 
+export type GitHubIssueCloseReason = 'completed' | 'not_planned' | 'duplicate'
+
 export type GitHubIssueUpdate = {
   state?: 'open' | 'closed'
+  stateReason?: GitHubIssueCloseReason
+  duplicateOf?: number
   title?: string
   // Why: body writes use the REST issue endpoint instead of `gh issue edit`
   // because that command does not consistently cover every body-edit case the
@@ -2772,6 +2776,9 @@ export type PersistedUIState = {
   /** User-dismissed browser import hint in the browser toolbar. Import remains
    *  available from Settings > Browser and the toolbar overflow menu. */
   browserImportHintHidden?: boolean
+  /** One-shot rollout notice for manual project ordering becoming the default.
+   *  Absent or true means the sidebar callout stays hidden. */
+  projectOrderManualDefaultNoticeDismissed?: boolean
   /** User-hidden empty-state usage CTA in the status bar. Permanently hides the
    *  "Connect AI accounts to see usage" prompt even if all providers are later
    *  disconnected — a dismissed teaching nudge stays dismissed. */

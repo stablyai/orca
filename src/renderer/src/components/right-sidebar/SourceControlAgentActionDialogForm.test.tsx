@@ -107,16 +107,6 @@ describe('SourceControlAgentActionDialogForm', () => {
     expect(markup).toContain('Resolve the merge conflicts reported for this pull request.')
   })
 
-  it('keeps save target controls visible when the current launch recipe is already saved', () => {
-    const settings = settingsWithSavedGlobalRecipe()
-
-    const markup = renderForm({ settings })
-
-    expect(markup).toContain('Launch recipe already saved')
-    expect(markup).toContain('Save for')
-    expect(markup).toContain('All repositories')
-  })
-
   it('checks already-saved copy against the selected save target', () => {
     const settings = settingsWithSavedGlobalRecipe()
     const saveTargets = [

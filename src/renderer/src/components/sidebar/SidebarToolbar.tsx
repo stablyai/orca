@@ -81,7 +81,7 @@ const SidebarToolbar = React.memo(function SidebarToolbar({
                 onClick={handleWorkspaceBoardClick}
                 className="text-muted-foreground"
               >
-                <Kanban className="size-4" />
+                <Kanban className="size-3.5" />
               </Button>
             </TooltipTrigger>
             <TooltipContent side="top" sideOffset={4}>

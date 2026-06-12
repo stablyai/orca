@@ -20,7 +20,6 @@ const {
   writeFileSyncMock,
   netConnectMock,
   forkMock,
-  checkDaemonHealthMock,
   healthCheckDaemonMock,
   getMacDaemonSystemResolverHealthMock,
   getDaemonLaunchIdentityMock,
@@ -67,7 +66,6 @@ const {
     }
   })
 
-  const checkDaemonHealthMock = vi.fn(async () => 'healthy')
   const healthCheckDaemonMock = vi.fn(async () => true)
   const getMacDaemonSystemResolverHealthMock = vi.fn(() => 'healthy')
   const getDaemonLaunchIdentityMock = vi.fn(() => 'match')
@@ -103,7 +101,6 @@ const {
     writeFileSyncMock,
     netConnectMock,
     forkMock,
-    checkDaemonHealthMock,
     healthCheckDaemonMock,
     getMacDaemonSystemResolverHealthMock,
     getDaemonLaunchIdentityMock,
@@ -175,7 +172,6 @@ vi.mock('child_process', () => ({ fork: forkMock }))
 vi.mock('net', () => ({ connect: netConnectMock }))
 
 vi.mock('./daemon-health', () => ({
-  checkDaemonHealth: checkDaemonHealthMock,
   getDaemonLaunchIdentity: getDaemonLaunchIdentityMock,
   getMacDaemonSystemResolverHealth: getMacDaemonSystemResolverHealthMock,
   healthCheckDaemon: healthCheckDaemonMock,
@@ -272,9 +268,8 @@ async function importFresh() {
   setLocalPtyProviderMock.mockClear()
   unbindLocalProviderListenersMock.mockClear()
   rebindLocalProviderListenersMock.mockClear()
-  checkDaemonHealthMock.mockClear()
-  checkDaemonHealthMock.mockResolvedValue('healthy')
   healthCheckDaemonMock.mockClear()
+  healthCheckDaemonMock.mockResolvedValue(true)
   getMacDaemonSystemResolverHealthMock.mockReset()
   getMacDaemonSystemResolverHealthMock.mockReturnValue('healthy')
   getDaemonLaunchIdentityMock.mockClear()
@@ -1031,7 +1026,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     probeSocketExistsMock.mockImplementation(
       (p?: string) => p === '/fake/app/out/main/daemon-entry.js'
     )
-    checkDaemonHealthMock.mockResolvedValueOnce('unhealthy')
+    healthCheckDaemonMock.mockResolvedValueOnce(false)
     const mod = await importFresh()
     getAppPathMock.mockReturnValue('/fake/app/out/main')
     await mod.initDaemonPtyProvider()
@@ -1074,7 +1069,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
   })
 
   it('removes detached daemon startup listeners after readiness', async () => {
-    checkDaemonHealthMock.mockResolvedValueOnce('unhealthy')
+    healthCheckDaemonMock.mockResolvedValueOnce(false)
     const mod = await importFresh()
     await mod.initDaemonPtyProvider()
 
@@ -1129,7 +1124,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
   })
 
   it('removes detached daemon startup listeners after startup error', async () => {
-    checkDaemonHealthMock.mockResolvedValueOnce('unhealthy')
+    healthCheckDaemonMock.mockResolvedValueOnce(false)
     const mod = await importFresh()
     await mod.initDaemonPtyProvider()
 
@@ -1173,7 +1168,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     expect(child.unref).not.toHaveBeenCalled()
   })
 
-  it('preserves a spawn-unhealthy daemon when it owns live sessions', async () => {
+  it('preserves a health-check-failing daemon when it owns live sessions', async () => {
     const mod = await importFresh()
     await mod.initDaemonPtyProvider()
 
@@ -1198,7 +1193,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
       socketPath: string,
       tokenPath: string
     ) => Promise<{ shutdown(): Promise<void> }>
-    checkDaemonHealthMock.mockResolvedValueOnce('pty-spawn-unhealthy')
+    healthCheckDaemonMock.mockResolvedValueOnce(false)
 
     await launcher('/fake/socket', '/fake/token')
 
@@ -1208,7 +1203,51 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     expect(forkMock).not.toHaveBeenCalled()
   })
 
-  it('replaces a spawn-unhealthy daemon when no live sessions would be lost', async () => {
+  it('replaces a health-check-failing daemon when live sessions cannot be verified', async () => {
+    const mod = await importFresh()
+    await mod.initDaemonPtyProvider()
+
+    daemonClientMock.mockImplementationOnce(function MockDaemonClient() {
+      return {
+        ensureConnected: vi.fn(async () => {
+          throw new Error('daemon is wedged')
+        }),
+        request: vi.fn(),
+        disconnect: vi.fn()
+      }
+    })
+
+    const launcher = spawnerInstances[0].launcher as (
+      socketPath: string,
+      tokenPath: string
+    ) => Promise<{ shutdown(): Promise<void> }>
+    healthCheckDaemonMock.mockResolvedValueOnce(false)
+    forkMock.mockImplementationOnce(() => ({
+      pid: 12345,
+      on(event: string, cb: (arg?: unknown) => void) {
+        if (event === 'message') {
+          queueMicrotask(() => cb({ type: 'ready' }))
+        }
+        return this
+      },
+      off() {
+        return this
+      },
+      disconnect: vi.fn(),
+      unref: vi.fn()
+    }))
+
+    await launcher('/fake/socket', '/fake/token')
+
+    expect(killStaleDaemonMock).toHaveBeenCalledWith(
+      '/fake/userData/daemon',
+      '/fake/socket',
+      '/fake/token'
+    )
+    expect(forkMock).toHaveBeenCalled()
+  })
+
+  it('replaces a health-check-failing daemon when no live sessions would be lost', async () => {
     const mod = await importFresh()
     await mod.initDaemonPtyProvider()
 
@@ -1216,7 +1255,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
       socketPath: string,
       tokenPath: string
     ) => Promise<{ shutdown(): Promise<void> }>
-    checkDaemonHealthMock.mockResolvedValueOnce('pty-spawn-unhealthy')
+    healthCheckDaemonMock.mockResolvedValueOnce(false)
     forkMock.mockImplementationOnce(() => {
       const handlers: Record<string, ((arg?: unknown) => void)[]> = {
         message: [],

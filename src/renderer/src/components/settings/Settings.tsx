@@ -89,29 +89,51 @@ import { translate } from '@/i18n/i18n'
 const SETTINGS_NAV_GROUPS = [
   {
     id: 'capabilities',
-    title: translate('auto.components.settings.Settings.23c6874fdf', 'AI Capabilities')
+    get title() {
+      return translate('auto.components.settings.Settings.23c6874fdf', 'AI Capabilities')
+    }
   },
-  { id: 'setup', title: translate('auto.components.settings.Settings.9abb9be3bc', 'Set Up') },
+  {
+    id: 'setup',
+    get title() {
+      return translate('auto.components.settings.Settings.9abb9be3bc', 'Set Up')
+    }
+  },
   {
     id: 'workflows',
-    title: translate('auto.components.settings.Settings.e1578cd4bc', 'Workflows')
+    get title() {
+      return translate('auto.components.settings.Settings.e1578cd4bc', 'Workflows')
+    }
   },
   {
     id: 'interface',
-    title: translate('auto.components.settings.Settings.8bd117d669', 'Interface')
+    get title() {
+      return translate('auto.components.settings.Settings.8bd117d669', 'Interface')
+    }
   },
   {
     id: 'remote',
-    title: translate('auto.components.settings.Settings.23931df7e8', 'Remote Access')
+    get title() {
+      return translate('auto.components.settings.Settings.23931df7e8', 'Remote Access')
+    }
   },
   {
     id: 'security',
-    title: translate('auto.components.settings.Settings.084d8fac5b', 'Privacy & Security')
+    get title() {
+      return translate('auto.components.settings.Settings.084d8fac5b', 'Privacy & Security')
+    }
   },
-  { id: 'advanced', title: translate('auto.components.settings.Settings.1c87f8d024', 'Advanced') },
+  {
+    id: 'advanced',
+    get title() {
+      return translate('auto.components.settings.Settings.1c87f8d024', 'Advanced')
+    }
+  },
   {
     id: 'experimental',
-    title: translate('auto.components.settings.Settings.8b017f2506', 'Experimental')
+    get title() {
+      return translate('auto.components.settings.Settings.8b017f2506', 'Experimental')
+    }
   }
 ] as const
 

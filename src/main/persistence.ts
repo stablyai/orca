@@ -429,6 +429,11 @@ function normalizeProjectOrderBy(projectOrderBy: unknown): PersistedState['ui'][
   return getDefaultUIState().projectOrderBy
 }
 
+import {
+  isExistingPersistedProfile,
+  resolveProjectOrderManualDefaultNoticeDismissed
+} from '../shared/project-order-manual-default-notice'
+
 function normalizeRightSidebarTab(tab: unknown): PersistedState['ui']['rightSidebarTab'] {
   if (
     tab === 'explorer' ||
@@ -2457,9 +2462,25 @@ export class Store {
               parsed.ui?.setupGuideSidebarDismissed,
               normalizedOnboarding
             )
+            const projectOrderManualDefaultNoticeDismissed =
+              resolveProjectOrderManualDefaultNoticeDismissed({
+                rawDismissed: parsed.ui?.projectOrderManualDefaultNoticeDismissed,
+                rawProjectOrderBy: parsed.ui?.projectOrderBy,
+                isExistingProfile: isExistingPersistedProfile({
+                  repoCount: parsed.repos?.length ?? 0,
+                  onboardingClosedAt: normalizedOnboarding.closedAt,
+                  ui: parsed.ui
+                })
+              })
             if (
               parsed.ui?.setupGuideSidebarDismissed !== setupGuideSidebarDismissed &&
               (setupGuideSidebarDismissed || parsed.ui?.setupGuideSidebarDismissed !== undefined)
+            ) {
+              this.loadNeedsSave = true
+            }
+            if (
+              parsed.ui?.projectOrderManualDefaultNoticeDismissed !==
+              projectOrderManualDefaultNoticeDismissed
             ) {
               this.loadNeedsSave = true
             }
@@ -2471,6 +2492,7 @@ export class Store {
               rightSidebarOpen,
               rightSidebarTab: normalizeRightSidebarTab(parsed.ui?.rightSidebarTab),
               setupGuideSidebarDismissed,
+              projectOrderManualDefaultNoticeDismissed,
               setupGuideBrowserMilestoneMigrated:
                 typeof parsed.ui?.setupGuideBrowserMilestoneMigrated === 'boolean'
                   ? parsed.ui.setupGuideBrowserMilestoneMigrated

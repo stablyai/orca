@@ -24,14 +24,36 @@ type SshDisconnectedDialogProps = {
 }
 
 const STATUS_MESSAGES: Partial<Record<SshConnectionStatus, string>> = {
-  disconnected: 'This remote repository is not connected.',
-  reconnecting: 'Reconnecting to the remote host...',
-  'reconnection-failed': 'Reconnection to the remote host failed.',
-  error: translate(
-    'auto.components.sidebar.SshDisconnectedDialog.376bed88e5',
-    'The connection to the remote host encountered an error.'
-  ),
-  'auth-failed': 'Authentication to the remote host failed.'
+  get disconnected() {
+    return translate(
+      'auto.components.sidebar.SshDisconnectedDialog.disconnected',
+      'This remote repository is not connected.'
+    )
+  },
+  get reconnecting() {
+    return translate(
+      'auto.components.sidebar.SshDisconnectedDialog.reconnecting',
+      'Reconnecting to the remote host...'
+    )
+  },
+  get 'reconnection-failed'() {
+    return translate(
+      'auto.components.sidebar.SshDisconnectedDialog.reconnectionFailed',
+      'Reconnection to the remote host failed.'
+    )
+  },
+  get error() {
+    return translate(
+      'auto.components.sidebar.SshDisconnectedDialog.376bed88e5',
+      'The connection to the remote host encountered an error.'
+    )
+  },
+  get 'auth-failed'() {
+    return translate(
+      'auto.components.sidebar.SshDisconnectedDialog.authFailed',
+      'Authentication to the remote host failed.'
+    )
+  }
 }
 
 function isReconnectable(status: SshConnectionStatus): boolean {
@@ -76,9 +98,21 @@ export function SshDisconnectedDialog({
     status === 'connecting' ||
     status === 'deploying-relay' ||
     status === 'reconnecting'
+  const reconnectingMessage =
+    STATUS_MESSAGES.reconnecting ??
+    translate(
+      'auto.components.sidebar.SshDisconnectedDialog.reconnecting',
+      'Reconnecting to the remote host...'
+    )
+  const disconnectedMessage =
+    STATUS_MESSAGES.disconnected ??
+    translate(
+      'auto.components.sidebar.SshDisconnectedDialog.disconnected',
+      'This remote repository is not connected.'
+    )
   const message = isConnecting
-    ? 'Reconnecting to the remote host...'
-    : (STATUS_MESSAGES[status] ?? 'This remote repository is not connected.')
+    ? reconnectingMessage
+    : (STATUS_MESSAGES[status] ?? disconnectedMessage)
   const showReconnect = isReconnectable(status)
 
   useEffect(() => {

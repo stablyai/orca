@@ -25,6 +25,11 @@ import type { HostedReviewProvider } from '../../../../shared/hosted-review'
 import { stripBaseRef } from './useCreatePullRequestDialogFields'
 import type { DropdownActionKind, DropdownEntry } from './source-control-dropdown-items'
 import { CreateHostedReviewComposerFields } from './CreateHostedReviewComposerFields'
+import {
+  RIGHT_SIDEBAR_MORPHING_PRIMARY_BUTTON_CLASS,
+  RIGHT_SIDEBAR_PRIMARY_BUTTON_LABEL_CLASS,
+  RIGHT_SIDEBAR_SPLIT_ACTION_ROW_CLASS
+} from './right-sidebar-primary-action-layout'
 
 const EMPTY_DROPDOWN_ITEMS: DropdownEntry[] = []
 
@@ -245,13 +250,17 @@ export function CreateHostedReviewComposer({
           baseSameAsBranch={baseSameAsBranch}
         />
 
-        <div className="flex items-stretch pt-0.5">
+        <div className={cn(RIGHT_SIDEBAR_SPLIT_ACTION_ROW_CLASS, 'pt-0.5')}>
           <Button
             type="button"
             size="xs"
             disabled={createDisabled}
             onClick={() => onPrimaryAction()}
-            className={cn('h-7 flex-1 px-3 text-xs', showDropdown && 'rounded-r-none')}
+            className={cn(
+              'h-7 px-3 text-xs',
+              showDropdown && 'rounded-r-none',
+              RIGHT_SIDEBAR_MORPHING_PRIMARY_BUTTON_CLASS
+            )}
             title={createDisabledReason ?? primaryAction.title}
           >
             {isCreating ? (
@@ -259,12 +268,14 @@ export function CreateHostedReviewComposer({
             ) : (
               <ReviewIcon className="size-3.5" />
             )}
-            {getCreateButtonLabel({
-              isCreating,
-              pushBeforeCreate,
-              draft,
-              shortLabel: copy.shortLabel
-            })}
+            <span className={RIGHT_SIDEBAR_PRIMARY_BUTTON_LABEL_CLASS}>
+              {getCreateButtonLabel({
+                isCreating,
+                pushBeforeCreate,
+                draft,
+                shortLabel: copy.shortLabel
+              })}
+            </span>
           </Button>
           {showDropdown ? (
             <DropdownMenu>

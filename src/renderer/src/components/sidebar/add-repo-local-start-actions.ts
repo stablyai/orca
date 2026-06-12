@@ -71,12 +71,12 @@ export function getAddRepoLocalStartActions({
     kind: 'create' as const,
     icon: Plus,
     title: translate(
-      'auto.components.sidebar.add.repo.local.start.actions.c709860596',
-      'Create new project'
+      'auto.components.sidebar.add.repo.local.start.actions.createProjectTitle',
+      'Create project'
     ),
     description: translate(
-      'auto.components.sidebar.add.repo.local.start.actions.d72789705e',
-      'Start from an empty folder'
+      'auto.components.sidebar.add.repo.local.start.actions.createGitProjectDescription',
+      'Create a local Git repository'
     ),
     onClick: onOpenCreateStep
   }

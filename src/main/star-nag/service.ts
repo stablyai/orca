@@ -1,14 +1,22 @@
 import { app, BrowserWindow, ipcMain } from 'electron'
 import { STAR_NAG_INITIAL_THRESHOLD } from '../../shared/constants'
-import { checkOrcaStarred } from '../github/client'
+import { checkOrcaStarred, starOrca } from '../github/client'
 import type { Store } from '../persistence'
 import type { StatsCollector } from '../stats/collector'
+import { track } from '../telemetry/client'
+import { getCohortAtEmit } from '../telemetry/cohort-classifier'
+import {
+  bucketStarNagAgentsSinceBaseline,
+  type StarNagOutcome,
+  type StarNagPromptMode,
+  type StarNagPromptSource
+} from '../../shared/star-nag-telemetry'
+import type { EventProps } from '../../shared/telemetry-events'
 
-type StarNagPromptSource = 'threshold' | 'force_show'
-type StarNagPromptMode = 'gh' | 'web'
+type StarNagPromptContext = Omit<EventProps<'star_nag_outcome'>, 'outcome' | 'next_threshold'>
 
-type StarNagPromptSession = {
-  source: StarNagPromptSource
+type StarNagPromptSession = StarNagPromptContext & {
+  starAttemptPromise?: Promise<boolean>
 }
 
 /**
@@ -36,8 +44,9 @@ export class StarNagService {
   // resolving.
   private evaluating = false
   private pendingForceShow = false
-  // Why: dismissal backoff should only apply to a prompt that was actually
-  // delivered, and the dismissal payload needs the delivered prompt source.
+  // Why: dismissal backoff and action telemetry must use the prompt context
+  // that was delivered, not whatever threshold/source happens to be current
+  // when the renderer later reports a user action.
   private promptSession: StarNagPromptSession | null = null
 
   constructor(store: Store, stats: StatsCollector) {
@@ -65,7 +74,9 @@ export class StarNagService {
   registerIpcHandlers(): void {
     ipcMain.handle('star-nag:dismiss', () => this.dismiss())
     ipcMain.handle('star-nag:complete', () => this.markCompleted())
-    ipcMain.handle('star-nag:disable', () => this.markCompleted())
+    ipcMain.handle('star-nag:disable', () => this.disable())
+    ipcMain.handle('star-nag:openWeb', () => this.openWeb())
+    ipcMain.handle('star-nag:starOrca', () => this.starOrcaFromNag())
     ipcMain.handle('star-nag:forceShow', () => this.forceShow())
   }
 
@@ -134,6 +145,7 @@ export class StarNagService {
         return
       }
       if (starred) {
+        this.trackAlreadyStarredSuppressed(source)
         // Already starred somewhere — lock in the permanent suppression so we
         // stop recomputing thresholds on every spawn.
         this.markCompleted()
@@ -167,11 +179,65 @@ export class StarNagService {
       this.promptSession = null
       return false
     }
+    const context = this.createPromptContext(source, mode)
     win.webContents.send('star-nag:show', { mode })
     this.promptVisible = true
-    this.promptSession = { source }
+    this.promptSession = context
+    this.trackOutcome('shown')
     this.logConsoleEvent('star_nag_shown', source)
     return true
+  }
+
+  private createPromptContext(
+    source: StarNagPromptSource,
+    mode: StarNagPromptMode
+  ): StarNagPromptContext {
+    const ui = this.store.getUI()
+    const threshold = ui.starNagNextThreshold ?? STAR_NAG_INITIAL_THRESHOLD
+    const agentsSinceBaseline = Math.max(
+      0,
+      this.stats.getTotalAgentsSpawned() - (ui.starNagBaselineAgents ?? 0)
+    )
+    return {
+      source,
+      mode,
+      threshold,
+      agents_since_baseline: agentsSinceBaseline,
+      agents_since_baseline_bucket: bucketStarNagAgentsSinceBaseline(agentsSinceBaseline),
+      ...getCohortAtEmit()
+    }
+  }
+
+  private trackOutcome(
+    outcome: StarNagOutcome,
+    options: { mode?: StarNagPromptMode; nextThreshold?: number } = {}
+  ): void {
+    const session = this.promptSession
+    if (!session) {
+      return
+    }
+    this.trackSessionOutcome(session, outcome, options)
+  }
+
+  private trackSessionOutcome(
+    session: StarNagPromptSession,
+    outcome: StarNagOutcome,
+    options: { mode?: StarNagPromptMode; nextThreshold?: number } = {}
+  ): void {
+    const { starAttemptPromise: _starAttemptPromise, ...context } = session
+    track('star_nag_outcome', {
+      ...context,
+      outcome,
+      ...(options.mode === undefined ? {} : { mode: options.mode }),
+      ...(options.nextThreshold === undefined ? {} : { next_threshold: options.nextThreshold })
+    })
+  }
+
+  private trackAlreadyStarredSuppressed(source: StarNagPromptSource): void {
+    track('star_nag_outcome', {
+      ...this.createPromptContext(source, 'gh'),
+      outcome: 'already_starred_suppressed'
+    })
   }
 
   private logConsoleEvent(
@@ -211,6 +277,7 @@ export class StarNagService {
     const ui = this.store.getUI()
     const threshold = ui.starNagNextThreshold ?? STAR_NAG_INITIAL_THRESHOLD
     const nextThreshold = threshold * 2
+    this.trackOutcome('dismissed', { nextThreshold })
     this.logConsoleEvent('star_nag_dismissed', session.source, nextThreshold)
     this.store.updateUI({
       starNagNextThreshold: nextThreshold,
@@ -218,6 +285,56 @@ export class StarNagService {
     })
     this.promptVisible = false
     this.promptSession = null
+  }
+
+  private disable(): void {
+    this.trackOutcome('disabled')
+    this.markCompleted()
+  }
+
+  private openWeb(): void {
+    this.trackOutcome('opened_web', { mode: 'web' })
+    this.markCompleted()
+  }
+
+  private async starOrcaFromNag(): Promise<boolean> {
+    const session = this.promptSession
+    if (!session) {
+      return false
+    }
+    if (session.starAttemptPromise) {
+      return session.starAttemptPromise
+    }
+    const attempt = this.runStarOrcaAttempt(session)
+    session.starAttemptPromise = attempt
+    try {
+      return await attempt
+    } finally {
+      if (this.promptSession === session) {
+        delete session.starAttemptPromise
+      }
+    }
+  }
+
+  private async runStarOrcaAttempt(session: StarNagPromptSession): Promise<boolean> {
+    this.trackSessionOutcome(session, 'star_attempted', { mode: 'gh' })
+    const starred = await starOrca()
+    if (!starred) {
+      if (this.promptSession === session) {
+        this.trackSessionOutcome(session, 'star_failed', { mode: 'gh' })
+        session.mode = 'web'
+      }
+      return false
+    }
+    this.trackSessionOutcome(session, 'star_succeeded', { mode: 'gh' })
+    // Why: app_starred_orca remains the canonical cross-surface success event;
+    // star_nag_outcome is only the nag-funnel companion.
+    track('app_starred_orca', {
+      source: 'star_nag',
+      ...getCohortAtEmit()
+    })
+    this.markCompleted()
+    return true
   }
 
   /** User successfully starred or opted out → never nag again. */

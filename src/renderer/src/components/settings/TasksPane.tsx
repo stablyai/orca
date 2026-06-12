@@ -26,38 +26,54 @@ const TASK_PROVIDER_OPTIONS: readonly {
 }[] = [
   {
     id: 'github',
-    label: translate('auto.components.settings.TasksPane.e14063e727', 'GitHub'),
-    description: translate(
-      'auto.components.settings.TasksPane.1db47236cd',
-      'Show GitHub in the Tasks source picker and sidebar shortcuts.'
-    ),
+    get label() {
+      return translate('auto.components.settings.TasksPane.e14063e727', 'GitHub')
+    },
+    get description() {
+      return translate(
+        'auto.components.settings.TasksPane.1db47236cd',
+        'Show GitHub in the Tasks source picker and sidebar shortcuts.'
+      )
+    },
     Icon: ({ className }) => <Github className={className} />
   },
   {
     id: 'gitlab',
-    label: translate('auto.components.settings.TasksPane.7c5d7fdc20', 'GitLab'),
-    description: translate(
-      'auto.components.settings.TasksPane.dd67a1b6e1',
-      'Show GitLab in the Tasks source picker and sidebar shortcuts.'
-    ),
+    get label() {
+      return translate('auto.components.settings.TasksPane.7c5d7fdc20', 'GitLab')
+    },
+    get description() {
+      return translate(
+        'auto.components.settings.TasksPane.dd67a1b6e1',
+        'Show GitLab in the Tasks source picker and sidebar shortcuts.'
+      )
+    },
     Icon: ({ className }) => <Gitlab className={className} />
   },
   {
     id: 'linear',
-    label: translate('auto.components.settings.TasksPane.09ae2d7c51', 'Linear'),
-    description: translate(
-      'auto.components.settings.TasksPane.e4170c9615',
-      'Show Linear in the Tasks source picker and sidebar shortcuts.'
-    ),
+    get label() {
+      return translate('auto.components.settings.TasksPane.09ae2d7c51', 'Linear')
+    },
+    get description() {
+      return translate(
+        'auto.components.settings.TasksPane.e4170c9615',
+        'Show Linear in the Tasks source picker and sidebar shortcuts.'
+      )
+    },
     Icon: ({ className }) => <LinearIcon className={className} />
   },
   {
     id: 'jira',
-    label: translate('auto.components.settings.TasksPane.6b23a34f6d', 'Jira'),
-    description: translate(
-      'auto.components.settings.TasksPane.8e1305fcc6',
-      'Show Jira in the Tasks source picker and sidebar shortcuts.'
-    ),
+    get label() {
+      return translate('auto.components.settings.TasksPane.6b23a34f6d', 'Jira')
+    },
+    get description() {
+      return translate(
+        'auto.components.settings.TasksPane.8e1305fcc6',
+        'Show Jira in the Tasks source picker and sidebar shortcuts.'
+      )
+    },
     Icon: ({ className }) => <JiraIcon className={className} />
   }
 ]

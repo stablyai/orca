@@ -158,6 +158,83 @@ describe('app_starred_orca schema', () => {
   })
 })
 
+describe('star_nag_outcome schema', () => {
+  const valid = {
+    outcome: 'shown',
+    source: 'threshold',
+    mode: 'gh',
+    threshold: 35,
+    agents_since_baseline: 35,
+    agents_since_baseline_bucket: '35-69',
+    nth_repo_added: 2
+  }
+
+  it('accepts a strict valid payload with cohort context', () => {
+    expect(eventSchemas.star_nag_outcome.safeParse(valid).success).toBe(true)
+  })
+
+  it('is in the runtime cohort-injection roster', () => {
+    expect(isCohortExtendedEvent('star_nag_outcome')).toBe(true)
+  })
+
+  it('accepts next_threshold only as a positive integer', () => {
+    expect(
+      eventSchemas.star_nag_outcome.safeParse({
+        ...valid,
+        outcome: 'dismissed',
+        next_threshold: 70
+      }).success
+    ).toBe(true)
+    expect(eventSchemas.star_nag_outcome.safeParse({ ...valid, next_threshold: 0 }).success).toBe(
+      false
+    )
+    expect(eventSchemas.star_nag_outcome.safeParse({ ...valid, next_threshold: 1.5 }).success).toBe(
+      false
+    )
+    expect(
+      eventSchemas.star_nag_outcome.safeParse({ ...valid, outcome: 'shown', next_threshold: 70 })
+        .success
+    ).toBe(false)
+  })
+
+  it('rejects unknown outcome source mode and bucket values', () => {
+    expect(eventSchemas.star_nag_outcome.safeParse({ ...valid, outcome: 'ignored' }).success).toBe(
+      false
+    )
+    expect(eventSchemas.star_nag_outcome.safeParse({ ...valid, source: 'renderer' }).success).toBe(
+      false
+    )
+    expect(eventSchemas.star_nag_outcome.safeParse({ ...valid, mode: 'desktop' }).success).toBe(
+      false
+    )
+    expect(
+      eventSchemas.star_nag_outcome.safeParse({
+        ...valid,
+        agents_since_baseline_bucket: '35+'
+      }).success
+    ).toBe(false)
+  })
+
+  it('rejects malformed numeric fields and raw extra fields', () => {
+    expect(eventSchemas.star_nag_outcome.safeParse({ ...valid, threshold: -1 }).success).toBe(false)
+    expect(eventSchemas.star_nag_outcome.safeParse({ ...valid, threshold: 1.5 }).success).toBe(
+      false
+    )
+    expect(
+      eventSchemas.star_nag_outcome.safeParse({ ...valid, agents_since_baseline: -1 }).success
+    ).toBe(false)
+    expect(eventSchemas.star_nag_outcome.safeParse({ ...valid, nth_repo_added: -1 }).success).toBe(
+      false
+    )
+    expect(eventSchemas.star_nag_outcome.safeParse({ ...valid, error: 'gh failed' }).success).toBe(
+      false
+    )
+    expect(
+      eventSchemas.star_nag_outcome.safeParse({ ...valid, url: 'https://github.com' }).success
+    ).toBe(false)
+  })
+})
+
 describe('agent_error schema', () => {
   it('round-trips a minimal {error_class, agent_kind} payload', () => {
     const parsed = eventSchemas.agent_error.safeParse({

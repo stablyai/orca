@@ -211,8 +211,12 @@ export class ClaudeRuntimeAuthService {
               outgoingReadBackResult.runtimeCredentialsJson
             )
           } else {
-            throw new Error(
-              'Claude account switch paused because a live Claude terminal has unverified refreshed auth.'
+            // Why: Claude's runtime credential blob can lack enough identity
+            // proof to attribute a live-session refresh. Do not persist that
+            // unverified blob, but also do not block the user from moving new
+            // terminals to the selected managed account.
+            console.warn(
+              '[claude-runtime-auth] Skipping unverified live Claude auth read-back while switching accounts'
             )
           }
         }

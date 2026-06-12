@@ -67,10 +67,40 @@ describe('presentGitHubPRMergeState', () => {
 
   it('labels unresolved GitHub mergeability as checking', () => {
     expect(
-      presentGitHubPRMergeState(pr({ mergeable: 'UNKNOWN', mergeStateStatus: null }))
+      presentGitHubPRMergeState(
+        pr({
+          mergeable: 'UNKNOWN',
+          mergeStateStatus: null,
+          checksSummary: { state: 'pending', total: 1, passed: 0, failed: 0, pending: 1 }
+        })
+      )
     ).toMatchObject({
       label: 'Checking',
       directMergeAvailable: false
+    })
+  })
+
+  it('allows direct merge when GitHub mergeability is unavailable but checks have passed', () => {
+    expect(
+      presentGitHubPRMergeState({
+        state: 'open',
+        checksSummary: { state: 'success', total: 3, passed: 3, failed: 0, pending: 0 }
+      })
+    ).toMatchObject({
+      label: 'Checks passed',
+      directMergeAvailable: true
+    })
+    expect(
+      presentGitHubPRMergeState(
+        pr({
+          mergeable: 'UNKNOWN',
+          mergeStateStatus: null,
+          checksSummary: { state: 'success', total: 3, passed: 3, failed: 0, pending: 0 }
+        })
+      )
+    ).toMatchObject({
+      label: 'Checks passed',
+      directMergeAvailable: true
     })
   })
 

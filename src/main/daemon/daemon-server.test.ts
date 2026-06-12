@@ -198,19 +198,19 @@ describe('DaemonServer', () => {
       expect(result).toEqual({ pong: true })
     })
 
-    it('handles ptySpawnHealth through the daemon process', async () => {
-      const ptySpawnHealthCheck = vi.fn(async () => {})
-      server = new DaemonServer({
-        socketPath,
-        tokenPath,
-        ptySpawnHealthCheck,
-        spawnSubprocess: () => createMockSubprocess()
-      })
-      await server.start()
+    it('replies with an error to unknown request types and keeps serving', async () => {
+      await startServer()
       const c = await connectClient()
 
-      await expect(c.request('ptySpawnHealth', undefined)).resolves.toEqual({ healthy: true })
-      expect(ptySpawnHealthCheck).toHaveBeenCalledOnce()
+      // Why: older app builds still send the removed ptySpawnHealth probe.
+      // The daemon must reject it gracefully so a downgraded client lands on
+      // its session-preserving branch instead of crashing the daemon.
+      await expect(c.request('ptySpawnHealth', undefined)).rejects.toThrow(
+        'Unknown request type: ptySpawnHealth'
+      )
+      await expect(c.request<{ pong: boolean }>('ping', undefined)).resolves.toEqual({
+        pong: true
+      })
     })
 
     it('handles systemResolverHealth', async () => {

@@ -1,4 +1,5 @@
 import type { StateCreator } from 'zustand'
+import type { GlobalSettings } from '../../../../shared/types'
 import type { AppState } from '../types'
 
 export type PullRequestFieldName = 'base' | 'title' | 'body' | 'draft'
@@ -11,6 +12,11 @@ export type PullRequestGenerationFields = {
   draft: boolean
 }
 
+export type PullRequestGenerationRuntimeTargetSettings = Pick<
+  GlobalSettings,
+  'activeRuntimeEnvironmentId'
+>
+
 export type PullRequestGenerationContext = {
   worktreeId: string | null
   worktreePath: string
@@ -18,6 +24,7 @@ export type PullRequestGenerationContext = {
   requestId: number
   repoId: string
   branch: string
+  runtimeTargetSettings?: PullRequestGenerationRuntimeTargetSettings | null
 }
 
 export type PullRequestGenerationStatus = 'idle' | 'running' | 'canceled' | 'failed' | 'succeeded'
@@ -43,6 +50,7 @@ export type PullRequestGenerationSlice = {
     key: string,
     updater: (record: PullRequestGenerationRecord | null) => PullRequestGenerationRecord | null
   ) => void
+  prunePullRequestGenerationRecords: (liveWorktreeKeys: ReadonlySet<string>) => void
 }
 
 export function getPullRequestGenerationWorktreeKey(
@@ -214,5 +222,22 @@ export const createPullRequestGenerationSlice: StateCreator<
           [key]: nextRecord
         }
       }
+    }),
+  prunePullRequestGenerationRecords: (liveWorktreeKeys) =>
+    set((state) => {
+      let changed = false
+      const nextRecords: PullRequestGenerationRecords = {}
+      for (const [key, record] of Object.entries(state.pullRequestGenerationRecords)) {
+        const worktreeKey = getPullRequestGenerationWorktreeKey(
+          record.context.worktreeId,
+          record.context.worktreePath
+        )
+        if (worktreeKey && liveWorktreeKeys.has(worktreeKey)) {
+          nextRecords[key] = record
+        } else {
+          changed = true
+        }
+      }
+      return changed ? { pullRequestGenerationRecords: nextRecords } : {}
     })
 })

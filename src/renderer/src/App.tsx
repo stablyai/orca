@@ -1087,6 +1087,11 @@ function App(): React.JSX.Element {
           // Don't let one pane's failure block the rest.
         }
       }
+      // Why: agent provider session ids live only in agentStatusByPaneKey,
+      // which is in-memory. Capture them into the persisted sleeping-session
+      // map so a daemon/session death while the app is closed can still
+      // cold-restore via the agent's resume command (#5232).
+      useAppStore.getState().captureAllSleepingAgentSessions()
       // Why: re-read state after capture() calls populated scrollback buffers
       // into the store via Zustand setters. The earlier read is only for the
       // gating flags and would miss those updates.

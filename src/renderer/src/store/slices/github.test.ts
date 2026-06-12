@@ -847,62 +847,6 @@ describe('createGitHubSlice.fetchPRComments', () => {
       vi.useRealTimers()
     }
   })
-
-  it('preserves cached checks when the checks IPC fails', async () => {
-    const store = createTestStore()
-    const repoPath = '/repo'
-    const branch = 'feature/test'
-    const checksCacheKey = `${repoPath}::pr-checks::12`
-    const cachedChecks = [
-      { name: 'build', status: 'completed', conclusion: 'failure', url: null } as const
-    ]
-
-    store.setState({
-      checksCache: {
-        [checksCacheKey]: {
-          data: cachedChecks,
-          fetchedAt: 1,
-          headSha: 'abc123head'
-        }
-      }
-    } as unknown as Partial<AppState>)
-    mockApi.gh.prChecks.mockRejectedValueOnce(new Error('rate limited'))
-
-    await expect(
-      store.getState().fetchPRChecks(repoPath, 12, branch, 'abc123head', null, { force: true })
-    ).resolves.toEqual(cachedChecks)
-
-    expect(store.getState().checksCache[checksCacheKey]?.data).toEqual(cachedChecks)
-    expect(store.getState().checksCache[checksCacheKey]?.fetchedAt).toBe(1)
-  })
-
-  it('does not return cached checks for a different requested head SHA after IPC failure', async () => {
-    const store = createTestStore()
-    const repoPath = '/repo'
-    const branch = 'feature/test'
-    const checksCacheKey = `${repoPath}::pr-checks::12`
-    const oldHeadChecks = [
-      { name: 'build', status: 'completed', conclusion: 'success', url: null } as const
-    ]
-
-    store.setState({
-      checksCache: {
-        [checksCacheKey]: {
-          data: oldHeadChecks,
-          fetchedAt: 1,
-          headSha: 'old-head'
-        }
-      }
-    } as unknown as Partial<AppState>)
-    mockApi.gh.prChecks.mockRejectedValueOnce(new Error('rate limited'))
-
-    await expect(
-      store.getState().fetchPRChecks(repoPath, 12, branch, 'new-head', null, { force: true })
-    ).resolves.toEqual([])
-
-    expect(store.getState().checksCache[checksCacheKey]?.data).toEqual(oldHeadChecks)
-    expect(store.getState().checksCache[checksCacheKey]?.headSha).toBe('old-head')
-  })
 })
 
 describe('createGitHubSlice.fetchPRCheckDetails', () => {

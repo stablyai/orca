@@ -42,20 +42,28 @@ type PermissionDefinition = {
 const PERMISSIONS: PermissionDefinition[] = [
   {
     id: 'accessibility',
-    label: translate('auto.components.settings.ComputerUsePane.6b5a2cd3a5', 'Accessibility'),
-    description: translate(
-      'auto.components.settings.ComputerUsePane.4d03dec2d0',
-      'Read app interface trees and perform requested actions.'
-    ),
+    get label() {
+      return translate('auto.components.settings.ComputerUsePane.6b5a2cd3a5', 'Accessibility')
+    },
+    get description() {
+      return translate(
+        'auto.components.settings.ComputerUsePane.4d03dec2d0',
+        'Read app interface trees and perform requested actions.'
+      )
+    },
     icon: <Accessibility className="size-4" />
   },
   {
     id: 'screenshots',
-    label: translate('auto.components.settings.ComputerUsePane.07bbe4c4cb', 'Screenshots'),
-    description: translate(
-      'auto.components.settings.ComputerUsePane.0c9a33f468',
-      'Capture app windows so agents can inspect visual state.'
-    ),
+    get label() {
+      return translate('auto.components.settings.ComputerUsePane.07bbe4c4cb', 'Screenshots')
+    },
+    get description() {
+      return translate(
+        'auto.components.settings.ComputerUsePane.0c9a33f468',
+        'Capture app windows so agents can inspect visual state.'
+      )
+    },
     icon: <Camera className="size-4" />
   }
 ]

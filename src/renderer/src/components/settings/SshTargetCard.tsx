@@ -29,7 +29,9 @@ export const STATUS_LABELS: Record<SshConnectionStatus, string> = {
   connected: 'Connected',
   reconnecting: 'Reconnecting\u2026',
   'reconnection-failed': 'Reconnection failed',
-  error: translate('auto.components.settings.SshTargetCard.18968ede9e', 'Error')
+  get error() {
+    return translate('auto.components.settings.SshTargetCard.18968ede9e', 'Error')
+  }
 }
 
 export function statusColor(status: SshConnectionStatus): string {

@@ -7,6 +7,10 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import type { PRComment } from '../../../../shared/types'
 import type { PRCommentGroup } from '@/lib/pr-comment-groups'
 import { PRCommentsList } from './checks-panel-content'
+import {
+  clearPRCommentsListSelection,
+  type PRCommentsListSelectionClearRequest
+} from './pr-comments-list-selection'
 
 let container: HTMLDivElement
 let root: Root
@@ -22,6 +26,8 @@ afterEach(() => {
     root.unmount()
   })
   container.remove()
+  clearPRCommentsListSelection('review:42')
+  clearPRCommentsListSelection('review:43')
 })
 
 function comment(overrides: Partial<PRComment>): PRComment {
@@ -38,6 +44,8 @@ function comment(overrides: Partial<PRComment>): PRComment {
 
 function renderList(props: {
   comments: PRComment[]
+  selectionContextKey?: string
+  selectionClearRequest?: PRCommentsListSelectionClearRequest | null
   onResolveSelectedCommentsWithAI?: (groups: PRCommentGroup[]) => void
 }): void {
   act(() => {
@@ -46,12 +54,20 @@ function renderList(props: {
         <PRCommentsList
           comments={props.comments}
           commentsLoading={false}
-          selectionContextKey="review:42"
+          selectionContextKey={props.selectionContextKey ?? 'review:42'}
+          selectionClearRequest={props.selectionClearRequest}
           onResolveSelectedCommentsWithAI={props.onResolveSelectedCommentsWithAI ?? vi.fn()}
         />
       </TooltipProvider>
     )
   })
+}
+
+function remountList(): void {
+  act(() => {
+    root.unmount()
+  })
+  root = createRoot(container)
 }
 
 function clickButton(label: string): void {
@@ -85,13 +101,13 @@ describe('PRCommentsList comment resolution selection', () => {
       ]
     })
 
-    expect(hasButton('Send unresolved PR comments')).toBe(false)
+    expect(hasButton('Send all unresolved')).toBe(false)
 
     renderList({
       comments: [comment({ id: 4 })]
     })
 
-    expect(hasButton('Send unresolved PR comments')).toBe(true)
+    expect(hasButton('Send all unresolved')).toBe(true)
     expect(container.textContent).toContain('Add')
   })
 
@@ -129,7 +145,7 @@ describe('PRCommentsList comment resolution selection', () => {
     })
 
     clickButton('Humans')
-    clickButton('Send unresolved PR comments')
+    clickButton('Send all unresolved')
 
     expect(onResolveSelectedCommentsWithAI).toHaveBeenCalledTimes(1)
     const selectedGroups = onResolveSelectedCommentsWithAI.mock.calls[0]?.[0] as PRCommentGroup[]
@@ -209,6 +225,61 @@ describe('PRCommentsList comment resolution selection', () => {
 
     expect(hasButton('Send 1 queued comments')).toBe(false)
     expect(container.querySelector('button[role="checkbox"]')).toBeNull()
+  })
+
+  it('keeps queued comments when the comments list remounts', () => {
+    const comments = [comment({ id: 1, threadId: 'thread-1', path: 'src/a.ts', isResolved: false })]
+    renderList({ comments })
+    clickButton('Add')
+
+    remountList()
+    renderList({ comments })
+
+    expect(hasButton('Send 1 queued comments')).toBe(true)
+  })
+
+  it('restores the queued comments for the matching review context after switching contexts', () => {
+    const review42Comments = [
+      comment({ id: 1, threadId: 'thread-1', path: 'src/a.ts', isResolved: false })
+    ]
+    renderList({ comments: review42Comments, selectionContextKey: 'review:42' })
+    clickButton('Add')
+
+    renderList({
+      comments: [comment({ id: 2, threadId: 'thread-2', path: 'src/b.ts', isResolved: false })],
+      selectionContextKey: 'review:43'
+    })
+    expect(hasButton('Send 1 queued comments')).toBe(false)
+
+    renderList({ comments: review42Comments, selectionContextKey: 'review:42' })
+
+    expect(hasButton('Send 1 queued comments')).toBe(true)
+  })
+
+  it('does not drop persisted queued comments while comments reload empty', () => {
+    const comments = [comment({ id: 1, threadId: 'thread-1', path: 'src/a.ts', isResolved: false })]
+    renderList({ comments })
+    clickButton('Add')
+
+    renderList({ comments: [] })
+    renderList({ comments })
+
+    expect(hasButton('Send 1 queued comments')).toBe(true)
+  })
+
+  it('clears persisted queued comments when the launch path marks them sent', () => {
+    const comments = [comment({ id: 1, threadId: 'thread-1', path: 'src/a.ts', isResolved: false })]
+    renderList({ comments })
+    clickButton('Add')
+    expect(hasButton('Send 1 queued comments')).toBe(true)
+
+    clearPRCommentsListSelection('review:42')
+    renderList({
+      comments,
+      selectionClearRequest: { contextKey: 'review:42', token: 1 }
+    })
+
+    expect(hasButton('Send 1 queued comments')).toBe(false)
   })
 
   it('exits selection mode when refresh leaves no eligible loaded threads', () => {

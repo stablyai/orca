@@ -463,6 +463,35 @@
             "7d732521ec": "Comentario"
           }
         }
+      },
+      "folderWorkspacePathStatus": {
+        "title": {
+          "missing": "Carpeta no encontrada",
+          "notDirectory": "La ruta no es una carpeta",
+          "ambiguousConnection": "No se puede determinar la conexión",
+          "unavailable": "No se puede comprobar la carpeta"
+        },
+        "description": {
+          "missing": "Orca no puede encontrar {{path}}. Elimina y vuelve a importar este espacio de trabajo de carpeta.",
+          "notDirectory": "{{path}} existe, pero no es una carpeta.",
+          "ambiguousConnection": "Orca no puede determinar qué conexión SSH pertenece a este ámbito de carpeta.",
+          "unavailable": "Orca no puede verificar esta carpeta ahora mismo. Revisa el runtime o la conexión SSH e inténtalo de nuevo."
+        },
+        "createError": {
+          "title": {
+            "missing": "Carpeta no encontrada",
+            "notDirectory": "La ruta no es una carpeta",
+            "ambiguousConnection": "No se puede determinar la conexión",
+            "unavailable": "No se puede comprobar la carpeta",
+            "generic": "No se pudo crear el espacio de trabajo de carpeta"
+          },
+          "description": {
+            "missing": "Orca no puede encontrar {{path}}. Elimina y vuelve a importar la carpeta.",
+            "notDirectory": "{{path}} existe, pero no es una carpeta.",
+            "ambiguousConnection": "Orca no puede determinar qué conexión SSH pertenece a este ámbito de carpeta.",
+            "unavailable": "Orca no puede verificar esta carpeta ahora mismo. Revisa el runtime o la conexión SSH e inténtalo de nuevo."
+          }
+        }
       }
     },
     "hooks": {
@@ -1000,7 +1029,15 @@
         "f660aa1454": "Conectando",
         "7711ad5122": "Comando de configuración local",
         "e5db1b0419": "Comando de configuración combinado",
-        "addProjectBeforeWorkspace": "Agregue un proyecto antes de crear un espacio de trabajo."
+        "addProjectBeforeWorkspace": "Agregue un proyecto antes de crear un espacio de trabajo.",
+        "sshNotConnected": "SSH not connected",
+        "connectingSsh": "Connecting SSH...",
+        "sshAuthenticationFailed": "SSH authentication failed",
+        "preparingSshConnection": "Preparing SSH connection...",
+        "connected": "Connected",
+        "reconnectingSsh": "Reconnecting SSH...",
+        "sshReconnectionFailed": "SSH reconnection failed",
+        "notConnected": "Not connected"
       },
       "NewWorkspaceComposerModal": {
         "fa90f739a5": "Elija el proyecto, el nombre del espacio de trabajo y el agente antes de crear el espacio de trabajo."
@@ -1629,7 +1666,9 @@
               "331ebe1170": "Agregue esta solicitud de extracción a la cola de combinación de GitHub",
               "b169f943e1": "Fusionar cuando esté listo",
               "62703b1dc4": "La fusión automática de GitHub está habilitada para esta solicitud de extracción",
-              "48d75ae118": "Deshabilitar la fusión automática"
+              "48d75ae118": "Deshabilitar la fusión automática",
+              "a5b66afb58": "Comprobaciones aprobadas",
+              "fbd4f57f0a": "Comprobaciones aprobadas. La elegibilidad de fusión se volverá a comprobar antes de fusionar."
             }
           }
         },
@@ -1773,7 +1812,11 @@
           "015b4e607d": "Cancelar",
           "e3bd59143c": "Insertar",
           "f24783f470": "https://...",
-          "ec6310b731": "Utilice una URL de imagen http:// o https://."
+          "ec6310b731": "Utilice una URL de imagen http:// o https://.",
+          "b7e4a1c902": "Paste, drop, or click to add files",
+          "8f1c2d4e6a": "Nothing to preview",
+          "c91f0a2b14": "Write",
+          "d82b1e3f05": "Preview"
         },
         "IssueSourceSelector": {
           "d6aeb2012b": "Mostrando problemas de",
@@ -1846,6 +1889,47 @@
                 "bb227706a6": "DESCANSAR"
               }
             }
+          }
+        },
+        "CloseReasonDropdown": {
+          "e1f2a3b4c5": "Choose close reason"
+        },
+        "GitHubIssueCommentComposer": {
+          "082515176a": "Failed to add comment",
+          "9f88657c4e": "Issue closed",
+          "e9b7cb7d17": "Failed to close issue",
+          "bd3b4492a0": "Issue reopened",
+          "f2a8c1d903": "Failed to reopen issue",
+          "a1b2c3d4e5": "Add a comment",
+          "c5c117270e": "Add your comment here, be kind",
+          "f6a7b8c9d0": "Close issue",
+          "b1c2d3e4f5": "Reopen issue",
+          "0a73f59e85": "Send comment",
+          "bf43425540": "Comment"
+        },
+        "GitHubWorkItemAssigneePopoverContent": {
+          "cddd9b04a7": "Loading assignees",
+          "a00830d3f7": "No users",
+          "4f8b6f2c1d": "Filter assignees..."
+        },
+        "GitHubWorkItemLabelPopoverContent": {
+          "2aa9acdf34": "Edit labels on GitHub",
+          "cddd9b04a7": "Loading labels",
+          "de26e2eb06": "No labels",
+          "8b0d52ee3a": "Filter labels..."
+        },
+        "githubIssueCloseReasons": {
+          "completed": {
+            "label": "Close as completed",
+            "description": "Done, closed, fixed, resolved"
+          },
+          "notPlanned": {
+            "label": "Close as not planned",
+            "description": "Won't fix, can't repro, stale"
+          },
+          "duplicate": {
+            "label": "Close as duplicate",
+            "description": "Duplicate of another issue"
           }
         }
       },
@@ -2122,7 +2206,8 @@
             "c44659e09f": "conducción móvil",
             "7cffad954c": "Colapsar",
             "3eed73394f": "Tu teclado está en pausa",
-            "faa367dc74": "Este terminal tiene el tamaño adecuado para tu aplicación móvil"
+            "faa367dc74": "Este terminal tiene el tamaño adecuado para tu aplicación móvil",
+            "54f7d6f69d": "Cambiar tamaño de todas las terminales"
           },
           "TerminalAgentSessionForkDialog": {
             "17fc841e59": "Copiar contexto",
@@ -2748,7 +2833,11 @@
           "4f8368c272": "Solo árboles de trabajo Orca",
           "cfe2282ffa": "Desconocido",
           "7765a4c3e1": "n / A",
-          "2d41fd45c6": "• Error del último análisis: {{value0}}"
+          "2d41fd45c6": "• Error del último análisis: {{value0}}",
+          "rangeLast7Days": "Last 7 days",
+          "rangeLast30Days": "Last 30 days",
+          "rangeLast90Days": "Last 90 days",
+          "rangeAllTime": "All time"
         },
         "CodexUsageDailyChart": {
           "1e6f62d7e3": "Razonamiento",
@@ -2797,7 +2886,11 @@
           "bf6cf2d4dd": "Desconocido",
           "ae255c3dba": "n / A",
           "247c93ca92": "• precios inferidos",
-          "8a6655f7a2": "• Error del último análisis: {{value0}}"
+          "8a6655f7a2": "• Error del último análisis: {{value0}}",
+          "rangeLast7Days": "Last 7 days",
+          "rangeLast30Days": "Last 30 days",
+          "rangeLast90Days": "Last 90 days",
+          "rangeAllTime": "All time"
         },
         "OpenCodeUsagePane": {
           "349f7c3f5c": "Total",
@@ -2836,7 +2929,11 @@
           "e04c58327c": "Solo árboles de trabajo Orca",
           "362231082f": "Desconocido",
           "8095a63426": "n / A",
-          "6cc7782458": "• Error del último análisis: {{value0}}"
+          "6cc7782458": "• Error del último análisis: {{value0}}",
+          "rangeLast7Days": "Last 7 days",
+          "rangeLast30Days": "Last 30 days",
+          "rangeLast90Days": "Last 90 days",
+          "rangeAllTime": "All time"
         },
         "ShareUsageButton": {
           "7d6b25323d": "Compartir en X",
@@ -2955,6 +3052,22 @@
               "d9a4b3e2f1c5": "eventos"
             }
           }
+        },
+        "UsageBreakdownSection": {
+          "7765a4c3e1": "n/a",
+          "247c93ca92": "• inferred pricing"
+        },
+        "UsageSessionsTable": {
+          "1afc25eb06": "Turns",
+          "0f03975d59": "Events",
+          "21ea00bfa8": "Cache",
+          "e0b988599d": "Total",
+          "01476891c7": "Last active",
+          "c17bed0416": "Project",
+          "f6a2c8d019": "Model",
+          "faf3444859": "Input",
+          "a8b7487ff7": "Output",
+          "cfe2282ffa": "Unknown"
         }
       },
       "sparse": {
@@ -3059,7 +3172,15 @@
           "fe1e616c5b": "Git no está instalado, así que una carpeta simple será el valor predeterminado.",
           "c234df77f7": "Elige o introduce una carpeta principal del servidor antes de crear.",
           "3a13f6e88b": "ubicación no seleccionada",
-          "6ed14c0281": "carpeta del servidor no seleccionada"
+          "6ed14c0281": "carpeta del servidor no seleccionada",
+          "createProjectTitle": "Crear proyecto",
+          "createProjectDescription": "Crea un repositorio Git local y el primer espacio de trabajo.",
+          "projectNameLabel": "Nombre del proyecto",
+          "createsGitRepoHelp": "Repositorio Git:",
+          "parentFolderLabel": "Carpeta principal",
+          "browseParentFolder": "Explorar",
+          "gitRequiredError": "Git es necesario para crear un proyecto.",
+          "createAction": "Crear"
         },
         "AddRepoNestedImportStep": {
           "496f68cf8c": "Escaneo de repositorios. Haga clic para detener.",
@@ -3067,7 +3188,6 @@
           "2f8298f3c3": "Detener escaneo",
           "c157f31a95": "Importar como grupo",
           "40199ef7b3": "Nombre del grupo",
-          "b20bb7c24f": "Mantiene estos repos juntos en un grupo. Lo mejor para repos relacionados como microservicios.",
           "787412361a": "¿Qué es el nombre de un grupo?",
           "5f857ba8e6": "en",
           "4df0d08cc5": "Encontró",
@@ -3076,11 +3196,10 @@
           "cf9d382ca1": "Importar",
           "220dd32d83": "Exploración...",
           "fb33359f69": "¿Es esto un monorepo?",
-          "d75170194e": "Elige esto si estos proyectos pertenecen juntos. Orca los agrupará y te permitirá trabajar desde la carpeta principal.",
-          "39d51212cc": "Nombre del monorepo",
-          "e907ec8935": "¿Qué es un nombre de monorepo?",
+          "d75170194e": "Impórtalos como grupo si son un monorepo o si pertenecen juntos. Orca los agrupará y te permitirá trabajar desde la carpeta principal.",
+          "39d51212cc": "Nombre del grupo",
           "aa0247680d": "No, importar por separado",
-          "a0bc4d1f8e": "Sí, importar como monorepo",
+          "a0bc4d1f8e": "Importar como grupo",
           "8401a7a0d0": "1 repositorio",
           "d4f1df62ef": "{{value0}} repositorios",
           "b4263a2ac4": "Se encontraron {{value0}} en {{value1}}.",
@@ -3438,7 +3557,11 @@
           "376bed88e5": "La conexión al host remoto encontró un error.",
           "4afcca1d24": "Reconectar",
           "11552bf786": "SSH desconectado",
-          "cb5938ae79": "Reconectando..."
+          "cb5938ae79": "Reconectando...",
+          "disconnected": "This remote repository is not connected.",
+          "reconnecting": "Reconnecting to the remote host...",
+          "reconnectionFailed": "Reconnection to the remote host failed.",
+          "authFailed": "Authentication to the remote host failed."
         },
         "SshTargetRow": {
           "4677394048": "Conectando…",
@@ -3662,7 +3785,9 @@
                   "a6c20dca96": "Abrir un proyecto desde un destino SSH",
                   "3d162cc76f": "Proyecto remoto",
                   "fb4fc5380e": "Proyecto local, repo de Git o carpeta con muchos repos",
-                  "2281fdc8c7": "Explorar carpeta"
+                  "2281fdc8c7": "Explorar carpeta",
+                  "createProjectTitle": "Crear proyecto",
+                  "createGitProjectDescription": "Crear un repositorio Git local"
                 }
               }
             }
@@ -3809,13 +3934,18 @@
           "b826a98b6f": "ocupado"
         },
         "FolderWorkspaceComposerDialog": {
-          "connectFailed": "Failed to connect to project.",
-          "noRepos": "Add a Git project under this folder to attach GitHub or GitLab tasks.",
-          "title": "Create Folder Workspace",
-          "createStart": "Create & Start Agent",
-          "create": "Create Workspace",
-          "sourceProject": "Task Source",
-          "chooseSourceProject": "Choose task source"
+          "connectFailed": "No se pudo conectar al proyecto.",
+          "noRepos": "Agrega un proyecto Git en esta carpeta para adjuntar tareas de GitHub o GitLab.",
+          "title": "Crear espacio de trabajo de carpeta",
+          "create": "Crear espacio de trabajo",
+          "sourceProject": "Origen de tareas",
+          "chooseSourceProject": "Elige el origen de tareas"
+        },
+        "ProjectOrderManualDefaultNotice": {
+          "a1f4c2d8e0": "El orden manual de proyectos ahora es el predeterminado",
+          "822ff300ad": "Descartar",
+          "b7e3a91c4f": "Arrastra los encabezados de proyecto para reordenarlos, o cambia a",
+          "e8c1f4a2b9": "en las opciones del espacio de trabajo."
         }
       },
       "shared": {
@@ -7495,7 +7625,9 @@
             "f273f2271c": "Agente iniciado. Marcados {{value0}} como resueltos, omitidos {{value1}}, con error {{value2}}.",
             "aa95b81a3a": "Agente iniciado. Marcados {{value0}} como resueltos, omitidos {{value1}}, con error {{value2}}.",
             "495b2f8c4b": "Agente iniciado, pero no se pudieron marcar los comentarios seleccionados como resueltos.",
-            "3c3ad3a1d2": "Agente iniciado. Ningún comentario seleccionado se puede marcar como resuelto en el host."
+            "3c3ad3a1d2": "Agente iniciado. Ningún comentario seleccionado se puede marcar como resuelto en el host.",
+            "b4f3ec62a1": "More {{value0}} actions",
+            "a9d7c128e4": "unlink {{value0}}"
           },
           "CreatePullRequestDialog": {
             "2bc1b4345e": "Cancelar",
@@ -7858,7 +7990,8 @@
             "31f6d46278": "Irresoluto",
             "2c417432b7": "Resuelto localmente",
             "f3a8b2c1d0e5": "Ingrese un título {{value0}}.",
-            "e2b7a1c0d9f4": "No se pudo crear {{value0}}"
+            "e2b7a1c0d9f4": "No se pudo crear {{value0}}",
+            "e9e238b260": "Custom command is empty. Add one in Settings -> Git -> Source Control AI."
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "No se pudo iniciar el agente seleccionado.",
@@ -7938,7 +8071,7 @@
                 "74c6885b8a": "Más acciones de comentarios",
                 "cbcc4ab3db": "Mostrando los primeros 100 cheques",
                 "0dca6bfab5": "Abrir detalles del cheque",
-                "991f50c7e4": "No hay controles configurados",
+                "991f50c7e4": "Aún no se han reportado controles",
                 "9ad98f2a17": "pendiente",
                 "5e52f4ef7f": "defecto",
                 "02ca4f9074": "paso",
@@ -7986,7 +8119,7 @@
                 "ae8a04ef17": "Los detalles del archivo de conflicto no están disponibles",
                 "73d0675356": "Detalles refrescantes del conflicto...",
                 "5dc3af25c0": "Seleccionar comentario",
-                "d7a2f9c401": "Enviar comentarios sin resolver de {{value0}}",
+                "d7a2f9c401": "Enviar todos sin resolver",
                 "d91f2a6c39": "Enviar {{value0}} comentarios en cola",
                 "a6de3e5a20": "Borrar comentarios en cola",
                 "49ea0937e4": "Agregar comentario a la lista de resolución",
@@ -8879,7 +9012,11 @@
             "3c4adfd821": "arreglar la condición de carrera de inicio de sesión",
             "56a0271428": "Espacios de trabajo aislados",
             "ef737dcee1": "GitHub y tareas Lineares",
-            "ac51c061e2": "codex"
+            "ac51c061e2": "codex",
+            "47f16ecf34": "Ship several things at once. Each workspace keeps its branch, terminal, and agent activity together.",
+            "70aa182266": "Hand off a goal and walk away. A coordinator agent fans out and ships parallel PRs.",
+            "f10c14dd9d": "Skip the tab-switching. Pick from your GitHub or Linear backlog and start a workspace in one click.",
+            "5d6ee181b6": "Open any workspace to return to its terminal, then split panes for tests, logs, and agents."
           },
           "FeatureWallBody": {
             "25ec5356d6": "Configuración"
@@ -8952,7 +9089,9 @@
             "6e3f5223c5": "Explorador",
             "ab2901bce6": "cheques",
             "d7f80060ca": "Control de fuente",
-            "8e715588e4": "Buscar"
+            "8e715588e4": "Buscar",
+            "a6c8b9e32f": "Checks passed",
+            "f4d5e1a7b2": "3 checks"
           },
           "ReviewShipAnimatedVisual": {
             "4d99496b8c": "Crear relaciones públicas",

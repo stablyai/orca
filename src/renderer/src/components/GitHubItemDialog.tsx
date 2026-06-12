@@ -37,8 +37,6 @@ import {
   Pencil,
   Plus,
   RefreshCw,
-  Send,
-  Settings,
   UndoDot,
   Users,
   Wrench,
@@ -85,6 +83,11 @@ import {
 import type { DiffSection } from '@/components/editor/diff-section-types'
 import type { CombinedDiffFileTreeEntry } from '@/components/editor/combined-diff-file-tree-model'
 import { CHECK_COLOR, CHECK_ICON } from '@/components/right-sidebar/checks-panel-content'
+import {
+  REVIEW_ACTION_MERGE_BUTTON_CLASS,
+  REVIEW_ACTION_STATE_BUTTON_CLASS,
+  RIGHT_SIDEBAR_PRIMARY_BUTTON_LABEL_CLASS
+} from '@/components/right-sidebar/right-sidebar-primary-action-layout'
 import {
   createGitHubChecksTabState,
   resolveGitHubChecksTabState,
@@ -134,6 +137,9 @@ import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-cl
 import { useRepoLabels, useRepoAssignees, useImmediateMutation } from '@/hooks/useIssueMetadata'
 import { useRepoLabelsBySlug, useRepoAssigneesBySlug } from '@/hooks/useGitHubSlugMetadata'
 import { GitHubMarkdownComposer } from '@/components/github/GitHubMarkdownComposer'
+import { GitHubWorkItemLabelPopoverContent } from '@/components/github/GitHubWorkItemLabelPopoverContent'
+import { GitHubWorkItemAssigneePopoverContent } from '@/components/github/GitHubWorkItemAssigneePopoverContent'
+import { GitHubIssueCommentComposer } from '@/components/github/GitHubIssueCommentComposer'
 import IssueSourceIndicator, { sameGitHubOwnerRepo } from '@/components/github/IssueSourceIndicator'
 import {
   getGitHubPRReviewerRows,
@@ -2682,12 +2688,12 @@ function ConversationTab({
     <div
       key={comment.id}
       className={cn(
-        'min-w-0 overflow-hidden rounded-lg border border-border/40 bg-card/50 shadow-xs',
-        isReply && 'ml-6 max-w-[calc(100%-1.5rem)]',
+        'min-w-0 overflow-hidden rounded-md border border-border/60 bg-card shadow-xs',
+        isReply && 'ml-8 max-w-[calc(100%-2rem)] border-l-2 border-l-border/80',
         comment.isResolved && PR_COMMENT_RESOLVED_CONTAINER_CLASS
       )}
     >
-      <div className="flex min-w-0 items-center gap-2 border-b border-border/40 px-3 py-2">
+      <div className="flex min-w-0 items-center gap-2 border-b border-border/50 bg-muted/20 px-3 py-2">
         {comment.authorAvatarUrl ? (
           <img
             src={comment.authorAvatarUrl}
@@ -2965,9 +2971,9 @@ function ConversationTab({
 
         {detailsLoaded ? (
           <>
-            <div className="flex items-center gap-2 pt-1">
+            <div className="flex items-center gap-2 border-b border-border/40 pb-2 pt-1">
               <MessageSquare className="size-4 text-muted-foreground" />
-              <span className="text-[13px] font-medium text-foreground">
+              <span className="text-[13px] font-semibold text-foreground">
                 {translate('auto.components.GitHubItemDialog.1506916c09', 'Comments')}
               </span>
               {comments.length > 0 && (
@@ -3001,13 +3007,13 @@ function ConversationTab({
             )}
 
             {comments.length === 0 ? (
-              <div className="rounded-lg border border-dashed border-border/50 px-3 py-6 text-left text-[13px] text-muted-foreground">
+              <p className="px-1 py-2 text-[13px] text-muted-foreground">
                 {translate('auto.components.GitHubItemDialog.5a94f3d0e9', 'No comments yet.')}
-              </div>
+              </p>
             ) : visibleComments.length === 0 ? (
-              <div className="rounded-lg border border-dashed border-border/50 px-3 py-6 text-center text-[13px] text-muted-foreground">
+              <p className="px-1 py-2 text-center text-[13px] text-muted-foreground">
                 {getPRCommentAudienceEmptyLabel(commentFilter)}
-              </div>
+              </p>
             ) : (
               <div className="flex min-w-0 flex-col gap-3">
                 {visibleCommentGroups.map(renderCommentGroup)}
@@ -3017,13 +3023,19 @@ function ConversationTab({
         ) : null}
 
         {detailsLoaded && repoPath && (
-          <GHCommentComposer
-            className="mt-1"
+          <GitHubIssueCommentComposer
+            className="mt-2"
             repoPath={repoPath}
             repoId={item.repoId}
             issueNumber={item.number}
             itemType={item.type}
+            itemState={localState}
+            itemId={item.id}
+            projectOrigin={projectOrigin}
+            previewGithubRepo={markdownGitHubRepo}
             onCommentAdded={onCommentAdded}
+            onStateChange={onStateChange}
+            onMutated={onMutated}
           />
         )}
       </div>
@@ -3234,7 +3246,7 @@ function PRActionsPanel({
         <WorkItemStateBadge item={actionItem} />
       </div>
 
-      <div className="grid gap-2">
+      <div className="grid gap-2 justify-items-start">
         <DropdownMenu modal={false}>
           <Tooltip>
             <TooltipTrigger asChild>
@@ -3243,7 +3255,8 @@ function PRActionsPanel({
                   type="button"
                   size="sm"
                   className={cn(
-                    'w-full justify-center gap-2 bg-green-600 text-white hover:bg-green-700',
+                    REVIEW_ACTION_MERGE_BUTTON_CLASS,
+                    'gap-2 bg-green-600 text-white hover:bg-green-700',
                     'disabled:cursor-not-allowed disabled:opacity-50'
                   )}
                 >
@@ -3252,11 +3265,13 @@ function PRActionsPanel({
                   ) : (
                     <GitMerge className="size-3.5" />
                   )}
-                  {mergePresentation.autoMergeAction?.label ??
-                    (mergePresentation.directMergeAvailable
-                      ? mergeMethods.defaultLabel
-                      : mergePresentation.label)}
-                  <ChevronDown className="size-3 opacity-60" />
+                  <span className={RIGHT_SIDEBAR_PRIMARY_BUTTON_LABEL_CLASS}>
+                    {mergePresentation.autoMergeAction?.label ??
+                      (mergePresentation.directMergeAvailable
+                        ? mergeMethods.defaultLabel
+                        : mergePresentation.label)}
+                  </span>
+                  <ChevronDown className="size-3 shrink-0 opacity-60" />
                 </Button>
               </DropdownMenuTrigger>
             </TooltipTrigger>
@@ -3302,7 +3317,8 @@ function PRActionsPanel({
           variant={nextState === 'closed' ? 'outline' : 'secondary'}
           size="sm"
           className={cn(
-            'w-full justify-center gap-2',
+            REVIEW_ACTION_STATE_BUTTON_CLASS,
+            'gap-2',
             nextState === 'closed' &&
               'border-border bg-background text-foreground hover:bg-accent hover:text-accent-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50'
           )}
@@ -3316,9 +3332,11 @@ function PRActionsPanel({
           ) : (
             <CircleDot className="size-3.5" />
           )}
-          {nextState === 'closed'
-            ? translate('auto.components.GitHubItemDialog.21860b58d0', 'Close pull request')
-            : translate('auto.components.GitHubItemDialog.ec5c4b3ab2', 'Reopen PR')}
+          <span className={RIGHT_SIDEBAR_PRIMARY_BUTTON_LABEL_CLASS}>
+            {nextState === 'closed'
+              ? translate('auto.components.GitHubItemDialog.21860b58d0', 'Close pull request')
+              : translate('auto.components.GitHubItemDialog.ec5c4b3ab2', 'Reopen PR')}
+          </span>
         </Button>
       </div>
     </aside>
@@ -4399,39 +4417,6 @@ async function runPullRequestStateUpdate(args: {
   }
 }
 
-function GitHubLabelsSettingsLink({
-  url,
-  separated,
-  onOpen
-}: {
-  url: string | null
-  separated?: boolean
-  onOpen?: () => void
-}): React.JSX.Element | null {
-  if (!url) {
-    return null
-  }
-
-  return (
-    <div className={cn(separated && 'mt-1 border-t border-border/60 pt-1')}>
-      <button
-        type="button"
-        onClick={() => {
-          onOpen?.()
-          void window.api.shell.openUrl(url)
-        }}
-        className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-[12px] text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-      >
-        <Settings className="size-3.5 shrink-0" />
-        <span className="min-w-0 flex-1 text-left">
-          {translate('auto.components.GitHubItemDialog.2aa9acdf34', 'Edit labels on GitHub')}
-        </span>
-        <ExternalLink className="size-3 shrink-0 opacity-70" />
-      </button>
-    </div>
-  )
-}
-
 function GHEditSection({
   item,
   repoPath,
@@ -4732,18 +4717,6 @@ function GHEditSection({
     return null
   }
 
-  const checkIcon = (
-    <svg className="size-2.5" viewBox="0 0 12 12" fill="none">
-      <path
-        d="M2 6l3 3 5-5"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  )
-
   if (layout === 'sidebar') {
     return (
       <aside className="flex flex-col gap-5 text-[13px]">
@@ -4825,41 +4798,14 @@ function GHEditSection({
                 className="popover-scroll-content scrollbar-sleek w-60 p-1"
                 align="end"
               >
-                {repoAssignees.error ? (
-                  <div className="px-2 py-3 text-center text-[12px] text-destructive">
-                    {repoAssignees.error}
-                  </div>
-                ) : (
-                  <div>
-                    {repoAssignees.data.map((user) => (
-                      <button
-                        key={user.login}
-                        type="button"
-                        onClick={() => handleAssigneeToggle(user.login)}
-                        className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-[12px] hover:bg-accent"
-                      >
-                        <span
-                          className={cn(
-                            'flex size-3.5 items-center justify-center rounded-sm border',
-                            localAssignees.includes(user.login)
-                              ? 'border-primary bg-primary text-primary-foreground'
-                              : 'border-input'
-                          )}
-                        >
-                          {localAssignees.includes(user.login) && checkIcon}
-                        </span>
-                        <span className="min-w-0 flex-1 text-left">
-                          <span className="block truncate">{user.login}</span>
-                          {user.name && (
-                            <span className="block truncate text-[11px] text-muted-foreground">
-                              {user.name}
-                            </span>
-                          )}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                )}
+                <GitHubWorkItemAssigneePopoverContent
+                  open={assigneePopoverOpen}
+                  assignees={repoAssignees.data}
+                  selectedLogins={localAssignees}
+                  error={repoAssignees.error}
+                  loading={repoAssignees.loading}
+                  onToggleAssignee={handleAssigneeToggle}
+                />
               </PopoverContent>
             </Popover>
           </div>
@@ -4918,39 +4864,15 @@ function GHEditSection({
                 className="popover-scroll-content scrollbar-sleek w-60 p-1"
                 align="end"
               >
-                {repoLabels.error ? (
-                  <div className="px-2 py-3 text-center text-[12px] text-destructive">
-                    {repoLabels.error}
-                  </div>
-                ) : null}
-                {!repoLabels.error ? (
-                  <div>
-                    {repoLabels.data.map((label) => (
-                      <button
-                        key={label}
-                        type="button"
-                        onClick={() => handleLabelToggle(label)}
-                        className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-[12px] hover:bg-accent"
-                      >
-                        <span
-                          className={cn(
-                            'flex size-3.5 items-center justify-center rounded-sm border',
-                            localLabels.includes(label)
-                              ? 'border-primary bg-primary text-primary-foreground'
-                              : 'border-input'
-                          )}
-                        >
-                          {localLabels.includes(label) && checkIcon}
-                        </span>
-                        {label}
-                      </button>
-                    ))}
-                  </div>
-                ) : null}
-                <GitHubLabelsSettingsLink
-                  url={repositoryLabelsUrl}
-                  separated={!repoLabels.error && repoLabels.data.length > 0}
-                  onOpen={() => setLabelPopoverOpen(false)}
+                <GitHubWorkItemLabelPopoverContent
+                  open={labelPopoverOpen}
+                  labels={repoLabels.data}
+                  selectedLabels={localLabels}
+                  error={repoLabels.error}
+                  loading={repoLabels.loading}
+                  repositoryLabelsUrl={repositoryLabelsUrl}
+                  onToggleLabel={handleLabelToggle}
+                  onOpenSettingsLink={() => setLabelPopoverOpen(false)}
                 />
               </PopoverContent>
             </Popover>
@@ -4985,12 +4907,12 @@ function GHEditSection({
           ) : null}
           {hasAttachedWorkspace ? (
             <DropdownMenu modal={false}>
-              <ButtonGroup className="w-full">
+              <ButtonGroup className="inline-flex w-auto max-w-full">
                 <Button
                   type="button"
                   size="sm"
                   onClick={handleOpenOrUseWorkspace}
-                  className="flex-1 gap-1.5"
+                  className="gap-1.5"
                   aria-label={translate(
                     'auto.components.GitHubItemDialog.84855fedd0',
                     'Open workspace attached to issue'
@@ -5111,39 +5033,15 @@ function GHEditSection({
           </button>
         </PopoverTrigger>
         <PopoverContent className="popover-scroll-content scrollbar-sleek w-52 p-1" align="start">
-          {repoLabels.error ? (
-            <div className="px-2 py-3 text-center text-[12px] text-destructive">
-              {repoLabels.error}
-            </div>
-          ) : null}
-          {!repoLabels.error ? (
-            <div>
-              {repoLabels.data.map((label) => (
-                <button
-                  key={label}
-                  type="button"
-                  onClick={() => handleLabelToggle(label)}
-                  className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-[12px] hover:bg-accent"
-                >
-                  <span
-                    className={cn(
-                      'flex size-3.5 items-center justify-center rounded-sm border',
-                      localLabels.includes(label)
-                        ? 'border-primary bg-primary text-primary-foreground'
-                        : 'border-input'
-                    )}
-                  >
-                    {localLabels.includes(label) && checkIcon}
-                  </span>
-                  {label}
-                </button>
-              ))}
-            </div>
-          ) : null}
-          <GitHubLabelsSettingsLink
-            url={repositoryLabelsUrl}
-            separated={!repoLabels.error && repoLabels.data.length > 0}
-            onOpen={() => setLabelPopoverOpen(false)}
+          <GitHubWorkItemLabelPopoverContent
+            open={labelPopoverOpen}
+            labels={repoLabels.data}
+            selectedLabels={localLabels}
+            error={repoLabels.error}
+            loading={repoLabels.loading}
+            repositoryLabelsUrl={repositoryLabelsUrl}
+            onToggleLabel={handleLabelToggle}
+            onOpenSettingsLink={() => setLabelPopoverOpen(false)}
           />
         </PopoverContent>
       </Popover>
@@ -5175,41 +5073,14 @@ function GHEditSection({
           </button>
         </PopoverTrigger>
         <PopoverContent className="popover-scroll-content scrollbar-sleek w-52 p-1" align="start">
-          {repoAssignees.error ? (
-            <div className="px-2 py-3 text-center text-[12px] text-destructive">
-              {repoAssignees.error}
-            </div>
-          ) : (
-            <div>
-              {repoAssignees.data.map((user) => (
-                <button
-                  key={user.login}
-                  type="button"
-                  onClick={() => handleAssigneeToggle(user.login)}
-                  className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-[12px] hover:bg-accent"
-                >
-                  <span
-                    className={cn(
-                      'flex size-3.5 items-center justify-center rounded-sm border',
-                      localAssignees.includes(user.login)
-                        ? 'border-primary bg-primary text-primary-foreground'
-                        : 'border-input'
-                    )}
-                  >
-                    {localAssignees.includes(user.login) && checkIcon}
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate">{user.login}</span>
-                    {user.name && (
-                      <span className="block truncate text-[11px] text-muted-foreground">
-                        {user.name}
-                      </span>
-                    )}
-                  </span>
-                </button>
-              ))}
-            </div>
-          )}
+          <GitHubWorkItemAssigneePopoverContent
+            open={assigneePopoverOpen}
+            assignees={repoAssignees.data}
+            selectedLogins={localAssignees}
+            error={repoAssignees.error}
+            loading={repoAssignees.loading}
+            onToggleAssignee={handleAssigneeToggle}
+          />
         </PopoverContent>
       </Popover>
 
@@ -5272,96 +5143,6 @@ function GHEditSection({
           </Button>
         )}
       </div>
-    </div>
-  )
-}
-
-function GHCommentComposer({
-  className,
-  repoPath,
-  repoId,
-  issueNumber,
-  itemType,
-  onCommentAdded
-}: {
-  className?: string
-  repoPath: string
-  repoId?: string | null
-  issueNumber: number
-  itemType: 'issue' | 'pr'
-  onCommentAdded: (comment: PRComment) => void
-}): React.JSX.Element {
-  const [body, setBody] = useState('')
-  const [submitting, setSubmitting] = useState(false)
-  const mountedRef = useMountedRef()
-
-  const handleSubmit = useCallback(async () => {
-    const trimmed = body.trim()
-    if (!trimmed) {
-      return
-    }
-    setSubmitting(true)
-    try {
-      const result = await addIssueCommentForRepo({
-        repoPath,
-        repoId: repoId ?? undefined,
-        number: issueNumber,
-        body: trimmed,
-        type: itemType
-      })
-      if (!mountedRef.current) {
-        return
-      }
-      if (result.ok) {
-        setBody('')
-        // Why: use the comment returned by GitHub so the optimistic row shows
-        // the real login/avatar immediately instead of waiting for a reopen.
-        onCommentAdded(result.comment)
-      } else {
-        toast.error(
-          result.error ??
-            translate('auto.components.GitHubItemDialog.082515176a', 'Failed to add comment')
-        )
-      }
-    } catch (err) {
-      if (mountedRef.current) {
-        toast.error(
-          err instanceof Error
-            ? err.message
-            : translate('auto.components.GitHubItemDialog.082515176a', 'Failed to add comment')
-        )
-      }
-    } finally {
-      if (mountedRef.current) {
-        setSubmitting(false)
-      }
-    }
-  }, [body, mountedRef, repoPath, repoId, issueNumber, itemType, onCommentAdded])
-
-  return (
-    <div className={cn('flex flex-col items-start gap-2', className)}>
-      <GitHubMarkdownComposer
-        value={body}
-        onChange={setBody}
-        placeholder={translate('auto.components.GitHubItemDialog.c5c117270e', 'Add a comment…')}
-        disabled={submitting}
-        minHeightClassName="min-h-28"
-        className="w-full"
-        onSubmitShortcut={() => void handleSubmit()}
-      />
-      <Button
-        onClick={handleSubmit}
-        disabled={!body.trim() || submitting}
-        className="gap-2"
-        aria-label={translate('auto.components.GitHubItemDialog.0a73f59e85', 'Send comment')}
-      >
-        {submitting ? (
-          <LoaderCircle className="size-3.5 animate-spin" />
-        ) : (
-          <Send className="size-3.5" />
-        )}
-        {translate('auto.components.GitHubItemDialog.bf43425540', 'Comment')}
-      </Button>
     </div>
   )
 }

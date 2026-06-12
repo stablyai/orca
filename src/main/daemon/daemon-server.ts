@@ -11,7 +11,6 @@ import { TerminalHost } from './terminal-host'
 import { DaemonStreamDataBatcher } from './daemon-stream-data-batcher'
 import { readCurrentProcessMacSystemResolverHealth } from '../network/macos-system-resolver-health'
 import type { SubprocessHandle } from './session'
-import { checkPtySpawnHealth } from './pty-subprocess'
 import {
   PROTOCOL_VERSION,
   NOTIFY_PREFIX,
@@ -23,7 +22,6 @@ import {
 export type DaemonServerOptions = {
   socketPath: string
   tokenPath: string
-  ptySpawnHealthCheck?: () => Promise<void>
   spawnSubprocess: (opts: {
     sessionId: string
     cols: number
@@ -47,7 +45,6 @@ export class DaemonServer {
   private host: TerminalHost
   private socketPath: string
   private tokenPath: string
-  private ptySpawnHealthCheck: () => Promise<void>
 
   private clients = new Map<string, ConnectedClient>()
   private streamDataBatcher = new DaemonStreamDataBatcher((clientId) => this.clients.get(clientId))
@@ -65,7 +62,6 @@ export class DaemonServer {
     this.tokenPath = opts.tokenPath
     this.token = randomUUID()
     this.host = new TerminalHost({ spawnSubprocess: opts.spawnSubprocess })
-    this.ptySpawnHealthCheck = opts.ptySpawnHealthCheck ?? checkPtySpawnHealth
   }
 
   async start(): Promise<void> {
@@ -378,10 +374,6 @@ export class DaemonServer {
 
       case 'systemResolverHealth':
         return { health: await readCurrentProcessMacSystemResolverHealth() }
-
-      case 'ptySpawnHealth':
-        await this.ptySpawnHealthCheck()
-        return { healthy: true }
 
       case 'shutdown':
         if (request.payload.killSessions) {

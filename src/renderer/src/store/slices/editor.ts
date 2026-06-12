@@ -29,7 +29,10 @@ import type {
   WorkspaceSessionState,
   WorkspaceVisibleTabType
 } from '../../../../shared/types'
-import { stripCredentialsFromMessage } from '../../../../shared/git-remote-error'
+import {
+  formatSubmodulePushFailureDetail,
+  stripCredentialsFromMessage
+} from '../../../../shared/git-remote-error'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 import type { RemoteOpKind } from '@/components/right-sidebar/source-control-primary-action'
@@ -1112,10 +1115,21 @@ function extractPublishFailureDetail(message: string): string | null {
   return null
 }
 
+function resolveSubmodulePushFailureMessage(
+  message: string,
+  operationLabel: string
+): string | null {
+  const detail = formatSubmodulePushFailureDetail(message)
+  return detail ? `${operationLabel} failed. ${truncateDetail(detail)}` : null
+}
+
 function isNonFastForwardRemoteError(error: unknown): boolean {
+  if (!(error instanceof Error)) {
+    return false
+  }
   return (
-    error instanceof Error &&
-    /non-fast-forward|fetch first|updates were rejected|stale info/i.test(error.message)
+    /non-fast-forward|fetch first|updates were rejected|stale info/i.test(error.message) ||
+    formatSubmodulePushFailureDetail(error.message)?.includes('has remote changes') === true
   )
 }
 
@@ -1151,6 +1165,34 @@ export function resolveRemoteOperationErrorMessage(
     return options?.isSync
       ? 'Sync stopped with merge conflicts. Resolve them in Source Control, then commit the merge.'
       : 'Pull stopped with merge conflicts. Resolve them in Source Control, then commit the merge.'
+  }
+
+  if (options?.publish) {
+    const submoduleMessage = resolveSubmodulePushFailureMessage(error.message, 'Publish Branch')
+    if (submoduleMessage) {
+      return submoduleMessage
+    }
+  }
+
+  if (options?.isSync) {
+    const submoduleMessage = resolveSubmodulePushFailureMessage(error.message, 'Sync')
+    if (submoduleMessage) {
+      return submoduleMessage
+    }
+  }
+
+  if (options?.isForcePush) {
+    const submoduleMessage = resolveSubmodulePushFailureMessage(error.message, 'Force Push')
+    if (submoduleMessage) {
+      return submoduleMessage
+    }
+  }
+
+  if (options?.isPush) {
+    const submoduleMessage = resolveSubmodulePushFailureMessage(error.message, 'Push')
+    if (submoduleMessage) {
+      return submoduleMessage
+    }
   }
 
   // Why: under sync, the inner push runs *after* a successful pull, so a

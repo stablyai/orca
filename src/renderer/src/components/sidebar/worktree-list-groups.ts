@@ -128,22 +128,30 @@ export const PR_GROUP_META: Record<
   }
 > = {
   done: {
-    label: translate('auto.components.sidebar.worktree.list.groups.5076efc3d2', 'Done'),
+    get label() {
+      return translate('auto.components.sidebar.worktree.list.groups.5076efc3d2', 'Done')
+    },
     icon: ConductorDoneIcon,
     tone: 'text-[#c7a594]'
   },
   'in-review': {
-    label: translate('auto.components.sidebar.worktree.list.groups.6798dc7c94', 'In review'),
+    get label() {
+      return translate('auto.components.sidebar.worktree.list.groups.6798dc7c94', 'In review')
+    },
     icon: ConductorReviewIcon,
     tone: 'text-[#16a34a]'
   },
   'in-progress': {
-    label: translate('auto.components.sidebar.worktree.list.groups.7c2f009786', 'In progress'),
+    get label() {
+      return translate('auto.components.sidebar.worktree.list.groups.7c2f009786', 'In progress')
+    },
     icon: ConductorProgressIcon,
     tone: 'text-[#d4a300]'
   },
   closed: {
-    label: translate('auto.components.sidebar.worktree.list.groups.682ed5d551', 'Closed'),
+    get label() {
+      return translate('auto.components.sidebar.worktree.list.groups.682ed5d551', 'Closed')
+    },
     icon: CircleX,
     tone: 'text-zinc-600 dark:text-zinc-300'
   }
@@ -161,7 +169,9 @@ export function getProjectGroupHeaderKey(groupId: string | null): string {
 export const PINNED_GROUP_KEY = 'pinned'
 
 export const PINNED_GROUP_META = {
-  label: translate('auto.components.sidebar.worktree.list.groups.4aeefc5996', 'Pinned'),
+  get label() {
+    return translate('auto.components.sidebar.worktree.list.groups.4aeefc5996', 'Pinned')
+  },
   tone: 'text-foreground',
   icon: Pin
 } as const
@@ -169,7 +179,9 @@ export const PINNED_GROUP_META = {
 export const ALL_GROUP_KEY = 'all'
 
 export const ALL_GROUP_META = {
-  label: translate('auto.components.sidebar.worktree.list.groups.0ed04075b8', 'All'),
+  get label() {
+    return translate('auto.components.sidebar.worktree.list.groups.0ed04075b8', 'All')
+  },
   tone: 'text-foreground',
   icon: List
 } as const
@@ -796,20 +808,27 @@ export function buildRows(
         compareRecentRank(recentRankForEntry(left), recentRankForEntry(right))
       )
     }
-    // Manual: within a Project Group, projects order by their per-group rank
-    // (projectGroupOrder), not the global repoOrder.
+    const manualFallbackRank = new Map(
+      entries.map((entry) => [entry[0], manualRankForEntry(entry, repoOrder)])
+    )
+    // Why: legacy grouped projects may not have projectGroupOrder yet. Falling
+    // back to manual rank keeps one-project drag writes able to land between
+    // old siblings instead of any finite order jumping ahead of all missing ones.
     return [...entries].sort((left, right) => {
       const leftOrder = left[1].repo?.projectGroupOrder
       const rightOrder = right[1].repo?.projectGroupOrder
       const leftRank =
         typeof leftOrder === 'number' && Number.isFinite(leftOrder)
           ? leftOrder
-          : Number.POSITIVE_INFINITY
+          : (manualFallbackRank.get(left[0]) ?? Number.POSITIVE_INFINITY) * 1000
       const rightRank =
         typeof rightOrder === 'number' && Number.isFinite(rightOrder)
           ? rightOrder
-          : Number.POSITIVE_INFINITY
-      return leftRank - rightRank
+          : (manualFallbackRank.get(right[0]) ?? Number.POSITIVE_INFINITY) * 1000
+      if (leftRank !== rightRank) {
+        return leftRank - rightRank
+      }
+      return left[1].label.localeCompare(right[1].label)
     })
   }
 

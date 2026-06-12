@@ -94,9 +94,9 @@ describe('contextual tour floating position', () => {
 
     expect(Number.isFinite(Number(position.panelPosition.left))).toBe(true)
     expect(Number.isFinite(Number(position.panelPosition.top))).toBe(true)
-    // Why: -(height - 1) overlaps the panel by its 1px border so the arrow
-    // fill covers the border segment beneath its base.
-    expect(position.arrowPosition[expectedStaticArrowSide(position.panelPlacement)]).toBe(-7)
+    // Why: the arrow starts just outside the panel border so the card outline
+    // remains visually clean.
+    expect(position.arrowPosition[expectedStaticArrowSide(position.panelPlacement)]).toBe(-8)
   })
 
   // Regression: a tall step panel inside a small dialog host fit no placement,

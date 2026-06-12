@@ -74,36 +74,15 @@ describe('daemon health', () => {
   })
 
   it('passes when a daemon answers ping', async () => {
-    const ptySpawnHealthCheck = vi.fn(async () => {})
     const server = new DaemonServer({
       socketPath,
       tokenPath,
-      ptySpawnHealthCheck,
       spawnSubprocess: () => createMockSubprocess()
     })
     await server.start()
 
     try {
       await expect(healthCheckDaemon(socketPath, tokenPath)).resolves.toBe(true)
-      expect(ptySpawnHealthCheck).toHaveBeenCalledOnce()
-    } finally {
-      await server.shutdown()
-    }
-  })
-
-  it('fails when a protocol-healthy daemon cannot spawn PTYs', async () => {
-    const server = new DaemonServer({
-      socketPath,
-      tokenPath,
-      ptySpawnHealthCheck: vi.fn(async () => {
-        throw new Error('stale node-pty helper')
-      }),
-      spawnSubprocess: () => createMockSubprocess()
-    })
-    await server.start()
-
-    try {
-      await expect(healthCheckDaemon(socketPath, tokenPath)).resolves.toBe(false)
     } finally {
       await server.shutdown()
     }

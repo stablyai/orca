@@ -1,13 +1,5 @@
-import React, { useCallback, useMemo, useState } from 'react'
-import {
-  LoaderCircle,
-  GitMerge,
-  ChevronDown,
-  Trash2,
-  GitPullRequestClosed,
-  CircleDot
-} from 'lucide-react'
-import { toast } from 'sonner'
+import React, { useCallback, useMemo } from 'react'
+import { LoaderCircle, GitMerge, ChevronDown, GitPullRequestClosed } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -19,26 +11,23 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator
 } from '@/components/ui/dropdown-menu'
-import { useConfirmationDialog } from '@/components/confirmation-dialog'
 import { presentGitHubPRMergeState } from '@/components/github-pr-merge-state'
-import type { HostedReviewInfo } from '../../../../shared/hosted-review'
 import type { PRInfo, Repo, Worktree } from '../../../../shared/types'
-import type { GitHubPRMergeMethod } from '../../../../shared/types'
 import { resolveGitHubPRMergeMethods } from '../../../../shared/github-pr-merge-methods'
 import { runWorktreeDelete } from '../sidebar/delete-worktree-flow'
 import { presentGitLabMRMergeState } from './gitlab-mr-merge-state'
+import {
+  ClosedReviewActions,
+  HostedReviewActionError,
+  MergedReviewActions
+} from './HostedReviewStateActions'
+import { useHostedReviewActions, type HostedReviewActionInfo } from './use-hosted-review-actions'
+import {
+  RIGHT_SIDEBAR_MERGE_PRIMARY_BUTTON_CLASS,
+  RIGHT_SIDEBAR_PRIMARY_BUTTON_LABEL_CLASS,
+  RIGHT_SIDEBAR_SPLIT_ACTION_ROW_CLASS
+} from './right-sidebar-primary-action-layout'
 import { translate } from '@/i18n/i18n'
-
-type HostedReviewActionInfo = Pick<
-  HostedReviewInfo,
-  'provider' | 'number' | 'state' | 'status' | 'mergeable'
-> &
-  Partial<
-    Pick<
-      HostedReviewInfo,
-      'reviewDecision' | 'autoMergeEnabled' | 'mergeQueueRequired' | 'mergeStateStatus'
-    >
-  >
 
 export default function HostedReviewActions({
   review,
@@ -56,11 +45,6 @@ export default function HostedReviewActions({
   const isDeletingWorktree = useAppStore(
     (s) => s.deleteStateByWorktreeId[worktree.id]?.isDeleting ?? false
   )
-  const confirm = useConfirmationDialog()
-  const [merging, setMerging] = useState(false)
-  const [stateUpdating, setStateUpdating] = useState<'open' | 'closed' | null>(null)
-  const [actionError, setActionError] = useState<string | null>(null)
-
   const isGitLab = review.provider === 'gitlab'
   const shortLabel = isGitLab ? 'MR' : 'PR'
   const reviewLabel = isGitLab ? 'merge request' : 'pull request'
@@ -83,6 +67,25 @@ export default function HostedReviewActions({
     () => resolveGitHubPRMergeMethods(isGitLab ? null : (githubPR?.mergeMethodSettings ?? null)),
     [githubPR?.mergeMethodSettings, isGitLab]
   )
+  const {
+    merging,
+    stateUpdating,
+    actionError,
+    handleMerge,
+    handleAutoMerge,
+    handleCloseReview,
+    handleReopenReview
+  } = useHostedReviewActions({
+    review,
+    githubPR,
+    repo,
+    isGitLab,
+    shortLabel,
+    reviewLabel,
+    defaultMergeMethod: mergeMethods.defaultMethod,
+    autoMergeAction: mergePresentation.autoMergeAction,
+    onRefreshReview
+  })
   const isUpdatingReviewState = stateUpdating !== null
   const primaryMergeDisabled =
     merging ||
@@ -91,169 +94,6 @@ export default function HostedReviewActions({
   const directMergeDisabled =
     merging || isUpdatingReviewState || !mergePresentation.directMergeAvailable
   const menuDisabled = merging || isUpdatingReviewState
-
-  const handleMerge = useCallback(
-    async (method: GitHubPRMergeMethod = mergeMethods.defaultMethod) => {
-      setMerging(true)
-      setActionError(null)
-      try {
-        const result = isGitLab
-          ? await window.api.gl.mergeMR({
-              repoPath: repo.path,
-              iid: review.number,
-              method
-            })
-          : await window.api.gh.mergePR({
-              repoPath: repo.path,
-              repoId: repo.id,
-              prNumber: review.number,
-              method,
-              prRepo: githubPR?.prRepo ?? null
-            })
-        if (!result.ok) {
-          setActionError(result.error)
-        } else {
-          await onRefreshReview()
-        }
-      } catch (err) {
-        setActionError(err instanceof Error ? err.message : 'Merge failed')
-      } finally {
-        setMerging(false)
-      }
-    },
-    [
-      githubPR?.prRepo,
-      isGitLab,
-      mergeMethods.defaultMethod,
-      onRefreshReview,
-      repo.id,
-      repo.path,
-      review.number
-    ]
-  )
-
-  const handleAutoMerge = useCallback(async () => {
-    if (isGitLab || !mergePresentation.autoMergeAction) {
-      return
-    }
-    const enabled = mergePresentation.autoMergeAction.kind === 'enable'
-    setMerging(true)
-    setActionError(null)
-    try {
-      const result = await window.api.gh.setPRAutoMerge({
-        repoPath: repo.path,
-        repoId: repo.id,
-        prNumber: review.number,
-        enabled,
-        prRepo: githubPR?.prRepo ?? null
-      })
-      if (!result.ok) {
-        setActionError(result.error)
-      } else {
-        await onRefreshReview()
-      }
-    } catch (err) {
-      setActionError(err instanceof Error ? err.message : 'Auto-merge update failed')
-    } finally {
-      setMerging(false)
-    }
-  }, [
-    githubPR?.prRepo,
-    isGitLab,
-    mergePresentation.autoMergeAction,
-    onRefreshReview,
-    repo.id,
-    repo.path,
-    review.number
-  ])
-
-  const handleReviewStateChange = useCallback(
-    async (nextState: 'open' | 'closed') => {
-      if (stateUpdating) {
-        return
-      }
-      const isClosing = nextState === 'closed'
-      const label = isClosing ? 'Close' : 'Reopen'
-      const confirmed = await confirm({
-        title: `${label} ${shortLabel} ${isGitLab ? '!' : '#'}${review.number}?`,
-        description: isClosing
-          ? translate(
-              'auto.components.right.sidebar.HostedReviewActions.a3d572a4de',
-              'This will close the {{value0}}.',
-              { value0: reviewLabel }
-            )
-          : translate(
-              'auto.components.right.sidebar.HostedReviewActions.78f5ff294c',
-              'This will reopen the {{value0}}.',
-              { value0: reviewLabel }
-            ),
-        confirmLabel: label,
-        confirmVariant: isClosing ? 'destructive' : 'default'
-      })
-      if (!confirmed) {
-        return
-      }
-      setStateUpdating(nextState)
-      setActionError(null)
-      try {
-        const result = isGitLab
-          ? isClosing
-            ? await window.api.gl.closeMR({ repoPath: repo.path, iid: review.number })
-            : await window.api.gl.reopenMR({ repoPath: repo.path, iid: review.number })
-          : await window.api.gh.updatePRState({
-              repoPath: repo.path,
-              repoId: repo.id,
-              prNumber: review.number,
-              updates: { state: nextState }
-            })
-        if (!result.ok) {
-          setActionError(result.error)
-          toast.error(result.error)
-        } else {
-          toast.success(
-            isClosing
-              ? translate(
-                  'auto.components.right.sidebar.HostedReviewActions.fa3ee9a515',
-                  '{{value0}} closed',
-                  { value0: shortLabel }
-                )
-              : translate(
-                  'auto.components.right.sidebar.HostedReviewActions.377269db6f',
-                  '{{value0}} reopened',
-                  { value0: shortLabel }
-                )
-          )
-          await onRefreshReview()
-        }
-      } catch (err) {
-        const message =
-          err instanceof Error ? err.message : `Failed to ${label.toLowerCase()} ${reviewLabel}`
-        setActionError(message)
-        toast.error(message)
-      } finally {
-        setStateUpdating(null)
-      }
-    },
-    [
-      confirm,
-      isGitLab,
-      onRefreshReview,
-      repo.id,
-      repo.path,
-      review.number,
-      reviewLabel,
-      shortLabel,
-      stateUpdating
-    ]
-  )
-
-  const handleCloseReview = useCallback(async () => {
-    await handleReviewStateChange('closed')
-  }, [handleReviewStateChange])
-
-  const handleReopenReview = useCallback(async () => {
-    await handleReviewStateChange('open')
-  }, [handleReviewStateChange])
 
   const handleDeleteWorktree = useCallback(() => {
     // Why: route every UI delete entry point through the shared funnel so
@@ -265,17 +105,23 @@ export default function HostedReviewActions({
     return (
       <div className="space-y-1.5">
         <TooltipProvider delayDuration={300}>
-          <div className="flex items-stretch">
+          <div className={RIGHT_SIDEBAR_SPLIT_ACTION_ROW_CLASS}>
             <Tooltip>
               <TooltipTrigger asChild>
                 {/* Why: wrapping in a <span> so the tooltip trigger receives pointer
                   events even when the merge button inside is disabled. */}
-                <span className={cn('flex flex-1', primaryMergeDisabled && 'cursor-not-allowed')}>
+                <span
+                  className={cn(
+                    'inline-flex min-w-0 max-w-full shrink',
+                    primaryMergeDisabled && 'cursor-not-allowed'
+                  )}
+                >
                   <Button
                     type="button"
                     size="xs"
                     className={cn(
-                      'w-full rounded-r-none px-3 text-[11px]',
+                      'rounded-r-none px-3 text-[11px]',
+                      RIGHT_SIDEBAR_MERGE_PRIMARY_BUTTON_CLASS,
                       'bg-green-600 text-white hover:bg-green-700',
                       'disabled:opacity-50 disabled:cursor-not-allowed'
                     )}
@@ -291,14 +137,16 @@ export default function HostedReviewActions({
                     ) : (
                       <GitMerge className="size-3.5" />
                     )}
-                    {merging
-                      ? translate(
-                          'auto.components.right.sidebar.HostedReviewActions.d2ca293f3d',
-                          'Working...'
-                        )
-                      : mergePresentation.directMergeAvailable
-                        ? mergeMethods.defaultLabel
-                        : (mergePresentation.autoMergeAction?.label ?? mergePresentation.label)}
+                    <span className={RIGHT_SIDEBAR_PRIMARY_BUTTON_LABEL_CLASS}>
+                      {merging
+                        ? translate(
+                            'auto.components.right.sidebar.HostedReviewActions.d2ca293f3d',
+                            'Working...'
+                          )
+                        : mergePresentation.directMergeAvailable
+                          ? mergeMethods.defaultLabel
+                          : (mergePresentation.autoMergeAction?.label ?? mergePresentation.label)}
+                    </span>
                   </Button>
                 </span>
               </TooltipTrigger>
@@ -376,65 +224,27 @@ export default function HostedReviewActions({
             </DropdownMenu>
           </div>
         </TooltipProvider>
-        {actionError && <div className="text-[10px] text-rose-500 break-words">{actionError}</div>}
+        <HostedReviewActionError message={actionError} />
       </div>
     )
   }
 
   if (review.state === 'closed') {
     return (
-      <div className="space-y-1.5">
-        <Button
-          type="button"
-          variant="outline"
-          size="xs"
-          className="w-full cursor-pointer text-[11px] hover:cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-          onClick={() => void handleReopenReview()}
-          disabled={isUpdatingReviewState}
-        >
-          {stateUpdating === 'open' ? (
-            <LoaderCircle className="size-3.5 animate-spin" />
-          ) : (
-            <CircleDot className="size-3.5" />
-          )}
-          {stateUpdating === 'open'
-            ? translate(
-                'auto.components.right.sidebar.HostedReviewActions.6645ac7dd1',
-                'Reopening...'
-              )
-            : translate(
-                'auto.components.right.sidebar.HostedReviewActions.3ce211ece6',
-                'Reopen {{value0}}',
-                { value0: shortLabel }
-              )}
-        </Button>
-        {actionError && <div className="text-[10px] text-rose-500 break-words">{actionError}</div>}
-      </div>
+      <ClosedReviewActions
+        shortLabel={shortLabel}
+        stateUpdating={stateUpdating}
+        actionError={actionError}
+        onReopenReview={() => void handleReopenReview()}
+      />
     )
   }
-
   if (review.state === 'merged') {
     return (
-      <Button
-        type="button"
-        variant="secondary"
-        size="xs"
-        className="w-full cursor-pointer text-[11px] hover:cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-        onClick={handleDeleteWorktree}
-        disabled={isDeletingWorktree}
-      >
-        {isDeletingWorktree ? (
-          <LoaderCircle className="size-3.5 animate-spin" />
-        ) : (
-          <Trash2 className="size-3.5" />
-        )}
-        {isDeletingWorktree
-          ? translate('auto.components.right.sidebar.HostedReviewActions.eefd50457e', 'Deleting...')
-          : translate(
-              'auto.components.right.sidebar.HostedReviewActions.e4aca40024',
-              'Delete Workspace'
-            )}
-      </Button>
+      <MergedReviewActions
+        isDeletingWorktree={isDeletingWorktree}
+        onDeleteWorktree={handleDeleteWorktree}
+      />
     )
   }
 

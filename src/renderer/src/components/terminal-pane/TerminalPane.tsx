@@ -46,8 +46,13 @@ import type { PreparedAgentSessionFork } from './terminal-agent-session-fork'
 import { useNotificationDispatch } from './use-notification-dispatch'
 import { connectPanePty } from './pty-connection'
 import { shouldPreserveTerminalScrollbackBuffers } from '../../../../shared/workspace-session-terminal-buffers'
-import { getFitOverrideForPty, onOverrideChange } from '@/lib/pane-manager/mobile-fit-overrides'
 import {
+  getAllOverrides,
+  getFitOverrideForPty,
+  onOverrideChange
+} from '@/lib/pane-manager/mobile-fit-overrides'
+import {
+  getAllDrivers,
   getDriverForPty,
   isPtyLocked,
   onDriverChange
@@ -56,11 +61,6 @@ import { resolvePaneKeyForManager } from '@/lib/pane-manager/pane-key-resolution
 import { safeFit } from '@/lib/pane-manager/pane-tree-ops'
 import { captureTerminalShutdownLayout } from './terminal-shutdown-layout-capture'
 import { inspectRuntimeTerminalProcess } from '@/runtime/runtime-terminal-inspection'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
-import {
-  getRemoteRuntimePtyEnvironmentId,
-  getRemoteRuntimeTerminalHandle
-} from '@/runtime/runtime-terminal-stream'
 import { closeWebRuntimeTerminal } from '@/runtime/web-runtime-session'
 import { isPrimarySelectionEnabled, readPrimarySelectionText } from '@/lib/primary-selection'
 import { WORKSPACE_FILE_PATH_MIME } from '@/lib/workspace-file-drag'
@@ -85,6 +85,7 @@ import {
 import { keybindingMatchesAction } from '../../../../shared/keybindings'
 import { pasteTerminalClipboard } from './terminal-clipboard-paste'
 import { scheduleImagePasteWebglAtlasRecovery } from './terminal-webgl-paste-recovery'
+import { restoreTerminalFitToDesktop, restoreTerminalFitsToDesktop } from './terminal-fit-restore'
 
 // Why: registry lives in a leaf module so the store slice can import it
 // without re-entering the `slice → TerminalPane → store → slice` cycle
@@ -1687,6 +1688,46 @@ export default function TerminalPane({
     rightClickToPaste
   })
 
+  const getMobileOwnedTerminalPtyIds = useCallback((): string[] => {
+    const ptyIds = new Set(getAllOverrides().keys())
+    for (const [ptyId, driver] of getAllDrivers()) {
+      if (driver.kind === 'mobile') {
+        ptyIds.add(ptyId)
+      }
+    }
+    return [...ptyIds]
+  }, [])
+
+  const restorePaneTerminalFit = useCallback(async (pane: ManagedPane): Promise<void> => {
+    // Why: local and remote runtime PTYs use different transports, but the
+    // desktop reclaim button should have one visible recovery behavior.
+    const id = paneTransportsRef.current.get(pane.id)?.getPtyId()
+    if (!id) {
+      return
+    }
+    const restored = await restoreTerminalFitToDesktop(id, settingsRef.current ?? undefined)
+    if (restored) {
+      // Why: after the overlay unmounts, focus would otherwise stay on the
+      // removed button/body instead of the terminal the user just reclaimed.
+      pane.terminal.focus()
+    }
+  }, [])
+
+  const restoreAllTerminalFits = useCallback(
+    async (focusPane: ManagedPane): Promise<void> => {
+      // Why: a mobile session can leave multiple PTYs held at phone size; bulk
+      // restore follows the same reclaim path as the per-pane button.
+      const restored = await restoreTerminalFitsToDesktop(
+        getMobileOwnedTerminalPtyIds(),
+        settingsRef.current ?? undefined
+      )
+      if (restored) {
+        focusPane.terminal.focus()
+      }
+    },
+    [getMobileOwnedTerminalPtyIds]
+  )
+
   const terminalShouldHandleMiddleClick = useCallback(
     (target: EventTarget | null): target is Node => {
       if (!(target instanceof Element)) {
@@ -2028,8 +2069,8 @@ export default function TerminalPane({
         // input paused (docs/mobile-presence-lock.md). (2) No mobile driver
         // but a phone-fit override is still in place → indefinite hold
         // (docs/mobile-fit-hold.md). MobileDriverOverlay owns the visual
-        // treatment and collapse-to-chip state; both branches share a
-        // single IPC route through restoreTerminalFit.
+        // treatment and collapse-to-chip state; both branches share the
+        // same local/remote desktop-restore route.
         const driver = getDriverForPty(ptyId)
         const isMobileDriving = driver.kind === 'mobile'
         const hasFitOverride = getFitOverrideForPty(ptyId) !== null
@@ -2042,38 +2083,8 @@ export default function TerminalPane({
             driver={driver}
             hasFitOverride={hasFitOverride}
             rootClassName="mobile-driver-banner"
-            onAction={async () => {
-              // Why: same restore intent has two transports. Remote-runtime PTYs
-              // must call the environment RPC; local PTYs use the Electron IPC
-              // handler. Both resolve active-mobile and held-no-subscriber states.
-              const transport = paneTransportsRef.current.get(pane.id)
-              const id = transport?.getPtyId()
-              if (!id) {
-                return
-              }
-              const remoteHandle = getRemoteRuntimeTerminalHandle(id)
-              const environmentId =
-                getRemoteRuntimePtyEnvironmentId(id) ??
-                settingsRef.current?.activeRuntimeEnvironmentId ??
-                null
-              const result =
-                remoteHandle && environmentId
-                  ? await callRuntimeRpc<{ restored: boolean }>(
-                      { kind: 'environment', environmentId },
-                      'terminal.restoreFit',
-                      { terminal: remoteHandle },
-                      { timeoutMs: 15_000 }
-                    ).catch(() => ({ restored: false }))
-                  : await window.api.runtime
-                      .restoreTerminalFit(id)
-                      .catch(() => ({ restored: false }))
-              if (result.restored) {
-                // Why: after the overlay unmounts, focus would otherwise stay on
-                // the removed button/body instead of the terminal the user just
-                // reclaimed.
-                pane.terminal.focus()
-              }
-            }}
+            onAction={() => restorePaneTerminalFit(pane)}
+            onAllAction={() => restoreAllTerminalFits(pane)}
           />,
           pane.container,
           `mobile-driver-banner-${pane.id}`

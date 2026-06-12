@@ -23,37 +23,52 @@ type FeatureSetupRow = {
 const FEATURE_SETUP_ROWS: readonly FeatureSetupRow[] = [
   {
     id: 'browserUse',
-    title: translate(
-      'auto.components.onboarding.FeatureSetupChecklist.ea85d9e628',
-      'Agent Browser Use'
-    ),
-    description: translate(
-      'auto.components.onboarding.FeatureSetupChecklist.01426f3a23',
-      'Agents can navigate sites, inspect pages, and work through browser tasks.'
-    ),
+    get title() {
+      return translate(
+        'auto.components.onboarding.FeatureSetupChecklist.ea85d9e628',
+        'Agent Browser Use'
+      )
+    },
+    get description() {
+      return translate(
+        'auto.components.onboarding.FeatureSetupChecklist.01426f3a23',
+        'Agents can navigate sites, inspect pages, and work through browser tasks.'
+      )
+    },
     setupSummary: 'Enables browser use, prepares orca-cli, and leaves cookies for Settings.',
     icon: <Globe2 className="size-4" />
   },
   {
     id: 'computerUse',
-    title: translate('auto.components.onboarding.FeatureSetupChecklist.1ecfb490ac', 'Computer Use'),
-    description: translate(
-      'auto.components.onboarding.FeatureSetupChecklist.c5292c409d',
-      'Agents can inspect app windows and operate local apps when you ask.'
-    ),
+    get title() {
+      return translate(
+        'auto.components.onboarding.FeatureSetupChecklist.1ecfb490ac',
+        'Computer Use'
+      )
+    },
+    get description() {
+      return translate(
+        'auto.components.onboarding.FeatureSetupChecklist.c5292c409d',
+        'Agents can inspect app windows and operate local apps when you ask.'
+      )
+    },
     setupSummary: 'Registers the Orca CLI, opens permissions, and prepares the skill.',
     icon: <MonitorCog className="size-4" />
   },
   {
     id: 'orchestration',
-    title: translate(
-      'auto.components.onboarding.FeatureSetupChecklist.399cf885c0',
-      'Agent Orchestration'
-    ),
-    description: translate(
-      'auto.components.onboarding.FeatureSetupChecklist.77f74946f5',
-      'Agents can message each other, take tasks, and coordinate handoffs.'
-    ),
+    get title() {
+      return translate(
+        'auto.components.onboarding.FeatureSetupChecklist.399cf885c0',
+        'Agent Orchestration'
+      )
+    },
+    get description() {
+      return translate(
+        'auto.components.onboarding.FeatureSetupChecklist.77f74946f5',
+        'Agents can message each other, take tasks, and coordinate handoffs.'
+      )
+    },
     setupSummary: 'Registers the Orca CLI, enables orchestration, and prepares the skill.',
     icon: <Workflow className="size-4" />
   }

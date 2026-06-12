@@ -1215,6 +1215,42 @@ describe('web file preload API', () => {
   })
 })
 
+describe('web star nag preload API', () => {
+  beforeEach(() => {
+    vi.resetModules()
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('keeps the browser-paired star nag API safe and in parity with the preload contract', async () => {
+    const { api } = await installApi('Linux')
+
+    expect(Object.keys(api.starNag).sort()).toEqual([
+      'complete',
+      'disable',
+      'dismiss',
+      'forceShow',
+      'onShow',
+      'openWeb',
+      'starOrca'
+    ])
+
+    const listener = vi.fn()
+    const unsubscribe = api.starNag.onShow(listener)
+    unsubscribe()
+
+    await expect(api.starNag.dismiss()).resolves.toBeUndefined()
+    await expect(api.starNag.complete()).resolves.toBeUndefined()
+    await expect(api.starNag.disable()).resolves.toBeUndefined()
+    await expect(api.starNag.openWeb()).resolves.toBeUndefined()
+    await expect(api.starNag.forceShow()).resolves.toBeUndefined()
+    await expect(api.starNag.starOrca()).resolves.toBe(false)
+    expect(listener).not.toHaveBeenCalled()
+  })
+})
+
 describe('web GitHub preload API', () => {
   beforeEach(() => {
     vi.resetModules()

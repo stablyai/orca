@@ -48,10 +48,30 @@ function formatTrackingSince(timestamp: number | null): string {
 type UsageTab = 'overview' | 'claude' | 'codex' | 'opencode'
 
 const USAGE_ANALYTICS_OPTIONS = [
-  { id: 'overview', label: translate('auto.components.stats.StatsPane.b2cf4310ce', 'Overview') },
-  { id: 'claude', label: translate('auto.components.stats.StatsPane.85457c02fe', 'Claude') },
-  { id: 'codex', label: translate('auto.components.stats.StatsPane.7d26110cea', 'Codex') },
-  { id: 'opencode', label: translate('auto.components.stats.StatsPane.1e696db2f6', 'OpenCode') }
+  {
+    id: 'overview',
+    get label() {
+      return translate('auto.components.stats.StatsPane.b2cf4310ce', 'Overview')
+    }
+  },
+  {
+    id: 'claude',
+    get label() {
+      return translate('auto.components.stats.StatsPane.85457c02fe', 'Claude')
+    }
+  },
+  {
+    id: 'codex',
+    get label() {
+      return translate('auto.components.stats.StatsPane.7d26110cea', 'Codex')
+    }
+  },
+  {
+    id: 'opencode',
+    get label() {
+      return translate('auto.components.stats.StatsPane.1e696db2f6', 'OpenCode')
+    }
+  }
 ] as const satisfies readonly { id: UsageTab; label: string }[]
 
 function UsageAnalyticsOptionIcon({ tab }: { tab: UsageTab }): React.JSX.Element {

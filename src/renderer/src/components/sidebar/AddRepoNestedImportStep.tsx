@@ -1,5 +1,5 @@
-import { useId, type Dispatch, type SetStateAction } from 'react'
-import { CircleHelp, CircleStop, Loader2 } from 'lucide-react'
+import { useEffect, useId, useState, type Dispatch, type SetStateAction } from 'react'
+import { CircleStop, Loader2 } from 'lucide-react'
 import { DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -36,6 +36,20 @@ export function AddRepoNestedImportStep({
 }: AddRepoNestedImportStepProps): React.JSX.Element {
   const folderName = getRuntimePathBasename(scan.selectedPath) || scan.selectedPath
   const groupNameInputId = useId()
+  const [pendingImportMode, setPendingImportMode] = useState<'group' | 'separate' | null>(null)
+  const showSeparateSpinner = isAdding && pendingImportMode === 'separate'
+  const showGroupSpinner = isAdding && pendingImportMode === 'group'
+
+  useEffect(() => {
+    if (!isAdding) {
+      setPendingImportMode(null)
+    }
+  }, [isAdding])
+
+  const handleImport = (mode: 'group' | 'separate'): void => {
+    setPendingImportMode(mode)
+    onImport(mode)
+  }
   const repoCountLabel =
     scan.repos.length === 1
       ? translate('auto.components.sidebar.AddRepoNestedImportStep.8401a7a0d0', '1 repository')
@@ -97,7 +111,7 @@ export function AddRepoNestedImportStep({
           <p className="text-xs text-muted-foreground">
             {translate(
               'auto.components.sidebar.AddRepoNestedImportStep.d75170194e',
-              'Choose this if these projects belong together. Orca will group them and let you work from the parent folder.'
+              "Import them as a group if they're a monorepo or otherwise belong together. Orca will group them and let you work from the parent folder."
             )}
           </p>
         </div>
@@ -106,37 +120,15 @@ export function AddRepoNestedImportStep({
             <Label htmlFor={groupNameInputId} className="text-[11px] text-muted-foreground">
               {translate(
                 'auto.components.sidebar.AddRepoNestedImportStep.39d51212cc',
-                'Monorepo name'
+                'Group name'
               )}
             </Label>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-xs"
-                  aria-label={translate(
-                    'auto.components.sidebar.AddRepoNestedImportStep.e907ec8935',
-                    'What is a monorepo name?'
-                  )}
-                  className="size-5 text-muted-foreground hover:text-foreground"
-                >
-                  <CircleHelp className="size-3.5" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="top" sideOffset={4} className="max-w-64">
-                {translate(
-                  'auto.components.sidebar.AddRepoNestedImportStep.b20bb7c24f',
-                  'Keeps these repos together in one group. Best for related repos like microservices.'
-                )}
-              </TooltipContent>
-            </Tooltip>
           </div>
           <Input
             id={groupNameInputId}
             aria-label={translate(
               'auto.components.sidebar.AddRepoNestedImportStep.39d51212cc',
-              'Monorepo name'
+              'Group name'
             )}
             value={groupName}
             onChange={(event) => onGroupNameChange(event.target.value)}
@@ -147,22 +139,24 @@ export function AddRepoNestedImportStep({
         </div>
         <div className="flex shrink-0 flex-wrap justify-end gap-2">
           <Button
-            onClick={() => onImport('separate')}
+            onClick={() => handleImport('separate')}
             disabled={isAdding || scanInProgress || selectedPaths.size === 0}
             variant="outline"
           >
+            {showSeparateSpinner ? <Loader2 className="size-3.5 animate-spin" /> : null}
             {translate(
               'auto.components.sidebar.AddRepoNestedImportStep.aa0247680d',
               'No, import separately'
             )}
           </Button>
           <Button
-            onClick={() => onImport('group')}
+            onClick={() => handleImport('group')}
             disabled={isAdding || scanInProgress || selectedPaths.size === 0}
           >
+            {showGroupSpinner ? <Loader2 className="size-3.5 animate-spin" /> : null}
             {translate(
               'auto.components.sidebar.AddRepoNestedImportStep.a0bc4d1f8e',
-              'Yes, import as monorepo'
+              'Import as group'
             )}
           </Button>
         </div>

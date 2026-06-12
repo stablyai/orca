@@ -2418,6 +2418,64 @@ describe('createEditorSlice remote branch actions', () => {
     expect(store.getState().isRemoteOperationActive).toBe(false)
   })
 
+  it('surfaces submodule push failures with the submodule name', async () => {
+    const store = createEditorStore()
+    const pushError = new Error(
+      "Command failed: git push\nPushing submodule 'find-cmux-followers'\n" +
+        ' ! [rejected]        master -> master (fetch first)\n' +
+        "Unable to push submodule 'find-cmux-followers'\n" +
+        'fatal: failed to push all needed submodules'
+    )
+    gitPushMock.mockRejectedValueOnce(pushError)
+
+    await expect(store.getState().pushBranch('wt-1', '/repo', false)).rejects.toThrow(
+      pushError.message
+    )
+
+    expect(toastErrorMock).toHaveBeenCalledWith(
+      "Push failed. Submodule 'find-cmux-followers' has remote changes. Pull inside the submodule, then try again."
+    )
+    await flushAsyncRemoteRefresh()
+
+    expect(gitStatusMock).not.toHaveBeenCalled()
+    expect(gitFetchMock).toHaveBeenCalledWith({
+      worktreePath: '/repo',
+      connectionId: undefined
+    })
+    expect(gitUpstreamStatusMock).toHaveBeenCalledWith({
+      worktreePath: '/repo',
+      connectionId: undefined
+    })
+    expect(store.getState().isRemoteOperationActive).toBe(false)
+  })
+
+  it('surfaces transport-prefixed normalized submodule push failures', async () => {
+    const store = createEditorStore()
+    const pushError = new Error(
+      "Error invoking remote method 'git:push': Error: Submodule 'find-cmux-followers' has remote changes. Pull inside the submodule, then try again."
+    )
+    gitPushMock.mockRejectedValueOnce(pushError)
+
+    await expect(store.getState().pushBranch('wt-1', '/repo', false)).rejects.toThrow(
+      pushError.message
+    )
+
+    expect(toastErrorMock).toHaveBeenCalledWith(
+      "Push failed. Submodule 'find-cmux-followers' has remote changes. Pull inside the submodule, then try again."
+    )
+    await flushAsyncRemoteRefresh()
+
+    expect(gitFetchMock).toHaveBeenCalledWith({
+      worktreePath: '/repo',
+      connectionId: undefined
+    })
+    expect(gitUpstreamStatusMock).toHaveBeenCalledWith({
+      worktreePath: '/repo',
+      connectionId: undefined
+    })
+    expect(store.getState().isRemoteOperationActive).toBe(false)
+  })
+
   it('uses a fallback message for generic push errors', async () => {
     const store = createEditorStore()
     const pushError = new Error('network timeout')

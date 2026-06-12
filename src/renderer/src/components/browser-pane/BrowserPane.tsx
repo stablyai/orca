@@ -188,12 +188,16 @@ type BrowserOverlayAnchor = {
 const BROWSER_ANNOTATION_INTENT_OPTIONS = [
   {
     value: 'change',
-    label: translate('auto.components.browser.pane.BrowserPane.143204e423', 'Change'),
+    get label() {
+      return translate('auto.components.browser.pane.BrowserPane.143204e423', 'Change')
+    },
     icon: PencilLine
   },
   {
     value: 'question',
-    label: translate('auto.components.browser.pane.BrowserPane.b5ba6085de', 'Question'),
+    get label() {
+      return translate('auto.components.browser.pane.BrowserPane.b5ba6085de', 'Question')
+    },
     icon: MessageCircleQuestionMark
   }
 ] as const

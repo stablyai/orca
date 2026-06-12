@@ -232,6 +232,7 @@ export function FolderWorkspaceComposerDialog({
         quickAgent,
         autoRenameBranchFromWork: settings?.autoRenameBranchFromWork,
         agentCmdOverrides: settings?.agentCmdOverrides,
+        isRemote: selectedRepoConnectionId !== null,
         createFolderWorkspace,
         onOpenChange
       })
@@ -246,6 +247,7 @@ export function FolderWorkspaceComposerDialog({
     onOpenChange,
     projectGroup,
     quickAgent,
+    selectedRepoConnectionId,
     settings?.agentCmdOverrides,
     settings?.autoRenameBranchFromWork,
     submitting,
@@ -335,17 +337,10 @@ export function FolderWorkspaceComposerDialog({
             repoId={repoId}
             selectedRepoIsGit={true}
             onRepoChange={handleRepoChange}
-            primaryActionLabel={
-              quickAgent
-                ? translate(
-                    'auto.components.sidebar.FolderWorkspaceComposerDialog.createStart',
-                    'Create & Start Agent'
-                  )
-                : translate(
-                    'auto.components.sidebar.FolderWorkspaceComposerDialog.create',
-                    'Create Workspace'
-                  )
-            }
+            primaryActionLabel={translate(
+              'auto.components.sidebar.FolderWorkspaceComposerDialog.create',
+              'Create workspace'
+            )}
             projectLabel={translate(
               'auto.components.sidebar.FolderWorkspaceComposerDialog.sourceProject',
               'Task Source'

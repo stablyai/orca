@@ -126,7 +126,7 @@ export function AutoRenameBranchFromWorkSetting({
     <SearchableSetting
       title={translate(
         'auto.components.settings.AutoRenameBranchFromWorkSetting.ef787db0e3',
-        'Auto-Rename Branch'
+        'Auto-rename branch & worktree'
       )}
       description={translate(
         'auto.components.settings.AutoRenameBranchFromWorkSetting.6a051586d2',
@@ -152,7 +152,7 @@ export function AutoRenameBranchFromWorkSetting({
           <Label>
             {translate(
               'auto.components.settings.AutoRenameBranchFromWorkSetting.ef787db0e3',
-              'Auto-Rename Branch'
+              'Auto-rename branch & worktree'
             )}
           </Label>
           <p className="text-xs text-muted-foreground">

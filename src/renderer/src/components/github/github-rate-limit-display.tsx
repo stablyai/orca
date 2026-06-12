@@ -20,27 +20,30 @@ type BucketMeta = {
 const BUCKETS: BucketMeta[] = [
   {
     key: 'core',
-    label: translate('auto.components.github.github.rate.limit.display.bb227706a6', 'REST'),
-    description: translate(
-      'auto.components.github.github.rate.limit.display.c392c749a6',
-      'REST API'
-    )
+    get label() {
+      return translate('auto.components.github.github.rate.limit.display.bb227706a6', 'REST')
+    },
+    get description() {
+      return translate('auto.components.github.github.rate.limit.display.c392c749a6', 'REST API')
+    }
   },
   {
     key: 'search',
-    label: translate('auto.components.github.github.rate.limit.display.c377a4f06a', 'Search'),
-    description: translate(
-      'auto.components.github.github.rate.limit.display.1f2f28a4de',
-      'Search API'
-    )
+    get label() {
+      return translate('auto.components.github.github.rate.limit.display.c377a4f06a', 'Search')
+    },
+    get description() {
+      return translate('auto.components.github.github.rate.limit.display.1f2f28a4de', 'Search API')
+    }
   },
   {
     key: 'graphql',
-    label: translate('auto.components.github.github.rate.limit.display.1daf0f22a9', 'GraphQL'),
-    description: translate(
-      'auto.components.github.github.rate.limit.display.01f7323e58',
-      'GraphQL API'
-    )
+    get label() {
+      return translate('auto.components.github.github.rate.limit.display.1daf0f22a9', 'GraphQL')
+    },
+    get description() {
+      return translate('auto.components.github.github.rate.limit.display.01f7323e58', 'GraphQL API')
+    }
   }
 ]
 

@@ -671,6 +671,26 @@ describe('Store', () => {
     expect(store.getUI().projectOrderBy).toBe('manual')
   })
 
+  it('shows the manual-default notice for upgraded profiles without projectOrderBy', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [{ id: 'repo-1', path: '/tmp/repo', displayName: 'Repo', badgeColor: '#000000' }],
+      ui: {}
+    })
+    const store = await createStore()
+    expect(store.getUI().projectOrderManualDefaultNoticeDismissed).toBe(false)
+  })
+
+  it('hides the manual-default notice for profiles that already chose recent', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [{ id: 'repo-1', path: '/tmp/repo', displayName: 'Repo', badgeColor: '#000000' }],
+      ui: { projectOrderBy: 'recent' }
+    })
+    const store = await createStore()
+    expect(store.getUI().projectOrderManualDefaultNoticeDismissed).toBe(true)
+  })
+
   // ── 2. Load from existing valid file ─────────────────────────────────
 
   it('reads repos from an existing data file', async () => {

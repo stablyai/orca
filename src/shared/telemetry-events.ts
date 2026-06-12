@@ -35,6 +35,12 @@ import { SETUP_SCRIPT_IMPORT_PROVIDERS } from './setup-script-import-providers'
 import { WORKSPACE_SOURCE_VALUES, type WorkspaceSource } from './workspace-source'
 import { appStarSourceSchema } from './gh-star-source'
 import {
+  starNagAgentBucketSchema,
+  starNagOutcomeSchema,
+  starNagPromptModeSchema,
+  starNagPromptSourceSchema
+} from './star-nag-telemetry'
+import {
   NESTED_REPO_COUNT_BUCKETS,
   NESTED_REPO_IMPORT_ACTIONS,
   NESTED_REPO_IMPORT_OUTCOMES,
@@ -348,6 +354,23 @@ const appStarredOrcaSchema = z
     nth_repo_added: nthRepoAddedSchema
   })
   .strict()
+
+const starNagOutcomeEventSchema = z
+  .object({
+    outcome: starNagOutcomeSchema,
+    source: starNagPromptSourceSchema,
+    mode: starNagPromptModeSchema,
+    threshold: z.number().int().positive(),
+    agents_since_baseline: z.number().int().nonnegative(),
+    agents_since_baseline_bucket: starNagAgentBucketSchema,
+    nth_repo_added: nthRepoAddedSchema,
+    next_threshold: z.number().int().positive().optional()
+  })
+  .strict()
+  .refine((payload) => payload.next_threshold === undefined || payload.outcome === 'dismissed', {
+    message: 'next_threshold is only valid for dismissed outcomes',
+    path: ['next_threshold']
+  })
 
 const workspaceCreatedSchema = z
   .object({
@@ -1282,6 +1305,7 @@ const terminalPaneSplitSchema = z
 export const eventSchemas = {
   app_opened: appOpenedSchema,
   app_starred_orca: appStarredOrcaSchema,
+  star_nag_outcome: starNagOutcomeEventSchema,
   feature_interaction_usage_bucket_reached: featureInteractionUsageBucketReachedSchema,
 
   repo_added: repoAddedSchema,
@@ -1408,6 +1432,7 @@ export const COHORT_EXTENDED: readonly EventName[] = Array.from(COHORT_EXTENDED_
 type _CohortExtendedRoster =
   | 'app_opened'
   | 'app_starred_orca'
+  | 'star_nag_outcome'
   | 'feature_interaction_usage_bucket_reached'
   | 'repo_added'
   | 'add_repo_setup_step_action'
