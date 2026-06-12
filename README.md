@@ -253,20 +253,12 @@ yay -S stably-orca-git
 
 ---
 
-## Your Code, Your Keys
-
-- **Bring your own subscription** — Use the agent subscriptions you already pay for, with no extra layer in between.
-- **Runs on your machines** — Agents execute locally, or on your own servers over SSH.
-- **Open source** — MIT licensed, with the full source in this repo.
-- **Transparent telemetry** — Anonymous usage data only, documented and opt-out. See the [privacy &amp; telemetry docs](https://www.onorca.dev/docs/telemetry).
-
----
-
 ## Community &amp; Support
 
 - **Discord:** Join the community on **[Discord](https://discord.gg/fzjDKHxv8Q)**.
 - **Twitter / X:** Follow **[@orca_build](https://x.com/orca_build)** for updates and announcements.
 - **Feedback &amp; Ideas:** We ship fast. Missing something? [Request a new feature](https://github.com/stablyai/orca/issues).
+- **Privacy:** See the [privacy &amp; telemetry docs](https://www.onorca.dev/docs/telemetry) for what anonymous usage data Orca collects and how to opt out.
 - **Show Support:** Star this repo to follow along with our daily ships.
 
 ---
