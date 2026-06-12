@@ -2443,7 +2443,9 @@
             "77ac113df0": "{{value0}} を開始: {{value1}}",
             "7b1c9d6ae1": "走る",
             "c781f992e4": "破壊的な",
-            "be8f0ff166": "削除"
+            "be8f0ff166": "削除",
+            "f3a8c2d1e7": "Search quick commands...",
+            "b4e7f9a2c1": "No commands match"
           },
           "shell": {
             "icons": {

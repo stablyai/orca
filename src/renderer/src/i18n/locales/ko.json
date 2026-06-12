@@ -2443,7 +2443,9 @@
             "77ac113df0": "시작 {{value0}}: {{value1}}",
             "7b1c9d6ae1": "달리다",
             "c781f992e4": "파괴적인",
-            "be8f0ff166": "삭제"
+            "be8f0ff166": "삭제",
+            "f3a8c2d1e7": "Search quick commands...",
+            "b4e7f9a2c1": "No commands match"
           },
           "shell": {
             "icons": {

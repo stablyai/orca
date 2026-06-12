@@ -2443,7 +2443,9 @@
             "77ac113df0": "Inicio {{value0}}: {{value1}}",
             "7b1c9d6ae1": "Correr",
             "c781f992e4": "destructivo",
-            "be8f0ff166": "Borrar"
+            "be8f0ff166": "Borrar",
+            "f3a8c2d1e7": "Search quick commands...",
+            "b4e7f9a2c1": "No commands match"
           },
           "shell": {
             "icons": {
