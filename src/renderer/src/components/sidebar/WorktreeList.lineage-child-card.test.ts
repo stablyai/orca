@@ -263,6 +263,16 @@ function makeLineage(worktree: Worktree, parent: Worktree): WorktreeLineage {
   }
 }
 
+function makeFolderWorkspacePathStatusState(): Record<string, unknown> {
+  return {
+    fetchFolderWorkspacePathStatus: vi.fn(),
+    folderWorkspacePathStatuses: {},
+    folderWorkspaces: [],
+    getFolderWorkspacePathStatusCacheKey: (request: unknown) => JSON.stringify(request),
+    getFreshFolderWorkspacePathStatus: vi.fn(() => null)
+  }
+}
+
 function setLineageFixtureState(
   groupBy: 'none' | 'repo' = 'none',
   options: {
@@ -332,6 +342,7 @@ function setLineageFixtureState(
       ])
     ),
     filterRepoIds: [],
+    ...makeFolderWorkspacePathStatusState(),
     groupBy,
     hideDefaultBranchWorkspace: false,
     issueCache: {},
@@ -407,6 +418,7 @@ function setProjectGroupWithoutWorktreeRowsState(filterRepoIds: string[] = []): 
     collapsedGroups: new Set<string>(),
     deleteStateByWorktreeId: {},
     filterRepoIds,
+    ...makeFolderWorkspacePathStatusState(),
     groupBy: 'repo',
     hideDefaultBranchWorkspace: false,
     issueCache: {},
@@ -467,6 +479,7 @@ function setEmptyUngroupedProjectState(filterRepoIds: string[] = []): void {
     collapsedGroups: new Set<string>(),
     deleteStateByWorktreeId: {},
     filterRepoIds,
+    ...makeFolderWorkspacePathStatusState(),
     groupBy: 'repo',
     hideDefaultBranchWorkspace: false,
     issueCache: {},

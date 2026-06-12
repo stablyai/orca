@@ -3935,6 +3935,30 @@
             }
           }
         },
+        "LinearAgentSkillSetupPrompt": {
+          "missingCliAndSkill": "缺少 Orca CLI 和 Linear agent 技能。",
+          "modalTitle": "启用 Linear ticket 访问",
+          "modalDescription": "从 terminal 安装 Linear 技能。",
+          "modalPrompt": "允许 Agent 读取和编辑已附加的 Linear ticket。",
+          "dontShowAgain": "不再显示",
+          "notNow": "暂不",
+          "missingBoth": "缺少 Orca CLI 和 Linear agent 技能。",
+          "missingCli": "缺少 Orca CLI。",
+          "missingSkill": "缺少 Linear agent 技能。",
+          "title": "设置 Linear agent 技能",
+          "remoteCopy": "这会安装主机设置；远程 agent 环境可能需要单独设置。",
+          "hostCopy": "为已链接 Linear 工作的主机 agent 交接安装此项。",
+          "dismiss": "关闭 Linear agent 技能设置",
+          "setup": "设置",
+          "recheck": "重新检查",
+          "panelTitle": "Linear agent 技能",
+          "panelDescription": "安装主机 agent 技能，用于已链接 Linear 任务交接。",
+          "terminalTitle": "安装 Linear agent 技能",
+          "terminalAria": "Linear agent 技能安装 terminal",
+          "install": "安装 CLI 和技能",
+          "wslCopy": "为已链接 Linear 工作的 WSL agent 交接安装此项。",
+          "wslLabel": "WSL 默认值"
+        },
         "FolderWorkspaceComposerDialog": {
           "connectFailed": "无法连接到项目。",
           "noRepos": "在此文件夹下添加 Git 项目，以关联 GitHub 或 GitLab 任务。",
@@ -4321,6 +4345,8 @@
           "8671e406f0": "取消",
           "a4aafe46e3": "目标路径：",
           "e8012c03a1": "使 Agent 能够使用 Orca 工作区、terminal 和进度命令。",
+          "cliSkillTerminalTitle": "CLI 技能设置",
+          "cliSkillTerminalAria": "CLI 技能安装 terminal",
           "6053cf736c": "CLI技能",
           "36a6f919ba": "为 Agent 提供 Orca 感知的工作区、terminal 和进度工作流程。",
           "04873eea3e": "Agent 技能",
@@ -7534,7 +7560,16 @@
                 "eae4a9f16b": "Add Linear access to browse and link issues.",
                 "fe9231215b": "Checking Linear access before showing setup actions.",
                 "e1f5e6424c": "{{value0}} workspace{{value1}} connected",
-                "disconnect_all": "Disconnect"
+                "disconnect_all": "全部断开连接",
+                "linearSkillTitle": "Linear agent 技能",
+                "linearSkillDescription": "安装主机 agent 技能，供 Agent 用于更丰富的已链接 Linear 任务交接。",
+                "linearSkillTerminalTitle": "安装 Linear agent 技能",
+                "linearSkillTerminalAria": "Linear agent 技能安装 terminal",
+                "linearSkillInstall": "安装 CLI 和技能",
+                "linearSkillOptionalHint": "可选下一步：安装 Linear agent 技能，让 agent 交接更了解 ticket 背景。",
+                "linearSkillDismissHint": "关闭可选的 Linear agent 技能设置提示",
+                "linearSkillWslDescription": "安装 WSL agent 技能，供 Agent 用于更丰富的已链接 Linear 任务交接。",
+                "linearSkillWslLabel": "WSL 默认值"
               }
             }
           }
@@ -8493,7 +8528,10 @@
           "c5292c409d": "按你的要求，Agent 可查看应用窗口并操作本地应用。",
           "1ecfb490ac": "计算机控制",
           "01426f3a23": "Agent 可浏览网站、检查页面并完成浏览器任务。",
-          "ea85d9e628": "Agent 浏览器操控"
+          "ea85d9e628": "Agent 浏览器操控",
+          "linearTicketsTitle": "Linear agent 技能",
+          "linearTicketsDescription": "Agent 可使用已链接的 Linear 任务，完成更了解 ticket 背景的交接。",
+          "linearTicketsSetupSummary": "推荐用于 Linear 工作区；不会影响 Linear 连接设置。"
         },
         "FeatureSetupInlineTerminal": {
           "789b59936e": "按 Enter 运行命令并在询问时确认 npx。您也可以稍后在“设置”中进行设置。",
@@ -8635,7 +8673,7 @@
           }
         },
         "AgentFeatureSetupStep": {
-          "97dcdc010f": "启用功能"
+          "97dcdc010f": "安装 CLI 和技能"
         }
       },
       "new": {
@@ -8908,7 +8946,9 @@
             "3a59452a67": "技能命令已复制并插入到下方以供评审。",
             "c605f51f2b": "能力设置就绪",
             "1aa657d8f4": "一些能力设置需要注意",
-            "c89534cbe9": "安装 CLI 和技能"
+            "c89534cbe9": "安装 CLI 和技能",
+            "linearTicketsTitle": "Linear agent 技能",
+            "linearTicketsDescription": "当 Agent 从已链接的 Linear 任务开始工作时推荐使用。"
           },
           "AiCommitPrSettingsCard": {
             "8d4152701a": "例如llama 运行 llama3.1 {{value0}}",
@@ -10515,6 +10555,44 @@
             "e176f9d0c5": "Jira Cloud site URL",
             "d785c42b8b": "Use a Jira Cloud site URL, Atlassian email, and API token to browse issues.",
             "8388bdea2b": "Connect Jira site"
+          }
+        }
+      },
+      "link": {
+        "routing": {
+          "preference": {
+            "dialog": {
+              "badge": "终端链接",
+              "preview": "预览",
+              "title": "在 Orca 浏览器中打开终端链接？",
+              "description": "用 Orca 浏览器打开终端链接，或继续使用系统浏览器。",
+              "orca": {
+                "button": "在 Orca 中打开",
+                "note": "Orca 可以使用已导入的 Cookie 打开已登录的网站。"
+              },
+              "settings": {
+                "note": "之后可在设置 → 浏览器中更改。"
+              },
+              "system": {
+                "button": "使用系统浏览器"
+              },
+              "link": {
+                "label": "链接"
+              },
+              "shortcut": {
+                "note": {
+                  "prefix": "当链接在 Orca 中打开时，",
+                  "suffix": "点击可临时改用系统浏览器。"
+                }
+              },
+              "keep": {
+                "title": "继续在 Orca 浏览器中打开终端链接？",
+                "description": "或默认使用系统浏览器。",
+                "orca": {
+                  "button": "继续使用 Orca"
+                }
+              }
+            }
           }
         }
       }

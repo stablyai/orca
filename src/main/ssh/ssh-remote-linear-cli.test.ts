@@ -50,6 +50,63 @@ function createRuntime() {
         partial: false,
         workspaceErrors: []
       }
+    })),
+    linearIssueSetState: vi.fn(async (request: unknown) => ({
+      request,
+      issue: {
+        id: 'issue-1',
+        identifier: 'ENG-123',
+        url: 'https://linear.app/acme/issue/ENG-123'
+      },
+      state: { id: 'state-review', name: 'In Review', type: 'started' },
+      previousState: { id: 'state-started', name: 'In Progress' },
+      meta: { workspaceId: 'workspace-1', alreadyInState: false }
+    })),
+    linearIssueAddComment: vi.fn(async (request: unknown) => ({
+      request,
+      comment: { id: 'comment-1', url: null, parentId: null },
+      issue: {
+        id: 'issue-1',
+        identifier: 'ENG-123',
+        url: 'https://linear.app/acme/issue/ENG-123'
+      },
+      meta: {
+        workspaceId: 'workspace-1',
+        bodyChars: 4,
+        writeId: '123e4567-e89b-12d3-a456-426614174000',
+        deduplicated: false
+      }
+    })),
+    linearIssueAttachLink: vi.fn(async (request: unknown) => ({
+      request,
+      attachment: { id: 'attachment-1', title: 'PR/MR link', url: 'https://example.com/review/1' },
+      issue: {
+        id: 'issue-1',
+        identifier: 'ENG-123',
+        url: 'https://linear.app/acme/issue/ENG-123'
+      },
+      meta: {
+        workspaceId: 'workspace-1',
+        writeId: '123e4567-e89b-12d3-a456-426614174000',
+        deduplicated: false
+      }
+    })),
+    linearIssueCreate: vi.fn(async (request: unknown) => ({
+      request,
+      issue: {
+        id: 'issue-2',
+        identifier: 'ENG-456',
+        title: 'Follow-up',
+        url: 'https://linear.app/acme/issue/ENG-456',
+        team: { id: 'team-1', key: 'ENG', name: 'Engineering' },
+        state: { id: 'state-triage', name: 'Triage' },
+        parent: { id: 'issue-1', identifier: 'ENG-123' }
+      },
+      meta: {
+        workspaceId: 'workspace-1',
+        writeId: '123e4567-e89b-12d3-a456-426614174000',
+        deduplicated: false
+      }
     }))
   } as unknown as OrcaRuntimeService
   return runtime
@@ -126,6 +183,110 @@ describe('runRemoteOrcaCli Linear commands', () => {
       query: 'auth bug',
       limit: 5,
       workspaceId: 'all'
+    })
+  })
+
+  it('dispatches Linear status writes through the remote runtime with SSH context hints', async () => {
+    const runtime = createRuntime()
+
+    const result = await runRemoteOrcaCli(runtime, {
+      argv: ['linear', 'status', 'set', 'ENG-123', '--to', 'In Review', '--json'],
+      cwd: '/home/alice/remote-repo',
+      env: {
+        ORCA_TERMINAL_HANDLE: 'term_ssh',
+        ORCA_WORKTREE_ID: 'repo::remote'
+      }
+    })
+
+    expect(result.exitCode).toBe(0)
+    const payload = JSON.parse(result.stdout) as {
+      ok: boolean
+      result: { request: { input: string; to: string; context: Record<string, unknown> } }
+    }
+    expect(payload.ok).toBe(true)
+    expect(payload.result.request).toMatchObject({
+      input: 'ENG-123',
+      to: 'In Review',
+      context: {
+        remote: true,
+        terminalHandle: 'term_ssh',
+        worktreeId: 'repo::remote'
+      }
+    })
+  })
+
+  it('formats SSH Linear writes in non-json mode', async () => {
+    const runtime = createRuntime()
+
+    const result = await runRemoteOrcaCli(runtime, {
+      argv: ['linear', 'comment', 'add', 'ENG-123', '--body', 'Done'],
+      cwd: '/home/alice/remote-repo',
+      env: { ORCA_TERMINAL_HANDLE: 'term_ssh' }
+    })
+
+    expect(result.exitCode).toBe(0)
+    expect(result.stdout).toBe('Added comment comment-1 to ENG-123.\n')
+    expect(result.stderr).toBe('')
+  })
+
+  it('dispatches body-file stdin writes in the SSH shim', async () => {
+    const runtime = createRuntime()
+
+    const result = await runRemoteOrcaCli(runtime, {
+      argv: ['linear', 'comment', 'add', '--current', '--body-file', '-', '--json'],
+      cwd: '/home/alice/remote-repo',
+      env: { ORCA_TERMINAL_HANDLE: 'term_ssh' },
+      stdin: 'line one\nline two\n'
+    })
+
+    expect(result.exitCode).toBe(0)
+    const payload = JSON.parse(result.stdout) as {
+      ok: boolean
+      result: { request: { body: string } }
+    }
+    expect(payload.ok).toBe(true)
+    expect(payload.result.request.body).toBe('line one\nline two\n')
+  })
+
+  it('rejects body-file stdin writes when SSH stdin is unavailable', async () => {
+    const runtime = createRuntime()
+
+    const result = await runRemoteOrcaCli(runtime, {
+      argv: ['linear', 'comment', 'add', '--current', '--body-file', '-', '--json'],
+      cwd: '/home/alice/remote-repo',
+      env: { ORCA_TERMINAL_HANDLE: 'term_ssh' }
+    })
+
+    expect(result.exitCode).toBe(1)
+    const payload = JSON.parse(result.stdout) as {
+      ok: boolean
+      error: { code: string; message: string }
+    }
+    expect(payload.ok).toBe(false)
+    expect(payload.error).toMatchObject({
+      code: 'invalid_argument',
+      message: 'SSH Linear writes require stdin when using --body-file -.'
+    })
+  })
+
+  it('rejects remote body-file paths in the SSH shim before dispatch', async () => {
+    const runtime = createRuntime()
+
+    const result = await runRemoteOrcaCli(runtime, {
+      argv: ['linear', 'comment', 'add', '--current', '--body-file', 'body.md', '--json'],
+      cwd: '/home/alice/remote-repo',
+      env: { ORCA_TERMINAL_HANDLE: 'term_ssh' }
+    })
+
+    expect(result.exitCode).toBe(1)
+    const payload = JSON.parse(result.stdout) as {
+      ok: boolean
+      error: { code: string; message: string }
+    }
+    expect(payload.ok).toBe(false)
+    expect(payload.error).toMatchObject({
+      code: 'invalid_argument',
+      message: 'SSH Linear writes only support --body-file - for stdin.'
     })
   })
 
@@ -223,6 +384,30 @@ describe('runRemoteOrcaCli Linear commands', () => {
     expect(result.stderr).toContain('Linear is not connected.')
   })
 
+  it('prints SSH Linear non-json next steps from structured errors', async () => {
+    const runtime = createRuntime()
+    const linearIssueAddComment = (
+      runtime as unknown as { linearIssueAddComment: ReturnType<typeof vi.fn> }
+    ).linearIssueAddComment
+    linearIssueAddComment.mockRejectedValueOnce(
+      Object.assign(new Error('Linear may have applied the write.'), {
+        code: 'linear_write_unconfirmed',
+        data: { nextSteps: ['Retry once with the pinned command: `orca linear comment add`.'] }
+      })
+    )
+
+    const result = await runRemoteOrcaCli(runtime, {
+      argv: ['linear', 'comment', 'add', 'ENG-123', '--body', 'Done'],
+      cwd: '/home/alice/remote-repo',
+      env: { ORCA_TERMINAL_HANDLE: 'term_ssh' }
+    })
+
+    expect(result.exitCode).toBe(1)
+    expect(result.stdout).toBe('')
+    expect(result.stderr).toContain('Linear may have applied the write.')
+    expect(result.stderr).toContain('Next step: Retry once with the pinned command')
+  })
+
   it('shows SSH Linear command help without dispatching to the runtime', async () => {
     const runtime = createRuntime()
     const linearIssueContext = (
@@ -257,6 +442,7 @@ describe('runRemoteOrcaCli Linear commands', () => {
     expect(result.stdout).toContain('orca linear')
     expect(result.stdout).toContain('Usage: orca linear <command> [options]')
     expect(result.stdout).toContain('search')
+    expect(result.stdout).toContain('comment add')
     expect(linearIssueContext).not.toHaveBeenCalled()
   })
 

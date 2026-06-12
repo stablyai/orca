@@ -3034,11 +3034,6 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                       ? undefined
                       : { transform: getVirtualRowTransform(vItem.start) }
                   }
-                  onPointerDown={
-                    isDraggableRepoHeader && projectIdForHeader
-                      ? (event) => repoDrag.onHandlePointerDown(event, projectIdForHeader)
-                      : undefined
-                  }
                 >
                   <div
                     role="button"
@@ -3051,7 +3046,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                     data-workspace-pin-drop-target={isPinnedHeader ? '' : undefined}
                     className={cn(
                       'group flex h-7 w-full items-center gap-1.5 pr-1 text-left transition-all',
-                      isDraggableRepoHeader ? 'cursor-grab' : 'cursor-pointer',
+                      'cursor-pointer',
                       isDraggingThis &&
                         'bg-accent/80 ring-1 ring-ring/40 shadow-md rounded-md scale-[1.01]',
                       headerWorkspaceStatus &&
@@ -3120,7 +3115,18 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
 
                     <div className="min-w-0 flex-1">
                       <div className="flex min-w-0 items-center gap-1.5">
-                        <div className="min-w-0 truncate text-[13px] font-semibold leading-none">
+                        <div
+                          data-repo-header-drag-handle=""
+                          className={cn(
+                            'min-w-0 truncate text-[13px] font-semibold leading-none',
+                            isDraggableRepoHeader && 'cursor-grab'
+                          )}
+                          onPointerDown={
+                            isDraggableRepoHeader && projectIdForHeader
+                              ? (event) => repoDrag.onHandlePointerDown(event, projectIdForHeader)
+                              : undefined
+                          }
+                        >
                           {row.label}
                         </div>
                         <RepoForkIndicator upstream={row.repo?.upstream} />

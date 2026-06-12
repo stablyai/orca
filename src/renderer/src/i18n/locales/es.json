@@ -3935,6 +3935,30 @@
         "index": {
           "b826a98b6f": "ocupado"
         },
+        "LinearAgentSkillSetupPrompt": {
+          "missingCliAndSkill": "Faltan la CLI de Orca y la habilidad de Agent de Linear.",
+          "modalTitle": "Activar acceso a tickets de Linear",
+          "modalDescription": "Instala la habilidad de Linear desde una terminal.",
+          "modalPrompt": "Permite que los Agents lean y editen el ticket de Linear adjunto.",
+          "dontShowAgain": "No volver a mostrar",
+          "notNow": "Ahora no",
+          "missingBoth": "Faltan la CLI de Orca y la habilidad de Agent de Linear.",
+          "missingCli": "Falta la CLI de Orca.",
+          "missingSkill": "Falta la habilidad de Agent de Linear.",
+          "title": "Configurar habilidad de Agent de Linear",
+          "remoteCopy": "Esto instala la configuración del host; los entornos de Agent remotos pueden necesitar una configuración separada.",
+          "hostCopy": "Instálala para traspasos de Agent del host desde trabajo Linear enlazado.",
+          "dismiss": "Descartar configuración de habilidad de Agent de Linear",
+          "setup": "Configurar",
+          "recheck": "Volver a comprobar",
+          "panelTitle": "Habilidad de Agent de Linear",
+          "panelDescription": "Instala la habilidad de Agent del host para traspasos desde tareas Linear enlazadas.",
+          "terminalTitle": "Instalar habilidad de Agent de Linear",
+          "terminalAria": "Terminal de instalación de la habilidad de Agent de Linear",
+          "install": "Instalar CLI y habilidad",
+          "wslCopy": "Instálala para traspasos de Agent en WSL desde trabajo Linear enlazado.",
+          "wslLabel": "WSL predeterminado"
+        },
         "FolderWorkspaceComposerDialog": {
           "connectFailed": "No se pudo conectar al proyecto.",
           "noRepos": "Agrega un proyecto Git en esta carpeta para adjuntar tareas de GitHub o GitLab.",
@@ -4336,6 +4360,8 @@
           "8671e406f0": "Cancelar",
           "a4aafe46e3": "Ruta de destino:",
           "e8012c03a1": "Permite a los agents utilizar el espacio de trabajo, la terminal y los comandos de progreso de Orca.",
+          "cliSkillTerminalTitle": "Configuración de habilidad CLI",
+          "cliSkillTerminalAria": "Terminal de instalación de la habilidad CLI",
           "6053cf736c": "Habilidad CLI",
           "36a6f919ba": "Ofrezca a los agents espacios de trabajo, terminales y flujos de trabajo de progreso compatibles con Orca.",
           "04873eea3e": "Habilidades del Agent",
@@ -7534,7 +7560,16 @@
                 "eae4a9f16b": "Add Linear access to browse and link issues.",
                 "fe9231215b": "Checking Linear access before showing setup actions.",
                 "e1f5e6424c": "{{value0}} workspace{{value1}} connected",
-                "disconnect_all": "Disconnect"
+                "disconnect_all": "Desconectar todo",
+                "linearSkillTitle": "Habilidad de Agent de Linear",
+                "linearSkillDescription": "Instala la habilidad de Agent del host que los Agents usan para traspasos más completos con tareas Linear enlazadas.",
+                "linearSkillTerminalTitle": "Instalar habilidad de Agent de Linear",
+                "linearSkillTerminalAria": "Terminal de instalación de la habilidad de Agent de Linear",
+                "linearSkillInstall": "Instalar CLI y habilidad",
+                "linearSkillOptionalHint": "Paso opcional siguiente: instala la habilidad de Agent de Linear para traspasos con contexto del ticket.",
+                "linearSkillDismissHint": "Descartar la nota opcional de configuración de la habilidad de Agent de Linear",
+                "linearSkillWslDescription": "Instala la habilidad de Agent de WSL que los Agents usan para traspasos más completos con tareas Linear enlazadas.",
+                "linearSkillWslLabel": "WSL predeterminado"
               }
             }
           }
@@ -8493,7 +8528,10 @@
           "c5292c409d": "Los Agents pueden inspeccionar las ventanas de las aplicaciones y operar aplicaciones locales cuando usted lo solicite.",
           "1ecfb490ac": "Uso de la computadora",
           "01426f3a23": "Los Agents pueden navegar por sitios, inspeccionar páginas y realizar tareas del navegador.",
-          "ea85d9e628": "Uso del navegador del Agent"
+          "ea85d9e628": "Uso del navegador del Agent",
+          "linearTicketsTitle": "Habilidad de Agent de Linear",
+          "linearTicketsDescription": "Los Agents pueden usar tareas Linear enlazadas para traspasos más completos y conscientes del ticket.",
+          "linearTicketsSetupSummary": "Recomendado para espacios de trabajo Linear; no afecta la configuración de conexión de Linear."
         },
         "FeatureSetupInlineTerminal": {
           "789b59936e": "Presione Enter para ejecutar el comando y confirme npx si se le solicita. También puedes configurar esto más tarde en Configuración.",
@@ -8635,7 +8673,7 @@
           }
         },
         "AgentFeatureSetupStep": {
-          "97dcdc010f": "Habilitar capacidades"
+          "97dcdc010f": "Instalar CLI y habilidades"
         }
       },
       "new": {
@@ -8908,7 +8946,9 @@
             "3a59452a67": "Comando de habilidad copiado e insertado a continuación para su revisión.",
             "c605f51f2b": "Configuración de capacidad lista",
             "1aa657d8f4": "Alguna configuración de capacidad necesita atención",
-            "c89534cbe9": "Instalar CLI y habilidades"
+            "c89534cbe9": "Instalar CLI y habilidades",
+            "linearTicketsTitle": "Habilidad de Agent de Linear",
+            "linearTicketsDescription": "Recomendado cuando los Agents trabajan desde tareas Linear enlazadas."
           },
           "AiCommitPrSettingsCard": {
             "8d4152701a": "p.ej. ollama corre llama3.1 {{value0}}",
@@ -10515,6 +10555,44 @@
             "e176f9d0c5": "Jira Cloud site URL",
             "d785c42b8b": "Use a Jira Cloud site URL, Atlassian email, and API token to browse issues.",
             "8388bdea2b": "Connect Jira site"
+          }
+        }
+      },
+      "link": {
+        "routing": {
+          "preference": {
+            "dialog": {
+              "badge": "Enlace del terminal",
+              "preview": "Vista previa",
+              "title": "¿Abrir enlaces del terminal en el navegador de Orca?",
+              "description": "Usa el navegador de Orca para los enlaces del terminal o conserva tu navegador del sistema.",
+              "orca": {
+                "button": "Abrir en Orca",
+                "note": "Orca puede usar cookies importadas para sitios con sesión iniciada."
+              },
+              "settings": {
+                "note": "Cámbialo después en Configuración → Navegador."
+              },
+              "system": {
+                "button": "Usar navegador del sistema"
+              },
+              "link": {
+                "label": "Enlace"
+              },
+              "shortcut": {
+                "note": {
+                  "prefix": "Cuando los enlaces se abren en Orca,",
+                  "suffix": "clic abre el navegador del sistema una vez."
+                }
+              },
+              "keep": {
+                "title": "¿Mantener los enlaces del terminal en el navegador de Orca?",
+                "description": "O usa tu navegador del sistema de forma predeterminada.",
+                "orca": {
+                  "button": "Mantener Orca"
+                }
+              }
+            }
           }
         }
       }

@@ -154,6 +154,7 @@ describe('orca root help', () => {
     expect(rootHelp).toContain('linear                    Read Linear ticket context for agents')
     expect(rootHelp).not.toContain('linear issue')
     expect(rootHelp).not.toContain('linear search')
+    expect(rootHelp).not.toContain('linear status set')
 
     logSpy.mockClear()
     await main(['linear', '--help'], '/tmp/repo')
@@ -162,6 +163,10 @@ describe('orca root help', () => {
     expect(groupHelp).toContain('orca linear')
     expect(groupHelp).toContain('issue')
     expect(groupHelp).toContain('search')
+    expect(groupHelp).toContain('status set')
+    expect(groupHelp).toContain('comment add')
+    expect(groupHelp).toContain('attach')
+    expect(groupHelp).toContain('create')
     expect(groupHelp).not.toContain('--comments')
     expect(groupHelp).not.toContain('--attachments')
 
@@ -182,6 +187,21 @@ describe('orca root help', () => {
     expect(searchHelp).toContain('orca linear search <query>')
     expect(searchHelp).toContain('--workspace <id|all>  Connected Linear workspace id, or all')
     expect(searchHelp).toContain('--query <text>        Text to search across Linear issues')
+
+    logSpy.mockClear()
+    await main(['linear', 'comment', 'add', '--help'], '/tmp/repo')
+
+    const commentHelp = String(logSpy.mock.calls[0][0])
+    expect(commentHelp).toContain('orca linear comment add [<id>]')
+    expect(commentHelp).toContain('--body-file <path|->  Read Linear body from a file or stdin')
+    expect(commentHelp).toContain('--write-id <uuid>     Retry id from linear_write_unconfirmed')
+
+    logSpy.mockClear()
+    await main(['linear', 'create', '--help'], '/tmp/repo')
+
+    const createHelp = String(logSpy.mock.calls[0][0])
+    expect(createHelp).toContain('orca linear create --title <title>')
+    expect(createHelp).toContain('--parent-current      Use the current linked issue as parent')
     expect(callMock).not.toHaveBeenCalled()
   })
 })

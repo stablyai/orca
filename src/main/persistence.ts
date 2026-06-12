@@ -2229,6 +2229,14 @@ export class Store {
           parsed.settings?.disabledTuiAgents
         )
         const migratedAgentYoloDefaults = migrateAgentYoloDefaults(parsed.settings)
+        const openLinksInAppWasPersisted = Object.prototype.hasOwnProperty.call(
+          parsed.settings ?? {},
+          'openLinksInApp'
+        )
+        const migratedOpenLinksInAppPreferencePrompted =
+          typeof parsed.settings?.openLinksInAppPreferencePrompted === 'boolean'
+            ? parsed.settings.openLinksInAppPreferencePrompted
+            : openLinksInAppWasPersisted
         if (
           parsed.settings?.agentYoloDefaultsMigrated !== true ||
           hasUnsupportedTuiAgentArgs('opencode', parsed.settings?.agentDefaultArgs?.opencode) ||
@@ -2243,6 +2251,12 @@ export class Store {
           migratedDisabledTuiAgents.push('claude-agent-teams')
         }
         if (!autoRenameBranchFromWorkDefaultedOn) {
+          this.loadNeedsSave = true
+        }
+        if (
+          parsed.settings?.openLinksInAppPreferencePrompted !==
+          migratedOpenLinksInAppPreferencePrompted
+        ) {
           this.loadNeedsSave = true
         }
         const normalizedOnboarding = normalizeLoadedOnboardingState(
@@ -2322,6 +2336,7 @@ export class Store {
             openInApplications: normalizeOpenInApplications(parsed.settings?.openInApplications, {
               seedDefaults: true
             }),
+            openLinksInAppPreferencePrompted: migratedOpenLinksInAppPreferencePrompted,
             notifications: normalizeNotificationSettings(parsed.settings?.notifications),
             sourceControlAi: migratedSourceControlAi,
             // Why: new builds read sourceControlAi, but rollback builds still

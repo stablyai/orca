@@ -75,7 +75,8 @@ export function BrowserAction(props: { done: boolean }): React.JSX.Element {
 const BROWSER_ONLY_FEATURE_SETUP: OnboardingFeatureSetupSelection = {
   browserUse: true,
   computerUse: false,
-  orchestration: false
+  orchestration: false,
+  linearTickets: false
 }
 
 // The grab→agent flow relies on the Orca CLI and browser skill, so offer the same

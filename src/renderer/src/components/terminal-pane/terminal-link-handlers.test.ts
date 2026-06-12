@@ -39,7 +39,11 @@ const setPendingEditorRevealMock = vi.fn()
 const deps = { worktreeId: 'wt-1', worktreePath: '/tmp' }
 const storeState = {
   settings: undefined as
-    | { openLinksInApp?: boolean; activeRuntimeEnvironmentId?: string | null }
+    | {
+        openLinksInApp?: boolean
+        openLinksInAppPreferencePrompted?: boolean
+        activeRuntimeEnvironmentId?: string | null
+      }
     | undefined,
   setActiveWorktree: setActiveWorktreeMock,
   createBrowserTab: createBrowserTabMock,
@@ -178,16 +182,40 @@ describe('handleOscLink', () => {
     expect(stopPropagation).not.toHaveBeenCalled()
   })
 
-  it('defaults to Orca when settings have not hydrated yet', () => {
+  it('defaults to the system browser when settings have not hydrated yet', () => {
     setPlatform('Macintosh')
     storeState.settings = undefined
 
     handleOscLink('https://example.com', { metaKey: true, ctrlKey: false, shiftKey: false }, deps)
 
+    expect(openUrlMock).toHaveBeenCalledWith('https://example.com/')
+    expect(createBrowserTabMock).not.toHaveBeenCalled()
+    expect(setActiveWorktreeMock).not.toHaveBeenCalled()
+  })
+
+  it('waits for the first-use preference before routing terminal http links', async () => {
+    setPlatform('Macintosh')
+    storeState.settings = { openLinksInApp: false, openLinksInAppPreferencePrompted: false }
+    const requestOpenLinksInAppPreference = vi.fn(async () => {
+      storeState.settings = { openLinksInApp: true, openLinksInAppPreferencePrompted: true }
+      return true
+    })
+
+    handleOscLink(
+      'https://example.com',
+      { metaKey: true, ctrlKey: false, shiftKey: false },
+      { ...deps, requestOpenLinksInAppPreference }
+    )
+
+    expect(requestOpenLinksInAppPreference).toHaveBeenCalledWith('https://example.com/')
+    expect(openUrlMock).not.toHaveBeenCalled()
+    expect(createBrowserTabMock).not.toHaveBeenCalled()
+
+    await flushAsyncWork()
+
     expect(createBrowserTabMock).toHaveBeenCalledWith('wt-1', 'https://example.com/', {
       activate: true
     })
-    expect(setActiveWorktreeMock).toHaveBeenCalledWith('wt-1')
     expect(openUrlMock).not.toHaveBeenCalled()
   })
 
@@ -1365,6 +1393,55 @@ describe('createFilePathLinkProvider range bounds', () => {
 
     disposable.dispose()
     expect(element.removeEventListener).toHaveBeenCalledWith('mouseup', mouseUp)
+  })
+
+  it('asks for the first-use preference from the direct URL click fallback', async () => {
+    setPlatform('Macintosh')
+    storeState.settings = { openLinksInApp: false, openLinksInAppPreferencePrompted: false }
+    const rows = [
+      makeBufferLine('PR opened: https://github.com/stablyai/orca-marketing-website/pull/82')
+    ]
+    const requestOpenLinksInAppPreference = vi.fn(async () => {
+      storeState.settings = { openLinksInApp: true, openLinksInAppPreferencePrompted: true }
+      return true
+    })
+    const { terminal, element } = makeFallbackTerminal(rows)
+    const disposable = installHttpLinkClickFallback(terminal, {
+      worktreeId: 'wt-1',
+      requestOpenLinksInAppPreference
+    })
+    const mouseUp = getRegisteredBubbleMouseUpHandler(element)
+    const preventDefault = vi.fn()
+
+    mouseUp({
+      button: 0,
+      metaKey: true,
+      ctrlKey: false,
+      shiftKey: false,
+      defaultPrevented: false,
+      clientX: 230,
+      clientY: 25,
+      preventDefault,
+      stopPropagation: vi.fn()
+    } as unknown as MouseEvent)
+
+    expect(requestOpenLinksInAppPreference).toHaveBeenCalledWith(
+      'https://github.com/stablyai/orca-marketing-website/pull/82'
+    )
+    expect(openUrlMock).not.toHaveBeenCalled()
+    expect(createBrowserTabMock).not.toHaveBeenCalled()
+
+    await flushAsyncWork()
+
+    expect(createBrowserTabMock).toHaveBeenCalledWith(
+      'wt-1',
+      'https://github.com/stablyai/orca-marketing-website/pull/82',
+      { activate: true }
+    )
+    expect(preventDefault).toHaveBeenCalled()
+    expect(terminal.clearSelection).toHaveBeenCalled()
+
+    disposable.dispose()
   })
 
   it('does not double-open URLs when xterm already handled the mouseup', () => {

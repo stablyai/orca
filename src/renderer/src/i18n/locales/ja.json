@@ -3935,6 +3935,30 @@
             }
           }
         },
+        "LinearAgentSkillSetupPrompt": {
+          "missingCliAndSkill": "Orca CLI と Linear agent スキルがありません。",
+          "modalTitle": "Linear チケットアクセスを有効にする",
+          "modalDescription": "terminal から Linear スキルをインストールします。",
+          "modalPrompt": "Agents が添付された Linear チケットを読み書きできるようにします。",
+          "dontShowAgain": "今後表示しない",
+          "notNow": "後で",
+          "missingBoth": "Orca CLI と Linear agent スキルがありません。",
+          "missingCli": "Orca CLI がありません。",
+          "missingSkill": "Linear agent スキルがありません。",
+          "title": "Linear agent スキルを設定",
+          "remoteCopy": "これはホスト側の設定をインストールします。リモート agent 環境では別途設定が必要な場合があります。",
+          "hostCopy": "リンクされた Linear 作業からのホスト agent 引き継ぎ用にインストールします。",
+          "dismiss": "Linear agent スキル設定を閉じる",
+          "setup": "設定",
+          "recheck": "再確認",
+          "panelTitle": "Linear agent スキル",
+          "panelDescription": "リンクされた Linear タスクの引き継ぎ用にホスト agent スキルをインストールします。",
+          "terminalTitle": "Linear agent スキルをインストール",
+          "terminalAria": "Linear agent スキルのインストール terminal",
+          "install": "CLI とスキルをインストール",
+          "wslCopy": "リンクされた Linear 作業からの WSL agent 引き継ぎ用にインストールします。",
+          "wslLabel": "WSL 既定"
+        },
         "FolderWorkspaceComposerDialog": {
           "connectFailed": "プロジェクトに接続できませんでした。",
           "noRepos": "GitHub または GitLab のタスクを関連付けるには、このフォルダー内に Git プロジェクトを追加してください。",
@@ -4321,6 +4345,8 @@
           "8671e406f0": "キャンセル",
           "a4aafe46e3": "ターゲットパス:",
           "e8012c03a1": "agents が Orca ワークスペース、terminal、進捗コマンドを使用できるようにします。",
+          "cliSkillTerminalTitle": "CLI スキルのセットアップ",
+          "cliSkillTerminalAria": "CLI スキルのインストール terminal",
           "6053cf736c": "CLIスキル",
           "36a6f919ba": "agents に Orca 対応のワークスペース、terminal、および進行状況のワークフローを提供します。",
           "04873eea3e": "Agent のスキル",
@@ -7534,7 +7560,16 @@
                 "eae4a9f16b": "Add Linear access to browse and link issues.",
                 "fe9231215b": "Checking Linear access before showing setup actions.",
                 "e1f5e6424c": "{{value0}} workspace{{value1}} connected",
-                "disconnect_all": "Disconnect"
+                "disconnect_all": "すべて切断",
+                "linearSkillTitle": "Linear agent スキル",
+                "linearSkillDescription": "リンクされた Linear タスクの引き継ぎをより充実させるために agents が使うホスト agent スキルをインストールします。",
+                "linearSkillTerminalTitle": "Linear agent スキルをインストール",
+                "linearSkillTerminalAria": "Linear agent スキルのインストール terminal",
+                "linearSkillInstall": "CLI とスキルをインストール",
+                "linearSkillOptionalHint": "任意の次の手順: チケットを踏まえた agent の引き継ぎのために Linear agent スキルをインストールします。",
+                "linearSkillDismissHint": "任意の Linear agent スキル設定メモを閉じる",
+                "linearSkillWslDescription": "リンクされた Linear タスクの引き継ぎをより充実させるために agents が使う WSL agent スキルをインストールします。",
+                "linearSkillWslLabel": "WSL 既定"
               }
             }
           }
@@ -8493,7 +8528,10 @@
           "c5292c409d": "Agents は、要求に応じてアプリ ウィンドウを検査し、ローカル アプリを操作できます。",
           "1ecfb490ac": "コンピュータ操作",
           "01426f3a23": "Agents はサイトを移動し、ページを検査し、ブラウザーのタスクを実行できます。",
-          "ea85d9e628": "Agent ブラウザの使用"
+          "ea85d9e628": "Agent ブラウザの使用",
+          "linearTicketsTitle": "Linear agent スキル",
+          "linearTicketsDescription": "Agents はリンクされた Linear タスクを使って、チケットを踏まえたより詳しい引き継ぎができます。",
+          "linearTicketsSetupSummary": "Linear ワークスペースに推奨。Linear 接続設定には影響しません。"
         },
         "FeatureSetupInlineTerminal": {
           "789b59936e": "Enter キーを押してコマンドを実行し、要求されたら npx を確認します。これは、後で [設定] で設定することもできます。",
@@ -8635,7 +8673,7 @@
           }
         },
         "AgentFeatureSetupStep": {
-          "97dcdc010f": "機能を有効にする"
+          "97dcdc010f": "CLI とスキルをインストール"
         }
       },
       "new": {
@@ -8908,7 +8946,9 @@
             "3a59452a67": "スキル コマンドをコピーして確認のために以下に挿入しました。",
             "c605f51f2b": "機能セットアップの準備完了",
             "1aa657d8f4": "一部の機能の設定には注意が必要です",
-            "c89534cbe9": "CLIとスキルのインストール"
+            "c89534cbe9": "CLIとスキルのインストール",
+            "linearTicketsTitle": "Linear agent スキル",
+            "linearTicketsDescription": "Agents がリンクされた Linear タスクから作業する場合に推奨されます。"
           },
           "AiCommitPrSettingsCard": {
             "8d4152701a": "例えばオラマはラマ3.1 {{value0}}を実行します",
@@ -10515,6 +10555,44 @@
             "e176f9d0c5": "Jira Cloud site URL",
             "d785c42b8b": "Use a Jira Cloud site URL, Atlassian email, and API token to browse issues.",
             "8388bdea2b": "Connect Jira site"
+          }
+        }
+      },
+      "link": {
+        "routing": {
+          "preference": {
+            "dialog": {
+              "badge": "ターミナルリンク",
+              "preview": "プレビュー",
+              "title": "ターミナルのリンクを Orca のブラウザで開きますか？",
+              "description": "ターミナルのリンクを Orca のブラウザで開くか、システムブラウザを使い続けます。",
+              "orca": {
+                "button": "Orca で開く",
+                "note": "Orca はインポート済み Cookie を使ってログイン済みサイトを開けます。"
+              },
+              "settings": {
+                "note": "後で 設定 → ブラウザ から変更できます。"
+              },
+              "system": {
+                "button": "システムブラウザを使用"
+              },
+              "link": {
+                "label": "リンク"
+              },
+              "shortcut": {
+                "note": {
+                  "prefix": "リンクを Orca で開く場合、",
+                  "suffix": "クリックで今回だけシステムブラウザで開きます。"
+                }
+              },
+              "keep": {
+                "title": "ターミナルのリンクを Orca のブラウザで開き続けますか？",
+                "description": "またはシステムブラウザを既定で使用します。",
+                "orca": {
+                  "button": "Orca のままにする"
+                }
+              }
+            }
           }
         }
       }

@@ -209,6 +209,12 @@ export function useRepoHeaderDrag({
           return
         }
         session.promoted = true
+        try {
+          session.handleEl.setPointerCapture(session.pointerId)
+        } catch {
+          // setPointerCapture can throw if the element is detached; the global
+          // pointer listeners still fire, so dragging keeps working.
+        }
         refreshHeaderRects()
         setState({ draggingRepoId: session.repoId, dropIndex: null, dropIndicatorY: null })
       }
@@ -260,7 +266,7 @@ export function useRepoHeaderDrag({
   }, [cancelAutoscroll, computeDrop, endDrag, ensureAutoscroll, refreshHeaderRects, sessionArmed])
 
   useEffect(() => {
-    if (!sessionArmed) {
+    if (state.draggingRepoId === null) {
       return
     }
     const body = document.body
@@ -272,7 +278,7 @@ export function useRepoHeaderDrag({
       body.style.cursor = prevCursor
       body.style.userSelect = prevUserSelect
     }
-  }, [sessionArmed])
+  }, [state.draggingRepoId])
 
   const onHandlePointerDown = useCallback(
     (event: React.PointerEvent<HTMLElement>, repoId: string) => {
@@ -295,4 +301,7 @@ export function useRepoHeaderDrag({
   return { state, onHandlePointerDown }
 }
 
-export { isRepoHeaderActionTarget } from './project-header-drag-contract'
+export {
+  isRepoHeaderActionTarget,
+  isProjectHeaderDragHandleTarget
+} from './project-header-drag-contract'

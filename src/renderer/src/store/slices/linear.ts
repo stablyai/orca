@@ -249,6 +249,13 @@ function invalidateLinearCaches(): void {
   clearLinearMetadataCache()
 }
 
+function clearLinearIssueCollectionRequestMaps(): void {
+  inflightSearchRequests.clear()
+  inflightListRequests.clear()
+  inflightProjectIssueRequests.clear()
+  inflightCustomViewIssueRequests.clear()
+}
+
 function shouldRefreshStatusAfterRead(
   workspaceId: LinearWorkspaceSelection | null | undefined,
   status: LinearConnectionStatus
@@ -408,6 +415,7 @@ export type LinearSlice = {
   disconnectLinear: () => Promise<void>
   disconnectLinearWorkspace: (workspaceId: string) => Promise<void>
   fetchLinearIssue: (id: string, workspaceId?: string | null) => Promise<LinearIssue | null>
+  refreshLinearIssue: (id: string, workspaceId?: string | null) => Promise<LinearIssue | null>
   getCachedLinearIssues: (
     args: LinearIssueReadArgs
   ) => LinearIssue[] | LinearCollectionResult<LinearIssue> | null
@@ -875,6 +883,33 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
     }
     inflightIssueRequests.set(issueCacheKey, entry)
     return promise
+  },
+
+  refreshLinearIssue: async (id: string, workspaceId?: string | null) => {
+    const issueCacheKey = `${workspaceId ?? 'selected'}::${id}`
+    inflightIssueRequests.delete(issueCacheKey)
+    clearLinearIssueCollectionRequestMaps()
+    set((s) => {
+      const nextIssueCache = { ...s.linearIssueCache }
+      for (const [key, entry] of Object.entries(nextIssueCache)) {
+        if (
+          key === issueCacheKey ||
+          key === id ||
+          entry?.data?.id === id ||
+          entry?.data?.identifier === id
+        ) {
+          delete nextIssueCache[key]
+        }
+      }
+      return {
+        linearIssueCache: nextIssueCache,
+        linearSearchCache: {},
+        linearListCache: {},
+        linearProjectIssueCache: {},
+        linearCustomViewIssueCache: {}
+      }
+    })
+    return get().fetchLinearIssue(id, workspaceId)
   },
 
   getCachedLinearIssues: (args) => {

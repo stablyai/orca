@@ -784,6 +784,15 @@ export function useIpcEvents(): void {
         void handleWorktreesChanged(event.repoId)
         return
       }
+      if (event.type === 'linearLinkedIssueUpdated') {
+        void useAppStore
+          .getState()
+          .refreshLinearIssue(event.identifier, event.workspaceId)
+          .catch((error) => {
+            console.error('Failed to refresh updated Linear issue:', error)
+          })
+        return
+      }
       void activateNotifiedWorktree(event, { allowRuntimeEnvironment: true }).catch((error) => {
         console.error('Failed to activate runtime-created worktree:', error)
       })

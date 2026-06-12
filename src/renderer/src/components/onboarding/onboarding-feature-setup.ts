@@ -5,6 +5,7 @@ import type {
 } from '../../../../shared/computer-use-permissions-types'
 import {
   COMPUTER_USE_SKILL_NAME,
+  LINEAR_TICKETS_SKILL_NAME,
   ORCA_CLI_SKILL_NAME,
   ORCHESTRATION_SKILL_NAME,
   buildAgentFeatureSkillInstallCommand
@@ -19,17 +20,29 @@ import {
 } from '@/lib/orchestration-setup-state'
 import type { EventProps } from '../../../../shared/telemetry-events'
 
-export type OnboardingFeatureSetupId = 'browserUse' | 'computerUse' | 'orchestration'
+export type OnboardingFeatureSetupId =
+  | 'browserUse'
+  | 'computerUse'
+  | 'orchestration'
+  | 'linearTickets'
 
 export type OnboardingFeatureSetupSelection = Record<OnboardingFeatureSetupId, boolean>
 
 export const DEFAULT_ONBOARDING_FEATURE_SETUP_SELECTION: OnboardingFeatureSetupSelection = {
   browserUse: true,
   computerUse: true,
-  orchestration: true
+  orchestration: true,
+  linearTickets: false
 }
 
 export const ONBOARDING_FEATURE_SETUP_IDS: readonly OnboardingFeatureSetupId[] = [
+  'browserUse',
+  'computerUse',
+  'orchestration',
+  'linearTickets'
+]
+
+const ONBOARDING_PROGRESS_FEATURE_SETUP_IDS: readonly OnboardingFeatureSetupId[] = [
   'browserUse',
   'computerUse',
   'orchestration'
@@ -38,7 +51,8 @@ export const ONBOARDING_FEATURE_SETUP_IDS: readonly OnboardingFeatureSetupId[] =
 const FEATURE_SKILL_NAMES: Record<OnboardingFeatureSetupId, string> = {
   browserUse: ORCA_CLI_SKILL_NAME,
   computerUse: COMPUTER_USE_SKILL_NAME,
-  orchestration: ORCHESTRATION_SKILL_NAME
+  orchestration: ORCHESTRATION_SKILL_NAME,
+  linearTickets: LINEAR_TICKETS_SKILL_NAME
 }
 
 const FEATURE_TELEMETRY_IDS: Record<
@@ -47,7 +61,8 @@ const FEATURE_TELEMETRY_IDS: Record<
 > = {
   browserUse: 'browser_use',
   computerUse: 'computer_use',
-  orchestration: 'orchestration'
+  orchestration: 'orchestration',
+  linearTickets: 'linear_tickets'
 }
 
 export type OnboardingFeatureSetupWarning = {
@@ -118,9 +133,17 @@ export function onboardingFeatureSetupTelemetrySelection(
   return {
     browser_use: selection.browserUse,
     computer_use: selection.computerUse,
+    linear_tickets: selection.linearTickets,
     orchestration: selection.orchestration,
-    selected_count: selectedOnboardingFeatureSetupIds(selection).length
+    // Why: Linear skill setup is a recommended add-on, not onboarding progress.
+    selected_count: selectedOnboardingProgressFeatureSetupIds(selection).length
   }
+}
+
+function selectedOnboardingProgressFeatureSetupIds(
+  selection: OnboardingFeatureSetupSelection
+): OnboardingFeatureSetupId[] {
+  return ONBOARDING_PROGRESS_FEATURE_SETUP_IDS.filter((id) => selection[id])
 }
 
 export function onboardingFeatureSetupRunTelemetry(

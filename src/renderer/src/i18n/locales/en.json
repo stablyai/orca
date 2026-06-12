@@ -3935,6 +3935,30 @@
         "index": {
           "b826a98b6f": "busy"
         },
+        "LinearAgentSkillSetupPrompt": {
+          "missingCliAndSkill": "Orca CLI and Linear agent skill are missing.",
+          "modalTitle": "Enable Linear ticket access",
+          "modalDescription": "Install the Linear skill from a terminal.",
+          "modalPrompt": "Enable agents to read and edit the attached Linear ticket.",
+          "dontShowAgain": "Don't show again",
+          "notNow": "Not now",
+          "missingBoth": "Orca CLI and Linear agent skill are missing.",
+          "missingCli": "Orca CLI is missing.",
+          "missingSkill": "Linear agent skill is missing.",
+          "title": "Set up Linear agent skill",
+          "remoteCopy": "This installs host setup; remote agent environments may need separate setup.",
+          "hostCopy": "Install it for host agent handoffs from linked Linear work.",
+          "dismiss": "Dismiss Linear agent skill setup",
+          "setup": "Set up",
+          "recheck": "Re-check",
+          "panelTitle": "Linear agent skill",
+          "panelDescription": "Install the host agent skill for linked Linear task handoffs.",
+          "terminalTitle": "Install Linear agent skill",
+          "terminalAria": "Linear agent skill installer terminal",
+          "install": "Install CLI & Skill",
+          "wslCopy": "Install it for WSL agent handoffs from linked Linear work.",
+          "wslLabel": "WSL default"
+        },
         "FolderWorkspaceComposerDialog": {
           "connectFailed": "Failed to connect to project.",
           "noRepos": "Add a Git project under this folder to attach GitHub or GitLab tasks.",
@@ -4336,6 +4360,8 @@
           "8671e406f0": "Cancel",
           "a4aafe46e3": "Target path:",
           "e8012c03a1": "Enables agents to use Orca workspace, terminal, and progress commands.",
+          "cliSkillTerminalTitle": "CLI skill setup",
+          "cliSkillTerminalAria": "CLI skill install terminal",
           "6053cf736c": "CLI skill",
           "36a6f919ba": "Give agents Orca-aware workspace, terminal, and progress workflows.",
           "04873eea3e": "Agent skills",
@@ -7534,7 +7560,16 @@
                 "eae4a9f16b": "Add Linear access to browse and link issues.",
                 "fe9231215b": "Checking Linear access before showing setup actions.",
                 "e1f5e6424c": "{{value0}} workspace{{value1}} connected",
-                "disconnect_all": "Disconnect"
+                "disconnect_all": "Disconnect all",
+                "linearSkillTitle": "Linear agent skill",
+                "linearSkillDescription": "Install the host agent skill that agents use for richer linked Linear task handoffs.",
+                "linearSkillTerminalTitle": "Install Linear agent skill",
+                "linearSkillTerminalAria": "Linear agent skill installer terminal",
+                "linearSkillInstall": "Install CLI & Skill",
+                "linearSkillOptionalHint": "Optional next step: install the Linear agent skill for ticket-aware agent handoffs.",
+                "linearSkillDismissHint": "Dismiss optional Linear agent skill setup note",
+                "linearSkillWslDescription": "Install the WSL agent skill that agents use for richer linked Linear task handoffs.",
+                "linearSkillWslLabel": "WSL default"
               }
             }
           }
@@ -8493,7 +8528,10 @@
           "c5292c409d": "Agents can inspect app windows and operate local apps when you ask.",
           "1ecfb490ac": "Computer Use",
           "01426f3a23": "Agents can navigate sites, inspect pages, and work through browser tasks.",
-          "ea85d9e628": "Agent Browser Use"
+          "ea85d9e628": "Agent Browser Use",
+          "linearTicketsTitle": "Linear agent skill",
+          "linearTicketsDescription": "Agents can use linked Linear tasks for richer ticket-aware handoffs.",
+          "linearTicketsSetupSummary": "Recommended for Linear workspaces; does not affect Linear connection setup."
         },
         "FeatureSetupInlineTerminal": {
           "789b59936e": "Press Enter to run the command and confirm npx if asked. You can also set this up later in Settings.",
@@ -8635,7 +8673,7 @@
           }
         },
         "AgentFeatureSetupStep": {
-          "97dcdc010f": "Enable capabilities"
+          "97dcdc010f": "Install CLI & Skills"
         }
       },
       "new": {
@@ -8908,7 +8946,9 @@
             "3a59452a67": "Skill command copied and inserted below for review.",
             "c605f51f2b": "Capability setup ready",
             "1aa657d8f4": "Some capability setup needs attention",
-            "c89534cbe9": "Install CLI & Skills"
+            "c89534cbe9": "Install CLI & Skills",
+            "linearTicketsTitle": "Linear agent skill",
+            "linearTicketsDescription": "Recommended when agents work from linked Linear tasks."
           },
           "AiCommitPrSettingsCard": {
             "8d4152701a": "e.g. ollama run llama3.1 {{value0}}",
@@ -10515,6 +10555,44 @@
             "e176f9d0c5": "Jira Cloud site URL",
             "d785c42b8b": "Use a Jira Cloud site URL, Atlassian email, and API token to browse issues.",
             "8388bdea2b": "Connect Jira site"
+          }
+        }
+      },
+      "link": {
+        "routing": {
+          "preference": {
+            "dialog": {
+              "badge": "Terminal link",
+              "preview": "Preview",
+              "title": "Open terminal links in Orca's browser?",
+              "description": "Use Orca's browser for terminal links, or keep your system browser.",
+              "orca": {
+                "button": "Open in Orca",
+                "note": "Orca can use imported cookies for logged-in sites."
+              },
+              "settings": {
+                "note": "Change this later in Settings → Browser."
+              },
+              "system": {
+                "button": "Use system browser"
+              },
+              "link": {
+                "label": "Link"
+              },
+              "shortcut": {
+                "note": {
+                  "prefix": "When links open in Orca,",
+                  "suffix": "click opens system browser once."
+                }
+              },
+              "keep": {
+                "title": "Keep terminal links in Orca's browser?",
+                "description": "Or use your system browser by default.",
+                "orca": {
+                  "button": "Keep Orca"
+                }
+              }
+            }
           }
         }
       }

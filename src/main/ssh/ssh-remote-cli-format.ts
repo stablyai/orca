@@ -1,10 +1,17 @@
-import type { LinearIssueContextResult, LinearSearchResult } from '../../shared/linear-agent-access'
+import type {
+  LinearAttachResult,
+  LinearCommentAddResult,
+  LinearCreateResult,
+  LinearIssueContextResult,
+  LinearSearchResult,
+  LinearStatusSetResult
+} from '../../shared/linear-agent-access'
 import type { CliStatusResult } from '../../shared/runtime-types'
 import type { RpcResponse } from '../runtime/rpc/core'
 
 export function formatRemoteCli(response: RpcResponse): { stdout: string; stderr: string } {
   if (!response.ok) {
-    return { stdout: '', stderr: `${response.error.message}\n` }
+    return { stdout: '', stderr: `${formatRemoteCliError(response.error)}\n` }
   }
   const result = response.result
   if (isRecord(result) && 'app' in result && 'runtime' in result && 'graph' in result) {
@@ -23,7 +30,30 @@ export function formatRemoteCli(response: RpcResponse): { stdout: string; stderr
       stderr: linearSearchWarnings(result)
     }
   }
+  if (isLinearStatusSetResult(result)) {
+    return { stdout: `${formatLinearStatusSet(result)}\n`, stderr: '' }
+  }
+  if (isLinearCommentAddResult(result)) {
+    return { stdout: `${formatLinearCommentAdd(result)}\n`, stderr: '' }
+  }
+  if (isLinearAttachResult(result)) {
+    return { stdout: `${formatLinearAttach(result)}\n`, stderr: '' }
+  }
+  if (isLinearCreateResult(result)) {
+    return { stdout: `${formatLinearCreate(result)}\n`, stderr: '' }
+  }
   return { stdout: `${JSON.stringify(result)}\n`, stderr: '' }
+}
+
+function formatRemoteCliError(error: { message: string; data?: unknown }): string {
+  const nextSteps =
+    isRecord(error.data) && Array.isArray(error.data.nextSteps)
+      ? error.data.nextSteps.filter((step): step is string => typeof step === 'string')
+      : []
+  if (nextSteps.length === 0) {
+    return error.message
+  }
+  return `${error.message}\n${nextSteps.map((step) => `Next step: ${step}`).join('\n')}`
 }
 
 function formatStatusResult(status: CliStatusResult): { stdout: string; stderr: string } {
@@ -70,6 +100,50 @@ function isLinearSearchResult(result: unknown): result is LinearSearchResult {
   )
 }
 
+function isLinearStatusSetResult(result: unknown): result is LinearStatusSetResult {
+  return (
+    isRecord(result) &&
+    isRecord(result.issue) &&
+    isRecord(result.state) &&
+    isRecord(result.meta) &&
+    typeof result.state.name === 'string' &&
+    typeof result.meta.alreadyInState === 'boolean'
+  )
+}
+
+function isLinearCommentAddResult(result: unknown): result is LinearCommentAddResult {
+  return (
+    isRecord(result) &&
+    isRecord(result.comment) &&
+    isRecord(result.issue) &&
+    isRecord(result.meta) &&
+    typeof result.comment.id === 'string' &&
+    typeof result.meta.bodyChars === 'number'
+  )
+}
+
+function isLinearAttachResult(result: unknown): result is LinearAttachResult {
+  return (
+    isRecord(result) &&
+    isRecord(result.attachment) &&
+    isRecord(result.issue) &&
+    isRecord(result.meta) &&
+    typeof result.attachment.title === 'string' &&
+    typeof result.attachment.url === 'string'
+  )
+}
+
+function isLinearCreateResult(result: unknown): result is LinearCreateResult {
+  return (
+    isRecord(result) &&
+    isRecord(result.issue) &&
+    isRecord(result.meta) &&
+    typeof result.issue.identifier === 'string' &&
+    typeof result.issue.title === 'string' &&
+    typeof result.meta.writeId === 'string'
+  )
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object'
 }
@@ -110,6 +184,27 @@ function formatLinearSearch(result: LinearSearchResult): string {
       return `${issue.identifier.padEnd(10)} ${state.padEnd(14)} ${assignee.padEnd(18)} ${issue.title}`
     })
     .join('\n')
+}
+
+function formatLinearStatusSet(result: LinearStatusSetResult): string {
+  const suffix = result.meta.alreadyInState ? ' (already set)' : ''
+  return `Set ${result.issue.identifier} to ${result.state.name}${suffix}.`
+}
+
+function formatLinearCommentAdd(result: LinearCommentAddResult): string {
+  const suffix = result.meta.deduplicated ? ' (already posted)' : ''
+  return `Added comment ${result.comment.id} to ${result.issue.identifier}${suffix}.`
+}
+
+function formatLinearAttach(result: LinearAttachResult): string {
+  const suffix = result.meta.deduplicated ? ' (already attached)' : ''
+  return `Attached ${result.attachment.title} to ${result.issue.identifier}${suffix}.`
+}
+
+function formatLinearCreate(result: LinearCreateResult): string {
+  const parent = result.issue.parent ? ` under ${result.issue.parent.identifier}` : ''
+  const suffix = result.meta.deduplicated ? ' (already created)' : ''
+  return `Created ${result.issue.identifier}${parent}: ${result.issue.title}${suffix}.`
 }
 
 function linearIssueWarnings(result: LinearIssueContextResult): string {

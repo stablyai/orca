@@ -13,6 +13,7 @@ export type RemoteOrcaCliRequest = {
   argv: string[]
   cwd: string
   env: Record<string, string>
+  stdin?: string
 }
 
 export type RemoteOrcaCliResult = {
@@ -37,6 +38,7 @@ const REMOTE_BOOLEAN_FLAGS = new Set([
   'inject',
   'json',
   'relations',
+  'parent-current',
   'unread',
   'wait'
 ])
@@ -54,7 +56,7 @@ export async function runRemoteOrcaCli(
   }
 
   try {
-    const response = await dispatchRemoteCli(dispatcher, parsed, request.env)
+    const response = await dispatchRemoteCli(dispatcher, parsed, request.env, request.stdin)
     const formatted = json
       ? { stdout: `${JSON.stringify(response, null, 2)}\n`, stderr: '' }
       : formatRemoteCli(response)
@@ -87,10 +89,11 @@ export async function runRemoteOrcaCli(
 async function dispatchRemoteCli(
   dispatcher: RpcDispatcher,
   parsed: ParsedRemoteCli,
-  env: Record<string, string>
+  env: Record<string, string>,
+  stdin?: string
 ): Promise<RpcResponse> {
   const command = parsed.commandPath.join(' ')
-  const linearResponse = await tryDispatchRemoteLinearCli(dispatcher, parsed, env)
+  const linearResponse = await tryDispatchRemoteLinearCli(dispatcher, parsed, env, stdin)
   if (linearResponse) {
     return linearResponse
   }

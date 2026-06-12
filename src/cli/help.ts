@@ -371,6 +371,42 @@ function formatCommandFlagHelp(flag: string, commandPath: string[]): string {
   if (command === 'linear search' && flag === 'workspace') {
     return '--workspace <id|all>  Connected Linear workspace id, or all'
   }
+  if (command.startsWith('linear ') && flag === 'workspace') {
+    return '--workspace <id>      Connected Linear workspace id'
+  }
+  if (command.startsWith('linear ') && flag === 'body') {
+    return '--body <text>         Linear comment or issue body'
+  }
+  if (command.startsWith('linear ') && flag === 'body-file') {
+    return '--body-file <path|->  Read Linear body from a file or stdin'
+  }
+  if (command.startsWith('linear ') && flag === 'write-id') {
+    return '--write-id <uuid>     Retry id from linear_write_unconfirmed'
+  }
+  if (command.startsWith('linear ') && flag === 'to') {
+    return '--to <state>          Exact Linear workflow state name'
+  }
+  if (command === 'linear comment add' && flag === 'reply-to') {
+    return '--reply-to <id>       Comment id to reply to'
+  }
+  if (command === 'linear attach' && flag === 'url') {
+    return '--url <url>           Absolute http(s) link to attach'
+  }
+  if (command === 'linear attach' && flag === 'title') {
+    return '--title <text>        Attachment title'
+  }
+  if (command === 'linear create' && flag === 'title') {
+    return '--title <text>        New Linear issue title'
+  }
+  if (command === 'linear create' && flag === 'team') {
+    return '--team <key>          Linear team key'
+  }
+  if (command === 'linear create' && flag === 'parent') {
+    return '--parent <id>         Parent Linear issue key, id, or URL'
+  }
+  if (command === 'linear create' && flag === 'parent-current') {
+    return '--parent-current      Use the current linked issue as parent'
+  }
   if (flag === 'key' && command === 'computer hotkey') {
     return '--key <key-combo>      Modifier chord with one key, e.g. CmdOrCtrl+A'
   }

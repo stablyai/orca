@@ -86,8 +86,14 @@ import type { RuntimeClientEvent } from '../../shared/runtime-client-events'
 import { toRuntimeActivateWorktreeEvent } from '../../shared/runtime-client-events'
 import type {
   LinearCurrentIssueContextHints,
-  LinearIssueRequest
+  LinearAttachResult,
+  LinearCommentAddResult,
+  LinearCreateResult,
+  LinearIssueSummary,
+  LinearIssueRequest,
+  LinearStatusSetResult
 } from '../../shared/linear-agent-access'
+import { LINEAR_WRITE_BODY_CAP } from '../../shared/linear-agent-access'
 import type { FeatureInteractionId } from '../../shared/feature-interactions'
 import type { TerminalPaneSplitSource } from '../../shared/feature-education-telemetry'
 import { FOLDER_WORKSPACE_INSTANCE_SEPARATOR, splitWorktreeId } from '../../shared/worktree-id'
@@ -308,17 +314,27 @@ import {
   connect as connectLinear,
   disconnect as disconnectLinear,
   getStatus as getLinearStatus,
+  isAuthError as isLinearAuthError,
   selectWorkspace as selectLinearWorkspace,
   testConnection as testLinearConnection
 } from '../linear/client'
 import {
   addIssueComment as addLinearIssueComment,
+  addIssueCommentForAgent as addLinearIssueCommentForAgent,
+  createIssueAttachment as createLinearIssueAttachment,
+  createIssueForAgent as createLinearIssueForAgent,
   createIssue as createLinearIssue,
+  getAttachmentByUuidForAgent as getLinearAttachmentByUuidForAgent,
+  getCommentByUuidForAgent as getLinearCommentByUuidForAgent,
   getIssue as getLinearIssue,
+  getIssueByUuidForAgent as getLinearIssueByUuidForAgent,
+  getIssueCommentThreadRoot as getLinearIssueCommentThreadRoot,
   getIssueComments as getLinearIssueComments,
   listIssues as listLinearIssues,
   searchIssues as searchLinearIssues,
+  updateIssueForAgent as updateLinearIssueForAgent,
   updateIssue as updateLinearIssue,
+  LinearWriteFailure,
   type LinearListFilter
 } from '../linear/issues'
 import {
@@ -328,6 +344,12 @@ import {
   resolveLegacyLinearLinkWorkspace,
   searchLinearIssuesForAgents
 } from '../linear/issue-context'
+import {
+  classifyLinearError,
+  linearError,
+  linearMessage,
+  sanitizeLinearErrorMessage
+} from '../linear/issue-context-errors'
 import {
   createProject as createLinearProject,
   getCustomView as getLinearCustomView,
@@ -343,7 +365,9 @@ import {
   getTeamLabels as getLinearTeamLabels,
   getTeamMembers as getLinearTeamMembers,
   getTeamStates as getLinearTeamStates,
-  listTeams as listLinearTeams
+  getTeamStatesOrThrow as getLinearTeamStatesOrThrow,
+  listTeams as listLinearTeams,
+  listTeamsOrThrow as listLinearTeamsOrThrow
 } from '../linear/teams'
 import {
   connect as connectJira,
@@ -1208,6 +1232,11 @@ type ResolvedWorktree = Worktree & {
   childWorktreeIds: string[]
   lineage: WorktreeLineage | null
   git: GitWorktreeInfo
+}
+
+type LinearAgentWriteTarget = {
+  issue: LinearIssueSummary
+  workspaceId: string
 }
 
 type TerminalWorkspaceLaunchScope = {
@@ -14859,6 +14888,862 @@ export class OrcaRuntimeService {
       }
     }
     return link
+  }
+
+  async linearIssueSetState(params: {
+    input?: string
+    current?: boolean
+    workspaceId?: string
+    to: string
+    context?: LinearCurrentIssueContextHints
+  }): Promise<LinearStatusSetResult> {
+    const target = await this.resolveLinearAgentWriteTarget(params)
+    const teamId = target.issue.team?.id
+    if (!teamId) {
+      throw linearError('linear_invalid_state', 'The Linear issue does not have a team.')
+    }
+    const states = await this.getLinearTeamStatesForWrite(teamId, target.workspaceId)
+    const state = this.resolveLinearAgentState(params.to, states)
+    if (!state) {
+      throw linearError(
+        'linear_invalid_state',
+        `No workflow state exactly matched "${params.to}".`,
+        {
+          states: states.map(({ id, name, type }) => ({ id, name, type })),
+          nextSteps: [`Retry with one of the exact state names for ${target.issue.identifier}.`]
+        }
+      )
+    }
+
+    const previousState =
+      target.issue.state?.id && target.issue.state.name
+        ? { id: target.issue.state.id, name: target.issue.state.name }
+        : null
+    const alreadyInState = target.issue.state?.id === state.id
+    if (!alreadyInState) {
+      await this.runLinearAgentWrite(
+        async (signal) => {
+          const updated = await updateLinearIssueForAgent(
+            target.issue.id,
+            { stateId: state.id },
+            target.workspaceId,
+            {
+              signal
+            }
+          )
+          if (updated.state?.id !== state.id) {
+            throw new LinearWriteFailure(
+              'unconfirmed',
+              'Linear state update could not be confirmed.'
+            )
+          }
+          return updated
+        },
+        (cause) =>
+          linearError(
+            'linear_write_unconfirmed',
+            'Linear may have applied the state change, but Orca could not confirm it.',
+            {
+              nextSteps: [
+                `Run \`orca linear issue ${target.issue.identifier} --workspace ${target.workspaceId} --json\` and check the current state before retrying.`
+              ],
+              ...(cause ? { cause } : {})
+            }
+          )
+      )
+    }
+    await this.notifyLinearLinkedIssueUpdated(target.workspaceId, target.issue.identifier)
+    return {
+      issue: this.linearWriteIssueRef(target.issue),
+      state: { id: state.id, name: state.name, type: state.type },
+      previousState,
+      meta: { workspaceId: target.workspaceId, alreadyInState }
+    }
+  }
+
+  async linearIssueAddComment(params: {
+    input?: string
+    current?: boolean
+    workspaceId?: string
+    body: string
+    replyTo?: string
+    writeId?: string
+    context?: LinearCurrentIssueContextHints
+  }): Promise<LinearCommentAddResult> {
+    if (params.body.length > LINEAR_WRITE_BODY_CAP) {
+      throw linearError('linear_body_too_large', 'Linear comment body is too large.')
+    }
+    const target = await this.resolveLinearAgentWriteTarget(params)
+    const parentId = params.replyTo
+      ? await this.resolveLinearCommentParentId(target.issue.id, params.replyTo, target.workspaceId)
+      : null
+    const writeId = params.writeId ?? randomUUID()
+    const existing =
+      params.writeId !== undefined
+        ? await this.getMatchingLinearCommentWrite(
+            writeId,
+            target.issue.id,
+            parentId,
+            target.workspaceId,
+            true
+          )
+        : null
+    if (existing) {
+      await this.notifyLinearLinkedIssueUpdated(target.workspaceId, target.issue.identifier)
+      return this.linearCommentResult(existing, target, params.body.length, writeId, true)
+    }
+
+    try {
+      const comment = await this.runLinearAgentWrite(
+        (signal) =>
+          addLinearIssueCommentForAgent(target.issue.id, params.body, target.workspaceId, {
+            id: writeId,
+            parentId,
+            signal
+          }),
+        (cause) =>
+          this.linearCreateStyleUnconfirmed('comment', writeId, target, {
+            parentId,
+            bodyRequired: true,
+            cause
+          })
+      )
+      await this.notifyLinearLinkedIssueUpdated(target.workspaceId, target.issue.identifier)
+      return this.linearCommentResult(comment, target, params.body.length, writeId, false)
+    } catch (error) {
+      if (error instanceof LinearWriteFailure && error.kind === 'duplicate_id') {
+        const comment = await this.refetchLinearCommentAfterDuplicate(
+          writeId,
+          target.issue.id,
+          parentId,
+          target.workspaceId,
+          () =>
+            this.linearCreateStyleUnconfirmed('comment', writeId, target, {
+              parentId,
+              bodyRequired: true
+            })
+        )
+        await this.notifyLinearLinkedIssueUpdated(target.workspaceId, target.issue.identifier)
+        return this.linearCommentResult(comment, target, params.body.length, writeId, true)
+      }
+      throw error
+    }
+  }
+
+  async linearIssueAttachLink(params: {
+    input?: string
+    current?: boolean
+    workspaceId?: string
+    url: string
+    title?: string
+    writeId?: string
+    context?: LinearCurrentIssueContextHints
+  }): Promise<LinearAttachResult> {
+    const url = this.parseLinearAttachmentUrl(params.url)
+    const target = await this.resolveLinearAgentWriteTarget(params)
+    const writeId = params.writeId ?? randomUUID()
+    const title = params.title?.trim() || this.defaultLinearAttachmentTitle(url)
+    const existing =
+      params.writeId !== undefined
+        ? await this.getMatchingLinearAttachmentWrite(
+            writeId,
+            target.issue.id,
+            target.workspaceId,
+            true
+          )
+        : null
+    if (existing) {
+      await this.notifyLinearLinkedIssueUpdated(target.workspaceId, target.issue.identifier)
+      return this.linearAttachResult(existing, target, writeId, true)
+    }
+    try {
+      const attachment = await this.runLinearAgentWrite(
+        (signal) =>
+          createLinearIssueAttachment(
+            target.issue.id,
+            { id: writeId, title, url: url.toString() },
+            target.workspaceId,
+            { signal }
+          ),
+        (cause) =>
+          this.linearCreateStyleUnconfirmed('attach', writeId, target, {
+            title,
+            url: url.toString(),
+            cause
+          })
+      )
+      await this.notifyLinearLinkedIssueUpdated(target.workspaceId, target.issue.identifier)
+      return this.linearAttachResult(attachment, target, writeId, false)
+    } catch (error) {
+      if (error instanceof LinearWriteFailure && error.kind === 'duplicate_id') {
+        const attachment = await this.refetchLinearAttachmentAfterDuplicate(
+          writeId,
+          target.issue.id,
+          target.workspaceId,
+          () =>
+            this.linearCreateStyleUnconfirmed('attach', writeId, target, {
+              title,
+              url: url.toString()
+            })
+        )
+        await this.notifyLinearLinkedIssueUpdated(target.workspaceId, target.issue.identifier)
+        return this.linearAttachResult(attachment, target, writeId, true)
+      }
+      throw error
+    }
+  }
+
+  async linearIssueCreate(params: {
+    title: string
+    body?: string
+    teamKey?: string
+    parentInput?: string
+    parentCurrent?: boolean
+    workspaceId?: string
+    writeId?: string
+    context?: LinearCurrentIssueContextHints
+  }): Promise<LinearCreateResult> {
+    if ((params.body?.length ?? 0) > LINEAR_WRITE_BODY_CAP) {
+      throw linearError('linear_body_too_large', 'Linear issue body is too large.')
+    }
+    const parent =
+      params.parentInput || params.parentCurrent
+        ? await this.resolveLinearAgentWriteTarget({
+            input: params.parentInput,
+            current: params.parentCurrent,
+            workspaceId: params.workspaceId,
+            context: params.context
+          })
+        : null
+    if (parent && params.workspaceId && params.workspaceId !== parent.workspaceId) {
+      throw linearError(
+        'linear_invalid_workspace',
+        'The parent issue belongs to a different workspace.'
+      )
+    }
+    const team = await this.resolveLinearCreateTeam(params.teamKey, params.workspaceId, parent)
+    const parentId = parent?.issue.id ?? null
+    const writeId = params.writeId ?? randomUUID()
+    const existing =
+      params.writeId !== undefined
+        ? await this.getMatchingLinearCreatedIssue(
+            writeId,
+            team.id,
+            parentId,
+            team.workspaceId,
+            true
+          )
+        : null
+    if (existing) {
+      if (parent) {
+        await this.notifyLinearLinkedIssueUpdated(parent.workspaceId, parent.issue.identifier)
+      }
+      return this.linearCreateResult(existing, team.workspaceId, writeId, true)
+    }
+
+    try {
+      const issue = await this.runLinearAgentWrite(
+        (signal) =>
+          createLinearIssueForAgent(team.id, params.title, params.body, team.workspaceId, {
+            id: writeId,
+            parentId,
+            signal
+          }),
+        (cause) =>
+          this.linearCreateStyleUnconfirmed('create', writeId, null, {
+            team,
+            parent,
+            title: params.title,
+            bodyRequired: params.body !== undefined,
+            cause
+          })
+      )
+      if (parent) {
+        await this.notifyLinearLinkedIssueUpdated(parent.workspaceId, parent.issue.identifier)
+      }
+      return this.linearCreateResult(issue, team.workspaceId, writeId, false)
+    } catch (error) {
+      if (error instanceof LinearWriteFailure && error.kind === 'duplicate_id') {
+        const issue = await this.refetchLinearIssueAfterDuplicate(
+          writeId,
+          team.id,
+          parentId,
+          team.workspaceId,
+          () =>
+            this.linearCreateStyleUnconfirmed('create', writeId, null, {
+              team,
+              parent,
+              title: params.title,
+              bodyRequired: params.body !== undefined
+            })
+        )
+        if (parent) {
+          await this.notifyLinearLinkedIssueUpdated(parent.workspaceId, parent.issue.identifier)
+        }
+        return this.linearCreateResult(issue, team.workspaceId, writeId, true)
+      }
+      throw error
+    }
+  }
+
+  private async resolveLinearAgentWriteTarget(params: {
+    input?: string
+    current?: boolean
+    workspaceId?: string
+    context?: LinearCurrentIssueContextHints
+  }): Promise<LinearAgentWriteTarget> {
+    const result = await readLinearIssueContext(
+      {
+        input: params.input,
+        current: params.current,
+        workspaceId: params.workspaceId,
+        include: { comments: false, children: false, attachments: false, relations: false },
+        depth: 0,
+        context: params.context
+      },
+      (context) => this.linearResolveCurrentIssue(context)
+    )
+    return { issue: result.issue, workspaceId: result.meta.resolved.workspaceId }
+  }
+
+  private async getLinearTeamStatesForWrite(
+    teamId: string,
+    workspaceId: string
+  ): Promise<Awaited<ReturnType<typeof getLinearTeamStatesOrThrow>>> {
+    try {
+      return await getLinearTeamStatesOrThrow(teamId, workspaceId)
+    } catch (error) {
+      throw this.mapLinearReadFailure(error)
+    }
+  }
+
+  private resolveLinearAgentState(
+    input: string,
+    states: Awaited<ReturnType<typeof getLinearTeamStatesOrThrow>>
+  ): Awaited<ReturnType<typeof getLinearTeamStatesOrThrow>>[number] | null {
+    const normalized = input.toLocaleLowerCase()
+    return (
+      states.find(
+        (state) =>
+          state.id.toLocaleLowerCase() === normalized ||
+          state.name.toLocaleLowerCase() === normalized
+      ) ?? null
+    )
+  }
+
+  private async resolveLinearCommentParentId(
+    issueId: string,
+    commentId: string,
+    workspaceId: string
+  ): Promise<string> {
+    try {
+      const root = await getLinearIssueCommentThreadRoot(issueId, commentId, workspaceId)
+      if (!root) {
+        throw linearError(
+          'linear_invalid_parent',
+          'The reply target is not a comment on this issue.',
+          {
+            nextSteps: ['Run `orca linear issue <id> --comments --json` to list valid comment ids.']
+          }
+        )
+      }
+      return root.id
+    } catch (error) {
+      if (error instanceof LinearAgentAccessError) {
+        throw error
+      }
+      throw this.mapLinearReadFailure(error)
+    }
+  }
+
+  private async runLinearAgentWrite<T>(
+    write: (signal: AbortSignal) => Promise<T>,
+    unconfirmed: (cause?: string) => LinearAgentAccessError
+  ): Promise<T> {
+    const controller = new AbortController()
+    const writePromise = write(controller.signal)
+    writePromise.catch(() => undefined)
+    let timer: ReturnType<typeof setTimeout> | null = null
+    try {
+      return await Promise.race([
+        writePromise,
+        new Promise<never>((_resolve, reject) => {
+          timer = setTimeout(() => {
+            controller.abort()
+            reject(
+              new LinearWriteFailure(
+                'unconfirmed',
+                'Linear write deadline elapsed before confirmation.'
+              )
+            )
+          }, 25_000)
+        })
+      ])
+    } catch (error) {
+      if (error instanceof LinearWriteFailure && error.kind === 'duplicate_id') {
+        throw error
+      }
+      if (error instanceof LinearWriteFailure && error.kind === 'unconfirmed') {
+        throw unconfirmed(this.linearWriteFailureCauseMessage(error))
+      }
+      if (error instanceof LinearWriteFailure && error.kind === 'network') {
+        throw linearError('linear_network_error', sanitizeLinearErrorMessage(error.message))
+      }
+      if (error instanceof LinearWriteFailure) {
+        throw linearError('linear_write_failed', sanitizeLinearErrorMessage(error.message))
+      }
+      throw this.mapLinearReadFailure(error)
+    } finally {
+      if (timer) {
+        clearTimeout(timer)
+      }
+    }
+  }
+
+  private linearWriteFailureCauseMessage(error: LinearWriteFailure): string {
+    if (error.cause instanceof Error) {
+      return sanitizeLinearErrorMessage(error.cause.message)
+    }
+    if (error.cause !== undefined) {
+      return sanitizeLinearErrorMessage(String(error.cause))
+    }
+    return sanitizeLinearErrorMessage(error.message)
+  }
+
+  private mapLinearReadFailure(error: unknown): LinearAgentAccessError {
+    if (error instanceof LinearAgentAccessError) {
+      return error
+    }
+    if (isLinearAuthError(error)) {
+      return linearError('linear_auth_expired', 'Linear authentication expired.', {
+        nextSteps: ['Reconnect Linear from Orca settings.']
+      })
+    }
+    return linearError(classifyLinearError(error), linearMessage(error))
+  }
+
+  private async getMatchingLinearCommentWrite(
+    writeId: string,
+    issueId: string,
+    parentId: string | null,
+    workspaceId: string,
+    required: boolean
+  ): Promise<Awaited<ReturnType<typeof getLinearCommentByUuidForAgent>> | null> {
+    const comment = await this.readLinearWriteLookup(() =>
+      getLinearCommentByUuidForAgent(writeId, workspaceId)
+    )
+    if (!comment) {
+      return null
+    }
+    if (comment.issue.id === issueId && comment.parentId === parentId) {
+      return comment
+    }
+    if (required) {
+      throw linearError(
+        'linear_invalid_write_id',
+        'The write id belongs to a different comment target.'
+      )
+    }
+    return null
+  }
+
+  private async getMatchingLinearAttachmentWrite(
+    writeId: string,
+    issueId: string,
+    workspaceId: string,
+    required: boolean
+  ): Promise<Awaited<ReturnType<typeof getLinearAttachmentByUuidForAgent>> | null> {
+    const attachment = await this.readLinearWriteLookup(() =>
+      getLinearAttachmentByUuidForAgent(writeId, workspaceId)
+    )
+    if (!attachment) {
+      return null
+    }
+    if (attachment.issue.id === issueId) {
+      return attachment
+    }
+    if (required) {
+      throw linearError(
+        'linear_invalid_write_id',
+        'The write id belongs to a different attachment target.'
+      )
+    }
+    return null
+  }
+
+  private async getMatchingLinearCreatedIssue(
+    writeId: string,
+    teamId: string,
+    parentId: string | null,
+    workspaceId: string,
+    required: boolean
+  ): Promise<Awaited<ReturnType<typeof getLinearIssueByUuidForAgent>> | null> {
+    const issue = await this.readLinearWriteLookup(() =>
+      getLinearIssueByUuidForAgent(writeId, workspaceId)
+    )
+    if (!issue) {
+      return null
+    }
+    if (issue.team.id === teamId && (issue.parent?.id ?? null) === parentId) {
+      return issue
+    }
+    if (required) {
+      throw linearError(
+        'linear_invalid_write_id',
+        'The write id belongs to a different issue target.'
+      )
+    }
+    return null
+  }
+
+  private async refetchLinearCommentAfterDuplicate(
+    writeId: string,
+    issueId: string,
+    parentId: string | null,
+    workspaceId: string,
+    unconfirmed: (cause?: string) => LinearAgentAccessError
+  ): Promise<NonNullable<Awaited<ReturnType<typeof getLinearCommentByUuidForAgent>>>> {
+    try {
+      // Why: a duplicate-id response can mean the original write landed; only
+      // the exact target relationship proves this pinned retry.
+      const comment = await this.getMatchingLinearCommentWrite(
+        writeId,
+        issueId,
+        parentId,
+        workspaceId,
+        true
+      )
+      if (comment) {
+        return comment
+      }
+    } catch (error) {
+      if (error instanceof LinearAgentAccessError && error.code === 'linear_invalid_write_id') {
+        throw error
+      }
+      throw unconfirmed(
+        error instanceof Error
+          ? sanitizeLinearErrorMessage(error.message)
+          : sanitizeLinearErrorMessage(String(error))
+      )
+    }
+    throw unconfirmed()
+  }
+
+  private async refetchLinearAttachmentAfterDuplicate(
+    writeId: string,
+    issueId: string,
+    workspaceId: string,
+    unconfirmed: (cause?: string) => LinearAgentAccessError
+  ): Promise<NonNullable<Awaited<ReturnType<typeof getLinearAttachmentByUuidForAgent>>>> {
+    try {
+      // Why: a duplicate-id response can mean the original write landed; only
+      // the exact target relationship proves this pinned retry.
+      const attachment = await this.getMatchingLinearAttachmentWrite(
+        writeId,
+        issueId,
+        workspaceId,
+        true
+      )
+      if (attachment) {
+        return attachment
+      }
+    } catch (error) {
+      if (error instanceof LinearAgentAccessError && error.code === 'linear_invalid_write_id') {
+        throw error
+      }
+      throw unconfirmed(
+        error instanceof Error
+          ? sanitizeLinearErrorMessage(error.message)
+          : sanitizeLinearErrorMessage(String(error))
+      )
+    }
+    throw unconfirmed()
+  }
+
+  private async refetchLinearIssueAfterDuplicate(
+    writeId: string,
+    teamId: string,
+    parentId: string | null,
+    workspaceId: string,
+    unconfirmed: (cause?: string) => LinearAgentAccessError
+  ): Promise<NonNullable<Awaited<ReturnType<typeof getLinearIssueByUuidForAgent>>>> {
+    try {
+      // Why: a duplicate-id response can mean the original write landed; only
+      // the exact target relationship proves this pinned retry.
+      const issue = await this.getMatchingLinearCreatedIssue(
+        writeId,
+        teamId,
+        parentId,
+        workspaceId,
+        true
+      )
+      if (issue) {
+        return issue
+      }
+    } catch (error) {
+      if (error instanceof LinearAgentAccessError && error.code === 'linear_invalid_write_id') {
+        throw error
+      }
+      throw unconfirmed(
+        error instanceof Error
+          ? sanitizeLinearErrorMessage(error.message)
+          : sanitizeLinearErrorMessage(String(error))
+      )
+    }
+    throw unconfirmed()
+  }
+
+  private async readLinearWriteLookup<T>(lookup: () => Promise<T>): Promise<T> {
+    try {
+      return await lookup()
+    } catch (error) {
+      throw this.mapLinearReadFailure(error)
+    }
+  }
+
+  private parseLinearAttachmentUrl(value: string): URL {
+    try {
+      const url = new URL(value)
+      if (url.protocol === 'http:' || url.protocol === 'https:') {
+        return url
+      }
+    } catch {
+      // Fall through to the stable agent-facing error below.
+    }
+    throw linearError('linear_invalid_url', 'Attachment URL must be an absolute http(s) URL.')
+  }
+
+  private defaultLinearAttachmentTitle(url: URL): string {
+    const tail = url.pathname.split('/').filter(Boolean).at(-1)
+    return tail ? `${url.host}/${tail}` : url.host
+  }
+
+  private async resolveLinearCreateTeam(
+    teamKey: string | undefined,
+    workspaceId: string | undefined,
+    parent: LinearAgentWriteTarget | null
+  ): Promise<{ id: string; key: string; name: string; workspaceId: string }> {
+    if (!teamKey && parent?.issue.team?.id && parent.issue.team.key && parent.issue.team.name) {
+      return {
+        id: parent.issue.team.id,
+        key: parent.issue.team.key,
+        name: parent.issue.team.name,
+        workspaceId: parent.workspaceId
+      }
+    }
+    if (!teamKey) {
+      throw linearError('linear_team_required', 'Pass --team or create under a parent issue.', {
+        nextSteps: ['Run `orca linear create --team <key> ...` or use --parent-current.']
+      })
+    }
+
+    const scope = parent?.workspaceId ?? workspaceId
+    this.validateLinearCreateWorkspaceScope(scope)
+    let teams: Awaited<ReturnType<typeof listLinearTeamsOrThrow>>
+    try {
+      teams = await listLinearTeamsOrThrow(scope ?? 'all')
+    } catch (error) {
+      throw this.mapLinearReadFailure(error)
+    }
+    if (teams.length === 0 && (getLinearStatus().workspaces?.length ?? 0) === 0) {
+      throw linearError('linear_not_connected', 'Linear is not connected.', {
+        nextSteps: ['Connect Linear from Orca settings, then retry the issue create.']
+      })
+    }
+    const matches = teams.filter(
+      (team) => team.key.toLocaleLowerCase() === teamKey.toLocaleLowerCase()
+    )
+    if (matches.length === 1 && matches[0].workspaceId) {
+      return {
+        id: matches[0].id,
+        key: matches[0].key,
+        name: matches[0].name,
+        workspaceId: matches[0].workspaceId
+      }
+    }
+    if (matches.length > 1) {
+      throw linearError(
+        'linear_workspace_ambiguous',
+        `Team key ${teamKey} exists in multiple workspaces.`,
+        {
+          candidates: matches.map((team) => ({
+            workspaceId: team.workspaceId,
+            workspaceName: team.workspaceName,
+            teamKey: team.key
+          }))
+        }
+      )
+    }
+    if (parent) {
+      let globalTeams: Awaited<ReturnType<typeof listLinearTeamsOrThrow>>
+      try {
+        globalTeams = await listLinearTeamsOrThrow('all')
+      } catch (error) {
+        throw this.mapLinearReadFailure(error)
+      }
+      const globalMatch = globalTeams.find(
+        (team) => team.key.toLocaleLowerCase() === teamKey.toLocaleLowerCase()
+      )
+      if (globalMatch) {
+        throw linearError(
+          'linear_invalid_workspace',
+          `Team key ${teamKey} is not in the parent issue workspace.`
+        )
+      }
+    }
+    throw linearError('linear_team_required', `No connected Linear team matched ${teamKey}.`)
+  }
+
+  private validateLinearCreateWorkspaceScope(workspaceId: string | undefined): void {
+    if (!workspaceId) {
+      return
+    }
+    const workspaces = getLinearStatus().workspaces ?? []
+    if (workspaces.length > 0 && !workspaces.some((workspace) => workspace.id === workspaceId)) {
+      throw linearError(
+        'linear_invalid_workspace',
+        `No connected Linear workspace matched ${workspaceId}.`
+      )
+    }
+  }
+
+  private linearWriteIssueRef(issue: { id: string; identifier: string; url: string }): {
+    id: string
+    identifier: string
+    url: string
+  } {
+    return { id: issue.id, identifier: issue.identifier, url: issue.url }
+  }
+
+  private linearCommentResult(
+    comment: NonNullable<Awaited<ReturnType<typeof getLinearCommentByUuidForAgent>>>,
+    target: LinearAgentWriteTarget,
+    bodyChars: number,
+    writeId: string,
+    deduplicated: boolean
+  ): LinearCommentAddResult {
+    return {
+      comment: { id: comment.id, url: comment.url, parentId: comment.parentId },
+      issue: this.linearWriteIssueRef(target.issue),
+      meta: { workspaceId: target.workspaceId, bodyChars, writeId, deduplicated }
+    }
+  }
+
+  private linearAttachResult(
+    attachment: NonNullable<Awaited<ReturnType<typeof getLinearAttachmentByUuidForAgent>>>,
+    target: LinearAgentWriteTarget,
+    writeId: string,
+    deduplicated: boolean
+  ): LinearAttachResult {
+    return {
+      attachment: { id: attachment.id, title: attachment.title, url: attachment.url },
+      issue: this.linearWriteIssueRef(target.issue),
+      meta: { workspaceId: target.workspaceId, writeId, deduplicated }
+    }
+  }
+
+  private linearCreateResult(
+    issue: NonNullable<Awaited<ReturnType<typeof getLinearIssueByUuidForAgent>>>,
+    workspaceId: string,
+    writeId: string,
+    deduplicated: boolean
+  ): LinearCreateResult {
+    return {
+      issue,
+      meta: { workspaceId, writeId, deduplicated }
+    }
+  }
+
+  private linearCreateStyleUnconfirmed(
+    verb: 'comment' | 'attach' | 'create',
+    writeId: string,
+    target: LinearAgentWriteTarget | null,
+    extra: {
+      parentId?: string | null
+      team?: { id: string; key: string; name: string; workspaceId: string }
+      parent?: LinearAgentWriteTarget | null
+      title?: string
+      url?: string
+      bodyRequired?: boolean
+      cause?: string
+    } = {}
+  ): LinearAgentAccessError {
+    const workspaceId = target?.workspaceId ?? extra.team?.workspaceId ?? ''
+    // Why: unconfirmed writes need a retry that preserves id and target so
+    // duplicate recovery can prove intent without matching mutable content.
+    const pinned =
+      verb === 'create'
+        ? [
+            'orca linear create',
+            `--workspace=${this.commandToken(workspaceId, 'WORKSPACE_ID')}`,
+            `--write-id=${this.commandToken(writeId, 'WRITE_ID')}`,
+            '--title TITLE_HERE',
+            ...(extra.bodyRequired ? ['--body-file -'] : []),
+            ...(extra.parent
+              ? [`--parent=${this.commandToken(extra.parent.issue.identifier, 'PARENT_ISSUE')}`]
+              : []),
+            ...(extra.team ? [`--team=${this.commandToken(extra.team.key, 'TEAM_KEY')}`] : [])
+          ].join(' ')
+        : [
+            `orca linear ${verb === 'attach' ? 'attach' : 'comment add'}`,
+            this.commandToken(target?.issue.identifier ?? '', 'ISSUE_ID'),
+            `--workspace=${this.commandToken(workspaceId, 'WORKSPACE_ID')}`,
+            `--write-id=${this.commandToken(writeId, 'WRITE_ID')}`,
+            ...(verb === 'comment' ? ['--body-file -'] : []),
+            ...(verb === 'comment' && extra.parentId
+              ? [`--reply-to=${this.commandToken(extra.parentId, 'COMMENT_ID')}`]
+              : []),
+            ...(verb === 'attach' ? ['--url URL_HERE', '--title TITLE_HERE'] : [])
+          ].join(' ')
+    const retryPrefix = extra.bodyRequired || verb === 'comment' ? 'Pipe the same body and r' : 'R'
+    const payloadNote =
+      verb === 'attach'
+        ? ' Replace TITLE_HERE/URL_HERE with the exact original payload values before running.'
+        : verb === 'create'
+          ? ' Replace TITLE_HERE with the exact original title before running.'
+          : ''
+    return linearError(
+      'linear_write_unconfirmed',
+      'Linear may have applied the write, but Orca could not confirm it.',
+      {
+        writeId,
+        workspaceId,
+        issueIdentifier: target?.issue.identifier,
+        parentId: extra.parentId,
+        team: extra.team ? { id: extra.team.id, key: extra.team.key } : undefined,
+        parentIdentifier: extra.parent?.issue.identifier,
+        nextSteps: [
+          `${retryPrefix}etry once with the pinned command: \`${pinned}\`.${payloadNote}`
+        ],
+        ...(extra.cause ? { cause: sanitizeLinearErrorMessage(extra.cause) } : {})
+      }
+    )
+  }
+
+  private commandToken(value: string, placeholder: string): string {
+    return /^[A-Za-z0-9._:@%+=,/-]+$/.test(value) ? value : placeholder
+  }
+
+  private async notifyLinearLinkedIssueUpdated(
+    workspaceId: string,
+    identifier: string
+  ): Promise<void> {
+    const normalized = identifier.toLocaleUpperCase()
+    for (const worktree of await this.listResolvedWorktrees()) {
+      if ((worktree.linkedLinearIssue ?? '').toLocaleUpperCase() !== normalized) {
+        continue
+      }
+      const linkedWorkspaceId = worktree.linkedLinearIssueWorkspaceId ?? workspaceId
+      if (linkedWorkspaceId !== workspaceId) {
+        continue
+      }
+      this.emitClientEvent({
+        type: 'linearLinkedIssueUpdated',
+        worktreeId: worktree.id,
+        identifier,
+        workspaceId
+      })
+    }
   }
 
   private async resolveWorktreeForContainedPath(cwd: string): Promise<ResolvedWorktree | null> {

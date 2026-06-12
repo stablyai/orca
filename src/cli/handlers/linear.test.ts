@@ -182,6 +182,169 @@ describe('orca linear CLI handlers', () => {
       workspaceId: undefined
     })
   })
+
+  it('maps status writes to the agent write RPC with an explicit target', async () => {
+    queueFixtures(callMock, okFixture('req_status', statusSetResult()))
+
+    await main(['linear', 'status', 'set', 'ENG-123', '--to', 'In Review', '--json'], '/tmp/repo')
+
+    expect(callMock).toHaveBeenCalledWith(
+      'linear.issueSetState',
+      {
+        input: 'ENG-123',
+        current: false,
+        workspaceId: undefined,
+        to: 'In Review',
+        context: {
+          remote: false,
+          cwd: '/tmp/repo'
+        }
+      },
+      { timeoutMs: 75_000 }
+    )
+  })
+
+  it('requires exact write targets for issue writes', async () => {
+    await main(['linear', 'comment', 'add', '--body', 'done'], '/tmp/repo')
+
+    expect(callMock).not.toHaveBeenCalled()
+    expect(vi.mocked(console.error).mock.calls[0][0]).toContain(
+      'Pass a Linear issue id or --current'
+    )
+    expect(process.exitCode).toBe(1)
+  })
+
+  it('rejects --workspace all for writes before dispatch', async () => {
+    await main(
+      [
+        'linear',
+        'attach',
+        'ENG-123',
+        '--url',
+        'https://example.com/review/123',
+        '--workspace',
+        'all'
+      ],
+      '/tmp/repo'
+    )
+
+    expect(callMock).not.toHaveBeenCalled()
+    expect(vi.mocked(console.error).mock.calls[0][0]).toContain(
+      '--workspace all is not valid for Linear writes'
+    )
+    expect(process.exitCode).toBe(1)
+  })
+
+  it('reads comment bodies from stdin and passes retry write ids through', async () => {
+    const stdin = mockStdin(false, ['line one\n', 'line two'])
+    queueFixtures(callMock, okFixture('req_comment', commentAddResult()))
+
+    try {
+      await main(
+        [
+          'linear',
+          'comment',
+          'add',
+          '--current',
+          '--body-file',
+          '-',
+          '--reply-to',
+          'comment-parent',
+          '--write-id',
+          '123e4567-e89b-12d3-a456-426614174000',
+          '--json'
+        ],
+        '/tmp/repo'
+      )
+    } finally {
+      stdin.restore()
+    }
+
+    expect(callMock).toHaveBeenCalledWith(
+      'linear.issueAddComment',
+      {
+        input: undefined,
+        current: true,
+        workspaceId: undefined,
+        body: 'line one\nline two',
+        replyTo: 'comment-parent',
+        writeId: '123e4567-e89b-12d3-a456-426614174000',
+        context: {
+          remote: false,
+          cwd: '/tmp/repo'
+        }
+      },
+      { timeoutMs: 75_000 }
+    )
+  })
+
+  it('rejects malformed write ids before dispatch', async () => {
+    await main(
+      [
+        'linear',
+        'attach',
+        'ENG-123',
+        '--url',
+        'https://example.com/review/123',
+        '--write-id',
+        'not-a-uuid',
+        '--json'
+      ],
+      '/tmp/repo'
+    )
+
+    expect(callMock).not.toHaveBeenCalled()
+    const payload = JSON.parse(String(vi.mocked(console.log).mock.calls[0][0])) as {
+      error: { code: string }
+    }
+    expect(payload.error.code).toBe('linear_invalid_write_id')
+  })
+
+  it('maps create with parent-current and optional body flags', async () => {
+    queueFixtures(callMock, okFixture('req_create', createResult()))
+
+    await main(
+      [
+        'linear',
+        'create',
+        '--title',
+        'Follow-up bug',
+        '--body',
+        'Concrete repro',
+        '--parent-current',
+        '--json'
+      ],
+      '/tmp/repo'
+    )
+
+    expect(callMock).toHaveBeenCalledWith(
+      'linear.issueCreate',
+      {
+        title: 'Follow-up bug',
+        body: 'Concrete repro',
+        teamKey: undefined,
+        parentInput: undefined,
+        parentCurrent: true,
+        workspaceId: undefined,
+        writeId: undefined,
+        context: {
+          remote: false,
+          cwd: '/tmp/repo'
+        }
+      },
+      { timeoutMs: 75_000 }
+    )
+  })
+
+  it('rejects duplicate body inputs before dispatch', async () => {
+    await main(
+      ['linear', 'create', '--title', 'Bug', '--body', 'one', '--body-file', 'body.md'],
+      '/tmp/repo'
+    )
+
+    expect(callMock).not.toHaveBeenCalled()
+    expect(vi.mocked(console.error).mock.calls[0][0]).toContain('Use either --body or --body-file')
+  })
 })
 
 function issueResult(): unknown {
@@ -210,6 +373,76 @@ function issueResult(): unknown {
       partial: false,
       includeErrors: [],
       sections: {}
+    }
+  }
+}
+
+function statusSetResult(): unknown {
+  return {
+    issue: { id: 'issue-id', identifier: 'ENG-123', url: 'https://linear.app/acme/issue/ENG-123' },
+    state: { id: 'state-review', name: 'In Review', type: 'started' },
+    previousState: { id: 'state-started', name: 'In Progress' },
+    meta: { workspaceId: 'workspace-1', alreadyInState: false }
+  }
+}
+
+function commentAddResult(): unknown {
+  return {
+    comment: { id: 'comment-id', url: null, parentId: 'comment-parent' },
+    issue: { id: 'issue-id', identifier: 'ENG-123', url: 'https://linear.app/acme/issue/ENG-123' },
+    meta: {
+      workspaceId: 'workspace-1',
+      bodyChars: 17,
+      writeId: '123e4567-e89b-12d3-a456-426614174000',
+      deduplicated: false
+    }
+  }
+}
+
+function createResult(): unknown {
+  return {
+    issue: {
+      id: 'issue-child',
+      identifier: 'ENG-456',
+      title: 'Follow-up bug',
+      url: 'https://linear.app/acme/issue/ENG-456',
+      team: { id: 'team-eng', key: 'ENG', name: 'Engineering' },
+      state: { id: 'state-triage', name: 'Triage' },
+      parent: { id: 'issue-id', identifier: 'ENG-123' }
+    },
+    meta: {
+      workspaceId: 'workspace-1',
+      writeId: '123e4567-e89b-12d3-a456-426614174000',
+      deduplicated: false
+    }
+  }
+}
+
+function mockStdin(isTTY: boolean, chunks: string[]): { restore: () => void } {
+  const stdin = process.stdin
+  const previousIsTTY = stdin.isTTY
+  const previousAsyncIterator = stdin[Symbol.asyncIterator]
+  Object.defineProperty(stdin, 'isTTY', {
+    configurable: true,
+    value: isTTY
+  })
+  ;(stdin as unknown as Record<symbol, unknown>)[Symbol.asyncIterator] = async function* () {
+    for (const chunk of chunks) {
+      yield chunk
+    }
+    return undefined
+  }
+  return {
+    restore: () => {
+      Object.defineProperty(stdin, 'isTTY', {
+        configurable: true,
+        value: previousIsTTY
+      })
+      if (previousAsyncIterator) {
+        ;(stdin as unknown as Record<symbol, unknown>)[Symbol.asyncIterator] = previousAsyncIterator
+      } else {
+        Reflect.deleteProperty(stdin, Symbol.asyncIterator)
+      }
     }
   }
 }

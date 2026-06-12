@@ -58,5 +58,22 @@ export function classifyLinearError(error: unknown): LinearErrorCode {
 }
 
 export function linearMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error)
+  const message = error instanceof Error ? error.message : String(error)
+  return sanitizeLinearErrorMessage(message)
+}
+
+export function sanitizeLinearErrorMessage(message: string): string {
+  // Why: provider text is useful in CLI errors, but raw SDK failures can embed secrets or user payloads.
+  return message
+    .split(/\r?\n\s+at\s+/)[0]
+    .replace(
+      /(headers?\s*[:=]\s*)\{[^{}]*(?:authorization|token|api[-_]?key)[^{}]*\}/gi,
+      '$1[REDACTED]'
+    )
+    .replace(/(authorization\s*[:=]\s*bearer\s+)[^\s]+/gi, '$1[REDACTED]')
+    .replace(/((?:api[-_]?key|token)\s*[:=]\s*)[^\s,}\]]+/gi, '$1[REDACTED]')
+    .replace(/(variables\s*[:=]\s*)\{[\s\S]*?\}/gi, '$1[REDACTED]')
+    .replace(/((?:body|comment|description)\s*[:=]\s*)\{[\s\S]*?\}/gi, '$1[REDACTED]')
+    .replace(/((?:body|comment|description)\s*[:=]\s*)(["']).*?\2/gi, '$1[REDACTED]')
+    .trim()
 }

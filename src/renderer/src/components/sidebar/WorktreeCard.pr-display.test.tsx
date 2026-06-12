@@ -10,6 +10,7 @@ const fetchIssue = vi.fn()
 const fetchLinearIssue = vi.fn()
 const openModal = vi.fn()
 const updateWorktreeMeta = vi.fn()
+const linearPromptProps: { remote?: boolean; settings?: unknown }[] = []
 
 let worktreeCardProperties: WorktreeCardProperty[] = ['pr']
 let hostedReviewCache: Record<string, unknown> = {}
@@ -63,6 +64,13 @@ vi.mock('./WorktreeCardAgents', () => ({
 
 vi.mock('./SshDisconnectedDialog', () => ({
   SshDisconnectedDialog: () => null
+}))
+
+vi.mock('./LinearAgentSkillSetupPrompt', () => ({
+  LinearAgentSkillSetupPrompt: (props: { remote?: boolean; settings?: unknown }) => {
+    linearPromptProps.push(props)
+    return null
+  }
 }))
 
 vi.mock('./WorktreeContextMenu', () => ({
@@ -128,6 +136,7 @@ describe('WorktreeCard linked PR display', () => {
     vi.clearAllMocks()
     worktreeCardProperties = ['pr']
     hostedReviewCache = {}
+    linearPromptProps.length = 0
     workspacePortScan = null
     settings = null
   })
@@ -215,6 +224,27 @@ describe('WorktreeCard linked PR display', () => {
     expect(markup).not.toContain('Loading issue')
     expect(markup).not.toContain('Loading PR')
     expect(markup).not.toContain('Reviewer handoff note')
+  })
+
+  it('treats active runtime environment Linear prompts as remote setup', async () => {
+    settings = { activeRuntimeEnvironmentId: 'env-1' }
+    worktreeCardProperties = ['linear-issue']
+    const { default: WorktreeCard } = await import('./WorktreeCard')
+
+    renderWorktreeCardMarkup(
+      <WorktreeCard
+        worktree={makeWorktree({ linkedLinearIssue: 'ENG-123' })}
+        repo={makeRepo()}
+        isActive
+      />
+    )
+
+    expect(linearPromptProps.at(-1)).toEqual(
+      expect.objectContaining({
+        remote: true,
+        settings
+      })
+    )
   })
 
   it('keeps issue, Linear issue, PR, and notes metadata out of compact cards', async () => {

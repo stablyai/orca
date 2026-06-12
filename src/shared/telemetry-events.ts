@@ -744,16 +744,23 @@ const onboardingChecklistItemSchema = z.enum([
   'openedFile',
   'ranAgentOnFile'
 ])
-const onboardingFeatureSetupFeatureSchema = z.enum(['browser_use', 'computer_use', 'orchestration'])
+const onboardingFeatureSetupFeatureSchema = z.enum([
+  'browser_use',
+  'computer_use',
+  'orchestration',
+  'linear_tickets'
+])
 const onboardingFeatureSetupSelectionSchema = {
   browser_use: z.boolean(),
   computer_use: z.boolean(),
+  linear_tickets: z.boolean(),
   orchestration: z.boolean(),
   selected_count: z.number().int().min(0).max(3)
 } as const
 type OnboardingFeatureSetupSelectionTelemetry = {
   browser_use: boolean
   computer_use: boolean
+  linear_tickets: boolean
   orchestration: boolean
   selected_count: number
 }
@@ -765,6 +772,8 @@ const onboardingFeatureSetupSelectedCountRefinement = {
 function hasMatchingOnboardingFeatureSetupSelectedCount(
   props: OnboardingFeatureSetupSelectionTelemetry
 ): boolean {
+  // Why: Linear ticket setup is a recommended add-on and must not affect
+  // onboarding progress metrics.
   const selectedCount =
     (props.browser_use ? 1 : 0) + (props.computer_use ? 1 : 0) + (props.orchestration ? 1 : 0)
   return props.selected_count === selectedCount

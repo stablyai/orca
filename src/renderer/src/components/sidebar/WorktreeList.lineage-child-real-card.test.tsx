@@ -213,6 +213,16 @@ function makeHostedReview(overrides: Partial<HostedReviewInfo> = {}): HostedRevi
   }
 }
 
+function makeFolderWorkspacePathStatusState(): Record<string, unknown> {
+  return {
+    fetchFolderWorkspacePathStatus: vi.fn(),
+    folderWorkspacePathStatuses: {},
+    folderWorkspaces: [],
+    getFolderWorkspacePathStatusCacheKey: (request: unknown) => JSON.stringify(request),
+    getFreshFolderWorkspacePathStatus: vi.fn(() => null)
+  }
+}
+
 function setLineageState(options: { deletingChild?: boolean } = {}): void {
   const repo = makeRepo()
   const parent = makeWorktree({
@@ -251,6 +261,7 @@ function setLineageState(options: { deletingChild?: boolean } = {}): void {
     fetchIssue: mockStore.fetchIssue,
     fetchLinearIssue: mockStore.fetchLinearIssue,
     filterRepoIds: [],
+    ...makeFolderWorkspacePathStatusState(),
     gitConflictOperationByWorktree: {},
     groupBy: 'none',
     hideDefaultBranchWorkspace: false,

@@ -1,7 +1,11 @@
 import type {
+  LinearAttachResult,
+  LinearCommentAddResult,
+  LinearCreateResult,
   LinearIssueContextResult,
   LinearSearchIssueSummary,
-  LinearSearchResult
+  LinearSearchResult,
+  LinearStatusSetResult
 } from '../shared/linear-agent-access'
 
 export function formatLinearIssue(result: LinearIssueContextResult): string {
@@ -42,6 +46,27 @@ export function formatLinearSearch(result: LinearSearchResult): string {
     return 'No Linear issues found.'
   }
   return result.issues.map(formatSearchRow).join('\n')
+}
+
+export function formatLinearStatusSet(result: LinearStatusSetResult): string {
+  const suffix = result.meta.alreadyInState ? ' (already set)' : ''
+  return `Set ${result.issue.identifier} to ${result.state.name}${suffix}.`
+}
+
+export function formatLinearCommentAdd(result: LinearCommentAddResult): string {
+  const suffix = result.meta.deduplicated ? ' (already posted)' : ''
+  return `Added comment ${result.comment.id} to ${result.issue.identifier}${suffix}.`
+}
+
+export function formatLinearAttach(result: LinearAttachResult): string {
+  const suffix = result.meta.deduplicated ? ' (already attached)' : ''
+  return `Attached ${result.attachment.title} to ${result.issue.identifier}${suffix}.`
+}
+
+export function formatLinearCreate(result: LinearCreateResult): string {
+  const parent = result.issue.parent ? ` under ${result.issue.parent.identifier}` : ''
+  const suffix = result.meta.deduplicated ? ' (already created)' : ''
+  return `Created ${result.issue.identifier}${parent}: ${result.issue.title}${suffix}.`
 }
 
 export function printLinearIssueWarnings(result: LinearIssueContextResult): void {

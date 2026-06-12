@@ -7,6 +7,7 @@ export const LINEAR_CHILDREN_MAX_DEPTH = 5
 export const LINEAR_CHILDREN_NODE_CAP = 200
 export const LINEAR_ATTACHMENTS_CAP = 100
 export const LINEAR_RELATIONS_CAP = 100
+export const LINEAR_WRITE_BODY_CAP = 65_000
 
 export const LINEAR_ERROR_CODES = [
   'linear_not_connected',
@@ -16,6 +17,14 @@ export const LINEAR_ERROR_CODES = [
   'linear_issue_not_found',
   'linear_workspace_ambiguous',
   'linear_invalid_workspace',
+  'linear_invalid_state',
+  'linear_invalid_parent',
+  'linear_team_required',
+  'linear_invalid_url',
+  'linear_body_too_large',
+  'linear_invalid_write_id',
+  'linear_write_failed',
+  'linear_write_unconfirmed',
   'linear_rate_limited',
   'linear_timeout',
   'linear_permission_denied',
@@ -182,9 +191,81 @@ export type LinearSearchResult = {
   }
 }
 
+export type LinearWriteTargetRequest = {
+  input?: string
+  current?: boolean
+  workspaceId?: string
+  context?: LinearCurrentIssueContextHints
+}
+
+export type LinearStatusSetRequest = LinearWriteTargetRequest & {
+  to: string
+}
+
+export type LinearCommentAddRequest = LinearWriteTargetRequest & {
+  body: string
+  replyTo?: string
+  writeId?: string
+}
+
+export type LinearAttachRequest = LinearWriteTargetRequest & {
+  url: string
+  title?: string
+  writeId?: string
+}
+
+export type LinearCreateRequest = {
+  title: string
+  body?: string
+  teamKey?: string
+  parentInput?: string
+  parentCurrent?: boolean
+  workspaceId?: string
+  writeId?: string
+  context?: LinearCurrentIssueContextHints
+}
+
 export type LinearWorkspaceCandidate = {
   id: string
   name: string
+}
+
+export type LinearWriteIssueRef = {
+  id: string
+  identifier: string
+  url: string
+}
+
+export type LinearStatusSetResult = {
+  issue: LinearWriteIssueRef
+  state: { id: string; name: string; type: string }
+  previousState: { id: string; name: string } | null
+  meta: { workspaceId: string; alreadyInState: boolean }
+}
+
+export type LinearCommentAddResult = {
+  comment: { id: string; url: string | null; parentId: string | null }
+  issue: LinearWriteIssueRef
+  meta: { workspaceId: string; bodyChars: number; writeId: string; deduplicated: boolean }
+}
+
+export type LinearAttachResult = {
+  attachment: { id: string; title: string; url: string }
+  issue: LinearWriteIssueRef
+  meta: { workspaceId: string; writeId: string; deduplicated: boolean }
+}
+
+export type LinearCreateResult = {
+  issue: {
+    id: string
+    identifier: string
+    title: string
+    url: string
+    team: { id: string; key: string; name: string }
+    state: { id: string; name: string } | null
+    parent: { id: string; identifier: string } | null
+  }
+  meta: { workspaceId: string; writeId: string; deduplicated: boolean }
 }
 
 export function clampLinearSearchLimit(limit: number | undefined): number {
