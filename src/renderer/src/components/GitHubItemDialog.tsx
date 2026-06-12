@@ -176,6 +176,8 @@ import { PER_REPO_FETCH_LIMIT } from '../../../shared/work-items'
 import { translate } from '@/i18n/i18n'
 
 const IS_MAC = navigator.userAgent.includes('Mac')
+const IS_WINDOWS = !IS_MAC && navigator.userAgent.includes('Windows')
+const WINDOWS_WINDOW_CONTROLS_WIDTH = '138px'
 
 // Why: the GH item dialog can be opened from any work-item list surface and
 // doesn't have the full owner/repo context the list's cache entry carries.
@@ -5676,6 +5678,13 @@ export default function GitHubItemDialog({
   const ownerRepo = workItem ? parseOwnerRepoFromItemUrl(workItem.url) : null
   const issueStateBadgeTone =
     localState === 'closed' ? 'bg-rose-600 text-white' : 'bg-emerald-600 text-white'
+  const sheetHeaderStyle = useMemo(
+    () =>
+      variant === 'sheet' && IS_WINDOWS
+        ? ({ paddingRight: `calc(1rem + ${WINDOWS_WINDOW_CONTROLS_WIDTH})` } as const)
+        : undefined,
+    [variant]
+  )
 
   const content = workItem ? (
     <div className="flex h-full min-h-0 flex-col">
@@ -5872,7 +5881,12 @@ export default function GitHubItemDialog({
           </div>
         </>
       ) : (
-        <div className="flex-none border-b border-border/60 bg-card/80 px-4 py-3 shadow-xs backdrop-blur supports-[backdrop-filter]:bg-card/70">
+        <div
+          className="flex-none border-b border-border/60 bg-card/80 px-4 py-3 shadow-xs backdrop-blur supports-[backdrop-filter]:bg-card/70"
+          // Why: this sheet portals outside the app root, so it cannot inherit
+          // the Windows titlebar inset variable that keeps header buttons clear.
+          style={sheetHeaderStyle}
+        >
           <div className="flex items-start gap-3">
             {variant === 'page' ? (
               <Button
