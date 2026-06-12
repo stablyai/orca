@@ -212,8 +212,6 @@ Works with **any CLI agent** — if it runs in a terminal, it runs in Orca.
   <kbd>+ any CLI agent</kbd>
 </p>
 
-See [setup details for each agent](https://www.onorca.dev/docs/agents/supported) in the docs.
-
 ---
 
 ## Install
