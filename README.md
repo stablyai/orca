@@ -12,15 +12,15 @@
 </p>
 
 <p align="center">
+  <sub><a href="docs/readme/README.es.md">Español</a> · <a href="docs/readme/README.zh-CN.md">中文</a> · <a href="docs/readme/README.ja.md">日本語</a> · <a href="docs/readme/README.ko.md">한국어</a></sub>
+</p>
+
+<p align="center">
   <strong>The AI Orchestrator for 100x builders.</strong><br/>
   Run Claude Code, OpenClaude, Codex, or OpenCode side-by-side — each in its own worktree, tracked in one place.
 </p>
 
 <h3 align="center"><a href="https://onorca.dev/download"><ins>Download Orca</ins></a></h3>
-
-<p align="center">
-  <sub><a href="docs/readme/README.es.md">Español</a> · <a href="docs/readme/README.zh-CN.md">中文</a> · <a href="docs/readme/README.ja.md">日本語</a> · <a href="docs/readme/README.ko.md">한국어</a></sub>
-</p>
 
 <p align="center">
   <img src="docs/assets/readme-hero.jpg" alt="Orca desktop app running agents in parallel worktrees, with the Orca mobile companion app in the corner" width="960" />
