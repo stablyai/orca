@@ -30,7 +30,7 @@
 
 ## Why Orca
 
-Traditional IDEs weren't built for agents, and parallel-agent wrappers stop at a terminal. Orca is the whole environment: worktree-isolated agents, Ghostty-class terminals, an embedded browser with Design Mode, GitHub and Linear built in, remote worktrees over SSH, and a mobile companion app — using the agent subscriptions you already pay for, with no Orca login. Free and open source (MIT), shipping new features daily.
+Traditional IDEs weren't built for agents, and parallel-agent wrappers stop at a terminal. Orca is the whole environment: worktree-isolated agents, Ghostty-class terminals, an embedded browser with Design Mode, GitHub and Linear built in, remote worktrees over SSH, and a mobile companion app — powered by the agent subscriptions you already pay for. Free and open source (MIT), shipping new features daily.
 
 ---
 
@@ -255,7 +255,7 @@ yay -S stably-orca-git
 
 ## Your Code, Your Keys
 
-- **No Orca account** — Bring your existing Claude Code, OpenClaude, Codex, Grok, Antigravity, OpenCode, or other agent subscriptions.
+- **Bring your own subscription** — Use the agent subscriptions you already pay for, with no extra layer in between.
 - **Runs on your machines** — Agents execute locally, or on your own servers over SSH.
 - **Open source** — MIT licensed, with the full source in this repo.
 - **Transparent telemetry** — Anonymous usage data only, documented and opt-out. See the [privacy &amp; telemetry docs](https://www.onorca.dev/docs/telemetry).
