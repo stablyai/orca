@@ -31,128 +31,128 @@
 
 <table>
 <tr>
-<td width="38%" valign="middle">
+<td width="50%" valign="middle">
 
 ### Mobile Companion
 
-Monitor and steer your agents from your phone. Get notified when an agent finishes, review output, and send follow-ups from anywhere.
+Monitor and steer your agents from your phone — get notified when an agent finishes and send follow-ups from anywhere.
 
 [iOS App Store](https://apps.apple.com/us/app/orca-ide/id6766130217) · [Android APK](https://github.com/stablyai/orca/releases/download/mobile-v0.0.12/app-release.apk) · [Docs →](https://www.onorca.dev/docs/mobile)
 
 </td>
-<td width="62%">
+<td width="50%">
   <a href="https://www.onorca.dev/docs/mobile"><picture><source srcset="docs/assets/feature-wall/mobile-companion-app-showcase.gif" type="image/gif"><img src="docs/assets/feature-wall/mobile-companion-app-showcase.jpg" alt="Orca desktop with the mobile companion app" width="100%" /></picture></a>
 </td>
 </tr>
 <tr>
-<td width="38%" valign="middle">
+<td width="50%" valign="middle">
 
 ### Parallel Worktrees
 
-Every task runs in its own isolated git worktree — no stashing, no branch juggling. Fan one prompt across five agents, compare the results, and merge the winner.
+Fan one prompt across five agents, each in its own isolated git worktree — compare the results and merge the winner.
 
 [Docs →](https://www.onorca.dev/docs/model/worktrees)
 
 </td>
-<td width="62%">
+<td width="50%">
   <a href="https://www.onorca.dev/docs/model/worktrees"><picture><source srcset="docs/assets/feature-wall/parallel-worktrees.gif" type="image/gif"><img src="docs/assets/feature-wall/parallel-worktrees.jpg" alt="Parallel worktree orchestration" width="100%" /></picture></a>
 </td>
 </tr>
 <tr>
-<td width="38%" valign="middle">
+<td width="50%" valign="middle">
 
 ### Terminal Splits
 
-Ghostty-class terminals with WebGL rendering, infinite splits, scrollback restored on restart, and full scrollback search. See active, waiting, and finished agent sessions at a glance.
+Ghostty-class terminals with WebGL rendering, infinite splits, and scrollback that survives restarts.
 
 [Docs →](https://www.onorca.dev/docs/terminal)
 
 </td>
-<td width="62%">
+<td width="50%">
   <a href="https://www.onorca.dev/docs/terminal"><picture><source srcset="docs/assets/feature-wall/terminal-splits.gif" type="image/gif"><img src="docs/assets/feature-wall/terminal-splits.jpg" alt="Terminal splits" width="100%" /></picture></a>
 </td>
 </tr>
 <tr>
-<td width="38%" valign="middle">
+<td width="50%" valign="middle">
 
 ### Design Mode
 
-A real Chromium window per worktree. Click any UI element to send its HTML, CSS, and a cropped screenshot straight into your agent's prompt.
+Click any UI element in a real Chromium window to send its HTML, CSS, and a cropped screenshot straight into your agent's prompt.
 
 [Docs →](https://www.onorca.dev/docs/browser/design-mode)
 
 </td>
-<td width="62%">
+<td width="50%">
   <a href="https://www.onorca.dev/docs/browser/design-mode"><picture><source srcset="docs/assets/feature-wall/design-mode.gif" type="image/gif"><img src="docs/assets/feature-wall/design-mode.jpg" alt="Embedded browser and Design Mode" width="100%" /></picture></a>
 </td>
 </tr>
 <tr>
-<td width="38%" valign="middle">
+<td width="50%" valign="middle">
 
 ### GitHub &amp; Linear, Native
 
-Browse PRs, issues, and project boards in-app. Open a worktree from any task, review and approve PRs, inspect CI checks, and create issues — no context switch.
+Browse PRs, issues, and project boards in-app — open a worktree from any task and review without a context switch.
 
 [Docs →](https://www.onorca.dev/docs/review/linear)
 
 </td>
-<td width="62%">
+<td width="50%">
   <a href="https://www.onorca.dev/docs/review/linear"><picture><source srcset="docs/assets/feature-wall/github-linear.gif" type="image/gif"><img src="docs/assets/feature-wall/github-linear.jpg" alt="GitHub and Linear task workflows in Orca" width="100%" /></picture></a>
 </td>
 </tr>
 <tr>
-<td width="38%" valign="middle">
+<td width="50%" valign="middle">
 
 ### SSH Worktrees
 
-Run agents on a beefy remote box with full file editing, git, and terminals. Auto-reconnect, port forwarding, and passphrase caching included.
+Run agents on a beefy remote box with full file editing, git, and terminals — auto-reconnect and port forwarding included.
 
 [Docs →](https://www.onorca.dev/docs/ssh)
 
 </td>
-<td width="62%">
+<td width="50%">
   <a href="https://www.onorca.dev/docs/ssh"><picture><source srcset="docs/assets/feature-wall/ssh-worktrees.gif" type="image/gif"><img src="docs/assets/feature-wall/ssh-worktrees.jpg" alt="Remote worktrees over SSH" width="100%" /></picture></a>
 </td>
 </tr>
 <tr>
-<td width="38%" valign="middle">
+<td width="50%" valign="middle">
 
 ### Annotate AI Diffs
 
-Drop markdown comments on any diff line, batch them, and ship them back to the agent. Review AI-generated changes, make quick edits, and commit without leaving Orca.
+Drop comments on any diff line and ship them back to the agent — review, edit, and commit without leaving Orca.
 
 [Docs →](https://www.onorca.dev/docs/review/annotate-ai-diff)
 
 </td>
-<td width="62%">
+<td width="50%">
   <a href="https://www.onorca.dev/docs/review/annotate-ai-diff"><picture><source srcset="docs/assets/feature-wall/annotate-diff.gif" type="image/gif"><img src="docs/assets/feature-wall/annotate-diff.jpg" alt="Annotate AI-generated diffs" width="100%" /></picture></a>
 </td>
 </tr>
 <tr>
-<td width="38%" valign="middle">
+<td width="50%" valign="middle">
 
 ### Drag Files to Agents
 
-VS Code's editor with autosave everywhere, quick-open, and drag-and-drop of files or images straight into an agent prompt.
+VS Code's editor with autosave everywhere — drag files or images straight into an agent prompt.
 
 [Docs →](https://www.onorca.dev/docs/editing/file-explorer)
 
 </td>
-<td width="62%">
+<td width="50%">
   <a href="https://www.onorca.dev/docs/editing/file-explorer"><picture><source srcset="docs/assets/feature-wall/file-drag.gif" type="image/gif"><img src="docs/assets/feature-wall/file-drag.jpg" alt="Drag files and images into an agent prompt" width="100%" /></picture></a>
 </td>
 </tr>
 <tr>
-<td width="38%" valign="middle">
+<td width="50%" valign="middle">
 
 ### Orca CLI
 
-Agents drive Orca too: `orca worktree create`, `snapshot`, `click`, `fill`. Script every workflow from the terminal.
+Agents drive Orca too — script every workflow with `orca worktree create`, `snapshot`, `click`, and `fill`.
 
 [Docs →](https://www.onorca.dev/docs/cli/overview)
 
 </td>
-<td width="62%">
+<td width="50%">
   <a href="https://www.onorca.dev/docs/cli/overview"><picture><source srcset="docs/assets/feature-wall/orca-cli.gif" type="image/gif"><img src="docs/assets/feature-wall/orca-cli.jpg" alt="Script Orca from the CLI" width="100%" /></picture></a>
 </td>
 </tr>
