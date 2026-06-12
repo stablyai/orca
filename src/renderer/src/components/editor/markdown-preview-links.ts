@@ -106,6 +106,13 @@ export function isMarkdownPreviewOpenModifier(
   return isMac ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey
 }
 
+export function isMarkdownPreviewSystemBrowserModifier(
+  event: Pick<MouseEvent, 'metaKey' | 'ctrlKey' | 'shiftKey'>,
+  isMac: boolean
+): boolean {
+  return event.shiftKey && (isMac ? event.metaKey : event.ctrlKey)
+}
+
 // Why: Cmd/Ctrl+Shift-click is the escape hatch that forces the OS default
 // browser; every other click routes through openHttpLink so the "open links in
 // Orca" setting (and remote-runtime state) decides the destination. Mac uses
@@ -115,8 +122,7 @@ export function resolveMarkdownPreviewHttpOpenOptions(
   isMac: boolean,
   worktreeId: string | null
 ): OpenHttpLinkOptions {
-  const modKey = isMac ? event.metaKey : event.ctrlKey
-  if (modKey && event.shiftKey) {
+  if (isMarkdownPreviewSystemBrowserModifier(event, isMac)) {
     return { forceSystemBrowser: true }
   }
   return { worktreeId }

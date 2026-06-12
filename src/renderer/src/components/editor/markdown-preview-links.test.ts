@@ -5,6 +5,7 @@ import {
   getMarkdownPreviewImageOpenTarget,
   getMarkdownPreviewLinkTarget,
   isMarkdownPreviewOpenModifier,
+  isMarkdownPreviewSystemBrowserModifier,
   resolveMarkdownPreviewHref,
   resolveMarkdownPreviewHttpOpenOptions,
   resolveImageAbsolutePath
@@ -104,6 +105,38 @@ describe('isMarkdownPreviewOpenModifier', () => {
   it('uses Ctrl on non-macOS platforms', () => {
     expect(isMarkdownPreviewOpenModifier({ metaKey: false, ctrlKey: true }, false)).toBe(true)
     expect(isMarkdownPreviewOpenModifier({ metaKey: true, ctrlKey: false }, false)).toBe(false)
+  })
+})
+
+describe('isMarkdownPreviewSystemBrowserModifier', () => {
+  it('uses Cmd+Shift on macOS', () => {
+    expect(
+      isMarkdownPreviewSystemBrowserModifier(
+        { metaKey: true, ctrlKey: false, shiftKey: true },
+        true
+      )
+    ).toBe(true)
+    expect(
+      isMarkdownPreviewSystemBrowserModifier(
+        { metaKey: false, ctrlKey: true, shiftKey: true },
+        true
+      )
+    ).toBe(false)
+  })
+
+  it('uses Ctrl+Shift on non-macOS platforms', () => {
+    expect(
+      isMarkdownPreviewSystemBrowserModifier(
+        { metaKey: false, ctrlKey: true, shiftKey: true },
+        false
+      )
+    ).toBe(true)
+    expect(
+      isMarkdownPreviewSystemBrowserModifier(
+        { metaKey: true, ctrlKey: false, shiftKey: true },
+        false
+      )
+    ).toBe(false)
   })
 })
 

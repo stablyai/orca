@@ -46,6 +46,7 @@ import {
   fileUrlToAbsolutePath,
   getMarkdownPreviewLinkTarget,
   isMarkdownPreviewOpenModifier,
+  isMarkdownPreviewSystemBrowserModifier,
   resolveMarkdownPreviewHref,
   resolveMarkdownPreviewHttpOpenOptions
 } from './markdown-preview-links'
@@ -1239,8 +1240,7 @@ export default function MarkdownPreview({
           // link to the system default handler, bypassing the classifier. For a
           // dangling in-worktree .md, pre-check existence so the user sees a
           // toast instead of the silent no-op from shell.openFileUri.
-          const modKey = isMac ? event.metaKey : event.ctrlKey
-          if (modKey && event.shiftKey) {
+          if (isMarkdownPreviewSystemBrowserModifier(event, isMac)) {
             const osTarget = getMarkdownPreviewLinkTarget(href, filePath)
             if (!osTarget) {
               return
