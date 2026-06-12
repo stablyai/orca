@@ -6,6 +6,7 @@ import {
   getMarkdownPreviewLinkTarget,
   isMarkdownPreviewOpenModifier,
   resolveMarkdownPreviewHref,
+  resolveMarkdownPreviewHttpOpenOptions,
   resolveImageAbsolutePath
 } from './markdown-preview-links'
 
@@ -103,6 +104,83 @@ describe('isMarkdownPreviewOpenModifier', () => {
   it('uses Ctrl on non-macOS platforms', () => {
     expect(isMarkdownPreviewOpenModifier({ metaKey: false, ctrlKey: true }, false)).toBe(true)
     expect(isMarkdownPreviewOpenModifier({ metaKey: true, ctrlKey: false }, false)).toBe(false)
+  })
+})
+
+describe('resolveMarkdownPreviewHttpOpenOptions', () => {
+  // forceSystemBrowser -> shell.openExternal (system default browser);
+  // worktreeId (no force) -> openHttpLink routes into the Orca browser per the
+  // openLinksInApp setting. See http-link-routing.test.ts for that mapping.
+  it('forces the system browser on Cmd+Shift-click on macOS', () => {
+    expect(
+      resolveMarkdownPreviewHttpOpenOptions(
+        { metaKey: true, ctrlKey: false, shiftKey: true },
+        true,
+        'wt-1'
+      )
+    ).toEqual({ forceSystemBrowser: true })
+  })
+
+  it('forces the system browser on Ctrl+Shift-click on Linux/Windows', () => {
+    expect(
+      resolveMarkdownPreviewHttpOpenOptions(
+        { metaKey: false, ctrlKey: true, shiftKey: true },
+        false,
+        'wt-1'
+      )
+    ).toEqual({ forceSystemBrowser: true })
+  })
+
+  it('routes a plain Cmd-click through the worktree so it can open in Orca', () => {
+    expect(
+      resolveMarkdownPreviewHttpOpenOptions(
+        { metaKey: true, ctrlKey: false, shiftKey: false },
+        true,
+        'wt-1'
+      )
+    ).toEqual({ worktreeId: 'wt-1' })
+  })
+
+  it('routes a plain click (no modifier) through the worktree', () => {
+    expect(
+      resolveMarkdownPreviewHttpOpenOptions(
+        { metaKey: false, ctrlKey: false, shiftKey: false },
+        true,
+        'wt-1'
+      )
+    ).toEqual({ worktreeId: 'wt-1' })
+  })
+
+  it('does not force the system browser for Shift without the platform mod key', () => {
+    // Plain Shift-click (no Cmd/Ctrl) is not the escape hatch.
+    expect(
+      resolveMarkdownPreviewHttpOpenOptions(
+        { metaKey: false, ctrlKey: false, shiftKey: true },
+        true,
+        'wt-1'
+      )
+    ).toEqual({ worktreeId: 'wt-1' })
+  })
+
+  it('does not treat Mac Ctrl+Shift-click as the escape hatch', () => {
+    // On macOS the mod key is Cmd; Ctrl+Shift must not force the system browser.
+    expect(
+      resolveMarkdownPreviewHttpOpenOptions(
+        { metaKey: false, ctrlKey: true, shiftKey: true },
+        true,
+        'wt-1'
+      )
+    ).toEqual({ worktreeId: 'wt-1' })
+  })
+
+  it('passes through a null worktree (openHttpLink then falls back to system browser)', () => {
+    expect(
+      resolveMarkdownPreviewHttpOpenOptions(
+        { metaKey: false, ctrlKey: false, shiftKey: false },
+        true,
+        null
+      )
+    ).toEqual({ worktreeId: null })
   })
 })
 

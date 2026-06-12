@@ -46,7 +46,8 @@ import {
   fileUrlToAbsolutePath,
   getMarkdownPreviewLinkTarget,
   isMarkdownPreviewOpenModifier,
-  resolveMarkdownPreviewHref
+  resolveMarkdownPreviewHref,
+  resolveMarkdownPreviewHttpOpenOptions
 } from './markdown-preview-links'
 import {
   createMarkdownDocumentIndex,
@@ -1251,7 +1252,10 @@ export default function MarkdownPreview({
               return
             }
             if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
-              openHttpLink(parsed.toString(), { forceSystemBrowser: true })
+              openHttpLink(
+                parsed.toString(),
+                resolveMarkdownPreviewHttpOpenOptions(event, isMac, sourceRoutingWorktreeId)
+              )
               return
             }
             if (parsed.protocol === 'file:') {
@@ -1303,7 +1307,14 @@ export default function MarkdownPreview({
           }
 
           if (target.protocol === 'http:' || target.protocol === 'https:') {
-            void window.api.shell.openUrl(target.toString())
+            // Why: route through openHttpLink (not raw shell.openUrl) so a plain
+            // click honors the "open links in Orca" setting; openHttpLink keeps
+            // remote runtimes on the system browser. (Cmd/Ctrl+Shift-click is
+            // handled above; this path only sees non-escape-hatch clicks.)
+            openHttpLink(
+              target.toString(),
+              resolveMarkdownPreviewHttpOpenOptions(event, isMac, sourceRoutingWorktreeId)
+            )
             return
           }
 
