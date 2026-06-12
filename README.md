@@ -216,29 +216,15 @@ Works with **any CLI agent** — if it runs in a terminal, it runs in Orca.
 
 ## Install
 
-| Platform | Download |
-|:---------|:---------|
-| **macOS** | [Apple Silicon (.dmg)](https://github.com/stablyai/orca/releases/latest/download/orca-macos-arm64.dmg) · [Intel (.dmg)](https://github.com/stablyai/orca/releases/latest/download/orca-macos-x64.dmg) |
-| **Windows** | [Installer (.exe)](https://github.com/stablyai/orca/releases/latest/download/orca-windows-setup.exe) |
-| **Linux** | [AppImage](https://github.com/stablyai/orca/releases/latest/download/orca-linux.AppImage) · [.deb and all builds](https://github.com/stablyai/orca/releases/latest) |
+| Platform | Download | Package manager |
+|:---------|:---------|:----------------|
+| **macOS** | [Apple Silicon (.dmg)](https://github.com/stablyai/orca/releases/latest/download/orca-macos-arm64.dmg) · [Intel (.dmg)](https://github.com/stablyai/orca/releases/latest/download/orca-macos-x64.dmg) | `brew install --cask stablyai/orca/orca` |
+| **Windows** | [Installer (.exe)](https://github.com/stablyai/orca/releases/latest/download/orca-windows-setup.exe) | — |
+| **Linux** | [AppImage](https://github.com/stablyai/orca/releases/latest/download/orca-linux.AppImage) · [.deb](https://github.com/stablyai/orca/releases/latest) | `yay -S stably-orca-bin` (AUR, or `stably-orca-git` to build from source) |
+| **iOS** | [App Store](https://apps.apple.com/us/app/orca-ide/id6766130217) | — |
+| **Android** | [APK](https://github.com/stablyai/orca/releases/download/mobile-v0.0.12/app-release.apk) | — |
 
-Download once — Orca auto-updates on the stable channel. Also available at **[onOrca.dev](https://onOrca.dev)** or via a package manager:
-
-### macOS (Homebrew)
-
-```bash
-brew install --cask stablyai/orca/orca
-```
-
-### Arch Linux (AUR)
-
-```bash
-# Precompiled binary
-yay -S stably-orca-bin
-
-# Build from GitHub source
-yay -S stably-orca-git
-```
+Download once — Orca auto-updates on the stable channel. Older versions and all builds are on [GitHub Releases](https://github.com/stablyai/orca/releases), and you can always grab it from **[onOrca.dev](https://onOrca.dev)**.
 
 ---
 
