@@ -4624,6 +4624,7 @@
           "colors_only": "カラーのみ",
           "no_themes_found": "カスタム Warp テーマが見つかりませんでした。",
           "builtin_themes_hint": "Warp のプリロードテーマは Warp アプリ本体に含まれており、ディスクから読み取ることはできません。Dracula、Gruvbox、Solarized、Tokyo Night など、その多くは Orca の組み込みテーマとして既に利用できます。",
+          "custom_theme_yaml_hint": "Custom and community themes need to exist as YAML files in a Warp themes folder before auto-import can find them. If you cloned Warp's public themes repo, use Choose Folder to import that checkout.",
           "choose_manually": "テーマ YAML ファイルまたはフォルダーを選択して手動でインポートします。",
           "skipped_files": "スキップされたファイル",
           "more_skipped_files": "他 {{value0}} 件のファイルがスキップされました。",

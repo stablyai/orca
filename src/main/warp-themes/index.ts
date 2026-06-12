@@ -1,4 +1,5 @@
-import { readFile, stat } from 'fs/promises'
+import { readFile, realpath, stat } from 'fs/promises'
+import path from 'path'
 import type { WebContents } from 'electron'
 import type { Store } from '../persistence'
 import type {
@@ -7,10 +8,11 @@ import type {
   WarpThemeImportSkippedFile
 } from '../../shared/terminal-custom-themes'
 import { makeCustomTerminalThemeSelection } from '../../shared/terminal-custom-themes'
-import { getWarpThemeDirectories } from './discovery'
+import { getWarpThemeDirectories, warpThemeSourceLabelForDirectory } from './discovery'
 import { parseWarpThemeYamlWithTimeout } from './parser-runner'
 import {
   sanitizeReadError,
+  MAX_THEME_FILES,
   scanWarpThemeDirectory,
   type ThemeFileCandidate
 } from './theme-file-scanner'
@@ -47,11 +49,14 @@ type ThemeSourceResolution = {
 async function filesFromDirectory(
   directoryPath: string,
   sourceLabelOverride?: string,
-  budget?: PreviewOperationBudget
+  budget?: PreviewOperationBudget,
+  themeFileLimit = MAX_THEME_FILES,
+  reportThemeFileLimit = true
 ): Promise<ThemeSourceSelection> {
   const { sourceLabel, rootReadable, files, skippedFiles } = await scanWarpThemeDirectory(
     directoryPath,
-    budget
+    budget,
+    { themeFileLimit, reportThemeFileLimit }
   )
   const effectiveSourceLabel = sourceLabelOverride ?? sourceLabel
   return {
@@ -63,16 +68,56 @@ async function filesFromDirectory(
   }
 }
 
+function themeFileCanonicalFallback(filePath: string): string {
+  return path.normalize(path.resolve(filePath))
+}
+
+async function themeFileDedupeKey(filePath: string): Promise<string> {
+  try {
+    return path.normalize(await realpath(filePath))
+  } catch {
+    return themeFileCanonicalFallback(filePath)
+  }
+}
+
+async function appendUniqueThemeFiles(
+  targetFiles: ThemeFileCandidate[],
+  seenFilePaths: Set<string>,
+  candidateFiles: ThemeFileCandidate[]
+): Promise<boolean> {
+  let capped = false
+  for (const file of candidateFiles) {
+    const dedupeKey = await themeFileDedupeKey(file.path)
+    if (seenFilePaths.has(dedupeKey)) {
+      continue
+    }
+    seenFilePaths.add(dedupeKey)
+    if (targetFiles.length < MAX_THEME_FILES) {
+      targetFiles.push(file)
+    } else {
+      capped = true
+      break
+    }
+  }
+  return capped
+}
+
 async function filesFromAutoDirectories(
   budget?: PreviewOperationBudget
 ): Promise<ThemeSourceSelection> {
   const directories = getWarpThemeDirectories()
-  let localSelection: ThemeSourceSelection | null = null
-  const unreadableSkippedFiles: WarpThemeImportSkippedFile[] = []
+  const mergedFiles: ThemeFileCandidate[] = []
+  const seenFilePaths = new Set<string>()
+  const skippedFiles: WarpThemeImportSkippedFile[] = []
   let autoDiscoveryExpired = false
+  let globalThemeFileLimitHit = false
   for (const directoryPath of directories) {
     if (budget?.isExpired()) {
       autoDiscoveryExpired = true
+      break
+    }
+    const remainingThemeFileSlots = MAX_THEME_FILES - mergedFiles.length
+    if (remainingThemeFileSlots <= 0) {
       break
     }
     try {
@@ -83,44 +128,43 @@ async function filesFromAutoDirectories(
     } catch {
       continue
     }
-    const selection = await filesFromDirectory(directoryPath, 'Local Warp themes', budget)
-    if (!selection.canceled && selection.rootReadable) {
-      localSelection = selection
-      break
+    const selection = await filesFromDirectory(
+      directoryPath,
+      warpThemeSourceLabelForDirectory(directoryPath),
+      budget,
+      remainingThemeFileSlots + 1,
+      false
+    )
+    if (selection.canceled) {
+      continue
     }
-    if (!selection.canceled) {
-      unreadableSkippedFiles.push(...selection.skippedFiles)
-    }
-  }
-  if (localSelection) {
-    return {
-      canceled: false,
-      sourceLabel: 'Warp themes',
-      files: localSelection.files,
-      skippedFiles: localSelection.skippedFiles
-    }
+    globalThemeFileLimitHit =
+      (await appendUniqueThemeFiles(mergedFiles, seenFilePaths, selection.files)) ||
+      globalThemeFileLimitHit
+    skippedFiles.push(...selection.skippedFiles)
   }
   if (autoDiscoveryExpired) {
-    return {
-      canceled: false,
-      sourceLabel: 'Warp themes',
-      files: [],
-      skippedFiles: [
-        {
-          label: 'Warp themes',
-          reason: 'Preview budget expired before local Warp theme folders could be scanned.'
-        }
-      ]
-    }
+    skippedFiles.push({
+      label: 'Warp themes',
+      reason: 'Preview budget expired before local Warp theme folders could be scanned.'
+    })
   }
+
+  if (globalThemeFileLimitHit) {
+    skippedFiles.push({
+      label: 'Warp themes',
+      reason: `Only the first ${MAX_THEME_FILES} theme files were scanned.`
+    })
+  }
+
   // Why: Warp's preloaded themes live inside the Warp app binary, not on disk,
   // so an absent or empty themes folder is a genuine empty result — the
   // renderer explains this and points at Orca's built-in equivalents.
   return {
     canceled: false,
     sourceLabel: 'Warp themes',
-    files: [],
-    skippedFiles: unreadableSkippedFiles
+    files: mergedFiles,
+    skippedFiles
   }
 }
 

@@ -7463,6 +7463,7 @@
           "colors_only": "Colors only",
           "no_themes_found": "No custom Warp themes found.",
           "builtin_themes_hint": "Warp's preloaded themes are part of the Warp app and can't be read from disk. Orca already includes most of them, like Dracula, Gruvbox, Solarized, and Tokyo Night.",
+          "custom_theme_yaml_hint": "Custom and community themes need to exist as YAML files in a Warp themes folder before auto-import can find them. If you cloned Warp's public themes repo, use Choose Folder to import that checkout.",
           "choose_manually": "Choose a theme YAML file or folder to import manually.",
           "skipped_files": "Skipped files",
           "more_skipped_files": "{{value0}} more skipped files.",
