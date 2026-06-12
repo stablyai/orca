@@ -1,4 +1,4 @@
-import { execFile, execFileSync } from 'child_process'
+import { execFile } from 'child_process'
 import { promisify } from 'util'
 import { recognizeAgentProcessFromCommandLine } from '../../shared/agent-process-recognition'
 
@@ -91,23 +91,4 @@ function resolveAgentForegroundProcessFromPs(stdout: string, shellPid: number): 
     }
   }
   return null
-}
-
-export function resolveAgentForegroundProcessSync(
-  shellPid: number | null | undefined,
-  fallbackProcess: string | null
-): string | null {
-  if (process.platform === 'win32' || !shellPid) {
-    return fallbackProcess
-  }
-
-  try {
-    const stdout = execFileSync('ps', ['-axo', 'pid=,ppid=,stat=,command='], {
-      encoding: 'utf8',
-      timeout: 3000
-    })
-    return resolveAgentForegroundProcessFromPs(stdout, shellPid) ?? fallbackProcess
-  } catch {
-    return fallbackProcess
-  }
 }
