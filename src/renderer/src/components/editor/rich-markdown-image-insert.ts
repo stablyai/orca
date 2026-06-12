@@ -6,6 +6,7 @@ import { useAppStore } from '@/store'
 import { importExternalPathsToRuntime } from '@/runtime/runtime-file-client'
 import { settingsForRuntimeOwner } from '@/runtime/runtime-rpc-client'
 import { translate } from '@/i18n/i18n'
+import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { extractIpcErrorMessage } from './rich-markdown-ipc-error-message'
 
 export type RichMarkdownImageInsertArgs = {
@@ -59,11 +60,16 @@ export async function insertRichMarkdownImageFromPath({
       return
     }
 
-    editor
+    const inserted = editor
       .chain()
       .focus()
       .insertContentAt(insertPos, { type: 'image', attrs: { src: basename(imported.destPath) } })
       .run()
+    if (!inserted) {
+      toast.error(
+        translate('auto.components.editor.useLocalImagePick.175cb8b8ce', 'Failed to insert image.')
+      )
+    }
   } catch (err) {
     toast.error(extractIpcErrorMessage(err, 'Failed to insert image.'))
   }
@@ -74,6 +80,14 @@ function getWorktreePath(worktreeId: string | null): string | null {
     return null
   }
   const state = useAppStore.getState()
+  const parsedWorkspaceKey = parseWorkspaceKey(worktreeId)
+  if (parsedWorkspaceKey?.type === 'folder') {
+    return (
+      state.folderWorkspaces.find(
+        (workspace) => workspace.id === parsedWorkspaceKey.folderWorkspaceId
+      )?.folderPath ?? null
+    )
+  }
   const worktrees = Object.values(state.worktreesByRepo ?? {}).flat()
   return worktrees.find((worktree) => worktree.id === worktreeId)?.path ?? null
 }
