@@ -224,7 +224,7 @@ yay -S stably-orca-bin
 
 ### Mobile Companion — iOS, Android
 
-A separate app that pairs with the desktop app, so you can monitor and steer your agents from your phone.
+Pair with your desktop app to monitor and steer your agents from your phone.
 
 - **iOS:** [Download on the App Store](https://apps.apple.com/us/app/orca-ide/id6766130217)
 - **Android:** [Download the APK](https://github.com/stablyai/orca/releases/download/mobile-v0.0.12/app-release.apk)
