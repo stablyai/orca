@@ -83,7 +83,7 @@ import {
 } from '../../../../src/terminal/terminal-live-input'
 import { normalizeTerminalTextInput } from '../../../../src/terminal/terminal-text-input-normalization'
 import { countTerminalGestureInputSequences } from '../../../../src/terminal/terminal-gesture-input'
-import { MobileBrowserPane, type MobileBrowserTab } from '../../../../src/browser/MobileBrowserPane'
+import { MobileBrowserPane } from '../../../../src/browser/MobileBrowserPane'
 import { isBlankBrowserUrl, normalizeBrowserUrl } from '../../../../src/browser/browser-url'
 import { StatusDot } from '../../../../src/components/StatusDot'
 import { ActionSheetModal } from '../../../../src/components/ActionSheetModal'
@@ -98,10 +98,7 @@ import {
   saveCustomKeys,
   type CustomKey
 } from '../../../../src/components/CustomKeyModal'
-import {
-  buildMobileDiffLines,
-  type MobileDiffLine
-} from '../../../../src/session/mobile-diff-lines'
+import { buildMobileDiffLines } from '../../../../src/session/mobile-diff-lines'
 import {
   addMobileDiffComment,
   formatDiffComments,
@@ -113,17 +110,14 @@ import {
   buildPlainMobileDiffSyntaxLines,
   highlightMobileCode,
   highlightMobileDiffLines,
-  resolveMobileSyntaxLanguage,
-  type MobileHighlightedDiffLine,
-  type MobileSyntaxSegment
+  resolveMobileSyntaxLanguage
 } from '../../../../src/session/mobile-file-syntax'
 import {
   getTerminalRecordsFromSessionTabs,
   mergeTerminalListWithKnownRecords,
   mergeTerminalRecordsByCurrentOrder,
   mobileSessionTabsEqual,
-  terminalRecordsEqual,
-  type TerminalRecord
+  terminalRecordsEqual
 } from '../../../../src/session/mobile-terminal-records'
 import {
   buildMobileNewTabAgentOptions,
@@ -143,119 +137,27 @@ import {
 } from '../../../../src/session/mobile-session-create-warning-state'
 import { colors, spacing, radii, typography } from '../../../../src/theme/mobile-theme'
 import type { DiffComment } from '../../../../../src/shared/types'
-import type { AgentStatusEntry } from '../../../../../src/shared/agent-status-types'
-
-type Terminal = TerminalRecord
-
-type MobileSessionTabType = 'terminal' | 'markdown' | 'file' | 'browser'
-
-type MobileSessionTab =
-  | {
-      type: 'terminal'
-      id: string
-      title: string
-      parentTabId?: string
-      leafId?: string
-      status?: 'pending-handle' | 'ready'
-      terminal: string | null
-      agentStatus?: AgentStatusEntry | null
-      terminalTheme?: MobileTerminalTheme
-      isActive: boolean
-    }
-  | {
-      type: 'markdown'
-      id: string
-      title: string
-      filePath: string
-      relativePath: string
-      isDirty: boolean
-      isActive: boolean
-      documentVersion: string
-    }
-  | {
-      type: 'file'
-      id: string
-      title: string
-      filePath: string
-      relativePath: string
-      language?: string
-      mode?: 'edit' | 'diff'
-      diffSource?: 'staged' | 'unstaged' | 'branch' | 'commit'
-      isDirty: boolean
-      isActive: boolean
-    }
-  | MobileBrowserTab
-
-type SessionTabsResult = {
-  worktree: string
-  publicationEpoch?: string
-  snapshotVersion: number
-  tabs: MobileSessionTab[]
-  activeTabId: string | null
-  activeTabType: MobileSessionTabType | null
-}
-
-type RuntimeStatusResult = {
-  capabilities?: string[]
-}
-
-type MarkdownDocState =
-  | { status: 'loading' }
-  | {
-      status: 'ready'
-      content: string
-      localContent: string
-      baseVersion: string
-      isDirty: boolean
-      editable: boolean
-      stale?: boolean
-      saving?: boolean
-      saveError?: string
-      readOnlyReason?: string
-    }
-  | { status: 'error'; message: string }
-
-type FileDocState =
-  | { status: 'loading' }
-  | { status: 'ready'; kind: 'file'; content: string; truncated: boolean; byteLength: number }
-  | { status: 'ready'; kind: 'diff'; lines: MobileDiffLine[]; truncated: boolean }
-  | { status: 'error'; message: string }
-
-type RenderableDiffLine = MobileHighlightedDiffLine<MobileDiffLine>
-
-type DiffCommentActions = {
-  comments: DiffComment[]
-  busy: boolean
-  onAdd: (filePath: string, lineNumber: number, body: string) => Promise<boolean>
-  onDelete: (commentId: string) => Promise<void>
-  onCopyAll: () => Promise<void>
-  onSendAll: () => void
-}
-
-type DiffNotesDelivery = {
-  prompt: string
-  comments: DiffComment[]
-}
-
-type ReadyFileDocState = Extract<FileDocState, { status: 'ready' }>
-
-type FileSyntaxState = {
-  doc: ReadyFileDocState
-  language: string
-  segments: MobileSyntaxSegment[]
-}
-
-type DiffSyntaxState = {
-  doc: ReadyFileDocState
-  language: string
-  lines: RenderableDiffLine[]
-}
-
-type DirtyMarkdownDraft = {
-  tabId: string
-  title: string
-  content: string
-}
+import type {
+  DiffCommentActions,
+  DiffNotesDelivery,
+  DiffSyntaxState,
+  DirtyMarkdownDraft,
+  FileDocState,
+  FileSyntaxState,
+  MarkdownDocState,
+  MobileDisplayMode,
+  MobileNewTabAgentLoadState,
+  MobileSessionTab,
+  MobileSessionTabType,
+  RenderableDiffLine,
+  RuntimeRepoSummary,
+  RuntimeStatusResult,
+  SessionTabsResult,
+  Terminal,
+  TerminalCreateResult,
+  TerminalGestureInputBucket,
+  TerminalGestureInputQueue
+} from './mobile-session-route-types'
 
 function getActiveTabIdForHandle(
   tabs: MobileSessionTab[],
@@ -297,25 +199,12 @@ function isFileExistsErrorMessage(message: string): boolean {
   return normalized.includes('eexist') || normalized.includes('already exists')
 }
 
-type TerminalCreateResult = {
-  tab: Extract<MobileSessionTab, { type: 'terminal' }>
-}
-
-type MobileNewTabAgentLoadState = 'idle' | 'loading' | 'loaded' | 'error'
-
-type RuntimeRepoSummary = {
-  id: string
-  connectionId?: string | null
-}
-
 function getRepoIdFromMobileWorktreeId(id: string): string {
   // Why: mobile cannot import desktop shared modules in its standalone tsc run,
   // but the runtime worktree id wire format is still `${repoId}::${path}`.
   const separatorIdx = id.indexOf('::')
   return separatorIdx === -1 ? id : id.slice(0, separatorIdx)
 }
-
-type MobileDisplayMode = 'auto' | 'phone' | 'desktop'
 
 const STATUS_LABELS: Record<ConnectionState, string> = {
   connecting: 'Connecting',
@@ -331,18 +220,6 @@ const TERMINAL_GESTURE_INPUT_REFILL_PER_SECOND = 120
 const TERMINAL_GESTURE_INPUT_FLUSH_DELAY_MS = 16
 const TERMINAL_GESTURE_INPUT_MAX_PENDING_SEQUENCES = 32
 const TERMINAL_GESTURE_INPUT_MAX_QUEUE_AGE_MS = 250
-
-type TerminalGestureInputBucket = {
-  tokens: number
-  lastRefillMs: number
-}
-
-type TerminalGestureInputQueue = {
-  bytes: string
-  sequenceCount: number
-  timer: ReturnType<typeof setTimeout> | null
-  lastUpdatedMs: number
-}
 
 function isWheelMouseTrackingMode(mode: TerminalModes['mouseTrackingMode'] | undefined): boolean {
   return mode === 'vt200' || mode === 'drag' || mode === 'any'
@@ -3209,7 +3086,8 @@ export default function SessionScreen() {
     if (!repoResponse.ok) {
       throw new Error((repoResponse as RpcFailure).error.message)
     }
-    const repos = ((repoResponse as RpcSuccess).result as { repos?: RuntimeRepoSummary[] }).repos ?? []
+    const repos =
+      ((repoResponse as RpcSuccess).result as { repos?: RuntimeRepoSummary[] }).repos ?? []
     return repos.find((repo) => repo.id === repoId)?.connectionId?.trim() || null
   }, [client, worktreeId])
 
@@ -3290,7 +3168,15 @@ export default function SessionScreen() {
         showToast('Paste failed', 1500)
       }
     }
-  }, [client, activeHandle, canSend, connState, getActiveWorktreeConnectionId, refreshCanPaste, showToast])
+  }, [
+    client,
+    activeHandle,
+    canSend,
+    connState,
+    getActiveWorktreeConnectionId,
+    refreshCanPaste,
+    showToast
+  ])
 
   // Why: refresh canPaste on mount, AppState active, after paste.
   useEffect(() => {

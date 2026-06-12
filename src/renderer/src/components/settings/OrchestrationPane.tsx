@@ -51,7 +51,10 @@ type OrchestrationPaneProps = {
 
 function getOrchestrationSkillRuntime(props: OrchestrationPaneProps): LocalAgentRuntime {
   if (!props.settings) {
-    return { runtime: 'host', label: 'This device' }
+    return {
+      runtime: 'host',
+      label: translate('auto.components.settings.OrchestrationPane.thisDevice', 'This device')
+    }
   }
   return getSelectedAgentRuntime(
     props.settings,

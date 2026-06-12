@@ -17,29 +17,53 @@ export function getComputerUseSummary({
 }: ComputerUseSummaryInput): { title: string; description: string } {
   if (checking) {
     return {
-      title: 'Checking Computer Use access.',
-      description: 'Orca is checking macOS privacy permissions for the Computer Use helper.'
+      title: translate(
+        'auto.components.settings.computerUseSummary.checkingTitle',
+        'Checking Computer Use access.'
+      ),
+      description: translate(
+        'auto.components.settings.computerUseSummary.checkingDescription',
+        'Orca is checking macOS privacy permissions for the Computer Use helper.'
+      )
     }
   }
   if (setupUnavailable) {
     return {
-      title: 'Computer Use is unavailable.',
-      description: `Computer Use permissions are unavailable because ${helperUnavailableReason}.`
+      title: translate(
+        'auto.components.settings.computerUseSummary.unavailableTitle',
+        'Computer Use is unavailable.'
+      ),
+      description: translate(
+        'auto.components.settings.computerUseSummary.unavailableDescription',
+        'Computer Use permissions are unavailable because {{value0}}.',
+        { value0: helperUnavailableReason }
+      )
     }
   }
   if (allGranted) {
     return {
-      title: 'Computer Use is ready.',
-      description: 'Agents can inspect and operate app windows when you ask.'
+      title: translate(
+        'auto.components.settings.computerUseSummary.readyTitle',
+        'Computer Use is ready.'
+      ),
+      description: translate(
+        'auto.components.settings.computerUseSummary.readyDescription',
+        'Agents can inspect and operate app windows when you ask.'
+      )
     }
   }
   return {
-    title: 'Finish setup to use local apps.',
+    title: translate(
+      'auto.components.settings.computerUseSummary.permissionsTitle',
+      'Finish setup to use local apps.'
+    ),
     description: translate(
       'auto.components.settings.computerUseSummary.permissionsRequired',
-      `${requiredPermissionCount} permission${
-        requiredPermissionCount === 1 ? '' : 's'
-      } required before agents can operate app windows.`
+      '{{value0}} permission{{value1}} required before agents can operate app windows.',
+      {
+        value0: requiredPermissionCount,
+        value1: requiredPermissionCount === 1 ? '' : 's'
+      }
     )
   }
 }

@@ -172,7 +172,10 @@ function getSettingsAgentSkillRuntime(args: {
   isWindows: boolean
 }): LocalAgentRuntime {
   if (!args.settings) {
-    return { runtime: 'host', label: 'This device' }
+    return {
+      runtime: 'host',
+      label: translate('auto.components.settings.Settings.thisDevice', 'This device')
+    }
   }
   return getSelectedAgentRuntime(args.settings, args.isWindows, args.isWindows, false)
 }
