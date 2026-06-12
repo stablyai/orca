@@ -11,17 +11,14 @@
 </p>
 
 <p align="center">
-  <a href="README.md">English</a> · <a href="docs/readme/README.es.md">Español</a> · <a href="docs/readme/README.zh-CN.md">中文</a> · <a href="docs/readme/README.ja.md">日本語</a> · <a href="docs/readme/README.ko.md">한국어</a>
-</p>
-
-<p align="center">
   <strong>The AI Orchestrator for 100x builders.</strong><br/>
   Run Claude Code, OpenClaude, Codex, Grok, Antigravity, or OpenCode side-by-side across repos — each in its own worktree, tracked in one place.
 </p>
 
 <p align="center">
   <a href="https://onorca.dev/download"><strong>Download Orca</strong></a><br/>
-  <sub>Mobile companion: <a href="https://apps.apple.com/us/app/orca-ide/id6766130217">iOS App Store</a> · <a href="https://github.com/stablyai/orca/releases/download/mobile-v0.0.12/app-release.apk">Android APK</a></sub>
+  <sub>Mobile companion: <a href="https://apps.apple.com/us/app/orca-ide/id6766130217">iOS App Store</a> · <a href="https://github.com/stablyai/orca/releases/download/mobile-v0.0.12/app-release.apk">Android APK</a></sub><br/>
+  <sub><a href="docs/readme/README.es.md">Español</a> · <a href="docs/readme/README.zh-CN.md">中文</a> · <a href="docs/readme/README.ja.md">日本語</a> · <a href="docs/readme/README.ko.md">한국어</a></sub>
 </p>
 
 <p align="center">
@@ -223,8 +220,6 @@ brew install --cask stablyai/orca/orca
 # Arch Linux (AUR) — or stably-orca-git to build from source
 yay -S stably-orca-bin
 ```
-
-Download once — Orca auto-updates.
 
 ### Mobile Companion — iOS, Android
 
