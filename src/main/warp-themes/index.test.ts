@@ -290,6 +290,38 @@ describe('previewWarpThemeImport', () => {
     })
   })
 
+  it('reports the theme cap when later Warp directories contain themes after the cap is full', async () => {
+    getWarpThemeDirectoriesMock.mockReturnValue([
+      '/Users/alice/.warp/themes',
+      '/Users/alice/.warp-preview/themes'
+    ])
+    opendirMock.mockImplementation((directoryPath: string) => {
+      if (directoryPath === '/Users/alice/.warp/themes') {
+        return Promise.resolve(
+          mockDirectory(
+            Array.from({ length: 200 }, (_, index) => fileEntry(`stable-${index}.yaml`))
+          )
+        )
+      }
+      if (directoryPath === '/Users/alice/.warp-preview/themes') {
+        return Promise.resolve(mockDirectory([fileEntry('preview.yaml')]))
+      }
+      return Promise.resolve(mockDirectory([]))
+    })
+
+    const preview = await previewWarpThemeImport({} as Store, { kind: 'auto' })
+
+    expect(preview.themes).toHaveLength(200)
+    expect(readFileMock).not.toHaveBeenCalledWith(
+      path.join('/Users/alice/.warp-preview/themes', 'preview.yaml'),
+      'utf-8'
+    )
+    expect(preview.skippedFiles).toContainEqual({
+      label: 'Warp themes',
+      reason: 'Only the first 200 theme files were scanned.'
+    })
+  })
+
   it('keeps scanning later directories for unique themes after duplicate canonical files', async () => {
     const stableDirectory = '/Users/alice/.warp/themes'
     const previewDirectory = '/Users/alice/.warp-preview/themes'
