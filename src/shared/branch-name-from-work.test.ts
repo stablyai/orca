@@ -74,8 +74,11 @@ describe('stripConfiguredBranchPrefix', () => {
     expect(stripConfiguredBranchPrefix('tmchow-fix-auth', '')).toBe('tmchow-fix-auth')
   })
 
-  it('never strips a slug down to nothing', () => {
-    expect(stripConfiguredBranchPrefix('tmchow', 'tmchow')).toBe('tmchow')
+  it('returns empty for prefix-only output so the caller skips the rename', () => {
+    // The model echoed just the prefix; renaming would double it (`tmchow/tmchow`).
+    expect(stripConfiguredBranchPrefix('tmchow', 'tmchow')).toBe('')
+    // Confirm a real work-derived name still strips correctly.
+    expect(stripConfiguredBranchPrefix('tmchow-fix-auth', 'tmchow')).toBe('fix-auth')
   })
 })
 

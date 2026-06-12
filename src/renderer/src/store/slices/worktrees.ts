@@ -707,6 +707,7 @@ const WORKTREE_ID_KEYED_MAP_KEYS = [
   'tabBarOrderByWorktree',
   'pendingReconnectTabByWorktree',
   'rightSidebarTabByWorktree',
+  'rightSidebarExplorerViewByWorktree',
   'unifiedTabsByWorktree',
   'groupsByWorktree',
   'layoutByWorktree',
@@ -834,6 +835,10 @@ function buildWorktreeRenameState(
       ? { pendingReconnectWorktreeIds }
       : {}),
     ...(s.activeWorktreeId === oldWorktreeId ? { activeWorktreeId: newWorktreeId } : {}),
+    // The active workspace key derives from the worktree id, so keep it in sync when the active worktree is renamed.
+    ...(s.activeWorkspaceKey === worktreeWorkspaceKey(oldWorktreeId)
+      ? { activeWorkspaceKey: worktreeWorkspaceKey(newWorktreeId) }
+      : {}),
     ...(s.renamingWorktreeId === oldWorktreeId ? { renamingWorktreeId: newWorktreeId } : {})
   }
 }

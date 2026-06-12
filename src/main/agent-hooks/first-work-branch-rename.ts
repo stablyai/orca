@@ -264,6 +264,11 @@ async function runAutoRename(
     generated.slug,
     getConfiguredBranchPrefix(settings, username)
   )
+  // Prefix-only model output strips to empty; renaming with it would just
+  // re-add the prefix (`tmchow/tmchow`), so treat it as a benign skip.
+  if (!slug) {
+    return stop('model produced only the configured prefix', true)
+  }
   const newBranch = await resolveUniqueBranchName(
     exec,
     slug,

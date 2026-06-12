@@ -41,6 +41,8 @@ export function planWorktreeFolderRename(args: {
   // Why: keep this a pure rename. If path settings changed since creation the
   // computed target could sit under a different parent — moving there would
   // relocate, not rename, so skip rather than surprise the user.
+  // posix.dirname is safe here: win32 is filtered out above, so every remaining
+  // path (remote/Linux/Mac) uses forward slashes.
   if (posix.dirname(newPath) !== posix.dirname(args.oldWorktreePath)) {
     return null
   }

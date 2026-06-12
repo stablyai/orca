@@ -217,6 +217,21 @@ describe('maybeAutoRenameBranchOnFirstWork', () => {
     expect(setDisplayName).toHaveBeenCalledWith(WORKTREE_ID, 'Worktree spinner')
   })
 
+  it('skips the rename when the model echoes only the configured prefix', async () => {
+    // The model emitted just `you` (the prefix); stripping leaves an empty slug,
+    // so renaming would re-add the prefix and double it to `you/you`.
+    generateBranchNameMock.mockResolvedValue({ success: true, slug: 'you' })
+    const { deps, onRenamed, setRenameError } = makeDeps()
+    await maybeAutoRenameBranchOnFirstWork(workingEvent(), deps)
+    expect(gitExecFileAsyncMock).not.toHaveBeenCalledWith(
+      ['branch', '-m', expect.anything()],
+      expect.anything()
+    )
+    expect(onRenamed).not.toHaveBeenCalled()
+    // Benign terminal state: clear any stale badge, never raise a new one.
+    expect(setRenameError).not.toHaveBeenCalledWith(WORKTREE_ID, expect.any(String))
+  })
+
   it('leaves a user-customized display name untouched while still renaming the branch', async () => {
     const { deps, setDisplayName } = makeDeps({ getCurrentDisplayName: () => 'My cool feature' })
     await maybeAutoRenameBranchOnFirstWork(workingEvent(), deps)

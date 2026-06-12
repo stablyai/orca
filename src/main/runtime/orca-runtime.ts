@@ -12924,6 +12924,8 @@ export class OrcaRuntimeService {
   notifyWorktreeFolderRenamed(repoId: string, oldWorktreeId: string, newWorktreeId: string): void {
     this.invalidateResolvedWorktreeCache()
     this.notifier?.worktreesChanged(repoId, { oldWorktreeId, newWorktreeId })
+    // Mirror notifyBranchRenamed so in-process onClientEvent listeners also see the rename.
+    this.emitClientEvent({ type: 'worktreesChanged', repoId })
   }
 
   notifyFolderWorkspaceChanged(): void {

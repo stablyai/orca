@@ -90,7 +90,7 @@ import {
   unregisterPersistentWebview
 } from '../../components/browser-pane/webview-registry'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
-import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
+import { folderWorkspaceKey, worktreeWorkspaceKey } from '../../../../shared/workspace-scope'
 
 function resetRemoteRuntimeMocks() {
   clearRuntimeCompatibilityCacheForTests()
@@ -3745,8 +3745,10 @@ describe('migrateWorktreeIdentity', () => {
     const store = createTestStore()
     store.setState({
       activeWorktreeId: OLD,
+      activeWorkspaceKey: worktreeWorkspaceKey(OLD),
       renamingWorktreeId: OLD,
       tabsByWorktree: { [OLD]: [{ id: 'tab1', worktreeId: OLD }] },
+      rightSidebarExplorerViewByWorktree: { [OLD]: 'search' },
       activeTabIdByWorktree: { [OLD]: 'tab1' },
       browserTabsByWorktree: { [OLD]: [{ id: 'browser1', worktreeId: OLD }] },
       browserPagesByWorkspace: { browser1: [{ id: 'page1', worktreeId: OLD }] },
@@ -3776,6 +3778,7 @@ describe('migrateWorktreeIdentity', () => {
     expect(s.tabsByWorktree[OLD]).toBeUndefined()
     expect(s.tabsByWorktree[NEW]).toEqual([{ id: 'tab1', worktreeId: NEW }])
     expect(s.activeWorktreeId).toBe(NEW)
+    expect(s.activeWorkspaceKey).toBe(worktreeWorkspaceKey(NEW))
     expect(s.renamingWorktreeId).toBe(NEW)
     expect(s.activeTabIdByWorktree[NEW]).toBe('tab1')
     expect(s.browserTabsByWorktree[NEW]?.[0]?.worktreeId).toBe(NEW)
@@ -3786,6 +3789,8 @@ describe('migrateWorktreeIdentity', () => {
     expect(s.unifiedTabsByWorktree[NEW]?.[0]?.worktreeId).toBe(NEW)
     expect(s.groupsByWorktree[NEW]?.[0]?.worktreeId).toBe(NEW)
     expect(s.gitStatusByWorktree[NEW]).toEqual([{ path: 'a.ts' }])
+    expect(s.rightSidebarExplorerViewByWorktree[OLD]).toBeUndefined()
+    expect(s.rightSidebarExplorerViewByWorktree[NEW]).toBe('search')
     expect(s.lastVisitedAtByWorktreeId[NEW]).toBe(123)
     expect(s.defaultTerminalTabsAppliedByWorktreeId[NEW]).toBe(true)
     // The two maps absent from the purge list are still re-keyed.

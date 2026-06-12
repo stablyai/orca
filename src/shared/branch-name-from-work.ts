@@ -52,8 +52,10 @@ export function sanitizeBranchSlug(raw: string, maxWords = MAX_BRANCH_NAME_WORDS
  * `tmchow-worktree-spinner`. Left alone, that leaks the prefix into both the
  * branch leaf (yielding a doubled `tmchow/tmchow-...`) and the humanized
  * display name. Strips only when the leading segment matches the *configured*
- * prefix, so a work-derived name that merely starts with a real word survives,
- * and never strips down to nothing.
+ * prefix, so a work-derived name that merely starts with a real word survives.
+ * Prefix-only output (the model echoed just `tmchow`) yields an empty slug so
+ * the caller skips the rename — otherwise it would double-prefix to
+ * `tmchow/tmchow`.
  */
 export function stripConfiguredBranchPrefix(
   slug: string,
@@ -67,8 +69,11 @@ export function stripConfiguredBranchPrefix(
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
-  if (!prefixSlug || slug === prefixSlug) {
+  if (!prefixSlug) {
     return slug
+  }
+  if (slug === prefixSlug) {
+    return ''
   }
   return slug.startsWith(`${prefixSlug}-`) ? slug.slice(prefixSlug.length + 1) : slug
 }
