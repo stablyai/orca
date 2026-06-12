@@ -39,7 +39,7 @@ Monitor and steer your agents from your phone. Get notified when an agent finish
 
 [iOS App Store](https://apps.apple.com/us/app/orca-ide/id6766130217) · [Android APK](https://github.com/stablyai/orca/releases/download/mobile-v0.0.12/app-release.apk) · [Docs →](https://www.onorca.dev/docs/mobile)
 
-<a href="https://www.onorca.dev/docs/mobile"><picture><source srcset="docs/assets/feature-wall/mobile-companion-app-showcase.gif" type="image/gif"><img src="docs/assets/feature-wall/mobile-companion-app-showcase.jpg" alt="Orca desktop with the mobile companion app" width="100%" /></picture></a>
+<p align="center"><a href="https://www.onorca.dev/docs/mobile"><picture><source srcset="docs/assets/feature-wall/mobile-companion-app-showcase.gif" type="image/gif"><img src="docs/assets/feature-wall/mobile-companion-app-showcase.jpg" alt="Orca desktop with the mobile companion app" width="720" /></picture></a></p>
 
 </td>
 </tr>
@@ -52,7 +52,7 @@ Every task runs in its own isolated git worktree — no stashing, no branch jugg
 
 [Docs →](https://www.onorca.dev/docs/model/worktrees)
 
-<a href="https://www.onorca.dev/docs/model/worktrees"><picture><source srcset="docs/assets/feature-wall/parallel-worktrees.gif" type="image/gif"><img src="docs/assets/feature-wall/parallel-worktrees.jpg" alt="Parallel worktree orchestration" width="100%" /></picture></a>
+<p align="center"><a href="https://www.onorca.dev/docs/model/worktrees"><picture><source srcset="docs/assets/feature-wall/parallel-worktrees.gif" type="image/gif"><img src="docs/assets/feature-wall/parallel-worktrees.jpg" alt="Parallel worktree orchestration" width="720" /></picture></a></p>
 
 </td>
 </tr>
@@ -65,7 +65,7 @@ Ghostty-class terminals with WebGL rendering, infinite splits, scrollback restor
 
 [Docs →](https://www.onorca.dev/docs/terminal)
 
-<a href="https://www.onorca.dev/docs/terminal"><picture><source srcset="docs/assets/feature-wall/terminal-splits.gif" type="image/gif"><img src="docs/assets/feature-wall/terminal-splits.jpg" alt="Terminal splits" width="100%" /></picture></a>
+<p align="center"><a href="https://www.onorca.dev/docs/terminal"><picture><source srcset="docs/assets/feature-wall/terminal-splits.gif" type="image/gif"><img src="docs/assets/feature-wall/terminal-splits.jpg" alt="Terminal splits" width="720" /></picture></a></p>
 
 </td>
 </tr>
@@ -78,7 +78,7 @@ A real Chromium window per worktree. Click any UI element to send its HTML, CSS,
 
 [Docs →](https://www.onorca.dev/docs/browser/design-mode)
 
-<a href="https://www.onorca.dev/docs/browser/design-mode"><picture><source srcset="docs/assets/feature-wall/design-mode.gif" type="image/gif"><img src="docs/assets/feature-wall/design-mode.jpg" alt="Embedded browser and Design Mode" width="100%" /></picture></a>
+<p align="center"><a href="https://www.onorca.dev/docs/browser/design-mode"><picture><source srcset="docs/assets/feature-wall/design-mode.gif" type="image/gif"><img src="docs/assets/feature-wall/design-mode.jpg" alt="Embedded browser and Design Mode" width="720" /></picture></a></p>
 
 </td>
 </tr>
@@ -91,7 +91,7 @@ Browse PRs, issues, and project boards in-app. Open a worktree from any task, re
 
 [Docs →](https://www.onorca.dev/docs/review/linear)
 
-<a href="https://www.onorca.dev/docs/review/linear"><picture><source srcset="docs/assets/feature-wall/github-linear.gif" type="image/gif"><img src="docs/assets/feature-wall/github-linear.jpg" alt="GitHub and Linear task workflows in Orca" width="100%" /></picture></a>
+<p align="center"><a href="https://www.onorca.dev/docs/review/linear"><picture><source srcset="docs/assets/feature-wall/github-linear.gif" type="image/gif"><img src="docs/assets/feature-wall/github-linear.jpg" alt="GitHub and Linear task workflows in Orca" width="720" /></picture></a></p>
 
 </td>
 </tr>
@@ -104,7 +104,7 @@ Run agents on a beefy remote box with full file editing, git, and terminals. Aut
 
 [Docs →](https://www.onorca.dev/docs/ssh)
 
-<a href="https://www.onorca.dev/docs/ssh"><picture><source srcset="docs/assets/feature-wall/ssh-worktrees.gif" type="image/gif"><img src="docs/assets/feature-wall/ssh-worktrees.jpg" alt="Remote worktrees over SSH" width="100%" /></picture></a>
+<p align="center"><a href="https://www.onorca.dev/docs/ssh"><picture><source srcset="docs/assets/feature-wall/ssh-worktrees.gif" type="image/gif"><img src="docs/assets/feature-wall/ssh-worktrees.jpg" alt="Remote worktrees over SSH" width="720" /></picture></a></p>
 
 </td>
 </tr>
@@ -117,7 +117,7 @@ Drop markdown comments on any diff line, batch them, and ship them back to the a
 
 [Docs →](https://www.onorca.dev/docs/review/annotate-ai-diff)
 
-<a href="https://www.onorca.dev/docs/review/annotate-ai-diff"><picture><source srcset="docs/assets/feature-wall/annotate-diff.gif" type="image/gif"><img src="docs/assets/feature-wall/annotate-diff.jpg" alt="Annotate AI-generated diffs" width="100%" /></picture></a>
+<p align="center"><a href="https://www.onorca.dev/docs/review/annotate-ai-diff"><picture><source srcset="docs/assets/feature-wall/annotate-diff.gif" type="image/gif"><img src="docs/assets/feature-wall/annotate-diff.jpg" alt="Annotate AI-generated diffs" width="720" /></picture></a></p>
 
 </td>
 </tr>
@@ -130,7 +130,7 @@ VS Code's editor with autosave everywhere, quick-open, and drag-and-drop of file
 
 [Docs →](https://www.onorca.dev/docs/editing/file-explorer)
 
-<a href="https://www.onorca.dev/docs/editing/file-explorer"><picture><source srcset="docs/assets/feature-wall/file-drag.gif" type="image/gif"><img src="docs/assets/feature-wall/file-drag.jpg" alt="Drag files and images into an agent prompt" width="100%" /></picture></a>
+<p align="center"><a href="https://www.onorca.dev/docs/editing/file-explorer"><picture><source srcset="docs/assets/feature-wall/file-drag.gif" type="image/gif"><img src="docs/assets/feature-wall/file-drag.jpg" alt="Drag files and images into an agent prompt" width="720" /></picture></a></p>
 
 </td>
 </tr>
@@ -143,7 +143,7 @@ Agents drive Orca too: `orca worktree create`, `snapshot`, `click`, `fill`. Scri
 
 [Docs →](https://www.onorca.dev/docs/cli/overview)
 
-<a href="https://www.onorca.dev/docs/cli/overview"><picture><source srcset="docs/assets/feature-wall/orca-cli.gif" type="image/gif"><img src="docs/assets/feature-wall/orca-cli.jpg" alt="Script Orca from the CLI" width="100%" /></picture></a>
+<p align="center"><a href="https://www.onorca.dev/docs/cli/overview"><picture><source srcset="docs/assets/feature-wall/orca-cli.gif" type="image/gif"><img src="docs/assets/feature-wall/orca-cli.jpg" alt="Script Orca from the CLI" width="720" /></picture></a></p>
 
 </td>
 </tr>
