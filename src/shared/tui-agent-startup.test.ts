@@ -272,13 +272,18 @@ describe('tui agent startup plans', () => {
       agent: 'devin',
       prompt: 'fix the tests',
       cmdOverrides: {},
+      agentArgs: resolveTuiAgentLaunchArgs('devin', null),
       platform: 'linux'
     })
     expect(plan).toEqual({
       agent: 'devin',
-      launchCommand: 'devin',
+      launchCommand: "devin '--permission-mode' 'bypass'",
       expectedProcess: 'devin',
       followupPrompt: 'fix the tests'
     })
+  })
+
+  it('appends Devin default permission-mode bypass before stdin prompt delivery', () => {
+    expect(resolveTuiAgentLaunchArgs('devin', null)).toBe('--permission-mode bypass')
   })
 })
