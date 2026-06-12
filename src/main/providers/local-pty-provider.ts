@@ -39,6 +39,7 @@ import {
   resolveWindowsGitBashShellPath
 } from '../git-bash'
 import { WINDOWS_GIT_BASH_SHELL } from '../../shared/windows-terminal-shell'
+import { resolveAgentForegroundProcess } from './agent-foreground-process'
 
 const PANE_IDENTITY_ENV_KEYS = ['ORCA_PANE_KEY', 'ORCA_TAB_ID', 'ORCA_WORKTREE_ID'] as const
 
@@ -710,7 +711,7 @@ export class LocalPtyProvider implements IPtyProvider {
       return null
     }
     try {
-      return proc.process || null
+      return await resolveAgentForegroundProcess(proc.pid, proc.process || null)
     } catch {
       return null
     }

@@ -27,6 +27,7 @@ import { getWslContextFromSessionId } from './wsl-session-context'
 import { addOrcaWslInteropEnv } from '../pty/wsl-orca-env'
 import { isWindowsGitBashShellPath, resolveWindowsGitBashShellPath } from '../git-bash'
 import { WINDOWS_GIT_BASH_SHELL } from '../../shared/windows-terminal-shell'
+import { resolveAgentForegroundProcessSync } from '../providers/agent-foreground-process'
 
 const PANE_IDENTITY_ENV_KEYS = ['ORCA_PANE_KEY', 'ORCA_TAB_ID', 'ORCA_WORKTREE_ID'] as const
 
@@ -489,7 +490,10 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
         return null
       }
       try {
-        return normalizeForegroundProcessName(proc.process)
+        return resolveAgentForegroundProcessSync(
+          proc.pid,
+          normalizeForegroundProcessName(proc.process)
+        )
       } catch {
         return null
       }
