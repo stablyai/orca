@@ -3040,7 +3040,15 @@
           "fe1e616c5b": "Git がインストールされていないため、通常のフォルダが既定になります。",
           "c234df77f7": "作成する前に、サーバーの親フォルダを選択または入力してください。",
           "3a13f6e88b": "場所が選択されていません",
-          "6ed14c0281": "サーバーフォルダが選択されていません"
+          "6ed14c0281": "サーバーフォルダが選択されていません",
+          "createProjectTitle": "Create project",
+          "createProjectDescription": "Create a local Git repo and first workspace.",
+          "projectNameLabel": "Project name",
+          "createsGitRepoHelp": "Creates Git repo",
+          "parentFolderLabel": "Parent folder",
+          "browseParentFolder": "Browse",
+          "gitRequiredError": "Git is required to create a project.",
+          "createAction": "Create"
         },
         "AddRepoNestedImportStep": {
           "496f68cf8c": "リポジトリをスキャンしています。クリックして停止します。",
@@ -3641,7 +3649,9 @@
                   "a6c20dca96": "SSH ターゲットからプロジェクトを開く",
                   "3d162cc76f": "リモートプロジェクト",
                   "fb4fc5380e": "ローカルプロジェクト、Git repo、または多数の repos を含むフォルダー",
-                  "2281fdc8c7": "フォルダを参照する"
+                  "2281fdc8c7": "フォルダを参照する",
+                  "createProjectTitle": "Create project",
+                  "createGitProjectDescription": "Create a local Git repository"
                 }
               }
             }

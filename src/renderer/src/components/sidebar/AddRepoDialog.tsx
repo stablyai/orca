@@ -133,12 +133,10 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
   const {
     createName,
     createParent,
-    createKind,
     createError,
     isCreating,
     setCreateName,
     setCreateParent,
-    setCreateKind,
     setCreateError,
     resetCreateState,
     handlePickParent,
@@ -153,14 +151,12 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
     createRuntimeParentStatus,
     createParentDefaultPending,
     resetCreateDefaultState,
-    markCreateParentTouched,
-    markCreateKindTouched
+    markCreateParentTouched
   } = useCreateProjectDefaults({
     step,
     activeRuntimeEnvironmentId: settings?.activeRuntimeEnvironmentId,
     createParent,
-    setCreateParent,
-    setCreateKind
+    setCreateParent
   })
 
   const {
@@ -332,7 +328,6 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
           nestedGroupName={nestedGroupName}
           createName={createName}
           createParent={createParent}
-          createKind={createKind}
           createError={createError}
           isCreating={isCreating}
           createDefaultParent={createDefaultParent}
@@ -388,11 +383,6 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
           onCreateParentChange={(value) => {
             markCreateParentTouched(value)
             setCreateParent(value)
-            setCreateError(null)
-          }}
-          onCreateKindChange={(kind) => {
-            markCreateKindTouched()
-            setCreateKind(kind)
             setCreateError(null)
           }}
           onPickCreateParent={() => {

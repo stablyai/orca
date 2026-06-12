@@ -53,7 +53,6 @@ function renderStepContent(overrides: Partial<StepContentProps>): string {
     nestedGroupName: 'platform',
     createName: '',
     createParent: '',
-    createKind: 'git',
     createError: null,
     isCreating: false,
     createDefaultParent: '',
@@ -82,7 +81,6 @@ function renderStepContent(overrides: Partial<StepContentProps>): string {
     onImportNestedRepos: vi.fn(),
     onCreateNameChange: vi.fn(),
     onCreateParentChange: vi.fn(),
-    onCreateKindChange: vi.fn(),
     onPickCreateParent: vi.fn(),
     onCreate: vi.fn(),
     ...overrides
@@ -129,8 +127,9 @@ describe('AddRepoDialogStepContent nested imports', () => {
       activeRuntimeEnvironmentId: 'env-1'
     })
 
-    expect(html).toContain('Create a new project')
-    expect(html).toContain('server folder not selected')
+    expect(html).toContain('Create project')
+    expect(html).toContain('Choose or enter a server parent folder before creating.')
+    expect(html).toContain('Browse')
   })
 
   it('offers server browsing for remote clone destinations', () => {

@@ -89,7 +89,7 @@ describe('useCreateRepo default-checkout handoff', () => {
     vi.clearAllMocks()
     mocks.stateIndex = 0
     mocks.stateSetters = []
-    mocks.stateValues = ['created', '/projects', 'git', null, false]
+    mocks.stateValues = ['created', '/projects', null, false]
     mocks.storeState.repos = []
     mocks.storeState.worktreesByRepo = {}
     mocks.storeState.settings.activeRuntimeEnvironmentId = null
@@ -163,11 +163,11 @@ describe('useCreateRepo default-checkout handoff', () => {
     )
   })
 
-  it('marks onboarding folder progress when a created folder project opens', async () => {
+  it('uses the folder completion path if IPC returns a folder project', async () => {
     const repo = makeRepo({ kind: 'folder' })
     const worktree = { id: `${repo.id}::/projects/created` }
     const closeModal = vi.fn()
-    mocks.stateValues = ['created', '/projects', 'folder', null, false]
+    mocks.stateValues = ['created', '/projects', null, false]
     mocks.createRepo.mockResolvedValue({ repo })
     mocks.fetchWorktrees.mockImplementation(async (repoId: string) => {
       mocks.storeState.worktreesByRepo = { [repoId]: [worktree] }
@@ -181,7 +181,7 @@ describe('useCreateRepo default-checkout handoff', () => {
     expect(mocks.createRepo).toHaveBeenCalledWith({
       parentPath: '/projects',
       name: 'created',
-      kind: 'folder'
+      kind: 'git'
     })
     expect(mocks.fetchWorktrees).toHaveBeenCalledWith(repo.id)
     expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith(worktree.id, {

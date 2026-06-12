@@ -3059,7 +3059,15 @@
           "fe1e616c5b": "Git no está instalado, así que una carpeta simple será el valor predeterminado.",
           "c234df77f7": "Elige o introduce una carpeta principal del servidor antes de crear.",
           "3a13f6e88b": "ubicación no seleccionada",
-          "6ed14c0281": "carpeta del servidor no seleccionada"
+          "6ed14c0281": "carpeta del servidor no seleccionada",
+          "createProjectTitle": "Create project",
+          "createProjectDescription": "Create a local Git repo and first workspace.",
+          "projectNameLabel": "Project name",
+          "createsGitRepoHelp": "Creates Git repo",
+          "parentFolderLabel": "Parent folder",
+          "browseParentFolder": "Browse",
+          "gitRequiredError": "Git is required to create a project.",
+          "createAction": "Create"
         },
         "AddRepoNestedImportStep": {
           "496f68cf8c": "Escaneo de repositorios. Haga clic para detener.",
@@ -3660,7 +3668,9 @@
                   "a6c20dca96": "Abrir un proyecto desde un destino SSH",
                   "3d162cc76f": "Proyecto remoto",
                   "fb4fc5380e": "Proyecto local, repo de Git o carpeta con muchos repos",
-                  "2281fdc8c7": "Explorar carpeta"
+                  "2281fdc8c7": "Explorar carpeta",
+                  "createProjectTitle": "Create project",
+                  "createGitProjectDescription": "Create a local Git repository"
                 }
               }
             }

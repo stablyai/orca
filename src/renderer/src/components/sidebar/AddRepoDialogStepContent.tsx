@@ -38,7 +38,6 @@ type AddRepoDialogStepContentProps = {
   nestedGroupName: string
   createName: string
   createParent: string
-  createKind: 'git' | 'folder'
   createError: string | null
   isCreating: boolean
   createDefaultParent: string
@@ -67,7 +66,6 @@ type AddRepoDialogStepContentProps = {
   onImportNestedRepos: (mode: 'group' | 'separate') => void
   onCreateNameChange: (name: string) => void
   onCreateParentChange: (parent: string) => void
-  onCreateKindChange: (kind: 'git' | 'folder') => void
   onPickCreateParent: () => void
   onCreate: () => void
 }
@@ -100,7 +98,6 @@ export function AddRepoDialogStepContent({
   nestedGroupName,
   createName,
   createParent,
-  createKind,
   createError,
   isCreating,
   createDefaultParent,
@@ -129,7 +126,6 @@ export function AddRepoDialogStepContent({
   onImportNestedRepos,
   onCreateNameChange,
   onCreateParentChange,
-  onCreateKindChange,
   onPickCreateParent,
   onCreate
 }: AddRepoDialogStepContentProps): React.JSX.Element | null {
@@ -224,7 +220,6 @@ export function AddRepoDialogStepContent({
       <CreateStep
         createName={createName}
         createParent={createParent}
-        createKind={createKind}
         createError={createError}
         isCreating={isCreating}
         defaultParent={createDefaultParent}
@@ -235,7 +230,6 @@ export function AddRepoDialogStepContent({
         runtimeEnvironmentId={activeRuntimeEnvironmentId}
         onNameChange={onCreateNameChange}
         onParentChange={onCreateParentChange}
-        onKindChange={onCreateKindChange}
         onPickParent={onPickCreateParent}
         onCreate={onCreate}
       />

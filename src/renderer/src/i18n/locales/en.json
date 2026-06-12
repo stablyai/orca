@@ -3059,7 +3059,15 @@
           "2c12db1511": "Project already added",
           "875dda0995": "Enter a server parent path.",
           "45b7c26034": "Create project",
-          "85085d74d2": "Creating…"
+          "85085d74d2": "Creating…",
+          "createProjectTitle": "Create project",
+          "createProjectDescription": "Create a local Git repo and first workspace.",
+          "projectNameLabel": "Project name",
+          "createsGitRepoHelp": "Creates Git repo",
+          "parentFolderLabel": "Parent folder",
+          "browseParentFolder": "Browse",
+          "gitRequiredError": "Git is required to create a project.",
+          "createAction": "Create"
         },
         "AddRepoNestedImportStep": {
           "496f68cf8c": "Scanning repositories. Click to stop.",
@@ -3660,7 +3668,9 @@
                   "a6c20dca96": "Open a project from an SSH target",
                   "3d162cc76f": "Remote project",
                   "fb4fc5380e": "Local project, Git repo, or folder with many repos",
-                  "2281fdc8c7": "Browse folder"
+                  "2281fdc8c7": "Browse folder",
+                  "createProjectTitle": "Create project",
+                  "createGitProjectDescription": "Create a local Git repository"
                 }
               }
             }

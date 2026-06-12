@@ -5,11 +5,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { browseRuntimeServerDirectory } from '@/runtime/runtime-server-directory-browser'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import type { AddRepoDialogStep } from './add-repo-dialog-types'
-import {
-  getDefaultCreateProjectParent,
-  type GitAvailability,
-  type RepoKind
-} from './create-project-defaults'
+import { getDefaultCreateProjectParent, type GitAvailability } from './create-project-defaults'
 
 const LOCAL_GIT_AVAILABILITY_TIMEOUT_MS = 1500
 const RUNTIME_GIT_AVAILABILITY_TIMEOUT_MS = 3000
@@ -51,14 +47,12 @@ export function useCreateProjectDefaults({
   step,
   activeRuntimeEnvironmentId,
   createParent,
-  setCreateParent,
-  setCreateKind
+  setCreateParent
 }: {
   step: AddRepoDialogStep
   activeRuntimeEnvironmentId: string | null | undefined
   createParent: string
   setCreateParent: (value: string) => void
-  setCreateKind: (kind: RepoKind) => void
 }): {
   createDefaultParent: string
   createGitAvailability: GitAvailability
@@ -66,7 +60,6 @@ export function useCreateProjectDefaults({
   createParentDefaultPending: boolean
   resetCreateDefaultState: () => void
   markCreateParentTouched: (value?: string) => void
-  markCreateKindTouched: () => void
 } {
   const [createDefaultParent, setCreateDefaultParent] = useState('')
   const [createGitAvailability, setCreateGitAvailability] = useState<GitAvailability>('unknown')
@@ -76,7 +69,6 @@ export function useCreateProjectDefaults({
   const autoFilledCreateParentRef = useRef<AutoFilledCreateParent | null>(null)
   const createParentProvenanceRef = useRef<CreateParentProvenance | null>(null)
   const createParentTouchedRef = useRef(false)
-  const createKindTouchedRef = useRef(false)
   const createParentDefaultGenRef = useRef(0)
   const createGitProbeGenRef = useRef(0)
   const activeCreateParentRuntimeEnvironmentId = activeRuntimeEnvironmentId?.trim() || null
@@ -96,7 +88,6 @@ export function useCreateProjectDefaults({
     autoFilledCreateParentRef.current = null
     createParentProvenanceRef.current = null
     createParentTouchedRef.current = false
-    createKindTouchedRef.current = false
     setCreateDefaultParent('')
     setCreateGitAvailability('unknown')
     setCreateRuntimeParentStatus('idle')
@@ -114,9 +105,6 @@ export function useCreateProjectDefaults({
     },
     [activeCreateParentRuntimeEnvironmentId, createParent]
   )
-  const markCreateKindTouched = useCallback(() => {
-    createKindTouchedRef.current = true
-  }, [])
 
   const createParentDefaultPending =
     step === 'create' &&
@@ -282,10 +270,6 @@ export function useCreateProjectDefaults({
           return
         }
         setCreateGitAvailability(available ? 'available' : 'unavailable')
-        if (createKindTouchedRef.current) {
-          return
-        }
-        setCreateKind(available ? 'git' : 'folder')
       })
       .catch(() => {
         if (gen !== createGitProbeGenRef.current) {
@@ -293,7 +277,7 @@ export function useCreateProjectDefaults({
         }
         setCreateGitAvailability('unknown')
       })
-  }, [activeRuntimeEnvironmentId, setCreateKind, step])
+  }, [activeRuntimeEnvironmentId, step])
 
   return {
     createDefaultParent,
@@ -301,7 +285,6 @@ export function useCreateProjectDefaults({
     createRuntimeParentStatus,
     createParentDefaultPending: createParentPending,
     resetCreateDefaultState,
-    markCreateParentTouched,
-    markCreateKindTouched
+    markCreateParentTouched
   }
 }

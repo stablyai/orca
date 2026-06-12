@@ -131,7 +131,7 @@ describe('AddRepoLocalStartStep', () => {
     expect(markup).toContain('Browse folder')
     expect(markup).toContain('Clone from URL')
     expect(markup).toContain('Remote project')
-    expect(markup).toContain('Create new project')
+    expect(markup).toContain('Create project')
     expect(markup).toContain('Other ways to add')
     expect(markup).not.toContain('More options')
   })
@@ -140,7 +140,7 @@ describe('AddRepoLocalStartStep', () => {
     const titles = getActionTitles(false)
 
     expect(titles.primary).toBe('Browse folder')
-    expect(titles.secondary).toEqual(['Clone from URL', 'Remote project', 'Create new project'])
+    expect(titles.secondary).toEqual(['Clone from URL', 'Remote project', 'Create project'])
   })
 
   it('keeps Browse folder primary for SSH-likely users', () => {
@@ -149,14 +149,14 @@ describe('AddRepoLocalStartStep', () => {
     expect(markup).toContain('Browse folder')
     expect(markup).toContain('Remote project')
     expect(markup).toContain('Clone from URL')
-    expect(markup).toContain('Create new project')
+    expect(markup).toContain('Create project')
   })
 
   it('orders secondary actions remote-first for SSH-likely users', () => {
     const titles = getActionTitles(true)
 
     expect(titles.primary).toBe('Browse folder')
-    expect(titles.secondary).toEqual(['Remote project', 'Clone from URL', 'Create new project'])
+    expect(titles.secondary).toEqual(['Remote project', 'Clone from URL', 'Create project'])
   })
 
   it('focuses Browse folder when the default Add Project step opens', async () => {
@@ -188,7 +188,7 @@ describe('AddRepoLocalStartStep', () => {
 
     expect(findButton(container, 'Clone from URL').disabled).toBe(false)
     expect(findButton(container, 'Remote project').disabled).toBe(false)
-    expect(findButton(container, 'Create new project').disabled).toBe(false)
+    expect(findButton(container, 'Create project').disabled).toBe(false)
 
     await act(async () => {
       root.unmount()
