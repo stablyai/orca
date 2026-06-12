@@ -28,8 +28,8 @@
 ## Features
 
 <p align="center">
-  <a href="https://www.onorca.dev/docs/mobile"><kbd><strong>Mobile Companion</strong><br/><sub>Monitor and steer your agents from your phone — get notified<br/>when an agent finishes and send follow-ups from anywhere</sub><br/><br/><picture><source srcset="docs/assets/feature-wall/mobile-companion-app-showcase.gif" type="image/gif"><img src="docs/assets/feature-wall/mobile-companion-app-showcase.jpg" alt="Orca desktop with the mobile companion app" width="390" /></picture><br/></kbd></a> &nbsp;&nbsp;
-  <a href="https://www.onorca.dev/docs/model/worktrees"><kbd><strong>Parallel Worktrees</strong><br/><sub>Fan one prompt across five agents, each in its own isolated<br/>git worktree — compare the results and merge the winner</sub><br/><br/><picture><source srcset="docs/assets/feature-wall/parallel-worktrees.gif" type="image/gif"><img src="docs/assets/feature-wall/parallel-worktrees.jpg" alt="Parallel worktree orchestration" width="390" /></picture><br/></kbd></a>
+  <a href="https://www.onorca.dev/docs/mobile"><kbd><strong>Mobile Companion</strong><br/>Monitor and steer your agents from your<br/>phone — send follow-ups from anywhere<br/><br/><picture><source srcset="docs/assets/feature-wall/mobile-companion-app-showcase.gif" type="image/gif"><img src="docs/assets/feature-wall/mobile-companion-app-showcase.jpg" alt="Orca desktop with the mobile companion app" width="390" /></picture><br/></kbd></a> &nbsp;&nbsp;
+  <a href="https://www.onorca.dev/docs/model/worktrees"><kbd><strong>Parallel Worktrees</strong><br/>Fan one prompt across five isolated git<br/>worktrees — merge the winning result<br/><br/><picture><source srcset="docs/assets/feature-wall/parallel-worktrees.gif" type="image/gif"><img src="docs/assets/feature-wall/parallel-worktrees.jpg" alt="Parallel worktree orchestration" width="390" /></picture><br/></kbd></a>
 </p>
 
 <table>
