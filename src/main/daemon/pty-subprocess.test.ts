@@ -214,6 +214,8 @@ describe('createPtySubprocess', () => {
     const proc = mockPtyProcess()
     proc.process = 'node'
     spawnMock.mockReturnValue(proc)
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { value: 'darwin' })
     let resolveForeground!: (processName: string) => void
     resolveAgentForegroundProcessMock.mockReturnValue(
       new Promise<string>((resolve) => {
@@ -221,17 +223,23 @@ describe('createPtySubprocess', () => {
       })
     )
 
-    const handle = createPtySubprocess({
-      sessionId: 'test',
-      cols: 80,
-      rows: 24
-    })
+    try {
+      const handle = createPtySubprocess({
+        sessionId: 'test',
+        cols: 80,
+        rows: 24
+      })
 
-    expect(handle.getForegroundProcess()).toBe('node')
-    expect(resolveAgentForegroundProcessMock).toHaveBeenCalledWith(proc.pid, 'node')
+      expect(handle.getForegroundProcess()).toBe('node')
+      expect(resolveAgentForegroundProcessMock).toHaveBeenCalledWith(proc.pid, 'node')
 
-    resolveForeground('codex')
-    await vi.waitFor(() => expect(handle.getForegroundProcess()).toBe('codex'))
+      resolveForeground('codex')
+      await vi.waitFor(() => expect(handle.getForegroundProcess()).toBe('codex'))
+    } finally {
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
   })
 
   it('treats node-pty terminal name as inconclusive foreground process', () => {
