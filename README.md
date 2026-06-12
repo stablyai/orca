@@ -29,21 +29,15 @@
 
 ## Features
 
-<table>
-<tr>
-<td width="38%" valign="middle">
-
 ### Mobile Companion
 
 Monitor and steer your agents from your phone. Get notified when an agent finishes, review output, and send follow-ups from anywhere.
 
 [iOS App Store](https://apps.apple.com/us/app/orca-ide/id6766130217) · [Android APK](https://github.com/stablyai/orca/releases/download/mobile-v0.0.12/app-release.apk) · [Docs →](https://www.onorca.dev/docs/mobile)
 
-</td>
-<td width="62%">
-  <a href="https://www.onorca.dev/docs/mobile"><picture><source srcset="docs/assets/feature-wall/mobile-companion-app-showcase.gif" type="image/gif"><img src="docs/assets/feature-wall/mobile-companion-app-showcase.jpg" alt="Orca desktop with the mobile companion app" width="100%" /></picture></a>
-</td>
-</tr>
+<a href="https://www.onorca.dev/docs/mobile"><picture><source srcset="docs/assets/feature-wall/mobile-companion-app-showcase.gif" type="image/gif"><img src="docs/assets/feature-wall/mobile-companion-app-showcase.jpg" alt="Orca desktop with the mobile companion app" width="100%" /></picture></a>
+
+<table>
 <tr>
 <td width="38%" valign="middle">
 
