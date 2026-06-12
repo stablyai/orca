@@ -80,6 +80,11 @@ function launchSleepingAgentSession(record: SleepingAgentSessionRecord): boolean
 export function resumeSleepingAgentSessionsForWorktree(worktreeId: string): number {
   const records = Object.values(useAppStore.getState().sleepingAgentSessionsByPaneKey)
     .filter((record) => record.worktreeId === worktreeId)
+    // Why: quit-time captures (#5232) cover panes that still exist in the
+    // restored session. Those panes own their own recovery — warm reattach
+    // when the daemon kept the agent alive, or the pane-level cold-restore
+    // resume — so launching a separate tab here would duplicate the session.
+    .filter((record) => record.origin !== 'quit')
     .sort((a, b) => a.capturedAt - b.capturedAt || a.updatedAt - b.updatedAt)
 
   let launched = 0

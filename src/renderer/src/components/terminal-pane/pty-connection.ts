@@ -1796,30 +1796,38 @@ export function connectPanePty(
       if (pendingStartupCommand) {
         return false
       }
-      const entry = useAppStore.getState().agentStatusByPaneKey[cacheKey]
-      if (!entry || entry.state === 'done' || !isResumableTuiAgent(entry.agentType)) {
+      const state = useAppStore.getState()
+      const entry = state.agentStatusByPaneKey[cacheKey]
+      // Why: agentStatusByPaneKey is in-memory only. After an app restart, the
+      // quit-captured sleeping record is the only surviving source of this
+      // pane's provider session id (#5232). Live entries win when present —
+      // they are fresher and setAgentStatus already cleared the record.
+      const sleepingRecord = entry ? null : state.sleepingAgentSessionsByPaneKey[cacheKey]
+      const agentType = entry?.agentType ?? sleepingRecord?.agent
+      const agentState = entry?.state ?? sleepingRecord?.state
+      const rawProviderSession = entry?.providerSession ?? sleepingRecord?.providerSession
+      if (!agentType || agentState === 'done' || !isResumableTuiAgent(agentType)) {
         return false
       }
-      const providerSession = normalizeAgentProviderSession(entry.providerSession)
+      const providerSession = normalizeAgentProviderSession(rawProviderSession)
       if (!providerSession) {
         return false
       }
       const startupPlan = buildAgentResumeStartupPlan({
-        agent: entry.agentType,
+        agent: agentType,
         providerSession,
-        cmdOverrides: useAppStore.getState().settings?.agentCmdOverrides ?? {},
-        agentArgs: resolveTuiAgentLaunchArgs(
-          entry.agentType,
-          useAppStore.getState().settings?.agentDefaultArgs
-        ),
-        agentEnv: resolveTuiAgentLaunchEnv(
-          entry.agentType,
-          useAppStore.getState().settings?.agentDefaultEnv
-        ),
+        cmdOverrides: state.settings?.agentCmdOverrides ?? {},
+        agentArgs: resolveTuiAgentLaunchArgs(agentType, state.settings?.agentDefaultArgs),
+        agentEnv: resolveTuiAgentLaunchEnv(agentType, state.settings?.agentDefaultEnv),
         platform: getColdRestoreAgentResumePlatform()
       })
       if (!startupPlan) {
         return false
+      }
+      if (sleepingRecord) {
+        // Why: the record is one-shot — consuming it here prevents a later
+        // worktree activation from launching a duplicate resume tab.
+        useAppStore.getState().clearSleepingAgentSession(cacheKey)
       }
       // Why: cold restore means the PTY process is gone but the agent provider
       // session is still resumable, so the replacement shell must launch it.
