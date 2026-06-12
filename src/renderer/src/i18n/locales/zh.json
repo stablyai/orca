@@ -3041,14 +3041,14 @@
           "c234df77f7": "创建前请选择或输入服务器父文件夹。",
           "3a13f6e88b": "未选择位置",
           "6ed14c0281": "未选择服务器文件夹",
-          "createProjectTitle": "Create project",
-          "createProjectDescription": "Create a local Git repo and first workspace.",
-          "projectNameLabel": "Project name",
-          "createsGitRepoHelp": "Creates Git repo",
-          "parentFolderLabel": "Parent folder",
-          "browseParentFolder": "Browse",
-          "gitRequiredError": "Git is required to create a project.",
-          "createAction": "Create"
+          "createProjectTitle": "创建项目",
+          "createProjectDescription": "创建本地 Git 仓库和第一个工作区。",
+          "projectNameLabel": "项目名称",
+          "createsGitRepoHelp": "将创建 Git 仓库",
+          "parentFolderLabel": "父文件夹",
+          "browseParentFolder": "浏览",
+          "gitRequiredError": "创建项目需要 Git。",
+          "createAction": "创建"
         },
         "AddRepoNestedImportStep": {
           "496f68cf8c": "扫描存储库。单击停止。",
@@ -3650,8 +3650,8 @@
                   "3d162cc76f": "远程项目",
                   "fb4fc5380e": "本地项目、Git repo 或包含多个 repos 的文件夹",
                   "2281fdc8c7": "浏览文件夹",
-                  "createProjectTitle": "Create project",
-                  "createGitProjectDescription": "Create a local Git repository"
+                  "createProjectTitle": "创建项目",
+                  "createGitProjectDescription": "创建本地 Git 仓库"
                 }
               }
             }

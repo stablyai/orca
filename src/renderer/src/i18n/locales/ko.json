@@ -3041,14 +3041,14 @@
           "c234df77f7": "만들기 전에 서버 상위 폴더를 선택하거나 입력하세요.",
           "3a13f6e88b": "위치가 선택되지 않음",
           "6ed14c0281": "서버 폴더가 선택되지 않음",
-          "createProjectTitle": "Create project",
-          "createProjectDescription": "Create a local Git repo and first workspace.",
-          "projectNameLabel": "Project name",
-          "createsGitRepoHelp": "Creates Git repo",
-          "parentFolderLabel": "Parent folder",
-          "browseParentFolder": "Browse",
-          "gitRequiredError": "Git is required to create a project.",
-          "createAction": "Create"
+          "createProjectTitle": "프로젝트 생성",
+          "createProjectDescription": "로컬 Git 저장소와 첫 번째 작업 공간을 만듭니다.",
+          "projectNameLabel": "프로젝트 이름",
+          "createsGitRepoHelp": "Git 저장소 생성",
+          "parentFolderLabel": "상위 폴더",
+          "browseParentFolder": "찾아보기",
+          "gitRequiredError": "프로젝트를 만들려면 Git이 필요합니다.",
+          "createAction": "생성"
         },
         "AddRepoNestedImportStep": {
           "496f68cf8c": "저장소를 스캔하는 중입니다. 중지하려면 클릭하세요.",
@@ -3650,8 +3650,8 @@
                   "3d162cc76f": "원격 프로젝트",
                   "fb4fc5380e": "로컬 프로젝트, Git repo 또는 repos가 많은 폴더",
                   "2281fdc8c7": "폴더 찾아보기",
-                  "createProjectTitle": "Create project",
-                  "createGitProjectDescription": "Create a local Git repository"
+                  "createProjectTitle": "프로젝트 생성",
+                  "createGitProjectDescription": "로컬 Git 저장소 만들기"
                 }
               }
             }
