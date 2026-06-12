@@ -8,6 +8,7 @@ import type {
 import { sessionSortTime } from './session-scanner-accumulator'
 import { codexHomeForSessionsDir, uniqueCodexSessionsDirs } from './session-scanner-codex-paths'
 import { discoverFiles, discoverOpenClawFiles } from './session-scanner-discovery'
+import { parseGrokSessionFile } from './session-scanner-grok-parser'
 import {
   parseDroidSessionFile,
   parseMessageGraphSessionFile,
@@ -53,15 +54,17 @@ const OPENCODE_STORAGE_DIR = join(
   process.env.OPENCODE_CONFIG_DIR?.trim() || join(homedir(), '.local', 'share', 'opencode'),
   'storage'
 )
+const GROK_SESSIONS_DIR = join(
+  process.env.GROK_HOME?.trim() || join(homedir(), '.grok'),
+  'sessions'
+)
 const HERMES_SESSIONS_DIR = join(homedir(), '.hermes', 'sessions')
 const ROVO_SESSIONS_DIR = join(homedir(), '.rovodev', 'sessions')
 const OPENCLAW_STATE_DIR = process.env.OPENCLAW_STATE_DIR?.trim() || join(homedir(), '.openclaw')
-const OPENCLAW_LEGACY_STATE_DIR = join(homedir(), '.clawdbot')
 const PI_SESSIONS_DIR = normalizePiSessionsDir(
   process.env.PI_CODING_AGENT_DIR?.trim() || join(homedir(), '.pi', 'agent', 'sessions')
 )
 const DROID_SESSIONS_DIR = join(homedir(), '.factory', 'sessions')
-const DROID_PROJECTS_DIR = join(homedir(), '.factory', 'projects')
 
 export async function scanAiVaultSessions(
   options: AiVaultScanOptions = {}
@@ -122,6 +125,14 @@ export async function scanAiVaultSessions(
       extensions: ['.json']
     }),
     discoverFiles({
+      rootDir: options.grokSessionsDir ?? GROK_SESSIONS_DIR,
+      limit: limitPerAgent,
+      agent: 'grok',
+      issues,
+      extensions: ['.json'],
+      filePredicate: (path) => basename(path) === 'summary.json'
+    }),
+    discoverFiles({
       rootDir: options.hermesSessionsDir ?? HERMES_SESSIONS_DIR,
       limit: limitPerAgent,
       agent: 'hermes',
@@ -140,7 +151,7 @@ export async function scanAiVaultSessions(
     discoverOpenClawFiles({
       rootDirs: [
         options.openclawStateDir ?? OPENCLAW_STATE_DIR,
-        options.openclawLegacyStateDir ?? OPENCLAW_LEGACY_STATE_DIR
+        options.openclawLegacyStateDir ?? join(homedir(), '.clawdbot')
       ],
       limit: limitPerAgent,
       issues
@@ -160,7 +171,7 @@ export async function scanAiVaultSessions(
       extensions: ['.jsonl']
     }),
     discoverFiles({
-      rootDir: options.droidProjectsDir ?? DROID_PROJECTS_DIR,
+      rootDir: options.droidProjectsDir ?? join(homedir(), '.factory', 'projects'),
       limit: limitPerAgent,
       agent: 'droid',
       issues,
@@ -274,6 +285,8 @@ async function parseAgentSessionFile(
       return parseCursorSessionFile(candidate.file, platform)
     case 'opencode':
       return parseOpenCodeSessionFile(candidate.file, platform)
+    case 'grok':
+      return parseGrokSessionFile(candidate.file, platform)
     case 'hermes':
       return parseHermesSessionFile(candidate.file, platform)
     case 'rovo':

@@ -11,6 +11,7 @@ export const AI_VAULT_AGENTS = [
   'rovo',
   'copilot',
   'opencode',
+  'grok',
   'openclaw',
   'droid'
 ] as const satisfies readonly TuiAgent[]
@@ -30,6 +31,7 @@ export const AI_VAULT_AGENT_LABELS = {
   rovo: 'Rovo Dev',
   copilot: 'GitHub Copilot',
   opencode: 'OpenCode',
+  grok: 'Grok',
   openclaw: 'OpenClaw',
   droid: 'Droid'
 } as const satisfies Record<AiVaultAgent, string>
@@ -140,6 +142,7 @@ function buildAgentResumeInvocation(
     case 'claude':
     case 'cursor':
     case 'gemini':
+    case 'grok':
     case 'hermes':
     case 'openclaw':
     case 'droid':

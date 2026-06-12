@@ -7990,7 +7990,8 @@
             "2c417432b7": "ローカルで解決済み",
             "d206117f90": "{{value0}} コンフリクト ({{value1}})",
             "f3a8b2c1d0e5": "{{value0}} のタイトルを入力してください。",
-            "e2b7a1c0d9f4": "{{value0}} の作成に失敗しました"
+            "e2b7a1c0d9f4": "{{value0}} の作成に失敗しました",
+            "e9e238b260": "Custom command is empty. Add one in Settings -> Git -> Source Control AI."
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "選択した agent を開始できませんでした。",

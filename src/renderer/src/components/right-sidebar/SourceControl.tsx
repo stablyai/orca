@@ -1619,7 +1619,10 @@ function SourceControlInner(): React.JSX.Element {
               }
             }),
             requestId,
-            error: 'Custom command is empty. Add one in Settings -> Git -> Source Control AI.'
+            error: translate(
+              'auto.components.right.sidebar.SourceControl.e9e238b260',
+              'Custom command is empty. Add one in Settings -> Git -> Source Control AI.'
+            )
           })
           if (failedRecord) {
             setCommitMessageGenerationRecord(generationKey, failedRecord)

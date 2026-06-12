@@ -7990,7 +7990,8 @@
             "2c417432b7": "로컬에서 해결됨",
             "d206117f90": "{{value0}} 충돌 ({{value1}})",
             "f3a8b2c1d0e5": "{{value0}} 제목을 입력하세요.",
-            "e2b7a1c0d9f4": "{{value0}} 생성에 실패했습니다"
+            "e2b7a1c0d9f4": "{{value0}} 생성에 실패했습니다",
+            "e9e238b260": "Custom command is empty. Add one in Settings -> Git -> Source Control AI."
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "선택한 agent를 시작할 수 없습니다.",

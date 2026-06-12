@@ -7990,7 +7990,8 @@
             "2c417432b7": "已在本地解决",
             "d206117f90": "{{value0}} 冲突 ({{value1}})",
             "f3a8b2c1d0e5": "请输入 {{value0}} 标题。",
-            "e2b7a1c0d9f4": "创建 {{value0}} 失败"
+            "e2b7a1c0d9f4": "创建 {{value0}} 失败",
+            "e9e238b260": "Custom command is empty. Add one in Settings -> Git -> Source Control AI."
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "无法启动选定的 Agent。",

@@ -7990,7 +7990,8 @@
             "31f6d46278": "Unresolved",
             "2c417432b7": "Resolved locally",
             "f3a8b2c1d0e5": "Enter a {{value0}} title.",
-            "e2b7a1c0d9f4": "Failed to create {{value0}}"
+            "e2b7a1c0d9f4": "Failed to create {{value0}}",
+            "e9e238b260": "Custom command is empty. Add one in Settings -> Git -> Source Control AI."
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "Could not start the selected agent.",
