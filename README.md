@@ -271,18 +271,6 @@ yay -S stably-orca-git
 
 ---
 
-## Star History
-
-<a href="https://star-history.com/#stablyai/orca&Date">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=stablyai/orca&type=Date&theme=dark" />
-    <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=stablyai/orca&type=Date" />
-    <img alt="Star history chart" src="https://api.star-history.com/svg?repos=stablyai/orca&type=Date" width="600" />
-  </picture>
-</a>
-
----
-
 ## Developing
 
 Want to contribute or run locally? See our [CONTRIBUTING.md](.github/CONTRIBUTING.md) guide.
