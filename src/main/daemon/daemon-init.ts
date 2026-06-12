@@ -355,6 +355,14 @@ function createOutOfProcessLauncher(runtimeDir: string): DaemonLauncher {
 
 export async function initDaemonPtyProvider(signal?: AbortSignal): Promise<void> {
   logDaemonMilestone('daemon-init-start')
+  // Why: e2e coverage for the startup PTY gate (#5232) needs a daemon init
+  // that deterministically outlasts the first-window timeout. Real triggers
+  // (stale-daemon cleanup, legacy probes on a busy disk) are not controllable
+  // from a test.
+  const e2eInitDelayMs = Number(process.env.ORCA_E2E_DAEMON_INIT_DELAY_MS)
+  if (Number.isFinite(e2eInitDelayMs) && e2eInitDelayMs > 0) {
+    await new Promise((resolve) => setTimeout(resolve, e2eInitDelayMs))
+  }
   const runtimeDir = getRuntimeDir()
 
   const newSpawner = new DaemonSpawner({
