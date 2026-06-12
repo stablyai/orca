@@ -2863,6 +2863,7 @@ export default function TaskPage(): React.JSX.Element {
   const dialogWorkItem = dialogWorkItemKey
     ? (cachedDialogWorkItem ?? githubTaskDrawerWorkItem)
     : null
+  const pageGitHubDetailWorkItem = pageData.openGitHubWorkItem ? dialogWorkItem : null
   const dialogRepoPath = dialogWorkItem ? (repoMap.get(dialogWorkItem.repoId)?.path ?? null) : null
 
   const setDialogWorkItem = useCallback(
@@ -2884,17 +2885,13 @@ export default function TaskPage(): React.JSX.Element {
 
   const openGitHubDetailPage = useCallback(
     (item: GitHubWorkItem, initialTab: ItemDialogTab = 'conversation') => {
-      openTaskPage(
-        {
-          taskSource: 'github',
-          preselectedRepoId: item.repoId,
-          openGitHubWorkItem: item,
-          openGitHubInitialTab: initialTab
-        },
-        { recordTasksInteraction: false }
-      )
+      // Why: in-list opens should float over the Tasks list. Direct opens
+      // from outside Tasks still pass `openGitHubWorkItem` through page state.
+      useAppStore.getState().recordFeatureInteraction('github-tasks')
+      setGithubMode('items')
+      setDialogWorkItem(item, initialTab)
     },
-    [openTaskPage]
+    [setDialogWorkItem]
   )
 
   const patchTaskPageWorkItemRows = useCallback(
@@ -7631,13 +7628,13 @@ export default function TaskPage(): React.JSX.Element {
             </section>
           </div>
 
-          {taskSource === 'github' && dialogWorkItem ? (
-            dialogWorkItem.type === 'pr' ? (
+          {taskSource === 'github' && pageGitHubDetailWorkItem ? (
+            pageGitHubDetailWorkItem.type === 'pr' ? (
               <PullRequestPage
-                workItem={dialogWorkItem}
+                workItem={pageGitHubDetailWorkItem}
                 initialTab={dialogInitialTab}
                 repoPath={dialogRepoPath}
-                repoId={dialogWorkItem.repoId}
+                repoId={pageGitHubDetailWorkItem.repoId}
                 backLabel="Pull requests"
                 onUse={(item) => {
                   setDialogWorkItem(null)
@@ -7648,10 +7645,10 @@ export default function TaskPage(): React.JSX.Element {
               />
             ) : (
               <GitHubItemDialog
-                workItem={dialogWorkItem}
+                workItem={pageGitHubDetailWorkItem}
                 initialTab={dialogInitialTab}
                 repoPath={dialogRepoPath}
-                repoId={dialogWorkItem.repoId}
+                repoId={pageGitHubDetailWorkItem.repoId}
                 variant="page"
                 backLabel="GitHub list"
                 onUse={(item) => {
@@ -11128,6 +11125,23 @@ export default function TaskPage(): React.JSX.Element {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <GitHubItemDialog
+        workItem={pageGitHubDetailWorkItem ? null : dialogWorkItem}
+        repoPath={
+          // Why: the dialog is for a single item — resolve its repoPath from the
+          // item's own repoId (set when fan-out merged the list) so it works in
+          // cross-repo mode too. Reusing the memoized repo map avoids an O(n)
+          // scan on every render while the dialog is open.
+          dialogWorkItem ? (repoMap.get(dialogWorkItem.repoId)?.path ?? null) : null
+        }
+        repoId={dialogWorkItem?.repoId ?? null}
+        onUse={(item) => {
+          setDialogWorkItem(null)
+          handleUseWorkItem(item)
+        }}
+        onClose={() => setDialogWorkItem(null)}
+      />
 
       <GitLabItemDialog
         item={gitlabDialogItem}

@@ -4,6 +4,7 @@ import {
   buildAgentStartupPlan,
   isShellProcess
 } from './tui-agent-startup'
+import { resolveTuiAgentLaunchArgs } from '../../../shared/tui-agent-launch-defaults'
 
 describe('buildAgentStartupPlan', () => {
   it('passes Claude prompts as a positional interactive argument', () => {
@@ -146,6 +147,23 @@ describe('buildAgentStartupPlan', () => {
       agent: 'grok',
       launchCommand: 'grok',
       expectedProcess: 'grok',
+      followupPrompt: 'Trace the failing test'
+    })
+  })
+
+  it('launches Devin first and injects the prompt after startup', () => {
+    expect(
+      buildAgentStartupPlan({
+        agent: 'devin',
+        prompt: 'Trace the failing test',
+        cmdOverrides: {},
+        agentArgs: resolveTuiAgentLaunchArgs('devin', null),
+        platform: 'linux'
+      })
+    ).toEqual({
+      agent: 'devin',
+      launchCommand: "devin '--permission-mode' 'bypass'",
+      expectedProcess: 'devin',
       followupPrompt: 'Trace the failing test'
     })
   })

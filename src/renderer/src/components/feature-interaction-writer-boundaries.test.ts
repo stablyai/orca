@@ -80,12 +80,20 @@ describe('feature interaction writer boundaries', () => {
   it('suppresses Tasks surface telemetry for in-page provider switches and detail opens', () => {
     const source = componentSource('TaskPage.tsx')
     const suppression = 'recordTasksInteraction: false'
+    const githubDetailSection = sourceBetween(
+      source,
+      'const openGitHubDetailPage',
+      'const patchTaskPageWorkItemRows'
+    )
 
     const inPageNavigationSections = [
-      sourceBetween(source, 'const openGitHubDetailPage', 'const patchTaskPageWorkItemRows'),
       sourceBetween(source, 'const openLinearDetailPage', 'const openRelatedLinearIssue'),
       sourceBetween(source, 'taskSourceManuallyChangedRef.current = true', 'void updateSettings')
     ]
+
+    expect(githubDetailSection).toContain("recordFeatureInteraction('github-tasks')")
+    expect(githubDetailSection).toContain('setDialogWorkItem(item, initialTab)')
+    expect(githubDetailSection).not.toContain('openTaskPage')
 
     for (const section of inPageNavigationSections) {
       expect(section).toContain(suppression)

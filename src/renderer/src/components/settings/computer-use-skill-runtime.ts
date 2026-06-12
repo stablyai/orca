@@ -1,4 +1,5 @@
 import type { GlobalSettings } from '../../../../shared/types'
+import { translate } from '@/i18n/i18n'
 import { getSelectedAgentRuntime, type LocalAgentRuntime } from './CliSkillRuntimeSetup'
 
 export type ComputerUseSkillRuntimeInput = {
@@ -10,7 +11,10 @@ export type ComputerUseSkillRuntimeInput = {
 
 export function getComputerUseSkillRuntime(input: ComputerUseSkillRuntimeInput): LocalAgentRuntime {
   if (!input.settings) {
-    return { runtime: 'host', label: 'This device' }
+    return {
+      runtime: 'host',
+      label: translate('auto.components.settings.computerUseSkillRuntime.thisDevice', 'This device')
+    }
   }
   return getSelectedAgentRuntime(
     input.settings,

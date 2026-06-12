@@ -62,6 +62,24 @@ describe('CommentMarkdown', () => {
     expect(markup).toContain('src="data:image/png;base64,abc123"')
   })
 
+  it('renders bare GitHub user attachment links as document videos', () => {
+    const url = 'https://github.com/user-attachments/assets/ce11040a-fb66-4289-927f-547b16dfc488'
+    const markup = renderToStaticMarkup(<CommentMarkdown variant="document" content={url} />)
+
+    expect(markup).toContain('<video')
+    expect(markup).toContain(`src="${url}"`)
+    expect(markup).toContain('controls=""')
+    expect(markup).not.toContain(`href="${url}" class="break-all`)
+  })
+
+  it('keeps non-attachment document links as links', () => {
+    const url = 'https://github.com/stablyai/orca/pull/5265'
+    const markup = renderToStaticMarkup(<CommentMarkdown variant="document" content={url} />)
+
+    expect(markup).not.toContain('<video')
+    expect(markup).toContain(`href="${url}"`)
+  })
+
   it('autolinks very large generated GitHub reference comments', () => {
     const referenceCount = 130_000
     const tree = {

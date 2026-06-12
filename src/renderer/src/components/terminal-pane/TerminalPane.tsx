@@ -408,6 +408,9 @@ export default function TerminalPane({
   // context menu. The settings default keeps the Windows shortcut feeling native
   // without changing the other platforms' interaction model.
   const rightClickToPaste = isWindowsUserAgent() && (settings?.terminalRightClickToPaste ?? true)
+  // Why: Windows ConPTY does not forward DECSET 2004 from foreground TUIs, so
+  // xterm may not know multi-line text needs bracketed-paste protection.
+  const forceBracketedMultilineTextPaste = isWindowsUserAgent()
   const [startup] = useState(() => useAppStore.getState().pendingStartupByTabId[tabId])
   const shouldMeasureHiddenStartup = startup !== undefined && !isVisible
   const consumeTabStartupCommand = useAppStore((store) => store.consumeTabStartupCommand)
@@ -1283,9 +1286,10 @@ export default function TerminalPane({
         readClipboardText: window.api.ui.readClipboardText,
         saveClipboardImageAsTempFile: window.api.ui.saveClipboardImageAsTempFile,
         connectionId,
+        forceBracketedMultilineTextPaste,
         pasteText: (text, options) => {
           pasteTerminalText(pane.terminal, text, options)
-          if (options?.forceBracketedPaste) {
+          if (options?.recoverImagePasteWebglAtlas) {
             scheduleImagePasteWebglAtlasRecovery()
           }
         },
@@ -1391,7 +1395,7 @@ export default function TerminalPane({
       container.removeEventListener('keydown', onKeyPaste, { capture: true })
       container.removeEventListener('paste', onPaste, { capture: true })
     }
-  }, [isActive, worktreeId, keybindings])
+  }, [isActive, worktreeId, keybindings, forceBracketedMultilineTextPaste])
 
   // Why: a click inside the terminal container is a deliberate interaction
   // with the pane — dismiss the attention indicator for this tab and worktree
@@ -1720,6 +1724,7 @@ export default function TerminalPane({
     onSetTitle: handleStartRename,
     onPasteError: setTerminalError,
     onAgentSessionForkReady: setAgentSessionFork,
+    forceBracketedMultilineTextPaste,
     rightClickToPaste
   })
 
