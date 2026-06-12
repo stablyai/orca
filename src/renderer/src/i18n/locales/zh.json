@@ -274,7 +274,8 @@
           "760bc6883d": "Codex",
           "a5fc0cb622": "OpenClaude",
           "bf53f09bf8": "Claude Agent Teams",
-          "0708ed89f1": "Claude"
+          "0708ed89f1": "Claude",
+          "fc80296033": "Devin"
         },
         "skill": {
           "cli": {

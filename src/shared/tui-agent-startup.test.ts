@@ -266,4 +266,19 @@ describe('tui agent startup plans', () => {
     expect(plan?.expectedProcess).toBe('omp')
     expect(plan?.launchCommand).toBe('omp; unset ORCA_OMP_PREFILL')
   })
+
+  it('launches Devin with stdin-after-start prompt delivery', () => {
+    const plan = buildAgentStartupPlan({
+      agent: 'devin',
+      prompt: 'fix the tests',
+      cmdOverrides: {},
+      platform: 'linux'
+    })
+    expect(plan).toEqual({
+      agent: 'devin',
+      launchCommand: 'devin',
+      expectedProcess: 'devin',
+      followupPrompt: 'fix the tests'
+    })
+  })
 })

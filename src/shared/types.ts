@@ -1962,6 +1962,7 @@ export type TuiAgent =
   | 'openclaw' // OpenClaw
   | 'copilot' // GitHub Copilot CLI
   | 'grok' // xAI Grok CLI
+  | 'devin' // Devin CLI
 
 export type TaskViewPresetId = 'all' | 'issues' | 'review' | 'my-issues' | 'my-prs' | 'prs'
 
