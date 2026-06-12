@@ -21,7 +21,7 @@
 </p>
 
 <p align="center">
-  <a href="https://onOrca.dev"><strong>Download Orca</strong></a> &nbsp;·&nbsp; <a href="https://www.onorca.dev/docs">Docs</a> &nbsp;·&nbsp; <a href="https://discord.gg/fzjDKHxv8Q">Discord</a> &nbsp;·&nbsp; <a href="https://github.com/stablyai/orca/releases">Changelog</a>
+  <a href="https://onOrca.dev"><strong>Download Orca</strong></a> &nbsp;·&nbsp; <a href="https://apps.apple.com/us/app/orca-ide/id6766130217">iOS</a> &nbsp;·&nbsp; <a href="https://github.com/stablyai/orca/releases/download/mobile-v0.0.12/app-release.apk">Android</a> &nbsp;·&nbsp; <a href="https://www.onorca.dev/docs">Docs</a> &nbsp;·&nbsp; <a href="https://discord.gg/fzjDKHxv8Q">Discord</a> &nbsp;·&nbsp; <a href="https://github.com/stablyai/orca/releases">Changelog</a>
 </p>
 
 <p align="center">
@@ -37,6 +37,20 @@ Traditional IDEs weren't built for agents, and parallel-agent wrappers stop at a
 ## Features
 
 <table>
+<tr>
+<td width="38%" valign="middle">
+
+### Mobile Companion
+
+Monitor and steer your agents from your phone. Get notified when an agent finishes, review output, and send follow-ups from anywhere.
+
+[iOS App Store](https://apps.apple.com/us/app/orca-ide/id6766130217) · [Android APK](https://github.com/stablyai/orca/releases/download/mobile-v0.0.12/app-release.apk) · [Docs →](https://www.onorca.dev/docs/mobile)
+
+</td>
+<td width="62%">
+  <a href="https://www.onorca.dev/docs/mobile"><picture><source srcset="docs/assets/feature-wall/mobile-companion-app-showcase.gif" type="image/gif"><img src="docs/assets/feature-wall/mobile-companion-app-showcase.jpg" alt="Orca desktop with the mobile companion app" width="100%" /></picture></a>
+</td>
+</tr>
 <tr>
 <td width="38%" valign="middle">
 
@@ -236,19 +250,6 @@ yay -S stably-orca-bin
 # Build from GitHub source
 yay -S stably-orca-git
 ```
-
----
-
-## Mobile Companion App
-
-Control your agents from your phone.
-
-<p align="center">
-  <picture><source srcset="docs/assets/feature-wall/mobile-companion-app-showcase.gif" type="image/gif"><img src="docs/assets/feature-wall/mobile-companion-app-showcase.jpg" alt="Orca desktop with the mobile companion app" width="720" /></picture>
-</p>
-
-- **iOS:** [Download from App Store](https://apps.apple.com/us/app/orca-ide/id6766130217)
-- **Android:** [Download APK from GitHub Releases](https://github.com/stablyai/orca/releases/download/mobile-v0.0.12/app-release.apk)
 
 ---
 
