@@ -27,12 +27,35 @@
 
 ## Features
 
-<p align="center">
-  <a href="https://www.onorca.dev/docs/mobile"><kbd><strong>Mobile Companion</strong><br/><sub>Monitor and steer your agents from your phone — get notified<br/>when an agent finishes and send follow-ups from anywhere</sub><br/><br/><picture><source srcset="docs/assets/feature-wall/mobile-companion-app-showcase.gif" type="image/gif"><img src="docs/assets/feature-wall/mobile-companion-app-showcase.jpg" alt="Orca desktop with the mobile companion app" width="390" /></picture><br/></kbd></a> &nbsp;&nbsp;
-  <a href="https://www.onorca.dev/docs/model/worktrees"><kbd><strong>Parallel Worktrees</strong><br/><sub>Fan one prompt across five agents, each in its own isolated<br/>git worktree — compare the results and merge the winner</sub><br/><br/><picture><source srcset="docs/assets/feature-wall/parallel-worktrees.gif" type="image/gif"><img src="docs/assets/feature-wall/parallel-worktrees.jpg" alt="Parallel worktree orchestration" width="390" /></picture><br/></kbd></a>
-</p>
-
 <table>
+<tr>
+<td width="50%" valign="middle">
+
+### Mobile Companion
+
+Monitor and steer your agents from your phone — get notified when an agent finishes and send follow-ups from anywhere.
+
+[iOS App Store](https://apps.apple.com/us/app/orca-ide/id6766130217) · [Android APK](https://github.com/stablyai/orca/releases/download/mobile-v0.0.12/app-release.apk) · [Docs →](https://www.onorca.dev/docs/mobile)
+
+</td>
+<td width="50%">
+  <a href="https://www.onorca.dev/docs/mobile"><picture><source srcset="docs/assets/feature-wall/mobile-companion-app-showcase.gif" type="image/gif"><img src="docs/assets/feature-wall/mobile-companion-app-showcase.jpg" alt="Orca desktop with the mobile companion app" width="100%" /></picture></a>
+</td>
+</tr>
+<tr>
+<td width="50%" valign="middle">
+
+### Parallel Worktrees
+
+Fan one prompt across five agents, each in its own isolated git worktree — compare the results and merge the winner.
+
+[Docs →](https://www.onorca.dev/docs/model/worktrees)
+
+</td>
+<td width="50%">
+  <a href="https://www.onorca.dev/docs/model/worktrees"><picture><source srcset="docs/assets/feature-wall/parallel-worktrees.gif" type="image/gif"><img src="docs/assets/feature-wall/parallel-worktrees.jpg" alt="Parallel worktree orchestration" width="100%" /></picture></a>
+</td>
+</tr>
 <tr>
 <td width="50%" valign="middle">
 
