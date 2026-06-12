@@ -369,6 +369,16 @@ export class DaemonServer {
       case 'getSnapshot':
         return { snapshot: this.host.getSnapshot(request.payload.sessionId) }
 
+      case 'takePendingOutput':
+        // Why no await before this call: with includeSnapshot, drain and
+        // serialize must share one synchronous turn — an intervening await
+        // would let PTY data land in between, and cold restore would replay
+        // those bytes on top of a snapshot that already contains them.
+        return this.host.takePendingOutput(
+          request.payload.sessionId,
+          request.payload.includeSnapshot === true
+        )
+
       case 'ping':
         return { pong: true }
 
