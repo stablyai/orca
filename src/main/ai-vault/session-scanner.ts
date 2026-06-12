@@ -8,6 +8,7 @@ import type {
 import { sessionSortTime } from './session-scanner-accumulator'
 import { codexHomeForSessionsDir, uniqueCodexSessionsDirs } from './session-scanner-codex-paths'
 import { discoverFiles, discoverOpenClawFiles } from './session-scanner-discovery'
+import { parseDevinSessionFile } from './session-scanner-devin-parser'
 import { parseGrokSessionFile } from './session-scanner-grok-parser'
 import {
   parseDroidSessionFile,
@@ -65,6 +66,10 @@ const PI_SESSIONS_DIR = normalizePiSessionsDir(
   process.env.PI_CODING_AGENT_DIR?.trim() || join(homedir(), '.pi', 'agent', 'sessions')
 )
 const DROID_SESSIONS_DIR = join(homedir(), '.factory', 'sessions')
+const DEVIN_TRANSCRIPTS_DIR = join(
+  process.env.DEVIN_HOME?.trim() || join(homedir(), '.local', 'share', 'devin', 'cli'),
+  'transcripts'
+)
 
 export async function scanAiVaultSessions(
   options: AiVaultScanOptions = {}
@@ -131,6 +136,13 @@ export async function scanAiVaultSessions(
       issues,
       extensions: ['.json'],
       filePredicate: (path) => basename(path) === 'summary.json'
+    }),
+    discoverFiles({
+      rootDir: options.devinTranscriptsDir ?? DEVIN_TRANSCRIPTS_DIR,
+      limit: limitPerAgent,
+      agent: 'devin',
+      issues,
+      extensions: ['.json']
     }),
     discoverFiles({
       rootDir: options.hermesSessionsDir ?? HERMES_SESSIONS_DIR,
@@ -297,6 +309,8 @@ async function parseAgentSessionFile(
       return parseMessageGraphSessionFile('pi', candidate.file, platform)
     case 'droid':
       return parseDroidSessionFile(candidate.file, platform)
+    case 'devin':
+      return parseDevinSessionFile(candidate.file, platform)
   }
 }
 
