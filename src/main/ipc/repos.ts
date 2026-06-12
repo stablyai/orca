@@ -937,6 +937,16 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
         return { error: `SSH connection "${args.connectionId}" not found or not connected` }
       }
 
+      const findExistingRemoteRepo = (path: string): Repo | undefined =>
+        store
+          .getRepos()
+          .find(
+            (repo) =>
+              repo.connectionId === args.connectionId &&
+              normalizeRuntimePathForComparison(repo.path) ===
+                normalizeRuntimePathForComparison(path)
+          )
+
       let repoKind: 'git' | 'folder' = args.kind ?? 'git'
       let resolvedPath = args.remotePath
 
@@ -959,9 +969,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
 
       // Why: check for duplicates after tilde resolution so that adding `~/`
       // when `/home/ubuntu` is already stored correctly detects the duplicate.
-      const existing = store
-        .getRepos()
-        .find((r) => r.connectionId === args.connectionId && r.path === resolvedPath)
+      const existing = findExistingRemoteRepo(resolvedPath)
       if (existing) {
         // Why: duplicate hit is suppressed by `emitRepoAdded` anyway, and for
         // remote adds git-ness isn't resolved until the isGitRepoAsync check
@@ -981,6 +989,13 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
             repoKind = 'git'
             if (check.rootPath) {
               resolvedPath = check.rootPath
+            }
+            const existingAfterRootResolution = findExistingRemoteRepo(resolvedPath)
+            if (existingAfterRootResolution) {
+              // Why: users may browse inside a repo; store identity is the Git root,
+              // but different SSH targets can legitimately share that same path.
+              emitRepoAdded('folder_picker', true, true)
+              return { repo: existingAfterRootResolution }
             }
           } else {
             return { error: `Not a valid git repository: ${args.remotePath}` }
