@@ -20,7 +20,8 @@
 </p>
 
 <p align="center">
-  <a href="https://onOrca.dev"><strong>Download Orca</strong></a> &nbsp;·&nbsp; <a href="https://www.onorca.dev/docs">Docs</a> &nbsp;·&nbsp; <a href="https://discord.gg/fzjDKHxv8Q">Discord</a> &nbsp;·&nbsp; <a href="https://github.com/stablyai/orca/releases">Changelog</a>
+  <a href="https://onOrca.dev"><strong>Download Orca</strong></a> &nbsp;·&nbsp; <a href="https://www.onorca.dev/docs">Docs</a> &nbsp;·&nbsp; <a href="https://discord.gg/fzjDKHxv8Q">Discord</a> &nbsp;·&nbsp; <a href="https://github.com/stablyai/orca/releases">Changelog</a><br/>
+  <sub>Mobile companion: <a href="https://apps.apple.com/us/app/orca-ide/id6766130217">iOS App Store</a> · <a href="https://github.com/stablyai/orca/releases/download/mobile-v0.0.12/app-release.apk">Android APK</a></sub>
 </p>
 
 <p align="center">
