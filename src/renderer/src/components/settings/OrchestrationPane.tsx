@@ -1,9 +1,12 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { ArrowRightLeft, GitBranch, ListChecks, Workflow } from 'lucide-react'
+import type { SkillDiscoveryTarget } from '../../../../shared/skills'
+import type { GlobalSettings } from '../../../../shared/types'
 import { ORCHESTRATION_SKILL_NAME } from '@/lib/agent-feature-install-commands'
 import {
   AGENT_SKILL_CLI_PREREQUISITE_NOTICE,
-  ensureOrcaCliAvailableForAgentSkillTerminal
+  ensureOrcaCliAvailableForAgentSkillTerminal,
+  isOrcaCliAvailableOnPath
 } from '@/lib/agent-skill-cli-prerequisite'
 import { ORCHESTRATION_SKILL_INSTALL_COMMAND } from '@/lib/orchestration-install-command'
 import { getOrchestrationUsageExamples } from '@/lib/orchestration-usage-examples'
@@ -20,6 +23,15 @@ import { OrchestrationSkillAgentCoverage } from './OrchestrationSkillAgentCovera
 import { OrchestrationExampleDialog } from './OrchestrationExamplesDialog'
 import { OrchestrationSkillPromptDialog } from './OrchestrationSkillPromptDialog'
 import { translate } from '@/i18n/i18n'
+import {
+  buildSkillInstallCommandForRuntime,
+  ensureWslCliAvailableForAgentSkillTerminal,
+  getAgentSkillTerminalShellOverride,
+  getSelectedAgentRuntime,
+  getSkillDiscoveryTargetForRuntime,
+  type LocalAgentRuntime
+} from './CliSkillRuntimeSetup'
+import { getDesktopPlatformFromUserAgent } from './GeneralPane'
 
 const EXAMPLE_ICONS = {
   handoff: ArrowRightLeft,
@@ -29,11 +41,52 @@ const EXAMPLE_ICONS = {
   'child-worktrees': Workflow
 } as const
 
-export function OrchestrationPane(): React.JSX.Element {
+type OrchestrationPaneProps = {
+  currentPlatform?: string
+  settings?: GlobalSettings | null
+  wslSupportedPlatform?: boolean
+  wslAvailable?: boolean
+  wslCapabilitiesLoading?: boolean
+}
+
+function getOrchestrationSkillRuntime(props: OrchestrationPaneProps): LocalAgentRuntime {
+  if (!props.settings) {
+    return { runtime: 'host', label: 'This device' }
+  }
+  return getSelectedAgentRuntime(
+    props.settings,
+    props.wslSupportedPlatform ?? false,
+    props.wslAvailable ?? false,
+    props.wslCapabilitiesLoading ?? false
+  )
+}
+
+export function OrchestrationPane(props: OrchestrationPaneProps = {}): React.JSX.Element {
   const searchQuery = useAppStore((s) => s.settingsSearchQuery)
   const showOrchestration = matchesSettingsSearch(searchQuery, getOrchestrationPaneSearchEntries())
   const [selectedExampleId, setSelectedExampleId] = useState<string | null>(null)
   const [skillPromptOpen, setSkillPromptOpen] = useState(false)
+  const currentPlatform =
+    props.currentPlatform ??
+    (typeof navigator === 'undefined'
+      ? 'other'
+      : getDesktopPlatformFromUserAgent(navigator.userAgent))
+  const skillRuntime = useMemo(() => getOrchestrationSkillRuntime(props), [props])
+  const skillDiscoveryTarget = useMemo<SkillDiscoveryTarget | undefined>(
+    () => getSkillDiscoveryTargetForRuntime(skillRuntime),
+    [skillRuntime]
+  )
+  const skillInstallCommand = buildSkillInstallCommandForRuntime(
+    ORCHESTRATION_SKILL_INSTALL_COMMAND,
+    skillRuntime
+  )
+  const skillTerminalShellOverride = props.settings
+    ? getAgentSkillTerminalShellOverride(currentPlatform, props.settings, skillRuntime)
+    : undefined
+  const getSkillPrerequisiteStatus = () =>
+    skillRuntime.runtime === 'wsl'
+      ? window.api.cli.getWslInstallStatus()
+      : window.api.cli.getInstallStatus()
 
   const {
     installed: orchestrationSkillDetected,
@@ -42,6 +95,7 @@ export function OrchestrationPane(): React.JSX.Element {
     skills: discoveredSkills,
     refresh: refreshOrchestrationSkill
   } = useInstalledAgentSkill(ORCHESTRATION_SKILL_NAME, {
+    discoveryTarget: skillDiscoveryTarget,
     sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
   })
 
@@ -71,18 +125,23 @@ export function OrchestrationPane(): React.JSX.Element {
           'auto.components.settings.OrchestrationPane.9bedd2a6e5',
           'Enables agents to hand off context and coordinate work through Orca.'
         )}
-        command={ORCHESTRATION_SKILL_INSTALL_COMMAND}
+        command={skillInstallCommand}
         terminalTitle="Orchestration setup"
         terminalAriaLabel="Orchestration skill install terminal"
-        terminalWorktreeId="settings-orchestration-skill-terminal"
+        terminalWorktreeId={`settings-orchestration-skill-terminal-${skillRuntime.runtime}`}
+        terminalShellOverride={skillTerminalShellOverride}
         installed={orchestrationSkillDetected}
         loading={orchestrationSkillLoading}
         error={orchestrationSkillError}
         icon={<Workflow className="size-5" />}
         preInstallNotice={AGENT_SKILL_CLI_PREREQUISITE_NOTICE}
+        getPrerequisiteStatus={getSkillPrerequisiteStatus}
+        isPrerequisiteAvailable={isOrcaCliAvailableOnPath}
         onBeforeOpenTerminal={async () => {
           useAppStore.getState().recordFeatureInteraction('agent-orchestration-setup')
-          await ensureOrcaCliAvailableForAgentSkillTerminal()
+          await (skillRuntime.runtime === 'wsl'
+            ? ensureWslCliAvailableForAgentSkillTerminal()
+            : ensureOrcaCliAvailableForAgentSkillTerminal())
         }}
         actionHint={
           <p className="text-[12px] leading-snug text-muted-foreground">
@@ -113,7 +172,7 @@ export function OrchestrationPane(): React.JSX.Element {
       />
 
       <OrchestrationSkillPromptDialog
-        command={ORCHESTRATION_SKILL_INSTALL_COMMAND}
+        command={skillInstallCommand}
         open={skillPromptOpen}
         onOpenChange={setSkillPromptOpen}
       />

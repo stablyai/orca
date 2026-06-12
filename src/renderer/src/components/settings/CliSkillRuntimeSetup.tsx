@@ -1,4 +1,8 @@
 import type { GlobalSettings } from '../../../../shared/types'
+import {
+  buildWslLoginShellCommand,
+  escapeWslShCommandForWindows
+} from '../../../../shared/wsl-login-shell-command'
 import { toast } from 'sonner'
 import type { CliInstallStatus } from '../../../../shared/cli-install-types'
 import {
@@ -11,6 +15,7 @@ import { translate } from '@/i18n/i18n'
 
 export type LocalAgentRuntime = {
   runtime: 'host' | 'wsl'
+  wslDistro?: string | null
   label: string
 }
 
@@ -31,9 +36,14 @@ export function getSelectedAgentRuntime(
     selectedRuntime === 'wsl' &&
     (wslAvailable || wslCapabilitiesLoading)
   ) {
+    const wslDistro =
+      settings.localAgentWslDistro?.trim() || settings.terminalWindowsWslDistro?.trim() || null
     return {
       runtime: 'wsl',
-      label: translate('auto.components.settings.CliSkillRuntimeSetup.c47127f222', 'WSL default')
+      wslDistro,
+      label: wslDistro
+        ? `WSL ${wslDistro}`
+        : translate('auto.components.settings.CliSkillRuntimeSetup.c47127f222', 'WSL default')
     }
   }
   return { runtime: 'host', label: getHostRuntimeLabel() }
@@ -43,13 +53,28 @@ function quotePowerShellSingle(value: string): string {
   return `'${value.replaceAll("'", "''")}'`
 }
 
+function quotePowerShellArgument(value: string): string {
+  return quotePowerShellSingle(value)
+}
+
 export function buildSkillInstallCommandForRuntime(
   command: string,
   runtime: LocalAgentRuntime
 ): string {
+  if (runtime.runtime !== 'wsl') {
+    return command
+  }
+  const distroArgs = runtime.wslDistro ? ` -d ${quotePowerShellArgument(runtime.wslDistro)}` : ''
+  const wslCommand = escapeWslShCommandForWindows(buildWslLoginShellCommand(command))
+  return `wsl.exe${distroArgs} -- sh -c ${quotePowerShellSingle(wslCommand)}`
+}
+
+export function getSkillDiscoveryTargetForRuntime(
+  runtime: LocalAgentRuntime
+): { runtime: 'wsl'; wslDistro?: string | null } | undefined {
   return runtime.runtime === 'wsl'
-    ? `wsl.exe -- bash -lc ${quotePowerShellSingle(command)}`
-    : command
+    ? { runtime: 'wsl', wslDistro: runtime.wslDistro ?? null }
+    : undefined
 }
 
 export function getAgentSkillTerminalShellOverride(

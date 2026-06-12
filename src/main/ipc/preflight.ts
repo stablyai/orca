@@ -11,6 +11,7 @@ import { getGiteaAuthStatus } from '../gitea/client'
 import { _resetKnownHostsCache } from '../gitlab/gl-utils'
 import { getActiveMultiplexer } from './ssh'
 import { detectWslCommandsOnPath, type WslPreflightTarget } from './preflight-wsl-agent-detection'
+import { runPreflightCommandInWsl } from './preflight-wsl-command'
 import { detectCommandsInInstallDirs } from './local-agent-install-dir-detection'
 const execFileAsync = promisify(execFile)
 const PREFLIGHT_COMMAND_TIMEOUT_MS = 5000
@@ -102,11 +103,7 @@ async function execCommandInWsl(
   target: WslPreflightTarget,
   command: string
 ): Promise<{ stdout: string; stderr: string }> {
-  const distroArgs = target.distro ? ['-d', target.distro] : []
-  const commandPromise = execFileAsync('wsl.exe', [...distroArgs, '--', 'bash', '-lc', command], {
-    encoding: 'utf-8',
-    timeout: PREFLIGHT_COMMAND_TIMEOUT_MS
-  }) as Promise<{ stdout: string; stderr: string }>
+  const commandPromise = runPreflightCommandInWsl(target, command, PREFLIGHT_COMMAND_TIMEOUT_MS)
   return withPreflightTimeout('wsl.exe', commandPromise)
 }
 

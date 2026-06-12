@@ -1015,12 +1015,7 @@ describe('createPtySubprocess', () => {
 
     expect(spawnMock).toHaveBeenCalledWith(
       'wsl.exe',
-      [
-        '--',
-        'bash',
-        '-c',
-        `cd '${expectedLinuxCwd}' && export PATH="$HOME/.local/bin:$PATH" && exec bash -l`
-      ],
+      ['--', 'sh', '-c', expect.stringContaining(`cd '${expectedLinuxCwd}'`)],
       expect.objectContaining({ cwd: expect.any(String) })
     )
   })
@@ -1057,14 +1052,7 @@ describe('createPtySubprocess', () => {
 
     expect(spawnMock).toHaveBeenCalledWith(
       'wsl.exe',
-      [
-        '-d',
-        'Debian',
-        '--',
-        'bash',
-        '-c',
-        `cd '${expectedLinuxCwd}' && export PATH="$HOME/.local/bin:$PATH" && exec bash -l`
-      ],
+      ['-d', 'Debian', '--', 'sh', '-c', expect.stringContaining(`cd '${expectedLinuxCwd}'`)],
       expect.objectContaining({ cwd: expect.any(String) })
     )
   })
@@ -1092,14 +1080,7 @@ describe('createPtySubprocess', () => {
 
     expect(spawnMock).toHaveBeenCalledWith(
       'wsl.exe',
-      [
-        '-d',
-        'Ubuntu',
-        '--',
-        'bash',
-        '-c',
-        'cd \'/home/jin/repo\' && export PATH="$HOME/.local/bin:$PATH" && exec bash -l'
-      ],
+      ['-d', 'Ubuntu', '--', 'sh', '-c', expect.stringContaining("cd '/home/jin/repo'")],
       expect.objectContaining({ cwd: expect.any(String) })
     )
   })
@@ -1127,14 +1108,7 @@ describe('createPtySubprocess', () => {
 
     expect(spawnMock).toHaveBeenCalledWith(
       'wsl.exe',
-      [
-        '-d',
-        'Ubuntu',
-        '--',
-        'bash',
-        '-c',
-        'cd \'/home/jin/repo\' && export PATH="$HOME/.local/bin:$PATH" && exec bash -l'
-      ],
+      ['-d', 'Ubuntu', '--', 'sh', '-c', expect.stringContaining("cd '/home/jin/repo'")],
       expect.objectContaining({
         env: expect.not.objectContaining({
           CODEX_HOME: expect.anything(),
@@ -1219,14 +1193,7 @@ describe('createPtySubprocess', () => {
 
     expect(spawnMock).toHaveBeenCalledWith(
       'wsl.exe',
-      [
-        '-d',
-        'Ubuntu',
-        '--',
-        'bash',
-        '-c',
-        `cd '${expectedLinuxCwd}' && export PATH="$HOME/.local/bin:$PATH" && exec bash -l`
-      ],
+      ['-d', 'Ubuntu', '--', 'sh', '-c', expect.stringContaining(`cd '${expectedLinuxCwd}'`)],
       expect.objectContaining({
         env: expect.objectContaining({
           CODEX_HOME: '/home/jin/.local/share/orca/codex-accounts/a/home',
@@ -1260,14 +1227,7 @@ describe('createPtySubprocess', () => {
 
     expect(spawnMock).toHaveBeenCalledWith(
       'wsl.exe',
-      [
-        '-d',
-        'Ubuntu',
-        '--',
-        'bash',
-        '-c',
-        'cd \'/home/jin/repo\' && export PATH="$HOME/.local/bin:$PATH" && exec bash -l'
-      ],
+      ['-d', 'Ubuntu', '--', 'sh', '-c', expect.stringContaining("cd '/home/jin/repo'")],
       expect.objectContaining({
         env: expect.objectContaining({ CODEX_HOME: '/home/jin/.codex-alt' })
       })
@@ -1350,14 +1310,7 @@ describe('createPtySubprocess', () => {
     )
     expect(spawnMock).toHaveBeenCalledWith(
       'wsl.exe',
-      [
-        '-d',
-        'Ubuntu',
-        '--',
-        'bash',
-        '-c',
-        'cd \'/home/jin/repo/subdir\' && export PATH="$HOME/.local/bin:$PATH" && exec bash -l'
-      ],
+      ['-d', 'Ubuntu', '--', 'sh', '-c', expect.stringContaining("cd '/home/jin/repo/subdir'")],
       expect.objectContaining({ cwd: expect.any(String) })
     )
   })

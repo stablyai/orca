@@ -278,10 +278,10 @@ describe('preflight', () => {
       }
       if (command === 'wsl.exe') {
         const script = String(args[5])
-        if (script === "'gh' --version") {
+        if (script.includes('gh') && script.includes('--version')) {
           return { stdout: 'gh version 2.0.0\n' }
         }
-        if (script === "'gh' auth status") {
+        if (script.includes('gh') && script.includes('auth status')) {
           return { stdout: 'github.com\n  - Active account: true\n' }
         }
         throw new Error(`unexpected WSL script ${script}`)
@@ -294,12 +294,12 @@ describe('preflight', () => {
     expect(status.gh).toEqual({ installed: true, authenticated: true })
     expect(execFileAsyncMock).toHaveBeenCalledWith(
       'wsl.exe',
-      ['-d', 'Ubuntu', '--', 'bash', '-lc', "'gh' --version"],
+      ['-d', 'Ubuntu', '--', 'sh', '-c', expect.stringMatching(/gh[\s\S]*--version/)],
       { encoding: 'utf-8', timeout: 5000 }
     )
     expect(execFileAsyncMock).toHaveBeenCalledWith(
       'wsl.exe',
-      ['-d', 'Ubuntu', '--', 'bash', '-lc', "'gh' auth status"],
+      ['-d', 'Ubuntu', '--', 'sh', '-c', expect.stringMatching(/gh[\s\S]*auth status/)],
       { encoding: 'utf-8', timeout: 5000 }
     )
   })
@@ -318,10 +318,18 @@ describe('preflight', () => {
         if (command === 'gh' || command === 'glab') {
           return Promise.reject(Object.assign(new Error('spawn ENOENT'), { code: 'ENOENT' }))
         }
-        if (command === 'wsl.exe' && Array.isArray(args) && args.at(-1) === "'gh' --version") {
+        if (
+          command === 'wsl.exe' &&
+          Array.isArray(args) &&
+          String(args.at(-1)).includes("'gh' --version")
+        ) {
           return new Promise(() => {})
         }
-        if (command === 'wsl.exe' && Array.isArray(args) && args.at(-1) === "'glab' --version") {
+        if (
+          command === 'wsl.exe' &&
+          Array.isArray(args) &&
+          String(args.at(-1)).includes("'glab' --version")
+        ) {
           return Promise.reject(Object.assign(new Error('spawn ENOENT'), { code: 'ENOENT' }))
         }
         throw new Error(`unexpected command ${String(command)}`)
@@ -606,9 +614,9 @@ describe('preflight', () => {
       expect.arrayContaining([
         '-d',
         'Ubuntu',
-        '--exec',
-        'bash',
-        '-ic',
+        '--',
+        'sh',
+        '-c',
         expect.stringContaining("'claude'")
       ]),
       { encoding: 'utf-8', timeout: 10000 }
@@ -637,7 +645,7 @@ describe('preflight', () => {
     expect(resolveCliCommandsMock).not.toHaveBeenCalled()
     expect(execFileAsyncMock).toHaveBeenCalledWith(
       'wsl.exe',
-      expect.arrayContaining(['--exec', 'bash', '-ic', expect.stringContaining("'codex'")]),
+      expect.arrayContaining(['--', 'sh', '-c', expect.stringContaining("'codex'")]),
       { encoding: 'utf-8', timeout: 10000 }
     )
   })
