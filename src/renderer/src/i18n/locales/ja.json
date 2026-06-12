@@ -10515,6 +10515,44 @@
             "8388bdea2b": "Connect Jira site"
           }
         }
+      },
+      "link": {
+        "routing": {
+          "preference": {
+            "dialog": {
+              "badge": "ターミナルリンク",
+              "preview": "プレビュー",
+              "title": "ターミナルのリンクを Orca のブラウザで開きますか？",
+              "description": "ターミナルのリンクを Orca のブラウザで開くか、システムブラウザを使い続けます。",
+              "orca": {
+                "button": "Orca で開く",
+                "note": "Orca はインポート済み Cookie を使ってログイン済みサイトを開けます。"
+              },
+              "settings": {
+                "note": "後で 設定 → ブラウザ から変更できます。"
+              },
+              "system": {
+                "button": "システムブラウザを使用"
+              },
+              "link": {
+                "label": "リンク"
+              },
+              "shortcut": {
+                "note": {
+                  "prefix": "リンクを Orca で開く場合、",
+                  "suffix": "クリックで今回だけシステムブラウザで開きます。"
+                }
+              },
+              "keep": {
+                "title": "ターミナルのリンクを Orca のブラウザで開き続けますか？",
+                "description": "またはシステムブラウザを既定で使用します。",
+                "orca": {
+                  "button": "Orca のままにする"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "i18n": {

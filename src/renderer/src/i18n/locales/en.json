@@ -10515,6 +10515,44 @@
             "8388bdea2b": "Connect Jira site"
           }
         }
+      },
+      "link": {
+        "routing": {
+          "preference": {
+            "dialog": {
+              "badge": "Terminal link",
+              "preview": "Preview",
+              "title": "Open terminal links in Orca's browser?",
+              "description": "Use Orca's browser for terminal links, or keep your system browser.",
+              "orca": {
+                "button": "Open in Orca",
+                "note": "Orca can use imported cookies for logged-in sites."
+              },
+              "settings": {
+                "note": "Change this later in Settings → Browser."
+              },
+              "system": {
+                "button": "Use system browser"
+              },
+              "link": {
+                "label": "Link"
+              },
+              "shortcut": {
+                "note": {
+                  "prefix": "When links open in Orca,",
+                  "suffix": "click opens system browser once."
+                }
+              },
+              "keep": {
+                "title": "Keep terminal links in Orca's browser?",
+                "description": "Or use your system browser by default.",
+                "orca": {
+                  "button": "Keep Orca"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "i18n": {

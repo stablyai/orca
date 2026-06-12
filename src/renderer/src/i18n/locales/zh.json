@@ -10515,6 +10515,44 @@
             "8388bdea2b": "Connect Jira site"
           }
         }
+      },
+      "link": {
+        "routing": {
+          "preference": {
+            "dialog": {
+              "badge": "终端链接",
+              "preview": "预览",
+              "title": "在 Orca 浏览器中打开终端链接？",
+              "description": "用 Orca 浏览器打开终端链接，或继续使用系统浏览器。",
+              "orca": {
+                "button": "在 Orca 中打开",
+                "note": "Orca 可以使用已导入的 Cookie 打开已登录的网站。"
+              },
+              "settings": {
+                "note": "之后可在设置 → 浏览器中更改。"
+              },
+              "system": {
+                "button": "使用系统浏览器"
+              },
+              "link": {
+                "label": "链接"
+              },
+              "shortcut": {
+                "note": {
+                  "prefix": "当链接在 Orca 中打开时，",
+                  "suffix": "点击可临时改用系统浏览器。"
+                }
+              },
+              "keep": {
+                "title": "继续在 Orca 浏览器中打开终端链接？",
+                "description": "或默认使用系统浏览器。",
+                "orca": {
+                  "button": "继续使用 Orca"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "i18n": {

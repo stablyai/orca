@@ -61,6 +61,7 @@ import { WorkspacePortScanner } from './components/ports/WorkspacePortScanner'
 import { CrashReportDialog } from './components/crash-report/CrashReportDialog'
 import { RecoverableRenderErrorBoundary } from './components/error-boundaries/RecoverableRenderErrorBoundary'
 import { ConfirmationDialogProvider } from './components/confirmation-dialog'
+import { LinkRoutingPreferenceDialogProvider } from './components/link-routing-preference-dialog'
 import RecentTabSwitcher from './components/tab-bar/RecentTabSwitcher'
 import { useGitStatusPolling } from './components/right-sidebar/useGitStatusPolling'
 import { useEditorExternalWatch } from './hooks/useEditorExternalWatch'
@@ -1773,7 +1774,8 @@ function App(): React.JSX.Element {
     >
       <TooltipProvider delayDuration={400}>
         <ConfirmationDialogProvider>
-          <WorkspacePortScanner enabled={workspaceSessionReady} />
+          <LinkRoutingPreferenceDialogProvider>
+            <WorkspacePortScanner enabled={workspaceSessionReady} />
           {/* Why: leaf-mounted retention sync keeps agent-status retention
             subscriptions from re-rendering the App tree. */}
           <RetainedAgentsSyncGate />
@@ -2287,6 +2289,7 @@ function App(): React.JSX.Element {
           >
             <RecentTabSwitcher />
           </RecoverableRenderErrorBoundary>
+          </LinkRoutingPreferenceDialogProvider>
         </ConfirmationDialogProvider>
       </TooltipProvider>
       <Toaster closeButton toastOptions={{ className: 'font-sans text-sm' }} />

@@ -35,7 +35,7 @@ export function openHttpLink(url: string, opts: OpenHttpLinkOptions = {}): void 
     !remoteRuntimeActive &&
     !forceSystemBrowser &&
     Boolean(worktreeId) &&
-    state?.settings?.openLinksInApp !== false
+    state?.settings?.openLinksInApp === true
 
   if (routeToOrca && worktreeId && state) {
     // Why: http clicks from inside a worktree should not push a worktree-switch

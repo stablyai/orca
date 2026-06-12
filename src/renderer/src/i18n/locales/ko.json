@@ -10515,6 +10515,44 @@
             "8388bdea2b": "Connect Jira site"
           }
         }
+      },
+      "link": {
+        "routing": {
+          "preference": {
+            "dialog": {
+              "badge": "터미널 링크",
+              "preview": "미리보기",
+              "title": "터미널 링크를 Orca 브라우저에서 열까요?",
+              "description": "터미널 링크를 Orca 브라우저에서 열거나 시스템 브라우저를 계속 사용합니다.",
+              "orca": {
+                "button": "Orca에서 열기",
+                "note": "Orca는 가져온 쿠키를 사용해 로그인된 사이트를 열 수 있습니다."
+              },
+              "settings": {
+                "note": "나중에 설정 → 브라우저에서 변경할 수 있습니다."
+              },
+              "system": {
+                "button": "시스템 브라우저 사용"
+              },
+              "link": {
+                "label": "링크"
+              },
+              "shortcut": {
+                "note": {
+                  "prefix": "링크가 Orca에서 열릴 때,",
+                  "suffix": "클릭하면 한 번만 시스템 브라우저에서 열립니다."
+                }
+              },
+              "keep": {
+                "title": "터미널 링크를 Orca 브라우저에서 계속 열까요?",
+                "description": "또는 시스템 브라우저를 기본값으로 사용합니다.",
+                "orca": {
+                  "button": "Orca 유지"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "i18n": {
