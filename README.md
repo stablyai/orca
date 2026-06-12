@@ -25,7 +25,7 @@
 </p>
 
 <p align="center">
-  <img src="docs/assets/readme-feature-showcase.gif" alt="Orca feature showcase cycling through parallel worktrees, terminal splits, design mode, GitHub and Linear workflows, CLI agents, and SSH worktrees" width="960" />
+  <img src="docs/assets/readme-hero.jpg" alt="Orca desktop app running agents in parallel worktrees, with the Orca mobile companion app in the corner" width="960" />
 </p>
 
 ## Why Orca
