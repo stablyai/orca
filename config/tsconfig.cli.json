@@ -23,6 +23,7 @@
     "../src/main/grok/hook-service.ts",
     "../src/main/devin/hook-settings.ts",
     "../src/main/devin/hook-service.ts",
+    "../src/main/devin/hook-config-json.ts",
     "../src/main/hermes/hook-service.ts",
     "../src/main/openclaude/hook-service.ts",
     "../src/main/runtime/runtime-metadata.ts",

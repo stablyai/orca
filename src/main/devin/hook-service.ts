@@ -2,9 +2,8 @@ import type { SFTPWrapper } from 'ssh2'
 import type { AgentHookInstallState, AgentHookInstallStatus } from '../../shared/agent-hook-types'
 import {
   buildWindowsAgentHookPostCommand,
-  readHooksJson,
   writeHooksJson,
-  writeManagedScript
+  writeManagedScript,
 } from '../agent-hooks/installer-utils'
 import {
   readHooksJsonRemote,
@@ -25,6 +24,11 @@ import {
   getDevinRemoteConfigPath,
   getDevinRemoteManagedCommand
 } from './hook-settings'
+import {
+  mergeHookInstallDetail,
+  readConfigFromOrcaOverlapDetail,
+  readDevinHooksConfig
+} from './hook-config-json'
 
 function getManagedScript(target: 'local' | 'posix' = 'local'): string {
   if (target === 'local' && process.platform === 'win32') {
@@ -97,14 +101,14 @@ export class DevinHookService {
   getStatus(): AgentHookInstallStatus {
     const configPath = getDevinConfigPath()
     const scriptPath = getDevinManagedScriptPath()
-    const config = readHooksJson(configPath)
+    const config = readDevinHooksConfig(configPath)
     if (!config) {
       return {
         agent: 'devin',
         state: 'error',
         configPath,
         managedHooksPresent: false,
-        detail: `Could not parse ${'Devin'} settings.json`
+        detail: 'Could not parse Devin config.json'
       }
     }
 
@@ -141,20 +145,26 @@ export class DevinHookService {
       state = 'partial'
       detail = `Managed hook missing for events: ${missing.join(', ')}`
     }
-    return { agent: 'devin', state, configPath, managedHooksPresent, detail }
+    return {
+      agent: 'devin',
+      state,
+      configPath,
+      managedHooksPresent,
+      detail: mergeHookInstallDetail(detail, readConfigFromOrcaOverlapDetail(config))
+    }
   }
 
   install(): AgentHookInstallStatus {
     const configPath = getDevinConfigPath()
     const scriptPath = getDevinManagedScriptPath()
-    const config = readHooksJson(configPath)
+    const config = readDevinHooksConfig(configPath)
     if (!config) {
       return {
         agent: 'devin',
         state: 'error',
         configPath,
         managedHooksPresent: false,
-        detail: `Could not parse ${'Devin'} settings.json`
+        detail: 'Could not parse Devin config.json'
       }
     }
 
@@ -195,7 +205,7 @@ export class DevinHookService {
           state: 'error',
           configPath: remoteConfigPath,
           managedHooksPresent: false,
-          detail: `Could not parse remote ${'Devin'} settings.json`
+          detail: 'Could not parse remote Devin config.json'
         }
       }
 
@@ -235,14 +245,14 @@ export class DevinHookService {
 
   remove(): AgentHookInstallStatus {
     const configPath = getDevinConfigPath()
-    const config = readHooksJson(configPath)
+    const config = readDevinHooksConfig(configPath)
     if (!config) {
       return {
         agent: 'devin',
         state: 'error',
         configPath,
         managedHooksPresent: false,
-        detail: `Could not parse ${'Devin'} settings.json`
+        detail: 'Could not parse Devin config.json'
       }
     }
     const { config: nextConfig, changed } = removeManagedHooks(

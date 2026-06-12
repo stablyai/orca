@@ -16,6 +16,7 @@ vi.mock('os', async () => {
 })
 
 import { DevinHookService } from './hook-service'
+import { getDevinManagedCommand } from './hook-settings'
 
 describe('DevinHookService', () => {
   let homeDir: string
@@ -65,5 +66,79 @@ describe('DevinHookService', () => {
     }
     expect(config.permissions.mode).toBe('normal')
     expect(config.hooks.UserPromptSubmit).toBeDefined()
+  })
+
+  it('installs when Devin config uses JSONC comments', () => {
+    const configPath = join(homeDir, '.config', 'devin', 'config.json')
+    mkdirSync(dirname(configPath), { recursive: true })
+    writeFileSync(
+      configPath,
+      `{
+  // user hooks
+  "hooks": {}
+}
+`
+    )
+
+    const status = new DevinHookService().install()
+
+    expect(status.state).toBe('installed')
+    expect(JSON.parse(readFileSync(configPath, 'utf8')).hooks.UserPromptSubmit).toBeDefined()
+  })
+
+  it('surfaces read_config_from overlap in status detail', () => {
+    const configPath = join(homeDir, '.config', 'devin', 'config.json')
+    mkdirSync(dirname(configPath), { recursive: true })
+    writeFileSync(
+      configPath,
+      `${JSON.stringify({ hooks: {}, read_config_from: ['claude'] }, null, 2)}\n`
+    )
+
+    const status = new DevinHookService().getStatus()
+
+    expect(status.detail).toContain('read_config_from')
+    expect(status.detail).toContain('claude')
+  })
+
+  it('uses forward slashes in managed hook command on Windows', () => {
+    const previous = process.platform
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+    try {
+      const scriptPath = 'C:\\Users\\alice\\.orca\\agent-hooks\\devin-hook.cmd'
+      expect(getDevinManagedCommand(scriptPath)).toBe(
+        'C:/Users/alice/.orca/agent-hooks/devin-hook.cmd'
+      )
+    } finally {
+      Object.defineProperty(process, 'platform', { value: previous })
+    }
+  })
+
+  it('reports not_installed when Devin config has no managed hooks', () => {
+    const configPath = join(homeDir, '.config', 'devin', 'config.json')
+    mkdirSync(dirname(configPath), { recursive: true })
+    writeFileSync(configPath, `${JSON.stringify({ hooks: {} }, null, 2)}\n`)
+
+    const status = new DevinHookService().getStatus()
+
+    expect(status.state).toBe('not_installed')
+    expect(status.managedHooksPresent).toBe(false)
+  })
+
+  it('remove clears managed hook commands from Devin config', () => {
+    const service = new DevinHookService()
+    const installed = service.install()
+    expect(installed.state).toBe('installed')
+
+    const removed = service.remove()
+
+    expect(removed.state).toBe('not_installed')
+    const configPath = join(homeDir, '.config', 'devin', 'config.json')
+    const config = JSON.parse(readFileSync(configPath, 'utf8')) as {
+      hooks: Record<string, { hooks: { command: string }[] }[]>
+    }
+    const commands = Object.values(config.hooks).flatMap((definitions) =>
+      definitions.flatMap((definition) => definition.hooks.map((hook) => hook.command))
+    )
+    expect(commands.some((command) => command.includes('devin-hook'))).toBe(false)
   })
 })

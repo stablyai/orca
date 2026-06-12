@@ -9,7 +9,8 @@ export const RESUMABLE_TUI_AGENTS = [
   'antigravity',
   'opencode',
   'droid',
-  'grok'
+  'grok',
+  'devin'
 ] as const satisfies readonly TuiAgent[]
 
 export type ResumableTuiAgent = (typeof RESUMABLE_TUI_AGENTS)[number]
@@ -157,5 +158,7 @@ export function getAgentResumeArgv(
       return providerSession.key === 'session_id' ? ['droid', '--resume', id] : null
     case 'grok':
       return providerSession.key === 'session_id' ? ['grok', '--resume', id] : null
+    case 'devin':
+      return providerSession.key === 'session_id' ? ['devin', '--resume', id] : null
   }
 }

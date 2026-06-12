@@ -9,10 +9,7 @@ const DEVIN_SCRIPT_BASE = 'devin-hook'
 
 export function getDevinConfigPath(): string {
   if (process.platform === 'win32') {
-    const appData = process.env.APPDATA
-    if (!appData) {
-      throw new Error('APPDATA is not set')
-    }
+    const appData = process.env.APPDATA ?? join(homedir(), 'AppData', 'Roaming')
     return join(appData, 'devin', 'config.json')
   }
   return join(homedir(), '.config', 'devin', 'config.json')
@@ -35,7 +32,11 @@ export function getDevinRemoteConfigPath(remoteHome: string): string {
 }
 
 export function getDevinManagedCommand(scriptPath: string): string {
-  return process.platform === 'win32' ? scriptPath : wrapPosixHookCommand(scriptPath)
+  if (process.platform === 'win32') {
+    // Why: Devin documents Claude Code–compatible hooks; forward slashes survive Git Bash on Windows.
+    return scriptPath.replaceAll('\\', '/')
+  }
+  return wrapPosixHookCommand(scriptPath)
 }
 
 export function getDevinRemoteManagedCommand(scriptPath: string): string {
