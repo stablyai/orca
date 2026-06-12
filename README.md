@@ -233,7 +233,7 @@ Download once — Orca auto-updates. Also available at **[onOrca.dev](https://on
 - **Twitter / X:** Follow **[@orca_build](https://x.com/orca_build)** for updates and announcements.
 - **Feedback &amp; Ideas:** We ship fast. Missing something? [Request a new feature](https://github.com/stablyai/orca/issues).
 - **Privacy:** See the [privacy &amp; telemetry docs](https://www.onorca.dev/docs/telemetry) for what anonymous usage data Orca collects and how to opt out.
-- **Show Support:** Star this repo to follow along with our daily ships.
+- **Show Support:** [Star](https://github.com/stablyai/orca) this repo to follow along with our daily ships.
 
 ---
 
