@@ -62,9 +62,7 @@ import {
   triggerEdgeBump
 } from '../../../../src/platform/haptics'
 import {
-  TerminalWebView,
   type TerminalKeyboardAvoidanceMetrics,
-  type MobileTerminalTheme,
   type TerminalModes,
   type TerminalWebViewHandle
 } from '../../../../src/terminal/TerminalWebView'
@@ -127,6 +125,18 @@ import {
   buildMobileImagePastePayload,
   saveMobileClipboardImageAsTempFile
 } from '../../../../src/session/mobile-clipboard-image'
+import { TerminalPaneView } from '../../../../src/session/TerminalPaneView'
+import {
+  getRepoIdFromMobileWorktreeId,
+  isFileExistsErrorMessage,
+  isGestureMouseTrackingMode,
+  MOBILE_SESSION_STATUS_LABELS,
+  TERMINAL_GESTURE_INPUT_BUCKET_CAPACITY,
+  TERMINAL_GESTURE_INPUT_FLUSH_DELAY_MS,
+  TERMINAL_GESTURE_INPUT_MAX_PENDING_SEQUENCES,
+  TERMINAL_GESTURE_INPUT_MAX_QUEUE_AGE_MS,
+  TERMINAL_GESTURE_INPUT_REFILL_PER_SECOND
+} from '../../../../src/session/mobile-session-route-helpers'
 import { resolveMarkdownFloatingActionsBottom } from '../../../../src/session/markdown-floating-actions-layout'
 import { resolveTabStripScrollOffset } from '../../../../src/session/tab-strip-scroll'
 import {
@@ -192,106 +202,6 @@ function getMobileSessionTabTitle(tab: MobileSessionTab): string {
     return tab.title || 'File'
   }
   return tab.title || 'Terminal'
-}
-
-function isFileExistsErrorMessage(message: string): boolean {
-  const normalized = message.toLowerCase()
-  return normalized.includes('eexist') || normalized.includes('already exists')
-}
-
-function getRepoIdFromMobileWorktreeId(id: string): string {
-  // Why: mobile cannot import desktop shared modules in its standalone tsc run,
-  // but the runtime worktree id wire format is still `${repoId}::${path}`.
-  const separatorIdx = id.indexOf('::')
-  return separatorIdx === -1 ? id : id.slice(0, separatorIdx)
-}
-
-const STATUS_LABELS: Record<ConnectionState, string> = {
-  connecting: 'Connecting',
-  handshaking: 'Securing',
-  connected: 'Connected',
-  disconnected: 'Disconnected',
-  reconnecting: 'Reconnecting',
-  'auth-failed': 'Auth failed'
-}
-
-const TERMINAL_GESTURE_INPUT_BUCKET_CAPACITY = 64
-const TERMINAL_GESTURE_INPUT_REFILL_PER_SECOND = 120
-const TERMINAL_GESTURE_INPUT_FLUSH_DELAY_MS = 16
-const TERMINAL_GESTURE_INPUT_MAX_PENDING_SEQUENCES = 32
-const TERMINAL_GESTURE_INPUT_MAX_QUEUE_AGE_MS = 250
-
-function isWheelMouseTrackingMode(mode: TerminalModes['mouseTrackingMode'] | undefined): boolean {
-  return mode === 'vt200' || mode === 'drag' || mode === 'any'
-}
-
-function isGestureMouseTrackingMode(mode: TerminalModes['mouseTrackingMode'] | undefined): boolean {
-  return mode === 'x10' || isWheelMouseTrackingMode(mode)
-}
-
-function TerminalPaneView({
-  handle,
-  active,
-  keyboardLift,
-  terminalTheme,
-  onRef,
-  onWebReady,
-  onSelectionMode,
-  onSelectionCopy,
-  onSelectionEvicted,
-  onModesChanged,
-  onKeyboardAvoidanceMetrics,
-  onHaptic,
-  onTerminalInput,
-  onTerminalTap
-}: {
-  handle: string
-  active: boolean
-  keyboardLift: number
-  terminalTheme?: MobileTerminalTheme
-  onRef: (handle: string, ref: TerminalWebViewHandle | null) => void
-  onWebReady: (handle: string) => void
-  onSelectionMode: (handle: string, active: boolean) => void
-  onSelectionCopy: (handle: string, text: string) => void
-  onSelectionEvicted: (handle: string) => void
-  onModesChanged: (handle: string, modes: TerminalModes) => void
-  onKeyboardAvoidanceMetrics: (handle: string, metrics: TerminalKeyboardAvoidanceMetrics) => void
-  onHaptic: (kind: 'selection' | 'success' | 'error' | 'edge-bump') => void
-  onTerminalInput: (handle: string, bytes: string) => void
-  onTerminalTap: (handle: string) => void
-}) {
-  const setRef = useCallback(
-    (ref: TerminalWebViewHandle | null) => {
-      onRef(handle, ref)
-    },
-    [handle, onRef]
-  )
-
-  return (
-    <View
-      pointerEvents={active ? 'auto' : 'none'}
-      style={[
-        styles.terminalPane,
-        keyboardLift > 0 && { transform: [{ translateY: -keyboardLift }] },
-        !active && styles.terminalPaneHidden
-      ]}
-    >
-      <TerminalWebView
-        ref={setRef}
-        style={styles.terminalWebView}
-        terminalTheme={terminalTheme}
-        onWebReady={() => onWebReady(handle)}
-        onSelectionMode={(a) => onSelectionMode(handle, a)}
-        onSelectionCopy={(t) => onSelectionCopy(handle, t)}
-        onSelectionEvicted={() => onSelectionEvicted(handle)}
-        onModesChanged={(m) => onModesChanged(handle, m)}
-        onKeyboardAvoidanceMetrics={(m) => onKeyboardAvoidanceMetrics(handle, m)}
-        onHaptic={onHaptic}
-        onTerminalInput={(bytes) => onTerminalInput(handle, bytes)}
-        onTerminalTap={() => onTerminalTap(handle)}
-      />
-    </View>
-  )
 }
 
 function MarkdownReader({
@@ -3644,7 +3554,7 @@ export default function SessionScreen() {
           : `${visibleTabs.length} tabs`
       : showConnectionRetry
         ? `${connectionVerdict.label} — tap to retry`
-        : STATUS_LABELS[connState]
+        : MOBILE_SESSION_STATUS_LABELS[connState]
 
   // Why: keep safe-area padding in layout at all times, then visually translate
   // the controls over the terminal when the keyboard appears. iOS keyboard
