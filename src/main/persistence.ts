@@ -3581,6 +3581,121 @@ export class Store {
     this.scheduleSave()
   }
 
+  /**
+   * Move every worktreeId-keyed record from `oldWorktreeId` to `newWorktreeId`
+   * after the worktree's folder (and thus its `${repoId}::${path}` id) was
+   * renamed on disk, so a post-move refresh re-binds the worktree's state under
+   * the new id instead of orphaning it. Records the old id on the new meta's
+   * `priorWorktreeIds` so the session GC/hydration can still recognize PTY
+   * sessions minted under the old (path-derived) id. No-op when the ids match.
+   *
+   * Renderer counterpart: `buildWorktreeRenameState` in store/slices/worktrees.ts
+   * re-keys the renderer's own worktree-scoped maps for the same id change.
+   */
+  migrateWorktreeIdentity(oldWorktreeId: string, newWorktreeId: string): void {
+    if (oldWorktreeId === newWorktreeId) {
+      return
+    }
+    const moveKey = <T>(
+      record: Record<string, T>,
+      mapValue: (value: T) => T = (value) => value
+    ): boolean => {
+      if (!(oldWorktreeId in record)) {
+        return false
+      }
+      record[newWorktreeId] = mapValue(record[oldWorktreeId])
+      delete record[oldWorktreeId]
+      return true
+    }
+    const moveOptionalKey = <T>(
+      record: Record<string, T> | undefined,
+      mapValue?: (value: T) => T
+    ): boolean => (record ? moveKey(record, mapValue) : false)
+    const withNewWorktreeId = <T extends { worktreeId: string }>(value: T): T =>
+      value.worktreeId === oldWorktreeId ? { ...value, worktreeId: newWorktreeId } : value
+
+    let changed = moveKey(this.state.worktreeMeta)
+    // Record the prior id so a session minted under it isn't reaped as an orphan.
+    const newMeta = this.state.worktreeMeta[newWorktreeId]
+    if (newMeta) {
+      const prior = newMeta.priorWorktreeIds ?? []
+      if (!prior.includes(oldWorktreeId)) {
+        newMeta.priorWorktreeIds = [...prior, oldWorktreeId]
+        changed = true
+      }
+    }
+
+    changed = moveKey(this.state.worktreeLineageById) || changed
+    const movedLineage = this.state.worktreeLineageById[newWorktreeId]
+    if (movedLineage && movedLineage.worktreeId === oldWorktreeId) {
+      movedLineage.worktreeId = newWorktreeId
+    }
+    // Why: other worktrees created from this one carry it as parentWorktreeId;
+    // the stable parentWorktreeInstanceId is unaffected, but keep the denormalized
+    // path-derived id consistent too.
+    for (const lineage of Object.values(this.state.worktreeLineageById)) {
+      if (lineage.parentWorktreeId === oldWorktreeId) {
+        lineage.parentWorktreeId = newWorktreeId
+        changed = true
+      }
+    }
+
+    const session = this.state.workspaceSession
+    changed =
+      moveOptionalKey(session.tabsByWorktree, (tabs) => tabs.map(withNewWorktreeId)) || changed
+    changed =
+      moveOptionalKey(session.openFilesByWorktree, (files) => files.map(withNewWorktreeId)) ||
+      changed
+    changed = moveOptionalKey(session.activeFileIdByWorktree) || changed
+    changed =
+      moveOptionalKey(session.browserTabsByWorktree, (workspaces) =>
+        workspaces.map(withNewWorktreeId)
+      ) || changed
+    if (session.browserPagesByWorkspace) {
+      let pagesChanged = false
+      const nextPagesByWorkspace = { ...session.browserPagesByWorkspace }
+      for (const [workspaceId, pages] of Object.entries(nextPagesByWorkspace)) {
+        if (!pages.some((page) => page.worktreeId === oldWorktreeId)) {
+          continue
+        }
+        nextPagesByWorkspace[workspaceId] = pages.map(withNewWorktreeId)
+        pagesChanged = true
+      }
+      if (pagesChanged) {
+        session.browserPagesByWorkspace = nextPagesByWorkspace
+        changed = true
+      }
+    }
+    changed = moveOptionalKey(session.activeBrowserTabIdByWorktree) || changed
+    changed = moveOptionalKey(session.activeTabTypeByWorktree) || changed
+    changed = moveOptionalKey(session.activeTabIdByWorktree) || changed
+    changed = moveOptionalKey(session.unifiedTabs, (tabs) => tabs.map(withNewWorktreeId)) || changed
+    changed =
+      moveOptionalKey(session.tabGroups, (groups) => groups.map(withNewWorktreeId)) || changed
+    changed = moveOptionalKey(session.tabGroupLayouts) || changed
+    changed = moveOptionalKey(session.activeGroupIdByWorktree) || changed
+    changed = moveOptionalKey(session.lastVisitedAtByWorktreeId) || changed
+    changed = moveOptionalKey(session.defaultTerminalTabsAppliedByWorktreeId) || changed
+    if (session.activeWorktreeIdsOnShutdown?.includes(oldWorktreeId)) {
+      session.activeWorktreeIdsOnShutdown = session.activeWorktreeIdsOnShutdown.map((id) =>
+        id === oldWorktreeId ? newWorktreeId : id
+      )
+      changed = true
+    }
+    if (session.activeWorktreeId === oldWorktreeId) {
+      session.activeWorktreeId = newWorktreeId
+      changed = true
+    }
+    const showDotfiles = this.state.ui?.showDotfilesByWorktree
+    if (showDotfiles) {
+      changed = moveKey(showDotfiles) || changed
+    }
+
+    if (changed) {
+      this.scheduleSave()
+    }
+  }
+
   // ── Settings ───────────────────────────────────────────────────────
 
   getSettings(): GlobalSettings {

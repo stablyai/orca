@@ -7279,3 +7279,109 @@ describe('Store', () => {
     })
   })
 })
+
+describe('Store.migrateWorktreeIdentity', () => {
+  const OLD = 'repo1::/ws/cunner'
+  const NEW = 'repo1::/ws/worktree-creation-spinner'
+
+  it('moves meta, lineage, tabs, active pointers, and records the prior id', async () => {
+    const store = await createStore()
+    store.setWorktreeMeta(OLD, { displayName: 'Cunner', linkedIssue: 42 })
+    store.setWorktreeLineage(OLD, makeWorktreeLineage({ worktreeId: OLD }))
+    store.setWorkspaceSession({
+      activeRepoId: 'repo1',
+      activeWorktreeId: OLD,
+      activeTabId: 'tab1',
+      tabsByWorktree: { [OLD]: [makeTerminalTab({ id: 'tab1', worktreeId: OLD })] },
+      activeWorktreeIdsOnShutdown: [OLD],
+      openFilesByWorktree: {
+        [OLD]: [
+          { filePath: '/ws/cunner/a.ts', relativePath: 'a.ts', worktreeId: OLD, language: 'ts' }
+        ]
+      },
+      activeFileIdByWorktree: { [OLD]: '/ws/cunner/a.ts' },
+      browserTabsByWorktree: {
+        [OLD]: [{ id: 'browser1', worktreeId: OLD, title: 'Browser', url: 'about:blank' }]
+      },
+      browserPagesByWorkspace: {
+        browser1: [{ id: 'page1', workspaceId: 'browser1', worktreeId: OLD }]
+      },
+      activeBrowserTabIdByWorktree: { [OLD]: 'browser1' },
+      activeTabTypeByWorktree: { [OLD]: 'browser' },
+      activeTabIdByWorktree: { [OLD]: 'tab1' },
+      unifiedTabs: { [OLD]: [{ id: 'unified1', worktreeId: OLD }] },
+      tabGroups: {
+        [OLD]: [{ id: 'group1', worktreeId: OLD, activeTabId: 'unified1', tabOrder: ['unified1'] }]
+      },
+      tabGroupLayouts: { [OLD]: { type: 'leaf', groupId: 'group1' } },
+      activeGroupIdByWorktree: { [OLD]: 'group1' },
+      lastVisitedAtByWorktreeId: { [OLD]: 123 },
+      defaultTerminalTabsAppliedByWorktreeId: { [OLD]: true },
+      terminalLayoutsByTabId: {}
+    } as unknown as WorkspaceSessionState)
+
+    store.migrateWorktreeIdentity(OLD, NEW)
+
+    expect(store.getWorktreeMeta(OLD)).toBeUndefined()
+    const meta = store.getWorktreeMeta(NEW)
+    expect(meta?.displayName).toBe('Cunner')
+    expect(meta?.linkedIssue).toBe(42)
+    expect(meta?.priorWorktreeIds).toEqual([OLD])
+
+    expect(store.getWorktreeLineage(OLD)).toBeUndefined()
+    expect(store.getWorktreeLineage(NEW)?.worktreeId).toBe(NEW)
+
+    // The live session's tab keeps its frozen ptyId but now belongs to the new id.
+    expect(store.getWorktreeIdForTab('tab1')).toBe(NEW)
+    const session = store.getWorkspaceSession()
+    expect(session.tabsByWorktree[OLD]).toBeUndefined()
+    expect(session.tabsByWorktree[NEW]?.[0]?.worktreeId).toBe(NEW)
+    expect(session.activeWorktreeIdsOnShutdown).toEqual([NEW])
+    expect(session.openFilesByWorktree?.[OLD]).toBeUndefined()
+    expect(session.openFilesByWorktree?.[NEW]?.[0]?.worktreeId).toBe(NEW)
+    expect(session.activeFileIdByWorktree?.[NEW]).toBe('/ws/cunner/a.ts')
+    expect(session.browserTabsByWorktree?.[OLD]).toBeUndefined()
+    expect(session.browserTabsByWorktree?.[NEW]?.[0]?.worktreeId).toBe(NEW)
+    expect(session.browserPagesByWorkspace?.browser1?.[0]?.worktreeId).toBe(NEW)
+    expect(session.activeBrowserTabIdByWorktree?.[NEW]).toBe('browser1')
+    expect(session.activeTabTypeByWorktree?.[NEW]).toBe('browser')
+    expect(session.activeWorktreeId).toBe(NEW)
+    expect(session.activeTabIdByWorktree?.[NEW]).toBe('tab1')
+    expect(session.unifiedTabs?.[NEW]?.[0]?.worktreeId).toBe(NEW)
+    expect(session.tabGroups?.[NEW]?.[0]?.worktreeId).toBe(NEW)
+    expect(session.tabGroupLayouts?.[NEW]).toEqual({ type: 'leaf', groupId: 'group1' })
+    expect(session.activeGroupIdByWorktree?.[NEW]).toBe('group1')
+    expect(session.lastVisitedAtByWorktreeId?.[NEW]).toBe(123)
+    expect(session.defaultTerminalTabsAppliedByWorktreeId?.[NEW]).toBe(true)
+  })
+
+  it('rewrites parentWorktreeId back-references in other lineage entries', async () => {
+    const store = await createStore()
+    store.setWorktreeMeta(OLD, { displayName: 'Cunner' })
+    const CHILD = 'repo1::/ws/child'
+    store.setWorktreeLineage(
+      CHILD,
+      makeWorktreeLineage({ worktreeId: CHILD, parentWorktreeId: OLD })
+    )
+
+    store.migrateWorktreeIdentity(OLD, NEW)
+
+    expect(store.getWorktreeLineage(CHILD)?.parentWorktreeId).toBe(NEW)
+  })
+
+  it('accumulates prior ids across chained renames', async () => {
+    const store = await createStore()
+    store.setWorktreeMeta(OLD, { displayName: 'Cunner' })
+    store.migrateWorktreeIdentity(OLD, NEW)
+    const NEWER = 'repo1::/ws/final-name'
+    store.migrateWorktreeIdentity(NEW, NEWER)
+    expect(store.getWorktreeMeta(NEWER)?.priorWorktreeIds).toEqual([OLD, NEW])
+  })
+
+  it('is a no-op when the ids match', async () => {
+    const store = await createStore()
+    store.setWorktreeMeta(OLD, { displayName: 'Cunner' })
+    store.migrateWorktreeIdentity(OLD, OLD)
+    expect(store.getWorktreeMeta(OLD)?.priorWorktreeIds).toBeUndefined()
+  })
+})

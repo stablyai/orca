@@ -12,7 +12,8 @@ const {
   generateBranchNameMock,
   resolveTextGenerationParamsMock,
   prepareLocalEnvMock,
-  computeBranchNameMock
+  computeBranchNameMock,
+  getConfiguredBranchPrefixMock
 } = vi.hoisted(() => ({
   gitExecFileAsyncMock: vi.fn(),
   getGitUsernameMock: vi.fn(() => 'you'),
@@ -21,7 +22,9 @@ const {
   generateBranchNameMock: vi.fn(),
   resolveTextGenerationParamsMock: vi.fn(),
   prepareLocalEnvMock: vi.fn(async () => ({ ok: true as const })),
-  computeBranchNameMock: vi.fn((leaf: string) => `you/${leaf}`)
+  computeBranchNameMock: vi.fn((leaf: string) => `you/${leaf}`),
+  // Mirror computeBranchNameMock's `you/` strategy so prefix stripping is realistic.
+  getConfiguredBranchPrefixMock: vi.fn((_settings: unknown, username: string | null) => username)
 }))
 
 vi.mock('../git/runner', () => ({ gitExecFileAsync: gitExecFileAsyncMock }))
@@ -35,7 +38,10 @@ vi.mock('../text-generation/commit-message-text-generation', () => ({
 vi.mock('../text-generation/commit-message-agent-environment', () => ({
   prepareLocalCommitMessageAgentEnv: prepareLocalEnvMock
 }))
-vi.mock('../ipc/worktree-logic', () => ({ computeBranchName: computeBranchNameMock }))
+vi.mock('../ipc/worktree-logic', () => ({
+  computeBranchName: computeBranchNameMock,
+  getConfiguredBranchPrefix: getConfiguredBranchPrefixMock
+}))
 
 import {
   FIRST_WORK_BRANCH_RENAME_SETTLED_CACHE_LIMIT,
@@ -87,16 +93,19 @@ function makeDeps(overrides: Partial<FirstWorkBranchRenameDeps> = {}): {
   deps: FirstWorkBranchRenameDeps
   onRenamed: ReturnType<typeof vi.fn>
   setDisplayName: ReturnType<typeof vi.fn>
+  renameWorktreeFolder: ReturnType<typeof vi.fn>
   setRenameError: ReturnType<typeof vi.fn>
 } {
   const onRenamed = vi.fn()
   const setDisplayName = vi.fn()
+  const renameWorktreeFolder = vi.fn(async () => false)
   const setRenameError = vi.fn()
   const settings = { autoRenameBranchFromWork: true } as unknown as GlobalSettings
   const repo = { id: REPO_ID, path: '/repo', connectionId: undefined } as unknown as Repo
   return {
     onRenamed,
     setDisplayName,
+    renameWorktreeFolder,
     setRenameError,
     deps: {
       getSettings: () => settings,
@@ -105,6 +114,7 @@ function makeDeps(overrides: Partial<FirstWorkBranchRenameDeps> = {}): {
       getCurrentDisplayName: () => 'Nautilus-8',
       canRenameOrcaCreatedBranch: () => true,
       setDisplayName,
+      renameWorktreeFolder,
       setRenameError,
       resolveWorktreeIdForTab: () => WORKTREE_ID,
       onRenamed,
@@ -162,6 +172,49 @@ describe('maybeAutoRenameBranchOnFirstWork', () => {
     )
     expect(setDisplayName).toHaveBeenCalledWith(WORKTREE_ID, 'Fix auth')
     expect(onRenamed).toHaveBeenCalledWith(REPO_ID)
+  })
+
+  it('asks to align the on-disk folder with the generated slug after renaming', async () => {
+    const { deps, renameWorktreeFolder } = makeDeps()
+    await maybeAutoRenameBranchOnFirstWork(workingEvent(), deps)
+    expect(renameWorktreeFolder).toHaveBeenCalledWith(WORKTREE_ID, 'fix-auth')
+  })
+
+  it('skips the redundant branch-rename notify when the folder rename succeeded', async () => {
+    // The folder rename already pushed a worktrees:changed carrying the id mapping,
+    // so onRenamed would only trigger a second, redundant renderer re-list.
+    const { deps, onRenamed } = makeDeps({ renameWorktreeFolder: vi.fn(async () => true) })
+    await maybeAutoRenameBranchOnFirstWork(workingEvent(), deps)
+    expect(onRenamed).not.toHaveBeenCalled()
+  })
+
+  it('survives a folder-rename failure without undoing the branch/display rename', async () => {
+    const { deps, onRenamed, setDisplayName } = makeDeps({
+      renameWorktreeFolder: vi.fn(async () => {
+        throw new Error('git worktree move failed')
+      })
+    })
+    await maybeAutoRenameBranchOnFirstWork(workingEvent(), deps)
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
+      ['branch', '-m', 'you/fix-auth'],
+      expect.objectContaining({ cwd: '/repo/wt' })
+    )
+    expect(setDisplayName).toHaveBeenCalledWith(WORKTREE_ID, 'Fix auth')
+    expect(onRenamed).toHaveBeenCalledWith(REPO_ID)
+  })
+
+  it('strips a prefix the model leaked into the slug from both branch and display name', async () => {
+    // Model ignored "no prefixes" and echoed `you/worktree-spinner`, which the
+    // sanitizer folds to `you-worktree-spinner`; without stripping it would
+    // double-prefix the branch (`you/you-...`) and show "You worktree spinner".
+    generateBranchNameMock.mockResolvedValue({ success: true, slug: 'you-worktree-spinner' })
+    const { deps, setDisplayName } = makeDeps()
+    await maybeAutoRenameBranchOnFirstWork(workingEvent(), deps)
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
+      ['branch', '-m', 'you/worktree-spinner'],
+      expect.objectContaining({ cwd: '/repo/wt' })
+    )
+    expect(setDisplayName).toHaveBeenCalledWith(WORKTREE_ID, 'Worktree spinner')
   })
 
   it('leaves a user-customized display name untouched while still renaming the branch', async () => {
@@ -376,7 +429,7 @@ describe('maybeAutoRenameBranchOnFirstWork', () => {
     expect(onRenamed).not.toHaveBeenCalled()
   })
 
-  it('suffixes when the generated branch name already exists', async () => {
+  it('suffixes the branch, display name, and folder together on collision', async () => {
     gitExecFileAsyncMock.mockImplementation(
       gitResponder({
         currentBranch: 'you/Nautilus',
@@ -384,12 +437,16 @@ describe('maybeAutoRenameBranchOnFirstWork', () => {
         existingRefs: ['refs/heads/you/fix-auth']
       })
     )
-    const { deps } = makeDeps()
+    const { deps, setDisplayName, renameWorktreeFolder } = makeDeps()
     await maybeAutoRenameBranchOnFirstWork(workingEvent(), deps)
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
       ['branch', '-m', 'you/fix-auth-2'],
       expect.objectContaining({ cwd: '/repo/wt' })
     )
+    // Display name and folder must follow the resolved (suffixed) leaf, not the
+    // pre-suffix slug — otherwise they diverge from the branch.
+    expect(setDisplayName).toHaveBeenCalledWith(WORKTREE_ID, 'Fix auth 2')
+    expect(renameWorktreeFolder).toHaveBeenCalledWith(WORKTREE_ID, 'fix-auth-2')
   })
 
   it('does not rename when the branch changes while generation is running', async () => {

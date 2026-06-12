@@ -827,7 +827,7 @@ const DRAFT_PASTE_READY_TIMEOUT_MS = 8000
 const RECENT_PTY_OUTPUT_LIMIT = 4096
 
 type RuntimeNotifier = {
-  worktreesChanged(repoId: string): void
+  worktreesChanged(repoId: string, renamed?: { oldWorktreeId: string; newWorktreeId: string }): void
   worktreeBaseStatus?(event: WorktreeBaseStatusEvent): void
   worktreeRemoteBranchConflict?(event: WorktreeRemoteBranchConflictEvent): void
   reposChanged(): void
@@ -12916,6 +12916,14 @@ export class OrcaRuntimeService {
   notifyBranchRenamed(repoId: string): void {
     this.invalidateResolvedWorktreeCache()
     this.notifyWorktreesChanged(repoId)
+  }
+
+  /** Like {@link notifyBranchRenamed}, but carries the old->new worktree id so the
+   *  renderer re-keys its worktree-scoped state instead of treating the id change
+   *  (from a folder rename) as a deletion. Same channel = guaranteed ordering. */
+  notifyWorktreeFolderRenamed(repoId: string, oldWorktreeId: string, newWorktreeId: string): void {
+    this.invalidateResolvedWorktreeCache()
+    this.notifier?.worktreesChanged(repoId, { oldWorktreeId, newWorktreeId })
   }
 
   notifyFolderWorkspaceChanged(): void {

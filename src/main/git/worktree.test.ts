@@ -18,7 +18,13 @@ vi.mock('./runner', () => ({
   translateWslOutputPaths: translateWslOutputPathsMock
 }))
 
-import { addSparseWorktree, addWorktree, parseWorktreeList, removeWorktree } from './worktree'
+import {
+  addSparseWorktree,
+  addWorktree,
+  moveWorktree,
+  parseWorktreeList,
+  removeWorktree
+} from './worktree'
 
 describe('parseWorktreeList', () => {
   it('parses regular and bare worktree blocks from porcelain output', () => {
@@ -1212,6 +1218,28 @@ describe('addWorktree', () => {
       '--',
       'feature/test'
     ])
+  })
+})
+
+describe('moveWorktree', () => {
+  beforeEach(() => {
+    gitExecFileAsyncMock.mockReset()
+  })
+
+  it('runs `git worktree move` from the repo with old and new paths', async () => {
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '', stderr: '' })
+    await moveWorktree('/repo', '/ws/cunner', '/ws/worktree-creation-spinner')
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
+      ['worktree', 'move', '/ws/cunner', '/ws/worktree-creation-spinner'],
+      { cwd: '/repo' }
+    )
+  })
+
+  it('propagates git failures so the caller can fall back', async () => {
+    gitExecFileAsyncMock.mockRejectedValueOnce(new Error('fatal: destination exists'))
+    await expect(moveWorktree('/repo', '/ws/cunner', '/ws/taken')).rejects.toThrow(
+      'destination exists'
+    )
   })
 })
 
