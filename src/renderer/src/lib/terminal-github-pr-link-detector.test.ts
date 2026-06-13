@@ -72,4 +72,16 @@ describe('createTerminalGitHubPRLinkDetector', () => {
       }
     ])
   })
+
+  it('extracts HTTP GitHub Enterprise pull request URLs from terminal output', () => {
+    const observe = createTerminalGitHubPRLinkDetector()
+
+    expect(observe('Created http://github.internal/MyOrg/my_repo/pull/395\r\n')).toEqual([
+      {
+        url: 'http://github.internal/MyOrg/my_repo/pull/395',
+        slug: { owner: 'MyOrg', repo: 'my_repo' },
+        number: 395
+      }
+    ])
+  })
 })
