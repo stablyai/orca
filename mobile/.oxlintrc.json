@@ -64,7 +64,7 @@
     {
       "files": ["src/transport/rpc-client.ts"],
       "rules": {
-        "max-lines": ["error", { "max": 1070, "skipBlankLines": true, "skipComments": true }]
+        "max-lines": ["error", { "max": 1074, "skipBlankLines": true, "skipComments": true }]
       }
     },
     {

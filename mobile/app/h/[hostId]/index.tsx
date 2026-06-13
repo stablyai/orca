@@ -52,6 +52,7 @@ import { ActionSheetContent } from '../../../src/components/ActionSheetModal'
 import { ConfirmModal } from '../../../src/components/ConfirmModal'
 import { BottomDrawer } from '../../../src/components/BottomDrawer'
 import { ProtocolBlockScreen } from '../../../src/components/ProtocolBlockScreen'
+import { AuthFailedBanner } from '../../../src/components/AuthFailedBanner'
 import { getCachedWorktrees } from '../../../src/cache/worktree-cache'
 import { colors, radii, spacing, typography } from '../../../src/theme/mobile-theme'
 import { useResponsiveLayout } from '../../../src/layout/responsive-layout'
@@ -998,19 +999,12 @@ export default function HostScreen() {
 
       {/* Auth failed banner */}
       {connState === 'auth-failed' && (
-        <View style={styles.authBanner}>
-          <Text style={styles.authBannerText}>
-            Pairing rejected — re-pair from desktop or remove this host.
-          </Text>
-          <View style={styles.authActions}>
-            <Pressable style={styles.authAction} onPress={() => router.push('/pair-scan')}>
-              <Text style={styles.authActionText}>Re-pair</Text>
-            </Pressable>
-            <Pressable style={styles.authAction} onPress={() => setConfirmRemoveHost(true)}>
-              <Text style={[styles.authActionText, { color: colors.statusRed }]}>Remove</Text>
-            </Pressable>
-          </View>
-        </View>
+        <AuthFailedBanner
+          canRetry={!!hostId}
+          onRetry={() => hostId && void forceReconnectHost(hostId)}
+          onRepair={() => router.push('/pair-scan')}
+          onRemove={() => setConfirmRemoveHost(true)}
+        />
       )}
 
       {/* Search bar */}
@@ -1422,30 +1416,6 @@ const styles = StyleSheet.create({
   reconnectButtonText: {
     color: colors.textPrimary,
     fontSize: typography.metaSize,
-    fontWeight: '600'
-  },
-  authBanner: {
-    backgroundColor: colors.bgPanel,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.lg,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.borderSubtle
-  },
-  authBannerText: {
-    color: colors.statusRed,
-    fontSize: 13,
-    marginBottom: spacing.sm
-  },
-  authActions: {
-    flexDirection: 'row',
-    gap: spacing.lg
-  },
-  authAction: {
-    paddingVertical: spacing.xs
-  },
-  authActionText: {
-    color: colors.accentBlue,
-    fontSize: 13,
     fontWeight: '600'
   },
   toolbar: {
