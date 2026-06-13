@@ -55,7 +55,7 @@ describe('createTerminalGitHubPRLinkDetector', () => {
     expect(observe('more output\n')).toEqual([])
   })
 
-  it('ignores non-PR and non-GitHub links', () => {
+  it('ignores non-PR GitHub-shaped links', () => {
     const observe = createTerminalGitHubPRLinkDetector()
 
     expect(observe('https://github.com/acme/orca/issues/42\n')).toEqual([])
@@ -81,6 +81,18 @@ describe('createTerminalGitHubPRLinkDetector', () => {
         url: 'http://github.internal/MyOrg/my_repo/pull/395',
         slug: { owner: 'MyOrg', repo: 'my_repo' },
         number: 395
+      }
+    ])
+  })
+
+  it('extracts GitHub Enterprise pull request URLs with a custom port', () => {
+    const observe = createTerminalGitHubPRLinkDetector()
+
+    expect(observe('Created https://github.internal:8443/MyOrg/my_repo/pull/397\r\n')).toEqual([
+      {
+        url: 'https://github.internal:8443/MyOrg/my_repo/pull/397',
+        slug: { owner: 'MyOrg', repo: 'my_repo' },
+        number: 397
       }
     ])
   })

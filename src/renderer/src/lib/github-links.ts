@@ -57,7 +57,7 @@ export function parseGitHubIssueOrPRNumber(input: string): number | null {
 
 /**
  * Parses an owner/repo slug plus issue/PR number from a GitHub URL. Returns
- * null for anything that isn't a recognizable github.com issue or pull URL.
+ * null for anything that isn't a recognizable GitHub-shaped issue or pull URL.
  */
 export function parseGitHubIssueOrPRLink(input: string): {
   slug: RepoSlug
@@ -112,7 +112,7 @@ export function normalizeGitHubLinkQuery(raw: string): GitHubLinkQuery {
     return { query: trimmed, directNumber: null }
   }
 
-  // Why: any github.com issue/pull URL is accepted by number regardless of
+  // Why: any GitHub-shaped issue/pull URL is accepted by number regardless of
   // slug, since fork checkouts can legitimately target upstream issues whose
   // slug differs from the origin remote.
   return {
