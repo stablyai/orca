@@ -14505,12 +14505,12 @@ export class OrcaRuntimeService {
   // handler, works even for daemon terminals), and (2) the PTY foreground process
   // + output quiescence. The poll self-cancels when the primary OSC path fires.
   private startTuiIdleFallbackPoll(waiter: TerminalWaiter, leaf: RuntimeLeafRecord): void {
-    let pollInFlight = false
+    let foregroundPollInFlight = false
     waiter.pollInterval = setInterval(async () => {
-      if (pollInFlight || !waiter.pollInterval) {
+      if (!waiter.pollInterval) {
         return
       }
-      pollInFlight = true
+      let startedForegroundPoll = false
       try {
         if (leaf.lastAgentStatus === 'idle') {
           if (waiter.pollInterval) {
@@ -14561,7 +14561,14 @@ export class OrcaRuntimeService {
         }
         // Foreground process fallback: if the daemon/local provider can report
         // the process and it's a non-shell with quiet output, treat as idle.
-        if (leaf.lastAgentStatus === null && leaf.ptyId && this.ptyController) {
+        if (
+          leaf.lastAgentStatus === null &&
+          leaf.ptyId &&
+          this.ptyController &&
+          !foregroundPollInFlight
+        ) {
+          foregroundPollInFlight = true
+          startedForegroundPoll = true
           const fg = await this.ptyController.getForegroundProcess(leaf.ptyId)
           if (fg && !isShellProcess(fg)) {
             const quietMs = leaf.lastOutputAt ? Date.now() - leaf.lastOutputAt : 0
@@ -14577,18 +14584,20 @@ export class OrcaRuntimeService {
       } catch {
         // Swallow transient PTY inspection errors and keep polling.
       } finally {
-        pollInFlight = false
+        if (startedForegroundPoll) {
+          foregroundPollInFlight = false
+        }
       }
     }, TUI_IDLE_POLL_INTERVAL_MS)
   }
 
   private startPtyTuiIdleFallbackPoll(waiter: TerminalWaiter, pty: RuntimePtyWorktreeRecord): void {
-    let pollInFlight = false
+    let foregroundPollInFlight = false
     waiter.pollInterval = setInterval(async () => {
-      if (pollInFlight || !waiter.pollInterval) {
+      if (!waiter.pollInterval) {
         return
       }
-      pollInFlight = true
+      let startedForegroundPoll = false
       try {
         if (pty.lastAgentStatus === 'idle') {
           if (waiter.pollInterval) {
@@ -14624,7 +14633,9 @@ export class OrcaRuntimeService {
           this.resolveWaiter(waiter, buildPtyTerminalWaitResult(waiter.handle, 'tui-idle', pty))
           return
         }
-        if (pty.lastAgentStatus === null && this.ptyController) {
+        if (pty.lastAgentStatus === null && this.ptyController && !foregroundPollInFlight) {
+          foregroundPollInFlight = true
+          startedForegroundPoll = true
           const fg = await this.ptyController.getForegroundProcess(pty.ptyId)
           if (fg && !isShellProcess(fg)) {
             const quietMs = pty.lastOutputAt ? Date.now() - pty.lastOutputAt : 0
@@ -14640,7 +14651,9 @@ export class OrcaRuntimeService {
       } catch {
         // Swallow transient PTY inspection errors and keep polling.
       } finally {
-        pollInFlight = false
+        if (startedForegroundPoll) {
+          foregroundPollInFlight = false
+        }
       }
     }, TUI_IDLE_POLL_INTERVAL_MS)
   }
