@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   buildMobileDiffIdentity,
   clearMobileDiffReviewFileReviewed,
+  completeMobileDiffReviewState,
   createMobileDiffReviewState,
   isMobileDiffReviewFileReviewed,
   markMobileDiffReviewFileReviewed,
@@ -66,6 +67,25 @@ describe('mobile diff review state', () => {
 
     expect(merged.files[descriptor.key]?.reviewedAt).toBeUndefined()
     expect(merged.files[descriptor.key]?.reviewDiffIdentity).toBeUndefined()
+  })
+
+  it('drops completion when a refreshed identity invalidates a reviewed file', () => {
+    const reviewed = markMobileDiffReviewFileReviewed(createMobileDiffReviewState(1), descriptor, 5)
+    const completed = completeMobileDiffReviewState(reviewed, 6)
+
+    const merged = mergeMobileDiffReviewState(completed, [{ ...descriptor, diffIdentity: 'd2' }], 8)
+
+    expect(merged.completedAt).toBeUndefined()
+  })
+
+  it('keeps completion when refreshed identities are unchanged', () => {
+    const reviewed = markMobileDiffReviewFileReviewed(createMobileDiffReviewState(1), descriptor, 5)
+    const completed = completeMobileDiffReviewState(reviewed, 6)
+
+    const merged = mergeMobileDiffReviewState(completed, [descriptor], 8)
+
+    expect(merged.completedAt).toBe(6)
+    expect(merged.files[descriptor.key]?.reviewedAt).toBe(5)
   })
 
   it('clears reviewed state for manual unreview', () => {

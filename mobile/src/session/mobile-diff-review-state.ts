@@ -72,12 +72,16 @@ export function mergeMobileDiffReviewState(
   now: number
 ): MobileDiffReviewState {
   const files: Record<string, MobileDiffReviewFileState> = { ...state.files }
+  let invalidatedReview = false
   for (const descriptor of descriptors) {
     const previous = files[descriptor.key]
     const changedSinceReview =
       previous?.reviewedAt !== undefined &&
       previous.reviewDiffIdentity !== undefined &&
       previous.reviewDiffIdentity !== descriptor.diffIdentity
+    if (changedSinceReview) {
+      invalidatedReview = true
+    }
     files[descriptor.key] = {
       key: descriptor.key,
       filePath: descriptor.filePath,
@@ -89,7 +93,15 @@ export function mergeMobileDiffReviewState(
       reviewDiffIdentity: changedSinceReview ? undefined : previous?.reviewDiffIdentity
     }
   }
-  return { ...state, version: 1, updatedAt: now, files }
+  // Why: a file whose diff changed is no longer reviewed, so a prior "review
+  // complete" marker is stale — match markUnreviewed and drop completedAt.
+  return {
+    ...state,
+    version: 1,
+    updatedAt: now,
+    completedAt: invalidatedReview ? undefined : state.completedAt,
+    files
+  }
 }
 
 export function markMobileDiffReviewFileOpened(
