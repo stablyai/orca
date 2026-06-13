@@ -57,6 +57,17 @@ function expectBashOsc133Lifecycle(output: string): void {
   expect(output.split(oscD)).toHaveLength(3)
 }
 
+function expectZdotdirSourceContext(content: string, fileName: '.zprofile' | '.zshrc' | '.zlogin') {
+  expect(content).toContain('export ZDOTDIR="$_orca_home"')
+  expect(content).toContain(`source "$_orca_home/${fileName}"`)
+  expect(content).toContain('export ZDOTDIR="$_orca_wrapper_zdotdir"')
+}
+
+function expectFinalZdotdirRestoreContext(content: string) {
+  expect(content).toContain("after Orca's last wrapper file has loaded")
+  expect(content).toContain('export ZDOTDIR="$_orca_home"')
+}
+
 describePosix('daemon shell-ready launch config', () => {
   let previousUserDataPath: string | undefined
   let previousOrcaOrigZdotdir: string | undefined
@@ -213,9 +224,17 @@ describePosix('daemon shell-ready launch config', () => {
     getShellReadyLaunchConfig('/bin/zsh')
 
     const zshenv = readFileSync(join(userDataPath, 'shell-ready', 'zsh', '.zshenv'), 'utf8')
+    const zprofile = readFileSync(join(userDataPath, 'shell-ready', 'zsh', '.zprofile'), 'utf8')
+    const zshrc = readFileSync(join(userDataPath, 'shell-ready', 'zsh', '.zshrc'), 'utf8')
+    const zlogin = readFileSync(join(userDataPath, 'shell-ready', 'zsh', '.zlogin'), 'utf8')
     expect(zshenv).toContain('_orca_user_zdotdir="${_orca_spawn_orig_zdotdir:-$HOME}"')
     expect(zshenv).toContain('*/shell-ready/zsh) _orca_user_zdotdir="$HOME" ;;')
     expect(zshenv).toContain('""|*/shell-ready/zsh) export ORCA_ORIG_ZDOTDIR="$HOME" ;;')
+    expectZdotdirSourceContext(zprofile, '.zprofile')
+    expectZdotdirSourceContext(zshrc, '.zshrc')
+    expectZdotdirSourceContext(zlogin, '.zlogin')
+    expectFinalZdotdirRestoreContext(zshrc)
+    expectFinalZdotdirRestoreContext(zlogin)
   })
 
   it('writes wrappers that restore OpenCode and Pi config after user startup files', async () => {
@@ -233,6 +252,7 @@ describePosix('daemon shell-ready launch config', () => {
       '[[ -n "${ORCA_PI_CODING_AGENT_DIR:-}" ]] && export PI_CODING_AGENT_DIR="${ORCA_PI_CODING_AGENT_DIR}"'
     const codexRestoreLine =
       '[[ -n "${ORCA_CODEX_HOME:-}" ]] && export CODEX_HOME="${ORCA_CODEX_HOME}"'
+    const agentTeamsPathRestoreLine = '[[ -n "${ORCA_AGENT_TEAMS_SHIM_DIR:-}" ]] || return 0'
     const ompRestoreLine =
       'if [[ -z "${ORCA_PI_CODING_AGENT_DIR:-}" && -n "${ORCA_OMP_CODING_AGENT_DIR:-}" ]]; then'
     const ompWrapperLine = 'command omp --extension "${ORCA_OMP_STATUS_EXTENSION}" "$@"'
@@ -244,6 +264,9 @@ describePosix('daemon shell-ready launch config', () => {
     expect(bashRc).toContain(piRestoreLine)
     expect(zshrc).toContain(codexRestoreLine)
     expect(zlogin).toContain(codexRestoreLine)
+    expect(zshrc).toContain(agentTeamsPathRestoreLine)
+    expect(zlogin).toContain(agentTeamsPathRestoreLine)
+    expect(bashRc).toContain(agentTeamsPathRestoreLine)
     expect(bashRc).toContain(codexRestoreLine)
     // OMP launches use ORCA_OMP_CODING_AGENT_DIR; both restore lines must be
     // present so a PTY of either kind has its overlay restored after rc files.

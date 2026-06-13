@@ -1,4 +1,4 @@
-import type { GitPushTarget } from '../../shared/types'
+import type { GitHubPrStartPoint, GitPushTarget } from '../../shared/types'
 import { isMissingRemoteRefGitError } from '../git/fetch-error-classification'
 import { getPullRequestPushTarget, getWorkItem } from './client'
 
@@ -14,9 +14,7 @@ type ResolveGitHubPrStartPointArgs = {
   resolveRemote: () => Promise<string>
 }
 
-type ResolveGitHubPrStartPointResult =
-  | { baseBranch: string; pushTarget?: GitPushTarget }
-  | { error: string }
+type ResolveGitHubPrStartPointResult = GitHubPrStartPoint | { error: string }
 
 export async function resolveGitHubPrStartPoint(
   args: ResolveGitHubPrStartPointArgs
@@ -24,15 +22,20 @@ export async function resolveGitHubPrStartPoint(
   let headRefName = args.headRefName?.trim() ?? ''
   let isCrossRepository = args.isCrossRepository === true
   let pushTarget: GitPushTarget | undefined
+  let maintainerCanModify: boolean | undefined
 
   const resolvePushTarget = async (): Promise<void> => {
     if (pushTarget) {
       return
     }
     try {
-      pushTarget =
-        (await getPullRequestPushTarget(args.repoPath, args.prNumber, args.connectionId ?? null)) ??
-        undefined
+      const resolved = await getPullRequestPushTarget(
+        args.repoPath,
+        args.prNumber,
+        args.connectionId ?? null
+      )
+      pushTarget = resolved?.pushTarget
+      maintainerCanModify = resolved?.maintainerCanModify
     } catch {
       // Why: deleted/inaccessible fork metadata can prevent push-target
       // discovery, but GitHub still exposes the PR head ref for checkout.
@@ -96,7 +99,16 @@ export async function resolveGitHubPrStartPoint(
     if ('error' in result) {
       return result
     }
-    return { ...result, ...(pushTarget ? { pushTarget } : {}) }
+    // Why: adopt the contributor's branch name locally (mirroring the same-repo
+    // return below) so fork-PR worktrees aren't renamed with the maintainer's
+    // branch prefix (e.g. `me/866`). The push refspec still targets the fork.
+    return {
+      ...result,
+      headSha: result.baseBranch,
+      branchNameOverride: headRefName,
+      ...(pushTarget ? { pushTarget } : {}),
+      ...(maintainerCanModify !== undefined ? { maintainerCanModify } : {})
+    }
   }
 
   try {
@@ -113,7 +125,13 @@ export async function resolveGitHubPrStartPoint(
       const result = await fetchPullRequestHeadSha()
       if (!('error' in result)) {
         await resolvePushTarget()
-        return { ...result, ...(pushTarget ? { pushTarget } : {}) }
+        return {
+          ...result,
+          headSha: result.baseBranch,
+          branchNameOverride: headRefName,
+          ...(pushTarget ? { pushTarget } : {}),
+          ...(maintainerCanModify !== undefined ? { maintainerCanModify } : {})
+        }
       }
     }
     return {
@@ -122,14 +140,21 @@ export async function resolveGitHubPrStartPoint(
   }
 
   const remoteRef = `${remote}/${headRefName}`
+  let headSha: string
   try {
-    await args.gitExec(['rev-parse', '--verify', remoteRef])
+    const { stdout } = await args.gitExec(['rev-parse', '--verify', remoteRef])
+    headSha = stdout.trim()
   } catch {
     return { error: `Remote ref ${remoteRef} does not exist after fetch.` }
   }
+  if (!headSha) {
+    return { error: `Empty SHA resolving PR #${args.prNumber} head.` }
+  }
 
   return {
-    baseBranch: remoteRef,
+    baseBranch: headSha,
+    headSha,
+    branchNameOverride: headRefName,
     pushTarget: { remoteName: remote, branchName: headRefName }
   }
 }

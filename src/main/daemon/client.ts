@@ -2,6 +2,7 @@
 import { connect, type Socket } from 'net'
 import { readFileSync } from 'fs'
 import { randomUUID } from 'crypto'
+import { StringDecoder } from 'string_decoder'
 import { encodeNdjson, createNdjsonParser } from './ndjson'
 import { PROTOCOL_VERSION, NOTIFY_PREFIX, DaemonProtocolError } from './types'
 import type { HelloMessage, HelloResponse, RpcResponse, DaemonEvent } from './types'
@@ -256,8 +257,11 @@ export class DaemonClient {
         }
         resolve()
       }
+      // Why: daemon socket chunks can split emoji/box-drawing UTF-8 bytes.
+      // Decoding each Buffer independently would permanently inject U+FFFD.
+      const decoder = new StringDecoder('utf8')
       const onData = (chunk: Buffer): void => {
-        buffer += chunk.toString()
+        buffer += decoder.write(chunk)
         const newlineIdx = buffer.indexOf('\n')
         if (newlineIdx === -1) {
           return
@@ -295,6 +299,9 @@ export class DaemonClient {
   }
 
   private setupControlParser(socket: Socket): () => void {
+    // Why: control responses may contain terminal/startup data with multibyte
+    // text; keep incomplete UTF-8 bytes until the next socket chunk.
+    const decoder = new StringDecoder('utf8')
     const parser = createNdjsonParser(
       (msg) => {
         const response = msg as RpcResponse
@@ -314,12 +321,15 @@ export class DaemonClient {
       () => {} // Ignore parse errors on control socket
     )
 
-    const onData = (chunk: Buffer) => parser.feed(chunk.toString())
+    const onData = (chunk: Buffer) => parser.feed(decoder.write(chunk))
     socket.on('data', onData)
     return () => socket.off('data', onData)
   }
 
   private setupStreamParser(socket: Socket): () => void {
+    // Why: PTY output streams include emoji/box-drawing tables; socket chunks
+    // can split those UTF-8 sequences across packets.
+    const decoder = new StringDecoder('utf8')
     const parser = createNdjsonParser(
       (msg) => {
         const event = msg as DaemonEvent
@@ -332,7 +342,7 @@ export class DaemonClient {
       () => {} // Ignore parse errors on stream socket
     )
 
-    const onData = (chunk: Buffer) => parser.feed(chunk.toString())
+    const onData = (chunk: Buffer) => parser.feed(decoder.write(chunk))
     socket.on('data', onData)
     return () => socket.off('data', onData)
   }

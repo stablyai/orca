@@ -19,6 +19,20 @@ export function __resetTrustPromptChainForTests(): void {
   trustPromptChain = Promise.resolve()
 }
 
+function getSetupTrustContent(yamlHooks: OrcaHooks | null): string {
+  const defaultTabCommands = (yamlHooks?.defaultTabs ?? [])
+    .map((tab, index) => {
+      const command = tab.command?.trim()
+      if (!command) {
+        return null
+      }
+      const label = tab.title ? ` ${tab.title}` : ''
+      return `# defaultTabs[${index + 1}]${label}\n${command}`
+    })
+    .filter((entry): entry is string => entry !== null)
+  return [yamlHooks?.scripts?.setup?.trim(), ...defaultTabCommands].filter(Boolean).join('\n\n')
+}
+
 export async function ensureHooksConfirmed(
   state: AppState,
   repoId: string,
@@ -61,7 +75,10 @@ export async function ensureHooksConfirmed(
           return 'skip'
         }
         const yamlHooks = (result.hooks as OrcaHooks | null) ?? null
-        scriptContent = (yamlHooks?.scripts?.[scriptKind] ?? '').trim()
+        scriptContent =
+          scriptKind === 'setup'
+            ? getSetupTrustContent(yamlHooks)
+            : (yamlHooks?.scripts?.[scriptKind] ?? '').trim()
       }
     } catch {
       // Fail closed: if we cannot inspect the script, we cannot trust it.

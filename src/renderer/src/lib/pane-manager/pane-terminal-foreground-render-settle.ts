@@ -1,12 +1,4 @@
-import {
-  FOREGROUND_CURSOR_RESTORE_SAFETY_DELAY_MS,
-  restoreForegroundTerminalCursor,
-  scheduleForegroundTerminalCursorRestore,
-  suppressForegroundTerminalCursor,
-  type TerminalCursorSuppressionTarget
-} from './pane-terminal-cursor-suppression'
-
-export type ForegroundTerminalOutputTarget = TerminalCursorSuppressionTarget & {
+export type ForegroundTerminalOutputTarget = {
   buffer?: {
     active?: {
       cursorY?: number
@@ -20,6 +12,12 @@ export type ForegroundTerminalOutputTarget = TerminalCursorSuppressionTarget & {
   }
   refresh?(start: number, end: number): void
   write(data: string, callback?: () => void): void
+}
+
+type ForegroundTerminalWriteOptions = {
+  forceViewportRefresh?: boolean
+  followupViewportRefresh?: boolean
+  onParsed?: () => void
 }
 
 const pendingViewportSettleRefreshByTerminal = new WeakMap<
@@ -110,45 +108,44 @@ function scheduleViewportSettleRefresh(terminal: ForegroundTerminalOutputTarget)
 
 function settleForegroundRender(
   terminal: ForegroundTerminalOutputTarget,
-  beforeWriteViewport: ViewportSnapshot
+  beforeWriteViewport: ViewportSnapshot,
+  options: ForegroundTerminalWriteOptions
 ): void {
   refreshVisibleRowsNow(terminal)
   // Why: when output advances the viewport, Chromium can paint the freshly
   // scrolled top row one frame later than xterm finishes parsing. Repaint once
   // more after the scroll settles so the user doesn't need to jiggle the window.
-  if (viewportChangedDuringWrite(terminal, beforeWriteViewport)) {
+  if (
+    options.followupViewportRefresh ||
+    viewportChangedDuringWrite(terminal, beforeWriteViewport)
+  ) {
     scheduleViewportSettleRefresh(terminal)
   }
 }
 
 export function writeForegroundTerminalChunk(
   terminal: ForegroundTerminalOutputTarget,
-  data: string
+  data: string,
+  options: ForegroundTerminalWriteOptions = {}
 ): void {
-  const beforeWriteViewport = captureViewportSnapshot(terminal)
-  suppressForegroundTerminalCursor(terminal)
-  // Why: a disposed terminal may never fire xterm's write callback; keep a
-  // safety restore so the cursor cannot remain hidden after teardown races.
-  scheduleForegroundTerminalCursorRestore(terminal, FOREGROUND_CURSOR_RESTORE_SAFETY_DELAY_MS)
+  const beforeWriteViewport = options.forceViewportRefresh
+    ? captureViewportSnapshot(terminal)
+    : null
   try {
     terminal.write(data, () => {
-      settleForegroundRender(terminal, beforeWriteViewport)
-      scheduleForegroundTerminalCursorRestore(terminal)
+      if (beforeWriteViewport) {
+        settleForegroundRender(terminal, beforeWriteViewport, options)
+      }
+      options.onParsed?.()
     })
   } catch {
-    settleForegroundRender(terminal, beforeWriteViewport)
-    restoreForegroundTerminalCursor(terminal)
+    if (beforeWriteViewport) {
+      settleForegroundRender(terminal, beforeWriteViewport, options)
+    }
+    options.onParsed?.()
   }
-}
-
-export function suppressTerminalCursorUntilOutputSettles(
-  terminal: ForegroundTerminalOutputTarget
-): void {
-  suppressForegroundTerminalCursor(terminal)
-  scheduleForegroundTerminalCursorRestore(terminal, FOREGROUND_CURSOR_RESTORE_SAFETY_DELAY_MS)
 }
 
 export function discardForegroundRenderSettle(terminal: ForegroundTerminalOutputTarget): void {
   cancelScheduledViewportSettleRefresh(terminal)
-  restoreForegroundTerminalCursor(terminal)
 }

@@ -1,11 +1,6 @@
-/* eslint-disable max-lines -- Why: the mobile page keeps pairing, device
-   revoke, QR, and stage transitions together so the flow remains auditable. */
 import { useCallback, useEffect, useRef, useState } from 'react'
 import QRCodeBrowser from 'qrcode/lib/browser'
 import { toast } from 'sonner'
-import { Eye, EyeOff, X } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { useAppStore } from '@/store'
 import { PhoneCarousel } from './PhoneCarousel'
@@ -17,13 +12,18 @@ import {
   type Platform,
   type StepIndex
 } from './MobileHero'
+import { PLATFORM_COPY } from './mobile-platform-copy'
 import {
   selectRefreshedNetworkAddress,
   type MobileNetworkInterface
 } from '../settings/mobile-network-interface-selection'
 import { useMobilePairingDevicePolling } from '../settings/mobile-pairing-device-polling'
-
-type FlowStage = 'intro' | 'paired' | 'flow'
+import {
+  shouldShowPairedAfterDeviceRefresh,
+  type MobilePageStage as FlowStage
+} from './mobile-page-stage'
+import { MobilePageToolbar } from './MobilePageToolbar'
+import { translate } from '@/i18n/i18n'
 
 async function renderQrDataUrl(text: string): Promise<string> {
   return QRCodeBrowser.toDataURL(text, {
@@ -31,22 +31,6 @@ async function renderQrDataUrl(text: string): Promise<string> {
     margin: 2,
     width: 232
   })
-}
-
-export const PLATFORM_COPY: Record<
-  Platform,
-  { description: string; ctaLabel: string; url: string }
-> = {
-  ios: {
-    description: 'Scan with your iPhone camera to open the App Store.',
-    ctaLabel: 'Open App Store',
-    url: 'https://apps.apple.com/app/orca-ide/id6766130217'
-  },
-  android: {
-    description: 'Scan with your Android camera to download the latest APK from GitHub Releases.',
-    ctaLabel: 'Download APK',
-    url: 'https://github.com/stablyai/orca/releases/tag/mobile-v0.0.10'
-  }
 }
 
 export default function MobilePage(): React.JSX.Element {
@@ -69,19 +53,56 @@ export default function MobilePage(): React.JSX.Element {
   const [deviceCountAtPairStart, setDeviceCountAtPairStart] = useState<number | null>(null)
   const hasGeneratedRef = useRef(false)
   const mountedRef = useMountedRef()
-  // Tracks the previous stage so we can set the paired-view baseline exactly
-  // once on entry into 'paired', avoiding a polling-stop race when devices
-  // change while already in paired view.
-  const lastStageRef = useRef<FlowStage | null>(null)
+  const stageRef = useRef<FlowStage | null>(null)
+  const deviceCountAtPairStartRef = useRef<number | null>(null)
   const closeMobilePage = useAppStore((s) => s.closeMobilePage)
   const showMobileButton = useAppStore((s) => s.settings?.showMobileButton !== false)
   const updateSettings = useAppStore((s) => s.updateSettings)
+
+  const setPairingDeviceBaseline = useCallback(
+    (count: number | null): void => {
+      deviceCountAtPairStartRef.current = count
+      if (mountedRef.current) {
+        setDeviceCountAtPairStart(count)
+      }
+    },
+    [mountedRef]
+  )
+
+  const showStage = useCallback(
+    (nextStage: FlowStage | null): void => {
+      stageRef.current = nextStage
+      if (mountedRef.current) {
+        setStage(nextStage)
+      }
+    },
+    [mountedRef]
+  )
+
+  const showPairedDevices = useCallback(
+    (deviceCount: number): void => {
+      // Why: paired-view polling uses this baseline; setting it with the
+      // transition avoids the render-plus-Effect gap where polling stops.
+      setPairingDeviceBaseline(deviceCount)
+      showStage('paired')
+    },
+    [setPairingDeviceBaseline, showStage]
+  )
 
   const loadDevices = useCallback(async (): Promise<PairedDevice[]> => {
     try {
       const result = await window.api.mobile.listDevices()
       if (mountedRef.current) {
         setDevices(result.devices)
+        if (
+          shouldShowPairedAfterDeviceRefresh({
+            stage: stageRef.current,
+            deviceCountAtPairStart: deviceCountAtPairStartRef.current,
+            nextDeviceCount: result.devices.length
+          })
+        ) {
+          showPairedDevices(result.devices.length)
+        }
       }
       return result.devices
     } catch (err) {
@@ -90,7 +111,7 @@ export default function MobilePage(): React.JSX.Element {
       console.error('mobile.listDevices failed', err)
       return []
     }
-  }, [mountedRef])
+  }, [mountedRef, showPairedDevices])
 
   // Why: pick the initial stage based on whether any devices are already
   // paired so returning users don't see the marketing intro every time.
@@ -101,12 +122,16 @@ export default function MobilePage(): React.JSX.Element {
       if (cancelled) {
         return
       }
-      setStage(initialDevices.length > 0 ? 'paired' : 'intro')
+      if (initialDevices.length > 0) {
+        showPairedDevices(initialDevices.length)
+      } else {
+        showStage('intro')
+      }
     })()
     return () => {
       cancelled = true
     }
-  }, [loadDevices])
+  }, [loadDevices, showPairedDevices, showStage])
 
   const revokeDevice = useCallback(
     async (deviceId: string) => {
@@ -127,14 +152,14 @@ export default function MobilePage(): React.JSX.Element {
         await window.api.mobile.revokeDevice({ deviceId })
         const remaining = await loadDevices()
         if (mountedRef.current) {
-          toast.success('Device revoked')
+          toast.success(translate("auto.components.mobile.MobilePage.255372e6e8", "Device revoked"))
         }
         if (remaining.length === 0 && mountedRef.current) {
-          setStage('intro')
+          showStage('intro')
         }
       } catch {
         if (mountedRef.current) {
-          toast.error('Failed to revoke device')
+          toast.error(translate("auto.components.mobile.MobilePage.4e1eb5d55c", "Failed to revoke device"))
         }
       } finally {
         if (mountedRef.current) {
@@ -142,7 +167,7 @@ export default function MobilePage(): React.JSX.Element {
         }
       }
     },
-    [loadDevices, mountedRef]
+    [loadDevices, mountedRef, showStage]
   )
 
   // Why: render install QRs lazily — only after the user enters the flow,
@@ -191,12 +216,12 @@ export default function MobilePage(): React.JSX.Element {
           hasGeneratedRef.current = true
         } else {
           if (mountedRef.current) {
-            toast.error('WebSocket transport is not running')
+            toast.error(translate("auto.components.mobile.MobilePage.b353e18de1", "WebSocket transport is not running"))
           }
         }
       } catch {
         if (mountedRef.current) {
-          toast.error('Failed to generate pairing code')
+          toast.error(translate("auto.components.mobile.MobilePage.4c8bd11c1a", "Failed to generate pairing code"))
         }
       } finally {
         if (mountedRef.current) {
@@ -258,12 +283,12 @@ export default function MobilePage(): React.JSX.Element {
     try {
       await window.api.ui.writeClipboardText(pairingUrl)
       if (mountedRef.current) {
-        toast.success('Pairing code copied')
+        toast.success(translate("auto.components.mobile.MobilePage.3c1f7168bb", "Pairing code copied"))
       }
     } catch (err) {
       console.error('writeClipboardText failed', err)
       if (mountedRef.current) {
-        toast.error('Failed to copy pairing code')
+        toast.error(translate("auto.components.mobile.MobilePage.6a66e38943", "Failed to copy pairing code"))
       }
     }
   }, [mountedRef, pairingUrl])
@@ -294,59 +319,35 @@ export default function MobilePage(): React.JSX.Element {
     loadDevices: polledLoadDevices
   })
 
-  useEffect(() => {
-    if (
-      stage === 'flow' &&
-      deviceCountAtPairStart !== null &&
-      devices.length > deviceCountAtPairStart
-    ) {
-      setStage('paired')
-    }
-  }, [stage, devices.length, deviceCountAtPairStart])
-
-  // Why: set the paired-view polling baseline exactly once on entry into
-  // 'paired'. Re-baselining on every devices.length change opened a small
-  // window where polling stopped then resumed; capturing the count once on
-  // transition lets newly added devices flow through naturally.
-  useEffect(() => {
-    if (stage === 'paired' && lastStageRef.current !== 'paired') {
-      setDeviceCountAtPairStart(devices.length)
-    }
-    lastStageRef.current = stage
-    // devices.length is intentionally excluded: we want to capture the count
-    // only at the moment of the stage transition, not re-run on every change.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stage])
-
   const enterFlow = (): void => {
     setStepIdx(0)
-    setDeviceCountAtPairStart(devices.length)
+    setPairingDeviceBaseline(devices.length)
     // Force the auto-generate effect to mint a fresh pairing token on next
     // entry into Step 2, and clear stale QR state so we never flash an
     // expired code from a previous session.
     hasGeneratedRef.current = false
     setPairQrDataUrl(null)
     setPairingUrl(null)
-    setStage('flow')
+    showStage('flow')
   }
 
   // Why: from the paired summary, "Pair another device" jumps straight to
   // Step 2 since the app is presumably already installed on the user's phone.
   const pairAnotherDevice = (): void => {
     setStepIdx(1)
-    setDeviceCountAtPairStart(devices.length)
+    setPairingDeviceBaseline(devices.length)
     // Same reset as enterFlow — re-entering must mint a fresh pairing offer.
     hasGeneratedRef.current = false
     setPairQrDataUrl(null)
     setPairingUrl(null)
-    setStage('flow')
+    showStage('flow')
   }
 
   const handleBack = (): void => {
     if (stepIdx === 1) {
       setStepIdx(0)
     } else {
-      setStage('intro')
+      showStage('intro')
     }
   }
 
@@ -364,12 +365,12 @@ export default function MobilePage(): React.JSX.Element {
     try {
       await window.api.ui.writeClipboardText(PLATFORM_COPY[platform].url)
       if (mountedRef.current) {
-        toast.success('Install link copied')
+        toast.success(translate("auto.components.mobile.MobilePage.fad833de8d", "Install link copied"))
       }
     } catch (err) {
       console.error('writeClipboardText failed', err)
       if (mountedRef.current) {
-        toast.error('Failed to copy link')
+        toast.error(translate("auto.components.mobile.MobilePage.baea63c445", "Failed to copy link"))
       }
     }
   }
@@ -409,38 +410,16 @@ export default function MobilePage(): React.JSX.Element {
 
   return (
     <div className="mobile-page-root">
-      <div className="mp-page-toolbar">
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="size-7 rounded-full"
-              onClick={closeMobilePage}
-              aria-label="Close Orca Mobile"
-            >
-              <X className="size-4" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="bottom" sideOffset={6}>
-            Close · Esc
-          </TooltipContent>
-        </Tooltip>
-        <Button
-          variant="outline"
-          size="sm"
-          className="h-8 gap-2 rounded-md bg-card px-3 text-xs font-medium shadow-xs"
-          onClick={toggleMobileSidebarButton}
-        >
-          {showMobileButton ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
-          {showMobileButton ? 'Hide from sidebar' : 'Show in sidebar'}
-        </Button>
-      </div>
+      <MobilePageToolbar
+        showMobileButton={showMobileButton}
+        onClose={closeMobilePage}
+        onToggleMobileSidebarButton={toggleMobileSidebarButton}
+      />
       <section className="mp-hero">
         <div className="mp-hero-copy">
-          {stage === null ? null : stage === 'intro' ? (
+          {stage === null ? null : stage === "intro" ? (
             <HeroIntro onStart={enterFlow} />
-          ) : stage === 'paired' ? (
+          ) : stage === "paired" ? (
             <HeroPaired
               devices={devices}
               onPairAnother={pairAnotherDevice}
@@ -468,12 +447,12 @@ export default function MobilePage(): React.JSX.Element {
               refreshingNetworkInterfaces={refreshingNetworkInterfaces}
               onBack={handleBack}
               onContinue={handleContinue}
-              onDone={devices.length > 0 ? () => setStage('paired') : undefined}
+              onDone={devices.length > 0 ? () => showPairedDevices(devices.length) : undefined}
             />
           )}
         </div>
 
-        <div className="mp-stage" aria-label="Phone preview">
+        <div className="mp-stage" aria-label={translate("auto.components.mobile.MobilePage.e17393c6a3", "Phone preview")}>
           <PhoneCarousel />
         </div>
       </section>

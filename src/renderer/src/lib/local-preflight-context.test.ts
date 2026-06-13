@@ -88,6 +88,21 @@ describe('local preflight context', () => {
     expect(localPreflightContextKey(getLocalPreflightContext(state))).toBe('host')
   })
 
+  it('keys preflight by active runtime before local WSL or host context', () => {
+    const state = {
+      ...makeState({
+        repoPath: String.raw`\\wsl.localhost\Ubuntu\home\alice\repo`
+      }),
+      settings: {
+        activeRuntimeEnvironmentId: 'runtime-1'
+      }
+    } as AppState
+
+    const context = getLocalPreflightContext(state)
+    expect(context?.runtimeContextKey).toMatch(/^runtime:runtime-1#\d+$/)
+    expect(localPreflightContextKey(context)).toBe(context?.runtimeContextKey)
+  })
+
   it('uses the selected WSL distro for local agent checks when WSL is the default shell', () => {
     const state = {
       ...makeState({ repoPath: 'C:\\Users\\alice\\repo' }),

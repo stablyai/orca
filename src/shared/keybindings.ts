@@ -1,6 +1,9 @@
 /* eslint-disable max-lines -- Why: the central shortcut registry, parser,
  * formatter, and conflict detector must stay in one shared module so main,
  * renderer, browser guests, and Settings cannot drift apart. */
+import type { TuiAgent } from './types'
+import { ALL_TUI_AGENTS, TUI_AGENT_DISPLAY_NAMES } from './tui-agent-display-names'
+
 export type KeybindingScope =
   | 'global'
   | 'tabs'
@@ -22,6 +25,8 @@ export type KeybindingMatchOptions = {
   terminalShortcutPolicy?: TerminalShortcutPolicy
 }
 
+export type AgentTabActionId = `tab.newAgent.${TuiAgent}`
+
 export type KeybindingActionId =
   | 'worktree.quickOpen'
   | 'worktree.palette'
@@ -31,6 +36,7 @@ export type KeybindingActionId =
   | 'app.forceReload'
   | 'file.exportPdf'
   | 'workspace.create'
+  | 'workspace.rename'
   | 'workspace.delete'
   | 'voice.dictation'
   | 'view.tasks'
@@ -49,10 +55,14 @@ export type KeybindingActionId =
   | 'worktree.history.back'
   | 'worktree.history.forward'
   | 'tab.newTerminal'
+  | 'tab.newAgent'
+  | AgentTabActionId
   | 'tab.newBrowser'
+  | 'tab.newSimulator'
   | 'tab.newMarkdown'
   | 'tab.openMarkdown'
   | 'tab.close'
+  | 'tab.rename'
   | 'tab.reopenClosed'
   | 'tab.nextSameType'
   | 'tab.previousSameType'
@@ -158,6 +168,10 @@ export type KeybindingConflict = {
   actionIds: KeybindingActionId[]
 }
 
+export type FindKeybindingConflictOptions = {
+  ignoredActionIds?: Iterable<KeybindingActionId>
+}
+
 export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
   {
     id: 'worktree.quickOpen',
@@ -229,6 +243,22 @@ export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
     scope: 'global',
     searchKeywords: ['shortcut', 'global', 'worktree', 'create', 'new workspace'],
     defaultBindings: platformBindings(['Mod+N', 'Mod+Shift+N'])
+  },
+  {
+    id: 'workspace.rename',
+    title: 'Rename worktree',
+    group: 'Global',
+    scope: 'global',
+    conflictGroup: 'workspace-shell',
+    searchKeywords: ['shortcut', 'global', 'worktree', 'rename', 'workspace', 'title'],
+    // Why: macOS only. On Windows/Linux Ctrl+Alt+R has no safe default, and the
+    // chord families there (Ctrl+R reverse-search, Ctrl+Shift+R reload) are
+    // taken, so users bind it explicitly in Settings.
+    defaultBindings: {
+      darwin: ['Mod+Alt+R'],
+      linux: [],
+      win32: []
+    }
   },
   {
     id: 'workspace.delete',
@@ -394,12 +424,39 @@ export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
     defaultBindings: platformBindings(['Mod+T'])
   },
   {
+    id: 'tab.newAgent',
+    title: 'New agent tab (default agent)',
+    group: 'Tabs',
+    scope: 'tabs',
+    searchKeywords: ['shortcut', 'tab', 'agent', 'new', 'default', 'launch'],
+    // Why: macOS only. On Windows Ctrl+Alt is AltGr on many layouts, and on
+    // Linux Ctrl+Alt+T is the desktop-level "open terminal" shortcut, so
+    // there is no safe default chord there; users bind it in Settings.
+    defaultBindings: {
+      darwin: ['Mod+Alt+T'],
+      linux: [],
+      win32: []
+    }
+  },
+  {
     id: 'tab.newBrowser',
     title: 'New browser tab',
     group: 'Tabs',
     scope: 'tabs',
     searchKeywords: ['shortcut', 'tab', 'browser', 'new'],
     defaultBindings: platformBindings(['Mod+Shift+B'])
+  },
+  {
+    id: 'tab.newSimulator',
+    title: 'New mobile emulator tab',
+    group: 'Tabs',
+    scope: 'tabs',
+    searchKeywords: ['shortcut', 'tab', 'simulator', 'emulator', 'mobile', 'ios', 'new'],
+    defaultBindings: {
+      darwin: ['Mod+Shift+E'],
+      linux: [],
+      win32: []
+    }
   },
   {
     id: 'tab.newMarkdown',
@@ -424,6 +481,22 @@ export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
     scope: 'tabs',
     searchKeywords: ['shortcut', 'close', 'tab', 'pane'],
     defaultBindings: platformBindings(['Mod+W'])
+  },
+  {
+    id: 'tab.rename',
+    title: 'Rename active tab',
+    group: 'Tabs',
+    scope: 'tabs',
+    conflictGroup: 'workspace-shell',
+    searchKeywords: ['shortcut', 'tab', 'rename', 'title', 'label'],
+    // Why: macOS only. Cmd+R is free in the app/terminal focus zone (the
+    // browser pane owns its own Cmd+R reload). On Windows/Linux Ctrl+R is the
+    // shell reverse-search, so it is left unbound for explicit user binding.
+    defaultBindings: {
+      darwin: ['Mod+R'],
+      linux: [],
+      win32: []
+    }
   },
   {
     id: 'tab.reopenClosed',
@@ -724,8 +797,35 @@ export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
       linux: ['Alt+Shift+D'],
       win32: ['Alt+Shift+D']
     }
-  }
+  },
+  ...buildAgentTabKeybindingDefinitions()
 ]
+
+export function agentTabActionId(agent: TuiAgent): AgentTabActionId {
+  return `tab.newAgent.${agent}`
+}
+
+// Why: one bindable action per agent so users can put each enabled agent on
+// its own chord. All ship unassigned — `tab.newAgent` covers the default
+// agent — and Settings → Shortcuts hides rows for disabled agents.
+function buildAgentTabKeybindingDefinitions(): KeybindingDefinition[] {
+  return ALL_TUI_AGENTS.map((agent) => ({
+    id: agentTabActionId(agent),
+    title: `New ${TUI_AGENT_DISPLAY_NAMES[agent]} tab`,
+    group: 'Agents',
+    scope: 'tabs',
+    searchKeywords: [
+      'shortcut',
+      'tab',
+      'agent',
+      'new',
+      'launch',
+      agent,
+      TUI_AGENT_DISPLAY_NAMES[agent].toLowerCase()
+    ],
+    defaultBindings: platformBindings([])
+  }))
+}
 
 const DEFINITIONS_BY_ID = new Map<KeybindingActionId, KeybindingDefinition>(
   KEYBINDING_DEFINITIONS.map((definition) => [definition.id, definition])
@@ -1113,7 +1213,30 @@ function numpadCodeKeyTokenFromInput(input: KeybindingInput): string | null {
   return code === 'NumpadAdd' || code === 'NumpadSubtract' ? normalizeKeyToken(code) : null
 }
 
-function keyTokenFromInput(input: KeybindingInput): string | null {
+function shouldUseMacOptionComposedCaptureFallback(
+  input: KeybindingInput,
+  platform: NodeJS.Platform
+): boolean {
+  // Why: macOS Option+key reports composed characters (Option+C -> ç), so
+  // capturing Alt shortcuts needs the same physical-code fallback as matching.
+  if (
+    getKeybindingPlatform(platform) !== 'darwin' ||
+    !hasModifier(input, 'alt') ||
+    MODIFIER_KEYS.has(input.key ?? '')
+  ) {
+    return false
+  }
+  const physicalToken = physicalCodeKeyTokenFromInput(input)
+  if (!physicalToken) {
+    return false
+  }
+  return (
+    (physicalToken.length === 1 && physicalToken >= 'A' && physicalToken <= 'Z') ||
+    isPunctuationKeyToken(physicalToken)
+  )
+}
+
+function keyTokenFromInput(input: KeybindingInput, platform: NodeJS.Platform): string | null {
   const numpadKey = numpadCodeKeyTokenFromInput(input)
   if (numpadKey) {
     return numpadKey
@@ -1122,7 +1245,10 @@ function keyTokenFromInput(input: KeybindingInput): string | null {
   if (logicalKey) {
     return logicalKey
   }
-  if (!canUsePhysicalCodeFallback(input)) {
+  if (
+    !canUsePhysicalCodeFallback(input) &&
+    !shouldUseMacOptionComposedCaptureFallback(input, platform)
+  ) {
     return null
   }
   return physicalCodeKeyTokenFromInput(input)
@@ -1133,7 +1259,7 @@ function keybindingFromInputWithOptions(
   platform: NodeJS.Platform,
   options: NormalizeKeybindingOptions = {}
 ): KeybindingValidationResult {
-  const key = keyTokenFromInput(input)
+  const key = keyTokenFromInput(input, platform)
   if (!key) {
     return { ok: false, error: 'Press a key, not only a modifier.' }
   }
@@ -1282,6 +1408,21 @@ function shouldUseMacOptionLetterPhysicalFallback(
   )
 }
 
+function shouldUseMacOptionPunctuationPhysicalFallback(
+  parsed: ParsedKeybinding,
+  input: KeybindingInput,
+  platform: NodeJS.Platform
+): boolean {
+  // Why: macOS Option+punctuation can report composed quote/dead-key values,
+  // leaving no logical bracket token for app shortcuts that intentionally use Alt.
+  return (
+    getKeybindingPlatform(platform) === 'darwin' &&
+    parsed.alt &&
+    hasModifier(input, 'alt') &&
+    logicalKeyTokenFromInput(input) === null
+  )
+}
+
 function letterKeyMatches(
   input: KeybindingInput,
   letter: string,
@@ -1372,7 +1513,11 @@ function keyMatches(
       }
       return semanticKey === parsedKey
     }
-    return canUsePhysicalCodeFallback(input) && physicalPunctuationKey(input) === parsedKey
+    return (
+      (canUsePhysicalCodeFallback(input) ||
+        shouldUseMacOptionPunctuationPhysicalFallback(parsed, input, platform)) &&
+      physicalPunctuationKey(input) === parsedKey
+    )
   }
 
   const logicalKey = logicalKeyTokenFromInput(input)
@@ -1489,15 +1634,21 @@ function formatKeyToken(token: string): string {
 
 export function findKeybindingConflicts(
   platform: NodeJS.Platform,
-  overrides?: KeybindingOverrides
+  overrides?: KeybindingOverrides,
+  options: FindKeybindingConflictOptions = {}
 ): KeybindingConflict[] {
   const owners = new Map<string, KeybindingActionId[]>()
+  const ignoredActionIds = new Set(options.ignoredActionIds ?? [])
   const customizedActions = new Set(
-    Object.keys(overrides ?? {}).filter((actionId): actionId is KeybindingActionId =>
-      isKeybindingActionId(actionId)
+    Object.keys(overrides ?? {}).filter(
+      (actionId): actionId is KeybindingActionId =>
+        isKeybindingActionId(actionId) && !ignoredActionIds.has(actionId)
     )
   )
   for (const definition of KEYBINDING_DEFINITIONS) {
+    if (ignoredActionIds.has(definition.id)) {
+      continue
+    }
     for (const binding of getEffectiveKeybindingsForAction(definition.id, platform, overrides)) {
       const groups = new Set([definition.conflictGroup ?? definition.scope])
       if (definition.conflictGroup) {

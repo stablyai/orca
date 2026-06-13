@@ -1,3 +1,6 @@
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { EventEmitter } from 'node:events'
 import { PassThrough } from 'node:stream'
 import { describe, expect, it, vi, beforeEach } from 'vitest'
@@ -7,9 +10,13 @@ const { existsSyncMock, spawnMock } = vi.hoisted(() => ({
   spawnMock: vi.fn()
 }))
 
-vi.mock('fs', () => ({
-  existsSync: existsSyncMock
-}))
+vi.mock('fs', async (importOriginal) => {
+  const actual = (await importOriginal()) as Record<string, unknown>
+  return {
+    ...actual,
+    existsSync: existsSyncMock
+  }
+})
 
 vi.mock('child_process', () => ({
   spawn: spawnMock
@@ -23,6 +30,7 @@ import {
   uploadDirectoryViaSystemSsh,
   writeFileViaSystemSsh
 } from './ssh-system-fallback'
+import { getRemoteHostPlatform } from './ssh-remote-platform'
 import type { SshTarget } from '../../shared/ssh-types'
 
 function createTarget(overrides?: Partial<SshTarget>): SshTarget {
@@ -237,6 +245,18 @@ describe('spawnSystemSsh', () => {
     )
   })
 
+  it('can spawn a native remote command without the POSIX shell wrapper', () => {
+    spawnSystemSshCommand(createTarget({ configHost: 'fdpass-host' }), 'echo hello', {
+      wrapCommand: false
+    })
+
+    expect(spawnMock).toHaveBeenCalledWith(
+      '/usr/bin/ssh',
+      expect.arrayContaining(['--', 'deploy@fdpass-host', 'echo hello']),
+      expect.objectContaining({ stdio: ['pipe', 'pipe', 'pipe'] })
+    )
+  })
+
   it('exposes child stdin so remote commands receive EOF', () => {
     const channel = spawnSystemSshCommand(createTarget(), 'cat > /tmp/file')
 
@@ -274,6 +294,71 @@ describe('spawnSystemSsh', () => {
     await expect(promise).resolves.toBeUndefined()
     expect(proc.stdin.end).toHaveBeenCalledWith('contents')
     expect(proc.stderr.listenerCount('data')).toBe(0)
+  })
+
+  it('writes files to Windows system SSH targets with PowerShell stdin bytes', async () => {
+    const proc = createEventedProcess()
+    spawnMock.mockReturnValue(proc)
+    const hostPlatform = getRemoteHostPlatform('win32-x64')
+
+    const promise = writeFileViaSystemSsh(
+      createTarget(),
+      'C:/Users/me/.orca-remote/relay/.version',
+      '0.1.0',
+      { hostPlatform }
+    )
+    proc.emit('close', 0, null)
+
+    await expect(promise).resolves.toBeUndefined()
+    const args = spawnMock.mock.calls[0][1] as string[]
+    const remoteCommand = args.at(-1) ?? ''
+    expect(remoteCommand).toContain('powershell.exe')
+    expect(remoteCommand).not.toContain('/bin/sh')
+    expect(proc.stdin.end).toHaveBeenCalledWith(Buffer.from('0.1.0', 'utf-8'))
+  })
+
+  it('uploads directories to Windows system SSH targets in one PowerShell batch', async () => {
+    const localDir = mkdtempSync(join(tmpdir(), 'orca-system-ssh-upload-'))
+    writeFileSync(join(localDir, 'relay.js'), 'console.log("relay")')
+    const spawned: EventedProcess[] = []
+    spawnMock.mockImplementation(() => {
+      const proc = createEventedProcess()
+      spawned.push(proc)
+      queueMicrotask(() => proc.emit('close', 0, null))
+      return proc
+    })
+
+    try {
+      await uploadDirectoryViaSystemSsh(
+        createTarget(),
+        localDir,
+        'C:/Users/me/.orca-remote/relay',
+        { hostPlatform: getRemoteHostPlatform('win32-x64') }
+      )
+    } finally {
+      rmSync(localDir, { recursive: true, force: true })
+    }
+
+    const commands = spawnMock.mock.calls.map((call) => (call[1] as string[]).at(-1) ?? '')
+    expect(commands).toHaveLength(1)
+    expect(commands.every((command) => command.includes('powershell.exe'))).toBe(true)
+    expect(commands.every((command) => !command.includes('/bin/sh'))).toBe(true)
+    expect(commands.join('\n')).not.toContain('tar -xzf')
+    const payload = JSON.parse(spawned[0].stdin.end.mock.calls[0]?.[0] as string) as {
+      kind: string
+      path: string
+      contentsBase64?: string
+    }[]
+    expect(payload).toEqual(
+      expect.arrayContaining([
+        { kind: 'directory', path: 'C:/Users/me/.orca-remote/relay' },
+        {
+          kind: 'file',
+          path: 'C:/Users/me/.orca-remote/relay/relay.js',
+          contentsBase64: Buffer.from('console.log("relay")').toString('base64')
+        }
+      ])
+    )
   })
 
   it('throws when no system ssh is found', () => {

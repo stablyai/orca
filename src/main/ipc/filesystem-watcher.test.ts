@@ -1,3 +1,6 @@
+/* eslint-disable max-lines -- Why: filesystem watcher tests share module-level
+state across local, WSL, and SSH lifecycle paths; keeping them together makes
+closeAllWatchers cleanup regressions visible in one suite. */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { handleMock, getSshFilesystemProviderMock } = vi.hoisted(() => ({
@@ -37,7 +40,7 @@ describe('registerFilesystemWatcherHandlers', () => {
   const handlers: HandlerMap = {}
   const originalPlatform = process.platform
 
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.useRealTimers()
     handleMock.mockReset()
     getSshFilesystemProviderMock.mockReset()
@@ -54,6 +57,7 @@ describe('registerFilesystemWatcherHandlers', () => {
       handlers[channel] = handler
     })
     registerFilesystemWatcherHandlers()
+    await closeAllWatchers()
   })
 
   it('pins Parcel to the Windows backend for local Windows watches', async () => {
@@ -135,6 +139,38 @@ describe('registerFilesystemWatcherHandlers', () => {
       { sender: { id: 1 } },
       { worktreePath: '/home/me/repo', connectionId: 'conn-1' }
     )
+    vi.useRealTimers()
+  })
+
+  it('retries SSH worktree watches when provider setup rejects', async () => {
+    vi.useFakeTimers()
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const sendMock = vi.fn()
+    const sender = { isDestroyed: () => false, send: sendMock, once: vi.fn(), id: 1 }
+    const unwatchMock = vi.fn()
+    const retryWatchMock = vi.fn().mockResolvedValue(unwatchMock)
+    getSshFilesystemProviderMock
+      .mockReturnValueOnce({
+        watch: vi.fn().mockRejectedValue(new Error('provider disposed'))
+      })
+      .mockReturnValue({ watch: retryWatchMock })
+
+    await expect(
+      handlers['fs:watchWorktree'](
+        { sender },
+        { worktreePath: '/home/me/repo', connectionId: 'conn-1' }
+      )
+    ).resolves.toBeUndefined()
+
+    await vi.advanceTimersByTimeAsync(1_000)
+
+    expect(retryWatchMock).toHaveBeenCalledWith('/home/me/repo', expect.any(Function))
+    handlers['fs:unwatchWorktree'](
+      { sender: { id: 1 } },
+      { worktreePath: '/home/me/repo', connectionId: 'conn-1' }
+    )
+    expect(unwatchMock).toHaveBeenCalledTimes(1)
+    warnSpy.mockRestore()
     vi.useRealTimers()
   })
 
@@ -279,6 +315,45 @@ describe('registerFilesystemWatcherHandlers', () => {
       { worktreePath: '/home/me/repo', connectionId: 'conn-1' }
     )
     expect(unwatchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('unsubscribes if the sender is destroyed while an SSH watcher is opening', async () => {
+    const destroyedCallbacks: (() => void)[] = []
+    const sender = {
+      isDestroyed: () => false,
+      send: vi.fn(),
+      once: vi.fn((event: string, callback: () => void) => {
+        if (event === 'destroyed') {
+          destroyedCallbacks.push(callback)
+        }
+      }),
+      id: 1
+    }
+    const unwatchMock = vi.fn()
+    let resolveWatch: (unwatch: () => void) => void = () => {}
+    const watchPromise = new Promise<() => void>((resolve) => {
+      resolveWatch = resolve
+    })
+    const watchMock = vi.fn().mockReturnValue(watchPromise)
+    getSshFilesystemProviderMock.mockReturnValue({ watch: watchMock })
+
+    const watch = handlers['fs:watchWorktree'](
+      { sender },
+      { worktreePath: '/home/me/repo', connectionId: 'conn-1' }
+    ) as Promise<unknown>
+
+    await Promise.resolve()
+    expect(watchMock).toHaveBeenCalledTimes(1)
+    expect(destroyedCallbacks).toHaveLength(1)
+
+    destroyedCallbacks[0]()
+    resolveWatch(unwatchMock)
+    await watch
+
+    expect(unwatchMock).toHaveBeenCalledTimes(1)
+    const onEvents = watchMock.mock.calls[0][1]
+    onEvents([{ path: '/home/me/repo/file.txt', type: 'update' }])
+    expect(sender.send).not.toHaveBeenCalled()
   })
 
   it('revives a pending SSH watcher install when a new sender joins after cancellation', async () => {

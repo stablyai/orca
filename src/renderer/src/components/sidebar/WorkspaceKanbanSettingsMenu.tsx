@@ -1,24 +1,21 @@
 import React from 'react'
-import { ArrowDown, ArrowUp, LayoutList, Plus, Rows3, Settings, Trash2 } from 'lucide-react'
+import { ArrowDown, ArrowUp, Plus, Settings, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuLabel,
-  DropdownMenuSeparator,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
-import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import type { WorkspaceStatusDefinition } from '../../../../shared/types'
 import { getWorkspaceStatusVisualMeta } from './workspace-status'
 import WorkspaceStatusAppearancePopover from './WorkspaceStatusAppearancePopover'
+import { translate } from '@/i18n/i18n'
 
 type WorkspaceKanbanSettingsMenuProps = {
-  compact: boolean
   workspaceStatuses: readonly WorkspaceStatusDefinition[]
-  onCompactChange: (compact: boolean) => void
   onRenameStatus: (statusId: string, label: string) => void
   onChangeStatusColor: (statusId: string, color: string) => void
   onChangeStatusIcon: (statusId: string, icon: string) => void
@@ -28,9 +25,7 @@ type WorkspaceKanbanSettingsMenuProps = {
 }
 
 export default function WorkspaceKanbanSettingsMenu({
-  compact,
   workspaceStatuses,
-  onCompactChange,
   onRenameStatus,
   onChangeStatusColor,
   onChangeStatusIcon,
@@ -46,7 +41,11 @@ export default function WorkspaceKanbanSettingsMenu({
             <Button
               variant="ghost"
               size="icon-xs"
-              aria-label="Workspace board settings"
+              aria-label={translate(
+                'auto.components.sidebar.WorkspaceKanbanSettingsMenu.26cbc92150',
+                'Workspace board settings'
+              )}
+              data-contextual-tour-target="workspace-board-settings"
               className="text-muted-foreground"
             >
               <Settings className="size-3.5" />
@@ -54,7 +53,10 @@ export default function WorkspaceKanbanSettingsMenu({
           </DropdownMenuTrigger>
         </TooltipTrigger>
         <TooltipContent side="top" sideOffset={4}>
-          Board settings
+          {translate(
+            'auto.components.sidebar.WorkspaceKanbanSettingsMenu.34f03eb0de',
+            'Board settings'
+          )}
         </TooltipContent>
       </Tooltip>
       <DropdownMenuContent
@@ -72,40 +74,9 @@ export default function WorkspaceKanbanSettingsMenu({
           }
         }}
       >
-        <DropdownMenuLabel>Card density</DropdownMenuLabel>
-        <div className="px-2 pb-2">
-          <ToggleGroup
-            type="single"
-            value={compact ? 'compact' : 'detailed'}
-            onValueChange={(value) => {
-              if (value) {
-                onCompactChange(value === 'compact')
-              }
-            }}
-            variant="outline"
-            size="sm"
-            className="h-7 w-full justify-stretch"
-          >
-            <ToggleGroupItem
-              value="detailed"
-              className="h-7 grow basis-0 gap-1.5 px-1.5 text-[11px] data-[state=on]:bg-foreground/10 data-[state=on]:font-semibold data-[state=on]:text-foreground"
-              aria-label="Detailed workspace cards"
-            >
-              <LayoutList className="size-3.5" />
-              Detailed
-            </ToggleGroupItem>
-            <ToggleGroupItem
-              value="compact"
-              className="h-7 grow basis-0 gap-1.5 px-1.5 text-[11px] data-[state=on]:bg-foreground/10 data-[state=on]:font-semibold data-[state=on]:text-foreground"
-              aria-label="Compact workspace cards"
-            >
-              <Rows3 className="size-3.5" />
-              Compact
-            </ToggleGroupItem>
-          </ToggleGroup>
-        </div>
-        <DropdownMenuSeparator />
-        <DropdownMenuLabel>Statuses</DropdownMenuLabel>
+        <DropdownMenuLabel>
+          {translate('auto.components.sidebar.WorkspaceKanbanSettingsMenu.395e541d5d', 'Statuses')}
+        </DropdownMenuLabel>
         <div className="space-y-2 px-1 pb-1">
           {workspaceStatuses.map((status, index) => {
             const meta = getWorkspaceStatusVisualMeta(status)
@@ -126,7 +97,11 @@ export default function WorkspaceKanbanSettingsMenu({
                       }
                     }}
                     className="h-7 min-w-0 flex-1 rounded-md border border-input bg-background px-2 text-[12px] text-foreground outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                    aria-label={`Rename ${status.label}`}
+                    aria-label={translate(
+                      'auto.components.sidebar.WorkspaceKanbanSettingsMenu.8ce44af9a8',
+                      'Rename {{value0}}',
+                      { value0: status.label }
+                    )}
                   />
                   <WorkspaceStatusAppearancePopover
                     status={status}
@@ -140,7 +115,11 @@ export default function WorkspaceKanbanSettingsMenu({
                     className="size-7"
                     disabled={index === 0}
                     onClick={() => onMoveStatus(status.id, -1)}
-                    aria-label={`Move ${status.label} left`}
+                    aria-label={translate(
+                      'auto.components.sidebar.WorkspaceKanbanSettingsMenu.b45b350eb0',
+                      'Move {{value0}} left',
+                      { value0: status.label }
+                    )}
                   >
                     <ArrowUp className="size-3.5" />
                   </Button>
@@ -151,7 +130,11 @@ export default function WorkspaceKanbanSettingsMenu({
                     className="size-7"
                     disabled={index === workspaceStatuses.length - 1}
                     onClick={() => onMoveStatus(status.id, 1)}
-                    aria-label={`Move ${status.label} right`}
+                    aria-label={translate(
+                      'auto.components.sidebar.WorkspaceKanbanSettingsMenu.b45b350eb0',
+                      'Move {{value0}} right',
+                      { value0: status.label }
+                    )}
                   >
                     <ArrowDown className="size-3.5" />
                   </Button>
@@ -162,7 +145,11 @@ export default function WorkspaceKanbanSettingsMenu({
                     className="size-7 text-muted-foreground hover:text-destructive"
                     disabled={workspaceStatuses.length <= 1}
                     onClick={() => onRemoveStatus(status.id)}
-                    aria-label={`Remove ${status.label}`}
+                    aria-label={translate(
+                      'auto.components.sidebar.WorkspaceKanbanSettingsMenu.054cb50df7',
+                      'Remove {{value0}}',
+                      { value0: status.label }
+                    )}
                   >
                     <Trash2 className="size-3.5" />
                   </Button>
@@ -178,7 +165,10 @@ export default function WorkspaceKanbanSettingsMenu({
             onClick={onAddStatus}
           >
             <Plus className="size-3.5" />
-            Add status
+            {translate(
+              'auto.components.sidebar.WorkspaceKanbanSettingsMenu.79eb990aa4',
+              'Add status'
+            )}
           </Button>
         </div>
       </DropdownMenuContent>

@@ -13,6 +13,16 @@ function createTestDir(): string {
   return mkdtempSync(join(tmpdir(), 'daemon-client-test-'))
 }
 
+function splitInsideUtf8Sequence(payload: string, needle: string): [Buffer, Buffer] {
+  const encoded = Buffer.from(payload, 'utf8')
+  const encodedNeedle = Buffer.from(needle, 'utf8')
+  const offset = encoded.indexOf(encodedNeedle)
+  if (offset === -1 || encodedNeedle.length < 2) {
+    throw new Error(`Unable to split payload inside ${needle}`)
+  }
+  return [encoded.subarray(0, offset + 1), encoded.subarray(offset + 1)]
+}
+
 async function waitFor(predicate: () => boolean, timeoutMs = 2000): Promise<void> {
   const start = Date.now()
   while (!predicate()) {
@@ -331,6 +341,48 @@ describe('DaemonClient', () => {
         event: 'data',
         sessionId: 'session-1'
       })
+    })
+
+    it('preserves UTF-8 stream events split inside multibyte characters', async () => {
+      let streamSocket: Socket | null = null
+      await startMockDaemon()
+
+      const origListener = server.listeners('connection')[0] as (s: Socket) => void
+      server.removeAllListeners('connection')
+      let socketCount = 0
+      server.on('connection', (socket) => {
+        socketCount++
+        if (socketCount === 2) {
+          streamSocket = socket
+        }
+        origListener(socket)
+      })
+
+      const events: DaemonEvent[] = []
+      client = new DaemonClient({ socketPath, tokenPath })
+      client.onEvent((event) => events.push(event as DaemonEvent))
+      await client.ensureConnected()
+      await waitFor(() => streamSocket !== null)
+
+      const tableRow = '│OpenCode│🧩│┼────────┤'
+      const event: DaemonEvent = {
+        type: 'event',
+        event: 'data',
+        sessionId: 'session-1',
+        payload: { data: tableRow }
+      }
+      const [first, second] = splitInsideUtf8Sequence(encodeNdjson(event), '🧩')
+      streamSocket!.write(first)
+      streamSocket!.write(second)
+
+      await waitFor(() => events.length > 0)
+      expect(events[0]).toMatchObject({
+        type: 'event',
+        event: 'data',
+        sessionId: 'session-1',
+        payload: { data: tableRow }
+      })
+      expect(JSON.stringify(events[0])).not.toContain('\ufffd')
     })
   })
 

@@ -67,6 +67,32 @@ export async function listTeams(
   return results.flat().sort((a, b) => a.name.localeCompare(b.name))
 }
 
+export async function listTeamsOrThrow(
+  workspaceId?: LinearWorkspaceSelection | null
+): Promise<LinearTeam[]> {
+  const entries = getClients(workspaceId)
+  if (entries.length === 0) {
+    return []
+  }
+
+  const results = await Promise.all(
+    entries.map(async (entry) => {
+      await acquire()
+      try {
+        return await fetchAllTeamsForWorkspace(entry)
+      } catch (error) {
+        if (isAuthError(error)) {
+          clearToken(entry.workspace.id)
+        }
+        throw error
+      } finally {
+        release()
+      }
+    })
+  )
+  return results.flat().sort((a, b) => a.name.localeCompare(b.name))
+}
+
 export async function getTeamStates(
   teamId: string,
   workspaceId?: string | null
@@ -96,6 +122,38 @@ export async function getTeamStates(
     }
     console.warn('[linear] getTeamStates failed:', error)
     return []
+  } finally {
+    release()
+  }
+}
+
+export async function getTeamStatesOrThrow(
+  teamId: string,
+  workspaceId?: string | null
+): Promise<LinearWorkflowState[]> {
+  const entry = getClients(workspaceId)[0]
+  if (!entry) {
+    return []
+  }
+
+  await acquire()
+  try {
+    const team = await entry.client.team(teamId)
+    const states = await team.states()
+    return states.nodes
+      .map((s) => ({
+        id: s.id,
+        name: s.name,
+        type: s.type,
+        color: s.color,
+        position: s.position
+      }))
+      .sort((a, b) => a.position - b.position)
+  } catch (error) {
+    if (isAuthError(error)) {
+      clearToken(entry.workspace.id)
+    }
+    throw error
   } finally {
     release()
   }

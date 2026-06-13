@@ -2,9 +2,8 @@
 import { app, BrowserWindow, ipcMain, Menu, nativeTheme, screen, shell } from 'electron'
 import { join } from 'path'
 import { is } from '@electron-toolkit/utils'
-import icon from '../../../resources/icon.png?asset'
-import devIcon from '../../../resources/icon-dev.png?asset'
 import type { Store } from '../persistence'
+import { getAppIconPath } from '../app-icon'
 import { browserManager } from '../browser/browser-manager'
 import { browserSessionRegistry } from '../browser/browser-session-registry'
 import {
@@ -42,10 +41,6 @@ function forceRepaint(window: BrowserWindow): void {
       window.setSize(width, height)
     }
   }, 32)
-}
-
-function isControlKeyRelease(input: Electron.Input): boolean {
-  return input.type === 'keyUp' && (input.code === 'ControlLeft' || input.code === 'ControlRight')
 }
 
 function nativeZoomCommandMatchesKeybindings(
@@ -235,6 +230,10 @@ export function createMainWindow(
     minHeight: MIN_HEIGHT,
     title: opts?.title ?? 'Orca',
     show: false,
+    // Why: macOS swallows the app-activating click by default, so clicking
+    // back into Orca (e.g. the floating workspace) needed a second click.
+    // macOS-only option; Windows/Linux already deliver that click.
+    acceptFirstMouse: true,
     // Why: on macOS the menu lives in the system menu bar, so the in-window
     // menu bar is irrelevant. On Windows/Linux we auto-hide so the menu bar
     // doesn't consume a dedicated row of vertical space on every launch —
@@ -264,7 +263,7 @@ export function createMainWindow(
           }
         }
       : {}),
-    icon: is.dev ? devIcon : icon,
+    icon: getAppIconPath(settings?.appIcon),
     ...platformBlurOptions,
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
@@ -275,11 +274,11 @@ export function createMainWindow(
   const rendererWebContentsId = mainWindow.webContents.id
 
   if (process.platform === 'darwin') {
-    // Why: persistent parked webviews use separate compositor layers, and on
+    // Why: persistent browser webviews use separate compositor layers, and on
     // recent macOS releases those layers can fail to repaint after occlusion or
     // restore. Disabling main-window throttling and forcing a repaint on
-    // visibility transitions hardens Orca against the same black-surface
-    // failure mode seen during browser-tab restore and tab switching.
+    // visibility transitions hardens Orca against black-surface failures during
+    // browser-tab restore and tab switching.
     mainWindow.webContents.setBackgroundThrottling(false)
     mainWindow.on('restore', () => {
       forceRepaint(mainWindow)
@@ -624,10 +623,17 @@ export function createMainWindow(
     resetTerminalInputFocus()
     resetFloatingTerminalInputFocus()
     resetShortcutRecorderFocus()
-    if (opts?.shouldRecordRendererCrash?.(details, rendererWebContentsId) !== false) {
+    // Why: macOS can report BrowserWindow teardown as renderer `killed`/SIGKILL
+    // after a confirmed close; that is window lifecycle noise, not a crash.
+    if (
+      !windowClosing &&
+      opts?.shouldRecordRendererCrash?.(details, rendererWebContentsId) !== false
+    ) {
       opts?.onRendererProcessGone?.(details, rendererWebContentsId)
     }
-    console.error('[window] Renderer process gone; close confirmation will be bypassed', details)
+    if (!windowClosing) {
+      console.error('[window] Renderer process gone; close confirmation will be bypassed', details)
+    }
     scheduleRendererRecovery(details)
   })
   mainWindow.webContents.on('destroyed', () => {
@@ -649,7 +655,6 @@ export function createMainWindow(
     clearRendererRecoveryTimer()
   })
 
-  let ctrlTabSwitching = false
   mainWindow.webContents.on('before-input-event', (event, input) => {
     if (shortcutRecorderFocused) {
       return
@@ -673,23 +678,11 @@ export function createMainWindow(
       )
     }
     if (
+      input.type === 'keyDown' &&
       matchesRecentTabSwitcherChord(input, process.platform, keybindings, terminalShortcutContext)
     ) {
-      // Why: Ctrl+Tab is a held-key interaction. Route both press and release
-      // through IPC so renderer keyup suppression from preventDefault cannot
-      // leave the switcher overlay stranded.
-      event.preventDefault()
-      if (input.type === 'keyDown') {
-        ctrlTabSwitching = true
-        mainWindow.webContents.send('ui:ctrlTabKeyDown', { shiftKey: input.shift === true })
-      }
-      return
-    }
-
-    if (ctrlTabSwitching && isControlKeyRelease(input)) {
-      event.preventDefault()
-      ctrlTabSwitching = false
-      mainWindow.webContents.send('ui:ctrlTabKeyUp')
+      // Why: the held switcher commits on modifier keyup. If main prevents the
+      // keydown, Electron can suppress the renderer keyup and strand the overlay.
       return
     }
 

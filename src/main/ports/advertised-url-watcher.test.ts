@@ -233,6 +233,28 @@ describe('AdvertisedUrlWatcher.ingest', () => {
     expect(events).toContainEqual({ worktreeId: WORKTREE, port: 3002 })
   })
 
+  it('forgetWorktree drops scan snapshots, PTY buffers, and cached URLs', () => {
+    const watcher = bindFresh()
+    watcher.reconcileScan([WORKTREE], [{ port: 3001, pid: 100 }])
+    watcher.ingest(PTY, 'cached https://cached.example.com:3001/\n')
+    watcher.ingest(PTY, 'partial https://example.com:3002')
+    const events: { worktreeId: string; port: number }[] = []
+    watcher.onDidChange((event) => events.push(event))
+
+    watcher.forgetWorktree(WORKTREE)
+
+    const internals = watcher as unknown as {
+      buffers: Map<string, unknown>
+      ptyToWorktree: Map<string, string>
+      scanSnapshots: Map<string, Map<number, number | undefined>>
+    }
+    expect(watcher.lookup(WORKTREE, 3001)).toBeUndefined()
+    expect(internals.buffers.has(PTY)).toBe(false)
+    expect(internals.ptyToWorktree.has(PTY)).toBe(false)
+    expect(internals.scanSnapshots.has(WORKTREE)).toBe(false)
+    expect(events).toEqual([{ worktreeId: WORKTREE, port: 3001 }])
+  })
+
   it('different worktrees on the same port are tracked independently', () => {
     const watcher = bindFresh()
     watcher.bindPty('pty-2', 'repo::/other')

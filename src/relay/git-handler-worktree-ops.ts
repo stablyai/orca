@@ -1,16 +1,9 @@
-/**
- * Worktree management and commit operations for the relay git handler.
- *
- * Why: extracted from git-handler-ops.ts to keep all relay files under
- * the oxlint max-lines (300) limit.
- */
 import * as path from 'path'
 import type { RemoveWorktreeResult } from '../shared/types'
 import { resolveWorktreeAddBaseRef } from '../shared/worktree-base-ref'
+import { deleteAlreadyMergedRelayBranchAfterSafeDeleteFailure } from './git-handler-branch-cleanup'
 import type { GitExec } from './git-handler-ops'
-import { parseWorktreeList } from './git-handler-utils'
-
-// ─── Worktree management ─────────────────────────────────────────────
+import { isUnsupportedWorktreeListZError, parseWorktreeList } from './git-handler-utils'
 
 async function persistRelayWorktreeCreationBase(
   git: GitExec,
@@ -180,6 +173,26 @@ export async function removeWorktreeOp(
     await git(['branch', forceBranchDelete ? '-D' : '-d', '--', branchName], repoPath)
     return {}
   } catch (error) {
+    if (!forceBranchDelete && branchHead) {
+      try {
+        if (
+          await deleteAlreadyMergedRelayBranchAfterSafeDeleteFailure(
+            git,
+            repoPath,
+            branchName,
+            branchHead
+          )
+        ) {
+          return {}
+        }
+      } catch (alreadyMergedDeleteError) {
+        // Why: worktree is gone; preserve branch recovery on cleanup races.
+        console.warn(
+          `relay removeWorktree: failed to delete already-merged local branch "${branchName}" after removing worktree`,
+          alreadyMergedDeleteError
+        )
+      }
+    }
     // Expected when the branch still has unmerged/unpublished commits: keep it.
     console.warn(
       `relay removeWorktree: preserved local branch "${branchName}" after removing worktree (not fully merged)`,
@@ -197,24 +210,45 @@ type RelayWorktreeInfo = {
 
 async function listRelayWorktrees(git: GitExec, repoPath: string): Promise<RelayWorktreeInfo[]> {
   try {
-    const { stdout } = await git(['worktree', 'list', '--porcelain'], repoPath)
-    return parseWorktreeList(stdout)
-      .map((worktree) => ({
-        path: typeof worktree.path === 'string' ? worktree.path : '',
-        head: typeof worktree.head === 'string' ? worktree.head : undefined,
-        branch: typeof worktree.branch === 'string' ? worktree.branch : undefined
-      }))
-      .filter((worktree) => worktree.path.length > 0)
+    return await readRelayWorktreeList(git, repoPath)
   } catch {
     return []
   }
+}
+
+export async function readRelayWorktreeList(
+  git: GitExec,
+  repoPath: string
+): Promise<RelayWorktreeInfo[]> {
+  try {
+    const { stdout } = await git(['worktree', 'list', '--porcelain', '-z'], repoPath)
+    return normalizeRelayWorktrees(parseWorktreeList(stdout, { nulDelimited: true }))
+  } catch (error) {
+    if (!isUnsupportedWorktreeListZError(error)) {
+      throw error
+    }
+  }
+
+  // Why: `-z` preserves newlines; fallback keeps Git <2.36 compatible.
+  const { stdout } = await git(['worktree', 'list', '--porcelain'], repoPath)
+  return normalizeRelayWorktrees(parseWorktreeList(stdout))
+}
+
+function normalizeRelayWorktrees(worktrees: Record<string, unknown>[]): RelayWorktreeInfo[] {
+  return worktrees
+    .map((worktree) => ({
+      path: typeof worktree.path === 'string' ? worktree.path : '',
+      head: typeof worktree.head === 'string' ? worktree.head : undefined,
+      branch: typeof worktree.branch === 'string' ? worktree.branch : undefined
+    }))
+    .filter((worktree) => worktree.path.length > 0)
 }
 
 function normalizeLocalBranchRef(branch: string): string {
   return branch.replace(/^refs\/heads\//, '')
 }
 
-function areRelayWorktreePathsEqual(leftPath: string, rightPath: string): boolean {
+export function areRelayWorktreePathsEqual(leftPath: string, rightPath: string): boolean {
   const left = path.normalize(path.resolve(leftPath))
   const right = path.normalize(path.resolve(rightPath))
   return process.platform === 'win32' ? left.toLowerCase() === right.toLowerCase() : left === right
@@ -225,12 +259,14 @@ export async function worktreeIsCleanOp(
   params: Record<string, unknown>
 ): Promise<{ clean: boolean; stdout?: string }> {
   const worktreePath = params.worktreePath as string
-  const { stdout } = await git(['status', '--porcelain', '--untracked-files=all'], worktreePath)
+  const includeUntracked = params.includeUntracked !== false
+  const { stdout } = await git(
+    ['status', '--porcelain', includeUntracked ? '--untracked-files=all' : '--untracked-files=no'],
+    worktreePath
+  )
   const clean = !stdout.trim()
   return { clean, stdout: clean ? undefined : stdout }
 }
-
-// ─── Commit ──────────────────────────────────────────────────────────
 
 export async function commitChangesRelay(
   git: GitExec,

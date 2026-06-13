@@ -25,8 +25,7 @@ EOF
 
   expect(stdout).toMatchInlineSnapshot(`
     "HOME=<HOME>
-    ORCA_ORIG_ZDOTDIR=<HOME>/.config/zsh
-    ZDOTDIR=<WRAPPER_DIR>
+    ZDOTDIR=<HOME>/.config/zsh
     "
   `)
 })
@@ -93,8 +92,7 @@ Use `toMatchInlineSnapshot()` to keep expected output visible in the test file:
 ```typescript
 expect(stdout).toMatchInlineSnapshot(`
   "HOME=<HOME>
-  ORCA_ORIG_ZDOTDIR=<HOME>/.config/zsh
-  ZDOTDIR=<WRAPPER_DIR>
+  ZDOTDIR=<HOME>/.config/zsh
   "
 `)
 ```

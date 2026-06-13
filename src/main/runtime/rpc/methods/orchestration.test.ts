@@ -179,6 +179,23 @@ describe('orchestration RPC methods', () => {
       expect(result.messages[0].to_handle).toBe('term_b')
     })
 
+    it('fans out @droid by title match', async () => {
+      setupWithTerminals([
+        makeSummary('term_a', { title: 'Codex' }),
+        makeSummary('term_b', { title: 'Droid ready' }),
+        makeSummary('term_c', { title: 'Android build' })
+      ])
+
+      const result = (await call('orchestration.send', {
+        from: 'term_a',
+        to: '@droid',
+        subject: 'droid only'
+      })) as { messages: { to_handle: string }[]; recipients: number }
+
+      expect(result.recipients).toBe(1)
+      expect(result.messages[0].to_handle).toBe('term_b')
+    })
+
     it('fans out @worktree:<id> to matching worktree', async () => {
       setupWithTerminals([
         makeSummary('term_a', { worktreeId: 'wt_1' }),
@@ -393,6 +410,42 @@ describe('orchestration RPC methods', () => {
 
       expect(result).toEqual({ messages: [], count: 0 })
       expect(db.getUnreadMessages('b')).toHaveLength(1)
+    })
+
+    it('keeps waiting for requested types when an unrelated heartbeat arrives', async () => {
+      setup()
+
+      const waitPromise = call('orchestration.check', {
+        terminal: 'coord',
+        wait: true,
+        timeoutMs: 5000,
+        types: 'worker_done,escalation'
+      }) as Promise<{ count: number; messages: { type: string }[] }>
+      await Promise.resolve()
+
+      await call('orchestration.send', {
+        from: 'worker',
+        to: 'coord',
+        subject: 'alive',
+        type: 'heartbeat'
+      })
+
+      const early = await Promise.race([
+        waitPromise.then(() => 'settled'),
+        Promise.resolve('pending')
+      ])
+      expect(early).toBe('pending')
+
+      await call('orchestration.send', {
+        from: 'worker',
+        to: 'coord',
+        subject: 'done',
+        type: 'worker_done'
+      })
+
+      const result = await waitPromise
+      expect(result.count).toBe(1)
+      expect(result.messages[0].type).toBe('worker_done')
     })
 
     it('does not mark existing messages read when the check starts aborted', async () => {

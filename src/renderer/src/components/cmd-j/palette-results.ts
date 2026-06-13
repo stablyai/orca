@@ -1,5 +1,4 @@
-import type { LucideIcon } from 'lucide-react'
-import type { SettingsNavSection } from '@/lib/settings-navigation-types'
+import type { SettingsNavIcon, SettingsNavSection } from '@/lib/settings-navigation-types'
 import type { CmdJQuickAction } from './quick-actions'
 
 export type CmdJSettingsResult = {
@@ -7,7 +6,7 @@ export type CmdJSettingsResult = {
   kind: 'settings'
   title: string
   description: string
-  icon: LucideIcon
+  icon: SettingsNavIcon
   sectionId: string
   targetSectionId?: string
   order: number

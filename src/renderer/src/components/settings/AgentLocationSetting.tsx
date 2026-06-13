@@ -1,6 +1,9 @@
 import type { GlobalSettings } from '../../../../shared/types'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
 import { SettingsRow, SettingsSegmentedControl } from './SettingsFormControls'
+import { translate } from '@/i18n/i18n'
+
+const EMPTY_WSL_DISTROS: string[] = []
 
 type AgentDetectionRuntime = {
   runtime: 'host' | 'wsl'
@@ -12,6 +15,7 @@ type AgentLocationSettingProps = {
   settings: GlobalSettings
   updateSettings: (updates: Partial<GlobalSettings>) => void | Promise<void>
   refresh: () => Promise<unknown>
+  wslSupportedPlatform?: boolean
   wslAvailable?: boolean
   wslDistros?: string[]
   wslCapabilitiesLoading?: boolean
@@ -23,15 +27,19 @@ function getHostRuntimeLabel(): string {
 
 function getSelectedAgentRuntime(
   settings: GlobalSettings,
+  wslSupportedPlatform: boolean,
   wslAvailable: boolean,
   wslDistros: string[],
   wslCapabilitiesLoading: boolean
 ): AgentDetectionRuntime {
   const configuredRuntime =
     settings.localAgentRuntime ?? (settings.terminalWindowsShell === 'wsl.exe' ? 'wsl' : 'host')
-  if (configuredRuntime === 'wsl') {
+  if (wslSupportedPlatform && configuredRuntime === 'wsl') {
     if (!wslAvailable && !wslCapabilitiesLoading) {
-      return { runtime: 'wsl', label: 'WSL' }
+      return {
+        runtime: 'wsl',
+        label: translate('auto.components.settings.AgentLocationSetting.43663b5e69', 'WSL')
+      }
     }
     const configuredDistro =
       settings.localAgentWslDistro?.trim() || settings.terminalWindowsWslDistro?.trim() || null
@@ -52,12 +60,14 @@ export function AgentLocationSetting({
   settings,
   updateSettings,
   refresh,
+  wslSupportedPlatform = false,
   wslAvailable = false,
-  wslDistros = [],
+  wslDistros = EMPTY_WSL_DISTROS,
   wslCapabilitiesLoading = false
-}: AgentLocationSettingProps): React.JSX.Element {
+}: AgentLocationSettingProps): React.JSX.Element | null {
   const agentRuntime = getSelectedAgentRuntime(
     settings,
+    wslSupportedPlatform,
     wslAvailable,
     wslDistros,
     wslCapabilitiesLoading
@@ -66,33 +76,57 @@ export function AgentLocationSetting({
     void Promise.resolve(updateSettings(updates)).then(() => refresh())
   }
 
+  if (!wslSupportedPlatform) {
+    return null
+  }
+
   return (
     <section className="space-y-3">
       <SettingsRow
-        label="Agent location"
+        label={translate(
+          'auto.components.settings.AgentLocationSetting.9bccf48906',
+          'Agent location'
+        )}
         alignTop
         description={
           agentRuntime.runtime === 'wsl' && !wslAvailable && !wslCapabilitiesLoading
-            ? 'WSL is not available on this machine.'
-            : `Show installed agents from ${agentRuntime.label}. Refresh re-checks PATH in that environment.`
+            ? translate(
+                'auto.components.settings.AgentLocationSetting.c7c516946f',
+                'WSL is not available on this machine.'
+              )
+            : translate(
+                'auto.components.settings.AgentLocationSetting.d00949e59b',
+                'Show installed agents from {{value0}}. Refresh re-checks PATH in that environment.',
+                { value0: agentRuntime.label }
+              )
         }
         control={
           <div className="flex w-44 flex-col items-stretch gap-2">
             <SettingsSegmentedControl
-              ariaLabel="Agent location"
+              ariaLabel={translate(
+                'auto.components.settings.AgentLocationSetting.9bccf48906',
+                'Agent location'
+              )}
               value={agentRuntime.runtime}
               onChange={(value) => updateAgentLocation({ localAgentRuntime: value })}
               equalWidth
               options={[
                 { value: 'host', label: getHostRuntimeLabel() },
-                {
-                  value: 'wsl',
-                  label: 'WSL',
-                  disabled: wslCapabilitiesLoading || !wslAvailable
-                }
+                ...(wslSupportedPlatform
+                  ? [
+                      {
+                        value: 'wsl',
+                        label: translate(
+                          'auto.components.settings.AgentLocationSetting.43663b5e69',
+                          'WSL'
+                        ),
+                        disabled: wslCapabilitiesLoading || !wslAvailable
+                      } as const
+                    ]
+                  : [])
               ]}
             />
-            {agentRuntime.runtime === 'wsl' ? (
+            {wslSupportedPlatform && agentRuntime.runtime === 'wsl' ? (
               <Select
                 value={agentRuntime.wslDistro ?? '__default__'}
                 onValueChange={(value) =>
@@ -105,11 +139,26 @@ export function AgentLocationSetting({
               >
                 <SelectTrigger size="sm" className="w-full min-w-44">
                   <SelectValue
-                    placeholder={wslCapabilitiesLoading ? 'Loading WSL' : 'WSL default'}
+                    placeholder={
+                      wslCapabilitiesLoading
+                        ? translate(
+                            'auto.components.settings.AgentLocationSetting.fc806485ae',
+                            'Loading WSL'
+                          )
+                        : translate(
+                            'auto.components.settings.AgentLocationSetting.92f4238f1a',
+                            'WSL default'
+                          )
+                    }
                   />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="__default__">WSL default</SelectItem>
+                  <SelectItem value="__default__">
+                    {translate(
+                      'auto.components.settings.AgentLocationSetting.92f4238f1a',
+                      'WSL default'
+                    )}
+                  </SelectItem>
                   {wslDistros.map((distro) => (
                     <SelectItem key={distro} value={distro}>
                       {distro}

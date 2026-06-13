@@ -49,6 +49,7 @@ const existingAutomation = {
   id: 'auto-1',
   name: 'Daily review',
   prompt: 'Review changes',
+  precheck: null,
   agentId: 'codex',
   projectId: 'repo-1',
   executionTargetType: 'local',
@@ -77,6 +78,7 @@ describe('OrcaRuntimeService automation methods', () => {
     const automation = await runtime.createAutomation({
       name: 'Daily review',
       prompt: 'Review changes',
+      precheck: { command: 'test -f ready', timeoutSeconds: 30 },
       agentId: 'codex',
       repo: 'repo-1',
       workspaceMode: 'new_per_run',
@@ -88,6 +90,7 @@ describe('OrcaRuntimeService automation methods', () => {
       expect.objectContaining({
         name: 'Daily review',
         prompt: 'Review changes',
+        precheck: { command: 'test -f ready', timeoutSeconds: 30 },
         agentId: 'codex',
         projectId: 'repo-1',
         workspaceMode: 'new_per_run',

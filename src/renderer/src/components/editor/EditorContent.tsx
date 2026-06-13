@@ -26,6 +26,8 @@ import { extractFrontMatter, prependFrontMatter } from './markdown-frontmatter'
 import { RichMarkdownErrorBoundary } from './RichMarkdownErrorBoundary'
 import { useMarkdownDocuments } from './useMarkdownDocuments'
 import { findGitConflictBlocks } from './monaco-conflict-decorations'
+import { getDiffContentSignature } from './diff-content-signature'
+import { translate } from '@/i18n/i18n'
 
 const MonacoEditor = lazy(() => import('./MonacoEditor'))
 const DiffViewer = lazy(() => import('./DiffViewer'))
@@ -55,6 +57,8 @@ type FileContent = {
   loadError?: string
 }
 
+const noopCloseMarkdownTableOfContents = (): void => {}
+
 function matchesPendingEditorReveal(
   reveal: PendingEditorReveal | null,
   file: Pick<OpenFile, 'id' | 'filePath'>
@@ -77,11 +81,13 @@ function FileLoadErrorView({
       <div className="flex max-w-xl items-start gap-3 rounded-md border border-border bg-background p-4">
         <AlertCircle className="mt-0.5 size-4 flex-shrink-0 text-destructive" />
         <div className="min-w-0">
-          <div className="font-medium text-foreground">Unable to load file</div>
+          <div className="font-medium text-foreground">
+            {translate('auto.components.editor.EditorContent.39f018b052', 'Unable to load file')}
+          </div>
           <div className="mt-1 break-words">{message}</div>
           <Button type="button" variant="outline" size="sm" className="mt-3" onClick={onRetry}>
             <RefreshCw className="size-3.5" />
-            Retry
+            {translate('auto.components.editor.EditorContent.2a512bb46a', 'Retry')}
           </Button>
         </div>
       </div>
@@ -106,7 +112,9 @@ export function EditorContent({
   isChangesMode,
   sideBySide,
   showMarkdownTableOfContents = false,
-  onCloseMarkdownTableOfContents = () => {},
+  showMarkdownFrontmatter = false,
+  onCloseMarkdownTableOfContents = noopCloseMarkdownTableOfContents,
+  markdownAnnotationsEnabled = true,
   pendingEditorReveal,
   handleContentChange,
   handleContentChangeForFile,
@@ -131,7 +139,9 @@ export function EditorContent({
   isChangesMode: boolean
   sideBySide: boolean
   showMarkdownTableOfContents?: boolean
+  showMarkdownFrontmatter?: boolean
   onCloseMarkdownTableOfContents?: () => void
+  markdownAnnotationsEnabled?: boolean
   pendingEditorReveal: PendingEditorReveal | null
   handleContentChange: (content: string) => void
   handleContentChangeForFile: (file: OpenFile, content: string) => void
@@ -246,8 +256,10 @@ export function EditorContent({
               conflictKind: entry.conflictKind,
               conflictStatus: entry.conflictStatus,
               conflictStatusSource: entry.conflictStatusSource,
-              message:
-                'This file is in a conflict state, but no working-tree file is available to edit.',
+              message: translate(
+                'auto.components.editor.EditorContent.8b1a605bae',
+                'This file is in a conflict state, but no working-tree file is available to edit.'
+              ),
               guidance: 'Resolve the conflict in Git or restore one side before reopening it.'
             }
           : {
@@ -287,7 +299,7 @@ export function EditorContent({
       onContentChange={handleContentChange}
       onSave={isMarkdown ? md.mdSave : handleSave}
       worktreeId={activeFile.worktreeId}
-      markdownAnnotationsEnabled={isMarkdown}
+      markdownAnnotationsEnabled={markdownAnnotationsEnabled && isMarkdown}
       conflictDecorationsEnabled={activeFile.conflict?.conflictStatus === 'unresolved'}
       revealLine={
         matchesPendingEditorReveal(pendingEditorReveal, activeFile)
@@ -385,7 +397,7 @@ export function EditorContent({
                 markdownDocuments={md.markdownDocuments}
                 showTableOfContents={showMarkdownTableOfContents}
                 onCloseTableOfContents={onCloseMarkdownTableOfContents}
-                markdownAnnotationsEnabled={true}
+                markdownAnnotationsEnabled={markdownAnnotationsEnabled}
                 markdownAnnotationFilePath={activeFile.relativePath}
                 markdownSourceLineOffset={fm ? getMarkdownSourceLineOffset(fm.raw) : 0}
                 markdownReviewContent={currentContent}
@@ -393,7 +405,9 @@ export function EditorContent({
                 // (inside the editor shell) so formatting controls remain at
                 // the top of the pane — the banner is read-only context, not
                 // a header above the toolbar.
-                headerSlot={fm ? <FrontMatterBanner raw={fm.raw} /> : null}
+                headerSlot={
+                  fm && showMarkdownFrontmatter ? <FrontMatterBanner raw={fm.raw} /> : null
+                }
               />
             </RichMarkdownErrorBoundary>
           </div>
@@ -425,7 +439,7 @@ export function EditorContent({
               scrollCacheKey={`${editorViewStateKey}:preview`}
               showTableOfContents={showMarkdownTableOfContents}
               onCloseTableOfContents={onCloseMarkdownTableOfContents}
-              markdownAnnotationsEnabled={true}
+              markdownAnnotationsEnabled={markdownAnnotationsEnabled}
               {...md.previewProps}
             />
           </div>
@@ -468,7 +482,7 @@ export function EditorContent({
       return (
         <div className={className}>
           <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-            Loading...
+            {translate('auto.components.editor.EditorContent.b2735221f5', 'Loading...')}
           </div>
         </div>
       )
@@ -498,7 +512,10 @@ export function EditorContent({
       return (
         <div className={className}>
           <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-            Binary file — cannot display
+            {translate(
+              'auto.components.editor.EditorContent.b9de81ba52',
+              'Binary file — cannot display'
+            )}
           </div>
         </div>
       )
@@ -643,7 +660,7 @@ export function EditorContent({
     if (!fc) {
       return (
         <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
-          Loading preview...
+          {translate('auto.components.editor.EditorContent.37a0e81fa6', 'Loading preview...')}
         </div>
       )
     }
@@ -655,7 +672,10 @@ export function EditorContent({
     if (fc.isBinary) {
       return (
         <div className="flex h-full items-center justify-center px-6 text-center text-sm text-muted-foreground">
-          Markdown preview is unavailable for binary files.
+          {translate(
+            'auto.components.editor.EditorContent.8608ce4cb1',
+            'Markdown preview is unavailable for binary files.'
+          )}
         </div>
       )
     }
@@ -674,7 +694,7 @@ export function EditorContent({
           initialAnchor={activeFile.markdownPreviewAnchor ?? null}
           showTableOfContents={showMarkdownTableOfContents}
           onCloseTableOfContents={onCloseMarkdownTableOfContents}
-          markdownAnnotationsEnabled={true}
+          markdownAnnotationsEnabled={markdownAnnotationsEnabled}
           {...md.previewProps}
         />
       </div>
@@ -689,7 +709,7 @@ export function EditorContent({
     if (!fc) {
       return (
         <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
-          Loading...
+          {translate('auto.components.editor.EditorContent.b2735221f5', 'Loading...')}
         </div>
       )
     }
@@ -706,7 +726,10 @@ export function EditorContent({
       }
       return (
         <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
-          Binary file — cannot display
+          {translate(
+            'auto.components.editor.EditorContent.b9de81ba52',
+            'Binary file — cannot display'
+          )}
         </div>
       )
     }
@@ -778,7 +801,7 @@ export function EditorContent({
   if (!dc) {
     return (
       <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
-        Loading diff...
+        {translate('auto.components.editor.EditorContent.c88c73a0d3', 'Loading diff...')}
       </div>
     )
   }
@@ -798,11 +821,19 @@ export function EditorContent({
     return (
       <div className="flex h-full items-center justify-center px-6 text-center">
         <div className="space-y-2">
-          <div className="text-sm font-medium text-foreground">Binary file changed</div>
+          <div className="text-sm font-medium text-foreground">
+            {translate('auto.components.editor.EditorContent.78541e254e', 'Binary file changed')}
+          </div>
           <div className="text-xs text-muted-foreground">
             {activeFile.diffSource === 'branch'
-              ? 'Text diff is unavailable for this file in branch compare.'
-              : 'Text diff is unavailable for this file.'}
+              ? translate(
+                  'auto.components.editor.EditorContent.3c6e71df22',
+                  'Text diff is unavailable for this file in branch compare.'
+                )
+              : translate(
+                  'auto.components.editor.EditorContent.8a0898ae4c',
+                  'Text diff is unavailable for this file.'
+                )}
           </div>
         </div>
       </div>
@@ -817,7 +848,10 @@ export function EditorContent({
           deletions simultaneously, so preview mode intentionally shows the
           modified side of the diff. Source mode remains available for the
           actual line-by-line comparison. */}
-          Previewing the modified version of this diff. Switch to source mode to inspect changes.
+          {translate(
+            'auto.components.editor.EditorContent.9640d1d3db',
+            'Previewing the modified version of this diff. Switch to source mode to inspect changes.'
+          )}
         </div>
         <div className="min-h-0 flex-1">
           <MarkdownPreview
@@ -830,17 +864,25 @@ export function EditorContent({
             scrollCacheKey={`${diffViewStateKey}:preview`}
             showTableOfContents={showMarkdownTableOfContents}
             onCloseTableOfContents={onCloseMarkdownTableOfContents}
-            markdownAnnotationsEnabled={true}
+            markdownAnnotationsEnabled={markdownAnnotationsEnabled}
             {...md.previewProps}
           />
         </div>
       </div>
     )
   }
+  // Why: kept Monaco models ignore refreshed git blobs unless the model identity
+  // rotates. Key off fetched diff content and explicit reload nonce, not live
+  // edit-buffer text, so editable unstaged diffs keep their undo stack.
+  const diffReloadNonce = activeFile.diffContentReloadNonce ?? 0
+  const originalModelKey = `${diffViewStateKey}:original:${getDiffContentSignature(dc.originalContent)}`
+  const modifiedModelKey = `${diffViewStateKey}:modified:${getDiffContentSignature(dc.modifiedContent)}:${diffReloadNonce}`
   return (
     <DiffViewer
-      key={viewStateScopeId}
+      key={`${viewStateScopeId}:${diffReloadNonce}:${getDiffContentSignature(dc.modifiedContent)}`}
       modelKey={diffViewStateKey}
+      originalModelKey={originalModelKey}
+      modifiedModelKey={modifiedModelKey}
       originalContent={dc.originalContent}
       modifiedContent={modifiedDiffContent}
       language={monacoLanguage}
@@ -869,9 +911,9 @@ function FrontMatterBanner({ raw }: { raw: string }): React.JSX.Element {
   return (
     <div className="border-b border-border/60 bg-muted/40 px-3 py-2">
       <div className="mb-1 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-        Front Matter
+        {translate('auto.components.editor.EditorContent.e4b074749d', 'Front Matter')}
         <span className="ml-2 font-normal normal-case tracking-normal opacity-70">
-          (edit in source mode)
+          {translate('auto.components.editor.EditorContent.56dba34e1a', '(edit in source mode)')}
         </span>
       </div>
       <pre className="max-h-32 overflow-auto whitespace-pre-wrap text-xs text-muted-foreground font-mono scrollbar-editor">

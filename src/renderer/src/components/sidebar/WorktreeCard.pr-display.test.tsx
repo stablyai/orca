@@ -2,7 +2,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { HostedReviewInfo } from '../../../../shared/hosted-review'
-import type { Repo, Worktree, WorktreeCardProperty } from '../../../../shared/types'
+import type { GlobalSettings, Repo, Worktree, WorktreeCardProperty } from '../../../../shared/types'
 import type { WorkspacePortScanResult } from '../../../../shared/workspace-ports'
 
 const fetchHostedReviewForBranch = vi.fn()
@@ -10,10 +10,12 @@ const fetchIssue = vi.fn()
 const fetchLinearIssue = vi.fn()
 const openModal = vi.fn()
 const updateWorktreeMeta = vi.fn()
+const linearPromptProps: { remote?: boolean; settings?: unknown }[] = []
 
 let worktreeCardProperties: WorktreeCardProperty[] = ['pr']
 let hostedReviewCache: Record<string, unknown> = {}
 let workspacePortScan: WorkspacePortScanResult | null = null
+let settings: Partial<GlobalSettings> | null = null
 
 vi.mock('@/store', () => ({
   useAppStore: (selector: (state: unknown) => unknown) =>
@@ -28,7 +30,7 @@ vi.mock('@/store', () => ({
       linearIssueCache: {},
       openModal,
       remoteBranchConflictByWorktreeId: {},
-      settings: null,
+      settings,
       sshConnectionStates: new Map(),
       sshTargetLabels: new Map(),
       updateWorktreeMeta,
@@ -62,6 +64,13 @@ vi.mock('./WorktreeCardAgents', () => ({
 
 vi.mock('./SshDisconnectedDialog', () => ({
   SshDisconnectedDialog: () => null
+}))
+
+vi.mock('./LinearAgentSkillSetupPrompt', () => ({
+  LinearAgentSkillSetupPrompt: (props: { remote?: boolean; settings?: unknown }) => {
+    linearPromptProps.push(props)
+    return null
+  }
 }))
 
 vi.mock('./WorktreeContextMenu', () => ({
@@ -127,10 +136,12 @@ describe('WorktreeCard linked PR display', () => {
     vi.clearAllMocks()
     worktreeCardProperties = ['pr']
     hostedReviewCache = {}
+    linearPromptProps.length = 0
     workspacePortScan = null
+    settings = null
   })
 
-  it('keeps an icon-only linked GH PR badge visible before hosted review details are cached', async () => {
+  it('shows linked GH PR metadata in detailed cards before hosted review details are cached', async () => {
     const { default: WorktreeCard } = await import('./WorktreeCard')
 
     const markup = renderWorktreeCardMarkup(
@@ -141,7 +152,54 @@ describe('WorktreeCard linked PR display', () => {
     expect(markup).not.toContain('Loading PR')
   })
 
-  it('renders issue, Linear issue, PR, and notes as icon-only metadata in the closed card', async () => {
+  it('does not show cached branch PR details when the worktree has no linked PR', async () => {
+    hostedReviewCache = {
+      'local::repo-1::feature/local-branch': {
+        data: makeHostedReview({ number: 456, title: 'Stale branch PR' }),
+        fetchedAt: Date.now(),
+        linkedReviewHintKey: 'github:456'
+      }
+    }
+    const { default: WorktreeCard } = await import('./WorktreeCard')
+
+    const markup = renderWorktreeCardMarkup(
+      <WorktreeCard
+        worktree={makeWorktree({ linkedPR: null })}
+        repo={makeRepo()}
+        isActive={false}
+      />
+    )
+
+    expect(markup).not.toContain('PR #456')
+    expect(markup).not.toContain('Stale branch PR')
+  })
+
+  it('shows branch-discovered hosted review providers without linked worktree metadata', async () => {
+    hostedReviewCache = {
+      'local::repo-1::feature/local-branch': {
+        data: makeHostedReview({
+          provider: 'bitbucket',
+          number: 789,
+          title: 'Bitbucket branch PR',
+          url: 'https://bitbucket.org/acme/orca/pull-requests/789'
+        }),
+        fetchedAt: Date.now()
+      }
+    }
+    const { default: WorktreeCard } = await import('./WorktreeCard')
+
+    const markup = renderWorktreeCardMarkup(
+      <WorktreeCard
+        worktree={makeWorktree({ linkedPR: null })}
+        repo={makeRepo()}
+        isActive={false}
+      />
+    )
+
+    expect(markup).toContain('Linked PR #789')
+  })
+
+  it('shows issue, Linear issue, PR, and notes metadata in detailed cards', async () => {
     worktreeCardProperties = ['issue', 'linear-issue', 'pr', 'comment']
     const { default: WorktreeCard } = await import('./WorktreeCard')
 
@@ -166,7 +224,52 @@ describe('WorktreeCard linked PR display', () => {
     expect(markup).not.toContain('Loading issue')
     expect(markup).not.toContain('Loading PR')
     expect(markup).not.toContain('Reviewer handoff note')
-    expect(markup.indexOf('Workspace notes')).toBeLessThan(markup.indexOf('Linked issue #123'))
+  })
+
+  it('treats active runtime environment Linear prompts as remote setup', async () => {
+    settings = { activeRuntimeEnvironmentId: 'env-1' }
+    worktreeCardProperties = ['linear-issue']
+    const { default: WorktreeCard } = await import('./WorktreeCard')
+
+    renderWorktreeCardMarkup(
+      <WorktreeCard
+        worktree={makeWorktree({ linkedLinearIssue: 'ENG-123' })}
+        repo={makeRepo()}
+        isActive
+      />
+    )
+
+    expect(linearPromptProps.at(-1)).toEqual(
+      expect.objectContaining({
+        remote: true,
+        settings
+      })
+    )
+  })
+
+  it('keeps issue, Linear issue, PR, and notes metadata out of compact cards', async () => {
+    settings = { compactWorktreeCards: true }
+    worktreeCardProperties = ['issue', 'linear-issue', 'pr', 'comment']
+    const { default: WorktreeCard } = await import('./WorktreeCard')
+
+    const markup = renderWorktreeCardMarkup(
+      <WorktreeCard
+        worktree={makeWorktree({
+          linkedIssue: 123,
+          linkedLinearIssue: 'ENG-123',
+          linkedPR: 456,
+          comment: 'Reviewer handoff note'
+        })}
+        repo={makeRepo()}
+        isActive={false}
+      />
+    )
+
+    expect(markup).not.toContain('Linked issue #123')
+    expect(markup).not.toContain('Linked Linear ENG-123')
+    expect(markup).not.toContain('Linked PR #456')
+    expect(markup).not.toContain('Workspace notes')
+    expect(markup).not.toContain('Reviewer handoff note')
   })
 
   it('hides individual metadata surfaces when their card properties are disabled', async () => {
@@ -230,7 +333,7 @@ describe('WorktreeCard linked PR display', () => {
     expect(markup).not.toContain('58941')
   })
 
-  it('does not render the standalone CI badge and colors a failing linked PR icon red', async () => {
+  it('does not render standalone CI or linked PR status icons on the closed card', async () => {
     worktreeCardProperties = ['pr', 'ci']
     hostedReviewCache = {
       'local::repo-1::feature/local-branch': {

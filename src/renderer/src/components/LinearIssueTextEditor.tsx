@@ -2,12 +2,22 @@ import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { LoaderCircle } from 'lucide-react'
 import { toast } from 'sonner'
 
+import { LinearIssueMarkdownDescriptionEditor } from '@/components/LinearIssueMarkdownDescriptionEditor'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
 import { getScreenSubmitShortcutLabel, isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
 import { linearUpdateIssue } from '@/runtime/runtime-linear-client'
 import type { LinearIssue } from '../../../shared/types'
+import {
+  getLinearIssueTextSavePlan,
+  type LinearIssueTextField
+} from './linear-issue-text-save-plan'
+import {
+  createLinearIssueTextDraftState,
+  resolveLinearIssueTextDraftState
+} from './linear-issue-text-draft-state'
+import { translate } from '@/i18n/i18n'
 
 type LinearIssueTextEditorProps = {
   issue: LinearIssue
@@ -39,65 +49,64 @@ export function LinearIssueTextEditor({
 }: LinearIssueTextEditorProps): React.JSX.Element {
   const settings = useAppStore((s) => s.settings)
   const patchLinearIssue = useAppStore((s) => s.patchLinearIssue)
-  const [titleDraft, setTitleDraft] = useState(issue.title)
-  const [descriptionDraft, setDescriptionDraft] = useState(issue.description ?? '')
-  const [savingField, setSavingField] = useState<'title' | 'description' | null>(null)
-  const submitShortcutLabel = getScreenSubmitShortcutLabel()
-  const titleRef = useAutosizeTextArea(titleDraft)
-  const descriptionRef = useAutosizeTextArea(descriptionDraft)
+  const [draftState, setDraftState] = useState(() => createLinearIssueTextDraftState(issue))
+  const [savingField, setSavingField] = useState<LinearIssueTextField | null>(null)
   const lastIssueIdRef = useRef(issue.id)
   const mountedRef = useMountedRef()
-  const lastSyncedTitleRef = useRef(issue.title)
-  const lastSyncedDescriptionRef = useRef(issue.description ?? '')
-
-  useEffect(() => {
-    const nextDescription = issue.description ?? ''
-    if (issue.id !== lastIssueIdRef.current) {
-      lastIssueIdRef.current = issue.id
-      lastSyncedTitleRef.current = issue.title
-      lastSyncedDescriptionRef.current = nextDescription
-      setTitleDraft(issue.title)
-      setDescriptionDraft(nextDescription)
+  const resolvedDraftState = resolveLinearIssueTextDraftState(draftState, issue)
+  const issueChanged = draftState.issueId !== issue.id
+  if (resolvedDraftState !== draftState) {
+    // Why: Linear can push updated title/description while another field has
+    // unsaved edits; reconcile only untouched drafts before the next paint.
+    setDraftState(resolvedDraftState)
+    if (issueChanged && savingField !== null) {
       setSavingField(null)
-      return
     }
-
-    const previousTitle = lastSyncedTitleRef.current
-    const previousDescription = lastSyncedDescriptionRef.current
-
-    // Why: optimistic saves can update one field while the user has unsaved
-    // edits in the other; only sync fields that still match the last source.
-    if (issue.title !== previousTitle && titleDraft === previousTitle) {
-      setTitleDraft(issue.title)
-    }
-    if (nextDescription !== previousDescription && descriptionDraft === previousDescription) {
-      setDescriptionDraft(nextDescription)
-    }
-
-    lastSyncedTitleRef.current = issue.title
-    lastSyncedDescriptionRef.current = nextDescription
-  }, [descriptionDraft, issue.description, issue.id, issue.title, titleDraft])
+    lastIssueIdRef.current = issue.id
+  }
+  const titleDraft = resolvedDraftState.title
+  const descriptionDraft = resolvedDraftState.description
+  const submitShortcutLabel = getScreenSubmitShortcutLabel()
+  const titleRef = useAutosizeTextArea(titleDraft)
+  const updateTitleDraft = useCallback(
+    (title: string): void => {
+      setDraftState((current) => ({
+        ...resolveLinearIssueTextDraftState(current, issue),
+        title
+      }))
+    },
+    [issue]
+  )
+  const updateDescriptionDraft = useCallback(
+    (description: string): void => {
+      setDraftState((current) => ({
+        ...resolveLinearIssueTextDraftState(current, issue),
+        description
+      }))
+    },
+    [issue]
+  )
 
   const saveField = useCallback(
-    async (field: 'title' | 'description') => {
-      const nextTitle = titleDraft.trim()
-      const nextDescription = descriptionDraft.trimEnd()
-      if (field === 'title' && !nextTitle) {
-        setTitleDraft(issue.title)
-        toast.error('Title is required')
+    async (field: LinearIssueTextField, descriptionOverride?: string) => {
+      const savePlan = getLinearIssueTextSavePlan({
+        descriptionDraft: descriptionOverride ?? descriptionDraft,
+        field,
+        issue: { description: issue.description, title: issue.title },
+        titleDraft
+      })
+      if (savePlan.kind === 'empty-title') {
+        updateTitleDraft(issue.title)
+        toast.error(
+          translate('auto.components.LinearIssueTextEditor.1e08a1ec80', 'Title is required')
+        )
+        return
+      }
+      if (savePlan.kind === 'unchanged') {
         return
       }
 
-      const nextValue = field === 'title' ? nextTitle : nextDescription
-      const currentValue = field === 'title' ? issue.title : (issue.description ?? '')
-      if (nextValue === currentValue) {
-        return
-      }
-
-      const patch =
-        field === 'title'
-          ? ({ title: nextTitle } as const)
-          : ({ description: nextDescription } as const)
+      const { patch } = savePlan
       setSavingField(field)
       onIssueChange(patch)
       patchLinearIssue(issue.id, patch)
@@ -118,12 +127,20 @@ export function LinearIssueTextEditor({
         patchLinearIssue(issue.id, revert)
         if (stillEditingIssue) {
           if (field === 'title') {
-            setTitleDraft(issue.title)
+            updateTitleDraft(issue.title)
           } else {
-            setDescriptionDraft(issue.description ?? '')
+            updateDescriptionDraft(issue.description ?? '')
           }
         }
-        toast.error(error instanceof Error ? error.message : `Failed to update ${field}`)
+        toast.error(
+          error instanceof Error
+            ? error.message
+            : translate(
+                'auto.components.LinearIssueTextEditor.e8ff595db3',
+                'Failed to update {{value0}}',
+                { value0: field }
+              )
+        )
       } finally {
         if (mountedRef.current && lastIssueIdRef.current === issue.id) {
           setSavingField(null)
@@ -140,7 +157,9 @@ export function LinearIssueTextEditor({
       onIssueChange,
       patchLinearIssue,
       settings,
-      titleDraft
+      titleDraft,
+      updateDescriptionDraft,
+      updateTitleDraft
     ]
   )
 
@@ -153,6 +172,14 @@ export function LinearIssueTextEditor({
       event.currentTarget.blur()
     },
     []
+  )
+
+  const saveDescriptionValue = useCallback(
+    (value: string) => {
+      updateDescriptionDraft(value)
+      void saveField('description', value)
+    },
+    [saveField, updateDescriptionDraft]
   )
 
   const handleTitleKeyDown = useCallback(
@@ -171,9 +198,6 @@ export function LinearIssueTextEditor({
     density === 'page'
       ? 'text-[28px] font-semibold leading-tight'
       : 'text-[15px] font-semibold leading-tight'
-  const descriptionClass =
-    density === 'page' ? 'mt-7 px-3 text-[15px] leading-7' : 'px-3 text-[14px] leading-relaxed'
-
   return (
     <div className="min-w-0">
       {fields !== 'description' ? (
@@ -181,12 +205,15 @@ export function LinearIssueTextEditor({
           <textarea
             ref={titleRef}
             value={titleDraft}
-            onChange={(event) => setTitleDraft(event.target.value)}
+            onChange={(event) => updateTitleDraft(event.target.value)}
             onBlur={() => void saveField('title')}
             onKeyDown={handleTitleKeyDown}
             disabled={savingField === 'title'}
             rows={1}
-            aria-label="Issue title"
+            aria-label={translate(
+              'auto.components.LinearIssueTextEditor.04d73b72dc',
+              'Issue title'
+            )}
             className={cn(
               'peer scrollbar-sleek block w-full resize-none overflow-hidden rounded-md border border-transparent bg-transparent px-1 py-0 text-foreground outline-none transition hover:border-border/50 hover:bg-accent/40 focus-visible:border-border focus-visible:bg-background focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-80',
               titleClass
@@ -196,7 +223,7 @@ export function LinearIssueTextEditor({
             <kbd className="inline-flex h-4 min-w-4 select-none items-center justify-center rounded border border-border bg-muted/70 px-1 font-mono text-[9px] font-medium shadow-xs">
               ↵
             </kbd>
-            <span>to save</span>
+            <span>{translate('auto.components.LinearIssueTextEditor.947ba2d6f4', 'to save')}</span>
           </div>
           {savingField === 'title' ? (
             <LoaderCircle className="absolute right-2 top-2 size-4 animate-spin text-muted-foreground" />
@@ -206,37 +233,14 @@ export function LinearIssueTextEditor({
 
       {fields !== 'title' ? (
         <div className="relative">
-          <textarea
-            ref={descriptionRef}
+          <LinearIssueMarkdownDescriptionEditor
             value={descriptionDraft}
-            onChange={(event) => setDescriptionDraft(event.target.value)}
-            onBlur={() => void saveField('description')}
-            onKeyDown={handleDescriptionKeyDown}
+            onChange={updateDescriptionDraft}
+            onSave={saveDescriptionValue}
+            density={density}
             disabled={savingField === 'description'}
-            rows={descriptionDraft.trim() ? 3 : 1}
-            placeholder="No description provided."
-            aria-label="Issue description"
-            className={cn(
-              'peer scrollbar-sleek block w-full resize-none overflow-hidden rounded-md border border-transparent bg-transparent py-1 text-foreground outline-none transition placeholder:italic placeholder:text-muted-foreground hover:border-border/50 hover:bg-accent/40 focus-visible:border-border focus-visible:bg-background focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-80',
-              descriptionClass
-            )}
+            submitShortcutLabel={submitShortcutLabel}
           />
-          <div className="pointer-events-none absolute bottom-1.5 right-2 z-10 flex items-center gap-1.5 text-[10px] text-muted-foreground/75 opacity-0 transition-opacity peer-focus:opacity-100">
-            <span className="flex items-center gap-1">
-              <span>{submitShortcutLabel}</span>
-              <span>save</span>
-            </span>
-            <span className="text-muted-foreground/35">·</span>
-            <span className="flex items-center gap-1">
-              <kbd className="inline-flex h-4 min-w-4 select-none items-center justify-center rounded border border-border bg-muted/70 px-1 font-mono text-[9px] font-medium shadow-xs">
-                ↵
-              </kbd>
-              <span>newline</span>
-            </span>
-          </div>
-          {savingField === 'description' ? (
-            <LoaderCircle className="absolute right-2 top-2 size-4 animate-spin text-muted-foreground" />
-          ) : null}
         </div>
       ) : null}
     </div>

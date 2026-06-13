@@ -11,6 +11,7 @@ export type DaemonPidFile = {
   pid: number
   startedAtMs: number | null
   entryPath?: string
+  appVersion?: string
 }
 
 export type DaemonProcessHandle = {

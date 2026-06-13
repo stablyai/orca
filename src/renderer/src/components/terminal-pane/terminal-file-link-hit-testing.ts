@@ -1,6 +1,8 @@
 import type { IBufferLine, IBufferRange } from '@xterm/xterm'
 import { extractTerminalFileLinkCandidates, resolveTerminalFileLink } from '@/lib/terminal-links'
-import { openDetectedFilePath } from './terminal-file-open-routing'
+import { isRemoteRuntimeFileOperation } from '@/runtime/runtime-file-client'
+import { getTerminalFileContext, openDetectedFilePath } from './terminal-file-open-routing'
+import { getTerminalPathExistsCacheKey } from './terminal-path-exists-cache'
 import {
   buildHardWrappedPathLogicalLineCandidates,
   buildWrappedLogicalLine,
@@ -48,7 +50,17 @@ export function openFilePathLinkAtBufferPosition(
       if (!range || !rangeContainsBufferPosition(range, position, terminalColumns)) {
         continue
       }
-      const cacheKey = `${deps.runtimeEnvironmentId ?? 'active'}\0${resolved.absolutePath}`
+      const fileContext = getTerminalFileContext(
+        deps.worktreeId,
+        deps.worktreePath,
+        deps.runtimeEnvironmentId
+      )
+      const cacheKey = getTerminalPathExistsCacheKey({
+        absolutePath: resolved.absolutePath,
+        connectionId: fileContext.connectionId,
+        isRemoteRuntimePath: isRemoteRuntimeFileOperation(fileContext, resolved.absolutePath),
+        runtimeEnvironmentId: deps.runtimeEnvironmentId
+      })
       matches.push({
         absolutePath: resolved.absolutePath,
         line: resolved.line,

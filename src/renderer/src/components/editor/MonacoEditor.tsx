@@ -1,6 +1,7 @@
 /* eslint-disable max-lines -- Why: MonacoEditor centralizes Monaco setup,
 source-mode markdown annotations, persistence-safe content sync, reveal
 handling, and editor-local UI overlays so split-pane state remains coherent. */
+/* oxlint-disable react-doctor/no-adjust-state-on-prop-change -- Why: selection annotations are synchronized from Monaco editor selection and layout APIs, not derived React props. */
 import React, { useRef, useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react'
 import Editor, { type OnMount } from '@monaco-editor/react'
 import type { editor } from 'monaco-editor'
@@ -48,6 +49,7 @@ import {
   getMonacoMarkdownSelectionAnnotationTarget,
   type MonacoMarkdownSelectionAnnotationTarget
 } from './monaco-markdown-selection-annotation'
+import { translate } from '@/i18n/i18n'
 
 type MonacoEditorProps = {
   fileId: string
@@ -380,7 +382,7 @@ export default function MonacoEditor({
       )
       const searchInFilesAction = editorInstance.addAction({
         id: 'orca.searchInFiles',
-        label: 'Search in Files',
+        label: translate('auto.components.editor.MonacoEditor.fd68ae03b3', 'Search in Files'),
         contextMenuGroupId: 'navigation',
         contextMenuOrder: 2,
         run: () => {
@@ -396,9 +398,7 @@ export default function MonacoEditor({
             return
           }
           const state = useAppStore.getState()
-          state.seedFileSearchQuery(worktreeId, query)
-          state.setRightSidebarTab('search')
-          state.setRightSidebarOpen(true)
+          state.showRightSidebarSearch({ query })
         }
       })
 
@@ -749,8 +749,14 @@ export default function MonacoEditor({
             top: Math.max(4, selectionAnnotationTarget.top - 22),
             left: selectionAnnotationTarget.left ?? 4
           }}
-          title="Add note on selected text"
-          aria-label="Add note on selected text"
+          title={translate(
+            'auto.components.editor.MonacoEditor.68cb83f4a7',
+            'Add note on selected text'
+          )}
+          aria-label={translate(
+            'auto.components.editor.MonacoEditor.68cb83f4a7',
+            'Add note on selected text'
+          )}
           onMouseDown={(event) => {
             event.preventDefault()
             event.stopPropagation()

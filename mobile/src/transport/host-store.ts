@@ -39,7 +39,9 @@ let inflightLoad: Promise<HostProfile[]> | null = null
 export async function loadHosts(): Promise<HostProfile[]> {
   // Why: deduplicate concurrent loadHosts() calls so multiple screens
   // mounting simultaneously share one Keychain read pass.
-  if (inflightLoad) return inflightLoad
+  if (inflightLoad) {
+    return inflightLoad
+  }
   inflightLoad = doLoadHosts().finally(() => {
     inflightLoad = null
   })
@@ -48,14 +50,18 @@ export async function loadHosts(): Promise<HostProfile[]> {
 
 async function doLoadHosts(): Promise<HostProfile[]> {
   const raw = await AsyncStorage.getItem(STORAGE_KEY)
-  if (!raw) return []
+  if (!raw) {
+    return []
+  }
   let parsed: unknown
   try {
     parsed = JSON.parse(raw)
   } catch {
     return []
   }
-  if (!Array.isArray(parsed)) return []
+  if (!Array.isArray(parsed)) {
+    return []
+  }
 
   const out: HostProfile[] = []
   for (const item of parsed) {
@@ -67,7 +73,9 @@ async function doLoadHosts(): Promise<HostProfile[]> {
       continue
     }
     const stored = StoredHostProfileSchema.safeParse(item)
-    if (!stored.success) continue
+    if (!stored.success) {
+      continue
+    }
 
     let token = tokenCache.get(stored.data.id)
     if (!token) {
@@ -97,14 +105,20 @@ async function doLoadHosts(): Promise<HostProfile[]> {
 
 async function loadStoredHosts(): Promise<StoredHostProfile[]> {
   const raw = await AsyncStorage.getItem(STORAGE_KEY)
-  if (!raw) return []
+  if (!raw) {
+    return []
+  }
   try {
     const parsed = JSON.parse(raw) as unknown
-    if (!Array.isArray(parsed)) return []
+    if (!Array.isArray(parsed)) {
+      return []
+    }
     return parsed.flatMap((item) => {
       // Why: same drop-old-records rule as loadHosts; keeps internal
       // mutators from re-persisting pre-v0.0.3 entries.
-      if (item && typeof item === 'object' && 'deviceToken' in item) return []
+      if (item && typeof item === 'object' && 'deviceToken' in item) {
+        return []
+      }
       const result = StoredHostProfileSchema.safeParse(item)
       return result.success ? [result.data] : []
     })

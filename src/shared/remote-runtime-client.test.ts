@@ -90,6 +90,42 @@ describe('subscribeRemoteRuntimeRequest', () => {
       offSpy.mockRestore()
     }
   })
+
+  it('closes established subscription sockets after terminal protocol errors', async () => {
+    const offSpy = vi.spyOn(WebSocketClient.prototype, 'off')
+    try {
+      const server = await createSubscriptionServer({ sendMismatchedResponseAfterSubscribe: true })
+      const onResponse = vi.fn()
+      const onError = vi.fn()
+      const onClose = vi.fn()
+
+      const subscription = await subscribeRemoteRuntimeRequest(
+        server.pairing,
+        'terminal.subscribe',
+        { terminal: 't1' },
+        1000,
+        {
+          onResponse,
+          onError,
+          onClose
+        }
+      )
+
+      await vi.waitFor(() => expect(onResponse).toHaveBeenCalled())
+      await vi.waitFor(() =>
+        expect(onError).toHaveBeenCalledWith(
+          expect.objectContaining({ code: 'invalid_runtime_response' })
+        )
+      )
+      expect(onClose).toHaveBeenCalledOnce()
+
+      const removedEvents = offSpy.mock.calls.map(([event]) => event)
+      expect(removedEvents).toEqual(expect.arrayContaining(['open', 'error', 'close', 'message']))
+      expect(subscription.sendBinary(new Uint8Array([9]))).toBe(false)
+    } finally {
+      offSpy.mockRestore()
+    }
+  })
 })
 
 describe('sendRemoteRuntimeRequest', () => {
@@ -106,6 +142,40 @@ describe('sendRemoteRuntimeRequest', () => {
     expect(response).toMatchObject({
       ok: true,
       result: { satisfied: true }
+    })
+  })
+
+  it('preserves structured failure data for remote computer-use recovery hints', async () => {
+    const server = await createOneShotServer({
+      response: (requestId) => ({
+        id: requestId,
+        ok: false,
+        error: {
+          code: 'app_not_found',
+          message: 'app not found: Gmail',
+          data: {
+            nextSteps: ['Target the desktop browser app/window that contains Gmail.']
+          }
+        },
+        _meta: { runtimeId: 'runtime-test' }
+      })
+    })
+
+    const response = await sendRemoteRuntimeRequest(
+      server.pairing,
+      'computer.getAppState',
+      { app: 'Gmail' },
+      1000
+    )
+
+    expect(response).toMatchObject({
+      ok: false,
+      error: {
+        code: 'app_not_found',
+        data: {
+          nextSteps: [expect.stringContaining('desktop browser app/window')]
+        }
+      }
     })
   })
 
@@ -129,7 +199,11 @@ describe('sendRemoteRuntimeRequest', () => {
   })
 })
 
-async function createSubscriptionServer(): Promise<{
+async function createSubscriptionServer(
+  options: {
+    sendMismatchedResponseAfterSubscribe?: boolean
+  } = {}
+): Promise<{
   pairing: PairingOffer
   nextBinary: Promise<Uint8Array>
 }> {
@@ -186,6 +260,15 @@ async function createSubscriptionServer(): Promise<{
         result: { type: 'subscribed' },
         _meta: { runtimeId: 'runtime-test' }
       })
+      if (options.sendMismatchedResponseAfterSubscribe) {
+        sendEncrypted(ws, sharedKey, {
+          id: `${request.id}-mismatch`,
+          ok: true,
+          streaming: true,
+          result: { type: 'subscribed' },
+          _meta: { runtimeId: 'runtime-test' }
+        })
+      }
     })
   })
 
@@ -209,7 +292,11 @@ function sendEncrypted(ws: WebSocket, sharedKey: Uint8Array, message: unknown): 
   ws.send(encrypt(JSON.stringify(message), sharedKey))
 }
 
-async function createOneShotServer(): Promise<{ pairing: PairingOffer }> {
+async function createOneShotServer(
+  options: {
+    response?: (requestId: string) => unknown
+  } = {}
+): Promise<{ pairing: PairingOffer }> {
   const serverKeyPair = generateKeyPair()
   const wss = new WebSocketServer({ port: 0 })
   servers.push(wss)
@@ -251,12 +338,16 @@ async function createOneShotServer(): Promise<{ pairing: PairingOffer }> {
       ws.once('close', () => clearInterval(keepalive))
       setTimeout(() => {
         clearInterval(keepalive)
-        sendEncrypted(ws, key, {
-          id: request.id,
-          ok: true,
-          result: { satisfied: true },
-          _meta: { runtimeId: 'runtime-test' }
-        })
+        sendEncrypted(
+          ws,
+          key,
+          options.response?.(request.id) ?? {
+            id: request.id,
+            ok: true,
+            result: { satisfied: true },
+            _meta: { runtimeId: 'runtime-test' }
+          }
+        )
       }, 550)
     })
   })

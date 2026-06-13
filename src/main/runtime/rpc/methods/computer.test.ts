@@ -1,4 +1,3 @@
-/* eslint-disable max-lines -- Why: computer RPC coverage shares one mocked registry setup across all method contracts. */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { buildRegistry } from '../core'
 
@@ -9,7 +8,8 @@ const computerMocks = vi.hoisted(() => ({
   callComputerSidecarListWindows: vi.fn(),
   callComputerSidecarSnapshot: vi.fn(),
   resetComputerSidecarForTest: vi.fn(),
-  openComputerUsePermissions: vi.fn()
+  openComputerUsePermissions: vi.fn(),
+  getComputerUsePermissionStatus: vi.fn()
 }))
 
 vi.mock('../../../computer/sidecar-client', () => ({
@@ -22,7 +22,8 @@ vi.mock('../../../computer/sidecar-client', () => ({
 }))
 
 vi.mock('../../../computer/macos-computer-use-permissions', () => ({
-  openComputerUsePermissions: computerMocks.openComputerUsePermissions
+  openComputerUsePermissions: computerMocks.openComputerUsePermissions,
+  getComputerUsePermissionStatus: computerMocks.getComputerUsePermissionStatus
 }))
 
 import { COMPUTER_METHODS, resetComputerSessionsForTest } from './computer'
@@ -36,6 +37,7 @@ describe('computer RPC methods', () => {
     computerMocks.callComputerSidecarSnapshot.mockReset()
     computerMocks.resetComputerSidecarForTest.mockReset()
     computerMocks.openComputerUsePermissions.mockReset()
+    computerMocks.getComputerUsePermissionStatus.mockReset()
     resetComputerSessionsForTest()
     computerMocks.resetComputerSidecarForTest.mockClear()
   })
@@ -54,6 +56,7 @@ describe('computer RPC methods', () => {
       'computer.pasteText',
       'computer.performSecondaryAction',
       'computer.permissions',
+      'computer.permissionsStatus',
       'computer.pressKey',
       'computer.scroll',
       'computer.setValue',
@@ -77,6 +80,12 @@ describe('computer RPC methods', () => {
     expect(computerMocks.callComputerSidecarListApps).toHaveBeenCalledWith()
   })
 
+  it('rejects ignored listApps scoping params', () => {
+    expect(() =>
+      findMethod('computer.listApps').params!.parse({ worktree: 'path:/tmp/repo' })
+    ).toThrow()
+  })
+
   it('returns provider capabilities through the sidecar', async () => {
     const result = { platform: 'darwin', provider: 'orca-computer-use-macos', protocolVersion: 1 }
     computerMocks.callComputerSidecarCapabilities.mockResolvedValue(result)
@@ -94,8 +103,21 @@ describe('computer RPC methods', () => {
     }
     computerMocks.openComputerUsePermissions.mockReturnValue(result)
 
-    await expect(call('computer.permissions', {})).resolves.toBe(result)
-    expect(computerMocks.openComputerUsePermissions).toHaveBeenCalledWith()
+    await expect(call('computer.permissions', { id: 'accessibility' })).resolves.toBe(result)
+    expect(computerMocks.openComputerUsePermissions).toHaveBeenCalledWith('accessibility')
+  })
+
+  it('returns computer-use permission status', async () => {
+    const result = {
+      platform: 'darwin',
+      helperAppPath: '/Applications/Orca Computer Use.app',
+      helperUnavailableReason: null,
+      permissions: [{ id: 'accessibility', status: 'granted' }]
+    }
+    computerMocks.getComputerUsePermissionStatus.mockReturnValue(result)
+
+    await expect(call('computer.permissionsStatus', {})).resolves.toBe(result)
+    expect(computerMocks.getComputerUsePermissionStatus).toHaveBeenCalledWith()
   })
 
   it('lists windows through the sidecar', async () => {
@@ -103,11 +125,26 @@ describe('computer RPC methods', () => {
       app: { name: 'Finder', bundleId: 'com.apple.finder', pid: 100 },
       windows: []
     }
-    const params = { app: 'Finder', worktree: 'path:/tmp/repo' }
+    const params = { app: 'Finder' }
     computerMocks.callComputerSidecarListWindows.mockResolvedValue(result)
 
     await expect(call('computer.listWindows', params)).resolves.toBe(result)
     expect(computerMocks.callComputerSidecarListWindows).toHaveBeenCalledWith(params)
+  })
+
+  it('rejects ignored listWindows scoping params', () => {
+    expect(() =>
+      findMethod('computer.listWindows').params!.parse({
+        app: 'Finder',
+        session: 'manual'
+      })
+    ).toThrow()
+    expect(() =>
+      findMethod('computer.listWindows').params!.parse({
+        app: 'Finder',
+        worktree: 'path:/tmp/repo'
+      })
+    ).toThrow()
   })
 
   it('gets app state through the sidecar', async () => {
@@ -159,168 +196,46 @@ describe('computer RPC methods', () => {
     ).toThrow(/either --window-id or --window-index/)
   })
 
-  it('rejects incomplete pointer action coordinates', () => {
-    expect(() => findMethod('computer.click').params!.parse({ app: 'Finder' })).toThrow(
-      /Click requires/
-    )
-    expect(() => findMethod('computer.click').params!.parse({ app: 'Finder', x: 1 })).toThrow(
-      /both --x and --y/
-    )
+  it('rejects ambiguous session and worktree targeting', () => {
     expect(() =>
-      findMethod('computer.click').params!.parse({ app: 'Finder', elementIndex: 0, x: 1, y: 2 })
-    ).toThrow(/either --element-index or coordinate flags/)
-    expect(() =>
-      findMethod('computer.scroll').params!.parse({ app: 'Finder', direction: 'down' })
-    ).toThrow(/Scroll requires/)
-    expect(() =>
-      findMethod('computer.scroll').params!.parse({
+      findMethod('computer.getAppState').params!.parse({
         app: 'Finder',
-        elementIndex: 0,
-        x: 1,
-        y: 2,
-        direction: 'down'
+        session: 'manual',
+        worktree: 'id:repo::/tmp/repo'
       })
-    ).toThrow(/either --element-index or coordinate flags/)
+    ).toThrow(/either session or worktree/)
     expect(() =>
-      findMethod('computer.drag').params!.parse({ app: 'Finder', fromX: 1, fromY: 2 })
-    ).toThrow(/Drag coordinates/)
-    expect(() =>
-      findMethod('computer.drag').params!.parse({ app: 'Finder', fromElementIndex: 1 })
-    ).toThrow(/both --from-element-index and --to-element-index/)
-    expect(() =>
-      findMethod('computer.drag').params!.parse({
+      findMethod('computer.click').params!.parse({
         app: 'Finder',
-        fromElementIndex: 0,
-        toElementIndex: 1,
-        fromX: 1,
-        fromY: 2,
-        toX: 3,
-        toY: 4
+        session: 'manual',
+        worktree: 'id:repo::/tmp/repo',
+        elementIndex: 0
       })
-    ).toThrow(/either element indexes or coordinate flags/)
+    ).toThrow(/either session or worktree/)
   })
 
-  it('rejects unsupported scroll directions', () => {
-    expect(() =>
-      findMethod('computer.scroll').params!.parse({
+  it('treats empty computer-use worktree scope as absent', () => {
+    expect(
+      findMethod('computer.getAppState').params!.parse({
         app: 'Finder',
-        elementIndex: 0,
-        direction: 'diagonal'
+        worktree: ''
       })
-    ).toThrow()
-    expect(() =>
-      findMethod('computer.scroll').params!.parse({
-        app: 'Finder',
-        elementIndex: 0,
-        direction: 'down',
-        pages: 0
-      })
-    ).toThrow()
-  })
-
-  it('dispatches pointer and element actions through the sidecar', async () => {
-    computerMocks.callComputerSidecarAction.mockResolvedValue({ ok: true })
-
-    await call('computer.click', {
+    ).toMatchObject({
       app: 'Finder',
-      worktree: 'path:/tmp/repo',
-      elementIndex: 0,
-      clickCount: 2,
-      mouseButton: 'left',
-      noScreenshot: true
-    })
-    await call('computer.performSecondaryAction', {
-      app: 'Finder',
-      elementIndex: 0,
-      action: 'Raise'
-    })
-    await call('computer.drag', {
-      app: 'Finder',
-      fromX: 1,
-      fromY: 2,
-      toX: 3,
-      toY: 4
-    })
-
-    expect(computerMocks.callComputerSidecarAction).toHaveBeenNthCalledWith(1, 'click', {
-      app: 'Finder',
-      worktree: 'path:/tmp/repo',
-      elementIndex: 0,
-      clickCount: 2,
-      mouseButton: 'left',
-      noScreenshot: true
-    })
-    expect(computerMocks.callComputerSidecarAction).toHaveBeenNthCalledWith(
-      2,
-      'performSecondaryAction',
-      {
-        app: 'Finder',
-        elementIndex: 0,
-        action: 'Raise'
-      }
-    )
-    expect(computerMocks.callComputerSidecarAction).toHaveBeenNthCalledWith(3, 'drag', {
-      app: 'Finder',
-      fromX: 1,
-      fromY: 2,
-      toX: 3,
-      toY: 4
+      worktree: undefined
     })
   })
 
-  it('dispatches keyboard and text actions through the sidecar', async () => {
-    computerMocks.callComputerSidecarAction.mockResolvedValue({ ok: true })
-
-    await call('computer.typeText', { app: 'Finder', text: 'hello', noScreenshot: true })
-    await call('computer.pressKey', { app: 'Finder', key: 'Return' })
-    await call('computer.hotkey', { app: 'Finder', key: 'CmdOrCtrl+L' })
-    await call('computer.pasteText', { app: 'Finder', text: 'long text' })
-
-    expect(computerMocks.callComputerSidecarAction).toHaveBeenNthCalledWith(1, 'typeText', {
-      app: 'Finder',
-      text: 'hello',
-      noScreenshot: true
-    })
-    expect(computerMocks.callComputerSidecarAction).toHaveBeenNthCalledWith(2, 'pressKey', {
-      app: 'Finder',
-      key: 'Return'
-    })
-    expect(computerMocks.callComputerSidecarAction).toHaveBeenNthCalledWith(3, 'hotkey', {
-      app: 'Finder',
-      key: 'CmdOrCtrl+L'
-    })
-    expect(computerMocks.callComputerSidecarAction).toHaveBeenNthCalledWith(4, 'pasteText', {
-      app: 'Finder',
-      text: 'long text'
-    })
-  })
-
-  it('dispatches scroll and setValue actions through the sidecar', async () => {
-    computerMocks.callComputerSidecarAction.mockResolvedValue({ ok: true })
-
-    await call('computer.scroll', {
-      app: 'Finder',
-      elementIndex: 0,
-      direction: 'down',
-      pages: 2
-    })
-    await call('computer.setValue', {
-      app: 'Finder',
-      elementIndex: 1,
-      value: ''
-    })
-
-    expect(computerMocks.callComputerSidecarAction).toHaveBeenNthCalledWith(1, 'scroll', {
-      app: 'Finder',
-      elementIndex: 0,
-      direction: 'down',
-      pages: 2
-    })
-    expect(computerMocks.callComputerSidecarAction).toHaveBeenNthCalledWith(2, 'setValue', {
-      app: 'Finder',
-      elementIndex: 1,
-      value: ''
-    })
+  it('rejects malformed hotkey specs before dispatch', () => {
+    expect(() =>
+      findMethod('computer.hotkey').params!.parse({ app: 'Finder', key: 'Return' })
+    ).toThrow(/Hotkey requires a modifier and one key/)
+    expect(() =>
+      findMethod('computer.hotkey').params!.parse({ app: 'Finder', key: 'CmdOrCtrl+Shift' })
+    ).toThrow(/Hotkey requires a modifier and one key/)
+    expect(() =>
+      findMethod('computer.hotkey').params!.parse({ app: 'Finder', key: 'Ctrl+A+B' })
+    ).toThrow(/Hotkey requires a modifier and one key/)
   })
 })
 

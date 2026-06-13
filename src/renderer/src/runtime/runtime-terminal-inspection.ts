@@ -12,6 +12,7 @@ export type RuntimeTerminalProcessInspection = {
 }
 
 const REMOTE_PTY_ID_PREFIX = 'remote:'
+const DESKTOP_RUNTIME_CLIENT = { id: 'orca-desktop', type: 'desktop' } as const
 
 export function isRemoteRuntimePtyId(ptyId: string): boolean {
   return ptyId.startsWith(REMOTE_PTY_ID_PREFIX)
@@ -87,7 +88,7 @@ export function sendRuntimePtyInput(
   void callRuntimeRpc(
     target,
     'terminal.send',
-    { terminal, text: data },
+    { terminal, text: data, client: DESKTOP_RUNTIME_CLIENT },
     { timeoutMs: 15_000 }
   ).catch(() => {
     // Why: web session snapshots can retire a remote handle while xterm still
@@ -121,7 +122,7 @@ export async function sendRuntimePtyInputVerified(
     const result = await callRuntimeRpc<{ send: RuntimeTerminalSend }>(
       target,
       'terminal.send',
-      { terminal, text: data, client: { id: 'orca-desktop', type: 'desktop' } },
+      { terminal, text: data, client: DESKTOP_RUNTIME_CLIENT },
       { timeoutMs: 15_000 }
     )
     return result.send.accepted === true

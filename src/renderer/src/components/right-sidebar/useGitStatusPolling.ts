@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { useAppStore } from '@/store'
-import { useActiveWorktree, useAllWorktrees, useRepoById, useRepoMap } from '@/store/selectors'
+import { useAllWorktrees, useRepoById, useRepoMap, useWorktreeById } from '@/store/selectors'
 import type { GitConflictOperation } from '../../../../shared/types'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import { getConnectionId } from '@/lib/connection-context'
@@ -12,10 +12,11 @@ import { shouldPollActiveGitStatus } from '@/lib/passive-macos-app-data-access'
 
 const POLL_INTERVAL_MS = 3000
 
-export function useGitStatusPolling(): void {
-  const activeWorktree = useActiveWorktree()
-  const allWorktrees = useAllWorktrees()
+export function useGitStatusPolling(options: { enabled?: boolean } = {}): void {
+  const enabled = options.enabled ?? true
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
+  const activeWorktree = useWorktreeById(activeWorktreeId)
+  const allWorktrees = useAllWorktrees()
   const updateWorktreeGitIdentity = useAppStore((s) => s.updateWorktreeGitIdentity)
   const setGitStatus = useAppStore((s) => s.setGitStatus)
   const fetchUpstreamStatus = useAppStore((s) => s.fetchUpstreamStatus)
@@ -25,6 +26,7 @@ export function useGitStatusPolling(): void {
   const sshConnectionStates = useAppStore((s) => s.sshConnectionStates)
   const rightSidebarOpen = useAppStore((s) => s.rightSidebarOpen)
   const rightSidebarTab = useAppStore((s) => s.rightSidebarTab)
+  const rightSidebarExplorerView = useAppStore((s) => s.rightSidebarExplorerView)
   const openFiles = useAppStore((s) => s.openFiles)
   const repoMap = useRepoMap()
   const statusPollInFlightRef = useRef(false)
@@ -66,6 +68,9 @@ export function useGitStatusPolling(): void {
   }, [allWorktrees, conflictOperationByWorktree, activeWorktreeId, repoMap])
 
   const runFetchStatus = useCallback(async () => {
+    if (!enabled) {
+      return
+    }
     if (!activeWorktreeId || !worktreePath) {
       return
     }
@@ -75,6 +80,7 @@ export function useGitStatusPolling(): void {
         worktreePath,
         rightSidebarOpen,
         rightSidebarTab,
+        rightSidebarExplorerView,
         openFiles
       }) ||
       !activeRepoSupportsGit
@@ -107,9 +113,11 @@ export function useGitStatusPolling(): void {
     activeConnectionId,
     activePushTarget,
     activeWorktreeId,
+    enabled,
     fetchUpstreamStatus,
     isConnectionReady,
     openFiles,
+    rightSidebarExplorerView,
     rightSidebarOpen,
     rightSidebarTab,
     worktreePath,
@@ -138,15 +146,21 @@ export function useGitStatusPolling(): void {
   fetchStatusRef.current = fetchStatus
 
   useEffect(() => {
+    if (!enabled) {
+      return
+    }
     // Why: this root-level poll should pause while hidden, but visible
     // unfocused windows still need fresh status for second-display workflows.
     return installWindowVisibilityInterval({ run: fetchStatus, intervalMs: POLL_INTERVAL_MS })
-  }, [fetchStatus])
+  }, [enabled, fetchStatus])
 
   // Why: poll conflict operation for non-active worktrees that have a stale
   // non-unknown operation. This is a lightweight fs-only check (no git status)
   // so it won't cause performance issues even with many worktrees.
   useEffect(() => {
+    if (!enabled) {
+      return
+    }
     if (staleConflictWorktrees.length === 0) {
       return
     }
@@ -187,5 +201,5 @@ export function useGitStatusPolling(): void {
       pollRunner.dispose()
       stopVisiblePoll()
     }
-  }, [staleConflictWorktrees, setConflictOperation, isConnectionReady])
+  }, [enabled, staleConflictWorktrees, setConflictOperation, isConnectionReady])
 }

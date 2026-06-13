@@ -5,6 +5,10 @@ import type { StoreApi } from 'zustand'
 import type { AppState } from '@/store'
 import type { OpenFile } from '@/store/slices/editor'
 import { getConnectionId } from '@/lib/connection-context'
+import {
+  buildWorkspaceSessionPayload,
+  shouldPersistWorkspaceSession
+} from '@/lib/workspace-session'
 import { findWorktreeById } from '@/store/slices/worktree-helpers'
 import { writeRuntimeFile } from '@/runtime/runtime-file-client'
 import { settingsForRuntimeOwner } from '@/runtime/runtime-rpc-client'
@@ -30,7 +34,9 @@ import {
   getDuplicateDirtySavePaths
 } from './editor-autosave-state-projections'
 import {
+  ORCA_EDITOR_PREPARE_HOT_EXIT_EVENT,
   ORCA_EDITOR_SAVE_DIRTY_FILES_EVENT,
+  type EditorPrepareHotExitDetail,
   type EditorSaveDirtyFilesDetail
 } from '../../../../shared/editor-save-events'
 
@@ -83,7 +89,7 @@ export function attachEditorAutosaveController(store: AppStoreApi): () => void {
         // round-tripping back into a setContent that jumps the cursor to the
         // end (and, under round-trip drift, can drop keystrokes typed in the
         // debounce window). See editor-self-write-registry.
-        recordSelfWrite(liveFile.filePath, contentToSave)
+        recordSelfWrite(liveFile.filePath, contentToSave, liveFile.runtimeEnvironmentId)
         try {
           await writeRuntimeFile(
             {
@@ -99,7 +105,7 @@ export function attachEditorAutosaveController(store: AppStoreApi): () => void {
           // Why: the self-write stamp is only valid if a disk write actually
           // happened. Clearing it on failure keeps the external watcher from
           // suppressing a real third-party update that lands during the TTL.
-          clearSelfWrite(liveFile.filePath)
+          clearSelfWrite(liveFile.filePath, liveFile.runtimeEnvironmentId)
           throw error
         }
 
@@ -243,6 +249,50 @@ export function attachEditorAutosaveController(store: AppStoreApi): () => void {
     }
   }
 
+  const handlePrepareHotExit = async (event: Event): Promise<void> => {
+    const detail = (event as CustomEvent<EditorPrepareHotExitDetail>).detail
+    if (!detail) {
+      return
+    }
+
+    try {
+      detail.claim()
+
+      const initiallyDirtyFiles = store.getState().openFiles.filter((file) => file.isDirty)
+      await Promise.all(initiallyDirtyFiles.map((file) => quiesceFileSave(file.id)))
+
+      const state = store.getState()
+      const dirtyFiles = state.openFiles.filter((file) => file.isDirty)
+      const unsupportedDirtyFiles = dirtyFiles.filter((file) => file.mode !== 'edit')
+      if (unsupportedDirtyFiles.length > 0) {
+        detail.reject('Some unsaved editor changes cannot be backed up before restart.')
+        return
+      }
+
+      for (const file of dirtyFiles) {
+        if (state.editorDrafts[file.id] === undefined) {
+          throw new Error(`Missing editor buffer for ${file.relativePath}`)
+        }
+      }
+
+      if (dirtyFiles.length > 0 && !shouldPersistWorkspaceSession(state)) {
+        detail.reject(
+          'Unsaved editor changes cannot be backed up until workspace restore finishes.'
+        )
+        return
+      }
+
+      // Why: restart/update may quit before the debounced session writer fires.
+      // Write the full session now so dirty drafts restore as unsaved tabs.
+      if (shouldPersistWorkspaceSession(state)) {
+        window.api.session.setSync(buildWorkspaceSessionPayload(state))
+      }
+      detail.resolve()
+    } catch (error) {
+      detail.reject(String((error as Error)?.message ?? error))
+    }
+  }
+
   const handleSaveAndClose = async (event: Event): Promise<void> => {
     const { fileId } = (event as CustomEvent<{ fileId: string }>).detail
     const file = store.getState().openFiles.find((openFile) => openFile.id === fileId)
@@ -342,6 +392,7 @@ export function attachEditorAutosaveController(store: AppStoreApi): () => void {
   syncAutoSave()
 
   window.addEventListener(ORCA_EDITOR_SAVE_DIRTY_FILES_EVENT, handleSaveDirtyFiles as EventListener)
+  window.addEventListener(ORCA_EDITOR_PREPARE_HOT_EXIT_EVENT, handlePrepareHotExit as EventListener)
   window.addEventListener(ORCA_EDITOR_SAVE_AND_CLOSE_EVENT, handleSaveAndClose as EventListener)
   window.addEventListener(ORCA_EDITOR_SAVE_FILE_EVENT, handleSaveFile as EventListener)
   window.addEventListener(ORCA_EDITOR_QUIESCE_FILE_SAVES_EVENT, handleQuiesce as EventListener)
@@ -355,6 +406,10 @@ export function attachEditorAutosaveController(store: AppStoreApi): () => void {
     window.removeEventListener(
       ORCA_EDITOR_SAVE_DIRTY_FILES_EVENT,
       handleSaveDirtyFiles as EventListener
+    )
+    window.removeEventListener(
+      ORCA_EDITOR_PREPARE_HOT_EXIT_EVENT,
+      handlePrepareHotExit as EventListener
     )
     window.removeEventListener(
       ORCA_EDITOR_SAVE_AND_CLOSE_EVENT,

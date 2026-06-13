@@ -19,6 +19,9 @@ const HISTORY_DIR_NAME_WSL = 'terminal-history-wsl'
 
 type ShellKind = 'zsh' | 'bash' | 'fish' | 'pwsh' | 'powershell' | 'cmd' | 'unknown'
 
+let scheduledHistoryGcTimer: ReturnType<typeof setTimeout> | null = null
+let historyGcRunning = false
+
 // ─── Shell Detection ───────────────────────────────────────────────
 
 /** Resolve the shell kind from a shell binary path.
@@ -353,9 +356,16 @@ export function runHistoryGc(liveWorktreeIds: Set<string>): void {
 /** Schedule GC after a delay so it runs after workspace hydration completes.
  *  `getLiveWorktreeIds` should use already-known IDs, not probe repo paths. */
 export function scheduleHistoryGc(getLiveWorktreeIds: () => Promise<Set<string>>): void {
+  // Why: main-window services can reattach during reload/reactivation; one
+  // pending/running disk GC is enough and avoids duplicate startup I/O.
+  if (scheduledHistoryGcTimer !== null || historyGcRunning) {
+    return
+  }
   // Why 10s: avoids competing with startup-critical I/O while still running
   // early enough to clean up before the user notices disk usage (§7.6).
-  setTimeout(async () => {
+  scheduledHistoryGcTimer = setTimeout(async () => {
+    scheduledHistoryGcTimer = null
+    historyGcRunning = true
     try {
       const liveIds = await getLiveWorktreeIds()
       runHistoryGc(liveIds)
@@ -363,6 +373,8 @@ export function scheduleHistoryGc(getLiveWorktreeIds: () => Promise<Set<string>>
       console.warn(
         `[pty:history:gc] Failed to enumerate live worktrees for GC: ${err instanceof Error ? err.message : String(err)}`
       )
+    } finally {
+      historyGcRunning = false
     }
   }, 10_000)
 }

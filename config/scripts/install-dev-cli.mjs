@@ -7,7 +7,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url))
-const source = path.join(scriptDir, 'orca-dev')
+const source = path.join(scriptDir, 'orca-dev.mjs')
 
 const commandPath =
   process.platform === 'darwin' || process.platform === 'linux' ? '/usr/local/bin/orca-dev' : null

@@ -1,7 +1,8 @@
-import { useEffect, useId, useRef, useState } from 'react'
-import { CornerDownLeft, User } from 'lucide-react'
+import { useCallback, useEffect, useId, useRef, useState } from 'react'
+import { CornerDownLeft } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useMountedRef } from '@/hooks/useMountedRef'
+import { translate } from '@/i18n/i18n'
 
 // Why: rendered as a DOM sibling overlay inside the editor container rather
 // than as a Monaco content widget because it owns a React textarea with
@@ -45,7 +46,6 @@ export function DiffCommentPopover({
   // reflect the in-flight status to the user.
   const [submitting, setSubmitting] = useState(false)
   const mountedRef = useMountedRef()
-  const textareaRef = useRef<HTMLTextAreaElement | null>(null)
   const popoverRef = useRef<HTMLDivElement | null>(null)
   // Why: stash onCancel in a ref so the document mousedown listener below can
   // read the freshest callback without listing `onCancel` in its dependency
@@ -61,8 +61,10 @@ export function DiffCommentPopover({
   // "Line N" label as the dialog's accessible name.
   const labelId = useId()
 
-  useEffect(() => {
-    textareaRef.current?.focus()
+  const focusTextareaRef = useCallback((textarea: HTMLTextAreaElement | null): void => {
+    // Why: the draft field should receive focus as soon as the popover mounts;
+    // no external system needs a post-render Effect for this.
+    textarea?.focus()
   }, [])
 
   // Why: Monaco's editor area does not bubble a synthetic React click up to
@@ -123,23 +125,24 @@ export function DiffCommentPopover({
       onMouseDown={(ev) => ev.stopPropagation()}
       onClick={(ev) => ev.stopPropagation()}
     >
-      {/* Left Column: Avatar */}
-      <div className="orca-diff-comment-avatar-col">
-        <span className="orca-diff-comment-avatar orca-diff-comment-avatar-local">
-          <User className="size-3" />
-        </span>
-      </div>
-
-      {/* Right Column: Content */}
+      {/* Content */}
       <div className="orca-diff-comment-content-col" style={{ gap: '8px' }}>
         <div id={labelId} className="orca-diff-comment-popover-label">
           {title ??
             (startLine && startLine !== lineNumber
-              ? `Lines ${startLine}-${lineNumber}`
-              : `Line ${lineNumber}`)}
+              ? translate(
+                  'auto.components.diff.comments.DiffCommentPopover.c845170b3b',
+                  'Lines {{value0}}-{{value1}}',
+                  { value0: startLine, value1: lineNumber }
+                )
+              : translate(
+                  'auto.components.diff.comments.DiffCommentPopover.e05063cfc1',
+                  'Line {{value0}}',
+                  { value0: lineNumber }
+                ))}
         </div>
         <textarea
-          ref={textareaRef}
+          ref={focusTextareaRef}
           className="orca-diff-comment-popover-textarea"
           placeholder={placeholder}
           value={body}
@@ -175,7 +178,7 @@ export function DiffCommentPopover({
         />
         <div className="orca-diff-comment-popover-footer">
           <Button variant="ghost" size="sm" onClick={onCancel}>
-            Cancel
+            {translate('auto.components.diff.comments.DiffCommentPopover.2b3ce6d394', 'Cancel')}
           </Button>
           <Button
             size="sm"

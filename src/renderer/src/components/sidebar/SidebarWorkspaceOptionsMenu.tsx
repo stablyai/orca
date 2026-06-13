@@ -17,55 +17,25 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import type { AgentActivityDisplayMode, WorktreeCardProperty } from '../../../../shared/types'
+import type { AgentActivityDisplayMode } from '../../../../shared/types'
 import { DEFAULT_SHOW_SLEEPING_WORKSPACES } from '../../../../shared/constants'
 import SidebarRepositoryFilterSection from './SidebarRepositoryFilterSection'
 import SidebarWorkspaceFilterSection from './SidebarWorkspaceFilterSection'
+import { translate } from '@/i18n/i18n'
 
 type SidebarWorkspaceOptionsMenuProps = {
   preserveWorkspaceBoardOpen?: boolean
   onMenuOpenChange?: (open: boolean) => void
 }
 
-const GROUP_BY_OPTIONS = [
-  { id: 'none', label: 'None' },
-  { id: 'workspace-status', label: 'Status' },
-  { id: 'pr-status', label: 'PR' },
-  { id: 'repo', label: 'Project' }
-] as const
-
-const PROPERTY_OPTIONS: { id: WorktreeCardProperty; label: string }[] = [
-  { id: 'issue', label: 'GitHub ticket' },
-  { id: 'linear-issue', label: 'Linear issue' },
-  { id: 'pr', label: 'PR/MR link' },
-  { id: 'comment', label: 'Notes' },
-  { id: 'ports', label: 'Ports' },
-  // Why: toggles the inline "Agent activity" list rendered below each
-  // workspace card body (see WorktreeCard -> WorktreeCardAgents). Off hides
-  // the list; there is no alternate surface.
-  { id: 'inline-agents', label: 'Agent activity' }
-]
-
-const AGENT_ACTIVITY_DISPLAY_OPTIONS: { id: AgentActivityDisplayMode; label: string }[] = [
-  { id: 'compact', label: 'Compact' },
-  { id: 'full', label: 'Full list' }
-]
-
-const SORT_OPTIONS = [
-  { id: 'name', label: 'Name', description: null },
-  {
-    id: 'smart',
-    label: 'Agent Activity',
-    description: 'Agents that need attention, then most recent activity.'
-  },
-  { id: 'recent', label: 'Recent', description: null },
-  { id: 'repo', label: 'Project', description: null },
-  {
-    id: 'manual',
-    label: 'Manual',
-    description: 'Drag workspaces to arrange them within each group.'
-  }
-] as const
+import {
+  AGENT_ACTIVITY_DISPLAY_OPTIONS,
+  CARD_LAYOUT_OPTIONS,
+  GROUP_BY_OPTIONS,
+  PROJECT_ORDER_OPTIONS,
+  PROPERTY_OPTIONS,
+  SORT_OPTIONS
+} from './sidebar-workspace-options-menu-options'
 
 const SidebarWorkspaceOptionsMenu = React.memo(function SidebarWorkspaceOptionsMenu({
   preserveWorkspaceBoardOpen = false,
@@ -77,12 +47,16 @@ const SidebarWorkspaceOptionsMenu = React.memo(function SidebarWorkspaceOptionsM
   const repos = useAppStore((s) => s.repos)
   const worktreeCardProperties = useAppStore((s) => s.worktreeCardProperties)
   const toggleWorktreeCardProperty = useAppStore((s) => s.toggleWorktreeCardProperty)
+  const settings = useAppStore((s) => s.settings)
+  const updateSettings = useAppStore((s) => s.updateSettings)
   const agentActivityDisplayMode = useAppStore((s) => s.agentActivityDisplayMode)
   const setAgentActivityDisplayMode = useAppStore((s) => s.setAgentActivityDisplayMode)
   const sortBy = useAppStore((s) => s.sortBy)
   const setSortBy = useAppStore((s) => s.setSortBy)
   const groupBy = useAppStore((s) => s.groupBy)
   const setGroupBy = useAppStore((s) => s.setGroupBy)
+  const projectOrderBy = useAppStore((s) => s.projectOrderBy)
+  const setProjectOrderBy = useAppStore((s) => s.setProjectOrderBy)
 
   const [open, setOpen] = useState(false)
 
@@ -112,6 +86,11 @@ const SidebarWorkspaceOptionsMenu = React.memo(function SidebarWorkspaceOptionsM
     (hasSleepingFilter ? 1 : 0) + (hideDefaultBranchWorkspace ? 1 : 0) + selectedCount
   const activeFilterLabel = `${activeFilterCount} ${activeFilterCount === 1 ? 'filter' : 'filters'}`
   const sortLabel = SORT_OPTIONS.find((opt) => opt.id === sortBy)?.label ?? 'Sort'
+  const projectOrderLabel =
+    PROJECT_ORDER_OPTIONS.find((opt) => opt.id === projectOrderBy)?.label ?? 'Manual'
+  const cardLayout = settings?.compactWorktreeCards ? 'compact' : 'detailed'
+  const cardLayoutLabel =
+    CARD_LAYOUT_OPTIONS.find((opt) => opt.id === cardLayout)?.label ?? 'Detailed'
   const visiblePropertyCount = PROPERTY_OPTIONS.filter((opt) =>
     worktreeCardProperties.includes(opt.id)
   ).length
@@ -128,8 +107,15 @@ const SidebarWorkspaceOptionsMenu = React.memo(function SidebarWorkspaceOptionsM
               className="relative text-muted-foreground"
               aria-label={
                 hasAnyFilter
-                  ? `Workspace options (${activeFilterLabel} active)`
-                  : 'Workspace options'
+                  ? translate(
+                      'auto.components.sidebar.SidebarWorkspaceOptionsMenu.bc96dbd041',
+                      'Workspace options ({{value0}} active)',
+                      { value0: activeFilterLabel }
+                    )
+                  : translate(
+                      'auto.components.sidebar.SidebarWorkspaceOptionsMenu.9919ae1082',
+                      'Workspace options'
+                    )
               }
               data-workspace-board-preserve-open={preserveWorkspaceBoardOpen ? '' : undefined}
             >
@@ -148,7 +134,16 @@ const SidebarWorkspaceOptionsMenu = React.memo(function SidebarWorkspaceOptionsM
           </DropdownMenuTrigger>
         </TooltipTrigger>
         <TooltipContent side="bottom" sideOffset={6}>
-          {hasAnyFilter ? `Workspace options (${activeFilterLabel})` : 'Workspace options'}
+          {hasAnyFilter
+            ? translate(
+                'auto.components.sidebar.SidebarWorkspaceOptionsMenu.bc96dbd041',
+                'Workspace options ({{value0}})',
+                { value0: activeFilterLabel }
+              )
+            : translate(
+                'auto.components.sidebar.SidebarWorkspaceOptionsMenu.9919ae1082',
+                'Workspace options'
+              )}
         </TooltipContent>
       </Tooltip>
       <DropdownMenuContent
@@ -158,7 +153,9 @@ const SidebarWorkspaceOptionsMenu = React.memo(function SidebarWorkspaceOptionsM
         className="w-72 pb-2"
         data-workspace-board-preserve-open={preserveWorkspaceBoardOpen ? '' : undefined}
       >
-        <DropdownMenuLabel>Group by</DropdownMenuLabel>
+        <DropdownMenuLabel>
+          {translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.dc0bb670bc', 'Group by')}
+        </DropdownMenuLabel>
         <div className="px-2 pt-0.5 pb-1">
           <ToggleGroup
             type="single"
@@ -188,7 +185,12 @@ const SidebarWorkspaceOptionsMenu = React.memo(function SidebarWorkspaceOptionsM
         <DropdownMenuSub>
           <DropdownMenuSubTrigger>
             <span className="flex flex-1 items-center justify-between">
-              <span>Sort by</span>
+              <span>
+                {translate(
+                  'auto.components.sidebar.SidebarWorkspaceOptionsMenu.7bada3b1ab',
+                  'Sort by'
+                )}
+              </span>
               <span className="text-[11px] font-medium text-muted-foreground">{sortLabel}</span>
             </span>
           </DropdownMenuSubTrigger>
@@ -228,19 +230,112 @@ const SidebarWorkspaceOptionsMenu = React.memo(function SidebarWorkspaceOptionsM
           </DropdownMenuSubContent>
         </DropdownMenuSub>
 
-        <DropdownMenuSeparator />
-        <SidebarWorkspaceFilterSection />
+        {/* Why: project order only has a visible effect when grouping by
+            project; hide it in none/status/PR modes to avoid a dead control. */}
+        {groupBy === 'repo' && (
+          <DropdownMenuSub>
+            <DropdownMenuSubTrigger>
+              <span className="flex flex-1 items-center justify-between">
+                <span>
+                  {translate(
+                    'auto.components.sidebar.SidebarWorkspaceOptionsMenu.09faabd875',
+                    'Project order'
+                  )}
+                </span>
+                <span className="text-[11px] font-medium text-muted-foreground">
+                  {projectOrderLabel}
+                </span>
+              </span>
+            </DropdownMenuSubTrigger>
+            <DropdownMenuSubContent
+              className="w-44"
+              data-workspace-board-preserve-open={preserveWorkspaceBoardOpen ? '' : undefined}
+            >
+              <DropdownMenuRadioGroup
+                value={projectOrderBy}
+                onValueChange={(v) => setProjectOrderBy(v as typeof projectOrderBy)}
+              >
+                {PROJECT_ORDER_OPTIONS.map((opt) => (
+                  <Tooltip key={opt.id}>
+                    <TooltipTrigger asChild>
+                      <DropdownMenuRadioItem
+                        value={opt.id}
+                        // Keep the menu open so people can compare order modes.
+                        onSelect={(e) => e.preventDefault()}
+                      >
+                        {opt.label}
+                      </DropdownMenuRadioItem>
+                    </TooltipTrigger>
+                    <TooltipContent side="right" sideOffset={6}>
+                      {opt.description}
+                    </TooltipContent>
+                  </Tooltip>
+                ))}
+              </DropdownMenuRadioGroup>
+            </DropdownMenuSubContent>
+          </DropdownMenuSub>
+        )}
 
-        <DropdownMenuSeparator />
         <DropdownMenuSub>
           <DropdownMenuSubTrigger>
             <span className="flex flex-1 items-center justify-between">
-              <span>Show properties</span>
-              {visiblePropertyCount > 0 && (
+              <span>
+                {translate(
+                  'auto.components.sidebar.SidebarWorkspaceOptionsMenu.320b675c9a',
+                  'Card layout'
+                )}
+              </span>
+              <span className="text-[11px] font-medium text-muted-foreground">
+                {cardLayoutLabel}
+              </span>
+            </span>
+          </DropdownMenuSubTrigger>
+          <DropdownMenuSubContent
+            className="w-44"
+            data-workspace-board-preserve-open={preserveWorkspaceBoardOpen ? '' : undefined}
+          >
+            <DropdownMenuRadioGroup
+              value={cardLayout}
+              onValueChange={(value) => {
+                void updateSettings({
+                  compactWorktreeCards: value === 'compact'
+                })
+              }}
+            >
+              {CARD_LAYOUT_OPTIONS.map((opt) => (
+                <DropdownMenuRadioItem
+                  key={opt.id}
+                  value={opt.id}
+                  onSelect={(e) => e.preventDefault()}
+                >
+                  {opt.label}
+                </DropdownMenuRadioItem>
+              ))}
+            </DropdownMenuRadioGroup>
+          </DropdownMenuSubContent>
+        </DropdownMenuSub>
+
+        <DropdownMenuSub>
+          <DropdownMenuSubTrigger>
+            <span className="flex flex-1 items-center justify-between">
+              <span>
+                {translate(
+                  'auto.components.sidebar.SidebarWorkspaceOptionsMenu.ba87080fb7',
+                  'Show properties'
+                )}
+              </span>
+              {cardLayout === 'compact' ? (
+                <span className="text-[11px] font-medium text-muted-foreground">
+                  {translate(
+                    'auto.components.sidebar.SidebarWorkspaceOptionsMenu.3d4b9c4997',
+                    'Hover'
+                  )}
+                </span>
+              ) : visiblePropertyCount > 0 ? (
                 <span className="text-[11px] font-medium text-muted-foreground">
                   {visiblePropertyCount}
                 </span>
-              )}
+              ) : null}
             </span>
           </DropdownMenuSubTrigger>
           <DropdownMenuSubContent
@@ -259,7 +354,10 @@ const SidebarWorkspaceOptionsMenu = React.memo(function SidebarWorkspaceOptionsM
             ))}
             <DropdownMenuSeparator />
             <DropdownMenuLabel className="px-2 py-1 text-[11px] font-medium text-muted-foreground">
-              Agent activity layout
+              {translate(
+                'auto.components.sidebar.SidebarWorkspaceOptionsMenu.95c9754653',
+                'Agent activity layout'
+              )}
             </DropdownMenuLabel>
             <DropdownMenuRadioGroup
               value={agentActivityDisplayMode}
@@ -279,6 +377,9 @@ const SidebarWorkspaceOptionsMenu = React.memo(function SidebarWorkspaceOptionsM
             </DropdownMenuRadioGroup>
           </DropdownMenuSubContent>
         </DropdownMenuSub>
+
+        <DropdownMenuSeparator />
+        <SidebarWorkspaceFilterSection />
 
         <DropdownMenuSeparator />
         <SidebarRepositoryFilterSection />

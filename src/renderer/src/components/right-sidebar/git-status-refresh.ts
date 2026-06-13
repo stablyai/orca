@@ -10,7 +10,7 @@ export type GitStatusRefreshDeps = {
   setGitStatus: (worktreeId: string, status: GitStatusResult) => void
   updateWorktreeGitIdentity: (
     worktreeId: string,
-    identity: { head?: string; branch?: string }
+    identity: { head?: string; branch?: string | null }
   ) => void
   setUpstreamStatus: (worktreeId: string, status: GitUpstreamStatus) => void
   fetchUpstreamStatus: (
@@ -48,7 +48,9 @@ export async function refreshGitStatusForWorktree({
   // gives us the new identity without a separate worktree-list poll.
   deps.updateWorktreeGitIdentity(worktreeId, {
     head: status.head,
-    branch: status.branch
+    // Why: detached HEAD reports a head oid and no branch. Pass null as an
+    // explicit clear signal so stale branch names don't linger in the UI.
+    branch: status.branch ?? (status.head ? null : undefined)
   })
   if (pushTarget) {
     // Why: porcelain status reports Git's configured upstream. Source Control

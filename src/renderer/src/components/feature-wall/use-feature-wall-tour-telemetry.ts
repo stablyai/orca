@@ -100,18 +100,18 @@ export function useFeatureWallTourTelemetry(args: {
   }, [])
 
   useEffect(() => {
-    if (isOpen && openFeatureWallTourTelemetrySession(telemetryRef.current, performance.now())) {
-      track('feature_wall_opened', { source })
-      return
-    }
     if (!isOpen) {
       emitCloseTelemetry()
+      return undefined
     }
-  }, [emitCloseTelemetry, isOpen, source])
 
-  useEffect(() => {
+    if (openFeatureWallTourTelemetrySession(telemetryRef.current, performance.now())) {
+      track('feature_wall_opened', { source: sourceRef.current })
+    }
+    // Why: the telemetry session opens from this Effect, so the same Effect
+    // owns close-on-unmount instead of a second cleanup-only Effect.
     return () => emitCloseTelemetry()
-  }, [emitCloseTelemetry])
+  }, [emitCloseTelemetry, isOpen])
 
   return { markExitAction }
 }

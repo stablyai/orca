@@ -3,6 +3,8 @@
  * semantics cannot drift across app surfaces. */
 import { describe, expect, it } from 'vitest'
 import {
+  agentTabActionId,
+  getKeybindingDefinition,
   findKeybindingConflicts,
   formatKeybindingList,
   getEffectiveKeybindingsForAction,
@@ -14,6 +16,7 @@ import {
   normalizeKeybindingListForAction,
   normalizeKeybindingList
 } from './keybindings'
+import { ALL_TUI_AGENTS } from './tui-agent-display-names'
 
 describe('keybindings', () => {
   it('normalizes editable shortcut input and rejects unsafe bindings', () => {
@@ -56,6 +59,33 @@ describe('keybindings', () => {
     ).toEqual({ ok: true, value: 'Mod+Alt+Shift+J' })
     expect(
       keybindingFromInput({ key: 'Control', code: 'ControlLeft', control: true }, 'linux')
+    ).toEqual({ ok: false, error: 'Press a key, not only a modifier.' })
+  })
+
+  it('captures macOS Option-composed key events via the physical code', () => {
+    expect(
+      keybindingFromInput(
+        { key: 'ç', code: 'KeyC', meta: true, control: false, alt: true, shift: false },
+        'darwin'
+      )
+    ).toEqual({ ok: true, value: 'Mod+Alt+C' })
+    expect(
+      keybindingFromInput(
+        { key: '“', code: 'BracketLeft', meta: true, control: false, alt: true, shift: false },
+        'darwin'
+      )
+    ).toEqual({ ok: true, value: 'Mod+Alt+BracketLeft' })
+    expect(
+      keybindingFromInput(
+        { key: 'Alt', code: 'AltLeft', meta: false, control: false, alt: true, shift: false },
+        'darwin'
+      )
+    ).toEqual({ ok: false, error: 'Press a key, not only a modifier.' })
+    expect(
+      keybindingFromInput(
+        { key: '¡', code: 'Digit1', meta: true, control: false, alt: true, shift: false },
+        'darwin'
+      )
     ).toEqual({ ok: false, error: 'Press a key, not only a modifier.' })
   })
 
@@ -152,6 +182,62 @@ describe('keybindings', () => {
     })
   })
 
+  it('defines macOS-only rename shortcuts that stay conflict-free', () => {
+    expect(getEffectiveKeybindingsForAction('tab.rename', 'darwin')).toEqual(['Mod+R'])
+    expect(getEffectiveKeybindingsForAction('tab.rename', 'linux')).toEqual([])
+    expect(getEffectiveKeybindingsForAction('tab.rename', 'win32')).toEqual([])
+    expect(getEffectiveKeybindingsForAction('workspace.rename', 'darwin')).toEqual(['Mod+Alt+R'])
+    expect(getEffectiveKeybindingsForAction('workspace.rename', 'linux')).toEqual([])
+    expect(formatKeybindingList(['Mod+Alt+R'], 'darwin')).toBe('⌘⌥R')
+    expect(
+      keybindingMatchesAction(
+        'tab.rename',
+        {
+          key: 'r',
+          code: 'KeyR',
+          meta: true,
+          control: false,
+          alt: false,
+          shift: false
+        },
+        'darwin'
+      )
+    ).toBe(true)
+    expect(
+      keybindingMatchesAction(
+        'tab.rename',
+        {
+          key: 'r',
+          code: 'KeyR',
+          meta: false,
+          control: true,
+          alt: false,
+          shift: false
+        },
+        'linux'
+      )
+    ).toBe(false)
+
+    // Why: tab.rename (Mod+R) intentionally shares its binding with
+    // browser.reload, but the two live in different scopes (tabs vs browser),
+    // so customizing tab.rename to its default must not flag a conflict.
+    expect(findKeybindingConflicts('darwin', { 'tab.rename': ['Mod+R'] })).toEqual([])
+    // Why: tab/workspace rename share the same active workspace keydown path,
+    // so Settings must reject user overrides that make one shadow the other.
+    expect(findKeybindingConflicts('darwin', { 'workspace.rename': ['Mod+R'] })).toEqual([
+      {
+        binding: 'Mod+R',
+        actionIds: ['workspace.rename', 'tab.rename']
+      }
+    ])
+    expect(findKeybindingConflicts('darwin', { 'tab.rename': ['Mod+Alt+R'] })).toEqual([
+      {
+        binding: 'Mod+Alt+R',
+        actionIds: ['workspace.rename', 'tab.rename']
+      }
+    ])
+  })
+
   it('keeps equalize pane sizes unassigned until users customize it', () => {
     expect(getEffectiveKeybindingsForAction('terminal.equalizePaneSizes', 'darwin')).toEqual([])
     expect(
@@ -188,6 +274,53 @@ describe('keybindings', () => {
         'workspace.delete': ['Mod+Shift+Backspace']
       })
     ).toBe(true)
+  })
+
+  it('defines a macOS-only default for the new agent tab shortcut', () => {
+    expect(getEffectiveKeybindingsForAction('tab.newAgent', 'darwin')).toEqual(['Mod+Alt+T'])
+    expect(getEffectiveKeybindingsForAction('tab.newAgent', 'linux')).toEqual([])
+    expect(getEffectiveKeybindingsForAction('tab.newAgent', 'win32')).toEqual([])
+    expect(
+      keybindingMatchesAction(
+        'tab.newAgent',
+        { key: 't', code: 'KeyT', meta: true, control: false, alt: true, shift: false },
+        'darwin'
+      )
+    ).toBe(true)
+  })
+
+  it('defines an unassigned per-agent tab action for every TUI agent', () => {
+    for (const agent of ALL_TUI_AGENTS) {
+      const actionId = agentTabActionId(agent)
+      const definition = getKeybindingDefinition(actionId)
+      expect(definition, actionId).toBeDefined()
+      expect(definition?.group).toBe('Agents')
+      expect(definition?.scope).toBe('tabs')
+      expect(getEffectiveKeybindingsForAction(actionId, 'darwin')).toEqual([])
+    }
+  })
+
+  it('matches per-agent tab actions only through user overrides', () => {
+    const binding = { key: 'k', code: 'KeyK', meta: true, control: false, alt: true, shift: true }
+    expect(keybindingMatchesAction(agentTabActionId('claude'), binding, 'darwin')).toBe(false)
+    expect(
+      keybindingMatchesAction(agentTabActionId('claude'), binding, 'darwin', {
+        'tab.newAgent.claude': ['Mod+Alt+Shift+K']
+      })
+    ).toBe(true)
+  })
+
+  it('ignores selected actions when checking shortcut conflicts', () => {
+    expect(
+      findKeybindingConflicts(
+        'darwin',
+        {
+          'tab.newAgent.claude': ['Mod+Alt+Shift+K'],
+          'tab.newAgent.codex': ['Mod+Alt+Shift+K']
+        },
+        { ignoredActionIds: [agentTabActionId('claude')] }
+      )
+    ).toEqual([])
   })
 
   it('reports customized renderer conflicts with native menu accelerators', () => {
@@ -552,5 +685,33 @@ describe('keybindings', () => {
         'linux'
       )
     ).toBe(true)
+  })
+
+  it('matches macOS Option-composed bracket shortcuts for all-type tab switching', () => {
+    const macOptionLeftBracket = {
+      key: '\u201c',
+      code: 'BracketLeft',
+      control: false,
+      meta: true,
+      alt: true,
+      shift: false
+    }
+    const macOptionRightBracket = {
+      key: '\u2018',
+      code: 'BracketRight',
+      control: false,
+      meta: true,
+      alt: true,
+      shift: false
+    }
+
+    expect(keybindingMatchesAction('tab.previousAllTypes', macOptionLeftBracket, 'darwin')).toBe(
+      true
+    )
+    expect(keybindingMatchesAction('tab.nextAllTypes', macOptionLeftBracket, 'darwin')).toBe(false)
+    expect(keybindingMatchesAction('tab.nextAllTypes', macOptionRightBracket, 'darwin')).toBe(true)
+    expect(keybindingMatchesAction('tab.previousAllTypes', macOptionRightBracket, 'darwin')).toBe(
+      false
+    )
   })
 })

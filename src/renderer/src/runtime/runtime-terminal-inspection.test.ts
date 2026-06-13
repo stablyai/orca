@@ -51,7 +51,11 @@ describe('runtime terminal owner routing', () => {
       expect(runtimeCall).toHaveBeenCalledWith({
         selector: 'env-1',
         method: 'terminal.send',
-        params: { terminal: 'terminal-1', text: 'x' },
+        params: {
+          terminal: 'terminal-1',
+          text: 'x',
+          client: { id: 'orca-desktop', type: 'desktop' }
+        },
         timeoutMs: 15_000
       })
     })

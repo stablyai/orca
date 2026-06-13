@@ -17,6 +17,39 @@ export type CommandSpec = {
 }
 
 export const GLOBAL_FLAGS = ['help', 'json', 'pairing-code', 'environment']
+export const BOOLEAN_FLAGS = new Set([
+  'all',
+  'attachments',
+  'children',
+  'comments',
+  'current',
+  'dry-run',
+  'enter',
+  'focus',
+  'force',
+  'full',
+  'help',
+  'inject',
+  'interrupt',
+  'json',
+  'messages',
+  'mobile',
+  'mobile-pairing',
+  'no-pairing',
+  'parent-current',
+  'ready',
+  'relations',
+  'restore-window',
+  'return-preamble',
+  'run-hooks',
+  'show-profile',
+  'staged',
+  'tasks',
+  'text-stdin',
+  'unread',
+  'value-stdin',
+  'wait'
+])
 
 export function parseArgs(argv: string[]): ParsedArgs {
   const commandPath: string[] = []
@@ -40,6 +73,10 @@ export function parseArgs(argv: string[]): ParsedArgs {
     }
 
     const flag = assignment
+    if (BOOLEAN_FLAGS.has(flag)) {
+      flags.set(flag, true)
+      continue
+    }
     const hasNext = i + 1 < argv.length
     const next = argv[i + 1]
     if (!hasNext || next.startsWith('--')) {
@@ -75,9 +112,19 @@ export function supportsBrowserPageFlag(commandPath: string[]): boolean {
     return false
   }
   if (
-    ['automations', 'repo', 'worktree', 'terminal', 'file', 'computer', 'note'].includes(
-      commandPath[0]
-    )
+    [
+      'automations',
+      'repo',
+      'worktree',
+      'terminal',
+      'file',
+      'orchestration',
+      'computer',
+      'emulator',
+      'note',
+      'diagnostics',
+      'linear'
+    ].includes(commandPath[0])
   ) {
     return false
   }
@@ -111,8 +158,11 @@ export function isCommandGroup(commandPath: string[]): boolean {
         'storage',
         'orchestration',
         'computer',
+        'emulator',
         'agent',
-        'environment'
+        'environment',
+        'diagnostics',
+        'linear'
       ].includes(commandPath[0])) ||
     (commandPath.length === 2 && commandPath[0] === 'agent' && commandPath[1] === 'hooks') ||
     (commandPath.length === 2 &&

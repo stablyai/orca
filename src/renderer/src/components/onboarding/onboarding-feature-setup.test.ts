@@ -7,6 +7,7 @@ import type {
 import {
   buildAgentFeatureSkillInstallCommand,
   COMPUTER_USE_SKILL_NAME,
+  LINEAR_TICKETS_SKILL_NAME,
   ORCA_CLI_SKILL_NAME,
   ORCHESTRATION_SKILL_NAME
 } from '@/lib/agent-feature-install-commands'
@@ -29,7 +30,8 @@ import {
 const ALL_SKILL_INSTALL_COMMAND = buildAgentFeatureSkillInstallCommand([
   ORCA_CLI_SKILL_NAME,
   COMPUTER_USE_SKILL_NAME,
-  ORCHESTRATION_SKILL_NAME
+  ORCHESTRATION_SKILL_NAME,
+  LINEAR_TICKETS_SKILL_NAME
 ])
 const ORCHESTRATION_ONLY_SKILL_INSTALL_COMMAND = buildAgentFeatureSkillInstallCommand([
   ORCHESTRATION_SKILL_NAME
@@ -102,20 +104,22 @@ describe('onboarding feature setup runner', () => {
     expect(DEFAULT_ONBOARDING_FEATURE_SETUP_SELECTION).toEqual({
       browserUse: true,
       computerUse: true,
-      orchestration: true
+      orchestration: true,
+      linearTickets: false
     })
   })
 
-  it('builds one skill command for the selected Browser Use, Computer Use, and Orchestration features', () => {
+  it('builds one skill command for selected onboarding feature setup skills', () => {
     const text = buildOnboardingFeatureSetupClipboardText({
       browserUse: true,
       computerUse: true,
-      orchestration: true
+      orchestration: true,
+      linearTickets: true
     })
 
     expect(text).toBe(ALL_SKILL_INSTALL_COMMAND)
     expect(text).toBe(
-      'npx skills add https://github.com/stablyai/orca --skill orca-cli computer-use orchestration --global'
+      'npx skills add https://github.com/stablyai/orca --skill orca-cli computer-use orchestration linear-tickets --global'
     )
   })
 
@@ -123,19 +127,21 @@ describe('onboarding feature setup runner', () => {
     const selection: OnboardingFeatureSetupSelection = {
       browserUse: true,
       computerUse: false,
-      orchestration: true
+      orchestration: true,
+      linearTickets: true
     }
 
     expect(onboardingFeatureSetupTelemetryFeature('browserUse')).toBe('browser_use')
     expect(onboardingFeatureSetupTelemetrySelection(selection)).toEqual({
       browser_use: true,
       computer_use: false,
+      linear_tickets: true,
       orchestration: true,
       selected_count: 2
     })
     expect(
       onboardingFeatureSetupRunTelemetry(selection, {
-        selectedIds: ['browserUse', 'orchestration'],
+        selectedIds: ['browserUse', 'orchestration', 'linearTickets'],
         cliTouched: true,
         skillCommandsCopied: false,
         skillInstallCommand: ORCHESTRATION_ONLY_SKILL_INSTALL_COMMAND,
@@ -145,6 +151,7 @@ describe('onboarding feature setup runner', () => {
     ).toEqual({
       browser_use: true,
       computer_use: false,
+      linear_tickets: true,
       orchestration: true,
       selected_count: 2,
       cli_touched: true,
@@ -155,7 +162,7 @@ describe('onboarding feature setup runner', () => {
     })
   })
 
-  it('runs selected Browser Use, Computer Use, and Orchestration setup through injected deps only', async () => {
+  it('runs selected feature setup through injected deps only', async () => {
     const deps = createDeps({
       getComputerUsePermissionStatus: vi.fn(
         async (): Promise<ComputerUsePermissionStatusResult> => ({
@@ -171,12 +178,12 @@ describe('onboarding feature setup runner', () => {
     })
 
     const result = await runOnboardingFeatureSetup(
-      { browserUse: true, computerUse: true, orchestration: true },
+      { browserUse: true, computerUse: true, orchestration: true, linearTickets: true },
       deps
     )
 
     expect(result).toEqual({
-      selectedIds: ['browserUse', 'computerUse', 'orchestration'],
+      selectedIds: ['browserUse', 'computerUse', 'orchestration', 'linearTickets'],
       cliTouched: false,
       skillCommandsCopied: true,
       skillInstallCommand: ALL_SKILL_INSTALL_COMMAND,
@@ -200,7 +207,8 @@ describe('onboarding feature setup runner', () => {
     const selection: OnboardingFeatureSetupSelection = {
       browserUse: false,
       computerUse: false,
-      orchestration: true
+      orchestration: true,
+      linearTickets: false
     }
 
     const result = await runOnboardingFeatureSetup(selection, deps)
@@ -223,7 +231,7 @@ describe('onboarding feature setup runner', () => {
     const deps = createDeps()
 
     const result = await runOnboardingFeatureSetup(
-      { browserUse: false, computerUse: false, orchestration: false },
+      { browserUse: false, computerUse: false, orchestration: false, linearTickets: false },
       deps
     )
 
@@ -251,7 +259,7 @@ describe('onboarding feature setup runner', () => {
     })
 
     const result = await runOnboardingFeatureSetup(
-      { browserUse: false, computerUse: false, orchestration: true },
+      { browserUse: false, computerUse: false, orchestration: true, linearTickets: false },
       deps
     )
 
@@ -282,7 +290,7 @@ describe('onboarding feature setup runner', () => {
     })
 
     const result = await runOnboardingFeatureSetup(
-      { browserUse: true, computerUse: false, orchestration: false },
+      { browserUse: true, computerUse: false, orchestration: false, linearTickets: false },
       deps
     )
 

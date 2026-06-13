@@ -9,9 +9,37 @@
 // scrubbing passwords on any scheme and HTTPS token-only forms.
 const USERPASS_URL_PATTERN = /([a-z][a-z0-9+.-]*:\/\/)[^\s/@:]+:[^\s/@]+@/gi
 const HTTPS_TOKEN_URL_PATTERN = /(https?:\/\/)[^\s/@:]+@/gi
+const SUBMODULE_PUSH_FAILURE_PATTERN = /Unable to push submodule ['"](.+?)['"]/i
+const SUBMODULE_PUSH_FAILURE_SENTINEL_PATTERN =
+  /failed to push all needed submodules|Unable to push submodule/i
+const SUBMODULE_REMOTE_CHANGED_PATTERN =
+  /non-fast-forward|fetch first|updates were rejected|remote contains work that you do not have/i
+const NORMALIZED_SUBMODULE_PUSH_FAILURE_PATTERN =
+  /(?:^|:\s)((?:Submodule '[^'\n]+'|A submodule) (?:has remote changes\. Pull inside the submodule, then try again\.|could not be pushed\. Resolve the submodule push error, then try again\.))(?:$|\s)/i
 
 export function stripCredentialsFromMessage(message: string): string {
   return message.replace(USERPASS_URL_PATTERN, '$1').replace(HTTPS_TOKEN_URL_PATTERN, '$1')
+}
+
+export function formatSubmodulePushFailureDetail(message: string): string | null {
+  const raw = stripCredentialsFromMessage(message)
+  const normalized = raw.replace(/\r\n/g, '\n').trim()
+  const normalizedMatch = normalized.match(NORMALIZED_SUBMODULE_PUSH_FAILURE_PATTERN)
+  if (normalizedMatch) {
+    return normalizedMatch[1]
+  }
+  if (!SUBMODULE_PUSH_FAILURE_SENTINEL_PATTERN.test(normalized)) {
+    return null
+  }
+
+  // Why: recursive push can hide the actionable nested rejection behind a
+  // top-level "failed to push all needed submodules" fatal line.
+  const submoduleName = normalized.match(SUBMODULE_PUSH_FAILURE_PATTERN)?.[1]?.trim()
+  const subject = submoduleName ? `Submodule '${submoduleName}'` : 'A submodule'
+  if (SUBMODULE_REMOTE_CHANGED_PATTERN.test(normalized)) {
+    return `${subject} has remote changes. Pull inside the submodule, then try again.`
+  }
+  return `${subject} could not be pushed. Resolve the submodule push error, then try again.`
 }
 
 function extractTailLine(message: string): string {
@@ -38,6 +66,11 @@ export function normalizeGitErrorMessage(error: unknown, operation?: GitRemoteOp
   // already-redacted text. The fast-path branches below return fixed
   // literals today, but this hardens against accidental leakage later.
   const raw = stripCredentialsFromMessage(error.message)
+
+  const submodulePushFailureDetail = formatSubmodulePushFailureDetail(raw)
+  if ((operation === 'push' || operation === undefined) && submodulePushFailureDetail) {
+    return submodulePushFailureDetail
+  }
 
   // Why: `non-fast-forward` / `fetch first` can appear on fetch (after a
   // remote force-push updating a tracking ref) and on pull (with

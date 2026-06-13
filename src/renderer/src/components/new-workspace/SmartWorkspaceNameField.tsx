@@ -1,6 +1,7 @@
 /* eslint-disable max-lines -- Why: the smart name field owns source tabs,
 search orchestration, and result rendering so the unified create flow stays
 in one predictable form control instead of splitting state across fragments. */
+/* oxlint-disable react-doctor/no-adjust-state-on-prop-change -- Why: this component's existing reset effects need a dedicated refactor outside the Linear API compatibility change. */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   CaseSensitive,
@@ -10,13 +11,11 @@ import {
   GitBranchPlus,
   GitMerge,
   GitPullRequest,
-  Github,
-  Gitlab,
   LoaderCircle,
   Search,
-  Sparkles,
   X
 } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { useShallow } from 'zustand/react/shallow'
 import { Command, CommandGroup, CommandItem, CommandList } from '@/components/ui/command'
 import { Button } from '@/components/ui/button'
@@ -40,8 +39,10 @@ import {
 } from '@/lib/github-links'
 import { lookupSmartGitHubSubmitItem } from '@/lib/smart-github-submit'
 import { parseGitLabIssueOrMRLink } from '@/lib/gitlab-links'
+import { getLocalPreflightContext, localPreflightContextKey } from '@/lib/local-preflight-context'
 import { cn } from '@/lib/utils'
 import { LinearIcon } from '@/components/icons/LinearIcon'
+import { JiraIcon } from '@/components/icons/JiraIcon'
 import { searchRuntimeRepoBaseRefDetails } from '@/runtime/runtime-repo-client'
 import {
   buildSmartWorkspaceSourceRows,
@@ -59,17 +60,12 @@ import type {
   LinearIssue
 } from '../../../../shared/types'
 import { resolveSmartWorkspaceCommandValue } from './smart-workspace-command-value'
-
-// Why: GitLab MR list filter — Open / Merged / Closed / All — replaces
-// GitHub's search-DSL on the GitLab tab per the agreed scope.
-type MrStateFilter = 'opened' | 'merged' | 'closed' | 'all'
-
-const MR_STATE_FILTERS: { id: MrStateFilter; label: string }[] = [
-  { id: 'opened', label: 'Open' },
-  { id: 'merged', label: 'Merged' },
-  { id: 'closed', label: 'Closed' },
-  { id: 'all', label: 'All' }
-]
+import { translate } from '@/i18n/i18n'
+import {
+  getMrStateFilters,
+  getSmartWorkspaceNameModes,
+  type MrStateFilter
+} from './smart-workspace-localized-options'
 
 type RepoOption = ReturnType<typeof useAppStore.getState>['repos'][number]
 
@@ -92,37 +88,17 @@ type SmartWorkspaceNameFieldProps = {
   disabled?: boolean
   disabledPlaceholder?: string
   textOnly?: boolean
+  branchesEnabled?: boolean
 }
 
 export type SmartWorkspaceNameSelection = {
-  kind: 'github-pr' | 'github-issue' | 'gitlab-mr' | 'gitlab-issue' | 'branch' | 'linear'
+  kind: 'github-pr' | 'github-issue' | 'gitlab-mr' | 'gitlab-issue' | 'branch' | 'linear' | 'jira'
   label: string
   url?: string
 }
 
 const SEARCH_DEBOUNCE_MS = 200
 const RESULT_LIMIT = 12
-
-const MODES: {
-  id: SmartNameMode
-  label: string
-  Icon: React.ComponentType<{ className?: string }>
-}[] = [
-  { id: 'smart', label: 'Smart', Icon: Sparkles },
-  { id: 'github', label: 'GitHub', Icon: Github },
-  { id: 'gitlab', label: 'GitLab', Icon: Gitlab },
-  { id: 'branches', label: 'Branch', Icon: GitBranch },
-  {
-    id: 'linear',
-    label: 'Linear',
-    Icon: ({ className }: { className?: string }) => (
-      <svg viewBox="0 0 24 24" aria-hidden className={className} fill="currentColor">
-        <path d="M2.886 4.18A11.982 11.982 0 0 1 11.99 0C18.624 0 24 5.376 24 12.009c0 3.64-1.62 6.903-4.18 9.105L2.887 4.18ZM1.817 5.626l16.556 16.556c-.524.33-1.075.62-1.65.866L.951 7.277c.247-.575.537-1.126.866-1.65ZM.322 9.163l14.515 14.515c-.71.172-1.443.282-2.195.322L0 11.358a12 12 0 0 1 .322-2.195Zm-.17 4.862 9.823 9.824a12.02 12.02 0 0 1-9.824-9.824Z" />
-      </svg>
-    )
-  },
-  { id: 'text', label: 'Name', Icon: CaseSensitive }
-]
 
 type RowEntry = SmartWorkspaceSourceRow
 
@@ -142,8 +118,12 @@ export default function SmartWorkspaceNameField({
   onPlainEnter,
   disabled = false,
   disabledPlaceholder,
-  textOnly = false
+  textOnly = false,
+  branchesEnabled = true
 }: SmartWorkspaceNameFieldProps): React.JSX.Element {
+  // Why: tab/filter labels use the lightweight translate() helper; subscribing
+  // here makes them refresh even when language changes don't remount the field.
+  useTranslation()
   const {
     addRepo,
     checkLinearConnection,
@@ -154,6 +134,8 @@ export default function SmartWorkspaceNameField({
     listLinearIssues,
     preflightStatus,
     preflightStatusChecked,
+    preflightStatusContextKey,
+    expectedPreflightContextKey,
     refreshPreflightStatus,
     searchLinearIssues,
     settings
@@ -168,6 +150,8 @@ export default function SmartWorkspaceNameField({
       listLinearIssues: s.listLinearIssues,
       preflightStatus: s.preflightStatus,
       preflightStatusChecked: s.preflightStatusChecked,
+      preflightStatusContextKey: s.preflightStatusContextKey,
+      expectedPreflightContextKey: localPreflightContextKey(getLocalPreflightContext(s)),
       refreshPreflightStatus: s.refreshPreflightStatus,
       searchLinearIssues: s.searchLinearIssues,
       settings: s.settings
@@ -204,42 +188,34 @@ export default function SmartWorkspaceNameField({
     link: NonNullable<ReturnType<typeof parseGitHubIssueOrPRLink>>
     matchingRepo: RepoOption | null
   } | null>(null)
+  const preflightStatusCurrent = preflightStatusContextKey === expectedPreflightContextKey
   const availableTaskProviders = useMemo(
     () =>
       filterAvailableTaskProviders(['github', 'gitlab', 'linear'], {
-        gitlabInstalled: preflightStatus?.glab?.installed === true,
+        gitlabInstalled: preflightStatusCurrent && preflightStatus?.glab?.installed === true,
         linearConnected: linearStatus.connected === true
       }),
-    [linearStatus.connected, preflightStatus?.glab?.installed]
+    [linearStatus.connected, preflightStatus?.glab?.installed, preflightStatusCurrent]
   )
   const gitlabAvailable = availableTaskProviders.includes('gitlab')
   const linearAvailable = availableTaskProviders.includes('linear')
-  const availableModes = useMemo(
-    () =>
-      MODES.filter((item) => {
-        if (textOnly) {
-          return item.id === 'text'
-        }
-        if (item.id === 'gitlab') {
-          return gitlabAvailable
-        }
-        if (item.id === 'linear') {
-          return linearAvailable
-        }
-        return true
-      }),
-    [gitlabAvailable, linearAvailable, textOnly]
-  )
+  const availableModes = getSmartWorkspaceNameModes().filter((item) => {
+    if (textOnly) {
+      return item.id === 'text'
+    }
+    if (item.id === 'gitlab') {
+      return gitlabAvailable
+    }
+    if (item.id === 'linear') {
+      return linearAvailable
+    }
+    if (item.id === 'branches') {
+      return branchesEnabled
+    }
+    return true
+  })
+  const mrStateFilters = getMrStateFilters()
 
-  const setInputNode = useCallback(
-    (node: HTMLInputElement | null) => {
-      localInputRef.current = node
-      if (inputRef) {
-        inputRef.current = node
-      }
-    },
-    [inputRef]
-  )
   const selectedSourceFocusKey = selectedSource
     ? `${selectedSource.kind}:${selectedSource.label}:${selectedSource.url ?? ''}`
     : null
@@ -271,13 +247,24 @@ export default function SmartWorkspaceNameField({
     localInputFocusFrameRef.current = null
   }, [])
 
-  useEffect(() => cancelLocalInputFocusFrame, [cancelLocalInputFocusFrame])
+  const setInputNode = useCallback(
+    (node: HTMLInputElement | null) => {
+      if (node === null) {
+        cancelLocalInputFocusFrame()
+      }
+      localInputRef.current = node
+      if (inputRef) {
+        inputRef.current = node
+      }
+    },
+    [cancelLocalInputFocusFrame, inputRef]
+  )
 
   useEffect(() => {
     if (disabled || textOnly) {
       return
     }
-    if (!preflightStatusChecked) {
+    if (!preflightStatusChecked || !preflightStatusCurrent) {
       void refreshPreflightStatus()
     }
     if (!linearStatusChecked) {
@@ -288,6 +275,7 @@ export default function SmartWorkspaceNameField({
     disabled,
     linearStatusChecked,
     preflightStatusChecked,
+    preflightStatusCurrent,
     refreshPreflightStatus,
     textOnly
   ])
@@ -487,13 +475,14 @@ export default function SmartWorkspaceNameField({
     () =>
       getBranchSearchRequest({
         disabled,
+        branchesEnabled,
         textOnly,
         mode,
         selectedRepoId: selectedRepo?.id ?? null,
         query: debouncedQuery,
         limit: RESULT_LIMIT
       }),
-    [debouncedQuery, disabled, mode, selectedRepo?.id, textOnly]
+    [branchesEnabled, debouncedQuery, disabled, mode, selectedRepo?.id, textOnly]
   )
 
   useEffect(() => {
@@ -549,7 +538,7 @@ export default function SmartWorkspaceNameField({
     const trimmed = debouncedQuery.trim()
     const request = trimmed
       ? searchLinearIssues(trimmed, RESULT_LIMIT)
-      : listLinearIssues('assigned', RESULT_LIMIT)
+      : listLinearIssues('assigned', RESULT_LIMIT).then((result) => result.items)
     void request
       .then((issues) => {
         if (!stale) {
@@ -869,8 +858,12 @@ export default function SmartWorkspaceNameField({
     ? (disabledPlaceholder ?? 'Unavailable')
     : mode === 'smart'
       ? linearAvailable
-        ? 'Type a name, #1234, branch, GitHub or Linear URL'
-        : 'Type a name, #1234, branch, or GitHub URL'
+        ? branchesEnabled
+          ? 'Type a name, #1234, branch, GitHub or Linear URL'
+          : 'Type a name, #1234, GitHub or Linear URL'
+        : branchesEnabled
+          ? 'Type a name, #1234, branch, or GitHub URL'
+          : 'Type a name, #1234, or GitHub URL'
       : mode === 'github'
         ? 'Search GitHub PRs and issues'
         : mode === 'branches'
@@ -984,13 +977,19 @@ export default function SmartWorkspaceNameField({
                           size="icon-xs"
                           onClick={() => void window.api.shell.openUrl(selectedSource.url!)}
                           className="size-6 shrink-0 rounded-sm text-muted-foreground hover:text-foreground"
-                          aria-label="Open link in browser"
+                          aria-label={translate(
+                            'auto.components.new.workspace.SmartWorkspaceNameField.2c69728c2a',
+                            'Open link in browser'
+                          )}
                         >
                           <ExternalLink className="size-3.5" />
                         </Button>
                       </TooltipTrigger>
                       <TooltipContent side="top" sideOffset={6}>
-                        Open in browser
+                        {translate(
+                          'auto.components.new.workspace.SmartWorkspaceNameField.370a1faf67',
+                          'Open in browser'
+                        )}
                       </TooltipContent>
                     </Tooltip>
                   ) : null}
@@ -1002,13 +1001,19 @@ export default function SmartWorkspaceNameField({
                         size="icon-xs"
                         onClick={onClearSelectedSource}
                         className="size-6 shrink-0 rounded-sm text-muted-foreground hover:text-foreground"
-                        aria-label="Clear selected source"
+                        aria-label={translate(
+                          'auto.components.new.workspace.SmartWorkspaceNameField.7199ff19c7',
+                          'Clear selected source'
+                        )}
                       >
                         <X className="size-3.5" />
                       </Button>
                     </TooltipTrigger>
                     <TooltipContent side="top" sideOffset={6}>
-                      Clear
+                      {translate(
+                        'auto.components.new.workspace.SmartWorkspaceNameField.0c9e668e3a',
+                        'Clear'
+                      )}
                     </TooltipContent>
                   </Tooltip>
                 </div>
@@ -1115,7 +1120,7 @@ export default function SmartWorkspaceNameField({
                 className="flex shrink-0 items-center gap-1 border-b border-border/40 px-2 py-1.5"
                 onMouseDown={(e) => e.preventDefault()}
               >
-                {MR_STATE_FILTERS.map(({ id, label }) => (
+                {mrStateFilters.map(({ id, label }) => (
                   <Button
                     key={id}
                     type="button"
@@ -1139,7 +1144,10 @@ export default function SmartWorkspaceNameField({
               ) : rows.length === 0 ? (
                 <div className="px-3 py-6 text-center text-xs text-muted-foreground">
                   {mode === 'linear' && linearStatusChecked && !linearStatus.connected
-                    ? 'Connect Linear in Settings to search issues.'
+                    ? translate(
+                        'auto.components.new.workspace.SmartWorkspaceNameField.3e8bb1176a',
+                        'Connect Linear in Settings to search issues.'
+                      )
                     : getSmartWorkspaceEmptyHint(mode)}
                 </div>
               ) : (
@@ -1167,25 +1175,57 @@ export default function SmartWorkspaceNameField({
       >
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Switch project?</DialogTitle>
+            <DialogTitle>
+              {translate(
+                'auto.components.new.workspace.SmartWorkspaceNameField.4bd98f1091',
+                'Switch project?'
+              )}
+            </DialogTitle>
             <DialogDescription>
-              The GitHub URL points to {crossRepoPrompt?.link.slug.owner}/
-              {crossRepoPrompt?.link.slug.repo}, which is different from the selected project.
+              {translate(
+                'auto.components.new.workspace.SmartWorkspaceNameField.ad188067ae',
+                'The GitHub URL points to'
+              )}{' '}
+              {crossRepoPrompt?.link.slug.owner}/{crossRepoPrompt?.link.slug.repo}
+              {translate(
+                'auto.components.new.workspace.SmartWorkspaceNameField.9ef1a7c4b0',
+                ', which is different from the selected project.'
+              )}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" onClick={dismissCrossRepoPrompt}>
-              Cancel
+              {translate(
+                'auto.components.new.workspace.SmartWorkspaceNameField.6859e2896c',
+                'Cancel'
+              )}
             </Button>
             <Button variant="outline" onClick={() => void handleUseCurrentRepo()}>
-              Keep {selectedRepo?.displayName ?? 'current project'}
+              {translate(
+                'auto.components.new.workspace.SmartWorkspaceNameField.eadf877af5',
+                'Keep'
+              )}{' '}
+              {selectedRepo?.displayName ??
+                translate(
+                  'auto.components.new.workspace.SmartWorkspaceNameField.fda67f0b61',
+                  'current project'
+                )}
             </Button>
             {crossRepoPrompt?.matchingRepo ? (
               <Button onClick={() => void acceptGitHubLink(crossRepoPrompt.matchingRepo!)}>
-                Switch to {crossRepoPrompt.matchingRepo.displayName}
+                {translate(
+                  'auto.components.new.workspace.SmartWorkspaceNameField.a76fcb4fa0',
+                  'Switch to'
+                )}{' '}
+                {crossRepoPrompt.matchingRepo.displayName}
               </Button>
             ) : (
-              <Button onClick={() => void handleAddMatchingRepo()}>Add project...</Button>
+              <Button onClick={() => void handleAddMatchingRepo()}>
+                {translate(
+                  'auto.components.new.workspace.SmartWorkspaceNameField.e57c53727c',
+                  'Add project...'
+                )}
+              </Button>
             )}
           </DialogFooter>
         </DialogContent>
@@ -1242,6 +1282,9 @@ function SelectionIcon({ kind }: { kind: SmartWorkspaceNameSelection['kind'] }):
   if (kind === 'branch') {
     return <GitBranch className="size-3.5 shrink-0 text-muted-foreground" />
   }
+  if (kind === 'jira') {
+    return <JiraIcon className="size-3.5 shrink-0 text-muted-foreground" />
+  }
   return <LinearIcon className="size-3.5 shrink-0 text-muted-foreground" />
 }
 
@@ -1249,15 +1292,26 @@ function RowLabel({ row }: { row: RowEntry }): React.JSX.Element {
   if (row.kind === 'use-name') {
     return (
       <span className="min-w-0 truncate">
-        Use <span className="font-medium text-foreground">&ldquo;{row.name}&rdquo;</span> as
-        workspace name
+        {translate('auto.components.new.workspace.SmartWorkspaceNameField.b1a7d679ba', 'Use')}
+        <span className="font-medium text-foreground">
+          {translate('auto.components.new.workspace.SmartWorkspaceNameField.34ca97bce3', '"')}
+          {row.name}
+          {translate('auto.components.new.workspace.SmartWorkspaceNameField.766083a596', '"')}
+        </span>{' '}
+        {translate(
+          'auto.components.new.workspace.SmartWorkspaceNameField.a44229ce4d',
+          'as workspace name'
+        )}
       </span>
     )
   }
   if (row.kind === 'create-branch') {
     return (
       <span className="min-w-0 truncate">
-        Create new branch{' '}
+        {translate(
+          'auto.components.new.workspace.SmartWorkspaceNameField.2a0d535f69',
+          'Create new branch'
+        )}{' '}
         <span className="font-mono text-[11px] font-medium text-foreground">{row.name}</span>
       </span>
     )

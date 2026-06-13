@@ -2,18 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { FolderOpen, RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
 import type { CliInstallStatus } from '../../../../shared/cli-install-types'
-import {
-  ORCA_CLI_SKILL_INSTALL_COMMAND,
-  ORCA_CLI_SKILL_NAME
-} from '@/lib/agent-feature-install-commands'
-import {
-  AGENT_SKILL_CLI_PREREQUISITE_NOTICE,
-  ensureOrcaCliAvailableForAgentSkillTerminal
-} from '@/lib/agent-skill-cli-prerequisite'
-import {
-  GLOBAL_AGENT_SKILL_SOURCE_KINDS,
-  useInstalledAgentSkill
-} from '@/hooks/useInstalledAgentSkills'
+import type { GlobalSettings } from '../../../../shared/types'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { Button } from '../ui/button'
 import {
@@ -26,11 +15,17 @@ import {
 } from '../ui/dialog'
 import { Label } from '../ui/label'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip'
-import { AgentSkillSetupPanel } from './AgentSkillSetupPanel'
+import { CliAgentSkillSetup } from './CliAgentSkillSetup'
 import { WslCliRegistration } from './WslCliRegistration'
+import { translate } from '@/i18n/i18n'
 
 type CliSectionProps = {
   currentPlatform: string
+  settings: GlobalSettings
+  updateSettings: (updates: Partial<GlobalSettings>) => void
+  wslSupportedPlatform?: boolean
+  wslAvailable?: boolean
+  wslCapabilitiesLoading?: boolean
 }
 
 function getRevealLabel(platform: string): string {
@@ -60,20 +55,19 @@ function getFallbackCommandName(platform: string): string {
   return platform === 'linux' ? 'orca-ide' : 'orca'
 }
 
-export function CliSection({ currentPlatform }: CliSectionProps): React.JSX.Element {
+export function CliSection({
+  currentPlatform,
+  settings,
+  updateSettings,
+  wslSupportedPlatform = false,
+  wslAvailable = false,
+  wslCapabilitiesLoading = false
+}: CliSectionProps): React.JSX.Element {
   const [status, setStatus] = useState<CliInstallStatus | null>(null)
   const [loading, setLoading] = useState(true)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [busyAction, setBusyAction] = useState<'install' | 'remove' | null>(null)
   const mountedRef = useMountedRef()
-  const {
-    installed: cliSkillDetected,
-    loading: cliSkillLoading,
-    error: cliSkillError,
-    refresh: refreshCliSkill
-  } = useInstalledAgentSkill(ORCA_CLI_SKILL_NAME, {
-    sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
-  })
 
   const handleStatusChange = useCallback(
     (nextStatus: CliInstallStatus): void => {
@@ -90,7 +84,14 @@ export function CliSection({ currentPlatform }: CliSectionProps): React.JSX.Elem
       handleStatusChange(await window.api.cli.getInstallStatus())
     } catch (error) {
       if (mountedRef.current) {
-        toast.error(error instanceof Error ? error.message : 'Failed to load CLI status.')
+        toast.error(
+          error instanceof Error
+            ? error.message
+            : translate(
+                'auto.components.settings.CliSection.7baec27029',
+                'Failed to load CLI status.'
+              )
+        )
       }
     } finally {
       if (mountedRef.current) {
@@ -118,12 +119,24 @@ export function CliSection({ currentPlatform }: CliSectionProps): React.JSX.Elem
       if (mountedRef.current) {
         setStatus(next)
         setDialogOpen(false)
-        toast.success(`Registered \`${next.commandName}\` in PATH.`)
+        toast.success(
+          translate(
+            'auto.components.settings.CliSection.9cbcd31338',
+            'Registered `{{value0}}` in PATH.',
+            { value0: next.commandName }
+          )
+        )
       }
     } catch (error) {
       if (mountedRef.current) {
         toast.error(
-          error instanceof Error ? error.message : `Failed to register \`${commandName}\` in PATH.`
+          error instanceof Error
+            ? error.message
+            : translate(
+                'auto.components.settings.CliSection.a2b13efa94',
+                'Failed to register `{{value0}}` in PATH.',
+                { value0: commandName }
+              )
         )
       }
     } finally {
@@ -140,12 +153,24 @@ export function CliSection({ currentPlatform }: CliSectionProps): React.JSX.Elem
       if (mountedRef.current) {
         setStatus(next)
         setDialogOpen(false)
-        toast.success(`Removed \`${next.commandName}\` from PATH.`)
+        toast.success(
+          translate(
+            'auto.components.settings.CliSection.af5540930c',
+            'Removed `{{value0}}` from PATH.',
+            { value0: next.commandName }
+          )
+        )
       }
     } catch (error) {
       if (mountedRef.current) {
         toast.error(
-          error instanceof Error ? error.message : `Failed to remove \`${commandName}\` from PATH.`
+          error instanceof Error
+            ? error.message
+            : translate(
+                'auto.components.settings.CliSection.d77352f2df',
+                'Failed to remove `{{value0}}` from PATH.',
+                { value0: commandName }
+              )
         )
       }
     } finally {
@@ -158,20 +183,29 @@ export function CliSection({ currentPlatform }: CliSectionProps): React.JSX.Elem
   return (
     <section className="space-y-4" data-settings-section="cli">
       <div className="space-y-1">
-        <h2 className="text-sm font-semibold">Orca CLI</h2>
+        <h2 className="text-sm font-semibold">
+          {translate('auto.components.settings.CliSection.c5c0f2641d', 'Orca CLI')}
+        </h2>
         <p className="text-xs text-muted-foreground">
-          Use Orca from your terminal to open the app, manage worktrees, and interact with Orca
-          terminals.
+          {translate(
+            'auto.components.settings.CliSection.6930feda9e',
+            'Use Orca from your terminal to open the app, manage worktrees, and interact with Orca terminals.'
+          )}
         </p>
       </div>
 
       <div className="space-y-3 rounded-xl border border-border/60 bg-card/50 p-4">
         <div className="flex items-center justify-between gap-4">
           <div className="space-y-0.5">
-            <Label>Shell command</Label>
+            <Label>
+              {translate('auto.components.settings.CliSection.38edbb5721', 'Shell command')}
+            </Label>
             <p className="text-xs text-muted-foreground">
               {loading
-                ? 'Checking CLI registration…'
+                ? translate(
+                    'auto.components.settings.CliSection.d363e5929b',
+                    'Checking CLI registration…'
+                  )
                 : (status?.detail ?? getInstallDescription(currentPlatform))}
             </p>
           </div>
@@ -184,13 +218,16 @@ export function CliSection({ currentPlatform }: CliSectionProps): React.JSX.Elem
                     size="icon-xs"
                     onClick={() => void refreshStatus()}
                     disabled={loading || busyAction !== null}
-                    aria-label="Refresh CLI status"
+                    aria-label={translate(
+                      'auto.components.settings.CliSection.52e640f3a0',
+                      'Refresh CLI status'
+                    )}
                   >
                     <RefreshCw className="size-3.5" />
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent side="bottom" sideOffset={6}>
-                  Refresh
+                  {translate('auto.components.settings.CliSection.5dae812f50', 'Refresh')}
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
@@ -216,20 +253,28 @@ export function CliSection({ currentPlatform }: CliSectionProps): React.JSX.Elem
 
         {status?.commandPath ? (
           <p className="text-xs text-muted-foreground">
-            Command path:{' '}
+            {translate('auto.components.settings.CliSection.15eaad0d31', 'Command path:')}{' '}
             <code className="rounded bg-muted px-1 py-0.5 text-[11px]">{status.commandPath}</code>
           </p>
         ) : null}
 
         {status?.state === 'stale' && status.currentTarget ? (
           <p className="text-xs text-amber-600 dark:text-amber-400">
-            Existing launcher target: <code>{status.currentTarget}</code>
+            {translate(
+              'auto.components.settings.CliSection.b0c310ab46',
+              'Existing launcher target:'
+            )}
+            <code>{status.currentTarget}</code>
           </p>
         ) : null}
 
         {status?.state === 'installed' && !status.pathConfigured && status.pathDirectory ? (
           <p className="text-xs text-amber-600 dark:text-amber-400">
-            {status.pathDirectory} is not currently visible on PATH for this shell.
+            {status.pathDirectory}{' '}
+            {translate(
+              'auto.components.settings.CliSection.7f2747f7dd',
+              'is not currently visible on PATH for this shell.'
+            )}
           </p>
         ) : null}
 
@@ -253,35 +298,15 @@ export function CliSection({ currentPlatform }: CliSectionProps): React.JSX.Elem
         </div>
 
         {!isBrowserManaged ? (
-          <div className="border-t border-border/60 pt-3">
-            <div className="space-y-0.5">
-              <Label>Agent skills</Label>
-              <p className="text-xs text-muted-foreground">
-                Give agents Orca-aware workspace, terminal, and progress workflows.
-              </p>
-            </div>
-
-            <AgentSkillSetupPanel
-              className="mt-3"
-              variant="inline"
-              title="CLI skill"
-              description="Enables agents to use Orca workspace, terminal, and progress commands."
-              command={ORCA_CLI_SKILL_INSTALL_COMMAND}
-              terminalTitle="CLI skill setup"
-              terminalAriaLabel="CLI skill install terminal"
-              terminalWorktreeId="settings-cli-skill-terminal"
-              installed={cliSkillDetected}
-              loading={cliSkillLoading}
-              error={cliSkillError}
-              preInstallNotice={AGENT_SKILL_CLI_PREREQUISITE_NOTICE}
-              onBeforeOpenTerminal={async () => {
-                await ensureOrcaCliAvailableForAgentSkillTerminal({
-                  onStatusChange: handleStatusChange
-                })
-              }}
-              onRecheck={refreshCliSkill}
-            />
-          </div>
+          <CliAgentSkillSetup
+            currentPlatform={currentPlatform}
+            settings={settings}
+            updateSettings={updateSettings}
+            wslSupportedPlatform={wslSupportedPlatform}
+            wslAvailable={wslAvailable}
+            wslCapabilitiesLoading={wslCapabilitiesLoading}
+            onHostStatusChange={handleStatusChange}
+          />
         ) : null}
       </div>
 
@@ -292,18 +317,33 @@ export function CliSection({ currentPlatform }: CliSectionProps): React.JSX.Elem
           <DialogHeader>
             <DialogTitle>
               {isEnabled
-                ? `Remove \`${commandName}\` from PATH?`
-                : `Register \`${commandName}\` in PATH?`}
+                ? translate(
+                    'auto.components.settings.CliSection.14444243ba',
+                    'Remove `{{value0}}` from PATH?',
+                    { value0: commandName }
+                  )
+                : translate(
+                    'auto.components.settings.CliSection.fa87db3d6e',
+                    'Register `{{value0}}` in PATH?',
+                    { value0: commandName }
+                  )}
             </DialogTitle>
             <DialogDescription>
               {isEnabled
-                ? 'This removes the shell command symlink. Orca itself remains installed.'
-                : `Orca will register ${status?.commandPath ?? commandName} so the command works from your terminal.`}
+                ? translate(
+                    'auto.components.settings.CliSection.a030816e3e',
+                    'This removes the shell command symlink. Orca itself remains installed.'
+                  )
+                : translate(
+                    'auto.components.settings.CliSection.aa6536977e',
+                    'Orca will register {{value0}} so the command works from your terminal.',
+                    { value0: status?.commandPath ?? commandName }
+                  )}
             </DialogDescription>
           </DialogHeader>
           {status?.commandPath ? (
             <p className="text-xs text-muted-foreground">
-              Target path:{' '}
+              {translate('auto.components.settings.CliSection.a4aafe46e3', 'Target path:')}{' '}
               <code className="rounded bg-muted px-1 py-0.5 text-[11px]">{status.commandPath}</code>
             </p>
           ) : null}
@@ -313,19 +353,19 @@ export function CliSection({ currentPlatform }: CliSectionProps): React.JSX.Elem
               onClick={() => setDialogOpen(false)}
               disabled={busyAction !== null}
             >
-              Cancel
+              {translate('auto.components.settings.CliSection.8671e406f0', 'Cancel')}
             </Button>
             <Button
               onClick={() => void (isEnabled ? handleRemove() : handleInstall())}
               disabled={busyAction !== null || !isSupported}
             >
               {busyAction === 'remove'
-                ? 'Removing…'
+                ? translate('auto.components.settings.CliSection.068552b191', 'Removing…')
                 : busyAction === 'install'
-                  ? 'Registering…'
+                  ? translate('auto.components.settings.CliSection.b0fca411a0', 'Registering…')
                   : isEnabled
-                    ? 'Remove'
-                    : 'Register'}
+                    ? translate('auto.components.settings.CliSection.9a5f8a4568', 'Remove')
+                    : translate('auto.components.settings.CliSection.d00df2e397', 'Register')}
             </Button>
           </DialogFooter>
         </DialogContent>

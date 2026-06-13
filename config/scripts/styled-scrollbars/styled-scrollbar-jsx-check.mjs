@@ -138,6 +138,20 @@ function expressionHasStyledScrollbarLiteral(node) {
       hasStyledScrollbar = true
       return
     }
+    // Why: a scrollbar literal that only renders on some branches must not be
+    // treated as covering an unconditional inline overflow. Skip conditional
+    // and short-circuit expressions when proving unconditional coverage.
+    if (ts.isConditionalExpression(current)) {
+      return
+    }
+    if (
+      ts.isBinaryExpression(current) &&
+      (current.operatorToken.kind === ts.SyntaxKind.AmpersandAmpersandToken ||
+        current.operatorToken.kind === ts.SyntaxKind.BarBarToken ||
+        current.operatorToken.kind === ts.SyntaxKind.QuestionQuestionToken)
+    ) {
+      return
+    }
     ts.forEachChild(current, visit)
   }
 
@@ -246,7 +260,12 @@ function jsxElementReports(node, filePath, sourceFile) {
 
   for (const attribute of node.attributes.properties) {
     if (ts.isJsxSpreadAttribute(attribute)) {
-      classExpression ??= spreadPropExpressions(attribute.expression, 'className').at(-1)
+      // Why: at runtime React applies attributes in source order, so a later
+      // spread that supplies className overrides an earlier explicit className.
+      const spreadClassExpression = spreadPropExpressions(attribute.expression, 'className').at(-1)
+      if (spreadClassExpression) {
+        classExpression = spreadClassExpression
+      }
       styleExpressions.push(...spreadPropExpressions(attribute.expression, 'style'))
     } else if (jsxAttributeName(attribute) === 'className') {
       classExpression = jsxAttributeExpression(attribute)

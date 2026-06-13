@@ -5,10 +5,12 @@ import {
   loadGitHistoryFromExecutor,
   parseGitHistoryLog
 } from './git-history'
+import { GIT_HISTORY_COMMIT_FORMAT } from './git-history-log-parser'
 
 const HEAD_OID = 'a'.repeat(40)
 const REMOTE_OID = 'b'.repeat(40)
 const BASE_OID = 'c'.repeat(40)
+const DECORATION_SEPARATOR = '\x1f'
 
 function logRecord({
   hash,
@@ -114,6 +116,24 @@ describe('git history parsing', () => {
       ['refs/tags/v1.0.0', 'v1.0.0', 'tags']
     ])
   })
+
+  it('preserves commas inside branch and tag decoration names', () => {
+    const stdout = logRecord({
+      hash: HEAD_OID,
+      decorations: ['HEAD -> refs/heads/feat,one', 'tag: refs/tags/v1,0', 'refs/heads/master'].join(
+        DECORATION_SEPARATOR
+      ),
+      message: 'initial'
+    })
+
+    const [item] = parseGitHistoryLog(stdout)
+
+    expect(item?.references?.map((ref) => [ref.id, ref.name, ref.category])).toEqual([
+      ['refs/heads/feat,one', 'feat,one', 'branches'],
+      ['refs/heads/master', 'master', 'branches'],
+      ['refs/tags/v1,0', 'v1,0', 'tags']
+    ])
+  })
 })
 
 describe('git history loader', () => {
@@ -125,7 +145,7 @@ describe('git history loader', () => {
     const logCall = calls.find((args) => args[0] === 'log')
     expect(logCall).toEqual(
       expect.arrayContaining([
-        `--format=%H%n%aN%n%aE%n%at%n%ct%n%P%n%D%n%B`,
+        `--format=${GIT_HISTORY_COMMIT_FORMAT}`,
         '-z',
         '--topo-order',
         '--decorate=full',

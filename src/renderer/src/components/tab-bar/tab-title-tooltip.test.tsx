@@ -226,6 +226,7 @@ describe('tab title tooltips', () => {
         tabCount={1}
         hasTabsToRight={false}
         isActive={true}
+        isPinned={false}
         isExpanded={false}
         onActivate={vi.fn()}
         onClose={vi.fn()}
@@ -233,6 +234,7 @@ describe('tab title tooltips', () => {
         onCloseToRight={vi.fn()}
         onSetCustomTitle={vi.fn()}
         onSetTabColor={vi.fn()}
+        onTogglePin={vi.fn()}
         onToggleExpand={vi.fn()}
         onSplitGroup={vi.fn()}
         dragData={makeDragData('terminal', 'terminal-1')}
@@ -241,8 +243,8 @@ describe('tab title tooltips', () => {
 
     expectTooltipContent(markup, 'Custom terminal title')
     expect(markup).not.toContain('Runtime terminal title')
+    expect(markup).toContain('data-tooltip-trigger="true"')
     const root = openingTag(markup, 'data-testid', 'sortable-tab')
-    expect(root).toContain('data-tooltip-trigger="true"')
     expect(root).toContain('role="tab"')
     expect(root).toContain('tabindex="0"')
   })
@@ -255,6 +257,7 @@ describe('tab title tooltips', () => {
         tabCount={1}
         hasTabsToRight={false}
         isActive={true}
+        isPinned={false}
         isExpanded={false}
         onActivate={vi.fn()}
         onClose={vi.fn()}
@@ -262,6 +265,7 @@ describe('tab title tooltips', () => {
         onCloseToRight={vi.fn()}
         onSetCustomTitle={vi.fn()}
         onSetTabColor={vi.fn()}
+        onTogglePin={vi.fn()}
         onToggleExpand={vi.fn()}
         onSplitGroup={vi.fn()}
         dragData={makeDragData('terminal', 'terminal-1')}
@@ -270,7 +274,8 @@ describe('tab title tooltips', () => {
 
     expect(markup).toContain('data-agent-icon="claude"')
     expectTooltipContent(markup, 'Claude Code')
-    expect(markup).toContain('<span class="truncate max-w-[72px] mr-1">Claude Code</span>')
+    expect(markup).toContain('data-tooltip-trigger="true"')
+    expect(markup).toContain('>Claude Code</span>')
     expect(markup).not.toContain('data-shell-icon="generic"')
     expect(markup).not.toContain('>✳ Claude Code</span>')
   })
@@ -280,12 +285,14 @@ describe('tab title tooltips', () => {
       <BrowserTab
         tab={makeBrowserTab({ title: '' })}
         isActive={false}
+        isPinned={false}
         hasTabsToRight={false}
         onActivate={vi.fn()}
         onClose={vi.fn()}
         onCloseToRight={vi.fn()}
         onSplitGroup={vi.fn()}
         onDuplicate={vi.fn()}
+        onTogglePin={vi.fn()}
         dragData={makeDragData('browser', 'browser-1')}
       />
     )
@@ -303,13 +310,15 @@ describe('tab title tooltips', () => {
       <EditorFileTab
         file={makeEditorFile({ externalMutation: 'renamed', isPreview: true })}
         isActive={false}
+        isPinned={false}
         hasTabsToRight={false}
         statusByRelativePath={new Map<string, GitFileStatus>()}
         onActivate={vi.fn()}
         onClose={vi.fn()}
         onCloseToRight={vi.fn()}
         onCloseAll={vi.fn()}
-        onPin={vi.fn()}
+        onMakePermanent={vi.fn()}
+        onTogglePin={vi.fn()}
         onSplitGroup={vi.fn()}
         dragData={makeDragData('editor', 'editor-tab-1')}
       />

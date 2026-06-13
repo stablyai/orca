@@ -3,6 +3,7 @@ paths together in one file makes it easier to audit the protocol/parsing
 differences and ensure account-scoped env handling stays identical. */
 import type { ProviderRateLimits, RateLimitWindow } from '../../shared/rate-limit-types'
 import { spawn } from 'node:child_process'
+import { codexAuthExists } from './codex-auth-presence'
 import { resolveCodexCommand } from '../codex-cli/command'
 import { withMacTailscaleDnsHint } from '../network/macos-tailscale-dns-diagnostic'
 import { getCmdExePath, getSpawnArgsForWindows } from '../win32-utils'
@@ -398,6 +399,7 @@ async function fetchViaPty(options?: FetchCodexRateLimitsOptions): Promise<Provi
     let output = ''
     let resolved = false
     let sentStatus = false
+    let settleTimer: ReturnType<typeof setTimeout> | null = null
 
     const term = pty.spawn(spawnFile, spawnArgs, {
       name: 'xterm-256color',
@@ -414,6 +416,10 @@ async function fetchViaPty(options?: FetchCodexRateLimitsOptions): Promise<Provi
     const timeout = setTimeout(() => {
       if (!resolved) {
         resolved = true
+        if (settleTimer) {
+          clearTimeout(settleTimer)
+          settleTimer = null
+        }
         cleanupHiddenRateLimitPty(term, termDisposables, { kill: true })
         resolve({
           provider: 'codex',
@@ -442,8 +448,11 @@ async function fetchViaPty(options?: FetchCodexRateLimitsOptions): Promise<Provi
       }
 
       // Check if we have parseable output
-      if (sentStatus && (FIVE_HOUR_RE.test(output) || WEEKLY_RE.test(output))) {
-        setTimeout(() => {
+      if (sentStatus && !settleTimer && (FIVE_HOUR_RE.test(output) || WEEKLY_RE.test(output))) {
+        // Why: after status text is parseable the TUI may continue streaming
+        // chunks; one settle timer is enough to let the panel finish flushing.
+        settleTimer = setTimeout(() => {
+          settleTimer = null
           if (resolved) {
             return
           }
@@ -475,6 +484,10 @@ async function fetchViaPty(options?: FetchCodexRateLimitsOptions): Promise<Provi
 
     const onExitDisposable = term.onExit(() => {
       cleanupHiddenRateLimitPty(term, termDisposables, { kill: false })
+      if (settleTimer) {
+        clearTimeout(settleTimer)
+        settleTimer = null
+      }
       if (!resolved) {
         resolved = true
         clearTimeout(timeout)
@@ -508,6 +521,20 @@ async function fetchViaPty(options?: FetchCodexRateLimitsOptions): Promise<Provi
 export async function fetchCodexRateLimits(
   options?: FetchCodexRateLimitsOptions
 ): Promise<ProviderRateLimits> {
+  // Why: never spawn the `codex` binary unless the user has signed in. Without
+  // auth the RPC/PTY paths can only error, and spawning them shows up as an
+  // unexpected background Codex process for users who don't use Codex.
+  if (!codexAuthExists(options?.codexHomePath)) {
+    return {
+      provider: 'codex',
+      session: null,
+      weekly: null,
+      updatedAt: Date.now(),
+      error: 'Codex not signed in',
+      status: 'unavailable'
+    }
+  }
+
   // Path A: try RPC first
   try {
     const rpcResult = await fetchViaRpc(options)

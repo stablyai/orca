@@ -1,9 +1,13 @@
-import { useEffect, useState } from 'react'
-import { Star, X } from 'lucide-react'
+import { useCallback, useEffect, useState } from 'react'
+import { ExternalLink, Star, X } from 'lucide-react'
 import { Card } from './ui/card'
 import { Button } from './ui/button'
 import { useAppStore } from '../store'
 import { useMountedRef } from '@/hooks/useMountedRef'
+import { translate } from '@/i18n/i18n'
+
+const ORCA_STARGAZERS_URL = 'https://github.com/stablyai/orca/stargazers'
+type StarNagMode = 'gh' | 'web'
 
 /**
  * Persistent "star Orca on GitHub" notification card.
@@ -19,7 +23,7 @@ import { useMountedRef } from '@/hooks/useMountedRef'
 export function StarNagCard(): React.JSX.Element | null {
   const [visible, setVisible] = useState(false)
   const [busy, setBusy] = useState(false)
-  const [error, setError] = useState(false)
+  const [mode, setMode] = useState<StarNagMode>('gh')
   const mountedRef = useMountedRef()
   // Why: UpdateCard lives at the same bottom-right slot. When it is visible
   // (any non-idle / non-not-available state), stack the star-nag card above
@@ -29,19 +33,30 @@ export function StarNagCard(): React.JSX.Element | null {
   const updateCardVisible = updateStatus.state !== 'idle' && updateStatus.state !== 'not-available'
 
   useEffect(() => {
-    return window.api.starNag.onShow(() => {
-      setError(false)
+    return window.api.starNag.onShow((payload) => {
+      setMode(payload?.mode === 'web' ? 'web' : 'gh')
       setVisible(true)
     })
   }, [])
 
-  const handleClose = (): void => {
+  const handleClose = useCallback((): void => {
+    if (busy) {
+      return
+    }
     setVisible(false)
     // Why: fire-and-forget. If persisting the dismissal fails the worst case
     // is we re-fire the same threshold on next launch — not worth blocking
     // the close animation on.
     void window.api.starNag.dismiss()
-  }
+  }, [busy])
+
+  const handleDisable = useCallback((): void => {
+    if (busy) {
+      return
+    }
+    setVisible(false)
+    void window.api.starNag.disable()
+  }, [busy])
 
   useEffect(() => {
     if (!visible) {
@@ -54,9 +69,7 @@ export function StarNagCard(): React.JSX.Element | null {
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- handleClose closes
-    // over stable refs; re-binding on each render is unnecessary.
-  }, [visible])
+  }, [handleClose, visible])
 
   if (!visible) {
     return null
@@ -66,19 +79,27 @@ export function StarNagCard(): React.JSX.Element | null {
     if (busy) {
       return
     }
+    if (mode === 'web') {
+      setBusy(true)
+      await window.api.shell.openUrl(ORCA_STARGAZERS_URL)
+      await window.api.starNag.openWeb()
+      if (mountedRef.current) {
+        setBusy(false)
+        setVisible(false)
+      }
+      return
+    }
     setBusy(true)
-    setError(false)
-    const ok = await window.api.gh.starOrca('star_nag')
+    const ok = await window.api.starNag.starOrca()
     if (mountedRef.current) {
       setBusy(false)
     }
     if (!ok) {
       if (mountedRef.current) {
-        setError(true)
+        setMode('web')
       }
       return
     }
-    await window.api.starNag.complete()
     if (mountedRef.current) {
       setVisible(false)
     }
@@ -100,7 +121,7 @@ export function StarNagCard(): React.JSX.Element | null {
             <div className="flex items-center gap-2">
               <Star className="size-4 fill-amber-400/60 text-amber-400/80" />
               <h3 id="star-nag-heading" className="text-sm font-semibold">
-                Enjoying Orca?
+                {translate('auto.components.StarNagCard.5f6df21046', 'Enjoying Orca?')}
               </h3>
             </div>
             <Button
@@ -108,22 +129,19 @@ export function StarNagCard(): React.JSX.Element | null {
               size="icon"
               className="size-7 shrink-0"
               onClick={handleClose}
-              aria-label="Dismiss"
+              disabled={busy}
+              aria-label={translate('auto.components.StarNagCard.b5e685e4d9', 'Dismiss')}
             >
               <X className="size-3.5" />
             </Button>
           </div>
 
           <p className="text-sm text-muted-foreground">
-            If Orca has saved you time, a GitHub star goes a long way. It helps other developers
-            discover the project and keeps the team motivated to ship improvements.
+            {translate(
+              'auto.components.StarNagCard.30c36231c1',
+              'If Orca has saved you time, a GitHub star goes a long way. It helps other developers discover the project and keeps the team motivated to ship improvements.'
+            )}
           </p>
-
-          {error ? (
-            <p className="text-xs text-destructive">
-              Could not star the repo. Make sure <code>gh</code> is authenticated and try again.
-            </p>
-          ) : null}
 
           <Button
             variant="default"
@@ -132,9 +150,35 @@ export function StarNagCard(): React.JSX.Element | null {
             disabled={busy}
             className="mt-0.5 w-full gap-1.5"
           >
-            <Star className="size-3.5" />
-            {busy ? 'Starring…' : 'Star on GitHub'}
+            {mode === 'web' ? <ExternalLink className="size-3.5" /> : <Star className="size-3.5" />}
+            {busy
+              ? mode === 'web'
+                ? translate('auto.components.StarNagCard.d32015fec7', 'Opening...')
+                : translate('auto.components.StarNagCard.af3c9bbb37', 'Starring…')
+              : mode === 'web'
+                ? translate('auto.components.StarNagCard.157bb5ecbb', 'Open GitHub')
+                : translate('auto.components.StarNagCard.2d67b6c849', 'Star on GitHub')}
           </Button>
+          <div className="flex items-center justify-between gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2"
+              onClick={handleClose}
+              disabled={busy}
+            >
+              {translate('auto.components.StarNagCard.8c967b4d15', 'Not now')}
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2"
+              onClick={handleDisable}
+              disabled={busy}
+            >
+              {translate('auto.components.StarNagCard.73dfd4eb8d', "Don't ask again")}
+            </Button>
+          </div>
         </div>
       </Card>
     </div>

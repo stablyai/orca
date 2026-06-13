@@ -21,6 +21,7 @@ import type {
   Automation,
   AutomationCreateInput,
   AutomationDispatchResult,
+  AutomationPrecheckResult,
   AutomationRunOutputSnapshot,
   AutomationRun,
   AutomationRunTrigger,
@@ -30,10 +31,12 @@ import {
   latestAutomationOccurrenceAtOrBefore,
   nextAutomationOccurrenceAfter
 } from '../shared/automation-schedules'
+import { normalizeAutomationPrecheck } from '../shared/automation-precheck'
 import type {
   PersistedState,
   Repo,
   ProjectGroup,
+  FolderWorkspace,
   SparsePreset,
   WorktreeMeta,
   WorktreeLineage,
@@ -47,6 +50,7 @@ import type {
   TerminalPaneLayoutNode,
   TerminalLayoutSnapshot,
   TerminalTab,
+  WorkspaceSessionPatch,
   WorkspaceSessionState
 } from '../shared/types'
 import type { MigrationUnsupportedPtyEntry } from '../shared/agent-status-types'
@@ -63,6 +67,7 @@ import {
   getDefaultWorkspaceSession,
   normalizeAgentActivityDisplayMode,
   normalizeWorktreeCardProperties,
+  ONBOARDING_FLOW_VERSION,
   ONBOARDING_FINAL_STEP
 } from '../shared/constants'
 import { parseWorkspaceSession } from '../shared/workspace-session-schema'
@@ -81,21 +86,36 @@ import { agentHookServer } from './agent-hooks/server'
 import { pruneLocalTerminalScrollbackBuffers } from '../shared/workspace-session-terminal-buffers'
 import { pruneWorkspaceSessionBrowserHistory } from '../shared/workspace-session-browser-history'
 import { getRepoIdFromWorktreeId, getWorktreePathBasenameFromId } from '../shared/worktree-id'
-import { normalizeRuntimePathForComparison } from '../shared/cross-platform-path'
+import {
+  isPathInsideOrEqual,
+  normalizeRuntimePathForComparison
+} from '../shared/cross-platform-path'
 import { normalizeTerminalQuickCommands } from '../shared/terminal-quick-commands'
 import { normalizeTaskProviderSettings } from '../shared/task-providers'
+import { normalizeAutoRenameBranchFromWorkDefaultOn } from '../shared/auto-rename-branch-from-work-settings'
 import { normalizeOpenInApplications } from '../shared/open-in-applications'
 import { normalizeTerminalShortcutPolicy } from '../shared/keybindings'
+import { normalizeAppIconId } from '../shared/app-icon'
+import { normalizeTerminalCustomThemes } from '../shared/terminal-custom-themes'
 import {
+  normalizeLeftSidebarAppearanceMode,
+  normalizeLeftSidebarTintColor,
+  normalizeLeftSidebarTintOpacity
+} from '../shared/left-sidebar-appearance'
+import {
+  compareFeatureInteractionUsageBuckets,
+  getFeatureInteractionCategory,
+  getFeatureInteractionUsageBucket,
   normalizeFeatureInteractions,
+  normalizeFeatureInteractionTelemetryBuckets,
   type FeatureInteractionId
 } from '../shared/feature-interactions'
+import { normalizeContextualTourIds } from '../shared/contextual-tours'
 import { normalizeFeatureTipIds } from '../shared/feature-tips'
 import {
   DEFAULT_WORKSPACE_STATUS_ID,
   clampWorkspaceBoardColumnWidth,
   clampWorkspaceBoardOpacity,
-  normalizeWorkspaceBoardCompact,
   normalizePersistedWorkspaceStatuses,
   normalizeWorkspaceStatuses
 } from '../shared/workspace-statuses'
@@ -110,6 +130,7 @@ import {
   normalizeProjectGroupName,
   normalizeProjectGroups
 } from '../shared/project-groups'
+import { createNestedProjectGroupResolver } from './project-groups/nested-repo-import'
 import {
   mergeLegacyCommitMessageAiIntoSourceControlAi,
   normalizeRepoSourceControlAiOverrides,
@@ -118,6 +139,29 @@ import {
   sourceControlAiSettingsFromLegacy
 } from '../shared/source-control-ai'
 import { normalizeDisabledTuiAgents } from '../shared/tui-agent-selection'
+import {
+  DEFAULT_TUI_AGENT_ARGS,
+  DEFAULT_TUI_AGENT_ENV,
+  hasUnsupportedTuiAgentArgs,
+  normalizeTuiAgentArgsRecord,
+  normalizeTuiAgentEnvRecord
+} from '../shared/tui-agent-launch-defaults'
+import { normalizeTerminalCursorStyleDefault } from '../shared/terminal-cursor-style-settings'
+import { normalizeUiLanguage } from '../shared/ui-language'
+import { normalizeBrowserPageZoomLevel } from '../shared/browser-page-zoom'
+import {
+  normalizeFolderWorkspaceName,
+  normalizeFolderWorkspaces
+} from '../shared/folder-workspaces'
+import { folderWorkspaceKey } from '../shared/workspace-scope'
+import {
+  collectTerminalScrollbackSnapshotRefs,
+  deleteTerminalScrollbackSnapshotSync,
+  migrateWorkspaceSessionTerminalScrollbackSnapshots,
+  readTerminalScrollbackSnapshotSync
+} from './terminal-scrollback-snapshots'
+import { track } from './telemetry/client'
+import { getCohortAtEmit } from './telemetry/cohort-classifier'
 
 function encrypt(plaintext: string): string {
   if (!plaintext || !safeStorage.isEncryptionAvailable()) {
@@ -188,6 +232,16 @@ function getDataFile(): string {
 // >=1-hour spacing cover recent work without churning disk on every debounce.
 const BACKUP_COUNT = 5
 const BACKUP_MIN_INTERVAL_MS = 60 * 60 * 1000
+const WORKSPACE_SESSION_PATCH_FULL_NORMALIZATION_KEYS = new Set<keyof WorkspaceSessionState>([
+  'tabsByWorktree',
+  'terminalLayoutsByTabId'
+])
+
+function workspaceSessionPatchNeedsFullNormalization(patch: WorkspaceSessionPatch): boolean {
+  return Object.keys(patch).some((key) =>
+    WORKSPACE_SESSION_PATCH_FULL_NORMALIZATION_KEYS.has(key as keyof WorkspaceSessionState)
+  )
+}
 
 function backupPath(dataFile: string, index: number): string {
   return `${dataFile}.bak.${index}`
@@ -227,6 +281,53 @@ function getWorkspaceLayoutHistoryKey(layout: OrcaWorkspaceLayout): string {
   return `${normalizeRuntimePathForComparison(layout.path)}:${layout.nestWorkspaces}`
 }
 
+function migrateAgentYoloDefaults(
+  settings: GlobalSettings | undefined
+): Pick<GlobalSettings, 'agentDefaultArgs' | 'agentDefaultEnv' | 'agentYoloDefaultsMigrated'> {
+  const existingArgs = normalizeTuiAgentArgsRecord(settings?.agentDefaultArgs)
+  const existingEnv = normalizeTuiAgentEnvRecord(settings?.agentDefaultEnv)
+  if (settings?.agentYoloDefaultsMigrated === true) {
+    return {
+      agentDefaultArgs: existingArgs,
+      agentDefaultEnv: existingEnv,
+      agentYoloDefaultsMigrated: true
+    }
+  }
+
+  const commandOverrides = settings?.agentCmdOverrides ?? {}
+  const migratedArgs = { ...existingArgs }
+  for (const [agent, args] of Object.entries(DEFAULT_TUI_AGENT_ARGS)) {
+    if (agent in migratedArgs) {
+      continue
+    }
+    if (agent in commandOverrides) {
+      migratedArgs[agent as keyof typeof DEFAULT_TUI_AGENT_ARGS] = ''
+      continue
+    }
+    migratedArgs[agent as keyof typeof DEFAULT_TUI_AGENT_ARGS] = args
+  }
+
+  const migratedEnv = { ...existingEnv }
+  for (const [agent, env] of Object.entries(DEFAULT_TUI_AGENT_ENV)) {
+    if (agent in migratedEnv) {
+      continue
+    }
+    if (agent in commandOverrides) {
+      migratedEnv[agent as keyof typeof DEFAULT_TUI_AGENT_ENV] = {}
+      continue
+    }
+    migratedEnv[agent as keyof typeof DEFAULT_TUI_AGENT_ENV] = { ...env }
+  }
+
+  return {
+    // Why: legacy users could only customize per-agent launch defaults via
+    // command overrides, so those agents are treated as already user-owned.
+    agentDefaultArgs: migratedArgs,
+    agentDefaultEnv: migratedEnv,
+    agentYoloDefaultsMigrated: true
+  }
+}
+
 function normalizeGroupBy(groupBy: unknown): PersistedState['ui']['groupBy'] {
   if (
     groupBy === 'none' ||
@@ -240,6 +341,26 @@ function normalizeGroupBy(groupBy: unknown): PersistedState['ui']['groupBy'] {
     return 'none'
   }
   return getDefaultUIState().groupBy
+}
+
+function normalizeShowDotfilesByWorktree(value: unknown): Record<string, boolean> {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+    return {}
+  }
+  const out: Record<string, boolean> = {}
+  for (const [worktreeId, showDotfiles] of Object.entries(value as Record<string, unknown>)) {
+    if (
+      !worktreeId ||
+      worktreeId === '__proto__' ||
+      worktreeId === 'constructor' ||
+      worktreeId === 'prototype' ||
+      typeof showDotfiles !== 'boolean'
+    ) {
+      continue
+    }
+    out[worktreeId] = showDotfiles
+  }
+  return out
 }
 
 function mergeFeatureInteractions(
@@ -267,6 +388,32 @@ function mergeFeatureInteractions(
   return merged
 }
 
+function mergeContextualTourSeenIds(
+  current: PersistedState['ui']['contextualToursSeenIds'],
+  incoming: PersistedState['ui']['contextualToursSeenIds']
+): PersistedState['ui']['contextualToursSeenIds'] {
+  const merged = new Set(normalizeContextualTourIds(current))
+  for (const id of normalizeContextualTourIds(incoming)) {
+    merged.add(id)
+  }
+  return [...merged]
+}
+
+function stripMainOwnedTelemetryMarkerFromUI(
+  value: Partial<PersistedState['ui']> | undefined
+): Partial<PersistedState['ui']> {
+  if (!value || typeof value !== 'object') {
+    return {}
+  }
+  const { featureInteractionTelemetryBuckets: _reserved, ...ui } = value as Partial<
+    PersistedState['ui']
+  > & {
+    featureInteractionTelemetryBuckets?: unknown
+  }
+  void _reserved
+  return ui
+}
+
 function normalizeSortBy(sortBy: unknown): PersistedState['ui']['sortBy'] {
   if (
     sortBy === 'smart' ||
@@ -280,10 +427,23 @@ function normalizeSortBy(sortBy: unknown): PersistedState['ui']['sortBy'] {
   return getDefaultUIState().sortBy
 }
 
+function normalizeProjectOrderBy(projectOrderBy: unknown): PersistedState['ui']['projectOrderBy'] {
+  if (projectOrderBy === 'manual' || projectOrderBy === 'recent') {
+    return projectOrderBy
+  }
+  return getDefaultUIState().projectOrderBy
+}
+
+import {
+  isExistingPersistedProfile,
+  resolveProjectOrderManualDefaultNoticeDismissed
+} from '../shared/project-order-manual-default-notice'
+
 function normalizeRightSidebarTab(tab: unknown): PersistedState['ui']['rightSidebarTab'] {
   if (
     tab === 'explorer' ||
     tab === 'search' ||
+    tab === 'vault' ||
     tab === 'source-control' ||
     tab === 'checks' ||
     tab === 'ports'
@@ -291,6 +451,20 @@ function normalizeRightSidebarTab(tab: unknown): PersistedState['ui']['rightSide
     return tab
   }
   return getDefaultUIState().rightSidebarTab
+}
+
+function normalizeRightSidebarExplorerView(
+  view: unknown,
+  tab?: unknown
+): PersistedState['ui']['rightSidebarExplorerView'] {
+  // Why: older builds persisted Search as a standalone activity tab.
+  if (tab === 'search') {
+    return 'search'
+  }
+  if (view === 'files' || view === 'search') {
+    return view
+  }
+  return getDefaultUIState().rightSidebarExplorerView
 }
 
 function normalizeNotificationSettings(value: unknown): NotificationSettings {
@@ -357,9 +531,43 @@ function normalizeAutomationRunOutputSnapshot(
   }
 }
 
+function normalizeAutomationPrecheckResult(
+  value: AutomationPrecheckResult | null | undefined
+): AutomationPrecheckResult | null {
+  if (!value || typeof value.command !== 'string' || !value.command.trim()) {
+    return null
+  }
+  const startedAt =
+    typeof value.startedAt === 'number' && Number.isFinite(value.startedAt)
+      ? value.startedAt
+      : Date.now()
+  const completedAt =
+    typeof value.completedAt === 'number' && Number.isFinite(value.completedAt)
+      ? value.completedAt
+      : startedAt
+  return {
+    command: value.command.trim(),
+    exitCode:
+      typeof value.exitCode === 'number' && Number.isFinite(value.exitCode) ? value.exitCode : null,
+    timedOut: value.timedOut === true,
+    durationMs:
+      typeof value.durationMs === 'number' && Number.isFinite(value.durationMs)
+        ? Math.max(0, value.durationMs)
+        : Math.max(0, completedAt - startedAt),
+    stdout: typeof value.stdout === 'string' ? value.stdout : '',
+    stderr: typeof value.stderr === 'string' ? value.stderr : '',
+    stdoutTruncated: value.stdoutTruncated === true,
+    stderrTruncated: value.stderrTruncated === true,
+    error: typeof value.error === 'string' && value.error.trim() ? value.error : null,
+    startedAt,
+    completedAt
+  }
+}
+
 function normalizeAutomationSessionReuse(automation: Automation): Automation {
   return {
     ...automation,
+    precheck: normalizeAutomationPrecheck(automation.precheck),
     reuseSession: automation.workspaceMode === 'existing' && automation.reuseSession === true
   }
 }
@@ -381,11 +589,12 @@ function normalizeSshTarget(t: SshTarget): SshTarget {
   delete target.remoteWorkspaceSyncEnabled
   delete target.remoteWorkspaceSyncGracePeriodSeconds
   delete target.relayGracePeriodSeconds
+  // Why: synced legacy targets ignored stale relayGracePeriodSeconds values.
+  // Prefer the synced grace so a user's "unlimited" (0) survives migration.
   const relayGracePeriodSeconds =
-    currentGracePeriodSeconds ??
-    (legacySyncEnabled === true && typeof legacyGracePeriodSeconds === 'number'
+    legacySyncEnabled === true && typeof legacyGracePeriodSeconds === 'number'
       ? legacyGracePeriodSeconds
-      : undefined)
+      : currentGracePeriodSeconds
   const normalized: SshTarget = {
     ...target,
     configHost: target.configHost ?? target.label ?? target.host
@@ -404,8 +613,43 @@ function normalizeSshTarget(t: SshTarget): SshTarget {
 // merges over current state without wiping previously-true keys. Invalid
 // top-level fields are OMITTED (not coerced to fallbacks) so partial updates
 // don't clobber valid persisted state; the load-path caller spreads defaults.
+type SanitizeOnboardingUpdateOptions = {
+  migrateLegacyProgress?: boolean
+}
+
+function remapLegacyOnboardingLastCompletedStep(
+  lastCompletedStep: number,
+  raw: Record<string, unknown>
+): number {
+  if (raw.outcome === 'completed' && lastCompletedStep >= ONBOARDING_FINAL_STEP) {
+    return ONBOARDING_FINAL_STEP
+  }
+  // Why: v2 was the five-step flow; missing/older versions were seven-step
+  // data where step 4 was removed agent setup, not completed integrations.
+  if (raw.flowVersion === 2) {
+    if (lastCompletedStep === 3) {
+      return 2
+    }
+    if (lastCompletedStep >= 4) {
+      return 3
+    }
+    return lastCompletedStep
+  }
+  if (lastCompletedStep === 3) {
+    return 2
+  }
+  if (lastCompletedStep === 4) {
+    return 2
+  }
+  if (lastCompletedStep >= 5) {
+    return 3
+  }
+  return lastCompletedStep
+}
+
 export function sanitizeOnboardingUpdate(
-  input: unknown
+  input: unknown,
+  options: SanitizeOnboardingUpdateOptions = {}
 ): Partial<Omit<OnboardingState, 'checklist'>> & { checklist?: Partial<OnboardingChecklistState> } {
   if (!input || typeof input !== 'object' || Array.isArray(input)) {
     return {}
@@ -436,10 +680,24 @@ export function sanitizeOnboardingUpdate(
     }
     // else: omit.
   }
+  if ('flowVersion' in raw) {
+    const v = raw.flowVersion
+    if (typeof v === 'number' && Number.isInteger(v) && v >= 1 && v <= ONBOARDING_FLOW_VERSION) {
+      out.flowVersion = v
+    }
+    // else: omit.
+  }
   if ('lastCompletedStep' in raw) {
     const v = raw.lastCompletedStep
-    if (typeof v === 'number' && Number.isInteger(v) && v >= -1 && v <= ONBOARDING_FINAL_STEP) {
-      out.lastCompletedStep = v
+    if (typeof v === 'number' && Number.isInteger(v) && v >= -1) {
+      const isLegacyFlow =
+        options.migrateLegacyProgress && raw.flowVersion !== ONBOARDING_FLOW_VERSION
+      // Why: removing two wizard pages changed numeric meanings. Migrate raw
+      // legacy disk values before the new final-step bound can drop them.
+      const normalized = isLegacyFlow ? remapLegacyOnboardingLastCompletedStep(v, raw) : v
+      if (normalized <= ONBOARDING_FINAL_STEP) {
+        out.lastCompletedStep = normalized
+      }
     }
     // else: omit.
   }
@@ -459,7 +717,64 @@ export function sanitizeOnboardingUpdate(
       out.checklist = checklist
     }
   }
+  if (options.migrateLegacyProgress) {
+    out.flowVersion = ONBOARDING_FLOW_VERSION
+  }
   return out
+}
+
+function normalizeLoadedOnboardingState(
+  input: unknown,
+  defaults: OnboardingState
+): OnboardingState {
+  // Why: if we successfully parsed an existing orca-data.json that lacks an
+  // onboarding block, this is an upgrade-cohort user — backfill as completed
+  // (not dismissed) so they don't get dropped into the wizard regardless of
+  // whether they currently have repos, SSH targets, or just non-default
+  // settings. Analytics still distinguish this from users who explicitly
+  // bailed mid-funnel.
+  if (!input) {
+    return {
+      ...defaults,
+      closedAt: Date.now(),
+      outcome: 'completed',
+      lastCompletedStep: ONBOARDING_FINAL_STEP
+    }
+  }
+  // Why: validate every persisted onboarding key explicitly via the shared
+  // sanitizer instead of spreading raw values. A type-flipped field on disk
+  // (string where number expected, unknown checklist key) is dropped or
+  // coerced to the default rather than poisoning in-memory state.
+  const sanitized = sanitizeOnboardingUpdate(input, {
+    migrateLegacyProgress: true
+  })
+  // Why: a persisted completed/dismissed outcome means the user left
+  // onboarding. Recover from a bad/missing/null closedAt instead of reopening
+  // the new-user sidebar checklist.
+  const recoveredClosedAt =
+    typeof sanitized.closedAt === 'number'
+      ? sanitized.closedAt
+      : sanitized.outcome !== null && sanitized.outcome !== undefined
+        ? Date.now()
+        : sanitized.closedAt
+  return {
+    ...defaults,
+    ...sanitized,
+    closedAt: recoveredClosedAt ?? defaults.closedAt,
+    checklist: {
+      ...defaults.checklist,
+      ...sanitized.checklist
+    }
+  }
+}
+
+function resolveSetupGuideSidebarDismissedOnLoad(
+  persistedDismissed: unknown,
+  onboarding: OnboardingState
+): boolean {
+  // Why: the sidebar checklist is a new-user prompt. Once onboarding is
+  // closed, persisted false is just the old default value, not a user opt-in.
+  return onboarding.closedAt !== null || persistedDismissed === true
 }
 
 // Why: read a settings field that was removed from the GlobalSettings type
@@ -478,8 +793,24 @@ function readLegacySidekickFlag(parsed: PersistedState | undefined): boolean | u
   return (parsed?.settings as { experimentalSidekick?: boolean } | undefined)?.experimentalSidekick
 }
 
+function sanitizeRepoUpstream(value: unknown): Repo['upstream'] | undefined {
+  if (value === undefined) {
+    return undefined
+  }
+  if (value === null) {
+    return null
+  }
+  if (!value || typeof value !== 'object') {
+    return undefined
+  }
+  const candidate = value as { owner?: unknown; repo?: unknown }
+  const owner = typeof candidate.owner === 'string' ? candidate.owner.trim() : ''
+  const repo = typeof candidate.repo === 'string' ? candidate.repo.trim() : ''
+  return owner && repo ? { owner, repo } : undefined
+}
+
 function sanitizeRepoUpdatesForPersistence<
-  T extends Partial<Pick<Repo, 'badgeColor' | 'repoIcon'>>
+  T extends Partial<Pick<Repo, 'badgeColor' | 'repoIcon' | 'upstream' | 'worktreeBasePath'>>
 >(updates: T): T {
   const sanitized = { ...updates }
   if ('badgeColor' in sanitized) {
@@ -496,6 +827,22 @@ function sanitizeRepoUpdatesForPersistence<
       delete sanitized.repoIcon
     } else {
       sanitized.repoIcon = repoIcon
+    }
+  }
+  // Why: `null` is a valid "not a fork" marker; only drop malformed shapes.
+  if ('upstream' in sanitized) {
+    const upstream = sanitizeRepoUpstream(sanitized.upstream)
+    if (upstream === undefined) {
+      delete sanitized.upstream
+    } else {
+      sanitized.upstream = upstream
+    }
+  }
+  if ('worktreeBasePath' in sanitized && sanitized.worktreeBasePath !== undefined) {
+    if (typeof sanitized.worktreeBasePath === 'string') {
+      sanitized.worktreeBasePath = sanitized.worktreeBasePath.trim() || undefined
+    } else {
+      delete sanitized.worktreeBasePath
     }
   }
   return sanitized
@@ -948,6 +1295,11 @@ function normalizeTerminalLayoutSnapshotForPersistence(
     leafIdByInputLeafId,
     duplicatedInputLeafIds
   )
+  const scrollbackRefsByLeafId = remapLeafRecordForPersistence(
+    inputSnapshot.scrollbackRefsByLeafId,
+    leafIdByInputLeafId,
+    duplicatedInputLeafIds
+  )
   const titlesByLeafId = remapLeafRecordForPersistence(
     inputSnapshot.titlesByLeafId,
     leafIdByInputLeafId,
@@ -956,6 +1308,7 @@ function normalizeTerminalLayoutSnapshotForPersistence(
   const recordsChanged =
     !leafRecordEquivalent(inputSnapshot.ptyIdsByLeafId, ptyIdsByLeafId) ||
     !leafRecordEquivalent(inputSnapshot.buffersByLeafId, buffersByLeafId) ||
+    !leafRecordEquivalent(inputSnapshot.scrollbackRefsByLeafId, scrollbackRefsByLeafId) ||
     !leafRecordEquivalent(inputSnapshot.titlesByLeafId, titlesByLeafId)
   const metadataChanged =
     activeLeafId !== inputSnapshot.activeLeafId || expandedLeafId !== inputSnapshot.expandedLeafId
@@ -965,6 +1318,7 @@ function normalizeTerminalLayoutSnapshotForPersistence(
   const {
     ptyIdsByLeafId: _oldPtyIdsByLeafId,
     buffersByLeafId: _oldBuffersByLeafId,
+    scrollbackRefsByLeafId: _oldScrollbackRefsByLeafId,
     titlesByLeafId: _oldTitlesByLeafId,
     ...snapshotWithoutLeafRecords
   } = inputSnapshot
@@ -976,6 +1330,7 @@ function normalizeTerminalLayoutSnapshotForPersistence(
       expandedLeafId,
       ...(ptyIdsByLeafId ? { ptyIdsByLeafId } : {}),
       ...(buffersByLeafId ? { buffersByLeafId } : {}),
+      ...(scrollbackRefsByLeafId ? { scrollbackRefsByLeafId } : {}),
       ...(titlesByLeafId ? { titlesByLeafId } : {})
     },
     changed: true,
@@ -1307,6 +1662,182 @@ function cloneWorkspaceSessionState(session: WorkspaceSessionState): WorkspaceSe
   return structuredClone(session)
 }
 
+function removeWorkspaceSessionOwner(
+  session: WorkspaceSessionState | undefined,
+  ownerKey: string
+): WorkspaceSessionState | undefined {
+  if (!session) {
+    return session
+  }
+  const next = cloneWorkspaceSessionState(session)
+  const removedTerminalTabs = next.tabsByWorktree?.[ownerKey] ?? []
+  if (next.tabsByWorktree) {
+    delete next.tabsByWorktree[ownerKey]
+  }
+  for (const tab of removedTerminalTabs) {
+    delete next.terminalLayoutsByTabId[tab.id]
+    if (next.activeTabId === tab.id) {
+      next.activeTabId = null
+    }
+  }
+
+  if (next.openFilesByWorktree) {
+    delete next.openFilesByWorktree[ownerKey]
+  }
+  if (next.activeFileIdByWorktree) {
+    delete next.activeFileIdByWorktree[ownerKey]
+  }
+  const browserWorkspaces = next.browserTabsByWorktree?.[ownerKey] ?? []
+  if (next.browserTabsByWorktree) {
+    delete next.browserTabsByWorktree[ownerKey]
+  }
+  if (next.browserPagesByWorkspace) {
+    for (const workspace of browserWorkspaces) {
+      delete next.browserPagesByWorkspace[workspace.id]
+    }
+  }
+  if (next.activeBrowserTabIdByWorktree) {
+    delete next.activeBrowserTabIdByWorktree[ownerKey]
+  }
+  if (next.activeTabTypeByWorktree) {
+    delete next.activeTabTypeByWorktree[ownerKey]
+  }
+  if (next.activeTabIdByWorktree) {
+    delete next.activeTabIdByWorktree[ownerKey]
+  }
+  if (next.unifiedTabs) {
+    delete next.unifiedTabs[ownerKey]
+  }
+  if (next.tabGroups) {
+    delete next.tabGroups[ownerKey]
+  }
+  if (next.tabGroupLayouts) {
+    delete next.tabGroupLayouts[ownerKey]
+  }
+  if (next.activeGroupIdByWorktree) {
+    delete next.activeGroupIdByWorktree[ownerKey]
+  }
+  if (next.lastVisitedAtByWorktreeId) {
+    delete next.lastVisitedAtByWorktreeId[ownerKey]
+  }
+  if (next.defaultTerminalTabsAppliedByWorktreeId) {
+    delete next.defaultTerminalTabsAppliedByWorktreeId[ownerKey]
+  }
+  if (next.sleepingAgentSessionsByPaneKey) {
+    for (const [paneKey, record] of Object.entries(next.sleepingAgentSessionsByPaneKey)) {
+      if (record.worktreeId === ownerKey) {
+        delete next.sleepingAgentSessionsByPaneKey[paneKey]
+      }
+    }
+  }
+  if (next.activeWorkspaceKey === ownerKey) {
+    next.activeWorkspaceKey = null
+  }
+  if (next.activeWorktreeId === ownerKey) {
+    next.activeWorktreeId = null
+  }
+  next.activeWorktreeIdsOnShutdown = next.activeWorktreeIdsOnShutdown?.filter(
+    (worktreeId) => worktreeId !== ownerKey
+  )
+  return next
+}
+
+function inferFolderScopeConnectionIdForMigration(args: {
+  folderPath: string
+  projectGroupId: string
+  projectGroups: readonly ProjectGroup[]
+  repos: readonly Repo[]
+}): string | null {
+  const groupIds = getProjectGroupSubtreeIds(args.projectGroups, args.projectGroupId)
+  const groupRepos = args.repos.filter(
+    (repo) => typeof repo.projectGroupId === 'string' && groupIds.has(repo.projectGroupId)
+  )
+  const candidateRepos =
+    groupRepos.length > 0
+      ? groupRepos
+      : args.repos.filter((repo) => isPathInsideOrEqual(args.folderPath, repo.path))
+  if (candidateRepos.length === 0) {
+    return null
+  }
+  let hasLocalRepo = false
+  const connectionIds = new Set<string>()
+  for (const repo of candidateRepos) {
+    if (repo.connectionId) {
+      connectionIds.add(repo.connectionId)
+    } else {
+      hasLocalRepo = true
+    }
+  }
+  if (hasLocalRepo || connectionIds.size !== 1) {
+    return null
+  }
+  return [...connectionIds][0]
+}
+
+function backfillFolderScopeConnectionIds(state: PersistedState): {
+  state: PersistedState
+  changed: boolean
+} {
+  const groups = state.projectGroups ?? []
+  const repos = state.repos ?? []
+  let changed = false
+  const projectGroups = groups.map((group) => {
+    if (group.connectionId || !group.parentPath) {
+      return group
+    }
+    const connectionId = inferFolderScopeConnectionIdForMigration({
+      folderPath: group.parentPath,
+      projectGroupId: group.id,
+      projectGroups: groups,
+      repos
+    })
+    if (!connectionId) {
+      return group
+    }
+    changed = true
+    return { ...group, connectionId }
+  })
+  const groupsById = new Map(projectGroups.map((group) => [group.id, group]))
+  const folderWorkspaces = (state.folderWorkspaces ?? []).map((workspace) => {
+    if (workspace.connectionId) {
+      return workspace
+    }
+    const groupConnectionId = groupsById.get(workspace.projectGroupId)?.connectionId ?? null
+    const connectionId =
+      groupConnectionId ??
+      inferFolderScopeConnectionIdForMigration({
+        folderPath: workspace.folderPath,
+        projectGroupId: workspace.projectGroupId,
+        projectGroups,
+        repos
+      })
+    if (!connectionId) {
+      return workspace
+    }
+    changed = true
+    return { ...workspace, connectionId }
+  })
+  return {
+    changed,
+    state: changed ? { ...state, projectGroups, folderWorkspaces } : state
+  }
+}
+
+function deleteRemovedTerminalScrollbackSnapshots(
+  prior: WorkspaceSessionState | undefined,
+  next: WorkspaceSessionState
+): void {
+  if (!prior) {
+    return
+  }
+  const nextRefs = collectTerminalScrollbackSnapshotRefs(next)
+  for (const ref of collectTerminalScrollbackSnapshotRefs(prior)) {
+    if (!nextRefs.has(ref)) {
+      deleteTerminalScrollbackSnapshotSync(ref)
+    }
+  }
+}
+
 export class Store {
   private state: PersistedState
   private writeTimer: ReturnType<typeof setTimeout> | null = null
@@ -1326,6 +1857,7 @@ export class Store {
     const loaded = this.load()
     const normalized = normalizePersistedPaneIdentityState(loaded)
     this.state = normalized.state
+    const adaptedProjectGroups = this.adaptFlatFolderScanProjectGroups()
     for (const entry of normalized.migrationUnsupportedEntries) {
       setMigrationUnsupportedPty(entry)
     }
@@ -1346,13 +1878,93 @@ export class Store {
       this.state.legacyPaneKeyAliasEntries = entries
       this.scheduleSave()
     })
-    if (normalized.changed || this.loadNeedsSave) {
+    if (normalized.changed || this.loadNeedsSave || adaptedProjectGroups) {
       // Why: upgraded sessions may contain legacy pane:1 leaves. Rewrite them at
       // the main persistence boundary so older renderer writes cannot revive them.
       // Other one-shot load migrations also set loadNeedsSave to persist their
       // guard flags before the next restart.
       this.scheduleSave()
     }
+  }
+
+  private adaptFlatFolderScanProjectGroups(): boolean {
+    // Why: older folder imports persisted a real parent path but kept all repos
+    // flat. Upgrade that shape into v1 sparse folder scopes on load.
+    const groups = this.state.projectGroups ?? []
+    const repos = this.state.repos
+    if (groups.length === 0 || repos.length === 0) {
+      return false
+    }
+
+    let changed = false
+    let maxOrder = -1
+    for (const group of groups) {
+      maxOrder = Math.max(maxOrder, group.tabOrder)
+    }
+
+    const childGroupIds = new Set(
+      groups.flatMap((group) => (group.parentGroupId ? [group.parentGroupId] : []))
+    )
+    const initialGroupCount = groups.length
+    for (let groupIndex = 0; groupIndex < initialGroupCount; groupIndex += 1) {
+      const rootGroup = groups[groupIndex]
+      if (!rootGroup) {
+        continue
+      }
+      if (
+        rootGroup.createdFrom !== 'folder-scan' ||
+        !rootGroup.parentPath ||
+        rootGroup.parentGroupId ||
+        childGroupIds.has(rootGroup.id)
+      ) {
+        continue
+      }
+      const rootPath = rootGroup.parentPath
+      const repoCandidates = repos.filter(
+        (repo) =>
+          !isFolderRepo(repo) &&
+          repo.projectGroupId === rootGroup.id &&
+          isPathInsideOrEqual(rootPath, repo.path)
+      )
+      if (repoCandidates.length < 2) {
+        continue
+      }
+
+      const resolver = createNestedProjectGroupResolver({
+        parentPath: rootPath,
+        groupName: rootGroup.name,
+        mode: 'group',
+        repoPaths: repoCandidates.map((repo) => repo.path),
+        createGroup: (input) => {
+          if (!input.parentGroupId) {
+            return rootGroup
+          }
+          maxOrder += 1
+          const group = createProjectGroup({
+            ...input,
+            tabOrder: maxOrder
+          })
+          groups.push(group)
+          changed = true
+          return group
+        }
+      })
+      const nextOrderByGroupId = new Map<string, number>()
+      for (const repo of repoCandidates) {
+        const group = resolver.getGroupForRepo(repo.path)
+        if (!group) {
+          continue
+        }
+        const nextOrder = nextOrderByGroupId.get(group.id) ?? 0
+        nextOrderByGroupId.set(group.id, nextOrder + 1)
+        if (repo.projectGroupId !== group.id || repo.projectGroupOrder !== nextOrder) {
+          repo.projectGroupId = group.id
+          repo.projectGroupOrder = nextOrder
+          changed = true
+        }
+      }
+    }
+    return changed
   }
 
   // Why (issue #1158): debounced writes fire as often as every 300ms during
@@ -1459,10 +2071,13 @@ export class Store {
         const raw = readFileSync(dataFile, 'utf-8')
         const parsed = JSON.parse(raw) as PersistedState
 
-        // Why: opencodeSessionCookie is stored encrypted on disk via safeStorage.
+        // Why: secret settings are stored encrypted on disk via safeStorage.
         // Decrypt at the load boundary so the rest of the app sees plaintext.
         if (parsed.settings?.opencodeSessionCookie) {
           parsed.settings.opencodeSessionCookie = decrypt(parsed.settings.opencodeSessionCookie)
+        }
+        if (parsed.settings?.httpProxyUrl) {
+          parsed.settings.httpProxyUrl = decrypt(parsed.settings.httpProxyUrl)
         }
         if (parsed.ui?.browserKagiSessionLink) {
           parsed.ui.browserKagiSessionLink = decryptOptionalSecret(parsed.ui.browserKagiSessionLink)
@@ -1471,8 +2086,11 @@ export class Store {
         // Merge with defaults in case new fields were added
         const homeDir = homedir()
         const defaults = getDefaultPersistedState(homeDir)
-        const rawSourceControlAiMissing = parsed.settings?.sourceControlAi === undefined
-        if (rawSourceControlAiMissing) {
+        const rawSourceControlAi = parsed.settings?.sourceControlAi
+        const rawSourceControlAiMissing = rawSourceControlAi === undefined
+        const rawSourceControlAiActionsMissing =
+          rawSourceControlAi !== undefined && rawSourceControlAi.actions === undefined
+        if (rawSourceControlAiMissing || rawSourceControlAiActionsMissing) {
           this.loadNeedsSave = true
         }
         const legacyCommitMessageAi = parsed.settings?.commitMessageAi
@@ -1565,9 +2183,28 @@ export class Store {
         const migratedExperimentalActivity = experimentalActivityDefaultedOffForAllUsers
           ? (parsed.settings?.experimentalActivity ?? false)
           : false
-        const taskProviderSettings = normalizeTaskProviderSettings({
+        const autoRenameBranchFromWorkDefaultedOn =
+          parsed.settings?.autoRenameBranchFromWorkDefaultedOn === true
+        // Why: default-on rollout should activate old profiles once, but a
+        // later Settings opt-out must survive reloads.
+        const migratedAutoRenameBranchFromWork = normalizeAutoRenameBranchFromWorkDefaultOn(
+          parsed.settings
+        )
+        const migratedTerminalCursorStyle = normalizeTerminalCursorStyleDefault(parsed.settings)
+        const rawTaskProviderSettings = normalizeTaskProviderSettings({
           visibleTaskProviders: parsed.settings?.visibleTaskProviders,
           defaultTaskSource: parsed.settings?.defaultTaskSource
+        })
+        const visibleTaskProvidersDefaultedForJira =
+          parsed.settings?.visibleTaskProvidersDefaultedForJira === true
+        const migratedVisibleTaskProviders = visibleTaskProvidersDefaultedForJira
+          ? rawTaskProviderSettings.visibleTaskProviders
+          : rawTaskProviderSettings.visibleTaskProviders.includes('jira')
+            ? rawTaskProviderSettings.visibleTaskProviders
+            : [...rawTaskProviderSettings.visibleTaskProviders, 'jira' as const]
+        const taskProviderSettings = normalizeTaskProviderSettings({
+          visibleTaskProviders: migratedVisibleTaskProviders,
+          defaultTaskSource: rawTaskProviderSettings.defaultTaskSource
         })
         const primarySelectionDefaultedForLinux =
           parsed.settings?.primarySelectionMiddleClickPasteDefaultedForLinux === true
@@ -1585,10 +2222,67 @@ export class Store {
         if (migratePrimarySelectionPlatformDefault || stampPrimarySelectionTerminalDefaults) {
           this.loadNeedsSave = true
         }
+        if (!visibleTaskProvidersDefaultedForJira) {
+          this.loadNeedsSave = true
+        }
+        const claudeAgentTeamsDefaultDisabledMigrated =
+          parsed.settings?.claudeAgentTeamsDefaultDisabledMigrated === true
+        if (!claudeAgentTeamsDefaultDisabledMigrated) {
+          this.loadNeedsSave = true
+        }
+        const migratedDisabledTuiAgents = normalizeDisabledTuiAgents(
+          parsed.settings?.disabledTuiAgents
+        )
+        const migratedAgentYoloDefaults = migrateAgentYoloDefaults(parsed.settings)
+        const openLinksInAppWasPersisted = Object.prototype.hasOwnProperty.call(
+          parsed.settings ?? {},
+          'openLinksInApp'
+        )
+        const migratedOpenLinksInAppPreferencePrompted =
+          typeof parsed.settings?.openLinksInAppPreferencePrompted === 'boolean'
+            ? parsed.settings.openLinksInAppPreferencePrompted
+            : openLinksInAppWasPersisted
+        if (
+          parsed.settings?.agentYoloDefaultsMigrated !== true ||
+          hasUnsupportedTuiAgentArgs('opencode', parsed.settings?.agentDefaultArgs?.opencode) ||
+          hasUnsupportedTuiAgentArgs('kilo', parsed.settings?.agentDefaultArgs?.kilo)
+        ) {
+          this.loadNeedsSave = true
+        }
+        if (
+          !claudeAgentTeamsDefaultDisabledMigrated &&
+          !migratedDisabledTuiAgents.includes('claude-agent-teams')
+        ) {
+          migratedDisabledTuiAgents.push('claude-agent-teams')
+        }
+        if (!autoRenameBranchFromWorkDefaultedOn) {
+          this.loadNeedsSave = true
+        }
+        if (
+          parsed.settings?.openLinksInAppPreferencePrompted !==
+          migratedOpenLinksInAppPreferencePrompted
+        ) {
+          this.loadNeedsSave = true
+        }
+        const normalizedOnboarding = normalizeLoadedOnboardingState(
+          parsed.onboarding,
+          defaults.onboarding
+        )
+        if (!parsed.onboarding) {
+          this.loadNeedsSave = true
+        }
+        const normalizedProjectGroups = normalizeProjectGroups(parsed.projectGroups)
         result = {
           ...defaults,
           ...parsed,
-          projectGroups: normalizeProjectGroups(parsed.projectGroups),
+          featureInteractionTelemetryBuckets: normalizeFeatureInteractionTelemetryBuckets(
+            parsed.featureInteractionTelemetryBuckets
+          ),
+          projectGroups: normalizedProjectGroups,
+          folderWorkspaces: normalizeFolderWorkspaces(
+            parsed.folderWorkspaces,
+            normalizedProjectGroups
+          ),
           worktreeLineageById: parsed.worktreeLineageById ?? {},
           settings: {
             ...defaults.settings,
@@ -1609,8 +2303,17 @@ export class Store {
               (process.platform === 'linux' && migratePrimarySelectionPlatformDefault),
             primarySelectionMiddleClickPasteDefaultedForTerminalDefaults:
               primarySelectionDefaultedForTerminalDefaults || stampPrimarySelectionTerminalDefaults,
+            ...migratedAutoRenameBranchFromWork,
+            ...migratedTerminalCursorStyle,
             experimentalActivity: migratedExperimentalActivity,
             experimentalActivityDefaultedOffForAllUsers: true,
+            // Why: compact worktree cards graduated from Experimental; preserve
+            // the old opt-in for profiles written during the rollout.
+            compactWorktreeCards:
+              parsed.settings?.compactWorktreeCards ??
+              parsed.settings?.experimentalCompactWorktreeCards ??
+              defaults.settings.compactWorktreeCards,
+            experimentalCompactWorktreeCards: undefined,
             terminalMacOptionAsAlt: migratedOptionAsAlt,
             terminalMacOptionAsAltMigrated: true,
             floatingTerminalEnabled: migratedFloatingTerminalEnabled,
@@ -1621,13 +2324,33 @@ export class Store {
             terminalQuickCommands: normalizeTerminalQuickCommands(
               parsed.settings?.terminalQuickCommands
             ),
+            terminalCustomThemes: normalizeTerminalCustomThemes(
+              parsed.settings?.terminalCustomThemes
+            ),
+            leftSidebarAppearanceMode: normalizeLeftSidebarAppearanceMode(
+              parsed.settings?.leftSidebarAppearanceMode
+            ),
+            leftSidebarTintColor: normalizeLeftSidebarTintColor(
+              parsed.settings?.leftSidebarTintColor
+            ),
+            leftSidebarTintOpacity: normalizeLeftSidebarTintOpacity(
+              parsed.settings?.leftSidebarTintOpacity
+            ),
+            appIcon: normalizeAppIconId(parsed.settings?.appIcon),
+            uiLanguage: normalizeUiLanguage(parsed.settings?.uiLanguage),
             defaultTaskSource: taskProviderSettings.defaultTaskSource,
             visibleTaskProviders: taskProviderSettings.visibleTaskProviders,
+            visibleTaskProvidersDefaultedForJira: true,
             terminalShortcutPolicy: normalizeTerminalShortcutPolicy(
               parsed.settings?.terminalShortcutPolicy
             ),
-            disabledTuiAgents: normalizeDisabledTuiAgents(parsed.settings?.disabledTuiAgents),
-            openInApplications: normalizeOpenInApplications(parsed.settings?.openInApplications),
+            disabledTuiAgents: migratedDisabledTuiAgents,
+            ...migratedAgentYoloDefaults,
+            claudeAgentTeamsDefaultDisabledMigrated: true,
+            openInApplications: normalizeOpenInApplications(parsed.settings?.openInApplications, {
+              seedDefaults: true
+            }),
+            openLinksInAppPreferencePrompted: migratedOpenLinksInAppPreferencePrompted,
             notifications: normalizeNotificationSettings(parsed.settings?.notifications),
             sourceControlAi: migratedSourceControlAi,
             // Why: new builds read sourceControlAi, but rollback builds still
@@ -1764,14 +2487,51 @@ export class Store {
             ) {
               this.loadNeedsSave = true
             }
+            const setupGuideSidebarDismissed = resolveSetupGuideSidebarDismissedOnLoad(
+              parsed.ui?.setupGuideSidebarDismissed,
+              normalizedOnboarding
+            )
+            const projectOrderManualDefaultNoticeDismissed =
+              resolveProjectOrderManualDefaultNoticeDismissed({
+                rawDismissed: parsed.ui?.projectOrderManualDefaultNoticeDismissed,
+                rawProjectOrderBy: parsed.ui?.projectOrderBy,
+                isExistingProfile: isExistingPersistedProfile({
+                  repoCount: parsed.repos?.length ?? 0,
+                  onboardingClosedAt: normalizedOnboarding.closedAt,
+                  ui: parsed.ui
+                })
+              })
+            if (
+              parsed.ui?.setupGuideSidebarDismissed !== setupGuideSidebarDismissed &&
+              (setupGuideSidebarDismissed || parsed.ui?.setupGuideSidebarDismissed !== undefined)
+            ) {
+              this.loadNeedsSave = true
+            }
+            if (
+              parsed.ui?.projectOrderManualDefaultNoticeDismissed !==
+              projectOrderManualDefaultNoticeDismissed
+            ) {
+              this.loadNeedsSave = true
+            }
             return {
               ...defaults.ui,
-              ...parsed.ui,
+              ...stripMainOwnedTelemetryMarkerFromUI(parsed.ui),
               // Why: migrate once from the retired Appearance setting only
               // when no explicit persisted chrome preference exists yet.
               rightSidebarOpen,
               rightSidebarTab: normalizeRightSidebarTab(parsed.ui?.rightSidebarTab),
+              setupGuideSidebarDismissed,
+              projectOrderManualDefaultNoticeDismissed,
+              setupGuideBrowserMilestoneMigrated:
+                typeof parsed.ui?.setupGuideBrowserMilestoneMigrated === 'boolean'
+                  ? parsed.ui.setupGuideBrowserMilestoneMigrated
+                  : false,
+              setupGuideBrowserMilestoneLegacyComplete:
+                parsed.ui?.setupGuideBrowserMilestoneLegacyComplete === true,
               sortBy: migrate ? ('smart' as const) : sort,
+              showDotfilesByWorktree: normalizeShowDotfilesByWorktree(
+                parsed.ui?.showDotfilesByWorktree
+              ),
               workspaceStatuses,
               _workspaceStatusesDefaultOrderMigrated: true,
               _workspaceStatusesDefaultWorkflowMigrated: true,
@@ -1821,36 +2581,7 @@ export class Store {
           ),
           automations: Array.isArray(parsed.automations) ? parsed.automations : [],
           automationRuns: Array.isArray(parsed.automationRuns) ? parsed.automationRuns : [],
-          onboarding: (() => {
-            // Why: if we successfully parsed an existing orca-data.json that
-            // lacks an onboarding block, this is an upgrade-cohort user —
-            // backfill as completed (not dismissed) so they don't get dropped
-            // into the wizard regardless of whether they currently have repos,
-            // SSH targets, or just non-default settings. Analytics still
-            // distinguish this from users who explicitly bailed mid-funnel.
-            if (!parsed.onboarding) {
-              return {
-                ...defaults.onboarding,
-                closedAt: Date.now(),
-                outcome: 'completed' as const,
-                lastCompletedStep: ONBOARDING_FINAL_STEP
-              }
-            }
-            // Why: validate every persisted onboarding key explicitly via the
-            // shared sanitizer instead of spreading raw values. A type-flipped
-            // field on disk (string where number expected, unknown checklist
-            // key) is dropped or coerced to the default rather than poisoning
-            // in-memory state.
-            const sanitized = sanitizeOnboardingUpdate(parsed.onboarding)
-            return {
-              ...defaults.onboarding,
-              ...sanitized,
-              checklist: {
-                ...defaults.onboarding.checklist,
-                ...sanitized.checklist
-              }
-            }
-          })()
+          onboarding: normalizedOnboarding
         }
       }
     } catch (err) {
@@ -1882,13 +2613,23 @@ export class Store {
       result = getDefaultPersistedState(homedir())
     }
 
-    result = {
+    const workspaceSession = pruneWorkspaceSessionBrowserHistory(
+      pruneLocalTerminalScrollbackBuffers(result.workspaceSession, result.repos)
+    )
+    const migratedScrollback = migrateWorkspaceSessionTerminalScrollbackSnapshots(workspaceSession)
+    if (migratedScrollback.changed) {
+      this.loadNeedsSave = true
+    }
+
+    const folderScopeConnectionMigration = backfillFolderScopeConnectionIds({
       ...result,
       repos: clearMissingProjectGroupMemberships(result.repos, result.projectGroups ?? []),
-      workspaceSession: pruneWorkspaceSessionBrowserHistory(
-        pruneLocalTerminalScrollbackBuffers(result.workspaceSession, result.repos)
-      )
+      workspaceSession: migratedScrollback.session
+    })
+    if (folderScopeConnectionMigration.changed) {
+      this.loadNeedsSave = true
     }
+    result = folderScopeConnectionMigration.state
 
     return this.migrateTelemetry(result, fileExistedOnLoad)
   }
@@ -1991,13 +2732,14 @@ export class Store {
     await mkdir(dir, { recursive: true }).catch(() => {})
     const tmpFile = `${dataFile}.${process.pid}.${Date.now()}.${Math.random().toString(16).slice(2)}.tmp`
 
-    // Why: opencodeSessionCookie must be encrypted on disk. Clone state so
-    // the in-memory this.state stays plaintext for the rest of the app.
+    // Why: secrets must be encrypted on disk. Clone state so the in-memory
+    // this.state stays plaintext for the rest of the app.
     const stateToSave = {
       ...this.state,
       settings: {
         ...this.state.settings,
-        opencodeSessionCookie: encrypt(this.state.settings.opencodeSessionCookie)
+        opencodeSessionCookie: encrypt(this.state.settings.opencodeSessionCookie),
+        httpProxyUrl: encrypt(this.state.settings.httpProxyUrl ?? '')
       },
       ui: {
         ...this.state.ui,
@@ -2045,13 +2787,14 @@ export class Store {
     }
     const tmpFile = `${dataFile}.${process.pid}.${Date.now()}.${Math.random().toString(16).slice(2)}.tmp`
 
-    // Why: opencodeSessionCookie must be encrypted on disk. Clone state so
-    // the in-memory this.state stays plaintext for the rest of the app.
+    // Why: secrets must be encrypted on disk. Clone state so the in-memory
+    // this.state stays plaintext for the rest of the app.
     const stateToSave = {
       ...this.state,
       settings: {
         ...this.state.settings,
-        opencodeSessionCookie: encrypt(this.state.settings.opencodeSessionCookie)
+        opencodeSessionCookie: encrypt(this.state.settings.opencodeSessionCookie),
+        httpProxyUrl: encrypt(this.state.settings.httpProxyUrl ?? '')
       },
       ui: {
         ...this.state.ui,
@@ -2124,6 +2867,7 @@ export class Store {
   createProjectGroup(input: {
     name: string
     parentPath?: string | null
+    connectionId?: string | null
     parentGroupId?: string | null
     createdFrom: ProjectGroup['createdFrom']
   }): ProjectGroup {
@@ -2182,6 +2926,165 @@ export class Store {
         ? { ...repo, projectGroupId: null }
         : repo
     )
+    for (const workspace of this.state.folderWorkspaces ?? []) {
+      if (deletedGroupIds.has(workspace.projectGroupId)) {
+        this.state.workspaceSession = removeWorkspaceSessionOwner(
+          this.state.workspaceSession,
+          folderWorkspaceKey(workspace.id)
+        )!
+      }
+    }
+    this.state.folderWorkspaces = (this.state.folderWorkspaces ?? []).filter(
+      (workspace) => !deletedGroupIds.has(workspace.projectGroupId)
+    )
+    this.scheduleSave()
+    return true
+  }
+
+  getFolderWorkspaces(): FolderWorkspace[] {
+    return [...(this.state.folderWorkspaces ?? [])].sort(
+      (left, right) => right.sortOrder - left.sortOrder || left.name.localeCompare(right.name)
+    )
+  }
+
+  getFolderWorkspace(id: string): FolderWorkspace | undefined {
+    return (this.state.folderWorkspaces ?? []).find((workspace) => workspace.id === id)
+  }
+
+  createFolderWorkspace(input: {
+    projectGroupId: string
+    name?: string
+    folderPath?: string | null
+    linkedTask?: FolderWorkspace['linkedTask']
+    connectionId?: string | null
+    createdWithAgent?: FolderWorkspace['createdWithAgent']
+    pendingFirstAgentMessageRename?: boolean
+  }): FolderWorkspace {
+    const group = (this.state.projectGroups ?? []).find(
+      (entry) => entry.id === input.projectGroupId
+    )
+    const folderPath =
+      typeof input.folderPath === 'string' && input.folderPath.trim().length > 0
+        ? input.folderPath
+        : group?.parentPath
+    if (!group || !folderPath) {
+      throw new Error('Folder-backed project group not found.')
+    }
+    const now = Date.now()
+    const workspace: FolderWorkspace = {
+      id: randomUUID(),
+      projectGroupId: group.id,
+      name: normalizeFolderWorkspaceName(input.name, `${group.name} workspace`),
+      folderPath,
+      connectionId: input.connectionId ?? group.connectionId ?? null,
+      linkedTask: input.linkedTask ?? null,
+      comment: '',
+      isArchived: false,
+      isUnread: false,
+      isPinned: false,
+      sortOrder: now,
+      ...(input.createdWithAgent ? { createdWithAgent: input.createdWithAgent } : {}),
+      ...(input.pendingFirstAgentMessageRename === true && input.createdWithAgent
+        ? { pendingFirstAgentMessageRename: true }
+        : {}),
+      lastActivityAt: 0,
+      createdAt: now,
+      updatedAt: now
+    }
+    this.state.folderWorkspaces = [workspace, ...(this.state.folderWorkspaces ?? [])]
+    this.scheduleSave()
+    return workspace
+  }
+
+  updateFolderWorkspace(
+    id: string,
+    updates: Partial<
+      Pick<
+        FolderWorkspace,
+        | 'name'
+        | 'folderPath'
+        | 'linkedTask'
+        | 'comment'
+        | 'isArchived'
+        | 'isUnread'
+        | 'isPinned'
+        | 'sortOrder'
+        | 'manualOrder'
+        | 'workspaceStatus'
+        | 'createdWithAgent'
+        | 'pendingFirstAgentMessageRename'
+        | 'firstAgentMessageRenameError'
+        | 'lastActivityAt'
+      >
+    >
+  ): FolderWorkspace | null {
+    const workspace = this.getFolderWorkspace(id)
+    if (!workspace) {
+      return null
+    }
+    if (updates.name !== undefined) {
+      workspace.name = normalizeFolderWorkspaceName(updates.name, workspace.name)
+    }
+    if (typeof updates.folderPath === 'string' && updates.folderPath.trim().length > 0) {
+      workspace.folderPath = updates.folderPath
+    }
+    if (updates.linkedTask !== undefined) {
+      workspace.linkedTask = updates.linkedTask
+    }
+    if (updates.comment !== undefined) {
+      workspace.comment = updates.comment
+    }
+    if (updates.isArchived !== undefined) {
+      workspace.isArchived = updates.isArchived
+    }
+    if (updates.isUnread !== undefined) {
+      workspace.isUnread = updates.isUnread
+    }
+    if (updates.isPinned !== undefined) {
+      workspace.isPinned = updates.isPinned
+    }
+    if (updates.sortOrder !== undefined && Number.isFinite(updates.sortOrder)) {
+      workspace.sortOrder = updates.sortOrder
+    }
+    if (updates.manualOrder !== undefined) {
+      if (Number.isFinite(updates.manualOrder)) {
+        workspace.manualOrder = updates.manualOrder
+      } else {
+        delete workspace.manualOrder
+      }
+    }
+    if (updates.workspaceStatus !== undefined) {
+      workspace.workspaceStatus = updates.workspaceStatus
+    }
+    if (updates.createdWithAgent !== undefined) {
+      workspace.createdWithAgent = updates.createdWithAgent
+    }
+    if (updates.pendingFirstAgentMessageRename !== undefined) {
+      workspace.pendingFirstAgentMessageRename = updates.pendingFirstAgentMessageRename
+    }
+    if (updates.firstAgentMessageRenameError !== undefined) {
+      workspace.firstAgentMessageRenameError = updates.firstAgentMessageRenameError
+    }
+    if (updates.lastActivityAt !== undefined && Number.isFinite(updates.lastActivityAt)) {
+      workspace.lastActivityAt = updates.lastActivityAt
+    }
+    workspace.updatedAt = Date.now()
+    this.scheduleSave()
+    return workspace
+  }
+
+  removeFolderWorkspace(id: string): boolean {
+    const before = this.state.folderWorkspaces?.length ?? 0
+    this.state.folderWorkspaces = (this.state.folderWorkspaces ?? []).filter(
+      (workspace) => workspace.id !== id
+    )
+    if ((this.state.folderWorkspaces?.length ?? 0) === before) {
+      return false
+    }
+    this.state.workspaceSession = removeWorkspaceSessionOwner(
+      this.state.workspaceSession,
+      folderWorkspaceKey(id)
+    )!
     this.scheduleSave()
     return true
   }
@@ -2270,8 +3173,10 @@ export class Store {
         | 'displayName'
         | 'badgeColor'
         | 'repoIcon'
+        | 'upstream'
         | 'hookSettings'
         | 'worktreeBaseRef'
+        | 'worktreeBasePath'
         | 'kind'
         | 'symlinkPaths'
         | 'issueSourcePreference'
@@ -2279,9 +3184,8 @@ export class Store {
         | 'externalWorktreeVisibilityPromptDismissedAt'
         | 'projectGroupId'
         | 'projectGroupOrder'
-        | 'sourceControlAi'
       >
-    >
+    > & { sourceControlAi?: Repo['sourceControlAi'] | null }
   ): Repo | null {
     const repo = this.state.repos.find((r) => r.id === id)
     if (!repo) {
@@ -2319,6 +3223,10 @@ export class Store {
       delete repo.issueSourcePreference
       delete sanitizedUpdates.issueSourcePreference
     }
+    if ('worktreeBasePath' in sanitizedUpdates && sanitizedUpdates.worktreeBasePath === undefined) {
+      delete repo.worktreeBasePath
+      delete sanitizedUpdates.worktreeBasePath
+    }
     if (
       'externalWorktreeVisibility' in sanitizedUpdates &&
       repo.externalWorktreeVisibilityLegacy === undefined
@@ -2327,7 +3235,10 @@ export class Store {
       // time visibility changes so later hide/show choices keep legacy safety.
       repo.externalWorktreeVisibilityLegacy = externalWorktreeVisibilityLegacy
     }
-    if ('sourceControlAi' in sanitizedUpdates && sanitizedUpdates.sourceControlAi === undefined) {
+    if (
+      'sourceControlAi' in sanitizedUpdates &&
+      (sanitizedUpdates.sourceControlAi === undefined || sanitizedUpdates.sourceControlAi === null)
+    ) {
       delete repo.sourceControlAi
       delete sanitizedUpdates.sourceControlAi
     } else if ('sourceControlAi' in sanitizedUpdates) {
@@ -2346,8 +3257,15 @@ export class Store {
   }
 
   private hydrateRepo(repo: Repo): Repo {
-    const { repoIcon: rawRepoIcon, ...repoWithoutIcon } = repo
+    const {
+      repoIcon: rawRepoIcon,
+      upstream: rawUpstream,
+      sourceControlAi: rawSourceControlAi,
+      ...repoWithoutIcon
+    } = repo
     const repoIcon = sanitizeRepoIcon(rawRepoIcon)
+    const upstream = sanitizeRepoUpstream(rawUpstream)
+    const sourceControlAi = normalizeRepoSourceControlAiOverrides(rawSourceControlAi)
     const gitUsername = isFolderRepo(repo)
       ? ''
       : (this.gitUsernameCache.get(repo.path) ??
@@ -2360,6 +3278,8 @@ export class Store {
     return {
       ...repoWithoutIcon,
       ...(repoIcon !== undefined ? { repoIcon } : {}),
+      ...(upstream !== undefined ? { upstream } : {}),
+      ...(sourceControlAi !== undefined ? { sourceControlAi } : {}),
       kind: isFolderRepo(repo) ? 'folder' : 'git',
       gitUsername,
       hookSettings: {
@@ -2408,9 +3328,12 @@ export class Store {
 
   listAutomationRuns(automationId?: string): AutomationRun[] {
     const runs = this.state.automationRuns ?? []
-    return [
-      ...(automationId ? runs.filter((run) => run.automationId === automationId) : runs)
-    ].sort((left, right) => right.createdAt - left.createdAt)
+    return [...(automationId ? runs.filter((run) => run.automationId === automationId) : runs)]
+      .map((run) => ({
+        ...run,
+        precheckResult: normalizeAutomationPrecheckResult(run.precheckResult)
+      }))
+      .sort((left, right) => right.createdAt - left.createdAt)
   }
 
   createAutomation(input: AutomationCreateInput): Automation {
@@ -2421,6 +3344,7 @@ export class Store {
       id: randomUUID(),
       name: input.name.trim() || 'Untitled automation',
       prompt: input.prompt,
+      precheck: normalizeAutomationPrecheck(input.precheck),
       agentId: input.agentId,
       projectId: input.projectId,
       executionTargetType,
@@ -2464,6 +3388,9 @@ export class Store {
       ...updates,
       name:
         updates.name !== undefined ? updates.name.trim() || 'Untitled automation' : current.name,
+      precheck: Object.hasOwn(updates, 'precheck')
+        ? normalizeAutomationPrecheck(updates.precheck)
+        : normalizeAutomationPrecheck(current.precheck),
       projectId: repoId,
       executionTargetType,
       executionTargetId: executionTargetType === 'ssh' ? (repo?.connectionId ?? '') : 'local',
@@ -2533,6 +3460,7 @@ export class Store {
       chatSessionId: null,
       terminalSessionId: null,
       outputSnapshot: null,
+      precheckResult: null,
       usage: null,
       error: null,
       startedAt: null,
@@ -2570,6 +3498,9 @@ export class Store {
       outputSnapshot: Object.hasOwn(result, 'outputSnapshot')
         ? normalizeAutomationRunOutputSnapshot(result.outputSnapshot)
         : normalizeAutomationRunOutputSnapshot(current.outputSnapshot),
+      precheckResult: Object.hasOwn(result, 'precheckResult')
+        ? normalizeAutomationPrecheckResult(result.precheckResult)
+        : normalizeAutomationPrecheckResult(current.precheckResult),
       usage: Object.hasOwn(result, 'usage') ? (result.usage ?? null) : (current.usage ?? null),
       error: result.error ?? null,
       startedAt: current.startedAt ?? now,
@@ -2715,9 +3646,37 @@ export class Store {
     if ('disabledTuiAgents' in updates) {
       sanitizedUpdates.disabledTuiAgents = normalizeDisabledTuiAgents(updates.disabledTuiAgents)
     }
+    if ('agentDefaultArgs' in updates) {
+      sanitizedUpdates.agentDefaultArgs = normalizeTuiAgentArgsRecord(updates.agentDefaultArgs)
+      sanitizedUpdates.agentYoloDefaultsMigrated = true
+    }
+    if ('agentDefaultEnv' in updates) {
+      sanitizedUpdates.agentDefaultEnv = normalizeTuiAgentEnvRecord(updates.agentDefaultEnv)
+      sanitizedUpdates.agentYoloDefaultsMigrated = true
+    }
     if ('terminalQuickCommands' in updates) {
       sanitizedUpdates.terminalQuickCommands = normalizeTerminalQuickCommands(
         updates.terminalQuickCommands
+      )
+    }
+    if ('terminalCustomThemes' in updates) {
+      sanitizedUpdates.terminalCustomThemes = normalizeTerminalCustomThemes(
+        updates.terminalCustomThemes
+      )
+    }
+    if ('leftSidebarAppearanceMode' in updates) {
+      sanitizedUpdates.leftSidebarAppearanceMode = normalizeLeftSidebarAppearanceMode(
+        updates.leftSidebarAppearanceMode
+      )
+    }
+    if ('leftSidebarTintColor' in updates) {
+      sanitizedUpdates.leftSidebarTintColor = normalizeLeftSidebarTintColor(
+        updates.leftSidebarTintColor
+      )
+    }
+    if ('leftSidebarTintOpacity' in updates) {
+      sanitizedUpdates.leftSidebarTintOpacity = normalizeLeftSidebarTintOpacity(
+        updates.leftSidebarTintOpacity
       )
     }
     if ('visibleTaskProviders' in updates || 'defaultTaskSource' in updates) {
@@ -2733,6 +3692,12 @@ export class Store {
       })
       sanitizedUpdates.defaultTaskSource = taskProviderSettings.defaultTaskSource
       sanitizedUpdates.visibleTaskProviders = taskProviderSettings.visibleTaskProviders
+      if ('visibleTaskProviders' in updates) {
+        sanitizedUpdates.visibleTaskProvidersDefaultedForJira = true
+      }
+    }
+    if ('autoRenameBranchFromWork' in updates || 'autoRenameBranchFromWorkDefaultedOn' in updates) {
+      sanitizedUpdates.autoRenameBranchFromWorkDefaultedOn = true
     }
     if ('openInApplications' in updates) {
       sanitizedUpdates.openInApplications = normalizeOpenInApplications(updates.openInApplications)
@@ -2741,6 +3706,12 @@ export class Store {
       sanitizedUpdates.terminalShortcutPolicy = normalizeTerminalShortcutPolicy(
         updates.terminalShortcutPolicy
       )
+    }
+    if ('appIcon' in updates) {
+      sanitizedUpdates.appIcon = normalizeAppIconId(updates.appIcon)
+    }
+    if ('uiLanguage' in updates) {
+      sanitizedUpdates.uiLanguage = normalizeUiLanguage(updates.uiLanguage)
     }
     const historyWithPreviousLayout = buildWorkspaceDirHistoryForUpdate(
       this.state.settings,
@@ -2801,12 +3772,18 @@ export class Store {
   // ── UI State ───────────────────────────────────────────────────────
 
   getUI(): PersistedState['ui'] {
+    const uiState = stripMainOwnedTelemetryMarkerFromUI(this.state.ui)
     return {
       ...getDefaultUIState(),
-      ...this.state.ui,
+      ...uiState,
       groupBy: normalizeGroupBy(this.state.ui?.groupBy),
       sortBy: normalizeSortBy(this.state.ui?.sortBy),
+      projectOrderBy: normalizeProjectOrderBy(this.state.ui?.projectOrderBy),
       rightSidebarTab: normalizeRightSidebarTab(this.state.ui?.rightSidebarTab),
+      rightSidebarExplorerView: normalizeRightSidebarExplorerView(
+        this.state.ui?.rightSidebarExplorerView,
+        this.state.ui?.rightSidebarTab
+      ),
       worktreeCardProperties: normalizeWorktreeCardProperties(
         this.state.ui?.worktreeCardProperties
       ),
@@ -2815,62 +3792,103 @@ export class Store {
       ),
       workspaceStatuses: normalizeWorkspaceStatuses(this.state.ui?.workspaceStatuses),
       workspaceBoardOpacity: clampWorkspaceBoardOpacity(this.state.ui?.workspaceBoardOpacity),
-      workspaceBoardCompact: normalizeWorkspaceBoardCompact(this.state.ui?.workspaceBoardCompact),
       workspaceBoardColumnWidth: clampWorkspaceBoardColumnWidth(
         this.state.ui?.workspaceBoardColumnWidth
       ),
+      browserDefaultZoomLevel: normalizeBrowserPageZoomLevel(
+        this.state.ui?.browserDefaultZoomLevel
+      ),
+      showDotfilesByWorktree: normalizeShowDotfilesByWorktree(
+        this.state.ui?.showDotfilesByWorktree
+      ),
       featureTipsSeenIds: normalizeFeatureTipIds(this.state.ui?.featureTipsSeenIds),
+      contextualToursSeenIds: normalizeContextualTourIds(this.state.ui?.contextualToursSeenIds),
       featureInteractions: normalizeFeatureInteractions(this.state.ui?.featureInteractions)
     }
   }
 
   updateUI(updates: Partial<PersistedState['ui']>): void {
+    const sanitizedUpdates = stripMainOwnedTelemetryMarkerFromUI(updates)
+    const currentUI = {
+      ...getDefaultUIState(),
+      ...stripMainOwnedTelemetryMarkerFromUI(this.state.ui)
+    }
+    const nextRightSidebarTab =
+      sanitizedUpdates.rightSidebarTab !== undefined
+        ? normalizeRightSidebarTab(sanitizedUpdates.rightSidebarTab)
+        : normalizeRightSidebarTab(this.state.ui?.rightSidebarTab)
+    const nextRightSidebarExplorerView =
+      sanitizedUpdates.rightSidebarExplorerView !== undefined
+        ? normalizeRightSidebarExplorerView(
+            sanitizedUpdates.rightSidebarExplorerView,
+            nextRightSidebarTab
+          )
+        : sanitizedUpdates.rightSidebarTab === 'search'
+          ? 'search'
+          : normalizeRightSidebarExplorerView(
+              this.state.ui?.rightSidebarExplorerView,
+              nextRightSidebarTab
+            )
     this.state.ui = {
-      ...this.state.ui,
-      ...updates,
-      groupBy: updates.groupBy
-        ? normalizeGroupBy(updates.groupBy)
+      ...currentUI,
+      ...sanitizedUpdates,
+      groupBy: sanitizedUpdates.groupBy
+        ? normalizeGroupBy(sanitizedUpdates.groupBy)
         : normalizeGroupBy(this.state.ui?.groupBy),
-      sortBy: updates.sortBy
-        ? normalizeSortBy(updates.sortBy)
+      sortBy: sanitizedUpdates.sortBy
+        ? normalizeSortBy(sanitizedUpdates.sortBy)
         : normalizeSortBy(this.state.ui?.sortBy),
-      rightSidebarTab:
-        updates.rightSidebarTab !== undefined
-          ? normalizeRightSidebarTab(updates.rightSidebarTab)
-          : normalizeRightSidebarTab(this.state.ui?.rightSidebarTab),
+      projectOrderBy: updates.projectOrderBy
+        ? normalizeProjectOrderBy(updates.projectOrderBy)
+        : normalizeProjectOrderBy(this.state.ui?.projectOrderBy),
+      rightSidebarTab: nextRightSidebarTab,
+      rightSidebarExplorerView: nextRightSidebarExplorerView,
       worktreeCardProperties:
-        updates.worktreeCardProperties !== undefined
-          ? normalizeWorktreeCardProperties(updates.worktreeCardProperties)
+        sanitizedUpdates.worktreeCardProperties !== undefined
+          ? normalizeWorktreeCardProperties(sanitizedUpdates.worktreeCardProperties)
           : normalizeWorktreeCardProperties(this.state.ui?.worktreeCardProperties),
       agentActivityDisplayMode:
         updates.agentActivityDisplayMode !== undefined
           ? normalizeAgentActivityDisplayMode(updates.agentActivityDisplayMode)
           : normalizeAgentActivityDisplayMode(this.state.ui?.agentActivityDisplayMode),
       workspaceStatuses:
-        updates.workspaceStatuses !== undefined
-          ? normalizeWorkspaceStatuses(updates.workspaceStatuses)
+        sanitizedUpdates.workspaceStatuses !== undefined
+          ? normalizeWorkspaceStatuses(sanitizedUpdates.workspaceStatuses)
           : normalizeWorkspaceStatuses(this.state.ui?.workspaceStatuses),
       workspaceBoardOpacity: clampWorkspaceBoardOpacity(
-        updates.workspaceBoardOpacity ?? this.state.ui?.workspaceBoardOpacity
-      ),
-      workspaceBoardCompact: normalizeWorkspaceBoardCompact(
-        updates.workspaceBoardCompact ?? this.state.ui?.workspaceBoardCompact
+        sanitizedUpdates.workspaceBoardOpacity ?? this.state.ui?.workspaceBoardOpacity
       ),
       workspaceBoardColumnWidth: clampWorkspaceBoardColumnWidth(
-        updates.workspaceBoardColumnWidth ?? this.state.ui?.workspaceBoardColumnWidth
+        sanitizedUpdates.workspaceBoardColumnWidth ?? this.state.ui?.workspaceBoardColumnWidth
       ),
+      browserDefaultZoomLevel: normalizeBrowserPageZoomLevel(
+        updates.browserDefaultZoomLevel ?? this.state.ui?.browserDefaultZoomLevel
+      ),
+      showDotfilesByWorktree:
+        updates.showDotfilesByWorktree !== undefined
+          ? normalizeShowDotfilesByWorktree(updates.showDotfilesByWorktree)
+          : normalizeShowDotfilesByWorktree(this.state.ui?.showDotfilesByWorktree),
       featureTipsSeenIds:
-        updates.featureTipsSeenIds !== undefined
-          ? normalizeFeatureTipIds(updates.featureTipsSeenIds)
+        sanitizedUpdates.featureTipsSeenIds !== undefined
+          ? normalizeFeatureTipIds(sanitizedUpdates.featureTipsSeenIds)
           : normalizeFeatureTipIds(this.state.ui?.featureTipsSeenIds),
+      // Why: renderer and paired clients can mark different tours seen from
+      // stale UI snapshots; union them so completed tours stay suppressed.
+      contextualToursSeenIds:
+        updates.contextualToursSeenIds !== undefined
+          ? mergeContextualTourSeenIds(
+              this.state.ui?.contextualToursSeenIds,
+              updates.contextualToursSeenIds
+            )
+          : normalizeContextualTourIds(this.state.ui?.contextualToursSeenIds),
       // Why: runtime RPCs and the renderer can both record education state.
       // Merge instead of replacing so a stale renderer snapshot cannot erase
       // runtime-only feature interactions.
       featureInteractions:
-        updates.featureInteractions !== undefined
+        sanitizedUpdates.featureInteractions !== undefined
           ? mergeFeatureInteractions(
               this.state.ui?.featureInteractions,
-              updates.featureInteractions
+              sanitizedUpdates.featureInteractions
             )
           : normalizeFeatureInteractions(this.state.ui?.featureInteractions)
     }
@@ -2879,16 +3897,46 @@ export class Store {
 
   recordFeatureInteraction(id: FeatureInteractionId): PersistedState['ui'] {
     const featureInteractions = normalizeFeatureInteractions(this.state.ui?.featureInteractions)
+    const telemetryBuckets = normalizeFeatureInteractionTelemetryBuckets(
+      this.state.featureInteractionTelemetryBuckets
+    )
     const existing = featureInteractions[id]
+    const previousCount = existing?.interactionCount ?? 0
+    const nextCount = previousCount + 1
+    const previousBucket = getFeatureInteractionUsageBucket(previousCount)
+    const nextBucket = getFeatureInteractionUsageBucket(nextCount)
+    const lastEmittedBucket = telemetryBuckets[id] ?? null
+    const shouldEmit =
+      nextBucket !== null &&
+      (lastEmittedBucket === null ||
+        compareFeatureInteractionUsageBuckets(nextBucket, lastEmittedBucket) > 0)
+
     this.updateUI({
       featureInteractions: {
         ...featureInteractions,
         [id]: {
           firstInteractedAt: existing?.firstInteractedAt ?? Date.now(),
-          interactionCount: (existing?.interactionCount ?? 0) + 1
+          interactionCount: nextCount
         }
       }
     })
+    this.state.featureInteractionTelemetryBuckets = shouldEmit
+      ? { ...telemetryBuckets, [id]: nextBucket }
+      : telemetryBuckets
+    this.scheduleSave()
+
+    if (shouldEmit) {
+      track('feature_interaction_usage_bucket_reached', {
+        feature_id: id,
+        feature_category: getFeatureInteractionCategory(id),
+        count_bucket: nextBucket,
+        bucket_source:
+          lastEmittedBucket === null && previousBucket !== null && previousBucket === nextBucket
+            ? 'observed_existing'
+            : 'crossed_now',
+        ...getCohortAtEmit()
+      })
+    }
     return this.getUI()
   }
 
@@ -2939,6 +3987,10 @@ export class Store {
 
   getWorkspaceSession(): PersistedState['workspaceSession'] {
     return this.state.workspaceSession ?? getDefaultWorkspaceSession()
+  }
+
+  readTerminalScrollbackSnapshot(ref: string): string | null {
+    return readTerminalScrollbackSnapshotSync(ref)
   }
 
   /** Resolve the worktree a terminal tab belongs to, from the session's
@@ -3066,6 +4118,11 @@ export class Store {
             layout.buffersByLeafId,
             liveLeafIds
           )
+          const scrollbackRefsByLeafId = preserveMissingLeafRecordEntries(
+            priorLayout.scrollbackRefsByLeafId,
+            layout.scrollbackRefsByLeafId,
+            liveLeafIds
+          )
           const titlesByLeafId = preserveMissingLeafRecordEntries(
             priorLayout.titlesByLeafId,
             layout.titlesByLeafId,
@@ -3074,13 +4131,39 @@ export class Store {
           if (buffersByLeafId) {
             layout.buffersByLeafId = buffersByLeafId
           }
+          if (scrollbackRefsByLeafId) {
+            layout.scrollbackRefsByLeafId = scrollbackRefsByLeafId
+          }
           if (titlesByLeafId) {
             layout.titlesByLeafId = titlesByLeafId
           }
         }
       }
     }
+    session = pruneLocalTerminalScrollbackBuffers(session, this.state.repos)
+    const migratedScrollback = migrateWorkspaceSessionTerminalScrollbackSnapshots(session)
+    session = migratedScrollback.session
+    deleteRemovedTerminalScrollbackSnapshots(prior, session)
     this.state.workspaceSession = session
+    this.scheduleSave()
+  }
+
+  patchWorkspaceSession(patch: WorkspaceSessionPatch): void {
+    // Why: the renderer's debounced hot path sends only changed top-level
+    // session slices. Scalar/UI patches avoid the terminal normalization path;
+    // terminal topology/layout patches still reuse the stale-PTY protections.
+    let next: WorkspaceSessionState = {
+      ...this.getWorkspaceSession(),
+      ...patch
+    }
+    if (workspaceSessionPatchNeedsFullNormalization(patch)) {
+      this.setWorkspaceSession(next)
+      return
+    }
+    if (Object.hasOwn(patch, 'browserUrlHistory')) {
+      next = pruneWorkspaceSessionBrowserHistory(next)
+    }
+    this.state.workspaceSession = next
     this.scheduleSave()
   }
 
@@ -3392,24 +4475,34 @@ export class Store {
   markSshRemotePtyLeases(targetId: string, state: SshRemotePtyLease['state']): void {
     const now = Date.now()
     let changed = false
+    const shouldClearBindings = state === 'terminated' || state === 'expired'
+    const leasesToClear: SshRemotePtyLease[] = []
     this.state.sshRemotePtyLeases ??= []
     for (const lease of this.state.sshRemotePtyLeases) {
-      if (lease.targetId !== targetId || lease.state === state) {
+      if (lease.targetId !== targetId) {
         continue
       }
       if (state === 'detached' && lease.state !== 'attached') {
         continue
       }
-      lease.state = state
-      lease.updatedAt = now
-      if (state === 'attached') {
-        lease.lastAttachedAt = now
-      } else if (state === 'detached') {
-        lease.lastDetachedAt = now
+      if (lease.state !== state) {
+        lease.state = state
+        lease.updatedAt = now
+        if (state === 'attached') {
+          lease.lastAttachedAt = now
+        } else if (state === 'detached') {
+          lease.lastDetachedAt = now
+        }
+        changed = true
       }
-      changed = true
+      if (shouldClearBindings) {
+        leasesToClear.push(lease)
+      }
     }
-    if (changed) {
+    const bindingsChanged = shouldClearBindings
+      ? this.clearSshRemotePtyBindingsForLeases(targetId, leasesToClear)
+      : false
+    if (changed || bindingsChanged) {
       this.flush()
     }
   }
@@ -3419,7 +4512,14 @@ export class Store {
     const lease = this.state.sshRemotePtyLeases?.find(
       (entry) => entry.targetId === targetId && entry.ptyId === relayPtyId
     )
-    if (!lease || lease.state === state) {
+    if (!lease) {
+      return
+    }
+    const shouldClearBindings = state === 'terminated' || state === 'expired'
+    if (lease.state === state) {
+      if (shouldClearBindings && this.clearSshRemotePtyBindingsForLeases(targetId, [lease])) {
+        this.flush()
+      }
       return
     }
     const now = Date.now()
@@ -3429,6 +4529,9 @@ export class Store {
       lease.lastAttachedAt = now
     } else if (state === 'detached') {
       lease.lastDetachedAt = now
+    }
+    if (shouldClearBindings) {
+      this.clearSshRemotePtyBindingsForLeases(targetId, [lease])
     }
     this.flush()
   }
@@ -3465,10 +4568,13 @@ export class Store {
     this.clearSshRemotePtyBindingsForLeases(targetId, leases ?? [])
   }
 
-  private clearSshRemotePtyBindingsForLeases(targetId: string, leases: SshRemotePtyLease[]): void {
+  private clearSshRemotePtyBindingsForLeases(
+    targetId: string,
+    leases: SshRemotePtyLease[]
+  ): boolean {
     const session = this.state.workspaceSession
     if (!leases?.length || !session) {
-      return
+      return false
     }
     let changed = false
     for (const [worktreeId, tabs] of Object.entries(session.tabsByWorktree ?? {})) {
@@ -3519,6 +4625,7 @@ export class Store {
     if (changed) {
       this.scheduleSave()
     }
+    return changed
   }
 
   // ── Flush (for shutdown) ───────────────────────────────────────────

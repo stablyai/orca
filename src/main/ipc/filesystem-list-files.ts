@@ -198,21 +198,18 @@ function listFilesWithGit(
       let buf = ''
       let done = false
 
-      const processLine = (line: string): void => {
-        if (line.charCodeAt(line.length - 1) === 13 /* \r */) {
-          line = line.substring(0, line.length - 1)
-        }
-        if (!line) {
+      const processPath = (path: string): void => {
+        if (!path) {
           return
         }
         // Why: git exclude pathspecs prune most hits, but post-filter is
         // still required because pathspec semantics differ subtly from the
         // rg globs and exist as a correctness backstop.
-        if (shouldExcludeQuickOpenRelPath(line, excludePathPrefixes)) {
+        if (shouldExcludeQuickOpenRelPath(path, excludePathPrefixes)) {
           return
         }
-        if (shouldIncludeQuickOpenPath(line)) {
-          files.add(line)
+        if (shouldIncludeQuickOpenPath(path)) {
+          files.add(path)
         }
       }
 
@@ -226,11 +223,11 @@ function listFilesWithGit(
       const handleStdoutData = (chunk: string): void => {
         buf += chunk
         let start = 0
-        let newlineIdx = buf.indexOf('\n', start)
-        while (newlineIdx !== -1) {
-          processLine(buf.substring(start, newlineIdx))
-          start = newlineIdx + 1
-          newlineIdx = buf.indexOf('\n', start)
+        let nulIdx = buf.indexOf('\0', start)
+        while (nulIdx !== -1) {
+          processPath(buf.substring(start, nulIdx))
+          start = nulIdx + 1
+          nulIdx = buf.indexOf('\0', start)
         }
         buf = start < buf.length ? buf.substring(start) : ''
       }
@@ -243,7 +240,7 @@ function listFilesWithGit(
       }
       const handleClose = (): void => {
         if (buf) {
-          processLine(buf)
+          processPath(buf)
         }
         finish()
       }

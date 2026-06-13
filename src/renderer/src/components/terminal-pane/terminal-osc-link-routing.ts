@@ -1,10 +1,13 @@
 import { resolveTerminalFileLinkText } from '@/lib/terminal-links'
-import { openHttpLink } from '@/lib/http-link-routing'
 import { isWindowsAbsolutePathLike } from '../../../../shared/cross-platform-path'
 import type { LinkHandlerDeps } from './terminal-link-handlers'
 import { isTerminalLinkActivation } from './terminal-link-handlers'
 import { resolveTerminalFileUrlTarget } from './terminal-file-url-target'
 import { openDetectedFilePath } from './terminal-file-open-routing'
+import {
+  openTerminalHttpLink,
+  type TerminalLinkRoutingPreferenceRequester
+} from './terminal-url-link-hit-testing'
 
 type TerminalLinkEvent = Pick<MouseEvent, 'metaKey' | 'ctrlKey'> &
   Partial<Pick<MouseEvent, 'shiftKey' | 'preventDefault' | 'stopPropagation'>>
@@ -13,7 +16,9 @@ export function handleOscLink(
   rawText: string,
   event: TerminalLinkEvent | undefined,
   deps: Pick<LinkHandlerDeps, 'worktreeId' | 'worktreePath'> &
-    Partial<Pick<LinkHandlerDeps, 'runtimeEnvironmentId' | 'startupCwd' | 'terminalHomePath'>>
+    Partial<Pick<LinkHandlerDeps, 'runtimeEnvironmentId' | 'startupCwd' | 'terminalHomePath'>> & {
+      requestOpenLinksInAppPreference?: TerminalLinkRoutingPreferenceRequester
+    }
 ): void {
   if (!isTerminalLinkActivation(event)) {
     return
@@ -30,28 +35,45 @@ export function handleOscLink(
   // without holding a button) extends a selection until the next click/Esc.
   event?.preventDefault?.()
 
-  let parsed: URL
-  try {
-    parsed = new URL(rawText)
-  } catch {
+  const openDetectedPathLink = (): boolean => {
     const resolved = resolveTerminalFileLinkText(
       rawText,
       deps.startupCwd || deps.worktreePath,
       deps.terminalHomePath
     )
-    if (resolved) {
-      openDetectedFilePath(resolved.absolutePath, resolved.line, resolved.column, {
-        ...deps,
-        openWithSystemDefault: Boolean(event?.shiftKey)
-      })
+    if (!resolved) {
+      return false
     }
+    openDetectedFilePath(resolved.absolutePath, resolved.line, resolved.column, {
+      ...deps,
+      openWithSystemDefault: Boolean(event?.shiftKey)
+    })
+    return true
+  }
+
+  if (
+    isWindowsAbsolutePathLike(rawText) &&
+    isWindowsAbsolutePathLike(deps.startupCwd || deps.worktreePath) &&
+    openDetectedPathLink()
+  ) {
+    // Why: `new URL("C:\\path\\file.ts")` succeeds with protocol `c:`;
+    // Windows OSC links need file-path routing before generic URL parsing.
+    return
+  }
+
+  let parsed: URL
+  try {
+    parsed = new URL(rawText)
+  } catch {
+    openDetectedPathLink()
     return
   }
 
   if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
-    openHttpLink(parsed.toString(), {
+    openTerminalHttpLink(parsed.toString(), {
       worktreeId: deps.worktreeId,
-      forceSystemBrowser: Boolean(event?.shiftKey)
+      forceSystemBrowser: Boolean(event?.shiftKey),
+      requestOpenLinksInAppPreference: deps.requestOpenLinksInAppPreference
     })
     return
   }

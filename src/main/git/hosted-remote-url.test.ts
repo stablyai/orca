@@ -54,7 +54,7 @@ describe('hosted remote URLs', () => {
 
     expect(
       buildHostedRemoteFileUrl('git@bitbucket.org:team/repo.git', 'src/a.ts', 'feature/x', 7)
-    ).toBe('https://bitbucket.org/team/repo/src/feature%2Fx/src/a.ts#L7')
+    ).toBe('https://bitbucket.org/team/repo/src/feature%2Fx/src/a.ts#a.ts-7')
 
     expect(
       buildHostedRemoteFileUrl(
@@ -64,6 +64,12 @@ describe('hosted remote URLs', () => {
         5
       )
     ).toBe('https://github.com/Org/Repo/blob/feature%2Fx/src/a.ts#L5')
+  })
+
+  it('builds Bitbucket line fragments from the target file name', () => {
+    expect(
+      buildHostedRemoteFileUrl('https://bitbucket.org/team/repo.git', 'src/a file.ts', 'main', 29)
+    ).toBe('https://bitbucket.org/team/repo/src/main/src/a%20file.ts#a%20file.ts-29')
   })
 
   it('rejects unsupported hosts and incomplete repo paths', () => {

@@ -3,6 +3,7 @@ import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { track } from '@/lib/telemetry'
 import { getRepositoryLocalCommandsSectionId } from '@/components/settings/repository-settings-targets'
+import { RepoBadgeMark } from '@/components/repo/RepoBadgeLabel'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import {
   buildImportedHookSettings,
@@ -29,6 +30,7 @@ import {
   SaveLocalSetupAction,
   SetupScriptPromptBody
 } from './SetupScriptPromptCardViews'
+import { translate } from '@/i18n/i18n'
 
 type PromptState = SetupScriptPromptInspection
 
@@ -41,14 +43,13 @@ function SavedInProjectSettingsToast({
 }: SavedInProjectSettingsToastProps): React.JSX.Element {
   return (
     <span>
-      Saved in this{' '}
+      {translate("auto.components.sidebar.SetupScriptPromptCard.a5bb8c5135", "Saved in this")}{' '}
       <button
         type="button"
         className="rounded-sm font-medium underline underline-offset-2 hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
         onClick={onOpenSettings}
       >
-        project&apos;s settings
-      </button>
+        {translate("auto.components.sidebar.SetupScriptPromptCard.d9f2db2738", "project's settings")}</button>
     </span>
   )
 }
@@ -249,7 +250,7 @@ function SetupScriptPromptCard(): React.JSX.Element | null {
             })
           )
           if (mountedRef.current) {
-            toast.error('Failed to save setup script')
+            toast.error(translate("auto.components.sidebar.SetupScriptPromptCard.888b83bf78", "Failed to save setup script"))
           }
           return
         }
@@ -277,7 +278,7 @@ function SetupScriptPromptCard(): React.JSX.Element | null {
             )
             showSavedInProjectSettingsToast({
               onOpenSettings: () => openLocalCommandSettings(importedRepoId),
-              description: 'Orca will run this command each time a new worktree is created.'
+              description: translate("auto.components.sidebar.SetupScriptPromptCard.a49196d538", "Runs when Orca creates a new worktree.")
             })
           }
           return
@@ -293,8 +294,8 @@ function SetupScriptPromptCard(): React.JSX.Element | null {
             onOpenSettings: () => openLocalCommandSettings(importedRepoId),
             description:
               skippedCount > 0
-                ? `${skippedCount} unsupported field${skippedCount === 1 ? '' : 's'} skipped. Saved locally; move it to orca.yaml later to share it.`
-                : 'Move it to orca.yaml later to share it.'
+                ? `${skippedCount} unsupported field${skippedCount === 1 ? '' : 's'} skipped. Saved the setup command.`
+                : 'Saved the setup command.'
           })
         }
       } catch (error) {
@@ -312,7 +313,7 @@ function SetupScriptPromptCard(): React.JSX.Element | null {
         )
         console.warn('[setup-script-prompt] Failed to save setup script:', error)
         if (mountedRef.current) {
-          toast.error('Failed to save setup script')
+          toast.error(translate("auto.components.sidebar.SetupScriptPromptCard.888b83bf78", "Failed to save setup script"))
         }
       } finally {
         if (mountedRef.current) {
@@ -338,7 +339,7 @@ function SetupScriptPromptCard(): React.JSX.Element | null {
         }
       : promptState.candidate
     if (!candidate.setup) {
-      toast.error('Setup script cannot be empty')
+      toast.error(translate("auto.components.sidebar.SetupScriptPromptCard.70715947fb", "Setup script cannot be empty"))
       return
     }
     if (actionPrefix === 'save_detected_setup') {
@@ -380,16 +381,24 @@ function SetupScriptPromptCard(): React.JSX.Element | null {
   const candidateProvenance = candidate ? formatCandidateProvenance(candidate) : null
 
   return (
-    <div className="px-3 pb-2">
-      <div className="rounded-lg border border-sidebar-border bg-sidebar-accent p-3 text-sidebar-accent-foreground shadow-xs">
+    // Why: shrink-0 keeps the card from being squeezed by a long worktree list
+    // in the overflow-hidden sidebar column, which clipped its top edge.
+    <div className="shrink-0 px-3 pb-2">
+      <div className="setup-script-prompt-card rounded-lg border border-worktree-sidebar-border p-3 text-worktree-sidebar-accent-foreground shadow-xs">
         <div className="flex items-center justify-between gap-2">
-          <p className="text-sm font-semibold leading-snug">Add a setup script</p>
+          <p className="text-sm font-semibold leading-snug">{translate("auto.components.sidebar.SetupScriptPromptCard.ff1e819a11", "Add a setup script")}</p>
           <DismissButton onDismiss={handleDismiss} />
         </div>
 
+        {/* Why: name the repo on its own line so the prompt's project is clear in
+            every body variant, not just the default one. */}
+        <p className="mt-0.5 flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+          <RepoBadgeMark color={activeRepo.badgeColor} />
+          <span className="truncate font-medium text-foreground">{activeRepo.displayName}</span>
+        </p>
+
         <p className="mt-1 text-xs leading-snug text-muted-foreground">
           <SetupScriptPromptBody
-            repo={activeRepo}
             isInspectionError={isInspectionError}
             sharedSetupIgnored={sharedSetupIgnored}
             isPackageManagerSuggestion={Boolean(isPackageManagerSuggestion && candidate)}
@@ -417,7 +426,7 @@ function SetupScriptPromptCard(): React.JSX.Element | null {
           />
         ) : candidate ? (
           <SaveLocalSetupAction isSaving={isImporting} onSave={() => void handleImport()} />
-        ) : promptState.status === 'ok' ? (
+        ) : promptState.status === "ok" ? (
           <ConfigureOnlyAction onConfigure={handleConfigure} />
         ) : null}
       </div>

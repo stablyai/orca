@@ -19,6 +19,7 @@ import {
   type WorkspaceCleanupScanResult
 } from '../../../../shared/workspace-cleanup'
 import { detectAgentStatusFromTitle, isExplicitAgentStatusFresh } from '@/lib/agent-status'
+import { translate } from '@/i18n/i18n'
 
 export type WorkspaceCleanupFailure = {
   worktreeId: string
@@ -397,7 +398,10 @@ async function preflightWorkspaceCleanupCandidate(
       failure: {
         worktreeId,
         displayName: worktreeId,
-        message: 'Workspace no longer exists.'
+        message: translate(
+          'auto.store.slices.workspace.cleanup.9d6e531da6',
+          'Workspace no longer exists.'
+        )
       }
     }
   }

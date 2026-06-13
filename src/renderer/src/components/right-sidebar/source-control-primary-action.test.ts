@@ -8,6 +8,7 @@ function inputs(overrides: Partial<PrimaryActionInputs> = {}): PrimaryActionInpu
   return {
     stagedCount: 0,
     hasUnstagedChanges: false,
+    hasStageableChanges: false,
     hasPartiallyStagedChanges: false,
     hasMessage: false,
     hasUnresolvedConflicts: false,
@@ -126,6 +127,22 @@ describe('resolvePrimaryAction', () => {
     })
   })
 
+  it('mirrors an in-flight Force Push on the push primary slot', () => {
+    const result = resolvePrimaryAction(
+      inputs({
+        isRemoteOperationActive: true,
+        upstreamStatus: { hasUpstream: true, ahead: 3, behind: 0 },
+        inFlightRemoteOpKind: 'force_push'
+      })
+    )
+    expect(result).toEqual({
+      kind: 'push',
+      label: 'Force Push',
+      title: 'Force Push in progress…',
+      disabled: true
+    })
+  })
+
   it('blocks commits while unresolved conflicts exist', () => {
     const result = resolvePrimaryAction(
       inputs({ hasUnresolvedConflicts: true, stagedCount: 2, hasMessage: true })
@@ -181,6 +198,22 @@ describe('resolvePrimaryAction', () => {
       label: 'Publish Branch',
       title: 'Publish this branch to origin',
       disabled: false
+    })
+  })
+
+  it('does not offer Publish Branch when HEAD is detached', () => {
+    const result = resolvePrimaryAction(
+      inputs({
+        upstreamStatus: { hasUpstream: false, ahead: 0, behind: 0 },
+        branchCommitsAhead: 4,
+        hasCurrentBranch: false
+      })
+    )
+    expect(result).toEqual({
+      kind: 'commit',
+      label: 'Commit',
+      title: 'Check out a branch before publishing commits.',
+      disabled: true
     })
   })
 
@@ -287,6 +320,7 @@ describe('resolvePrimaryAction', () => {
     const result = resolvePrimaryAction(
       inputs({
         hasUnstagedChanges: true,
+        hasStageableChanges: true,
         upstreamStatus: { hasUpstream: true, ahead: 0, behind: 3 }
       })
     )
@@ -302,6 +336,7 @@ describe('resolvePrimaryAction', () => {
     const result = resolvePrimaryAction(
       inputs({
         hasUnstagedChanges: true,
+        hasStageableChanges: true,
         upstreamStatus: { hasUpstream: true, ahead: 2, behind: 0 }
       })
     )
@@ -314,6 +349,7 @@ describe('resolvePrimaryAction', () => {
     const result = resolvePrimaryAction(
       inputs({
         hasUnstagedChanges: true,
+        hasStageableChanges: true,
         upstreamStatus: { hasUpstream: false, ahead: 0, behind: 0 }
       })
     )
@@ -322,7 +358,7 @@ describe('resolvePrimaryAction', () => {
 
   it('returns Stage All on a dirty tree while upstream status is still loading', () => {
     const result = resolvePrimaryAction(
-      inputs({ hasUnstagedChanges: true, upstreamStatus: undefined })
+      inputs({ hasUnstagedChanges: true, hasStageableChanges: true, upstreamStatus: undefined })
     )
     expect(result.kind).toBe('stage')
     expect(result.disabled).toBe(false)
@@ -333,6 +369,7 @@ describe('resolvePrimaryAction', () => {
       inputs({
         stagedCount: 1,
         hasUnstagedChanges: true,
+        hasStageableChanges: true,
         hasPartiallyStagedChanges: true,
         hasMessage: true,
         upstreamStatus: { hasUpstream: true, ahead: 0, behind: 0 }
@@ -357,6 +394,22 @@ describe('resolvePrimaryAction', () => {
     expect(result.disabled).toBe(false)
   })
 
+  it('does not return Stage All when dirty rows cannot be staged from the parent repo', () => {
+    const result = resolvePrimaryAction(
+      inputs({
+        hasUnstagedChanges: true,
+        hasStageableChanges: false,
+        upstreamStatus: upstreamInSync
+      })
+    )
+    expect(result).toEqual({
+      kind: 'commit',
+      label: 'Commit',
+      title: 'Stage at least one file to commit',
+      disabled: true
+    })
+  })
+
   it('still disables Commit (needs message) when staged+dirty without a message', () => {
     const result = resolvePrimaryAction(
       inputs({ stagedCount: 1, hasUnstagedChanges: true, hasMessage: false })
@@ -368,7 +421,11 @@ describe('resolvePrimaryAction', () => {
 
   it('returns Stage All when unstaged changes exist on an in-sync branch', () => {
     const result = resolvePrimaryAction(
-      inputs({ hasUnstagedChanges: true, upstreamStatus: upstreamInSync })
+      inputs({
+        hasUnstagedChanges: true,
+        hasStageableChanges: true,
+        upstreamStatus: upstreamInSync
+      })
     )
     expect(result).toEqual({
       kind: 'stage',
@@ -405,6 +462,27 @@ describe('resolvePrimaryAction', () => {
       kind: 'create_pr',
       label: 'Create PR',
       title: 'Create a pull request for this branch',
+      disabled: false
+    })
+  })
+
+  it('returns Create MR when a clean tracked GitLab branch is eligible for review creation', () => {
+    const result = resolvePrimaryAction(
+      inputs({
+        upstreamStatus: upstreamInSync,
+        hostedReviewCreation: {
+          provider: 'gitlab',
+          review: null,
+          canCreate: true,
+          blockedReason: null,
+          nextAction: null
+        }
+      })
+    )
+    expect(result).toEqual({
+      kind: 'create_pr',
+      label: 'Create MR',
+      title: 'Create a merge request for this branch',
       disabled: false
     })
   })

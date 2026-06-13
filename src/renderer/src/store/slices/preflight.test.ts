@@ -6,6 +6,17 @@ import type { AppState } from '../types'
 import { createPreflightSlice } from './preflight'
 
 const preflightCheck = vi.fn()
+const callRuntimeRpc = vi.fn()
+
+vi.mock('@/runtime/runtime-rpc-client', () => ({
+  callRuntimeRpc: (...args: unknown[]) => callRuntimeRpc(...args),
+  getActiveRuntimeTarget: (
+    settings?: { activeRuntimeEnvironmentId?: string | null } | null
+  ): { kind: 'local' } | { kind: 'environment'; environmentId: string } => {
+    const environmentId = settings?.activeRuntimeEnvironmentId?.trim()
+    return environmentId ? { kind: 'environment', environmentId } : { kind: 'local' }
+  }
+}))
 
 globalThis.window = {
   api: {
@@ -31,6 +42,11 @@ function createTestStore() {
         ...createPreflightSlice(...a)
       }) as AppState
   )
+}
+
+function resetPreflightMocks(): void {
+  preflightCheck.mockReset()
+  callRuntimeRpc.mockReset()
 }
 
 function makeStatus(glabInstalled: boolean): PreflightStatus {
@@ -86,7 +102,7 @@ function deferred<T>() {
 
 describe('createPreflightSlice', () => {
   it('dedupes concurrent non-forced checks', async () => {
-    preflightCheck.mockReset()
+    resetPreflightMocks()
     const pending = deferred<PreflightStatus>()
     preflightCheck.mockReturnValueOnce(pending.promise)
     const store = createTestStore()
@@ -104,7 +120,7 @@ describe('createPreflightSlice', () => {
   })
 
   it('lets forced checks bypass non-forced dedupe and win stale races', async () => {
-    preflightCheck.mockReset()
+    resetPreflightMocks()
     const stale = deferred<PreflightStatus>()
     const fresh = deferred<PreflightStatus>()
     preflightCheck.mockReturnValueOnce(stale.promise).mockReturnValueOnce(fresh.promise)
@@ -125,7 +141,7 @@ describe('createPreflightSlice', () => {
   })
 
   it('dedupes lazy checks onto an in-flight forced refresh', async () => {
-    preflightCheck.mockReset()
+    resetPreflightMocks()
     const fresh = deferred<PreflightStatus>()
     preflightCheck.mockReturnValueOnce(fresh.promise)
     const store = createTestStore()
@@ -141,7 +157,7 @@ describe('createPreflightSlice', () => {
   })
 
   it('checks integrations inside the active WSL worktree distro', async () => {
-    preflightCheck.mockReset()
+    resetPreflightMocks()
     preflightCheck.mockResolvedValueOnce(makeStatus(true))
     const store = createTestStore()
     store.setState({
@@ -170,7 +186,7 @@ describe('createPreflightSlice', () => {
   })
 
   it('keeps preflight request dedupe scoped by WSL distro context', async () => {
-    preflightCheck.mockReset()
+    resetPreflightMocks()
     const ubuntu = deferred<PreflightStatus>()
     const debian = deferred<PreflightStatus>()
     preflightCheck.mockReturnValueOnce(ubuntu.promise).mockReturnValueOnce(debian.promise)
@@ -196,8 +212,46 @@ describe('createPreflightSlice', () => {
     expect(store.getState().preflightStatus?.glab?.installed).toBe(true)
   })
 
+  it('checks integrations through the active runtime environment', async () => {
+    resetPreflightMocks()
+    const firstRuntime = deferred<PreflightStatus>()
+    const secondRuntime = deferred<PreflightStatus>()
+    callRuntimeRpc
+      .mockReturnValueOnce(firstRuntime.promise)
+      .mockReturnValueOnce(secondRuntime.promise)
+    const store = createTestStore()
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'runtime-1' }
+    } as Partial<AppState>)
+
+    const first = store.getState().refreshPreflightStatus()
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'runtime-2' }
+    } as Partial<AppState>)
+    const second = store.getState().refreshPreflightStatus()
+
+    expect(preflightCheck).not.toHaveBeenCalled()
+    expect(callRuntimeRpc).toHaveBeenNthCalledWith(
+      1,
+      { kind: 'environment', environmentId: 'runtime-1' },
+      'preflight.check',
+      {}
+    )
+    expect(callRuntimeRpc).toHaveBeenNthCalledWith(
+      2,
+      { kind: 'environment', environmentId: 'runtime-2' },
+      'preflight.check',
+      {}
+    )
+    firstRuntime.resolve(makeStatus(false))
+    secondRuntime.resolve(makeStatus(true))
+    await Promise.all([first, second])
+    expect(store.getState().preflightStatusContextKey).toBe('runtime:runtime-2#0')
+    expect(store.getState().preflightStatus?.glab?.installed).toBe(true)
+  })
+
   it('clears checked status immediately when refreshing a different local context', async () => {
-    preflightCheck.mockReset()
+    resetPreflightMocks()
     const host = deferred<PreflightStatus>()
     const wsl = deferred<PreflightStatus>()
     preflightCheck.mockReturnValueOnce(host.promise).mockReturnValueOnce(wsl.promise)
