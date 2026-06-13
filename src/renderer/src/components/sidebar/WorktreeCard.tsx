@@ -61,6 +61,7 @@ import {
 } from './workspace-delete-quick-action'
 import { DetachedHeadBadge } from '@/components/DetachedHeadBadge'
 import { getWorktreeGitIdentityDisplay } from '@/lib/worktree-git-identity-display'
+import { getFlushWorktreeCardPaddingLeft } from './worktree-list-indentation'
 import { translate } from '@/i18n/i18n'
 import { folderWorkspaceKey, parseWorkspaceKey } from '../../../../shared/workspace-scope'
 
@@ -793,8 +794,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
   // aligned with the pre-inset layout and the repo header hierarchy.
   const cardStyle = flushSurface
     ? {
-        paddingLeft:
-          contentIndent > 0 ? `max(0.125rem, calc(${contentIndent}px - 0.625rem))` : '0.125rem'
+        paddingLeft: getFlushWorktreeCardPaddingLeft(contentIndent)
       }
     : contentIndent > 0
       ? { paddingLeft: `calc(0.125rem + ${contentIndent}px)` }

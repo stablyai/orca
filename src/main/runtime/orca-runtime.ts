@@ -97,6 +97,7 @@ import { LINEAR_WRITE_BODY_CAP } from '../../shared/linear-agent-access'
 import type { FeatureInteractionId } from '../../shared/feature-interactions'
 import type { TerminalPaneSplitSource } from '../../shared/feature-education-telemetry'
 import { FOLDER_WORKSPACE_INSTANCE_SEPARATOR, splitWorktreeId } from '../../shared/worktree-id'
+import { parsePtySessionId } from '../../shared/pty-session-id-format'
 import { clampLinearIssueListLimit } from '../../shared/linear-issue-read-limits'
 import { isFolderRepo } from '../../shared/repo-kind'
 import { DEFAULT_WORKSPACE_STATUS_ID } from '../../shared/workspace-statuses'
@@ -14487,7 +14488,12 @@ export class OrcaRuntimeService {
   // handler, works even for daemon terminals), and (2) the PTY foreground process
   // + output quiescence. The poll self-cancels when the primary OSC path fires.
   private startTuiIdleFallbackPoll(waiter: TerminalWaiter, leaf: RuntimeLeafRecord): void {
+    let foregroundPollInFlight = false
     waiter.pollInterval = setInterval(async () => {
+      if (!waiter.pollInterval) {
+        return
+      }
+      let startedForegroundPoll = false
       try {
         if (leaf.lastAgentStatus === 'idle') {
           if (waiter.pollInterval) {
@@ -14538,7 +14544,14 @@ export class OrcaRuntimeService {
         }
         // Foreground process fallback: if the daemon/local provider can report
         // the process and it's a non-shell with quiet output, treat as idle.
-        if (leaf.lastAgentStatus === null && leaf.ptyId && this.ptyController) {
+        if (
+          leaf.lastAgentStatus === null &&
+          leaf.ptyId &&
+          this.ptyController &&
+          !foregroundPollInFlight
+        ) {
+          foregroundPollInFlight = true
+          startedForegroundPoll = true
           const fg = await this.ptyController.getForegroundProcess(leaf.ptyId)
           if (fg && !isShellProcess(fg)) {
             const quietMs = leaf.lastOutputAt ? Date.now() - leaf.lastOutputAt : 0
@@ -14553,12 +14566,21 @@ export class OrcaRuntimeService {
         }
       } catch {
         // Swallow transient PTY inspection errors and keep polling.
+      } finally {
+        if (startedForegroundPoll) {
+          foregroundPollInFlight = false
+        }
       }
     }, TUI_IDLE_POLL_INTERVAL_MS)
   }
 
   private startPtyTuiIdleFallbackPoll(waiter: TerminalWaiter, pty: RuntimePtyWorktreeRecord): void {
+    let foregroundPollInFlight = false
     waiter.pollInterval = setInterval(async () => {
+      if (!waiter.pollInterval) {
+        return
+      }
+      let startedForegroundPoll = false
       try {
         if (pty.lastAgentStatus === 'idle') {
           if (waiter.pollInterval) {
@@ -14594,7 +14616,9 @@ export class OrcaRuntimeService {
           this.resolveWaiter(waiter, buildPtyTerminalWaitResult(waiter.handle, 'tui-idle', pty))
           return
         }
-        if (pty.lastAgentStatus === null && this.ptyController) {
+        if (pty.lastAgentStatus === null && this.ptyController && !foregroundPollInFlight) {
+          foregroundPollInFlight = true
+          startedForegroundPoll = true
           const fg = await this.ptyController.getForegroundProcess(pty.ptyId)
           if (fg && !isShellProcess(fg)) {
             const quietMs = pty.lastOutputAt ? Date.now() - pty.lastOutputAt : 0
@@ -14609,6 +14633,10 @@ export class OrcaRuntimeService {
         }
       } catch {
         // Swallow transient PTY inspection errors and keep polling.
+      } finally {
+        if (startedForegroundPoll) {
+          foregroundPollInFlight = false
+        }
       }
     }, TUI_IDLE_POLL_INTERVAL_MS)
   }
@@ -16549,18 +16577,13 @@ function withTimeoutResult<T>(
   promise: Promise<T>,
   timeoutMs: number
 ): Promise<{ ok: true; value: T } | { ok: false }> {
-  let timeout: ReturnType<typeof setTimeout> | null = null
-  return new Promise<{ ok: true; value: T } | { ok: false }>((resolve) => {
-    timeout = setTimeout(() => resolve({ ok: false }), timeoutMs)
-    promise.then(
-      (value) => resolve({ ok: true, value }),
-      () => resolve({ ok: false })
-    )
-  }).finally(() => {
-    if (timeout) {
-      clearTimeout(timeout)
+  return withTimeout(
+    promise.then((value) => ({ ok: true, value }) as const),
+    timeoutMs,
+    {
+      ok: false
     }
-  })
+  )
 }
 
 export function appendRecentPtyOutput(previous: string | undefined, data: string): string {
@@ -17168,13 +17191,7 @@ function buildTerminalWaitResult(
   condition: RuntimeTerminalWaitCondition,
   leaf: RuntimeLeafRecord
 ): RuntimeTerminalWait {
-  return {
-    handle,
-    condition,
-    satisfied: true,
-    status: getTerminalState(leaf),
-    exitCode: leaf.lastExitCode
-  }
+  return buildTerminalWait(handle, condition, getTerminalState(leaf), leaf.lastExitCode)
 }
 
 function buildTerminalWaitBlockedResult(
@@ -17183,14 +17200,13 @@ function buildTerminalWaitBlockedResult(
   leaf: RuntimeLeafRecord,
   blockedReason: RuntimeTerminalWaitBlockedReason
 ): RuntimeTerminalWait {
-  return {
+  return buildTerminalWait(
     handle,
     condition,
-    satisfied: false,
-    status: getTerminalState(leaf),
-    exitCode: leaf.lastExitCode,
+    getTerminalState(leaf),
+    leaf.lastExitCode,
     blockedReason
-  }
+  )
 }
 
 function buildPtyTerminalWaitResult(
@@ -17198,13 +17214,7 @@ function buildPtyTerminalWaitResult(
   condition: RuntimeTerminalWaitCondition,
   pty: RuntimePtyWorktreeRecord
 ): RuntimeTerminalWait {
-  return {
-    handle,
-    condition,
-    satisfied: true,
-    status: pty.connected ? 'running' : pty.lastExitCode !== null ? 'exited' : 'unknown',
-    exitCode: pty.lastExitCode
-  }
+  return buildTerminalWait(handle, condition, getPtyTerminalState(pty), pty.lastExitCode)
 }
 
 function buildPtyTerminalWaitBlockedResult(
@@ -17213,14 +17223,34 @@ function buildPtyTerminalWaitBlockedResult(
   pty: RuntimePtyWorktreeRecord,
   blockedReason: RuntimeTerminalWaitBlockedReason
 ): RuntimeTerminalWait {
+  return buildTerminalWait(
+    handle,
+    condition,
+    getPtyTerminalState(pty),
+    pty.lastExitCode,
+    blockedReason
+  )
+}
+
+function buildTerminalWait(
+  handle: string,
+  condition: RuntimeTerminalWaitCondition,
+  status: RuntimeTerminalState,
+  exitCode: number | null,
+  blockedReason?: RuntimeTerminalWaitBlockedReason
+): RuntimeTerminalWait {
   return {
     handle,
     condition,
-    satisfied: false,
-    status: pty.connected ? 'running' : pty.lastExitCode !== null ? 'exited' : 'unknown',
-    exitCode: pty.lastExitCode,
-    blockedReason
+    satisfied: blockedReason === undefined,
+    status,
+    exitCode,
+    ...(blockedReason ? { blockedReason } : {})
   }
+}
+
+function getPtyTerminalState(pty: RuntimePtyWorktreeRecord): RuntimeTerminalState {
+  return pty.connected ? 'running' : pty.lastExitCode !== null ? 'exited' : 'unknown'
 }
 
 function branchSelectorMatches(branch: string, selector: string): boolean {
@@ -17236,12 +17266,7 @@ function runtimePathsEqual(left: string, right: string): boolean {
 }
 
 function inferWorktreeIdFromPtyId(ptyId: string): string | null {
-  const separatorIndex = ptyId.lastIndexOf('@@')
-  if (separatorIndex <= 0) {
-    return null
-  }
-  const worktreeId = ptyId.slice(0, separatorIndex)
-  return parseRuntimeWorktreeId(worktreeId) ? worktreeId : null
+  return parsePtySessionId(ptyId).worktreeId
 }
 
 function parseRuntimeWorktreeId(
@@ -17286,13 +17311,7 @@ function getLeafWorktreeStatus(
   ]
   const latestTitle = getLatestAgentCandidateTitle(...titleCandidates)
   const detected = latestTitle ? detectAgentStatusFromTitle(latestTitle) : leaf.lastAgentStatus
-  if (detected === 'permission') {
-    return 'permission'
-  }
-  if (detected === 'working') {
-    return 'working'
-  }
-  return leaf.ptyId ? 'active' : 'inactive'
+  return getDetectedWorktreeStatus(detected, leaf.ptyId !== null)
 }
 
 function classifyLatestAgentTitle(
@@ -17344,7 +17363,13 @@ function getLatestAgentCandidateTitle(
 }
 
 function getSavedTabWorktreeStatus(title: string, hasPty: boolean): RuntimeWorktreeStatus {
-  const detected = detectAgentStatusFromTitle(title)
+  return getDetectedWorktreeStatus(detectAgentStatusFromTitle(title), hasPty)
+}
+
+function getDetectedWorktreeStatus(
+  detected: AgentStatus | null,
+  hasPty: boolean
+): RuntimeWorktreeStatus {
   if (detected === 'permission') {
     return 'permission'
   }

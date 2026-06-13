@@ -1671,7 +1671,9 @@
               "62703b1dc4": "为此PR启用了 GitHub 自动合并",
               "48d75ae118": "禁用自动合并",
               "a5b66afb58": "检查已通过",
-              "fbd4f57f0a": "检查已通过。合并资格将在合并前再次验证。"
+              "fbd4f57f0a": "检查已通过。合并资格将在合并前再次验证。",
+              "4ab19a62ef": "启用自动合并",
+              "8f6cb3772f": "满足要求后自动合并此PR"
             }
           }
         },
@@ -3959,6 +3961,12 @@
           "terminalTitle": "安装 Linear agent 技能",
           "terminalAria": "Linear agent 技能安装 terminal",
           "install": "安装 CLI 和技能",
+          "successTitle": "Linear 议题访问已就绪",
+          "successDescription": "Agent 现在可以从此工作区读取和更新已链接的 Linear 议题。",
+          "successDescriptionWsl": "WSL Agent 现在可以从此工作区使用已链接的 Linear 议题。",
+          "successDescriptionRemote": "主机 Agent 现在可以使用已链接的 Linear 议题。远程 Agent 环境可能仍需要单独设置。",
+          "successStatus": "Linear 议题访问已就绪",
+          "done": "完成",
           "wslCopy": "为已链接 Linear 工作的 WSL agent 交接安装此项。",
           "wslLabel": "WSL 默认值"
         },

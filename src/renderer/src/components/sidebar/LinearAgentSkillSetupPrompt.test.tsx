@@ -65,6 +65,14 @@ vi.mock('../settings/AgentSkillSetupPanel', () => ({
         <button type="button" onClick={() => void (props.onBeforeOpenTerminal as () => void)()}>
           Mock install
         </button>
+        <button
+          type="button"
+          disabled={Boolean(props.loading)}
+          data-loading={String(Boolean(props.loading))}
+          onClick={() => void (props.onRecheck as () => void | Promise<void>)()}
+        >
+          Re-check
+        </button>
       </section>
     )
   }
@@ -104,12 +112,47 @@ async function renderPrompt(
   return container
 }
 
+async function updatePrompt(
+  props: ComponentProps<typeof LinearAgentSkillSetupPrompt>
+): Promise<void> {
+  await act(async () => {
+    root?.render(<LinearAgentSkillSetupPrompt {...props} />)
+  })
+  await act(async () => {})
+}
+
+function findBodyButton(label: string): HTMLButtonElement | undefined {
+  return Array.from(document.body.querySelectorAll('button')).find(
+    (button) => button.textContent === label
+  )
+}
+
+async function settleRender(): Promise<void> {
+  await act(async () => {})
+  await act(async () => {})
+}
+
+async function showSuccessfulModalRecheck(): Promise<void> {
+  await renderPrompt({ linked: true, remote: false, surface: 'modal' })
+
+  mocks.getCliStatus.mockResolvedValue(cliStatus({}))
+  mocks.skillState.refresh.mockImplementationOnce(async () => {
+    mocks.skillState.installed = true
+  })
+
+  await act(async () => {
+    findBodyButton('Re-check')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+  })
+  await settleRender()
+}
+
 describe('LinearAgentSkillSetupPrompt', () => {
   beforeEach(() => {
     mocks.skillState.installed = false
     mocks.skillState.loading = false
     mocks.skillState.error = null
-    mocks.skillState.refresh.mockClear()
+    mocks.skillState.refresh.mockReset()
+    mocks.skillState.refresh.mockImplementation(async () => {})
     mocks.useInstalledAgentSkill.mockReset()
     mocks.useInstalledAgentSkill.mockReturnValue(mocks.skillState)
     mocks.getCliStatus.mockReset()
@@ -378,6 +421,380 @@ describe('LinearAgentSkillSetupPrompt', () => {
     expect(window.localStorage.getItem(HOST_DISMISS_STORAGE_KEY)).toBeNull()
     expect(document.body.textContent).not.toContain(
       'Enable agents to read and edit the attached Linear ticket.'
+    )
+  })
+
+  it('keeps the modal open with success copy after a modal Re-check succeeds', async () => {
+    await showSuccessfulModalRecheck()
+
+    expect(document.body.textContent).toContain('Linear ticket access is ready')
+    expect(document.body.textContent).toContain(
+      'Agents can now read and update linked Linear tickets from this workspace.'
+    )
+    expect(document.body.textContent).toContain('Linear ticket access ready')
+    expect(document.body.textContent).not.toContain('Mock install')
+    expect(document.body.textContent).not.toContain("Don't show again")
+    expect(document.body.textContent).not.toContain('Not now')
+  })
+
+  it('closes success with Done without permanent dismissal or session snooze', async () => {
+    await showSuccessfulModalRecheck()
+
+    await act(async () => {
+      findBodyButton('Done')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    expect(window.localStorage.getItem(HOST_DISMISS_STORAGE_KEY)).toBeNull()
+    expect(document.body.textContent).not.toContain('Linear ticket access is ready')
+
+    await act(async () => {
+      root?.unmount()
+    })
+    root = null
+    container?.remove()
+    container = null
+
+    mocks.getCliStatus.mockResolvedValue(
+      cliStatus({ state: 'not_installed', pathConfigured: false })
+    )
+    mocks.skillState.installed = false
+
+    await renderPrompt({ linked: true, remote: false, surface: 'modal' })
+    expect(document.body.textContent).toContain(
+      'Enable agents to read and edit the attached Linear ticket.'
+    )
+  })
+
+  it('closes success with the dialog close button without permanent dismissal or session snooze', async () => {
+    await showSuccessfulModalRecheck()
+
+    await act(async () => {
+      findBodyButton('Close')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    expect(window.localStorage.getItem(HOST_DISMISS_STORAGE_KEY)).toBeNull()
+    expect(document.body.textContent).not.toContain('Linear ticket access is ready')
+
+    await act(async () => {
+      root?.unmount()
+    })
+    root = null
+    container?.remove()
+    container = null
+
+    mocks.getCliStatus.mockResolvedValue(
+      cliStatus({ state: 'not_installed', pathConfigured: false })
+    )
+    mocks.skillState.installed = false
+
+    await renderPrompt({ linked: true, remote: false, surface: 'modal' })
+    expect(document.body.textContent).toContain(
+      'Enable agents to read and edit the attached Linear ticket.'
+    )
+  })
+
+  it('closes success with Escape without permanent dismissal or session snooze', async () => {
+    await showSuccessfulModalRecheck()
+
+    await act(async () => {
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    })
+    await settleRender()
+
+    expect(window.localStorage.getItem(HOST_DISMISS_STORAGE_KEY)).toBeNull()
+    expect(document.body.textContent).not.toContain('Linear ticket access is ready')
+  })
+
+  it('closes success with outside click without permanent dismissal or session snooze', async () => {
+    await showSuccessfulModalRecheck()
+
+    const overlay = document.body.querySelector('[data-slot="dialog-overlay"]')
+    await act(async () => {
+      overlay?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }))
+      overlay?.dispatchEvent(new PointerEvent('pointerup', { bubbles: true }))
+      overlay?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    await settleRender()
+
+    expect(window.localStorage.getItem(HOST_DISMISS_STORAGE_KEY)).toBeNull()
+    expect(document.body.textContent).not.toContain('Linear ticket access is ready')
+  })
+
+  it('still removes the inline prompt after an inline Re-check succeeds', async () => {
+    const rendered = await renderPrompt({ linked: true, remote: false })
+
+    mocks.getCliStatus.mockResolvedValue(cliStatus({}))
+    mocks.skillState.refresh.mockImplementationOnce(async () => {
+      mocks.skillState.installed = true
+    })
+
+    const recheckButton = Array.from(rendered.querySelectorAll('button')).find(
+      (button) => button.textContent === 'Re-check'
+    )
+    await act(async () => {
+      recheckButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    await settleRender()
+
+    expect(rendered.textContent).not.toContain('Set up Linear agent skill')
+  })
+
+  it('keeps the missing setup modal visible after a partial Re-check', async () => {
+    await renderPrompt({ linked: true, remote: false, surface: 'modal' })
+
+    mocks.getCliStatus.mockResolvedValue(cliStatus({}))
+
+    await act(async () => {
+      findBodyButton('Re-check')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    await settleRender()
+
+    expect(document.body.textContent).toContain(
+      'Enable agents to read and edit the attached Linear ticket.'
+    )
+    expect(document.body.textContent).toContain('Linear agent skill is missing.')
+    expect(document.body.textContent).not.toContain('Linear ticket access is ready')
+  })
+
+  it('keeps the modal mounted and the Re-check action loading during a slow modal check', async () => {
+    await renderPrompt({ linked: true, remote: false, surface: 'modal' })
+
+    let resolveCliStatus: (status: CliInstallStatus) => void = () => {}
+    let resolveSkillRefresh: () => void = () => {}
+    mocks.getCliStatus.mockReturnValue(
+      new Promise<CliInstallStatus>((resolve) => {
+        resolveCliStatus = resolve
+      })
+    )
+    mocks.skillState.refresh.mockReturnValue(
+      new Promise<void>((resolve) => {
+        resolveSkillRefresh = resolve
+      })
+    )
+
+    await act(async () => {
+      findBodyButton('Re-check')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    expect(document.body.textContent).toContain(
+      'Enable agents to read and edit the attached Linear ticket.'
+    )
+    expect(mocks.panelProps.at(-1)).toEqual(expect.objectContaining({ loading: true }))
+
+    resolveCliStatus(cliStatus({}))
+    mocks.skillState.installed = true
+    resolveSkillRefresh()
+    await settleRender()
+  })
+
+  it('ignores stale CLI success after the runtime context changes during Re-check', async () => {
+    await renderPrompt({
+      linked: true,
+      remote: false,
+      surface: 'modal',
+      currentPlatform: 'win32',
+      settings: {
+        localAgentRuntime: 'wsl',
+        localAgentWslDistro: 'Fedora',
+        terminalWindowsShell: 'wsl.exe',
+        activeRuntimeEnvironmentId: null
+      }
+    })
+
+    let resolveWslStatus: (status: CliInstallStatus) => void = () => {}
+    mocks.getWslCliStatus.mockReturnValueOnce(
+      new Promise<CliInstallStatus>((resolve) => {
+        resolveWslStatus = resolve
+      })
+    )
+    mocks.skillState.refresh.mockReturnValueOnce(Promise.resolve())
+
+    await act(async () => {
+      findBodyButton('Re-check')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    mocks.getCliStatus.mockResolvedValue(
+      cliStatus({ state: 'not_installed', pathConfigured: false })
+    )
+    mocks.skillState.installed = true
+    await updatePrompt({
+      linked: true,
+      remote: false,
+      surface: 'modal',
+      currentPlatform: 'win32',
+      settings: {
+        localAgentRuntime: 'host',
+        terminalWindowsShell: 'powershell.exe',
+        activeRuntimeEnvironmentId: null
+      }
+    })
+
+    resolveWslStatus(cliStatus({}))
+    await settleRender()
+
+    expect(document.body.textContent).toContain(
+      'Enable agents to read and edit the attached Linear ticket.'
+    )
+    expect(document.body.textContent).toContain('Orca CLI is missing.')
+    expect(document.body.textContent).not.toContain('Linear ticket access is ready')
+  })
+
+  it('ignores stale prerequisite CLI status callbacks after the runtime context changes', async () => {
+    let reportHostCliStatus: ((status: CliInstallStatus) => void) | null = null
+    mocks.ensureCli.mockImplementationOnce(
+      async (options?: { onStatusChange?: (status: CliInstallStatus) => void }) => {
+        reportHostCliStatus = options?.onStatusChange ?? null
+        return null
+      }
+    )
+    await renderPrompt({ linked: true, remote: false, surface: 'modal' })
+
+    await act(async () => {
+      findBodyButton('Mock install')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    mocks.getWslCliStatus.mockResolvedValue(
+      cliStatus({ state: 'not_installed', pathConfigured: false })
+    )
+    mocks.skillState.installed = true
+    await updatePrompt({
+      linked: true,
+      remote: false,
+      surface: 'modal',
+      currentPlatform: 'win32',
+      settings: {
+        localAgentRuntime: 'wsl',
+        localAgentWslDistro: 'Fedora',
+        terminalWindowsShell: 'wsl.exe',
+        activeRuntimeEnvironmentId: null
+      }
+    })
+
+    await act(async () => {
+      reportHostCliStatus?.(cliStatus({}))
+    })
+    await settleRender()
+
+    expect(document.body.textContent).toContain(
+      'Enable agents to read and edit the attached Linear ticket.'
+    )
+    expect(document.body.textContent).toContain('Orca CLI is missing.')
+    expect(document.body.textContent).not.toContain('Linear ticket access is ready')
+  })
+
+  it('accepts same-context prerequisite CLI status callbacks after a newer Re-check', async () => {
+    let reportHostCliStatus: ((status: CliInstallStatus) => void) | null = null
+    let resolveEnsureCli: () => void = () => {}
+    mocks.ensureCli.mockImplementationOnce(
+      async (options?: { onStatusChange?: (status: CliInstallStatus) => void }) => {
+        reportHostCliStatus = options?.onStatusChange ?? null
+        await new Promise<void>((resolve) => {
+          resolveEnsureCli = resolve
+        })
+        return null
+      }
+    )
+    await renderPrompt({ linked: true, remote: false, surface: 'modal' })
+
+    await act(async () => {
+      findBodyButton('Mock install')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    mocks.getCliStatus.mockResolvedValue(
+      cliStatus({ state: 'not_installed', pathConfigured: false })
+    )
+    await act(async () => {
+      findBodyButton('Re-check')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    await settleRender()
+
+    await act(async () => {
+      reportHostCliStatus?.(cliStatus({}))
+      resolveEnsureCli()
+    })
+    await settleRender()
+
+    expect(document.body.textContent).toContain(
+      'Enable agents to read and edit the attached Linear ticket.'
+    )
+    expect(document.body.textContent).toContain('Linear agent skill is missing.')
+    expect(document.body.textContent).not.toContain('Orca CLI is missing.')
+  })
+
+  it('ignores older same-context CLI refreshes that finish after a newer Re-check', async () => {
+    const rendered = await renderPrompt({ linked: true, remote: false })
+    const recheckButton = Array.from(rendered.querySelectorAll('button')).find(
+      (button) => button.textContent === 'Re-check'
+    )
+    let resolveOlderCliStatus: (status: CliInstallStatus) => void = () => {}
+    mocks.getCliStatus.mockReturnValueOnce(
+      new Promise<CliInstallStatus>((resolve) => {
+        resolveOlderCliStatus = resolve
+      })
+    )
+    mocks.getCliStatus.mockResolvedValue(cliStatus({}))
+    mocks.skillState.refresh.mockImplementation(async () => {
+      mocks.skillState.installed = true
+    })
+
+    await act(async () => {
+      recheckButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      recheckButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    await settleRender()
+
+    expect(rendered.textContent).not.toContain('Set up Linear agent skill')
+
+    resolveOlderCliStatus(cliStatus({ state: 'not_installed', pathConfigured: false }))
+    await settleRender()
+
+    expect(rendered.textContent).not.toContain('Set up Linear agent skill')
+  })
+
+  it('uses WSL-specific success copy for a selected WSL runtime', async () => {
+    await renderPrompt({
+      linked: true,
+      remote: false,
+      surface: 'modal',
+      currentPlatform: 'win32',
+      settings: {
+        localAgentRuntime: 'wsl',
+        localAgentWslDistro: 'Fedora',
+        terminalWindowsShell: 'wsl.exe',
+        activeRuntimeEnvironmentId: null
+      }
+    })
+
+    mocks.getWslCliStatus.mockResolvedValue(cliStatus({}))
+    mocks.skillState.refresh.mockImplementationOnce(async () => {
+      mocks.skillState.installed = true
+    })
+
+    await act(async () => {
+      findBodyButton('Re-check')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    await settleRender()
+
+    expect(document.body.textContent).toContain(
+      'WSL agents can now use linked Linear tickets from this workspace.'
+    )
+  })
+
+  it('uses remote-safe success copy for remote workspaces', async () => {
+    await renderPrompt({ linked: true, remote: true, surface: 'modal' })
+
+    mocks.getCliStatus.mockResolvedValue(cliStatus({}))
+    mocks.skillState.refresh.mockImplementationOnce(async () => {
+      mocks.skillState.installed = true
+    })
+
+    await act(async () => {
+      findBodyButton('Re-check')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    await settleRender()
+
+    expect(document.body.textContent).toContain(
+      'Host agents can now use linked Linear tickets. Remote agent environments may still need their own setup.'
     )
   })
 

@@ -7,6 +7,14 @@ import {
 } from './right-sidebar-primary-action-layout'
 
 describe('right sidebar primary action layout classes', () => {
+  it('fills the sidebar row while stretching wrapped and direct primary buttons', () => {
+    expect(RIGHT_SIDEBAR_SPLIT_ACTION_ROW_CLASS).toContain('flex')
+    expect(RIGHT_SIDEBAR_SPLIT_ACTION_ROW_CLASS).toContain('w-full')
+    expect(RIGHT_SIDEBAR_SPLIT_ACTION_ROW_CLASS).toContain('[&>*:first-child]:flex-1')
+    expect(RIGHT_SIDEBAR_SPLIT_ACTION_ROW_CLASS).toContain('[&>*:first-child>button]:w-full')
+    expect(RIGHT_SIDEBAR_SPLIT_ACTION_ROW_CLASS).toContain('[&>button:first-child]:w-full')
+  })
+
   it('lets split-button primaries shrink inside the minimum-width sidebar', () => {
     expect(RIGHT_SIDEBAR_SPLIT_ACTION_ROW_CLASS).toContain('min-w-0')
     expect(RIGHT_SIDEBAR_MORPHING_PRIMARY_BUTTON_CLASS).toContain('shrink')

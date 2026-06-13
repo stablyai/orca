@@ -1671,7 +1671,9 @@
               "62703b1dc4": "このPRでは GitHub 自動マージが有効になっています",
               "48d75ae118": "自動マージを無効にする",
               "a5b66afb58": "チェックは通過しました",
-              "fbd4f57f0a": "チェックは通過しました。マージ可否はマージ前に再確認されます。"
+              "fbd4f57f0a": "チェックは通過しました。マージ可否はマージ前に再確認されます。",
+              "4ab19a62ef": "自動マージを有効にする",
+              "8f6cb3772f": "要件が満たされると、このプルリクエストを自動的にマージします"
             }
           }
         },
@@ -3959,6 +3961,12 @@
           "terminalTitle": "Linear agent スキルをインストール",
           "terminalAria": "Linear agent スキルのインストール terminal",
           "install": "CLI とスキルをインストール",
+          "successTitle": "Linear チケットアクセスの準備ができました",
+          "successDescription": "Agents はこのワークスペースからリンクされた Linear チケットを読み取り、更新できるようになりました。",
+          "successDescriptionWsl": "WSL agents はこのワークスペースからリンクされた Linear チケットを使用できるようになりました。",
+          "successDescriptionRemote": "ホスト agents はリンクされた Linear チケットを使用できるようになりました。リモート agent 環境ではまだ独自の設定が必要な場合があります。",
+          "successStatus": "Linear チケットアクセス準備完了",
+          "done": "完了",
           "wslCopy": "リンクされた Linear 作業からの WSL agent 引き継ぎ用にインストールします。",
           "wslLabel": "WSL 既定"
         },

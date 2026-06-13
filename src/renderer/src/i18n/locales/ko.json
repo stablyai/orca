@@ -1671,7 +1671,9 @@
               "62703b1dc4": "이 PR에 대해 GitHub 자동 병합이 활성화되었습니다.",
               "48d75ae118": "자동 병합 비활성화",
               "a5b66afb58": "검사 통과",
-              "fbd4f57f0a": "검사를 통과했습니다. 병합 전에 병합 가능 여부를 다시 확인합니다."
+              "fbd4f57f0a": "검사를 통과했습니다. 병합 전에 병합 가능 여부를 다시 확인합니다.",
+              "4ab19a62ef": "자동 병합 활성화",
+              "8f6cb3772f": "요구 사항이 충족되면 이 PR을 자동으로 병합합니다"
             }
           }
         },
@@ -3959,6 +3961,12 @@
           "terminalTitle": "Linear agent 스킬 설치",
           "terminalAria": "Linear agent 스킬 설치 terminal",
           "install": "CLI 및 스킬 설치",
+          "successTitle": "Linear 티켓 접근이 준비되었습니다",
+          "successDescription": "이제 agents가 이 워크스페이스에서 연결된 Linear 티켓을 읽고 업데이트할 수 있습니다.",
+          "successDescriptionWsl": "이제 WSL agents가 이 워크스페이스에서 연결된 Linear 티켓을 사용할 수 있습니다.",
+          "successDescriptionRemote": "이제 호스트 agents가 연결된 Linear 티켓을 사용할 수 있습니다. 원격 agent 환경에는 자체 설정이 여전히 필요할 수 있습니다.",
+          "successStatus": "Linear 티켓 접근 준비됨",
+          "done": "완료",
           "wslCopy": "연결된 Linear 작업에서 WSL agent 인계를 위해 설치합니다.",
           "wslLabel": "WSL 기본값"
         },

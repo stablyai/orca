@@ -132,6 +132,24 @@ function updateUnifiedTerminalLabel(
   return unifiedTabs.map((entry, index) => (index === unifiedIndex ? { ...entry, label } : entry))
 }
 
+function getDecorativeAgentTitleSignature(title: string): string | null {
+  const status = detectAgentStatusFromTitle(title)
+  if (!status) {
+    return null
+  }
+  // Why: agent spinners can emit OSC title frames many times per second; the
+  // spinner glyph is live decoration, not meaningful tab or sort state.
+  return `${status}:${title
+    .trim()
+    .replace(/^[\u2800-\u28ff\s]+/u, '')
+    .replace(/\s+/g, ' ')}`
+}
+
+function isDecorativeAgentTitleFrameChange(prevTitle: string, nextTitle: string): boolean {
+  const prevSignature = getDecorativeAgentTitleSignature(prevTitle)
+  return prevSignature !== null && prevSignature === getDecorativeAgentTitleSignature(nextTitle)
+}
+
 function updateUnifiedTerminalGeneratedLabel(
   unifiedTabs: Tab[],
   terminalTabId: string,
@@ -1058,6 +1076,21 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       }
       const nextTitle = title.trim() || getFallbackTabTitle(currentTab)
       const currentUnifiedTabs = s.unifiedTabsByWorktree[ownerWorktreeId] ?? []
+      if (isDecorativeAgentTitleFrameChange(currentTab.title, nextTitle)) {
+        const unifiedTabsWithCurrentLabel = updateUnifiedTerminalLabel(
+          currentUnifiedTabs,
+          tabId,
+          currentTab.title
+        )
+        return unifiedTabsWithCurrentLabel
+          ? {
+              unifiedTabsByWorktree: {
+                ...s.unifiedTabsByWorktree,
+                [ownerWorktreeId]: unifiedTabsWithCurrentLabel
+              }
+            }
+          : s
+      }
       const unifiedTabsWithUpdatedLabel = updateUnifiedTerminalLabel(
         currentUnifiedTabs,
         tabId,
@@ -1189,6 +1222,9 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       const currentByPane = s.runtimePaneTitlesByTabId[tabId] ?? {}
       const prevTitle = currentByPane[paneId]
       if (prevTitle === title) {
+        return s
+      }
+      if (prevTitle && isDecorativeAgentTitleFrameChange(prevTitle, title)) {
         return s
       }
       // Why: smart sort's title-heuristic fallback (Edge case 9) reads

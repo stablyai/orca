@@ -1671,7 +1671,9 @@
               "62703b1dc4": "La fusión automática de GitHub está habilitada para esta solicitud de extracción",
               "48d75ae118": "Deshabilitar la fusión automática",
               "a5b66afb58": "Comprobaciones aprobadas",
-              "fbd4f57f0a": "Comprobaciones aprobadas. La elegibilidad de fusión se volverá a comprobar antes de fusionar."
+              "fbd4f57f0a": "Comprobaciones aprobadas. La elegibilidad de fusión se volverá a comprobar antes de fusionar.",
+              "4ab19a62ef": "Habilitar la fusión automática",
+              "8f6cb3772f": "Fusionar esta solicitud de extracción automáticamente cuando se cumplan los requisitos"
             }
           }
         },
@@ -3959,6 +3961,12 @@
           "terminalTitle": "Instalar habilidad de Agent de Linear",
           "terminalAria": "Terminal de instalación de la habilidad de Agent de Linear",
           "install": "Instalar CLI y habilidad",
+          "successTitle": "El acceso a tickets de Linear está listo",
+          "successDescription": "Los Agents ya pueden leer y actualizar tickets de Linear enlazados desde este espacio de trabajo.",
+          "successDescriptionWsl": "Los Agents de WSL ya pueden usar tickets de Linear enlazados desde este espacio de trabajo.",
+          "successDescriptionRemote": "Los Agents del host ya pueden usar tickets de Linear enlazados. Los entornos de Agent remotos aún pueden necesitar su propia configuración.",
+          "successStatus": "Acceso a tickets de Linear listo",
+          "done": "Listo",
           "wslCopy": "Instálala para traspasos de Agent en WSL desde trabajo Linear enlazado.",
           "wslLabel": "WSL predeterminado"
         },
