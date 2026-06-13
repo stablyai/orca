@@ -16,6 +16,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { getDefaultSettings } from '../../shared/constants'
 import type { ClaudeManagedAccount, GlobalSettings } from '../../shared/types'
+import { isOauthTokenExpiring, refreshClaudeOauthCredentials } from './oauth-refresh'
 
 const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
 const testState = {
@@ -41,6 +42,15 @@ vi.mock('electron', () => ({
   app: {
     getPath: () => testState.userDataDir
   }
+}))
+
+// Why: these tests exercise materialize/read-back/snapshot logic, not the
+// network OAuth refresh (covered by oauth-refresh.test.ts). Default the token
+// to "not expiring" so the proactive switch-in refresh never fires here and
+// existing expectations hold; individual tests can override these mocks.
+vi.mock('./oauth-refresh', () => ({
+  isOauthTokenExpiring: vi.fn(() => false),
+  refreshClaudeOauthCredentials: vi.fn(async () => null)
 }))
 
 vi.mock('node:os', async () => {
@@ -3553,5 +3563,83 @@ describe('ClaudeRuntimeAuthService', () => {
 
     expect(readManagedCredentialsForTest('account-1', managedAuthPath)).toBe(reauthedCredentials)
     expect(readFileSync(runtimeCredentialsPath, 'utf-8')).toBe(reauthedCredentials)
+  })
+
+  it('proactively refreshes and persists an expiring account on switch-in', async () => {
+    const runtimeCredentialsPath = join(testState.fakeHomeDir, '.claude', '.credentials.json')
+    const account1Stale = createClaudeCredentialsJson('one@example.com', 'one-stale', null, 1_000)
+    const account1Refreshed = createClaudeCredentialsJson(
+      'one@example.com',
+      'one-refreshed',
+      null,
+      9_999_999_999_999
+    )
+    const managedAuthPath1 = createManagedClaudeAuth(
+      testState.userDataDir,
+      'account-1',
+      account1Stale
+    )
+    // Start on the system default (no active managed account), then switch in.
+    const settings = createSettings({
+      claudeManagedAccounts: [
+        createClaudeAccount('account-1', managedAuthPath1, { email: 'one@example.com' })
+      ],
+      activeClaudeManagedAccountId: null
+    })
+    const store = createStore(settings)
+
+    const { ClaudeRuntimeAuthService } = await import('./runtime-auth-service')
+    const service = new ClaudeRuntimeAuthService(store as never)
+    await service.syncForCurrentSelection()
+
+    // Now switch into account-1: token is expiring, so the service must refresh
+    // and persist the rotation before materializing.
+    vi.mocked(isOauthTokenExpiring).mockReturnValueOnce(true)
+    vi.mocked(refreshClaudeOauthCredentials).mockResolvedValueOnce(account1Refreshed)
+    store.updateSettings({ activeClaudeManagedAccountId: 'account-1' })
+    await service.syncForCurrentSelection()
+
+    expect(refreshClaudeOauthCredentials).toHaveBeenCalledWith(account1Stale)
+    expect(readManagedCredentialsForTest('account-1', managedAuthPath1)).toBe(account1Refreshed)
+    expect(readFileSync(runtimeCredentialsPath, 'utf-8')).toBe(account1Refreshed)
+  })
+
+  it('adopts a rotated-refresh-token runtime credential on cold-start read-back', async () => {
+    const runtimeCredentialsPath = join(testState.fakeHomeDir, '.claude', '.credentials.json')
+    // Same expiry on both sides (cold start), but the runtime refresh token has
+    // rotated — proof the CLI refreshed. Must be read back into managed storage.
+    const managedCredentials = createClaudeCredentialsJson(
+      'one@example.com',
+      'one-old',
+      null,
+      3_000
+    )
+    const runtimeRotated = `${JSON.stringify({
+      claudeAiOauth: {
+        email: 'one@example.com',
+        accessToken: 'one-rotated',
+        refreshToken: 'one-rotated-refresh',
+        expiresAt: 3_000
+      }
+    })}\n`
+    writeFileSync(runtimeCredentialsPath, runtimeRotated, 'utf-8')
+    const managedAuthPath1 = createManagedClaudeAuth(
+      testState.userDataDir,
+      'account-1',
+      managedCredentials
+    )
+    const settings = createSettings({
+      claudeManagedAccounts: [
+        createClaudeAccount('account-1', managedAuthPath1, { email: 'one@example.com' })
+      ],
+      activeClaudeManagedAccountId: 'account-1'
+    })
+    const store = createStore(settings)
+
+    const { ClaudeRuntimeAuthService } = await import('./runtime-auth-service')
+    const service = new ClaudeRuntimeAuthService(store as never)
+    await service.syncForCurrentSelection()
+
+    expect(readManagedCredentialsForTest('account-1', managedAuthPath1)).toBe(runtimeRotated)
   })
 })
