@@ -341,23 +341,6 @@ export class ClaudeRuntimeAuthService {
       return
     }
 
-    // Why: own the OAuth refresh for the account being switched into so a
-    // single-use refresh token is rotated and persisted to managed storage
-    // atomically — never materializing a stale token that fails with
-    // invalid_grant. Skipped when this account is already the live/active one:
-    // a running `claude` owns those credentials and refreshing here would race
-    // its own rotation (double-rotation invalidates one copy). Read-back
-    // handles the live account instead.
-    if (this.lastSyncedAccountId !== activeAccount.id && !hasLiveClaudePtys()) {
-      const refreshed = await this.refreshManagedAccountTokenIfNeeded(
-        activeAccount,
-        credentialsJson
-      )
-      if (refreshed) {
-        credentialsJson = refreshed
-      }
-    }
-
     if (this.lastSyncedAccountId === null) {
       const paths = this.pathResolver.getRuntimePaths()
       const runtimeCredentialsJson = existsSync(paths.credentialsPath)
@@ -420,6 +403,25 @@ export class ClaudeRuntimeAuthService {
     if (this.lastSyncedAccountId !== activeAccount.id) {
       this.skipNextReadBackForAccountId = null
     }
+
+    // Why: own the OAuth refresh whenever no live `claude` owns these
+    // credentials — both switching into an account and re-syncing the active
+    // account with an expired token. A single-use refresh token is rotated and
+    // persisted to managed storage atomically before we materialize it, so the
+    // runtime never gets a stale token that fails with invalid_grant. Skipped
+    // entirely while a Claude PTY is live: that process owns the credentials
+    // and refreshing here would race its own rotation (double-rotation
+    // invalidates one copy) — the read-back above preserves its refresh instead.
+    if (!hasLiveClaudePtys()) {
+      const refreshed = await this.refreshManagedAccountTokenIfNeeded(
+        activeAccount,
+        credentialsJson
+      )
+      if (refreshed) {
+        credentialsJson = refreshed
+      }
+    }
+
     const paths = this.pathResolver.getRuntimePaths()
     this.writeRuntimeCredentials(credentialsJson)
     if (process.platform === 'darwin') {
