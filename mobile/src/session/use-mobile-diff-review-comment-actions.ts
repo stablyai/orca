@@ -10,9 +10,15 @@ import {
   completeMobileDiffReviewState,
   markMobileDiffReviewFileReviewed
 } from './mobile-diff-review-state'
-import type { MobileDiffReviewQueueItem } from './mobile-diff-review-queue'
+import type {
+  MobileDiffReviewQueueFilter,
+  MobileDiffReviewQueueItem
+} from './mobile-diff-review-queue'
 import type { ComposerState, ReviewScreenState } from './mobile-diff-review-screen-model'
-import { reviewDescriptorFromItem } from './mobile-diff-review-screen-model'
+import {
+  nextReviewIndexAfterMarkReviewed,
+  reviewDescriptorFromItem
+} from './mobile-diff-review-screen-model'
 
 type CommentActionsInput = {
   client: RpcClient | null
@@ -22,6 +28,7 @@ type CommentActionsInput = {
   currentItem: MobileDiffReviewQueueItem | null
   queue: MobileDiffReviewQueueItem[]
   filteredQueue: MobileDiffReviewQueueItem[]
+  filter: MobileDiffReviewQueueFilter
   currentIndex: number
   composer: ComposerState | null
   composerBody: string
@@ -42,6 +49,7 @@ export function useMobileDiffReviewCommentActions(input: CommentActionsInput) {
     currentItem,
     queue,
     filteredQueue,
+    filter,
     currentIndex,
     composer,
     composerBody,
@@ -181,22 +189,21 @@ export function useMobileDiffReviewCommentActions(input: CommentActionsInput) {
       nextReviewState = completeMobileDiffReviewState(nextReviewState, now)
     }
     await saveCommentsAndReviewState(screenState.comments, nextReviewState)
-    const nextIndex = filteredQueue.findIndex(
-      (item, index) => index > currentIndex && item.key !== currentItem.key && !item.isReviewed
-    )
-    const wrappedIndex = filteredQueue.findIndex(
-      (item) => item.key !== currentItem.key && !item.isReviewed
-    )
-    if (nextIndex >= 0) {
+    const nextIndex = nextReviewIndexAfterMarkReviewed({
+      currentIndex,
+      currentItemKey: currentItem.key,
+      filter,
+      filteredQueue
+    })
+    if (nextIndex !== null) {
       setCurrentIndex(nextIndex)
-    } else if (wrappedIndex >= 0) {
-      setCurrentIndex(wrappedIndex)
     } else {
       setShowCompletion(true)
     }
   }, [
     currentIndex,
     currentItem,
+    filter,
     filteredQueue,
     queue,
     saveCommentsAndReviewState,

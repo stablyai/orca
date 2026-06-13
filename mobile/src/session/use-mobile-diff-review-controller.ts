@@ -210,6 +210,7 @@ export function useMobileDiffReviewController(input: ControllerInput) {
     currentItem,
     queue,
     filteredQueue,
+    filter,
     currentIndex,
     activeHunkIndex,
     composer,

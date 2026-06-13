@@ -29,6 +29,7 @@ type InteractionInput = {
   currentItem: MobileDiffReviewQueueItem | null
   queue: MobileDiffReviewQueueItem[]
   filteredQueue: MobileDiffReviewQueueItem[]
+  filter: MobileDiffReviewQueueFilter
   currentIndex: number
   activeHunkIndex: number | null
   composer: ComposerState | null
@@ -60,6 +61,7 @@ export function useMobileDiffReviewInteractions(input: InteractionInput) {
     currentItem,
     queue,
     filteredQueue,
+    filter,
     currentIndex,
     activeHunkIndex,
     composer,
@@ -97,6 +99,7 @@ export function useMobileDiffReviewInteractions(input: InteractionInput) {
     currentItem,
     queue,
     filteredQueue,
+    filter,
     currentIndex,
     composer,
     composerBody,

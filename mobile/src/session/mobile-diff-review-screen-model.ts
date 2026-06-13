@@ -83,6 +83,30 @@ export function reviewDescriptorFromItem(
   }
 }
 
+export function nextReviewIndexAfterMarkReviewed({
+  currentIndex,
+  currentItemKey,
+  filter,
+  filteredQueue
+}: {
+  currentIndex: number
+  currentItemKey: string
+  filter: MobileDiffReviewQueueFilter
+  filteredQueue: readonly MobileDiffReviewQueueItem[]
+}): number | null {
+  const nextIndex = filteredQueue.findIndex(
+    (item, index) => index > currentIndex && item.key !== currentItemKey && !item.isReviewed
+  )
+  const wrappedIndex = filteredQueue.findIndex(
+    (item) => item.key !== currentItemKey && !item.isReviewed
+  )
+  const targetIndex = nextIndex >= 0 ? nextIndex : wrappedIndex >= 0 ? wrappedIndex : null
+  if (targetIndex === null) {
+    return null
+  }
+  return filter === 'unreviewed' && targetIndex > currentIndex ? targetIndex - 1 : targetIndex
+}
+
 export function mobileReviewScopeLabel(item: MobileDiffReviewQueueItem): string {
   if (item.scope === 'branch') {
     return 'Branch'
