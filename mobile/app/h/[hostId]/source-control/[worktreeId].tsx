@@ -32,8 +32,9 @@ import {
 } from 'lucide-react-native'
 import { useHostClient, useForceReconnect } from '../../../../src/transport/client-context'
 import { getWorktreeLabel } from '../../../../src/session/worktree-label'
-import type { RpcClient } from '../../../../src/transport/rpc-client'
 import type { RpcSuccess } from '../../../../src/transport/types'
+import { MobileSourceControlReviewEntry } from '../../../../src/source-control/mobile-source-control-review-entry'
+import { resolveMobileBranchCompareBaseRef } from '../../../../src/source-control/mobile-branch-base-ref'
 import {
   ActionSheetModal,
   type ActionSheetAction
@@ -134,16 +135,6 @@ type MobileBranchDiffPreviewState =
     }
   | { kind: 'error'; entry: MobileGitBranchChangeEntry; message: string }
 
-type RuntimeRepoSummary = {
-  id: string
-  worktreeBaseRef?: string | null
-}
-
-type RepoBaseRefDefaultResult = {
-  defaultBaseRef: string | null
-  remoteCount: number
-}
-
 type GitDiffTextResult = {
   kind: 'text'
   originalContent: string
@@ -160,45 +151,6 @@ function firstParam(value: string | string[] | undefined): string {
 
 function wait(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
-}
-
-function getRepoIdFromMobileWorktreeId(id: string): string {
-  // Why: mobile cannot import desktop shared modules in its standalone tsc run,
-  // but the runtime worktree id wire format is still `${repoId}::${path}`.
-  const separatorIdx = id.indexOf('::')
-  return separatorIdx === -1 ? id : id.slice(0, separatorIdx)
-}
-
-async function resolveMobileBranchCompareBaseRef(
-  client: RpcClient,
-  worktreeId: string
-): Promise<string | null> {
-  const repoId = getRepoIdFromMobileWorktreeId(worktreeId)
-  if (!repoId) {
-    return null
-  }
-
-  let repoBaseRef: string | null = null
-  const repoResponse = await client.sendRequest('repo.list')
-  if (repoResponse.ok) {
-    const repos = ((repoResponse as RpcSuccess).result as { repos?: RuntimeRepoSummary[] }).repos
-    const repo = repos?.find((candidate) => candidate.id === repoId)
-    repoBaseRef = repo?.worktreeBaseRef?.trim() || null
-  }
-
-  if (repoBaseRef) {
-    return repoBaseRef
-  }
-
-  const defaultResponse = await client.sendRequest('repo.baseRefDefault', { repo: `id:${repoId}` })
-  if (!defaultResponse.ok) {
-    if (isMobileGitUnavailable(defaultResponse.error?.code, defaultResponse.error?.message)) {
-      return null
-    }
-    throw new Error(defaultResponse.error?.message || 'Unable to resolve branch base')
-  }
-  const result = (defaultResponse as RpcSuccess).result as RepoBaseRefDefaultResult
-  return result.defaultBaseRef?.trim() || null
 }
 
 function formatBranchLabel(branch: string | undefined, head: string | undefined): string {
@@ -507,6 +459,7 @@ export default function MobileSourceControlScreen() {
     branchCompareState.kind === 'error' ||
     (branchCompareResult !== null && branchCompareResult.summary.status !== 'ready')
   const hasVisibleChanges = sections.length > 0 || shouldShowBranchCompareSection
+  const reviewableCount = entries.length + (branchCompareCanOpen ? branchEntries.length : 0)
   const stageablePaths = useMemo(() => getStageablePaths(entries), [entries])
   const unstageablePaths = useMemo(() => getUnstageablePaths(entries), [entries])
   const stagedCount = useMemo(() => countStagedEntries(entries), [entries])
@@ -1469,6 +1422,19 @@ export default function MobileSourceControlScreen() {
                 </Text>
               </View>
             ) : null}
+            <MobileSourceControlReviewEntry
+              count={reviewableCount}
+              disabled={
+                screenState.kind !== 'ready' ||
+                connState !== 'connected' ||
+                busyAction !== null ||
+                openingPath !== null ||
+                openingBranchPath !== null
+              }
+              hostId={hostId}
+              worktreeId={worktreeId}
+              worktreeName={name}
+            />
             <View style={styles.bulkRow}>
               <Pressable
                 style={({ pressed }) => [

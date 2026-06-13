@@ -9,8 +9,9 @@ import {
 } from './mobile-diff-comments'
 
 function comment(overrides: Partial<DiffComment> & Pick<DiffComment, 'id'>): DiffComment {
+  const { id, ...rest } = overrides
   return {
-    id: overrides.id,
+    id,
     worktreeId: 'wt-1',
     filePath: 'src/app.ts',
     source: 'diff',
@@ -18,7 +19,7 @@ function comment(overrides: Partial<DiffComment> & Pick<DiffComment, 'id'>): Dif
     body: 'check this',
     createdAt: 100,
     side: 'modified',
-    ...overrides
+    ...rest
   }
 }
 
@@ -56,6 +57,28 @@ describe('mobile diff comments', () => {
       side: 'modified'
     })
     expect(result.comments).toHaveLength(1)
+  })
+
+  it('creates file-level scoped comments', () => {
+    const result = addMobileDiffComment([], {
+      id: 'mobile-1',
+      worktreeId: 'wt-1',
+      filePath: 'src/app.ts',
+      oldPath: 'src/old-app.ts',
+      lineNumber: 0,
+      body: '  File note  ',
+      createdAt: 200,
+      scope: 'branch',
+      diffIdentity: 'd1'
+    })
+
+    expect(result.comment).toMatchObject({
+      lineNumber: 0,
+      body: 'File note',
+      scope: 'branch',
+      oldPath: 'src/old-app.ts',
+      diffIdentity: 'd1'
+    })
   })
 
   it('rejects blank comment bodies', () => {
@@ -97,5 +120,40 @@ describe('mobile diff comments', () => {
     expect(formatDiffComments([comment({ id: 'a', body: 'quote "this"' })])).toBe(
       ['File: src/app.ts', 'Line: 4', 'User comment: "quote \\"this\\""'].join('\n')
     )
+  })
+
+  it('formats file-level notes with file scope', () => {
+    expect(formatDiffComments([comment({ id: 'a', lineNumber: 0 })])).toBe(
+      ['File: src/app.ts', 'Scope: file', 'User comment: "check this"'].join('\n')
+    )
+  })
+
+  it('keeps review metadata while normalizing persisted notes', () => {
+    expect(
+      normalizeMobileDiffComments(
+        [
+          comment({
+            id: 'a',
+            lineNumber: 0,
+            updatedAt: 200,
+            sentAt: 300,
+            scope: 'staged',
+            oldPath: 'src/old.ts',
+            diffIdentity: 'd1'
+          })
+        ],
+        'wt-1'
+      )
+    ).toEqual([
+      comment({
+        id: 'a',
+        lineNumber: 0,
+        updatedAt: 200,
+        sentAt: 300,
+        scope: 'staged',
+        oldPath: 'src/old.ts',
+        diffIdentity: 'd1'
+      })
+    ])
   })
 })

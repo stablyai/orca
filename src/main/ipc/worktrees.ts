@@ -520,7 +520,8 @@ function mergeFolderWorkspace(repo: Repo, worktreeId: string, meta: WorktreeMeta
     ...(meta.createdAt !== undefined ? { createdAt: meta.createdAt } : {}),
     ...(meta.createdWithAgent !== undefined ? { createdWithAgent: meta.createdWithAgent } : {}),
     workspaceStatus: meta.workspaceStatus ?? DEFAULT_WORKSPACE_STATUS_ID,
-    diffComments: meta.diffComments
+    diffComments: meta.diffComments,
+    mobileDiffReview: meta.mobileDiffReview
   }
 }
 

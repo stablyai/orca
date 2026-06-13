@@ -337,6 +337,7 @@ export type Worktree = {
   pushTarget?: GitPushTarget
   workspaceStatus?: WorkspaceStatus
   diffComments?: DiffComment[]
+  mobileDiffReview?: MobileDiffReviewState
 } & GitWorktreeInfo
 
 export type GitPushTarget = {
@@ -405,6 +406,7 @@ export type WorktreeMeta = {
   /** User-assigned workspace board status for manual sidebar organization. */
   workspaceStatus?: WorkspaceStatus
   diffComments?: DiffComment[]
+  mobileDiffReview?: MobileDiffReviewState
 }
 
 export type WorktreeOwnership = 'orca-managed' | 'external' | 'unknown-legacy'
@@ -469,6 +471,25 @@ export type WorktreeLineageWarning = {
 // or used to bootstrap a new agent session). Stored on WorktreeMeta so the
 // existing persistence layer writes them to orca-data.json automatically.
 export type DiffCommentSource = 'diff' | 'markdown'
+export type DiffReviewScope = 'unstaged' | 'staged' | 'branch'
+
+export type MobileDiffReviewFileState = {
+  key: string
+  filePath: string
+  oldPath?: string
+  scope: DiffReviewScope
+  lastOpenedAt?: number
+  lastSeenDiffIdentity?: string
+  reviewedAt?: number
+  reviewDiffIdentity?: string
+}
+
+export type MobileDiffReviewState = {
+  version: 1
+  updatedAt?: number
+  completedAt?: number
+  files: Record<string, MobileDiffReviewFileState>
+}
 
 export type DiffComment = {
   id: string
@@ -483,8 +504,12 @@ export type DiffComment = {
   lineNumber: number
   body: string
   createdAt: number
+  updatedAt?: number
   /** Set after the note has been handed to an agent. Edits clear it. */
   sentAt?: number
+  scope?: DiffReviewScope
+  oldPath?: string
+  diffIdentity?: string
   // Reserved for future "comments on the original side" — always 'modified' in v1.
   side: 'modified'
 }
