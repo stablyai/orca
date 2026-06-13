@@ -1920,10 +1920,12 @@ export default function ChecksPanel(): React.JSX.Element {
     const refreshComments =
       prNumber !== null && (commentsFetchedAt === undefined || commentsFetchedAt < cutoff)
 
-    // Reset polling attention state so this entry refresh establishes a fresh
-    // baseline rather than colliding with the previous PR's backoff.
-    pollIntervalRef.current = CHECKS_PANEL_BASE_POLL_INTERVAL_MS
-    prevChecksRef.current = ''
+    if (refreshChecks) {
+      // Reset polling attention state only when this entry refresh will fetch
+      // checks, so comment-only refreshes preserve the current checks backoff.
+      pollIntervalRef.current = CHECKS_PANEL_BASE_POLL_INTERVAL_MS
+      prevChecksRef.current = ''
+    }
     handleEntryRefresh({ refreshChecks, refreshComments })
   }, [entryKey, prFetchedAt, checksFetchedAt, commentsFetchedAt, prNumber, handleEntryRefresh])
 

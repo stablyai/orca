@@ -65,4 +65,24 @@ describe('nextChecksPanelPollInterval', () => {
       }).intervalMs
     ).toBe(CHECKS_PANEL_BASE_POLL_INTERVAL_MS)
   })
+
+  it('backs off repeated results even when provider ordering changes', () => {
+    const checks: PRCheckDetail[] = [
+      { name: 'build', status: 'completed', conclusion: 'success', url: null },
+      { name: 'test', status: 'in_progress', conclusion: null, url: null }
+    ]
+    const { signature } = nextChecksPanelPollInterval({
+      checks,
+      previousSignature: '',
+      currentIntervalMs: CHECKS_PANEL_BASE_POLL_INTERVAL_MS
+    })
+
+    expect(
+      nextChecksPanelPollInterval({
+        checks: [...checks].reverse(),
+        previousSignature: signature,
+        currentIntervalMs: CHECKS_PANEL_BASE_POLL_INTERVAL_MS
+      }).intervalMs
+    ).toBe(CHECKS_PANEL_BASE_POLL_INTERVAL_MS * 2)
+  })
 })
