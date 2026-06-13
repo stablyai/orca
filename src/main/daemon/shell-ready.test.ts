@@ -30,7 +30,11 @@ async function runInteractiveZshLogin(args: {
   isDone: (output: string) => boolean
 }): Promise<string> {
   const pty = await import('node-pty')
-  const proc = pty.spawn('zsh', ['-l'], {
+  // Why: -o noglobalrcs skips /etc/zsh/* on CI runners, whose insecure (group-
+  // writable) fpath dirs make the global compinit block on an interactive
+  // "insecure directories" [y/n] prompt before zle-line-init ever fires. The
+  // marker contract lives entirely in our ZDOTDIR files, which still load.
+  const proc = pty.spawn('zsh', ['-o', 'noglobalrcs', '-l'], {
     name: 'xterm-256color',
     cols: 80,
     rows: 24,
@@ -71,7 +75,9 @@ async function runInteractiveZshRc(args: {
   isDone: (output: string) => boolean
 }): Promise<string> {
   const pty = await import('node-pty')
-  const proc = pty.spawn('zsh', ['-i'], {
+  // Why: -o noglobalrcs skips /etc/zsh/* so the CI runner's global compinit
+  // can't block on an insecure-directory [y/n] prompt before our marker fires.
+  const proc = pty.spawn('zsh', ['-o', 'noglobalrcs', '-i'], {
     name: 'xterm-256color',
     cols: 80,
     rows: 24,
