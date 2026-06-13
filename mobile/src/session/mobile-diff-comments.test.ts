@@ -3,6 +3,7 @@ import type { DiffComment } from '../../../src/shared/types'
 import {
   addMobileDiffComment,
   formatDiffComments,
+  formatMobileDiffReviewPrompt,
   normalizeMobileDiffComments,
   removeDeliveredMobileDiffComments,
   removeMobileDiffComments
@@ -125,6 +126,23 @@ describe('mobile diff comments', () => {
   it('formats file-level notes with file scope', () => {
     expect(formatDiffComments([comment({ id: 'a', lineNumber: 0 })])).toBe(
       ['File: src/app.ts', 'Scope: file', 'User comment: "check this"'].join('\n')
+    )
+  })
+
+  it('wraps sent review notes in the mobile agent prompt', () => {
+    expect(formatMobileDiffReviewPrompt([comment({ id: 'a' })])).toBe(
+      [
+        'You are reviewing the current worktree. Address the following mobile review notes.',
+        '',
+        'File: src/app.ts',
+        'Line: 4',
+        'User comment: "check this"',
+        '',
+        'After applying fixes:',
+        '1. Summarize changed files.',
+        '2. Run relevant tests.',
+        '3. Tell me if anything remains risky.'
+      ].join('\n')
     )
   })
 

@@ -4,7 +4,7 @@ import type { DiffComment, MobileDiffReviewState } from '../../../src/shared/typ
 import type { ConnectionState } from '../transport/types'
 import type { RpcClient } from '../transport/rpc-client'
 import { triggerSuccess } from '../platform/haptics'
-import { formatDiffComments } from './mobile-diff-comments'
+import { formatDiffComments, formatMobileDiffReviewPrompt } from './mobile-diff-comments'
 import { clearSentMobileDiffComments, markMobileDiffCommentsSent } from './mobile-diff-comment-edit'
 import {
   readMobileReviewCreatedTerminal,
@@ -76,7 +76,7 @@ export function useMobileDiffReviewSendActions(input: SendActionsInput) {
       }
       const response = await client.sendRequest('terminal.send', {
         terminal,
-        text: formatDiffComments(comments),
+        text: formatMobileDiffReviewPrompt(comments),
         enter: true
       })
       if (!response.ok) {

@@ -54,6 +54,19 @@ export function formatDiffComments(comments: readonly DiffComment[]): string {
   return comments.map(formatDiffComment).join('\n\n')
 }
 
+export function formatMobileDiffReviewPrompt(comments: readonly DiffComment[]): string {
+  return [
+    'You are reviewing the current worktree. Address the following mobile review notes.',
+    '',
+    formatDiffComments(comments),
+    '',
+    'After applying fixes:',
+    '1. Summarize changed files.',
+    '2. Run relevant tests.',
+    '3. Tell me if anything remains risky.'
+  ].join('\n')
+}
+
 export function normalizeMobileDiffComments(value: unknown, worktreeId: string): DiffComment[] {
   if (!Array.isArray(value)) {
     return []
