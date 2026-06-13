@@ -1,5 +1,6 @@
 import React from 'react'
 import { WINDOWS_GIT_BASH_SHELL } from '../../../../shared/windows-terminal-shell'
+import { translate } from '@/i18n/i18n'
 
 export type WindowsShell = 'powershell.exe' | 'cmd.exe' | 'wsl.exe' | typeof WINDOWS_GIT_BASH_SHELL
 
@@ -72,7 +73,7 @@ function WslIcon({ size = 14 }: { size?: number }): React.JSX.Element {
         fill="#1F1F1F"
         fontFamily="system-ui, -apple-system, sans-serif"
       >
-        WSL
+        {translate('auto.components.tab.bar.shell.icons.e9b2e70613', 'WSL')}
       </text>
     </svg>
   )
@@ -97,7 +98,7 @@ function GitBashIcon({ size = 14 }: { size?: number }): React.JSX.Element {
         fill="#ffffff"
         fontFamily="system-ui, -apple-system, sans-serif"
       >
-        Git
+        {translate('auto.components.tab.bar.shell.icons.d4ceaa227c', 'Git')}
       </text>
     </svg>
   )

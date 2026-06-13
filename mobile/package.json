@@ -27,6 +27,7 @@
     "expo-haptics": "^55.0.14",
     "expo-linking": "^55.0.15",
     "expo-modules-core": "~55.0.25",
+    "expo-network": "~55.0.14",
     "expo-notifications": "^55.0.22",
     "expo-router": "^55.0.14",
     "expo-secure-store": "^55.0.13",

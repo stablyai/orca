@@ -133,13 +133,13 @@ describe('worktree-palette-create-action', () => {
     ).toBe(CREATE_WORKTREE_ITEM_ID)
   })
 
-  it('hides create when no git repos are available', () => {
+  it('shows create even when no project is available so the composer can guide setup', () => {
     expect(
       getWorktreePaletteCreateActionState({
         canCreateWorktree: false,
         query: 'new-workspace'
       }).showCreateAction
-    ).toBe(false)
+    ).toBe(true)
   })
 
   it('hides create for an empty query', () => {

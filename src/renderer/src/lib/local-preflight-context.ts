@@ -1,7 +1,10 @@
 import type { AppState } from '@/store/types'
 import { parseWslUncPath } from '../../../shared/wsl-paths'
+import { getProviderRuntimeContextKey } from './provider-runtime-context'
 
-export type LocalPreflightContext = { wslDistro?: string | null; wslDefault?: boolean } | undefined
+export type LocalPreflightContext =
+  | { wslDistro?: string | null; wslDefault?: boolean; runtimeContextKey?: string }
+  | undefined
 
 const wslPreflightContextsByDistro = new Map<string, NonNullable<LocalPreflightContext>>()
 const wslDefaultPreflightContext = Object.freeze({ wslDefault: true })
@@ -24,6 +27,9 @@ function getWslPreflightContext(wslDistro: string): NonNullable<LocalPreflightCo
 }
 
 export function getLocalPreflightContext(state: AppState): LocalPreflightContext {
+  if (state.settings?.activeRuntimeEnvironmentId?.trim()) {
+    return { runtimeContextKey: getProviderRuntimeContextKey(state.settings) }
+  }
   const wslDistro = getLocalPreflightWslDistro(state)
   return wslDistro ? getWslPreflightContext(wslDistro) : undefined
 }
@@ -69,6 +75,9 @@ function getLocalPreflightWslDistro(state: AppState): string | null {
 }
 
 export function localPreflightContextKey(context: LocalPreflightContext): string {
+  if (context?.runtimeContextKey) {
+    return context.runtimeContextKey
+  }
   if (context?.wslDistro) {
     return `wsl:${context.wslDistro}`
   }

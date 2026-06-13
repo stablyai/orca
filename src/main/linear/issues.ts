@@ -8,6 +8,7 @@ import type {
   LinearCollectionResult,
   LinearWorkspaceSelection
 } from '../../shared/types'
+import { LinearClient } from '@linear/sdk'
 import {
   LINEAR_ISSUE_API_PAGE_SIZE_MAX,
   clampLinearIssueListLimit
@@ -77,6 +78,47 @@ type LinearIssuePageRequest = {
 type LinearIssueConnectionLoader = (
   page: LinearIssuePageRequest
 ) => Promise<LinearIssueConnection | null | undefined>
+
+export type LinearWriteFailureKind = 'duplicate_id' | 'failed' | 'network' | 'unconfirmed'
+
+export class LinearWriteFailure extends Error {
+  readonly kind: LinearWriteFailureKind
+  readonly cause: unknown
+
+  constructor(kind: LinearWriteFailureKind, message: string, cause?: unknown) {
+    super(message)
+    this.name = 'LinearWriteFailure'
+    this.kind = kind
+    this.cause = cause
+  }
+}
+
+export type LinearIssueWriteRecord = {
+  id: string
+  identifier: string
+  title: string
+  description?: string | null
+  url: string
+  team: { id: string; key: string; name: string }
+  state: { id: string; name: string } | null
+  parent: { id: string; identifier: string } | null
+}
+
+export type LinearCommentWriteRecord = {
+  id: string
+  url: string | null
+  body: string
+  issue: { id: string; identifier: string; url: string }
+  parentId: string | null
+  threadRootId: string | null
+}
+
+export type LinearAttachmentWriteRecord = {
+  id: string
+  title: string
+  url: string
+  issue: { id: string; identifier: string; url: string }
+}
 
 const LINEAR_ISSUE_NODE_FIELDS = `
   id
@@ -181,6 +223,71 @@ const VIEWER_CREATED_ISSUES_QUERY = `
     }
   }
 `
+
+const AGENT_ISSUE_WRITE_FIELDS = `
+  id
+  identifier
+  title
+  description
+  url
+  team { id key name }
+  state { id name }
+  parent { id identifier }
+`
+
+const ISSUE_BY_UUID_QUERY = `
+  query OrcaLinearIssueByUuid($id: String!) {
+    issue(id: $id) {
+      ${AGENT_ISSUE_WRITE_FIELDS}
+    }
+  }
+`
+
+const COMMENT_BY_UUID_QUERY = `
+  query OrcaLinearCommentByUuid($id: String!) {
+    comment(id: $id) {
+      id
+      url
+      body
+      parent { id }
+      issue { id identifier url }
+    }
+  }
+`
+
+const ATTACHMENT_BY_UUID_QUERY = `
+  query OrcaLinearAttachmentByUuid($id: String!) {
+    attachment(id: $id) {
+      id
+      title
+      url
+      issue { id identifier url }
+    }
+  }
+`
+
+type LinearIssueByUuidResponse = {
+  issue?: LinearIssueWriteRecord | null
+}
+
+type LinearCommentByUuidResponse = {
+  comment?: {
+    id: string
+    url?: string | null
+    body?: string | null
+    parent?: { id?: string | null } | null
+    issue?: { id?: string | null; identifier?: string | null; url?: string | null } | null
+  } | null
+}
+
+type LinearAttachmentByUuidResponse = {
+  attachment?: {
+    id: string
+    title?: string | null
+    url?: string | null
+    issue?: { id?: string | null; identifier?: string | null; url?: string | null } | null
+  } | null
+}
 
 async function mapIssueForWorkspace(
   entry: LinearClientForWorkspace,
@@ -349,6 +456,164 @@ function shouldThrowAuthError(selection: LinearWorkspaceSelection | null | undef
   return selection !== 'all'
 }
 
+function linearWriteMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
+}
+
+function isDuplicateIdError(error: unknown): boolean {
+  const message = linearWriteMessage(error).toLowerCase()
+  return (
+    message.includes('duplicate') ||
+    message.includes('already exists') ||
+    message.includes('already in use') ||
+    message.includes('id has already')
+  )
+}
+
+function errorCauseCode(error: unknown): string {
+  if (!error || typeof error !== 'object') {
+    return ''
+  }
+  const cause = (error as { cause?: unknown }).cause
+  if (!cause || typeof cause !== 'object') {
+    return ''
+  }
+  const code = (cause as { code?: unknown }).code
+  return typeof code === 'string' ? code.toLowerCase() : ''
+}
+
+function classifyWriteFailure(error: unknown): LinearWriteFailure {
+  if (error instanceof LinearWriteFailure) {
+    return error
+  }
+  if (isDuplicateIdError(error)) {
+    return new LinearWriteFailure('duplicate_id', linearWriteMessage(error), error)
+  }
+  const message = linearWriteMessage(error)
+  const lower = message.toLowerCase()
+  const code = errorCauseCode(error)
+  if (
+    lower.includes('enotfound') ||
+    lower.includes('econnrefused') ||
+    code === 'enotfound' ||
+    code === 'econnrefused'
+  ) {
+    return new LinearWriteFailure('network', message, error)
+  }
+  if (
+    lower.includes('abort') ||
+    lower.includes('timeout') ||
+    lower.includes('timed out') ||
+    lower.includes('network') ||
+    lower.includes('econnreset') ||
+    lower.includes('fetch failed') ||
+    lower.includes('socket')
+  ) {
+    return new LinearWriteFailure('unconfirmed', message, error)
+  }
+  return new LinearWriteFailure('failed', message, error)
+}
+
+async function runLinearWrite<T>(
+  entry: LinearClientForWorkspace,
+  signal: AbortSignal | undefined,
+  write: (client: LinearClient) => Promise<T>
+): Promise<T> {
+  await acquire()
+  try {
+    const client = signal ? new LinearClient({ apiKey: entry.apiKey, signal }) : entry.client
+    return await write(client)
+  } catch (error) {
+    if (error instanceof LinearWriteFailure) {
+      throw error
+    }
+    if (isAuthError(error)) {
+      clearToken(entry.workspace.id)
+      throw error
+    }
+    throw classifyWriteFailure(error)
+  } finally {
+    release()
+  }
+}
+
+async function runLinearLookup<T>(
+  entry: LinearClientForWorkspace,
+  lookup: () => Promise<T>
+): Promise<T | null> {
+  await acquire()
+  try {
+    return await lookup()
+  } catch (error) {
+    if (isAuthError(error)) {
+      clearToken(entry.workspace.id)
+      throw error
+    }
+    if (isLinearLookupMiss(error)) {
+      return null
+    }
+    throw error
+  } finally {
+    release()
+  }
+}
+
+function isLinearLookupMiss(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error)
+  // Why: Linear throws for direct entity lookups that miss; write-id probes
+  // need the same null shape as GraphQL nullable data, not a failed write.
+  return message.includes('Entity not found:') && message.includes('Could not find referenced')
+}
+
+async function confirmLinearWrite<T>(message: string, readback: () => Promise<T>): Promise<T> {
+  try {
+    return await readback()
+  } catch (error) {
+    throw new LinearWriteFailure('unconfirmed', message, error)
+  }
+}
+
+function mapRawCommentWriteRecord(
+  comment: NonNullable<LinearCommentByUuidResponse['comment']>
+): LinearCommentWriteRecord | null {
+  const issue = comment.issue
+  if (!issue?.id || !issue.identifier || !issue.url) {
+    return null
+  }
+  const parentId = comment.parent?.id ?? null
+  return {
+    id: comment.id,
+    url: comment.url ?? null,
+    body: comment.body ?? '',
+    issue: {
+      id: issue.id,
+      identifier: issue.identifier,
+      url: issue.url
+    },
+    parentId,
+    threadRootId: parentId ?? comment.id
+  }
+}
+
+function mapRawAttachmentWriteRecord(
+  attachment: NonNullable<LinearAttachmentByUuidResponse['attachment']>
+): LinearAttachmentWriteRecord | null {
+  const issue = attachment.issue
+  if (!issue?.id || !issue.identifier || !issue.url || !attachment.url) {
+    return null
+  }
+  return {
+    id: attachment.id,
+    title: attachment.title ?? attachment.url,
+    url: attachment.url,
+    issue: {
+      id: issue.id,
+      identifier: issue.identifier,
+      url: issue.url
+    }
+  }
+}
+
 export async function getIssue(
   id: string,
   workspaceId?: LinearWorkspaceSelection | null
@@ -380,6 +645,74 @@ export async function getIssue(
     }
   }
   return null
+}
+
+export async function getIssueByUuidForAgent(
+  id: string,
+  workspaceId?: string | null
+): Promise<LinearIssueWriteRecord | null> {
+  const entry = getClients(workspaceId)[0]
+  if (!entry) {
+    return null
+  }
+
+  return runLinearLookup(entry, async () => {
+    const result = await entry.client.client.rawRequest<
+      LinearIssueByUuidResponse,
+      LinearRawVariables
+    >(ISSUE_BY_UUID_QUERY, { id })
+    return result.data?.issue ?? null
+  })
+}
+
+export async function getCommentByUuidForAgent(
+  id: string,
+  workspaceId?: string | null
+): Promise<LinearCommentWriteRecord | null> {
+  const entry = getClients(workspaceId)[0]
+  if (!entry) {
+    return null
+  }
+
+  return runLinearLookup(entry, async () => {
+    const result = await entry.client.client.rawRequest<
+      LinearCommentByUuidResponse,
+      LinearRawVariables
+    >(COMMENT_BY_UUID_QUERY, { id })
+    const comment = result.data?.comment
+    return comment ? mapRawCommentWriteRecord(comment) : null
+  })
+}
+
+export async function getAttachmentByUuidForAgent(
+  id: string,
+  workspaceId?: string | null
+): Promise<LinearAttachmentWriteRecord | null> {
+  const entry = getClients(workspaceId)[0]
+  if (!entry) {
+    return null
+  }
+
+  return runLinearLookup(entry, async () => {
+    const result = await entry.client.client.rawRequest<
+      LinearAttachmentByUuidResponse,
+      LinearRawVariables
+    >(ATTACHMENT_BY_UUID_QUERY, { id })
+    const attachment = result.data?.attachment
+    return attachment ? mapRawAttachmentWriteRecord(attachment) : null
+  })
+}
+
+export async function getIssueCommentThreadRoot(
+  issueId: string,
+  commentId: string,
+  workspaceId?: string | null
+): Promise<{ id: string; parentId: string | null } | null> {
+  const comment = await getCommentByUuidForAgent(commentId, workspaceId)
+  if (!comment || comment.issue.id !== issueId) {
+    return null
+  }
+  return { id: comment.threadRootId ?? comment.id, parentId: comment.parentId }
 }
 
 export async function searchIssues(
@@ -622,6 +955,7 @@ export async function createIssue(
   description?: string,
   workspaceId?: string | null,
   options?: {
+    id?: string
     parentId?: string
     projectId?: string | null
     stateId?: string
@@ -641,6 +975,7 @@ export async function createIssue(
   await acquire()
   try {
     const result = await entry.client.createIssue({
+      ...(options?.id ? { id: options.id } : {}),
       teamId,
       title,
       ...(description ? { description } : {}),
@@ -675,6 +1010,61 @@ export async function createIssue(
   } finally {
     release()
   }
+}
+
+export async function createIssueForAgent(
+  teamId: string,
+  title: string,
+  description: string | undefined,
+  workspaceId: string,
+  options: {
+    id: string
+    parentId?: string | null
+    signal?: AbortSignal
+  }
+): Promise<LinearIssueWriteRecord> {
+  const entry = getClients(workspaceId)[0]
+  if (!entry) {
+    throw new LinearWriteFailure('failed', 'Not connected to Linear')
+  }
+
+  return runLinearWrite(entry, options.signal, async (client) => {
+    const result = await client.createIssue({
+      id: options.id,
+      teamId,
+      title,
+      ...(description ? { description } : {}),
+      ...(options.parentId ? { parentId: options.parentId } : {})
+    })
+    if (!result.success) {
+      throw new LinearWriteFailure('failed', 'Linear create failed')
+    }
+    const issue = await confirmLinearWrite(
+      'Issue was created but could not be retrieved',
+      async () => result.issue
+    )
+    if (!issue?.id) {
+      throw new LinearWriteFailure('unconfirmed', 'Issue was created but could not be retrieved')
+    }
+    return confirmLinearWrite('Issue was created but could not be retrieved', () =>
+      getCreatedIssueRecord(issue.id, client)
+    )
+  })
+}
+
+async function getCreatedIssueRecord(
+  issueId: string,
+  client: LinearClient
+): Promise<LinearIssueWriteRecord> {
+  const result = await client.client.rawRequest<LinearIssueByUuidResponse, LinearRawVariables>(
+    ISSUE_BY_UUID_QUERY,
+    { id: issueId }
+  )
+  const record = result.data?.issue ?? null
+  if (!record) {
+    throw new LinearWriteFailure('unconfirmed', 'Issue was created but could not be retrieved')
+  }
+  return record
 }
 
 export async function updateIssue(
@@ -738,11 +1128,41 @@ export async function updateIssue(
   }
 }
 
+export async function updateIssueForAgent(
+  id: string,
+  updates: Pick<LinearIssueUpdate, 'stateId'>,
+  workspaceId: string,
+  options: { signal?: AbortSignal } = {}
+): Promise<LinearIssueWriteRecord> {
+  const entry = getClients(workspaceId)[0]
+  if (!entry) {
+    throw new LinearWriteFailure('failed', 'Not connected to Linear')
+  }
+
+  return runLinearWrite(entry, options.signal, async (client) => {
+    const payload: Record<string, unknown> = {}
+    if (updates.stateId !== undefined) {
+      payload.stateId = updates.stateId
+    }
+    const result = await client.updateIssue(id, payload)
+    if (!result.success) {
+      throw new LinearWriteFailure('failed', 'Linear update failed')
+    }
+    return confirmLinearWrite('Issue was updated but could not be retrieved', () =>
+      getCreatedIssueRecord(id, client)
+    )
+  })
+}
+
 export async function addIssueComment(
   issueId: string,
   body: string,
-  workspaceId?: string | null
-): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
+  workspaceId?: string | null,
+  options?: { id?: string; parentId?: string | null }
+): Promise<
+  | { ok: true; id: string; url?: string | null; parentId?: string | null }
+  | { ok: false; error: string }
+> {
   const entry = getClients(workspaceId)[0]
   if (!entry) {
     return { ok: false, error: 'Not connected to Linear' }
@@ -750,12 +1170,22 @@ export async function addIssueComment(
 
   await acquire()
   try {
-    const result = await entry.client.createComment({ issueId, body })
+    const result = await entry.client.createComment({
+      ...(options?.id ? { id: options.id } : {}),
+      issueId,
+      body,
+      ...(options?.parentId ? { parentId: options.parentId } : {})
+    })
     if (!result.success) {
       return { ok: false, error: 'Failed to create comment' }
     }
     const comment = await result.comment
-    return { ok: true, id: comment?.id ?? '' }
+    return {
+      ok: true,
+      id: comment?.id ?? '',
+      url: comment?.url ?? null,
+      parentId: options?.parentId ?? null
+    }
   } catch (error) {
     if (isAuthError(error)) {
       clearToken(entry.workspace.id)
@@ -766,6 +1196,113 @@ export async function addIssueComment(
   } finally {
     release()
   }
+}
+
+export async function addIssueCommentForAgent(
+  issueId: string,
+  body: string,
+  workspaceId: string,
+  options: { id: string; parentId?: string | null; signal?: AbortSignal }
+): Promise<LinearCommentWriteRecord> {
+  const entry = getClients(workspaceId)[0]
+  if (!entry) {
+    throw new LinearWriteFailure('failed', 'Not connected to Linear')
+  }
+
+  return runLinearWrite(entry, options.signal, async (client) => {
+    const result = await client.createComment({
+      id: options.id,
+      issueId,
+      body,
+      ...(options.parentId ? { parentId: options.parentId } : {})
+    })
+    if (!result.success) {
+      throw new LinearWriteFailure('failed', 'Failed to create comment')
+    }
+    const comment = await confirmLinearWrite(
+      'Comment was created but could not be retrieved',
+      async () => result.comment
+    )
+    if (!comment?.id) {
+      throw new LinearWriteFailure('unconfirmed', 'Comment was created but could not be retrieved')
+    }
+    const record = await confirmLinearWrite('Comment was created but could not be retrieved', () =>
+      readCommentWriteRecord(client, comment.id)
+    )
+    if (!record) {
+      throw new LinearWriteFailure('unconfirmed', 'Comment was created but could not be retrieved')
+    }
+    return record
+  })
+}
+
+export async function createIssueAttachment(
+  issueId: string,
+  input: { id: string; title: string; url: string },
+  workspaceId: string,
+  options: { signal?: AbortSignal } = {}
+): Promise<LinearAttachmentWriteRecord> {
+  const entry = getClients(workspaceId)[0]
+  if (!entry) {
+    throw new LinearWriteFailure('failed', 'Not connected to Linear')
+  }
+
+  return runLinearWrite(entry, options.signal, async (client) => {
+    const result = await client.createAttachment({
+      id: input.id,
+      issueId,
+      title: input.title,
+      url: input.url
+    })
+    if (!result.success) {
+      throw new LinearWriteFailure('failed', 'Failed to create attachment')
+    }
+    const attachment = await confirmLinearWrite(
+      'Attachment was created but could not be retrieved',
+      async () => result.attachment
+    )
+    if (!attachment?.id) {
+      throw new LinearWriteFailure(
+        'unconfirmed',
+        'Attachment was created but could not be retrieved'
+      )
+    }
+    const record = await confirmLinearWrite(
+      'Attachment was created but could not be retrieved',
+      () => readAttachmentWriteRecord(client, attachment.id)
+    )
+    if (!record) {
+      throw new LinearWriteFailure(
+        'unconfirmed',
+        'Attachment was created but could not be retrieved'
+      )
+    }
+    return record
+  })
+}
+
+async function readCommentWriteRecord(
+  client: LinearClient,
+  id: string
+): Promise<LinearCommentWriteRecord | null> {
+  const result = await client.client.rawRequest<LinearCommentByUuidResponse, LinearRawVariables>(
+    COMMENT_BY_UUID_QUERY,
+    { id }
+  )
+  const comment = result.data?.comment
+  return comment ? mapRawCommentWriteRecord(comment) : null
+}
+
+async function readAttachmentWriteRecord(
+  client: LinearClient,
+  id: string
+): Promise<LinearAttachmentWriteRecord | null> {
+  const result = await client.client.rawRequest<LinearAttachmentByUuidResponse, LinearRawVariables>(
+    ATTACHMENT_BY_UUID_QUERY,
+    { id }
+  )
+  const attachment = result.data?.attachment
+  return attachment ? mapRawAttachmentWriteRecord(attachment) : null
 }
 
 export async function getIssueComments(

@@ -15,9 +15,15 @@ import type {
   WorktreeBaseStatusEvent,
   WorktreeLineage,
   WorktreeRemoteBranchConflictEvent,
-  WorktreeMeta
+  WorktreeMeta,
+  WorkspaceKey
 } from '../../../../shared/types'
 import type { TerminalGitHubPRLink } from '@/lib/terminal-github-pr-link-detector'
+import type {
+  PendingWorktreeCreation,
+  WorktreeCreationPhase
+} from '@/lib/pending-worktree-creation'
+import { getRepoIdFromWorktreeId } from '../../../../shared/worktree-id'
 export { getRepoIdFromWorktreeId } from '../../../../shared/worktree-id'
 
 export type WorktreeDeleteState = {
@@ -37,6 +43,22 @@ export type WorktreeSlice = {
   detectedWorktreesByRepo: Record<string, DetectedWorktreeListResult>
   worktreeLineageById: Record<string, WorktreeLineage>
   activeWorktreeId: string | null
+  activeWorkspaceKey: WorkspaceKey | null
+  /**
+   * In-flight / failed background worktree creations, keyed by a renderer
+   * `creationId`. Kept separate from `worktreesByRepo` on purpose — a real
+   * worktree row only exists once `git worktree add` succeeds, so faking one
+   * here would ripple through git-status, the tab model, persistence, and PTY
+   * spawning. Session-only; never persisted.
+   */
+  pendingWorktreeCreations: Record<string, PendingWorktreeCreation>
+  /**
+   * The pending creation currently filling the workspace content area (the
+   * "Creating worktree…" panel). Distinct from `activeWorktreeId`, which stays
+   * strictly real, so navigating to/away from a pending creation never routes a
+   * fake id through `setActiveWorktree` or nav-history.
+   */
+  activePendingCreationId: string | null
   // Why: signals the matching worktree card's inline title editor to open. The
   // workspace.rename shortcut sets this; the card clears it on consume.
   renamingWorktreeId: string | null
@@ -109,8 +131,31 @@ export type WorktreeSlice = {
     linkedGitLabMR?: number,
     linkedGitLabIssue?: number,
     startup?: WorktreeStartupLaunch,
-    pendingFirstAgentMessageRename?: boolean
+    pendingFirstAgentMessageRename?: boolean,
+    /** When set, correlates the backend's `createWorktree:progress` events to a
+     *  renderer pending creation. Synchronous callers omit it. */
+    creationId?: string,
+    linkedLinearIssueWorkspaceId?: string | null,
+    linkedLinearIssueOrganizationUrlKey?: string | null
   ) => Promise<CreateWorktreeResult>
+  /** Register an in-flight background creation and make it the active surface. */
+  beginPendingWorktreeCreation: (entry: PendingWorktreeCreation) => void
+  /** Merge a status patch (phase/error/status/loaderVisible) into an existing
+   *  pending entry. */
+  updatePendingWorktreeCreation: (
+    creationId: string,
+    patch: {
+      phase?: WorktreeCreationPhase
+      status?: 'creating' | 'error'
+      error?: string
+      loaderVisible?: boolean
+    }
+  ) => void
+  /** Drop a pending entry (on success or dismiss), clearing the active surface
+   *  if it pointed at this creation. */
+  removePendingWorktreeCreation: (creationId: string) => void
+  /** Point the content panel at a pending creation (or clear it with null). */
+  setActivePendingWorktreeCreation: (creationId: string | null) => void
   prefetchWorktreeCreateBase: (repoId: string, baseBranch?: string) => Promise<void>
   removeWorktree: (
     worktreeId: string,
@@ -167,6 +212,7 @@ export type WorktreeSlice = {
    */
   seedActiveWorktreeLastVisitedIfMissing: () => void
   setActiveWorktree: (worktreeId: string | null) => void
+  setActiveFolderWorkspace: (folderWorkspaceId: string) => void
   setRenamingWorktreeId: (worktreeId: string | null) => void
   allWorktrees: () => Worktree[]
   getKnownWorktreeById: (worktreeId: string) => Worktree | DetectedWorktree | undefined
@@ -203,24 +249,24 @@ export function applyWorktreeUpdates(
   worktreeId: string,
   updates: Partial<WorktreeMeta>
 ): Record<string, Worktree[]> {
-  let changed = false
-  const next: Record<string, Worktree[]> = {}
-
-  for (const [repoId, worktrees] of Object.entries(worktreesByRepo)) {
-    let repoChanged = false
-    const nextWorktrees = worktrees.map((worktree) => {
-      if (worktree.id !== worktreeId) {
-        return worktree
-      }
-
-      const updatedWorktree = { ...worktree, ...updates }
-      repoChanged = true
-      changed = true
-      return updatedWorktree
-    })
-
-    next[repoId] = repoChanged ? nextWorktrees : worktrees
+  const repoId = getRepoIdFromWorktreeId(worktreeId)
+  const worktrees = worktreesByRepo[repoId]
+  if (!worktrees) {
+    return worktreesByRepo
   }
 
-  return changed ? next : worktreesByRepo
+  let changed = false
+  const nextWorktrees = worktrees.map((worktree) => {
+    if (worktree.id !== worktreeId) {
+      return worktree
+    }
+
+    changed = true
+    return { ...worktree, ...updates }
+  })
+  if (!changed) {
+    return worktreesByRepo
+  }
+
+  return { ...worktreesByRepo, [repoId]: nextWorktrees }
 }

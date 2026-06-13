@@ -6,6 +6,7 @@ import { Input } from '../ui/input'
 import { Label } from '../ui/label'
 import { SearchableSetting } from './SearchableSetting'
 import { SettingsSubsectionHeader } from './SettingsFormControls'
+import { translate } from '@/i18n/i18n'
 
 export type HttpProxyUrlDraftState = {
   sourceValue: string
@@ -173,20 +174,40 @@ export function GeneralNetworkSettingsSection({
   return (
     <section key="network" className="space-y-4">
       <SettingsSubsectionHeader
-        title="Network"
-        description="Configure app-level network routing."
+        title={translate(
+          'auto.components.settings.GeneralNetworkSettingsSection.c46cdbbd4e',
+          'Network'
+        )}
+        description={translate(
+          'auto.components.settings.GeneralNetworkSettingsSection.d93c7cd531',
+          'Configure app-level network routing.'
+        )}
       />
 
       <SearchableSetting
-        title="HTTP Proxy"
-        description="Proxy URL for Orca network requests and local terminal children."
+        title={translate(
+          'auto.components.settings.GeneralNetworkSettingsSection.f00daf6324',
+          'HTTP Proxy'
+        )}
+        description={translate(
+          'auto.components.settings.GeneralNetworkSettingsSection.823e0f15b1',
+          'Proxy URL for Orca network requests and local terminal children.'
+        )}
         keywords={['proxy', 'http_proxy', 'https_proxy', 'network', 'dock', 'launchpad']}
         className="space-y-3"
       >
         <div className="space-y-1">
-          <Label htmlFor="settings-http-proxy-url">HTTP Proxy</Label>
+          <Label htmlFor="settings-http-proxy-url">
+            {translate(
+              'auto.components.settings.GeneralNetworkSettingsSection.f00daf6324',
+              'HTTP Proxy'
+            )}
+          </Label>
           <p className="text-xs text-muted-foreground">
-            Leave empty to use system proxy settings and inherited proxy environment variables.
+            {translate(
+              'auto.components.settings.GeneralNetworkSettingsSection.1e214e265a',
+              'Leave empty to use system proxy settings and inherited proxy environment variables.'
+            )}
           </p>
         </div>
         <Input
@@ -201,7 +222,10 @@ export function GeneralNetworkSettingsSection({
               e.currentTarget.blur()
             }
           }}
-          placeholder="http://proxy.example.com:8080"
+          placeholder={translate(
+            'auto.components.settings.GeneralNetworkSettingsSection.476f302aca',
+            'http://proxy.example.com:8080'
+          )}
           autoCapitalize="none"
           autoCorrect="off"
           autoComplete="off"
@@ -213,21 +237,38 @@ export function GeneralNetworkSettingsSection({
           <p className="text-xs text-destructive">{httpProxyUrlError}</p>
         ) : (
           <p className="text-xs text-muted-foreground">
-            Supports http, https, socks, socks4, and socks5 URLs.
+            {translate(
+              'auto.components.settings.GeneralNetworkSettingsSection.0adfce9fa7',
+              'Supports http, https, socks, socks4, and socks5 URLs.'
+            )}
           </p>
         )}
       </SearchableSetting>
 
       <SearchableSetting
-        title="Proxy Bypass Rules"
-        description="Hosts that should bypass the configured HTTP proxy."
+        title={translate(
+          'auto.components.settings.GeneralNetworkSettingsSection.f6d76cc8f4',
+          'Proxy Bypass Rules'
+        )}
+        description={translate(
+          'auto.components.settings.GeneralNetworkSettingsSection.fb7130dcb9',
+          'Hosts that should bypass the configured HTTP proxy.'
+        )}
         keywords={['proxy', 'bypass', 'no_proxy', 'localhost', 'network']}
         className="space-y-3"
       >
         <div className="space-y-1">
-          <Label htmlFor="settings-http-proxy-bypass-rules">Proxy Bypass Rules</Label>
+          <Label htmlFor="settings-http-proxy-bypass-rules">
+            {translate(
+              'auto.components.settings.GeneralNetworkSettingsSection.f6d76cc8f4',
+              'Proxy Bypass Rules'
+            )}
+          </Label>
           <p className="text-xs text-muted-foreground">
-            Optional. Separate hosts with commas, semicolons, or new lines.
+            {translate(
+              'auto.components.settings.GeneralNetworkSettingsSection.33ee3ca3af',
+              'Optional. Separate hosts with commas, semicolons, or new lines.'
+            )}
           </p>
         </div>
         <Input
@@ -240,7 +281,10 @@ export function GeneralNetworkSettingsSection({
               e.currentTarget.blur()
             }
           }}
-          placeholder="localhost, 127.0.0.1, *.internal"
+          placeholder={translate(
+            'auto.components.settings.GeneralNetworkSettingsSection.3e431564b5',
+            'localhost, 127.0.0.1, *.internal'
+          )}
           autoCapitalize="none"
           autoCorrect="off"
           autoComplete="off"

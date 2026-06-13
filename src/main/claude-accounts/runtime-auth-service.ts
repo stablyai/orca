@@ -184,9 +184,42 @@ export class ClaudeRuntimeAuthService {
       : null
     if (previousAccount && previousAccount.id !== activeAccount?.id) {
       if (previousManagedCredentialsJson) {
-        await this.readBackRefreshedTokens(previousManagedCredentialsJson, {
-          updateLastWrittenCredentialsJson: true
-        })
+        const outgoingReadBackResult = await this.readBackRefreshedTokens(
+          previousManagedCredentialsJson,
+          {
+            updateLastWrittenCredentialsJson: true
+          }
+        )
+        if (
+          outgoingReadBackResult.status === 'rejected' &&
+          outgoingReadBackResult.runtimeCredentialsChanged &&
+          hasLiveClaudePtys()
+        ) {
+          if (
+            outgoingReadBackResult.runtimeCredentialsJson &&
+            this.liveRuntimeCredentialsCanUpdateActiveAccount(
+              outgoingReadBackResult.runtimeCredentialsJson,
+              previousAccount,
+              previousManagedCredentialsJson,
+              previousManagedOauthAccount
+            )
+          ) {
+            // Why: switching away while Claude is live must preserve verified
+            // token refreshes before replacing the shared runtime credentials.
+            await this.writeManagedCredentials(
+              previousAccount,
+              outgoingReadBackResult.runtimeCredentialsJson
+            )
+          } else {
+            // Why: Claude's runtime credential blob can lack enough identity
+            // proof to attribute a live-session refresh. Do not persist that
+            // unverified blob, but also do not block the user from moving new
+            // terminals to the selected managed account.
+            console.warn(
+              '[claude-runtime-auth] Skipping unverified live Claude auth read-back while switching accounts'
+            )
+          }
+        }
       }
     }
     if (!activeAccount) {

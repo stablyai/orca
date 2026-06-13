@@ -95,6 +95,23 @@ describe('resolveDropdownItems', () => {
     expect(byKind.fetch.disabled).toBe(false)
   })
 
+  it('does not offer Publish Branch when HEAD is detached', () => {
+    const items = resolveDropdownItems(
+      inputs({
+        upstreamStatus: { hasUpstream: false, ahead: 0, behind: 0 },
+        branchCommitsAhead: 4,
+        hasCurrentBranch: false
+      })
+    )
+    const byKind = Object.fromEntries(
+      items.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
+    )
+    expect(byKind.push.title).toBe('Check out a branch before pushing commits')
+    expect(byKind.publish.label).toBe('No Branch')
+    expect(byKind.publish.title).toBe('Check out a branch before publishing commits')
+    expect(byKind.publish.disabled).toBe(true)
+  })
+
   it('disables Publish Branch when branch already has an upstream', () => {
     const items = resolveDropdownItems(
       inputs({

@@ -94,6 +94,7 @@ export function validateWorkingDirectory(cwd: string): void {
 export type ShellSpawnParams = {
   shellPath: string
   shellArgs: string[]
+  termName?: string
   cols: number
   rows: number
   cwd: string
@@ -120,6 +121,7 @@ export function spawnShellWithFallback(params: ShellSpawnParams): ShellSpawnResu
   const {
     shellPath,
     shellArgs,
+    termName = 'xterm-256color',
     cols,
     rows,
     cwd,
@@ -137,7 +139,7 @@ export function spawnShellWithFallback(params: ShellSpawnParams): ShellSpawnResu
   if (!primaryError) {
     try {
       return {
-        process: ptySpawn(shellPath, shellArgs, { name: 'xterm-256color', cols, rows, cwd, env }),
+        process: ptySpawn(shellPath, shellArgs, { name: termName, cols, rows, cwd, env }),
         shellPath
       }
     } catch (err) {
@@ -158,7 +160,7 @@ export function spawnShellWithFallback(params: ShellSpawnParams): ShellSpawnResu
         onBeforeFallbackSpawn?.(env, fallback)
         Object.assign(env, fallbackReady?.env ?? {})
         const proc = ptySpawn(fallback, fallbackReady?.args ?? ['-l'], {
-          name: 'xterm-256color',
+          name: termName,
           cols,
           rows,
           cwd,

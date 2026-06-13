@@ -801,6 +801,15 @@ async function ensureDevLauncher(args: {
     encoding: 'utf8',
     mode: args.platform === 'win32' ? undefined : 0o755
   })
+  if (args.commandName === DEV_COMMAND_NAME && args.platform !== 'win32') {
+    // Why: dev PTYs prepend userData/cli/bin to PATH, and product-owned
+    // commands are documented as `orca ...`. Keep that local alias fresh
+    // without claiming the global production command.
+    await writeFile(join(dirname(launcherPath), 'orca'), content, {
+      encoding: 'utf8',
+      mode: 0o755
+    })
+  }
   return launcherPath
 }
 

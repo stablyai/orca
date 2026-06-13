@@ -4,6 +4,7 @@ import {
   type QuickOpenIndexedFile
 } from '../quick-open-search'
 import type { RuntimeFileListState } from '../quick-open-file-list'
+import { translate } from '@/i18n/i18n'
 
 const HOST_FILE_EXTENSIONS = new Set([
   'css',
@@ -122,7 +123,13 @@ function classifyExplicitUrl(
     return null
   }
   if ((url.protocol !== 'http:' && url.protocol !== 'https:') || !url.hostname) {
-    return { kind: 'blocked', message: 'Enter an http:// or https:// URL.' }
+    return {
+      kind: 'blocked',
+      message: translate(
+        'auto.components.tab.bar.tab.create.entry.classifier.90eb94dc48',
+        'Enter an http:// or https:// URL.'
+      )
+    }
   }
   return { kind: 'explicit-url', url: url.href }
 }
@@ -214,7 +221,10 @@ export function classifyTabEntryQuery(
   return (
     getTabEntryOptions(query, fileList, 1)[0]?.classification ?? {
       kind: 'empty',
-      message: 'Enter a URL or file path.'
+      message: translate(
+        'auto.components.tab.bar.tab.create.entry.classifier.5553b283ce',
+        'Enter a URL or file path.'
+      )
     }
   )
 }
@@ -226,7 +236,18 @@ export function getTabEntryOptions(
 ): TabEntryOption[] {
   const trimmed = query.trim()
   if (!trimmed) {
-    return [{ id: 'empty', classification: { kind: 'empty', message: 'URL, file, or new file' } }]
+    return [
+      {
+        id: 'empty',
+        classification: {
+          kind: 'empty',
+          message: translate(
+            'auto.components.tab.bar.tab.create.entry.classifier.5a9c83c04b',
+            'Open any file, URL, agent, ...'
+          )
+        }
+      }
+    ]
   }
 
   const explicitUrl = classifyExplicitUrl(trimmed)
@@ -240,7 +261,18 @@ export function getTabEntryOptions(
   }
 
   if (fileList.loading) {
-    return [{ id: 'loading', classification: { kind: 'blocked', message: 'Loading files...' } }]
+    return [
+      {
+        id: 'loading',
+        classification: {
+          kind: 'blocked',
+          message: translate(
+            'auto.components.tab.bar.tab.create.entry.classifier.097a982ee0',
+            'Loading files...'
+          )
+        }
+      }
+    ]
   }
   if (fileList.loadError) {
     return [{ id: 'load-error', classification: { kind: 'blocked', message: fileList.loadError } }]
@@ -307,5 +339,16 @@ export function getTabEntryOptions(
     ]
   }
 
-  return [{ id: 'blocked', classification: { kind: 'blocked', message: 'No action available.' } }]
+  return [
+    {
+      id: 'blocked',
+      classification: {
+        kind: 'blocked',
+        message: translate(
+          'auto.components.tab.bar.tab.create.entry.classifier.42e6262ae9',
+          'No action available.'
+        )
+      }
+    }
+  ]
 }

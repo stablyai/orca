@@ -2,6 +2,10 @@
 import type * as ReactModule from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { SYNC_FIT_PANES_EVENT } from '@/constants/terminal'
+import {
+  registerLivePaneManager,
+  unregisterLivePaneManager
+} from '@/lib/pane-manager/pane-manager-registry'
 import { useTerminalPaneGlobalEffects } from './use-terminal-pane-global-effects'
 
 const mocks = vi.hoisted(() => ({
@@ -92,6 +96,7 @@ function useMountForFileDrop(
   manager: {
     getPanes: ReturnType<typeof vi.fn>
     resumeRendering: ReturnType<typeof vi.fn>
+    resetWebglTextureAtlases: ReturnType<typeof vi.fn>
     suspendRendering: ReturnType<typeof vi.fn>
     getActivePane: ReturnType<typeof vi.fn>
   }
@@ -107,6 +112,7 @@ function useMountForFileDrop(
   const manager = {
     getPanes: vi.fn(() => []),
     resumeRendering: vi.fn(),
+    resetWebglTextureAtlases: vi.fn(),
     suspendRendering: vi.fn(),
     getActivePane: vi.fn(() => null)
   }
@@ -133,6 +139,16 @@ function useMountForFileDrop(
 }
 
 describe('useTerminalPaneGlobalEffects', () => {
+  // Why: the live-manager registry is module-global; unregister in afterEach
+  // so a failed assertion cannot leak fake managers into later tests.
+  const registeredManagers: { resetWebglTextureAtlases(): void }[] = []
+
+  function registerManagerForReset<T extends { resetWebglTextureAtlases(): void }>(manager: T): T {
+    registerLivePaneManager(manager)
+    registeredManagers.push(manager)
+    return manager
+  }
+
   beforeEach(() => {
     resetHookRefs()
     vi.clearAllMocks()
@@ -152,6 +168,9 @@ describe('useTerminalPaneGlobalEffects', () => {
   })
 
   afterEach(() => {
+    for (const manager of registeredManagers.splice(0)) {
+      unregisterLivePaneManager(manager)
+    }
     delete (globalThis as unknown as { window?: unknown }).window
     delete (globalThis as unknown as { ResizeObserver?: unknown }).ResizeObserver
   })
@@ -166,6 +185,7 @@ describe('useTerminalPaneGlobalEffects', () => {
         { id: 2, terminal: terminalB }
       ]),
       resumeRendering: vi.fn(() => order.push('resume')),
+      resetWebglTextureAtlases: vi.fn(() => order.push('reset-atlas')),
       suspendRendering: vi.fn(),
       fitAllPanes: vi.fn(),
       getActivePane: vi.fn(() => null),
@@ -186,6 +206,10 @@ describe('useTerminalPaneGlobalEffects', () => {
     })
     mocks.fitAndFocusPanes.mockImplementation(() => order.push('fit-focus'))
 
+    // Why: the resume path resets atlases through the live-manager registry
+    // (shared glyph atlas), so the fake manager must be registered to observe
+    // its reset in the ordering assertion.
+    registerManagerForReset(manager)
     const isActiveRef = { current: false }
     const isVisibleRef = { current: false }
     beginHookRender()
@@ -214,7 +238,8 @@ describe('useTerminalPaneGlobalEffects', () => {
       'resume',
       'fit-focus',
       'restore:terminal-a',
-      'restore:terminal-b'
+      'restore:terminal-b',
+      'reset-atlas'
     ])
     expect(mocks.flushTerminalOutput).toHaveBeenNthCalledWith(1, terminalA, {
       maxChars: 256 * 1024
@@ -231,6 +256,7 @@ describe('useTerminalPaneGlobalEffects', () => {
     const manager = {
       getPanes: vi.fn(() => [{ id: 1, terminal: { name: 'terminal-a' } }]),
       resumeRendering: vi.fn(),
+      resetWebglTextureAtlases: vi.fn(),
       suspendRendering: vi.fn(),
       getActivePane: vi.fn(() => ({ id: 1, terminal: { name: 'terminal-a' } }))
     }
@@ -261,6 +287,7 @@ describe('useTerminalPaneGlobalEffects', () => {
     const manager = {
       getPanes: vi.fn(() => [{ id: 1, terminal: terminalA }]),
       resumeRendering: vi.fn(),
+      resetWebglTextureAtlases: vi.fn(),
       suspendRendering: vi.fn(),
       fitAllPanes: vi.fn(),
       getActivePane: vi.fn(() => null),
@@ -311,6 +338,49 @@ describe('useTerminalPaneGlobalEffects', () => {
     expect(mocks.captureScrollState).toHaveBeenCalledTimes(2)
     expect(manager.suspendRendering).toHaveBeenCalledTimes(1)
     expect(mocks.restoreScrollStateAfterLayout).toHaveBeenLastCalledWith(terminalA, preHideState)
+  })
+
+  it('clears WebGL texture atlases when the active visible terminal regains focus', () => {
+    const manager = {
+      getPanes: vi.fn(() => []),
+      resumeRendering: vi.fn(),
+      resetWebglTextureAtlases: vi.fn(),
+      suspendRendering: vi.fn(),
+      getActivePane: vi.fn(() => null)
+    }
+
+    // Why: focus recovery resets every registered manager (shared glyph
+    // atlas), so the fake manager observes the reset through the registry.
+    registerManagerForReset(manager)
+    beginHookRender()
+    useTerminalPaneGlobalEffects({
+      tabId: 'tab-1',
+      worktreeId: 'wt-1',
+      isActive: true,
+      isVisible: true,
+      isSyncFitEnabled: true,
+      paneCount: 0,
+      managerRef: { current: manager as never },
+      containerRef: { current: null },
+      paneTransportsRef: { current: new Map() },
+      isActiveRef: { current: false },
+      isVisibleRef: { current: false },
+      toggleExpandPane: vi.fn()
+    })
+
+    const focusListener = vi
+      .mocked(window.addEventListener)
+      .mock.calls.find(([eventName]) => eventName === 'focus')
+
+    expect(focusListener).toBeDefined()
+    const listener = focusListener?.[1]
+    if (typeof listener !== 'function') {
+      throw new Error('expected focus listener')
+    }
+    manager.resetWebglTextureAtlases.mockClear()
+    listener(new Event('focus'))
+
+    expect(manager.resetWebglTextureAtlases).toHaveBeenCalledTimes(1)
   })
 
   it('ignores terminal file drops for another terminal tab', () => {
@@ -373,6 +443,7 @@ describe('useTerminalPaneGlobalEffects', () => {
     const manager = {
       getPanes: vi.fn(() => []),
       resumeRendering: vi.fn(),
+      resetWebglTextureAtlases: vi.fn(),
       suspendRendering: vi.fn(),
       fitAllPanes: vi.fn(),
       getActivePane: vi.fn(() => null)
@@ -405,6 +476,7 @@ describe('useTerminalPaneGlobalEffects', () => {
     const manager = {
       getPanes: vi.fn(() => []),
       resumeRendering: vi.fn(),
+      resetWebglTextureAtlases: vi.fn(),
       suspendRendering: vi.fn(),
       fitAllPanes: vi.fn(),
       getActivePane: vi.fn(() => null)

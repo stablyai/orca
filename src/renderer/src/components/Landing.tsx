@@ -7,6 +7,7 @@ import { ShortcutKeyCombo } from './ShortcutKeyCombo'
 import { useShortcutKeys } from '@/hooks/useShortcutLabel'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import logo from '../../../../resources/logo.svg'
+import { translate } from '@/i18n/i18n'
 
 type ShortcutItem = {
   id: string
@@ -31,8 +32,11 @@ function getPreflightIssues(status: {
   if (!status.git.installed) {
     issues.push({
       id: 'git',
-      title: 'Git is not installed',
-      description: 'Git is required for Git projects, source control, and workspace management.',
+      title: translate('auto.components.Landing.e5b7296d9d', 'Git is not installed'),
+      description: translate(
+        'auto.components.Landing.b673e7cf1b',
+        'Git is required for Git projects, source control, and workspace management.'
+      ),
       fixLabel: 'Install Git',
       fixUrl: 'https://git-scm.com/downloads'
     })
@@ -41,16 +45,22 @@ function getPreflightIssues(status: {
   if (!status.gh.installed) {
     issues.push({
       id: 'gh',
-      title: 'GitHub CLI is not installed',
-      description: 'Orca uses the GitHub CLI (gh) to show pull requests, issues, and checks.',
+      title: translate('auto.components.Landing.5beaef5f9e', 'GitHub CLI is not installed'),
+      description: translate(
+        'auto.components.Landing.73e1ad4282',
+        'Orca uses the GitHub CLI (gh) to show pull requests, issues, and checks.'
+      ),
       fixLabel: 'Install GitHub CLI',
       fixUrl: 'https://cli.github.com'
     })
   } else if (!status.gh.authenticated) {
     issues.push({
       id: 'gh-auth',
-      title: 'GitHub CLI is not authenticated',
-      description: 'Run "gh auth login" in a terminal to connect your GitHub account.',
+      title: translate('auto.components.Landing.9f96d018b7', 'GitHub CLI is not authenticated'),
+      description: translate(
+        'auto.components.Landing.00cee697c1',
+        'Run "gh auth login" in a terminal to connect your GitHub account.'
+      ),
       fixLabel: 'Learn more',
       fixUrl: 'https://cli.github.com/manual/gh_auth_login'
     })
@@ -59,7 +69,9 @@ function getPreflightIssues(status: {
   return issues
 }
 
-type StarState = 'loading' | 'starred' | 'not-starred' | 'hidden'
+const ORCA_STARGAZERS_URL = 'https://github.com/stablyai/orca/stargazers'
+
+type StarState = 'loading' | 'starred' | 'not-starred' | 'web-fallback' | 'hidden'
 
 function GitHubStarButton({ hasRepos }: { hasRepos: boolean }): React.JSX.Element | null {
   const [state, setState] = useState<StarState>('loading')
@@ -74,7 +86,7 @@ function GitHubStarButton({ hasRepos }: { hasRepos: boolean }): React.JSX.Elemen
         return
       }
       if (result === null) {
-        setState('hidden')
+        setState('web-fallback')
       } else {
         setState(result ? 'starred' : 'not-starred')
       }
@@ -102,6 +114,11 @@ function GitHubStarButton({ hasRepos }: { hasRepos: boolean }): React.JSX.Elemen
       setMenuOpen((v) => !v)
       return
     }
+    if (state === 'web-fallback') {
+      await window.api.shell.openUrl(ORCA_STARGAZERS_URL)
+      await window.api.starNag.complete()
+      return
+    }
     if (state !== 'not-starred') {
       return
     }
@@ -109,7 +126,7 @@ function GitHubStarButton({ hasRepos }: { hasRepos: boolean }): React.JSX.Elemen
     const ok = await window.api.gh.starOrca('landing')
     if (!ok) {
       if (mountedRef.current) {
-        setState('not-starred')
+        setState('web-fallback')
       }
       return
     }
@@ -119,7 +136,7 @@ function GitHubStarButton({ hasRepos }: { hasRepos: boolean }): React.JSX.Elemen
     await window.api.starNag.complete()
   }
 
-  // Hide if gh CLI is unavailable, or if the user has already starred and added a repo
+  // Hide once the user has already starred and added a repo.
   if (state === 'hidden' || (state === 'starred' && hasRepos)) {
     return null
   }
@@ -130,7 +147,7 @@ function GitHubStarButton({ hasRepos }: { hasRepos: boolean }): React.JSX.Elemen
         className={cn(
           'inline-flex items-center gap-2 rounded-full border px-4 py-1.5 text-[13px] font-medium transition-all duration-300',
           state === 'loading' && 'pointer-events-none opacity-0',
-          state === 'not-starred' &&
+          state !== 'starred' &&
             'cursor-pointer border-amber-500/60 text-amber-700 hover:border-amber-500/80 hover:bg-amber-400/10 dark:border-amber-400/30 dark:text-amber-300/90 dark:hover:border-amber-400/50 dark:hover:bg-amber-400/[0.08]',
           state === 'starred' &&
             'cursor-pointer border-amber-500/50 bg-amber-400/10 text-amber-700 dark:border-amber-400/25 dark:bg-amber-400/[0.06] dark:text-amber-400/60'
@@ -138,15 +155,23 @@ function GitHubStarButton({ hasRepos }: { hasRepos: boolean }): React.JSX.Elemen
         onClick={handleClick}
         disabled={state === 'loading'}
       >
-        <Star
-          className={cn(
-            'size-3.5 transition-all duration-300',
-            state === 'starred'
-              ? 'fill-amber-500/70 text-amber-500/70 dark:fill-amber-400/60 dark:text-amber-400/60'
-              : 'text-amber-600 dark:text-amber-400/80'
-          )}
-        />
-        {state === 'starred' ? 'Starred on GitHub' : 'Star on GitHub'}
+        {state === 'web-fallback' ? (
+          <ExternalLink className="size-3.5 text-amber-600 transition-all duration-300 dark:text-amber-400/80" />
+        ) : (
+          <Star
+            className={cn(
+              'size-3.5 transition-all duration-300',
+              state === 'starred'
+                ? 'fill-amber-500/70 text-amber-500/70 dark:fill-amber-400/60 dark:text-amber-400/60'
+                : 'text-amber-600 dark:text-amber-400/80'
+            )}
+          />
+        )}
+        {state === 'starred'
+          ? translate('auto.components.Landing.ec43b38ba7', 'Starred on GitHub')
+          : state === 'web-fallback'
+            ? translate('auto.components.Landing.157bb5ecbb', 'Open GitHub')
+            : translate('auto.components.Landing.0d0ace8861', 'Star on GitHub')}
       </button>
       {state === 'starred' && menuOpen && (
         <div className="absolute right-0 top-[calc(100%+4px)] z-10 min-w-[100px] rounded-md border border-border bg-popover py-1 shadow-md">
@@ -157,7 +182,7 @@ function GitHubStarButton({ hasRepos }: { hasRepos: boolean }): React.JSX.Elemen
               setState('hidden')
             }}
           >
-            Hide
+            {translate('auto.components.Landing.c1cf168479', 'Hide')}
           </button>
         </div>
       )}
@@ -170,7 +195,9 @@ function PreflightBanner({ issues }: { issues: PreflightIssue[] }): React.JSX.El
     <div className="w-full rounded-lg border border-yellow-500/30 bg-yellow-500/5 p-4 space-y-3">
       <div className="flex items-center gap-2 text-yellow-500">
         <AlertTriangle className="size-4 shrink-0" />
-        <span className="text-sm font-medium">Missing dependencies</span>
+        <span className="text-sm font-medium">
+          {translate('auto.components.Landing.ce44fad849', 'Missing dependencies')}
+        </span>
       </div>
       <div className="space-y-2.5">
         {issues.map((issue) => (
@@ -197,9 +224,9 @@ export default function Landing(): React.JSX.Element {
   const repos = useAppStore((s) => s.repos)
   const openModal = useAppStore((s) => s.openModal)
 
-  const canCreateWorktree = repos.length > 0
   const createTargetLabel =
-    canCreateWorktree && repos.every((repo) => isGitRepoKind(repo)) ? 'Worktree' : 'Workspace'
+    repos.length > 0 && repos.every((repo) => isGitRepoKind(repo)) ? 'Worktree' : 'Workspace'
+  const canCreateWorktree = repos.length > 0
 
   const [preflightIssues, setPreflightIssues] = useState<PreflightIssue[]>([])
 
@@ -281,16 +308,25 @@ export default function Landing(): React.JSX.Element {
             className="flex items-center justify-center size-20 rounded-2xl border border-border/80 shadow-lg shadow-black/40"
             style={{ backgroundColor: '#12181e' }}
           >
-            <img src={logo} alt="Orca logo" className="size-12" />
+            <img
+              src={logo}
+              alt={translate('auto.components.Landing.520304a067', 'Orca logo')}
+              className="size-12"
+            />
           </div>
-          <h1 className="text-4xl font-bold text-foreground tracking-tight">ORCA</h1>
+          <h1 className="text-4xl font-bold text-foreground tracking-tight">
+            {translate('auto.components.Landing.6ca6ff404e', 'ORCA')}
+          </h1>
 
           {preflightIssues.length > 0 && <PreflightBanner issues={preflightIssues} />}
 
           <p className="text-sm text-muted-foreground text-center">
             {canCreateWorktree
-              ? 'Select a workspace from the sidebar to begin.'
-              : 'Add a project to get started.'}
+              ? translate(
+                  'auto.components.Landing.9c00bd4adf',
+                  'Select a workspace from the sidebar to begin.'
+                )
+              : translate('auto.components.Landing.cd21242762', 'Add a project to get started.')}
           </p>
 
           <div className="flex items-center justify-center gap-2.5 flex-wrap">
@@ -299,17 +335,22 @@ export default function Landing(): React.JSX.Element {
               onClick={() => openModal('add-repo')}
             >
               <FolderPlus className="size-3.5" />
-              Add Project
+              {translate('auto.components.Landing.f9eaa9e12d', 'Add Project')}
             </button>
 
             <button
               className="inline-flex items-center gap-1.5 bg-secondary/70 border border-border/80 text-foreground font-medium text-sm px-4 py-2 rounded-md transition-colors disabled:opacity-40 disabled:cursor-not-allowed enabled:cursor-pointer enabled:hover:bg-accent"
               disabled={!canCreateWorktree}
-              title={!canCreateWorktree ? 'Add a project first' : undefined}
+              title={
+                !canCreateWorktree
+                  ? translate('auto.components.Landing.f05d237049', 'Add a project first')
+                  : undefined
+              }
               onClick={() => openModal('new-workspace-composer', { telemetrySource: 'unknown' })}
             >
               <GitBranchPlus className="size-3.5" />
-              Create {createTargetLabel}
+              {translate('auto.components.Landing.76a95f7f47', 'Create')}
+              {createTargetLabel}
             </button>
           </div>
 

@@ -44,6 +44,10 @@ import type {
   WorktreeDefaultTabsLaunch,
   WorktreeRemoteBranchConflictEvent
 } from '../shared/types'
+import type {
+  WarpThemeImportPreview,
+  WarpThemeImportSource
+} from '../shared/terminal-custom-themes'
 import type { GitHistoryOptions, GitHistoryResult } from '../shared/git-history'
 import type { ShellOpenLocalPathResult } from '../shared/shell-open-types'
 import type { SkillDiscoveryResult, SkillDiscoveryTarget } from '../shared/skills'
@@ -135,6 +139,7 @@ import type {
   AutomationUpdateInput
 } from '../shared/automations-types'
 import type { KeybindingActionId, KeybindingFileSnapshot } from '../shared/keybindings'
+import type { AiVaultListArgs } from '../shared/ai-vault-types'
 import {
   ORCA_EDITOR_PREPARE_HOT_EXIT_EVENT,
   type EditorPrepareHotExitDetail
@@ -405,6 +410,8 @@ const api = {
       }
     },
     reload: (): Promise<void> => ipcRenderer.invoke('app:reload'),
+    awaitFirstWindowStartupServices: (): Promise<void> =>
+      ipcRenderer.invoke('app:awaitFirstWindowStartupServices'),
     // Why: on macOS this returns AppleCurrentKeyboardLayoutInputSourceID so
     // the renderer's keyboard-layout probe can distinguish Polish Pro / US
     // Extended / ABC Extended / IME Roman modes from plain US QWERTY (see
@@ -453,6 +460,11 @@ const api = {
     addRemote: (args) => ipcRenderer.invoke('repos:addRemote', args),
 
     create: (args) => ipcRenderer.invoke('repos:create', args),
+
+    isGitAvailable: (): Promise<boolean> => ipcRenderer.invoke('repos:isGitAvailable'),
+
+    getDefaultCreateProjectParent: (): Promise<string> =>
+      ipcRenderer.invoke('repos:getDefaultCreateProjectParent'),
 
     remove: (args) => ipcRenderer.invoke('repos:remove', args),
 
@@ -520,6 +532,14 @@ const api = {
     importNested: (args) => ipcRenderer.invoke('projectGroups:importNested', args)
   } satisfies PreloadApi['projectGroups'],
 
+  folderWorkspaces: {
+    list: () => ipcRenderer.invoke('folderWorkspaces:list'),
+    getPathStatus: (args) => ipcRenderer.invoke('folderWorkspaces:getPathStatus', args),
+    create: (args) => ipcRenderer.invoke('folderWorkspaces:create', args),
+    update: (args) => ipcRenderer.invoke('folderWorkspaces:update', args),
+    delete: (args) => ipcRenderer.invoke('folderWorkspaces:delete', args)
+  } satisfies PreloadApi['folderWorkspaces'],
+
   sparsePresets: {
     list: (args) => ipcRenderer.invoke('sparsePresets:list', args),
 
@@ -543,6 +563,17 @@ const api = {
     listAll: () => ipcRenderer.invoke('worktrees:listAll'),
 
     create: (args) => ipcRenderer.invoke('worktrees:create', args),
+
+    onCreateProgress: (
+      callback: (data: { creationId?: string; phase: 'fetching' | 'creating' }) => void
+    ): (() => void) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        data: { creationId?: string; phase: 'fetching' | 'creating' }
+      ) => callback(data)
+      ipcRenderer.on('createWorktree:progress', listener)
+      return () => ipcRenderer.removeListener('createWorktree:progress', listener)
+    },
 
     prefetchCreateBase: (args) => ipcRenderer.invoke('worktrees:prefetchCreateBase', args),
 
@@ -1433,13 +1464,19 @@ const api = {
   },
 
   starNag: {
-    onShow: (callback: () => void): (() => void) => {
-      const listener = (_event: Electron.IpcRendererEvent): void => callback()
+    onShow: (callback: (payload?: { mode?: 'gh' | 'web' }) => void): (() => void) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        payload?: { mode?: 'gh' | 'web' }
+      ): void => callback(payload)
       ipcRenderer.on('star-nag:show', listener)
       return () => ipcRenderer.removeListener('star-nag:show', listener)
     },
     dismiss: (): Promise<void> => ipcRenderer.invoke('star-nag:dismiss'),
     complete: (): Promise<void> => ipcRenderer.invoke('star-nag:complete'),
+    disable: (): Promise<void> => ipcRenderer.invoke('star-nag:disable'),
+    openWeb: (): Promise<void> => ipcRenderer.invoke('star-nag:openWeb'),
+    starOrca: (): Promise<boolean> => ipcRenderer.invoke('star-nag:starOrca'),
     forceShow: (): Promise<void> => ipcRenderer.invoke('star-nag:forceShow')
   },
 
@@ -1488,6 +1525,9 @@ const api = {
 
     previewGhosttyImport: (): Promise<GhosttyImportPreview> =>
       ipcRenderer.invoke('settings:previewGhosttyImport'),
+
+    previewWarpThemeImport: (source: WarpThemeImportSource): Promise<WarpThemeImportPreview> =>
+      ipcRenderer.invoke('settings:previewWarpThemeImport', source),
 
     onChanged: (callback: (updates: Record<string, unknown>) => void): (() => void) => {
       const listener = (
@@ -1553,10 +1593,12 @@ const api = {
     getInstallStatus: (): Promise<CliInstallStatus> => ipcRenderer.invoke('cli:getInstallStatus'),
     install: (): Promise<CliInstallStatus> => ipcRenderer.invoke('cli:install'),
     remove: (): Promise<CliInstallStatus> => ipcRenderer.invoke('cli:remove'),
-    getWslInstallStatus: (): Promise<CliInstallStatus> =>
-      ipcRenderer.invoke('cli:getWslInstallStatus'),
-    installWsl: (): Promise<CliInstallStatus> => ipcRenderer.invoke('cli:installWsl'),
-    removeWsl: (): Promise<CliInstallStatus> => ipcRenderer.invoke('cli:removeWsl')
+    getWslInstallStatus: (args?: { distro?: string | null }): Promise<CliInstallStatus> =>
+      ipcRenderer.invoke('cli:getWslInstallStatus', args),
+    installWsl: (args?: { distro?: string | null }): Promise<CliInstallStatus> =>
+      ipcRenderer.invoke('cli:installWsl', args),
+    removeWsl: (args?: { distro?: string | null }): Promise<CliInstallStatus> =>
+      ipcRenderer.invoke('cli:removeWsl', args)
   },
 
   agentHooks: {
@@ -2259,6 +2301,11 @@ const api = {
       connectionId?: string
     }): Promise<{ content: string; isBinary: boolean; isImage?: boolean; mimeType?: string }> =>
       ipcRenderer.invoke('fs:readFile', args),
+    downloadFile: (args: {
+      filePath: string
+      connectionId: string
+    }): Promise<{ canceled: true } | { canceled: false; destinationPath: string }> =>
+      ipcRenderer.invoke('fs:downloadFile', args),
     listMarkdownDocuments: (args: {
       rootPath: string
       connectionId?: string
@@ -2477,7 +2524,11 @@ const api = {
     }): Promise<{ success: boolean; error?: string }> => ipcRenderer.invoke('git:commit', args),
     generateCommitMessage: (args: {
       worktreePath: string
+      repoId?: string
       connectionId?: string
+      sourceControlAiResolvedParams?: unknown
+      sourceControlAi?: unknown
+      agentCmdOverrides?: Record<string, string>
     }): Promise<unknown> => ipcRenderer.invoke('git:generateCommitMessage', args),
     discoverCommitMessageModels: (args: {
       agentId: string
@@ -2490,11 +2541,15 @@ const api = {
     }): Promise<void> => ipcRenderer.invoke('git:cancelGenerateCommitMessage', args),
     generatePullRequestFields: (args: {
       worktreePath: string
+      repoId?: string
       base: string
       title: string
       body: string
       draft: boolean
       connectionId?: string
+      sourceControlAiResolvedParams?: unknown
+      sourceControlAi?: unknown
+      agentCmdOverrides?: Record<string, string>
     }): Promise<unknown> => ipcRenderer.invoke('git:generatePullRequestFields', args),
     cancelGeneratePullRequestFields: (args: {
       worktreePath: string
@@ -3191,6 +3246,11 @@ const api = {
       ipcRenderer.invoke('openCodeUsage:getBreakdown', args),
     getRecentSessions: (args: { scope: string; range: string; limit?: number }): Promise<unknown> =>
       ipcRenderer.invoke('openCodeUsage:getRecentSessions', args)
+  },
+
+  aiVault: {
+    listSessions: (args?: AiVaultListArgs): Promise<unknown> =>
+      ipcRenderer.invoke('aiVault:listSessions', args)
   },
 
   runtime: {

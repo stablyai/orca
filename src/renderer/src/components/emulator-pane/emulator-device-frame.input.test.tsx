@@ -147,15 +147,38 @@ function wheelEvent(init: {
   return event
 }
 
-function decodedSentTouches(): unknown[] {
+function keyEvent(
+  type: string,
+  init: { altKey?: boolean; ctrlKey?: boolean; key: string; metaKey?: boolean; shiftKey?: boolean }
+): Event {
+  const event = new Event(type, { bubbles: true, cancelable: true })
+  Object.defineProperties(event, {
+    altKey: { value: init.altKey ?? false },
+    ctrlKey: { value: init.ctrlKey ?? false },
+    isComposing: { value: false },
+    key: { value: init.key },
+    metaKey: { value: init.metaKey ?? false },
+    shiftKey: { value: init.shiftKey ?? false }
+  })
+  return event
+}
+
+function decodedSentMessages(tag: number): unknown[] {
   const ws = FakeWebSocket.instances[0]
   if (!ws) {
     return []
   }
-  return ws.sent.map((frame) => {
-    expect(frame[0]).toBe(0x03)
-    return JSON.parse(new TextDecoder().decode(frame.subarray(1)))
-  })
+  return ws.sent
+    .filter((frame) => frame[0] === tag)
+    .map((frame) => JSON.parse(new TextDecoder().decode(frame.subarray(1))))
+}
+
+function decodedSentTouches(): unknown[] {
+  return decodedSentMessages(0x03)
+}
+
+function decodedSentKeyboardFrames(): unknown[] {
+  return decodedSentMessages(0x06)
 }
 
 describe('EmulatorDeviceFrame input', () => {
@@ -179,6 +202,142 @@ describe('EmulatorDeviceFrame input', () => {
       { type: 'end', x: 0.5, y: 0.2 }
     ])
     expect(onGesture).not.toHaveBeenCalled()
+  })
+
+  it('marks bottom-origin pointer drags as serve-sim edge gestures', () => {
+    renderFrame()
+    act(() => {
+      FakeWebSocket.instances[0]?.open()
+    })
+    const screen = getScreen()
+
+    act(() => {
+      screen.dispatchEvent(pointerEvent('pointerdown', { clientX: 50, clientY: 196 }))
+      screen.dispatchEvent(pointerEvent('pointermove', { clientX: 50, clientY: 120 }))
+      screen.dispatchEvent(pointerEvent('pointerup', { clientX: 50, clientY: 40 }))
+    })
+
+    expect(decodedSentTouches()).toEqual([
+      { type: 'begin', x: 0.5, y: 0.98, edge: 3 },
+      { type: 'move', x: 0.5, y: 0.6, edge: 3 },
+      { type: 'end', x: 0.5, y: 0.2, edge: 3 }
+    ])
+  })
+
+  it('forwards focused keyboard text as serve-sim HID frames', () => {
+    vi.useFakeTimers()
+    renderFrame()
+    act(() => {
+      FakeWebSocket.instances[0]?.open()
+    })
+    const screen = getScreen()
+
+    act(() => {
+      screen.dispatchEvent(keyEvent('keydown', { key: 'Enter' }))
+      screen.dispatchEvent(keyEvent('keydown', { key: 'A' }))
+    })
+
+    expect(decodedSentKeyboardFrames()).toEqual([{ type: 'down', usage: 225 }])
+
+    act(() => {
+      vi.advanceTimersByTime(12)
+    })
+
+    expect(decodedSentKeyboardFrames()).toEqual([
+      { type: 'down', usage: 225 },
+      { type: 'down', usage: 4 },
+      { type: 'up', usage: 4 },
+      { type: 'up', usage: 225 }
+    ])
+  })
+
+  it('releases pressed keyboard usages when delayed frames are canceled by cleanup', () => {
+    vi.useFakeTimers()
+    renderFrame()
+    act(() => {
+      FakeWebSocket.instances[0]?.open()
+    })
+    const screen = getScreen()
+
+    act(() => {
+      screen.dispatchEvent(keyEvent('keydown', { key: 'Enter' }))
+      screen.dispatchEvent(keyEvent('keydown', { key: 'A' }))
+    })
+
+    expect(decodedSentKeyboardFrames()).toEqual([{ type: 'down', usage: 225 }])
+
+    act(() => {
+      root.render(<div />)
+    })
+
+    expect(decodedSentKeyboardFrames()).toEqual([
+      { type: 'down', usage: 225 },
+      { type: 'up', usage: 225 }
+    ])
+  })
+
+  it('does not trap Tab focus until keyboard capture is explicitly active', () => {
+    vi.useFakeTimers()
+    renderFrame()
+    act(() => {
+      FakeWebSocket.instances[0]?.open()
+    })
+    const screen = getScreen()
+    expect(screen.getAttribute('role')).toBe('application')
+
+    const tabBeforeCapture = keyEvent('keydown', { key: 'Tab' })
+    act(() => {
+      screen.dispatchEvent(tabBeforeCapture)
+    })
+
+    expect(tabBeforeCapture.defaultPrevented).toBe(false)
+    expect(decodedSentKeyboardFrames()).toEqual([])
+
+    const enterCapture = keyEvent('keydown', { key: 'Enter' })
+    const tabDuringCapture = keyEvent('keydown', { key: 'Tab', shiftKey: true })
+    act(() => {
+      screen.dispatchEvent(enterCapture)
+      screen.dispatchEvent(tabDuringCapture)
+    })
+
+    expect(enterCapture.defaultPrevented).toBe(true)
+    expect(tabDuringCapture.defaultPrevented).toBe(true)
+
+    act(() => {
+      vi.advanceTimersByTime(12)
+    })
+
+    expect(decodedSentKeyboardFrames()).toEqual([
+      { type: 'down', usage: 225 },
+      { type: 'down', usage: 43 },
+      { type: 'up', usage: 43 },
+      { type: 'up', usage: 225 }
+    ])
+
+    const escapeCapture = keyEvent('keydown', { key: 'Escape' })
+    const tabAfterEscape = keyEvent('keydown', { key: 'Tab' })
+    act(() => {
+      screen.dispatchEvent(escapeCapture)
+      screen.dispatchEvent(tabAfterEscape)
+    })
+
+    expect(escapeCapture.defaultPrevented).toBe(true)
+    expect(tabAfterEscape.defaultPrevented).toBe(false)
+  })
+
+  it('leaves host modifier shortcuts alone while focused', () => {
+    renderFrame()
+    act(() => {
+      FakeWebSocket.instances[0]?.open()
+    })
+    const screen = getScreen()
+
+    act(() => {
+      screen.dispatchEvent(keyEvent('keydown', { key: 'p', metaKey: true }))
+      screen.dispatchEvent(keyEvent('keydown', { key: 'p', ctrlKey: true }))
+    })
+
+    expect(decodedSentKeyboardFrames()).toEqual([])
   })
 
   it('turns trackpad wheel input into a live touch scroll', () => {

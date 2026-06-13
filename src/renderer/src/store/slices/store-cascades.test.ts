@@ -137,7 +137,8 @@ describe('removeWorktree cascade', () => {
       activeFileId: '/path/wt1/file.ts',
       activeTabType: 'editor',
       activeFileIdByWorktree: { [worktreeId]: '/path/wt1/file.ts' },
-      activeTabTypeByWorktree: { [worktreeId]: 'editor' }
+      activeTabTypeByWorktree: { [worktreeId]: 'editor' },
+      rightSidebarExplorerViewByWorktree: { [worktreeId]: 'search' }
     })
 
     const result = await store.getState().removeWorktree(worktreeId)
@@ -159,6 +160,7 @@ describe('removeWorktree cascade', () => {
     expect(s.activeTabType).toBe('terminal')
     expect(s.activeFileIdByWorktree[worktreeId]).toBeUndefined()
     expect(s.activeTabTypeByWorktree[worktreeId]).toBeUndefined()
+    expect(s.rightSidebarExplorerViewByWorktree[worktreeId]).toBeUndefined()
   })
 
   it('warns when workspace removal keeps the local branch', async () => {
@@ -759,7 +761,7 @@ describe('setActiveWorktree', () => {
         ]
       },
       rightSidebarTab: 'checks',
-      rightSidebarTabByWorktree: { [wt1]: 'search', [wt2]: 'explorer' }
+      rightSidebarTabByWorktree: { [wt1]: 'search' as never, [wt2]: 'explorer' }
     })
 
     store.getState().setActiveWorktree(wt1)
@@ -770,6 +772,41 @@ describe('setActiveWorktree', () => {
 
     store.getState().setActiveWorktree(wt1)
     expect(store.getState().rightSidebarTab).toBe('checks')
+  })
+
+  it('restores the Explorer files/search subview per worktree when switching', () => {
+    const store = createTestStore()
+    const wt1 = 'repo1::/path/wt1'
+    const wt2 = 'repo1::/path/wt2'
+    const wt3 = 'repo1::/path/wt3'
+
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [
+          makeWorktree({ id: wt1, repoId: 'repo1', path: '/path/wt1' }),
+          makeWorktree({ id: wt2, repoId: 'repo1', path: '/path/wt2' }),
+          makeWorktree({ id: wt3, repoId: 'repo1', path: '/path/wt3' })
+        ]
+      },
+      rightSidebarTab: 'explorer',
+      rightSidebarExplorerView: 'search',
+      rightSidebarExplorerViewByWorktree: {
+        [wt1]: 'search',
+        [wt2]: 'files'
+      }
+    })
+
+    store.getState().setActiveWorktree(wt1)
+    expect(store.getState().rightSidebarExplorerView).toBe('search')
+
+    store.getState().setActiveWorktree(wt2)
+    expect(store.getState().rightSidebarExplorerView).toBe('files')
+
+    store.getState().setActiveWorktree(wt3)
+    expect(store.getState().rightSidebarExplorerView).toBe('files')
+
+    store.getState().setActiveWorktree(wt1)
+    expect(store.getState().rightSidebarExplorerView).toBe('search')
   })
 
   it('does not reset the right sidebar tab for worktrees without remembered sidebar state', () => {
@@ -851,7 +888,7 @@ describe('setActiveWorktree', () => {
     seedStore(store, {
       activeWorktreeId: 'repo1::/path/wt1',
       rightSidebarTab: 'checks',
-      rightSidebarTabByWorktree: { 'repo1::/path/wt1': 'search' }
+      rightSidebarTabByWorktree: { 'repo1::/path/wt1': 'search' as never }
     })
 
     store.getState().setActiveWorktree(null)
@@ -1076,6 +1113,35 @@ describe('setActiveWorktree', () => {
     )
     expect(groups[0].activeTabId).toBe(terminal.id)
     expect(groups[0].tabOrder).toEqual([terminal.id])
+  })
+
+  it('stores trimmed quick command labels on terminal and unified tabs', () => {
+    const store = createTestStore()
+    const wt = 'repo1::/path/wt1'
+
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+      }
+    })
+
+    const labeled = store
+      .getState()
+      .createTab(wt, undefined, undefined, { quickCommandLabel: '  Run tests  ' })
+    const unlabeled = store
+      .getState()
+      .createTab(wt, undefined, undefined, { quickCommandLabel: '   ' })
+    const state = store.getState()
+
+    expect(state.tabsByWorktree[wt].find((tab) => tab.id === labeled.id)?.quickCommandLabel).toBe(
+      'Run tests'
+    )
+    expect(
+      state.unifiedTabsByWorktree[wt].find((tab) => tab.entityId === labeled.id)?.quickCommandLabel
+    ).toBe('Run tests')
+    expect(state.tabsByWorktree[wt].find((tab) => tab.id === unlabeled.id)).not.toHaveProperty(
+      'quickCommandLabel'
+    )
   })
 
   it('stamps the Windows default shell onto new terminal tabs', () => {

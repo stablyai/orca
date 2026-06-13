@@ -11,6 +11,10 @@ import type { NativeFileDropPayload } from '../shared/native-file-drop'
 import type { AppIdentity } from '../shared/app-identity'
 import type { TerminalPaneSplitSource } from '../shared/feature-education-telemetry'
 import type {
+  FolderWorkspacePathStatus,
+  FolderWorkspacePathStatusRequest
+} from '../shared/folder-workspace-path-status'
+import type {
   BaseRefDefaultResult,
   BaseRefSearchResult,
   BrowserCookieImportResult,
@@ -122,6 +126,7 @@ import type {
   PRRefreshOutcome,
   Repo,
   ProjectGroup,
+  FolderWorkspace,
   ProjectGroupImportResult,
   ProjectGroupImportMode,
   ShellHydrationFailureReason,
@@ -131,6 +136,7 @@ import type {
   SearchResult,
   StatsSummary,
   MemorySnapshot,
+  TuiAgent,
   UpdateStatus,
   Worktree,
   WorktreeBaseStatusEvent,
@@ -144,6 +150,10 @@ import type {
   WorkspaceSessionPatch,
   WorkspaceSessionState
 } from '../shared/types'
+import type {
+  WarpThemeImportPreview,
+  WarpThemeImportSource
+} from '../shared/terminal-custom-themes'
 import type { SetupScriptImportCandidate } from '../shared/setup-script-imports'
 import type { GitHistoryOptions, GitHistoryResult } from '../shared/git-history'
 import type { PublicKnownRuntimeEnvironment } from '../shared/runtime-environments'
@@ -220,6 +230,8 @@ import type {
   CommitMessageAgentCapability,
   CommitMessageModelCapability
 } from '../shared/commit-message-agent-spec'
+import type { ResolvedSourceControlAiGenerationParams } from '../shared/source-control-ai'
+import type { SourceControlAiSettings } from '../shared/source-control-ai-types'
 import type { ShellOpenLocalPathResult } from '../shared/shell-open-types'
 import type { SkillDiscoveryResult, SkillDiscoveryTarget } from '../shared/skills'
 import type {
@@ -311,6 +323,7 @@ import type {
   OpenCodeUsageSnapshot,
   OpenCodeUsageSummary
 } from '../shared/opencode-usage-types'
+import type { AiVaultListArgs, AiVaultListResult } from '../shared/ai-vault-types'
 import type { TelemetryConsentState } from '../shared/telemetry-consent-types'
 import type { AgentKind, LaunchSource, RequestKind } from '../shared/telemetry-events'
 import type { AppStarSource } from '../shared/gh-star-source'
@@ -659,6 +672,10 @@ export type OpenCodeUsageApi = {
   }) => Promise<OpenCodeUsageSessionRow[]>
 }
 
+export type AiVaultApi = {
+  listSessions: (args?: AiVaultListArgs) => Promise<AiVaultListResult>
+}
+
 export type AppApi = {
   /** Returns the app identity currently exposed to native chrome and the titlebar. */
   getIdentity: () => Promise<AppIdentity>
@@ -675,6 +692,9 @@ export type AppApi = {
   /** Reloads the current app renderer through main so expected renderer
    *  teardown can be classified before Electron emits process-gone events. */
   reload: () => Promise<void>
+  /** Resolves when the daemon PTY provider and hook receiver have either
+   *  started or failed open for the first BrowserWindow. */
+  awaitFirstWindowStartupServices: () => Promise<void>
   /** Returns the macOS `AppleCurrentKeyboardLayoutInputSourceID` when
    *  available (e.g. `com.apple.keylayout.PolishPro`). Used by the
    *  keyboard-layout probe to distinguish layouts whose base layer matches
@@ -734,9 +754,8 @@ export type PreloadApi = {
           | 'externalWorktreeVisibilityPromptDismissedAt'
           | 'projectGroupId'
           | 'projectGroupOrder'
-          | 'sourceControlAi'
         >
-      >
+      > & { sourceControlAi?: Repo['sourceControlAi'] | null }
     }) => Promise<Repo>
     pickFolder: () => Promise<string | null>
     pickDirectory: () => Promise<string | null>
@@ -755,6 +774,8 @@ export type PreloadApi = {
       name: string
       kind: 'git' | 'folder'
     }) => Promise<{ repo: Repo } | { error: string }>
+    isGitAvailable: () => Promise<boolean>
+    getDefaultCreateProjectParent: () => Promise<string>
     onCloneProgress: (callback: (data: { phase: string; percent: number }) => void) => () => void
     getGitUsername: (args: { repoId: string }) => Promise<string>
     getBaseRefDefault: (args: { repoId: string }) => Promise<BaseRefDefaultResult>
@@ -771,6 +792,7 @@ export type PreloadApi = {
     create: (args: {
       name: string
       parentPath?: string | null
+      connectionId?: string | null
       parentGroupId?: string | null
       createdFrom?: ProjectGroup['createdFrom']
     }) => Promise<ProjectGroup>
@@ -803,6 +825,42 @@ export type PreloadApi = {
       mode: ProjectGroupImportMode
     }) => Promise<ProjectGroupImportResult>
   }
+  folderWorkspaces: {
+    list: () => Promise<FolderWorkspace[]>
+    getPathStatus: (args: FolderWorkspacePathStatusRequest) => Promise<FolderWorkspacePathStatus>
+    create: (args: {
+      projectGroupId: string
+      name?: string
+      folderPath?: string | null
+      connectionId?: string | null
+      linkedTask?: FolderWorkspace['linkedTask']
+      createdWithAgent?: FolderWorkspace['createdWithAgent']
+      pendingFirstAgentMessageRename?: boolean
+    }) => Promise<FolderWorkspace>
+    update: (args: {
+      folderWorkspaceId: string
+      updates: Partial<
+        Pick<
+          FolderWorkspace,
+          | 'name'
+          | 'folderPath'
+          | 'linkedTask'
+          | 'comment'
+          | 'isArchived'
+          | 'isUnread'
+          | 'isPinned'
+          | 'sortOrder'
+          | 'manualOrder'
+          | 'workspaceStatus'
+          | 'createdWithAgent'
+          | 'pendingFirstAgentMessageRename'
+          | 'firstAgentMessageRenameError'
+          | 'lastActivityAt'
+        >
+      >
+    }) => Promise<FolderWorkspace | null>
+    delete: (args: { folderWorkspaceId: string }) => Promise<boolean>
+  }
   sparsePresets: {
     list: (args: { repoId: string }) => Promise<SparsePreset[]>
     save: (args: {
@@ -819,6 +877,13 @@ export type PreloadApi = {
     listDetected: (args: { repoId: string }) => Promise<DetectedWorktreeListResult>
     listAll: () => Promise<Worktree[]>
     create: (args: CreateWorktreeArgs) => Promise<CreateWorktreeResult>
+    /** Two-phase progress for a background `create`, correlated by
+     *  `creationId`. Renderer routes each event to its pending creation's
+     *  status surface; the remote/runtime create path emits nothing, so the
+     *  surface falls back to an indeterminate spinner. */
+    onCreateProgress: (
+      callback: (data: { creationId?: string; phase: 'fetching' | 'creating' }) => void
+    ) => () => void
     prefetchCreateBase: (args: { repoId: string; baseBranch?: string }) => Promise<void>
     resolvePrBase: (args: {
       repoId: string
@@ -1558,9 +1623,12 @@ export type PreloadApi = {
     listTransitions: (args: { key: string; siteId?: string }) => Promise<JiraTransition[]>
   }
   starNag: {
-    onShow: (callback: () => void) => () => void
+    onShow: (callback: (payload?: { mode?: 'gh' | 'web' }) => void) => () => void
     dismiss: () => Promise<void>
     complete: () => Promise<void>
+    disable: () => Promise<void>
+    openWeb: () => Promise<void>
+    starOrca: () => Promise<boolean>
     forceShow: () => Promise<void>
   }
   /** Fire-and-forget track. Loose typing at the IPC boundary on purpose —
@@ -1604,6 +1672,7 @@ export type PreloadApi = {
     set: (args: Partial<GlobalSettings>) => Promise<GlobalSettings>
     listFonts: () => Promise<string[]>
     previewGhosttyImport: () => Promise<GhosttyImportPreview>
+    previewWarpThemeImport: (source: WarpThemeImportSource) => Promise<WarpThemeImportPreview>
     /** Subscribe to out-of-band settings updates (e.g. the View > Appearance
      *  menu toggles) so the renderer can stay in sync with main's persisted
      *  state without round-tripping through settings:get. */
@@ -1653,9 +1722,9 @@ export type PreloadApi = {
     getInstallStatus: () => Promise<CliInstallStatus>
     install: () => Promise<CliInstallStatus>
     remove: () => Promise<CliInstallStatus>
-    getWslInstallStatus: () => Promise<CliInstallStatus>
-    installWsl: () => Promise<CliInstallStatus>
-    removeWsl: () => Promise<CliInstallStatus>
+    getWslInstallStatus: (args?: { distro?: string | null }) => Promise<CliInstallStatus>
+    installWsl: (args?: { distro?: string | null }) => Promise<CliInstallStatus>
+    removeWsl: (args?: { distro?: string | null }) => Promise<CliInstallStatus>
   }
   agentHooks: {
     claudeStatus: () => Promise<AgentHookInstallStatus>
@@ -1814,12 +1883,17 @@ export type PreloadApi = {
   claudeUsage: ClaudeUsageApi
   codexUsage: CodexUsageApi
   openCodeUsage: OpenCodeUsageApi
+  aiVault: AiVaultApi
   fs: {
     readDir: (args: { dirPath: string; connectionId?: string }) => Promise<DirEntry[]>
     readFile: (args: {
       filePath: string
       connectionId?: string
     }) => Promise<{ content: string; isBinary: boolean; isImage?: boolean; mimeType?: string }>
+    downloadFile: (args: {
+      filePath: string
+      connectionId: string
+    }) => Promise<{ canceled: true } | { canceled: false; destinationPath: string }>
     listMarkdownDocuments: (args: {
       rootPath: string
       connectionId?: string
@@ -2014,6 +2088,9 @@ export type PreloadApi = {
       worktreePath: string
       repoId?: string
       connectionId?: string
+      sourceControlAiResolvedParams?: ResolvedSourceControlAiGenerationParams
+      sourceControlAi?: SourceControlAiSettings
+      agentCmdOverrides?: Partial<Record<TuiAgent, string>>
     }) => Promise<
       | { success: true; message: string; agentLabel?: string }
       | { success: false; error: string; canceled?: boolean }
@@ -2043,13 +2120,17 @@ export type PreloadApi = {
       body: string
       draft: boolean
       connectionId?: string
+      sourceControlAiResolvedParams?: ResolvedSourceControlAiGenerationParams
+      sourceControlAi?: SourceControlAiSettings
+      agentCmdOverrides?: Partial<Record<TuiAgent, string>>
     }) => Promise<
       | {
           success: true
           fields: { base: string; title: string; body: string; draft: boolean }
           agentLabel?: string
+          branchChangedByPreparation?: boolean
         }
-      | { success: false; error: string; canceled?: boolean }
+      | { success: false; error: string; canceled?: boolean; branchChangedByPreparation?: boolean }
     >
     cancelGeneratePullRequestFields: (args: {
       worktreePath: string

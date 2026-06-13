@@ -33,3 +33,13 @@ export function getTabRootStateClasses(isActive: boolean): string {
     ? 'bg-[color-mix(in_srgb,var(--foreground)_6%,var(--card))] text-foreground'
     : 'bg-card text-muted-foreground hover:text-foreground'
 }
+
+export function getTabStripBorderClasses(
+  hasTabsToRight: boolean,
+  options?: { includeTopBorder?: boolean }
+): string {
+  const includeTopBorder = options?.includeTopBorder ?? true
+  return [includeTopBorder ? 'border-t' : '', hasTabsToRight ? 'border-r' : '', 'border-border']
+    .filter(Boolean)
+    .join(' ')
+}

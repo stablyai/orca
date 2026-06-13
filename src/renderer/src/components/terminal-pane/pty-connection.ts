@@ -8,17 +8,19 @@ import {
 } from '@/lib/agent-status'
 import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
 import { useAppStore } from '@/store'
-import { getRepoMapFromState, getWorktreeMapFromState } from '@/store/selectors'
+import { getWorktreeMapFromState } from '@/store/selectors'
+import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import type { PtyBufferSnapshot, PtyConnectResult } from './pty-transport'
 import { createIpcPtyTransport } from './pty-transport'
 import { createRemoteRuntimePtyTransport } from './remote-runtime-pty-transport'
+import { getConnectionId } from '@/lib/connection-context'
 import { shouldSeedCacheTimerOnInitialTitle } from './cache-timer-seeding'
 import type { PtyConnectionDeps } from './pty-connection-types'
 import { safeFit } from '@/lib/pane-manager/pane-tree-ops'
 import { getFitOverrideForPty, bindPanePtyId } from '@/lib/pane-manager/mobile-fit-overrides'
 import { isPtyLocked } from '@/lib/pane-manager/mobile-driver-state'
-import { isPaneReplaying, replayIntoTerminal } from './replay-guard'
-import { terminalOutputPrefersDomRenderer } from '@/lib/pane-manager/terminal-complex-script'
+import { isPaneReplaying, replayIntoTerminal, replayIntoTerminalAsync } from './replay-guard'
+import { terminalOutputPrefersRenderRefresh } from '@/lib/pane-manager/terminal-complex-script'
 import {
   PANE_PTY_RESIZE_HOLD_FLUSH_EVENT,
   queuePanePtyResizeIfHeld,
@@ -75,12 +77,24 @@ import {
 } from './terminal-bracketed-paste'
 import { createCommandCodeOutputStatusDetector } from './command-code-output-status'
 import type { PtyDataMeta } from './pty-dispatcher'
+import { getEagerPtyBufferHandle } from './pty-dispatcher'
 import { createTerminalGitHubPRLinkDetector } from '@/lib/terminal-github-pr-link-detector'
 import { installConptyDeviceAttributesHandler } from './terminal-conpty-device-attributes'
 import {
   cancelScheduledHiddenOutputRestore,
   scheduleHiddenOutputRestore
 } from './hidden-output-restore-scheduler'
+import { CLIENT_PLATFORM } from '@/lib/new-workspace'
+import { buildAgentResumeStartupPlan } from '@/lib/tui-agent-startup'
+import {
+  resolveTuiAgentLaunchArgs,
+  resolveTuiAgentLaunchEnv
+} from '../../../../shared/tui-agent-launch-defaults'
+import {
+  isResumableTuiAgent,
+  normalizeAgentProviderSession
+} from '../../../../shared/agent-session-resume'
+import { isWslUncPath } from '../../../../shared/wsl-paths'
 
 const pendingSpawnByPaneKey = new Map<string, Promise<string | null>>()
 const SSH_SESSION_EXPIRED_ERROR = 'SSH_SESSION_EXPIRED'
@@ -895,11 +909,14 @@ export function connectPanePty(
   })
   commandLifecycle.attachXtermConsumer(pane.terminal)
   const onTerminalKeyDown = (event: KeyboardEvent): void => {
-    deps.clearTerminalTabUnread(deps.tabId)
-    deps.clearTerminalPaneUnread(cacheKey)
-    deps.clearWorktreeUnread(deps.worktreeId)
     if (isPlainEscapeKeyEvent(event)) {
       setPendingTerminalInputIntent('plain-escape')
+      // Why: plain Escape produces real terminal input (\x1b), so it is a
+      // genuine "user is here" signal and must still dismiss attention before
+      // the early return for interrupt-intent inference.
+      deps.clearTerminalTabUnread(deps.tabId)
+      deps.clearTerminalPaneUnread(cacheKey)
+      deps.clearWorktreeUnread(deps.worktreeId)
       return
     }
     if (isCtrlCKeyEvent(event)) {
@@ -908,6 +925,30 @@ export function connectPanePty(
       }
       setPendingTerminalInputIntent('ctrl-c')
     }
+    // Why: only treat keydowns that will produce real terminal input as the
+    // "user is here" signal. Modifier-only presses, autorepeat, and Cmd/Ctrl+C
+    // copy chords with an active selection must not dismiss attention on a
+    // sibling pane before the user has seen it.
+    if (
+      event.repeat ||
+      event.key === 'Alt' ||
+      event.key === 'AltGraph' ||
+      event.key === 'Control' ||
+      event.key === 'Meta' ||
+      event.key === 'Shift'
+    ) {
+      return
+    }
+    if (
+      (event.metaKey || event.ctrlKey) &&
+      event.key.toLowerCase() === 'c' &&
+      pane.terminal.hasSelection()
+    ) {
+      return
+    }
+    deps.clearTerminalTabUnread(deps.tabId)
+    deps.clearTerminalPaneUnread(cacheKey)
+    deps.clearWorktreeUnread(deps.worktreeId)
   }
   // Why: infer only from focused xterm key events. Raw PTY bytes cannot
   // distinguish plain Escape from Alt/meta sequences, and programmatic writes
@@ -983,6 +1024,16 @@ export function connectPanePty(
     const panes = manager.getPanes()
     if (panes.length <= 1) {
       deps.onPtyExitRef.current(ptyId)
+      return
+    }
+    if (
+      hadExistingPaneTransportAtConnect &&
+      !restoredPtyIdForTransport &&
+      !Number.isFinite(lastTerminalInputAt) &&
+      !hasReceivedPtyOutput
+    ) {
+      // Why: a freshly split pane can lose its newborn PTY during setup; keep
+      // the split visible so the failed session does not immediately collapse.
       return
     }
     manager.closePane(pane.id)
@@ -1365,19 +1416,31 @@ export function connectPanePty(
   // callbacks to the correct Orca pane without resolving worktrees from cwd.
   // The key matches the `${tabId}:${leafId}` composite used for cacheTimerByKey
   // and agentStatusByPaneKey. Treat it as opaque outside Orca.
+  const state = useAppStore.getState()
+  const parsedWorkspaceKey = parseWorkspaceKey(deps.worktreeId)
+  const folderWorkspace =
+    parsedWorkspaceKey?.type === 'folder'
+      ? state.folderWorkspaces.find(
+          (workspace) => workspace.id === parsedWorkspaceKey.folderWorkspaceId
+        )
+      : null
+  const workspaceEnv: Record<string, string> = { ORCA_WORKSPACE_ID: deps.worktreeId }
+  if (folderWorkspace) {
+    workspaceEnv.ORCA_PROJECT_GROUP_ID = folderWorkspace.projectGroupId
+    workspaceEnv.ORCA_WORKSPACE_ROOT = folderWorkspace.folderPath
+  }
   const paneEnv = {
     ...paneStartup?.env,
+    ...workspaceEnv,
     ORCA_PANE_KEY: cacheKey,
     ORCA_TAB_ID: deps.tabId,
     ORCA_WORKTREE_ID: deps.worktreeId
   }
 
-  // Why: remote repos route PTY spawn through the SSH provider. Resolve the
-  // repo's connectionId from the store so the transport passes it to pty:spawn.
-  const state = useAppStore.getState()
+  // Why: folder workspaces can inherit their SSH target from child repos, so
+  // use the shared resolver instead of only looking up repo-backed worktrees.
   const worktree = getWorktreeMapFromState(state).get(deps.worktreeId)
-  const repo = worktree ? getRepoMapFromState(state).get(worktree.repoId) : null
-  const connectionId = repo?.connectionId ?? null
+  const connectionId = getConnectionId(deps.worktreeId) ?? null
   const tab = (state.tabsByWorktree[deps.worktreeId] ?? []).find((t) => t.id === deps.tabId)
   const shellOverride = tab?.shellOverride
   const isNativeWindowsConpty = isLocalNativeWindowsPty({
@@ -1401,7 +1464,9 @@ export function connectPanePty(
   const runtimeEnvironmentId = remoteRuntimeOwnerForTransport ?? activeRuntimeEnvironmentId
   const shouldOwnAgentStatusInRenderer = runtimeEnvironmentId !== null
   const shouldDeliverStartupViaTerminalPaste = paneStartup?.delivery === 'terminal-paste'
+  const hadExistingPaneTransportAtConnect = deps.paneTransportsRef.current.size > 0
   let lastTerminalInputAt = Number.NEGATIVE_INFINITY
+  let hasReceivedPtyOutput = false
   const markTerminalInputSent = (): void => {
     lastTerminalInputAt = performance.now()
   }
@@ -1455,7 +1520,6 @@ export function connectPanePty(
   const transport = runtimeEnvironmentId
     ? createRemoteRuntimePtyTransport(runtimeEnvironmentId, transportOptions)
     : createIpcPtyTransport(transportOptions)
-  const hasExistingPaneTransport = deps.paneTransportsRef.current.size > 0
   deps.paneTransportsRef.current.set(pane.id, transport)
   const conptyDeviceAttributesDisposable = isNativeWindowsConpty
     ? installConptyDeviceAttributesHandler({
@@ -1614,7 +1678,9 @@ export function connectPanePty(
     if (!proposed || proposed.cols <= 0 || proposed.rows <= 0) {
       return
     }
-    if (!isRemoteRuntimePtyId(currentPtyId)) {
+    if (isRemoteRuntimePtyId(currentPtyId)) {
+      transport.resize(proposed.cols, proposed.rows)
+    } else {
       window.api.pty.reportGeometry(currentPtyId, proposed.cols, proposed.rows)
     }
   }
@@ -1720,6 +1786,86 @@ export function connectPanePty(
     // stay renderer-delivered so xterm can apply bracketed-paste semantics.
     let pendingStartupCommand =
       shouldDeliverStartupViaTerminalPaste || connectionId ? (paneStartup?.command ?? null) : null
+    const getColdRestoreAgentResumePlatform = (): NodeJS.Platform => {
+      if (connectionId || (worktree?.path && isWslUncPath(worktree.path))) {
+        return 'linux'
+      }
+      return CLIENT_PLATFORM
+    }
+    const prepareColdRestoreAgentResumeCommand = (): boolean => {
+      if (pendingStartupCommand) {
+        return false
+      }
+      const state = useAppStore.getState()
+      const entry = state.agentStatusByPaneKey[cacheKey]
+      // Why: agentStatusByPaneKey is in-memory only. After an app restart, the
+      // quit-captured sleeping record is the only surviving source of this
+      // pane's provider session id (#5232). Live entries win when present —
+      // they are fresher and setAgentStatus already cleared the record.
+      const sleepingRecord = entry ? null : state.sleepingAgentSessionsByPaneKey[cacheKey]
+      const agentType = entry?.agentType ?? sleepingRecord?.agent
+      const agentState = entry?.state ?? sleepingRecord?.state
+      const rawProviderSession = entry?.providerSession ?? sleepingRecord?.providerSession
+      if (!agentType || agentState === 'done' || !isResumableTuiAgent(agentType)) {
+        return false
+      }
+      const providerSession = normalizeAgentProviderSession(rawProviderSession)
+      if (!providerSession) {
+        return false
+      }
+      const startupPlan = buildAgentResumeStartupPlan({
+        agent: agentType,
+        providerSession,
+        cmdOverrides: state.settings?.agentCmdOverrides ?? {},
+        agentArgs: resolveTuiAgentLaunchArgs(agentType, state.settings?.agentDefaultArgs),
+        agentEnv: resolveTuiAgentLaunchEnv(agentType, state.settings?.agentDefaultEnv),
+        platform: getColdRestoreAgentResumePlatform()
+      })
+      if (!startupPlan) {
+        return false
+      }
+      if (sleepingRecord) {
+        // Why: the record is one-shot — consuming it here prevents a later
+        // worktree activation from launching a duplicate resume tab.
+        useAppStore.getState().clearSleepingAgentSession(cacheKey)
+      }
+      // Why: cold restore means the PTY process is gone but the agent provider
+      // session is still resumable, so the replacement shell must launch it.
+      pendingStartupCommand = startupPlan.launchCommand
+      return true
+    }
+    const schedulePendingStartupCommandDelivery = (): void => {
+      if (!pendingStartupCommand) {
+        return
+      }
+      if (startupInjectTimer !== null) {
+        clearTimeout(startupInjectTimer)
+      }
+      startupInjectTimer = setTimeout(() => {
+        startupInjectTimer = null
+        void (async () => {
+          const command = pendingStartupCommand
+          if (!command || disposed) {
+            return
+          }
+          if (shouldDeliverStartupViaTerminalPaste) {
+            await waitForTerminalOutputParsed(pane.terminal)
+          }
+          if (pendingStartupCommand !== command || disposed) {
+            return
+          }
+          if (shouldDeliverStartupViaTerminalPaste) {
+            // Why: this mode must pass through xterm so bracketed-paste
+            // wrapping is applied before the submit Enter.
+            pasteTerminalText(pane.terminal, command)
+            transport.sendInput('\r')
+          } else {
+            transport.sendInput(`${command}\r`)
+          }
+          pendingStartupCommand = null
+        })()
+      }, 50)
+    }
 
     const startFreshSpawn = (): void => {
       // Why: pre-signal the main process so its cooperation gate suppresses
@@ -1776,19 +1922,7 @@ export function connectPanePty(
       pendingSpawnByPaneKey.set(pendingSpawnKey, trackedPromise)
     }
 
-    let rendererRiskScanTail = ''
     let foregroundRefreshRiskScanTail = ''
-
-    function terminalOutputChunkPrefersDomRenderer(data: string): boolean {
-      if (!data) {
-        return false
-      }
-      // Why: PTY chunk boundaries can split ASCII SGR sequences; keep a small
-      // tail so Codex background-color redraws still trigger the DOM fallback.
-      const scanData = rendererRiskScanTail ? `${rendererRiskScanTail}${data}` : data
-      rendererRiskScanTail = scanData.slice(-TERMINAL_RENDERER_RISK_SCAN_TAIL_CHARS)
-      return terminalOutputPrefersDomRenderer(scanData)
-    }
 
     function trailingIncompleteCsiSequence(data: string): string {
       const escapeIndex = data.lastIndexOf('\x1b[')
@@ -1813,7 +1947,7 @@ export function connectPanePty(
         ? `${foregroundRefreshRiskScanTail}${data}`
         : data
       const prefersRefresh =
-        scanData.includes('\x1b[') && terminalOutputPrefersDomRenderer(scanData)
+        scanData.includes('\x1b[') && terminalOutputPrefersRenderRefresh(scanData)
       foregroundRefreshRiskScanTail = trailingIncompleteCsiSequence(scanData)
       return prefersRefresh
     }
@@ -1826,19 +1960,32 @@ export function connectPanePty(
       // Why: drain any queued background bytes BEFORE the replay paint, so the
       // scheduler's deferred drain cannot land older bytes on top of the replay.
       flushTerminalOutput(pane.terminal)
-      // Why: replay rebuilds terminal pixels from serialized bytes. Keep it off
-      // WebGL so stale atlas/canvas cells cannot survive restore + scroll.
-      manager.markPaneHasComplexScriptOutput(pane.id)
       replayIntoTerminal(pane, deps.replayingPanesRef, data)
     }
 
+    const writeReplayDataAsync = (data: string): Promise<void> => {
+      // Why: WebGL must be rebuilt after xterm has parsed replay bytes, not
+      // merely after the write was queued.
+      flushTerminalOutput(pane.terminal)
+      return replayIntoTerminalAsync(pane, deps.replayingPanesRef, data)
+    }
+
     const replayDataCallback = (data: string): void => {
-      // Relay replay buffer holds the last 100 KB of output, which may
-      // overlap with content already rendered in xterm before the
-      // disconnect. Clear first to prevent duplication on SSH reconnect.
-      writeReplayData('\x1b[2J\x1b[3J\x1b[H')
-      writeReplayData(data)
-      writeReplayData(POST_REPLAY_REATTACH_RESET)
+      void (async () => {
+        // Relay replay buffer holds the last 100 KB of output, which may
+        // overlap with content already rendered in xterm before the
+        // disconnect. Clear first to prevent duplication on SSH reconnect.
+        await writeReplayDataAsync('\x1b[2J\x1b[3J\x1b[H')
+        await writeReplayDataAsync(data)
+        await writeReplayDataAsync(POST_REPLAY_REATTACH_RESET)
+        if (disposed) {
+          return
+        }
+        // Why: remote-runtime snapshots can arrive after WebGL attached to an
+        // empty buffer; rebuilding after replay parses seeds the glyph atlas
+        // from the now-populated xterm state.
+        manager.rebuildPaneWebgl(pane.id)
+      })()
     }
 
     type PendingHiddenOutputRestoreChunk = {
@@ -1921,20 +2068,8 @@ export function connectPanePty(
       transport.sendInput(mode2031SequenceFor(mode))
       recordHiddenMode2031Reply()
     }
-    function beforeTerminalOutputWrite(chunk: string): void {
-      // Why: hidden tab output is coalesced by the scheduler. Run per-byte
-      // renderer checks at the xterm write boundary so background PTY bursts
-      // do not spend foreground event-loop time scanning bytes we will delay.
-      if (terminalOutputChunkPrefersDomRenderer(chunk) || containsNonAsciiOutput(chunk)) {
-        manager.markPaneHasComplexScriptOutput(pane.id)
-      }
+    function beforeTerminalOutputWrite(): void {
       recordTerminalOutput(pane.terminal)
-    }
-
-    function markRendererRiskForSkippedOutput(): void {
-      // Why: hidden-output recovery skips xterm.write entirely, so WebGL does
-      // not see the bytes it would later need to repaint during restore/scroll.
-      manager.markPaneHasComplexScriptOutput(pane.id)
     }
 
     function consumeForegroundImmediateBudget(dataLength: number): boolean {
@@ -2115,7 +2250,6 @@ export function connectPanePty(
     }
 
     function skipHiddenRendererOutput(data: string): void {
-      markRendererRiskForSkippedOutput()
       respondToSkippedMode2031Subscribe(data)
       markHiddenOutputRestoreNeeded()
       if (hiddenOutputRestoreInFlight) {
@@ -2506,6 +2640,9 @@ export function connectPanePty(
     }
 
     const dataCallback = (data: string, meta?: PtyDataMeta): void => {
+      if (data.length > 0) {
+        hasReceivedPtyOutput = true
+      }
       resetHiddenOutputRestoreIfPtyChanged()
       observeTerminalBracketedPasteModeOutput(pane.terminal, data)
       for (const link of observeTerminalGitHubPRLink(data)) {
@@ -2536,35 +2673,7 @@ export function connectPanePty(
         writePtyOutputToXterm(data, foreground)
       }
 
-      if (pendingStartupCommand) {
-        if (startupInjectTimer !== null) {
-          clearTimeout(startupInjectTimer)
-        }
-        startupInjectTimer = setTimeout(() => {
-          startupInjectTimer = null
-          void (async () => {
-            const command = pendingStartupCommand
-            if (!command || disposed) {
-              return
-            }
-            if (shouldDeliverStartupViaTerminalPaste) {
-              await waitForTerminalOutputParsed(pane.terminal)
-            }
-            if (pendingStartupCommand !== command || disposed) {
-              return
-            }
-            if (shouldDeliverStartupViaTerminalPaste) {
-              // Why: this mode must pass through xterm so bracketed-paste
-              // wrapping is applied before the submit Enter.
-              pasteTerminalText(pane.terminal, command)
-              transport.sendInput('\r')
-            } else {
-              transport.sendInput(`${command}\r`)
-            }
-            pendingStartupCommand = null
-          })()
-        }, 50)
-      }
+      schedulePendingStartupCommandDelivery()
     }
     unregisterE2ePtyDataInjection = registerE2eTerminalPtyDataInjection(cacheKey, (data, meta) => {
       if (!disposed) {
@@ -2598,6 +2707,7 @@ export function connectPanePty(
         if (staleSessionId) {
           deps.clearTabPtyId(deps.tabId, staleSessionId)
         }
+        prepareColdRestoreAgentResumeCommand()
         startFreshSpawn()
         return
       }
@@ -2609,6 +2719,7 @@ export function connectPanePty(
         // Why: SSH sleep/reconnect can invalidate the relay-held PTY while
         // leaving the tab mounted. Replace the dead lease in-place instead of
         // stranding the pane behind a stale expired-session overlay.
+        prepareColdRestoreAgentResumeCommand()
         startFreshSpawn()
         return
       }
@@ -2678,6 +2789,9 @@ export function connectPanePty(
         writeReplayData(POST_REPLAY_MODE_RESET)
         if (!isRemoteRuntimePtyId(ptyId)) {
           window.api.pty.ackColdRestore(ptyId)
+        }
+        if (prepareColdRestoreAgentResumeCommand()) {
+          schedulePendingStartupCommandDelivery()
         }
       }
       // Why: when a mobile-fit override is active, skip sending desktop dims
@@ -2899,6 +3013,7 @@ export function connectPanePty(
                   }
                   deps.syncPanePtyLayoutBinding(pane.id, null)
                   deps.clearTabPtyId(deps.tabId, pendingSessionId)
+                  prepareColdRestoreAgentResumeCommand()
                   startFreshSpawn()
                   return
                 }
@@ -2922,9 +3037,11 @@ export function connectPanePty(
                 if (isSshSessionExpiredError(err)) {
                   deps.syncPanePtyLayoutBinding(pane.id, null)
                   deps.clearTabPtyId(deps.tabId, pendingSessionId)
+                  prepareColdRestoreAgentResumeCommand()
                   startFreshSpawn()
                   return
                 }
+                prepareColdRestoreAgentResumeCommand()
                 startFreshSpawn()
               })
           } else {
@@ -2949,7 +3066,7 @@ export function connectPanePty(
 
     const restoredSessionId = restoredPtyId ?? null
     const detachedLivePtyId =
-      existingPtyId && !hasExistingPaneTransport
+      existingPtyId && !hadExistingPaneTransportAtConnect
         ? restoredSessionId
           ? restoredSessionId === existingPtyId
             ? restoredSessionId
@@ -2962,6 +3079,24 @@ export function connectPanePty(
       restoredSessionId && restoredSessionId !== detachedLivePtyId
         ? restoredSessionId
         : detachedLivePtyId
+    const currentTabLivePtyIds = storeSnapshot.ptyIdsByTabId[deps.tabId] ?? []
+    const candidateHasEagerBuffer = Boolean(
+      candidateReattachSessionId &&
+      !isRemoteRuntimePtyId(candidateReattachSessionId) &&
+      getEagerPtyBufferHandle(candidateReattachSessionId)
+    )
+    // Why: a still-live locally-spawned PTY (e.g. a background automation agent
+    // launched before its tab mounts) keeps an eager buffer until a pane adopts
+    // it. Such a PTY must be adopted via attach()+replay, not re-connected as a
+    // daemon session — connect({ sessionId }) on a non-session ptyId spawns a
+    // fresh shell and orphans the live agent. Presence of an eager buffer plus
+    // current-tab live ownership is the discriminator; route these to attach.
+    const eagerLivePtyId =
+      candidateReattachSessionId &&
+      candidateHasEagerBuffer &&
+      currentTabLivePtyIds.includes(candidateReattachSessionId)
+        ? candidateReattachSessionId
+        : null
     // Why: daemon session IDs encode `${worktreeId}@@${uuid}`. After a daemon
     // crash + cold restore, corrupted or stale session-to-tab mappings can
     // cause a tab in workspace A to hold a ptyId from workspace B. Restoring
@@ -2970,11 +3105,12 @@ export function connectPanePty(
     const deferredReattachSessionId =
       candidateReattachSessionId &&
       !isRemoteRuntimePtyId(candidateReattachSessionId) &&
+      !candidateHasEagerBuffer &&
       isSessionOwnedByWorktree(candidateReattachSessionId, deps.worktreeId)
         ? candidateReattachSessionId
         : null
     recordPtyConnectDiagnostic(
-      `pane=${pane.id} tab=${deps.tabId} restored=${restoredPtyId} existing=${existingPtyId} detached=${detachedRemoteLeafPtyId ?? detachedLivePtyId} reattach=${deferredReattachSessionId} hasTransport=${hasExistingPaneTransport} pendingKey=${pendingSpawnKey}`
+      `pane=${pane.id} tab=${deps.tabId} restored=${restoredPtyId} existing=${existingPtyId} detached=${detachedRemoteLeafPtyId ?? detachedLivePtyId} reattach=${deferredReattachSessionId} hasTransport=${hadExistingPaneTransportAtConnect} pendingKey=${pendingSpawnKey}`
     )
 
     if (deferredReattachSessionId) {
@@ -3025,6 +3161,7 @@ export function connectPanePty(
             }
             deps.syncPanePtyLayoutBinding(pane.id, null)
             deps.clearTabPtyId(deps.tabId, deferredReattachSessionId)
+            prepareColdRestoreAgentResumeCommand()
             startFreshSpawn()
             return
           }
@@ -3053,17 +3190,22 @@ export function connectPanePty(
           deps.syncPanePtyLayoutBinding(pane.id, null)
           deps.clearTabPtyId(deps.tabId, deferredReattachSessionId)
           if (connectionId && isSshSessionExpiredError(err)) {
+            prepareColdRestoreAgentResumeCommand()
             startFreshSpawn()
             return
           }
           reportError(message)
+          prepareColdRestoreAgentResumeCommand()
           startFreshSpawn()
         })
-    } else if (detachedRemoteLeafPtyId || detachedLivePtyId) {
+    } else if (detachedRemoteLeafPtyId || detachedLivePtyId || eagerLivePtyId) {
       // Why: mirrored web terminal layouts mount one pane per host leaf.
       // Later leaves already have a pane transport, but must still attach to
       // their exact remote PTY instead of spawning replacement host tabs.
-      const attachPtyId = detachedRemoteLeafPtyId ?? detachedLivePtyId!
+      // eagerLivePtyId covers a still-live background PTY (e.g. an automation
+      // agent) whose restored id may not equal the tab ptyId yet still has a
+      // live eager buffer to adopt.
+      const attachPtyId = detachedRemoteLeafPtyId ?? detachedLivePtyId ?? eagerLivePtyId!
       recordPtyConnectDiagnostic(`pane=${pane.id} -> ATTACH detached=${attachPtyId}`)
       allowInitialIdleCacheSeed = false
       // Why: surface synchronous attach failures (e.g., the PTY died between
@@ -3089,6 +3231,9 @@ export function connectPanePty(
         deps.syncPanePtyLayoutBinding(pane.id, attachPtyId)
         deps.updateTabPtyId(deps.tabId, attachPtyId)
         agentCompletionCoordinator.startProcessTracking()
+        if (attachPtyId === eagerLivePtyId) {
+          registerPaneSerializerFor(attachPtyId)
+        }
       } catch (err) {
         reportError(err instanceof Error ? err.message : String(err))
         deps.clearTabPtyId(deps.tabId, attachPtyId)

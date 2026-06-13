@@ -4,6 +4,7 @@ import { OptionalFiniteNumber, OptionalString, requiredString } from '../schemas
 import { sanitizeRepoIcon } from '../../../../shared/repo-icon'
 import { normalizeRepoBadgeColor } from '../../../../shared/repo-badge-color'
 import { normalizeRepoSourceControlAiOverrides } from '../../../../shared/source-control-ai'
+import { FOLDER_WORKSPACE_METHODS } from './folder-workspace'
 
 const RepoSelector = z.object({
   repo: requiredString('Missing repo selector')
@@ -34,7 +35,11 @@ const RepoSourceControlAiOverrides = z
   .unknown()
   .optional()
   .transform((value) =>
-    value === undefined ? undefined : normalizeRepoSourceControlAiOverrides(value)
+    value === undefined
+      ? undefined
+      : value === null
+        ? null
+        : normalizeRepoSourceControlAiOverrides(value)
   )
 
 const RepoBadgeColor = z
@@ -91,6 +96,7 @@ const RepoReorder = z.object({
 const ProjectGroupCreate = z.object({
   name: requiredString('Missing group name'),
   parentPath: OptionalString,
+  connectionId: OptionalString.nullable().optional(),
   parentGroupId: OptionalString.nullable().optional(),
   createdFrom: z.enum(['manual', 'folder-scan', 'migration']).optional()
 })
@@ -183,6 +189,7 @@ export const REPO_METHODS: RpcMethod[] = [
       repo: await runtime.moveProjectToGroup(params.repo, params.groupId ?? null, params.order)
     })
   }),
+  ...FOLDER_WORKSPACE_METHODS,
   defineMethod({
     name: 'projectGroup.scanNested',
     params: ProjectGroupScanNested,
@@ -223,6 +230,11 @@ export const REPO_METHODS: RpcMethod[] = [
     params: RepoCreate,
     handler: async (params, { runtime }) =>
       runtime.createRepo(params.parentPath, params.name, params.kind)
+  }),
+  defineMethod({
+    name: 'repo.gitAvailable',
+    params: null,
+    handler: async (_params, { runtime }) => ({ available: await runtime.isGitAvailable() })
   }),
   defineMethod({
     name: 'repo.clone',

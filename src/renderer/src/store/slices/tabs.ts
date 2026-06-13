@@ -29,6 +29,7 @@ import { buildHydratedTabState, pruneTabGroupLayoutForGroups } from './tabs-hydr
 import { buildOrphanTerminalCleanupPatch, getOrphanTerminalIds } from './terminal-orphan-helpers'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
+import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 
 export type TabSplitDirection = 'left' | 'right' | 'up' | 'down'
 
@@ -50,6 +51,7 @@ export type TabsSlice = {
         | 'entityId'
         | 'label'
         | 'generatedLabel'
+        | 'quickCommandLabel'
         | 'customLabel'
         | 'color'
         | 'isPreview'
@@ -75,6 +77,7 @@ export type TabsSlice = {
         | 'entityId'
         | 'label'
         | 'generatedLabel'
+        | 'quickCommandLabel'
         | 'customLabel'
         | 'color'
         | 'isPreview'
@@ -142,7 +145,14 @@ export type TabsSlice = {
     init?: Partial<
       Pick<
         Tab,
-        'id' | 'entityId' | 'label' | 'generatedLabel' | 'customLabel' | 'color' | 'isPinned'
+        | 'id'
+        | 'entityId'
+        | 'label'
+        | 'generatedLabel'
+        | 'quickCommandLabel'
+        | 'customLabel'
+        | 'color'
+        | 'isPinned'
       >
     >
   ) => Tab | null
@@ -516,6 +526,9 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
         label:
           init?.label ?? (contentType === 'terminal' ? `Terminal ${existingTabs.length + 1}` : id),
         ...(init?.generatedLabel !== undefined ? { generatedLabel: init.generatedLabel } : {}),
+        ...(init?.quickCommandLabel !== undefined
+          ? { quickCommandLabel: init.quickCommandLabel }
+          : {}),
         customLabel: init?.customLabel ?? null,
         color: init?.color ?? null,
         sortOrder: nextOrder.length,
@@ -585,6 +598,9 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
         label:
           init?.label ?? (contentType === 'terminal' ? `Terminal ${existingTabs.length + 1}` : id),
         ...(init?.generatedLabel !== undefined ? { generatedLabel: init.generatedLabel } : {}),
+        ...(init?.quickCommandLabel !== undefined
+          ? { quickCommandLabel: init.quickCommandLabel }
+          : {}),
         customLabel: init?.customLabel ?? null,
         color: init?.color ?? null,
         sortOrder: 0,
@@ -840,6 +856,7 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
         ...(shouldDeactivateWorktree
           ? {
               activeWorktreeId: null,
+              activeWorkspaceKey: null,
               activeTabId: null,
               activeBrowserTabId: null,
               activeFileId: null,
@@ -1506,6 +1523,7 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
       entityId: init?.entityId ?? tab.entityId,
       label: init?.label ?? tab.label,
       generatedLabel: init?.generatedLabel ?? tab.generatedLabel,
+      quickCommandLabel: init?.quickCommandLabel ?? tab.quickCommandLabel,
       customLabel: init?.customLabel ?? tab.customLabel,
       color: init?.color ?? tab.color,
       isPinned: init?.isPinned ?? tab.isPinned,
@@ -1611,6 +1629,9 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
               worktreeId,
               contentType: 'terminal' as const,
               label: tab.title,
+              ...(tab.quickCommandLabel?.trim()
+                ? { quickCommandLabel: tab.quickCommandLabel.trim() }
+                : {}),
               ...(tab.generatedTitle?.trim() ? { generatedLabel: tab.generatedTitle.trim() } : {}),
               customLabel: tab.customTitle,
               color: tab.color,
@@ -1799,6 +1820,9 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
         .map((w) => w.id)
     )
     validWorktreeIds.add(FLOATING_TERMINAL_WORKTREE_ID)
+    for (const workspace of state.folderWorkspaces) {
+      validWorktreeIds.add(folderWorkspaceKey(workspace.id))
+    }
     set(buildHydratedTabState(session, validWorktreeIds))
   }
 })

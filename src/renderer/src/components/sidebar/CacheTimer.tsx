@@ -4,6 +4,7 @@ import { Timer } from 'lucide-react'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { usePromptCacheCountdownNow } from './prompt-cache-countdown-clock'
 import { getMostUrgentPromptCacheStartedAt } from './prompt-cache-timer-selection'
+import { translate } from '@/i18n/i18n'
 
 /**
  * The most-urgent cache start time when a countdown should show, else null.
@@ -64,7 +65,11 @@ export default function CacheTimer({
           )}
         >
           <Timer className="size-2.5" />
-          <span>{expired ? 'expired' : label}</span>
+          <span>
+            {expired
+              ? translate('auto.components.sidebar.CacheTimer.07729cc155', 'expired')
+              : label}
+          </span>
         </div>
       </TooltipTrigger>
       <TooltipContent side="right" sideOffset={8}>

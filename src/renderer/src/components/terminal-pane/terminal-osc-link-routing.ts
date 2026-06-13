@@ -1,10 +1,13 @@
 import { resolveTerminalFileLinkText } from '@/lib/terminal-links'
-import { openHttpLink } from '@/lib/http-link-routing'
 import { isWindowsAbsolutePathLike } from '../../../../shared/cross-platform-path'
 import type { LinkHandlerDeps } from './terminal-link-handlers'
 import { isTerminalLinkActivation } from './terminal-link-handlers'
 import { resolveTerminalFileUrlTarget } from './terminal-file-url-target'
 import { openDetectedFilePath } from './terminal-file-open-routing'
+import {
+  openTerminalHttpLink,
+  type TerminalLinkRoutingPreferenceRequester
+} from './terminal-url-link-hit-testing'
 
 type TerminalLinkEvent = Pick<MouseEvent, 'metaKey' | 'ctrlKey'> &
   Partial<Pick<MouseEvent, 'shiftKey' | 'preventDefault' | 'stopPropagation'>>
@@ -13,7 +16,9 @@ export function handleOscLink(
   rawText: string,
   event: TerminalLinkEvent | undefined,
   deps: Pick<LinkHandlerDeps, 'worktreeId' | 'worktreePath'> &
-    Partial<Pick<LinkHandlerDeps, 'runtimeEnvironmentId' | 'startupCwd' | 'terminalHomePath'>>
+    Partial<Pick<LinkHandlerDeps, 'runtimeEnvironmentId' | 'startupCwd' | 'terminalHomePath'>> & {
+      requestOpenLinksInAppPreference?: TerminalLinkRoutingPreferenceRequester
+    }
 ): void {
   if (!isTerminalLinkActivation(event)) {
     return
@@ -65,9 +70,10 @@ export function handleOscLink(
   }
 
   if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
-    openHttpLink(parsed.toString(), {
+    openTerminalHttpLink(parsed.toString(), {
       worktreeId: deps.worktreeId,
-      forceSystemBrowser: Boolean(event?.shiftKey)
+      forceSystemBrowser: Boolean(event?.shiftKey),
+      requestOpenLinksInAppPreference: deps.requestOpenLinksInAppPreference
     })
     return
   }

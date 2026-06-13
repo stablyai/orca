@@ -22,6 +22,7 @@ import {
   type TabDropZone
 } from './useTabDragSplit'
 import { tabGroupBodyAnchorName } from './tab-group-body-anchor'
+import { translate } from '@/i18n/i18n'
 
 const EditorPanel = lazy(() => import('../editor/EditorPanel'))
 
@@ -271,8 +272,14 @@ export default function TabGroupPanel({
                 <DropdownMenuTrigger asChild>
                   <button
                     type="button"
-                    aria-label="Pane Actions"
-                    title="Pane Actions"
+                    aria-label={translate(
+                      'auto.components.tab.group.TabGroupPanel.9acaf92093',
+                      'Pane Actions'
+                    )}
+                    title={translate(
+                      'auto.components.tab.group.TabGroupPanel.9acaf92093',
+                      'Pane Actions'
+                    )}
                     onClick={(event) => {
                       event.stopPropagation()
                     }}
@@ -288,7 +295,7 @@ export default function TabGroupPanel({
                     }}
                   >
                     <Columns2 className="size-4" />
-                    Split Right
+                    {translate('auto.components.tab.group.TabGroupPanel.ab1e2bff04', 'Split Right')}
                   </DropdownMenuItem>
                   <DropdownMenuItem
                     onSelect={() => {
@@ -296,7 +303,7 @@ export default function TabGroupPanel({
                     }}
                   >
                     <Rows2 className="size-4" />
-                    Split Down
+                    {translate('auto.components.tab.group.TabGroupPanel.4df2a06d36', 'Split Down')}
                   </DropdownMenuItem>
                   <DropdownMenuItem
                     onSelect={() => {
@@ -304,7 +311,7 @@ export default function TabGroupPanel({
                     }}
                   >
                     <Columns2 className="size-4" />
-                    Split Left
+                    {translate('auto.components.tab.group.TabGroupPanel.30137df7d0', 'Split Left')}
                   </DropdownMenuItem>
                   <DropdownMenuItem
                     onSelect={() => {
@@ -312,7 +319,7 @@ export default function TabGroupPanel({
                     }}
                   >
                     <Rows2 className="size-4" />
-                    Split Up
+                    {translate('auto.components.tab.group.TabGroupPanel.0db2081805', 'Split Up')}
                   </DropdownMenuItem>
                   {hasSplitGroups ? (
                     <>
@@ -324,7 +331,10 @@ export default function TabGroupPanel({
                         }}
                       >
                         <X className="size-4" />
-                        Close Group
+                        {translate(
+                          'auto.components.tab.group.TabGroupPanel.f7d6ce445e',
+                          'Close Group'
+                        )}
                       </DropdownMenuItem>
                     </>
                   ) : null}
@@ -356,8 +366,9 @@ export default function TabGroupPanel({
 
       <div
         ref={setBodyDropRef}
-        className="relative flex-1 min-h-0 overflow-hidden"
         data-tab-group-body-id={groupId}
+        data-worktree-id={worktreeId}
+        className="relative flex-1 min-h-0 overflow-hidden"
         style={bodyAnchorStyle}
       >
         {/* Why: this empty anchor lets the agent-sessions tour read as a
@@ -379,7 +390,10 @@ export default function TabGroupPanel({
               <Suspense
                 fallback={
                   <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
-                    Loading editor...
+                    {translate(
+                      'auto.components.tab.group.TabGroupPanel.814fb04c43',
+                      'Loading editor...'
+                    )}
                   </div>
                 }
               >

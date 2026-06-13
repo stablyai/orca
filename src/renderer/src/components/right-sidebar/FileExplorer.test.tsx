@@ -1,18 +1,32 @@
 /* eslint-disable max-lines -- File Explorer toolbar and row tests share element-walking fixtures. */
-import { describe, expect, it, vi } from 'vitest'
-import { Ellipsis, ListCollapse, Loader2, RefreshCw } from 'lucide-react'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { Ellipsis, ListCollapse, Loader2, RefreshCw, Search } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { DropdownMenuCheckboxItem } from '@/components/ui/dropdown-menu'
 import { WorktreeOpenInMenuItems } from '@/components/sidebar/WorktreeOpenInMenu'
 import { FileExplorerToolbar } from './FileExplorerToolbar'
 import {
+  downloadRemoteFile,
   FileExplorerRow,
   shouldShowCollapseFolderAction,
-  shouldShowFindInFolderAction
+  shouldShowFindInFolderAction,
+  shouldShowRemoteDownloadAction
 } from './FileExplorerRow'
 import { FileExplorerVirtualRows } from './FileExplorerVirtualRows'
 import type { TreeNode } from './file-explorer-types'
 import { createFileExplorerRowProjection } from './file-explorer-row-projection'
+
+const { toastErrorMock, toastSuccessMock } = vi.hoisted(() => ({
+  toastErrorMock: vi.fn(),
+  toastSuccessMock: vi.fn()
+}))
+
+vi.mock('sonner', () => ({
+  toast: {
+    error: toastErrorMock,
+    success: toastSuccessMock
+  }
+}))
 
 type ReactElementLike = {
   type: unknown
@@ -43,6 +57,19 @@ function findRefreshButton(node: unknown): ReactElementLike {
   })
   if (!found) {
     throw new Error('refresh button not found')
+  }
+  return found
+}
+
+function findSearchButton(node: unknown): ReactElementLike {
+  let found: ReactElementLike | null = null
+  visit(node, (entry) => {
+    if (entry.type === Button && entry.props['aria-label'] === 'Search') {
+      found = entry
+    }
+  })
+  if (!found) {
+    throw new Error('search button not found')
   }
   return found
 }
@@ -212,9 +239,16 @@ function makeToolbar(overrides: Partial<Parameters<typeof FileExplorerToolbar>[0
     onToggleGitIgnoredFiles: vi.fn(),
     showDotfiles: true,
     onToggleDotfiles: vi.fn(),
+    onSearch: vi.fn(),
     ...overrides
   })
 }
+
+beforeEach(() => {
+  toastErrorMock.mockReset()
+  toastSuccessMock.mockReset()
+  delete (globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__
+})
 
 describe('FileExplorerToolbar', () => {
   it('fires the refresh action from the icon button', () => {
@@ -241,6 +275,17 @@ describe('FileExplorerToolbar', () => {
     expect(label.props.className).toContain('min-w-0')
   })
 
+  it('fires the search action from the icon button', () => {
+    const onSearch = vi.fn()
+    const element = makeToolbar({ onSearch })
+
+    const button = findSearchButton(element)
+    ;(button.props.onClick as () => void)()
+
+    expect(onSearch).toHaveBeenCalledTimes(1)
+    expect(hasIcon(button, Search)).toBe(true)
+  })
+
   it('disables the refresh button and shows a spinner while refreshing', () => {
     const element = makeToolbar({
       refresh: makeRefreshState({ isRefreshing: true, showRefreshSpinner: true })
@@ -264,7 +309,8 @@ describe('FileExplorerToolbar', () => {
     ;(button.props.onClick as () => void)()
 
     expect(onCollapseAll).toHaveBeenCalledTimes(1)
-    expect(button.props.disabled).toBe(false)
+    expect(button.props.disabled).toBeUndefined()
+    expect(button.props['aria-disabled']).toBe(false)
     expect(hasIcon(button, ListCollapse)).toBe(true)
   })
 
@@ -273,8 +319,23 @@ describe('FileExplorerToolbar', () => {
 
     const button = findCollapseAllButton(element)
 
-    expect(button.props.disabled).toBe(true)
+    expect(button.props.disabled).toBeUndefined()
+    expect(button.props['aria-disabled']).toBe(true)
+    expect(button.props.className).toContain('opacity-50')
+    expect(button.props.className).toContain('cursor-not-allowed')
     expect(hasIcon(button, ListCollapse)).toBe(true)
+  })
+
+  it('keeps disabled collapse all clicks from firing', () => {
+    const onCollapseAll = vi.fn()
+    const preventDefault = vi.fn()
+    const element = makeToolbar({ canCollapseAll: false, onCollapseAll })
+
+    const button = findCollapseAllButton(element)
+    ;(button.props.onClick as (event: { preventDefault: () => void }) => void)({ preventDefault })
+
+    expect(preventDefault).toHaveBeenCalledTimes(1)
+    expect(onCollapseAll).not.toHaveBeenCalled()
   })
 
   it('puts the git ignored visibility toggle in the overflow menu', () => {
@@ -314,6 +375,7 @@ describe('FileExplorerToolbar', () => {
     const element = makeToolbar()
 
     expect(getToolbarButtonLabels(element)).toEqual([
+      'Search',
       'Collapse All',
       'Refresh Explorer',
       'More Explorer Actions'
@@ -336,6 +398,13 @@ describe('FileExplorerRow collapse folder action', () => {
     relativePath: 'src',
     isDirectory: true,
     depth: 0
+  }
+  const fileNode: TreeNode = {
+    name: 'index.ts',
+    path: '/repo/src/index.ts',
+    relativePath: 'src/index.ts',
+    isDirectory: false,
+    depth: 1
   }
 
   it('only shows collapse folder for expanded directories', () => {
@@ -366,6 +435,68 @@ describe('FileExplorerRow collapse folder action', () => {
         isDirectory: false
       })
     ).toBe(false)
+  })
+
+  it('shows remote download only for desktop SSH file-like rows', () => {
+    expect(shouldShowRemoteDownloadAction(fileNode, 'ssh-1')).toBe(true)
+    expect(shouldShowRemoteDownloadAction({ ...fileNode, isSymlink: true }, 'ssh-1')).toBe(true)
+    expect(shouldShowRemoteDownloadAction(fileNode, null)).toBe(false)
+    expect(shouldShowRemoteDownloadAction(directoryNode, 'ssh-1')).toBe(false)
+
+    ;(globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ = true
+
+    expect(shouldShowRemoteDownloadAction(fileNode, 'ssh-1')).toBe(false)
+  })
+
+  it('calls the preload download API and shows success only when not canceled', async () => {
+    const downloadFile = vi
+      .fn()
+      .mockResolvedValueOnce({ canceled: false, destinationPath: '/downloads/index.ts' })
+      .mockResolvedValueOnce({ canceled: true })
+    const openPath = vi.fn().mockResolvedValue(undefined)
+    ;(
+      globalThis as unknown as {
+        window: {
+          api: {
+            fs: { downloadFile: typeof downloadFile }
+            shell: { openPath: typeof openPath }
+          }
+        }
+      }
+    ).window = { api: { fs: { downloadFile }, shell: { openPath } } }
+
+    await downloadRemoteFile(fileNode, 'ssh-1')
+    await downloadRemoteFile(fileNode, 'ssh-1')
+
+    expect(downloadFile).toHaveBeenCalledWith({
+      filePath: '/repo/src/index.ts',
+      connectionId: 'ssh-1'
+    })
+    expect(toastSuccessMock).toHaveBeenCalledTimes(1)
+    expect(toastSuccessMock).toHaveBeenCalledWith("Downloaded 'index.ts'", {
+      action: {
+        label: 'Open',
+        onClick: expect.any(Function)
+      }
+    })
+    const action = toastSuccessMock.mock.calls[0]?.[1]?.action as
+      | { onClick: () => void }
+      | undefined
+    action?.onClick()
+    expect(openPath).toHaveBeenCalledWith('/downloads/index.ts')
+    expect(toastErrorMock).not.toHaveBeenCalled()
+  })
+
+  it('shows a failure toast when remote download fails', async () => {
+    const downloadFile = vi.fn().mockRejectedValue(new Error('Remote connection dropped'))
+    ;(
+      globalThis as unknown as { window: { api: { fs: { downloadFile: typeof downloadFile } } } }
+    ).window = { api: { fs: { downloadFile } } }
+
+    await downloadRemoteFile(fileNode, 'ssh-1')
+
+    expect(toastErrorMock).toHaveBeenCalledWith('Remote connection dropped')
+    expect(toastSuccessMock).not.toHaveBeenCalled()
   })
 
   it('passes the row node to the collapse folder handler', () => {
@@ -468,5 +599,55 @@ describe('FileExplorerRow collapse folder action', () => {
     ;(row.props.onFindInFolder as () => void)()
 
     expect(onFindInFolder).toHaveBeenCalledWith(directoryNode)
+  })
+
+  it('passes the active connection id to virtualized rows', () => {
+    const element = FileExplorerVirtualRows({
+      virtualizer: {
+        getTotalSize: () => 26,
+        getVirtualItems: () => [{ index: 0, key: 'index.ts', start: 0 }],
+        measureElement: vi.fn()
+      } as never,
+      inlineInputIndex: -1,
+      rowProjection: createFileExplorerRowProjection([fileNode]),
+      inlineInput: null,
+      handleInlineSubmit: vi.fn(),
+      dismissInlineInput: vi.fn(),
+      folderStatusByRelativePath: new Map(),
+      statusByRelativePath: new Map(),
+      ignoredByRelativePath: new Set(),
+      expanded: new Set(),
+      dirCache: {},
+      selectedPaths: new Set(),
+      activeFileId: null,
+      flashingPath: null,
+      deleteShortcutLabel: 'Del',
+      connectionId: 'ssh-1',
+      onClick: vi.fn(),
+      onDoubleClick: vi.fn(),
+      onContextMenuSelect: vi.fn(),
+      onCopyPaths: vi.fn(),
+      onStartNew: vi.fn(),
+      onStartRename: vi.fn(),
+      onDuplicate: vi.fn(),
+      onAddFolderAsProject: vi.fn(),
+      canAddFolderAsProject: () => false,
+      onRequestDelete: vi.fn(),
+      onCollapseFolderSubtree: vi.fn(),
+      onFindInFolder: vi.fn(),
+      onMoveDrop: vi.fn(),
+      onDragTargetChange: vi.fn(),
+      onDragSourceChange: vi.fn(),
+      onDragExpandDir: vi.fn(),
+      onNativeDragTargetChange: vi.fn(),
+      onNativeDragExpandDir: vi.fn(),
+      dropTargetDir: null,
+      dragSourcePath: null,
+      nativeDropTargetDir: null
+    })
+
+    const row = findFileExplorerRow(element)
+
+    expect(row.props.connectionId).toBe('ssh-1')
   })
 })

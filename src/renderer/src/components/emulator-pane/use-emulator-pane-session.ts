@@ -9,19 +9,19 @@ import {
 } from './emulator-pane-types'
 import { markSimulatorDeviceBooted, markSimulatorDeviceShutdown } from './emulator-device-state'
 import { useEmulatorPaneControls } from './use-emulator-pane-controls'
-import {
-  EMULATOR_LOCAL_SHUTDOWN_EVENT,
-  useEmulatorPaneSessionEvents
-} from './use-emulator-pane-session-events'
+import { useEmulatorPaneSessionEvents } from './use-emulator-pane-session-events'
 import {
   consumePrelaunchedSimulatorSession,
   isManualSimulatorLaunchPending
 } from '@/lib/simulator-launch-coordination'
+import { shutdownManagedSimulatorIfNoPane } from '@/lib/simulator-pane-shutdown-scheduler'
 import { buildPrelaunchedEmulatorSessionState } from './emulator-prelaunched-session'
 import { useEmulatorPaneManualLaunchEvents } from './use-emulator-pane-manual-launch-events'
 import { buildEmulatorPaneSessionView } from './emulator-pane-session-view'
 import { resolveEmulatorAttachTarget } from './emulator-attach-target'
 import { useEmulatorPaneLifecycle } from './use-emulator-pane-lifecycle'
+import { useEmulatorPaneShutdown } from './use-emulator-pane-shutdown'
+import { emulatorPaneErrorMessage } from './emulator-pane-error-message'
 
 type UseEmulatorPaneSessionArgs = {
   worktreeId: string
@@ -54,6 +54,7 @@ export function useEmulatorPaneSession({
   const [streamKey, setStreamKey] = useState<string | null>(prelaunchedState.streamKey)
   const mountedRef = useRef(true)
   const liveTargetRef = useRef<string | null>(prelaunchedState.liveTarget)
+  const deviceRefreshErrorRef = useRef<unknown>(null)
   const suppressAutoAttachRef = useRef(false)
   const { sendTap, sendButton, sendGesture, sendRotate } = useEmulatorPaneControls(worktreeId)
 
@@ -68,9 +69,19 @@ export function useEmulatorPaneSession({
       if (!mountedRef.current) {
         return next
       }
+      const hadRefreshError = deviceRefreshErrorRef.current !== null
+      deviceRefreshErrorRef.current = null
       setDevices(next)
+      if (hadRefreshError) {
+        setError(null)
+      }
       return next
-    } catch {
+    } catch (error) {
+      deviceRefreshErrorRef.current = error
+      if (mountedRef.current) {
+        setDevices([])
+        setError(emulatorPaneErrorMessage(error, 'Could not list emulator devices.'))
+      }
       return []
     }
   }, [])
@@ -146,6 +157,9 @@ export function useEmulatorPaneSession({
         if (list.length === 0) {
           list = (await refreshDevices()) ?? []
         }
+        if (list.length === 0 && deviceRefreshErrorRef.current) {
+          throw deviceRefreshErrorRef.current
+        }
         const target = resolveEmulatorAttachTarget({
           configuredDefaultUdid,
           devices: list,
@@ -172,6 +186,9 @@ export function useEmulatorPaneSession({
           focus: false
         })) as { attached?: boolean; info?: EmulatorPaneSession['info'] }
         if (!mountedRef.current) {
+          // Why: attach can finish after the tab closes, after the earlier
+          // unmount shutdown already no-op'd because the session was not registered yet.
+          await shutdownManagedSimulatorIfNoPane(worktreeId, tabId)
           return
         }
         const attached = !!res?.attached
@@ -188,10 +205,13 @@ export function useEmulatorPaneSession({
         if (requestedTarget && liveTargetRef.current === requestedTarget) {
           return
         }
-        const msg =
-          e instanceof Error
-            ? e.message
-            : 'Could not start the emulator. Check that Xcode is installed and try another device.'
+        // Why: setup failures otherwise trigger the mount auto-attach loop again
+        // and erase the actionable error before the user can read it.
+        suppressAutoAttachRef.current = true
+        const msg = emulatorPaneErrorMessage(
+          e,
+          'Could not start the emulator. Check that Xcode is installed and try another device.'
+        )
         setError(msg)
         if (tabId) {
           useAppStore.getState().setTabLabel(tabId, 'Mobile Emulator')
@@ -220,42 +240,15 @@ export function useEmulatorPaneSession({
     }
   }, [configuredDefaultUdid, selectedUdid])
 
-  const shutdown = useCallback(
-    async (deviceTarget?: string) => {
-      if (loading) {
-        return
-      }
-      setLoading(true)
-      setError(null)
-      if (tabId) {
-        useAppStore.getState().setTabLabel(tabId, 'Shutting down…')
-      }
-      try {
-        const res = (await callRuntimeRpc({ kind: 'local' }, 'emulator.shutdown', {
-          ...(deviceTarget ? { device: deviceTarget } : {}),
-          worktree: worktreeId
-        })) as { deviceUdid?: string }
-        const shutdownTarget = res?.deviceUdid || deviceTarget
-        window.dispatchEvent(
-          new CustomEvent(EMULATOR_LOCAL_SHUTDOWN_EVENT, {
-            detail: { worktreeId, deviceUdid: shutdownTarget }
-          })
-        )
-        void refreshDevices()
-      } catch (e: unknown) {
-        const msg =
-          e instanceof Error
-            ? e.message
-            : 'Could not shut down the emulator. Try again from Xcode Simulator.'
-        setError(msg)
-      } finally {
-        if (mountedRef.current) {
-          setLoading(false)
-        }
-      }
-    },
-    [loading, refreshDevices, tabId, worktreeId]
-  )
+  const shutdown = useEmulatorPaneShutdown({
+    loading,
+    mountedRef,
+    refreshDevices,
+    setError,
+    setLoading,
+    tabId,
+    worktreeId
+  })
 
   useEmulatorPaneLifecycle({ mountedRef, refreshDevices, tabId, worktreeId })
 

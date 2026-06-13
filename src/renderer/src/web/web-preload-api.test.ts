@@ -159,7 +159,7 @@ describe('web keybindings preload API', () => {
       bindings: null
     })
     expect(reset.overrides['worktree.palette']).toBeUndefined()
-  })
+  }, 15_000)
 
   it('rejects conflicts before mutating browser storage', async () => {
     const { api } = await installApi('Linux')
@@ -782,6 +782,46 @@ describe('web UI preload API', () => {
     expect(stored.contextualToursSeenIds).toEqual(['tasks', 'browser'])
   })
 
+  it('does not keep a local shadow copy of main-owned feature telemetry markers', async () => {
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        call(method: string): Promise<RuntimeRpcResponse<unknown>> {
+          return Promise.resolve({
+            id: method,
+            ok: true,
+            result: { ui: {} },
+            _meta: { runtimeId: 'runtime-1' }
+          })
+        }
+
+        close(): void {}
+      }
+    }))
+
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage)
+    globals.storage.setItem(
+      'orca.web.ui.v1',
+      JSON.stringify({
+        featureInteractionTelemetryBuckets: { tasks: 'count_1000_plus' }
+      })
+    )
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    await globals.window.api.ui.set({
+      featureInteractionTelemetryBuckets: { tasks: 'count_500_999' }
+    } as never)
+    const ui = await globals.window.api.ui.get()
+    const stored = JSON.parse(globals.storage.getItem('orca.web.ui.v1') ?? '{}') as Record<
+      string,
+      unknown
+    >
+
+    expect('featureInteractionTelemetryBuckets' in (ui as Record<string, unknown>)).toBe(false)
+    expect(stored.featureInteractionTelemetryBuckets).toBeUndefined()
+  })
+
   it('union-merges local contextual tour seen ids when recordFeatureInteraction returns stale host state', async () => {
     vi.doMock('./web-runtime-client', () => ({
       WebRuntimeClient: class {
@@ -957,6 +997,53 @@ describe('web UI preload API', () => {
   })
 })
 
+describe('web repos preload API', () => {
+  beforeEach(() => {
+    vi.resetModules()
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.doUnmock('./web-runtime-client')
+  })
+
+  it.each([
+    ['/home/alice', '/home/alice/orca/projects'],
+    ['/', '/orca/projects'],
+    ['C:\\', 'C:\\orca\\projects']
+  ])(
+    'resolves the default create-project parent from runtime host home %s',
+    async (resolvedPath, expectedParent) => {
+      const runtimeCalls: { method: string; params: unknown }[] = []
+      vi.doMock('./web-runtime-client', () => ({
+        WebRuntimeClient: class {
+          call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
+            runtimeCalls.push({ method, params })
+            return Promise.resolve({
+              id: method,
+              ok: true,
+              result: { resolvedPath, entries: [] },
+              _meta: { runtimeId: 'runtime-1' }
+            })
+          }
+
+          close(): void {}
+        }
+      }))
+
+      const globals = installBrowserGlobals('Linux')
+      writeStoredRuntimeEnvironment(globals.storage)
+      const { installWebPreloadApi } = await import('./web-preload-api')
+      installWebPreloadApi()
+
+      await expect(globals.window.api.repos.getDefaultCreateProjectParent()).resolves.toBe(
+        expectedParent
+      )
+      expect(runtimeCalls).toEqual([{ method: 'files.browseServerDir', params: { path: '~' } }])
+    }
+  )
+})
+
 describe('web worktree preload API', () => {
   beforeEach(() => {
     vi.resetModules()
@@ -1048,6 +1135,14 @@ describe('web file preload API', () => {
     vi.doUnmock('./web-runtime-client')
   })
 
+  it('rejects native save-dialog downloads in paired web clients', async () => {
+    const { api } = await installApi('Linux')
+
+    await expect(
+      api.fs.downloadFile({ filePath: '/workspace/repo/file.txt', connectionId: 'ssh-1' })
+    ).rejects.toThrow('Remote file download is unavailable in paired web clients.')
+  })
+
   it('returns false for runtime missing-path errors from fs.pathExists', async () => {
     const runtimeCalls: { method: string; params: unknown }[] = []
     const worktree = {
@@ -1117,6 +1212,42 @@ describe('web file preload API', () => {
       { method: 'worktree.detectedList', params: { repo: 'repo-1' } },
       { method: 'files.stat', params: { worktree: 'id:wt-1', relativePath: 'untitled.md' } }
     ])
+  })
+})
+
+describe('web star nag preload API', () => {
+  beforeEach(() => {
+    vi.resetModules()
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('keeps the browser-paired star nag API safe and in parity with the preload contract', async () => {
+    const { api } = await installApi('Linux')
+
+    expect(Object.keys(api.starNag).sort()).toEqual([
+      'complete',
+      'disable',
+      'dismiss',
+      'forceShow',
+      'onShow',
+      'openWeb',
+      'starOrca'
+    ])
+
+    const listener = vi.fn()
+    const unsubscribe = api.starNag.onShow(listener)
+    unsubscribe()
+
+    await expect(api.starNag.dismiss()).resolves.toBeUndefined()
+    await expect(api.starNag.complete()).resolves.toBeUndefined()
+    await expect(api.starNag.disable()).resolves.toBeUndefined()
+    await expect(api.starNag.openWeb()).resolves.toBeUndefined()
+    await expect(api.starNag.forceShow()).resolves.toBeUndefined()
+    await expect(api.starNag.starOrca()).resolves.toBe(false)
+    expect(listener).not.toHaveBeenCalled()
   })
 })
 

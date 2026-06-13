@@ -23,6 +23,14 @@ function shouldIgnoreRemoteSelection(commandPath: string[]): boolean {
 }
 
 export async function main(argv = process.argv.slice(2), cwd = process.cwd()): Promise<void> {
+  if (argv[0] === 'agent-teams-tmux') {
+    await runAgentTeamsTmuxShim(argv.slice(1))
+    return
+  }
+  if (argv[0] === 'claude-teams') {
+    await runClaudeTeams(argv.slice(1), cwd)
+    return
+  }
   const parsed = normalizeCommandPositionals(COMMAND_SPECS, parseArgs(argv))
   const helpPath = resolveHelpPath(parsed)
   if (helpPath !== null) {
@@ -72,6 +80,49 @@ export async function main(argv = process.argv.slice(2), cwd = process.cwd()): P
     })
   } catch (error) {
     reportCliError(error, json, { commandPath: parsed.commandPath })
+    process.exitCode = 1
+  }
+}
+
+async function runClaudeTeams(argv: string[], cwd: string): Promise<void> {
+  try {
+    // Why: everything after `orca claude-teams` belongs to Claude Code, not
+    // Orca's own flag parser, so new Claude flags work without Orca changes.
+    const client = new RuntimeClient(undefined, undefined, null, null)
+    await dispatch(['claude-teams'], {
+      flags: new Map(),
+      client,
+      cwd,
+      json: false,
+      rawArgs: argv
+    })
+  } catch (error) {
+    reportCliError(error, false, { commandPath: ['claude-teams'] })
+    process.exitCode = 1
+  }
+}
+
+async function runAgentTeamsTmuxShim(argv: string[]): Promise<void> {
+  try {
+    const client = new RuntimeClient(undefined, 10_000)
+    const response = await client.call<{
+      tmux: { stdout: string; stderr: string; exitCode: number }
+    }>(
+      'agentTeams.tmuxCompat',
+      {
+        teamId: process.env.ORCA_AGENT_TEAMS_TEAM_ID,
+        token: process.env.ORCA_AGENT_TEAMS_TOKEN,
+        envPane: process.env.TMUX_PANE,
+        cwd: process.cwd(),
+        argv
+      },
+      { timeoutMs: 10_000 }
+    )
+    process.stdout.write(response.result.tmux.stdout)
+    process.stderr.write(response.result.tmux.stderr)
+    process.exitCode = response.result.tmux.exitCode
+  } catch (error) {
+    reportCliError(error, false, { commandPath: ['agent-teams-tmux'] })
     process.exitCode = 1
   }
 }

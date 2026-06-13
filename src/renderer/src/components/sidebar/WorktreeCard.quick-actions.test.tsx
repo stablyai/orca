@@ -157,7 +157,7 @@ describe('WorktreeCard quick actions', () => {
     expect(markup).toContain('data-worktree-card-meta-row=""')
   })
 
-  it('renders folder kind in the detailed metadata row', () => {
+  it('renders folder kind and directory in the detailed metadata row', () => {
     const markup = renderToStaticMarkup(
       <WorktreeCard
         worktree={makeWorktree({ displayName: 'Docs folder', branch: '' })}
@@ -168,6 +168,27 @@ describe('WorktreeCard quick actions', () => {
 
     expect(markup).toContain('Docs folder')
     expect(markup).toContain('>Folder</span>')
+    expect(markup).toContain('>quick-action</span>')
+    expect(markup).toContain('data-worktree-card-meta-row=""')
+  })
+
+  it('renders synthetic folder workspace directory in the detailed metadata row', () => {
+    const markup = renderToStaticMarkup(
+      <WorktreeCard
+        worktree={makeWorktree({
+          id: 'folder:folder-1',
+          displayName: 'Docs folder',
+          branch: '',
+          path: '/repo/worktrees/quick-action'
+        })}
+        repo={undefined}
+        isActive={false}
+      />
+    )
+
+    expect(markup).toContain('Docs folder')
+    expect(markup).toContain('>Folder</span>')
+    expect(markup).toContain('>quick-action</span>')
     expect(markup).toContain('data-worktree-card-meta-row=""')
   })
 
@@ -224,7 +245,7 @@ describe('WorktreeCard quick actions', () => {
 
   it('omits the repeated branch metadata row when compact cards are enabled', () => {
     worktreeCardProperties = []
-    settings = { experimentalCompactWorktreeCards: true }
+    settings = { compactWorktreeCards: true }
 
     const markup = renderToStaticMarkup(
       <WorktreeCard
@@ -241,7 +262,7 @@ describe('WorktreeCard quick actions', () => {
 
   it('omits the branch metadata row when the workspace has a custom title', () => {
     worktreeCardProperties = []
-    settings = { experimentalCompactWorktreeCards: true }
+    settings = { compactWorktreeCards: true }
 
     const markup = renderToStaticMarkup(
       <WorktreeCard
@@ -281,7 +302,7 @@ describe('WorktreeCard quick actions', () => {
 
   it('moves unread and primary into the title row when compact cards are enabled', () => {
     worktreeCardProperties = ['status', 'unread']
-    settings = { experimentalCompactWorktreeCards: true }
+    settings = { compactWorktreeCards: true }
 
     const markup = renderToStaticMarkup(
       <WorktreeCard

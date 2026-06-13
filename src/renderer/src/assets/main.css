@@ -278,6 +278,31 @@
   --linear-priority-bar-inactive-fill: color-mix(in srgb, lch(39.576 1.25 282) 62%, transparent);
 }
 
+[data-sonner-toaster] [data-sonner-toast][data-styled='true'] [data-close-button] {
+  /* Why: Sonner's dark-theme defaults can resolve the close icon and button
+     background to the same color; keep the X readable on both Orca themes. */
+  color: var(--popover-foreground);
+  background: var(--popover);
+  border-color: rgb(0 0 0 / 0.14);
+}
+
+[data-sonner-toaster][data-sonner-theme='dark']
+  [data-sonner-toast][data-styled='true']
+  [data-close-button] {
+  color: var(--popover-foreground);
+  background: var(--popover);
+  border-color: rgb(255 255 255 / 0.14);
+}
+
+.dark [data-sonner-toaster] [data-sonner-toast][data-styled='true'] [data-close-button] {
+  border-color: rgb(255 255 255 / 0.14);
+}
+
+[data-sonner-toaster] [data-sonner-toast][data-styled='true'] [data-close-button]:hover {
+  color: var(--accent-foreground);
+  background: var(--accent);
+}
+
 /* ── Base Layer ──────────────────────────────────────── */
 
 @layer base {
@@ -546,7 +571,9 @@
   align-items: center;
   overflow: hidden;
   flex-shrink: 0;
-  background: var(--bg-titlebar, var(--card));
+  /* Why: in workspace view this strip sits directly above the worktree
+     sidebar — match its surface so the left column reads as one panel. */
+  background: var(--worktree-sidebar);
   /* Why: draw the divider via inset shadow instead of border-bottom so the
      flex content area spans the full 36px. With border-bottom + border-box,
      the content area shrinks to 35px and flex-centered controls land at
@@ -558,6 +585,12 @@
   box-shadow: inset 0 -1px 0 var(--border);
   -webkit-app-region: drag;
   user-select: none;
+}
+
+/* Why: when the sidebar is collapsed this header floats over the tab strip,
+   so keep the standard titlebar surface instead of the sidebar tint. */
+.titlebar-left-floating {
+  background: var(--bg-titlebar, var(--card));
 }
 
 .titlebar-traffic-light-pad {
@@ -906,6 +939,61 @@
 
 .dark .setup-script-prompt-card {
   background: color-mix(in srgb, var(--sidebar-foreground) 12%, var(--sidebar));
+}
+
+/* Why: one-shot sidebar education cards need stronger separation than
+   worktree-sidebar-accent, which sits almost on top of the sidebar fill. */
+.worktree-sidebar-notice-card {
+  position: relative;
+  border: 1px solid
+    color-mix(in srgb, var(--worktree-sidebar-foreground) 24%, var(--worktree-sidebar-border));
+  background: color-mix(in srgb, var(--worktree-sidebar-foreground) 9%, var(--worktree-sidebar));
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--worktree-sidebar-foreground) 8%, transparent),
+    0 1px 2px color-mix(in srgb, var(--worktree-sidebar-foreground) 10%, transparent);
+}
+
+.dark .worktree-sidebar-notice-card {
+  border-color: color-mix(
+    in srgb,
+    var(--worktree-sidebar-foreground) 32%,
+    var(--worktree-sidebar-border)
+  );
+  background: color-mix(in srgb, var(--worktree-sidebar-foreground) 14%, var(--worktree-sidebar));
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--worktree-sidebar-foreground) 12%, transparent),
+    0 1px 4px rgb(0 0 0 / 0.28);
+}
+
+/* Why: the project-order notice sits directly under the Projects header; a
+   caret aligned to that label reads as a callout instead of a random card. */
+.worktree-sidebar-notice-card--to-section-title::before {
+  content: '';
+  position: absolute;
+  top: -5px;
+  left: 1.75rem;
+  width: 10px;
+  height: 10px;
+  transform: rotate(45deg);
+  border-left: 1px solid
+    color-mix(in srgb, var(--worktree-sidebar-foreground) 24%, var(--worktree-sidebar-border));
+  border-top: 1px solid
+    color-mix(in srgb, var(--worktree-sidebar-foreground) 24%, var(--worktree-sidebar-border));
+  background: color-mix(in srgb, var(--worktree-sidebar-foreground) 9%, var(--worktree-sidebar));
+}
+
+.dark .worktree-sidebar-notice-card--to-section-title::before {
+  border-left-color: color-mix(
+    in srgb,
+    var(--worktree-sidebar-foreground) 32%,
+    var(--worktree-sidebar-border)
+  );
+  border-top-color: color-mix(
+    in srgb,
+    var(--worktree-sidebar-foreground) 32%,
+    var(--worktree-sidebar-border)
+  );
+  background: color-mix(in srgb, var(--worktree-sidebar-foreground) 14%, var(--worktree-sidebar));
 }
 
 /* Why: the detected command is editable, but a pure app-background fill reads
@@ -3003,51 +3091,20 @@ html.onboarding-tour-start-transition::view-transition-new(root) {
   margin-top: 4px;
 }
 
-/* Why: a tour panel must read as elevated above the chrome it is teaching about
-   without resorting to color. A 1px inner top highlight plus the documented
-   floating shadow keeps it above the surface in both light and dark modes. */
+/* Why: tours need a distinct item surface without highlighting the underlying target. */
 .orca-contextual-tour-panel {
-  background: linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--foreground) 4%, var(--popover)) 0%,
-    var(--popover) 12%
-  );
+  --contextual-tour-panel-surface: color-mix(in srgb, var(--foreground) 7%, var(--popover));
+  --contextual-tour-panel-border: color-mix(in srgb, var(--foreground) 14%, var(--border));
+  background: var(--contextual-tour-panel-surface);
+  border-color: var(--contextual-tour-panel-border);
   box-shadow:
     inset 0 1px 0 0 color-mix(in srgb, var(--foreground) 10%, transparent),
     0 10px 24px rgba(0, 0, 0, 0.18);
 }
 
 .dark .orca-contextual-tour-panel {
-  background: linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--foreground) 4%, var(--popover)) 0%,
-    var(--popover) 14%
-  );
-  box-shadow:
-    inset 0 1px 0 0 color-mix(in srgb, var(--foreground) 5%, transparent),
-    0 10px 24px rgba(0, 0, 0, 0.18);
-}
-
-/* Why: a tour panel must read as elevated above the chrome it is teaching about
-   without resorting to color. A 1px inner top highlight plus the documented
-   floating shadow keeps it above the surface in both light and dark modes. */
-.orca-contextual-tour-panel {
-  background: linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--foreground) 4%, var(--popover)) 0%,
-    var(--popover) 12%
-  );
-  box-shadow:
-    inset 0 1px 0 0 color-mix(in srgb, var(--foreground) 10%, transparent),
-    0 10px 24px rgba(0, 0, 0, 0.18);
-}
-
-.dark .orca-contextual-tour-panel {
-  background: linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--foreground) 4%, var(--popover)) 0%,
-    var(--popover) 14%
-  );
+  --contextual-tour-panel-surface: color-mix(in srgb, var(--foreground) 10%, var(--popover));
+  --contextual-tour-panel-border: color-mix(in srgb, var(--foreground) 16%, var(--border));
   box-shadow:
     inset 0 1px 0 0 color-mix(in srgb, var(--foreground) 5%, transparent),
     0 10px 24px rgba(0, 0, 0, 0.18);

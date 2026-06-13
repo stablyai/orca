@@ -54,6 +54,8 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import type { TabCreateEntryArgs } from './tab-create-entry-action'
 import { buildTabAgentLaunchOptions, orderTabLaunchAgents } from './tab-agent-launch-options'
+import { buildTabCreateMenuOptions, type TabCreateMenuOption } from './tab-create-menu-options'
+import { translate } from '@/i18n/i18n'
 
 const isWindows = navigator.userAgent.includes('Windows')
 const isMacOs = navigator.userAgent.includes('Mac')
@@ -108,6 +110,8 @@ type TabBarProps = {
     sourceVisibleTabId?: string
   ) => void
   hoveredTabInsertion?: HoveredTabInsertion | null
+  /** Floating workspace panels are rounded; skip tab top borders that clash with the curve. */
+  tabStripChrome?: 'default' | 'floating-panel'
 }
 
 type TabItem =
@@ -206,8 +210,10 @@ function TabBarInner({
   onPinFile,
   tabBarOrder,
   onCreateSplitGroup,
-  hoveredTabInsertion
+  hoveredTabInsertion,
+  tabStripChrome = 'default'
 }: TabBarProps): React.JSX.Element {
+  const includeTopTabBorder = tabStripChrome !== 'floating-panel'
   const newTerminalShortcut = useShortcutLabel('tab.newTerminal')
   const newBrowserShortcut = useShortcutLabel('tab.newBrowser')
   const newSimulatorShortcut = useShortcutLabel('tab.newSimulator')
@@ -237,17 +243,11 @@ function TabBarInner({
     const repo = worktree ? s.repos?.find((entry) => entry.id === worktree.repoId) : null
     return Boolean(repo?.connectionId)
   })
-  const unifiedNewTabLauncherEnabled = useAppStore(
-    (s) => s.settings?.experimentalUnifiedNewTabLauncher === true
-  )
   const defaultAgent = useAppStore((s) => s.settings?.defaultTuiAgent)
   const agentCmdOverrides = useAppStore(
     (s) => s.settings?.agentCmdOverrides ?? EMPTY_AGENT_CMD_OVERRIDES
   )
   const connectionId = useAppStore((s) => {
-    if (!unifiedNewTabLauncherEnabled) {
-      return undefined
-    }
     const allWorktrees = Object.values(s.worktreesByRepo ?? {}).flat()
     const worktree = allWorktrees.find((w) => w.id === worktreeId)
     if (!worktree) {
@@ -305,6 +305,7 @@ function TabBarInner({
   // clicks, so it misses webview clicks entirely. Listening for window blur
   // catches the moment focus leaves the renderer (including into a webview).
   const [newTabMenuOpen, setNewTabMenuOpen] = useState(false)
+  const [createMenuQuery, setCreateMenuQuery] = useState('')
   const pendingNewTabMenuFocusRef = useRef<(() => void) | null>(null)
   const pendingNewTabMenuFocusAnimationRef = useRef<number | null>(null)
   const pendingNewTabMenuFocusRetryRef = useRef<number | null>(null)
@@ -358,6 +359,109 @@ function TabBarInner({
   const queueTerminalTabFocusAfterNewTabMenuClose = (tabId: string): void => {
     pendingNewTabMenuFocusRef.current = () => focusTerminalTabSurface(tabId)
   }
+  const windowsShellEntries = useMemo(() => {
+    if (!shouldShowWindowsShellMenu || !onNewTerminalWithShell) {
+      return undefined
+    }
+    const allShells: {
+      label: string
+      shell: BuiltInWindowsTerminalShell
+    }[] = [
+      {
+        label: translate('auto.components.tab.bar.TabBar.2148f65e04', 'PowerShell'),
+        shell: 'powershell.exe'
+      },
+      {
+        label: translate('auto.components.tab.bar.TabBar.1a8af49530', 'CMD Prompt'),
+        shell: 'cmd.exe'
+      },
+      ...(windowsTerminalCapabilities.gitBashAvailable
+        ? ([
+            {
+              label: translate('auto.components.tab.bar.TabBar.efb33546ff', 'Git Bash'),
+              shell: WINDOWS_GIT_BASH_SHELL
+            }
+          ] as const)
+        : []),
+      ...(windowsTerminalCapabilities.wslAvailable
+        ? ([
+            {
+              label: translate('auto.components.tab.bar.TabBar.d1afac112b', 'WSL'),
+              shell: 'wsl.exe'
+            }
+          ] as const)
+        : [])
+    ]
+    const defaultEntry =
+      allShells.find((shell) => shell.shell === defaultWindowsShell) ?? allShells[0]
+    const orderedShells = [
+      defaultEntry,
+      ...allShells.filter((shell) => shell.shell !== defaultEntry.shell)
+    ]
+    return orderedShells.map((entry) => ({ label: entry.label, shell: entry.shell }))
+  }, [
+    defaultWindowsShell,
+    onNewTerminalWithShell,
+    shouldShowWindowsShellMenu,
+    windowsTerminalCapabilities.gitBashAvailable,
+    windowsTerminalCapabilities.wslAvailable
+  ])
+  const createMenuOptions = useMemo(
+    () =>
+      buildTabCreateMenuOptions({
+        terminalOnly,
+        windowsShellEntries,
+        hasNewBrowser: !terminalOnly,
+        hasNewMarkdown: !terminalOnly && Boolean(onNewFileTab),
+        hasOpenMarkdown: !terminalOnly && Boolean(onOpenFileTab),
+        hasSimulator:
+          !terminalOnly && isMacOs && mobileEmulatorEnabled && Boolean(onNewSimulatorTab),
+        simulatorIsGoTo: workspaceHasSimulatorTab
+      }),
+    [
+      mobileEmulatorEnabled,
+      onNewFileTab,
+      onNewSimulatorTab,
+      onOpenFileTab,
+      terminalOnly,
+      windowsShellEntries,
+      workspaceHasSimulatorTab
+    ]
+  )
+  const handleSelectCreateMenuOption = (option: TabCreateMenuOption): void => {
+    switch (option.kind) {
+      case 'new-terminal':
+        queueNewActiveTerminalFocusAfterNewTabMenuClose()
+        onNewTerminalTab()
+        break
+      case 'new-terminal-shell':
+        if (!onNewTerminalWithShell || !option.shell) {
+          break
+        }
+        queueNewActiveTerminalFocusAfterNewTabMenuClose()
+        onNewTerminalWithShell(
+          resolveWindowsShellLaunchTarget(
+            option.shell,
+            defaultWindowsPowerShellImplementation,
+            windowsTerminalCapabilities.pwshAvailable
+          )
+        )
+        break
+      case 'new-browser':
+        onNewBrowserTab()
+        break
+      case 'new-markdown':
+        onNewFileTab?.()
+        break
+      case 'open-markdown':
+        onOpenFileTab?.()
+        break
+      case 'new-simulator':
+      case 'go-to-simulator':
+        onNewSimulatorTab?.()
+        break
+    }
+  }
   const launchAgentFromNewTabEntry = (agent: TuiAgent): void => {
     const option = agentLaunchOptions.find((candidate) => candidate.agent === agent)
     const result = launchAgentInNewTab({
@@ -367,7 +471,13 @@ function TabBarInner({
       launchSource: 'tab_bar_quick_launch'
     })
     if (!result) {
-      toast.error(`Could not build launch command for ${option?.label ?? agent}.`)
+      toast.error(
+        translate(
+          'auto.components.tab.bar.TabBar.ab589350e5',
+          'Could not build launch command for {{value0}}.',
+          { value0: option?.label ?? agent }
+        )
+      )
       return
     }
     if (result.tabId) {
@@ -407,68 +517,38 @@ function TabBarInner({
   const clearPendingNewTabMenuFocusOnUnmount = clearPendingNewTabMenuFocusOnUnmountRef.current
 
   const defaultTerminalMenuItems =
-    shouldShowWindowsShellMenu && onNewTerminalWithShell ? (
-      // Why: previously the Windows path nested shell choices under a
-      // Radix submenu. In practice the submenu frequently failed to open
-      // on hover/click, and even when it worked the two-step expansion
-      // hid the fact that multiple shells were available. Inlining all
-      // shells as flat items — default pinned to the top with the
-      // Ctrl+T hint — matches the "no popouts, show all options at
-      // once" rec. Each entry uses a shell-specific icon (ShellIcon)
-      // so PowerShell / CMD / Git Bash / WSL are distinguishable at a glance.
-      // Labels use "CMD Prompt" instead of "Command Prompt" to keep
-      // each row narrow enough that the shortcut hint fits without
-      // wrapping.
-      (() => {
-        const allShells: {
-          label: string
-          shell: BuiltInWindowsTerminalShell
-        }[] = [
-          { label: 'PowerShell', shell: 'powershell.exe' },
-          { label: 'CMD Prompt', shell: 'cmd.exe' },
-          ...(windowsTerminalCapabilities.gitBashAvailable
-            ? ([{ label: 'Git Bash', shell: WINDOWS_GIT_BASH_SHELL }] as const)
-            : []),
-          ...(windowsTerminalCapabilities.wslAvailable
-            ? ([{ label: 'WSL', shell: 'wsl.exe' }] as const)
-            : [])
-        ]
-        const defaultEntry = allShells.find((s) => s.shell === defaultWindowsShell) ?? allShells[0]
-        const orderedShells = [
-          defaultEntry,
-          ...allShells.filter((s) => s.shell !== defaultEntry.shell)
-        ]
-        return orderedShells.map((entry, idx) => {
-          const isDefault = idx === 0
-          return (
-            <DropdownMenuItem
-              key={entry.shell}
-              onSelect={() => {
-                // Why: the top-level Windows shell menu models shell
-                // categories, not concrete executables. When the user
-                // picked PowerShell 7+ in advanced settings, launching the
-                // "PowerShell" menu item must preserve that implementation
-                // instead of forcing inbox powershell.exe.
-                queueNewActiveTerminalFocusAfterNewTabMenuClose()
-                onNewTerminalWithShell(
-                  resolveWindowsShellLaunchTarget(
-                    entry.shell,
-                    defaultWindowsPowerShellImplementation,
-                    windowsTerminalCapabilities.pwshAvailable
-                  )
+    windowsShellEntries && onNewTerminalWithShell ? (
+      windowsShellEntries.map((entry, idx) => {
+        const isDefault = idx === 0
+        return (
+          <DropdownMenuItem
+            key={entry.shell}
+            onSelect={() => {
+              // Why: the top-level Windows shell menu models shell
+              // categories, not concrete executables. When the user
+              // picked PowerShell 7+ in advanced settings, launching the
+              // "PowerShell" menu item must preserve that implementation
+              // instead of forcing inbox powershell.exe.
+              queueNewActiveTerminalFocusAfterNewTabMenuClose()
+              onNewTerminalWithShell(
+                resolveWindowsShellLaunchTarget(
+                  entry.shell,
+                  defaultWindowsPowerShellImplementation,
+                  windowsTerminalCapabilities.pwshAvailable
                 )
-              }}
-              className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
-            >
-              <ShellIcon shell={entry.shell} size={14} />
-              <span className="flex-1">New Terminal: {entry.label}</span>
-              {isDefault ? (
-                <DropdownMenuShortcut>{newTerminalShortcut}</DropdownMenuShortcut>
-              ) : null}
-            </DropdownMenuItem>
-          )
-        })
-      })()
+              )
+            }}
+            className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
+          >
+            <ShellIcon shell={entry.shell} size={14} />
+            <span className="flex-1">
+              {translate('auto.components.tab.bar.TabBar.7c1313d237', 'New Terminal:')}{' '}
+              {entry.label}
+            </span>
+            {isDefault ? <DropdownMenuShortcut>{newTerminalShortcut}</DropdownMenuShortcut> : null}
+          </DropdownMenuItem>
+        )
+      })
     ) : (
       <DropdownMenuItem
         onSelect={() => {
@@ -478,7 +558,7 @@ function TabBarInner({
         className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
       >
         <TerminalSquare className="size-4 text-muted-foreground" />
-        New Terminal
+        {translate('auto.components.tab.bar.TabBar.d364f3c8d4', 'New Terminal')}
         <DropdownMenuShortcut>{newTerminalShortcut}</DropdownMenuShortcut>
       </DropdownMenuItem>
     )
@@ -488,7 +568,7 @@ function TabBarInner({
       className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
     >
       <Globe className="size-4 text-muted-foreground" />
-      New Browser Tab
+      {translate('auto.components.tab.bar.TabBar.4833fb2cbe', 'New Browser Tab')}
       <DropdownMenuShortcut>{newBrowserShortcut}</DropdownMenuShortcut>
     </DropdownMenuItem>
   ) : null
@@ -502,12 +582,15 @@ function TabBarInner({
               className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
             >
               <Smartphone className="size-4 text-muted-foreground" />
-              Go to Mobile Emulator
+              {translate('auto.components.tab.bar.TabBar.b426bb2615', 'Go to Mobile Emulator')}
               <DropdownMenuShortcut>{newSimulatorShortcut}</DropdownMenuShortcut>
             </DropdownMenuItem>
           </TooltipTrigger>
           <TooltipContent side="right" sideOffset={8} className="z-[80]">
-            Open the existing emulator tab.
+            {translate(
+              'auto.components.tab.bar.TabBar.aea43b5748',
+              'Open the existing emulator tab.'
+            )}
           </TooltipContent>
         </Tooltip>
       ) : (
@@ -516,7 +599,7 @@ function TabBarInner({
           className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
         >
           <Smartphone className="size-4 text-muted-foreground" />
-          New Mobile Emulator
+          {translate('auto.components.tab.bar.TabBar.fd2b42aaa3', 'New Mobile Emulator')}
           <DropdownMenuShortcut>{newSimulatorShortcut}</DropdownMenuShortcut>
         </DropdownMenuItem>
       )
@@ -528,7 +611,7 @@ function TabBarInner({
         className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
       >
         <FilePlus className="size-4 text-muted-foreground" />
-        New Markdown
+        {translate('auto.components.tab.bar.TabBar.3d5d6c960d', 'New Markdown')}
         <DropdownMenuShortcut>{newFileShortcut}</DropdownMenuShortcut>
       </DropdownMenuItem>
     ) : null
@@ -539,7 +622,7 @@ function TabBarInner({
         className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
       >
         <FileText className="size-4 text-muted-foreground" />
-        Open Markdown...
+        {translate('auto.components.tab.bar.TabBar.4f327c8b3d', 'Open Markdown...')}
       </DropdownMenuItem>
     ) : null
   const standardCreateMenuItems =
@@ -569,6 +652,14 @@ function TabBarInner({
     window.addEventListener('blur', dismiss)
     return () => window.removeEventListener('blur', dismiss)
   }, [newTabMenuOpen])
+
+  useEffect(() => {
+    if (!newTabMenuOpen) {
+      setCreateMenuQuery('')
+    }
+  }, [newTabMenuOpen])
+
+  const showStaticCreateMenuItems = createMenuQuery.trim().length === 0
 
   const terminalMap = useMemo(() => new Map(tabs.map((t) => [t.id, t])), [tabs])
   const editorMap = useMemo(
@@ -865,6 +956,7 @@ function TabBarInner({
                   }
                   dragData={dragData}
                   dropIndicator={dropIndicatorByVisibleId.get(item.id) ?? null}
+                  includeTopTabBorder={includeTopTabBorder}
                 />
               )
             }
@@ -886,6 +978,7 @@ function TabBarInner({
                   onTogglePin={() => togglePinned(item)}
                   dragData={dragData}
                   dropIndicator={dropIndicatorByVisibleId.get(item.id) ?? null}
+                  includeTopTabBorder={includeTopTabBorder}
                 />
               )
             }
@@ -921,6 +1014,7 @@ function TabBarInner({
                   }
                   dragData={dragData}
                   dropIndicator={dropIndicatorByVisibleId.get(item.id) ?? null}
+                  includeTopTabBorder={includeTopTabBorder}
                 />
               )
             }
@@ -946,6 +1040,7 @@ function TabBarInner({
                 }
                 dragData={dragData}
                 dropIndicator={dropIndicatorByVisibleId.get(item.id) ?? null}
+                includeTopTabBorder={includeTopTabBorder}
               />
             )
           })}
@@ -956,12 +1051,12 @@ function TabBarInner({
           <button
             className="ml-2 my-auto flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent/50 hover:text-foreground"
             style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-            title="New tab"
+            title={translate('auto.components.tab.bar.TabBar.b1a132357f', 'New tab')}
             // Why: aria-label matches the tooltip so E2E can locate the "+"
             // affordance via getByRole('button', { name: 'New tab' }). The
             // store-only createTab() round-trip that preceded this was a
             // tautology — it would pass even if the + button had been deleted.
-            aria-label="New tab"
+            aria-label={translate('auto.components.tab.bar.TabBar.b1a132357f', 'New tab')}
           >
             <Plus className="w-3.5 h-3.5" />
           </button>
@@ -969,7 +1064,7 @@ function TabBarInner({
         <DropdownMenuContent
           align="start"
           sideOffset={6}
-          className={`${unifiedNewTabLauncherEnabled ? 'w-72 max-w-[calc(100vw-1rem)]' : 'min-w-[11rem]'} rounded-[11px] border-border/80 p-1 shadow-[0_16px_36px_rgba(0,0,0,0.24)]`}
+          className="w-72 max-w-[calc(100vw-1rem)] rounded-[11px] border-border/80 p-1 shadow-[0_16px_36px_rgba(0,0,0,0.24)]"
           onCloseAutoFocus={(e) => {
             // Why: terminal-producing menu actions activate a freshly-mounted
             // xterm. Radix's default focus restore sends focus back to the "+"
@@ -978,12 +1073,13 @@ function TabBarInner({
             runPendingNewTabMenuFocusAfterClose()
           }}
         >
-          {!terminalOnly && onOpenEntry && unifiedNewTabLauncherEnabled ? (
+          {!terminalOnly && onOpenEntry ? (
             <>
               <TabBarCreateEntry
                 worktreeId={worktreeId}
                 groupId={resolvedGroupId}
                 menuOpen={newTabMenuOpen}
+                menuOptions={createMenuOptions}
                 agentOptions={agentLaunchOptions}
                 onLaunchAgent={launchAgentFromNewTabEntry}
                 onOpenDefaultTerminal={() => {
@@ -991,13 +1087,15 @@ function TabBarInner({
                   onNewTerminalTab()
                 }}
                 onOpenEntry={onOpenEntry}
+                onQueryChange={setCreateMenuQuery}
+                onSelectMenuOption={handleSelectCreateMenuOption}
                 onDidOpenEntry={() => setNewTabMenuOpen(false)}
               />
-              <DropdownMenuSeparator />
+              {showStaticCreateMenuItems ? <DropdownMenuSeparator /> : null}
             </>
           ) : null}
-          {standardCreateMenuItems}
-          {showAgentLaunchItems ? (
+          {showStaticCreateMenuItems ? standardCreateMenuItems : null}
+          {showStaticCreateMenuItems && showAgentLaunchItems ? (
             <>
               <DropdownMenuSeparator />
               <QuickLaunchAgentMenuItems

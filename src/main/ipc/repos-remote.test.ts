@@ -89,7 +89,7 @@ vi.mock('./filesystem-auth', () => ({
 
 vi.mock('../providers/ssh-git-dispatch', () => ({
   getSshGitProvider: vi.fn().mockImplementation((id: string) => {
-    if (id === 'conn-1') {
+    if (id === 'conn-1' || id === 'conn-2') {
       return mockGitProvider
     }
     return undefined
@@ -98,7 +98,7 @@ vi.mock('../providers/ssh-git-dispatch', () => ({
 
 vi.mock('../providers/ssh-filesystem-dispatch', () => ({
   getSshFilesystemProvider: vi.fn().mockImplementation((id: string) => {
-    if (id === 'conn-1') {
+    if (id === 'conn-1' || id === 'conn-2') {
       return mockFilesystemProvider
     }
     return undefined
@@ -107,7 +107,7 @@ vi.mock('../providers/ssh-filesystem-dispatch', () => ({
 
 vi.mock('./ssh', () => ({
   getActiveMultiplexer: vi.fn().mockImplementation((id: string) => {
-    if (id === 'conn-1') {
+    if (id === 'conn-1' || id === 'conn-2') {
       return mockMultiplexer
     }
     return undefined
@@ -880,6 +880,59 @@ describe('repos:addRemote', () => {
     const result = await handlers.get('repos:addRemote')!(null, {
       connectionId: 'conn-1',
       remotePath: '/home/user/project'
+    })
+
+    expect(result).toEqual({ repo: existing })
+    expect(mockStore.addRepo).not.toHaveBeenCalled()
+  })
+
+  it('allows the same resolved remote path on a different SSH connection', async () => {
+    const existing = {
+      id: 'machine-1-project',
+      path: '/home/user/project',
+      connectionId: 'conn-1',
+      displayName: 'project',
+      badgeColor: '#fff',
+      addedAt: 1000,
+      kind: 'git'
+    }
+    mockStore.getRepos.mockReturnValue([existing])
+
+    const result = await handlers.get('repos:addRemote')!(null, {
+      connectionId: 'conn-2',
+      remotePath: '/home/user/project'
+    })
+
+    expect(mockStore.addRepo).toHaveBeenCalledWith(
+      expect.objectContaining({
+        path: '/home/user/project',
+        connectionId: 'conn-2'
+      })
+    )
+    expect(result).toHaveProperty('repo.connectionId', 'conn-2')
+    expect(result).toHaveProperty('repo.id')
+    expect(result).not.toEqual({ repo: existing })
+  })
+
+  it('dedupes remote projects after git root resolution on the same SSH connection', async () => {
+    const existing = {
+      id: 'existing-id',
+      path: '/home/user/project',
+      connectionId: 'conn-1',
+      displayName: 'project',
+      badgeColor: '#fff',
+      addedAt: 1000,
+      kind: 'git'
+    }
+    mockStore.getRepos.mockReturnValue([existing])
+    mockGitProvider.isGitRepoAsync.mockResolvedValueOnce({
+      isRepo: true,
+      rootPath: '/home/user/project'
+    })
+
+    const result = await handlers.get('repos:addRemote')!(null, {
+      connectionId: 'conn-1',
+      remotePath: '/home/user/project/src'
     })
 
     expect(result).toEqual({ repo: existing })

@@ -11,7 +11,10 @@ import {
   isManualSimulatorLaunchPending,
   rememberPrelaunchedSimulatorSession
 } from './simulator-launch-coordination'
-import { cancelPendingSimulatorPaneShutdown } from './simulator-pane-shutdown-scheduler'
+import {
+  cancelPendingSimulatorPaneShutdown,
+  shutdownManagedSimulatorIfNoPane
+} from './simulator-pane-shutdown-scheduler'
 
 type OpenMobileEmulatorTabOptions = {
   targetGroupId?: string
@@ -93,6 +96,11 @@ export async function openMobileEmulatorTab(
     )
     if (!result.attached || !result.info) {
       throw new Error('Could not start the emulator.')
+    }
+    // Why: users can close the tab while serve-sim is still starting; after
+    // attach registers the managed session, clean it up if no pane remains.
+    if (await shutdownManagedSimulatorIfNoPane(worktreeId, tabId)) {
+      return tabId
     }
 
     rememberPrelaunchedSimulatorSession(worktreeId, result.info)

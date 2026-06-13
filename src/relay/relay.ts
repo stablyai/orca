@@ -57,6 +57,9 @@ import {
 import { assertPluginSourceUnderByteCap } from './plugin-source-limit'
 import { resolveOpenCodeSourceConfigDir, resolvePiSourceAgentDir } from './plugin-overlay-env'
 import { detectPiAgentKindFromCommand } from '../shared/pi-agent-kind'
+import { pickRemoteCliEnv } from './remote-cli-env'
+import { remoteCliRequestTimeoutMs } from './remote-cli-timeout'
+import { shouldReadRemoteCliStdin } from './remote-cli-stdin'
 
 const DEFAULT_GRACE_MS = DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS * 1000
 const SOCK_NAME = 'relay.sock'
@@ -87,6 +90,9 @@ function parseNonNegativeIntEnv(name: string, fallback: number): number {
 }
 
 function readSocketIdentity(sockPath: string): SocketIdentity | null {
+  if (isWindowsNamedPipePath(sockPath)) {
+    return null
+  }
   try {
     const stat = statSync(sockPath, { bigint: true })
     return { dev: stat.dev, ino: stat.ino, ctimeNs: stat.ctimeNs }
@@ -95,18 +101,24 @@ function readSocketIdentity(sockPath: string): SocketIdentity | null {
   }
 }
 
+function isWindowsNamedPipePath(sockPath: string): boolean {
+  return process.platform === 'win32' && /^\\\\[.?]\\pipe\\/i.test(sockPath)
+}
+
 function parseArgs(argv: string[]): {
   graceTimeMs: number
   connectMode: boolean
   detached: boolean
   cliMode: boolean
   sockPath: string
+  endpointDir?: string
 } {
   let graceTimeMs = DEFAULT_GRACE_MS
   let connectMode = false
   let detached = false
   let cliMode = false
   let sockPath = ''
+  let endpointDir: string | undefined
   for (let i = 2; i < argv.length; i++) {
     if (argv[i] === '--grace-time' && argv[i + 1]) {
       const parsed = parseInt(argv[i + 1], 10)
@@ -126,12 +138,15 @@ function parseArgs(argv: string[]): {
     } else if (argv[i] === '--sock-path' && argv[i + 1]) {
       sockPath = argv[i + 1]
       i++
+    } else if (argv[i] === '--endpoint-dir' && argv[i + 1]) {
+      endpointDir = argv[i + 1]
+      i++
     }
   }
   if (!sockPath) {
     sockPath = join(process.cwd(), SOCK_NAME)
   }
-  return { graceTimeMs, connectMode, detached, cliMode, sockPath }
+  return { graceTimeMs, connectMode, detached, cliMode, sockPath, endpointDir }
 }
 
 // ── Connect mode ─────────────────────────────────────────────────────
@@ -199,8 +214,9 @@ function runConnectMode(sockPath: string): void {
   })
 }
 
-function runOrcaCliMode(sockPath: string, argv: string[]): void {
+async function runOrcaCliMode(sockPath: string, argv: string[]): Promise<void> {
   const myVersion = readLaunchVersion()
+  const stdin = shouldReadRemoteCliStdin(argv) ? await readOrcaCliStdin() : undefined
   const sock = createConnection({ path: sockPath })
   let nextSeq = 1
   let highestReceivedSeq = 0
@@ -216,7 +232,8 @@ function runOrcaCliMode(sockPath: string, argv: string[]): void {
         params: {
           argv,
           cwd: process.cwd(),
-          env
+          env,
+          ...(stdin !== undefined ? { stdin } : {})
         }
       },
       nextSeq++,
@@ -285,21 +302,23 @@ function runOrcaCliMode(sockPath: string, argv: string[]): void {
   })
 }
 
-function pickRemoteCliEnv(env: NodeJS.ProcessEnv): Record<string, string> {
-  const picked: Record<string, string> = {}
-  for (const key of ['ORCA_TERMINAL_HANDLE', 'ORCA_USER_DATA_PATH', 'PATH', 'Path']) {
-    const value = env[key]
-    if (typeof value === 'string') {
-      picked[key] = value
-    }
+async function readOrcaCliStdin(): Promise<string | undefined> {
+  if (process.stdin.isTTY) {
+    return undefined
   }
-  return picked
+  const chunks: Buffer[] = []
+  for await (const chunk of process.stdin) {
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk)))
+  }
+  return Buffer.concat(chunks).toString('utf8')
 }
 
 // ── Normal mode ──────────────────────────────────────────────────────
 
 async function main(): Promise<void> {
-  const { graceTimeMs, connectMode, detached, cliMode, sockPath } = parseArgs(process.argv)
+  const { graceTimeMs, connectMode, detached, cliMode, sockPath, endpointDir } = parseArgs(
+    process.argv
+  )
 
   if (connectMode) {
     runConnectMode(sockPath)
@@ -307,13 +326,16 @@ async function main(): Promise<void> {
   }
   if (cliMode) {
     const marker = process.argv.indexOf('--orca-cli')
-    runOrcaCliMode(sockPath, marker >= 0 ? process.argv.slice(marker + 1) : [])
+    await runOrcaCliMode(sockPath, marker >= 0 ? process.argv.slice(marker + 1) : [])
     return
   }
 
   let ownsSocketPath = false
   let ownedSocketIdentity: SocketIdentity | null = null
   const ownsCurrentSocketPath = (): boolean => {
+    if (isWindowsNamedPipePath(sockPath)) {
+      return ownsSocketPath
+    }
     const currentIdentity = readSocketIdentity(sockPath)
     return (
       ownsSocketPath &&
@@ -422,7 +444,8 @@ async function main(): Promise<void> {
 
   dispatcher.onRequest('orca.cli', async (params, context) => {
     return await dispatcher.requestAnyClient('orca.cli', params, {
-      excludeClientId: context.clientId
+      excludeClientId: context.clientId,
+      timeoutMs: remoteCliRequestTimeoutMs(params)
     })
   })
 
@@ -453,7 +476,7 @@ async function main(): Promise<void> {
     // Why: a remote account can host multiple target-specific relay daemons.
     // Scope endpoint.env/cmd by the daemon socket path so their hook tokens
     // cannot overwrite each other.
-    endpointDir: endpointDirForRelaySocket(sockPath),
+    endpointDir: endpointDir ?? endpointDirForRelaySocket(sockPath),
     forward: (envelope) => {
       // Why: dispatcher.notify is fire-and-forget — when the SSH channel is
       // mid-reconnect the write callback no-ops and the notification is
@@ -730,10 +753,11 @@ async function main(): Promise<void> {
     // created with 0o600 permissions atomically. The previous approach
     // (chmod after listen) had a TOCTOU window where another local user
     // could connect to the socket before chmod ran.
-    const prevUmask = process.umask(0o177)
+    const shouldSetSocketUmask = !isWindowsNamedPipePath(sockPath)
+    const prevUmask = shouldSetSocketUmask ? process.umask(0o177) : 0
     let umaskRestored = false
     const restoreUmask = (): void => {
-      if (!umaskRestored) {
+      if (shouldSetSocketUmask && !umaskRestored) {
         process.umask(prevUmask)
         umaskRestored = true
       }
@@ -804,6 +828,10 @@ async function main(): Promise<void> {
       // the existing "duplicate detected" rejection.
       function onInitialError(err: NodeJS.ErrnoException): void {
         if (err.code !== 'EADDRINUSE' || staleRetryAttempted) {
+          failInitial(err)
+          return
+        }
+        if (isWindowsNamedPipePath(sockPath)) {
           failInitial(err)
           return
         }
@@ -977,6 +1005,9 @@ async function main(): Promise<void> {
 }
 
 function cleanupSocket(sockPath: string): void {
+  if (isWindowsNamedPipePath(sockPath)) {
+    return
+  }
   try {
     if (existsSync(sockPath)) {
       unlinkSync(sockPath)

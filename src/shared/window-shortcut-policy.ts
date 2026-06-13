@@ -92,6 +92,32 @@ export function matchesRecentTabSwitcherChord(
   )
 }
 
+function isControlKey(input: WindowShortcutInput): boolean {
+  return (
+    input.code === 'ControlLeft' ||
+    input.code === 'ControlRight' ||
+    input.code === 'Control' ||
+    input.key === 'Control'
+  )
+}
+
+function isTabKey(input: WindowShortcutInput): boolean {
+  return input.code === 'Tab' || input.key === 'Tab'
+}
+
+export function isRecentTabSwitcherCommitRelease(input: WindowShortcutInput): boolean {
+  if (input.type !== 'keyUp' && input.type !== 'keyup') {
+    return false
+  }
+  if (isControlKey(input)) {
+    return true
+  }
+  const control = input.control ?? input.ctrlKey
+  // Why: some Electron surfaces report the final Ctrl+Tab release as Tab
+  // keyup after Control is already up, so commit instead of stranding the UI.
+  return isTabKey(input) && control === false
+}
+
 function actionMatches(
   actionId: KeybindingActionId,
   input: WindowShortcutInput,

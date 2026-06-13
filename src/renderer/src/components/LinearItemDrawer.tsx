@@ -44,6 +44,7 @@ import {
   linearIssueComments,
   linearUpdateIssue
 } from '@/runtime/runtime-linear-client'
+import { translate } from '@/i18n/i18n'
 
 function LinearIcon({ className }: { className?: string }): React.JSX.Element {
   return (
@@ -192,6 +193,9 @@ export function LinearIssueEditSection({
           onEditStateChange({ state: prevState })
           patchLinearIssue(issue.id, { state: prevState })
         },
+        onSuccess: () => {
+          useAppStore.getState().recordFeatureInteraction('linear-tasks')
+        },
         onError: (err) => toast.error(err)
       })
     },
@@ -221,6 +225,9 @@ export function LinearIssueEditSection({
           onEditStateChange({ priority: prevPriority })
           patchLinearIssue(issue.id, { priority: prevPriority })
         },
+        onSuccess: () => {
+          useAppStore.getState().recordFeatureInteraction('linear-tasks')
+        },
         onError: (err) => toast.error(err)
       })
     },
@@ -241,6 +248,9 @@ export function LinearIssueEditSection({
           onEditStateChange({ estimate: prevEstimate })
           patchLinearIssue(issue.id, { estimate: prevEstimate })
         },
+        onSuccess: () => {
+          useAppStore.getState().recordFeatureInteraction('linear-tasks')
+        },
         onError: (err) => toast.error(err)
       })
     },
@@ -256,7 +266,12 @@ export function LinearIssueEditSection({
 
     const estimate = Number(trimmed)
     if (!Number.isInteger(estimate) || estimate < 0) {
-      toast.error('Estimate must be a non-negative integer')
+      toast.error(
+        translate(
+          'auto.components.LinearItemDrawer.0be31fef8e',
+          'Estimate must be a non-negative integer'
+        )
+      )
       return
     }
 
@@ -280,6 +295,9 @@ export function LinearIssueEditSection({
         onRevert: () => {
           onEditStateChange({ assignee: prevAssignee })
           patchLinearIssue(issue.id, { assignee: prevAssignee })
+        },
+        onSuccess: () => {
+          useAppStore.getState().recordFeatureInteraction('linear-tasks')
         },
         onError: (err) => toast.error(err)
       })
@@ -318,6 +336,9 @@ export function LinearIssueEditSection({
         onRevert: () => {
           onEditStateChange({ labelIds: prevLabelIds, labels: prevLabels })
           patchLinearIssue(issue.id, { labelIds: prevLabelIds, labels: prevLabels })
+        },
+        onSuccess: () => {
+          useAppStore.getState().recordFeatureInteraction('linear-tasks')
         },
         onError: (err) => toast.error(err)
       })
@@ -371,7 +392,7 @@ export function LinearIssueEditSection({
       <div className="space-y-3">
         <section className="rounded-xl border border-border/60 bg-card text-card-foreground shadow-xs">
           <div className="flex h-10 items-center gap-1 border-b border-border/50 px-4 text-sm font-medium text-muted-foreground">
-            <span>Properties</span>
+            <span>{translate('auto.components.LinearItemDrawer.dd304de85a', 'Properties')}</span>
             <ChevronDown className="size-3.5" />
           </div>
           <div className="space-y-1 p-3">
@@ -402,7 +423,7 @@ export function LinearIssueEditSection({
                 ) : states.loading ? (
                   <div className="flex items-center gap-2 px-2 py-3 text-[12px] text-muted-foreground">
                     <LoaderCircle className="size-3 animate-spin" />
-                    Loading states
+                    {translate('auto.components.LinearItemDrawer.59b6cd3706', 'Loading states')}
                   </div>
                 ) : states.data.length > 0 ? (
                   <div>
@@ -426,7 +447,7 @@ export function LinearIssueEditSection({
                   </div>
                 ) : (
                   <div className="px-2 py-3 text-center text-[12px] text-muted-foreground">
-                    No states found
+                    {translate('auto.components.LinearItemDrawer.780ea6ed89', 'No states found')}
                   </div>
                 )}
               </PopoverContent>
@@ -483,7 +504,9 @@ export function LinearIssueEditSection({
                     <UserRound className={propertyIconClass} />
                   )}
                   <span className="min-w-0 flex-1 truncate">
-                    {localAssignee ? localAssignee.displayName : 'Unassigned'}
+                    {localAssignee
+                      ? localAssignee.displayName
+                      : translate('auto.components.LinearItemDrawer.866316f22c', 'Unassigned')}
                   </span>
                   <LinearEditChipAdornment loading={members.loading} pending={assigneePending} />
                 </button>
@@ -498,7 +521,7 @@ export function LinearIssueEditSection({
                     onClick={() => handleAssigneeChange('__unassign__')}
                     className={cn(LINEAR_EDIT_MENU_ITEM_CLASS, !localAssignee && 'bg-accent/50')}
                   >
-                    Unassigned
+                    {translate('auto.components.LinearItemDrawer.866316f22c', 'Unassigned')}
                   </button>
                   {members.error ? (
                     <div className="px-2 py-3 text-center text-[12px] text-destructive">
@@ -507,7 +530,7 @@ export function LinearIssueEditSection({
                   ) : members.loading ? (
                     <div className="flex items-center gap-2 px-2 py-3 text-[12px] text-muted-foreground">
                       <LoaderCircle className="size-3 animate-spin" />
-                      Loading members
+                      {translate('auto.components.LinearItemDrawer.b2376d0179', 'Loading members')}
                     </div>
                   ) : (
                     members.data.map((m) => (
@@ -570,7 +593,10 @@ export function LinearIssueEditSection({
                       }
                     }}
                     inputMode="numeric"
-                    placeholder="Custom estimate"
+                    placeholder={translate(
+                      'auto.components.LinearItemDrawer.fbb90300e2',
+                      'Custom estimate'
+                    )}
                     className="h-8 text-sm"
                   />
                   <div className="flex items-center justify-between gap-2">
@@ -580,7 +606,7 @@ export function LinearIssueEditSection({
                       size="sm"
                       onClick={() => handleEstimateChange(null)}
                     >
-                      Clear
+                      {translate('auto.components.LinearItemDrawer.ceeb8c6153', 'Clear')}
                     </Button>
                     <Button
                       type="button"
@@ -589,7 +615,7 @@ export function LinearIssueEditSection({
                       disabled={estimatePending}
                     >
                       {estimatePending ? <LoaderCircle className="size-3.5 animate-spin" /> : null}
-                      Save
+                      {translate('auto.components.LinearItemDrawer.b5675b0694', 'Save')}
                     </Button>
                   </div>
                 </div>
@@ -600,7 +626,7 @@ export function LinearIssueEditSection({
 
         <section className="rounded-xl border border-border/60 bg-card text-card-foreground shadow-xs">
           <div className="flex h-10 items-center gap-1 border-b border-border/50 px-4 text-sm font-medium text-muted-foreground">
-            <span>Labels</span>
+            <span>{translate('auto.components.LinearItemDrawer.64bfffc4dd', 'Labels')}</span>
             <ChevronDown className="size-3.5" />
           </div>
           <div className="p-3">
@@ -611,13 +637,21 @@ export function LinearIssueEditSection({
                   disabled={labelsPending}
                   className={propertyRowClass}
                   aria-label={
-                    localLabels.length ? `Labels: ${localLabels.join(', ')}` : 'Add label'
+                    localLabels.length
+                      ? translate(
+                          'auto.components.LinearItemDrawer.7f7b89b631',
+                          'Labels: {{value0}}',
+                          { value0: localLabels.join(', ') }
+                        )
+                      : translate('auto.components.LinearItemDrawer.23886c7eec', 'Add label')
                   }
                   aria-busy={labelsPending || labels.loading}
                 >
                   <Tag className={propertyIconClass} />
                   <span className="min-w-0 flex-1 truncate">
-                    {localLabels.length ? labelSummary : 'Add label'}
+                    {localLabels.length
+                      ? labelSummary
+                      : translate('auto.components.LinearItemDrawer.23886c7eec', 'Add label')}
                   </span>
                   <LinearEditChipAdornment loading={labels.loading} pending={labelsPending} />
                 </button>
@@ -633,7 +667,7 @@ export function LinearIssueEditSection({
                 ) : labels.loading ? (
                   <div className="flex items-center gap-2 px-2 py-3 text-[12px] text-muted-foreground">
                     <LoaderCircle className="size-3 animate-spin" />
-                    Loading labels
+                    {translate('auto.components.LinearItemDrawer.cddd9b04a7', 'Loading labels')}
                   </div>
                 ) : labels.data.length > 0 ? (
                   <div>
@@ -664,7 +698,7 @@ export function LinearIssueEditSection({
                   </div>
                 ) : (
                   <div className="px-2 py-3 text-center text-[12px] text-muted-foreground">
-                    No labels found
+                    {translate('auto.components.LinearItemDrawer.367f828482', 'No labels found')}
                   </div>
                 )}
               </PopoverContent>
@@ -701,7 +735,7 @@ export function LinearIssueEditSection({
           ) : states.loading ? (
             <div className="flex items-center gap-2 px-2 py-3 text-[12px] text-muted-foreground">
               <LoaderCircle className="size-3 animate-spin" />
-              Loading states
+              {translate('auto.components.LinearItemDrawer.59b6cd3706', 'Loading states')}
             </div>
           ) : states.data.length > 0 ? (
             <div>
@@ -725,7 +759,7 @@ export function LinearIssueEditSection({
             </div>
           ) : (
             <div className="px-2 py-3 text-center text-[12px] text-muted-foreground">
-              No states found
+              {translate('auto.components.LinearItemDrawer.780ea6ed89', 'No states found')}
             </div>
           )}
         </PopoverContent>
@@ -805,7 +839,10 @@ export function LinearIssueEditSection({
                 }
               }}
               inputMode="numeric"
-              placeholder="Custom estimate"
+              placeholder={translate(
+                'auto.components.LinearItemDrawer.fbb90300e2',
+                'Custom estimate'
+              )}
               className="h-8 text-sm"
             />
             <div className="flex items-center justify-between gap-2">
@@ -815,7 +852,7 @@ export function LinearIssueEditSection({
                 size="sm"
                 onClick={() => handleEstimateChange(null)}
               >
-                Clear
+                {translate('auto.components.LinearItemDrawer.ceeb8c6153', 'Clear')}
               </Button>
               <Button
                 type="button"
@@ -824,7 +861,7 @@ export function LinearIssueEditSection({
                 disabled={estimatePending}
               >
                 {estimatePending ? <LoaderCircle className="size-3.5 animate-spin" /> : null}
-                Save
+                {translate('auto.components.LinearItemDrawer.b5675b0694', 'Save')}
               </Button>
             </div>
           </div>
@@ -841,7 +878,9 @@ export function LinearIssueEditSection({
             aria-busy={assigneePending || members.loading}
           >
             <span className="truncate">
-              {localAssignee ? localAssignee.displayName : '+ Assignee'}
+              {localAssignee
+                ? localAssignee.displayName
+                : translate('auto.components.LinearItemDrawer.d71cd3003e', '+ Assignee')}
             </span>
             <LinearEditChipAdornment loading={members.loading} pending={assigneePending} />
           </button>
@@ -853,7 +892,7 @@ export function LinearIssueEditSection({
               onClick={() => handleAssigneeChange('__unassign__')}
               className={cn(LINEAR_EDIT_MENU_ITEM_CLASS, !localAssignee && 'bg-accent/50')}
             >
-              Unassigned
+              {translate('auto.components.LinearItemDrawer.866316f22c', 'Unassigned')}
             </button>
             {members.error ? (
               <div className="px-2 py-3 text-center text-[12px] text-destructive">
@@ -862,7 +901,7 @@ export function LinearIssueEditSection({
             ) : members.loading ? (
               <div className="flex items-center gap-2 px-2 py-3 text-[12px] text-muted-foreground">
                 <LoaderCircle className="size-3 animate-spin" />
-                Loading members
+                {translate('auto.components.LinearItemDrawer.b2376d0179', 'Loading members')}
               </div>
             ) : (
               members.data.map((m) => (
@@ -890,7 +929,13 @@ export function LinearIssueEditSection({
             type="button"
             disabled={labelsPending}
             className={LINEAR_EDIT_CHIP_CLASS}
-            aria-label={localLabels.length ? `Labels: ${localLabels.join(', ')}` : 'Add label'}
+            aria-label={
+              localLabels.length
+                ? translate('auto.components.LinearItemDrawer.7f7b89b631', 'Labels: {{value0}}', {
+                    value0: localLabels.join(', ')
+                  })
+                : translate('auto.components.LinearItemDrawer.23886c7eec', 'Add label')
+            }
             aria-busy={labelsPending || labels.loading}
           >
             <span className="truncate">{labelSummary}</span>
@@ -903,7 +948,7 @@ export function LinearIssueEditSection({
           ) : labels.loading ? (
             <div className="flex items-center gap-2 px-2 py-3 text-[12px] text-muted-foreground">
               <LoaderCircle className="size-3 animate-spin" />
-              Loading labels
+              {translate('auto.components.LinearItemDrawer.cddd9b04a7', 'Loading labels')}
             </div>
           ) : labels.data.length > 0 ? (
             <div>
@@ -934,7 +979,7 @@ export function LinearIssueEditSection({
             </div>
           ) : (
             <div className="px-2 py-3 text-center text-[12px] text-muted-foreground">
-              No labels found
+              {translate('auto.components.LinearItemDrawer.367f828482', 'No labels found')}
             </div>
           )}
         </PopoverContent>
@@ -992,17 +1037,25 @@ export function LinearIssueCommentFooter({
       }
       if (typed.ok) {
         setBody('')
+        useAppStore.getState().recordFeatureInteraction('linear-tasks')
         onCommentAdded({
           id: typed.id ?? createBrowserUuid(),
           body: trimmed,
           createdAt: new Date().toISOString()
         })
       } else {
-        toast.error(typed.error ?? 'Failed to add comment')
+        toast.error(
+          typed.error ??
+            translate('auto.components.LinearItemDrawer.6ab35eafd5', 'Failed to add comment')
+        )
       }
     } catch (err) {
       if (mountedRef.current) {
-        toast.error(err instanceof Error ? err.message : 'Failed to add comment')
+        toast.error(
+          err instanceof Error
+            ? err.message
+            : translate('auto.components.LinearItemDrawer.6ab35eafd5', 'Failed to add comment')
+        )
       }
     } finally {
       if (mountedRef.current) {
@@ -1035,19 +1088,26 @@ export function LinearIssueCommentFooter({
             autoGrow()
           }}
           onKeyDown={handleKeyDown}
-          placeholder="Leave a comment..."
+          placeholder={translate(
+            'auto.components.LinearItemDrawer.2820f0f0f0',
+            'Leave a comment...'
+          )}
           rows={3}
           className="scrollbar-sleek min-h-24 max-h-40 w-full resize-none overflow-y-auto rounded-t-xl bg-transparent px-5 py-4 text-sm placeholder:text-muted-foreground focus-visible:outline-none"
         />
         <div className="flex items-center justify-between px-4 pb-3">
           <span className="text-[11px] text-muted-foreground">
-            {submitShortcutLabel !== 'Unassigned' ? `${submitShortcutLabel} to comment` : ''}
+            {submitShortcutLabel !== 'Unassigned'
+              ? translate('auto.components.LinearItemDrawer.fda549766e', '{{value0}} to comment', {
+                  value0: submitShortcutLabel
+                })
+              : ''}
           </span>
           <Button
             size="icon-sm"
             onClick={handleSubmit}
             disabled={!body.trim() || submitting}
-            aria-label="Send comment"
+            aria-label={translate('auto.components.LinearItemDrawer.d369841269', 'Send comment')}
           >
             {submitting ? (
               <LoaderCircle className="size-3.5 animate-spin" />
@@ -1073,7 +1133,7 @@ export function LinearIssueCommentFooter({
           autoGrow()
         }}
         onKeyDown={handleKeyDown}
-        placeholder="Add a comment…"
+        placeholder={translate('auto.components.LinearItemDrawer.2fcff829a8', 'Add a comment…')}
         rows={1}
         className="scrollbar-sleek min-h-[32px] max-h-[96px] flex-1 resize-none overflow-y-auto rounded-md border border-input bg-transparent px-3 py-2 text-[13px] placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
       />
@@ -1082,7 +1142,7 @@ export function LinearIssueCommentFooter({
         onClick={handleSubmit}
         disabled={!body.trim() || submitting}
         className="size-8 shrink-0"
-        aria-label="Send comment"
+        aria-label={translate('auto.components.LinearItemDrawer.d369841269', 'Send comment')}
       >
         {submitting ? (
           <LoaderCircle className="size-3.5 animate-spin" />
@@ -1253,10 +1313,18 @@ export default function LinearItemDrawer({
         }}
       >
         <VisuallyHidden.Root asChild>
-          <SheetTitle>{displayed?.title ?? 'Linear issue'}</SheetTitle>
+          <SheetTitle>
+            {displayed?.title ??
+              translate('auto.components.LinearItemDrawer.39883467f4', 'Linear issue')}
+          </SheetTitle>
         </VisuallyHidden.Root>
         <VisuallyHidden.Root asChild>
-          <SheetDescription>Preview and edit the selected Linear issue.</SheetDescription>
+          <SheetDescription>
+            {translate(
+              'auto.components.LinearItemDrawer.04a442f796',
+              'Preview and edit the selected Linear issue.'
+            )}
+          </SheetDescription>
         </VisuallyHidden.Root>
 
         {displayed && (
@@ -1291,13 +1359,16 @@ export default function LinearItemDrawer({
                         size="icon"
                         className="size-7"
                         onClick={() => window.api.shell.openUrl(displayed.url)}
-                        aria-label="Open on Linear"
+                        aria-label={translate(
+                          'auto.components.LinearItemDrawer.0190b760c1',
+                          'Open on Linear'
+                        )}
                       >
                         <ExternalLink className="size-4" />
                       </Button>
                     </TooltipTrigger>
                     <TooltipContent side="bottom" sideOffset={6}>
-                      Open on Linear
+                      {translate('auto.components.LinearItemDrawer.0190b760c1', 'Open on Linear')}
                     </TooltipContent>
                   </Tooltip>
                   <Tooltip>
@@ -1307,13 +1378,16 @@ export default function LinearItemDrawer({
                         size="icon"
                         className="size-7"
                         onClick={onClose}
-                        aria-label="Close preview"
+                        aria-label={translate(
+                          'auto.components.LinearItemDrawer.858d0630da',
+                          'Close preview'
+                        )}
                       >
                         <X className="size-4" />
                       </Button>
                     </TooltipTrigger>
                     <TooltipContent side="bottom" sideOffset={6}>
-                      Close · Esc
+                      {translate('auto.components.LinearItemDrawer.9dc54172db', 'Close · Esc')}
                     </TooltipContent>
                   </Tooltip>
                 </div>
@@ -1342,7 +1416,9 @@ export default function LinearItemDrawer({
 
               <div className="border-t border-border/40 px-4 py-4">
                 <div className="flex items-center gap-2 pb-3">
-                  <span className="text-[13px] font-medium text-foreground">Comments</span>
+                  <span className="text-[13px] font-medium text-foreground">
+                    {translate('auto.components.LinearItemDrawer.fde849b2b6', 'Comments')}
+                  </span>
                   {comments.length > 0 && (
                     <span className="text-[12px] text-muted-foreground">{comments.length}</span>
                   )}
@@ -1352,7 +1428,9 @@ export default function LinearItemDrawer({
                     <LoaderCircle className="size-4 animate-spin text-muted-foreground" />
                   </div>
                 ) : comments.length === 0 ? (
-                  <p className="text-[13px] text-muted-foreground">No comments yet.</p>
+                  <p className="text-[13px] text-muted-foreground">
+                    {translate('auto.components.LinearItemDrawer.a4fcc57522', 'No comments yet.')}
+                  </p>
                 ) : (
                   <div className="flex flex-col gap-3">
                     {comments.map((comment) => (
@@ -1369,7 +1447,8 @@ export default function LinearItemDrawer({
                             />
                           )}
                           <span className="text-[13px] font-semibold text-foreground">
-                            {comment.user?.displayName ?? 'Unknown'}
+                            {comment.user?.displayName ??
+                              translate('auto.components.LinearItemDrawer.48e17e8cbd', 'Unknown')}
                           </span>
                           <span className="text-[12px] text-muted-foreground">
                             · {formatRelativeTime(comment.createdAt)}
@@ -1398,9 +1477,15 @@ export default function LinearItemDrawer({
               <Button
                 onClick={() => onUse(displayed)}
                 className="w-full justify-center gap-2"
-                aria-label="Start workspace from issue"
+                aria-label={translate(
+                  'auto.components.LinearItemDrawer.04008e6c46',
+                  'Start workspace from issue'
+                )}
               >
-                Start workspace from issue
+                {translate(
+                  'auto.components.LinearItemDrawer.04008e6c46',
+                  'Start workspace from issue'
+                )}
                 <ArrowRight className="size-4" />
               </Button>
             </div>

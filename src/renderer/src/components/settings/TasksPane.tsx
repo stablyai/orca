@@ -11,6 +11,7 @@ import { LinearIcon } from '@/components/icons/LinearIcon'
 import { Label } from '../ui/label'
 import { SearchableSetting } from './SearchableSetting'
 import { SettingsSubsectionHeader } from './SettingsFormControls'
+import { translate } from '@/i18n/i18n'
 
 type TasksPaneProps = {
   settings: GlobalSettings
@@ -25,26 +26,54 @@ const TASK_PROVIDER_OPTIONS: readonly {
 }[] = [
   {
     id: 'github',
-    label: 'GitHub',
-    description: 'Show GitHub in the Tasks source picker and sidebar shortcuts.',
+    get label() {
+      return translate('auto.components.settings.TasksPane.e14063e727', 'GitHub')
+    },
+    get description() {
+      return translate(
+        'auto.components.settings.TasksPane.1db47236cd',
+        'Show GitHub in the Tasks source picker and sidebar shortcuts.'
+      )
+    },
     Icon: ({ className }) => <Github className={className} />
   },
   {
     id: 'gitlab',
-    label: 'GitLab',
-    description: 'Show GitLab in the Tasks source picker and sidebar shortcuts.',
+    get label() {
+      return translate('auto.components.settings.TasksPane.7c5d7fdc20', 'GitLab')
+    },
+    get description() {
+      return translate(
+        'auto.components.settings.TasksPane.dd67a1b6e1',
+        'Show GitLab in the Tasks source picker and sidebar shortcuts.'
+      )
+    },
     Icon: ({ className }) => <Gitlab className={className} />
   },
   {
     id: 'linear',
-    label: 'Linear',
-    description: 'Show Linear in the Tasks source picker and sidebar shortcuts.',
+    get label() {
+      return translate('auto.components.settings.TasksPane.09ae2d7c51', 'Linear')
+    },
+    get description() {
+      return translate(
+        'auto.components.settings.TasksPane.e4170c9615',
+        'Show Linear in the Tasks source picker and sidebar shortcuts.'
+      )
+    },
     Icon: ({ className }) => <LinearIcon className={className} />
   },
   {
     id: 'jira',
-    label: 'Jira',
-    description: 'Show Jira in the Tasks source picker and sidebar shortcuts.',
+    get label() {
+      return translate('auto.components.settings.TasksPane.6b23a34f6d', 'Jira')
+    },
+    get description() {
+      return translate(
+        'auto.components.settings.TasksPane.8e1305fcc6',
+        'Show Jira in the Tasks source picker and sidebar shortcuts.'
+      )
+    },
     Icon: ({ className }) => <JiraIcon className={className} />
   }
 ]
@@ -72,13 +101,19 @@ export function TasksPane({ settings, updateSettings }: TasksPaneProps): React.J
     <div className="space-y-6">
       <section className="space-y-3">
         <SettingsSubsectionHeader
-          title="Task Sources"
-          description="Choose which task providers appear in the Tasks page source picker and sidebar shortcuts. At least one provider must stay visible."
+          title={translate('auto.components.settings.TasksPane.93e72ef659', 'Task Sources')}
+          description={translate(
+            'auto.components.settings.TasksPane.71644aba56',
+            'Choose which task providers appear in the Tasks page source picker and sidebar shortcuts. At least one provider must stay visible.'
+          )}
         />
 
         <SearchableSetting
-          title="Task Providers"
-          description="Choose which task providers appear in the Tasks page and sidebar shortcuts."
+          title={translate('auto.components.settings.TasksPane.f71d8a9dd3', 'Task Providers')}
+          description={translate(
+            'auto.components.settings.TasksPane.3a72b9745e',
+            'Choose which task providers appear in the Tasks page and sidebar shortcuts.'
+          )}
           keywords={[
             'tasks',
             'provider',

@@ -6,6 +6,7 @@ import {
 import { Label } from '../ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
 import { SearchableSetting } from './SearchableSetting'
+import { translate } from '@/i18n/i18n'
 
 type BrowserDefaultZoomSettingProps = {
   value: number
@@ -20,14 +21,30 @@ export function BrowserDefaultZoomSetting({
 
   return (
     <SearchableSetting
-      title="Default Zoom"
-      description="Zoom level applied to newly opened browser tabs."
+      title={translate(
+        'auto.components.settings.BrowserDefaultZoomSetting.265597101f',
+        'Default Zoom'
+      )}
+      description={translate(
+        'auto.components.settings.BrowserDefaultZoomSetting.2622126877',
+        'Zoom level applied to newly opened browser tabs.'
+      )}
       keywords={['browser', 'zoom', 'scale', 'default', 'page zoom', 'new tab', 'percentage']}
       className="flex items-center justify-between gap-4 py-2"
     >
       <div className="space-y-0.5">
-        <Label>Default Zoom</Label>
-        <p className="text-xs text-muted-foreground">Applied to newly opened browser tabs.</p>
+        <Label>
+          {translate(
+            'auto.components.settings.BrowserDefaultZoomSetting.265597101f',
+            'Default Zoom'
+          )}
+        </Label>
+        <p className="text-xs text-muted-foreground">
+          {translate(
+            'auto.components.settings.BrowserDefaultZoomSetting.bbeec087d3',
+            'Applied to newly opened browser tabs.'
+          )}
+        </p>
       </div>
       <Select value={String(selectedZoomLevel)} onValueChange={(next) => onChange(Number(next))}>
         <SelectTrigger className="h-7 w-28 text-xs">

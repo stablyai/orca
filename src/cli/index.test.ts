@@ -7,13 +7,15 @@ const {
   serveOrcaAppMock,
   getDefaultUserDataPathMock,
   addEnvironmentFromPairingCodeMock,
-  listEnvironmentsMock
+  listEnvironmentsMock,
+  spawnMock
 } = vi.hoisted(() => ({
   callMock: vi.fn(),
   serveOrcaAppMock: vi.fn(),
   getDefaultUserDataPathMock: vi.fn(() => '/tmp/orca-user-data'),
   addEnvironmentFromPairingCodeMock: vi.fn(),
-  listEnvironmentsMock: vi.fn()
+  listEnvironmentsMock: vi.fn(),
+  spawnMock: vi.fn()
 }))
 
 vi.mock('./runtime-client', () => {
@@ -79,6 +81,17 @@ vi.mock('./runtime/environments', () => ({
   resolveEnvironment: vi.fn()
 }))
 
+vi.mock('child_process', async () => {
+  const { EventEmitter } = await import('events')
+  return {
+    spawn: spawnMock.mockImplementation(() => {
+      const child = new EventEmitter()
+      process.nextTick(() => child.emit('exit', 0, null))
+      return child
+    })
+  }
+})
+
 import {
   buildCurrentWorktreeSelector,
   COMMAND_SPECS,
@@ -130,6 +143,67 @@ describe('orca root help', () => {
     )
     expect(callMock).not.toHaveBeenCalled()
   })
+
+  it('progressively discloses Linear commands', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(['--help'], '/tmp/repo')
+
+    const rootHelp = String(logSpy.mock.calls[0][0])
+    expect(rootHelp).toContain('Linear:')
+    expect(rootHelp).toContain('linear                    Read Linear ticket context for agents')
+    expect(rootHelp).not.toContain('linear issue')
+    expect(rootHelp).not.toContain('linear search')
+    expect(rootHelp).not.toContain('linear status set')
+
+    logSpy.mockClear()
+    await main(['linear', '--help'], '/tmp/repo')
+
+    const groupHelp = String(logSpy.mock.calls[0][0])
+    expect(groupHelp).toContain('orca linear')
+    expect(groupHelp).toContain('issue')
+    expect(groupHelp).toContain('search')
+    expect(groupHelp).toContain('status set')
+    expect(groupHelp).toContain('comment add')
+    expect(groupHelp).toContain('attach')
+    expect(groupHelp).toContain('create')
+    expect(groupHelp).not.toContain('--comments')
+    expect(groupHelp).not.toContain('--attachments')
+
+    logSpy.mockClear()
+    await main(['linear', 'issue', '--help'], '/tmp/repo')
+
+    const issueHelp = String(logSpy.mock.calls[0][0])
+    expect(issueHelp).toContain('orca linear issue [<id>]')
+    expect(issueHelp).toContain('--comments             Include threaded Linear comments')
+    expect(issueHelp).toContain('--attachments          Include attachment metadata and URLs')
+    expect(issueHelp).toContain('--workspace <id>      Connected Linear workspace id')
+    expect(issueHelp).toContain('--id <id>             Linear issue key, id, or URL')
+
+    logSpy.mockClear()
+    await main(['linear', 'search', '--help'], '/tmp/repo')
+
+    const searchHelp = String(logSpy.mock.calls[0][0])
+    expect(searchHelp).toContain('orca linear search <query>')
+    expect(searchHelp).toContain('--workspace <id|all>  Connected Linear workspace id, or all')
+    expect(searchHelp).toContain('--query <text>        Text to search across Linear issues')
+
+    logSpy.mockClear()
+    await main(['linear', 'comment', 'add', '--help'], '/tmp/repo')
+
+    const commentHelp = String(logSpy.mock.calls[0][0])
+    expect(commentHelp).toContain('orca linear comment add [<id>]')
+    expect(commentHelp).toContain('--body-file <path|->  Read Linear body from a file or stdin')
+    expect(commentHelp).toContain('--write-id <uuid>     Retry id from linear_write_unconfirmed')
+
+    logSpy.mockClear()
+    await main(['linear', 'create', '--help'], '/tmp/repo')
+
+    const createHelp = String(logSpy.mock.calls[0][0])
+    expect(createHelp).toContain('orca linear create --title <title>')
+    expect(createHelp).toContain('--parent-current      Use the current linked issue as parent')
+    expect(callMock).not.toHaveBeenCalled()
+  })
 })
 
 describe('orca cli worktree awareness', () => {
@@ -147,6 +221,7 @@ describe('orca cli worktree awareness', () => {
     getDefaultUserDataPathMock.mockClear()
     addEnvironmentFromPairingCodeMock.mockReset()
     listEnvironmentsMock.mockReset()
+    spawnMock.mockClear()
     addEnvironmentFromPairingCodeMock.mockReturnValue({
       id: 'env-1',
       name: 'desk',
@@ -239,6 +314,107 @@ describe('orca cli worktree awareness', () => {
     })
     expect(logSpy).toHaveBeenCalledTimes(1)
   })
+
+  it.skipIf(process.platform === 'win32')(
+    'prepares and starts Claude Agent Teams in the current Orca terminal',
+    async () => {
+      process.env.ORCA_PANE_KEY = 'tab-1:11111111-1111-4111-8111-111111111111'
+      queueFixtures(
+        callMock,
+        okFixture('req_agent_teams_prepare', {
+          launch: {
+            env: {
+              CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: '1',
+              TMUX: '/tmp/orca-claude-agent-teams/team-1,0,1',
+              TMUX_PANE: '%1',
+              PATH: '/tmp/orca-shim:/usr/bin'
+            }
+          }
+        })
+      )
+
+      await main(['claude-teams'], '/tmp/repo')
+
+      expect(callMock).toHaveBeenCalledWith('agentTeams.prepareLaunch', {
+        paneKey: 'tab-1:11111111-1111-4111-8111-111111111111',
+        env: expect.objectContaining({
+          ORCA_PANE_KEY: 'tab-1:11111111-1111-4111-8111-111111111111'
+        })
+      })
+      expect(spawnMock).toHaveBeenCalledWith('claude', ['--teammate-mode', 'auto'], {
+        stdio: 'inherit',
+        env: expect.objectContaining({
+          CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: '1',
+          TMUX_PANE: '%1'
+        })
+      })
+    }
+  )
+
+  it.skipIf(process.platform === 'win32')(
+    'passes Claude Agent Teams arguments through to Claude Code',
+    async () => {
+      process.env.ORCA_PANE_KEY = 'tab-1:11111111-1111-4111-8111-111111111111'
+      queueFixtures(
+        callMock,
+        okFixture('req_agent_teams_prepare', {
+          launch: {
+            env: {
+              CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: '1',
+              TMUX: '/tmp/orca-claude-agent-teams/team-1,0,1',
+              TMUX_PANE: '%1',
+              PATH: '/tmp/orca-shim:/usr/bin'
+            }
+          }
+        })
+      )
+
+      await main(
+        ['claude-teams', '--resume', 'session-1', '--model', 'sonnet', 'review this'],
+        '/tmp/repo'
+      )
+
+      expect(spawnMock).toHaveBeenCalledWith(
+        'claude',
+        ['--teammate-mode', 'auto', '--resume', 'session-1', '--model', 'sonnet', 'review this'],
+        {
+          stdio: 'inherit',
+          env: expect.objectContaining({
+            CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: '1',
+            TMUX_PANE: '%1'
+          })
+        }
+      )
+    }
+  )
+
+  it.skipIf(process.platform === 'win32')(
+    'does not duplicate an explicit Claude teammate mode',
+    async () => {
+      process.env.ORCA_PANE_KEY = 'tab-1:11111111-1111-4111-8111-111111111111'
+      queueFixtures(
+        callMock,
+        okFixture('req_agent_teams_prepare', {
+          launch: {
+            env: {
+              CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: '1',
+              TMUX: '/tmp/orca-claude-agent-teams/team-1,0,1',
+              TMUX_PANE: '%1',
+              PATH: '/tmp/orca-shim:/usr/bin'
+            }
+          }
+        })
+      )
+
+      await main(['claude-teams', '--teammate-mode', 'in-process'], '/tmp/repo')
+
+      expect(spawnMock).toHaveBeenCalledWith(
+        'claude',
+        ['--teammate-mode', 'in-process'],
+        expect.objectContaining({ stdio: 'inherit' })
+      )
+    }
+  )
 
   it('rejects remote `worktree current` without listing worktrees from client cwd', async () => {
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
@@ -1233,6 +1409,42 @@ describe('orca cli worktree awareness', () => {
     })
   })
 
+  it('prints terminal.read fallback screen lines in json mode', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_terminal_read', {
+        terminal: {
+          handle: 'term_worker',
+          status: 'running',
+          tail: ['Claude Code', 'Checking files', 'Waiting for input'],
+          truncated: false,
+          limited: true,
+          oldestCursor: '0',
+          nextCursor: '3000',
+          latestCursor: '3000',
+          returnedLineCount: 3
+        }
+      })
+    )
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      ['terminal', 'read', '--terminal', 'term_worker', '--limit', '120', '--json'],
+      '/tmp/repo'
+    )
+
+    expect(callMock).toHaveBeenCalledWith('terminal.read', {
+      terminal: 'term_worker',
+      limit: 120
+    })
+    const printed = JSON.parse(String(logSpy.mock.calls[0]?.[0]))
+    expect(printed.result.terminal.tail).toEqual([
+      'Claude Code',
+      'Checking files',
+      'Waiting for input'
+    ])
+  })
+
   it('keeps interactive Codex startup commands backgrounded unless focus is explicit', async () => {
     queueFixtures(
       callMock,
@@ -1972,9 +2184,9 @@ describe('orca cli worktree awareness', () => {
 
   it('passes emulator gesture points through to the runtime', async () => {
     const points = [
-      { type: 'begin', x: 0.5, y: 0.8 },
-      { type: 'move', x: 0.5, y: 0.4 },
-      { type: 'end', x: 0.5, y: 0.2 }
+      { type: 'begin', x: 0.5, y: 0.98, edge: 3 },
+      { type: 'move', x: 0.5, y: 0.4, edge: 3 },
+      { type: 'end', x: 0.5, y: 0.2, edge: 3 }
     ]
     queueFixtures(callMock, okFixture('req_emulator_gesture', { ok: true }))
     vi.spyOn(console, 'log').mockImplementation(() => {})
@@ -2020,6 +2232,37 @@ describe('orca cli worktree awareness', () => {
       }
     })
     expect(process.exitCode).toBe(1)
+
+    process.exitCode = priorExitCode
+  })
+
+  it('rejects emulator gesture points with invalid edge markers', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const priorExitCode = process.exitCode
+
+    await main(
+      [
+        'emulator',
+        'gesture',
+        JSON.stringify([
+          { type: 'begin', x: 0.5, y: 0.98, edge: 8 },
+          { type: 'end', x: 0.5, y: 0.2, edge: 8 }
+        ]),
+        '--worktree',
+        'id:wt-1',
+        '--json'
+      ],
+      '/tmp/repo'
+    )
+
+    expect(callMock).not.toHaveBeenCalled()
+    expect(JSON.parse(String(logSpy.mock.calls[0]?.[0]))).toMatchObject({
+      ok: false,
+      error: {
+        code: 'invalid_argument',
+        message: 'gesture point 0 edge must be an integer between 0 and 4'
+      }
+    })
 
     process.exitCode = priorExitCode
   })

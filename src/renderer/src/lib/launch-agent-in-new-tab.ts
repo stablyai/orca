@@ -15,10 +15,15 @@ import {
   isWebRuntimeSessionActive,
   isWebTerminalSurfaceTabId
 } from '@/runtime/web-runtime-session'
+import {
+  resolveTuiAgentLaunchArgs,
+  resolveTuiAgentLaunchEnv
+} from '../../../shared/tui-agent-launch-defaults'
 import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 import type { TuiAgent } from '../../../shared/types'
 import type { LaunchSource } from '../../../shared/telemetry-events'
+import { translate } from '@/i18n/i18n'
 
 const WIN32_INLINE_DRAFT_LIMIT_CHARS = 24_000
 
@@ -31,12 +36,16 @@ export type LaunchAgentInNewTabArgs = {
   /** Optional initial prompt. Delivery depends on `promptDelivery` and the
    *  agent's prompt mode. */
   prompt?: string
+  /** Optional CLI arguments appended to the selected agent command. */
+  agentArgs?: string | null
   /** Force generated prompt text out of the shell launch command. `draft`
    *  leaves it editable; `submit-after-ready` sends it once the TUI is ready. */
   promptDelivery?: 'auto-submit' | 'draft' | 'submit-after-ready'
   /** Telemetry surface that initiated this launch. Defaults to the tab-bar
    *  quick-launch entry point so existing callers stay unchanged. */
   launchSource?: LaunchSource
+  /** User-authored Quick Command label for local tabs created from the tab bar. */
+  quickCommandLabel?: string | null
   /** Shell platform that will execute the startup command. Defaults to the
    * renderer OS; SSH and WSL worktrees run a Linux shell even from Windows. */
   launchPlatform?: NodeJS.Platform
@@ -121,13 +130,20 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
     worktreeId,
     groupId,
     prompt,
+    agentArgs,
     promptDelivery = 'auto-submit',
     launchSource,
+    quickCommandLabel,
     launchPlatform = CLIENT_PLATFORM,
     onPromptDelivered
   } = args
   const store = useAppStore.getState()
   const cmdOverrides = store.settings?.agentCmdOverrides ?? {}
+  const effectiveAgentArgs =
+    agentArgs !== undefined
+      ? agentArgs
+      : resolveTuiAgentLaunchArgs(agent, store.settings?.agentDefaultArgs)
+  const agentEnv = resolveTuiAgentLaunchEnv(agent, store.settings?.agentDefaultEnv)
   const trimmedPrompt = prompt?.trim() ?? ''
   const hasPrompt = trimmedPrompt.length > 0
   const isFollowupPath = TUI_AGENT_CONFIG[agent].promptInjectionMode === 'stdin-after-start'
@@ -150,6 +166,8 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
       prompt: '',
       cmdOverrides,
       platform: launchPlatform,
+      agentArgs: effectiveAgentArgs,
+      agentEnv,
       allowEmptyPromptLaunch: true
     })
     pasteDraftAfterLaunch = trimmedPrompt
@@ -160,7 +178,9 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
       agent,
       draft: trimmedPrompt,
       cmdOverrides,
-      platform: launchPlatform
+      platform: launchPlatform,
+      agentArgs: effectiveAgentArgs,
+      agentEnv
     })
     if (draftLaunchPlan && canUseInlineDraftLaunchPlan(draftLaunchPlan, launchPlatform)) {
       startupPlan = {
@@ -176,6 +196,8 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
         prompt: '',
         cmdOverrides,
         platform: launchPlatform,
+        agentArgs: effectiveAgentArgs,
+        agentEnv,
         allowEmptyPromptLaunch: true
       })
       pasteDraftAfterLaunch = trimmedPrompt
@@ -186,6 +208,8 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
       prompt: '',
       cmdOverrides,
       platform: launchPlatform,
+      agentArgs: effectiveAgentArgs,
+      agentEnv,
       allowEmptyPromptLaunch: true
     })
     pasteDraftAfterLaunch = trimmedPrompt
@@ -195,6 +219,8 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
       prompt: hasPrompt ? trimmedPrompt : '',
       cmdOverrides,
       platform: launchPlatform,
+      agentArgs: effectiveAgentArgs,
+      agentEnv,
       allowEmptyPromptLaunch: !hasPrompt
     })
   }
@@ -220,7 +246,13 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
       // exists; keep pruning stale local rows until the snapshot mirrors.
       removeStaleLocalAgentTabsForWebHostLaunch(worktreeId)
       if (!created) {
-        toast.error(`Could not launch ${agent} in a new terminal.`)
+        toast.error(
+          translate(
+            'auto.lib.launch.agent.in.new.tab.11cce5cc77',
+            'Could not launch {{value0}} in a new terminal.',
+            { value0: agent }
+          )
+        )
         return
       }
       store.setActiveTabType('terminal')
@@ -244,7 +276,10 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
   //
   // Why: stamp the launched agent on the tab so the tab bar shows the provider
   // icon immediately, before the agent's first hook event arrives.
-  const tab = store.createTab(worktreeId, groupId, undefined, { launchAgent: agent })
+  const tab = store.createTab(worktreeId, groupId, undefined, {
+    launchAgent: agent,
+    quickCommandLabel
+  })
   store.queueTabStartupCommand(tab.id, {
     command: startupPlan.launchCommand,
     ...(startupPlan.env ? { env: startupPlan.env } : {}),
@@ -293,7 +328,13 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
           return
         }
         const label = submitPastedPrompt ? 'prompt' : 'notes'
-        toast.message(`Your ${label} wasn't sent — paste it once the agent is ready.`)
+        toast.message(
+          translate(
+            'auto.lib.launch.agent.in.new.tab.a5a1f7033f',
+            "Your {{value0}} wasn't sent — paste it once the agent is ready.",
+            { value0: label }
+          )
+        )
         track('agent_error', {
           error_class: 'paste_readiness_timeout',
           agent_kind: tuiAgentToAgentKind(agent)

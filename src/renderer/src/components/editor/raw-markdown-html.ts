@@ -1,6 +1,7 @@
 import { Node, mergeAttributes } from '@tiptap/core'
 import { isEditableDetailsHtmlBlock, matchDetailsHtmlBlock } from './details-markdown-html'
 import { formatMarkdownDocLinkBody, parseMarkdownDocLink } from './markdown-doc-links'
+import { normalizeMarkdownReferenceLinks } from './markdown-reference-link-normalization'
 
 const INLINE_PLACEHOLDER_PREFIX = '[[ORCA_RAW_HTML_INLINE:'
 const BLOCK_PLACEHOLDER_PREFIX = '[[ORCA_RAW_HTML_BLOCK:'
@@ -90,14 +91,15 @@ function matchBlockHtml(content: string, start: number): string | null {
 }
 
 export function encodeRawMarkdownHtmlForRichEditor(content: string): string {
+  const normalizedContent = normalizeMarkdownReferenceLinks(content)
   let index = 0
   let isLineStart = true
   let activeFence: '`' | '~' | null = null
   let activeFenceLength = 0
   let result = ''
 
-  while (index < content.length) {
-    const lineRest = content.slice(index)
+  while (index < normalizedContent.length) {
+    const lineRest = normalizedContent.slice(index)
 
     if (isLineStart) {
       const fenceMatch = lineRest.match(/^\s*(`{3,}|~{3,})/)
@@ -115,16 +117,16 @@ export function encodeRawMarkdownHtmlForRichEditor(content: string): string {
     }
 
     if (activeFence) {
-      const nextChar = content[index]
+      const nextChar = normalizedContent[index]
       result += nextChar
       isLineStart = nextChar === '\n'
       index += 1
       continue
     }
 
-    if (content[index] === '`') {
+    if (normalizedContent[index] === '`') {
       let tickCount = 0
-      while (content[index + tickCount] === '`') {
+      while (normalizedContent[index + tickCount] === '`') {
         tickCount += 1
       }
 
@@ -132,15 +134,15 @@ export function encodeRawMarkdownHtmlForRichEditor(content: string): string {
       // not a longer run. We scan forward to find the first exact match.
       let searchFrom = index + tickCount
       let closingIndex = -1
-      while (searchFrom < content.length) {
-        const candidate = content.indexOf('`'.repeat(tickCount), searchFrom)
+      while (searchFrom < normalizedContent.length) {
+        const candidate = normalizedContent.indexOf('`'.repeat(tickCount), searchFrom)
         if (candidate === -1) {
           break
         }
         // Verify the match is exactly tickCount backticks (no extra backtick before/after)
         if (
-          (candidate === 0 || content[candidate - 1] !== '`') &&
-          content[candidate + tickCount] !== '`'
+          (candidate === 0 || normalizedContent[candidate - 1] !== '`') &&
+          normalizedContent[candidate + tickCount] !== '`'
         ) {
           closingIndex = candidate
           break
@@ -149,7 +151,7 @@ export function encodeRawMarkdownHtmlForRichEditor(content: string): string {
       }
 
       if (closingIndex !== -1) {
-        const rawSpan = content.slice(index, closingIndex + tickCount)
+        const rawSpan = normalizedContent.slice(index, closingIndex + tickCount)
         result += rawSpan
         isLineStart = rawSpan.endsWith('\n')
         index = closingIndex + tickCount
@@ -158,7 +160,7 @@ export function encodeRawMarkdownHtmlForRichEditor(content: string): string {
     }
 
     if (isLineStart) {
-      const detailsHtml = matchDetailsHtmlBlock(content, index)
+      const detailsHtml = matchDetailsHtmlBlock(normalizedContent, index)
       if (detailsHtml && isEditableDetailsHtmlBlock(detailsHtml)) {
         // Why: <details>/<summary> is an editable rich-mode node; raw passthrough
         // would make toggle blocks reopen as inert HTML instead.
@@ -173,7 +175,7 @@ export function encodeRawMarkdownHtmlForRichEditor(content: string): string {
         continue
       }
 
-      const blockHtml = matchBlockHtml(content, index)
+      const blockHtml = matchBlockHtml(normalizedContent, index)
       if (blockHtml) {
         result += createPlaceholder('block', blockHtml)
         index += blockHtml.length
@@ -181,8 +183,8 @@ export function encodeRawMarkdownHtmlForRichEditor(content: string): string {
       }
     }
 
-    if (content[index] === '<' && !isEscaped(content, index)) {
-      const inlineHtml = matchInlineHtml(content.slice(index))
+    if (normalizedContent[index] === '<' && !isEscaped(normalizedContent, index)) {
+      const inlineHtml = matchInlineHtml(normalizedContent.slice(index))
       if (inlineHtml) {
         result += createPlaceholder('inline', inlineHtml)
         index += inlineHtml.length
@@ -195,14 +197,14 @@ export function encodeRawMarkdownHtmlForRichEditor(content: string): string {
     // skipped by the guards above. The [[ORCA_ prefix check prevents re-encoding
     // sibling placeholders that were already emitted earlier in this pass.
     if (
-      content[index] === '[' &&
-      content[index + 1] === '[' &&
-      !content.startsWith('[[ORCA_', index) &&
-      !isEscaped(content, index)
+      normalizedContent[index] === '[' &&
+      normalizedContent[index + 1] === '[' &&
+      !normalizedContent.startsWith('[[ORCA_', index) &&
+      !isEscaped(normalizedContent, index)
     ) {
-      const closingIndex = content.indexOf(']]', index + 2)
+      const closingIndex = normalizedContent.indexOf(']]', index + 2)
       if (closingIndex !== -1) {
-        const rawTarget = content.slice(index + 2, closingIndex)
+        const rawTarget = normalizedContent.slice(index + 2, closingIndex)
         const link = parseMarkdownDocLink(rawTarget)
         if (link) {
           result += `${DOC_LINK_PLACEHOLDER_PREFIX}${formatMarkdownDocLinkBody(
@@ -215,7 +217,7 @@ export function encodeRawMarkdownHtmlForRichEditor(content: string): string {
       }
     }
 
-    const nextChar = content[index]
+    const nextChar = normalizedContent[index]
     result += nextChar
     isLineStart = nextChar === '\n'
     index += 1

@@ -3,6 +3,7 @@ export const ORCA_SKILLS_REPOSITORY_URL = 'https://github.com/stablyai/orca'
 export const ORCA_CLI_SKILL_NAME = 'orca-cli'
 export const COMPUTER_USE_SKILL_NAME = 'computer-use'
 export const ORCHESTRATION_SKILL_NAME = 'orchestration'
+export const LINEAR_TICKETS_SKILL_NAME = 'linear-tickets'
 
 export function buildAgentFeatureSkillInstallCommand(skillNames: readonly string[]): string {
   if (skillNames.length === 0) {
@@ -26,4 +27,8 @@ export const ORCHESTRATION_SKILL_INSTALL_COMMAND = buildAgentFeatureSkillInstall
 export const ORCA_CLI_ORCHESTRATION_SKILL_INSTALL_COMMAND = buildAgentFeatureSkillInstallCommand([
   ORCA_CLI_SKILL_NAME,
   ORCHESTRATION_SKILL_NAME
+])
+
+export const LINEAR_TICKETS_SKILL_INSTALL_COMMAND = buildAgentFeatureSkillInstallCommand([
+  LINEAR_TICKETS_SKILL_NAME
 ])

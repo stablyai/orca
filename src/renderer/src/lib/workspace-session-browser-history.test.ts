@@ -6,6 +6,7 @@ import { buildWorkspaceSessionPayload, type WorkspaceSessionSnapshot } from './w
 function createSnapshot(browserUrlHistory: BrowserHistoryEntry[]): WorkspaceSessionSnapshot {
   return {
     activeRepoId: null,
+    activeWorkspaceKey: null,
     activeWorktreeId: null,
     activeTabId: null,
     tabsByWorktree: {},

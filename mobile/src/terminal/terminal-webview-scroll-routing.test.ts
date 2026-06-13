@@ -6,6 +6,10 @@ const sessionSource = readFileSync(
   new URL('../../app/h/[hostId]/session/[worktreeId].tsx', import.meta.url),
   'utf8'
 )
+const sessionHelperSource = readFileSync(
+  new URL('../session/mobile-session-route-helpers.ts', import.meta.url),
+  'utf8'
+)
 
 function sliceBetween(startPattern: string, endPattern: string): string {
   const start = source.indexOf(startPattern)
@@ -190,8 +194,10 @@ describe('TerminalWebView scroll routing', () => {
   })
 
   it('allows x10 mouse gesture reports through the mobile session gate', () => {
-    expect(sessionSource).toContain('function isGestureMouseTrackingMode')
-    expect(sessionSource).toContain("return mode === 'x10' || isWheelMouseTrackingMode(mode)")
+    expect(sessionHelperSource).toContain('function isGestureMouseTrackingMode')
+    expect(sessionHelperSource).toContain(
+      "return mode === 'x10' || mode === 'vt200' || mode === 'drag' || mode === 'any'"
+    )
 
     const inputBlockStart = sessionSource.indexOf('const handleTerminalInput = useCallback')
     expect(inputBlockStart).toBeGreaterThanOrEqual(0)

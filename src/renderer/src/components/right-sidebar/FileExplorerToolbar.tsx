@@ -1,5 +1,5 @@
 import React from 'react'
-import { Ellipsis, ListCollapse, Loader2, RefreshCw } from 'lucide-react'
+import { Ellipsis, ListCollapse, Loader2, RefreshCw, Search } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -10,6 +10,8 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { WorktreeOpenInMenuItems } from '@/components/sidebar/WorktreeOpenInMenu'
+import { translate } from '@/i18n/i18n'
+import { cn } from '@/lib/utils'
 
 type FileExplorerToolbarProps = {
   repoName: string
@@ -27,6 +29,7 @@ type FileExplorerToolbarProps = {
   onToggleGitIgnoredFiles: () => void
   showDotfiles: boolean
   onToggleDotfiles: () => void
+  onSearch: () => void
 }
 
 export function FileExplorerToolbar({
@@ -40,7 +43,8 @@ export function FileExplorerToolbar({
   showGitIgnoredFiles,
   onToggleGitIgnoredFiles,
   showDotfiles,
-  onToggleDotfiles
+  onToggleDotfiles,
+  onSearch
 }: FileExplorerToolbarProps): React.JSX.Element {
   return (
     <div className="flex h-8 min-h-8 items-center gap-2 border-b border-border px-2">
@@ -57,15 +61,51 @@ export function FileExplorerToolbar({
             variant="ghost"
             size="icon-xs"
             className="text-muted-foreground hover:text-foreground"
-            aria-label="Collapse All"
-            disabled={!canCollapseAll}
-            onClick={onCollapseAll}
+            aria-label={translate(
+              'auto.components.right.sidebar.FileExplorerToolbar.693cbeadd0',
+              'Search'
+            )}
+            onClick={onSearch}
+          >
+            <Search className="size-3" />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent side="bottom" sideOffset={4}>
+          {translate('auto.components.right.sidebar.FileExplorerToolbar.693cbeadd0', 'Search')}
+        </TooltipContent>
+      </Tooltip>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-xs"
+            className={cn(
+              'text-muted-foreground hover:text-foreground',
+              !canCollapseAll && 'cursor-not-allowed opacity-50'
+            )}
+            aria-label={translate(
+              'auto.components.right.sidebar.FileExplorerToolbar.6026b16950',
+              'Collapse All'
+            )}
+            aria-disabled={!canCollapseAll}
+            // Why: native disabled buttons suppress Radix tooltip triggers in Chromium.
+            onClick={(event) => {
+              if (!canCollapseAll) {
+                event.preventDefault()
+                return
+              }
+              onCollapseAll()
+            }}
           >
             <ListCollapse className="size-3" />
           </Button>
         </TooltipTrigger>
         <TooltipContent side="bottom" sideOffset={4}>
-          Collapse All
+          {translate(
+            'auto.components.right.sidebar.FileExplorerToolbar.6026b16950',
+            'Collapse All'
+          )}
         </TooltipContent>
       </Tooltip>
       <Tooltip>
@@ -75,7 +115,10 @@ export function FileExplorerToolbar({
             variant="ghost"
             size="icon-xs"
             className="text-muted-foreground hover:text-foreground"
-            aria-label="Refresh Explorer"
+            aria-label={translate(
+              'auto.components.right.sidebar.FileExplorerToolbar.d95e30fe28',
+              'Refresh Explorer'
+            )}
             disabled={refresh.isRefreshing}
             onClick={refresh.handleRefresh}
           >
@@ -87,7 +130,10 @@ export function FileExplorerToolbar({
           </Button>
         </TooltipTrigger>
         <TooltipContent side="bottom" sideOffset={4}>
-          Refresh Explorer
+          {translate(
+            'auto.components.right.sidebar.FileExplorerToolbar.d95e30fe28',
+            'Refresh Explorer'
+          )}
         </TooltipContent>
       </Tooltip>
       <DropdownMenu>
@@ -99,26 +145,38 @@ export function FileExplorerToolbar({
                 variant="ghost"
                 size="icon-xs"
                 className="text-muted-foreground hover:text-foreground"
-                aria-label="More Explorer Actions"
+                aria-label={translate(
+                  'auto.components.right.sidebar.FileExplorerToolbar.31b4c3195d',
+                  'More Explorer Actions'
+                )}
               >
                 <Ellipsis className="size-3" />
               </Button>
             </DropdownMenuTrigger>
           </TooltipTrigger>
           <TooltipContent side="bottom" sideOffset={4}>
-            More Explorer Actions
+            {translate(
+              'auto.components.right.sidebar.FileExplorerToolbar.31b4c3195d',
+              'More Explorer Actions'
+            )}
           </TooltipContent>
         </Tooltip>
         <DropdownMenuContent align="end" className="min-w-[12rem]">
           <DropdownMenuCheckboxItem checked={showDotfiles} onCheckedChange={onToggleDotfiles}>
-            Show Dotfiles
+            {translate(
+              'auto.components.right.sidebar.FileExplorerToolbar.78f133232c',
+              'Show Dotfiles'
+            )}
           </DropdownMenuCheckboxItem>
           {showGitIgnoredFilesToggle ? (
             <DropdownMenuCheckboxItem
               checked={showGitIgnoredFiles}
               onCheckedChange={onToggleGitIgnoredFiles}
             >
-              Show Git Ignored Files
+              {translate(
+                'auto.components.right.sidebar.FileExplorerToolbar.d238264654',
+                'Show Git Ignored Files'
+              )}
             </DropdownMenuCheckboxItem>
           ) : null}
           <DropdownMenuSeparator />

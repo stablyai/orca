@@ -181,6 +181,35 @@ describe('LocalPtyProvider', () => {
       expect(spawnCall[2].env.CUSTOM_VAR).toBe('custom-value')
     })
 
+    it('honors explicit terminal env overrides after deleting requested defaults', async () => {
+      provider.configure({
+        buildSpawnEnv: (_id, env) => {
+          env.TERM_PROGRAM = 'Orca'
+          env.ORCA_ATTRIBUTION_SHIM_DIR = '/tmp/orca-attribution'
+          env.PATH = `/tmp/orca-attribution:${env.PATH ?? ''}`
+          return env
+        }
+      })
+
+      await provider.spawn({
+        cols: 80,
+        rows: 24,
+        env: {
+          TERM: 'screen-256color',
+          PATH: '/tmp/orca-agent-teams-bin:/usr/bin',
+          ORCA_AGENT_TEAMS_TEAM_ID: 'team-test'
+        },
+        envToDelete: ['TERM_PROGRAM', 'ORCA_ATTRIBUTION_SHIM_DIR']
+      })
+
+      const spawnCall = spawnMock.mock.calls.at(-1)!
+      expect(spawnCall[2].name).toBe('screen-256color')
+      expect(spawnCall[2].env.TERM).toBe('screen-256color')
+      expect(spawnCall[2].env.PATH.split(':')[0]).toBe('/tmp/orca-agent-teams-bin')
+      expect(spawnCall[2].env.TERM_PROGRAM).toBeUndefined()
+      expect(spawnCall[2].env.ORCA_ATTRIBUTION_SHIM_DIR).toBeUndefined()
+    })
+
     it('does not pass a Windows Codex home into WSL terminals', async () => {
       Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
       provider.configure({
@@ -316,10 +345,11 @@ describe('LocalPtyProvider', () => {
         '-d',
         'Debian',
         '--',
-        'bash',
+        'sh',
         '-c',
-        'cd \'/mnt/c/Users/jin/repo\' && export PATH="$HOME/.local/bin:$PATH" && exec bash -l'
+        expect.stringContaining("cd '/mnt/c/Users/jin/repo'")
       ])
+      expect(spawnCall[1][5]).toContain('exec "\\$_orca_wsl_shell" -l')
     })
 
     it('marks Orca terminal handle for WSL import when buildSpawnEnv opts in', async () => {
@@ -488,14 +518,7 @@ describe('LocalPtyProvider', () => {
 
       expect(spawnMock).toHaveBeenCalledWith(
         'wsl.exe',
-        [
-          '-d',
-          'Ubuntu',
-          '--',
-          'bash',
-          '-c',
-          'cd \'/home/jin/repo/subdir\' && export PATH="$HOME/.local/bin:$PATH" && exec bash -l'
-        ],
+        ['-d', 'Ubuntu', '--', 'sh', '-c', expect.stringContaining("cd '/home/jin/repo/subdir'")],
         expect.objectContaining({ cwd: expect.any(String) })
       )
     })

@@ -33,14 +33,7 @@ export function slugifyForWorkspaceName(input: string): string {
 }
 
 export function getLinkedWorkItemSuggestedName(item: { title: string }): string {
-  const withoutLeadingNumber = item.title
-    .trim()
-    .replace(/^(?:issue|pr|pull request)\s*#?\d+\s*[:-]\s*/i, '')
-    .replace(/^#\d+\s*[:-]\s*/, '')
-    .replace(/\(#\d+\)/gi, '')
-    .replace(/\b#\d+\b/g, '')
-    .trim()
-  const seed = withoutLeadingNumber || item.title.trim()
+  const seed = getLinkedWorkItemTitleSubject(item) || item.title.trim()
   return slugifyForWorkspaceName(seed)
 }
 
@@ -56,6 +49,16 @@ export type WorkspaceIntentWorkItem = {
 export type WorkspaceIntentName = {
   displayName: string
   seedName: string
+}
+
+function getLinkedWorkItemTitleSubject(item: { title: string }): string {
+  return item.title
+    .trim()
+    .replace(/^(?:issue|pr|pull request|mr|merge request)\s*[#!]?\d+\s*[:-]\s*/i, '')
+    .replace(/^#\d+\s*[:-]\s*/, '')
+    .replace(/\([#!]?\d+\)/g, '')
+    .replace(/\b#\d+\b/g, '')
+    .trim()
 }
 
 // Why: generated workspace seeds are hyphenated; `issue-123-fix-title`
@@ -167,6 +170,24 @@ function workItemIdentity(item: WorkspaceIntentWorkItem): string {
     return `MR ${item.number}`
   }
   return `Issue ${item.number}`
+}
+
+export function getLinkedWorkItemWorkspaceName(
+  item: WorkspaceIntentWorkItem
+): WorkspaceIntentName | null {
+  const identifier = item.linearIdentifier ?? item.jiraIdentifier
+  let subject = getLinkedWorkItemTitleSubject(item) || item.title.trim()
+  if (identifier) {
+    subject = subject
+      .replace(new RegExp(`^${escapeRegExp(identifier)}\\s*[:-]?\\s*`, 'i'), '')
+      .trim()
+  }
+  const displayName = [identifier, subject].filter(Boolean).join(' ') || workItemIdentity(item)
+  const seedName = slugifyForWorkspaceName(displayName)
+  if (!seedName) {
+    return null
+  }
+  return { displayName, seedName }
 }
 
 function defaultActionForWorkItem(item: WorkspaceIntentWorkItem): string | null {

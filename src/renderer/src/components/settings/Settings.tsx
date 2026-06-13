@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react'
 import { toast } from 'sonner'
 import type { GlobalSettings, OrcaHooks } from '../../../../shared/types'
+import type { SkillDiscoveryTarget } from '../../../../shared/skills'
 import type { SpeechModelState } from '../../../../shared/speech-types'
 import type {
   SourceControlAiSettings,
@@ -16,7 +17,7 @@ import { applyDocumentTheme } from '@/lib/document-theme'
 import { useConfirmationDialog } from '@/components/confirmation-dialog'
 import { SCROLLBACK_PRESETS_MB, getFallbackTerminalFonts } from './SettingsConstants'
 import { DEFAULT_APP_FONT_FAMILY, getDefaultVoiceSettings } from '../../../../shared/constants'
-import { GeneralPane } from './GeneralPane'
+import { GeneralPane, getDesktopPlatformFromUserAgent } from './GeneralPane'
 import { BrowserPane } from './BrowserPane'
 import { AppearancePane } from './AppearancePane'
 import { InputPane } from './InputPane'
@@ -24,6 +25,7 @@ import { ShortcutsPane } from './ShortcutsPane'
 import { TerminalPane } from './TerminalPane'
 import { FloatingWorkspacePane } from './FloatingWorkspacePane'
 import { useGhosttyImport } from './useGhosttyImport'
+import { useWarpThemeImport } from './useWarpThemeImport'
 import { RepositoryPane } from './RepositoryPane'
 import { GitPane } from './GitPane'
 import { CommitMessageAiPane } from './CommitMessageAiPane'
@@ -83,16 +85,62 @@ import {
   getInitialMountedSectionIds,
   getRuntimeTargetIdentity
 } from './settings-load-performance'
+import { translate } from '@/i18n/i18n'
+import {
+  getSelectedAgentRuntime,
+  getSkillDiscoveryTargetForRuntime,
+  type LocalAgentRuntime
+} from './CliSkillRuntimeSetup'
 
 const SETTINGS_NAV_GROUPS = [
-  { id: 'capabilities', title: 'AI Capabilities' },
-  { id: 'setup', title: 'Set Up' },
-  { id: 'workflows', title: 'Workflows' },
-  { id: 'interface', title: 'Interface' },
-  { id: 'remote', title: 'Remote Access' },
-  { id: 'security', title: 'Privacy & Security' },
-  { id: 'advanced', title: 'Advanced' },
-  { id: 'experimental', title: 'Experimental' }
+  {
+    id: 'capabilities',
+    get title() {
+      return translate('auto.components.settings.Settings.23c6874fdf', 'AI Capabilities')
+    }
+  },
+  {
+    id: 'setup',
+    get title() {
+      return translate('auto.components.settings.Settings.9abb9be3bc', 'Set Up')
+    }
+  },
+  {
+    id: 'workflows',
+    get title() {
+      return translate('auto.components.settings.Settings.e1578cd4bc', 'Workflows')
+    }
+  },
+  {
+    id: 'interface',
+    get title() {
+      return translate('auto.components.settings.Settings.8bd117d669', 'Interface')
+    }
+  },
+  {
+    id: 'remote',
+    get title() {
+      return translate('auto.components.settings.Settings.23931df7e8', 'Remote Access')
+    }
+  },
+  {
+    id: 'security',
+    get title() {
+      return translate('auto.components.settings.Settings.084d8fac5b', 'Privacy & Security')
+    }
+  },
+  {
+    id: 'advanced',
+    get title() {
+      return translate('auto.components.settings.Settings.1c87f8d024', 'Advanced')
+    }
+  },
+  {
+    id: 'experimental',
+    get title() {
+      return translate('auto.components.settings.Settings.8b017f2506', 'Experimental')
+    }
+  }
 ] as const
 
 const SHORTCUTS_ESCAPE_CONFIRM_TOAST_ID = 'shortcuts-escape-confirm'
@@ -117,6 +165,19 @@ function getSkillNavInstallStatus(skill: {
     return 'checking'
   }
   return skill.installed ? 'installed' : 'install'
+}
+
+function getSettingsAgentSkillRuntime(args: {
+  settings: GlobalSettings | null
+  isWindows: boolean
+}): LocalAgentRuntime {
+  if (!args.settings) {
+    return {
+      runtime: 'host',
+      label: translate('auto.components.settings.Settings.thisDevice', 'This device')
+    }
+  }
+  return getSelectedAgentRuntime(args.settings, args.isWindows, args.isWindows, false)
 }
 
 function hasReadyVoiceModel(
@@ -214,10 +275,21 @@ function Settings(): React.JSX.Element {
   const isMac = isMacUserAgent()
   const isWebClient = isWebClientLocation()
   const showDesktopOnlySettings = !isWebClient
+  const currentPlatform = getDesktopPlatformFromUserAgent(navigator.userAgent)
+  const agentSkillRuntime = useMemo(
+    () => getSettingsAgentSkillRuntime({ settings, isWindows }),
+    [settings, isWindows]
+  )
+  const agentSkillDiscoveryTarget = useMemo<SkillDiscoveryTarget | undefined>(
+    () => getSkillDiscoveryTargetForRuntime(agentSkillRuntime),
+    [agentSkillRuntime]
+  )
   const orchestrationSkill = useInstalledAgentSkill(ORCHESTRATION_SKILL_NAME, {
+    discoveryTarget: agentSkillDiscoveryTarget,
     sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
   })
   const computerUseSkill = useInstalledAgentSkill(COMPUTER_USE_SKILL_NAME, {
+    discoveryTarget: agentSkillDiscoveryTarget,
     enabled: showDesktopOnlySettings,
     sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
   })
@@ -230,6 +302,7 @@ function Settings(): React.JSX.Element {
   // Why: Appearance owns terminal visual controls, but the Ghostty import flow
   // still needs Settings-level state so the modal survives section remounts.
   const ghostty = useGhosttyImport(updateSettings, settings)
+  const warpThemes = useWarpThemeImport(updateSettings, settings)
   const [fontSuggestions, setFontSuggestions] = useState<string[]>(
     Array.from(new Set([DEFAULT_APP_FONT_FAMILY, ...getFallbackTerminalFonts()]))
   )
@@ -240,6 +313,7 @@ function Settings(): React.JSX.Element {
   const [pendingNavRequestTick, setPendingNavRequestTick] = useState(0)
   const [quickCommandAddIntentSignal, setQuickCommandAddIntentSignal] = useState(0)
   const [hasUnsavedCommitPromptChanges, setHasUnsavedCommitPromptChanges] = useState(false)
+  const [hasUnsavedBranchPromptChanges, setHasUnsavedBranchPromptChanges] = useState(false)
   const [sourceControlAiPromptDiscardSignal, setSourceControlAiPromptDiscardSignal] = useState(0)
   const confirm = useConfirmationDialog()
   // Why: the hidden-experimental group is an unlock — Shift-clicking the
@@ -258,9 +332,8 @@ function Settings(): React.JSX.Element {
   const shortcutsEscapeConfirmUntilRef = useRef(0)
   const sourceControlAiWriteQueueRef = useRef<Promise<void>>(Promise.resolve())
 
-  // Why: the commit pane now owns every Git AI Author prompt draft (commit, PR,
-  // and branch name), so its single dirty signal covers all unsaved prompt edits.
-  const hasUnsavedSourceControlAiPromptChanges = hasUnsavedCommitPromptChanges
+  const hasUnsavedSourceControlAiPromptChanges =
+    hasUnsavedCommitPromptChanges || hasUnsavedBranchPromptChanges
 
   const writeSourceControlAiSettings = useCallback(
     (patch: SourceControlAiSettingsPatch): Promise<void> => {
@@ -308,14 +381,21 @@ function Settings(): React.JSX.Element {
       return true
     }
     const shouldDiscard = await confirm({
-      title: 'Discard unsaved Git AI Author prompt changes?',
-      description: 'You have unsaved Git AI Author prompt changes. Leaving will discard them.',
-      confirmLabel: 'Discard',
+      title: translate(
+        'auto.components.settings.Settings.17bdee4ff1',
+        'Discard unsaved Git AI Author changes?'
+      ),
+      description: translate(
+        'auto.components.settings.Settings.43b68e10f0',
+        'You have unsaved Git AI Author changes. Leaving will discard them.'
+      ),
+      confirmLabel: translate('auto.components.settings.Settings.65358016ea', 'Discard'),
       confirmVariant: 'destructive'
     })
     if (shouldDiscard) {
       setSourceControlAiPromptDiscardSignal((signal) => signal + 1)
       setHasUnsavedCommitPromptChanges(false)
+      setHasUnsavedBranchPromptChanges(false)
     }
     return shouldDiscard
   }, [confirm, hasUnsavedSourceControlAiPromptChanges])
@@ -377,7 +457,7 @@ function Settings(): React.JSX.Element {
         return
       }
       // Why: nested dialogs and menus own Escape before Settings page-level
-      // navigation, including the unsaved Source Control AI prompt confirmation dialog.
+      // navigation, including the unsaved Source Control AI confirmation dialog.
       if (hasVisibleOverlay()) {
         return
       }
@@ -399,11 +479,17 @@ function Settings(): React.JSX.Element {
           return
         }
         shortcutsEscapeConfirmUntilRef.current = now + SHORTCUTS_ESCAPE_CONFIRM_WINDOW_MS
-        toast.info('Press ESC again to exit settings', {
-          id: SHORTCUTS_ESCAPE_CONFIRM_TOAST_ID,
-          duration: SHORTCUTS_ESCAPE_CONFIRM_WINDOW_MS,
-          className: 'whitespace-nowrap'
-        })
+        toast.info(
+          translate(
+            'auto.components.settings.Settings.acc7bbdefd',
+            'Press ESC again to exit settings'
+          ),
+          {
+            id: SHORTCUTS_ESCAPE_CONFIRM_TOAST_ID,
+            duration: SHORTCUTS_ESCAPE_CONFIRM_WINDOW_MS,
+            className: 'whitespace-nowrap'
+          }
+        )
         return
       }
       void closeSettingsPageWithPromptGuard()
@@ -584,10 +670,7 @@ function Settings(): React.JSX.Element {
   const windowsTerminalCapabilityOwnerKey = getWindowsTerminalCapabilityOwnerKey(
     settings?.activeRuntimeEnvironmentId
   )
-  const runtimeTarget = useMemo(
-    () => getActiveRuntimeTarget(settings),
-    [settings?.activeRuntimeEnvironmentId]
-  )
+  const runtimeTarget = useMemo(() => getActiveRuntimeTarget(settings), [settings])
   const hasActiveRuntimeEnvironment = Boolean(settings?.activeRuntimeEnvironmentId?.trim())
   const shouldLoadWindowsTerminalCapabilities =
     hasActiveRuntimeEnvironment ||
@@ -858,7 +941,7 @@ function Settings(): React.JSX.Element {
         className="settings-view-shell flex min-h-0 flex-1 overflow-hidden bg-background"
       >
         <div className="flex flex-1 items-center justify-center text-muted-foreground">
-          Loading settings...
+          {translate('auto.components.settings.Settings.c7ad095d96', 'Loading settings...')}
         </div>
       </div>
     )
@@ -884,6 +967,8 @@ function Settings(): React.JSX.Element {
   const isSectionMounted = (sectionId: string): boolean => neededSectionIds.has(sectionId)
   const isFocusedShortcutsPane =
     activeSectionId === 'shortcuts' && settingsSearchQuery.trim() === ''
+  const isFocusedSetupGuidePane =
+    activeSectionId === 'setup-guide' && settingsSearchQuery.trim() === ''
 
   return (
     <div
@@ -892,6 +977,7 @@ function Settings(): React.JSX.Element {
     >
       <SettingsSidebar
         activeSectionId={activeSectionId}
+        settings={settings}
         generalGroups={generalNavGroups}
         repoSections={repoNavSections}
         hasRepos={repos.length > 0}
@@ -912,20 +998,29 @@ function Settings(): React.JSX.Element {
         >
           <div
             className={cn(
-              'mx-auto flex w-full max-w-4xl flex-col gap-10 px-8 pt-10',
-              isFocusedShortcutsPane ? 'h-full pb-6' : 'pb-24'
+              'mx-auto flex w-full flex-col gap-10 px-8 pt-10',
+              isFocusedShortcutsPane ? 'h-full pb-6' : 'pb-24',
+              isFocusedSetupGuidePane ? 'max-w-6xl' : 'max-w-4xl'
             )}
           >
             {visibleNavSections.length === 0 ? (
               <div className="flex min-h-[24rem] items-center justify-center rounded-2xl border border-dashed border-border/60 bg-card/30 text-sm text-muted-foreground">
-                No settings found for &quot;{settingsSearchQuery.trim()}&quot;
+                {translate(
+                  'auto.components.settings.Settings.3c88ec55d6',
+                  'No settings found for "'
+                )}
+                {settingsSearchQuery.trim()}
+                {translate('auto.components.settings.Settings.add3b97ee6', '"')}
               </div>
             ) : (
               <ActiveSettingsSectionProvider value={activeSectionId}>
                 <SettingsSection
                   id="agents"
-                  title="Agents"
-                  description="Manage AI agents, set a default, and customize commands."
+                  title={translate('auto.components.settings.Settings.8afa676615', 'Agents')}
+                  description={translate(
+                    'auto.components.settings.Settings.ec1ba547f7',
+                    'Manage AI agents, set a default, and customize commands.'
+                  )}
                   searchEntries={getSectionSearchEntries('agents')}
                 >
                   {isSectionMounted('agents') ? (
@@ -942,9 +1037,18 @@ function Settings(): React.JSX.Element {
 
                 <SettingsSection
                   id="accounts"
-                  title="AI Provider Accounts"
-                  description="Optional. Orca works with your existing provider logins; add accounts only if you want Orca to help switch between them."
-                  badge="Optional"
+                  title={translate(
+                    'auto.components.settings.Settings.ad6c529693',
+                    'AI Provider Accounts'
+                  )}
+                  description={translate(
+                    'auto.components.settings.Settings.21f09426ea',
+                    'Optional. Orca works with your existing provider logins; add accounts only if you want Orca to help switch between them.'
+                  )}
+                  badge={translate(
+                    'auto.hooks.useSettingsNavigationMetadata.7c79d3b7bf',
+                    'Optional'
+                  )}
                   searchEntries={getSectionSearchEntries('accounts')}
                 >
                   {isSectionMounted('accounts') ? (
@@ -961,28 +1065,56 @@ function Settings(): React.JSX.Element {
 
                 <SettingsSection
                   id="orchestration"
-                  title="Orchestration"
-                  description="Coordinate multiple coding agents through Orca."
+                  title={translate('auto.components.settings.Settings.00c3a7950d', 'Orchestration')}
+                  description={translate(
+                    'auto.components.settings.Settings.475980f53d',
+                    'Coordinate multiple coding agents through Orca.'
+                  )}
                   searchEntries={getSectionSearchEntries('orchestration')}
                 >
-                  {isSectionMounted('orchestration') ? <OrchestrationPane /> : null}
+                  {isSectionMounted('orchestration') ? (
+                    <OrchestrationPane
+                      currentPlatform={currentPlatform}
+                      settings={settings}
+                      wslSupportedPlatform={wslSupportedPlatform}
+                      wslAvailable={windowsTerminalCapabilities.wslAvailable}
+                      wslCapabilitiesLoading={windowsTerminalCapabilities.isLoading}
+                    />
+                  ) : null}
                 </SettingsSection>
 
                 {showDesktopOnlySettings ? (
                   <>
                     <SettingsSection
                       id="computer-use"
-                      title="Computer Use"
-                      description="Enable agents to control any app on your computer."
+                      title={translate(
+                        'auto.components.settings.Settings.c9841721cb',
+                        'Computer Use'
+                      )}
+                      description={translate(
+                        'auto.components.settings.Settings.7118953f14',
+                        'Enable agents to control any app on your computer.'
+                      )}
                       searchEntries={getSectionSearchEntries('computer-use')}
                     >
-                      {isSectionMounted('computer-use') ? <ComputerUsePane /> : null}
+                      {isSectionMounted('computer-use') ? (
+                        <ComputerUsePane
+                          currentPlatform={currentPlatform}
+                          settings={settings}
+                          wslSupportedPlatform={wslSupportedPlatform}
+                          wslAvailable={windowsTerminalCapabilities.wslAvailable}
+                          wslCapabilitiesLoading={windowsTerminalCapabilities.isLoading}
+                        />
+                      ) : null}
                     </SettingsSection>
 
                     <SettingsSection
                       id="voice"
-                      title="Voice"
-                      description="Local speech-to-text dictation with on-device models."
+                      title={translate('auto.components.settings.Settings.5063bb47a5', 'Voice')}
+                      description={translate(
+                        'auto.components.settings.Settings.eb1176a14e',
+                        'Local speech-to-text dictation with on-device models.'
+                      )}
                       searchEntries={getSectionSearchEntries('voice')}
                     >
                       {isSectionMounted('voice') ? (
@@ -994,18 +1126,27 @@ function Settings(): React.JSX.Element {
 
                 <SettingsSection
                   id="setup-guide"
-                  title="Onboarding checklist"
-                  description="Finish the core workflows that make Orca useful for parallel agent work."
+                  title={translate(
+                    'auto.components.settings.Settings.6d119427ef',
+                    'Onboarding checklist'
+                  )}
+                  description={translate(
+                    'auto.components.settings.Settings.6855b0f77d',
+                    'Finish the core workflows that make Orca useful for parallel agent work.'
+                  )}
                   searchEntries={getSectionSearchEntries('setup-guide')}
-                  bodyClassName="overflow-hidden p-0"
+                  bodyClassName="overflow-hidden rounded-none border-0 bg-transparent p-0 shadow-none"
                 >
                   {isSectionMounted('setup-guide') ? <SettingsSetupGuidePane /> : null}
                 </SettingsSection>
 
                 <SettingsSection
                   id="general"
-                  title="General"
-                  description="Workspace defaults, app setup, and maintenance."
+                  title={translate('auto.components.settings.Settings.7807c11c4d', 'General')}
+                  description={translate(
+                    'auto.components.settings.Settings.f9b77539fd',
+                    'Workspace defaults, app setup, and maintenance.'
+                  )}
                   searchEntries={getSectionSearchEntries('general')}
                 >
                   {isSectionMounted('general') ? (
@@ -1021,8 +1162,11 @@ function Settings(): React.JSX.Element {
 
                 <SettingsSection
                   id="integrations"
-                  title="Integrations"
-                  description="Connect GitHub, GitLab, Linear, and source-hosting services."
+                  title={translate('auto.components.settings.Settings.c9ca101a3b', 'Integrations')}
+                  description={translate(
+                    'auto.components.settings.Settings.b07041697f',
+                    'Connect GitHub, GitLab, Linear, and source-hosting services.'
+                  )}
                   searchEntries={getSectionSearchEntries('integrations')}
                 >
                   {isSectionMounted('integrations') ? <IntegrationsPane /> : null}
@@ -1030,8 +1174,14 @@ function Settings(): React.JSX.Element {
 
                 <SettingsSection
                   id="git"
-                  title="Git & Source Control"
-                  description="Branch naming, base refs, attribution, and Git AI Author."
+                  title={translate(
+                    'auto.components.settings.Settings.70100f94c7',
+                    'Git & Source Control'
+                  )}
+                  description={translate(
+                    'auto.components.settings.Settings.cfa34f4465',
+                    'Branch naming, base refs, attribution, and Git AI Author.'
+                  )}
                   searchEntries={getSectionSearchEntries('git')}
                   forceVisible={hasUnsavedSourceControlAiPromptChanges}
                 >
@@ -1040,7 +1190,12 @@ function Settings(): React.JSX.Element {
                       <GitPane
                         settings={settings}
                         updateSettings={updateSettings}
+                        writeSourceControlAiSettings={writeSourceControlAiSettings}
                         displayedGitUsername={displayedGitUsername}
+                        hasUnsavedBranchPromptChanges={hasUnsavedBranchPromptChanges}
+                        onBranchPromptDirtyChange={setHasUnsavedBranchPromptChanges}
+                        branchPromptDiscardSignal={sourceControlAiPromptDiscardSignal}
+                        settingsSearchQuery={settingsSearchQuery}
                       />
                       <CommitMessageAiPane
                         settings={settings}
@@ -1056,8 +1211,11 @@ function Settings(): React.JSX.Element {
 
                 <SettingsSection
                   id="tasks"
-                  title="Task Sources"
-                  description="Choose which task providers appear in the Tasks page and sidebar."
+                  title={translate('auto.components.settings.Settings.11faa2f7dd', 'Task Sources')}
+                  description={translate(
+                    'auto.components.settings.Settings.dd72ed437a',
+                    'Choose which task providers appear in the Tasks page and sidebar.'
+                  )}
                   searchEntries={getSectionSearchEntries('tasks')}
                 >
                   {isSectionMounted('tasks') ? (
@@ -1067,8 +1225,11 @@ function Settings(): React.JSX.Element {
 
                 <SettingsSection
                   id="terminal"
-                  title="Terminal"
-                  description="Shells, renderer, sessions, and terminal behavior."
+                  title={translate('auto.components.settings.Settings.3de4bbb841', 'Terminal')}
+                  description={translate(
+                    'auto.components.settings.Settings.b79b5b31e9',
+                    'Shells, renderer, sessions, and terminal behavior.'
+                  )}
                   searchEntries={getSectionSearchEntries('terminal')}
                 >
                   {isSectionMounted('terminal') ? (
@@ -1089,8 +1250,14 @@ function Settings(): React.JSX.Element {
 
                 <SettingsSection
                   id="quick-commands"
-                  title="Quick Commands"
-                  description="Saved terminal commands, scoped globally or per project."
+                  title={translate(
+                    'auto.components.settings.Settings.13d4fe30ad',
+                    'Quick Commands'
+                  )}
+                  description={translate(
+                    'auto.components.settings.Settings.6742c7932c',
+                    'Saved terminal commands, scoped globally or per project.'
+                  )}
                   searchEntries={getSectionSearchEntries('quick-commands')}
                 >
                   {isSectionMounted('quick-commands') ? (
@@ -1105,8 +1272,11 @@ function Settings(): React.JSX.Element {
                 {showDesktopOnlySettings ? (
                   <SettingsSection
                     id="browser"
-                    title="Browser"
-                    description="Home page, link routing, and session cookies."
+                    title={translate('auto.components.settings.Settings.c46215ea03', 'Browser')}
+                    description={translate(
+                      'auto.components.settings.Settings.ad9788036f',
+                      'Home page, link routing, and session cookies.'
+                    )}
                     searchEntries={getSectionSearchEntries('browser')}
                   >
                     {isSectionMounted('browser') ? (
@@ -1122,8 +1292,14 @@ function Settings(): React.JSX.Element {
                 {showDesktopOnlySettings && isMac ? (
                   <SettingsSection
                     id="mobile-emulator"
-                    title="Mobile Emulator"
-                    description="Configure mobile emulator support for Orca and coding agents."
+                    title={translate(
+                      'auto.components.settings.Settings.f75daf1002',
+                      'Mobile Emulator'
+                    )}
+                    description={translate(
+                      'auto.components.settings.Settings.01f9d36292',
+                      'Configure mobile emulator support for Orca and coding agents.'
+                    )}
                     searchEntries={getSectionSearchEntries('mobile-emulator')}
                   >
                     {isSectionMounted('mobile-emulator') ? (
@@ -1137,8 +1313,14 @@ function Settings(): React.JSX.Element {
 
                 <SettingsSection
                   id="floating-workspace"
-                  title="Floating Workspace"
-                  description="Global terminal, browser, and markdown tabs."
+                  title={translate(
+                    'auto.components.settings.Settings.3eb22a3ada',
+                    'Floating Workspace'
+                  )}
+                  description={translate(
+                    'auto.components.settings.Settings.3d9adfe6a5',
+                    'Global terminal, browser, and markdown tabs.'
+                  )}
                   searchEntries={getSectionSearchEntries('floating-workspace')}
                 >
                   {isSectionMounted('floating-workspace') ? (
@@ -1148,8 +1330,11 @@ function Settings(): React.JSX.Element {
 
                 <SettingsSection
                   id="appearance"
-                  title="Appearance"
-                  description="Theme, zoom, app and terminal appearance, sidebars, and status bar."
+                  title={translate('auto.components.settings.Settings.2b4474780a', 'Appearance')}
+                  description={translate(
+                    'auto.components.settings.Settings.6d1a27e193',
+                    'Theme, zoom, app and terminal appearance, sidebars, and status bar.'
+                  )}
                   searchEntries={getSectionSearchEntries('appearance')}
                 >
                   {isSectionMounted('appearance') ? (
@@ -1163,14 +1348,21 @@ function Settings(): React.JSX.Element {
                       )}
                       systemPrefersDark={systemPrefersDark}
                       ghostty={ghostty}
+                      warpThemes={warpThemes}
                     />
                   ) : null}
                 </SettingsSection>
 
                 <SettingsSection
                   id="input"
-                  title="Input & Editing"
-                  description="Selection and editing behavior."
+                  title={translate(
+                    'auto.components.settings.Settings.d7a3e635b6',
+                    'Input & Editing'
+                  )}
+                  description={translate(
+                    'auto.components.settings.Settings.d0b7021d64',
+                    'Selection and editing behavior.'
+                  )}
                   searchEntries={getSectionSearchEntries('input')}
                 >
                   <InputPane settings={settings} updateSettings={updateSettings} />
@@ -1179,8 +1371,14 @@ function Settings(): React.JSX.Element {
                 {showDesktopOnlySettings ? (
                   <SettingsSection
                     id="notifications"
-                    title="Notifications"
-                    description="Native desktop notifications for agent activity and terminal events."
+                    title={translate(
+                      'auto.components.settings.Settings.9907545fa3',
+                      'Notifications'
+                    )}
+                    description={translate(
+                      'auto.components.settings.Settings.7210ac09c4',
+                      'Native desktop notifications for agent activity and terminal events.'
+                    )}
                     searchEntries={getSectionSearchEntries('notifications')}
                   >
                     {isSectionMounted('notifications') ? (
@@ -1191,8 +1389,11 @@ function Settings(): React.JSX.Element {
 
                 <SettingsSection
                   id="shortcuts"
-                  title="Shortcuts"
-                  description="Keyboard shortcuts for common actions."
+                  title={translate('auto.components.settings.Settings.23bf7a1ad4', 'Shortcuts')}
+                  description={translate(
+                    'auto.components.settings.Settings.a737a4bb22',
+                    'Keyboard shortcuts for common actions.'
+                  )}
                   searchEntries={getSectionSearchEntries('shortcuts')}
                   className={
                     isFocusedShortcutsPane
@@ -1208,8 +1409,11 @@ function Settings(): React.JSX.Element {
 
                 <SettingsSection
                   id="stats"
-                  title="Stats & Usage"
-                  description="Orca stats plus Claude, Codex, and OpenCode usage analytics."
+                  title={translate('auto.components.settings.Settings.954a8f5aef', 'Stats & Usage')}
+                  description={translate(
+                    'auto.components.settings.Settings.8acf3f22e0',
+                    'Orca stats plus Claude, Codex, and OpenCode usage analytics.'
+                  )}
                   searchEntries={getSectionSearchEntries('stats')}
                 >
                   {isSectionMounted('stats') ? <StatsPane /> : null}
@@ -1217,12 +1421,21 @@ function Settings(): React.JSX.Element {
 
                 <SettingsSection
                   id="servers"
-                  title="Remote Orca Servers"
+                  title={translate(
+                    'auto.components.settings.Settings.bd0181eeca',
+                    'Remote Orca Servers'
+                  )}
                   badge="Beta"
                   description={
                     isWebClient
-                      ? 'Connect this browser to a saved Orca server.'
-                      : 'Switch between local desktop mode and paired remote Orca runtimes.'
+                      ? translate(
+                          'auto.components.settings.Settings.7686cb5c36',
+                          'Connect this browser to a saved Orca server.'
+                        )
+                      : translate(
+                          'auto.components.settings.Settings.b5ee17826b',
+                          'Switch between local desktop mode and paired remote Orca runtimes.'
+                        )
                   }
                   searchEntries={getSectionSearchEntries('servers')}
                 >
@@ -1240,8 +1453,11 @@ function Settings(): React.JSX.Element {
                   <>
                     <SettingsSection
                       id="ssh"
-                      title="SSH Hosts"
-                      description="Remote SSH hosts for files, terminals, and git."
+                      title={translate('auto.components.settings.Settings.9b02492d1f', 'SSH Hosts')}
+                      description={translate(
+                        'auto.components.settings.Settings.c2ee313198',
+                        'Remote SSH hosts for files, terminals, and git.'
+                      )}
                       searchEntries={getSectionSearchEntries('ssh')}
                     >
                       {isSectionMounted('ssh') ? <SshPane /> : null}
@@ -1249,9 +1465,12 @@ function Settings(): React.JSX.Element {
 
                     <SettingsSection
                       id="mobile"
-                      title="Mobile"
+                      title={translate('auto.components.settings.Settings.c40dadaac8', 'Mobile')}
                       badge="Beta"
-                      description="Control terminals and agents from your phone."
+                      description={translate(
+                        'auto.components.settings.Settings.c6c01ac209',
+                        'Control terminals and agents from your phone.'
+                      )}
                       searchEntries={getSectionSearchEntries('mobile')}
                     >
                       {isSectionMounted('mobile') ? (
@@ -1264,8 +1483,14 @@ function Settings(): React.JSX.Element {
                 {showDesktopOnlySettings && isMac ? (
                   <SettingsSection
                     id="developer-permissions"
-                    title="macOS Permissions"
-                    description="macOS privacy access for terminal-launched developer tools."
+                    title={translate(
+                      'auto.components.settings.Settings.65660d4548',
+                      'macOS Permissions'
+                    )}
+                    description={translate(
+                      'auto.components.settings.Settings.9b83cc62c2',
+                      'macOS privacy access for terminal-launched developer tools.'
+                    )}
                     searchEntries={getSectionSearchEntries('developer-permissions')}
                   >
                     {isSectionMounted('developer-permissions') ? (
@@ -1276,8 +1501,14 @@ function Settings(): React.JSX.Element {
 
                 <SettingsSection
                   id="privacy"
-                  title="Privacy & Telemetry"
-                  description="Anonymous usage data and telemetry controls."
+                  title={translate(
+                    'auto.components.settings.Settings.d7e3f62d70',
+                    'Privacy & Telemetry'
+                  )}
+                  description={translate(
+                    'auto.components.settings.Settings.c1b43dc4e2',
+                    'Anonymous usage data and telemetry controls.'
+                  )}
                   searchEntries={getSectionSearchEntries('privacy')}
                 >
                   {isSectionMounted('privacy') ? <PrivacyPane settings={settings} /> : null}
@@ -1286,8 +1517,11 @@ function Settings(): React.JSX.Element {
                 {showDesktopOnlySettings ? (
                   <SettingsSection
                     id="advanced"
-                    title="Advanced"
-                    description="Low-level compatibility settings for troubleshooting."
+                    title={translate('auto.components.settings.Settings.1c87f8d024', 'Advanced')}
+                    description={translate(
+                      'auto.components.settings.Settings.499c1cd7f9',
+                      'Low-level compatibility settings for troubleshooting.'
+                    )}
                     searchEntries={getSectionSearchEntries('advanced')}
                   >
                     {isSectionMounted('advanced') ? (
@@ -1298,8 +1532,11 @@ function Settings(): React.JSX.Element {
 
                 <SettingsSection
                   id="experimental"
-                  title="Experimental"
-                  description="New features that are still taking shape. Give them a try."
+                  title={translate('auto.components.settings.Settings.8b017f2506', 'Experimental')}
+                  description={translate(
+                    'auto.components.settings.Settings.075341c763',
+                    'New features that are still taking shape. Give them a try.'
+                  )}
                   searchEntries={getSectionSearchEntries('experimental')}
                 >
                   {isSectionMounted('experimental') ? (
@@ -1319,7 +1556,11 @@ function Settings(): React.JSX.Element {
                     <SettingsSection
                       key={repo.id}
                       id={repoSectionId}
-                      title={`Project Settings > ${repo.displayName}`}
+                      title={translate(
+                        'auto.components.settings.Settings.3bf149e873',
+                        'Project Settings > {{value0}}',
+                        { value0: repo.displayName }
+                      )}
                       description={repo.path}
                       searchEntries={getSectionSearchEntries(repoSectionId)}
                     >

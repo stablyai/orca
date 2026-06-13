@@ -22,6 +22,7 @@ import type {
   WorkspaceCreateTelemetrySource,
   WorkspaceStatus
 } from '../../../shared/types'
+import { translate } from '@/i18n/i18n'
 
 type ComposerModalData = {
   prefilledName?: string
@@ -228,12 +229,18 @@ function QuickTabBody({
       <DialogHeader className="gap-1">
         <DialogTitle className="text-base font-semibold">{primaryActionLabel}</DialogTitle>
         <DialogDescription className="sr-only">
-          Choose the project, workspace name, and agent before creating the workspace.
+          {translate(
+            'auto.components.NewWorkspaceComposerModal.fa90f739a5',
+            'Choose the project, workspace name, and agent before creating the workspace.'
+          )}
         </DialogDescription>
       </DialogHeader>
       <NewWorkspaceComposerCard
         contextualTourSource={modalData.contextualTourSource}
-        containerClassName="min-h-0 flex-1 overflow-y-auto pr-1 scrollbar-sleek"
+        // Why: the scroll container clips children, while Orca's standard
+        // field focus ring paints 3px outside the control. Inset both sides so
+        // keyboard focus stays fully visible at the dialog edges.
+        containerClassName="min-h-0 flex-1 overflow-y-auto px-1 scrollbar-sleek"
         composerRef={composerRef}
         onComposerNodeChange={onComposerNodeChange}
         nameInputRef={nameInputRef}

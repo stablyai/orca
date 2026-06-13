@@ -36,6 +36,7 @@ import type {
   PersistedState,
   Repo,
   ProjectGroup,
+  FolderWorkspace,
   SparsePreset,
   WorktreeMeta,
   WorktreeLineage,
@@ -85,15 +86,28 @@ import { agentHookServer } from './agent-hooks/server'
 import { pruneLocalTerminalScrollbackBuffers } from '../shared/workspace-session-terminal-buffers'
 import { pruneWorkspaceSessionBrowserHistory } from '../shared/workspace-session-browser-history'
 import { getRepoIdFromWorktreeId, getWorktreePathBasenameFromId } from '../shared/worktree-id'
-import { normalizeRuntimePathForComparison } from '../shared/cross-platform-path'
+import {
+  isPathInsideOrEqual,
+  normalizeRuntimePathForComparison
+} from '../shared/cross-platform-path'
 import { normalizeTerminalQuickCommands } from '../shared/terminal-quick-commands'
 import { normalizeTaskProviderSettings } from '../shared/task-providers'
 import { normalizeAutoRenameBranchFromWorkDefaultOn } from '../shared/auto-rename-branch-from-work-settings'
 import { normalizeOpenInApplications } from '../shared/open-in-applications'
 import { normalizeTerminalShortcutPolicy } from '../shared/keybindings'
 import { normalizeAppIconId } from '../shared/app-icon'
+import { normalizeTerminalCustomThemes } from '../shared/terminal-custom-themes'
 import {
+  normalizeLeftSidebarAppearanceMode,
+  normalizeLeftSidebarTintColor,
+  normalizeLeftSidebarTintOpacity
+} from '../shared/left-sidebar-appearance'
+import {
+  compareFeatureInteractionUsageBuckets,
+  getFeatureInteractionCategory,
+  getFeatureInteractionUsageBucket,
   normalizeFeatureInteractions,
+  normalizeFeatureInteractionTelemetryBuckets,
   type FeatureInteractionId
 } from '../shared/feature-interactions'
 import { normalizeContextualTourIds } from '../shared/contextual-tours'
@@ -116,6 +130,7 @@ import {
   normalizeProjectGroupName,
   normalizeProjectGroups
 } from '../shared/project-groups'
+import { createNestedProjectGroupResolver } from './project-groups/nested-repo-import'
 import {
   mergeLegacyCommitMessageAiIntoSourceControlAi,
   normalizeRepoSourceControlAiOverrides,
@@ -124,14 +139,29 @@ import {
   sourceControlAiSettingsFromLegacy
 } from '../shared/source-control-ai'
 import { normalizeDisabledTuiAgents } from '../shared/tui-agent-selection'
+import {
+  DEFAULT_TUI_AGENT_ARGS,
+  DEFAULT_TUI_AGENT_ENV,
+  hasUnsupportedTuiAgentArgs,
+  normalizeTuiAgentArgsRecord,
+  normalizeTuiAgentEnvRecord
+} from '../shared/tui-agent-launch-defaults'
 import { normalizeTerminalCursorStyleDefault } from '../shared/terminal-cursor-style-settings'
+import { normalizeUiLanguage } from '../shared/ui-language'
 import { normalizeBrowserPageZoomLevel } from '../shared/browser-page-zoom'
+import {
+  normalizeFolderWorkspaceName,
+  normalizeFolderWorkspaces
+} from '../shared/folder-workspaces'
+import { folderWorkspaceKey } from '../shared/workspace-scope'
 import {
   collectTerminalScrollbackSnapshotRefs,
   deleteTerminalScrollbackSnapshotSync,
   migrateWorkspaceSessionTerminalScrollbackSnapshots,
   readTerminalScrollbackSnapshotSync
 } from './terminal-scrollback-snapshots'
+import { track } from './telemetry/client'
+import { getCohortAtEmit } from './telemetry/cohort-classifier'
 
 function encrypt(plaintext: string): string {
   if (!plaintext || !safeStorage.isEncryptionAvailable()) {
@@ -251,6 +281,53 @@ function getWorkspaceLayoutHistoryKey(layout: OrcaWorkspaceLayout): string {
   return `${normalizeRuntimePathForComparison(layout.path)}:${layout.nestWorkspaces}`
 }
 
+function migrateAgentYoloDefaults(
+  settings: GlobalSettings | undefined
+): Pick<GlobalSettings, 'agentDefaultArgs' | 'agentDefaultEnv' | 'agentYoloDefaultsMigrated'> {
+  const existingArgs = normalizeTuiAgentArgsRecord(settings?.agentDefaultArgs)
+  const existingEnv = normalizeTuiAgentEnvRecord(settings?.agentDefaultEnv)
+  if (settings?.agentYoloDefaultsMigrated === true) {
+    return {
+      agentDefaultArgs: existingArgs,
+      agentDefaultEnv: existingEnv,
+      agentYoloDefaultsMigrated: true
+    }
+  }
+
+  const commandOverrides = settings?.agentCmdOverrides ?? {}
+  const migratedArgs = { ...existingArgs }
+  for (const [agent, args] of Object.entries(DEFAULT_TUI_AGENT_ARGS)) {
+    if (agent in migratedArgs) {
+      continue
+    }
+    if (agent in commandOverrides) {
+      migratedArgs[agent as keyof typeof DEFAULT_TUI_AGENT_ARGS] = ''
+      continue
+    }
+    migratedArgs[agent as keyof typeof DEFAULT_TUI_AGENT_ARGS] = args
+  }
+
+  const migratedEnv = { ...existingEnv }
+  for (const [agent, env] of Object.entries(DEFAULT_TUI_AGENT_ENV)) {
+    if (agent in migratedEnv) {
+      continue
+    }
+    if (agent in commandOverrides) {
+      migratedEnv[agent as keyof typeof DEFAULT_TUI_AGENT_ENV] = {}
+      continue
+    }
+    migratedEnv[agent as keyof typeof DEFAULT_TUI_AGENT_ENV] = { ...env }
+  }
+
+  return {
+    // Why: legacy users could only customize per-agent launch defaults via
+    // command overrides, so those agents are treated as already user-owned.
+    agentDefaultArgs: migratedArgs,
+    agentDefaultEnv: migratedEnv,
+    agentYoloDefaultsMigrated: true
+  }
+}
+
 function normalizeGroupBy(groupBy: unknown): PersistedState['ui']['groupBy'] {
   if (
     groupBy === 'none' ||
@@ -322,6 +399,21 @@ function mergeContextualTourSeenIds(
   return [...merged]
 }
 
+function stripMainOwnedTelemetryMarkerFromUI(
+  value: Partial<PersistedState['ui']> | undefined
+): Partial<PersistedState['ui']> {
+  if (!value || typeof value !== 'object') {
+    return {}
+  }
+  const { featureInteractionTelemetryBuckets: _reserved, ...ui } = value as Partial<
+    PersistedState['ui']
+  > & {
+    featureInteractionTelemetryBuckets?: unknown
+  }
+  void _reserved
+  return ui
+}
+
 function normalizeSortBy(sortBy: unknown): PersistedState['ui']['sortBy'] {
   if (
     sortBy === 'smart' ||
@@ -342,10 +434,16 @@ function normalizeProjectOrderBy(projectOrderBy: unknown): PersistedState['ui'][
   return getDefaultUIState().projectOrderBy
 }
 
+import {
+  isExistingPersistedProfile,
+  resolveProjectOrderManualDefaultNoticeDismissed
+} from '../shared/project-order-manual-default-notice'
+
 function normalizeRightSidebarTab(tab: unknown): PersistedState['ui']['rightSidebarTab'] {
   if (
     tab === 'explorer' ||
     tab === 'search' ||
+    tab === 'vault' ||
     tab === 'source-control' ||
     tab === 'checks' ||
     tab === 'ports'
@@ -353,6 +451,20 @@ function normalizeRightSidebarTab(tab: unknown): PersistedState['ui']['rightSide
     return tab
   }
   return getDefaultUIState().rightSidebarTab
+}
+
+function normalizeRightSidebarExplorerView(
+  view: unknown,
+  tab?: unknown
+): PersistedState['ui']['rightSidebarExplorerView'] {
+  // Why: older builds persisted Search as a standalone activity tab.
+  if (tab === 'search') {
+    return 'search'
+  }
+  if (view === 'files' || view === 'search') {
+    return view
+  }
+  return getDefaultUIState().rightSidebarExplorerView
 }
 
 function normalizeNotificationSettings(value: unknown): NotificationSettings {
@@ -1550,6 +1662,167 @@ function cloneWorkspaceSessionState(session: WorkspaceSessionState): WorkspaceSe
   return structuredClone(session)
 }
 
+function removeWorkspaceSessionOwner(
+  session: WorkspaceSessionState | undefined,
+  ownerKey: string
+): WorkspaceSessionState | undefined {
+  if (!session) {
+    return session
+  }
+  const next = cloneWorkspaceSessionState(session)
+  const removedTerminalTabs = next.tabsByWorktree?.[ownerKey] ?? []
+  if (next.tabsByWorktree) {
+    delete next.tabsByWorktree[ownerKey]
+  }
+  for (const tab of removedTerminalTabs) {
+    delete next.terminalLayoutsByTabId[tab.id]
+    if (next.activeTabId === tab.id) {
+      next.activeTabId = null
+    }
+  }
+
+  if (next.openFilesByWorktree) {
+    delete next.openFilesByWorktree[ownerKey]
+  }
+  if (next.activeFileIdByWorktree) {
+    delete next.activeFileIdByWorktree[ownerKey]
+  }
+  const browserWorkspaces = next.browserTabsByWorktree?.[ownerKey] ?? []
+  if (next.browserTabsByWorktree) {
+    delete next.browserTabsByWorktree[ownerKey]
+  }
+  if (next.browserPagesByWorkspace) {
+    for (const workspace of browserWorkspaces) {
+      delete next.browserPagesByWorkspace[workspace.id]
+    }
+  }
+  if (next.activeBrowserTabIdByWorktree) {
+    delete next.activeBrowserTabIdByWorktree[ownerKey]
+  }
+  if (next.activeTabTypeByWorktree) {
+    delete next.activeTabTypeByWorktree[ownerKey]
+  }
+  if (next.activeTabIdByWorktree) {
+    delete next.activeTabIdByWorktree[ownerKey]
+  }
+  if (next.unifiedTabs) {
+    delete next.unifiedTabs[ownerKey]
+  }
+  if (next.tabGroups) {
+    delete next.tabGroups[ownerKey]
+  }
+  if (next.tabGroupLayouts) {
+    delete next.tabGroupLayouts[ownerKey]
+  }
+  if (next.activeGroupIdByWorktree) {
+    delete next.activeGroupIdByWorktree[ownerKey]
+  }
+  if (next.lastVisitedAtByWorktreeId) {
+    delete next.lastVisitedAtByWorktreeId[ownerKey]
+  }
+  if (next.defaultTerminalTabsAppliedByWorktreeId) {
+    delete next.defaultTerminalTabsAppliedByWorktreeId[ownerKey]
+  }
+  if (next.sleepingAgentSessionsByPaneKey) {
+    for (const [paneKey, record] of Object.entries(next.sleepingAgentSessionsByPaneKey)) {
+      if (record.worktreeId === ownerKey) {
+        delete next.sleepingAgentSessionsByPaneKey[paneKey]
+      }
+    }
+  }
+  if (next.activeWorkspaceKey === ownerKey) {
+    next.activeWorkspaceKey = null
+  }
+  if (next.activeWorktreeId === ownerKey) {
+    next.activeWorktreeId = null
+  }
+  next.activeWorktreeIdsOnShutdown = next.activeWorktreeIdsOnShutdown?.filter(
+    (worktreeId) => worktreeId !== ownerKey
+  )
+  return next
+}
+
+function inferFolderScopeConnectionIdForMigration(args: {
+  folderPath: string
+  projectGroupId: string
+  projectGroups: readonly ProjectGroup[]
+  repos: readonly Repo[]
+}): string | null {
+  const groupIds = getProjectGroupSubtreeIds(args.projectGroups, args.projectGroupId)
+  const groupRepos = args.repos.filter(
+    (repo) => typeof repo.projectGroupId === 'string' && groupIds.has(repo.projectGroupId)
+  )
+  const candidateRepos =
+    groupRepos.length > 0
+      ? groupRepos
+      : args.repos.filter((repo) => isPathInsideOrEqual(args.folderPath, repo.path))
+  if (candidateRepos.length === 0) {
+    return null
+  }
+  let hasLocalRepo = false
+  const connectionIds = new Set<string>()
+  for (const repo of candidateRepos) {
+    if (repo.connectionId) {
+      connectionIds.add(repo.connectionId)
+    } else {
+      hasLocalRepo = true
+    }
+  }
+  if (hasLocalRepo || connectionIds.size !== 1) {
+    return null
+  }
+  return [...connectionIds][0]
+}
+
+function backfillFolderScopeConnectionIds(state: PersistedState): {
+  state: PersistedState
+  changed: boolean
+} {
+  const groups = state.projectGroups ?? []
+  const repos = state.repos ?? []
+  let changed = false
+  const projectGroups = groups.map((group) => {
+    if (group.connectionId || !group.parentPath) {
+      return group
+    }
+    const connectionId = inferFolderScopeConnectionIdForMigration({
+      folderPath: group.parentPath,
+      projectGroupId: group.id,
+      projectGroups: groups,
+      repos
+    })
+    if (!connectionId) {
+      return group
+    }
+    changed = true
+    return { ...group, connectionId }
+  })
+  const groupsById = new Map(projectGroups.map((group) => [group.id, group]))
+  const folderWorkspaces = (state.folderWorkspaces ?? []).map((workspace) => {
+    if (workspace.connectionId) {
+      return workspace
+    }
+    const groupConnectionId = groupsById.get(workspace.projectGroupId)?.connectionId ?? null
+    const connectionId =
+      groupConnectionId ??
+      inferFolderScopeConnectionIdForMigration({
+        folderPath: workspace.folderPath,
+        projectGroupId: workspace.projectGroupId,
+        projectGroups,
+        repos
+      })
+    if (!connectionId) {
+      return workspace
+    }
+    changed = true
+    return { ...workspace, connectionId }
+  })
+  return {
+    changed,
+    state: changed ? { ...state, projectGroups, folderWorkspaces } : state
+  }
+}
+
 function deleteRemovedTerminalScrollbackSnapshots(
   prior: WorkspaceSessionState | undefined,
   next: WorkspaceSessionState
@@ -1584,6 +1857,7 @@ export class Store {
     const loaded = this.load()
     const normalized = normalizePersistedPaneIdentityState(loaded)
     this.state = normalized.state
+    const adaptedProjectGroups = this.adaptFlatFolderScanProjectGroups()
     for (const entry of normalized.migrationUnsupportedEntries) {
       setMigrationUnsupportedPty(entry)
     }
@@ -1604,13 +1878,93 @@ export class Store {
       this.state.legacyPaneKeyAliasEntries = entries
       this.scheduleSave()
     })
-    if (normalized.changed || this.loadNeedsSave) {
+    if (normalized.changed || this.loadNeedsSave || adaptedProjectGroups) {
       // Why: upgraded sessions may contain legacy pane:1 leaves. Rewrite them at
       // the main persistence boundary so older renderer writes cannot revive them.
       // Other one-shot load migrations also set loadNeedsSave to persist their
       // guard flags before the next restart.
       this.scheduleSave()
     }
+  }
+
+  private adaptFlatFolderScanProjectGroups(): boolean {
+    // Why: older folder imports persisted a real parent path but kept all repos
+    // flat. Upgrade that shape into v1 sparse folder scopes on load.
+    const groups = this.state.projectGroups ?? []
+    const repos = this.state.repos
+    if (groups.length === 0 || repos.length === 0) {
+      return false
+    }
+
+    let changed = false
+    let maxOrder = -1
+    for (const group of groups) {
+      maxOrder = Math.max(maxOrder, group.tabOrder)
+    }
+
+    const childGroupIds = new Set(
+      groups.flatMap((group) => (group.parentGroupId ? [group.parentGroupId] : []))
+    )
+    const initialGroupCount = groups.length
+    for (let groupIndex = 0; groupIndex < initialGroupCount; groupIndex += 1) {
+      const rootGroup = groups[groupIndex]
+      if (!rootGroup) {
+        continue
+      }
+      if (
+        rootGroup.createdFrom !== 'folder-scan' ||
+        !rootGroup.parentPath ||
+        rootGroup.parentGroupId ||
+        childGroupIds.has(rootGroup.id)
+      ) {
+        continue
+      }
+      const rootPath = rootGroup.parentPath
+      const repoCandidates = repos.filter(
+        (repo) =>
+          !isFolderRepo(repo) &&
+          repo.projectGroupId === rootGroup.id &&
+          isPathInsideOrEqual(rootPath, repo.path)
+      )
+      if (repoCandidates.length < 2) {
+        continue
+      }
+
+      const resolver = createNestedProjectGroupResolver({
+        parentPath: rootPath,
+        groupName: rootGroup.name,
+        mode: 'group',
+        repoPaths: repoCandidates.map((repo) => repo.path),
+        createGroup: (input) => {
+          if (!input.parentGroupId) {
+            return rootGroup
+          }
+          maxOrder += 1
+          const group = createProjectGroup({
+            ...input,
+            tabOrder: maxOrder
+          })
+          groups.push(group)
+          changed = true
+          return group
+        }
+      })
+      const nextOrderByGroupId = new Map<string, number>()
+      for (const repo of repoCandidates) {
+        const group = resolver.getGroupForRepo(repo.path)
+        if (!group) {
+          continue
+        }
+        const nextOrder = nextOrderByGroupId.get(group.id) ?? 0
+        nextOrderByGroupId.set(group.id, nextOrder + 1)
+        if (repo.projectGroupId !== group.id || repo.projectGroupOrder !== nextOrder) {
+          repo.projectGroupId = group.id
+          repo.projectGroupOrder = nextOrder
+          changed = true
+        }
+      }
+    }
+    return changed
   }
 
   // Why (issue #1158): debounced writes fire as often as every 300ms during
@@ -1732,8 +2086,11 @@ export class Store {
         // Merge with defaults in case new fields were added
         const homeDir = homedir()
         const defaults = getDefaultPersistedState(homeDir)
-        const rawSourceControlAiMissing = parsed.settings?.sourceControlAi === undefined
-        if (rawSourceControlAiMissing) {
+        const rawSourceControlAi = parsed.settings?.sourceControlAi
+        const rawSourceControlAiMissing = rawSourceControlAi === undefined
+        const rawSourceControlAiActionsMissing =
+          rawSourceControlAi !== undefined && rawSourceControlAi.actions === undefined
+        if (rawSourceControlAiMissing || rawSourceControlAiActionsMissing) {
           this.loadNeedsSave = true
         }
         const legacyCommitMessageAi = parsed.settings?.commitMessageAi
@@ -1868,7 +2225,43 @@ export class Store {
         if (!visibleTaskProvidersDefaultedForJira) {
           this.loadNeedsSave = true
         }
+        const claudeAgentTeamsDefaultDisabledMigrated =
+          parsed.settings?.claudeAgentTeamsDefaultDisabledMigrated === true
+        if (!claudeAgentTeamsDefaultDisabledMigrated) {
+          this.loadNeedsSave = true
+        }
+        const migratedDisabledTuiAgents = normalizeDisabledTuiAgents(
+          parsed.settings?.disabledTuiAgents
+        )
+        const migratedAgentYoloDefaults = migrateAgentYoloDefaults(parsed.settings)
+        const openLinksInAppWasPersisted = Object.prototype.hasOwnProperty.call(
+          parsed.settings ?? {},
+          'openLinksInApp'
+        )
+        const migratedOpenLinksInAppPreferencePrompted =
+          typeof parsed.settings?.openLinksInAppPreferencePrompted === 'boolean'
+            ? parsed.settings.openLinksInAppPreferencePrompted
+            : openLinksInAppWasPersisted
+        if (
+          parsed.settings?.agentYoloDefaultsMigrated !== true ||
+          hasUnsupportedTuiAgentArgs('opencode', parsed.settings?.agentDefaultArgs?.opencode) ||
+          hasUnsupportedTuiAgentArgs('kilo', parsed.settings?.agentDefaultArgs?.kilo)
+        ) {
+          this.loadNeedsSave = true
+        }
+        if (
+          !claudeAgentTeamsDefaultDisabledMigrated &&
+          !migratedDisabledTuiAgents.includes('claude-agent-teams')
+        ) {
+          migratedDisabledTuiAgents.push('claude-agent-teams')
+        }
         if (!autoRenameBranchFromWorkDefaultedOn) {
+          this.loadNeedsSave = true
+        }
+        if (
+          parsed.settings?.openLinksInAppPreferencePrompted !==
+          migratedOpenLinksInAppPreferencePrompted
+        ) {
           this.loadNeedsSave = true
         }
         const normalizedOnboarding = normalizeLoadedOnboardingState(
@@ -1878,10 +2271,18 @@ export class Store {
         if (!parsed.onboarding) {
           this.loadNeedsSave = true
         }
+        const normalizedProjectGroups = normalizeProjectGroups(parsed.projectGroups)
         result = {
           ...defaults,
           ...parsed,
-          projectGroups: normalizeProjectGroups(parsed.projectGroups),
+          featureInteractionTelemetryBuckets: normalizeFeatureInteractionTelemetryBuckets(
+            parsed.featureInteractionTelemetryBuckets
+          ),
+          projectGroups: normalizedProjectGroups,
+          folderWorkspaces: normalizeFolderWorkspaces(
+            parsed.folderWorkspaces,
+            normalizedProjectGroups
+          ),
           worktreeLineageById: parsed.worktreeLineageById ?? {},
           settings: {
             ...defaults.settings,
@@ -1906,6 +2307,13 @@ export class Store {
             ...migratedTerminalCursorStyle,
             experimentalActivity: migratedExperimentalActivity,
             experimentalActivityDefaultedOffForAllUsers: true,
+            // Why: compact worktree cards graduated from Experimental; preserve
+            // the old opt-in for profiles written during the rollout.
+            compactWorktreeCards:
+              parsed.settings?.compactWorktreeCards ??
+              parsed.settings?.experimentalCompactWorktreeCards ??
+              defaults.settings.compactWorktreeCards,
+            experimentalCompactWorktreeCards: undefined,
             terminalMacOptionAsAlt: migratedOptionAsAlt,
             terminalMacOptionAsAltMigrated: true,
             floatingTerminalEnabled: migratedFloatingTerminalEnabled,
@@ -1916,17 +2324,33 @@ export class Store {
             terminalQuickCommands: normalizeTerminalQuickCommands(
               parsed.settings?.terminalQuickCommands
             ),
+            terminalCustomThemes: normalizeTerminalCustomThemes(
+              parsed.settings?.terminalCustomThemes
+            ),
+            leftSidebarAppearanceMode: normalizeLeftSidebarAppearanceMode(
+              parsed.settings?.leftSidebarAppearanceMode
+            ),
+            leftSidebarTintColor: normalizeLeftSidebarTintColor(
+              parsed.settings?.leftSidebarTintColor
+            ),
+            leftSidebarTintOpacity: normalizeLeftSidebarTintOpacity(
+              parsed.settings?.leftSidebarTintOpacity
+            ),
             appIcon: normalizeAppIconId(parsed.settings?.appIcon),
+            uiLanguage: normalizeUiLanguage(parsed.settings?.uiLanguage),
             defaultTaskSource: taskProviderSettings.defaultTaskSource,
             visibleTaskProviders: taskProviderSettings.visibleTaskProviders,
             visibleTaskProvidersDefaultedForJira: true,
             terminalShortcutPolicy: normalizeTerminalShortcutPolicy(
               parsed.settings?.terminalShortcutPolicy
             ),
-            disabledTuiAgents: normalizeDisabledTuiAgents(parsed.settings?.disabledTuiAgents),
+            disabledTuiAgents: migratedDisabledTuiAgents,
+            ...migratedAgentYoloDefaults,
+            claudeAgentTeamsDefaultDisabledMigrated: true,
             openInApplications: normalizeOpenInApplications(parsed.settings?.openInApplications, {
               seedDefaults: true
             }),
+            openLinksInAppPreferencePrompted: migratedOpenLinksInAppPreferencePrompted,
             notifications: normalizeNotificationSettings(parsed.settings?.notifications),
             sourceControlAi: migratedSourceControlAi,
             // Why: new builds read sourceControlAi, but rollback builds still
@@ -2067,20 +2491,43 @@ export class Store {
               parsed.ui?.setupGuideSidebarDismissed,
               normalizedOnboarding
             )
+            const projectOrderManualDefaultNoticeDismissed =
+              resolveProjectOrderManualDefaultNoticeDismissed({
+                rawDismissed: parsed.ui?.projectOrderManualDefaultNoticeDismissed,
+                rawProjectOrderBy: parsed.ui?.projectOrderBy,
+                isExistingProfile: isExistingPersistedProfile({
+                  repoCount: parsed.repos?.length ?? 0,
+                  onboardingClosedAt: normalizedOnboarding.closedAt,
+                  ui: parsed.ui
+                })
+              })
             if (
               parsed.ui?.setupGuideSidebarDismissed !== setupGuideSidebarDismissed &&
               (setupGuideSidebarDismissed || parsed.ui?.setupGuideSidebarDismissed !== undefined)
             ) {
               this.loadNeedsSave = true
             }
+            if (
+              parsed.ui?.projectOrderManualDefaultNoticeDismissed !==
+              projectOrderManualDefaultNoticeDismissed
+            ) {
+              this.loadNeedsSave = true
+            }
             return {
               ...defaults.ui,
-              ...parsed.ui,
+              ...stripMainOwnedTelemetryMarkerFromUI(parsed.ui),
               // Why: migrate once from the retired Appearance setting only
               // when no explicit persisted chrome preference exists yet.
               rightSidebarOpen,
               rightSidebarTab: normalizeRightSidebarTab(parsed.ui?.rightSidebarTab),
               setupGuideSidebarDismissed,
+              projectOrderManualDefaultNoticeDismissed,
+              setupGuideBrowserMilestoneMigrated:
+                typeof parsed.ui?.setupGuideBrowserMilestoneMigrated === 'boolean'
+                  ? parsed.ui.setupGuideBrowserMilestoneMigrated
+                  : false,
+              setupGuideBrowserMilestoneLegacyComplete:
+                parsed.ui?.setupGuideBrowserMilestoneLegacyComplete === true,
               sortBy: migrate ? ('smart' as const) : sort,
               showDotfilesByWorktree: normalizeShowDotfilesByWorktree(
                 parsed.ui?.showDotfilesByWorktree
@@ -2174,11 +2621,15 @@ export class Store {
       this.loadNeedsSave = true
     }
 
-    result = {
+    const folderScopeConnectionMigration = backfillFolderScopeConnectionIds({
       ...result,
       repos: clearMissingProjectGroupMemberships(result.repos, result.projectGroups ?? []),
       workspaceSession: migratedScrollback.session
+    })
+    if (folderScopeConnectionMigration.changed) {
+      this.loadNeedsSave = true
     }
+    result = folderScopeConnectionMigration.state
 
     return this.migrateTelemetry(result, fileExistedOnLoad)
   }
@@ -2416,6 +2867,7 @@ export class Store {
   createProjectGroup(input: {
     name: string
     parentPath?: string | null
+    connectionId?: string | null
     parentGroupId?: string | null
     createdFrom: ProjectGroup['createdFrom']
   }): ProjectGroup {
@@ -2474,6 +2926,165 @@ export class Store {
         ? { ...repo, projectGroupId: null }
         : repo
     )
+    for (const workspace of this.state.folderWorkspaces ?? []) {
+      if (deletedGroupIds.has(workspace.projectGroupId)) {
+        this.state.workspaceSession = removeWorkspaceSessionOwner(
+          this.state.workspaceSession,
+          folderWorkspaceKey(workspace.id)
+        )!
+      }
+    }
+    this.state.folderWorkspaces = (this.state.folderWorkspaces ?? []).filter(
+      (workspace) => !deletedGroupIds.has(workspace.projectGroupId)
+    )
+    this.scheduleSave()
+    return true
+  }
+
+  getFolderWorkspaces(): FolderWorkspace[] {
+    return [...(this.state.folderWorkspaces ?? [])].sort(
+      (left, right) => right.sortOrder - left.sortOrder || left.name.localeCompare(right.name)
+    )
+  }
+
+  getFolderWorkspace(id: string): FolderWorkspace | undefined {
+    return (this.state.folderWorkspaces ?? []).find((workspace) => workspace.id === id)
+  }
+
+  createFolderWorkspace(input: {
+    projectGroupId: string
+    name?: string
+    folderPath?: string | null
+    linkedTask?: FolderWorkspace['linkedTask']
+    connectionId?: string | null
+    createdWithAgent?: FolderWorkspace['createdWithAgent']
+    pendingFirstAgentMessageRename?: boolean
+  }): FolderWorkspace {
+    const group = (this.state.projectGroups ?? []).find(
+      (entry) => entry.id === input.projectGroupId
+    )
+    const folderPath =
+      typeof input.folderPath === 'string' && input.folderPath.trim().length > 0
+        ? input.folderPath
+        : group?.parentPath
+    if (!group || !folderPath) {
+      throw new Error('Folder-backed project group not found.')
+    }
+    const now = Date.now()
+    const workspace: FolderWorkspace = {
+      id: randomUUID(),
+      projectGroupId: group.id,
+      name: normalizeFolderWorkspaceName(input.name, `${group.name} workspace`),
+      folderPath,
+      connectionId: input.connectionId ?? group.connectionId ?? null,
+      linkedTask: input.linkedTask ?? null,
+      comment: '',
+      isArchived: false,
+      isUnread: false,
+      isPinned: false,
+      sortOrder: now,
+      ...(input.createdWithAgent ? { createdWithAgent: input.createdWithAgent } : {}),
+      ...(input.pendingFirstAgentMessageRename === true && input.createdWithAgent
+        ? { pendingFirstAgentMessageRename: true }
+        : {}),
+      lastActivityAt: 0,
+      createdAt: now,
+      updatedAt: now
+    }
+    this.state.folderWorkspaces = [workspace, ...(this.state.folderWorkspaces ?? [])]
+    this.scheduleSave()
+    return workspace
+  }
+
+  updateFolderWorkspace(
+    id: string,
+    updates: Partial<
+      Pick<
+        FolderWorkspace,
+        | 'name'
+        | 'folderPath'
+        | 'linkedTask'
+        | 'comment'
+        | 'isArchived'
+        | 'isUnread'
+        | 'isPinned'
+        | 'sortOrder'
+        | 'manualOrder'
+        | 'workspaceStatus'
+        | 'createdWithAgent'
+        | 'pendingFirstAgentMessageRename'
+        | 'firstAgentMessageRenameError'
+        | 'lastActivityAt'
+      >
+    >
+  ): FolderWorkspace | null {
+    const workspace = this.getFolderWorkspace(id)
+    if (!workspace) {
+      return null
+    }
+    if (updates.name !== undefined) {
+      workspace.name = normalizeFolderWorkspaceName(updates.name, workspace.name)
+    }
+    if (typeof updates.folderPath === 'string' && updates.folderPath.trim().length > 0) {
+      workspace.folderPath = updates.folderPath
+    }
+    if (updates.linkedTask !== undefined) {
+      workspace.linkedTask = updates.linkedTask
+    }
+    if (updates.comment !== undefined) {
+      workspace.comment = updates.comment
+    }
+    if (updates.isArchived !== undefined) {
+      workspace.isArchived = updates.isArchived
+    }
+    if (updates.isUnread !== undefined) {
+      workspace.isUnread = updates.isUnread
+    }
+    if (updates.isPinned !== undefined) {
+      workspace.isPinned = updates.isPinned
+    }
+    if (updates.sortOrder !== undefined && Number.isFinite(updates.sortOrder)) {
+      workspace.sortOrder = updates.sortOrder
+    }
+    if (updates.manualOrder !== undefined) {
+      if (Number.isFinite(updates.manualOrder)) {
+        workspace.manualOrder = updates.manualOrder
+      } else {
+        delete workspace.manualOrder
+      }
+    }
+    if (updates.workspaceStatus !== undefined) {
+      workspace.workspaceStatus = updates.workspaceStatus
+    }
+    if (updates.createdWithAgent !== undefined) {
+      workspace.createdWithAgent = updates.createdWithAgent
+    }
+    if (updates.pendingFirstAgentMessageRename !== undefined) {
+      workspace.pendingFirstAgentMessageRename = updates.pendingFirstAgentMessageRename
+    }
+    if (updates.firstAgentMessageRenameError !== undefined) {
+      workspace.firstAgentMessageRenameError = updates.firstAgentMessageRenameError
+    }
+    if (updates.lastActivityAt !== undefined && Number.isFinite(updates.lastActivityAt)) {
+      workspace.lastActivityAt = updates.lastActivityAt
+    }
+    workspace.updatedAt = Date.now()
+    this.scheduleSave()
+    return workspace
+  }
+
+  removeFolderWorkspace(id: string): boolean {
+    const before = this.state.folderWorkspaces?.length ?? 0
+    this.state.folderWorkspaces = (this.state.folderWorkspaces ?? []).filter(
+      (workspace) => workspace.id !== id
+    )
+    if ((this.state.folderWorkspaces?.length ?? 0) === before) {
+      return false
+    }
+    this.state.workspaceSession = removeWorkspaceSessionOwner(
+      this.state.workspaceSession,
+      folderWorkspaceKey(id)
+    )!
     this.scheduleSave()
     return true
   }
@@ -2573,9 +3184,8 @@ export class Store {
         | 'externalWorktreeVisibilityPromptDismissedAt'
         | 'projectGroupId'
         | 'projectGroupOrder'
-        | 'sourceControlAi'
       >
-    >
+    > & { sourceControlAi?: Repo['sourceControlAi'] | null }
   ): Repo | null {
     const repo = this.state.repos.find((r) => r.id === id)
     if (!repo) {
@@ -2625,7 +3235,10 @@ export class Store {
       // time visibility changes so later hide/show choices keep legacy safety.
       repo.externalWorktreeVisibilityLegacy = externalWorktreeVisibilityLegacy
     }
-    if ('sourceControlAi' in sanitizedUpdates && sanitizedUpdates.sourceControlAi === undefined) {
+    if (
+      'sourceControlAi' in sanitizedUpdates &&
+      (sanitizedUpdates.sourceControlAi === undefined || sanitizedUpdates.sourceControlAi === null)
+    ) {
       delete repo.sourceControlAi
       delete sanitizedUpdates.sourceControlAi
     } else if ('sourceControlAi' in sanitizedUpdates) {
@@ -2644,9 +3257,15 @@ export class Store {
   }
 
   private hydrateRepo(repo: Repo): Repo {
-    const { repoIcon: rawRepoIcon, upstream: rawUpstream, ...repoWithoutIcon } = repo
+    const {
+      repoIcon: rawRepoIcon,
+      upstream: rawUpstream,
+      sourceControlAi: rawSourceControlAi,
+      ...repoWithoutIcon
+    } = repo
     const repoIcon = sanitizeRepoIcon(rawRepoIcon)
     const upstream = sanitizeRepoUpstream(rawUpstream)
+    const sourceControlAi = normalizeRepoSourceControlAiOverrides(rawSourceControlAi)
     const gitUsername = isFolderRepo(repo)
       ? ''
       : (this.gitUsernameCache.get(repo.path) ??
@@ -2660,6 +3279,7 @@ export class Store {
       ...repoWithoutIcon,
       ...(repoIcon !== undefined ? { repoIcon } : {}),
       ...(upstream !== undefined ? { upstream } : {}),
+      ...(sourceControlAi !== undefined ? { sourceControlAi } : {}),
       kind: isFolderRepo(repo) ? 'folder' : 'git',
       gitUsername,
       hookSettings: {
@@ -3026,9 +3646,37 @@ export class Store {
     if ('disabledTuiAgents' in updates) {
       sanitizedUpdates.disabledTuiAgents = normalizeDisabledTuiAgents(updates.disabledTuiAgents)
     }
+    if ('agentDefaultArgs' in updates) {
+      sanitizedUpdates.agentDefaultArgs = normalizeTuiAgentArgsRecord(updates.agentDefaultArgs)
+      sanitizedUpdates.agentYoloDefaultsMigrated = true
+    }
+    if ('agentDefaultEnv' in updates) {
+      sanitizedUpdates.agentDefaultEnv = normalizeTuiAgentEnvRecord(updates.agentDefaultEnv)
+      sanitizedUpdates.agentYoloDefaultsMigrated = true
+    }
     if ('terminalQuickCommands' in updates) {
       sanitizedUpdates.terminalQuickCommands = normalizeTerminalQuickCommands(
         updates.terminalQuickCommands
+      )
+    }
+    if ('terminalCustomThemes' in updates) {
+      sanitizedUpdates.terminalCustomThemes = normalizeTerminalCustomThemes(
+        updates.terminalCustomThemes
+      )
+    }
+    if ('leftSidebarAppearanceMode' in updates) {
+      sanitizedUpdates.leftSidebarAppearanceMode = normalizeLeftSidebarAppearanceMode(
+        updates.leftSidebarAppearanceMode
+      )
+    }
+    if ('leftSidebarTintColor' in updates) {
+      sanitizedUpdates.leftSidebarTintColor = normalizeLeftSidebarTintColor(
+        updates.leftSidebarTintColor
+      )
+    }
+    if ('leftSidebarTintOpacity' in updates) {
+      sanitizedUpdates.leftSidebarTintOpacity = normalizeLeftSidebarTintOpacity(
+        updates.leftSidebarTintOpacity
       )
     }
     if ('visibleTaskProviders' in updates || 'defaultTaskSource' in updates) {
@@ -3061,6 +3709,9 @@ export class Store {
     }
     if ('appIcon' in updates) {
       sanitizedUpdates.appIcon = normalizeAppIconId(updates.appIcon)
+    }
+    if ('uiLanguage' in updates) {
+      sanitizedUpdates.uiLanguage = normalizeUiLanguage(updates.uiLanguage)
     }
     const historyWithPreviousLayout = buildWorkspaceDirHistoryForUpdate(
       this.state.settings,
@@ -3121,13 +3772,18 @@ export class Store {
   // ── UI State ───────────────────────────────────────────────────────
 
   getUI(): PersistedState['ui'] {
+    const uiState = stripMainOwnedTelemetryMarkerFromUI(this.state.ui)
     return {
       ...getDefaultUIState(),
-      ...this.state.ui,
+      ...uiState,
       groupBy: normalizeGroupBy(this.state.ui?.groupBy),
       sortBy: normalizeSortBy(this.state.ui?.sortBy),
       projectOrderBy: normalizeProjectOrderBy(this.state.ui?.projectOrderBy),
       rightSidebarTab: normalizeRightSidebarTab(this.state.ui?.rightSidebarTab),
+      rightSidebarExplorerView: normalizeRightSidebarExplorerView(
+        this.state.ui?.rightSidebarExplorerView,
+        this.state.ui?.rightSidebarTab
+      ),
       worktreeCardProperties: normalizeWorktreeCardProperties(
         this.state.ui?.worktreeCardProperties
       ),
@@ -3152,39 +3808,58 @@ export class Store {
   }
 
   updateUI(updates: Partial<PersistedState['ui']>): void {
+    const sanitizedUpdates = stripMainOwnedTelemetryMarkerFromUI(updates)
+    const currentUI = {
+      ...getDefaultUIState(),
+      ...stripMainOwnedTelemetryMarkerFromUI(this.state.ui)
+    }
+    const nextRightSidebarTab =
+      sanitizedUpdates.rightSidebarTab !== undefined
+        ? normalizeRightSidebarTab(sanitizedUpdates.rightSidebarTab)
+        : normalizeRightSidebarTab(this.state.ui?.rightSidebarTab)
+    const nextRightSidebarExplorerView =
+      sanitizedUpdates.rightSidebarExplorerView !== undefined
+        ? normalizeRightSidebarExplorerView(
+            sanitizedUpdates.rightSidebarExplorerView,
+            nextRightSidebarTab
+          )
+        : sanitizedUpdates.rightSidebarTab === 'search'
+          ? 'search'
+          : normalizeRightSidebarExplorerView(
+              this.state.ui?.rightSidebarExplorerView,
+              nextRightSidebarTab
+            )
     this.state.ui = {
-      ...this.state.ui,
-      ...updates,
-      groupBy: updates.groupBy
-        ? normalizeGroupBy(updates.groupBy)
+      ...currentUI,
+      ...sanitizedUpdates,
+      groupBy: sanitizedUpdates.groupBy
+        ? normalizeGroupBy(sanitizedUpdates.groupBy)
         : normalizeGroupBy(this.state.ui?.groupBy),
-      sortBy: updates.sortBy
-        ? normalizeSortBy(updates.sortBy)
+      sortBy: sanitizedUpdates.sortBy
+        ? normalizeSortBy(sanitizedUpdates.sortBy)
         : normalizeSortBy(this.state.ui?.sortBy),
       projectOrderBy: updates.projectOrderBy
         ? normalizeProjectOrderBy(updates.projectOrderBy)
         : normalizeProjectOrderBy(this.state.ui?.projectOrderBy),
-      rightSidebarTab:
-        updates.rightSidebarTab !== undefined
-          ? normalizeRightSidebarTab(updates.rightSidebarTab)
-          : normalizeRightSidebarTab(this.state.ui?.rightSidebarTab),
+      rightSidebarTab: nextRightSidebarTab,
+      rightSidebarExplorerView: nextRightSidebarExplorerView,
       worktreeCardProperties:
-        updates.worktreeCardProperties !== undefined
-          ? normalizeWorktreeCardProperties(updates.worktreeCardProperties)
+        sanitizedUpdates.worktreeCardProperties !== undefined
+          ? normalizeWorktreeCardProperties(sanitizedUpdates.worktreeCardProperties)
           : normalizeWorktreeCardProperties(this.state.ui?.worktreeCardProperties),
       agentActivityDisplayMode:
         updates.agentActivityDisplayMode !== undefined
           ? normalizeAgentActivityDisplayMode(updates.agentActivityDisplayMode)
           : normalizeAgentActivityDisplayMode(this.state.ui?.agentActivityDisplayMode),
       workspaceStatuses:
-        updates.workspaceStatuses !== undefined
-          ? normalizeWorkspaceStatuses(updates.workspaceStatuses)
+        sanitizedUpdates.workspaceStatuses !== undefined
+          ? normalizeWorkspaceStatuses(sanitizedUpdates.workspaceStatuses)
           : normalizeWorkspaceStatuses(this.state.ui?.workspaceStatuses),
       workspaceBoardOpacity: clampWorkspaceBoardOpacity(
-        updates.workspaceBoardOpacity ?? this.state.ui?.workspaceBoardOpacity
+        sanitizedUpdates.workspaceBoardOpacity ?? this.state.ui?.workspaceBoardOpacity
       ),
       workspaceBoardColumnWidth: clampWorkspaceBoardColumnWidth(
-        updates.workspaceBoardColumnWidth ?? this.state.ui?.workspaceBoardColumnWidth
+        sanitizedUpdates.workspaceBoardColumnWidth ?? this.state.ui?.workspaceBoardColumnWidth
       ),
       browserDefaultZoomLevel: normalizeBrowserPageZoomLevel(
         updates.browserDefaultZoomLevel ?? this.state.ui?.browserDefaultZoomLevel
@@ -3194,8 +3869,8 @@ export class Store {
           ? normalizeShowDotfilesByWorktree(updates.showDotfilesByWorktree)
           : normalizeShowDotfilesByWorktree(this.state.ui?.showDotfilesByWorktree),
       featureTipsSeenIds:
-        updates.featureTipsSeenIds !== undefined
-          ? normalizeFeatureTipIds(updates.featureTipsSeenIds)
+        sanitizedUpdates.featureTipsSeenIds !== undefined
+          ? normalizeFeatureTipIds(sanitizedUpdates.featureTipsSeenIds)
           : normalizeFeatureTipIds(this.state.ui?.featureTipsSeenIds),
       // Why: renderer and paired clients can mark different tours seen from
       // stale UI snapshots; union them so completed tours stay suppressed.
@@ -3210,10 +3885,10 @@ export class Store {
       // Merge instead of replacing so a stale renderer snapshot cannot erase
       // runtime-only feature interactions.
       featureInteractions:
-        updates.featureInteractions !== undefined
+        sanitizedUpdates.featureInteractions !== undefined
           ? mergeFeatureInteractions(
               this.state.ui?.featureInteractions,
-              updates.featureInteractions
+              sanitizedUpdates.featureInteractions
             )
           : normalizeFeatureInteractions(this.state.ui?.featureInteractions)
     }
@@ -3222,16 +3897,46 @@ export class Store {
 
   recordFeatureInteraction(id: FeatureInteractionId): PersistedState['ui'] {
     const featureInteractions = normalizeFeatureInteractions(this.state.ui?.featureInteractions)
+    const telemetryBuckets = normalizeFeatureInteractionTelemetryBuckets(
+      this.state.featureInteractionTelemetryBuckets
+    )
     const existing = featureInteractions[id]
+    const previousCount = existing?.interactionCount ?? 0
+    const nextCount = previousCount + 1
+    const previousBucket = getFeatureInteractionUsageBucket(previousCount)
+    const nextBucket = getFeatureInteractionUsageBucket(nextCount)
+    const lastEmittedBucket = telemetryBuckets[id] ?? null
+    const shouldEmit =
+      nextBucket !== null &&
+      (lastEmittedBucket === null ||
+        compareFeatureInteractionUsageBuckets(nextBucket, lastEmittedBucket) > 0)
+
     this.updateUI({
       featureInteractions: {
         ...featureInteractions,
         [id]: {
           firstInteractedAt: existing?.firstInteractedAt ?? Date.now(),
-          interactionCount: (existing?.interactionCount ?? 0) + 1
+          interactionCount: nextCount
         }
       }
     })
+    this.state.featureInteractionTelemetryBuckets = shouldEmit
+      ? { ...telemetryBuckets, [id]: nextBucket }
+      : telemetryBuckets
+    this.scheduleSave()
+
+    if (shouldEmit) {
+      track('feature_interaction_usage_bucket_reached', {
+        feature_id: id,
+        feature_category: getFeatureInteractionCategory(id),
+        count_bucket: nextBucket,
+        bucket_source:
+          lastEmittedBucket === null && previousBucket !== null && previousBucket === nextBucket
+            ? 'observed_existing'
+            : 'crossed_now',
+        ...getCohortAtEmit()
+      })
+    }
     return this.getUI()
   }
 

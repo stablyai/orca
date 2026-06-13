@@ -4,6 +4,7 @@ export type EmulatorScreenPoint = {
 }
 
 export type EmulatorGesturePoint = EmulatorScreenPoint & {
+  edge?: number
   type: 'begin' | 'move' | 'end'
 }
 
@@ -38,6 +39,8 @@ type ContentRect = RectLike
 
 const DOM_DELTA_LINE = 1
 const DOM_DELTA_PAGE = 2
+export const HID_EDGE_BOTTOM = 3
+const HOME_INDICATOR_BAND_NORM = 0.93
 
 function clampUnit(value: number): number {
   return Math.max(0, Math.min(1, value))
@@ -45,6 +48,18 @@ function clampUnit(value: number): number {
 
 export function clampEmulatorScreenPoint(point: EmulatorScreenPoint): EmulatorScreenPoint {
   return { x: clampUnit(point.x), y: clampUnit(point.y) }
+}
+
+export function resolveEmulatorHomeIndicatorEdge(point: EmulatorScreenPoint): number | undefined {
+  return point.y >= HOME_INDICATOR_BAND_NORM ? HID_EDGE_BOTTOM : undefined
+}
+
+export function buildEmulatorGesturePoint(
+  point: EmulatorScreenPoint,
+  type: EmulatorGesturePoint['type'],
+  edge?: number
+): EmulatorGesturePoint {
+  return edge === undefined ? { ...point, type } : { ...point, type, edge }
 }
 
 function resolveSimulatorScreenContentRect(rect: RectLike, streamSize: StreamSize): ContentRect {
@@ -127,15 +142,16 @@ export function resolveEmulatorPointerAction(
     return { kind: 'tap', point: lastPoint }
   }
 
+  const edge = resolveEmulatorHomeIndicatorEdge(firstPoint)
   const middle = samples.slice(1, -1)
-  const points: EmulatorGesturePoint[] = [{ ...firstPoint, type: 'begin' }]
+  const points: EmulatorGesturePoint[] = [buildEmulatorGesturePoint(firstPoint, 'begin', edge)]
   for (const sample of middle) {
     const point = mapClientPointToSimulatorScreen(sample, rect, streamSize)
     if (point) {
-      points.push({ ...point, type: 'move' })
+      points.push(buildEmulatorGesturePoint(point, 'move', edge))
     }
   }
-  points.push({ ...lastPoint, type: 'end' })
+  points.push(buildEmulatorGesturePoint(lastPoint, 'end', edge))
   return { kind: 'gesture', points }
 }
 

@@ -10,20 +10,26 @@ import {
 import { useAppStore } from '../../store'
 import {
   CommitMessageAiPane,
-  createCommitMessageInstructionDraftState,
   getCommitMessageSettingsPaneDiscoveryHostKey,
-  mergeDiscoveredModelsIntoCommitMessageConfig,
-  resolveCommitMessageInstructionDraftState
+  mergeDiscoveredModelsIntoCommitMessageConfig
 } from './CommitMessageAiPane'
-import { COMMIT_MESSAGE_AI_PANE_SEARCH_ENTRIES } from './commit-message-ai-search'
+import {
+  getAgentCatalogForAction,
+  getSourceControlAgentArgsPlaceholder
+} from './source-control-action-recipe-options'
+import { getCommitMessageAiPaneSearchEntries } from './commit-message-ai-search'
+import { TooltipProvider } from '../ui/tooltip'
 
-function renderPane(settings: GlobalSettings, settingsSearchQuery = ''): string {
+function renderPane(settings: GlobalSettings): string {
   return renderToStaticMarkup(
-    React.createElement(CommitMessageAiPane, {
-      settings,
-      updateSettings: () => {},
-      settingsSearchQuery
-    })
+    React.createElement(
+      TooltipProvider,
+      null,
+      React.createElement(CommitMessageAiPane, {
+        settings,
+        updateSettings: () => {}
+      })
+    )
   )
 }
 
@@ -46,117 +52,19 @@ describe('CommitMessageAiPane', () => {
     useAppStore.setState({ settingsSearchQuery: '' })
   })
 
-  it('updates clean instruction drafts when persisted instructions change', () => {
-    const state = createCommitMessageInstructionDraftState(
-      {
-        commitMessage: 'commit-a',
-        pullRequest: 'pr-a',
-        branchName: 'branch-a'
-      },
-      1
-    )
-
-    const resolved = resolveCommitMessageInstructionDraftState(
-      state,
-      {
-        commitMessage: 'commit-b',
-        pullRequest: 'pr-a',
-        branchName: 'branch-b'
-      },
-      1
-    )
-
-    expect(resolved.draft).toEqual({
-      commitMessage: 'commit-b',
-      pullRequest: 'pr-a',
-      branchName: 'branch-b'
-    })
-  })
-
-  it('preserves dirty instruction drafts until the discard signal changes', () => {
-    const state = createCommitMessageInstructionDraftState(
-      {
-        commitMessage: 'commit-a',
-        pullRequest: 'pr-a',
-        branchName: 'branch-a'
-      },
-      1
-    )
-    state.draft.commitMessage = 'local edit'
-
-    const withExternalChange = resolveCommitMessageInstructionDraftState(
-      state,
-      {
-        commitMessage: 'commit-b',
-        pullRequest: 'pr-b',
-        branchName: 'branch-b'
-      },
-      1
-    )
-    expect(withExternalChange.draft).toEqual({
-      commitMessage: 'local edit',
-      pullRequest: 'pr-b',
-      branchName: 'branch-b'
-    })
-
-    const afterDiscard = resolveCommitMessageInstructionDraftState(
-      withExternalChange,
-      {
-        commitMessage: 'commit-b',
-        pullRequest: 'pr-b',
-        branchName: 'branch-b'
-      },
-      2
-    )
-    expect(afterDiscard.draft).toEqual({
-      commitMessage: 'commit-b',
-      pullRequest: 'pr-b',
-      branchName: 'branch-b'
-    })
-  })
-
   it('renders only the opt-in control before the feature is enabled', () => {
     const markup = renderPane(buildSettings())
 
-    expect(markup).toContain('Git AI Author')
-    expect(markup).toContain('Enable Git AI Author')
+    expect(markup).toContain('Source Control AI')
+    expect(markup).toContain('Show Source Control AI actions')
     expect(markup).toContain('aria-checked="false"')
-    expect(markup).not.toContain('Orca invokes this CLI')
-    expect(markup).not.toContain('Thinking Effort')
-    // The auto-name toggle depends on Git AI Author, so it is hidden while off.
-    expect(markup).not.toContain('Auto-name new workspaces from first message')
+    expect(markup).not.toContain('Action recipes')
+    expect(markup).not.toContain('Command template')
+    expect(markup).not.toContain('Default model')
+    expect(markup).not.toContain('Thinking effort')
   })
 
-  it('renders the auto-name toggle once Git AI Author is enabled', () => {
-    const markup = renderPane(
-      buildSettings({
-        autoRenameBranchFromWork: true,
-        commitMessageAi: {
-          enabled: true,
-          agentId: 'codex',
-          selectedModelByAgent: { codex: 'gpt-5.5' },
-          selectedThinkingByModel: { 'gpt-5.5': 'medium' },
-          customPrompt: '',
-          customAgentCommand: ''
-        }
-      })
-    )
-
-    expect(markup).toContain('Auto-name new workspaces from first message')
-    // Tuning lives in the Advanced -> Branch Names group, not on the toggle row.
-    expect(markup).toContain('Tune the model and prompt under Advanced')
-  })
-
-  it('surfaces the enable row when searching for auto-name while the feature is off', () => {
-    const markup = renderPane(buildSettings(), 'auto-name')
-
-    // Why: the toggle can't render while disabled, so an auto-name search should
-    // still guide the user to the Enable Git AI Author row.
-    expect(markup).toContain('Enable Git AI Author')
-    expect(markup).not.toContain('Auto-name new workspaces from first message')
-  })
-
-  it('renders model, thinking, and collapsed advanced customization for enabled preset agents', () => {
+  it('renders action recipes for every Source Control AI action', () => {
     const markup = renderPane(
       buildSettings({
         commitMessageAi: {
@@ -171,139 +79,147 @@ describe('CommitMessageAiPane', () => {
     )
 
     expect(markup).toContain('aria-checked="true"')
-    expect(markup).toContain('Orca invokes this CLI')
-    expect(markup).toContain('Model')
-    expect(markup).toContain('Thinking Effort')
-    expect(markup).toContain('Advanced')
-    expect(markup).toContain('aria-expanded="false"')
-    // Match the group headings specifically: the auto-name toggle copy mentions
-    // "Branch Names", but the collapsed group heading must not be rendered.
-    expect(markup).not.toContain('>Commit Messages</h4>')
-    expect(markup).not.toContain('>Pull Requests</h4>')
-    expect(markup).not.toContain('>Branch Names</h4>')
-    expect(markup).not.toContain('Use a different model for commit message generation.')
-    expect(markup).not.toContain('Creation defaults')
-    expect(markup).not.toContain('Use a different model for branch name generation.')
-    expect(markup).not.toContain('Higher effort produces more careful messages')
-    expect(markup).not.toContain('Use Conventional Commits.')
-    expect(markup).not.toContain('Saved')
+    expect(markup).toContain('Action recipes')
+    expect(markup).toContain('Commit message')
+    expect(markup).toContain('Pull request details')
+    expect(markup).toContain('Branch name')
+    expect(markup).toContain('Commit failure fixes')
+    expect(markup).toContain('Broken checks fixes')
+    expect(markup).toContain('Conflict resolution')
+    expect(markup).toContain('CLI arguments')
+    expect(markup).toContain('Command template')
+    expect(markup).toContain('Custom command')
+    expect(markup).toContain('{basePrompt}')
+    expect(markup).toContain('{stagedPatch}')
+    expect(markup).toContain('Use Conventional Commits.')
+    expect(markup).not.toContain('Default model')
+    expect(markup).not.toContain('Thinking effort')
   })
 
-  it('shows the enable row for Git AI Author search matches before the feature is enabled', () => {
-    const markup = renderPane(buildSettings(), 'customization')
-
-    expect(markup).toContain('Git AI Author')
-    expect(markup).toContain('Enable Git AI Author')
-    expect(markup).toContain('aria-checked="false"')
-    expect(markup).not.toContain('aria-expanded="false"')
-    expect(markup).not.toContain('Branch Names')
-  })
-
-  it('opens advanced customization for matching settings search terms', () => {
+  it('uses agent-specific CLI argument placeholders', () => {
     const markup = renderPane(
       buildSettings({
-        commitMessageAi: {
+        sourceControlAi: {
           enabled: true,
-          agentId: 'codex',
-          selectedModelByAgent: { codex: 'gpt-5.5' },
-          selectedThinkingByModel: { 'gpt-5.5': 'medium' },
-          customPrompt: '',
-          customAgentCommand: ''
+          agentId: null,
+          selectedModelByAgent: {},
+          selectedModelByAgentByHost: {},
+          discoveredModelsByAgent: {},
+          discoveredModelsByAgentByHost: {},
+          selectedThinkingByModel: {},
+          instructionsByOperation: {},
+          customAgentCommand: '',
+          actions: {
+            fixChecks: {
+              agentId: 'codex'
+            }
+          },
+          prCreationDefaults: {},
+          launchActionDefaults: {}
         }
-      }),
-      'customization'
+      })
     )
 
-    expect(markup).toContain('aria-expanded="true"')
-    expect(markup).toContain('Commit Messages')
-    expect(markup).toContain('Pull Requests')
-    expect(markup).toContain('Branch Names')
-    expect(markup).toContain('Creation defaults')
+    expect(markup).toContain('placeholder="--model gpt-5.4-mini"')
   })
 
-  it('shows the nested branch name model control for branch name model search', () => {
+  it('falls back to the preferred default agent for CLI argument placeholders', () => {
     const markup = renderPane(
       buildSettings({
-        commitMessageAi: {
+        defaultTuiAgent: 'codex',
+        sourceControlAi: {
           enabled: true,
-          agentId: 'codex',
-          selectedModelByAgent: { codex: 'gpt-5.5' },
-          selectedThinkingByModel: { 'gpt-5.5': 'medium' },
-          customPrompt: '',
-          customAgentCommand: ''
+          agentId: null,
+          selectedModelByAgent: {},
+          selectedModelByAgentByHost: {},
+          discoveredModelsByAgent: {},
+          discoveredModelsByAgentByHost: {},
+          selectedThinkingByModel: {},
+          instructionsByOperation: {},
+          customAgentCommand: '',
+          actions: {},
+          prCreationDefaults: {},
+          launchActionDefaults: {}
         }
-      }),
-      'branch name model'
+      })
     )
 
-    expect(markup).toContain('aria-expanded="true"')
-    expect(markup).toContain('Branch Names')
-    expect(markup).toContain('Use a different model for branch name generation.')
+    expect(markup.match(/placeholder="--model gpt-5\.4-mini"/g)?.length ?? 0).toBeGreaterThan(0)
   })
 
-  it('shows the nested commit model control for commit message model search', () => {
-    const markup = renderPane(
-      buildSettings({
-        commitMessageAi: {
-          enabled: true,
-          agentId: 'codex',
-          selectedModelByAgent: { codex: 'gpt-5.5' },
-          selectedThinkingByModel: { 'gpt-5.5': 'medium' },
-          customPrompt: '',
-          customAgentCommand: ''
-        }
-      }),
-      'commit message model'
-    )
-
-    expect(markup).toContain('aria-expanded="true"')
-    expect(markup).toContain('Commit Messages')
-    expect(markup).toContain('Use a different model for commit message generation.')
+  it('uses known model flags when building source-control CLI argument placeholders', () => {
+    expect(getSourceControlAgentArgsPlaceholder('claude')).toBe('--model sonnet')
+    expect(getSourceControlAgentArgsPlaceholder('codex')).toBe('--model gpt-5.4-mini')
+    expect(getSourceControlAgentArgsPlaceholder('amp')).toBe('--mode smart')
+    expect(getSourceControlAgentArgsPlaceholder('aider')).toBe('--model <model>')
   })
 
-  it('shows the nested commit model control for commit model search', () => {
-    const markup = renderPane(
-      buildSettings({
-        commitMessageAi: {
-          enabled: true,
-          agentId: 'codex',
-          selectedModelByAgent: { codex: 'gpt-5.5' },
-          selectedThinkingByModel: { 'gpt-5.5': 'medium' },
-          customPrompt: '',
-          customAgentCommand: ''
-        }
-      }),
-      'commit model'
+  it('only offers non-interactive generation agents for text generation actions', () => {
+    expect(getAgentCatalogForAction('commitMessage', null).map((agent) => agent.id)).not.toContain(
+      'aider'
     )
-
-    expect(markup).toContain('aria-expanded="true"')
-    expect(markup).toContain('Commit Messages')
-    expect(markup).toContain('Use a different model for commit message generation.')
+    expect(getAgentCatalogForAction('pullRequest', null).map((agent) => agent.id)).not.toContain(
+      'aider'
+    )
+    expect(getAgentCatalogForAction('fixChecks', null).map((agent) => agent.id)).toContain('aider')
   })
 
-  it('shows the nested pull request model control for pr model search', () => {
+  it('explains which agents are supported for text-generation recipes', () => {
     const markup = renderPane(
       buildSettings({
-        commitMessageAi: {
+        sourceControlAi: {
           enabled: true,
-          agentId: 'codex',
-          selectedModelByAgent: { codex: 'gpt-5.5' },
-          selectedThinkingByModel: { 'gpt-5.5': 'medium' },
-          customPrompt: '',
-          customAgentCommand: ''
+          agentId: null,
+          selectedModelByAgent: {},
+          selectedModelByAgentByHost: {},
+          discoveredModelsByAgent: {},
+          discoveredModelsByAgentByHost: {},
+          selectedThinkingByModel: {},
+          instructionsByOperation: {},
+          customAgentCommand: '',
+          actions: {},
+          prCreationDefaults: {},
+          launchActionDefaults: {}
         }
-      }),
-      'pr model'
+      })
     )
 
-    expect(markup).toContain('aria-expanded="true"')
-    expect(markup).toContain('Pull Requests')
+    expect(markup).toContain('Supported agents for this recipe:')
+    expect(markup).toContain('Claude, Codex')
+    expect(markup).toContain('Custom command')
+  })
+
+  it('marks an unsupported saved text-recipe agent with the supported alternatives', () => {
+    const markup = renderPane(
+      buildSettings({
+        sourceControlAi: {
+          enabled: true,
+          agentId: null,
+          selectedModelByAgent: {},
+          selectedModelByAgentByHost: {},
+          discoveredModelsByAgent: {},
+          discoveredModelsByAgentByHost: {},
+          selectedThinkingByModel: {},
+          instructionsByOperation: {},
+          customAgentCommand: '',
+          actions: {
+            commitMessage: {
+              agentId: 'aider'
+            }
+          },
+          prCreationDefaults: {},
+          launchActionDefaults: {}
+        }
+      })
+    )
+
     expect(markup).toContain(
-      'Use a different model for pull request title and description generation.'
+      'Aider cannot run this text-generation recipe. Pick one of the supported agents below.'
     )
+    expect(markup).toContain('Supported agents for this recipe:')
   })
 
-  it('keeps the agent and model selectors aligned for long labels', () => {
+  it('keeps action agent selectors constrained for long labels', () => {
     const markup = renderPane(
       buildSettings({
         commitMessageAi: {
@@ -317,30 +233,101 @@ describe('CommitMessageAiPane', () => {
       })
     )
 
-    expect(markup.match(/w-\[260px\]/g)).toHaveLength(2)
-    expect(markup.match(/shrink-0/g)?.length ?? 0).toBeGreaterThanOrEqual(2)
+    expect(markup.match(/sm:w-\[220px\]/g)?.length ?? 0).toBeGreaterThanOrEqual(6)
+    expect(markup.match(/shrink-0/g)?.length ?? 0).toBeGreaterThanOrEqual(6)
   })
 
-  it('renders custom command settings for custom agents', () => {
+  it('renders saved custom action templates in action recipes', () => {
     const markup = renderPane(
       buildSettings({
-        commitMessageAi: {
+        sourceControlAi: {
           enabled: true,
-          agentId: 'custom',
+          agentId: null,
           selectedModelByAgent: {},
+          selectedModelByAgentByHost: {},
+          discoveredModelsByAgent: {},
+          discoveredModelsByAgentByHost: {},
           selectedThinkingByModel: {},
-          customPrompt: '',
-          customAgentCommand: 'ollama run llama3.1 {prompt}'
+          instructionsByOperation: { commitMessage: '', pullRequest: '', branchName: '' },
+          customAgentCommand: '',
+          actions: {
+            commitMessage: {
+              agentId: 'codex',
+              commandInputTemplate: 'use $best-commit-msg to write a commit'
+            },
+            fixChecks: {
+              agentId: 'claude',
+              commandInputTemplate: 'use /fix-ci-issue to fix the linked CI bug'
+            }
+          },
+          prCreationDefaults: {},
+          launchActionDefaults: {}
         }
       })
     )
 
-    expect(markup).toContain('Git AI Author')
-    expect(markup).toContain('Custom command')
-    expect(markup).toContain('ollama run llama3.1 {prompt}')
+    expect(markup).toContain('Source Control AI')
+    expect(markup).toContain('use $best-commit-msg to write a commit')
+    expect(markup).toContain('use /fix-ci-issue to fix the linked CI bug')
   })
 
-  it('shows an unconfigured state when the default agent is unsupported', () => {
+  it('renders the custom command editor when a text action uses it', () => {
+    const markup = renderPane(
+      buildSettings({
+        sourceControlAi: {
+          enabled: true,
+          agentId: null,
+          selectedModelByAgent: {},
+          selectedModelByAgentByHost: {},
+          discoveredModelsByAgent: {},
+          discoveredModelsByAgentByHost: {},
+          selectedThinkingByModel: {},
+          instructionsByOperation: { commitMessage: '', pullRequest: '', branchName: '' },
+          customAgentCommand: 'my-commit-writer --prompt {prompt}',
+          actions: {
+            commitMessage: {
+              agentId: 'custom',
+              commandInputTemplate: '{basePrompt}'
+            }
+          },
+          prCreationDefaults: {},
+          launchActionDefaults: {}
+        }
+      })
+    )
+
+    expect(markup).toContain('Used by commit-message, pull-request, and branch-name recipes')
+    expect(markup).toContain('my-commit-writer --prompt {prompt}')
+  })
+
+  it('preserves in-progress trailing spaces in command template textareas', () => {
+    const markup = renderPane(
+      buildSettings({
+        sourceControlAi: {
+          enabled: true,
+          agentId: null,
+          selectedModelByAgent: {},
+          selectedModelByAgentByHost: {},
+          discoveredModelsByAgent: {},
+          discoveredModelsByAgentByHost: {},
+          selectedThinkingByModel: {},
+          instructionsByOperation: { commitMessage: '', pullRequest: '', branchName: '' },
+          customAgentCommand: '',
+          actions: {
+            fixChecks: {
+              commandInputTemplate: 'use /fix-ci-issue '
+            }
+          },
+          prCreationDefaults: {},
+          launchActionDefaults: {}
+        }
+      })
+    )
+
+    expect(markup).toContain('use /fix-ci-issue </textarea>')
+  })
+
+  it('allows default-agent recipes even when the old default generator is unsupported', () => {
     const markup = renderPane(
       buildSettings({
         defaultTuiAgent: 'aider',
@@ -355,14 +342,13 @@ describe('CommitMessageAiPane', () => {
       })
     )
 
-    expect(markup).toContain('Not configured')
-    expect(markup).toContain('Your default agent is Aider')
-    expect(markup).toContain('Choose a supported agent or Custom')
-    expect(markup).not.toContain('Which model the selected agent uses')
-    expect(markup).not.toContain('Thinking Effort')
+    expect(markup).toContain('Action recipes')
+    expect(markup).toContain('{basePrompt}')
+    expect(markup).not.toContain('Not configured')
+    expect(markup).not.toContain('Thinking effort')
   })
 
-  it('shows Gemini as coming soon instead of a selectable generator', () => {
+  it('removes the old Gemini text-generation lockout from the settings pane', () => {
     const markup = renderPane(
       buildSettings({
         commitMessageAi: {
@@ -376,18 +362,18 @@ describe('CommitMessageAiPane', () => {
       })
     )
 
-    expect(markup).toContain('Gemini')
-    expect(markup).toContain('Gemini Git AI Author is coming soon')
-    expect(markup).not.toContain('Which model Git AI Author uses')
+    expect(markup).toContain('Action recipes')
+    expect(markup).not.toContain('Gemini Source Control AI is coming soon')
+    expect(markup).not.toContain('Which model Source Control AI uses')
   })
 
-  it('keeps custom command discoverable in settings search metadata', () => {
-    const customCommandEntry = COMMIT_MESSAGE_AI_PANE_SEARCH_ENTRIES.find(
-      (entry) => entry.title === 'Custom command'
+  it('keeps action recipes discoverable in settings search metadata', () => {
+    const actionRecipesEntry = getCommitMessageAiPaneSearchEntries().find(
+      (entry) => entry.title === 'Action recipes'
     )
 
-    expect(customCommandEntry?.keywords).toEqual(
-      expect.arrayContaining(['custom', 'command', 'ollama'])
+    expect(actionRecipesEntry?.keywords).toEqual(
+      expect.arrayContaining(['agent', 'arguments', 'cli', 'command', 'model', 'template', 'ci'])
     )
   })
 

@@ -7,16 +7,21 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
-import { AGENT_CATALOG } from '@/lib/agent-catalog'
+import { getAgentCatalog } from '@/lib/agent-catalog'
 import {
   parseGitHubIssueOrPRNumber,
   parseGitHubIssueOrPRLink,
   normalizeGitHubLinkQuery
 } from '@/lib/github-links'
 import { activateAndRevealWorktree, type AgentStartedTelemetry } from '@/lib/worktree-activation'
+import { runBackgroundWorktreeCreation } from '@/lib/worktree-creation-flow'
+import type { WorktreeCreationRequest } from '@/lib/pending-worktree-creation'
 import { buildAgentDraftLaunchPlan, buildAgentStartupPlan } from '@/lib/tui-agent-startup'
-import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
 import { filterEnabledTuiAgents, isTuiAgentEnabled } from '../../../shared/tui-agent-selection'
+import {
+  resolveTuiAgentLaunchArgs,
+  resolveTuiAgentLaunchEnv
+} from '../../../shared/tui-agent-launch-defaults'
 import { tuiAgentToAgentKind } from '@/lib/telemetry'
 import { isGitRepoKind } from '../../../shared/repo-kind'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
@@ -44,8 +49,8 @@ import {
   getAttachmentLabel,
   getLinkedWorkItemProvider,
   getLinkedWorkItemSuggestedName,
+  getLinkedWorkItemWorkspaceName,
   getSetupConfig,
-  getWorkspaceIntentName,
   getWorkspaceSeedName,
   isGitLabIssueUrl,
   PER_REPO_FETCH_LIMIT,
@@ -57,6 +62,7 @@ import {
   getLinkedWorkItemPromptContext,
   resolveQuickCreateLinkedWorkItemPrompt
 } from '@/lib/linked-work-item-context'
+import { isOrcaCliAvailableForLaunch } from '@/lib/orca-cli-launch-availability'
 import {
   buildLinearIssueLinkedWorkItem,
   isLinearLinkedWorkItem
@@ -72,6 +78,7 @@ import {
   getSmartGitHubSubmitResolution,
   type SmartGitHubSubmitResolution
 } from '@/lib/smart-github-submit'
+import { isWorkItemLookupText } from '@/lib/work-item-lookup-text'
 import {
   canUseRepoBackedComposerSources,
   getSelectedRepoSshGate,
@@ -102,6 +109,7 @@ import {
   resolveComposerBranchNameOverrideForCreate,
   resolveComposerBranchSelection
 } from './composer-branch-selection'
+import { translate } from '@/i18n/i18n'
 
 export type UseComposerStateOptions = {
   initialRepoId?: string
@@ -183,6 +191,7 @@ export type ComposerCardProps = {
   advancedOpen: boolean
   onToggleAdvanced: () => void
   createDisabled: boolean
+  projectError: string | null
   creating: boolean
   onCreate: () => void
   note: string
@@ -332,6 +341,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   })
 
   const [internalRepoId, setInternalRepoId] = useState<string>(resolvedInitialRepoId)
+  const [projectError, setProjectError] = useState<string | null>(null)
   const repoId = repoIdOverride ?? internalRepoId
   const selectedRepo = eligibleRepos.find((repo) => repo.id === repoId)
   const selectedRepoIsGit = selectedRepo ? isGitRepoKind(selectedRepo) : false
@@ -437,7 +447,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   const enabledCatalogAgents = useMemo(
     () =>
       filterEnabledTuiAgents(
-        AGENT_CATALOG.map((agent) => agent.id),
+        getAgentCatalog().map((agent) => agent.id),
         disabledTuiAgents
       ),
     [disabledTuiAgents]
@@ -865,12 +875,12 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       }
       const enabledIds = filterEnabledTuiAgents(ids, disabledTuiAgents)
       if (!newWorkspaceDraft?.agent && !settings?.defaultTuiAgent && enabledIds.length > 0) {
-        const firstInCatalogOrder = AGENT_CATALOG.find((a) => enabledIds.includes(a.id))
+        const firstInCatalogOrder = getAgentCatalog().find((a) => enabledIds.includes(a.id))
         if (firstInCatalogOrder) {
           setTuiAgent(firstInCatalogOrder.id)
         }
       } else if (!isTuiAgentEnabled(tuiAgent, disabledTuiAgents)) {
-        const firstEnabledDetected = AGENT_CATALOG.find((a) => enabledIds.includes(a.id))
+        const firstEnabledDetected = getAgentCatalog().find((a) => enabledIds.includes(a.id))
         setTuiAgent(firstEnabledDetected?.id ?? fallbackDefaultAgent)
       }
     })
@@ -966,7 +976,11 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     try {
       await window.api.ssh.connect({ targetId })
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to connect to project.')
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : translate('auto.hooks.useComposerState.ba6cb77082', 'Failed to connect to project.')
+      )
     }
   }, [])
 
@@ -1153,11 +1167,14 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         url: item.url
       })
       const suggestedName =
-        getWorkspaceIntentName({
-          sourceText: name,
-          workItem: item
-        })?.seedName ?? getLinkedWorkItemSuggestedName(item)
-      if (suggestedName && (!name.trim() || name === lastAutoNameRef.current)) {
+        getLinkedWorkItemWorkspaceName(item)?.seedName ?? getLinkedWorkItemSuggestedName(item)
+      // Why: a pasted URL/#123 in the field is the lookup query that found
+      // this item, not a deliberate name — replace it with the title-derived
+      // name or it silently becomes a slugified-URL workspace name.
+      if (
+        suggestedName &&
+        (!name.trim() || name === lastAutoNameRef.current || isWorkItemLookupText(name))
+      ) {
         setName(suggestedName)
         lastAutoNameRef.current = suggestedName
       }
@@ -1191,9 +1208,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         throw new Error('Could not resolve the GitHub item before creating the workspace.')
       }
 
-      const resolution = getSmartGitHubSubmitResolution(item, {
-        sourceText: [name, agentPrompt, noteRef.current].filter(Boolean).join('\n')
-      })
+      const resolution = getSmartGitHubSubmitResolution(item)
       // Why: Create can be clicked before the debounced smart field commits
       // its selected source. Commit the resolved item here so failures leave
       // the form showing the title instead of the raw URL.
@@ -1210,7 +1225,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       branchAutoNameRef.current = ''
       setStartFromResetHint(null)
       return resolution
-    }, [agentPrompt, linkedWorkItem, name, selectedRepo, selectedRepoIsGit])
+    }, [linkedWorkItem, name, selectedRepo, selectedRepoIsGit])
 
   // Why: parallel of applyLinkedWorkItem for GitLab. Touches the GitLab
   // state slots only — the GitHub linkedIssue/linkedPR remain unchanged
@@ -1240,17 +1255,17 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         title: item.title,
         branchName: item.branchName
       } as unknown as GitHubWorkItem)
-      const intentName = getWorkspaceIntentName({
-        sourceText: name,
-        workItem: {
-          type: item.type,
-          provider: 'gitlab',
-          number: item.number,
-          title: item.title
-        }
+      const titleName = getLinkedWorkItemWorkspaceName({
+        type: item.type,
+        provider: 'gitlab',
+        number: item.number,
+        title: item.title
       })
-      const nextName = intentName?.seedName ?? suggestedName
-      if (nextName && (!name.trim() || name === lastAutoNameRef.current)) {
+      const nextName = titleName?.seedName ?? suggestedName
+      if (
+        nextName &&
+        (!name.trim() || name === lastAutoNameRef.current || isWorkItemLookupText(name))
+      ) {
         setName(nextName)
         lastAutoNameRef.current = nextName
       }
@@ -1393,7 +1408,12 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         return null
       }
       if (!targetRepoPath) {
-        toast.error('No remote project path is available for attachments.')
+        toast.error(
+          translate(
+            'auto.hooks.useComposerState.3db83fc58a',
+            'No remote project path is available for attachments.'
+          )
+        )
         return { filePaths: [], folderPaths: [] }
       }
       const destinationDir = joinPath(targetRepoPath, '.orca/drops')
@@ -1423,7 +1443,12 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         }
       }
       if (skippedOrFailed > 0) {
-        toast.error('Some attachments could not be uploaded.')
+        toast.error(
+          translate(
+            'auto.hooks.useComposerState.a9ff236145',
+            'Some attachments could not be uploaded.'
+          )
+        )
       }
       return { filePaths, folderPaths }
     },
@@ -1528,6 +1553,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
 
   const handleRepoChange = useCallback(
     (value: string): void => {
+      setProjectError(null)
       if (value === repoId) {
         setRepoId(value)
         return
@@ -1573,6 +1599,17 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     },
     [baseBranch, linkedWorkItem, repoId, setRepoId]
   )
+
+  const showProjectRequiredError = useCallback((): void => {
+    setProjectError('Choose or add a project before creating a workspace.')
+    requestAnimationFrame(() => {
+      document
+        .querySelector<HTMLElement>(
+          '[data-contextual-tour-target="workspace-creation-project"] [data-repo-combobox-root="true"][role="combobox"]'
+        )
+        ?.focus()
+    })
+  }, [])
 
   const handleSparseSelectPreset = useCallback((preset: SparsePreset | null): void => {
     if (preset) {
@@ -1709,7 +1746,11 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         .catch((error: unknown) => {
           setBaseBranch(undefined)
           setPushTarget(undefined)
-          toast.error(error instanceof Error ? error.message : 'Failed to resolve PR base.')
+          toast.error(
+            error instanceof Error
+              ? error.message
+              : translate('auto.hooks.useComposerState.b2ead86962', 'Failed to resolve PR base.')
+          )
         })
     },
     [applyLinkedWorkItem, eligibleRepos, handleBaseBranchPrSelect, selectedRepo, settings]
@@ -1782,7 +1823,14 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       setLinkedPR(null)
       setLinkedWorkItem(buildLinearIssueLinkedWorkItem(issue))
       const suggestedName = getLinearIssueWorkspaceName(issue)
-      if (!name.trim() || name === lastAutoNameRef.current) {
+      // Why: same lookup-text rule as applyLinkedWorkItem, plus the typed
+      // Linear identifier ("STA-123") that matched this issue.
+      if (
+        !name.trim() ||
+        name === lastAutoNameRef.current ||
+        isWorkItemLookupText(name) ||
+        name.trim().toLowerCase() === issue.identifier.toLowerCase()
+      ) {
         setName(suggestedName)
         lastAutoNameRef.current = suggestedName
       }
@@ -1867,10 +1915,12 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   )
 
   const submit = useCallback(async (): Promise<void> => {
+    if (!repoId || !selectedRepo) {
+      showProjectRequiredError()
+      return
+    }
     if (
-      !repoId ||
       !workspaceSeedName ||
-      !selectedRepo ||
       selectedRepoRequiresConnection ||
       shouldWaitForSetupCheck ||
       shouldWaitForIssueAutomationCheck ||
@@ -1881,7 +1931,12 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     }
     if (!isTuiAgentEnabled(tuiAgent, disabledTuiAgents)) {
       setTuiAgent(fallbackDefaultAgent)
-      toast.error('Selected agent is disabled. Choose an enabled agent before creating.')
+      toast.error(
+        translate(
+          'auto.hooks.useComposerState.7eb3f44ff7',
+          'Selected agent is disabled. Choose an enabled agent before creating.'
+        )
+      )
       return
     }
 
@@ -1893,16 +1948,14 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       const submitLinkedIssueNumber =
         smartGitHubResolution?.linkedIssueNumber ?? parsedLinkedIssueNumber
       const submitLinkedPR = smartGitHubResolution?.linkedPR ?? effectiveLinkedPR
-      const submitIntentName = submitLinkedWorkItem
-        ? getWorkspaceIntentName({
-            sourceText: [name, agentPrompt, note].filter(Boolean).join('\n'),
-            workItem: submitLinkedWorkItem
-          })
+      const submitTitleName = submitLinkedWorkItem
+        ? getLinkedWorkItemWorkspaceName(submitLinkedWorkItem)
         : null
-      const nameIsAutoManaged = !name.trim() || name === lastAutoNameRef.current
+      const nameIsAutoManaged =
+        !name.trim() || name === lastAutoNameRef.current || isWorkItemLookupText(name)
       const workspaceName =
         smartGitHubResolution?.workspaceName ??
-        (nameIsAutoManaged && submitIntentName ? submitIntentName.seedName : workspaceSeedName)
+        (nameIsAutoManaged && submitTitleName ? submitTitleName.seedName : workspaceSeedName)
       if (!workspaceName) {
         return
       }
@@ -1922,7 +1975,15 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
               }
             )
           : ''
-      const linkedPromptContext = getLinkedWorkItemPromptContext(submitLinkedWorkItem)
+      // Why: the hint must never point agents at a command that cannot run;
+      // SSH worktrees always have the relay shim, local launches need the
+      // installed CLI on PATH.
+      const linearCliAvailable = submitLinkedWorkItem?.linearIdentifier
+        ? await isOrcaCliAvailableForLaunch({ remote: isRemote })
+        : false
+      const linkedPromptContext = getLinkedWorkItemPromptContext(submitLinkedWorkItem, {
+        cliAvailable: linearCliAvailable
+      })
       const submitStartupPrompt = submitShouldApplyLinkedOnlyTemplate
         ? buildAgentPromptWithContext(
             submitLinkedOnlyTemplatePrompt,
@@ -1962,6 +2023,14 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         submitLinkedWorkItem && getLinkedWorkItemProvider(submitLinkedWorkItem) === 'linear'
           ? submitLinkedWorkItem.linearIdentifier
           : undefined
+      const linkedLinearIssueWorkspaceId =
+        submitLinkedWorkItem && getLinkedWorkItemProvider(submitLinkedWorkItem) === 'linear'
+          ? submitLinkedWorkItem.linearWorkspaceId
+          : undefined
+      const linkedLinearIssueOrganizationUrlKey =
+        submitLinkedWorkItem && getLinkedWorkItemProvider(submitLinkedWorkItem) === 'linear'
+          ? submitLinkedWorkItem.linearOrganizationUrlKey
+          : undefined
       const effectiveBranchNameOverride = resolveComposerBranchNameOverrideForCreate({
         branchNameOverride,
         branchAutoName: branchAutoNameRef.current,
@@ -1970,7 +2039,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       })
       const createDisplayName =
         smartGitHubResolution?.displayName ??
-        (nameIsAutoManaged ? submitIntentName?.displayName : undefined)
+        (nameIsAutoManaged ? submitTitleName?.displayName : undefined)
       // Why: the first-work hook only renames blank, auto-generated git workspaces
       // that actually launch an agent. Persist that known-pending state for the card.
       const pendingFirstAgentMessageRename =
@@ -1984,6 +2053,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         agent: tuiAgent,
         prompt: submitStartupPrompt,
         cmdOverrides: settings?.agentCmdOverrides ?? {},
+        agentArgs: resolveTuiAgentLaunchArgs(tuiAgent, settings?.agentDefaultArgs),
+        agentEnv: resolveTuiAgentLaunchEnv(tuiAgent, settings?.agentDefaultEnv),
         platform: CLIENT_PLATFORM
       })
 
@@ -2026,7 +2097,10 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         linkedGitLabMR ?? undefined,
         linkedGitLabIssue ?? undefined,
         backendStartup,
-        pendingFirstAgentMessageRename
+        pendingFirstAgentMessageRename,
+        undefined,
+        linkedLinearIssueWorkspaceId,
+        linkedLinearIssueOrganizationUrlKey
       )
       const worktree = result.worktree
 
@@ -2101,6 +2175,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     issueCommandTemplate,
     effectiveLinkedPR,
     hasLoadedIssueCommand,
+    isRemote,
     linkedGitLabIssue,
     linkedGitLabMR,
     linkedWorkItem,
@@ -2119,7 +2194,10 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     selectedRepo,
     selectedRepoIsGit,
     selectedRepoRequiresConnection,
+    showProjectRequiredError,
     settings?.agentCmdOverrides,
+    settings?.agentDefaultArgs,
+    settings?.agentDefaultEnv,
     settings?.autoRenameBranchFromWork,
     setSidebarOpen,
     setupDecision,
@@ -2148,10 +2226,12 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         linkedPR,
         fallbackName: fallbackCreatureName
       })
+      if (!repoId || !selectedRepo) {
+        showProjectRequiredError()
+        return
+      }
       if (
-        !repoId ||
         !workspaceNameSeed ||
-        !selectedRepo ||
         selectedRepoRequiresConnection ||
         (requiresExplicitSetupChoice && !setupDecision) ||
         sparseError !== null
@@ -2167,16 +2247,14 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         const submitLinkedIssueNumber =
           smartGitHubResolution?.linkedIssueNumber ?? parsedLinkedIssueNumber
         const submitLinkedPR = smartGitHubResolution?.linkedPR ?? effectiveLinkedPR
-        const submitIntentName = submitLinkedWorkItem
-          ? getWorkspaceIntentName({
-              sourceText: [name, agentPrompt, note].filter(Boolean).join('\n'),
-              workItem: submitLinkedWorkItem
-            })
+        const submitTitleName = submitLinkedWorkItem
+          ? getLinkedWorkItemWorkspaceName(submitLinkedWorkItem)
           : null
-        const nameIsAutoManaged = !name.trim() || name === lastAutoNameRef.current
+        const nameIsAutoManaged =
+          !name.trim() || name === lastAutoNameRef.current || isWorkItemLookupText(name)
         const workspaceName =
           smartGitHubResolution?.workspaceName ??
-          (nameIsAutoManaged && submitIntentName ? submitIntentName.seedName : workspaceNameSeed)
+          (nameIsAutoManaged && submitTitleName ? submitTitleName.seedName : workspaceNameSeed)
         if (!workspaceName) {
           return
         }
@@ -2219,6 +2297,14 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
           submitLinkedWorkItem && getLinkedWorkItemProvider(submitLinkedWorkItem) === 'linear'
             ? submitLinkedWorkItem.linearIdentifier
             : undefined
+        const linkedLinearIssueWorkspaceId =
+          submitLinkedWorkItem && getLinkedWorkItemProvider(submitLinkedWorkItem) === 'linear'
+            ? submitLinkedWorkItem.linearWorkspaceId
+            : undefined
+        const linkedLinearIssueOrganizationUrlKey =
+          submitLinkedWorkItem && getLinkedWorkItemProvider(submitLinkedWorkItem) === 'linear'
+            ? submitLinkedWorkItem.linearOrganizationUrlKey
+            : undefined
         const effectiveBranchNameOverride = resolveComposerBranchNameOverrideForCreate({
           branchNameOverride,
           branchAutoName: branchAutoNameRef.current,
@@ -2227,7 +2313,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         })
         const createDisplayName =
           smartGitHubResolution?.displayName ??
-          (nameIsAutoManaged ? submitIntentName?.displayName : undefined)
+          (nameIsAutoManaged ? submitTitleName?.displayName : undefined)
         // Why: quick create uses the same blank-name creature branch flow; the card
         // needs an explicit marker rather than guessing from the generated title.
         const pendingFirstAgentMessageRename =
@@ -2241,8 +2327,13 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         // Why: backend startup is safe only when the launch command is
         // self-contained. Agents that need post-ready paste/follow-up stay on
         // the renderer path so prompt delivery is not skipped.
+        const quickLinearCliAvailable = submitLinkedWorkItem?.linearIdentifier
+          ? await isOrcaCliAvailableForLaunch({ remote: isRemote })
+          : false
         const { prompt: quickPrompt, draftPrompt: quickDraftPrompt } =
-          resolveQuickCreateLinkedWorkItemPrompt(submitLinkedWorkItem, trimmedNote)
+          resolveQuickCreateLinkedWorkItemPrompt(submitLinkedWorkItem, trimmedNote, {
+            cliAvailable: quickLinearCliAvailable
+          })
         const draftLaunchPlan =
           agent === null || !quickDraftPrompt
             ? null
@@ -2250,6 +2341,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
                 agent,
                 draft: quickDraftPrompt,
                 cmdOverrides: settings?.agentCmdOverrides ?? {},
+                agentArgs: resolveTuiAgentLaunchArgs(agent, settings?.agentDefaultArgs),
+                agentEnv: resolveTuiAgentLaunchEnv(agent, settings?.agentDefaultEnv),
                 platform: CLIENT_PLATFORM
               })
 
@@ -2267,6 +2360,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
             agent,
             prompt: quickPrompt,
             cmdOverrides: settings?.agentCmdOverrides ?? {},
+            agentArgs: resolveTuiAgentLaunchArgs(agent, settings?.agentDefaultArgs),
+            agentEnv: resolveTuiAgentLaunchEnv(agent, settings?.agentDefaultEnv),
             platform: CLIENT_PLATFORM,
             allowEmptyPromptLaunch: true
           })
@@ -2292,91 +2387,54 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
                 ...(quickTelemetry ? { telemetry: quickTelemetry } : {})
               }
             : undefined
-        const result = await createWorktree(
+        const request: WorktreeCreationRequest = {
           repoId,
-          workspaceName,
-          selectedRepoIsGit ? baseBranch : undefined,
-          effectiveSetupDecision,
-          selectedRepoIsGit && sparseEnabled
+          name: workspaceName,
+          ...(createDisplayName ? { displayName: createDisplayName } : {}),
+          ...(selectedRepoIsGit && baseBranch ? { baseBranch } : {}),
+          setupDecision: effectiveSetupDecision,
+          ...(selectedRepoIsGit && sparseEnabled
             ? {
-                directories: normalizedSparseDirectories,
-                ...(effectivePresetId ? { presetId: effectivePresetId } : {})
-              }
-            : undefined,
-          telemetrySource,
-          createDisplayName,
-          submitLinkedIssueNumber ?? undefined,
-          submitLinkedPR ?? undefined,
-          pushTarget,
-          agent ?? undefined,
-          linkedLinearIssue,
-          effectiveBranchNameOverride,
-          resolvedInitialWorkspaceStatus,
-          linkedGitLabMR ?? undefined,
-          linkedGitLabIssue ?? undefined,
-          backendStartup,
-          pendingFirstAgentMessageRename
-        )
-        const worktree = result.worktree
-
-        await applyWorktreeMeta(worktree.id, trimmedNote ? { comment: trimmedNote } : {})
-
-        // Why: agents that gate first-launch behind a "Do you trust this
-        // folder?" menu (cursor-agent, copilot) consume the bracketed paste
-        // as menu input. Pre-write the trust artifact so the menu is
-        // skipped — best-effort, errors swallowed by main. Guard the IPC
-        // presence so a stale preload bundle doesn't crash the launch with
-        // "Cannot read properties of undefined".
-        if (agent && worktree.path && window.api.agentTrust?.markTrusted) {
-          const preflight = TUI_AGENT_CONFIG[agent].preflightTrust
-          if (preflight) {
-            try {
-              await window.api.agentTrust.markTrusted({
-                preset: preflight,
-                workspacePath: worktree.path
-              })
-            } catch {
-              // Best-effort: continue with launch.
-            }
-          }
-        }
-
-        const backendSpawnedStartup = result.startupTerminal?.spawned === true
-        const activation = activateAndRevealWorktree(worktree.id, {
-          sidebarRevealBehavior: 'auto',
-          setup: result.setup,
-          defaultTabs: result.defaultTabs,
-          ...(startupPlan && !backendSpawnedStartup
-            ? {
-                startup: {
-                  command: startupPlan.launchCommand,
-                  ...(startupPlan.env ? { env: startupPlan.env } : {}),
-                  ...(agent === 'command-code' && quickPrompt.trim().length > 0
-                    ? {
-                        initialAgentStatus: {
-                          agent,
-                          prompt: quickPrompt.trim()
-                        }
-                      }
-                    : {}),
-                  ...(quickTelemetry ? { telemetry: quickTelemetry } : {})
+                sparseCheckout: {
+                  directories: normalizedSparseDirectories,
+                  ...(effectivePresetId ? { presetId: effectivePresetId } : {})
                 }
               }
-            : {})
-        })
-        if (startupPlan && !backendSpawnedStartup) {
-          void ensureAgentStartupInTerminal({
-            worktreeId: worktree.id,
-            primaryTabId: activation === false ? null : activation.primaryTabId,
-            startup: startupPlan
-          })
+            : {}),
+          ...(telemetrySource ? { telemetrySource } : {}),
+          ...(submitLinkedIssueNumber != null ? { linkedIssue: submitLinkedIssueNumber } : {}),
+          ...(submitLinkedPR != null ? { linkedPR: submitLinkedPR } : {}),
+          ...(pushTarget ? { pushTarget } : {}),
+          agent,
+          ...(linkedLinearIssue ? { linkedLinearIssue } : {}),
+          ...(linkedLinearIssueWorkspaceId !== undefined ? { linkedLinearIssueWorkspaceId } : {}),
+          ...(linkedLinearIssueOrganizationUrlKey !== undefined
+            ? { linkedLinearIssueOrganizationUrlKey }
+            : {}),
+          ...(effectiveBranchNameOverride
+            ? { branchNameOverride: effectiveBranchNameOverride }
+            : {}),
+          ...(resolvedInitialWorkspaceStatus
+            ? { workspaceStatus: resolvedInitialWorkspaceStatus }
+            : {}),
+          ...(linkedGitLabMR != null ? { linkedGitLabMR } : {}),
+          ...(linkedGitLabIssue != null ? { linkedGitLabIssue } : {}),
+          ...(backendStartup ? { startup: backendStartup } : {}),
+          pendingFirstAgentMessageRename,
+          note: trimmedNote,
+          startupPlan,
+          quickPrompt,
+          quickTelemetry
         }
-        setSidebarOpen(true)
+
+        // Why: git fetch + `git worktree add` can take 10–15s; holding the modal
+        // hostage to that made it feel frozen, so hand off to a background flow and
+        // close the modal immediately.
         if (persistDraft) {
           clearNewWorkspaceDraft()
         }
         onCreated?.()
-        queueNewWorkspaceTerminalFocus(worktree.id, activation)
+        runBackgroundWorktreeCreation(request)
       } catch (error) {
         const formattedError = formatWorkspaceCreateError(error)
         setCreateError(formattedError)
@@ -2386,15 +2444,13 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       }
     },
     [
-      agentPrompt,
-      applyWorktreeMeta,
       baseBranch,
       branchNameOverride,
       branchNameOverridePreservesNameEdits,
       clearNewWorkspaceDraft,
-      createWorktree,
       fallbackCreatureName,
       effectiveLinkedPR,
+      isRemote,
       linkedGitLabIssue,
       linkedGitLabMR,
       linkedPR,
@@ -2414,10 +2470,12 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       selectedRepo,
       selectedRepoIsGit,
       selectedRepoRequiresConnection,
+      showProjectRequiredError,
       settings?.agentCmdOverrides,
+      settings?.agentDefaultArgs,
+      settings?.agentDefaultEnv,
       settings?.autoRenameBranchFromWork,
       disabledTuiAgents,
-      setSidebarOpen,
       setupDecision,
       sparseEnabled,
       sparseError,
@@ -2485,6 +2543,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     advancedOpen,
     onToggleAdvanced: () => setAdvancedOpen((current) => !current),
     createDisabled,
+    projectError,
     creating,
     onCreate: () => void submit(),
     baseBranch,

@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
+  getAllDrivers,
   getDriverForPty,
   hydrateDrivers,
   isPtyLocked,
@@ -22,6 +23,21 @@ describe('mobile-driver-state', () => {
 
     expect(getDriverForPty('pty-1')).toEqual({ kind: 'idle' })
     expect(isPtyLocked('pty-1')).toBe(false)
+  })
+
+  it('returns a defensive snapshot of all non-idle drivers', () => {
+    setDriverForPty('pty-1', { kind: 'mobile', clientId: 'phone-1' })
+    setDriverForPty('pty-2', { kind: 'desktop' })
+
+    const drivers = getAllDrivers()
+    expect([...drivers.entries()]).toEqual([
+      ['pty-1', { kind: 'mobile', clientId: 'phone-1' }],
+      ['pty-2', { kind: 'desktop' }]
+    ])
+    drivers.clear()
+
+    expect(getDriverForPty('pty-1')).toEqual({ kind: 'mobile', clientId: 'phone-1' })
+    expect(getDriverForPty('pty-2')).toEqual({ kind: 'desktop' })
   })
 
   it('hydrates driver snapshots and notifies affected listeners', () => {

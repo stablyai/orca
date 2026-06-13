@@ -30,10 +30,13 @@ import {
 } from '../../shared/git-uncommitted-line-stats'
 import { decodeGitCQuotedPath } from '../../shared/git-cquoted-path'
 import { gitExecFileAsync, gitExecFileAsyncBuffer, gitOptionalLocksDisabledEnv } from './runner'
+import { describeMaxBufferOverflowError, isMaxBufferOverflowError } from './max-buffer-overflow'
 import {
   removeSafeUntrackedDiscardTarget,
   removeSafeUntrackedDiscardTargets
 } from '../../shared/git-discard-path-safety'
+import { resolveWorktreeAddBaseRef } from '../../shared/worktree-base-ref'
+import { hasWorktreeBaseCommitRef } from './worktree-base-ref-probe'
 
 const MAX_GIT_SHOW_BYTES = 10 * 1024 * 1024
 const MAX_STAGED_COMMIT_CONTEXT_BYTES = MAX_GIT_SHOW_BYTES
@@ -701,6 +704,11 @@ export async function getBranchCompare(
 
   const compareRef = await resolveCompareRef(worktreePath)
   summary.compareRef = compareRef
+  // Why: short remote display refs like "origin/main" can collide with a local
+  // branch of the same name. Compare against the proven remote-tracking ref.
+  const resolvedBaseRef = await resolveWorktreeAddBaseRef(baseRef, (qualifiedRef) =>
+    hasWorktreeBaseCommitRef(worktreePath, qualifiedRef)
+  )
 
   let headOid = ''
   let baseOid = ''
@@ -709,7 +717,7 @@ export async function getBranchCompare(
     summary.headOid = headOid
   } catch {
     try {
-      baseOid = await resolveRefOid(worktreePath, baseRef)
+      baseOid = await resolveRefOid(worktreePath, resolvedBaseRef)
       summary.baseOid = baseOid
       // Why: new remote worktrees can be on an unborn branch until the first
       // commit. There are no committed branch changes yet; surfacing this as a
@@ -729,7 +737,7 @@ export async function getBranchCompare(
   }
 
   try {
-    baseOid = await resolveRefOid(worktreePath, baseRef)
+    baseOid = await resolveRefOid(worktreePath, resolvedBaseRef)
     summary.baseOid = baseOid
   } catch {
     summary.status = 'invalid-base'
@@ -1212,16 +1220,28 @@ export async function getStagedCommitContext(
     return null
   }
 
-  const { stdout: stagedPatch } = await gitExecFileAsync(
-    ['diff', '--cached', '--patch', '--minimal', '--no-color', '--no-ext-diff'],
-    {
-      cwd: worktreePath,
-      // Why: the prompt builder truncates large staged patches later. Give git
-      // enough buffer room to reach that truncation step instead of failing at
-      // Node's default execFile limit first.
-      maxBuffer: MAX_STAGED_COMMIT_CONTEXT_BYTES
+  let stagedPatch = ''
+  try {
+    const patchResult = await gitExecFileAsync(
+      ['diff', '--cached', '--patch', '--minimal', '--no-color', '--no-ext-diff'],
+      {
+        cwd: worktreePath,
+        maxBuffer: MAX_STAGED_COMMIT_CONTEXT_BYTES
+      }
+    )
+    stagedPatch = patchResult.stdout
+  } catch (error) {
+    if (!isMaxBufferOverflowError(error)) {
+      throw error
     }
-  )
+    // Why: a very large staged diff overflows maxBuffer (ENOBUFS). The patch is
+    // optional context that gets truncated to STAGED_DIFF_BYTE_BUDGET anyway, so
+    // degrade to the file-name summary instead of failing commit-message generation.
+    console.warn(
+      '[git] Staged patch too large to read; using file summary only:',
+      describeMaxBufferOverflowError(error)
+    )
+  }
 
   return {
     branch: branchResult.stdout.trim() || null,

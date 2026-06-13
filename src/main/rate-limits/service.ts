@@ -189,9 +189,10 @@ export class RateLimitService {
     this.detachWindowListeners = detachWindowListeners
   }
 
-  start(): void {
-    // Fire initial fetch immediately on start
-    void this.fetchAll()
+  start(options: { fetchImmediately?: boolean } = {}): void {
+    if (options.fetchImmediately !== false) {
+      void this.fetchAll()
+    }
     this.startTimer()
   }
 

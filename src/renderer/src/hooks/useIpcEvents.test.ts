@@ -3,6 +3,7 @@ import type * as ReactModule from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   buildNewWorkspaceShortcutModalData,
+  openNewWorkspaceFromShortcut,
   resolveBrowserSessionTabTarget,
   resolveZoomTarget
 } from './useIpcEvents'
@@ -344,16 +345,8 @@ describe('buildNewWorkspaceShortcutModalData', () => {
       number: 0,
       title: 'Fix Linear context handoff',
       url: 'https://linear.app/acme/issue/ENG-123/fix-linear-context-handoff',
-      linearIdentifier: 'ENG-123',
-      linkedContext: {
-        provider: 'linear',
-        version: 1
-      }
+      linearIdentifier: 'ENG-123'
     })
-    expect(data.linkedWorkItem?.linkedContext?.renderedText).toContain('Identifier: ENG-123')
-    expect(data.linkedWorkItem?.linkedContext?.renderedText).toContain(
-      'URL: https://linear.app/acme/issue/ENG-123/fix-linear-context-handoff'
-    )
   })
 
   it('does not reuse stale task context outside the Tasks view', () => {
@@ -377,6 +370,36 @@ describe('buildNewWorkspaceShortcutModalData', () => {
     } as never)
 
     expect(data).toEqual({ telemetrySource: 'shortcut' })
+  })
+})
+
+describe('openNewWorkspaceFromShortcut', () => {
+  it('opens the composer even when no project has been added yet', () => {
+    const openModal = vi.fn()
+
+    openNewWorkspaceFromShortcut({
+      activeModal: 'none',
+      activeView: 'terminal',
+      taskPageData: {},
+      openModal
+    } as never)
+
+    expect(openModal).toHaveBeenCalledWith('new-workspace-composer', {
+      telemetrySource: 'shortcut'
+    })
+  })
+
+  it('does not reopen the composer when it is already active', () => {
+    const openModal = vi.fn()
+
+    openNewWorkspaceFromShortcut({
+      activeModal: 'new-workspace-composer',
+      activeView: 'terminal',
+      taskPageData: {},
+      openModal
+    } as never)
+
+    expect(openModal).not.toHaveBeenCalled()
   })
 })
 

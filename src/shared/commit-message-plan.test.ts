@@ -94,6 +94,36 @@ describe('planCommitMessageGeneration', () => {
     })
   })
 
+  it('plans Amp execute generation without the removed archive flag', () => {
+    const result = planCommitMessageGeneration(
+      {
+        agentId: 'amp',
+        model: 'large',
+        thinkingLevel: 'medium'
+      },
+      'PROMPT'
+    )
+
+    expect(result).toEqual({
+      ok: true,
+      plan: {
+        binary: 'amp',
+        args: [
+          '--execute',
+          '--no-notifications',
+          '--no-ide',
+          '--no-jetbrains',
+          '--mode',
+          'large',
+          '--effort',
+          'medium'
+        ],
+        stdinPayload: 'PROMPT',
+        label: 'Amp'
+      }
+    })
+  })
+
   it('allows discovered dynamic models that are not in the seed catalog', () => {
     const result = planCommitMessageGeneration(
       {
@@ -182,6 +212,124 @@ describe('planCommitMessageGeneration', () => {
         ],
         stdinPayload: 'PROMPT'
       }
+    })
+  })
+
+  it('appends per-action CLI arguments after the built-in model args for stdin agents', () => {
+    const result = planCommitMessageGeneration(
+      {
+        agentId: 'codex',
+        model: 'gpt-5.4-mini',
+        agentArgs: '--model gpt-5.5 --sandbox read-only'
+      },
+      'PROMPT'
+    )
+
+    expect(result).toMatchObject({
+      ok: true,
+      plan: {
+        args: [
+          'exec',
+          '--ephemeral',
+          '--skip-git-repo-check',
+          '-s',
+          'read-only',
+          '--model',
+          'gpt-5.4-mini',
+          '--model',
+          'gpt-5.5',
+          '--sandbox',
+          'read-only'
+        ],
+        stdinPayload: 'PROMPT'
+      }
+    })
+  })
+
+  it('appends per-action CLI arguments for stdin agents', () => {
+    const result = planCommitMessageGeneration(
+      {
+        agentId: 'opencode',
+        model: 'opencode/gpt-5.4-mini',
+        agentArgs: '--model opencode/gpt-5.5'
+      },
+      'PROMPT'
+    )
+
+    expect(result).toMatchObject({
+      ok: true,
+      plan: {
+        args: [
+          'run',
+          '--model',
+          'opencode/gpt-5.4-mini',
+          '--agent',
+          'build',
+          '--format',
+          'default',
+          '--model',
+          'opencode/gpt-5.5'
+        ],
+        stdinPayload: 'PROMPT'
+      }
+    })
+  })
+
+  it('keeps custom per-action CLI arguments before a positional prompt', () => {
+    const result = planCommitMessageGeneration(
+      {
+        agentId: 'custom',
+        model: '',
+        customAgentCommand: 'agent --message {prompt}',
+        agentArgs: '--model gpt-5.5'
+      },
+      'PROMPT'
+    )
+
+    expect(result).toEqual({
+      ok: true,
+      plan: {
+        binary: 'agent',
+        args: ['--message', '--model', 'gpt-5.5', 'PROMPT'],
+        stdinPayload: null,
+        label: 'agent'
+      }
+    })
+  })
+
+  it('appends custom per-action CLI arguments when the prompt is sent on stdin', () => {
+    const result = planCommitMessageGeneration(
+      {
+        agentId: 'custom',
+        model: '',
+        customAgentCommand: 'agent --message',
+        agentArgs: '--model gpt-5.5'
+      },
+      'PROMPT'
+    )
+
+    expect(result).toMatchObject({
+      ok: true,
+      plan: {
+        args: ['--message', '--model', 'gpt-5.5'],
+        stdinPayload: 'PROMPT'
+      }
+    })
+  })
+
+  it('rejects invalid per-action CLI arguments before spawning', () => {
+    const result = planCommitMessageGeneration(
+      {
+        agentId: 'claude',
+        model: 'haiku',
+        agentArgs: '--model "unterminated'
+      },
+      'PROMPT'
+    )
+
+    expect(result).toEqual({
+      ok: false,
+      error: 'CLI arguments are invalid: Unclosed quote in command template.'
     })
   })
 

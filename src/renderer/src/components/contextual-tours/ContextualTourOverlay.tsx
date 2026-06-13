@@ -10,17 +10,11 @@ import {
   trackContextualTourOutcome,
   trackContextualTourShown
 } from '@/lib/feature-education-telemetry'
-import { formatShortcutLabel } from '@/hooks/useShortcutLabel'
+import { isContextualTourAllowedForModal } from './contextual-tour-gate'
 import {
-  getContextualTourStepCopy,
-  getContextualTourStepProgress,
-  getContextualTourOutcomeStepTotal,
-  getMeasurableContextualTourTarget,
-  getContextualTourPanelHost,
-  getVisibleContextualTourStepIndexes,
-  isContextualTourAllowedForModal
-} from './contextual-tour-gate'
-import { getContextualTourOverlayPanelPosition } from './contextual-tour-overlay-position'
+  getContextualTourCleanupOutcome,
+  measureContextualTourOverlayRenderState
+} from './contextual-tour-overlay-measurement'
 import {
   ContextualTourOverlaySurface,
   getContextualTourFocusableElements,
@@ -167,62 +161,33 @@ export function ContextualTourOverlay(): JSX.Element | null {
       return
     }
 
-    const targetExists = (selector: string): boolean =>
-      getMeasurableContextualTourTarget(selector) !== null
-    const visibleStepIndexes = getVisibleContextualTourStepIndexes(activeTour, targetExists)
     telemetryDefinedStepCountRef.current = activeTour.steps.length
+    const measurement = measureContextualTourOverlayRenderState({
+      tour: activeTour,
+      activeStepIndex,
+      sidebarOpen,
+      keybindings,
+      previousTelemetryTotalSteps: telemetryTotalStepsRef.current
+    })
     telemetryTotalStepsRef.current = Math.max(
       telemetryTotalStepsRef.current,
-      getContextualTourOutcomeStepTotal(visibleStepIndexes)
+      measurement.kind === 'render' ? measurement.telemetryTotalSteps : 0
     )
-    const activeStep = activeTour.steps[activeStepIndex]
-    const target = activeStep ? getMeasurableContextualTourTarget(activeStep.targetSelector) : null
-    const progress = getContextualTourStepProgress({
-      visibleStepIndexes,
-      stepIndex: activeStepIndex
-    })
 
-    if (visibleStepIndexes.length === 0) {
+    if (measurement.kind === 'advance') {
+      advanceContextualTour()
+      return
+    }
+    if (measurement.kind === 'wait') {
+      return
+    }
+    if (measurement.kind === 'cancel') {
       emitContextualTourOutcome('cancelled')
       cancelContextualTour(activeTourId)
       return
     }
 
-    if (!activeStep || !target || !progress) {
-      const hasLaterStep = visibleStepIndexes.some((index) => index > activeStepIndex)
-      if (hasLaterStep) {
-        advanceContextualTour()
-      } else {
-        emitContextualTourOutcome('cancelled')
-        cancelContextualTour(activeTourId)
-      }
-      return
-    }
-
-    // Why: the "Show worktrees" CTA only opens the sidebar; when it's already
-    // open the button is a no-op, so fall back to a plain Next and drop the Skip.
-    const sidebarAlreadyVisible = activeStep.primaryAction?.kind === 'show-worktrees' && sidebarOpen
-    const primaryAction = sidebarAlreadyVisible
-      ? ({ kind: 'next', label: 'Next' } as const)
-      : activeStep.primaryAction
-    const secondaryAction = sidebarAlreadyVisible ? undefined : activeStep.secondaryAction
-
-    setRenderState({
-      rect: target.rect,
-      targetElement: target.element,
-      progress,
-      title: activeStep.title,
-      body: formatContextualTourStepCopy(getContextualTourStepCopy(activeStep), keybindings),
-      control: activeStep.control,
-      primaryAction,
-      secondaryAction,
-      preferredPlacement: activeStep.preferredPlacement,
-      targetPulse: activeStep.targetPulse,
-      hidePrimaryAction: activeStep.hidePrimaryAction,
-      isLastStep: progress.current === progress.total,
-      isFirstStep: progress.current === 1,
-      panelHost: getContextualTourPanelHost(target.element)
-    })
+    setRenderState(measurement.renderState)
   }, [
     activeStepIndex,
     activeTour,
@@ -370,25 +335,11 @@ export function ContextualTourOverlay(): JSX.Element | null {
     })
   }
 
-  const viewport = {
-    width: typeof window === 'undefined' ? 1024 : window.innerWidth,
-    height: typeof window === 'undefined' ? 768 : window.innerHeight
-  }
-  const { panelPosition, panelPlacement } = getContextualTourOverlayPanelPosition({
-    targetRect: renderState.rect,
-    panelElement: panelRef.current,
-    panelHost: renderState.panelHost,
-    preferredPlacement: renderState.preferredPlacement,
-    viewport
-  })
-
   return (
     <ContextualTourOverlaySurface
       activeTourId={activeTourId}
       renderState={renderState}
       panelRef={panelRef}
-      panelPosition={panelPosition}
-      panelPlacement={panelPlacement}
       panelHost={renderState.panelHost}
       onSkip={(id) => {
         emitContextualTourOutcome('skipped')
@@ -408,20 +359,4 @@ export function ContextualTourOverlay(): JSX.Element | null {
   )
 }
 
-export function getContextualTourCleanupOutcome(
-  activeTourId: ContextualTourId
-): ContextualTourOutcome {
-  return useAppStore.getState().lastCompletedContextualTourId === activeTourId
-    ? 'completed'
-    : 'cancelled'
-}
-
-function formatContextualTourStepCopy(
-  copy: string,
-  keybindings: Parameters<typeof formatShortcutLabel>[1]
-): string {
-  return copy.replace(
-    '{terminal.splitRight}',
-    formatShortcutLabel('terminal.splitRight', keybindings)
-  )
-}
+export { getContextualTourCleanupOutcome } from './contextual-tour-overlay-measurement'

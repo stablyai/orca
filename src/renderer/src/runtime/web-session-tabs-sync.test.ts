@@ -17,6 +17,7 @@ import {
   shouldApplyWebSessionTabsSnapshot,
   shouldBootstrapInitialWebRuntimeTerminal,
   shouldRespawnWebRuntimeTerminalAfterWake,
+  shouldSyncRuntimeSessionTabs,
   type WebSessionTabsSyncState
 } from './web-session-tabs-sync'
 
@@ -189,6 +190,31 @@ describe('applyWebSessionTabsSnapshot', () => {
         hasLiveLocalPty: false
       })
     ).toBe(true)
+  })
+
+  it('syncs session tabs for desktop remote runtime clients, not only web clients', () => {
+    vi.stubGlobal('__ORCA_WEB_CLIENT__', false)
+
+    expect(
+      shouldSyncRuntimeSessionTabs({
+        activeRuntimeEnvironmentId: ENV,
+        workspaceSessionReady: true
+      })
+    ).toBe(true)
+    expect(
+      shouldSyncRuntimeSessionTabs({
+        activeRuntimeEnvironmentId: ENV,
+        activeWorktreeId: WT,
+        workspaceSessionReady: true,
+        requireActiveWorktree: true
+      })
+    ).toBe(true)
+    expect(
+      shouldSyncRuntimeSessionTabs({
+        activeRuntimeEnvironmentId: null,
+        workspaceSessionReady: true
+      })
+    ).toBe(false)
   })
 
   it('clears web session tracking maps when the host removes a worktree snapshot', () => {
@@ -525,6 +551,38 @@ describe('applyWebSessionTabsSnapshot', () => {
     })
     expect(patch.activeTabId).toBe(mirroredId)
     expect(patch.activeTabIdByWorktree?.[WT]).toBe(mirroredId)
+  })
+
+  it('preserves quick command labels from host terminal surfaces', () => {
+    const patch = applyWebSessionTabsSnapshot(
+      makeState(),
+      makeSnapshot([
+        {
+          type: 'terminal',
+          id: HOST_SURFACE_ID,
+          title: 'Run tests',
+          quickCommandLabel: 'Run tests',
+          parentTabId: 'host-tab-1',
+          leafId: LEAF_ID,
+          isActive: true,
+          status: 'ready',
+          terminal: 'terminal-1'
+        }
+      ]),
+      ENV,
+      NOW
+    ) as Partial<WebSessionTabsSyncState>
+
+    const mirroredId = patch.tabsByWorktree?.[WT]?.[0]?.id
+    expect(patch.tabsByWorktree?.[WT]?.[0]).toMatchObject({
+      id: mirroredId,
+      quickCommandLabel: 'Run tests',
+      title: 'Run tests'
+    })
+    expect(
+      patch.unifiedTabsByWorktree?.[WT]?.find((tab) => tab.entityId === mirroredId)
+        ?.quickCommandLabel
+    ).toBe('Run tests')
   })
 
   it('removes stale scrollback refs from mirrored terminal layouts', () => {

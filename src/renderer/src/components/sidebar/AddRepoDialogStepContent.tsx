@@ -8,6 +8,7 @@ import { AddRepoNestedImportStep } from './AddRepoNestedImportStep'
 import type { AddRepoDialogStep } from './add-repo-dialog-types'
 import type { NestedRepoScanResult } from '../../../../shared/types'
 import type { SshConnectionState, SshTarget } from '../../../../shared/ssh-types'
+import type { GitAvailability } from './create-project-defaults'
 
 type AddRepoDialogStepContentProps = {
   step: AddRepoDialogStep
@@ -37,9 +38,12 @@ type AddRepoDialogStepContentProps = {
   nestedGroupName: string
   createName: string
   createParent: string
-  createKind: 'git' | 'folder'
   createError: string | null
   isCreating: boolean
+  createDefaultParent: string
+  createGitAvailability: GitAvailability
+  createRuntimeParentStatus: 'idle' | 'checking' | 'failed'
+  createParentDefaultPending: boolean
   onBrowse: () => void
   onOpenCloneStep: () => void
   onOpenCreateStep: () => void
@@ -62,7 +66,6 @@ type AddRepoDialogStepContentProps = {
   onImportNestedRepos: (mode: 'group' | 'separate') => void
   onCreateNameChange: (name: string) => void
   onCreateParentChange: (parent: string) => void
-  onCreateKindChange: (kind: 'git' | 'folder') => void
   onPickCreateParent: () => void
   onCreate: () => void
 }
@@ -95,9 +98,12 @@ export function AddRepoDialogStepContent({
   nestedGroupName,
   createName,
   createParent,
-  createKind,
   createError,
   isCreating,
+  createDefaultParent,
+  createGitAvailability,
+  createRuntimeParentStatus,
+  createParentDefaultPending,
   onBrowse,
   onOpenCloneStep,
   onOpenCreateStep,
@@ -120,7 +126,6 @@ export function AddRepoDialogStepContent({
   onImportNestedRepos,
   onCreateNameChange,
   onCreateParentChange,
-  onCreateKindChange,
   onPickCreateParent,
   onCreate
 }: AddRepoDialogStepContentProps): React.JSX.Element | null {
@@ -200,7 +205,6 @@ export function AddRepoDialogStepContent({
         scan={nestedScan}
         groupName={nestedGroupName}
         selectedPaths={nestedSelectedPaths}
-        isFirstRepoImport={repoCount === 0}
         isAdding={isAdding}
         scanInProgress={nestedScanInProgress}
         onGroupNameChange={onNestedGroupNameChange}
@@ -216,14 +220,16 @@ export function AddRepoDialogStepContent({
       <CreateStep
         createName={createName}
         createParent={createParent}
-        createKind={createKind}
         createError={createError}
         isCreating={isCreating}
+        defaultParent={createDefaultParent}
+        gitAvailability={createGitAvailability}
+        runtimeParentStatus={createRuntimeParentStatus}
+        parentDefaultPending={createParentDefaultPending}
         manualParentEntry={isRuntimeEnvironmentActive}
         runtimeEnvironmentId={activeRuntimeEnvironmentId}
         onNameChange={onCreateNameChange}
         onParentChange={onCreateParentChange}
-        onKindChange={onCreateKindChange}
         onPickParent={onPickCreateParent}
         onCreate={onCreate}
       />

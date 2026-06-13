@@ -9,6 +9,9 @@ export const FLUSH_CARD_CONTENT_PULLBACK = 4
 // Why: even at zero indent a flush card keeps this minimal left inset so its
 // surface never sits hard against the sidebar edge.
 export const FLUSH_CARD_MIN_CONTENT_INSET = 2
+// Why: grouped workspace cards should move their surface inward without using
+// the full tree step, preserving the existing compact child-card rhythm.
+const GROUPED_WORKTREE_CARD_SURFACE_INDENT = 14
 export const PROJECT_GROUP_HEADER_BASE_PADDING = 10
 // Why: workspace/status headers and project headers occupy the same sidebar
 // row role, so their titles should not shift when switching grouping modes.
@@ -35,4 +38,11 @@ export function getWorktreeCardContentIndent(args: {
   const groupSteps = args.isGrouped ? clampDepth(args.groupDepth) + 1 : 0
   const projectCardIndent = args.isGrouped ? PROJECT_WORKTREE_CARD_EXTRA_INDENT : 0
   return (groupSteps + clampDepth(args.lineageDepth)) * SIDEBAR_TREE_INDENT + projectCardIndent
+}
+
+export function getWorktreeCardSurfaceInset(args: {
+  isGrouped: boolean
+  groupDepth: number
+}): number {
+  return args.isGrouped ? clampDepth(args.groupDepth) * GROUPED_WORKTREE_CARD_SURFACE_INDENT : 0
 }

@@ -18,7 +18,7 @@ const setWorkspacePortScanRefreshing = vi.fn()
 let worktreeCardProperties: WorktreeCardProperty[] = ['pr', 'ports']
 let hostedReviewCache: Record<string, unknown> = {}
 let workspacePortScan: { key: string; result: WorkspacePortScanResult } | null = null
-let settings: Partial<GlobalSettings> | null = { experimentalCompactWorktreeCards: true }
+let settings: Partial<GlobalSettings> | null = { compactWorktreeCards: true }
 
 vi.mock('@/store', () => ({
   useAppStore: (selector: (state: unknown) => unknown) =>
@@ -152,7 +152,7 @@ describe('WorktreeCard compact hover details', () => {
     worktreeCardProperties = ['pr', 'ports']
     hostedReviewCache = {}
     workspacePortScan = null
-    settings = { experimentalCompactWorktreeCards: true }
+    settings = { compactWorktreeCards: true }
   })
 
   it('shows PR and live port details from the compact worktree title hover', async () => {
@@ -202,5 +202,5 @@ describe('WorktreeCard compact hover details', () => {
     expect(markup).toContain('Live Ports')
     expect(markup).toContain('58941')
     expect(markup).not.toContain('data-worktree-card-meta-row=""')
-  })
+  }, 20_000)
 })

@@ -29,6 +29,8 @@ import { createDetectedAgentsSlice } from './slices/detected-agents'
 import { createWorktreeNavHistorySlice } from './slices/worktree-nav-history'
 import { createDictationSlice } from './slices/dictation'
 import { createWorkspaceCleanupSlice } from './slices/workspace-cleanup'
+import { createPullRequestGenerationSlice } from './slices/pull-request-generation'
+import { createCommitMessageGenerationSlice } from './slices/commit-message-generation'
 import { e2eConfig } from '@/lib/e2e-config'
 import { registerHttpLinkStoreAccessor } from '@/lib/http-link-routing'
 
@@ -61,7 +63,9 @@ export const useAppStore = create<AppState>()((...a) => ({
   ...createDetectedAgentsSlice(...a),
   ...createWorktreeNavHistorySlice(...a),
   ...createDictationSlice(...a),
-  ...createWorkspaceCleanupSlice(...a)
+  ...createWorkspaceCleanupSlice(...a),
+  ...createPullRequestGenerationSlice(...a),
+  ...createCommitMessageGenerationSlice(...a)
 }))
 
 registerHttpLinkStoreAccessor(() => useAppStore.getState())

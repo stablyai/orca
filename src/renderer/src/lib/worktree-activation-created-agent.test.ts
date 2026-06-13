@@ -208,7 +208,8 @@ describe('activateAndRevealWorktree created agent reopen', () => {
     expect(result).toEqual({ primaryTabId: reopenedTab?.id })
     expect(reopenedTab).toBeDefined()
     expect(state.pendingStartupByTabId[reopenedTab!.id]).toEqual({
-      command: 'codex',
+      command: "codex '--dangerously-bypass-approvals-and-sandbox'",
+      env: {},
       telemetry: {
         agent_kind: 'codex',
         launch_source: 'sidebar',
@@ -293,7 +294,7 @@ describe('activateAndRevealWorktree created agent reopen', () => {
     expect(result).toEqual({ primaryTabId: null })
     expect(resumedTab?.launchAgent).toBe('codex')
     expect(state.pendingStartupByTabId[resumedTab!.id]).toEqual({
-      command: "codex 'resume' 'codex-session-1'",
+      command: "codex '--dangerously-bypass-approvals-and-sandbox' 'resume' 'codex-session-1'",
       telemetry: {
         agent_kind: 'codex',
         launch_source: 'sidebar',

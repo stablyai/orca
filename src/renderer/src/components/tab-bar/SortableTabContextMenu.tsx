@@ -7,18 +7,69 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import type { TerminalTab } from '../../../../shared/types'
+import { translate } from '@/i18n/i18n'
 
 const TAB_COLORS = [
-  { label: 'None', value: null },
-  { label: 'Blue', value: '#3b82f6' },
-  { label: 'Purple', value: '#a855f7' },
-  { label: 'Pink', value: '#ec4899' },
-  { label: 'Red', value: '#ef4444' },
-  { label: 'Orange', value: '#f97316' },
-  { label: 'Yellow', value: '#eab308' },
-  { label: 'Green', value: '#22c55e' },
-  { label: 'Teal', value: '#14b8a6' },
-  { label: 'Gray', value: '#9ca3af' }
+  {
+    get label() {
+      return translate('auto.components.tab.bar.SortableTabContextMenu.20baa43c05', 'None')
+    },
+    value: null
+  },
+  {
+    get label() {
+      return translate('auto.components.tab.bar.SortableTabContextMenu.cb3eadefd2', 'Blue')
+    },
+    value: '#3b82f6'
+  },
+  {
+    get label() {
+      return translate('auto.components.tab.bar.SortableTabContextMenu.c2d8b0991f', 'Purple')
+    },
+    value: '#a855f7'
+  },
+  {
+    get label() {
+      return translate('auto.components.tab.bar.SortableTabContextMenu.03cf6dab1a', 'Pink')
+    },
+    value: '#ec4899'
+  },
+  {
+    get label() {
+      return translate('auto.components.tab.bar.SortableTabContextMenu.620aec6729', 'Red')
+    },
+    value: '#ef4444'
+  },
+  {
+    get label() {
+      return translate('auto.components.tab.bar.SortableTabContextMenu.a47629b3cf', 'Orange')
+    },
+    value: '#f97316'
+  },
+  {
+    get label() {
+      return translate('auto.components.tab.bar.SortableTabContextMenu.69682e2ce4', 'Yellow')
+    },
+    value: '#eab308'
+  },
+  {
+    get label() {
+      return translate('auto.components.tab.bar.SortableTabContextMenu.be905e9b0a', 'Green')
+    },
+    value: '#22c55e'
+  },
+  {
+    get label() {
+      return translate('auto.components.tab.bar.SortableTabContextMenu.845576bed1', 'Teal')
+    },
+    value: '#14b8a6'
+  },
+  {
+    get label() {
+      return translate('auto.components.tab.bar.SortableTabContextMenu.7703990447', 'Gray')
+    },
+    value: '#9ca3af'
+  }
 ] as const
 
 type SortableTabContextMenuProps = {
@@ -67,39 +118,48 @@ export function SortableTabContextMenu({
       <DropdownMenuContent className="w-48" sideOffset={0} align="start">
         <DropdownMenuItem onSelect={() => onSplitGroup('up', tab.id)}>
           <Rows2 className="mr-1.5 size-3.5" />
-          Split Up
+          {translate('auto.components.tab.bar.SortableTabContextMenu.591f9b12c1', 'Split Up')}
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={() => onSplitGroup('down', tab.id)}>
           <Rows2 className="mr-1.5 size-3.5" />
-          Split Down
+          {translate('auto.components.tab.bar.SortableTabContextMenu.af80ed83c1', 'Split Down')}
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={() => onSplitGroup('left', tab.id)}>
           <Columns2 className="mr-1.5 size-3.5" />
-          Split Left
+          {translate('auto.components.tab.bar.SortableTabContextMenu.0ce4bae39d', 'Split Left')}
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={() => onSplitGroup('right', tab.id)}>
           <Columns2 className="mr-1.5 size-3.5" />
-          Split Right
+          {translate('auto.components.tab.bar.SortableTabContextMenu.21132389e9', 'Split Right')}
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={onTogglePin}>
           {isPinned ? <PinOff className="mr-1.5 size-3.5" /> : <Pin className="mr-1.5 size-3.5" />}
-          {isPinned ? 'Unpin Tab' : 'Pin Tab'}
+          {isPinned
+            ? translate('auto.components.tab.bar.SortableTabContextMenu.417722e9c2', 'Unpin Tab')
+            : translate('auto.components.tab.bar.SortableTabContextMenu.60f958ec75', 'Pin Tab')}
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={() => !isPinned && onClose(tab.id)} disabled={isPinned}>
-          Close
+          {translate('auto.components.tab.bar.SortableTabContextMenu.89359a36f7', 'Close')}
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={() => onCloseOthers(tab.id)} disabled={tabCount <= 1}>
-          Close Others
+          {translate('auto.components.tab.bar.SortableTabContextMenu.8d16f9cd30', 'Close Others')}
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={() => onCloseToRight(tab.id)} disabled={!hasTabsToRight}>
-          Close Tabs To The Right
+          {translate(
+            'auto.components.tab.bar.SortableTabContextMenu.c1ee099c7e',
+            'Close Tabs To The Right'
+          )}
         </DropdownMenuItem>
         <DropdownMenuSeparator />
-        <DropdownMenuItem onSelect={onRenameOpen}>Change Title</DropdownMenuItem>
+        <DropdownMenuItem onSelect={onRenameOpen}>
+          {translate('auto.components.tab.bar.SortableTabContextMenu.2f697b3c31', 'Change Title')}
+        </DropdownMenuItem>
         <div className="px-2 pt-1.5 pb-1">
-          <div className="text-xs font-medium text-muted-foreground mb-1.5">Tab Color</div>
+          <div className="text-xs font-medium text-muted-foreground mb-1.5">
+            {translate('auto.components.tab.bar.SortableTabContextMenu.35e8892fd0', 'Tab Color')}
+          </div>
           <div className="flex flex-wrap gap-2">
             {TAB_COLORS.map((color) => {
               const isSelected = tab.color === color.value

@@ -290,6 +290,8 @@ export function mergeWorktree(
     linkedIssue: meta?.linkedIssue ?? null,
     linkedPR: meta?.linkedPR ?? null,
     linkedLinearIssue: meta?.linkedLinearIssue ?? null,
+    linkedLinearIssueWorkspaceId: meta?.linkedLinearIssueWorkspaceId ?? null,
+    linkedLinearIssueOrganizationUrlKey: meta?.linkedLinearIssueOrganizationUrlKey ?? null,
     linkedGitLabMR: meta?.linkedGitLabMR ?? null,
     linkedGitLabIssue: meta?.linkedGitLabIssue ?? null,
     isArchived: meta?.isArchived ?? false,
@@ -302,6 +304,9 @@ export function mergeWorktree(
     ...(meta?.createdWithAgent !== undefined ? { createdWithAgent: meta.createdWithAgent } : {}),
     ...(meta?.pendingFirstAgentMessageRename !== undefined
       ? { pendingFirstAgentMessageRename: meta.pendingFirstAgentMessageRename }
+      : {}),
+    ...(meta?.firstAgentMessageRenameError !== undefined
+      ? { firstAgentMessageRenameError: meta.firstAgentMessageRenameError }
       : {}),
     ...(git.isSparse === true
       ? {

@@ -7,11 +7,12 @@ import {
 import type { AgentStartupPlan } from '@/lib/tui-agent-startup'
 import { isShellProcess } from '@/lib/tui-agent-startup'
 import type { LinkedWorkItemContext } from '@/lib/linked-work-item-context'
-import type { OrcaHooks, TaskViewPresetId } from '../../../shared/types'
+import type { FolderWorkspaceLinkedTask, OrcaHooks, TaskViewPresetId } from '../../../shared/types'
 import { resolveHookCommandSourcePolicy } from '../../../shared/hook-command-source-policy'
 import { isExpectedAgentProcess } from '../../../shared/agent-process-recognition'
 import { slugifyForWorkspaceName } from '../../../shared/workspace-name'
 export { getLinkedWorkItemSuggestedName } from '../../../shared/workspace-name'
+export { getLinkedWorkItemWorkspaceName } from '../../../shared/workspace-name'
 export { getWorkspaceIntentName } from '../../../shared/workspace-name'
 
 /**
@@ -46,17 +47,12 @@ export const CLIENT_PLATFORM: NodeJS.Platform = navigator.userAgent.includes('Wi
     ? 'darwin'
     : 'linux'
 
-export type { LinkedWorkItemContext } from '@/lib/linked-work-item-context'
 export { getLinkedWorkItemProvider, isGitLabIssueUrl } from './linked-work-item-provider'
 
-export type LinkedWorkItemSummary = {
-  type: 'issue' | 'pr' | 'mr'
-  provider?: 'github' | 'gitlab' | 'linear' | 'jira'
-  number: number
-  title: string
-  url: string
-  linearIdentifier?: string
-  jiraIdentifier?: string
+export type LinkedWorkItemSummary = Omit<FolderWorkspaceLinkedTask, 'provider'> & {
+  provider?: FolderWorkspaceLinkedTask['provider']
+  linearWorkspaceId?: string
+  linearOrganizationUrlKey?: string
   linkedContext?: LinkedWorkItemContext
 }
 

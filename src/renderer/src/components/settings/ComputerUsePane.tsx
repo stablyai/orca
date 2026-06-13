@@ -1,17 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import {
-  Accessibility,
-  Camera,
-  ExternalLink,
-  MonitorCog,
-  RefreshCw,
-  ShieldCheck
-} from 'lucide-react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { ExternalLink, MonitorCog, RefreshCw, ShieldCheck } from 'lucide-react'
 import { toast } from 'sonner'
+import type { SkillDiscoveryTarget } from '../../../../shared/skills'
+import type { GlobalSettings } from '../../../../shared/types'
 import type {
   ComputerUsePermissionId,
-  ComputerUsePermissionState,
-  ComputerUsePermissionStatus
+  ComputerUsePermissionState
 } from '../../../../shared/computer-use-permissions-types'
 import {
   COMPUTER_USE_SKILL_INSTALL_COMMAND,
@@ -19,7 +13,8 @@ import {
 } from '@/lib/agent-feature-install-commands'
 import {
   AGENT_SKILL_CLI_PREREQUISITE_NOTICE,
-  ensureOrcaCliAvailableForAgentSkillTerminal
+  ensureOrcaCliAvailableForAgentSkillTerminal,
+  isOrcaCliAvailableOnPath
 } from '@/lib/agent-skill-cli-prerequisite'
 import {
   GLOBAL_AGENT_SKILL_SOURCE_KINDS,
@@ -29,50 +24,32 @@ import { useAppStore } from '@/store'
 import { Button } from '../ui/button'
 import { Badge } from '../ui/badge'
 import { AgentSkillSetupPanel } from './AgentSkillSetupPanel'
-export { COMPUTER_USE_PANE_SEARCH_ENTRIES } from './computer-use-search'
+import {
+  buildSkillInstallCommandForRuntime,
+  ensureWslCliAvailableForAgentSkillTerminal,
+  getAgentSkillTerminalShellOverride,
+  getSkillDiscoveryTargetForRuntime
+} from './CliSkillRuntimeSetup'
+import { getDesktopPlatformFromUserAgent } from './GeneralPane'
+import {
+  COMPUTER_USE_PERMISSIONS,
+  getComputerUsePermissionStatusClass,
+  getComputerUsePermissionStatusLabel
+} from './computer-use-permission-definitions'
+import { getComputerUseSkillRuntime } from './computer-use-skill-runtime'
+import { getComputerUseSummary } from './computer-use-summary'
+import { translate } from '@/i18n/i18n'
+export { getComputerUsePaneSearchEntries } from './computer-use-search'
 
-type PermissionDefinition = {
-  id: ComputerUsePermissionId
-  label: string
-  description: string
-  icon: ReactNode
+type ComputerUsePaneProps = {
+  currentPlatform?: string
+  settings?: GlobalSettings | null
+  wslSupportedPlatform?: boolean
+  wslAvailable?: boolean
+  wslCapabilitiesLoading?: boolean
 }
 
-const PERMISSIONS: PermissionDefinition[] = [
-  {
-    id: 'accessibility',
-    label: 'Accessibility',
-    description: 'Read app interface trees and perform requested actions.',
-    icon: <Accessibility className="size-4" />
-  },
-  {
-    id: 'screenshots',
-    label: 'Screenshots',
-    description: 'Capture app windows so agents can inspect visual state.',
-    icon: <Camera className="size-4" />
-  }
-]
-
-function statusLabel(status: ComputerUsePermissionStatus | undefined): string {
-  switch (status) {
-    case 'granted':
-      return 'Granted'
-    case 'unsupported':
-      return 'macOS only'
-    case 'not-granted':
-    case undefined:
-      return 'Not enabled'
-  }
-}
-
-function statusClass(status: ComputerUsePermissionStatus | undefined): string {
-  if (status === 'granted') {
-    return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
-  }
-  return 'border-border bg-muted text-muted-foreground'
-}
-
-export function ComputerUsePane(): React.JSX.Element {
+export function ComputerUsePane(props: ComputerUsePaneProps = {}): React.JSX.Element {
   const [platform, setPlatform] = useState<NodeJS.Platform | null>(null)
   const [states, setStates] = useState<ComputerUsePermissionState[]>([])
   const [loading, setLoading] = useState(true)
@@ -83,12 +60,35 @@ export function ComputerUsePane(): React.JSX.Element {
   const permissionOperationSequence = useRef(0)
   const mountedRef = useRef(true)
   const [helperUnavailableReason, setHelperUnavailableReason] = useState<string | null>(null)
+  const currentPlatform =
+    props.currentPlatform ??
+    (typeof navigator === 'undefined'
+      ? 'other'
+      : getDesktopPlatformFromUserAgent(navigator.userAgent))
+  const skillRuntime = useMemo(() => getComputerUseSkillRuntime(props), [props])
+  const skillDiscoveryTarget = useMemo<SkillDiscoveryTarget | undefined>(
+    () => getSkillDiscoveryTargetForRuntime(skillRuntime),
+    [skillRuntime]
+  )
+  const skillInstallCommand = buildSkillInstallCommandForRuntime(
+    COMPUTER_USE_SKILL_INSTALL_COMMAND,
+    skillRuntime
+  )
+  const skillTerminalShellOverride = props.settings
+    ? getAgentSkillTerminalShellOverride(currentPlatform, props.settings, skillRuntime)
+    : undefined
+  const getSkillPrerequisiteStatus = () =>
+    skillRuntime.runtime === 'wsl'
+      ? window.api.cli.getWslInstallStatus()
+      : window.api.cli.getInstallStatus()
+
   const {
     installed: computerUseSkillDetected,
     loading: computerUseSkillLoading,
     error: computerUseSkillError,
     refresh: refreshComputerUseSkill
   } = useInstalledAgentSkill(COMPUTER_USE_SKILL_NAME, {
+    discoveryTarget: skillDiscoveryTarget,
     sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
   })
 
@@ -96,30 +96,21 @@ export function ComputerUsePane(): React.JSX.Element {
     () => new Map(states.map((state) => [state.id, state.status] as const)),
     [states]
   )
-  const grantedCount = PERMISSIONS.filter(
+  const grantedCount = COMPUTER_USE_PERMISSIONS.filter(
     (permission) => stateById.get(permission.id) === 'granted'
   ).length
-  const allGranted = grantedCount === PERMISSIONS.length
+  const allGranted = grantedCount === COMPUTER_USE_PERMISSIONS.length
   const checking = loading && states.length === 0
   const setupUnavailable = helperUnavailableReason !== null
   const resetAccessDisabled =
     resetting || loading || states.length === 0 || pendingId !== null || setupUnavailable
-  const summaryTitle = checking
-    ? 'Checking Computer Use access.'
-    : setupUnavailable
-      ? 'Computer Use is unavailable.'
-      : allGranted
-        ? 'Computer Use is ready.'
-        : 'Finish setup to use local apps.'
-  const summaryDescription = checking
-    ? 'Orca is checking macOS privacy permissions for the Computer Use helper.'
-    : setupUnavailable
-      ? `Computer Use permissions are unavailable because ${helperUnavailableReason}.`
-      : allGranted
-        ? 'Agents can inspect and operate app windows when you ask.'
-        : `${PERMISSIONS.length - grantedCount} permission${
-            PERMISSIONS.length - grantedCount === 1 ? '' : 's'
-          } required before agents can operate app windows.`
+  const { title: summaryTitle, description: summaryDescription } = getComputerUseSummary({
+    checking,
+    setupUnavailable,
+    allGranted,
+    helperUnavailableReason,
+    requiredPermissionCount: COMPUTER_USE_PERMISSIONS.length - grantedCount
+  })
 
   useEffect(() => {
     mountedRef.current = true
@@ -152,7 +143,12 @@ export function ComputerUsePane(): React.JSX.Element {
         return
       }
       toast.error(
-        error instanceof Error ? error.message : 'Could not load Computer Use permissions'
+        error instanceof Error
+          ? error.message
+          : translate(
+              'auto.components.settings.ComputerUsePane.2168fa5ab0',
+              'Could not load Computer Use permissions'
+            )
       )
     } finally {
       if (operationId === permissionOperationSequence.current && mountedRef.current) {
@@ -184,18 +180,34 @@ export function ComputerUsePane(): React.JSX.Element {
         return
       }
       if (result.launchedHelper) {
-        toast.message('Opened macOS Privacy & Security')
+        toast.message(
+          translate(
+            'auto.components.settings.ComputerUsePane.697005758f',
+            'Opened macOS Privacy & Security'
+          )
+        )
       } else {
         toast.message(
           result.platform === 'darwin'
-            ? 'Computer Use setup is already complete'
-            : 'Computer Use permissions are only required on macOS'
+            ? translate(
+                'auto.components.settings.ComputerUsePane.740766c291',
+                'Computer Use setup is already complete'
+              )
+            : translate(
+                'auto.components.settings.ComputerUsePane.7801ac08ec',
+                'Computer Use permissions are only required on macOS'
+              )
         )
       }
     } catch (error) {
       if (mountedRef.current) {
         toast.error(
-          error instanceof Error ? error.message : 'Could not open Computer Use permissions'
+          error instanceof Error
+            ? error.message
+            : translate(
+                'auto.components.settings.ComputerUsePane.5c45349665',
+                'Could not open Computer Use permissions'
+              )
         )
       }
     } finally {
@@ -224,13 +236,23 @@ export function ComputerUsePane(): React.JSX.Element {
       setPlatform(result.platform)
       setStates(result.permissions)
       setHelperUnavailableReason(result.helperUnavailableReason)
-      toast.message('Reset Computer Use access')
+      toast.message(
+        translate(
+          'auto.components.settings.ComputerUsePane.f189f448a3',
+          'Reset Computer Use access'
+        )
+      )
     } catch (error) {
       if (operationId !== permissionOperationSequence.current || !mountedRef.current) {
         return
       }
       toast.error(
-        error instanceof Error ? error.message : 'Could not reset Computer Use permissions'
+        error instanceof Error
+          ? error.message
+          : translate(
+              'auto.components.settings.ComputerUsePane.3383ea1aab',
+              'Could not reset Computer Use permissions'
+            )
       )
     } finally {
       if (operationId === permissionOperationSequence.current && mountedRef.current) {
@@ -257,7 +279,7 @@ export function ComputerUsePane(): React.JSX.Element {
                     variant="outline"
                     className="border-emerald-500/30 text-emerald-700 dark:text-emerald-300"
                   >
-                    Ready
+                    {translate('auto.components.settings.ComputerUsePane.0c29da5805', 'Ready')}
                   </Badge>
                 ) : null}
               </div>
@@ -271,13 +293,13 @@ export function ComputerUsePane(): React.JSX.Element {
               onClick={() => void refresh()}
             >
               <RefreshCw className={`size-3.5 ${loading ? 'animate-spin' : ''}`} />
-              Refresh
+              {translate('auto.components.settings.ComputerUsePane.d95d1cfab8', 'Refresh')}
             </Button>
           </div>
 
           <div className="space-y-2">
             <div className="divide-y divide-border/60 rounded-lg border border-border/60">
-              {PERMISSIONS.map((permission) => {
+              {COMPUTER_USE_PERMISSIONS.map((permission) => {
                 const status = stateById.get(permission.id)
                 const pending = pendingId === permission.id
 
@@ -292,11 +314,11 @@ export function ComputerUsePane(): React.JSX.Element {
                         <div className="flex flex-wrap items-center gap-2">
                           <span className="text-sm font-medium">{permission.label}</span>
                           <span
-                            className={`rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider ${statusClass(
+                            className={`rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider ${getComputerUsePermissionStatusClass(
                               status
                             )}`}
                           >
-                            {statusLabel(status)}
+                            {getComputerUsePermissionStatusLabel(status)}
                           </span>
                         </div>
                         <p className="text-xs text-muted-foreground">{permission.description}</p>
@@ -316,7 +338,7 @@ export function ComputerUsePane(): React.JSX.Element {
                         className="gap-1.5"
                       >
                         <ExternalLink className="size-3.5" />
-                        Open
+                        {translate('auto.components.settings.ComputerUsePane.45f8e22c2e', 'Open')}
                       </Button>
                     </div>
                   </div>
@@ -329,27 +351,43 @@ export function ComputerUsePane(): React.JSX.Element {
               onClick={() => void resetAccess()}
               className="ml-auto mr-4 block w-28 text-right text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
             >
-              {resetting ? 'Resetting access...' : 'Reset access'}
+              {resetting
+                ? translate(
+                    'auto.components.settings.ComputerUsePane.506f2acf7a',
+                    'Resetting access...'
+                  )
+                : translate('auto.components.settings.ComputerUsePane.6b17602073', 'Reset access')}
             </button>
           </div>
         </>
       ) : null}
 
       <AgentSkillSetupPanel
-        title="Computer Use skill"
-        description="Enables agents to inspect and operate local desktop apps."
-        command={COMPUTER_USE_SKILL_INSTALL_COMMAND}
+        title={translate(
+          'auto.components.settings.ComputerUsePane.93255aaf18',
+          'Computer Use skill'
+        )}
+        description={translate(
+          'auto.components.settings.ComputerUsePane.1735461723',
+          'Enables agents to inspect and operate local desktop apps.'
+        )}
+        command={skillInstallCommand}
         terminalTitle="Computer Use setup"
         terminalAriaLabel="Computer Use skill install terminal"
-        terminalWorktreeId="settings-computer-use-skill-terminal"
+        terminalWorktreeId={`settings-computer-use-skill-terminal-${skillRuntime.runtime}`}
+        terminalShellOverride={skillTerminalShellOverride}
         installed={computerUseSkillDetected}
         loading={computerUseSkillLoading}
         error={computerUseSkillError}
         icon={<MonitorCog className="size-5" />}
         preInstallNotice={AGENT_SKILL_CLI_PREREQUISITE_NOTICE}
+        getPrerequisiteStatus={getSkillPrerequisiteStatus}
+        isPrerequisiteAvailable={isOrcaCliAvailableOnPath}
         onBeforeOpenTerminal={async () => {
           useAppStore.getState().recordFeatureInteraction('computer-use-setup')
-          await ensureOrcaCliAvailableForAgentSkillTerminal()
+          await (skillRuntime.runtime === 'wsl'
+            ? ensureWslCliAvailableForAgentSkillTerminal()
+            : ensureOrcaCliAvailableForAgentSkillTerminal())
         }}
         onRecheck={refreshComputerUseSkill}
       />

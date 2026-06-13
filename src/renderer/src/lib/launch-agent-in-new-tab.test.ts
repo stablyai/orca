@@ -95,6 +95,21 @@ describe('launchAgentInNewTab', () => {
     })
   })
 
+  it('passes quick command labels only to locally-created agent tabs', async () => {
+    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
+
+    launchAgentInNewTab({
+      agent: 'codex',
+      worktreeId: 'wt-1',
+      quickCommandLabel: 'Review'
+    })
+
+    expect(mockCreateTab).toHaveBeenCalledWith('wt-1', undefined, undefined, {
+      launchAgent: 'codex',
+      quickCommandLabel: 'Review'
+    })
+  })
+
   it('delegates agent quick launch to the host runtime in paired web clients', async () => {
     mockIsWebRuntimeSessionActive.mockReturnValue(true)
     store.settings = { agentCmdOverrides: {}, activeRuntimeEnvironmentId: 'web-runtime' }
@@ -160,7 +175,7 @@ describe('launchAgentInNewTab', () => {
     expect(mockQueueTabStartupCommand).toHaveBeenCalledWith(
       'tab-1',
       expect.objectContaining({
-        command: "command-code --trust 'fix the spinner'",
+        command: "command-code --trust '--yolo' 'fix the spinner'",
         initialAgentStatus: {
           agent: 'command-code',
           prompt: 'fix the spinner'
@@ -209,7 +224,7 @@ describe('launchAgentInNewTab', () => {
     expect(mockQueueTabStartupCommand).toHaveBeenCalledWith(
       'tab-1',
       expect.objectContaining({
-        command: "claude --prefill 'review Bob''s change'"
+        command: "claude '--dangerously-skip-permissions' --prefill 'review Bob''s change'"
       })
     )
   })
@@ -229,7 +244,7 @@ describe('launchAgentInNewTab', () => {
     expect(mockQueueTabStartupCommand).toHaveBeenCalledWith(
       'tab-1',
       expect.objectContaining({
-        command: 'claude'
+        command: "claude '--dangerously-skip-permissions'"
       })
     )
     expect(mockPasteDraftWhenAgentReady).toHaveBeenCalledWith(
@@ -258,7 +273,7 @@ describe('launchAgentInNewTab', () => {
     expect(mockQueueTabStartupCommand).toHaveBeenCalledWith(
       'tab-1',
       expect.objectContaining({
-        command: 'command-code --trust'
+        command: "command-code --trust '--yolo'"
       })
     )
     expect(mockPasteDraftWhenAgentReady).toHaveBeenCalledWith(
@@ -291,5 +306,24 @@ describe('launchAgentInNewTab', () => {
     await Promise.resolve()
 
     expect(mockTrack).not.toHaveBeenCalledWith('agent_prompt_sent', expect.anything())
+  })
+
+  it('queues per-launch CLI arguments without putting generated prompts in argv', async () => {
+    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
+
+    launchAgentInNewTab({
+      agent: 'codex',
+      worktreeId: 'wt-1',
+      prompt: 'large generated prompt',
+      agentArgs: '--model gpt-5.5',
+      promptDelivery: 'submit-after-ready'
+    })
+
+    expect(mockQueueTabStartupCommand).toHaveBeenCalledWith(
+      'tab-1',
+      expect.objectContaining({
+        command: "codex '--model' 'gpt-5.5'"
+      })
+    )
   })
 })

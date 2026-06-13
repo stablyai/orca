@@ -5,6 +5,8 @@ import {
   getCurrentWorkspaceActionAvailability,
   getWorkspaceScopedActionAvailability
 } from './quick-action-context'
+import { translate } from '@/i18n/i18n'
+import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 
 export type CmdJQuickActionRunResult =
   | { status: 'ok' }
@@ -54,44 +56,76 @@ async function runWorkspaceAction(
 // Why: Cmd+J actions are for high-frequency, safe, context-light verbs.
 // Context-heavy setup flows such as Ghostty import and browser cookie import
 // stay inside their Settings panes where explanatory UI and failure states fit.
-export const CMD_J_QUICK_ACTIONS: readonly CmdJQuickAction[] = [
+export const getCmdJQuickActions = createLocalizedCatalog((): CmdJQuickAction[] => [
   {
     id: 'new-browser-tab',
     kind: 'action',
-    title: 'New Browser Tab',
-    description: 'Open a browser tab in the active workspace.',
+    title: translate('auto.components.cmd.j.quick.actions.892bfa9339', 'New Browser Tab'),
+    description: translate(
+      'auto.components.cmd.j.quick.actions.784812ca24',
+      'Open a browser tab in the active workspace.'
+    ),
     icon: Globe,
-    verbKeywords: ['new browser', 'new browser tab', 'open browser', 'browser tab'],
+    verbKeywords: [
+      translate('auto.components.cmd.j.quick.actions.verbs.newBrowser', 'new browser'),
+      translate('auto.components.cmd.j.quick.actions.verbs.newBrowserTab', 'new browser tab'),
+      translate('auto.components.cmd.j.quick.actions.verbs.openBrowser', 'open browser'),
+      translate('auto.components.cmd.j.quick.actions.verbs.browserTab', 'browser tab')
+    ],
     isAvailable: workspaceActionAvailability,
     run: (ctx) => runWorkspaceAction(ctx, ctx.openNewBrowserTab)
   },
   {
     id: 'new-markdown-file',
     kind: 'action',
-    title: 'New Markdown File',
-    description: 'Create an untitled markdown file in the active workspace.',
+    title: translate('auto.components.cmd.j.quick.actions.25349b66fc', 'New Markdown File'),
+    description: translate(
+      'auto.components.cmd.j.quick.actions.f2a1b33f8d',
+      'Create an untitled markdown file in the active workspace.'
+    ),
     icon: FileText,
-    verbKeywords: ['new markdown', 'new markdown file', 'new mark', 'new file', 'markdown file'],
+    verbKeywords: [
+      translate('auto.components.cmd.j.quick.actions.verbs.newMarkdown', 'new markdown'),
+      translate('auto.components.cmd.j.quick.actions.verbs.newMarkdownFile', 'new markdown file'),
+      translate('auto.components.cmd.j.quick.actions.verbs.newMark', 'new mark'),
+      translate('auto.components.cmd.j.quick.actions.verbs.newFile', 'new file'),
+      translate('auto.components.cmd.j.quick.actions.verbs.markdownFile', 'markdown file')
+    ],
     isAvailable: workspaceActionAvailability,
     run: (ctx) => runWorkspaceAction(ctx, ctx.openNewMarkdownFile)
   },
   {
     id: 'new-terminal-tab',
     kind: 'action',
-    title: 'New Terminal Tab',
-    description: 'Open a terminal tab in the active workspace.',
+    title: translate('auto.components.cmd.j.quick.actions.34980395d4', 'New Terminal Tab'),
+    description: translate(
+      'auto.components.cmd.j.quick.actions.f70812764a',
+      'Open a terminal tab in the active workspace.'
+    ),
     icon: SquareTerminal,
-    verbKeywords: ['new terminal', 'new terminal tab', 'new shell', 'terminal tab'],
+    verbKeywords: [
+      translate('auto.components.cmd.j.quick.actions.verbs.newTerminal', 'new terminal'),
+      translate('auto.components.cmd.j.quick.actions.verbs.newTerminalTab', 'new terminal tab'),
+      translate('auto.components.cmd.j.quick.actions.verbs.newShell', 'new shell'),
+      translate('auto.components.cmd.j.quick.actions.verbs.terminalTab', 'terminal tab')
+    ],
     isAvailable: workspaceActionAvailability,
     run: (ctx) => runWorkspaceAction(ctx, ctx.openNewTerminalTab)
   },
   {
     id: CREATE_WORKSPACE_QUICK_ACTION_ID,
     kind: 'action',
-    title: 'Create Worktree',
-    description: 'Start a new worktree.',
+    title: translate('auto.components.cmd.j.quick.actions.52ac9da671', 'Create Worktree'),
+    description: translate(
+      'auto.components.cmd.j.quick.actions.0b1f25f796',
+      'Start a new worktree.'
+    ),
     icon: FolderPlus,
-    verbKeywords: ['create worktree', 'add worktree', 'new worktree'],
+    verbKeywords: [
+      translate('auto.components.cmd.j.quick.actions.verbs.createWorktree', 'create worktree'),
+      translate('auto.components.cmd.j.quick.actions.verbs.addWorktree', 'add worktree'),
+      translate('auto.components.cmd.j.quick.actions.verbs.newWorktree', 'new worktree')
+    ],
     isAvailable: () => ({ available: true }),
     run: async (ctx) => {
       ctx.openCreateWorkspace()
@@ -101,14 +135,20 @@ export const CMD_J_QUICK_ACTIONS: readonly CmdJQuickAction[] = [
   {
     id: 'delete-workspace',
     kind: 'action',
-    title: 'Delete Worktree',
-    description: 'Delete the current worktree.',
+    title: translate('auto.components.cmd.j.quick.actions.9537b910fe', 'Delete Worktree'),
+    description: translate(
+      'auto.components.cmd.j.quick.actions.54853d52a2',
+      'Delete the current worktree.'
+    ),
     icon: Trash2,
     verbKeywords: [
-      'delete worktree',
-      'delete current worktree',
-      'remove worktree',
-      'trash worktree'
+      translate('auto.components.cmd.j.quick.actions.verbs.deleteWorktree', 'delete worktree'),
+      translate(
+        'auto.components.cmd.j.quick.actions.verbs.deleteCurrentWorktree',
+        'delete current worktree'
+      ),
+      translate('auto.components.cmd.j.quick.actions.verbs.removeWorktree', 'remove worktree'),
+      translate('auto.components.cmd.j.quick.actions.verbs.trashWorktree', 'trash worktree')
     ],
     isAvailable: currentWorkspaceActionAvailability,
     run: async (ctx) => {
@@ -123,14 +163,20 @@ export const CMD_J_QUICK_ACTIONS: readonly CmdJQuickAction[] = [
   {
     id: 'add-quick-command',
     kind: 'action',
-    title: 'Add Quick Command',
-    description: 'Create a saved terminal command.',
+    title: translate('auto.components.cmd.j.quick.actions.a43ab56fc1', 'Add Quick Command'),
+    description: translate(
+      'auto.components.cmd.j.quick.actions.c884a6398e',
+      'Create a saved terminal command.'
+    ),
     icon: Play,
-    verbKeywords: ['add quick command', 'new quick command'],
+    verbKeywords: [
+      translate('auto.components.cmd.j.quick.actions.verbs.addQuickCommand', 'add quick command'),
+      translate('auto.components.cmd.j.quick.actions.verbs.newQuickCommand', 'new quick command')
+    ],
     isAvailable: () => ({ available: true }),
     run: async (ctx) => {
       ctx.openAddQuickCommand()
       return { status: 'ok' }
     }
   }
-]
+])
