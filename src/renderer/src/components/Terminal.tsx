@@ -63,6 +63,7 @@ import {
 } from './terminal/split-group-mount'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import { appendUniqueOpenFileIds } from './terminal/unsaved-close-queue'
+import { setWindowCloseRequestHandler } from './window-close-request-coordinator'
 import CodexRestartChip from './CodexRestartChip'
 import {
   findActivityTerminalPortal,
@@ -1565,11 +1566,15 @@ function Terminal(): React.JSX.Element | null {
     return () => window.removeEventListener('beforeunload', handler)
   }, [])
 
-  // Listen for main-process window close requests. Terminal sessions are
-  // detached by the daemon/SSH lifecycle; only dirty editor files should block
-  // close here. Explicit destructive terminal actions keep their own confirms.
+  // Handle main-process window close requests. Terminal sessions are detached
+  // by the daemon/SSH lifecycle; only dirty editor files should block close
+  // here. Explicit destructive terminal actions keep their own confirms.
+  // Why: register into the coordinator rather than subscribing to IPC directly.
+  // The single IPC subscription lives at the always-mounted App root, so quits
+  // on the no-workspace landing page (where Terminal is not mounted) are still
+  // handled instead of deadlocking the window (#5144).
   useEffect(() => {
-    return window.api.ui.onWindowCloseRequested(({ isQuitting }) => {
+    setWindowCloseRequestHandler(({ isQuitting }) => {
       if (isIntentionalAppRestartInProgress()) {
         window.api.ui.confirmWindowClose()
         return
@@ -1593,6 +1598,7 @@ function Terminal(): React.JSX.Element | null {
 
       proceedToNativeWindowClose(isQuitting)
     })
+    return () => setWindowCloseRequestHandler(null)
   }, [proceedToNativeWindowClose, queueEditorCloseRequests])
 
   // Why: browser page state can disappear through store-only paths (CLI tab

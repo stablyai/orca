@@ -42,6 +42,7 @@ import RetainedAgentsSyncGate from './components/dashboard/RetainedAgentsSyncGat
 import { ActivityTitlebarControls } from './components/activity/ActivityTitlebarControls'
 import Sidebar from './components/Sidebar'
 import { shutdownBufferCaptures } from './components/terminal-pane/shutdown-buffer-captures'
+import { dispatchWindowCloseRequest } from './components/window-close-request-coordinator'
 import { useSystemPrefersDark } from './components/terminal-pane/use-system-prefers-dark'
 import RightSidebar from './components/right-sidebar'
 import { StarNagCard } from './components/StarNagCard'
@@ -1117,6 +1118,16 @@ function App(): React.JSX.Element {
     }
     window.addEventListener('beforeunload', captureAndFlush)
     return () => window.removeEventListener('beforeunload', captureAndFlush)
+  }, [])
+
+  // Own the single window-close-request subscription at the always-mounted App
+  // root. Why: the rich confirmation flow lives in Terminal, which is not
+  // mounted on the no-workspace landing page (and is lazy-loaded elsewhere), so
+  // subscribing there left File → Exit / Ctrl+Q with no listener and the window
+  // never closed (#5144). dispatchWindowCloseRequest delegates to Terminal's
+  // handler when present, else confirms the close directly.
+  useEffect(() => {
+    return window.api.ui.onWindowCloseRequested(dispatchWindowCloseRequest)
   }, [])
 
   // Why there is no periodic scrollback save: PR #461 added a 3-minute
