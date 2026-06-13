@@ -24,13 +24,17 @@ export async function detectWslCommandsOnPath(
   }
 
   const commandList = uniqueCommands.map(shellQuote).join(' ')
+  // Why: join with newlines, not spaces. This script runs through the user's
+  // login shell (see buildWslLoginShellCommand), and a space-joined `... fi done`
+  // is a parse error in zsh (`parse error near 'done'`) even though bash/sh/dash
+  // tolerate it. Newlines are unambiguous statement separators in every POSIX shell.
   const script = [
     `for cmd in ${commandList}; do`,
     'if resolved=$(command -v "$cmd" 2>/dev/null); then',
     `printf '${WSL_AGENT_DETECTION_PREFIX}%s\\t%s\\n' "$cmd" "$resolved";`,
     'fi',
     'done'
-  ].join(' ')
+  ].join('\n')
 
   try {
     // Why: WSL cold-start plus many parallel wsl.exe probes can timeout and
