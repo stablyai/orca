@@ -46,3 +46,9 @@ export function getWorktreeCardSurfaceInset(args: {
 }): number {
   return args.isGrouped ? clampDepth(args.groupDepth) * GROUPED_WORKTREE_CARD_SURFACE_INDENT : 0
 }
+
+export function getFlushWorktreeCardPaddingLeft(contentIndent: number): string {
+  return contentIndent > 0
+    ? `max(${FLUSH_CARD_MIN_CONTENT_INSET}px, calc(${contentIndent}px - ${FLUSH_CARD_CONTENT_PULLBACK}px))`
+    : `${FLUSH_CARD_MIN_CONTENT_INSET}px`
+}
