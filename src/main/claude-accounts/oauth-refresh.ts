@@ -152,11 +152,21 @@ export async function refreshClaudeOauthCredentials(
       signal: controller.signal
     })
     if (!res.ok) {
+      // Why: surface the status (never the token) so a throttle (429) or a
+      // dead refresh token (400/401 invalid_grant) is diagnosable in the
+      // field, instead of a silent null that looks identical to success.
+      // Callers keep the existing credentials on null — a transient 429 just
+      // means the still-valid token is reused until the next attempt.
+      console.warn(`[claude-oauth-refresh] token endpoint returned ${res.status}`)
       return null
     }
     const data = (await res.json()) as TokenEndpointResponse
     return applyRefreshedToken(credentialsJson, data, now)
-  } catch {
+  } catch (error) {
+    console.warn(
+      '[claude-oauth-refresh] token refresh request failed:',
+      error instanceof Error ? error.message : error
+    )
     return null
   } finally {
     clearTimeout(timer)
