@@ -11,6 +11,7 @@ type ResolveGitHubPrStartPointArgs = {
   isCrossRepository?: boolean
   connectionId?: string | null
   gitExec: GitExec
+  fetchRemoteTrackingRef: (remote: string, branch: string) => Promise<void>
   resolveRemote: () => Promise<string>
 }
 
@@ -112,11 +113,7 @@ export async function resolveGitHubPrStartPoint(
   }
 
   try {
-    await args.gitExec([
-      'fetch',
-      remote,
-      `+refs/heads/${headRefName}:refs/remotes/${remote}/${headRefName}`
-    ])
+    await args.fetchRemoteTrackingRef(remote, headRefName)
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     // Why: missing fork metadata can make a fork PR look like a same-repo

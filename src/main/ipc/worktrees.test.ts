@@ -1406,6 +1406,50 @@ describe('registerWorktreeHandlers', () => {
     })
   })
 
+  it('fetches the same-repo PR head via the SSH tracking-ref RPC, not git.exec', async () => {
+    const fetchRemoteTrackingRef = vi.fn(async () => {})
+    const exec = vi.fn(async (args: string[]) => {
+      if (args[0] === 'remote') {
+        return { stdout: 'origin\n', stderr: '' }
+      }
+      if (args[0] === 'rev-parse') {
+        return { stdout: 'def456\n', stderr: '' }
+      }
+      return { stdout: '', stderr: '' }
+    })
+    getSshGitProviderMock.mockReturnValue({ exec, fetchRemoteTrackingRef })
+    store.getRepo.mockReturnValue({
+      id: 'repo-1',
+      path: '/workspace/repo',
+      displayName: 'repo',
+      badgeColor: '#000',
+      addedAt: 0,
+      connectionId: 'conn-1',
+      worktreeBaseRef: null
+    })
+
+    const result = await handlers['worktrees:resolvePrBase'](null, {
+      repoId: 'repo-1',
+      prNumber: 42,
+      headRefName: 'feature/add-feature',
+      isCrossRepository: false
+    })
+
+    expect(fetchRemoteTrackingRef).toHaveBeenCalledWith(
+      '/workspace/repo',
+      'origin',
+      'feature/add-feature',
+      'refs/remotes/origin/feature/add-feature'
+    )
+    expect(exec).not.toHaveBeenCalledWith(expect.arrayContaining(['fetch']), expect.anything())
+    expect(result).toMatchObject({
+      baseBranch: 'def456',
+      headSha: 'def456',
+      branchNameOverride: 'feature/add-feature',
+      pushTarget: { remoteName: 'origin', branchName: 'feature/add-feature' }
+    })
+  })
+
   it('resolves a fork PR base even when push-target discovery fails', async () => {
     getPullRequestPushTargetMock.mockRejectedValueOnce(new Error('lookup failed'))
     gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
