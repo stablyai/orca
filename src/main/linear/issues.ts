@@ -6,6 +6,7 @@ import type {
   LinearIssueUpdate,
   LinearComment,
   LinearCollectionResult,
+  LinearWorkspaceError,
   LinearWorkspaceSelection
 } from '../../shared/types'
 import { LinearClient } from '@linear/sdk'
@@ -29,6 +30,7 @@ type LinearIssueNode = {
   title: string
   description?: string | null
   url: string
+  dueDate?: string | null
   estimate?: number | null
   priority: number
   updatedAt: string
@@ -102,6 +104,12 @@ export type LinearIssueWriteRecord = {
   team: { id: string; key: string; name: string }
   state: { id: string; name: string } | null
   parent: { id: string; identifier: string } | null
+  assignee?: { id: string; displayName: string } | null
+  priority?: number | null
+  estimate?: number | null
+  dueDate?: string | null
+  labelIds?: string[] | null
+  labels?: { id: string; name: string }[]
 }
 
 export type LinearCommentWriteRecord = {
@@ -126,6 +134,7 @@ const LINEAR_ISSUE_NODE_FIELDS = `
   title
   description
   url
+  dueDate
   priority
   estimate
   updatedAt
@@ -233,6 +242,12 @@ const AGENT_ISSUE_WRITE_FIELDS = `
   team { id key name }
   state { id name }
   parent { id identifier }
+  assignee { id displayName }
+  priority
+  estimate
+  dueDate
+  labelIds
+  labels(first: 50) { nodes { id name } }
 `
 
 const ISSUE_BY_UUID_QUERY = `
@@ -267,7 +282,11 @@ const ATTACHMENT_BY_UUID_QUERY = `
 `
 
 type LinearIssueByUuidResponse = {
-  issue?: LinearIssueWriteRecord | null
+  issue?:
+    | (Omit<LinearIssueWriteRecord, 'labels'> & {
+        labels?: { nodes?: { id: string; name: string }[] } | null
+      })
+    | null
 }
 
 type LinearCommentByUuidResponse = {
@@ -355,6 +374,7 @@ function mapRawIssueForWorkspace(
       : undefined,
     estimate: issue.estimate ?? null,
     priority: issue.priority,
+    dueDate: issue.dueDate ?? null,
     updatedAt: issue.updatedAt,
     workspaceId: entry.workspace.id,
     workspaceName: entry.workspace.organizationName
@@ -396,10 +416,12 @@ function getOldestIssueTime(issues: LinearIssue[]): number {
 
 function getListIssueConnectionLoader(
   entry: LinearClientForWorkspace,
-  filter: LinearListFilter
+  filter: LinearListFilter,
+  teamId?: string
 ): LinearIssueConnectionLoader {
   const orderBy = 'updatedAt'
   const variables = { orderBy }
+  const filterInput = listIssueFilter(filter, teamId)
 
   if (filter === 'assigned') {
     return async (page) => {
@@ -409,7 +431,7 @@ function getListIssueConnectionLoader(
       >(VIEWER_ASSIGNED_ISSUES_QUERY, {
         ...variables,
         ...page,
-        filter: ACTIVE_STATE_FILTER
+        filter: filterInput
       })
       return result.data?.viewer?.assignedIssues
     }
@@ -423,7 +445,7 @@ function getListIssueConnectionLoader(
       >(VIEWER_CREATED_ISSUES_QUERY, {
         ...variables,
         ...page,
-        filter: ACTIVE_STATE_FILTER
+        filter: filterInput
       })
       return result.data?.viewer?.createdIssues
     }
@@ -437,7 +459,7 @@ function getListIssueConnectionLoader(
       >(VIEWER_ASSIGNED_ISSUES_QUERY, {
         ...variables,
         ...page,
-        filter: COMPLETED_STATE_FILTER
+        filter: filterInput
       })
       return result.data?.viewer?.assignedIssues
     }
@@ -447,7 +469,7 @@ function getListIssueConnectionLoader(
     const result = await entry.client.client.rawRequest<
       LinearIssueConnectionResponse,
       LinearRawVariables
-    >(ALL_ISSUES_QUERY, { ...variables, ...page, filter: ACTIVE_STATE_FILTER })
+    >(ALL_ISSUES_QUERY, { ...variables, ...page, filter: filterInput })
     return result.data?.issues
   }
 }
@@ -614,6 +636,15 @@ function mapRawAttachmentWriteRecord(
   }
 }
 
+function mapRawIssueWriteRecord(
+  issue: NonNullable<LinearIssueByUuidResponse['issue']>
+): LinearIssueWriteRecord {
+  return {
+    ...issue,
+    labels: issue.labels?.nodes ?? []
+  }
+}
+
 export async function getIssue(
   id: string,
   workspaceId?: LinearWorkspaceSelection | null
@@ -661,7 +692,8 @@ export async function getIssueByUuidForAgent(
       LinearIssueByUuidResponse,
       LinearRawVariables
     >(ISSUE_BY_UUID_QUERY, { id })
-    return result.data?.issue ?? null
+    const issue = result.data?.issue ?? null
+    return issue ? mapRawIssueWriteRecord(issue) : null
   })
 }
 
@@ -759,10 +791,32 @@ export async function searchIssues(
   return sortAndLimitIssues(results.flat(), limit)
 }
 
-export type LinearListFilter = 'assigned' | 'created' | 'all' | 'completed'
+export type LinearListFilter = 'assigned' | 'created' | 'all' | 'completed' | 'open'
 
 const ACTIVE_STATE_FILTER = { state: { type: { nin: ['completed', 'canceled'] } } }
 const COMPLETED_STATE_FILTER = { state: { type: { in: ['completed', 'canceled'] } } }
+
+function listFilterForState(filter: LinearListFilter): Record<string, unknown> | undefined {
+  if (filter === 'assigned' || filter === 'created' || filter === 'open') {
+    return ACTIVE_STATE_FILTER
+  }
+  if (filter === 'completed') {
+    return COMPLETED_STATE_FILTER
+  }
+  return undefined
+}
+
+function listIssueFilter(
+  filter: LinearListFilter,
+  teamId?: string
+): Record<string, unknown> | undefined {
+  const stateFilter = listFilterForState(filter)
+  const teamFilter = teamId ? { team: { id: { eq: teamId } } } : undefined
+  if (stateFilter && teamFilter) {
+    return { ...stateFilter, ...teamFilter }
+  }
+  return stateFilter ?? teamFilter
+}
 
 type LinearIssuePageResult = {
   items: LinearIssue[]
@@ -776,18 +830,49 @@ type LinearIssueWorkspacePageState = {
   items: LinearIssue[]
   hasMore: boolean
   canPage: boolean
+  error?: LinearWorkspaceError
   after?: string
+}
+
+function linearWorkspaceError(
+  entry: LinearClientForWorkspace,
+  error: unknown
+): LinearWorkspaceError {
+  const message = error instanceof Error ? error.message : String(error)
+  const lower = message.toLocaleLowerCase()
+  const type: LinearWorkspaceError['type'] = isAuthError(error)
+    ? 'auth'
+    : lower.includes('rate limit') || lower.includes('429')
+      ? 'rate_limited'
+      : lower.includes('network') ||
+          lower.includes('timeout') ||
+          lower.includes('fetch failed') ||
+          lower.includes('econnreset') ||
+          lower.includes('enotfound')
+        ? 'network'
+        : 'unknown'
+  return {
+    workspaceId: entry.workspace.id,
+    workspaceName: entry.workspace.organizationName,
+    type,
+    message
+  }
 }
 
 async function readListIssuesForWorkspace(
   entry: LinearClientForWorkspace,
   filter: LinearListFilter,
   limit: number,
-  workspaceId: LinearWorkspaceSelection | null | undefined
-): Promise<{ items: LinearIssue[]; hasMore: boolean }> {
+  workspaceId: LinearWorkspaceSelection | null | undefined,
+  teamId?: string
+): Promise<LinearCollectionResult<LinearIssue>> {
   await acquire()
   try {
-    return readIssueConnectionPages(entry, limit, getListIssueConnectionLoader(entry, filter))
+    return await readIssueConnectionPages(
+      entry,
+      limit,
+      getListIssueConnectionLoader(entry, filter, teamId)
+    )
   } catch (error) {
     if (isAuthError(error)) {
       clearToken(entry.workspace.id)
@@ -797,7 +882,7 @@ async function readListIssuesForWorkspace(
     } else {
       console.warn('[linear] listIssues failed:', error)
     }
-    return { items: [], hasMore: false }
+    return { items: [], hasMore: false, errors: [linearWorkspaceError(entry, error)] }
   } finally {
     release()
   }
@@ -840,6 +925,7 @@ async function readListIssuesPageForState(
     state.items = []
     state.hasMore = false
     state.canPage = false
+    state.error = linearWorkspaceError(state.entry, error)
     if (isAuthError(error)) {
       clearToken(state.entry.workspace.id)
       if (shouldThrowAuthError(workspaceId)) {
@@ -889,11 +975,12 @@ async function readListIssuesAcrossWorkspaces(
   entries: LinearClientForWorkspace[],
   filter: LinearListFilter,
   limit: number,
-  workspaceId: LinearWorkspaceSelection | null | undefined
+  workspaceId: LinearWorkspaceSelection | null | undefined,
+  teamId?: string
 ): Promise<LinearCollectionResult<LinearIssue>> {
   const states: LinearIssueWorkspacePageState[] = entries.map((entry) => ({
     entry,
-    loadConnection: getListIssueConnectionLoader(entry, filter),
+    loadConnection: getListIssueConnectionLoader(entry, filter, teamId),
     items: [],
     hasMore: false,
     canPage: false
@@ -927,14 +1014,16 @@ async function readListIssuesAcrossWorkspaces(
   )
   return {
     items: limited.items,
-    hasMore: states.some((state) => state.hasMore) || limited.clipped
+    hasMore: states.some((state) => state.hasMore) || limited.clipped,
+    errors: states.flatMap((state) => (state.error ? [state.error] : []))
   }
 }
 
 export async function listIssues(
   filter: LinearListFilter = 'assigned',
   limit = 20,
-  workspaceId?: LinearWorkspaceSelection | null
+  workspaceId?: LinearWorkspaceSelection | null,
+  teamId?: string
 ): Promise<LinearCollectionResult<LinearIssue>> {
   const effectiveLimit = clampLinearIssueListLimit(limit)
   const entries = getClients(workspaceId)
@@ -943,10 +1032,10 @@ export async function listIssues(
   }
 
   if (entries.length === 1) {
-    return readListIssuesForWorkspace(entries[0], filter, effectiveLimit, workspaceId)
+    return readListIssuesForWorkspace(entries[0], filter, effectiveLimit, workspaceId, teamId)
   }
 
-  return readListIssuesAcrossWorkspaces(entries, filter, effectiveLimit, workspaceId)
+  return readListIssuesAcrossWorkspaces(entries, filter, effectiveLimit, workspaceId, teamId)
 }
 
 export async function createIssue(
@@ -960,6 +1049,8 @@ export async function createIssue(
     projectId?: string | null
     stateId?: string
     priority?: number
+    estimate?: number | null
+    dueDate?: string | null
     assigneeId?: string | null
     labelIds?: string[]
   }
@@ -983,6 +1074,8 @@ export async function createIssue(
       ...(options?.projectId ? { projectId: options.projectId } : {}),
       ...(options?.stateId ? { stateId: options.stateId } : {}),
       ...(options?.priority !== undefined ? { priority: options.priority } : {}),
+      ...(options?.estimate !== undefined ? { estimate: options.estimate } : {}),
+      ...(options?.dueDate !== undefined ? { dueDate: options.dueDate } : {}),
       ...(options?.assigneeId ? { assigneeId: options.assigneeId } : {}),
       ...(options?.labelIds ? { labelIds: options.labelIds } : {})
     })
@@ -1020,6 +1113,12 @@ export async function createIssueForAgent(
   options: {
     id: string
     parentId?: string | null
+    stateId?: string
+    assigneeId?: string | null
+    priority?: number
+    estimate?: number | null
+    dueDate?: string | null
+    labelIds?: string[]
     signal?: AbortSignal
   }
 ): Promise<LinearIssueWriteRecord> {
@@ -1034,7 +1133,13 @@ export async function createIssueForAgent(
       teamId,
       title,
       ...(description ? { description } : {}),
-      ...(options.parentId ? { parentId: options.parentId } : {})
+      ...(options.parentId ? { parentId: options.parentId } : {}),
+      ...(options.stateId ? { stateId: options.stateId } : {}),
+      ...(options.assigneeId !== undefined ? { assigneeId: options.assigneeId } : {}),
+      ...(options.priority !== undefined ? { priority: options.priority } : {}),
+      ...(options.estimate !== undefined ? { estimate: options.estimate } : {}),
+      ...(options.dueDate !== undefined ? { dueDate: options.dueDate } : {}),
+      ...(options.labelIds !== undefined ? { labelIds: options.labelIds } : {})
     })
     if (!result.success) {
       throw new LinearWriteFailure('failed', 'Linear create failed')
@@ -1064,7 +1169,7 @@ async function getCreatedIssueRecord(
   if (!record) {
     throw new LinearWriteFailure('unconfirmed', 'Issue was created but could not be retrieved')
   }
-  return record
+  return mapRawIssueWriteRecord(record)
 }
 
 export async function updateIssue(
@@ -1104,6 +1209,9 @@ export async function updateIssue(
     if (updates.priority !== undefined) {
       payload.priority = updates.priority
     }
+    if (updates.dueDate !== undefined) {
+      payload.dueDate = updates.dueDate
+    }
     if (resolvedLabelIds !== undefined) {
       payload.labelIds = resolvedLabelIds
     }
@@ -1130,7 +1238,10 @@ export async function updateIssue(
 
 export async function updateIssueForAgent(
   id: string,
-  updates: Pick<LinearIssueUpdate, 'stateId'>,
+  updates: Pick<
+    LinearIssueUpdate,
+    'stateId' | 'assigneeId' | 'priority' | 'estimate' | 'dueDate' | 'labelIds'
+  >,
   workspaceId: string,
   options: { signal?: AbortSignal } = {}
 ): Promise<LinearIssueWriteRecord> {
@@ -1143,6 +1254,21 @@ export async function updateIssueForAgent(
     const payload: Record<string, unknown> = {}
     if (updates.stateId !== undefined) {
       payload.stateId = updates.stateId
+    }
+    if (updates.assigneeId !== undefined) {
+      payload.assigneeId = updates.assigneeId
+    }
+    if (updates.priority !== undefined) {
+      payload.priority = updates.priority
+    }
+    if (updates.estimate !== undefined) {
+      payload.estimate = updates.estimate
+    }
+    if (updates.dueDate !== undefined) {
+      payload.dueDate = updates.dueDate
+    }
+    if (updates.labelIds !== undefined) {
+      payload.labelIds = updates.labelIds
     }
     const result = await client.updateIssue(id, payload)
     if (!result.success) {

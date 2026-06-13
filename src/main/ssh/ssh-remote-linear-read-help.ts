@@ -8,6 +8,21 @@ export function getRemoteLinearReadHelp(commandPath: string[]): string | null {
   if (matchesRemoteCommand(commandPath, 'linear', 'search')) {
     return LINEAR_SEARCH_HELP
   }
+  if (matchesRemoteCommand(commandPath, 'linear', 'team', 'list')) {
+    return LINEAR_TEAM_LIST_HELP
+  }
+  if (matchesRemoteCommand(commandPath, 'linear', 'team', 'members')) {
+    return LINEAR_TEAM_MEMBERS_HELP
+  }
+  if (matchesRemoteCommand(commandPath, 'linear', 'team', 'states')) {
+    return LINEAR_TEAM_STATES_HELP
+  }
+  if (matchesRemoteCommand(commandPath, 'linear', 'team', 'labels')) {
+    return LINEAR_TEAM_LABELS_HELP
+  }
+  if (matchesRemoteCommand(commandPath, 'linear', 'list')) {
+    return LINEAR_LIST_HELP
+  }
   return null
 }
 
@@ -25,6 +40,22 @@ Usage: orca linear <command> [options]
 Commands:
   issue              Read Linear issue context for agents
   search             Search connected Linear workspaces
+  team list          List connected Linear teams
+  team members       List Linear team members
+  team states        List Linear team workflow states
+  team labels        List Linear team labels
+  list               List Linear issues
+  assignee set       Set a Linear issue assignee
+  assignee clear     Clear a Linear issue assignee
+  priority set       Set a Linear issue priority
+  priority clear     Clear a Linear issue priority
+  estimate set       Set a Linear issue estimate
+  estimate clear     Clear a Linear issue estimate
+  due-date set       Set a Linear issue due date
+  due-date clear     Clear a Linear issue due date
+  label add          Add labels to a Linear issue
+  label remove       Remove labels from a Linear issue
+  label set          Replace labels on a Linear issue
   status set         Set a Linear issue status
   comment add        Add a comment to a Linear issue
   attach             Attach a link to a Linear issue
@@ -76,3 +107,33 @@ Options:
 Examples:
   $ orca linear search "auth bug"
   $ orca linear search ENG --workspace all --json`
+
+const LINEAR_TEAM_LIST_HELP = `orca linear team list
+
+Usage: orca linear team list [--workspace <id>|all] [--json]
+
+List connected Linear teams`
+
+const LINEAR_TEAM_MEMBERS_HELP = `orca linear team members
+
+Usage: orca linear team members --team <key|id> [--workspace <id>] [--json]
+
+List Linear team members`
+
+const LINEAR_TEAM_STATES_HELP = `orca linear team states
+
+Usage: orca linear team states --team <key|id> [--workspace <id>] [--json]
+
+List Linear team workflow states`
+
+const LINEAR_TEAM_LABELS_HELP = `orca linear team labels
+
+Usage: orca linear team labels --team <key|id> [--workspace <id>] [--json]
+
+List Linear team labels`
+
+const LINEAR_LIST_HELP = `orca linear list
+
+Usage: orca linear list [--filter assigned|created|all|completed|open] [--team <key|id>] [--limit <n>] [--workspace <id>|all] [--json]
+
+List Linear issues`

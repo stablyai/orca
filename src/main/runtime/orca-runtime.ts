@@ -89,8 +89,17 @@ import type {
   LinearAttachResult,
   LinearCommentAddResult,
   LinearCreateResult,
+  LinearErrorCode,
+  LinearIssueListFilter,
+  LinearIssueListResult,
   LinearIssueSummary,
   LinearIssueRequest,
+  LinearIssueTaskUpdateRequest,
+  LinearIssueTaskUpdateResult,
+  LinearTeamLabelsResult,
+  LinearTeamListResult,
+  LinearTeamMembersResult,
+  LinearTeamStatesResult,
   LinearStatusSetResult
 } from '../../shared/linear-agent-access'
 import { LINEAR_WRITE_BODY_CAP } from '../../shared/linear-agent-access'
@@ -363,9 +372,13 @@ import {
 } from '../linear/projects'
 import {
   getTeamLabels as getLinearTeamLabels,
+  getTeamLabelsOrThrow as getLinearTeamLabelsOrThrow,
   getTeamMembers as getLinearTeamMembers,
+  getTeamMembersOrThrow as getLinearTeamMembersOrThrow,
   getTeamStates as getLinearTeamStates,
   getTeamStatesOrThrow as getLinearTeamStatesOrThrow,
+  getViewerForWorkspaceOrThrow as getLinearViewerForWorkspaceOrThrow,
+  listTeamsForAgent as listLinearTeamsForAgent,
   listTeams as listLinearTeams,
   listTeamsOrThrow as listLinearTeamsOrThrow
 } from '../linear/teams'
@@ -1237,6 +1250,37 @@ type ResolvedWorktree = Worktree & {
 type LinearAgentWriteTarget = {
   issue: LinearIssueSummary
   workspaceId: string
+}
+
+type LinearCreateFieldIntent = {
+  stateId?: string
+  assigneeId?: string | null
+  priority?: number
+  estimate?: number | null
+  dueDate?: string | null
+  labelIds?: string[]
+}
+
+function sameStringSet(left: string[], right: string[]): boolean {
+  if (left.length !== right.length) {
+    return false
+  }
+  const rightSet = new Set(right)
+  return left.every((value) => rightSet.has(value))
+}
+
+function labelsForIds(
+  ids: string[],
+  labels: { id?: string | null; name?: string | null; color?: string | null }[]
+): { id: string; name: string; color?: string | null }[] {
+  return ids.map((id) => {
+    const label = labels.find((candidate) => candidate.id === id)
+    return {
+      id,
+      name: label?.name ?? id,
+      ...(label?.color ? { color: label.color } : {})
+    }
+  })
 }
 
 type TerminalWorkspaceLaunchScope = {
@@ -14823,6 +14867,136 @@ export class OrcaRuntimeService {
     return readLinearIssueContext(request, (context) => this.linearResolveCurrentIssue(context))
   }
 
+  async linearTeamListForAgents(params: {
+    workspaceId?: string | 'all'
+  }): Promise<LinearTeamListResult> {
+    try {
+      const result = await listLinearTeamsForAgent(params.workspaceId)
+      const workspaceErrors = result.errors.map((error) => ({
+        workspace: { id: error.workspaceId, name: error.workspaceName ?? error.workspaceId },
+        code: this.linearWorkspaceErrorCode(error.type),
+        message: sanitizeLinearErrorMessage(error.message)
+      }))
+      return {
+        teams: result.teams.map((team) => this.linearTeamSummary(team)),
+        meta: {
+          workspaceId: params.workspaceId,
+          returned: result.teams.length,
+          partial: workspaceErrors.length > 0,
+          workspaceErrors
+        }
+      }
+    } catch (error) {
+      throw this.mapLinearReadFailure(error)
+    }
+  }
+
+  async linearTeamMembersForAgents(params: {
+    teamInput: string
+    workspaceId?: string
+  }): Promise<LinearTeamMembersResult> {
+    const team = await this.resolveLinearTeamInput(params.teamInput, params.workspaceId)
+    try {
+      const members = await getLinearTeamMembersOrThrow(team.id, team.workspaceId)
+      return {
+        team: this.linearTeamSummary(team),
+        members: members.map((member) => ({
+          id: member.id,
+          displayName: member.displayName,
+          avatarUrl: member.avatarUrl
+        })),
+        meta: { workspaceId: team.workspaceId, returned: members.length }
+      }
+    } catch (error) {
+      throw this.mapLinearReadFailure(error)
+    }
+  }
+
+  async linearTeamStatesForAgents(params: {
+    teamInput: string
+    workspaceId?: string
+  }): Promise<LinearTeamStatesResult> {
+    const team = await this.resolveLinearTeamInput(params.teamInput, params.workspaceId)
+    const states = await this.getLinearTeamStatesForWrite(team.id, team.workspaceId)
+    return {
+      team: this.linearTeamSummary(team),
+      states: states.map((state) => ({
+        id: state.id,
+        name: state.name,
+        type: state.type,
+        color: state.color,
+        position: state.position
+      })),
+      meta: { workspaceId: team.workspaceId, returned: states.length }
+    }
+  }
+
+  async linearTeamLabelsForAgents(params: {
+    teamInput: string
+    workspaceId?: string
+  }): Promise<LinearTeamLabelsResult> {
+    const team = await this.resolveLinearTeamInput(params.teamInput, params.workspaceId)
+    const labels = await this.getLinearTeamLabelsForWrite(team.id, team.workspaceId)
+    return {
+      team: this.linearTeamSummary(team),
+      labels: labels.map((label) => ({ id: label.id, name: label.name, color: label.color })),
+      meta: { workspaceId: team.workspaceId, returned: labels.length }
+    }
+  }
+
+  async linearIssueListForAgents(params: {
+    filter?: LinearIssueListFilter
+    teamInput?: string
+    limit?: number
+    workspaceId?: string | 'all'
+  }): Promise<LinearIssueListResult> {
+    const filter = params.filter ?? 'assigned'
+    const limit = clampLinearIssueListLimit(params.limit)
+    const team = params.teamInput
+      ? await this.resolveLinearTeamInput(params.teamInput, params.workspaceId)
+      : null
+    const workspaceId = team?.workspaceId ?? params.workspaceId
+    try {
+      const result = await listLinearIssues(filter, limit, workspaceId, team?.id)
+      return {
+        issues: result.items.map((issue) => ({
+          id: issue.id,
+          identifier: issue.identifier,
+          title: issue.title,
+          url: issue.url,
+          state: issue.state,
+          team: issue.team,
+          project: issue.project ?? null,
+          assignee: issue.assignee ?? null,
+          priority: issue.priority,
+          estimate: issue.estimate,
+          dueDate: issue.dueDate,
+          updatedAt: issue.updatedAt,
+          workspace: {
+            id: issue.workspaceId ?? workspaceId ?? '',
+            name: issue.workspaceName ?? issue.workspaceId ?? workspaceId ?? ''
+          }
+        })),
+        meta: {
+          filter,
+          workspaceId,
+          ...(team ? { team: this.linearTeamSummary(team) } : {}),
+          limit,
+          returned: result.items.length,
+          hasMore: result.hasMore === true,
+          partial: (result.errors?.length ?? 0) > 0,
+          workspaceErrors: (result.errors ?? []).map((error) => ({
+            workspace: { id: error.workspaceId, name: error.workspaceName ?? error.workspaceId },
+            code: this.linearWorkspaceErrorCode(error.type),
+            message: sanitizeLinearErrorMessage(error.message)
+          }))
+        }
+      }
+    } catch (error) {
+      throw this.mapLinearReadFailure(error)
+    }
+  }
+
   async linearResolveCurrentIssue(
     context?: LinearCurrentIssueContextHints
   ): Promise<ReturnType<typeof getLinearCurrentIssueFromWorktree>> {
@@ -14961,6 +15135,60 @@ export class OrcaRuntimeService {
     }
   }
 
+  async linearIssueUpdateTask(
+    params: LinearIssueTaskUpdateRequest
+  ): Promise<LinearIssueTaskUpdateResult> {
+    const target = await this.resolveLinearAgentWriteTarget(params)
+    const current = await this.readLinearAgentIssueWriteRecord(target.issue.id, target.workspaceId)
+    const update = await this.buildLinearTaskUpdate(params, current, target.workspaceId)
+    if (!update) {
+      throw linearError('linear_write_failed', 'No Linear task field update was requested.')
+    }
+    const alreadySet = this.linearTaskFieldAlreadySet(params.operation, current, update)
+    if (!alreadySet) {
+      await this.runLinearAgentWrite(
+        async (signal) => {
+          const updated = await updateLinearIssueForAgent(
+            target.issue.id,
+            update.fields,
+            target.workspaceId,
+            { signal }
+          )
+          if (!this.linearTaskFieldAlreadySet(params.operation, updated, update)) {
+            throw new LinearWriteFailure(
+              'unconfirmed',
+              'Linear task field update could not be confirmed.'
+            )
+          }
+          return updated
+        },
+        (cause) =>
+          linearError(
+            'linear_write_unconfirmed',
+            'Linear may have applied the task update, but Orca could not confirm it.',
+            {
+              nextSteps: [
+                `Run \`orca linear issue ${target.issue.identifier} --workspace ${target.workspaceId} --json\` and check the updated field before retrying.`
+              ],
+              ...(cause ? { cause } : {})
+            }
+          )
+      )
+    }
+    await this.notifyLinearLinkedIssueUpdated(target.workspaceId, target.issue.identifier)
+    const finalRecord = alreadySet
+      ? current
+      : await this.readLinearAgentIssueWriteRecord(target.issue.id, target.workspaceId)
+    return this.linearTaskUpdateResult(
+      params.operation,
+      target.issue,
+      target.workspaceId,
+      current,
+      finalRecord,
+      alreadySet
+    )
+  }
+
   async linearIssueAddComment(params: {
     input?: string
     current?: boolean
@@ -15096,7 +15324,14 @@ export class OrcaRuntimeService {
   async linearIssueCreate(params: {
     title: string
     body?: string
+    teamInput?: string
     teamKey?: string
+    state?: string
+    assignee?: string
+    priority?: number
+    estimate?: number
+    dueDate?: string
+    labels?: string[]
     parentInput?: string
     parentCurrent?: boolean
     workspaceId?: string
@@ -15121,7 +15356,12 @@ export class OrcaRuntimeService {
         'The parent issue belongs to a different workspace.'
       )
     }
-    const team = await this.resolveLinearCreateTeam(params.teamKey, params.workspaceId, parent)
+    const team = await this.resolveLinearCreateTeam(
+      params.teamInput ?? params.teamKey,
+      params.workspaceId,
+      parent
+    )
+    const createFields = await this.resolveLinearCreateFields(params, team)
     const parentId = parent?.issue.id ?? null
     const writeId = params.writeId ?? randomUUID()
     const existing =
@@ -15131,7 +15371,8 @@ export class OrcaRuntimeService {
             team.id,
             parentId,
             team.workspaceId,
-            true
+            true,
+            createFields
           )
         : null
     if (existing) {
@@ -15143,18 +15384,34 @@ export class OrcaRuntimeService {
 
     try {
       const issue = await this.runLinearAgentWrite(
-        (signal) =>
-          createLinearIssueForAgent(team.id, params.title, params.body, team.workspaceId, {
-            id: writeId,
-            parentId,
-            signal
-          }),
+        async (signal) => {
+          const created = await createLinearIssueForAgent(
+            team.id,
+            params.title,
+            params.body,
+            team.workspaceId,
+            {
+              id: writeId,
+              parentId,
+              ...createFields,
+              signal
+            }
+          )
+          if (!this.linearCreatedIssueMatchesIntent(created, createFields)) {
+            throw new LinearWriteFailure(
+              'unconfirmed',
+              'Linear issue create could not be confirmed with the requested task fields.'
+            )
+          }
+          return created
+        },
         (cause) =>
           this.linearCreateStyleUnconfirmed('create', writeId, null, {
             team,
             parent,
             title: params.title,
             bodyRequired: params.body !== undefined,
+            createFields,
             cause
           })
       )
@@ -15169,12 +15426,14 @@ export class OrcaRuntimeService {
           team.id,
           parentId,
           team.workspaceId,
+          createFields,
           () =>
             this.linearCreateStyleUnconfirmed('create', writeId, null, {
               team,
               parent,
               title: params.title,
-              bodyRequired: params.body !== undefined
+              bodyRequired: params.body !== undefined,
+              createFields
             })
         )
         if (parent) {
@@ -15229,6 +15488,294 @@ export class OrcaRuntimeService {
           state.name.toLocaleLowerCase() === normalized
       ) ?? null
     )
+  }
+
+  private async getLinearTeamLabelsForWrite(
+    teamId: string,
+    workspaceId: string
+  ): Promise<Awaited<ReturnType<typeof getLinearTeamLabelsOrThrow>>> {
+    try {
+      return await getLinearTeamLabelsOrThrow(teamId, workspaceId)
+    } catch (error) {
+      throw this.mapLinearReadFailure(error)
+    }
+  }
+
+  private async readLinearAgentIssueWriteRecord(
+    issueId: string,
+    workspaceId: string
+  ): Promise<NonNullable<Awaited<ReturnType<typeof getLinearIssueByUuidForAgent>>>> {
+    const issue = await this.readLinearWriteLookup(() =>
+      getLinearIssueByUuidForAgent(issueId, workspaceId)
+    )
+    if (!issue) {
+      throw linearError('linear_issue_not_found', 'Linear issue was not found.')
+    }
+    return issue
+  }
+
+  private async buildLinearTaskUpdate(
+    params: LinearIssueTaskUpdateRequest,
+    current: NonNullable<Awaited<ReturnType<typeof getLinearIssueByUuidForAgent>>>,
+    workspaceId: string
+  ): Promise<{
+    fields: {
+      assigneeId?: string | null
+      priority?: number
+      estimate?: number | null
+      dueDate?: string | null
+      labelIds?: string[]
+    }
+    labels?: { id: string; name: string }[]
+  } | null> {
+    if (params.operation === 'assignee') {
+      const assigneeId = params.assigneeMe
+        ? (await this.getLinearViewerForWrite(workspaceId)).id
+        : params.assigneeId
+      if (assigneeId === undefined) {
+        throw linearError('linear_invalid_assignee', 'Pass --me, --to-id, or clear assignee.')
+      }
+      return { fields: { assigneeId } }
+    }
+    if (params.operation === 'priority') {
+      if (params.priority === undefined) {
+        throw linearError('linear_write_failed', 'Missing priority value.')
+      }
+      return { fields: { priority: params.priority } }
+    }
+    if (params.operation === 'estimate') {
+      if (params.estimate === undefined) {
+        throw linearError('linear_write_failed', 'Missing estimate value.')
+      }
+      return { fields: { estimate: params.estimate } }
+    }
+    if (params.operation === 'dueDate') {
+      if (params.dueDate === undefined) {
+        throw linearError('linear_write_failed', 'Missing due date value.')
+      }
+      return { fields: { dueDate: params.dueDate } }
+    }
+    if (params.operation === 'labels') {
+      const mode = params.labelMode
+      const inputs = params.labels ?? []
+      if (!mode || inputs.length === 0) {
+        throw linearError('linear_invalid_label', 'Pass at least one --label.')
+      }
+      const labels = await this.resolveLinearLabelsForIssue(current, inputs, workspaceId)
+      const requestedIds = labels.map((label) => label.id)
+      const existingIds = current.labelIds ?? current.labels?.map((label) => label.id) ?? []
+      const nextIds =
+        mode === 'set'
+          ? requestedIds
+          : mode === 'add'
+            ? Array.from(new Set([...existingIds, ...requestedIds]))
+            : existingIds.filter((id) => !requestedIds.includes(id))
+      return {
+        fields: { labelIds: nextIds },
+        labels: labelsForIds(nextIds, [...(current.labels ?? []), ...labels])
+      }
+    }
+    return null
+  }
+
+  private async resolveLinearCreateFields(
+    params: {
+      state?: string
+      assignee?: string
+      priority?: number
+      estimate?: number
+      dueDate?: string
+      labels?: string[]
+    },
+    team: { id: string; workspaceId: string }
+  ): Promise<LinearCreateFieldIntent> {
+    const fields: LinearCreateFieldIntent = {}
+    if (params.state) {
+      const states = await this.getLinearTeamStatesForWrite(team.id, team.workspaceId)
+      const state = this.resolveLinearAgentState(params.state, states)
+      if (!state) {
+        throw linearError(
+          'linear_invalid_state',
+          `No workflow state exactly matched "${params.state}".`,
+          { states: states.map(({ id, name, type }) => ({ id, name, type })) }
+        )
+      }
+      fields.stateId = state.id
+    }
+    if (params.assignee) {
+      fields.assigneeId =
+        params.assignee.toLocaleLowerCase() === 'me'
+          ? (await this.getLinearViewerForWrite(team.workspaceId)).id
+          : params.assignee
+    }
+    if (params.priority !== undefined) {
+      fields.priority = params.priority
+    }
+    if (params.estimate !== undefined) {
+      fields.estimate = params.estimate
+    }
+    if (params.dueDate !== undefined) {
+      fields.dueDate = params.dueDate
+    }
+    if (params.labels && params.labels.length > 0) {
+      const labels = await this.resolveLinearLabelsForTeam(team.id, params.labels, team.workspaceId)
+      fields.labelIds = labels.map((label) => label.id)
+    }
+    return fields
+  }
+
+  private async getLinearViewerForWrite(
+    workspaceId: string
+  ): Promise<{ id: string; displayName?: string | null; avatarUrl?: string | null }> {
+    try {
+      return await getLinearViewerForWorkspaceOrThrow(workspaceId)
+    } catch (error) {
+      throw this.mapLinearReadFailure(error)
+    }
+  }
+
+  private async resolveLinearLabelsForIssue(
+    issue: NonNullable<Awaited<ReturnType<typeof getLinearIssueByUuidForAgent>>>,
+    inputs: string[],
+    workspaceId: string
+  ): Promise<{ id: string; name: string }[]> {
+    const labels = await this.getLinearTeamLabelsForWrite(issue.team.id, workspaceId)
+    const resolved = inputs.map((input) => {
+      const normalized = input.toLocaleLowerCase()
+      const idMatch = labels.find((label) => label.id.toLocaleLowerCase() === normalized)
+      if (idMatch) {
+        return { id: idMatch.id, name: idMatch.name }
+      }
+      const nameMatches = labels.filter((label) => label.name.toLocaleLowerCase() === normalized)
+      if (nameMatches.length === 1) {
+        return { id: nameMatches[0].id, name: nameMatches[0].name }
+      }
+      throw linearError(
+        'linear_invalid_label',
+        nameMatches.length === 0
+          ? `No label exactly matched "${input}".`
+          : `Multiple labels exactly matched "${input}".`,
+        {
+          labels: labels.map((label) => ({ id: label.id, name: label.name })),
+          nextSteps: ['Run `orca linear team labels --team <key-or-id> --json` and retry by id.']
+        }
+      )
+    })
+    return Array.from(new Map(resolved.map((label) => [label.id, label])).values())
+  }
+
+  private async resolveLinearLabelsForTeam(
+    teamId: string,
+    inputs: string[],
+    workspaceId: string
+  ): Promise<{ id: string; name: string }[]> {
+    const labels = await this.getLinearTeamLabelsForWrite(teamId, workspaceId)
+    const resolved = inputs.map((input) => {
+      const normalized = input.toLocaleLowerCase()
+      const idMatch = labels.find((label) => label.id.toLocaleLowerCase() === normalized)
+      if (idMatch) {
+        return { id: idMatch.id, name: idMatch.name }
+      }
+      const nameMatches = labels.filter((label) => label.name.toLocaleLowerCase() === normalized)
+      if (nameMatches.length === 1) {
+        return { id: nameMatches[0].id, name: nameMatches[0].name }
+      }
+      throw linearError(
+        'linear_invalid_label',
+        nameMatches.length === 0
+          ? `No label exactly matched "${input}".`
+          : `Multiple labels exactly matched "${input}".`,
+        { labels: labels.map((label) => ({ id: label.id, name: label.name })) }
+      )
+    })
+    return Array.from(new Map(resolved.map((label) => [label.id, label])).values())
+  }
+
+  private linearCreatedIssueMatchesIntent(
+    issue: NonNullable<Awaited<ReturnType<typeof getLinearIssueByUuidForAgent>>>,
+    intent: LinearCreateFieldIntent
+  ): boolean {
+    if (intent.stateId !== undefined && issue.state?.id !== intent.stateId) {
+      return false
+    }
+    if (intent.assigneeId !== undefined && (issue.assignee?.id ?? null) !== intent.assigneeId) {
+      return false
+    }
+    if (intent.priority !== undefined && issue.priority !== intent.priority) {
+      return false
+    }
+    if (intent.estimate !== undefined && (issue.estimate ?? null) !== intent.estimate) {
+      return false
+    }
+    if (intent.dueDate !== undefined && (issue.dueDate ?? null) !== intent.dueDate) {
+      return false
+    }
+    const issueLabelIds = issue.labelIds ?? issue.labels?.map((label) => label.id) ?? []
+    if (intent.labelIds !== undefined && !sameStringSet(issueLabelIds, intent.labelIds)) {
+      return false
+    }
+    return true
+  }
+
+  private linearTaskFieldAlreadySet(
+    operation: LinearIssueTaskUpdateRequest['operation'],
+    record: NonNullable<Awaited<ReturnType<typeof getLinearIssueByUuidForAgent>>>,
+    update: {
+      fields: {
+        assigneeId?: string | null
+        priority?: number
+        estimate?: number | null
+        dueDate?: string | null
+        labelIds?: string[]
+      }
+    }
+  ): boolean {
+    if (operation === 'assignee') {
+      return (record.assignee?.id ?? null) === update.fields.assigneeId
+    }
+    if (operation === 'priority') {
+      return record.priority === update.fields.priority
+    }
+    if (operation === 'estimate') {
+      return (record.estimate ?? null) === update.fields.estimate
+    }
+    if (operation === 'dueDate') {
+      return (record.dueDate ?? null) === update.fields.dueDate
+    }
+    if (operation === 'labels') {
+      const recordLabelIds = record.labelIds ?? record.labels?.map((label) => label.id) ?? []
+      return sameStringSet(recordLabelIds, update.fields.labelIds ?? [])
+    }
+    return false
+  }
+
+  private linearTaskUpdateResult(
+    operation: LinearIssueTaskUpdateRequest['operation'],
+    issue: LinearIssueSummary,
+    workspaceId: string,
+    previous: NonNullable<Awaited<ReturnType<typeof getLinearIssueByUuidForAgent>>>,
+    current: NonNullable<Awaited<ReturnType<typeof getLinearIssueByUuidForAgent>>>,
+    alreadySet: boolean
+  ): LinearIssueTaskUpdateResult {
+    return {
+      issue: this.linearWriteIssueRef(issue),
+      operation,
+      previous: this.linearTaskResultFields(previous),
+      current: this.linearTaskResultFields(current),
+      meta: { workspaceId, alreadySet }
+    }
+  }
+
+  private linearTaskResultFields(
+    record: NonNullable<Awaited<ReturnType<typeof getLinearIssueByUuidForAgent>>>
+  ): LinearIssueTaskUpdateResult['current'] {
+    return {
+      assignee: record.assignee ?? null,
+      priority: record.priority ?? null,
+      estimate: record.estimate ?? null,
+      dueDate: record.dueDate ?? null,
+      labels: record.labels ?? []
+    }
   }
 
   private async resolveLinearCommentParentId(
@@ -15376,7 +15923,8 @@ export class OrcaRuntimeService {
     teamId: string,
     parentId: string | null,
     workspaceId: string,
-    required: boolean
+    required: boolean,
+    intent: LinearCreateFieldIntent = {}
   ): Promise<Awaited<ReturnType<typeof getLinearIssueByUuidForAgent>> | null> {
     const issue = await this.readLinearWriteLookup(() =>
       getLinearIssueByUuidForAgent(writeId, workspaceId)
@@ -15384,7 +15932,11 @@ export class OrcaRuntimeService {
     if (!issue) {
       return null
     }
-    if (issue.team.id === teamId && (issue.parent?.id ?? null) === parentId) {
+    if (
+      issue.team.id === teamId &&
+      (issue.parent?.id ?? null) === parentId &&
+      this.linearCreatedIssueMatchesIntent(issue, intent)
+    ) {
       return issue
     }
     if (required) {
@@ -15465,6 +16017,7 @@ export class OrcaRuntimeService {
     teamId: string,
     parentId: string | null,
     workspaceId: string,
+    intent: LinearCreateFieldIntent,
     unconfirmed: (cause?: string) => LinearAgentAccessError
   ): Promise<NonNullable<Awaited<ReturnType<typeof getLinearIssueByUuidForAgent>>>> {
     try {
@@ -15475,7 +16028,8 @@ export class OrcaRuntimeService {
         teamId,
         parentId,
         workspaceId,
-        true
+        true,
+        intent
       )
       if (issue) {
         return issue
@@ -15518,12 +16072,99 @@ export class OrcaRuntimeService {
     return tail ? `${url.host}/${tail}` : url.host
   }
 
+  private linearWorkspaceErrorCode(type: string): LinearErrorCode {
+    if (type === 'auth') {
+      return 'linear_auth_expired'
+    }
+    if (type === 'network') {
+      return 'linear_network_error'
+    }
+    if (type === 'rate_limited') {
+      return 'linear_rate_limited'
+    }
+    return 'linear_write_failed'
+  }
+
+  private linearTeamSummary(team: {
+    id: string
+    name: string
+    key: string
+    url?: string
+    workspaceId?: string
+    workspaceName?: string
+  }): {
+    id: string
+    name: string
+    key: string
+    url?: string
+    workspace?: { id: string; name: string }
+  } {
+    return {
+      id: team.id,
+      name: team.name,
+      key: team.key,
+      ...(team.url ? { url: team.url } : {}),
+      ...(team.workspaceId
+        ? { workspace: { id: team.workspaceId, name: team.workspaceName ?? team.workspaceId } }
+        : {})
+    }
+  }
+
+  private async resolveLinearTeamInput(
+    teamInput: string,
+    workspaceId?: string | 'all'
+  ): Promise<{
+    id: string
+    key: string
+    name: string
+    workspaceId: string
+    workspaceName?: string
+  }> {
+    this.validateLinearCreateWorkspaceScope(workspaceId === 'all' ? undefined : workspaceId)
+    let teams: Awaited<ReturnType<typeof listLinearTeamsOrThrow>>
+    try {
+      teams = await listLinearTeamsOrThrow(workspaceId ?? 'all')
+    } catch (error) {
+      throw this.mapLinearReadFailure(error)
+    }
+    const normalized = teamInput.toLocaleLowerCase()
+    const idMatches = teams.filter((team) => team.id.toLocaleLowerCase() === normalized)
+    const matches =
+      idMatches.length > 0
+        ? idMatches
+        : teams.filter((team) => team.key.toLocaleLowerCase() === normalized)
+    if (matches.length === 1 && matches[0].workspaceId) {
+      return {
+        id: matches[0].id,
+        key: matches[0].key,
+        name: matches[0].name,
+        workspaceId: matches[0].workspaceId,
+        workspaceName: matches[0].workspaceName
+      }
+    }
+    if (matches.length > 1) {
+      throw linearError(
+        'linear_workspace_ambiguous',
+        `Team ${teamInput} exists in multiple workspaces.`,
+        {
+          candidates: matches.map((team) => ({
+            workspaceId: team.workspaceId,
+            workspaceName: team.workspaceName,
+            teamId: team.id,
+            teamKey: team.key
+          }))
+        }
+      )
+    }
+    throw linearError('linear_team_required', `No connected Linear team matched ${teamInput}.`)
+  }
+
   private async resolveLinearCreateTeam(
-    teamKey: string | undefined,
+    teamInput: string | undefined,
     workspaceId: string | undefined,
     parent: LinearAgentWriteTarget | null
   ): Promise<{ id: string; key: string; name: string; workspaceId: string }> {
-    if (!teamKey && parent?.issue.team?.id && parent.issue.team.key && parent.issue.team.name) {
+    if (!teamInput && parent?.issue.team?.id && parent.issue.team.key && parent.issue.team.name) {
       return {
         id: parent.issue.team.id,
         key: parent.issue.team.key,
@@ -15531,7 +16172,7 @@ export class OrcaRuntimeService {
         workspaceId: parent.workspaceId
       }
     }
-    if (!teamKey) {
+    if (!teamInput) {
       throw linearError('linear_team_required', 'Pass --team or create under a parent issue.', {
         nextSteps: ['Run `orca linear create --team <key> ...` or use --parent-current.']
       })
@@ -15551,7 +16192,9 @@ export class OrcaRuntimeService {
       })
     }
     const matches = teams.filter(
-      (team) => team.key.toLocaleLowerCase() === teamKey.toLocaleLowerCase()
+      (team) =>
+        team.id.toLocaleLowerCase() === teamInput.toLocaleLowerCase() ||
+        team.key.toLocaleLowerCase() === teamInput.toLocaleLowerCase()
     )
     if (matches.length === 1 && matches[0].workspaceId) {
       return {
@@ -15564,7 +16207,7 @@ export class OrcaRuntimeService {
     if (matches.length > 1) {
       throw linearError(
         'linear_workspace_ambiguous',
-        `Team key ${teamKey} exists in multiple workspaces.`,
+        `Team ${teamInput} exists in multiple workspaces.`,
         {
           candidates: matches.map((team) => ({
             workspaceId: team.workspaceId,
@@ -15582,16 +16225,18 @@ export class OrcaRuntimeService {
         throw this.mapLinearReadFailure(error)
       }
       const globalMatch = globalTeams.find(
-        (team) => team.key.toLocaleLowerCase() === teamKey.toLocaleLowerCase()
+        (team) =>
+          team.id.toLocaleLowerCase() === teamInput.toLocaleLowerCase() ||
+          team.key.toLocaleLowerCase() === teamInput.toLocaleLowerCase()
       )
       if (globalMatch) {
         throw linearError(
           'linear_invalid_workspace',
-          `Team key ${teamKey} is not in the parent issue workspace.`
+          `Team ${teamInput} is not in the parent issue workspace.`
         )
       }
     }
-    throw linearError('linear_team_required', `No connected Linear team matched ${teamKey}.`)
+    throw linearError('linear_team_required', `No connected Linear team matched ${teamInput}.`)
   }
 
   private validateLinearCreateWorkspaceScope(workspaceId: string | undefined): void {
@@ -15654,6 +16299,44 @@ export class OrcaRuntimeService {
     }
   }
 
+  private linearCreateFieldRetryTokens(fields: LinearCreateFieldIntent | undefined): string[] {
+    if (!fields) {
+      return []
+    }
+    return [
+      ...(fields.stateId ? [`--state=${this.commandToken(fields.stateId, 'STATE_ID')}`] : []),
+      ...(fields.assigneeId
+        ? [`--assignee=${this.commandToken(fields.assigneeId, 'ASSIGNEE_ID')}`]
+        : []),
+      ...(fields.priority !== undefined
+        ? [`--priority=${this.linearPriorityRetryToken(fields.priority)}`]
+        : []),
+      ...(fields.estimate !== undefined && fields.estimate !== null
+        ? [`--estimate=${fields.estimate}`]
+        : []),
+      ...(fields.dueDate ? [`--due-date=${fields.dueDate}`] : []),
+      ...(fields.labelIds ?? []).map(
+        (labelId) => `--label=${this.commandToken(labelId, 'LABEL_ID')}`
+      )
+    ]
+  }
+
+  private linearPriorityRetryToken(priority: number): string {
+    if (priority === 1) {
+      return 'urgent'
+    }
+    if (priority === 2) {
+      return 'high'
+    }
+    if (priority === 3) {
+      return 'medium'
+    }
+    if (priority === 4) {
+      return 'low'
+    }
+    return 'none'
+  }
+
   private linearCreateStyleUnconfirmed(
     verb: 'comment' | 'attach' | 'create',
     writeId: string,
@@ -15665,6 +16348,7 @@ export class OrcaRuntimeService {
       title?: string
       url?: string
       bodyRequired?: boolean
+      createFields?: LinearCreateFieldIntent
       cause?: string
     } = {}
   ): LinearAgentAccessError {
@@ -15682,7 +16366,10 @@ export class OrcaRuntimeService {
             ...(extra.parent
               ? [`--parent=${this.commandToken(extra.parent.issue.identifier, 'PARENT_ISSUE')}`]
               : []),
-            ...(extra.team ? [`--team=${this.commandToken(extra.team.key, 'TEAM_KEY')}`] : [])
+            ...(extra.team
+              ? [`--team=${this.commandToken(extra.team.key, 'TEAM_KEY')}`]
+              : []
+            ).concat(this.linearCreateFieldRetryTokens(extra.createFields))
           ].join(' ')
         : [
             `orca linear ${verb === 'attach' ? 'attach' : 'comment add'}`,
@@ -15712,6 +16399,7 @@ export class OrcaRuntimeService {
         parentId: extra.parentId,
         team: extra.team ? { id: extra.team.id, key: extra.team.key } : undefined,
         parentIdentifier: extra.parent?.issue.identifier,
+        createFields: extra.createFields,
         nextSteps: [
           `${retryPrefix}etry once with the pinned command: \`${pinned}\`.${payloadNote}`
         ],
@@ -15763,9 +16451,10 @@ export class OrcaRuntimeService {
   linearListIssues(
     filter?: LinearListFilter,
     limit = 20,
-    workspaceId?: LinearWorkspaceSelection
+    workspaceId?: LinearWorkspaceSelection,
+    teamId?: string
   ): ReturnType<typeof listLinearIssues> {
-    return listLinearIssues(filter, clampLinearIssueListLimit(limit), workspaceId)
+    return listLinearIssues(filter, clampLinearIssueListLimit(limit), workspaceId, teamId)
   }
 
   linearCreateIssue(
@@ -15778,6 +16467,8 @@ export class OrcaRuntimeService {
     options?: {
       stateId?: string
       priority?: number
+      estimate?: number | null
+      dueDate?: string | null
       assigneeId?: string | null
       labelIds?: string[]
     }

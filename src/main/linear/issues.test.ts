@@ -107,7 +107,8 @@ describe('Linear issue queries', () => {
           labelIds: ['label-1'],
           workspaceId: 'workspace-1',
           team: { id: 'team-1' },
-          estimate: 3
+          estimate: 3,
+          dueDate: null
         }
       ],
       hasMore: false
@@ -117,6 +118,26 @@ describe('Linear issue queries', () => {
     expect(rawRequest.mock.calls[0][0]).toContain('query OrcaLinearIssues')
     expect(rawRequest.mock.calls[0][0]).toContain('pageInfo')
     expect(rawRequest.mock.calls[0][0]).toContain('estimate')
+  })
+
+  it('passes team filters into Linear before list pagination', async () => {
+    rawRequest.mockResolvedValueOnce({
+      data: { issues: { nodes: [rawIssue('LIN-1')], pageInfo: { hasNextPage: false } } }
+    })
+    const { listIssues } = await import('./issues')
+
+    await expect(listIssues('open', 10, 'workspace-1', 'team-1')).resolves.toMatchObject({
+      items: [{ id: 'LIN-1' }],
+      hasMore: false
+    })
+
+    expect(rawRequest.mock.calls[0][1]).toMatchObject({
+      first: 10,
+      filter: {
+        state: { type: { nin: ['completed', 'canceled'] } },
+        team: { id: { eq: 'team-1' } }
+      }
+    })
   })
 
   it('keeps single-workspace search results in Linear relevance order', async () => {
@@ -256,6 +277,57 @@ describe('Linear issue queries', () => {
     })
   })
 
+  it('keeps partial workspace errors on multi-workspace lists', async () => {
+    const secondWorkspaceRequest = vi.fn().mockRejectedValue(new Error('fetch failed'))
+    getClients.mockReturnValue([
+      makeEntry(),
+      makeEntry({
+        workspaceId: 'workspace-2',
+        organizationName: 'Second Workspace',
+        request: secondWorkspaceRequest
+      })
+    ])
+    rawRequest.mockResolvedValueOnce({
+      data: {
+        issues: {
+          nodes: [rawIssue('LIN-OK')],
+          pageInfo: { hasNextPage: false }
+        }
+      }
+    })
+    const { listIssues } = await import('./issues')
+
+    await expect(listIssues('all', 10, 'all')).resolves.toMatchObject({
+      items: [{ id: 'LIN-OK' }],
+      errors: [
+        {
+          workspaceId: 'workspace-2',
+          workspaceName: 'Second Workspace',
+          type: 'network',
+          message: 'fetch failed'
+        }
+      ]
+    })
+  })
+
+  it('keeps workspace errors on single-workspace lists', async () => {
+    rawRequest.mockRejectedValueOnce(new Error('fetch failed'))
+    const { listIssues } = await import('./issues')
+
+    await expect(listIssues('all', 10, 'workspace-1')).resolves.toMatchObject({
+      items: [],
+      hasMore: false,
+      errors: [
+        {
+          workspaceId: 'workspace-1',
+          workspaceName: 'Workspace',
+          type: 'network',
+          message: 'fetch failed'
+        }
+      ]
+    })
+  })
+
   it('pages only workspaces that can affect the global multi-workspace cutoff', async () => {
     const firstWorkspaceRequest = vi.fn()
     const secondWorkspaceRequest = vi.fn()
@@ -333,6 +405,18 @@ describe('Linear issue queries', () => {
     expect(updateIssue).toHaveBeenCalledWith('issue-1', { estimate: 5 })
   })
 
+  it('sends due date updates through to Linear', async () => {
+    const updateIssue = vi.fn().mockResolvedValue({ success: true })
+    getClients.mockReturnValue([{ ...makeEntry(), client: { updateIssue } }])
+    const { updateIssue: updateLinearIssue } = await import('./issues')
+
+    await expect(
+      updateLinearIssue('issue-1', { dueDate: '2026-06-30' }, 'workspace-1')
+    ).resolves.toEqual({ ok: true })
+
+    expect(updateIssue).toHaveBeenCalledWith('issue-1', { dueDate: '2026-06-30' })
+  })
+
   it('reads back agent state updates before confirming success', async () => {
     const updateIssue = vi.fn().mockResolvedValue({ success: true })
     rawRequest.mockResolvedValueOnce({
@@ -363,6 +447,48 @@ describe('Linear issue queries', () => {
 
     expect(updateIssue).toHaveBeenCalledWith('issue-1', { stateId: 'state-review' })
     expect(rawRequest.mock.calls[0][0]).toContain('query OrcaLinearIssueByUuid')
+  })
+
+  it('reads back agent task field updates before confirming success', async () => {
+    const updateIssue = vi.fn().mockResolvedValue({ success: true })
+    rawRequest.mockResolvedValueOnce({
+      data: {
+        issue: {
+          id: 'issue-1',
+          identifier: 'ENG-1',
+          title: 'Fix thing',
+          description: 'Description',
+          url: 'https://linear.app/ENG-1',
+          team: { id: 'team-1', key: 'ENG', name: 'Engineering' },
+          state: { id: 'state-review', name: 'In Review' },
+          parent: null,
+          priority: 1,
+          estimate: 5,
+          dueDate: '2026-06-30',
+          labelIds: ['label-1'],
+          labels: { nodes: [{ id: 'label-1', name: 'Bug' }] }
+        }
+      }
+    })
+    getClients.mockReturnValue([
+      { ...makeEntry(), client: { updateIssue, client: { rawRequest } } }
+    ])
+    const { updateIssueForAgent } = await import('./issues')
+
+    await expect(
+      updateIssueForAgent(
+        'issue-1',
+        { priority: 1, estimate: 5, dueDate: '2026-06-30', labelIds: ['label-1'] },
+        'workspace-1'
+      )
+    ).resolves.toMatchObject({ priority: 1, dueDate: '2026-06-30', labelIds: ['label-1'] })
+
+    expect(updateIssue).toHaveBeenCalledWith('issue-1', {
+      priority: 1,
+      estimate: 5,
+      dueDate: '2026-06-30',
+      labelIds: ['label-1']
+    })
   })
 
   it('treats post-state-update readback misses as unconfirmed', async () => {
