@@ -421,6 +421,13 @@ function App(): React.JSX.Element {
   // and shutdown transitions where activeWorktreeId can briefly become null.
   const shouldMountTerminalWorkbench =
     activeWorktreeId !== null || hasMountedTerminalWorkbenchRef.current
+  // Why: visible worktree creation owns its faux tab strip; the previous
+  // workspace must stay mounted for retention without rendering real chrome.
+  const creationLayoutActive = activeView === 'terminal' && activeCreationLoaderVisible
+  const workspaceChromeActive =
+    activeView === 'terminal' && activeWorktreeId !== null && !creationLayoutActive
+  const terminalWorkbenchVisible =
+    activeView === 'terminal' && activeWorktreeId !== null && !creationLayoutActive
   // Why: a closed empty floating workspace is not startup-critical. Once it owns
   // tabs, keep it mounted while closed so hidden terminal/browser/editor panes
   // retain their local state.
@@ -1229,11 +1236,7 @@ function App(): React.JSX.Element {
   const effectiveActiveTabExpanded = effectiveActiveTabId
     ? (expandedPaneByTabId[effectiveActiveTabId] ?? false)
     : false
-  const showTitlebarExpandButton =
-    activeView === 'terminal' &&
-    activeWorktreeId !== null &&
-    !hasTabBar &&
-    effectiveActiveTabExpanded
+  const showTitlebarExpandButton = workspaceChromeActive && !hasTabBar && effectiveActiveTabExpanded
   // Why: Activity and Space are full-page navigation surfaces — same
   // treatment as Settings — so the worktree sidebar is removed for those views.
   const showSidebar =
@@ -1241,16 +1244,14 @@ function App(): React.JSX.Element {
     activeView !== 'activity' &&
     activeView !== 'space' &&
     activeView !== 'skills'
-  // Why: only the terminal workspace replaces the full-width titlebar with
-  // split-column chrome. Full-page navigation views keep the draggable app
-  // titlebar so their page-level controls can live in that window strip.
-  const workspaceActive = activeView === 'terminal' && activeWorktreeId !== null
-  // Why: Tasks/Landing keep the full titlebar only when the sidebar is collapsed;
-  // with it open, mirror workspace view so titlebar-left sits flush above nav.
-  const stackedSidebarOpen = !workspaceActive && showSidebar && sidebarOpen
+  // Why: Tasks/Landing keep the full titlebar only when the sidebar is
+  // collapsed; with it open, mirror workspace view so titlebar-left sits flush
+  // above nav. Creation layout suppresses both titlebar forms.
+  const stackedSidebarOpen =
+    !workspaceChromeActive && !creationLayoutActive && showSidebar && sidebarOpen
   // Why: suppress right sidebar controls on full-page navigation surfaces
   // since those surfaces intentionally own the full content area.
-  const showRightSidebarControls = canShowRightSidebarForView(activeView)
+  const showRightSidebarControls = !creationLayoutActive && canShowRightSidebarForView(activeView)
 
   const handleToggleExpand = (): void => {
     if (!effectiveActiveTabId) {
@@ -1309,7 +1310,7 @@ function App(): React.JSX.Element {
         })
       }
 
-      const canRevealRightSidebar = canShowRightSidebarForView(activeView)
+      const canRevealRightSidebar = !creationLayoutActive && canShowRightSidebarForView(activeView)
 
       const openSearchSidebar = (query: string | null): void => {
         actions.showRightSidebarSearch(query ? { query } : undefined)
@@ -1380,7 +1381,7 @@ function App(): React.JSX.Element {
         // Why: Back/Forward traverse mixed worktree + page visits, so the
         // shortcut is active wherever the titlebar button cluster is (terminal
         // or stack-backed pages). Still suppressed in Settings.
-        if (!shouldShowWorktreeHistoryControls(activeView)) {
+        if (creationLayoutActive || !shouldShowWorktreeHistoryControls(activeView)) {
           return
         }
         e.preventDefault()
@@ -1422,7 +1423,7 @@ function App(): React.JSX.Element {
       // focus zone because the browser pane owns its own Cmd+R reload and that
       // focus never reaches this renderer-window handler. Only terminal tabs
       // have an inline title editor, so other active tab types fall through.
-      if (workspaceActive && !floatingWorkspaceFocused && matchShortcut('tab.rename')) {
+      if (workspaceChromeActive && !floatingWorkspaceFocused && matchShortcut('tab.rename')) {
         const store = useAppStore.getState()
         if (store.activeTabType === 'terminal' && store.activeTabId) {
           e.preventDefault()
@@ -1436,7 +1437,7 @@ function App(): React.JSX.Element {
       // first so the card is mounted and visible even when sidebar filters or
       // collapse state would otherwise hide it.
       if (
-        workspaceActive &&
+        workspaceChromeActive &&
         !floatingWorkspaceFocused &&
         matchShortcut('workspace.rename') &&
         activeWorktreeId
@@ -1541,7 +1542,8 @@ function App(): React.JSX.Element {
     keybindings,
     settings?.terminalShortcutPolicy,
     setFloatingTerminalOpenWithFocus,
-    workspaceActive
+    workspaceChromeActive,
+    creationLayoutActive
   ])
 
   useLayoutEffect(() => {
@@ -1560,7 +1562,7 @@ function App(): React.JSX.Element {
     })
     observer.observe(controls)
     return () => observer.disconnect()
-  }, [isFullScreen, settings?.showTitlebarAppName, showSidebar, workspaceActive, sidebarOpen])
+  }, [isFullScreen, settings?.showTitlebarAppName, showSidebar, workspaceChromeActive, sidebarOpen])
 
   const resolvedMountedLazyModalIds = resolveMountedLazyModalIds(activeModal, mountedLazyModalIds)
   if (resolvedMountedLazyModalIds !== mountedLazyModalIds) {
@@ -1584,7 +1586,7 @@ function App(): React.JSX.Element {
     <div
       ref={titlebarLeftControlsRef}
       className={`flex h-full shrink-0 items-center${
-        workspaceActive && !sidebarOpen ? ' w-max' : ' w-full'
+        workspaceChromeActive && !sidebarOpen ? ' w-max' : ' w-full'
       }`}
     >
       <div className="flex h-full items-center">
@@ -1730,10 +1732,10 @@ function App(): React.JSX.Element {
     <>
       {activeView === 'activity' ? (
         <ActivityTitlebarControls />
-      ) : (
+      ) : creationLayoutActive ? null : (
         <div
           id="titlebar-tabs"
-          className={`flex flex-1 min-w-0 self-stretch${activeView !== 'terminal' || !activeWorktreeId ? ' invisible pointer-events-none' : ''}`}
+          className={`flex flex-1 min-w-0 self-stretch${!workspaceChromeActive ? ' invisible pointer-events-none' : ''}`}
         />
       )}
       {showTitlebarExpandButton && (
@@ -1810,7 +1812,7 @@ function App(): React.JSX.Element {
                 to the top of the window. Left titlebar controls move to a
                 header above the sidebar. Settings, landing, and the tasks
                 page keep the titlebar. */}
-                  {!workspaceActive && !stackedSidebarOpen ? (
+                  {!workspaceChromeActive && !stackedSidebarOpen && !creationLayoutActive ? (
                     <div className="titlebar">
                       <div className="flex items-center shrink-0 mr-2">{titlebarLeftControls}</div>
                       {titlebarMainStrip}
@@ -1818,7 +1820,7 @@ function App(): React.JSX.Element {
                   ) : null}
                   <div className="flex flex-row flex-1 min-h-0 overflow-hidden">
                     {showSidebar ? (
-                      workspaceActive || stackedSidebarOpen ? (
+                      workspaceChromeActive || stackedSidebarOpen ? (
                         /* Why: left column wraps the sidebar with a titlebar-height
                      header above it. The header holds the same controls
                      (traffic lights, sidebar toggle, "Orca" title, agent badge)
@@ -1917,7 +1919,7 @@ function App(): React.JSX.Element {
                     top-0 anchor so the icon's vertical center is identical between
                     open and closed states — otherwise toggling makes the icon jump
                     a few pixels, which reads as layout jitter. */}
-                        {workspaceActive && !rightSidebarOpen && (
+                        {workspaceChromeActive && !rightSidebarOpen && (
                           <div
                             className="absolute top-0 z-10 flex items-center h-[36px]"
                             style={
@@ -1941,9 +1943,7 @@ function App(): React.JSX.Element {
                           {shouldMountTerminalWorkbench ? (
                             <div
                               className={
-                                activeView !== 'terminal' ||
-                                !activeWorktreeId ||
-                                activeCreationLoaderVisible
+                                !terminalWorkbenchVisible
                                   ? 'hidden flex-1 min-w-0 min-h-0'
                                   : 'flex flex-1 min-w-0 min-h-0'
                               }
