@@ -1672,8 +1672,8 @@
               "48d75ae118": "自動マージを無効にする",
               "a5b66afb58": "チェックは通過しました",
               "fbd4f57f0a": "チェックは通過しました。マージ可否はマージ前に再確認されます。",
-              "4ab19a62ef": "Enable auto-merge",
-              "8f6cb3772f": "Merge this pull request automatically once requirements are met"
+              "4ab19a62ef": "自動マージを有効にする",
+              "8f6cb3772f": "要件が満たされると、このプルリクエストを自動的にマージします"
             }
           }
         },

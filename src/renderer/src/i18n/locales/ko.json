@@ -1672,8 +1672,8 @@
               "48d75ae118": "자동 병합 비활성화",
               "a5b66afb58": "검사 통과",
               "fbd4f57f0a": "검사를 통과했습니다. 병합 전에 병합 가능 여부를 다시 확인합니다.",
-              "4ab19a62ef": "Enable auto-merge",
-              "8f6cb3772f": "Merge this pull request automatically once requirements are met"
+              "4ab19a62ef": "자동 병합 활성화",
+              "8f6cb3772f": "요구 사항이 충족되면 이 PR을 자동으로 병합합니다"
             }
           }
         },

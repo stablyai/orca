@@ -1672,8 +1672,8 @@
               "48d75ae118": "Deshabilitar la fusión automática",
               "a5b66afb58": "Comprobaciones aprobadas",
               "fbd4f57f0a": "Comprobaciones aprobadas. La elegibilidad de fusión se volverá a comprobar antes de fusionar.",
-              "4ab19a62ef": "Enable auto-merge",
-              "8f6cb3772f": "Merge this pull request automatically once requirements are met"
+              "4ab19a62ef": "Habilitar la fusión automática",
+              "8f6cb3772f": "Fusionar esta solicitud de extracción automáticamente cuando se cumplan los requisitos"
             }
           }
         },
