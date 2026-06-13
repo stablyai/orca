@@ -14873,7 +14873,10 @@ export class OrcaRuntimeService {
 
     const link = getLinearCurrentIssueFromWorktree(worktree)
     if (!link.workspaceId) {
-      const backfill = resolveLegacyLinearLinkWorkspace(worktree.linkedLinearIssue ?? '')
+      const backfill = resolveLegacyLinearLinkWorkspace(
+        worktree.linkedLinearIssue ?? '',
+        worktree.linkedLinearIssueOrganizationUrlKey
+      )
       if (backfill?.workspaceId) {
         this.store.setWorktreeMeta(worktree.id, {
           linkedLinearIssueWorkspaceId: backfill.workspaceId,

@@ -204,6 +204,23 @@ describe('orca root help', () => {
     expect(createHelp).toContain('--parent-current      Use the current linked issue as parent')
     expect(callMock).not.toHaveBeenCalled()
   })
+
+  it('advertises Linear issue linking on worktree create and set help', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    logSpy.mockClear()
+
+    await main(['worktree', 'create', '--help'], '/tmp/repo')
+
+    expect(String(logSpy.mock.calls[0][0])).toContain('--linear-issue <identifier-or-url>')
+
+    logSpy.mockClear()
+    await main(['worktree', 'set', '--help'], '/tmp/repo')
+
+    const setHelp = String(logSpy.mock.calls[0][0])
+    expect(setHelp).toContain('--linear-issue <identifier-or-url|null>')
+    expect(setHelp).toContain('--linear-issue <id|url|null> Linked Linear issue identifier or URL')
+    expect(callMock).not.toHaveBeenCalled()
+  })
 })
 
 describe('orca cli worktree awareness', () => {
@@ -628,6 +645,115 @@ describe('orca cli worktree awareness', () => {
     })
   })
 
+  it('passes Linear URL metadata through worktree.set', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_set_linear', {
+        worktree: {
+          ...buildWorktree('/tmp/repo/child', 'feature/child'),
+          linkedLinearIssue: 'STA-335',
+          linkedLinearIssueWorkspaceId: null,
+          linkedLinearIssueOrganizationUrlKey: 'stably'
+        }
+      })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      [
+        'worktree',
+        'set',
+        '--worktree',
+        'id:repo::/tmp/repo/child',
+        '--linear-issue',
+        'https://linear.app/stably/issue/STA-335/test-issue',
+        '--json'
+      ],
+      '/tmp/repo'
+    )
+
+    expect(callMock).toHaveBeenCalledWith('worktree.set', {
+      worktree: 'id:repo::/tmp/repo/child',
+      displayName: undefined,
+      linkedIssue: undefined,
+      linkedLinearIssue: 'STA-335',
+      linkedLinearIssueWorkspaceId: null,
+      linkedLinearIssueOrganizationUrlKey: 'stably',
+      comment: undefined,
+      workspaceStatus: undefined,
+      parentWorktree: undefined,
+      noParent: false
+    })
+  })
+
+  it('clears all Linear metadata through worktree.set', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_clear_linear', {
+        worktree: {
+          ...buildWorktree('/tmp/repo/child', 'feature/child'),
+          linkedLinearIssue: null,
+          linkedLinearIssueWorkspaceId: null,
+          linkedLinearIssueOrganizationUrlKey: null
+        }
+      })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      [
+        'worktree',
+        'set',
+        '--worktree',
+        'id:repo::/tmp/repo/child',
+        '--linear-issue',
+        'null',
+        '--json'
+      ],
+      '/tmp/repo'
+    )
+
+    expect(callMock).toHaveBeenCalledWith('worktree.set', {
+      worktree: 'id:repo::/tmp/repo/child',
+      displayName: undefined,
+      linkedIssue: undefined,
+      linkedLinearIssue: null,
+      linkedLinearIssueWorkspaceId: null,
+      linkedLinearIssueOrganizationUrlKey: null,
+      comment: undefined,
+      workspaceStatus: undefined,
+      parentWorktree: undefined,
+      noParent: false
+    })
+  })
+
+  it('rejects invalid Linear issue values on worktree.set before RPC', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const priorExitCode = process.exitCode
+
+    await main(
+      [
+        'worktree',
+        'set',
+        '--worktree',
+        'id:repo::/tmp/repo/child',
+        '--linear-issue',
+        'not-a-linear-link',
+        '--json'
+      ],
+      '/tmp/repo'
+    )
+
+    expect(callMock).not.toHaveBeenCalled()
+    expect([...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')).toContain(
+      'Pass a Linear issue identifier like STA-335'
+    )
+    expect(process.exitCode).toBe(1)
+
+    process.exitCode = priorExitCode
+  })
+
   it('passes workspace status through worktree.set', async () => {
     queueFixtures(
       callMock,
@@ -662,6 +788,191 @@ describe('orca cli worktree awareness', () => {
       parentWorktree: undefined,
       noParent: false
     })
+  })
+
+  it('passes Linear issue metadata through worktree.create', async () => {
+    queueFixtures(
+      callMock,
+      worktreeListFixture([buildWorktree('/tmp/repo', 'main', 'abc', 'repo-1')]),
+      okFixture('req_create_linear', {
+        worktree: {
+          ...buildWorktree('/tmp/repo/feature', 'feature', 'abc', 'repo-1'),
+          linkedLinearIssue: 'STA-335',
+          linkedLinearIssueWorkspaceId: null,
+          linkedLinearIssueOrganizationUrlKey: 'stably'
+        }
+      })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      [
+        'worktree',
+        'create',
+        '--repo',
+        'id:repo-1',
+        '--name',
+        'feature',
+        '--linear-issue',
+        'https://linear.app/stably/issue/STA-335/test-issue',
+        '--json'
+      ],
+      '/tmp/repo'
+    )
+
+    expect(callMock).toHaveBeenNthCalledWith(2, 'worktree.create', {
+      repo: 'id:repo-1',
+      name: 'feature',
+      baseBranch: undefined,
+      linkedIssue: undefined,
+      linkedLinearIssue: 'STA-335',
+      linkedLinearIssueWorkspaceId: null,
+      linkedLinearIssueOrganizationUrlKey: 'stably',
+      comment: undefined,
+      runHooks: false,
+      activate: false,
+      parentWorktree: undefined,
+      cwdParentWorktree: 'id:repo-1::/tmp/repo',
+      noParent: false,
+      callerTerminalHandle: undefined
+    })
+  })
+
+  it('normalizes bare Linear identifiers through worktree.create', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_create_linear_id', {
+        worktree: {
+          ...buildWorktree('/tmp/repo/feature', 'feature', 'abc', 'repo-1'),
+          linkedLinearIssue: 'STA-335'
+        },
+        lineage: null,
+        warnings: []
+      })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    await main(
+      [
+        'worktree',
+        'create',
+        '--repo',
+        'id:repo-1',
+        '--name',
+        'feature',
+        '--linear-issue',
+        'sta-335',
+        '--no-parent',
+        '--json'
+      ],
+      '/tmp/repo'
+    )
+
+    expect(callMock).toHaveBeenCalledWith('worktree.create', {
+      repo: 'id:repo-1',
+      name: 'feature',
+      baseBranch: undefined,
+      linkedIssue: undefined,
+      linkedLinearIssue: 'STA-335',
+      linkedLinearIssueWorkspaceId: null,
+      linkedLinearIssueOrganizationUrlKey: null,
+      comment: undefined,
+      runHooks: false,
+      activate: false,
+      parentWorktree: undefined,
+      noParent: true,
+      callerTerminalHandle: undefined
+    })
+  })
+
+  it('rejects null Linear issue values on worktree.create before RPC', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const priorExitCode = process.exitCode
+
+    await main(
+      [
+        'worktree',
+        'create',
+        '--repo',
+        'id:repo-1',
+        '--name',
+        'feature',
+        '--linear-issue',
+        'null',
+        '--no-parent',
+        '--json'
+      ],
+      '/tmp/repo'
+    )
+
+    expect(callMock).not.toHaveBeenCalled()
+    expect([...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')).toContain(
+      'Omit --linear-issue on create'
+    )
+    expect(process.exitCode).toBe(1)
+
+    process.exitCode = priorExitCode
+  })
+
+  it('rejects invalid Linear issue values on worktree.create before RPC', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const priorExitCode = process.exitCode
+
+    await main(
+      [
+        'worktree',
+        'create',
+        '--repo',
+        'id:repo-1',
+        '--name',
+        'feature',
+        '--linear-issue',
+        'not-a-linear-link',
+        '--no-parent',
+        '--json'
+      ],
+      '/tmp/repo'
+    )
+
+    expect(callMock).not.toHaveBeenCalled()
+    expect([...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')).toContain(
+      'Pass a Linear issue identifier like STA-335'
+    )
+    expect(process.exitCode).toBe(1)
+
+    process.exitCode = priorExitCode
+  })
+
+  it('rejects missing Linear issue values on worktree.create before RPC', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const priorExitCode = process.exitCode
+
+    await main(
+      [
+        'worktree',
+        'create',
+        '--repo',
+        'id:repo-1',
+        '--name',
+        'feature',
+        '--linear-issue',
+        '--no-parent',
+        '--json'
+      ],
+      '/tmp/repo'
+    )
+
+    expect(callMock).not.toHaveBeenCalled()
+    expect([...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')).toContain(
+      'Missing value for --linear-issue'
+    )
+    expect(process.exitCode).toBe(1)
+
+    process.exitCode = priorExitCode
   })
 
   it('passes explicit activation through worktree.create', async () => {

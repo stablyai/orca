@@ -155,6 +155,8 @@ export const WorktreeSet = WorktreeSelector.extend({
   linkedIssue: TriStateLinkedIssue,
   linkedPR: TriStateLinkedIssue,
   linkedLinearIssue: z.union([z.string(), z.null()]).optional(),
+  linkedLinearIssueWorkspaceId: z.union([z.string(), z.null()]).optional(),
+  linkedLinearIssueOrganizationUrlKey: z.union([z.string(), z.null()]).optional(),
   linkedGitLabMR: TriStateLinkedIssue,
   linkedGitLabIssue: TriStateLinkedIssue,
   isArchived: OptionalBoolean,
