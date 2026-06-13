@@ -1671,7 +1671,9 @@
               "62703b1dc4": "La fusión automática de GitHub está habilitada para esta solicitud de extracción",
               "48d75ae118": "Deshabilitar la fusión automática",
               "a5b66afb58": "Comprobaciones aprobadas",
-              "fbd4f57f0a": "Comprobaciones aprobadas. La elegibilidad de fusión se volverá a comprobar antes de fusionar."
+              "fbd4f57f0a": "Comprobaciones aprobadas. La elegibilidad de fusión se volverá a comprobar antes de fusionar.",
+              "4ab19a62ef": "Enable auto-merge",
+              "8f6cb3772f": "Merge this pull request automatically once requirements are met"
             }
           }
         },

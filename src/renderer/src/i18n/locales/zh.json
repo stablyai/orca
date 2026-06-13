@@ -1671,7 +1671,9 @@
               "62703b1dc4": "为此PR启用了 GitHub 自动合并",
               "48d75ae118": "禁用自动合并",
               "a5b66afb58": "检查已通过",
-              "fbd4f57f0a": "检查已通过。合并资格将在合并前再次验证。"
+              "fbd4f57f0a": "检查已通过。合并资格将在合并前再次验证。",
+              "4ab19a62ef": "Enable auto-merge",
+              "8f6cb3772f": "Merge this pull request automatically once requirements are met"
             }
           }
         },

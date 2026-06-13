@@ -1671,7 +1671,9 @@
               "62703b1dc4": "이 PR에 대해 GitHub 자동 병합이 활성화되었습니다.",
               "48d75ae118": "자동 병합 비활성화",
               "a5b66afb58": "검사 통과",
-              "fbd4f57f0a": "검사를 통과했습니다. 병합 전에 병합 가능 여부를 다시 확인합니다."
+              "fbd4f57f0a": "검사를 통과했습니다. 병합 전에 병합 가능 여부를 다시 확인합니다.",
+              "4ab19a62ef": "Enable auto-merge",
+              "8f6cb3772f": "Merge this pull request automatically once requirements are met"
             }
           }
         },

@@ -1671,7 +1671,9 @@
               "62703b1dc4": "GitHub auto-merge is enabled for this pull request",
               "48d75ae118": "Disable auto-merge",
               "a5b66afb58": "Checks passed",
-              "fbd4f57f0a": "Checks passed. Merge eligibility will be checked again before merging."
+              "fbd4f57f0a": "Checks passed. Merge eligibility will be checked again before merging.",
+              "4ab19a62ef": "Enable auto-merge",
+              "8f6cb3772f": "Merge this pull request automatically once requirements are met"
             }
           }
         },
