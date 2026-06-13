@@ -11,6 +11,9 @@ type UnifiedTabsByWorktree = AppState['unifiedTabsByWorktree']
 type UnifiedTab = UnifiedTabsByWorktree[string][number]
 
 const TERMINAL_TAB_LIVE_TITLE_KEYS = new Set<keyof TerminalTab>(['title'])
+// Why: this handoff flag is stripped from workspace sessions, so toggling it
+// alone should not rebuild and rewrite the durable session payload.
+const TERMINAL_TAB_TRANSIENT_SESSION_KEYS = new Set<keyof TerminalTab>(['pendingActivationSpawn'])
 
 function getDecorativeAgentTitleSignature(title: string): string | null {
   const status = detectAgentStatusFromTitle(title)
@@ -37,7 +40,7 @@ function terminalTabChangedForSession(prev: TerminalTab, next: TerminalTab): boo
     ...(Object.keys(next) as (keyof TerminalTab)[])
   ])
   for (const key of keys) {
-    if (TERMINAL_TAB_LIVE_TITLE_KEYS.has(key)) {
+    if (TERMINAL_TAB_LIVE_TITLE_KEYS.has(key) || TERMINAL_TAB_TRANSIENT_SESSION_KEYS.has(key)) {
       continue
     }
     if (prev[key] !== next[key]) {

@@ -225,6 +225,65 @@ describe('createSessionWriteSubscriber', () => {
     cleanup()
   })
 
+  it('persists terminal defaultTitle-only changes', () => {
+    const persist = vi.fn<(payload: WorkspaceSessionWrite) => void>()
+    const cleanup = createSessionWriteSubscriber({ store: useAppStore, persist })
+
+    useAppStore.setState({
+      workspaceSessionReady: true,
+      hydrationSucceeded: true,
+      ...makeTerminalSessionState('bash')
+    })
+    vi.advanceTimersByTime(200)
+    persist.mockClear()
+
+    useAppStore.setState({
+      tabsByWorktree: {
+        'wt-1': [
+          {
+            ...useAppStore.getState().tabsByWorktree['wt-1'][0],
+            defaultTitle: 'Terminal 2'
+          }
+        ]
+      }
+    })
+    vi.advanceTimersByTime(200)
+
+    expect(persist).toHaveBeenCalledTimes(1)
+    expect(persist.mock.calls[0][0].patch.tabsByWorktree?.['wt-1']?.[0]?.defaultTitle).toBe(
+      'Terminal 2'
+    )
+    cleanup()
+  })
+
+  it('ignores pendingActivationSpawn-only changes', () => {
+    const persist = vi.fn<(payload: WorkspaceSessionWrite) => void>()
+    const cleanup = createSessionWriteSubscriber({ store: useAppStore, persist })
+
+    useAppStore.setState({
+      workspaceSessionReady: true,
+      hydrationSucceeded: true,
+      ...makeTerminalSessionState('bash')
+    })
+    vi.advanceTimersByTime(200)
+    persist.mockClear()
+
+    useAppStore.setState({
+      tabsByWorktree: {
+        'wt-1': [
+          {
+            ...useAppStore.getState().tabsByWorktree['wt-1'][0],
+            pendingActivationSpawn: true
+          }
+        ]
+      }
+    })
+    vi.advanceTimersByTime(200)
+
+    expect(persist).not.toHaveBeenCalled()
+    cleanup()
+  })
+
   it('ignores decorative unified terminal label churn', () => {
     const persist = vi.fn<(payload: WorkspaceSessionWrite) => void>()
     const cleanup = createSessionWriteSubscriber({ store: useAppStore, persist })
