@@ -15,7 +15,27 @@ import { existsSync, readFileSync } from 'fs'
 import type { SshConnection } from './ssh-connection'
 import { RELAY_REMOTE_DIR } from './relay-protocol'
 import { execCommand } from './ssh-relay-deploy-helpers'
-import { shellEscape } from './ssh-connection-utils'
+import {
+  acquireInstallLockParentCommand,
+  listRelayBaseDirsCommand,
+  lockMtimeEpochCommand,
+  probeDirectoryExistsCommand,
+  probeFileExistsCommand,
+  probeRelayInstalledCommand,
+  relayLivenessProbeCommand,
+  removeRemoteTreeCommand,
+  tryCreateInstallLockCommand,
+  writeRemoteEmptyFileCommand
+} from './ssh-remote-commands'
+import {
+  getRemoteHostPlatform,
+  isWindowsRemoteHost,
+  joinRemotePath,
+  remoteBasename,
+  type RemoteHostPlatform,
+  type RemotePathFlavor
+} from './ssh-remote-platform'
+import { windowsRelayPipePathsForSocketName } from './ssh-relay-endpoints'
 
 // Why: the GC pass and the version-dir parser must agree on what counts as a
 // relay install dir. Single source of truth for both. The pattern matches the
@@ -42,6 +62,15 @@ const INSTALL_LOCK_TIMEOUT_MS = 120_000
 // (10–60s on slow hosts) so a slow concurrent installer is not falsely
 // declared dead.
 const INSTALL_LOCK_STALE_MS = 120_000
+const DEFAULT_REMOTE_HOST = getRemoteHostPlatform('linux-x64')
+
+function execHostCommand(
+  conn: SshConnection,
+  host: RemoteHostPlatform,
+  command: string
+): Promise<string> {
+  return execCommand(conn, command, { wrapCommand: host.commandDialect !== 'powershell' })
+}
 
 /**
  * Read the local relay's content-hashed version (e.g. "0.1.0+0a5fe134d020")
@@ -72,8 +101,16 @@ export function readLocalFullVersion(localRelayDir: string): string {
  * Compute the absolute remote install directory for a given content-hashed
  * version. The format is `${remoteHome}/${RELAY_REMOTE_DIR}/relay-${fullVersion}`.
  */
-export function computeRemoteRelayDir(remoteHome: string, fullVersion: string): string {
-  return `${remoteHome}/${RELAY_REMOTE_DIR}/relay-${fullVersion}`
+export function computeRemoteRelayDir(
+  remoteHome: string,
+  fullVersion: string,
+  pathFlavor: RemotePathFlavor = 'posix'
+): string {
+  const host =
+    pathFlavor === 'windows'
+      ? getRemoteHostPlatform('win32-x64')
+      : getRemoteHostPlatform('linux-x64')
+  return joinRemotePath(host, remoteHome, RELAY_REMOTE_DIR, `relay-${fullVersion}`)
 }
 
 /**
@@ -86,15 +123,14 @@ export function computeRemoteRelayDir(remoteHome: string, fullVersion: string): 
  */
 export async function isRelayAlreadyInstalled(
   conn: SshConnection,
-  remoteRelayDir: string
+  remoteRelayDir: string,
+  host: RemoteHostPlatform = DEFAULT_REMOTE_HOST
 ): Promise<boolean> {
   try {
-    const probe = await execCommand(
+    const probe = await execHostCommand(
       conn,
-      `test -d ${shellEscape(remoteRelayDir)} ` +
-        `&& test -f ${shellEscape(`${remoteRelayDir}/relay.js`)} ` +
-        `&& test -f ${shellEscape(`${remoteRelayDir}/${INSTALL_COMPLETE_NAME}`)} ` +
-        `&& echo OK || echo MISSING`
+      host,
+      probeRelayInstalledCommand(host, remoteRelayDir)
     )
     return probe.trim() === 'OK'
   } catch {
@@ -113,21 +149,19 @@ export async function isRelayAlreadyInstalled(
  */
 export async function acquireInstallLock(
   conn: SshConnection,
-  remoteRelayDir: string
+  remoteRelayDir: string,
+  host: RemoteHostPlatform = DEFAULT_REMOTE_HOST
 ): Promise<void> {
-  const lockDir = `${remoteRelayDir}/${INSTALL_LOCK_NAME}`
+  const lockDir = joinRemotePath(host, remoteRelayDir, INSTALL_LOCK_NAME)
   // Why: the parent dir may not exist yet on a first install. mkdir -p is
   // safe to run multiple times — it's a no-op if the dir already exists.
-  await execCommand(conn, `mkdir -p ${shellEscape(remoteRelayDir)}`)
+  await execHostCommand(conn, host, acquireInstallLockParentCommand(host, remoteRelayDir))
 
   let start = Date.now()
   let recoveredOnce = false
   while (true) {
     try {
-      const result = await execCommand(
-        conn,
-        `mkdir ${shellEscape(lockDir)} 2>&1 && echo OK || echo BUSY`
-      )
+      const result = await execHostCommand(conn, host, tryCreateInstallLockCommand(host, lockDir))
       if (result.trim().endsWith('OK')) {
         return
       }
@@ -146,10 +180,10 @@ export async function acquireInstallLock(
       // window, the previous installer crashed. Steal it and retry once,
       // resetting the timeout window so a single post-recovery race doesn't
       // immediately exhaust the budget.
-      const ageOk = await isLockStale(conn, lockDir)
+      const ageOk = await isLockStale(conn, lockDir, host)
       if (ageOk) {
         console.warn(`[ssh-relay] Stealing stale install lock at ${lockDir}`)
-        await execCommand(conn, `rm -rf ${shellEscape(lockDir)}`).catch(() => {})
+        await execHostCommand(conn, host, removeRemoteTreeCommand(host, lockDir)).catch(() => {})
         recoveredOnce = true
         start = Date.now()
         continue
@@ -164,15 +198,16 @@ export async function acquireInstallLock(
   }
 }
 
-async function isLockStale(conn: SshConnection, lockDir: string): Promise<boolean> {
+async function isLockStale(
+  conn: SshConnection,
+  lockDir: string,
+  host: RemoteHostPlatform = DEFAULT_REMOTE_HOST
+): Promise<boolean> {
   try {
     // Why: `stat` flags differ between GNU coreutils (Linux) and BSD (macOS).
     // We try GNU first, then BSD; both produce a Unix epoch in seconds on
     // stdout. If both fail we conservatively treat the lock as not stale.
-    const out = await execCommand(
-      conn,
-      `stat -c %Y ${shellEscape(lockDir)} 2>/dev/null || stat -f %m ${shellEscape(lockDir)} 2>/dev/null || echo`
-    )
+    const out = await execHostCommand(conn, host, lockMtimeEpochCommand(host, lockDir))
     const mtimeSec = parseInt(out.trim(), 10)
     if (!Number.isFinite(mtimeSec)) {
       return false
@@ -190,11 +225,15 @@ async function isLockStale(conn: SshConnection, lockDir: string): Promise<boolea
  * a sibling dir is never observed by GC as "complete but locked", which
  * would lead GC to skip a recoverable dir indefinitely.
  */
-export async function finalizeInstall(conn: SshConnection, remoteRelayDir: string): Promise<void> {
-  const sentinel = `${remoteRelayDir}/${INSTALL_COMPLETE_NAME}`
-  const lock = `${remoteRelayDir}/${INSTALL_LOCK_NAME}`
-  await execCommand(conn, `touch ${shellEscape(sentinel)}`)
-  await execCommand(conn, `rm -rf ${shellEscape(lock)}`).catch(() => {})
+export async function finalizeInstall(
+  conn: SshConnection,
+  remoteRelayDir: string,
+  host: RemoteHostPlatform = DEFAULT_REMOTE_HOST
+): Promise<void> {
+  const sentinel = joinRemotePath(host, remoteRelayDir, INSTALL_COMPLETE_NAME)
+  const lock = joinRemotePath(host, remoteRelayDir, INSTALL_LOCK_NAME)
+  await execHostCommand(conn, host, writeRemoteEmptyFileCommand(host, sentinel))
+  await execHostCommand(conn, host, removeRemoteTreeCommand(host, lock)).catch(() => {})
 }
 
 /**
@@ -202,9 +241,13 @@ export async function finalizeInstall(conn: SshConnection, remoteRelayDir: strin
  * from the failure path so the dir remains a recoverable partial that the
  * next deploy detects (alreadyInstalled=false) and re-runs upload+install.
  */
-export async function abandonInstall(conn: SshConnection, remoteRelayDir: string): Promise<void> {
-  const lock = `${remoteRelayDir}/${INSTALL_LOCK_NAME}`
-  await execCommand(conn, `rm -rf ${shellEscape(lock)}`).catch(() => {})
+export async function abandonInstall(
+  conn: SshConnection,
+  remoteRelayDir: string,
+  host: RemoteHostPlatform = DEFAULT_REMOTE_HOST
+): Promise<void> {
+  const lock = joinRemotePath(host, remoteRelayDir, INSTALL_LOCK_NAME)
+  await execHostCommand(conn, host, removeRemoteTreeCommand(host, lock)).catch(() => {})
 }
 
 /**
@@ -223,13 +266,18 @@ export async function abandonInstall(conn: SshConnection, remoteRelayDir: string
 export async function gcOldRelayVersions(
   conn: SshConnection,
   remoteHome: string,
-  currentDirAbsPath: string
+  currentDirAbsPath: string,
+  host: RemoteHostPlatform = DEFAULT_REMOTE_HOST,
+  options?: {
+    windowsNodePath?: string
+    windowsSockNames?: string[]
+  }
 ): Promise<void> {
-  const baseDir = `${remoteHome}/${RELAY_REMOTE_DIR}`
-  const currentDirName = currentDirAbsPath.split('/').filter(Boolean).pop() ?? ''
+  const baseDir = joinRemotePath(host, remoteHome, RELAY_REMOTE_DIR)
+  const currentDirName = remoteBasename(currentDirAbsPath, host)
   let listing: string
   try {
-    listing = await execCommand(conn, `ls -1 ${shellEscape(baseDir)} 2>/dev/null || true`)
+    listing = await execHostCommand(conn, host, listRelayBaseDirsCommand(host, baseDir))
   } catch {
     return
   }
@@ -247,14 +295,14 @@ export async function gcOldRelayVersions(
   const removed: string[] = []
   const kept: string[] = []
   for (const name of candidates) {
-    const dir = `${baseDir}/${name}`
+    const dir = joinRemotePath(host, baseDir, name)
     try {
-      const safe = await isCandidateSafeToRemove(conn, dir, name)
+      const safe = await isCandidateSafeToRemove(conn, dir, name, host, options)
       if (!safe) {
         kept.push(name)
         continue
       }
-      await execCommand(conn, `rm -rf ${shellEscape(dir)}`)
+      await execHostCommand(conn, host, removeRemoteTreeCommand(host, dir))
       removed.push(name)
     } catch (err) {
       console.warn(
@@ -275,13 +323,20 @@ export async function gcOldRelayVersions(
 async function isCandidateSafeToRemove(
   conn: SshConnection,
   dir: string,
-  name: string
+  name: string,
+  host: RemoteHostPlatform = DEFAULT_REMOTE_HOST,
+  options?: {
+    windowsNodePath?: string
+    windowsSockNames?: string[]
+  }
 ): Promise<boolean> {
   const isLegacy = LEGACY_RELAY_DIR_REGEX.test(name)
 
-  const lockProbe = await execCommand(
+  const lockDir = joinRemotePath(host, dir, INSTALL_LOCK_NAME)
+  const lockProbe = await execHostCommand(
     conn,
-    `test -d ${shellEscape(`${dir}/${INSTALL_LOCK_NAME}`)} && echo LOCKED || echo OPEN`
+    host,
+    probeDirectoryExistsCommand(host, lockDir)
   ).catch(() => 'OPEN')
   const locked = lockProbe.trim() === 'LOCKED'
 
@@ -293,8 +348,7 @@ async function isCandidateSafeToRemove(
     // end of finalizeInstall failed), removing the dir is safe — no
     // installer is racing us, and the daemon (if any) keeps running off
     // its already-loaded code regardless of disk state.
-    const lockDir = `${dir}/${INSTALL_LOCK_NAME}`
-    if (!(await isLockStale(conn, lockDir))) {
+    if (!(await isLockStale(conn, lockDir, host))) {
       return false
     }
     process.stderr.write?.(`[ssh-relay] GC: lock at ${lockDir} is stale; treating as recoverable\n`)
@@ -304,9 +358,11 @@ async function isCandidateSafeToRemove(
   // check for them and rely solely on the live-socket probe — that's the
   // only signal we have that a legacy daemon is still serving clients.
   if (!isLegacy) {
-    const completeProbe = await execCommand(
+    const completePath = joinRemotePath(host, dir, INSTALL_COMPLETE_NAME)
+    const completeProbe = await execHostCommand(
       conn,
-      `test -f ${shellEscape(`${dir}/${INSTALL_COMPLETE_NAME}`)} && echo COMPLETE || echo PARTIAL`
+      host,
+      probeFileExistsCommand(host, completePath)
     ).catch(() => 'PARTIAL')
     if (completeProbe.trim() !== 'COMPLETE') {
       // Crashed-install partial; leave for the next deploy to recover.
@@ -314,24 +370,40 @@ async function isCandidateSafeToRemove(
     }
   }
 
-  const sockAlive = await hasLiveRelaySocket(conn, dir)
+  const sockAlive = await hasLiveRelaySocket(conn, dir, host, options)
   if (sockAlive) {
     return false
   }
   return true
 }
 
-async function hasLiveRelaySocket(conn: SshConnection, dir: string): Promise<boolean> {
+async function hasLiveRelaySocket(
+  conn: SshConnection,
+  dir: string,
+  host: RemoteHostPlatform = DEFAULT_REMOTE_HOST,
+  options?: {
+    windowsNodePath?: string
+    windowsSockNames?: string[]
+  }
+): Promise<boolean> {
   try {
     // Why: `ls -1 dir/relay-*.sock 2>/dev/null` lists socket files. For each,
     // we test -S to confirm it's a socket inode. We do NOT attempt to open
     // the socket here — `test -S` is sufficient for the GC decision and a
     // connect-and-close probe would race with a daemon that's about to idle.
-    const out = await execCommand(
+    const windowsOptions =
+      isWindowsRemoteHost(host) && options?.windowsNodePath
+        ? {
+            nodePath: options.windowsNodePath,
+            pipePaths: (options.windowsSockNames ?? []).flatMap((sockName) =>
+              windowsRelayPipePathsForSocketName(host, dir, sockName)
+            )
+          }
+        : undefined
+    const out = await execHostCommand(
       conn,
-      `for f in ${shellEscape(dir)}/relay-*.sock ${shellEscape(dir)}/relay.sock; do ` +
-        `[ -S "$f" ] && echo ALIVE && break; ` +
-        `done; true`
+      host,
+      relayLivenessProbeCommand(host, dir, windowsOptions)
     )
     return out.includes('ALIVE')
   } catch {

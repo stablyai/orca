@@ -10,6 +10,7 @@ vi.mock('../git/runner', () => ({
 }))
 
 import {
+  _getGiteaRepoRefCacheSize,
   _resetGiteaRepoRefCache,
   getGiteaRepoRef,
   getGiteaRepoRefForRemote,
@@ -36,6 +37,21 @@ describe('Gitea repository ref parsing', () => {
       repo: 'project',
       apiBaseUrl: 'https://git.example.com/api/v1',
       webBaseUrl: 'https://git.example.com'
+    })
+  })
+
+  it('strips trailing slashes after .git suffixes', () => {
+    expect(parseGiteaRepoRef('https://git.example.com/team/project.git/')).toEqual({
+      host: 'git.example.com',
+      owner: 'team',
+      repo: 'project',
+      apiBaseUrl: 'https://git.example.com/api/v1',
+      webBaseUrl: 'https://git.example.com'
+    })
+    expect(parseGiteaRepoRef('git@gitea.example.test:team/project.git/')).toMatchObject({
+      host: 'gitea.example.test',
+      owner: 'team',
+      repo: 'project'
     })
   })
 
@@ -107,6 +123,19 @@ describe('Gitea repository ref parsing', () => {
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['remote', 'get-url', 'origin'], {
       cwd: '/repo'
     })
+  })
+
+  it('bounds cached repository refs for distinct repo paths', async () => {
+    gitExecFileAsyncMock.mockResolvedValue({
+      stdout: 'https://git.example.com/team/project.git\n',
+      stderr: ''
+    })
+
+    for (let i = 0; i < 513; i += 1) {
+      await getGiteaRepoRef(`/repo-${i}`)
+    }
+
+    expect(_getGiteaRepoRefCacheSize()).toBe(512)
   })
 
   it('resolves repository refs through the SSH git provider for connected repos', async () => {

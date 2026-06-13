@@ -1,10 +1,19 @@
+/* oxlint-disable max-lines -- Why: crash-reporting IPC handlers share one mocked ipcMain registry and store contract. */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { CrashReportRecord } from '../../shared/crash-reporting'
 
-const { handlers, clipboardWriteTextMock, submitFeedbackMock } = vi.hoisted(() => ({
+const {
+  handlers,
+  listeners,
+  clipboardWriteTextMock,
+  submitFeedbackMock,
+  recordCrashBreadcrumbMock
+} = vi.hoisted(() => ({
   handlers: new Map<string, (_event: unknown, args?: unknown) => unknown>(),
+  listeners: new Map<string, (_event: unknown, args?: unknown) => void>(),
   clipboardWriteTextMock: vi.fn(),
-  submitFeedbackMock: vi.fn()
+  submitFeedbackMock: vi.fn(),
+  recordCrashBreadcrumbMock: vi.fn()
 }))
 
 vi.mock('electron', () => ({
@@ -14,6 +23,10 @@ vi.mock('electron', () => ({
     removeHandler: vi.fn((channel: string) => handlers.delete(channel)),
     handle: vi.fn((channel: string, handler: (_event: unknown, args?: unknown) => unknown) => {
       handlers.set(channel, handler)
+    }),
+    removeAllListeners: vi.fn((channel: string) => listeners.delete(channel)),
+    on: vi.fn((channel: string, listener: (_event: unknown, args?: unknown) => void) => {
+      listeners.set(channel, listener)
     })
   }
 }))
@@ -22,7 +35,16 @@ vi.mock('./feedback', () => ({
   submitFeedback: submitFeedbackMock
 }))
 
-import { registerCrashReportingHandlers } from './crash-reporting'
+vi.mock('../crash-reporting/crash-breadcrumb-store', () => ({
+  getCrashBreadcrumbSnapshot: vi.fn(() => []),
+  recordCrashBreadcrumb: (...args: unknown[]) => recordCrashBreadcrumbMock(...args)
+}))
+
+import {
+  _getCrashReportingStateSizesForTests,
+  _resetRendererErrorReportDedupeForTests,
+  registerCrashReportingHandlers
+} from './crash-reporting'
 
 function report(
   status: CrashReportRecord['status'] = 'pending',
@@ -49,9 +71,12 @@ function report(
 describe('registerCrashReportingHandlers', () => {
   beforeEach(() => {
     handlers.clear()
+    listeners.clear()
     clipboardWriteTextMock.mockReset()
     submitFeedbackMock.mockReset()
+    recordCrashBreadcrumbMock.mockReset()
     submitFeedbackMock.mockResolvedValue({ ok: true })
+    _resetRendererErrorReportDedupeForTests()
   })
 
   it('copies the latest pending diagnostic text to the clipboard', async () => {
@@ -216,6 +241,29 @@ describe('registerCrashReportingHandlers', () => {
     expect(markSent).not.toHaveBeenCalled()
   })
 
+  it('bounds submitted report ids by evicting the oldest successful sends', async () => {
+    registerCrashReportingHandlers({
+      getById: vi.fn(async (reportId: string) => report('pending', reportId)),
+      dismiss: vi.fn(),
+      markSent: vi.fn(async (reportId: string) => report('sent', reportId)),
+      markDismissedSent: vi.fn(),
+      listRecent: vi.fn(async () => []),
+      record: vi.fn(),
+      formatDiagnosticText: vi.fn()
+    } as never)
+
+    for (let i = 0; i < 260; i += 1) {
+      await handlers.get('crashReports:submit')?.(null, {
+        reportId: `crash-${i}`,
+        submitAnonymously: true,
+        githubLogin: null,
+        githubEmail: null
+      })
+    }
+
+    expect(_getCrashReportingStateSizesForTests().submittedReportIds).toBe(256)
+  })
+
   it('records a deduped renderer error boundary report through the crash store', async () => {
     const recorded = report('pending', 'react-render')
     const recordMock = vi.fn(async () => recorded)
@@ -298,5 +346,106 @@ describe('registerCrashReportingHandlers', () => {
       })
     ).resolves.toEqual({ ok: false, error: 'Invalid renderer error report.' })
     expect(recordMock).not.toHaveBeenCalled()
+  })
+
+  it('bounds renderer error dedupe keys by evicting the oldest unique reports', async () => {
+    let recordCount = 0
+    const recordMock = vi.fn(async () => report('pending', `react-render-${recordCount++}`))
+    registerCrashReportingHandlers({
+      getById: vi.fn(),
+      dismiss: vi.fn(),
+      markSent: vi.fn(),
+      markDismissedSent: vi.fn(),
+      listRecent: vi.fn(async () => []),
+      record: recordMock,
+      formatDiagnosticText: vi.fn()
+    } as never)
+
+    const baseArgs = {
+      boundaryId: 'terminal.workbench',
+      surface: 'terminal-workbench',
+      errorName: 'TypeError',
+      componentStack: 'at Terminal'
+    }
+
+    for (let i = 0; i < 260; i += 1) {
+      await handlers.get('crashReports:recordRendererError')?.(null, {
+        ...baseArgs,
+        errorMessage: `unique-render-error-${i}`
+      })
+    }
+
+    await expect(
+      handlers.get('crashReports:recordRendererError')?.(null, {
+        ...baseArgs,
+        errorMessage: 'unique-render-error-0'
+      })
+    ).resolves.toEqual({
+      ok: true,
+      report: expect.objectContaining({ id: 'react-render-260' }),
+      deduped: false
+    })
+    await expect(
+      handlers.get('crashReports:recordRendererError')?.(null, {
+        ...baseArgs,
+        errorMessage: 'unique-render-error-259'
+      })
+    ).resolves.toEqual({
+      ok: true,
+      report: null,
+      deduped: true
+    })
+
+    expect(recordMock).toHaveBeenCalledTimes(261)
+  })
+
+  it('records sanitized renderer breadcrumbs', () => {
+    registerCrashReportingHandlers({
+      getLatestPending: vi.fn(),
+      getById: vi.fn(),
+      dismiss: vi.fn(),
+      markSent: vi.fn(),
+      listRecent: vi.fn(),
+      record: vi.fn(),
+      formatDiagnosticText: vi.fn()
+    } as never)
+
+    listeners.get('crashReports:recordBreadcrumb')?.(null, {
+      name: 'renderer_error',
+      data: {
+        message: 'boom',
+        count: 2,
+        ok: true,
+        empty: null,
+        badNumber: Number.POSITIVE_INFINITY,
+        object: { ignored: true }
+      }
+    })
+
+    expect(recordCrashBreadcrumbMock).toHaveBeenCalledWith('renderer_error', {
+      message: 'boom',
+      count: 2,
+      ok: true,
+      empty: null
+    })
+  })
+
+  it('ignores renderer breadcrumbs without a string name', () => {
+    registerCrashReportingHandlers({
+      getLatestPending: vi.fn(),
+      getById: vi.fn(),
+      dismiss: vi.fn(),
+      markSent: vi.fn(),
+      listRecent: vi.fn(),
+      record: vi.fn(),
+      formatDiagnosticText: vi.fn()
+    } as never)
+
+    listeners.get('crashReports:recordBreadcrumb')?.(null, {
+      name: 123,
+      data: { message: 'boom' }
+    })
+
+    expect(recordCrashBreadcrumbMock).not.toHaveBeenCalled()
   })
 })

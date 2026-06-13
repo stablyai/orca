@@ -6,26 +6,27 @@ import { useAppStore, type AppState } from '@/store'
 import {
   cancelRuntimeGeneratePullRequestFields,
   generateRuntimePullRequestFields,
+  type RuntimeGeneratePullRequestFieldsOverrides,
   type RuntimeGitContext
 } from '@/runtime/runtime-git-client'
 import {
   getRuntimeRepoBaseRefDefault,
-  searchRuntimeRepoBaseRefs
+  searchRuntimeRepoBaseRefDetails
 } from '@/runtime/runtime-repo-client'
-import {
-  isCustomAgentId,
-  resolveCommitMessageAgentChoice
-} from '../../../../shared/commit-message-agent-spec'
+import type { Repo } from '../../../../shared/types'
 import type { HostedReviewCreationEligibility } from '../../../../shared/hosted-review'
 import { normalizeHostedReviewBaseRef } from '../../../../shared/hosted-review-refs'
+import type { BaseRefSearchResult } from '../../../../shared/types'
 import {
   DEFAULT_SOURCE_CONTROL_AI_PR_CREATION_DEFAULTS,
-  normalizeSourceControlAiSettings
+  resolveSourceControlAiForOperation
 } from '../../../../shared/source-control-ai'
 import type { SourceControlAiPrCreationDefaults } from '../../../../shared/source-control-ai-types'
+import type {
+  PullRequestFieldName,
+  PullRequestFieldRevisions
+} from '@/store/slices/pull-request-generation'
 
-type PullRequestFieldName = 'base' | 'title' | 'body' | 'draft'
-export type PullRequestFieldRevisions = Record<PullRequestFieldName, number>
 type PullRequestDraftFields = {
   base: string
   title: string
@@ -40,6 +41,7 @@ type UseCreatePullRequestDialogFieldsOptions = {
   worktreePath: string
   branch: string
   eligibility: HostedReviewCreationEligibility | null
+  repo?: Pick<Repo, 'sourceControlAi'> | null
   settings: AppState['settings']
   submitting: boolean
   prCreationDefaults?: SourceControlAiPrCreationDefaults
@@ -47,7 +49,11 @@ type UseCreatePullRequestDialogFieldsOptions = {
   generation?: {
     generating: boolean
     generateError: string | null
-    onGenerate: (fields: PullRequestDraftFields, fieldRevisions: PullRequestFieldRevisions) => void
+    onGenerate: (
+      fields: PullRequestDraftFields,
+      fieldRevisions: PullRequestFieldRevisions,
+      overrides?: RuntimeGeneratePullRequestFieldsOverrides
+    ) => void
     onCancelGenerate: () => void
   }
 }
@@ -71,6 +77,24 @@ export function stripBaseRef(ref: string): string {
   return normalizeHostedReviewBaseRef(ref)
 }
 
+export function normalizeCreateReviewBaseSearchResults(
+  results: readonly BaseRefSearchResult[]
+): string[] {
+  const seen = new Set<string>()
+  const branches: string[] = []
+  for (const result of results) {
+    // Why: hosted review APIs take branch names, while base search displays
+    // remote-qualified refs. Detailed search already resolves slashy remotes.
+    const branch = stripBaseRef((result.localBranchName || result.refName).trim())
+    if (!branch || seen.has(branch)) {
+      continue
+    }
+    seen.add(branch)
+    branches.push(branch)
+  }
+  return branches
+}
+
 export function useCreatePullRequestDialogFields({
   open,
   repoId,
@@ -78,24 +102,20 @@ export function useCreatePullRequestDialogFields({
   worktreePath,
   branch,
   eligibility,
+  repo,
   settings,
   submitting,
   prCreationDefaults,
   onBranchChangedByGeneration,
   generation
 }: UseCreatePullRequestDialogFieldsOptions) {
-  const normalizedSourceControlAi = normalizeSourceControlAiSettings(
-    settings?.sourceControlAi,
-    settings?.commitMessageAi
-  )
-  const sourceControlAi = settings
-    ? normalizedSourceControlAi
-    : { ...normalizedSourceControlAi, enabled: false }
-  const effectiveCommitMessageAgentId = resolveCommitMessageAgentChoice(
-    sourceControlAi.agentId,
-    settings?.defaultTuiAgent,
-    settings?.disabledTuiAgents
-  )
+  const resolvedPullRequestAi = settings
+    ? resolveSourceControlAiForOperation({
+        settings,
+        repo,
+        operation: 'pullRequest'
+      })
+    : null
   const resolvedPrDefaults = {
     ...DEFAULT_SOURCE_CONTROL_AI_PR_CREATION_DEFAULTS,
     ...prCreationDefaults
@@ -213,6 +233,18 @@ export function useCreatePullRequestDialogFields({
     if (initializedFromEligibilityRef.current === initializationKey) {
       return
     }
+    if (!hasExternalGeneration) {
+      // Why: a branch/context switch invalidates any local AI request; cancel
+      // it before reseeding fields so stale generated text cannot land later.
+      generationRequestIdRef.current += 1
+      const requestContext = generationSeedRef.current?.context
+      if (generateInFlightRef.current && requestContext?.worktreePath) {
+        void cancelRuntimeGeneratePullRequestFields(requestContext)
+      }
+      generateInFlightRef.current = false
+      generationSeedRef.current = null
+      setGenerating(false)
+    }
     // Why: eligibility refreshes while the dialog is open; only seed fields
     // once per branch so late refreshes do not overwrite user edits.
     initializedFromEligibilityRef.current = initializationKey
@@ -266,10 +298,10 @@ export function useCreatePullRequestDialogFields({
     }
     let stale = false
     const timer = window.setTimeout(() => {
-      void searchRuntimeRepoBaseRefs(settings, repoId, baseQuery.trim(), 20)
+      void searchRuntimeRepoBaseRefDetails(settings, repoId, baseQuery.trim(), 20)
         .then((results) => {
           if (!stale) {
-            setBaseResults(results.map(stripBaseRef))
+            setBaseResults(normalizeCreateReviewBaseSearchResults(results))
             setBaseSearchError(null)
           }
         })
@@ -289,104 +321,108 @@ export function useCreatePullRequestDialogFields({
   let generateDisabledReason: string | undefined
   if (submitting) {
     generateDisabledReason = 'Create PR in progress...'
-  } else if (!sourceControlAi.enabled) {
-    generateDisabledReason = 'Enable Source Control AI in Settings -> Git.'
-  } else if (!effectiveCommitMessageAgentId) {
-    generateDisabledReason = 'Pick an agent in Settings -> Git -> Source Control AI.'
-  } else if (isCustomAgentId(effectiveCommitMessageAgentId)) {
-    const command = sourceControlAi.customAgentCommand?.trim() ?? ''
-    if (!command) {
-      generateDisabledReason =
-        'Custom command is empty. Add one in Settings -> Git -> Source Control AI.'
-    }
+  } else if (!resolvedPullRequestAi?.ok) {
+    generateDisabledReason =
+      resolvedPullRequestAi?.error ?? 'Enable Source Control AI in Settings -> Git.'
   } else if (!base.trim()) {
     generateDisabledReason = 'Choose a base branch before generating.'
   }
   const generateDisabled = !effectiveGenerating && Boolean(generateDisabledReason)
 
-  const handleGenerate = useCallback(async (): Promise<void> => {
-    if (!worktreePath || !base.trim() || effectiveGenerating || generateDisabled) {
-      return
-    }
-    if (generation) {
-      generation.onGenerate({ base, title, body, draft }, { ...fieldRevisionsRef.current })
-      return
-    }
-    const requestId = generationRequestIdRef.current + 1
-    generationRequestIdRef.current = requestId
-    const connectionId = getConnectionId(worktreeId) ?? undefined
-    const requestContext = {
-      settings: useAppStore.getState().settings,
-      worktreeId,
-      worktreePath,
-      connectionId
-    }
-    const seed = {
-      requestId,
-      fieldRevisions: { ...fieldRevisionsRef.current },
-      context: requestContext
-    }
-    generationSeedRef.current = seed
-    generateInFlightRef.current = true
-    setGenerating(true)
-    setGenerateError(null)
-    try {
-      const result = await generateRuntimePullRequestFields(requestContext, {
-        base: stripBaseRef(base.trim()),
-        title,
-        body,
-        draft
-      })
-      if (result.branchChangedByPreparation) {
-        await onBranchChangedByGeneration?.()
-      }
-      const isCurrentRequest = generationRequestIdRef.current === requestId
-      if (!isCurrentRequest) {
+  const handleGenerate = useCallback(
+    async (overrides?: RuntimeGeneratePullRequestFieldsOverrides): Promise<void> => {
+      if (!worktreePath || !base.trim() || effectiveGenerating || generateDisabled) {
         return
       }
-      if (!result.success) {
-        if (result.canceled) {
-          setGenerateError(null)
+      if (generation) {
+        generation.onGenerate(
+          { base, title, body, draft },
+          { ...fieldRevisionsRef.current },
+          overrides
+        )
+        return
+      }
+      const requestId = generationRequestIdRef.current + 1
+      generationRequestIdRef.current = requestId
+      const connectionId = getConnectionId(worktreeId) ?? undefined
+      const requestContext = {
+        settings: useAppStore.getState().settings,
+        worktreeId,
+        worktreePath,
+        connectionId
+      }
+      const seed = {
+        requestId,
+        fieldRevisions: { ...fieldRevisionsRef.current },
+        context: requestContext
+      }
+      generationSeedRef.current = seed
+      generateInFlightRef.current = true
+      setGenerating(true)
+      setGenerateError(null)
+      try {
+        const result = await generateRuntimePullRequestFields(
+          requestContext,
+          {
+            base: stripBaseRef(base.trim()),
+            title,
+            body,
+            draft
+          },
+          overrides
+        )
+        if (result.branchChangedByPreparation) {
+          await onBranchChangedByGeneration?.()
+        }
+        const isCurrentRequest = generationRequestIdRef.current === requestId
+        if (!isCurrentRequest) {
           return
         }
-        setGenerateError(result.error)
-        return
-      }
+        if (!result.success) {
+          if (result.canceled) {
+            setGenerateError(null)
+            return
+          }
+          setGenerateError(result.error)
+          return
+        }
 
-      const currentSeed = generationSeedRef.current
-      if (!currentSeed || currentSeed.requestId !== requestId) {
-        return
+        const currentSeed = generationSeedRef.current
+        if (!currentSeed || currentSeed.requestId !== requestId) {
+          return
+        }
+        applyGeneratedFields(result.fields, currentSeed.fieldRevisions)
+        useAppStore.getState().recordFeatureInteraction('ai-pr-generation')
+        setGenerateError(null)
+      } catch (error) {
+        if (generationRequestIdRef.current !== requestId) {
+          return
+        }
+        setGenerateError(
+          error instanceof Error ? error.message : 'Failed to generate pull request details'
+        )
+      } finally {
+        if (generationRequestIdRef.current === requestId) {
+          generateInFlightRef.current = false
+          generationSeedRef.current = null
+          setGenerating(false)
+        }
       }
-      applyGeneratedFields(result.fields, currentSeed.fieldRevisions)
-      useAppStore.getState().recordFeatureInteraction('ai-pr-generation')
-      setGenerateError(null)
-    } catch (error) {
-      if (generationRequestIdRef.current !== requestId) {
-        return
-      }
-      setGenerateError(
-        error instanceof Error ? error.message : 'Failed to generate pull request details'
-      )
-    } finally {
-      if (generationRequestIdRef.current === requestId) {
-        generateInFlightRef.current = false
-        generationSeedRef.current = null
-        setGenerating(false)
-      }
-    }
-  }, [
-    base,
-    body,
-    draft,
-    effectiveGenerating,
-    applyGeneratedFields,
-    generation,
-    generateDisabled,
-    onBranchChangedByGeneration,
-    title,
-    worktreeId,
-    worktreePath
-  ])
+    },
+    [
+      base,
+      body,
+      draft,
+      effectiveGenerating,
+      applyGeneratedFields,
+      generation,
+      generateDisabled,
+      onBranchChangedByGeneration,
+      title,
+      worktreeId,
+      worktreePath
+    ]
+  )
 
   const handleCancelGenerate = useCallback((): void => {
     if (generation) {
@@ -429,7 +465,7 @@ export function useCreatePullRequestDialogFields({
   ])
 
   return {
-    aiGenerationEnabled: sourceControlAi.enabled === true,
+    aiGenerationEnabled: resolvedPullRequestAi?.ok === true,
     base,
     setBase: setUserBase,
     title,

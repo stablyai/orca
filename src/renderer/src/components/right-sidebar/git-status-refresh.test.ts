@@ -128,4 +128,26 @@ describe('refreshGitStatusForWorktree', () => {
     })
     expect(deps.setGitStatus).toHaveBeenCalledWith('wt-3', status)
   })
+
+  it('clears stale branch identity when git status reports detached HEAD', async () => {
+    const status: GitStatusResult = {
+      entries: [],
+      conflictOperation: 'unknown',
+      head: 'abc123456789'
+    }
+    const gitStatus = vi.fn().mockResolvedValue(status)
+    vi.stubGlobal('window', { api: { git: { status: gitStatus } } })
+    const deps = makeDeps()
+
+    await refreshGitStatusForWorktree({
+      worktreeId: 'wt-detached',
+      worktreePath: '/repo',
+      deps
+    })
+
+    expect(deps.updateWorktreeGitIdentity).toHaveBeenCalledWith('wt-detached', {
+      head: 'abc123456789',
+      branch: null
+    })
+  })
 })

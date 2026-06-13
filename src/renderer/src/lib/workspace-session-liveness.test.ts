@@ -6,6 +6,7 @@ function createSnapshot(
 ): WorkspaceSessionSnapshot {
   return {
     activeRepoId: 'repo-1',
+    activeWorkspaceKey: 'worktree:wt-1',
     activeWorktreeId: 'wt-1',
     activeTabId: 'tab-1',
     tabsByWorktree: {},
@@ -13,6 +14,8 @@ function createSnapshot(
     terminalLayoutsByTabId: {},
     activeTabIdByWorktree: {},
     openFiles: [],
+    editorDrafts: {},
+    markdownFrontmatterVisible: {},
     activeFileIdByWorktree: {},
     activeTabTypeByWorktree: {},
     browserTabsByWorktree: {},
@@ -28,6 +31,7 @@ function createSnapshot(
     worktreesByRepo: {},
     lastKnownRelayPtyIdByTabId: {},
     lastVisitedAtByWorktreeId: {},
+    defaultTerminalTabsAppliedByWorktreeId: {},
     ...overrides
   }
 }

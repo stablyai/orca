@@ -4,6 +4,7 @@ import { rmSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { test, expect } from './helpers/orca-app'
 import {
+  focusActiveTerminalInput,
   getTerminalContent,
   waitForActivePanePtyId,
   waitForActiveTerminalManager,
@@ -15,32 +16,6 @@ import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } fro
 const KEY_LATENCY_SAMPLES = 'abcdefghijklmnop'
 const MAX_MEDIAN_KEY_LATENCY_MS = 250
 const MAX_WORST_KEY_LATENCY_MS = 1_000
-
-async function focusActiveTerminalInput(page: Page): Promise<void> {
-  await page.evaluate(() => {
-    const state = window.__store?.getState()
-    const worktreeId = state?.activeWorktreeId
-    const tabId =
-      state?.activeTabType === 'terminal'
-        ? state.activeTabId
-        : worktreeId
-          ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
-          : null
-    const manager = tabId ? window.__paneManagers?.get(tabId) : null
-    const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
-    if (!pane) {
-      throw new Error('No active terminal pane to focus')
-    }
-    pane.terminal.focus()
-    const textarea = pane.container.querySelector(
-      '.xterm-helper-textarea'
-    ) as HTMLTextAreaElement | null
-    if (!textarea) {
-      throw new Error('Active terminal has no xterm helper textarea')
-    }
-    textarea.focus()
-  })
-}
 
 function interactivePromptScript(runId: string): string {
   return `

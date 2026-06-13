@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { AgentSkillSetupPanel } from './AgentSkillSetupPanel'
 import { StepBadge } from './BrowserUseStepBadge'
+import { translate } from '@/i18n/i18n'
 
 type Props = {
   command: string
@@ -26,8 +27,14 @@ export function BrowserUseSkillStep({
   return (
     <AgentSkillSetupPanel
       variant="inline"
-      title="Browser Use skill"
-      description="Enables agents to navigate and verify pages in Orca's browser."
+      title={translate(
+        'auto.components.settings.BrowserUseSkillStep.459e24eebc',
+        'Browser Use skill'
+      )}
+      description={translate(
+        'auto.components.settings.BrowserUseSkillStep.0871b6998d',
+        "Enables agents to navigate and verify pages in Orca's browser."
+      )}
       command={command}
       terminalTitle="Browser Use setup"
       terminalAriaLabel="Browser Use skill install terminal"

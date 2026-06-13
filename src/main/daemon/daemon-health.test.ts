@@ -122,20 +122,23 @@ describe('parseDaemonPidFile', () => {
     expect(parseDaemonPidFile(serialized)).toEqual({
       pid: 12345,
       startedAtMs: 1_700_000_000_000,
-      entryPath: null
+      entryPath: null,
+      appVersion: null
     })
   })
 
-  it('parses JSON pid files with entryPath', () => {
+  it('parses JSON pid files with launch metadata', () => {
     const serialized = serializeDaemonPidFile({
       pid: 12345,
       startedAtMs: 1_700_000_000_000,
-      entryPath: '/repo/out/main/daemon-entry.js'
+      entryPath: '/repo/out/main/daemon-entry.js',
+      appVersion: '1.2.3'
     })
     expect(parseDaemonPidFile(serialized)).toEqual({
       pid: 12345,
       startedAtMs: 1_700_000_000_000,
-      entryPath: '/repo/out/main/daemon-entry.js'
+      entryPath: '/repo/out/main/daemon-entry.js',
+      appVersion: '1.2.3'
     })
   })
 
@@ -145,7 +148,8 @@ describe('parseDaemonPidFile', () => {
     expect(parseDaemonPidFile('{"pid":9999}')).toEqual({
       pid: 9999,
       startedAtMs: null,
-      entryPath: null
+      entryPath: null,
+      appVersion: null
     })
   })
 
@@ -156,12 +160,14 @@ describe('parseDaemonPidFile', () => {
     expect(parseDaemonPidFile('12345')).toEqual({
       pid: 12345,
       startedAtMs: null,
-      entryPath: null
+      entryPath: null,
+      appVersion: null
     })
     expect(parseDaemonPidFile('  12345\n')).toEqual({
       pid: 12345,
       startedAtMs: null,
-      entryPath: null
+      entryPath: null,
+      appVersion: null
     })
   })
 

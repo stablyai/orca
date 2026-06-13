@@ -34,6 +34,21 @@ describe('tab create entry classification', () => {
     })
   })
 
+  it('opens local-dev URLs with root suffixes as browser tabs', () => {
+    expect(classifyTabEntryQuery('localhost:3000/', readyFiles([]))).toEqual({
+      kind: 'host-url',
+      url: 'http://localhost:3000/'
+    })
+    expect(classifyTabEntryQuery('localhost:3000?debug=1', readyFiles([]))).toEqual({
+      kind: 'host-url',
+      url: 'http://localhost:3000/?debug=1'
+    })
+    expect(classifyTabEntryQuery('localhost:3000#preview', readyFiles([]))).toEqual({
+      kind: 'host-url',
+      url: 'http://localhost:3000/#preview'
+    })
+  })
+
   it('keeps common source/document filenames as file candidates', () => {
     expect(classifyTabEntryQuery('README.md', readyFiles([]))).toEqual({
       kind: 'new-file',

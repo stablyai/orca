@@ -1,7 +1,7 @@
 /* oxlint-disable max-lines */
 import { execSync } from 'child_process'
 import { existsSync, statSync } from 'fs'
-import { join, basename } from 'path'
+import { basename } from 'path'
 import { gitExecFileSync, gitExecFileAsync } from './runner'
 import type { BaseRefSearchResult } from '../../shared/types'
 import { buildHostedRemoteFileUrl, parseHostedRemote } from './hosted-remote-url'
@@ -53,25 +53,23 @@ export function isGitRepo(path: string): boolean {
     if (!existsSync(path) || !statSync(path).isDirectory()) {
       return false
     }
-    // .git dir or file (for worktrees) or bare repo
-    if (existsSync(join(path, '.git'))) {
-      return true
-    }
-    // Might be a bare repo — ask git
-    const result = gitExecFileSync(['rev-parse', '--is-inside-work-tree'], {
+    const insideWorkTree = gitExecFileSync(['rev-parse', '--is-inside-work-tree'], {
       cwd: path
     }).trim()
-    return result === 'true'
-  } catch {
-    // Also check if it's a bare repo
-    try {
-      const result = gitExecFileSync(['rev-parse', '--is-bare-repository'], {
-        cwd: path
-      }).trim()
-      return result === 'true'
-    } catch {
-      return false
+    if (insideWorkTree === 'true') {
+      return true
     }
+  } catch {
+    // Fall through to the bare-repo probe below.
+  }
+
+  try {
+    const bareRepo = gitExecFileSync(['rev-parse', '--is-bare-repository'], {
+      cwd: path
+    }).trim()
+    return bareRepo === 'true'
+  } catch {
+    return false
   }
 }
 
@@ -772,20 +770,21 @@ export async function getBranchConflictKind(
   }
 
   try {
+    const remoteNames = (await listRemoteNames(path)).sort((a, b) => b.length - a.length)
     const { stdout } = await gitExecFileAsync(
       ['for-each-ref', '--format=%(refname)', 'refs/remotes'],
       { cwd: path }
     )
-    // Why: refs have the form refs/remotes/<remote>/<branch>. We strip the
-    // first three segments so that e.g. "feature/dashboard" only matches
-    // "refs/remotes/origin/feature/dashboard", not "refs/remotes/origin/other/feature/dashboard".
     const hasRemoteConflict = stdout.split('\n').some((ref) => {
       const trimmed = ref.trim()
       if (isAllowedRemoteBaseRef(trimmed, allowedBaseRef)) {
         return false
       }
-      const parts = trimmed.split('/')
-      return parts.slice(3).join('/') === branchName
+      const shortRef = trimmed.replace(/^refs\/remotes\//, '')
+      // Why: git allows slashes in remote names. Use the configured remote
+      // list so foo/bar/feature resolves as branch "feature" for remote
+      // "foo/bar", matching searchBaseRefDetails.
+      return resolveLocalBranchName(trimmed, shortRef, remoteNames) === branchName
     })
 
     return hasRemoteConflict ? 'remote' : null

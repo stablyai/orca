@@ -5,6 +5,7 @@ import type {
   MigrationUnsupportedPtyEntry
 } from '../../shared/agent-status-types'
 import type { AgentInterruptInferenceRequest } from '../../shared/agent-interrupt-intent'
+import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { agentHookServer, isValidPaneKey } from '../agent-hooks/server'
 import { ampHookService } from '../amp/hook-service'
 import {
@@ -23,11 +24,32 @@ import { copilotHookService } from '../copilot/hook-service'
 import { hermesHookService } from '../hermes/hook-service'
 import { openClaudeHookService } from '../openclaude/hook-service'
 
+type AgentStatusRuntimeEnrichment = Pick<
+  OrcaRuntimeService,
+  'getAgentStatusTerminalHandleForPaneKey' | 'getAgentStatusOrchestrationContextForPaneKey'
+>
+
+function enrichAgentStatusIpcPayload(
+  data: AgentStatusIpcPayload,
+  runtime: AgentStatusRuntimeEnrichment | undefined
+): AgentStatusIpcPayload {
+  if (!runtime) {
+    return data
+  }
+  const terminalHandle = runtime.getAgentStatusTerminalHandleForPaneKey(data.paneKey)
+  const orchestration = runtime.getAgentStatusOrchestrationContextForPaneKey(data.paneKey)
+  return {
+    ...data,
+    ...(terminalHandle ? { terminalHandle } : {}),
+    ...(orchestration ? { orchestration } : {})
+  }
+}
+
 // Why: install/remove are intentionally not exposed to the renderer. Orca
 // auto-installs managed hooks at app startup (see src/main/index.ts), so a
 // renderer-triggered remove would be silently reverted on the next launch
 // and mislead the user.
-export function registerAgentHookHandlers(): void {
+export function registerAgentHookHandlers(runtime?: AgentStatusRuntimeEnrichment): void {
   // Why: matches the defensive pattern in src/main/ipc/pty.ts so re-registration
   // never throws "Attempted to register a second handler..." if this function is
   // ever invoked more than once (e.g. the macOS app re-activation path that
@@ -71,8 +93,11 @@ export function registerAgentHookHandlers(): void {
   })
   ipcMain.handle('agentStatus:getSnapshot', (): AgentStatusIpcPayload[] => {
     // Why: the renderer pulls this after workspace hydration, so startup cannot
-    // lose replayed statuses while its local store is still empty.
-    return agentHookServer.getStatusSnapshot()
+    // lose replayed statuses while its local store is still empty. Match the
+    // live push enrichment in main/index.ts so parent/child rows survive replay.
+    return agentHookServer
+      .getStatusSnapshot()
+      .map((entry) => enrichAgentStatusIpcPayload(entry, runtime))
   })
   ipcMain.handle('agentStatus:inferInterrupt', (_event, request: unknown): boolean => {
     if (typeof request !== 'object' || request === null) {

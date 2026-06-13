@@ -7,45 +7,70 @@ import type { OnboardingState } from '../../../../shared/types'
 import { AgentStep } from './AgentStep'
 import { ThemeStep } from './ThemeStep'
 import { NotificationStep } from './NotificationStep'
-import { AgentFeatureSetupStep } from './AgentFeatureSetupStep'
 import { IntegrationsStep } from './IntegrationsStep'
-import { RepoStep } from './RepoStep'
-import { OnboardingTourStep } from './OnboardingTourStep'
-import { STEPS, useOnboardingFlow } from './use-onboarding-flow'
+import { useOnboardingFlow } from './use-onboarding-flow'
 import { OnboardingSkipConfirmationDialog } from './OnboardingSkipConfirmationDialog'
 import { OnboardingFooter } from './OnboardingFooter'
 import { shouldRequestOnboardingSkipConfirmation } from './onboarding-dismiss-target'
 import logo from '../../../../../resources/logo.svg'
+import { translate } from '@/i18n/i18n'
 
 const stepCopy = {
   agent: {
-    title: 'Pick your default agent',
-    subtitle:
-      "Orca works with every CLI agent. Choose the one you'll reach for most. Switch any time."
+    get title() {
+      return translate(
+        'auto.components.onboarding.OnboardingFlow.198b148b3c',
+        'Pick your default agent'
+      )
+    },
+    get subtitle() {
+      return translate(
+        'auto.components.onboarding.OnboardingFlow.322fc50a18',
+        "Orca works with every CLI agent. Choose the one you'll reach for most. Switch any time."
+      )
+    }
   },
   theme: {
-    title: 'Make it feel like home',
-    subtitle: 'Pick the look you want to stare at for hours.'
+    get title() {
+      return translate(
+        'auto.components.onboarding.OnboardingFlow.f396db9f20',
+        'Make it feel like home'
+      )
+    },
+    get subtitle() {
+      return translate(
+        'auto.components.onboarding.OnboardingFlow.04ae28d8ca',
+        'Pick the look you want to stare at for hours.'
+      )
+    }
   },
   notifications: {
-    title: 'Set up notifications',
-    subtitle: 'Orca will notify you know when agents are done or need help.'
-  },
-  agentSetup: {
-    title: 'Set up Orca for agents',
-    subtitle: 'Turn on advanced Orca capabilities for agents.'
+    get title() {
+      return translate(
+        'auto.components.onboarding.OnboardingFlow.b054332836',
+        'Set up notifications'
+      )
+    },
+    get subtitle() {
+      return translate(
+        'auto.components.onboarding.OnboardingFlow.ff92d15436',
+        'Orca will notify you when agents are done or need help.'
+      )
+    }
   },
   integrations: {
-    title: 'Connect your task sources',
-    subtitle: 'Connect GitHub or Linear to:'
-  },
-  tour: {
-    title: 'Explore Orca',
-    subtitle: "Take a 60-second tour of Orca's advanced features."
-  },
-  repo: {
-    title: 'Point Orca at some code',
-    subtitle: 'Open a folder or clone a repo to finish setup.'
+    get title() {
+      return translate(
+        'auto.components.onboarding.OnboardingFlow.ae3b00ca82',
+        'Set up GitHub tasks'
+      )
+    },
+    get subtitle() {
+      return translate(
+        'auto.components.onboarding.OnboardingFlow.97c42cda00',
+        'Install the GitHub CLI to:'
+      )
+    }
   }
 } as const
 
@@ -53,10 +78,7 @@ const stepTooltipLabels = {
   agent: 'Default Agent',
   theme: 'Appearance',
   notifications: 'Notifications',
-  agentSetup: 'Agent setup',
-  integrations: 'Integrations',
-  tour: 'Explore Orca',
-  repo: 'Create project'
+  integrations: 'Integrations'
 } as const
 
 type OnboardingFlowProps = {
@@ -74,34 +96,26 @@ export default function OnboardingFlow({
   const continueShortcutModifierLabel = getScreenSubmitModifierLabel()
   const { currentStep, stepIndex, busyLabel } = flow
   const copy = stepCopy[currentStep.id]
-  const isTourStep = currentStep.id === 'tour'
-  const tourStarted = flow.tourStarted
-  const isInlineTourRunning = isTourStep && tourStarted
-  const shouldShowFooter = !isInlineTourRunning
-  const shouldShowSkipToProjectSetup = currentStep.id !== 'repo'
-  const shouldShowStepHeading = !isInlineTourRunning
-  const shouldShowFooterBusy = Boolean(busyLabel) && currentStep.id !== 'agentSetup'
+  const shouldShowSkipToProjectSetup = currentStep.id !== 'notifications'
+  const shouldShowFooterBusy = Boolean(busyLabel)
   const footerPrimaryLabel =
-    currentStep.id === 'agentSetup' ? 'Continue' : (busyLabel ?? 'Continue')
+    busyLabel ?? (currentStep.id === 'notifications' ? 'Add your first project' : 'Continue')
+  const canDismissCurrentStep = currentStep.id !== 'notifications'
   const [skipConfirmOpen, setSkipConfirmOpen] = useState(false)
   const skipConfirmAdvancedViaRef = useRef<'button' | 'keyboard'>('button')
-  const {
-    next: flowNext,
-    openFolder: flowOpenFolder,
-    continueWithExistingProject: flowContinueWithExistingProject,
-    skipTourToRepo: flowSkipTourToRepo,
-    dismissOnboarding: flowDismissOnboarding
-  } = flow
+  const { next: flowNext, dismissOnboarding: flowDismissOnboarding } = flow
 
   const requestSkipConfirmation = useCallback(
     (advancedVia: 'button' | 'keyboard') => {
-      if (busyLabel || skipConfirmOpen) {
+      // Why: the final notifications step hands off to Add Project, so all
+      // dismiss paths are disabled there, not just the visible Skip button.
+      if (!canDismissCurrentStep || busyLabel || skipConfirmOpen) {
         return
       }
       skipConfirmAdvancedViaRef.current = advancedVia
       setSkipConfirmOpen(true)
     },
-    [busyLabel, skipConfirmOpen]
+    [busyLabel, canDismissCurrentStep, skipConfirmOpen]
   )
 
   const confirmSkipOnboarding = useCallback(() => {
@@ -124,37 +138,12 @@ export default function OnboardingFlow({
       if (!isScreenSubmitShortcut(event)) {
         return
       }
-      if (currentStep.id === 'tour' && tourStarted) {
-        return
-      }
       event.preventDefault()
-      if (currentStep.id === 'tour') {
-        if (!tourStarted) {
-          void flowSkipTourToRepo()
-        }
-        return
-      }
-      if (currentStep.id === 'repo') {
-        if (flow.hasExistingProject) {
-          void flowContinueWithExistingProject('keyboard')
-        } else {
-          void flowOpenFolder()
-        }
-      } else {
-        void flowNext('keyboard')
-      }
+      void flowNext('keyboard')
     }
     window.addEventListener('keydown', onKeyDown, { capture: true })
     return () => window.removeEventListener('keydown', onKeyDown, { capture: true })
-  }, [
-    currentStep.id,
-    flow.hasExistingProject,
-    flowContinueWithExistingProject,
-    flowNext,
-    flowOpenFolder,
-    flowSkipTourToRepo,
-    tourStarted
-  ])
+  }, [flowNext])
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
@@ -185,13 +174,17 @@ export default function OnboardingFlow({
       />
 
       <section
+        ref={flow.setLifecycleRootRef}
         role="dialog"
-        aria-label="Orca onboarding"
+        aria-label={translate(
+          'auto.components.onboarding.OnboardingFlow.277ba45540',
+          'Orca onboarding'
+        )}
         aria-modal="true"
         data-onboarding-modal
         className={cn(
           'relative flex h-[calc(100vh-2rem)] max-h-[960px] min-h-0 w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-xl border border-border bg-card text-card-foreground shadow-[0_10px_24px_rgba(0,0,0,0.18)] transition-[max-width] duration-[760ms] ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none',
-          isInlineTourRunning ? 'max-w-[1180px]' : 'max-w-[1100px]'
+          'max-w-[1100px]'
         )}
       >
         <div className="relative flex h-full min-h-0 flex-col px-6 pb-6 pt-8 sm:px-8 sm:pb-8 sm:pt-9">
@@ -202,19 +195,14 @@ export default function OnboardingFlow({
               aria-hidden="true"
               className="h-7 w-auto shrink-0 invert dark:invert-0"
             />
-            <span>Orca</span>
+            <span>{translate('auto.components.onboarding.OnboardingFlow.a249f81538', 'Orca')}</span>
           </div>
 
-          <div
-            className={cn(
-              'flex items-center gap-2 transition-[margin-top] duration-[760ms] ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none',
-              isInlineTourRunning ? 'mt-7' : 'mt-10'
-            )}
-          >
+          <div className="mt-10 flex items-center gap-2 transition-[margin-top] duration-[760ms] ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none">
             <TooltipProvider delayDuration={0} skipDelayDuration={0}>
-              {STEPS.map((step, idx) => {
-                const isActive = idx === stepIndex
-                const isDone = idx < stepIndex
+              {flow.visibleSteps.map(({ step, index: realStepIndex }, visibleIdx) => {
+                const isActive = realStepIndex === stepIndex
+                const isDone = realStepIndex < stepIndex
                 return (
                   <Tooltip key={step.id}>
                     <TooltipTrigger asChild>
@@ -230,9 +218,13 @@ export default function OnboardingFlow({
                               ? 'w-6 bg-muted-foreground/70 hover:bg-foreground/80'
                               : 'w-6 bg-muted-foreground/25 hover:bg-muted-foreground/45'
                         )}
-                        aria-label={`Go to onboarding step ${step.stepNumber}: ${stepCopy[step.id].title}`}
+                        aria-label={translate(
+                          'auto.components.onboarding.OnboardingFlow.adaa0aa627',
+                          'Go to onboarding step {{value0}}: {{value1}}',
+                          { value0: visibleIdx + 1, value1: stepCopy[step.id].title }
+                        )}
                         aria-current={isActive ? 'step' : undefined}
-                        onClick={() => flow.jumpToStep(idx)}
+                        onClick={() => flow.jumpToStep(realStepIndex)}
                       />
                     </TooltipTrigger>
                     <TooltipContent side="top" sideOffset={8} style={{ zIndex: 110 }}>
@@ -243,55 +235,37 @@ export default function OnboardingFlow({
               })}
             </TooltipProvider>
             <span className="ml-3 text-xs font-medium text-muted-foreground">
-              {stepIndex + 1} of {STEPS.length}
+              {flow.visibleStepIndex + 1}{' '}
+              {translate('auto.components.onboarding.OnboardingFlow.4db04f2f57', 'of')}{' '}
+              {flow.visibleSteps.length}
             </span>
-            {isInlineTourRunning ? (
-              <h1 className="ml-5 text-[34px] font-semibold leading-[1.15] tracking-tight text-foreground">
-                {stepTooltipLabels.tour}
-              </h1>
-            ) : null}
           </div>
 
-          {shouldShowStepHeading ? (
-            <div className="mt-8 shrink-0">
-              {stepIndex === 0 && (
-                <div className="mb-2 text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
-                  Welcome to Orca
-                </div>
-              )}
-              <h1 className="text-[34px] font-semibold leading-[1.15] tracking-tight text-foreground">
-                {copy.title}
-              </h1>
-              {copy.subtitle ? (
-                <p
-                  className={cn(
-                    'mt-3 text-[15px] leading-relaxed text-muted-foreground',
-                    currentStep.id === 'agentSetup' ? 'max-w-none' : 'max-w-[58ch]'
-                  )}
-                >
-                  {copy.subtitle}
-                </p>
-              ) : null}
-            </div>
-          ) : null}
+          <div className="mt-8 shrink-0">
+            {stepIndex === 0 && (
+              <div className="mb-2 text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
+                {translate(
+                  'auto.components.onboarding.OnboardingFlow.1b5e182e9f',
+                  'Welcome to Orca'
+                )}
+              </div>
+            )}
+            <h1 className="text-[34px] font-semibold leading-[1.15] tracking-tight text-foreground">
+              {copy.title}
+            </h1>
+            {copy.subtitle ? (
+              <p className="mt-3 max-w-[58ch] text-[15px] leading-relaxed text-muted-foreground">
+                {copy.subtitle}
+              </p>
+            ) : null}
+          </div>
 
           <div
             className={cn(
               'min-h-0 flex-1 transition-[margin-top] duration-[760ms] ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none',
               // Why: long setup output should scroll inside the step so the footer
               // actions stay anchored across every onboarding page.
-              isInlineTourRunning
-                ? 'mt-7 overflow-hidden'
-                : cn(
-                    'scrollbar-sleek overflow-y-auto pr-1',
-                    currentStep.id === 'agentSetup'
-                      ? 'mt-4'
-                      : currentStep.id === 'repo'
-                        ? flow.nestedScan
-                          ? 'mt-6 overflow-hidden'
-                          : 'mt-6'
-                        : 'mt-10'
-                  )
+              cn('scrollbar-sleek overflow-y-auto pr-1', 'mt-10')
             )}
           >
             {currentStep.id === 'agent' && (
@@ -313,78 +287,21 @@ export default function OnboardingFlow({
             {currentStep.id === 'notifications' && (
               <NotificationStep settings={flow.settings} updateSettings={flow.updateSettings} />
             )}
-            {currentStep.id === 'agentSetup' && (
-              <AgentFeatureSetupStep
-                featureSetup={flow.featureSetupSelection}
-                onFeatureSetupChange={flow.setFeatureSetupSelection}
-                featureSetupCommand={flow.featureSetupTerminalCommand}
-                featureSetupCommandSelection={flow.featureSetupTerminalSelection}
-                setupBusyLabel={currentStep.id === 'agentSetup' ? busyLabel : null}
-                onStartFeatureSetup={() => void flow.startFeatureSetup()}
-              />
-            )}
             {currentStep.id === 'integrations' && <IntegrationsStep />}
-            {currentStep.id === 'tour' && (
-              <OnboardingTourStep
-                tourStarted={flow.tourStarted}
-                busyLabel={busyLabel}
-                onStartTour={flow.startTour}
-                onCompleteTour={flow.completeTour}
-                onExitTour={flow.exitTour}
-                onTourDepthSummaryChange={flow.recordTourDepthSummary}
-              />
-            )}
-            {currentStep.id === 'repo' && (
-              <RepoStep
-                cloneUrl={flow.cloneUrl}
-                onCloneUrlChange={flow.setCloneUrl}
-                nestedScan={flow.nestedScan}
-                nestedSelectedPaths={flow.nestedSelectedPaths}
-                onNestedSelectedPathsChange={flow.setNestedSelectedPaths}
-                nestedGroupName={flow.nestedGroupName}
-                onNestedGroupNameChange={flow.setNestedGroupName}
-                onImportNested={(mode) => void flow.importNested(mode)}
-                onCancelNested={flow.cancelNested}
-                onOpenFolder={() => void flow.openFolder()}
-                onOpenServerFolder={(kind) => void flow.openFolder(kind)}
-                onClone={() => void flow.clone()}
-                onOpenSshSettings={() => void flow.openSshSettings()}
-                serverPath={flow.serverPath}
-                onServerPathChange={flow.setServerPath}
-                cloneDestination={flow.cloneDestination}
-                onCloneDestinationChange={flow.setCloneDestination}
-                workspaceDir={flow.settings?.workspaceDir ?? ''}
-                runtimeActive={Boolean(flow.settings?.activeRuntimeEnvironmentId?.trim())}
-                busyLabel={flow.busyLabel}
-                error={flow.error}
-              />
-            )}
           </div>
 
-          {shouldShowFooter && (
-            <OnboardingFooter
-              shouldShowSkipToProjectSetup={shouldShowSkipToProjectSetup}
-              busyLabel={busyLabel}
-              onSkipToRepo={() => void flow.skipToRepo()}
-              stepIndex={stepIndex}
-              onBack={flow.nestedScan ? flow.cancelNested : flow.back}
-              showPrimary={currentStep.id !== 'repo' || flow.hasExistingProject}
-              primaryBusy={shouldShowFooterBusy}
-              primaryLabel={footerPrimaryLabel}
-              shortcutModifierLabel={continueShortcutModifierLabel}
-              onPrimary={() => {
-                if (isTourStep) {
-                  void flow.skipTourToRepo()
-                  return
-                }
-                if (currentStep.id === 'repo') {
-                  void flow.continueWithExistingProject()
-                  return
-                }
-                void flow.next()
-              }}
-            />
-          )}
+          <OnboardingFooter
+            shouldShowSkipToProjectSetup={shouldShowSkipToProjectSetup}
+            busyLabel={busyLabel}
+            onSkipToRepo={() => void flow.skipToRepo()}
+            stepIndex={stepIndex}
+            onBack={flow.nestedScan ? flow.cancelNested : flow.back}
+            showPrimary
+            primaryBusy={shouldShowFooterBusy}
+            primaryLabel={footerPrimaryLabel}
+            shortcutModifierLabel={continueShortcutModifierLabel}
+            onPrimary={() => void flow.next()}
+          />
         </div>
       </section>
       <OnboardingSkipConfirmationDialog

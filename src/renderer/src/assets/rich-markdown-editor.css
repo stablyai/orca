@@ -25,9 +25,18 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 10px 14px;
-  border-bottom: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
+  min-height: 40px;
+  box-sizing: border-box;
+  padding: 6px 14px;
+  border-bottom: none;
+  box-shadow: inset 0 -1px 0 color-mix(in srgb, var(--border) 72%, transparent);
   background: color-mix(in srgb, var(--background) 84%, transparent);
+}
+
+/* Why: the TOC header uses the same 40px chrome row; swap its border for an inset shadow so both dividers align. */
+.rich-markdown-editor-layout:has(.markdown-toc-panel) .markdown-toc-header {
+  border-bottom: none;
+  box-shadow: inset 0 -1px 0 color-mix(in srgb, var(--border) 72%, transparent);
 }
 
 .rich-markdown-toolbar-button {
@@ -57,6 +66,129 @@
   border-color: color-mix(in srgb, var(--border) 82%, transparent);
   background: var(--accent);
   color: var(--foreground);
+}
+
+.github-markdown-composer .rich-markdown-editor-toolbar {
+  padding: 6px 8px;
+  background: color-mix(in srgb, var(--background) 92%, transparent);
+}
+
+.github-markdown-composer-editor {
+  min-height: 8rem;
+  padding: 12px 14px 18px;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.github-markdown-composer-editor p,
+.github-markdown-composer-editor ul,
+.github-markdown-composer-editor ol,
+.github-markdown-composer-editor blockquote {
+  margin: 0.55em 0;
+}
+
+.github-markdown-composer-image-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
+  background: color-mix(in srgb, var(--muted) 38%, var(--background));
+}
+
+.github-markdown-composer-tabbed {
+  border-radius: 8px;
+}
+
+.github-markdown-composer-tabbar {
+  display: flex;
+  align-items: stretch;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 40px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
+  background: color-mix(in srgb, var(--muted) 28%, var(--background));
+}
+
+.github-markdown-composer-tabs {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+}
+
+.github-markdown-composer-tab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 72px;
+  padding: 0 14px;
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.github-markdown-composer-tab:hover {
+  color: var(--foreground);
+}
+
+.github-markdown-composer-tab.is-active {
+  margin-bottom: -1px;
+  border-bottom-color: transparent;
+  background: var(--background);
+  color: var(--foreground);
+}
+
+.github-markdown-composer-tabbar-toolbar {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+  justify-content: flex-end;
+  overflow-x: auto;
+}
+
+.github-markdown-composer-tabbar-toolbar .rich-markdown-editor-toolbar {
+  min-height: 38px;
+  padding: 4px 8px;
+  box-shadow: none;
+  background: transparent;
+}
+
+.github-markdown-composer-preview {
+  padding: 12px 14px 18px;
+}
+
+.github-markdown-composer-attachment {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border: none;
+  border-top: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
+  background: transparent;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.github-markdown-composer-attachment:hover:not(:disabled) {
+  color: var(--foreground);
+  background: color-mix(in srgb, var(--accent) 40%, transparent);
+}
+
+.github-markdown-composer-attachment:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.github-issue-comment-composer .github-markdown-composer-tabbed {
+  border-color: color-mix(in srgb, var(--border) 82%, transparent);
 }
 
 .orca-diff-comment-add-btn.rich-markdown-comment-add-btn {
@@ -95,7 +227,7 @@
 }
 
 .rich-markdown-editor-shell.has-rich-markdown-review-notes .rich-markdown-editor {
-  padding-right: min(360px, 34%);
+  padding-right: clamp(252px, 28%, 308px);
 }
 
 .rich-markdown-review-rail-actions {
@@ -109,7 +241,7 @@
 }
 
 .rich-markdown-review-rail-toggle,
-.rich-markdown-review-rail-send {
+.rich-markdown-review-rail-action {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -128,20 +260,20 @@
   font-weight: 600;
 }
 
-.rich-markdown-review-rail-send {
+.rich-markdown-review-rail-action {
   width: 26px;
   padding: 0;
 }
 
 .rich-markdown-review-rail-toggle:hover,
 .rich-markdown-review-rail-toggle[aria-expanded='true'],
-.rich-markdown-review-rail-send:hover:not(:disabled) {
+.rich-markdown-review-rail-action:hover:not(:disabled) {
   background: var(--accent);
   color: var(--foreground);
 }
 
-.rich-markdown-review-rail-send:disabled,
-.rich-markdown-review-note-send:disabled {
+.rich-markdown-review-rail-action:disabled,
+.rich-markdown-review-note-action:disabled {
   cursor: default;
   opacity: 0.45;
 }
@@ -150,7 +282,8 @@
   position: absolute;
   top: 0;
   right: 16px;
-  width: min(300px, 30%);
+  /* Why: the card action pill needs the same minimum rail width as preview mode. */
+  width: clamp(220px, 24%, 250px);
   pointer-events: none;
   z-index: 30;
 }
@@ -163,8 +296,8 @@
 }
 
 .rich-markdown-review-note-card.is-active > .orca-diff-comment-card {
-  border-color: color-mix(in srgb, var(--foreground) 32%, transparent);
-  background: color-mix(in srgb, var(--foreground) 8%, var(--editor-surface));
+  border-color: color-mix(in srgb, var(--foreground) 18%, transparent);
+  background: color-mix(in srgb, var(--foreground) 4%, var(--editor-surface));
 }
 
 .rich-markdown-review-note-card.is-attention > .orca-diff-comment-card {
@@ -192,7 +325,7 @@
   }
 }
 
-.rich-markdown-review-note-send {
+.rich-markdown-review-note-action {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -207,7 +340,7 @@
   z-index: 1;
 }
 
-.rich-markdown-review-note-send:hover:not(:disabled) {
+.rich-markdown-review-note-action:hover:not(:disabled) {
   border-color: color-mix(in srgb, var(--foreground) 20%, transparent);
   background: color-mix(in srgb, var(--foreground) 6%, transparent);
   color: var(--foreground);
@@ -811,6 +944,131 @@
 .rich-markdown-editor .ProseMirror-selectednode {
   outline: 2px solid color-mix(in srgb, var(--ring) 78%, transparent);
   outline-offset: 2px;
+}
+
+/* ── Linear Issue Markdown Editor ────────────────────── */
+
+.linear-issue-markdown-editor {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--foreground);
+  transition:
+    border-color 120ms ease,
+    background-color 120ms ease,
+    box-shadow 120ms ease;
+}
+
+.linear-issue-markdown-editor-page {
+  margin-top: 1.75rem;
+  font-size: 15px;
+  line-height: 1.7;
+}
+
+.linear-issue-markdown-editor-drawer {
+  font-size: 14px;
+  line-height: 1.625;
+}
+
+.linear-issue-markdown-editor:hover {
+  border-color: color-mix(in srgb, var(--border) 50%, transparent);
+  background: color-mix(in srgb, var(--accent) 40%, transparent);
+}
+
+.linear-issue-markdown-editor:focus-within {
+  border-color: var(--border);
+  background: var(--background);
+  box-shadow: 0 0 0 1px var(--ring);
+}
+
+.linear-issue-markdown-editor.is-disabled {
+  opacity: 0.8;
+}
+
+.linear-issue-markdown-toolbar {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 4px;
+  overflow-x: auto;
+  padding: 4px 6px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+  background: color-mix(in srgb, var(--background) 72%, transparent);
+}
+
+.linear-issue-markdown-toolbar-button {
+  display: inline-flex;
+  width: 26px;
+  min-width: 26px;
+  height: 26px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.linear-issue-markdown-toolbar-button:hover:not(:disabled),
+.linear-issue-markdown-toolbar-button.is-active {
+  border-color: color-mix(in srgb, var(--border) 78%, transparent);
+  background: var(--accent);
+  color: var(--foreground);
+}
+
+.linear-issue-markdown-toolbar-button:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.linear-issue-markdown-toolbar-separator {
+  width: 1px;
+  min-width: 1px;
+  height: 16px;
+  background: color-mix(in srgb, var(--border) 70%, transparent);
+}
+
+.linear-issue-markdown-scroll {
+  min-width: 0;
+}
+
+.linear-issue-markdown-editor .rich-markdown-editor {
+  min-height: 96px;
+  padding: 10px 12px 26px;
+  font-size: inherit;
+  line-height: inherit;
+}
+
+.linear-issue-markdown-editor-page .rich-markdown-editor {
+  min-height: 132px;
+  padding: 12px 12px 28px;
+}
+
+.linear-issue-markdown-editor .rich-markdown-editor p,
+.linear-issue-markdown-editor .rich-markdown-editor ul,
+.linear-issue-markdown-editor .rich-markdown-editor ol,
+.linear-issue-markdown-editor .rich-markdown-editor blockquote {
+  margin: 0.55em 0;
+}
+
+.linear-issue-markdown-editor .rich-markdown-editor p.is-editor-empty:first-child::before {
+  font-style: italic;
+}
+
+.linear-issue-markdown-save-hint {
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.linear-issue-markdown-editor:focus-within .linear-issue-markdown-save-hint {
+  opacity: 1;
 }
 
 .rich-markdown-slash-menu {

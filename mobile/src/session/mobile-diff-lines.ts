@@ -9,6 +9,7 @@ export type MobileDiffLine = {
 
 const MAX_DIFF_CELLS = 200_000
 const MAX_MOBILE_DIFF_LINES = 2_500
+const MAX_BUILT_DIFF_LINES = MAX_MOBILE_DIFF_LINES + 1
 const TRUNCATED_LINE: MobileDiffLine = {
   kind: 'context',
   text: '... diff truncated for mobile preview ...'
@@ -27,10 +28,7 @@ export function buildMobileDiffLines(
       ? buildLcsDiffLines(originalLines, modifiedLines)
       : buildPrefixSuffixDiffLines(originalLines, modifiedLines)
 
-  if (lines.length <= MAX_MOBILE_DIFF_LINES) {
-    return { lines, truncated: false }
-  }
-  return { lines: [...lines.slice(0, MAX_MOBILE_DIFF_LINES), TRUNCATED_LINE], truncated: true }
+  return finalizeMobileDiffLines(lines)
 }
 
 function splitContentLines(content: string): string[] {
@@ -61,48 +59,68 @@ function buildLcsDiffLines(originalLines: string[], modifiedLines: string[]): Mo
   let modifiedIndex = 0
   while (originalIndex < originalLines.length && modifiedIndex < modifiedLines.length) {
     if (originalLines[originalIndex] === modifiedLines[modifiedIndex]) {
-      lines.push({
-        kind: 'context',
-        text: originalLines[originalIndex] ?? '',
-        oldLineNumber: originalIndex + 1,
-        newLineNumber: modifiedIndex + 1
-      })
+      if (
+        !appendDiffLine(lines, {
+          kind: 'context',
+          text: originalLines[originalIndex] ?? '',
+          oldLineNumber: originalIndex + 1,
+          newLineNumber: modifiedIndex + 1
+        })
+      ) {
+        return lines
+      }
       originalIndex += 1
       modifiedIndex += 1
     } else if (
       dp[(originalIndex + 1) * rowWidth + modifiedIndex] >=
       dp[originalIndex * rowWidth + modifiedIndex + 1]
     ) {
-      lines.push({
-        kind: 'delete',
-        text: originalLines[originalIndex] ?? '',
-        oldLineNumber: originalIndex + 1
-      })
+      if (
+        !appendDiffLine(lines, {
+          kind: 'delete',
+          text: originalLines[originalIndex] ?? '',
+          oldLineNumber: originalIndex + 1
+        })
+      ) {
+        return lines
+      }
       originalIndex += 1
     } else {
-      lines.push({
-        kind: 'add',
-        text: modifiedLines[modifiedIndex] ?? '',
-        newLineNumber: modifiedIndex + 1
-      })
+      if (
+        !appendDiffLine(lines, {
+          kind: 'add',
+          text: modifiedLines[modifiedIndex] ?? '',
+          newLineNumber: modifiedIndex + 1
+        })
+      ) {
+        return lines
+      }
       modifiedIndex += 1
     }
   }
 
   while (originalIndex < originalLines.length) {
-    lines.push({
-      kind: 'delete',
-      text: originalLines[originalIndex] ?? '',
-      oldLineNumber: originalIndex + 1
-    })
+    if (
+      !appendDiffLine(lines, {
+        kind: 'delete',
+        text: originalLines[originalIndex] ?? '',
+        oldLineNumber: originalIndex + 1
+      })
+    ) {
+      return lines
+    }
     originalIndex += 1
   }
   while (modifiedIndex < modifiedLines.length) {
-    lines.push({
-      kind: 'add',
-      text: modifiedLines[modifiedIndex] ?? '',
-      newLineNumber: modifiedIndex + 1
-    })
+    if (
+      !appendDiffLine(lines, {
+        kind: 'add',
+        text: modifiedLines[modifiedIndex] ?? '',
+        newLineNumber: modifiedIndex + 1
+      })
+    ) {
+      return lines
+    }
     modifiedIndex += 1
   }
 
@@ -134,28 +152,69 @@ function buildPrefixSuffixDiffLines(
 
   const lines: MobileDiffLine[] = []
   for (let i = 0; i < prefixLength; i += 1) {
-    lines.push({
-      kind: 'context',
-      text: originalLines[i] ?? '',
-      oldLineNumber: i + 1,
-      newLineNumber: i + 1
-    })
+    if (
+      !appendDiffLine(lines, {
+        kind: 'context',
+        text: originalLines[i] ?? '',
+        oldLineNumber: i + 1,
+        newLineNumber: i + 1
+      })
+    ) {
+      return lines
+    }
   }
   for (let i = prefixLength; i < originalLines.length - suffixLength; i += 1) {
-    lines.push({ kind: 'delete', text: originalLines[i] ?? '', oldLineNumber: i + 1 })
+    if (
+      !appendDiffLine(lines, {
+        kind: 'delete',
+        text: originalLines[i] ?? '',
+        oldLineNumber: i + 1
+      })
+    ) {
+      return lines
+    }
   }
   for (let i = prefixLength; i < modifiedLines.length - suffixLength; i += 1) {
-    lines.push({ kind: 'add', text: modifiedLines[i] ?? '', newLineNumber: i + 1 })
+    if (
+      !appendDiffLine(lines, {
+        kind: 'add',
+        text: modifiedLines[i] ?? '',
+        newLineNumber: i + 1
+      })
+    ) {
+      return lines
+    }
   }
   for (let i = originalLines.length - suffixLength; i < originalLines.length; i += 1) {
     const modifiedIndex =
       modifiedLines.length - suffixLength + (i - (originalLines.length - suffixLength))
-    lines.push({
-      kind: 'context',
-      text: originalLines[i] ?? '',
-      oldLineNumber: i + 1,
-      newLineNumber: modifiedIndex + 1
-    })
+    if (
+      !appendDiffLine(lines, {
+        kind: 'context',
+        text: originalLines[i] ?? '',
+        oldLineNumber: i + 1,
+        newLineNumber: modifiedIndex + 1
+      })
+    ) {
+      return lines
+    }
   }
   return lines
+}
+
+function appendDiffLine(lines: MobileDiffLine[], line: MobileDiffLine): boolean {
+  // Why: the mobile preview only renders the first capped rows; keep one extra
+  // row solely to preserve the existing "truncated" marker decision.
+  lines.push(line)
+  return lines.length < MAX_BUILT_DIFF_LINES
+}
+
+function finalizeMobileDiffLines(lines: MobileDiffLine[]): {
+  lines: MobileDiffLine[]
+  truncated: boolean
+} {
+  if (lines.length <= MAX_MOBILE_DIFF_LINES) {
+    return { lines, truncated: false }
+  }
+  return { lines: [...lines.slice(0, MAX_MOBILE_DIFF_LINES), TRUNCATED_LINE], truncated: true }
 }

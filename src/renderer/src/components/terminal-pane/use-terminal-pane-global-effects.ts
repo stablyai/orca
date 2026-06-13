@@ -7,6 +7,7 @@ import {
   type PasteTerminalTextDetail
 } from '@/constants/terminal'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
+import { resetAllTerminalWebglAtlases } from '@/lib/pane-manager/pane-manager-registry'
 import { fitAndFocusPanes, fitPanes } from './pane-helpers'
 import type { PtyTransport } from './pty-transport'
 import { handleTerminalFileDrop } from './terminal-drop-handler'
@@ -118,6 +119,9 @@ export function useTerminalPaneGlobalEffects({
             restoreScrollStateAfterLayout(pane.terminal, position)
           }
         }
+        // Why: this clear wipes the glyph atlas shared with other same-config
+        // terminals; the global reset rebuilds their render models too.
+        resetAllTerminalWebglAtlases()
       })
       wasVisibleRef.current = true
       applyPendingFollowOutputRequests()
@@ -134,6 +138,36 @@ export function useTerminalPaneGlobalEffects({
     wasVisibleRef.current = false
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isActive, isVisible])
+
+  useEffect(() => {
+    if (!isActive || !isVisible) {
+      return
+    }
+    const onFocus = (): void => {
+      // Why: WebGL atlas corruption does not always raise context loss; window
+      // focus regain is a low-cost recovery point for agent TUI glyph damage.
+      // Reset globally — a per-manager reset clears the shared glyph atlas
+      // under every other visible same-config terminal and garbles it.
+      resetAllTerminalWebglAtlases()
+    }
+    window.addEventListener('focus', onFocus)
+    return () => window.removeEventListener('focus', onFocus)
+  }, [isActive, isVisible])
+
+  useEffect(() => {
+    const manager = managerRef.current
+    const activePane = isActive && isVisible ? manager?.getActivePane() : null
+    const ptyId = activePane
+      ? (paneTransportsRef.current.get(activePane.id)?.getPtyId() ?? null)
+      : null
+    if (!ptyId || ptyId.startsWith('remote:')) {
+      return
+    }
+    // Why: main uses this as a scheduler hint only, so the foreground pane's
+    // renderer output gets first chance at the bounded ACK reserve.
+    window.api.pty.setActiveRendererPty?.(ptyId, true)
+    return () => window.api.pty.setActiveRendererPty?.(ptyId, false)
+  }, [isActive, isVisible, managerRef, paneTransportsRef])
 
   useEffect(() => {
     const onToggleExpand = (event: Event): void => {

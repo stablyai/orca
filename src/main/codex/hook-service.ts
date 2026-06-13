@@ -76,6 +76,10 @@ const CODEX_EVENT_LABEL: Record<(typeof CODEX_EVENTS)[number], CodexEventLabel> 
   Stop: 'stop'
 }
 
+const CODEX_MANAGED_EVENT_LABELS = new Set<CodexEventLabel>(
+  CODEX_EVENTS.map((eventName) => CODEX_EVENT_LABEL[eventName])
+)
+
 const CODEX_HOOK_EVENT_LABEL: Record<string, CodexEventLabel> = {
   ...CODEX_EVENT_LABEL,
   PreCompact: 'pre_compact',
@@ -427,6 +431,20 @@ function collectMirroredRuntimeUserHookTrustEntries(
   return entries
 }
 
+function moveMirroredRuntimeUserTrustAfterManagedStatusHook(
+  entries: readonly MirroredRuntimeUserHookTrustEntry[]
+): MirroredRuntimeUserHookTrustEntry[] {
+  return entries.map(({ entry, enabled }) => {
+    if (!CODEX_MANAGED_EVENT_LABELS.has(entry.eventLabel)) {
+      return { entry, enabled }
+    }
+    return {
+      entry: { ...entry, groupIndex: entry.groupIndex + 1 },
+      enabled
+    }
+  })
+}
+
 function escapeRegex(value: string): string {
   return value.replaceAll(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
@@ -646,7 +664,9 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
     // Why: worktreeId embeds a filesystem path, so hand-building JSON in POSIX
     // shell is not safe once a path contains quotes or newlines. Post the raw
     // hook payload plus metadata as form fields and let the receiver parse it.
+    // Timeout caps best-effort hook posts if the local listener stalls.
     'curl -sS -X POST "http://127.0.0.1:${ORCA_AGENT_HOOK_PORT}/hook/codex" \\',
+    '  --connect-timeout 0.5 --max-time 1.5 \\',
     '  -H "Content-Type: application/x-www-form-urlencoded" \\',
     '  -H "X-Orca-Agent-Hook-Token: ${ORCA_AGENT_HOOK_TOKEN}" \\',
     '  --data-urlencode "paneKey=${ORCA_PANE_KEY}" \\',
@@ -699,9 +719,9 @@ export class CodexHookService {
     let presentCount = 0
     for (const eventName of CODEX_EVENTS) {
       const definitions = Array.isArray(config.hooks?.[eventName]) ? config.hooks![eventName]! : []
-      // Why: install() appends our managed definition at the end, so its
-      // group index is the LAST match. Picking the first match would
-      // misreport stale duplicates as trust-missing.
+      // Why: older installs appended this command, while current installs
+      // prepend it. Picking the last match keeps status repair conservative
+      // if duplicate managed definitions survive from a stale hooks.json.
       let foundGroupIndex = -1
       let foundHandlerIndex = -1
       definitions.forEach((definition, idx) => {
@@ -826,7 +846,9 @@ export class CodexHookService {
     // hook sits in the "review required" pile. We compute the trust hash for
     // each managed entry as we install it and persist it alongside hooks.json
     // so the user does not have to /hooks-approve after every install.
-    const mirroredUserTrustEntries = hookPlan.trustEntries
+    const mirroredUserTrustEntries = moveMirroredRuntimeUserTrustAfterManagedStatusHook(
+      hookPlan.trustEntries
+    )
     const trustEntries: CodexTrustEntry[] = mirroredUserTrustEntries.map(({ entry }) => entry)
     for (const eventName of CODEX_EVENTS) {
       const current = Array.isArray(nextHooks[eventName]) ? nextHooks[eventName] : []
@@ -834,15 +856,14 @@ export class CodexHookService {
       const definition: HookDefinition = {
         hooks: [{ type: 'command', command }]
       }
-      nextHooks[eventName] = [...cleaned, definition]
-      // Why: our managed definition is appended after `cleaned`, so its
-      // group index in the resulting hooks.json is `cleaned.length`. The
-      // handler is always the first (and only) entry in the group, so
-      // handler index is 0. Codex's hook_key uses these positional indices.
+      nextHooks[eventName] = [definition, ...cleaned]
+      // Why: the status hook must run before user hooks so a slow
+      // PostToolUse/Stop hook cannot leave the sidebar stuck on the previous
+      // state while Codex visibly reports that hooks are still running.
       trustEntries.push({
         sourcePath: configPath,
         eventLabel: CODEX_EVENT_LABEL[eventName],
-        groupIndex: cleaned.length,
+        groupIndex: 0,
         handlerIndex: 0,
         command
       })

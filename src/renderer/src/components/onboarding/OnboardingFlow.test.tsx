@@ -20,32 +20,7 @@ describe('OnboardingFlow', () => {
     vi.unstubAllGlobals()
   })
 
-  it('renders the tour intro in the standard left-aligned onboarding shell', () => {
-    const html = renderToStaticMarkup(
-      <OnboardingFlow
-        onboarding={{
-          ...getDefaultOnboardingState(),
-          lastCompletedStep: 5
-        }}
-        onOnboardingChange={vi.fn()}
-      />
-    )
-
-    expect(html).toContain('Explore Orca')
-    expect(html).toContain('Take a 60-second tour of Orca&#x27;s advanced features.')
-    expect(html).toContain('Take the tour')
-    // Why: the prior intro carried a redundant lead, a four-item checklist, and
-    // a help-menu footnote. The tour animation already conveys all of that, so
-    // the body is now just the preview + a single CTA — guard against drift.
-    expect(html).not.toContain('Preview the core workflow.')
-    expect(html).not.toContain('Run agents in isolated worktrees.')
-    expect(html).not.toContain('Available later under Help')
-    expect(html).toContain('Continue')
-    expect(html).toContain('Skip to project setup')
-    expect(html).not.toContain('Skip the tour')
-  })
-
-  it('keeps agent setup actions out of the footer', () => {
+  it('does not render the removed agent setup or tour steps', () => {
     const html = renderToStaticMarkup(
       <OnboardingFlow
         onboarding={{
@@ -56,12 +31,118 @@ describe('OnboardingFlow', () => {
       />
     )
 
-    expect(html).toContain('Set up Orca for agents')
-    expect(html).toContain('Turn on advanced Orca capabilities for agents.')
-    expect(html).toContain('Enable capabilities')
-    expect(html).toContain('Continue')
-    expect(html).toContain('Skip to project setup')
-    expect(html).not.toContain('>Skip</button>')
+    expect(html).toContain('Set up notifications')
+    expect(html).not.toContain('Set up Orca for agents')
+    expect(html).not.toContain('Explore Orca')
+    expect(html).not.toContain('Take the tour')
+    expect(html).toContain('Add your first project')
+    expect(html).not.toContain('Point Orca at some code')
+  })
+
+  it.each([
+    [3, 'Set up GitHub tasks'],
+    [4, 'Set up GitHub tasks'],
+    [5, 'Set up notifications'],
+    [9, 'Set up notifications']
+  ])(
+    'resumes unversioned seven-step onboarding progress %i at the matching four-step page',
+    (legacyStep, title) => {
+      const html = renderToStaticMarkup(
+        <OnboardingFlow
+          onboarding={{
+            ...getDefaultOnboardingState(),
+            flowVersion: 1,
+            lastCompletedStep: legacyStep
+          }}
+          onOnboardingChange={vi.fn()}
+        />
+      )
+
+      expect(html).toContain(title)
+      expect(html).not.toContain('Set up Orca for agents')
+      expect(html).not.toContain('Explore Orca')
+    }
+  )
+
+  it.each([
+    [3, 'Set up GitHub tasks'],
+    [4, 'Set up notifications'],
+    [5, 'Set up notifications'],
+    [9, 'Set up notifications']
+  ])(
+    'resumes versioned five-step onboarding progress %i at the matching four-step page',
+    (legacyStep, title) => {
+      const html = renderToStaticMarkup(
+        <OnboardingFlow
+          onboarding={{
+            ...getDefaultOnboardingState(),
+            flowVersion: 2,
+            lastCompletedStep: legacyStep
+          }}
+          onOnboardingChange={vi.fn()}
+        />
+      )
+
+      expect(html).toContain(title)
+      expect(html).not.toContain('Set up Orca for agents')
+      expect(html).not.toContain('Explore Orca')
+    }
+  )
+
+  it('skips GitHub task setup when the GitHub CLI is already detected', () => {
+    useAppStore.setState({
+      preflightStatus: {
+        git: { installed: true },
+        gh: { installed: true, authenticated: false }
+      },
+      preflightStatusChecked: true
+    })
+
+    const html = renderToStaticMarkup(
+      <OnboardingFlow
+        onboarding={{
+          ...getDefaultOnboardingState(),
+          lastCompletedStep: 2
+        }}
+        onOnboardingChange={vi.fn()}
+      />
+    )
+
+    expect(html).toContain('Set up notifications')
+    expect(html).toContain('Add your first project')
+    expect(html).not.toContain('Set up GitHub tasks')
+    expect(html).not.toContain('Connect your task sources')
+    expect(html).not.toContain('Point Orca at some code')
+  })
+
+  it('shows only GitHub on the task setup page when the GitHub CLI is missing', () => {
+    useAppStore.setState({
+      preflightStatus: {
+        git: { installed: true },
+        gh: { installed: false, authenticated: false }
+      },
+      preflightStatusChecked: true
+    })
+
+    const html = renderToStaticMarkup(
+      <OnboardingFlow
+        onboarding={{
+          ...getDefaultOnboardingState(),
+          lastCompletedStep: 2
+        }}
+        onOnboardingChange={vi.fn()}
+      />
+    )
+
+    expect(html).toContain('Set up GitHub tasks')
+    expect(html).toContain('Install the GitHub CLI to:')
+    expect(html).toContain('GitHub')
+    expect(html).not.toContain(
+      '<h3 class="text-[15px] font-semibold leading-tight text-foreground">Linear</h3>'
+    )
+    expect(html).toContain(
+      'Linear, GitLab, Bitbucket, Azure DevOps, Gitea, and Jira live in Settings'
+    )
   })
 
   it('renders onboarding inside a centered modal shell', () => {

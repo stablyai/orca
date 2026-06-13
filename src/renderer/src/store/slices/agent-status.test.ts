@@ -4,7 +4,6 @@ import {
   AGENT_STATUS_STALE_AFTER_MS,
   type AgentStatusEntry
 } from '../../../../shared/agent-status-types'
-import type { TerminalTab } from '../../../../shared/types'
 import type { AppState } from '../types'
 import type { RetainedAgentEntry } from './agent-status'
 import { createTestStore, makeTab, makeWorktree } from './store-test-helpers'
@@ -107,6 +106,286 @@ describe('agent status freshness expiry', () => {
   })
 })
 
+describe('agent status routing attribution', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('stores worktree and tab attribution from accepted hook events', () => {
+    vi.useFakeTimers()
+    const store = createTestStore()
+
+    store
+      .getState()
+      .setAgentStatus(
+        'tab-child:11111111-1111-4111-8111-111111111111',
+        { state: 'working', prompt: 'child agent', agentType: 'codex' },
+        undefined,
+        undefined,
+        { tabId: 'tab-child', worktreeId: 'wt-1', terminalHandle: 'term-child' }
+      )
+
+    expect(
+      store.getState().agentStatusByPaneKey['tab-child:11111111-1111-4111-8111-111111111111']
+    ).toMatchObject({
+      tabId: 'tab-child',
+      worktreeId: 'wt-1',
+      terminalHandle: 'term-child'
+    })
+  })
+})
+
+describe('agent status runtime orchestration metadata', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('fills runtime orchestration metadata into existing live entries', () => {
+    vi.useFakeTimers()
+    const store = createTestStore()
+    const childPaneKey = 'tab-child:11111111-1111-4111-8111-111111111111'
+    const parentPaneKey = 'tab-parent:22222222-2222-4222-8222-222222222222'
+
+    store.getState().setAgentStatus(childPaneKey, {
+      state: 'working',
+      prompt: 'child agent',
+      agentType: 'codex'
+    })
+    const epochBeforeRuntime = store.getState().agentStatusEpoch
+    store.getState().setRuntimeAgentOrchestrationByPaneKey({
+      [childPaneKey]: {
+        taskId: 'task-1',
+        dispatchId: 'ctx-1',
+        parentPaneKey
+      }
+    })
+
+    expect(store.getState().agentStatusByPaneKey[childPaneKey].orchestration).toMatchObject({
+      taskId: 'task-1',
+      dispatchId: 'ctx-1',
+      parentPaneKey
+    })
+    expect(store.getState().agentStatusEpoch).toBe(epochBeforeRuntime + 1)
+  })
+
+  it('replaces stale live orchestration metadata when runtime dispatch identity changes', () => {
+    vi.useFakeTimers()
+    const store = createTestStore()
+    const childPaneKey = 'tab-child:11111111-1111-4111-8111-111111111111'
+    const staleParentPaneKey = 'tab-parent:22222222-2222-4222-8222-222222222222'
+    const currentParentPaneKey = 'tab-parent:33333333-3333-4333-8333-333333333333'
+
+    store.getState().setAgentStatus(childPaneKey, {
+      state: 'working',
+      prompt: 'child agent',
+      agentType: 'codex',
+      orchestration: {
+        taskId: 'task-1',
+        dispatchId: 'ctx-1',
+        parentPaneKey: staleParentPaneKey,
+        parentTerminalHandle: 'term-stale'
+      }
+    })
+    store.getState().setRuntimeAgentOrchestrationByPaneKey({
+      [childPaneKey]: {
+        taskId: 'task-2',
+        dispatchId: 'ctx-2',
+        parentPaneKey: currentParentPaneKey,
+        parentTerminalHandle: 'term-current'
+      }
+    })
+
+    expect(store.getState().agentStatusByPaneKey[childPaneKey].orchestration).toEqual({
+      taskId: 'task-2',
+      dispatchId: 'ctx-2',
+      parentPaneKey: currentParentPaneKey,
+      parentTerminalHandle: 'term-current'
+    })
+  })
+
+  it('uses existing orchestration fields only as fallback for the same runtime dispatch', () => {
+    vi.useFakeTimers()
+    const store = createTestStore()
+    const childPaneKey = 'tab-child:11111111-1111-4111-8111-111111111111'
+    const parentPaneKey = 'tab-parent:22222222-2222-4222-8222-222222222222'
+
+    store.getState().setAgentStatus(childPaneKey, {
+      state: 'working',
+      prompt: 'child agent',
+      agentType: 'codex',
+      orchestration: {
+        taskId: 'task-1',
+        dispatchId: 'ctx-1',
+        parentPaneKey,
+        coordinatorHandle: 'term-stale-coordinator'
+      }
+    })
+    store.getState().setRuntimeAgentOrchestrationByPaneKey({
+      [childPaneKey]: {
+        taskId: 'task-1',
+        dispatchId: 'ctx-1',
+        coordinatorHandle: 'term-current-coordinator'
+      }
+    })
+
+    expect(store.getState().agentStatusByPaneKey[childPaneKey].orchestration).toEqual({
+      taskId: 'task-1',
+      dispatchId: 'ctx-1',
+      parentPaneKey,
+      coordinatorHandle: 'term-current-coordinator'
+    })
+  })
+
+  it('keeps current payload orchestration ahead of a stale runtime map entry', () => {
+    vi.useFakeTimers()
+    const store = createTestStore()
+    const childPaneKey = 'tab-child:11111111-1111-4111-8111-111111111111'
+
+    store.getState().setRuntimeAgentOrchestrationByPaneKey({
+      [childPaneKey]: {
+        taskId: 'task-1',
+        dispatchId: 'ctx-1',
+        parentTerminalHandle: 'term-stale'
+      }
+    })
+    store.getState().setAgentStatus(childPaneKey, {
+      state: 'working',
+      prompt: 'child agent',
+      agentType: 'codex',
+      orchestration: {
+        taskId: 'task-2',
+        dispatchId: 'ctx-2',
+        parentTerminalHandle: 'term-current'
+      }
+    })
+
+    expect(store.getState().agentStatusByPaneKey[childPaneKey].orchestration).toEqual({
+      taskId: 'task-2',
+      dispatchId: 'ctx-2',
+      parentTerminalHandle: 'term-current'
+    })
+  })
+
+  it('fills already-synced runtime orchestration metadata into new live entries', () => {
+    vi.useFakeTimers()
+    const store = createTestStore()
+    const childPaneKey = 'tab-child:11111111-1111-4111-8111-111111111111'
+    const parentPaneKey = 'tab-parent:22222222-2222-4222-8222-222222222222'
+
+    store.getState().setRuntimeAgentOrchestrationByPaneKey({
+      [childPaneKey]: {
+        taskId: 'task-1',
+        dispatchId: 'ctx-1',
+        parentPaneKey
+      }
+    })
+    store.getState().setAgentStatus(childPaneKey, {
+      state: 'working',
+      prompt: 'child agent',
+      agentType: 'codex'
+    })
+
+    expect(store.getState().agentStatusByPaneKey[childPaneKey].orchestration).toMatchObject({
+      taskId: 'task-1',
+      dispatchId: 'ctx-1',
+      parentPaneKey
+    })
+  })
+
+  it('clears stale live orchestration when a reused pane starts non-orchestrated work', () => {
+    vi.useFakeTimers()
+    const store = createTestStore()
+    const childPaneKey = 'tab-child:11111111-1111-4111-8111-111111111111'
+
+    store.getState().setAgentStatus(childPaneKey, {
+      state: 'done',
+      prompt: 'finished child',
+      agentType: 'codex',
+      orchestration: {
+        taskId: 'task-1',
+        dispatchId: 'ctx-1',
+        parentTerminalHandle: 'term-parent'
+      }
+    })
+    store.getState().setRuntimeAgentOrchestrationByPaneKey({})
+    store.getState().setAgentStatus(childPaneKey, {
+      state: 'working',
+      prompt: 'manual follow-up',
+      agentType: 'codex'
+    })
+
+    expect(store.getState().agentStatusByPaneKey[childPaneKey].orchestration).toBeUndefined()
+  })
+
+  it('preserves stale live orchestration for final done rows', () => {
+    vi.useFakeTimers()
+    const store = createTestStore()
+    const childPaneKey = 'tab-child:11111111-1111-4111-8111-111111111111'
+
+    store.getState().setAgentStatus(childPaneKey, {
+      state: 'working',
+      prompt: 'child agent',
+      agentType: 'codex',
+      orchestration: {
+        taskId: 'task-1',
+        dispatchId: 'ctx-1',
+        parentTerminalHandle: 'term-parent'
+      }
+    })
+    store.getState().setRuntimeAgentOrchestrationByPaneKey({})
+    store.getState().setAgentStatus(childPaneKey, {
+      state: 'done',
+      prompt: 'child finished',
+      agentType: 'codex'
+    })
+
+    expect(store.getState().agentStatusByPaneKey[childPaneKey].orchestration).toEqual({
+      taskId: 'task-1',
+      dispatchId: 'ctx-1',
+      parentTerminalHandle: 'term-parent'
+    })
+  })
+
+  it('fills runtime orchestration metadata into retained entries', () => {
+    const store = createTestStore()
+    const childPaneKey = 'tab-child:11111111-1111-4111-8111-111111111111'
+    const parentPaneKey = 'tab-parent:22222222-2222-4222-8222-222222222222'
+    const now = Date.now()
+    const entry: AgentStatusEntry = {
+      state: 'done',
+      prompt: 'child agent',
+      updatedAt: now,
+      stateStartedAt: now,
+      paneKey: childPaneKey,
+      stateHistory: []
+    }
+    const retained: RetainedAgentEntry = {
+      entry,
+      worktreeId: 'wt-1',
+      tab: makeTab({ id: 'tab-child', worktreeId: 'wt-1', title: 'codex' }),
+      agentType: 'codex',
+      startedAt: now
+    }
+
+    store.getState().retainAgents([retained])
+    store.getState().setRuntimeAgentOrchestrationByPaneKey({
+      [childPaneKey]: {
+        taskId: 'task-1',
+        dispatchId: 'ctx-1',
+        parentPaneKey
+      }
+    })
+
+    expect(
+      store.getState().retainedAgentsByPaneKey[childPaneKey].entry.orchestration
+    ).toMatchObject({
+      taskId: 'task-1',
+      dispatchId: 'ctx-1',
+      parentPaneKey
+    })
+  })
+})
+
 describe('agent status tool + assistant fields', () => {
   // Why: setAgentStatus schedules a real 30-minute freshness setTimeout via
   // queueMicrotask. Without fake timers those handles leak into the test
@@ -181,16 +460,94 @@ describe('agent status tool + assistant fields', () => {
     expect(store.getState().agentStatusByPaneKey['tab-1:1'].agentType).toBe('claude')
   })
 
-  it('overwrites prior agentType when payload sends a different known value', () => {
+  it('preserves active pane agentType when a nested hook sends a different known value', () => {
     vi.useFakeTimers()
     const store = createTestStore()
     store
       .getState()
-      .setAgentStatus('tab-1:1', { state: 'working', prompt: 'p1', agentType: 'claude' })
+      .setAgentStatus('tab-1:1', { state: 'working', prompt: 'p1', agentType: 'codex' })
     store
       .getState()
-      .setAgentStatus('tab-1:1', { state: 'working', prompt: 'p2', agentType: 'cursor' })
-    expect(store.getState().agentStatusByPaneKey['tab-1:1'].agentType).toBe('cursor')
+      .setAgentStatus('tab-1:1', { state: 'working', prompt: 'p2', agentType: 'claude' })
+    expect(store.getState().agentStatusByPaneKey['tab-1:1'].agentType).toBe('codex')
+  })
+
+  it('ignores nested done while the parent pane agent is still active', () => {
+    vi.useFakeTimers()
+    const store = createTestStore()
+    const setGeneratedTabTitleFromAgentPrompt = vi.fn()
+    store.setState({ setGeneratedTabTitleFromAgentPrompt } as Partial<AppState>)
+    store
+      .getState()
+      .setAgentStatus(
+        'tab-1:1',
+        { state: 'working', prompt: 'parent codex', agentType: 'codex' },
+        'codex',
+        { updatedAt: 1_000, stateStartedAt: 1_000 }
+      )
+    const firstEpoch = store.getState().agentStatusEpoch
+
+    store.getState().setAgentStatus(
+      'tab-1:1',
+      {
+        state: 'done',
+        prompt: 'nested claude',
+        agentType: 'claude',
+        toolName: 'Read',
+        toolInput: '00-review-context.md',
+        lastAssistantMessage: 'child finished'
+      },
+      'claude',
+      { updatedAt: 1_100, stateStartedAt: 1_100 }
+    )
+
+    const entry = store.getState().agentStatusByPaneKey['tab-1:1']
+    expect(entry).toMatchObject({
+      state: 'working',
+      prompt: 'parent codex',
+      agentType: 'codex',
+      updatedAt: 1_000,
+      stateStartedAt: 1_000
+    })
+    expect(entry.toolName).toBeUndefined()
+    expect(entry.toolInput).toBeUndefined()
+    expect(entry.lastAssistantMessage).toBeUndefined()
+    expect(store.getState().agentStatusEpoch).toBe(firstEpoch)
+    expect(setGeneratedTabTitleFromAgentPrompt).toHaveBeenCalledTimes(1)
+    expect(setGeneratedTabTitleFromAgentPrompt).toHaveBeenLastCalledWith('tab-1:1', 'parent codex')
+  })
+
+  it('allows pane agentType to change after the prior turn is done', () => {
+    vi.useFakeTimers()
+    const store = createTestStore()
+    store.getState().setAgentStatus('tab-1:1', { state: 'done', prompt: 'p1', agentType: 'codex' })
+    store
+      .getState()
+      .setAgentStatus('tab-1:1', { state: 'working', prompt: 'p2', agentType: 'claude' })
+    expect(store.getState().agentStatusByPaneKey['tab-1:1'].agentType).toBe('claude')
+  })
+
+  it('allows stale active pane agentType to change', () => {
+    vi.useFakeTimers()
+    const store = createTestStore()
+    store
+      .getState()
+      .setAgentStatus('tab-1:1', { state: 'working', prompt: 'p1', agentType: 'codex' }, 'codex', {
+        updatedAt: 1_000,
+        stateStartedAt: 1_000
+      })
+    store
+      .getState()
+      .setAgentStatus(
+        'tab-1:1',
+        { state: 'working', prompt: 'p2', agentType: 'claude' },
+        'claude',
+        {
+          updatedAt: 1_000 + AGENT_STATUS_STALE_AFTER_MS + 1,
+          stateStartedAt: 1_000 + AGENT_STATUS_STALE_AFTER_MS + 1
+        }
+      )
+    expect(store.getState().agentStatusByPaneKey['tab-1:1'].agentType).toBe('claude')
   })
 
   it('keeps global epochs stable for fresh same-state working pings while updating the entry', () => {
@@ -323,6 +680,47 @@ describe('agent status PR refresh handoff', () => {
     store
       .getState()
       .setAgentStatus('tab-1:0', { state: 'done', prompt: 'create a PR', agentType: 'codex' })
+
+    await flushMicrotasks()
+
+    expect(enqueuePRRefresh).toHaveBeenCalledWith({
+      candidate: expect.objectContaining({
+        repoPath: '/repo',
+        branch: 'feature/pr-from-agent',
+        worktreeId: 'wt-1',
+        linkedPRNumber: null
+      }),
+      reason: 'active',
+      priority: 80
+    })
+  })
+
+  it('uses hook worktree attribution for PR refresh when the agent tab is not mounted', async () => {
+    vi.useFakeTimers()
+    const enqueuePRRefresh = stubGitHubPRRefreshApi()
+    const store = createTestStore()
+    seedAgentPRRefreshFixture(store, ['pr'])
+    store.setState({ tabsByWorktree: { 'wt-1': [] } } as Partial<AppState>)
+    const paneKey = 'tab-worker:11111111-1111-4111-8111-111111111111'
+
+    store
+      .getState()
+      .setAgentStatus(
+        paneKey,
+        { state: 'working', prompt: 'create a PR', agentType: 'codex' },
+        undefined,
+        undefined,
+        { tabId: 'tab-worker', worktreeId: 'wt-1', terminalHandle: 'term-worker' }
+      )
+    store
+      .getState()
+      .setAgentStatus(
+        paneKey,
+        { state: 'done', prompt: 'create a PR', agentType: 'codex' },
+        undefined,
+        undefined,
+        { tabId: 'tab-worker', worktreeId: 'wt-1', terminalHandle: 'term-worker' }
+      )
 
     await flushMicrotasks()
 
@@ -523,14 +921,14 @@ describe('agent status retention + prefix sweep', () => {
     const retainedA: RetainedAgentEntry = {
       entry: entryA,
       worktreeId: 'wt-a',
-      tab: { id: 'tab-a', title: 'claude' } as unknown as TerminalTab,
+      tab: makeTab({ id: 'tab-a', worktreeId: 'wt-a', title: 'claude' }),
       agentType: 'claude',
       startedAt: now
     }
     const retainedB: RetainedAgentEntry = {
       entry: entryB,
       worktreeId: 'wt-b',
-      tab: { id: 'tab-b', title: 'claude' } as unknown as TerminalTab,
+      tab: makeTab({ id: 'tab-b', worktreeId: 'wt-b', title: 'claude' }),
       agentType: 'claude',
       startedAt: now
     }
@@ -573,14 +971,14 @@ describe('agent status retention + prefix sweep', () => {
     const retainedA: RetainedAgentEntry = {
       entry: entryA,
       worktreeId: 'wt-a',
-      tab: { id: 'tab-a', title: 'claude' } as unknown as TerminalTab,
+      tab: makeTab({ id: 'tab-a', worktreeId: 'wt-a', title: 'claude' }),
       agentType: 'claude',
       startedAt: now
     }
     const retainedB: RetainedAgentEntry = {
       entry: entryB,
       worktreeId: 'wt-a',
-      tab: { id: 'tab-a', title: 'claude' } as unknown as TerminalTab,
+      tab: makeTab({ id: 'tab-a', worktreeId: 'wt-a', title: 'claude' }),
       agentType: 'claude',
       startedAt: now
     }
@@ -598,6 +996,35 @@ describe('agent status retention + prefix sweep', () => {
     // retained-only (no live entry) → no suppressor, to avoid indefinite
     // leaks when no live→gone transition will ever fire for this paneKey.
     expect(suppressed['tab-a:1']).toBeUndefined()
+  })
+
+  it('dropAgentStatusByWorktree removes live entries attributed before their tab exists', () => {
+    vi.useFakeTimers()
+    const store = createTestStore()
+    const paneKey = 'tab-worker:11111111-1111-4111-8111-111111111111'
+
+    store
+      .getState()
+      .setAgentStatus(
+        paneKey,
+        { state: 'working', prompt: 'worker', agentType: 'codex' },
+        undefined,
+        undefined,
+        {
+          tabId: 'tab-worker',
+          worktreeId: 'wt-a',
+          terminalHandle: 'term-worker'
+        }
+      )
+    store.setState({
+      acknowledgedAgentsByPaneKey: { [paneKey]: Date.now() }
+    } as Partial<AppState>)
+
+    store.getState().dropAgentStatusByWorktree('wt-a')
+
+    expect(store.getState().agentStatusByPaneKey[paneKey]).toBeUndefined()
+    expect(store.getState().acknowledgedAgentsByPaneKey[paneKey]).toBeUndefined()
+    expect(store.getState().retentionSuppressedPaneKeys[paneKey]).toBe(true)
   })
 
   it('pruneRetainedAgents keeps only entries whose worktreeId is in the valid set', () => {
@@ -622,14 +1049,14 @@ describe('agent status retention + prefix sweep', () => {
     const retainedA: RetainedAgentEntry = {
       entry: entryA,
       worktreeId: 'wt-a',
-      tab: { id: 'tab-a', title: 'claude' } as unknown as TerminalTab,
+      tab: makeTab({ id: 'tab-a', worktreeId: 'wt-a', title: 'claude' }),
       agentType: 'claude',
       startedAt: now
     }
     const retainedB: RetainedAgentEntry = {
       entry: entryB,
       worktreeId: 'wt-b',
-      tab: { id: 'tab-b', title: 'claude' } as unknown as TerminalTab,
+      tab: makeTab({ id: 'tab-b', worktreeId: 'wt-b', title: 'claude' }),
       agentType: 'claude',
       startedAt: now
     }

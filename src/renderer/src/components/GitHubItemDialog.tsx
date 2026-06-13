@@ -37,7 +37,6 @@ import {
   Pencil,
   Plus,
   RefreshCw,
-  Send,
   UndoDot,
   Users,
   Wrench,
@@ -69,7 +68,6 @@ import {
 } from '@/components/ui/dropdown-menu'
 import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
 import { detectLanguage } from '@/lib/language-detect'
-import { isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
 import { cn } from '@/lib/utils'
 import { DiffSectionItem } from '@/components/editor/DiffSectionItem'
 import type { DecoratedDiffComment } from '@/components/diff-comments/useDiffCommentDecorator'
@@ -86,10 +84,33 @@ import type { DiffSection } from '@/components/editor/diff-section-types'
 import type { CombinedDiffFileTreeEntry } from '@/components/editor/combined-diff-file-tree-model'
 import { CHECK_COLOR, CHECK_ICON } from '@/components/right-sidebar/checks-panel-content'
 import {
+  REVIEW_ACTION_MERGE_BUTTON_CLASS,
+  REVIEW_ACTION_STATE_BUTTON_CLASS,
+  RIGHT_SIDEBAR_PRIMARY_BUTTON_LABEL_CLASS
+} from '@/components/right-sidebar/right-sidebar-primary-action-layout'
+import {
+  createGitHubChecksTabState,
+  resolveGitHubChecksTabState,
+  toggleGitHubChecksTabExpandedKey,
+  updateGitHubChecksTabDetails,
+  updateGitHubChecksTabLocalChecks,
+  type CheckDetailsLoadState
+} from '@/components/github-checks-tab-state'
+import {
+  clearGitHubLinkCopied,
+  createGitHubLinkCopyState,
+  markGitHubLinkCopied,
+  resolveGitHubLinkCopyState
+} from '@/components/github-link-copy-state'
+import {
+  resolveGitHubBodyDraft,
+  shouldSyncGitHubBodyDraft
+} from '@/components/github-body-draft-state'
+import {
   filterPRCommentsByAudience,
   getPRCommentAudienceCounts,
   getPRCommentAudienceEmptyLabel,
-  PR_COMMENT_AUDIENCE_FILTERS,
+  getPrCommentAudienceFilters,
   type PRCommentAudienceFilter
 } from '@/lib/pr-comment-audience'
 import {
@@ -103,29 +124,39 @@ import {
   PR_COMMENT_RESOLVED_CONTAINER_CLASS,
   type PRCommentGroup
 } from '@/lib/pr-comment-groups'
+import {
+  createCommentCodeContextExpansionState,
+  resolveCommentCodeContextExpansionState,
+  updateCommentCodeContextExpansionState,
+  type CommentCodeContextLineUpdate
+} from '@/components/comment-code-context-state'
+import { resolveCommentReplyTarget } from '@/components/comment-reply-target-state'
 import { useAppStore } from '@/store'
 import { useAllWorktrees } from '@/store/selectors'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import { useRepoLabels, useRepoAssignees, useImmediateMutation } from '@/hooks/useIssueMetadata'
 import { useRepoLabelsBySlug, useRepoAssigneesBySlug } from '@/hooks/useGitHubSlugMetadata'
+import { GitHubMarkdownComposer } from '@/components/github/GitHubMarkdownComposer'
+import { GitHubWorkItemLabelPopoverContent } from '@/components/github/GitHubWorkItemLabelPopoverContent'
+import { GitHubWorkItemAssigneePopoverContent } from '@/components/github/GitHubWorkItemAssigneePopoverContent'
+import { GitHubIssueCommentComposer } from '@/components/github/GitHubIssueCommentComposer'
 import IssueSourceIndicator, { sameGitHubOwnerRepo } from '@/components/github/IssueSourceIndicator'
 import {
   getGitHubPRReviewerRows,
   normalizeGitHubReviewerLogins
 } from '@/components/github-pr-reviewer-display'
 import { presentGitHubPRMergeState } from '@/components/github-pr-merge-state'
-import { AGENT_CATALOG } from '@/lib/agent-catalog'
-import { filterEnabledTuiAgents } from '../../../shared/tui-agent-selection'
-import { getConnectionId } from '@/lib/connection-context'
-import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
+import {
+  GITHUB_PR_MERGE_METHOD_LABELS,
+  resolveGitHubPRMergeMethods
+} from '../../../shared/github-pr-merge-methods'
 import {
   findGithubIssueWorkspaceAttachment,
-  findGithubPrWorkspaceAttachment,
   getGithubWorkItemWorkspaceAttachmentLabel
 } from '@/lib/github-work-item-workspace-attachment'
-import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
-import { launchWorkItemDirect } from '@/lib/launch-work-item-direct'
+import { startFixChecksAgent } from '@/lib/fix-checks-agent-launch'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
+import { buildFixBrokenChecksPrompt, getBrokenChecks } from '@/components/pr-checks-fix-prompt'
 import type {
   GitHubOwnerRepo,
   GitHubPRFile,
@@ -135,16 +166,18 @@ import type {
   GitHubWorkItemDetails,
   GitHubAssignableUser,
   GitHubReaction,
+  GitHubPRMergeMethod,
   GitBranchChangeEntry,
   GitDiffResult,
   PRCheckDetail,
-  PRCheckRunDetails,
-  PRComment,
-  TuiAgent
+  PRComment
 } from '../../../shared/types'
 import { PER_REPO_FETCH_LIMIT } from '../../../shared/work-items'
+import { translate } from '@/i18n/i18n'
 
 const IS_MAC = navigator.userAgent.includes('Mac')
+const IS_WINDOWS = !IS_MAC && navigator.userAgent.includes('Windows')
+const WINDOWS_WINDOW_CONTROLS_WIDTH = '138px'
 
 // Why: the GH item dialog can be opened from any work-item list surface and
 // doesn't have the full owner/repo context the list's cache entry carries.
@@ -168,21 +201,30 @@ function parseOwnerRepoFromItemUrl(url: string): GitHubOwnerRepo | null {
   }
 }
 
+function getGitHubRepositoryLabelsUrl(itemUrl: string): string | null {
+  try {
+    const parsed = new URL(itemUrl)
+    if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+      return null
+    }
+    const segments = parsed.pathname.split('/').filter(Boolean)
+    if (segments.length < 2) {
+      return null
+    }
+    // Why: label management is repository-scoped; preserving the origin keeps
+    // GitHub Enterprise URLs working while navigating away from the issue path.
+    parsed.pathname = `/${segments[0]}/${segments[1]}/labels`
+    parsed.search = ''
+    parsed.hash = ''
+    return parsed.toString()
+  } catch {
+    return null
+  }
+}
+
 const MonacoCodeExcerpt = lazy(() => import('@/components/editor/MonacoCodeExcerpt'))
 
 export type ItemDialogTab = 'conversation' | 'checks' | 'files'
-
-type MentionOption = {
-  login: string
-  name?: string | null
-  avatarUrl?: string
-  source: string
-}
-
-type MentionQuery = {
-  atIndex: number
-  query: string
-}
 
 const CODE_CONTEXT_EXPAND_STEP = 5
 const CODE_CONTEXT_FALLBACK_LINES = 20
@@ -265,80 +307,6 @@ function formatRelativeTime(input: string): string {
   }
   const diffDays = Math.round(diffHours / 24)
   return formatter.format(diffDays, 'day')
-}
-
-function findMentionQuery(value: string, caret: number): MentionQuery | null {
-  const beforeCaret = value.slice(0, caret)
-  const match = /(^|[\s([{,])@([A-Za-z0-9-]*)$/.exec(beforeCaret)
-  if (!match) {
-    return null
-  }
-  const query = match[2] ?? ''
-  return {
-    atIndex: beforeCaret.length - query.length - 1,
-    query
-  }
-}
-
-function buildMentionOptions({
-  item,
-  comments,
-  participants,
-  assignableUsers
-}: {
-  item: GitHubWorkItem
-  comments: PRComment[]
-  participants: GitHubAssignableUser[]
-  assignableUsers: GitHubAssignableUser[]
-}): MentionOption[] {
-  const byLogin = new Map<string, MentionOption>()
-  const add = (
-    login: string | null | undefined,
-    source: string,
-    avatarUrl?: string,
-    name?: string | null
-  ): void => {
-    if (!login || login === 'ghost') {
-      return
-    }
-    const key = login.toLowerCase()
-    const existing = byLogin.get(key)
-    if (existing) {
-      if (!existing.avatarUrl && avatarUrl) {
-        existing.avatarUrl = avatarUrl
-      }
-      if (!existing.name && name) {
-        existing.name = name
-      }
-      return
-    }
-    byLogin.set(key, { login, source, avatarUrl, name })
-  }
-
-  add(item.author, item.type === 'pr' ? 'PR author' : 'Issue author')
-  for (const comment of comments) {
-    add(comment.author, 'Commenter', comment.authorAvatarUrl)
-  }
-  for (const user of participants) {
-    add(user.login, 'Participant', user.avatarUrl, user.name)
-  }
-  for (const user of assignableUsers) {
-    add(user.login, 'Team member', user.avatarUrl, user.name)
-  }
-
-  return Array.from(byLogin.values())
-}
-
-function filterMentionOptions(options: MentionOption[], query: string): MentionOption[] {
-  const normalizedQuery = query.toLowerCase()
-  const filtered = normalizedQuery
-    ? options.filter(
-        (option) =>
-          option.login.toLowerCase().includes(normalizedQuery) ||
-          (option.name ?? '').toLowerCase().includes(normalizedQuery)
-      )
-    : options
-  return filtered.slice(0, 8)
 }
 
 function getStateLabel(item: GitHubWorkItem): string {
@@ -479,11 +447,16 @@ function PRReviewersPanel({
   const [reviewerInput, setReviewerInput] = useState('')
   const [reviewerPickerSide, setReviewerPickerSide] = useState<'top' | 'bottom'>('bottom')
   const [reviewerPickerMaxHeight, setReviewerPickerMaxHeight] = useState<number | null>(null)
-  const [activeReviewerIndex, setActiveReviewerIndex] = useState(0)
+  const [activeReviewerCursor, setActiveReviewerCursor] = useState({ resetKey: '', index: 0 })
   const [submitting, setSubmitting] = useState(false)
   const [localReviewRequests, setLocalReviewRequests] = useState<GitHubAssignableUser[]>(
     () => item.reviewRequests ?? []
   )
+  const [reviewRequestsSource, setReviewRequestsSource] = useState(() => ({
+    itemId: item.id,
+    repoId: item.repoId,
+    reviewRequests: item.reviewRequests
+  }))
   const patchWorkItem = useAppStore((s) => s.patchWorkItem)
   const settings = useAppStore((s) => s.settings)
   const reviewerInputRef = useRef<HTMLInputElement | null>(null)
@@ -516,9 +489,20 @@ function PRReviewersPanel({
     }
   }, [cancelReviewerInputFocusFrame])
 
-  useEffect(() => {
+  // Why: reviewer edits are optimistic, but item switches/refetches must clear
+  // stale local requests before paint; a passive Effect leaves one stale render.
+  if (
+    reviewRequestsSource.itemId !== item.id ||
+    reviewRequestsSource.repoId !== item.repoId ||
+    reviewRequestsSource.reviewRequests !== item.reviewRequests
+  ) {
+    setReviewRequestsSource({
+      itemId: item.id,
+      repoId: item.repoId,
+      reviewRequests: item.reviewRequests
+    })
     setLocalReviewRequests(item.reviewRequests ?? [])
-  }, [item.id, item.reviewRequests])
+  }
 
   const reviewerSeedUsers = useMemo<GitHubAssignableUser[]>(() => {
     const byLogin = new Map<string, GitHubAssignableUser>()
@@ -628,9 +612,24 @@ function PRReviewersPanel({
     [everyoneElseReviewerRows, suggestedReviewerRows]
   )
 
-  useEffect(() => {
-    setActiveReviewerIndex(0)
-  }, [reviewerQuery, actionableReviewerRows.length])
+  const reviewerCursorResetKey = `${reviewerQuery}\u0000${actionableReviewerRows.length}`
+  if (activeReviewerCursor.resetKey !== reviewerCursorResetKey) {
+    setActiveReviewerCursor({ resetKey: reviewerCursorResetKey, index: 0 })
+  }
+  const activeReviewerIndex =
+    activeReviewerCursor.resetKey === reviewerCursorResetKey ? activeReviewerCursor.index : 0
+  const setActiveReviewerIndex = useCallback(
+    (nextIndex: number | ((current: number) => number)): void => {
+      setActiveReviewerCursor((current) => {
+        const currentIndex = current.resetKey === reviewerCursorResetKey ? current.index : 0
+        return {
+          resetKey: reviewerCursorResetKey,
+          index: typeof nextIndex === 'function' ? nextIndex(currentIndex) : nextIndex
+        }
+      })
+    },
+    [reviewerCursorResetKey]
+  )
 
   const hasReviewerMetadata =
     item.reviewDecision !== undefined ||
@@ -668,16 +667,26 @@ function PRReviewersPanel({
       selectedReviewerLogins
     )
     if (logins.length === 0) {
-      toast.error('Enter a reviewer')
+      toast.error(translate('auto.components.GitHubItemDialog.94ab23a9f9', 'Enter a reviewer'))
       return
     }
     if (localReviewRequests.length + logins.length > 15) {
-      toast.error('You can request up to 15 reviewers')
+      toast.error(
+        translate(
+          'auto.components.GitHubItemDialog.12e761610e',
+          'You can request up to 15 reviewers'
+        )
+      )
       return
     }
     const target = getActiveRuntimeTarget(settings)
     if (target.kind !== 'environment' && !repoPath) {
-      toast.error('No repo context available for this pull request.')
+      toast.error(
+        translate(
+          'auto.components.GitHubItemDialog.b4af16bf43',
+          'No repo context available for this pull request.'
+        )
+      )
       return
     }
     setSubmitting(true)
@@ -700,7 +709,10 @@ function PRReviewersPanel({
         return
       }
       if (!result.ok) {
-        toast.error(result.error ?? 'Failed to request reviewer')
+        toast.error(
+          result.error ??
+            translate('auto.components.GitHubItemDialog.c42d942b75', 'Failed to request reviewer')
+        )
         return
       }
       const nextReviewRequests = buildRequestedReviewUsers(
@@ -712,10 +724,17 @@ function PRReviewersPanel({
       patchWorkItem(item.id, { reviewRequests: nextReviewRequests }, item.repoId)
       onReviewersRequested(nextReviewRequests)
       setReviewerInput('')
-      toast.success(logins.length === 1 ? 'Reviewer requested' : 'Reviewers requested')
+      useAppStore.getState().recordFeatureInteraction('github-tasks')
+      toast.success(
+        logins.length === 1
+          ? translate('auto.components.GitHubItemDialog.ea985e657f', 'Reviewer requested')
+          : translate('auto.components.GitHubItemDialog.c016e4bac3', 'Reviewers requested')
+      )
     } catch {
       if (reviewerPanelMountedRef.current) {
-        toast.error('Failed to request reviewer')
+        toast.error(
+          translate('auto.components.GitHubItemDialog.c42d942b75', 'Failed to request reviewer')
+        )
       }
     } finally {
       if (reviewerPanelMountedRef.current) {
@@ -737,7 +756,12 @@ function PRReviewersPanel({
     }
     const target = getActiveRuntimeTarget(settings)
     if (target.kind !== 'environment' && !repoPath) {
-      toast.error('No repo context available for this pull request.')
+      toast.error(
+        translate(
+          'auto.components.GitHubItemDialog.b4af16bf43',
+          'No repo context available for this pull request.'
+        )
+      )
       return
     }
     setSubmitting(true)
@@ -760,7 +784,10 @@ function PRReviewersPanel({
         return
       }
       if (!result.ok) {
-        toast.error(result.error ?? 'Failed to remove reviewer')
+        toast.error(
+          result.error ??
+            translate('auto.components.GitHubItemDialog.73487fb975', 'Failed to remove reviewer')
+        )
         return
       }
       const removed = new Set(logins.map((login) => login.toLowerCase()))
@@ -771,10 +798,17 @@ function PRReviewersPanel({
       patchWorkItem(item.id, { reviewRequests: nextReviewRequests }, item.repoId)
       onReviewersRequested(nextReviewRequests)
       setReviewerInput('')
-      toast.success(logins.length === 1 ? 'Reviewer removed' : 'Reviewers removed')
+      useAppStore.getState().recordFeatureInteraction('github-tasks')
+      toast.success(
+        logins.length === 1
+          ? translate('auto.components.GitHubItemDialog.69515bff81', 'Reviewer removed')
+          : translate('auto.components.GitHubItemDialog.2e69540652', 'Reviewers removed')
+      )
     } catch {
       if (reviewerPanelMountedRef.current) {
-        toast.error('Failed to remove reviewer')
+        toast.error(
+          translate('auto.components.GitHubItemDialog.73487fb975', 'Failed to remove reviewer')
+        )
       }
     } finally {
       if (reviewerPanelMountedRef.current) {
@@ -813,7 +847,17 @@ function PRReviewersPanel({
         key={`${options.suggested ? 'suggested' : 'reviewer'}:${reviewer.login}`}
         type="button"
         aria-label={
-          selected ? `Unrequest reviewer ${reviewer.login}` : `Request reviewer ${reviewer.login}`
+          selected
+            ? translate(
+                'auto.components.GitHubItemDialog.fedc09eeb9',
+                'Unrequest reviewer {{value0}}',
+                { value0: reviewer.login }
+              )
+            : translate(
+                'auto.components.GitHubItemDialog.8c45901789',
+                'Request reviewer {{value0}}',
+                { value0: reviewer.login }
+              )
         }
         aria-pressed={selected}
         className={cn(
@@ -849,7 +893,10 @@ function PRReviewersPanel({
           </span>
           {options.suggested ? (
             <span className="block truncate text-[12px] leading-4 text-muted-foreground">
-              Recently edited these files
+              {translate(
+                'auto.components.GitHubItemDialog.e3243d9376',
+                'Recently edited these files'
+              )}
             </span>
           ) : null}
         </span>
@@ -861,7 +908,9 @@ function PRReviewersPanel({
     <aside className="rounded-lg border border-border/50 bg-card/50 shadow-xs">
       <div className="flex h-10 items-center gap-2 border-b border-border/50 px-3">
         <Users className="size-3.5 text-muted-foreground" />
-        <span className="text-[13px] font-medium text-foreground">Reviewers</span>
+        <span className="text-[13px] font-medium text-foreground">
+          {translate('auto.components.GitHubItemDialog.dc8a092c57', 'Reviewers')}
+        </span>
         {reviewers.length > 0 ? (
           <span className="ml-auto rounded-full border border-border/50 bg-muted/30 px-1.5 py-0.5 text-[11px] tabular-nums text-muted-foreground">
             {reviewers.length}
@@ -872,7 +921,7 @@ function PRReviewersPanel({
         {loading && !hasReviewerMetadata ? (
           <div className="flex items-center gap-2 py-1 text-[12px] text-muted-foreground">
             <LoaderCircle className="size-3.5 animate-spin" />
-            Loading reviewers
+            {translate('auto.components.GitHubItemDialog.6a45771d47', 'Loading reviewers')}
           </div>
         ) : reviewers.length > 0 ? (
           <div className="flex flex-col gap-2">
@@ -903,7 +952,11 @@ function PRReviewersPanel({
                           size="icon-xs"
                           className="size-6 shrink-0 text-muted-foreground hover:text-foreground"
                           disabled={submitting || !canRequestReview}
-                          aria-label={`Remove reviewer ${reviewer.login}`}
+                          aria-label={translate(
+                            'auto.components.GitHubItemDialog.8b15a5e91c',
+                            'Remove reviewer {{value0}}',
+                            { value0: reviewer.login }
+                          )}
                           onClick={() => {
                             void handleRemoveReviewers([reviewer.login])
                           }}
@@ -911,7 +964,12 @@ function PRReviewersPanel({
                           <X className="size-3.5" />
                         </Button>
                       </TooltipTrigger>
-                      <TooltipContent>Remove reviewer</TooltipContent>
+                      <TooltipContent>
+                        {translate(
+                          'auto.components.GitHubItemDialog.5c1c973855',
+                          'Remove reviewer'
+                        )}
+                      </TooltipContent>
                     </Tooltip>
                   ) : null}
                 </div>
@@ -919,7 +977,9 @@ function PRReviewersPanel({
             })}
           </div>
         ) : (
-          <div className="py-1 text-[12px] text-muted-foreground">No reviewers requested.</div>
+          <div className="py-1 text-[12px] text-muted-foreground">
+            {translate('auto.components.GitHubItemDialog.36f9ac4a47', 'No reviewers requested.')}
+          </div>
         )}
         <Popover open={open} onOpenChange={handleReviewerPickerOpenChange}>
           <PopoverAnchor asChild>
@@ -933,8 +993,11 @@ function PRReviewersPanel({
                 }
               }}
               disabled={submitting || !canRequestReview}
-              placeholder="Type or choose a user"
-              aria-label="Reviewer"
+              placeholder={translate(
+                'auto.components.GitHubItemDialog.bb42774171',
+                'Type or choose a user'
+              )}
+              aria-label={translate('auto.components.GitHubItemDialog.934add88b6', 'Reviewer')}
               aria-expanded={open}
               aria-haspopup="listbox"
               className="mt-3 h-8 min-w-0 cursor-text rounded-md border-border/50 bg-background text-xs"
@@ -996,18 +1059,23 @@ function PRReviewersPanel({
           >
             <div className="border-b border-border/70 px-3 py-2">
               <div className="text-[13px] font-semibold text-foreground">
-                Request up to 15 reviewers
+                {translate(
+                  'auto.components.GitHubItemDialog.b0b7344684',
+                  'Request up to 15 reviewers'
+                )}
               </div>
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto scrollbar-sleek">
               {reviewerMetadata.loading ? (
-                <div className="px-3 py-2 text-[13px] text-muted-foreground">Loading...</div>
+                <div className="px-3 py-2 text-[13px] text-muted-foreground">
+                  {translate('auto.components.GitHubItemDialog.a98433e73d', 'Loading...')}
+                </div>
               ) : filteredReviewerCandidates.length > 0 ? (
                 <>
                   {suggestedReviewerRows.length > 0 ? (
                     <>
                       <div className="border-b border-border/70 bg-muted/50 px-3 py-1.5 text-[12px] font-semibold text-foreground">
-                        Suggestions
+                        {translate('auto.components.GitHubItemDialog.c2b21818e1', 'Suggestions')}
                       </div>
                       {suggestedReviewerRows.map((reviewer, index) =>
                         renderReviewerPickerRow(reviewer, { suggested: true, activeIndex: index })
@@ -1015,7 +1083,7 @@ function PRReviewersPanel({
                     </>
                   ) : null}
                   <div className="border-b border-border/70 bg-muted/50 px-3 py-1.5 text-[12px] font-semibold text-foreground">
-                    Everyone else
+                    {translate('auto.components.GitHubItemDialog.1ffce94a8b', 'Everyone else')}
                   </div>
                   {everyoneElseReviewerRows.length > 0 ? (
                     everyoneElseReviewerRows.map((reviewer, index) =>
@@ -1026,7 +1094,10 @@ function PRReviewersPanel({
                     )
                   ) : (
                     <div className="px-3 py-2 text-[13px] text-muted-foreground">
-                      No matching reviewers.
+                      {translate(
+                        'auto.components.GitHubItemDialog.70e84e3d0b',
+                        'No matching reviewers.'
+                      )}
                     </div>
                   )}
                 </>
@@ -1034,8 +1105,14 @@ function PRReviewersPanel({
                 <div className="px-3 py-2 text-[13px] text-muted-foreground">
                   {reviewerMetadata.error ??
                     (hasReviewerMetadata
-                      ? 'No matching reviewers.'
-                      : 'Open the PR details to view current reviewers.')}
+                      ? translate(
+                          'auto.components.GitHubItemDialog.70e84e3d0b',
+                          'No matching reviewers.'
+                        )
+                      : translate(
+                          'auto.components.GitHubItemDialog.3f79ffc8b7',
+                          'Open the PR details to view current reviewers.'
+                        ))}
                 </div>
               )}
             </div>
@@ -1477,7 +1554,11 @@ function PRViewedCheckbox({
           type="button"
           role="checkbox"
           aria-checked={checked}
-          aria-label={`${checked ? 'Unmark' : 'Mark'} ${filePath} as viewed`}
+          aria-label={translate(
+            'auto.components.GitHubItemDialog.2d89a38d9d',
+            '{{value0}} {{value1}} as viewed',
+            { value0: checked ? 'Unmark' : 'Mark', value1: filePath }
+          )}
           disabled={pending}
           onClick={(event) => {
             event.stopPropagation()
@@ -1503,11 +1584,13 @@ function PRViewedCheckbox({
               <Check className="size-3" strokeWidth={3} />
             ) : null}
           </span>
-          <span>Viewed</span>
+          <span>{translate('auto.components.GitHubItemDialog.af924014f8', 'Viewed')}</span>
         </button>
       </TooltipTrigger>
       <TooltipContent side="bottom" sideOffset={4}>
-        {checked ? 'Unmark viewed' : 'Mark viewed'}
+        {checked
+          ? translate('auto.components.GitHubItemDialog.ba8e329d92', 'Unmark viewed')
+          : translate('auto.components.GitHubItemDialog.16c1abe76c', 'Mark viewed')}
       </TooltipContent>
     </Tooltip>
   )
@@ -1751,7 +1834,10 @@ function PRFilesCombinedDiffViewer({
               originalIsBinary: false,
               modifiedIsBinary: false
             },
-            error: 'Diff unavailable because the PR commit SHAs are missing.'
+            error: translate(
+              'auto.components.GitHubItemDialog.829674460a',
+              'Diff unavailable because the PR commit SHAs are missing.'
+            )
           }
         }
         const contents = await loadPRFileContents({
@@ -1926,7 +2012,12 @@ function PRFilesCombinedDiffViewer({
       }
     ) => {
       if (!headSha) {
-        toast.error('Unable to comment without the PR head SHA.')
+        toast.error(
+          translate(
+            'auto.components.GitHubItemDialog.d1fa2cf888',
+            'Unable to comment without the PR head SHA.'
+          )
+        )
         return false
       }
       const result = await addPRReviewCommentForRepo({
@@ -1940,11 +2031,19 @@ function PRFilesCombinedDiffViewer({
         body
       })
       if (!result.ok) {
-        toast.error(result.error || 'Failed to add review comment.')
+        toast.error(
+          result.error ||
+            translate(
+              'auto.components.GitHubItemDialog.b0b09778c8',
+              'Failed to add review comment.'
+            )
+        )
         return false
       }
       onCommentAdded(result.comment)
-      toast.success('Review comment added.')
+      toast.success(
+        translate('auto.components.GitHubItemDialog.a341343303', 'Review comment added.')
+      )
       return true
     },
     [headSha, onCommentAdded, prNumber, repoId, repoPath]
@@ -1975,7 +2074,7 @@ function PRFilesCombinedDiffViewer({
   )
 
   return (
-    <div className="flex min-h-[520px] flex-1 flex-col">
+    <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden">
       <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border bg-background/50 px-3 py-1.5">
         <div className="flex min-w-0 items-center gap-2">
           {fileTreeCollapsed && (
@@ -1985,19 +2084,23 @@ function PRFilesCombinedDiffViewer({
                   type="button"
                   variant="ghost"
                   size="icon-xs"
-                  aria-label="Show file tree"
+                  aria-label={translate(
+                    'auto.components.GitHubItemDialog.1257d1435d',
+                    'Show file tree'
+                  )}
                   onClick={() => setFileTreeCollapsed(false)}
                 >
                   <PanelLeftOpen className="size-3.5" />
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="bottom" sideOffset={6}>
-                Show file tree
+                {translate('auto.components.GitHubItemDialog.1257d1435d', 'Show file tree')}
               </TooltipContent>
             </Tooltip>
           )}
           <span className="truncate text-xs text-muted-foreground">
-            {files.filter(isPRFileViewed).length} / {files.length} files viewed
+            {files.filter(isPRFileViewed).length} / {files.length}{' '}
+            {translate('auto.components.GitHubItemDialog.f2d02cdf8c', 'files viewed')}
           </span>
         </div>
         <div className="flex shrink-0 items-center gap-2">
@@ -2006,14 +2109,18 @@ function PRFilesCombinedDiffViewer({
             className="w-20 text-left text-xs text-muted-foreground transition-colors hover:text-foreground"
             onClick={() => setAllSectionsCollapsed(!allSectionsCollapsed)}
           >
-            {allSectionsCollapsed ? 'Expand All' : 'Collapse All'}
+            {allSectionsCollapsed
+              ? translate('auto.components.GitHubItemDialog.3c19ec3069', 'Expand All')
+              : translate('auto.components.GitHubItemDialog.d00a0a7f8f', 'Collapse All')}
           </button>
           <button
             type="button"
             className="w-24 rounded border border-border px-2 py-0.5 text-center text-xs text-muted-foreground transition-colors hover:text-foreground"
             onClick={() => setSideBySide((prev) => !prev)}
           >
-            {sideBySide ? 'Inline' : 'Side by Side'}
+            {sideBySide
+              ? translate('auto.components.GitHubItemDialog.6e43a16435', 'Inline')
+              : translate('auto.components.GitHubItemDialog.31770bef03', 'Side by Side')}
           </button>
         </div>
       </div>
@@ -2100,8 +2207,9 @@ function CommentCodeContext({
 }): React.JSX.Element | null {
   const [contents, setContents] = useState<GitHubPRFileContents | null>(null)
   const [error, setError] = useState(false)
-  const [contextBefore, setContextBefore] = useState(0)
-  const [contextAfter, setContextAfter] = useState(0)
+  const [contextExpansionState, setContextExpansionState] = useState(() =>
+    createCommentCodeContextExpansionState(comment.id)
+  )
   const file = useMemo(
     () => files.find((candidate) => candidate.path === comment.path),
     [comment.path, files]
@@ -2132,10 +2240,37 @@ function CommentCodeContext({
     }
   }, [baseSha, file, headSha, line, prNumber, repoId, repoPath])
 
-  useEffect(() => {
-    setContextBefore(0)
-    setContextAfter(0)
-  }, [comment.id])
+  const resolvedContextExpansionState = resolveCommentCodeContextExpansionState(
+    contextExpansionState,
+    comment.id
+  )
+  if (resolvedContextExpansionState !== contextExpansionState) {
+    // Why: comment rows can be reused when a PR refreshes; reset before paint
+    // so expanded context from the previous comment is never shown on the next.
+    setContextExpansionState(resolvedContextExpansionState)
+  }
+  const contextBefore = resolvedContextExpansionState.contextBefore
+  const contextAfter = resolvedContextExpansionState.contextAfter
+  const setContextBefore = useCallback(
+    (contextBeforeUpdate: CommentCodeContextLineUpdate) => {
+      setContextExpansionState((current) =>
+        updateCommentCodeContextExpansionState(current, comment.id, {
+          contextBefore: contextBeforeUpdate
+        })
+      )
+    },
+    [comment.id]
+  )
+  const setContextAfter = useCallback(
+    (contextAfterUpdate: CommentCodeContextLineUpdate) => {
+      setContextExpansionState((current) =>
+        updateCommentCodeContextExpansionState(current, comment.id, {
+          contextAfter: contextAfterUpdate
+        })
+      )
+    },
+    [comment.id]
+  )
 
   if (!comment.path || !line || !file || file.isBinary || error) {
     return null
@@ -2145,7 +2280,7 @@ function CommentCodeContext({
     return (
       <div className="mb-3 flex items-center gap-2 rounded-md border border-border/40 bg-muted/20 px-3 py-2 text-[12px] text-muted-foreground">
         <LoaderCircle className="size-3.5 animate-spin" />
-        Loading code context…
+        {translate('auto.components.GitHubItemDialog.db61d76cd5', 'Loading code context…')}
       </div>
     )
   }
@@ -2194,16 +2329,31 @@ function CommentCodeContext({
           <span className="truncate font-mono">{comment.path}</span>
           <span className="shrink-0 font-mono">
             L{from}
-            {to !== from ? `-L${to}` : ''}
+            {to !== from
+              ? translate('auto.components.GitHubItemDialog.d1c0dad471', '-L{{value0}}', {
+                  value0: to
+                })
+              : ''}
           </span>
           {(from !== commentFrom || to !== commentTo) && (
             <span className="shrink-0 font-mono text-muted-foreground/70">
-              comment L{commentFrom}
-              {commentTo !== commentFrom ? `-L${commentTo}` : ''}
+              {translate('auto.components.GitHubItemDialog.bd7be7b1fd', 'comment L')}
+              {commentFrom}
+              {commentTo !== commentFrom
+                ? translate('auto.components.GitHubItemDialog.d1c0dad471', '-L{{value0}}', {
+                    value0: commentTo
+                  })
+                : ''}
             </span>
           )}
         </div>
-        <ButtonGroup className="text-muted-foreground" aria-label="Code context controls">
+        <ButtonGroup
+          className="text-muted-foreground"
+          aria-label={translate(
+            'auto.components.GitHubItemDialog.d43736d09c',
+            'Code context controls'
+          )}
+        >
           {(contextBefore > 0 || contextAfter > 0) && (
             <Tooltip>
               <TooltipTrigger asChild>
@@ -2216,12 +2366,17 @@ function CommentCodeContext({
                     setContextBefore(0)
                     setContextAfter(0)
                   }}
-                  aria-label="Reset code context"
+                  aria-label={translate(
+                    'auto.components.GitHubItemDialog.b1574e8ac2',
+                    'Reset code context'
+                  )}
                 >
                   <UndoDot className="size-3.5" />
                 </Button>
               </TooltipTrigger>
-              <TooltipContent>Reset code context</TooltipContent>
+              <TooltipContent>
+                {translate('auto.components.GitHubItemDialog.b1574e8ac2', 'Reset code context')}
+              </TooltipContent>
             </Tooltip>
           )}
           <Tooltip>
@@ -2237,12 +2392,18 @@ function CommentCodeContext({
                     Math.min(current + CODE_CONTEXT_EXPAND_STEP, commentFrom - 1)
                   )
                 }
-                aria-label={`Show ${CODE_CONTEXT_EXPAND_STEP} more lines above`}
+                aria-label={translate(
+                  'auto.components.GitHubItemDialog.307c98e8e3',
+                  'Show {{value0}} more lines above',
+                  { value0: CODE_CONTEXT_EXPAND_STEP }
+                )}
               >
                 <ArrowUp className="size-3.5" />
               </Button>
             </TooltipTrigger>
-            <TooltipContent>Show more lines above</TooltipContent>
+            <TooltipContent>
+              {translate('auto.components.GitHubItemDialog.5664681624', 'Show more lines above')}
+            </TooltipContent>
           </Tooltip>
           <Tooltip>
             <TooltipTrigger asChild>
@@ -2257,12 +2418,18 @@ function CommentCodeContext({
                     Math.min(current + CODE_CONTEXT_EXPAND_STEP, lines.length - commentTo)
                   )
                 }
-                aria-label={`Show ${CODE_CONTEXT_EXPAND_STEP} more lines below`}
+                aria-label={translate(
+                  'auto.components.GitHubItemDialog.307c98e8e3',
+                  'Show {{value0}} more lines below',
+                  { value0: CODE_CONTEXT_EXPAND_STEP }
+                )}
               >
                 <ArrowDown className="size-3.5" />
               </Button>
             </TooltipTrigger>
-            <TooltipContent>Show more lines below</TooltipContent>
+            <TooltipContent>
+              {translate('auto.components.GitHubItemDialog.06c06e58ba', 'Show more lines below')}
+            </TooltipContent>
           </Tooltip>
           <Tooltip>
             <TooltipTrigger asChild>
@@ -2333,7 +2500,6 @@ function ConversationTab({
   loading,
   detailsLoaded,
   checks,
-  participants: detailsParticipants,
   localState,
   onStateChange,
   projectOrigin,
@@ -2354,7 +2520,6 @@ function ConversationTab({
   loading: boolean
   detailsLoaded: boolean
   checks: GitHubWorkItemDetails['checks']
-  participants: GitHubAssignableUser[]
   localState: GitHubWorkItem['state']
   onStateChange: (state: GitHubWorkItem['state']) => void
   projectOrigin: GitHubItemDialogProjectOrigin | undefined
@@ -2370,57 +2535,26 @@ function ConversationTab({
   const [bodyDraft, setBodyDraft] = useState(body)
   const [bodyEditing, setBodyEditing] = useState(false)
   const [bodySaving, setBodySaving] = useState(false)
-  const bodyTextareaRef = useRef<HTMLTextAreaElement>(null)
-  const bodyTextareaFocusFrameRef = useRef<number | null>(null)
-  const repoAssignees = useRepoAssignees(repoPath, item.repoId)
   const commentCounts = useMemo(() => getPRCommentAudienceCounts(comments), [comments])
   const visibleComments = useMemo(
     () => filterPRCommentsByAudience(comments, commentFilter),
     [commentFilter, comments]
   )
   const visibleCommentGroups = useMemo(() => groupPRComments(visibleComments), [visibleComments])
-  const mentionOptions = useMemo(
-    () =>
-      buildMentionOptions({
-        item,
-        comments,
-        participants: detailsParticipants,
-        assignableUsers: repoAssignees.data
-      }),
-    [comments, detailsParticipants, item, repoAssignees.data]
-  )
+  const resolvedReplyingTo = resolveCommentReplyTarget(replyingTo, visibleComments)
 
-  const cancelBodyTextareaFocusFrame = useCallback((): void => {
-    if (bodyTextareaFocusFrameRef.current !== null) {
-      cancelAnimationFrame(bodyTextareaFocusFrameRef.current)
-      bodyTextareaFocusFrameRef.current = null
-    }
-  }, [])
+  if (resolvedReplyingTo !== replyingTo) {
+    // Why: comment filters/refetches can hide the active reply target; clear it
+    // before paint so a stale composer does not flash for the wrong comment set.
+    setReplyingTo(resolvedReplyingTo)
+  }
 
-  useEffect(() => {
-    if (replyingTo !== null && !visibleComments.some((comment) => comment.id === replyingTo)) {
-      setReplyingTo(null)
-    }
-  }, [replyingTo, visibleComments])
-
-  useEffect(() => {
-    if (!bodyEditing) {
-      setBodyDraft(body)
-    }
-  }, [body, bodyEditing, item.id])
-
-  useEffect(() => {
-    if (!bodyEditing) {
-      cancelBodyTextareaFocusFrame()
-      return cancelBodyTextareaFocusFrame
-    }
-    cancelBodyTextareaFocusFrame()
-    bodyTextareaFocusFrameRef.current = requestAnimationFrame(() => {
-      bodyTextareaFocusFrameRef.current = null
-      bodyTextareaRef.current?.focus()
-    })
-    return cancelBodyTextareaFocusFrame
-  }, [bodyEditing, cancelBodyTextareaFocusFrame])
+  const resolvedBodyDraft = resolveGitHubBodyDraft(bodyDraft, body, bodyEditing)
+  if (shouldSyncGitHubBodyDraft(bodyDraft, body, bodyEditing)) {
+    // Why: background detail refreshes can change the body while the editor is
+    // closed; reconcile before paint so reopening never sees a stale draft.
+    setBodyDraft(resolvedBodyDraft)
+  }
 
   const bodySlug = useMemo(() => parseOwnerRepoFromItemUrl(item.url), [item.url])
   const markdownGitHubRepo = useMemo(
@@ -2429,7 +2563,7 @@ function ConversationTab({
   )
   const canEditBody =
     item.type === 'pr' ? Boolean(projectOrigin || bodySlug) : Boolean(projectOrigin || repoPath)
-  const bodyChanged = bodyDraft !== body
+  const bodyChanged = resolvedBodyDraft !== body
 
   const handleSaveBody = useCallback(async (): Promise<void> => {
     if (bodySaving || !bodyChanged) {
@@ -2442,23 +2576,47 @@ function ConversationTab({
         item,
         repoPath,
         projectOrigin,
-        body: bodyDraft,
+        body: resolvedBodyDraft,
         parsedSlug: bodySlug
       })
-      onBodyUpdated(bodyDraft)
+      onBodyUpdated(resolvedBodyDraft)
       setBodyEditing(false)
-      toast.success('Description updated.')
+      useAppStore.getState().recordFeatureInteraction('github-tasks')
+      toast.success(
+        translate('auto.components.GitHubItemDialog.5221548274', 'Description updated.')
+      )
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to update description.')
+      toast.error(
+        err instanceof Error
+          ? err.message
+          : translate(
+              'auto.components.GitHubItemDialog.58c73cb0d8',
+              'Failed to update description.'
+            )
+      )
     } finally {
       setBodySaving(false)
     }
-  }, [bodyChanged, bodyDraft, bodySaving, bodySlug, item, onBodyUpdated, projectOrigin, repoPath])
+  }, [
+    bodyChanged,
+    resolvedBodyDraft,
+    bodySaving,
+    bodySlug,
+    item,
+    onBodyUpdated,
+    projectOrigin,
+    repoPath
+  ])
 
   const handleReply = useCallback(
     async (comment: PRComment, replyBody: string): Promise<boolean> => {
       if (!repoPath) {
-        toast.error('Unable to reply without a repository path.')
+        toast.error(
+          translate(
+            'auto.components.GitHubItemDialog.745c9089ec',
+            'Unable to reply without a repository path.'
+          )
+        )
         return false
       }
       const result =
@@ -2482,12 +2640,15 @@ function ConversationTab({
             })
 
       if (!result.ok) {
-        toast.error(result.error || 'Failed to post reply.')
+        toast.error(
+          result.error ||
+            translate('auto.components.GitHubItemDialog.283699bc82', 'Failed to post reply.')
+        )
         return false
       }
       onCommentAdded(result.comment)
       setReplyingTo(null)
-      toast.success('Reply posted.')
+      toast.success(translate('auto.components.GitHubItemDialog.10f4ff5be8', 'Reply posted.'))
       return true
     },
     [item.number, item.repoId, item.type, onCommentAdded, repoPath]
@@ -2529,12 +2690,12 @@ function ConversationTab({
     <div
       key={comment.id}
       className={cn(
-        'min-w-0 overflow-hidden rounded-lg border border-border/40 bg-card/50 shadow-xs',
-        isReply && 'ml-6 max-w-[calc(100%-1.5rem)]',
+        'min-w-0 overflow-hidden rounded-md border border-border/60 bg-card shadow-xs',
+        isReply && 'ml-8 max-w-[calc(100%-2rem)] border-l-2 border-l-border/80',
         comment.isResolved && PR_COMMENT_RESOLVED_CONTAINER_CLASS
       )}
     >
-      <div className="flex min-w-0 items-center gap-2 border-b border-border/40 px-3 py-2">
+      <div className="flex min-w-0 items-center gap-2 border-b border-border/50 bg-muted/20 px-3 py-2">
         {comment.authorAvatarUrl ? (
           <img
             src={comment.authorAvatarUrl}
@@ -2558,12 +2719,16 @@ function ConversationTab({
         {comment.path && (
           <span className="min-w-0 truncate font-mono text-[11px] text-muted-foreground/70">
             {comment.path.split('/').pop()}
-            {comment.line ? `:L${comment.line}` : ''}
+            {comment.line
+              ? translate('auto.components.GitHubItemDialog.136542c9ba', ':L{{value0}}', {
+                  value0: comment.line
+                })
+              : ''}
           </span>
         )}
         {comment.isResolved && (
           <span className="rounded-full border border-border/60 bg-muted/40 px-1.5 py-0.5 text-[11px] text-muted-foreground">
-            resolved
+            {translate('auto.components.GitHubItemDialog.68cb993d61', 'resolved')}
           </span>
         )}
         <div className="ml-auto flex shrink-0 items-center gap-1">
@@ -2576,12 +2741,17 @@ function ConversationTab({
                 onClick={() =>
                   setReplyingTo((current) => (current === comment.id ? null : comment.id))
                 }
-                aria-label="Reply to comment"
+                aria-label={translate(
+                  'auto.components.GitHubItemDialog.bca8eb39ac',
+                  'Reply to comment'
+                )}
               >
                 <MessageSquarePlus className="size-3.5" />
               </Button>
             </TooltipTrigger>
-            <TooltipContent>Reply to comment</TooltipContent>
+            <TooltipContent>
+              {translate('auto.components.GitHubItemDialog.bca8eb39ac', 'Reply to comment')}
+            </TooltipContent>
           </Tooltip>
           {comment.url && (
             <Tooltip>
@@ -2592,12 +2762,17 @@ function ConversationTab({
                   size="icon-xs"
                   className="size-7"
                   onClick={() => window.api.shell.openUrl(comment.url)}
-                  aria-label="Open comment on GitHub"
+                  aria-label={translate(
+                    'auto.components.GitHubItemDialog.a154ec5224',
+                    'Open comment on GitHub'
+                  )}
                 >
                   <ExternalLink className="size-3.5" />
                 </Button>
               </TooltipTrigger>
-              <TooltipContent>Open comment on GitHub</TooltipContent>
+              <TooltipContent>
+                {translate('auto.components.GitHubItemDialog.a154ec5224', 'Open comment on GitHub')}
+              </TooltipContent>
             </Tooltip>
           )}
         </div>
@@ -2619,13 +2794,19 @@ function ConversationTab({
           className="min-w-0 max-w-full overflow-hidden break-words text-[13px] leading-relaxed [&_a]:break-all [&_code]:break-words [&_pre]:max-w-full"
         />
         <CommentReactions reactions={comment.reactions} />
-        {replyingTo === comment.id && (
+        {resolvedReplyingTo === comment.id && (
           <CommentReplyForm
             className="mt-3"
             placeholder={
-              comment.path ? 'Reply in this review thread' : `Reply to @${comment.author}`
+              comment.path
+                ? translate(
+                    'auto.components.GitHubItemDialog.86f809e2ce',
+                    'Reply in this review thread'
+                  )
+                : translate('auto.components.GitHubItemDialog.080d071d48', 'Reply to @{{value0}}', {
+                    value0: comment.author
+                  })
             }
-            mentionOptions={mentionOptions}
             onCancel={() => setReplyingTo(null)}
             onSubmit={(replyBody) => handleReply(comment, replyBody)}
           />
@@ -2661,7 +2842,11 @@ function ConversationTab({
         >
           <AccordionTrigger className="px-3 py-2 text-[13px] text-muted-foreground hover:bg-accent/30">
             <span className="min-w-0 truncate">
-              Resolved {group.kind === 'thread' ? 'thread' : 'comment'} by {root.author}
+              {translate('auto.components.GitHubItemDialog.228e2f59d3', 'Resolved')}{' '}
+              {group.kind === 'thread'
+                ? translate('auto.components.GitHubItemDialog.28d0d3374f', 'thread')
+                : translate('auto.components.GitHubItemDialog.e2bf3e41a9', 'comment')}{' '}
+              {translate('auto.components.GitHubItemDialog.0ae387d8ca', 'by')} {root.author}
               {count > 1 ? ` (${count})` : ''}
             </span>
           </AccordionTrigger>
@@ -2687,7 +2872,10 @@ function ConversationTab({
         <div className="rounded-lg border border-border/50 bg-card/50 shadow-xs">
           <div className="flex items-center gap-2 border-b border-border/50 px-3 py-2 text-[12px] text-muted-foreground">
             <span className="font-medium text-foreground">{authorLabel}</span>
-            <span>updated {formatRelativeTime(item.updatedAt)}</span>
+            <span>
+              {translate('auto.components.GitHubItemDialog.8223320f8d', 'updated')}{' '}
+              {formatRelativeTime(item.updatedAt)}
+            </span>
             {canEditBody && !loading && detailsLoaded ? (
               bodyEditing ? (
                 <div className="ml-auto flex items-center gap-1">
@@ -2703,7 +2891,7 @@ function ConversationTab({
                     }}
                   >
                     <X className="size-3.5" />
-                    Cancel
+                    {translate('auto.components.GitHubItemDialog.675bc0d638', 'Cancel')}
                   </Button>
                   <Button
                     type="button"
@@ -2717,7 +2905,7 @@ function ConversationTab({
                     ) : (
                       <Check className="size-3.5" />
                     )}
-                    Save
+                    {translate('auto.components.GitHubItemDialog.9df4e74bdf', 'Save')}
                   </Button>
                 </div>
               ) : (
@@ -2732,12 +2920,17 @@ function ConversationTab({
                         setBodyDraft(body)
                         setBodyEditing(true)
                       }}
-                      aria-label="Edit description"
+                      aria-label={translate(
+                        'auto.components.GitHubItemDialog.4d555d3796',
+                        'Edit description'
+                      )}
                     >
                       <Pencil className="size-3.5" />
                     </Button>
                   </TooltipTrigger>
-                  <TooltipContent>Edit description</TooltipContent>
+                  <TooltipContent>
+                    {translate('auto.components.GitHubItemDialog.4d555d3796', 'Edit description')}
+                  </TooltipContent>
                 </Tooltip>
               )
             ) : null}
@@ -2748,27 +2941,17 @@ function ConversationTab({
                 <LoaderCircle className="size-4 animate-spin text-muted-foreground" />
               </div>
             ) : bodyEditing ? (
-              <MentionTextarea
-                textareaRef={bodyTextareaRef}
-                value={bodyDraft}
-                onValueChange={setBodyDraft}
-                onKeyDown={(event) => {
-                  if (event.key === 'Escape') {
-                    event.preventDefault()
-                    setBodyDraft(body)
-                    setBodyEditing(false)
-                    return
-                  }
-                  if (isScreenSubmitShortcut(event)) {
-                    event.preventDefault()
-                    void handleSaveBody()
-                  }
-                }}
-                placeholder="Description"
-                rows={12}
-                mentionOptions={mentionOptions}
-                wrapperClassName="flex min-h-64 w-full items-stretch"
-                className="scrollbar-sleek block min-h-64 w-full resize-y rounded-md border border-input bg-background px-3 py-2 font-mono text-[13px] leading-5 placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              <GitHubMarkdownComposer
+                value={resolvedBodyDraft}
+                onChange={setBodyDraft}
+                placeholder={translate(
+                  'auto.components.GitHubItemDialog.52b20b56f7',
+                  'Description'
+                )}
+                disabled={bodySaving}
+                autoFocus
+                minHeightClassName="min-h-64"
+                onSubmitShortcut={() => void handleSaveBody()}
               />
             ) : body.trim() ? (
               <CommentMarkdown
@@ -2778,16 +2961,23 @@ function ConversationTab({
                 className="min-w-0 max-w-full overflow-hidden break-words text-[14px] leading-relaxed [&_a]:break-all [&_code]:break-words [&_pre]:max-w-full"
               />
             ) : (
-              <span className="italic text-muted-foreground">No description provided.</span>
+              <span className="italic text-muted-foreground">
+                {translate(
+                  'auto.components.GitHubItemDialog.9b9cb55994',
+                  'No description provided.'
+                )}
+              </span>
             )}
           </div>
         </div>
 
         {detailsLoaded ? (
           <>
-            <div className="flex items-center gap-2 pt-1">
+            <div className="flex items-center gap-2 border-b border-border/40 pb-2 pt-1">
               <MessageSquare className="size-4 text-muted-foreground" />
-              <span className="text-[13px] font-medium text-foreground">Comments</span>
+              <span className="text-[13px] font-semibold text-foreground">
+                {translate('auto.components.GitHubItemDialog.1506916c09', 'Comments')}
+              </span>
               {comments.length > 0 && (
                 <span className="rounded-full border border-border/50 bg-muted/30 px-1.5 py-0.5 text-[11px] tabular-nums text-muted-foreground">
                   {comments.length}
@@ -2797,7 +2987,7 @@ function ConversationTab({
 
             {item.type === 'pr' && comments.length > 0 && (
               <div className="grid grid-cols-3 rounded-lg border border-border/50 bg-background p-0.5">
-                {PR_COMMENT_AUDIENCE_FILTERS.map((filter) => {
+                {getPrCommentAudienceFilters().map((filter) => {
                   const isActive = commentFilter === filter.value
                   return (
                     <button
@@ -2819,13 +3009,13 @@ function ConversationTab({
             )}
 
             {comments.length === 0 ? (
-              <div className="rounded-lg border border-dashed border-border/50 px-3 py-6 text-left text-[13px] text-muted-foreground">
-                No comments yet.
-              </div>
+              <p className="px-1 py-2 text-[13px] text-muted-foreground">
+                {translate('auto.components.GitHubItemDialog.5a94f3d0e9', 'No comments yet.')}
+              </p>
             ) : visibleComments.length === 0 ? (
-              <div className="rounded-lg border border-dashed border-border/50 px-3 py-6 text-center text-[13px] text-muted-foreground">
+              <p className="px-1 py-2 text-center text-[13px] text-muted-foreground">
                 {getPRCommentAudienceEmptyLabel(commentFilter)}
-              </div>
+              </p>
             ) : (
               <div className="flex min-w-0 flex-col gap-3">
                 {visibleCommentGroups.map(renderCommentGroup)}
@@ -2835,14 +3025,19 @@ function ConversationTab({
         ) : null}
 
         {detailsLoaded && repoPath && (
-          <GHCommentComposer
-            className="mt-1"
+          <GitHubIssueCommentComposer
+            className="mt-2"
             repoPath={repoPath}
             repoId={item.repoId}
             issueNumber={item.number}
             itemType={item.type}
-            mentionOptions={mentionOptions}
+            itemState={localState}
+            itemId={item.id}
+            projectOrigin={projectOrigin}
+            previewGithubRepo={markdownGitHubRepo}
             onCommentAdded={onCommentAdded}
+            onStateChange={onStateChange}
+            onMutated={onMutated}
           />
         )}
       </div>
@@ -2876,6 +3071,7 @@ function PRActionsPanel({
   const confirm = useConfirmationDialog()
   const actionItem = { ...item, state: localState }
   const mergePresentation = presentGitHubPRMergeState(actionItem)
+  const mergeMethods = resolveGitHubPRMergeMethods(actionItem.mergeMethodSettings)
   const canMutateState = localState !== 'merged' && (!!repoPath || !!projectOrigin)
   const nextState: 'open' | 'closed' = localState === 'closed' ? 'open' : 'closed'
   const mergeDisabled = !repoPath || mergePending || !mergePresentation.directMergeAvailable
@@ -2905,11 +3101,21 @@ function PRActionsPanel({
     }
     const label = nextState === 'closed' ? 'Close' : 'Reopen'
     const confirmed = await confirm({
-      title: `${label} PR #${item.number}?`,
+      title: translate(
+        'auto.components.GitHubItemDialog.03d7216d62',
+        '{{value0}} PR #{{value1}}?',
+        { value0: label, value1: item.number }
+      ),
       description:
         nextState === 'closed'
-          ? 'This will close the pull request on GitHub.'
-          : 'This will reopen the pull request on GitHub.',
+          ? translate(
+              'auto.components.GitHubItemDialog.de45fedf7b',
+              'This will close the pull request on GitHub.'
+            )
+          : translate(
+              'auto.components.GitHubItemDialog.b6f1b7adbd',
+              'This will reopen the pull request on GitHub.'
+            ),
       confirmLabel: label,
       confirmVariant: nextState === 'closed' ? 'destructive' : 'default'
     })
@@ -2927,25 +3133,42 @@ function PRActionsPanel({
         number: item.number,
         updates: { state: nextState }
       })
-      toast.success(nextState === 'closed' ? 'Pull request closed' : 'Pull request reopened')
+      useAppStore.getState().recordFeatureInteraction('github-tasks')
+      toast.success(
+        nextState === 'closed'
+          ? translate('auto.components.GitHubItemDialog.9f88657c4e', 'Pull request closed')
+          : translate('auto.components.GitHubItemDialog.bd3b4492a0', 'Pull request reopened')
+      )
       onMutated()
     } catch (err) {
       applyStatePatch(previousState)
-      toast.error(err instanceof Error ? err.message : `Failed to ${label.toLowerCase()} PR`)
+      toast.error(
+        err instanceof Error
+          ? err.message
+          : translate('auto.components.GitHubItemDialog.e9b7cb7d17', 'Failed to {{value0}} PR', {
+              value0: label.toLowerCase()
+            })
+      )
     } finally {
       setStatePending(false)
     }
   }
 
-  const handleMerge = async (method: 'merge' | 'squash' | 'rebase'): Promise<void> => {
+  const handleMerge = async (method: GitHubPRMergeMethod): Promise<void> => {
     if (!repoPath || mergeDisabled) {
       return
     }
-    const label =
-      method === 'squash' ? 'Squash and merge' : method === 'rebase' ? 'Rebase and merge' : 'Merge'
+    const label = GITHUB_PR_MERGE_METHOD_LABELS[method]
     const confirmed = await confirm({
-      title: `${label} PR #${item.number}?`,
-      description: 'This will update the pull request on GitHub.',
+      title: translate(
+        'auto.components.GitHubItemDialog.03d7216d62',
+        '{{value0}} PR #{{value1}}?',
+        { value0: label, value1: item.number }
+      ),
+      description: translate(
+        'auto.components.GitHubItemDialog.a27ee5ca1a',
+        'This will update the pull request on GitHub.'
+      ),
       confirmLabel: label
     })
     if (!confirmed) {
@@ -2965,10 +3188,13 @@ function PRActionsPanel({
         return
       }
       applyStatePatch('merged')
-      toast.success('Pull request merged')
+      useAppStore.getState().recordFeatureInteraction('github-tasks')
+      toast.success(translate('auto.components.GitHubItemDialog.dbe5e2448e', 'Pull request merged'))
       onMutated()
     } catch {
-      toast.error('Failed to merge pull request')
+      toast.error(
+        translate('auto.components.GitHubItemDialog.aba792c8b3', 'Failed to merge pull request')
+      )
     } finally {
       setMergePending(false)
     }
@@ -2992,10 +3218,19 @@ function PRActionsPanel({
         toast.error(result.error)
         return
       }
-      toast.success(enabled ? 'Auto-merge enabled' : 'Auto-merge disabled')
+      useAppStore.getState().recordFeatureInteraction('github-tasks')
+      toast.success(
+        enabled
+          ? translate('auto.components.GitHubItemDialog.a35ea5a0f6', 'Auto-merge enabled')
+          : translate('auto.components.GitHubItemDialog.4b390bd50d', 'Auto-merge disabled')
+      )
       onMutated()
     } catch {
-      toast.error(enabled ? 'Failed to enable auto-merge' : 'Failed to disable auto-merge')
+      toast.error(
+        enabled
+          ? translate('auto.components.GitHubItemDialog.825a8fb8cd', 'Failed to enable auto-merge')
+          : translate('auto.components.GitHubItemDialog.ce360fc318', 'Failed to disable auto-merge')
+      )
     } finally {
       setMergePending(false)
     }
@@ -3006,12 +3241,14 @@ function PRActionsPanel({
       <div className="mb-3 flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <GitPullRequest className="size-3.5 text-muted-foreground" />
-          <span className="text-[13px] font-medium text-foreground">Pull request</span>
+          <span className="text-[13px] font-medium text-foreground">
+            {translate('auto.components.GitHubItemDialog.a2495e4784', 'Pull request')}
+          </span>
         </div>
         <WorkItemStateBadge item={actionItem} />
       </div>
 
-      <div className="grid gap-2">
+      <div className="grid gap-2 justify-items-start">
         <DropdownMenu modal={false}>
           <Tooltip>
             <TooltipTrigger asChild>
@@ -3020,7 +3257,8 @@ function PRActionsPanel({
                   type="button"
                   size="sm"
                   className={cn(
-                    'w-full justify-center gap-2 bg-green-600 text-white hover:bg-green-700',
+                    REVIEW_ACTION_MERGE_BUTTON_CLASS,
+                    'gap-2 bg-green-600 text-white hover:bg-green-700',
                     'disabled:cursor-not-allowed disabled:opacity-50'
                   )}
                 >
@@ -3029,14 +3267,23 @@ function PRActionsPanel({
                   ) : (
                     <GitMerge className="size-3.5" />
                   )}
-                  {mergePresentation.autoMergeAction?.label ??
-                    (mergePresentation.directMergeAvailable ? 'Merge' : mergePresentation.label)}
-                  <ChevronDown className="size-3 opacity-60" />
+                  <span className={RIGHT_SIDEBAR_PRIMARY_BUTTON_LABEL_CLASS}>
+                    {mergePresentation.autoMergeAction?.label ??
+                      (mergePresentation.directMergeAvailable
+                        ? mergeMethods.defaultLabel
+                        : mergePresentation.label)}
+                  </span>
+                  <ChevronDown className="size-3 shrink-0 opacity-60" />
                 </Button>
               </DropdownMenuTrigger>
             </TooltipTrigger>
             <TooltipContent side="bottom" sideOffset={6}>
-              {!repoPath ? 'Merge requires a registered local repo' : mergePresentation.tooltip}
+              {!repoPath
+                ? translate(
+                    'auto.components.GitHubItemDialog.5932578f51',
+                    'Merge requires a registered local repo'
+                  )
+                : mergePresentation.tooltip}
             </TooltipContent>
           </Tooltip>
           <DropdownMenuContent align="start" className="w-52">
@@ -3050,21 +3297,19 @@ function PRActionsPanel({
               </DropdownMenuItem>
             )}
             {mergePresentation.autoMergeAction && <DropdownMenuSeparator />}
-            <DropdownMenuItem disabled={mergeDisabled} onSelect={() => void handleMerge('squash')}>
-              <GitMerge className="size-4" />
-              Squash and merge
-            </DropdownMenuItem>
-            <DropdownMenuItem disabled={mergeDisabled} onSelect={() => void handleMerge('merge')}>
-              <GitMerge className="size-4" />
-              Create merge commit
-            </DropdownMenuItem>
-            <DropdownMenuItem disabled={mergeDisabled} onSelect={() => void handleMerge('rebase')}>
-              <GitMerge className="size-4" />
-              Rebase and merge
-            </DropdownMenuItem>
+            {mergeMethods.methods.map(({ method, label }) => (
+              <DropdownMenuItem
+                key={method}
+                disabled={mergeDisabled}
+                onSelect={() => void handleMerge(method)}
+              >
+                <GitMerge className="size-4" />
+                {label}
+              </DropdownMenuItem>
+            ))}
             <DropdownMenuItem onSelect={() => window.api.shell.openUrl(item.url)}>
               <ExternalLink className="size-4" />
-              Open GitHub merge box
+              {translate('auto.components.GitHubItemDialog.53fe19aefc', 'Open GitHub merge box')}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -3074,7 +3319,8 @@ function PRActionsPanel({
           variant={nextState === 'closed' ? 'outline' : 'secondary'}
           size="sm"
           className={cn(
-            'w-full justify-center gap-2',
+            REVIEW_ACTION_STATE_BUTTON_CLASS,
+            'gap-2',
             nextState === 'closed' &&
               'border-border bg-background text-foreground hover:bg-accent hover:text-accent-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50'
           )}
@@ -3088,7 +3334,11 @@ function PRActionsPanel({
           ) : (
             <CircleDot className="size-3.5" />
           )}
-          {nextState === 'closed' ? 'Close pull request' : 'Reopen PR'}
+          <span className={RIGHT_SIDEBAR_PRIMARY_BUTTON_LABEL_CLASS}>
+            {nextState === 'closed'
+              ? translate('auto.components.GitHubItemDialog.21860b58d0', 'Close pull request')
+              : translate('auto.components.GitHubItemDialog.ec5c4b3ab2', 'Reopen PR')}
+          </span>
         </Button>
       </div>
     </aside>
@@ -3111,7 +3361,15 @@ function CommentReactions({
         <span
           key={reaction.content}
           className="inline-flex h-6 items-center gap-1 rounded-full border border-border/60 bg-muted/35 px-2 text-[12px] leading-none text-foreground"
-          aria-label={`${reaction.count} ${reaction.content} reaction${reaction.count === 1 ? '' : 's'}`}
+          aria-label={translate(
+            'auto.components.GitHubItemDialog.a18f669c7a',
+            '{{value0}} {{value1}} reaction{{value2}}',
+            {
+              value0: reaction.count,
+              value1: reaction.content,
+              value2: reaction.count === 1 ? '' : 's'
+            }
+          )}
         >
           <span aria-hidden="true">{REACTION_EMOJI[reaction.content]}</span>
           <span className="tabular-nums">{reaction.count}</span>
@@ -3124,24 +3382,17 @@ function CommentReactions({
 function CommentReplyForm({
   className,
   placeholder,
-  mentionOptions,
   onCancel,
   onSubmit
 }: {
   className?: string
   placeholder: string
-  mentionOptions: MentionOption[]
   onCancel: () => void
   onSubmit: (body: string) => Promise<boolean>
 }): React.JSX.Element {
   const [body, setBody] = useState('')
   const [submitting, setSubmitting] = useState(false)
-  const textareaRef = useRef<HTMLTextAreaElement>(null)
   const mountedRef = useMountedRef()
-
-  useEffect(() => {
-    textareaRef.current?.focus()
-  }, [])
 
   const submit = useCallback(async () => {
     const trimmed = body.trim()
@@ -3166,32 +3417,23 @@ function CommentReplyForm({
 
   return (
     <div className={cn('rounded-md border border-border/50 bg-background/60 p-2', className)}>
-      <MentionTextarea
-        textareaRef={textareaRef}
+      <GitHubMarkdownComposer
         value={body}
-        onValueChange={setBody}
-        onKeyDown={(e) => {
-          if (e.key === 'Escape') {
-            e.preventDefault()
-            onCancel()
-            return
-          }
-          if (isScreenSubmitShortcut(e)) {
-            e.preventDefault()
-            void submit()
-          }
-        }}
+        onChange={setBody}
         placeholder={placeholder}
-        rows={3}
-        mentionOptions={mentionOptions}
-        className="scrollbar-sleek min-h-20 w-full resize-y rounded-md border border-input bg-transparent px-3 py-2 text-[13px] placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+        disabled={submitting}
+        autoFocus
+        minHeightClassName="min-h-24"
+        onSubmitShortcut={() => void submit()}
       />
       <div className="mt-2 flex justify-end gap-2">
         <Button variant="ghost" size="sm" onClick={onCancel}>
-          Cancel
+          {translate('auto.components.GitHubItemDialog.675bc0d638', 'Cancel')}
         </Button>
         <Button size="sm" disabled={!body.trim() || submitting} onClick={() => void submit()}>
-          {submitting ? 'Posting…' : 'Reply'}
+          {submitting
+            ? translate('auto.components.GitHubItemDialog.5752c25aff', 'Posting…')
+            : translate('auto.components.GitHubItemDialog.f64dd90102', 'Reply')}
         </Button>
       </div>
     </div>
@@ -3285,58 +3527,6 @@ function getChecksSummaryLabel(checks: PRCheckDetail[]): string {
   return `${counts.passing} of ${checks.length} checks passing`
 }
 
-function getBrokenChecks(checks: PRCheckDetail[]): PRCheckDetail[] {
-  return checks.filter((check) =>
-    ['failure', 'cancelled', 'timed_out'].includes(getCheckConclusion(check))
-  )
-}
-
-function buildFixBrokenChecksPrompt(item: GitHubWorkItem, checks: PRCheckDetail[]): string {
-  const brokenChecks = getBrokenChecks(checks)
-  const checkLines =
-    brokenChecks.length > 0
-      ? brokenChecks.map((check) => {
-          const details = [
-            getCheckStatusLabel(check),
-            check.checkRunId ? `check run ${check.checkRunId}` : null,
-            check.workflowRunId ? `workflow run ${check.workflowRunId}` : null,
-            check.url ? `details: ${check.url}` : null
-          ]
-            .filter(Boolean)
-            .join(', ')
-          return `- ${check.name}${details ? ` (${details})` : ''}`
-        })
-      : ['- No failing check is currently listed; refresh PR checks first, then inspect CI.']
-
-  return [
-    `Fix the broken checks for PR #${item.number}: ${item.title}`,
-    `PR: ${item.url}`,
-    '',
-    'Broken checks:',
-    ...checkLines,
-    '',
-    'Focus only on making the failing checks pass. Inspect the CI output first, make the smallest correct code or test changes, and do not work on unrelated cleanup.'
-  ].join('\n')
-}
-
-function pickDefaultAgent(
-  defaultAgent: TuiAgent | 'blank' | null | undefined,
-  detectedAgents: TuiAgent[],
-  disabledAgents?: TuiAgent[]
-): TuiAgent | null {
-  const enabledAgents = filterEnabledTuiAgents(detectedAgents, disabledAgents)
-  if (defaultAgent && defaultAgent !== 'blank' && enabledAgents.includes(defaultAgent)) {
-    return defaultAgent
-  }
-  return AGENT_CATALOG.find((entry) => enabledAgents.includes(entry.id))?.id ?? null
-}
-
-type CheckDetailsLoadState = {
-  loading: boolean
-  details: PRCheckRunDetails | null
-  error: string | null
-}
-
 function getCheckDetailsKey(check: PRCheckDetail): string {
   return String(check.checkRunId ?? check.workflowRunId ?? check.url ?? check.name)
 }
@@ -3376,15 +3566,18 @@ function ChecksTab({
   variant?: 'compact' | 'page'
   onChecksUpdated: (checks: PRCheckDetail[]) => void
 }): React.JSX.Element {
-  const [localChecks, setLocalChecks] = useState<PRCheckDetail[] | null>(null)
   const [refreshing, setRefreshing] = useState(false)
   const [rerunning, setRerunning] = useState(false)
   const [fixingChecks, setFixingChecks] = useState(false)
-  const [expandedCheckKey, setExpandedCheckKey] = useState<string | null>(null)
-  const [detailsByCheckKey, setDetailsByCheckKey] = useState<Record<string, CheckDetailsLoadState>>(
-    {}
-  )
+  const [checksState, setChecksState] = useState(() => createGitHubChecksTabState(checks))
   const mountedRef = useMountedRef()
+  const resolvedChecksState = resolveGitHubChecksTabState(checksState, checks)
+  if (resolvedChecksState !== checksState) {
+    // Why: parent check refreshes replace the source list; clear local refresh
+    // and inline detail state before stale rows/details can paint.
+    setChecksState(resolvedChecksState)
+  }
+  const { localChecks, expandedCheckKey, detailsByCheckKey } = resolvedChecksState
   const list = useMemo(() => localChecks ?? checks ?? [], [checks, localChecks])
   const prRepo = useMemo(() => parseOwnerRepoFromItemUrl(item.url), [item.url])
   const sorted = [...list].sort(
@@ -3413,15 +3606,14 @@ function ChecksTab({
           : 'text-muted-foreground'
   const canFixBrokenChecks = Boolean((repoId ?? item.repoId) && failedChecks.length > 0)
 
-  useEffect(() => {
-    setLocalChecks(null)
-    setExpandedCheckKey(null)
-    setDetailsByCheckKey({})
-  }, [checks])
-
   const handleRefresh = useCallback(async (): Promise<PRCheckDetail[] | null> => {
     if (!repoPath) {
-      toast.error('Unable to refresh checks without a repository path.')
+      toast.error(
+        translate(
+          'auto.components.GitHubItemDialog.e7007aa1d8',
+          'Unable to refresh checks without a repository path.'
+        )
+      )
       return null
     }
     setRefreshing(true)
@@ -3433,11 +3625,15 @@ function ChecksTab({
         headSha,
         noCache: true
       })) as PRCheckDetail[]
-      setLocalChecks(nextChecks)
+      setChecksState((current) => updateGitHubChecksTabLocalChecks(current, nextChecks))
       onChecksUpdated(nextChecks)
       return nextChecks
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to refresh checks')
+      toast.error(
+        err instanceof Error
+          ? err.message
+          : translate('auto.components.GitHubItemDialog.0bbdc673c1', 'Failed to refresh checks')
+      )
       return null
     } finally {
       setRefreshing(false)
@@ -3462,10 +3658,18 @@ function ChecksTab({
           toast.error(result.error)
           return
         }
-        toast.success(result.count === 1 ? 'Check rerun requested' : 'Check reruns requested')
+        toast.success(
+          result.count === 1
+            ? translate('auto.components.GitHubItemDialog.ddafe851e1', 'Check rerun requested')
+            : translate('auto.components.GitHubItemDialog.e463ec935f', 'Check reruns requested')
+        )
         await handleRefresh()
       } catch (err) {
-        toast.error(err instanceof Error ? err.message : 'Failed to rerun checks')
+        toast.error(
+          err instanceof Error
+            ? err.message
+            : translate('auto.components.GitHubItemDialog.9e7c221b8d', 'Failed to rerun checks')
+        )
       } finally {
         setRerunning(false)
       }
@@ -3479,72 +3683,54 @@ function ChecksTab({
       return
     }
     if (failedChecks.length === 0) {
-      toast.message('No broken checks to fix.')
+      toast.message(
+        translate('auto.components.GitHubItemDialog.1690fd7f4a', 'No broken checks to fix.')
+      )
       return
     }
 
+    const basePrompt = buildFixBrokenChecksPrompt({
+      reviewKind: 'PR',
+      reviewNumber: item.number,
+      reviewTitle: item.title,
+      reviewUrl: item.url,
+      checks: list
+    })
     setFixingChecks(true)
     try {
-      const prompt = buildFixBrokenChecksPrompt(item, list)
-      const store = useAppStore.getState()
-      const attachedWorkspace = findGithubPrWorkspaceAttachment(
-        store.allWorktrees(),
-        targetRepoId,
-        item.number
-      )
-
-      if (!attachedWorkspace) {
-        await launchWorkItemDirect({
-          item: { ...item, pasteContent: prompt },
-          repoId: targetRepoId,
-          launchSource: 'task_page',
-          telemetrySource: 'sidebar',
-          openModalFallback: () => {
-            toast.error('Unable to create a fix workspace automatically.')
-          }
-        })
-        return
-      }
-
-      if (!activateAndRevealWorktree(attachedWorkspace.id)) {
-        toast.error('Unable to open the workspace attached to this pull request.')
-        return
-      }
-
-      const connectionId = getConnectionId(attachedWorkspace.id)
-      if (connectionId === undefined) {
-        toast.error('Unable to resolve the workspace connection.')
-        return
-      }
-
-      const activeStore = useAppStore.getState()
-      const detectedAgents =
-        typeof connectionId === 'string'
-          ? await activeStore.ensureRemoteDetectedAgents(connectionId)
-          : await activeStore.ensureDetectedAgents()
-      const agent = pickDefaultAgent(
-        activeStore.settings?.defaultTuiAgent,
-        detectedAgents,
-        activeStore.settings?.disabledTuiAgents
-      )
-      if (!agent) {
-        toast.error('No enabled AI agents. Configure agents in Settings.')
-        return
-      }
-
-      const result = launchAgentInNewTab({
-        agent,
-        worktreeId: attachedWorkspace.id,
-        prompt,
-        promptDelivery: 'draft',
-        launchSource: 'task_page'
+      const started = await startFixChecksAgent({
+        item,
+        repoId: targetRepoId,
+        basePrompt,
+        launchSource: 'task_page',
+        telemetrySource: 'sidebar',
+        openModalFallback: () => {
+          toast.error(
+            translate(
+              'auto.components.GitHubItemDialog.06482d6190',
+              'Unable to create a fix workspace automatically.'
+            )
+          )
+        }
       })
-      if (!result) {
-        toast.error('Could not build the agent launch command.')
-        return
+      if (started) {
+        toast.success(
+          translate(
+            'auto.components.GitHubItemDialog.28986b3747',
+            'Started an AI agent for the broken checks.'
+          )
+        )
       }
-      focusTerminalTabSurface(result.tabId)
-      toast.success('Started an AI agent for the broken checks.')
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      console.error('Failed to start fix checks agent', err)
+      toast.error(
+        translate(
+          'auto.components.GitHubItemDialog.03e542fcfe',
+          'Failed to start an AI agent for the broken checks: {{value0}}',
+          { value0: message }
+        )
+      )
     } finally {
       setFixingChecks(false)
     }
@@ -3553,7 +3739,7 @@ function ChecksTab({
   const handleToggleCheckDetails = useCallback(
     (check: PRCheckDetail): void => {
       const key = getCheckDetailsKey(check)
-      setExpandedCheckKey((current) => (current === key ? null : key))
+      setChecksState((current) => toggleGitHubChecksTabExpandedKey(current, key))
       if (
         !repoPath ||
         detailsByCheckKey[key] ||
@@ -3561,10 +3747,9 @@ function ChecksTab({
       ) {
         return
       }
-      setDetailsByCheckKey((current) => ({
-        ...current,
-        [key]: { loading: true, details: null, error: null }
-      }))
+      setChecksState((current) =>
+        updateGitHubChecksTabDetails(current, key, { loading: true, details: null, error: null })
+      )
       void window.api.gh
         .prCheckDetails({
           repoPath,
@@ -3579,27 +3764,25 @@ function ChecksTab({
           if (!mountedRef.current) {
             return
           }
-          setDetailsByCheckKey((current) => ({
-            ...current,
-            [key]: {
+          setChecksState((current) =>
+            updateGitHubChecksTabDetails(current, key, {
               loading: false,
               details,
               error: details ? null : 'No inline details are available for this check.'
-            }
-          }))
+            })
+          )
         })
         .catch((err) => {
           if (!mountedRef.current) {
             return
           }
-          setDetailsByCheckKey((current) => ({
-            ...current,
-            [key]: {
+          setChecksState((current) =>
+            updateGitHubChecksTabDetails(current, key, {
               loading: false,
               details: null,
               error: err instanceof Error ? err.message : 'Failed to load check details.'
-            }
-          }))
+            })
+          )
         })
     },
     [detailsByCheckKey, mountedRef, prRepo, repoId, repoPath]
@@ -3615,13 +3798,13 @@ function ChecksTab({
           className="size-7 shrink-0"
           disabled={!repoPath || refreshing}
           onClick={() => void handleRefresh()}
-          aria-label="Refresh checks"
+          aria-label={translate('auto.components.GitHubItemDialog.9a1004fc76', 'Refresh checks')}
         >
           <RefreshCw className={cn('size-3.5', refreshing && 'animate-spin')} />
         </Button>
       </TooltipTrigger>
       <TooltipContent side="bottom" sideOffset={6}>
-        Refresh checks
+        {translate('auto.components.GitHubItemDialog.9a1004fc76', 'Refresh checks')}
       </TooltipContent>
     </Tooltip>
   )
@@ -3642,11 +3825,16 @@ function ChecksTab({
             ) : (
               <Wrench className="size-3" />
             )}
-            {variant === 'compact' ? 'Fix checks' : 'Fix broken checks'}
+            {variant === 'compact'
+              ? translate('auto.components.GitHubItemDialog.9157d48ddb', 'Fix checks')
+              : translate('auto.components.GitHubItemDialog.2511f44bb7', 'Fix broken checks')}
           </Button>
         </TooltipTrigger>
         <TooltipContent side="bottom" sideOffset={6}>
-          Start the default AI agent on these checks
+          {translate(
+            'auto.components.GitHubItemDialog.f4b1292569',
+            'Start the default AI agent on these checks'
+          )}
         </TooltipContent>
       </Tooltip>
     ) : null
@@ -3666,7 +3854,7 @@ function ChecksTab({
             ) : (
               <RefreshCw className="size-3" />
             )}
-            Rerun
+            {translate('auto.components.GitHubItemDialog.1b56e28faa', 'Rerun')}
             <ChevronDown className="size-3 opacity-60" />
           </Button>
         </DropdownMenuTrigger>
@@ -3676,11 +3864,11 @@ function ChecksTab({
             onSelect={() => void handleRerun(true)}
           >
             <RefreshCw className="size-4" />
-            Rerun failed checks
+            {translate('auto.components.GitHubItemDialog.e31651a224', 'Rerun failed checks')}
           </DropdownMenuItem>
           <DropdownMenuItem disabled={rerunning} onSelect={() => void handleRerun(false)}>
             <RefreshCw className="size-4" />
-            Rerun all checks
+            {translate('auto.components.GitHubItemDialog.71c11aff84', 'Rerun all checks')}
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
@@ -3712,7 +3900,9 @@ function ChecksTab({
             )}
           />
           <div className="min-w-0 flex-1">
-            <div className="text-[13px] font-medium leading-5 text-foreground">Checks</div>
+            <div className="text-[13px] font-medium leading-5 text-foreground">
+              {translate('auto.components.GitHubItemDialog.4bd1f5b055', 'Checks')}
+            </div>
             {list.length > 0 && (
               <div className="truncate text-[11px] leading-4 text-muted-foreground">
                 {summaryLabel}
@@ -3794,18 +3984,33 @@ function ChecksTab({
         {state?.loading ? (
           <div className="flex items-center gap-2 py-2 text-[12px] text-muted-foreground">
             <LoaderCircle className="size-3.5 animate-spin" />
-            Loading check details…
+            {translate('auto.components.GitHubItemDialog.934d87ab96', 'Loading check details…')}
           </div>
         ) : (
           <div className="flex min-w-0 flex-col gap-2">
             <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
               <span>
-                Status:{' '}
+                {translate('auto.components.GitHubItemDialog.9c3ba11a05', 'Status:')}{' '}
                 {details ? getCheckStatusLabel(detailsStatusCheck) : getCheckStatusLabel(check)}
               </span>
-              {startedAt && <span>Started {startedAt}</span>}
-              {completedAt && <span>Completed {completedAt}</span>}
-              {check.checkRunId && <span className="font-mono">check #{check.checkRunId}</span>}
+              {startedAt && (
+                <span>
+                  {translate('auto.components.GitHubItemDialog.4812814bc8', 'Started')}
+                  {startedAt}
+                </span>
+              )}
+              {completedAt && (
+                <span>
+                  {translate('auto.components.GitHubItemDialog.0f478f5efa', 'Completed')}
+                  {completedAt}
+                </span>
+              )}
+              {check.checkRunId && (
+                <span className="font-mono">
+                  {translate('auto.components.GitHubItemDialog.485609c4f2', 'check #')}
+                  {check.checkRunId}
+                </span>
+              )}
             </div>
 
             {state?.error && <div className="text-[12px] text-muted-foreground">{state.error}</div>}
@@ -3837,9 +4042,9 @@ function ChecksTab({
             {hasAnnotations && (
               <div className="min-w-0 rounded-md border border-border/40 bg-background/70">
                 <div className="border-b border-border/40 px-2.5 py-1.5 text-[11px] font-medium text-foreground">
-                  Annotations
+                  {translate('auto.components.GitHubItemDialog.96d8f36798', 'Annotations')}
                 </div>
-                <div className="flex max-h-48 flex-col overflow-y-auto scrollbar-sleek">
+                <div className="flex flex-col">
                   {details!.annotations.map((annotation, index) => (
                     <div
                       key={`${annotation.path ?? 'annotation'}-${index}`}
@@ -3850,7 +4055,8 @@ function ChecksTab({
                     >
                       <div className="flex min-w-0 items-center gap-2">
                         <span className="min-w-0 truncate font-mono text-[11px] text-muted-foreground">
-                          {annotation.path ?? 'Annotation'}
+                          {annotation.path ??
+                            translate('auto.components.GitHubItemDialog.7d42606f66', 'Annotation')}
                           {annotation.startLine ? `:${annotation.startLine}` : ''}
                         </span>
                         {annotation.annotationLevel && (
@@ -3868,7 +4074,7 @@ function ChecksTab({
                         {annotation.message}
                       </div>
                       {annotation.rawDetails && (
-                        <pre className="mt-1 max-h-32 overflow-auto whitespace-pre-wrap rounded bg-muted/40 p-2 font-mono text-[11px] text-muted-foreground scrollbar-sleek">
+                        <pre className="mt-1 whitespace-pre-wrap rounded bg-muted/40 p-2 font-mono text-[11px] text-muted-foreground">
                           {annotation.rawDetails}
                         </pre>
                       )}
@@ -3881,9 +4087,9 @@ function ChecksTab({
             {hasJobs && (
               <div className="min-w-0 rounded-md border border-border/40 bg-background/70">
                 <div className="border-b border-border/40 px-2.5 py-1.5 text-[11px] font-medium text-foreground">
-                  Jobs
+                  {translate('auto.components.GitHubItemDialog.08d072664d', 'Jobs')}
                 </div>
-                <div className="flex max-h-64 flex-col overflow-y-auto scrollbar-sleek">
+                <div className="flex flex-col">
                   {details!.jobs.map((job, index) => (
                     <div
                       key={`${job.name}-${index}`}
@@ -3897,7 +4103,9 @@ function ChecksTab({
                           {job.name}
                         </span>
                         <span className="shrink-0 text-[11px] text-muted-foreground">
-                          {job.conclusion ?? job.status ?? 'unknown'}
+                          {job.conclusion ??
+                            job.status ??
+                            translate('auto.components.GitHubItemDialog.773ff70035', 'unknown')}
                         </span>
                       </div>
                       {job.steps.length > 0 && (
@@ -3921,7 +4129,10 @@ function ChecksTab({
 
             {!state?.error && !hasOutput && !hasAnnotations && !hasJobs && (
               <div className="text-[12px] text-muted-foreground">
-                No inline output is available for this check.
+                {translate(
+                  'auto.components.GitHubItemDialog.744197c84d',
+                  'No inline output is available for this check.'
+                )}
               </div>
             )}
 
@@ -3934,7 +4145,7 @@ function ChecksTab({
                   className="h-7 gap-1 px-2 text-[11px]"
                   onClick={() => window.api.shell.openUrl(openUrl)}
                 >
-                  Open in GitHub
+                  {translate('auto.components.GitHubItemDialog.5dddefdf58', 'Open in GitHub')}
                   <ExternalLink className="size-3" />
                 </Button>
               </div>
@@ -3963,10 +4174,13 @@ function ChecksTab({
             <CircleDashed className="size-4 shrink-0 text-muted-foreground" />
             <div className="flex min-w-0 flex-1 flex-col">
               <span className="truncate text-[13px] font-medium text-foreground">
-                No checks found
+                {translate('auto.components.GitHubItemDialog.ecffebc251', 'No checks found')}
               </span>
               <span className="truncate text-[11px] text-muted-foreground">
-                This pull request has no reported checks yet.
+                {translate(
+                  'auto.components.GitHubItemDialog.90020cc1f3',
+                  'This pull request has no reported checks yet.'
+                )}
               </span>
             </div>
             {actions}
@@ -3979,7 +4193,9 @@ function ChecksTab({
         {compactHeader}
         <div className="flex flex-col items-center justify-center gap-1 px-4 py-6 text-center">
           <CircleDashed className="size-4 text-muted-foreground/60" />
-          <div className="text-[12px] text-muted-foreground">No checks reported yet</div>
+          <div className="text-[12px] text-muted-foreground">
+            {translate('auto.components.GitHubItemDialog.e52bed9264', 'No checks reported yet')}
+          </div>
         </div>
       </>
     )
@@ -3987,17 +4203,34 @@ function ChecksTab({
   if (variant === 'page') {
     const countChips: { label: string; className: string }[] = []
     if (counts.passing > 0) {
-      countChips.push({ label: `${counts.passing} passing`, className: CHECK_COLOR.success })
+      countChips.push({
+        label: translate('auto.components.GitHubItemDialog.311d0cee55', '{{value0}} passing', {
+          value0: counts.passing
+        }),
+        className: CHECK_COLOR.success
+      })
     }
     if (counts.failing > 0) {
-      countChips.push({ label: `${counts.failing} failing`, className: CHECK_COLOR.failure })
+      countChips.push({
+        label: translate('auto.components.GitHubItemDialog.b1ac991806', '{{value0}} failing', {
+          value0: counts.failing
+        }),
+        className: CHECK_COLOR.failure
+      })
     }
     if (counts.pending > 0) {
-      countChips.push({ label: `${counts.pending} pending`, className: CHECK_COLOR.pending })
+      countChips.push({
+        label: translate('auto.components.GitHubItemDialog.18f80e1329', '{{value0}} pending', {
+          value0: counts.pending
+        }),
+        className: CHECK_COLOR.pending
+      })
     }
     if (counts.skipped + counts.neutral > 0) {
       countChips.push({
-        label: `${counts.skipped + counts.neutral} skipped`,
+        label: translate('auto.components.GitHubItemDialog.d23bbb6416', '{{value0}} skipped', {
+          value0: counts.skipped + counts.neutral
+        }),
         className: 'text-muted-foreground'
       })
     }
@@ -4046,149 +4279,6 @@ function ChecksTab({
         {sorted.map(renderCheckRow)}
       </div>
     </>
-  )
-}
-
-function MentionTextarea({
-  value,
-  onValueChange,
-  onKeyDown,
-  placeholder,
-  rows,
-  className,
-  wrapperClassName,
-  mentionOptions,
-  textareaRef
-}: {
-  value: string
-  onValueChange: (value: string) => void
-  onKeyDown?: (event: React.KeyboardEvent<HTMLTextAreaElement>) => void
-  placeholder: string
-  rows: number
-  className?: string
-  wrapperClassName?: string
-  mentionOptions: MentionOption[]
-  textareaRef: React.RefObject<HTMLTextAreaElement | null>
-}): React.JSX.Element {
-  const [mentionQuery, setMentionQuery] = useState<MentionQuery | null>(null)
-  const [activeIndex, setActiveIndex] = useState(0)
-  const suggestions = useMemo(
-    () => (mentionQuery ? filterMentionOptions(mentionOptions, mentionQuery.query) : []),
-    [mentionOptions, mentionQuery]
-  )
-  const showSuggestions = mentionQuery !== null && suggestions.length > 0
-
-  const syncMentionQuery = useCallback((textarea: HTMLTextAreaElement): void => {
-    const nextQuery = findMentionQuery(textarea.value, textarea.selectionStart)
-    setMentionQuery(nextQuery)
-    setActiveIndex(0)
-  }, [])
-
-  const insertMention = useCallback(
-    (option: MentionOption): void => {
-      const textarea = textareaRef.current
-      const caret = textarea?.selectionStart ?? value.length
-      const query = textarea ? findMentionQuery(value, caret) : mentionQuery
-      if (!query) {
-        return
-      }
-      const suffix = value[caret] && !/\s/.test(value[caret]) ? ' ' : ''
-      const inserted = `@${option.login}${suffix}`
-      const nextValue = `${value.slice(0, query.atIndex)}${inserted}${value.slice(caret)}`
-      const nextCaret = query.atIndex + inserted.length
-      onValueChange(nextValue)
-      setMentionQuery(null)
-      requestAnimationFrame(() => {
-        textarea?.focus()
-        textarea?.setSelectionRange(nextCaret, nextCaret)
-      })
-    },
-    [mentionQuery, onValueChange, textareaRef, value]
-  )
-
-  return (
-    <div className={cn('relative min-w-0 flex-1', wrapperClassName)}>
-      {showSuggestions && (
-        <div className="absolute right-0 bottom-[calc(100%+6px)] left-0 z-50 max-h-64 overflow-y-auto rounded-md border border-border/70 bg-popover p-1 text-popover-foreground shadow-lg scrollbar-sleek">
-          {suggestions.map((option, index) => (
-            <button
-              key={option.login}
-              type="button"
-              onMouseDown={(event) => {
-                event.preventDefault()
-                insertMention(option)
-              }}
-              className={cn(
-                'flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-[12px]',
-                index === activeIndex && 'bg-accent text-accent-foreground'
-              )}
-            >
-              {option.avatarUrl ? (
-                <img src={option.avatarUrl} alt="" className="size-5 shrink-0 rounded-full" />
-              ) : (
-                <div className="flex size-5 shrink-0 items-center justify-center rounded-full bg-muted text-[10px] font-medium text-muted-foreground">
-                  {option.login.slice(0, 1).toUpperCase()}
-                </div>
-              )}
-              <span className="flex min-w-0 flex-1 items-baseline gap-1.5">
-                <span className="shrink-0 font-medium">@{option.login}</span>
-                {option.name && (
-                  <>
-                    <span className="shrink-0 text-muted-foreground">|</span>
-                    <span className="truncate text-muted-foreground">{option.name}</span>
-                  </>
-                )}
-                <span className="shrink-0 text-muted-foreground">|</span>
-                <span className="shrink-0 text-[11px] text-muted-foreground">{option.source}</span>
-              </span>
-            </button>
-          ))}
-        </div>
-      )}
-      <textarea
-        ref={textareaRef}
-        value={value}
-        onChange={(event) => {
-          onValueChange(event.target.value)
-          syncMentionQuery(event.currentTarget)
-        }}
-        onClick={(event) => syncMentionQuery(event.currentTarget)}
-        onKeyUp={(event) => {
-          if (!['ArrowDown', 'ArrowUp', 'Enter', 'Tab', 'Escape'].includes(event.key)) {
-            syncMentionQuery(event.currentTarget)
-          }
-        }}
-        onBlur={() => setMentionQuery(null)}
-        onKeyDown={(event) => {
-          if (showSuggestions) {
-            if (event.key === 'ArrowDown') {
-              event.preventDefault()
-              setActiveIndex((current) => (current + 1) % suggestions.length)
-              return
-            }
-            if (event.key === 'ArrowUp') {
-              event.preventDefault()
-              setActiveIndex((current) => (current - 1 + suggestions.length) % suggestions.length)
-              return
-            }
-            if (event.key === 'Enter' || event.key === 'Tab') {
-              event.preventDefault()
-              insertMention(suggestions[activeIndex] ?? suggestions[0])
-              return
-            }
-            if (event.key === 'Escape') {
-              event.preventDefault()
-              setMentionQuery(null)
-              return
-            }
-          }
-          onKeyDown?.(event)
-        }}
-        placeholder={placeholder}
-        rows={rows}
-        className={className}
-      />
-    </div>
   )
 }
 
@@ -4369,7 +4459,8 @@ function GHEditSection({
   const [labelPopoverOpen, setLabelPopoverOpen] = useState(false)
   const [assigneePopoverOpen, setAssigneePopoverOpen] = useState(false)
   const [localAssignees, setLocalAssignees] = useState<string[]>(assignees)
-  const hasEditedAssigneesRef = useRef(false)
+  const editedAssigneesItemKeyRef = useRef<string | null>(null)
+  const assigneesItemKey = `${item.repoId}\0${item.id}`
   const patchWorkItem = useAppStore((s) => s.patchWorkItem)
   const patchProjectRowContent = useAppStore((s) => s.patchProjectRowContent)
   const { isPending, run } = useImmediateMutation()
@@ -4399,6 +4490,7 @@ function GHEditSection({
   )
   const repoLabelsBySlug = useRepoLabelsBySlug(slugOwner, slugRepo)
   const repoLabels = projectOrigin ? repoLabelsBySlug : repoLabelsByPath
+  const repositoryLabelsUrl = useMemo(() => getGitHubRepositoryLabelsUrl(item.url), [item.url])
   const repoAssigneesByPath = useRepoAssignees(
     projectOrigin ? null : repoPath,
     projectOrigin ? null : repoId
@@ -4419,16 +4511,11 @@ function GHEditSection({
   // resolves with real data — but skip if the user already made an
   // optimistic edit so we don't clobber in-flight changes.
   useEffect(() => {
-    if (hasEditedAssigneesRef.current) {
+    if (editedAssigneesItemKeyRef.current === assigneesItemKey) {
       return
     }
     setLocalAssignees(assignees)
-  }, [item.id, assignees])
-
-  // Reset the dirty flag when we switch to a different item.
-  useEffect(() => {
-    hasEditedAssigneesRef.current = false
-  }, [item.id])
+  }, [assigneesItemKey, assignees])
 
   const handleStateChange = useCallback(
     (newState: 'open' | 'closed') => {
@@ -4456,6 +4543,7 @@ function GHEditSection({
           patchProjectRowIfNeeded({ state: prevState })
         },
         onSuccess: () => {
+          useAppStore.getState().recordFeatureInteraction('github-tasks')
           patchWorkItem(item.id, { state: newState }, item.repoId)
           patchProjectRowIfNeeded({ state: newState })
           onMutated()
@@ -4500,6 +4588,7 @@ function GHEditSection({
             patchProjectRowIfNeeded({ labels: newLabels })
           },
           onSuccess: () => {
+            useAppStore.getState().recordFeatureInteraction('github-tasks')
             onMutated()
           },
           onRevert: () => {
@@ -4530,6 +4619,7 @@ function GHEditSection({
             patchProjectRowIfNeeded({ labels: prevLabels })
           },
           onSuccess: () => {
+            useAppStore.getState().recordFeatureInteraction('github-tasks')
             onMutated()
           },
           onError: (err) => toast.error(err)
@@ -4559,7 +4649,9 @@ function GHEditSection({
         ? prevAssignees.filter((l) => l !== login)
         : [...prevAssignees, login]
 
-      hasEditedAssigneesRef.current = true
+      // Why: the optimistic guard is scoped to this repo item so switching
+      // items does not suppress the next item's assignee sync.
+      editedAssigneesItemKeyRef.current = assigneesItemKey
       if (isAssigned) {
         run('assignees', {
           mutate: () =>
@@ -4579,6 +4671,7 @@ function GHEditSection({
             patchProjectRowIfNeeded({ assignees: prevAssignees })
           },
           onSuccess: () => {
+            useAppStore.getState().recordFeatureInteraction('github-tasks')
             onMutated()
           },
           onError: (err) => toast.error(err)
@@ -4598,6 +4691,7 @@ function GHEditSection({
             patchProjectRowIfNeeded({ assignees: newAssignees })
           },
           onSuccess: () => {
+            useAppStore.getState().recordFeatureInteraction('github-tasks')
             onMutated()
           },
           onRevert: () => {
@@ -4611,6 +4705,7 @@ function GHEditSection({
     [
       item.number,
       item.repoId,
+      assigneesItemKey,
       repoPath,
       projectOrigin,
       localAssignees,
@@ -4624,25 +4719,13 @@ function GHEditSection({
     return null
   }
 
-  const checkIcon = (
-    <svg className="size-2.5" viewBox="0 0 12 12" fill="none">
-      <path
-        d="M2 6l3 3 5-5"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  )
-
   if (layout === 'sidebar') {
     return (
       <aside className="flex flex-col gap-5 text-[13px]">
         {/* State */}
         <section>
           <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
-            Status
+            {translate('auto.components.GitHubItemDialog.00ccdf9b5a', 'Status')}
           </div>
           <Popover>
             <PopoverTrigger asChild>
@@ -4674,7 +4757,7 @@ function GHEditSection({
                 )}
               >
                 <CircleDot className="size-3 text-emerald-500" />
-                Open
+                {translate('auto.components.GitHubItemDialog.dc1ca081a8', 'Open')}
               </button>
               <button
                 type="button"
@@ -4685,7 +4768,7 @@ function GHEditSection({
                 )}
               >
                 <CircleDashed className="size-3 text-rose-500" />
-                Closed
+                {translate('auto.components.GitHubItemDialog.ab050dffec', 'Closed')}
               </button>
             </PopoverContent>
           </Popover>
@@ -4694,13 +4777,16 @@ function GHEditSection({
         {/* Assignees */}
         <section>
           <div className="mb-2 flex items-center justify-between text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
-            <span>Assignees</span>
+            <span>{translate('auto.components.GitHubItemDialog.83ac703dda', 'Assignees')}</span>
             <Popover open={assigneePopoverOpen} onOpenChange={setAssigneePopoverOpen}>
               <PopoverTrigger asChild>
                 <button
                   type="button"
                   disabled={isPending('assignees') || repoAssignees.loading}
-                  aria-label="Edit assignees"
+                  aria-label={translate(
+                    'auto.components.GitHubItemDialog.76adcf5fe2',
+                    'Edit assignees'
+                  )}
                   className="rounded p-0.5 text-muted-foreground transition hover:bg-accent hover:text-foreground disabled:opacity-50"
                 >
                   {isPending('assignees') ? (
@@ -4714,46 +4800,21 @@ function GHEditSection({
                 className="popover-scroll-content scrollbar-sleek w-60 p-1"
                 align="end"
               >
-                {repoAssignees.error ? (
-                  <div className="px-2 py-3 text-center text-[12px] text-destructive">
-                    {repoAssignees.error}
-                  </div>
-                ) : (
-                  <div>
-                    {repoAssignees.data.map((user) => (
-                      <button
-                        key={user.login}
-                        type="button"
-                        onClick={() => handleAssigneeToggle(user.login)}
-                        className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-[12px] hover:bg-accent"
-                      >
-                        <span
-                          className={cn(
-                            'flex size-3.5 items-center justify-center rounded-sm border',
-                            localAssignees.includes(user.login)
-                              ? 'border-primary bg-primary text-primary-foreground'
-                              : 'border-input'
-                          )}
-                        >
-                          {localAssignees.includes(user.login) && checkIcon}
-                        </span>
-                        <span className="min-w-0 flex-1 text-left">
-                          <span className="block truncate">{user.login}</span>
-                          {user.name && (
-                            <span className="block truncate text-[11px] text-muted-foreground">
-                              {user.name}
-                            </span>
-                          )}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                )}
+                <GitHubWorkItemAssigneePopoverContent
+                  open={assigneePopoverOpen}
+                  assignees={repoAssignees.data}
+                  selectedLogins={localAssignees}
+                  error={repoAssignees.error}
+                  loading={repoAssignees.loading}
+                  onToggleAssignee={handleAssigneeToggle}
+                />
               </PopoverContent>
             </Popover>
           </div>
           {localAssignees.length === 0 ? (
-            <div className="text-[12px] text-muted-foreground">No one assigned</div>
+            <div className="text-[12px] text-muted-foreground">
+              {translate('auto.components.GitHubItemDialog.c67de9e2fe', 'No one assigned')}
+            </div>
           ) : (
             <ul className="flex flex-col gap-1.5">
               {localAssignees.map((login) => {
@@ -4782,13 +4843,16 @@ function GHEditSection({
         {/* Labels */}
         <section>
           <div className="mb-2 flex items-center justify-between text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
-            <span>Labels</span>
+            <span>{translate('auto.components.GitHubItemDialog.217e55d87c', 'Labels')}</span>
             <Popover open={labelPopoverOpen} onOpenChange={setLabelPopoverOpen}>
               <PopoverTrigger asChild>
                 <button
                   type="button"
                   disabled={isPending('labels') || repoLabels.loading}
-                  aria-label="Edit labels"
+                  aria-label={translate(
+                    'auto.components.GitHubItemDialog.4ba0132f37',
+                    'Edit labels'
+                  )}
                   className="rounded p-0.5 text-muted-foreground transition hover:bg-accent hover:text-foreground disabled:opacity-50"
                 >
                   {isPending('labels') ? (
@@ -4802,39 +4866,23 @@ function GHEditSection({
                 className="popover-scroll-content scrollbar-sleek w-60 p-1"
                 align="end"
               >
-                {repoLabels.error ? (
-                  <div className="px-2 py-3 text-center text-[12px] text-destructive">
-                    {repoLabels.error}
-                  </div>
-                ) : (
-                  <div>
-                    {repoLabels.data.map((label) => (
-                      <button
-                        key={label}
-                        type="button"
-                        onClick={() => handleLabelToggle(label)}
-                        className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-[12px] hover:bg-accent"
-                      >
-                        <span
-                          className={cn(
-                            'flex size-3.5 items-center justify-center rounded-sm border',
-                            localLabels.includes(label)
-                              ? 'border-primary bg-primary text-primary-foreground'
-                              : 'border-input'
-                          )}
-                        >
-                          {localLabels.includes(label) && checkIcon}
-                        </span>
-                        {label}
-                      </button>
-                    ))}
-                  </div>
-                )}
+                <GitHubWorkItemLabelPopoverContent
+                  open={labelPopoverOpen}
+                  labels={repoLabels.data}
+                  selectedLabels={localLabels}
+                  error={repoLabels.error}
+                  loading={repoLabels.loading}
+                  repositoryLabelsUrl={repositoryLabelsUrl}
+                  onToggleLabel={handleLabelToggle}
+                  onOpenSettingsLink={() => setLabelPopoverOpen(false)}
+                />
               </PopoverContent>
             </Popover>
           </div>
           {localLabels.length === 0 ? (
-            <div className="text-[12px] text-muted-foreground">None yet</div>
+            <div className="text-[12px] text-muted-foreground">
+              {translate('auto.components.GitHubItemDialog.886a64b081', 'None yet')}
+            </div>
           ) : (
             <div className="flex flex-wrap gap-1.5">
               {localLabels.map((name) => (
@@ -4851,7 +4899,7 @@ function GHEditSection({
 
         <section>
           <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
-            Workspace
+            {translate('auto.components.GitHubItemDialog.2e4d806c92', 'Workspace')}
           </div>
           {attachedWorkspaceLabel ? (
             <div className="mb-2 flex min-w-0 items-center gap-1.5 text-[12px] text-muted-foreground">
@@ -4861,19 +4909,29 @@ function GHEditSection({
           ) : null}
           {hasAttachedWorkspace ? (
             <DropdownMenu modal={false}>
-              <ButtonGroup className="w-full">
+              <ButtonGroup className="inline-flex w-auto max-w-full">
                 <Button
                   type="button"
                   size="sm"
                   onClick={handleOpenOrUseWorkspace}
-                  className="flex-1 gap-1.5"
-                  aria-label="Open workspace attached to issue"
+                  className="gap-1.5"
+                  aria-label={translate(
+                    'auto.components.GitHubItemDialog.84855fedd0',
+                    'Open workspace attached to issue'
+                  )}
                 >
-                  Open workspace
+                  {translate('auto.components.GitHubItemDialog.726db41722', 'Open workspace')}
                   <ArrowRight className="size-3.5" />
                 </Button>
                 <DropdownMenuTrigger asChild>
-                  <Button type="button" size="icon-sm" aria-label="More issue workspace actions">
+                  <Button
+                    type="button"
+                    size="icon-sm"
+                    aria-label={translate(
+                      'auto.components.GitHubItemDialog.fe6ff12dc2',
+                      'More issue workspace actions'
+                    )}
+                  >
                     <ChevronDown className="size-3.5" />
                   </Button>
                 </DropdownMenuTrigger>
@@ -4881,7 +4939,7 @@ function GHEditSection({
               <DropdownMenuContent align="end">
                 <DropdownMenuItem onSelect={() => onUse(item)}>
                   <Plus className="size-4" />
-                  Start new workspace
+                  {translate('auto.components.GitHubItemDialog.36182aa57f', 'Start new workspace')}
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -4891,9 +4949,15 @@ function GHEditSection({
               size="sm"
               onClick={() => onUse(item)}
               className="w-full gap-1.5"
-              aria-label="Start workspace from issue"
+              aria-label={translate(
+                'auto.components.GitHubItemDialog.0ab4664a8b',
+                'Start workspace from issue'
+              )}
             >
-              Start workspace from issue
+              {translate(
+                'auto.components.GitHubItemDialog.0ab4664a8b',
+                'Start workspace from issue'
+              )}
               <ArrowRight className="size-3.5" />
             </Button>
           )}
@@ -4928,7 +4992,7 @@ function GHEditSection({
             )}
           >
             <CircleDot className="size-3 text-emerald-500" />
-            Open
+            {translate('auto.components.GitHubItemDialog.dc1ca081a8', 'Open')}
           </button>
           <button
             type="button"
@@ -4939,7 +5003,7 @@ function GHEditSection({
             )}
           >
             <CircleDashed className="size-3 text-rose-500" />
-            Closed
+            {translate('auto.components.GitHubItemDialog.ab050dffec', 'Closed')}
           </button>
         </PopoverContent>
       </Popover>
@@ -4953,7 +5017,9 @@ function GHEditSection({
             className="group/labels inline-flex items-center gap-1 rounded-full border border-border/30 bg-muted/20 px-2 py-0.5 text-[11px] transition hover:brightness-125 hover:ring-1 hover:ring-white/10 disabled:opacity-50"
           >
             {localLabels.length === 0 ? (
-              <span className="text-muted-foreground">+ Label</span>
+              <span className="text-muted-foreground">
+                {translate('auto.components.GitHubItemDialog.f41ec96c13', '+ Label')}
+              </span>
             ) : (
               localLabels.map((name) => (
                 <span key={name} className="text-[10px] text-muted-foreground">
@@ -4969,34 +5035,16 @@ function GHEditSection({
           </button>
         </PopoverTrigger>
         <PopoverContent className="popover-scroll-content scrollbar-sleek w-52 p-1" align="start">
-          {repoLabels.error ? (
-            <div className="px-2 py-3 text-center text-[12px] text-destructive">
-              {repoLabels.error}
-            </div>
-          ) : (
-            <div>
-              {repoLabels.data.map((label) => (
-                <button
-                  key={label}
-                  type="button"
-                  onClick={() => handleLabelToggle(label)}
-                  className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-[12px] hover:bg-accent"
-                >
-                  <span
-                    className={cn(
-                      'flex size-3.5 items-center justify-center rounded-sm border',
-                      localLabels.includes(label)
-                        ? 'border-primary bg-primary text-primary-foreground'
-                        : 'border-input'
-                    )}
-                  >
-                    {localLabels.includes(label) && checkIcon}
-                  </span>
-                  {label}
-                </button>
-              ))}
-            </div>
-          )}
+          <GitHubWorkItemLabelPopoverContent
+            open={labelPopoverOpen}
+            labels={repoLabels.data}
+            selectedLabels={localLabels}
+            error={repoLabels.error}
+            loading={repoLabels.loading}
+            repositoryLabelsUrl={repositoryLabelsUrl}
+            onToggleLabel={handleLabelToggle}
+            onOpenSettingsLink={() => setLabelPopoverOpen(false)}
+          />
         </PopoverContent>
       </Popover>
 
@@ -5009,7 +5057,9 @@ function GHEditSection({
             className="group/assignees inline-flex items-center gap-1 rounded-full border border-border/30 bg-muted/20 px-2 py-0.5 text-[11px] transition hover:brightness-125 hover:ring-1 hover:ring-white/10 disabled:opacity-50"
           >
             {localAssignees.length === 0 ? (
-              <span className="text-muted-foreground">+ Assignee</span>
+              <span className="text-muted-foreground">
+                {translate('auto.components.GitHubItemDialog.c6f37a563d', '+ Assignee')}
+              </span>
             ) : (
               localAssignees.map((login) => (
                 <span key={login} className="text-[10px] text-muted-foreground">
@@ -5025,41 +5075,14 @@ function GHEditSection({
           </button>
         </PopoverTrigger>
         <PopoverContent className="popover-scroll-content scrollbar-sleek w-52 p-1" align="start">
-          {repoAssignees.error ? (
-            <div className="px-2 py-3 text-center text-[12px] text-destructive">
-              {repoAssignees.error}
-            </div>
-          ) : (
-            <div>
-              {repoAssignees.data.map((user) => (
-                <button
-                  key={user.login}
-                  type="button"
-                  onClick={() => handleAssigneeToggle(user.login)}
-                  className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-[12px] hover:bg-accent"
-                >
-                  <span
-                    className={cn(
-                      'flex size-3.5 items-center justify-center rounded-sm border',
-                      localAssignees.includes(user.login)
-                        ? 'border-primary bg-primary text-primary-foreground'
-                        : 'border-input'
-                    )}
-                  >
-                    {localAssignees.includes(user.login) && checkIcon}
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate">{user.login}</span>
-                    {user.name && (
-                      <span className="block truncate text-[11px] text-muted-foreground">
-                        {user.name}
-                      </span>
-                    )}
-                  </span>
-                </button>
-              ))}
-            </div>
-          )}
+          <GitHubWorkItemAssigneePopoverContent
+            open={assigneePopoverOpen}
+            assignees={repoAssignees.data}
+            selectedLogins={localAssignees}
+            error={repoAssignees.error}
+            loading={repoAssignees.loading}
+            onToggleAssignee={handleAssigneeToggle}
+          />
         </PopoverContent>
       </Popover>
 
@@ -5078,13 +5101,23 @@ function GHEditSection({
                 size="sm"
                 onClick={handleOpenOrUseWorkspace}
                 className="gap-2"
-                aria-label="Open workspace attached to issue"
+                aria-label={translate(
+                  'auto.components.GitHubItemDialog.84855fedd0',
+                  'Open workspace attached to issue'
+                )}
               >
-                Open workspace
+                {translate('auto.components.GitHubItemDialog.726db41722', 'Open workspace')}
                 <ArrowRight className="size-4" />
               </Button>
               <DropdownMenuTrigger asChild>
-                <Button type="button" size="icon-sm" aria-label="More issue workspace actions">
+                <Button
+                  type="button"
+                  size="icon-sm"
+                  aria-label={translate(
+                    'auto.components.GitHubItemDialog.fe6ff12dc2',
+                    'More issue workspace actions'
+                  )}
+                >
                   <ChevronDown className="size-3.5" />
                 </Button>
               </DropdownMenuTrigger>
@@ -5092,7 +5125,7 @@ function GHEditSection({
             <DropdownMenuContent align="end">
               <DropdownMenuItem onSelect={() => onUse(item)}>
                 <Plus className="size-4" />
-                Start new workspace
+                {translate('auto.components.GitHubItemDialog.36182aa57f', 'Start new workspace')}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -5102,124 +5135,16 @@ function GHEditSection({
             size="sm"
             onClick={() => onUse(item)}
             className="gap-2"
-            aria-label="Start workspace from issue"
+            aria-label={translate(
+              'auto.components.GitHubItemDialog.0ab4664a8b',
+              'Start workspace from issue'
+            )}
           >
-            Start workspace from issue
+            {translate('auto.components.GitHubItemDialog.0ab4664a8b', 'Start workspace from issue')}
             <ArrowRight className="size-4" />
           </Button>
         )}
       </div>
-    </div>
-  )
-}
-
-function GHCommentComposer({
-  className,
-  repoPath,
-  repoId,
-  issueNumber,
-  itemType,
-  mentionOptions,
-  onCommentAdded
-}: {
-  className?: string
-  repoPath: string
-  repoId?: string | null
-  issueNumber: number
-  itemType: 'issue' | 'pr'
-  mentionOptions: MentionOption[]
-  onCommentAdded: (comment: PRComment) => void
-}): React.JSX.Element {
-  const [body, setBody] = useState('')
-  const [submitting, setSubmitting] = useState(false)
-  const textareaRef = useRef<HTMLTextAreaElement>(null)
-  const mountedRef = useMountedRef()
-
-  const autoGrow = useCallback(() => {
-    const el = textareaRef.current
-    if (!el) {
-      return
-    }
-    el.style.height = 'auto'
-    el.style.height = `${Math.max(80, Math.min(el.scrollHeight, 240))}px`
-  }, [])
-
-  const handleSubmit = useCallback(async () => {
-    const trimmed = body.trim()
-    if (!trimmed) {
-      return
-    }
-    setSubmitting(true)
-    try {
-      const result = await addIssueCommentForRepo({
-        repoPath,
-        repoId: repoId ?? undefined,
-        number: issueNumber,
-        body: trimmed,
-        type: itemType
-      })
-      if (!mountedRef.current) {
-        return
-      }
-      if (result.ok) {
-        setBody('')
-        requestAnimationFrame(autoGrow)
-        // Why: use the comment returned by GitHub so the optimistic row shows
-        // the real login/avatar immediately instead of waiting for a reopen.
-        onCommentAdded(result.comment)
-      } else {
-        toast.error(result.error ?? 'Failed to add comment')
-      }
-    } catch (err) {
-      if (mountedRef.current) {
-        toast.error(err instanceof Error ? err.message : 'Failed to add comment')
-      }
-    } finally {
-      if (mountedRef.current) {
-        setSubmitting(false)
-      }
-    }
-  }, [autoGrow, body, mountedRef, repoPath, repoId, issueNumber, itemType, onCommentAdded])
-
-  const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
-      if (isScreenSubmitShortcut(e)) {
-        e.preventDefault()
-        handleSubmit()
-      }
-    },
-    [handleSubmit]
-  )
-
-  return (
-    <div className={cn('flex flex-col items-start gap-2', className)}>
-      <MentionTextarea
-        textareaRef={textareaRef}
-        value={body}
-        onValueChange={(nextValue) => {
-          setBody(nextValue)
-          requestAnimationFrame(autoGrow)
-        }}
-        onKeyDown={handleKeyDown}
-        placeholder="Add a comment…"
-        rows={4}
-        mentionOptions={mentionOptions}
-        wrapperClassName="flex min-h-20 w-full items-stretch"
-        className="scrollbar-sleek block h-20 max-h-[240px] min-h-20 w-full resize-none overflow-y-auto rounded-md border border-input bg-card px-3 py-2 text-[13px] leading-5 placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-      />
-      <Button
-        onClick={handleSubmit}
-        disabled={!body.trim() || submitting}
-        className="gap-2"
-        aria-label="Send comment"
-      >
-        {submitting ? (
-          <LoaderCircle className="size-3.5 animate-spin" />
-        ) : (
-          <Send className="size-3.5" />
-        )}
-        Comment
-      </Button>
     </div>
   )
 }
@@ -5298,11 +5223,18 @@ export default function GitHubItemDialog({
   onReviewRequestsChange,
   onClose
 }: GitHubItemDialogProps): React.JSX.Element {
+  const workItemId = workItem?.id
   const [tab, setTab] = useState<ItemDialogTab>(() => normalizeItemDialogTab(workItem, initialTab))
   const [localState, setLocalState] = useState<GitHubWorkItem['state']>(workItem?.state ?? 'open')
   const [localLabels, setLocalLabels] = useState<string[]>(workItem?.labels ?? [])
-  const [linkCopied, setLinkCopied] = useState(false)
-  const workItemId = workItem?.id
+  const [linkCopyState, setLinkCopyState] = useState(() => createGitHubLinkCopyState(workItemId))
+  const resolvedLinkCopyState = resolveGitHubLinkCopyState(linkCopyState, workItemId)
+  if (resolvedLinkCopyState !== linkCopyState) {
+    // Why: switching GitHub items should not paint a stale copied indicator
+    // from the previous item while waiting for a passive Effect pass.
+    setLinkCopyState(resolvedLinkCopyState)
+  }
+  const linkCopied = resolvedLinkCopyState.copied
   const workItemState = workItem?.state
   const workItemLabels = workItem?.labels
   const effectiveRepoId = repoId ?? workItem?.repoId ?? null
@@ -5332,7 +5264,12 @@ export default function GitHubItemDialog({
 
       const result = activateAndRevealWorktree(currentAttached.id)
       if (result === false) {
-        toast.error('Unable to open the workspace attached to this issue.')
+        toast.error(
+          translate(
+            'auto.components.GitHubItemDialog.2ef631437e',
+            'Unable to open the workspace attached to this issue.'
+          )
+        )
       }
     },
     [effectiveRepoId, onUse]
@@ -5607,21 +5544,25 @@ export default function GitHubItemDialog({
   // Why: clipboard IPC can resolve after the dialog unmounts; skip copied-state
   // feedback instead of starting its reset timer on a stale surface.
   const linkCopyMountedRef = useRef(false)
-  const setLinkCopyButtonRef = useCallback((node: HTMLButtonElement | null) => {
-    linkCopyMountedRef.current = node !== null
-  }, [])
-
-  useEffect(() => {
-    setLinkCopied(false)
-  }, [workItemId])
-
-  useEffect(() => {
-    if (!linkCopied) {
+  const linkCopiedResetTimerRef = useRef<number | null>(null)
+  const clearLinkCopiedResetTimer = useCallback((): void => {
+    if (linkCopiedResetTimerRef.current === null) {
       return
     }
-    const handle = window.setTimeout(() => setLinkCopied(false), 1500)
-    return () => window.clearTimeout(handle)
-  }, [linkCopied])
+    window.clearTimeout(linkCopiedResetTimerRef.current)
+    linkCopiedResetTimerRef.current = null
+  }, [])
+  const setLinkCopyButtonRef = useCallback(
+    (node: HTMLButtonElement | null) => {
+      linkCopyMountedRef.current = node !== null
+      if (node === null) {
+        // Why: the copied-state timer belongs to the copy control surface;
+        // clear it when that surface detaches without a passive cleanup Effect.
+        clearLinkCopiedResetTimer()
+      }
+    },
+    [clearLinkCopiedResetTimer]
+  )
 
   const handleCopyWorkItemLink = useCallback(async (): Promise<void> => {
     if (!workItem) {
@@ -5634,15 +5575,24 @@ export default function GitHubItemDialog({
       if (!linkCopyMountedRef.current) {
         return
       }
-      setLinkCopied(true)
-      toast.success('GitHub link copied')
+      clearLinkCopiedResetTimer()
+      const copiedWorkItemId = workItem.id
+      setLinkCopyState(markGitHubLinkCopied(copiedWorkItemId))
+      linkCopiedResetTimerRef.current = window.setTimeout(() => {
+        linkCopiedResetTimerRef.current = null
+        setLinkCopyState((current) => clearGitHubLinkCopied(current, copiedWorkItemId))
+      }, 1500)
+      toast.success(translate('auto.components.GitHubItemDialog.2e77dc2053', 'GitHub link copied'))
     } catch {
-      toast.error('Failed to copy GitHub link')
+      toast.error(
+        translate('auto.components.GitHubItemDialog.5fea151559', 'Failed to copy GitHub link')
+      )
     }
-  }, [workItem])
+  }, [clearLinkCopiedResetTimer, workItem])
 
   const appendOptimisticComment = useCallback(
     (comment: PRComment) => {
+      useAppStore.getState().recordFeatureInteraction('github-tasks')
       // Why: skip refreshDetails() — gh api --cache 60s returns stale data
       // that overwrites the optimistic comment. The next dialog open (after
       // cache expiry) will pick up the server-confirmed version.
@@ -5678,7 +5628,12 @@ export default function GitHubItemDialog({
   const handlePRFileViewedChange = useCallback(
     async (path: string, viewed: boolean): Promise<boolean> => {
       if (!repoPath || !details?.pullRequestId || !workItem || workItem.type !== 'pr') {
-        toast.error('Unable to sync viewed state for this pull request.')
+        toast.error(
+          translate(
+            'auto.components.GitHubItemDialog.c0253318d6',
+            'Unable to sync viewed state for this pull request.'
+          )
+        )
         return false
       }
       setPendingViewedPaths((prev) => new Set(prev).add(path))
@@ -5699,7 +5654,12 @@ export default function GitHubItemDialog({
           if (detailsCacheKey && previousState) {
             patchCachedPRFileViewedState(detailsCacheKey, path, previousState)
           }
-          toast.error('Failed to sync viewed state with GitHub.')
+          toast.error(
+            translate(
+              'auto.components.GitHubItemDialog.b7bf31b8de',
+              'Failed to sync viewed state with GitHub.'
+            )
+          )
           return false
         }
         return true
@@ -5718,6 +5678,13 @@ export default function GitHubItemDialog({
   const ownerRepo = workItem ? parseOwnerRepoFromItemUrl(workItem.url) : null
   const issueStateBadgeTone =
     localState === 'closed' ? 'bg-rose-600 text-white' : 'bg-emerald-600 text-white'
+  const sheetHeaderStyle = useMemo(
+    () =>
+      variant === 'sheet' && IS_WINDOWS
+        ? ({ paddingRight: `calc(1rem + ${WINDOWS_WINDOW_CONTROLS_WIDTH})` } as const)
+        : undefined,
+    [variant]
+  )
 
   const content = workItem ? (
     <div className="flex h-full min-h-0 flex-col">
@@ -5758,7 +5725,10 @@ export default function GitHubItemDialog({
                       variant="ghost"
                       size="icon-sm"
                       onClick={() => void handleCopyWorkItemLink()}
-                      aria-label="Copy GitHub link"
+                      aria-label={translate(
+                        'auto.components.GitHubItemDialog.c43fe79ee0',
+                        'Copy GitHub link'
+                      )}
                     >
                       {linkCopied ? (
                         <Check className="size-4 text-emerald-500" />
@@ -5768,7 +5738,12 @@ export default function GitHubItemDialog({
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent side="bottom" sideOffset={6}>
-                    {linkCopied ? 'Copied' : 'Copy GitHub link'}
+                    {linkCopied
+                      ? translate('auto.components.GitHubItemDialog.038b3d39b1', 'Copied')
+                      : translate(
+                          'auto.components.GitHubItemDialog.c43fe79ee0',
+                          'Copy GitHub link'
+                        )}
                   </TooltipContent>
                 </Tooltip>
                 <Tooltip>
@@ -5777,13 +5752,16 @@ export default function GitHubItemDialog({
                       variant="ghost"
                       size="icon-sm"
                       onClick={() => window.api.shell.openUrl(workItem.url)}
-                      aria-label="Open on GitHub"
+                      aria-label={translate(
+                        'auto.components.GitHubItemDialog.3fdf777817',
+                        'Open on GitHub'
+                      )}
                     >
                       <ExternalLink className="size-4" />
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent side="bottom" sideOffset={6}>
-                    Open on GitHub
+                    {translate('auto.components.GitHubItemDialog.3fdf777817', 'Open on GitHub')}
                   </TooltipContent>
                 </Tooltip>
               </div>
@@ -5808,16 +5786,22 @@ export default function GitHubItemDialog({
                         size="sm"
                         onClick={() => handleOpenOrUseIssueWorkspace(workItem)}
                         className="gap-1.5 whitespace-nowrap"
-                        aria-label="Open workspace attached to issue"
+                        aria-label={translate(
+                          'auto.components.GitHubItemDialog.84855fedd0',
+                          'Open workspace attached to issue'
+                        )}
                       >
-                        Open workspace
+                        {translate('auto.components.GitHubItemDialog.726db41722', 'Open workspace')}
                         <ArrowRight className="size-3.5" />
                       </Button>
                       <DropdownMenuTrigger asChild>
                         <Button
                           type="button"
                           size="icon-sm"
-                          aria-label="More issue workspace actions"
+                          aria-label={translate(
+                            'auto.components.GitHubItemDialog.fe6ff12dc2',
+                            'More issue workspace actions'
+                          )}
                         >
                           <ChevronDown className="size-3.5" />
                         </Button>
@@ -5826,11 +5810,14 @@ export default function GitHubItemDialog({
                     <DropdownMenuContent align="end">
                       <DropdownMenuItem onSelect={() => onUse(workItem)}>
                         <Plus className="size-4" />
-                        Start new workspace
+                        {translate(
+                          'auto.components.GitHubItemDialog.36182aa57f',
+                          'Start new workspace'
+                        )}
                       </DropdownMenuItem>
                       <DropdownMenuItem onSelect={() => window.api.shell.openUrl(workItem.url)}>
                         <ExternalLink className="size-4" />
-                        Open on GitHub
+                        {translate('auto.components.GitHubItemDialog.3fdf777817', 'Open on GitHub')}
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
@@ -5840,9 +5827,15 @@ export default function GitHubItemDialog({
                     size="sm"
                     onClick={() => onUse(workItem)}
                     className="gap-1.5 whitespace-nowrap"
-                    aria-label="Start workspace from issue"
+                    aria-label={translate(
+                      'auto.components.GitHubItemDialog.0ab4664a8b',
+                      'Start workspace from issue'
+                    )}
                   >
-                    Start workspace from issue
+                    {translate(
+                      'auto.components.GitHubItemDialog.0ab4664a8b',
+                      'Start workspace from issue'
+                    )}
                     <ArrowRight className="size-3.5" />
                   </Button>
                 )}
@@ -5860,15 +5853,21 @@ export default function GitHubItemDialog({
                 ) : (
                   <CircleDot className="size-3.5" />
                 )}
-                {localState === 'closed' ? 'Closed' : 'Open'}
+                {localState === 'closed'
+                  ? translate('auto.components.GitHubItemDialog.ab050dffec', 'Closed')
+                  : translate('auto.components.GitHubItemDialog.dc1ca081a8', 'Open')}
               </span>
               <span className="flex flex-wrap items-center gap-1.5">
                 <span className="font-semibold text-foreground">
-                  {workItem.author ?? 'unknown'}
+                  {workItem.author ??
+                    translate('auto.components.GitHubItemDialog.773ff70035', 'unknown')}
                 </span>
-                <span>opened this issue</span>
+                <span>
+                  {translate('auto.components.GitHubItemDialog.55962099bc', 'opened this issue')}
+                </span>
                 <span className="text-muted-foreground/80">
-                  · updated {formatRelativeTime(workItem.updatedAt)}
+                  {translate('auto.components.GitHubItemDialog.10ef1afb8e', '· updated')}
+                  {formatRelativeTime(workItem.updatedAt)}
                 </span>
               </span>
               <WorkItemIssueSourceIndicator url={workItem.url} repoId={effectiveRepoId} />
@@ -5882,7 +5881,12 @@ export default function GitHubItemDialog({
           </div>
         </>
       ) : (
-        <div className="flex-none border-b border-border/60 bg-card/80 px-4 py-3 shadow-xs backdrop-blur supports-[backdrop-filter]:bg-card/70">
+        <div
+          className="flex-none border-b border-border/60 bg-card/80 px-4 py-3 shadow-xs backdrop-blur supports-[backdrop-filter]:bg-card/70"
+          // Why: this sheet portals outside the app root, so it cannot inherit
+          // the Windows titlebar inset variable that keeps header buttons clear.
+          style={sheetHeaderStyle}
+        >
           <div className="flex items-start gap-3">
             {variant === 'page' ? (
               <Button
@@ -5904,14 +5908,24 @@ export default function GitHubItemDialog({
               <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
                 <WorkItemStateBadge item={{ ...workItem, state: localState }} />
                 <span className="font-mono">#{workItem.number}</span>
-                <span>{workItem.type === 'pr' ? 'Pull request' : 'Issue'}</span>
+                <span>
+                  {workItem.type === 'pr'
+                    ? translate('auto.components.GitHubItemDialog.a2495e4784', 'Pull request')
+                    : translate('auto.components.GitHubItemDialog.3e544d966d', 'Issue')}
+                </span>
               </div>
               <h2 className="text-[15px] font-semibold leading-snug text-foreground">
                 {workItem.title}
               </h2>
               <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted-foreground">
-                <span>{workItem.author ?? 'unknown'}</span>
-                <span>updated {formatRelativeTime(workItem.updatedAt)}</span>
+                <span>
+                  {workItem.author ??
+                    translate('auto.components.GitHubItemDialog.773ff70035', 'unknown')}
+                </span>
+                <span>
+                  {translate('auto.components.GitHubItemDialog.8223320f8d', 'updated')}
+                  {formatRelativeTime(workItem.updatedAt)}
+                </span>
                 {workItem.branchName && (
                   <span className="max-w-full truncate rounded-md border border-border/50 bg-muted/40 px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
                     {workItem.branchName}
@@ -5935,9 +5949,15 @@ export default function GitHubItemDialog({
                   size="sm"
                   onClick={() => onUse(workItem)}
                   className="gap-1.5 whitespace-nowrap"
-                  aria-label="Start workspace from PR"
+                  aria-label={translate(
+                    'auto.components.GitHubItemDialog.0caac1a18f',
+                    'Start workspace from PR'
+                  )}
                 >
-                  Start workspace from PR
+                  {translate(
+                    'auto.components.GitHubItemDialog.0caac1a18f',
+                    'Start workspace from PR'
+                  )}
                   <ArrowRight className="size-3.5" />
                 </Button>
               )}
@@ -5949,7 +5969,10 @@ export default function GitHubItemDialog({
                     variant="ghost"
                     size="icon-sm"
                     onClick={() => void handleCopyWorkItemLink()}
-                    aria-label="Copy GitHub link"
+                    aria-label={translate(
+                      'auto.components.GitHubItemDialog.c43fe79ee0',
+                      'Copy GitHub link'
+                    )}
                   >
                     {linkCopied ? (
                       <Check className="size-4 text-emerald-500" />
@@ -5959,7 +5982,9 @@ export default function GitHubItemDialog({
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent side="bottom" sideOffset={6}>
-                  {linkCopied ? 'Copied' : 'Copy GitHub link'}
+                  {linkCopied
+                    ? translate('auto.components.GitHubItemDialog.038b3d39b1', 'Copied')
+                    : translate('auto.components.GitHubItemDialog.c43fe79ee0', 'Copy GitHub link')}
                 </TooltipContent>
               </Tooltip>
               <Tooltip>
@@ -5968,13 +5993,16 @@ export default function GitHubItemDialog({
                     variant="ghost"
                     size="icon-sm"
                     onClick={() => window.api.shell.openUrl(workItem.url)}
-                    aria-label="Open on GitHub"
+                    aria-label={translate(
+                      'auto.components.GitHubItemDialog.3fdf777817',
+                      'Open on GitHub'
+                    )}
                   >
                     <ExternalLink className="size-4" />
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent side="bottom" sideOffset={6}>
-                  Open on GitHub
+                  {translate('auto.components.GitHubItemDialog.3fdf777817', 'Open on GitHub')}
                 </TooltipContent>
               </Tooltip>
               {variant === 'sheet' ? (
@@ -5984,13 +6012,16 @@ export default function GitHubItemDialog({
                       variant="ghost"
                       size="icon-sm"
                       onClick={onClose}
-                      aria-label="Close preview"
+                      aria-label={translate(
+                        'auto.components.GitHubItemDialog.45af57999b',
+                        'Close preview'
+                      )}
                     >
                       <X className="size-4" />
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent side="bottom" sideOffset={6}>
-                    Close · Esc
+                    {translate('auto.components.GitHubItemDialog.474c59b4b3', 'Close · Esc')}
                   </TooltipContent>
                 </Tooltip>
               ) : null}
@@ -6050,7 +6081,6 @@ export default function GitHubItemDialog({
                   loading={loading}
                   detailsLoaded={detailsLoaded}
                   checks={checks}
-                  participants={details?.participants ?? []}
                   localState={localState}
                   onStateChange={setLocalState}
                   projectOrigin={projectOrigin}
@@ -6131,13 +6161,13 @@ export default function GitHubItemDialog({
             >
               <TabsTrigger value="conversation" className="px-2">
                 <MessageSquare className="size-3.5" />
-                Conversation
+                {translate('auto.components.GitHubItemDialog.e30a5470c9', 'Conversation')}
               </TabsTrigger>
               {workItem.type === 'pr' && (
                 <>
                   <TabsTrigger value="checks" className="px-2">
                     <ListChecks className="size-3.5" />
-                    Checks
+                    {translate('auto.components.GitHubItemDialog.4bd1f5b055', 'Checks')}
                     {checks.length > 0 && (
                       <span className="ml-1 text-[10px] text-muted-foreground">
                         {checks.length}
@@ -6146,7 +6176,7 @@ export default function GitHubItemDialog({
                   </TabsTrigger>
                   <TabsTrigger value="files" className="px-2">
                     <FileText className="size-3.5" />
-                    Files
+                    {translate('auto.components.GitHubItemDialog.999b5ad7d9', 'Files')}
                     {files.length > 0 && (
                       <span className="ml-1 text-[10px] text-muted-foreground">{files.length}</span>
                     )}
@@ -6169,7 +6199,6 @@ export default function GitHubItemDialog({
                   loading={loading}
                   detailsLoaded={detailsLoaded}
                   checks={checks}
-                  participants={details?.participants ?? []}
                   localState={localState}
                   onStateChange={setLocalState}
                   projectOrigin={projectOrigin}
@@ -6225,14 +6254,17 @@ export default function GitHubItemDialog({
                     />
                   </TabsContent>
 
-                  <TabsContent value="files" className="mt-0">
+                  <TabsContent value="files" className="mt-0 h-full min-h-0 overflow-hidden">
                     {loading && files.length === 0 ? (
                       <div className="flex items-center justify-center py-10">
                         <LoaderCircle className="size-5 animate-spin text-muted-foreground" />
                       </div>
                     ) : files.length === 0 ? (
                       <div className="px-4 py-10 text-center text-[12px] text-muted-foreground">
-                        No files changed.
+                        {translate(
+                          'auto.components.GitHubItemDialog.3cd5ae5b7b',
+                          'No files changed.'
+                        )}
                       </div>
                     ) : (
                       <PRFilesCombinedDiffViewer
@@ -6300,11 +6332,17 @@ export default function GitHubItemDialog({
             but the visible header carries the same info. Wrap each with
             `asChild` so the VisuallyHidden span wraps the element cleanly. */}
         <VisuallyHidden.Root asChild>
-          <SheetTitle>{workItem?.title ?? 'GitHub item'}</SheetTitle>
+          <SheetTitle>
+            {workItem?.title ??
+              translate('auto.components.GitHubItemDialog.3853476a97', 'GitHub item')}
+          </SheetTitle>
         </VisuallyHidden.Root>
         <VisuallyHidden.Root asChild>
           <SheetDescription>
-            Preview and edit the selected GitHub issue or pull request.
+            {translate(
+              'auto.components.GitHubItemDialog.3ab6ac0fc8',
+              'Preview and edit the selected GitHub issue or pull request.'
+            )}
           </SheetDescription>
         </VisuallyHidden.Root>
 

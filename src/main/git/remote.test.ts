@@ -95,6 +95,23 @@ describe('git remote operations', () => {
     )
   })
 
+  it('maps recursive submodule push failures to submodule-specific guidance', async () => {
+    gitExecFileAsyncMock
+      .mockRejectedValueOnce(new Error('no branch'))
+      .mockRejectedValueOnce(
+        new Error(
+          "Command failed: git push\nPushing submodule 'find-cmux-followers'\n" +
+            ' ! [rejected]        master -> master (fetch first)\n' +
+            "Unable to push submodule 'find-cmux-followers'\n" +
+            'fatal: failed to push all needed submodules'
+        )
+      )
+
+    await expect(gitPush('/repo', false)).rejects.toThrow(
+      "Submodule 'find-cmux-followers' has remote changes. Pull inside the submodule, then try again."
+    )
+  })
+
   it('passes through clean tail line when push error does not match known patterns', async () => {
     gitExecFileAsyncMock
       .mockRejectedValueOnce(new Error('no branch'))
@@ -332,6 +349,22 @@ describe('git remote operations', () => {
     expect(gitExecFileAsyncMock.mock.calls).toEqual([
       [['check-ref-format', '--branch', 'feature/fix'], { cwd: '/repo' }],
       [['fetch', '--prune', 'fork'], { cwd: '/repo' }]
+    ])
+  })
+
+  it('fetches explicit publish target remotes whose names contain slashes', async () => {
+    gitExecFileAsyncMock
+      .mockResolvedValueOnce({ stdout: '', stderr: '' })
+      .mockResolvedValueOnce({ stdout: '', stderr: '' })
+
+    await gitFetch('/repo', {
+      remoteName: 'foo/bar',
+      branchName: 'feature/fix'
+    })
+
+    expect(gitExecFileAsyncMock.mock.calls).toEqual([
+      [['check-ref-format', '--branch', 'feature/fix'], { cwd: '/repo' }],
+      [['fetch', '--prune', 'foo/bar'], { cwd: '/repo' }]
     ])
   })
 

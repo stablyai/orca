@@ -6,11 +6,17 @@ import { rangeForParsedFileLink } from './wrapped-terminal-link-ranges'
 type UrlLinkHitTestDeps = {
   worktreeId: string
   forceSystemBrowser?: boolean
+  requestOpenLinksInAppPreference?: TerminalLinkRoutingPreferenceRequester
 }
 
 type UrlLinkClickFallbackDeps = {
   worktreeId: string
+  requestOpenLinksInAppPreference?: TerminalLinkRoutingPreferenceRequester
 }
+
+export type TerminalLinkRoutingPreferenceRequester = (
+  url: string
+) => boolean | Promise<boolean> | null | undefined
 
 type ParsedTerminalHttpLink = {
   url: string
@@ -100,7 +106,8 @@ export function installHttpLinkClickFallback(
     // that xterm already handled.
     const opened = openHttpLinkAtBufferPosition(terminal.buffer.active, position, terminal.cols, {
       worktreeId: deps.worktreeId,
-      forceSystemBrowser: event.shiftKey
+      forceSystemBrowser: event.shiftKey,
+      requestOpenLinksInAppPreference: deps.requestOpenLinksInAppPreference
     })
     if (opened) {
       event.preventDefault()
@@ -134,15 +141,39 @@ export function openHttpLinkAtBufferPosition(
       if (!range || !rangeContainsBufferPosition(range, position, terminalColumns)) {
         continue
       }
-      openHttpLink(parsed.url, {
-        worktreeId: deps.worktreeId,
-        forceSystemBrowser: deps.forceSystemBrowser
-      })
+      openTerminalHttpLink(parsed.url, deps)
       return true
     }
   }
 
   return false
+}
+
+export function openTerminalHttpLink(url: string, deps: UrlLinkHitTestDeps): void {
+  if (deps.forceSystemBrowser) {
+    openHttpLink(url, { worktreeId: deps.worktreeId, forceSystemBrowser: true })
+    return
+  }
+
+  const preferenceDecision = deps.requestOpenLinksInAppPreference?.(url)
+  if (preferenceDecision === null || preferenceDecision === undefined) {
+    openHttpLink(url, { worktreeId: deps.worktreeId })
+    return
+  }
+
+  // Why: the first terminal link click may need an async preference dialog.
+  // Suppress the browser's default link handling first, then route after the
+  // persisted choice is available.
+  void Promise.resolve(preferenceDecision)
+    .then((openInOrca) => {
+      openHttpLink(url, {
+        worktreeId: deps.worktreeId,
+        forceSystemBrowser: !openInOrca
+      })
+    })
+    .catch(() => {
+      openHttpLink(url, { worktreeId: deps.worktreeId, forceSystemBrowser: true })
+    })
 }
 
 function rangeContainsBufferPosition(

@@ -10,6 +10,7 @@ import {
   type GitHistoryItemViewModel
 } from '../../../../shared/git-history-graph'
 import { GitHistoryGraphSvg, graphColor } from './GitHistoryGraphSvg'
+import { translate } from '@/i18n/i18n'
 
 export type GitHistoryPanelState =
   | { status: 'idle' | 'loading'; result?: GitHistoryResult; error?: string }
@@ -171,7 +172,7 @@ function GitHistoryRow({
       type="button"
       className={rowClassName}
       title={rowTooltip}
-      aria-label={`Open commit ${item.displayId ?? item.id}: ${item.subject}`}
+      aria-label={translate("auto.components.right.sidebar.GitHistoryPanel.8232c8b2f2", "Open commit {{value0}}: {{value1}}", { value0: item.displayId ?? item.id, value1: item.subject })}
       data-testid="git-history-row"
       onClick={() => {
         onOpenCommit?.(item)
@@ -295,7 +296,7 @@ export function GitHistoryPanel({
       {!collapsed && (
         <div
           role="separator"
-          aria-label="Resize graph"
+          aria-label={translate("auto.components.right.sidebar.GitHistoryPanel.e5e81e59a6", "Resize commits")}
           aria-orientation="horizontal"
           aria-valuemin={MIN_GIT_HISTORY_PANEL_HEIGHT}
           aria-valuemax={MAX_GIT_HISTORY_PANEL_HEIGHT}
@@ -316,7 +317,7 @@ export function GitHistoryPanel({
             <ChevronDown
               className={cn('size-3 shrink-0 transition-transform', collapsed && '-rotate-90')}
             />
-            <span>Graph</span>
+            <span>{translate("auto.components.right.sidebar.GitHistoryPanel.d836037d02", "Commits")}</span>
             {result && <span className="text-[10px] font-medium tabular-nums">{count}</span>}
             {result?.hasMore && <span className="text-[10px] font-medium">+</span>}
           </button>
@@ -327,7 +328,7 @@ export function GitHistoryPanel({
                 variant="ghost"
                 size="icon-xs"
                 className="my-auto h-auto w-auto p-0.5 text-muted-foreground hover:bg-transparent hover:text-muted-foreground dark:hover:bg-transparent [&_svg]:size-3"
-                aria-label="What are graph refs?"
+                aria-label={translate("auto.components.right.sidebar.GitHistoryPanel.9289ba0cb9", "What are refs?")}
                 onClick={(event) => {
                   event.stopPropagation()
                 }}
@@ -336,9 +337,7 @@ export function GitHistoryPanel({
               </Button>
             </TooltipTrigger>
             <TooltipContent side="bottom" sideOffset={6} className="max-w-72">
-              Refs are branch or tag names pointing at that exact commit. They only appear where Git
-              has a named ref for the commit.
-            </TooltipContent>
+              {translate("auto.components.right.sidebar.GitHistoryPanel.9f7535d22b", "Refs are branch or tag names pointing at that exact commit. They only appear where Git has a named ref for the commit.")}</TooltipContent>
           </Tooltip>
           <Tooltip>
             <TooltipTrigger asChild>
@@ -355,14 +354,13 @@ export function GitHistoryPanel({
                   }
                   onRefresh()
                 }}
-                aria-label="Refresh graph"
+                aria-label={translate("auto.components.right.sidebar.GitHistoryPanel.d0fb0f4bf2", "Refresh commits")}
               >
                 <RefreshCw className={cn('size-3.5', loading && 'animate-spin')} />
               </Button>
             </TooltipTrigger>
             <TooltipContent side="bottom" sideOffset={6}>
-              Refresh graph
-            </TooltipContent>
+              {translate("auto.components.right.sidebar.GitHistoryPanel.d0fb0f4bf2", "Refresh commits")}</TooltipContent>
           </Tooltip>
         </div>
       </div>
@@ -374,7 +372,7 @@ export function GitHistoryPanel({
           {state.error}
         </div>
       )}
-      {!collapsed && (state.status === 'idle' || state.status === 'loading') && !result && (
+      {!collapsed && (state.status === 'idle' || state.status === "loading") && !result && (
         <div
           className={cn(
             expandedBodyClassName,
@@ -383,7 +381,7 @@ export function GitHistoryPanel({
           style={expandedBodyStyle}
         >
           <RefreshCw className="size-3 animate-spin" />
-          <span>Loading graph...</span>
+          <span>{translate("auto.components.right.sidebar.GitHistoryPanel.781a8bcf7b", "Loading graph...")}</span>
         </div>
       )}
       {!collapsed && result && viewModels.length === 0 && (
@@ -391,8 +389,7 @@ export function GitHistoryPanel({
           className={cn(expandedBodyClassName, 'px-6 py-2 text-[11px] text-muted-foreground')}
           style={expandedBodyStyle}
         >
-          No commits yet
-        </div>
+          {translate("auto.components.right.sidebar.GitHistoryPanel.cf7cad58d2", "No commits yet")}</div>
       )}
       {!collapsed && viewModels.length > 0 && (
         <div className={expandedBodyClassName} style={expandedBodyStyle}>

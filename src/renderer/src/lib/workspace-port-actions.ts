@@ -5,6 +5,7 @@ import {
   RuntimeRpcCallError,
   type RuntimeClientTarget
 } from '@/runtime/runtime-rpc-client'
+import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
 import type {
   WorkspacePort,
   WorkspacePortKillResult,
@@ -38,7 +39,7 @@ function delay(ms: number): Promise<void> {
 export function shouldOpenWorkspacePortInOrcaBrowser(
   settings: { openLinksInApp?: boolean } | null | undefined
 ): boolean {
-  return settings?.openLinksInApp !== false
+  return settings?.openLinksInApp === true
 }
 
 export function workspacePortOwnerWorktreeId(port: WorkspacePort): string | null {
@@ -80,7 +81,7 @@ export async function openWorkspacePortInBrowser(args: {
       const remotePage = await callRuntimeRpc<{ browserPageId: string }>(
         args.runtimeTarget,
         'browser.tabCreate',
-        { worktree: `id:${worktreeId}`, url },
+        { worktree: toRuntimeWorktreeSelector(worktreeId), url },
         { timeoutMs: 30_000 }
       )
       const tab = args.createBrowserTab(worktreeId, url, { activate: true })
@@ -126,7 +127,13 @@ export async function refreshWorkspacePortScanAfterStop(args: {
 }): Promise<{ ok: true } | { ok: false; reason: string }> {
   args.setWorkspacePortScanRefreshing(true)
   try {
-    const firstScan = await scanWorkspacePortsForTarget(args.runtimeTarget)
+    let firstScan: WorkspacePortScanResult
+    try {
+      firstScan = await scanWorkspacePortsForTarget(args.runtimeTarget)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      return { ok: false, reason: message || 'Workspace port scan failed.' }
+    }
     args.setWorkspacePortScan({
       key: `${workspacePortRuntimeTargetKey(args.runtimeTarget)}:all`,
       result: firstScan
@@ -134,17 +141,20 @@ export async function refreshWorkspacePortScanAfterStop(args: {
 
     // Why: stopping sends SIGTERM, and the listener can remain visible for a
     // short window. A settled re-scan keeps worktree cards from showing a stale
-    // port row after the process actually exits.
+    // port row after the process actually exits. Failures here are swallowed
+    // because the UI is already correct from the first scan; surfacing a
+    // 'Failed to refresh ports' toast on top of the stop success would lie.
     await delay(WORKSPACE_PORT_STOP_SETTLE_MS)
-    const settledScan = await scanWorkspacePortsForTarget(args.runtimeTarget)
-    args.setWorkspacePortScan({
-      key: `${workspacePortRuntimeTargetKey(args.runtimeTarget)}:all`,
-      result: settledScan
-    })
+    try {
+      const settledScan = await scanWorkspacePortsForTarget(args.runtimeTarget)
+      args.setWorkspacePortScan({
+        key: `${workspacePortRuntimeTargetKey(args.runtimeTarget)}:all`,
+        result: settledScan
+      })
+    } catch {
+      // Intentionally ignored: first scan already updated the UI.
+    }
     return { ok: true }
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
-    return { ok: false, reason: message || 'Workspace port scan failed.' }
   } finally {
     args.setWorkspacePortScanRefreshing(false)
   }

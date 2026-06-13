@@ -3,7 +3,7 @@
 import { existsSync, mkdtempSync, readFileSync, readlinkSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
-import { spawn } from 'node:child_process'
+import { spawn, type ChildProcess } from 'node:child_process'
 import { afterEach, describe, expect, it } from 'vitest'
 
 const processesToCleanUp = new Set<number>()
@@ -37,6 +37,65 @@ async function waitFor(predicate: () => boolean, timeoutMs = 5000): Promise<void
   }
 }
 
+function readPidFile(pidFile: string): number[] {
+  return readFileSync(pidFile, 'utf8')
+    .trim()
+    .split(/\s+/)
+    .map((pid) => Number.parseInt(pid, 10))
+    .filter((pid) => Number.isFinite(pid))
+}
+
+function trackPidFile(pidFile: string): number[] {
+  const pids = readPidFile(pidFile)
+  for (const pid of pids) {
+    processesToCleanUp.add(pid)
+  }
+  return pids
+}
+
+function waitForExit(
+  child: ChildProcess,
+  timeoutMs = 5000
+): Promise<{ code: number | null; signal: NodeJS.Signals | null }> {
+  if (child.exitCode !== null || child.signalCode !== null) {
+    return Promise.resolve({ code: child.exitCode, signal: child.signalCode })
+  }
+  return new Promise((resolveExit, reject) => {
+    const timer = setTimeout(() => {
+      child.kill('SIGKILL')
+      reject(new Error('Timed out waiting for dev wrapper exit'))
+    }, timeoutMs)
+    child.once('exit', (code, signal) => {
+      clearTimeout(timer)
+      resolveExit({ code, signal })
+    })
+  })
+}
+
+async function stopWrapper(
+  wrapper: ChildProcess
+): Promise<{ code: number | null; signal: NodeJS.Signals | null }> {
+  if (wrapper.pid) {
+    processesToCleanUp.add(wrapper.pid)
+  }
+  if (wrapper.exitCode === null && wrapper.signalCode === null) {
+    wrapper.kill('SIGINT')
+  }
+  const result = await waitForExit(wrapper)
+  if (wrapper.pid) {
+    processesToCleanUp.delete(wrapper.pid)
+  }
+  return result
+}
+
+async function stopWrapperAndTrackedPids(wrapper: ChildProcess, pids: number[]): Promise<void> {
+  await stopWrapper(wrapper)
+  await waitFor(() => pids.every((pid) => !processExists(pid)))
+  for (const pid of pids) {
+    processesToCleanUp.delete(pid)
+  }
+}
+
 function devWrapperTestEnv(extra: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   const env = { ...process.env }
   for (const key of Object.keys(env)) {
@@ -49,10 +108,23 @@ function devWrapperTestEnv(extra: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
 }
 
 describe('run-electron-vite-dev', () => {
-  afterEach(() => {
+  afterEach(async () => {
     for (const pid of processesToCleanUp) {
       try {
-        process.kill(pid, 'SIGKILL')
+        process.kill(pid, 'SIGTERM')
+      } catch (error) {
+        const code = error && typeof error === 'object' && 'code' in error ? error.code : null
+        if (code !== 'ESRCH') {
+          throw error
+        }
+      }
+    }
+    await sleep(100)
+    for (const pid of processesToCleanUp) {
+      try {
+        if (processExists(pid)) {
+          process.kill(pid, 'SIGKILL')
+        }
       } catch (error) {
         const code = error && typeof error === 'object' && 'code' in error ? error.code : null
         if (code !== 'ESRCH') {
@@ -94,24 +166,18 @@ describe('run-electron-vite-dev', () => {
         }
       })
 
-      const grandchildPid = Number.parseInt(readFileSync(pidFile, 'utf8').trim(), 10)
+      const [fakeCliPid, grandchildPid] = trackPidFile(pidFile)
+      expect(Number.isFinite(fakeCliPid)).toBe(true)
       expect(Number.isFinite(grandchildPid)).toBe(true)
-      processesToCleanUp.add(grandchildPid)
+      expect(processExists(fakeCliPid)).toBe(true)
       expect(processExists(grandchildPid)).toBe(true)
 
-      const exitPromise = new Promise<number | null>((resolveExit) => {
-        wrapper.on('exit', (code) => {
-          resolveExit(code)
-        })
-      })
+      const { code } = await stopWrapper(wrapper)
+      expect(code).toBe(130)
 
-      wrapper.kill('SIGINT')
-      const exitCode = await exitPromise
-      expect(exitCode).toBe(130)
-
-      await waitFor(() => !processExists(grandchildPid))
+      await waitFor(() => !processExists(fakeCliPid) && !processExists(grandchildPid))
+      processesToCleanUp.delete(fakeCliPid)
       processesToCleanUp.delete(grandchildPid)
-      processesToCleanUp.delete(wrapper.pid!)
     }
   )
 
@@ -148,10 +214,7 @@ describe('run-electron-vite-dev', () => {
       }
     })
 
-    const grandchildPid = Number.parseInt(readFileSync(pidFile, 'utf8').trim(), 10)
-    if (Number.isFinite(grandchildPid)) {
-      processesToCleanUp.add(grandchildPid)
-    }
+    const trackedPids = trackPidFile(pidFile)
 
     const envSnapshot = JSON.parse(readFileSync(envFile, 'utf8')) as {
       args: string[]
@@ -174,8 +237,53 @@ describe('run-electron-vite-dev', () => {
     expect(envSnapshot.stableName).toBeNull()
     expect(envSnapshot.electronExecPath).toBeNull()
 
-    wrapper.kill('SIGINT')
+    await stopWrapperAndTrackedPids(wrapper, trackedPids)
   })
+
+  it.skipIf(process.platform === 'win32')(
+    'prepares userData orca and orca-dev wrappers for dev terminals',
+    async () => {
+      const tempDir = mkdtempSync(join(tmpdir(), 'orca-dev-wrapper-'))
+      const userDataPath = join(tempDir, 'userData')
+      const pidFile = join(tempDir, 'grandchild.pid')
+      const envFile = join(tempDir, 'env.json')
+      const wrapperPath = resolve('config/scripts/run-electron-vite-dev.mjs')
+      const fakeCliPath = resolve('src/main/startup/__fixtures__/fake-electron-vite-dev-cli.mjs')
+
+      const wrapper = spawn(process.execPath, [wrapperPath], {
+        cwd: resolve('.'),
+        env: devWrapperTestEnv({
+          ORCA_DEV_USER_DATA_PATH: userDataPath,
+          ORCA_ELECTRON_VITE_CLI: fakeCliPath,
+          ORCA_SKIP_DEV_ELECTRON_APP_PREPARE: '1',
+          ORCA_SKIP_DEV_WEB_PREPARE: '1',
+          ORCA_DEV_WRAPPER_TEST_PID_FILE: pidFile,
+          ORCA_DEV_WRAPPER_TEST_ENV_FILE: envFile
+        }),
+        stdio: 'ignore'
+      })
+
+      expect(wrapper.pid).toBeTypeOf('number')
+      processesToCleanUp.add(wrapper.pid!)
+
+      await waitFor(() => {
+        try {
+          return readFileSync(envFile, 'utf8').trim().length > 0
+        } catch {
+          return false
+        }
+      })
+
+      const trackedPids = trackPidFile(pidFile)
+      const devWrapper = readFileSync(join(userDataPath, 'cli', 'bin', 'orca-dev'), 'utf8')
+      const publicAliasWrapper = readFileSync(join(userDataPath, 'cli', 'bin', 'orca'), 'utf8')
+      expect(publicAliasWrapper).toBe(devWrapper)
+      expect(publicAliasWrapper).toContain('ORCA_USER_DATA_PATH')
+      expect(publicAliasWrapper).toContain('out/cli/index.js')
+
+      await stopWrapperAndTrackedPids(wrapper, trackedPids)
+    }
+  )
 
   it('consumes the stable-name flag before forwarding args to electron-vite', async () => {
     const tempDir = mkdtempSync(join(tmpdir(), 'orca-dev-wrapper-'))
@@ -213,10 +321,7 @@ describe('run-electron-vite-dev', () => {
       }
     })
 
-    const grandchildPid = Number.parseInt(readFileSync(pidFile, 'utf8').trim(), 10)
-    if (Number.isFinite(grandchildPid)) {
-      processesToCleanUp.add(grandchildPid)
-    }
+    const trackedPids = trackPidFile(pidFile)
 
     const envSnapshot = JSON.parse(readFileSync(envFile, 'utf8')) as {
       args: string[]
@@ -228,7 +333,7 @@ describe('run-electron-vite-dev', () => {
     expect(envSnapshot.stableName).toBe('1')
     expect(envSnapshot.electronExecPath).toBeNull()
 
-    wrapper.kill('SIGINT')
+    await stopWrapperAndTrackedPids(wrapper, trackedPids)
   })
 
   it.skipIf(process.platform !== 'darwin')(
@@ -269,16 +374,13 @@ describe('run-electron-vite-dev', () => {
           }
         }, 20000)
 
-        const grandchildPid = Number.parseInt(readFileSync(pidFile, 'utf8').trim(), 10)
-        if (Number.isFinite(grandchildPid)) {
-          processesToCleanUp.add(grandchildPid)
-        }
+        const trackedPids = trackPidFile(pidFile)
 
         const envSnapshot = JSON.parse(readFileSync(envFile, 'utf8')) as {
           electronExecPath: string | null
         }
         expect(envSnapshot.electronExecPath).toBeTypeOf('string')
-        wrapper.kill('SIGINT')
+        await stopWrapperAndTrackedPids(wrapper, trackedPids)
         return { electronExecPath: envSnapshot.electronExecPath! }
       }
 
@@ -346,10 +448,7 @@ describe('run-electron-vite-dev', () => {
         }
       }, 20000)
 
-      const grandchildPid = Number.parseInt(readFileSync(pidFile, 'utf8').trim(), 10)
-      if (Number.isFinite(grandchildPid)) {
-        processesToCleanUp.add(grandchildPid)
-      }
+      const trackedPids = trackPidFile(pidFile)
 
       const envSnapshot = JSON.parse(readFileSync(envFile, 'utf8')) as {
         electronExecPath: string | null
@@ -365,7 +464,7 @@ describe('run-electron-vite-dev', () => {
       )
       expect(readlinkSync(join(frameworkPath, 'Versions', 'Current'))).toBe('A')
 
-      wrapper.kill('SIGINT')
+      await stopWrapperAndTrackedPids(wrapper, trackedPids)
     },
     30000
   )

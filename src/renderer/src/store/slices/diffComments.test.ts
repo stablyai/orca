@@ -119,6 +119,7 @@ import { createGitHubSlice } from './github'
 import { createHostedReviewSlice } from './hosted-review'
 import { createLinearSlice } from './linear'
 import { createPreflightSlice } from './preflight'
+import { createJiraSlice } from './jira'
 import { createEditorSlice } from './editor'
 import { createStatsSlice } from './stats'
 import { createMemorySlice } from './memory'
@@ -135,6 +136,8 @@ import { createDetectedAgentsSlice } from './detected-agents'
 import { createWorktreeNavHistorySlice } from './worktree-nav-history'
 import { createDictationSlice } from './dictation'
 import { createWorkspaceCleanupSlice } from './workspace-cleanup'
+import { createPullRequestGenerationSlice } from './pull-request-generation'
+import { createCommitMessageGenerationSlice } from './commit-message-generation'
 
 function createTestStore() {
   return create<AppState>()((...a) => ({
@@ -150,6 +153,7 @@ function createTestStore() {
     ...createHostedReviewSlice(...a),
     ...createLinearSlice(...a),
     ...createPreflightSlice(...a),
+    ...createJiraSlice(...a),
     ...createEditorSlice(...a),
     ...createStatsSlice(...a),
     ...createMemorySlice(...a),
@@ -165,7 +169,9 @@ function createTestStore() {
     ...createDetectedAgentsSlice(...a),
     ...createWorktreeNavHistorySlice(...a),
     ...createDictationSlice(...a),
-    ...createWorkspaceCleanupSlice(...a)
+    ...createWorkspaceCleanupSlice(...a),
+    ...createPullRequestGenerationSlice(...a),
+    ...createCommitMessageGenerationSlice(...a)
   }))
 }
 
@@ -337,7 +343,7 @@ describe('updateDiffComment', () => {
       selector: 'env-1',
       method: 'worktree.set',
       params: {
-        worktree: WT,
+        worktree: `id:${WT}`,
         diffComments: [expect.objectContaining({ id: 'c1', body: 'remote body' })]
       },
       timeoutMs: 15_000
@@ -628,7 +634,7 @@ describe('bulk clear diff comments', () => {
       selector: 'env-1',
       method: 'worktree.set',
       params: {
-        worktree: WT,
+        worktree: `id:${WT}`,
         diffComments: []
       },
       timeoutMs: 15_000

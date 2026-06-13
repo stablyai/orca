@@ -20,6 +20,7 @@
  * sites must use this module; see filesystem.ts and relay/fs-handler.ts.
  */
 import { join, relative } from 'path'
+import { normalizeSearchResult } from './search-match-count'
 import type { SearchFileResult, SearchOptions, SearchResult } from './types'
 
 export type SearchAccumulator = {
@@ -30,6 +31,10 @@ export type SearchAccumulator = {
 
 export function createAccumulator(): SearchAccumulator {
   return { fileMap: new Map(), totalMatches: 0, truncated: false }
+}
+
+function acceptMatch(fileResult: SearchFileResult): void {
+  fileResult.matchCount = (fileResult.matchCount ?? 0) + 1
 }
 
 // Why: collapse mixed separators and strip leading slashes so results are
@@ -237,15 +242,19 @@ export function ingestRgJsonLine(
   const relPath = normalizeRelativePath(relative(rootPath, absPath))
   const lineContent = (data.lines?.text ?? '').replace(/\n$/, '')
   const lineNumber = data.line_number ?? 0
-  const submatches = data.submatches ?? []
-
-  let fileResult = acc.fileMap.get(absPath)
-  if (!fileResult) {
-    fileResult = { filePath: absPath, relativePath: relPath, matches: [] }
-    acc.fileMap.set(absPath, fileResult)
+  let submatches = data.submatches ?? []
+  if (submatches.length === 0) {
+    // Why: some rg regex matches report the line but no submatch ranges.
+    // Surface a navigable line-level result instead of a file row with count 0.
+    submatches = [{ start: 0, end: lineContent.length > 0 ? 1 : 0 }]
   }
 
   for (const sub of submatches) {
+    let fileResult = acc.fileMap.get(absPath)
+    if (!fileResult) {
+      fileResult = { filePath: absPath, relativePath: relPath, matches: [], matchCount: 0 }
+      acc.fileMap.set(absPath, fileResult)
+    }
     const clamped = clampLineContext(lineContent, sub.start, sub.end - sub.start)
     fileResult.matches.push({
       line: lineNumber,
@@ -257,6 +266,7 @@ export function ingestRgJsonLine(
         ? { displayMatchLength: clamped.displayMatchLength }
         : {})
     })
+    acceptMatch(fileResult)
     acc.totalMatches++
     if (acc.totalMatches >= maxResults) {
       acc.truncated = true
@@ -386,28 +396,42 @@ export function ingestGitGrepLine(
     return 'continue'
   }
 
-  // Why: with --null -n the output format is filename\0linenum:content.
+  // Why: with --null -n, modern git emits filename\0linenum\0content.
+  // Keep the older colon parser too so relay hosts with different git output
+  // remain searchable.
   const nullIdx = line.indexOf('\0')
   if (nullIdx === -1) {
     return 'continue'
   }
   const relPath = normalizeRelativePath(line.substring(0, nullIdx))
   const rest = line.substring(nullIdx + 1)
-  const colonIdx = rest.indexOf(':')
-  if (colonIdx === -1) {
+  const secondNullIdx = rest.indexOf('\0')
+  let lineNumberText: string
+  let lineContent: string
+  if (secondNullIdx >= 0) {
+    lineNumberText = rest.substring(0, secondNullIdx)
+    lineContent = rest.substring(secondNullIdx + 1).replace(/\n$/, '')
+  } else {
+    const colonIdx = rest.indexOf(':')
+    if (colonIdx === -1) {
+      return 'continue'
+    }
+    lineNumberText = rest.substring(0, colonIdx)
+    lineContent = rest.substring(colonIdx + 1).replace(/\n$/, '')
+  }
+  if (!/^\d+$/.test(lineNumberText)) {
     return 'continue'
   }
-  const lineNum = parseInt(rest.substring(0, colonIdx), 10)
-  if (isNaN(lineNum)) {
-    return 'continue'
-  }
-  const lineContent = rest.substring(colonIdx + 1).replace(/\n$/, '')
+  const lineNum = Number(lineNumberText)
 
   const absPath = join(rootPath, relPath)
-  let fileResult = acc.fileMap.get(absPath)
-  if (!fileResult) {
-    fileResult = { filePath: absPath, relativePath: relPath, matches: [] }
-    acc.fileMap.set(absPath, fileResult)
+  const getFileResult = (): SearchFileResult => {
+    let fileResult = acc.fileMap.get(absPath)
+    if (!fileResult) {
+      fileResult = { filePath: absPath, relativePath: relPath, matches: [], matchCount: 0 }
+      acc.fileMap.set(absPath, fileResult)
+    }
+    return fileResult
   }
 
   // Why: git grep already confirmed the line matched — if we can't build a
@@ -416,6 +440,7 @@ export function ingestGitGrepLine(
   // whole-line highlight so the result still shows up in the UI.
   if (submatchRegex === null) {
     const clamped = clampLineContext(lineContent, 0, lineContent.length)
+    const fileResult = getFileResult()
     fileResult.matches.push({
       line: lineNum,
       column: clamped.column,
@@ -426,6 +451,7 @@ export function ingestGitGrepLine(
         ? { displayMatchLength: clamped.displayMatchLength }
         : {})
     })
+    acceptMatch(fileResult)
     acc.totalMatches++
     if (acc.totalMatches >= maxResults) {
       acc.truncated = true
@@ -436,8 +462,10 @@ export function ingestGitGrepLine(
 
   submatchRegex.lastIndex = 0
   let m: RegExpExecArray | null
+  let acceptedLineMatch = false
   while ((m = submatchRegex.exec(lineContent)) !== null) {
     const clamped = clampLineContext(lineContent, m.index, m[0].length)
+    const fileResult = getFileResult()
     fileResult.matches.push({
       line: lineNum,
       column: clamped.column,
@@ -448,6 +476,8 @@ export function ingestGitGrepLine(
         ? { displayMatchLength: clamped.displayMatchLength }
         : {})
     })
+    acceptMatch(fileResult)
+    acceptedLineMatch = true
     acc.totalMatches++
     if (acc.totalMatches >= maxResults) {
       acc.truncated = true
@@ -458,15 +488,38 @@ export function ingestGitGrepLine(
       submatchRegex.lastIndex++
     }
   }
+  // Why: git grep reported this line as a match, but JS regex semantics can
+  // still find no exact occurrence. Keep the result navigable instead of
+  // silently dropping a git-confirmed hit.
+  if (!acceptedLineMatch) {
+    const clamped = clampLineContext(lineContent, 0, lineContent.length)
+    const fileResult = getFileResult()
+    fileResult.matches.push({
+      line: lineNum,
+      column: clamped.column,
+      matchLength: clamped.matchLength,
+      lineContent: clamped.lineContent,
+      ...(clamped.displayColumn !== undefined ? { displayColumn: clamped.displayColumn } : {}),
+      ...(clamped.displayMatchLength !== undefined
+        ? { displayMatchLength: clamped.displayMatchLength }
+        : {})
+    })
+    acceptMatch(fileResult)
+    acc.totalMatches++
+    if (acc.totalMatches >= maxResults) {
+      acc.truncated = true
+      return 'stop'
+    }
+  }
   return 'continue'
 }
 
 // ─── finalize ───────────────────────────────────────────────────────
 
 export function finalize(acc: SearchAccumulator): SearchResult {
-  return {
-    files: Array.from(acc.fileMap.values()),
+  return normalizeSearchResult({
+    files: Array.from(acc.fileMap.values()).filter((file) => file.matches.length > 0),
     totalMatches: acc.totalMatches,
     truncated: acc.truncated
-  }
+  })
 }

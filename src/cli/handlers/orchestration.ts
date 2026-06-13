@@ -72,6 +72,54 @@ type MessageSummary = {
   payload?: string | null
 }
 
+function getOptionalStructuredMessagePayload(
+  flags: Map<string, string | boolean>
+): string | undefined {
+  const rawPayload = getOptionalStringFlag(flags, 'payload')
+  const taskId = getOptionalStringFlag(flags, 'task-id')
+  const dispatchId = getOptionalStringFlag(flags, 'dispatch-id')
+  const filesModified = getOptionalStringFlag(flags, 'files-modified')
+  const reportPath = getOptionalStringFlag(flags, 'report-path')
+  const phase = getOptionalStringFlag(flags, 'phase')
+  const hasStructuredPayload =
+    taskId !== undefined ||
+    dispatchId !== undefined ||
+    filesModified !== undefined ||
+    reportPath !== undefined ||
+    phase !== undefined
+  if (!hasStructuredPayload) {
+    return rawPayload
+  }
+  if (rawPayload !== undefined) {
+    throw new RuntimeClientError(
+      'invalid_argument',
+      'Use either --payload or structured payload flags, not both.'
+    )
+  }
+  // Why: raw JSON arguments are fragile in Windows PowerShell; these flags let
+  // workers send parseable orchestration payloads without shell-specific quoting.
+  const payload: Record<string, string | string[]> = {}
+  if (taskId) {
+    payload.taskId = taskId
+  }
+  if (dispatchId) {
+    payload.dispatchId = dispatchId
+  }
+  if (filesModified) {
+    payload.filesModified = filesModified
+      .split(',')
+      .map((file) => file.trim())
+      .filter(Boolean)
+  }
+  if (reportPath) {
+    payload.reportPath = reportPath
+  }
+  if (phase) {
+    payload.phase = phase
+  }
+  return JSON.stringify(payload)
+}
+
 async function resolveOrchestrationTerminalHandle(
   flags: Map<string, string | boolean>,
   cwd: string,
@@ -127,7 +175,7 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
       type: getOptionalStringFlag(flags, 'type'),
       priority: getOptionalStringFlag(flags, 'priority'),
       threadId: getOptionalStringFlag(flags, 'thread-id'),
-      payload: getOptionalStringFlag(flags, 'payload'),
+      payload: getOptionalStructuredMessagePayload(flags),
       devMode: isDevCliInvocation()
     })
     printResult(result, json, (r) => {

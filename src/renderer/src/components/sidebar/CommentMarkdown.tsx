@@ -1,5 +1,5 @@
 import React from 'react'
-import Markdown from 'react-markdown'
+import Markdown, { defaultUrlTransform } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import remarkBreaks from 'remark-breaks'
 import rehypeRaw from 'rehype-raw'
@@ -8,6 +8,7 @@ import type { Components } from 'react-markdown'
 import { cn } from '@/lib/utils'
 
 type MarkdownPlugins = NonNullable<React.ComponentProps<typeof Markdown>['rehypePlugins']>
+type UrlTransform = NonNullable<React.ComponentProps<typeof Markdown>['urlTransform']>
 
 type GitHubRepoReference = {
   owner: string
@@ -30,6 +31,84 @@ type MarkdownNode = {
   type: string
   value?: string
   children?: MarkdownNode[]
+}
+
+function isTrustedCompactImageSrc(src: string | undefined): src is string {
+  if (!src) {
+    return false
+  }
+  const normalized = src.trim().toLowerCase()
+  return (
+    normalized.startsWith('blob:') || /^data:image\/(?:png|jpe?g|gif|webp);base64,/.test(normalized)
+  )
+}
+
+function isGitHubUserAttachmentUrl(href: string | undefined): href is string {
+  if (!href) {
+    return false
+  }
+  try {
+    const url = new URL(href)
+    return (
+      url.protocol === 'https:' &&
+      url.hostname === 'github.com' &&
+      url.pathname.startsWith('/user-attachments/assets/')
+    )
+  } catch {
+    return false
+  }
+}
+
+function isBareAutolink(children: React.ReactNode, href: string): boolean {
+  const text = React.Children.toArray(children).join('').trim()
+  return text === href
+}
+
+function GitHubUserAttachmentVideo({
+  href,
+  children
+}: {
+  href: string
+  children: React.ReactNode
+}): React.ReactElement {
+  const [failed, setFailed] = React.useState(false)
+
+  if (failed) {
+    return (
+      <a
+        href={href}
+        target="_blank"
+        rel="noreferrer"
+        className="break-all text-primary underline underline-offset-2 hover:text-primary/80"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {children}
+      </a>
+    )
+  }
+
+  return (
+    <video
+      src={href}
+      controls
+      preload="metadata"
+      playsInline
+      className="my-3 max-h-[28rem] max-w-full rounded-md bg-black/80 outline outline-1 outline-black/10 dark:outline-white/10"
+      onClick={(e) => e.stopPropagation()}
+      onError={() => setFailed(true)}
+    >
+      <a href={href} target="_blank" rel="noreferrer">
+        {children}
+      </a>
+    </video>
+  )
+}
+
+const commentMarkdownUrlTransform: UrlTransform = (value, key, node) => {
+  if (key === 'src' && node?.tagName === 'img' && isTrustedCompactImageSrc(value)) {
+    return value
+  }
+  return defaultUrlTransform(value)
 }
 
 // Why: sidebar comments are rendered at 11px in a narrow card, so we strip
@@ -97,20 +176,42 @@ const compactComponents: Components = {
       {children}
     </blockquote>
   ),
-  // Why: images in a ~200px sidebar card would blow out the layout or look
-  // broken at any reasonable size. Render as a text link instead so the URL is
-  // still accessible without disrupting the card.
-  img: ({ alt, src }) => (
-    <a
-      href={src}
-      target="_blank"
-      rel="noreferrer"
-      className="underline underline-offset-2 text-foreground/80 hover:text-foreground"
-      onClick={(e) => e.stopPropagation()}
-    >
-      {alt || 'image'}
-    </a>
-  ),
+  // Why: agent replies and workspace notes often carry screenshot markdown
+  // like "Image #1"; compact cards inline app-managed thumbnails without
+  // auto-fetching arbitrary remote image URLs.
+  img: ({ alt, src }) => {
+    if (!isTrustedCompactImageSrc(src)) {
+      if (!src) {
+        return alt ? <span>{alt}</span> : null
+      }
+      return (
+        <a
+          href={src}
+          target="_blank"
+          rel="noreferrer"
+          className="underline underline-offset-2 text-foreground/80 hover:text-foreground"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {alt || src}
+        </a>
+      )
+    }
+
+    const image = (
+      <img
+        src={src}
+        alt={alt ?? ''}
+        className="my-1 max-h-32 max-w-full rounded-sm object-contain outline outline-1 outline-border/70"
+      />
+    )
+    return src ? (
+      <a href={src} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}>
+        {image}
+      </a>
+    ) : (
+      image
+    )
+  },
   // Why: GFM tables in a ~200px sidebar would overflow badly. Wrapping in an
   // overflow container keeps the card layout stable while still letting the
   // user scroll to see the full table.
@@ -125,17 +226,22 @@ const compactComponents: Components = {
 
 const documentComponents: Components = {
   p: ({ children }) => <p className="my-2 first:mt-0 last:mb-0">{children}</p>,
-  a: ({ href, children }) => (
-    <a
-      href={href}
-      target="_blank"
-      rel="noreferrer"
-      className="break-all text-primary underline underline-offset-2 hover:text-primary/80"
-      onClick={(e) => e.stopPropagation()}
-    >
-      {children}
-    </a>
-  ),
+  a: ({ href, children }) =>
+    isGitHubUserAttachmentUrl(href) && isBareAutolink(children, href) ? (
+      // Why: GitHub's API returns uploaded videos as bare attachment links;
+      // GitHub.com upgrades them to media embeds in its own renderer.
+      <GitHubUserAttachmentVideo href={href}>{children}</GitHubUserAttachmentVideo>
+    ) : (
+      <a
+        href={href}
+        target="_blank"
+        rel="noreferrer"
+        className="break-all text-primary underline underline-offset-2 hover:text-primary/80"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {children}
+      </a>
+    ),
   code: ({ children }) => (
     <code className="rounded bg-accent px-1.5 py-0.5 font-mono text-[0.92em] [overflow-wrap:anywhere]">
       {children}
@@ -296,6 +402,10 @@ const commentMarkdownSanitizeSchema = {
     input: [...(defaultSchema.attributes?.input ?? []), 'type', 'checked', 'disabled'],
     td: [...(defaultSchema.attributes?.td ?? []), 'align'],
     th: [...(defaultSchema.attributes?.th ?? []), 'align']
+  },
+  protocols: {
+    ...defaultSchema.protocols,
+    src: [...(defaultSchema.protocols?.src ?? []), 'data', 'blob']
   }
 }
 
@@ -340,6 +450,7 @@ const CommentMarkdown = React.memo(
           remarkPlugins={activeRemarkPlugins}
           rehypePlugins={rehypePlugins}
           components={components}
+          urlTransform={commentMarkdownUrlTransform}
         >
           {content}
         </Markdown>

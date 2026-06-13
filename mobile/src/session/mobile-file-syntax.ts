@@ -110,6 +110,9 @@ export function highlightMobileDiffLines<TLine extends { text: string }>(
 
     attemptedLines += 1
     attemptedChars += line.text.length
+    if (line.text.trim().length === 0) {
+      return plainHighlightedLine(line)
+    }
     const result = highlightMobileCode(
       line.text,
       language,
@@ -172,14 +175,30 @@ function tokenKindForClasses(className: unknown): MobileSyntaxTokenKind | null {
       : []
 
   const tokens = new Set(classes.map((value) => value.replace(/^hljs-/, '')))
-  if (hasAny(tokens, ['comment', 'quote'])) return 'comment'
-  if (hasAny(tokens, ['keyword', 'selector-tag', 'tag', 'name'])) return 'keyword'
-  if (hasAny(tokens, ['string', 'regexp', 'symbol', 'bullet'])) return 'string'
-  if (hasAny(tokens, ['number', 'literal'])) return 'number'
-  if (hasAny(tokens, ['type', 'built_in', 'class', 'title.class'])) return 'type'
-  if (hasAny(tokens, ['title.function', 'function', 'title'])) return 'function'
-  if (hasAny(tokens, ['attr', 'attribute', 'property', 'variable', 'params'])) return 'variable'
-  if (hasAny(tokens, ['meta', 'doctag', 'subst', 'section'])) return 'meta'
+  if (hasAny(tokens, ['comment', 'quote'])) {
+    return 'comment'
+  }
+  if (hasAny(tokens, ['keyword', 'selector-tag', 'tag', 'name'])) {
+    return 'keyword'
+  }
+  if (hasAny(tokens, ['string', 'regexp', 'symbol', 'bullet'])) {
+    return 'string'
+  }
+  if (hasAny(tokens, ['number', 'literal'])) {
+    return 'number'
+  }
+  if (hasAny(tokens, ['type', 'built_in', 'class', 'title.class'])) {
+    return 'type'
+  }
+  if (hasAny(tokens, ['title.function', 'function', 'title'])) {
+    return 'function'
+  }
+  if (hasAny(tokens, ['attr', 'attribute', 'property', 'variable', 'params'])) {
+    return 'variable'
+  }
+  if (hasAny(tokens, ['meta', 'doctag', 'subst', 'section'])) {
+    return 'meta'
+  }
   return null
 }
 

@@ -8,6 +8,7 @@ function inputs(overrides: Partial<DropdownActionInputs> = {}): DropdownActionIn
   return {
     stagedCount: 0,
     hasUnstagedChanges: false,
+    hasStageableChanges: false,
     hasPartiallyStagedChanges: false,
     hasMessage: false,
     hasUnresolvedConflicts: false,
@@ -34,6 +35,7 @@ describe('resolveDropdownItems', () => {
       'commit_sync',
       'separator',
       'push',
+      'force_push',
       'create_pr',
       'push_create_pr',
       'pull',
@@ -93,6 +95,23 @@ describe('resolveDropdownItems', () => {
     expect(byKind.fetch.disabled).toBe(false)
   })
 
+  it('does not offer Publish Branch when HEAD is detached', () => {
+    const items = resolveDropdownItems(
+      inputs({
+        upstreamStatus: { hasUpstream: false, ahead: 0, behind: 0 },
+        branchCommitsAhead: 4,
+        hasCurrentBranch: false
+      })
+    )
+    const byKind = Object.fromEntries(
+      items.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
+    )
+    expect(byKind.push.title).toBe('Check out a branch before pushing commits')
+    expect(byKind.publish.label).toBe('No Branch')
+    expect(byKind.publish.title).toBe('Check out a branch before publishing commits')
+    expect(byKind.publish.disabled).toBe(true)
+  })
+
   it('disables Publish Branch when branch already has an upstream', () => {
     const items = resolveDropdownItems(
       inputs({
@@ -113,6 +132,7 @@ describe('resolveDropdownItems', () => {
       items.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
     )
     expect(byKind.push.label).toBe('Push (3)')
+    expect(byKind.force_push.label).toBe('Force Push (3)')
     expect(byKind.pull.label).toBe('Pull (2)')
     expect(byKind.sync.label).toBe('Sync (↓2 ↑3)')
   })
@@ -163,9 +183,12 @@ describe('resolveDropdownItems', () => {
       items.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
     )
 
-    expect(byKind.push.label).toBe('Force Push (4)')
-    expect(byKind.push.disabled).toBe(false)
-    expect(byKind.push.title).toBe(
+    expect(byKind.push.label).toBe('Push (14)')
+    expect(byKind.push.disabled).toBe(true)
+    expect(byKind.push.title).toBe('Use Force Push — remote only has older copies of local commits')
+    expect(byKind.force_push.label).toBe('Force Push (4)')
+    expect(byKind.force_push.disabled).toBe(false)
+    expect(byKind.force_push.title).toBe(
       'Remote only has older copies of local commits. Force push 4 branch commits with lease to update origin/feature.'
     )
     expect(byKind.commit_push.label).toBe('Commit & Force Push')
@@ -191,6 +214,30 @@ describe('resolveDropdownItems', () => {
     expect(byKind.push_create_pr.disabled).toBe(false)
   })
 
+  it('offers explicit force-push-with-lease for an ordinary ahead branch', () => {
+    const items = resolveDropdownItems(
+      inputs({
+        upstreamStatus: {
+          hasUpstream: true,
+          upstreamName: 'origin/feature',
+          ahead: 1,
+          behind: 0
+        }
+      })
+    )
+    const byKind = Object.fromEntries(
+      items.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
+    )
+
+    expect(byKind.push.label).toBe('Push (1)')
+    expect(byKind.push.disabled).toBe(false)
+    expect(byKind.force_push.label).toBe('Force Push (1)')
+    expect(byKind.force_push.disabled).toBe(false)
+    expect(byKind.force_push.title).toBe(
+      'Force push 1 local commit with lease to update origin/feature.'
+    )
+  })
+
   it('omits counts from labels when ahead/behind are 0', () => {
     const items = resolveDropdownItems(
       inputs({ upstreamStatus: { hasUpstream: true, ahead: 0, behind: 0 } })
@@ -199,6 +246,7 @@ describe('resolveDropdownItems', () => {
       items.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
     )
     expect(byKind.push.label).toBe('Push')
+    expect(byKind.force_push.label).toBe('Force Push')
     expect(byKind.pull.label).toBe('Pull')
     expect(byKind.sync.label).toBe('Sync')
   })
@@ -289,7 +337,7 @@ describe('resolveDropdownItems', () => {
     })
   })
 
-  it('locks every item while a pull request operation is running', () => {
+  it('locks every item while a hosted review operation is running', () => {
     const items = resolveDropdownItems(
       inputs({
         isPullRequestOperationActive: true,
@@ -307,7 +355,7 @@ describe('resolveDropdownItems', () => {
     for (const entry of items) {
       if (entry.kind !== 'separator') {
         expect(entry.disabled).toBe(true)
-        expect(entry.title).toBe('Pull request operation in progress…')
+        expect(entry.title).toBe('Hosted review operation in progress…')
       }
     }
   })
@@ -326,6 +374,7 @@ describe('resolveDropdownItems', () => {
       'commit_push',
       'commit_sync',
       'push',
+      'force_push',
       'pull',
       'fast_forward',
       'sync',
@@ -407,6 +456,22 @@ describe('resolveDropdownItems', () => {
     )
     expect(byKind.publish.label).toBe('No Branch Changes')
     expect(byKind.publish.title).toBe('Nothing to publish')
+    expect(byKind.publish.disabled).toBe(true)
+  })
+
+  it('points an unpublished dirty branch with no commits at committing first', () => {
+    const items = resolveDropdownItems(
+      inputs({
+        stagedCount: 1,
+        upstreamStatus: { hasUpstream: false, ahead: 0, behind: 0 },
+        branchCommitsAhead: 0
+      })
+    )
+    const byKind = Object.fromEntries(
+      items.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
+    )
+    expect(byKind.publish.label).toBe('Commit Changes First')
+    expect(byKind.publish.title).toBe('Commit changes before publishing the branch')
     expect(byKind.publish.disabled).toBe(true)
   })
 
@@ -506,5 +571,47 @@ describe('resolveDropdownItems', () => {
     expect(byKind.create_pr.hint).toBe('Push first')
     expect(byKind.push_create_pr.label).toBe('Push before PR')
     expect(byKind.push_create_pr.disabled).toBe(false)
+  })
+
+  it('uses GitLab MR copy for create and push-before-create rows', () => {
+    const items = resolveDropdownItems(
+      inputs({
+        upstreamStatus: { hasUpstream: true, ahead: 2, behind: 0 },
+        hostedReviewCreation: {
+          provider: 'gitlab',
+          review: null,
+          canCreate: false,
+          blockedReason: 'needs_push',
+          nextAction: 'push'
+        }
+      })
+    )
+    const byKind = Object.fromEntries(
+      items.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
+    )
+    expect(byKind.create_pr.label).toBe('Create MR')
+    expect(byKind.create_pr.hint).toBe('Push first')
+    expect(byKind.push_create_pr.label).toBe('Push before MR')
+    expect(byKind.push_create_pr.title).toBe('Push local commits before creating a merge request')
+    expect(byKind.push_create_pr.disabled).toBe(false)
+  })
+
+  it('uses GitLab auth copy when MR creation needs authentication', () => {
+    const items = resolveDropdownItems(
+      inputs({
+        upstreamStatus: { hasUpstream: true, ahead: 0, behind: 0 },
+        hostedReviewCreation: {
+          provider: 'gitlab',
+          review: null,
+          canCreate: false,
+          blockedReason: 'auth_required',
+          nextAction: 'authenticate'
+        }
+      })
+    )
+    const byKind = Object.fromEntries(
+      items.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
+    )
+    expect(byKind.create_pr.hint).toBe('Run glab auth login in this environment')
   })
 })

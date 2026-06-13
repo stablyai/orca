@@ -8,17 +8,31 @@ import type { AppState } from '../types'
 import type {
   Repo,
   ProjectGroup,
+  FolderWorkspace,
   ProjectGroupImportResult,
   NestedRepoScanResult
 } from '../../../../shared/types'
+import {
+  FOLDER_WORKSPACE_PATH_STATUS_TTL_MS,
+  type FolderWorkspacePathStatus,
+  type FolderWorkspacePathStatusRequest
+} from '../../../../shared/folder-workspace-path-status'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import { sanitizeRepoIcon } from '../../../../shared/repo-icon'
 import { normalizeRepoBadgeColor } from '../../../../shared/repo-badge-color'
 import { getProjectGroupSubtreeIds } from '../../../../shared/project-groups'
+import { isPathInsideOrEqual } from '../../../../shared/cross-platform-path'
+import { selectProjectGroupRemovalTargets } from './project-group-removal-targets'
 import { getRepoIdFromWorktreeId } from './worktree-helpers'
+import { reconcileFetchedRepos } from './repo-identity-reconcile'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '../../runtime/runtime-rpc-client'
-import { buildDismissedOnboardingFolderAgentStartup } from '@/lib/onboarding-folder-agent-startup'
-import { filterSetupScriptPromptDismissalsToValidRepos } from '@/lib/setup-script-prompt'
+import { toRuntimeWorktreeSelector } from '../../runtime/runtime-worktree-selector'
+import { buildDismissedOnboardingFolderAgentStartup } from '../../lib/onboarding-folder-agent-startup'
+import { markOnboardingProjectAdded } from '../../lib/onboarding-project-checklist'
+import { filterSetupScriptPromptDismissalsToValidRepos } from '../../lib/setup-script-prompt'
+import { translate } from '../../i18n/i18n'
+import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
+import { formatFolderWorkspaceCreateError } from '../../lib/folder-workspace-path-status'
 
 const ERROR_TOAST_DURATION = 60_000
 
@@ -28,8 +42,10 @@ type RepoUpdate = Partial<
     | 'displayName'
     | 'badgeColor'
     | 'repoIcon'
+    | 'upstream'
     | 'hookSettings'
     | 'worktreeBaseRef'
+    | 'worktreeBasePath'
     | 'kind'
     | 'symlinkPaths'
     | 'issueSourcePreference'
@@ -37,9 +53,54 @@ type RepoUpdate = Partial<
     | 'externalWorktreeVisibilityPromptDismissedAt'
     | 'projectGroupId'
     | 'projectGroupOrder'
-    | 'sourceControlAi'
   >
->
+> & { sourceControlAi?: Repo['sourceControlAi'] | null }
+
+type NestedRepoScanControls = {
+  scanId?: string
+  onProgress?: (scan: NestedRepoScanResult) => void
+}
+
+export type FolderWorkspacePathStatusCacheEntry = {
+  status: FolderWorkspacePathStatus
+  checkedAt: number
+  requestSnapshot: string
+}
+
+export type DeleteProjectGroupWithContainedProjectsOptions = {
+  removeContainedProjects: boolean
+}
+
+export type ProjectRemovalFailure = {
+  projectId: string
+  reason: string
+}
+
+export type DeleteProjectGroupWithContainedProjectsResult =
+  | {
+      status: 'deleted-group'
+      groupId: string
+      requestedProjectIds: string[]
+      removedProjectIds: string[]
+      failedProjectRemovals: ProjectRemovalFailure[]
+    }
+  | {
+      status: 'missing-group' | 'group-delete-failed'
+      groupId: string
+      requestedProjectIds: string[]
+      removedProjectIds: []
+      failedProjectRemovals: []
+    }
+
+function normalizeNestedRepoScanResult(scan: NestedRepoScanResult): NestedRepoScanResult {
+  return {
+    ...scan,
+    stopped: scan.stopped ?? false,
+    maxDepth: scan.maxDepth ?? 3,
+    maxRepos: scan.maxRepos ?? 100,
+    timeoutMs: scan.timeoutMs ?? null
+  }
+}
 
 function sanitizeRepoUpdate(updates: RepoUpdate): RepoUpdate {
   const sanitized = { ...updates }
@@ -58,6 +119,9 @@ function sanitizeRepoUpdate(updates: RepoUpdate): RepoUpdate {
     } else {
       sanitized.repoIcon = repoIcon
     }
+  }
+  if ('worktreeBasePath' in sanitized && sanitized.worktreeBasePath !== undefined) {
+    sanitized.worktreeBasePath = sanitized.worktreeBasePath.trim() || undefined
   }
   return sanitized
 }
@@ -84,29 +148,189 @@ function getKnownRepoWorktreeIds(state: AppState, projectId: string): string[] {
   return [...ids]
 }
 
+function getFolderWorkspacePathStatusScopeKey(request: FolderWorkspacePathStatusRequest): string {
+  return request.scope === 'project-group'
+    ? `project-group:${request.projectGroupId}`
+    : `folder-workspace:${request.folderWorkspaceId}`
+}
+
+function getRuntimeTargetCachePrefix(state: AppState): string {
+  const target = getActiveRuntimeTarget(state.settings)
+  return target.kind === 'local' ? 'local' : `environment:${target.environmentId}`
+}
+
+function getFolderWorkspaceStatusRequestSnapshot(
+  state: Pick<AppState, 'projectGroups' | 'folderWorkspaces' | 'repos' | 'sshConnectionStates'>,
+  request: FolderWorkspacePathStatusRequest
+): string | null {
+  const scope =
+    request.scope === 'project-group'
+      ? state.projectGroups.find((group) => group.id === request.projectGroupId)
+      : state.folderWorkspaces.find((workspace) => workspace.id === request.folderWorkspaceId)
+  const projectGroup =
+    request.scope === 'project-group'
+      ? scope && 'parentPath' in scope
+        ? scope
+        : null
+      : scope && 'projectGroupId' in scope
+        ? state.projectGroups.find((group) => group.id === scope.projectGroupId)
+        : null
+  const folderPath =
+    request.scope === 'project-group'
+      ? scope && 'parentPath' in scope
+        ? scope.parentPath
+        : null
+      : scope && 'folderPath' in scope
+        ? scope.folderPath
+        : null
+  const projectGroupId =
+    request.scope === 'project-group'
+      ? request.projectGroupId
+      : scope && 'projectGroupId' in scope
+        ? scope.projectGroupId
+        : null
+  const scopeConnectionId =
+    request.scope === 'project-group'
+      ? scope && 'parentPath' in scope
+        ? scope.connectionId
+        : null
+      : scope && 'folderPath' in scope
+        ? (scope.connectionId ?? projectGroup?.connectionId)
+        : null
+  if (!folderPath || !projectGroupId) {
+    return null
+  }
+  const groupIds = getProjectGroupSubtreeIds(state.projectGroups, projectGroupId)
+  const candidateRepos = state.repos.filter(
+    (repo) =>
+      (typeof repo.projectGroupId === 'string' && groupIds.has(repo.projectGroupId)) ||
+      isPathInsideOrEqual(folderPath, repo.path)
+  )
+  const relevantConnectionIds = new Set<string>()
+  if (scopeConnectionId) {
+    relevantConnectionIds.add(scopeConnectionId)
+  }
+  for (const repo of candidateRepos) {
+    if (repo.connectionId) {
+      relevantConnectionIds.add(repo.connectionId)
+    }
+  }
+  const sshFingerprint = [...relevantConnectionIds]
+    .map(
+      (connectionId) =>
+        `${connectionId}:${state.sshConnectionStates.get(connectionId)?.status ?? 'missing'}`
+    )
+    .sort()
+    .join('|')
+  const repoFingerprint = candidateRepos
+    .map(
+      (repo) => `${repo.id}:${repo.path}:${repo.projectGroupId ?? ''}:${repo.connectionId ?? ''}`
+    )
+    .sort()
+    .join('|')
+  return [
+    folderPath,
+    projectGroupId,
+    scopeConnectionId ?? '',
+    sshFingerprint,
+    repoFingerprint
+  ].join('\0')
+}
+
+function getFreshFolderWorkspacePathStatusFromCache(args: {
+  entry: FolderWorkspacePathStatusCacheEntry | undefined
+  requestSnapshot: string | null
+}): FolderWorkspacePathStatus | null {
+  const { entry, requestSnapshot } = args
+  if (!entry || requestSnapshot === null || entry.requestSnapshot !== requestSnapshot) {
+    return null
+  }
+  return Date.now() - entry.checkedAt < FOLDER_WORKSPACE_PATH_STATUS_TTL_MS ? entry.status : null
+}
+
+function getFolderWorkspacePathStatusRequestSnapshotForRead(
+  state: AppState,
+  request: FolderWorkspacePathStatusRequest
+): string | null {
+  return getFolderWorkspaceStatusRequestSnapshot(state, request)
+}
+
 export type RepoSlice = {
   repos: Repo[]
   projectGroups: ProjectGroup[]
+  folderWorkspaces: FolderWorkspace[]
+  folderWorkspacePathStatuses: Record<string, FolderWorkspacePathStatusCacheEntry>
   activeRepoId: string | null
   fetchRepos: () => Promise<void>
   fetchProjectGroups: () => Promise<void>
+  fetchFolderWorkspaces: () => Promise<void>
   addRepo: () => Promise<Repo | null>
   addRepoPath: (path: string, kind?: 'git' | 'folder') => Promise<Repo | null>
   addNonGitFolder: (path: string) => Promise<Repo | null>
-  scanNestedRepos: (path: string, connectionId?: string) => Promise<NestedRepoScanResult | null>
+  scanNestedRepos: (
+    path: string,
+    connectionId?: string,
+    controls?: NestedRepoScanControls
+  ) => Promise<NestedRepoScanResult | null>
+  cancelNestedRepoScan: (scanId: string) => Promise<boolean>
   importNestedRepos: (args: {
     parentPath: string
     groupName: string
     projectPaths: string[]
     connectionId?: string
+    scanId?: string
     mode: 'group' | 'separate'
   }) => Promise<ProjectGroupImportResult | null>
   createProjectGroup: (name: string) => Promise<ProjectGroup | null>
+  createFolderWorkspace: (args: {
+    projectGroupId: string
+    name?: string
+    folderPath?: string | null
+    connectionId?: string | null
+    linkedTask?: FolderWorkspace['linkedTask']
+    createdWithAgent?: FolderWorkspace['createdWithAgent']
+    pendingFirstAgentMessageRename?: boolean
+  }) => Promise<FolderWorkspace | null>
+  getFolderWorkspacePathStatusCacheKey: (request: FolderWorkspacePathStatusRequest) => string
+  getFreshFolderWorkspacePathStatus: (
+    request: FolderWorkspacePathStatusRequest
+  ) => FolderWorkspacePathStatus | null
+  fetchFolderWorkspacePathStatus: (
+    request: FolderWorkspacePathStatusRequest,
+    options?: { force?: boolean }
+  ) => Promise<FolderWorkspacePathStatus | null>
+  updateFolderWorkspace: (
+    folderWorkspaceId: string,
+    updates: Partial<
+      Pick<
+        FolderWorkspace,
+        | 'name'
+        | 'folderPath'
+        | 'linkedTask'
+        | 'comment'
+        | 'isArchived'
+        | 'isUnread'
+        | 'isPinned'
+        | 'sortOrder'
+        | 'manualOrder'
+        | 'workspaceStatus'
+        | 'createdWithAgent'
+        | 'pendingFirstAgentMessageRename'
+        | 'firstAgentMessageRenameError'
+        | 'lastActivityAt'
+      >
+    >
+  ) => Promise<boolean>
+  deleteFolderWorkspace: (folderWorkspaceId: string) => Promise<boolean>
   updateProjectGroup: (
     groupId: string,
     updates: Partial<Pick<ProjectGroup, 'name' | 'isCollapsed' | 'tabOrder' | 'color'>>
   ) => Promise<boolean>
   deleteProjectGroup: (groupId: string) => Promise<boolean>
+  deleteProjectGroupWithContainedProjects: (
+    groupId: string,
+    options: DeleteProjectGroupWithContainedProjectsOptions
+  ) => Promise<DeleteProjectGroupWithContainedProjectsResult>
   moveProjectToGroup: (
     projectId: string,
     groupId: string | null,
@@ -121,6 +345,8 @@ export type RepoSlice = {
 export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, get) => ({
   repos: [],
   projectGroups: [],
+  folderWorkspaces: [],
+  folderWorkspacePathStatuses: {},
   activeRepoId: null,
 
   fetchRepos: async () => {
@@ -142,8 +368,10 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
             ).repos
       set((s) => {
         const validRepoIds = new Set(repos.map((repo) => repo.id))
+        const reconciledRepos = reconcileFetchedRepos(s.repos, repos)
         return {
-          repos,
+          repos: reconciledRepos,
+          folderWorkspacePathStatuses: {},
           activeRepoId: s.activeRepoId && validRepoIds.has(s.activeRepoId) ? s.activeRepoId : null,
           filterRepoIds: s.filterRepoIds.filter((projectId) => validRepoIds.has(projectId)),
           setupScriptPromptDismissedRepoIds: filterSetupScriptPromptDismissalsToValidRepos(
@@ -173,29 +401,134 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
                 }
               )
             ).groups
-      set({ projectGroups })
+      set({ projectGroups, folderWorkspacePathStatuses: {} })
     } catch (err) {
       console.error('Failed to fetch project groups:', err)
     }
   },
 
-  scanNestedRepos: async (path, connectionId) => {
+  fetchFolderWorkspaces: async () => {
     try {
       const target = getActiveRuntimeTarget(get().settings)
-      return target.kind === 'local'
-        ? await window.api.projectGroups.scanNested({
-            path,
-            connectionId
-          })
-        : await callRuntimeRpc<NestedRepoScanResult>(
-            target,
-            'projectGroup.scanNested',
-            { path },
-            { timeoutMs: 15_000 }
+      const folderWorkspaces =
+        target.kind === 'local'
+          ? await window.api.folderWorkspaces.list()
+          : (
+              await callRuntimeRpc<{ folderWorkspaces: FolderWorkspace[] }>(
+                target,
+                'folderWorkspace.list',
+                undefined,
+                { timeoutMs: 15_000 }
+              )
+            ).folderWorkspaces
+      set({ folderWorkspaces, folderWorkspacePathStatuses: {} })
+    } catch (err) {
+      console.error('Failed to fetch folder workspaces:', err)
+    }
+  },
+
+  getFolderWorkspacePathStatusCacheKey: (request) =>
+    `${getRuntimeTargetCachePrefix(get())}:${getFolderWorkspacePathStatusScopeKey(request)}`,
+
+  getFreshFolderWorkspacePathStatus: (request) => {
+    const state = get()
+    const cacheKey = get().getFolderWorkspacePathStatusCacheKey(request)
+    const cached = state.folderWorkspacePathStatuses[cacheKey]
+    const requestSnapshot = getFolderWorkspacePathStatusRequestSnapshotForRead(state, request)
+    return getFreshFolderWorkspacePathStatusFromCache({ entry: cached, requestSnapshot })
+  },
+
+  fetchFolderWorkspacePathStatus: async (request, options) => {
+    const cacheKey = get().getFolderWorkspacePathStatusCacheKey(request)
+    const requestSnapshot = getFolderWorkspaceStatusRequestSnapshot(get(), request)
+    const cached = get().folderWorkspacePathStatuses[cacheKey]
+    const freshCachedStatus = getFreshFolderWorkspacePathStatusFromCache({
+      entry: cached,
+      requestSnapshot
+    })
+    if (!options?.force && freshCachedStatus) {
+      return freshCachedStatus
+    }
+    try {
+      const target = getActiveRuntimeTarget(get().settings)
+      const status =
+        target.kind === 'local'
+          ? await window.api.folderWorkspaces.getPathStatus(request)
+          : (
+              await callRuntimeRpc<{ status: FolderWorkspacePathStatus }>(
+                target,
+                'folderWorkspace.getPathStatus',
+                request,
+                { timeoutMs: 15_000 }
+              )
+            ).status
+      set((state) => ({
+        folderWorkspacePathStatuses:
+          requestSnapshot !== null &&
+          getFolderWorkspaceStatusRequestSnapshot(state, request) === requestSnapshot
+            ? {
+                ...state.folderWorkspacePathStatuses,
+                [cacheKey]: { status, checkedAt: Date.now(), requestSnapshot }
+              }
+            : state.folderWorkspacePathStatuses
+      }))
+      return status
+    } catch (err) {
+      console.error('Failed to fetch folder workspace path status:', err)
+      return null
+    }
+  },
+
+  scanNestedRepos: async (path, connectionId, controls) => {
+    try {
+      const target = getActiveRuntimeTarget(get().settings)
+      if (target.kind === 'local') {
+        const unsubscribe =
+          controls?.scanId && controls.onProgress
+            ? window.api.projectGroups.onNestedScanProgress(({ scanId, scan }) => {
+                if (scanId === controls.scanId) {
+                  controls.onProgress?.(normalizeNestedRepoScanResult(scan))
+                }
+              })
+            : undefined
+        try {
+          return normalizeNestedRepoScanResult(
+            await window.api.projectGroups.scanNested({
+              path,
+              connectionId,
+              scanId: controls?.scanId
+            })
           )
+        } finally {
+          unsubscribe?.()
+        }
+      }
+      return normalizeNestedRepoScanResult(
+        await callRuntimeRpc<NestedRepoScanResult>(
+          target,
+          'projectGroup.scanNested',
+          { path },
+          // Why: older runtime servers cannot stream or cancel scans, so the
+          // renderer must retain a bounded failure path for large folders.
+          { timeoutMs: 20_000 }
+        )
+      )
     } catch (err) {
       console.error('Failed to scan nested repos:', err)
       return null
+    }
+  },
+
+  cancelNestedRepoScan: async (scanId) => {
+    try {
+      const target = getActiveRuntimeTarget(get().settings)
+      if (target.kind !== 'local') {
+        return false
+      }
+      return await window.api.projectGroups.cancelNestedScan({ scanId })
+    } catch (err) {
+      console.error('Failed to cancel nested repo scan:', err)
+      return false
     }
   },
 
@@ -212,18 +545,24 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
                 parentPath: args.parentPath,
                 groupName: args.groupName,
                 projectPaths: args.projectPaths,
+                scanId: args.scanId,
                 mode: args.mode
               },
               { timeoutMs: 60_000 }
             )
       await get().fetchProjectGroups()
+      await get().fetchFolderWorkspaces()
       await get().fetchRepos()
+      set({ folderWorkspacePathStatuses: {} })
       return result
     } catch (err) {
       console.error('Failed to import nested repos:', err)
-      toast.error('Failed to import repositories', {
-        description: err instanceof Error ? err.message : String(err)
-      })
+      toast.error(
+        translate('auto.store.slices.repos.6d3318e813', 'Failed to import repositories'),
+        {
+          description: err instanceof Error ? err.message : String(err)
+        }
+      )
       return null
     }
   },
@@ -245,11 +584,100 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
                 { timeoutMs: 15_000 }
               )
             ).group
-      set((s) => ({ projectGroups: [...s.projectGroups, group] }))
+      set((s) => ({ projectGroups: [...s.projectGroups, group], folderWorkspacePathStatuses: {} }))
       return group
     } catch (err) {
       console.error('Failed to create project group:', err)
       return null
+    }
+  },
+
+  createFolderWorkspace: async (args) => {
+    try {
+      const target = getActiveRuntimeTarget(get().settings)
+      const workspace =
+        target.kind === 'local'
+          ? await window.api.folderWorkspaces.create(args)
+          : (
+              await callRuntimeRpc<{ folderWorkspace: FolderWorkspace }>(
+                target,
+                'folderWorkspace.create',
+                args,
+                { timeoutMs: 15_000 }
+              )
+            ).folderWorkspace
+      set((s) => ({
+        folderWorkspaces: [workspace, ...s.folderWorkspaces],
+        folderWorkspacePathStatuses: {}
+      }))
+      return workspace
+    } catch (err) {
+      console.error('Failed to create folder workspace:', err)
+      const { title, description } = formatFolderWorkspaceCreateError(err)
+      toast.error(title, { description, duration: ERROR_TOAST_DURATION })
+      return null
+    }
+  },
+
+  updateFolderWorkspace: async (folderWorkspaceId, updates) => {
+    try {
+      const target = getActiveRuntimeTarget(get().settings)
+      const updated =
+        target.kind === 'local'
+          ? await window.api.folderWorkspaces.update({ folderWorkspaceId, updates })
+          : (
+              await callRuntimeRpc<{ folderWorkspace: FolderWorkspace | null }>(
+                target,
+                'folderWorkspace.update',
+                { folderWorkspaceId, updates },
+                { timeoutMs: 15_000 }
+              )
+            ).folderWorkspace
+      if (!updated) {
+        return false
+      }
+      set((s) => ({
+        folderWorkspaces: s.folderWorkspaces.map((workspace) =>
+          workspace.id === folderWorkspaceId ? updated : workspace
+        ),
+        folderWorkspacePathStatuses: {}
+      }))
+      return true
+    } catch (err) {
+      console.error('Failed to update folder workspace:', err)
+      return false
+    }
+  },
+
+  deleteFolderWorkspace: async (folderWorkspaceId) => {
+    try {
+      const target = getActiveRuntimeTarget(get().settings)
+      const deleted =
+        target.kind === 'local'
+          ? await window.api.folderWorkspaces.delete({ folderWorkspaceId })
+          : (
+              await callRuntimeRpc<{ deleted: boolean }>(
+                target,
+                'folderWorkspace.delete',
+                { folderWorkspaceId },
+                { timeoutMs: 15_000 }
+              )
+            ).deleted
+      if (!deleted) {
+        return false
+      }
+      const workspaceKey = folderWorkspaceKey(folderWorkspaceId)
+      set((s) => ({
+        folderWorkspaces: s.folderWorkspaces.filter(
+          (workspace) => workspace.id !== folderWorkspaceId
+        ),
+        folderWorkspacePathStatuses: {}
+      }))
+      get().purgeWorktreeTerminalState([workspaceKey])
+      return true
+    } catch (err) {
+      console.error('Failed to delete folder workspace:', err)
+      return false
     }
   },
 
@@ -271,7 +699,8 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
         return false
       }
       set((s) => ({
-        projectGroups: s.projectGroups.map((group) => (group.id === groupId ? updated : group))
+        projectGroups: s.projectGroups.map((group) => (group.id === groupId ? updated : group)),
+        folderWorkspacePathStatuses: {}
       }))
       return true
     } catch (err) {
@@ -301,17 +730,86 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
         const deletedGroupIds = getProjectGroupSubtreeIds(s.projectGroups, groupId)
         return {
           projectGroups: s.projectGroups.filter((group) => !deletedGroupIds.has(group.id)),
+          folderWorkspaces: s.folderWorkspaces.filter(
+            (workspace) => !deletedGroupIds.has(workspace.projectGroupId)
+          ),
           repos: s.repos.map((repo) =>
             repo.projectGroupId && deletedGroupIds.has(repo.projectGroupId)
               ? { ...repo, projectGroupId: null }
               : repo
-          )
+          ),
+          folderWorkspacePathStatuses: {}
         }
       })
       return true
     } catch (err) {
       console.error('Failed to delete project group:', err)
       return false
+    }
+  },
+
+  deleteProjectGroupWithContainedProjects: async (groupId, options) => {
+    const targets = selectProjectGroupRemovalTargets(get().projectGroups, get().repos, groupId)
+    const requestedProjectIds = options.removeContainedProjects ? targets.projectIds : []
+    if (!targets.groupExists) {
+      return {
+        status: 'missing-group',
+        groupId,
+        requestedProjectIds,
+        removedProjectIds: [],
+        failedProjectRemovals: []
+      }
+    }
+
+    const deleted = await get().deleteProjectGroup(groupId)
+    if (!deleted) {
+      return {
+        status: 'group-delete-failed',
+        groupId,
+        requestedProjectIds,
+        removedProjectIds: [],
+        failedProjectRemovals: []
+      }
+    }
+
+    if (!options.removeContainedProjects) {
+      return {
+        status: 'deleted-group',
+        groupId,
+        requestedProjectIds,
+        removedProjectIds: [],
+        failedProjectRemovals: []
+      }
+    }
+
+    const removedProjectIds: string[] = []
+    const failedProjectRemovals: ProjectRemovalFailure[] = []
+    for (const projectId of targets.projectIds) {
+      const existedBeforeRemoval = get().repos.some((repo) => repo.id === projectId)
+      try {
+        if (existedBeforeRemoval) {
+          await get().removeProject(projectId)
+        }
+      } catch (err) {
+        console.error('Failed to remove contained project:', err)
+      }
+      const stillExists = get().repos.some((repo) => repo.id === projectId)
+      if (stillExists) {
+        failedProjectRemovals.push({
+          projectId,
+          reason: 'Project remained in Orca after removeProject completed.'
+        })
+      } else {
+        removedProjectIds.push(projectId)
+      }
+    }
+
+    return {
+      status: 'deleted-group',
+      groupId,
+      requestedProjectIds,
+      removedProjectIds,
+      failedProjectRemovals
     }
   },
 
@@ -336,7 +834,10 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
       if (!moved) {
         return false
       }
-      set((s) => ({ repos: s.repos.map((repo) => (repo.id === projectId ? moved : repo)) }))
+      set((s) => ({
+        repos: s.repos.map((repo) => (repo.id === projectId ? moved : repo)),
+        folderWorkspacePathStatuses: {}
+      }))
       return true
     } catch (err) {
       console.error('Failed to move repo to group:', err)
@@ -386,21 +887,28 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
         if (s.repos.some((r) => r.id === repo.id)) {
           return s
         }
-        return { repos: [...s.repos, repo] }
+        return { repos: [...s.repos, repo], folderWorkspacePathStatuses: {} }
       })
       if (alreadyAdded) {
-        toast.info('Project already added', { description: repo.displayName })
-      } else {
-        toast.success(isGitRepoKind(repo) ? 'Project added' : 'Folder added', {
+        toast.info(translate('auto.store.slices.repos.a8e4b3af5b', 'Project already added'), {
           description: repo.displayName
         })
+      } else {
+        toast.success(
+          isGitRepoKind(repo)
+            ? translate('auto.store.slices.repos.8bb3ad7935', 'Project added')
+            : translate('auto.store.slices.repos.90d129b48b', 'Folder added'),
+          {
+            description: repo.displayName
+          }
+        )
       }
       return repo
     } catch (err) {
       console.error('Failed to add project:', err)
       const message = err instanceof Error ? err.message : String(err)
       const duration = ERROR_TOAST_DURATION
-      toast.error('Failed to add project', {
+      toast.error(translate('auto.store.slices.repos.c6e022ddfc', 'Failed to add project'), {
         description: message,
         duration
       })
@@ -413,7 +921,12 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
     if (target.kind !== 'local') {
       // Why: OS folder pickers return client-local paths. Remote environments
       // need an explicit server path, which the Add Project dialog handles.
-      toast.error('Use a server path to add projects from a remote runtime.')
+      toast.error(
+        translate(
+          'auto.store.slices.repos.e649269645',
+          'Use a server path to add projects from a remote runtime.'
+        )
+      )
       return null
     }
     const path = await window.api.repos.pickFolder()
@@ -430,6 +943,7 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
       if (!repo) {
         return null
       }
+      await markOnboardingProjectAdded('addedFolder')
       // Why: without focusing the new folder, the UI looks unchanged after
       // the dialog closes and users think nothing happened. Fetch the
       // synthetic folder worktree and route through the standard activation
@@ -458,7 +972,10 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
     } catch (err) {
       console.error('Failed to add folder:', err)
       const message = err instanceof Error ? err.message : String(err)
-      toast.error('Failed to add folder', { description: message, duration: ERROR_TOAST_DURATION })
+      toast.error(translate('auto.store.slices.repos.b7e14472ae', 'Failed to add folder'), {
+        description: message,
+        duration: ERROR_TOAST_DURATION
+      })
       return null
     }
   },
@@ -483,7 +1000,12 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
       if (target.kind === 'environment') {
         await Promise.allSettled(
           worktreeIds.map((worktreeId) =>
-            callRuntimeRpc(target, 'terminal.stop', { worktree: worktreeId }, { timeoutMs: 15_000 })
+            callRuntimeRpc(
+              target,
+              'terminal.stop',
+              { worktree: toRuntimeWorktreeSelector(worktreeId) },
+              { timeoutMs: 15_000 }
+            )
           )
         )
       }
@@ -568,6 +1090,7 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
           activeFileId: activeFileCleared ? null : s.activeFileId,
           activeTabType: activeFileCleared ? 'terminal' : s.activeTabType,
           lastVisitedAtByWorktreeId: nextLastVisitedAtByWorktreeId,
+          folderWorkspacePathStatuses: {},
           sortEpoch: s.sortEpoch + 1,
           // Why: removing the last repo while in settings leaves activeView as
           // 'settings', which renders an empty settings pane instead of Landing.
@@ -577,6 +1100,7 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
             ? {
                 activeView: 'terminal' as const,
                 activeWorktreeId: null,
+                activeWorkspaceKey: null,
                 activeRepoId: null
               }
             : {})
@@ -593,16 +1117,39 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
       try {
         const sanitizedUpdates = sanitizeRepoUpdate(updates)
         const target = getActiveRuntimeTarget(get().settings)
-        await (target.kind === 'local'
-          ? window.api.repos.update({ repoId: projectId, updates: sanitizedUpdates })
-          : callRuntimeRpc(
-              target,
-              'repo.update',
-              { repo: projectId, updates: sanitizedUpdates },
-              { timeoutMs: 15_000 }
-            ))
+        const updatedRepo =
+          target.kind === 'local'
+            ? await window.api.repos.update({ repoId: projectId, updates: sanitizedUpdates })
+            : (
+                await callRuntimeRpc<{ repo: Repo }>(
+                  target,
+                  'repo.update',
+                  { repo: projectId, updates: sanitizedUpdates },
+                  { timeoutMs: 15_000 }
+                )
+              ).repo
         set((s) => ({
-          repos: s.repos.map((r) => (r.id === projectId ? { ...r, ...sanitizedUpdates } : r))
+          repos: s.repos.map((r) => {
+            if (r.id !== projectId) {
+              return r
+            }
+            if (updatedRepo) {
+              return updatedRepo
+            }
+            if (sanitizedUpdates.sourceControlAi === null) {
+              const { sourceControlAi: _sourceControlAi, ...repoWithoutSourceControlAi } = r
+              const { sourceControlAi: _clearedSourceControlAi, ...updatesWithoutSourceControlAi } =
+                sanitizedUpdates
+              return { ...repoWithoutSourceControlAi, ...updatesWithoutSourceControlAi }
+            }
+            const { sourceControlAi, ...updatesWithoutSourceControlAi } = sanitizedUpdates
+            return {
+              ...r,
+              ...updatesWithoutSourceControlAi,
+              ...(sourceControlAi !== undefined ? { sourceControlAi } : {})
+            }
+          }),
+          folderWorkspacePathStatuses: {}
         }))
         return true
       } catch (err) {
@@ -644,7 +1191,7 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
       // Caller passed a non-permutation — refuse to apply locally.
       return
     }
-    set({ repos: next })
+    set({ repos: next, folderWorkspacePathStatuses: {} })
     try {
       const target = getActiveRuntimeTarget(get().settings)
       const result =

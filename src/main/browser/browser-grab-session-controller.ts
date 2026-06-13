@@ -188,6 +188,11 @@ export class BrowserGrabSessionController {
       const timeoutId = setTimeout(() => {
         settleOnce({ opId, kind: 'cancelled', reason: 'timeout' })
       }, GRAB_OP_TIMEOUT_MS)
+      // Why: the timeout prevents stale grab state, but an armed grab should
+      // not keep Electron main alive after its owning tab/window is gone.
+      if (typeof timeoutId.unref === 'function') {
+        timeoutId.unref()
+      }
 
       guest.on('did-start-navigation', handleNavigation)
       guest.on('destroyed', handleDestroyed)

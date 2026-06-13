@@ -1,9 +1,21 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 
-const { browserWindowGetAllWindowsMock, handleMock, previewGhosttyImportMock } = vi.hoisted(() => ({
+const {
+  applyAppIconMock,
+  applyElectronProxySettingsMock,
+  browserWindowGetAllWindowsMock,
+  handleMock,
+  previewGhosttyImportMock,
+  previewWarpThemeImportMock,
+  rebuildAppMenuMock
+} = vi.hoisted(() => ({
+  applyAppIconMock: vi.fn(),
+  applyElectronProxySettingsMock: vi.fn(),
   browserWindowGetAllWindowsMock: vi.fn(),
   handleMock: vi.fn(),
-  previewGhosttyImportMock: vi.fn()
+  previewGhosttyImportMock: vi.fn(),
+  previewWarpThemeImportMock: vi.fn(),
+  rebuildAppMenuMock: vi.fn()
 }))
 
 vi.mock('electron', () => ({
@@ -14,6 +26,22 @@ vi.mock('electron', () => ({
 
 vi.mock('../ghostty/index', () => ({
   previewGhosttyImport: previewGhosttyImportMock
+}))
+
+vi.mock('../warp-themes', () => ({
+  previewWarpThemeImport: previewWarpThemeImportMock
+}))
+
+vi.mock('../network/proxy-settings', () => ({
+  applyElectronProxySettings: applyElectronProxySettingsMock
+}))
+
+vi.mock('../app-icon', () => ({
+  applyAppIcon: applyAppIconMock
+}))
+
+vi.mock('../menu/register-app-menu', () => ({
+  rebuildAppMenu: rebuildAppMenuMock
 }))
 
 import { registerSettingsHandlers } from './settings'
@@ -36,7 +64,12 @@ const store = {
 describe('registerSettingsHandlers', () => {
   beforeEach(() => {
     handleMock.mockClear()
+    applyAppIconMock.mockClear()
+    applyElectronProxySettingsMock.mockClear()
+    applyElectronProxySettingsMock.mockResolvedValue({ source: 'settings' })
     previewGhosttyImportMock.mockClear()
+    previewWarpThemeImportMock.mockClear()
+    rebuildAppMenuMock.mockClear()
     browserWindowGetAllWindowsMock.mockReset()
     store.getSettings.mockReset()
     store.updateSettings.mockReset()
@@ -47,6 +80,12 @@ describe('registerSettingsHandlers', () => {
     registerSettingsHandlers(store as never)
     const channels = handleMock.mock.calls.map((call) => call[0])
     expect(channels).toContain('settings:previewGhosttyImport')
+  })
+
+  it('registers settings:previewWarpThemeImport handler', () => {
+    registerSettingsHandlers(store as never)
+    const channels = handleMock.mock.calls.map((call) => call[0])
+    expect(channels).toContain('settings:previewWarpThemeImport')
   })
 
   it('settings:previewGhosttyImport returns preview result', async () => {
@@ -61,6 +100,45 @@ describe('registerSettingsHandlers', () => {
     const result = await handler!(null, {})
     expect(result).toEqual(expected)
     expect(previewGhosttyImportMock).toHaveBeenCalledWith(store)
+  })
+
+  it('settings:previewWarpThemeImport returns preview result', async () => {
+    const expected = { found: false, themes: [], skippedFiles: [] }
+    previewWarpThemeImportMock.mockResolvedValue(expected)
+    registerSettingsHandlers(store as never)
+
+    const handler = handleMock.mock.calls.find(
+      (call) => call[0] === 'settings:previewWarpThemeImport'
+    )?.[1] as (event: { sender: unknown }, args: { kind: 'auto' }) => Promise<unknown>
+
+    const sender = { id: 3 }
+    const result = await handler!({ sender }, { kind: 'auto' })
+    expect(result).toEqual(expected)
+    expect(previewWarpThemeImportMock).toHaveBeenCalledWith(store, { kind: 'auto' }, sender)
+  })
+
+  it('settings:previewWarpThemeImport forwards malformed sources for main validation', async () => {
+    const expected = {
+      found: false,
+      themes: [],
+      skippedFiles: [],
+      error: 'Invalid Warp theme import source.'
+    }
+    previewWarpThemeImportMock.mockResolvedValue(expected)
+    registerSettingsHandlers(store as never)
+
+    const handler = handleMock.mock.calls.find(
+      (call) => call[0] === 'settings:previewWarpThemeImport'
+    )?.[1] as (event: { sender: unknown }, args: unknown) => Promise<unknown>
+
+    const invalidSource = { kind: 'unknown' }
+    const sender = { id: 3 }
+    const result = await handler!({ sender }, invalidSource)
+    expect(result).toEqual(expected)
+    expect(previewWarpThemeImportMock).toHaveBeenCalledWith(store, invalidSource, sender)
+
+    await handler!({ sender }, null)
+    expect(previewWarpThemeImportMock).toHaveBeenCalledWith(store, null, sender)
   })
 
   it('broadcasts store-level settings changes to open windows', () => {
@@ -153,5 +231,153 @@ describe('registerSettingsHandlers', () => {
       {},
       { notifyListeners: true, originWebContentsId: 1 }
     )
+  })
+
+  it('normalizes custom terminal themes from renderer settings IPC', async () => {
+    store.getSettings.mockReturnValue({ terminalCustomThemes: [] })
+    store.updateSettings.mockReturnValue({ terminalCustomThemes: [] })
+    registerSettingsHandlers(store as never)
+
+    const handler = handleMock.mock.calls.find((call) => call[0] === 'settings:set')?.[1] as (
+      _event: unknown,
+      args: unknown
+    ) => Promise<unknown>
+
+    await handler(settingsInvokeEvent, {
+      terminalCustomThemes: [
+        {
+          id: 'warp:Test Theme',
+          name: 'Test Theme',
+          source: 'warp',
+          mode: 'dark',
+          terminal: {
+            background: '000',
+            foreground: 'fff',
+            black: '123',
+            red: 'nope'
+          },
+          sourcePath: '/Users/alice/.warp/themes/test.yaml'
+        }
+      ]
+    })
+
+    expect(store.updateSettings).toHaveBeenCalledWith(
+      {
+        terminalCustomThemes: [
+          expect.objectContaining({
+            id: 'warp:test-theme',
+            terminal: {
+              background: '#000000',
+              foreground: '#ffffff',
+              black: '#112233'
+            }
+          })
+        ]
+      },
+      { notifyListeners: true, originWebContentsId: 1 }
+    )
+  })
+
+  it('sanitizes and applies proxy settings from renderer settings IPC', async () => {
+    store.getSettings.mockReturnValue({ httpProxyUrl: '' })
+    store.updateSettings.mockReturnValue({
+      httpProxyUrl: 'http://proxy.example:8080',
+      httpProxyBypassRules: 'localhost;*.internal'
+    })
+    registerSettingsHandlers(store as never)
+
+    const handler = handleMock.mock.calls.find((call) => call[0] === 'settings:set')?.[1] as (
+      _event: unknown,
+      args: unknown
+    ) => Promise<unknown>
+
+    await handler(settingsInvokeEvent, {
+      httpProxyUrl: ' http://proxy.example:8080/path#frag ',
+      httpProxyBypassRules: 'localhost, *.internal'
+    })
+
+    expect(store.updateSettings).toHaveBeenCalledWith(
+      {
+        httpProxyUrl: 'http://proxy.example:8080',
+        httpProxyBypassRules: 'localhost;*.internal'
+      },
+      { notifyListeners: true, originWebContentsId: 1 }
+    )
+    expect(applyElectronProxySettingsMock).toHaveBeenCalledWith({
+      httpProxyUrl: 'http://proxy.example:8080',
+      httpProxyBypassRules: 'localhost;*.internal'
+    })
+  })
+
+  it('drops invalid proxy URLs at the settings boundary', async () => {
+    store.getSettings.mockReturnValue({ httpProxyUrl: 'http://proxy.example:8080' })
+    store.updateSettings.mockReturnValue({ httpProxyUrl: '' })
+    registerSettingsHandlers(store as never)
+
+    const handler = handleMock.mock.calls.find((call) => call[0] === 'settings:set')?.[1] as (
+      _event: unknown,
+      args: unknown
+    ) => Promise<unknown>
+
+    await handler(settingsInvokeEvent, { httpProxyUrl: 'ftp://proxy.example:2121' })
+
+    expect(store.updateSettings).toHaveBeenCalledWith(
+      { httpProxyUrl: '' },
+      { notifyListeners: true, originWebContentsId: 1 }
+    )
+    expect(applyElectronProxySettingsMock).toHaveBeenCalledWith({ httpProxyUrl: '' })
+  })
+
+  it('normalizes and applies app icon changes from renderer settings IPC', async () => {
+    store.getSettings.mockReturnValue({ appIcon: 'classic' })
+    store.updateSettings.mockReturnValue({ appIcon: 'watercolor' })
+    registerSettingsHandlers(store as never)
+
+    const handler = handleMock.mock.calls.find((call) => call[0] === 'settings:set')?.[1] as (
+      _event: unknown,
+      args: unknown
+    ) => Promise<unknown>
+
+    await handler(settingsInvokeEvent, { appIcon: 'watercolor' })
+
+    expect(store.updateSettings).toHaveBeenCalledWith(
+      { appIcon: 'watercolor' },
+      { notifyListeners: true, originWebContentsId: 1 }
+    )
+    expect(applyAppIconMock).toHaveBeenCalledWith('watercolor')
+  })
+
+  it('falls back to the classic app icon for invalid renderer settings IPC values', async () => {
+    store.getSettings.mockReturnValue({ appIcon: 'watercolor' })
+    store.updateSettings.mockReturnValue({ appIcon: 'classic' })
+    registerSettingsHandlers(store as never)
+
+    const handler = handleMock.mock.calls.find((call) => call[0] === 'settings:set')?.[1] as (
+      _event: unknown,
+      args: unknown
+    ) => Promise<unknown>
+
+    await handler(settingsInvokeEvent, { appIcon: 'not-real' })
+
+    expect(store.updateSettings).toHaveBeenCalledWith(
+      { appIcon: 'classic' },
+      { notifyListeners: true, originWebContentsId: 1 }
+    )
+    expect(applyAppIconMock).toHaveBeenCalledWith('classic')
+  })
+
+  it('rebuilds the app menu after Automations sidebar visibility changes', async () => {
+    store.getSettings.mockReturnValue({ showAutomationsButton: true })
+    store.updateSettings.mockReturnValue({ showAutomationsButton: false })
+    registerSettingsHandlers(store as never)
+
+    const handler = handleMock.mock.calls.find((call) => call[0] === 'settings:set')?.[1] as (
+      _event: unknown,
+      args: unknown
+    ) => Promise<unknown>
+
+    await handler(settingsInvokeEvent, { showAutomationsButton: false })
+
+    expect(rebuildAppMenuMock).toHaveBeenCalledTimes(1)
   })
 })

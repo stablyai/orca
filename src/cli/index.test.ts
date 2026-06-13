@@ -7,13 +7,15 @@ const {
   serveOrcaAppMock,
   getDefaultUserDataPathMock,
   addEnvironmentFromPairingCodeMock,
-  listEnvironmentsMock
+  listEnvironmentsMock,
+  spawnMock
 } = vi.hoisted(() => ({
   callMock: vi.fn(),
   serveOrcaAppMock: vi.fn(),
   getDefaultUserDataPathMock: vi.fn(() => '/tmp/orca-user-data'),
   addEnvironmentFromPairingCodeMock: vi.fn(),
-  listEnvironmentsMock: vi.fn()
+  listEnvironmentsMock: vi.fn(),
+  spawnMock: vi.fn()
 }))
 
 vi.mock('./runtime-client', () => {
@@ -79,6 +81,17 @@ vi.mock('./runtime/environments', () => ({
   resolveEnvironment: vi.fn()
 }))
 
+vi.mock('child_process', async () => {
+  const { EventEmitter } = await import('events')
+  return {
+    spawn: spawnMock.mockImplementation(() => {
+      const child = new EventEmitter()
+      process.nextTick(() => child.emit('exit', 0, null))
+      return child
+    })
+  }
+})
+
 import {
   buildCurrentWorktreeSelector,
   COMMAND_SPECS,
@@ -113,6 +126,86 @@ describe('COMMAND_SPECS collision check', () => {
   })
 })
 
+describe('orca root help', () => {
+  it('advertises computer-use capabilities discovery', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(['--help'], '/tmp/repo')
+
+    expect(logSpy.mock.calls[0][0]).toContain(
+      'computer capabilities     Show computer-use provider capabilities'
+    )
+    expect(logSpy.mock.calls[0][0]).toContain(
+      'computer permissions      Show or open computer-use permission setup'
+    )
+    expect(logSpy.mock.calls[0][0]).toContain(
+      'computer press-key        Press a single key such as Return or Escape'
+    )
+    expect(callMock).not.toHaveBeenCalled()
+  })
+
+  it('progressively discloses Linear commands', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(['--help'], '/tmp/repo')
+
+    const rootHelp = String(logSpy.mock.calls[0][0])
+    expect(rootHelp).toContain('Linear:')
+    expect(rootHelp).toContain('linear                    Read Linear ticket context for agents')
+    expect(rootHelp).not.toContain('linear issue')
+    expect(rootHelp).not.toContain('linear search')
+    expect(rootHelp).not.toContain('linear status set')
+
+    logSpy.mockClear()
+    await main(['linear', '--help'], '/tmp/repo')
+
+    const groupHelp = String(logSpy.mock.calls[0][0])
+    expect(groupHelp).toContain('orca linear')
+    expect(groupHelp).toContain('issue')
+    expect(groupHelp).toContain('search')
+    expect(groupHelp).toContain('status set')
+    expect(groupHelp).toContain('comment add')
+    expect(groupHelp).toContain('attach')
+    expect(groupHelp).toContain('create')
+    expect(groupHelp).not.toContain('--comments')
+    expect(groupHelp).not.toContain('--attachments')
+
+    logSpy.mockClear()
+    await main(['linear', 'issue', '--help'], '/tmp/repo')
+
+    const issueHelp = String(logSpy.mock.calls[0][0])
+    expect(issueHelp).toContain('orca linear issue [<id>]')
+    expect(issueHelp).toContain('--comments             Include threaded Linear comments')
+    expect(issueHelp).toContain('--attachments          Include attachment metadata and URLs')
+    expect(issueHelp).toContain('--workspace <id>      Connected Linear workspace id')
+    expect(issueHelp).toContain('--id <id>             Linear issue key, id, or URL')
+
+    logSpy.mockClear()
+    await main(['linear', 'search', '--help'], '/tmp/repo')
+
+    const searchHelp = String(logSpy.mock.calls[0][0])
+    expect(searchHelp).toContain('orca linear search <query>')
+    expect(searchHelp).toContain('--workspace <id|all>  Connected Linear workspace id, or all')
+    expect(searchHelp).toContain('--query <text>        Text to search across Linear issues')
+
+    logSpy.mockClear()
+    await main(['linear', 'comment', 'add', '--help'], '/tmp/repo')
+
+    const commentHelp = String(logSpy.mock.calls[0][0])
+    expect(commentHelp).toContain('orca linear comment add [<id>]')
+    expect(commentHelp).toContain('--body-file <path|->  Read Linear body from a file or stdin')
+    expect(commentHelp).toContain('--write-id <uuid>     Retry id from linear_write_unconfirmed')
+
+    logSpy.mockClear()
+    await main(['linear', 'create', '--help'], '/tmp/repo')
+
+    const createHelp = String(logSpy.mock.calls[0][0])
+    expect(createHelp).toContain('orca linear create --title <title>')
+    expect(createHelp).toContain('--parent-current      Use the current linked issue as parent')
+    expect(callMock).not.toHaveBeenCalled()
+  })
+})
+
 describe('orca cli worktree awareness', () => {
   const originalTerminalHandle = process.env.ORCA_TERMINAL_HANDLE
   const originalUserDataPath = process.env.ORCA_USER_DATA_PATH
@@ -128,6 +221,7 @@ describe('orca cli worktree awareness', () => {
     getDefaultUserDataPathMock.mockClear()
     addEnvironmentFromPairingCodeMock.mockReset()
     listEnvironmentsMock.mockReset()
+    spawnMock.mockClear()
     addEnvironmentFromPairingCodeMock.mockReturnValue({
       id: 'env-1',
       name: 'desk',
@@ -198,6 +292,7 @@ describe('orca cli worktree awareness', () => {
     queueFixtures(
       callMock,
       worktreeListFixture([
+        buildWorktree('/tmp/repo', 'main'),
         buildWorktree('/tmp/repo/feature', 'feature/foo'),
         buildWorktree('/tmp/repo/feature', 'feature/foo', 'abc', 'duplicate-repo')
       ]),
@@ -219,6 +314,107 @@ describe('orca cli worktree awareness', () => {
     })
     expect(logSpy).toHaveBeenCalledTimes(1)
   })
+
+  it.skipIf(process.platform === 'win32')(
+    'prepares and starts Claude Agent Teams in the current Orca terminal',
+    async () => {
+      process.env.ORCA_PANE_KEY = 'tab-1:11111111-1111-4111-8111-111111111111'
+      queueFixtures(
+        callMock,
+        okFixture('req_agent_teams_prepare', {
+          launch: {
+            env: {
+              CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: '1',
+              TMUX: '/tmp/orca-claude-agent-teams/team-1,0,1',
+              TMUX_PANE: '%1',
+              PATH: '/tmp/orca-shim:/usr/bin'
+            }
+          }
+        })
+      )
+
+      await main(['claude-teams'], '/tmp/repo')
+
+      expect(callMock).toHaveBeenCalledWith('agentTeams.prepareLaunch', {
+        paneKey: 'tab-1:11111111-1111-4111-8111-111111111111',
+        env: expect.objectContaining({
+          ORCA_PANE_KEY: 'tab-1:11111111-1111-4111-8111-111111111111'
+        })
+      })
+      expect(spawnMock).toHaveBeenCalledWith('claude', ['--teammate-mode', 'auto'], {
+        stdio: 'inherit',
+        env: expect.objectContaining({
+          CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: '1',
+          TMUX_PANE: '%1'
+        })
+      })
+    }
+  )
+
+  it.skipIf(process.platform === 'win32')(
+    'passes Claude Agent Teams arguments through to Claude Code',
+    async () => {
+      process.env.ORCA_PANE_KEY = 'tab-1:11111111-1111-4111-8111-111111111111'
+      queueFixtures(
+        callMock,
+        okFixture('req_agent_teams_prepare', {
+          launch: {
+            env: {
+              CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: '1',
+              TMUX: '/tmp/orca-claude-agent-teams/team-1,0,1',
+              TMUX_PANE: '%1',
+              PATH: '/tmp/orca-shim:/usr/bin'
+            }
+          }
+        })
+      )
+
+      await main(
+        ['claude-teams', '--resume', 'session-1', '--model', 'sonnet', 'review this'],
+        '/tmp/repo'
+      )
+
+      expect(spawnMock).toHaveBeenCalledWith(
+        'claude',
+        ['--teammate-mode', 'auto', '--resume', 'session-1', '--model', 'sonnet', 'review this'],
+        {
+          stdio: 'inherit',
+          env: expect.objectContaining({
+            CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: '1',
+            TMUX_PANE: '%1'
+          })
+        }
+      )
+    }
+  )
+
+  it.skipIf(process.platform === 'win32')(
+    'does not duplicate an explicit Claude teammate mode',
+    async () => {
+      process.env.ORCA_PANE_KEY = 'tab-1:11111111-1111-4111-8111-111111111111'
+      queueFixtures(
+        callMock,
+        okFixture('req_agent_teams_prepare', {
+          launch: {
+            env: {
+              CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: '1',
+              TMUX: '/tmp/orca-claude-agent-teams/team-1,0,1',
+              TMUX_PANE: '%1',
+              PATH: '/tmp/orca-shim:/usr/bin'
+            }
+          }
+        })
+      )
+
+      await main(['claude-teams', '--teammate-mode', 'in-process'], '/tmp/repo')
+
+      expect(spawnMock).toHaveBeenCalledWith(
+        'claude',
+        ['--teammate-mode', 'in-process'],
+        expect.objectContaining({ stdio: 'inherit' })
+      )
+    }
+  )
 
   it('rejects remote `worktree current` without listing worktrees from client cwd', async () => {
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
@@ -426,8 +622,45 @@ describe('orca cli worktree awareness', () => {
       displayName: undefined,
       linkedIssue: undefined,
       comment: undefined,
+      workspaceStatus: undefined,
       parentWorktree: undefined,
       noParent: true
+    })
+  })
+
+  it('passes workspace status through worktree.set', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_set_status', {
+        worktree: {
+          ...buildWorktree('/tmp/repo/child', 'feature/child'),
+          workspaceStatus: 'in-review'
+        }
+      })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      [
+        'worktree',
+        'set',
+        '--worktree',
+        'id:repo::/tmp/repo/child',
+        '--workspace-status',
+        'in-review',
+        '--json'
+      ],
+      '/tmp/repo'
+    )
+
+    expect(callMock).toHaveBeenCalledWith('worktree.set', {
+      worktree: 'id:repo::/tmp/repo/child',
+      displayName: undefined,
+      linkedIssue: undefined,
+      comment: undefined,
+      workspaceStatus: 'in-review',
+      parentWorktree: undefined,
+      noParent: false
     })
   })
 
@@ -922,6 +1155,225 @@ describe('orca cli worktree awareness', () => {
     })
   })
 
+  it('passes agent prompt and setup policy through worktree.create', async () => {
+    queueFixtures(
+      callMock,
+      worktreeListFixture([buildWorktree('/tmp/repo', 'main', 'abc', 'repo-1')]),
+      okFixture('req_create', {
+        worktree: buildWorktree('/tmp/repo/agent-task', 'agent-task', 'abc', 'repo-1'),
+        lineage: null,
+        warnings: []
+      })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      [
+        'worktree',
+        'create',
+        '--repo',
+        'id:repo-1',
+        '--name',
+        'agent-task',
+        '--agent',
+        'codex',
+        '--prompt',
+        'hi',
+        '--setup',
+        'run',
+        '--json'
+      ],
+      '/tmp/repo/src'
+    )
+
+    expect(callMock).toHaveBeenNthCalledWith(2, 'worktree.create', {
+      repo: 'id:repo-1',
+      name: 'agent-task',
+      baseBranch: undefined,
+      linkedIssue: undefined,
+      comment: undefined,
+      runHooks: false,
+      activate: true,
+      setupDecision: 'run',
+      parentWorktree: undefined,
+      cwdParentWorktree: 'id:repo-1::/tmp/repo',
+      noParent: false,
+      callerTerminalHandle: undefined,
+      startupAgent: 'codex',
+      startupPrompt: 'hi'
+    })
+  })
+
+  it('infers the repo from the current worktree on worktree.create', async () => {
+    queueFixtures(
+      callMock,
+      worktreeListFixture([buildWorktree('/tmp/repo', 'main', 'abc', 'repo-1')]),
+      okFixture('req_create', {
+        worktree: buildWorktree('/tmp/repo/agent-task', 'agent-task', 'abc', 'repo-1'),
+        lineage: null,
+        warnings: []
+      })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      [
+        'worktree',
+        'create',
+        '--name',
+        'agent-task',
+        '--agent',
+        'codex',
+        '--prompt',
+        'hi',
+        '--json'
+      ],
+      '/tmp/repo/src'
+    )
+
+    expect(callMock).toHaveBeenNthCalledWith(2, 'worktree.create', {
+      repo: 'id:repo-1',
+      name: 'agent-task',
+      baseBranch: undefined,
+      linkedIssue: undefined,
+      comment: undefined,
+      runHooks: false,
+      activate: true,
+      parentWorktree: undefined,
+      cwdParentWorktree: 'id:repo-1::/tmp/repo',
+      noParent: false,
+      callerTerminalHandle: undefined,
+      startupAgent: 'codex',
+      startupPrompt: 'hi'
+    })
+  })
+
+  it('rejects prompt without agent on worktree.create', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const priorExitCode = process.exitCode
+
+    await main(
+      ['worktree', 'create', '--repo', 'id:repo-1', '--name', 'child', '--prompt', 'hi', '--json'],
+      '/tmp/repo'
+    )
+
+    expect(callMock).not.toHaveBeenCalled()
+    expect([...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')).toContain(
+      '--prompt requires --agent'
+    )
+    expect(process.exitCode).toBe(1)
+
+    process.exitCode = priorExitCode
+  })
+
+  it('rejects unknown agents on worktree.create', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const priorExitCode = process.exitCode
+
+    await main(
+      ['worktree', 'create', '--repo', 'id:repo-1', '--name', 'child', '--agent', 'wat', '--json'],
+      '/tmp/repo'
+    )
+
+    expect(callMock).not.toHaveBeenCalled()
+    expect(JSON.parse(String(logSpy.mock.calls[0]?.[0]))).toMatchObject({
+      ok: false,
+      error: {
+        code: 'invalid_argument',
+        message: 'Unknown TUI agent "wat"'
+      }
+    })
+    expect(process.exitCode).toBe(1)
+
+    process.exitCode = priorExitCode
+  })
+
+  it('rejects agent, prompt, and setup flags without values on worktree.create', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const priorExitCode = process.exitCode
+
+    await main(
+      ['worktree', 'create', '--repo', 'id:repo-1', '--name', 'child', '--agent'],
+      '/tmp/repo'
+    )
+    expect(callMock.mock.calls.some(([method]) => method === 'worktree.create')).toBe(false)
+    expect([...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')).toContain(
+      'Missing value for --agent'
+    )
+
+    callMock.mockClear()
+    logSpy.mockClear()
+    errSpy.mockClear()
+    process.exitCode = priorExitCode
+
+    await main(
+      [
+        'worktree',
+        'create',
+        '--repo',
+        'id:repo-1',
+        '--name',
+        'child',
+        '--agent',
+        'codex',
+        '--prompt'
+      ],
+      '/tmp/repo'
+    )
+    expect(callMock.mock.calls.some(([method]) => method === 'worktree.create')).toBe(false)
+    expect([...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')).toContain(
+      'Missing value for --prompt'
+    )
+
+    callMock.mockClear()
+    logSpy.mockClear()
+    errSpy.mockClear()
+    process.exitCode = priorExitCode
+
+    await main(
+      ['worktree', 'create', '--repo', 'id:repo-1', '--name', 'child', '--setup'],
+      '/tmp/repo'
+    )
+    expect(callMock.mock.calls.some(([method]) => method === 'worktree.create')).toBe(false)
+    expect([...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')).toContain(
+      'Missing value for --setup'
+    )
+
+    process.exitCode = priorExitCode
+  })
+
+  it('rejects contradictory setup flags on worktree.create', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const priorExitCode = process.exitCode
+
+    await main(
+      [
+        'worktree',
+        'create',
+        '--repo',
+        'id:repo-1',
+        '--name',
+        'child',
+        '--run-hooks',
+        '--setup',
+        'skip',
+        '--json'
+      ],
+      '/tmp/repo'
+    )
+
+    expect(callMock).not.toHaveBeenCalled()
+    expect([...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')).toContain(
+      'Choose either --run-hooks or --setup run'
+    )
+    expect(process.exitCode).toBe(1)
+
+    process.exitCode = priorExitCode
+  })
+
   it('passes explicit focus through terminal.create', async () => {
     queueFixtures(
       callMock,
@@ -955,6 +1407,42 @@ describe('orca cli worktree awareness', () => {
       title: 'RUNNER',
       focus: true
     })
+  })
+
+  it('prints terminal.read fallback screen lines in json mode', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_terminal_read', {
+        terminal: {
+          handle: 'term_worker',
+          status: 'running',
+          tail: ['Claude Code', 'Checking files', 'Waiting for input'],
+          truncated: false,
+          limited: true,
+          oldestCursor: '0',
+          nextCursor: '3000',
+          latestCursor: '3000',
+          returnedLineCount: 3
+        }
+      })
+    )
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      ['terminal', 'read', '--terminal', 'term_worker', '--limit', '120', '--json'],
+      '/tmp/repo'
+    )
+
+    expect(callMock).toHaveBeenCalledWith('terminal.read', {
+      terminal: 'term_worker',
+      limit: 120
+    })
+    const printed = JSON.parse(String(logSpy.mock.calls[0]?.[0]))
+    expect(printed.result.terminal.tail).toEqual([
+      'Claude Code',
+      'Checking files',
+      'Waiting for input'
+    ])
   })
 
   it('keeps interactive Codex startup commands backgrounded unless focus is explicit', async () => {
@@ -1537,6 +2025,62 @@ describe('orca cli worktree awareness', () => {
     })
   })
 
+  it('collects and formats memory diagnostics', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_memory', {
+        app: {
+          cpu: 1.25,
+          memory: 1024 * 1024,
+          main: { cpu: 0.5, memory: 512 * 1024 },
+          renderer: { cpu: 0.5, memory: 384 * 1024 },
+          other: { cpu: 0.25, memory: 128 * 1024 },
+          history: [1024 * 1024]
+        },
+        worktrees: [
+          {
+            worktreeId: 'repo::/tmp/repo/feature',
+            worktreeName: 'feature',
+            repoId: 'repo',
+            repoName: 'Orca',
+            cpu: 2.5,
+            memory: 1024 * 1024,
+            sessions: [
+              {
+                sessionId: 'pty-1',
+                paneKey: null,
+                pid: 123,
+                cpu: 2.5,
+                memory: 1024 * 1024
+              }
+            ],
+            history: [1024 * 1024]
+          }
+        ],
+        host: {
+          totalMemory: 8 * 1024 * 1024,
+          freeMemory: 2 * 1024 * 1024,
+          usedMemory: 6 * 1024 * 1024,
+          memoryUsagePercent: 75,
+          cpuCoreCount: 8,
+          loadAverage1m: 1.25
+        },
+        totalCpu: 3.75,
+        totalMemory: 2 * 1024 * 1024,
+        collectedAt: 1000
+      })
+    )
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(['diagnostics', 'memory'], '/tmp/repo')
+
+    expect(callMock).toHaveBeenCalledWith('diagnostics.memory')
+    const output = logSpy.mock.calls.flat().join('\n')
+    expect(output).toContain('totalMemory: 2.0 MB')
+    expect(output).toContain('app: 1.0 MB')
+    expect(output).toContain('- feature  1.0 MB  2.5%  1 session')
+  })
+
   it('exits nonzero when terminal wait returns an unsatisfied blocked result', async () => {
     process.env.ORCA_TERMINAL_HANDLE = 'term_worker'
     callMock.mockResolvedValueOnce({
@@ -1636,6 +2180,91 @@ describe('orca cli worktree awareness', () => {
 
     expect(callMock).toHaveBeenCalledTimes(1)
     expect(callMock).toHaveBeenCalledWith('browser.tabCurrent', { worktree: undefined })
+  })
+
+  it('passes emulator gesture points through to the runtime', async () => {
+    const points = [
+      { type: 'begin', x: 0.5, y: 0.98, edge: 3 },
+      { type: 'move', x: 0.5, y: 0.4, edge: 3 },
+      { type: 'end', x: 0.5, y: 0.2, edge: 3 }
+    ]
+    queueFixtures(callMock, okFixture('req_emulator_gesture', { ok: true }))
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      ['emulator', 'gesture', JSON.stringify(points), '--worktree', 'id:wt-1', '--json'],
+      '/tmp/repo'
+    )
+
+    expect(callMock).toHaveBeenCalledWith('emulator.gesture', {
+      points,
+      device: undefined,
+      emulator: undefined,
+      worktree: 'id:wt-1'
+    })
+  })
+
+  it('rejects emulator gesture points outside normalized coordinates', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const priorExitCode = process.exitCode
+
+    await main(
+      [
+        'emulator',
+        'gesture',
+        JSON.stringify([
+          { type: 'begin', x: 1.2, y: 0.8 },
+          { type: 'end', x: 0.5, y: 0.2 }
+        ]),
+        '--worktree',
+        'id:wt-1',
+        '--json'
+      ],
+      '/tmp/repo'
+    )
+
+    expect(callMock).not.toHaveBeenCalled()
+    expect(JSON.parse(String(logSpy.mock.calls[0]?.[0]))).toMatchObject({
+      ok: false,
+      error: {
+        code: 'invalid_argument',
+        message: '--points[0].x must be between 0 and 1'
+      }
+    })
+    expect(process.exitCode).toBe(1)
+
+    process.exitCode = priorExitCode
+  })
+
+  it('rejects emulator gesture points with invalid edge markers', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const priorExitCode = process.exitCode
+
+    await main(
+      [
+        'emulator',
+        'gesture',
+        JSON.stringify([
+          { type: 'begin', x: 0.5, y: 0.98, edge: 8 },
+          { type: 'end', x: 0.5, y: 0.2, edge: 8 }
+        ]),
+        '--worktree',
+        'id:wt-1',
+        '--json'
+      ],
+      '/tmp/repo'
+    )
+
+    expect(callMock).not.toHaveBeenCalled()
+    expect(JSON.parse(String(logSpy.mock.calls[0]?.[0]))).toMatchObject({
+      ok: false,
+      error: {
+        code: 'invalid_argument',
+        message: 'gesture point 0 edge must be an integer between 0 and 4'
+      }
+    })
+
+    process.exitCode = priorExitCode
   })
 
   it('creates an automation for the enclosing worktree by default', async () => {

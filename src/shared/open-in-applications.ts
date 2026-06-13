@@ -1,9 +1,13 @@
 import type { OpenInApplication } from './types'
 
 export const OPEN_IN_APPLICATIONS_MAX = 8
+export const DEFAULT_OPEN_IN_APPLICATIONS: OpenInApplication[] = [
+  { id: 'vscode', label: 'VS Code', command: 'code' }
+]
 
 type NormalizeOpenInApplicationsOptions = {
   createId?: () => string
+  seedDefaults?: boolean
 }
 
 function normalizeToken(value: unknown): string {
@@ -19,7 +23,7 @@ export function normalizeOpenInApplications(
   options: NormalizeOpenInApplicationsOptions = {}
 ): OpenInApplication[] {
   if (!Array.isArray(value)) {
-    return []
+    return options.seedDefaults ? [...DEFAULT_OPEN_IN_APPLICATIONS] : []
   }
 
   const normalized: OpenInApplication[] = []

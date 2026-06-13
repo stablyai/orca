@@ -7,14 +7,16 @@ describe('notification routing', () => {
       buildLocalNotificationData(
         {
           source: 'agent-task-complete',
-          worktreeId: 'repo::/Users/me/orca/workspaces/feature'
+          worktreeId: 'repo::/Users/me/orca/workspaces/feature',
+          notificationId: 'agent:one'
         },
         'host-1'
       )
     ).toEqual({
       source: 'agent-task-complete',
       hostId: 'host-1',
-      worktreeId: 'repo::/Users/me/orca/workspaces/feature'
+      worktreeId: 'repo::/Users/me/orca/workspaces/feature',
+      notificationId: 'agent:one'
     })
   })
 

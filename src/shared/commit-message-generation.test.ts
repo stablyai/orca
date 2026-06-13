@@ -33,6 +33,20 @@ describe('buildCommitMessagePrompt', () => {
     expect(prompt).toContain('Branch: (detached)')
     expect(prompt).toContain('Additional user prompt:\nUse Conventional Commits.')
   })
+
+  it('notes when the diff was omitted so the agent relies on the file list', () => {
+    const prompt = buildCommitMessagePrompt(
+      {
+        branch: 'feature/big-diff',
+        stagedSummary: 'A\thuge.jsonl',
+        stagedPatch: ''
+      },
+      ''
+    )
+
+    expect(prompt).toContain('Staged files:\nA\thuge.jsonl')
+    expect(prompt).toContain('diff omitted — too large to read')
+  })
 })
 
 describe('splitGeneratedCommitMessage', () => {

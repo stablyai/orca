@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { shallow } from 'zustand/shallow'
 
 import { workItemsCacheKey, type CacheEntry } from '@/store/slices/github'
-import type { GitHubWorkItem, LinearIssue } from '../../../shared/types'
+import type { GitHubWorkItem, LinearCollectionResult, LinearIssue } from '../../../shared/types'
 import {
   buildTaskPageRepoSourceState,
   deriveTaskPageGitHubWorkItemsFetchOptions,
@@ -249,9 +249,14 @@ describe('task page cache selectors', () => {
     const searchCache = {
       assigned: entry<LinearIssue[]>([searchIssue])
     }
+    const listIssue = linearIssue('LIN-3')
+    const listCache = {
+      all: entry<LinearCollectionResult<LinearIssue>>({ items: [listIssue] })
+    }
 
-    expect(findTaskPageLinearDrawerIssue(issueCache, searchCache, null)).toBeNull()
-    expect(findTaskPageLinearDrawerIssue(issueCache, searchCache, 'LIN-1')).toBe(issue)
-    expect(findTaskPageLinearDrawerIssue({}, searchCache, 'LIN-2')).toBe(searchIssue)
+    expect(findTaskPageLinearDrawerIssue(issueCache, searchCache, listCache, null)).toBeNull()
+    expect(findTaskPageLinearDrawerIssue(issueCache, searchCache, listCache, 'LIN-1')).toBe(issue)
+    expect(findTaskPageLinearDrawerIssue({}, searchCache, listCache, 'LIN-2')).toBe(searchIssue)
+    expect(findTaskPageLinearDrawerIssue({}, {}, listCache, 'LIN-3')).toBe(listIssue)
   })
 })

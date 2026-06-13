@@ -1,9 +1,10 @@
 import { useState } from 'react'
 import { Check, ExternalLink } from 'lucide-react'
-import { AGENT_CATALOG, AgentIcon } from '@/lib/agent-catalog'
+import { getAgentCatalog, AgentIcon, type AgentCatalogEntry } from '@/lib/agent-catalog'
 import { cn } from '@/lib/utils'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import type { TuiAgent } from '../../../../shared/types'
+import { translate } from '@/i18n/i18n'
 
 type AgentStepProps = {
   selectedAgent: TuiAgent | null
@@ -16,14 +17,15 @@ type AgentStepProps = {
 }
 
 export function AgentStep({ selectedAgent, onSelect, detectedSet, isDetecting }: AgentStepProps) {
-  const detected = AGENT_CATALOG.filter((agent) => detectedSet.has(agent.id))
-  const rest = AGENT_CATALOG.filter((agent) => !detectedSet.has(agent.id))
+  const agentCatalog = getAgentCatalog()
+  const detected = agentCatalog.filter((agent) => detectedSet.has(agent.id))
+  const rest = agentCatalog.filter((agent) => !detectedSet.has(agent.id))
   const hasDetected = detected.length > 0
-  const primary = hasDetected ? detected : AGENT_CATALOG.slice(0, 6)
-  const fallbackRest = hasDetected ? rest : AGENT_CATALOG.slice(6)
+  const primary = hasDetected ? detected : agentCatalog.slice(0, 6)
+  const fallbackRest = hasDetected ? rest : agentCatalog.slice(6)
   const selectedEntry =
     selectedAgent && !detectedSet.has(selectedAgent)
-      ? AGENT_CATALOG.find((a) => a.id === selectedAgent)
+      ? agentCatalog.find((a) => a.id === selectedAgent)
       : undefined
   // Why: keep the collapsed bucket open when the selected agent lives there, so
   // the active card is visible without forcing the user to expand the disclosure.
@@ -42,34 +44,54 @@ export function AgentStep({ selectedAgent, onSelect, detectedSet, isDetecting }:
       setOpenState(true)
     }
   }
-  const fallbackRestLabel = openState ? 'Hide agents' : `Show ${fallbackRest.length} more agents→`
+  const fallbackRestLabel = openState
+    ? translate('auto.components.onboarding.AgentStep.hideAgents', 'Hide agents')
+    : translate(
+        'auto.components.onboarding.AgentStep.showMoreAgents',
+        'Show {{value0}} more agents→',
+        {
+          value0: fallbackRest.length
+        }
+      )
   return (
     <div className="space-y-5">
       {!hasDetected && !isDetecting && (
         <div className="rounded-lg border border-amber-400/30 bg-amber-400/10 px-4 py-3 text-xs text-amber-700 dark:text-amber-200/90">
-          No agents detected on your PATH. Pick one to install later, or continue with a blank
-          terminal.
+          {translate(
+            'auto.components.onboarding.AgentStep.1eee1c7bd8',
+            'No agents detected on your PATH. Pick one to install later, or continue with a blank terminal.'
+          )}
         </div>
       )}
       {selectedEntry && (
         <div className="flex items-center justify-between gap-3 rounded-lg border border-amber-400/30 bg-amber-400/10 px-4 py-2.5 text-xs text-amber-700 dark:text-amber-200/90">
           <span>
-            <span className="font-medium">{selectedEntry.label}</span> isn&apos;t on your PATH yet.
-            Orca will set it as your default and you can install it any time.
+            <span className="font-medium">{selectedEntry.label}</span>{' '}
+            {translate(
+              'auto.components.onboarding.AgentStep.69af7e9c1c',
+              "isn't on your PATH yet. Orca will set it as your default and you can install it any time."
+            )}
           </span>
           <button
             type="button"
             className="inline-flex shrink-0 items-center gap-1 rounded-md border border-amber-400/40 bg-amber-400/10 px-2 py-1 font-medium text-amber-800 hover:bg-amber-400/20 dark:text-amber-100"
             onClick={() => void window.api.shell.openUrl(selectedEntry.homepageUrl)}
           >
-            Install instructions
+            {translate('auto.components.onboarding.AgentStep.9c163bb0e0', 'Install instructions')}
             <ExternalLink className="size-3" />
           </button>
         </div>
       )}
       <section className="space-y-3">
         <SectionHeader
-          label={hasDetected ? 'Detected on your system' : 'Popular agents'}
+          label={
+            hasDetected
+              ? translate(
+                  'auto.components.onboarding.AgentStep.d7b3ef168b',
+                  'Detected on your system'
+                )
+              : translate('auto.components.onboarding.AgentStep.e6a369bd04', 'Popular agents')
+          }
           count={primary.length}
           showDetectedIndicator={hasDetected}
         />
@@ -133,7 +155,7 @@ function AgentButton({
   selected,
   onClick
 }: {
-  agent: (typeof AGENT_CATALOG)[number]
+  agent: AgentCatalogEntry
   selected: boolean
   onClick: () => void
 }) {

@@ -86,6 +86,13 @@ function parseRrule(rrule: string): ParsedRrule {
     throw new Error('Invalid recurrence minute.')
   }
   const byDay = (entries.get('BYDAY') ?? '').split(',').filter(Boolean)
+  if (
+    freq === 'WEEKLY' &&
+    (byDay.length === 0 ||
+      byDay.some((day) => !DAY_CODES.includes(day as (typeof DAY_CODES)[number])))
+  ) {
+    throw new Error('Invalid recurrence day.')
+  }
   return { kind: 'rrule', freq, byDay, byHour, byMinute }
 }
 
@@ -490,6 +497,27 @@ export function buildAutomationRrule(args: {
   return `FREQ=DAILY;BYHOUR=${hour};BYMINUTE=${minute}`
 }
 
+export function buildAutomationCronSchedule(args: {
+  preset: Exclude<AutomationSchedulePreset, 'custom'>
+  hour: number
+  minute: number
+  dayOfWeek?: number
+}): string {
+  const hour = Math.max(0, Math.min(23, Math.floor(args.hour)))
+  const minute = Math.max(0, Math.min(59, Math.floor(args.minute)))
+  if (args.preset === 'hourly') {
+    return `${minute} * * * *`
+  }
+  if (args.preset === 'weekdays') {
+    return `${minute} ${hour} * * 1-5`
+  }
+  if (args.preset === 'weekly') {
+    const day = Math.max(0, Math.min(6, Math.floor(args.dayOfWeek ?? 1)))
+    return `${minute} ${hour} * * ${day}`
+  }
+  return `${minute} ${hour} * * *`
+}
+
 export function nextAutomationOccurrenceAfter(
   rrule: string,
   dtstart: number,
@@ -520,10 +548,10 @@ export function nextAutomationOccurrenceAfter(
     const base = new Date(start)
     base.setMinutes(rule.byMinute, 0, 0)
     let candidate = base.getTime()
-    if (candidate <= after) {
+    if (candidate <= after || candidate < dtstart) {
       candidate += HOUR_MS
     }
-    return Math.max(candidate, dtstart)
+    return candidate
   }
   const candidate = scanDayCandidates(rule, Math.max(dtstart - 1, after), 1)
   if (candidate === null) {

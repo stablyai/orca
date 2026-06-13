@@ -9,6 +9,7 @@ export type AutomationRunStatus =
   | 'dispatching'
   | 'dispatched'
   | 'completed'
+  | 'skipped_precheck'
   | 'skipped_missed'
   | 'skipped_unavailable'
   | 'skipped_needs_interactive_auth'
@@ -54,10 +55,30 @@ export type AutomationRunOutputSnapshot = {
   truncated: boolean
 }
 
+export type AutomationPrecheck = {
+  command: string
+  timeoutSeconds: number
+}
+
+export type AutomationPrecheckResult = {
+  command: string
+  exitCode: number | null
+  timedOut: boolean
+  durationMs: number
+  stdout: string
+  stderr: string
+  stdoutTruncated: boolean
+  stderrTruncated: boolean
+  error: string | null
+  startedAt: number
+  completedAt: number
+}
+
 export type Automation = {
   id: string
   name: string
   prompt: string
+  precheck: AutomationPrecheck | null
   agentId: TuiAgent
   projectId: string
   executionTargetType: AutomationExecutionTargetType
@@ -94,6 +115,7 @@ export type AutomationRun = {
   chatSessionId: string | null
   terminalSessionId: string | null
   outputSnapshot: AutomationRunOutputSnapshot | null
+  precheckResult: AutomationPrecheckResult | null
   usage: AutomationRunUsage | null
   error: string | null
   startedAt: number | null
@@ -104,6 +126,7 @@ export type AutomationRun = {
 export type AutomationCreateInput = {
   name: string
   prompt: string
+  precheck?: AutomationPrecheck | null
   agentId: TuiAgent
   projectId: string
   workspaceMode: AutomationWorkspaceMode
@@ -122,6 +145,7 @@ export type AutomationUpdateInput = Partial<
     Automation,
     | 'name'
     | 'prompt'
+    | 'precheck'
     | 'agentId'
     | 'projectId'
     | 'workspaceMode'
@@ -148,6 +172,7 @@ export type AutomationDispatchResult = {
   workspaceDisplayName?: string | null
   terminalSessionId?: string | null
   outputSnapshot?: AutomationRunOutputSnapshot | null
+  precheckResult?: AutomationPrecheckResult | null
   usage?: AutomationRunUsage | null
   error?: string | null
 }

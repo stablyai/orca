@@ -43,15 +43,21 @@ export function formatDiffComments(comments: readonly DiffComment[]): string {
 }
 
 export function normalizeMobileDiffComments(value: unknown, worktreeId: string): DiffComment[] {
-  if (!Array.isArray(value)) return []
+  if (!Array.isArray(value)) {
+    return []
+  }
   return value.flatMap((candidate): DiffComment[] => {
-    if (!isRecord(candidate)) return []
+    if (!isRecord(candidate)) {
+      return []
+    }
     const id = typeof candidate.id === 'string' ? candidate.id : ''
     const filePath = typeof candidate.filePath === 'string' ? candidate.filePath : ''
     const lineNumber = typeof candidate.lineNumber === 'number' ? candidate.lineNumber : NaN
     const body = typeof candidate.body === 'string' ? candidate.body.trim() : ''
     const createdAt = typeof candidate.createdAt === 'number' ? candidate.createdAt : Date.now()
-    if (!id || !filePath || !Number.isFinite(lineNumber) || !body) return []
+    if (!id || !filePath || !Number.isFinite(lineNumber) || !body) {
+      return []
+    }
     return [
       {
         id,
@@ -103,7 +109,9 @@ export function removeMobileDiffComments(
   comments: readonly DiffComment[],
   ids: ReadonlySet<string>
 ): DiffComment[] {
-  if (ids.size === 0) return [...comments]
+  if (ids.size === 0) {
+    return [...comments]
+  }
   return comments.filter((comment) => !ids.has(comment.id))
 }
 
@@ -123,7 +131,9 @@ export function removeDeliveredMobileDiffComments(
   comments: readonly DiffComment[],
   delivered: readonly DiffComment[]
 ): DiffComment[] {
-  if (delivered.length === 0) return [...comments]
+  if (delivered.length === 0) {
+    return [...comments]
+  }
   const deliveredById = new Map(delivered.map((comment) => [comment.id, comment]))
   return comments.filter((comment) => {
     const snapshot = deliveredById.get(comment.id)

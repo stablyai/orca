@@ -9,6 +9,7 @@ function buildInputs(overrides: Partial<PrimaryActionInputs> = {}): PrimaryActio
   return {
     stagedCount: 1,
     hasUnstagedChanges: false,
+    hasStageableChanges: false,
     hasPartiallyStagedChanges: false,
     hasMessage: true,
     hasUnresolvedConflicts: false,
@@ -63,6 +64,15 @@ function firstButton(markup: string): string {
     throw new Error('button not found')
   }
   return match[0]
+}
+
+function buttonContaining(markup: string, label: string): string {
+  const buttons = markup.match(/<button\b[\s\S]*?<\/button>/g) ?? []
+  const button = buttons.find((candidate) => candidate.includes(label))
+  if (!button) {
+    throw new Error(`button not found: ${label}`)
+  }
+  return button
 }
 
 function textarea(markup: string): string {
@@ -374,6 +384,34 @@ describe('ConflictSummaryCard', () => {
     expect(cherryPickMarkup).not.toContain('Abort rebase')
   })
 
+  it('renders abort actions with the quiet outline review-conflicts button treatment', () => {
+    const mergeMarkup = renderToStaticMarkup(
+      <ConflictSummaryCard
+        conflictOperation="merge"
+        unresolvedCount={1}
+        isResolvingWithAI={false}
+        onAbortOperation={vi.fn()}
+        onResolveWithAI={vi.fn()}
+        onReview={vi.fn()}
+      />
+    )
+    const rebaseMarkup = renderToStaticMarkup(
+      <ConflictSummaryCard
+        conflictOperation="rebase"
+        unresolvedCount={1}
+        isResolvingWithAI={false}
+        onAbortOperation={vi.fn()}
+        onResolveWithAI={vi.fn()}
+        onReview={vi.fn()}
+      />
+    )
+
+    expect(buttonContaining(mergeMarkup, 'Review conflicts')).toContain('data-variant="outline"')
+    expect(buttonContaining(mergeMarkup, 'Abort merge')).toContain('data-variant="outline"')
+    expect(buttonContaining(rebaseMarkup, 'Review conflicts')).toContain('data-variant="outline"')
+    expect(buttonContaining(rebaseMarkup, 'Abort rebase')).toContain('data-variant="outline"')
+  })
+
   it('renders the Sparkles icon on the idle Resolve with AI button', () => {
     const markup = renderToStaticMarkup(
       <ConflictSummaryCard
@@ -407,5 +445,17 @@ describe('OperationBanner', () => {
     expect(rebaseMarkup).toContain('Abort rebase')
     expect(cherryPickMarkup).not.toContain('Abort merge')
     expect(cherryPickMarkup).not.toContain('Abort rebase')
+  })
+
+  it('renders abort actions with the quiet outline button treatment', () => {
+    const mergeMarkup = renderToStaticMarkup(
+      <OperationBanner conflictOperation="merge" onAbortOperation={vi.fn()} />
+    )
+    const rebaseMarkup = renderToStaticMarkup(
+      <OperationBanner conflictOperation="rebase" onAbortOperation={vi.fn()} />
+    )
+
+    expect(buttonContaining(mergeMarkup, 'Abort merge')).toContain('data-variant="outline"')
+    expect(buttonContaining(rebaseMarkup, 'Abort rebase')).toContain('data-variant="outline"')
   })
 })

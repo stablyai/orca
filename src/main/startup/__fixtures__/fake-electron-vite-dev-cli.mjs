@@ -12,11 +12,53 @@ const grandchild = spawn(process.execPath, [grandchildPath], {
   stdio: 'ignore'
 })
 
+let exiting = false
+
+function killGrandchild(signal) {
+  if (!grandchild.pid) {
+    return
+  }
+  try {
+    process.kill(grandchild.pid, signal)
+  } catch (error) {
+    const code = error && typeof error === 'object' && 'code' in error ? error.code : null
+    if (code !== 'ESRCH') {
+      throw error
+    }
+  }
+}
+
+function exitAfterGrandchild(signal, code) {
+  if (exiting) {
+    return
+  }
+  exiting = true
+  killGrandchild(signal)
+  const forceTimer = setTimeout(() => {
+    killGrandchild('SIGKILL')
+    process.exit(code)
+  }, 1000)
+  grandchild.once('exit', () => {
+    clearTimeout(forceTimer)
+    process.exit(code)
+  })
+}
+
+process.once('SIGINT', () => {
+  exitAfterGrandchild('SIGINT', 130)
+})
+
+process.once('SIGTERM', () => {
+  exitAfterGrandchild('SIGTERM', 143)
+})
+
 if (!pidFile) {
   throw new Error('ORCA_DEV_WRAPPER_TEST_PID_FILE is required')
 }
 
-writeFileSync(pidFile, `${grandchild.pid ?? ''}\n`, 'utf8')
+// Why: wrapper tests must clean up both the fake electron-vite CLI process and
+// the spawned Electron-like descendant if the assertion fails before SIGINT.
+writeFileSync(pidFile, `${process.pid}\n${grandchild.pid ?? ''}\n`, 'utf8')
 if (envFile) {
   writeFileSync(
     envFile,

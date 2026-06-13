@@ -51,7 +51,18 @@ function readRuntimeArg() {
 
 function ensureNodeRuntime() {
   const initial = runNodeCheck()
-  if (initial.ok) {
+  const patchedNodePtyRebuildReason = getPatchedNodePtyRebuildReason()
+  if (initial.ok && !patchedNodePtyRebuildReason) {
+    return
+  }
+
+  if (patchedNodePtyRebuildReason) {
+    console.warn(`[native-runtime] ${patchedNodePtyRebuildReason}`)
+    if (!initial.ok) {
+      printCheckError(initial)
+    }
+    runPnpm(['rebuild', 'node-pty'])
+    verifyNodeRuntimeAfterRebuild()
     return
   }
 
@@ -61,7 +72,10 @@ function ensureNodeRuntime() {
   )
   printCheckError(initial)
   runPnpm(['rebuild', ...failedModules])
+  verifyNodeRuntimeAfterRebuild()
+}
 
+function verifyNodeRuntimeAfterRebuild() {
   const final = runNodeCheck()
   if (!final.ok) {
     console.error(
@@ -74,14 +88,22 @@ function ensureNodeRuntime() {
 
 function ensureElectronRuntime() {
   const initial = runElectronCheck()
-  if (initial.ok) {
+  const patchedNodePtyRebuildReason = getPatchedNodePtyRebuildReason()
+  if (initial.ok && !patchedNodePtyRebuildReason) {
     return
   }
 
-  console.warn(
-    `[native-runtime] ${formatRuntimeLabel('electron')} cannot load native modules; rebuilding native deps for Electron.`
-  )
-  printCheckError(initial)
+  if (patchedNodePtyRebuildReason) {
+    console.warn(`[native-runtime] ${patchedNodePtyRebuildReason}`)
+    if (!initial.ok) {
+      printCheckError(initial)
+    }
+  } else {
+    console.warn(
+      `[native-runtime] ${formatRuntimeLabel('electron')} cannot load native modules; rebuilding native deps for Electron.`
+    )
+    printCheckError(initial)
+  }
   runNodeScript(['config/scripts/rebuild-native-deps.mjs'])
 
   const final = runElectronCheck()
@@ -234,7 +256,12 @@ function loadNodePtyNativeModule() {
   const nativeName = getNodePtyNativeModuleName()
   // Why: node-pty's Windows JS wrapper defers conpty.node/pty.node until a
   // terminal is created, so require('node-pty') alone can miss ABI mismatches.
-  loadNativeModule(nativeName)
+  const native = loadNativeModule(nativeName)
+  if (requiresPatchedNodePtySourceBuild() && !isNodePtyReleaseBuildDir(native.dir)) {
+    throw new Error(
+      `node-pty resolved to ${native.dir}; expected build/Release so Orca's node-pty patch is active`
+    )
+  }
 }
 
 function getNodePtyNativeModuleName() {
@@ -243,6 +270,43 @@ function getNodePtyNativeModuleName() {
   }
 
   return getWindowsBuildNumber() >= 18309 ? 'conpty' : 'pty'
+}
+
+function getPatchedNodePtyRebuildReason() {
+  if (!requiresPatchedNodePtySourceBuild()) {
+    return null
+  }
+
+  // Why: a loadable upstream node-pty prebuild is not enough; Orca's Unix
+  // patch only lands in the source-built build/Release artifacts.
+  const nodePtyDir = resolve(projectDir, 'node_modules', 'node-pty')
+  const missingArtifact = [
+    resolve(nodePtyDir, 'build', 'Release', 'pty.node'),
+    resolve(nodePtyDir, 'build', 'Release', 'spawn-helper')
+  ].find((artifactPath) => !existsSync(artifactPath))
+
+  if (!missingArtifact) {
+    return null
+  }
+
+  return 'Patched node-pty build artifacts are missing; rebuilding native deps.'
+}
+
+function requiresPatchedNodePtySourceBuild() {
+  if (process.platform === 'win32') {
+    return false
+  }
+
+  const nodePtyPatchPath = resolve(projectDir, 'config', 'patches', 'node-pty@1.1.0.patch')
+  if (!existsSync(nodePtyPatchPath)) {
+    return false
+  }
+
+  return existsSync(resolve(projectDir, 'node_modules', 'node-pty'))
+}
+
+function isNodePtyReleaseBuildDir(nativeDir) {
+  return typeof nativeDir === 'string' && nativeDir.replace(/\\/g, '/').includes('build/Release/')
 }
 
 function getWindowsBuildNumber() {

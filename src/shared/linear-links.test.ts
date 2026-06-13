@@ -4,7 +4,8 @@ import {
   buildLinearPersonalApiKeySettingsUrl,
   buildLinearTeamUrl,
   buildLinearWorkspaceApiSettingsUrl,
-  getLinearOrganizationUrlKeyFromIssueUrl
+  getLinearOrganizationUrlKeyFromIssueUrl,
+  parseLinearIssueInput
 } from './linear-links'
 
 describe('linear links', () => {
@@ -40,5 +41,21 @@ describe('linear links', () => {
       'https://linear.app/settings/account/security'
     )
     expect(buildLinearWorkspaceApiSettingsUrl('   ')).toBe('https://linear.app/settings/api')
+  })
+
+  it('parses bare Linear issue identifiers', () => {
+    expect(parseLinearIssueInput('eng-123')).toEqual({ identifier: 'ENG-123' })
+  })
+
+  it('parses Linear issue URLs with organization URL keys', () => {
+    expect(parseLinearIssueInput('https://linear.app/acme/issue/eng-123/fix-auth')).toEqual({
+      identifier: 'ENG-123',
+      organizationUrlKey: 'acme'
+    })
+  })
+
+  it('rejects non-Linear issue input', () => {
+    expect(parseLinearIssueInput('https://example.com/acme/issue/ENG-123')).toBeNull()
+    expect(parseLinearIssueInput('not an issue')).toBeNull()
   })
 })

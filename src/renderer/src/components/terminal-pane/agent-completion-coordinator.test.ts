@@ -33,6 +33,8 @@ function createRejectableDeferred<T>(): {
   return { promise, reject: rejectDeferred }
 }
 
+const HOOK_DONE_QUIET_MS = 1_500
+
 describe('agent completion coordinator', () => {
   beforeEach(() => {
     vi.useFakeTimers()
@@ -350,9 +352,20 @@ describe('agent completion coordinator', () => {
       agentType: 'codex'
     })
     coordinator.observeClassifiedTitleCompletion('codex done')
+    vi.advanceTimersByTime(HOOK_DONE_QUIET_MS)
 
     expect(dispatchCompletion).toHaveBeenCalledTimes(1)
-    expect(dispatchCompletion).toHaveBeenCalledWith('codex')
+    expect(dispatchCompletion).toHaveBeenCalledWith(
+      'codex',
+      expect.objectContaining({
+        source: 'hook',
+        quietedHookDone: true,
+        agentStatus: expect.objectContaining({
+          state: 'done',
+          agentType: 'codex'
+        })
+      })
+    )
   })
 
   it('ignores stale working title state after a hook completion already notified', () => {
@@ -497,6 +510,7 @@ describe('agent completion coordinator', () => {
       prompt: '',
       agentType: 'codex'
     })
+    vi.advanceTimersByTime(HOOK_DONE_QUIET_MS)
 
     expect(dispatchCompletion).toHaveBeenCalledTimes(2)
   })
@@ -591,6 +605,92 @@ describe('agent completion coordinator', () => {
     expect(dispatchCompletion).toHaveBeenCalledTimes(2)
   })
 
+  it('cancels a hook completion when the same turn resumes work before the quiet window', () => {
+    const dispatchCompletion = vi.fn()
+    const coordinator = createAgentCompletionCoordinator({
+      paneKey: 'tab-1:leaf-1',
+      getPtyId: () => 'pty-1',
+      getSettings: () => null,
+      inspectProcess: vi.fn(),
+      dispatchCompletion,
+      isLive: () => true
+    })
+
+    coordinator.observeHookStatus({
+      state: 'working',
+      prompt: 'run the goal',
+      agentType: 'codex'
+    })
+    coordinator.observeHookStatus({
+      state: 'done',
+      prompt: 'run the goal',
+      agentType: 'codex'
+    })
+    expect(coordinator.hasPendingHookDoneCompletion()).toBe(true)
+    vi.advanceTimersByTime(HOOK_DONE_QUIET_MS - 1)
+    expect(dispatchCompletion).not.toHaveBeenCalled()
+
+    coordinator.observeHookStatus({
+      state: 'working',
+      prompt: 'run the goal',
+      agentType: 'codex'
+    })
+    expect(coordinator.hasPendingHookDoneCompletion()).toBe(false)
+    vi.advanceTimersByTime(HOOK_DONE_QUIET_MS)
+    expect(dispatchCompletion).not.toHaveBeenCalled()
+
+    coordinator.observeHookStatus({
+      state: 'done',
+      prompt: 'run the goal',
+      agentType: 'codex'
+    })
+    vi.advanceTimersByTime(HOOK_DONE_QUIET_MS)
+
+    expect(dispatchCompletion).toHaveBeenCalledTimes(1)
+    expect(dispatchCompletion).toHaveBeenCalledWith(
+      'codex',
+      expect.objectContaining({
+        source: 'hook',
+        quietedHookDone: true,
+        agentStatus: expect.objectContaining({
+          state: 'done',
+          prompt: 'run the goal',
+          agentType: 'codex'
+        })
+      })
+    )
+  })
+
+  it('cancels a hook completion when title tracking observes resumed work before quiet', () => {
+    const dispatchCompletion = vi.fn()
+    const coordinator = createAgentCompletionCoordinator({
+      paneKey: 'tab-1:leaf-1',
+      getPtyId: () => 'pty-1',
+      getSettings: () => null,
+      inspectProcess: vi.fn(),
+      dispatchCompletion,
+      isLive: () => true
+    })
+
+    coordinator.observeHookStatus({
+      state: 'working',
+      prompt: 'run the goal',
+      agentType: 'codex'
+    })
+    coordinator.observeHookStatus({
+      state: 'done',
+      prompt: 'run the goal',
+      agentType: 'codex'
+    })
+    expect(coordinator.hasPendingHookDoneCompletion()).toBe(true)
+
+    coordinator.observeTitleWorking()
+    expect(coordinator.hasPendingHookDoneCompletion()).toBe(false)
+    vi.advanceTimersByTime(HOOK_DONE_QUIET_MS)
+
+    expect(dispatchCompletion).not.toHaveBeenCalled()
+  })
+
   it.each([
     'claude',
     'codex',
@@ -621,6 +721,89 @@ describe('agent completion coordinator', () => {
     })
 
     expect(dispatchCompletion).toHaveBeenCalledWith(agentType)
+  })
+
+  it('notifies once after a Cursor tool-heavy turn, not on each shell hook', () => {
+    const dispatchCompletion = vi.fn()
+    const coordinator = createAgentCompletionCoordinator({
+      paneKey: 'tab-1:leaf-1',
+      getPtyId: () => 'pty-1',
+      getSettings: () => null,
+      inspectProcess: vi.fn(),
+      dispatchCompletion,
+      isLive: () => true
+    })
+
+    const turn = {
+      prompt: 'fix the bug',
+      agentType: 'cursor' as const
+    }
+
+    coordinator.observeHookStatus({ state: 'working', ...turn })
+    coordinator.observeHookStatus({
+      state: 'working',
+      ...turn,
+      toolName: 'Shell',
+      toolInput: 'pnpm test'
+    })
+    coordinator.observeHookStatus({
+      state: 'working',
+      ...turn,
+      toolName: 'Read',
+      toolInput: '/repo/src/app.ts'
+    })
+    coordinator.observeHookStatus({
+      state: 'working',
+      ...turn,
+      toolName: 'Shell',
+      toolInput: 'git status'
+    })
+
+    expect(dispatchCompletion).not.toHaveBeenCalled()
+
+    coordinator.observeHookStatus({ state: 'done', ...turn, lastAssistantMessage: 'Fixed.' })
+    vi.advanceTimersByTime(HOOK_DONE_QUIET_MS)
+
+    expect(dispatchCompletion).toHaveBeenCalledTimes(1)
+  })
+
+  it('would spam Cursor notifications if shell hooks still mapped to waiting', () => {
+    const dispatchCompletion = vi.fn()
+    const coordinator = createAgentCompletionCoordinator({
+      paneKey: 'tab-1:leaf-1',
+      getPtyId: () => 'pty-1',
+      getSettings: () => null,
+      inspectProcess: vi.fn(),
+      dispatchCompletion,
+      isLive: () => true
+    })
+
+    const turn = {
+      prompt: 'fix the bug',
+      agentType: 'cursor' as const
+    }
+
+    coordinator.observeHookStatus({ state: 'working', ...turn })
+    coordinator.observeHookStatus({
+      state: 'waiting',
+      ...turn,
+      toolName: 'Shell',
+      toolInput: 'pnpm test'
+    })
+    coordinator.observeHookStatus({
+      state: 'working',
+      ...turn,
+      toolName: 'Read',
+      toolInput: '/repo/src/app.ts'
+    })
+    coordinator.observeHookStatus({
+      state: 'waiting',
+      ...turn,
+      toolName: 'Shell',
+      toolInput: 'git status'
+    })
+
+    expect(dispatchCompletion).toHaveBeenCalledTimes(2)
   })
 
   it('keeps a generic title completion pending long enough for the first remote inspection', async () => {

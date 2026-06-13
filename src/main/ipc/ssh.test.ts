@@ -47,6 +47,7 @@ const {
     dispose: vi.fn(),
     isDisposed: vi.fn().mockReturnValue(false),
     onNotification: vi.fn(),
+    onRequest: vi.fn().mockReturnValue(() => {}),
     onDispose: vi.fn().mockReturnValue(() => {}),
     request: vi.fn().mockResolvedValue({}),
     notify: vi.fn()

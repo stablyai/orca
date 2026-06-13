@@ -9,6 +9,7 @@ import {
   normalizeRuntimePathForComparison
 } from '../../../../shared/cross-platform-path'
 import type { Worktree } from '../../../../shared/types'
+import { translate } from '@/i18n/i18n'
 
 type WorktreeBatchDeleteOptions = {
   forceConfirm?: boolean
@@ -16,6 +17,7 @@ type WorktreeBatchDeleteOptions = {
 }
 
 type WorktreeDeleteWithToastOptions = {
+  force?: boolean
   onForceDeleted?: (worktreeId: string) => void
 }
 
@@ -42,6 +44,9 @@ export async function runWorktreeDeletesInParallel(
   targets: readonly Pick<Worktree, 'id' | 'displayName' | 'repoId' | 'path'>[],
   options: WorktreeDeleteWithToastOptions = {}
 ): Promise<string[]> {
+  // Why: deletes are serialized per repo to avoid git lock races, but every
+  // selected/lineage workspace should show in-flight feedback immediately.
+  useAppStore.getState().markWorktreesDeleting(targets.map((target) => target.id))
   // Why: `git worktree remove`/`prune`/`branch -D` mutate repo-wide ref state
   // and contend on `.git/packed-refs.lock` and per-worktree HEAD.lock. Running
   // every target through Promise.all races those locks on the same repo and
@@ -68,6 +73,7 @@ export async function runWorktreeDeletesInParallel(
       const failedInGroup: (typeof group)[number][] = []
       for (const target of group) {
         if (failedInGroup.some((failed) => isStrictDescendantPath(target.path, failed.path))) {
+          useAppStore.getState().clearWorktreeDeleteState(target.id)
           continue
         }
         const deleted = await runWorktreeDeleteWithToast(target.id, target.displayName, options)
@@ -106,7 +112,7 @@ export function runWorktreeDeleteWithToast(
 ): Promise<boolean> {
   const removeWorktree = useAppStore.getState().removeWorktree
 
-  return removeWorktree(worktreeId, false)
+  return removeWorktree(worktreeId, options.force === true)
     .then((result) => {
       if (result.ok) {
         return true
@@ -119,37 +125,58 @@ export function runWorktreeDeleteWithToast(
         description: toastCopy.description,
         duration: 10000,
         cancel: {
-          label: 'View',
+          label: translate('auto.components.sidebar.delete.worktree.flow.7488ed8711', 'View'),
           onClick: () => viewWorktreeDiff(worktreeId)
         },
         action: canForceDelete
           ? {
-              label: 'Force Delete',
+              label: translate(
+                'auto.components.sidebar.delete.worktree.flow.2b20ce87b3',
+                'Force Delete'
+              ),
               onClick: () => {
                 useAppStore
                   .getState()
                   .removeWorktree(worktreeId, true)
                   .then((forceResult) => {
                     if (!forceResult.ok) {
-                      toast.error('Force delete failed', {
-                        description: forceResult.error,
-                        action: {
-                          label: 'View',
-                          onClick: () => viewWorktreeDiff(worktreeId)
+                      toast.error(
+                        translate(
+                          'auto.components.sidebar.delete.worktree.flow.4f3876c0f5',
+                          'Force delete failed'
+                        ),
+                        {
+                          description: forceResult.error,
+                          action: {
+                            label: translate(
+                              'auto.components.sidebar.delete.worktree.flow.7488ed8711',
+                              'View'
+                            ),
+                            onClick: () => viewWorktreeDiff(worktreeId)
+                          }
                         }
-                      })
+                      )
                       return
                     }
                     options.onForceDeleted?.(worktreeId)
                   })
                   .catch((err: unknown) => {
-                    toast.error('Failed to delete workspace', {
-                      description: err instanceof Error ? err.message : String(err),
-                      action: {
-                        label: 'View',
-                        onClick: () => viewWorktreeDiff(worktreeId)
+                    toast.error(
+                      translate(
+                        'auto.components.sidebar.delete.worktree.flow.ae57cbf6e4',
+                        'Failed to delete workspace'
+                      ),
+                      {
+                        description: err instanceof Error ? err.message : String(err),
+                        action: {
+                          label: translate(
+                            'auto.components.sidebar.delete.worktree.flow.7488ed8711',
+                            'View'
+                          ),
+                          onClick: () => viewWorktreeDiff(worktreeId)
+                        }
                       }
-                    })
+                    )
                   })
               }
             }
@@ -158,9 +185,15 @@ export function runWorktreeDeleteWithToast(
       return false
     })
     .catch((err: unknown) => {
-      toast.error('Failed to delete workspace', {
-        description: err instanceof Error ? err.message : String(err)
-      })
+      toast.error(
+        translate(
+          'auto.components.sidebar.delete.worktree.flow.ae57cbf6e4',
+          'Failed to delete workspace'
+        ),
+        {
+          description: err instanceof Error ? err.message : String(err)
+        }
+      )
       return false
     })
 }
@@ -221,9 +254,18 @@ export function runWorktreeBatchDelete(
     .filter((worktree): worktree is Worktree => worktree != null && !worktree.isMainWorktree)
 
   if (targets.length === 0) {
-    toast.info('No deletable workspaces selected', {
-      description: 'Refresh Space and try again if the workspace list looks stale.'
-    })
+    toast.info(
+      translate(
+        'auto.components.sidebar.delete.worktree.flow.7243145cd6',
+        'No deletable workspaces selected'
+      ),
+      {
+        description: translate(
+          'auto.components.sidebar.delete.worktree.flow.b81b4e40ca',
+          'Refresh Space and try again if the workspace list looks stale.'
+        )
+      }
+    )
     return false
   }
 

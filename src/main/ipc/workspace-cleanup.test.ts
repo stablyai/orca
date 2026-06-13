@@ -3,7 +3,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ipcMain } from 'electron'
 import type { Store } from '../persistence'
-import type { DiffComment, GitStatusResult, GitWorktreeInfo, Repo } from '../../shared/types'
+import type {
+  DiffComment,
+  GitStatusResult,
+  GitWorktreeInfo,
+  Repo,
+  WorktreeMeta
+} from '../../shared/types'
 
 const {
   listRepoWorktreesMock,
@@ -188,6 +194,48 @@ describe('workspace cleanup scan', () => {
 
     expect(result.errors).toEqual([])
     expect(result.candidates).toEqual([])
+  })
+
+  it('uses direct metadata lookup for focused disconnected remote preflight', async () => {
+    const targetWorktreeId = 'repo-1::/remote/repo-feature'
+    const targetMeta: WorktreeMeta = {
+      displayName: 'Remote Feature',
+      comment: '',
+      linkedIssue: null,
+      linkedPR: null,
+      linkedLinearIssue: null,
+      isArchived: false,
+      isUnread: false,
+      isPinned: false,
+      sortOrder: 0,
+      lastActivityAt: NOW - 2 * 24 * 60 * 60 * 1000
+    }
+    const getWorktreeMeta = vi.fn((worktreeId: string) =>
+      worktreeId === targetWorktreeId ? targetMeta : undefined
+    )
+    const getAllWorktreeMeta = vi.fn(() => {
+      throw new Error('focused disconnected SSH preflight should not enumerate all metadata')
+    })
+    const store = {
+      getRepos: () => [{ ...REPO, connectionId: 'ssh-1' }],
+      getWorktreeMeta,
+      getAllWorktreeMeta
+    } as unknown as Store
+
+    const result = await scanWorkspaceCleanup(store, { worktreeId: targetWorktreeId })
+
+    expect(getWorktreeMeta).toHaveBeenCalledWith(targetWorktreeId)
+    expect(getAllWorktreeMeta).not.toHaveBeenCalled()
+    expect(result.errors).toEqual([])
+    expect(result.candidates[0]).toMatchObject({
+      worktreeId: targetWorktreeId,
+      path: '/remote/repo-feature',
+      blockers: ['ssh-disconnected'],
+      git: {
+        clean: null,
+        checkedAt: null
+      }
+    })
   })
 
   it('scans connected remote workspaces through the SSH git provider', async () => {

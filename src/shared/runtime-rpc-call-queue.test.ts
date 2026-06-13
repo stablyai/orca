@@ -5,6 +5,7 @@ describe('runtime RPC call queue', () => {
   it('classifies per-worktree decoration lookups as background work', () => {
     expect(isBackgroundRuntimeMethod('github.prForBranch')).toBe(true)
     expect(isBackgroundRuntimeMethod('hostedReview.forBranch')).toBe(true)
+    expect(isBackgroundRuntimeMethod('worktree.prefetchCreateBase')).toBe(true)
     expect(isBackgroundRuntimeMethod('terminal.send')).toBe(false)
     expect(isBackgroundRuntimeMethod('worktree.create')).toBe(false)
   })
@@ -48,5 +49,33 @@ describe('runtime RPC call queue', () => {
 
     const second = queue.enqueue('web-runtime', 'status.get', async () => 'second')
     await expect(second).resolves.toBe('second')
+  })
+
+  it('preserves queued background ordering across large bursts', async () => {
+    const queue = new RuntimeRpcCallQueuePool(1, 1)
+    const started: number[] = []
+    let releaseFirst: () => void = () => {}
+    const first = queue.enqueue('web-runtime', 'github.prForBranch', async () => {
+      started.push(0)
+      await new Promise<void>((resolve) => {
+        releaseFirst = resolve
+      })
+      return 0
+    })
+    const rest = Array.from({ length: 70 }, (_, index) =>
+      queue.enqueue('web-runtime', 'github.prForBranch', async () => {
+        const value = index + 1
+        started.push(value)
+        return value
+      })
+    )
+
+    await vi.waitFor(() => expect(started).toEqual([0]))
+    releaseFirst()
+
+    await expect(Promise.all([first, ...rest])).resolves.toEqual(
+      Array.from({ length: 71 }, (_, index) => index)
+    )
+    expect(started).toEqual(Array.from({ length: 71 }, (_, index) => index))
   })
 })

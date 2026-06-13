@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 
 import { homedir } from 'os'
 import { basename, join } from 'path'
 import { app } from 'electron'
+import { createHash } from 'crypto'
 import {
   ORCA_PI_AGENT_STATUS_EXTENSION_FILE,
   getPiAgentStatusExtensionSource
@@ -153,12 +154,22 @@ function getDefaultPiAgentDir(kind: PiAgentKind): string {
   return join(homedir(), AGENT_HOME_DIR_NAME[kind], PI_AGENT_SUBDIR)
 }
 
+function toSafeOverlayDirName(ptyId: string): string {
+  return createHash('sha256').update(ptyId).digest('hex').slice(0, 32)
+}
+
 export class PiTitlebarExtensionService {
   private getOverlayRoot(kind: PiAgentKind): string {
     return join(app.getPath('userData'), OVERLAY_ROOT_DIR_NAME[kind])
   }
 
   private getOverlayDir(ptyId: string, kind: PiAgentKind): string {
+    // Why: daemon PTY session ids include worktree paths. Hashing keeps the
+    // overlay stable across daemon cold restore without path-shaped dirs.
+    return join(this.getOverlayRoot(kind), toSafeOverlayDirName(ptyId))
+  }
+
+  private getLegacyOverlayDir(ptyId: string, kind: PiAgentKind): string {
     return join(this.getOverlayRoot(kind), ptyId)
   }
 
@@ -234,6 +245,7 @@ export class PiTitlebarExtensionService {
 
     try {
       this.safeRemoveOverlay(overlayDir, kind)
+      this.safeRemoveOverlay(this.getLegacyOverlayDir(ptyId, kind), kind)
     } catch {
       // Why: on Windows the overlay directory can be locked by another process
       // (e.g. antivirus, indexer, or a previous Orca session that didn't clean up).
@@ -293,6 +305,7 @@ export class PiTitlebarExtensionService {
     for (const kind of Object.keys(OVERLAY_ROOT_DIR_NAME) as PiAgentKind[]) {
       try {
         this.safeRemoveOverlay(this.getOverlayDir(ptyId, kind), kind)
+        this.safeRemoveOverlay(this.getLegacyOverlayDir(ptyId, kind), kind)
       } catch {
         // Why: on Windows the overlay dir can be locked (EPERM/EBUSY) by
         // antivirus or indexers. Overlay cleanup is best-effort - a stale

@@ -10,6 +10,7 @@ vi.mock('../git/runner', () => ({
 }))
 
 import {
+  _getBitbucketRepoRefCacheSize,
   _resetBitbucketRepoRefCache,
   getBitbucketRepoRefForRemote,
   getBitbucketRepoRef,
@@ -43,6 +44,17 @@ describe('Bitbucket repository refs', () => {
       repoSlug: 'project'
     })
     expect(parseBitbucketRepoRef('https://github.com/team/project.git')).toBeNull()
+  })
+
+  it('strips trailing slashes after .git suffixes', () => {
+    expect(parseBitbucketRepoRef('https://bitbucket.org/team/project.git/')).toEqual({
+      workspace: 'team',
+      repoSlug: 'project'
+    })
+    expect(parseBitbucketRepoRef('git@bitbucket.org:team/project.git/')).toEqual({
+      workspace: 'team',
+      repoSlug: 'project'
+    })
   })
 
   it('keeps malformed percent sequences as literal repo path text', async () => {
@@ -80,6 +92,19 @@ describe('Bitbucket repository refs', () => {
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['remote', 'get-url', 'origin'], {
       cwd: '/repo'
     })
+  })
+
+  it('bounds cached repository refs for distinct repo paths', async () => {
+    gitExecFileAsyncMock.mockResolvedValue({
+      stdout: 'git@bitbucket.org:team/project.git\n',
+      stderr: ''
+    })
+
+    for (let i = 0; i < 513; i += 1) {
+      await getBitbucketRepoRef(`/repo-${i}`)
+    }
+
+    expect(_getBitbucketRepoRefCacheSize()).toBe(512)
   })
 
   it('resolves project refs through the SSH git provider for connected repos', async () => {

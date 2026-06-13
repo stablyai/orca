@@ -96,6 +96,11 @@ function encodeRelativePath(path: string): string {
   return path.replaceAll('\\', '/').split('/').filter(Boolean).map(encodeURIComponent).join('/')
 }
 
+function encodeBitbucketFileLineFragment(path: string, line: number): string {
+  const fileName = path.replaceAll('\\', '/').split('/').filter(Boolean).at(-1)
+  return fileName ? `#${encodeURIComponent(`${fileName}-${line}`)}` : ''
+}
+
 export function buildHostedRemoteFileUrl(
   remoteUrl: string,
   relativePath: string,
@@ -119,5 +124,5 @@ export function buildHostedRemoteFileUrl(
   if (remote.provider === 'gitlab') {
     return `${baseUrl}/-/blob/${encodedBranch}${filePathSuffix}#L${line}`
   }
-  return `${baseUrl}/src/${encodedBranch}${filePathSuffix}#L${line}`
+  return `${baseUrl}/src/${encodedBranch}${filePathSuffix}${encodeBitbucketFileLineFragment(relativePath, line)}`
 }

@@ -9,6 +9,19 @@ import type { ElectronApplication } from '@stablyai/playwright-test'
 
 const tempRoots: string[] = []
 
+function initializeGitRepo(repoPath: string): void {
+  mkdirSync(repoPath, { recursive: true })
+  execFileSync('git', ['init'], { cwd: repoPath, stdio: 'pipe' })
+  execFileSync('git', ['config', 'user.email', 'e2e@test.local'], {
+    cwd: repoPath,
+    stdio: 'pipe'
+  })
+  execFileSync('git', ['config', 'user.name', 'E2E Test'], { cwd: repoPath, stdio: 'pipe' })
+  writeFileSync(path.join(repoPath, 'README.md'), `# ${path.basename(repoPath)}\n`)
+  execFileSync('git', ['add', 'README.md'], { cwd: repoPath, stdio: 'pipe' })
+  execFileSync('git', ['commit', '-m', 'Initial commit'], { cwd: repoPath, stdio: 'pipe' })
+}
+
 async function createNestedRepoFixture(): Promise<{
   parentPath: string
   projectPaths: string[]
@@ -20,16 +33,7 @@ async function createNestedRepoFixture(): Promise<{
   const projectPaths = repoNames.map((name) => path.join(parentPath, name))
 
   for (const repoPath of projectPaths) {
-    mkdirSync(repoPath, { recursive: true })
-    execFileSync('git', ['init'], { cwd: repoPath, stdio: 'pipe' })
-    execFileSync('git', ['config', 'user.email', 'e2e@test.local'], {
-      cwd: repoPath,
-      stdio: 'pipe'
-    })
-    execFileSync('git', ['config', 'user.name', 'E2E Test'], { cwd: repoPath, stdio: 'pipe' })
-    writeFileSync(path.join(repoPath, 'README.md'), `# ${path.basename(repoPath)}\n`)
-    execFileSync('git', ['add', 'README.md'], { cwd: repoPath, stdio: 'pipe' })
-    execFileSync('git', ['commit', '-m', 'Initial commit'], { cwd: repoPath, stdio: 'pipe' })
+    initializeGitRepo(repoPath)
   }
 
   return {
@@ -59,16 +63,7 @@ async function createLargeNestedRepoFixture(): Promise<{
   })
 
   for (const repoPath of projectPaths) {
-    mkdirSync(repoPath, { recursive: true })
-    execFileSync('git', ['init'], { cwd: repoPath, stdio: 'pipe' })
-    execFileSync('git', ['config', 'user.email', 'e2e@test.local'], {
-      cwd: repoPath,
-      stdio: 'pipe'
-    })
-    execFileSync('git', ['config', 'user.name', 'E2E Test'], { cwd: repoPath, stdio: 'pipe' })
-    writeFileSync(path.join(repoPath, 'README.md'), `# ${path.basename(repoPath)}\n`)
-    execFileSync('git', ['add', 'README.md'], { cwd: repoPath, stdio: 'pipe' })
-    execFileSync('git', ['commit', '-m', 'Initial commit'], { cwd: repoPath, stdio: 'pipe' })
+    initializeGitRepo(repoPath)
   }
 
   return {
@@ -115,16 +110,16 @@ test.describe('Folder setup', () => {
     await expect(dialog).toBeVisible()
     await dialog.getByRole('button', { name: /Browse folder/i }).click()
 
-    const importDialog = orcaPage.getByRole('dialog', { name: /Import as project group/i })
+    const importDialog = orcaPage.getByRole('dialog', {
+      name: /Import repositories from folder/i
+    })
     await expect(
-      importDialog.getByRole('heading', { name: /Import as project group/i })
+      importDialog.getByRole('heading', { name: /Import repositories from folder/i })
     ).toBeVisible()
     await expect(importDialog.getByText('api-service', { exact: true }).first()).toBeVisible()
     await expect(importDialog.getByText('web-client', { exact: true }).first()).toBeVisible()
-    await expect(
-      importDialog.getByRole('button', { name: /Import as project group/i })
-    ).toBeEnabled()
-    await importDialog.getByRole('button', { name: /Import as project group/i }).click()
+    await expect(importDialog.getByRole('button', { name: /Import as group/i })).toBeEnabled()
+    await importDialog.getByRole('button', { name: /Import as group/i }).click()
 
     await expect
       .poll(
@@ -183,8 +178,10 @@ test.describe('Folder setup', () => {
     await expect(dialog).toBeVisible()
     await dialog.getByRole('button', { name: /Browse folder/i }).click()
 
-    const importDialog = orcaPage.getByRole('dialog', { name: /Import as project group/i })
-    await expect(importDialog.getByText('Found 87 git repositories in this folder.')).toBeVisible()
+    const importDialog = orcaPage.getByRole('dialog', {
+      name: /Import repositories from folder/i
+    })
+    await expect(importDialog.getByText(/Found 87 repositories in/)).toBeVisible()
     await expect
       .poll(async () =>
         importDialog.locator('ul').evaluate((list) => {
@@ -209,7 +206,7 @@ test.describe('Folder setup', () => {
         .locator('input[type="checkbox"]')
         .check()
     }
-    await importDialog.getByRole('button', { name: /Import as project group/i }).click()
+    await importDialog.getByRole('button', { name: /Import as group/i }).click()
 
     await expect
       .poll(

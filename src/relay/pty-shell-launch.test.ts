@@ -44,6 +44,17 @@ function expectBashOsc133Lifecycle(output: string): void {
   expect(output.split(oscD)).toHaveLength(3)
 }
 
+function expectZdotdirSourceContext(content: string, fileName: '.zprofile' | '.zshrc' | '.zlogin') {
+  expect(content).toContain('export ZDOTDIR="$_orca_home"')
+  expect(content).toContain(`source "$_orca_home/${fileName}"`)
+  expect(content).toContain('export ZDOTDIR="$_orca_wrapper_zdotdir"')
+}
+
+function expectFinalZdotdirRestoreContext(content: string) {
+  expect(content).toContain("after Orca's last wrapper file has loaded")
+  expect(content).toContain('export ZDOTDIR="$_orca_home"')
+}
+
 describe('getRelayShellLaunchConfig', () => {
   let homeDir: string
 
@@ -72,14 +83,44 @@ describe('getRelayShellLaunchConfig', () => {
       expect(readFileSync(join(zshRoot, '.zprofile'), 'utf8')).toContain(
         '_orca_home="${ORCA_USER_ZDOTDIR:-${ORCA_ORIG_ZDOTDIR:-$HOME}}"'
       )
-      expect(readFileSync(join(zshRoot, '.zshrc'), 'utf8')).toContain(
-        '_orca_home="${ORCA_USER_ZDOTDIR:-${ORCA_ORIG_ZDOTDIR:-$HOME}}"'
-      )
-      expect(readFileSync(join(zshRoot, '.zlogin'), 'utf8')).toContain(
-        '_orca_home="${ORCA_USER_ZDOTDIR:-${ORCA_ORIG_ZDOTDIR:-$HOME}}"'
-      )
+      const zprofile = readFileSync(join(zshRoot, '.zprofile'), 'utf8')
+      const zshrc = readFileSync(join(zshRoot, '.zshrc'), 'utf8')
+      const zlogin = readFileSync(join(zshRoot, '.zlogin'), 'utf8')
+      expect(zshrc).toContain('_orca_home="${ORCA_USER_ZDOTDIR:-${ORCA_ORIG_ZDOTDIR:-$HOME}}"')
+      expect(zlogin).toContain('_orca_home="${ORCA_USER_ZDOTDIR:-${ORCA_ORIG_ZDOTDIR:-$HOME}}"')
+      expectZdotdirSourceContext(zprofile, '.zprofile')
+      expectZdotdirSourceContext(zshrc, '.zshrc')
+      expectZdotdirSourceContext(zlogin, '.zlogin')
+      expectFinalZdotdirRestoreContext(zshrc)
+      expectFinalZdotdirRestoreContext(zlogin)
     }
   )
+
+  it('does not pass POSIX login flags to Windows shells', () => {
+    expect(
+      getRelayShellLaunchConfig('C:\\Windows\\System32\\cmd.exe', { HOME: homeDir }, 'win32')
+    ).toEqual({
+      args: [],
+      env: {}
+    })
+    expect(
+      getRelayShellLaunchConfig(
+        'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe',
+        { HOME: homeDir },
+        'win32'
+      )
+    ).toEqual({
+      args: ['-NoLogo'],
+      env: {}
+    })
+  })
+
+  it('keeps PowerShell Core on POSIX remotes as a login shell', () => {
+    expect(getRelayShellLaunchConfig('/usr/bin/pwsh', { HOME: homeDir }, 'linux')).toEqual({
+      args: ['-l'],
+      env: {}
+    })
+  })
 
   it.skipIf(process.platform === 'win32')('rewrites stale persistent wrapper files', () => {
     const zshRoot = join(homeDir, '.orca-relay', 'shell-ready', 'zsh')

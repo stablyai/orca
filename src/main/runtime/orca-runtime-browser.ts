@@ -62,7 +62,7 @@ import {
   importCookiesFromBrowser,
   selectBrowserProfile
 } from '../browser/browser-cookie-import'
-import { waitForTabRegistration } from '../ipc/browser'
+import { waitForTabRegistration, waitForWorktreeTabRegistration } from '../ipc/browser'
 
 export type BrowserCommandTargetParams = {
   worktree?: string
@@ -159,6 +159,32 @@ export class RuntimeBrowserCommands {
     return bridge
   }
 
+  private hasLiveRegisteredBrowserTab(
+    bridge: AgentBrowserBridge,
+    worktreeId: string | undefined
+  ): boolean {
+    for (const [, webContentsId] of bridge.getRegisteredTabs(worktreeId)) {
+      const guest = webContents.fromId(webContentsId)
+      if (guest && !guest.isDestroyed()) {
+        return true
+      }
+    }
+    return false
+  }
+
+  private hasLiveRegisteredBrowserPage(
+    bridge: AgentBrowserBridge,
+    worktreeId: string | undefined,
+    browserPageId: string
+  ): boolean {
+    const webContentsId = bridge.getRegisteredTabs(worktreeId).get(browserPageId)
+    if (webContentsId == null) {
+      return false
+    }
+    const guest = webContents.fromId(webContentsId)
+    return Boolean(guest && !guest.isDestroyed())
+  }
+
   // Why: the CLI sends worktree selectors (e.g. "path:/Users/...") but the
   // bridge stores worktreeIds in "repoId::path" format (from the renderer's
   // Zustand store). This helper resolves the selector to the store-compatible
@@ -169,11 +195,9 @@ export class RuntimeBrowserCommands {
       // Without --worktree, we still need to activate the view so persisted tabs
       // become operable via registerGuest.
       const bridge = this.host.getAgentBrowserBridge()
-      if (bridge && bridge.getRegisteredTabs().size === 0) {
+      if (bridge && !this.hasLiveRegisteredBrowserTab(bridge, undefined)) {
         try {
-          const win = this.host.getAuthoritativeWindow()
-          win.webContents.send('browser:activateView', {})
-          await new Promise((resolve) => setTimeout(resolve, 500))
+          await this.ensureBrowserWorktreeActive(undefined)
         } catch {
           // Window may not exist yet (e.g. during startup or in tests)
         }
@@ -187,7 +211,7 @@ export class RuntimeBrowserCommands {
     // activation step remains best-effort because missing windows during tests
     // or startup should not erase the validated worktree target itself.
     const bridge = this.host.getAgentBrowserBridge()
-    if (bridge && bridge.getRegisteredTabs(worktreeId).size === 0) {
+    if (bridge && !this.hasLiveRegisteredBrowserTab(bridge, worktreeId)) {
       try {
         await this.ensureBrowserWorktreeActive(worktreeId)
       } catch {
@@ -209,13 +233,23 @@ export class RuntimeBrowserCommands {
       }
     }
 
+    const worktreeId = params.worktree
+      ? (await this.host.resolveWorktreeSelector(params.worktree)).id
+      : undefined
+    const bridge = this.host.getAgentBrowserBridge()
+    if (bridge && !this.hasLiveRegisteredBrowserPage(bridge, worktreeId, browserPageId)) {
+      try {
+        await this.ensureBrowserPageActive(worktreeId, browserPageId)
+      } catch {
+        // Fall through with the explicit page target so downstream routing
+        // returns the existing clear "tab not found" error if wake fails.
+      }
+    }
     return {
       // Why: explicit browserPageId is already a stable tab identity, so we do
       // not auto-resolve cwd worktree scoping on top of it. Only honor an
       // explicit --worktree when the caller asked for that extra validation.
-      worktreeId: params.worktree
-        ? await this.resolveBrowserWorktreeId(params.worktree)
-        : undefined,
+      worktreeId,
       browserPageId
     }
   }
@@ -251,12 +285,25 @@ export class RuntimeBrowserCommands {
   // and registerGuest fires, but automation must not steal the user's visible
   // worktree/browser pane. Ask the renderer to background-mount the worktree and
   // acquire a hidden automation visibility lease instead of activating the UI.
-  private async ensureBrowserWorktreeActive(worktreeId: string): Promise<void> {
+  private async ensureBrowserWorktreeActive(worktreeId: string | undefined): Promise<void> {
     const win = this.host.getAuthoritativeWindow()
-    win.webContents.send('browser:activateView', { worktreeId })
-    // Why: give the renderer time to mount the hidden paintable webview.
-    // The webview needs to attach and fire dom-ready before registerGuest runs.
-    await new Promise((resolve) => setTimeout(resolve, 500))
+    win.webContents.send('browser:activateView', worktreeId ? { worktreeId } : {})
+    // Why: hidden/restored browser panes become operable only after the
+    // renderer's webview mounts and calls registerGuest. Waiting on that IPC is
+    // both faster and less flaky than sleeping for an arbitrary fixed delay.
+    await waitForWorktreeTabRegistration(worktreeId)
+  }
+
+  private async ensureBrowserPageActive(
+    worktreeId: string | undefined,
+    browserPageId: string
+  ): Promise<void> {
+    const win = this.host.getAuthoritativeWindow()
+    win.webContents.send(
+      'browser:activateView',
+      worktreeId ? { worktreeId, browserPageId } : { browserPageId }
+    )
+    await waitForTabRegistration(browserPageId)
   }
 
   // Why: agent-browser drives navigation via CDP, which bypasses Electron's
@@ -572,8 +619,8 @@ export class RuntimeBrowserCommands {
   }
 
   async browserTabShow(params: { page: string; worktree?: string }): Promise<BrowserTabShowResult> {
-    const worktreeId = await this.resolveBrowserWorktreeId(params.worktree)
-    return { tab: this.describeBrowserTab(params.page, worktreeId) }
+    const target = await this.resolveBrowserCommandTarget(params)
+    return { tab: this.describeBrowserTab(params.page, target.worktreeId) }
   }
 
   async browserTabCurrent(params: { worktree?: string }): Promise<BrowserTabCurrentResult> {
@@ -1405,8 +1452,8 @@ export class RuntimeBrowserCommands {
     page: string
     worktree?: string
   }): Promise<BrowserTabProfileShowResult> {
-    const worktreeId = await this.resolveBrowserWorktreeId(params.worktree)
-    const tab = this.describeBrowserTab(params.page, worktreeId)
+    const target = await this.resolveBrowserCommandTarget(params)
+    const tab = this.describeBrowserTab(params.page, target.worktreeId)
     return {
       browserPageId: tab.browserPageId,
       worktreeId: tab.worktreeId ?? null,
@@ -1546,7 +1593,12 @@ export class RuntimeBrowserCommands {
     worktree?: string
   }): Promise<{ closed: boolean }> {
     const bridge = this.requireAgentBrowserBridge()
-    const worktreeId = await this.resolveBrowserWorktreeId(params.worktree)
+    const pageTarget =
+      typeof params.page === 'string' && params.page.length > 0
+        ? await this.resolveBrowserCommandTarget({ worktree: params.worktree, page: params.page })
+        : null
+    const worktreeId =
+      pageTarget?.worktreeId ?? (await this.resolveBrowserWorktreeId(params.worktree))
 
     let tabId: string | null = null
     if (typeof params.page === 'string' && params.page.length > 0) {
@@ -1652,10 +1704,6 @@ export class RuntimeBrowserCommands {
   ): Promise<{ browserPageId: string }> {
     const win = this.host.getAuthoritativeWindow()
     const requestId = randomUUID()
-
-    if (worktreeId) {
-      await this.ensureBrowserWorktreeActive(worktreeId)
-    }
 
     const browserPageId = await new Promise<string>((resolve, reject) => {
       const timer = setTimeout(() => {

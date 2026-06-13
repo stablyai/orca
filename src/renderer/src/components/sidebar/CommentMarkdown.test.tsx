@@ -42,6 +42,44 @@ describe('CommentMarkdown', () => {
     expect(markup).not.toContain('href="https://github.com/stablyai/orca/issues/2317"')
   })
 
+  it('keeps remote compact markdown images as links', () => {
+    const markup = renderToStaticMarkup(
+      <CommentMarkdown content="See this: ![Image #1](https://example.com/screenshot.png)" />
+    )
+
+    expect(markup).not.toContain('<img')
+    expect(markup).toContain('href="https://example.com/screenshot.png"')
+    expect(markup).toContain('>Image #1</a>')
+  })
+
+  it('renders trusted compact markdown images inline', () => {
+    const markup = renderToStaticMarkup(
+      <CommentMarkdown content="See this: ![Image #1](data:image/png;base64,abc123)" />
+    )
+
+    expect(markup).toContain('<img')
+    expect(markup).toContain('alt="Image #1"')
+    expect(markup).toContain('src="data:image/png;base64,abc123"')
+  })
+
+  it('renders bare GitHub user attachment links as document videos', () => {
+    const url = 'https://github.com/user-attachments/assets/ce11040a-fb66-4289-927f-547b16dfc488'
+    const markup = renderToStaticMarkup(<CommentMarkdown variant="document" content={url} />)
+
+    expect(markup).toContain('<video')
+    expect(markup).toContain(`src="${url}"`)
+    expect(markup).toContain('controls=""')
+    expect(markup).not.toContain(`href="${url}" class="break-all`)
+  })
+
+  it('keeps non-attachment document links as links', () => {
+    const url = 'https://github.com/stablyai/orca/pull/5265'
+    const markup = renderToStaticMarkup(<CommentMarkdown variant="document" content={url} />)
+
+    expect(markup).not.toContain('<video')
+    expect(markup).toContain(`href="${url}"`)
+  })
+
   it('autolinks very large generated GitHub reference comments', () => {
     const referenceCount = 130_000
     const tree = {

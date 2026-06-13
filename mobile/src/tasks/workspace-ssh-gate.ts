@@ -12,13 +12,27 @@ function isWorkspaceSshConnectInProgress(status: SshConnectionStatus | null): bo
 }
 
 export function workspaceSshStatusLabel(status: SshConnectionStatus | null): string {
-  if (status === 'connected') return 'Connected'
-  if (status === 'connecting') return 'Connecting'
-  if (status === 'deploying-relay') return 'Deploying relay'
-  if (status === 'reconnecting') return 'Reconnecting'
-  if (status === 'auth-failed') return 'Authentication failed'
-  if (status === 'reconnection-failed') return 'Reconnect failed'
-  if (status === 'error') return 'Connection failed'
+  if (status === 'connected') {
+    return 'Connected'
+  }
+  if (status === 'connecting') {
+    return 'Connecting'
+  }
+  if (status === 'deploying-relay') {
+    return 'Deploying relay'
+  }
+  if (status === 'reconnecting') {
+    return 'Reconnecting'
+  }
+  if (status === 'auth-failed') {
+    return 'Authentication failed'
+  }
+  if (status === 'reconnection-failed') {
+    return 'Reconnect failed'
+  }
+  if (status === 'error') {
+    return 'Connection failed'
+  }
   return 'Disconnected'
 }
 

@@ -17,6 +17,7 @@ vi.mock('./ssh-channel-multiplexer', () => {
       notify = vi.fn()
       request = vi.fn().mockResolvedValue([])
       onNotification = vi.fn().mockReturnValue(() => {})
+      onRequest = vi.fn().mockReturnValue(() => {})
       onDispose = vi.fn().mockReturnValue(() => {})
       dispose = vi.fn()
       isDisposed = vi.fn().mockReturnValue(false)
@@ -57,7 +58,6 @@ vi.mock('../ipc/pty', () => ({
   clearPtyOwnershipForConnection: vi.fn(),
   clearProviderPtyState: vi.fn(),
   deletePtyOwnership: vi.fn(),
-  isRendererPtyOutputPaused: vi.fn(() => false),
   setPtyOwnership: vi.fn()
 }))
 

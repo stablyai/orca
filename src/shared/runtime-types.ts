@@ -1,5 +1,5 @@
 /* eslint-disable max-lines -- Why: shared type definitions for all runtime RPC methods live in one file for discoverability and import simplicity. */
-import type { AgentStatusEntry } from './agent-status-types'
+import type { AgentStatusEntry, AgentStatusOrchestrationContext } from './agent-status-types'
 import type {
   BaseRefSearchResult,
   BrowserCookieImportResult,
@@ -101,10 +101,17 @@ export type RuntimeSyncWindowGraph = {
   mobileSessionTabs?: RuntimeMobileSessionTabsSnapshot[]
 }
 
+export type RuntimeSyncWindowGraphResult = RuntimeStatus & {
+  /** Main owns terminal handles/dispatches, so renderer graph sync returns the
+   *  parent metadata needed by title-derived agent rows without name guessing. */
+  agentOrchestrationByPaneKey?: Record<string, AgentStatusOrchestrationContext>
+}
+
 export type RuntimeMobileSessionTerminalTab = {
   type: 'terminal'
   id: string
   title: string
+  quickCommandLabel?: string | null
   parentTabId: string
   leafId: string
   ptyId?: string | null
@@ -789,12 +796,20 @@ export type BrowserErrorCode =
   | 'browser_timeout'
   | 'browser_error'
 
+export type EmulatorErrorCode =
+  | 'emulator_no_active'
+  | 'emulator_device_not_found'
+  | 'emulator_helper_failed'
+  | 'emulator_not_macos'
+  | 'emulator_error'
+
 // Computer-use types (see docs/computer-use/plan.md §4 and §12.6).
 
 export const COMPUTER_ERROR_CODES = {
   app_not_found: 'app_not_found',
   app_blocked: 'app_blocked',
   window_not_found: 'window_not_found',
+  window_not_focused: 'window_not_focused',
   window_stale: 'window_stale',
   provider_incompatible: 'provider_incompatible',
   unsupported_capability: 'unsupported_capability',
@@ -813,16 +828,6 @@ export type ComputerErrorCode = keyof typeof COMPUTER_ERROR_CODES
 
 export type ComputerAppQuery = string
 
-export type ComputerSessionTarget = {
-  session?: string
-  worktree?: string
-  app?: ComputerAppQuery
-}
-
-export type ComputerListAppsArgs = {
-  worktree?: string
-}
-
 export type ComputerAppInfo = {
   name: string
   bundleId: string | null
@@ -831,6 +836,7 @@ export type ComputerAppInfo = {
 
 export type ComputerWindowInfo = {
   id?: number | null
+  index?: number | null
   title: string
   x?: number | null
   y?: number | null
@@ -889,19 +895,27 @@ export type ComputerActionMetadata = {
   actionName?: string | null
   fallbackReason?: string | null
   targetWindowId?: number | null
+  targetWindowIndex?: number | null
   verification?: ComputerActionVerification
 }
 
 export type ComputerActionVerification =
   | {
       state: 'verified'
-      property: 'focusedText' | 'selection'
+      property: 'focusedText' | 'selection' | 'value'
       expected?: string | null
       actualPreview?: string | null
     }
   | {
       state: 'unverified'
-      reason: 'synthetic_input' | 'clipboard_paste' | 'provider_unavailable' | 'window_changed'
+      reason:
+        | 'synthetic_input'
+        | 'clipboard_paste'
+        | 'provider_unavailable'
+        | 'window_changed'
+        | 'value_mismatch'
+      expected?: string | null
+      actualPreview?: string | null
     }
 
 export type ComputerSnapshotResult = {

@@ -14,7 +14,8 @@ const ActivateTab = WorktreeTabSelector.extend({
   tabId: z
     .unknown()
     .transform((v) => (typeof v === 'string' ? v : ''))
-    .pipe(z.string().min(1, 'Missing tab id'))
+    .pipe(z.string().min(1, 'Missing tab id')),
+  leafId: z.string().max(128).optional()
 })
 
 const CreateTerminalTab = WorktreeTabSelector.extend({
@@ -90,7 +91,7 @@ export const SESSION_TAB_METHODS: RpcAnyMethod[] = [
     name: 'session.tabs.activate',
     params: ActivateTab,
     handler: async (params, { runtime }) =>
-      runtime.activateMobileSessionTab(params.worktree, params.tabId)
+      runtime.activateMobileSessionTab(params.worktree, params.tabId, params.leafId)
   }),
   defineMethod({
     name: 'session.tabs.close',

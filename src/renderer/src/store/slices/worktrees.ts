@@ -6,8 +6,9 @@ import type {
   TerminalLayoutSnapshot,
   TerminalPaneLayoutNode,
   LocalBaseRefRefreshResult,
-  Repo,
   ForceDeleteWorktreeBranchResult,
+  FolderWorkspace,
+  GitHubPrStartPoint,
   Worktree,
   WorkspaceVisibleTabType,
   GitPushTarget,
@@ -15,7 +16,6 @@ import type {
   WorktreeLineage,
   WorktreeMeta
 } from '../../../../shared/types'
-import type { TerminalGitHubPRLink } from '@/lib/terminal-github-pr-link-detector'
 import type { RuntimeWorktreeListResult } from '../../../../shared/runtime-types'
 import {
   findWorktreeById,
@@ -30,18 +30,34 @@ import {
   getActiveRuntimeTarget,
   RuntimeRpcCallError
 } from '../../runtime/runtime-rpc-client'
+import { toRuntimeWorktreeSelector } from '../../runtime/runtime-worktree-selector'
 import { getHostedReviewCacheKey, refreshHostedReviewCard } from './hosted-review'
 import { getGitHubPRCacheKey, getLegacyGitHubPRCacheKey } from './github-cache-key'
 import { moveFocusToRendererBeforeFocusedWebviewHidden } from './browser-webview-cleanup'
 import { toast } from 'sonner'
 import { requestVirtualizedScrollAnchorRecord } from '@/hooks/requestVirtualizedScrollAnchorRecord'
 import { branchName } from '@/lib/git-utils'
-import { basename } from '@/lib/path'
+import { markInputQuietSchedulerInput, scheduleAfterInputQuiet } from '@/lib/input-quiet-scheduler'
+import { showLocalBaseRefUpdateSuggestionToast } from '@/components/sidebar/local-base-ref-suggestion-toast'
+import { translate } from '@/i18n/i18n'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
+import {
+  folderWorkspaceKey,
+  parseWorkspaceKey,
+  worktreeWorkspaceKey
+} from '../../../../shared/workspace-scope'
+import { folderWorkspaceToWorktree } from '../../../../shared/folder-workspace-worktree'
 export type { WorktreeSlice, WorktreeDeleteState } from './worktree-helpers'
 
 // Why: old runtime servers only have `worktree.list`; preserve the large-list
 // UI hydration parity this slice used before `worktree.detectedList` existed.
 const REMOTE_WORKTREE_LIST_PARITY_LIMIT = 10_000
+const ACTIVE_WORKTREE_TERMINAL_PREP_DELAY_MS = 300
+const ACTIVE_WORKTREE_TERMINAL_PREP_INPUT_QUIET_MS = 450
+const ACTIVE_WORKTREE_TERMINAL_PREP_IDLE_TIMEOUT_MS = 180
+const pendingActivationTerminalPrepCancels = new Map<string, () => void>()
+const detachedHeadAutoDerivedDisplayNames = new Map<string, string>()
+const folderWorkspaceWorktreeCache = new WeakMap<FolderWorkspace, Worktree>()
 
 function countTerminalLayoutLeaves(node: TerminalPaneLayoutNode | null | undefined): number {
   if (!node) {
@@ -60,6 +76,10 @@ function getActivationSpawnSuppression(layout: TerminalLayoutSnapshot | undefine
     Object.keys(layout?.ptyIdsByLeafId ?? {}).length
   )
   return paneCount === 1 ? true : paneCount
+}
+
+function shouldDeferActivationTerminalPrep(): boolean {
+  return typeof window !== 'undefined' && import.meta.env.MODE !== 'test'
 }
 
 function showLocalBaseRefRefreshToast(result: LocalBaseRefRefreshResult | undefined): void {
@@ -83,13 +103,23 @@ function showLocalBaseRefRefreshToast(result: LocalBaseRefRefreshResult | undefi
       break
   }
 
-  toast.warning(`Local ${result.localBranch} was not refreshed`, {
-    description: `Workspace created from ${result.baseRef}, but Orca could not fast-forward local ${result.localBranch} because ${reason}`
-  })
+  toast.warning(
+    translate('auto.store.slices.worktrees.14bc053a47', 'Local {{value0}} was not refreshed', {
+      value0: result.localBranch
+    }),
+    {
+      description: translate(
+        'auto.store.slices.worktrees.903b51c2ed',
+        'Workspace created from {{value0}}, but Orca could not fast-forward local {{value1}} because {{value2}}',
+        { value0: result.baseRef, value1: result.localBranch, value2: reason }
+      )
+    }
+  )
 }
 
 function showPreservedBranchToast(
   result: RemoveWorktreeResult | undefined,
+  worktree: Pick<Worktree, 'displayName' | 'isMainWorktree'> | undefined,
   onForceDelete: (branchName: string, expectedHead: string) => void
 ): void {
   const preservedBranch = result?.preservedBranch
@@ -97,17 +127,30 @@ function showPreservedBranchToast(
   if (!branch) {
     return
   }
+  const targetTitle = worktree?.isMainWorktree ? 'Workspace' : 'Worktree'
+  const targetLabel = targetTitle.toLowerCase()
+  const targetName = worktree?.displayName?.trim()
+  const deletedTarget = targetName ? ` after deleting ${targetLabel} "${targetName}"` : ''
   const expectedHead = preservedBranch.head
   const action = expectedHead
     ? {
-        label: 'Force Delete Branch',
+        label: translate('auto.store.slices.worktrees.e50495aae6', 'Force Delete Branch'),
         onClick: () => onForceDelete(branch, expectedHead)
       }
     : undefined
-  toast.warning('Workspace deleted, branch kept', {
-    description: `Git could not safely delete "${branch}", so Orca kept it to avoid losing local commits.`,
-    ...(action ? { action } : {})
-  })
+  toast.warning(
+    translate('auto.store.slices.worktrees.4e6496f3d2', '{{value0}} deleted, branch kept', {
+      value0: targetTitle
+    }),
+    {
+      description: translate(
+        'auto.store.slices.worktrees.d1d78a7baa',
+        'Git could not safely delete branch "{{value0}}"{{value1}}, so Orca kept it to avoid losing local commits.',
+        { value0: branch, value1: deletedTarget }
+      ),
+      ...(action ? { action } : {})
+    }
+  )
 }
 
 function arraysShallowEqual(a: string[] | undefined, b: string[] | undefined): boolean {
@@ -118,63 +161,6 @@ function arraysShallowEqual(a: string[] | undefined, b: string[] | undefined): b
     return !a?.length && !b?.length
   }
   return a.every((v, i) => v === b[i])
-}
-
-function normalizeGitHubRepoName(value: string | null | undefined): string | null {
-  const trimmed = value?.trim()
-  if (!trimmed) {
-    return null
-  }
-  return trimmed.replace(/\.git$/i, '').toLowerCase()
-}
-
-function parseGitHubRemoteSlug(
-  remoteUrl: string | null | undefined
-): { owner: string; repo: string } | null {
-  const trimmed = remoteUrl?.trim()
-  if (!trimmed) {
-    return null
-  }
-  const withoutGitSuffix = trimmed.replace(/\.git(?:[?#].*)?$/i, '')
-  const match =
-    /^git@github\.com:([^/]+)\/([^/?#]+)$/i.exec(withoutGitSuffix) ??
-    /^ssh:\/\/(?:[^@/]+@)?github\.com[:/]+([^/]+)\/([^/?#]+)$/i.exec(withoutGitSuffix) ??
-    /^https?:\/\/(?:[^@/]+@)?github\.com\/([^/]+)\/([^/?#]+)$/i.exec(withoutGitSuffix)
-  if (!match) {
-    return null
-  }
-  return { owner: match[1], repo: match[2] }
-}
-
-function githubSlugsEqual(
-  left: { owner: string; repo: string } | null,
-  right: { owner: string; repo: string }
-): boolean {
-  return (
-    left !== null &&
-    left.owner.toLowerCase() === right.owner.toLowerCase() &&
-    left.repo.toLowerCase() === right.repo.toLowerCase()
-  )
-}
-
-function shouldOptimisticallyLinkTerminalGitHubPR(
-  repo: Repo,
-  worktree: Pick<Worktree, 'path' | 'pushTarget'>,
-  link: TerminalGitHubPRLink
-): boolean {
-  if (githubSlugsEqual(parseGitHubRemoteSlug(worktree.pushTarget?.remoteUrl), link.slug)) {
-    return true
-  }
-
-  const observedRepo = normalizeGitHubRepoName(link.slug.repo)
-  if (!observedRepo) {
-    return false
-  }
-  const localRepoNames = [repo.displayName, basename(repo.path), basename(worktree.path)]
-    .map(normalizeGitHubRepoName)
-    .filter((name): name is string => name !== null)
-
-  return localRepoNames.includes(observedRepo)
 }
 
 function areLineageRecordsEqual(
@@ -231,6 +217,8 @@ function areWorktreesEqual(current: Worktree[] | undefined, next: Worktree[]): b
       worktree.lastActivityAt === candidate.lastActivityAt &&
       worktree.workspaceStatus === candidate.workspaceStatus &&
       worktree.createdWithAgent === candidate.createdWithAgent &&
+      worktree.pendingFirstAgentMessageRename === candidate.pendingFirstAgentMessageRename &&
+      worktree.firstAgentMessageRenameError === candidate.firstAgentMessageRenameError &&
       worktree.baseRef === candidate.baseRef &&
       worktree.pushTarget?.remoteName === candidate.pushTarget?.remoteName &&
       worktree.pushTarget?.branchName === candidate.pushTarget?.branchName &&
@@ -273,17 +261,17 @@ function areDetectedWorktreeResultsEqual(
 }
 
 function toVisibleTabType(contentType: string): WorkspaceVisibleTabType {
-  return contentType === 'browser' ? 'browser' : contentType === 'terminal' ? 'terminal' : 'editor'
-}
-
-function toRuntimeWorktreeIdSelector(worktreeId: string): string {
-  return `id:${worktreeId}`
+  if (contentType === 'browser' || contentType === 'terminal' || contentType === 'simulator') {
+    return contentType
+  }
+  return 'editor'
 }
 
 const FORCE_RETRYABLE_WORKTREE_REMOVAL_MESSAGES = [
   'Worktree has uncommitted or untracked changes',
   'contains modified or untracked files',
-  'Worktree is no longer registered with Git but its directory remains'
+  'Worktree is no longer registered with Git but its directory remains',
+  'Worktree is no longer registered with Git and its directory is already gone'
 ] as const
 
 // Why: local preflight formatting can surface raw git porcelain instead of the
@@ -387,29 +375,50 @@ function applyDetectedWorktreeUpdates(
   worktreeId: string,
   updates: Partial<WorktreeMeta>
 ): AppState['detectedWorktreesByRepo'] {
-  let changed = false
-  const nextByRepo: AppState['detectedWorktreesByRepo'] = {}
-
-  for (const [repoId, result] of Object.entries(detectedWorktreesByRepo)) {
-    let repoChanged = false
-    const nextWorktrees = result.worktrees.map((worktree) => {
-      if (worktree.id !== worktreeId) {
-        return worktree
-      }
-      repoChanged = true
-      changed = true
-      return { ...worktree, ...updates }
-    })
-    nextByRepo[repoId] = repoChanged ? { ...result, worktrees: nextWorktrees } : result
+  const repoId = getRepoIdFromWorktreeId(worktreeId)
+  const result = detectedWorktreesByRepo[repoId]
+  if (!result) {
+    return detectedWorktreesByRepo
   }
 
-  return changed ? nextByRepo : detectedWorktreesByRepo
+  let changed = false
+  const nextWorktrees = result.worktrees.map((worktree) => {
+    if (worktree.id !== worktreeId) {
+      return worktree
+    }
+    changed = true
+    return { ...worktree, ...updates }
+  })
+  if (!changed) {
+    return detectedWorktreesByRepo
+  }
+
+  return {
+    ...detectedWorktreesByRepo,
+    [repoId]: { ...result, worktrees: nextWorktrees }
+  }
 }
 
 function findKnownWorktreeById(
-  state: Pick<AppState, 'worktreesByRepo' | 'detectedWorktreesByRepo'>,
+  state: Pick<AppState, 'worktreesByRepo' | 'detectedWorktreesByRepo' | 'folderWorkspaces'>,
   worktreeId: string
 ): Worktree | DetectedWorktreeListResult['worktrees'][number] | undefined {
+  const workspaceScope = parseWorkspaceKey(worktreeId)
+  if (workspaceScope?.type === 'folder') {
+    const folderWorkspace = state.folderWorkspaces.find(
+      (workspace) => workspace.id === workspaceScope.folderWorkspaceId
+    )
+    if (!folderWorkspace) {
+      return undefined
+    }
+    const cached = folderWorkspaceWorktreeCache.get(folderWorkspace)
+    if (cached) {
+      return cached
+    }
+    const worktree = folderWorkspaceToWorktree(folderWorkspace)
+    folderWorkspaceWorktreeCache.set(folderWorkspace, worktree)
+    return worktree
+  }
   const visible = findWorktreeById(state.worktreesByRepo, worktreeId)
   if (visible) {
     return visible
@@ -421,6 +430,84 @@ function findKnownWorktreeById(
     }
   }
   return undefined
+}
+
+function getFolderWorkspaceMetaUpdates(
+  updates: Partial<WorktreeMeta>
+): Partial<
+  Pick<
+    FolderWorkspace,
+    | 'name'
+    | 'comment'
+    | 'isArchived'
+    | 'isUnread'
+    | 'isPinned'
+    | 'sortOrder'
+    | 'manualOrder'
+    | 'lastActivityAt'
+    | 'workspaceStatus'
+    | 'createdWithAgent'
+    | 'pendingFirstAgentMessageRename'
+    | 'firstAgentMessageRenameError'
+  >
+> {
+  const next: Partial<
+    Pick<
+      FolderWorkspace,
+      | 'name'
+      | 'comment'
+      | 'isArchived'
+      | 'isUnread'
+      | 'isPinned'
+      | 'sortOrder'
+      | 'manualOrder'
+      | 'lastActivityAt'
+      | 'workspaceStatus'
+      | 'createdWithAgent'
+      | 'pendingFirstAgentMessageRename'
+      | 'firstAgentMessageRenameError'
+    >
+  > = {}
+  if (updates.displayName !== undefined) {
+    next.name = updates.displayName
+    next.pendingFirstAgentMessageRename = false
+    next.firstAgentMessageRenameError = null
+  }
+  if (updates.comment !== undefined) {
+    next.comment = updates.comment
+    next.lastActivityAt = Date.now()
+  }
+  if (updates.isArchived !== undefined) {
+    next.isArchived = updates.isArchived
+  }
+  if (updates.isUnread !== undefined) {
+    next.isUnread = updates.isUnread
+  }
+  if (updates.isPinned !== undefined) {
+    next.isPinned = updates.isPinned
+  }
+  if (updates.sortOrder !== undefined) {
+    next.sortOrder = updates.sortOrder
+  }
+  if (updates.manualOrder !== undefined) {
+    next.manualOrder = updates.manualOrder
+  }
+  if (updates.lastActivityAt !== undefined) {
+    next.lastActivityAt = updates.lastActivityAt
+  }
+  if (updates.workspaceStatus !== undefined) {
+    next.workspaceStatus = updates.workspaceStatus
+  }
+  if (updates.createdWithAgent !== undefined) {
+    next.createdWithAgent = updates.createdWithAgent
+  }
+  if (updates.pendingFirstAgentMessageRename !== undefined) {
+    next.pendingFirstAgentMessageRename = updates.pendingFirstAgentMessageRename
+  }
+  if (updates.firstAgentMessageRenameError !== undefined) {
+    next.firstAgentMessageRenameError = updates.firstAgentMessageRenameError
+  }
+  return next
 }
 
 function isRuntimeSelectorNotFoundError(error: unknown): boolean {
@@ -565,7 +652,7 @@ async function persistWorktreeMeta(
   await callRuntimeRpc(
     target,
     'worktree.set',
-    { worktree: toRuntimeWorktreeIdSelector(worktreeId), ...updates },
+    { worktree: toRuntimeWorktreeSelector(worktreeId), ...updates },
     { timeoutMs: 15_000 }
   )
 }
@@ -580,9 +667,12 @@ async function resolveLinkedPrPushTarget(
     const result =
       target.kind === 'local'
         ? await window.api.worktrees.resolvePrBase({ repoId, prNumber })
-        : await callRuntimeRpc<
-            { baseBranch: string; pushTarget?: GitPushTarget } | { error: string }
-          >(target, 'worktree.resolvePrBase', { repo: repoId, prNumber }, { timeoutMs: 30_000 })
+        : await callRuntimeRpc<GitHubPrStartPoint | { error: string }>(
+            target,
+            'worktree.resolvePrBase',
+            { repo: repoId, prNumber },
+            { timeoutMs: 30_000 }
+          )
     if ('error' in result) {
       console.warn(`Failed to resolve push target for PR #${prNumber}: ${result.error}`)
       return undefined
@@ -602,15 +692,22 @@ function buildWorktreePurgeState(s: AppState, worktreeIds: string[]): Partial<Ap
 
   // Collect every tab id (and removed file id) we are about to orphan.
   const doomedTabIds = new Set<string>()
+  const doomedBrowserWorkspaceIds = new Set<string>()
   const removedFileIds = new Set<string>()
   for (const id of worktreeIdSet) {
     for (const tab of s.tabsByWorktree[id] ?? []) {
       doomedTabIds.add(tab.id)
     }
+    for (const workspace of s.browserTabsByWorktree[id] ?? []) {
+      doomedBrowserWorkspaceIds.add(workspace.id)
+    }
   }
   for (const file of s.openFiles) {
     if (worktreeIdSet.has(file.worktreeId)) {
       removedFileIds.add(file.id)
+      if (file.markdownPreviewSourceFileId) {
+        removedFileIds.add(file.markdownPreviewSourceFileId)
+      }
     }
   }
 
@@ -625,12 +722,42 @@ function buildWorktreePurgeState(s: AppState, worktreeIds: string[]): Partial<Ap
     }
     return changed ? out : obj
   }
+  const pruneRightSidebarTabByWorktree = (): AppState['rightSidebarTabByWorktree'] => {
+    const omitted = omitByWorktree(s.rightSidebarTabByWorktree)
+    let changed = omitted !== s.rightSidebarTabByWorktree
+    const out: AppState['rightSidebarTabByWorktree'] = {}
+    for (const [id, tab] of Object.entries(omitted)) {
+      if (
+        tab === 'explorer' ||
+        tab === 'vault' ||
+        tab === 'source-control' ||
+        tab === 'checks' ||
+        tab === 'ports'
+      ) {
+        out[id] = tab
+      } else {
+        changed = true
+      }
+    }
+    return changed ? out : omitted
+  }
   const omitByTabId = <T>(obj: Record<string, T>): Record<string, T> => {
     let changed = false
     const out = { ...obj }
     for (const tabId of doomedTabIds) {
       if (tabId in out) {
         delete out[tabId]
+        changed = true
+      }
+    }
+    return changed ? out : obj
+  }
+  const omitByBrowserWorkspaceId = <T>(obj: Record<string, T>): Record<string, T> => {
+    let changed = false
+    const out = { ...obj }
+    for (const workspaceId of doomedBrowserWorkspaceIds) {
+      if (workspaceId in out) {
+        delete out[workspaceId]
         changed = true
       }
     }
@@ -689,6 +816,7 @@ function buildWorktreePurgeState(s: AppState, worktreeIds: string[]): Partial<Ap
     fileSearchStateByWorktree: omitByWorktree(s.fileSearchStateByWorktree),
     // Browser state
     browserTabsByWorktree: omitByWorktree(s.browserTabsByWorktree),
+    browserPagesByWorkspace: omitByBrowserWorkspaceId(s.browserPagesByWorkspace),
     recentlyClosedBrowserTabsByWorktree: omitByWorktree(s.recentlyClosedBrowserTabsByWorktree),
     activeBrowserTabIdByWorktree: omitByWorktree(s.activeBrowserTabIdByWorktree),
     // Editor state
@@ -697,7 +825,8 @@ function buildWorktreePurgeState(s: AppState, worktreeIds: string[]): Partial<Ap
     activeTabIdByWorktree: omitByWorktree(s.activeTabIdByWorktree),
     tabBarOrderByWorktree: omitByWorktree(s.tabBarOrderByWorktree),
     pendingReconnectTabByWorktree: omitByWorktree(s.pendingReconnectTabByWorktree),
-    rightSidebarTabByWorktree: omitByWorktree(s.rightSidebarTabByWorktree),
+    rightSidebarTabByWorktree: pruneRightSidebarTabByWorktree(),
+    rightSidebarExplorerViewByWorktree: omitByWorktree(s.rightSidebarExplorerViewByWorktree ?? {}),
     // Split-tab / unified tab state
     unifiedTabsByWorktree: omitByWorktree(s.unifiedTabsByWorktree),
     groupsByWorktree: omitByWorktree(s.groupsByWorktree),
@@ -711,15 +840,19 @@ function buildWorktreePurgeState(s: AppState, worktreeIds: string[]): Partial<Ap
     gitBranchChangesByWorktree: omitByWorktree(s.gitBranchChangesByWorktree),
     gitBranchCompareSummaryByWorktree: omitByWorktree(s.gitBranchCompareSummaryByWorktree),
     gitBranchCompareRequestKeyByWorktree: omitByWorktree(s.gitBranchCompareRequestKeyByWorktree),
+    showDotfilesByWorktree: omitByWorktree(s.showDotfilesByWorktree),
     expandedDirs: omitByWorktree(s.expandedDirs),
     // Per-file editor state for removed files
     editorDrafts: omitByFileId(s.editorDrafts),
     markdownViewMode: omitByFileId(s.markdownViewMode),
+    markdownFrontmatterVisible: omitByFileId(s.markdownFrontmatterVisible),
     // Top-level actives
     openFiles: nextOpenFiles,
     everActivatedWorktreeIds: nextEverActivatedWorktreeIds,
     lastVisitedAtByWorktreeId: omitByWorktree(s.lastVisitedAtByWorktreeId),
     activeWorktreeId: removedActive ? null : s.activeWorktreeId,
+    activeWorkspaceKey:
+      s.activeWorkspaceKey && worktreeIdSet.has(s.activeWorkspaceKey) ? null : s.activeWorkspaceKey,
     activeFileId: activeFileCleared ? null : s.activeFileId,
     activeBrowserTabId: removedActive ? null : s.activeBrowserTabId,
     activeTabId: activeTabCleared ? null : s.activeTabId,
@@ -732,6 +865,10 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
   detectedWorktreesByRepo: {},
   worktreeLineageById: {},
   activeWorktreeId: null,
+  activeWorkspaceKey: null,
+  pendingWorktreeCreations: {},
+  activePendingCreationId: null,
+  renamingWorktreeId: null,
   deleteStateByWorktreeId: {},
   baseStatusByWorktreeId: {},
   remoteBranchConflictByWorktreeId: {},
@@ -879,6 +1016,9 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       return
     }
     const validIds = new Set<string>()
+    // Why: floating is persisted renderer state, but not a repo worktree that
+    // authoritative runtime scans can return.
+    validIds.add(FLOATING_TERMINAL_WORKTREE_ID)
     for (const result of Object.values(get().detectedWorktreesByRepo)) {
       if (!result.authoritative) {
         continue
@@ -917,8 +1057,10 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
               target,
               'worktree.set',
               {
-                worktree: toRuntimeWorktreeIdSelector(worktreeId),
-                ...(args.parentWorktreeId ? { parentWorktree: `id:${args.parentWorktreeId}` } : {}),
+                worktree: toRuntimeWorktreeSelector(worktreeId),
+                ...(args.parentWorktreeId
+                  ? { parentWorktree: toRuntimeWorktreeSelector(args.parentWorktreeId) }
+                  : {}),
                 ...(args.noParent === true ? { noParent: true } : {})
               },
               { timeoutMs: 15_000 }
@@ -962,15 +1104,28 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
           return worktree
         }
         const nextHead = identity.head ?? worktree.head
-        const nextBranch = identity.branch ?? worktree.branch
+        const nextBranch = identity.branch === null ? '' : (identity.branch ?? worktree.branch)
         if (nextHead === worktree.head && nextBranch === worktree.branch) {
           return worktree
         }
         changed = true
         // Why: terminal branch switches only patch branch/head here; auto-derived
         // titles need the same branch derivation that full worktree listing uses.
-        const wasAutoDerived = worktree.displayName === branchName(worktree.branch)
-        const nextDisplayName = wasAutoDerived ? branchName(nextBranch) : worktree.displayName
+        const currentBranchName = branchName(worktree.branch)
+        const wasAutoDerived = worktree.displayName === currentBranchName
+        const wasDetachedAutoDerived =
+          worktree.branch === '' &&
+          nextBranch !== '' &&
+          detachedHeadAutoDerivedDisplayNames.get(worktreeId) === worktree.displayName
+        const nextDisplayName =
+          (wasAutoDerived || wasDetachedAutoDerived) && nextBranch
+            ? branchName(nextBranch)
+            : worktree.displayName
+        if (identity.branch === null && wasAutoDerived) {
+          detachedHeadAutoDerivedDisplayNames.set(worktreeId, worktree.displayName)
+        } else if (identity.branch !== undefined) {
+          detachedHeadAutoDerivedDisplayNames.delete(worktreeId)
+        }
         return { ...worktree, head: nextHead, branch: nextBranch, displayName: nextDisplayName }
       })
 
@@ -1003,6 +1158,28 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     }))
   },
 
+  prefetchWorktreeCreateBase: async (repoId, baseBranch) => {
+    try {
+      const target = getActiveRuntimeTarget(get().settings)
+      if (target.kind === 'local') {
+        await window.api.worktrees.prefetchCreateBase({
+          repoId,
+          ...(baseBranch ? { baseBranch } : {})
+        })
+        return
+      }
+      await callRuntimeRpc(
+        target,
+        'worktree.prefetchCreateBase',
+        { repo: repoId, ...(baseBranch ? { baseBranch } : {}) },
+        { timeoutMs: 30_000 }
+      )
+    } catch {
+      // Why: prefetch is only a latency hedge. The create path awaits the same
+      // backend refresh and owns user-visible error reporting.
+    }
+  },
+
   createWorktree: async (
     repoId,
     name,
@@ -1020,7 +1197,11 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     workspaceStatus,
     linkedGitLabMR,
     linkedGitLabIssue,
-    startup
+    startup,
+    pendingFirstAgentMessageRename,
+    creationId,
+    linkedLinearIssueWorkspaceId,
+    linkedLinearIssueOrganizationUrlKey
   ) => {
     const retryableConflictPatterns = [
       /already exists locally/i,
@@ -1030,15 +1211,18 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     ]
     const nextCandidateName = (current: string, attempt: number): string =>
       attempt === 0 ? current : `${current}-${attempt + 1}`
-    const nextCandidateBranchName = (
-      current: string | undefined,
-      attempt: number
-    ): string | undefined => (current ? nextCandidateName(current, attempt) : undefined)
+    const isBranchNameOverrideConflict = (error: Error): boolean =>
+      Boolean(
+        branchNameOverride &&
+        (/^Branch ".+" already exists\./i.test(error.message) ||
+          /already exists locally/i.test(error.message) ||
+          /already exists on a remote/i.test(error.message) ||
+          /already has pr #\d+/i.test(error.message))
+      )
 
     try {
       for (let attempt = 0; attempt < 25; attempt += 1) {
         const candidateName = nextCandidateName(name, attempt)
-        const candidateBranchNameOverride = nextCandidateBranchName(branchNameOverride, attempt)
         try {
           // Why: Manual sort is user-authored order. Stamp new workspaces
           // deliberately at the top instead of relying on sortOrder fallback.
@@ -1047,9 +1231,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
             repoId,
             name: candidateName,
             baseBranch,
-            ...(candidateBranchNameOverride
-              ? { branchNameOverride: candidateBranchNameOverride }
-              : {}),
+            ...(branchNameOverride ? { branchNameOverride } : {}),
             setupDecision,
             sparseCheckout,
             ...(displayName ? { displayName } : {}),
@@ -1058,11 +1240,20 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
             ...(linkedPR !== undefined ? { linkedPR } : {}),
             ...(pushTarget ? { pushTarget } : {}),
             ...(createdWithAgent ? { createdWithAgent } : {}),
+            ...(pendingFirstAgentMessageRename === true && createdWithAgent
+              ? { pendingFirstAgentMessageRename: true }
+              : {}),
             ...(linkedLinearIssue !== undefined ? { linkedLinearIssue } : {}),
+            ...(linkedLinearIssueWorkspaceId !== undefined ? { linkedLinearIssueWorkspaceId } : {}),
+            ...(linkedLinearIssueOrganizationUrlKey !== undefined
+              ? { linkedLinearIssueOrganizationUrlKey }
+              : {}),
             ...(manualOrder !== undefined ? { manualOrder } : {}),
             ...(workspaceStatus !== undefined ? { workspaceStatus } : {}),
             ...(linkedGitLabMR !== undefined ? { linkedGitLabMR } : {}),
-            ...(linkedGitLabIssue !== undefined ? { linkedGitLabIssue } : {})
+            ...(linkedGitLabIssue !== undefined ? { linkedGitLabIssue } : {}),
+            ...(startup ? { startup } : {}),
+            ...(creationId ? { creationId } : {})
           }
           const target = getActiveRuntimeTarget(get().settings)
           const result =
@@ -1075,9 +1266,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
                     repo: repoId,
                     name: candidateName,
                     baseBranch,
-                    ...(candidateBranchNameOverride
-                      ? { branchNameOverride: candidateBranchNameOverride }
-                      : {}),
+                    ...(branchNameOverride ? { branchNameOverride } : {}),
                     setupDecision,
                     sparseCheckout,
                     ...(displayName ? { displayName } : {}),
@@ -1086,7 +1275,16 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
                     ...(linkedPR !== undefined ? { linkedPR } : {}),
                     ...(pushTarget ? { pushTarget } : {}),
                     ...(createdWithAgent ? { createdWithAgent } : {}),
+                    ...(pendingFirstAgentMessageRename === true && createdWithAgent
+                      ? { pendingFirstAgentMessageRename: true }
+                      : {}),
                     ...(linkedLinearIssue !== undefined ? { linkedLinearIssue } : {}),
+                    ...(linkedLinearIssueWorkspaceId !== undefined
+                      ? { linkedLinearIssueWorkspaceId }
+                      : {}),
+                    ...(linkedLinearIssueOrganizationUrlKey !== undefined
+                      ? { linkedLinearIssueOrganizationUrlKey }
+                      : {}),
                     ...(manualOrder !== undefined ? { manualOrder } : {}),
                     ...(workspaceStatus !== undefined ? { workspaceStatus } : {}),
                     ...(linkedGitLabMR !== undefined ? { linkedGitLabMR } : {}),
@@ -1109,10 +1307,17 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
           set((s) => {
             const current = s.worktreesByRepo[repoId] ?? []
             const alreadyPresent = current.some((w) => w.id === result.worktree.id)
+            const nextWorktrees = alreadyPresent
+              ? current.map((worktree) =>
+                  worktree.id === result.worktree.id
+                    ? { ...worktree, ...result.worktree }
+                    : worktree
+                )
+              : [...current, result.worktree]
             return {
               worktreesByRepo: {
                 ...s.worktreesByRepo,
-                [repoId]: alreadyPresent ? current : [...current, result.worktree]
+                [repoId]: nextWorktrees
               },
               ...(result.initialBaseStatus
                 ? {
@@ -1127,10 +1332,19 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
             }
           })
           showLocalBaseRefRefreshToast(result.localBaseRefRefresh)
+          showLocalBaseRefUpdateSuggestionToast(result.localBaseRefUpdateSuggestion, {
+            updateSettings: get().updateSettings,
+            getSettings: () => get().settings,
+            openSettingsPage: get().openSettingsPage,
+            openSettingsTarget: get().openSettingsTarget
+          })
           return result
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error)
           const shouldRetry = retryableConflictPatterns.some((pattern) => pattern.test(message))
+          if (error instanceof Error && isBranchNameOverrideConflict(error)) {
+            throw error
+          }
           if (!shouldRetry || attempt === 24) {
             throw error
           }
@@ -1142,6 +1356,62 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       console.error('Failed to create worktree:', err)
       throw err
     }
+  },
+
+  beginPendingWorktreeCreation: (entry) => {
+    set((s) => ({
+      pendingWorktreeCreations: { ...s.pendingWorktreeCreations, [entry.creationId]: entry },
+      activePendingCreationId: entry.creationId
+    }))
+  },
+
+  updatePendingWorktreeCreation: (creationId, patch) => {
+    set((s) => {
+      const entry = s.pendingWorktreeCreations[creationId]
+      if (!entry) {
+        return {}
+      }
+      // Why: the main process re-emits the same phase across mutually-exclusive
+      // fetch paths; skip the write when nothing changes so the strip and panel
+      // don't re-render on a no-op progress event.
+      const hasChange = (Object.keys(patch) as (keyof typeof patch)[]).some(
+        (key) => patch[key] !== entry[key]
+      )
+      if (!hasChange) {
+        return {}
+      }
+      return {
+        pendingWorktreeCreations: {
+          ...s.pendingWorktreeCreations,
+          [creationId]: { ...entry, ...patch }
+        }
+      }
+    })
+  },
+
+  removePendingWorktreeCreation: (creationId) => {
+    set((s) => {
+      if (!s.pendingWorktreeCreations[creationId]) {
+        return {}
+      }
+      const { [creationId]: _removed, ...rest } = s.pendingWorktreeCreations
+      return {
+        pendingWorktreeCreations: rest,
+        // Why: only clear the active surface if it pointed here, so dismissing a
+        // background creation the user already navigated away from doesn't yank
+        // them off whatever they're now looking at.
+        ...(s.activePendingCreationId === creationId ? { activePendingCreationId: null } : {})
+      }
+    })
+  },
+
+  setActivePendingWorktreeCreation: (creationId) => {
+    set((s) => {
+      if (creationId !== null && !s.pendingWorktreeCreations[creationId]) {
+        return {}
+      }
+      return { activePendingCreationId: creationId }
+    })
   },
 
   removeWorktree: async (worktreeId, force) => {
@@ -1161,20 +1431,20 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       const trustDecision = await ensureHooksConfirmed(get(), repoIdForTrust, 'archive')
       const skipArchive = trustDecision === 'skip'
 
+      const worktreeBeforeRemoval = get()
+        .allWorktrees()
+        .find((entry) => entry.id === worktreeId)
       const target = getActiveRuntimeTarget(get().settings)
       const removalResult = await (target.kind === 'local'
         ? window.api.worktrees.remove({ worktreeId, force, skipArchive })
         : callRuntimeRpc<RemoveWorktreeResult>(
             target,
             'worktree.rm',
-            { worktree: worktreeId, force, runHooks: !skipArchive },
+            { worktree: toRuntimeWorktreeSelector(worktreeId), force, runHooks: !skipArchive },
             { timeoutMs: 60_000 }
           ))
 
-      const worktreeDisplayName = get()
-        .allWorktrees()
-        .find((entry) => entry.id === worktreeId)
-        ?.displayName?.trim()
+      const worktreeDisplayName = worktreeBeforeRemoval?.displayName?.trim()
       if (worktreeDisplayName) {
         try {
           await window.api.automations?.snapshotWorkspaceName?.({
@@ -1294,23 +1564,41 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         delete nextGitBranchCompareRequestKeyByWorktree[worktreeId]
         // Why: clean up per-file editor state for files belonging to the removed
         // worktree so stale drafts and view modes never accumulate in memory.
-        const removedFileIds = new Set(
-          s.openFiles.filter((f) => f.worktreeId === worktreeId).map((f) => f.id)
-        )
+        const removedFileIds = new Set<string>()
+        for (const file of s.openFiles) {
+          if (file.worktreeId !== worktreeId) {
+            continue
+          }
+          removedFileIds.add(file.id)
+          if (file.markdownPreviewSourceFileId) {
+            removedFileIds.add(file.markdownPreviewSourceFileId)
+          }
+        }
         const nextEditorDrafts = removedFileIds.size > 0 ? { ...s.editorDrafts } : s.editorDrafts
         const nextMarkdownViewMode =
           removedFileIds.size > 0 ? { ...s.markdownViewMode } : s.markdownViewMode
         const nextEditorViewMode =
           removedFileIds.size > 0 ? { ...s.editorViewMode } : s.editorViewMode
+        const nextMarkdownFrontmatterVisible =
+          removedFileIds.size > 0
+            ? { ...s.markdownFrontmatterVisible }
+            : s.markdownFrontmatterVisible
         if (removedFileIds.size > 0) {
           for (const fileId of removedFileIds) {
             delete nextEditorDrafts[fileId]
             delete nextMarkdownViewMode[fileId]
             delete nextEditorViewMode[fileId]
+            delete nextMarkdownFrontmatterVisible[fileId]
           }
         }
         const nextExpandedDirs = { ...s.expandedDirs }
         delete nextExpandedDirs[worktreeId]
+        const nextShowDotfilesByWorktree = { ...s.showDotfilesByWorktree }
+        delete nextShowDotfilesByWorktree[worktreeId]
+        const nextRightSidebarExplorerViewByWorktree = {
+          ...s.rightSidebarExplorerViewByWorktree
+        }
+        delete nextRightSidebarExplorerViewByWorktree[worktreeId]
         // If the active file belonged to the removed worktree, clear it
         const activeFileCleared = s.activeFileId
           ? s.openFiles.some((f) => f.id === s.activeFileId && f.worktreeId === worktreeId)
@@ -1361,6 +1649,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
           activeFileIdByWorktree: nextActiveFileIdByWorktree,
           activeBrowserTabIdByWorktree: nextActiveBrowserTabIdByWorktree,
           activeTabTypeByWorktree: nextActiveTabTypeByWorktree,
+          rightSidebarExplorerViewByWorktree: nextRightSidebarExplorerViewByWorktree,
           activeTabIdByWorktree: nextActiveTabIdByWorktree,
           tabBarOrderByWorktree: nextTabBarOrderByWorktree,
           pendingReconnectTabByWorktree: nextPendingReconnectTabByWorktree,
@@ -1371,6 +1660,8 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
           editorDrafts: nextEditorDrafts,
           markdownViewMode: nextMarkdownViewMode,
           editorViewMode: nextEditorViewMode,
+          markdownFrontmatterVisible: nextMarkdownFrontmatterVisible,
+          showDotfilesByWorktree: nextShowDotfilesByWorktree,
           expandedDirs: nextExpandedDirs,
           gitStatusByWorktree: nextGitStatusByWorktree,
           gitIgnoredPathsByWorktree: nextGitIgnoredPathsByWorktree,
@@ -1388,12 +1679,13 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         }
       })
       get().removeWorkspaceSpaceWorktrees?.([worktreeId])
-      showPreservedBranchToast(removalResult, (branch, expectedHead) => {
-        void get().forceDeletePreservedBranch(worktreeId, branch, expectedHead)
-      })
-      return removalResult?.preservedBranch
-        ? { ok: true as const, preservedBranch: removalResult.preservedBranch }
-        : { ok: true as const }
+      const preservedBranch = removalResult?.preservedBranch
+      if (preservedBranch) {
+        showPreservedBranchToast(removalResult, worktreeBeforeRemoval, (branch, expectedHead) => {
+          void get().forceDeletePreservedBranch(worktreeId, branch, expectedHead)
+        })
+      }
+      return preservedBranch ? { ok: true as const, preservedBranch } : { ok: true as const }
     } catch (err) {
       // Why: git refusing a non-force delete for dirty/untracked files is a
       // handled user decision point surfaced by the delete toast, not an app error.
@@ -1413,6 +1705,29 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     }
   },
 
+  markWorktreesDeleting: (worktreeIds) => {
+    if (worktreeIds.length === 0) {
+      return
+    }
+    set((s) => {
+      const nextDeleteState = { ...s.deleteStateByWorktreeId }
+      let changed = false
+      for (const worktreeId of new Set(worktreeIds)) {
+        const current = nextDeleteState[worktreeId]
+        if (current?.isDeleting && current.error === null && !current.canForceDelete) {
+          continue
+        }
+        nextDeleteState[worktreeId] = {
+          isDeleting: true,
+          error: null,
+          canForceDelete: false
+        }
+        changed = true
+      }
+      return changed ? { deleteStateByWorktreeId: nextDeleteState } : {}
+    })
+  },
+
   forceDeletePreservedBranch: async (worktreeId, branchName, expectedHead) => {
     try {
       const target = getActiveRuntimeTarget(get().settings)
@@ -1425,16 +1740,18 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         : callRuntimeRpc<ForceDeleteWorktreeBranchResult>(
             target,
             'worktree.forceDeleteBranch',
-            { worktree: worktreeId, branchName, expectedHead },
+            { worktree: toRuntimeWorktreeSelector(worktreeId), branchName, expectedHead },
             { timeoutMs: 15_000 }
           ))
-      toast.success('Local branch deleted', {
-        description: `Deleted "${branchName}".`
+      toast.success(translate('auto.store.slices.worktrees.19db0085fb', 'Local branch deleted'), {
+        description: translate('auto.store.slices.worktrees.5a58e03a26', 'Deleted "{{value0}}".', {
+          value0: branchName
+        })
       })
       return { ok: true as const, ...result }
     } catch (err) {
       const error = err instanceof Error ? err.message : String(err)
-      toast.error('Failed to delete branch', {
+      toast.error(translate('auto.store.slices.worktrees.0216895fb5', 'Failed to delete branch'), {
         description: error
       })
       return { ok: false as const, error }
@@ -1452,8 +1769,20 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     })
   },
 
-  updateWorktreeMeta: async (worktreeId, updates) => {
+  updateWorktreeMeta: async (worktreeId, updates, options) => {
+    const shouldApplyUpdate = options?.shouldApply
     const existingWorktree = get().getKnownWorktreeById(worktreeId)
+    if (shouldApplyUpdate && !shouldApplyUpdate(existingWorktree)) {
+      return
+    }
+    const workspaceScope = parseWorkspaceKey(worktreeId)
+    if (workspaceScope?.type === 'folder') {
+      const folderUpdates = getFolderWorkspaceMetaUpdates(updates)
+      if (Object.keys(folderUpdates).length > 0) {
+        await get().updateFolderWorkspace(workspaceScope.folderWorkspaceId, folderUpdates)
+      }
+      return
+    }
     // Why: manual PR linking only supplies the PR number. Resolve the PR head
     // branch here so Push targets the review branch, but don't repeat that
     // network lookup for no-op linkedPR metadata saves.
@@ -1473,12 +1802,16 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
             linkedPrForPushTarget
           )
         : undefined
+    const worktreeForUpdate = get().getKnownWorktreeById(worktreeId)
+    if (shouldApplyUpdate && !shouldApplyUpdate(worktreeForUpdate)) {
+      return
+    }
     const shouldRefreshHostedReview =
-      updates.linkedPR === null && existingWorktree?.linkedPR !== null
+      updates.linkedPR === null && worktreeForUpdate?.linkedPR !== null
     const reviewRepo = shouldRefreshHostedReview
-      ? get().repos.find((repo) => repo.id === existingWorktree?.repoId)
+      ? get().repos.find((repo) => repo.id === worktreeForUpdate?.repoId)
       : undefined
-    const reviewBranch = existingWorktree?.branch.replace(/^refs\/heads\//, '')
+    const reviewBranch = worktreeForUpdate?.branch.replace(/^refs\/heads\//, '')
 
     // Why: editing a comment is meaningful interaction with the worktree.
     // Without refreshing lastActivityAt, the time-decay score has decayed
@@ -1488,12 +1821,23 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     const targetEnriched = resolvedPushTarget
       ? { ...updates, pushTarget: resolvedPushTarget }
       : updates
-    const enriched =
-      'comment' in targetEnriched
-        ? { ...targetEnriched, lastActivityAt: Date.now() }
+    const renameCleared =
+      'displayName' in targetEnriched
+        ? {
+            ...targetEnriched,
+            pendingFirstAgentMessageRename: false,
+            firstAgentMessageRenameError: null
+          }
         : targetEnriched
+    const enriched =
+      'comment' in renameCleared ? { ...renameCleared, lastActivityAt: Date.now() } : renameCleared
 
+    let didApply = false
     set((s) => {
+      if (shouldApplyUpdate && !shouldApplyUpdate(findKnownWorktreeById(s, worktreeId))) {
+        return {}
+      }
+      didApply = true
       const nextWorktrees = applyWorktreeUpdates(s.worktreesByRepo, worktreeId, enriched)
       const nextDetectedWorktrees = applyDetectedWorktreeUpdates(
         s.detectedWorktreesByRepo,
@@ -1570,6 +1914,9 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         ...(nextPRCache !== prCache ? { prCache: nextPRCache } : {})
       }
     })
+    if (shouldApplyUpdate && !didApply) {
+      return
+    }
 
     try {
       await persistWorktreeMeta(get().settings, worktreeId, enriched)
@@ -1580,7 +1927,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         void get().fetchHostedReviewForBranch(reviewRepo.path, reviewBranch, {
           repoId: reviewRepo.id,
           linkedGitHubPR: null,
-          linkedGitLabMR: existingWorktree?.linkedGitLabMR ?? null,
+          linkedGitLabMR: worktreeForUpdate?.linkedGitLabMR ?? null,
           force: true
         })
       }
@@ -1638,6 +1985,36 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         }
       })
     )
+  },
+
+  setWorktreesPinnedAndReveal: (worktreeIds, isPinned) => {
+    // Skip worktrees already in the target state so a no-op toggle doesn't
+    // scroll the viewport away from where the user is.
+    const updates = new Map<string, Partial<WorktreeMeta>>()
+    let revealWorktreeId: string | null = null
+    for (const worktreeId of worktreeIds) {
+      const current = get().getKnownWorktreeById(worktreeId)
+      if (!current || current.isPinned === isPinned) {
+        continue
+      }
+      const workspaceScope = parseWorkspaceKey(worktreeId)
+      if (workspaceScope?.type === 'folder') {
+        void get().updateWorktreeMeta(worktreeId, { isPinned })
+      } else {
+        updates.set(worktreeId, { isPinned })
+      }
+      if (revealWorktreeId === null) {
+        revealWorktreeId = worktreeId
+      }
+    }
+    if (revealWorktreeId === null) {
+      return
+    }
+    // updateWorktreesMeta applies its store update synchronously (only the
+    // persistence is async), so the reveal below resolves against a render
+    // where the row already sits in its new section.
+    void get().updateWorktreesMeta(updates)
+    get().revealWorktreeInSidebar(revealWorktreeId, { behavior: 'smooth', highlight: true })
   },
 
   markWorktreeUnread: (worktreeId) => {
@@ -1708,58 +2085,50 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     }
 
     const branch = branchName(worktree.branch)
-    const shouldLinkNow =
-      worktree.linkedPR === link.number ||
-      shouldOptimisticallyLinkTerminalGitHubPR(repo, worktree, link)
-
-    if (shouldLinkNow && worktree.linkedPR !== link.number) {
-      set((s) => {
-        const nextWorktrees = applyWorktreeUpdates(s.worktreesByRepo, worktreeId, {
-          linkedPR: link.number
-        })
-        const nextDetectedWorktrees = applyDetectedWorktreeUpdates(
-          s.detectedWorktreesByRepo,
-          worktreeId,
-          { linkedPR: link.number }
-        )
-        return {
-          ...(nextWorktrees !== s.worktreesByRepo
-            ? { worktreesByRepo: nextWorktrees, sortEpoch: s.sortEpoch + 1 }
-            : {}),
-          ...(nextDetectedWorktrees !== s.detectedWorktreesByRepo
-            ? { detectedWorktreesByRepo: nextDetectedWorktrees }
-            : {})
-        }
-      })
-      // Why: `gh pr create` prints the canonical PR URL before the agent is
-      // done. Persist the exact number immediately so the workspace card can
-      // show it without waiting for the completion-time GitHub refresh.
-      void get().updateWorktreeMeta(worktreeId, { linkedPR: link.number })
-    }
+    const alreadyLinked = worktree.linkedPR === link.number
 
     const fetchPRForBranch = get().fetchPRForBranch
     if (typeof fetchPRForBranch === 'function') {
       void fetchPRForBranch(repo.path, branch, {
         force: true,
         repoId: repo.id,
-        linkedPRNumber: shouldLinkNow ? link.number : null,
-        fallbackPRNumber: shouldLinkNow ? null : link.number,
-        fallbackPRSource: shouldLinkNow ? null : 'explicit'
+        worktreeId,
+        linkedPRNumber: alreadyLinked ? link.number : null,
+        fallbackPRNumber: null,
+        fallbackPRSource: alreadyLinked ? null : 'explicit'
       }).then((pr) => {
-        if (!shouldLinkNow && pr?.number === link.number) {
-          void get().updateWorktreeMeta(worktreeId, { linkedPR: link.number })
+        if (!alreadyLinked && pr?.number === link.number) {
+          // Why: terminal output can include arbitrary PR URLs from docs,
+          // agents, or logs. Persist only after branch lookup confirms it and
+          // the user has not picked a different PR while lookup was in flight.
+          void get().updateWorktreeMeta(
+            worktreeId,
+            { linkedPR: link.number },
+            {
+              shouldApply: (currentWorktree) =>
+                Boolean(
+                  currentWorktree &&
+                  !currentWorktree.isBare &&
+                  !currentWorktree.isArchived &&
+                  (currentWorktree.linkedPR == null || currentWorktree.linkedPR === link.number)
+                )
+            }
+          )
         }
       })
+      return
     }
 
     const fetchHostedReviewForBranch = get().fetchHostedReviewForBranch
     if (typeof fetchHostedReviewForBranch === 'function') {
+      // Why: full app stores always have fetchPRForBranch, which syncs the
+      // GitHub hosted-review cache. Keep this only as a slice-test fallback.
       void refreshHostedReviewCard(fetchHostedReviewForBranch, {
         repoPath: repo.path,
         repoId: repo.id,
         branch,
-        linkedGitHubPR: shouldLinkNow ? link.number : null,
-        fallbackGitHubPR: shouldLinkNow ? null : link.number,
+        linkedGitHubPR: alreadyLinked ? link.number : null,
+        fallbackGitHubPR: null,
         linkedGitLabMR: worktree.linkedGitLabMR ?? null
       })
     }
@@ -1948,7 +2317,15 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     })
   },
 
+  setRenamingWorktreeId: (worktreeId) => {
+    set({ renamingWorktreeId: worktreeId })
+  },
+
   setActiveWorktree: (worktreeId) => {
+    if (worktreeId && shouldDeferActivationTerminalPrep()) {
+      markInputQuietSchedulerInput()
+    }
+
     if (get().activeWorktreeId !== worktreeId) {
       moveFocusToRendererBeforeFocusedWebviewHidden()
     }
@@ -1956,10 +2333,16 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       ? get().reconcileWorktreeTabModel(worktreeId).activeRenderableTabId
       : null
     let shouldClearUnread = false
+    let shouldPrepareTerminalTabs = false
+    let shouldTagTerminalTabs = false
     set((s) => {
       if (!worktreeId) {
         return {
-          activeWorktreeId: null
+          activeWorktreeId: null,
+          activeWorkspaceKey: null,
+          // Why: activating any real worktree (or clearing it) must dismiss the
+          // background-creation panel so the user isn't stranded on it.
+          activePendingCreationId: null
         }
       }
 
@@ -1967,6 +2350,10 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       shouldClearUnread = Boolean(worktree?.isUnread)
 
       // Restore per-worktree editor state
+      // Why: Search now lives under Explorer, so the files/search sub-route
+      // must switch with the worktree instead of leaking the previous one.
+      const restoredRightSidebarExplorerView =
+        s.rightSidebarExplorerViewByWorktree?.[worktreeId] ?? 'files'
       const restoredFileId = s.activeFileIdByWorktree[worktreeId] ?? null
       const restoredBrowserTabId = s.activeBrowserTabIdByWorktree[worktreeId] ?? null
       const restoredTabType = s.activeTabTypeByWorktree[worktreeId] ?? 'terminal'
@@ -2081,12 +2468,9 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       // PTY lifecycle and explicit edits still flow through bumpWorktreeActivity.
       const metaUpdates: Partial<WorktreeMeta> = shouldClearUnread ? { isUnread: false } : {}
 
-      // Why: the generation bump for dead-PTY tabs MUST happen in the same
-      // set() as the activation. Two separate set() calls let React/Zustand
-      // render the old (dead-transport) TerminalPane as visible for one frame
-      // before the generation bump unmounts it — that intermediate render
-      // resumes the pane with a transport stuck at connected=false/ptyId=null,
-      // and user input is silently dropped.
+      // Why: dead-PTY terminal prep must complete before the workspace shell
+      // renders that tab. The shell render is deferred below, so terminal prep
+      // can wait for input quiet instead of blocking the activation click.
       //
       // Why pendingActivationSpawn + first-activation check: the first time a
       // worktree is activated in this session, its TerminalPane mounts and
@@ -2111,45 +2495,78 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         tabs.every((tab) => !tabHasLivePty(s.ptyIdsByTabId, tab.id))
       const isFirstActivation = worktreeId != null && !s.everActivatedWorktreeIds.has(worktreeId)
       const shouldTagTabs = worktreeId != null && tabs.length > 0 && isFirstActivation
+      // Why: when every PTY for the worktree's tabs is dead, the existing
+      // (hidden) TerminalPane wraps a dead transport. Once activeWorktreeId
+      // commits, that pane becomes visible and accepts keystrokes that the
+      // dead transport silently drops. Bump generation in the SAME set() so
+      // React/Zustand commit activation and the remount key in one render —
+      // no visible-but-dead-transport window. First-activation tagging
+      // (shouldTagTabs without allDead) does not remount panes and stays on
+      // the deferred path below.
+      shouldPrepareTerminalTabs = Boolean(
+        worktreeId && tabs.length > 0 && shouldTagTabs && !allDead
+      )
+      shouldTagTerminalTabs = shouldTagTabs
       const nextEverActivated = isFirstActivation
         ? new Set([...s.everActivatedWorktreeIds, worktreeId!])
         : s.everActivatedWorktreeIds
-      const tabsByWorktreeUpdate =
-        allDead || shouldTagTabs
-          ? {
-              tabsByWorktree: {
-                ...s.tabsByWorktree,
-                [worktreeId!]: tabs.map((tab) => ({
-                  ...tab,
-                  ...(allDead ? { generation: (tab.generation ?? 0) + 1 } : {}),
-                  // Why: the allDead generation bump remounts panes and may
-                  // fresh-spawn PTYs — click side-effects, not real activity.
-                  // Split layouts remount several panes, so count the expected
-                  // pane events instead of suppressing only the first one.
-                  ...(allDead || shouldTagTabs
-                    ? {
-                        pendingActivationSpawn: getActivationSpawnSuppression(
-                          s.terminalLayoutsByTabId[tab.id]
-                        )
-                      }
-                    : {})
-                }))
-              }
-            }
-          : {}
       const nextWorktrees = shouldClearUnread
         ? applyWorktreeUpdates(s.worktreesByRepo, worktreeId, metaUpdates)
         : s.worktreesByRepo
       const nextDetectedWorktrees = shouldClearUnread
         ? applyDetectedWorktreeUpdates(s.detectedWorktreesByRepo, worktreeId, metaUpdates)
         : s.detectedWorktreesByRepo
+      const tabsByWorktreeUpdate =
+        allDead && worktreeId != null
+          ? {
+              tabsByWorktree: {
+                ...s.tabsByWorktree,
+                [worktreeId]: tabs.map((tab) => ({
+                  ...tab,
+                  generation: (tab.generation ?? 0) + 1,
+                  pendingActivationSpawn: getActivationSpawnSuppression(
+                    s.terminalLayoutsByTabId[tab.id]
+                  )
+                }))
+              }
+            }
+          : {}
+
+      const nextActiveTabTypeByWorktree =
+        s.activeTabTypeByWorktree[worktreeId] === activeTabType
+          ? s.activeTabTypeByWorktree
+          : { ...s.activeTabTypeByWorktree, [worktreeId]: activeTabType }
+      const hasStateChange =
+        s.activeWorktreeId !== worktreeId ||
+        // Why: a pending-creation panel can be showing while activeWorktreeId is
+        // still the prior worktree. Re-selecting that same worktree must clear
+        // the panel, so a non-null activePendingCreationId counts as a change.
+        s.activePendingCreationId !== null ||
+        s.activeFileId !== activeFileId ||
+        s.activeBrowserTabId !== activeBrowserTabId ||
+        s.activeTabType !== activeTabType ||
+        s.rightSidebarExplorerView !== restoredRightSidebarExplorerView ||
+        s.activeTabId !== activeTabId ||
+        nextActiveTabTypeByWorktree !== s.activeTabTypeByWorktree ||
+        nextEverActivated !== s.everActivatedWorktreeIds ||
+        nextWorktrees !== s.worktreesByRepo ||
+        nextDetectedWorktrees !== s.detectedWorktreesByRepo
+      if (!hasStateChange) {
+        // Why: repeated activation of the already-active worktree can come from
+        // clicks, IPC, and automation restore paths. Preserve the root Zustand
+        // reference so session persistence/runtime sync do not fan out on a no-op.
+        return s
+      }
 
       return {
         activeWorktreeId: worktreeId,
+        activeWorkspaceKey: worktreeWorkspaceKey(worktreeId),
+        activePendingCreationId: null,
         activeFileId,
         activeBrowserTabId,
         activeTabType,
-        activeTabTypeByWorktree: { ...s.activeTabTypeByWorktree, [worktreeId]: activeTabType },
+        activeTabTypeByWorktree: nextActiveTabTypeByWorktree,
+        rightSidebarExplorerView: restoredRightSidebarExplorerView,
         activeTabId,
         everActivatedWorktreeIds: nextEverActivated,
         ...(nextWorktrees !== s.worktreesByRepo ? { worktreesByRepo: nextWorktrees } : {}),
@@ -2159,6 +2576,56 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         ...tabsByWorktreeUpdate
       }
     })
+
+    if (worktreeId && shouldPrepareTerminalTabs) {
+      const prepareTerminalTabs = (): void => {
+        pendingActivationTerminalPrepCancels.delete(worktreeId)
+        set((s) => {
+          if (s.activeWorktreeId !== worktreeId) {
+            return {}
+          }
+          const tabs = s.tabsByWorktree[worktreeId] ?? []
+          if (tabs.length === 0) {
+            return {}
+          }
+          const allDead = tabs.every((tab) => !tabHasLivePty(s.ptyIdsByTabId, tab.id))
+          if (!allDead && !shouldTagTerminalTabs) {
+            return {}
+          }
+          return {
+            tabsByWorktree: {
+              ...s.tabsByWorktree,
+              [worktreeId]: tabs.map((tab) => ({
+                ...tab,
+                ...(allDead ? { generation: (tab.generation ?? 0) + 1 } : {}),
+                // Why: slept terminal remount/spawn is click-driven wake work.
+                // Tag the resulting PTY updates so they do not reshuffle Recent.
+                pendingActivationSpawn: getActivationSpawnSuppression(
+                  s.terminalLayoutsByTabId[tab.id]
+                )
+              }))
+            }
+          }
+        })
+      }
+
+      const cancelExistingPrep = pendingActivationTerminalPrepCancels.get(worktreeId)
+      if (cancelExistingPrep) {
+        cancelExistingPrep()
+      }
+      if (shouldDeferActivationTerminalPrep()) {
+        pendingActivationTerminalPrepCancels.set(
+          worktreeId,
+          scheduleAfterInputQuiet(prepareTerminalTabs, {
+            delayMs: ACTIVE_WORKTREE_TERMINAL_PREP_DELAY_MS,
+            quietMs: ACTIVE_WORKTREE_TERMINAL_PREP_INPUT_QUIET_MS,
+            idleTimeoutMs: ACTIVE_WORKTREE_TERMINAL_PREP_IDLE_TIMEOUT_MS
+          })
+        )
+      } else {
+        prepareTerminalTabs()
+      }
+    }
 
     // Why: activation is explicit enough to revalidate PR state immediately;
     // the GitHub coordinator still coalesces requests and applies rate guards.
@@ -2186,14 +2653,124 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     }
   },
 
+  setActiveFolderWorkspace: (folderWorkspaceId) => {
+    const workspaceKey = folderWorkspaceKey(folderWorkspaceId)
+    const workspace = get().folderWorkspaces.find((entry) => entry.id === folderWorkspaceId)
+    if (!workspace) {
+      return
+    }
+    if (shouldDeferActivationTerminalPrep()) {
+      markInputQuietSchedulerInput()
+    }
+    if (get().activeWorktreeId !== workspaceKey) {
+      moveFocusToRendererBeforeFocusedWebviewHidden()
+    }
+    const reconciledActiveTabId =
+      get().reconcileWorktreeTabModel(workspaceKey).activeRenderableTabId
+    set((s) => {
+      const restoredFileId = s.activeFileIdByWorktree[workspaceKey] ?? null
+      const restoredBrowserTabId = s.activeBrowserTabIdByWorktree[workspaceKey] ?? null
+      const restoredTabType = s.activeTabTypeByWorktree[workspaceKey] ?? 'terminal'
+      const activeGroupId =
+        s.activeGroupIdByWorktree[workspaceKey] ?? s.groupsByWorktree[workspaceKey]?.[0]?.id ?? null
+      const activeGroup = activeGroupId
+        ? ((s.groupsByWorktree[workspaceKey] ?? []).find((group) => group.id === activeGroupId) ??
+          null)
+        : null
+      const activeUnifiedTabId = reconciledActiveTabId ?? activeGroup?.activeTabId ?? null
+      const activeUnifiedTab =
+        activeUnifiedTabId != null
+          ? ((s.unifiedTabsByWorktree[workspaceKey] ?? []).find(
+              (tab) =>
+                tab.id === activeUnifiedTabId && (!activeGroup || tab.groupId === activeGroup.id)
+            ) ?? null)
+          : null
+      const fileStillOpen = restoredFileId
+        ? s.openFiles.some((file) => file.id === restoredFileId && file.worktreeId === workspaceKey)
+        : false
+      const browserTabs = s.browserTabsByWorktree[workspaceKey] ?? []
+      const browserTabStillOpen = restoredBrowserTabId
+        ? browserTabs.some((tab) => tab.id === restoredBrowserTabId)
+        : false
+      const worktreeTabs = s.tabsByWorktree[workspaceKey] ?? []
+      const restoredTabId = s.activeTabIdByWorktree[workspaceKey] ?? null
+      const tabStillExists = restoredTabId
+        ? worktreeTabs.some((tab) => tab.id === restoredTabId)
+        : false
+      const activeFileId =
+        activeUnifiedTab?.contentType === 'editor' ||
+        activeUnifiedTab?.contentType === 'diff' ||
+        activeUnifiedTab?.contentType === 'conflict-review'
+          ? activeUnifiedTab.entityId
+          : fileStillOpen
+            ? restoredFileId
+            : null
+      const activeBrowserTabId =
+        activeUnifiedTab?.contentType === 'browser'
+          ? activeUnifiedTab.entityId
+          : browserTabStillOpen
+            ? restoredBrowserTabId
+            : (browserTabs[0]?.id ?? null)
+      const activeTabType =
+        activeUnifiedTab?.contentType === 'terminal'
+          ? 'terminal'
+          : activeUnifiedTab?.contentType === 'browser'
+            ? 'browser'
+            : activeUnifiedTab
+              ? 'editor'
+              : restoredTabType === 'browser' && browserTabStillOpen
+                ? 'browser'
+                : restoredTabType === 'editor' && fileStillOpen
+                  ? 'editor'
+                  : fileStillOpen
+                    ? 'editor'
+                    : browserTabs.length > 0
+                      ? 'browser'
+                      : 'terminal'
+      const activeTabId =
+        activeUnifiedTab?.contentType === 'terminal'
+          ? activeUnifiedTab.entityId
+          : tabStillExists
+            ? restoredTabId
+            : (worktreeTabs[0]?.id ?? null)
+      const nextEverActivated = s.everActivatedWorktreeIds.has(workspaceKey)
+        ? s.everActivatedWorktreeIds
+        : new Set([...s.everActivatedWorktreeIds, workspaceKey])
+      return {
+        activeRepoId: null,
+        activeWorktreeId: workspaceKey,
+        activeWorkspaceKey: workspaceKey,
+        activePendingCreationId: null,
+        activeFileId,
+        activeBrowserTabId,
+        activeTabType,
+        activeTabTypeByWorktree:
+          s.activeTabTypeByWorktree[workspaceKey] === activeTabType
+            ? s.activeTabTypeByWorktree
+            : { ...s.activeTabTypeByWorktree, [workspaceKey]: activeTabType },
+        activeTabId,
+        everActivatedWorktreeIds: nextEverActivated,
+        folderWorkspaces: workspace.isUnread
+          ? s.folderWorkspaces.map((entry) =>
+              entry.id === folderWorkspaceId ? { ...entry, isUnread: false } : entry
+            )
+          : s.folderWorkspaces
+      }
+    })
+    if (workspace.isUnread) {
+      void get().updateFolderWorkspace(folderWorkspaceId, { isUnread: false })
+    }
+  },
+
   allWorktrees: () => Object.values(get().worktreesByRepo).flat(),
 
   getKnownWorktreeById: (worktreeId) => findKnownWorktreeById(get(), worktreeId),
 
   purgeWorktreeTerminalState: (worktreeIds: string[]) => {
-    if (worktreeIds.length === 0) {
+    const purgeableWorktreeIds = worktreeIds.filter((id) => id !== FLOATING_TERMINAL_WORKTREE_ID)
+    if (purgeableWorktreeIds.length === 0) {
       return
     }
-    set((s) => buildWorktreePurgeState(s, worktreeIds))
+    set((s) => buildWorktreePurgeState(s, purgeableWorktreeIds))
   }
 })

@@ -23,6 +23,7 @@ type CacheEntry<T> = { data: T | null; fetchedAt: number; linkedReviewHintKey?: 
 type FetchOptions = { force?: boolean; repoId?: string; staleWhileRevalidate?: boolean }
 
 const CACHE_TTL_MS = 60_000
+const HOSTED_REVIEW_CACHE_MAX = 500
 
 const inflightHostedReviewRequests = new Map<
   string,
@@ -34,6 +35,16 @@ const inflightHostedReviewRequests = new Map<
   }
 >()
 const requestGenerations = new Map<string, number>()
+
+/** @internal - exposed for leak-regression tests only */
+export function _getHostedReviewRequestGenerationCountForTest(): number {
+  return requestGenerations.size
+}
+
+/** @internal - exposed for leak-regression tests only */
+export function _clearHostedReviewRequestGenerationsForTest(): void {
+  requestGenerations.clear()
+}
 
 function isFresh<T>(entry: CacheEntry<T> | undefined): entry is CacheEntry<T> {
   return entry !== undefined && Date.now() - entry.fetchedAt < CACHE_TTL_MS
@@ -81,6 +92,30 @@ function hasNewerHostedReviewCacheEntry(
     (entry.fetchedAt > requestStartedAt ||
       (entry.fetchedAt === requestStartedAt && entry !== requestStartedEntry))
   )
+}
+
+function withHostedReviewCacheEntry(
+  cache: HostedReviewSlice['hostedReviewCache'],
+  cacheKey: string,
+  entry: CacheEntry<HostedReviewInfo>
+): HostedReviewSlice['hostedReviewCache'] {
+  const next = { ...cache, [cacheKey]: entry }
+  const keys = Object.keys(next)
+  if (keys.length <= HOSTED_REVIEW_CACHE_MAX) {
+    return next
+  }
+  const keep = new Set(
+    keys
+      .map((key) => ({ key, fetchedAt: next[key].fetchedAt }))
+      .sort((a, b) => b.fetchedAt - a.fetchedAt)
+      .slice(0, HOSTED_REVIEW_CACHE_MAX)
+      .map((item) => item.key)
+  )
+  const pruned: HostedReviewSlice['hostedReviewCache'] = {}
+  for (const key of keep) {
+    pruned[key] = next[key]
+  }
+  return pruned
 }
 
 export type HostedReviewSlice = {
@@ -278,10 +313,11 @@ export const createHostedReviewSlice: StateCreator<AppState, [], [], HostedRevie
                   : currentPRCache
               return {
                 ...(prCache === currentPRCache ? {} : { prCache }),
-                hostedReviewCache: {
-                  ...state.hostedReviewCache,
-                  [cacheKey]: { data: review, fetchedAt: Date.now(), linkedReviewHintKey: hintKey }
-                }
+                hostedReviewCache: withHostedReviewCacheEntry(state.hostedReviewCache, cacheKey, {
+                  data: review,
+                  fetchedAt: Date.now(),
+                  linkedReviewHintKey: hintKey
+                })
               }
             })
           }
@@ -301,10 +337,11 @@ export const createHostedReviewSlice: StateCreator<AppState, [], [], HostedRevie
                 return {}
               }
               return {
-                hostedReviewCache: {
-                  ...state.hostedReviewCache,
-                  [cacheKey]: { data: null, fetchedAt: Date.now(), linkedReviewHintKey: hintKey }
-                }
+                hostedReviewCache: withHostedReviewCacheEntry(state.hostedReviewCache, cacheKey, {
+                  data: null,
+                  fetchedAt: Date.now(),
+                  linkedReviewHintKey: hintKey
+                })
               }
             })
           }
@@ -313,6 +350,9 @@ export const createHostedReviewSlice: StateCreator<AppState, [], [], HostedRevie
           const activeRequest = inflightHostedReviewRequests.get(cacheKey)
           if (activeRequest?.generation === generation) {
             inflightHostedReviewRequests.delete(cacheKey)
+            if (requestGenerations.get(cacheKey) === generation) {
+              requestGenerations.delete(cacheKey)
+            }
           }
         }
       })()

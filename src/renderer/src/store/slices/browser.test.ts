@@ -38,6 +38,8 @@ function createTestStore() {
     (...a) =>
       ({
         settings: { activeRuntimeEnvironmentId: null } as AppState['settings'],
+        activeWorktreeId: 'wt-1',
+        browserDefaultUrl: 'about:blank',
         unifiedTabsByWorktree: {},
         tabBarOrderByWorktree: {},
         tabsByWorktree: {},
@@ -49,6 +51,7 @@ function createTestStore() {
         closeUnifiedTab: vi.fn(),
         activateTab: vi.fn(),
         setTabLabel: vi.fn(),
+        recordFeatureInteraction: vi.fn(),
         ...createBrowserSlice(...a)
       }) as unknown as AppState
   )
@@ -143,6 +146,19 @@ function makeAnnotation(pageId: string, id = 'annotation-1'): BrowserPageAnnotat
 }
 
 describe('createBrowserSlice annotations', () => {
+  it('records browser-tab-created only for the explicit new-tab action', async () => {
+    const store = createTestStore()
+
+    store.getState().createBrowserTab('wt-1', 'https://example.com')
+    expect(store.getState().recordFeatureInteraction).not.toHaveBeenCalledWith(
+      'browser-tab-created'
+    )
+
+    await store.getState().openNewBrowserTabInActiveWorkspace('group-1')
+
+    expect(store.getState().recordFeatureInteraction).toHaveBeenCalledWith('browser-tab-created')
+  })
+
   it('clears page annotations when the browser page URL changes', () => {
     const store = createTestStore()
     const tab = store.getState().createBrowserTab('wt-1', 'https://example.com')
@@ -387,6 +403,35 @@ describe('createBrowserSlice floating tabs', () => {
     )
     expect(store.getState().pendingAddressBarFocusByTabId[tab.id]).toBe(true)
     expect(store.getState().activeTabType).toBe(activeTabTypeBeforeFloating)
+  })
+})
+
+describe('createBrowserSlice closed browser workspaces', () => {
+  it('reopens duplicate-URL browser pages on the originally active page', () => {
+    const store = createTestStore()
+    const tab = store.getState().createBrowserTab('wt-1', 'https://example.com/dashboard', {
+      title: 'First copy'
+    })
+    const secondPage = store.getState().createBrowserPage(tab.id, 'https://example.com/dashboard', {
+      title: 'Second copy'
+    })
+    if (!secondPage) {
+      throw new Error('Expected a second browser page')
+    }
+
+    store.getState().closeBrowserTab(tab.id)
+    const restored = store.getState().reopenClosedBrowserTab('wt-1')
+    if (!restored) {
+      throw new Error('Expected a reopened browser workspace')
+    }
+    const restoredPages = store.getState().browserPagesByWorkspace[restored.id] ?? []
+    const activePage = restoredPages.find((page) => page.id === restored.activePageId)
+
+    expect(restoredPages.map((page) => page.url)).toEqual([
+      'https://example.com/dashboard',
+      'https://example.com/dashboard'
+    ])
+    expect(activePage?.title).toBe('Second copy')
   })
 })
 

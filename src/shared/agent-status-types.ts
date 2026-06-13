@@ -5,6 +5,8 @@
 // agent misses its own cancellation hook. We still do not infer status from
 // terminal titles anywhere in the data flow.
 
+import type { AgentProviderSessionMetadata } from './agent-session-resume'
+
 export const AGENT_STATUS_STATES = ['working', 'blocked', 'waiting', 'done'] as const
 export type AgentStatusState = (typeof AGENT_STATUS_STATES)[number]
 // Why: agent types are not restricted to a fixed set — new agents appear
@@ -28,6 +30,7 @@ export type WellKnownAgentType =
   | 'command-code'
   | 'grok'
   | 'hermes'
+  | 'devin'
   | 'unknown'
 export type AgentType = WellKnownAgentType | (string & {})
 
@@ -82,6 +85,16 @@ export type AgentStatusEntry = {
   agentType?: AgentType
   /** Composite key: `${tabId}:${leafId}` where leafId is a stable UUID layout leaf. */
   paneKey: string
+  /** Runtime terminal handle for matching retained parent rows when the parent
+   *  pane key cannot be re-derived after terminal teardown. */
+  terminalHandle?: string
+  /** Worktree attribution stamped by main when a hook can be resolved there.
+   *  Why: orchestration workers can report status before their terminal tab is
+   *  present in a renderer; retaining this lets worktree-level UI still show
+   *  the live child agent instead of dropping it as unattributed. */
+  worktreeId?: string
+  /** Tab attribution from the hook IPC payload, when available. */
+  tabId?: string
   terminalTitle?: string
   /** Rolling log of previous states. Each entry records a state the agent was in
    *  before transitioning to the current one. Capped at AGENT_STATE_HISTORY_MAX. */
@@ -103,6 +116,9 @@ export type AgentStatusEntry = {
    *  Why: parent/child agent hierarchy is pane-level state, not worktree
    *  lineage; workers often run in the same worktree as their coordinator. */
   orchestration?: AgentStatusOrchestrationContext
+  /** Provider-owned conversation/session id captured from hook payloads.
+   *  Used only for exact CLI resume; Orca terminal ids are not agent-session ids. */
+  providerSession?: AgentProviderSessionMetadata
 }
 
 export type MigrationUnsupportedPtyEntry = {
@@ -149,6 +165,7 @@ export type ParsedAgentStatusPayload = Omit<AgentStatusPayload, 'prompt'> & { pr
  */
 export type AgentStatusIpcPayload = ParsedAgentStatusPayload & {
   paneKey: string
+  terminalHandle?: string
   tabId?: string
   worktreeId?: string
   /** Identifies the SSH connection the event arrived on, or null for local.
@@ -161,6 +178,7 @@ export type AgentStatusIpcPayload = ParsedAgentStatusPayload & {
   /** Timestamp (ms) when the current state first appeared for this pane. */
   stateStartedAt: number
   orchestration?: AgentStatusOrchestrationContext
+  providerSession?: AgentProviderSessionMetadata
 }
 
 /** Maximum character length for the prompt field. Truncated on parse. */

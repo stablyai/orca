@@ -3,7 +3,17 @@ import {
   encodePowerShellCommand,
   getPowerShellOsc133Bootstrap
 } from '../powershell-osc133-bootstrap'
+import {
+  buildWslInteractiveLoginShellCommand,
+  escapeWslShCommandForWindows
+} from '../../shared/wsl-login-shell-command'
 import { resolveWindowsShellLaunchArgs } from './windows-shell-args'
+
+function expectedWslArgs(linuxCwd: string, distro?: string): string[] {
+  const command = `cd '${linuxCwd}' && export PATH="$HOME/.local/bin:$PATH" && ${buildWslInteractiveLoginShellCommand()}`
+  const shellArgs = ['--', 'sh', '-c', escapeWslShCommandForWindows(command)]
+  return distro ? ['-d', distro, ...shellArgs] : shellArgs
+}
 
 describe('resolveWindowsShellLaunchArgs', () => {
   it('returns cmd.exe args with chcp 65001 for UTF-8 output', () => {
@@ -95,12 +105,7 @@ describe('resolveWindowsShellLaunchArgs', () => {
       'C:\\Users\\alice\\code',
       'C:\\Users\\alice'
     )
-    expect(result.shellArgs).toEqual([
-      '--',
-      'bash',
-      '-c',
-      "cd '/mnt/c/Users/alice/code' && exec bash -l"
-    ])
+    expect(result.shellArgs).toEqual(expectedWslArgs('/mnt/c/Users/alice/code'))
     // Why: WSL cannot cd into a Windows path, so node-pty must start from the
     // user's Windows home and we inject the Linux cd into the shellArgs above.
     expect(result.effectiveCwd).toBe('C:\\Users\\alice')
@@ -109,14 +114,17 @@ describe('resolveWindowsShellLaunchArgs', () => {
 
   it('escapes single quotes when translating a WSL cwd', () => {
     const result = resolveWindowsShellLaunchArgs('wsl.exe', "C:\\weird'path", 'C:\\Users\\alice')
-    // The injected bash cmd must not break out of the surrounding single
-    // quotes when the path contains a ' character.
-    expect(result.shellArgs[3]).toBe("cd '/mnt/c/weird'\\''path' && exec bash -l")
+    // The injected sh cmd must not break out of the surrounding single quotes
+    // when the path contains a ' character.
+    expect(result.shellArgs[3]).toContain("cd '/mnt/c/weird'\\''path'")
+    expect(result.shellArgs[3]).toContain('exec "\\$_orca_wsl_shell" -l')
   })
 
   it('falls back to /mnt/c when cwd is not a drive-letter path', () => {
     const result = resolveWindowsShellLaunchArgs('wsl.exe', '\\\\server\\share', 'C:\\Users\\alice')
-    expect(result.shellArgs[3]).toBe("cd '/mnt/c' && exec bash -l")
+    expect(result.shellArgs[3]).toContain(
+      'cd \'/mnt/c\' && export PATH="\\$HOME/.local/bin:\\$PATH"'
+    )
   })
 
   it('keeps WSL UNC worktree cwd inside the matching distro', () => {
@@ -132,14 +140,7 @@ describe('resolveWindowsShellLaunchArgs', () => {
         '\\\\wsl.localhost\\Ubuntu\\home\\alice\\repo',
         'C:\\Users\\alice'
       )
-      expect(result.shellArgs).toEqual([
-        '-d',
-        'Ubuntu',
-        '--',
-        'bash',
-        '-c',
-        "cd '/home/alice/repo' && exec bash -l"
-      ])
+      expect(result.shellArgs).toEqual(expectedWslArgs('/home/alice/repo', 'Ubuntu'))
       expect(result.effectiveCwd).toBe('C:\\Users\\alice')
       expect(result.validationCwd).toBe('\\\\wsl.localhost\\Ubuntu\\home\\alice\\repo')
     } finally {
@@ -158,14 +159,7 @@ describe('resolveWindowsShellLaunchArgs', () => {
       { distro: 'Ubuntu', treatPosixCwdAsWsl: true }
     )
 
-    expect(result.shellArgs).toEqual([
-      '-d',
-      'Ubuntu',
-      '--',
-      'bash',
-      '-c',
-      "cd '/home/alice/repo/subdir' && exec bash -l"
-    ])
+    expect(result.shellArgs).toEqual(expectedWslArgs('/home/alice/repo/subdir', 'Ubuntu'))
     expect(result.effectiveCwd).toBe('C:\\Users\\alice')
     expect(result.validationCwd).toBe('\\\\wsl.localhost\\Ubuntu\\home\\alice\\repo\\subdir')
   })

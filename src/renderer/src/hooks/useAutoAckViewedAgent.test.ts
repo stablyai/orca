@@ -1,5 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { computeAutoAckTargets } from './useAutoAckViewedAgent'
+import {
+  acknowledgeViewedAgentAttention,
+  computeAutoAckTargets,
+  computeViewedAgentCompletionPaneKey,
+  shouldClearViewedAgentWorktreeUnread
+} from './useAutoAckViewedAgent'
 import { createTestStore, makeTab } from '../store/slices/store-test-helpers'
 import type { RetainedAgentEntry } from '../store/slices/agent-status'
 import { makePaneKey } from '../../../shared/stable-pane-id'
@@ -197,5 +202,180 @@ describe('computeAutoAckTargets — codex retain race regression', () => {
     expect(targets.length).toBeLessThanOrEqual(2)
     expect(targets.every((k) => k === paneKey)).toBe(true)
     expect(targets.includes(paneKey)).toBe(true)
+  })
+})
+
+describe('acknowledgeViewedAgentAttention', () => {
+  it('acks the visible agent and clears unread worktree/tab/pane attention', () => {
+    const actions = {
+      acknowledgeAgents: vi.fn(),
+      clearWorktreeUnread: vi.fn(),
+      clearTerminalTabUnread: vi.fn(),
+      clearTerminalPaneUnread: vi.fn()
+    }
+    const paneKey = makePaneKey('tab-1', CODEX_LEAF_ID)
+
+    acknowledgeViewedAgentAttention(actions, {
+      activeWorktreeId: 'wt-1',
+      activeTabId: 'tab-1',
+      paneKeys: [paneKey]
+    })
+
+    expect(actions.acknowledgeAgents).toHaveBeenCalledWith([paneKey])
+    expect(actions.clearWorktreeUnread).toHaveBeenCalledWith('wt-1')
+    expect(actions.clearTerminalTabUnread).toHaveBeenCalledWith('tab-1')
+    expect(actions.clearTerminalPaneUnread).toHaveBeenCalledWith(paneKey)
+  })
+
+  it('does nothing when there are no visible agent targets', () => {
+    const actions = {
+      acknowledgeAgents: vi.fn(),
+      clearWorktreeUnread: vi.fn(),
+      clearTerminalTabUnread: vi.fn(),
+      clearTerminalPaneUnread: vi.fn()
+    }
+
+    acknowledgeViewedAgentAttention(actions, {
+      activeWorktreeId: 'wt-1',
+      activeTabId: 'tab-1',
+      paneKeys: []
+    })
+
+    expect(actions.acknowledgeAgents).not.toHaveBeenCalled()
+    expect(actions.clearWorktreeUnread).not.toHaveBeenCalled()
+    expect(actions.clearTerminalTabUnread).not.toHaveBeenCalled()
+    expect(actions.clearTerminalPaneUnread).not.toHaveBeenCalled()
+  })
+
+  it('clears visible pane unread even when there is no agent row to acknowledge', () => {
+    const actions = {
+      acknowledgeAgents: vi.fn(),
+      clearWorktreeUnread: vi.fn(),
+      clearTerminalTabUnread: vi.fn(),
+      clearTerminalPaneUnread: vi.fn()
+    }
+    const paneKey = makePaneKey('tab-1', CODEX_LEAF_ID)
+
+    acknowledgeViewedAgentAttention(actions, {
+      activeWorktreeId: 'wt-1',
+      activeTabId: 'tab-1',
+      paneKeys: [],
+      activePaneKey: paneKey
+    })
+
+    expect(actions.acknowledgeAgents).not.toHaveBeenCalled()
+    expect(actions.clearWorktreeUnread).toHaveBeenCalledWith('wt-1')
+    expect(actions.clearTerminalTabUnread).toHaveBeenCalledWith('tab-1')
+    expect(actions.clearTerminalPaneUnread).toHaveBeenCalledWith(paneKey)
+  })
+})
+
+describe('computeViewedAgentCompletionPaneKey', () => {
+  it('returns the exact active pane unread marker', () => {
+    const paneKey = makePaneKey('tab-1', CODEX_LEAF_ID)
+
+    expect(
+      computeViewedAgentCompletionPaneKey(
+        {
+          unreadAgentCompletionPanes: {
+            [paneKey]: true
+          }
+        },
+        'tab-1',
+        CODEX_LEAF_ID
+      )
+    ).toBe(paneKey)
+  })
+
+  it('skips unread markers for hidden sibling panes', () => {
+    const siblingPaneKey = makePaneKey('tab-1', OTHER_LEAF_ID)
+
+    expect(
+      computeViewedAgentCompletionPaneKey(
+        {
+          unreadAgentCompletionPanes: {
+            [siblingPaneKey]: true
+          }
+        },
+        'tab-1',
+        CODEX_LEAF_ID
+      )
+    ).toBeNull()
+  })
+})
+
+describe('agent completion pane unread store marker', () => {
+  it('clears through the normal pane-unread clear path', () => {
+    const store = createTestStore()
+    const paneKey = makePaneKey('tab-1', CODEX_LEAF_ID)
+
+    store.getState().markAgentCompletionPaneUnread(paneKey)
+    expect(store.getState().unreadAgentCompletionPanes).toEqual({ [paneKey]: true })
+
+    store.getState().clearTerminalPaneUnread(paneKey)
+    expect(store.getState().unreadAgentCompletionPanes).toEqual({})
+  })
+})
+
+describe('shouldClearViewedAgentWorktreeUnread', () => {
+  it('clears worktree unread when the visible pane owns the only agent source', () => {
+    const paneKey = makePaneKey('tab-1', CODEX_LEAF_ID)
+
+    expect(
+      shouldClearViewedAgentWorktreeUnread(
+        {
+          tabsByWorktree: { 'wt-1': [{ id: 'tab-1' }] },
+          unreadAgentCompletionPanes: { [paneKey]: true },
+          unreadTerminalTabs: {}
+        },
+        {
+          activeWorktreeId: 'wt-1',
+          activeTabId: 'tab-1',
+          paneKeysToClear: new Set([paneKey])
+        }
+      )
+    ).toBe(true)
+  })
+
+  it('keeps worktree unread when a hidden tab still owns agent attention', () => {
+    const activePaneKey = makePaneKey('tab-1', CODEX_LEAF_ID)
+    const hiddenPaneKey = makePaneKey('tab-2', OTHER_LEAF_ID)
+
+    expect(
+      shouldClearViewedAgentWorktreeUnread(
+        {
+          tabsByWorktree: { 'wt-1': [{ id: 'tab-1' }, { id: 'tab-2' }] },
+          unreadAgentCompletionPanes: {
+            [activePaneKey]: true,
+            [hiddenPaneKey]: true
+          },
+          unreadTerminalTabs: {}
+        },
+        {
+          activeWorktreeId: 'wt-1',
+          activeTabId: 'tab-1',
+          paneKeysToClear: new Set([activePaneKey])
+        }
+      )
+    ).toBe(false)
+  })
+
+  it('keeps worktree unread when a hidden tab has terminal unread attention', () => {
+    const activePaneKey = makePaneKey('tab-1', CODEX_LEAF_ID)
+
+    expect(
+      shouldClearViewedAgentWorktreeUnread(
+        {
+          tabsByWorktree: { 'wt-1': [{ id: 'tab-1' }, { id: 'tab-2' }] },
+          unreadAgentCompletionPanes: { [activePaneKey]: true },
+          unreadTerminalTabs: { 'tab-2': true }
+        },
+        {
+          activeWorktreeId: 'wt-1',
+          activeTabId: 'tab-1',
+          paneKeysToClear: new Set([activePaneKey])
+        }
+      )
+    ).toBe(false)
   })
 })

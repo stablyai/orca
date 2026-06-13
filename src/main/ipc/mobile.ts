@@ -2,6 +2,7 @@ import { ipcMain } from 'electron'
 import { networkInterfaces } from 'os'
 import QRCode from 'qrcode'
 import type { RuntimeAccessGrant } from '../../shared/runtime-access-grants'
+import { isTailnetIPv4Address } from '../../shared/tailnet-address'
 import type { DeviceEntry } from '../runtime/device-registry'
 import type { OrcaRuntimeRpcServer } from '../runtime/runtime-rpc'
 
@@ -27,10 +28,12 @@ function getNetworkInterfaces(): NetworkInterface[] {
       }
     }
   }
-  return result
+  return result.sort(
+    (a, b) => Number(isTailnetIPv4Address(b.address)) - Number(isTailnetIPv4Address(a.address))
+  )
 }
 
-function getLanAddress(): string | null {
+function getDefaultPairingAddress(): string | null {
   const ifaces = getNetworkInterfaces()
   return ifaces.length > 0 ? ifaces[0]!.address : null
 }
@@ -59,7 +62,7 @@ export function registerMobileHandlers(rpcServer: OrcaRuntimeRpcServer): void {
       // Why: allow the caller to specify which network interface address to
       // embed in the QR code. This supports overlay networks (Tailscale,
       // ZeroTier) where the default LAN IP isn't reachable from the phone.
-      const ip = args?.address ?? getLanAddress()
+      const ip = args?.address ?? getDefaultPairingAddress()
       if (!ip) {
         return { available: false as const }
       }
@@ -100,7 +103,7 @@ export function registerMobileHandlers(rpcServer: OrcaRuntimeRpcServer): void {
   ipcMain.handle(
     'mobile:getRuntimePairingUrl',
     async (_event, args?: { address?: string; rotate?: boolean }) => {
-      const ip = args?.address ?? getLanAddress()
+      const ip = args?.address ?? getDefaultPairingAddress()
       if (!ip) {
         return { available: false as const }
       }

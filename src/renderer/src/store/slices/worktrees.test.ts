@@ -7,6 +7,7 @@ import { create } from 'zustand'
 import type { AppState } from '../types'
 import type {
   DetectedWorktreeListResult,
+  FolderWorkspace,
   LocalBaseRefRefreshResult,
   Worktree,
   WorktreeLineage
@@ -20,7 +21,11 @@ import { clearRuntimeCompatibilityCacheForTests } from '../../runtime/runtime-rp
 
 vi.mock('sonner', () => ({
   toast: {
-    warning: vi.fn()
+    warning: vi.fn(),
+    info: vi.fn(),
+    success: vi.fn(),
+    error: vi.fn(),
+    dismiss: vi.fn()
   }
 }))
 
@@ -50,6 +55,7 @@ function makeDetectedResult(
 const mockApi = {
   worktrees: {
     create: vi.fn(),
+    prefetchCreateBase: vi.fn().mockResolvedValue(undefined),
     list: worktreeListMock,
     listDetected: vi.fn(async ({ repoId }: { repoId: string }) =>
       makeDetectedResult(repoId, await worktreeListMock({ repoId }))
@@ -76,12 +82,15 @@ const mockApi = {
 globalThis.window = { api: mockApi }
 
 import { createWorktreeSlice } from './worktrees'
+import type { PendingWorktreeCreation } from '@/lib/pending-worktree-creation'
 import { getHostedReviewCacheKey } from './hosted-review'
 import { getGitHubPRCacheKey, getLegacyGitHubPRCacheKey } from './github-cache-key'
 import {
   registerPersistentWebview,
   unregisterPersistentWebview
 } from '../../components/browser-pane/webview-registry'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
+import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 
 function resetRemoteRuntimeMocks() {
   clearRuntimeCompatibilityCacheForTests()
@@ -101,6 +110,7 @@ function createTestStore() {
         ...createWorktreeSlice(...a),
         trustedOrcaHooks: {},
         repos: [],
+        updateSettings: vi.fn().mockResolvedValue(undefined),
         openModal: vi.fn(),
         shutdownWorktreeTerminals: vi.fn().mockResolvedValue(undefined),
         shutdownWorktreeBrowsers: vi.fn().mockResolvedValue(undefined),
@@ -116,6 +126,7 @@ function createTestStore() {
         editorDrafts: {},
         markdownViewMode: {},
         editorViewMode: {},
+        showDotfilesByWorktree: {},
         expandedDirs: {},
         gitStatusByWorktree: {},
         gitIgnoredPathsByWorktree: {},
@@ -190,6 +201,45 @@ function makeLineage(overrides: Partial<WorktreeLineage> = {}): WorktreeLineage 
     ...overrides
   }
 }
+
+function makeFolderWorkspace(overrides: Partial<FolderWorkspace> = {}): FolderWorkspace {
+  return {
+    ...overrides,
+    id: overrides.id ?? 'folder-1',
+    projectGroupId: overrides.projectGroupId ?? 'group-1',
+    name: overrides.name ?? 'platform workspace',
+    folderPath: overrides.folderPath ?? '/work/platform',
+    linkedTask: overrides.linkedTask ?? null,
+    comment: overrides.comment ?? '',
+    isArchived: overrides.isArchived ?? false,
+    isUnread: overrides.isUnread ?? false,
+    isPinned: overrides.isPinned ?? false,
+    sortOrder: overrides.sortOrder ?? 0,
+    manualOrder: overrides.manualOrder ?? 0,
+    lastActivityAt: overrides.lastActivityAt ?? 0,
+    createdAt: overrides.createdAt ?? 0,
+    updatedAt: overrides.updatedAt ?? 0,
+    workspaceStatus: overrides.workspaceStatus ?? 'active'
+  }
+}
+
+describe('folder workspace lookups', () => {
+  it('returns a stable synthetic worktree for repeated folder workspace lookups', () => {
+    const store = createTestStore()
+    const folderWorkspace = makeFolderWorkspace()
+    store.setState({ folderWorkspaces: [folderWorkspace] } as Partial<AppState>)
+
+    const first = store.getState().getKnownWorktreeById(folderWorkspaceKey(folderWorkspace.id))
+    const second = store.getState().getKnownWorktreeById(folderWorkspaceKey(folderWorkspace.id))
+
+    expect(second).toBe(first)
+    expect(first).toMatchObject({
+      id: folderWorkspaceKey(folderWorkspace.id),
+      displayName: folderWorkspace.name,
+      path: folderWorkspace.folderPath
+    })
+  })
+})
 
 describe('setActiveWorktree focus handling', () => {
   beforeEach(() => {
@@ -413,8 +463,12 @@ describe('fetchWorktrees', () => {
       worktreesByRepo: { repo1: [removed, surviving] },
       sortEpoch: 7,
       rightSidebarTabByWorktree: {
-        [removed.id]: 'search',
+        [removed.id]: 'search' as never,
         [surviving.id]: 'checks'
+      },
+      rightSidebarExplorerViewByWorktree: {
+        [removed.id]: 'search',
+        [surviving.id]: 'files'
       }
     } as Partial<AppState>)
 
@@ -422,6 +476,9 @@ describe('fetchWorktrees', () => {
 
     expect(store.getState().worktreesByRepo.repo1).toEqual([surviving])
     expect(store.getState().rightSidebarTabByWorktree).toEqual({ [surviving.id]: 'checks' })
+    expect(store.getState().rightSidebarExplorerViewByWorktree).toEqual({
+      [surviving.id]: 'files'
+    })
     expect(store.getState().sortEpoch).toBe(8)
   })
 
@@ -450,6 +507,10 @@ describe('fetchWorktrees', () => {
       sortEpoch: 7,
       rightSidebarTabByWorktree: {
         [visible.id]: 'checks',
+        [hidden.id]: 'search' as never
+      },
+      rightSidebarExplorerViewByWorktree: {
+        [visible.id]: 'files',
         [hidden.id]: 'search'
       },
       tabsByWorktree: {
@@ -461,6 +522,7 @@ describe('fetchWorktrees', () => {
 
     expect(store.getState().worktreesByRepo.repo1).toEqual([visible])
     expect(store.getState().rightSidebarTabByWorktree).toEqual({ [visible.id]: 'checks' })
+    expect(store.getState().rightSidebarExplorerViewByWorktree).toEqual({ [visible.id]: 'files' })
     expect(store.getState().tabsByWorktree[hidden.id]).toBeUndefined()
     expect(store.getState().sortEpoch).toBe(7)
   })
@@ -537,7 +599,7 @@ describe('fetchWorktrees', () => {
       worktreesByRepo: { repo1: [missingFromFallback, fallback] },
       sortEpoch: 7,
       rightSidebarTabByWorktree: {
-        [missingFromFallback.id]: 'search',
+        [missingFromFallback.id]: 'search' as never,
         [fallback.id]: 'checks'
       },
       tabsByWorktree: {
@@ -572,7 +634,7 @@ describe('fetchWorktrees', () => {
     store.setState({
       worktreesByRepo: { repo1: [existing] },
       sortEpoch: 7,
-      rightSidebarTabByWorktree: { [existing.id]: 'search' }
+      rightSidebarTabByWorktree: { [existing.id]: 'search' as never }
     } as Partial<AppState>)
 
     const result = await store.getState().fetchWorktrees('repo1')
@@ -1050,12 +1112,144 @@ describe('updateWorktreeGitIdentity', () => {
 
     expect(store.getState().worktreesByRepo.repo1[0].displayName).toBe('My Cool Work')
   })
+
+  it('clears stale branch identity for detached HEAD updates', () => {
+    const store = createTestStore()
+    const existing = makeWorktree({
+      id: 'repo1::/path/wt1',
+      repoId: 'repo1',
+      path: '/path/wt1',
+      head: 'old-head',
+      branch: 'refs/heads/review-branch',
+      displayName: 'Restore PR review'
+    })
+
+    store.setState({ worktreesByRepo: { repo1: [existing] }, sortEpoch: 3 } as Partial<AppState>)
+
+    store.getState().updateWorktreeGitIdentity('repo1::/path/wt1', {
+      head: 'new-head',
+      branch: null
+    })
+
+    expect(store.getState().worktreesByRepo.repo1[0]).toMatchObject({
+      head: 'new-head',
+      branch: '',
+      displayName: 'Restore PR review'
+    })
+    expect(store.getState().sortEpoch).toBe(4)
+  })
+
+  it('keeps an auto-derived title when detached HEAD clears the branch', () => {
+    const store = createTestStore()
+    const existing = makeWorktree({
+      id: 'repo1::/path/wt1',
+      repoId: 'repo1',
+      path: '/path/wt1',
+      head: 'old-head',
+      branch: 'refs/heads/review-branch',
+      displayName: 'review-branch'
+    })
+
+    store.setState({ worktreesByRepo: { repo1: [existing] } } as Partial<AppState>)
+
+    store.getState().updateWorktreeGitIdentity('repo1::/path/wt1', {
+      head: 'new-head',
+      branch: null
+    })
+
+    expect(store.getState().worktreesByRepo.repo1[0]).toMatchObject({
+      branch: '',
+      displayName: 'review-branch'
+    })
+  })
+
+  it('resumes following branch names after an auto-derived title crosses detached HEAD', () => {
+    const store = createTestStore()
+    const existing = makeWorktree({
+      id: 'repo1::/path/wt1',
+      repoId: 'repo1',
+      path: '/path/wt1',
+      head: 'old-head',
+      branch: 'refs/heads/review-branch',
+      displayName: 'review-branch'
+    })
+
+    store.setState({ worktreesByRepo: { repo1: [existing] } } as Partial<AppState>)
+
+    store.getState().updateWorktreeGitIdentity('repo1::/path/wt1', {
+      head: 'detached-head',
+      branch: null
+    })
+    store.getState().updateWorktreeGitIdentity('repo1::/path/wt1', {
+      head: 'reattached-head',
+      branch: 'refs/heads/main'
+    })
+
+    expect(store.getState().worktreesByRepo.repo1[0]).toMatchObject({
+      branch: 'refs/heads/main',
+      displayName: 'main'
+    })
+  })
+
+  it('preserves custom detached titles when a branch returns', () => {
+    const store = createTestStore()
+    const existing = makeWorktree({
+      id: 'repo1::/path/wt1',
+      repoId: 'repo1',
+      path: '/path/wt1',
+      head: 'detached-head',
+      branch: '',
+      displayName: 'Restore PR review'
+    })
+
+    store.setState({ worktreesByRepo: { repo1: [existing] } } as Partial<AppState>)
+
+    store.getState().updateWorktreeGitIdentity('repo1::/path/wt1', {
+      head: 'reattached-head',
+      branch: 'refs/heads/main'
+    })
+
+    expect(store.getState().worktreesByRepo.repo1[0]).toMatchObject({
+      branch: 'refs/heads/main',
+      displayName: 'Restore PR review'
+    })
+  })
 })
 
 describe('createWorktree base status merge', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     resetRemoteRuntimeMocks()
+  })
+
+  it('prefetches create base through desktop IPC on the local runtime target', async () => {
+    const store = createTestStore()
+
+    await store.getState().prefetchWorktreeCreateBase('repo1', 'origin/main')
+
+    expect(mockApi.worktrees.prefetchCreateBase).toHaveBeenCalledWith({
+      repoId: 'repo1',
+      baseBranch: 'origin/main'
+    })
+    expect(runtimeEnvironmentTransportCall).not.toHaveBeenCalled()
+  })
+
+  it('prefetches create base through runtime RPC for remote runtime targets', async () => {
+    const store = createTestStore()
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'remote-runtime' }
+    } as Partial<AppState>)
+    runtimeEnvironmentCall.mockResolvedValue({ id: 'req', ok: true, result: null })
+
+    await store.getState().prefetchWorktreeCreateBase('repo1')
+
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
+      selector: 'remote-runtime',
+      method: 'worktree.prefetchCreateBase',
+      params: { repo: 'repo1' },
+      timeoutMs: 30_000
+    })
+    expect(mockApi.worktrees.prefetchCreateBase).not.toHaveBeenCalled()
   })
 
   it('passes linked work item and creation agent metadata through the create IPC payload', async () => {
@@ -1068,7 +1262,8 @@ describe('createWorktree base status merge', () => {
       linkedPR: 456,
       createdWithAgent: 'codex',
       linkedLinearIssue: 'ENG-123',
-      workspaceStatus: 'in-review'
+      workspaceStatus: 'in-review',
+      pendingFirstAgentMessageRename: true
     })
     mockApi.worktrees.create.mockResolvedValue({ worktree: wt })
 
@@ -1088,7 +1283,11 @@ describe('createWorktree base status merge', () => {
         'codex',
         'ENG-123',
         undefined,
-        'in-review'
+        'in-review',
+        undefined,
+        undefined,
+        undefined,
+        true
       )
 
     expect(mockApi.worktrees.create).toHaveBeenCalledWith(
@@ -1099,7 +1298,8 @@ describe('createWorktree base status merge', () => {
         linkedPR: 456,
         createdWithAgent: 'codex',
         linkedLinearIssue: 'ENG-123',
-        workspaceStatus: 'in-review'
+        workspaceStatus: 'in-review',
+        pendingFirstAgentMessageRename: true
       })
     )
     expect(store.getState().worktreesByRepo.repo1[0]).toMatchObject({
@@ -1107,7 +1307,33 @@ describe('createWorktree base status merge', () => {
       linkedPR: 456,
       createdWithAgent: 'codex',
       linkedLinearIssue: 'ENG-123',
-      workspaceStatus: 'in-review'
+      workspaceStatus: 'in-review',
+      pendingFirstAgentMessageRename: true
+    })
+  })
+
+  it('merges create result metadata into a worktree inserted by the watcher race', async () => {
+    const store = createTestStore()
+    const watcherWorktree = makeWorktree({
+      id: 'repo1::/path/wt1',
+      repoId: 'repo1',
+      path: '/path/wt1'
+    })
+    const createdWorktree = makeWorktree({
+      ...watcherWorktree,
+      baseRef: 'refs/remotes/origin/main'
+    })
+    store.setState({
+      worktreesByRepo: { repo1: [watcherWorktree] }
+    } as Partial<AppState>)
+    mockApi.worktrees.create.mockResolvedValue({ worktree: createdWorktree })
+
+    await store.getState().createWorktree('repo1', 'feature', 'origin/main')
+
+    expect(store.getState().worktreesByRepo.repo1).toHaveLength(1)
+    expect(store.getState().worktreesByRepo.repo1[0]).toMatchObject({
+      id: watcherWorktree.id,
+      baseRef: 'refs/remotes/origin/main'
     })
   })
 
@@ -1173,6 +1399,89 @@ describe('createWorktree base status merge', () => {
     await store.getState().createWorktree('repo1', 'feature', 'origin/main')
 
     expect(toast.warning).not.toHaveBeenCalled()
+  })
+
+  it('suggests turning on local main freshness when the create result reports a stale local base', async () => {
+    const store = createTestStore()
+    const wt = makeWorktree({
+      id: 'repo1::/path/wt1',
+      repoId: 'repo1',
+      path: '/path/wt1'
+    })
+    mockApi.worktrees.create.mockResolvedValue({
+      worktree: wt,
+      localBaseRefUpdateSuggestion: {
+        baseRef: 'origin/main',
+        localBranch: 'main',
+        behind: 2
+      }
+    })
+
+    await store.getState().createWorktree('repo1', 'feature', 'origin/main')
+
+    // The button workflow (Keep main up to date / Settings link) lives in the
+    // toast component's own test; here we just assert the sticky nudge is raised.
+    expect(toast.info).toHaveBeenCalledWith(
+      'Local main is behind origin/main',
+      expect.objectContaining({
+        id: 'local-base-ref-update-suggestion:origin/main:main',
+        duration: Infinity,
+        dismissible: true
+      })
+    )
+  })
+
+  it('persists the dismissal flag when the suggestion toast is closed or swiped', async () => {
+    const store = createTestStore()
+    store.setState({
+      settings: { refreshLocalBaseRefOnWorktreeCreate: false } as AppState['settings'],
+      updateSettings: vi.fn().mockResolvedValue(undefined)
+    } as Partial<AppState>)
+    const wt = makeWorktree({ id: 'repo1::/path/wt1', repoId: 'repo1', path: '/path/wt1' })
+    mockApi.worktrees.create.mockResolvedValue({
+      worktree: wt,
+      localBaseRefUpdateSuggestion: { baseRef: 'origin/main', localBranch: 'main', behind: 2 }
+    })
+
+    await store.getState().createWorktree('repo1', 'feature', 'origin/main')
+
+    const options = vi.mocked(toast.info).mock.calls.at(-1)?.[1] as unknown as {
+      onDismiss: () => void
+    }
+    // The close (X)/swipe path persists the decline flag.
+    options.onDismiss()
+    await Promise.resolve()
+
+    expect(store.getState().updateSettings).toHaveBeenCalledWith({
+      localBaseRefSuggestionDismissed: true
+    })
+  })
+
+  it('does not record a dismissal on close when the feature is already enabled', async () => {
+    const store = createTestStore()
+    store.setState({
+      settings: { refreshLocalBaseRefOnWorktreeCreate: true } as AppState['settings'],
+      updateSettings: vi.fn().mockResolvedValue(undefined)
+    } as Partial<AppState>)
+    const wt = makeWorktree({ id: 'repo1::/path/wt1', repoId: 'repo1', path: '/path/wt1' })
+    mockApi.worktrees.create.mockResolvedValue({
+      worktree: wt,
+      localBaseRefUpdateSuggestion: { baseRef: 'origin/main', localBranch: 'main', behind: 1 }
+    })
+
+    await store.getState().createWorktree('repo1', 'feature', 'origin/main')
+
+    const options = vi.mocked(toast.info).mock.calls.at(-1)?.[1] as unknown as {
+      onDismiss: () => void
+    }
+    // The Turn On success path dismisses the toast, which fires onDismiss; that
+    // must not be recorded as a decline now that the feature is enabled.
+    options.onDismiss()
+    await Promise.resolve()
+
+    expect(store.getState().updateSettings).not.toHaveBeenCalledWith({
+      localBaseRefSuggestionDismissed: true
+    })
   })
 
   it('stamps manualOrder on create while Manual sort is active', async () => {
@@ -1241,51 +1550,38 @@ describe('createWorktree base status merge', () => {
     )
   })
 
-  it('suffixes branchNameOverride when local IPC returns the SSH branch-exists error', async () => {
+  it('does not suffix branchNameOverride when local IPC reports a branch conflict', async () => {
     const store = createTestStore()
-    const wt = makeWorktree({
-      id: 'repo1::/path/feature-something-2',
-      repoId: 'repo1',
-      path: '/path/feature-something-2',
-      branch: 'feature/something-2'
-    })
-    mockApi.worktrees.create
-      .mockRejectedValueOnce(
-        new Error('Branch "feature/something" already exists. Pick a different worktree name.')
-      )
-      .mockResolvedValueOnce({ worktree: wt })
+    const error = new Error(
+      'Branch "feature/something" already exists. Pick a different worktree name.'
+    )
+    mockApi.worktrees.create.mockRejectedValueOnce(error)
 
-    const result = await store
-      .getState()
-      .createWorktree(
-        'repo1',
-        'feature/something',
-        'origin/main',
-        'inherit',
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        'feature/something'
-      )
+    await expect(
+      store
+        .getState()
+        .createWorktree(
+          'repo1',
+          'feature/something',
+          'origin/main',
+          'inherit',
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          'feature/something'
+        )
+    ).rejects.toThrow(error.message)
 
-    expect(result).toEqual({ worktree: wt })
-    expect(mockApi.worktrees.create).toHaveBeenNthCalledWith(
-      1,
+    expect(mockApi.worktrees.create).toHaveBeenCalledTimes(1)
+    expect(mockApi.worktrees.create).toHaveBeenCalledWith(
       expect.objectContaining({
         name: 'feature/something',
         branchNameOverride: 'feature/something'
-      })
-    )
-    expect(mockApi.worktrees.create).toHaveBeenNthCalledWith(
-      2,
-      expect.objectContaining({
-        name: 'feature/something-2',
-        branchNameOverride: 'feature/something-2'
       })
     )
   })
@@ -1445,6 +1741,64 @@ describe('removeWorktree state cleanup', () => {
     expect(store.getState().editorViewMode).toEqual({ 'file-2': 'changes' })
   })
 
+  it('cleans up markdownFrontmatterVisible for files in the removed worktree', async () => {
+    const store = createTestStore()
+    const wt = makeWorktree({ id: 'repo1::/path/wt1', repoId: 'repo1', path: '/path/wt1' })
+
+    store.setState({
+      worktreesByRepo: { repo1: [wt] },
+      openFiles: [
+        {
+          id: 'file-1',
+          worktreeId: 'repo1::/path/wt1',
+          filePath: '/path/wt1/readme.md',
+          relativePath: 'readme.md',
+          language: 'markdown',
+          isDirty: false,
+          isPreview: false,
+          mode: 'edit' as const
+        }
+      ],
+      markdownFrontmatterVisible: {
+        'file-1': true,
+        'file-2': true
+      }
+    } as unknown as Partial<AppState>)
+
+    await store.getState().removeWorktree('repo1::/path/wt1')
+
+    expect(store.getState().markdownFrontmatterVisible).toEqual({ 'file-2': true })
+  })
+
+  it('cleans up markdownFrontmatterVisible for preview-only source files in the removed worktree', async () => {
+    const store = createTestStore()
+    const wt = makeWorktree({ id: 'repo1::/path/wt1', repoId: 'repo1', path: '/path/wt1' })
+
+    store.setState({
+      worktreesByRepo: { repo1: [wt] },
+      openFiles: [
+        {
+          id: 'markdown-preview::file-1',
+          worktreeId: 'repo1::/path/wt1',
+          filePath: '/path/wt1/readme.md',
+          relativePath: 'readme.md',
+          language: 'markdown',
+          isDirty: false,
+          markdownPreviewSourceFileId: 'file-1',
+          mode: 'markdown-preview' as const
+        }
+      ],
+      markdownFrontmatterVisible: {
+        'file-1': true,
+        'file-2': true
+      }
+    } as unknown as Partial<AppState>)
+
+    await store.getState().removeWorktree('repo1::/path/wt1')
+
+    expect(store.getState().markdownFrontmatterVisible).toEqual({ 'file-2': true })
+  })
+
   it('records the sidebar scroll anchor in the same tick it removes the worktree', async () => {
     const store = createTestStore()
     const wt = makeWorktree({ id: 'repo1::/path/wt1', repoId: 'repo1', path: '/path/wt1' })
@@ -1490,6 +1844,25 @@ describe('removeWorktree state cleanup', () => {
 
     expect(store.getState().expandedDirs).toEqual({
       'repo1::/path/wt2': new Set(['test'])
+    })
+  })
+
+  it('cleans up dotfile visibility for the removed worktree', async () => {
+    const store = createTestStore()
+    const wt = makeWorktree({ id: 'repo1::/path/wt1', repoId: 'repo1', path: '/path/wt1' })
+
+    store.setState({
+      worktreesByRepo: { repo1: [wt] },
+      showDotfilesByWorktree: {
+        'repo1::/path/wt1': false,
+        'repo1::/path/wt2': false
+      }
+    } as Partial<AppState>)
+
+    await store.getState().removeWorktree('repo1::/path/wt1')
+
+    expect(store.getState().showDotfilesByWorktree).toEqual({
+      'repo1::/path/wt2': false
     })
   })
 
@@ -1808,61 +2181,107 @@ describe('worktree remote runtime mutations', () => {
     )
   })
 
-  it('suffixes branchNameOverride when retrying a runtime create conflict', async () => {
+  it('passes startup commands through local worktree creation IPC', async () => {
     const store = createTestStore()
     const wt = makeWorktree({
-      id: 'repo1::/path/feature-something-2',
+      id: 'repo1::/path/local-agent-startup',
       repoId: 'repo1',
-      path: '/path/feature-something-2',
-      branch: 'feature/something-2'
+      path: '/path/local-agent-startup'
     })
-    runtimeEnvironmentCall
-      .mockRejectedValueOnce(new Error('Branch already exists on a remote'))
-      .mockResolvedValueOnce({
-        id: 'rpc-create',
-        ok: true,
-        result: { worktree: wt },
-        _meta: { runtimeId: 'runtime-remote' }
+    mockApi.worktrees.create.mockResolvedValue({
+      worktree: wt,
+      startupTerminal: { spawned: true, surface: 'visible' }
+    })
+    store.setState({
+      worktreesByRepo: { repo1: [] }
+    } as Partial<AppState>)
+
+    await store
+      .getState()
+      .createWorktree(
+        'repo1',
+        'local-agent-startup',
+        undefined,
+        'skip',
+        undefined,
+        'sidebar',
+        'Launch local agent',
+        undefined,
+        undefined,
+        undefined,
+        'claude',
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        {
+          command: "claude --prefill 'summarize repo'",
+          env: { ORCA_AGENT_MODE: 'direct' },
+          telemetry: {
+            agent_kind: 'claude-code',
+            launch_source: 'new_workspace_composer',
+            request_kind: 'new'
+          }
+        }
+      )
+
+    expect(mockApi.worktrees.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        repoId: 'repo1',
+        name: 'local-agent-startup',
+        setupDecision: 'skip',
+        telemetrySource: 'sidebar',
+        displayName: 'Launch local agent',
+        createdWithAgent: 'claude',
+        startup: {
+          command: "claude --prefill 'summarize repo'",
+          env: { ORCA_AGENT_MODE: 'direct' },
+          telemetry: {
+            agent_kind: 'claude-code',
+            launch_source: 'new_workspace_composer',
+            request_kind: 'new'
+          }
+        }
       })
+    )
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+  })
+
+  it('does not suffix branchNameOverride when runtime create reports a branch conflict', async () => {
+    const store = createTestStore()
+    runtimeEnvironmentCall.mockRejectedValueOnce(new Error('Branch already exists on a remote'))
     store.setState({
       settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
       worktreesByRepo: { repo1: [] }
     } as Partial<AppState>)
 
-    const result = await store
-      .getState()
-      .createWorktree(
-        'repo1',
-        'feature/something',
-        'origin/main',
-        'skip',
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        'feature/something'
-      )
+    await expect(
+      store
+        .getState()
+        .createWorktree(
+          'repo1',
+          'feature/something',
+          'origin/main',
+          'skip',
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          'feature/something'
+        )
+    ).rejects.toThrow('Branch already exists on a remote')
 
-    expect(result).toEqual({ worktree: wt })
-    expect(runtimeEnvironmentCall).toHaveBeenNthCalledWith(
-      1,
+    expect(runtimeEnvironmentCall).toHaveBeenCalledTimes(1)
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
       expect.objectContaining({
         params: expect.objectContaining({
           name: 'feature/something',
           branchNameOverride: 'feature/something'
-        })
-      })
-    )
-    expect(runtimeEnvironmentCall).toHaveBeenNthCalledWith(
-      2,
-      expect.objectContaining({
-        params: expect.objectContaining({
-          name: 'feature/something-2',
-          branchNameOverride: 'feature/something-2'
         })
       })
     )
@@ -1888,7 +2307,7 @@ describe('worktree remote runtime mutations', () => {
     expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
       selector: 'env-1',
       method: 'worktree.rm',
-      params: { worktree: wt.id, force: undefined, runHooks: true },
+      params: { worktree: `id:${wt.id}`, force: undefined, runHooks: true },
       timeoutMs: 60_000
     })
     expect(mockApi.worktrees.remove).not.toHaveBeenCalled()
@@ -1919,6 +2338,36 @@ describe('worktree remote runtime mutations', () => {
     })
     expect(mockApi.worktrees.updateMeta).not.toHaveBeenCalled()
     expect(store.getState().worktreesByRepo.repo1[0]?.comment).toBe('remote note')
+  })
+
+  it('clears pending first-agent rename when the title is updated', async () => {
+    const store = createTestStore()
+    const wt = makeWorktree({
+      id: 'repo1::/path/wt1',
+      repoId: 'repo1',
+      path: '/path/wt1',
+      displayName: 'Nautilus',
+      pendingFirstAgentMessageRename: true
+    })
+    store.setState({
+      worktreesByRepo: { repo1: [wt] }
+    } as Partial<AppState>)
+
+    await store.getState().updateWorktreeMeta(wt.id, { displayName: 'Fix auth' })
+
+    expect(mockApi.worktrees.updateMeta).toHaveBeenCalledWith({
+      worktreeId: wt.id,
+      updates: {
+        displayName: 'Fix auth',
+        pendingFirstAgentMessageRename: false,
+        firstAgentMessageRenameError: null
+      }
+    })
+    expect(store.getState().worktreesByRepo.repo1[0]).toMatchObject({
+      displayName: 'Fix auth',
+      pendingFirstAgentMessageRename: false,
+      firstAgentMessageRenameError: null
+    })
   })
 
   it('resolves and persists a push target when manually linking a GitHub PR', async () => {
@@ -1973,10 +2422,164 @@ describe('worktree remote runtime mutations', () => {
     })
   })
 
-  it('optimistically links a terminal-observed GitHub PR for the same repo', () => {
+  it('waits for branch confirmation before linking a terminal PR URL for a known push target', async () => {
     const store = createTestStore()
-    const fetchPRForBranch = vi.fn().mockResolvedValue(null)
-    const fetchHostedReviewForBranch = vi.fn().mockResolvedValue(null)
+    const fetchPRForBranch = vi.fn().mockResolvedValue({ number: 42 })
+    const wt = makeWorktree({
+      id: 'repo1::/path/wt1',
+      repoId: 'repo1',
+      path: '/worktrees/orca',
+      branch: 'refs/heads/feature/pr-link',
+      pushTarget: {
+        remoteName: 'origin',
+        branchName: 'feature/pr-link',
+        remoteUrl: 'https://github.com/acme/orca.git'
+      }
+    })
+    store.setState({
+      repos: [
+        { id: 'repo1', path: '/repos/orca', displayName: 'orca', badgeColor: '#000', addedAt: 0 }
+      ],
+      worktreesByRepo: { repo1: [wt] },
+      fetchPRForBranch
+    } as unknown as Partial<AppState>)
+
+    store.getState().observeTerminalGitHubPullRequestLink(wt.id, {
+      url: 'https://github.com/acme/orca/pull/42',
+      slug: { owner: 'acme', repo: 'orca' },
+      number: 42
+    })
+
+    expect(store.getState().worktreesByRepo.repo1[0]?.linkedPR).toBeNull()
+    expect(mockApi.worktrees.resolvePrBase).not.toHaveBeenCalled()
+    expect(mockApi.worktrees.updateMeta).not.toHaveBeenCalled()
+    expect(fetchPRForBranch).toHaveBeenCalledWith('/repos/orca', 'feature/pr-link', {
+      force: true,
+      repoId: 'repo1',
+      worktreeId: wt.id,
+      linkedPRNumber: null,
+      fallbackPRNumber: null,
+      fallbackPRSource: 'explicit'
+    })
+    for (let i = 0; i < 6; i++) {
+      await Promise.resolve()
+    }
+
+    expect(mockApi.worktrees.updateMeta).toHaveBeenCalledWith({
+      worktreeId: wt.id,
+      updates: { linkedPR: 42 }
+    })
+  })
+
+  it('waits for branch confirmation before linking a same-repo terminal PR URL', async () => {
+    const store = createTestStore()
+    const fetchPRForBranch = vi.fn().mockResolvedValue({ number: 42 })
+    const wt = makeWorktree({
+      id: 'repo1::/path/wt1',
+      repoId: 'repo1',
+      path: '/worktrees/orca',
+      branch: 'refs/heads/feature/pr-link',
+      pushTarget: {
+        remoteName: 'origin',
+        branchName: 'feature/pr-link'
+      }
+    })
+    store.setState({
+      repos: [
+        { id: 'repo1', path: '/repos/orca', displayName: 'orca', badgeColor: '#000', addedAt: 0 }
+      ],
+      worktreesByRepo: { repo1: [wt] },
+      fetchPRForBranch
+    } as unknown as Partial<AppState>)
+
+    store.getState().observeTerminalGitHubPullRequestLink(wt.id, {
+      url: 'https://github.com/acme/orca/pull/42',
+      slug: { owner: 'acme', repo: 'orca' },
+      number: 42
+    })
+
+    expect(store.getState().worktreesByRepo.repo1[0]?.linkedPR).toBeNull()
+    expect(fetchPRForBranch).toHaveBeenCalledWith('/repos/orca', 'feature/pr-link', {
+      force: true,
+      repoId: 'repo1',
+      worktreeId: wt.id,
+      linkedPRNumber: null,
+      fallbackPRNumber: null,
+      fallbackPRSource: 'explicit'
+    })
+    for (let i = 0; i < 6; i++) {
+      await Promise.resolve()
+    }
+
+    expect(mockApi.worktrees.updateMeta).toHaveBeenCalledWith({
+      worktreeId: wt.id,
+      updates: { linkedPR: 42 }
+    })
+  })
+
+  it('does not persist a terminal PR URL when the linked PR changes before branch confirmation resolves', async () => {
+    const store = createTestStore()
+    let resolveLookup: (value: { number: number } | null) => void = () => {}
+    const fetchPRForBranch = vi.fn(
+      () =>
+        new Promise<{ number: number } | null>((resolve) => {
+          resolveLookup = resolve
+        })
+    )
+    const wt = makeWorktree({
+      id: 'repo1::/path/wt1',
+      repoId: 'repo1',
+      path: '/worktrees/orca',
+      branch: 'refs/heads/feature/pr-link',
+      pushTarget: {
+        remoteName: 'origin',
+        branchName: 'feature/pr-link'
+      }
+    })
+    store.setState({
+      repos: [
+        { id: 'repo1', path: '/repos/orca', displayName: 'orca', badgeColor: '#000', addedAt: 0 }
+      ],
+      worktreesByRepo: { repo1: [wt] },
+      fetchPRForBranch
+    } as unknown as Partial<AppState>)
+
+    store.getState().observeTerminalGitHubPullRequestLink(wt.id, {
+      url: 'https://github.com/acme/orca/pull/42',
+      slug: { owner: 'acme', repo: 'orca' },
+      number: 42
+    })
+    expect(mockApi.worktrees.updateMeta).not.toHaveBeenCalled()
+
+    store.setState({
+      worktreesByRepo: { repo1: [{ ...wt, linkedPR: 7 }] }
+    } as Partial<AppState>)
+
+    resolveLookup({ number: 42 })
+    for (let i = 0; i < 6; i++) {
+      await Promise.resolve()
+    }
+
+    expect(store.getState().worktreesByRepo.repo1[0]?.linkedPR).toBe(7)
+    expect(mockApi.worktrees.updateMeta).not.toHaveBeenCalled()
+  })
+
+  it('does not persist a terminal PR URL when the linked PR changes while push target lookup resolves', async () => {
+    const store = createTestStore()
+    const fetchPRForBranch = vi.fn().mockResolvedValue({ number: 42 })
+    let resolvePushTarget: (value: {
+      baseBranch: string
+      pushTarget: { remoteName: string; branchName: string }
+    }) => void = () => {}
+    mockApi.worktrees.resolvePrBase.mockImplementationOnce(
+      () =>
+        new Promise<{
+          baseBranch: string
+          pushTarget: { remoteName: string; branchName: string }
+        }>((resolve) => {
+          resolvePushTarget = resolve
+        })
+    )
     const wt = makeWorktree({
       id: 'repo1::/path/wt1',
       repoId: 'repo1',
@@ -1988,8 +2591,7 @@ describe('worktree remote runtime mutations', () => {
         { id: 'repo1', path: '/repos/orca', displayName: 'orca', badgeColor: '#000', addedAt: 0 }
       ],
       worktreesByRepo: { repo1: [wt] },
-      fetchPRForBranch,
-      fetchHostedReviewForBranch
+      fetchPRForBranch
     } as unknown as Partial<AppState>)
 
     store.getState().observeTerminalGitHubPullRequestLink(wt.id, {
@@ -1998,32 +2600,71 @@ describe('worktree remote runtime mutations', () => {
       number: 42
     })
 
-    expect(store.getState().worktreesByRepo.repo1[0]?.linkedPR).toBe(42)
-    expect(mockApi.worktrees.resolvePrBase).not.toHaveBeenCalled()
-    expect(mockApi.worktrees.updateMeta).toHaveBeenCalledWith({
-      worktreeId: wt.id,
-      updates: { linkedPR: 42 }
-    })
-    expect(fetchPRForBranch).toHaveBeenCalledWith('/repos/orca', 'feature/pr-link', {
-      force: true,
+    for (let i = 0; i < 6; i++) {
+      await Promise.resolve()
+    }
+
+    expect(mockApi.worktrees.resolvePrBase).toHaveBeenCalledWith({
       repoId: 'repo1',
-      linkedPRNumber: 42,
-      fallbackPRNumber: null,
-      fallbackPRSource: null
+      prNumber: 42
     })
-    expect(fetchHostedReviewForBranch).toHaveBeenCalledWith(
-      '/repos/orca',
-      'feature/pr-link',
-      expect.objectContaining({
-        force: true,
-        repoId: 'repo1',
-        linkedGitHubPR: 42,
-        linkedGitLabMR: null
-      })
-    )
+
+    store.setState({
+      worktreesByRepo: { repo1: [{ ...wt, linkedPR: 7 }] }
+    } as Partial<AppState>)
+
+    resolvePushTarget({
+      baseBranch: 'main',
+      pushTarget: { remoteName: 'origin', branchName: 'feature/pr-link' }
+    })
+    for (let i = 0; i < 6; i++) {
+      await Promise.resolve()
+    }
+
+    expect(store.getState().worktreesByRepo.repo1[0]?.linkedPR).toBe(7)
+    expect(mockApi.worktrees.updateMeta).not.toHaveBeenCalled()
   })
 
-  it('waits for exact lookup before linking a terminal PR URL for a differently named repo', async () => {
+  it('does not link an arbitrary same-repo terminal PR URL for a known push target when lookup misses', async () => {
+    const store = createTestStore()
+    const fetchPRForBranch = vi.fn().mockResolvedValue(null)
+    const wt = makeWorktree({
+      id: 'repo1::/path/wt1',
+      repoId: 'repo1',
+      path: '/worktrees/orca',
+      branch: 'refs/heads/feature/pr-link',
+      pushTarget: {
+        remoteName: 'origin',
+        branchName: 'feature/pr-link',
+        remoteUrl: 'https://github.com/acme/orca.git'
+      }
+    })
+    store.setState({
+      repos: [
+        { id: 'repo1', path: '/repos/orca', displayName: 'orca', badgeColor: '#000', addedAt: 0 }
+      ],
+      worktreesByRepo: { repo1: [wt] },
+      fetchPRForBranch
+    } as unknown as Partial<AppState>)
+
+    store.getState().observeTerminalGitHubPullRequestLink(wt.id, {
+      url: 'https://github.com/acme/orca/pull/1',
+      slug: { owner: 'acme', repo: 'orca' },
+      number: 1
+    })
+
+    for (let i = 0; i < 6; i++) {
+      await Promise.resolve()
+    }
+
+    expect(store.getState().worktreesByRepo.repo1[0]?.linkedPR).toBeNull()
+    expect(mockApi.worktrees.updateMeta).not.toHaveBeenCalledWith({
+      worktreeId: wt.id,
+      updates: { linkedPR: 1 }
+    })
+  })
+
+  it('uses branch confirmation before linking a differently named terminal PR URL', async () => {
     const store = createTestStore()
     const fetchPRForBranch = vi.fn().mockResolvedValue({ number: 42 })
     const wt = makeWorktree({
@@ -2051,8 +2692,9 @@ describe('worktree remote runtime mutations', () => {
     expect(fetchPRForBranch).toHaveBeenCalledWith('/repos/orca', 'feature/pr-link', {
       force: true,
       repoId: 'repo1',
+      worktreeId: wt.id,
       linkedPRNumber: null,
-      fallbackPRNumber: 42,
+      fallbackPRNumber: null,
       fallbackPRSource: 'explicit'
     })
 
@@ -2537,6 +3179,117 @@ describe('fetchAllWorktrees hydration-time purge (design §4.4)', () => {
     expect(mockApi.worktrees.list).toHaveBeenCalledTimes(4)
     expect(store.getState().tabsByWorktree['repoA::/a/new-zombie']).toBeDefined()
   })
+
+  it('preserves floating workspace state while purging a real stale worktree', async () => {
+    const store = createTestStore()
+    const wtA = makeWorktree({ id: 'repoA::/a/wt1', repoId: 'repoA', path: '/a/wt1' })
+    const wtB = makeWorktree({ id: 'repoB::/b/wt1', repoId: 'repoB', path: '/b/wt1' })
+    const staleId = 'repoA::/a/zombie'
+    const floatingFile = {
+      id: 'floating-file',
+      worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+      filePath: '/floating/note.md',
+      relativePath: 'note.md',
+      language: 'markdown',
+      isDirty: false,
+      isPreview: false,
+      mode: 'edit' as const
+    }
+
+    mockApi.worktrees.list.mockImplementation(async ({ repoId }: { repoId: string }) =>
+      repoId === 'repoA' ? [wtA] : [wtB]
+    )
+
+    store.setState({
+      repos: [repoA, repoB],
+      activeWorktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+      activeFileId: 'floating-file',
+      activeTabId: 'floating-terminal-tab',
+      activeTabType: 'editor' as const,
+      tabsByWorktree: {
+        [wtA.id]: [{ id: 'tab-A', worktreeId: wtA.id }],
+        [staleId]: [{ id: 'tab-zombie', worktreeId: staleId }],
+        [FLOATING_TERMINAL_WORKTREE_ID]: [
+          { id: 'floating-terminal-tab', worktreeId: FLOATING_TERMINAL_WORKTREE_ID }
+        ]
+      },
+      browserTabsByWorktree: {
+        [FLOATING_TERMINAL_WORKTREE_ID]: [{ id: 'floating-browser', url: 'https://orca.test' }]
+      },
+      activeBrowserTabIdByWorktree: {
+        [FLOATING_TERMINAL_WORKTREE_ID]: 'floating-browser'
+      },
+      openFiles: [
+        floatingFile,
+        {
+          id: 'stale-file',
+          worktreeId: staleId,
+          filePath: '/a/zombie/stale.ts',
+          relativePath: 'stale.ts',
+          language: 'typescript',
+          isDirty: false,
+          isPreview: false,
+          mode: 'edit' as const
+        }
+      ],
+      activeFileIdByWorktree: {
+        [FLOATING_TERMINAL_WORKTREE_ID]: 'floating-file',
+        [staleId]: 'stale-file'
+      },
+      unifiedTabsByWorktree: {
+        [FLOATING_TERMINAL_WORKTREE_ID]: [
+          {
+            id: 'floating-unified-tab',
+            type: 'editor',
+            worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+            fileId: 'floating-file'
+          }
+        ],
+        [staleId]: [{ id: 'stale-unified-tab', worktreeId: staleId }]
+      },
+      groupsByWorktree: {
+        [FLOATING_TERMINAL_WORKTREE_ID]: [
+          {
+            id: 'floating-group',
+            worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+            activeTabId: 'floating-unified-tab'
+          }
+        ],
+        [staleId]: [{ id: 'stale-group', worktreeId: staleId, activeTabId: 'stale-unified-tab' }]
+      },
+      layoutByWorktree: {
+        [FLOATING_TERMINAL_WORKTREE_ID]: { type: 'leaf', groupId: 'floating-group' },
+        [staleId]: { type: 'leaf', groupId: 'stale-group' }
+      }
+    } as unknown as Partial<AppState>)
+
+    await store.getState().fetchAllWorktrees()
+
+    expect(store.getState().hasHydratedWorktreePurge).toBe(true)
+    expect(store.getState().tabsByWorktree).toEqual({
+      [wtA.id]: [{ id: 'tab-A', worktreeId: wtA.id }],
+      [FLOATING_TERMINAL_WORKTREE_ID]: [
+        { id: 'floating-terminal-tab', worktreeId: FLOATING_TERMINAL_WORKTREE_ID }
+      ]
+    })
+    expect(store.getState().browserTabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID]).toEqual([
+      { id: 'floating-browser', url: 'https://orca.test' }
+    ])
+    expect(store.getState().openFiles).toEqual([floatingFile])
+    expect(store.getState().activeFileIdByWorktree[FLOATING_TERMINAL_WORKTREE_ID]).toBe(
+      'floating-file'
+    )
+    expect(store.getState().unifiedTabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID]).toHaveLength(1)
+    expect(store.getState().groupsByWorktree[FLOATING_TERMINAL_WORKTREE_ID]).toHaveLength(1)
+    expect(store.getState().layoutByWorktree[FLOATING_TERMINAL_WORKTREE_ID]).toEqual({
+      type: 'leaf',
+      groupId: 'floating-group'
+    })
+    expect(store.getState().activeWorktreeId).toBe(FLOATING_TERMINAL_WORKTREE_ID)
+    expect(store.getState().activeFileId).toBe('floating-file')
+    expect(store.getState().activeTabId).toBe('floating-terminal-tab')
+    expect(store.getState().activeTabType).toBe('editor')
+  })
 })
 
 // Why: design §4.4 — purgeWorktreeTerminalState wipes every worktree-scoped
@@ -2577,17 +3330,19 @@ describe('purgeWorktreeTerminalState direct (design §4.4)', () => {
           relativePath: 'a.ts',
           language: 'typescript',
           isDirty: false,
+          markdownPreviewSourceFileId: 'source-1',
           isPreview: false,
           mode: 'edit' as const
         }
       ],
       editorDrafts: { 'file-1': 'draft', 'file-99': 'other' },
+      markdownFrontmatterVisible: { 'source-1': true, 'file-99': true },
       gitIgnoredPathsByWorktree: {
         'repoA::/a/wt1': ['dist/'],
         'repoA::/a/wt2': ['coverage/']
       },
       rightSidebarTabByWorktree: {
-        'repoA::/a/wt1': 'search',
+        'repoA::/a/wt1': 'search' as never,
         'repoA::/a/wt2': 'checks'
       },
       activeWorktreeId: 'repoA::/a/wt1',
@@ -2614,6 +3369,7 @@ describe('purgeWorktreeTerminalState direct (design §4.4)', () => {
     expect(s.runtimePaneTitlesByTabId).toEqual({ 'tab-3': 'bash' })
     expect(s.openFiles).toEqual([])
     expect(s.editorDrafts).toEqual({ 'file-99': 'other' })
+    expect(s.markdownFrontmatterVisible).toEqual({ 'file-99': true })
     expect(s.gitIgnoredPathsByWorktree).toEqual({ 'repoA::/a/wt2': ['coverage/'] })
     expect(s.rightSidebarTabByWorktree).toEqual({ 'repoA::/a/wt2': 'checks' })
     expect(s.activeWorktreeId).toBeNull()
@@ -2632,6 +3388,157 @@ describe('purgeWorktreeTerminalState direct (design §4.4)', () => {
     store.getState().purgeWorktreeTerminalState([])
 
     expect(store.getState().tabsByWorktree).toBe(before)
+  })
+
+  it('ignores the floating workspace sentinel while purging mixed real ids', () => {
+    const store = createTestStore()
+    const staleId = 'repoA::/a/wt1'
+    const floatingFile = {
+      id: 'floating-file',
+      worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+      filePath: '/floating/note.md',
+      relativePath: 'note.md',
+      language: 'markdown',
+      isDirty: false,
+      isPreview: false,
+      mode: 'edit' as const
+    }
+
+    store.setState({
+      tabsByWorktree: {
+        [staleId]: [{ id: 'tab-1', worktreeId: staleId }],
+        [FLOATING_TERMINAL_WORKTREE_ID]: [
+          { id: 'floating-terminal-tab', worktreeId: FLOATING_TERMINAL_WORKTREE_ID }
+        ]
+      },
+      browserTabsByWorktree: {
+        [FLOATING_TERMINAL_WORKTREE_ID]: [{ id: 'floating-browser', url: 'https://orca.test' }]
+      },
+      openFiles: [
+        floatingFile,
+        {
+          id: 'stale-file',
+          worktreeId: staleId,
+          filePath: '/a/wt1/stale.ts',
+          relativePath: 'stale.ts',
+          language: 'typescript',
+          isDirty: false,
+          isPreview: false,
+          mode: 'edit' as const
+        }
+      ],
+      activeFileIdByWorktree: {
+        [FLOATING_TERMINAL_WORKTREE_ID]: 'floating-file',
+        [staleId]: 'stale-file'
+      },
+      unifiedTabsByWorktree: {
+        [FLOATING_TERMINAL_WORKTREE_ID]: [
+          {
+            id: 'floating-unified-tab',
+            type: 'editor',
+            worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+            fileId: 'floating-file'
+          }
+        ],
+        [staleId]: [{ id: 'stale-unified-tab', worktreeId: staleId }]
+      },
+      groupsByWorktree: {
+        [FLOATING_TERMINAL_WORKTREE_ID]: [
+          {
+            id: 'floating-group',
+            worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+            activeTabId: 'floating-unified-tab'
+          }
+        ],
+        [staleId]: [{ id: 'stale-group', worktreeId: staleId, activeTabId: 'stale-unified-tab' }]
+      },
+      layoutByWorktree: {
+        [FLOATING_TERMINAL_WORKTREE_ID]: { type: 'leaf', groupId: 'floating-group' },
+        [staleId]: { type: 'leaf', groupId: 'stale-group' }
+      }
+    } as unknown as Partial<AppState>)
+
+    store.getState().purgeWorktreeTerminalState([staleId, FLOATING_TERMINAL_WORKTREE_ID])
+
+    expect(store.getState().tabsByWorktree).toEqual({
+      [FLOATING_TERMINAL_WORKTREE_ID]: [
+        { id: 'floating-terminal-tab', worktreeId: FLOATING_TERMINAL_WORKTREE_ID }
+      ]
+    })
+    expect(store.getState().browserTabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID]).toEqual([
+      { id: 'floating-browser', url: 'https://orca.test' }
+    ])
+    expect(store.getState().openFiles).toEqual([floatingFile])
+    expect(store.getState().activeFileIdByWorktree).toEqual({
+      [FLOATING_TERMINAL_WORKTREE_ID]: 'floating-file'
+    })
+    expect(store.getState().unifiedTabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID]).toHaveLength(1)
+    expect(store.getState().groupsByWorktree[FLOATING_TERMINAL_WORKTREE_ID]).toHaveLength(1)
+    expect(store.getState().layoutByWorktree[FLOATING_TERMINAL_WORKTREE_ID]).toEqual({
+      type: 'leaf',
+      groupId: 'floating-group'
+    })
+  })
+
+  it('is a no-op when only the floating workspace sentinel is passed', () => {
+    const store = createTestStore()
+    const tabsByWorktree = {}
+    const browserTabsByWorktree = {
+      [FLOATING_TERMINAL_WORKTREE_ID]: [{ id: 'floating-browser', url: 'https://orca.test' }]
+    }
+    const openFiles = [
+      {
+        id: 'floating-file',
+        worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+        filePath: '/floating/note.md',
+        relativePath: 'note.md',
+        language: 'markdown',
+        isDirty: false,
+        isPreview: false,
+        mode: 'edit' as const
+      }
+    ]
+    const unifiedTabsByWorktree = {
+      [FLOATING_TERMINAL_WORKTREE_ID]: [
+        {
+          id: 'floating-unified-tab',
+          type: 'editor',
+          worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+          fileId: 'floating-file'
+        }
+      ]
+    }
+    const groupsByWorktree = {
+      [FLOATING_TERMINAL_WORKTREE_ID]: [
+        {
+          id: 'floating-group',
+          worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+          activeTabId: 'floating-unified-tab'
+        }
+      ]
+    }
+    const layoutByWorktree = {
+      [FLOATING_TERMINAL_WORKTREE_ID]: { type: 'leaf', groupId: 'floating-group' }
+    }
+
+    store.setState({
+      tabsByWorktree,
+      browserTabsByWorktree,
+      openFiles,
+      activeFileIdByWorktree: { [FLOATING_TERMINAL_WORKTREE_ID]: 'floating-file' },
+      unifiedTabsByWorktree,
+      groupsByWorktree,
+      layoutByWorktree
+    } as unknown as Partial<AppState>)
+
+    store.getState().purgeWorktreeTerminalState([FLOATING_TERMINAL_WORKTREE_ID])
+
+    expect(store.getState().tabsByWorktree).toBe(tabsByWorktree)
+    expect(store.getState().browserTabsByWorktree).toBe(browserTabsByWorktree)
+    expect(store.getState().openFiles).toBe(openFiles)
+    expect(store.getState().unifiedTabsByWorktree).toBe(unifiedTabsByWorktree)
+    expect(store.getState().groupsByWorktree).toBe(groupsByWorktree)
+    expect(store.getState().layoutByWorktree).toBe(layoutByWorktree)
   })
 })
 
@@ -2706,5 +3613,235 @@ describe('markWorktreeVisited', () => {
     store.getState().pruneLastVisitedTimestamps()
 
     expect(store.getState().lastVisitedAtByWorktreeId).toEqual({ 'repo1::/hidden': 100 })
+  })
+})
+
+describe('setRenamingWorktreeId', () => {
+  it('sets and clears the workspace rename signal', () => {
+    const store = createTestStore()
+
+    expect(store.getState().renamingWorktreeId).toBeNull()
+
+    store.getState().setRenamingWorktreeId('repo1::/feature')
+    expect(store.getState().renamingWorktreeId).toBe('repo1::/feature')
+
+    store.getState().setRenamingWorktreeId(null)
+    expect(store.getState().renamingWorktreeId).toBeNull()
+  })
+})
+
+describe('setWorktreesPinnedAndReveal', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    resetRemoteRuntimeMocks()
+  })
+
+  it('pins a worktree and reveals it so the viewport follows it into the Pinned section', () => {
+    const store = createTestStore()
+    const wt = makeWorktree({ id: 'repo1::/a', repoId: 'repo1', path: '/a', isPinned: false })
+    const reveal = vi.fn()
+    store.setState({
+      worktreesByRepo: { repo1: [wt] },
+      revealWorktreeInSidebar: reveal
+    } as Partial<AppState>)
+
+    store.getState().setWorktreesPinnedAndReveal([wt.id], true)
+
+    expect(store.getState().worktreesByRepo.repo1[0].isPinned).toBe(true)
+    expect(reveal).toHaveBeenCalledWith(wt.id, { behavior: 'smooth', highlight: true })
+  })
+
+  it('reveals on unpin so the viewport follows the row back to its status group', () => {
+    const store = createTestStore()
+    const wt = makeWorktree({ id: 'repo1::/a', repoId: 'repo1', path: '/a', isPinned: true })
+    const reveal = vi.fn()
+    store.setState({
+      worktreesByRepo: { repo1: [wt] },
+      revealWorktreeInSidebar: reveal
+    } as Partial<AppState>)
+
+    store.getState().setWorktreesPinnedAndReveal([wt.id], false)
+
+    expect(store.getState().worktreesByRepo.repo1[0].isPinned).toBe(false)
+    expect(reveal).toHaveBeenCalledWith(wt.id, { behavior: 'smooth', highlight: true })
+  })
+
+  it('skips a no-op toggle without requesting a reveal', () => {
+    const store = createTestStore()
+    const wt = makeWorktree({ id: 'repo1::/a', repoId: 'repo1', path: '/a', isPinned: true })
+    const reveal = vi.fn()
+    store.setState({
+      worktreesByRepo: { repo1: [wt] },
+      revealWorktreeInSidebar: reveal
+    } as Partial<AppState>)
+
+    store.getState().setWorktreesPinnedAndReveal([wt.id], true)
+
+    expect(reveal).not.toHaveBeenCalled()
+    expect(store.getState().worktreesByRepo.repo1[0].isPinned).toBe(true)
+  })
+
+  it('does nothing for an unknown worktree id', () => {
+    const store = createTestStore()
+    const wt = makeWorktree({ id: 'repo1::/a', repoId: 'repo1', path: '/a', isPinned: false })
+    const reveal = vi.fn()
+    store.setState({
+      worktreesByRepo: { repo1: [wt] },
+      revealWorktreeInSidebar: reveal
+    } as Partial<AppState>)
+
+    store.getState().setWorktreesPinnedAndReveal(['repo1::/missing'], true)
+
+    expect(reveal).not.toHaveBeenCalled()
+    expect(store.getState().worktreesByRepo.repo1[0].isPinned).toBe(false)
+  })
+
+  it('does nothing for an empty id list', () => {
+    const store = createTestStore()
+    const reveal = vi.fn()
+    store.setState({
+      worktreesByRepo: { repo1: [] },
+      revealWorktreeInSidebar: reveal
+    } as Partial<AppState>)
+
+    store.getState().setWorktreesPinnedAndReveal([], true)
+
+    expect(reveal).not.toHaveBeenCalled()
+  })
+
+  it('reveals only the first newly-pinned worktree when pinning several at once', () => {
+    const store = createTestStore()
+    const alreadyPinned = makeWorktree({
+      id: 'repo1::/a',
+      repoId: 'repo1',
+      path: '/a',
+      isPinned: true
+    })
+    const first = makeWorktree({ id: 'repo1::/b', repoId: 'repo1', path: '/b', isPinned: false })
+    const second = makeWorktree({ id: 'repo1::/c', repoId: 'repo1', path: '/c', isPinned: false })
+    const reveal = vi.fn()
+    store.setState({
+      worktreesByRepo: { repo1: [alreadyPinned, first, second] },
+      revealWorktreeInSidebar: reveal
+    } as Partial<AppState>)
+
+    store.getState().setWorktreesPinnedAndReveal([alreadyPinned.id, first.id, second.id], true)
+
+    expect(reveal).toHaveBeenCalledTimes(1)
+    expect(reveal).toHaveBeenCalledWith(first.id, { behavior: 'smooth', highlight: true })
+    // Every targeted row is pinned, not just the revealed one, and the
+    // already-pinned row is left untouched.
+    expect(store.getState().worktreesByRepo.repo1[0].isPinned).toBe(true)
+    expect(store.getState().worktreesByRepo.repo1[1].isPinned).toBe(true)
+    expect(store.getState().worktreesByRepo.repo1[2].isPinned).toBe(true)
+  })
+})
+
+function makePendingCreation(
+  creationId: string,
+  overrides: Partial<PendingWorktreeCreation> = {}
+): PendingWorktreeCreation {
+  return {
+    creationId,
+    phase: 'fetching',
+    status: 'creating',
+    indeterminate: false,
+    loaderVisible: false,
+    request: {
+      repoId: 'repo1',
+      name: 'feature',
+      setupDecision: 'inherit',
+      agent: null,
+      pendingFirstAgentMessageRename: false,
+      note: '',
+      startupPlan: null,
+      quickPrompt: '',
+      quickTelemetry: null
+    },
+    ...overrides
+  }
+}
+
+describe('pending worktree creation state', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    resetRemoteRuntimeMocks()
+  })
+
+  it('beginPendingWorktreeCreation registers the entry and makes it the active surface', () => {
+    const store = createTestStore()
+    store.getState().beginPendingWorktreeCreation(makePendingCreation('c1'))
+
+    expect(store.getState().pendingWorktreeCreations.c1).toBeDefined()
+    expect(store.getState().activePendingCreationId).toBe('c1')
+  })
+
+  it('updatePendingWorktreeCreation skips the write when the patch changes nothing', () => {
+    const store = createTestStore()
+    store.getState().beginPendingWorktreeCreation(makePendingCreation('c1'))
+    const before = store.getState().pendingWorktreeCreations
+
+    store.getState().updatePendingWorktreeCreation('c1', { phase: 'fetching' })
+
+    // Same map reference => no subscriber notification on a no-op progress event.
+    expect(store.getState().pendingWorktreeCreations).toBe(before)
+  })
+
+  it('updatePendingWorktreeCreation applies a real phase change', () => {
+    const store = createTestStore()
+    store.getState().beginPendingWorktreeCreation(makePendingCreation('c1'))
+
+    store.getState().updatePendingWorktreeCreation('c1', { phase: 'creating' })
+
+    expect(store.getState().pendingWorktreeCreations.c1.phase).toBe('creating')
+  })
+
+  it('updatePendingWorktreeCreation is a no-op for an unknown id', () => {
+    const store = createTestStore()
+    const before = store.getState().pendingWorktreeCreations
+
+    store.getState().updatePendingWorktreeCreation('missing', { status: 'error', error: 'x' })
+
+    expect(store.getState().pendingWorktreeCreations).toBe(before)
+  })
+
+  it('removePendingWorktreeCreation clears the active surface only when it points at the removed entry', () => {
+    const store = createTestStore()
+    store.getState().beginPendingWorktreeCreation(makePendingCreation('c1'))
+    store.getState().beginPendingWorktreeCreation(makePendingCreation('c2'))
+    // c2 is active now; removing the background c1 must not steal the surface.
+    store.getState().removePendingWorktreeCreation('c1')
+
+    expect(store.getState().pendingWorktreeCreations.c1).toBeUndefined()
+    expect(store.getState().activePendingCreationId).toBe('c2')
+
+    store.getState().removePendingWorktreeCreation('c2')
+    expect(store.getState().activePendingCreationId).toBeNull()
+  })
+
+  it('setActivePendingWorktreeCreation ignores unknown ids but always accepts null', () => {
+    const store = createTestStore()
+    store.getState().beginPendingWorktreeCreation(makePendingCreation('c1'))
+
+    store.getState().setActivePendingWorktreeCreation('missing')
+    expect(store.getState().activePendingCreationId).toBe('c1')
+
+    store.getState().setActivePendingWorktreeCreation(null)
+    expect(store.getState().activePendingCreationId).toBeNull()
+  })
+
+  it('setActiveWorktree dismisses the creation panel even when re-selecting the already-active worktree', () => {
+    const store = createTestStore()
+    const wt = makeWorktree({ id: 'repo1::/path/a', repoId: 'repo1' })
+    store.setState({
+      worktreesByRepo: { repo1: [wt] },
+      activeWorktreeId: wt.id,
+      activePendingCreationId: 'c1',
+      pendingWorktreeCreations: { c1: makePendingCreation('c1') }
+    } as unknown as Partial<AppState>)
+
+    store.getState().setActiveWorktree(wt.id)
+
+    expect(store.getState().activePendingCreationId).toBeNull()
   })
 })

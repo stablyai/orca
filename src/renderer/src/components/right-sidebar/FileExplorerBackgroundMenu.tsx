@@ -6,6 +6,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
+import { translate } from '@/i18n/i18n'
 
 function stopRightButtonMenuSelection(event: React.PointerEvent): void {
   if (event.button !== 2) {
@@ -49,11 +50,17 @@ export function FileExplorerBackgroundMenu({
       >
         <DropdownMenuItem onSelect={() => onStartNew('file', worktreePath, 0)}>
           <FilePlus />
-          New File
+          {translate(
+            'auto.components.right.sidebar.FileExplorerBackgroundMenu.21fe46ed36',
+            'New File'
+          )}
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={() => onStartNew('folder', worktreePath, 0)}>
           <FolderPlus />
-          New Folder
+          {translate(
+            'auto.components.right.sidebar.FileExplorerBackgroundMenu.3b5e2dcb8d',
+            'New Folder'
+          )}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
