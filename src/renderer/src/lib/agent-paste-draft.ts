@@ -281,19 +281,39 @@ function waitForInputBoxReady(
 }
 
 /**
- * Why: activation creates the tab synchronously but the PTY spawn is
- * async. Poll the store until the primary PTY id appears or the budget
- * expires. Tight interval because the wait is normally <200ms — only the
- * first launch on a cold app reaches the tail of this.
+ * Why: activation creates the tab synchronously but the PTY spawn is async.
+ * Subscribe to the tab→PTY binding instead of polling so paste-readiness
+ * sidecars attach in the same renderer turn that connectPanePty publishes the
+ * PTY id, before the transport registers its primary data handler.
  */
 async function waitForPtyId(tabId: string, timeoutMs: number): Promise<string | null> {
-  const deadline = Date.now() + timeoutMs
-  while (Date.now() < deadline) {
-    const ptyId = useAppStore.getState().ptyIdsByTabId[tabId]?.[0]
-    if (ptyId) {
-      return ptyId
-    }
-    await new Promise<void>((resolve) => window.setTimeout(resolve, 50))
+  const initialPtyId = useAppStore.getState().ptyIdsByTabId[tabId]?.[0]
+  if (initialPtyId) {
+    return initialPtyId
   }
-  return null
+
+  return new Promise<string | null>((resolve) => {
+    let settled = false
+    let unsubscribe: (() => void) | null = null
+    let timer: number | null = null
+    const finish = (ptyId: string | null): void => {
+      if (settled) {
+        return
+      }
+      settled = true
+      unsubscribe?.()
+      if (timer !== null) {
+        window.clearTimeout(timer)
+      }
+      resolve(ptyId)
+    }
+    timer = window.setTimeout(() => finish(null), timeoutMs)
+
+    unsubscribe = useAppStore.subscribe((state) => {
+      const ptyId = state.ptyIdsByTabId[tabId]?.[0]
+      if (ptyId) {
+        finish(ptyId)
+      }
+    })
+  })
 }

@@ -1,14 +1,23 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { pasteDraftWhenAgentReady, sendBracketedPasteToRunningAgent } from './agent-paste-draft'
 
+type TestAppState = {
+  settings: Record<string, unknown>
+  ptyIdsByTabId: Record<string, string[]>
+  runtimePaneTitlesByTabId: Record<string, Record<string, string>>
+  tabsByWorktree: Record<string, { id: string; title?: string }[]>
+}
+
 const testState = vi.hoisted(() => ({
   appState: {
     settings: {},
     ptyIdsByTabId: { 'tab-1': ['pty-1'] },
     runtimePaneTitlesByTabId: {},
     tabsByWorktree: {}
-  },
+  } as TestAppState,
   ptyObserver: null as ((data: string) => void) | null,
+  storeSubscriber: null as ((state: TestAppState) => void) | null,
+  unsubscribeStore: vi.fn(),
   unsubscribe: vi.fn(),
   subscribeToPtyData: vi.fn(),
   isRemoteRuntimePtyId: vi.fn(),
@@ -19,7 +28,11 @@ const testState = vi.hoisted(() => ({
 
 vi.mock('@/store', () => ({
   useAppStore: {
-    getState: () => testState.appState
+    getState: () => testState.appState,
+    subscribe: (subscriber: (state: TestAppState) => void) => {
+      testState.storeSubscriber = subscriber
+      return testState.unsubscribeStore
+    }
   }
 }))
 
@@ -54,6 +67,8 @@ describe('pasteDraftWhenAgentReady', () => {
     testState.appState.runtimePaneTitlesByTabId = {}
     testState.appState.tabsByWorktree = {}
     testState.ptyObserver = null
+    testState.storeSubscriber = null
+    testState.unsubscribeStore.mockReset()
     testState.unsubscribe.mockReset()
     testState.subscribeToPtyData.mockReset()
     testState.subscribeToPtyData.mockImplementation(
@@ -117,6 +132,33 @@ describe('pasteDraftWhenAgentReady', () => {
     testState.ptyObserver?.(
       `${DECSET_BRACKETED_PASTE}${CODEX_COMPOSER_PROMPT_RENDER}${'x'.repeat(900)}`
     )
+
+    await expect(promise).resolves.toBe(true)
+    expect(testState.sendRuntimePtyInputVerified).toHaveBeenCalledWith(
+      {},
+      'pty-1',
+      PASTED_ISSUE_URL
+    )
+  })
+
+  it('subscribes to PTY output as soon as the tab PTY binding appears', async () => {
+    testState.appState.ptyIdsByTabId = {}
+
+    const promise = pasteDraftWhenAgentReady({
+      tabId: 'tab-1',
+      content: ISSUE_URL,
+      agent: 'codex'
+    })
+    await flushMicrotasks()
+    expect(testState.subscribeToPtyData).not.toHaveBeenCalled()
+
+    testState.appState.ptyIdsByTabId = { 'tab-1': ['pty-1'] }
+    testState.storeSubscriber?.(testState.appState)
+    await flushMicrotasks()
+
+    expect(testState.unsubscribeStore).toHaveBeenCalledTimes(1)
+    expect(testState.subscribeToPtyData).toHaveBeenCalledWith('pty-1', expect.any(Function))
+    testState.ptyObserver?.(`${DECSET_BRACKETED_PASTE}${CODEX_COMPOSER_PROMPT_RENDER}`)
 
     await expect(promise).resolves.toBe(true)
     expect(testState.sendRuntimePtyInputVerified).toHaveBeenCalledWith(
