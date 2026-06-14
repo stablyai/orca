@@ -5,6 +5,8 @@ import en from '../../renderer/src/i18n/locales/en.json'
 import es from '../../renderer/src/i18n/locales/es.json'
 import ja from '../../renderer/src/i18n/locales/ja.json'
 import ko from '../../renderer/src/i18n/locales/ko.json'
+import ru from '../../renderer/src/i18n/locales/ru.json'
+import uk from '../../renderer/src/i18n/locales/uk.json'
 import zh from '../../renderer/src/i18n/locales/zh.json'
 import { isPseudoLocalizationLocale, pseudoLocalizeString } from '../../shared/pseudo-localization'
 import { DEFAULT_UI_LOCALE, resolveUiLocale, type SupportedUiLocale } from '../../shared/ui-locale'
@@ -42,6 +44,12 @@ export async function ensureMainI18n(): Promise<I18nInstance> {
         },
         es: {
           translation: es
+        },
+        ru: {
+          translation: ru
+        },
+        uk: {
+          translation: uk
         }
       },
       interpolation: {

@@ -5,6 +5,8 @@ import en from './locales/en.json'
 import es from './locales/es.json'
 import ja from './locales/ja.json'
 import ko from './locales/ko.json'
+import ru from './locales/ru.json'
+import uk from './locales/uk.json'
 import zh from './locales/zh.json'
 import { isPseudoLocalizationLocale, pseudoLocalizeString } from './pseudo-localization'
 import { DEFAULT_LOCALE, resolveUiLocale } from './supported-languages'
@@ -30,6 +32,12 @@ void i18n.use(initReactI18next).init({
     },
     es: {
       translation: es
+    },
+    ru: {
+      translation: ru
+    },
+    uk: {
+      translation: uk
     }
   },
   interpolation: {

@@ -11,7 +11,9 @@ const LOCALE_CACHE_FILES = {
   ko: '.ko-catalog-cache.json',
   zh: '.zh-catalog-cache.json',
   ja: '.ja-catalog-cache.json',
-  es: '.es-catalog-cache.json'
+  es: '.es-catalog-cache.json',
+  ru: '.ru-catalog-cache.json',
+  uk: '.uk-catalog-cache.json'
 }
 
 function parseLocaleArg(argv) {
@@ -57,7 +59,7 @@ export async function repairLocale(root, locale) {
 }
 
 export async function main(root = process.cwd(), locale = parseLocaleArg(process.argv)) {
-  const locales = locale ? [locale] : ['ko', 'zh', 'ja', 'es']
+  const locales = locale ? [locale] : ['ko', 'zh', 'ja', 'es', 'ru', 'uk']
   const unsupported = locales.filter((code) => !LOCALE_CACHE_FILES[code])
   if (unsupported.length > 0) {
     console.error(`Unsupported locale(s): ${unsupported.join(', ')}`)
