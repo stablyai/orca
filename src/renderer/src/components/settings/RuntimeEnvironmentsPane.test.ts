@@ -175,7 +175,7 @@ describe('RuntimeEnvironmentsPane host details', () => {
   })
 
   it('explains that selecting a saved server is the explicit default Host mode', () => {
-    expect(getActiveServerModeDescription(true)).toContain('default Host')
+    expect(getActiveServerModeDescription(true)).toContain('Use this computer by default')
     expect(getActiveServerModeDescription(true)).toContain('browser/mobile handoff')
     expect(getActiveServerModeDescription(false)).toContain('default Host')
     expect(getActiveServerModeDescription(false)).toContain('paired Orca runtime')

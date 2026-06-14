@@ -624,6 +624,12 @@ export function RuntimeEnvironmentsPane({
         }
         return false
       }
+      const store = useAppStore.getState()
+      // Why: Connect is not the Active Server selector anymore, but connected
+      // hosts should still contribute their projects/workspaces to the sidebar.
+      const repos = await store.fetchRuntimeEnvironmentRepos(environment.id)
+      await Promise.all(repos.map((repo) => useAppStore.getState().fetchWorktrees(repo.id)))
+      await useAppStore.getState().fetchWorktreeLineage()
       if (mountedRef.current) {
         toast.success(
           translate(
