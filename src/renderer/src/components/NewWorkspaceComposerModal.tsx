@@ -22,12 +22,14 @@ import type {
   WorkspaceCreateTelemetrySource,
   WorkspaceStatus
 } from '../../../shared/types'
+import type { TaskSourceContext } from '../../../shared/task-source-context'
 import { translate } from '@/i18n/i18n'
 
 type ComposerModalData = {
   prefilledName?: string
   initialRepoId?: string
   linkedWorkItem?: LinkedWorkItemSummary | null
+  taskSourceContext?: TaskSourceContext | null
   initialBaseBranch?: string
   initialWorkspaceStatus?: WorkspaceStatus
   /** Telemetry surface that opened the composer. Set by each
@@ -124,6 +126,7 @@ function QuickTabBody({
     // intentionally ignored even if older callers still send it.
     initialPrompt: '',
     initialLinkedWorkItem: modalData.linkedWorkItem ?? null,
+    initialTaskSourceContext: modalData.taskSourceContext ?? null,
     initialRepoId: modalData.initialRepoId,
     initialWorkspaceStatus: modalData.initialWorkspaceStatus,
     ...(modalData.initialBaseBranch ? { initialBaseBranch: modalData.initialBaseBranch } : {}),

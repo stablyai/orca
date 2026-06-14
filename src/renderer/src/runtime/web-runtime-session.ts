@@ -182,6 +182,7 @@ function stageWebRuntimeBrowserTab(args: {
   const browserTab = useAppStore.getState().createBrowserTab(args.worktreeId, url, {
     title: url === 'about:blank' ? 'New Browser Tab' : url,
     focusAddressBar: true,
+    browserRuntimeEnvironmentId: args.environmentId,
     targetGroupId: args.targetGroupId
   })
   const pageId = browserTab.activePageId ?? browserTab.pageIds?.[0] ?? null

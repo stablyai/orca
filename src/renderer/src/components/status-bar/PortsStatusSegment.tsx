@@ -6,7 +6,7 @@ import { useAppStore } from '@/store'
 import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import {
   scanWorkspacePortsForTarget,
-  workspacePortRuntimeTargetKey
+  workspacePortScanKeyForTarget
 } from '@/lib/workspace-port-actions'
 import { getExternalWorkspacePorts, getWorkspacePortGroups } from '@/lib/workspace-port-groups'
 import { SelectedTextCopyMenu } from '@/components/SelectedTextCopyMenu'
@@ -25,11 +25,12 @@ export function PortsStatusSegment({ iconOnly }: PortsStatusSegmentProps): React
   const refreshing = useAppStore((s) => s.workspacePortScanRefreshing)
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
   const setWorkspacePortScan = useAppStore((s) => s.setWorkspacePortScan)
+  const setWorkspacePortScanForKey = useAppStore((s) => s.setWorkspacePortScanForKey)
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
   const [open, setOpen] = useState(false)
   const [externalOpen, setExternalOpen] = useState(false)
   const runtimeTarget = useMemo(() => getActiveRuntimeTarget(settings), [settings])
-  const scanKey = `${workspacePortRuntimeTargetKey(runtimeTarget)}:all`
+  const scanKey = workspacePortScanKeyForTarget(runtimeTarget)
 
   const workspaceGroups = useMemo(() => getWorkspacePortGroups(scan), [scan])
   const externalPorts = useMemo(() => getExternalWorkspacePorts(scan), [scan])
@@ -46,6 +47,7 @@ export function PortsStatusSegment({ iconOnly }: PortsStatusSegmentProps): React
       // popover should still collapse that stale window without flashing icons.
       void scanWorkspacePortsForTarget(runtimeTarget)
         .then((result) => {
+          setWorkspacePortScanForKey(scanKey, result)
           setWorkspacePortScan({ key: scanKey, result })
         })
         .catch((error) => {
@@ -61,7 +63,13 @@ export function PortsStatusSegment({ iconOnly }: PortsStatusSegmentProps): React
           })
         })
     },
-    [recordFeatureInteraction, runtimeTarget, scanKey, setWorkspacePortScan]
+    [
+      recordFeatureInteraction,
+      runtimeTarget,
+      scanKey,
+      setWorkspacePortScan,
+      setWorkspacePortScanForKey
+    ]
   )
 
   return (

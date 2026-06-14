@@ -7,6 +7,10 @@ import {
 import type { AppState } from '@/store/types'
 import { useAppStore } from '@/store'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
+import {
+  getSettingsForWorktreeRuntimeOwner,
+  type WorktreeRuntimeOwnerState
+} from '@/lib/worktree-runtime-owner'
 import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
 import { isTerminalLeafId, makePaneKey } from '../../../shared/stable-pane-id'
 import type { TerminalLayoutSnapshot } from '../../../shared/types'
@@ -47,7 +51,7 @@ export type ActiveTerminalNoteTargetState = {
   runtimePaneTitlesByTabId?: Record<string, Record<number, string> | undefined>
   agentStatusByPaneKey?: Record<string, AgentStatusEntry | undefined>
   settings: Parameters<typeof getActiveRuntimeTarget>[0]
-}
+} & Pick<WorktreeRuntimeOwnerState, 'repos' | 'worktreesByRepo'>
 
 type ActiveAgentRuntimeProbeDescriptor = {
   key: string
@@ -159,7 +163,11 @@ export function getActiveAgentRuntimeProbeDescriptor(
   if (!activePtyId) {
     return null
   }
-  const runtimeTarget = getActiveRuntimeTarget(state.settings)
+  // Route by the worktree's owner host so the probe targets the host that runs
+  // this worktree's agent terminal, not the focused runtime.
+  const runtimeTarget = getActiveRuntimeTarget(
+    getSettingsForWorktreeRuntimeOwner(state, worktreeId)
+  )
   const runtimeKey =
     runtimeTarget.kind === 'environment' ? `env:${runtimeTarget.environmentId}` : 'local'
   return {

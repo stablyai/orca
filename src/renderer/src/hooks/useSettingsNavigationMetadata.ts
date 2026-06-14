@@ -389,7 +389,7 @@ export function buildSettingsNavigationMetadata({
       ),
       description: isWebClient
         ? 'Connect this browser to a saved Orca server.'
-        : 'Switch between local desktop mode and paired remote Orca runtimes.',
+        : 'Pair remote Orca runtimes for persistent sessions, richer remote state, and web or mobile handoff.',
       icon: Server,
       searchEntries: [runtimeEnvironmentsSearchEntry],
       group: 'remote',
@@ -402,7 +402,7 @@ export function buildSettingsNavigationMetadata({
             title: translate('auto.hooks.useSettingsNavigationMetadata.94a5afe910', 'SSH Hosts'),
             description: translate(
               'auto.hooks.useSettingsNavigationMetadata.31e57d1c70',
-              'Remote SSH hosts for files, terminals, and git.'
+              'Use existing machines over SSH for files, terminals, Git, and workspaces.'
             ),
             icon: Cable,
             searchEntries: getSshPaneSearchEntries(),
@@ -417,7 +417,7 @@ export function buildSettingsNavigationMetadata({
             ),
             icon: Smartphone,
             searchEntries: getMobileSettingsPaneSearchEntries(),
-            group: 'remote'
+            group: 'mobile'
           }
         ]
       : []),

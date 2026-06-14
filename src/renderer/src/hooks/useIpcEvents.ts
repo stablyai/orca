@@ -109,6 +109,7 @@ import {
 import { showTerminalShortcutCaptureNotification } from '@/lib/terminal-shortcut-capture-notification'
 import { resolveAgentStatusTerminalTitle } from '@/lib/agent-status-terminal-title'
 import { titleHasAgentName } from '../../../shared/agent-detection'
+import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { translate } from '@/i18n/i18n'
 
 function getShortcutPlatform(): NodeJS.Platform {
@@ -682,6 +683,10 @@ function isRuntimeEnvironmentActive(): boolean {
 
 function getActiveRuntimeEnvironmentId(): string | null {
   return useAppStore.getState().settings?.activeRuntimeEnvironmentId?.trim() || null
+}
+
+function getWorktreeRuntimeEnvironmentId(worktreeId: string | null | undefined): string | null {
+  return getRuntimeEnvironmentIdForWorktree(useAppStore.getState(), worktreeId)
 }
 
 export function useIpcEvents(): void {
@@ -1662,14 +1667,14 @@ export function useIpcEvents(): void {
 
     unsubs.push(
       window.api.browser.onOpenLinkInOrcaTab(({ browserPageId, url }) => {
-        if (isRuntimeEnvironmentActive()) {
-          return
-        }
         const store = useAppStore.getState()
         const sourcePage = Object.values(store.browserPagesByWorkspace)
           .flat()
           .find((page) => page.id === browserPageId)
         if (!sourcePage) {
+          return
+        }
+        if (getRuntimeEnvironmentIdForWorktree(store, sourcePage.worktreeId)) {
           return
         }
         // Why: the guest process can request "open this link in Orca", but it
@@ -1691,8 +1696,8 @@ export function useIpcEvents(): void {
         }
         const worktreeId = store.activeWorktreeId
         if (worktreeId) {
-          if (isRuntimeEnvironmentActive()) {
-            const environmentId = getActiveRuntimeEnvironmentId()
+          const environmentId = getWorktreeRuntimeEnvironmentId(worktreeId)
+          if (environmentId) {
             if (!isWebRuntimeSessionActive(environmentId)) {
               store.createBrowserTab(worktreeId, store.browserDefaultUrl ?? 'about:blank', {
                 title: translate('auto.hooks.useIpcEvents.f6300deb8b', 'New Browser Tab'),
@@ -1706,6 +1711,7 @@ export function useIpcEvents(): void {
               // the next host snapshot remains authoritative.
               await createWebRuntimeSessionBrowserTab({
                 worktreeId,
+                environmentId,
                 url: store.browserDefaultUrl ?? 'about:blank'
               })
             })()
@@ -2034,6 +2040,7 @@ export function useIpcEvents(): void {
           if (
             await createWebRuntimeSessionTerminal({
               worktreeId,
+              environmentId: getWorktreeRuntimeEnvironmentId(worktreeId),
               activate: true
             })
           ) {
@@ -2083,8 +2090,8 @@ export function useIpcEvents(): void {
           ) {
             return
           }
-          if (isRuntimeEnvironmentActive() && store.activeWorktreeId) {
-            const environmentId = getActiveRuntimeEnvironmentId()
+          const environmentId = getWorktreeRuntimeEnvironmentId(store.activeWorktreeId)
+          if (environmentId && store.activeWorktreeId) {
             if (!isWebRuntimeSessionActive(environmentId)) {
               store.closeBrowserTab(store.activeBrowserTabId)
               return
@@ -2092,7 +2099,8 @@ export function useIpcEvents(): void {
             void (async () => {
               await closeWebRuntimeSessionTab({
                 worktreeId: store.activeWorktreeId!,
-                tabId: store.activeBrowserTabId!
+                tabId: store.activeBrowserTabId!,
+                environmentId
               })
             })()
             return

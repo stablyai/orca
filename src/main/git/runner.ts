@@ -481,6 +481,34 @@ export function gitOptionalLocksDisabledEnv(
 }
 
 /**
+ * Force git to be non-interactive so it fails fast instead of blocking forever
+ * on a prompt. Without this, a git read-path call (status, worktree list, …)
+ * that hits an auth/credential prompt or an SSH host-key confirmation hangs on
+ * stdin with no terminal to answer it; on the headless `serve` runtime those
+ * stuck calls pile up and the runtime stops answering all clients (issue #5308).
+ *
+ * - GIT_TERMINAL_PROMPT=0: git refuses to prompt for credentials and errors out.
+ * - GIT_ASKPASS / SSH_ASKPASS='': disable any GUI/askpass credential helper that
+ *   would otherwise pop a prompt and block.
+ * - GIT_SSH_COMMAND BatchMode=yes: SSH fails instead of waiting on an
+ *   interactive password/host-key prompt. BatchMode does NOT change host trust
+ *   (an unknown host still errors, it just won't hang). Only added when the
+ *   caller hasn't set its own GIT_SSH_COMMAND.
+ */
+export function nonInteractiveGitEnv(env: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
+  const next: NodeJS.ProcessEnv = {
+    ...env,
+    GIT_TERMINAL_PROMPT: '0',
+    GIT_ASKPASS: env.GIT_ASKPASS ?? '',
+    SSH_ASKPASS: env.SSH_ASKPASS ?? ''
+  }
+  if (!next.GIT_SSH_COMMAND) {
+    next.GIT_SSH_COMMAND = 'ssh -o BatchMode=yes'
+  }
+  return next
+}
+
+/**
  * Async git command execution. Drop-in replacement for
  * `execFileAsync('git', args, { cwd, encoding, ... })`.
  */
@@ -501,7 +529,9 @@ export async function gitExecFileAsync(
         encoding: (options.encoding ?? 'utf-8') as BufferEncoding,
         maxBuffer: options.maxBuffer,
         timeout: options.timeout,
-        env: options.env
+        // Why: never let a git read-path call block on an interactive prompt
+        // (issue #5308) — fail fast instead of hanging the runtime.
+        env: nonInteractiveGitEnv(options.env)
       })
       return { stdout: stdout as string, stderr: stderr as string }
     }

@@ -18,6 +18,7 @@ import { parseWslUncPath } from '../../shared/wsl-paths'
 import { getDefaultWslDistro, getWslHome, toWindowsWslPath } from '../wsl'
 import { buildEncodedWslBashCommand } from '../wsl-bash-command'
 import { hasLiveClaudePtys } from './live-pty-gate'
+import { isOauthTokenExpiring, refreshClaudeOauthCredentials } from './oauth-refresh'
 import { ClaudeRuntimePathResolver } from './runtime-paths'
 import {
   deleteActiveClaudeKeychainCredentialsStrict,
@@ -402,6 +403,25 @@ export class ClaudeRuntimeAuthService {
     if (this.lastSyncedAccountId !== activeAccount.id) {
       this.skipNextReadBackForAccountId = null
     }
+
+    // Why: own the OAuth refresh whenever no live `claude` owns these
+    // credentials — both switching into an account and re-syncing the active
+    // account with an expired token. A single-use refresh token is rotated and
+    // persisted to managed storage atomically before we materialize it, so the
+    // runtime never gets a stale token that fails with invalid_grant. Skipped
+    // entirely while a Claude PTY is live: that process owns the credentials
+    // and refreshing here would race its own rotation (double-rotation
+    // invalidates one copy) — the read-back above preserves its refresh instead.
+    if (!hasLiveClaudePtys()) {
+      const refreshed = await this.refreshManagedAccountTokenIfNeeded(
+        activeAccount,
+        credentialsJson
+      )
+      if (refreshed) {
+        credentialsJson = refreshed
+      }
+    }
+
     const paths = this.pathResolver.getRuntimePaths()
     this.writeRuntimeCredentials(credentialsJson)
     if (process.platform === 'darwin') {
@@ -485,15 +505,28 @@ export class ClaudeRuntimeAuthService {
           continue
         }
         // Why: on cold app start we cannot tell whether matching runtime
-        // credentials are a fresh CLI refresh or stale state unless token
-        // metadata proves runtime is newer than managed storage.
+        // credentials are a fresh CLI refresh or stale state. Adopt when the
+        // token expiry proves runtime is newer, OR the refresh token rotated
+        // and runtime is not provably older. A rotated refresh token with
+        // equal/missing expiry is a genuine CLI refresh we'd otherwise drop
+        // (stranding a stale managed token); but if expiry proves runtime is
+        // older, managed already holds the newer token (e.g. a prior read-back
+        // or proactive refresh), so reject it.
         if (this.lastWrittenCredentialsJson === null) {
-          if (
-            !this.runtimeCredentialsAreFresher(
+          const fresher = this.runtimeCredentialsAreFresher(
+            runtimeContents.credentialsJson,
+            match.managedCredentialsJson
+          )
+          const refreshTokenRotated =
+            this.compareRefreshTokens(
               runtimeContents.credentialsJson,
               match.managedCredentialsJson
-            )
-          ) {
+            ) === 'different'
+          const older = this.runtimeCredentialsAreOlder(
+            runtimeContents.credentialsJson,
+            match.managedCredentialsJson
+          )
+          if (!fresher && !(refreshTokenRotated && !older)) {
             continue
           }
         } else if (
@@ -1002,6 +1035,37 @@ export class ClaudeRuntimeAuthService {
       return
     }
     writeClaudeManagedAuthFile(managedAuthPath, '.credentials.json', credentialsJson)
+  }
+
+  /**
+   * Proactively refresh an account's OAuth token and persist the rotation to
+   * managed storage. Returns the refreshed credentials JSON when a rotation was
+   * stored, or null when no refresh happened (token still valid, no refresh
+   * token, or the network call failed — in which case the caller keeps the
+   * existing credentials, never worse than before).
+   *
+   * Caller guarantees this account is not the live/active one and runs inside
+   * the serialized mutation queue, so a single-use refresh token can't be
+   * rotated concurrently.
+   */
+  private async refreshManagedAccountTokenIfNeeded(
+    account: ClaudeManagedAccount,
+    credentialsJson: string
+  ): Promise<string | null> {
+    if (!isOauthTokenExpiring(credentialsJson)) {
+      return null
+    }
+    const refreshed = await refreshClaudeOauthCredentials(credentialsJson)
+    if (!refreshed || !this.isValidCredentialsJsonObject(refreshed)) {
+      return null
+    }
+    try {
+      await this.writeManagedCredentials(account, refreshed)
+    } catch (error) {
+      console.warn('[claude-runtime-auth] Failed to persist refreshed Claude token:', error)
+      return null
+    }
+    return refreshed
   }
 
   private readManagedOauthAccount(account: ClaudeManagedAccount): unknown {

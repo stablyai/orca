@@ -85,6 +85,20 @@ describe('create project defaults', () => {
         defaultParent: '',
         runtimeEnvironmentId: 'env-1'
       })
-    ).toBe('server folder not selected')
+    ).toBe('host folder not selected')
+    expect(
+      formatCreateProjectParentSummary({
+        parent: '/Users/alice/orca/projects',
+        defaultParent: '/Users/alice/orca/projects',
+        isRemoteHost: true
+      })
+    ).toBe('/Users/alice/orca/projects')
+    expect(
+      formatCreateProjectParentSummary({
+        parent: '',
+        defaultParent: '',
+        isRemoteHost: true
+      })
+    ).toBe('host folder not selected')
   })
 })

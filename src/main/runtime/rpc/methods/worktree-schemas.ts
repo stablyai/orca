@@ -155,6 +155,8 @@ export const WorktreeSet = WorktreeSelector.extend({
   linkedIssue: TriStateLinkedIssue,
   linkedPR: TriStateLinkedIssue,
   linkedLinearIssue: z.union([z.string(), z.null()]).optional(),
+  linkedLinearIssueWorkspaceId: z.union([z.string(), z.null()]).optional(),
+  linkedLinearIssueOrganizationUrlKey: z.union([z.string(), z.null()]).optional(),
   linkedGitLabMR: TriStateLinkedIssue,
   linkedGitLabIssue: TriStateLinkedIssue,
   isArchived: OptionalBoolean,
@@ -177,6 +179,7 @@ export const WorktreeSet = WorktreeSelector.extend({
     })
     .optional(),
   diffComments: z.array(z.unknown()).optional(),
+  mobileDiffReview: z.unknown().optional(),
   parentWorktree: OptionalString,
   noParent: OptionalBoolean
 }).superRefine((params, ctx) => {

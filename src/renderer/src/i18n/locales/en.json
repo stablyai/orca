@@ -25,7 +25,7 @@
         "geminiToggleDescription": "Show Gemini token and cost usage for the active workspace.",
         "opencodeGoToggleDescription": "Show OpenCode Go token and cost usage for the active workspace.",
         "kimiToggleDescription": "Show Kimi subscription usage for the active workspace.",
-        "sshToggleDescription": "Show the active SSH connection. Only visible once an SSH target is configured.",
+        "sshToggleDescription": "Show configured SSH and remote Orca hosts when any are available.",
         "resourceUsageToggleDescription": "Show the Resource Manager. Click it for CPU, memory, sessions, daemon controls, and workspace disk scans.",
         "portsToggleDescription": "Show live workspace ports. Click it for workspace-scoped ports and external listeners."
       }
@@ -218,7 +218,7 @@
         },
         "repos": {
           "b7e14472ae": "Failed to add folder",
-          "e649269645": "Use a server path to add projects from a remote runtime.",
+          "e649269645": "Use Add Project to enter a path on the selected host.",
           "c6e022ddfc": "Failed to add project",
           "90d129b48b": "Folder added",
           "8bb3ad7935": "Project added",
@@ -274,8 +274,7 @@
           "760bc6883d": "Codex",
           "a5fc0cb622": "OpenClaude",
           "bf53f09bf8": "Claude Agent Teams",
-          "0708ed89f1": "Claude",
-          "fc80296033": "Devin"
+          "0708ed89f1": "Claude"
         },
         "skill": {
           "cli": {
@@ -464,35 +463,6 @@
             "7d732521ec": "Comment"
           }
         }
-      },
-      "folderWorkspacePathStatus": {
-        "title": {
-          "missing": "Folder not found",
-          "notDirectory": "Path is not a folder",
-          "ambiguousConnection": "Cannot determine connection",
-          "unavailable": "Cannot check folder"
-        },
-        "description": {
-          "missing": "Orca cannot find {{path}}. Remove and re-import this folder workspace.",
-          "notDirectory": "{{path}} exists, but it is not a folder.",
-          "ambiguousConnection": "Orca cannot tell which SSH connection owns this folder scope.",
-          "unavailable": "Orca cannot verify this folder right now. Check the runtime or SSH connection and try again."
-        },
-        "createError": {
-          "title": {
-            "missing": "Folder not found",
-            "notDirectory": "Path is not a folder",
-            "ambiguousConnection": "Cannot determine connection",
-            "unavailable": "Cannot check folder",
-            "generic": "Failed to create folder workspace"
-          },
-          "description": {
-            "missing": "Orca cannot find {{path}}. Remove and re-import the folder.",
-            "notDirectory": "{{path}} exists, but it is not a folder.",
-            "ambiguousConnection": "Orca cannot tell which SSH connection owns this folder scope.",
-            "unavailable": "Orca cannot verify this folder right now. Check the runtime or SSH connection and try again."
-          }
-        }
       }
     },
     "hooks": {
@@ -505,7 +475,7 @@
         "7eb3f44ff7": "Selected agent is disabled. Choose an enabled agent before creating.",
         "b2ead86962": "Failed to resolve PR base.",
         "a9ff236145": "Some attachments could not be uploaded.",
-        "3db83fc58a": "No remote project path is available for attachments.",
+        "3db83fc58a": "No project path is available on this host for attachments.",
         "ba6cb77082": "Failed to connect to project."
       },
       "useGlobalFileDrop": {
@@ -540,7 +510,7 @@
         "d91ae31fbd": "macOS Permissions",
         "95a1886d94": "Control terminals and agents from your phone.",
         "1cd25673df": "Mobile",
-        "31e57d1c70": "Remote SSH hosts for files, terminals, and git.",
+        "31e57d1c70": "Use existing machines over SSH for files, terminals, Git, and workspaces.",
         "94a5afe910": "SSH Hosts",
         "40d80bad8a": "Beta",
         "de0c2907a1": "Remote Orca Servers",
@@ -1030,15 +1000,21 @@
         "f660aa1454": "Connecting",
         "7711ad5122": "Local setup command",
         "e5db1b0419": "Combined setup command",
+        "runOn": "Run on",
         "addProjectBeforeWorkspace": "Add a project before creating a workspace.",
-        "sshNotConnected": "SSH not connected",
-        "connectingSsh": "Connecting SSH...",
-        "sshAuthenticationFailed": "SSH authentication failed",
-        "preparingSshConnection": "Preparing SSH connection...",
-        "connected": "Connected",
-        "reconnectingSsh": "Reconnecting SSH...",
-        "sshReconnectionFailed": "SSH reconnection failed",
-        "notConnected": "Not connected"
+        "setupHostExistingFolderTitle": "Set up {{value0}}",
+        "cloneProjectOnHost": "Clone project",
+        "cloneUrlPlaceholder": "https://github.com/owner/repo.git",
+        "cloneDestinationPlaceholder": "/parent/directory/on/host",
+        "cloningHostSetup": "Cloning...",
+        "cloneHostSetup": "Clone",
+        "importExistingFolderOnHost": "Import existing folder",
+        "setupHostExistingFolderPlaceholder": "/path/to/project/on/host",
+        "setupKindGit": "Git repo",
+        "setupKindFolder": "Folder",
+        "setupHostExistingFolderHelp": "Link a checkout that already exists there, then create this workspace on that host.",
+        "importingHostSetup": "Importing...",
+        "importHostSetup": "Import"
       },
       "NewWorkspaceComposerModal": {
         "fa90f739a5": "Choose the project, workspace name, and agent before creating the workspace."
@@ -1552,9 +1528,7 @@
         "a2a279b32a": "Save timed out or failed. Fix errors before closing.",
         "46e08bc5c8": "This file has unsaved changes.",
         "61ed600d29": "\"{{value0}}\" has unsaved changes. Do you want to save before closing?",
-        "cdc9ac4b2d": "editor",
-        "e57db40c11": "Could not build launch command for {{value0}}.",
-        "5b2c1a9e44": "No agent CLI detected — install one or pick a default agent in Settings."
+        "cdc9ac4b2d": "editor"
       },
       "TerminalSearch": {
         "db234b7519": "Close",
@@ -1635,7 +1609,8 @@
         "worktreesHeader": "Worktrees",
         "recentWorktreesHeader": "Recent Worktrees",
         "settingsBadge": "Settings",
-        "actionBadge": "Action"
+        "actionBadge": "Action",
+        "paletteHostBadge": "Host: {{value0}}"
       },
       "github": {
         "pr": {
@@ -1817,11 +1792,7 @@
           "015b4e607d": "Cancel",
           "e3bd59143c": "Insert",
           "f24783f470": "https://...",
-          "ec6310b731": "Use an http:// or https:// image URL.",
-          "b7e4a1c902": "Paste, drop, or click to add files",
-          "8f1c2d4e6a": "Nothing to preview",
-          "c91f0a2b14": "Write",
-          "d82b1e3f05": "Preview"
+          "ec6310b731": "Use an http:// or https:// image URL."
         },
         "IssueSourceSelector": {
           "d6aeb2012b": "Showing issues from",
@@ -1894,47 +1865,6 @@
                 "bb227706a6": "REST"
               }
             }
-          }
-        },
-        "CloseReasonDropdown": {
-          "e1f2a3b4c5": "Choose close reason"
-        },
-        "GitHubIssueCommentComposer": {
-          "082515176a": "Failed to add comment",
-          "9f88657c4e": "Issue closed",
-          "e9b7cb7d17": "Failed to close issue",
-          "bd3b4492a0": "Issue reopened",
-          "f2a8c1d903": "Failed to reopen issue",
-          "a1b2c3d4e5": "Add a comment",
-          "c5c117270e": "Add your comment here, be kind",
-          "f6a7b8c9d0": "Close issue",
-          "b1c2d3e4f5": "Reopen issue",
-          "0a73f59e85": "Send comment",
-          "bf43425540": "Comment"
-        },
-        "GitHubWorkItemAssigneePopoverContent": {
-          "cddd9b04a7": "Loading assignees",
-          "a00830d3f7": "No users",
-          "4f8b6f2c1d": "Filter assignees..."
-        },
-        "GitHubWorkItemLabelPopoverContent": {
-          "2aa9acdf34": "Edit labels on GitHub",
-          "cddd9b04a7": "Loading labels",
-          "de26e2eb06": "No labels",
-          "8b0d52ee3a": "Filter labels..."
-        },
-        "githubIssueCloseReasons": {
-          "completed": {
-            "label": "Close as completed",
-            "description": "Done, closed, fixed, resolved"
-          },
-          "notPlanned": {
-            "label": "Close as not planned",
-            "description": "Won't fix, can't repro, stale"
-          },
-          "duplicate": {
-            "label": "Close as duplicate",
-            "description": "Duplicate of another issue"
           }
         }
       },
@@ -2211,8 +2141,7 @@
             "c44659e09f": "Mobile driving",
             "7cffad954c": "Collapse",
             "3eed73394f": "Your keyboard is paused",
-            "faa367dc74": "This terminal is sized for your mobile app",
-            "54f7d6f69d": "Resize all terminals"
+            "faa367dc74": "This terminal is sized for your mobile app"
           },
           "TerminalAgentSessionForkDialog": {
             "17fc841e59": "Copy context",
@@ -2448,9 +2377,7 @@
             "77ac113df0": "Start {{value0}}: {{value1}}",
             "7b1c9d6ae1": "Run",
             "c781f992e4": "destructive",
-            "be8f0ff166": "Delete",
-            "f3a8c2d1e7": "Search quick commands...",
-            "b4e7f9a2c1": "No commands match"
+            "be8f0ff166": "Delete"
           },
           "shell": {
             "icons": {
@@ -2589,10 +2516,10 @@
             "e9a5d3c2b1f0": "Kill {{value0}}?"
           },
           "SshStatusSegment": {
-            "3ad70e0365": "Manage SSH…",
-            "6e8a9a4242": "SSH Connections",
-            "d09ec41831": "SSH",
-            "fdc57e9970": "SSH connection status",
+            "3ad70e0365": "Manage Remote Hosts…",
+            "6e8a9a4242": "Remote Hosts",
+            "d09ec41831": "Remote Hosts",
+            "fdc57e9970": "Remote host connection status",
             "59b553e2aa": "Disconnect",
             "63f36455cc": "Connect",
             "bf07aee59e": "Disconnect failed",
@@ -2602,12 +2529,16 @@
             "fd9a3c600e": "error",
             "fbb3f9f05e": "conflict",
             "95e4ff5b4b": "pushing",
-            "63a2b965f6": "pulling"
+            "63a2b965f6": "pulling",
+            "remote_server": "Remote Server",
+            "runtime_checking": "Checking",
+            "runtime_online": "Connected",
+            "runtime_unavailable": "Disconnected"
           },
           "StatusBar": {
             "9659e38343": "Ports",
             "d1e1a7a6bf": "Resource Manager",
-            "24ac89df1a": "SSH Status",
+            "24ac89df1a": "Remote Hosts",
             "5e59007df4": "Kimi Usage",
             "8c86cd77b0": "OpenCode Go Usage",
             "c1df0d67ec": "Gemini Usage",
@@ -2840,11 +2771,7 @@
           "4f8368c272": "Orca worktrees only",
           "cfe2282ffa": "Unknown",
           "7765a4c3e1": "n/a",
-          "2d41fd45c6": " • Last scan error: {{value0}}",
-          "rangeLast7Days": "Last 7 days",
-          "rangeLast30Days": "Last 30 days",
-          "rangeLast90Days": "Last 90 days",
-          "rangeAllTime": "All time"
+          "2d41fd45c6": " • Last scan error: {{value0}}"
         },
         "CodexUsageDailyChart": {
           "1e6f62d7e3": "Reasoning",
@@ -2893,11 +2820,7 @@
           "bf6cf2d4dd": "Unknown",
           "ae255c3dba": "n/a",
           "247c93ca92": "• inferred pricing",
-          "8a6655f7a2": " • Last scan error: {{value0}}",
-          "rangeLast7Days": "Last 7 days",
-          "rangeLast30Days": "Last 30 days",
-          "rangeLast90Days": "Last 90 days",
-          "rangeAllTime": "All time"
+          "8a6655f7a2": " • Last scan error: {{value0}}"
         },
         "OpenCodeUsagePane": {
           "349f7c3f5c": "Total",
@@ -2936,11 +2859,7 @@
           "e04c58327c": "Orca worktrees only",
           "362231082f": "Unknown",
           "8095a63426": "n/a",
-          "6cc7782458": " • Last scan error: {{value0}}",
-          "rangeLast7Days": "Last 7 days",
-          "rangeLast30Days": "Last 30 days",
-          "rangeLast90Days": "Last 90 days",
-          "rangeAllTime": "All time"
+          "6cc7782458": " • Last scan error: {{value0}}"
         },
         "ShareUsageButton": {
           "7d6b25323d": "Share on X",
@@ -3059,22 +2978,6 @@
               "d9a4b3e2f1c5": "events"
             }
           }
-        },
-        "UsageBreakdownSection": {
-          "7765a4c3e1": "n/a",
-          "247c93ca92": "• inferred pricing"
-        },
-        "UsageSessionsTable": {
-          "1afc25eb06": "Turns",
-          "0f03975d59": "Events",
-          "21ea00bfa8": "Cache",
-          "e0b988599d": "Total",
-          "01476891c7": "Last active",
-          "c17bed0416": "Project",
-          "f6a2c8d019": "Model",
-          "faf3444859": "Input",
-          "a8b7487ff7": "Output",
-          "cfe2282ffa": "Unknown"
         }
       },
       "sparse": {
@@ -3159,7 +3062,7 @@
           "7d1f51678c": "Add Project",
           "7726a16374": "Cancel",
           "046751dbfb": "Add this folder as a separate Orca project.",
-          "e643b30398": "Remote project added"
+          "e643b30398": "Project added on SSH host"
         },
         "AddRepoCreateStep": {
           "0ae45b8238": "my-project",
@@ -3172,22 +3075,21 @@
           "685b5eefe1": "{{kind}} in {{parent}}",
           "2a762f3b19": "Checking Git on this host...",
           "fe1e616c5b": "Git isn't installed, so a plain folder is the default.",
-          "c234df77f7": "Choose or enter a server parent folder before creating.",
+          "c234df77f7": "Choose or enter a host parent folder before creating.",
           "3a13f6e88b": "location not selected",
-          "6ed14c0281": "server folder not selected",
+          "6ed14c0281": "host folder not selected",
           "5e97f0c4b9": "Project created",
           "2c12db1511": "Project already added",
-          "875dda0995": "Enter a server parent path.",
+          "875dda0995": "Enter a host parent path.",
+          "ssh_parent_manual": "Enter an SSH parent path.",
           "45b7c26034": "Create project",
-          "85085d74d2": "Creating…",
-          "createProjectTitle": "Create project",
-          "createProjectDescription": "Create a local Git repo and first workspace.",
-          "projectNameLabel": "Project name",
-          "createsGitRepoHelp": "Git repo:",
-          "parentFolderLabel": "Parent folder",
-          "browseParentFolder": "Browse",
-          "gitRequiredError": "Git is required to create a project.",
-          "createAction": "Create"
+          "85085d74d2": "Creating…"
+        },
+        "AddRepoHostSelector": {
+          "host": "Host",
+          "local": "Local",
+          "runtime": "Server",
+          "ssh": "SSH"
         },
         "AddRepoNestedImportStep": {
           "496f68cf8c": "Scanning repositories. Click to stop.",
@@ -3195,6 +3097,7 @@
           "2f8298f3c3": "Stop scan",
           "c157f31a95": "Import as group",
           "40199ef7b3": "Group name",
+          "b20bb7c24f": "Keeps these repos together in one group. Best for related repos like microservices.",
           "787412361a": "What is a group name?",
           "5f857ba8e6": "in",
           "4df0d08cc5": "Found",
@@ -3203,10 +3106,11 @@
           "cf9d382ca1": "Import",
           "220dd32d83": "Scanning...",
           "fb33359f69": "Is this a monorepo?",
-          "d75170194e": "Import them as a group if they're a monorepo or otherwise belong together. Orca will group them and let you work from the parent folder.",
-          "39d51212cc": "Group name",
+          "d75170194e": "Choose this if these projects belong together. Orca will group them and let you work from the parent folder.",
+          "39d51212cc": "Monorepo name",
+          "e907ec8935": "What is a monorepo name?",
           "aa0247680d": "No, import separately",
-          "a0bc4d1f8e": "Import as group",
+          "a0bc4d1f8e": "Yes, import as monorepo",
           "8401a7a0d0": "1 repository",
           "d4f1df62ef": "{{value0}} repositories",
           "b4263a2ac4": "Found {{value0}} in {{value1}}.",
@@ -3215,35 +3119,36 @@
         "AddRepoRemoteStep": {
           "5b205b5281": "Stop scan",
           "6680289908": "/home/user/project",
-          "ef410aa881": "Remote path",
+          "ef410aa881": "Host path",
           "0416bde073": "Add in Settings",
           "df6fbcf880": "No SSH targets configured.",
           "44637f43bd": "SSH target",
           "80557be85a": "Choose a connected SSH target and enter the path to a Git repository.",
-          "91b93a90a4": "Open remote project",
+          "91b93a90a4": "Open project on SSH host",
           "007651bdf9": "Navigate to a directory and click Select to choose it.",
           "dd3ff65486": "Browse remote filesystem",
-          "36d427bb66": "Add remote project",
-          "35831a7312": "Adding..."
+          "36d427bb66": "Add project on SSH host",
+          "35831a7312": "Adding...",
+          "lockedDescription": "Enter the path to a Git repository on {{value0}}."
         },
         "AddRepoServerStartStep": {
           "ae990c86a0": "Back to add options",
           "e1710bf831": "Open as Folder",
           "8da4d1a5be": "Add Git Project",
-          "ac66a3ed2d": "Browse server filesystem",
+          "ac66a3ed2d": "Browse host filesystem",
           "92d25420a0": "/home/user/project",
-          "867692f505": "Server path",
-          "423b5d3d31": "Add a Git repository or folder that already exists on the selected runtime server.",
-          "3d0c035483": "Open server project",
-          "438493f214": "Or enter a server path manually",
+          "867692f505": "Host path",
+          "423b5d3d31": "Add a Git repository or folder that already exists on the selected host.",
+          "3d0c035483": "Open host project",
+          "438493f214": "Or enter a host path manually",
           "6b9958492a": "Want to import many repos at once? Browse to the parent folder.",
           "d40d751517": "New repo or folder",
-          "a81ffa0a99": "Create on server",
+          "a81ffa0a99": "Create on host",
           "a2ea37d549": "Remote Git repository",
           "47759c9491": "Clone from URL",
           "516187414c": "Existing project or folder",
-          "0adf083af7": "Browse server",
-          "8efa930eb5": "Add another project from the selected runtime server.",
+          "0adf083af7": "Browse host",
+          "8efa930eb5": "Add another project from the selected host.",
           "39bd249b3a": "Add a project",
           "0f8aba944c": "Navigate to a directory and click Select to choose it."
         },
@@ -3260,7 +3165,7 @@
         },
         "AddRepoSteps": {
           "569326d9cc": "Choose folder",
-          "a93ef169b5": "Browse server filesystem",
+          "a93ef169b5": "Browse host filesystem",
           "2ce3f6edf8": "/path/to/destination",
           "04a4c4e84a": "Clone location",
           "b698a4a29d": "https://github.com/user/repo.git",
@@ -3268,10 +3173,12 @@
           "5b2ea674b1": "Enter the Git URL and choose where to clone it.",
           "c05f88a31f": "Clone from URL",
           "fe8e629fe3": "Navigate to a directory and click Select to choose it.",
-          "df8b0e6c22": "Remote project added",
+          "df8b0e6c22": "Project added on SSH host",
           "3e64e8a70d": "Connection failed",
           "32a7256d85": "Clone",
-          "69f5b5380d": "Cloning..."
+          "69f5b5380d": "Cloning...",
+          "cloneOnHostDescription": "Enter the Git URL and choose where to clone it on {{value0}}.",
+          "cloneParentFolder": "Parent folder"
         },
         "AutoRenameFailedDialog": {
           "aed1623b1e": "Close",
@@ -3286,7 +3193,7 @@
           "95548e33bf": "Choose parent folder...",
           "632b456b1b": "Change",
           "afaf54f245": "Change parent folder",
-          "f520f83a97": "Browse server filesystem",
+          "f520f83a97": "Browse host filesystem",
           "2a20a603a3": "/home/user/projects",
           "134e37f711": "Location",
           "b589b77997": "Navigate to a directory and click Select to choose it."
@@ -3334,7 +3241,7 @@
           "e52454b7f6": "Open as Folder",
           "05b33a17a9": "Cancel",
           "8fba4b8cbb": "This folder isn't a Git repository. You'll have the editor, terminal, and search, but Git-based features won't be available.",
-          "c49fb13492": "Failed to add remote folder"
+          "c49fb13492": "Failed to add folder on this host"
         },
         "OrcaYamlTrustDialog": {
           "f3e2b868fb": "Run hooks",
@@ -3380,7 +3287,7 @@
           "9e060f5815": "Select folder",
           "f8b1deb1a4": "Cancel",
           "51001182e3": "Empty directory",
-          "971d85cc84": "Opens as a remote project · {{value0}}",
+          "971d85cc84": "Opens as a project on this host · {{value0}}",
           "00c4235c10": "No matches for '{{value0}}'"
         },
         "RemoveFolderDialog": {
@@ -3523,7 +3430,21 @@
           "ed1611b65b": "Hide sleeping",
           "82594419ba": "Filters"
         },
+        "sidebarHostOptions": {
+          "3e102f111c": "All hosts",
+          "visibleHostsCount": "{{value0}} hosts"
+        },
+        "SidebarHostScopeStrip": {
+          "scopedTo": "{{value0}} visible",
+          "backToAll": "All hosts"
+        },
         "SidebarWorkspaceOptionsMenu": {
+          "hosts": "Hosts",
+          "allHostsDetail": "Show every host",
+          "configuredSshHost": "Configured SSH",
+          "projectSshHost": "Project SSH",
+          "activeRuntimeHost": "Active server",
+          "projectRuntimeHost": "Project server",
           "95c9754653": "Agent activity layout",
           "3d4b9c4997": "Hover",
           "ba87080fb7": "Show properties",
@@ -3531,6 +3452,7 @@
           "09faabd875": "Project order",
           "7bada3b1ab": "Sort by",
           "dc0bb670bc": "Group by",
+          "631b97eea9": "Host scope",
           "9919ae1082": "Workspace options",
           "bc96dbd041": "Workspace options ({{value0}})",
           "af9249c505": "Most recent workspace activity",
@@ -3564,11 +3486,7 @@
           "376bed88e5": "The connection to the remote host encountered an error.",
           "4afcca1d24": "Reconnect",
           "11552bf786": "SSH Disconnected",
-          "cb5938ae79": "Reconnecting...",
-          "disconnected": "This remote repository is not connected.",
-          "reconnecting": "Reconnecting to the remote host...",
-          "reconnectionFailed": "Reconnection to the remote host failed.",
-          "authFailed": "Authentication to the remote host failed."
+          "cb5938ae79": "Reconnecting..."
         },
         "SshTargetRow": {
           "4677394048": "Connecting…",
@@ -3627,7 +3545,7 @@
           "01f45d3d8a": "sidebar",
           "93aebe4529": "Folder",
           "0d224eff10": "Primary worktree",
-          "ca74db7550": "Remote project via SSH",
+          "ca74db7550": "Project on SSH host",
           "021538e1d1": "SSH disconnected"
         },
         "WorktreeCardAgents": {
@@ -3698,6 +3616,9 @@
           "250de158fd": "Remove Workspace"
         },
         "WorktreeList": {
+          "7a8b9c0d1e": "Update required",
+          "hostAuthNeeded": "Authentication needed",
+          "hostDisconnected": "Disconnected",
           "d880ea0744": "Create a group and move this project into it.",
           "bc1460beb3": "Update the group name shown in the sidebar.",
           "13757c053c": "New Project Group",
@@ -3790,11 +3711,12 @@
                   "5f9ffac036": "Clone a remote Git repository",
                   "7edb8ebe24": "Clone from URL",
                   "a6c20dca96": "Open a project from an SSH target",
-                  "3d162cc76f": "Remote project",
+                  "sshCreateUnavailable": "Not available for SSH hosts yet",
+                  "3d162cc76f": "Project on SSH host",
                   "fb4fc5380e": "Local project, Git repo, or folder with many repos",
                   "2281fdc8c7": "Browse folder",
-                  "createProjectTitle": "Create project",
-                  "createGitProjectDescription": "Create a local Git repository"
+                  "sshBrowseTitle": "Open project on SSH host",
+                  "sshBrowseDescription": "Existing Git repository or folder on this SSH host"
                 }
               }
             }
@@ -3845,7 +3767,7 @@
             "drop": {
               "669e12dd97": "Local folders and Git repositories",
               "ffc769ca29": "Drop folder to add project",
-              "740e8d0d46": "Use Add Project for server paths",
+              "740e8d0d46": "Use Add Project for host paths",
               "e344666fb8": "Server runtime active",
               "d0f8943f8b": "Preparing the project add flow",
               "18d3cf40e9": "Checking folder"
@@ -3862,10 +3784,10 @@
         },
         "useAddRepoCloneFlow": {
           "4d0013cc93": "Repository cloned",
-          "0dc4d1b657": "Enter a server path for the clone destination."
+          "0dc4d1b657": "Enter a host path for the clone destination."
         },
         "useAddRepoLocalFolderFlow": {
-          "7ab10e4974": "Use a server path to add projects from a remote runtime."
+          "7ab10e4974": "Use a host path to add projects from a remote host."
         },
         "useAddRepoNestedImportFlow": {
           "680cac2c82": "{{value0}} failed",
@@ -3875,7 +3797,7 @@
         "useSidebarProjectDrop": {
           "f34a286c0d": "Could not add dropped folder.",
           "451a4638db": "Drop a folder to add it as a project.",
-          "5ccb56c7be": "Use Add Project to enter a server path.",
+          "5ccb56c7be": "Use Add Project to enter a host path.",
           "849ef13dc0": "Local folder drops are unavailable for server runtimes.",
           "c0315153d1": "Drop one folder at a time."
         },
@@ -3940,6 +3862,39 @@
         "index": {
           "b826a98b6f": "busy"
         },
+        "HostRemoveDialog": {
+          "1a2b3c4d5e": "Removed {{value0}}",
+          "2b3c4d5e6f": "Failed to remove host",
+          "3c4d5e6f7a": "Remove {{value0}}?",
+          "4d5e6f7a8b": "This opens the Orca servers settings where you can remove this server.",
+          "5e6f7a8b9c": "This removes the saved SSH host and its credentials from this computer. Remote files are not deleted.",
+          "6f7a8b9c0d": "Cancel",
+          "7a8b9c0d1e": "Open settings",
+          "8b9c0d1e2f": "Remove host"
+        },
+        "HostRenameDialog": {
+          "1a2b3c4d5e": "Rename host",
+          "2b3c4d5e6f": "This label is shown only on this computer. Leave it blank to use the default name.",
+          "3c4d5e6f7a": "Display name",
+          "4d5e6f7a8b": "Reset to default",
+          "5e6f7a8b9c": "Cancel",
+          "6f7a8b9c0d": "Save"
+        },
+        "HostSectionHeaderMenu": {
+          "5b8b4b6a01": "Update server required",
+          "9b3c1d2e44": "Update client required",
+          "2c29e2de68": "Connection failed",
+          "bf07aee59e": "Disconnect failed",
+          "7f1a2b3c4d": "{{value0}} is reachable",
+          "4f2c8a9b10": "Host actions for {{value0}}",
+          "6b7c8d9e10": "Host actions",
+          "8d1e2f3a4b": "Rename…",
+          "63f36455cc": "Reconnect",
+          "59b553e2aa": "Disconnect",
+          "2d3e4f5a6b": "Check connection",
+          "3c4d5e6f7a": "Manage host…",
+          "6e7f8a9b0c": "Remove host…"
+        },
         "LinearAgentSkillSetupPrompt": {
           "missingCliAndSkill": "Orca CLI and Linear agent skill are missing.",
           "modalTitle": "Enable Linear ticket access",
@@ -3968,21 +3923,24 @@
           "successStatus": "Linear ticket access ready",
           "done": "Done",
           "wslCopy": "Install it for WSL agent handoffs from linked Linear work.",
-          "wslLabel": "WSL default"
+          "wslLabel": "WSL default",
+          "toastMissingCliAndSkill": "Orca CLI and Linear skill are missing",
+          "toastMissingCli": "Orca CLI is missing",
+          "toastMissingSkill": "Linear skill is missing",
+          "toastInstallCliAndSkillDescription": "Install the Orca CLI and the Linear skill to enable your agents to read and edit Linear tasks.",
+          "toastInstallCliDescription": "Install the Orca CLI to enable your agents to read and edit Linear tasks.",
+          "toastInstallSkillDescription": "Install the Linear skill to enable your agents to read and edit Linear tasks through the Orca CLI.",
+          "toastRemoteDescription": "{{value0}} Remote agent environments may need their own setup.",
+          "toastWslDescription": "{{value0}} This setup runs in the selected WSL agent runtime."
         },
         "FolderWorkspaceComposerDialog": {
           "connectFailed": "Failed to connect to project.",
           "noRepos": "Add a Git project under this folder to attach GitHub or GitLab tasks.",
           "title": "Create Folder Workspace",
-          "create": "Create workspace",
+          "createStart": "Create & Start Agent",
+          "create": "Create Workspace",
           "sourceProject": "Task Source",
           "chooseSourceProject": "Choose task source"
-        },
-        "ProjectOrderManualDefaultNotice": {
-          "a1f4c2d8e0": "Manual project order is now the default",
-          "822ff300ad": "Dismiss",
-          "b7e3a91c4f": "Drag project headers to reorder, or switch to",
-          "e8c1f4a2b9": "in workspace options."
         }
       },
       "shared": {
@@ -4214,19 +4172,7 @@
           "7d26ccabe8": "Dark",
           "fb0e0b4453": "System",
           "932ff1fbff": "Theme",
-          "0f28e7b30c": "Choose how Orca looks in the app window.",
-          "leftSidebarAppearance": {
-            "title": "Left Sidebar Appearance",
-            "description": "Make the left sidebar match your terminal, stay default, or use a tint.",
-            "rowDescription": "Make the left sidebar match your terminal, stay default, or use a tint.",
-            "default": "Default",
-            "matchTerminal": "Match Terminal",
-            "tinted": "Tinted",
-            "tintColor": "Sidebar Tint",
-            "tintColorDescription": "The color mixed into the left sidebar surface.",
-            "tintOpacity": "Tint Strength",
-            "tintOpacityDescription": "Controls how strongly the tint is mixed into the sidebar."
-          }
+          "0f28e7b30c": "Choose how Orca looks in the app window."
         },
         "AutoRenameBranchFromWorkSetting": {
           "1626524572": "Nautilus",
@@ -4244,7 +4190,7 @@
           "e784ea62dc": "Advanced",
           "d9b65054ef": ") to a short name summarizing the task. Only branches Orca named itself are renamed, and never after they have been pushed.",
           "12ea4a408d": "When an agent starts working in a new workspace, Orca renames its auto-generated branch (e.g.",
-          "ef787db0e3": "Auto-rename branch & worktree",
+          "ef787db0e3": "Auto-Rename Branch",
           "6a051586d2": "Rename the auto-generated branch based on the work once an agent starts.",
           "ec3e0c388e": "Save",
           "cfd82406dd": "Saving...",
@@ -4301,6 +4247,10 @@
           "612f7f6861": "Failed to create profile.",
           "8f22b7580d": "Profile \"{{value0}}\" created.",
           "8481ee0331": "New Browser Profile",
+          "c0f85056d9": "Browser profiles on this Orca server.",
+          "86b7c83fee": "This computer",
+          "6480776a03": "Browser profiles for the selected host.",
+          "5e19a692f7": "Host",
           "6f2584b39e": "Add Profile",
           "e4aaf8051b": "toolbar menu.",
           "cd47bc9622": "Select a default profile for new browser tabs. Import cookies and switch profiles per-tab via the",
@@ -4383,8 +4333,6 @@
           "8671e406f0": "Cancel",
           "a4aafe46e3": "Target path:",
           "e8012c03a1": "Enables agents to use Orca workspace, terminal, and progress commands.",
-          "cliSkillTerminalTitle": "CLI skill setup",
-          "cliSkillTerminalAria": "CLI skill install terminal",
           "6053cf736c": "CLI skill",
           "36a6f919ba": "Give agents Orca-aware workspace, terminal, and progress workflows.",
           "04873eea3e": "Agent skills",
@@ -5073,8 +5021,7 @@
           "9bedd2a6e5": "Enables agents to hand off context and coordinate work through Orca.",
           "07641b9768": "Orchestration skill",
           "2aacdb0517": "Coordinate coding agents across handoffs, worktree handovers, and child-agent work.",
-          "191ac34567": "Agent Orchestration",
-          "thisDevice": "This device"
+          "191ac34567": "Agent Orchestration"
         },
         "OrchestrationSetupCard": {
           "e7d2a5146c": "Enables agents to hand off context and coordinate work through Orca.",
@@ -5285,7 +5232,38 @@
           "0909e5d650": "Remove Project",
           "ee5a290616": "Opened as folder. Git features are unavailable for this workspace.",
           "323debba71": "Type:",
-          "499a437335": "Identity"
+          "availableHosts": "Available Hosts",
+          "availableHostsDescription": "Hosts where this project is set up.",
+          "availableHostsHelp": "Project paths and worktree settings are host-specific; creating a workspace can target any ready setup.",
+          "viewingHost": "Viewing host",
+          "currentSetup": "Current",
+          "hostSetupStateReady": "Ready",
+          "hostSetupStateNotSetUp": "Not set up",
+          "hostSetupStateSettingUp": "Setting up",
+          "hostSetupStateError": "Error",
+          "hostSetupStateUnsupported": "Unsupported",
+          "setupPathPending": "Path pending",
+          "openSetup": "Open",
+          "removeSetup": "Remove",
+          "hostSetupBlockedVersion": "Orca server version is incompatible",
+          "hostSetupMissingCapability": "Update Orca on this host to set up projects",
+          "setupProjectOnHost": "Set up on another host",
+          "setupProjectOnHostHelp": "Choose a host, then import an existing checkout, clone the repository there, or track a setup that will be provisioned later.",
+          "setupExistingFolder": "Import existing folder",
+          "setupExistingFolderHelp": "Make this project available on another host by linking a checkout that already exists there.",
+          "setupExistingFolderPathPlaceholder": "/path/to/project/on/host",
+          "cloneUrlPlaceholder": "Repository URL",
+          "cloneDestinationPlaceholder": "/destination/on/host",
+          "setupKindGit": "Git repo",
+          "setupKindFolder": "Folder",
+          "settingUpHost": "Importing...",
+          "setupHost": "Import",
+          "cloningHost": "Cloning...",
+          "cloneHost": "Clone",
+          "creatingPendingSetup": "Creating...",
+          "createPendingSetup": "Track setup",
+          "499a437335": "Identity",
+          "hostSetupCheckingCapability": "Checking host capabilities"
         },
         "RepositorySourceControlAiActionRows": {
           "548a6e1281": "Command template",
@@ -5349,8 +5327,15 @@
           "bb90dd6487": "Remove Server",
           "d2e00809e4": "Switch",
           "05e0fc3ebf": "Switch to",
-          "b2290ed203": "Orca will close remote terminals and browser tabs from the current server before loading projects from the next server.",
+          "b2290ed203": "Orca will focus this host and load its projects. Existing terminals and browser tabs on other hosts stay alive.",
           "d570c35a99": "Switch Server",
+          "f3a3d6d834": "{{value0}} capabilities",
+          "0ef838094a": "Protocol {{value0}}",
+          "9a91c4a0eb": "Compatible",
+          "86ed75bec8": "Update server",
+          "62ac182a27": "Update client",
+          "c8791efc45": "Status unavailable",
+          "5120beaac6": "Checking…",
           "84b9b2be05": "Create a revocable access grant so a browser or another Orca client can connect.",
           "6e1280ca55": "Share this Orca server",
           "9a3758d983": "No saved servers.",
@@ -5377,8 +5362,8 @@
           "e6410d72c3": "Failed to load runtime environments.",
           "6ef71985da": "No endpoint",
           "ed3e3f069d": "This removes the saved server from Orca. It does not change the active server.",
-          "b2fda48c39": "Removing the active server disconnects this browser and closes remote terminals and browser tabs for that server.",
-          "9f7665a01b": "Removing the active server first switches Orca back to Local desktop and closes remote terminals and browser tabs for that server.",
+          "b2fda48c39": "Removing the active server disconnects this browser from that host. Existing host sessions are left alone.",
+          "9f7665a01b": "Removing the active server first switches Orca back to Local desktop. Existing host sessions are left alone.",
           "3595fd1948": "New Link",
           "54dee18f5c": "Hide Form",
           "8cf8790697": "Saved servers route this browser through a paired Orca runtime.",
@@ -5429,9 +5414,9 @@
           "65660d4548": "macOS Permissions",
           "c6c01ac209": "Control terminals and agents from your phone.",
           "c40dadaac8": "Mobile",
-          "c2ee313198": "Remote SSH hosts for files, terminals, and git.",
+          "c2ee313198": "Use existing machines over SSH for files, terminals, Git, and workspaces.",
           "9b02492d1f": "SSH Hosts",
-          "b5ee17826b": "Switch between local desktop mode and paired remote Orca runtimes.",
+          "b5ee17826b": "Pair remote Orca runtimes for persistent sessions, richer remote state, and web or mobile handoff.",
           "7686cb5c36": "Connect this browser to a saved Orca server.",
           "bd0181eeca": "Remote Orca Servers",
           "8acf3f22e0": "Orca stats plus Claude, Codex, and OpenCode usage analytics.",
@@ -5481,14 +5466,14 @@
           "43b68e10f0": "You have unsaved Git AI Author changes. Leaving will discard them.",
           "17bdee4ff1": "Discard unsaved Git AI Author changes?",
           "084d8fac5b": "Privacy & Security",
-          "23931df7e8": "Remote Access",
+          "23931df7e8": "Remote Hosts",
+          "mobile_group": "Mobile",
           "8bd117d669": "Interface",
           "e1578cd4bc": "Workflows",
           "9abb9be3bc": "Set Up",
           "23c6874fdf": "AI Capabilities",
           "2309068a6f": "destructive",
-          "65358016ea": "Discard",
-          "thisDevice": "This device"
+          "65358016ea": "Discard"
         },
         "SettingsFormControls": {
           "42a4d15a30": "No matching fonts.",
@@ -6239,8 +6224,8 @@
             "f4997e0f8a": "connection",
             "a278406ed5": "remote",
             "6ecad74eb3": "ssh",
-            "f17d66d0d2": "Show the active SSH connection status in the status bar.",
-            "57fb424c56": "SSH Status",
+            "f17d66d0d2": "Show remote host connection status in the status bar.",
+            "57fb424c56": "Remote Hosts",
             "35565867cb": "moonshot",
             "de586def95": "subscription",
             "00a028f25f": "usage",
@@ -6269,10 +6254,6 @@
               "locale": "locale",
               "i18n": "i18n",
               "translation": "translation"
-            },
-            "leftSidebarAppearance": {
-              "title": "Left Sidebar Appearance",
-              "description": "Make the left sidebar match your terminal, stay default, or use a tint."
             }
           }
         },
@@ -6297,7 +6278,7 @@
                 "55a1860e47": "rename",
                 "9319bd9827": "branch",
                 "ea94b9da8a": "Rename the auto-generated branch based on the work once an agent starts.",
-                "427f2cd1eb": "Auto-rename branch & worktree"
+                "427f2cd1eb": "Auto-Rename Branch"
               }
             }
           }
@@ -7116,6 +7097,12 @@
             "a47f51127e": "source control",
             "6cc5c65e64": "Project-specific git generation overrides.",
             "eec3995dc6": "Git AI Author",
+            "availableHosts": "Available Hosts",
+            "availableHostsDescription": "Hosts where this project is set up.",
+            "host": "host",
+            "ssh": "ssh",
+            "remote": "remote",
+            "vm": "vm",
             "cc876ca5f2": "repository",
             "6469de5368": "project",
             "3067595d82": "delete",
@@ -7527,6 +7514,13 @@
             }
           }
         },
+        "WorkspaceDirectorySetting": {
+          "1a2b3c4d5e": "Client default",
+          "2b3c4d5e6f": "Apply to",
+          "3c4d5e6f7a": "Overrides client default",
+          "4d5e6f7a8b": "Inherits the client default",
+          "5e6f7a8b9c": "Reset"
+        },
         "agent-awake-copy": {
           "e5995ce268": "Keep computer awake while agents are working",
           "95d3031db2": "Keeps this computer and display awake while agents are working. Lid-close behavior follows this device's power settings.",
@@ -7590,16 +7584,7 @@
                 "eae4a9f16b": "Add Linear access to browse and link issues.",
                 "fe9231215b": "Checking Linear access before showing setup actions.",
                 "e1f5e6424c": "{{value0}} workspace{{value1}} connected",
-                "disconnect_all": "Disconnect all",
-                "linearSkillTitle": "Linear agent skill",
-                "linearSkillDescription": "Install the host agent skill that agents use for richer linked Linear task handoffs.",
-                "linearSkillTerminalTitle": "Install Linear agent skill",
-                "linearSkillTerminalAria": "Linear agent skill installer terminal",
-                "linearSkillInstall": "Install CLI & Skill",
-                "linearSkillOptionalHint": "Optional next step: install the Linear agent skill for ticket-aware agent handoffs.",
-                "linearSkillDismissHint": "Dismiss optional Linear agent skill setup note",
-                "linearSkillWslDescription": "Install the WSL agent skill that agents use for richer linked Linear task handoffs.",
-                "linearSkillWslLabel": "WSL default"
+                "disconnect_all": "Disconnect"
               }
             }
           }
@@ -7645,19 +7630,6 @@
               }
             }
           }
-        },
-        "computerUseSummary": {
-          "permissionsRequired": "{{value0}} permission{{value1}} required before agents can operate app windows.",
-          "checkingTitle": "Checking Computer Use access.",
-          "checkingDescription": "Orca is checking macOS privacy permissions for the Computer Use helper.",
-          "unavailableTitle": "Computer Use is unavailable.",
-          "unavailableDescription": "Computer Use permissions are unavailable because {{value0}}.",
-          "readyTitle": "Computer Use is ready.",
-          "readyDescription": "Agents can inspect and operate app windows when you ask.",
-          "permissionsTitle": "Finish setup to use local apps."
-        },
-        "computerUseSkillRuntime": {
-          "thisDevice": "This device"
         }
       },
       "right": {
@@ -7705,9 +7677,7 @@
             "f273f2271c": "Started the agent. Marked {{value0}} resolved, skipped {{value1}}, failed {{value2}}.",
             "aa95b81a3a": "Started the agent. Marked {{value0}} resolved, skipped {{value1}}, failed {{value2}}.",
             "495b2f8c4b": "Started the agent, but could not mark the selected comments resolved.",
-            "3c3ad3a1d2": "Started the agent. No selected comments can be marked resolved on the host.",
-            "b4f3ec62a1": "More {{value0}} actions",
-            "a9d7c128e4": "unlink {{value0}}"
+            "3c3ad3a1d2": "Started the agent. No selected comments can be marked resolved on the host."
           },
           "CreatePullRequestDialog": {
             "2bc1b4345e": "Cancel",
@@ -8070,8 +8040,7 @@
             "31f6d46278": "Unresolved",
             "2c417432b7": "Resolved locally",
             "f3a8b2c1d0e5": "Enter a {{value0}} title.",
-            "e2b7a1c0d9f4": "Failed to create {{value0}}",
-            "e9e238b260": "Custom command is empty. Add one in Settings -> Git -> Source Control AI."
+            "e2b7a1c0d9f4": "Failed to create {{value0}}"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "Could not start the selected agent.",
@@ -8151,7 +8120,7 @@
                 "74c6885b8a": "More comment actions",
                 "cbcc4ab3db": "Showing first 100 checks",
                 "0dca6bfab5": "Open check details",
-                "991f50c7e4": "No checks reported yet",
+                "991f50c7e4": "No checks configured",
                 "9ad98f2a17": "pending",
                 "5e52f4ef7f": "failing",
                 "02ca4f9074": "passing",
@@ -8199,7 +8168,7 @@
                 "ae8a04ef17": "Conflict file details are unavailable",
                 "73d0675356": "Refreshing conflict details…",
                 "5dc3af25c0": "Select comment",
-                "d7a2f9c401": "Send all unresolved",
+                "d7a2f9c401": "Send unresolved {{value0}} comments",
                 "d91f2a6c39": "Send {{value0}} queued comments",
                 "a6de3e5a20": "Clear queued comments",
                 "49ea0937e4": "Add comment to resolve list",
@@ -8571,10 +8540,7 @@
           "c5292c409d": "Agents can inspect app windows and operate local apps when you ask.",
           "1ecfb490ac": "Computer Use",
           "01426f3a23": "Agents can navigate sites, inspect pages, and work through browser tasks.",
-          "ea85d9e628": "Agent Browser Use",
-          "linearTicketsTitle": "Linear agent skill",
-          "linearTicketsDescription": "Agents can use linked Linear tasks for richer ticket-aware handoffs.",
-          "linearTicketsSetupSummary": "Recommended for Linear workspaces; does not affect Linear connection setup."
+          "ea85d9e628": "Agent Browser Use"
         },
         "FeatureSetupInlineTerminal": {
           "789b59936e": "Press Enter to run the command and confirm npx if asked. You can also set this up later in Settings.",
@@ -8658,9 +8624,9 @@
         "RepoStep": {
           "e8fdb36338": "Scanning repositories. Click to stop.",
           "b7c4da0504": "SSH? Set hosts up in Settings",
-          "c33b190ca3": "Server paths only",
+          "c33b190ca3": "Host paths only",
           "7b679207e4": "Workspace",
-          "24c7c8696c": "Clone into server path",
+          "24c7c8696c": "Clone into host path",
           "7932e95f68": "Clone",
           "955134915e": "git@github.com:org/repo.git",
           "288d8444b7": "Paste an HTTPS or SSH URL.",
@@ -8671,14 +8637,14 @@
           "e8214aa632": "Open as Folder",
           "3863747c56": "Add Git Project",
           "2ebbc26343": "/home/user/project",
-          "466108ab89": "Enter a path that exists on the runtime server.",
-          "8cab104e3c": "Open a server project",
+          "466108ab89": "Enter a path that exists on the selected host.",
+          "8cab104e3c": "Open a project on this host",
           "2d20200346": "Import repositories",
           "27ca610db1": "Back",
           "cecd6593fa": "Scanned folder:",
           "c7af322fc3": "Stop scanning",
           "c3d9d44ca2": "Stop scan",
-          "cf23006ba7": "Runtime server",
+          "cf23006ba7": "Selected host",
           "7ec3f48820": "/home/user",
           "2e6438dd34": "{{value0}}Found {{value1}} {{value2}} in this folder."
         },
@@ -8716,7 +8682,7 @@
           }
         },
         "AgentFeatureSetupStep": {
-          "97dcdc010f": "Install CLI & Skills"
+          "97dcdc010f": "Enable capabilities"
         }
       },
       "new": {
@@ -8752,6 +8718,10 @@
             "3e8bb1176a": "Connect Linear in Settings to search issues.",
             "69ce292138": "linear",
             "9c004911c3": "gitlab"
+          },
+          "ProjectHostSetupCombobox": {
+            "empty": "No hosts are ready for this project.",
+            "placeholder": "Choose host"
           }
         }
       },
@@ -8989,9 +8959,7 @@
             "3a59452a67": "Skill command copied and inserted below for review.",
             "c605f51f2b": "Capability setup ready",
             "1aa657d8f4": "Some capability setup needs attention",
-            "c89534cbe9": "Install CLI & Skills",
-            "linearTicketsTitle": "Linear agent skill",
-            "linearTicketsDescription": "Recommended when agents work from linked Linear tasks."
+            "c89534cbe9": "Install CLI & Skills"
           },
           "AiCommitPrSettingsCard": {
             "8d4152701a": "e.g. ollama run llama3.1 {{value0}}",
@@ -9097,11 +9065,7 @@
             "3c4adfd821": "fix login race condition",
             "56a0271428": "Isolated workspaces",
             "ef737dcee1": "GitHub & Linear tasks",
-            "ac51c061e2": "codex",
-            "47f16ecf34": "Ship several things at once. Each workspace keeps its branch, terminal, and agent activity together.",
-            "70aa182266": "Hand off a goal and walk away. A coordinator agent fans out and ships parallel PRs.",
-            "f10c14dd9d": "Skip the tab-switching. Pick from your GitHub or Linear backlog and start a workspace in one click.",
-            "5d6ee181b6": "Open any workspace to return to its terminal, then split panes for tests, logs, and agents."
+            "ac51c061e2": "codex"
           },
           "FeatureWallBody": {
             "25ec5356d6": "Setup"
@@ -9174,9 +9138,7 @@
             "6e3f5223c5": "Explorer",
             "ab2901bce6": "Checks",
             "d7f80060ca": "Source Control",
-            "8e715588e4": "Search",
-            "a6c8b9e32f": "Checks passed",
-            "f4d5e1a7b2": "3 checks"
+            "8e715588e4": "Search"
           },
           "ReviewShipAnimatedVisual": {
             "4d99496b8c": "Create PR",
@@ -10598,44 +10560,6 @@
             "e176f9d0c5": "Jira Cloud site URL",
             "d785c42b8b": "Use a Jira Cloud site URL, Atlassian email, and API token to browse issues.",
             "8388bdea2b": "Connect Jira site"
-          }
-        }
-      },
-      "link": {
-        "routing": {
-          "preference": {
-            "dialog": {
-              "badge": "Terminal link",
-              "preview": "Preview",
-              "title": "Open terminal links in Orca's browser?",
-              "description": "Use Orca's browser for terminal links, or keep your system browser.",
-              "orca": {
-                "button": "Open in Orca",
-                "note": "Orca can use imported cookies for logged-in sites."
-              },
-              "settings": {
-                "note": "Change this later in Settings → Browser."
-              },
-              "system": {
-                "button": "Use system browser"
-              },
-              "link": {
-                "label": "Link"
-              },
-              "shortcut": {
-                "note": {
-                  "prefix": "When links open in Orca,",
-                  "suffix": "click opens system browser once."
-                }
-              },
-              "keep": {
-                "title": "Keep terminal links in Orca's browser?",
-                "description": "Or use your system browser by default.",
-                "orca": {
-                  "button": "Keep Orca"
-                }
-              }
-            }
           }
         }
       }

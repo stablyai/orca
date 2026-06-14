@@ -17,13 +17,15 @@ vi.mock('@/components/editor/editor-autosave', () => ({
 describe('getEditorExternalWatchTargets', () => {
   const makeRepo = (
     id: string,
-    connectionId: string | null = null
+    connectionId: string | null = null,
+    executionHostId?: EditorExternalWatchTargetState['repos'][number]['executionHostId']
   ): EditorExternalWatchTargetState['repos'][number] =>
     ({
       id,
       path: `/${id}`,
       kind: 'git',
-      connectionId
+      connectionId,
+      executionHostId
     }) as EditorExternalWatchTargetState['repos'][number]
 
   const makeWorktree = (

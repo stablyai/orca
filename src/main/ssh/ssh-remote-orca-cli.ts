@@ -37,11 +37,14 @@ const REMOTE_BOOLEAN_FLAGS = new Set([
   'help',
   'inject',
   'json',
+  'me',
   'relations',
   'parent-current',
   'unread',
   'wait'
 ])
+const REPEATED_FLAG_SEPARATOR = '\u0000'
+const REPEATABLE_REMOTE_STRING_FLAGS = new Set(['label'])
 
 export async function runRemoteOrcaCli(
   runtime: OrcaRuntimeService,
@@ -184,20 +187,37 @@ function parseRemoteCliArgs(argv: string[]): ParsedRemoteCli {
     // form as the local CLI, including values that themselves start with `--`.
     const equalsIndex = assignment.indexOf('=')
     if (equalsIndex !== -1) {
-      flags.set(assignment.slice(0, equalsIndex), assignment.slice(equalsIndex + 1))
+      setRemoteFlag(flags, assignment.slice(0, equalsIndex), assignment.slice(equalsIndex + 1))
       continue
     }
 
     const flag = assignment
     const next = argv[i + 1]
     if (!REMOTE_BOOLEAN_FLAGS.has(flag) && next && !next.startsWith('--')) {
-      flags.set(flag, next)
+      setRemoteFlag(flags, flag, next)
       i += 1
     } else {
-      flags.set(flag, true)
+      setRemoteFlag(flags, flag, true)
     }
   }
   return { commandPath, flags }
+}
+
+function setRemoteFlag(
+  flags: Map<string, string | boolean>,
+  name: string,
+  value: string | boolean
+): void {
+  const previous = flags.get(name)
+  if (
+    typeof previous === 'string' &&
+    typeof value === 'string' &&
+    REPEATABLE_REMOTE_STRING_FLAGS.has(name)
+  ) {
+    flags.set(name, `${previous}${REPEATED_FLAG_SEPARATOR}${value}`)
+    return
+  }
+  flags.set(name, value)
 }
 
 function resolveHandle(

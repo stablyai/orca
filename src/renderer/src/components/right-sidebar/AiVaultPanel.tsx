@@ -247,7 +247,7 @@ export default function AiVaultPanel(): React.JSX.Element {
         <div className="border-b border-sidebar-border px-3 py-2 text-[11px] leading-4 text-muted-foreground">
           {translate(
             'auto.components.right.sidebar.AiVaultPanel.remoteBrowseLocalHistory',
-            'Remote workspaces can browse local history. Resume actions run from local workspaces.'
+            'SSH-host workspaces can browse local history. Resume actions run from Local Mac workspaces.'
           )}
         </div>
       ) : null}

@@ -72,13 +72,13 @@ describe('ChecksPanelReviewHeader', () => {
     expect(markup).toContain('unlink PR')
   })
 
-  it('shows GitLab MR unlink actions in the menu', () => {
+  it('shows GitLab MR identity without GitHub-only link management actions', () => {
     const markup = renderHeader({ provider: 'gitlab' })
 
     expect(markup).toContain('Open on GitLab')
     expect(markup).toContain('!31')
-    expect(markup).toContain('More MR actions')
-    expect(markup).toContain('unlink MR')
+    expect(markup).not.toContain('More PR actions')
+    expect(markup).not.toContain('unlink PR')
     expect(markup).not.toContain('Link another PR')
   })
 })

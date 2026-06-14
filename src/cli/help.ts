@@ -29,6 +29,15 @@ Automations:
   automations run           Run an Orca automation now
   automations runs          List automation run history
 
+Projects:
+  project list              List durable projects known to Orca
+  project setups            List project host setups
+  project setup-existing-folder Make a project available on a host by importing an existing folder
+  project setup-clone       Make a project available on a host by cloning a repository
+  project setup-create      Create independent project host setup metadata
+  project setup-update      Update project host setup metadata
+  project setup-delete      Remove a project host setup
+
 Repos:
   repo list                 List repos registered in Orca
   repo add                  Add a project to Orca by filesystem path
@@ -185,10 +194,10 @@ Common Commands:
   orca environment show --environment <selector> [--json]
   orca environment rm --environment <selector> [--json]
   orca worktree list [--repo <selector>] [--limit <n>] [--json]
-  orca worktree create --name <name> [--repo <selector>] [--agent <id>] [--prompt <text>] [--setup run|skip|inherit] [--base-branch <ref>] [--issue <number>] [--comment <text>] [--parent-worktree <selector>] [--no-parent] [--run-hooks] [--activate] [--json]
+  orca worktree create --name <name> [--repo <selector>|--project <id> [--host <host-id>]|--project-host-setup <id>] [--agent <id>] [--prompt <text>] [--setup run|skip|inherit] [--base-branch <ref>] [--issue <number>] [--linear-issue <identifier-or-url>] [--comment <text>] [--parent-worktree <selector>] [--no-parent] [--run-hooks] [--activate] [--json]
   orca worktree show --worktree <selector> [--json]
   orca worktree current [--json]
-  orca worktree set --worktree <selector> [--display-name <name>] [--issue <number|null>] [--comment <text>] [--workspace-status <id>] [--parent-worktree <selector>|--no-parent] [--json]
+  orca worktree set --worktree <selector> [--display-name <name>] [--issue <number|null>] [--linear-issue <identifier-or-url|null>] [--comment <text>] [--workspace-status <id>] [--parent-worktree <selector>|--no-parent] [--json]
   orca worktree rm --worktree <selector> [--force] [--run-hooks] [--json]
   orca worktree ps [--limit <n>] [--json]
   orca file open <path> [--worktree <selector>] [--json]
@@ -204,6 +213,13 @@ Common Commands:
   orca terminal split [--terminal <handle>] [--direction horizontal|vertical] [--json]
   orca terminal switch [--terminal <handle>] [--json]
   orca terminal close [--terminal <handle>] [--json]
+  orca project list [--json]
+  orca project setups [--project <id>] [--host <host-id>] [--json]
+  orca project setup-existing-folder --project <id> --host <host-id> --path <path> [--kind git|folder] [--display-name <name>] [--json]
+  orca project setup-clone --project <id> --host <host-id> --url <clone-url> --destination <path> [--display-name <name>] [--json]
+  orca project setup-create --project <id> --host <host-id> [--setup-id <id>] [--path <path>] [--kind git|folder] [--display-name <name>] [--worktree-base-path <path>] [--git-username <name>] [--state ready|not-set-up|setting-up|error|unsupported] [--method imported-existing-folder|cloned|provisioned] [--json]
+  orca project setup-update --setup <setup-id> [--display-name <name>] [--path <path>] [--worktree-base-path <path>] [--git-username <name>] [--kind git|folder] [--state ready|not-set-up|setting-up|error|unsupported] [--method legacy-repo|imported-existing-folder|cloned|provisioned] [--json]
+  orca project setup-delete --setup <setup-id> [--json]
   orca repo list [--json]
   orca repo add --path <path> [--json]
   orca repo show --repo <selector> [--json]
@@ -277,9 +293,12 @@ Examples:
   $ orca repo list
   $ orca worktree create --name agent-task --agent codex --prompt "hi"
   $ orca worktree create --repo name:orca --name cli-test-1 --issue 273
+  $ orca worktree create --repo name:orca --name linear-task --linear-issue https://linear.app/stably/issue/STA-335/test-issue
+  $ orca worktree create --name linear-task --linear-issue STA-335
   $ orca worktree show --worktree branch:Jinwoo-H/cli
   $ orca worktree current
   $ orca worktree set --worktree active --comment "waiting on review"
+  $ orca worktree set --worktree active --linear-issue null
   $ orca worktree ps --limit 10
   $ orca file open-changed --mode diff
   $ orca file open src/App.tsx
@@ -442,6 +461,8 @@ export function formatFlagHelp(flag: string): string {
     interrupt: '--interrupt            Send as an interrupt-style input when supported',
     id: '--id <id>             Identifier for a target item or permission',
     issue: '--issue <number|null>  Linked GitHub issue number',
+    'linear-issue':
+      '--linear-issue <id|url|null> Linked Linear issue identifier or URL; null clears on set',
     json: '--json                 Emit machine-readable JSON',
     key: '--key <key>            Key argument for this command',
     limit: '--limit <n>            Maximum number of rows to return',
@@ -481,6 +502,8 @@ export function formatFlagHelp(flag: string): string {
       '--workspace-status <id> Board status id (defaults: todo, in-progress, in-review, completed)',
     staged: '--staged               Open staged source-control changes',
     provider: '--provider <agent>     Agent id such as codex, claude, or gemini',
+    'source-context':
+      '--source-context <json|null> Explicit TaskSourceContext for automation task/provider data',
     trigger: '--trigger <schedule>   Automation schedule preset, cron, or RRULE',
     schedule: '--schedule <schedule>  Alias for --trigger',
     time: '--time <HH:MM>        Time used with daily/weekdays/weekly presets',

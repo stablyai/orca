@@ -1534,6 +1534,9 @@ describe('useIpcEvents updater integration', () => {
     expect(createFloatingWorkspaceTerminalTab).not.toHaveBeenCalled()
     expect(createWebRuntimeSessionTerminal).toHaveBeenCalledWith({
       worktreeId: 'wt-1',
+      // Why: multi-host scopes the new terminal to the worktree's own runtime
+      // env (null here -> falls back to the active env inside the helper).
+      environmentId: null,
       activate: true
     })
     expect(createTab).toHaveBeenCalledWith('wt-1')

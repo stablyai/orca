@@ -824,6 +824,7 @@ function buildMirroredBrowserTabs(
       canGoForward: tab.canGoForward,
       loadError: null,
       createdAt,
+      browserRuntimeEnvironmentId: environmentId,
       viewportPresetId: existing?.page.viewportPresetId ?? null
     }
     const workspace: BrowserWorkspace = {
@@ -1320,6 +1321,7 @@ function browserPageEqual(a: BrowserPage, b: BrowserPage): boolean {
     a.loadError?.description === b.loadError?.description &&
     a.loadError?.validatedUrl === b.loadError?.validatedUrl &&
     a.createdAt === b.createdAt &&
+    a.browserRuntimeEnvironmentId === b.browserRuntimeEnvironmentId &&
     a.viewportPresetId === b.viewportPresetId
   )
 }

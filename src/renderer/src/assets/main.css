@@ -760,6 +760,12 @@
   cursor: pointer;
 }
 
+/* Why: when the app name sits inside the worktree sidebar header, it should
+   inherit that panel's contrast instead of the generic titlebar text color. */
+.titlebar-left:not(.titlebar-left-floating) .titlebar-app-name {
+  color: var(--worktree-sidebar-foreground);
+}
+
 .titlebar-app-name-main {
   flex: 0 0 auto;
 }

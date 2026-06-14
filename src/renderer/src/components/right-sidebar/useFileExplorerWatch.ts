@@ -16,6 +16,8 @@ import {
 } from './file-explorer-watcher-reconcile'
 import { useAppStore } from '@/store'
 import { subscribeRuntimeFileChanges } from '@/runtime/runtime-file-client'
+import type { AppState } from '@/store/types'
+import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 
 type UseFileExplorerWatchParams = {
   worktreePath: string | null
@@ -87,6 +89,13 @@ export function payloadRequiresDeferredTreeRefresh(
   return payload.events.some((evt) => evt.kind === 'rename')
 }
 
+export function getFileExplorerWatchRuntimeEnvironmentId(
+  state: Pick<AppState, 'repos' | 'settings' | 'worktreesByRepo'>,
+  activeWorktreeId: string | null
+): string | null {
+  return getRuntimeEnvironmentIdForWorktree(state, activeWorktreeId)
+}
+
 /**
  * Reconciles File Explorer state on filesystem events for the active worktree.
  *
@@ -110,7 +119,11 @@ export function useFileExplorerWatch({
   dragSourcePath,
   isNativeDragOver
 }: UseFileExplorerWatchParams): void {
-  const activeRuntimeEnvironmentId = useAppStore((s) => s.settings?.activeRuntimeEnvironmentId)
+  // Why: Explorer subscriptions are for the selected worktree. Host focus is
+  // only a default for legacy untagged worktrees, not an ownership signal.
+  const activeRuntimeEnvironmentId = useAppStore((s) =>
+    getFileExplorerWatchRuntimeEnvironmentId(s, activeWorktreeId)
+  )
 
   // Keep refs for values accessed inside the event handler to avoid
   // re-subscribing the IPC listener on every render.

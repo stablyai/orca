@@ -84,6 +84,7 @@ import {
   cancelScheduledHiddenOutputRestore,
   scheduleHiddenOutputRestore
 } from './hidden-output-restore-scheduler'
+import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { CLIENT_PLATFORM } from '@/lib/new-workspace'
 import { buildAgentResumeStartupPlan } from '@/lib/tui-agent-startup'
 import {
@@ -1460,8 +1461,8 @@ export function connectPanePty(
     (restoredPtyIdForTransport
       ? getRemoteRuntimePtyEnvironmentId(restoredPtyIdForTransport)
       : null) ?? (tab?.ptyId ? getRemoteRuntimePtyEnvironmentId(tab.ptyId) : null)
-  const activeRuntimeEnvironmentId = state.settings?.activeRuntimeEnvironmentId?.trim() || null
-  const runtimeEnvironmentId = remoteRuntimeOwnerForTransport ?? activeRuntimeEnvironmentId
+  const runtimeEnvironmentId =
+    remoteRuntimeOwnerForTransport ?? getRuntimeEnvironmentIdForWorktree(state, deps.worktreeId)
   const shouldOwnAgentStatusInRenderer = runtimeEnvironmentId !== null
   const shouldDeliverStartupViaTerminalPaste = paneStartup?.delivery === 'terminal-paste'
   const hadExistingPaneTransportAtConnect = deps.paneTransportsRef.current.size > 0
@@ -1798,40 +1799,35 @@ export function connectPanePty(
       }
       const state = useAppStore.getState()
       const entry = state.agentStatusByPaneKey[cacheKey]
-      // Why: agentStatusByPaneKey is in-memory only. After an app restart, the
-      // quit-captured sleeping record is the only surviving source of this
-      // pane's provider session id (#5232). Live entries win when present —
-      // they are fresher and setAgentStatus already cleared the record.
-      const sleepingRecord = entry ? null : state.sleepingAgentSessionsByPaneKey[cacheKey]
-      const agentType = entry?.agentType ?? sleepingRecord?.agent
-      const agentState = entry?.state ?? sleepingRecord?.state
-      const rawProviderSession = entry?.providerSession ?? sleepingRecord?.providerSession
-      if (!agentType || agentState === 'done' || !isResumableTuiAgent(agentType)) {
+      const sleepingRecord = state.sleepingAgentSessionsByPaneKey[cacheKey]
+      const useLiveEntry = entry && entry.state !== 'done'
+      const agent = useLiveEntry ? entry.agentType : sleepingRecord?.agent
+      if (!agent || !isResumableTuiAgent(agent)) {
         return false
       }
-      const providerSession = normalizeAgentProviderSession(rawProviderSession)
+      const providerSession = normalizeAgentProviderSession(
+        useLiveEntry ? entry.providerSession : sleepingRecord?.providerSession
+      )
       if (!providerSession) {
         return false
       }
       const startupPlan = buildAgentResumeStartupPlan({
-        agent: agentType,
+        agent,
         providerSession,
         cmdOverrides: state.settings?.agentCmdOverrides ?? {},
-        agentArgs: resolveTuiAgentLaunchArgs(agentType, state.settings?.agentDefaultArgs),
-        agentEnv: resolveTuiAgentLaunchEnv(agentType, state.settings?.agentDefaultEnv),
+        agentArgs: resolveTuiAgentLaunchArgs(agent, state.settings?.agentDefaultArgs),
+        agentEnv: resolveTuiAgentLaunchEnv(agent, state.settings?.agentDefaultEnv),
         platform: getColdRestoreAgentResumePlatform()
       })
       if (!startupPlan) {
         return false
       }
-      if (sleepingRecord) {
-        // Why: the record is one-shot — consuming it here prevents a later
-        // worktree activation from launching a duplicate resume tab.
-        useAppStore.getState().clearSleepingAgentSession(cacheKey)
-      }
       // Why: cold restore means the PTY process is gone but the agent provider
       // session is still resumable, so the replacement shell must launch it.
       pendingStartupCommand = startupPlan.launchCommand
+      if (!useLiveEntry && sleepingRecord) {
+        state.clearSleepingAgentSession(cacheKey)
+      }
       return true
     }
     const schedulePendingStartupCommandDelivery = (): void => {

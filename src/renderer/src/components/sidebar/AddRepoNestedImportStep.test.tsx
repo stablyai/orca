@@ -78,13 +78,13 @@ describe('AddRepoNestedImportStep', () => {
     expect(html).toContain('Import repositories from folder')
     expect(html).toContain('Found 3 repositories in')
     expect(html).toContain('/workspace/platform')
-    expect(html).toContain('aria-label="Group name"')
+    expect(html).toContain('aria-label="Monorepo name"')
     expect(html).not.toContain('What is a')
     expect(html).toContain('Is this a monorepo?')
-    expect(html).toContain('Import them as a group if they&#x27;re a monorepo')
+    expect(html).toContain('Choose this if these projects belong together')
     expect(html).toContain('Orca will group them and let you work from the parent folder')
     expect(html).toContain('No, import separately')
-    expect(html).toContain('Import as group')
+    expect(html).toContain('Yes, import as monorepo')
     expect(html).toContain('payments/api')
     expect(html).toContain('billing/api')
     expect(html).not.toContain('disabled=""')
@@ -97,9 +97,9 @@ describe('AddRepoNestedImportStep', () => {
 
     expect(html).toContain('Is this a monorepo?')
     expect(html).toContain('No, import separately')
-    expect(html).toContain('Import as group')
+    expect(html).toContain('Yes, import as monorepo')
     expect(html).toMatch(/<button[^>]*disabled=""[^>]*>No, import separately<\/button>/)
-    expect(html).toMatch(/<button[^>]*disabled=""[^>]*>Import as group<\/button>/)
+    expect(html).toMatch(/<button[^>]*disabled=""[^>]*>Yes, import as monorepo<\/button>/)
   })
 
   it('maps the monorepo choice to grouped import and the non-monorepo choice to separate import', () => {
@@ -130,7 +130,7 @@ describe('AddRepoNestedImportStep', () => {
     })
 
     act(() => {
-      findButton(host, 'Import as group').click()
+      findButton(host, 'Yes, import as monorepo').click()
       findButton(host, 'No, import separately').click()
     })
 
@@ -174,11 +174,13 @@ describe('AddRepoNestedImportStep', () => {
     })
 
     act(() => {
-      findButton(host, 'Import as group').click()
+      findButton(host, 'Yes, import as monorepo').click()
     })
 
     expect(onImport).toHaveBeenCalledWith('group')
-    expect(findButton(host, 'Import as group').querySelector('.animate-spin')).not.toBeNull()
+    expect(
+      findButton(host, 'Yes, import as monorepo').querySelector('.animate-spin')
+    ).not.toBeNull()
     expect(findButton(host, 'No, import separately').querySelector('.animate-spin')).toBeNull()
   })
 })

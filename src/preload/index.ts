@@ -70,6 +70,7 @@ import type { RateLimitRuntimeTarget, RateLimitState } from '../shared/rate-limi
 import type { WorkspaceSpaceScanProgress } from '../shared/workspace-space-types'
 import type { WorkspacePortAdvertisedUrlChangedEvent } from '../shared/workspace-ports'
 import type { GhAuthDiagnostic } from '../shared/github-auth-types'
+import type { TaskSourceContext } from '../shared/task-source-context'
 import type {
   AddIssueCommentBySlugArgs,
   ClearProjectItemFieldArgs,
@@ -478,6 +479,10 @@ const api = {
 
     clone: (args) => ipcRenderer.invoke('repos:clone', args),
 
+    cloneRemote: (args) => ipcRenderer.invoke('repos:cloneRemote', args),
+
+    createRemote: (args) => ipcRenderer.invoke('repos:createRemote', args),
+
     cloneAbort: () => ipcRenderer.invoke('repos:cloneAbort'),
 
     onCloneProgress: (
@@ -512,6 +517,16 @@ const api = {
       return () => ipcRenderer.removeListener('repos:changed', listener)
     }
   } satisfies PreloadApi['repos'],
+
+  projects: {
+    list: () => ipcRenderer.invoke('projects:list'),
+    listHostSetups: () => ipcRenderer.invoke('projectHostSetups:list'),
+    createHostSetup: (args) => ipcRenderer.invoke('projectHostSetups:create', args),
+    setupExistingFolder: (args) =>
+      ipcRenderer.invoke('projectHostSetups:setupExistingFolder', args),
+    updateHostSetup: (args) => ipcRenderer.invoke('projectHostSetups:update', args),
+    deleteHostSetup: (args) => ipcRenderer.invoke('projectHostSetups:delete', args)
+  } satisfies PreloadApi['projects'],
 
   projectGroups: {
     list: () => ipcRenderer.invoke('projectGroups:list'),
@@ -925,12 +940,17 @@ const api = {
       return () => ipcRenderer.removeListener('gh:prRefreshEvent', listener)
     },
 
-    issue: (args: { repoPath: string; repoId?: string; number: number }): Promise<unknown> =>
-      ipcRenderer.invoke('gh:issue', args),
+    issue: (args: {
+      repoPath: string
+      repoId?: string
+      sourceContext?: TaskSourceContext | null
+      number: number
+    }): Promise<unknown> => ipcRenderer.invoke('gh:issue', args),
 
     workItem: (args: {
       repoPath: string
       repoId?: string
+      sourceContext?: TaskSourceContext | null
       number: number
       type?: 'issue' | 'pr'
     }): Promise<unknown> => ipcRenderer.invoke('gh:workItem', args),
@@ -947,6 +967,7 @@ const api = {
     workItemDetails: (args: {
       repoPath: string
       repoId?: string
+      sourceContext?: TaskSourceContext | null
       number: number
       type?: 'issue' | 'pr'
     }): Promise<unknown> => ipcRenderer.invoke('gh:workItemDetails', args),
@@ -954,6 +975,7 @@ const api = {
     prFileContents: (args: {
       repoPath: string
       repoId?: string
+      sourceContext?: TaskSourceContext | null
       prNumber: number
       path: string
       oldPath?: string
@@ -968,6 +990,7 @@ const api = {
     createIssue: (args: {
       repoPath: string
       repoId?: string
+      sourceContext?: TaskSourceContext | null
       title: string
       body: string
       labels?: string[]
@@ -994,6 +1017,7 @@ const api = {
     prChecks: (args: {
       repoPath: string
       repoId?: string
+      sourceContext?: TaskSourceContext | null
       prNumber: number
       headSha?: string
       prRepo?: { owner: string; repo: string } | null
@@ -1003,6 +1027,7 @@ const api = {
     prCheckDetails: (args: {
       repoPath: string
       repoId?: string
+      sourceContext?: TaskSourceContext | null
       checkRunId?: number
       workflowRunId?: number
       checkName?: string
@@ -1013,6 +1038,7 @@ const api = {
     rerunPRChecks: (args: {
       repoPath: string
       repoId?: string
+      sourceContext?: TaskSourceContext | null
       prNumber: number
       headSha?: string
       failedOnly?: boolean
@@ -1022,6 +1048,7 @@ const api = {
     prComments: (args: {
       repoPath: string
       repoId?: string
+      sourceContext?: TaskSourceContext | null
       prNumber: number
       prRepo?: { owner: string; repo: string } | null
       noCache?: boolean
@@ -1030,6 +1057,7 @@ const api = {
     resolveReviewThread: (args: {
       repoPath: string
       repoId?: string
+      sourceContext?: TaskSourceContext | null
       threadId: string
       resolve: boolean
     }): Promise<boolean> => ipcRenderer.invoke('gh:resolveReviewThread', args),
@@ -1037,6 +1065,7 @@ const api = {
     setPRFileViewed: (args: {
       repoPath: string
       repoId?: string
+      sourceContext?: TaskSourceContext | null
       prNumber: number
       pullRequestId: string
       path: string
@@ -1054,6 +1083,7 @@ const api = {
     mergePR: (args: {
       repoPath: string
       repoId?: string
+      sourceContext?: TaskSourceContext | null
       prNumber: number
       method?: 'merge' | 'squash' | 'rebase'
       prRepo?: { owner: string; repo: string } | null
@@ -1063,6 +1093,7 @@ const api = {
     setPRAutoMerge: (args: {
       repoPath: string
       repoId?: string
+      sourceContext?: TaskSourceContext | null
       prNumber: number
       enabled: boolean
       prRepo?: { owner: string; repo: string } | null
@@ -1072,6 +1103,7 @@ const api = {
     updatePRState: (args: {
       repoPath: string
       repoId?: string
+      sourceContext?: TaskSourceContext | null
       prNumber: number
       updates: { state: 'open' | 'closed' }
     }): Promise<{ ok: true } | { ok: false; error: string }> =>
@@ -1080,6 +1112,7 @@ const api = {
     requestPRReviewers: (args: {
       repoPath: string
       repoId?: string
+      sourceContext?: TaskSourceContext | null
       prNumber: number
       reviewers: string[]
     }): Promise<{ ok: true } | { ok: false; error: string }> =>
@@ -1088,6 +1121,7 @@ const api = {
     removePRReviewers: (args: {
       repoPath: string
       repoId?: string
+      sourceContext?: TaskSourceContext | null
       prNumber: number
       reviewers: string[]
     }): Promise<{ ok: true } | { ok: false; error: string }> =>
@@ -1096,6 +1130,7 @@ const api = {
     updateIssue: (args: {
       repoPath: string
       repoId?: string
+      sourceContext?: TaskSourceContext | null
       number: number
       updates: unknown
     }): Promise<{ ok: true } | { ok: false; error: string }> =>
@@ -1104,6 +1139,7 @@ const api = {
     addIssueComment: (args: {
       repoPath: string
       repoId?: string
+      sourceContext?: TaskSourceContext | null
       number: number
       body: string
       type?: 'issue' | 'pr'
@@ -1113,6 +1149,7 @@ const api = {
     addPRReviewCommentReply: (args: {
       repoPath: string
       repoId?: string
+      sourceContext?: TaskSourceContext | null
       prNumber: number
       commentId: number
       body: string
@@ -1125,6 +1162,7 @@ const api = {
     addPRReviewComment: (args: {
       repoPath: string
       repoId?: string
+      sourceContext?: TaskSourceContext | null
       prNumber: number
       commitId: string
       path: string
@@ -1133,12 +1171,16 @@ const api = {
       body: string
     }): Promise<GitHubCommentResult> => ipcRenderer.invoke('gh:addPRReviewComment', args),
 
-    listLabels: (args: { repoPath: string; repoId?: string }): Promise<string[]> =>
-      ipcRenderer.invoke('gh:listLabels', args),
+    listLabels: (args: {
+      repoPath: string
+      repoId?: string
+      sourceContext?: TaskSourceContext | null
+    }): Promise<string[]> => ipcRenderer.invoke('gh:listLabels', args),
 
     listAssignableUsers: (args: {
       repoPath: string
       repoId?: string
+      sourceContext?: TaskSourceContext | null
     }): Promise<GitHubAssignableUser[]> => ipcRenderer.invoke('gh:listAssignableUsers', args),
 
     // Why: every renderer subscribes to local mutation broadcasts so each
@@ -1475,8 +1517,6 @@ const api = {
     dismiss: (): Promise<void> => ipcRenderer.invoke('star-nag:dismiss'),
     complete: (): Promise<void> => ipcRenderer.invoke('star-nag:complete'),
     disable: (): Promise<void> => ipcRenderer.invoke('star-nag:disable'),
-    openWeb: (): Promise<void> => ipcRenderer.invoke('star-nag:openWeb'),
-    starOrca: (): Promise<boolean> => ipcRenderer.invoke('star-nag:starOrca'),
     forceShow: (): Promise<void> => ipcRenderer.invoke('star-nag:forceShow')
   },
 
@@ -2222,14 +2262,16 @@ const api = {
   } satisfies PreloadApi['cache'],
 
   session: {
-    get: () => ipcRenderer.invoke('session:get'),
-    set: (args) => ipcRenderer.invoke('session:set', args),
-    patch: (args) => ipcRenderer.invoke('session:patch', args),
+    // hostId is optional and defaults to 'local' on the main side, so existing
+    // call sites that omit it keep targeting the local session partition.
+    get: (hostId) => ipcRenderer.invoke('session:get', hostId),
+    set: (args, hostId) => ipcRenderer.invoke('session:set', args, hostId),
+    patch: (args, hostId) => ipcRenderer.invoke('session:patch', args, hostId),
     readTerminalScrollback: (args) =>
       ipcRenderer.sendSync('session:read-terminal-scrollback-sync', args),
     /** Synchronous session save for beforeunload — blocks until flushed to disk. */
-    setSync: (args) => {
-      ipcRenderer.sendSync('session:set-sync', args)
+    setSync: (args, hostId) => {
+      ipcRenderer.sendSync('session:set-sync', args, hostId)
     }
   } satisfies PreloadApi['session'],
 
@@ -3333,6 +3375,10 @@ const api = {
       ipcRenderer.invoke('runtimeEnvironments:resolve', args),
     remove: (args: { selector: string }): Promise<{ removed: PublicKnownRuntimeEnvironment }> =>
       ipcRenderer.invoke('runtimeEnvironments:remove', args),
+    disconnect: (args: {
+      selector: string
+    }): Promise<{ disconnected: PublicKnownRuntimeEnvironment }> =>
+      ipcRenderer.invoke('runtimeEnvironments:disconnect', args),
     getStatus: (args: {
       selector: string
       timeoutMs?: number

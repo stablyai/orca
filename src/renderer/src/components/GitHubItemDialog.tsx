@@ -11,6 +11,7 @@ import React, {
   useSyncExternalStore
 } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
+import { useShallow } from 'zustand/react/shallow'
 import type { editor as monacoEditor } from 'monaco-editor'
 import {
   ArrowDown,
@@ -37,6 +38,8 @@ import {
   Pencil,
   Plus,
   RefreshCw,
+  Send,
+  Settings,
   UndoDot,
   Users,
   Wrench,
@@ -83,11 +86,6 @@ import {
 import type { DiffSection } from '@/components/editor/diff-section-types'
 import type { CombinedDiffFileTreeEntry } from '@/components/editor/combined-diff-file-tree-model'
 import { CHECK_COLOR, CHECK_ICON } from '@/components/right-sidebar/checks-panel-content'
-import {
-  REVIEW_ACTION_MERGE_BUTTON_CLASS,
-  REVIEW_ACTION_STATE_BUTTON_CLASS,
-  RIGHT_SIDEBAR_PRIMARY_BUTTON_LABEL_CLASS
-} from '@/components/right-sidebar/right-sidebar-primary-action-layout'
 import {
   createGitHubChecksTabState,
   resolveGitHubChecksTabState,
@@ -137,9 +135,6 @@ import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-cl
 import { useRepoLabels, useRepoAssignees, useImmediateMutation } from '@/hooks/useIssueMetadata'
 import { useRepoLabelsBySlug, useRepoAssigneesBySlug } from '@/hooks/useGitHubSlugMetadata'
 import { GitHubMarkdownComposer } from '@/components/github/GitHubMarkdownComposer'
-import { GitHubWorkItemLabelPopoverContent } from '@/components/github/GitHubWorkItemLabelPopoverContent'
-import { GitHubWorkItemAssigneePopoverContent } from '@/components/github/GitHubWorkItemAssigneePopoverContent'
-import { GitHubIssueCommentComposer } from '@/components/github/GitHubIssueCommentComposer'
 import IssueSourceIndicator, { sameGitHubOwnerRepo } from '@/components/github/IssueSourceIndicator'
 import {
   getGitHubPRReviewerRows,
@@ -172,12 +167,15 @@ import type {
   PRCheckDetail,
   PRComment
 } from '../../../shared/types'
+import {
+  getTaskSourceRuntimeSettings,
+  type TaskSourceContext
+} from '../../../shared/task-source-context'
 import { PER_REPO_FETCH_LIMIT } from '../../../shared/work-items'
 import { translate } from '@/i18n/i18n'
+import { getSettingsForRepoRuntimeOwner } from '@/lib/repo-runtime-owner'
 
 const IS_MAC = navigator.userAgent.includes('Mac')
-const IS_WINDOWS = !IS_MAC && navigator.userAgent.includes('Windows')
-const WINDOWS_WINDOW_CONTROLS_WIDTH = '138px'
 
 // Why: the GH item dialog can be opened from any work-item list surface and
 // doesn't have the full owner/repo context the list's cache entry carries.
@@ -272,6 +270,7 @@ type GitHubItemDialogProps = {
   workItem: GitHubWorkItem | null
   repoPath: string | null
   repoId?: string | null
+  sourceContext?: TaskSourceContext | null
   initialTab?: ItemDialogTab
   variant?: 'sheet' | 'page'
   backLabel?: string
@@ -436,11 +435,13 @@ function PRReviewersPanel({
   item,
   loading,
   repoPath,
+  sourceContext,
   onReviewersRequested
 }: {
   item: GitHubWorkItem
   loading: boolean
   repoPath: string | null
+  sourceContext?: TaskSourceContext | null
   onReviewersRequested: (reviewRequests: GitHubAssignableUser[]) => void
 }): React.JSX.Element {
   const [open, setOpen] = useState(false)
@@ -458,7 +459,19 @@ function PRReviewersPanel({
     reviewRequests: item.reviewRequests
   }))
   const patchWorkItem = useAppStore((s) => s.patchWorkItem)
-  const settings = useAppStore((s) => s.settings)
+  const repoOwnerSettings = useAppStore(
+    useShallow((s) => getSettingsForRepoRuntimeOwner(s, item.repoId ?? null))
+  )
+  const sourceSettings = useMemo(
+    () =>
+      sourceContext?.provider === 'github'
+        ? ({
+            ...repoOwnerSettings,
+            ...getTaskSourceRuntimeSettings(sourceContext)
+          } as typeof repoOwnerSettings)
+        : repoOwnerSettings,
+    [repoOwnerSettings, sourceContext]
+  )
   const reviewerInputRef = useRef<HTMLInputElement | null>(null)
   const reviewerInputFocusFrameRef = useRef<number | null>(null)
   const reviewerPanelMountedRef = useRef(true)
@@ -533,11 +546,12 @@ function PRReviewersPanel({
     open && reviewSlug ? reviewSlug.owner : null,
     open && reviewSlug ? reviewSlug.repo : null,
     reviewerSeedUsers.map((user) => user.login),
-    settings
+    sourceSettings
   )
   const reviewerMetadataByPath = useRepoAssignees(
     open && !reviewSlug ? repoPath : null,
-    open && !reviewSlug ? item.repoId : null
+    open && !reviewSlug ? item.repoId : null,
+    sourceSettings
   )
   const reviewerMetadata = reviewSlug ? reviewerMetadataBySlug : reviewerMetadataByPath
   const displayItem = { ...item, reviewRequests: localReviewRequests }
@@ -636,7 +650,8 @@ function PRReviewersPanel({
     localReviewRequests.length > 0 ||
     item.reviewRequests !== undefined ||
     item.latestReviews !== undefined
-  const canRequestReview = !!repoPath || getActiveRuntimeTarget(settings).kind === 'environment'
+  const canRequestReview =
+    !!repoPath || getActiveRuntimeTarget(sourceSettings).kind === 'environment'
 
   const measureReviewerPickerPlacement = useCallback(() => {
     const rect = reviewerInputRef.current?.getBoundingClientRect()
@@ -679,7 +694,7 @@ function PRReviewersPanel({
       )
       return
     }
-    const target = getActiveRuntimeTarget(settings)
+    const target = getActiveRuntimeTarget(sourceSettings)
     if (target.kind !== 'environment' && !repoPath) {
       toast.error(
         translate(
@@ -702,6 +717,7 @@ function PRReviewersPanel({
           : await window.api.gh.requestPRReviewers({
               repoPath: repoPath ?? '',
               repoId: item.repoId,
+              sourceContext,
               prNumber: item.number,
               reviewers: logins
             })
@@ -721,7 +737,9 @@ function PRReviewersPanel({
         localReviewRequests
       )
       setLocalReviewRequests(nextReviewRequests)
-      patchWorkItem(item.id, { reviewRequests: nextReviewRequests }, item.repoId)
+      patchWorkItem(item.id, { reviewRequests: nextReviewRequests }, item.repoId, {
+        sourceContext
+      })
       onReviewersRequested(nextReviewRequests)
       setReviewerInput('')
       useAppStore.getState().recordFeatureInteraction('github-tasks')
@@ -754,7 +772,7 @@ function PRReviewersPanel({
     if (logins.length === 0) {
       return
     }
-    const target = getActiveRuntimeTarget(settings)
+    const target = getActiveRuntimeTarget(sourceSettings)
     if (target.kind !== 'environment' && !repoPath) {
       toast.error(
         translate(
@@ -777,6 +795,7 @@ function PRReviewersPanel({
           : await window.api.gh.removePRReviewers({
               repoPath: repoPath ?? '',
               repoId: item.repoId,
+              sourceContext,
               prNumber: item.number,
               reviewers: logins
             })
@@ -795,7 +814,9 @@ function PRReviewersPanel({
         (reviewer) => !removed.has(reviewer.login.toLowerCase())
       )
       setLocalReviewRequests(nextReviewRequests)
-      patchWorkItem(item.id, { reviewRequests: nextReviewRequests }, item.repoId)
+      patchWorkItem(item.id, { reviewRequests: nextReviewRequests }, item.repoId, {
+        sourceContext
+      })
       onReviewersRequested(nextReviewRequests)
       setReviewerInput('')
       useAppStore.getState().recordFeatureInteraction('github-tasks')
@@ -1410,6 +1431,7 @@ function getPRFileContentCacheKey(args: {
 function loadPRFileContents(args: {
   repoPath: string
   repoId: string
+  sourceContext?: TaskSourceContext | null
   prNumber: number
   file: GitHubPRFile
   headSha: string
@@ -1425,6 +1447,7 @@ function loadPRFileContents(args: {
     .prFileContents({
       repoPath: args.repoPath,
       repoId: args.repoId,
+      sourceContext: args.sourceContext,
       prNumber: args.prNumber,
       path: args.file.path,
       oldPath: args.file.oldPath,
@@ -1447,6 +1470,7 @@ function loadPRFileContents(args: {
 function addIssueCommentForRepo(args: {
   repoId?: string
   repoPath: string
+  sourceContext?: TaskSourceContext | null
   number: number
   body: string
   type?: 'issue' | 'pr'
@@ -1454,6 +1478,7 @@ function addIssueCommentForRepo(args: {
   return window.api.gh.addIssueComment({
     repoPath: args.repoPath,
     repoId: args.repoId,
+    sourceContext: args.sourceContext,
     number: args.number,
     body: args.body,
     type: args.type
@@ -1463,6 +1488,7 @@ function addIssueCommentForRepo(args: {
 function addPRReviewCommentForRepo(args: {
   repoId?: string
   repoPath: string
+  sourceContext?: TaskSourceContext | null
   prNumber: number
   commitId: string
   path: string
@@ -1473,6 +1499,7 @@ function addPRReviewCommentForRepo(args: {
   return window.api.gh.addPRReviewComment({
     repoPath: args.repoPath,
     repoId: args.repoId,
+    sourceContext: args.sourceContext,
     prNumber: args.prNumber,
     commitId: args.commitId,
     path: args.path,
@@ -1485,6 +1512,7 @@ function addPRReviewCommentForRepo(args: {
 function addPRReviewCommentReplyForRepo(args: {
   repoId?: string
   repoPath: string
+  sourceContext?: TaskSourceContext | null
   prNumber: number
   commentId: number
   body: string
@@ -1495,6 +1523,7 @@ function addPRReviewCommentReplyForRepo(args: {
   return window.api.gh.addPRReviewCommentReply({
     repoPath: args.repoPath,
     repoId: args.repoId,
+    sourceContext: args.sourceContext,
     prNumber: args.prNumber,
     commentId: args.commentId,
     body: args.body,
@@ -1507,6 +1536,7 @@ function addPRReviewCommentReplyForRepo(args: {
 function setPRFileViewedForRepo(args: {
   repoId?: string
   repoPath: string
+  sourceContext?: TaskSourceContext | null
   prNumber: number
   pullRequestId: string
   path: string
@@ -1515,6 +1545,7 @@ function setPRFileViewedForRepo(args: {
   return window.api.gh.setPRFileViewed({
     repoPath: args.repoPath,
     repoId: args.repoId,
+    sourceContext: args.sourceContext,
     prNumber: args.prNumber,
     pullRequestId: args.pullRequestId,
     path: args.path,
@@ -1525,12 +1556,14 @@ function setPRFileViewedForRepo(args: {
 function getWorkItemDetailsForRepo(args: {
   repoId?: string
   repoPath: string
+  sourceContext?: TaskSourceContext | null
   number: number
   type: 'issue' | 'pr'
 }): Promise<GitHubWorkItemDetails | null> {
   return window.api.gh.workItemDetails({
     repoPath: args.repoPath,
     repoId: args.repoId,
+    sourceContext: args.sourceContext,
     number: args.number,
     type: args.type
   })
@@ -1663,6 +1696,7 @@ type PRFilesCombinedDiffViewerProps = {
   comments: PRComment[]
   repoPath: string
   repoId: string
+  sourceContext?: TaskSourceContext | null
   prNumber: number
   prUrl: string
   headSha: string | undefined
@@ -1677,6 +1711,7 @@ function PRFilesCombinedDiffViewer({
   comments,
   repoPath,
   repoId,
+  sourceContext,
   prNumber,
   prUrl,
   headSha,
@@ -1843,6 +1878,7 @@ function PRFilesCombinedDiffViewer({
         const contents = await loadPRFileContents({
           repoPath,
           repoId,
+          sourceContext,
           prNumber,
           file,
           headSha,
@@ -1884,7 +1920,7 @@ function PRFilesCombinedDiffViewer({
           )
         })
     },
-    [baseSha, fileByPath, headSha, prNumber, repoId, repoPath]
+    [baseSha, fileByPath, headSha, prNumber, repoId, repoPath, sourceContext]
   )
 
   const retrySection = useCallback(
@@ -2023,6 +2059,7 @@ function PRFilesCombinedDiffViewer({
       const result = await addPRReviewCommentForRepo({
         repoPath,
         repoId,
+        sourceContext,
         prNumber,
         commitId: headSha,
         path: section.path,
@@ -2046,7 +2083,7 @@ function PRFilesCombinedDiffViewer({
       )
       return true
     },
-    [headSha, onCommentAdded, prNumber, repoId, repoPath]
+    [headSha, onCommentAdded, prNumber, repoId, repoPath, sourceContext]
   )
 
   const renderViewedCheckbox = useCallback(
@@ -2192,6 +2229,7 @@ function CommentCodeContext({
   comment,
   repoPath,
   repoId,
+  sourceContext,
   prNumber,
   files,
   headSha,
@@ -2200,6 +2238,7 @@ function CommentCodeContext({
   comment: PRComment
   repoPath: string | null
   repoId: string
+  sourceContext?: TaskSourceContext | null
   prNumber: number
   files: GitHubPRFile[]
   headSha: string | undefined
@@ -2224,7 +2263,7 @@ function CommentCodeContext({
       return
     }
     let cancelled = false
-    loadPRFileContents({ repoPath, repoId, prNumber, file, headSha, baseSha })
+    loadPRFileContents({ repoPath, repoId, sourceContext, prNumber, file, headSha, baseSha })
       .then((result) => {
         if (!cancelled) {
           setContents(result)
@@ -2238,7 +2277,7 @@ function CommentCodeContext({
     return () => {
       cancelled = true
     }
-  }, [baseSha, file, headSha, line, prNumber, repoId, repoPath])
+  }, [baseSha, file, headSha, line, prNumber, repoId, repoPath, sourceContext])
 
   const resolvedContextExpansionState = resolveCommentCodeContextExpansionState(
     contextExpansionState,
@@ -2492,6 +2531,7 @@ function CommentCodeContext({
 function ConversationTab({
   item,
   repoPath,
+  sourceContext,
   body,
   comments,
   files,
@@ -2512,6 +2552,7 @@ function ConversationTab({
   item: GitHubWorkItem
   repoPath: string | null
   repoId: string | null
+  sourceContext?: TaskSourceContext | null
   body: string
   comments: PRComment[]
   files: GitHubPRFile[]
@@ -2575,6 +2616,7 @@ function ConversationTab({
       await runWorkItemBodyUpdate({
         item,
         repoPath,
+        sourceContext,
         projectOrigin,
         body: resolvedBodyDraft,
         parsedSlug: bodySlug
@@ -2605,7 +2647,8 @@ function ConversationTab({
     item,
     onBodyUpdated,
     projectOrigin,
-    repoPath
+    repoPath,
+    sourceContext
   ])
 
   const handleReply = useCallback(
@@ -2624,6 +2667,7 @@ function ConversationTab({
           ? await addPRReviewCommentReplyForRepo({
               repoPath,
               repoId: item.repoId,
+              sourceContext,
               prNumber: item.number,
               commentId: comment.id,
               body: replyBody,
@@ -2634,6 +2678,7 @@ function ConversationTab({
           : await addIssueCommentForRepo({
               repoPath,
               repoId: item.repoId,
+              sourceContext,
               number: item.number,
               body: `@${comment.author} ${replyBody}`,
               type: item.type
@@ -2651,7 +2696,7 @@ function ConversationTab({
       toast.success(translate('auto.components.GitHubItemDialog.10f4ff5be8', 'Reply posted.'))
       return true
     },
-    [item.number, item.repoId, item.type, onCommentAdded, repoPath]
+    [item.number, item.repoId, item.type, onCommentAdded, repoPath, sourceContext]
   )
 
   const rightPanel =
@@ -2661,6 +2706,7 @@ function ConversationTab({
           item={item}
           repoPath={repoPath}
           repoId={item.repoId}
+          sourceContext={sourceContext}
           projectOrigin={projectOrigin}
           localState={localState}
           onStateChange={onStateChange}
@@ -2670,6 +2716,7 @@ function ConversationTab({
           item={item}
           loading={loading}
           repoPath={repoPath}
+          sourceContext={sourceContext}
           onReviewersRequested={onReviewersRequested}
         />
         <aside className="overflow-hidden rounded-lg border border-border/50 bg-card/50 shadow-xs">
@@ -2677,6 +2724,7 @@ function ConversationTab({
             item={item}
             repoPath={repoPath}
             repoId={item.repoId}
+            sourceContext={sourceContext}
             headSha={headSha}
             checks={checks}
             loading={loading || !detailsLoaded}
@@ -2690,12 +2738,12 @@ function ConversationTab({
     <div
       key={comment.id}
       className={cn(
-        'min-w-0 overflow-hidden rounded-md border border-border/60 bg-card shadow-xs',
-        isReply && 'ml-8 max-w-[calc(100%-2rem)] border-l-2 border-l-border/80',
+        'min-w-0 overflow-hidden rounded-lg border border-border/40 bg-card/50 shadow-xs',
+        isReply && 'ml-6 max-w-[calc(100%-1.5rem)]',
         comment.isResolved && PR_COMMENT_RESOLVED_CONTAINER_CLASS
       )}
     >
-      <div className="flex min-w-0 items-center gap-2 border-b border-border/50 bg-muted/20 px-3 py-2">
+      <div className="flex min-w-0 items-center gap-2 border-b border-border/40 px-3 py-2">
         {comment.authorAvatarUrl ? (
           <img
             src={comment.authorAvatarUrl}
@@ -2782,6 +2830,7 @@ function ConversationTab({
           comment={comment}
           repoPath={repoPath}
           repoId={item.repoId}
+          sourceContext={sourceContext}
           prNumber={item.number}
           files={files}
           headSha={headSha}
@@ -2973,9 +3022,9 @@ function ConversationTab({
 
         {detailsLoaded ? (
           <>
-            <div className="flex items-center gap-2 border-b border-border/40 pb-2 pt-1">
+            <div className="flex items-center gap-2 pt-1">
               <MessageSquare className="size-4 text-muted-foreground" />
-              <span className="text-[13px] font-semibold text-foreground">
+              <span className="text-[13px] font-medium text-foreground">
                 {translate('auto.components.GitHubItemDialog.1506916c09', 'Comments')}
               </span>
               {comments.length > 0 && (
@@ -3009,13 +3058,13 @@ function ConversationTab({
             )}
 
             {comments.length === 0 ? (
-              <p className="px-1 py-2 text-[13px] text-muted-foreground">
+              <div className="rounded-lg border border-dashed border-border/50 px-3 py-6 text-left text-[13px] text-muted-foreground">
                 {translate('auto.components.GitHubItemDialog.5a94f3d0e9', 'No comments yet.')}
-              </p>
+              </div>
             ) : visibleComments.length === 0 ? (
-              <p className="px-1 py-2 text-center text-[13px] text-muted-foreground">
+              <div className="rounded-lg border border-dashed border-border/50 px-3 py-6 text-center text-[13px] text-muted-foreground">
                 {getPRCommentAudienceEmptyLabel(commentFilter)}
-              </p>
+              </div>
             ) : (
               <div className="flex min-w-0 flex-col gap-3">
                 {visibleCommentGroups.map(renderCommentGroup)}
@@ -3025,19 +3074,14 @@ function ConversationTab({
         ) : null}
 
         {detailsLoaded && repoPath && (
-          <GitHubIssueCommentComposer
-            className="mt-2"
+          <GHCommentComposer
+            className="mt-1"
             repoPath={repoPath}
             repoId={item.repoId}
+            sourceContext={sourceContext}
             issueNumber={item.number}
             itemType={item.type}
-            itemState={localState}
-            itemId={item.id}
-            projectOrigin={projectOrigin}
-            previewGithubRepo={markdownGitHubRepo}
             onCommentAdded={onCommentAdded}
-            onStateChange={onStateChange}
-            onMutated={onMutated}
           />
         )}
       </div>
@@ -3051,6 +3095,7 @@ function PRActionsPanel({
   item,
   repoPath,
   repoId,
+  sourceContext,
   projectOrigin,
   localState,
   onStateChange,
@@ -3059,6 +3104,7 @@ function PRActionsPanel({
   item: GitHubWorkItem
   repoPath: string | null
   repoId: string | null
+  sourceContext?: TaskSourceContext | null
   projectOrigin: GitHubItemDialogProjectOrigin | undefined
   localState: GitHubWorkItem['state']
   onStateChange: (state: GitHubWorkItem['state']) => void
@@ -3089,10 +3135,10 @@ function PRActionsPanel({
   const applyStatePatch = useCallback(
     (state: GitHubWorkItem['state']) => {
       onStateChange(state)
-      patchWorkItem(item.id, { state }, item.repoId)
+      patchWorkItem(item.id, { state }, item.repoId, { sourceContext })
       patchProjectRowIfNeeded(state)
     },
-    [item.id, item.repoId, onStateChange, patchProjectRowIfNeeded, patchWorkItem]
+    [item.id, item.repoId, onStateChange, patchProjectRowIfNeeded, patchWorkItem, sourceContext]
   )
 
   const handleStateChange = async (): Promise<void> => {
@@ -3129,6 +3175,7 @@ function PRActionsPanel({
       await runPullRequestStateUpdate({
         repoPath,
         repoId,
+        sourceContext,
         projectOrigin,
         number: item.number,
         updates: { state: nextState }
@@ -3179,6 +3226,7 @@ function PRActionsPanel({
       const result = await window.api.gh.mergePR({
         repoPath,
         repoId: repoId ?? undefined,
+        sourceContext,
         prNumber: item.number,
         method,
         prRepo: item.prRepo ?? null
@@ -3210,6 +3258,7 @@ function PRActionsPanel({
       const result = await window.api.gh.setPRAutoMerge({
         repoPath,
         repoId: repoId ?? undefined,
+        sourceContext,
         prNumber: item.number,
         enabled,
         prRepo: item.prRepo ?? null
@@ -3248,7 +3297,7 @@ function PRActionsPanel({
         <WorkItemStateBadge item={actionItem} />
       </div>
 
-      <div className="grid gap-2 justify-items-start">
+      <div className="grid gap-2">
         <DropdownMenu modal={false}>
           <Tooltip>
             <TooltipTrigger asChild>
@@ -3257,8 +3306,7 @@ function PRActionsPanel({
                   type="button"
                   size="sm"
                   className={cn(
-                    REVIEW_ACTION_MERGE_BUTTON_CLASS,
-                    'gap-2 bg-green-600 text-white hover:bg-green-700',
+                    'w-full justify-center gap-2 bg-green-600 text-white hover:bg-green-700',
                     'disabled:cursor-not-allowed disabled:opacity-50'
                   )}
                 >
@@ -3267,13 +3315,11 @@ function PRActionsPanel({
                   ) : (
                     <GitMerge className="size-3.5" />
                   )}
-                  <span className={RIGHT_SIDEBAR_PRIMARY_BUTTON_LABEL_CLASS}>
-                    {mergePresentation.autoMergeAction?.label ??
-                      (mergePresentation.directMergeAvailable
-                        ? mergeMethods.defaultLabel
-                        : mergePresentation.label)}
-                  </span>
-                  <ChevronDown className="size-3 shrink-0 opacity-60" />
+                  {mergePresentation.autoMergeAction?.label ??
+                    (mergePresentation.directMergeAvailable
+                      ? mergeMethods.defaultLabel
+                      : mergePresentation.label)}
+                  <ChevronDown className="size-3 opacity-60" />
                 </Button>
               </DropdownMenuTrigger>
             </TooltipTrigger>
@@ -3319,8 +3365,7 @@ function PRActionsPanel({
           variant={nextState === 'closed' ? 'outline' : 'secondary'}
           size="sm"
           className={cn(
-            REVIEW_ACTION_STATE_BUTTON_CLASS,
-            'gap-2',
+            'w-full justify-center gap-2',
             nextState === 'closed' &&
               'border-border bg-background text-foreground hover:bg-accent hover:text-accent-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50'
           )}
@@ -3334,11 +3379,9 @@ function PRActionsPanel({
           ) : (
             <CircleDot className="size-3.5" />
           )}
-          <span className={RIGHT_SIDEBAR_PRIMARY_BUTTON_LABEL_CLASS}>
-            {nextState === 'closed'
-              ? translate('auto.components.GitHubItemDialog.21860b58d0', 'Close pull request')
-              : translate('auto.components.GitHubItemDialog.ec5c4b3ab2', 'Reopen PR')}
-          </span>
+          {nextState === 'closed'
+            ? translate('auto.components.GitHubItemDialog.21860b58d0', 'Close pull request')
+            : translate('auto.components.GitHubItemDialog.ec5c4b3ab2', 'Reopen PR')}
         </Button>
       </div>
     </aside>
@@ -3551,6 +3594,7 @@ function ChecksTab({
   item,
   repoPath,
   repoId,
+  sourceContext,
   headSha,
   checks,
   loading,
@@ -3560,6 +3604,7 @@ function ChecksTab({
   item: GitHubWorkItem
   repoPath: string | null
   repoId: string | null
+  sourceContext?: TaskSourceContext | null
   headSha: string | undefined
   checks: GitHubWorkItemDetails['checks']
   loading: boolean
@@ -3621,6 +3666,7 @@ function ChecksTab({
       const nextChecks = (await window.api.gh.prChecks({
         repoPath,
         repoId: repoId ?? undefined,
+        sourceContext,
         prNumber: item.number,
         headSha,
         noCache: true
@@ -3638,7 +3684,7 @@ function ChecksTab({
     } finally {
       setRefreshing(false)
     }
-  }, [headSha, item.number, onChecksUpdated, repoId, repoPath])
+  }, [headSha, item.number, onChecksUpdated, repoId, repoPath, sourceContext])
 
   const handleRerun = useCallback(
     async (failedOnly: boolean): Promise<void> => {
@@ -3650,6 +3696,7 @@ function ChecksTab({
         const result = await window.api.gh.rerunPRChecks({
           repoPath,
           repoId: repoId ?? undefined,
+          sourceContext,
           prNumber: item.number,
           headSha,
           failedOnly
@@ -3674,7 +3721,7 @@ function ChecksTab({
         setRerunning(false)
       }
     },
-    [handleRefresh, headSha, item.number, rerunning, repoId, repoPath]
+    [handleRefresh, headSha, item.number, rerunning, repoId, repoPath, sourceContext]
   )
 
   const handleFixBrokenChecks = useCallback(async (): Promise<void> => {
@@ -4288,15 +4335,23 @@ function ChecksTab({
 // repo. The edit IPCs return a structured `{ ok, error }` shape; we adapt
 // to a thrown rejection so the existing `useImmediateMutation` flow
 // (which expects throws on failure) continues to work unchanged.
+function getGitHubMutationSettings(repoId: string | null | undefined) {
+  const state = useAppStore.getState()
+  // Why: project-origin mutations are slug-addressed, but when we know the
+  // backing repo id they must still execute on that repo's owner host.
+  return getSettingsForRepoRuntimeOwner(state, repoId ?? null)
+}
+
 async function runIssueUpdate(args: {
   repoPath: string | null
   repoId?: string | null
+  sourceContext?: TaskSourceContext | null
   projectOrigin: GitHubItemDialogProjectOrigin | undefined
   number: number
   updates: Parameters<typeof window.api.gh.updateIssue>[0]['updates']
 }): Promise<void> {
   if (args.projectOrigin) {
-    const target = getActiveRuntimeTarget(useAppStore.getState().settings)
+    const target = getActiveRuntimeTarget(getGitHubMutationSettings(args.repoId))
     const updateArgs = {
       owner: args.projectOrigin.owner,
       repo: args.projectOrigin.repo,
@@ -4323,6 +4378,7 @@ async function runIssueUpdate(args: {
   const res = await window.api.gh.updateIssue({
     repoPath: args.repoPath,
     repoId: args.repoId ?? undefined,
+    sourceContext: args.sourceContext,
     number: args.number,
     updates: args.updates
   })
@@ -4334,6 +4390,7 @@ async function runIssueUpdate(args: {
 async function runWorkItemBodyUpdate(args: {
   item: GitHubWorkItem
   repoPath: string | null
+  sourceContext?: TaskSourceContext | null
   projectOrigin: GitHubItemDialogProjectOrigin | undefined
   body: string
   parsedSlug: GitHubOwnerRepo | null
@@ -4345,7 +4402,7 @@ async function runWorkItemBodyUpdate(args: {
     if (!targetSlug) {
       throw new Error('No GitHub repository context available for this pull request.')
     }
-    const target = getActiveRuntimeTarget(useAppStore.getState().settings)
+    const target = getActiveRuntimeTarget(getGitHubMutationSettings(args.item.repoId))
     const updateArgs = {
       owner: targetSlug.owner,
       repo: targetSlug.repo,
@@ -4370,6 +4427,7 @@ async function runWorkItemBodyUpdate(args: {
   await runIssueUpdate({
     repoPath: args.repoPath,
     repoId: args.item.repoId,
+    sourceContext: args.sourceContext,
     projectOrigin: args.projectOrigin,
     number: args.item.number,
     updates: { body: args.body }
@@ -4379,12 +4437,13 @@ async function runWorkItemBodyUpdate(args: {
 async function runPullRequestStateUpdate(args: {
   repoPath: string | null
   repoId?: string | null
+  sourceContext?: TaskSourceContext | null
   projectOrigin: GitHubItemDialogProjectOrigin | undefined
   number: number
   updates: { state: 'open' | 'closed' }
 }): Promise<void> {
   if (args.projectOrigin) {
-    const target = getActiveRuntimeTarget(useAppStore.getState().settings)
+    const target = getActiveRuntimeTarget(getGitHubMutationSettings(args.repoId))
     const updateArgs = {
       owner: args.projectOrigin.owner,
       repo: args.projectOrigin.repo,
@@ -4411,6 +4470,7 @@ async function runPullRequestStateUpdate(args: {
   const res = await window.api.gh.updatePRState({
     repoPath: args.repoPath,
     repoId: args.repoId ?? undefined,
+    sourceContext: args.sourceContext,
     prNumber: args.number,
     updates: args.updates
   })
@@ -4419,10 +4479,44 @@ async function runPullRequestStateUpdate(args: {
   }
 }
 
+function GitHubLabelsSettingsLink({
+  url,
+  separated,
+  onOpen
+}: {
+  url: string | null
+  separated?: boolean
+  onOpen?: () => void
+}): React.JSX.Element | null {
+  if (!url) {
+    return null
+  }
+
+  return (
+    <div className={cn(separated && 'mt-1 border-t border-border/60 pt-1')}>
+      <button
+        type="button"
+        onClick={() => {
+          onOpen?.()
+          void window.api.shell.openUrl(url)
+        }}
+        className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-[12px] text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+      >
+        <Settings className="size-3.5 shrink-0" />
+        <span className="min-w-0 flex-1 text-left">
+          {translate('auto.components.GitHubItemDialog.2aa9acdf34', 'Edit labels on GitHub')}
+        </span>
+        <ExternalLink className="size-3 shrink-0 opacity-70" />
+      </button>
+    </div>
+  )
+}
+
 function GHEditSection({
   item,
   repoPath,
   repoId,
+  sourceContext,
   projectOrigin,
   localState,
   localLabels,
@@ -4438,6 +4532,7 @@ function GHEditSection({
   item: GitHubWorkItem
   repoPath: string | null
   repoId: string | null
+  sourceContext?: TaskSourceContext | null
   projectOrigin: GitHubItemDialogProjectOrigin | undefined
   localState: GitHubWorkItem['state']
   localLabels: string[]
@@ -4463,6 +4558,19 @@ function GHEditSection({
   const assigneesItemKey = `${item.repoId}\0${item.id}`
   const patchWorkItem = useAppStore((s) => s.patchWorkItem)
   const patchProjectRowContent = useAppStore((s) => s.patchProjectRowContent)
+  const repoOwnerSettings = useAppStore(
+    useShallow((s) => getSettingsForRepoRuntimeOwner(s, item.repoId ?? null))
+  )
+  const sourceSettings = useMemo(
+    () =>
+      sourceContext?.provider === 'github'
+        ? ({
+            ...repoOwnerSettings,
+            ...getTaskSourceRuntimeSettings(sourceContext)
+          } as typeof repoOwnerSettings)
+        : repoOwnerSettings,
+    [repoOwnerSettings, sourceContext]
+  )
   const { isPending, run } = useImmediateMutation()
   // Why: when the dialog opens from a Project view, mutations route through
   // *BySlug IPCs and we must keep `projectViewCache` in sync alongside
@@ -4486,16 +4594,18 @@ function GHEditSection({
   const slugRepo = projectOrigin?.repo ?? null
   const repoLabelsByPath = useRepoLabels(
     projectOrigin ? null : repoPath,
-    projectOrigin ? null : repoId
+    projectOrigin ? null : repoId,
+    sourceSettings
   )
-  const repoLabelsBySlug = useRepoLabelsBySlug(slugOwner, slugRepo)
+  const repoLabelsBySlug = useRepoLabelsBySlug(slugOwner, slugRepo, sourceSettings)
   const repoLabels = projectOrigin ? repoLabelsBySlug : repoLabelsByPath
   const repositoryLabelsUrl = useMemo(() => getGitHubRepositoryLabelsUrl(item.url), [item.url])
   const repoAssigneesByPath = useRepoAssignees(
     projectOrigin ? null : repoPath,
-    projectOrigin ? null : repoId
+    projectOrigin ? null : repoId,
+    sourceSettings
   )
-  const repoAssigneesBySlug = useRepoAssigneesBySlug(slugOwner, slugRepo, assignees)
+  const repoAssigneesBySlug = useRepoAssigneesBySlug(slugOwner, slugRepo, assignees, sourceSettings)
   const repoAssignees = projectOrigin ? repoAssigneesBySlug : repoAssigneesByPath
   const hasAttachedWorkspace =
     attachedWorkspaceLabel !== null && attachedWorkspaceLabel !== undefined
@@ -4528,23 +4638,24 @@ function GHEditSection({
           runIssueUpdate({
             repoId: item.repoId,
             repoPath,
+            sourceContext,
             projectOrigin,
             number: item.number,
             updates: { state: newState }
           }),
         onOptimistic: () => {
           onStateChange(newState)
-          patchWorkItem(item.id, { state: newState }, item.repoId)
+          patchWorkItem(item.id, { state: newState }, item.repoId, { sourceContext })
           patchProjectRowIfNeeded({ state: newState })
         },
         onRevert: () => {
           onStateChange(prevState)
-          patchWorkItem(item.id, { state: prevState }, item.repoId)
+          patchWorkItem(item.id, { state: prevState }, item.repoId, { sourceContext })
           patchProjectRowIfNeeded({ state: prevState })
         },
         onSuccess: () => {
           useAppStore.getState().recordFeatureInteraction('github-tasks')
-          patchWorkItem(item.id, { state: newState }, item.repoId)
+          patchWorkItem(item.id, { state: newState }, item.repoId, { sourceContext })
           patchProjectRowIfNeeded({ state: newState })
           onMutated()
         },
@@ -4557,6 +4668,7 @@ function GHEditSection({
       item.repoId,
       localState,
       repoPath,
+      sourceContext,
       projectOrigin,
       patchWorkItem,
       patchProjectRowIfNeeded,
@@ -4578,13 +4690,14 @@ function GHEditSection({
             runIssueUpdate({
               repoId: item.repoId,
               repoPath,
+              sourceContext,
               projectOrigin,
               number: item.number,
               updates: { addLabels: [label] }
             }),
           onOptimistic: () => {
             onLabelsChange(newLabels)
-            patchWorkItem(item.id, { labels: newLabels }, item.repoId)
+            patchWorkItem(item.id, { labels: newLabels }, item.repoId, { sourceContext })
             patchProjectRowIfNeeded({ labels: newLabels })
           },
           onSuccess: () => {
@@ -4593,7 +4706,7 @@ function GHEditSection({
           },
           onRevert: () => {
             onLabelsChange(prevLabels)
-            patchWorkItem(item.id, { labels: prevLabels }, item.repoId)
+            patchWorkItem(item.id, { labels: prevLabels }, item.repoId, { sourceContext })
             patchProjectRowIfNeeded({ labels: prevLabels })
           },
           onError: (err) => toast.error(err)
@@ -4604,18 +4717,19 @@ function GHEditSection({
             runIssueUpdate({
               repoId: item.repoId,
               repoPath,
+              sourceContext,
               projectOrigin,
               number: item.number,
               updates: { removeLabels: [label] }
             }),
           onOptimistic: () => {
             onLabelsChange(newLabels)
-            patchWorkItem(item.id, { labels: newLabels }, item.repoId)
+            patchWorkItem(item.id, { labels: newLabels }, item.repoId, { sourceContext })
             patchProjectRowIfNeeded({ labels: newLabels })
           },
           onRevert: () => {
             onLabelsChange(prevLabels)
-            patchWorkItem(item.id, { labels: prevLabels }, item.repoId)
+            patchWorkItem(item.id, { labels: prevLabels }, item.repoId, { sourceContext })
             patchProjectRowIfNeeded({ labels: prevLabels })
           },
           onSuccess: () => {
@@ -4632,6 +4746,7 @@ function GHEditSection({
       item.repoId,
       localLabels,
       repoPath,
+      sourceContext,
       projectOrigin,
       patchWorkItem,
       patchProjectRowIfNeeded,
@@ -4658,6 +4773,7 @@ function GHEditSection({
             runIssueUpdate({
               repoId: item.repoId,
               repoPath,
+              sourceContext,
               projectOrigin,
               number: item.number,
               updates: { removeAssignees: [login] }
@@ -4682,6 +4798,7 @@ function GHEditSection({
             runIssueUpdate({
               repoId: item.repoId,
               repoPath,
+              sourceContext,
               projectOrigin,
               number: item.number,
               updates: { addAssignees: [login] }
@@ -4707,6 +4824,7 @@ function GHEditSection({
       item.repoId,
       assigneesItemKey,
       repoPath,
+      sourceContext,
       projectOrigin,
       localAssignees,
       patchProjectRowIfNeeded,
@@ -4718,6 +4836,18 @@ function GHEditSection({
   if (item.type === 'pr') {
     return null
   }
+
+  const checkIcon = (
+    <svg className="size-2.5" viewBox="0 0 12 12" fill="none">
+      <path
+        d="M2 6l3 3 5-5"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
 
   if (layout === 'sidebar') {
     return (
@@ -4800,14 +4930,41 @@ function GHEditSection({
                 className="popover-scroll-content scrollbar-sleek w-60 p-1"
                 align="end"
               >
-                <GitHubWorkItemAssigneePopoverContent
-                  open={assigneePopoverOpen}
-                  assignees={repoAssignees.data}
-                  selectedLogins={localAssignees}
-                  error={repoAssignees.error}
-                  loading={repoAssignees.loading}
-                  onToggleAssignee={handleAssigneeToggle}
-                />
+                {repoAssignees.error ? (
+                  <div className="px-2 py-3 text-center text-[12px] text-destructive">
+                    {repoAssignees.error}
+                  </div>
+                ) : (
+                  <div>
+                    {repoAssignees.data.map((user) => (
+                      <button
+                        key={user.login}
+                        type="button"
+                        onClick={() => handleAssigneeToggle(user.login)}
+                        className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-[12px] hover:bg-accent"
+                      >
+                        <span
+                          className={cn(
+                            'flex size-3.5 items-center justify-center rounded-sm border',
+                            localAssignees.includes(user.login)
+                              ? 'border-primary bg-primary text-primary-foreground'
+                              : 'border-input'
+                          )}
+                        >
+                          {localAssignees.includes(user.login) && checkIcon}
+                        </span>
+                        <span className="min-w-0 flex-1 text-left">
+                          <span className="block truncate">{user.login}</span>
+                          {user.name && (
+                            <span className="block truncate text-[11px] text-muted-foreground">
+                              {user.name}
+                            </span>
+                          )}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </PopoverContent>
             </Popover>
           </div>
@@ -4866,15 +5023,39 @@ function GHEditSection({
                 className="popover-scroll-content scrollbar-sleek w-60 p-1"
                 align="end"
               >
-                <GitHubWorkItemLabelPopoverContent
-                  open={labelPopoverOpen}
-                  labels={repoLabels.data}
-                  selectedLabels={localLabels}
-                  error={repoLabels.error}
-                  loading={repoLabels.loading}
-                  repositoryLabelsUrl={repositoryLabelsUrl}
-                  onToggleLabel={handleLabelToggle}
-                  onOpenSettingsLink={() => setLabelPopoverOpen(false)}
+                {repoLabels.error ? (
+                  <div className="px-2 py-3 text-center text-[12px] text-destructive">
+                    {repoLabels.error}
+                  </div>
+                ) : null}
+                {!repoLabels.error ? (
+                  <div>
+                    {repoLabels.data.map((label) => (
+                      <button
+                        key={label}
+                        type="button"
+                        onClick={() => handleLabelToggle(label)}
+                        className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-[12px] hover:bg-accent"
+                      >
+                        <span
+                          className={cn(
+                            'flex size-3.5 items-center justify-center rounded-sm border',
+                            localLabels.includes(label)
+                              ? 'border-primary bg-primary text-primary-foreground'
+                              : 'border-input'
+                          )}
+                        >
+                          {localLabels.includes(label) && checkIcon}
+                        </span>
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+                <GitHubLabelsSettingsLink
+                  url={repositoryLabelsUrl}
+                  separated={!repoLabels.error && repoLabels.data.length > 0}
+                  onOpen={() => setLabelPopoverOpen(false)}
                 />
               </PopoverContent>
             </Popover>
@@ -4909,12 +5090,12 @@ function GHEditSection({
           ) : null}
           {hasAttachedWorkspace ? (
             <DropdownMenu modal={false}>
-              <ButtonGroup className="inline-flex w-auto max-w-full">
+              <ButtonGroup className="w-full">
                 <Button
                   type="button"
                   size="sm"
                   onClick={handleOpenOrUseWorkspace}
-                  className="gap-1.5"
+                  className="flex-1 gap-1.5"
                   aria-label={translate(
                     'auto.components.GitHubItemDialog.84855fedd0',
                     'Open workspace attached to issue'
@@ -5035,15 +5216,39 @@ function GHEditSection({
           </button>
         </PopoverTrigger>
         <PopoverContent className="popover-scroll-content scrollbar-sleek w-52 p-1" align="start">
-          <GitHubWorkItemLabelPopoverContent
-            open={labelPopoverOpen}
-            labels={repoLabels.data}
-            selectedLabels={localLabels}
-            error={repoLabels.error}
-            loading={repoLabels.loading}
-            repositoryLabelsUrl={repositoryLabelsUrl}
-            onToggleLabel={handleLabelToggle}
-            onOpenSettingsLink={() => setLabelPopoverOpen(false)}
+          {repoLabels.error ? (
+            <div className="px-2 py-3 text-center text-[12px] text-destructive">
+              {repoLabels.error}
+            </div>
+          ) : null}
+          {!repoLabels.error ? (
+            <div>
+              {repoLabels.data.map((label) => (
+                <button
+                  key={label}
+                  type="button"
+                  onClick={() => handleLabelToggle(label)}
+                  className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-[12px] hover:bg-accent"
+                >
+                  <span
+                    className={cn(
+                      'flex size-3.5 items-center justify-center rounded-sm border',
+                      localLabels.includes(label)
+                        ? 'border-primary bg-primary text-primary-foreground'
+                        : 'border-input'
+                    )}
+                  >
+                    {localLabels.includes(label) && checkIcon}
+                  </span>
+                  {label}
+                </button>
+              ))}
+            </div>
+          ) : null}
+          <GitHubLabelsSettingsLink
+            url={repositoryLabelsUrl}
+            separated={!repoLabels.error && repoLabels.data.length > 0}
+            onOpen={() => setLabelPopoverOpen(false)}
           />
         </PopoverContent>
       </Popover>
@@ -5075,14 +5280,41 @@ function GHEditSection({
           </button>
         </PopoverTrigger>
         <PopoverContent className="popover-scroll-content scrollbar-sleek w-52 p-1" align="start">
-          <GitHubWorkItemAssigneePopoverContent
-            open={assigneePopoverOpen}
-            assignees={repoAssignees.data}
-            selectedLogins={localAssignees}
-            error={repoAssignees.error}
-            loading={repoAssignees.loading}
-            onToggleAssignee={handleAssigneeToggle}
-          />
+          {repoAssignees.error ? (
+            <div className="px-2 py-3 text-center text-[12px] text-destructive">
+              {repoAssignees.error}
+            </div>
+          ) : (
+            <div>
+              {repoAssignees.data.map((user) => (
+                <button
+                  key={user.login}
+                  type="button"
+                  onClick={() => handleAssigneeToggle(user.login)}
+                  className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-[12px] hover:bg-accent"
+                >
+                  <span
+                    className={cn(
+                      'flex size-3.5 items-center justify-center rounded-sm border',
+                      localAssignees.includes(user.login)
+                        ? 'border-primary bg-primary text-primary-foreground'
+                        : 'border-input'
+                    )}
+                  >
+                    {localAssignees.includes(user.login) && checkIcon}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate">{user.login}</span>
+                    {user.name && (
+                      <span className="block truncate text-[11px] text-muted-foreground">
+                        {user.name}
+                      </span>
+                    )}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
         </PopoverContent>
       </Popover>
 
@@ -5149,6 +5381,99 @@ function GHEditSection({
   )
 }
 
+function GHCommentComposer({
+  className,
+  repoPath,
+  repoId,
+  sourceContext,
+  issueNumber,
+  itemType,
+  onCommentAdded
+}: {
+  className?: string
+  repoPath: string
+  repoId?: string | null
+  sourceContext?: TaskSourceContext | null
+  issueNumber: number
+  itemType: 'issue' | 'pr'
+  onCommentAdded: (comment: PRComment) => void
+}): React.JSX.Element {
+  const [body, setBody] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+  const mountedRef = useMountedRef()
+
+  const handleSubmit = useCallback(async () => {
+    const trimmed = body.trim()
+    if (!trimmed) {
+      return
+    }
+    setSubmitting(true)
+    try {
+      const result = await addIssueCommentForRepo({
+        repoPath,
+        repoId: repoId ?? undefined,
+        sourceContext,
+        number: issueNumber,
+        body: trimmed,
+        type: itemType
+      })
+      if (!mountedRef.current) {
+        return
+      }
+      if (result.ok) {
+        setBody('')
+        // Why: use the comment returned by GitHub so the optimistic row shows
+        // the real login/avatar immediately instead of waiting for a reopen.
+        onCommentAdded(result.comment)
+      } else {
+        toast.error(
+          result.error ??
+            translate('auto.components.GitHubItemDialog.082515176a', 'Failed to add comment')
+        )
+      }
+    } catch (err) {
+      if (mountedRef.current) {
+        toast.error(
+          err instanceof Error
+            ? err.message
+            : translate('auto.components.GitHubItemDialog.082515176a', 'Failed to add comment')
+        )
+      }
+    } finally {
+      if (mountedRef.current) {
+        setSubmitting(false)
+      }
+    }
+  }, [body, mountedRef, repoPath, repoId, sourceContext, issueNumber, itemType, onCommentAdded])
+
+  return (
+    <div className={cn('flex flex-col items-start gap-2', className)}>
+      <GitHubMarkdownComposer
+        value={body}
+        onChange={setBody}
+        placeholder={translate('auto.components.GitHubItemDialog.c5c117270e', 'Add a comment…')}
+        disabled={submitting}
+        minHeightClassName="min-h-28"
+        className="w-full"
+        onSubmitShortcut={() => void handleSubmit()}
+      />
+      <Button
+        onClick={handleSubmit}
+        disabled={!body.trim() || submitting}
+        className="gap-2"
+        aria-label={translate('auto.components.GitHubItemDialog.0a73f59e85', 'Send comment')}
+      >
+        {submitting ? (
+          <LoaderCircle className="size-3.5 animate-spin" />
+        ) : (
+          <Send className="size-3.5" />
+        )}
+        {translate('auto.components.GitHubItemDialog.bf43425540', 'Comment')}
+      </Button>
+    </div>
+  )
+}
+
 // Why: the dialog doesn't carry the resolved PR-source slug the Tasks view's
 // list cache carries, so we reach into workItemsCache to recover it. We scope
 // the lookup to the dialog's own `repoPath` via the public
@@ -5166,10 +5491,12 @@ function GHEditSection({
 // doc §1 rule: hide when either side is unknown rather than guessing.
 function WorkItemIssueSourceIndicator({
   url,
-  repoId
+  repoId,
+  repoPath
 }: {
   url: string
   repoId: string | null
+  repoPath?: string | null
 }): React.JSX.Element | null {
   // Why: subscribe to a single store-side selector that returns the resolved
   // sources for this repo — either the primary `(repoPath, PER_REPO_FETCH_LIMIT, '')`
@@ -5183,7 +5510,7 @@ function WorkItemIssueSourceIndicator({
   // indicator is small and the cache rewrite rate is bounded by user-initiated
   // refresh/search actions.
   const sources = useAppStore((s) =>
-    s.getWorkItemsAnySourcesForRepo(repoId ?? '', PER_REPO_FETCH_LIMIT)
+    s.getWorkItemsAnySourcesForRepo(repoId ?? '', PER_REPO_FETCH_LIMIT, repoPath ?? undefined)
   )
   const issues = useMemo<GitHubOwnerRepo | null>(() => {
     const fromUrl = parseOwnerRepoFromItemUrl(url)
@@ -5215,6 +5542,7 @@ export default function GitHubItemDialog({
   workItem,
   repoPath,
   repoId,
+  sourceContext,
   initialTab,
   variant = 'sheet',
   backLabel = 'Back',
@@ -5451,6 +5779,7 @@ export default function GitHubItemDialog({
       getWorkItemDetailsForRepo({
         repoPath,
         repoId: effectiveRepoId ?? undefined,
+        sourceContext,
         number: workItem.number,
         type: workItem.type
       })
@@ -5511,7 +5840,7 @@ export default function GitHubItemDialog({
           error: message
         })
       })
-  }, [repoPath, effectiveRepoId, workItem, detailsCacheKey, initialTab, refetchTick])
+  }, [repoPath, effectiveRepoId, sourceContext, workItem, detailsCacheKey, initialTab, refetchTick])
 
   const Icon = workItem?.type === 'pr' ? GitPullRequest : CircleDot
   const displayWorkItem = useMemo<GitHubWorkItem | null>(() => {
@@ -5645,6 +5974,7 @@ export default function GitHubItemDialog({
         const ok = await setPRFileViewedForRepo({
           repoId: workItem.repoId,
           repoPath,
+          sourceContext,
           prNumber: workItem.number,
           pullRequestId: details.pullRequestId,
           path,
@@ -5671,20 +6001,13 @@ export default function GitHubItemDialog({
         })
       }
     },
-    [details?.pullRequestId, detailsCacheKey, repoPath, workItem]
+    [details?.pullRequestId, detailsCacheKey, repoPath, sourceContext, workItem]
   )
 
   const isIssuePage = variant === 'page' && workItem?.type === 'issue'
   const ownerRepo = workItem ? parseOwnerRepoFromItemUrl(workItem.url) : null
   const issueStateBadgeTone =
     localState === 'closed' ? 'bg-rose-600 text-white' : 'bg-emerald-600 text-white'
-  const sheetHeaderStyle = useMemo(
-    () =>
-      variant === 'sheet' && IS_WINDOWS
-        ? ({ paddingRight: `calc(1rem + ${WINDOWS_WINDOW_CONTROLS_WIDTH})` } as const)
-        : undefined,
-    [variant]
-  )
 
   const content = workItem ? (
     <div className="flex h-full min-h-0 flex-col">
@@ -5870,7 +6193,11 @@ export default function GitHubItemDialog({
                   {formatRelativeTime(workItem.updatedAt)}
                 </span>
               </span>
-              <WorkItemIssueSourceIndicator url={workItem.url} repoId={effectiveRepoId} />
+              <WorkItemIssueSourceIndicator
+                url={workItem.url}
+                repoId={effectiveRepoId}
+                repoPath={repoPath}
+              />
               {issueAttachedWorkspaceLabel ? (
                 <span className="inline-flex min-w-0 items-center gap-1.5">
                   <FolderKanban className="size-3.5 shrink-0" />
@@ -5881,12 +6208,7 @@ export default function GitHubItemDialog({
           </div>
         </>
       ) : (
-        <div
-          className="flex-none border-b border-border/60 bg-card/80 px-4 py-3 shadow-xs backdrop-blur supports-[backdrop-filter]:bg-card/70"
-          // Why: this sheet portals outside the app root, so it cannot inherit
-          // the Windows titlebar inset variable that keeps header buttons clear.
-          style={sheetHeaderStyle}
-        >
+        <div className="flex-none border-b border-border/60 bg-card/80 px-4 py-3 shadow-xs backdrop-blur supports-[backdrop-filter]:bg-card/70">
           <div className="flex items-start gap-3">
             {variant === 'page' ? (
               <Button
@@ -5939,7 +6261,11 @@ export default function GitHubItemDialog({
                 ) : null}
               </div>
               {workItem.type === 'issue' && (
-                <WorkItemIssueSourceIndicator url={workItem.url} repoId={effectiveRepoId} />
+                <WorkItemIssueSourceIndicator
+                  url={workItem.url}
+                  repoId={effectiveRepoId}
+                  repoPath={repoPath}
+                />
               )}
             </div>
             <div className="flex shrink-0 items-center justify-end gap-1">
@@ -6035,6 +6361,7 @@ export default function GitHubItemDialog({
           item={workItem}
           repoPath={repoPath}
           repoId={effectiveRepoId}
+          sourceContext={sourceContext}
           projectOrigin={projectOrigin}
           localState={localState}
           localLabels={localLabels}
@@ -6073,6 +6400,7 @@ export default function GitHubItemDialog({
                   item={displayWorkItem ?? workItem}
                   repoPath={repoPath}
                   repoId={effectiveRepoId}
+                  sourceContext={sourceContext}
                   body={body}
                   comments={comments}
                   files={files}
@@ -6123,6 +6451,7 @@ export default function GitHubItemDialog({
                       item={workItem}
                       repoPath={repoPath}
                       repoId={effectiveRepoId}
+                      sourceContext={sourceContext}
                       projectOrigin={projectOrigin}
                       localState={localState}
                       localLabels={localLabels}
@@ -6191,6 +6520,7 @@ export default function GitHubItemDialog({
                   item={displayWorkItem ?? workItem}
                   repoPath={repoPath}
                   repoId={effectiveRepoId}
+                  sourceContext={sourceContext}
                   body={body}
                   comments={comments}
                   files={files}
@@ -6242,6 +6572,7 @@ export default function GitHubItemDialog({
                       item={workItem}
                       repoPath={repoPath}
                       repoId={effectiveRepoId}
+                      sourceContext={sourceContext}
                       headSha={details?.headSha}
                       checks={checks}
                       loading={loading || !detailsLoaded}
@@ -6272,6 +6603,7 @@ export default function GitHubItemDialog({
                         comments={comments}
                         repoPath={repoPath ?? ''}
                         repoId={effectiveRepoId ?? ''}
+                        sourceContext={sourceContext}
                         prNumber={workItem.number}
                         prUrl={workItem.url}
                         headSha={details?.headSha}

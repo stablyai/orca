@@ -4,6 +4,8 @@ import {
   MAX_AUTOMATION_PRECHECK_TIMEOUT_SECONDS,
   normalizeAutomationPrecheckTimeoutSeconds
 } from '../../../../shared/automation-precheck'
+import { normalizeExecutionHostId } from '../../../../shared/execution-host'
+import type { TaskProviderIdentity as SharedTaskProviderIdentity } from '../../../../shared/task-source-context'
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import { defineMethod, type RpcMethod } from '../core'
 import {
@@ -20,6 +22,14 @@ const TuiAgent = requiredString('Missing provider').refine(isTuiAgent, {
 })
 
 const AutomationWorkspaceMode = z.enum(['existing', 'new_per_run']).optional()
+const ExecutionHostId = requiredString('Missing host id').transform((value, ctx) => {
+  const hostId = normalizeExecutionHostId(value)
+  if (!hostId) {
+    ctx.addIssue({ code: 'custom', message: 'Invalid host id' })
+    return z.NEVER
+  }
+  return hostId
+})
 
 const AutomationSchedule = requiredString('Missing trigger').refine(isValidAutomationSchedule, {
   message: 'Invalid automation trigger'
@@ -43,6 +53,43 @@ const OptionalNullablePlainString = z
   .pipe(z.union([z.string(), z.null(), z.undefined()]))
   .optional()
 
+const TaskProviderIdentity = z
+  .custom<SharedTaskProviderIdentity>(
+    (value) =>
+      value !== null &&
+      typeof value === 'object' &&
+      'provider' in value &&
+      ['github', 'gitlab', 'linear', 'jira'].includes(String(value.provider))
+  )
+  .optional()
+  .nullable()
+
+const TaskSourceContext = z
+  .object({
+    kind: z.literal('task-source'),
+    provider: z.enum(['github', 'gitlab', 'linear', 'jira']),
+    projectId: requiredString('Missing source project id'),
+    hostId: ExecutionHostId,
+    projectHostSetupId: OptionalNullablePlainString,
+    repoId: OptionalNullablePlainString,
+    providerIdentity: TaskProviderIdentity,
+    accountLabel: OptionalNullablePlainString
+  })
+  .optional()
+  .nullable()
+
+const WorkspaceRunContext = z
+  .object({
+    kind: z.literal('workspace-run'),
+    projectId: requiredString('Missing run project id'),
+    hostId: ExecutionHostId,
+    projectHostSetupId: requiredString('Missing project host setup id'),
+    repoId: requiredString('Missing repo id'),
+    path: requiredString('Missing run path')
+  })
+  .optional()
+  .nullable()
+
 const AutomationId = z.object({
   id: requiredString('Missing automation id')
 })
@@ -56,6 +103,8 @@ const AutomationCreate = z.object({
   prompt: requiredString('Missing automation prompt'),
   precheck: AutomationPrecheck,
   agentId: TuiAgent,
+  runContext: WorkspaceRunContext,
+  sourceContext: TaskSourceContext,
   repo: OptionalString,
   workspace: OptionalString,
   workspaceMode: AutomationWorkspaceMode,
@@ -73,6 +122,8 @@ const AutomationUpdateFields = z.object({
   prompt: OptionalString,
   precheck: AutomationPrecheck,
   agentId: TuiAgent.optional(),
+  runContext: WorkspaceRunContext,
+  sourceContext: TaskSourceContext,
   repo: OptionalString,
   workspace: OptionalString,
   workspaceMode: AutomationWorkspaceMode,

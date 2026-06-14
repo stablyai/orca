@@ -950,10 +950,21 @@ describe('OrcaRuntimeService', () => {
     expect(status.capabilities).toContain('terminal.binary-stream.v1')
     expect(status.capabilities).toContain('workspace-ports.v1')
     expect(status.capabilities).toContain('mobile.tasks.v1')
+    expect(status.capabilities).toContain('project-host-setup.v1')
+    expect(status.capabilities).not.toContain('browser.screencast.v1')
     expect(typeof status.protocolVersion).toBe('number')
     expect(typeof status.minCompatibleMobileVersion).toBe('number')
     expect(status.protocolVersion).toBeGreaterThanOrEqual(1)
     expect(status.minCompatibleMobileVersion).toBeGreaterThanOrEqual(0)
+  })
+
+  it('advertises browser screencast only when a renderer window is available', () => {
+    const runtime = createRuntime()
+    electronMocks.BrowserWindow.fromId.mockReturnValue({ isDestroyed: () => false } as never)
+
+    runtime.attachWindow(TEST_WINDOW_ID)
+
+    expect(runtime.getStatus().capabilities).toContain('browser.screencast.v1')
   })
 
   it('claims the first window as authoritative and ignores later windows', () => {
@@ -9846,6 +9857,47 @@ describe('OrcaRuntimeService', () => {
         worktreeId: TEST_WORKTREE_ID
       })
     )
+  })
+
+  it('publishes headless mobile session agent identity with synthesized PTY status', async () => {
+    const spawn = vi.fn().mockResolvedValue({ id: 'pty-agent' })
+    const runtime = new OrcaRuntimeService({
+      ...store,
+      getSettings: () => ({
+        ...store.getSettings(),
+        disabledTuiAgents: [],
+        agentCmdOverrides: {}
+      })
+    } as never)
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
+
+    const created = await runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`, {
+      agent: 'claude'
+    })
+    runtime.onPtyData('pty-agent', '\x1b]0;✳ Claude Code\x07', Date.now())
+
+    const listed = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
+
+    expect(created.tab).toMatchObject({
+      type: 'terminal',
+      launchAgent: 'claude'
+    })
+    expect(listed.tabs).toEqual([
+      expect.objectContaining({
+        type: 'terminal',
+        launchAgent: 'claude',
+        agentStatus: expect.objectContaining({
+          state: 'done',
+          agentType: 'claude'
+        })
+      })
+    ])
   })
 
   it('rejects disabled mobile session agent launches before spawning', async () => {

@@ -53,6 +53,18 @@ describe('AgentSkillSetupPanel', () => {
     expect(buttonLabels(html)).not.toContain('Re-check')
   })
 
+  it('keeps update copy until the installed panel checks CLI prerequisites', () => {
+    const html = renderPanel({
+      installed: true,
+      installLabel: 'Install CLI & Skill',
+      preInstallNotice: 'Install the Orca CLI before running agent skill setup.'
+    })
+
+    expect(html).toContain('Installed')
+    expect(buttonLabels(html)).toContain('Update')
+    expect(buttonLabels(html)).not.toContain('Install CLI &amp; Skill')
+  })
+
   it('can hide install after the skill is detected', () => {
     const html = renderPanel({ installed: true, showInstallWhenInstalled: false })
 

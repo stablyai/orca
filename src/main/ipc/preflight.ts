@@ -248,7 +248,9 @@ export async function refreshShellPathAndDetectAgents(
 export async function detectRemoteAgents(args: { connectionId: string }): Promise<string[]> {
   const mux = getActiveMultiplexer(args.connectionId)
   if (!mux || mux.isDisposed()) {
-    throw new Error(`No active SSH connection for "${args.connectionId}"`)
+    // Why: remote agent detection is passive UI polling. A disconnected host has
+    // no detectable agents until reconnect, but should not spam IPC errors.
+    return []
   }
   const result = (await mux.request('preflight.detectAgents', {
     commands: KNOWN_AGENT_COMMANDS

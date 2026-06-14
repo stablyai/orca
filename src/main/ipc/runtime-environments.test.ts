@@ -97,6 +97,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       'runtimeEnvironments:addFromPairingCode',
       'runtimeEnvironments:resolve',
       'runtimeEnvironments:remove',
+      'runtimeEnvironments:disconnect',
       'runtimeEnvironments:getStatus',
       'runtimeEnvironments:call',
       'runtimeEnvironments:subscribe',
@@ -115,6 +116,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       'runtimeEnvironments:addFromPairingCode',
       'runtimeEnvironments:resolve',
       'runtimeEnvironments:remove',
+      'runtimeEnvironments:disconnect',
       'runtimeEnvironments:getStatus',
       'runtimeEnvironments:call',
       'runtimeEnvironments:subscribe',
@@ -157,6 +159,30 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     expect(closeRemoteRuntimeRequestConnectionMock).toHaveBeenCalledWith(added.environment.id)
     expect(JSON.stringify(removed)).not.toContain('device-token')
     expect(await list(null, undefined)).toEqual([])
+  })
+
+  it('disconnects a saved runtime without removing it', async () => {
+    registerRuntimeEnvironmentHandlers()
+
+    const add = handler<
+      { name: string; pairingCode: string },
+      { environment: { id: string; name: string } }
+    >('runtimeEnvironments:addFromPairingCode')
+    const added = await add(null, { name: 'desk', pairingCode: pairingCode() })
+
+    const disconnect = handler<
+      { selector: string },
+      { disconnected: { id: string; name: string } }
+    >('runtimeEnvironments:disconnect')
+    expect(await disconnect(null, { selector: 'desk' })).toMatchObject({
+      disconnected: { id: added.environment.id, name: 'desk' }
+    })
+
+    expect(closeRemoteRuntimeRequestConnectionMock).toHaveBeenCalledWith(added.environment.id)
+    expect(closeRemoteRuntimeRequestConnectionMock).toHaveBeenCalledWith('desk')
+
+    const list = handler<undefined, { id: string; name: string }[]>('runtimeEnvironments:list')
+    expect(await list(null, undefined)).toMatchObject([{ id: added.environment.id, name: 'desk' }])
   })
 
   it('checks a saved remote runtime and records the runtime id on success', async () => {

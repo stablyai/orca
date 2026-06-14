@@ -76,6 +76,12 @@ describe('RPC optional pipe schemas', () => {
       telemetrySource: 'raw-source'
     })
     expectParses(methodParams(WORKTREE_METHODS, 'worktree.create'), { repo: 'repo-1' })
+    expectParses(methodParams(WORKTREE_METHODS, 'worktree.set'), {
+      worktree: 'id:wt-1',
+      linkedLinearIssue: 'STA-335',
+      linkedLinearIssueWorkspaceId: null,
+      linkedLinearIssueOrganizationUrlKey: 'stably'
+    })
     expectParses(methodParams(WORKTREE_METHODS, 'worktree.prefetchCreateBase'), { repo: 'repo-1' })
   })
 })

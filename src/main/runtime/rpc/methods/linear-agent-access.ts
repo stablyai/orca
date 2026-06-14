@@ -4,9 +4,33 @@ import { OptionalFiniteNumber, OptionalString, requiredString } from '../schemas
 import { linearError } from '../../../linear/issue-context-errors'
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+const LINEAR_DUE_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/
+const LinearDueDate = z.string().refine((value) => LINEAR_DUE_DATE_PATTERN.test(value), {
+  message: 'Linear due dates must use YYYY-MM-DD'
+})
+const OptionalLinearDueDate = LinearDueDate.optional()
+const OptionalLinearDueDateOrClear = z.union([LinearDueDate, z.null()]).optional()
 
 const AgentSearchIssues = z.object({
   query: requiredString('Missing query'),
+  limit: OptionalFiniteNumber,
+  workspaceId: z.union([z.string(), z.literal('all')]).optional()
+})
+
+const LinearWorkspaceRead = z.object({
+  workspaceId: z.union([z.string(), z.literal('all')]).optional()
+})
+
+const LinearTeamLookup = z.object({
+  teamInput: requiredString('Missing team'),
+  workspaceId: OptionalString.refine((value) => value !== 'all', {
+    message: '--workspace all is only valid for team list'
+  })
+})
+
+const LinearIssueList = z.object({
+  filter: z.enum(['assigned', 'created', 'all', 'completed', 'open']).optional(),
+  teamInput: OptionalString,
   limit: OptionalFiniteNumber,
   workspaceId: z.union([z.string(), z.literal('all')]).optional()
 })
@@ -49,6 +73,17 @@ const LinearIssueSetState = LinearWriteTarget.extend({
   to: requiredString('Missing target state')
 })
 
+const LinearIssueUpdateTask = LinearWriteTarget.extend({
+  operation: z.enum(['assignee', 'priority', 'estimate', 'dueDate', 'labels']),
+  assigneeId: z.string().nullable().optional(),
+  assigneeMe: z.boolean().optional(),
+  priority: z.number().int().min(0).max(4).optional(),
+  estimate: z.number().int().min(0).nullable().optional(),
+  dueDate: OptionalLinearDueDateOrClear,
+  labelMode: z.enum(['add', 'remove', 'set']).optional(),
+  labels: z.array(z.string()).optional()
+})
+
 const LinearIssueAddComment = LinearWriteTarget.extend({
   body: requiredString('Missing comment body'),
   replyTo: OptionalString,
@@ -64,7 +99,14 @@ const LinearIssueAttachLink = LinearWriteTarget.extend({
 const LinearIssueCreate = z.object({
   title: requiredString('Missing issue title'),
   body: OptionalString,
+  teamInput: OptionalString,
   teamKey: OptionalString,
+  state: OptionalString,
+  assignee: OptionalString,
+  priority: z.number().int().min(0).max(4).optional(),
+  estimate: z.number().int().min(0).optional(),
+  dueDate: OptionalLinearDueDate,
+  labels: z.array(z.string()).optional(),
   parentInput: OptionalString,
   parentCurrent: z.boolean().optional(),
   workspaceId: OptionalString.refine((value) => value !== 'all', {
@@ -101,6 +143,31 @@ export const LINEAR_AGENT_ACCESS_METHODS: RpcMethod[] = [
     handler: async (params, { runtime }) => runtime.linearIssueContext(params)
   }),
   defineMethod({
+    name: 'linear.agentTeamList',
+    params: LinearWorkspaceRead,
+    handler: async (params, { runtime }) => runtime.linearTeamListForAgents(params)
+  }),
+  defineMethod({
+    name: 'linear.agentTeamMembers',
+    params: LinearTeamLookup,
+    handler: async (params, { runtime }) => runtime.linearTeamMembersForAgents(params)
+  }),
+  defineMethod({
+    name: 'linear.agentTeamStates',
+    params: LinearTeamLookup,
+    handler: async (params, { runtime }) => runtime.linearTeamStatesForAgents(params)
+  }),
+  defineMethod({
+    name: 'linear.agentTeamLabels',
+    params: LinearTeamLookup,
+    handler: async (params, { runtime }) => runtime.linearTeamLabelsForAgents(params)
+  }),
+  defineMethod({
+    name: 'linear.agentIssueList',
+    params: LinearIssueList,
+    handler: async (params, { runtime }) => runtime.linearIssueListForAgents(params)
+  }),
+  defineMethod({
     name: 'linear.resolveCurrentIssue',
     params: LinearCurrentContext,
     handler: async (params, { runtime }) => runtime.linearResolveCurrentIssue(params)
@@ -109,6 +176,11 @@ export const LINEAR_AGENT_ACCESS_METHODS: RpcMethod[] = [
     name: 'linear.issueSetState',
     params: LinearIssueSetState,
     handler: async (params, { runtime }) => runtime.linearIssueSetState(params)
+  }),
+  defineMethod({
+    name: 'linear.issueUpdateTask',
+    params: LinearIssueUpdateTask,
+    handler: async (params, { runtime }) => runtime.linearIssueUpdateTask(params)
   }),
   defineMethod({
     name: 'linear.issueAddComment',

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { ExternalLink, Star, X } from 'lucide-react'
 import { Card } from './ui/card'
 import { Button } from './ui/button'
@@ -39,24 +39,18 @@ export function StarNagCard(): React.JSX.Element | null {
     })
   }, [])
 
-  const handleClose = useCallback((): void => {
-    if (busy) {
-      return
-    }
+  const handleClose = (): void => {
     setVisible(false)
     // Why: fire-and-forget. If persisting the dismissal fails the worst case
     // is we re-fire the same threshold on next launch — not worth blocking
     // the close animation on.
     void window.api.starNag.dismiss()
-  }, [busy])
+  }
 
-  const handleDisable = useCallback((): void => {
-    if (busy) {
-      return
-    }
+  const handleDisable = (): void => {
     setVisible(false)
     void window.api.starNag.disable()
-  }, [busy])
+  }
 
   useEffect(() => {
     if (!visible) {
@@ -69,7 +63,9 @@ export function StarNagCard(): React.JSX.Element | null {
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [handleClose, visible])
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- handleClose closes
+    // over stable refs; re-binding on each render is unnecessary.
+  }, [visible])
 
   if (!visible) {
     return null
@@ -82,7 +78,7 @@ export function StarNagCard(): React.JSX.Element | null {
     if (mode === 'web') {
       setBusy(true)
       await window.api.shell.openUrl(ORCA_STARGAZERS_URL)
-      await window.api.starNag.openWeb()
+      await window.api.starNag.disable()
       if (mountedRef.current) {
         setBusy(false)
         setVisible(false)
@@ -90,7 +86,7 @@ export function StarNagCard(): React.JSX.Element | null {
       return
     }
     setBusy(true)
-    const ok = await window.api.starNag.starOrca()
+    const ok = await window.api.gh.starOrca('star_nag')
     if (mountedRef.current) {
       setBusy(false)
     }
@@ -100,6 +96,7 @@ export function StarNagCard(): React.JSX.Element | null {
       }
       return
     }
+    await window.api.starNag.complete()
     if (mountedRef.current) {
       setVisible(false)
     }
@@ -129,7 +126,6 @@ export function StarNagCard(): React.JSX.Element | null {
               size="icon"
               className="size-7 shrink-0"
               onClick={handleClose}
-              disabled={busy}
               aria-label={translate('auto.components.StarNagCard.b5e685e4d9', 'Dismiss')}
             >
               <X className="size-3.5" />
@@ -160,22 +156,10 @@ export function StarNagCard(): React.JSX.Element | null {
                 : translate('auto.components.StarNagCard.2d67b6c849', 'Star on GitHub')}
           </Button>
           <div className="flex items-center justify-between gap-2">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-7 px-2"
-              onClick={handleClose}
-              disabled={busy}
-            >
+            <Button variant="ghost" size="sm" className="h-7 px-2" onClick={handleClose}>
               {translate('auto.components.StarNagCard.8c967b4d15', 'Not now')}
             </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-7 px-2"
-              onClick={handleDisable}
-              disabled={busy}
-            >
+            <Button variant="ghost" size="sm" className="h-7 px-2" onClick={handleDisable}>
               {translate('auto.components.StarNagCard.73dfd4eb8d', "Don't ask again")}
             </Button>
           </div>

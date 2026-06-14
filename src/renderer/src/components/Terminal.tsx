@@ -63,6 +63,7 @@ import {
 } from './terminal/split-group-mount'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import { appendUniqueOpenFileIds } from './terminal/unsaved-close-queue'
+import { setWindowCloseRequestHandler } from './window-close-request-coordinator'
 import CodexRestartChip from './CodexRestartChip'
 import {
   findActivityTerminalPortal,
@@ -99,6 +100,7 @@ import { useContextualTour } from './contextual-tours/use-contextual-tour'
 import { openTabBarEntry, type TabCreateEntryArgs } from './tab-bar/tab-create-entry-action'
 import { closeTerminalTab } from './terminal/terminal-tab-actions'
 import { translate } from '@/i18n/i18n'
+import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 
 const EditorPanel = lazy(() => import('./editor/EditorPanel'))
 
@@ -145,6 +147,10 @@ function isPinnedVisibleTab(
   visibleId: string
 ): boolean {
   return findUnifiedTabByVisibleId(state, worktreeId, visibleId)?.isPinned === true
+}
+
+function getActiveWorktreeRuntimeEnvironmentId(worktreeId: string | null): string | null {
+  return getRuntimeEnvironmentIdForWorktree(useAppStore.getState(), worktreeId)
 }
 
 function isPinnedActiveEditorTab(
@@ -211,9 +217,6 @@ function Terminal(): React.JSX.Element | null {
   const closeTab = useAppStore((s) => s.closeTab)
   const setActiveTab = useAppStore((s) => s.setActiveTab)
   const setActiveWorktree = useAppStore((s) => s.setActiveWorktree)
-  const activeRuntimeEnvironmentId = useAppStore(
-    (s) => s.settings?.activeRuntimeEnvironmentId ?? null
-  )
   const setTabCustomTitle = useAppStore((s) => s.setTabCustomTitle)
   const setTabColor = useAppStore((s) => s.setTabColor)
   const consumeSuppressedPtyExit = useAppStore((s) => s.consumeSuppressedPtyExit)
@@ -760,7 +763,7 @@ function Terminal(): React.JSX.Element | null {
     }
     // Why: in the paired web client, host session-tabs are authoritative.
     // Creating a local fallback races the host's initial terminal and duplicates tabs.
-    if (isWebRuntimeSessionActive(activeRuntimeEnvironmentId)) {
+    if (isWebRuntimeSessionActive(getActiveWorktreeRuntimeEnvironmentId(activeWorktreeId))) {
       return
     }
 
@@ -777,13 +780,7 @@ function Terminal(): React.JSX.Element | null {
     // activity and reshuffle the sidebar. Explicit "New Tab" actions
     // (handleNewTab below) still bump normally.
     createTab(activeWorktreeId, undefined, undefined, { pendingActivationSpawn: true })
-  }, [
-    workspaceSessionReady,
-    activeWorktreeId,
-    activeRuntimeEnvironmentId,
-    createTab,
-    reconcileWorktreeTabModel
-  ])
+  }, [workspaceSessionReady, activeWorktreeId, createTab, reconcileWorktreeTabModel])
 
   const handleNewTab = useCallback(
     (shellOverride?: string) => {
@@ -797,10 +794,11 @@ function Terminal(): React.JSX.Element | null {
         void openNewTerminalTabInActiveWorkspace(targetGroupId)
         return
       }
-      if (isWebRuntimeSessionActive(activeRuntimeEnvironmentId)) {
+      const runtimeEnvironmentId = getActiveWorktreeRuntimeEnvironmentId(activeWorktreeId)
+      if (isWebRuntimeSessionActive(runtimeEnvironmentId)) {
         void createWebRuntimeSessionTerminal({
           worktreeId: activeWorktreeId,
-          environmentId: activeRuntimeEnvironmentId,
+          environmentId: runtimeEnvironmentId,
           command: shellOverride,
           activate: true
         })
@@ -838,7 +836,6 @@ function Terminal(): React.JSX.Element | null {
       focusTerminalTabSurface(newTab.id)
     },
     [
-      activeRuntimeEnvironmentId,
       activeWorktreeId,
       createTab,
       openNewTerminalTabInActiveWorkspace,
@@ -900,10 +897,11 @@ function Terminal(): React.JSX.Element | null {
       return
     }
     const defaultUrl = useAppStore.getState().browserDefaultUrl ?? 'about:blank'
-    if (isWebRuntimeSessionActive(activeRuntimeEnvironmentId)) {
+    const runtimeEnvironmentId = getActiveWorktreeRuntimeEnvironmentId(activeWorktreeId)
+    if (isWebRuntimeSessionActive(runtimeEnvironmentId)) {
       void createWebRuntimeSessionBrowserTab({
         worktreeId: activeWorktreeId,
-        environmentId: activeRuntimeEnvironmentId,
+        environmentId: runtimeEnvironmentId,
         url: defaultUrl
       })
       return
@@ -912,12 +910,7 @@ function Terminal(): React.JSX.Element | null {
       title: translate('auto.components.Terminal.37da0d736f', 'New Browser Tab'),
       focusAddressBar: true
     })
-  }, [
-    activeRuntimeEnvironmentId,
-    activeWorktreeId,
-    createBrowserTab,
-    openNewBrowserTabInActiveWorkspace
-  ])
+  }, [activeWorktreeId, createBrowserTab, openNewBrowserTabInActiveWorkspace])
 
   const handleOpenEntry = useCallback(async (args: TabCreateEntryArgs) => {
     await openTabBarEntry(args)
@@ -934,10 +927,11 @@ function Terminal(): React.JSX.Element | null {
       if (!source) {
         return
       }
-      if (isWebRuntimeSessionActive(activeRuntimeEnvironmentId)) {
+      const runtimeEnvironmentId = getActiveWorktreeRuntimeEnvironmentId(activeWorktreeId)
+      if (isWebRuntimeSessionActive(runtimeEnvironmentId)) {
         void createWebRuntimeSessionBrowserTab({
           worktreeId: activeWorktreeId,
-          environmentId: activeRuntimeEnvironmentId,
+          environmentId: runtimeEnvironmentId,
           url: source.url,
           profileId: source.sessionProfileId
         })
@@ -948,7 +942,7 @@ function Terminal(): React.JSX.Element | null {
         sessionProfileId: source.sessionProfileId
       })
     },
-    [activeRuntimeEnvironmentId, activeWorktreeId, createBrowserTab]
+    [activeWorktreeId, createBrowserTab]
   )
 
   const handleNewFile = useCallback(async () => {
@@ -981,11 +975,12 @@ function Terminal(): React.JSX.Element | null {
       if (isPinnedVisibleTab(state, owningWorktreeId, tabId)) {
         return
       }
-      if (isWebRuntimeSessionActive(activeRuntimeEnvironmentId)) {
+      const runtimeEnvironmentId = getActiveWorktreeRuntimeEnvironmentId(owningWorktreeId)
+      if (isWebRuntimeSessionActive(runtimeEnvironmentId)) {
         void closeWebRuntimeSessionTab({
           worktreeId: owningWorktreeId,
           tabId,
-          environmentId: activeRuntimeEnvironmentId
+          environmentId: runtimeEnvironmentId
         })
         return
       }
@@ -1021,7 +1016,6 @@ function Terminal(): React.JSX.Element | null {
       closeBrowserTab(tabId)
     },
     [
-      activeRuntimeEnvironmentId,
       closeBrowserTab,
       setActiveBrowserTab,
       setActiveFile,
@@ -1059,14 +1053,15 @@ function Terminal(): React.JSX.Element | null {
         if (unifiedTab?.isPinned) {
           continue
         }
+        const runtimeEnvironmentId = getActiveWorktreeRuntimeEnvironmentId(activeWorktreeId)
         if (
-          isWebRuntimeSessionActive(activeRuntimeEnvironmentId) &&
+          isWebRuntimeSessionActive(runtimeEnvironmentId) &&
           (unifiedTab?.contentType === 'terminal' || unifiedTab?.contentType === 'browser')
         ) {
           void closeWebRuntimeSessionTab({
             worktreeId: activeWorktreeId,
             tabId: unifiedTab.contentType === 'browser' ? unifiedTab.id : unifiedTab.entityId,
-            environmentId: activeRuntimeEnvironmentId
+            environmentId: runtimeEnvironmentId
           })
           continue
         }
@@ -1092,14 +1087,7 @@ function Terminal(): React.JSX.Element | null {
         queueEditorCloseRequests(dirtyFileIds)
       }
     },
-    [
-      activeRuntimeEnvironmentId,
-      activeWorktreeId,
-      closeBrowserTab,
-      closeFile,
-      closeTab,
-      queueEditorCloseRequests
-    ]
+    [activeWorktreeId, closeBrowserTab, closeFile, closeTab, queueEditorCloseRequests]
   )
 
   const handleCloseTabsToRight = useCallback(
@@ -1122,14 +1110,15 @@ function Terminal(): React.JSX.Element | null {
         if (unifiedTab?.isPinned) {
           continue
         }
+        const runtimeEnvironmentId = getActiveWorktreeRuntimeEnvironmentId(activeWorktreeId)
         if (
-          isWebRuntimeSessionActive(activeRuntimeEnvironmentId) &&
+          isWebRuntimeSessionActive(runtimeEnvironmentId) &&
           (unifiedTab?.contentType === 'terminal' || unifiedTab?.contentType === 'browser')
         ) {
           void closeWebRuntimeSessionTab({
             worktreeId: activeWorktreeId,
             tabId: unifiedTab.contentType === 'browser' ? unifiedTab.id : unifiedTab.entityId,
-            environmentId: activeRuntimeEnvironmentId
+            environmentId: runtimeEnvironmentId
           })
           continue
         }
@@ -1155,14 +1144,7 @@ function Terminal(): React.JSX.Element | null {
         queueEditorCloseRequests(dirtyFileIds)
       }
     },
-    [
-      activeRuntimeEnvironmentId,
-      activeWorktreeId,
-      closeBrowserTab,
-      closeFile,
-      closeTab,
-      queueEditorCloseRequests
-    ]
+    [activeWorktreeId, closeBrowserTab, closeFile, closeTab, queueEditorCloseRequests]
   )
 
   const handleCloseAllFiles = useCallback(() => {
@@ -1187,17 +1169,18 @@ function Terminal(): React.JSX.Element | null {
 
   const handleActivateTab = useCallback(
     (tabId: string) => {
-      if (activeWorktreeId && isWebRuntimeSessionActive(activeRuntimeEnvironmentId)) {
+      const runtimeEnvironmentId = getActiveWorktreeRuntimeEnvironmentId(activeWorktreeId)
+      if (activeWorktreeId && isWebRuntimeSessionActive(runtimeEnvironmentId)) {
         void activateWebRuntimeSessionTab({
           worktreeId: activeWorktreeId,
           tabId,
-          environmentId: activeRuntimeEnvironmentId
+          environmentId: runtimeEnvironmentId
         })
       }
       setActiveTab(tabId)
       setActiveTabType('terminal')
     },
-    [activeRuntimeEnvironmentId, activeWorktreeId, setActiveTab, setActiveTabType]
+    [activeWorktreeId, setActiveTab, setActiveTabType]
   )
 
   const handleTogglePaneExpand = useCallback(
@@ -1216,17 +1199,18 @@ function Terminal(): React.JSX.Element | null {
 
   const handleActivateBrowserTab = useCallback(
     (tabId: string) => {
-      if (activeWorktreeId && isWebRuntimeSessionActive(activeRuntimeEnvironmentId)) {
+      const runtimeEnvironmentId = getActiveWorktreeRuntimeEnvironmentId(activeWorktreeId)
+      if (activeWorktreeId && isWebRuntimeSessionActive(runtimeEnvironmentId)) {
         void activateWebRuntimeSessionTab({
           worktreeId: activeWorktreeId,
           tabId,
-          environmentId: activeRuntimeEnvironmentId
+          environmentId: runtimeEnvironmentId
         })
       }
       setActiveBrowserTab(tabId)
       setActiveTabType('browser')
     },
-    [activeRuntimeEnvironmentId, activeWorktreeId, setActiveBrowserTab, setActiveTabType]
+    [activeWorktreeId, setActiveBrowserTab, setActiveTabType]
   )
 
   // Keyboard shortcuts
@@ -1565,11 +1549,15 @@ function Terminal(): React.JSX.Element | null {
     return () => window.removeEventListener('beforeunload', handler)
   }, [])
 
-  // Listen for main-process window close requests. Terminal sessions are
-  // detached by the daemon/SSH lifecycle; only dirty editor files should block
-  // close here. Explicit destructive terminal actions keep their own confirms.
+  // Handle main-process window close requests. Terminal sessions are detached
+  // by the daemon/SSH lifecycle; only dirty editor files should block close
+  // here. Explicit destructive terminal actions keep their own confirms.
+  // Why: register into the coordinator rather than subscribing to IPC directly.
+  // The single IPC subscription lives at the always-mounted App root, so quits
+  // on the no-workspace landing page (where Terminal is not mounted) are still
+  // handled instead of deadlocking the window (#5144).
   useEffect(() => {
-    return window.api.ui.onWindowCloseRequested(({ isQuitting }) => {
+    setWindowCloseRequestHandler(({ isQuitting }) => {
       if (isIntentionalAppRestartInProgress()) {
         window.api.ui.confirmWindowClose()
         return
@@ -1593,6 +1581,7 @@ function Terminal(): React.JSX.Element | null {
 
       proceedToNativeWindowClose(isQuitting)
     })
+    return () => setWindowCloseRequestHandler(null)
   }, [proceedToNativeWindowClose, queueEditorCloseRequests])
 
   // Why: browser page state can disappear through store-only paths (CLI tab

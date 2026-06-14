@@ -226,6 +226,13 @@ function getProviderForPty(ptyId: string): IPtyProvider {
   return getProvider(connectionId)
 }
 
+function hasPtyProviderForInspection(ptyId: string): boolean {
+  // Why: process inspection is background polling; disconnected SSH hosts should
+  // read as idle instead of surfacing repeated IPC errors.
+  const connectionId = ptyOwnership.get(ptyId)
+  return connectionId == null || sshProviders.has(connectionId)
+}
+
 function getAppPtyId(connectionId: string | null | undefined, ptyId: string): string {
   return connectionId ? toAppSshPtyId(connectionId, ptyId) : ptyId
 }
@@ -2801,6 +2808,9 @@ export function registerPtyHandlers(
   ipcMain.handle(
     'pty:hasChildProcesses',
     async (_event, args: { id: string }): Promise<boolean> => {
+      if (!hasPtyProviderForInspection(args.id)) {
+        return false
+      }
       return getProviderForPty(args.id).hasChildProcesses(args.id)
     }
   )
@@ -2808,6 +2818,9 @@ export function registerPtyHandlers(
   ipcMain.handle(
     'pty:getForegroundProcess',
     async (_event, args: { id: string }): Promise<string | null> => {
+      if (!hasPtyProviderForInspection(args.id)) {
+        return null
+      }
       return getProviderForPty(args.id).getForegroundProcess(args.id)
     }
   )

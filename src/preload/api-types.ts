@@ -10,6 +10,7 @@ import type {
 import type { NativeFileDropPayload } from '../shared/native-file-drop'
 import type { AppIdentity } from '../shared/app-identity'
 import type { TerminalPaneSplitSource } from '../shared/feature-education-telemetry'
+import type { TaskSourceContext } from '../shared/task-source-context'
 import type {
   FolderWorkspacePathStatus,
   FolderWorkspacePathStatusRequest
@@ -124,8 +125,18 @@ import type {
   PRComment,
   PRInfo,
   PRRefreshOutcome,
+  Project,
   Repo,
   ProjectGroup,
+  ProjectHostSetup,
+  ProjectHostSetupCreateArgs,
+  ProjectHostSetupCreateResult,
+  ProjectHostSetupDeleteArgs,
+  ProjectHostSetupDeleteResult,
+  ProjectHostSetupExistingFolderArgs,
+  ProjectHostSetupResult,
+  ProjectHostSetupUpdateArgs,
+  ProjectHostSetupUpdateResult,
   FolderWorkspace,
   ProjectGroupImportResult,
   ProjectGroupImportMode,
@@ -150,6 +161,18 @@ import type {
   WorkspaceSessionPatch,
   WorkspaceSessionState
 } from '../shared/types'
+
+type GitLabRepoSelectorArgs = {
+  repoPath: string
+  repoId?: string | null
+  sourceContext?: TaskSourceContext | null
+}
+
+type GitHubRepoSelectorArgs = {
+  repoPath: string
+  repoId?: string | null
+  sourceContext?: TaskSourceContext | null
+}
 import type {
   WarpThemeImportPreview,
   WarpThemeImportSource
@@ -159,6 +182,7 @@ import type { GitHistoryOptions, GitHistoryResult } from '../shared/git-history'
 import type { PublicKnownRuntimeEnvironment } from '../shared/runtime-environments'
 import type { RuntimeAccessGrant } from '../shared/runtime-access-grants'
 import type { RuntimeRpcResponse } from '../shared/runtime-rpc-envelope'
+import type { ExecutionHostId } from '../shared/execution-host'
 import type { FeatureInteractionId } from '../shared/feature-interactions'
 import type {
   AddIssueCommentBySlugArgs,
@@ -760,6 +784,13 @@ export type PreloadApi = {
     pickFolder: () => Promise<string | null>
     pickDirectory: () => Promise<string | null>
     clone: (args: { url: string; destination: string }) => Promise<Repo>
+    cloneRemote: (args: { connectionId: string; url: string; destination: string }) => Promise<Repo>
+    createRemote: (args: {
+      connectionId: string
+      parentPath: string
+      name: string
+      kind: 'git' | 'folder'
+    }) => Promise<{ repo: Repo } | { error: string }>
     cloneAbort: () => Promise<void>
     // Why: error union matches the IPC handler's return shape; renderer callers branch on `'error' in result`.
     addRemote: (args: {
@@ -786,6 +817,16 @@ export type PreloadApi = {
       limit?: number
     }) => Promise<BaseRefSearchResult[]>
     onChanged: (callback: () => void) => () => void
+  }
+  projects: {
+    list: () => Promise<Project[]>
+    listHostSetups: () => Promise<ProjectHostSetup[]>
+    createHostSetup: (args: ProjectHostSetupCreateArgs) => Promise<ProjectHostSetupCreateResult>
+    setupExistingFolder: (
+      args: ProjectHostSetupExistingFolderArgs
+    ) => Promise<ProjectHostSetupResult>
+    updateHostSetup: (args: ProjectHostSetupUpdateArgs) => Promise<ProjectHostSetupUpdateResult>
+    deleteHostSetup: (args: ProjectHostSetupDeleteArgs) => Promise<ProjectHostSetupDeleteResult>
   }
   projectGroups: {
     list: () => Promise<ProjectGroup[]>
@@ -1095,11 +1136,13 @@ export type PreloadApi = {
     issue: (args: {
       repoPath: string
       repoId?: string
+      sourceContext?: TaskSourceContext | null
       number: number
     }) => Promise<IssueInfo | null>
     workItem: (args: {
       repoPath: string
       repoId?: string
+      sourceContext?: TaskSourceContext | null
       number: number
       type?: 'issue' | 'pr'
     }) => Promise<Omit<GitHubWorkItem, 'repoId'> | null>
@@ -1111,22 +1154,22 @@ export type PreloadApi = {
       number: number
       type: 'issue' | 'pr'
     }) => Promise<Omit<GitHubWorkItem, 'repoId'> | null>
-    workItemDetails: (args: {
-      repoPath: string
-      repoId?: string
-      number: number
-      type?: 'issue' | 'pr'
-    }) => Promise<GitHubWorkItemDetails | null>
-    prFileContents: (args: {
-      repoPath: string
-      repoId?: string
-      prNumber: number
-      path: string
-      oldPath?: string
-      status: GitHubPRFile['status']
-      headSha: string
-      baseSha: string
-    }) => Promise<GitHubPRFileContents>
+    workItemDetails: (
+      args: GitHubRepoSelectorArgs & {
+        number: number
+        type?: 'issue' | 'pr'
+      }
+    ) => Promise<GitHubWorkItemDetails | null>
+    prFileContents: (
+      args: GitHubRepoSelectorArgs & {
+        prNumber: number
+        path: string
+        oldPath?: string
+        status: GitHubPRFile['status']
+        headSha: string
+        baseSha: string
+      }
+    ) => Promise<GitHubPRFileContents>
     listIssues: (args: {
       repoPath: string
       repoId?: string
@@ -1135,6 +1178,7 @@ export type PreloadApi = {
     createIssue: (args: {
       repoPath: string
       repoId?: string
+      sourceContext?: TaskSourceContext | null
       title: string
       body: string
       labels?: string[]
@@ -1149,33 +1193,35 @@ export type PreloadApi = {
       before?: string
       noCache?: boolean
     }) => Promise<ListWorkItemsResult<Omit<GitHubWorkItem, 'repoId'>>>
-    prChecks: (args: {
-      repoPath: string
-      repoId?: string
-      prNumber: number
-      headSha?: string
-      prRepo?: GitHubOwnerRepo | null
-      noCache?: boolean
-    }) => Promise<PRCheckDetail[]>
+    prChecks: (
+      args: GitHubRepoSelectorArgs & {
+        prNumber: number
+        headSha?: string
+        prRepo?: GitHubOwnerRepo | null
+        noCache?: boolean
+      }
+    ) => Promise<PRCheckDetail[]>
     prCheckDetails: (args: {
       repoPath: string
       repoId?: string
+      sourceContext?: TaskSourceContext | null
       checkRunId?: number
       workflowRunId?: number
       checkName?: string
       url?: string | null
       prRepo?: GitHubOwnerRepo | null
     }) => Promise<PRCheckRunDetails | null>
-    rerunPRChecks: (args: {
-      repoPath: string
-      repoId?: string
-      prNumber: number
-      headSha?: string
-      failedOnly?: boolean
-    }) => Promise<{ ok: true; count: number } | { ok: false; error: string }>
+    rerunPRChecks: (
+      args: GitHubRepoSelectorArgs & {
+        prNumber: number
+        headSha?: string
+        failedOnly?: boolean
+      }
+    ) => Promise<{ ok: true; count: number } | { ok: false; error: string }>
     prComments: (args: {
       repoPath: string
       repoId?: string
+      sourceContext?: TaskSourceContext | null
       prNumber: number
       prRepo?: GitHubOwnerRepo | null
       noCache?: boolean
@@ -1183,17 +1229,18 @@ export type PreloadApi = {
     resolveReviewThread: (args: {
       repoPath: string
       repoId?: string
+      sourceContext?: TaskSourceContext | null
       threadId: string
       resolve: boolean
     }) => Promise<boolean>
-    setPRFileViewed: (args: {
-      repoPath: string
-      repoId?: string
-      prNumber: number
-      pullRequestId: string
-      path: string
-      viewed: boolean
-    }) => Promise<boolean>
+    setPRFileViewed: (
+      args: GitHubRepoSelectorArgs & {
+        prNumber: number
+        pullRequestId: string
+        path: string
+        viewed: boolean
+      }
+    ) => Promise<boolean>
     updatePRTitle: (args: {
       repoPath: string
       repoId?: string
@@ -1201,75 +1248,83 @@ export type PreloadApi = {
       title: string
       prRepo?: GitHubOwnerRepo | null
     }) => Promise<boolean>
-    mergePR: (args: {
-      repoPath: string
-      repoId?: string
-      prNumber: number
-      method?: 'merge' | 'squash' | 'rebase'
-      prRepo?: GitHubOwnerRepo | null
-    }) => Promise<{ ok: true } | { ok: false; error: string }>
-    setPRAutoMerge: (args: {
-      repoPath: string
-      repoId?: string
-      prNumber: number
-      enabled: boolean
-      prRepo?: GitHubOwnerRepo | null
-    }) => Promise<{ ok: true } | { ok: false; error: string }>
-    updatePRState: (args: {
-      repoPath: string
-      repoId?: string
-      prNumber: number
-      updates: { state: 'open' | 'closed' }
-    }) => Promise<{ ok: true } | { ok: false; error: string }>
-    requestPRReviewers: (args: {
-      repoPath: string
-      repoId?: string
-      prNumber: number
-      reviewers: string[]
-    }) => Promise<{ ok: true } | { ok: false; error: string }>
-    removePRReviewers: (args: {
-      repoPath: string
-      repoId?: string
-      prNumber: number
-      reviewers: string[]
-    }) => Promise<{ ok: true } | { ok: false; error: string }>
-    updateIssue: (args: {
-      repoPath: string
-      repoId?: string
-      number: number
-      updates: GitHubIssueUpdate
-    }) => Promise<{ ok: true } | { ok: false; error: string }>
-    addIssueComment: (args: {
-      repoPath: string
-      repoId?: string
-      number: number
-      body: string
-      /** Why: GitHub stores PR conversation comments under `/issues/N/comments`
-       *  too, so the IPC and `gh` call paths are identical. The renderer cache
-       *  key is keyed by the drawer's `type`, so callers pass it through to
-       *  scope the cross-window invalidation broadcast correctly and avoid
-       *  evicting an unrelated PR/issue that happens to share the number. */
-      type?: 'issue' | 'pr'
-      prRepo?: GitHubOwnerRepo | null
-    }) => Promise<GitHubCommentResult>
-    addPRReviewCommentReply: (args: {
-      repoPath: string
-      repoId?: string
-      prNumber: number
-      commentId: number
-      body: string
-      threadId?: string
-      path?: string
-      line?: number
-      prRepo?: GitHubOwnerRepo | null
-    }) => Promise<GitHubCommentResult>
-    addPRReviewComment: (
-      args: GitHubPRReviewCommentInput & { repoId?: string }
+    mergePR: (
+      args: GitHubRepoSelectorArgs & {
+        prNumber: number
+        method?: 'merge' | 'squash' | 'rebase'
+        prRepo?: GitHubOwnerRepo | null
+      }
+    ) => Promise<{ ok: true } | { ok: false; error: string }>
+    setPRAutoMerge: (
+      args: GitHubRepoSelectorArgs & {
+        prNumber: number
+        enabled: boolean
+        prRepo?: GitHubOwnerRepo | null
+      }
+    ) => Promise<{ ok: true } | { ok: false; error: string }>
+    updatePRState: (
+      args: GitHubRepoSelectorArgs & {
+        prNumber: number
+        updates: { state: 'open' | 'closed' }
+      }
+    ) => Promise<{ ok: true } | { ok: false; error: string }>
+    requestPRReviewers: (
+      args: GitHubRepoSelectorArgs & {
+        prNumber: number
+        reviewers: string[]
+      }
+    ) => Promise<{ ok: true } | { ok: false; error: string }>
+    removePRReviewers: (
+      args: GitHubRepoSelectorArgs & {
+        prNumber: number
+        reviewers: string[]
+      }
+    ) => Promise<{ ok: true } | { ok: false; error: string }>
+    updateIssue: (
+      args: GitHubRepoSelectorArgs & {
+        number: number
+        updates: GitHubIssueUpdate
+      }
+    ) => Promise<{ ok: true } | { ok: false; error: string }>
+    addIssueComment: (
+      args: GitHubRepoSelectorArgs & {
+        number: number
+        body: string
+        /** Why: GitHub stores PR conversation comments under `/issues/N/comments`
+         *  too, so the IPC and `gh` call paths are identical. The renderer cache
+         *  key is keyed by the drawer's `type`, so callers pass it through to
+         *  scope the cross-window invalidation broadcast correctly and avoid
+         *  evicting an unrelated PR/issue that happens to share the number. */
+        type?: 'issue' | 'pr'
+        prRepo?: GitHubOwnerRepo | null
+      }
     ) => Promise<GitHubCommentResult>
-    listLabels: (args: { repoPath: string; repoId?: string }) => Promise<string[]>
+    addPRReviewCommentReply: (
+      args: GitHubRepoSelectorArgs & {
+        prNumber: number
+        commentId: number
+        body: string
+        threadId?: string
+        path?: string
+        line?: number
+        prRepo?: GitHubOwnerRepo | null
+      }
+    ) => Promise<GitHubCommentResult>
+    addPRReviewComment: (
+      args: GitHubPRReviewCommentInput & {
+        repoId?: string
+        sourceContext?: TaskSourceContext | null
+      }
+    ) => Promise<GitHubCommentResult>
+    listLabels: (args: {
+      repoPath: string
+      repoId?: string
+      sourceContext?: TaskSourceContext | null
+    }) => Promise<string[]>
     listAssignableUsers: (args: {
       repoPath: string
       repoId?: string
+      sourceContext?: TaskSourceContext | null
     }) => Promise<GitHubAssignableUser[]>
     /**
      * Subscribe to local-mutation broadcasts. Used by the work-item-drawer
@@ -1350,117 +1405,136 @@ export type PreloadApi = {
       force?: boolean
       host?: string | null
     }) => Promise<GetGitLabRateLimitResult>
-    projectSlug: (args: { repoPath: string }) => Promise<GitLabProjectRef | null>
-    mrForBranch: (args: {
-      repoPath: string
-      branch: string
-      linkedMRIid?: number | null
-    }) => Promise<MRInfo | null>
-    mr: (args: { repoPath: string; iid: number }) => Promise<MRInfo | null>
-    listMRs: (args: {
-      repoPath: string
-      state?: MRListState
-      page?: number
-      perPage?: number
-    }) => Promise<ListMergeRequestsResult>
+    projectSlug: (args: GitLabRepoSelectorArgs) => Promise<GitLabProjectRef | null>
+    mrForBranch: (
+      args: GitLabRepoSelectorArgs & {
+        branch: string
+        linkedMRIid?: number | null
+      }
+    ) => Promise<MRInfo | null>
+    mr: (args: GitLabRepoSelectorArgs & { iid: number }) => Promise<MRInfo | null>
+    listMRs: (
+      args: GitLabRepoSelectorArgs & {
+        state?: MRListState
+        page?: number
+        perPage?: number
+      }
+    ) => Promise<ListMergeRequestsResult>
     /** Combined MR + issue list filtered by state. Issues are skipped
      *  when state is 'merged' (issues don't merge). */
-    listWorkItems: (args: {
-      repoPath: string
-      state?: MRListState
-      page?: number
-      perPage?: number
-    }) => Promise<ListMergeRequestsResult>
-    issue: (args: { repoPath: string; number: number }) => Promise<GitLabIssueInfo | null>
-    listIssues: (args: {
-      repoPath: string
-      state?: 'opened' | 'closed' | 'all'
-      assignee?: string
-      limit?: number
-    }) => Promise<{ items: GitLabWorkItem[]; error?: ClassifiedError }>
-    createIssue: (args: {
-      repoPath: string
-      title: string
-      body: string
-    }) => Promise<{ ok: true; number: number; url: string } | { ok: false; error: string }>
-    updateIssue: (args: {
-      repoPath: string
-      number: number
-      updates: GitLabIssueUpdate
-    }) => Promise<{ ok: true } | { ok: false; error: string }>
-    addIssueComment: (args: {
-      repoPath: string
-      number: number
-      body: string
-    }) => Promise<GitLabCommentResult>
-    listLabels: (args: { repoPath: string }) => Promise<string[]>
-    listAssignableUsers: (args: { repoPath: string }) => Promise<GitLabAssignableUser[]>
+    listWorkItems: (
+      args: GitLabRepoSelectorArgs & {
+        state?: MRListState
+        page?: number
+        perPage?: number
+      }
+    ) => Promise<ListMergeRequestsResult>
+    issue: (args: GitLabRepoSelectorArgs & { number: number }) => Promise<GitLabIssueInfo | null>
+    listIssues: (
+      args: GitLabRepoSelectorArgs & {
+        state?: 'opened' | 'closed' | 'all'
+        assignee?: string
+        limit?: number
+      }
+    ) => Promise<{ items: GitLabWorkItem[]; error?: ClassifiedError }>
+    createIssue: (
+      args: GitLabRepoSelectorArgs & {
+        title: string
+        body: string
+      }
+    ) => Promise<{ ok: true; number: number; url: string } | { ok: false; error: string }>
+    updateIssue: (
+      args: GitLabRepoSelectorArgs & {
+        number: number
+        updates: GitLabIssueUpdate
+      }
+    ) => Promise<{ ok: true } | { ok: false; error: string }>
+    addIssueComment: (
+      args: GitLabRepoSelectorArgs & {
+        number: number
+        body: string
+      }
+    ) => Promise<GitLabCommentResult>
+    listLabels: (args: GitLabRepoSelectorArgs) => Promise<string[]>
+    listAssignableUsers: (args: GitLabRepoSelectorArgs) => Promise<GitLabAssignableUser[]>
     /** Cross-project user-scoped todos (gitlab.com/dashboard/todos). */
-    todos: (args: { repoPath: string }) => Promise<GitLabTodo[]>
+    todos: (args: GitLabRepoSelectorArgs) => Promise<GitLabTodo[]>
     /** Aggregated dialog payload — body + discussions + pipeline jobs. */
-    workItemDetails: (args: {
-      repoPath: string
-      iid: number
-      type: 'issue' | 'mr'
-    }) => Promise<GitLabWorkItemDetails | null>
-    closeMR: (args: {
-      repoPath: string
-      iid: number
-    }) => Promise<{ ok: true } | { ok: false; error: string }>
-    reopenMR: (args: {
-      repoPath: string
-      iid: number
-    }) => Promise<{ ok: true } | { ok: false; error: string }>
-    mergeMR: (args: {
-      repoPath: string
-      iid: number
-      method?: 'merge' | 'squash' | 'rebase'
-    }) => Promise<{ ok: true } | { ok: false; error: string }>
-    updateMR: (args: {
-      repoPath: string
-      iid: number
-      updates: GitLabMRUpdate
-    }) => Promise<{ ok: true } | { ok: false; error: string }>
-    updateMRReviewers: (args: {
-      repoPath: string
-      iid: number
-      reviewerIds: number[]
-      projectRef?: GitLabProjectRef | null
-    }) => Promise<GitLabMRReviewersUpdateResult>
-    addMRComment: (args: {
-      repoPath: string
-      iid: number
-      body: string
-    }) => Promise<GitLabCommentResult>
-    addMRInlineComment: (args: {
-      repoPath: string
-      iid: number
-      input: GitLabMRInlineCommentInput
-      projectRef?: GitLabProjectRef | null
-    }) => Promise<GitLabCommentResult>
-    resolveMRDiscussion: (args: {
-      repoPath: string
-      iid: number
-      discussionId: string
-      resolved: boolean
-    }) => Promise<GitLabDiscussionResolveResult>
-    jobTrace: (args: {
-      repoPath: string
-      jobId: number
-      projectRef?: GitLabProjectRef | null
-    }) => Promise<GitLabJobTraceResult>
-    retryJob: (args: {
-      repoPath: string
-      jobId: number
-      projectRef?: GitLabProjectRef | null
-    }) => Promise<GitLabRetryJobResult>
-    workItemByPath: (args: {
-      repoPath: string
-      host: string
-      path: string
-      iid: number
-      type: 'issue' | 'mr'
-    }) => Promise<Omit<GitLabWorkItem, 'repoId'> | null>
+    workItemDetails: (
+      args: GitLabRepoSelectorArgs & {
+        iid: number
+        type: 'issue' | 'mr'
+      }
+    ) => Promise<GitLabWorkItemDetails | null>
+    closeMR: (
+      args: GitLabRepoSelectorArgs & {
+        iid: number
+      }
+    ) => Promise<{ ok: true } | { ok: false; error: string }>
+    reopenMR: (
+      args: GitLabRepoSelectorArgs & {
+        iid: number
+      }
+    ) => Promise<{ ok: true } | { ok: false; error: string }>
+    mergeMR: (
+      args: GitLabRepoSelectorArgs & {
+        iid: number
+        method?: 'merge' | 'squash' | 'rebase'
+      }
+    ) => Promise<{ ok: true } | { ok: false; error: string }>
+    updateMR: (
+      args: GitLabRepoSelectorArgs & {
+        iid: number
+        updates: GitLabMRUpdate
+      }
+    ) => Promise<{ ok: true } | { ok: false; error: string }>
+    updateMRReviewers: (
+      args: GitLabRepoSelectorArgs & {
+        iid: number
+        reviewerIds: number[]
+        projectRef?: GitLabProjectRef | null
+      }
+    ) => Promise<GitLabMRReviewersUpdateResult>
+    addMRComment: (
+      args: GitLabRepoSelectorArgs & {
+        iid: number
+        body: string
+      }
+    ) => Promise<GitLabCommentResult>
+    addMRInlineComment: (
+      args: GitLabRepoSelectorArgs & {
+        iid: number
+        input: GitLabMRInlineCommentInput
+        projectRef?: GitLabProjectRef | null
+      }
+    ) => Promise<GitLabCommentResult>
+    resolveMRDiscussion: (
+      args: GitLabRepoSelectorArgs & {
+        iid: number
+        discussionId: string
+        resolved: boolean
+      }
+    ) => Promise<GitLabDiscussionResolveResult>
+    jobTrace: (
+      args: GitLabRepoSelectorArgs & {
+        jobId: number
+        projectRef?: GitLabProjectRef | null
+      }
+    ) => Promise<GitLabJobTraceResult>
+    retryJob: (
+      args: GitLabRepoSelectorArgs & {
+        jobId: number
+        projectRef?: GitLabProjectRef | null
+      }
+    ) => Promise<GitLabRetryJobResult>
+    workItemByPath: (
+      args: GitLabRepoSelectorArgs & {
+        host: string
+        path: string
+        iid: number
+        type: 'issue' | 'mr'
+      }
+    ) => Promise<Omit<GitLabWorkItem, 'repoId'> | null>
   }
   linear: {
     connect: (args: {
@@ -1627,8 +1701,6 @@ export type PreloadApi = {
     dismiss: () => Promise<void>
     complete: () => Promise<void>
     disable: () => Promise<void>
-    openWeb: () => Promise<void>
-    starOrca: () => Promise<boolean>
     forceShow: () => Promise<void>
   }
   /** Fire-and-forget track. Loose typing at the IPC boundary on purpose —
@@ -1841,11 +1913,13 @@ export type PreloadApi = {
     }) => Promise<void>
   }
   session: {
-    get: () => Promise<WorkspaceSessionState>
-    set: (args: WorkspaceSessionState) => Promise<void>
-    patch: (args: WorkspaceSessionPatch) => Promise<void>
+    // hostId is optional and defaults to the 'local' partition on the main
+    // side, so existing callers that omit it behave exactly as before.
+    get: (hostId?: ExecutionHostId) => Promise<WorkspaceSessionState>
+    set: (args: WorkspaceSessionState, hostId?: ExecutionHostId) => Promise<void>
+    patch: (args: WorkspaceSessionPatch, hostId?: ExecutionHostId) => Promise<void>
     readTerminalScrollback: (args: { ref: string }) => string | null
-    setSync: (args: WorkspaceSessionState) => void
+    setSync: (args: WorkspaceSessionState, hostId?: ExecutionHostId) => void
   }
   remoteWorkspace: {
     get: (args: { targetId: string }) => Promise<RemoteWorkspaceSnapshot | null>
@@ -2402,6 +2476,9 @@ export type PreloadApi = {
     }) => Promise<{ environment: PublicKnownRuntimeEnvironment }>
     resolve: (args: { selector: string }) => Promise<PublicKnownRuntimeEnvironment>
     remove: (args: { selector: string }) => Promise<{ removed: PublicKnownRuntimeEnvironment }>
+    disconnect: (args: {
+      selector: string
+    }) => Promise<{ disconnected: PublicKnownRuntimeEnvironment }>
     getStatus: (args: {
       selector: string
       timeoutMs?: number

@@ -38,9 +38,12 @@ export function getLinearCurrentIssueFromWorktree(worktree: {
   }
 }
 
-export function resolveLegacyLinearLinkWorkspace(identifier: string): CurrentIssueLink['backfill'] {
+export function resolveLegacyLinearLinkWorkspace(
+  identifier: string,
+  splitOrganizationUrlKey?: string | null
+): CurrentIssueLink['backfill'] {
   const parsed = parseLinearIssueInput(identifier)
-  const organizationUrlKey = parsed?.organizationUrlKey
+  const organizationUrlKey = splitOrganizationUrlKey ?? parsed?.organizationUrlKey
   if (!organizationUrlKey) {
     return undefined
   }

@@ -589,6 +589,31 @@ describe('preflight', () => {
     })
   })
 
+  it('returns no remote agents when the SSH connection is unavailable', async () => {
+    getActiveMultiplexerMock.mockReturnValue(null)
+
+    registerPreflightHandlers()
+
+    await expect(
+      handlers['preflight:detectRemoteAgents'](undefined, { connectionId: 'ssh-1' })
+    ).resolves.toEqual([])
+  })
+
+  it('returns no remote agents when the SSH connection is disposed', async () => {
+    const request = vi.fn()
+    getActiveMultiplexerMock.mockReturnValue({
+      isDisposed: () => true,
+      request
+    })
+
+    registerPreflightHandlers()
+
+    await expect(
+      handlers['preflight:detectRemoteAgents'](undefined, { connectionId: 'ssh-1' })
+    ).resolves.toEqual([])
+    expect(request).not.toHaveBeenCalled()
+  })
+
   it('detects agents from the selected WSL distro for a WSL workspace', async () => {
     Object.defineProperty(process, 'platform', {
       configurable: true,

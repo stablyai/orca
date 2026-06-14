@@ -45,6 +45,8 @@ describe('worktree RPC methods', () => {
       linkedIssue: 123,
       linkedPR: 456,
       linkedLinearIssue: undefined,
+      linkedLinearIssueWorkspaceId: undefined,
+      linkedLinearIssueOrganizationUrlKey: undefined,
       linkedGitLabIssue: 789,
       linkedGitLabMR: 321,
       comment: undefined,
@@ -256,6 +258,33 @@ describe('worktree RPC methods', () => {
       sourceBranch: 'feature/mr-head',
       isCrossRepository: false
     })
+  })
+
+  it('forwards Linear metadata through worktree.set', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      updateManagedWorktreeMeta: vi.fn().mockResolvedValue({ id: 'wt-1' })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: WORKTREE_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('worktree.set', {
+        worktree: 'id:wt-1',
+        linkedLinearIssue: 'STA-335',
+        linkedLinearIssueWorkspaceId: null,
+        linkedLinearIssueOrganizationUrlKey: 'stably'
+      })
+    )
+
+    expect(response).toMatchObject({ ok: true })
+    expect(runtime.updateManagedWorktreeMeta).toHaveBeenCalledWith(
+      'id:wt-1',
+      expect.objectContaining({
+        linkedLinearIssue: 'STA-335',
+        linkedLinearIssueWorkspaceId: null,
+        linkedLinearIssueOrganizationUrlKey: 'stably'
+      })
+    )
   })
 
   it('rejects worktree.set when both parent and no-parent are supplied', async () => {

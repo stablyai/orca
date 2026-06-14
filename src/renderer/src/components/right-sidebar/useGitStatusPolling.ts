@@ -9,6 +9,7 @@ import { refreshGitStatusForWorktree } from './git-status-refresh'
 import { createCoalescedPollRunner } from './coalesced-poll-runner'
 import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
 import { shouldPollActiveGitStatus } from '@/lib/passive-macos-app-data-access'
+import { getRightSidebarWorktreeRuntimeSettings } from './file-explorer-runtime-owner'
 
 const POLL_INTERVAL_MS = 3000
 
@@ -93,7 +94,7 @@ export function useGitStatusPolling(options: { enabled?: boolean } = {}): void {
     try {
       const connectionId = getConnectionId(activeWorktreeId) ?? undefined
       await refreshGitStatusForWorktree({
-        settings: useAppStore.getState().settings,
+        settings: getRightSidebarWorktreeRuntimeSettings(activeWorktreeId),
         worktreeId: activeWorktreeId,
         worktreePath,
         connectionId,
@@ -175,7 +176,7 @@ export function useGitStatusPolling(options: { enabled?: boolean } = {}): void {
             continue
           }
           const op = (await getRuntimeGitConflictOperation({
-            settings: useAppStore.getState().settings,
+            settings: getRightSidebarWorktreeRuntimeSettings(id),
             worktreeId: id,
             worktreePath: path,
             connectionId

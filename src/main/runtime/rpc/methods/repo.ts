@@ -4,6 +4,7 @@ import { OptionalFiniteNumber, OptionalString, requiredString } from '../schemas
 import { sanitizeRepoIcon } from '../../../../shared/repo-icon'
 import { normalizeRepoBadgeColor } from '../../../../shared/repo-badge-color'
 import { normalizeRepoSourceControlAiOverrides } from '../../../../shared/source-control-ai'
+import { PROJECT_RUNTIME_METHODS } from './project-runtime-rpc-methods'
 import { FOLDER_WORKSPACE_METHODS } from './folder-workspace'
 
 const RepoSelector = z.object({
@@ -158,6 +159,7 @@ export const REPO_METHODS: RpcMethod[] = [
     params: null,
     handler: (_params, { runtime }) => ({ repos: runtime.listRepos() })
   }),
+  ...PROJECT_RUNTIME_METHODS,
   defineMethod({
     name: 'projectGroup.list',
     params: null,

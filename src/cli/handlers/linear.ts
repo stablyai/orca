@@ -1,5 +1,3 @@
-import { readFile } from 'node:fs/promises'
-import { isAbsolute, join } from 'node:path'
 import type {
   LinearAttachRequest,
   LinearAttachResult,
@@ -7,44 +5,64 @@ import type {
   LinearCommentAddResult,
   LinearCreateRequest,
   LinearCreateResult,
+  LinearIssueListRequest,
+  LinearIssueListResult,
   LinearIssueContextResult,
-  LinearIssueInclude,
-  LinearIssueRequest,
+  LinearIssueTaskUpdateRequest,
+  LinearIssueTaskUpdateResult,
   LinearSearchResult,
   LinearStatusSetRequest,
   LinearStatusSetResult,
-  LinearWriteTargetRequest
+  LinearTeamLabelsResult,
+  LinearTeamListResult,
+  LinearTeamMembersResult,
+  LinearTeamStatesResult
 } from '../../shared/linear-agent-access'
-import {
-  LINEAR_CHILDREN_MAX_DEPTH,
-  LINEAR_WRITE_BODY_CAP,
-  clampLinearIssueDepth,
-  clampLinearSearchLimit
-} from '../../shared/linear-agent-access'
+import { clampLinearSearchLimit } from '../../shared/linear-agent-access'
 import type { CommandHandler } from '../dispatch'
 import { printResult } from '../format'
+import { RuntimeClientError } from '../runtime-client'
 import {
-  getOptionalNonNegativeIntegerFlag,
   getOptionalPositiveIntegerFlag,
   getOptionalStringFlag,
-  getRequiredStringFlagAllowingEmpty,
+  getRepeatedStringFlag,
   getRequiredStringFlag
 } from '../flags'
-import { RuntimeClientError } from '../runtime-client'
+import {
+  buildAssigneeSetRequest,
+  buildIssueRequest,
+  buildLinearCurrentContext,
+  buildWriteTargetRequest,
+  getDueDateFlag,
+  getHttpUrlFlag,
+  getLinearListFilter,
+  getOptionalWriteId,
+  getPriorityFlag,
+  getRequiredNonNegativeIntegerFlag,
+  getRequiredRepeatedStringFlag,
+  readLinearBody,
+  rejectAllWorkspaceForWrite
+} from '../linear-request-builders'
 import {
   formatLinearAttach,
   formatLinearCommentAdd,
   formatLinearCreate,
   formatLinearIssue,
+  formatLinearIssueList,
+  formatLinearTaskUpdate,
   formatLinearSearch,
   formatLinearStatusSet,
+  formatLinearTeamLabels,
+  formatLinearTeamList,
+  formatLinearTeamMembers,
+  formatLinearTeamStates,
   printLinearIssueWarnings,
+  printLinearListWarnings,
   printLinearSearchWarnings
 } from '../linear-format'
 
 const ISSUE_CONTEXT_TIMEOUT_MS = 120_000
 const LINEAR_WRITE_TIMEOUT_MS = 75_000
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 export const LINEAR_HANDLERS: Record<string, CommandHandler> = {
   'linear issue': async ({ flags, client, cwd, json }) => {
@@ -69,6 +87,51 @@ export const LINEAR_HANDLERS: Record<string, CommandHandler> = {
     }
     printResult(response, json, formatLinearSearch)
   },
+  'linear team list': async ({ flags, client, json }) => {
+    const response = await client.call<LinearTeamListResult>('linear.agentTeamList', {
+      workspaceId: getOptionalStringFlag(flags, 'workspace')
+    })
+    if (!json) {
+      printLinearListWarnings(response.result)
+    }
+    printResult(response, json, formatLinearTeamList)
+  },
+  'linear team members': async ({ flags, client, json }) => {
+    const response = await client.call<LinearTeamMembersResult>('linear.agentTeamMembers', {
+      teamInput: getRequiredStringFlag(flags, 'team'),
+      workspaceId: getOptionalStringFlag(flags, 'workspace')
+    })
+    printResult(response, json, formatLinearTeamMembers)
+  },
+  'linear team states': async ({ flags, client, json }) => {
+    const response = await client.call<LinearTeamStatesResult>('linear.agentTeamStates', {
+      teamInput: getRequiredStringFlag(flags, 'team'),
+      workspaceId: getOptionalStringFlag(flags, 'workspace')
+    })
+    printResult(response, json, formatLinearTeamStates)
+  },
+  'linear team labels': async ({ flags, client, json }) => {
+    const response = await client.call<LinearTeamLabelsResult>('linear.agentTeamLabels', {
+      teamInput: getRequiredStringFlag(flags, 'team'),
+      workspaceId: getOptionalStringFlag(flags, 'workspace')
+    })
+    printResult(response, json, formatLinearTeamLabels)
+  },
+  'linear list': async ({ flags, client, json }) => {
+    const limit = getOptionalPositiveIntegerFlag(flags, 'limit')
+    const filter = getLinearListFilter(flags)
+    const request: LinearIssueListRequest = {
+      filter,
+      teamInput: getOptionalStringFlag(flags, 'team'),
+      limit,
+      workspaceId: getOptionalStringFlag(flags, 'workspace')
+    }
+    const response = await client.call<LinearIssueListResult>('linear.agentIssueList', request)
+    if (!json) {
+      printLinearListWarnings(response.result)
+    }
+    printResult(response, json, formatLinearIssueList)
+  },
   'linear status set': async ({ flags, client, cwd, json }) => {
     const request: LinearStatusSetRequest = {
       ...buildWriteTargetRequest(flags, cwd, client.isRemote),
@@ -79,6 +142,53 @@ export const LINEAR_HANDLERS: Record<string, CommandHandler> = {
     })
     printResult(response, json, formatLinearStatusSet)
   },
+  'linear assignee set': async (ctx) =>
+    runTaskUpdate(ctx, buildAssigneeSetRequest(ctx.flags, ctx.cwd, ctx.client.isRemote)),
+  'linear assignee clear': async (ctx) =>
+    runTaskUpdate(ctx, {
+      ...buildWriteTargetRequest(ctx.flags, ctx.cwd, ctx.client.isRemote),
+      operation: 'assignee',
+      assigneeId: null
+    }),
+  'linear priority set': async (ctx) =>
+    runTaskUpdate(ctx, {
+      ...buildWriteTargetRequest(ctx.flags, ctx.cwd, ctx.client.isRemote),
+      operation: 'priority',
+      priority: getPriorityFlag(ctx.flags, 'to')
+    }),
+  'linear priority clear': async (ctx) =>
+    runTaskUpdate(ctx, {
+      ...buildWriteTargetRequest(ctx.flags, ctx.cwd, ctx.client.isRemote),
+      operation: 'priority',
+      priority: 0
+    }),
+  'linear estimate set': async (ctx) =>
+    runTaskUpdate(ctx, {
+      ...buildWriteTargetRequest(ctx.flags, ctx.cwd, ctx.client.isRemote),
+      operation: 'estimate',
+      estimate: getRequiredNonNegativeIntegerFlag(ctx.flags, 'to')
+    }),
+  'linear estimate clear': async (ctx) =>
+    runTaskUpdate(ctx, {
+      ...buildWriteTargetRequest(ctx.flags, ctx.cwd, ctx.client.isRemote),
+      operation: 'estimate',
+      estimate: null
+    }),
+  'linear due-date set': async (ctx) =>
+    runTaskUpdate(ctx, {
+      ...buildWriteTargetRequest(ctx.flags, ctx.cwd, ctx.client.isRemote),
+      operation: 'dueDate',
+      dueDate: getDueDateFlag(ctx.flags, 'to')
+    }),
+  'linear due-date clear': async (ctx) =>
+    runTaskUpdate(ctx, {
+      ...buildWriteTargetRequest(ctx.flags, ctx.cwd, ctx.client.isRemote),
+      operation: 'dueDate',
+      dueDate: null
+    }),
+  'linear label add': async (ctx) => runLabelUpdate(ctx, 'add'),
+  'linear label remove': async (ctx) => runLabelUpdate(ctx, 'remove'),
+  'linear label set': async (ctx) => runLabelUpdate(ctx, 'set'),
   'linear comment add': async ({ flags, client, cwd, json }) => {
     const body = await readLinearBody(flags, cwd, { required: true })
     const request: LinearCommentAddRequest = {
@@ -118,7 +228,15 @@ export const LINEAR_HANDLERS: Record<string, CommandHandler> = {
     const request: LinearCreateRequest = {
       title: getRequiredStringFlag(flags, 'title'),
       ...(body !== undefined ? { body } : {}),
-      teamKey: getOptionalStringFlag(flags, 'team'),
+      teamInput: getOptionalStringFlag(flags, 'team'),
+      state: getOptionalStringFlag(flags, 'state'),
+      assignee: getOptionalStringFlag(flags, 'assignee'),
+      priority: flags.has('priority') ? getPriorityFlag(flags, 'priority') : undefined,
+      estimate: flags.has('estimate')
+        ? getRequiredNonNegativeIntegerFlag(flags, 'estimate')
+        : undefined,
+      dueDate: flags.has('due-date') ? getDueDateFlag(flags, 'due-date') : undefined,
+      labels: getRepeatedStringFlag(flags, 'label'),
       parentInput,
       parentCurrent,
       workspaceId: getOptionalStringFlag(flags, 'workspace'),
@@ -132,160 +250,28 @@ export const LINEAR_HANDLERS: Record<string, CommandHandler> = {
   }
 }
 
-function buildIssueRequest(
-  flags: Map<string, string | boolean>,
-  cwd: string,
-  remote: boolean
-): LinearIssueRequest {
-  const full = flags.get('full') === true
-  const includes: Record<LinearIssueInclude, boolean> = {
-    comments: full || flags.get('comments') === true,
-    children: full || flags.get('children') === true,
-    attachments: full || flags.get('attachments') === true,
-    relations: full || flags.get('relations') === true
-  }
-  if (flags.has('depth') && !includes.children) {
-    throw new RuntimeClientError('invalid_argument', '--depth requires --children or --full')
-  }
-  const requestedDepth = getOptionalNonNegativeIntegerFlag(flags, 'depth')
-  if (requestedDepth !== undefined && requestedDepth > LINEAR_CHILDREN_MAX_DEPTH) {
-    throw new RuntimeClientError(
-      'invalid_argument',
-      `--depth must be at most ${LINEAR_CHILDREN_MAX_DEPTH}`
-    )
-  }
-  const workspaceId = getOptionalStringFlag(flags, 'workspace')
-  if (workspaceId === 'all') {
-    throw new RuntimeClientError(
-      'linear_invalid_workspace',
-      '--workspace all is not valid for issue'
-    )
-  }
-  const input = getOptionalStringFlag(flags, 'id')
-  return {
-    input,
-    current: input ? false : flags.get('current') === true,
-    workspaceId,
-    include: includes,
-    depth: clampLinearIssueDepth(requestedDepth),
-    context: buildLinearCurrentContext(cwd, remote)
-  }
-}
-
-function buildWriteTargetRequest(
-  flags: Map<string, string | boolean>,
-  cwd: string,
-  remote: boolean
-): LinearWriteTargetRequest {
-  rejectAllWorkspaceForWrite(flags)
-  const input = getOptionalStringFlag(flags, 'id')
-  const current = flags.get('current') === true
-  if (input && current) {
-    throw new RuntimeClientError('invalid_argument', 'Pass either <id> or --current, not both')
-  }
-  if (!input && !current) {
-    throw new RuntimeClientError('linear_issue_required', 'Pass a Linear issue id or --current')
-  }
-  return {
-    input,
-    current,
-    workspaceId: getOptionalStringFlag(flags, 'workspace'),
-    context: buildLinearCurrentContext(cwd, remote)
-  }
-}
-
-function buildLinearCurrentContext(cwd: string, remote: boolean): LinearIssueRequest['context'] {
-  return {
-    remote,
-    ...(remote ? {} : { cwd }),
-    ...(process.env.ORCA_WORKTREE_ID ? { worktreeId: process.env.ORCA_WORKTREE_ID } : {}),
-    ...(process.env.ORCA_TERMINAL_HANDLE
-      ? { terminalHandle: process.env.ORCA_TERMINAL_HANDLE }
-      : {})
-  }
-}
-
-function rejectAllWorkspaceForWrite(flags: Map<string, string | boolean>): void {
-  if (getOptionalStringFlag(flags, 'workspace') === 'all') {
-    throw new RuntimeClientError(
-      'linear_invalid_workspace',
-      '--workspace all is not valid for Linear writes'
-    )
-  }
-}
-
-function getOptionalWriteId(flags: Map<string, string | boolean>): string | undefined {
-  if (!flags.has('write-id')) {
-    return undefined
-  }
-  const writeId = getRequiredStringFlag(flags, 'write-id')
-  if (!UUID_PATTERN.test(writeId)) {
-    throw new RuntimeClientError('linear_invalid_write_id', '--write-id must be a UUID')
-  }
-  return writeId
-}
-
-function getHttpUrlFlag(flags: Map<string, string | boolean>, name: string): string {
-  const value = getRequiredStringFlag(flags, name)
-  try {
-    const parsed = new URL(value)
-    if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
-      return value
+async function runTaskUpdate(
+  { client, json }: Parameters<CommandHandler>[0],
+  request: LinearIssueTaskUpdateRequest
+): Promise<void> {
+  const response = await client.call<LinearIssueTaskUpdateResult>(
+    'linear.issueUpdateTask',
+    request,
+    {
+      timeoutMs: LINEAR_WRITE_TIMEOUT_MS
     }
-  } catch {
-    // Fall through to the stable Linear error below.
-  }
-  throw new RuntimeClientError('linear_invalid_url', '--url must be an absolute http(s) URL')
+  )
+  printResult(response, json, formatLinearTaskUpdate)
 }
 
-function readLinearBody(
-  flags: Map<string, string | boolean>,
-  cwd: string,
-  options: { required: true }
-): Promise<string>
-function readLinearBody(
-  flags: Map<string, string | boolean>,
-  cwd: string,
-  options: { required: false }
-): Promise<string | undefined>
-async function readLinearBody(
-  flags: Map<string, string | boolean>,
-  cwd: string,
-  options: { required: boolean }
-): Promise<string | undefined> {
-  const hasBody = flags.has('body')
-  const hasBodyFile = flags.has('body-file')
-  if (hasBody && hasBodyFile) {
-    throw new RuntimeClientError('invalid_argument', 'Use either --body or --body-file, not both')
-  }
-  if (!hasBody && !hasBodyFile) {
-    if (options.required) {
-      throw new RuntimeClientError('invalid_argument', 'Missing --body or --body-file')
-    }
-    return undefined
-  }
-  const body = hasBody
-    ? getRequiredStringFlagAllowingEmpty(flags, 'body')
-    : await readLinearBodyFile(getRequiredStringFlag(flags, 'body-file'), cwd)
-  if (body.length > LINEAR_WRITE_BODY_CAP) {
-    throw new RuntimeClientError(
-      'linear_body_too_large',
-      `Linear body must be at most ${LINEAR_WRITE_BODY_CAP} characters`
-    )
-  }
-  return body
-}
-
-async function readLinearBodyFile(path: string, cwd: string): Promise<string> {
-  if (path !== '-') {
-    return await readFile(isAbsolute(path) ? path : join(cwd, path), 'utf8')
-  }
-  if (process.stdin.isTTY) {
-    throw new RuntimeClientError('invalid_argument', 'stdin body requested but stdin is a TTY')
-  }
-  const chunks: Buffer[] = []
-  for await (const chunk of process.stdin) {
-    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk)))
-  }
-  return Buffer.concat(chunks).toString('utf8')
+function runLabelUpdate(
+  ctx: Parameters<CommandHandler>[0],
+  labelMode: 'add' | 'remove' | 'set'
+): Promise<void> {
+  return runTaskUpdate(ctx, {
+    ...buildWriteTargetRequest(ctx.flags, ctx.cwd, ctx.client.isRemote),
+    operation: 'labels',
+    labelMode,
+    labels: getRequiredRepeatedStringFlag(ctx.flags, 'label')
+  })
 }

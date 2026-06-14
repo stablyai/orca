@@ -1,6 +1,7 @@
 import { useAppStore } from '@/store'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
-import type { GitHubIssueCloseReason } from '../../../../shared/types'
+import type { GitHubIssueCloseReason, GlobalSettings } from '../../../../shared/types'
+import type { TaskSourceContext } from '../../../../shared/task-source-context'
 
 export type GitHubIssueCommentProjectOrigin = {
   owner: string
@@ -12,6 +13,8 @@ export type GitHubIssueCommentProjectOrigin = {
 export async function runIssueStateUpdate(args: {
   repoPath: string
   repoId?: string | null
+  sourceContext?: TaskSourceContext | null
+  sourceSettings?: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
   projectOrigin: GitHubIssueCommentProjectOrigin | undefined
   number: number
   updates: {
@@ -21,7 +24,7 @@ export async function runIssueStateUpdate(args: {
   }
 }): Promise<void> {
   if (args.projectOrigin) {
-    const target = getActiveRuntimeTarget(useAppStore.getState().settings)
+    const target = getActiveRuntimeTarget(args.sourceSettings ?? useAppStore.getState().settings)
     const updateArgs = {
       owner: args.projectOrigin.owner,
       repo: args.projectOrigin.repo,
@@ -45,6 +48,7 @@ export async function runIssueStateUpdate(args: {
   const res = await window.api.gh.updateIssue({
     repoPath: args.repoPath,
     repoId: args.repoId ?? undefined,
+    sourceContext: args.sourceContext,
     number: args.number,
     updates: args.updates
   })
@@ -56,6 +60,7 @@ export async function runIssueStateUpdate(args: {
 export async function addIssueCommentForRepo(args: {
   repoId?: string
   repoPath: string
+  sourceContext?: TaskSourceContext | null
   number: number
   body: string
   type?: 'issue' | 'pr'
@@ -63,6 +68,7 @@ export async function addIssueCommentForRepo(args: {
   return window.api.gh.addIssueComment({
     repoPath: args.repoPath,
     repoId: args.repoId,
+    sourceContext: args.sourceContext,
     number: args.number,
     body: args.body,
     type: args.type

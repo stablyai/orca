@@ -12,15 +12,18 @@ import { VisuallyHidden } from 'radix-ui'
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet'
 import type { GitHubItemDialogProjectOrigin } from '@/components/GitHubItemDialog'
 import { SlugDialogBody } from './slug-dialog/SlugDialogBody'
+import type { GlobalSettings } from '../../../../shared/types'
 import { translate } from '@/i18n/i18n'
 
 type Props = {
   projectOrigin: GitHubItemDialogProjectOrigin | null
+  sourceSettings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
   onClose: () => void
 }
 
 export default function ProjectItemSlugDialog({
   projectOrigin,
+  sourceSettings,
   onClose
 }: Props): React.JSX.Element {
   const open = projectOrigin !== null
@@ -49,7 +52,13 @@ export default function ProjectItemSlugDialog({
             )}
           </SheetDescription>
         </VisuallyHidden.Root>
-        {projectOrigin ? <SlugDialogBody projectOrigin={projectOrigin} onClose={onClose} /> : null}
+        {projectOrigin ? (
+          <SlugDialogBody
+            projectOrigin={projectOrigin}
+            sourceSettings={sourceSettings}
+            onClose={onClose}
+          />
+        ) : null}
       </SheetContent>
     </Sheet>
   )

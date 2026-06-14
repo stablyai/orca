@@ -68,20 +68,22 @@ export function formatCreateProjectParentSummary({
   parent,
   defaultParent,
   runtimeEnvironmentId,
+  isRemoteHost,
   missingLocationLabel = 'location not selected',
-  missingServerLocationLabel = 'server folder not selected'
+  missingServerLocationLabel = 'host folder not selected'
 }: {
   parent: string
   defaultParent: string
   runtimeEnvironmentId?: string | null
+  isRemoteHost?: boolean
   missingLocationLabel?: string
   missingServerLocationLabel?: string
 }): string {
   const trimmedParent = parent.trim()
   if (!trimmedParent) {
-    return runtimeEnvironmentId ? missingServerLocationLabel : missingLocationLabel
+    return runtimeEnvironmentId || isRemoteHost ? missingServerLocationLabel : missingLocationLabel
   }
-  if (defaultParent && trimmedParent === defaultParent && !runtimeEnvironmentId) {
+  if (defaultParent && trimmedParent === defaultParent && !runtimeEnvironmentId && !isRemoteHost) {
     return '~/orca/projects'
   }
   return trimmedParent

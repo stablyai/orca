@@ -2107,6 +2107,105 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
     expect(capture).toHaveBeenCalledWith({ includeLocalBuffers: false })
   })
 
+  it('does not stop the active runtime when sleeping an SSH-owned worktree', async () => {
+    const store = createTestStore()
+    const wt = 'repo1::/path/wt1'
+
+    seedStore(store, {
+      settings: { ...getDefaultSettings('/tmp'), activeRuntimeEnvironmentId: 'runtime-1' },
+      repos: [
+        {
+          id: 'repo1',
+          path: '/repo1',
+          displayName: 'Repo 1',
+          badgeColor: '#000',
+          addedAt: 0,
+          connectionId: 'ssh-1'
+        }
+      ],
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+      },
+      tabsByWorktree: {
+        [wt]: [makeTab({ id: 'tab-1', worktreeId: wt, ptyId: 'ssh:ssh-1@@pty-1' })]
+      },
+      ptyIdsByTabId: { 'tab-1': ['ssh:ssh-1@@pty-1'] }
+    })
+
+    await store.getState().shutdownWorktreeTerminals(wt, { keepIdentifiers: true })
+
+    expect(mockApi.runtimeEnvironments.call).not.toHaveBeenCalledWith(
+      expect.objectContaining({ method: 'terminal.stop' })
+    )
+    expect(mockApi.pty.kill).toHaveBeenCalledWith('ssh:ssh-1@@pty-1', { keepHistory: true })
+  })
+
+  it('stops the owner runtime when sleeping a runtime-owned compatibility worktree', async () => {
+    const store = createTestStore()
+    const wt = 'repo1::/path/wt1'
+
+    seedStore(store, {
+      settings: { ...getDefaultSettings('/tmp'), activeRuntimeEnvironmentId: 'runtime-1' },
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+      },
+      tabsByWorktree: {
+        [wt]: [makeTab({ id: 'tab-1', worktreeId: wt, ptyId: 'pty-1' })]
+      },
+      ptyIdsByTabId: { 'tab-1': ['pty-1'] }
+    })
+
+    await store.getState().shutdownWorktreeTerminals(wt, { keepIdentifiers: true })
+
+    expect(mockApi.runtimeEnvironments.call).toHaveBeenCalledWith(
+      expect.objectContaining({
+        selector: 'runtime-1',
+        method: 'terminal.stop'
+      })
+    )
+  })
+
+  it('stops the explicit owner runtime when another host is focused', async () => {
+    const store = createTestStore()
+    const wt = 'repo1::/path/wt1'
+
+    seedStore(store, {
+      settings: { ...getDefaultSettings('/tmp'), activeRuntimeEnvironmentId: 'focused-runtime' },
+      repos: [
+        {
+          id: 'repo1',
+          path: '/path/repo1',
+          displayName: 'Repo 1',
+          badgeColor: '#000',
+          addedAt: 0,
+          executionHostId: 'runtime:owner-runtime'
+        }
+      ],
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+      },
+      tabsByWorktree: {
+        [wt]: [makeTab({ id: 'tab-1', worktreeId: wt, ptyId: 'pty-1' })]
+      },
+      ptyIdsByTabId: { 'tab-1': ['pty-1'] }
+    })
+
+    await store.getState().shutdownWorktreeTerminals(wt, { keepIdentifiers: true })
+
+    expect(mockApi.runtimeEnvironments.call).toHaveBeenCalledWith(
+      expect.objectContaining({
+        selector: 'owner-runtime',
+        method: 'terminal.stop'
+      })
+    )
+    expect(mockApi.runtimeEnvironments.call).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        selector: 'focused-runtime',
+        method: 'terminal.stop'
+      })
+    )
+  })
+
   it('drops live agentStatusByPaneKey entries on sleep so the working row disappears', async () => {
     const store = createTestStore()
     const wt = 'repo1::/path/wt1'

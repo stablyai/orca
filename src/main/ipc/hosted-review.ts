@@ -98,7 +98,7 @@ export function registerHostedReviewHandlers(store: Store, stats: StatsCollector
   ipcMain.handle(
     'hostedReview:getCreationEligibility',
     async (_event, args: HostedReviewCreationEligibilityArgs) => {
-      const repo = assertRegisteredRepo(args.repoPath, store)
+      const repo = assertRegisteredRepo(args.repoPath, store, args.repoId)
       const worktreePath = await resolveHostedReviewWorktreePath(repo, store, args.worktreePath)
       return getHostedReviewCreationEligibility({
         ...args,
@@ -109,7 +109,7 @@ export function registerHostedReviewHandlers(store: Store, stats: StatsCollector
   )
 
   ipcMain.handle('hostedReview:create', async (_event, args: CreateHostedReviewArgs) => {
-    const repo = assertRegisteredRepo(args.repoPath, store)
+    const repo = assertRegisteredRepo(args.repoPath, store, args.repoId)
     const worktreePath = await resolveHostedReviewWorktreePath(repo, store, args.worktreePath)
     const result = await createHostedReview(
       worktreePath,

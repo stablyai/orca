@@ -117,6 +117,8 @@ export const WORKTREE_METHODS: RpcMethod[] = [
         linkedIssue: params.linkedIssue,
         linkedPR: params.linkedPR,
         linkedLinearIssue: params.linkedLinearIssue,
+        linkedLinearIssueWorkspaceId: params.linkedLinearIssueWorkspaceId,
+        linkedLinearIssueOrganizationUrlKey: params.linkedLinearIssueOrganizationUrlKey,
         linkedGitLabMR: params.linkedGitLabMR,
         linkedGitLabIssue: params.linkedGitLabIssue,
         comment: params.comment,
@@ -134,6 +136,7 @@ export const WORKTREE_METHODS: RpcMethod[] = [
         workspaceStatus: params.workspaceStatus,
         pushTarget: params.pushTarget,
         diffComments: params.diffComments,
+        mobileDiffReview: params.mobileDiffReview,
         lineage:
           params.parentWorktree || params.noParent === true
             ? {

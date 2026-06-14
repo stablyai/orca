@@ -5,10 +5,7 @@ import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 export const getSshPaneSearchEntries = createLocalizedCatalog(() => [
   {
     title: translate('auto.components.settings.ssh.search.380a788da7', 'SSH Connections'),
-    description: translate(
-      'auto.components.settings.ssh.search.74c6d90d78',
-      'Manage remote SSH targets.'
-    ),
+    description: translate('auto.components.settings.ssh.search.74c6d90d78', 'Manage SSH hosts.'),
     keywords: [
       ...translateSearchKeyword('auto.components.settings.ssh.search.7efd17e816', 'ssh'),
       ...translateSearchKeyword('auto.components.settings.ssh.search.d4bcd497c7', 'remote'),
@@ -19,10 +16,7 @@ export const getSshPaneSearchEntries = createLocalizedCatalog(() => [
   },
   {
     title: translate('auto.components.settings.ssh.search.f5a691bb6c', 'Add SSH Target'),
-    description: translate(
-      'auto.components.settings.ssh.search.62826efbe9',
-      'Add a new remote SSH target.'
-    ),
+    description: translate('auto.components.settings.ssh.search.62826efbe9', 'Add a new SSH host.'),
     keywords: [
       ...translateSearchKeyword('auto.components.settings.ssh.search.7efd17e816', 'ssh'),
       ...translateSearchKeyword('auto.components.settings.ssh.search.f7b6383aec', 'add'),

@@ -42,6 +42,7 @@ import { getLineageRenderInfo } from './worktree-list-groups'
 import { getWorkspaceStatus, getWorkspaceStatusVisualMeta } from './workspace-status'
 import { WorktreeOpenInSubMenu } from './WorktreeOpenInMenu'
 import { ProjectGroupNameDialog } from './ProjectGroupNameDialog'
+import { isEventTargetInsideCurrentTarget } from './worktree-card-dom-events'
 import { translate } from '@/i18n/i18n'
 import { folderWorkspaceKey, parseWorkspaceKey } from '../../../../shared/workspace-scope'
 
@@ -492,6 +493,9 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
       className="relative"
       {...{ [WORKTREE_CONTEXT_MENU_SCOPE_ATTR]: 'worktree' }}
       onContextMenuCapture={(event) => {
+        if (!isEventTargetInsideCurrentTarget(event.currentTarget, event.target)) {
+          return
+        }
         if (shouldUseNativeContextMenu(event.target)) {
           return
         }

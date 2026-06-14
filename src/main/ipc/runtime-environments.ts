@@ -33,6 +33,7 @@ const RUNTIME_ENVIRONMENT_HANDLER_CHANNELS = [
   'runtimeEnvironments:addFromPairingCode',
   'runtimeEnvironments:resolve',
   'runtimeEnvironments:remove',
+  'runtimeEnvironments:disconnect',
   'runtimeEnvironments:getStatus',
   'runtimeEnvironments:call',
   'runtimeEnvironments:subscribe',
@@ -101,6 +102,20 @@ export function registerRuntimeEnvironmentHandlers(): void {
       }
       closeSubscriptionsForEnvironment(removed.id)
       return { removed: redactRuntimeEnvironment(removed) }
+    }
+  )
+  ipcMain.handle(
+    'runtimeEnvironments:disconnect',
+    (_event, args: { selector: string }): { disconnected: PublicKnownRuntimeEnvironment } => {
+      const environment = resolveEnvironment(getUserDataPath(), args.selector)
+      // Why: disconnect is intentionally non-destructive; it drops live
+      // transport state while keeping the paired server available for later.
+      closeRemoteRuntimeRequestConnection(environment.id)
+      if (args.selector !== environment.id) {
+        closeRemoteRuntimeRequestConnection(args.selector)
+      }
+      closeSubscriptionsForEnvironment(environment.id)
+      return { disconnected: redactRuntimeEnvironment(environment) }
     }
   )
   ipcMain.handle(

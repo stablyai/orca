@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ComponentType, type Ref } from 'react'
+import { useEffect, useRef, useState, type ComponentType, type ReactNode, type Ref } from 'react'
 import { CircleStop, Loader2 } from 'lucide-react'
 import { DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
@@ -66,6 +66,10 @@ type AddRepoLocalStartStepProps = {
   addProjectBusyLabel: string | null
   nestedScanInProgress: boolean
   nestedScanId: string | null
+  hostSelector?: ReactNode
+  showRemoteAction?: boolean
+  canCreateProject?: boolean
+  browseHostKind?: 'local' | 'ssh' | 'runtime'
   onBrowse: () => void
   onOpenCloneStep: () => void
   onOpenRemoteStep: () => void
@@ -80,6 +84,10 @@ export function AddRepoLocalStartStep({
   addProjectBusyLabel,
   nestedScanInProgress,
   nestedScanId,
+  hostSelector,
+  showRemoteAction = true,
+  canCreateProject = true,
+  browseHostKind = 'local',
   onBrowse,
   onOpenCloneStep,
   onOpenRemoteStep,
@@ -93,7 +101,10 @@ export function AddRepoLocalStartStep({
     onBrowse,
     onOpenCloneStep,
     onOpenRemoteStep,
-    onOpenCreateStep
+    onOpenCreateStep,
+    showRemoteAction,
+    canCreateProject,
+    browseHostKind
   })
 
   // The white fill + ⏎ chip is a roving selection indicator, not a fixed "primary" badge:
@@ -161,6 +172,7 @@ export function AddRepoLocalStartStep({
         onBlur={handleActionsBlur}
         onKeyDown={handleArrowNavigation}
       >
+        {hostSelector}
         <AddRepoPrimaryStartAction
           icon={primaryAction.icon}
           title={primaryAction.title}
@@ -187,7 +199,7 @@ export function AddRepoLocalStartStep({
                 icon={action.icon}
                 title={action.title}
                 description={action.description}
-                disabled={isAdding}
+                disabled={isAdding || Boolean(action.disabled)}
                 selected={selectedKind === action.kind}
                 onClick={action.onClick}
                 onFocus={() => setSelectedKind(action.kind)}

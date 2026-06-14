@@ -81,6 +81,19 @@ vi.mock('../settings/AgentSkillSetupPanel', () => ({
 let root: Root | null = null
 let container: HTMLDivElement | null = null
 
+function installLocalStorageShim(): void {
+  const values = new Map<string, string>()
+  Object.defineProperty(window, 'localStorage', {
+    configurable: true,
+    value: {
+      clear: () => values.clear(),
+      getItem: (key: string) => values.get(key) ?? null,
+      removeItem: (key: string) => values.delete(key),
+      setItem: (key: string, value: string) => values.set(key, value)
+    }
+  })
+}
+
 function cliStatus(overrides: Partial<CliInstallStatus>): CliInstallStatus {
   return {
     platform: 'darwin',
@@ -119,6 +132,17 @@ async function updatePrompt(
     root?.render(<LinearAgentSkillSetupPrompt {...props} />)
   })
   await act(async () => {})
+}
+
+async function unmountPrompt(): Promise<void> {
+  if (root) {
+    await act(async () => {
+      root?.unmount()
+    })
+  }
+  root = null
+  container?.remove()
+  container = null
 }
 
 function findBodyButton(label: string): HTMLButtonElement | undefined {
@@ -166,8 +190,9 @@ describe('LinearAgentSkillSetupPrompt', () => {
     mocks.ensureCli.mockClear()
     mocks.ensureWslCli.mockClear()
     mocks.panelProps.length = 0
+    installLocalStorageShim()
     window.localStorage.clear()
-    _linearAgentSkillSetupPromptInternalsForTests.resetSessionSnoozes()
+    _linearAgentSkillSetupPromptInternalsForTests.resetSessionReminders()
     Object.defineProperty(window, 'api', {
       configurable: true,
       value: {
@@ -180,16 +205,9 @@ describe('LinearAgentSkillSetupPrompt', () => {
   })
 
   afterEach(async () => {
-    if (root) {
-      await act(async () => {
-        root?.unmount()
-      })
-    }
-    root = null
-    container?.remove()
-    container = null
+    await unmountPrompt()
     window.localStorage.clear()
-    _linearAgentSkillSetupPromptInternalsForTests.resetSessionSnoozes()
+    _linearAgentSkillSetupPromptInternalsForTests.resetSessionReminders()
     Reflect.deleteProperty(window, 'api')
   })
 
@@ -396,7 +414,7 @@ describe('LinearAgentSkillSetupPrompt', () => {
     )
   })
 
-  it('auto-opens as a modal-only prompt and session-snoozes when closed', async () => {
+  it('auto-opens as a modal-only prompt and treats Not now as a casual close', async () => {
     await renderPrompt({ linked: true, remote: false, surface: 'modal' })
 
     expect(container?.textContent).not.toContain('Set up Linear agent skill')

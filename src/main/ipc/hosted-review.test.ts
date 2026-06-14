@@ -101,6 +101,7 @@ describe('registerHostedReviewHandlers', () => {
 
     await handlers['hostedReview:getCreationEligibility'](null, {
       repoPath,
+      repoId: repo.id,
       worktreePath,
       branch: 'feature/pr',
       base: 'main'
@@ -128,6 +129,7 @@ describe('registerHostedReviewHandlers', () => {
 
     await handlers['hostedReview:create'](null, {
       repoPath,
+      repoId: repo.id,
       worktreePath,
       provider: 'github',
       base: 'main',
@@ -157,5 +159,27 @@ describe('registerHostedReviewHandlers', () => {
         meta: { prNumber: 42, prUrl: 'https://github.com/acme/orca/pull/42' }
       })
     )
+  })
+
+  it('rejects creation when repoId and repoPath point at different registered repos', async () => {
+    store.getRepo.mockImplementation((repoId: string) =>
+      repoId === repo.id ? { ...repo, path: '/other/repo' } : null
+    )
+
+    registerHostedReviewHandlers(store as never, stats as never)
+
+    await expect(
+      handlers['hostedReview:create'](null, {
+        repoPath,
+        repoId: repo.id,
+        worktreePath,
+        provider: 'github',
+        base: 'main',
+        head: 'feature/pr',
+        title: 'Feature PR'
+      })
+    ).rejects.toThrow('Access denied: unknown repository')
+
+    expect(createHostedReviewMock).not.toHaveBeenCalled()
   })
 })

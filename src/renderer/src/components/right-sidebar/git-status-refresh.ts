@@ -17,7 +17,8 @@ export type GitStatusRefreshDeps = {
     worktreeId: string,
     worktreePath: string,
     connectionId?: string,
-    pushTarget?: GitPushTarget
+    pushTarget?: GitPushTarget,
+    options?: { runtimeTargetSettings?: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null }
   ) => Promise<void>
 }
 
@@ -56,7 +57,9 @@ export async function refreshGitStatusForWorktree({
     // Why: porcelain status reports Git's configured upstream. Source Control
     // actions for PR-created worktrees must instead reconcile with Orca's
     // explicit publish target.
-    await deps.fetchUpstreamStatus(worktreeId, worktreePath, connectionId, pushTarget)
+    await deps.fetchUpstreamStatus(worktreeId, worktreePath, connectionId, pushTarget, {
+      runtimeTargetSettings: settings
+    })
     return
   }
   if (status.upstreamStatus) {
@@ -68,11 +71,15 @@ export async function refreshGitStatusForWorktree({
       // Why: porcelain status has counts but cannot tell stale post-rebase
       // upstream commits from real remote work. Writing it first makes the
       // primary action flicker between Sync and Force Push on every poll.
-      await deps.fetchUpstreamStatus(worktreeId, worktreePath, connectionId)
+      await deps.fetchUpstreamStatus(worktreeId, worktreePath, connectionId, undefined, {
+        runtimeTargetSettings: settings
+      })
       return
     }
     deps.setUpstreamStatus(worktreeId, status.upstreamStatus)
     return
   }
-  await deps.fetchUpstreamStatus(worktreeId, worktreePath, connectionId)
+  await deps.fetchUpstreamStatus(worktreeId, worktreePath, connectionId, undefined, {
+    runtimeTargetSettings: settings
+  })
 }

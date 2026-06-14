@@ -38,6 +38,7 @@ import {
   useWindowsTerminalCapabilities
 } from '@/lib/windows-terminal-capabilities'
 import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
+import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
 import {
   type BuiltInWindowsTerminalShell,
@@ -233,8 +234,10 @@ function TabBarInner({
   const defaultWindowsPowerShellImplementation = useAppStore(
     (s) => s.settings?.terminalWindowsPowerShellImplementation ?? 'auto'
   )
+  // Why: probe Windows shell capabilities on the host that owns this worktree, so
+  // the offered shells match the host that actually runs the terminal.
   const activeRuntimeEnvironmentId = useAppStore(
-    (s) => s.settings?.activeRuntimeEnvironmentId?.trim() || null
+    (s) => getRuntimeEnvironmentIdForWorktree(s, worktreeId)?.trim() || null
   )
   const worktreeHasRemoteConnection = useAppStore((s) => {
     const worktree = Object.values(s.worktreesByRepo ?? {})

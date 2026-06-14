@@ -210,4 +210,24 @@ describe('runner execFile timeout handling', () => {
     await rejection
     expect(child.kill).toHaveBeenCalled()
   })
+
+  // Issue #5308: git read-path calls must be forced non-interactive so a
+  // credential / SSH host-key prompt fails fast instead of blocking forever on
+  // stdin and wedging the serve runtime for all clients.
+  it('runs git non-interactively so a prompt fails fast instead of hanging', async () => {
+    const child = createMockChildProcess(1234)
+    let capturedEnv: NodeJS.ProcessEnv | undefined
+    execFileMock.mockImplementation((_cmd, _args, opts, cb) => {
+      capturedEnv = opts.env
+      cb(null, '', '')
+      return child
+    })
+
+    await gitExecFileAsync(['worktree', 'list', '--porcelain', '-z'], { cwd: '/home5/Brian' })
+
+    expect(capturedEnv?.GIT_TERMINAL_PROMPT).toBe('0')
+    expect(capturedEnv?.GIT_ASKPASS).toBe('')
+    expect(capturedEnv?.SSH_ASKPASS).toBe('')
+    expect(capturedEnv?.GIT_SSH_COMMAND).toContain('BatchMode=yes')
+  })
 })

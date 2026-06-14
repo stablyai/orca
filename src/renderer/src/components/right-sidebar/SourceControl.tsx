@@ -122,6 +122,7 @@ import {
   requestEditorSaveQuiesce
 } from '@/components/editor/editor-autosave'
 import { getConnectionId } from '@/lib/connection-context'
+import { getRepoOwnerRoutedSettings } from '@/lib/repo-runtime-owner'
 import {
   abortRuntimeGitMerge,
   abortRuntimeGitRebase,
@@ -145,11 +146,6 @@ import {
 import { getRuntimeRepoBaseRefDefault } from '@/runtime/runtime-repo-client'
 import { PullRequestIcon } from './checks-panel-content'
 import { stripBaseRef, useCreatePullRequestDialogFields } from './useCreatePullRequestDialogFields'
-import {
-  RIGHT_SIDEBAR_MORPHING_PRIMARY_BUTTON_CLASS,
-  RIGHT_SIDEBAR_PRIMARY_BUTTON_LABEL_CLASS,
-  RIGHT_SIDEBAR_SPLIT_ACTION_ROW_CLASS
-} from './right-sidebar-primary-action-layout'
 import { GitHistoryPanel, type GitHistoryPanelState } from './GitHistoryPanel'
 import type { GitHistoryItem } from '../../../../shared/git-history'
 import { normalizeHostedReviewHeadRef } from '../../../../shared/hosted-review-refs'
@@ -160,8 +156,6 @@ import type {
   GitBranchCompareSummary,
   GitConflictOperation,
   GitStatusEntry,
-  GlobalSettings,
-  Repo,
   SourceControlViewMode,
   TuiAgent
 } from '../../../../shared/types'
@@ -214,14 +208,6 @@ import {
   type PullRequestGenerationContext,
   type PullRequestGenerationFields
 } from '@/store/slices/pull-request-generation'
-import {
-  createRunningCommitMessageGenerationRecord,
-  getCommitMessageGenerationRecordKey,
-  markCommitMessageGenerationHydrated,
-  resolveCommitMessageGenerationCancel,
-  resolveCommitMessageGenerationFailure,
-  resolveCommitMessageGenerationSuccess
-} from '@/store/slices/commit-message-generation'
 
 export {
   appendCommitFailureCustomInstruction,
@@ -238,30 +224,6 @@ export {
 export type SourceControlScope = 'all' | 'uncommitted'
 type AbortConflictOperation = Extract<GitConflictOperation, 'merge' | 'rebase'>
 type AbortActionErrorKind = 'abort_merge' | 'abort_rebase'
-type CommitMessageGenerationTargetSnapshot = {
-  worktreeId: string
-  worktreePath: string
-  connectionId?: string
-  repo: Pick<Repo, 'id' | 'sourceControlAi'> | null
-  settings: GlobalSettings | null
-  discoveryHostKey: string
-}
-type CommitMessageGenerationOptions = RuntimeGenerateCommitMessageOverrides & {
-  target?: CommitMessageGenerationTargetSnapshot
-}
-type PullRequestGenerationTargetSnapshot = {
-  worktreeId: string | null
-  worktreePath: string
-  connectionId?: string
-  repo: Pick<Repo, 'id' | 'sourceControlAi'> | null
-  repoId: string
-  branch: string
-  settings: GlobalSettings | null
-  discoveryHostKey: string
-  fields: PullRequestGenerationFields
-  fieldRevisions: PullRequestFieldRevisions
-}
-
 export type SourceControlActionError = {
   kind: RemoteOpKind | AbortActionErrorKind
   message: string
@@ -688,6 +650,12 @@ function SourceControlInner(): React.JSX.Element {
   const isRemoteOperationActive = useAppStore((s) => s.isRemoteOperationActive)
   const inFlightRemoteOpKind = useAppStore((s) => s.inFlightRemoteOpKind)
   const settings = useAppStore((s) => s.settings)
+  // Why: git/file mutations and repo metadata requests belong to the repo
+  // OWNER host, not the currently focused host in the sidebar.
+  const activeRepoSettings = useMemo(
+    () => getRepoOwnerRoutedSettings(settings, activeRepo ?? null),
+    [activeRepo, settings]
+  )
   const updateSettings = useAppStore((s) => s.updateSettings)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
@@ -883,6 +851,15 @@ function SourceControlInner(): React.JSX.Element {
   const isAbortingOperation = abortOperationInFlightByWorktree[activeWorktreeId ?? ''] ?? false
   const confirmAction = useConfirmationDialog()
   const isCommitting = commitInFlightByWorktree[activeWorktreeId ?? ''] ?? false
+  // Why: parallel state to commit. Same per-worktree shape so navigating between
+  // worktrees mid-generation never silently cancels the in-flight request.
+  const generateInFlightRef = useRef<Record<string, boolean>>({})
+  const [generateInFlightByWorktree, setGenerateInFlightByWorktree] = useState<
+    Record<string, boolean>
+  >({})
+  const [generateErrors, setGenerateErrors] = useState<Record<string, string | null>>({})
+  const isGenerating = generateInFlightByWorktree[activeWorktreeId ?? ''] ?? false
+  const generateError = generateErrors[activeWorktreeId ?? ''] ?? null
   const [hostedReviewCreationState, setHostedReviewCreationState] =
     useState<HostedReviewCreationState | null>(null)
   const createPrInFlightRef = useRef<Record<string, boolean>>({})
@@ -892,24 +869,12 @@ function SourceControlInner(): React.JSX.Element {
   const [createPrErrors, setCreatePrErrors] = useState<Record<string, string | null>>({})
   const isCreatingPr = createPrInFlightByWorktree[activeWorktreeId ?? ''] ?? false
   const createPrError = createPrErrors[activeWorktreeId ?? ''] ?? null
-  const commitGenerationRecords = useAppStore((s) => s.commitMessageGenerationRecords)
-  const allocateCommitMessageGenerationRequestId = useAppStore(
-    (s) => s.allocateCommitMessageGenerationRequestId
-  )
-  const setCommitMessageGenerationRecord = useAppStore((s) => s.setCommitMessageGenerationRecord)
-  const updateCommitMessageGenerationRecord = useAppStore(
-    (s) => s.updateCommitMessageGenerationRecord
-  )
-  const pruneCommitMessageGenerationRecords = useAppStore(
-    (s) => s.pruneCommitMessageGenerationRecords
-  )
   const prGenerationRecords = useAppStore((s) => s.pullRequestGenerationRecords)
   const allocatePullRequestGenerationRequestId = useAppStore(
     (s) => s.allocatePullRequestGenerationRequestId
   )
   const setPullRequestGenerationRecord = useAppStore((s) => s.setPullRequestGenerationRecord)
   const updatePullRequestGenerationRecord = useAppStore((s) => s.updatePullRequestGenerationRecord)
-  const prunePullRequestGenerationRecords = useAppStore((s) => s.prunePullRequestGenerationRecords)
   const filterInputRef = useRef<HTMLInputElement>(null)
   const commitMessage = readCommitDraftForWorktree(commitDrafts, activeWorktreeId)
   const commitError = commitErrors[activeWorktreeId ?? ''] ?? null
@@ -936,16 +901,6 @@ function SourceControlInner(): React.JSX.Element {
   const gitIdentityDisplay = activeWorktree ? getWorktreeGitIdentityDisplay(activeWorktree) : null
   const detachedHeadDisplay = gitIdentityDisplay?.kind === 'detached' ? gitIdentityDisplay : null
   const branchName = gitIdentityDisplay?.kind === 'branch' ? gitIdentityDisplay.branchName : ''
-  const activeCommitGenerationKey = getCommitMessageGenerationRecordKey(
-    activeWorktreeId,
-    worktreePath
-  )
-  const activeCommitGenerationRecord = activeCommitGenerationKey
-    ? (commitGenerationRecords[activeCommitGenerationKey] ?? null)
-    : null
-  const isGenerating = activeCommitGenerationRecord?.status === 'running'
-  const generateError =
-    activeCommitGenerationRecord?.status === 'failed' ? activeCommitGenerationRecord.error : null
   const activePullRequestGenerationKey = getPullRequestGenerationRecordKey({
     worktreeId: activeWorktreeId,
     worktreePath,
@@ -974,7 +929,8 @@ function SourceControlInner(): React.JSX.Element {
     }
     const connectionId = getConnectionId(activeWorktreeId) ?? undefined
     await refreshGitStatusForWorktree({
-      settings: useAppStore.getState().settings,
+      // Why: route git status by the repo OWNER host, not the focused runtime.
+      settings: activeRepoSettings,
       worktreeId: activeWorktreeId,
       worktreePath,
       connectionId,
@@ -987,6 +943,7 @@ function SourceControlInner(): React.JSX.Element {
       }
     })
   }, [
+    activeRepoSettings,
     activeWorktreeId,
     activeWorktree?.pushTarget,
     fetchUpstreamStatus,
@@ -1012,7 +969,9 @@ function SourceControlInner(): React.JSX.Element {
       }
       try {
         await refreshGitStatusForWorktree({
-          settings: useAppStore.getState().settings,
+          // Why: generation can finish after the user switches hosts; refresh
+          // the same host that owned the generation request.
+          settings: context.runtimeTargetSettings,
           worktreeId: context.worktreeId,
           worktreePath: context.worktreePath,
           connectionId: context.connectionId,
@@ -1051,7 +1010,7 @@ function SourceControlInner(): React.JSX.Element {
     setDefaultBaseRef(null)
 
     let stale = false
-    void getRuntimeRepoBaseRefDefault(useAppStore.getState().settings, activeRepo.id)
+    void getRuntimeRepoBaseRefDefault(activeRepoSettings, activeRepo.id)
       .then((result) => {
         if (!stale) {
           // Why: IPC now returns a `{ defaultBaseRef, remoteCount }` envelope;
@@ -1073,7 +1032,7 @@ function SourceControlInner(): React.JSX.Element {
     return () => {
       stale = true
     }
-  }, [activeRepo, isBranchVisible, isFolder])
+  }, [activeRepo, activeRepoSettings, isBranchVisible, isFolder])
 
   const normalizedWorktreeBaseRef = activeWorktree?.baseRef?.trim() || null
   const normalizedRepoBaseRef = activeRepo?.worktreeBaseRef?.trim() || null
@@ -1103,7 +1062,8 @@ function SourceControlInner(): React.JSX.Element {
           branchName,
           settings,
           activeRepo.id,
-          activeRepo.connectionId
+          activeRepo.connectionId,
+          activeRepo.executionHostId
         )
       : null
   const hostedReviewEntry = hostedReviewCacheKey
@@ -1116,7 +1076,8 @@ function SourceControlInner(): React.JSX.Element {
           activeRepo.id,
           branchName,
           settings,
-          activeRepo.connectionId
+          activeRepo.connectionId,
+          activeRepo.executionHostId
         )
       : null
   const activePrFromQueue = activePrCacheKey ? (prCache[activePrCacheKey]?.data ?? null) : null
@@ -1321,7 +1282,7 @@ function SourceControlInner(): React.JSX.Element {
     handleSavePullRequestGenerationDefaults,
     openSourceControlAiSettings
   } = useSourceControlAi({
-    settings,
+    settings: activeRepoSettings,
     activeRepo: activeRepo ?? null,
     activeWorktreeId,
     activeConnectionId,
@@ -1339,70 +1300,17 @@ function SourceControlInner(): React.JSX.Element {
     openSettingsPage
   })
 
-  const [commitGenerationDialogTarget, setCommitGenerationDialogTarget] =
-    useState<CommitMessageGenerationTargetSnapshot | null>(null)
-  const [pullRequestGenerationDialogTarget, setPullRequestGenerationDialogTarget] =
-    useState<PullRequestGenerationTargetSnapshot | null>(null)
-
-  const createCommitMessageGenerationTarget = useCallback(() => {
-    if (!activeWorktreeId || !worktreePath) {
-      return null
-    }
-    return {
-      worktreeId: activeWorktreeId,
-      worktreePath,
-      connectionId: activeConnectionId ?? undefined,
-      repo: activeRepo ?? null,
-      settings,
-      discoveryHostKey: sourceControlAiDiscoveryHostKey
-    }
-  }, [
-    activeConnectionId,
-    activeRepo,
-    activeWorktreeId,
-    settings,
-    sourceControlAiDiscoveryHostKey,
-    worktreePath
-  ])
-
-  const handleCommitGenerationDialogOpenChange = useCallback(
-    (open: boolean): void => {
-      setCommitGenerationDialogOpen(open)
-      if (!open) {
-        setCommitGenerationDialogTarget(null)
-      }
-    },
-    [setCommitGenerationDialogOpen]
-  )
-
-  const handlePullRequestGenerationDialogOpenChange = useCallback(
-    (open: boolean): void => {
-      setPullRequestGenerationDialogOpen(open)
-      if (!open) {
-        setPullRequestGenerationDialogTarget(null)
-      }
-    },
-    [setPullRequestGenerationDialogOpen]
-  )
-
   // Why: orphaned draft/error/in-flight entries accumulate when worktrees are
   // removed from the store (long sessions with many create/destroy cycles).
   // Prune them so a deleted-then-reused worktree ID doesn't inherit stale
   // state — especially commitInFlightRef, which would permanently disable
   // Commit for that ID if left stuck at `true`.
   useEffect(() => {
-    const liveWorktreeKeys = new Set<string>()
-    for (const worktree of worktreeMap.values()) {
-      liveWorktreeKeys.add(worktree.id)
-      if (worktree.path.trim()) {
-        liveWorktreeKeys.add(worktree.path)
-      }
-    }
     const pruneRecord = <T,>(prev: Record<string, T>): Record<string, T> => {
       let changed = false
       const next: Record<string, T> = {}
       for (const key of Object.keys(prev)) {
-        if (liveWorktreeKeys.has(key)) {
+        if (worktreeMap.has(key)) {
           next[key] = prev[key]
         } else {
           changed = true
@@ -1415,21 +1323,26 @@ function SourceControlInner(): React.JSX.Element {
     setRemoteActionErrors((prev) => pruneRecord(prev))
     setCommitInFlightByWorktree((prev) => pruneRecord(prev))
     setAbortOperationInFlightByWorktree((prev) => pruneRecord(prev))
+    setGenerateInFlightByWorktree((prev) => pruneRecord(prev))
+    setGenerateErrors((prev) => pruneRecord(prev))
     setGitHistoryByWorktree((prev) => pruneRecord(prev))
-    pruneCommitMessageGenerationRecords(liveWorktreeKeys)
-    prunePullRequestGenerationRecords(liveWorktreeKeys)
     // Refs don't need setState — mutate in place to drop stale keys.
     for (const key of Object.keys(commitInFlightRef.current)) {
-      if (!liveWorktreeKeys.has(key)) {
+      if (!worktreeMap.has(key)) {
         delete commitInFlightRef.current[key]
       }
     }
+    for (const key of Object.keys(generateInFlightRef.current)) {
+      if (!worktreeMap.has(key)) {
+        delete generateInFlightRef.current[key]
+      }
+    }
     for (const key of Object.keys(gitHistoryRequestByWorktreeRef.current)) {
-      if (!liveWorktreeKeys.has(key)) {
+      if (!worktreeMap.has(key)) {
         delete gitHistoryRequestByWorktreeRef.current[key]
       }
     }
-  }, [pruneCommitMessageGenerationRecords, prunePullRequestGenerationRecords, worktreeMap])
+  }, [worktreeMap])
 
   useEffect(() => {
     // Why: users often finish merge/rebase conflicts in a terminal. Once git
@@ -1496,7 +1409,8 @@ function SourceControlInner(): React.JSX.Element {
     try {
       const commitResult = await commitRuntimeGit(
         {
-          settings: useAppStore.getState().settings,
+          // Why: route the commit by the repo OWNER host, not the focused runtime.
+          settings: activeRepoSettings,
           worktreeId: activeWorktreeId,
           worktreePath,
           connectionId
@@ -1563,6 +1477,7 @@ function SourceControlInner(): React.JSX.Element {
       commitInFlightRef.current[activeWorktreeId] = false
     }
   }, [
+    activeRepoSettings,
     activeWorktreeId,
     beginGitBranchCompareRequest,
     commitMessage,
@@ -1574,223 +1489,119 @@ function SourceControlInner(): React.JSX.Element {
   ])
 
   const handleGenerate = useCallback(
-    async (options?: CommitMessageGenerationOptions): Promise<void> => {
-      const target = options?.target ?? createCommitMessageGenerationTarget()
-      if (!target) {
+    async (overrides?: RuntimeGenerateCommitMessageOverrides): Promise<void> => {
+      if (!activeWorktreeId || !worktreePath) {
         return
       }
-      const overrides: RuntimeGenerateCommitMessageOverrides = {
-        ...(options?.sourceControlAiResolvedParams
-          ? { sourceControlAiResolvedParams: options.sourceControlAiResolvedParams }
-          : {}),
-        ...(options?.sourceControlAi ? { sourceControlAi: options.sourceControlAi } : {}),
-        ...(options?.agentCmdOverrides ? { agentCmdOverrides: options.agentCmdOverrides } : {})
-      }
-      const { worktreeId, worktreePath: generationWorktreePath, connectionId } = target
-      const generationKey = getCommitMessageGenerationRecordKey(worktreeId, generationWorktreePath)
-      if (!generationKey) {
+      if (generateInFlightRef.current[activeWorktreeId]) {
         return
       }
-      if (
-        useAppStore.getState().commitMessageGenerationRecords[generationKey]?.status === 'running'
-      ) {
-        return
-      }
-      if (!overrides.sourceControlAiResolvedParams && resolvedCommitMessageAi?.ok !== true) {
+      if (!overrides?.sourceControlAiResolvedParams && resolvedCommitMessageAi?.ok !== true) {
         return
       }
 
       if (
-        !overrides.sourceControlAiResolvedParams &&
+        !overrides?.sourceControlAiResolvedParams &&
         resolvedCommitMessageAi?.ok === true &&
         isCustomAgentId(resolvedCommitMessageAi.value.params.agentId)
       ) {
         const command = resolvedCommitMessageAi.value.params.customAgentCommand?.trim() ?? ''
         if (!command) {
-          const requestId = allocateCommitMessageGenerationRequestId()
-          const failedRecord = resolveCommitMessageGenerationFailure({
-            record: createRunningCommitMessageGenerationRecord({
-              worktreeId,
-              worktreePath: generationWorktreePath,
-              connectionId,
-              requestId,
-              runtimeTargetSettings: {
-                activeRuntimeEnvironmentId: target.settings?.activeRuntimeEnvironmentId ?? null
-              }
-            }),
-            requestId,
-            error: translate(
-              'auto.components.right.sidebar.SourceControl.e9e238b260',
+          setGenerateErrors((prev) => ({
+            ...prev,
+            [activeWorktreeId]:
               'Custom command is empty. Add one in Settings -> Git -> Source Control AI.'
-            )
-          })
-          if (failedRecord) {
-            setCommitMessageGenerationRecord(generationKey, failedRecord)
-          }
+          }))
           return
         }
       }
 
-      const requestId = allocateCommitMessageGenerationRequestId()
-      // Why: Stop must route to the runtime selected at generation start, even
-      // if the user changes settings before cancellation.
-      setCommitMessageGenerationRecord(
-        generationKey,
-        createRunningCommitMessageGenerationRecord({
-          worktreeId,
-          worktreePath: generationWorktreePath,
-          connectionId,
-          requestId,
-          runtimeTargetSettings: {
-            activeRuntimeEnvironmentId: target.settings?.activeRuntimeEnvironmentId ?? null
-          }
-        })
-      )
+      generateInFlightRef.current[activeWorktreeId] = true
+      const connectionId = getConnectionId(activeWorktreeId) ?? undefined
+      setGenerateInFlightByWorktree((prev) => ({ ...prev, [activeWorktreeId]: true }))
+      setGenerateErrors((prev) => ({ ...prev, [activeWorktreeId]: null }))
       try {
         const result = await generateRuntimeCommitMessage(
           {
-            settings: target.settings ?? useAppStore.getState().settings,
-            worktreeId,
-            worktreePath: generationWorktreePath,
+            // Why: route generation by the repo OWNER host, not the focused runtime.
+            settings: activeRepoSettings,
+            worktreeId: activeWorktreeId,
+            worktreePath,
             connectionId
           },
           overrides
         )
 
         if (!result.success) {
-          updateCommitMessageGenerationRecord(generationKey, (record) =>
-            resolveCommitMessageGenerationFailure({
-              record,
-              requestId,
-              canceled: result.canceled,
-              error: result.canceled ? null : result.error
-            })
-          )
+          // Why: cancellation is a deliberate user action, not a failure to
+          // surface. Clear any prior error and stay quiet.
+          if (result.canceled) {
+            setGenerateErrors((prev) => ({ ...prev, [activeWorktreeId]: null }))
+            return
+          }
+          setGenerateErrors((prev) => ({
+            ...prev,
+            [activeWorktreeId]: result.error
+          }))
           return
         }
 
+        // Why: race protection — the user may have started typing into the
+        // textarea while the agent was running. In that case we silently drop
+        // the generated message rather than overwrite their in-progress edits.
+        setCommitDrafts((prev) => {
+          const current = prev[activeWorktreeId]
+          if (current && current.length > 0) {
+            return prev
+          }
+          return writeCommitDraftForWorktree(prev, activeWorktreeId, result.message)
+        })
         useAppStore.getState().recordFeatureInteraction('ai-commit-generation')
-        updateCommitMessageGenerationRecord(generationKey, (record) =>
-          resolveCommitMessageGenerationSuccess({
-            record,
-            requestId,
-            message: result.message
-          })
-        )
+        setGenerateErrors((prev) => ({ ...prev, [activeWorktreeId]: null }))
       } catch (error) {
-        updateCommitMessageGenerationRecord(generationKey, (record) =>
-          resolveCommitMessageGenerationFailure({
-            record,
-            requestId,
-            error: error instanceof Error ? error.message : 'Failed to generate commit message'
-          })
-        )
+        setGenerateErrors((prev) => ({
+          ...prev,
+          [activeWorktreeId]:
+            error instanceof Error ? error.message : 'Failed to generate commit message'
+        }))
+      } finally {
+        setGenerateInFlightByWorktree((prev) => ({ ...prev, [activeWorktreeId]: false }))
+        generateInFlightRef.current[activeWorktreeId] = false
       }
     },
-    [
-      allocateCommitMessageGenerationRequestId,
-      createCommitMessageGenerationTarget,
-      resolvedCommitMessageAi,
-      setCommitMessageGenerationRecord,
-      updateCommitMessageGenerationRecord
-    ]
+    [activeRepoSettings, activeWorktreeId, resolvedCommitMessageAi, worktreePath]
   )
 
-  useEffect(() => {
-    if (
-      !activeCommitGenerationKey ||
-      !activeCommitGenerationRecord ||
-      activeCommitGenerationRecord.status !== 'succeeded' ||
-      !activeCommitGenerationRecord.message ||
-      activeCommitGenerationRecord.hydrated
-    ) {
-      return
-    }
-
-    const {
-      context: { worktreeId },
-      message
-    } = activeCommitGenerationRecord
-    // Why: generation can finish while Source Control is showing a different
-    // worktree or is temporarily unmounted; hydrate the saved result when its
-    // originating worktree is visible again without overwriting user edits.
-    setCommitDrafts((prev) => {
-      const current = prev[worktreeId]
-      if (current && current.length > 0) {
-        return prev
-      }
-      return writeCommitDraftForWorktree(prev, worktreeId, message)
-    })
-    updateCommitMessageGenerationRecord(
-      activeCommitGenerationKey,
-      markCommitMessageGenerationHydrated
-    )
-  }, [activeCommitGenerationKey, activeCommitGenerationRecord, updateCommitMessageGenerationRecord])
-
   const handleGenerateCommitMessageClick = useCallback((): void => {
-    const target = createCommitMessageGenerationTarget()
-    if (!target) {
-      return
-    }
     if (
       hasConfiguredCommitMessageGenerationDefaults({ settings, repo: activeRepo ?? null }) &&
       resolvedCommitMessageAi?.ok
     ) {
-      void handleGenerate({
-        sourceControlAiResolvedParams: resolvedCommitMessageAi.value.params,
-        target
-      })
+      void handleGenerate({ sourceControlAiResolvedParams: resolvedCommitMessageAi.value.params })
       return
     }
-    // Why: the dialog remains open while users can switch worktrees; keep it
-    // bound to the worktree that requested generation.
-    setCommitGenerationDialogTarget(target)
     openCommitGenerationDialog()
-  }, [
-    activeRepo,
-    createCommitMessageGenerationTarget,
-    handleGenerate,
-    openCommitGenerationDialog,
-    resolvedCommitMessageAi,
-    settings
-  ])
+  }, [activeRepo, handleGenerate, openCommitGenerationDialog, resolvedCommitMessageAi, settings])
 
   const handleCancelGenerate = useCallback((): void => {
-    if (
-      !activeCommitGenerationKey ||
-      !activeCommitGenerationRecord ||
-      activeCommitGenerationRecord.status !== 'running'
-    ) {
+    if (!activeWorktreeId || !worktreePath) {
       return
     }
-    const { context } = activeCommitGenerationRecord
-    updateCommitMessageGenerationRecord(
-      activeCommitGenerationKey,
-      resolveCommitMessageGenerationCancel
-    )
+    if (!generateInFlightRef.current[activeWorktreeId]) {
+      return
+    }
+    const connectionId = getConnectionId(activeWorktreeId) ?? undefined
     // Why: fire-and-forget — the in-flight generateCommitMessage promise
-    // resolves with `{canceled: true}` once the kill propagates, while the
-    // durable record lets the visible spinner clear immediately.
+    // resolves with `{canceled: true}` once the kill propagates, which is
+    // where the spinner is cleared. Awaiting here would just delay UI feedback.
     void cancelRuntimeGenerateCommitMessage({
-      settings: context.runtimeTargetSettings,
-      worktreeId: context.worktreeId,
-      worktreePath: context.worktreePath,
-      connectionId: context.connectionId
-    }).catch((error) => {
-      updateCommitMessageGenerationRecord(activeCommitGenerationKey, (record) => {
-        if (!record || record.context.requestId !== context.requestId) {
-          return null
-        }
-        return {
-          ...record,
-          status: 'failed',
-          error:
-            error instanceof Error ? error.message : 'Failed to stop commit message generation',
-          hydrated: false
-        }
-      })
+      // Why: route the cancel by the repo OWNER host, not the focused runtime.
+      settings: activeRepoSettings,
+      worktreeId: activeWorktreeId,
+      worktreePath,
+      connectionId
     })
-  }, [activeCommitGenerationKey, activeCommitGenerationRecord, updateCommitMessageGenerationRecord])
+  }, [activeRepoSettings, activeWorktreeId, worktreePath])
 
   // Why: a single dispatcher for every remote-only action the split button or
   // chevron dropdown can trigger. Keeps the error-swallow pattern in one
@@ -1820,7 +1631,8 @@ function SourceControlInner(): React.JSX.Element {
             worktreePath,
             true,
             connectionId,
-            activeWorktree?.pushTarget
+            activeWorktree?.pushTarget,
+            { runtimeTargetSettings: activeRepoSettings }
           )
           return
         }
@@ -1832,7 +1644,9 @@ function SourceControlInner(): React.JSX.Element {
             false,
             connectionId,
             activeWorktree?.pushTarget,
-            forceWithLease ? { forceWithLease: true } : undefined
+            forceWithLease
+              ? { forceWithLease: true, runtimeTargetSettings: activeRepoSettings }
+              : { runtimeTargetSettings: activeRepoSettings }
           )
           return
         }
@@ -1843,12 +1657,20 @@ function SourceControlInner(): React.JSX.Element {
             false,
             connectionId,
             activeWorktree?.pushTarget,
-            { forceWithLease: true }
+            { forceWithLease: true, runtimeTargetSettings: activeRepoSettings }
           )
           return
         }
         if (kind === 'pull') {
-          await pullBranch(activeWorktreeId, worktreePath, connectionId, activeWorktree?.pushTarget)
+          await pullBranch(
+            activeWorktreeId,
+            worktreePath,
+            connectionId,
+            activeWorktree?.pushTarget,
+            {
+              runtimeTargetSettings: activeRepoSettings
+            }
+          )
           return
         }
         if (kind === 'fast_forward') {
@@ -1856,7 +1678,8 @@ function SourceControlInner(): React.JSX.Element {
             activeWorktreeId,
             worktreePath,
             connectionId,
-            activeWorktree?.pushTarget
+            activeWorktree?.pushTarget,
+            { runtimeTargetSettings: activeRepoSettings }
           )
           return
         }
@@ -1865,7 +1688,10 @@ function SourceControlInner(): React.JSX.Element {
             activeWorktreeId,
             worktreePath,
             connectionId,
-            activeWorktree?.pushTarget
+            activeWorktree?.pushTarget,
+            {
+              runtimeTargetSettings: activeRepoSettings
+            }
           )
           return
         }
@@ -1878,11 +1704,14 @@ function SourceControlInner(): React.JSX.Element {
             worktreePath,
             effectiveBaseRef,
             connectionId,
-            activeWorktree?.pushTarget
+            activeWorktree?.pushTarget,
+            { runtimeTargetSettings: activeRepoSettings }
           )
           return
         }
-        await syncBranch(activeWorktreeId, worktreePath, connectionId, activeWorktree?.pushTarget)
+        await syncBranch(activeWorktreeId, worktreePath, connectionId, activeWorktree?.pushTarget, {
+          runtimeTargetSettings: activeRepoSettings
+        })
         setRemoteActionErrors((prev) => ({ ...prev, [activeWorktreeId]: null }))
       } catch (error) {
         // Why: remote action failures are surfaced by editor-slice actions to keep
@@ -1905,6 +1734,7 @@ function SourceControlInner(): React.JSX.Element {
       }
     },
     [
+      activeRepoSettings,
       activeWorktree?.pushTarget,
       activeWorktreeId,
       fetchBranch,
@@ -1952,7 +1782,8 @@ function SourceControlInner(): React.JSX.Element {
       setRemoteActionErrors((prev) => ({ ...prev, [activeWorktreeId]: null }))
       try {
         const context = {
-          settings: useAppStore.getState().settings,
+          // Why: route the abort by the repo OWNER host, not the focused runtime.
+          settings: activeRepoSettings,
           worktreeId: activeWorktreeId,
           worktreePath,
           connectionId
@@ -1983,6 +1814,7 @@ function SourceControlInner(): React.JSX.Element {
       }
     },
     [
+      activeRepoSettings,
       activeWorktreeId,
       confirmAction,
       conflictOperation,
@@ -2118,90 +1950,44 @@ function SourceControlInner(): React.JSX.Element {
     await refreshActiveGitStatusAfterMutation()
   }, [refreshActiveGitStatusAfterMutation])
 
-  const createPullRequestGenerationTarget = useCallback(
-    (
-      fields: PullRequestGenerationFields,
-      fieldRevisions: PullRequestFieldRevisions
-    ): PullRequestGenerationTargetSnapshot | null => {
-      if (!activeRepo || !worktreePath || !branchName) {
-        return null
-      }
-      return {
-        worktreeId: activeWorktreeId,
-        worktreePath,
-        connectionId: activeConnectionId ?? undefined,
-        repo: activeRepo,
-        repoId: activeRepo.id,
-        branch: branchName,
-        settings,
-        discoveryHostKey: sourceControlAiDiscoveryHostKey,
-        fields: { ...fields },
-        fieldRevisions: { ...fieldRevisions }
-      }
-    },
-    [
-      activeConnectionId,
-      activeRepo,
-      activeWorktreeId,
-      branchName,
-      settings,
-      sourceControlAiDiscoveryHostKey,
-      worktreePath
-    ]
-  )
-
   const handleGeneratePullRequestFieldsForActive = useCallback(
     async (
       fields: PullRequestGenerationFields,
       fieldRevisions: PullRequestFieldRevisions,
-      overrides?: RuntimeGeneratePullRequestFieldsOverrides,
-      targetOverride?: PullRequestGenerationTargetSnapshot
+      overrides?: RuntimeGeneratePullRequestFieldsOverrides
     ): Promise<void> => {
-      const target = targetOverride ?? createPullRequestGenerationTarget(fields, fieldRevisions)
-      if (!target) {
+      if (!activeRepo || !activePullRequestGenerationKey || !worktreePath || !branchName) {
         return
       }
-      const generationKey = getPullRequestGenerationRecordKey({
-        worktreeId: target.worktreeId,
-        worktreePath: target.worktreePath,
-        repoId: target.repoId,
-        branch: target.branch
-      })
-      if (!generationKey) {
-        return
-      }
+      const generationKey = activePullRequestGenerationKey
       if (
         useAppStore.getState().pullRequestGenerationRecords[generationKey]?.status === 'running'
       ) {
         return
       }
       const requestId = allocatePullRequestGenerationRequestId()
-      // Why: Stop must route to the runtime selected at generation start, even
-      // if the user changes settings before cancellation.
       const context: PullRequestGenerationContext = {
-        worktreeId: target.worktreeId,
-        worktreePath: target.worktreePath,
-        connectionId: target.connectionId,
+        worktreeId: activeWorktreeId,
+        worktreePath,
+        connectionId: getConnectionId(activeWorktreeId) ?? undefined,
         requestId,
-        repoId: target.repoId,
-        branch: target.branch,
-        runtimeTargetSettings: {
-          activeRuntimeEnvironmentId: target.settings?.activeRuntimeEnvironmentId ?? null
-        }
+        repoId: activeRepo.id,
+        branch: branchName,
+        runtimeTargetSettings: activeRepoSettings
       }
-      const seed = { ...target.fields }
-      // Why: SourceControl can unmount on tab/worktree switches; the record is
-      // keyed to the originating repo/worktree/branch so stale UI cannot retarget
-      // or orphan the generated hosted-review fields.
+      const seed = { ...fields }
+      // Why: SourceControl can unmount on tab switches; persisting the running
+      // record lets the embedded PR composer resume when the user returns.
       setPullRequestGenerationRecord(
         generationKey,
-        createRunningPullRequestGenerationRecord(context, seed, target.fieldRevisions)
+        createRunningPullRequestGenerationRecord(context, seed, fieldRevisions)
       )
 
       try {
         const result = await generateRuntimePullRequestFields(
           {
-            settings: target.settings ?? useAppStore.getState().settings,
+            // Why: route generation by the repo OWNER host, not the focused runtime.
+            settings: context.runtimeTargetSettings,
             worktreeId: context.worktreeId,
             worktreePath: context.worktreePath,
             connectionId: context.connectionId
@@ -2255,11 +2041,16 @@ function SourceControlInner(): React.JSX.Element {
       }
     },
     [
+      activePullRequestGenerationKey,
+      activeRepo,
+      activeRepoSettings,
+      activeWorktreeId,
       allocatePullRequestGenerationRequestId,
-      createPullRequestGenerationTarget,
+      branchName,
       refreshGitStatusAfterPullRequestGeneration,
       setPullRequestGenerationRecord,
-      updatePullRequestGenerationRecord
+      updatePullRequestGenerationRecord,
+      worktreePath
     ]
   )
 
@@ -2279,6 +2070,8 @@ function SourceControlInner(): React.JSX.Element {
       return resolvePullRequestGenerationCancel(current)
     })
     void cancelRuntimeGeneratePullRequestFields({
+      // Why: the user can switch hosts while generation runs; cancel the
+      // original request owner instead of the current focused host.
       settings: record.context.runtimeTargetSettings,
       worktreeId: record.context.worktreeId,
       worktreePath: record.context.worktreePath,
@@ -2308,7 +2101,6 @@ function SourceControlInner(): React.JSX.Element {
     setBody: setPrBody,
     draft: prDraft,
     setDraft: setPrDraft,
-    fieldRevisions: prFieldRevisions,
     baseQuery: prBaseQuery,
     setBaseQuery: setPrBaseQuery,
     baseResults: prBaseResults,
@@ -2329,7 +2121,7 @@ function SourceControlInner(): React.JSX.Element {
     branch: branchName,
     eligibility: hostedReviewCreation,
     repo: activeRepo ?? null,
-    settings,
+    settings: activeRepoSettings,
     submitting: isCreatingPr,
     prCreationDefaults: resolvedPrCreationDefaults,
     onBranchChangedByGeneration: handleBranchChangedByPullRequestGeneration,
@@ -2354,36 +2146,10 @@ function SourceControlInner(): React.JSX.Element {
       void handleGeneratePullRequestFields()
       return
     }
-    const target = createPullRequestGenerationTarget(
-      { base: prBase, title: prTitle, body: prBody, draft: prDraft },
-      prFieldRevisions
-    )
-    if (!target) {
-      return
-    }
-    // Why: the agent-picker dialog can stay open while the user switches
-    // worktrees; keep Generate bound to the PR draft that opened it.
-    setPullRequestGenerationDialogTarget(target)
     openPullRequestGenerationDialog()
-  }, [
-    activeRepo,
-    createPullRequestGenerationTarget,
-    handleGeneratePullRequestFields,
-    openPullRequestGenerationDialog,
-    prBase,
-    prBody,
-    prDraft,
-    prFieldRevisions,
-    prTitle,
-    settings
-  ])
+  }, [activeRepo, handleGeneratePullRequestFields, openPullRequestGenerationDialog, settings])
 
   useEffect(() => {
-    // Why: after a SourceControl remount, the PR composer first reseeds from
-    // eligibility; hydrate generated fields only after that seed exists.
-    if (hostedReviewCreation?.canCreate !== true) {
-      return
-    }
     if (
       !activePullRequestGenerationKey ||
       !activePullRequestGenerationRecord ||
@@ -2418,7 +2184,6 @@ function SourceControlInner(): React.JSX.Element {
     activePullRequestGenerationKey,
     activePullRequestGenerationRecord,
     applyGeneratedPullRequestFields,
-    hostedReviewCreation?.canCreate,
     updatePullRequestGenerationRecord
   ])
 
@@ -2439,6 +2204,7 @@ function SourceControlInner(): React.JSX.Element {
     let stale = false
     void getHostedReviewCreationEligibility({
       repoPath: activeRepo.path,
+      repoId: activeRepo.id,
       ...(worktreePath ? { worktreePath } : {}),
       branch: branchName,
       base: effectiveBaseRef ?? null,
@@ -2533,6 +2299,7 @@ function SourceControlInner(): React.JSX.Element {
     setCreatePrErrors((prev) => ({ ...prev, [activeWorktreeId]: null }))
     try {
       const result = await createHostedReview(activeRepo.path, {
+        repoId: activeRepo.id,
         provider: hostedReviewCreateProvider,
         base,
         head: normalizeHostedReviewHeadRef(branchName),
@@ -2924,7 +2691,8 @@ function SourceControlInner(): React.JSX.Element {
       const connectionId = getConnectionId(activeWorktreeId ?? null) ?? undefined
       await bulkStageRuntimeGitPaths(
         {
-          settings: useAppStore.getState().settings,
+          // Why: route staging by the repo OWNER host, not the focused runtime.
+          settings: activeRepoSettings,
           worktreeId: activeWorktreeId,
           worktreePath,
           connectionId
@@ -2937,6 +2705,7 @@ function SourceControlInner(): React.JSX.Element {
       setIsExecutingBulk(false)
     }
   }, [
+    activeRepoSettings,
     worktreePath,
     bulkStagePaths,
     clearSelection,
@@ -2953,7 +2722,8 @@ function SourceControlInner(): React.JSX.Element {
       const connectionId = getConnectionId(activeWorktreeId ?? null) ?? undefined
       await bulkUnstageRuntimeGitPaths(
         {
-          settings: useAppStore.getState().settings,
+          // Why: route unstaging by the repo OWNER host, not the focused runtime.
+          settings: activeRepoSettings,
           worktreeId: activeWorktreeId,
           worktreePath,
           connectionId
@@ -2966,6 +2736,7 @@ function SourceControlInner(): React.JSX.Element {
       setIsExecutingBulk(false)
     }
   }, [
+    activeRepoSettings,
     worktreePath,
     bulkUnstagePaths,
     clearSelection,
@@ -2983,7 +2754,8 @@ function SourceControlInner(): React.JSX.Element {
         const connectionId = getConnectionId(activeWorktreeId ?? null) ?? undefined
         await bulkStageRuntimeGitPaths(
           {
-            settings: useAppStore.getState().settings,
+            // Why: route staging by the repo OWNER host, not the focused runtime.
+            settings: activeRepoSettings,
             worktreeId: activeWorktreeId,
             worktreePath,
             connectionId
@@ -2997,6 +2769,7 @@ function SourceControlInner(): React.JSX.Element {
       }
     },
     [
+      activeRepoSettings,
       activeWorktreeId,
       clearSelection,
       isExecutingBulk,
@@ -3015,7 +2788,8 @@ function SourceControlInner(): React.JSX.Element {
         const connectionId = getConnectionId(activeWorktreeId ?? null) ?? undefined
         await bulkUnstageRuntimeGitPaths(
           {
-            settings: useAppStore.getState().settings,
+            // Why: route unstaging by the repo OWNER host, not the focused runtime.
+            settings: activeRepoSettings,
             worktreeId: activeWorktreeId,
             worktreePath,
             connectionId
@@ -3029,6 +2803,7 @@ function SourceControlInner(): React.JSX.Element {
       }
     },
     [
+      activeRepoSettings,
       activeWorktreeId,
       clearSelection,
       isExecutingBulk,
@@ -3055,7 +2830,8 @@ function SourceControlInner(): React.JSX.Element {
         const connectionId = getConnectionId(activeWorktreeId ?? null) ?? undefined
         await bulkStageRuntimeGitPaths(
           {
-            settings: useAppStore.getState().settings,
+            // Why: route staging by the repo OWNER host, not the focused runtime.
+            settings: activeRepoSettings,
             worktreeId: activeWorktreeId,
             worktreePath,
             connectionId
@@ -3069,6 +2845,7 @@ function SourceControlInner(): React.JSX.Element {
       }
     },
     [
+      activeRepoSettings,
       worktreePath,
       grouped,
       activeWorktreeId,
@@ -3098,7 +2875,8 @@ function SourceControlInner(): React.JSX.Element {
       const connectionId = getConnectionId(activeWorktreeId ?? null) ?? undefined
       await bulkStageRuntimeGitPaths(
         {
-          settings: useAppStore.getState().settings,
+          // Why: route staging by the repo OWNER host, not the focused runtime.
+          settings: activeRepoSettings,
           worktreeId: activeWorktreeId,
           worktreePath,
           connectionId
@@ -3111,6 +2889,7 @@ function SourceControlInner(): React.JSX.Element {
       setIsExecutingBulk(false)
     }
   }, [
+    activeRepoSettings,
     worktreePath,
     isExecutingBulk,
     grouped,
@@ -3154,7 +2933,8 @@ function SourceControlInner(): React.JSX.Element {
       const connectionId = getConnectionId(activeWorktreeId ?? null) ?? undefined
       await bulkUnstageRuntimeGitPaths(
         {
-          settings: useAppStore.getState().settings,
+          // Why: route unstaging by the repo OWNER host, not the focused runtime.
+          settings: activeRepoSettings,
           worktreeId: activeWorktreeId,
           worktreePath,
           connectionId
@@ -3167,6 +2947,7 @@ function SourceControlInner(): React.JSX.Element {
       setIsExecutingBulk(false)
     }
   }, [
+    activeRepoSettings,
     worktreePath,
     grouped.staged,
     activeWorktreeId,
@@ -3213,7 +2994,8 @@ function SourceControlInner(): React.JSX.Element {
       const connectionId = getConnectionId(activeWorktreeId ?? null) ?? undefined
       const result = await getRuntimeGitBranchCompare(
         {
-          settings: useAppStore.getState().settings,
+          // Why: route the branch compare by the repo OWNER host, not the focused runtime.
+          settings: activeRepoSettings,
           worktreeId: activeWorktreeId,
           worktreePath,
           connectionId
@@ -3237,6 +3019,7 @@ function SourceControlInner(): React.JSX.Element {
       })
     }
   }, [
+    activeRepoSettings,
     activeWorktreeId,
     beginGitBranchCompareRequest,
     branchName,
@@ -3310,7 +3093,8 @@ function SourceControlInner(): React.JSX.Element {
       const connectionId = getConnectionId(worktreeId) ?? undefined
       const result = await getRuntimeGitHistory(
         {
-          settings: useAppStore.getState().settings,
+          // Why: route the history read by the repo OWNER host, not the focused runtime.
+          settings: activeRepoSettings,
           worktreeId,
           worktreePath,
           connectionId
@@ -3337,6 +3121,7 @@ function SourceControlInner(): React.JSX.Element {
       })
     }
   }, [
+    activeRepoSettings,
     activeWorktreeId,
     effectiveBaseRef,
     isBranchVisible,
@@ -3393,9 +3178,11 @@ function SourceControlInner(): React.JSX.Element {
       activeWorktreeId,
       worktreePath,
       connectionId,
-      activeWorktree?.pushTarget
+      activeWorktree?.pushTarget,
+      { runtimeTargetSettings: activeRepoSettings }
     )
   }, [
+    activeRepoSettings,
     activeWorktree?.pushTarget,
     activeWorktreeId,
     fetchUpstreamStatus,
@@ -3460,7 +3247,8 @@ function SourceControlInner(): React.JSX.Element {
         const connectionId = getConnectionId(activeWorktreeId) ?? undefined
         const result = await getRuntimeGitCommitCompare(
           {
-            settings: useAppStore.getState().settings,
+            // Why: route the commit compare by the repo OWNER host, not the focused runtime.
+            settings: activeRepoSettings,
             worktreeId: activeWorktreeId,
             worktreePath,
             connectionId
@@ -3496,7 +3284,7 @@ function SourceControlInner(): React.JSX.Element {
         )
       }
     },
-    [activeWorktreeId, openCommitAllDiffs, worktreePath]
+    [activeRepoSettings, activeWorktreeId, openCommitAllDiffs, worktreePath]
   )
 
   // Why: a note's filePath is the same relative path used by GitStatusEntry /
@@ -3613,7 +3401,8 @@ function SourceControlInner(): React.JSX.Element {
         const connectionId = getConnectionId(activeWorktreeId ?? null) ?? undefined
         await stageRuntimeGitPath(
           {
-            settings: useAppStore.getState().settings,
+            // Why: route staging by the repo OWNER host, not the focused runtime.
+            settings: activeRepoSettings,
             worktreeId: activeWorktreeId,
             worktreePath,
             connectionId
@@ -3625,7 +3414,7 @@ function SourceControlInner(): React.JSX.Element {
         // git operation failed silently
       }
     },
-    [worktreePath, activeWorktreeId, refreshActiveGitStatusAfterMutation]
+    [activeRepoSettings, worktreePath, activeWorktreeId, refreshActiveGitStatusAfterMutation]
   )
 
   const handleUnstage = useCallback(
@@ -3637,7 +3426,8 @@ function SourceControlInner(): React.JSX.Element {
         const connectionId = getConnectionId(activeWorktreeId ?? null) ?? undefined
         await unstageRuntimeGitPath(
           {
-            settings: useAppStore.getState().settings,
+            // Why: route unstaging by the repo OWNER host, not the focused runtime.
+            settings: activeRepoSettings,
             worktreeId: activeWorktreeId,
             worktreePath,
             connectionId
@@ -3649,7 +3439,7 @@ function SourceControlInner(): React.JSX.Element {
         // git operation failed silently
       }
     },
-    [worktreePath, activeWorktreeId, refreshActiveGitStatusAfterMutation]
+    [activeRepoSettings, worktreePath, activeWorktreeId, refreshActiveGitStatusAfterMutation]
   )
 
   // Why: split into two variants — `discardSingle` throws so bulk callers can
@@ -3672,7 +3462,8 @@ function SourceControlInner(): React.JSX.Element {
       const connectionId = getConnectionId(activeWorktreeId ?? null) ?? undefined
       await discardRuntimeGitPath(
         {
-          settings: useAppStore.getState().settings,
+          // Why: route the discard by the repo OWNER host, not the focused runtime.
+          settings: activeRepoSettings,
           worktreeId: activeWorktreeId,
           worktreePath,
           connectionId
@@ -3685,7 +3476,7 @@ function SourceControlInner(): React.JSX.Element {
         relativePath: filePath
       })
     },
-    [activeWorktreeId, worktreePath]
+    [activeRepoSettings, activeWorktreeId, worktreePath]
   )
 
   const discardMany = useCallback(
@@ -3708,7 +3499,8 @@ function SourceControlInner(): React.JSX.Element {
       const connectionId = getConnectionId(activeWorktreeId) ?? undefined
       await bulkDiscardRuntimeGitPaths(
         {
-          settings: useAppStore.getState().settings,
+          // Why: route the discard by the repo OWNER host, not the focused runtime.
+          settings: activeRepoSettings,
           worktreeId: activeWorktreeId,
           worktreePath,
           connectionId
@@ -3723,7 +3515,7 @@ function SourceControlInner(): React.JSX.Element {
         })
       }
     },
-    [activeWorktreeId, worktreePath]
+    [activeRepoSettings, activeWorktreeId, worktreePath]
   )
 
   const handleDiscard = useCallback(
@@ -3769,7 +3561,8 @@ function SourceControlInner(): React.JSX.Element {
           bulkUnstage: (filePaths) =>
             bulkUnstageRuntimeGitPaths(
               {
-                settings: useAppStore.getState().settings,
+                // Why: route unstaging by the repo OWNER host, not the focused runtime.
+                settings: activeRepoSettings,
                 worktreeId: activeWorktreeId,
                 worktreePath,
                 connectionId
@@ -3826,6 +3619,7 @@ function SourceControlInner(): React.JSX.Element {
       }
     },
     [
+      activeRepoSettings,
       worktreePath,
       activeWorktreeId,
       grouped,
@@ -4724,7 +4518,7 @@ function SourceControlInner(): React.JSX.Element {
         )}
         description={translate(
           'auto.components.right.sidebar.SourceControl.901140f47d',
-          'Review the prompt before starting an agent.'
+          'Review and edit the full command input before starting an agent.'
         )}
         baseCommandInput={resolveConflictsPrompt}
         worktreeId={activeWorktreeId}
@@ -4754,7 +4548,7 @@ function SourceControlInner(): React.JSX.Element {
       />
       <SourceControlTextGenerationDialog
         open={commitGenerationDialogOpen}
-        onOpenChange={handleCommitGenerationDialogOpenChange}
+        onOpenChange={setCommitGenerationDialogOpen}
         actionId="commitMessage"
         title={translate(
           'auto.components.right.sidebar.SourceControl.6b122529d4',
@@ -4765,23 +4559,17 @@ function SourceControlInner(): React.JSX.Element {
           'Choose the agent and command template for this run.'
         )}
         generateLabel="Generate"
-        settings={commitGenerationDialogTarget?.settings ?? settings}
-        repo={commitGenerationDialogTarget?.repo ?? activeRepo ?? null}
-        discoveryHostKey={
-          commitGenerationDialogTarget?.discoveryHostKey ?? sourceControlAiDiscoveryHostKey
-        }
+        settings={settings}
+        repo={activeRepo ?? null}
+        discoveryHostKey={sourceControlAiDiscoveryHostKey}
         onGenerate={(params) => {
-          const target = commitGenerationDialogTarget ?? createCommitMessageGenerationTarget()
-          if (!target) {
-            return
-          }
-          void handleGenerate({ sourceControlAiResolvedParams: params, target })
+          void handleGenerate({ sourceControlAiResolvedParams: params })
         }}
         onSaveDefaults={handleSaveCommitMessageGenerationDefaults}
       />
       <SourceControlTextGenerationDialog
         open={pullRequestGenerationDialogOpen}
-        onOpenChange={handlePullRequestGenerationDialogOpenChange}
+        onOpenChange={setPullRequestGenerationDialogOpen}
         actionId="pullRequest"
         title={translate(
           'auto.components.right.sidebar.SourceControl.1a6a6e0bc5',
@@ -4792,27 +4580,11 @@ function SourceControlInner(): React.JSX.Element {
           'Choose the agent and command template for this run.'
         )}
         generateLabel="Generate"
-        settings={pullRequestGenerationDialogTarget?.settings ?? settings}
-        repo={pullRequestGenerationDialogTarget?.repo ?? activeRepo ?? null}
-        discoveryHostKey={
-          pullRequestGenerationDialogTarget?.discoveryHostKey ?? sourceControlAiDiscoveryHostKey
-        }
+        settings={settings}
+        repo={activeRepo ?? null}
+        discoveryHostKey={sourceControlAiDiscoveryHostKey}
         onGenerate={(params) => {
-          const target =
-            pullRequestGenerationDialogTarget ??
-            createPullRequestGenerationTarget(
-              { base: prBase, title: prTitle, body: prBody, draft: prDraft },
-              prFieldRevisions
-            )
-          if (!target) {
-            return
-          }
-          void handleGeneratePullRequestFieldsForActive(
-            target.fields,
-            target.fieldRevisions,
-            { sourceControlAiResolvedParams: params },
-            target
-          )
+          void handleGeneratePullRequestFields({ sourceControlAiResolvedParams: params })
         }}
         onSaveDefaults={handleSavePullRequestGenerationDefaults}
       />
@@ -4879,7 +4651,7 @@ function CommitFailureFixSplitButton({
   return (
     <>
       <DropdownMenu>
-        <div className="inline-flex shrink-0 max-w-full items-stretch">
+        <div className="flex shrink-0 items-stretch">
           <Button
             type="button"
             variant={variant}
@@ -4956,7 +4728,7 @@ function CommitFailureFixSplitButton({
           )}
           description={translate(
             'auto.components.right.sidebar.SourceControl.15b7f210d7',
-            'Review the prompt before starting an agent.'
+            'Choose the agent and edit the full command input before launch.'
           )}
           baseCommandInput={prompt}
           worktreeId={worktreeId}
@@ -5272,7 +5044,7 @@ export function CommitArea({
           chevron exposes the full action surface (fetch, pull, sync,
           publish, compound commits) without forcing morphing labels to
           carry every possible intent. */}
-      <div className={cn(RIGHT_SIDEBAR_SPLIT_ACTION_ROW_CLASS, showComposer && 'mt-1')}>
+      <div className={cn(showComposer ? 'mt-1 flex items-stretch' : 'flex items-stretch')}>
         {/* Why: match the hosted-review action buttons in Checks
             (size="xs", px-3 text-[11px]) so the sidebar has a consistent
             action-button shape across Source Control and Checks. The primary
@@ -5281,16 +5053,13 @@ export function CommitArea({
             pair read as one split button instead of two detached buttons. */}
         <Tooltip>
           <TooltipTrigger asChild>
-            <span className="inline-flex min-w-0 max-w-full shrink">
+            <span className="flex flex-1">
               <Button
                 type="button"
                 size="xs"
                 disabled={primaryAction.disabled}
                 onClick={() => onPrimaryAction()}
-                className={cn(
-                  'rounded-r-none px-3 text-[11px]',
-                  RIGHT_SIDEBAR_MORPHING_PRIMARY_BUTTON_CLASS
-                )}
+                className="w-full rounded-r-none px-3 text-[11px]"
                 title={primaryAction.title}
               >
                 {showSpinner ? (
@@ -5298,9 +5067,7 @@ export function CommitArea({
                 ) : PrimaryIcon ? (
                   <PrimaryIcon className="size-3.5" aria-hidden="true" />
                 ) : null}
-                <span className={RIGHT_SIDEBAR_PRIMARY_BUTTON_LABEL_CLASS}>
-                  {primaryAction.label}
-                </span>
+                {primaryAction.label}
               </Button>
             </span>
           </TooltipTrigger>
@@ -5524,7 +5291,7 @@ export function CommitArea({
           id="commit-area-remote-error"
           role="alert"
           aria-live="polite"
-          className="mt-1 min-w-0 text-[11px] leading-4 break-words text-destructive [overflow-wrap:anywhere]"
+          className="mt-1 text-[11px] text-destructive"
         >
           {remoteActionError}
         </p>
@@ -5992,6 +5759,14 @@ function DiffCommentsInlineList({
   )
 }
 
+function conflictAbortButtonVariant(
+  conflictOperation: GitConflictOperation
+): 'outline' | 'destructive' {
+  // Why: aborting a rebase is the escape hatch for this state, so it should
+  // match the quiet outline conflict-review action instead of reading as red.
+  return conflictOperation === 'rebase' ? 'outline' : 'destructive'
+}
+
 export function ConflictSummaryCard({
   conflictOperation,
   unresolvedCount,
@@ -6038,12 +5813,12 @@ export function ConflictSummaryCard({
           </div>
         </div>
       </div>
-      <div className="mt-2 flex flex-col items-start">
+      <div className="mt-2">
         <Button
           type="button"
           variant="default"
           size="sm"
-          className="h-7 text-xs"
+          className="h-7 w-full text-xs"
           disabled={isResolvingWithAI}
           onClick={onResolveWithAI}
         >
@@ -6058,7 +5833,7 @@ export function ConflictSummaryCard({
           type="button"
           variant="outline"
           size="sm"
-          className="mt-1.5 h-7 text-xs"
+          className="mt-1.5 h-7 w-full text-xs"
           onClick={onReview}
         >
           <GitMerge className="size-3.5" />
@@ -6067,11 +5842,9 @@ export function ConflictSummaryCard({
         {(conflictOperation === 'merge' || conflictOperation === 'rebase') && onAbortOperation ? (
           <Button
             type="button"
-            // Why: abort is the escape hatch for this state, so match the quiet
-            // outline conflict-review action instead of reading as destructive.
-            variant="outline"
+            variant={conflictAbortButtonVariant(conflictOperation)}
             size="sm"
-            className="mt-1.5 h-7 text-xs"
+            className="mt-1.5 h-7 w-full text-xs"
             disabled={isResolvingWithAI || isAbortingOperation}
             onClick={() => onAbortOperation(conflictOperation)}
           >
@@ -6113,28 +5886,24 @@ export function OperationBanner({
 
   return (
     <div className="rounded-md border border-amber-500/25 bg-amber-500/5 px-3 py-2">
-      <div className="flex items-center gap-2">
+      <div className="flex items-center justify-center gap-2">
         <Icon className="size-4 shrink-0 text-amber-600 dark:text-amber-400" />
         <span className="text-xs font-medium text-foreground">{label}</span>
       </div>
       {(conflictOperation === 'merge' || conflictOperation === 'rebase') && onAbortOperation ? (
-        <div className="mt-2 flex flex-col items-start">
-          <Button
-            type="button"
-            // Why: abort is the escape hatch for this state, so match the quiet
-            // outline conflict-review action instead of reading as destructive.
-            variant="outline"
-            size="sm"
-            className="h-7 text-xs"
-            disabled={isAbortingOperation}
-            onClick={() => onAbortOperation(conflictOperation)}
-          >
-            {isAbortingOperation ? <RefreshCw className="size-3.5 animate-spin" /> : null}
-            {conflictOperation === 'rebase'
-              ? translate('auto.components.right.sidebar.SourceControl.425f138269', 'Abort rebase')
-              : translate('auto.components.right.sidebar.SourceControl.540ca8f78c', 'Abort merge')}
-          </Button>
-        </div>
+        <Button
+          type="button"
+          variant={conflictAbortButtonVariant(conflictOperation)}
+          size="sm"
+          className="mt-2 h-7 w-full text-xs"
+          disabled={isAbortingOperation}
+          onClick={() => onAbortOperation(conflictOperation)}
+        >
+          {isAbortingOperation ? <RefreshCw className="size-3.5 animate-spin" /> : null}
+          {conflictOperation === 'rebase'
+            ? translate('auto.components.right.sidebar.SourceControl.425f138269', 'Abort rebase')
+            : translate('auto.components.right.sidebar.SourceControl.540ca8f78c', 'Abort merge')}
+        </Button>
       ) : null}
     </div>
   )

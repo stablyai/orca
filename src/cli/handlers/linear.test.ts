@@ -204,6 +204,49 @@ describe('orca linear CLI handlers', () => {
     )
   })
 
+  it('maps priority writes with Linear API priority numbering', async () => {
+    queueFixtures(callMock, okFixture('req_priority', taskUpdateResult('priority')))
+
+    await main(['linear', 'priority', 'set', 'ENG-123', '--to', 'urgent', '--json'], '/tmp/repo')
+
+    expect(callMock).toHaveBeenCalledWith(
+      'linear.issueUpdateTask',
+      expect.objectContaining({
+        input: 'ENG-123',
+        operation: 'priority',
+        priority: 1
+      }),
+      { timeoutMs: 75_000 }
+    )
+  })
+
+  it('rejects impossible due dates before dispatch', async () => {
+    await main(['linear', 'due-date', 'set', 'ENG-123', '--to', '2026-02-30'], '/tmp/repo')
+
+    expect(callMock).not.toHaveBeenCalled()
+    expect(vi.mocked(console.error).mock.calls[0][0]).toContain('real calendar date')
+  })
+
+  it('preserves repeated labels for label updates', async () => {
+    queueFixtures(callMock, okFixture('req_label', taskUpdateResult('labels')))
+
+    await main(
+      ['linear', 'label', 'add', 'ENG-123', '--label', 'Bug', '--label', 'Regression', '--json'],
+      '/tmp/repo'
+    )
+
+    expect(callMock).toHaveBeenCalledWith(
+      'linear.issueUpdateTask',
+      expect.objectContaining({
+        input: 'ENG-123',
+        operation: 'labels',
+        labelMode: 'add',
+        labels: ['Bug', 'Regression']
+      }),
+      { timeoutMs: 75_000 }
+    )
+  })
+
   it('requires exact write targets for issue writes', async () => {
     await main(['linear', 'comment', 'add', '--body', 'done'], '/tmp/repo')
 
@@ -322,7 +365,13 @@ describe('orca linear CLI handlers', () => {
       {
         title: 'Follow-up bug',
         body: 'Concrete repro',
-        teamKey: undefined,
+        teamInput: undefined,
+        state: undefined,
+        assignee: undefined,
+        priority: undefined,
+        estimate: undefined,
+        dueDate: undefined,
+        labels: [],
         parentInput: undefined,
         parentCurrent: true,
         workspaceId: undefined,
@@ -332,6 +381,52 @@ describe('orca linear CLI handlers', () => {
           cwd: '/tmp/repo'
         }
       },
+      { timeoutMs: 75_000 }
+    )
+  })
+
+  it('maps enriched create task fields', async () => {
+    queueFixtures(callMock, okFixture('req_create', createResult()))
+
+    await main(
+      [
+        'linear',
+        'create',
+        '--title',
+        'Triage bug',
+        '--team',
+        'ENG',
+        '--state',
+        'Todo',
+        '--assignee',
+        'me',
+        '--priority',
+        'high',
+        '--estimate',
+        '2',
+        '--due-date',
+        '2026-06-30',
+        '--label',
+        'Bug',
+        '--label',
+        'Regression',
+        '--json'
+      ],
+      '/tmp/repo'
+    )
+
+    expect(callMock).toHaveBeenCalledWith(
+      'linear.issueCreate',
+      expect.objectContaining({
+        title: 'Triage bug',
+        teamInput: 'ENG',
+        state: 'Todo',
+        assignee: 'me',
+        priority: 2,
+        estimate: 2,
+        dueDate: '2026-06-30',
+        labels: ['Bug', 'Regression']
+      }),
       { timeoutMs: 75_000 }
     )
   })
@@ -415,6 +510,16 @@ function createResult(): unknown {
       writeId: '123e4567-e89b-12d3-a456-426614174000',
       deduplicated: false
     }
+  }
+}
+
+function taskUpdateResult(operation: string): unknown {
+  return {
+    issue: { id: 'issue-id', identifier: 'ENG-123', url: 'https://linear.app/acme/issue/ENG-123' },
+    operation,
+    previous: {},
+    current: {},
+    meta: { workspaceId: 'workspace-1', alreadySet: false }
   }
 }
 

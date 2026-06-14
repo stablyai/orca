@@ -1,6 +1,7 @@
 import type { RuntimeTerminalSend, RuntimeTerminalWait } from '../../../shared/runtime-types'
 import { useAppStore } from '@/store'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
+import { getSettingsForWorktreeRuntimeOwner } from '@/lib/worktree-runtime-owner'
 import { findActiveRuntimeTerminal, getActiveTerminalNoteTarget } from './active-agent-note-target'
 
 export {
@@ -47,7 +48,11 @@ export async function sendNotesToActiveAgentSession({
     return { status: 'no-active-terminal' }
   }
 
-  const runtimeTarget = getActiveRuntimeTarget(state.settings)
+  // Route by the worktree's owner host so the agent terminal is found and driven
+  // on the host that actually runs it, not on the focused runtime.
+  const runtimeTarget = getActiveRuntimeTarget(
+    getSettingsForWorktreeRuntimeOwner(state, worktreeId)
+  )
   const terminal = await findActiveRuntimeTerminal(
     runtimeTarget,
     worktreeId,

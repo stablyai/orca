@@ -2,9 +2,9 @@ import { useEffect, useRef } from 'react'
 import { toast } from 'sonner'
 import { getConnectionId } from '@/lib/connection-context'
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
-import { useAppStore } from '@/store'
 import { importExternalPathsToRuntime } from '@/runtime/runtime-file-client'
 import { translate } from '@/i18n/i18n'
+import { getRightSidebarWorktreeRuntimeSettings } from './file-explorer-runtime-owner'
 
 type UseFileExplorerImportParams = {
   worktreePath: string | null
@@ -63,10 +63,9 @@ export function useFileExplorerImport({
 
       void (async () => {
         try {
-          const settings = useAppStore.getState().settings
           const { results } = await importExternalPathsToRuntime(
             {
-              settings,
+              settings: getRightSidebarWorktreeRuntimeSettings(wtId),
               worktreeId: wtId,
               worktreePath: worktreePathRef.current,
               connectionId

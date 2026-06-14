@@ -33,6 +33,7 @@ import { gitExecFileAsync } from '../git/runner'
 import { parseGitHubOwnerRepo } from '../github/gh-utils'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type { RemoteFetchResult, RemoteTrackingBase } from '../runtime/orca-runtime'
+import { getProjectHostSetupWorktreeMeta } from '../../shared/project-host-setup-projection'
 import {
   buildPosixRunnerScript,
   buildWindowsRunnerScript,
@@ -1419,6 +1420,9 @@ export async function createRemoteWorktree(
     // Fresh creations must rotate instance identity so stale lineage cannot
     // attach to the new occupant of the same path.
     instanceId: randomUUID(),
+    ...(store.getProjectHostSetups
+      ? getProjectHostSetupWorktreeMeta(store.getProjectHostSetups(), repo)
+      : {}),
     lastActivityAt: now,
     // Why: grants the new worktree a short grace window at the top of the
     // Recent sort. During worktree creation (git fetch + add can take several
@@ -1922,6 +1926,9 @@ export async function createLocalWorktree(
     // Fresh creations must rotate instance identity so stale lineage cannot
     // attach to the new occupant of the same path.
     instanceId: randomUUID(),
+    ...(store.getProjectHostSetups
+      ? getProjectHostSetupWorktreeMeta(store.getProjectHostSetups(), repo)
+      : {}),
     // Stamp activity so the worktree sorts into its final position
     // immediately — prevents scroll-to-reveal racing with a later
     // bumpWorktreeActivity that would re-sort the list.

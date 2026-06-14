@@ -36,6 +36,7 @@
     "lowlight": "^3.3.0",
     "lucide-react-native": "^1.14.0",
     "react": "^19.2.6",
+    "react-dom": "19.2.6",
     "react-native": "^0.83.9",
     "react-native-gesture-handler": "^2.31.2",
     "react-native-reanimated": "^4.3.0",

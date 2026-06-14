@@ -77,6 +77,26 @@ describe('feature interaction writer boundaries', () => {
     }
   })
 
+  it('threads GitHub task source context through inline task mutations', () => {
+    const source = componentSource('TaskPage.tsx')
+    const sections = [
+      sourceBetween(source, 'function GHStatusCell', 'function GitHubAssigneeAvatar'),
+      sourceBetween(source, 'function GHAssigneesCell', 'const triggerContent ='),
+      sourceBetween(source, 'function PRReviewCell', 'function PRChecksCell'),
+      componentBodyBeforeRender(source, 'PRMergeCell'),
+      sourceBetween(source, 'const handleCreateNewIssue', 'const handleCreateNewLinearProject')
+    ]
+
+    for (const section of sections) {
+      expect(section).toContain('sourceContext')
+    }
+    const rowRenderStart = source.indexOf('filteredWorkItems.map((item) => {')
+    expect(rowRenderStart).toBeGreaterThanOrEqual(0)
+    expect(source.slice(rowRenderStart, rowRenderStart + 12_000)).toContain(
+      'sourceContext={getTaskPageRepoSourceContext(itemRepo,'
+    )
+  })
+
   it('suppresses Tasks surface telemetry for in-page provider switches and detail opens', () => {
     const source = componentSource('TaskPage.tsx')
     const suppression = 'recordTasksInteraction: false'
@@ -91,9 +111,9 @@ describe('feature interaction writer boundaries', () => {
       sourceBetween(source, 'taskSourceManuallyChangedRef.current = true', 'void updateSettings')
     ]
 
-    expect(githubDetailSection).toContain("recordFeatureInteraction('github-tasks')")
-    expect(githubDetailSection).toContain('setDialogWorkItem(item, initialTab)')
-    expect(githubDetailSection).not.toContain('openTaskPage')
+    expect(githubDetailSection).toContain('openGitHubSourceContext')
+    expect(githubDetailSection).toContain('openTaskPage')
+    expect(githubDetailSection).toContain(suppression)
 
     for (const section of inPageNavigationSections) {
       expect(section).toContain(suppression)
@@ -187,6 +207,15 @@ describe('feature interaction writer boundaries', () => {
     for (const section of drawerMutationSections) {
       expect(section).toContain(linearWriter)
     }
+  })
+
+  it('records Jira provider-depth for workspace use', () => {
+    const taskPageSource = componentSource('TaskPage.tsx')
+    const jiraWriter = "recordFeatureInteraction('jira-tasks')"
+
+    expect(
+      sourceBetween(taskPageSource, 'const handleUseJiraItem', 'const handleJiraConnect')
+    ).toContain(jiraWriter)
   })
 
   it('records browser annotation agent handoff only from the prompt-delivered callback', () => {

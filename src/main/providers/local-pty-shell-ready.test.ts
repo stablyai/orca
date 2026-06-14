@@ -312,6 +312,24 @@ describePosix('local PTY shell-ready launch config', () => {
     expectFinalZdotdirRestoreContext(zlogin)
   })
 
+  it('owns zle-line-init for the shell-ready marker instead of an azhw hook', async () => {
+    const { getShellReadyLaunchConfig } = await importFreshLocalPtyShellReady()
+
+    getShellReadyLaunchConfig('/bin/zsh')
+
+    const zlogin = readFileSync(join(userDataPath, 'shell-ready', 'zsh', '.zlogin'), 'utf8')
+    expect(zlogin).toContain('zle -N zle-line-init __orca_prompt_mark')
+    expect(zlogin).toContain('__orca_prev_line_init_fn="${widgets[zle-line-init]#user:}"')
+    expect(zlogin).toContain('printf "\\033]777;orca-shell-ready\\007"')
+    // Why: add-zle-hook-widget aborts its hook chain when an earlier hook
+    // exits non-zero (e.g. oh-my-zsh vi-mode's raw zle-line-init), so the
+    // marker must not be registered through it.
+    expect(zlogin).not.toContain('add-zle-hook-widget line-init')
+    // Why: re-source guard — skip re-capturing when we are already the bound
+    // widget so the prior widget chain survives a second source.
+    expect(zlogin).toContain('== "user:__orca_prompt_mark"')
+  })
+
   it('writes wrappers that restore agent config homes after user startup files', async () => {
     const { getBashShellReadyRcfileContent, getShellReadyLaunchConfig } =
       await importFreshLocalPtyShellReady()

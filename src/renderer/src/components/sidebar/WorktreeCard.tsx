@@ -2,6 +2,7 @@
 import React, { useEffect, useCallback, useState } from 'react'
 import { useAppStore } from '@/store'
 import { getHostedReviewCacheKey } from '@/store/slices/hosted-review'
+import { issueCacheKey as getIssueCacheKey } from '@/store/slices/github'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
@@ -22,7 +23,6 @@ import CacheTimer, { usePromptCacheCountdownStartedAt } from './CacheTimer'
 import WorktreeContextMenu from './WorktreeContextMenu'
 import { SshDisconnectedDialog } from './SshDisconnectedDialog'
 import { AutoRenameFailedDialog } from './AutoRenameFailedDialog'
-import { LinearAgentSkillSetupPrompt } from './LinearAgentSkillSetupPrompt'
 import WorktreeCardAgents from './WorktreeCardAgents'
 import { WorktreeCardStatusSlot } from './WorktreeCardStatusSlot'
 import { cn } from '@/lib/utils'
@@ -47,6 +47,7 @@ import { WorktreeCardPortsDetails, WorktreeCardPortsTrigger } from './WorktreeCa
 import { writeWorkspaceDragData } from './workspace-status'
 import { getWorktreeCardPrDisplay } from './worktree-card-pr-display'
 import { useWorktreeCardDetailsHoverControl } from './worktree-card-details-hover-state'
+import { isEventTargetInsideCurrentTarget } from './worktree-card-dom-events'
 import { getWorkspacePortsByWorktreeId } from '@/lib/workspace-port-groups'
 import { RepoBadgeMark } from '@/components/repo/RepoBadgeLabel'
 import { RepoIconGlyph } from '@/components/repo/repo-icon'
@@ -76,6 +77,7 @@ type WorktreeCardProps = {
   revealHighlightTone?: 'default' | 'ai'
   selectedWorktrees?: readonly Worktree[]
   hideRepoBadge?: boolean
+  hostContextLabel?: string
   inPinnedSection?: boolean
   contentIndent?: number
   flushSurface?: boolean
@@ -163,6 +165,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
   onCardDragEnd,
   nativeDragEnabled = true,
   hideRepoBadge,
+  hostContextLabel,
   inPinnedSection = false,
   contentIndent = 0,
   flushSurface = false,
@@ -264,9 +267,26 @@ const WorktreeCard = React.memo(function WorktreeCard({
   const isFolder = repo ? isFolderRepo(repo) : folderWorkspaceId !== null
   const hostedReviewCacheKey =
     repo && branch
-      ? getHostedReviewCacheKey(repo.path, branch, settings, repo.id, repo.connectionId)
+      ? getHostedReviewCacheKey(
+          repo.path,
+          branch,
+          settings,
+          repo.id,
+          repo.connectionId,
+          repo.executionHostId
+        )
       : ''
-  const issueCacheKey = repo && worktree.linkedIssue ? `${repo.id}::${worktree.linkedIssue}` : ''
+  const issueCacheKey =
+    repo && worktree.linkedIssue
+      ? getIssueCacheKey(
+          repo.path,
+          repo.id,
+          worktree.linkedIssue,
+          settings,
+          repo.connectionId,
+          repo.executionHostId
+        )
+      : ''
   // Why: use 'all' to fetch from all Linear workspaces. The issue might belong
   // to a different workspace than the currently selected one.
   const linearIssueCacheKey = worktree.linkedLinearIssue ? `all::${worktree.linkedLinearIssue}` : ''
@@ -478,6 +498,9 @@ const WorktreeCard = React.memo(function WorktreeCard({
   // Stable click handler – ignore clicks that are really text selections.
   const handleClick = useCallback(
     (event: React.MouseEvent<HTMLDivElement>) => {
+      if (!isEventTargetInsideCurrentTarget(event.currentTarget, event.target)) {
+        return
+      }
       const selection = window.getSelection()
       // Why: only suppress the click when the selection is *inside this card*
       // (a real drag-select on the card's own text). A selection anchored
@@ -532,22 +555,28 @@ const WorktreeCard = React.memo(function WorktreeCard({
     [updateWorktreeMeta, worktree.id]
   )
 
-  const handleDoubleClick = useCallback(() => {
-    openModal('edit-meta', {
-      worktreeId: worktree.id,
-      currentDisplayName: worktree.displayName,
-      currentIssue: worktree.linkedIssue,
-      currentPR: worktree.linkedPR,
-      currentComment: worktree.comment
-    })
-  }, [
-    openModal,
-    worktree.comment,
-    worktree.displayName,
-    worktree.id,
-    worktree.linkedIssue,
-    worktree.linkedPR
-  ])
+  const handleDoubleClick = useCallback(
+    (event: React.MouseEvent<HTMLDivElement>) => {
+      if (!isEventTargetInsideCurrentTarget(event.currentTarget, event.target)) {
+        return
+      }
+      openModal('edit-meta', {
+        worktreeId: worktree.id,
+        currentDisplayName: worktree.displayName,
+        currentIssue: worktree.linkedIssue,
+        currentPR: worktree.linkedPR,
+        currentComment: worktree.comment
+      })
+    },
+    [
+      openModal,
+      worktree.comment,
+      worktree.displayName,
+      worktree.id,
+      worktree.linkedIssue,
+      worktree.linkedPR
+    ]
+  )
 
   const handleToggleUnreadQuick = useCallback(
     (event: React.MouseEvent<HTMLButtonElement>) => {
@@ -638,6 +667,10 @@ const WorktreeCard = React.memo(function WorktreeCard({
 
   const handleDragStart = useCallback(
     (event: React.DragEvent<HTMLDivElement>) => {
+      if (!isEventTargetInsideCurrentTarget(event.currentTarget, event.target)) {
+        event.preventDefault()
+        return
+      }
       if (isDeleting) {
         event.preventDefault()
         return
@@ -650,6 +683,16 @@ const WorktreeCard = React.memo(function WorktreeCard({
       onCardDragStart?.(event, worktree.id, Array.isArray(dragIds) ? dragIds : [dragIds])
     },
     [isDeleting, isMultiSelected, onCardDragStart, selectedWorktrees, worktree.id]
+  )
+
+  const handleDragEnd = useCallback(
+    (event: React.DragEvent<HTMLDivElement>) => {
+      if (!isEventTargetInsideCurrentTarget(event.currentTarget, event.target)) {
+        return
+      }
+      onCardDragEnd?.(event)
+    },
+    [onCardDragEnd]
   )
 
   const handleContextMenuSelect = useCallback(
@@ -756,6 +799,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
   const showInlineRepoBadge =
     compactCards && !!repo && !hideRepoBadge && !isFolder && !showPinnedRepoIcon
   const showRepoBadgeInMetaRow = !compactCards && !!repo && !hideRepoBadge && !showPinnedRepoIcon
+  const showHostContextBadge = !compactCards && !!hostContextLabel
   const showDetachedHeadInMetaRow = !compactCards && !isFolder && detachedHeadDisplay !== null
   const showBranch =
     !isFolder && branch.length > 0 && (!compactCards || branch !== worktree.displayName)
@@ -777,6 +821,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
   // metadata lane unless branch or detached-head identity has content.
   const hasDetailedMetaRowContent = Boolean(
     (showRepoBadgeInMetaRow && repo) ||
+    showHostContextBadge ||
     isFolder ||
     showBranch ||
     showDetachedHeadInMetaRow ||
@@ -898,7 +943,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
       onDoubleClick={handleDoubleClick}
       draggable={nativeDragEnabled && !isDeleting && !titleRenaming}
       onDragStart={nativeDragEnabled ? handleDragStart : undefined}
-      onDragEnd={nativeDragEnabled ? onCardDragEnd : undefined}
+      onDragEnd={nativeDragEnabled ? handleDragEnd : undefined}
       aria-busy={isDeleting}
       style={cardStyle}
     >
@@ -967,7 +1012,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
                       )
                     : translate(
                         'auto.components.sidebar.WorktreeCard.ca74db7550',
-                        'Remote project via SSH'
+                        'Project on SSH host'
                       )}
                 </TooltipContent>
               </Tooltip>
@@ -1195,6 +1240,15 @@ const WorktreeCard = React.memo(function WorktreeCard({
                 </div>
               )}
 
+              {showHostContextBadge && (
+                <Badge
+                  variant="secondary"
+                  className="h-[16px] max-w-[7rem] shrink-0 rounded border border-border bg-accent px-1.5 text-[10px] font-medium leading-none text-muted-foreground dark:bg-accent/80 dark:border-border/50"
+                >
+                  <span className="truncate">{hostContextLabel}</span>
+                </Badge>
+              )}
+
               {isFolder ? (
                 <span
                   className="min-w-0 truncate font-mono text-[11px] leading-none text-muted-foreground"
@@ -1253,15 +1307,6 @@ const WorktreeCard = React.memo(function WorktreeCard({
             </span>
           </div>
         )}
-
-        {isActive && worktree.linkedLinearIssue ? (
-          <LinearAgentSkillSetupPrompt
-            linked
-            remote={Boolean(repo?.connectionId || settings?.activeRuntimeEnvironmentId?.trim())}
-            surface="modal"
-            settings={settings}
-          />
-        ) : null}
 
         {/* Why: inline agent list. Gated on the 'inline-agents' card
              property so users can hide it. Layout coupling: this block

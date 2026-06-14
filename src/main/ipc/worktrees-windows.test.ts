@@ -111,6 +111,7 @@ describe('registerWorktreeHandlers – Windows path handling', () => {
   const store = {
     getRepos: vi.fn(),
     getRepo: vi.fn(),
+    getProjectHostSetups: vi.fn(),
     getSettings: vi.fn(),
     getWorktreeMeta: vi.fn(),
     setWorktreeMeta: vi.fn(),
@@ -141,6 +142,7 @@ describe('registerWorktreeHandlers – Windows path handling', () => {
     mainWindow.webContents.send.mockReset()
     store.getRepos.mockReset()
     store.getRepo.mockReset()
+    store.getProjectHostSetups.mockReset()
     store.getSettings.mockReset()
     store.getWorktreeMeta.mockReset()
     store.setWorktreeMeta.mockReset()
@@ -171,6 +173,7 @@ describe('registerWorktreeHandlers – Windows path handling', () => {
       addedAt: 0,
       worktreeBaseRef: null
     })
+    store.getProjectHostSetups.mockReturnValue([])
     store.getSettings.mockReturnValue({
       branchPrefix: 'none',
       nestWorkspaces: false,

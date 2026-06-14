@@ -8,6 +8,7 @@ import { findWorktreeById, getRepoIdFromWorktreeId } from './worktree-helpers'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '../../runtime/runtime-rpc-client'
 import { toRuntimeWorktreeSelector } from '../../runtime/runtime-worktree-selector'
 import { createBrowserUuid } from '@/lib/browser-uuid'
+import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 
 export type DiffCommentsSlice = {
   getDiffComments: (worktreeId: string | null | undefined) => DiffComment[]
@@ -115,6 +116,13 @@ async function persist(
   )
 }
 
+function settingsForWorktreeOwner(state: AppState, worktreeId: string): AppState['settings'] {
+  const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(state, worktreeId)
+  return state.settings
+    ? { ...state.settings, activeRuntimeEnvironmentId: runtimeEnvironmentId }
+    : ({ activeRuntimeEnvironmentId: runtimeEnvironmentId } as AppState['settings'])
+}
+
 // Why: IPC writes from `persist` are not ordered with respect to each other.
 // If two mutations (e.g. rapid add then delete, or two adds) are in flight
 // concurrently, their `updateMeta` resolutions can arrive out of call order,
@@ -141,7 +149,7 @@ function enqueuePersist(worktreeId: string, get: () => AppState): Promise<void> 
     const repoList = get().worktreesByRepo[repoId]
     const target = repoList?.find((w) => w.id === worktreeId)
     const latest = (target?.diffComments ?? []).map(normalizeDiffComment)
-    await persist(get().settings, worktreeId, latest)
+    await persist(settingsForWorktreeOwner(get(), worktreeId), worktreeId, latest)
   }
   const next = prior.then(run, run)
   persistQueueByWorktree.set(worktreeId, next)

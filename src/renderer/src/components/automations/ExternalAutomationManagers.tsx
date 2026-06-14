@@ -15,6 +15,7 @@ import {
   type FetchExternalAutomationRuns
 } from './ExternalAutomationRunTable'
 import { getExternalAutomationScheduleDisplay } from './external-automation-schedule-display'
+import { getExternalAutomationActionDisabledMessage } from './external-automation-source-availability'
 import { translate } from '@/i18n/i18n'
 
 type ExternalAutomationManagersProps = {
@@ -59,7 +60,7 @@ function getProviderLabel(manager: ExternalAutomationManager): string {
 }
 
 function getTargetKindLabel(manager: ExternalAutomationManager): string {
-  return manager.target.type === 'ssh' ? 'Remote SSH' : 'Local'
+  return manager.target.type === 'ssh' ? 'SSH host' : 'Local'
 }
 
 function ExternalActionButton({
@@ -163,6 +164,10 @@ export function ExternalAutomationManagers({
             <div className="divide-y divide-border/40">
               {manager.jobs.map((job) => {
                 const scheduleDisplay = getExternalAutomationScheduleDisplay(manager, job)
+                const disabledMessage = getExternalAutomationActionDisabledMessage({
+                  manager,
+                  actionInProgress: runningActionKey !== null
+                })
                 return (
                   <div
                     key={job.id}
@@ -228,11 +233,14 @@ export function ExternalAutomationManagers({
                     </div>
                     <div className="flex items-center justify-end gap-1">
                       <ExternalActionButton
-                        label={translate(
-                          'auto.components.automations.ExternalAutomationManagers.cc77ba88ff',
-                          'Run external automation'
-                        )}
-                        disabled={!manager.canManage || runningActionKey !== null}
+                        label={
+                          disabledMessage ??
+                          translate(
+                            'auto.components.automations.ExternalAutomationManagers.cc77ba88ff',
+                            'Run external automation'
+                          )
+                        }
+                        disabled={disabledMessage !== null}
                         onClick={() => onAction(manager, job, 'run')}
                       >
                         {runningActionKey === actionKey(manager, job, 'run') ? (
@@ -243,11 +251,14 @@ export function ExternalAutomationManagers({
                       </ExternalActionButton>
                       {manager.provider === 'hermes' ? (
                         <ExternalActionButton
-                          label={translate(
-                            'auto.components.automations.ExternalAutomationManagers.1df491fd00',
-                            'Edit external automation'
-                          )}
-                          disabled={!manager.canManage || runningActionKey !== null}
+                          label={
+                            disabledMessage ??
+                            translate(
+                              'auto.components.automations.ExternalAutomationManagers.1df491fd00',
+                              'Edit external automation'
+                            )
+                          }
+                          disabled={disabledMessage !== null}
                           onClick={() => onEdit?.(manager, job)}
                         >
                           <Pencil className="size-3.5" />
@@ -255,7 +266,8 @@ export function ExternalAutomationManagers({
                       ) : null}
                       <ExternalActionButton
                         label={
-                          job.enabled
+                          disabledMessage ??
+                          (job.enabled
                             ? translate(
                                 'auto.components.automations.ExternalAutomationManagers.0def1693bb',
                                 'Pause external automation'
@@ -263,9 +275,9 @@ export function ExternalAutomationManagers({
                             : translate(
                                 'auto.components.automations.ExternalAutomationManagers.1c3bfd38fe',
                                 'Resume external automation'
-                              )
+                              ))
                         }
-                        disabled={!manager.canManage || runningActionKey !== null}
+                        disabled={disabledMessage !== null}
                         onClick={() => onAction(manager, job, job.enabled ? 'pause' : 'resume')}
                       >
                         {runningActionKey ===
@@ -278,12 +290,15 @@ export function ExternalAutomationManagers({
                         )}
                       </ExternalActionButton>
                       <ExternalActionButton
-                        label={translate(
-                          'auto.components.automations.ExternalAutomationManagers.a42bf2b27e',
-                          'Delete external automation'
-                        )}
+                        label={
+                          disabledMessage ??
+                          translate(
+                            'auto.components.automations.ExternalAutomationManagers.a42bf2b27e',
+                            'Delete external automation'
+                          )
+                        }
                         className="text-destructive hover:text-destructive"
-                        disabled={!manager.canManage || runningActionKey !== null}
+                        disabled={disabledMessage !== null}
                         onClick={() => onAction(manager, job, 'delete')}
                       >
                         {runningActionKey === actionKey(manager, job, 'delete') ? (

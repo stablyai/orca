@@ -5,6 +5,7 @@ import {
   useCallback,
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
   type SetStateAction
@@ -21,6 +22,7 @@ import {
 import logo from '../../../resources/logo.svg'
 import { SYNC_FIT_PANES_EVENT, TOGGLE_TERMINAL_PANE_EXPAND_EVENT } from '@/constants/terminal'
 import { syncZoomCSSVar } from '@/lib/ui-zoom'
+import { resolveLeftSidebarStyleVariables } from '@/lib/left-sidebar-appearance'
 import { canShowRightSidebarForView } from '@/lib/right-sidebar-visibility'
 import { buildAppFontFamily } from '@/lib/app-font-family'
 import { toast } from 'sonner'
@@ -40,6 +42,8 @@ import RetainedAgentsSyncGate from './components/dashboard/RetainedAgentsSyncGat
 import { ActivityTitlebarControls } from './components/activity/ActivityTitlebarControls'
 import Sidebar from './components/Sidebar'
 import { shutdownBufferCaptures } from './components/terminal-pane/shutdown-buffer-captures'
+import { dispatchWindowCloseRequest } from './components/window-close-request-coordinator'
+import { useSystemPrefersDark } from './components/terminal-pane/use-system-prefers-dark'
 import RightSidebar from './components/right-sidebar'
 import { StarNagCard } from './components/StarNagCard'
 import { TelemetryFirstLaunchSurface } from './components/TelemetryFirstLaunchSurface'
@@ -88,6 +92,11 @@ import {
   shouldPersistWorkspaceSession
 } from './lib/workspace-session'
 import { createSessionWriteSubscriber } from './lib/session-write-subscriber'
+import {
+  fetchWorkspaceSessionFromHosts,
+  patchWorkspaceSessionByHost,
+  persistWorkspaceSessionByHostSync
+} from './lib/workspace-session-host-persistence'
 import {
   getStartupErrorFallbackUI,
   hydratePersistedUIAfterStartupRead
@@ -418,6 +427,13 @@ function App(): React.JSX.Element {
   // and shutdown transitions where activeWorktreeId can briefly become null.
   const shouldMountTerminalWorkbench =
     activeWorktreeId !== null || hasMountedTerminalWorkbenchRef.current
+  // Why: visible worktree creation owns its faux tab strip; the previous
+  // workspace must stay mounted for retention without rendering real chrome.
+  const creationLayoutActive = activeView === 'terminal' && activeCreationLoaderVisible
+  const workspaceChromeActive =
+    activeView === 'terminal' && activeWorktreeId !== null && !creationLayoutActive
+  const terminalWorkbenchVisible =
+    activeView === 'terminal' && activeWorktreeId !== null && !creationLayoutActive
   // Why: a closed empty floating workspace is not startup-critical. Once it owns
   // tabs, keep it mounted while closed so hidden terminal/browser/editor panes
   // retain their local state.
@@ -532,6 +548,11 @@ function App(): React.JSX.Element {
   const rightSidebarExplorerView = useAppStore((s) => s.rightSidebarExplorerView)
   const isFullScreen = useAppStore((s) => s.isFullScreen)
   const settings = useAppStore((s) => s.settings)
+  const systemPrefersDark = useSystemPrefersDark()
+  const leftSidebarStyle = useMemo(
+    () => resolveLeftSidebarStyleVariables(settings, systemPrefersDark),
+    [settings, systemPrefersDark]
+  ) as React.CSSProperties | undefined
   const dictationState = useAppStore((s) => s.dictationState)
   const hasSshCredentialRequest = useAppStore((s) => s.sshCredentialQueue.length > 0)
   const shouldMountDictationController =
@@ -743,7 +764,14 @@ function App(): React.JSX.Element {
           cancelled,
           hydratePersistedUI: actions.hydratePersistedUI
         })
-        const session = await window.api.session.get()
+        // Why: runtime-owned worktree slices live in per-host partitions.
+        // Repos were fetched above, so the known runtime hosts are derivable
+        // here; merge their slices into the unified session the hydrators
+        // expect. An unreadable host partition is skipped (fail-soft).
+        const session = await fetchWorkspaceSessionFromHosts(
+          window.api.session,
+          useAppStore.getState().repos
+        )
         await actions.fetchKeybindings()
         if (!cancelled) {
           actions.hydrateWorkspaceSession(session)
@@ -1035,9 +1063,12 @@ function App(): React.JSX.Element {
       store: useAppStore,
       shouldSchedulePersist: () => !isRemoteWorkspaceSnapshotApplyInProgress(),
       persist: ({ patch }) => {
-        const localWrite = window.api.session.patch(patch)
-        void localWrite
         const state = useAppStore.getState()
+        // Why: route each runtime host's worktree-scoped slice to its own
+        // partition; the returned promise is the local write so the
+        // remote-workspace upload chain below keeps its ordering.
+        const localWrite = patchWorkspaceSessionByHost(window.api.session, patch, state)
+        void localWrite
         const hydratedTargetIds = Array.from(state.remoteWorkspaceHydratedTargetIds).filter(
           (targetId) => state.remoteWorkspaceSyncStatusByTargetId[targetId]?.phase !== 'conflict'
         )
@@ -1097,11 +1128,25 @@ function App(): React.JSX.Element {
       // into the store via Zustand setters. The earlier read is only for the
       // gating flags and would miss those updates.
       const freshState = useAppStore.getState()
-      window.api.session.setSync(buildWorkspaceSessionPayload(freshState))
+      persistWorkspaceSessionByHostSync(
+        window.api.session,
+        buildWorkspaceSessionPayload(freshState),
+        freshState
+      )
       shutdownBuffersCaptured = true
     }
     window.addEventListener('beforeunload', captureAndFlush)
     return () => window.removeEventListener('beforeunload', captureAndFlush)
+  }, [])
+
+  // Own the single window-close-request subscription at the always-mounted App
+  // root. Why: the rich confirmation flow lives in Terminal, which is not
+  // mounted on the no-workspace landing page (and is lazy-loaded elsewhere), so
+  // subscribing there left File → Exit / Ctrl+Q with no listener and the window
+  // never closed (#5144). dispatchWindowCloseRequest delegates to Terminal's
+  // handler when present, else confirms the close directly.
+  useEffect(() => {
+    return window.api.ui.onWindowCloseRequested(dispatchWindowCloseRequest)
   }, [])
 
   // Why there is no periodic scrollback save: PR #461 added a 3-minute
@@ -1221,11 +1266,7 @@ function App(): React.JSX.Element {
   const effectiveActiveTabExpanded = effectiveActiveTabId
     ? (expandedPaneByTabId[effectiveActiveTabId] ?? false)
     : false
-  const showTitlebarExpandButton =
-    activeView === 'terminal' &&
-    activeWorktreeId !== null &&
-    !hasTabBar &&
-    effectiveActiveTabExpanded
+  const showTitlebarExpandButton = workspaceChromeActive && !hasTabBar && effectiveActiveTabExpanded
   // Why: Activity and Space are full-page navigation surfaces — same
   // treatment as Settings — so the worktree sidebar is removed for those views.
   const showSidebar =
@@ -1233,16 +1274,14 @@ function App(): React.JSX.Element {
     activeView !== 'activity' &&
     activeView !== 'space' &&
     activeView !== 'skills'
-  // Why: only the terminal workspace replaces the full-width titlebar with
-  // split-column chrome. Full-page navigation views keep the draggable app
-  // titlebar so their page-level controls can live in that window strip.
-  const workspaceActive = activeView === 'terminal' && activeWorktreeId !== null
-  // Why: Tasks/Landing keep the full titlebar only when the sidebar is collapsed;
-  // with it open, mirror workspace view so titlebar-left sits flush above nav.
-  const stackedSidebarOpen = !workspaceActive && showSidebar && sidebarOpen
+  // Why: Tasks/Landing keep the full titlebar only when the sidebar is
+  // collapsed; with it open, mirror workspace view so titlebar-left sits flush
+  // above nav. Creation layout suppresses both titlebar forms.
+  const stackedSidebarOpen =
+    !workspaceChromeActive && !creationLayoutActive && showSidebar && sidebarOpen
   // Why: suppress right sidebar controls on full-page navigation surfaces
   // since those surfaces intentionally own the full content area.
-  const showRightSidebarControls = canShowRightSidebarForView(activeView)
+  const showRightSidebarControls = !creationLayoutActive && canShowRightSidebarForView(activeView)
 
   const handleToggleExpand = (): void => {
     if (!effectiveActiveTabId) {
@@ -1301,7 +1340,7 @@ function App(): React.JSX.Element {
         })
       }
 
-      const canRevealRightSidebar = canShowRightSidebarForView(activeView)
+      const canRevealRightSidebar = !creationLayoutActive && canShowRightSidebarForView(activeView)
 
       const openSearchSidebar = (query: string | null): void => {
         actions.showRightSidebarSearch(query ? { query } : undefined)
@@ -1372,7 +1411,7 @@ function App(): React.JSX.Element {
         // Why: Back/Forward traverse mixed worktree + page visits, so the
         // shortcut is active wherever the titlebar button cluster is (terminal
         // or stack-backed pages). Still suppressed in Settings.
-        if (!shouldShowWorktreeHistoryControls(activeView)) {
+        if (creationLayoutActive || !shouldShowWorktreeHistoryControls(activeView)) {
           return
         }
         e.preventDefault()
@@ -1414,7 +1453,7 @@ function App(): React.JSX.Element {
       // focus zone because the browser pane owns its own Cmd+R reload and that
       // focus never reaches this renderer-window handler. Only terminal tabs
       // have an inline title editor, so other active tab types fall through.
-      if (workspaceActive && !floatingWorkspaceFocused && matchShortcut('tab.rename')) {
+      if (workspaceChromeActive && !floatingWorkspaceFocused && matchShortcut('tab.rename')) {
         const store = useAppStore.getState()
         if (store.activeTabType === 'terminal' && store.activeTabId) {
           e.preventDefault()
@@ -1428,7 +1467,7 @@ function App(): React.JSX.Element {
       // first so the card is mounted and visible even when sidebar filters or
       // collapse state would otherwise hide it.
       if (
-        workspaceActive &&
+        workspaceChromeActive &&
         !floatingWorkspaceFocused &&
         matchShortcut('workspace.rename') &&
         activeWorktreeId
@@ -1533,7 +1572,8 @@ function App(): React.JSX.Element {
     keybindings,
     settings?.terminalShortcutPolicy,
     setFloatingTerminalOpenWithFocus,
-    workspaceActive
+    workspaceChromeActive,
+    creationLayoutActive
   ])
 
   useLayoutEffect(() => {
@@ -1552,7 +1592,7 @@ function App(): React.JSX.Element {
     })
     observer.observe(controls)
     return () => observer.disconnect()
-  }, [isFullScreen, settings?.showTitlebarAppName, showSidebar, workspaceActive, sidebarOpen])
+  }, [isFullScreen, settings?.showTitlebarAppName, showSidebar, workspaceChromeActive, sidebarOpen])
 
   const resolvedMountedLazyModalIds = resolveMountedLazyModalIds(activeModal, mountedLazyModalIds)
   if (resolvedMountedLazyModalIds !== mountedLazyModalIds) {
@@ -1576,7 +1616,7 @@ function App(): React.JSX.Element {
     <div
       ref={titlebarLeftControlsRef}
       className={`flex h-full shrink-0 items-center${
-        workspaceActive && !sidebarOpen ? ' w-max' : ' w-full'
+        workspaceChromeActive && !sidebarOpen ? ' w-max' : ' w-full'
       }`}
     >
       <div className="flex h-full items-center">
@@ -1722,10 +1762,10 @@ function App(): React.JSX.Element {
     <>
       {activeView === 'activity' ? (
         <ActivityTitlebarControls />
-      ) : (
+      ) : creationLayoutActive ? null : (
         <div
           id="titlebar-tabs"
-          className={`flex flex-1 min-w-0 self-stretch${activeView !== 'terminal' || !activeWorktreeId ? ' invisible pointer-events-none' : ''}`}
+          className={`flex flex-1 min-w-0 self-stretch${!workspaceChromeActive ? ' invisible pointer-events-none' : ''}`}
         />
       )}
       {showTitlebarExpandButton && (
@@ -1802,7 +1842,7 @@ function App(): React.JSX.Element {
                 to the top of the window. Left titlebar controls move to a
                 header above the sidebar. Settings, landing, and the tasks
                 page keep the titlebar. */}
-                  {!workspaceActive && !stackedSidebarOpen ? (
+                  {!workspaceChromeActive && !stackedSidebarOpen && !creationLayoutActive ? (
                     <div className="titlebar">
                       <div className="flex items-center shrink-0 mr-2">{titlebarLeftControls}</div>
                       {titlebarMainStrip}
@@ -1810,7 +1850,7 @@ function App(): React.JSX.Element {
                   ) : null}
                   <div className="flex flex-row flex-1 min-h-0 overflow-hidden">
                     {showSidebar ? (
-                      workspaceActive || stackedSidebarOpen ? (
+                      workspaceChromeActive || stackedSidebarOpen ? (
                         /* Why: left column wraps the sidebar with a titlebar-height
                      header above it. The header holds the same controls
                      (traffic lights, sidebar toggle, "Orca" title, agent badge)
@@ -1837,6 +1877,10 @@ function App(): React.JSX.Element {
                                 : ' titlebar-left-floating absolute top-0 left-0 z-10 w-max border-r border-border'
                             }`}
                             style={{
+                              // Why: custom sidebar appearances are scoped to the sidebar
+                              // root, so mirror those variables onto the open header that
+                              // visually belongs to the same left-column panel.
+                              ...(sidebarOpen ? leftSidebarStyle : undefined),
                               // Why: the Sidebar resize hook updates the sidebar DOM width
                               // directly during drag and only persists to Zustand on
                               // mouseup. In workspace view, size this header from the
@@ -1905,7 +1949,7 @@ function App(): React.JSX.Element {
                     top-0 anchor so the icon's vertical center is identical between
                     open and closed states — otherwise toggling makes the icon jump
                     a few pixels, which reads as layout jitter. */}
-                        {workspaceActive && !rightSidebarOpen && (
+                        {workspaceChromeActive && !rightSidebarOpen && (
                           <div
                             className="absolute top-0 z-10 flex items-center h-[36px]"
                             style={
@@ -1929,9 +1973,7 @@ function App(): React.JSX.Element {
                           {shouldMountTerminalWorkbench ? (
                             <div
                               className={
-                                activeView !== 'terminal' ||
-                                !activeWorktreeId ||
-                                activeCreationLoaderVisible
+                                !terminalWorkbenchVisible
                                   ? 'hidden flex-1 min-w-0 min-h-0'
                                   : 'flex flex-1 min-w-0 min-h-0'
                               }

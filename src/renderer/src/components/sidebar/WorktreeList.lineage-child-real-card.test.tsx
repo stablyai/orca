@@ -311,6 +311,7 @@ function setLineageState(options: { deletingChild?: boolean } = {}): void {
     updateRepo: vi.fn(),
     updateWorktreeMeta: mockStore.updateWorktreeMeta,
     updateWorktreesMeta: vi.fn(),
+    workspaceHostScope: 'all',
     workspacePortScan: null,
     workspaceStatuses: [],
     worktreeCardProperties: [

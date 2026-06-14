@@ -33,6 +33,7 @@ export const BOOLEAN_FLAGS = new Set([
   'interrupt',
   'json',
   'messages',
+  'me',
   'mobile',
   'mobile-pairing',
   'no-pairing',
@@ -51,6 +52,18 @@ export const BOOLEAN_FLAGS = new Set([
   'wait'
 ])
 
+export const REPEATED_FLAG_SEPARATOR = '\u0000'
+const REPEATABLE_STRING_FLAGS = new Set(['label'])
+
+function setFlagValue(flags: Map<string, string | boolean>, name: string, value: string): void {
+  const existing = flags.get(name)
+  if (typeof existing === 'string' && REPEATABLE_STRING_FLAGS.has(name)) {
+    flags.set(name, `${existing}${REPEATED_FLAG_SEPARATOR}${value}`)
+    return
+  }
+  flags.set(name, value)
+}
+
 export function parseArgs(argv: string[]): ParsedArgs {
   const commandPath: string[] = []
   const flags = new Map<string, string | boolean>()
@@ -68,7 +81,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
     // treats a `--`-leading next token as a new flag, so it can't express one.
     const equalsIndex = assignment.indexOf('=')
     if (equalsIndex !== -1) {
-      flags.set(assignment.slice(0, equalsIndex), assignment.slice(equalsIndex + 1))
+      setFlagValue(flags, assignment.slice(0, equalsIndex), assignment.slice(equalsIndex + 1))
       continue
     }
 
@@ -83,7 +96,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
       flags.set(flag, true)
       continue
     }
-    flags.set(flag, next)
+    setFlagValue(flags, flag, next)
     i += 1
   }
 
@@ -114,6 +127,7 @@ export function supportsBrowserPageFlag(commandPath: string[]): boolean {
   if (
     [
       'automations',
+      'project',
       'repo',
       'worktree',
       'terminal',
@@ -143,6 +157,7 @@ export function isCommandGroup(commandPath: string[]): boolean {
     (commandPath.length === 1 &&
       [
         'automations',
+        'project',
         'repo',
         'worktree',
         'terminal',

@@ -52,6 +52,10 @@ describe('linear links', () => {
       identifier: 'ENG-123',
       organizationUrlKey: 'acme'
     })
+    expect(parseLinearIssueInput('https://linear.app/stably/issue/STA-335/test-issue')).toEqual({
+      identifier: 'STA-335',
+      organizationUrlKey: 'stably'
+    })
   })
 
   it('rejects non-Linear issue input', () => {
