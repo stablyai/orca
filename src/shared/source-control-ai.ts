@@ -911,10 +911,14 @@ function selectPersistedModelId(args: {
       agentId
     ) ??
     readDefaultSelectedModelId(source, hostKey, agentId) ??
-    legacy?.selectedModelByAgentByHost?.[hostKey]?.[agentId] ??
-    (hostKey === LOCAL_COMMIT_MESSAGE_HOST_KEY
-      ? legacy?.selectedModelByAgent?.[agentId]
-      : undefined) ??
+    readSourceControlAiModelChoiceForHost(
+      {
+        selectedModelByAgent: legacy?.selectedModelByAgent,
+        selectedModelByAgentByHost: legacy?.selectedModelByAgentByHost
+      },
+      hostKey,
+      agentId
+    ) ??
     defaultModelId
   )
 }

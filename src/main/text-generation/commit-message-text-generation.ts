@@ -518,6 +518,11 @@ async function runLocalPlan(
       }
     }
   }
+  const runPromptFileCleanup = (): void => {
+    void cleanupPromptFile().catch((error) => {
+      console.warn('[commit-message] Failed to clean up prompt file:', error)
+    })
+  }
   return new Promise((resolve) => {
     let child: ChildProcess
     try {
@@ -534,7 +539,7 @@ async function runLocalPlan(
         windowsHide: true
       })
     } catch (error) {
-      void cleanupPromptFile()
+      runPromptFileCleanup()
       if (error instanceof UnsafeWindowsBatchArgumentsError) {
         resolve({
           success: false,
@@ -571,7 +576,7 @@ async function runLocalPlan(
         timer = null
       }
       detachChildListeners()
-      void cleanupPromptFile()
+      runPromptFileCleanup()
       if (cancelToken && cancelTokensByLane.get(laneKey) === cancelToken) {
         cancelTokensByLane.delete(laneKey)
       }

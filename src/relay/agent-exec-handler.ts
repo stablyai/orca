@@ -204,6 +204,11 @@ export class AgentExecHandler {
         }
       }
     }
+    const runPromptFileCleanup = (): void => {
+      void cleanupPromptFile().catch((error) => {
+        console.warn('[agent-exec] Failed to clean up prompt file:', error)
+      })
+    }
     const spawnEnv = extraEnv ? { ...process.env, ...extraEnv } : process.env
 
     return new Promise<ExecResult>((resolve) => {
@@ -217,7 +222,7 @@ export class AgentExecHandler {
           windowsHide: true
         })
       } catch (error) {
-        void cleanupPromptFile()
+        runPromptFileCleanup()
         resolve({
           stdout: '',
           stderr: '',
@@ -255,7 +260,7 @@ export class AgentExecHandler {
           this.inFlightByLane.delete(laneKey)
         }
         resolve(result)
-        void cleanupPromptFile()
+        runPromptFileCleanup()
       }
       const cancelCurrent = (): void => {
         canceled = true

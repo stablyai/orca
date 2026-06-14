@@ -214,7 +214,10 @@ export function resolveDropdownItems(inputs: DropdownActionInputs): DropdownEntr
   })()
   const aiCommitItem: DropdownItem = {
     kind: 'ai_commit',
-    label: 'AI Commit',
+    label: translate(
+      'auto.components.right.sidebar.source.control.dropdown.items.ai.commit',
+      'AI Commit'
+    ),
     title: aiCommitDisabledReason ?? 'Generate a commit message from staged changes with AI',
     disabled: aiCommitDisabledReason !== null
   }

@@ -53,6 +53,8 @@ export function mergeDiscoveredModelsIntoCommitMessageConfig(
     selectedModelByAgent: config.selectedModelByAgent,
     selectedModelByAgentByHost: config.selectedModelByAgentByHost
   }
+  // Why: `persisted` is normalized (legacy OMP Copilot seed -> default),
+  // so compare raw and normalized values to force a one-time migration writeback.
   const rawPersisted =
     currentChoice.selectedModelByAgentByHost?.[hostKey]?.[agentId] ??
     (hostKey === 'local' ? currentChoice.selectedModelByAgent?.[agentId] : undefined)

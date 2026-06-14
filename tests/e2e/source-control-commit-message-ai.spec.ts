@@ -50,7 +50,7 @@ test.describe('Source Control AI commit messages', () => {
   }) => {
     const { branchName, worktreePath } = createWorktreeWithStagedChange(testRepoPath)
     const agentCommand =
-      'node -e "const end = Date.now() + 2000; while (Date.now() < end) {} process.stdout.write(\'Add generated E2E message\')"'
+      'node -e "setTimeout(() => process.stdout.write(\'Add generated E2E message\'), 2000)"'
 
     try {
       await waitForSessionReady(orcaPage)
