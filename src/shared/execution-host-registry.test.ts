@@ -193,15 +193,17 @@ describe('execution host registry', () => {
     ])
   })
 
-  it('includes runtime hosts from repo ownership even when they are not focused', () => {
+  it('includes runtime hosts from repo ownership but marks them disconnected without live status', () => {
     const hosts = buildExecutionHostRegistry({
       repos: [{ connectionId: null, executionHostId: 'runtime:env-2' }],
       settings: { activeRuntimeEnvironmentId: null }
     })
 
+    // No live status means no evidence the Orca server is reachable, so it must
+    // read 'disconnected' rather than defaulting to 'available'/"Connected".
     expect(hosts).toMatchObject([
       { id: 'local', health: 'local' },
-      { id: 'runtime:env-2', kind: 'runtime', label: 'env-2', health: 'available' }
+      { id: 'runtime:env-2', kind: 'runtime', label: 'env-2', health: 'disconnected' }
     ])
   })
 

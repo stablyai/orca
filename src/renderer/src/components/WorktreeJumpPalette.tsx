@@ -1625,7 +1625,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
                             </div>
                           )}
                         </div>
-                        <div className="flex shrink-0 flex-col items-end gap-1.5">
+                        <div className="flex shrink-0 items-center gap-1.5">
                           {repoName && (
                             <span className="inline-flex max-w-[180px] items-center gap-1.5 rounded-md border border-border bg-muted px-2 py-1 text-[11px] font-semibold leading-none text-foreground">
                               <RepoBadgeMark color={repo?.badgeColor} />
@@ -1747,7 +1747,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
                             </span>
                           </div>
                         </div>
-                        <div className="flex shrink-0 flex-col items-end gap-1.5">
+                        <div className="flex shrink-0 items-center gap-1.5">
                           {simulatorRepoName && (
                             <span className="inline-flex max-w-[180px] items-center gap-1.5 rounded-md border border-border bg-muted px-2 py-1 text-[11px] font-semibold leading-none text-foreground">
                               <RepoBadgeMark color={simulatorRepo?.badgeColor} />
@@ -1825,7 +1825,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
                           </span>
                         </div>
                       </div>
-                      <div className="flex shrink-0 flex-col items-end gap-1.5">
+                      <div className="flex shrink-0 items-center gap-1.5">
                         {browserRepoName && (
                           <span className="inline-flex max-w-[180px] items-center gap-1.5 rounded-md border border-border bg-muted px-2 py-1 text-[11px] font-semibold leading-none text-foreground">
                             <RepoBadgeMark color={browserRepo?.badgeColor} />
