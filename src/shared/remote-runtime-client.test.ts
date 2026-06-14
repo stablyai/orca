@@ -30,6 +30,19 @@ afterEach(async () => {
 })
 
 describe('subscribeRemoteRuntimeRequest', () => {
+  it('includes WebSocket close details when subscription admission is rejected', async () => {
+    const server = await createClosingServer(1013, 'Maximum connections reached')
+
+    await expect(
+      subscribeRemoteRuntimeRequest(server.pairing, 'terminal.subscribe', {}, 1000, {
+        onResponse: vi.fn(),
+        onError: vi.fn()
+      })
+    ).rejects.toThrow(
+      'Remote Orca runtime closed the connection (1013: Maximum connections reached).'
+    )
+  })
+
   it('sends encrypted binary frames on an established subscription socket', async () => {
     const server = await createSubscriptionServer()
     const onResponse = vi.fn()
@@ -129,6 +142,14 @@ describe('subscribeRemoteRuntimeRequest', () => {
 })
 
 describe('sendRemoteRuntimeRequest', () => {
+  it('includes WebSocket close details when one-shot admission is rejected', async () => {
+    const server = await createClosingServer(1013, 'Maximum connections reached')
+
+    await expect(sendRemoteRuntimeRequest(server.pairing, 'status.get', {}, 1000)).rejects.toThrow(
+      'Remote Orca runtime closed the connection (1013: Maximum connections reached).'
+    )
+  })
+
   it('refreshes the per-call timeout when the runtime sends keepalive frames', async () => {
     const server = await createOneShotServer()
 
@@ -290,6 +311,33 @@ async function createSubscriptionServer(
 
 function sendEncrypted(ws: WebSocket, sharedKey: Uint8Array, message: unknown): void {
   ws.send(encrypt(JSON.stringify(message), sharedKey))
+}
+
+async function createClosingServer(
+  code: number,
+  reason: string
+): Promise<{ pairing: PairingOffer }> {
+  const serverKeyPair = generateKeyPair()
+  const wss = new WebSocketServer({ port: 0 })
+  servers.push(wss)
+  wss.on('connection', (ws) => {
+    ws.close(code, reason)
+  })
+
+  await new Promise<void>((resolve) => wss.once('listening', resolve))
+  const address = wss.address() as AddressInfo
+  const pairing = parsePairingCode(
+    encodePairingOffer({
+      v: 2,
+      endpoint: `ws://127.0.0.1:${address.port}`,
+      deviceToken: 'device-token',
+      publicKeyB64: publicKeyToBase64(serverKeyPair.publicKey)
+    })
+  )
+  if (!pairing) {
+    throw new Error('Failed to create test pairing')
+  }
+  return { pairing }
 }
 
 async function createOneShotServer(
