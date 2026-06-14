@@ -39,7 +39,11 @@ export const CLIENT_EVENT_METHODS: readonly RpcAnyMethod[] = [
   defineMethod({
     name: 'runtime.clientEvents.unsubscribe',
     params: ClientEventsUnsubscribeParams,
-    handler: async (params, { runtime }) => {
+    handler: async (params, { runtime, connectionId }) => {
+      const expectedPrefix = `runtime-client-events-${connectionId ?? 'inproc'}-`
+      if (!params.subscriptionId.startsWith(expectedPrefix)) {
+        return { unsubscribed: false }
+      }
       runtime.cleanupSubscription(params.subscriptionId)
       return { unsubscribed: true }
     }

@@ -216,8 +216,9 @@ export function HostSetupPlannedStep({
 }): React.JSX.Element {
   const addHostLabel = translate(
     'auto.components.settings.RepositoryPane.addPlannedHostToHost',
-    'Add {{host}}'
-  ).replace('{{host}}', hostLabel)
+    'Add {{host}}',
+    { host: hostLabel }
+  )
 
   return (
     <div className="space-y-3 rounded-md border border-border bg-muted/20 p-3">

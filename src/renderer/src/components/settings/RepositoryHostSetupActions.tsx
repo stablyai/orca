@@ -92,17 +92,20 @@ export function RepositoryHostSetupActions({
       return
     }
     setIsSettingUp(true)
-    const result = await setupProjectExistingFolder({
-      projectId: selectedProjectHostSetup.projectId,
-      hostId: setupTargetHostId,
-      path: setupPath.trim(),
-      kind: setupKind,
-      displayName: repoDisplayName
-    })
-    setIsSettingUp(false)
-    if (result) {
-      resetFlow()
-      onOpenSetup(result.repo.id)
+    try {
+      const result = await setupProjectExistingFolder({
+        projectId: selectedProjectHostSetup.projectId,
+        hostId: setupTargetHostId,
+        path: setupPath.trim(),
+        kind: setupKind,
+        displayName: repoDisplayName
+      })
+      if (result) {
+        resetFlow()
+        onOpenSetup(result.repo.id)
+      }
+    } finally {
+      setIsSettingUp(false)
     }
   }
 
@@ -116,17 +119,20 @@ export function RepositoryHostSetupActions({
       return
     }
     setIsCloning(true)
-    const result = await setupProjectClone({
-      projectId: selectedProjectHostSetup.projectId,
-      hostId: setupTargetHostId,
-      url: cloneUrl.trim(),
-      destination: cloneDestination.trim(),
-      displayName: repoDisplayName
-    })
-    setIsCloning(false)
-    if (result) {
-      resetFlow()
-      onOpenSetup(result.repo.id)
+    try {
+      const result = await setupProjectClone({
+        projectId: selectedProjectHostSetup.projectId,
+        hostId: setupTargetHostId,
+        url: cloneUrl.trim(),
+        destination: cloneDestination.trim(),
+        displayName: repoDisplayName
+      })
+      if (result) {
+        resetFlow()
+        onOpenSetup(result.repo.id)
+      }
+    } finally {
+      setIsCloning(false)
     }
   }
 
@@ -135,16 +141,19 @@ export function RepositoryHostSetupActions({
       return
     }
     setIsCreatingPendingSetup(true)
-    const result = await createProjectHostSetup({
-      projectId: selectedProjectHostSetup.projectId,
-      hostId: setupTargetHostId,
-      displayName: repoDisplayName,
-      setupState: 'not-set-up',
-      setupMethod: 'provisioned'
-    })
-    setIsCreatingPendingSetup(false)
-    if (result) {
-      resetFlow()
+    try {
+      const result = await createProjectHostSetup({
+        projectId: selectedProjectHostSetup.projectId,
+        hostId: setupTargetHostId,
+        displayName: repoDisplayName,
+        setupState: 'not-set-up',
+        setupMethod: 'provisioned'
+      })
+      if (result) {
+        resetFlow()
+      }
+    } finally {
+      setIsCreatingPendingSetup(false)
     }
   }
 

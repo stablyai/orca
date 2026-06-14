@@ -183,6 +183,9 @@ export const SESSION_TAB_METHODS: RpcAnyMethod[] = [
           emit({ type: 'updated', ...snapshot })
         }
       })
+      if (closed) {
+        unsubscribe()
+      }
     }
   }),
   defineMethod({
