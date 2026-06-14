@@ -31,6 +31,7 @@ describe('resolveDropdownItems', () => {
     const kinds = items.map((item) => item.kind)
     expect(kinds).toEqual([
       'commit',
+      'ai_commit',
       'commit_push',
       'commit_sync',
       'separator',
@@ -45,6 +46,75 @@ describe('resolveDropdownItems', () => {
       'fetch',
       'publish'
     ])
+  })
+
+  it('enables AI Commit when staged changes can be summarized', () => {
+    const item = resolveDropdownItems(
+      inputs({
+        stagedCount: 1,
+        canGenerateCommitMessage: true,
+        upstreamStatus: { hasUpstream: true, ahead: 0, behind: 0 }
+      })
+    ).find((entry) => entry.kind === 'ai_commit')
+
+    expect(item).toMatchObject({
+      label: 'AI Commit',
+      title: 'Generate a commit message from staged changes with AI',
+      disabled: false
+    })
+  })
+
+  it('disables AI Commit with the specific generator guard reason', () => {
+    const cases: [string, Partial<DropdownActionInputs>, string][] = [
+      [
+        'no staged files',
+        { stagedCount: 0, canGenerateCommitMessage: true },
+        'Stage at least one file to generate a message.'
+      ],
+      [
+        'existing message',
+        { stagedCount: 1, hasMessage: true, canGenerateCommitMessage: true },
+        'Clear the message to regenerate.'
+      ],
+      [
+        'unsupported generator',
+        { stagedCount: 1, canGenerateCommitMessage: false },
+        'Pick an agent in Settings -> Git -> Source Control AI.'
+      ],
+      [
+        'in-flight generation',
+        {
+          stagedCount: 1,
+          canGenerateCommitMessage: true,
+          isGeneratingCommitMessage: true
+        },
+        'Generating commit message…'
+      ],
+      [
+        'partially staged changes',
+        {
+          stagedCount: 1,
+          hasPartiallyStagedChanges: true,
+          hasUnstagedChanges: true,
+          canGenerateCommitMessage: true
+        },
+        'Stage all changes before generating a message.'
+      ]
+    ]
+
+    for (const [name, overrides, title] of cases) {
+      const item = resolveDropdownItems(
+        inputs({
+          upstreamStatus: { hasUpstream: true, ahead: 0, behind: 0 },
+          ...overrides
+        })
+      ).find((entry) => entry.kind === 'ai_commit')
+
+      expect(item, name).toMatchObject({
+        title,
+        disabled: true
+      })
+    }
   })
 
   it('disables compound commit actions when no staged files', () => {

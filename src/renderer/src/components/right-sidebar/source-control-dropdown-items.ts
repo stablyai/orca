@@ -14,10 +14,13 @@ export type DropdownActionInputs = PrimaryActionInputs & {
   conflictOperation?: GitConflictOperation
   isPullRequestOperationActive?: boolean
   rebaseBaseRef?: string | null
+  canGenerateCommitMessage?: boolean
+  isGeneratingCommitMessage?: boolean
 }
 
 export type DropdownActionKind =
   | 'commit'
+  | 'ai_commit'
   | 'commit_push'
   | 'commit_sync'
   | 'abort_merge'
@@ -125,7 +128,9 @@ export function resolveDropdownItems(inputs: DropdownActionInputs): DropdownEntr
     branchCommitsAhead,
     hasCurrentBranch = true,
     rebaseBaseRef,
-    isPullRequestOperationActive = false
+    isPullRequestOperationActive = false,
+    canGenerateCommitMessage,
+    isGeneratingCommitMessage
   } = inputs
 
   const hasStaged = stagedCount > 0
@@ -181,6 +186,37 @@ export function resolveDropdownItems(inputs: DropdownActionInputs): DropdownEntr
     ),
     title: commitDisabledReason ?? 'Commit staged changes',
     disabled: !canCommit
+  }
+
+  const aiCommitDisabledReason = (() => {
+    if (isGeneratingCommitMessage) {
+      return 'Generating commit message…'
+    }
+    if (globalBusy) {
+      return 'Operation in progress…'
+    }
+    if (hasUnresolvedConflicts) {
+      return 'Resolve conflicts before generating a commit message'
+    }
+    if (!canGenerateCommitMessage) {
+      return 'Pick an agent in Settings -> Git -> Source Control AI.'
+    }
+    if (!hasStaged) {
+      return 'Stage at least one file to generate a message.'
+    }
+    if (hasPartiallyStagedChanges) {
+      return 'Stage all changes before generating a message.'
+    }
+    if (hasMessage) {
+      return 'Clear the message to regenerate.'
+    }
+    return null
+  })()
+  const aiCommitItem: DropdownItem = {
+    kind: 'ai_commit',
+    label: 'AI Commit',
+    title: aiCommitDisabledReason ?? 'Generate a commit message from staged changes with AI',
+    disabled: aiCommitDisabledReason !== null
   }
 
   // Why: compound commit labels omit counts because the commit itself changes
@@ -540,6 +576,7 @@ export function resolveDropdownItems(inputs: DropdownActionInputs): DropdownEntr
 
   const entries: DropdownEntry[] = [
     commitItem,
+    aiCommitItem,
     commitPushItem,
     commitSyncItem,
     { kind: 'separator' },

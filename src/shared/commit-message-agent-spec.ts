@@ -27,8 +27,8 @@ export type CommitMessageAgentSpec = {
   label: string
   /** Binary spawned in non-interactive mode. */
   binary: string
-  /** Where the prompt is delivered. Large diffs go via stdin to avoid argv limits. */
-  promptDelivery: 'argv' | 'stdin'
+  /** Where the prompt is delivered. Large diffs avoid argv when the CLI supports it. */
+  promptDelivery: 'argv' | 'stdin' | 'file'
   buildArgs: (params: { prompt: string; model: string; thinkingLevel?: string }) => string[]
   /** Whether the model list is static or discovered from the agent CLI. */
   modelSource: 'static' | 'dynamic'
@@ -40,6 +40,20 @@ export type CommitMessageAgentSpec = {
   }
   models: CommitMessageModel[]
   defaultModelId: string
+}
+
+export const COMMIT_MESSAGE_PROMPT_FILE_PLACEHOLDER = '{promptFile}'
+
+export const OMP_DEFAULT_MODEL_ID = 'default'
+const OMP_LEGACY_COPILOT_DEFAULT_MODEL_ID = 'github-copilot/gpt-5.4-mini'
+
+export function normalizeCommitMessageModelId(agentId: TuiAgent, modelId: string): string {
+  // Why: early OMP support accidentally seeded a Copilot-specific model. OMP
+  // users expect the CLI's configured default agent/model unless they opt in.
+  if (agentId === 'omp' && modelId === OMP_LEGACY_COPILOT_DEFAULT_MODEL_ID) {
+    return OMP_DEFAULT_MODEL_ID
+  }
+  return modelId
 }
 
 export type CommitMessageModelCapability = {
@@ -188,6 +202,77 @@ export function parsePiModels(stdout: string): CommitMessageModel[] {
         }
       })
   )
+}
+function labelFromOmpThinkingLevel(effort: string): string {
+  switch (effort) {
+    case 'xhigh':
+      return 'Extra High'
+    default:
+      return labelFromModelId(effort)
+  }
+}
+
+export function parseOmpModels(stdout: string): CommitMessageModel[] {
+  try {
+    const parsed = JSON.parse(stdout) as {
+      models?: unknown
+    }
+    const models = Array.isArray(parsed.models) ? parsed.models : []
+
+    const discoveredModels = models
+      .filter(
+        (
+          model
+        ): model is {
+          provider?: unknown
+          id?: unknown
+          selector?: unknown
+          name?: unknown
+          thinking?: unknown
+        } => typeof model === 'object' && model !== null
+      )
+      .map((model) => {
+        const provider =
+          typeof model.provider === 'string' && model.provider ? model.provider : undefined
+        const id = typeof model.id === 'string' && model.id ? model.id : undefined
+        const selector =
+          typeof model.selector === 'string' && model.selector ? model.selector : undefined
+        const modelId = selector ?? (provider && id ? `${provider}/${id}` : undefined)
+
+        if (!modelId) {
+          return null
+        }
+
+        const thinking = Array.isArray(model.thinking)
+          ? model.thinking.filter(
+              (effort): effort is string => typeof effort === 'string' && effort.length > 0
+            )
+          : []
+        const name = typeof model.name === 'string' ? model.name : undefined
+
+        return {
+          id: modelId,
+          label:
+            provider && id
+              ? `${labelFromModelId(provider)} ${name || labelFromModelId(id)}`
+              : labelFromModelId(modelId),
+          ...(thinking.length
+            ? {
+                thinkingLevels: thinking.map((effort) => ({
+                  id: effort,
+                  label: labelFromOmpThinkingLevel(effort)
+                })),
+                defaultThinkingLevel: thinking.includes('low') ? 'low' : thinking[0]
+              }
+            : {})
+        }
+      })
+      .filter((model): model is CommitMessageModel => model !== null)
+
+    return uniqueModels([{ id: OMP_DEFAULT_MODEL_ID, label: 'OMP default' }, ...discoveredModels])
+  } catch {
+    return []
+  }
 }
 
 export function parseCursorModels(stdout: string): CommitMessageModel[] {
@@ -397,6 +482,40 @@ export const COMMIT_MESSAGE_AGENT_SPECS: Partial<Record<TuiAgent, CommitMessageA
       }
     ],
     defaultModelId: 'github-copilot/gpt-5.4-mini'
+  },
+  omp: {
+    id: 'omp',
+    label: 'OMP',
+    binary: 'omp',
+    // Why: OMP's `--print` consumes positional messages, not stdin. Passing an
+    // @file keeps large staged diffs out of argv while still avoiding tools.
+    promptDelivery: 'file',
+    buildArgs: ({ prompt, model, thinkingLevel }) => [
+      '--print',
+      '--no-session',
+      '--no-tools',
+      '--no-extensions',
+      '--no-skills',
+      '--no-rules',
+      '--mode',
+      'text',
+      ...(model === OMP_DEFAULT_MODEL_ID ? [] : ['--model', model]),
+      ...(thinkingLevel ? ['--thinking', thinkingLevel] : []),
+      `@${prompt}`
+    ],
+    modelSource: 'dynamic',
+    modelDiscovery: {
+      binary: 'omp',
+      args: ['models', '--json', '--no-extensions'],
+      parse: parseOmpModels
+    },
+    models: [
+      {
+        id: OMP_DEFAULT_MODEL_ID,
+        label: 'OMP default'
+      }
+    ],
+    defaultModelId: OMP_DEFAULT_MODEL_ID
   },
   amp: {
     id: 'amp',
@@ -643,15 +762,16 @@ export function getCommitMessageModel(
   agentId: TuiAgent,
   modelId: string
 ): CommitMessageModel | undefined {
+  const normalizedModelId = normalizeCommitMessageModelId(agentId, modelId)
   const spec = getCommitMessageAgentSpec(agentId)
-  const model = spec?.models.find((m) => m.id === modelId)
-  if (model || !spec || spec.modelSource !== 'dynamic' || modelId.trim().length === 0) {
+  const model = spec?.models.find((m) => m.id === normalizedModelId)
+  if (model || !spec || spec.modelSource !== 'dynamic' || normalizedModelId.trim().length === 0) {
     return model
   }
   return {
-    id: modelId,
-    label: labelFromModelId(modelId),
-    ...withOpenAiThinking(modelId)
+    id: normalizedModelId,
+    label: labelFromModelId(normalizedModelId),
+    ...withOpenAiThinking(normalizedModelId)
   }
 }
 

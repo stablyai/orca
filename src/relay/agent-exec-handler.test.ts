@@ -1,4 +1,5 @@
 import { exec, spawn } from 'child_process'
+import { readFileSync } from 'fs'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as ChildProcess from 'child_process'
 import { createFakeChild, createHandlers, requestContext } from './agent-exec-handler-test-harness'
@@ -57,6 +58,40 @@ describe('AgentExecHandler', () => {
       windowsHide: true
     })
     expect(child.stdin.end).toHaveBeenCalledWith('PROMPT')
+  })
+
+  it('materializes promptFile payload as an @file argument', async () => {
+    const child = createFakeChild()
+    spawnMock.mockReturnValue(child as never)
+    const handlers = createHandlers()
+
+    const pending = handlers.get('agent.execNonInteractive')!(
+      {
+        binary: 'omp',
+        args: ['--print', '@{promptFile}'],
+        cwd: '/repo',
+        stdin: null,
+        promptFile: 'PROMPT',
+        timeoutMs: 5_000
+      },
+      requestContext()
+    )
+
+    await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(1))
+    const spawnedArgs = spawnMock.mock.calls[0]?.[1] as string[]
+    const promptArg = spawnedArgs[1]
+    expect(promptArg?.startsWith('@')).toBe(true)
+    expect(readFileSync(promptArg.slice(1), 'utf8')).toBe('PROMPT')
+
+    child.stdout.emit('data', Buffer.from('message'))
+    child.emit('close', 0)
+
+    await expect(pending).resolves.toMatchObject({
+      stdout: 'message',
+      exitCode: 0,
+      timedOut: false
+    })
+    expect(child.stdin.end).toHaveBeenCalledWith()
   })
 
   it('merges caller-supplied provider environment into the spawned command environment', async () => {

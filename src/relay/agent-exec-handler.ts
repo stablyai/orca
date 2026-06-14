@@ -1,7 +1,10 @@
 import { exec, spawn, type ChildProcess } from 'child_process'
+import { mkdtemp, rm, writeFile } from 'fs/promises'
+import { tmpdir } from 'os'
 import { existsSync } from 'fs'
 import { delimiter, join } from 'path'
 import type { RelayDispatcher, RequestContext } from './dispatcher'
+import { COMMIT_MESSAGE_PROMPT_FILE_PLACEHOLDER } from '../shared/commit-message-agent-spec'
 
 const DEFAULT_TIMEOUT_MS = 60_000
 const MAX_TIMEOUT_MS = 5 * 60 * 1000
@@ -64,6 +67,19 @@ function getWindowsSafeSpawn(
   return { spawnCmd: getCmdExePath(), spawnArgs: ['/d', '/s', '/c', commandLine] }
 }
 
+async function preparePromptFileArgs(
+  args: string[],
+  promptFilePayload: string
+): Promise<{ args: string[]; cleanup: () => Promise<void> }> {
+  const dir = await mkdtemp(join(tmpdir(), 'orca-commit-prompt-'))
+  const promptPath = join(dir, 'prompt.md')
+  await writeFile(promptPath, promptFilePayload, 'utf8')
+  return {
+    args: args.map((arg) => arg.replaceAll(COMMIT_MESSAGE_PROMPT_FILE_PLACEHOLDER, promptPath)),
+    cleanup: () => rm(dir, { recursive: true, force: true })
+  }
+}
+
 // Why: mirrors src/main/text-generation/commit-message-text-generation.ts. On
 // Windows, npm-installed CLIs like `claude`/`codex` are usually `.cmd` shims.
 // We route those through cmd.exe so Node can launch them, and taskkill is
@@ -95,6 +111,7 @@ type ExecParams = {
   timeoutMs: unknown
   env: unknown
   operation: unknown
+  promptFile: unknown
 }
 
 type CancelParams = {
@@ -159,6 +176,7 @@ export class AgentExecHandler {
       throw new Error('agent.execNonInteractive: binary is required')
     }
     const args = Array.isArray(params.args) ? params.args.map((a) => String(a)) : []
+    const promptFilePayload = typeof params.promptFile === 'string' ? params.promptFile : null
     const cwd = typeof params.cwd === 'string' && params.cwd.length > 0 ? params.cwd : undefined
     const stdinPayload = typeof params.stdin === 'string' ? params.stdin : null
     const requestedTimeout =
@@ -168,12 +186,30 @@ export class AgentExecHandler {
       params.env && typeof params.env === 'object' && !Array.isArray(params.env)
         ? (params.env as Record<string, string>)
         : null
+
+    let spawnArgsInput = args
+    let cleanupPromptFile = async (): Promise<void> => undefined
+    if (promptFilePayload !== null) {
+      try {
+        const prepared = await preparePromptFileArgs(args, promptFilePayload)
+        spawnArgsInput = prepared.args
+        cleanupPromptFile = prepared.cleanup
+      } catch (error) {
+        return {
+          stdout: '',
+          stderr: '',
+          exitCode: null,
+          timedOut: false,
+          spawnError: error instanceof Error ? error.message : String(error)
+        }
+      }
+    }
     const spawnEnv = extraEnv ? { ...process.env, ...extraEnv } : process.env
 
     return new Promise<ExecResult>((resolve) => {
       let child
       try {
-        const { spawnCmd, spawnArgs } = getWindowsSafeSpawn(binary, args, spawnEnv)
+        const { spawnCmd, spawnArgs } = getWindowsSafeSpawn(binary, spawnArgsInput, spawnEnv)
         child = spawn(spawnCmd, spawnArgs, {
           cwd,
           env: spawnEnv,
@@ -181,6 +217,7 @@ export class AgentExecHandler {
           windowsHide: true
         })
       } catch (error) {
+        void cleanupPromptFile()
         resolve({
           stdout: '',
           stderr: '',
@@ -218,6 +255,7 @@ export class AgentExecHandler {
           this.inFlightByLane.delete(laneKey)
         }
         resolve(result)
+        void cleanupPromptFile()
       }
       const cancelCurrent = (): void => {
         canceled = true

@@ -64,6 +64,73 @@ describe('planCommitMessageGeneration', () => {
     })
   })
 
+  it('plans OMP print generation through the configured CLI default model', () => {
+    const result = planCommitMessageGeneration(
+      {
+        agentId: 'omp',
+        model: 'default'
+      },
+      'PROMPT'
+    )
+
+    expect(result).toEqual({
+      ok: true,
+      plan: {
+        binary: 'omp',
+        args: [
+          '--print',
+          '--no-session',
+          '--no-tools',
+          '--no-extensions',
+          '--no-skills',
+          '--no-rules',
+          '--mode',
+          'text',
+          '@{promptFile}'
+        ],
+        stdinPayload: null,
+        promptFilePayload: 'PROMPT',
+        label: 'OMP'
+      }
+    })
+  })
+
+  it('plans explicit OMP model overrides when selected', () => {
+    const result = planCommitMessageGeneration(
+      {
+        agentId: 'omp',
+        model: 'openai/gpt-5.5',
+        thinkingLevel: 'high'
+      },
+      'PROMPT'
+    )
+
+    expect(result).toEqual({
+      ok: true,
+      plan: {
+        binary: 'omp',
+        args: [
+          '--print',
+          '--no-session',
+          '--no-tools',
+          '--no-extensions',
+          '--no-skills',
+          '--no-rules',
+          '--mode',
+          'text',
+          '--model',
+          'openai/gpt-5.5',
+          '--thinking',
+          'high',
+          '@{promptFile}'
+        ],
+        stdinPayload: null,
+        promptFilePayload: 'PROMPT',
+        label: 'OMP'
+      }
+    })
+  })
+
   it('keeps OpenCode preset command overrides while sending the prompt on stdin', () => {
     const result = planCommitMessageGeneration(
       {

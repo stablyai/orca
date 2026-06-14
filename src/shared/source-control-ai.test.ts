@@ -194,6 +194,32 @@ describe('source-control AI resolution', () => {
     expect(result.ok && result.value.params.model).toBe('gpt-5.4')
   })
 
+  it('uses the OMP CLI default model instead of the first Copilot seed', () => {
+    const base = settings()
+    base.defaultTuiAgent = 'omp'
+    base.sourceControlAi = {
+      ...base.sourceControlAi!,
+      agentId: 'omp',
+      selectedModelByAgent: { omp: 'github-copilot/gpt-5.4-mini' },
+      discoveredModelsByAgent: {
+        omp: [
+          { id: 'default', label: 'OMP default' },
+          { id: 'github-copilot/gpt-5.4-mini', label: 'Github Copilot GPT 5.4 Mini' }
+        ]
+      }
+    }
+
+    const result = resolveSourceControlAiForOperation({
+      settings: base,
+      repo: null,
+      operation: 'commitMessage',
+      discoveryHostKey: 'local'
+    })
+
+    expect(result.ok && result.value.params.agentId).toBe('omp')
+    expect(result.ok && result.value.params.model).toBe('default')
+  })
+
   it('lets a global operation model override win over the global default', () => {
     const base = settings()
     base.sourceControlAi!.modelOverridesByOperation = {

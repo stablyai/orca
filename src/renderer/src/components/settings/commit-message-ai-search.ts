@@ -53,6 +53,74 @@ export const getCommitMessageAiPaneSearchEntries = createLocalizedCatalog(() => 
   },
   {
     title: translate(
+      'auto.components.settings.commit.message.ai.search.739166f977',
+      'AI Commit Agent'
+    ),
+    description: translate(
+      'auto.components.settings.commit.message.ai.search.9ba3194716',
+      'Agent used when AI Commit generates the textarea message from staged changes.'
+    ),
+    keywords: [
+      ...translateSearchKeyword(
+        'auto.components.settings.commit.message.ai.search.c33cb1b982',
+        'ai'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.commit.message.ai.search.127d512e75',
+        'commit'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.commit.message.ai.search.3766941527',
+        'agent'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.commit.message.ai.search.a4de9c36d3',
+        'omp'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.commit.message.ai.search.f121bec167',
+        'claude'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.commit.message.ai.search.542e1a00a7',
+        'codex'
+      )
+    ]
+  },
+  {
+    title: translate(
+      'auto.components.settings.commit.message.ai.search.b5e533eb3e',
+      'AI Commit Model'
+    ),
+    description: translate(
+      'auto.components.settings.commit.message.ai.search.b51185176d',
+      'Model used by the selected AI Commit agent.'
+    ),
+    keywords: [
+      ...translateSearchKeyword(
+        'auto.components.settings.commit.message.ai.search.c33cb1b982',
+        'ai'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.commit.message.ai.search.127d512e75',
+        'commit'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.commit.message.ai.search.8e0bcc5d99',
+        'model'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.commit.message.ai.search.3766941527',
+        'agent'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.commit.message.ai.search.a4de9c36d3',
+        'omp'
+      )
+    ]
+  },
+  {
+    title: translate(
       'auto.components.settings.commit.message.ai.search.3c4e5e5938',
       'Action recipes'
     ),

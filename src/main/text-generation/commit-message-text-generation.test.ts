@@ -1,7 +1,8 @@
 /* eslint-disable max-lines -- Why: local/remote generation, cancellation, and
    env propagation share subprocess mocks; splitting would obscure the
    cross-path invariants these tests protect. */
-import { spawn } from 'child_process'
+import { readFileSync } from 'fs'
+import { exec, spawn } from 'child_process'
 import type * as ChildProcess from 'child_process'
 import { EventEmitter } from 'events'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -24,11 +25,13 @@ vi.mock('child_process', async (importOriginal) => {
   const actual = await importOriginal<typeof ChildProcess>()
   return {
     ...actual,
+    exec: vi.fn(),
     spawn: vi.fn(actual.spawn)
   }
 })
 
 const spawnMock = vi.mocked(spawn)
+const execMock = vi.mocked(exec)
 
 type MockDiscoveryChild = EventEmitter & {
   pid: number
@@ -48,6 +51,25 @@ function createMockDiscoveryChild(): MockDiscoveryChild {
   return child
 }
 
+function expectChildKilled(child: { pid: number; kill: ReturnType<typeof vi.fn> }): void {
+  if (process.platform === 'win32') {
+    expect(execMock).toHaveBeenCalledWith(`taskkill /pid ${child.pid} /T /F`, expect.any(Function))
+    return
+  }
+  expect(child.kill).toHaveBeenCalledWith('SIGKILL')
+}
+
+function expectChildNotKilled(child: { pid: number; kill: ReturnType<typeof vi.fn> }): void {
+  if (process.platform === 'win32') {
+    expect(execMock).not.toHaveBeenCalledWith(
+      `taskkill /pid ${child.pid} /T /F`,
+      expect.any(Function)
+    )
+    return
+  }
+  expect(child.kill).not.toHaveBeenCalled()
+}
+
 function syncSourceControlAiFromLegacy(settings: GlobalSettings): void {
   settings.sourceControlAi = sourceControlAiSettingsFromLegacy(settings.commitMessageAi)
 }
@@ -64,6 +86,7 @@ function withPlatform<T>(platform: NodeJS.Platform, fn: () => T): T {
 
 beforeEach(() => {
   spawnMock.mockClear()
+  execMock.mockClear()
 })
 
 describe('resolveCommitMessageSettings', () => {
@@ -350,11 +373,15 @@ describe('discoverCommitMessageModelsLocal', () => {
       success: true,
       defaultModelId: 'auto'
     })
-    expect(spawnMock).toHaveBeenCalledWith(
-      'npx',
-      ['cursor-agent', '--list-models'],
-      expect.objectContaining({ windowsHide: true })
-    )
+    const [spawnCmd, spawnArgs, spawnOptions] = spawnMock.mock.calls[0] ?? []
+    if (process.platform === 'win32') {
+      expect(spawnCmd).toBe(process.env.ComSpec || 'C:\\Windows\\System32\\cmd.exe')
+      expect(spawnArgs).toEqual(expect.arrayContaining(['cursor-agent', '--list-models']))
+    } else {
+      expect(spawnCmd).toBe('npx')
+      expect(spawnArgs).toEqual(['cursor-agent', '--list-models'])
+    }
+    expect(spawnOptions).toEqual(expect.objectContaining({ windowsHide: true }))
   })
 
   it('falls back to static models when dynamic discovery returns no parseable models', async () => {
@@ -428,7 +455,7 @@ describe('discoverCommitMessageModelsLocal', () => {
       await vi.advanceTimersByTimeAsync(60_000)
 
       await assertion
-      expect(child.kill).toHaveBeenCalledWith('SIGKILL')
+      expectChildKilled(child)
       expect(child.stdout.listenerCount('data')).toBe(0)
       expect(child.stderr.listenerCount('data')).toBe(0)
       expect(child.listenerCount('error')).toBe(0)
@@ -450,7 +477,7 @@ describe('discoverCommitMessageModelsLocal', () => {
       success: false,
       error: 'Cursor returned too much model data.'
     })
-    expect(child.kill).toHaveBeenCalledWith('SIGKILL')
+    expectChildKilled(child)
     expect(child.stdout.listenerCount('data')).toBe(0)
     expect(child.stderr.listenerCount('data')).toBe(0)
     expect(child.listenerCount('error')).toBe(0)
@@ -807,7 +834,55 @@ describe('generateCommitMessageFromContext', () => {
       error:
         'agent CLI command produced too much output. Check the agent CLI configuration and try again.'
     })
-    expect(child.kill).toHaveBeenCalledWith('SIGKILL')
+    expectChildKilled(child)
+  })
+
+  it('passes OMP prompts through a temporary @file instead of stdin', async () => {
+    const listeners = new Map<string, (value: unknown) => void>()
+    const child = {
+      pid: 123,
+      kill: vi.fn(),
+      stdout: { on: vi.fn((event, callback) => listeners.set(`stdout:${event}`, callback)) },
+      stderr: { on: vi.fn((event, callback) => listeners.set(`stderr:${event}`, callback)) },
+      stdin: { end: vi.fn() },
+      on: vi.fn((event, callback) => listeners.set(event, callback))
+    }
+    spawnMock.mockReturnValue(child as never)
+
+    const pending = generateCommitMessageFromContext(
+      {
+        branch: 'main',
+        stagedSummary: 'M\tREADME.md',
+        stagedPatch: '+hello'
+      },
+      {
+        agentId: 'omp',
+        model: 'default'
+      },
+      {
+        kind: 'local',
+        cwd: '/repo'
+      }
+    )
+
+    await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(1))
+    const spawnedArgs = spawnMock.mock.calls[0]?.[1] as string[]
+    expect(spawnedArgs).toEqual(
+      expect.arrayContaining(['--no-tools', '--no-extensions', '--no-skills', '--no-rules'])
+    )
+    expect(spawnedArgs).not.toContain('--model')
+    const promptArg = spawnedArgs.at(-1)
+    expect(promptArg?.startsWith('@')).toBe(true)
+    expect(readFileSync(promptArg!.slice(1), 'utf8')).toContain('Staged files:\nM\tREADME.md')
+    expect(child.stdin.end).toHaveBeenCalledWith(undefined)
+
+    listeners.get('stdout:data')?.(Buffer.from('Add README note\n'))
+    listeners.get('close')?.(0)
+
+    await expect(pending).resolves.toMatchObject({
+      success: true,
+      message: 'Add README note'
+    })
   })
 
   it('passes prepared provider environment to local agent subprocesses', async () => {
@@ -858,6 +933,7 @@ describe('generateCommitMessageFromContext', () => {
 
   it('keeps local commit-message and pull-request cancellation lanes separate', async () => {
     const children: {
+      pid: number
       kill: ReturnType<typeof vi.fn>
       listeners: Map<string, (value: unknown) => void>
     }[] = []
@@ -871,7 +947,7 @@ describe('generateCommitMessageFromContext', () => {
         stdin: { end: vi.fn() },
         on: vi.fn((event, callback) => listeners.set(event, callback))
       }
-      children.push({ kill: child.kill, listeners })
+      children.push({ pid: child.pid, kill: child.kill, listeners })
       return child as never
     })
 
@@ -916,8 +992,8 @@ describe('generateCommitMessageFromContext', () => {
 
     cancelGenerateCommitMessageLocal('/repo')
 
-    expect(children[0]?.kill).toHaveBeenCalledWith('SIGKILL')
-    expect(children[1]?.kill).not.toHaveBeenCalled()
+    expectChildKilled(children[0]!)
+    expectChildNotKilled(children[1]!)
 
     children[0]?.listeners.get('close')?.(null)
     const pullRequestStdout = children[1]?.listeners.get('stdout:data')
@@ -947,6 +1023,7 @@ describe('generateCommitMessageFromContext', () => {
 
   it('keeps local pull-request cancellation from stopping commit-message generation', async () => {
     const children: {
+      pid: number
       kill: ReturnType<typeof vi.fn>
       listeners: Map<string, (value: unknown) => void>
     }[] = []
@@ -960,7 +1037,7 @@ describe('generateCommitMessageFromContext', () => {
         stdin: { end: vi.fn() },
         on: vi.fn((event, callback) => listeners.set(event, callback))
       }
-      children.push({ kill: child.kill, listeners })
+      children.push({ pid: child.pid, kill: child.kill, listeners })
       return child as never
     })
 
@@ -1005,8 +1082,8 @@ describe('generateCommitMessageFromContext', () => {
 
     cancelGeneratePullRequestFieldsLocal('/repo')
 
-    expect(children[0]?.kill).not.toHaveBeenCalled()
-    expect(children[1]?.kill).toHaveBeenCalledWith('SIGKILL')
+    expectChildNotKilled(children[0]!)
+    expectChildKilled(children[1]!)
 
     const commitStdout = children[0]?.listeners.get('stdout:data')
     commitStdout?.(Buffer.from('Update README\n'))
@@ -1151,7 +1228,7 @@ describe('generateCommitMessageFromContext', () => {
     cancelGeneratePullRequestFieldsLocal('/repo')
     listeners.get('close')?.(null)
 
-    expect(child.kill).toHaveBeenCalledWith('SIGKILL')
+    expectChildKilled(child)
     await expect(pullRequest).resolves.toEqual({
       success: false,
       error: 'Generation canceled.',
@@ -1207,7 +1284,7 @@ describe('generateCommitMessageFromContext', () => {
       )
 
       cancelGenerateCommitMessageLocal('/repo')
-      expect(child.kill).toHaveBeenCalledWith('SIGKILL')
+      expectChildKilled(child)
       await Promise.resolve()
       await Promise.resolve()
       await Promise.resolve()

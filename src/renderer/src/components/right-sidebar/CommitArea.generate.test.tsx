@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import type { ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { CommitArea } from './SourceControl'
 import {
@@ -7,8 +8,42 @@ import {
 } from './source-control-text-generation-defaults'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { resolvePrimaryAction, type PrimaryActionInputs } from './source-control-primary-action'
-import { resolveDropdownItems, type DropdownActionKind } from './source-control-dropdown-items'
 import { getDefaultSettings } from '../../../../shared/constants'
+import { resolveDropdownItems, type DropdownActionKind } from './source-control-dropdown-items'
+
+vi.mock('@/components/ui/dropdown-menu', () => {
+  const Passthrough = ({ children }: { children?: ReactNode }) => <>{children}</>
+  return {
+    DropdownMenu: ({ children }: { children?: ReactNode }) => (
+      <div data-slot="dropdown-menu">{children}</div>
+    ),
+    DropdownMenuTrigger: Passthrough,
+    DropdownMenuContent: ({ children }: { children?: ReactNode }) => (
+      <div data-slot="dropdown-menu-content">{children}</div>
+    ),
+    DropdownMenuItem: ({
+      children,
+      disabled,
+      title,
+      variant
+    }: {
+      children?: ReactNode
+      disabled?: boolean
+      title?: string
+      variant?: string
+    }) => (
+      <div
+        role="menuitem"
+        aria-disabled={disabled ? true : undefined}
+        title={title}
+        data-variant={variant}
+      >
+        {children}
+      </div>
+    ),
+    DropdownMenuSeparator: () => <div role="separator" />
+  }
+})
 
 function buildInputs(overrides: Partial<PrimaryActionInputs> = {}): PrimaryActionInputs {
   return {
@@ -159,6 +194,20 @@ describe('CommitArea AI generation', () => {
     })
     expect(markup).toContain('Commit')
     expect(markup).toContain('aria-label="Generate commit message with AI"')
+  })
+
+  it('renders AI Commit in the split-button dropdown without adding a second sparkle label', () => {
+    const inputs = buildInputs({ hasMessage: false })
+    const markup = renderCommitArea({
+      ...baseProps({ hasMessage: false }),
+      commitMessage: '',
+      aiEnabled: true,
+      aiAgentConfigured: true,
+      dropdownItems: resolveDropdownItems({ ...inputs, canGenerateCommitMessage: true })
+    })
+
+    expect(markup).toContain('AI Commit')
+    expect(markup.match(/aria-label="Generate commit message with AI"/g) ?? []).toHaveLength(1)
   })
 
   it('renders a single commit-message AI entry point in the composer', () => {

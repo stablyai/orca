@@ -1,4 +1,5 @@
 import {
+  COMMIT_MESSAGE_PROMPT_FILE_PLACEHOLDER,
   getCommitMessageAgentSpec,
   getCommitMessageModel,
   isCustomAgentId
@@ -26,6 +27,8 @@ export type CommitMessagePlan = {
   args: string[]
   /** Non-null when the prompt should be piped via stdin. */
   stdinPayload: string | null
+  /** Non-null when a CLI needs the prompt materialized as a temporary @file. */
+  promptFilePayload?: string | null
   /** Human-readable label used in error prefixes (e.g. "Claude failed: ..."). */
   label: string
 }
@@ -71,7 +74,7 @@ function planAdditionalAgentArgs(
 function insertAdditionalAgentArgs(args: {
   baseArgs: string[]
   agentArgs: string[]
-  promptDelivery: 'argv' | 'stdin'
+  promptDelivery: 'argv' | 'stdin' | 'file'
   prompt: string
 }): string[] {
   if (!args.agentArgs.length) {
@@ -82,6 +85,16 @@ function insertAdditionalAgentArgs(args: {
     const merged = [...args.baseArgs]
     merged.splice(promptPlaceholderIndex, 0, ...args.agentArgs)
     return merged
+  }
+  if (args.promptDelivery === 'file') {
+    const promptFileIndex = args.baseArgs.findIndex((value) =>
+      value.includes(COMMIT_MESSAGE_PROMPT_FILE_PLACEHOLDER)
+    )
+    if (promptFileIndex !== -1) {
+      const merged = [...args.baseArgs]
+      merged.splice(promptFileIndex, 0, ...args.agentArgs)
+      return merged
+    }
   }
   if (
     args.promptDelivery === 'argv' &&
@@ -154,12 +167,23 @@ export function planCommitMessageGeneration(
     }
   }
 
-  const argvPrompt = spec.promptDelivery === 'argv' ? prompt : ''
+  const promptArgument =
+    spec.promptDelivery === 'argv'
+      ? prompt
+      : spec.promptDelivery === 'file'
+        ? COMMIT_MESSAGE_PROMPT_FILE_PLACEHOLDER
+        : ''
   const baseArgs = spec.buildArgs({
-    prompt: argvPrompt,
+    prompt: promptArgument,
     model: input.model,
     thinkingLevel: input.thinkingLevel
   })
+  if (
+    spec.promptDelivery === 'file' &&
+    !baseArgs.some((value) => value.includes(COMMIT_MESSAGE_PROMPT_FILE_PLACEHOLDER))
+  ) {
+    return { ok: false, error: `${spec.label} prompt file argument is not configured.` }
+  }
   const agentArgs = planAdditionalAgentArgs(input.agentArgs)
   if (!agentArgs.ok) {
     return agentArgs
@@ -168,7 +192,7 @@ export function planCommitMessageGeneration(
     baseArgs,
     agentArgs: agentArgs.args,
     promptDelivery: spec.promptDelivery,
-    prompt: argvPrompt
+    prompt: promptArgument
   })
   const command = planAgentBinary(spec.binary, input.agentCommandOverride)
   if (!command.ok) {
@@ -180,6 +204,7 @@ export function planCommitMessageGeneration(
       binary: command.binary,
       args: [...command.prefixArgs, ...args],
       stdinPayload: spec.promptDelivery === 'stdin' ? prompt : null,
+      ...(spec.promptDelivery === 'file' ? { promptFilePayload: prompt } : {}),
       label: spec.label
     }
   }

@@ -23,6 +23,7 @@ import { Input } from '../ui/input'
 import { Label } from '../ui/label'
 import { SearchableSetting } from './SearchableSetting'
 import { SourceControlAiActionRecipeDefaults } from './SourceControlAiActionRecipeDefaults'
+import { SourceControlAiCommitDefaults } from './SourceControlAiCommitDefaults'
 import { matchesSettingsSearch } from './settings-search'
 import { getSettingOwnershipSummary } from './setting-ownership'
 import { translate } from '@/i18n/i18n'
@@ -52,10 +53,13 @@ export function mergeDiscoveredModelsIntoCommitMessageConfig(
     selectedModelByAgent: config.selectedModelByAgent,
     selectedModelByAgentByHost: config.selectedModelByAgentByHost
   }
+  const rawPersisted =
+    currentChoice.selectedModelByAgentByHost?.[hostKey]?.[agentId] ??
+    (hostKey === 'local' ? currentChoice.selectedModelByAgent?.[agentId] : undefined)
   const persisted = readSourceControlAiModelChoiceForHost(currentChoice, hostKey, agentId)
   const nextModelId = models.some((model) => model.id === persisted) ? persisted : defaultModelId
   const selectedModelChoice =
-    nextModelId && nextModelId !== persisted
+    nextModelId && (nextModelId !== persisted || nextModelId !== rawPersisted)
       ? selectSourceControlAiModelChoiceForHost(currentChoice, hostKey, agentId, nextModelId)
       : currentChoice
   return {
@@ -101,6 +105,20 @@ export function CommitMessageAiPane({
   const storeSearchQuery = useAppStore((s) => s.settingsSearchQuery)
   const searchQuery = settingsSearchQuery ?? storeSearchQuery
   const config = readSettings(settings)
+  const activeWorktreeConnectionId = useAppStore((state) => {
+    const activeWorktree = state.activeWorktreeId
+      ? state.getKnownWorktreeById(state.activeWorktreeId)
+      : null
+    if (!activeWorktree) {
+      return undefined
+    }
+    return state.repos.find((repo) => repo.id === activeWorktree.repoId)?.connectionId ?? null
+  })
+  const commitMessageDiscoveryHostKey = getCommitMessageSettingsPaneDiscoveryHostKey(
+    settings,
+    activeWorktreeConnectionId,
+    activeWorktreeConnectionId !== undefined
+  )
   const ownership = getSettingOwnershipSummary('sourceControlAiDefaults')
   const settingsWriteQueueRef = useRef<Promise<void>>(Promise.resolve())
 
@@ -218,6 +236,16 @@ export function CommitMessageAiPane({
   }
 
   sections.push(
+    <SourceControlAiCommitDefaults
+      key="ai-commit-defaults"
+      config={config}
+      settings={settings}
+      discoveryHostKey={commitMessageDiscoveryHostKey}
+      searchQuery={searchQuery}
+      writeConfig={writeConfig}
+    />
+  )
+  sections.push(
     <SourceControlAiActionRecipeDefaults
       key="action-recipes"
       config={config}
@@ -324,6 +352,7 @@ export function CommitMessageAiPane({
     })
   ) {
     const prDefaults = config.prCreationDefaults ?? {}
+
     sections.push(
       <HostedReviewCreationDefaults
         key="pr-creation-defaults"

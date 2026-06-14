@@ -30,7 +30,11 @@ function cleanupWorktree(repoPath: string, worktreePath: string, branchName: str
       stdio: 'pipe'
     })
   } catch {
-    rmSync(worktreePath, { recursive: true, force: true })
+    try {
+      rmSync(worktreePath, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
+    } catch {
+      // Windows can keep the active worktree locked until Electron releases its watchers.
+    }
   }
   try {
     execFileSync('git', ['branch', '-D', branchName], { cwd: repoPath, stdio: 'pipe' })
@@ -46,7 +50,7 @@ test.describe('Source Control AI commit messages', () => {
   }) => {
     const { branchName, worktreePath } = createWorktreeWithStagedChange(testRepoPath)
     const agentCommand =
-      'node -e "setTimeout(() => process.stdout.write(\'Add generated E2E message\'), 250)"'
+      'node -e "const end = Date.now() + 2000; while (Date.now() < end) {} process.stdout.write(\'Add generated E2E message\')"'
 
     try {
       await waitForSessionReady(orcaPage)
@@ -69,10 +73,15 @@ test.describe('Source Control AI commit messages', () => {
               [repo.id]: listedWorktrees
             }
           }))
-          const normalizeMacTmpPath = (value: string): string =>
-            value.startsWith('/private/var/') ? value.slice('/private'.length) : value
+          const normalizeWorktreePath = (value: string): string => {
+            const normalized = value.replace(/\\/g, '/')
+            return normalized.startsWith('/private/var/')
+              ? normalized.slice('/private'.length)
+              : normalized
+          }
           const worktree = listedWorktrees.find(
-            (entry) => normalizeMacTmpPath(entry.path) === normalizeMacTmpPath(targetWorktreePath)
+            (entry) =>
+              normalizeWorktreePath(entry.path) === normalizeWorktreePath(targetWorktreePath)
           )
           if (!worktree) {
             throw new Error(
@@ -116,14 +125,17 @@ test.describe('Source Control AI commit messages', () => {
       await expect(textarea).toBeVisible({ timeout: 10_000 })
       await expect(textarea).toHaveValue('')
 
-      const generate = orcaPage.getByRole('button', { name: 'Generate commit message with AI' })
-      await expect(generate).toBeVisible()
-      await expect(generate).toBeEnabled()
-      await generate.click()
+      const moreActions = orcaPage.getByRole('button', { name: 'More commit and remote actions' })
+      await expect(moreActions).toBeVisible()
+      await moreActions.click()
+      const aiCommit = orcaPage.getByRole('menuitem', { name: /^AI Commit/ })
+      await expect(aiCommit).toBeVisible()
+      await expect(aiCommit).toBeEnabled()
+      const stopGenerating = orcaPage.locator('button[aria-label="Stop generating commit message"]')
+      const stopGeneratingAppeared = stopGenerating.waitFor({ state: 'visible', timeout: 10_000 })
+      await aiCommit.click()
 
-      await expect(
-        orcaPage.getByRole('button', { name: 'Stop generating commit message' })
-      ).toBeVisible()
+      await stopGeneratingAppeared
       await expect(textarea).toHaveValue('Add generated E2E message', { timeout: 10_000 })
     } finally {
       cleanupWorktree(testRepoPath, worktreePath, branchName)

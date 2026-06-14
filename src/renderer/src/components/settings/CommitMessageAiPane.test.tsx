@@ -14,6 +14,11 @@ import {
   mergeDiscoveredModelsIntoCommitMessageConfig
 } from './CommitMessageAiPane'
 import {
+  getAiCommitModelOptions,
+  readAiCommitSelectedModelId
+} from './SourceControlAiCommitDefaults'
+import { getCommitMessageAgentCapability } from '../../../../shared/commit-message-agent-spec'
+import {
   getAgentCatalogForAction,
   getSourceControlAgentArgsPlaceholder
 } from './source-control-action-recipe-options'
@@ -60,8 +65,45 @@ describe('CommitMessageAiPane', () => {
     expect(markup).toContain('aria-checked="false"')
     expect(markup).not.toContain('Action recipes')
     expect(markup).not.toContain('Command template')
+    expect(markup).not.toContain('AI Commit Agent')
+    expect(markup).not.toContain('AI Commit Model')
     expect(markup).not.toContain('Default model')
     expect(markup).not.toContain('Thinking effort')
+  })
+
+  it('renders AI Commit agent and model selectors for the commit-message action', () => {
+    const markup = renderPane(
+      buildSettings({
+        sourceControlAi: {
+          enabled: true,
+          agentId: null,
+          selectedModelByAgent: {},
+          selectedModelByAgentByHost: {},
+          discoveredModelsByAgent: {},
+          discoveredModelsByAgentByHost: {},
+          selectedThinkingByModel: {},
+          instructionsByOperation: {},
+          customAgentCommand: '',
+          actions: {
+            commitMessage: {
+              agentId: 'omp'
+            }
+          },
+          modelOverridesByOperation: {
+            commitMessage: {
+              selectedModelByAgent: { omp: 'default' }
+            }
+          },
+          prCreationDefaults: {},
+          launchActionDefaults: {}
+        }
+      })
+    )
+
+    expect(markup).toContain('AI Commit Agent')
+    expect(markup).toContain('AI Commit Model')
+    expect(markup).toContain('Used only by the AI Commit dropdown action.')
+    expect(markup).toContain('OMP')
   })
 
   it('renders action recipes for every Source Control AI action', () => {
@@ -152,15 +194,19 @@ describe('CommitMessageAiPane', () => {
     expect(getSourceControlAgentArgsPlaceholder('codex')).toBe('--model gpt-5.4-mini')
     expect(getSourceControlAgentArgsPlaceholder('amp')).toBe('--mode smart')
     expect(getSourceControlAgentArgsPlaceholder('aider')).toBe('--model <model>')
+    expect(getSourceControlAgentArgsPlaceholder('omp')).toBe('--model <model>')
   })
 
   it('only offers non-interactive generation agents for text generation actions', () => {
-    expect(getAgentCatalogForAction('commitMessage', null).map((agent) => agent.id)).not.toContain(
-      'aider'
+    const commitMessageAgents = getAgentCatalogForAction('commitMessage', null).map(
+      (agent) => agent.id
     )
-    expect(getAgentCatalogForAction('pullRequest', null).map((agent) => agent.id)).not.toContain(
-      'aider'
-    )
+    const pullRequestAgents = getAgentCatalogForAction('pullRequest', null).map((agent) => agent.id)
+
+    expect(commitMessageAgents).toContain('omp')
+    expect(commitMessageAgents).not.toContain('aider')
+    expect(pullRequestAgents).toContain('omp')
+    expect(pullRequestAgents).not.toContain('aider')
     expect(getAgentCatalogForAction('fixChecks', null).map((agent) => agent.id)).toContain('aider')
   })
 
@@ -187,6 +233,7 @@ describe('CommitMessageAiPane', () => {
     expect(markup).toContain('Supported agents for this recipe:')
     expect(markup).toContain('Claude, Codex')
     expect(markup).toContain('Custom command')
+    expect(markup).toContain('OMP')
   })
 
   it('marks an unsupported saved text-recipe agent with the supported alternatives', () => {
@@ -377,6 +424,17 @@ describe('CommitMessageAiPane', () => {
     )
   })
 
+  it('keeps AI Commit agent and model settings discoverable', () => {
+    const entries = getCommitMessageAiPaneSearchEntries()
+
+    expect(entries.find((entry) => entry.title === 'AI Commit Agent')?.keywords).toEqual(
+      expect.arrayContaining(['agent', 'omp', 'claude', 'codex'])
+    )
+    expect(entries.find((entry) => entry.title === 'AI Commit Model')?.keywords).toEqual(
+      expect.arrayContaining(['model', 'omp'])
+    )
+  })
+
   it('merges discovered models without clobbering newer settings fields', () => {
     const config: SourceControlAiSettings = {
       enabled: true,
@@ -405,6 +463,69 @@ describe('CommitMessageAiPane', () => {
     expect(merged.discoveredModelsByAgentByHost?.local?.cursor).toEqual([
       { id: 'auto', label: 'Auto' }
     ])
+  })
+
+  it('reads AI Commit operation model overrides before global model defaults', () => {
+    const config: SourceControlAiSettings = {
+      enabled: true,
+      agentId: null,
+      selectedModelByAgent: { omp: 'default' },
+      selectedThinkingByModel: {},
+      instructionsByOperation: {},
+      customAgentCommand: '',
+      modelOverridesByOperation: {
+        commitMessage: {
+          selectedModelByAgent: { omp: 'anthropic/claude-sonnet-4' }
+        }
+      }
+    }
+
+    expect(readAiCommitSelectedModelId(config, 'local', 'omp')).toBe('anthropic/claude-sonnet-4')
+  })
+
+  it('uses host-scoped discovered models for the AI Commit model picker', () => {
+    const capability = getCommitMessageAgentCapability('omp')
+    expect(capability).toBeDefined()
+    const config: SourceControlAiSettings = {
+      enabled: true,
+      agentId: null,
+      selectedModelByAgent: {},
+      selectedThinkingByModel: {},
+      instructionsByOperation: {},
+      customAgentCommand: '',
+      discoveredModelsByAgent: { omp: [{ id: 'local-model', label: 'Local Model' }] },
+      discoveredModelsByAgentByHost: {
+        'ssh:conn-1': { omp: [{ id: 'remote-model', label: 'Remote Model' }] }
+      }
+    }
+
+    expect(
+      getAiCommitModelOptions(config, 'ssh:conn-1', capability!).map((model) => model.id)
+    ).toEqual(['default', 'remote-model'])
+  })
+
+  it('migrates the first OMP Copilot seed to the CLI default model during discovery', () => {
+    const config: SourceControlAiSettings = {
+      enabled: true,
+      agentId: 'omp',
+      selectedModelByAgent: { omp: 'github-copilot/gpt-5.4-mini' },
+      selectedThinkingByModel: {},
+      instructionsByOperation: {},
+      customAgentCommand: '',
+      discoveredModelsByAgent: {}
+    }
+
+    const merged = mergeDiscoveredModelsIntoCommitMessageConfig(
+      config,
+      'omp',
+      [
+        { id: 'default', label: 'OMP default' },
+        { id: 'github-copilot/gpt-5.4-mini', label: 'Github Copilot GPT 5.4 Mini' }
+      ],
+      'default'
+    )
+
+    expect(merged.selectedModelByAgent.omp).toBe('default')
   })
 
   it('keeps SSH discovered models out of the legacy local cache', () => {

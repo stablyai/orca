@@ -6,6 +6,7 @@ import {
   getCommitMessageAgentSpec,
   getCommitMessageModel,
   listCommitMessageAgentCapabilities,
+  normalizeCommitMessageModelId,
   type CustomAgentId,
   isCustomAgentId,
   resolveCommitMessageAgentChoice
@@ -751,12 +752,12 @@ export function readSourceControlAiModelChoiceForHost(
   hostKey: string,
   agentId: TuiAgent
 ): string | undefined {
-  return (
+  const modelId =
     choice?.selectedModelByAgentByHost?.[hostKey]?.[agentId] ??
     (hostKey === LOCAL_COMMIT_MESSAGE_HOST_KEY
       ? choice?.selectedModelByAgent?.[agentId]
       : undefined)
-  )
+  return typeof modelId === 'string' ? normalizeCommitMessageModelId(agentId, modelId) : undefined
 }
 
 export function selectSourceControlAiModelChoiceForHost(

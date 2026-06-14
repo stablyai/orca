@@ -357,6 +357,7 @@ describe('SshGitProvider', () => {
       args: ['exec', 'PROMPT'],
       cwd: '/home/user/repo',
       stdin: null,
+      promptFile: null,
       timeoutMs: 60_000,
       operation: 'commit-message'
     })
@@ -401,6 +402,7 @@ describe('SshGitProvider', () => {
       args: ['exec', 'PROMPT'],
       cwd: '/home/user/repo',
       stdin: null,
+      promptFile: null,
       timeoutMs: 60_000,
       operation: 'commit-message'
     })
@@ -409,6 +411,7 @@ describe('SshGitProvider', () => {
       args: ['exec', 'PROMPT'],
       cwd: '/home/user/repo',
       stdin: null,
+      promptFile: null,
       timeoutMs: 60_000,
       operation: 'pull-request-fields'
     })

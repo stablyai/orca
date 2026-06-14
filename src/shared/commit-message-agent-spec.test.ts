@@ -7,6 +7,7 @@ import {
   getCommitMessageAgentSpec,
   getCommitMessageModelCapability,
   getCommitMessageModel,
+  normalizeCommitMessageModelId,
   isCustomAgentId,
   listCommitMessageAgentCapabilities,
   listCommitMessageAgentIds,
@@ -14,6 +15,7 @@ import {
   parseCodexModels,
   parseCursorModels,
   parseLineModels,
+  parseOmpModels,
   parsePiModels,
   resolveCommitMessageAgentChoice
 } from './commit-message-agent-spec'
@@ -29,6 +31,7 @@ describe('COMMIT_MESSAGE_AGENT_SPECS', () => {
       'copilot',
       'cursor',
       'kimi',
+      'omp',
       'opencode',
       'pi'
     ])
@@ -38,6 +41,12 @@ describe('COMMIT_MESSAGE_AGENT_SPECS', () => {
     expect(COMMIT_MESSAGE_AGENT_SPECS.claude?.defaultModelId).toBe('sonnet')
     expect(COMMIT_MESSAGE_AGENT_SPECS.codex?.defaultModelId).toBe('gpt-5.5')
     expect(COMMIT_MESSAGE_AGENT_SPECS.pi?.defaultModelId).toBe('github-copilot/gpt-5.4-mini')
+    expect(COMMIT_MESSAGE_AGENT_SPECS.omp?.defaultModelId).toBe('default')
+  })
+
+  it('maps the first OMP Copilot seed back to the CLI default model', () => {
+    expect(normalizeCommitMessageModelId('omp', 'github-copilot/gpt-5.4-mini')).toBe('default')
+    expect(getCommitMessageModel('omp', 'github-copilot/gpt-5.4-mini')?.id).toBe('default')
   })
 
   it('uses the provider-qualified Kimi model id accepted by the CLI', () => {
@@ -246,6 +255,38 @@ describe('model discovery parsers', () => {
       {
         id: 'github-copilot/gpt-4o',
         label: 'Github Copilot GPT 4O'
+      }
+    ])
+  })
+
+  it('parses OMP model JSON output', () => {
+    expect(
+      parseOmpModels(
+        JSON.stringify({
+          models: [
+            {
+              provider: 'github-copilot',
+              id: 'gpt-5.4-mini',
+              selector: 'github-copilot/gpt-5.4-mini',
+              name: 'GPT 5.4 Mini',
+              thinking: ['minimal', 'low', 'medium', 'high', 'xhigh']
+            }
+          ]
+        })
+      )
+    ).toEqual([
+      { id: 'default', label: 'OMP default' },
+      {
+        id: 'github-copilot/gpt-5.4-mini',
+        label: 'Github Copilot GPT 5.4 Mini',
+        thinkingLevels: [
+          { id: 'minimal', label: 'Minimal' },
+          { id: 'low', label: 'Low' },
+          { id: 'medium', label: 'Medium' },
+          { id: 'high', label: 'High' },
+          { id: 'xhigh', label: 'Extra High' }
+        ],
+        defaultThinkingLevel: 'low'
       }
     ])
   })

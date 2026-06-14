@@ -2,6 +2,9 @@
    spawn failure handling, and output normalization; keeping them together
    prevents those paths from drifting. */
 import { exec, spawn, type ChildProcess } from 'child_process'
+import { mkdtemp, rm, writeFile } from 'fs/promises'
+import { tmpdir } from 'os'
+import { join } from 'path'
 import type { GlobalSettings, Repo, TuiAgent } from '../../shared/types'
 import {
   buildCommitMessagePrompt,
@@ -25,6 +28,7 @@ import {
   type BranchNameWorkContext
 } from '../../shared/branch-name-from-work'
 import {
+  COMMIT_MESSAGE_PROMPT_FILE_PLACEHOLDER,
   getCommitMessageAgentSpec,
   type CommitMessageAgentCapability,
   type CommitMessageModelCapability
@@ -464,6 +468,21 @@ function killProcessTree(child: ChildProcess): void {
   }
 }
 
+async function preparePromptFileArgs(
+  plan: CommitMessagePlan,
+  promptFilePayload: string
+): Promise<{ args: string[]; cleanup: () => Promise<void> }> {
+  const dir = await mkdtemp(join(tmpdir(), 'orca-commit-prompt-'))
+  const promptPath = join(dir, 'prompt.md')
+  await writeFile(promptPath, promptFilePayload, 'utf8')
+  return {
+    args: plan.args.map((arg) =>
+      arg.replaceAll(COMMIT_MESSAGE_PROMPT_FILE_PLACEHOLDER, promptPath)
+    ),
+    cleanup: () => rm(dir, { recursive: true, force: true })
+  }
+}
+
 // Keying by operation plus `local:${cwd}` keeps local cancellation independent
 // from SSH worktrees and from other generation features in the same worktree.
 const cancelTokensByLane = new Map<string, () => void>()
@@ -483,7 +502,22 @@ async function runLocalPlan(
   emptyResultName = 'message',
   operation: TextGenerationOperation = 'commit-message'
 ): Promise<InternalTextGenerationResult> {
-  const { binary, args, stdinPayload, label } = plan
+  const { binary, stdinPayload, label } = plan
+  let args = plan.args
+  let cleanupPromptFile = async (): Promise<void> => undefined
+  if (typeof plan.promptFilePayload === 'string') {
+    try {
+      const prepared = await preparePromptFileArgs(plan, plan.promptFilePayload)
+      args = prepared.args
+      cleanupPromptFile = prepared.cleanup
+    } catch (error) {
+      console.error('[commit-message] Failed to prepare prompt file:', error)
+      return {
+        success: false,
+        error: `${label} prompt file could not be prepared. Check temporary directory permissions and try again.`
+      }
+    }
+  }
   return new Promise((resolve) => {
     let child: ChildProcess
     try {
@@ -500,6 +534,7 @@ async function runLocalPlan(
         windowsHide: true
       })
     } catch (error) {
+      void cleanupPromptFile()
       if (error instanceof UnsafeWindowsBatchArgumentsError) {
         resolve({
           success: false,
@@ -536,6 +571,7 @@ async function runLocalPlan(
         timer = null
       }
       detachChildListeners()
+      void cleanupPromptFile()
       if (cancelToken && cancelTokensByLane.get(laneKey) === cancelToken) {
         cancelTokensByLane.delete(laneKey)
       }
