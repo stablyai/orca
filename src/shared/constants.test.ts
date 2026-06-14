@@ -51,6 +51,9 @@ describe('getDefaultSettings', () => {
         branchName: ''
       }
     })
+    expect(getDefaultSettings('/tmp').sourceControlAi?.actions?.commitMessage).toEqual({
+      commandInputTemplate: '{basePrompt}'
+    })
   })
 
   it('keeps compact worktree cards disabled by default', () => {
