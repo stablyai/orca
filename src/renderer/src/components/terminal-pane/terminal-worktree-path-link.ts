@@ -8,6 +8,13 @@ export type WorktreeRootPathLink = {
 }
 
 type WorktreeRootPathState = Pick<AppState, 'worktreesByRepo'>
+type WorktreeRootPathIndex = Map<string, WorktreeRootPathLink | null>
+
+const EMPTY_WORKTREE_ROOT_PATH_INDEX: WorktreeRootPathIndex = new Map()
+const worktreeRootPathIndexCache = new WeakMap<
+  WorktreeRootPathState['worktreesByRepo'],
+  WorktreeRootPathIndex
+>()
 
 function isPathSeparator(value: string): boolean {
   return value === '/' || value === '\\'
@@ -42,26 +49,39 @@ function getWorktreeRootPathComparisonKey(path: string): string {
   return normalizeWorktreeRootPathForTerminalLink(path)
 }
 
+function getWorktreeRootPathIndex(
+  worktreesByRepo: WorktreeRootPathState['worktreesByRepo'] | undefined
+): WorktreeRootPathIndex {
+  if (!worktreesByRepo) {
+    return EMPTY_WORKTREE_ROOT_PATH_INDEX
+  }
+
+  const cachedIndex = worktreeRootPathIndexCache.get(worktreesByRepo)
+  if (cachedIndex) {
+    return cachedIndex
+  }
+
+  const index: WorktreeRootPathIndex = new Map()
+  for (const worktrees of Object.values(worktreesByRepo)) {
+    for (const worktree of worktrees) {
+      const comparisonKey = getWorktreeRootPathComparisonKey(worktree.path)
+      // Why: duplicate roots are ambiguous click targets; cache that ambiguity
+      // so terminal link detection avoids rescanning every workspace path.
+      index.set(
+        comparisonKey,
+        index.has(comparisonKey) ? null : { id: worktree.id, path: worktree.path }
+      )
+    }
+  }
+
+  worktreeRootPathIndexCache.set(worktreesByRepo, index)
+  return index
+}
+
 export function resolveKnownWorktreeRootPathLink(
   path: string,
   state: WorktreeRootPathState = useAppStore.getState()
 ): WorktreeRootPathLink | null {
   const pathComparisonKey = getWorktreeRootPathComparisonKey(path)
-  let match: WorktreeRootPathLink | null = null
-
-  // Why: terminal paths must switch workspaces only on exact known roots; a
-  // contained file path should keep its file-opening behavior.
-  for (const worktrees of Object.values(state.worktreesByRepo ?? {})) {
-    for (const worktree of worktrees) {
-      if (getWorktreeRootPathComparisonKey(worktree.path) !== pathComparisonKey) {
-        continue
-      }
-      if (match) {
-        return null
-      }
-      match = { id: worktree.id, path: worktree.path }
-    }
-  }
-
-  return match
+  return getWorktreeRootPathIndex(state.worktreesByRepo).get(pathComparisonKey) ?? null
 }

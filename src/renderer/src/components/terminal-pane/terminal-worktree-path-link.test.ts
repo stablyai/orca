@@ -67,6 +67,18 @@ describe('resolveKnownWorktreeRootPathLink', () => {
     expect(resolveKnownWorktreeRootPathLink('/repo/feature', state)).toBeNull()
   })
 
+  it('rebuilds the cached root index when worktreesByRepo is replaced', () => {
+    const firstState = createState({
+      repo: [{ id: 'wt-1', path: '/repo/feature' }]
+    })
+    const nextState = createState({
+      repo: [{ id: 'wt-2', path: '/repo/feature' }]
+    })
+
+    expect(resolveKnownWorktreeRootPathLink('/repo/feature', firstState)?.id).toBe('wt-1')
+    expect(resolveKnownWorktreeRootPathLink('/repo/feature', nextState)?.id).toBe('wt-2')
+  })
+
   it('matches Windows paths across native and resolved separator styles', () => {
     const state = createState({
       repo: [{ id: 'wt-1', path: 'C:\\Users\\Alice\\Repo' }]
