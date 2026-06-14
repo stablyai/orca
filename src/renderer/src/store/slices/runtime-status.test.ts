@@ -1,6 +1,7 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { create } from 'zustand'
 import type { RuntimeStatus } from '../../../../shared/runtime-types'
+import { createCompatibleRuntimeStatusResponse } from '../../runtime/runtime-compatibility-test-fixture'
 import { createRuntimeStatusSlice, type RuntimeStatusSlice } from './runtime-status'
 
 function createSliceStore() {
@@ -22,6 +23,28 @@ function makeStatus(overrides: Partial<RuntimeStatus> = {}): RuntimeStatus {
     ...overrides
   } as RuntimeStatus
 }
+
+function stubRuntimeEnvironmentApi({
+  getStatus = vi.fn(),
+  list = vi.fn()
+}: {
+  getStatus?: ReturnType<typeof vi.fn>
+  list?: ReturnType<typeof vi.fn>
+}) {
+  vi.stubGlobal('window', {
+    api: {
+      runtimeEnvironments: {
+        getStatus,
+        list
+      }
+    }
+  })
+  return { getStatus, list }
+}
+
+afterEach(() => {
+  vi.unstubAllGlobals()
+})
 
 describe('runtime-status slice', () => {
   it('starts with an empty map', () => {
@@ -122,5 +145,60 @@ describe('runtime-status slice', () => {
 
     store.getState().retainRuntimeEnvironmentStatuses(['keep', 'unrelated'])
     expect(store.getState().runtimeStatusByEnvironmentId).toBe(before)
+  })
+
+  it('refreshes one runtime environment status and repairs a stale null entry', async () => {
+    const getStatus = vi.fn().mockResolvedValue(createCompatibleRuntimeStatusResponse('runtime-a'))
+    stubRuntimeEnvironmentApi({ getStatus })
+    const store = createSliceStore()
+    store.getState().setRuntimeEnvironmentStatus('env-a', { status: null, checkedAt: 1 })
+
+    const reachable = await store.getState().refreshRuntimeEnvironmentStatus('env-a', 5_000)
+
+    expect(reachable).toBe(true)
+    expect(getStatus).toHaveBeenCalledWith({ selector: 'env-a', timeoutMs: 5_000 })
+    expect(store.getState().runtimeStatusByEnvironmentId.get('env-a')?.status?.runtimeId).toBe(
+      'runtime-a'
+    )
+  })
+
+  it('records null and returns false when a runtime refresh fails', async () => {
+    const getStatus = vi.fn().mockRejectedValue(new Error('closed'))
+    stubRuntimeEnvironmentApi({ getStatus })
+    const store = createSliceStore()
+    store.getState().setRuntimeEnvironmentStatus('env-a', { status: makeStatus(), checkedAt: 1 })
+
+    const reachable = await store.getState().refreshRuntimeEnvironmentStatus('env-a')
+
+    expect(reachable).toBe(false)
+    expect(store.getState().runtimeStatusByEnvironmentId.get('env-a')?.status).toBeNull()
+  })
+
+  it('hydrates saved environments through the single-environment refresh path', async () => {
+    const getStatus = vi.fn().mockResolvedValue(createCompatibleRuntimeStatusResponse('runtime-a'))
+    const list = vi.fn().mockResolvedValue([
+      {
+        id: 'env-a',
+        name: 'Dev Box',
+        createdAt: 1,
+        updatedAt: 1,
+        lastUsedAt: null,
+        runtimeId: null,
+        endpoints: [{ id: 'ws-a', kind: 'websocket', label: 'WebSocket', endpoint: 'ws://x' }],
+        preferredEndpointId: 'ws-a'
+      }
+    ])
+    stubRuntimeEnvironmentApi({ getStatus, list })
+    const store = createSliceStore()
+
+    await store.getState().hydrateRuntimeEnvironmentStatuses()
+
+    expect(store.getState().runtimeEnvironments.map((environment) => environment.id)).toEqual([
+      'env-a'
+    ])
+    expect(getStatus).toHaveBeenCalledWith({ selector: 'env-a', timeoutMs: 10_000 })
+    expect(store.getState().runtimeStatusByEnvironmentId.get('env-a')?.status?.runtimeId).toBe(
+      'runtime-a'
+    )
   })
 })

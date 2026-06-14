@@ -111,6 +111,8 @@ export function SshStatusSegment({
   const runtimeStatusByEnvironmentId = useAppStore((s) => s.runtimeStatusByEnvironmentId)
   const switchRuntimeEnvironment = useAppStore((s) => s.switchRuntimeEnvironment)
   const setRuntimeEnvironmentStatus = useAppStore((s) => s.setRuntimeEnvironmentStatus)
+  const hydrateRuntimeEnvironmentStatuses = useAppStore((s) => s.hydrateRuntimeEnvironmentStatuses)
+  const refreshRuntimeEnvironmentStatus = useAppStore((s) => s.refreshRuntimeEnvironmentStatus)
   const remoteWorkspaceSyncStatusByTargetId = useAppStore(
     (s) => s.remoteWorkspaceSyncStatusByTargetId
   )
@@ -149,12 +151,22 @@ export function SshStatusSegment({
   const disconnectedTargets = targets.filter((target) => target.status !== 'connected')
   const connectRuntimeHost = useCallback(
     async (environmentId: string): Promise<void> => {
+      const reachable = await refreshRuntimeEnvironmentStatus(environmentId, 5_000)
+      if (!reachable) {
+        toast.error(
+          translate(
+            'auto.components.status.bar.SshStatusSegment.runtime_connect_unavailable',
+            'Remote host is not reachable'
+          )
+        )
+        return
+      }
       const switched = await switchRuntimeEnvironment(environmentId)
       if (switched) {
         recordFeatureInteraction('ssh')
       }
     },
-    [recordFeatureInteraction, switchRuntimeEnvironment]
+    [recordFeatureInteraction, refreshRuntimeEnvironmentStatus, switchRuntimeEnvironment]
   )
   const disconnectRuntimeHost = useCallback(
     async (environmentId: string, isActive: boolean): Promise<void> => {
@@ -205,6 +217,7 @@ export function SshStatusSegment({
     <DropdownMenu
       onOpenChange={(open) => {
         if (open) {
+          void hydrateRuntimeEnvironmentStatuses()
           recordFeatureInteraction('ssh')
         }
       }}
