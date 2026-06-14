@@ -1629,10 +1629,11 @@ const api = {
     }): Promise<unknown> => ipcRenderer.invoke('claudeAccounts:select', args)
   },
   zaiApiKey: {
-    getStatus: (): Promise<unknown> => ipcRenderer.invoke('zaiApiKey:getStatus'),
-    save: (apiKey: string): Promise<unknown> => ipcRenderer.invoke('zaiApiKey:save', apiKey),
-    clear: (): Promise<unknown> => ipcRenderer.invoke('zaiApiKey:clear')
-  },
+    getStatus: (): Promise<{ configured: boolean }> => ipcRenderer.invoke('zaiApiKey:getStatus'),
+    save: (apiKey: string): Promise<{ configured: boolean }> =>
+      ipcRenderer.invoke('zaiApiKey:save', apiKey),
+    clear: (): Promise<{ configured: boolean }> => ipcRenderer.invoke('zaiApiKey:clear')
+  } satisfies PreloadApi['zaiApiKey'],
 
   cli: {
     getInstallStatus: (): Promise<CliInstallStatus> => ipcRenderer.invoke('cli:getInstallStatus'),

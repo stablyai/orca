@@ -31,7 +31,7 @@ beforeEach(() => {
 })
 
 describe('Z.AI API key store', () => {
-  it('saves, reads, and clears an encrypted key', async () => {
+  it('saves, reads, and clears an encrypted key with an explicit storage mode', async () => {
     const store = await loadStoreModule()
 
     store.saveZaiApiKey(' sk-test ')
@@ -39,6 +39,13 @@ describe('Z.AI API key store', () => {
     expect(store.hasZaiApiKey()).toBe(true)
     expect(store.readZaiApiKey()).toBe('sk-test')
     expect(safeStorageMock.encryptString).toHaveBeenCalledWith('sk-test')
+
+    const keyPath = join(tempHome, '.orca', 'zai-api-key.enc')
+    expect(JSON.parse(readFileSync(keyPath, 'utf8'))).toEqual({
+      v: 1,
+      mode: 'encrypted',
+      payload: Buffer.from('sk-test').toString('base64')
+    })
 
     store.clearZaiApiKey()
 
@@ -54,13 +61,28 @@ describe('Z.AI API key store', () => {
     store.saveZaiApiKey('sk-plaintext')
 
     const keyPath = join(tempHome, '.orca', 'zai-api-key.enc')
-    expect(readFileSync(keyPath, 'utf8')).toBe('sk-plaintext')
+    expect(JSON.parse(readFileSync(keyPath, 'utf8'))).toEqual({
+      v: 1,
+      mode: 'plaintext',
+      payload: 'sk-plaintext'
+    })
     expect(store.readZaiApiKey()).toBe('sk-plaintext')
     expect(warn).toHaveBeenCalledWith(
       '[zai-api-key] safeStorage encryption unavailable — storing Z.AI API key in plaintext'
     )
 
     warn.mockRestore()
+  })
+
+  it('keeps plaintext keys readable when encryption becomes available later', async () => {
+    safeStorageMock.isEncryptionAvailable.mockReturnValue(false)
+    const store = await loadStoreModule()
+
+    store.saveZaiApiKey('sk-plaintext')
+    safeStorageMock.isEncryptionAvailable.mockReturnValue(true)
+
+    expect(store.readZaiApiKey()).toBe('sk-plaintext')
+    expect(safeStorageMock.decryptString).not.toHaveBeenCalled()
   })
 
   it('reports missing configuration without creating storage files', async () => {

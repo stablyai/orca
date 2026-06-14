@@ -2246,6 +2246,8 @@ function createAccountsApi(): never {
     select: () => Promise.resolve(empty)
   } as never
 }
+// Why: paired web clients cannot access the desktop-local encrypted key store,
+// so Z.AI API-key management stays unavailable in the browser adapter.
 function createZaiApiKeyApi(): NonNullable<Partial<PreloadApi>['zaiApiKey']> {
   return {
     getStatus: () => Promise.resolve({ configured: false }),

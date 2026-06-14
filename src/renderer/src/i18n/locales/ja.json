@@ -28,7 +28,7 @@
         "sshToggleDescription": "Show configured SSH and remote Orca hosts when any are available.",
         "resourceUsageToggleDescription": "リソースマネージャーを表示します。これをクリックすると、CPU、メモリ、セッション、デーモン コントロール、およびワークスペース ディスク スキャンが行われます。",
         "portsToggleDescription": "ライブワークスペースポートを表示します。ワークスペーススコープのポートと外部リスナーの場合はこれをクリックします。",
-        "zaiToggleDescription": "Show Z.AI subscription usage in the status bar."
+        "zaiToggleDescription": "ステータスバーに Z.AI サブスクリプションの使用状況を表示します。"
       }
     }
   },
@@ -2675,12 +2675,8 @@
             "6cd6650b4c": "セッションを再開する",
             "1446d0d8a0": "{{value0}} Codex セッションはまだ古いアカウントにあります。",
             "605901a495": "1 Codex セッションはまだ古いアカウントにあります",
-            "9957b6dc3d": "Open Z.AI details and account switcher",
-            "251378b936": "Z.AI Account",
-            "4a06bf13f4": "No active Z.AI account",
-            "0ec6341563": "No Z.AI accounts",
-            "89fe3f951b": "Z.AI Usage",
-            "zaiDetails": "Open Z.AI usage details"
+            "89fe3f951b": "Z.AI 使用状況",
+            "zaiDetails": "Z.AI 使用状況の詳細を開く"
           },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "アカウントを接続する",
@@ -4201,32 +4197,20 @@
           "75ca9b718e": "Codex は、アクティブなアカウントには新たにサインインする必要があると報告しました。新規 Codex セッションを開始する前に、再認証してください。",
           "b11078a9c2": "wsl",
           "350b2a1aa7": "Use your current",
-          "e05d0ff737": "現在の {{value0}} Claude ログインを使用します。",
-          "zaiNoActive": "No active Z.AI account",
-          "zaiLoadFailed": "Could not load Z.AI accounts.",
-          "zaiUpdateFailed": "Z.AI account update failed.",
+          "e05d0ff737": "現在の {{value0}} の Claude ログインを使用します。",
           "zaiTitle": "Z.AI",
-          "zaiDescription": "Connect a Z.AI account for Anthropic-compatible usage at https://api.z.ai/api/anthropic and live quota tracking.",
-          "zaiAccountsTitle": "Z.AI Accounts",
-          "zaiAccountsDescription": "OAuth sign-in and live quota tracking for Z.AI.",
-          "zaiEndpointCopy": "Anthropic endpoint: https://api.z.ai/api/anthropic",
-          "zaiNoActiveSubtext": "Hide Z.AI usage until you select or add an account.",
-          "zaiEmpty": "No Z.AI accounts connected. Add an account to show Z.AI usage.",
-          "zaiAccountSubtext": "Anthropic endpoint · {{value0}}",
-          "zaiRemoveTitle": "Remove Z.AI Account?",
-          "zaiRemoveBody": "Orca will delete the saved Z.AI token for this account. If it is active, Z.AI usage is hidden until you select or add another account.",
-          "zaiApiKeyLoadFailed": "Could not load Z.AI API key status.",
-          "zaiApiKeySaveFailed": "Z.AI API key update failed.",
-          "zaiApiKeyClearFailed": "Z.AI API key update failed.",
-          "zaiApiKeyTitle": "Z.AI API Key",
-          "zaiApiKeyDescription": "Save a Z.AI API key for Anthropic-compatible access at https://api.z.ai/api/anthropic and usage fetching.",
-          "zaiApiKeyLabel": "API Key",
-          "zaiApiKeyEndpointCopy": "Anthropic endpoint: https://api.z.ai/api/anthropic",
+          "zaiDescription": "https://api.z.ai/api/anthropic での Anthropic 互換利用とライブクォータ追跡のために、Z.AI API キーを保存します。",
+          "zaiApiKeyLoadFailed": "Z.AI API キーの状態を読み込めませんでした。",
+          "zaiApiKeySaveFailed": "Z.AI API キーの更新に失敗しました。",
+          "zaiApiKeyClearFailed": "Z.AI API キーの更新に失敗しました。",
+          "zaiApiKeyTitle": "Z.AI API キー",
+          "zaiApiKeyDescription": "https://api.z.ai/api/anthropic での Anthropic 互換アクセスと使用量取得のために、Z.AI API キーを保存します。",
+          "zaiApiKeyLabel": "API キー",
+          "zaiApiKeyEndpointCopy": "Anthropic エンドポイント: https://api.z.ai/api/anthropic",
           "zaiApiKeyPlaceholder": "sk-...",
-          "zaiApiKeySave": "Save",
-          "zaiApiKeyClear": "Clear",
-          "zaiApiKeyConfigured": "Configured",
-          "zaiApiKeyNote": "Stored in ~/.orca using Electron encrypted storage when available.",
+          "zaiApiKeySave": "保存",
+          "zaiApiKeyClear": "クリア",
+          "zaiApiKeyConfigured": "設定済み",
           "92731d3ff7": "Claude terminal restart recommended"
         },
         "AdvancedPane": {
@@ -5579,8 +5563,8 @@
           "advanced": "Advanced",
           "serverDetails": "Server details",
           "advertiseThisApp": "Advertise this app as a server",
-          "advertiseThisAppHelp": "Create access links for browsers, mobile clients, or another Orca client to connect back to this running app.",
-          "runtimeReachable": "{{value0}} is reachable."
+          "advertiseThisAppHelp": "ブラウザー、モバイル クライアント、または別の Orca クライアントがこの実行中のアプリに接続できるアクセスリンクを作成します。",
+          "runtimeReachable": "{{value0}} に到達できます。"
         },
         "RuntimePairingGeneratedUrlRows": {
           "0495f68959": "{{value0}}をコピー"
@@ -6279,8 +6263,8 @@
             "593720c17f": "場所",
             "b84a5b0c8a": "プロバイダー アカウントをこのデバイスまたは WSL で検査および追加するかどうかを選択します。",
             "d09fb5ca92": "アカウントの場所",
-            "zaiTitle": "Z.AI Accounts",
-            "zaiDescription": "OAuth sign-in and live quota tracking for Z.AI."
+            "zaiTitle": "Z.AI API キー",
+            "zaiDescription": "Z.AI の API キー設定とライブクォータ追跡。"
           }
         },
         "advanced": {
@@ -6473,8 +6457,8 @@
               "title": "左サイドバーの外観",
               "description": "左サイドバーをターミナルに合わせるか、既定のままにするか、色合いを加えます。"
             },
-            "a5336dd0d1": "Z.AI Usage",
-            "2ffd3d3343": "Show Z.AI subscription usage in the status bar."
+            "a5336dd0d1": "Z.AI 使用状況",
+            "2ffd3d3343": "ステータスバーに Z.AI サブスクリプションの使用状況を表示します。"
           }
         },
         "auto": {

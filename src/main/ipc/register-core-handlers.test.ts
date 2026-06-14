@@ -326,6 +326,7 @@ describe('registerCoreHandlers', () => {
     registerAgentHookHandlersMock.mockReset()
     registerAgentTrustHandlersMock.mockReset()
     registerClaudeAccountHandlersMock.mockReset()
+    registerZaiApiKeyHandlersMock.mockReset()
     registerClipboardHandlersMock.mockReset()
     registerUpdaterHandlersMock.mockReset()
     registerRateLimitHandlersMock.mockReset()

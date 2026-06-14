@@ -378,7 +378,7 @@ export function AccountsPane({
               'Could not load Z.AI API key status.'
             ),
             {
-              description: String((error as Error)?.message ?? error)
+              description: getZaiApiKeyErrorDescription(error)
             }
           )
         }
@@ -1214,6 +1214,8 @@ export function AccountsPane({
             'auto.components.settings.AccountsPane.zaiApiKeyDescription',
             'Save a Z.AI API key for Anthropic-compatible access at https://api.z.ai/api/anthropic and usage fetching.'
           )}
+          // Why: SearchableSetting matches against a flat keyword list; flatten
+          // the shared catalog entry so Z.AI search stays aligned with settings navigation.
           keywords={getAccountsZaiSearchEntries().flatMap((entry) => [
             entry.title,
             entry.description ?? '',

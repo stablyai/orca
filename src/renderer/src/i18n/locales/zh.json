@@ -28,7 +28,7 @@
         "sshToggleDescription": "Show configured SSH and remote Orca hosts when any are available.",
         "resourceUsageToggleDescription": "显示资源管理器。点击可查看 CPU、内存、会话、守护进程控制和工作区磁盘扫描。",
         "portsToggleDescription": "显示实时工作区端口。单击它可获取工作区范围的端口和外部侦听器。",
-        "zaiToggleDescription": "Show Z.AI subscription usage in the status bar."
+        "zaiToggleDescription": "在状态栏中显示 Z.AI 订阅使用情况。"
       }
     }
   },
@@ -2675,12 +2675,8 @@
             "6cd6650b4c": "重新启动会话",
             "1446d0d8a0": "{{value0}} 个 Codex 会话仍使用旧账户。",
             "605901a495": "1 个 Codex 会话仍使用旧账户",
-            "9957b6dc3d": "Open Z.AI details and account switcher",
-            "251378b936": "Z.AI Account",
-            "4a06bf13f4": "No active Z.AI account",
-            "0ec6341563": "No Z.AI accounts",
-            "89fe3f951b": "Z.AI Usage",
-            "zaiDetails": "Open Z.AI usage details"
+            "89fe3f951b": "Z.AI 使用情况",
+            "zaiDetails": "打开 Z.AI 使用详情"
           },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "连接账户",
@@ -4201,32 +4197,20 @@
           "75ca9b718e": "Codex 报告活动账户需要重新登录。在开始新的 Codex 会话之前重新对其进行身份验证。",
           "b11078a9c2": "wsl",
           "350b2a1aa7": "Use your current",
-          "e05d0ff737": "使用您当前 {{value0}} Claude 登录名。",
-          "zaiNoActive": "No active Z.AI account",
-          "zaiLoadFailed": "Could not load Z.AI accounts.",
-          "zaiUpdateFailed": "Z.AI account update failed.",
+          "e05d0ff737": "使用您当前在 {{value0}} 上的 Claude 登录。",
           "zaiTitle": "Z.AI",
-          "zaiDescription": "Connect a Z.AI account for Anthropic-compatible usage at https://api.z.ai/api/anthropic and live quota tracking.",
-          "zaiAccountsTitle": "Z.AI Accounts",
-          "zaiAccountsDescription": "OAuth sign-in and live quota tracking for Z.AI.",
-          "zaiEndpointCopy": "Anthropic endpoint: https://api.z.ai/api/anthropic",
-          "zaiNoActiveSubtext": "Hide Z.AI usage until you select or add an account.",
-          "zaiEmpty": "No Z.AI accounts connected. Add an account to show Z.AI usage.",
-          "zaiAccountSubtext": "Anthropic endpoint · {{value0}}",
-          "zaiRemoveTitle": "Remove Z.AI Account?",
-          "zaiRemoveBody": "Orca will delete the saved Z.AI token for this account. If it is active, Z.AI usage is hidden until you select or add another account.",
-          "zaiApiKeyLoadFailed": "Could not load Z.AI API key status.",
-          "zaiApiKeySaveFailed": "Z.AI API key update failed.",
-          "zaiApiKeyClearFailed": "Z.AI API key update failed.",
-          "zaiApiKeyTitle": "Z.AI API Key",
-          "zaiApiKeyDescription": "Save a Z.AI API key for Anthropic-compatible access at https://api.z.ai/api/anthropic and usage fetching.",
-          "zaiApiKeyLabel": "API Key",
-          "zaiApiKeyEndpointCopy": "Anthropic endpoint: https://api.z.ai/api/anthropic",
+          "zaiDescription": "保存 Z.AI API 密钥，以便通过 https://api.z.ai/api/anthropic 使用兼容 Anthropic 的能力并进行实时配额跟踪。",
+          "zaiApiKeyLoadFailed": "无法加载 Z.AI API 密钥状态。",
+          "zaiApiKeySaveFailed": "Z.AI API 密钥更新失败。",
+          "zaiApiKeyClearFailed": "Z.AI API 密钥更新失败。",
+          "zaiApiKeyTitle": "Z.AI API 密钥",
+          "zaiApiKeyDescription": "保存 Z.AI API 密钥，以便通过 https://api.z.ai/api/anthropic 获取兼容 Anthropic 的访问和使用数据。",
+          "zaiApiKeyLabel": "API 密钥",
+          "zaiApiKeyEndpointCopy": "Anthropic 端点：https://api.z.ai/api/anthropic",
           "zaiApiKeyPlaceholder": "sk-...",
-          "zaiApiKeySave": "Save",
-          "zaiApiKeyClear": "Clear",
-          "zaiApiKeyConfigured": "Configured",
-          "zaiApiKeyNote": "Stored in ~/.orca using Electron encrypted storage when available.",
+          "zaiApiKeySave": "保存",
+          "zaiApiKeyClear": "清除",
+          "zaiApiKeyConfigured": "已配置",
           "92731d3ff7": "Claude terminal restart recommended"
         },
         "AdvancedPane": {
@@ -5542,8 +5526,8 @@
           "advanced": "Advanced",
           "serverDetails": "Server details",
           "advertiseThisApp": "Advertise this app as a server",
-          "advertiseThisAppHelp": "Create access links for browsers, mobile clients, or another Orca client to connect back to this running app.",
-          "runtimeReachable": "{{value0}} is reachable."
+          "advertiseThisAppHelp": "创建访问链接，让浏览器、移动客户端或其他 Orca 客户端连接回当前正在运行的应用。",
+          "runtimeReachable": "{{value0}} 可达。"
         },
         "RuntimePairingGeneratedUrlRows": {
           "0495f68959": "复制 {{value0}}"
@@ -6242,8 +6226,8 @@
             "593720c17f": "位置",
             "b84a5b0c8a": "选择是否在此设备上或 WSL 中检查和添加提供商账户。",
             "d09fb5ca92": "账户位置",
-            "zaiTitle": "Z.AI Accounts",
-            "zaiDescription": "OAuth sign-in and live quota tracking for Z.AI."
+            "zaiTitle": "Z.AI API 密钥",
+            "zaiDescription": "用于 Z.AI 的 API 密钥设置和实时配额跟踪。"
           }
         },
         "advanced": {
@@ -6436,8 +6420,8 @@
               "title": "左侧边栏外观",
               "description": "让左侧边栏匹配终端、保持默认，或使用色调。"
             },
-            "a5336dd0d1": "Z.AI Usage",
-            "2ffd3d3343": "Show Z.AI subscription usage in the status bar."
+            "a5336dd0d1": "Z.AI 使用情况",
+            "2ffd3d3343": "在状态栏中显示 Z.AI 订阅使用情况。"
           }
         },
         "auto": {

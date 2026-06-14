@@ -728,6 +728,16 @@ export class RateLimitService {
   private getZaiProvenance(apiKey: string | null): string {
     return apiKey ?? '__none__'
   }
+  private getZaiResolverSnapshot(): { apiKey: string | null; error: string | null } {
+    try {
+      return { apiKey: this.zaiApiKeyResolver?.() ?? null, error: null }
+    } catch (error) {
+      return {
+        apiKey: null,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      }
+    }
+  }
 
   private getMissingWslCodexHomeResult(
     target: NormalizedCodexAccountSelectionTarget
@@ -777,7 +787,8 @@ export class RateLimitService {
     const codexHomePath = this.codexHomePathResolver?.(codexTarget) ?? null
     const codexProvenance = this.getCodexProvenance(codexTarget, codexHomePath)
     const codexGeneration = this.codexFetchGeneration
-    const zaiApiKey = this.zaiApiKeyResolver?.() ?? null
+    const zaiSnapshot = this.getZaiResolverSnapshot()
+    const zaiApiKey = zaiSnapshot.apiKey
     const zaiProvenance = this.getZaiProvenance(zaiApiKey)
     const zaiGeneration = this.zaiFetchGeneration
     const previousState = this.state
@@ -830,7 +841,17 @@ export class RateLimitService {
         fetchGeminiRateLimits(geminiCliOAuthEnabled),
         fetchOpenCodeGoRateLimits(cookie, workspaceIdOverride || undefined),
         fetchKimiRateLimits(),
-        fetchZaiRateLimits(zaiApiKey)
+        zaiSnapshot.error
+          ? Promise.resolve({
+              provider: 'zai',
+              session: null,
+              weekly: null,
+              monthly: null,
+              updatedAt: Date.now(),
+              error: zaiSnapshot.error,
+              status: 'error'
+            } satisfies ProviderRateLimits)
+          : fetchZaiRateLimits(zaiApiKey)
       ])
 
     const claude =
@@ -916,8 +937,8 @@ export class RateLimitService {
     const latestClaudeAuthPreparation = await this.claudeAuthPreparationResolver?.(claudeTarget)
     const latestClaudeProvenance = latestClaudeAuthPreparation?.provenance ?? 'system'
     const latestCodexProvenance = this.getCodexProvenance(codexTarget, latestCodexHomePath)
-    const latestZaiApiKey = this.zaiApiKeyResolver?.() ?? null
-    const latestZaiProvenance = this.getZaiProvenance(latestZaiApiKey)
+    const latestZaiSnapshot = this.getZaiResolverSnapshot()
+    const latestZaiProvenance = this.getZaiProvenance(latestZaiSnapshot.apiKey)
     const shouldApplyCodex =
       codexGeneration === this.codexFetchGeneration && codexProvenance === latestCodexProvenance
     const shouldApplyClaude =

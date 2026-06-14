@@ -359,6 +359,32 @@ describe('RateLimitService', () => {
     expect(state.zai?.status).toBe('ok')
     expect(state.zai?.session?.usedPercent).toBe(60)
   })
+  it('keeps other providers updating when the Z.AI key resolver throws', async () => {
+    const service = new RateLimitService()
+    service.setZaiApiKeyResolver(() => {
+      throw new Error('key store unavailable')
+    })
+
+    vi.mocked(fetchClaudeRateLimits).mockResolvedValueOnce(okProvider('claude', 10, Date.now()))
+    vi.mocked(fetchCodexRateLimits).mockResolvedValueOnce(okProvider('codex', 20, Date.now()))
+    vi.mocked(fetchGeminiRateLimits).mockResolvedValueOnce(okProvider('gemini', 30, Date.now()))
+    vi.mocked(fetchOpenCodeGoRateLimits).mockResolvedValueOnce(
+      okProvider('opencode-go', 40, Date.now())
+    )
+    vi.mocked(fetchKimiRateLimits).mockResolvedValueOnce(okProvider('kimi', 50, Date.now()))
+
+    await service.refresh()
+
+    expect(fetchZaiRateLimits).not.toHaveBeenCalled()
+    const state = service.getState()
+    expect(state.claude?.session?.usedPercent).toBe(10)
+    expect(state.codex?.session?.usedPercent).toBe(20)
+    expect(state.gemini?.session?.usedPercent).toBe(30)
+    expect(state.opencodeGo?.session?.usedPercent).toBe(40)
+    expect(state.kimi?.session?.usedPercent).toBe(50)
+    expect(state.zai?.status).toBe('error')
+    expect(state.zai?.error).toBe('key store unavailable')
+  })
 
   it('passes the selected WSL Codex home into active account rate-limit fetches', async () => {
     const service = new RateLimitService()
