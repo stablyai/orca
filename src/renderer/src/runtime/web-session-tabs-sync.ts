@@ -1789,10 +1789,24 @@ export function applyWebSessionTabsSnapshot(
           .map((tabId) => hostToLocalTabId.get(tabId))
           .filter((tabId): tabId is string => tabId !== undefined && validTabBarIds.has(tabId))
       ) ?? []
-    return [
-      ...current.filter((tabId) => validTabBarIds.has(tabId) && !mirroredUnifiedIds.has(tabId)),
-      ...(hostTabBarOrder.length > 0 ? hostTabBarOrder : mirroredUnifiedTabs.map((tab) => tab.id))
-    ]
+    const next: string[] = []
+    const push = (tabId: string): void => {
+      if (validTabBarIds.has(tabId) && !next.includes(tabId)) {
+        next.push(tabId)
+      }
+    }
+    // Why: remote snapshots can arrive after the client staged local browser
+    // tabs. Preserve the user's visible mixed order and only append new host
+    // tabs; otherwise terminal-browser-terminal can collapse to browser-terminal-terminal.
+    for (const tabId of current) {
+      push(tabId)
+    }
+    const hostOrMirroredOrder =
+      hostTabBarOrder.length > 0 ? hostTabBarOrder : mirroredUnifiedTabs.map((tab) => tab.id)
+    for (const tabId of hostOrMirroredOrder) {
+      push(tabId)
+    }
+    return next
   })()
 
   let nextPtyIdsByTabId = state.ptyIdsByTabId

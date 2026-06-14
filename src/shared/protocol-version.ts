@@ -24,10 +24,12 @@ export const MIN_COMPATIBLE_RUNTIME_SERVER_VERSION = 2
 export const PROJECT_HOST_SETUP_RUNTIME_CAPABILITY = 'project-host-setup.v1' as const
 export const TASK_SOURCE_CONTEXT_RUNTIME_CAPABILITY = 'task-source-context.v1' as const
 export const WORKSPACE_RUN_CONTEXT_RUNTIME_CAPABILITY = 'workspace-run-context.v1' as const
+export const REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY = 'remote-runtime.shared-control.v1' as const
 
 export const RUNTIME_CAPABILITIES = [
   'runtime.status.compat.v1',
   'runtime.environments.v1',
+  REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY,
   'browser.screencast.v1',
   'terminal.binary-stream.v1',
   'terminal.multiplex.v1',

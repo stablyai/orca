@@ -34,6 +34,7 @@ export type ExecutionHostRegistryEntry = {
   protocolVersion?: number | null
   minCompatibleClientVersion?: number | null
   platform?: NodeJS.Platform | null
+  remoteControlState?: RuntimeStatus['remoteControl']
 }
 
 type RuntimeEnvironmentSummary = {
@@ -75,6 +76,23 @@ function runtimeHealth(compatibility: RuntimeCompatVerdict | null): ExecutionHos
   return compatibility.kind === 'blocked' ? 'blocked' : 'available'
 }
 
+function runtimeControlHealth(
+  remoteControl: RuntimeStatus['remoteControl'] | null | undefined
+): ExecutionHostHealth | null {
+  switch (remoteControl?.state) {
+    case 'awaiting_authenticated':
+    case 'awaiting_ready':
+    case 'reconnecting':
+      return 'connecting'
+    case 'closed':
+      return remoteControl.lastError ? 'error' : 'disconnected'
+    case 'ready':
+      return null
+    case undefined:
+      return null
+  }
+}
+
 function sshHealth(state: SshConnectionState | undefined): ExecutionHostHealth {
   switch (state?.status) {
     case 'connected':
@@ -113,19 +131,21 @@ function addRuntimeHost(
   const runtimeStatus = statusByEnvironmentId?.get(environmentId)
   const status = runtimeStatus?.status
   const compatibility = runtimeCompatibility(status)
+  const controlHealth = runtimeControlHealth(status?.remoteControl)
   setHost(hosts, {
     id: hostId,
     kind: 'runtime',
     label,
     detail: 'Orca server',
-    health: runtimeHealth(compatibility),
+    health: controlHealth ?? runtimeHealth(compatibility),
     compatibility: compatibility ?? undefined,
     capabilities: status?.capabilities,
     appVersion: runtimeStatus?.appVersion ?? null,
     protocolVersion: status?.runtimeProtocolVersion ?? status?.protocolVersion ?? null,
     minCompatibleClientVersion:
       status?.minCompatibleRuntimeClientVersion ?? status?.minCompatibleMobileVersion ?? null,
-    platform: status?.hostPlatform ?? null
+    platform: status?.hostPlatform ?? null,
+    remoteControlState: status?.remoteControl ?? null
   })
 }
 

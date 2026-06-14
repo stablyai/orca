@@ -120,6 +120,48 @@ describe('execution host registry', () => {
     ])
   })
 
+  it('uses shared-control diagnostics to show reconnecting runtime host health', () => {
+    const hosts = buildExecutionHostRegistry({
+      repos: [],
+      settings: { activeRuntimeEnvironmentId: null },
+      runtimeEnvironments: [{ id: 'dev-box', name: 'Dev Box' }],
+      runtimeStatusByEnvironmentId: new Map([
+        [
+          'dev-box',
+          {
+            status: {
+              runtimeId: 'runtime-dev',
+              rendererGraphEpoch: 1,
+              graphStatus: 'ready',
+              authoritativeWindowId: 1,
+              liveTabCount: 0,
+              liveLeafCount: 0,
+              remoteControl: {
+                state: 'reconnecting',
+                pendingRequestCount: 0,
+                subscriptionCount: 2,
+                reconnectAttempt: 1,
+                lastConnectedAt: 123,
+                lastClose: { code: 1006, reason: '' },
+                lastError: 'Remote Orca runtime closed the connection.'
+              }
+            }
+          }
+        ]
+      ])
+    })
+
+    expect(hosts).toMatchObject([
+      { id: 'local', health: 'local' },
+      {
+        id: 'runtime:dev-box',
+        label: 'Dev Box',
+        health: 'connecting',
+        remoteControlState: { state: 'reconnecting', subscriptionCount: 2 }
+      }
+    ])
+  })
+
   it('applies per-host display-label overrides to derived labels', () => {
     const hosts = buildExecutionHostRegistry({
       repos: [{ connectionId: 'repo-ssh' }],

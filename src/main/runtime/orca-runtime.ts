@@ -4268,6 +4268,13 @@ export class OrcaRuntimeService {
     }
   }
 
+  cleanupSubscriptionsByPrefix(prefix: string): void {
+    const ids = Array.from(this.subscriptionCleanups.keys()).filter((id) => id.startsWith(prefix))
+    for (const id of ids) {
+      this.cleanupSubscription(id)
+    }
+  }
+
   // Why: invoked from the WebSocket transport's on-close hook so streaming
   // listeners registered for this exact socket get torn down even when other
   // sockets sharing the same deviceToken are still alive (multi-screen

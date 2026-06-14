@@ -791,18 +791,19 @@ function Terminal(): React.JSX.Element | null {
       const targetGroupId =
         useAppStore.getState().activeGroupIdByWorktree[activeWorktreeId] ??
         useAppStore.getState().groupsByWorktree[activeWorktreeId]?.[0]?.id
-      if (!shellOverride && targetGroupId) {
-        void openNewTerminalTabInActiveWorkspace(targetGroupId)
-        return
-      }
       const runtimeEnvironmentId = getActiveWorktreeRuntimeEnvironmentId(activeWorktreeId)
       if (isWebRuntimeSessionActive(runtimeEnvironmentId)) {
         void createWebRuntimeSessionTerminal({
           worktreeId: activeWorktreeId,
           environmentId: runtimeEnvironmentId,
+          targetGroupId,
           command: shellOverride,
           activate: true
         })
+        return
+      }
+      if (!shellOverride && targetGroupId) {
+        void openNewTerminalTabInActiveWorkspace(targetGroupId)
         return
       }
       const newTab = createTab(activeWorktreeId, undefined, shellOverride)

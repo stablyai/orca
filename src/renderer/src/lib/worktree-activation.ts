@@ -329,7 +329,9 @@ export function activateAndRevealWorktree(
     state.revealWorktreeInSidebar(worktreeId)
   }
 
-  ensureWebRuntimeWorktreeTerminalAfterWake(worktreeId)
+  if (opts?.notifyHostRuntime !== false) {
+    ensureWebRuntimeWorktreeTerminalAfterWake(worktreeId)
+  }
 
   return { primaryTabId }
 }
@@ -346,10 +348,6 @@ export function ensureWebRuntimeWorktreeTerminalAfterWake(worktreeId: string): v
   }
 
   const tabs = state.tabsByWorktree[worktreeId] ?? []
-  if (tabs.length === 0) {
-    return
-  }
-
   const hasLivePty = tabs.some((tab) => tabHasLivePty(state.ptyIdsByTabId, tab.id))
   if (hasLivePty) {
     return
@@ -367,7 +365,7 @@ export function ensureWebRuntimeWorktreeTerminalAfterWake(worktreeId: string): v
   }
 
   const { renderableTabCount } = state.reconcileWorktreeTabModel(worktreeId)
-  if (renderableTabCount === 0) {
+  if (tabs.length > 0 && renderableTabCount === 0) {
     return
   }
 

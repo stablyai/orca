@@ -25,6 +25,12 @@ type TypingMeasurement = {
   worstLatencyMs: number
 }
 
+type ConnectedDockerRemote = {
+  targetId: string
+  repoId: string
+  worktreeId: string
+}
+
 function shellQuote(value: string): string {
   return `'${value.replaceAll("'", "'\\''")}'`
 }
@@ -50,8 +56,11 @@ function remoteTypingLoadScript(runId: string): string {
   ].join(';')
 }
 
-async function connectDockerRemote(page: Page, target: DockerSshRelayTarget): Promise<void> {
-  await page.evaluate(
+async function connectDockerRemote(
+  page: Page,
+  target: DockerSshRelayTarget
+): Promise<ConnectedDockerRemote> {
+  return await page.evaluate(
     async ({ target, remotePath }) => {
       const store = window.__store
       if (!store) {
@@ -100,6 +109,11 @@ async function connectDockerRemote(page: Page, target: DockerSshRelayTarget): Pr
           store.getState().createTab(worktree.id)
         }
         store.getState().setActiveTabType('terminal')
+        return {
+          targetId: createdTarget.id,
+          repoId: result.repo.id,
+          worktreeId: worktree.id
+        }
       } finally {
         credentialUnsub()
       }
@@ -138,6 +152,21 @@ async function stopRemoteLoad(page: Page, ptyId: string): Promise<void> {
   await page.evaluate((targetPtyId) => window.api.pty.write(targetPtyId, '\x03'), ptyId)
 }
 
+async function reconnectDockerTarget(page: Page, targetId: string): Promise<void> {
+  await page.evaluate(async (targetId) => {
+    const store = window.__store
+    if (!store) {
+      throw new Error('Store unavailable')
+    }
+    await window.api.ssh.disconnect({ targetId })
+    const state = await window.api.ssh.connect({ targetId })
+    if (!state || state.status !== 'connected') {
+      throw new Error(`SSH target did not reconnect: ${JSON.stringify(state)}`)
+    }
+    store.getState().setSshConnectionState(targetId, state)
+  }, targetId)
+}
+
 test.describe('Docker SSH relay perf', () => {
   test.skip(!RUN_DOCKER_SSH, 'Set ORCA_E2E_SSH_DOCKER=1 to run Docker-backed SSH relay perf.')
   test.skip(process.platform === 'win32', 'Docker SSH relay perf uses POSIX ssh tooling.')
@@ -173,6 +202,40 @@ test.describe('Docker SSH relay perf', () => {
       expect(measurement.medianLatencyMs).toBeLessThan(MAX_MEDIAN_KEY_LATENCY_MS)
       expect(measurement.worstLatencyMs).toBeLessThan(MAX_WORST_KEY_LATENCY_MS)
       await stopRemoteLoad(orcaPage, ptyId)
+    } finally {
+      cleanupDockerSshRelayTarget(target)
+    }
+  })
+
+  test('keeps an SSH workspace terminal usable after disconnect and reconnect', async ({
+    orcaPage
+  }, testInfo) => {
+    test.slow()
+    let target: DockerSshRelayTarget | null = null
+    try {
+      target = startDockerSshRelayTarget(testInfo)
+      await waitForSessionReady(orcaPage)
+      await waitForActiveWorktree(orcaPage)
+      const remote = await connectDockerRemote(orcaPage, target)
+      await ensureTerminalVisible(orcaPage, 45_000)
+      await waitForActiveTerminalManager(orcaPage, 60_000)
+      const beforePtyId = await waitForActivePanePtyId(orcaPage, 60_000)
+      const beforeMarker = `SSH_RECONNECT_BEFORE_${Date.now()}`
+      await execInTerminal(orcaPage, beforePtyId, `printf ${shellQuote(beforeMarker)}`)
+      await waitForTerminalOutput(orcaPage, beforeMarker, 20_000, 60_000)
+
+      await reconnectDockerTarget(orcaPage, remote.targetId)
+      await ensureTerminalVisible(orcaPage, 45_000)
+      await waitForActiveTerminalManager(orcaPage, 60_000)
+      const afterPtyId = await waitForActivePanePtyId(orcaPage, 60_000)
+      const afterMarker = `SSH_RECONNECT_AFTER_${Date.now()}`
+      await execInTerminal(orcaPage, afterPtyId, `printf ${shellQuote(afterMarker)}`)
+      await waitForTerminalOutput(orcaPage, afterMarker, 20_000, 60_000)
+
+      testInfo.annotations.push({
+        type: 'docker-ssh-reconnect',
+        description: `terminal survived reconnect: beforePty=${beforePtyId}, afterPty=${afterPtyId}`
+      })
     } finally {
       cleanupDockerSshRelayTarget(target)
     }

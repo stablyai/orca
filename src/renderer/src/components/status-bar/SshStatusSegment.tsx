@@ -15,6 +15,7 @@ import { getHostDisplayLabelOverrides } from '../../../../shared/host-setting-ov
 import { toRuntimeExecutionHostId } from '../../../../shared/execution-host'
 import { RuntimeHostStatusRow, type RuntimeHostConnectionState } from './RuntimeHostStatusRow'
 import { SshTargetStatusRow } from './SshTargetStatusRow'
+import type { RemoteRuntimeSharedConnectionDiagnostics } from '../../../../shared/remote-runtime-shared-control-types'
 
 function isConnecting(status: SshConnectionStatus): boolean {
   return ['connecting', 'deploying-relay', 'reconnecting'].includes(status)
@@ -70,31 +71,80 @@ function sshStatusForOverall(status: SshConnectionStatus): HostStatus {
 function runtimeHostConnectionState({
   hasStatus,
   online,
-  active
+  active,
+  remoteControl
 }: {
   hasStatus: boolean
   online: boolean
   active: boolean
+  remoteControl?: RemoteRuntimeSharedConnectionDiagnostics | null
 }): RuntimeHostConnectionState {
   if (!hasStatus) {
     return 'checking'
   }
+  if (remoteControl?.state === 'reconnecting') {
+    return 'reconnecting'
+  }
   if (!online) {
+    return 'disconnected'
+  }
+  if (remoteControl?.state === 'closed' && remoteControl.lastError) {
     return 'disconnected'
   }
   return active ? 'connected' : 'available'
 }
 
-function runtimeStatusForOverall(state: RuntimeHostConnectionState): HostStatus {
+function runtimeHostConnectionDetail(
+  remoteControl?: RemoteRuntimeSharedConnectionDiagnostics | null
+): string | null {
+  if (!remoteControl) {
+    return null
+  }
+  if (remoteControl.lastError) {
+    return remoteControl.lastError
+  }
+  if (remoteControl.lastClose?.reason) {
+    return translate(
+      'auto.components.status.bar.SshStatusSegment.runtime_last_close_reason',
+      'Closed: {{value0}}',
+      { value0: remoteControl.lastClose.reason }
+    )
+  }
+  if (remoteControl.state === 'reconnecting') {
+    return translate(
+      'auto.components.status.bar.SshStatusSegment.runtime_reconnect_attempt',
+      'Attempt {{value0}}',
+      { value0: String(remoteControl.reconnectAttempt + 1) }
+    )
+  }
+  if (remoteControl.pendingRequestCount > 0 || remoteControl.subscriptionCount > 0) {
+    return translate(
+      'auto.components.status.bar.SshStatusSegment.runtime_channel_counts',
+      '{{value0}} pending · {{value1}} streams',
+      {
+        value0: String(remoteControl.pendingRequestCount),
+        value1: String(remoteControl.subscriptionCount)
+      }
+    )
+  }
+  return null
+}
+
+export function runtimeStatusForOverall(state: RuntimeHostConnectionState): HostStatus {
   switch (state) {
     case 'connected':
+    case 'available':
       return 'connected'
     case 'checking':
+    case 'reconnecting':
       return 'connecting'
-    case 'available':
     case 'disconnected':
       return 'disconnected'
   }
+}
+
+export function isConnectedRuntimeHostState(state: RuntimeHostConnectionState): boolean {
+  return state === 'connected' || state === 'available'
 }
 
 export function SshStatusSegment({
@@ -138,15 +188,22 @@ export function SshStatusSegment({
       label: override || environment.name || environment.id,
       hasStatus: Boolean(statusEntry),
       online: Boolean(statusEntry?.status),
-      active: settings?.activeRuntimeEnvironmentId === environment.id
+      active: settings?.activeRuntimeEnvironmentId === environment.id,
+      remoteControl: statusEntry?.status?.remoteControl ?? null
     }
   })
   const runtimeHostRows = runtimeHosts.map((host) => ({
     ...host,
     state: runtimeHostConnectionState(host)
   }))
-  const connectedRuntimeHosts = runtimeHostRows.filter((host) => host.state === 'connected')
-  const inactiveRuntimeHosts = runtimeHostRows.filter((host) => host.state !== 'connected')
+  // Available remote servers are online even when they are not the active runtime.
+  // Keep host health separate from the advanced active-server selection.
+  const connectedRuntimeHosts = runtimeHostRows.filter((host) =>
+    isConnectedRuntimeHostState(host.state)
+  )
+  const inactiveRuntimeHosts = runtimeHostRows.filter(
+    (host) => !isConnectedRuntimeHostState(host.state)
+  )
   const connectedTargets = targets.filter((target) => target.status === 'connected')
   const disconnectedTargets = targets.filter((target) => target.status !== 'connected')
   const connectRuntimeHost = useCallback(
@@ -290,6 +347,7 @@ export function SshStatusSegment({
             key={host.id}
             label={host.label}
             state={host.state}
+            detail={runtimeHostConnectionDetail(host.remoteControl)}
             onConnect={() => connectRuntimeHost(host.id)}
             onDisconnect={() => disconnectRuntimeHost(host.id, host.active)}
           />
@@ -308,6 +366,7 @@ export function SshStatusSegment({
             key={host.id}
             label={host.label}
             state={host.state}
+            detail={runtimeHostConnectionDetail(host.remoteControl)}
             onConnect={() => connectRuntimeHost(host.id)}
             onDisconnect={() => disconnectRuntimeHost(host.id, host.active)}
           />

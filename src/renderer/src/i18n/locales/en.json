@@ -274,7 +274,8 @@
           "760bc6883d": "Codex",
           "a5fc0cb622": "OpenClaude",
           "bf53f09bf8": "Claude Agent Teams",
-          "0708ed89f1": "Claude"
+          "0708ed89f1": "Claude",
+          "fc80296033": "Devin"
         },
         "skill": {
           "cli": {
@@ -463,13 +464,43 @@
             "7d732521ec": "Comment"
           }
         }
+      },
+      "folderWorkspacePathStatus": {
+        "title": {
+          "missing": "Folder not found",
+          "notDirectory": "Path is not a folder",
+          "ambiguousConnection": "Cannot determine connection",
+          "unavailable": "Cannot check folder"
+        },
+        "description": {
+          "missing": "Orca cannot find {{path}}. Remove and re-import this folder workspace.",
+          "notDirectory": "{{path}} exists, but it is not a folder.",
+          "ambiguousConnection": "Orca cannot tell which SSH connection owns this folder scope.",
+          "unavailable": "Orca cannot verify this folder right now. Check the runtime or SSH connection and try again."
+        },
+        "createError": {
+          "title": {
+            "missing": "Folder not found",
+            "notDirectory": "Path is not a folder",
+            "ambiguousConnection": "Cannot determine connection",
+            "unavailable": "Cannot check folder",
+            "generic": "Failed to create folder workspace"
+          },
+          "description": {
+            "missing": "Orca cannot find {{path}}. Remove and re-import the folder.",
+            "notDirectory": "{{path}} exists, but it is not a folder.",
+            "ambiguousConnection": "Orca cannot tell which SSH connection owns this folder scope.",
+            "unavailable": "Orca cannot verify this folder right now. Check the runtime or SSH connection and try again."
+          }
+        }
       }
     },
     "hooks": {
       "useAutomationDispatchEvents": {
         "59718b120b": "The target workspace is no longer available.",
         "16a21d6413": "SSH reconnect requires interactive credentials.",
-        "386db94f3e": "The target project is no longer available."
+        "386db94f3e": "The target project is no longer available.",
+        "3ad7d77f57": "The target workspace is on a different host than this automation run target."
       },
       "useComposerState": {
         "7eb3f44ff7": "Selected agent is disabled. Choose an enabled agent before creating.",
@@ -1014,7 +1045,15 @@
         "setupKindFolder": "Folder",
         "setupHostExistingFolderHelp": "Link a checkout that already exists there, then create this workspace on that host.",
         "importingHostSetup": "Importing...",
-        "importHostSetup": "Import"
+        "importHostSetup": "Import",
+        "sshNotConnected": "SSH not connected",
+        "connectingSsh": "Connecting SSH...",
+        "sshAuthenticationFailed": "SSH authentication failed",
+        "preparingSshConnection": "Preparing SSH connection...",
+        "connected": "Connected",
+        "reconnectingSsh": "Reconnecting SSH...",
+        "sshReconnectionFailed": "SSH reconnection failed",
+        "notConnected": "Not connected"
       },
       "NewWorkspaceComposerModal": {
         "fa90f739a5": "Choose the project, workspace name, and agent before creating the workspace."
@@ -1528,7 +1567,9 @@
         "a2a279b32a": "Save timed out or failed. Fix errors before closing.",
         "46e08bc5c8": "This file has unsaved changes.",
         "61ed600d29": "\"{{value0}}\" has unsaved changes. Do you want to save before closing?",
-        "cdc9ac4b2d": "editor"
+        "cdc9ac4b2d": "editor",
+        "e57db40c11": "Could not build launch command for {{value0}}.",
+        "5b2c1a9e44": "No agent CLI detected — install one or pick a default agent in Settings."
       },
       "TerminalSearch": {
         "db234b7519": "Close",
@@ -1792,7 +1833,11 @@
           "015b4e607d": "Cancel",
           "e3bd59143c": "Insert",
           "f24783f470": "https://...",
-          "ec6310b731": "Use an http:// or https:// image URL."
+          "ec6310b731": "Use an http:// or https:// image URL.",
+          "b7e4a1c902": "Paste, drop, or click to add files",
+          "8f1c2d4e6a": "Nothing to preview",
+          "c91f0a2b14": "Write",
+          "d82b1e3f05": "Preview"
         },
         "IssueSourceSelector": {
           "d6aeb2012b": "Showing issues from",
@@ -1862,9 +1907,51 @@
                 "1f2f28a4de": "Search API",
                 "c377a4f06a": "Search",
                 "c392c749a6": "REST API",
-                "bb227706a6": "REST"
+                "bb227706a6": "REST",
+                "budget_scope_prefix": "Budget scope"
               }
             }
+          }
+        },
+        "CloseReasonDropdown": {
+          "e1f2a3b4c5": "Choose close reason"
+        },
+        "GitHubIssueCommentComposer": {
+          "082515176a": "Failed to add comment",
+          "9f88657c4e": "Issue closed",
+          "e9b7cb7d17": "Failed to close issue",
+          "bd3b4492a0": "Issue reopened",
+          "f2a8c1d903": "Failed to reopen issue",
+          "a1b2c3d4e5": "Add a comment",
+          "c5c117270e": "Add your comment here, be kind",
+          "f6a7b8c9d0": "Close issue",
+          "b1c2d3e4f5": "Reopen issue",
+          "0a73f59e85": "Send comment",
+          "bf43425540": "Comment"
+        },
+        "GitHubWorkItemAssigneePopoverContent": {
+          "cddd9b04a7": "Loading assignees",
+          "a00830d3f7": "No users",
+          "4f8b6f2c1d": "Filter assignees..."
+        },
+        "GitHubWorkItemLabelPopoverContent": {
+          "2aa9acdf34": "Edit labels on GitHub",
+          "cddd9b04a7": "Loading labels",
+          "de26e2eb06": "No labels",
+          "8b0d52ee3a": "Filter labels..."
+        },
+        "githubIssueCloseReasons": {
+          "completed": {
+            "label": "Close as completed",
+            "description": "Done, closed, fixed, resolved"
+          },
+          "notPlanned": {
+            "label": "Close as not planned",
+            "description": "Won't fix, can't repro, stale"
+          },
+          "duplicate": {
+            "label": "Close as duplicate",
+            "description": "Duplicate of another issue"
           }
         }
       },
@@ -2141,7 +2228,8 @@
             "c44659e09f": "Mobile driving",
             "7cffad954c": "Collapse",
             "3eed73394f": "Your keyboard is paused",
-            "faa367dc74": "This terminal is sized for your mobile app"
+            "faa367dc74": "This terminal is sized for your mobile app",
+            "54f7d6f69d": "Resize all terminals"
           },
           "TerminalAgentSessionForkDialog": {
             "17fc841e59": "Copy context",
@@ -2377,7 +2465,9 @@
             "77ac113df0": "Start {{value0}}: {{value1}}",
             "7b1c9d6ae1": "Run",
             "c781f992e4": "destructive",
-            "be8f0ff166": "Delete"
+            "be8f0ff166": "Delete",
+            "f3a8c2d1e7": "Search quick commands...",
+            "b4e7f9a2c1": "No commands match"
           },
           "shell": {
             "icons": {
@@ -2533,7 +2623,14 @@
             "remote_server": "Remote Server",
             "runtime_checking": "Checking",
             "runtime_online": "Connected",
-            "runtime_unavailable": "Disconnected"
+            "runtime_unavailable": "Disconnected",
+            "runtime_available": "Available",
+            "runtime_connect_unavailable": "Remote host is not reachable",
+            "runtime_disconnect_failed": "Disconnect failed",
+            "runtime_reconnecting": "Reconnecting",
+            "runtime_last_close_reason": "Closed: {{value0}}",
+            "runtime_reconnect_attempt": "Attempt {{value0}}",
+            "runtime_channel_counts": "{{value0}} pending · {{value1}} streams"
           },
           "StatusBar": {
             "9659e38343": "Ports",
@@ -2719,6 +2816,9 @@
             "7ad719c4bf": "Limited",
             "e740f92596": "Refresh failed",
             "8418ec448d": "{{value0}} usage could not be refreshed. Agent sessions may still be signed in."
+          },
+          "SshTargetStatusRow": {
+            "sshHost": "SSH Host"
           }
         }
       },
@@ -2771,7 +2871,11 @@
           "4f8368c272": "Orca worktrees only",
           "cfe2282ffa": "Unknown",
           "7765a4c3e1": "n/a",
-          "2d41fd45c6": " • Last scan error: {{value0}}"
+          "2d41fd45c6": " • Last scan error: {{value0}}",
+          "rangeLast7Days": "Last 7 days",
+          "rangeLast30Days": "Last 30 days",
+          "rangeLast90Days": "Last 90 days",
+          "rangeAllTime": "All time"
         },
         "CodexUsageDailyChart": {
           "1e6f62d7e3": "Reasoning",
@@ -2820,7 +2924,11 @@
           "bf6cf2d4dd": "Unknown",
           "ae255c3dba": "n/a",
           "247c93ca92": "• inferred pricing",
-          "8a6655f7a2": " • Last scan error: {{value0}}"
+          "8a6655f7a2": " • Last scan error: {{value0}}",
+          "rangeLast7Days": "Last 7 days",
+          "rangeLast30Days": "Last 30 days",
+          "rangeLast90Days": "Last 90 days",
+          "rangeAllTime": "All time"
         },
         "OpenCodeUsagePane": {
           "349f7c3f5c": "Total",
@@ -2859,7 +2967,11 @@
           "e04c58327c": "Orca worktrees only",
           "362231082f": "Unknown",
           "8095a63426": "n/a",
-          "6cc7782458": " • Last scan error: {{value0}}"
+          "6cc7782458": " • Last scan error: {{value0}}",
+          "rangeLast7Days": "Last 7 days",
+          "rangeLast30Days": "Last 30 days",
+          "rangeLast90Days": "Last 90 days",
+          "rangeAllTime": "All time"
         },
         "ShareUsageButton": {
           "7d6b25323d": "Share on X",
@@ -2978,6 +3090,22 @@
               "d9a4b3e2f1c5": "events"
             }
           }
+        },
+        "UsageBreakdownSection": {
+          "7765a4c3e1": "n/a",
+          "247c93ca92": "• inferred pricing"
+        },
+        "UsageSessionsTable": {
+          "1afc25eb06": "Turns",
+          "0f03975d59": "Events",
+          "21ea00bfa8": "Cache",
+          "e0b988599d": "Total",
+          "01476891c7": "Last active",
+          "c17bed0416": "Project",
+          "f6a2c8d019": "Model",
+          "faf3444859": "Input",
+          "a8b7487ff7": "Output",
+          "cfe2282ffa": "Unknown"
         }
       },
       "sparse": {
@@ -3129,7 +3257,9 @@
           "dd3ff65486": "Browse remote filesystem",
           "36d427bb66": "Add project on SSH host",
           "35831a7312": "Adding...",
-          "lockedDescription": "Enter the path to a Git repository on {{value0}}."
+          "lockedDescription": "Enter the path to a Git repository on {{value0}}.",
+          "lockedDisconnected": "{{value0}} is disconnected.",
+          "93e0221434": "Connect"
         },
         "AddRepoServerStartStep": {
           "ae990c86a0": "Back to add options",
@@ -3486,7 +3616,11 @@
           "376bed88e5": "The connection to the remote host encountered an error.",
           "4afcca1d24": "Reconnect",
           "11552bf786": "SSH Disconnected",
-          "cb5938ae79": "Reconnecting..."
+          "cb5938ae79": "Reconnecting...",
+          "disconnected": "This SSH host is not connected.",
+          "reconnecting": "Reconnecting to the remote host...",
+          "reconnectionFailed": "Reconnection to the remote host failed.",
+          "authFailed": "Authentication to the remote host failed."
         },
         "SshTargetRow": {
           "4677394048": "Connecting…",
@@ -3716,7 +3850,8 @@
                   "fb4fc5380e": "Local project, Git repo, or folder with many repos",
                   "2281fdc8c7": "Browse folder",
                   "sshBrowseTitle": "Open project on SSH host",
-                  "sshBrowseDescription": "Existing Git repository or folder on this SSH host"
+                  "sshBrowseDescription": "Existing Git repository or folder on this SSH host",
+                  "runtimeBrowseDescription": "Existing Git repository or folder on this host"
                 }
               }
             }
@@ -3941,6 +4076,12 @@
           "create": "Create Workspace",
           "sourceProject": "Task Source",
           "chooseSourceProject": "Choose task source"
+        },
+        "ProjectOrderManualDefaultNotice": {
+          "a1f4c2d8e0": "Manual project order is now the default",
+          "822ff300ad": "Dismiss",
+          "b7e3a91c4f": "Drag project headers to reorder, or switch to",
+          "e8c1f4a2b9": "in workspace options."
         }
       },
       "shared": {
@@ -4172,7 +4313,18 @@
           "7d26ccabe8": "Dark",
           "fb0e0b4453": "System",
           "932ff1fbff": "Theme",
-          "0f28e7b30c": "Choose how Orca looks in the app window."
+          "0f28e7b30c": "Choose how Orca looks in the app window.",
+          "leftSidebarAppearance": {
+            "title": "Left Sidebar Appearance",
+            "rowDescription": "Make the left sidebar match your terminal, stay default, or use a tint.",
+            "default": "Default",
+            "matchTerminal": "Match Terminal",
+            "tinted": "Tinted",
+            "tintColor": "Sidebar Tint",
+            "tintColorDescription": "The color mixed into the left sidebar surface.",
+            "tintOpacity": "Tint Strength",
+            "tintOpacityDescription": "Controls how strongly the tint is mixed into the sidebar."
+          }
         },
         "AutoRenameBranchFromWorkSetting": {
           "1626524572": "Nautilus",
@@ -4361,7 +4513,9 @@
           "14444243ba": "Remove `{{value0}}` from PATH?",
           "5d432fe44d": "installed",
           "8a9b784c60": "stale",
-          "d363e5929b": "Checking CLI registration…"
+          "d363e5929b": "Checking CLI registration…",
+          "cliSkillTerminalTitle": "CLI skill setup",
+          "cliSkillTerminalAria": "CLI skill install terminal"
         },
         "CliSkillRuntimeSetup": {
           "04325573f8": "WSL",
@@ -5263,7 +5417,24 @@
           "creatingPendingSetup": "Creating...",
           "createPendingSetup": "Track setup",
           "499a437335": "Identity",
-          "hostSetupCheckingCapability": "Checking host capabilities"
+          "hostSetupCheckingCapability": "Checking host capabilities",
+          "hostAvailability": "Host availability",
+          "hostAvailabilityHelp": "Add this same project on another connected host.",
+          "addToAnotherHost": "Add to another host",
+          "addProjectHost": "Add project to host",
+          "addProjectHostHelp": "Choose where this project should also be available.",
+          "closeHostSetup": "Close",
+          "setupHostLabel": "Host",
+          "browseFolder": "Browse folder",
+          "browseFolderHelp": "Use an existing checkout or folder on this host.",
+          "otherWaysToAdd": "Other ways to add",
+          "cloneFromUrl": "Clone from URL",
+          "cloneFromUrlHelp": "Clone this repository onto the selected host.",
+          "addPlannedHost": "Add host placeholder",
+          "addPlannedHostHelp": "Remember this host and finish adding the project later.",
+          "existingFolder": "Existing folder",
+          "addPlannedHostToHost": "Add {{host}}",
+          "addPlannedHostConfirm": "This only records that the project should be available on this host. You can add the folder or clone later."
         },
         "RepositorySourceControlAiActionRows": {
           "548a6e1281": "Command template",
@@ -5368,7 +5539,29 @@
           "54dee18f5c": "Hide Form",
           "8cf8790697": "Saved servers route this browser through a paired Orca runtime.",
           "f75ce1c7a5": "Local keeps today's desktop behavior. Saved servers route supported client calls through the remote runtime.",
-          "d25f0688b1": "Remove"
+          "d25f0688b1": "Remove",
+          "4b5c6d7e8f": "No capabilities reported",
+          "hostModelCapabilityUnknown": "Host model support: checking server capabilities",
+          "hostModelCapabilitySupported": "Host model support: ready",
+          "hostModelCapabilityMissing": "Host model support: update server for {{value0}}",
+          "hostModelCapabilityProjectSetup": "project setup",
+          "hostModelCapabilityTaskSourceContext": "task source context",
+          "hostModelCapabilityWorkspaceRunContext": "workspace run context",
+          "3f67e8078a": "Use this computer by default. Choose a saved server only when you want supported projects, files, terminals, provider checks, and browser/mobile handoff to run through that server.",
+          "2c85efb3e8": "Selecting a saved server makes this browser use that paired Orca runtime as its default Host.",
+          "serverConnected": "Connected",
+          "serverChecking": "Checking…",
+          "serverDisconnected": "Disconnected",
+          "disconnectedServer": "Disconnected from {{value0}}.",
+          "connectToRemoteServers": "Connect to remote servers",
+          "connectToRemoteServersHelp": "Pair another Orca runtime, then connect or disconnect it here. Use Advanced > Active Server only when you want to change the default host.",
+          "activeServerRowHelp": "Active server for server-routed projects, terminals, and provider checks.",
+          "disconnect": "Disconnect",
+          "connect": "Connect",
+          "advanced": "Advanced",
+          "serverDetails": "Server details",
+          "advertiseThisApp": "Advertise this app as a server",
+          "advertiseThisAppHelp": "Create access links for browsers, mobile clients, or another Orca client to connect back to this running app."
         },
         "RuntimePairingGeneratedUrlRows": {
           "0495f68959": "Copy {{value0}}"
@@ -6254,6 +6447,10 @@
               "locale": "locale",
               "i18n": "i18n",
               "translation": "translation"
+            },
+            "leftSidebarAppearance": {
+              "title": "Left Sidebar Appearance",
+              "description": "Make the left sidebar match your terminal, stay default, or use a tint."
             }
           }
         },
@@ -7555,7 +7752,8 @@
                   "23cb5a0dee": "Install the GitHub CLI to enable pull requests, issues, and checks.",
                   "6f30fc4216": "GitHub CLI status is not available in this runtime yet.",
                   "6b2cfb52b4": "gh",
-                  "b4d900e7f1": "Pull requests, issues, and checks via the"
+                  "b4d900e7f1": "Pull requests, issues, and checks via the",
+                  "account_scope_prefix": "Account scope"
                 }
               }
             }
@@ -7584,7 +7782,8 @@
                 "eae4a9f16b": "Add Linear access to browse and link issues.",
                 "fe9231215b": "Checking Linear access before showing setup actions.",
                 "e1f5e6424c": "{{value0}} workspace{{value1}} connected",
-                "disconnect_all": "Disconnect"
+                "disconnect_all": "Disconnect",
+                "account_scope_prefix": "Account scope"
               }
             }
           }
@@ -7630,6 +7829,44 @@
               }
             }
           }
+        },
+        "ProviderHostScopeControl": {
+          "scope_label": "{{value0}}: {{value1}}",
+          "change_host": "Open Remote Servers"
+        },
+        "computerUseSkillRuntime": {
+          "thisDevice": "This device"
+        },
+        "computerUseSummary": {
+          "checkingTitle": "Checking Computer Use access.",
+          "checkingDescription": "Orca is checking macOS privacy permissions for the Computer Use helper.",
+          "unavailableTitle": "Computer Use is unavailable.",
+          "unavailableDescription": "Computer Use permissions are unavailable because {{value0}}.",
+          "readyTitle": "Computer Use is ready.",
+          "readyDescription": "Agents can inspect and operate app windows when you ask.",
+          "permissionsTitle": "Finish setup to use local apps.",
+          "permissionsRequired": "{{value0}} permission{{value1}} required before agents can operate app windows."
+        },
+        "providerAccountScope": {
+          "remoteServer": "Remote server: {{value0}}",
+          "remoteServerCredentials": "Credentials and account checks for this provider are owned by this remote server. Use Settings > Remote Orca Servers > Advanced to edit another default runtime scope.",
+          "localMac": "Local Mac",
+          "localCredentials": "Credentials and account checks for this provider are owned by this desktop client. Use Settings > Remote Orca Servers > Advanced to edit server-owned credentials.",
+          "remoteServerRateLimit": "{{value0}} API budget is fetched from the CLI on this remote server. Use Settings > Remote Orca Servers > Advanced to view another default runtime budget.",
+          "localRateLimit": "{{value0}} API budget is fetched from the CLI on this desktop client. Use Settings > Remote Orca Servers > Advanced to view server-owned budgets."
+        },
+        "settingOwnership": {
+          "clientDefault": "Client default",
+          "sourceControlAiDefaults": "Recipes, prompts, and hosted-review defaults are shared by this client; model choices and discovery stay scoped to the host where the agent runs.",
+          "projectOnThisHost": "Project on this host",
+          "repositorySourceControlAi": "These overrides apply to this project setup and inherit the client Source Control AI defaults until customized.",
+          "agentLaunchDefaults": "Default agent, command overrides, CLI arguments, and launch environment are client preferences. SSH and remote server launches still validate host availability at run time.",
+          "clientDefaultProjectScopes": "Client default + project scopes",
+          "terminalQuickCommands": "Commands are saved on this client, then scoped globally or to a project setup so they run from the selected terminal context.",
+          "hostOverride": "Host override",
+          "workspaceDirectory": "The client default is inherited until a host needs its own worktree directory.",
+          "providerHost": "Provider host",
+          "providerAccounts": "Credentials and account checks belong to the local client or selected remote server that owns the provider integration."
         }
       },
       "right": {
@@ -8540,7 +8777,10 @@
           "c5292c409d": "Agents can inspect app windows and operate local apps when you ask.",
           "1ecfb490ac": "Computer Use",
           "01426f3a23": "Agents can navigate sites, inspect pages, and work through browser tasks.",
-          "ea85d9e628": "Agent Browser Use"
+          "ea85d9e628": "Agent Browser Use",
+          "linearTicketsTitle": "Linear agent skill",
+          "linearTicketsDescription": "Agents can use linked Linear tasks for richer ticket-aware handoffs.",
+          "linearTicketsSetupSummary": "Recommended for Linear workspaces; does not affect Linear connection setup."
         },
         "FeatureSetupInlineTerminal": {
           "789b59936e": "Press Enter to run the command and confirm npx if asked. You can also set this up later in Settings.",
@@ -8722,6 +8962,10 @@
           "ProjectHostSetupCombobox": {
             "empty": "No hosts are ready for this project.",
             "placeholder": "Choose host"
+          },
+          "ProjectCombobox": {
+            "search": "Search projects...",
+            "empty": "No projects match your search."
           }
         }
       },
@@ -8885,7 +9129,8 @@
                 "3e2c982cfa": "left, resets in",
                 "ea8ad0bae8": "of",
                 "0a891e8935": "REST API",
-                "953f7c6062": "This GitLab host did not return rate-limit headers."
+                "953f7c6062": "This GitLab host did not return rate-limit headers.",
+                "budget_scope_prefix": "Budget scope"
               }
             }
           }
@@ -9065,7 +9310,11 @@
             "3c4adfd821": "fix login race condition",
             "56a0271428": "Isolated workspaces",
             "ef737dcee1": "GitHub & Linear tasks",
-            "ac51c061e2": "codex"
+            "ac51c061e2": "codex",
+            "47f16ecf34": "Ship several things at once. Each workspace keeps its branch, terminal, and agent activity together.",
+            "70aa182266": "Hand off a goal and walk away. A coordinator agent fans out and ships parallel PRs.",
+            "f10c14dd9d": "Skip the tab-switching. Pick from your GitHub or Linear backlog and start a workspace in one click.",
+            "5d6ee181b6": "Open any workspace to return to its terminal, then split panes for tests, logs, and agents."
           },
           "FeatureWallBody": {
             "25ec5356d6": "Setup"
@@ -9138,7 +9387,9 @@
             "6e3f5223c5": "Explorer",
             "ab2901bce6": "Checks",
             "d7f80060ca": "Source Control",
-            "8e715588e4": "Search"
+            "8e715588e4": "Search",
+            "a6c8b9e32f": "Checks passed",
+            "f4d5e1a7b2": "3 checks"
           },
           "ReviewShipAnimatedVisual": {
             "4d99496b8c": "Create PR",
@@ -10232,7 +10483,8 @@
           "de0fedac06": "new_per_run",
           "51a470b966": "ssh",
           "b09b2384fd": "Paused",
-          "eaa02014f8": "Enabled"
+          "eaa02014f8": "Enabled",
+          "29baf8f4c2": "Source"
         },
         "AutomationEditorDialog": {
           "fb1896a5e7": "Cancel",
@@ -10387,7 +10639,9 @@
           "dd0bc7a1ba": "new_per_run",
           "7b2e285552": "SSH connections are unavailable in this client.",
           "d441032f7e": "pause",
-          "5918020edc": "run"
+          "5918020edc": "run",
+          "a21f6c33ad": "Automation source refreshed.",
+          "53f06f0ad5": "Retry source"
         },
         "CreateFromPicker": {
           "f061f49e3f": "Search repo branches...",
@@ -10488,6 +10742,13 @@
               }
             }
           }
+        },
+        "AutomationProjectCombobox": {
+          "search": "Search projects/folders...",
+          "empty": "No projects/folders match your search.",
+          "chooseHost": "Choose automation host",
+          "adding": "Adding project…",
+          "addProject": "Add project"
         }
       },
       "agent": {
@@ -10562,6 +10823,75 @@
             "8388bdea2b": "Connect Jira site"
           }
         }
+      },
+      "link": {
+        "routing": {
+          "preference": {
+            "dialog": {
+              "badge": "Terminal link",
+              "preview": "Preview",
+              "keep": {
+                "title": "Keep terminal links in Orca's browser?",
+                "description": "Or use your system browser by default.",
+                "orca": {
+                  "button": "Keep Orca"
+                }
+              },
+              "title": "Open terminal links in Orca's browser?",
+              "description": "Use Orca's browser for terminal links, or keep your system browser.",
+              "link": {
+                "label": "Link"
+              },
+              "orca": {
+                "note": "Orca can use imported cookies for logged-in sites.",
+                "button": "Open in Orca"
+              },
+              "settings": {
+                "note": "Change this later in Settings → Browser."
+              },
+              "shortcut": {
+                "note": {
+                  "prefix": "When links open in Orca,",
+                  "suffix": "click opens system browser once."
+                }
+              },
+              "system": {
+                "button": "Use system browser"
+              }
+            }
+          }
+        }
+      },
+      "task": {
+        "project": {
+          "source": {
+            "combobox": {
+              "noProjects": "No projects",
+              "allProjects": "All projects",
+              "hostCount": "{{value0}} hosts",
+              "searchProjects": "Search projects...",
+              "noMatches": "No projects match your search.",
+              "chooseSource": "Choose task source"
+            }
+          }
+        }
+      },
+      "taskPageEmptyState": {
+        "noProjectSourcesTitle": "No project sources selected",
+        "noProjectSourcesDescription": "Select at least one project source so Orca knows which host/account to fetch tasks from.",
+        "noMatchingGitHubWorkTitle": "No matching GitHub work",
+        "changeQueryDescription": "Change the query or clear it.",
+        "noGitLabIssuesTitle": "No GitLab issues",
+        "noGitLabIssuesDescription": "No GitLab issues match this filter.",
+        "noGitLabMrsTitle": "No GitLab merge requests",
+        "noGitLabMrsDescription": "No GitLab MRs match this filter.",
+        "noGitLabWorkTitle": "No GitLab work",
+        "noGitLabWorkDescription": "No GitLab work matches this filter."
+      },
+      "taskSourceContextSummary": {
+        "sourceUnavailable": "{{value0}} source unavailable: {{value1}}",
+        "someSourceHostsUnavailable": "Some {{value0}} source hosts unavailable: {{value1}}",
+        "reconnectOrUpdateTitle": "Reconnect or update {{value0}} to load this source."
       }
     },
     "i18n": {

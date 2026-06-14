@@ -106,7 +106,9 @@ export function SshTargetStatusRow({
       <div className="min-w-0 flex-1">
         <div className="truncate text-[12px] font-medium">{label}</div>
         <div className="flex min-w-0 items-center gap-1.5 text-[10px] text-muted-foreground">
-          <span>SSH Host</span>
+          <span>
+            {translate('auto.components.status.bar.SshTargetStatusRow.sshHost', 'SSH Host')}
+          </span>
           <span aria-hidden="true">·</span>
           <span>{STATUS_LABELS[status]}</span>
           {visibleSyncStatusLabel ? (
