@@ -95,6 +95,30 @@ export const getAccountsCodexSearchEntries = createLocalizedCatalog(() => [
     ]
   }
 ])
+export const getAccountsZaiSearchEntries = createLocalizedCatalog(() => [
+  {
+    title: translate('auto.components.settings.accounts.search.zaiTitle', 'Z.AI API Key'),
+    description: translate(
+      'auto.components.settings.accounts.search.zaiDescription',
+      'API key setup and live quota tracking for Z.AI.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.accounts.search.zaiKeyword1', 'z.ai'),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.zaiKeyword2', 'zai'),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.zaiKeyword3', 'zcode'),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.zaiKeyword4', 'glm'),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.zaiKeyword5', 'api key'),
+      ...translateSearchKeyword(
+        'auto.components.settings.accounts.search.zaiKeyword6',
+        'anthropic'
+      ),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.zaiKeyword7', 'usage'),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.zaiKeyword8', 'quota'),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.zaiKeyword9', 'weekly'),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.zaiKeyword10', 'monthly')
+    ]
+  }
+])
 
 export const getAccountsGeminiSearchEntries = createLocalizedCatalog(() => [
   {
@@ -175,6 +199,7 @@ export const getAccountsPaneSearchEntries = createLocalizedCatalog((): SettingsS
   ...getAccountsLocationSearchEntries(),
   ...getAccountsClaudeSearchEntries(),
   ...getAccountsCodexSearchEntries(),
+  ...getAccountsZaiSearchEntries(),
   ...getAccountsGeminiSearchEntries(),
   ...getAccountsOpencodeSearchEntries()
 ])

@@ -162,6 +162,33 @@ export const getStatusBarToggles = createLocalizedCatalog(
       )
     },
     {
+      id: 'zai',
+      title: translate('auto.components.settings.appearance.search.a5336dd0d1', 'Z.AI Usage'),
+      description: translate(
+        'auto.components.settings.appearance.search.2ffd3d3343',
+        'Show Z.AI subscription usage in the status bar.'
+      ),
+      keywords: [
+        ...translateSearchKeyword(
+          'auto.components.settings.appearance.search.896eb53fd4',
+          'status bar'
+        ),
+        ...translateSearchKeyword('auto.components.settings.appearance.search.437956b849', 'z.ai'),
+        ...translateSearchKeyword('auto.components.settings.appearance.search.72a23a4b5f', 'zai'),
+        ...translateSearchKeyword('auto.components.settings.appearance.search.40c3db8c35', 'glm'),
+        ...translateSearchKeyword(
+          'auto.components.settings.appearance.search.dea0a9a665',
+          'anthropic'
+        ),
+        ...translateSearchKeyword('auto.components.settings.appearance.search.00a028f25f', 'usage'),
+        ...translateSearchKeyword('auto.components.settings.appearance.search.0cd1146ff9', 'quota')
+      ],
+      toggleDescription: translate(
+        'settings.appearance.statusBar.zaiToggleDescription',
+        'Show Z.AI subscription usage in the status bar.'
+      )
+    },
+    {
       id: 'ssh',
       title: translate('auto.components.settings.appearance.search.57fb424c56', 'Remote Hosts'),
       description: translate(

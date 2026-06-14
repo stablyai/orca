@@ -20,6 +20,7 @@ export const createRateLimitSlice: StateCreator<AppState, [], [], RateLimitSlice
     gemini: null,
     opencodeGo: null,
     kimi: null,
+    zai: null,
     claudeTarget: { runtime: 'host', wslDistro: null },
     codexTarget: { runtime: 'host', wslDistro: null },
     inactiveClaudeAccounts: [],

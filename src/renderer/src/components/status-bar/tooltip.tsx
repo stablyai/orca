@@ -1,6 +1,6 @@
 import type { ProviderRateLimits, RateLimitWindow } from '../../../../shared/rate-limit-types'
 import { AgentIcon } from '@/lib/agent-catalog'
-import { ClaudeIcon, GeminiIcon, OpenAIIcon, OpenCodeGoIcon } from './icons'
+import { ClaudeIcon, GeminiIcon, OpenAIIcon, OpenCodeGoIcon, ZaiIcon } from './icons'
 import { translate } from '@/i18n/i18n'
 
 // ---------------------------------------------------------------------------
@@ -60,6 +60,9 @@ export function ProviderIcon({ provider }: { provider: string }): React.JSX.Elem
   if (provider === 'kimi') {
     return <AgentIcon agent="kimi" size={13} />
   }
+  if (provider === 'zai') {
+    return <ZaiIcon size={13} />
+  }
   return <ClaudeIcon size={13} />
 }
 
@@ -78,6 +81,9 @@ export function getProviderDisplayName(provider: ProviderRateLimits['provider'])
   }
   if (provider === 'kimi') {
     return 'Kimi'
+  }
+  if (provider === 'zai') {
+    return 'Z.AI'
   }
   return provider
 }

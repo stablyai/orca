@@ -19,6 +19,7 @@ import {
 import { fetchGeminiRateLimits } from './gemini-usage-fetcher'
 import { fetchKimiRateLimits } from './kimi-fetcher'
 import { fetchOpenCodeGoRateLimits } from './opencode-go-usage-fetcher'
+import { fetchZaiRateLimits } from './zai-fetcher'
 import {
   normalizeCodexAccountSelectionTarget,
   type CodexAccountSelectionTarget,
@@ -34,6 +35,7 @@ type CodexHomePathResolver = (target?: CodexAccountSelectionTarget) => string | 
 type ClaudeAuthPreparationResolver = (
   target?: ClaudeAccountSelectionTarget
 ) => Promise<ClaudeRuntimeAuthPreparation>
+type ZaiApiKeyResolver = () => string | null
 
 // Why: Claude's subscription usage endpoint has a tight request budget. Quota
 // state is informational, so prefer keeping a recent snapshot over polling it
@@ -53,6 +55,7 @@ type InternalRateLimitState = {
   gemini: ProviderRateLimits | null
   opencodeGo: ProviderRateLimits | null
   kimi: ProviderRateLimits | null
+  zai: ProviderRateLimits | null
 }
 
 function normalizePollingInterval(ms: number): number {
@@ -68,7 +71,8 @@ export class RateLimitService {
     codex: null,
     gemini: null,
     opencodeGo: null,
-    kimi: null
+    kimi: null,
+    zai: null
   }
   private pollInterval: number = DEFAULT_POLL_MS
   private timer: ReturnType<typeof setInterval> | null = null
@@ -82,6 +86,7 @@ export class RateLimitService {
   private fetchIdleResolvers: (() => void)[] = []
   private codexFetchGeneration = 0
   private claudeFetchGeneration = 0
+  private zaiFetchGeneration = 0
   private opencodeFetchGeneration = 0
   private lastOpencodeConfigHash = ''
   private codexHomePathResolver: CodexHomePathResolver | null = null
@@ -103,6 +108,7 @@ export class RateLimitService {
     | null = null
   private inactiveClaudeAccountsResolver: (() => InactiveClaudeAccountInfo[]) | null = null
   private inactiveCodexAccountsResolver: (() => InactiveCodexAccountInfo[]) | null = null
+  private zaiApiKeyResolver: ZaiApiKeyResolver | null = null
   private inactiveClaudeCache = new Map<string, ProviderRateLimits>()
   private inactiveCodexCache = new Map<string, ProviderRateLimits>()
   private inactiveClaudeFetching = new Set<string>()
@@ -146,6 +152,9 @@ export class RateLimitService {
     }
   ): void {
     this.settingsResolver = resolver
+  }
+  setZaiApiKeyResolver(resolver: ZaiApiKeyResolver): void {
+    this.zaiApiKeyResolver = resolver
   }
 
   setInactiveClaudeAccountsResolver(resolver: () => InactiveClaudeAccountInfo[]): void {
@@ -202,6 +211,10 @@ export class RateLimitService {
     this.detachWindowListeners = null
     this.mainWindow = null
   }
+  async refresh(): Promise<RateLimitState> {
+    await this.fetchAll({ force: true })
+    return this.getState()
+  }
 
   getState(): RateLimitState {
     this.pruneInactiveClaudeState()
@@ -219,15 +232,6 @@ export class RateLimitService {
         this.inactiveCodexFetching
       )
     }
-  }
-
-  async refresh(): Promise<RateLimitState> {
-    // Why: the explicit refresh button is a user-directed recovery action.
-    // Debouncing it behind the background poll throttle makes the UI feel
-    // broken after wake/focus transitions because the click can no-op even
-    // though the user is asking for a fresh read right now.
-    await this.fetchAll({ force: true })
-    return this.getState()
   }
 
   async refreshForCodexAccountChange(
@@ -679,9 +683,9 @@ export class RateLimitService {
     // Why: explicit refresh callers need to await the queued follow-up cycle
     // when a poll is already in flight, otherwise the UI stops spinning before
     // the user-requested refresh actually runs.
-    return new Promise((resolve) => {
-      this.fetchIdleResolvers.push(resolve)
-    })
+    const { promise, resolve } = Promise.withResolvers<void>()
+    this.fetchIdleResolvers.push(resolve)
+    return promise
   }
 
   private resolveFetchIdleWaiters(): void {
@@ -721,6 +725,9 @@ export class RateLimitService {
     const targetKey = target.runtime === 'wsl' ? `wsl:${target.wslDistro ?? '__default__'}` : 'host'
     return codexHomePath ? `${targetKey}:managed:${codexHomePath}` : `${targetKey}:system`
   }
+  private getZaiProvenance(apiKey: string | null): string {
+    return apiKey ?? '__none__'
+  }
 
   private getMissingWslCodexHomeResult(
     target: NormalizedCodexAccountSelectionTarget
@@ -746,7 +753,7 @@ export class RateLimitService {
 
   private withFetchingStatus(
     current: ProviderRateLimits | null,
-    provider: 'claude' | 'codex' | 'gemini' | 'opencode-go' | 'kimi'
+    provider: 'claude' | 'codex' | 'gemini' | 'opencode-go' | 'kimi' | 'zai'
   ): ProviderRateLimits {
     if (!current) {
       return {
@@ -770,6 +777,9 @@ export class RateLimitService {
     const codexHomePath = this.codexHomePathResolver?.(codexTarget) ?? null
     const codexProvenance = this.getCodexProvenance(codexTarget, codexHomePath)
     const codexGeneration = this.codexFetchGeneration
+    const zaiApiKey = this.zaiApiKeyResolver?.() ?? null
+    const zaiProvenance = this.getZaiProvenance(zaiApiKey)
+    const zaiGeneration = this.zaiFetchGeneration
     const previousState = this.state
     const settings = this.settingsResolver?.()
     const cookie = settings?.opencodeSessionCookie ?? ''
@@ -797,13 +807,14 @@ export class RateLimitService {
       opencodeGo: opencodeConfigChanged
         ? this.withFetchingStatus(null, 'opencode-go')
         : this.withFetchingStatus(previousState.opencodeGo, 'opencode-go'),
-      kimi: this.withFetchingStatus(previousState.kimi, 'kimi')
+      kimi: this.withFetchingStatus(previousState.kimi, 'kimi'),
+      zai: this.withFetchingStatus(previousState.zai, 'zai')
     })
 
     const missingWslCodexHome = codexHomePath
       ? null
       : this.getMissingWslCodexHomeResult(codexTarget)
-    const [claudeResult, codexResult, geminiResult, opencodeGoResult, kimiResult] =
+    const [claudeResult, codexResult, geminiResult, opencodeGoResult, kimiResult, zaiResult] =
       await Promise.allSettled([
         fetchClaudeRateLimits({
           authPreparation: claudeAuthPreparation,
@@ -818,7 +829,8 @@ export class RateLimitService {
           }),
         fetchGeminiRateLimits(geminiCliOAuthEnabled),
         fetchOpenCodeGoRateLimits(cookie, workspaceIdOverride || undefined),
-        fetchKimiRateLimits()
+        fetchKimiRateLimits(),
+        fetchZaiRateLimits(zaiApiKey)
       ])
 
     const claude =
@@ -887,11 +899,25 @@ export class RateLimitService {
             error: kimiResult.reason instanceof Error ? kimiResult.reason.message : 'Unknown error',
             status: 'error'
           } satisfies ProviderRateLimits)
+    const zai =
+      zaiResult.status === 'fulfilled'
+        ? zaiResult.value
+        : ({
+            provider: 'zai',
+            session: null,
+            weekly: null,
+            monthly: null,
+            updatedAt: Date.now(),
+            error: zaiResult.reason instanceof Error ? zaiResult.reason.message : 'Unknown error',
+            status: 'error'
+          } satisfies ProviderRateLimits)
 
     const latestCodexHomePath = this.codexHomePathResolver?.(codexTarget) ?? null
     const latestClaudeAuthPreparation = await this.claudeAuthPreparationResolver?.(claudeTarget)
     const latestClaudeProvenance = latestClaudeAuthPreparation?.provenance ?? 'system'
     const latestCodexProvenance = this.getCodexProvenance(codexTarget, latestCodexHomePath)
+    const latestZaiApiKey = this.zaiApiKeyResolver?.() ?? null
+    const latestZaiProvenance = this.getZaiProvenance(latestZaiApiKey)
     const shouldApplyCodex =
       codexGeneration === this.codexFetchGeneration && codexProvenance === latestCodexProvenance
     const shouldApplyClaude =
@@ -899,6 +925,8 @@ export class RateLimitService {
       claudeProvenance === latestClaudeProvenance &&
       this.isSameClaudeTarget(claudeTarget, this.claudeFetchTarget)
     const shouldApplyOpencode = opencodeGeneration === this.opencodeFetchGeneration
+    const shouldApplyZai =
+      zaiGeneration === this.zaiFetchGeneration && zaiProvenance === latestZaiProvenance
 
     // Why: account switches can race in-flight Codex fetches. Only apply a
     // Codex result if both the selected-account provenance and the request
@@ -918,7 +946,8 @@ export class RateLimitService {
           ? opencodeGo
           : this.applyStalePolicy(opencodeGo, previousState.opencodeGo)
         : this.state.opencodeGo,
-      kimi: this.applyStalePolicy(kimi, previousState.kimi)
+      kimi: this.applyStalePolicy(kimi, previousState.kimi),
+      zai: shouldApplyZai ? this.applyStalePolicy(zai, previousState.zai) : this.state.zai
     })
 
     this.lastFetchAt = Date.now()

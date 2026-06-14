@@ -1628,6 +1628,11 @@ const api = {
       wslDistro?: string | null
     }): Promise<unknown> => ipcRenderer.invoke('claudeAccounts:select', args)
   },
+  zaiApiKey: {
+    getStatus: (): Promise<unknown> => ipcRenderer.invoke('zaiApiKey:getStatus'),
+    save: (apiKey: string): Promise<unknown> => ipcRenderer.invoke('zaiApiKey:save', apiKey),
+    clear: (): Promise<unknown> => ipcRenderer.invoke('zaiApiKey:clear')
+  },
 
   cli: {
     getInstallStatus: (): Promise<CliInstallStatus> => ipcRenderer.invoke('cli:getInstallStatus'),

@@ -27,7 +27,8 @@
         "kimiToggleDescription": "Show Kimi subscription usage for the active workspace.",
         "sshToggleDescription": "Show configured SSH and remote Orca hosts when any are available.",
         "resourceUsageToggleDescription": "Show the Resource Manager. Click it for CPU, memory, sessions, daemon controls, and workspace disk scans.",
-        "portsToggleDescription": "Show live workspace ports. Click it for workspace-scoped ports and external listeners."
+        "portsToggleDescription": "Show live workspace ports. Click it for workspace-scoped ports and external listeners.",
+        "zaiToggleDescription": "Show Z.AI subscription usage in the status bar."
       }
     }
   },
@@ -2673,7 +2674,13 @@
             "cd9d7b40ff": "Restart {{value0}} Sessions",
             "6cd6650b4c": "Restart Session",
             "1446d0d8a0": "{{value0}} Codex sessions are still on the old account.",
-            "605901a495": "1 Codex session is still on the old account"
+            "605901a495": "1 Codex session is still on the old account",
+            "9957b6dc3d": "Open Z.AI details and account switcher",
+            "251378b936": "Z.AI Account",
+            "4a06bf13f4": "No active Z.AI account",
+            "0ec6341563": "No Z.AI accounts",
+            "89fe3f951b": "Z.AI Usage",
+            "zaiDetails": "Open Z.AI usage details"
           },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "Connect an account",
@@ -4209,7 +4216,33 @@
           "75ca9b718e": "Codex reported that the active account needs a fresh sign-in. Re-authenticate it before starting new Codex sessions.",
           "b11078a9c2": "wsl",
           "350b2a1aa7": "Use your current",
-          "e05d0ff737": "Use your current {{value0}} Claude login."
+          "e05d0ff737": "Use your current {{value0}} Claude login.",
+          "zaiNoActive": "No active Z.AI account",
+          "zaiLoadFailed": "Could not load Z.AI accounts.",
+          "zaiUpdateFailed": "Z.AI account update failed.",
+          "zaiTitle": "Z.AI",
+          "zaiDescription": "Connect a Z.AI account for Anthropic-compatible usage at https://api.z.ai/api/anthropic and live quota tracking.",
+          "zaiAccountsTitle": "Z.AI Accounts",
+          "zaiAccountsDescription": "OAuth sign-in and live quota tracking for Z.AI.",
+          "zaiEndpointCopy": "Anthropic endpoint: https://api.z.ai/api/anthropic",
+          "zaiNoActiveSubtext": "Hide Z.AI usage until you select or add an account.",
+          "zaiEmpty": "No Z.AI accounts connected. Add an account to show Z.AI usage.",
+          "zaiAccountSubtext": "Anthropic endpoint · {{value0}}",
+          "zaiRemoveTitle": "Remove Z.AI Account?",
+          "zaiRemoveBody": "Orca will delete the saved Z.AI token for this account. If it is active, Z.AI usage is hidden until you select or add another account.",
+          "zaiApiKeyLoadFailed": "Could not load Z.AI API key status.",
+          "zaiApiKeySaveFailed": "Z.AI API key update failed.",
+          "zaiApiKeyClearFailed": "Z.AI API key update failed.",
+          "zaiApiKeyTitle": "Z.AI API Key",
+          "zaiApiKeyDescription": "Save a Z.AI API key for Anthropic-compatible access at https://api.z.ai/api/anthropic and usage fetching.",
+          "zaiApiKeyLabel": "API Key",
+          "zaiApiKeyEndpointCopy": "Anthropic endpoint: https://api.z.ai/api/anthropic",
+          "zaiApiKeyPlaceholder": "sk-...",
+          "zaiApiKeySave": "Save",
+          "zaiApiKeyClear": "Clear",
+          "zaiApiKeyConfigured": "Configured",
+          "zaiApiKeyNote": "Stored in ~/.orca using Electron encrypted storage when available.",
+          "92731d3ff7": "Claude terminal restart recommended"
         },
         "AdvancedPane": {
           "40b29e0bf3": "Restart",
@@ -5561,7 +5594,8 @@
           "advanced": "Advanced",
           "serverDetails": "Server details",
           "advertiseThisApp": "Advertise this app as a server",
-          "advertiseThisAppHelp": "Create access links for browsers, mobile clients, or another Orca client to connect back to this running app."
+          "advertiseThisAppHelp": "Create access links for browsers, mobile clients, or another Orca client to connect back to this running app.",
+          "runtimeReachable": "{{value0}} is reachable."
         },
         "RuntimePairingGeneratedUrlRows": {
           "0495f68959": "Copy {{value0}}"
@@ -6259,7 +6293,9 @@
             "bdbd1e668e": "windows",
             "593720c17f": "location",
             "b84a5b0c8a": "Choose whether provider accounts are inspected and added on this device or in WSL.",
-            "d09fb5ca92": "Account Location"
+            "d09fb5ca92": "Account Location",
+            "zaiTitle": "Z.AI Accounts",
+            "zaiDescription": "OAuth sign-in and live quota tracking for Z.AI."
           }
         },
         "advanced": {
@@ -6451,7 +6487,9 @@
             "leftSidebarAppearance": {
               "title": "Left Sidebar Appearance",
               "description": "Make the left sidebar match your terminal, stay default, or use a tint."
-            }
+            },
+            "a5336dd0d1": "Z.AI Usage",
+            "2ffd3d3343": "Show Z.AI subscription usage in the status bar."
           }
         },
         "auto": {

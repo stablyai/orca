@@ -254,6 +254,7 @@ function migrateStatusBarItems(items: readonly string[] | undefined): StatusBarI
 
 const DEFAULT_ON_PORTS_STATUS_BAR_ITEM: StatusBarItem = 'ports'
 const DEFAULT_ON_KIMI_STATUS_BAR_ITEM: StatusBarItem = 'kimi'
+const DEFAULT_ON_ZAI_STATUS_BAR_ITEM: StatusBarItem = 'zai'
 
 function normalizeHydratedVisibleWorkspaceHostIds(ui: PersistedUIState): VisibleWorkspaceHostIds {
   const visibleHostIds = normalizeVisibleExecutionHostIds(ui.visibleWorkspaceHostIds)
@@ -2100,19 +2101,26 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         ui._portsStatusBarDefaultAdded || migratedStatusBarItems.includes('ports')
           ? migratedStatusBarItems
           : [...migratedStatusBarItems, DEFAULT_ON_PORTS_STATUS_BAR_ITEM]
-      const statusBarItems =
+      const statusBarItemsWithKimi =
         ui._kimiStatusBarDefaultAdded || statusBarItemsWithPorts.includes('kimi')
           ? statusBarItemsWithPorts
           : [...statusBarItemsWithPorts, DEFAULT_ON_KIMI_STATUS_BAR_ITEM]
+      const statusBarItems =
+        ui._zaiStatusBarDefaultAdded || statusBarItemsWithKimi.includes('zai')
+          ? statusBarItemsWithKimi
+          : [...statusBarItemsWithKimi, DEFAULT_ON_ZAI_STATUS_BAR_ITEM]
       if (
-        (!ui._portsStatusBarDefaultAdded || !ui._kimiStatusBarDefaultAdded) &&
+        (!ui._portsStatusBarDefaultAdded ||
+          !ui._kimiStatusBarDefaultAdded ||
+          !ui._zaiStatusBarDefaultAdded) &&
         typeof window !== 'undefined'
       ) {
         window.api.ui
           .set({
             statusBarItems,
             _portsStatusBarDefaultAdded: true,
-            _kimiStatusBarDefaultAdded: true
+            _kimiStatusBarDefaultAdded: true,
+            _zaiStatusBarDefaultAdded: true
           })
           .catch(console.error)
       }

@@ -25,10 +25,10 @@ const AccountsUnsubscribeParams = z.object({
 })
 
 // Why: bridges the desktop ClaudeAccountService / CodexAccountService /
-// RateLimitService into the mobile WebSocket RPC. Read + switch + remove
-// only — interactive add/re-auth flows spawn `claude login` / `codex login`
-// PTYs that need a desktop browser, so they intentionally remain
-// desktop-only. See plan in spec doc for issue #1438.
+// RateLimitService into the mobile WebSocket RPC. Read + switch + remove only
+// — interactive add/re-auth flows spawn CLI PTYs or desktop UI, so they
+// intentionally remain desktop-only. See plan in spec doc for issue #1438.
+// See plan in spec doc for issue #1438.
 export const ACCOUNT_METHODS: readonly RpcAnyMethod[] = [
   defineMethod({
     name: 'accounts.list',

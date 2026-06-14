@@ -88,6 +88,7 @@ import {
 import { normalizeClaudeRuntimeSelection } from './claude-accounts/runtime-selection'
 import { codexHookService } from './codex/hook-service'
 import { ClaudeAccountService } from './claude-accounts/service'
+import { readZaiApiKey } from './zai-api-key-store'
 import { ClaudeRuntimeAuthService } from './claude-accounts/runtime-auth-service'
 import { StarNagService } from './star-nag/service'
 import { agentHookServer } from './agent-hooks/server'
@@ -1268,6 +1269,7 @@ app.whenReady().then(async () => {
   rateLimits.setClaudeAuthPreparationResolver((target) =>
     claudeRuntimeAuth!.prepareForRateLimitFetch(target)
   )
+  rateLimits.setZaiApiKeyResolver(() => readZaiApiKey())
   rateLimits.setSettingsResolver(() => store!.getSettings())
   keybindings = new KeybindingService({
     homePath: app.getPath('home'),

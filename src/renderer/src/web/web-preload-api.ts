@@ -588,6 +588,7 @@ function createWebPreloadApi(): Partial<PreloadApi> {
     rateLimits: createRateLimitsApi(),
     codexAccounts: createAccountsApi(),
     claudeAccounts: createAccountsApi(),
+    zaiApiKey: createZaiApiKeyApi(),
     cli: createCliApi(),
     agentHooks: createAgentHooksApi(),
     developerPermissions: createDeveloperPermissionsApi(),
@@ -2213,6 +2214,7 @@ function createRateLimitsApi(): NonNullable<Partial<PreloadApi>['rateLimits']> {
     gemini: null,
     opencodeGo: null,
     kimi: null,
+    zai: null,
     claudeTarget: { runtime: 'host', wslDistro: null },
     codexTarget: { runtime: 'host', wslDistro: null },
     inactiveClaudeAccounts: [],
@@ -2243,6 +2245,13 @@ function createAccountsApi(): never {
     remove: () => Promise.resolve(empty),
     select: () => Promise.resolve(empty)
   } as never
+}
+function createZaiApiKeyApi(): NonNullable<Partial<PreloadApi>['zaiApiKey']> {
+  return {
+    getStatus: () => Promise.resolve({ configured: false }),
+    save: () => Promise.resolve({ configured: false }),
+    clear: () => Promise.resolve({ configured: false })
+  }
 }
 
 function createUpdaterApi(): NonNullable<Partial<PreloadApi>['updater']> {

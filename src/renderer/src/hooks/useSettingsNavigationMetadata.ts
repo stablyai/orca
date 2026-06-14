@@ -127,7 +127,7 @@ export function buildSettingsNavigationMetadata({
       ),
       description: translate(
         'auto.hooks.useSettingsNavigationMetadata.b1c2f8b0ac',
-        'Optional account switching for Claude, Codex, Gemini, and OpenCode Go.'
+        'Optional account switching and usage tracking for Claude, Codex, Gemini, OpenCode Go, and Z.AI.'
       ),
       icon: UserCog,
       searchEntries: getAccountsPaneSearchEntries(),

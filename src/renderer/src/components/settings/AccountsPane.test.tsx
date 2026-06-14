@@ -20,6 +20,15 @@ function renderPane(
   )
 }
 
+function extractSection(markup: string, sectionId: string): string {
+  const start = markup.indexOf(`id="${sectionId}"`)
+  if (start < 0) {
+    return ''
+  }
+  const nextSection = markup.indexOf('<section', start + 1)
+  return markup.slice(start, nextSection < 0 ? undefined : nextSection)
+}
+
 describe('AccountsPane', () => {
   beforeEach(async () => {
     await i18n.changeLanguage('en')
@@ -69,5 +78,38 @@ describe('AccountsPane', () => {
       'Mostrando cuentas para este dispositivo. Las nuevas cuentas se agregan allí.'
     )
     expect(markup).not.toContain('This device')
+  })
+
+  it('renders the Z.AI API-key section with save and clear affordances', () => {
+    useAppStore.setState({ settingsSearchQuery: 'zai' })
+
+    const markup = renderPane(getDefaultSettings('/tmp'))
+    const zaiSection = extractSection(markup, 'accounts-zai')
+
+    expect(zaiSection).toContain('API Key')
+    expect(zaiSection).toContain('https://api.z.ai/api/anthropic')
+    expect(zaiSection).toContain('Save')
+    expect(zaiSection).toContain('Clear')
+  })
+
+  it('does not interpolate WSL runtime copy into the Z.AI section', () => {
+    useAppStore.setState({ settingsSearchQuery: 'zai' })
+
+    const markup = renderPane(getDefaultSettings('/tmp'))
+    const zaiSection = extractSection(markup, 'accounts-zai')
+
+    expect(zaiSection).not.toContain(
+      'Showing accounts for This device. New accounts are added there.'
+    )
+    expect(zaiSection).not.toContain('Use your current This device')
+  })
+
+  it('shows the Z.AI section when searching for zai', () => {
+    useAppStore.setState({ settingsSearchQuery: 'zai' })
+
+    const markup = renderPane(getDefaultSettings('/tmp'))
+
+    expect(markup).toContain('id="accounts-zai"')
+    expect(markup).toContain('placeholder="sk-..."')
   })
 })

@@ -1790,6 +1790,11 @@ export type PreloadApi = {
       wslDistro?: string | null
     }) => Promise<ClaudeRateLimitAccountsState>
   }
+  zaiApiKey: {
+    getStatus: () => Promise<{ configured: boolean }>
+    save: (apiKey: string) => Promise<{ configured: boolean }>
+    clear: () => Promise<{ configured: boolean }>
+  }
   cli: {
     getInstallStatus: () => Promise<CliInstallStatus>
     install: () => Promise<CliInstallStatus>
