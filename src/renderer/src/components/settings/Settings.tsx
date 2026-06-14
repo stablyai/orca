@@ -53,6 +53,7 @@ import { ActiveSettingsSectionProvider, SettingsSection } from './SettingsSectio
 import { matchesSettingsSearch } from './settings-search'
 import { cn } from '@/lib/utils'
 import { isIntentionalAppRestartInProgress } from '@/lib/updater-beforeunload'
+import { registerWindowCloseGuard } from '../window-close-request-coordinator'
 import { checkRuntimeHooks } from '@/runtime/runtime-hooks-client'
 import {
   getWindowsTerminalCapabilityOwnerKey,
@@ -499,19 +500,19 @@ function Settings(): React.JSX.Element {
     return () => document.removeEventListener('keydown', handleKeyDown)
   }, [activeSectionId, closeSettingsPageWithPromptGuard])
 
+  // Why: route window close / quit through the same discard dialog as in-app
+  // navigation. A raw beforeunload preventDefault only silently vetoes the close
+  // (no UI), which on the no-workspace Settings page reads as an unquittable
+  // window. The guard returns false to cancel the close when the user keeps
+  // editing, true (after discarding, or when clean) to let it proceed.
   useEffect(() => {
-    const handleBeforeUnload = (event: BeforeUnloadEvent): void => {
+    return registerWindowCloseGuard(() => {
       if (isIntentionalAppRestartInProgress()) {
-        return
+        return true
       }
-      if (!hasUnsavedSourceControlAiPromptChanges) {
-        return
-      }
-      event.preventDefault()
-    }
-    window.addEventListener('beforeunload', handleBeforeUnload)
-    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
-  }, [hasUnsavedSourceControlAiPromptChanges])
+      return confirmDiscardSourceControlAiPromptChanges()
+    })
+  }, [confirmDiscardSourceControlAiPromptChanges])
 
   useEffect(() => {
     const handleFindShortcut = (event: KeyboardEvent): void => {
