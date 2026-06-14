@@ -2737,9 +2737,11 @@ describe('useIpcEvents CLI-created worktree activation', () => {
         subscribe: vi.fn(() => () => {}),
         getState: () => ({
           fetchRepos: vi.fn(),
+          fetchRuntimeEnvironmentRepos: vi.fn(),
           fetchProjectGroups: vi.fn(),
           fetchWorktrees,
           fetchWorktreeLineage,
+          repos: [{ id: 'repo-1' }],
           detectedWorktreesByRepo: {
             'repo-1': {
               repoId: 'repo-1',
