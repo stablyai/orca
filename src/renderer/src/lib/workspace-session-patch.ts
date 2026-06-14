@@ -117,6 +117,7 @@ export function buildWorkspaceSessionPatch(
     hasAnyChangedField(changed, [
       'activeGroupIdByWorktree',
       'groupsByWorktree',
+      'tabFolderGroupsByWorktree',
       'layoutByWorktree',
       'unifiedTabsByWorktree'
     ] as const)

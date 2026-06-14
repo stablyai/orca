@@ -24,6 +24,7 @@ describe('SESSION_RELEVANT_FIELDS', () => {
     browserUrlHistory: true,
     unifiedTabsByWorktree: true,
     groupsByWorktree: true,
+    tabFolderGroupsByWorktree: true,
     layoutByWorktree: true,
     activeGroupIdByWorktree: true,
     sshConnectionStates: true,

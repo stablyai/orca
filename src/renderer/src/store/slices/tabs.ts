@@ -7,6 +7,7 @@ import type { AppState } from '../types'
 import type {
   Tab,
   TabContentType,
+  TabFolderGroup,
   TabGroup,
   TabGroupLayoutNode,
   WorkspaceSessionState,
@@ -25,6 +26,13 @@ import {
   sanitizeRecentTabIds,
   updateGroup
 } from './tab-group-state'
+import {
+  clearMissingFolderAssignments,
+  DEFAULT_TAB_FOLDER_GROUP_COLOR,
+  findFolderGroupAndWorktree,
+  sanitizeFolderGroupsForWorktree,
+  updateFolderGroup
+} from './tab-folder-group-state'
 import { buildHydratedTabState, pruneTabGroupLayoutForGroups } from './tabs-hydration'
 import { buildOrphanTerminalCleanupPatch, getOrphanTerminalIds } from './terminal-orphan-helpers'
 import { createBrowserUuid } from '@/lib/browser-uuid'
@@ -39,6 +47,7 @@ export type TabsSlice = {
   // keyboard shortcut (tab.rename) sets this; the tab clears it on consume.
   renamingTabId: string | null
   groupsByWorktree: Record<string, TabGroup[]>
+  tabFolderGroupsByWorktree: Record<string, TabFolderGroup[]>
   activeGroupIdByWorktree: Record<string, string>
   layoutByWorktree: Record<string, TabGroupLayoutNode>
   createUnifiedTab: (
@@ -113,6 +122,26 @@ export type TabsSlice = {
     opts?: { recordInteraction?: boolean }
   ) => void
   setUnifiedTabColor: (tabId: string, color: string | null) => void
+  createTabFolderGroup: (
+    tabIds: string[],
+    init?: Partial<Pick<TabFolderGroup, 'color' | 'collapsed' | 'name'>>
+  ) => TabFolderGroup | null
+  addTabsToFolderGroup: (
+    folderGroupId: string,
+    tabIds: string[],
+    opts?: { index?: number }
+  ) => boolean
+  moveTabOutOfFolderGroup: (tabId: string, opts?: { index?: number }) => boolean
+  reorderTabFolderGroups: (
+    worktreeId: string,
+    splitGroupId: string,
+    folderGroupIds: string[]
+  ) => void
+  setTabFolderGroupName: (folderGroupId: string, name: string) => void
+  setTabFolderGroupColor: (folderGroupId: string, color: string) => void
+  setTabFolderGroupCollapsed: (folderGroupId: string, collapsed: boolean) => void
+  ungroupTabFolderGroup: (folderGroupId: string) => void
+  closeTabsInFolderGroup: (folderGroupId: string) => string[]
   setRenamingTabId: (tabId: string | null) => void
   pinTab: (tabId: string) => void
   unpinTab: (tabId: string) => void
@@ -487,6 +516,7 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
   unifiedTabsByWorktree: {},
   renamingTabId: null,
   groupsByWorktree: {},
+  tabFolderGroupsByWorktree: {},
   activeGroupIdByWorktree: {},
   layoutByWorktree: {},
 
@@ -794,6 +824,10 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
       const nextTabs = (current.unifiedTabsByWorktree[worktreeId] ?? []).filter(
         (item) => item.id !== tabId
       )
+      const nextFolderGroups = sanitizeFolderGroupsForWorktree(
+        nextTabs,
+        current.tabFolderGroupsByWorktree[worktreeId] ?? []
+      )
       // Why: closeUnifiedTab can be invoked without going through terminals.closeTab
       // (e.g., close-to-right / close-others gestures via closeOtherTabs and
       // closeTabsToRight). The unread-flag map is keyed by terminal entityId and
@@ -841,6 +875,10 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
         },
         layoutByWorktree: nextLayoutByWorktree,
         activeGroupIdByWorktree: nextActiveGroupIdByWorktree,
+        tabFolderGroupsByWorktree: {
+          ...current.tabFolderGroupsByWorktree,
+          [worktreeId]: nextFolderGroups
+        },
         // Why: skip writing unreadTerminalTabs when the reference is unchanged —
         // avoids a no-op top-level state allocation that would force re-evaluation
         // of full-state selectors. Mirrors focusGroup / reconcileWorktreeTabModel.
@@ -964,6 +1002,304 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
     if (exists) {
       get().recordFeatureInteraction?.('terminal-tabs')
     }
+  },
+
+  createTabFolderGroup: (tabIds, init) => {
+    const orderedIds = dedupeTabOrder(tabIds)
+    if (orderedIds.length === 0) {
+      return null
+    }
+    let created: TabFolderGroup | null = null
+    set((state) => {
+      const tabsById = new Map(
+        Object.values(state.unifiedTabsByWorktree)
+          .flat()
+          .map((tab) => [tab.id, tab])
+      )
+      const first = tabsById.get(orderedIds[0])
+      if (!first) {
+        return {}
+      }
+      const selectedTabs = orderedIds
+        .map((tabId) => tabsById.get(tabId))
+        .filter(
+          (tab): tab is Tab =>
+            tab !== undefined &&
+            tab.worktreeId === first.worktreeId &&
+            tab.groupId === first.groupId
+        )
+      if (selectedTabs.length === 0) {
+        return {}
+      }
+      const selectedIds = new Set(selectedTabs.map((tab) => tab.id))
+      const worktreeId = first.worktreeId
+      const splitGroupId = first.groupId
+      const existingFolders = state.tabFolderGroupsByWorktree[worktreeId] ?? []
+      const groupOrder = state.groupsByWorktree[worktreeId]?.find(
+        (group) => group.id === splitGroupId
+      )?.tabOrder
+      const tabOrder = groupOrder
+        ? groupOrder.filter((tabId) => selectedIds.has(tabId))
+        : selectedTabs.map((tab) => tab.id)
+      const now = Date.now()
+      created = {
+        id: createBrowserUuid(),
+        worktreeId,
+        splitGroupId,
+        name: init?.name?.trim() || 'Group',
+        color: init?.color ?? DEFAULT_TAB_FOLDER_GROUP_COLOR,
+        collapsed: init?.collapsed ?? false,
+        tabOrder,
+        sortOrder: existingFolders.filter((group) => group.splitGroupId === splitGroupId).length,
+        createdAt: now
+      }
+      const nextTabs = (state.unifiedTabsByWorktree[worktreeId] ?? []).map((tab) =>
+        selectedIds.has(tab.id) ? { ...tab, folderGroupId: created!.id } : tab
+      )
+      const nextFolders = sanitizeFolderGroupsForWorktree(nextTabs, [...existingFolders, created])
+      return {
+        unifiedTabsByWorktree: {
+          ...state.unifiedTabsByWorktree,
+          [worktreeId]: nextTabs
+        },
+        tabFolderGroupsByWorktree: {
+          ...state.tabFolderGroupsByWorktree,
+          [worktreeId]: nextFolders
+        }
+      }
+    })
+    if (created) {
+      get().recordFeatureInteraction?.('terminal-tabs')
+    }
+    return created
+  },
+
+  addTabsToFolderGroup: (folderGroupId, tabIds, opts) => {
+    const orderedIds = dedupeTabOrder(tabIds)
+    if (orderedIds.length === 0) {
+      return false
+    }
+    let moved = false
+    set((state) => {
+      const found = findFolderGroupAndWorktree(state.tabFolderGroupsByWorktree, folderGroupId)
+      if (!found) {
+        return {}
+      }
+      const { folderGroup, worktreeId } = found
+      const tabSet = new Set(orderedIds)
+      const existingTabs = state.unifiedTabsByWorktree[worktreeId] ?? []
+      const movableIds = existingTabs
+        .filter((tab) => tabSet.has(tab.id) && tab.groupId === folderGroup.splitGroupId)
+        .map((tab) => tab.id)
+      if (movableIds.length === 0) {
+        return {}
+      }
+      moved = true
+      const movableIdSet = new Set(movableIds)
+      const targetOrder = dedupeTabOrder(
+        folderGroup.tabOrder.filter((tabId) => !movableIdSet.has(tabId))
+      )
+      const insertIndex = Math.max(
+        0,
+        Math.min(opts?.index ?? targetOrder.length, targetOrder.length)
+      )
+      targetOrder.splice(insertIndex, 0, ...movableIds)
+      const nextTabs = existingTabs.map((tab) =>
+        movableIdSet.has(tab.id) ? { ...tab, folderGroupId } : tab
+      )
+      const nextFolders = sanitizeFolderGroupsForWorktree(
+        nextTabs,
+        updateFolderGroup(state.tabFolderGroupsByWorktree[worktreeId] ?? [], {
+          ...folderGroup,
+          tabOrder: targetOrder
+        })
+      )
+      return {
+        unifiedTabsByWorktree: {
+          ...state.unifiedTabsByWorktree,
+          [worktreeId]: nextTabs
+        },
+        tabFolderGroupsByWorktree: {
+          ...state.tabFolderGroupsByWorktree,
+          [worktreeId]: nextFolders
+        }
+      }
+    })
+    if (moved) {
+      get().recordFeatureInteraction?.('terminal-tabs')
+    }
+    return moved
+  },
+
+  moveTabOutOfFolderGroup: (tabId, opts) => {
+    let moved = false
+    set((state) => {
+      const found = findTabAndWorktree(state.unifiedTabsByWorktree, tabId)
+      if (!found?.tab.folderGroupId) {
+        return {}
+      }
+      const { tab, worktreeId } = found
+      const splitGroup = (state.groupsByWorktree[worktreeId] ?? []).find(
+        (group) => group.id === tab.groupId
+      )
+      if (!splitGroup) {
+        return {}
+      }
+      moved = true
+      const nextTabs = (state.unifiedTabsByWorktree[worktreeId] ?? []).map((candidate) =>
+        candidate.id === tabId ? { ...candidate, folderGroupId: null } : candidate
+      )
+      const nextFolders = sanitizeFolderGroupsForWorktree(
+        nextTabs,
+        state.tabFolderGroupsByWorktree[worktreeId] ?? []
+      )
+      const nextOrder = splitGroup.tabOrder.filter((id) => id !== tabId)
+      const insertIndex = Math.max(0, Math.min(opts?.index ?? nextOrder.length, nextOrder.length))
+      nextOrder.splice(insertIndex, 0, tabId)
+      return {
+        unifiedTabsByWorktree: {
+          ...state.unifiedTabsByWorktree,
+          [worktreeId]: nextTabs
+        },
+        groupsByWorktree: {
+          ...state.groupsByWorktree,
+          [worktreeId]: updateGroup(state.groupsByWorktree[worktreeId] ?? [], {
+            ...splitGroup,
+            tabOrder: nextOrder
+          })
+        },
+        tabFolderGroupsByWorktree: {
+          ...state.tabFolderGroupsByWorktree,
+          [worktreeId]: nextFolders
+        }
+      }
+    })
+    if (moved) {
+      get().recordFeatureInteraction?.('terminal-tabs')
+    }
+    return moved
+  },
+
+  reorderTabFolderGroups: (worktreeId, splitGroupId, folderGroupIds) => {
+    set((state) => {
+      const folders = state.tabFolderGroupsByWorktree[worktreeId] ?? []
+      if (folders.length === 0) {
+        return {}
+      }
+      const requested = new Map(folderGroupIds.map((id, index) => [id, index]))
+      const nextFolders = folders.map((group) =>
+        group.splitGroupId === splitGroupId && requested.has(group.id)
+          ? { ...group, sortOrder: requested.get(group.id)! }
+          : group
+      )
+      return {
+        tabFolderGroupsByWorktree: {
+          ...state.tabFolderGroupsByWorktree,
+          [worktreeId]: nextFolders
+        }
+      }
+    })
+  },
+
+  setTabFolderGroupName: (folderGroupId, name) => {
+    const trimmed = name.trim()
+    if (!trimmed) {
+      return
+    }
+    set((state) => {
+      const found = findFolderGroupAndWorktree(state.tabFolderGroupsByWorktree, folderGroupId)
+      if (!found || found.folderGroup.name === trimmed) {
+        return {}
+      }
+      return {
+        tabFolderGroupsByWorktree: {
+          ...state.tabFolderGroupsByWorktree,
+          [found.worktreeId]: updateFolderGroup(
+            state.tabFolderGroupsByWorktree[found.worktreeId] ?? [],
+            { ...found.folderGroup, name: trimmed }
+          )
+        }
+      }
+    })
+  },
+
+  setTabFolderGroupColor: (folderGroupId, color) => {
+    set((state) => {
+      const found = findFolderGroupAndWorktree(state.tabFolderGroupsByWorktree, folderGroupId)
+      if (!found || found.folderGroup.color === color) {
+        return {}
+      }
+      return {
+        tabFolderGroupsByWorktree: {
+          ...state.tabFolderGroupsByWorktree,
+          [found.worktreeId]: updateFolderGroup(
+            state.tabFolderGroupsByWorktree[found.worktreeId] ?? [],
+            { ...found.folderGroup, color }
+          )
+        }
+      }
+    })
+  },
+
+  setTabFolderGroupCollapsed: (folderGroupId, collapsed) => {
+    set((state) => {
+      const found = findFolderGroupAndWorktree(state.tabFolderGroupsByWorktree, folderGroupId)
+      if (!found || found.folderGroup.collapsed === collapsed) {
+        return {}
+      }
+      return {
+        tabFolderGroupsByWorktree: {
+          ...state.tabFolderGroupsByWorktree,
+          [found.worktreeId]: updateFolderGroup(
+            state.tabFolderGroupsByWorktree[found.worktreeId] ?? [],
+            { ...found.folderGroup, collapsed }
+          )
+        }
+      }
+    })
+  },
+
+  ungroupTabFolderGroup: (folderGroupId) => {
+    let ungrouped = false
+    set((state) => {
+      const found = findFolderGroupAndWorktree(state.tabFolderGroupsByWorktree, folderGroupId)
+      if (!found) {
+        return {}
+      }
+      ungrouped = true
+      const { folderGroup, worktreeId } = found
+      const memberIds = new Set(folderGroup.tabOrder)
+      const nextTabs = (state.unifiedTabsByWorktree[worktreeId] ?? []).map((tab) =>
+        memberIds.has(tab.id) ? { ...tab, folderGroupId: null } : tab
+      )
+      return {
+        unifiedTabsByWorktree: {
+          ...state.unifiedTabsByWorktree,
+          [worktreeId]: nextTabs
+        },
+        tabFolderGroupsByWorktree: {
+          ...state.tabFolderGroupsByWorktree,
+          [worktreeId]: (state.tabFolderGroupsByWorktree[worktreeId] ?? []).filter(
+            (group) => group.id !== folderGroupId
+          )
+        }
+      }
+    })
+    if (ungrouped) {
+      get().recordFeatureInteraction?.('terminal-tabs')
+    }
+  },
+
+  closeTabsInFolderGroup: (folderGroupId) => {
+    const found = findFolderGroupAndWorktree(get().tabFolderGroupsByWorktree, folderGroupId)
+    if (!found) {
+      return []
+    }
+    const tabIds = [...found.folderGroup.tabOrder]
+    for (const tabId of tabIds) {
+      get().closeUnifiedTab(tabId)
+    }
+    return tabIds
   },
 
   pinTab: (tabId) => {
@@ -1321,16 +1657,26 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
         }
         return group
       })
+      const nextTabsForWorktree = (state.unifiedTabsByWorktree[worktreeId] ?? []).map((candidate) =>
+        candidate.id === tabId
+          ? { ...candidate, groupId: targetGroupId, folderGroupId: null }
+          : candidate
+      )
       return {
         unifiedTabsByWorktree: {
           ...state.unifiedTabsByWorktree,
-          [worktreeId]: (state.unifiedTabsByWorktree[worktreeId] ?? []).map((candidate) =>
-            candidate.id === tabId ? { ...candidate, groupId: targetGroupId } : candidate
-          )
+          [worktreeId]: nextTabsForWorktree
         },
         groupsByWorktree: {
           ...state.groupsByWorktree,
           [worktreeId]: nextGroups
+        },
+        tabFolderGroupsByWorktree: {
+          ...state.tabFolderGroupsByWorktree,
+          [worktreeId]: sanitizeFolderGroupsForWorktree(
+            nextTabsForWorktree,
+            state.tabFolderGroupsByWorktree[worktreeId] ?? []
+          )
         },
         activeGroupIdByWorktree: nextActiveGroupIdByWorktree
       }
@@ -1474,10 +1820,20 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
         }
       }
 
+      const nextTabsForWorktree = (state.unifiedTabsByWorktree[worktreeId] ?? []).map((candidate) =>
+        candidate.id === tabId
+          ? { ...candidate, groupId: resolvedTargetGroupId, folderGroupId: null }
+          : candidate
+      )
       const nextUnifiedTabsByWorktree = {
         ...state.unifiedTabsByWorktree,
-        [worktreeId]: (state.unifiedTabsByWorktree[worktreeId] ?? []).map((candidate) =>
-          candidate.id === tabId ? { ...candidate, groupId: resolvedTargetGroupId } : candidate
+        [worktreeId]: nextTabsForWorktree
+      }
+      const nextTabFolderGroupsByWorktree = {
+        ...state.tabFolderGroupsByWorktree,
+        [worktreeId]: sanitizeFolderGroupsForWorktree(
+          nextTabsForWorktree,
+          state.tabFolderGroupsByWorktree[worktreeId] ?? []
         )
       }
       const nextGroupsByWorktree = {
@@ -1488,6 +1844,7 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
       return {
         unifiedTabsByWorktree: nextUnifiedTabsByWorktree,
         groupsByWorktree: nextGroupsByWorktree,
+        tabFolderGroupsByWorktree: nextTabFolderGroupsByWorktree,
         layoutByWorktree: nextLayoutByWorktree,
         activeGroupIdByWorktree: nextActiveGroupIdByWorktree,
         ...(state.activeWorktreeId === worktreeId
@@ -1678,7 +2035,12 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
       return liveEditorIds.has(tab.entityId)
     }
 
-    const validTabs = reconciledUnifiedTabs.filter(isRenderableTab)
+    const validTabsBeforeFolderCleanup = reconciledUnifiedTabs.filter(isRenderableTab)
+    const validFolderGroups = sanitizeFolderGroupsForWorktree(
+      validTabsBeforeFolderCleanup,
+      state.tabFolderGroupsByWorktree[worktreeId] ?? []
+    )
+    const validTabs = clearMissingFolderAssignments(validTabsBeforeFolderCleanup, validFolderGroups)
     const validTabIds = new Set(validTabs.map((tab) => tab.id))
 
     const nextGroupsWithEmpty = reconciledGroups.map((group) => {
@@ -1720,6 +2082,11 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
       nextGroups.length !== groups.length ||
       nextGroups.some((group, index) => group !== groups[index])
     const tabsChanged = validTabs.length !== unifiedTabs.length || restoredLegacyTabs.length > 0
+    const currentFolderGroups = state.tabFolderGroupsByWorktree[worktreeId] ?? []
+    const folderGroupsChanged =
+      validFolderGroups.length !== currentFolderGroups.length ||
+      validFolderGroups.some((group, index) => group !== currentFolderGroups[index]) ||
+      validTabs !== validTabsBeforeFolderCleanup
     const activeGroupChanged = nextActiveGroupId !== currentActiveGroupId
 
     const baseNextLayout =
@@ -1739,6 +2106,7 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
     if (
       tabsChanged ||
       groupsChanged ||
+      folderGroupsChanged ||
       activeGroupChanged ||
       layoutChanged ||
       orphanTerminalIds.size > 0
@@ -1775,6 +2143,10 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
         return {
           unifiedTabsByWorktree: { ...current.unifiedTabsByWorktree, [worktreeId]: validTabs },
           groupsByWorktree: { ...current.groupsByWorktree, [worktreeId]: nextGroups },
+          tabFolderGroupsByWorktree: {
+            ...current.tabFolderGroupsByWorktree,
+            [worktreeId]: validFolderGroups
+          },
           activeGroupIdByWorktree: {
             ...current.activeGroupIdByWorktree,
             [worktreeId]: nextActiveGroupId

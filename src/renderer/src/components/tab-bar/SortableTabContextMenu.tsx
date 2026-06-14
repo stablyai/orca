@@ -6,71 +6,10 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
-import type { TerminalTab } from '../../../../shared/types'
+import type { TabFolderGroup, TerminalTab } from '../../../../shared/types'
 import { translate } from '@/i18n/i18n'
-
-const TAB_COLORS = [
-  {
-    get label() {
-      return translate('auto.components.tab.bar.SortableTabContextMenu.20baa43c05', 'None')
-    },
-    value: null
-  },
-  {
-    get label() {
-      return translate('auto.components.tab.bar.SortableTabContextMenu.cb3eadefd2', 'Blue')
-    },
-    value: '#3b82f6'
-  },
-  {
-    get label() {
-      return translate('auto.components.tab.bar.SortableTabContextMenu.c2d8b0991f', 'Purple')
-    },
-    value: '#a855f7'
-  },
-  {
-    get label() {
-      return translate('auto.components.tab.bar.SortableTabContextMenu.03cf6dab1a', 'Pink')
-    },
-    value: '#ec4899'
-  },
-  {
-    get label() {
-      return translate('auto.components.tab.bar.SortableTabContextMenu.620aec6729', 'Red')
-    },
-    value: '#ef4444'
-  },
-  {
-    get label() {
-      return translate('auto.components.tab.bar.SortableTabContextMenu.a47629b3cf', 'Orange')
-    },
-    value: '#f97316'
-  },
-  {
-    get label() {
-      return translate('auto.components.tab.bar.SortableTabContextMenu.69682e2ce4', 'Yellow')
-    },
-    value: '#eab308'
-  },
-  {
-    get label() {
-      return translate('auto.components.tab.bar.SortableTabContextMenu.be905e9b0a', 'Green')
-    },
-    value: '#22c55e'
-  },
-  {
-    get label() {
-      return translate('auto.components.tab.bar.SortableTabContextMenu.845576bed1', 'Teal')
-    },
-    value: '#14b8a6'
-  },
-  {
-    get label() {
-      return translate('auto.components.tab.bar.SortableTabContextMenu.7703990447', 'Gray')
-    },
-    value: '#9ca3af'
-  }
-] as const
+import { TAB_COLORS } from './tab-color-palette'
+import { TabFolderMenuItems } from './TabFolderMenuItems'
 
 type SortableTabContextMenuProps = {
   tab: TerminalTab
@@ -79,6 +18,8 @@ type SortableTabContextMenuProps = {
   tabCount: number
   hasTabsToRight: boolean
   isPinned: boolean
+  currentFolderGroupId?: string | null
+  folderGroups: readonly TabFolderGroup[]
   onOpenChange: (open: boolean) => void
   onClose: (tabId: string) => void
   onCloseOthers: (tabId: string) => void
@@ -86,6 +27,9 @@ type SortableTabContextMenuProps = {
   onRenameOpen: () => void
   onSetTabColor: (tabId: string, color: string | null) => void
   onTogglePin: () => void
+  onCreateGroup: () => void
+  onAddToGroup: (folderGroupId: string) => void
+  onRemoveFromGroup: () => void
   onSplitGroup: (direction: 'left' | 'right' | 'up' | 'down', sourceVisibleTabId: string) => void
 }
 
@@ -96,6 +40,8 @@ export function SortableTabContextMenu({
   tabCount,
   hasTabsToRight,
   isPinned,
+  currentFolderGroupId,
+  folderGroups,
   onOpenChange,
   onClose,
   onCloseOthers,
@@ -103,6 +49,9 @@ export function SortableTabContextMenu({
   onRenameOpen,
   onSetTabColor,
   onTogglePin,
+  onCreateGroup,
+  onAddToGroup,
+  onRemoveFromGroup,
   onSplitGroup
 }: SortableTabContextMenuProps): React.JSX.Element {
   return (
@@ -139,6 +88,13 @@ export function SortableTabContextMenu({
             ? translate('auto.components.tab.bar.SortableTabContextMenu.417722e9c2', 'Unpin Tab')
             : translate('auto.components.tab.bar.SortableTabContextMenu.60f958ec75', 'Pin Tab')}
         </DropdownMenuItem>
+        <TabFolderMenuItems
+          currentFolderGroupId={currentFolderGroupId}
+          folderGroups={folderGroups}
+          onCreateGroup={onCreateGroup}
+          onAddToGroup={onAddToGroup}
+          onRemoveFromGroup={onRemoveFromGroup}
+        />
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={() => !isPinned && onClose(tab.id)} disabled={isPinned}>
           {translate('auto.components.tab.bar.SortableTabContextMenu.89359a36f7', 'Close')}

@@ -62,6 +62,12 @@ vi.mock('lucide-react', () => ({
   Eye: function Eye(props: Record<string, unknown>) {
     return { type: 'Eye', props }
   },
+  FolderPlus: function FolderPlus(props: Record<string, unknown>) {
+    return { type: 'FolderPlus', props }
+  },
+  FolderSymlink: function FolderSymlink(props: Record<string, unknown>) {
+    return { type: 'FolderSymlink', props }
+  },
   GitCompareArrows: function GitCompareArrows(props: Record<string, unknown>) {
     return { type: 'GitCompareArrows', props }
   },

@@ -7,7 +7,7 @@ import { stripLeadingAgentTitleDecoration } from '@/lib/agent-title-decoration'
 import { useTabAgent } from '@/lib/use-tab-agent'
 import { Input } from '@/components/ui/input'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import type { TerminalTab } from '../../../../shared/types'
+import type { TabFolderGroup, TerminalTab } from '../../../../shared/types'
 import type { TabDragItemData } from '../tab-group/useTabDragSplit'
 import { FilledBellIcon } from '../sidebar/WorktreeCardHelpers'
 import { useAppStore } from '../../store'
@@ -20,14 +20,22 @@ import {
 } from './drop-indicator'
 import { preventMiddleButtonDefault } from './middle-button-default-guard'
 import { SortableTabContextMenu } from './SortableTabContextMenu'
+import {
+  EMPTY_FOLDER_GROUPS,
+  noopAddToGroupAction,
+  noopTabGroupAction
+} from './tab-folder-group-defaults'
 import { translate } from '@/i18n/i18n'
 
 type SortableTabProps = {
   tab: TerminalTab
+  unifiedTabId?: string
   tabCount: number
   hasTabsToRight: boolean
   isActive: boolean
   isPinned: boolean
+  currentFolderGroupId?: string | null
+  folderGroups?: readonly TabFolderGroup[]
   isExpanded: boolean
   onActivate: (tabId: string) => void
   onClose: (tabId: string) => void
@@ -36,6 +44,9 @@ type SortableTabProps = {
   onSetCustomTitle: (tabId: string, title: string | null) => void
   onSetTabColor: (tabId: string, color: string | null) => void
   onTogglePin: () => void
+  onCreateGroup?: (tabId: string) => void
+  onAddToGroup?: (folderGroupId: string, tabId: string) => void
+  onRemoveFromGroup?: (tabId: string) => void
   onToggleExpand: (tabId: string) => void
   onSplitGroup: (direction: 'left' | 'right' | 'up' | 'down', sourceVisibleTabId: string) => void
   dragData: TabDragItemData
@@ -47,10 +58,13 @@ export const CLOSE_ALL_CONTEXT_MENUS_EVENT = 'orca-close-all-context-menus'
 
 export default function SortableTab({
   tab,
+  unifiedTabId,
   tabCount,
   hasTabsToRight,
   isActive,
   isPinned,
+  currentFolderGroupId,
+  folderGroups = EMPTY_FOLDER_GROUPS,
   isExpanded,
   onActivate,
   onClose,
@@ -59,6 +73,9 @@ export default function SortableTab({
   onSetCustomTitle,
   onSetTabColor,
   onTogglePin,
+  onCreateGroup = noopTabGroupAction,
+  onAddToGroup = noopAddToGroupAction,
+  onRemoveFromGroup = noopTabGroupAction,
   onToggleExpand,
   onSplitGroup,
   dragData,
@@ -450,6 +467,8 @@ export default function SortableTab({
         tabCount={tabCount}
         hasTabsToRight={hasTabsToRight}
         isPinned={isPinned}
+        currentFolderGroupId={currentFolderGroupId}
+        folderGroups={folderGroups}
         onOpenChange={setMenuOpen}
         onClose={onClose}
         onCloseOthers={onCloseOthers}
@@ -457,6 +476,9 @@ export default function SortableTab({
         onRenameOpen={handleRenameOpen}
         onSetTabColor={onSetTabColor}
         onTogglePin={onTogglePin}
+        onCreateGroup={() => onCreateGroup(unifiedTabId ?? tab.id)}
+        onAddToGroup={(folderGroupId) => onAddToGroup(folderGroupId, unifiedTabId ?? tab.id)}
+        onRemoveFromGroup={() => onRemoveFromGroup(unifiedTabId ?? tab.id)}
         onSplitGroup={onSplitGroup}
       />
     </>

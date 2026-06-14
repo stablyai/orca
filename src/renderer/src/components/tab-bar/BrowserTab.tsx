@@ -11,7 +11,7 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { ORCA_BROWSER_BLANK_URL } from '../../../../shared/constants'
 import { redactKagiSessionToken } from '../../../../shared/browser-url'
-import type { BrowserTab as BrowserTabState } from '../../../../shared/types'
+import type { BrowserTab as BrowserTabState, TabFolderGroup } from '../../../../shared/types'
 import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from './SortableTab'
 import { getLiveBrowserUrl } from '../browser-pane/browser-runtime'
 import type { TabDragItemData } from '../tab-group/useTabDragSplit'
@@ -24,6 +24,12 @@ import {
 } from './drop-indicator'
 import { preventMiddleButtonDefault } from './middle-button-default-guard'
 import { translate } from '@/i18n/i18n'
+import { TabFolderMenuItems } from './TabFolderMenuItems'
+import {
+  EMPTY_FOLDER_GROUPS,
+  noopAddToGroupAction,
+  noopTabGroupAction
+} from './tab-folder-group-defaults'
 
 function formatBrowserTabUrlLabel(url: string): string {
   if (url === ORCA_BROWSER_BLANK_URL || url === 'about:blank') {
@@ -100,6 +106,10 @@ function BrowserTabFavicon({
 
 export default function BrowserTab({
   tab,
+  unifiedTabId,
+  color,
+  currentFolderGroupId,
+  folderGroups = EMPTY_FOLDER_GROUPS,
   isActive,
   isPinned,
   hasTabsToRight,
@@ -109,11 +119,18 @@ export default function BrowserTab({
   onSplitGroup,
   onDuplicate,
   onTogglePin,
+  onCreateGroup = noopTabGroupAction,
+  onAddToGroup = noopAddToGroupAction,
+  onRemoveFromGroup = noopTabGroupAction,
   dragData,
   dropIndicator,
   includeTopTabBorder = true
 }: {
   tab: BrowserTabState
+  unifiedTabId?: string
+  color?: string | null
+  currentFolderGroupId?: string | null
+  folderGroups?: readonly TabFolderGroup[]
   isActive: boolean
   isPinned: boolean
   hasTabsToRight: boolean
@@ -123,6 +140,9 @@ export default function BrowserTab({
   onSplitGroup: (direction: 'left' | 'right' | 'up' | 'down', sourceVisibleTabId: string) => void
   onDuplicate: () => void
   onTogglePin: () => void
+  onCreateGroup?: (tabId: string) => void
+  onAddToGroup?: (folderGroupId: string, tabId: string) => void
+  onRemoveFromGroup?: (tabId: string) => void
   dragData: TabDragItemData
   dropIndicator?: DropIndicator
   includeTopTabBorder?: boolean
@@ -213,6 +233,9 @@ export default function BrowserTab({
       <span className="truncate max-w-[100px] mr-1">{tabLabel}</span>
       {tab.loading && !tab.loadError && !isBlankBrowserTab(tab) && (
         <span className="mr-1 size-1.5 rounded-full bg-sky-500/80 shrink-0" />
+      )}
+      {color && (
+        <span className="mr-1.5 size-2 shrink-0 rounded-full" style={{ backgroundColor: color }} />
       )}
       {!isPinned && (
         <button
@@ -305,6 +328,13 @@ export default function BrowserTab({
               ? translate('auto.components.tab.bar.BrowserTab.c5aaee8c39', 'Unpin Tab')
               : translate('auto.components.tab.bar.BrowserTab.911542656f', 'Pin Tab')}
           </DropdownMenuItem>
+          <TabFolderMenuItems
+            currentFolderGroupId={currentFolderGroupId}
+            folderGroups={folderGroups}
+            onCreateGroup={() => onCreateGroup(unifiedTabId ?? tab.id)}
+            onAddToGroup={(folderGroupId) => onAddToGroup(folderGroupId, unifiedTabId ?? tab.id)}
+            onRemoveFromGroup={() => onRemoveFromGroup(unifiedTabId ?? tab.id)}
+          />
           <DropdownMenuSeparator />
           <DropdownMenuItem onSelect={() => !isPinned && onClose()} disabled={isPinned}>
             {translate('auto.components.tab.bar.BrowserTab.1611a1324b', 'Close')}

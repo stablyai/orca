@@ -544,6 +544,7 @@ export type Tab = {
   id: string // UUID for terminals, filePath for editors (preserves current convention)
   entityId: string // ID of the backing content (terminal tab ID, file path, browser workspace ID)
   groupId: string
+  folderGroupId?: string | null
   worktreeId: string
   contentType: TabContentType
   label: string // display title (auto-derived from PTY or filename)
@@ -569,6 +570,20 @@ export type TabGroup = {
    *  sessions persisted before this field was added still hydrate cleanly —
    *  hydration seeds from activeTabId. */
   recentTabIds?: string[]
+}
+
+export type TabFolderGroup = {
+  id: string
+  worktreeId: string
+  /** Split-pane leaf group this folder belongs to. */
+  splitGroupId: string
+  name: string
+  color: string
+  collapsed: boolean
+  /** Canonical member order by unified tab id. */
+  tabOrder: string[]
+  sortOrder: number
+  createdAt: number
 }
 
 // ─── Terminal Tab (legacy — used by persistence and TerminalContentSlice) ─
@@ -805,6 +820,8 @@ export type WorkspaceSessionState = {
   tabGroups?: Record<string, TabGroup[]>
   /** Persisted split layout tree per worktree. */
   tabGroupLayouts?: Record<string, TabGroupLayoutNode>
+  /** Folder-style tab groups inside split-pane tab strips. */
+  tabFolderGroups?: Record<string, TabFolderGroup[]>
   /** Per-worktree focused group at shutdown. */
   activeGroupIdByWorktree?: Record<string, string>
   /** SSH target IDs that were connected at shutdown. Used on startup to
