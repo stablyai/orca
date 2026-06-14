@@ -1,7 +1,7 @@
 import type { RuntimeRpcResponse } from '../../shared/runtime-rpc-envelope'
 import { getRemoteRuntimeSharedControlDiagnostics } from './runtime-environment-request-connections'
 
-export function attachRemoteControlDiagnostics<TResult>(
+export function attachRemoteControlDiagnostics<TResult extends object>(
   response: RuntimeRpcResponse<TResult>,
   environmentId: string
 ): RuntimeRpcResponse<TResult> {

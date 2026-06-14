@@ -96,9 +96,9 @@ function runtimeHostConnectionState({
 
 function runtimeHostConnectionDetail(
   remoteControl?: RemoteRuntimeSharedConnectionDiagnostics | null
-): string | null {
+): string | undefined {
   if (!remoteControl) {
-    return null
+    return undefined
   }
   if (remoteControl.lastError) {
     return remoteControl.lastError
@@ -127,7 +127,7 @@ function runtimeHostConnectionDetail(
       }
     )
   }
-  return null
+  return undefined
 }
 
 export function runtimeStatusForOverall(state: RuntimeHostConnectionState): HostStatus {

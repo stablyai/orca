@@ -41,10 +41,10 @@ function normalizeAgentDetectionTarget(
  * that doesn't refresh when Settings → Agents refreshes would feel broken;
  * centralizing the state eliminates multi-owner drift.
  *
- * @param connectionId — Pass a string to detect agents on a remote SSH host.
- * Pass null for local detection. Pass undefined (or omit) when the connection
- * context is not yet known (store not hydrated) — returns loading state.
- * Backward-compatible: all existing callers pass no argument.
+ * @param connectionId — Pass a string for legacy SSH callers, or an
+ * AgentDetectionTarget for local/SSH/runtime hosts. Pass null for local
+ * detection. Pass undefined when the connection context is not yet known
+ * (store not hydrated) — returns loading state.
  */
 export function useDetectedAgents(
   connectionId: AgentDetectionTarget | string | null | undefined = null

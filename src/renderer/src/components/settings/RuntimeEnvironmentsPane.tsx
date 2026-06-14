@@ -633,8 +633,8 @@ export function RuntimeEnvironmentsPane({
       if (mountedRef.current) {
         toast.success(
           translate(
-            'auto.components.settings.RuntimeEnvironmentsPane.a5b58465b6',
-            'Connected to {{value0}}.',
+            'auto.components.settings.RuntimeEnvironmentsPane.runtimeReachable',
+            '{{value0}} is reachable.',
             { value0: environment.name }
           )
         )

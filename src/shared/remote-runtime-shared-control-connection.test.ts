@@ -1,3 +1,4 @@
+import path from 'node:path'
 import type { AddressInfo } from 'net'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { WebSocketServer, type WebSocket } from 'ws'
@@ -12,6 +13,8 @@ import {
 import { encodePairingOffer, parsePairingCode, type PairingOffer } from './pairing'
 import { RemoteRuntimeSharedControlConnection } from './remote-runtime-shared-control-connection'
 import * as sharedControlProtocol from './remote-runtime-shared-control-protocol'
+
+const TEST_PROJECT_PATH = path.join('tmp', 'project')
 
 type TestServer = {
   pairing: PairingOffer
@@ -283,7 +286,7 @@ describe('RemoteRuntimeSharedControlConnection', () => {
   it.each([
     ['session.tabs.subscribeAll', undefined, 'session.tabs.unsubscribeAll'],
     ['runtime.clientEvents.subscribe', null, 'runtime.clientEvents.unsubscribe'],
-    ['files.watch', { path: '/tmp/project' }, 'files.unwatch']
+    ['files.watch', { path: TEST_PROJECT_PATH }, 'files.unwatch']
   ])('cleans up %s explicitly on close', async (method, params, cleanupMethod) => {
     const server = await createServer()
     const connection = new RemoteRuntimeSharedControlConnection(server.pairing)
@@ -308,10 +311,15 @@ describe('RemoteRuntimeSharedControlConnection', () => {
     const connection = new RemoteRuntimeSharedControlConnection(server.pairing)
     const onResponse = vi.fn()
 
-    const subscription = await connection.subscribe('files.watch', { path: '/tmp/project' }, 1000, {
-      onResponse,
-      onError: vi.fn()
-    })
+    const subscription = await connection.subscribe(
+      'files.watch',
+      { path: TEST_PROJECT_PATH },
+      1000,
+      {
+        onResponse,
+        onError: vi.fn()
+      }
+    )
     await vi.waitFor(() => expect(onResponse).toHaveBeenCalled())
 
     subscription.close()

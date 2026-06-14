@@ -177,6 +177,9 @@ export const SESSION_TAB_METHODS: RpcAnyMethod[] = [
       }
       emit({ type: 'snapshot', ...initial })
       initialized = true
+      if (closed) {
+        return
+      }
 
       unsubscribe = runtime.onMobileSessionTabsChanged((snapshot) => {
         if (snapshot.worktree === subscribedWorktree) {

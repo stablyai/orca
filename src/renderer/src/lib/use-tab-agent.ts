@@ -64,6 +64,8 @@ export function resolveTabAgentFromSignals(args: {
 }): TuiAgent | null {
   const titleAgent = agentFromTitle(args.title)
   const titleLooksShell = isShellProcess(args.title)
+  // Why: remote panes cannot cheaply prove shell foreground after hook exit,
+  // so keep the last completed hook identity instead of flashing unknown.
   const completedHookAgent =
     !args.isRemote && titleLooksShell && args.hasCompletedHook ? null : args.completedHookAgent
   const hookAgent = args.hookAgent ?? completedHookAgent ?? null

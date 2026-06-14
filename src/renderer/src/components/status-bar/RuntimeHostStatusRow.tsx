@@ -73,7 +73,7 @@ export function RuntimeHostStatusRow({
 }: {
   label: string
   state: RuntimeHostConnectionState
-  detail?: string | null
+  detail?: string
   onConnect?: () => Promise<void>
   onDisconnect?: () => Promise<void>
 }): React.JSX.Element {

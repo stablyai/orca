@@ -1,3 +1,4 @@
+import path from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../shared/constants'
 import type { Worktree } from '../../../shared/types'
@@ -7,6 +8,9 @@ import { useAppStore } from '@/store'
 import { ensureWebRuntimeWorktreeTerminalAfterWake } from './worktree-activation'
 
 const initialAppStoreState = useAppStore.getState()
+const WORKTREE_PATH = path.join('workspace', 'feature')
+const REPO_PATH = path.join('workspace', 'repo')
+const ORCA_WORKSPACES_PATH = path.join('workspace', '.orca-workspaces')
 
 afterEach(() => {
   delete (globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__
@@ -18,9 +22,9 @@ afterEach(() => {
 
 function makeWorktree(): Worktree {
   return {
-    id: 'repo-1::/workspace/feature',
+    id: `repo-1::${WORKTREE_PATH}`,
     repoId: 'repo-1',
-    path: '/workspace/feature',
+    path: WORKTREE_PATH,
     head: 'abc123',
     branch: 'refs/heads/feature',
     isBare: false,
@@ -73,7 +77,7 @@ describe('empty remote worktree activation', () => {
       repos: [
         {
           id: 'repo-1',
-          path: '/workspace/repo',
+          path: REPO_PATH,
           displayName: 'repo',
           badgeColor: '#000000',
           addedAt: 0
@@ -83,7 +87,7 @@ describe('empty remote worktree activation', () => {
       tabsByWorktree: {},
       ptyIdsByTabId: {},
       settings: {
-        ...getDefaultSettings('/workspace/.orca-workspaces'),
+        ...getDefaultSettings(ORCA_WORKSPACES_PATH),
         activeRuntimeEnvironmentId: 'web-runtime-1'
       },
       reconcileWorktreeTabModel: vi.fn(() => ({
@@ -93,7 +97,9 @@ describe('empty remote worktree activation', () => {
     })
 
     ensureWebRuntimeWorktreeTerminalAfterWake(worktree.id)
-    await new Promise((resolve) => setTimeout(resolve, 0))
+    await vi.waitFor(() => {
+      expect(callRuntimeEnvironment).toHaveBeenCalled()
+    })
 
     expect(callRuntimeEnvironment).toHaveBeenCalledWith(
       expect.objectContaining({
