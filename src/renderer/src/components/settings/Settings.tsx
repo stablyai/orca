@@ -335,6 +335,11 @@ function Settings(): React.JSX.Element {
 
   const hasUnsavedSourceControlAiPromptChanges =
     hasUnsavedCommitPromptChanges || hasUnsavedBranchPromptChanges
+  // Why: the window-close guard registers once for Settings' lifetime, so it
+  // reads the latest dirty state from a ref instead of a closure that would lag
+  // behind the draft state until the next effect commit.
+  const hasUnsavedSourceControlAiPromptChangesRef = useRef(hasUnsavedSourceControlAiPromptChanges)
+  hasUnsavedSourceControlAiPromptChangesRef.current = hasUnsavedSourceControlAiPromptChanges
 
   const writeSourceControlAiSettings = useCallback(
     (patch: SourceControlAiSettingsPatch): Promise<void> => {
@@ -377,11 +382,11 @@ function Settings(): React.JSX.Element {
     cancelPendingSettingsSubsectionScrollFrame(pendingSubsectionScrollFrameRef)
   }, [])
 
-  const confirmDiscardSourceControlAiPromptChanges = useCallback(async (): Promise<boolean> => {
-    if (!hasUnsavedSourceControlAiPromptChanges) {
-      return true
-    }
-    const shouldDiscard = await confirm({
+  // Pure "discard and leave?" prompt — no side effects. Why separate from the
+  // discard helper below: the window-close guard must ask without clearing the
+  // drafts, since a later guard/handler can still cancel the close.
+  const promptDiscardSourceControlAiPromptChanges = useCallback((): Promise<boolean> => {
+    return confirm({
       title: translate(
         'auto.components.settings.Settings.17bdee4ff1',
         'Discard unsaved Git AI Author changes?'
@@ -393,13 +398,20 @@ function Settings(): React.JSX.Element {
       confirmLabel: translate('auto.components.settings.Settings.65358016ea', 'Discard'),
       confirmVariant: 'destructive'
     })
+  }, [confirm])
+
+  const confirmDiscardSourceControlAiPromptChanges = useCallback(async (): Promise<boolean> => {
+    if (!hasUnsavedSourceControlAiPromptChanges) {
+      return true
+    }
+    const shouldDiscard = await promptDiscardSourceControlAiPromptChanges()
     if (shouldDiscard) {
       setSourceControlAiPromptDiscardSignal((signal) => signal + 1)
       setHasUnsavedCommitPromptChanges(false)
       setHasUnsavedBranchPromptChanges(false)
     }
     return shouldDiscard
-  }, [confirm, hasUnsavedSourceControlAiPromptChanges])
+  }, [promptDiscardSourceControlAiPromptChanges, hasUnsavedSourceControlAiPromptChanges])
 
   const closeSettingsPageWithPromptGuard = useCallback(async (): Promise<void> => {
     if (!(await confirmDiscardSourceControlAiPromptChanges())) {
@@ -503,16 +515,22 @@ function Settings(): React.JSX.Element {
   // Why: route window close / quit through the same discard dialog as in-app
   // navigation. A raw beforeunload preventDefault only silently vetoes the close
   // (no UI), which on the no-workspace Settings page reads as an unquittable
-  // window. The guard returns false to cancel the close when the user keeps
-  // editing, true (after discarding, or when clean) to let it proceed.
+  // window. Register one stable guard for Settings' lifetime, reading the latest
+  // dirty state from a ref. Why the pure prompt (no discard side effect): a
+  // downstream guard/handler can still cancel the close (e.g. a dirty-editor save
+  // dialog), and clearing the drafts up front would lose them while the window
+  // stays open; on an actual close they fall away with the renderer anyway.
   useEffect(() => {
     return registerWindowCloseGuard(() => {
       if (isIntentionalAppRestartInProgress()) {
         return true
       }
-      return confirmDiscardSourceControlAiPromptChanges()
+      if (!hasUnsavedSourceControlAiPromptChangesRef.current) {
+        return true
+      }
+      return promptDiscardSourceControlAiPromptChanges()
     })
-  }, [confirmDiscardSourceControlAiPromptChanges])
+  }, [promptDiscardSourceControlAiPromptChanges])
 
   useEffect(() => {
     const handleFindShortcut = (event: KeyboardEvent): void => {
