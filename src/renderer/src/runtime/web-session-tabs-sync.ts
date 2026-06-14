@@ -503,6 +503,10 @@ function buildMirroredTerminalTabs(
       activeSurface.quickCommandLabel?.trim() ||
       surfaces.find((surface) => surface.quickCommandLabel?.trim())?.quickCommandLabel?.trim() ||
       existing?.quickCommandLabel?.trim()
+    const launchAgent =
+      activeSurface.launchAgent ??
+      surfaces.find((surface) => surface.launchAgent)?.launchAgent ??
+      existing?.launchAgent
     return {
       tab: {
         id: localTabId,
@@ -515,7 +519,10 @@ function buildMirroredTerminalTabs(
         color: existing?.color ?? null,
         sortOrder: sortOffset + index,
         createdAt: existing?.createdAt ?? now + index,
-        ...(activeSurface.launchAgent ? { launchAgent: activeSurface.launchAgent } : {})
+        // Why: runtime snapshots can omit launchAgent after the process settles;
+        // keep the client-side launch intent so completed remote tabs do not
+        // briefly lose their provider icon between host status snapshots.
+        ...(launchAgent ? { launchAgent } : {})
       },
       hostTabId: parentTabId,
       ptyIds,

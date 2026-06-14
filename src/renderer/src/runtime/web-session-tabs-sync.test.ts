@@ -553,6 +553,48 @@ describe('applyWebSessionTabsSnapshot', () => {
     expect(patch.activeTabIdByWorktree?.[WT]).toBe(mirroredId)
   })
 
+  it('preserves mirrored launch intent when a later host snapshot omits it', () => {
+    const existingTab: TerminalTab = {
+      id: toWebTerminalSurfaceTabId('host-tab-1'),
+      ptyId: 'remote:web-env-1@@terminal-1',
+      worktreeId: WT,
+      title: 'Codex',
+      defaultTitle: 'Codex',
+      customTitle: null,
+      color: null,
+      sortOrder: 0,
+      createdAt: NOW,
+      launchAgent: 'codex'
+    }
+
+    const patch = applyWebSessionTabsSnapshot(
+      makeState({
+        tabsByWorktree: { [WT]: [existingTab] },
+        ptyIdsByTabId: { [existingTab.id]: ['remote:web-env-1@@terminal-1'] }
+      }),
+      makeSnapshot([
+        {
+          type: 'terminal',
+          id: HOST_SURFACE_ID,
+          title: 'zsh',
+          parentTabId: 'host-tab-1',
+          leafId: LEAF_ID,
+          isActive: true,
+          status: 'ready',
+          terminal: 'terminal-1'
+        }
+      ]),
+      ENV,
+      NOW + 1
+    ) as Partial<WebSessionTabsSyncState>
+
+    expect(patch.tabsByWorktree?.[WT]?.[0]).toMatchObject({
+      id: existingTab.id,
+      title: 'zsh',
+      launchAgent: 'codex'
+    })
+  })
+
   it('preserves quick command labels from host terminal surfaces', () => {
     const patch = applyWebSessionTabsSnapshot(
       makeState(),

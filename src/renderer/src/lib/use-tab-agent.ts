@@ -65,7 +65,7 @@ export function resolveTabAgentFromSignals(args: {
   const titleAgent = agentFromTitle(args.title)
   const titleLooksShell = isShellProcess(args.title)
   const completedHookAgent =
-    titleLooksShell && args.hasCompletedHook ? null : args.completedHookAgent
+    !args.isRemote && titleLooksShell && args.hasCompletedHook ? null : args.completedHookAgent
   const hookAgent = args.hookAgent ?? completedHookAgent ?? null
   const launchAgent =
     args.hasCompletedHook || (titleLooksShell && args.hasObservedAgentSignal)
