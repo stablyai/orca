@@ -3087,9 +3087,11 @@ export class OrcaRuntimeService {
         const pty = this.findPtyForMobileTerminalTab(worktreeId, tab)
         if (pty) {
           this.ptyController?.kill(pty.ptyId)
-        } else {
-          this.notifier?.closeTerminal(tab.parentTabId)
         }
+        // Why: deleting from mobile must remove the tab, not just kill the PTY.
+        // Killing alone leaves a disconnected/reconnectable tab the desktop keeps,
+        // which mobile re-surfaces as an orphan — always close it via the renderer.
+        this.notifier?.closeTerminal(tab.parentTabId)
       } else {
         // Why: paired web tab bars represent a split terminal with one local
         // parent tab id. Closing that parent should close the desktop tab, not
