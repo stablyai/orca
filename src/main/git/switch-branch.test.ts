@@ -1,12 +1,17 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { SWITCH_BRANCH_STASH_LABEL } from '../../shared/git-branch-switch'
 import {
   isDirtyOverwriteError,
   normalizeSwitchBranchExecError,
+  runSwitchBranch,
   switchGitBranch,
   type SwitchBranchExec,
   type SwitchBranchExecResult
 } from './switch-branch'
+
+const runnerMocks = vi.hoisted(() => ({ gitExecFileAsync: vi.fn() }))
+vi.mock('./runner', () => ({ gitExecFileAsync: runnerMocks.gitExecFileAsync }))
+vi.mock('../providers/ssh-git-dispatch', () => ({ getSshGitProvider: () => null }))
 
 const ok = (stdout = ''): SwitchBranchExecResult => ({ stdout, stderr: '', exitCode: 0 })
 const fail = (stderr: string, exitCode = 1): SwitchBranchExecResult => ({
@@ -132,5 +137,33 @@ describe('switchGitBranch', () => {
       ok: false,
       reason: 'stash_pop_conflict'
     })
+  })
+})
+
+describe('runSwitchBranch (local)', () => {
+  it('runs git switch in the worktree and returns ok', async () => {
+    runnerMocks.gitExecFileAsync.mockResolvedValue({ stdout: '', stderr: '' })
+    const result = await runSwitchBranch({
+      cwd: '/repo',
+      connectionId: undefined,
+      options: { branch: 'main', mode: 'plain' }
+    })
+    expect(result).toEqual({ ok: true })
+    expect(runnerMocks.gitExecFileAsync).toHaveBeenCalledWith(['switch', 'main'], { cwd: '/repo' })
+  })
+
+  it('maps a rejected git switch into dirty_conflict', async () => {
+    runnerMocks.gitExecFileAsync.mockRejectedValue(
+      Object.assign(new Error('checkout failed'), {
+        stderr: 'Your local changes would be overwritten by checkout',
+        code: 1
+      })
+    )
+    const result = await runSwitchBranch({
+      cwd: '/repo',
+      connectionId: undefined,
+      options: { branch: 'main', mode: 'plain' }
+    })
+    expect(result).toEqual({ ok: false, reason: 'dirty_conflict' })
   })
 })

@@ -1,5 +1,7 @@
 import type { SwitchBranchOptions, SwitchBranchResult } from '../../shared/git-branch-switch'
 import { SWITCH_BRANCH_STASH_LABEL } from '../../shared/git-branch-switch'
+import { gitExecFileAsync } from './runner'
+import { getSshGitProvider } from '../providers/ssh-git-dispatch'
 
 export type SwitchBranchExecResult = { stdout: string; stderr: string; exitCode: number }
 // Why: this MUST resolve (never throw) — non-zero git exits are reported via
@@ -81,4 +83,38 @@ export async function switchGitBranch(
     return { ok: false, reason: 'stash_pop_conflict' }
   }
   return { ok: true }
+}
+
+// Why: both entry points (local preload IPC and the runtime RPC) need the same
+// local-vs-SSH exec wiring; centralize it so the two paths cannot drift.
+export async function runSwitchBranch(input: {
+  cwd: string
+  connectionId: string | undefined
+  options: SwitchBranchOptions
+}): Promise<SwitchBranchResult> {
+  const { cwd, connectionId, options } = input
+  if (connectionId) {
+    const provider = getSshGitProvider(connectionId)
+    if (!provider) {
+      throw new Error('SSH git provider unavailable')
+    }
+    const exec: SwitchBranchExec = async (argv) => {
+      try {
+        const { stdout, stderr } = await provider.exec(argv, cwd)
+        return { stdout, stderr, exitCode: 0 }
+      } catch (err) {
+        return normalizeSwitchBranchExecError(err)
+      }
+    }
+    return switchGitBranch(exec, options)
+  }
+  const exec: SwitchBranchExec = async (argv) => {
+    try {
+      const { stdout, stderr } = await gitExecFileAsync(argv, { cwd })
+      return { stdout: String(stdout), stderr: String(stderr), exitCode: 0 }
+    } catch (err) {
+      return normalizeSwitchBranchExecError(err)
+    }
+  }
+  return switchGitBranch(exec, options)
 }
