@@ -33,9 +33,9 @@ const StatusIndicator = React.memo(function StatusIndicator({
         title={resolvedTitle}
         {...rest}
       >
-        {/* Why: this dot is visible for long-running agents; a permanent CSS spin keeps
-            the GPU compositor awake while Orca is otherwise idle. */}
-        <span className="block size-2 rounded-full border-2 border-yellow-500 bg-yellow-500/15" />
+        {/* Why: a stepped spin preserves the worker-is-running affordance while
+            avoiding a full-refresh-rate compositor loop for long agent runs. */}
+        <span className="block size-2 rounded-full border-2 border-yellow-500 border-t-transparent [animation:spin_1s_steps(12,end)_infinite]" />
       </span>
     )
   }

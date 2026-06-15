@@ -5,6 +5,7 @@ import { existsSync, mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:
 import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { installSyntheticVisibleSpinners } from './idle-cpu-synthetic-spinners.mjs'
 
 const DEFAULT_WARMUP_MS = 15_000
 const DEFAULT_SAMPLE_MS = 30_000
@@ -23,7 +24,9 @@ function parseArgs(argv) {
     headful: false,
     output: null,
     disableRendererAnimations: false,
-    syntheticVisibleSpinners: 0
+    syntheticVisibleSpinners: 0,
+    syntheticSpinnerAnimation: 'smooth',
+    syntheticSpinnerSteps: 12
   }
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index]
@@ -55,6 +58,10 @@ function parseArgs(argv) {
       options.disableRendererAnimations = true
     } else if (arg === '--synthetic-visible-spinners') {
       options.syntheticVisibleSpinners = Number(readValue())
+    } else if (arg === '--synthetic-spinner-animation') {
+      options.syntheticSpinnerAnimation = readValue()
+    } else if (arg === '--synthetic-spinner-steps') {
+      options.syntheticSpinnerSteps = Number(readValue())
     } else if (arg === '--help') {
       printUsage()
       process.exit(0)
@@ -67,7 +74,8 @@ function parseArgs(argv) {
     'sampleMs',
     'intervalMs',
     'worktrees',
-    'syntheticVisibleSpinners'
+    'syntheticVisibleSpinners',
+    'syntheticSpinnerSteps'
   ]) {
     if (!Number.isFinite(options[key]) || options[key] < 0) {
       throw new Error(`Invalid --${key}: ${options[key]}`)
@@ -76,15 +84,17 @@ function parseArgs(argv) {
   options.worktrees = Math.max(1, Math.floor(options.worktrees))
   options.intervalMs = Math.max(250, Math.floor(options.intervalMs))
   options.syntheticVisibleSpinners = Math.max(0, Math.floor(options.syntheticVisibleSpinners))
+  options.syntheticSpinnerSteps = Math.max(1, Math.floor(options.syntheticSpinnerSteps))
+  if (!['smooth', 'steps'].includes(options.syntheticSpinnerAnimation)) {
+    throw new Error(`Invalid --synthetic-spinner-animation: ${options.syntheticSpinnerAnimation}`)
+  }
   return options
 }
-
 function printUsage() {
   console.log(
-    `Usage: node config/scripts/run-idle-cpu-benchmark.mjs [options]\n\nOptions:\n  --warmup-ms <n>    Time to wait after app readiness before sampling (default ${DEFAULT_WARMUP_MS})\n  --sample-ms <n>    Sampling window duration (default ${DEFAULT_SAMPLE_MS})\n  --interval-ms <n>  Sampling cadence (default ${DEFAULT_INTERVAL_MS})\n  --worktrees <n>    Seed repo worktree count, including primary (default ${DEFAULT_WORKTREE_COUNT})\n  --headful          Show the Electron window while measuring\n  --skip-build       Reuse out/main/index.js instead of building first\n  --output <path>    Write JSON report to this path\n  --disable-renderer-animations  Inject measurement-only CSS that disables animations/transitions\n  --disable-cmd-j-tip-caret     Measurement-only: disable the Cmd-J tip caret blink\n  --disable-working-spinners    Measurement-only: disable working status spinner animations\n`
+    `Usage: node config/scripts/run-idle-cpu-benchmark.mjs [options]\n\nOptions:\n  --warmup-ms <n>    Time to wait after app readiness before sampling (default ${DEFAULT_WARMUP_MS})\n  --sample-ms <n>    Sampling window duration (default ${DEFAULT_SAMPLE_MS})\n  --interval-ms <n>  Sampling cadence (default ${DEFAULT_INTERVAL_MS})\n  --worktrees <n>    Seed repo worktree count, including primary (default ${DEFAULT_WORKTREE_COUNT})\n  --headful          Show the Electron window while measuring\n  --skip-build       Reuse out/main/index.js instead of building first\n  --output <path>    Write JSON report to this path\n  --disable-renderer-animations  Inject measurement-only CSS that disables animations/transitions\n  --synthetic-visible-spinners <n>  Measurement-only: add visible working spinners\n  --synthetic-spinner-animation <smooth|steps>  Spinner animation style (default smooth)\n  --synthetic-spinner-steps <n>  Step count for --synthetic-spinner-animation steps (default 12)\n`
   )
 }
-
 function run(command, args, options = {}) {
   execFileSync(command, args, { stdio: options.stdio ?? 'pipe', encoding: 'utf8', ...options })
 }
@@ -313,49 +323,6 @@ function classify(row, rootPid) {
   return 'other-descendant'
 }
 
-async function installSyntheticVisibleSpinners(page, count) {
-  if (count <= 0) {
-    return
-  }
-  await page.addStyleTag({
-    content: `
-      @keyframes orca-idle-bench-spin {
-        to { transform: rotate(360deg); }
-      }
-      .orca-idle-bench-spinner-host {
-        position: fixed;
-        top: 16px;
-        right: 16px;
-        z-index: 2147483647;
-        display: flex;
-        flex-direction: column;
-        gap: 8px;
-        pointer-events: none;
-      }
-      .orca-idle-bench-spinner {
-        width: 10px;
-        height: 10px;
-        border: 2px solid rgb(234 179 8);
-        border-top-color: transparent;
-        border-radius: 9999px;
-        animation: orca-idle-bench-spin 1s linear infinite;
-      }
-    `
-  })
-  await page.evaluate((spinnerCount) => {
-    document.querySelector('[data-orca-idle-bench-spinners]')?.remove()
-    const host = document.createElement('div')
-    host.className = 'orca-idle-bench-spinner-host'
-    host.setAttribute('data-orca-idle-bench-spinners', String(spinnerCount))
-    for (let index = 0; index < spinnerCount; index += 1) {
-      const spinner = document.createElement('div')
-      spinner.className = 'orca-idle-bench-spinner'
-      host.appendChild(spinner)
-    }
-    document.body.appendChild(host)
-  }, count)
-}
-
 async function collectRendererIdleState(page) {
   return page.evaluate(() => {
     const describeElement = (element) => {
@@ -520,7 +487,12 @@ async function main() {
     if (measurementCss.length > 0) {
       await page.addStyleTag({ content: measurementCss.join('\n') })
     }
-    await installSyntheticVisibleSpinners(page, options.syntheticVisibleSpinners)
+    await installSyntheticVisibleSpinners(
+      page,
+      options.syntheticVisibleSpinners,
+      options.syntheticSpinnerAnimation,
+      options.syntheticSpinnerSteps
+    )
     await page.evaluate(async (repoPath) => {
       await window.api.repos.add({ path: repoPath })
       const store = window.__store
