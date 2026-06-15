@@ -5,6 +5,7 @@ import {
   LOCAL_DOCKER_CONNECTION_ID,
   type DockerConnection,
   type DockerConnectionStatus,
+  type DockerContainerAction,
   type DockerContainerInspect,
   type DockerContainerSummary,
   type DockerResourcesChangedEvent
@@ -32,6 +33,8 @@ export type DockerSlice = {
   applyDockerResources: (event: DockerResourcesChangedEvent) => void
   selectDockerContainer: (id: string | null) => void
   inspectDockerContainer: (containerId: string) => Promise<void>
+  actionPendingByContainerId: Record<string, boolean>
+  runDockerContainerAction: (containerId: string, action: DockerContainerAction) => Promise<void>
 }
 
 export const createDockerSlice: StateCreator<AppState, [], [], DockerSlice> = (set, get) => ({
@@ -42,6 +45,7 @@ export const createDockerSlice: StateCreator<AppState, [], [], DockerSlice> = (s
   selectedContainerId: null,
   inspectByContainerId: {},
   inspectErrorByContainerId: {},
+  actionPendingByContainerId: {},
 
   setActiveDockerConnection: async (connectionId) => {
     set({ activeConnectionId: connectionId, selectedContainerId: null })
@@ -76,6 +80,31 @@ export const createDockerSlice: StateCreator<AppState, [], [], DockerSlice> = (s
   },
 
   selectDockerContainer: (id) => set({ selectedContainerId: id }),
+
+  runDockerContainerAction: async (containerId, action) => {
+    const connectionId = get().activeConnectionId
+    set((s) => ({
+      actionPendingByContainerId: { ...s.actionPendingByContainerId, [containerId]: true }
+    }))
+    try {
+      await window.api.docker.containerAction({ connectionId, containerId, action })
+      if (action === 'remove' && get().selectedContainerId === containerId) {
+        set({ selectedContainerId: null })
+      }
+      // Optimistic refresh: reflect the new state immediately rather than waiting for the poll.
+      await get().refreshDockerContainers()
+    } catch (error) {
+      // Still refresh so the row shows its true state; rethrow so the UI can toast.
+      await get().refreshDockerContainers()
+      throw error
+    } finally {
+      set((s) => {
+        const next = { ...s.actionPendingByContainerId }
+        delete next[containerId]
+        return { actionPendingByContainerId: next }
+      })
+    }
+  },
 
   inspectDockerContainer: async (containerId) => {
     const connectionId = get().activeConnectionId
