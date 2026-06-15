@@ -188,7 +188,7 @@ const SidebarNav = React.memo(function SidebarNav() {
                 className={cn('size-4 shrink-0', !dockerActive && 'text-worktree-sidebar-foreground/30')}
                 strokeWidth={dockerActive ? 2.25 : 1.75}
               />
-              <span className="flex-1">{translate('auto.components.sidebar.SidebarNav.docker', 'Docker')}</span>
+              <span className="flex-1">{translate('auto.components.sidebar.SidebarNav.729082bde5', 'Docker')}</span>
             </button>
           </ContextMenuTrigger>
           <HideSidebarMenu onHide={hideDockerButton} />
