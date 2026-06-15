@@ -148,6 +148,7 @@ export type KeybindingInput = {
   metaKey?: boolean
   ctrlKey?: boolean
   shiftKey?: boolean
+  doubleTapModifier?: ModifierToken
 }
 
 type ParsedKeybinding = {
@@ -1598,6 +1599,24 @@ function keyMatches(
   return canUsePhysicalCodeFallback(input) && physicalCodeKeyTokenFromInput(input) === parsedKey
 }
 
+function resolveModifierToken(
+  modifier: ModifierToken,
+  platform: NodeJS.Platform
+): 'meta' | 'control' | 'alt' | 'shift' {
+  switch (modifier) {
+    case 'Mod':
+      return platform === 'darwin' ? 'meta' : 'control'
+    case 'Cmd':
+      return 'meta'
+    case 'Ctrl':
+      return 'control'
+    case 'Alt':
+      return 'alt'
+    case 'Shift':
+      return 'shift'
+  }
+}
+
 export function keybindingMatchesInput(
   binding: string,
   input: KeybindingInput,
@@ -1605,6 +1624,18 @@ export function keybindingMatchesInput(
 ): boolean {
   const parsed = parseKeybinding(binding)
   if (!parsed) {
+    return false
+  }
+  // A double-tap binding matches only a synthetic double-tap input, resolved per
+  // platform; a normal binding never matches a synthetic input, and vice-versa.
+  if (parsed.doubleTapModifier) {
+    return (
+      input.doubleTapModifier !== undefined &&
+      resolveModifierToken(parsed.doubleTapModifier, platform) ===
+        resolveModifierToken(input.doubleTapModifier, platform)
+    )
+  }
+  if (input.doubleTapModifier !== undefined) {
     return false
   }
   return (

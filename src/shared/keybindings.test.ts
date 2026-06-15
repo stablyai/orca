@@ -713,6 +713,48 @@ describe('keybindings', () => {
     ).toBe(true)
   })
 
+  it('matches double-tap bindings only against synthetic double-tap input', () => {
+    expect(keybindingMatchesInput('DoubleTap+Shift', { doubleTapModifier: 'Shift' }, 'darwin')).toBe(
+      true
+    )
+    // Mod resolves per platform: meta on macOS, control elsewhere.
+    expect(keybindingMatchesInput('DoubleTap+Mod', { doubleTapModifier: 'Cmd' }, 'darwin')).toBe(
+      true
+    )
+    expect(keybindingMatchesInput('DoubleTap+Mod', { doubleTapModifier: 'Ctrl' }, 'win32')).toBe(
+      true
+    )
+    expect(keybindingMatchesInput('DoubleTap+Mod', { doubleTapModifier: 'Cmd' }, 'win32')).toBe(
+      false
+    )
+    expect(keybindingMatchesInput('DoubleTap+Shift', { doubleTapModifier: 'Alt' }, 'darwin')).toBe(
+      false
+    )
+
+    // Cross-type negatives: a double-tap binding never matches a normal keydown,
+    // and a normal binding never matches a synthetic double-tap input.
+    expect(
+      keybindingMatchesInput(
+        'DoubleTap+Shift',
+        { key: 'A', code: 'KeyA', shift: true },
+        'darwin'
+      )
+    ).toBe(false)
+    expect(keybindingMatchesInput('Mod+P', { doubleTapModifier: 'Cmd' }, 'darwin')).toBe(false)
+
+    // Action-level matching works through user overrides, for free.
+    expect(
+      keybindingMatchesAction('worktree.quickOpen', { doubleTapModifier: 'Shift' }, 'darwin', {
+        'worktree.quickOpen': ['DoubleTap+Shift']
+      })
+    ).toBe(true)
+    expect(
+      keybindingMatchesAction('worktree.quickOpen', { doubleTapModifier: 'Alt' }, 'darwin', {
+        'worktree.quickOpen': ['DoubleTap+Shift']
+      })
+    ).toBe(false)
+  })
+
   it('matches macOS Option-composed bracket shortcuts for all-type tab switching', () => {
     const macOptionLeftBracket = {
       key: '\u201c',
