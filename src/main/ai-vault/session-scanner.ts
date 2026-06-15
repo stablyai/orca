@@ -66,6 +66,7 @@ const PI_SESSIONS_DIR = normalizePiSessionsDir(
   process.env.PI_CODING_AGENT_DIR?.trim() || join(homedir(), '.pi', 'agent', 'sessions')
 )
 const DROID_SESSIONS_DIR = join(homedir(), '.factory', 'sessions')
+// Why: Devin ATIF transcripts are stored under <DEVIN_HOME>/transcripts.
 const DEVIN_TRANSCRIPTS_DIR = join(
   process.env.DEVIN_HOME?.trim() || join(homedir(), '.local', 'share', 'devin', 'cli'),
   'transcripts'

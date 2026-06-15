@@ -26,7 +26,7 @@ export async function parseDevinSessionFile(
     return null
   }
   const sessionId =
-    extractString(record.session_id) ?? sessionIdFromFileName(file.path)
+    extractString(record.session_id) ?? extractString(record.sessionId) ?? sessionIdFromFileName(file.path)
   const accumulator = createAccumulator({ agent: 'devin', file, sessionId })
   const agentRecord = asRecord(record.agent)
   accumulator.model = extractString(agentRecord?.model_name)
