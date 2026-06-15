@@ -1104,10 +1104,36 @@ type GlabExecOptions = Omit<GitExecOptions, 'cwd'> & {
  *
  * Retry policy mirrors ghExecFileAsync.
  */
+/**
+ * glab's `--hostname` flag rejects a host that carries a port
+ * ("error parsing --hostname: invalid hostname"). A self-hosted GitLab on a
+ * non-default port (e.g. `gitlab.example.com:8443`) must instead be selected
+ * via the `GITLAB_HOST` env var, which accepts `host:port`. Translate any
+ * `--hostname host:port` pair into `GITLAB_HOST` so every call site (`api`,
+ * `auth status`, …) works against ported self-hosted instances. Port-less
+ * `--hostname` values are left untouched.
+ *
+ * @internal exported for tests.
+ */
+export function redirectPortedHostnameToEnv(
+  args: string[],
+  options: GlabExecOptions
+): { args: string[]; options: GlabExecOptions } {
+  const i = args.indexOf('--hostname')
+  if (i === -1 || i + 1 >= args.length) return { args, options }
+  const host = args[i + 1]
+  if (!/^[^/\s]+:\d+$/.test(host)) return { args, options }
+  return {
+    args: [...args.slice(0, i), ...args.slice(i + 2)],
+    options: { ...options, env: { ...(options.env ?? process.env), GITLAB_HOST: host } }
+  }
+}
+
 export async function glabExecFileAsync(
   args: string[],
   options: GlabExecOptions = {}
 ): Promise<{ stdout: string; stderr: string }> {
+  ;({ args, options } = redirectPortedHostnameToEnv(args, options))
   let resolved = resolveCommand('glab', args, options.cwd, options.wslDistro)
   let lastError: unknown
   let attemptedDefaultWslFallback = false
