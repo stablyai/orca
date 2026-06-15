@@ -333,6 +333,7 @@ import type {
   HostedReviewInfo
 } from '../../shared/hosted-review'
 import { getHostedReviewForBranch as getHostedReviewForBranchFromRepo } from '../source-control/hosted-review'
+import type { ForgeProviderId } from '../source-control/forge-provider'
 import {
   createHostedReview as createHostedReviewFromRepo,
   getHostedReviewCreationEligibility as getHostedReviewCreationEligibilityFromRepo
@@ -1081,6 +1082,9 @@ function mergeRuntimeFolderWorkspace(repo: Repo, worktreeId: string, meta: Workt
     linkedLinearIssueOrganizationUrlKey: meta.linkedLinearIssueOrganizationUrlKey ?? null,
     linkedGitLabMR: meta.linkedGitLabMR ?? null,
     linkedGitLabIssue: meta.linkedGitLabIssue ?? null,
+    linkedBitbucketPR: meta.linkedBitbucketPR ?? null,
+    linkedAzureDevOpsPR: meta.linkedAzureDevOpsPR ?? null,
+    linkedGiteaPR: meta.linkedGiteaPR ?? null,
     isArchived: meta.isArchived ?? false,
     isUnread: meta.isUnread ?? false,
     isPinned: meta.isPinned ?? false,
@@ -1227,22 +1231,57 @@ async function canCheckoutExistingLocalBranch(
   return !worktrees.some((worktree) => normalizeLocalBranchName(worktree.branch) === branchName)
 }
 
-type SelectedPrBranchInput = {
+type SelectedReviewBranchInput = {
   branchNameOverride?: string
   linkedPR?: number | null
+  linkedGitLabMR?: number | null
+  linkedBitbucketPR?: number | null
+  linkedAzureDevOpsPR?: number | null
+  linkedGiteaPR?: number | null
   pushTarget?: GitPushTarget
 }
 
+type SelectedReviewBranch = {
+  provider: ForgeProviderId
+  number: number
+}
+
+function getSelectedReviewBranch(args: SelectedReviewBranchInput): SelectedReviewBranch | null {
+  if (typeof args.linkedPR === 'number') {
+    return { provider: 'github', number: args.linkedPR }
+  }
+  if (typeof args.linkedGitLabMR === 'number') {
+    return { provider: 'gitlab', number: args.linkedGitLabMR }
+  }
+  if (typeof args.linkedBitbucketPR === 'number') {
+    return { provider: 'bitbucket', number: args.linkedBitbucketPR }
+  }
+  if (typeof args.linkedAzureDevOpsPR === 'number') {
+    return { provider: 'azure-devops', number: args.linkedAzureDevOpsPR }
+  }
+  if (typeof args.linkedGiteaPR === 'number') {
+    return { provider: 'gitea', number: args.linkedGiteaPR }
+  }
+  return null
+}
+
 function isSelectedGitHubPrBranchOverride(
-  args: SelectedPrBranchInput,
+  args: SelectedReviewBranchInput,
   branchName: string
 ): boolean {
   return typeof args.linkedPR === 'number' && args.branchNameOverride === branchName
 }
 
+function isSelectedReviewBranchOverride(
+  args: SelectedReviewBranchInput,
+  branchName: string
+): boolean {
+  return getSelectedReviewBranch(args) !== null && args.branchNameOverride === branchName
+}
+
 function isMatchingSelectedGitHubPr(
   existingPR: Awaited<ReturnType<typeof getPRForBranch>>,
-  args: SelectedPrBranchInput,
+  args: SelectedReviewBranchInput,
   branchName: string
 ): boolean {
   return Boolean(
@@ -1255,13 +1294,54 @@ function isMatchingSelectedGitHubPr(
 function isAllowedPushTargetRemoteConflict(
   conflictKind: 'local' | 'remote' | null,
   branchName: string,
-  args: SelectedPrBranchInput
+  args: SelectedReviewBranchInput
 ): boolean {
   return (
     conflictKind === 'remote' &&
-    isSelectedGitHubPrBranchOverride(args, branchName) &&
+    isSelectedReviewBranchOverride(args, branchName) &&
     args.pushTarget?.branchName === branchName
   )
+}
+
+function getSelectedReviewLookupHints(args: SelectedReviewBranchInput): {
+  linkedGitHubPR?: number | null
+  linkedGitLabMR?: number | null
+  linkedBitbucketPR?: number | null
+  linkedAzureDevOpsPR?: number | null
+  linkedGiteaPR?: number | null
+} {
+  return {
+    linkedGitHubPR: args.linkedPR ?? null,
+    linkedGitLabMR: args.linkedGitLabMR ?? null,
+    linkedBitbucketPR: args.linkedBitbucketPR ?? null,
+    linkedAzureDevOpsPR: args.linkedAzureDevOpsPR ?? null,
+    linkedGiteaPR: args.linkedGiteaPR ?? null
+  }
+}
+
+async function getSelectedHostedReviewForBranch(
+  repo: Pick<Repo, 'path' | 'connectionId'>,
+  branchName: string,
+  args: SelectedReviewBranchInput
+): Promise<{ matchesSelected: boolean; number: number } | null> {
+  const selectedReview = getSelectedReviewBranch(args)
+  if (!selectedReview) {
+    return null
+  }
+  const review = await getHostedReviewForBranchFromRepo({
+    repoPath: repo.path,
+    connectionId: repo.connectionId ?? null,
+    branch: branchName,
+    ...getSelectedReviewLookupHints(args)
+  })
+  if (!review) {
+    return null
+  }
+  return {
+    matchesSelected:
+      review.provider === selectedReview.provider && review.number === selectedReview.number,
+    number: review.number
+  }
 }
 
 async function pathExists(pathValue: string): Promise<boolean> {
@@ -9418,6 +9498,9 @@ export class OrcaRuntimeService {
     linkedLinearIssueOrganizationUrlKey?: string | null
     linkedGitLabMR?: number | null
     linkedGitLabIssue?: number | null
+    linkedBitbucketPR?: number | null
+    linkedAzureDevOpsPR?: number | null
+    linkedGiteaPR?: number | null
     comment?: string
     displayName?: string
     telemetrySource?: WorkspaceCreateTelemetrySource
@@ -9506,6 +9589,13 @@ export class OrcaRuntimeService {
           ? { linkedGitLabIssue: args.linkedGitLabIssue }
           : {}),
         ...(args.linkedGitLabMR !== undefined ? { linkedGitLabMR: args.linkedGitLabMR } : {}),
+        ...(args.linkedBitbucketPR !== undefined
+          ? { linkedBitbucketPR: args.linkedBitbucketPR }
+          : {}),
+        ...(args.linkedAzureDevOpsPR !== undefined
+          ? { linkedAzureDevOpsPR: args.linkedAzureDevOpsPR }
+          : {}),
+        ...(args.linkedGiteaPR !== undefined ? { linkedGiteaPR: args.linkedGiteaPR } : {}),
         ...(effectiveCreatedWithAgent ? { createdWithAgent: effectiveCreatedWithAgent } : {}),
         ...(args.comment !== undefined ? { comment: args.comment } : {}),
         ...(args.manualOrder !== undefined ? { manualOrder: args.manualOrder } : {}),
@@ -9645,24 +9735,38 @@ export class OrcaRuntimeService {
 
     if (!checkoutExistingBranch) {
       let existingPR: Awaited<ReturnType<typeof getPRForBranch>> | null = null
-      try {
-        existingPR = await getPRForBranch(repo.path, branchName)
-      } catch {
-        if (allowedPushTargetRemoteConflict) {
-          throw new Error(`Could not verify selected PR branch "${branchName}". Try again.`)
+      const selectedReview = getSelectedReviewBranch(args)
+      if (selectedReview?.provider === 'github' || !allowedPushTargetRemoteConflict) {
+        try {
+          existingPR = await getPRForBranch(repo.path, branchName)
+        } catch {
+          if (allowedPushTargetRemoteConflict) {
+            throw new Error(`Could not verify selected PR branch "${branchName}". Try again.`)
+          }
+          // Why: worktree creation should not hard-fail on transient GitHub reachability
+          // issues because git state is still the source of truth for whether the
+          // worktree can be created locally.
         }
-        // Why: worktree creation should not hard-fail on transient GitHub reachability
-        // issues because git state is still the source of truth for whether the
-        // worktree can be created locally.
       }
-      if (
-        allowedPushTargetRemoteConflict &&
-        !isMatchingSelectedGitHubPr(existingPR, args, branchName)
-      ) {
-        if (existingPR) {
-          throw new Error(`Branch "${branchName}" already has PR #${existingPR.number}.`)
+      if (allowedPushTargetRemoteConflict) {
+        if (selectedReview?.provider === 'github') {
+          if (!isMatchingSelectedGitHubPr(existingPR, args, branchName)) {
+            if (existingPR) {
+              throw new Error(`Branch "${branchName}" already has PR #${existingPR.number}.`)
+            }
+            throw new Error(`Branch "${branchName}" already exists on a remote.`)
+          }
+        } else if (selectedReview) {
+          const hostedReview = await getSelectedHostedReviewForBranch(repo, branchName, args).catch(
+            () => null
+          )
+          if (!hostedReview?.matchesSelected) {
+            if (hostedReview) {
+              throw new Error(`Branch "${branchName}" already has PR #${hostedReview.number}.`)
+            }
+            throw new Error(`Branch "${branchName}" already exists on a remote.`)
+          }
         }
-        throw new Error(`Branch "${branchName}" already exists on a remote.`)
       }
       if (existingPR && !isMatchingSelectedGitHubPr(existingPR, args, branchName)) {
         throw new Error(`Branch "${branchName}" already has PR #${existingPR.number}.`)
@@ -9900,6 +10004,13 @@ export class OrcaRuntimeService {
         ? { linkedGitLabIssue: args.linkedGitLabIssue }
         : {}),
       ...(args.linkedGitLabMR !== undefined ? { linkedGitLabMR: args.linkedGitLabMR } : {}),
+      ...(args.linkedBitbucketPR !== undefined
+        ? { linkedBitbucketPR: args.linkedBitbucketPR }
+        : {}),
+      ...(args.linkedAzureDevOpsPR !== undefined
+        ? { linkedAzureDevOpsPR: args.linkedAzureDevOpsPR }
+        : {}),
+      ...(args.linkedGiteaPR !== undefined ? { linkedGiteaPR: args.linkedGiteaPR } : {}),
       ...(effectiveCreatedWithAgent ? { createdWithAgent: effectiveCreatedWithAgent } : {}),
       ...(args.pendingFirstAgentMessageRename === true && effectiveCreatedWithAgent
         ? { pendingFirstAgentMessageRename: true }
@@ -10154,6 +10265,9 @@ export class OrcaRuntimeService {
       linkedLinearIssueOrganizationUrlKey?: string | null
       linkedGitLabMR?: number | null
       linkedGitLabIssue?: number | null
+      linkedBitbucketPR?: number | null
+      linkedAzureDevOpsPR?: number | null
+      linkedGiteaPR?: number | null
       comment?: string
       displayName?: string
       workspaceStatus?: string
@@ -10203,6 +10317,11 @@ export class OrcaRuntimeService {
           : {}),
         ...(args.linkedGitLabMR != null ? { linkedGitLabMR: args.linkedGitLabMR } : {}),
         ...(args.linkedGitLabIssue != null ? { linkedGitLabIssue: args.linkedGitLabIssue } : {}),
+        ...(args.linkedBitbucketPR != null ? { linkedBitbucketPR: args.linkedBitbucketPR } : {}),
+        ...(args.linkedAzureDevOpsPR != null
+          ? { linkedAzureDevOpsPR: args.linkedAzureDevOpsPR }
+          : {}),
+        ...(args.linkedGiteaPR != null ? { linkedGiteaPR: args.linkedGiteaPR } : {}),
         ...(args.pushTarget ? { pushTarget: args.pushTarget } : {}),
         ...(args.workspaceStatus ? { workspaceStatus: args.workspaceStatus as never } : {}),
         ...(args.manualOrder !== undefined ? { manualOrder: args.manualOrder } : {}),

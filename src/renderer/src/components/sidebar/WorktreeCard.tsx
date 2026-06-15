@@ -306,7 +306,17 @@ const WorktreeCard = React.memo(function WorktreeCard({
   const hostedReview: HostedReviewInfo | null | undefined =
     hostedReviewEntry !== undefined ? hostedReviewEntry.data : undefined
   const linkedGitLabMR = worktree.linkedGitLabMR ?? null
-  const prDisplay = getWorktreeCardPrDisplay(hostedReview, worktree.linkedPR, linkedGitLabMR)
+  const linkedBitbucketPR = worktree.linkedBitbucketPR ?? null
+  const linkedAzureDevOpsPR = worktree.linkedAzureDevOpsPR ?? null
+  const linkedGiteaPR = worktree.linkedGiteaPR ?? null
+  const prDisplay = getWorktreeCardPrDisplay(
+    hostedReview,
+    worktree.linkedPR,
+    linkedGitLabMR,
+    linkedBitbucketPR,
+    linkedAzureDevOpsPR,
+    linkedGiteaPR
+  )
   const issue: IssueInfo | null | undefined = worktree.linkedIssue
     ? issueEntry !== undefined
       ? issueEntry.data
@@ -425,6 +435,9 @@ const WorktreeCard = React.memo(function WorktreeCard({
         repoId: repo.id,
         linkedGitHubPR: worktree.linkedPR ?? null,
         linkedGitLabMR,
+        linkedBitbucketPR,
+        linkedAzureDevOpsPR,
+        linkedGiteaPR,
         staleWhileRevalidate: true
       })
     }
@@ -441,6 +454,9 @@ const WorktreeCard = React.memo(function WorktreeCard({
     worktree.isBare,
     worktree.linkedPR,
     linkedGitLabMR,
+    linkedBitbucketPR,
+    linkedAzureDevOpsPR,
+    linkedGiteaPR,
     fetchHostedReviewForBranch,
     branch,
     hostedReviewCacheKey,
@@ -766,13 +782,31 @@ const WorktreeCard = React.memo(function WorktreeCard({
   const detailsHoverControl = useWorktreeCardDetailsHoverControl()
   const hasExplicitLinkedReview =
     (metaReview?.provider === 'github' && worktree.linkedPR !== null) ||
-    (metaReview?.provider === 'gitlab' && linkedGitLabMR !== null)
+    (metaReview?.provider === 'gitlab' && linkedGitLabMR !== null) ||
+    (metaReview?.provider === 'bitbucket' && linkedBitbucketPR !== null) ||
+    (metaReview?.provider === 'azure-devops' && linkedAzureDevOpsPR !== null) ||
+    (metaReview?.provider === 'gitea' && linkedGiteaPR !== null)
   const handleUnlinkReview = useCallback(() => {
-    if (metaReview?.provider === 'gitlab') {
-      void updateWorktreeMeta(worktree.id, { linkedGitLabMR: null })
-      return
+    switch (metaReview?.provider) {
+      case 'github':
+        void updateWorktreeMeta(worktree.id, { linkedPR: null })
+        return
+      case 'gitlab':
+        void updateWorktreeMeta(worktree.id, { linkedGitLabMR: null })
+        return
+      case 'bitbucket':
+        void updateWorktreeMeta(worktree.id, { linkedBitbucketPR: null })
+        return
+      case 'azure-devops':
+        void updateWorktreeMeta(worktree.id, { linkedAzureDevOpsPR: null })
+        return
+      case 'gitea':
+        void updateWorktreeMeta(worktree.id, { linkedGiteaPR: null })
+        return
+      case 'unsupported':
+      case undefined:
+        break
     }
-    void updateWorktreeMeta(worktree.id, { linkedPR: null })
   }, [metaReview?.provider, updateWorktreeMeta, worktree.id])
   const handleOpenLinearIssueInOrca = useCallback(
     (e: React.MouseEvent) => {

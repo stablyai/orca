@@ -1155,16 +1155,23 @@ function SourceControlInner(): React.JSX.Element {
   const linkedGitHubPR = activeWorktree?.linkedPR ?? null
   const fallbackGitHubPRNumber = linkedGitHubPR == null ? (activePrFromQueue?.number ?? null) : null
   const linkedGitLabMR = activeWorktree?.linkedGitLabMR ?? null
+  const linkedBitbucketPR = activeWorktree?.linkedBitbucketPR ?? null
+  const linkedAzureDevOpsPR = activeWorktree?.linkedAzureDevOpsPR ?? null
+  const linkedGiteaPR = activeWorktree?.linkedGiteaPR ?? null
+  const hasLinkedHostedReview =
+    (linkedGitHubPR ?? fallbackGitHubPRNumber) !== null ||
+    linkedGitLabMR !== null ||
+    linkedBitbucketPR !== null ||
+    linkedAzureDevOpsPR !== null ||
+    linkedGiteaPR !== null
   // Why: when activeRepo.connectionId is truthy, neither the SourceControl
   // effect below nor WorktreeCard.tsx fetches hostedReview for this branch,
   // so hostedReviewEntry would stay undefined forever and would permanently
-  // block Publish Branch on SSH-backed worktrees with a linkedPR/linkedGitLabMR
+  // block Publish Branch on SSH-backed worktrees with linked review metadata
   // and no upstream. Skip the loading state for those repos so the publish
   // gate doesn't latch.
   const isHostedReviewStateLoading =
-    !activeRepo?.connectionId &&
-    ((linkedGitHubPR ?? fallbackGitHubPRNumber) !== null || linkedGitLabMR !== null) &&
-    hostedReviewEntry === undefined
+    !activeRepo?.connectionId && hasLinkedHostedReview && hostedReviewEntry === undefined
   useEffect(() => {
     if (
       !isBranchVisible ||
@@ -1185,6 +1192,9 @@ function SourceControlInner(): React.JSX.Element {
       linkedGitHubPR,
       fallbackGitHubPR: fallbackGitHubPRNumber,
       linkedGitLabMR,
+      linkedBitbucketPR,
+      linkedAzureDevOpsPR,
+      linkedGiteaPR,
       staleWhileRevalidate: true
     })
     // Why: the GitHub-specific cache powers grouping/check panels; keep that
@@ -1200,7 +1210,10 @@ function SourceControlInner(): React.JSX.Element {
     isFolder,
     linkedGitHubPR,
     fallbackGitHubPRNumber,
-    linkedGitLabMR
+    linkedGitLabMR,
+    linkedBitbucketPR,
+    linkedAzureDevOpsPR,
+    linkedGiteaPR
   ])
 
   // Why: eligibility is recomputed below, after prGenerating / isCreatingPr are
@@ -2279,7 +2292,10 @@ function SourceControlInner(): React.JSX.Element {
       behind: remoteStatus?.behind,
       linkedGitHubPR,
       fallbackGitHubPR: fallbackGitHubPRNumber,
-      linkedGitLabMR
+      linkedGitLabMR,
+      linkedBitbucketPR,
+      linkedAzureDevOpsPR,
+      linkedGiteaPR
     })
       .then((result) => {
         if (!stale) {
@@ -2312,6 +2328,9 @@ function SourceControlInner(): React.JSX.Element {
     linkedGitHubPR,
     fallbackGitHubPRNumber,
     linkedGitLabMR,
+    linkedBitbucketPR,
+    linkedAzureDevOpsPR,
+    linkedGiteaPR,
     prGenerating,
     remoteStatus?.ahead,
     remoteStatus?.behind,

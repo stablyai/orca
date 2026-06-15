@@ -218,6 +218,9 @@ function areWorktreesEqual(current: Worktree[] | undefined, next: Worktree[]): b
       worktree.linkedPR === candidate.linkedPR &&
       worktree.linkedGitLabMR === candidate.linkedGitLabMR &&
       worktree.linkedGitLabIssue === candidate.linkedGitLabIssue &&
+      worktree.linkedBitbucketPR === candidate.linkedBitbucketPR &&
+      worktree.linkedAzureDevOpsPR === candidate.linkedAzureDevOpsPR &&
+      worktree.linkedGiteaPR === candidate.linkedGiteaPR &&
       worktree.isArchived === candidate.isArchived &&
       worktree.isUnread === candidate.isUnread &&
       worktree.isPinned === candidate.isPinned &&
@@ -1280,7 +1283,10 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     pendingFirstAgentMessageRename,
     creationId,
     linkedLinearIssueWorkspaceId,
-    linkedLinearIssueOrganizationUrlKey
+    linkedLinearIssueOrganizationUrlKey,
+    linkedBitbucketPR,
+    linkedAzureDevOpsPR,
+    linkedGiteaPR
   ) => {
     const retryableConflictPatterns = [
       /already exists locally/i,
@@ -1331,6 +1337,9 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
             ...(workspaceStatus !== undefined ? { workspaceStatus } : {}),
             ...(linkedGitLabMR !== undefined ? { linkedGitLabMR } : {}),
             ...(linkedGitLabIssue !== undefined ? { linkedGitLabIssue } : {}),
+            ...(linkedBitbucketPR !== undefined ? { linkedBitbucketPR } : {}),
+            ...(linkedAzureDevOpsPR !== undefined ? { linkedAzureDevOpsPR } : {}),
+            ...(linkedGiteaPR !== undefined ? { linkedGiteaPR } : {}),
             ...(startup ? { startup } : {}),
             ...(creationId ? { creationId } : {})
           }
@@ -1368,6 +1377,9 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
                     ...(workspaceStatus !== undefined ? { workspaceStatus } : {}),
                     ...(linkedGitLabMR !== undefined ? { linkedGitLabMR } : {}),
                     ...(linkedGitLabIssue !== undefined ? { linkedGitLabIssue } : {}),
+                    ...(linkedBitbucketPR !== undefined ? { linkedBitbucketPR } : {}),
+                    ...(linkedAzureDevOpsPR !== undefined ? { linkedAzureDevOpsPR } : {}),
+                    ...(linkedGiteaPR !== undefined ? { linkedGiteaPR } : {}),
                     ...(startup
                       ? {
                           startupCommand: startup.command,
@@ -1886,7 +1898,13 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       return
     }
     const shouldRefreshHostedReview =
-      updates.linkedPR === null && worktreeForUpdate?.linkedPR !== null
+      (updates.linkedPR === null && worktreeForUpdate?.linkedPR !== null) ||
+      (updates.linkedGitLabMR === null && (worktreeForUpdate?.linkedGitLabMR ?? null) !== null) ||
+      (updates.linkedBitbucketPR === null &&
+        (worktreeForUpdate?.linkedBitbucketPR ?? null) !== null) ||
+      (updates.linkedAzureDevOpsPR === null &&
+        (worktreeForUpdate?.linkedAzureDevOpsPR ?? null) !== null) ||
+      (updates.linkedGiteaPR === null && (worktreeForUpdate?.linkedGiteaPR ?? null) !== null)
     const reviewRepo = shouldRefreshHostedReview
       ? get().repos.find((repo) => repo.id === worktreeForUpdate?.repoId)
       : undefined
@@ -2008,7 +2026,18 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         void get().fetchHostedReviewForBranch(reviewRepo.path, reviewBranch, {
           repoId: reviewRepo.id,
           linkedGitHubPR: null,
-          linkedGitLabMR: worktreeForUpdate?.linkedGitLabMR ?? null,
+          linkedGitLabMR:
+            updates.linkedGitLabMR === null ? null : (worktreeForUpdate?.linkedGitLabMR ?? null),
+          linkedBitbucketPR:
+            updates.linkedBitbucketPR === null
+              ? null
+              : (worktreeForUpdate?.linkedBitbucketPR ?? null),
+          linkedAzureDevOpsPR:
+            updates.linkedAzureDevOpsPR === null
+              ? null
+              : (worktreeForUpdate?.linkedAzureDevOpsPR ?? null),
+          linkedGiteaPR:
+            updates.linkedGiteaPR === null ? null : (worktreeForUpdate?.linkedGiteaPR ?? null),
           force: true
         })
       }

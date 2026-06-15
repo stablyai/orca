@@ -102,6 +102,7 @@ const {
   invalidateAuthorizedRootsCacheMock,
   createHostedReviewMock,
   getHostedReviewCreationEligibilityMock,
+  getHostedReviewForBranchMock,
   getPRForBranchMock,
   listGitHubIssuesMock,
   detectInstalledAgentsMock,
@@ -162,6 +163,7 @@ const {
     invalidateAuthorizedRootsCacheMock: vi.fn(),
     createHostedReviewMock: vi.fn(),
     getHostedReviewCreationEligibilityMock: vi.fn(),
+    getHostedReviewForBranchMock: vi.fn(),
     getPRForBranchMock: vi.fn().mockResolvedValue(null),
     listGitHubIssuesMock: vi.fn(),
     detectInstalledAgentsMock: vi.fn(),
@@ -272,6 +274,10 @@ vi.mock('../ipc/filesystem-auth', () => ({
 vi.mock('../source-control/hosted-review-creation', () => ({
   createHostedReview: createHostedReviewMock,
   getHostedReviewCreationEligibility: getHostedReviewCreationEligibilityMock
+}))
+
+vi.mock('../source-control/hosted-review', () => ({
+  getHostedReviewForBranch: getHostedReviewForBranchMock
 }))
 
 vi.mock('../github/client', async (importOriginal) => {
@@ -417,6 +423,8 @@ afterEach(() => {
     title: null,
     body: null
   })
+  getHostedReviewForBranchMock.mockReset()
+  getHostedReviewForBranchMock.mockResolvedValue(null)
   getPRForBranchMock.mockReset()
   getPRForBranchMock.mockResolvedValue(null)
   listGitHubIssuesMock.mockReset()
@@ -1713,6 +1721,74 @@ describe('OrcaRuntimeService', () => {
       expect(result.worktree).toMatchObject({
         path: createdWorktree.path,
         branch: 'refs/heads/feature/fix'
+      })
+    } finally {
+      gitSpy.mockRestore()
+    }
+  })
+
+  it('creates a selected Bitbucket PR branch override from a matching remote branch', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    const createdWorktree = {
+      path: '/tmp/workspaces/bitbucket-title',
+      head: 'abc123',
+      branch: 'refs/heads/feature/bitbucket',
+      isBare: false,
+      isMainWorktree: false
+    }
+    computeWorktreePathMock.mockReturnValue(createdWorktree.path)
+    ensurePathWithinWorkspaceMock.mockReturnValue(createdWorktree.path)
+    vi.mocked(getBranchConflictKind).mockResolvedValueOnce('remote')
+    vi.mocked(listWorktrees).mockResolvedValueOnce([createdWorktree])
+    getHostedReviewForBranchMock.mockResolvedValueOnce({
+      provider: 'bitbucket',
+      number: 11,
+      title: 'Bitbucket PR',
+      state: 'open',
+      url: 'https://bitbucket.org/team/repo/pull-requests/11',
+      status: 'success',
+      updatedAt: '2026-05-21T00:00:00Z',
+      mergeable: 'UNKNOWN'
+    })
+    const gitSpy = vi.spyOn(gitRunner, 'gitExecFileAsync').mockResolvedValue({
+      stdout: '',
+      stderr: ''
+    })
+
+    try {
+      const result = await runtime.createManagedWorktree({
+        repoSelector: 'id:repo-1',
+        name: 'bitbucket-title',
+        baseBranch: 'abc123',
+        branchNameOverride: 'feature/bitbucket',
+        linkedBitbucketPR: 11,
+        pushTarget: { remoteName: 'origin', branchName: 'feature/bitbucket' }
+      })
+
+      expect(getBranchConflictKind).toHaveBeenCalledWith(
+        TEST_REPO_PATH,
+        'feature/bitbucket',
+        'abc123'
+      )
+      expect(getHostedReviewForBranchMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          repoPath: TEST_REPO_PATH,
+          branch: 'feature/bitbucket',
+          linkedBitbucketPR: 11
+        })
+      )
+      expect(getPRForBranchMock).not.toHaveBeenCalled()
+      expect(addWorktree).toHaveBeenCalledWith(
+        TEST_REPO_PATH,
+        createdWorktree.path,
+        'feature/bitbucket',
+        'abc123',
+        false
+      )
+      expect(result.worktree).toMatchObject({
+        path: createdWorktree.path,
+        branch: 'refs/heads/feature/bitbucket',
+        linkedBitbucketPR: 11
       })
     } finally {
       gitSpy.mockRestore()

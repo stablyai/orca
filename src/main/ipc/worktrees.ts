@@ -561,6 +561,9 @@ function mergeFolderWorkspace(repo: Repo, worktreeId: string, meta: WorktreeMeta
     linkedLinearIssueOrganizationUrlKey: meta.linkedLinearIssueOrganizationUrlKey ?? null,
     linkedGitLabMR: meta.linkedGitLabMR ?? null,
     linkedGitLabIssue: meta.linkedGitLabIssue ?? null,
+    linkedBitbucketPR: meta.linkedBitbucketPR ?? null,
+    linkedAzureDevOpsPR: meta.linkedAzureDevOpsPR ?? null,
+    linkedGiteaPR: meta.linkedGiteaPR ?? null,
     isArchived: meta.isArchived ?? false,
     isUnread: meta.isUnread ?? false,
     isPinned: meta.isPinned ?? false,
@@ -670,7 +673,12 @@ function createFolderWorkspace(
     ...(args.manualOrder !== undefined ? { manualOrder: args.manualOrder } : {}),
     ...(args.workspaceStatus !== undefined ? { workspaceStatus: args.workspaceStatus } : {}),
     ...(args.linkedGitLabIssue !== undefined ? { linkedGitLabIssue: args.linkedGitLabIssue } : {}),
-    ...(args.linkedGitLabMR !== undefined ? { linkedGitLabMR: args.linkedGitLabMR } : {})
+    ...(args.linkedGitLabMR !== undefined ? { linkedGitLabMR: args.linkedGitLabMR } : {}),
+    ...(args.linkedBitbucketPR !== undefined ? { linkedBitbucketPR: args.linkedBitbucketPR } : {}),
+    ...(args.linkedAzureDevOpsPR !== undefined
+      ? { linkedAzureDevOpsPR: args.linkedAzureDevOpsPR }
+      : {}),
+    ...(args.linkedGiteaPR !== undefined ? { linkedGiteaPR: args.linkedGiteaPR } : {})
   })
   return { worktree: mergeFolderWorkspace(repo, worktreeId, meta) }
 }

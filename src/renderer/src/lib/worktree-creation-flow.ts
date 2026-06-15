@@ -92,7 +92,10 @@ async function executeWorktreeCreation(
         request.pendingFirstAgentMessageRename,
         creationId,
         request.linkedLinearIssueWorkspaceId,
-        request.linkedLinearIssueOrganizationUrlKey
+        request.linkedLinearIssueOrganizationUrlKey,
+        request.linkedBitbucketPR,
+        request.linkedAzureDevOpsPR,
+        request.linkedGiteaPR
       )
   } catch (error) {
     // Why: a missing entry means the user cancelled mid-flight — abandon

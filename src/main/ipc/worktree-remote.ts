@@ -27,6 +27,8 @@ import { getPRForBranch } from '../github/client'
 import { listWorktrees, addWorktree, addSparseWorktree } from '../git/worktree'
 import type { AddWorktreeResult } from '../git/worktree'
 import { getGitUsername, getDefaultBaseRef, getBranchConflictKind } from '../git/repo'
+import { getHostedReviewForBranch } from '../source-control/hosted-review'
+import type { ForgeProviderId } from '../source-control/forge-provider'
 import { validateGitPushTarget } from '../git/push-target-validation'
 import { assertGitPushTargetShape } from '../../shared/git-push-target-validation'
 import { gitExecFileAsync } from '../git/runner'
@@ -557,21 +559,58 @@ async function hasSshRemoteBranchConflict(
   }
 }
 
-type SelectedPrBranchInput = Pick<
+type SelectedReviewBranchInput = Pick<
   CreateWorktreeArgs,
-  'branchNameOverride' | 'linkedPR' | 'pushTarget'
+  | 'branchNameOverride'
+  | 'linkedPR'
+  | 'linkedGitLabMR'
+  | 'linkedBitbucketPR'
+  | 'linkedAzureDevOpsPR'
+  | 'linkedGiteaPR'
+  | 'pushTarget'
 >
 
+type SelectedReviewBranch = {
+  provider: ForgeProviderId
+  number: number
+}
+
+function getSelectedReviewBranch(args: SelectedReviewBranchInput): SelectedReviewBranch | null {
+  if (typeof args.linkedPR === 'number') {
+    return { provider: 'github', number: args.linkedPR }
+  }
+  if (typeof args.linkedGitLabMR === 'number') {
+    return { provider: 'gitlab', number: args.linkedGitLabMR }
+  }
+  if (typeof args.linkedBitbucketPR === 'number') {
+    return { provider: 'bitbucket', number: args.linkedBitbucketPR }
+  }
+  if (typeof args.linkedAzureDevOpsPR === 'number') {
+    return { provider: 'azure-devops', number: args.linkedAzureDevOpsPR }
+  }
+  if (typeof args.linkedGiteaPR === 'number') {
+    return { provider: 'gitea', number: args.linkedGiteaPR }
+  }
+  return null
+}
+
 function isSelectedGitHubPrBranchOverride(
-  args: SelectedPrBranchInput,
+  args: SelectedReviewBranchInput,
   branchName: string
 ): boolean {
   return typeof args.linkedPR === 'number' && args.branchNameOverride === branchName
 }
 
+function isSelectedReviewBranchOverride(
+  args: SelectedReviewBranchInput,
+  branchName: string
+): boolean {
+  return getSelectedReviewBranch(args) !== null && args.branchNameOverride === branchName
+}
+
 function isMatchingSelectedGitHubPr(
   existingPR: Awaited<ReturnType<typeof getPRForBranch>>,
-  args: SelectedPrBranchInput,
+  args: SelectedReviewBranchInput,
   branchName: string
 ): boolean {
   return Boolean(
@@ -584,13 +623,54 @@ function isMatchingSelectedGitHubPr(
 function isAllowedPushTargetRemoteConflict(
   conflictKind: 'local' | 'remote' | null,
   branchName: string,
-  args: SelectedPrBranchInput
+  args: SelectedReviewBranchInput
 ): boolean {
   return (
     conflictKind === 'remote' &&
-    isSelectedGitHubPrBranchOverride(args, branchName) &&
+    isSelectedReviewBranchOverride(args, branchName) &&
     args.pushTarget?.branchName === branchName
   )
+}
+
+function getSelectedReviewLookupHints(args: SelectedReviewBranchInput): {
+  linkedGitHubPR?: number | null
+  linkedGitLabMR?: number | null
+  linkedBitbucketPR?: number | null
+  linkedAzureDevOpsPR?: number | null
+  linkedGiteaPR?: number | null
+} {
+  return {
+    linkedGitHubPR: args.linkedPR ?? null,
+    linkedGitLabMR: args.linkedGitLabMR ?? null,
+    linkedBitbucketPR: args.linkedBitbucketPR ?? null,
+    linkedAzureDevOpsPR: args.linkedAzureDevOpsPR ?? null,
+    linkedGiteaPR: args.linkedGiteaPR ?? null
+  }
+}
+
+async function getSelectedHostedReviewForBranch(
+  repo: Pick<Repo, 'path' | 'connectionId'>,
+  branchName: string,
+  args: SelectedReviewBranchInput
+): Promise<{ matchesSelected: boolean; number: number } | null> {
+  const selectedReview = getSelectedReviewBranch(args)
+  if (!selectedReview) {
+    return null
+  }
+  const review = await getHostedReviewForBranch({
+    repoPath: repo.path,
+    connectionId: repo.connectionId ?? null,
+    branch: branchName,
+    ...getSelectedReviewLookupHints(args)
+  })
+  if (!review) {
+    return null
+  }
+  return {
+    matchesSelected:
+      review.provider === selectedReview.provider && review.number === selectedReview.number,
+    number: review.number
+  }
 }
 
 async function remotePathExists(
@@ -1201,9 +1281,14 @@ export async function createRemoteWorktree(
   )
   if (!checkoutExistingBranch) {
     if (await hasSshRemoteBranchConflict(provider, repo.path, branchName, baseBranch)) {
-      throw new Error(
-        `Branch "${branchName}" already exists on a remote. Pick a different worktree name.`
-      )
+      const selectedReview = isAllowedPushTargetRemoteConflict('remote', branchName, args)
+        ? await getSelectedHostedReviewForBranch(repo, branchName, args).catch(() => null)
+        : null
+      if (!selectedReview?.matchesSelected) {
+        throw new Error(
+          `Branch "${branchName}" already exists on a remote. Pick a different worktree name.`
+        )
+      }
     }
   }
 
@@ -1465,6 +1550,11 @@ export async function createRemoteWorktree(
     ...(args.manualOrder !== undefined ? { manualOrder: args.manualOrder } : {}),
     ...(args.linkedGitLabIssue !== undefined ? { linkedGitLabIssue: args.linkedGitLabIssue } : {}),
     ...(args.linkedGitLabMR !== undefined ? { linkedGitLabMR: args.linkedGitLabMR } : {}),
+    ...(args.linkedBitbucketPR !== undefined ? { linkedBitbucketPR: args.linkedBitbucketPR } : {}),
+    ...(args.linkedAzureDevOpsPR !== undefined
+      ? { linkedAzureDevOpsPR: args.linkedAzureDevOpsPR }
+      : {}),
+    ...(args.linkedGiteaPR !== undefined ? { linkedGiteaPR: args.linkedGiteaPR } : {}),
     ...(args.workspaceStatus !== undefined ? { workspaceStatus: args.workspaceStatus } : {})
   }
   const { worktree } = timing.timeSync('persist_metadata', () => {
@@ -1656,6 +1746,7 @@ export async function createLocalWorktree(
   let selectedExistingLocalBranchName: string | null = null
   let lastBranchConflictKind: 'local' | 'remote' | null = null
   let lastExistingPR: Awaited<ReturnType<typeof getPRForBranch>> | null = null
+  let lastExistingReviewNumber: number | null = null
   for (let suffix = 1; suffix <= MAX_SUFFIX_ATTEMPTS; suffix += 1) {
     effectiveSanitizedName = suffix === 1 ? sanitizedName : `${sanitizedName}-${suffix}`
     effectiveRequestedName =
@@ -1692,15 +1783,32 @@ export async function createLocalWorktree(
       if (allowedPushTargetRemoteConflict) {
         lastExistingPR = null
         let lookupFailed = false
-        try {
-          lastExistingPR = await getPRForBranch(repo.path, branchName)
-        } catch {
-          lookupFailed = true
-        }
-        if (!lookupFailed && isMatchingSelectedGitHubPr(lastExistingPR, args, branchName)) {
-          lastBranchConflictKind = null
-        } else if (lastExistingPR) {
-          break
+        const selectedReview = getSelectedReviewBranch(args)
+        if (selectedReview?.provider === 'github') {
+          try {
+            lastExistingPR = await getPRForBranch(repo.path, branchName)
+          } catch {
+            lookupFailed = true
+          }
+          if (!lookupFailed && isMatchingSelectedGitHubPr(lastExistingPR, args, branchName)) {
+            lastBranchConflictKind = null
+          } else if (lastExistingPR) {
+            lastExistingReviewNumber = lastExistingPR.number
+            break
+          }
+        } else if (selectedReview) {
+          let hostedReview: Awaited<ReturnType<typeof getSelectedHostedReviewForBranch>> = null
+          try {
+            hostedReview = await getSelectedHostedReviewForBranch(repo, branchName, args)
+          } catch {
+            lookupFailed = true
+          }
+          if (!lookupFailed && hostedReview?.matchesSelected) {
+            lastBranchConflictKind = null
+          } else if (hostedReview) {
+            lastExistingReviewNumber = hostedReview.number
+            break
+          }
         }
       }
     }
@@ -1729,6 +1837,7 @@ export async function createLocalWorktree(
       }
       if (lastExistingPR && !isMatchingSelectedGitHubPr(lastExistingPR, args, branchName)) {
         if (args.branchNameOverride) {
+          lastExistingReviewNumber = lastExistingPR.number
           break
         }
         continue
@@ -1751,9 +1860,9 @@ export async function createLocalWorktree(
     // Why: if every suffix in range collides, fall back to the original
     // "reject with a specific reason" behavior so the user sees why creation
     // failed instead of a generic error or (worse) an infinite spinner.
-    if (lastExistingPR) {
+    if (lastExistingReviewNumber !== null) {
       throw new Error(
-        `Branch "${branchName}" already has PR #${lastExistingPR.number}. Pick a different worktree name.`
+        `Branch "${branchName}" already has PR #${lastExistingReviewNumber}. Pick a different worktree name.`
       )
     }
     if (lastBranchConflictKind) {
@@ -1970,6 +2079,11 @@ export async function createLocalWorktree(
     ...(args.manualOrder !== undefined ? { manualOrder: args.manualOrder } : {}),
     ...(args.linkedGitLabIssue !== undefined ? { linkedGitLabIssue: args.linkedGitLabIssue } : {}),
     ...(args.linkedGitLabMR !== undefined ? { linkedGitLabMR: args.linkedGitLabMR } : {}),
+    ...(args.linkedBitbucketPR !== undefined ? { linkedBitbucketPR: args.linkedBitbucketPR } : {}),
+    ...(args.linkedAzureDevOpsPR !== undefined
+      ? { linkedAzureDevOpsPR: args.linkedAzureDevOpsPR }
+      : {}),
+    ...(args.linkedGiteaPR !== undefined ? { linkedGiteaPR: args.linkedGiteaPR } : {}),
     ...(args.workspaceStatus !== undefined ? { workspaceStatus: args.workspaceStatus } : {})
   }
   const { worktree } = timing.timeSync('persist_metadata', () => {

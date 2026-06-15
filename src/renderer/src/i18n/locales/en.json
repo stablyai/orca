@@ -5561,7 +5561,8 @@
           "advanced": "Advanced",
           "serverDetails": "Server details",
           "advertiseThisApp": "Advertise this app as a server",
-          "advertiseThisAppHelp": "Create access links for browsers, mobile clients, or another Orca client to connect back to this running app."
+          "advertiseThisAppHelp": "Create access links for browsers, mobile clients, or another Orca client to connect back to this running app.",
+          "runtimeReachable": "{{value0}} is reachable."
         },
         "RuntimePairingGeneratedUrlRows": {
           "0495f68959": "Copy {{value0}}"
@@ -8277,7 +8278,10 @@
             "31f6d46278": "Unresolved",
             "2c417432b7": "Resolved locally",
             "f3a8b2c1d0e5": "Enter a {{value0}} title.",
-            "e2b7a1c0d9f4": "Failed to create {{value0}}"
+            "e2b7a1c0d9f4": "Failed to create {{value0}}",
+            "hugeRepoIgnorePrompt": "This repository has too many active changes. Add \"{{value0}}\" to .gitignore?",
+            "hugeRepoIgnoreAction": "Add to .gitignore",
+            "tooManyChanges": "Too many changes detected. Only the first {{value0}} are shown."
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "Could not start the selected agent.",
