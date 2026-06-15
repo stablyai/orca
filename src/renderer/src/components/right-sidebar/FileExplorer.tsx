@@ -5,6 +5,7 @@ import { ArrowLeft } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { useActiveWorktree, useRepoById } from '@/store/selectors'
 import { basename, dirname } from '@/lib/path'
+import { useRuntimeFileListForWorktree } from '@/components/quick-open-file-list'
 import { folderRelativePathToIncludeGlob } from './file-search-include-pattern'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -13,6 +14,7 @@ import { cn } from '@/lib/utils'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import { shouldResetFileExplorerForVisibleWorktree } from './file-explorer-reset'
 import { FileExplorerBackgroundMenu } from './FileExplorerBackgroundMenu'
+import { FileExplorerNameFilter } from './FileExplorerNameFilter'
 import { FileExplorerToolbar } from './FileExplorerToolbar'
 import { FileExplorerTreeStatus } from './FileExplorerTreeStatus'
 import { FileExplorerVirtualRows } from './FileExplorerVirtualRows'
@@ -126,15 +128,47 @@ function FileExplorerFiles(): React.JSX.Element {
     refreshDir,
     resetAndLoad
   } = useFileExplorerTree(worktreePath, expanded, activeWorktreeId)
-  const { rowProjection, ignoredByRelativePath, showGitIgnoredFiles, toggleGitIgnoredFiles } =
-    useFileExplorerVisibleRowProjection(
-      activeWorktreeId,
-      worktreePath,
-      dirCache,
-      expanded,
-      activeRepoSupportsGit,
-      showDotfiles
-    )
+  const [nameFilterQuery, setNameFilterQuery] = useState('')
+  const hasNameFilter = nameFilterQuery.trim().length > 0
+  const nameFilterFiles = useRuntimeFileListForWorktree({
+    enabled: hasNameFilter,
+    worktreeId: activeWorktreeId
+  })
+  const nameFilterSource = useMemo(
+    () =>
+      hasNameFilter
+        ? {
+            query: nameFilterQuery,
+            relativePaths:
+              nameFilterFiles.loading && nameFilterFiles.files.length === 0
+                ? null
+                : nameFilterFiles.files
+          }
+        : null,
+    [hasNameFilter, nameFilterFiles.files, nameFilterFiles.loading, nameFilterQuery]
+  )
+  const {
+    rowProjection,
+    ignoredByRelativePath,
+    showGitIgnoredFiles,
+    nameFilterExpandedPaths,
+    toggleGitIgnoredFiles
+  } = useFileExplorerVisibleRowProjection(
+    activeWorktreeId,
+    worktreePath,
+    dirCache,
+    expanded,
+    activeRepoSupportsGit,
+    showDotfiles,
+    nameFilterSource
+  )
+  const rowExpandedPaths = useMemo(
+    () =>
+      nameFilterExpandedPaths.size > 0
+        ? new Set([...expanded, ...nameFilterExpandedPaths])
+        : expanded,
+    [expanded, nameFilterExpandedPaths]
+  )
   const visibleRowCount = rowProjection.getVisibleCount()
   const manualRefresh = useFileExplorerManualRefresh(refreshTree)
   const canCollapseAll = expanded.size > 0
@@ -149,6 +183,9 @@ function FileExplorerFiles(): React.JSX.Element {
       toggleShowDotfilesForWorktree(activeWorktreeId)
     }
   }, [activeWorktreeId, toggleShowDotfilesForWorktree])
+  const handleClearNameFilter = useCallback(() => {
+    setNameFilterQuery('')
+  }, [])
 
   const [flashingPath, setFlashingPath] = useState<string | null>(null)
   const [bgMenuOpen, setBgMenuOpen] = useState(false)
@@ -228,6 +265,7 @@ function FileExplorerFiles(): React.JSX.Element {
     }
     lastResetWorktreePathRef.current = visibleWorktreePath
     resetSelection()
+    setNameFilterQuery('')
     resetAndLoad()
     clearFileExplorerUndoHistory()
   }, [visibleWorktreePath, resetSelection]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -397,6 +435,7 @@ function FileExplorerFiles(): React.JSX.Element {
   useFileExplorerKeys({
     containerRef: explorerShellRef,
     rowProjection,
+    expandedPaths: rowExpandedPaths,
     inlineInput,
     selectedPaths,
     selectedNode,
@@ -483,9 +522,19 @@ function FileExplorerFiles(): React.JSX.Element {
   // present. Without this, external file drops would have no target surface
   // when the tree is empty, still loading, or showing a read error.
   const isEmptyState = visibleRowCount === 0 && !inlineInput
-  const isLoading = isEmptyState && (rootCache?.loading ?? true)
-  const hasError = isEmptyState && !isLoading && !!rootError
+  const isNameFilterLoading = nameFilterSource?.relativePaths === null
+  const isLoading =
+    isEmptyState && (hasNameFilter ? isNameFilterLoading : (rootCache?.loading ?? true))
+  const treeError = hasNameFilter ? nameFilterFiles.loadError : rootError
+  const hasError = isEmptyState && !isLoading && !!treeError
   const showTree = !isEmptyState
+  const emptyMessage =
+    hasNameFilter && !nameFilterFiles.loadError
+      ? translate(
+          'auto.components.right.sidebar.FileExplorer.2f4483d6c4',
+          'No files match this filter'
+        )
+      : undefined
 
   return (
     <>
@@ -510,6 +559,12 @@ function FileExplorerFiles(): React.JSX.Element {
           showDotfiles={showDotfiles}
           onToggleDotfiles={handleToggleDotfiles}
           onSearch={handleOpenSearch}
+        />
+        <FileExplorerNameFilter
+          query={nameFilterQuery}
+          loading={nameFilterFiles.loading}
+          onQueryChange={setNameFilterQuery}
+          onClear={handleClearNameFilter}
         />
         <ScrollArea
           className={cn(
@@ -556,8 +611,9 @@ function FileExplorerFiles(): React.JSX.Element {
           {!showTree && (
             <FileExplorerTreeStatus
               isLoading={isLoading}
-              error={hasError ? rootError : null}
+              error={hasError ? treeError : null}
               isEmpty={isEmptyState && !isLoading && !hasError}
+              emptyMessage={emptyMessage}
             />
           )}
           {showTree && (
@@ -571,7 +627,7 @@ function FileExplorerFiles(): React.JSX.Element {
               folderStatusByRelativePath={folderStatusByRelativePath}
               statusByRelativePath={statusByRelativePath}
               ignoredByRelativePath={ignoredByRelativePath}
-              expanded={expanded}
+              expanded={rowExpandedPaths}
               dirCache={dirCache}
               selectedPaths={selectedPaths}
               activeFileId={activeFileId}

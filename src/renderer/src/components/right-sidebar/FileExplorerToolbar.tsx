@@ -62,8 +62,8 @@ export function FileExplorerToolbar({
             size="icon-xs"
             className="text-muted-foreground hover:text-foreground"
             aria-label={translate(
-              'auto.components.right.sidebar.FileExplorerToolbar.693cbeadd0',
-              'Search'
+              'auto.components.right.sidebar.FileExplorerToolbar.c1f3f3ec70',
+              'Search Text'
             )}
             onClick={onSearch}
           >
@@ -71,7 +71,7 @@ export function FileExplorerToolbar({
           </Button>
         </TooltipTrigger>
         <TooltipContent side="bottom" sideOffset={4}>
-          {translate('auto.components.right.sidebar.FileExplorerToolbar.693cbeadd0', 'Search')}
+          {translate('auto.components.right.sidebar.FileExplorerToolbar.c1f3f3ec70', 'Search Text')}
         </TooltipContent>
       </Tooltip>
       <Tooltip>

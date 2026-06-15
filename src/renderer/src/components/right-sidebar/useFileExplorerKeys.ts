@@ -29,6 +29,7 @@ import { translate } from '@/i18n/i18n'
 export function useFileExplorerKeys(opts: {
   containerRef: React.RefObject<HTMLDivElement | null>
   rowProjection: FileExplorerRowProjection
+  expandedPaths: Set<string>
   inlineInput: InlineInput | null
   selectedPaths: Set<string>
   selectedNode: TreeNode | null
@@ -48,6 +49,8 @@ export function useFileExplorerKeys(opts: {
 
   const rowProjectionRef = useRef(opts.rowProjection)
   rowProjectionRef.current = opts.rowProjection
+  const expandedPathsRef = useRef(opts.expandedPaths)
+  expandedPathsRef.current = opts.expandedPaths
   const inlineInputRef = useRef(opts.inlineInput)
   inlineInputRef.current = opts.inlineInput
   const selectedPathsRef = useRef(opts.selectedPaths)
@@ -119,12 +122,7 @@ export function useFileExplorerKeys(opts: {
     }
 
     const isDirExpanded = (path: string): boolean => {
-      const worktreeId = activeWorktreeIdRef.current
-      if (!worktreeId) {
-        return false
-      }
-      const expanded = useAppStore.getState().expandedDirs[worktreeId]
-      return expanded ? expanded.has(path) : false
+      return expandedPathsRef.current.has(path)
     }
 
     const onKeyDown = (e: KeyboardEvent): void => {

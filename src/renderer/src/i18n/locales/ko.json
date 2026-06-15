@@ -7954,7 +7954,8 @@
           "FileExplorer": {
             "79b1537dd3": "파일을 찾아보려면 워크스페이스를 선택하세요.",
             "4da4d89845": "탐색기로 돌아가기",
-            "6ed5ce817b": "검색"
+            "6ed5ce817b": "검색",
+            "2f4483d6c4": "No files match this filter"
           },
           "FileExplorerBackgroundMenu": {
             "3b5e2dcb8d": "새 폴더",
@@ -7991,7 +7992,8 @@
             "31b4c3195d": "추가 탐색기 작업",
             "d95e30fe28": "탐색기 새로 고침",
             "6026b16950": "모두 축소",
-            "693cbeadd0": "검색"
+            "693cbeadd0": "검색",
+            "c1f3f3ec70": "Search Text"
           },
           "FileExplorerTreeStatus": {
             "ce03835e1f": "이 워크스페이스에는 파일이 없습니다.",
@@ -8704,6 +8706,10 @@
             "copyLogPath": "Copy Log Path",
             "messageCount": "{{value0}} msgs",
             "tokenCount": "{{value0}} tok"
+          },
+          "FileExplorerNameFilter": {
+            "26fb73c6e3": "Find files",
+            "4d5a6b2a49": "Clear file filter"
           }
         }
       },

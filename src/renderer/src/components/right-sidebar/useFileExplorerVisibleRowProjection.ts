@@ -10,6 +10,12 @@ import {
   type FileExplorerRowProjection
 } from './file-explorer-row-projection'
 import { buildIgnoredSet, isPathIgnored } from './status-display'
+import {
+  createNameFilteredFileExplorerProjection,
+  getFileExplorerNameFilterExpandedPaths,
+  getFileExplorerNameFilterIgnoredQueryRelativePaths,
+  type FileExplorerNameFilterProjectionSource
+} from './file-explorer-name-filter-projection'
 
 const EMPTY_IGNORED_PATHS: readonly string[] = []
 const EMPTY_RELATIVE_PATHS: string[] = []
@@ -23,6 +29,7 @@ export type IgnoredPathResult = {
 
 type VisibleFileExplorerRowProjectionOptions = {
   ignoredSet: Set<string>
+  nameFilter?: FileExplorerNameFilterProjectionSource | null
   showDotfiles: boolean
   showGitIgnoredFiles: boolean
 }
@@ -72,6 +79,22 @@ export function createVisibleFileExplorerRowProjection(
   if (!worktreePath) {
     return createFileExplorerRowProjectionFromParts(visibleFlatRows, rowsByPath)
   }
+  if (options.nameFilter) {
+    return createNameFilteredFileExplorerProjection({
+      ignoredSet: options.ignoredSet,
+      nameFilter: options.nameFilter,
+      showDotfiles: options.showDotfiles,
+      showGitIgnoredFiles: options.showGitIgnoredFiles,
+      worktreePath
+    })
+  }
+
+  const shouldHideRow = (row: TreeNode): boolean => {
+    if (!options.showDotfiles && isDotfileRelativePath(row.relativePath)) {
+      return true
+    }
+    return !options.showGitIgnoredFiles && isPathIgnored(options.ignoredSet, row.relativePath)
+  }
 
   const visitChildren = (parentPath: string): void => {
     const cached = dirCache[parentPath]
@@ -79,10 +102,7 @@ export function createVisibleFileExplorerRowProjection(
       return
     }
     for (const row of cached.children) {
-      if (!options.showDotfiles && isDotfileRelativePath(row.relativePath)) {
-        continue
-      }
-      if (!options.showGitIgnoredFiles && isPathIgnored(options.ignoredSet, row.relativePath)) {
+      if (shouldHideRow(row)) {
         continue
       }
       visibleFlatRows.push(row)
@@ -127,11 +147,13 @@ export function useFileExplorerVisibleRowProjection(
   dirCache: Record<string, DirCache>,
   expanded: Set<string>,
   activeRepoSupportsGit: boolean,
-  showDotfiles: boolean
+  showDotfiles: boolean,
+  nameFilter: FileExplorerNameFilterProjectionSource | null
 ): {
   rowProjection: FileExplorerRowProjection
   ignoredByRelativePath: Set<string>
   showGitIgnoredFiles: boolean
+  nameFilterExpandedPaths: Set<string>
   toggleGitIgnoredFiles: () => void
 } {
   const settings = useAppStore((s) => s.settings)
@@ -141,12 +163,14 @@ export function useFileExplorerVisibleRowProjection(
   const relativePaths = useMemo(
     () =>
       activeRepoSupportsGit
-        ? getFileExplorerIgnoredQueryRelativePaths(
-            { dirCache, expanded, worktreePath },
-            showDotfiles
-          )
+        ? nameFilter
+          ? getFileExplorerNameFilterIgnoredQueryRelativePaths(nameFilter, showDotfiles)
+          : getFileExplorerIgnoredQueryRelativePaths(
+              { dirCache, expanded, worktreePath },
+              showDotfiles
+            )
         : EMPTY_RELATIVE_PATHS,
-    [activeRepoSupportsGit, dirCache, expanded, showDotfiles, worktreePath]
+    [activeRepoSupportsGit, dirCache, expanded, nameFilter, showDotfiles, worktreePath]
   )
   const canLoadIgnoredPaths =
     activeRepoSupportsGit &&
@@ -168,7 +192,7 @@ export function useFileExplorerVisibleRowProjection(
         worktreePath,
         connectionId
       },
-      relativePaths
+      [...relativePaths]
     )
       .then((nextIgnoredPaths) => {
         if (!canceled) {
@@ -209,11 +233,16 @@ export function useFileExplorerVisibleRowProjection(
         { dirCache, expanded, worktreePath },
         {
           ignoredSet,
+          nameFilter,
           showDotfiles,
           showGitIgnoredFiles
         }
       ),
-    [dirCache, expanded, ignoredSet, showDotfiles, showGitIgnoredFiles, worktreePath]
+    [dirCache, expanded, ignoredSet, nameFilter, showDotfiles, showGitIgnoredFiles, worktreePath]
+  )
+  const nameFilterExpandedPaths = useMemo(
+    () => getFileExplorerNameFilterExpandedPaths(rowProjection, nameFilter?.query ?? ''),
+    [nameFilter?.query, rowProjection]
   )
   const ignoredByRelativePath = useMemo(
     () => (showGitIgnoredFiles ? ignoredSet : new Set<string>()),
@@ -227,6 +256,7 @@ export function useFileExplorerVisibleRowProjection(
     rowProjection,
     ignoredByRelativePath,
     showGitIgnoredFiles,
+    nameFilterExpandedPaths,
     toggleGitIgnoredFiles
   }
 }
