@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { SWITCH_BRANCH_STASH_LABEL } from '../../shared/git-branch-switch'
 import {
   isDirtyOverwriteError,
   normalizeSwitchBranchExecError,
@@ -39,6 +40,13 @@ describe('isDirtyOverwriteError', () => {
     expect(
       isDirtyOverwriteError(
         'error: The following untracked working tree files would be overwritten by checkout:'
+      )
+    ).toBe(true)
+  })
+  it('matches the git switch overwrite variant', () => {
+    expect(
+      isDirtyOverwriteError(
+        'error: Your local changes to the following files would be overwritten by switch:'
       )
     ).toBe(true)
   })
@@ -97,7 +105,13 @@ describe('switchGitBranch', () => {
   it('stash mode stashes, switches, then pops', async () => {
     const { exec, calls } = execScript([ok(), ok(), ok()])
     expect(await switchGitBranch(exec, { branch: 'main', mode: 'stash' })).toEqual({ ok: true })
-    expect(calls[0][0]).toBe('stash')
+    expect(calls[0]).toEqual([
+      'stash',
+      'push',
+      '--include-untracked',
+      '-m',
+      SWITCH_BRANCH_STASH_LABEL
+    ])
     expect(calls[1]).toEqual(['switch', 'main'])
     expect(calls[2]).toEqual(['stash', 'pop'])
   })

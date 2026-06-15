@@ -2,6 +2,10 @@ import type { SwitchBranchOptions, SwitchBranchResult } from '../../shared/git-b
 import { SWITCH_BRANCH_STASH_LABEL } from '../../shared/git-branch-switch'
 
 export type SwitchBranchExecResult = { stdout: string; stderr: string; exitCode: number }
+// Why: this MUST resolve (never throw) — non-zero git exits are reported via
+// `exitCode`, not rejection. The local/SSH adapters in runSwitchBranch convert a
+// rejected git call into this shape with normalizeSwitchBranchExecError, which
+// keeps switchGitBranch's stash-restore path reachable on a failed switch.
 export type SwitchBranchExec = (argv: string[]) => Promise<SwitchBranchExecResult>
 
 // Why: git emits two distinct overwrite errors — one for tracked changes, one
