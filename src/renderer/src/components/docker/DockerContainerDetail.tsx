@@ -24,7 +24,7 @@ export function DockerContainerDetail({
   if (!container) {
     return (
       <div className="flex h-full items-center justify-center p-6 text-sm text-muted-foreground">
-        Select a container to see its details.
+        {translate('auto.components.docker.DockerContainerDetail.dc6f85fe97', 'Select a container to see its details.')}
       </div>
     )
   }
@@ -55,7 +55,7 @@ export function DockerContainerDetail({
       </TabsList>
 
       {/* Details tab */}
-      <TabsContent value="details" className="overflow-y-auto p-4">
+      <TabsContent value="details" className="flex-1 overflow-y-auto p-4">
         <div className="flex flex-col gap-3">
           <div className="flex flex-col gap-1">
             <span className="text-sm font-medium">{container.names[0] ?? container.id.slice(0, 12)}</span>
@@ -144,7 +144,7 @@ export function DockerContainerDetail({
               {/* Mounts section */}
               <section className="flex flex-col gap-1">
                 <span className="font-medium text-muted-foreground uppercase tracking-wide text-[10px]">
-                  Mounts
+                  {translate('auto.components.docker.DockerContainerDetail.f10977e945', 'Mounts')}
                 </span>
                 {inspect && inspect.mounts.length > 0 ? (
                   inspect.mounts.map((mount, i) => (
@@ -169,7 +169,7 @@ export function DockerContainerDetail({
               {/* Ports section */}
               <section className="flex flex-col gap-1">
                 <span className="font-medium text-muted-foreground uppercase tracking-wide text-[10px]">
-                  Ports
+                  {translate('auto.components.docker.DockerContainerDetail.618e10b649', 'Ports')}
                 </span>
                 {inspect && inspect.ports.length > 0 ? (
                   inspect.ports.map((port, i) => (

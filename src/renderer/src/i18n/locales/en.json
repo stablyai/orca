@@ -11213,7 +11213,10 @@
           "dcd88f653a": "No environment variables.",
           "7d87fc3379": "No mounts.",
           "23d6458b14": "exposed",
-          "e8306d8d6e": "No published ports."
+          "e8306d8d6e": "No published ports.",
+          "dc6f85fe97": "Select a container to see its details.",
+          "f10977e945": "Mounts",
+          "618e10b649": "Ports"
         }
       }
     },
