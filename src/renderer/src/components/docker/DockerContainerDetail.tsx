@@ -9,6 +9,7 @@ import type {
 } from '../../../../shared/docker-types'
 import { buildDockerTerminalCommand } from './docker-terminal-command'
 import { DockerEmbeddedTerminal } from './DockerEmbeddedTerminal'
+import { DockerContainerActions } from './DockerContainerActions'
 
 export function DockerContainerDetail({
   container,
@@ -31,6 +32,20 @@ export function DockerContainerDetail({
 
   return (
     <Tabs defaultValue="details" className="flex h-full min-h-0 flex-col">
+      {/* Persistent header: container name/status on the left, lifecycle actions on the right. */}
+      <div className="flex items-center justify-between gap-2 border-b border-border/60 px-4 py-2">
+        <div className="flex min-w-0 flex-col gap-0.5">
+          <span className="truncate text-sm font-medium">
+            {container.names[0] ?? container.id.slice(0, 12)}
+          </span>
+          <span className="text-xs text-muted-foreground">
+            {translate('auto.components.docker.DockerContainerDetail.3f56801f68', 'Status')}{': '}
+            {container.status}
+          </span>
+        </div>
+        <DockerContainerActions container={container} />
+      </div>
+
       {/* Why: page-level tabs sit on a flat strip; the line variant paints an
           underline under the active tab so we don't need an extra boxing border. */}
       <TabsList

@@ -11216,7 +11216,15 @@
           "e8306d8d6e": "No published ports.",
           "dc6f85fe97": "Select a container to see its details.",
           "f10977e945": "Mounts",
-          "618e10b649": "Ports"
+          "618e10b649": "Ports",
+          "3f56801f68": "Status"
+        },
+        "DockerContainerActions": {
+          "174ec8f170": "Docker action failed",
+          "e3f8420199": "Remove container",
+          "61b45d53bd": "Permanently remove {{value0}}? This cannot be undone.",
+          "b6ca17b955": "Cancel",
+          "bdbc34eec1": "Remove"
         }
       }
     },
