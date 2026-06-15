@@ -11200,6 +11200,21 @@
         "sourceUnavailable": "{{value0}} source unavailable: {{value1}}",
         "someSourceHostsUnavailable": "Some {{value0}} source hosts unavailable: {{value1}}",
         "reconnectOrUpdateTitle": "Reconnect or update {{value0}} to load this source."
+      },
+      "docker": {
+        "DockerContainerDetail": {
+          "3785677742": "Mounts & Ports",
+          "73a03cf4fc": "Details",
+          "8e913f1e01": "Logs",
+          "65267b5ce5": "Terminal",
+          "7b6a28f972": "Env",
+          "d3541f3e1d": "Created",
+          "37810d101e": "Restart policy",
+          "dcd88f653a": "No environment variables.",
+          "7d87fc3379": "No mounts.",
+          "23d6458b14": "exposed",
+          "e8306d8d6e": "No published ports."
+        }
       }
     },
     "i18n": {
