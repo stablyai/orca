@@ -12,6 +12,10 @@ import {
   resetForegroundTerminalWorktreeIdsForTests,
   setForegroundTerminalWorktreeIds
 } from './foreground-terminal-worktrees'
+import {
+  recordAgentHibernationPaneOutput,
+  resetAgentHibernationOutputActivityForTests
+} from './agent-hibernation-output-activity'
 
 const NOW = 10_000_000
 const LEAF = '11111111-1111-4111-8111-111111111111'
@@ -77,6 +81,7 @@ function installEligibleState(
 afterEach(() => {
   resetAgentHibernationCoordinatorForTests()
   resetForegroundTerminalWorktreeIdsForTests()
+  resetAgentHibernationOutputActivityForTests()
   hydrateDrivers([])
   vi.useRealTimers()
 })
@@ -169,6 +174,33 @@ describe('agent hibernation coordinator', () => {
     await vi.advanceTimersByTimeAsync(1000)
 
     expect(shutdown).not.toHaveBeenCalled()
+  })
+
+  it('blocks shutdown when terminal output arrives between confirmation ticks', async () => {
+    vi.useFakeTimers()
+    const shutdown = installEligibleState(vi.fn().mockResolvedValue(undefined))
+    startAgentHibernationCoordinator({ intervalMs: 1000, now: () => NOW })
+
+    await vi.advanceTimersByTimeAsync(1000)
+    recordAgentHibernationPaneOutput(`tab-1:${LEAF}`)
+    await vi.advanceTimersByTimeAsync(1000)
+
+    expect(shutdown).not.toHaveBeenCalled()
+  })
+
+  it('does not mutate the running coordinator clock on a second start', async () => {
+    vi.useFakeTimers()
+    const shutdown = installEligibleState(vi.fn().mockResolvedValue(undefined))
+    startAgentHibernationCoordinator({ intervalMs: 1000, now: () => NOW })
+    startAgentHibernationCoordinator({
+      intervalMs: 1000,
+      now: () => NOW - DEFAULT_AGENT_HIBERNATION_IDLE_MS + 1
+    })
+
+    await vi.advanceTimersByTimeAsync(1000)
+    await vi.advanceTimersByTimeAsync(1000)
+
+    expect(shutdown).toHaveBeenCalled()
   })
 
   it('does not hibernate a mobile-driven terminal', async () => {

@@ -46,6 +46,8 @@ export function ExperimentalPane({
     getExperimentalSearchEntry().agentHibernation
   ])
   const agentHibernationEnabled = settings.experimentalAgentHibernation === true
+  // Why: the planner owns ms-based bounds/defaults; the UI edits minutes
+  // while displaying the same effective clamped value the planner will use.
   const agentHibernationIdleMinutes = Math.round(
     getEffectiveAgentHibernationIdleMs(settings.agentHibernationIdleMs) / MS_PER_MINUTE
   )
@@ -254,6 +256,7 @@ export function ExperimentalPane({
             )}
             onChange={(minutes) =>
               updateSettings({
+                // Why: settings persist the planner contract, not the display unit.
                 agentHibernationIdleMs: minutes * MS_PER_MINUTE
               })
             }

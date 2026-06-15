@@ -9,6 +9,7 @@ import {
 import type { AppState } from '@/store/types'
 import { getAllDrivers } from './pane-manager/mobile-driver-state'
 import { getForegroundTerminalWorktreeIds } from './foreground-terminal-worktrees'
+import { getAgentHibernationOutputSignature } from './agent-hibernation-output-activity'
 
 export const AGENT_HIBERNATION_TICK_MS = 60 * 1000
 
@@ -17,21 +18,6 @@ type IntervalHandle = ReturnType<typeof setInterval>
 type AgentHibernationCoordinatorOptions = {
   intervalMs?: number
   now?: () => number
-}
-
-type AgentHibernationTailFingerprint = { status: 'unavailable' }
-
-export function sampleAgentHibernationTailFingerprint(
-  _worktreeId: string
-): AgentHibernationTailFingerprint {
-  return { status: 'unavailable' }
-}
-
-export function isAgentHibernationTailFingerprintStable(
-  before: AgentHibernationTailFingerprint,
-  after: AgentHibernationTailFingerprint
-): boolean {
-  return before.status === 'unavailable' && after.status === 'unavailable'
 }
 
 type AgentHibernationCoordinatorState = {
@@ -67,7 +53,14 @@ function snapshotFromState(state: AppState, now: number): AgentHibernationPlanne
 }
 
 function currentCandidates(now: number) {
-  return planAgentHibernationCandidates(snapshotFromState(useAppStore.getState(), now))
+  return planAgentHibernationCandidates(snapshotFromState(useAppStore.getState(), now)).map(
+    (candidate) => ({
+      ...candidate,
+      // Why: terminal output after the first stable tick can mean the session
+      // is still alive even when agent status remains done; require it to stay quiet.
+      signature: `${candidate.signature}|output:${getAgentHibernationOutputSignature(candidate.paneKeys)}`
+    })
+  )
 }
 
 async function hibernateWorktreeIfStillEligible(
@@ -85,13 +78,8 @@ async function hibernateWorktreeIfStillEligible(
   if (!stillEligible) {
     return
   }
-  const tailBefore = sampleAgentHibernationTailFingerprint(worktreeId)
   coordinator.shuttingDownWorktreeIds.add(worktreeId)
   try {
-    const tailAfter = sampleAgentHibernationTailFingerprint(worktreeId)
-    if (!isAgentHibernationTailFingerprintStable(tailBefore, tailAfter)) {
-      return
-    }
     await useAppStore.getState().shutdownWorktreeTerminals(worktreeId, {
       keepIdentifiers: true,
       sleepingPaneKeys: confirmedCandidate.paneKeys
@@ -117,10 +105,10 @@ export function runAgentHibernationTick(): void {
 export function startAgentHibernationCoordinator(
   options: AgentHibernationCoordinatorOptions = {}
 ): () => void {
-  coordinator.now = options.now ?? (() => Date.now())
   if (coordinator.interval !== null) {
     return stopAgentHibernationCoordinator
   }
+  coordinator.now = options.now ?? (() => Date.now())
   const intervalMs = options.intervalMs ?? AGENT_HIBERNATION_TICK_MS
   coordinator.interval = setInterval(runAgentHibernationTick, intervalMs)
   return stopAgentHibernationCoordinator

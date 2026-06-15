@@ -52,7 +52,7 @@ describe('runtime terminal owner routing', () => {
     })
   })
 
-  it('skips runtime input marker lookup when hibernation is disabled', () => {
+  it('records runtime input markers even before hibernation is enabled', () => {
     useAppStore.setState({
       settings: { experimentalAgentHibernation: false } as never,
       terminalLayoutsByTabId: {
@@ -67,7 +67,7 @@ describe('runtime terminal owner routing', () => {
 
     recordRuntimeTerminalInputForPtyId('local-pty', 123)
 
-    expect(useAppStore.getState().lastTerminalInputAtByPaneKey[PANE_KEY]).toBeUndefined()
+    expect(useAppStore.getState().lastTerminalInputAtByPaneKey[PANE_KEY]).toBe(123)
   })
 
   it('sends input through the PTY owning environment instead of the active one', async () => {

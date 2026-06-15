@@ -2086,18 +2086,12 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
     shutdownBufferCaptures.clear()
   })
 
-  it('records terminal input only while agent hibernation is enabled', () => {
+  it('records terminal input even before agent hibernation is enabled', () => {
     const store = createTestStore()
 
     store.getState().recordTerminalInput('tab-1:leaf-1', 1000)
-    expect(store.getState().lastTerminalInputAtByPaneKey['tab-1:leaf-1']).toBeUndefined()
 
-    seedStore(store, {
-      settings: { ...getDefaultSettings('/tmp'), experimentalAgentHibernation: true }
-    })
-    store.getState().recordTerminalInput('tab-1:leaf-1', 2000)
-
-    expect(store.getState().lastTerminalInputAtByPaneKey['tab-1:leaf-1']).toBe(2000)
+    expect(store.getState().lastTerminalInputAtByPaneKey['tab-1:leaf-1']).toBe(1000)
   })
 
   it('asks sleep-time buffer capture to skip local scrollback serialization', async () => {

@@ -41,9 +41,6 @@ function isTerminalGoneError(error: unknown): boolean {
 
 export function recordRuntimeTerminalInputForPtyId(ptyId: string, timestamp = Date.now()): void {
   const state = useAppStore.getState()
-  if (state.settings?.experimentalAgentHibernation !== true) {
-    return
-  }
   for (const [tabId, layout] of Object.entries(state.terminalLayoutsByTabId)) {
     for (const [leafId, leafPtyId] of Object.entries(layout?.ptyIdsByLeafId ?? {})) {
       if (leafPtyId !== ptyId) {

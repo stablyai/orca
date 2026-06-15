@@ -527,9 +527,6 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
   },
 
   recordTerminalInput: (paneKey, timestamp = Date.now()) => {
-    if (get().settings?.experimentalAgentHibernation !== true) {
-      return
-    }
     if (!paneKey || !Number.isFinite(timestamp)) {
       return
     }
