@@ -14,8 +14,6 @@ export function useEmbeddedPtyTerminal(params: {
   connectionId: string | null
 }): { containerRef: React.RefObject<HTMLDivElement | null> } {
   const containerRef = useRef<HTMLDivElement | null>(null)
-  const paramsRef = useRef(params)
-  paramsRef.current = params
 
   useEffect(() => {
     const host = containerRef.current
@@ -27,9 +25,11 @@ export function useEmbeddedPtyTerminal(params: {
     term.open(host)
     fitAddon.fit()
 
+    // The effect re-runs whenever command/connectionId change, so reading them
+    // directly is current — no ref needed to avoid a stale closure.
     const transport = createIpcPtyTransport({
-      command: paramsRef.current.command,
-      connectionId: paramsRef.current.connectionId
+      command: params.command,
+      connectionId: params.connectionId
     })
 
     let disposed = false
