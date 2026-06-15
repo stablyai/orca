@@ -16,7 +16,16 @@ export function dedupeRemoteTrackingRefs(refs: readonly GitHistoryItemRef[]): Gi
     if (ref.category !== 'remote branches') {
       return true
     }
+    if (isAmbiguousRemoteTrackingRef(ref.name)) {
+      return true
+    }
     const split = splitRemoteBranchName(ref.name)
     return !split || !localBranchNames.has(split.branchName)
   })
+}
+
+function isAmbiguousRemoteTrackingRef(refName: string): boolean {
+  // Why: without configured remote names, `foo/bar/main` could be remote
+  // `foo` branch `bar/main` or remote `foo/bar` branch `main`.
+  return refName.split('/').length > 2
 }

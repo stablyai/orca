@@ -12,8 +12,13 @@ function remoteBranch(name: string): GitHistoryItemRef {
 
 describe('dedupeRemoteTrackingRefs', () => {
   it('drops a remote-tracking ref when the matching local branch is present', () => {
-    const refs = [localBranch('tmchow/file-browser'), remoteBranch('origin/tmchow/file-browser')]
-    expect(dedupeRemoteTrackingRefs(refs)).toEqual([localBranch('tmchow/file-browser')])
+    const refs = [localBranch('feature'), remoteBranch('origin/feature')]
+    expect(dedupeRemoteTrackingRefs(refs)).toEqual([localBranch('feature')])
+  })
+
+  it('keeps slash-containing remote refs because the remote name is ambiguous', () => {
+    const refs = [localBranch('bar/main'), remoteBranch('foo/bar/main')]
+    expect(dedupeRemoteTrackingRefs(refs)).toEqual(refs)
   })
 
   it('keeps a remote-tracking ref with no matching local branch', () => {

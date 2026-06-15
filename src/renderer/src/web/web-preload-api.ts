@@ -1501,6 +1501,13 @@ function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
         relativePath,
         line
       })
+    },
+    remoteCommitUrl: async ({ worktreePath, sha }) => {
+      const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
+      return callRuntimeResult('git.remoteCommitUrl', {
+        worktree: toRuntimeWorktreeSelector(worktree.id),
+        sha
+      })
     }
   }
 }
