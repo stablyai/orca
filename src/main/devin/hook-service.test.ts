@@ -16,7 +16,7 @@ vi.mock('os', async () => {
 })
 
 import { DevinHookService } from './hook-service'
-import { getDevinManagedCommand } from './hook-settings'
+import { getDevinConfigPath, getDevinManagedCommand } from './hook-settings'
 
 describe('DevinHookService', () => {
   let homeDir: string
@@ -141,4 +141,55 @@ describe('DevinHookService', () => {
     )
     expect(commands.some((command) => command.includes('devin-hook'))).toBe(false)
   })
-})
+
+  it('returns partial status when some managed hooks are missing', () => {
+    const configPath = join(homeDir, '.config', 'devin', 'config.json')
+    const scriptPath = join(homeDir, '.orca', 'agent-hooks', 'devin-hook.sh')
+    const command = getDevinManagedCommand(scriptPath)
+    mkdirSync(dirname(configPath), { recursive: true })
+    mkdirSync(dirname(scriptPath), { recursive: true })
+    writeFileSync(scriptPath, '#!/bin/sh\n')
+
+    // Only install the managed hook for UserPromptSubmit
+    writeFileSync(
+      configPath,
+      `${JSON.stringify({ hooks: { UserPromptSubmit: [{ hooks: [{ type: 'command', command }] }] } }, null, 2)}\n`
+    )
+
+    const status = new DevinHookService().getStatus()
+
+    expect(status.state).toBe('partial')
+    expect(status.managedHooksPresent).toBe(true)
+    expect(status.detail).toContain('Stop')
+    expect(status.detail).toContain('StopFailure')
+    expect(status.detail).toContain('PreToolUse')
+    expect(status.detail).toContain('PostToolUse')
+    expect(status.detail).toContain('PostToolUseFailure')
+    expect(status.detail).toContain('PermissionRequest')
+  })
+
+  it('uses APPDATA on Windows for Devin config path', () => {
+    const previous = process.platform
+    const previousAppData = process.env.APPDATA
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+    try {
+      process.env.APPDATA = 'C:\\Users\\test\\AppData\\Roaming'
+      expect(getDevinConfigPath()).toBe(
+        join('C:\\Users\\test\\AppData\\Roaming', 'devin', 'config.json')
+      )
+
+      // Fallback when APPDATA is unset
+      delete process.env.APPDATA
+      expect(getDevinConfigPath()).toBe(
+        join(homeDir, 'AppData', 'Roaming', 'devin', 'config.json')
+      )
+    } finally {
+      Object.defineProperty(process, 'platform', { value: previous })
+      if (previousAppData !== undefined) {
+        process.env.APPDATA = previousAppData
+      } else {
+        delete process.env.APPDATA
+      }
+    }
+  })
+ })

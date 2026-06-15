@@ -2,14 +2,17 @@ import type { SFTPWrapper } from 'ssh2'
 import type { AgentHookInstallState, AgentHookInstallStatus } from '../../shared/agent-hook-types'
 import {
   buildWindowsAgentHookPostCommand,
+  isPlainObject,
+  type HooksConfig,
   writeHooksJson,
   writeManagedScript,
 } from '../agent-hooks/installer-utils'
 import {
-  readHooksJsonRemote,
+  readTextFileRemote,
   writeHooksJsonRemote,
   writeManagedScriptRemote
 } from '../agent-hooks/installer-utils-remote'
+import { parse as parseJsonc } from 'jsonc-parser'
 import {
   applyManagedHooks,
   CLAUDE_EVENTS,
@@ -198,7 +201,18 @@ export class DevinHookService {
     // specifically means "file present but unparseable" — keep that branch
     // distinct so the user sees an actionable message.
     try {
-      const config = await readHooksJsonRemote(sftp, remoteConfigPath)
+      // Why: Devin config.json is JSONC (comments + trailing commas); stock
+      // JSON.parse rejects them. Read the raw text via SFTP and parse with
+      // jsonc-parser, mirroring the local readDevinHooksConfig path.
+      const body = await readTextFileRemote(sftp, remoteConfigPath)
+      const config = body === null
+        ? {}
+        : (() => {
+            const parsed = parseJsonc(body)
+            return parsed !== undefined && isPlainObject(parsed)
+              ? (parsed as HooksConfig)
+              : null
+          })()
       if (!config) {
         return {
           agent: 'devin',
