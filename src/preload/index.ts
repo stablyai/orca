@@ -49,6 +49,7 @@ import type {
   WarpThemeImportSource
 } from '../shared/terminal-custom-themes'
 import type { GitHistoryOptions, GitHistoryResult } from '../shared/git-history'
+import type { SwitchBranchResult } from '../shared/git-branch-switch'
 import type { ShellOpenLocalPathResult } from '../shared/shell-open-types'
 import type { SkillDiscoveryResult, SkillDiscoveryTarget } from '../shared/skills'
 import type {
@@ -2606,7 +2607,7 @@ const api = {
       branch: string
       mode: 'plain' | 'stash' | 'create'
       connectionId?: string
-    }): Promise<import('../shared/git-branch-switch').SwitchBranchResult> =>
+    }): Promise<SwitchBranchResult> =>
       ipcRenderer.invoke('git:switchBranch', args),
     stage: (args: {
       worktreePath: string

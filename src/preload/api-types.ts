@@ -179,6 +179,7 @@ import type {
 } from '../shared/terminal-custom-themes'
 import type { SetupScriptImportCandidate } from '../shared/setup-script-imports'
 import type { GitHistoryOptions, GitHistoryResult } from '../shared/git-history'
+import type { SwitchBranchResult } from '../shared/git-branch-switch'
 import type { PublicKnownRuntimeEnvironment } from '../shared/runtime-environments'
 import type { RuntimeAccessGrant } from '../shared/runtime-access-grants'
 import type { RuntimeRpcResponse } from '../shared/runtime-rpc-envelope'
@@ -2217,7 +2218,7 @@ export type PreloadApi = {
       branch: string
       mode: 'plain' | 'stash' | 'create'
       connectionId?: string
-    }) => Promise<import('../shared/git-branch-switch').SwitchBranchResult>
+    }) => Promise<SwitchBranchResult>
     stage: (args: {
       worktreePath: string
       filePath: string
