@@ -780,6 +780,16 @@ describe('keybindings', () => {
       ok: true,
       value: 'DoubleTap+Alt'
     })
+    // Ctrl is the primary modifier on Linux too, so it canonicalizes to Mod.
+    expect(keybindingFromInput({ doubleTapModifier: 'Ctrl' }, 'linux')).toEqual({
+      ok: true,
+      value: 'DoubleTap+Mod'
+    })
+    // Cmd is not the primary modifier off-mac, so it stays explicit.
+    expect(keybindingFromInput({ doubleTapModifier: 'Cmd' }, 'linux')).toEqual({
+      ok: true,
+      value: 'DoubleTap+Cmd'
+    })
   })
 
   it('formats double-tap bindings as the modifier glyph twice', () => {
