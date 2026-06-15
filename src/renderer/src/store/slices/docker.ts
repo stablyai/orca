@@ -5,6 +5,7 @@ import {
   LOCAL_DOCKER_CONNECTION_ID,
   type DockerConnection,
   type DockerConnectionStatus,
+  type DockerContainerInspect,
   type DockerContainerSummary,
   type DockerResourcesChangedEvent
 } from '../../../../shared/docker-types'
@@ -24,10 +25,13 @@ export type DockerSlice = {
   dockerConnectionError: string | null
   containersByConnection: Record<string, DockerContainerSummary[]>
   selectedContainerId: string | null
+  inspectByContainerId: Record<string, DockerContainerInspect>
+  inspectErrorByContainerId: Record<string, string>
   setActiveDockerConnection: (connectionId: string) => Promise<void>
   refreshDockerContainers: () => Promise<void>
   applyDockerResources: (event: DockerResourcesChangedEvent) => void
   selectDockerContainer: (id: string | null) => void
+  inspectDockerContainer: (containerId: string) => Promise<void>
 }
 
 export const createDockerSlice: StateCreator<AppState, [], [], DockerSlice> = (set, get) => ({
@@ -36,6 +40,8 @@ export const createDockerSlice: StateCreator<AppState, [], [], DockerSlice> = (s
   dockerConnectionError: null,
   containersByConnection: {},
   selectedContainerId: null,
+  inspectByContainerId: {},
+  inspectErrorByContainerId: {},
 
   setActiveDockerConnection: async (connectionId) => {
     set({ activeConnectionId: connectionId, selectedContainerId: null })
@@ -69,5 +75,24 @@ export const createDockerSlice: StateCreator<AppState, [], [], DockerSlice> = (s
     }))
   },
 
-  selectDockerContainer: (id) => set({ selectedContainerId: id })
+  selectDockerContainer: (id) => set({ selectedContainerId: id }),
+
+  inspectDockerContainer: async (containerId) => {
+    const connectionId = get().activeConnectionId
+    try {
+      const inspect = await window.api.docker.inspect({ connectionId, containerId })
+      set((s) => ({
+        inspectByContainerId: { ...s.inspectByContainerId, [containerId]: inspect },
+        inspectErrorByContainerId: (() => {
+          const next = { ...s.inspectErrorByContainerId }
+          delete next[containerId]
+          return next
+        })()
+      }))
+    } catch (error) {
+      set((s) => ({
+        inspectErrorByContainerId: { ...s.inspectErrorByContainerId, [containerId]: String(error) }
+      }))
+    }
+  },
 })
