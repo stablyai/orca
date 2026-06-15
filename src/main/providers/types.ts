@@ -6,6 +6,8 @@ import type {
   GitBranchCompareResult,
   GitCommitCompareResult,
   GitConflictOperation,
+  GitForkSyncExpectedUpstream,
+  GitForkSyncResult,
   GitPushTarget,
   GitUpstreamStatus,
   GitWorktreeInfo,
@@ -193,6 +195,10 @@ export type IGitProvider = {
   fastForwardBranch(worktreePath: string, pushTarget?: GitPushTarget): Promise<void>
   rebaseFromBase(worktreePath: string, baseRef: string): Promise<void>
   fetchRemote(worktreePath: string, pushTarget?: GitPushTarget): Promise<void>
+  syncForkDefaultBranch(
+    worktreePath: string,
+    expectedUpstream?: GitForkSyncExpectedUpstream | null
+  ): Promise<GitForkSyncResult>
   getBranchDiff(
     worktreePath: string,
     baseRef: string,

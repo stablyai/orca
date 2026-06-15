@@ -4,6 +4,8 @@ import type {
   GitCommitCompareResult,
   GitConflictOperation,
   GitDiffResult,
+  GitForkSyncExpectedUpstream,
+  GitForkSyncResult,
   GitPushTarget,
   GitStatusResult,
   GitUpstreamStatus,
@@ -44,6 +46,7 @@ import {
 import { getHistory as getGitHistory } from '../git/history'
 import { getUpstreamStatus } from '../git/upstream'
 import { gitFastForward, gitFetch, gitPull, gitPullRebaseFromBase, gitPush } from '../git/remote'
+import { gitSyncForkDefaultBranch } from '../git/fork-sync'
 import {
   getSshGitProvider,
   SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE
@@ -288,6 +291,21 @@ export class RuntimeGitCommands {
     }
     await gitFetch(target.worktree.path, pushTarget)
     return { ok: true }
+  }
+
+  async syncRuntimeGitForkDefaultBranch(
+    worktreeSelector: string,
+    expectedUpstream?: GitForkSyncExpectedUpstream | null
+  ): Promise<GitForkSyncResult> {
+    const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
+    const provider = target.connectionId ? getSshGitProvider(target.connectionId) : null
+    if (target.connectionId) {
+      if (!provider) {
+        throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
+      }
+      return provider.syncForkDefaultBranch(target.worktree.path, expectedUpstream)
+    }
+    return gitSyncForkDefaultBranch(target.worktree.path, expectedUpstream)
   }
 
   async pullRuntimeGit(

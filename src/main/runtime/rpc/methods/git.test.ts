@@ -304,6 +304,33 @@ describe('git RPC methods', () => {
     expect(runtime.fetchRuntimeGit).toHaveBeenCalledWith('id:wt-1', pushTarget)
   })
 
+  it('forwards fork sync requests to the runtime', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      syncRuntimeGitForkDefaultBranch: vi.fn().mockResolvedValue({
+        status: 'up-to-date',
+        originRemote: 'origin',
+        upstreamRemote: 'upstream',
+        branchName: 'main',
+        ahead: 0,
+        behind: 0
+      })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: GIT_METHODS })
+
+    await dispatcher.dispatch(
+      makeRequest('git.forkSync', {
+        worktree: 'id:wt-1',
+        expectedUpstream: { owner: 'stablyai', repo: 'orca' }
+      })
+    )
+
+    expect(runtime.syncRuntimeGitForkDefaultBranch).toHaveBeenCalledWith('id:wt-1', {
+      owner: 'stablyai',
+      repo: 'orca'
+    })
+  })
+
   it('forwards fast-forward push target to the runtime', async () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',

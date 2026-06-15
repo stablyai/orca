@@ -77,6 +77,7 @@ describe('GitHandler', () => {
     expect(methods).toContain('git.branchCompare')
     expect(methods).toContain('git.upstreamStatus')
     expect(methods).toContain('git.fetch')
+    expect(methods).toContain('git.forkSync')
     expect(methods).toContain('git.fetchRemoteTrackingRef')
     expect(methods).toContain('git.push')
     expect(methods).toContain('git.pull')

@@ -3525,6 +3525,8 @@ export class OrcaRuntimeService {
   fetchRuntimeGit: RuntimeGitCommands['fetchRuntimeGit'] = this.gitCommands.fetchRuntimeGit.bind(
     this.gitCommands
   )
+  syncRuntimeGitForkDefaultBranch: RuntimeGitCommands['syncRuntimeGitForkDefaultBranch'] =
+    this.gitCommands.syncRuntimeGitForkDefaultBranch.bind(this.gitCommands)
   pullRuntimeGit: RuntimeGitCommands['pullRuntimeGit'] = this.gitCommands.pullRuntimeGit.bind(
     this.gitCommands
   )

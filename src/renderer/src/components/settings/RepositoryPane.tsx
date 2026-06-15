@@ -20,6 +20,7 @@ import { RepositoryIconPicker } from './RepositoryIconPicker'
 import { getRepositoryPaneSearchEntries } from './repository-search'
 import { RepositoryHostSetupsSection } from './RepositoryHostSetupsSection'
 import { RepoSettingsDraftInput } from './RepositorySettingsDraftInput'
+import { RepositoryForkSyncSection } from './RepositoryForkSyncSection'
 import { translate } from '@/i18n/i18n'
 export { getRepositoryPaneSearchEntries }
 
@@ -127,6 +128,7 @@ export function RepositoryPane({
     [
       'Display Name',
       'Project Icon',
+      'Keep Fork Up to Date',
       'Default Worktree Base',
       'Worktree Location',
       'Remove Project'
@@ -282,6 +284,12 @@ export function RepositoryPane({
               forceVisible={forceFullPaneForRepoMatch}
               searchQuery={searchQuery}
               searchEntries={hostSetupEntries}
+            />
+
+            <RepositoryForkSyncSection
+              repo={repo}
+              updateRepo={updateRepo}
+              forceVisible={forceFullPaneForRepoMatch}
             />
 
             <SearchableSetting

@@ -13,6 +13,7 @@ import {
   GitDiscoverCommitMessageModels,
   GitDiff,
   GitFilePath,
+  GitForkSync,
   GitGenerateCommitMessage,
   GitGeneratePullRequestFields,
   GitHistory,
@@ -157,6 +158,12 @@ export const GIT_METHODS: RpcMethod[] = [
       params.pushTarget === undefined
         ? runtime.fetchRuntimeGit(params.worktree)
         : runtime.fetchRuntimeGit(params.worktree, params.pushTarget)
+  }),
+  defineMethod({
+    name: 'git.forkSync',
+    params: GitForkSync,
+    handler: async (params, { runtime }) =>
+      runtime.syncRuntimeGitForkDefaultBranch(params.worktree, params.expectedUpstream)
   }),
   defineMethod({
     name: 'git.pull',

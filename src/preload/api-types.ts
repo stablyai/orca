@@ -40,6 +40,8 @@ import type {
   GitCommitCompareResult,
   GitConflictOperation,
   GitDiffResult,
+  GitForkSyncExpectedUpstream,
+  GitForkSyncResult,
   GitPushTarget,
   GitStatusResult,
   GitUpstreamStatus,
@@ -2113,6 +2115,11 @@ export type PreloadApi = {
       connectionId?: string
       pushTarget?: GitPushTarget
     }) => Promise<void>
+    syncFork: (args: {
+      worktreePath: string
+      connectionId?: string
+      expectedUpstream?: GitForkSyncExpectedUpstream | null
+    }) => Promise<GitForkSyncResult>
     push: (args: {
       worktreePath: string
       publish?: boolean

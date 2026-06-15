@@ -34,6 +34,7 @@ import { assertGitPushTargetShape } from '../shared/git-push-target-validation'
 import { getPublishTargetStatus, type GitCommandRunner } from '../shared/git-publish-target-status'
 import { resolveGitRemoteRebaseSource } from '../shared/git-rebase-source'
 import type { GitPushTarget } from '../shared/types'
+import type { GitForkSyncExpectedUpstream } from '../shared/git-fork-sync'
 import {
   getEffectiveGitUpstreamStatus,
   resolveEffectiveGitUpstream
@@ -45,6 +46,7 @@ import {
   removeSafeUntrackedDiscardTargets
 } from '../shared/git-discard-path-safety'
 import { getGitCloneFailureMessage } from '../shared/git-clone-failure-message'
+import { syncForkDefaultBranch } from '../shared/git-fork-sync'
 
 const execFileAsync = promisify(execFile)
 const MAX_GIT_BUFFER = 10 * 1024 * 1024
@@ -79,6 +81,7 @@ export class GitHandler {
     this.dispatcher.onRequest('git.commitCompare', (p) => this.commitCompare(p))
     this.dispatcher.onRequest('git.upstreamStatus', (p) => this.upstreamStatus(p))
     this.dispatcher.onRequest('git.fetch', (p) => this.fetch(p))
+    this.dispatcher.onRequest('git.forkSync', (p) => this.forkSync(p))
     this.dispatcher.onRequest('git.fetchRemoteTrackingRef', (p) => this.fetchRemoteTrackingRef(p))
     this.dispatcher.onRequest('git.push', (p) => this.push(p))
     this.dispatcher.onRequest('git.pull', (p) => this.pull(p))
@@ -102,11 +105,22 @@ export class GitHandler {
   private async git(
     args: string[],
     cwd: string,
-    opts?: { maxBuffer?: number; disableOptionalLocks?: boolean; signal?: AbortSignal }
+    opts?: {
+      maxBuffer?: number
+      disableOptionalLocks?: boolean
+      signal?: AbortSignal
+      nonInteractive?: boolean
+    }
   ): Promise<{ stdout: string; stderr: string }> {
     const env = buildRelayCommandEnv()
     if (opts?.disableOptionalLocks) {
       env.GIT_OPTIONAL_LOCKS = '0'
+    }
+    if (opts?.nonInteractive) {
+      env.GIT_TERMINAL_PROMPT = '0'
+      env.GIT_ASKPASS = ''
+      env.SSH_ASKPASS = ''
+      env.GIT_SSH_COMMAND ??= 'ssh -o BatchMode=yes'
     }
     return execFileAsync('git', args, {
       cwd: expandTilde(cwd),
@@ -442,6 +456,37 @@ export class GitHandler {
       // versions/locales and may embed credentials).
       throw new Error(normalizeGitErrorMessage(error, 'fetch'))
     }
+  }
+
+  private async forkSync(params: Record<string, unknown>) {
+    const worktreePath = params.worktreePath as string
+    const expectedUpstream = this.parseForkSyncExpectedUpstream(params.expectedUpstream)
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 60_000)
+    try {
+      return await syncForkDefaultBranch(
+        (args) =>
+          this.git(args, worktreePath, {
+            nonInteractive: true,
+            signal: controller.signal
+          }),
+        { expectedUpstream }
+      )
+    } catch (error) {
+      throw new Error(normalizeGitErrorMessage(error, 'push'))
+    } finally {
+      clearTimeout(timeout)
+    }
+  }
+
+  private parseForkSyncExpectedUpstream(value: unknown): GitForkSyncExpectedUpstream | null {
+    if (!value || typeof value !== 'object') {
+      return null
+    }
+    const candidate = value as { owner?: unknown; repo?: unknown }
+    const owner = typeof candidate.owner === 'string' ? candidate.owner.trim() : ''
+    const repo = typeof candidate.repo === 'string' ? candidate.repo.trim() : ''
+    return owner && repo ? { owner, repo } : null
   }
 
   private async fetchRemoteTrackingRef(params: Record<string, unknown>) {

@@ -10,6 +10,8 @@ import type {
   GitBranchCompareResult,
   GitCommitCompareResult,
   GitConflictOperation,
+  GitForkSyncExpectedUpstream,
+  GitForkSyncResult,
   GitPushTarget,
   GitUpstreamStatus,
   GitWorktreeInfo,
@@ -416,6 +418,16 @@ export class SshGitProvider implements IGitProvider {
 
   async fetchRemote(worktreePath: string, pushTarget?: GitPushTarget): Promise<void> {
     await this.mux.request('git.fetch', { worktreePath, ...(pushTarget ? { pushTarget } : {}) })
+  }
+
+  async syncForkDefaultBranch(
+    worktreePath: string,
+    expectedUpstream?: GitForkSyncExpectedUpstream | null
+  ): Promise<GitForkSyncResult> {
+    return (await this.mux.request('git.forkSync', {
+      worktreePath,
+      ...(expectedUpstream ? { expectedUpstream } : {})
+    })) as GitForkSyncResult
   }
 
   async fetchRemoteTrackingRef(
