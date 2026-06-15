@@ -3517,7 +3517,8 @@
           "196c1b5362": "Abrir tareas de GitLab",
           "0ccba862b8": "Abrir tareas de GitHub",
           "fee535205b": "Tareas",
-          "d599269755": "Ocultar de la barra lateral"
+          "d599269755": "Ocultar de la barra lateral",
+          "docker": "Docker"
         },
         "SidebarRepositoryFilterSection": {
           "d3a9c4cea1": "Claro",

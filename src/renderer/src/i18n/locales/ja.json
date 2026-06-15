@@ -3498,7 +3498,8 @@
           "196c1b5362": "GitLab タスクを開く",
           "0ccba862b8": "GitHub タスクを開く",
           "fee535205b": "タスク",
-          "d599269755": "サイドバーから隠す"
+          "d599269755": "サイドバーから隠す",
+          "docker": "Docker"
         },
         "SidebarRepositoryFilterSection": {
           "d3a9c4cea1": "クリア",

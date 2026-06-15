@@ -3523,7 +3523,8 @@
           "196c1b5362": "Open GitLab tasks",
           "0ccba862b8": "Open GitHub tasks",
           "fee535205b": "Tasks",
-          "d599269755": "Hide from sidebar"
+          "d599269755": "Hide from sidebar",
+          "docker": "Docker"
         },
         "SidebarRepositoryFilterSection": {
           "d3a9c4cea1": "Clear",

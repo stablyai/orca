@@ -3498,7 +3498,8 @@
           "196c1b5362": "GitLab 작업 열기",
           "0ccba862b8": "GitHub 작업 열기",
           "fee535205b": "작업",
-          "d599269755": "사이드바에서 숨기기"
+          "d599269755": "사이드바에서 숨기기",
+          "docker": "Docker"
         },
         "SidebarRepositoryFilterSection": {
           "d3a9c4cea1": "지우기",
