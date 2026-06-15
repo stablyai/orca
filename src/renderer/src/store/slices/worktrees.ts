@@ -708,7 +708,6 @@ function projectWorktreeLineageToWorkspaceLineage(
 
 async function refreshRemoteWorktreeLineageBestEffort(
   settings: AppState['settings'],
-  get: () => AppState,
   set: (partial: Partial<AppState> | ((state: AppState) => Partial<AppState>)) => void
 ): Promise<void> {
   if (getActiveRuntimeTarget(settings).kind === 'local') {
@@ -1073,7 +1072,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
             ...(removedIds.length > 0 ? buildWorktreePurgeState(s, removedIds) : {})
           }
         })
-        await refreshRemoteWorktreeLineageBestEffort(settings, get, set)
+        await refreshRemoteWorktreeLineageBestEffort(settings, set)
         return detected.authoritative
       }
 
@@ -1107,7 +1106,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
           ...(removedIds.length > 0 ? buildWorktreePurgeState(s, removedIds) : {})
         }
       })
-      await refreshRemoteWorktreeLineageBestEffort(settings, get, set)
+      await refreshRemoteWorktreeLineageBestEffort(settings, set)
       return detected.authoritative
     } catch (err) {
       console.error(`Failed to fetch worktrees for repo ${repoId}:`, err)
