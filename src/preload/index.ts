@@ -2636,7 +2636,12 @@ const api = {
       relativePath: string
       line: number
       connectionId?: string
-    }): Promise<string | null> => ipcRenderer.invoke('git:remoteFileUrl', args)
+    }): Promise<string | null> => ipcRenderer.invoke('git:remoteFileUrl', args),
+    remoteCommitUrl: (args: {
+      worktreePath: string
+      sha: string
+      connectionId?: string
+    }): Promise<string | null> => ipcRenderer.invoke('git:remoteCommitUrl', args)
   },
 
   ui: {

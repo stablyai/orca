@@ -3566,6 +3566,8 @@ export class OrcaRuntimeService {
     this.gitCommands.discardRuntimeGitPath.bind(this.gitCommands)
   getRuntimeGitRemoteFileUrl: RuntimeGitCommands['getRuntimeGitRemoteFileUrl'] =
     this.gitCommands.getRuntimeGitRemoteFileUrl.bind(this.gitCommands)
+  getRuntimeGitRemoteCommitUrl: RuntimeGitCommands['getRuntimeGitRemoteCommitUrl'] =
+    this.gitCommands.getRuntimeGitRemoteCommitUrl.bind(this.gitCommands)
 
   private async resolveRuntimeGitTarget(
     worktreeSelector: string

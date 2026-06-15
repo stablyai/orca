@@ -786,3 +786,26 @@ export async function getRuntimeGitRemoteFileUrl(
     { timeoutMs: 15_000 }
   )
 }
+
+export async function getRuntimeGitRemoteCommitUrl(
+  context: RuntimeGitContext,
+  args: { sha: string }
+): Promise<string | null> {
+  const target = getActiveRuntimeTarget(context.settings)
+  if (target.kind === 'local' || !context.worktreeId) {
+    return window.api.git.remoteCommitUrl({
+      worktreePath: context.worktreePath,
+      sha: args.sha,
+      connectionId: context.connectionId
+    })
+  }
+  return callRuntimeRpc<string | null>(
+    target,
+    'git.remoteCommitUrl',
+    {
+      worktree: toRuntimeWorktreeSelector(context.worktreeId),
+      sha: args.sha
+    },
+    { timeoutMs: 15_000 }
+  )
+}

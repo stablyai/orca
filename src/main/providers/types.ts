@@ -223,6 +223,7 @@ export type IGitProvider = {
     options?: { signal?: AbortSignal; timeoutMs?: number }
   ): Promise<{ stdout: string; stderr: string }>
   getRemoteFileUrl(worktreePath: string, relativePath: string, line: number): Promise<string | null>
+  getRemoteCommitUrl(worktreePath: string, sha: string): Promise<string | null>
   worktreeIsClean(
     worktreePath: string,
     options?: { includeUntracked?: boolean }

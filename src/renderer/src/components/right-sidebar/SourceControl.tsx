@@ -38,6 +38,8 @@ import { useActiveWorktree, useRepoById, useWorktreeMap } from '@/store/selector
 import { getHostedReviewCacheKey } from '@/store/slices/hosted-review'
 import { getGitHubPRCacheKey } from '@/store/slices/github-cache-key'
 import { detectLanguage } from '@/lib/language-detect'
+import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
+import { resolveDefaultAgentForNewTab } from '@/lib/agent-tab-shortcuts'
 import { basename, dirname, joinPath } from '@/lib/path'
 import { cn } from '@/lib/utils'
 import { WORKSPACE_FILE_PATH_MIME } from '@/lib/workspace-file-drag'
@@ -141,6 +143,7 @@ import {
   getRuntimeGitBranchCompare,
   getRuntimeGitCommitCompare,
   getRuntimeGitHistory,
+  getRuntimeGitRemoteCommitUrl,
   stageRuntimeGitPath,
   unstageRuntimeGitPath,
   type RuntimeGenerateCommitMessageOverrides,
@@ -150,6 +153,7 @@ import { getRuntimeRepoBaseRefDefault } from '@/runtime/runtime-repo-client'
 import { PullRequestIcon } from './checks-panel-content'
 import { stripBaseRef, useCreatePullRequestDialogFields } from './useCreatePullRequestDialogFields'
 import { GitHistoryPanel, type GitHistoryPanelState } from './GitHistoryPanel'
+import type { GitHistoryCommitAction } from './GitHistoryCommitContextMenu'
 import type { GitHistoryItem } from '../../../../shared/git-history'
 import { normalizeHostedReviewHeadRef } from '../../../../shared/hosted-review-refs'
 import { shouldForcePushWithLeaseForUpstream } from '../../../../shared/git-upstream-status'
@@ -157,6 +161,7 @@ import type {
   DiffComment,
   GitBranchChangeEntry,
   GitBranchCompareSummary,
+  GitCommitCompareResult,
   GitConflictOperation,
   GitStatusEntry,
   SourceControlViewMode,
@@ -713,6 +718,8 @@ function SourceControlInner(): React.JSX.Element {
   const openAllDiffs = useAppStore((s) => s.openAllDiffs)
   const openBranchAllDiffs = useAppStore((s) => s.openBranchAllDiffs)
   const openCommitAllDiffs = useAppStore((s) => s.openCommitAllDiffs)
+  const openCommitDiff = useAppStore((s) => s.openCommitDiff)
+  const createBrowserTab = useAppStore((s) => s.createBrowserTab)
   const deleteDiffComment = useAppStore((s) => s.deleteDiffComment)
   const clearDiffComments = useAppStore((s) => s.clearDiffComments)
   const clearDiffCommentsForFile = useAppStore((s) => s.clearDiffCommentsForFile)
@@ -3321,39 +3328,70 @@ function SourceControlInner(): React.JSX.Element {
     [activeWorktreeId, branchSummary, openBranchDiff, resolveSplitTargetGroupId, worktreePath]
   )
 
+  // Caches each commit's compare result so expanding a commit in the history
+  // panel fetches its files once, and opening a single file (or the combined
+  // diff) reuses that same compare metadata without a second round-trip.
+  const commitCompareCacheRef = useRef<Map<string, GitCommitCompareResult>>(new Map())
+
+  // Keyed by commit oid; drop it when the workspace changes so the cache stays
+  // bounded to the commits expanded in the current worktree's history.
+  useEffect(() => {
+    commitCompareCacheRef.current = new Map()
+  }, [activeWorktreeId])
+
+  const loadCommitFiles = useCallback(
+    async (item: GitHistoryItem): Promise<GitBranchChangeEntry[]> => {
+      if (!activeWorktreeId || !worktreePath) {
+        return EMPTY_BRANCH_CHANGE_ENTRIES
+      }
+      const cached = commitCompareCacheRef.current.get(item.id)
+      if (cached) {
+        return cached.entries
+      }
+      const connectionId = getConnectionId(activeWorktreeId) ?? undefined
+      const result = await getRuntimeGitCommitCompare(
+        {
+          // Why: route the commit compare by the repo OWNER host, not the focused runtime.
+          settings: activeRepoSettings,
+          worktreeId: activeWorktreeId,
+          worktreePath,
+          connectionId
+        },
+        item.id
+      )
+      if (result.summary.status !== 'ready') {
+        throw new Error(
+          result.summary.errorMessage ??
+            translate(
+              'auto.components.right.sidebar.SourceControl.8a5ba6a988',
+              'Failed to load commit diff'
+            )
+        )
+      }
+      commitCompareCacheRef.current.set(item.id, result)
+      return result.entries
+    },
+    [activeRepoSettings, activeWorktreeId, worktreePath]
+  )
+
   const openHistoryCommitDiff = useCallback(
     async (item: GitHistoryItem): Promise<void> => {
       if (!activeWorktreeId || !worktreePath) {
         return
       }
-
       try {
-        const connectionId = getConnectionId(activeWorktreeId) ?? undefined
-        const result = await getRuntimeGitCommitCompare(
-          {
-            // Why: route the commit compare by the repo OWNER host, not the focused runtime.
-            settings: activeRepoSettings,
-            worktreeId: activeWorktreeId,
-            worktreePath,
-            connectionId
-          },
-          item.id
-        )
-        if (result.summary.status !== 'ready') {
-          toast.error(
-            result.summary.errorMessage ??
-              translate(
-                'auto.components.right.sidebar.SourceControl.8a5ba6a988',
-                'Failed to load commit diff'
-              )
-          )
+        // Reuses loadCommitFiles' fetch + cache so expanding a commit and then
+        // opening its combined diff costs a single round-trip.
+        await loadCommitFiles(item)
+        const cached = commitCompareCacheRef.current.get(item.id)
+        if (!cached) {
           return
         }
         openCommitAllDiffs(
           activeWorktreeId,
           worktreePath,
-          result.summary,
-          result.entries,
+          cached.summary,
+          cached.entries,
           item.subject,
           item.message
         )
@@ -3368,7 +3406,149 @@ function SourceControlInner(): React.JSX.Element {
         )
       }
     },
-    [activeRepoSettings, activeWorktreeId, openCommitAllDiffs, worktreePath]
+    [activeWorktreeId, loadCommitFiles, openCommitAllDiffs, worktreePath]
+  )
+
+  const openCommitFile = useCallback(
+    (
+      item: GitHistoryItem,
+      entry: GitBranchChangeEntry,
+      event?: SourceControlRowOpenEvent
+    ): void => {
+      if (!activeWorktreeId || !worktreePath) {
+        return
+      }
+      // The cache is populated by loadCommitFiles when the row is expanded, so a
+      // missing entry means the files never loaded — nothing to open.
+      const cached = commitCompareCacheRef.current.get(item.id)
+      if (!cached) {
+        return
+      }
+      const targetGroupId = resolveSplitTargetGroupId(event)
+      openCommitDiff(
+        activeWorktreeId,
+        worktreePath,
+        entry,
+        {
+          commitOid: cached.summary.commitOid,
+          parentOid: cached.summary.parentOid,
+          compareRef: cached.summary.compareRef,
+          baseRef: cached.summary.baseRef,
+          subject: item.subject,
+          message: item.message
+        },
+        detectLanguage(entry.path),
+        { targetGroupId, preview: shouldOpenSourceControlRowAsPreview(event, targetGroupId) }
+      )
+    },
+    [activeWorktreeId, openCommitDiff, resolveSplitTargetGroupId, worktreePath]
+  )
+
+  const copyCommitText = useCallback(async (text: string, label: string): Promise<void> => {
+    try {
+      await window.api.ui.writeClipboardText(text)
+      toast.success(
+        translate('auto.components.right.sidebar.SourceControl.cp1a09f2', '{{value0}} copied', {
+          value0: label
+        })
+      )
+    } catch {
+      toast.error(
+        translate(
+          'auto.components.right.sidebar.SourceControl.cp2b17e4',
+          'Failed to copy {{value0}}',
+          { value0: label.toLowerCase() }
+        )
+      )
+    }
+  }, [])
+
+  const handleCommitAction = useCallback(
+    (action: GitHistoryCommitAction, item: GitHistoryItem): void => {
+      if (action === 'open-remote') {
+        if (!activeWorktreeId || !worktreePath) {
+          return
+        }
+        // Resolve the provider commit URL in the main process, which reads the
+        // real origin remote (the renderer has no reliable origin identity).
+        void getRuntimeGitRemoteCommitUrl(
+          {
+            settings: activeRepoSettings,
+            worktreeId: activeWorktreeId,
+            worktreePath,
+            connectionId: getConnectionId(activeWorktreeId) ?? undefined
+          },
+          { sha: item.id }
+        )
+          .then((url) => {
+            if (url) {
+              createBrowserTab(activeWorktreeId, url, { activate: true })
+            } else {
+              toast.error(
+                translate(
+                  'auto.components.right.sidebar.SourceControl.cp6f52da',
+                  'This repository has no supported web remote'
+                )
+              )
+            }
+          })
+          .catch(() => {
+            toast.error(
+              translate(
+                'auto.components.right.sidebar.SourceControl.cp7a63eb',
+                'Failed to open commit in browser'
+              )
+            )
+          })
+        return
+      }
+      if (action === 'copy-hash') {
+        void copyCommitText(
+          item.id,
+          translate('auto.components.right.sidebar.SourceControl.cp3c25a6', 'Commit hash')
+        )
+        return
+      }
+      if (action === 'copy-message') {
+        void copyCommitText(
+          item.message || item.subject,
+          translate('auto.components.right.sidebar.SourceControl.cp4d33b8', 'Commit message')
+        )
+        return
+      }
+      // Explain: spawn the user's default agent in a new tab seeded with enough
+      // context to fetch and summarize the commit's diff itself.
+      if (!activeWorktreeId) {
+        return
+      }
+      const state = useAppStore.getState()
+      const connectionId = getConnectionId(activeWorktreeId)
+      const agent = resolveDefaultAgentForNewTab({
+        defaultTuiAgent: state.settings?.defaultTuiAgent,
+        detectedAgentIds:
+          typeof connectionId === 'string'
+            ? state.remoteDetectedAgentIds[connectionId]
+            : state.detectedAgentIds,
+        disabledTuiAgents: state.settings?.disabledTuiAgents
+      })
+      if (!agent) {
+        toast.error(
+          translate(
+            'auto.components.right.sidebar.SourceControl.cp5e41c9',
+            'No agent available to explain this commit'
+          )
+        )
+        return
+      }
+      const explainPrompt = `Explain the changes introduced by commit ${item.displayId} ("${item.subject}"). Run \`git show ${item.id}\` to inspect the full diff, then summarize what changed and why at a high level, calling out the most important files and any risks.`
+      launchAgentInNewTab({
+        agent,
+        worktreeId: activeWorktreeId,
+        prompt: explainPrompt,
+        promptDelivery: 'submit-after-ready'
+      })
+    },
+    [activeRepoSettings, activeWorktreeId, copyCommitText, createBrowserTab, worktreePath]
   )
 
   // Why: a note's filePath is the same relative path used by GitStatusEntry /
@@ -4503,6 +4683,9 @@ function SourceControlInner(): React.JSX.Element {
                 onToggle={() => toggleSection('history')}
                 onRefresh={() => void refreshGitHistory()}
                 onOpenCommit={(item) => void openHistoryCommitDiff(item)}
+                onLoadCommitFiles={loadCommitFiles}
+                onOpenCommitFile={openCommitFile}
+                onCommitAction={handleCommitAction}
               />
             </div>
           )}

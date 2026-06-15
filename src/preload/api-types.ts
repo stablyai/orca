@@ -2248,6 +2248,11 @@ export type PreloadApi = {
       line: number
       connectionId?: string
     }) => Promise<string | null>
+    remoteCommitUrl: (args: {
+      worktreePath: string
+      sha: string
+      connectionId?: string
+    }) => Promise<string | null>
   }
   ui: {
     get: () => Promise<PersistedUIState>
