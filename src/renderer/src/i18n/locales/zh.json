@@ -2257,7 +2257,10 @@
             "f3eeb1de13": "复制",
             "c2f0b72b8d": "插入",
             "925f49f210": "展开窗格",
-            "df766809e0": "折叠窗格"
+            "df766809e0": "折叠窗格",
+            "41fc98243e": "Copy Path",
+            "1ca591826e": "Open with Default App",
+            "590496273b": "Open"
           },
           "TerminalErrorToast": {
             "e4aa243f8c": "重新启动守护进程",
@@ -10160,6 +10163,10 @@
         },
         "useRichMarkdownReviewData": {
           "f9d2acd6b0": "所有未发送的笔记"
+        },
+        "UnrenderableBinaryFileNotice": {
+          "d4ba27a05b": "Open with Default App",
+          "11d463b73c": "Orca can&rsquo;t preview this file type."
         }
       },
       "diff": {

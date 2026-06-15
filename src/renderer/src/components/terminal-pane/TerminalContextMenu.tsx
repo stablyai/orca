@@ -192,14 +192,12 @@ export default function TerminalContextMenu({
             </DropdownMenuLabel>
             <DropdownMenuItem onSelect={onOpenLink}>
               <FileText />
-              Open
-            </DropdownMenuItem>
+              {translate("auto.components.terminal.pane.TerminalContextMenu.590496273b", "Open")}</DropdownMenuItem>
             {menuLink.isLocal ? (
               <>
                 <DropdownMenuItem onSelect={onOpenLinkExternally}>
                   <ExternalLink />
-                  Open with Default App
-                </DropdownMenuItem>
+                  {translate("auto.components.terminal.pane.TerminalContextMenu.1ca591826e", "Open with Default App")}</DropdownMenuItem>
                 <DropdownMenuItem onSelect={onRevealLink}>
                   <FolderOpen />
                   {revealInFileManagerLabel}
@@ -208,8 +206,7 @@ export default function TerminalContextMenu({
             ) : null}
             <DropdownMenuItem onSelect={onCopyLinkPath}>
               <ClipboardCopy />
-              Copy Path
-            </DropdownMenuItem>
+              {translate("auto.components.terminal.pane.TerminalContextMenu.41fc98243e", "Copy Path")}</DropdownMenuItem>
             <DropdownMenuSeparator />
           </>
         ) : null}

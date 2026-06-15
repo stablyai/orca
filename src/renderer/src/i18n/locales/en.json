@@ -2257,7 +2257,10 @@
             "f3eeb1de13": "Copy",
             "c2f0b72b8d": "Insert",
             "925f49f210": "Expand Pane",
-            "df766809e0": "Collapse Pane"
+            "df766809e0": "Collapse Pane",
+            "41fc98243e": "Copy Path",
+            "1ca591826e": "Open with Default App",
+            "590496273b": "Open"
           },
           "TerminalErrorToast": {
             "e4aa243f8c": "Restart daemon",
@@ -10160,6 +10163,10 @@
         },
         "useRichMarkdownReviewData": {
           "f9d2acd6b0": "All unsent notes"
+        },
+        "UnrenderableBinaryFileNotice": {
+          "d4ba27a05b": "Open with Default App",
+          "11d463b73c": "Orca can&rsquo;t preview this file type."
         }
       },
       "diff": {

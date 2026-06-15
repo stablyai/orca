@@ -2257,7 +2257,10 @@
             "f3eeb1de13": "복사",
             "c2f0b72b8d": "끼워 넣다",
             "925f49f210": "창 확장",
-            "df766809e0": "창 축소"
+            "df766809e0": "창 축소",
+            "41fc98243e": "Copy Path",
+            "1ca591826e": "Open with Default App",
+            "590496273b": "Open"
           },
           "TerminalErrorToast": {
             "e4aa243f8c": "데몬 재시작",
@@ -10160,6 +10163,10 @@
         },
         "useRichMarkdownReviewData": {
           "f9d2acd6b0": "보내지 않은 모든 메모"
+        },
+        "UnrenderableBinaryFileNotice": {
+          "d4ba27a05b": "Open with Default App",
+          "11d463b73c": "Orca can&rsquo;t preview this file type."
         }
       },
       "diff": {

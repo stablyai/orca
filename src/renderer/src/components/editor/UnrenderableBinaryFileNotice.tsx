@@ -5,6 +5,7 @@ import { isLocalPathOpenBlocked, showLocalPathOpenBlockedToast } from '@/lib/loc
 import { settingsForRuntimeOwner } from '@/runtime/runtime-rpc-client'
 import { useAppStore } from '@/store'
 import { revealInFileManagerLabel } from '@/lib/reveal-in-file-manager-label'
+import { translate } from '@/i18n/i18n'
 
 /**
  * Fallback shown when a binary file can't be rendered in Orca (Office docs,
@@ -46,13 +47,12 @@ export default function UnrenderableBinaryFileNotice({
 
   return (
     <div className="flex h-full flex-col items-center justify-center gap-4 px-6 text-center">
-      <div className="text-sm text-muted-foreground">Orca can&rsquo;t preview this file type.</div>
+      <div className="text-sm text-muted-foreground">{translate("auto.components.editor.UnrenderableBinaryFileNotice.11d463b73c", "Orca can&rsquo;t preview this file type.")}</div>
       {!localOpenBlocked ? (
         <div className="flex flex-wrap items-center justify-center gap-2">
           <Button variant="default" size="sm" onClick={openExternally}>
             <ExternalLink />
-            Open with Default App
-          </Button>
+            {translate("auto.components.editor.UnrenderableBinaryFileNotice.d4ba27a05b", "Open with Default App")}</Button>
           <Button variant="outline" size="sm" onClick={reveal}>
             <FolderOpen />
             {revealInFileManagerLabel}

@@ -2257,7 +2257,10 @@
             "f3eeb1de13": "Copiar",
             "c2f0b72b8d": "Insertar",
             "925f49f210": "Expandir panel",
-            "df766809e0": "Contraer panel"
+            "df766809e0": "Contraer panel",
+            "41fc98243e": "Copy Path",
+            "1ca591826e": "Open with Default App",
+            "590496273b": "Open"
           },
           "TerminalErrorToast": {
             "e4aa243f8c": "Reiniciar demonio",
@@ -10160,6 +10163,10 @@
         },
         "useRichMarkdownReviewData": {
           "f9d2acd6b0": "Todas las notas no enviadas"
+        },
+        "UnrenderableBinaryFileNotice": {
+          "d4ba27a05b": "Open with Default App",
+          "11d463b73c": "Orca can&rsquo;t preview this file type."
         }
       },
       "diff": {
