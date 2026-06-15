@@ -193,9 +193,25 @@
 
 .orca-diff-comment-add-btn.rich-markdown-comment-add-btn {
   display: flex;
-  width: 22px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
   z-index: 1001;
+  /* Why: this button appears on active text selection; keep it readable without hover. */
+  color: var(--primary);
+  border-color: color-mix(in srgb, var(--primary) 52%, var(--border));
+  background: color-mix(in srgb, var(--primary) 14%, var(--background));
+  box-shadow:
+    0 1px 4px color-mix(in srgb, var(--foreground) 16%, transparent),
+    0 0 0 1px color-mix(in srgb, var(--primary) 10%, transparent);
+}
+
+.orca-diff-comment-add-btn.rich-markdown-comment-add-btn:hover {
+  color: var(--primary);
+  border-color: color-mix(in srgb, var(--primary) 68%, var(--border));
+  background: color-mix(in srgb, var(--primary) 22%, var(--background));
+  box-shadow:
+    0 2px 8px color-mix(in srgb, var(--primary) 24%, transparent),
+    0 0 0 1px color-mix(in srgb, var(--primary) 14%, transparent);
 }
 
 .rich-markdown-annotation-selection {

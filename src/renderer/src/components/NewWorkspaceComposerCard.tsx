@@ -15,7 +15,7 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import RepoCombobox from '@/components/repo/RepoCombobox'
+import type RepoCombobox from '@/components/repo/RepoCombobox'
 import AgentCombobox from '@/components/agent/AgentCombobox'
 import { getAgentCatalog } from '@/lib/agent-catalog'
 import { useAppStore } from '@/store'
@@ -35,12 +35,18 @@ import SparseCheckoutPresetSelect from '@/components/sparse/SparseCheckoutPreset
 import SmartWorkspaceNameField, {
   type SmartWorkspaceNameSelection
 } from '@/components/new-workspace/SmartWorkspaceNameField'
+import ProjectCombobox from '@/components/new-workspace/ProjectCombobox'
+import ProjectHostSetupCombobox from '@/components/new-workspace/ProjectHostSetupCombobox'
 import type { SetupConfig } from '@/lib/new-workspace'
+import type { NewWorkspaceProjectOption } from '@/lib/new-workspace-project-options'
+import type { ProjectHostSetupOption } from '@/lib/project-host-setup-options'
 import type { WorkspaceCreateErrorDisplay } from '@/lib/workspace-create-error-format'
 import type { SshConnectionStatus } from '../../../shared/ssh-types'
 import { translate } from '@/i18n/i18n'
 
 type RepoOption = React.ComponentProps<typeof RepoCombobox>['repos'][number]
+const EMPTY_PROJECT_HOST_SETUP_OPTIONS: ProjectHostSetupOption[] = []
+const EMPTY_PROJECT_OPTIONS: NewWorkspaceProjectOption[] = []
 
 type NewWorkspaceComposerCardProps = {
   contextualTourSource?: string
@@ -52,8 +58,14 @@ type NewWorkspaceComposerCardProps = {
   onQuickAgentChange: (agent: TuiAgent | null) => void
   eligibleRepos: RepoOption[]
   repoId: string
+  projectOptions?: NewWorkspaceProjectOption[]
+  selectedProjectId?: string | null
   selectedRepoIsGit: boolean
   onRepoChange: (value: string) => void
+  onProjectChange: (value: string) => void
+  projectHostSetupOptions?: ProjectHostSetupOption[]
+  selectedProjectHostSetupId?: string | null
+  onProjectHostSetupChange?: (setupId: string) => void
   primaryActionLabel: string
   projectLabel?: string
   projectPlaceholder?: string
@@ -274,8 +286,14 @@ export default function NewWorkspaceComposerCard({
   onQuickAgentChange,
   eligibleRepos,
   repoId,
+  projectOptions = EMPTY_PROJECT_OPTIONS,
+  selectedProjectId = null,
   selectedRepoIsGit,
   onRepoChange,
+  onProjectChange,
+  projectHostSetupOptions = EMPTY_PROJECT_HOST_SETUP_OPTIONS,
+  selectedProjectHostSetupId = null,
+  onProjectHostSetupChange,
   primaryActionLabel,
   projectLabel,
   projectPlaceholder,
@@ -425,6 +443,16 @@ export default function NewWorkspaceComposerCard({
     openModal('add-repo')
   }, [openModal])
   const projectDescriptionId = React.useId()
+  const readyProjectHostSetupOptions = React.useMemo(
+    () => projectHostSetupOptions.filter((option) => option.kind === 'ready'),
+    [projectHostSetupOptions]
+  )
+  const handleProjectHostSetupChange = React.useCallback(
+    (setupId: string): void => {
+      onProjectHostSetupChange?.(setupId)
+    },
+    [onProjectHostSetupChange]
+  )
   useContextualTour(
     'workspace-creation',
     eligibleRepos.length > 0 && Boolean(repoId),
@@ -481,10 +509,10 @@ export default function NewWorkspaceComposerCard({
               </Tooltip>
             ) : null}
           </div>
-          <RepoCombobox
-            repos={eligibleRepos}
-            value={repoId}
-            onValueChange={onRepoChange}
+          <ProjectCombobox
+            options={projectOptions}
+            value={selectedProjectId}
+            onValueChange={onProjectChange}
             onValueSelected={focusNameInput}
             placeholder={
               projectPlaceholder ??
@@ -497,7 +525,6 @@ export default function NewWorkspaceComposerCard({
             // paints the familiar field ring instead of leaving no visible
             // focus state.
             triggerClassName="h-9 w-full border-input text-sm focus:border-ring focus:ring-[3px] focus:ring-ring/50"
-            showStandaloneAddButton={false}
             invalid={Boolean(projectError)}
             describedBy={projectDescriptionId}
           />
@@ -513,6 +540,18 @@ export default function NewWorkspaceComposerCard({
                   'Add a project before creating a workspace.'
                 )}
             </p>
+          ) : null}
+          {readyProjectHostSetupOptions.length > 1 ? (
+            <div className="space-y-1">
+              <label className="block min-w-0 truncate text-xs font-medium text-muted-foreground">
+                {translate('auto.components.NewWorkspaceComposerCard.runOn', 'Run on')}
+              </label>
+              <ProjectHostSetupCombobox
+                options={readyProjectHostSetupOptions}
+                value={selectedProjectHostSetupId ?? null}
+                onValueChange={handleProjectHostSetupChange}
+              />
+            </div>
           ) : null}
           {selectedRepoRequiresConnection && selectedRepoConnectionId ? (
             <div

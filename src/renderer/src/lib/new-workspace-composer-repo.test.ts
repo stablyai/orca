@@ -54,4 +54,46 @@ describe('new-workspace-composer-repo', () => {
       getComposerEligibleRepos([makeRepo('missing-path', { path: '' }), makeRepo('repo')])
     ).toEqual([expect.objectContaining({ id: 'repo' })])
   })
+
+  it('defaults to a repo on the focused host when no explicit repo is chosen', () => {
+    const eligibleRepos = [
+      makeRepo('local-repo'),
+      makeRepo('ssh-repo', { connectionId: 'win-vm' }),
+      makeRepo('runtime-repo', { executionHostId: 'runtime:env-1' })
+    ]
+
+    expect(resolveComposerRepoId({ eligibleRepos, focusedHostScope: 'ssh:win-vm' })).toBe(
+      'ssh-repo'
+    )
+    expect(resolveComposerRepoId({ eligibleRepos, focusedHostScope: 'runtime:env-1' })).toBe(
+      'runtime-repo'
+    )
+    expect(resolveComposerRepoId({ eligibleRepos, focusedHostScope: 'local' })).toBe('local-repo')
+  })
+
+  it('lets explicit draft/initial/active choices win over the focused host', () => {
+    const eligibleRepos = [makeRepo('local-repo'), makeRepo('ssh-repo', { connectionId: 'win-vm' })]
+
+    expect(
+      resolveComposerRepoId({
+        eligibleRepos,
+        activeRepoId: 'local-repo',
+        focusedHostScope: 'ssh:win-vm'
+      })
+    ).toBe('local-repo')
+  })
+
+  it('ignores host scope "all" and falls back to the first eligible repo', () => {
+    const eligibleRepos = [makeRepo('local-repo'), makeRepo('ssh-repo', { connectionId: 'win-vm' })]
+
+    expect(resolveComposerRepoId({ eligibleRepos, focusedHostScope: 'all' })).toBe('local-repo')
+  })
+
+  it('falls back to the first eligible repo when the focused host has no repos', () => {
+    const eligibleRepos = [makeRepo('local-repo')]
+
+    expect(resolveComposerRepoId({ eligibleRepos, focusedHostScope: 'ssh:gone' })).toBe(
+      'local-repo'
+    )
+  })
 })

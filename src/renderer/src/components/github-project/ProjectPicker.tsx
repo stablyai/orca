@@ -44,11 +44,20 @@ type Props = {
 }
 
 const BROWSE_CACHE_TTL_MS = 5 * 60_000
-let browseCache: {
+type BrowseCacheEntry = {
   fetchedAt: number
   projects: GitHubProjectSummary[]
   partialFailures?: { owner: string; message: string }[]
-} | null = null
+}
+
+const browseCacheByRuntimeScope = new Map<string, BrowseCacheEntry>()
+
+function getProjectPickerRuntimeScope(
+  settings: Parameters<typeof getActiveRuntimeTarget>[0]
+): string {
+  const target = getActiveRuntimeTarget(settings)
+  return target.kind === 'environment' ? `runtime:${target.environmentId}` : 'local'
+}
 
 async function listAccessibleProjectsForRuntime(
   settings: Parameters<typeof getActiveRuntimeTarget>[0]
@@ -110,6 +119,7 @@ export default function ProjectPicker({ activeProject, onSelect }: Props): React
   const [query, setQuery] = useState('')
   const [browseLoading, setBrowseLoading] = useState(false)
   const [browseError, setBrowseError] = useState<GitHubProjectViewError | null>(null)
+  const browseCache = browseCacheByRuntimeScope.get(getProjectPickerRuntimeScope(settings))
   const [browseProjects, setBrowseProjects] = useState<GitHubProjectSummary[]>(
     () => browseCache?.projects ?? []
   )
@@ -130,9 +140,11 @@ export default function ProjectPicker({ activeProject, onSelect }: Props): React
   const [viewLoading, setViewLoading] = useState(false)
 
   const loadBrowse = useCallback(async () => {
-    if (browseCache && Date.now() - browseCache.fetchedAt < BROWSE_CACHE_TTL_MS) {
-      setBrowseProjects(browseCache.projects)
-      setPartialFailures(browseCache.partialFailures ?? [])
+    const cacheKey = getProjectPickerRuntimeScope(settings)
+    const cached = browseCacheByRuntimeScope.get(cacheKey) ?? null
+    if (cached && Date.now() - cached.fetchedAt < BROWSE_CACHE_TTL_MS) {
+      setBrowseProjects(cached.projects)
+      setPartialFailures(cached.partialFailures ?? [])
       return
     }
     setBrowseLoading(true)
@@ -140,11 +152,11 @@ export default function ProjectPicker({ activeProject, onSelect }: Props): React
     try {
       const res = await listAccessibleProjectsForRuntime(settings)
       if (res.ok) {
-        browseCache = {
+        browseCacheByRuntimeScope.set(cacheKey, {
           fetchedAt: Date.now(),
           projects: res.projects,
           partialFailures: res.partialFailures
-        }
+        })
         if (!mountedRef.current) {
           return
         }

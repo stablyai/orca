@@ -1,7 +1,12 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import { findWorktreeById } from './worktree-helpers'
-import type { GitHubWorkItem, LinearIssue } from '../../../../shared/types'
+import type { GitHubWorkItem, JiraIssue, LinearIssue } from '../../../../shared/types'
+import type { GitLabWorkItem } from '../../../../shared/gitlab-types'
+import {
+  getTaskSourceCacheScope,
+  type TaskSourceContext
+} from '../../../../shared/task-source-context'
 
 // Why: cap the per-session history so a long-lived workspace with many
 // worktree jumps cannot grow the array unbounded. 50 is generous enough
@@ -20,9 +25,27 @@ export type WorktreeNavHistoryTaskDetailEntry =
       kind: 'task-detail'
       source: 'github'
       workItem: GitHubWorkItem
+      sourceContext?: TaskSourceContext | null
       initialTab?: 'conversation' | 'checks' | 'files'
     }
-  | { kind: 'task-detail'; source: 'linear'; issue: LinearIssue }
+  | {
+      kind: 'task-detail'
+      source: 'linear'
+      issue: LinearIssue
+      sourceContext?: TaskSourceContext | null
+    }
+  | {
+      kind: 'task-detail'
+      source: 'gitlab'
+      workItem: GitLabWorkItem
+      sourceContext?: TaskSourceContext | null
+    }
+  | {
+      kind: 'task-detail'
+      source: 'jira'
+      issue: JiraIssue
+      sourceContext?: TaskSourceContext | null
+    }
 export type WorktreeNavHistoryViewEntry =
   | WorktreeNavHistorySimpleViewEntry
   | WorktreeNavHistoryTaskDetailEntry
@@ -82,9 +105,31 @@ function getHistoryEntryKey(entry: WorktreeNavHistoryEntry): string {
     return entry === 'tasks' || entry === 'automations' ? `view:${entry}` : `worktree:${entry}`
   }
   if (entry.source === 'github') {
-    return `view:task-detail:github:${entry.workItem.repoId}:${entry.workItem.type}:${entry.workItem.number}:${entry.initialTab ?? 'conversation'}`
+    const sourceScope =
+      entry.sourceContext?.provider === 'github'
+        ? getTaskSourceCacheScope(entry.sourceContext)
+        : 'legacy'
+    return `view:task-detail:github:${sourceScope}:${entry.workItem.repoId}:${entry.workItem.type}:${entry.workItem.number}:${entry.initialTab ?? 'conversation'}`
   }
-  return `view:task-detail:linear:${entry.issue.workspaceId ?? 'selected'}:${entry.issue.id}`
+  if (entry.source === 'gitlab') {
+    const sourceScope =
+      entry.sourceContext?.provider === 'gitlab'
+        ? getTaskSourceCacheScope(entry.sourceContext)
+        : 'legacy'
+    return `view:task-detail:gitlab:${sourceScope}:${entry.workItem.repoId}:${entry.workItem.type}:${entry.workItem.number}`
+  }
+  if (entry.source === 'jira') {
+    const sourceScope =
+      entry.sourceContext?.provider === 'jira'
+        ? getTaskSourceCacheScope(entry.sourceContext)
+        : 'legacy'
+    return `view:task-detail:jira:${sourceScope}:${entry.issue.siteId ?? 'selected'}:${entry.issue.key}`
+  }
+  const sourceScope =
+    entry.sourceContext?.provider === 'linear'
+      ? getTaskSourceCacheScope(entry.sourceContext)
+      : 'legacy'
+  return `view:task-detail:linear:${sourceScope}:${entry.issue.workspaceId ?? 'selected'}:${entry.issue.id}`
 }
 
 function isLiveEntry(entry: WorktreeNavHistoryEntry, state: AppState): boolean {

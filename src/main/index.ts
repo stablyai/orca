@@ -109,6 +109,7 @@ import { browserManager } from './browser/browser-manager'
 import { initializeBrowserSessionsForApp } from './browser/browser-session-startup'
 import { setUnreadDockBadgeCount } from './dock/unread-badge'
 import { AutomationService } from './automations/service'
+import { createHeadlessAutomationOutputSnapshotBuffer } from './automations/headless-dispatch'
 import { AgentAwakeService } from './agent-awake-service'
 import {
   getCrashBreadcrumbSnapshot,
@@ -158,6 +159,16 @@ let claudeRuntimeAuth: ClaudeRuntimeAuthService | null = null
 let runtime: OrcaRuntimeService | null = null
 let rateLimits: RateLimitService | null = null
 let runtimeRpc: OrcaRuntimeRpcServer | null = null
+
+function buildHeadlessAutomationWorkspaceName(runTitle: string, scheduledFor: number): string {
+  const slug = runTitle
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 40)
+  const stamp = new Date(scheduledFor).toISOString().replace(/[-:]/g, '').slice(0, 13)
+  return `auto-${slug || 'run'}-${stamp}`
+}
 let starNag: StarNagService | null = null
 let agentAwakeService: AgentAwakeService | null = null
 let crashReports: CrashReportStore | null = null
@@ -1306,7 +1317,95 @@ app.whenReady().then(async () => {
     }
   })
   runtime = runtimeService
-  automations = new AutomationService(store, { claudeUsage, codexUsage })
+  automations = new AutomationService(store, {
+    claudeUsage,
+    codexUsage,
+    // Why: desktop clients may mirror remote-host automations, but only a
+    // server process should execute schedules owned by `remote_host_service`.
+    allowRemoteHostScheduling: isServeMode,
+    headlessDispatcher: isServeMode
+      ? async ({ automation, run, target }) => {
+          const terminalSnapshotLimit = 2_000
+          let terminalHandle: string
+          let terminalSessionId: string | null = null
+          let workspaceId: string
+          let workspaceDisplayName: string | null = null
+
+          if (automation.workspaceMode === 'new_per_run') {
+            const created = await runtimeService.createManagedWorktree({
+              repoSelector: target.repo.id,
+              name: buildHeadlessAutomationWorkspaceName(run.title, run.scheduledFor),
+              baseBranch: automation.baseBranch ?? undefined,
+              setupDecision: 'inherit',
+              activate: false,
+              createdWithAgent: automation.agentId,
+              startupAgent: automation.agentId,
+              startupPrompt: automation.prompt,
+              telemetrySource: 'unknown'
+            })
+            terminalHandle = created.startupTerminal?.handle ?? ''
+            terminalSessionId = created.startupTerminal?.tabId ?? null
+            workspaceId = created.worktree.id
+            workspaceDisplayName = created.worktree.displayName ?? null
+            if (!terminalHandle) {
+              throw new Error(
+                created.warning ||
+                  'Automation workspace was created, but no agent terminal started.'
+              )
+            }
+          } else {
+            if (!automation.workspaceId) {
+              throw new Error('The target workspace is no longer available.')
+            }
+            const terminal = await runtimeService.launchAgentTerminal(
+              `id:${automation.workspaceId}`,
+              {
+                agent: automation.agentId,
+                prompt: automation.prompt,
+                title: run.title
+              }
+            )
+            terminalHandle = terminal.handle
+            terminalSessionId = terminal.tabId ?? null
+            workspaceId = terminal.worktreeId
+            const worktree = await runtimeService.showManagedWorktree(`id:${workspaceId}`)
+            workspaceDisplayName = worktree.displayName ?? null
+          }
+
+          const completion = (async () => {
+            const wait = await runtimeService.waitForTerminal(terminalHandle, {
+              condition: 'tui-idle'
+            })
+            const read = await runtimeService.readTerminal(terminalHandle, {
+              limit: terminalSnapshotLimit
+            })
+            const snapshotBuffer = createHeadlessAutomationOutputSnapshotBuffer()
+            snapshotBuffer.append(read.tail.join('\n'))
+            if (wait.satisfied) {
+              return {
+                status: 'completed' as const,
+                outputSnapshot: snapshotBuffer.snapshot(),
+                error: null
+              }
+            }
+            return {
+              status: 'dispatch_failed' as const,
+              outputSnapshot: snapshotBuffer.snapshot(),
+              error: wait.blockedReason
+                ? `Automation agent is blocked: ${wait.blockedReason}.`
+                : 'Automation agent did not report completion.'
+            }
+          })()
+
+          return {
+            workspaceId,
+            workspaceDisplayName,
+            terminalSessionId,
+            completion
+          }
+        }
+      : undefined
+  })
   runtimeService.setAutomationService(automations)
   runtimeService.setAccountServices({ claudeAccounts, codexAccounts, rateLimits })
   runtimeService.setCommitMessageAgentEnvironmentResolvers({

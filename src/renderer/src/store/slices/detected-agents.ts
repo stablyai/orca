@@ -5,6 +5,7 @@ import {
   getLocalAgentPreflightContext,
   localPreflightContextKey
 } from '@/lib/local-preflight-context'
+import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 
 export type DetectedAgentsSlice = {
   detectedAgentIds: TuiAgent[] | null
@@ -31,6 +32,13 @@ export type DetectedAgentsSlice = {
   isDetectingRemoteAgents: Record<string, boolean>
   ensureRemoteDetectedAgents: (connectionId: string) => Promise<TuiAgent[]>
   clearRemoteDetectedAgents: (connectionId: string) => void
+
+  // Why: remote runtime hosts are not SSH connections, but their tab-bar
+  // launch menu still has to probe the host where the workspace actually runs.
+  runtimeDetectedAgentIds: Record<string, TuiAgent[] | null>
+  isDetectingRuntimeAgents: Record<string, boolean>
+  ensureRuntimeDetectedAgents: (environmentId: string) => Promise<TuiAgent[]>
+  clearRuntimeDetectedAgents: (environmentId: string) => void
 }
 
 // Why: these are module-scoped (not in the store) so we can deduplicate
@@ -39,9 +47,14 @@ let detectPromise: { key: string; promise: Promise<TuiAgent[]> } | null = null
 let refreshPromise: { key: string; promise: Promise<TuiAgent[]> } | null = null
 let detectedContextKey: string | null = null
 const remoteDetectPromises = new Map<string, Promise<TuiAgent[]>>()
+const runtimeDetectPromises = new Map<string, Promise<TuiAgent[]>>()
 
 export function _getRemoteDetectPromiseCountForTest(): number {
   return remoteDetectPromises.size
+}
+
+export function _getRuntimeDetectPromiseCountForTest(): number {
+  return runtimeDetectPromises.size
 }
 
 export const createDetectedAgentsSlice: StateCreator<AppState, [], [], DetectedAgentsSlice> = (
@@ -137,6 +150,8 @@ export const createDetectedAgentsSlice: StateCreator<AppState, [], [], DetectedA
 
   remoteDetectedAgentIds: {},
   isDetectingRemoteAgents: {},
+  runtimeDetectedAgentIds: {},
+  isDetectingRuntimeAgents: {},
 
   ensureRemoteDetectedAgents: (connectionId: string) => {
     const existing = get().remoteDetectedAgentIds[connectionId]
@@ -192,6 +207,59 @@ export const createDetectedAgentsSlice: StateCreator<AppState, [], [], DetectedA
       const { [connectionId]: _, ...restAgents } = s.remoteDetectedAgentIds
       const { [connectionId]: __, ...restLoading } = s.isDetectingRemoteAgents
       return { remoteDetectedAgentIds: restAgents, isDetectingRemoteAgents: restLoading }
+    })
+  },
+
+  ensureRuntimeDetectedAgents: (environmentId: string) => {
+    const existing = get().runtimeDetectedAgentIds[environmentId]
+    if (existing) {
+      return Promise.resolve(existing)
+    }
+    const inflight = runtimeDetectPromises.get(environmentId)
+    if (inflight) {
+      return inflight
+    }
+
+    set((s) => ({
+      isDetectingRuntimeAgents: { ...s.isDetectingRuntimeAgents, [environmentId]: true }
+    }))
+
+    const pending = callRuntimeRpc<TuiAgent[]>(
+      { kind: 'environment', environmentId },
+      'preflight.detectAgents'
+    )
+      .then((ids) => {
+        const typed = ids as TuiAgent[]
+        set((s) => ({
+          runtimeDetectedAgentIds: { ...s.runtimeDetectedAgentIds, [environmentId]: typed },
+          isDetectingRuntimeAgents: { ...s.isDetectingRuntimeAgents, [environmentId]: false }
+        }))
+        return typed
+      })
+      .catch(() => {
+        // Why: a remote runtime may be disconnected or version-incompatible.
+        // Keep the menu retryable instead of pinning a failed probe forever.
+        set((s) => ({
+          isDetectingRuntimeAgents: { ...s.isDetectingRuntimeAgents, [environmentId]: false }
+        }))
+        return [] as TuiAgent[]
+      })
+      .finally(() => {
+        if (runtimeDetectPromises.get(environmentId) === pending) {
+          runtimeDetectPromises.delete(environmentId)
+        }
+      })
+
+    runtimeDetectPromises.set(environmentId, pending)
+    return pending
+  },
+
+  clearRuntimeDetectedAgents: (environmentId: string) => {
+    runtimeDetectPromises.delete(environmentId)
+    set((s) => {
+      const { [environmentId]: _, ...restAgents } = s.runtimeDetectedAgentIds
+      const { [environmentId]: __, ...restLoading } = s.isDetectingRuntimeAgents
+      return { runtimeDetectedAgentIds: restAgents, isDetectingRuntimeAgents: restLoading }
     })
   }
 })

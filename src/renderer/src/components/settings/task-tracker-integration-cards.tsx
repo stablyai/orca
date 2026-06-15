@@ -1,34 +1,14 @@
-import { useEffect, useMemo, useState } from 'react'
-import { AlertCircle, CheckCircle2, LoaderCircle, TicketCheck, Unlink, X } from 'lucide-react'
-import type { SkillDiscoveryTarget } from '../../../../shared/skills'
-import type { GlobalSettings } from '../../../../shared/types'
+import { useState } from 'react'
+import { AlertCircle, CheckCircle2, LoaderCircle, Unlink } from 'lucide-react'
 import { LinearIcon } from '@/components/icons/LinearIcon'
 import { LinearApiKeyDialog } from '@/components/linear-api-key-dialog'
 import { Button } from '@/components/ui/button'
-import {
-  GLOBAL_AGENT_SKILL_SOURCE_KINDS,
-  useInstalledAgentSkill
-} from '@/hooks/useInstalledAgentSkills'
 import { useMountedRef } from '@/hooks/useMountedRef'
-import {
-  LINEAR_TICKETS_SKILL_NAME,
-  buildAgentFeatureSkillInstallCommand
-} from '@/lib/agent-feature-install-commands'
-import {
-  AGENT_SKILL_CLI_PREREQUISITE_NOTICE,
-  ensureOrcaCliAvailableForAgentSkillTerminal,
-  isOrcaCliAvailableOnPath
-} from '@/lib/agent-skill-cli-prerequisite'
 import { getProviderRuntimeContextKey } from '@/lib/provider-runtime-context'
 import { useAppStore } from '@/store'
-import { AgentSkillSetupPanel } from './AgentSkillSetupPanel'
-import {
-  buildSkillInstallCommandForRuntime,
-  ensureWslCliAvailableForAgentSkillTerminal,
-  getWslCliDistroRequest,
-  type LocalAgentRuntime
-} from './CliSkillRuntimeSetup'
 import { IntegrationCardDetails, IntegrationCardShell } from './integration-card-shell'
+import { getProviderAccountScope } from './provider-account-scope'
+import { ProviderHostScopeControl } from './ProviderHostScopeControl'
 import { translate } from '@/i18n/i18n'
 
 type VerificationResult = { state: 'ok' | 'error'; error?: string }
@@ -45,7 +25,6 @@ export function LinearIntegrationCard(): React.JSX.Element {
   const mountedRef = useMountedRef()
 
   const [dialogOpen, setDialogOpen] = useState(false)
-  const [showPostConnectSkillPrompt, setShowPostConnectSkillPrompt] = useState(false)
   const [testingWorkspaceId, setTestingWorkspaceId] = useState<string | null>(null)
   const [testResultByWorkspace, setTestResultByWorkspace] = useState<
     Record<string, VerificationResult>
@@ -55,43 +34,12 @@ export function LinearIntegrationCard(): React.JSX.Element {
   const checking = !contextMatches || !linearStatusChecked
   const connected = contextMatches && linearStatus.connected
   const workspaces = linearStatus.workspaces ?? []
-  const agentRuntime = useMemo(() => getLinearSettingsAgentRuntime(settings), [settings])
-  const skillDiscoveryTarget = useMemo<SkillDiscoveryTarget | undefined>(
-    () =>
-      agentRuntime.runtime === 'wsl'
-        ? { runtime: 'wsl', wslDistro: agentRuntime.wslDistro }
-        : undefined,
-    [agentRuntime.runtime, agentRuntime.wslDistro]
-  )
-  const linearTicketsSkill = useInstalledAgentSkill(LINEAR_TICKETS_SKILL_NAME, {
-    enabled: connected,
-    discoveryTarget: skillDiscoveryTarget,
-    sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
-  })
-  const linearTicketsInstallCommand = useMemo(
-    () =>
-      buildSkillInstallCommandForRuntime(
-        buildAgentFeatureSkillInstallCommand([LINEAR_TICKETS_SKILL_NAME]),
-        agentRuntime
-      ),
-    [agentRuntime]
-  )
-  const linearTicketsTerminalShellOverride = getLinearSettingsTerminalShellOverride(
-    settings,
-    agentRuntime
-  )
-
-  useEffect(() => {
-    if (!connected) {
-      setShowPostConnectSkillPrompt(false)
-    }
-  }, [connected])
+  const accountScope = getProviderAccountScope(settings)
 
   const handleDisconnect = async (workspaceId?: string): Promise<void> => {
     await (workspaceId ? disconnectLinearWorkspace(workspaceId) : disconnectLinear())
     if (mountedRef.current) {
       setTestResultByWorkspace({})
-      setShowPostConnectSkillPrompt(false)
     }
   }
 
@@ -159,6 +107,7 @@ export function LinearIntegrationCard(): React.JSX.Element {
         ) : null
       }
     >
+      <ProviderAccountScopeRow scope={accountScope} />
       {connected ? (
         <div className="mt-3 space-y-2">
           {workspaces.map((workspace) => {
@@ -234,80 +183,6 @@ export function LinearIntegrationCard(): React.JSX.Element {
               'Each connected Linear workspace has one key stored by the active runtime. Full-access keys can cover all teams the key owner can access; restricted keys can be replaced any time.'
             )}
           </p>
-          <AgentSkillSetupPanel
-            title={translate(
-              'auto.components.settings.task.tracker.integration.cards.linearSkillTitle',
-              'Linear agent skill'
-            )}
-            description={
-              agentRuntime.runtime === 'wsl'
-                ? translate(
-                    'auto.components.settings.task.tracker.integration.cards.linearSkillWslDescription',
-                    'Install the WSL agent skill that agents use for richer linked Linear task handoffs.'
-                  )
-                : translate(
-                    'auto.components.settings.task.tracker.integration.cards.linearSkillDescription',
-                    'Install the host agent skill that agents use for richer linked Linear task handoffs.'
-                  )
-            }
-            command={linearTicketsInstallCommand}
-            terminalTitle={translate(
-              'auto.components.settings.task.tracker.integration.cards.linearSkillTerminalTitle',
-              'Install Linear agent skill'
-            )}
-            terminalAriaLabel={translate(
-              'auto.components.settings.task.tracker.integration.cards.linearSkillTerminalAria',
-              'Linear agent skill installer terminal'
-            )}
-            terminalWorktreeId="settings-linear-agent-skill-setup"
-            terminalShellOverride={linearTicketsTerminalShellOverride}
-            installed={linearTicketsSkill.installed}
-            loading={linearTicketsSkill.loading}
-            error={linearTicketsSkill.error}
-            icon={<TicketCheck className="size-4" />}
-            installLabel={translate(
-              'auto.components.settings.task.tracker.integration.cards.linearSkillInstall',
-              'Install CLI & Skill'
-            )}
-            preInstallNotice={AGENT_SKILL_CLI_PREREQUISITE_NOTICE}
-            getPrerequisiteStatus={
-              agentRuntime.runtime === 'wsl'
-                ? () => window.api.cli.getWslInstallStatus(getWslCliDistroRequest(agentRuntime))
-                : undefined
-            }
-            isPrerequisiteAvailable={isOrcaCliAvailableOnPath}
-            onBeforeOpenTerminal={async () => {
-              setShowPostConnectSkillPrompt(false)
-              await (agentRuntime.runtime === 'wsl'
-                ? ensureWslCliAvailableForAgentSkillTerminal(agentRuntime)
-                : ensureOrcaCliAvailableForAgentSkillTerminal())
-            }}
-            actionHint={
-              showPostConnectSkillPrompt && !linearTicketsSkill.installed ? (
-                <div className="mt-3 flex items-start gap-2 rounded-md border border-border bg-background/70 px-3 py-2 text-xs text-muted-foreground">
-                  <span className="min-w-0 flex-1">
-                    {translate(
-                      'auto.components.settings.task.tracker.integration.cards.linearSkillOptionalHint',
-                      'Optional next step: install the Linear agent skill for ticket-aware agent handoffs.'
-                    )}
-                  </span>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-xs"
-                    aria-label={translate(
-                      'auto.components.settings.task.tracker.integration.cards.linearSkillDismissHint',
-                      'Dismiss optional Linear agent skill setup note'
-                    )}
-                    onClick={() => setShowPostConnectSkillPrompt(false)}
-                  >
-                    <X className="size-3.5" />
-                  </Button>
-                </div>
-              ) : null
-            }
-            onRecheck={linearTicketsSkill.refresh}
-          />
         </div>
       ) : !checking ? (
         <IntegrationCardDetails>
@@ -330,10 +205,7 @@ export function LinearIntegrationCard(): React.JSX.Element {
         open={dialogOpen}
         onOpenChange={setDialogOpen}
         connectLabel="Add Linear access"
-        onConnected={() => {
-          setTestResultByWorkspace({})
-          setShowPostConnectSkillPrompt(true)
-        }}
+        onConnected={() => setTestResultByWorkspace({})}
         overlayClassName="z-[110]"
         contentClassName="z-[120]"
       />
@@ -341,58 +213,17 @@ export function LinearIntegrationCard(): React.JSX.Element {
   )
 }
 
+function ProviderAccountScopeRow({ scope }: { scope: ReturnType<typeof getProviderAccountScope> }) {
+  return (
+    <ProviderHostScopeControl
+      labelPrefix={translate(
+        'auto.components.settings.task.tracker.integration.cards.account_scope_prefix',
+        'Account scope'
+      )}
+      scope={scope}
+      className="mt-3 rounded-md border border-border/40 bg-background/50 px-3 py-2 text-xs"
+    />
+  )
+}
+
 export { JiraIntegrationCard } from './jira-integration-card'
-
-function getCurrentPlatform(): NodeJS.Platform {
-  if (navigator.userAgent.includes('Windows')) {
-    return 'win32'
-  }
-  return navigator.userAgent.includes('Linux') ? 'linux' : 'darwin'
-}
-
-function getLinearSettingsAgentRuntime(
-  settings:
-    | Pick<
-        GlobalSettings,
-        | 'localAgentRuntime'
-        | 'localAgentWslDistro'
-        | 'terminalWindowsShell'
-        | 'terminalWindowsWslDistro'
-      >
-    | null
-    | undefined
-): LocalAgentRuntime {
-  const selectedRuntime =
-    settings?.localAgentRuntime ?? (settings?.terminalWindowsShell === 'wsl.exe' ? 'wsl' : 'host')
-  if (getCurrentPlatform() === 'win32' && selectedRuntime === 'wsl') {
-    const selectedDistro =
-      settings?.localAgentWslDistro?.trim() || settings?.terminalWindowsWslDistro?.trim() || null
-    return {
-      runtime: 'wsl',
-      wslDistro: selectedDistro,
-      label: selectedDistro
-        ? `WSL ${selectedDistro}`
-        : translate(
-            'auto.components.settings.task.tracker.integration.cards.linearSkillWslLabel',
-            'WSL default'
-          )
-    }
-  }
-  return {
-    runtime: 'host',
-    label: getCurrentPlatform() === 'win32' ? 'Windows' : 'This device'
-  }
-}
-
-function getLinearSettingsTerminalShellOverride(
-  settings: Pick<GlobalSettings, 'terminalWindowsShell'> | null | undefined,
-  runtime: LocalAgentRuntime
-): string | undefined {
-  if (getCurrentPlatform() !== 'win32') {
-    return undefined
-  }
-  if (runtime.runtime === 'wsl') {
-    return 'powershell.exe'
-  }
-  return settings?.terminalWindowsShell?.toLowerCase() === 'wsl.exe' ? 'powershell.exe' : undefined
-}

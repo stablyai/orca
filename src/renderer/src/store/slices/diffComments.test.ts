@@ -136,6 +136,7 @@ import { createDetectedAgentsSlice } from './detected-agents'
 import { createWorktreeNavHistorySlice } from './worktree-nav-history'
 import { createDictationSlice } from './dictation'
 import { createWorkspaceCleanupSlice } from './workspace-cleanup'
+import { createRuntimeStatusSlice } from './runtime-status'
 import { createPullRequestGenerationSlice } from './pull-request-generation'
 import { createCommitMessageGenerationSlice } from './commit-message-generation'
 
@@ -170,6 +171,7 @@ function createTestStore() {
     ...createWorktreeNavHistorySlice(...a),
     ...createDictationSlice(...a),
     ...createWorkspaceCleanupSlice(...a),
+    ...createRuntimeStatusSlice(...a),
     ...createPullRequestGenerationSlice(...a),
     ...createCommitMessageGenerationSlice(...a)
   }))
@@ -348,6 +350,35 @@ describe('updateDiffComment', () => {
       },
       timeoutMs: 15_000
     })
+  })
+
+  it('persists explicit local worktree comments locally while a runtime is focused', async () => {
+    const store = createTestStore()
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
+      repos: [
+        {
+          id: REPO,
+          path: '/path/repo',
+          displayName: 'Repo',
+          badgeColor: '#000',
+          addedAt: 1,
+          executionHostId: 'local'
+        }
+      ]
+    })
+    seed(store, [makeComment({ id: 'c1', body: 'old body' })])
+
+    const ok = await store.getState().updateDiffComment(WT, 'c1', 'local body')
+
+    expect(ok).toBe(true)
+    expect(updateMeta).toHaveBeenCalledWith({
+      worktreeId: WT,
+      updates: {
+        diffComments: [expect.objectContaining({ id: 'c1', body: 'local body' })]
+      }
+    })
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
   })
 
   it('rejects an empty body without persisting', async () => {

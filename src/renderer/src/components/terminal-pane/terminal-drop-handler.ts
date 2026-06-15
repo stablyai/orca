@@ -2,6 +2,7 @@ import { toast } from 'sonner'
 import { getConnectionId } from '@/lib/connection-context'
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
+import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { useAppStore } from '@/store'
 import { isWindowsUserAgent, shellEscapePath } from './pane-helpers'
 import type { PtyTransport } from './pty-transport'
@@ -65,8 +66,9 @@ export async function handleTerminalFileDrop(args: Args): Promise<void> {
   if (!transport) {
     return
   }
-  const settings = useAppStore.getState().settings
-  const activeRuntimeEnvironmentId = settings?.activeRuntimeEnvironmentId?.trim()
+  const state = useAppStore.getState()
+  const settings = state.settings
+  const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(state, worktreeId)
   const worktreePath = resolveWorktreePath(worktreeId, cwd)
   if (!worktreePath) {
     toast.error(
@@ -78,7 +80,7 @@ export async function handleTerminalFileDrop(args: Args): Promise<void> {
     return
   }
 
-  if (activeRuntimeEnvironmentId) {
+  if (runtimeEnvironmentId) {
     const targetShell = getTerminalTargetShellForWorktreePath(worktreePath)
     const destinationDir = joinRuntimeDropDir(worktreePath)
     const pending = toast.loading(
@@ -91,7 +93,9 @@ export async function handleTerminalFileDrop(args: Args): Promise<void> {
     try {
       const { results } = await importExternalPathsToRuntime(
         {
-          settings,
+          // Why: drops into existing worktrees must follow the worktree owner,
+          // not the currently focused host in the sidebar.
+          settings: { ...settings, activeRuntimeEnvironmentId: runtimeEnvironmentId },
           worktreeId,
           worktreePath
         },

@@ -72,7 +72,7 @@ export function useAddRepoLocalFolderFlow({
         toast.error(
           translate(
             'auto.components.sidebar.useAddRepoLocalFolderFlow.7ab10e4974',
-            'Use a server path to add projects from a remote runtime.'
+            'Use a host path to add projects from a remote host.'
           )
         )
         closeModal()

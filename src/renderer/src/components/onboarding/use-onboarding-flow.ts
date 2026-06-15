@@ -705,7 +705,7 @@ export function useOnboardingFlow(
       if (settings?.activeRuntimeEnvironmentId?.trim()) {
         const path = serverPath.trim()
         if (!path) {
-          const message = 'Enter a server path.'
+          const message = 'Enter a path on the selected host.'
           setError(message)
           return
         }
@@ -996,7 +996,7 @@ export function useOnboardingFlow(
     const destination =
       target.kind === 'environment' ? cloneDestination.trim() : settings.workspaceDir
     if (!destination) {
-      const message = 'Enter a server path for the clone destination.'
+      const message = 'Enter a host path for the clone destination.'
       setError(message)
       return
     }

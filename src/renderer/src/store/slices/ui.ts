@@ -10,6 +10,7 @@ import type {
   ChangelogData,
   CustomPet,
   GitHubWorkItem,
+  JiraIssue,
   LinearIssue,
   PersistedTrustedOrcaHooks,
   PersistedUIState,
@@ -22,9 +23,14 @@ import type {
   WorkspaceStatusDefinition,
   AgentActivityDisplayMode,
   ProjectOrderBy,
-  WorktreeCardProperty
+  WorktreeCardProperty,
+  WorkspaceHostOrder,
+  WorkspaceHostScope,
+  VisibleWorkspaceHostIds
 } from '../../../../shared/types'
+import type { GitLabWorkItem } from '../../../../shared/gitlab-types'
 import type { LaunchSource } from '../../../../shared/telemetry-events'
+import type { TaskSourceContext } from '../../../../shared/task-source-context'
 import { tuiAgentToAgentKind } from '../../../../shared/agent-kind'
 import { PET_SIZE_DEFAULT, PET_SIZE_MAX, PET_SIZE_MIN } from '../../../../shared/types'
 import {
@@ -62,6 +68,12 @@ import {
   DEFAULT_BROWSER_PAGE_ZOOM_LEVEL,
   normalizeBrowserPageZoomLevel
 } from '../../../../shared/browser-page-zoom'
+import {
+  normalizeExecutionHostOrder,
+  normalizeExecutionHostScope,
+  normalizeVisibleExecutionHostIds,
+  type ExecutionHostId
+} from '../../../../shared/execution-host'
 import {
   WORKSPACE_BOARD_COLUMN_WIDTH_DEFAULT,
   clampWorkspaceBoardColumnWidth,
@@ -242,6 +254,15 @@ function migrateStatusBarItems(items: readonly string[] | undefined): StatusBarI
 
 const DEFAULT_ON_PORTS_STATUS_BAR_ITEM: StatusBarItem = 'ports'
 const DEFAULT_ON_KIMI_STATUS_BAR_ITEM: StatusBarItem = 'kimi'
+
+function normalizeHydratedVisibleWorkspaceHostIds(ui: PersistedUIState): VisibleWorkspaceHostIds {
+  const visibleHostIds = normalizeVisibleExecutionHostIds(ui.visibleWorkspaceHostIds)
+  if (visibleHostIds) {
+    return visibleHostIds
+  }
+  const legacyScope = normalizeExecutionHostScope(ui.workspaceHostScope)
+  return legacyScope === 'all' ? null : [legacyScope]
+}
 
 const MIN_SIDEBAR_WIDTH = 220
 const MAX_LEFT_SIDEBAR_WIDTH = 500
@@ -584,8 +605,14 @@ export type UISlice = {
     prefilledName?: string
     taskSource?: TaskProvider
     openGitHubWorkItem?: GitHubWorkItem
+    openGitHubSourceContext?: TaskSourceContext | null
     openGitHubInitialTab?: 'conversation' | 'checks' | 'files'
+    openGitLabWorkItem?: GitLabWorkItem
+    openGitLabSourceContext?: TaskSourceContext | null
     openLinearIssue?: LinearIssue
+    openLinearSourceContext?: TaskSourceContext | null
+    openJiraIssue?: JiraIssue
+    openJiraSourceContext?: TaskSourceContext | null
   }
   taskResumeState: TaskResumeState | undefined
   setTaskResumeState: (updates: Partial<TaskResumeState>) => void
@@ -593,6 +620,11 @@ export type UISlice = {
   setGithubTaskDrawerWorkItem: (item: GitHubWorkItem | null) => void
   newWorkspaceDraft: {
     repoId: string | null
+    // Why: project-first workspace creation resolves through these when present,
+    // while old drafts can keep using only repoId during the additive migration.
+    projectId?: string | null
+    hostId?: ExecutionHostId | null
+    projectHostSetupId?: string | null
     name: string
     prompt: string
     note: string
@@ -604,6 +636,9 @@ export type UISlice = {
       url: string
       linearIdentifier?: string
     } | null
+    /** Why: starting from a task must preserve where provider data came from
+     *  separately from the host selected to run the workspace. */
+    taskSourceContext?: TaskSourceContext | null
     agent: TuiAgent
     linkedIssue: string
     linkedPR: number | null
@@ -731,6 +766,12 @@ export type UISlice = {
   setShowActiveOnly: (v: boolean) => void
   showSleepingWorkspaces: boolean
   setShowSleepingWorkspaces: (v: boolean) => void
+  workspaceHostScope: WorkspaceHostScope
+  setWorkspaceHostScope: (scope: WorkspaceHostScope) => void
+  visibleWorkspaceHostIds: VisibleWorkspaceHostIds
+  setVisibleWorkspaceHostIds: (ids: VisibleWorkspaceHostIds) => void
+  workspaceHostOrder: WorkspaceHostOrder
+  setWorkspaceHostOrder: (ids: WorkspaceHostOrder) => void
   hideDefaultBranchWorkspace: boolean
   setHideDefaultBranchWorkspace: (v: boolean) => void
   showDotfilesByWorktree: Record<string, boolean>
@@ -755,8 +796,10 @@ export type UISlice = {
   statusBarVisible: boolean
   setStatusBarVisible: (v: boolean) => void
   workspacePortScan: { key: string; result: WorkspacePortScanResult } | null
+  workspacePortScansByKey: Record<string, WorkspacePortScanResult>
   workspacePortScanRefreshing: boolean
   setWorkspacePortScan: (scan: { key: string; result: WorkspacePortScanResult } | null) => void
+  setWorkspacePortScanForKey: (key: string, result: WorkspacePortScanResult | null) => void
   setWorkspacePortScanRefreshing: (refreshing: boolean) => void
   /** Whether the experimental pet overlay is currently visible. Persisted
    *  so "Hide pet" from the status-bar menu survives reload. Independent
@@ -1051,8 +1094,14 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
     if (data.openGitHubWorkItem) {
       get().recordFeatureInteraction?.('github-tasks')
     }
+    if (data.openGitLabWorkItem) {
+      get().recordFeatureInteraction?.('gitlab-tasks')
+    }
     if (data.openLinearIssue) {
       get().recordFeatureInteraction?.('linear-tasks')
+    }
+    if (data.openJiraIssue) {
+      get().recordFeatureInteraction?.('jira-tasks')
     }
     // Why: record a Tasks visit in the shared back/forward history so the
     // titlebar Back/Forward buttons can return to Tasks. All task-source
@@ -1065,15 +1114,31 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
           kind: 'task-detail',
           source: 'github',
           workItem: data.openGitHubWorkItem,
+          sourceContext: data.openGitHubSourceContext,
           initialTab: data.openGitHubInitialTab
         } as const)
-      : data.openLinearIssue
+      : data.openGitLabWorkItem
         ? ({
             kind: 'task-detail',
-            source: 'linear',
-            issue: data.openLinearIssue
+            source: 'gitlab',
+            workItem: data.openGitLabWorkItem,
+            sourceContext: data.openGitLabSourceContext
           } as const)
-        : null
+        : data.openLinearIssue
+          ? ({
+              kind: 'task-detail',
+              source: 'linear',
+              issue: data.openLinearIssue,
+              sourceContext: data.openLinearSourceContext
+            } as const)
+          : data.openJiraIssue
+            ? ({
+                kind: 'task-detail',
+                source: 'jira',
+                issue: data.openJiraIssue,
+                sourceContext: data.openJiraSourceContext
+              } as const)
+            : null
     const currentEntry = get().worktreeNavHistory[get().worktreeNavHistoryIndex]
     const currentIsTaskStack =
       currentEntry === 'tasks' ||
@@ -1142,22 +1207,36 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
           ? (resume.githubItemsQuery ?? '').trim()
           : presetToQuery(resume?.githubItemsPreset ?? defaultPreset)
       for (const repo of selectedRepos) {
-        state.prefetchWorkItems(repo.id, repo.path, PER_REPO_FETCH_LIMIT, query)
+        state.prefetchWorkItems(repo.id, repo.path, PER_REPO_FETCH_LIMIT, query, {
+          sourceContext:
+            data.openGitHubSourceContext?.provider === 'github' &&
+            data.openGitHubSourceContext.repoId === repo.id
+              ? data.openGitHubSourceContext
+              : null
+        })
       }
     }
     if (resolvedSource === 'linear' && typeof state.prefetchLinearIssues === 'function') {
       const resume = state.taskResumeState
       const query = (resume?.linearQuery ?? '').trim()
+      const sourceContext =
+        data.openLinearSourceContext?.provider === 'linear' ? data.openLinearSourceContext : null
       if (query) {
-        state.prefetchLinearIssues({ kind: 'search', query, limit: LINEAR_TASK_PREFETCH_LIMIT })
+        state.prefetchLinearIssues(
+          { kind: 'search', query, limit: LINEAR_TASK_PREFETCH_LIMIT },
+          { sourceContext }
+        )
       } else {
         // Why: TaskPage no longer exposes Linear preset filters; keep warm
         // prefetch aligned with the default unsearched issue list.
-        state.prefetchLinearIssues({
-          kind: 'list',
-          filter: 'all',
-          limit: LINEAR_TASK_PREFETCH_LIMIT
-        })
+        state.prefetchLinearIssues(
+          {
+            kind: 'list',
+            filter: 'all',
+            limit: LINEAR_TASK_PREFETCH_LIMIT
+          },
+          { sourceContext }
+        )
       }
     }
   },
@@ -1738,6 +1817,40 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
   showSleepingWorkspaces: DEFAULT_SHOW_SLEEPING_WORKSPACES,
   setShowSleepingWorkspaces: (v) => set({ showSleepingWorkspaces: v }),
 
+  workspaceHostScope: 'all',
+  // Why (multi-host design): host scope is presentation/filtering only — it must
+  // never trigger resource teardown (terminals, browser pages, etc.).
+  setWorkspaceHostScope: (scope) => {
+    const normalized = normalizeExecutionHostScope(scope)
+    const visibleWorkspaceHostIds = normalized === 'all' ? null : [normalized]
+    set({ workspaceHostScope: normalized, visibleWorkspaceHostIds })
+    window.api.ui
+      .set({ workspaceHostScope: normalized, visibleWorkspaceHostIds })
+      .catch(console.error)
+  },
+  visibleWorkspaceHostIds: null,
+  setVisibleWorkspaceHostIds: (ids) => {
+    const normalized = normalizeVisibleExecutionHostIds(ids)
+    // Why: workspaceHostScope remains the compatibility/default-host signal
+    // for creation flows while visibility can now be multi-select.
+    let workspaceHostScope: WorkspaceHostScope = get().workspaceHostScope
+    if (normalized === null) {
+      workspaceHostScope = 'all'
+    } else if (normalized.length === 1) {
+      workspaceHostScope = normalized[0]
+    }
+    set({ visibleWorkspaceHostIds: normalized, workspaceHostScope })
+    window.api.ui
+      .set({ visibleWorkspaceHostIds: normalized, workspaceHostScope })
+      .catch(console.error)
+  },
+  workspaceHostOrder: [],
+  setWorkspaceHostOrder: (ids) => {
+    const workspaceHostOrder = normalizeExecutionHostOrder(ids)
+    set({ workspaceHostOrder })
+    window.api.ui.set({ workspaceHostOrder }).catch(console.error)
+  },
+
   hideDefaultBranchWorkspace: false,
   setHideDefaultBranchWorkspace: (v) => set({ hideDefaultBranchWorkspace: v }),
 
@@ -1847,8 +1960,36 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
     set({ statusBarVisible: v })
   },
   workspacePortScan: null,
+  workspacePortScansByKey: {},
   workspacePortScanRefreshing: false,
-  setWorkspacePortScan: (scan) => set({ workspacePortScan: scan }),
+  setWorkspacePortScan: (scan) =>
+    set((state) => {
+      if (!scan) {
+        return { workspacePortScan: null, workspacePortScansByKey: {} }
+      }
+      return {
+        workspacePortScan: scan,
+        workspacePortScansByKey: { ...state.workspacePortScansByKey, [scan.key]: scan.result }
+      }
+    }),
+  setWorkspacePortScanForKey: (key, result) =>
+    set((state) => {
+      const nextScansByKey = { ...state.workspacePortScansByKey }
+      if (result) {
+        nextScansByKey[key] = result
+      } else {
+        delete nextScansByKey[key]
+      }
+      return {
+        workspacePortScansByKey: nextScansByKey,
+        workspacePortScan:
+          state.workspacePortScan?.key === key
+            ? result
+              ? { key, result }
+              : null
+            : state.workspacePortScan
+      }
+    }),
   setWorkspacePortScanRefreshing: (refreshing) => set({ workspacePortScanRefreshing: refreshing }),
 
   // Why: default true so a user who enables experimentalPet sees the
@@ -2009,6 +2150,9 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         // Older positive-form keys are intentionally ignored so old profiles
         // start from the new default: sleeping workspaces visible.
         showSleepingWorkspaces: !(ui.hideSleepingWorkspaces ?? DEFAULT_HIDE_SLEEPING_WORKSPACES),
+        workspaceHostScope: normalizeExecutionHostScope(ui.workspaceHostScope),
+        visibleWorkspaceHostIds: normalizeHydratedVisibleWorkspaceHostIds(ui),
+        workspaceHostOrder: normalizeExecutionHostOrder(ui.workspaceHostOrder),
         hideDefaultBranchWorkspace: ui.hideDefaultBranchWorkspace ?? false,
         showDotfilesByWorktree: sanitizeShowDotfilesByWorktree(ui.showDotfilesByWorktree),
         filterRepoIds: (ui.filterRepoIds ?? []).filter((repoId) => validRepoIds.has(repoId)),

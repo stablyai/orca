@@ -13,14 +13,13 @@ import {
 import { useDetectedAgents } from '@/hooks/useDetectedAgents'
 import { useAppStore } from '@/store'
 import { getLinkedWorkItemProvider, type LinkedWorkItemSummary } from '@/lib/new-workspace'
-import { shouldAllowComposerEnterSubmitTarget } from '@/lib/new-workspace-enter-guard'
-import { isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
 import {
   pickQuickWorkspaceAgent,
   resolveQuickWorkspaceAgentSelection
 } from '@/lib/quick-workspace-agent-selection'
 import { getSelectedRepoSshGate, isSshConnectInProgress } from '@/lib/new-workspace-ssh-gate'
 import { isWorkItemLookupText } from '@/lib/work-item-lookup-text'
+import { buildNewWorkspaceProjectOptions } from '@/lib/new-workspace-project-options'
 import type {
   GitHubWorkItem,
   GitLabWorkItem,
@@ -32,6 +31,7 @@ import type { SshConnectionStatus } from '../../../../shared/ssh-types'
 import { translate } from '@/i18n/i18n'
 import {
   getFolderSourceRepos,
+  getFolderWorkspacePrimaryActionLabel,
   getLinkedItemDisplayName,
   getSmartNameSelection,
   toGitHubLinkedWorkItem,
@@ -40,6 +40,9 @@ import {
 } from './folder-workspace-composer-helpers'
 import { useFolderWorkspaceComposerPathStatus } from './folder-workspace-composer-path-status'
 import { submitFolderWorkspaceCreate } from './folder-workspace-composer-submit'
+import { projectHostSetupProjectionFromRepos } from '../../../../shared/project-host-setup-projection'
+import { useFolderWorkspaceComposerKeyboard } from './folder-workspace-composer-keyboard'
+import { getWorkspaceComposerInitialFocusTarget } from '@/lib/workspace-composer-initial-focus'
 
 type FolderWorkspaceComposerDialogProps = {
   projectGroup: ProjectGroup | null
@@ -71,7 +74,24 @@ export function FolderWorkspaceComposerDialog({
     [projectGroup, projectGroups, repos]
   )
   const [repoId, setRepoId] = useState('')
+  const projectSetupProjection = useMemo(
+    () => projectHostSetupProjectionFromRepos(sourceRepos),
+    [sourceRepos]
+  )
+  const projectOptions = useMemo(
+    () =>
+      buildNewWorkspaceProjectOptions({
+        projects: projectSetupProjection.projects,
+        projectHostSetups: projectSetupProjection.setups,
+        eligibleRepos: sourceRepos
+      }),
+    [projectSetupProjection, sourceRepos]
+  )
   const selectedRepo = sourceRepos.find((repo) => repo.id === repoId) ?? null
+  const selectedProjectHostSetup = projectSetupProjection.setups.find(
+    (setup) => setup.repoId === repoId
+  )
+  const selectedProjectId = selectedProjectHostSetup?.projectId ?? null
   const selectedRepoConnectionId =
     selectedRepo?.connectionId ??
     (sourceRepos.length === 0 ? (projectGroup?.connectionId ?? null) : null)
@@ -83,7 +103,7 @@ export function FolderWorkspaceComposerDialog({
       connectionId: selectedRepoConnectionId,
       status: selectedRepoSshState?.status ?? null
     })
-  const { detectedIds } = useDetectedAgents(null)
+  const { detectedIds } = useDetectedAgents(selectedRepoConnectionId)
   const detectedAgentIds = useMemo(() => (detectedIds ? new Set(detectedIds) : null), [detectedIds])
   const [name, setName] = useState('')
   const [note, setNote] = useState('')
@@ -154,6 +174,17 @@ export function FolderWorkspaceComposerDialog({
       return provider === 'github' || provider === 'gitlab' ? null : current
     })
   }, [])
+  const handleProjectChange = useCallback(
+    (projectId: string): void => {
+      const setup = projectSetupProjection.setups.find(
+        (candidate) => candidate.projectId === projectId
+      )
+      if (setup) {
+        handleRepoChange(setup.repoId)
+      }
+    },
+    [handleRepoChange, projectSetupProjection]
+  )
 
   const handleSmartGitHubItemSelect = useCallback(
     (item: GitHubWorkItem): void => {
@@ -232,7 +263,6 @@ export function FolderWorkspaceComposerDialog({
         quickAgent,
         autoRenameBranchFromWork: settings?.autoRenameBranchFromWork,
         agentCmdOverrides: settings?.agentCmdOverrides,
-        isRemote: selectedRepoConnectionId !== null,
         createFolderWorkspace,
         onOpenChange
       })
@@ -247,7 +277,6 @@ export function FolderWorkspaceComposerDialog({
     onOpenChange,
     projectGroup,
     quickAgent,
-    selectedRepoConnectionId,
     settings?.agentCmdOverrides,
     settings?.autoRenameBranchFromWork,
     submitting,
@@ -255,45 +284,13 @@ export function FolderWorkspaceComposerDialog({
     selectedRepoRequiresConnection
   ])
 
-  useEffect(() => {
-    if (!open) {
-      return
-    }
-    const onKeyDown = (event: KeyboardEvent): void => {
-      if (event.key !== 'Enter' && event.key !== 'Escape') {
-        return
-      }
-      const target = event.target
-      if (!(target instanceof HTMLElement)) {
-        return
-      }
-      if (event.key === 'Escape') {
-        if (
-          target instanceof HTMLInputElement ||
-          target instanceof HTMLTextAreaElement ||
-          target instanceof HTMLSelectElement ||
-          target.isContentEditable
-        ) {
-          event.preventDefault()
-          target.blur()
-          return
-        }
-        event.preventDefault()
-        onOpenChange(false)
-        return
-      }
-      if (!isScreenSubmitShortcut(event)) {
-        return
-      }
-      if (!shouldAllowComposerEnterSubmitTarget(target, composerRef.current) || submitting) {
-        return
-      }
-      event.preventDefault()
-      void handleCreate()
-    }
-    window.addEventListener('keydown', onKeyDown, { capture: true })
-    return () => window.removeEventListener('keydown', onKeyDown, { capture: true })
-  }, [handleCreate, onOpenChange, open, submitting])
+  useFolderWorkspaceComposerKeyboard({
+    open,
+    submitting,
+    composerRef,
+    onOpenChange,
+    onCreate: () => void handleCreate()
+  })
 
   const smartNameSelection = useMemo(() => getSmartNameSelection(linkedWorkItem), [linkedWorkItem])
   const emptySourceProjectMessage =
@@ -312,10 +309,7 @@ export function FolderWorkspaceComposerDialog({
           onOpenAutoFocus={(event) => {
             event.preventDefault()
             const content = event.currentTarget as HTMLElement
-            const trigger = content.querySelector<HTMLElement>(
-              '[data-repo-combobox-root="true"][role="combobox"]'
-            )
-            trigger?.focus({ preventScroll: true })
+            getWorkspaceComposerInitialFocusTarget(content)?.focus({ preventScroll: true })
           }}
         >
           <DialogHeader className="gap-1">
@@ -335,12 +329,12 @@ export function FolderWorkspaceComposerDialog({
             onQuickAgentChange={handleQuickAgentChange}
             eligibleRepos={sourceRepos}
             repoId={repoId}
+            projectOptions={projectOptions}
+            selectedProjectId={selectedProjectId}
             selectedRepoIsGit={true}
             onRepoChange={handleRepoChange}
-            primaryActionLabel={translate(
-              'auto.components.sidebar.FolderWorkspaceComposerDialog.create',
-              'Create workspace'
-            )}
+            onProjectChange={handleProjectChange}
+            primaryActionLabel={getFolderWorkspacePrimaryActionLabel(quickAgent)}
             projectLabel={translate(
               'auto.components.sidebar.FolderWorkspaceComposerDialog.sourceProject',
               'Task Source'

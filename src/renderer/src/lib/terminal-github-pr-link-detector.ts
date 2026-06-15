@@ -2,11 +2,9 @@ import type { RepoSlug } from './github-links'
 import { parseGitHubIssueOrPRLink } from './github-links'
 
 const GITHUB_PR_URL_RE =
-  /\bhttps:\/\/(?:www\.)?github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+\/pull\/\d+(?:[/?#][^\s"'<>]*)?/gi
-const GITHUB_HOST_MARKER = 'github.com/'
+  /\bhttps?:\/\/[A-Za-z0-9][A-Za-z0-9_.-]*(?::\d+)?\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+\/pull\/\d+(?:[/?#][^\s"'<>]*)?/gi
 const GITHUB_PR_PATH_MARKER = '/pull/'
-const HTTPS_SCHEME_PREFIX = 'https://'
-const HTTPS_SCHEME_FRAGMENT_LAST_CHARS = new Set('https:/'.split(''))
+const HTTP_SCHEME_PREFIXES = ['https://', 'http://'] as const
 const TRAILING_TERMINAL_PUNCTUATION_RE = /[),.;\]}]+$/
 const MAX_CARRY_LENGTH = 512
 
@@ -29,39 +27,25 @@ function parseTerminalGitHubPRUrl(candidate: string): TerminalGitHubPRLink | nul
   return { url, slug: parsed.slug, number: parsed.number }
 }
 
-function endsWithHttpsSchemePrefixFragment(value: string): string {
-  for (let length = Math.min(HTTPS_SCHEME_PREFIX.length - 1, value.length); length > 0; length--) {
-    if (value.endsWith(HTTPS_SCHEME_PREFIX.slice(0, length))) {
-      return value.slice(value.length - length)
+function endsWithHttpSchemePrefixFragment(value: string): string {
+  for (const prefix of HTTP_SCHEME_PREFIXES) {
+    for (let length = Math.min(prefix.length - 1, value.length); length > 0; length--) {
+      if (value.endsWith(prefix.slice(0, length))) {
+        return value.slice(value.length - length)
+      }
     }
   }
   return ''
 }
 
-function getPotentialGitHubPRCarry(value: string, hasGitHubHost: boolean): string {
-  if (hasGitHubHost) {
-    const hostIndex = value.lastIndexOf(GITHUB_HOST_MARKER)
-    const schemeIndex = value.lastIndexOf('https://', hostIndex)
-    if (schemeIndex === -1) {
-      return ''
-    }
-
-    const tail = value.slice(schemeIndex)
-    return /\s/.test(tail) ? '' : tail.slice(-MAX_CARRY_LENGTH)
-  }
-
-  const schemeIndex = value.lastIndexOf('https://')
+function getPotentialGitHubPRCarry(value: string): string {
+  const schemeIndex = Math.max(...HTTP_SCHEME_PREFIXES.map((prefix) => value.lastIndexOf(prefix)))
   if (schemeIndex !== -1) {
     const tail = value.slice(schemeIndex)
     return /\s/.test(tail) ? '' : tail.slice(-MAX_CARRY_LENGTH)
   }
 
-  const lastChar = value.at(-1)
-  if (!lastChar || !HTTPS_SCHEME_FRAGMENT_LAST_CHARS.has(lastChar)) {
-    return ''
-  }
-
-  return endsWithHttpsSchemePrefixFragment(value)
+  return endsWithHttpSchemePrefixFragment(value)
 }
 
 export function createTerminalGitHubPRLinkDetector(): (data: string) => TerminalGitHubPRLink[] {
@@ -70,10 +54,9 @@ export function createTerminalGitHubPRLinkDetector(): (data: string) => Terminal
 
   return (data: string): TerminalGitHubPRLink[] => {
     const combined = carry ? carry + data : data
-    const hasGitHubHost = combined.includes(GITHUB_HOST_MARKER)
 
-    if (!hasGitHubHost || !combined.includes(GITHUB_PR_PATH_MARKER)) {
-      carry = getPotentialGitHubPRCarry(combined, hasGitHubHost)
+    if (!combined.includes(GITHUB_PR_PATH_MARKER)) {
+      carry = getPotentialGitHubPRCarry(combined)
       return []
     }
 
@@ -95,7 +78,7 @@ export function createTerminalGitHubPRLinkDetector(): (data: string) => Terminal
       links.push(parsed)
     }
 
-    carry = getPotentialGitHubPRCarry(combined, true)
+    carry = getPotentialGitHubPRCarry(combined)
     return links
   }
 }

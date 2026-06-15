@@ -120,6 +120,46 @@ function getActionTitles(isSshLikely: boolean): {
   }
 }
 
+function getHostAwareActionModel(): {
+  secondary: string[]
+  createDisabled: boolean | undefined
+} {
+  const { secondaryActions } = getAddRepoLocalStartActions({
+    isSshLikely: true,
+    showRemoteAction: false,
+    onBrowse: vi.fn(),
+    onOpenCloneStep: vi.fn(),
+    onOpenRemoteStep: vi.fn(),
+    onOpenCreateStep: vi.fn()
+  })
+  const createAction = secondaryActions.find((action) => action.kind === 'create')
+
+  return {
+    secondary: secondaryActions.map((action) => action.title),
+    createDisabled: createAction?.disabled
+  }
+}
+
+function getRuntimeHostActionModel(): {
+  primary: string
+  description: string
+} {
+  const { primaryAction } = getAddRepoLocalStartActions({
+    isSshLikely: false,
+    showRemoteAction: false,
+    browseHostKind: 'runtime',
+    onBrowse: vi.fn(),
+    onOpenCloneStep: vi.fn(),
+    onOpenRemoteStep: vi.fn(),
+    onOpenCreateStep: vi.fn()
+  })
+
+  return {
+    primary: primaryAction.title,
+    description: primaryAction.description
+  }
+}
+
 describe('AddRepoLocalStartStep', () => {
   afterEach(() => {
     document.body.innerHTML = ''
@@ -130,8 +170,8 @@ describe('AddRepoLocalStartStep', () => {
 
     expect(markup).toContain('Browse folder')
     expect(markup).toContain('Clone from URL')
-    expect(markup).toContain('Remote project')
-    expect(markup).toContain('Create project')
+    expect(markup).toContain('Project on SSH host')
+    expect(markup).toContain('Create new project')
     expect(markup).toContain('Other ways to add')
     expect(markup).not.toContain('More options')
   })
@@ -140,23 +180,45 @@ describe('AddRepoLocalStartStep', () => {
     const titles = getActionTitles(false)
 
     expect(titles.primary).toBe('Browse folder')
-    expect(titles.secondary).toEqual(['Clone from URL', 'Remote project', 'Create project'])
+    expect(titles.secondary).toEqual([
+      'Clone from URL',
+      'Project on SSH host',
+      'Create new project'
+    ])
   })
 
   it('keeps Browse folder primary for SSH-likely users', () => {
     const markup = renderLocalStartStep(true)
 
     expect(markup).toContain('Browse folder')
-    expect(markup).toContain('Remote project')
+    expect(markup).toContain('Project on SSH host')
     expect(markup).toContain('Clone from URL')
-    expect(markup).toContain('Create project')
+    expect(markup).toContain('Create new project')
   })
 
   it('orders secondary actions remote-first for SSH-likely users', () => {
     const titles = getActionTitles(true)
 
     expect(titles.primary).toBe('Browse folder')
-    expect(titles.secondary).toEqual(['Remote project', 'Clone from URL', 'Create project'])
+    expect(titles.secondary).toEqual([
+      'Project on SSH host',
+      'Clone from URL',
+      'Create new project'
+    ])
+  })
+
+  it('lets host-aware Add Project replace the separate remote row', () => {
+    const model = getHostAwareActionModel()
+
+    expect(model.secondary).toEqual(['Clone from URL', 'Create new project'])
+    expect(model.createDisabled).toBe(false)
+  })
+
+  it('uses host-neutral browse copy for runtime hosts', () => {
+    const model = getRuntimeHostActionModel()
+
+    expect(model.primary).toBe('Browse folder')
+    expect(model.description).toBe('Existing Git repository or folder on this host')
   })
 
   it('focuses Browse folder when the default Add Project step opens', async () => {
@@ -173,7 +235,7 @@ describe('AddRepoLocalStartStep', () => {
   it('focuses Browse folder for SSH-likely users too', async () => {
     const { container, root } = await renderLocalStartStepDom(true)
     const browseButton = findButton(container, 'Browse folder')
-    const remoteButton = findButton(container, 'Remote project')
+    const remoteButton = findButton(container, 'Project on SSH host')
 
     expect(document.activeElement).toBe(browseButton)
     expect(document.activeElement).not.toBe(remoteButton)
@@ -187,8 +249,8 @@ describe('AddRepoLocalStartStep', () => {
     const { container, root } = await renderLocalStartStepDom(false)
 
     expect(findButton(container, 'Clone from URL').disabled).toBe(false)
-    expect(findButton(container, 'Remote project').disabled).toBe(false)
-    expect(findButton(container, 'Create project').disabled).toBe(false)
+    expect(findButton(container, 'Project on SSH host').disabled).toBe(false)
+    expect(findButton(container, 'Create new project').disabled).toBe(false)
 
     await act(async () => {
       root.unmount()
@@ -303,12 +365,12 @@ describe('AddRepoServerPathStartStep', () => {
     const markup = renderServerPathStartStep('env-1')
 
     expect(markup).toContain('Add a project')
-    expect(markup).toContain('Add another project from the selected runtime server.')
-    expect(markup).toContain('Browse server')
+    expect(markup).toContain('Add another project from the selected host.')
+    expect(markup).toContain('Browse host')
     expect(markup).toContain('Clone from URL')
-    expect(markup).toContain('Create on server')
+    expect(markup).toContain('Create on host')
     expect(markup).toContain('Want to import many repos at once?')
-    expect(markup).toContain('Or enter a server path manually')
+    expect(markup).toContain('Or enter a host path manually')
   })
 
   it('disables server entry cards without an active runtime environment', () => {

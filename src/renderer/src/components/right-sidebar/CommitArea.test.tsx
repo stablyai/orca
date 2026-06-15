@@ -384,7 +384,7 @@ describe('ConflictSummaryCard', () => {
     expect(cherryPickMarkup).not.toContain('Abort rebase')
   })
 
-  it('renders abort actions with the quiet outline review-conflicts button treatment', () => {
+  it('renders abort actions with operation-specific button treatment', () => {
     const mergeMarkup = renderToStaticMarkup(
       <ConflictSummaryCard
         conflictOperation="merge"
@@ -407,7 +407,7 @@ describe('ConflictSummaryCard', () => {
     )
 
     expect(buttonContaining(mergeMarkup, 'Review conflicts')).toContain('data-variant="outline"')
-    expect(buttonContaining(mergeMarkup, 'Abort merge')).toContain('data-variant="outline"')
+    expect(buttonContaining(mergeMarkup, 'Abort merge')).toContain('data-variant="destructive"')
     expect(buttonContaining(rebaseMarkup, 'Review conflicts')).toContain('data-variant="outline"')
     expect(buttonContaining(rebaseMarkup, 'Abort rebase')).toContain('data-variant="outline"')
   })
@@ -447,7 +447,7 @@ describe('OperationBanner', () => {
     expect(cherryPickMarkup).not.toContain('Abort rebase')
   })
 
-  it('renders abort actions with the quiet outline button treatment', () => {
+  it('renders abort actions with operation-specific button treatment', () => {
     const mergeMarkup = renderToStaticMarkup(
       <OperationBanner conflictOperation="merge" onAbortOperation={vi.fn()} />
     )
@@ -455,7 +455,7 @@ describe('OperationBanner', () => {
       <OperationBanner conflictOperation="rebase" onAbortOperation={vi.fn()} />
     )
 
-    expect(buttonContaining(mergeMarkup, 'Abort merge')).toContain('data-variant="outline"')
+    expect(buttonContaining(mergeMarkup, 'Abort merge')).toContain('data-variant="destructive"')
     expect(buttonContaining(rebaseMarkup, 'Abort rebase')).toContain('data-variant="outline"')
   })
 })

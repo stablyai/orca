@@ -11,6 +11,7 @@ import React, {
   useSyncExternalStore
 } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
+import { useShallow } from 'zustand/react/shallow'
 import type { editor as monacoEditor } from 'monaco-editor'
 import {
   ArrowDown,
@@ -84,11 +85,6 @@ import {
 import type { DiffSection } from '@/components/editor/diff-section-types'
 import type { CombinedDiffFileTreeEntry } from '@/components/editor/combined-diff-file-tree-model'
 import { CHECK_COLOR, CHECK_ICON } from '@/components/right-sidebar/checks-panel-content'
-import {
-  REVIEW_ACTION_MERGE_BUTTON_CLASS,
-  REVIEW_ACTION_STATE_BUTTON_CLASS,
-  RIGHT_SIDEBAR_PRIMARY_BUTTON_LABEL_CLASS
-} from '@/components/right-sidebar/right-sidebar-primary-action-layout'
 import { SourceControlAgentActionDialog } from '@/components/right-sidebar/SourceControlAgentActionDialog'
 import {
   createGitHubChecksTabState,
@@ -138,8 +134,6 @@ import { useAllWorktrees } from '@/store/selectors'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import { useRepoLabels, useRepoAssignees, useImmediateMutation } from '@/hooks/useIssueMetadata'
 import { useRepoLabelsBySlug, useRepoAssigneesBySlug } from '@/hooks/useGitHubSlugMetadata'
-import { GitHubWorkItemLabelPopoverContent } from '@/components/github/GitHubWorkItemLabelPopoverContent'
-import { GitHubWorkItemAssigneePopoverContent } from '@/components/github/GitHubWorkItemAssigneePopoverContent'
 import {
   getGitHubPRReviewerRows,
   normalizeGitHubReviewerLogins
@@ -184,6 +178,7 @@ import type {
   PRComment
 } from '../../../shared/types'
 import { translate } from '@/i18n/i18n'
+import { getSettingsForRepoRuntimeOwner } from '@/lib/repo-runtime-owner'
 
 // Why: the GH item dialog can be opened from any work-item list surface and
 // doesn't have the full owner/repo context the list's cache entry carries.
@@ -202,25 +197,6 @@ function parseOwnerRepoFromItemUrl(url: string): GitHubOwnerRepo | null {
       return null
     }
     return { owner: segments[0], repo: segments[1] }
-  } catch {
-    return null
-  }
-}
-
-function getGitHubRepositoryLabelsUrl(itemUrl: string): string | null {
-  try {
-    const parsed = new URL(itemUrl)
-    if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
-      return null
-    }
-    const segments = parsed.pathname.split('/').filter(Boolean)
-    if (segments.length < 2) {
-      return null
-    }
-    parsed.pathname = `/${segments[0]}/${segments[1]}/labels`
-    parsed.search = ''
-    parsed.hash = ''
-    return parsed.toString()
   } catch {
     return null
   }
@@ -547,7 +523,9 @@ function PRReviewersPanel({
     reviewRequests: item.reviewRequests
   }))
   const patchWorkItem = useAppStore((s) => s.patchWorkItem)
-  const settings = useAppStore((s) => s.settings)
+  const repoOwnerSettings = useAppStore(
+    useShallow((s) => getSettingsForRepoRuntimeOwner(s, item.repoId ?? null))
+  )
   const reviewerInputRef = useRef<HTMLInputElement | null>(null)
   const reviewerInputFocusFrameRef = useRef<number | null>(null)
   const reviewerPanelMountedRef = useRef(true)
@@ -622,11 +600,12 @@ function PRReviewersPanel({
     open && reviewSlug ? reviewSlug.owner : null,
     open && reviewSlug ? reviewSlug.repo : null,
     reviewerSeedUsers.map((user) => user.login),
-    settings
+    repoOwnerSettings
   )
   const reviewerMetadataByPath = useRepoAssignees(
     open && !reviewSlug ? repoPath : null,
-    open && !reviewSlug ? item.repoId : null
+    open && !reviewSlug ? item.repoId : null,
+    repoOwnerSettings
   )
   const reviewerMetadata = reviewSlug ? reviewerMetadataBySlug : reviewerMetadataByPath
   const displayItem = { ...item, reviewRequests: localReviewRequests }
@@ -725,7 +704,8 @@ function PRReviewersPanel({
     localReviewRequests.length > 0 ||
     item.reviewRequests !== undefined ||
     item.latestReviews !== undefined
-  const canRequestReview = !!repoPath || getActiveRuntimeTarget(settings).kind === 'environment'
+  const canRequestReview =
+    !!repoPath || getActiveRuntimeTarget(repoOwnerSettings).kind === 'environment'
 
   const measureReviewerPickerPlacement = useCallback(() => {
     const rect = reviewerInputRef.current?.getBoundingClientRect()
@@ -768,7 +748,7 @@ function PRReviewersPanel({
       )
       return
     }
-    const target = getActiveRuntimeTarget(settings)
+    const target = getActiveRuntimeTarget(repoOwnerSettings)
     if (target.kind !== 'environment' && !repoPath) {
       toast.error(
         translate(
@@ -842,7 +822,7 @@ function PRReviewersPanel({
     if (logins.length === 0) {
       return
     }
-    const target = getActiveRuntimeTarget(settings)
+    const target = getActiveRuntimeTarget(repoOwnerSettings)
     if (target.kind !== 'environment' && !repoPath) {
       toast.error(
         translate(
@@ -2702,6 +2682,7 @@ function CommentCodeContext({
 function ConversationTab({
   item,
   repoPath,
+  repoId,
   body,
   comments,
   files,
@@ -2749,7 +2730,10 @@ function ConversationTab({
   const [bodySaving, setBodySaving] = useState(false)
   const bodyTextareaRef = useRef<HTMLTextAreaElement>(null)
   const bodyTextareaFocusFrameRef = useRef<number | null>(null)
-  const repoAssignees = useRepoAssignees(repoPath, item.repoId)
+  const repoOwnerSettings = useAppStore(
+    useShallow((s) => getSettingsForRepoRuntimeOwner(s, item.repoId ?? repoId ?? null))
+  )
+  const repoAssignees = useRepoAssignees(repoPath, item.repoId, repoOwnerSettings)
   const commentCounts = useMemo(() => getPRCommentAudienceCounts(comments), [comments])
   const visibleComments = useMemo(
     () => filterPRCommentsByAudience(comments, commentFilter),
@@ -3488,7 +3472,7 @@ function PRActionsPanel({
         <WorkItemStateBadge item={actionItem} />
       </div>
 
-      <div className="grid gap-2 justify-items-start">
+      <div className="grid gap-2">
         <DropdownMenu modal={false}>
           <Tooltip>
             <TooltipTrigger asChild>
@@ -3497,8 +3481,7 @@ function PRActionsPanel({
                   type="button"
                   size="sm"
                   className={cn(
-                    REVIEW_ACTION_MERGE_BUTTON_CLASS,
-                    'gap-2 bg-green-600 text-white hover:bg-green-700',
+                    'w-full justify-center gap-2 bg-green-600 text-white hover:bg-green-700',
                     'disabled:cursor-not-allowed disabled:opacity-50'
                   )}
                 >
@@ -3507,13 +3490,11 @@ function PRActionsPanel({
                   ) : (
                     <GitMerge className="size-3.5" />
                   )}
-                  <span className={RIGHT_SIDEBAR_PRIMARY_BUTTON_LABEL_CLASS}>
-                    {mergePresentation.autoMergeAction?.label ??
-                      (mergePresentation.directMergeAvailable
-                        ? mergeMethods.defaultLabel
-                        : mergePresentation.label)}
-                  </span>
-                  <ChevronDown className="size-3 shrink-0 opacity-60" />
+                  {mergePresentation.autoMergeAction?.label ??
+                    (mergePresentation.directMergeAvailable
+                      ? mergeMethods.defaultLabel
+                      : mergePresentation.label)}
+                  <ChevronDown className="size-3 opacity-60" />
                 </Button>
               </DropdownMenuTrigger>
             </TooltipTrigger>
@@ -3559,8 +3540,7 @@ function PRActionsPanel({
           variant={nextState === 'closed' ? 'outline' : 'secondary'}
           size="sm"
           className={cn(
-            REVIEW_ACTION_STATE_BUTTON_CLASS,
-            'gap-2',
+            'w-full justify-center gap-2',
             nextState === 'closed' &&
               'border-border bg-background text-foreground hover:bg-accent hover:text-accent-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50'
           )}
@@ -3574,11 +3554,9 @@ function PRActionsPanel({
           ) : (
             <CircleDot className="size-3.5" />
           )}
-          <span className={RIGHT_SIDEBAR_PRIMARY_BUTTON_LABEL_CLASS}>
-            {nextState === 'closed'
-              ? translate('auto.components.PullRequestPage.96d013ed28', 'Close pull request')
-              : translate('auto.components.PullRequestPage.9d5425918e', 'Reopen PR')}
-          </span>
+          {nextState === 'closed'
+            ? translate('auto.components.PullRequestPage.96d013ed28', 'Close pull request')
+            : translate('auto.components.PullRequestPage.9d5425918e', 'Reopen PR')}
         </Button>
       </div>
     </aside>
@@ -4813,6 +4791,13 @@ function MentionTextarea({
 // repo. The edit IPCs return a structured `{ ok, error }` shape; we adapt
 // to a thrown rejection so the existing `useImmediateMutation` flow
 // (which expects throws on failure) continues to work unchanged.
+function getGitHubMutationSettings(repoId: string | null | undefined) {
+  const state = useAppStore.getState()
+  // Why: project-origin mutations are slug-addressed, but when we know the
+  // backing repo id they must still execute on that repo's owner host.
+  return getSettingsForRepoRuntimeOwner(state, repoId ?? null)
+}
+
 async function runIssueUpdate(args: {
   repoPath: string | null
   repoId?: string | null
@@ -4821,7 +4806,7 @@ async function runIssueUpdate(args: {
   updates: Parameters<typeof window.api.gh.updateIssue>[0]['updates']
 }): Promise<void> {
   if (args.projectOrigin) {
-    const target = getActiveRuntimeTarget(useAppStore.getState().settings)
+    const target = getActiveRuntimeTarget(getGitHubMutationSettings(args.repoId))
     const updateArgs = {
       owner: args.projectOrigin.owner,
       repo: args.projectOrigin.repo,
@@ -4870,7 +4855,7 @@ async function runWorkItemBodyUpdate(args: {
     if (!targetSlug) {
       throw new Error('No GitHub repository context available for this pull request.')
     }
-    const target = getActiveRuntimeTarget(useAppStore.getState().settings)
+    const target = getActiveRuntimeTarget(getGitHubMutationSettings(args.item.repoId))
     const updateArgs = {
       owner: targetSlug.owner,
       repo: targetSlug.repo,
@@ -4909,7 +4894,7 @@ async function runPullRequestStateUpdate(args: {
   updates: { state: 'open' | 'closed' }
 }): Promise<void> {
   if (args.projectOrigin) {
-    const target = getActiveRuntimeTarget(useAppStore.getState().settings)
+    const target = getActiveRuntimeTarget(getGitHubMutationSettings(args.repoId))
     const updateArgs = {
       owner: args.projectOrigin.owner,
       repo: args.projectOrigin.repo,
@@ -4979,8 +4964,10 @@ function GHEditSection({
   const assigneesItemKey = `${item.repoId}\0${item.id}`
   const patchWorkItem = useAppStore((s) => s.patchWorkItem)
   const patchProjectRowContent = useAppStore((s) => s.patchProjectRowContent)
+  const repoOwnerSettings = useAppStore(
+    useShallow((s) => getSettingsForRepoRuntimeOwner(s, item.repoId ?? repoId ?? null))
+  )
   const { isPending, run } = useImmediateMutation()
-  const repositoryLabelsUrl = useMemo(() => getGitHubRepositoryLabelsUrl(item.url), [item.url])
   // Why: when the dialog opens from a Project view, mutations route through
   // *BySlug IPCs and we must keep `projectViewCache` in sync alongside
   // `workItemsCache` — `patchWorkItem` only walks the latter, so without this
@@ -5003,15 +4990,22 @@ function GHEditSection({
   const slugRepo = projectOrigin?.repo ?? null
   const repoLabelsByPath = useRepoLabels(
     projectOrigin ? null : repoPath,
-    projectOrigin ? null : repoId
+    projectOrigin ? null : repoId,
+    repoOwnerSettings
   )
-  const repoLabelsBySlug = useRepoLabelsBySlug(slugOwner, slugRepo)
+  const repoLabelsBySlug = useRepoLabelsBySlug(slugOwner, slugRepo, repoOwnerSettings)
   const repoLabels = projectOrigin ? repoLabelsBySlug : repoLabelsByPath
   const repoAssigneesByPath = useRepoAssignees(
     projectOrigin ? null : repoPath,
-    projectOrigin ? null : repoId
+    projectOrigin ? null : repoId,
+    repoOwnerSettings
   )
-  const repoAssigneesBySlug = useRepoAssigneesBySlug(slugOwner, slugRepo, assignees)
+  const repoAssigneesBySlug = useRepoAssigneesBySlug(
+    slugOwner,
+    slugRepo,
+    assignees,
+    repoOwnerSettings
+  )
   const repoAssignees = projectOrigin ? repoAssigneesBySlug : repoAssigneesByPath
 
   // Why: sync local assignees when item changes or when the detail fetch
@@ -5221,6 +5215,18 @@ function GHEditSection({
     return null
   }
 
+  const checkIcon = (
+    <svg className="size-2.5" viewBox="0 0 12 12" fill="none">
+      <path
+        d="M2 6l3 3 5-5"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-border/60 px-4 py-2.5">
       {/* State */}
@@ -5290,16 +5296,34 @@ function GHEditSection({
           </button>
         </PopoverTrigger>
         <PopoverContent className="popover-scroll-content scrollbar-sleek w-52 p-1" align="start">
-          <GitHubWorkItemLabelPopoverContent
-            open={labelPopoverOpen}
-            labels={repoLabels.data}
-            selectedLabels={localLabels}
-            error={repoLabels.error}
-            loading={repoLabels.loading}
-            repositoryLabelsUrl={repositoryLabelsUrl}
-            onToggleLabel={handleLabelToggle}
-            onOpenSettingsLink={() => setLabelPopoverOpen(false)}
-          />
+          {repoLabels.error ? (
+            <div className="px-2 py-3 text-center text-[12px] text-destructive">
+              {repoLabels.error}
+            </div>
+          ) : (
+            <div>
+              {repoLabels.data.map((label) => (
+                <button
+                  key={label}
+                  type="button"
+                  onClick={() => handleLabelToggle(label)}
+                  className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-[12px] hover:bg-accent"
+                >
+                  <span
+                    className={cn(
+                      'flex size-3.5 items-center justify-center rounded-sm border',
+                      localLabels.includes(label)
+                        ? 'border-primary bg-primary text-primary-foreground'
+                        : 'border-input'
+                    )}
+                  >
+                    {localLabels.includes(label) && checkIcon}
+                  </span>
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
         </PopoverContent>
       </Popover>
 
@@ -5330,14 +5354,41 @@ function GHEditSection({
           </button>
         </PopoverTrigger>
         <PopoverContent className="popover-scroll-content scrollbar-sleek w-52 p-1" align="start">
-          <GitHubWorkItemAssigneePopoverContent
-            open={assigneePopoverOpen}
-            assignees={repoAssignees.data}
-            selectedLogins={localAssignees}
-            error={repoAssignees.error}
-            loading={repoAssignees.loading}
-            onToggleAssignee={handleAssigneeToggle}
-          />
+          {repoAssignees.error ? (
+            <div className="px-2 py-3 text-center text-[12px] text-destructive">
+              {repoAssignees.error}
+            </div>
+          ) : (
+            <div>
+              {repoAssignees.data.map((user) => (
+                <button
+                  key={user.login}
+                  type="button"
+                  onClick={() => handleAssigneeToggle(user.login)}
+                  className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-[12px] hover:bg-accent"
+                >
+                  <span
+                    className={cn(
+                      'flex size-3.5 items-center justify-center rounded-sm border',
+                      localAssignees.includes(user.login)
+                        ? 'border-primary bg-primary text-primary-foreground'
+                        : 'border-input'
+                    )}
+                  >
+                    {localAssignees.includes(user.login) && checkIcon}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate">{user.login}</span>
+                    {user.name && (
+                      <span className="block truncate text-[11px] text-muted-foreground">
+                        {user.name}
+                      </span>
+                    )}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
         </PopoverContent>
       </Popover>
 

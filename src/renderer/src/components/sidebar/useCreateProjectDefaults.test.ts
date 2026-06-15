@@ -63,14 +63,16 @@ function useHarness(overrides: Partial<Parameters<typeof useCreateProjectDefault
   mocks.stateIndex = 0
   mocks.refIndex = 0
   const setCreateParent = vi.fn()
+  const setCreateKind = vi.fn()
   const result = useCreateProjectDefaults({
     step: 'create',
     activeRuntimeEnvironmentId: null,
     createParent: '',
     setCreateParent,
+    setCreateKind,
     ...overrides
   })
-  return { result, setCreateParent }
+  return { result, setCreateParent, setCreateKind }
 }
 
 describe('useCreateProjectDefaults', () => {
@@ -91,15 +93,16 @@ describe('useCreateProjectDefaults', () => {
     mocks.getDefaultCreateProjectParent.mockResolvedValue('/Users/alice/orca/projects')
   })
 
-  it('auto-fills the local default parent and records Git availability', async () => {
+  it('auto-fills the local default parent and defaults to git when available', async () => {
     mocks.isGitAvailable.mockResolvedValue(true)
 
-    const { setCreateParent } = useHarness()
+    const { setCreateParent, setCreateKind } = useHarness()
     await flushAsync()
 
     expect(setCreateParent).toHaveBeenCalledWith('/Users/alice/orca/projects')
     expect(mocks.stateValues[DEFAULT_PARENT_STATE]).toBe('/Users/alice/orca/projects')
     expect(mocks.stateValues[GIT_AVAILABILITY_STATE]).toBe('available')
+    expect(setCreateKind).toHaveBeenCalledWith('git')
     expect(mocks.getDefaultCreateProjectParent).toHaveBeenCalled()
     expect(mocks.callRuntimeRpc).not.toHaveBeenCalled()
   })
@@ -125,22 +128,24 @@ describe('useCreateProjectDefaults', () => {
     expect(mocks.stateValues[DEFAULT_PARENT_STATE]).toBe('/Users/alice/orca/projects')
   })
 
-  it('records unavailable Git without changing project kind', async () => {
+  it('defaults to folder with a visible fallback when Git is unavailable', async () => {
     mocks.isGitAvailable.mockResolvedValue(false)
 
-    useHarness()
+    const { setCreateKind } = useHarness()
     await flushAsync()
 
     expect(mocks.stateValues[GIT_AVAILABILITY_STATE]).toBe('unavailable')
+    expect(setCreateKind).toHaveBeenCalledWith('folder')
   })
 
-  it('reports unknown availability when the Git probe fails', async () => {
+  it('reports unknown availability and keeps the kind when the Git probe fails', async () => {
     mocks.isGitAvailable.mockRejectedValue(new Error('probe failed'))
 
-    useHarness()
+    const { setCreateKind } = useHarness()
     await flushAsync()
 
     expect(mocks.stateValues[GIT_AVAILABILITY_STATE]).toBe('unknown')
+    expect(setCreateKind).not.toHaveBeenCalled()
   })
 
   it('does not overwrite a parent the user already chose', async () => {
@@ -156,7 +161,7 @@ describe('useCreateProjectDefaults', () => {
     mocks.browseRuntimeServerDirectory.mockResolvedValue({ resolvedPath: '/home/alice' })
     mocks.callRuntimeRpc.mockResolvedValue({ available: true })
 
-    const { setCreateParent } = useHarness({ activeRuntimeEnvironmentId: 'env-1' })
+    const { setCreateParent, setCreateKind } = useHarness({ activeRuntimeEnvironmentId: 'env-1' })
     await flushAsync()
 
     expect(mocks.browseRuntimeServerDirectory).toHaveBeenCalledWith('env-1', '~')
@@ -171,6 +176,7 @@ describe('useCreateProjectDefaults', () => {
       { timeoutMs: 3000 }
     )
     expect(mocks.isGitAvailable).not.toHaveBeenCalled()
+    expect(setCreateKind).toHaveBeenCalledWith('git')
   })
 
   it('replaces an untouched local default when switching to a runtime target', async () => {
@@ -242,11 +248,26 @@ describe('useCreateProjectDefaults', () => {
     expect(setCreateParent).not.toHaveBeenCalled()
   })
 
-  it('does nothing outside the create step', async () => {
-    const { setCreateParent } = useHarness({ step: 'add' })
+  it('does not use client defaults or Git probing for SSH targets', async () => {
+    mocks.isGitAvailable.mockResolvedValue(true)
+
+    const { setCreateParent, setCreateKind } = useHarness({ sshTargetId: 'ssh-1' })
     await flushAsync()
 
     expect(setCreateParent).not.toHaveBeenCalled()
+    expect(setCreateKind).not.toHaveBeenCalled()
+    expect(mocks.getDefaultCreateProjectParent).not.toHaveBeenCalled()
+    expect(mocks.isGitAvailable).not.toHaveBeenCalled()
+    expect(mocks.callRuntimeRpc).not.toHaveBeenCalled()
+    expect(mocks.stateValues[GIT_AVAILABILITY_STATE]).toBe('unknown')
+  })
+
+  it('does nothing outside the create step', async () => {
+    const { setCreateParent, setCreateKind } = useHarness({ step: 'add' })
+    await flushAsync()
+
+    expect(setCreateParent).not.toHaveBeenCalled()
+    expect(setCreateKind).not.toHaveBeenCalled()
     expect(mocks.isGitAvailable).not.toHaveBeenCalled()
     expect(mocks.browseRuntimeServerDirectory).not.toHaveBeenCalled()
   })

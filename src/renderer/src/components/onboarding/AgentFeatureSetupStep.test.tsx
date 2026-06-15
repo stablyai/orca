@@ -24,7 +24,7 @@ describe('AgentFeatureSetupStep', () => {
     expect(html).toContain('Computer Use')
     expect(html).toContain('Agent Orchestration')
     expect(html).toContain('Linear agent skill')
-    expect(html).toContain('Install CLI &amp; Skills')
+    expect(html).toContain('Enable capabilities')
     expect(html).toContain('role="checkbox"')
   })
 })

@@ -33,6 +33,7 @@ import {
   resolveTuiAgentLaunchArgs,
   resolveTuiAgentLaunchEnv
 } from '../../../../shared/tui-agent-launch-defaults'
+import { getSettingOwnershipSummary } from './setting-ownership'
 import { translate } from '@/i18n/i18n'
 
 export { getAgentsPaneSearchEntries } from './agents-search'
@@ -612,6 +613,7 @@ export function AgentsPane({
   )
 
   const defaultAgent = settings.defaultTuiAgent
+  const agentOwnership = getSettingOwnershipSummary('agentLaunchDefaults')
   const cmdOverrides = settings.agentCmdOverrides ?? {}
   const agentDefaultArgs = settings.agentDefaultArgs ?? {}
   const agentDefaultEnv = settings.agentDefaultEnv ?? {}
@@ -695,10 +697,7 @@ export function AgentsPane({
       <section className="space-y-4">
         <SettingsSubsectionHeader
           title={translate('auto.components.settings.AgentsPane.385212c7a1', 'Default Agent')}
-          description={translate(
-            'auto.components.settings.AgentsPane.9b175d0f5e',
-            'Pre-selected agent when opening a new workspace.'
-          )}
+          description={agentOwnership.description}
         />
 
         <div className="flex flex-wrap gap-2">

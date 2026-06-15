@@ -137,7 +137,10 @@ export function healthCheckDaemon(socketPath: string, tokenPath: string): Promis
             settle(false)
             return
           }
-          sock?.write(encodeNdjson({ id: 'health-1', type: 'ping' }))
+          // Why: a protocol-live daemon with a stale cwd or node-pty helper
+          // will answer ping but cannot create terminals, so reuse must check
+          // the PTY spawn prerequisites too.
+          sock?.write(encodeNdjson({ id: 'health-1', type: 'ptySpawnHealth' }))
           continue
         }
 

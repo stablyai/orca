@@ -18,6 +18,7 @@ import {
   subscribeToPtyExit
 } from '@/components/terminal-pane/pty-dispatcher'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
+import { getSettingsForWorktreeRuntimeOwner } from '@/lib/worktree-runtime-owner'
 import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
 import { singlePaneLayoutSnapshot } from '@/store/slices/terminal-helpers'
 import {
@@ -153,7 +154,11 @@ export async function launchAgentBackgroundSession(
       window.api.pty.write(ptyId, submittedCommand)
     }, 50)
   }
-  const runtimeTarget = getActiveRuntimeTarget(store.settings)
+  // Route by the worktree's owner host: the agent terminal must spawn on the host
+  // that owns this worktree, not on the focused runtime.
+  const runtimeTarget = getActiveRuntimeTarget(
+    getSettingsForWorktreeRuntimeOwner(store, worktreeId)
+  )
   let ptyId: string
   try {
     if (runtimeTarget.kind === 'environment') {

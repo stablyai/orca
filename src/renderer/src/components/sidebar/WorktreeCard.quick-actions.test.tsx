@@ -201,9 +201,11 @@ describe('WorktreeCard quick actions', () => {
       />
     )
 
-    expect(markup).toContain('aria-label="Will be renamed from first agent message"')
+    expect(markup).toContain(
+      'aria-label="This worktree will be renamed from the first agent message"'
+    )
     expect(markup).toContain('rename pending')
-    expect(markup).toContain('Will be renamed from first agent message')
+    expect(markup).toContain('This worktree will be renamed from the first agent message')
   })
 
   it('renders the repeated branch metadata row in detailed cards', () => {

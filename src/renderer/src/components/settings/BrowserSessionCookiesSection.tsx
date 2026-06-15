@@ -2,9 +2,17 @@ import { Plus } from 'lucide-react'
 import type { BrowserSessionProfile } from '../../../../shared/types'
 import { Button } from '../ui/button'
 import { Label } from '../ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
 import { SearchableSetting } from './SearchableSetting'
 import { BrowserProfileRow, type BrowserProfileRowProps } from './BrowserProfileRow'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { translate } from '@/i18n/i18n'
+
+type BrowserSessionHostOption = {
+  id: ExecutionHostId
+  label: string
+  detail: string
+}
 
 type BrowserSessionCookiesSectionProps = {
   defaultProfile: BrowserSessionProfile | undefined
@@ -12,7 +20,10 @@ type BrowserSessionCookiesSectionProps = {
   detectedBrowsers: BrowserProfileRowProps['detectedBrowsers']
   importState: BrowserProfileRowProps['importState']
   defaultBrowserSessionProfileId: string | null
+  hostOptions: readonly BrowserSessionHostOption[]
+  selectedHostId: ExecutionHostId
   onAddProfile: () => void
+  onSelectHost: (hostId: ExecutionHostId) => void
   onSelectDefaultProfile: () => void
   onSelectProfile: (profileId: string) => void
 }
@@ -23,10 +34,14 @@ export function BrowserSessionCookiesSection({
   detectedBrowsers,
   importState,
   defaultBrowserSessionProfileId,
+  hostOptions,
+  selectedHostId,
   onAddProfile,
+  onSelectHost,
   onSelectDefaultProfile,
   onSelectProfile
 }: BrowserSessionCookiesSectionProps): React.JSX.Element {
+  const selectedHost = hostOptions.find((host) => host.id === selectedHostId) ?? hostOptions[0]
   return (
     <SearchableSetting
       id="browser-session-cookies"
@@ -67,6 +82,38 @@ export function BrowserSessionCookiesSection({
           {translate('auto.components.settings.BrowserPane.6f2584b39e', 'Add Profile')}
         </Button>
       </div>
+
+      {hostOptions.length > 1 ? (
+        <div className="flex items-center justify-between gap-3 rounded-md border border-border/70 px-3 py-2">
+          <div className="min-w-0 space-y-0.5">
+            <Label className="text-xs">
+              {translate('auto.components.settings.BrowserPane.5e19a692f7', 'Host')}
+            </Label>
+            <p className="truncate text-[11px] text-muted-foreground">
+              {selectedHost?.detail ??
+                translate(
+                  'auto.components.settings.BrowserPane.6480776a03',
+                  'Browser profiles for the selected host.'
+                )}
+            </p>
+          </div>
+          <Select
+            value={selectedHostId}
+            onValueChange={(value) => onSelectHost(value as ExecutionHostId)}
+          >
+            <SelectTrigger size="sm" className="max-w-48">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent align="end">
+              {hostOptions.map((host) => (
+                <SelectItem key={host.id} value={host.id}>
+                  {host.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      ) : null}
 
       <div className="space-y-2">
         <BrowserProfileRow

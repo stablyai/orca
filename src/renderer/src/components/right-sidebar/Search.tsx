@@ -8,6 +8,7 @@ import { buildSearchRows } from './search-rows'
 import { cancelRevealFrame, openMatchResult } from './search-match-open'
 import { SearchHeader } from './SearchHeader'
 import { SearchResultsPane } from './SearchResultsPane'
+import { getRightSidebarWorktreeRuntimeSettings } from './file-explorer-runtime-owner'
 import { translate } from '@/i18n/i18n'
 
 const SEARCH_DEBOUNCE_MS = 300
@@ -188,7 +189,7 @@ export default function Search(): React.JSX.Element {
           const connectionId = getConnectionId(activeWorktreeId!) ?? undefined
           const results = await searchRuntimeFiles(
             {
-              settings: state.settings,
+              settings: getRightSidebarWorktreeRuntimeSettings(activeWorktreeId),
               worktreeId: activeWorktreeId,
               worktreePath,
               connectionId

@@ -38,6 +38,7 @@ import {
 } from '@/components/linear-state-pill-style'
 import { LinearPriorityIcon } from '@/components/linear-priority-icon'
 import type { LinearIssue, LinearComment } from '../../../shared/types'
+import type { TaskSourceContext } from '../../../shared/task-source-context'
 import {
   linearAddIssueComment,
   linearGetIssue,
@@ -118,6 +119,7 @@ type LinearItemDrawerProps = {
   issue: LinearIssue | null
   onUse: (issue: LinearIssue) => void
   onClose: () => void
+  sourceContext?: TaskSourceContext | null
 }
 
 export type LinearEditState = {
@@ -134,18 +136,21 @@ type EditSectionProps = {
   editState: LinearEditState
   onEditStateChange: (patch: Partial<LinearEditState>) => void
   layout?: 'chips' | 'properties'
+  sourceContext?: TaskSourceContext | null
 }
 
 export function LinearIssueEditSection({
   issue,
   editState,
   onEditStateChange,
-  layout = 'chips'
+  layout = 'chips',
+  sourceContext
 }: EditSectionProps): React.JSX.Element {
   const [labelPopoverOpen, setLabelPopoverOpen] = useState(false)
   const [estimatePopoverOpen, setEstimatePopoverOpen] = useState(false)
   const patchLinearIssue = useAppStore((s) => s.patchLinearIssue)
   const settings = useAppStore((s) => s.settings)
+  const providerSettings = sourceContext ?? settings
   const { isPending, run } = useImmediateMutation()
 
   const {
@@ -159,9 +164,9 @@ export function LinearIssueEditSection({
   const [estimateInput, setEstimateInput] = useState(() => formatLinearEstimateInput(localEstimate))
 
   const teamId = issue.team?.id || null
-  const states = useTeamStates(teamId, settings, issue.workspaceId)
-  const labels = useTeamLabels(teamId, settings, issue.workspaceId)
-  const members = useTeamMembers(teamId, settings, issue.workspaceId)
+  const states = useTeamStates(teamId, providerSettings, issue.workspaceId)
+  const labels = useTeamLabels(teamId, providerSettings, issue.workspaceId)
+  const members = useTeamMembers(teamId, providerSettings, issue.workspaceId)
 
   const handleEstimatePopoverOpenChange = useCallback(
     (open: boolean) => {
@@ -184,14 +189,14 @@ export function LinearIssueEditSection({
       const stateValue = { name: newState.name, type: newState.type, color: newState.color }
 
       run('state', {
-        mutate: () => linearUpdateIssue(settings, issue.id, { stateId }, issue.workspaceId),
+        mutate: () => linearUpdateIssue(providerSettings, issue.id, { stateId }, issue.workspaceId),
         onOptimistic: () => {
           onEditStateChange({ state: stateValue })
-          patchLinearIssue(issue.id, { state: stateValue })
+          patchLinearIssue(issue.id, { state: stateValue }, { sourceContext })
         },
         onRevert: () => {
           onEditStateChange({ state: prevState })
-          patchLinearIssue(issue.id, { state: prevState })
+          patchLinearIssue(issue.id, { state: prevState }, { sourceContext })
         },
         onSuccess: () => {
           useAppStore.getState().recordFeatureInteraction('linear-tasks')
@@ -203,11 +208,12 @@ export function LinearIssueEditSection({
       issue.id,
       issue.workspaceId,
       localState,
-      settings,
+      providerSettings,
       states.data,
       patchLinearIssue,
       run,
-      onEditStateChange
+      onEditStateChange,
+      sourceContext
     ]
   )
 
@@ -216,14 +222,15 @@ export function LinearIssueEditSection({
       const priority = parseInt(value, 10)
       const prevPriority = localPriority
       run('priority', {
-        mutate: () => linearUpdateIssue(settings, issue.id, { priority }, issue.workspaceId),
+        mutate: () =>
+          linearUpdateIssue(providerSettings, issue.id, { priority }, issue.workspaceId),
         onOptimistic: () => {
           onEditStateChange({ priority })
-          patchLinearIssue(issue.id, { priority })
+          patchLinearIssue(issue.id, { priority }, { sourceContext })
         },
         onRevert: () => {
           onEditStateChange({ priority: prevPriority })
-          patchLinearIssue(issue.id, { priority: prevPriority })
+          patchLinearIssue(issue.id, { priority: prevPriority }, { sourceContext })
         },
         onSuccess: () => {
           useAppStore.getState().recordFeatureInteraction('linear-tasks')
@@ -231,22 +238,32 @@ export function LinearIssueEditSection({
         onError: (err) => toast.error(err)
       })
     },
-    [issue.id, issue.workspaceId, localPriority, settings, patchLinearIssue, run, onEditStateChange]
+    [
+      issue.id,
+      issue.workspaceId,
+      localPriority,
+      providerSettings,
+      patchLinearIssue,
+      run,
+      onEditStateChange,
+      sourceContext
+    ]
   )
 
   const handleEstimateChange = useCallback(
     (estimate: number | null) => {
       const prevEstimate = localEstimate
       run('estimate', {
-        mutate: () => linearUpdateIssue(settings, issue.id, { estimate }, issue.workspaceId),
+        mutate: () =>
+          linearUpdateIssue(providerSettings, issue.id, { estimate }, issue.workspaceId),
         onOptimistic: () => {
           onEditStateChange({ estimate })
-          patchLinearIssue(issue.id, { estimate })
+          patchLinearIssue(issue.id, { estimate }, { sourceContext })
           setEstimatePopoverOpen(false)
         },
         onRevert: () => {
           onEditStateChange({ estimate: prevEstimate })
-          patchLinearIssue(issue.id, { estimate: prevEstimate })
+          patchLinearIssue(issue.id, { estimate: prevEstimate }, { sourceContext })
         },
         onSuccess: () => {
           useAppStore.getState().recordFeatureInteraction('linear-tasks')
@@ -254,7 +271,16 @@ export function LinearIssueEditSection({
         onError: (err) => toast.error(err)
       })
     },
-    [issue.id, issue.workspaceId, localEstimate, settings, patchLinearIssue, run, onEditStateChange]
+    [
+      issue.id,
+      issue.workspaceId,
+      localEstimate,
+      providerSettings,
+      patchLinearIssue,
+      run,
+      onEditStateChange,
+      sourceContext
+    ]
   )
 
   const handleEstimateSubmit = useCallback(() => {
@@ -287,14 +313,15 @@ export function LinearIssueEditSection({
         ? { id: member.id, displayName: member.displayName, avatarUrl: member.avatarUrl }
         : undefined
       run('assignee', {
-        mutate: () => linearUpdateIssue(settings, issue.id, { assigneeId }, issue.workspaceId),
+        mutate: () =>
+          linearUpdateIssue(providerSettings, issue.id, { assigneeId }, issue.workspaceId),
         onOptimistic: () => {
           onEditStateChange({ assignee: newAssignee })
-          patchLinearIssue(issue.id, { assignee: newAssignee })
+          patchLinearIssue(issue.id, { assignee: newAssignee }, { sourceContext })
         },
         onRevert: () => {
           onEditStateChange({ assignee: prevAssignee })
-          patchLinearIssue(issue.id, { assignee: prevAssignee })
+          patchLinearIssue(issue.id, { assignee: prevAssignee }, { sourceContext })
         },
         onSuccess: () => {
           useAppStore.getState().recordFeatureInteraction('linear-tasks')
@@ -306,11 +333,12 @@ export function LinearIssueEditSection({
       issue.id,
       issue.workspaceId,
       localAssignee,
-      settings,
+      providerSettings,
       members.data,
       patchLinearIssue,
       run,
-      onEditStateChange
+      onEditStateChange,
+      sourceContext
     ]
   )
 
@@ -328,14 +356,27 @@ export function LinearIssueEditSection({
 
       run('labels', {
         mutate: () =>
-          linearUpdateIssue(settings, issue.id, { labelIds: newLabelIds }, issue.workspaceId),
+          linearUpdateIssue(
+            providerSettings,
+            issue.id,
+            { labelIds: newLabelIds },
+            issue.workspaceId
+          ),
         onOptimistic: () => {
           onEditStateChange({ labelIds: newLabelIds, labels: newLabels })
-          patchLinearIssue(issue.id, { labelIds: newLabelIds, labels: newLabels })
+          patchLinearIssue(
+            issue.id,
+            { labelIds: newLabelIds, labels: newLabels },
+            { sourceContext }
+          )
         },
         onRevert: () => {
           onEditStateChange({ labelIds: prevLabelIds, labels: prevLabels })
-          patchLinearIssue(issue.id, { labelIds: prevLabelIds, labels: prevLabels })
+          patchLinearIssue(
+            issue.id,
+            { labelIds: prevLabelIds, labels: prevLabels },
+            { sourceContext }
+          )
         },
         onSuccess: () => {
           useAppStore.getState().recordFeatureInteraction('linear-tasks')
@@ -348,11 +389,12 @@ export function LinearIssueEditSection({
       issue.workspaceId,
       localLabelIds,
       localLabels,
-      settings,
+      providerSettings,
       labels.data,
       patchLinearIssue,
       run,
-      onEditStateChange
+      onEditStateChange,
+      sourceContext
     ]
   )
 
@@ -994,14 +1036,17 @@ export function LinearIssueCommentFooter({
   issueId,
   workspaceId,
   onCommentAdded,
-  variant = 'compact'
+  variant = 'compact',
+  sourceContext
 }: {
   issueId: string
   workspaceId?: string | null
   onCommentAdded: (comment: LinearLocalComment) => void
   variant?: 'compact' | 'linear-page'
+  sourceContext?: TaskSourceContext | null
 }): React.JSX.Element {
   const settings = useAppStore((s) => s.settings)
+  const providerSettings = sourceContext ?? settings
   const submitShortcutLabel = getScreenSubmitShortcutLabel()
   const [body, setBody] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -1030,7 +1075,7 @@ export function LinearIssueCommentFooter({
     }
     setSubmitting(true)
     try {
-      const result = await linearAddIssueComment(settings, issueId, trimmed, workspaceId)
+      const result = await linearAddIssueComment(providerSettings, issueId, trimmed, workspaceId)
       const typed = result as { ok: boolean; id?: string; error?: string }
       if (!mountedRef.current) {
         return
@@ -1062,7 +1107,7 @@ export function LinearIssueCommentFooter({
         setSubmitting(false)
       }
     }
-  }, [body, issueId, onCommentAdded, settings, workspaceId])
+  }, [body, issueId, onCommentAdded, providerSettings, workspaceId])
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -1168,7 +1213,8 @@ export function initLinearIssueEditState(issue: LinearIssue): LinearEditState {
 export default function LinearItemDrawer({
   issue,
   onUse,
-  onClose
+  onClose,
+  sourceContext
 }: LinearItemDrawerProps): React.JSX.Element {
   const [fullIssue, setFullIssue] = useState<LinearIssue | null>(null)
   const [comments, setComments] = useState<LinearComment[]>([])
@@ -1178,6 +1224,7 @@ export default function LinearItemDrawer({
   const hasEditedRef = useRef(false)
   const optimisticCommentsRef = useRef<LinearComment[]>([])
   const settings = useAppStore((s) => s.settings)
+  const providerSettings = sourceContext ?? settings
 
   const handleEditStateChange = useCallback((patch: Partial<LinearEditState>) => {
     hasEditedRef.current = true
@@ -1214,7 +1261,7 @@ export default function LinearItemDrawer({
 
     // Why: fetch issue and comments independently so a transient comments
     // failure doesn't discard the successfully-fetched issue data.
-    linearGetIssue(settings, issue.id, issue.workspaceId)
+    linearGetIssue(providerSettings, issue.id, issue.workspaceId)
       .then((issueResult) => {
         if (requestId !== requestIdRef.current) {
           return
@@ -1231,7 +1278,7 @@ export default function LinearItemDrawer({
       })
       .catch(() => {})
 
-    linearIssueComments(settings, issue.id, issue.workspaceId)
+    linearIssueComments(providerSettings, issue.id, issue.workspaceId)
       .then((commentsResult) => {
         if (requestId !== requestIdRef.current) {
           return
@@ -1256,7 +1303,7 @@ export default function LinearItemDrawer({
         }
       })
     // oxlint-disable-next-line react-hooks/exhaustive-deps
-  }, [issue?.id, issue?.workspaceId, settings])
+  }, [issue?.id, issue?.workspaceId, providerSettings])
 
   // Why: same pointer-events fix as GitHubItemDialog — Radix may leave
   // pointer-events: none on body when overlays transition.
@@ -1343,6 +1390,7 @@ export default function LinearItemDrawer({
                       onIssueChange={handleIssueTextChange}
                       density="drawer"
                       fields="title"
+                      sourceContext={sourceContext}
                     />
                   </div>
                   <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted-foreground">
@@ -1400,6 +1448,7 @@ export default function LinearItemDrawer({
                 issue={displayed}
                 editState={editState}
                 onEditStateChange={handleEditStateChange}
+                sourceContext={sourceContext}
               />
             )}
 
@@ -1411,6 +1460,7 @@ export default function LinearItemDrawer({
                   onIssueChange={handleIssueTextChange}
                   density="drawer"
                   fields="description"
+                  sourceContext={sourceContext}
                 />
               </div>
 
@@ -1472,6 +1522,7 @@ export default function LinearItemDrawer({
               issueId={displayed.id}
               workspaceId={displayed.workspaceId}
               onCommentAdded={handleCommentAdded}
+              sourceContext={sourceContext}
             />
             <div className="flex-none border-t border-border/60 bg-background/40 px-4 py-3">
               <Button

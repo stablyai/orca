@@ -21,13 +21,9 @@ import type { AgentActivityDisplayMode } from '../../../../shared/types'
 import { DEFAULT_SHOW_SLEEPING_WORKSPACES } from '../../../../shared/constants'
 import SidebarRepositoryFilterSection from './SidebarRepositoryFilterSection'
 import SidebarWorkspaceFilterSection from './SidebarWorkspaceFilterSection'
-import { translate } from '@/i18n/i18n'
-
-type SidebarWorkspaceOptionsMenuProps = {
-  preserveWorkspaceBoardOpen?: boolean
-  onMenuOpenChange?: (open: boolean) => void
-}
-
+import { getSidebarHostVisibilityLabel, shouldShowHostScopeControls } from './sidebar-host-options'
+import { useSidebarHostScopeOptions } from './use-sidebar-host-scope-options'
+import { SidebarHostScopeMenuSection } from './SidebarHostScopeMenuSection'
 import {
   AGENT_ACTIVITY_DISPLAY_OPTIONS,
   CARD_LAYOUT_OPTIONS,
@@ -35,7 +31,13 @@ import {
   PROJECT_ORDER_OPTIONS,
   PROPERTY_OPTIONS,
   SORT_OPTIONS
-} from './sidebar-workspace-options-menu-options'
+} from './sidebar-workspace-option-items'
+import { translate } from '@/i18n/i18n'
+
+type SidebarWorkspaceOptionsMenuProps = {
+  preserveWorkspaceBoardOpen?: boolean
+  onMenuOpenChange?: (open: boolean) => void
+}
 
 const SidebarWorkspaceOptionsMenu = React.memo(function SidebarWorkspaceOptionsMenu({
   preserveWorkspaceBoardOpen = false,
@@ -49,6 +51,9 @@ const SidebarWorkspaceOptionsMenu = React.memo(function SidebarWorkspaceOptionsM
   const toggleWorktreeCardProperty = useAppStore((s) => s.toggleWorktreeCardProperty)
   const settings = useAppStore((s) => s.settings)
   const updateSettings = useAppStore((s) => s.updateSettings)
+  const setWorkspaceHostScope = useAppStore((s) => s.setWorkspaceHostScope)
+  const visibleWorkspaceHostIds = useAppStore((s) => s.visibleWorkspaceHostIds)
+  const setVisibleWorkspaceHostIds = useAppStore((s) => s.setVisibleWorkspaceHostIds)
   const agentActivityDisplayMode = useAppStore((s) => s.agentActivityDisplayMode)
   const setAgentActivityDisplayMode = useAppStore((s) => s.setAgentActivityDisplayMode)
   const sortBy = useAppStore((s) => s.sortBy)
@@ -59,6 +64,8 @@ const SidebarWorkspaceOptionsMenu = React.memo(function SidebarWorkspaceOptionsM
   const setProjectOrderBy = useAppStore((s) => s.setProjectOrderBy)
 
   const [open, setOpen] = useState(false)
+  const { hostOptions } = useSidebarHostScopeOptions()
+  const showHostScopeControls = shouldShowHostScopeControls(hostOptions)
 
   const handleOpenChange = useCallback(
     (next: boolean) => {
@@ -81,13 +88,19 @@ const SidebarWorkspaceOptionsMenu = React.memo(function SidebarWorkspaceOptionsM
   }, [repos, filterRepoIds])
   const hasRepoFilter = selectedCount > 0
   const hasSleepingFilter = showSleepingWorkspaces !== DEFAULT_SHOW_SLEEPING_WORKSPACES
-  const hasAnyFilter = hasSleepingFilter || hideDefaultBranchWorkspace || hasRepoFilter
+  const hasHostVisibilityFilter = visibleWorkspaceHostIds !== null
+  const hasAnyFilter =
+    hasSleepingFilter || hideDefaultBranchWorkspace || hasRepoFilter || hasHostVisibilityFilter
   const activeFilterCount =
-    (hasSleepingFilter ? 1 : 0) + (hideDefaultBranchWorkspace ? 1 : 0) + selectedCount
+    (hasSleepingFilter ? 1 : 0) +
+    (hideDefaultBranchWorkspace ? 1 : 0) +
+    (hasHostVisibilityFilter ? 1 : 0) +
+    selectedCount
   const activeFilterLabel = `${activeFilterCount} ${activeFilterCount === 1 ? 'filter' : 'filters'}`
   const sortLabel = SORT_OPTIONS.find((opt) => opt.id === sortBy)?.label ?? 'Sort'
   const projectOrderLabel =
     PROJECT_ORDER_OPTIONS.find((opt) => opt.id === projectOrderBy)?.label ?? 'Manual'
+  const hostVisibilityLabel = getSidebarHostVisibilityLabel(visibleWorkspaceHostIds, hostOptions)
   const cardLayout = settings?.compactWorktreeCards ? 'compact' : 'detailed'
   const cardLayoutLabel =
     CARD_LAYOUT_OPTIONS.find((opt) => opt.id === cardLayout)?.label ?? 'Detailed'
@@ -153,6 +166,18 @@ const SidebarWorkspaceOptionsMenu = React.memo(function SidebarWorkspaceOptionsM
         className="w-72 pb-2"
         data-workspace-board-preserve-open={preserveWorkspaceBoardOpen ? '' : undefined}
       >
+        {showHostScopeControls && (
+          <SidebarHostScopeMenuSection
+            hostOptionsCount={hostOptions.length}
+            hostVisibilityLabel={hostVisibilityLabel}
+            hostOptions={hostOptions}
+            preserveWorkspaceBoardOpen={preserveWorkspaceBoardOpen}
+            setWorkspaceHostScope={setWorkspaceHostScope}
+            visibleWorkspaceHostIds={visibleWorkspaceHostIds}
+            setVisibleWorkspaceHostIds={setVisibleWorkspaceHostIds}
+          />
+        )}
+
         <DropdownMenuLabel>
           {translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.dc0bb670bc', 'Group by')}
         </DropdownMenuLabel>

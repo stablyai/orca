@@ -57,15 +57,18 @@ export function useRepoLabelsBySlug(
 
     const cached = getFreshMetadata(slugLabelStore, key)
     if (cached) {
-      // Why: always seed state from cache. A remount with the same key
-      // resets local state to defaults but `activeKeyRef.current` from the
-      // new ref instance is null on first run — the previous gate that
-      // skipped setState when keys matched dropped cached data on remount.
-      setState({ data: cached.data, loading: false, error: null })
+      // Why: parent selectors can pass a fresh settings object each render;
+      // only the first cached hit for this key should write React state.
+      if (activeKeyRef.current !== key) {
+        setState({ data: cached.data, loading: false, error: null })
+      }
       activeKeyRef.current = key
       return
     }
 
+    if (activeKeyRef.current === key) {
+      return
+    }
     activeKeyRef.current = key
     const requestKey = key
     setState((s) => ({
@@ -141,14 +144,18 @@ export function useRepoAssigneesBySlug(
 
     const cached = getFreshMetadata(slugAssigneeStore, key)
     if (cached) {
-      // Why: see useRepoLabelsBySlug — always seed state from cache so a
-      // remount with the same key picks up cached data instead of staying
-      // at the empty default.
-      setState({ data: cached.data, loading: false, error: null })
+      // Why: see useRepoLabelsBySlug — avoid cached no-op writes when only
+      // the settings object identity changed.
+      if (activeKeyRef.current !== key) {
+        setState({ data: cached.data, loading: false, error: null })
+      }
       activeKeyRef.current = key
       return
     }
 
+    if (activeKeyRef.current === key) {
+      return
+    }
     activeKeyRef.current = key
     const requestKey = key
     setState((s) => ({

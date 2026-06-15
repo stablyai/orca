@@ -75,6 +75,11 @@ function listProjectViewsForRuntime(
     : window.api.gh.listProjectViews(args)
 }
 
+function getProjectViewSourceScope(settings: Parameters<typeof getActiveRuntimeTarget>[0]): string {
+  const target = getActiveRuntimeTarget(settings)
+  return target.kind === 'environment' ? `runtime:${target.environmentId}` : 'local'
+}
+
 export default function ProjectViewWrapper(_props: Props = {} as Props): React.JSX.Element {
   const settings = useAppStore((s) => s.settings)
   const projectViewCache = useAppStore((s) => s.projectViewCache)
@@ -89,6 +94,7 @@ export default function ProjectViewWrapper(_props: Props = {} as Props): React.J
   const mountedRef = useMountedRef()
 
   const activeProject = settings?.githubProjects?.activeProject ?? null
+  const projectViewSourceScope = useMemo(() => getProjectViewSourceScope(settings), [settings])
   const lastViewByProject = useMemo(
     () => settings?.githubProjects?.lastViewByProject ?? {},
     [settings?.githubProjects?.lastViewByProject]
@@ -172,14 +178,15 @@ export default function ProjectViewWrapper(_props: Props = {} as Props): React.J
     if (!viewId) {
       return
     }
-    const projectViewKey = `${key}:${viewId}`
+    const projectViewKey = `${projectViewSourceScope}:${key}:${viewId}`
     const queryOverride = appliedQueryByView[projectViewKey]
     const cacheKey = projectViewCacheKey(
       activeProject.ownerType,
       activeProject.owner,
       activeProject.number,
       viewId,
-      queryOverride
+      queryOverride,
+      projectViewSourceScope
     )
     if (projectViewCache[cacheKey]?.data) {
       return
@@ -194,7 +201,14 @@ export default function ProjectViewWrapper(_props: Props = {} as Props): React.J
       false,
       queryOverride
     )
-  }, [activeProject, lastViewByProject, projectViewCache, doFetch, appliedQueryByView])
+  }, [
+    activeProject,
+    lastViewByProject,
+    projectViewCache,
+    doFetch,
+    appliedQueryByView,
+    projectViewSourceScope
+  ])
 
   // Load the project's view list whenever the active project changes so the
   // tab strip can render. The list is small and rarely changes — fetched once
@@ -203,7 +217,7 @@ export default function ProjectViewWrapper(_props: Props = {} as Props): React.J
     if (!activeProject) {
       return
     }
-    const projectKey = `${activeProject.ownerType}:${activeProject.owner}:${activeProject.number}`
+    const projectKey = `${projectViewSourceScope}:${activeProject.ownerType}:${activeProject.owner}:${activeProject.number}`
     if (viewListByProject[projectKey]) {
       return
     }
@@ -234,7 +248,7 @@ export default function ProjectViewWrapper(_props: Props = {} as Props): React.J
     return () => {
       cancelled = true
     }
-  }, [activeProject, viewListByProject, settings])
+  }, [activeProject, viewListByProject, settings, projectViewSourceScope])
 
   const handleSwitchView = useCallback(
     async (viewId: string) => {
@@ -286,8 +300,8 @@ export default function ProjectViewWrapper(_props: Props = {} as Props): React.J
     if (!viewId) {
       return null
     }
-    return `${key}:${viewId}`
-  }, [activeProject, lastViewByProject])
+    return `${projectViewSourceScope}:${key}:${viewId}`
+  }, [activeProject, lastViewByProject, projectViewSourceScope])
 
   const currentAppliedOverride = currentProjectViewKey
     ? appliedQueryByView[currentProjectViewKey]
@@ -307,9 +321,10 @@ export default function ProjectViewWrapper(_props: Props = {} as Props): React.J
       activeProject.owner,
       activeProject.number,
       viewId,
-      currentAppliedOverride
+      currentAppliedOverride,
+      projectViewSourceScope
     )
-  }, [activeProject, lastViewByProject, currentAppliedOverride])
+  }, [activeProject, lastViewByProject, currentAppliedOverride, projectViewSourceScope])
 
   const table: GitHubProjectTable | null = currentCacheKey
     ? (projectViewCache[currentCacheKey]?.data ?? null)
@@ -746,7 +761,8 @@ export default function ProjectViewWrapper(_props: Props = {} as Props): React.J
       {activeProject
         ? (() => {
             const projectKey = `${activeProject.ownerType}:${activeProject.owner}:${activeProject.number}`
-            const views = viewListByProject[projectKey] ?? []
+            const scopedProjectKey = `${projectViewSourceScope}:${projectKey}`
+            const views = viewListByProject[scopedProjectKey] ?? []
             const activeViewId = lastViewByProject[projectKey]?.viewId ?? null
             return (
               <ViewTabStrip
@@ -791,6 +807,7 @@ export default function ProjectViewWrapper(_props: Props = {} as Props): React.J
             }
           }}
           onStartWork={handleStartWork}
+          sourceSettings={settings}
         />
       ) : null}
 
@@ -831,6 +848,7 @@ export default function ProjectViewWrapper(_props: Props = {} as Props): React.J
           button here would only confuse the user. */}
       <ProjectItemSlugDialog
         projectOrigin={resolvedMissingRepoDialogs.slugDialog?.origin ?? null}
+        sourceSettings={settings}
         onClose={() => setSlugDialog(null)}
       />
 
