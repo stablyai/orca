@@ -21,7 +21,8 @@ type ShortcutKeyComboProps = {
   // Override cap colors when chips sit on a non-default surface (e.g. a filled primary card).
   keyCapClassName?: string
   // When true the chips render a double-tap gesture: no "+" separator (reads
-  // "Shift Shift"), with a title clarifying the gesture.
+  // "Shift Shift"), with a title clarifying the gesture. Note: the title uses
+  // the displayed label, so on Mac it reads as the glyph (e.g. 'Double-tap ⇧').
   doubleTap?: boolean
 }
 

@@ -764,6 +764,8 @@ describe('keybindings', () => {
     expect(formatKeybinding('DoubleTap+Mod', 'win32')).toEqual(['Ctrl', 'Ctrl'])
     expect(formatKeybinding('DoubleTap+Cmd', 'win32')).toEqual(['Cmd', 'Cmd'])
     expect(formatKeybinding('DoubleTap+Alt', 'darwin')).toEqual(['⌥', '⌥'])
+    // Ctrl's glyph ⌃ diverges from Mod's ⌘ on Mac, so cover it explicitly.
+    expect(formatKeybinding('DoubleTap+Ctrl', 'darwin')).toEqual(['⌃', '⌃'])
   })
 
   it('matches macOS Option-composed bracket shortcuts for all-type tab switching', () => {
