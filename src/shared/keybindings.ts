@@ -148,6 +148,7 @@ export type KeybindingInput = {
   metaKey?: boolean
   ctrlKey?: boolean
   shiftKey?: boolean
+  // Set only by the double-tap detector; always a physical token (never 'Mod').
   doubleTapModifier?: ModifierToken
 }
 
