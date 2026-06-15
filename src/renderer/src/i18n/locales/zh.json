@@ -8706,8 +8706,8 @@
             "tokenCount": "{{value0}} tok"
           },
           "SourceControlViewModeToggle": {
-            "3e1e60f138": "Show changes as list",
-            "3b429e0f68": "Show changes as tree"
+            "3e1e60f138": "以列表显示更改",
+            "3b429e0f68": "以树状显示更改"
           }
         }
       },
