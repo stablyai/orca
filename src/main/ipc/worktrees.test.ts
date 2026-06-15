@@ -660,9 +660,11 @@ describe('registerWorktreeHandlers', () => {
       name: 'improve-dashboard'
     })
 
+    const listWorktreesCallsAfterCreate = listWorktreesMock.mock.calls.length
     await expect(
       resolveRegisteredWorktreePath('/workspace/improve-dashboard', store as never)
     ).resolves.toBe('/workspace/improve-dashboard')
+    expect(listWorktreesMock).toHaveBeenCalledTimes(listWorktreesCallsAfterCreate)
   })
 
   it('uses branchNameOverride for the git branch while keeping the sanitized worktree path', async () => {

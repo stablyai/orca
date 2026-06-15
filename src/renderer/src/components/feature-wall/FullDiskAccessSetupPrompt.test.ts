@@ -68,6 +68,11 @@ describe('FullDiskAccessSetupPrompt state helpers', () => {
   afterEach(() => {
     vi.restoreAllMocks()
     document.body.innerHTML = ''
+    Reflect.deleteProperty(window, 'api')
+    Object.defineProperty(window.navigator, 'userAgent', {
+      value: '',
+      configurable: true
+    })
   })
 
   it('hides the setup prompt before status is known or when unsupported', () => {
