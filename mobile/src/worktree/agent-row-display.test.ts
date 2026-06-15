@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { AGENT_STATUS_STALE_AFTER_MS } from '../../../src/shared/agent-status-types'
 import type { RuntimeWorktreeAgentRow } from '../../../src/shared/runtime-types'
 import {
+  AGENT_STATUS_STALE_AFTER_MS,
   agentDisplayLabel,
   agentDotState,
   agentIdentityLabel,

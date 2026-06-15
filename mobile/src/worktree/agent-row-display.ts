@@ -1,5 +1,10 @@
-import { AGENT_STATUS_STALE_AFTER_MS } from '../../../src/shared/agent-status-types'
 import type { RuntimeWorktreeAgentRow } from '../../../src/shared/runtime-types'
+
+// Mirrors the desktop AGENT_STATUS_STALE_AFTER_MS (src/shared/agent-status-types.ts:
+// 30 min). Defined locally rather than imported because a runtime-value import
+// from a root .ts breaks mobile's vitest transform (no tsconfig in the
+// mobile-only checkout); root type-only imports stay fine.
+export const AGENT_STATUS_STALE_AFTER_MS = 30 * 60 * 1000
 
 // Mirrors the desktop AgentStateDot vocabulary. The wire `state` is the agent
 // status state; 'blocked'/'waiting' read as attention states, 'done' as
