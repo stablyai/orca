@@ -53,6 +53,7 @@ describe('CmdJPaletteFeatureTipVisual', () => {
     expect(html).toContain('auth-redirect')
     expect(html).not.toContain('payments-api')
     expect(html).not.toContain('animate-spin')
+    expect(html).not.toContain('animate-cmd-j-tip-caret')
     expect(html).not.toContain('animate-cmd-j-tip-result-in')
   })
 
@@ -81,6 +82,31 @@ describe('CmdJPaletteFeatureTipVisual', () => {
     })
 
     expect(clearTimeoutSpy).toHaveBeenCalled()
+  })
+
+  it('settles after the one-shot demo instead of looping idle timers', async () => {
+    vi.useFakeTimers()
+
+    const { container, root } = await renderVisual()
+    await act(async () => {
+      vi.runAllTimers()
+    })
+
+    expect(container.textContent).toContain('auth')
+    expect(container.textContent).toContain('auth-redirect')
+    expect(container.textContent).not.toContain('payments-api')
+    expect(vi.getTimerCount()).toBe(0)
+
+    await act(async () => {
+      root.unmount()
+    })
+  })
+
+  it('does not render infinite animation classes in the default preview', () => {
+    const html = renderToStaticMarkup(<CmdJPaletteFeatureTipVisual />)
+
+    expect(html).not.toContain('animate-spin')
+    expect(html).not.toContain('animate-cmd-j-tip-caret')
   })
 
   it('falls back to default per-key chips when the live binding is unassigned', () => {

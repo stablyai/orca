@@ -34,13 +34,7 @@ function filterDemoWorktrees(query: string): typeof DEMO_WORKTREES {
 // Why: cycle phases are sequenced so the keypress visibly precedes the palette
 // opening (cause → effect), matching what the user will see when they actually
 // press the shortcut.
-type CyclePhase = 'idle' | 'pressed' | 'open' | 'typing' | 'closing'
-
-type ClosingFrame = {
-  query: string
-  worktrees: ReturnType<typeof filterDemoWorktrees>
-  showCreate: boolean
-}
+type CyclePhase = 'idle' | 'pressed' | 'open' | 'typing'
 
 const KEYPRESS_AT_MS = 450
 const PALETTE_OPEN_AT_MS = 850
@@ -50,12 +44,6 @@ const HOLD_BEFORE_TYPING_MS = 700
 // Per-character typing interval. Kept tight and constant so the cursor advances
 // at an even cadence instead of feeling staggered.
 const TYPE_INTERVAL_MS = 120
-// Pause on the final, filtered state before the cycle resets, so the
-// user has time to actually read the matched worktrees + create option.
-const HOLD_AFTER_RESULTS_MS = 3200
-// Matches the palette container's `duration-300` fade plus a small buffer so we
-// never swap list content while the closing fade is still running.
-const PALETTE_FADE_OUT_MS = 350
 
 export function CmdJPaletteFeatureTipVisual(): JSX.Element {
   const reducedMotion = usePrefersReducedMotion()
@@ -69,7 +57,6 @@ export function CmdJPaletteFeatureTipVisual(): JSX.Element {
 
   const [phase, setPhase] = useState<CyclePhase>('idle')
   const [typedLength, setTypedLength] = useState(0)
-  const [closingFrame, setClosingFrame] = useState<ClosingFrame | null>(null)
 
   // Why: for reduced-motion users, jump straight to the fully-populated end
   // state so they see what the feature does without any animation.
@@ -78,23 +65,16 @@ export function CmdJPaletteFeatureTipVisual(): JSX.Element {
   const currentQuery = TYPED_QUERY.slice(0, effectiveTypedLength)
   const visibleWorktrees = filterDemoWorktrees(currentQuery)
   const showCreateAction = currentQuery.trim().length > 0
-  // Why: snapshot the final filtered frame during `closing` so loop reset never
-  // re-renders the empty-query worktree list while the palette is still visible.
-  const renderQuery = phase === 'closing' && closingFrame ? closingFrame.query : currentQuery
-  const renderWorktrees =
-    phase === 'closing' && closingFrame ? closingFrame.worktrees : visibleWorktrees
-  const renderShowCreate =
-    phase === 'closing' && closingFrame ? closingFrame.showCreate : showCreateAction
+  const renderQuery = currentQuery
+  const renderWorktrees = visibleWorktrees
+  const renderShowCreate = showCreateAction
   // Why: mirror WorktreeJumpPalette — recent worktrees render as soon as the
-  // palette opens; typing only filters them down. Keep the list mounted through
-  // `closing` so the final filtered frame fades out with the palette.
-  const showWorktreeList =
-    reducedMotion || phase === 'open' || phase === 'typing' || phase === 'closing'
-  // Why: keep the palette hidden during `pressed` — an empty search shell between
-  // cycles read as the pre-search list flashing back before the fade finished.
-  const paletteMounted =
-    reducedMotion || phase === 'open' || phase === 'typing' || phase === 'closing'
-  const paletteOpaque = reducedMotion || (paletteMounted && phase !== 'closing')
+  // palette opens; typing only filters them down.
+  const showWorktreeList = reducedMotion || phase === 'open' || phase === 'typing'
+  // Why: keep the palette hidden during `pressed` so the keypress visibly
+  // precedes the palette opening.
+  const paletteMounted = reducedMotion || phase === 'open' || phase === 'typing'
+  const paletteOpaque = reducedMotion || paletteMounted
   const resultEnterClass =
     showWorktreeList && !reducedMotion && phase === 'open' ? 'animate-cmd-j-tip-result-in' : ''
 
@@ -118,45 +98,27 @@ export function CmdJPaletteFeatureTipVisual(): JSX.Element {
         i += 1
         setTypedLength(i)
         if (i >= TYPED_QUERY.length) {
-          later(() => closeAndRestart(), HOLD_AFTER_RESULTS_MS)
           return
         }
         timeouts.push(window.setTimeout(typeNext, TYPE_INTERVAL_MS))
       }
       if (i >= TYPED_QUERY.length) {
-        later(() => closeAndRestart(), HOLD_AFTER_RESULTS_MS)
         return
       }
       later(typeNext, TYPE_INTERVAL_MS)
     }
 
-    const scheduleCycle = (): void => {
-      later(() => setPhase('pressed'), KEYPRESS_AT_MS)
-      later(() => setPhase('open'), PALETTE_OPEN_AT_MS)
-      later(() => {
-        setPhase('typing')
-        startTyping(0)
-      }, PALETTE_OPEN_AT_MS + HOLD_BEFORE_TYPING_MS)
-    }
-
-    const closeAndRestart = (): void => {
-      setClosingFrame({
-        query: TYPED_QUERY,
-        worktrees: filterDemoWorktrees(TYPED_QUERY),
-        showCreate: true
-      })
-      setPhase('closing')
-      later(() => {
-        setPhase('idle')
-        setClosingFrame(null)
-        setTypedLength(0)
-        scheduleCycle()
-      }, PALETTE_FADE_OUT_MS)
-    }
+    // Why: this tip may remain open while Orca is idle. Play the demo once,
+    // then settle on the final useful state instead of looping timers forever.
+    later(() => setPhase('pressed'), KEYPRESS_AT_MS)
+    later(() => setPhase('open'), PALETTE_OPEN_AT_MS)
+    later(() => {
+      setPhase('typing')
+      startTyping(0)
+    }, PALETTE_OPEN_AT_MS + HOLD_BEFORE_TYPING_MS)
 
     setPhase('idle')
     setTypedLength(0)
-    scheduleCycle()
 
     return () => {
       cancelled = true
@@ -210,7 +172,9 @@ export function CmdJPaletteFeatureTipVisual(): JSX.Element {
             <span className="block truncate">
               {renderQuery}
               {!reducedMotion && (phase === 'open' || phase === 'typing') ? (
-                <span className="ml-px inline-block h-[14px] w-px -translate-y-px align-middle bg-foreground/75 animate-cmd-j-tip-caret" />
+                // Why: this tip can sit open while Orca is idle; keep the
+                // caret static so the preview does not wake the compositor.
+                <span className="ml-px inline-block h-[14px] w-px -translate-y-px align-middle bg-foreground/75" />
               ) : null}
             </span>
           </div>
@@ -227,14 +191,9 @@ export function CmdJPaletteFeatureTipVisual(): JSX.Element {
                   {result.status === 'done' ? (
                     <span className="size-2.5 rounded-full bg-emerald-500" aria-hidden="true" />
                   ) : (
-                    // Why: yellow border spinner mirrors StatusIndicator's
-                    // 'working' affordance, so users connect the icon to the
-                    // same running-workspace state they see in the sidebar.
-                    <span
-                      className={`block size-2.5 rounded-full border-[1.5px] border-yellow-500 ${
-                        reducedMotion ? 'border-t-yellow-500' : 'animate-spin border-t-transparent'
-                      }`}
-                    />
+                    // Why: this tip can stay mounted while Orca is idle; mirror
+                    // the sidebar's static working ring instead of spinning.
+                    <span className="block size-2.5 rounded-full border-[1.5px] border-yellow-500 bg-yellow-500/15" />
                   )}
                 </span>
                 <div className="min-w-0 flex-1">

@@ -33,7 +33,9 @@ const StatusIndicator = React.memo(function StatusIndicator({
         title={resolvedTitle}
         {...rest}
       >
-        <span className="block size-2 rounded-full border-2 border-yellow-500 border-t-transparent animate-spin" />
+        {/* Why: this dot is visible for long-running agents; a permanent CSS spin keeps
+            the GPU compositor awake while Orca is otherwise idle. */}
+        <span className="block size-2 rounded-full border-2 border-yellow-500 bg-yellow-500/15" />
       </span>
     )
   }
@@ -52,8 +54,7 @@ const StatusIndicator = React.memo(function StatusIndicator({
             : status === 'done' || status === 'active'
               ? // Green dot for both hook-reported 'done' and the heuristic
                 // 'active' (terminal open, quiet). Working uses a yellow
-                // spinner so working vs done differ by motion; 'inactive'
-                // stays grey.
+                // ring above; 'inactive' stays grey.
                 'bg-emerald-500'
               : 'bg-neutral-500/40'
         )}
