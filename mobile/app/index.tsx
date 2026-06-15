@@ -179,7 +179,9 @@ function fetchWorktreeInfo(
   }
 
   client
-    .sendRequest('worktree.ps')
+    // Why: worktree.ps defaults to 200 and silently truncates; request the full
+    // set so the host worktree count and active count are accurate.
+    .sendRequest('worktree.ps', { limit: 10000 })
     .then((response) => {
       if (disposed()) {
         return
