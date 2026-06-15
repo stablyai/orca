@@ -208,6 +208,27 @@ describe('attachWebgl', () => {
     expect(pane.terminal.loadAddon).toHaveBeenCalledTimes(1)
   })
 
+  it('keeps transparent auto-mode panes on the DOM renderer for visible cursor and selection', () => {
+    const pane = createPane()
+    pane.terminal.options = { allowTransparency: true } as never
+
+    attachWebgl(pane)
+
+    expect(pane.webglAddon).toBeNull()
+    expect(pane.terminal.loadAddon).not.toHaveBeenCalled()
+  })
+
+  it('still allows forced WebGL for transparent panes', () => {
+    const pane = createPane()
+    pane.terminalGpuAcceleration = 'on'
+    pane.terminal.options = { allowTransparency: true } as never
+
+    attachWebgl(pane)
+
+    expect(pane.webglAddon).not.toBeNull()
+    expect(pane.terminal.loadAddon).toHaveBeenCalledTimes(1)
+  })
+
   it('uses DOM rendering for auto GPU acceleration on Linux', () => {
     vi.stubGlobal('navigator', {
       platform: 'Linux x86_64',

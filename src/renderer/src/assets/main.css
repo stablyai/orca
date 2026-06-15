@@ -313,7 +313,8 @@
   }
 
   body {
-    @apply bg-background text-foreground;
+    @apply text-foreground;
+    background-color: transparent;
     margin: 0;
     padding: 0;
     overflow: hidden;

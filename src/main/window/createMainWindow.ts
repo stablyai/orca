@@ -211,12 +211,18 @@ export function createMainWindow(
   })
   const blur = settings?.windowBackgroundBlur ?? false
   // Why: native blur requires platform-specific Electron APIs. macOS uses
-  // vibrancy (needs transparent: true), Windows uses backgroundMaterial.
-  // Linux has no native equivalent. Blur only applies at window creation;
-  // changing the setting requires a restart.
+  // vibrancy with a transparent window and must keep the visual effect active
+  // while unfocused; otherwise macOS swaps the material back to an opaque fill
+  // when another app becomes active. Windows uses backgroundMaterial. Linux has
+  // no native equivalent. Blur only applies at window creation; changing the
+  // setting requires a restart.
   const platformBlurOptions = blur
     ? process.platform === 'darwin'
-      ? { vibrancy: 'under-window' as const, transparent: true }
+      ? {
+          vibrancy: 'under-window' as const,
+          visualEffectState: 'active' as const,
+          transparent: true
+        }
       : process.platform === 'win32'
         ? { backgroundMaterial: 'acrylic' as const }
         : {}
@@ -241,7 +247,12 @@ export function createMainWindow(
     // Window/Help menus by pressing Alt, matching native Windows/Linux
     // conventions (File Explorer, Firefox, etc.).
     autoHideMenuBar: true,
-    backgroundColor: nativeTheme.shouldUseDarkColors ? '#0a0a0a' : '#ffffff',
+    backgroundColor:
+      blur && process.platform === 'darwin'
+        ? '#00000000'
+        : nativeTheme.shouldUseDarkColors
+          ? '#0a0a0a'
+          : '#ffffff',
     // Why: on macOS 'hiddenInset' keeps the native traffic lights positioned
     // inside our custom 42px titlebar. On Windows 'hidden' removes the default
     // OS title bar (which would otherwise stack on top of our renderer titlebar
