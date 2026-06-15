@@ -17,6 +17,15 @@ function sourceBetween(source: string, startPattern: string, endPattern: string)
 }
 
 describe('GitHubItemDialog source host boundaries', () => {
+  it('does not keep the stale right-side sheet owner', () => {
+    const source = componentSource('GitHubItemDialog.tsx')
+
+    expect(source).not.toContain('@/components/ui/sheet')
+    expect(source).not.toContain('<Sheet')
+    expect(source).not.toContain('<SheetContent')
+    expect(source).not.toContain("variant?: 'sheet'")
+  })
+
   it('routes reviewer metadata and reviewer mutations through the task source context', () => {
     const source = componentSource('GitHubItemDialog.tsx')
     const section = sourceBetween(source, 'function PRReviewersPanel', 'function isPRFileViewed')

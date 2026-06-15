@@ -51,8 +51,6 @@ import { ButtonGroup } from '@/components/ui/button-group'
 import { Input } from '@/components/ui/input'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { useConfirmationDialog } from '@/components/confirmation-dialog'
-import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet'
-import { VisuallyHidden } from 'radix-ui'
 import {
   Accordion,
   AccordionContent,
@@ -186,8 +184,6 @@ import { PER_REPO_FETCH_LIMIT } from '../../../shared/work-items'
 import { translate } from '@/i18n/i18n'
 import { getSettingsForRepoRuntimeOwner } from '@/lib/repo-runtime-owner'
 
-const IS_MAC = navigator.userAgent.includes('Mac')
-
 // Why: the GH item dialog can be opened from any work-item list surface and
 // doesn't have the full owner/repo context the list's cache entry carries.
 // Parsing the canonical `https://github.com/{owner}/{repo}/...` URL is the
@@ -283,7 +279,6 @@ type GitHubItemDialogProps = {
   repoId?: string | null
   sourceContext?: TaskSourceContext | null
   initialTab?: ItemDialogTab
-  variant?: 'sheet' | 'page'
   backLabel?: string
   /** Called when the user clicks the primary CTA to start work from this item. */
   onUse: (item: GitHubWorkItem) => void
@@ -5695,7 +5690,6 @@ export default function GitHubItemDialog({
   repoId,
   sourceContext,
   initialTab,
-  variant = 'sheet',
   backLabel = 'Back',
   projectOrigin,
   onUse,
@@ -6161,7 +6155,7 @@ export default function GitHubItemDialog({
     [details?.pullRequestId, detailsCacheKey, repoPath, sourceContext, workItem]
   )
 
-  const isIssuePage = variant === 'page' && workItem?.type === 'issue'
+  const isIssuePage = workItem?.type === 'issue'
   const ownerRepo = workItem ? parseOwnerRepoFromItemUrl(workItem.url) : null
   const issueStateBadgeTone =
     localState === 'closed' ? 'bg-rose-600 text-white' : 'bg-emerald-600 text-white'
@@ -6367,19 +6361,17 @@ export default function GitHubItemDialog({
       ) : (
         <div className="flex-none border-b border-border/60 bg-card/80 px-4 py-3 shadow-xs backdrop-blur supports-[backdrop-filter]:bg-card/70">
           <div className="flex items-start gap-3">
-            {variant === 'page' ? (
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={onClose}
-                className="-ml-1 mt-0.5 shrink-0 gap-1.5"
-                aria-label={backLabel}
-              >
-                <ChevronLeft className="size-4" />
-                {backLabel}
-              </Button>
-            ) : null}
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={onClose}
+              className="-ml-1 mt-0.5 shrink-0 gap-1.5"
+              aria-label={backLabel}
+            >
+              <ChevronLeft className="size-4" />
+              {backLabel}
+            </Button>
             <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md border border-border/60 bg-muted/40 text-muted-foreground">
               <Icon className="size-4" />
             </div>
@@ -6488,26 +6480,6 @@ export default function GitHubItemDialog({
                   {translate('auto.components.GitHubItemDialog.3fdf777817', 'Open on GitHub')}
                 </TooltipContent>
               </Tooltip>
-              {variant === 'sheet' ? (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      onClick={onClose}
-                      aria-label={translate(
-                        'auto.components.GitHubItemDialog.45af57999b',
-                        'Close preview'
-                      )}
-                    >
-                      <X className="size-4" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom" sideOffset={6}>
-                    {translate('auto.components.GitHubItemDialog.474c59b4b3', 'Close · Esc')}
-                  </TooltipContent>
-                </Tooltip>
-              ) : null}
             </div>
           </div>
         </div>
@@ -6780,63 +6752,9 @@ export default function GitHubItemDialog({
     </div>
   ) : null
 
-  if (variant === 'page') {
-    return (
-      <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-md border border-border/50 bg-background shadow-sm">
-        {content}
-      </div>
-    )
-  }
-
   return (
-    <Sheet open={workItem !== null} onOpenChange={(open) => !open && onClose()}>
-      <SheetContent
-        side="right"
-        showCloseButton={false}
-        className={cn(
-          'flex w-full flex-col gap-0 overflow-hidden p-0 lg:max-w-[var(--github-item-dialog-max-width)]',
-          // Why: native macOS traffic lights are drawn above web content, so a
-          // nearly full-width right sheet must leave the titlebar's 80px
-          // traffic-light pad uncovered instead of relying on z-index.
-          IS_MAC
-            ? 'max-w-[calc(100vw-(80px/var(--ui-zoom-factor,1)))] sm:max-w-[calc(100vw-(80px/var(--ui-zoom-factor,1)))]'
-            : 'max-w-[calc(100vw-1rem)] sm:max-w-[calc(100vw-1rem)]'
-        )}
-        style={
-          {
-            '--github-item-dialog-max-width': IS_MAC
-              ? 'min(calc(100vw - (80px / var(--ui-zoom-factor, 1))), 1600px)'
-              : 'min(calc(100vw - 2rem), 1600px)'
-          } as React.CSSProperties
-        }
-        onOpenAutoFocus={(event) => {
-          // Why: focusing the first actionable element inside the drawer
-          // causes the "Start workspace" action to receive focus and
-          // get visually highlighted on open. Preventing auto-focus keeps the
-          // drawer feeling like a passive preview until the user acts.
-          event.preventDefault()
-        }}
-      >
-        {/* Why: SheetTitle/Description are required by Radix Dialog for a11y,
-            but the visible header carries the same info. Wrap each with
-            `asChild` so the VisuallyHidden span wraps the element cleanly. */}
-        <VisuallyHidden.Root asChild>
-          <SheetTitle>
-            {workItem?.title ??
-              translate('auto.components.GitHubItemDialog.3853476a97', 'GitHub item')}
-          </SheetTitle>
-        </VisuallyHidden.Root>
-        <VisuallyHidden.Root asChild>
-          <SheetDescription>
-            {translate(
-              'auto.components.GitHubItemDialog.3ab6ac0fc8',
-              'Preview and edit the selected GitHub issue or pull request.'
-            )}
-          </SheetDescription>
-        </VisuallyHidden.Root>
-
-        {content}
-      </SheetContent>
-    </Sheet>
+    <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-md border border-border/50 bg-background shadow-sm">
+      {content}
+    </div>
   )
 }
