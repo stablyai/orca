@@ -10739,9 +10739,25 @@ describe('OrcaRuntimeService', () => {
 
   it('attaches inline agent rows from hook-reported status (not just OSC)', async () => {
     // Why: agent status normally arrives via hooks, not OSC terminal output;
-    // worktree.ps must surface those agents too or mobile shows none.
-    const runtime = new OrcaRuntimeService(store)
+    // worktree.ps reads the hook snapshot so mobile surfaces those agents too.
     const leafId = '33333333-3333-4333-8333-333333333333'
+    const paneKey = `tab-1:${leafId}`
+    const runtime = new OrcaRuntimeService(store, undefined, {
+      getAgentStatusSnapshot: () => [
+        {
+          paneKey,
+          worktreeId: TEST_WORKTREE_ID,
+          tabId: 'tab-1',
+          state: 'working',
+          prompt: 'ship it',
+          agentType: 'claude',
+          lastAssistantMessage: 'on it',
+          connectionId: null,
+          receivedAt: 1000,
+          stateStartedAt: 900
+        }
+      ]
+    })
     runtime.attachWindow(1)
     runtime.syncWindowGraph(1, {
       tabs: [
@@ -10764,27 +10780,17 @@ describe('OrcaRuntimeService', () => {
       ]
     })
 
-    runtime.retainAgentRowSnapshotFromHook({
-      paneKey: `tab-1:${leafId}`,
-      worktreeId: TEST_WORKTREE_ID,
-      tabId: 'tab-1',
-      payload: {
-        state: 'working',
-        prompt: 'ship it',
-        agentType: 'claude',
-        lastAssistantMessage: 'on it'
-      }
-    })
-
     const { worktrees } = await runtime.getWorktreePs()
     const summary = worktrees.find((w) => w.worktreeId === TEST_WORKTREE_ID)
     expect(summary?.agents).toEqual([
       expect.objectContaining({
-        paneKey: `tab-1:${leafId}`,
+        paneKey,
         state: 'working',
         agentType: 'claude',
         prompt: 'ship it',
-        lastAssistantMessage: 'on it'
+        lastAssistantMessage: 'on it',
+        stateStartedAt: 900,
+        updatedAt: 1000
       })
     ])
   })

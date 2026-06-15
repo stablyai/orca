@@ -10,6 +10,7 @@ import {
 import type { AgentStatus } from '../../shared/agent-detection'
 import {
   AGENT_STATUS_STALE_AFTER_MS,
+  type AgentStatusIpcPayload,
   type ParsedAgentStatusPayload,
   type AgentStatusOrchestrationContext,
   type AgentStatusEntry
@@ -1888,6 +1889,7 @@ export class OrcaRuntimeService {
   private readonly getLocalProviderFn: (() => IPtyProvider) | null
   private readonly onPtyStopped: ((ptyId: string) => void) | null
   private readonly onTerminalAgentStatus: ((event: RuntimeTerminalAgentStatusEvent) => void) | null
+  private readonly getAgentStatusSnapshotFn: (() => AgentStatusIpcPayload[]) | null
   private accountServices: RuntimeAccountServices | null = null
   private commitMessageAgentEnv: CommitMessageAgentEnvironmentResolvers | null = null
   private automationService: AutomationService | null = null
@@ -1910,6 +1912,10 @@ export class OrcaRuntimeService {
       getLocalProvider?: () => IPtyProvider
       onPtyStopped?: (ptyId: string) => void
       onTerminalAgentStatus?: (event: RuntimeTerminalAgentStatusEvent) => void
+      // Why: agent status mostly arrives via hooks (agent-hooks/server), not OSC
+      // terminal output. worktree.ps reads this at query time so mobile shows the
+      // same inline agent rows the desktop sidebar does — same source, 1:1.
+      getAgentStatusSnapshot?: () => AgentStatusIpcPayload[]
     }
   ) {
     this.store = store
@@ -1917,6 +1923,7 @@ export class OrcaRuntimeService {
       this.stats = stats
       this.agentDetector = new AgentDetector(stats)
     }
+    this.getAgentStatusSnapshotFn = deps?.getAgentStatusSnapshot ?? null
     // Why: the daemon adapter is installed via `setLocalPtyProvider()` during
     // attachMainWindowServices, AFTER this service is constructed. Capturing
     // `getLocalPtyProvider()` at construction time would freeze a reference to
@@ -3945,35 +3952,6 @@ export class OrcaRuntimeService {
       stateStartedAt,
       updatedAt: now
     })
-  }
-
-  // Why: agent status normally arrives via hooks (agent-hooks/server → IPC), not
-  // OSC terminal output, so the OSC-fed retain path above never sees most agents.
-  // The hook listener calls this so mobile's worktree.ps gets the same inline
-  // agent rows the desktop sidebar shows. Resolves a ptyId from the paneKey when
-  // possible so pty-exit cleanup still applies.
-  retainAgentRowSnapshotFromHook(args: {
-    paneKey: string
-    worktreeId?: string
-    tabId?: string
-    payload: ParsedAgentStatusPayload
-  }): void {
-    const ptyId = this.resolvePtyIdForPaneKey(args.paneKey) ?? ''
-    this.retainAgentRowSnapshot(ptyId, args.paneKey, args.worktreeId, args.tabId, args.payload)
-  }
-
-  private resolvePtyIdForPaneKey(paneKey: string): string | undefined {
-    for (const leaf of this.leaves.values()) {
-      if (leaf.ptyId && this.makeRuntimePaneKey(leaf) === paneKey) {
-        return leaf.ptyId
-      }
-    }
-    for (const pty of this.ptysById.values()) {
-      if (pty.paneKey === paneKey) {
-        return pty.ptyId
-      }
-    }
-    return undefined
   }
 
   private clearAgentRowSnapshotsForPty(ptyId: string): void {
@@ -6999,20 +6977,30 @@ export class OrcaRuntimeService {
   // the orchestration db (paneKey-keyed), not the OSC payload, since spawn
   // hierarchy is pane-level state tracked separately from terminal output.
   private attachAgentRowsToSummaries(summaries: Map<string, RuntimeWorktreePsSummary>): void {
-    if (this.latestAgentStatusByPaneKey.size === 0) {
-      return
-    }
-    const orchestrationByPaneKey = this.buildAgentOrchestrationByPaneKey()
-    const rowsByWorktree = new Map<string, RuntimeWorktreeAgentRow[]>()
-    for (const snapshot of this.latestAgentStatusByPaneKey.values()) {
-      const worktreeId = snapshot.worktreeId
-      if (!worktreeId || !summaries.has(worktreeId)) {
-        continue
+    // Why: most agents report via hooks (agent-hooks/server), not OSC, so the
+    // hook snapshot is the primary source — same one the desktop sidebar reads.
+    // OSC-only entries (no hook) are merged in as a fallback, keyed by paneKey.
+    const rowSources = new Map<
+      string,
+      {
+        paneKey: string
+        worktreeId?: string
+        state: ParsedAgentStatusPayload['state']
+        agentType: string | null
+        prompt: string
+        lastAssistantMessage: string | null
+        toolName: string | null
+        toolInput: string | null
+        interrupted: boolean
+        stateStartedAt: number
+        updatedAt: number
       }
+    >()
+    for (const snapshot of this.latestAgentStatusByPaneKey.values()) {
       const { payload } = snapshot
-      const row: RuntimeWorktreeAgentRow = {
+      rowSources.set(snapshot.paneKey, {
         paneKey: snapshot.paneKey,
-        parentPaneKey: orchestrationByPaneKey?.[snapshot.paneKey]?.parentPaneKey ?? null,
+        worktreeId: snapshot.worktreeId,
         state: payload.state,
         agentType: payload.agentType ?? null,
         prompt: payload.prompt,
@@ -7022,6 +7010,45 @@ export class OrcaRuntimeService {
         interrupted: payload.interrupted ?? false,
         stateStartedAt: snapshot.stateStartedAt,
         updatedAt: snapshot.updatedAt
+      })
+    }
+    for (const entry of this.getAgentStatusSnapshotFn?.() ?? []) {
+      rowSources.set(entry.paneKey, {
+        paneKey: entry.paneKey,
+        worktreeId: entry.worktreeId,
+        state: entry.state,
+        agentType: entry.agentType ?? null,
+        prompt: entry.prompt,
+        lastAssistantMessage: entry.lastAssistantMessage ?? null,
+        toolName: entry.toolName ?? null,
+        toolInput: entry.toolInput ?? null,
+        interrupted: entry.interrupted ?? false,
+        stateStartedAt: entry.stateStartedAt,
+        updatedAt: entry.receivedAt
+      })
+    }
+    if (rowSources.size === 0) {
+      return
+    }
+    const orchestrationByPaneKey = this.buildAgentOrchestrationByPaneKey()
+    const rowsByWorktree = new Map<string, RuntimeWorktreeAgentRow[]>()
+    for (const src of rowSources.values()) {
+      const worktreeId = src.worktreeId
+      if (!worktreeId || !summaries.has(worktreeId)) {
+        continue
+      }
+      const row: RuntimeWorktreeAgentRow = {
+        paneKey: src.paneKey,
+        parentPaneKey: orchestrationByPaneKey?.[src.paneKey]?.parentPaneKey ?? null,
+        state: src.state,
+        agentType: src.agentType,
+        prompt: src.prompt,
+        lastAssistantMessage: src.lastAssistantMessage,
+        toolName: src.toolName,
+        toolInput: src.toolInput,
+        interrupted: src.interrupted,
+        stateStartedAt: src.stateStartedAt,
+        updatedAt: src.updatedAt
       }
       const rows = rowsByWorktree.get(worktreeId)
       if (rows) {
