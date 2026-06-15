@@ -168,6 +168,7 @@ const MOBILE_RPC_METHOD_ALLOWLIST = new Set([
   'git.rebaseFromBase',
   'git.stage',
   'git.status',
+  'git.switchBranch',
   'git.unstage',
   'git.upstreamStatus',
   'github.createIssue',

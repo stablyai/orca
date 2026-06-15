@@ -10926,6 +10926,24 @@
           "91b5c8d7e6": "GitLab"
         }
       }
+    },
+    "branchSwitch": {
+      "search": "Search branches…",
+      "searching": "Searching…",
+      "none": "No matching branches.",
+      "local": "Local",
+      "remote": "Remote",
+      "newName": "New branch name",
+      "create": "Create",
+      "createNew": "Create new branch…",
+      "inWorkspace": "in {{value0}}",
+      "current": "current",
+      "noBranch": "No branch",
+      "stashTitle": "Stash changes and switch?",
+      "stashBody": "Your local changes would be overwritten. Stash them, switch, and re-apply?",
+      "stashConfirm": "Stash & switch",
+      "popConflict": "Switched, but re-applying your changes conflicted — they are saved in git stash.",
+      "failed": "Could not switch branch."
     }
   }
 }

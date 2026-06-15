@@ -18,6 +18,7 @@ import type {
 import type { ResolvedSourceControlAiGenerationParams } from '../../../shared/source-control-ai'
 import { getCommitMessageModelDiscoveryHostKeyForScope } from '../../../shared/commit-message-host-key'
 import type { GitHistoryOptions, GitHistoryResult } from '../../../shared/git-history'
+import type { SwitchBranchMode, SwitchBranchResult } from '../../../shared/git-branch-switch'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree-id'
 import { callRuntimeRpc, getActiveRuntimeTarget } from './runtime-rpc-client'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
@@ -500,6 +501,31 @@ export async function commitRuntimeGit(
     'git.commit',
     { worktree: toRuntimeWorktreeSelector(context.worktreeId), message },
     { timeoutMs: 30_000 }
+  )
+}
+
+export async function switchRuntimeGitBranch(
+  context: RuntimeGitContext,
+  options: { branch: string; mode: SwitchBranchMode }
+): Promise<SwitchBranchResult> {
+  const target = getActiveRuntimeTarget(context.settings)
+  if (target.kind === 'local' || !context.worktreeId) {
+    return window.api.git.switchBranch({
+      worktreePath: context.worktreePath,
+      branch: options.branch,
+      mode: options.mode,
+      connectionId: context.connectionId
+    })
+  }
+  return callRuntimeRpc<SwitchBranchResult>(
+    target,
+    'git.switchBranch',
+    {
+      worktree: toRuntimeWorktreeSelector(context.worktreeId),
+      branch: options.branch,
+      mode: options.mode
+    },
+    { timeoutMs: 60_000 }
   )
 }
 

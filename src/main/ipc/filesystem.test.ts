@@ -8,6 +8,7 @@ const {
   showSaveDialogMock,
   fromWebContentsMock,
   trashItemMock,
+  runSwitchBranchMock,
   readdirMock,
   readFileMock,
   writeFileMock,
@@ -80,7 +81,8 @@ const {
   cancelGenerateCommitMessageLocalMock: vi.fn(),
   cancelGeneratePullRequestFieldsLocalMock: vi.fn(),
   getSshFilesystemProviderMock: vi.fn(),
-  getSshGitProviderMock: vi.fn()
+  getSshGitProviderMock: vi.fn(),
+  runSwitchBranchMock: vi.fn()
 }))
 
 vi.mock('electron', () => ({
@@ -154,6 +156,10 @@ vi.mock('../providers/ssh-git-dispatch', () => ({
   getSshGitProvider: getSshGitProviderMock,
   SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE:
     'Remote connection dropped. Click Reconnect on the SSH target before retrying.'
+}))
+
+vi.mock('../git/switch-branch', () => ({
+  runSwitchBranch: runSwitchBranchMock
 }))
 
 vi.mock('../text-generation/commit-message-text-generation', () => ({
@@ -251,7 +257,8 @@ describe('registerFilesystemHandlers', () => {
       cancelGenerateCommitMessageLocalMock,
       cancelGeneratePullRequestFieldsLocalMock,
       getSshFilesystemProviderMock,
-      getSshGitProviderMock
+      getSshGitProviderMock,
+      runSwitchBranchMock
     ]) {
       mock.mockReset()
     }
@@ -1897,5 +1904,35 @@ describe('registerFilesystemHandlers', () => {
     expect(listFilesMock).toHaveBeenCalledWith('/home/user/repo', {
       excludePaths: ['/home/user/repo/worktrees/feature']
     })
+  })
+
+  it('routes git:switchBranch through runSwitchBranch', async () => {
+    runSwitchBranchMock.mockResolvedValue({ ok: true })
+
+    registerFilesystemHandlers(store as never)
+
+    const result = await handlers.get('git:switchBranch')!(null, {
+      worktreePath: WORKTREE_FEATURE_PATH,
+      branch: 'main',
+      mode: 'plain'
+    })
+    expect(result).toEqual({ ok: true })
+    expect(runSwitchBranchMock).toHaveBeenCalledWith({
+      cwd: WORKTREE_FEATURE_PATH,
+      connectionId: undefined,
+      options: { branch: 'main', mode: 'plain' }
+    })
+  })
+
+  it('rejects git:switchBranch when branch looks like a flag', async () => {
+    registerFilesystemHandlers(store as never)
+
+    await expect(
+      handlers.get('git:switchBranch')!(null, {
+        worktreePath: WORKTREE_FEATURE_PATH,
+        branch: '--evil',
+        mode: 'plain'
+      })
+    ).rejects.toThrow()
   })
 })

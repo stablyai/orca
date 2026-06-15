@@ -20,6 +20,7 @@ import {
   GitRebaseFromBase,
   GitRemoteFileUrl,
   GitStatusParams,
+  GitSwitchBranch,
   GitTargetedRemote,
   WorktreeSelector
 } from './git-params'
@@ -218,6 +219,15 @@ export const GIT_METHODS: RpcMethod[] = [
     params: GitCommit,
     handler: async (params, { runtime }) =>
       runtime.commitRuntimeGit(params.worktree, params.message)
+  }),
+  defineMethod({
+    name: 'git.switchBranch',
+    params: GitSwitchBranch,
+    handler: async (params, { runtime }) =>
+      runtime.switchRuntimeGitBranch(params.worktree, {
+        branch: params.branch,
+        mode: params.mode
+      })
   }),
   defineMethod({
     name: 'git.generateCommitMessage',

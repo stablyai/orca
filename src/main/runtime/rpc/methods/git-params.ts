@@ -78,6 +78,19 @@ export const GitCommit = WorktreeSelector.extend({
     .pipe(z.string().min(1, 'Missing commit message'))
 })
 
+export const GitSwitchBranch = WorktreeSelector.extend({
+  branch: z
+    .unknown()
+    .transform((v) => (typeof v === 'string' ? v : ''))
+    .pipe(
+      z
+        .string()
+        .min(1, 'Missing branch')
+        .refine((value) => !value.startsWith('-'), 'Branch must not start with -')
+    ),
+  mode: z.enum(['plain', 'stash', 'create'])
+})
+
 const CommitMessageModelCapability = z.object({
   id: z.string(),
   label: z.string(),
