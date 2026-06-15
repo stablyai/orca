@@ -57,7 +57,8 @@ function makeProjectRefForTrustedHost(host: string, path: string): ProjectRef | 
  *   hostname regardless of the URL's port — this preserves recognition for
  *   legacy `gitlab.com` / bare-hostname known entries.
  * - A known entry WITH a port only matches a URL host with the exact same
- *   port, so `database:8080` does not accept a `database:3030` remote.
+ *   port, so `gitlab.example.com:8443` does not accept a
+ *   `gitea.example.com:3000` (or same-host different-port) remote.
  */
 function knownHostMatches(urlHost: string, knownHost: string): boolean {
   if (urlHost === knownHost) {

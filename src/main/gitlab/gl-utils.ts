@@ -405,8 +405,8 @@ export function parseGlabApiResponse(stdout: string): GlabApiResponse {
 export function parseGlabAuthStatusHosts(output: string): string[] {
   const hosts = new Set<string>()
   // Why: self-hosted GitLab can run on a non-default port (e.g.
-  // `database:8080`); capture the optional `:port` so two services on the
-  // same hostname but different ports stay distinct downstream.
+  // `gitlab.example.com:8443`); capture the optional `:port` so two services
+  // on the same hostname but different ports stay distinct downstream.
   for (const m of output.matchAll(/logged in to ([a-zA-Z0-9.-]+(?::\d+)?)/gi)) {
     hosts.add(m[1].toLowerCase())
   }
