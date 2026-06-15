@@ -9,6 +9,12 @@ import { MobileRepoIcon } from './MobileRepoIcon'
 import { WorktreeAgentList } from './WorktreeAgentList'
 import { WorktreeMetaGlyphs, prStateColor } from './WorktreeMetaGlyphs'
 
+// Strip the refs/heads/ prefix for display, matching the desktop sidebar
+// (WorktreeCardHelpers.formatBranchName).
+function displayBranch(branch: string): string {
+  return branch.replace(/^refs\/heads\//, '')
+}
+
 // Minimal row shape needed for rendering — a structural subset of the screen's
 // Worktree so this component stays decoupled from the screen's local type.
 export type WorktreeListRowItem = {
@@ -124,15 +130,13 @@ export function WorktreeListRow<T extends WorktreeListRowItem>({
             </>
           )}
           <Text style={styles.branchName} numberOfLines={1}>
-            {item.branch}
+            {displayBranch(item.branch)}
           </Text>
         </View>
+        {/* Only agents get a secondary activity line, matching desktop. A plain
+            terminal's shell-output tail is intentionally not surfaced here. */}
         {item.agents && item.agents.length > 0 ? (
           <WorktreeAgentList agents={item.agents} now={now} unvisited={item.unread} />
-        ) : item.preview ? (
-          <Text style={styles.worktreePreview} numberOfLines={1}>
-            {item.preview}
-          </Text>
         ) : null}
       </View>
 
@@ -224,12 +228,6 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontFamily: typography.monoFamily,
     flexShrink: 1
-  },
-  worktreePreview: {
-    fontSize: 11,
-    color: colors.textMuted,
-    fontFamily: typography.monoFamily,
-    marginTop: 2
   },
   terminalCount: {
     fontSize: typography.metaSize,
