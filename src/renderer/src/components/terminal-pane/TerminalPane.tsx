@@ -1034,6 +1034,8 @@ export default function TerminalPane({
         cwd,
         startup: { command: 'codex' },
         paneTransportsRef,
+        paneMode2031Ref,
+        paneLastThemeModeRef,
         replayingPanesRef,
         isActiveRef,
         isVisibleRef,
