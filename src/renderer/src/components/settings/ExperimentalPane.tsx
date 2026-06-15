@@ -5,10 +5,18 @@ import { SearchableSetting } from './SearchableSetting'
 import { matchesSettingsSearch } from './settings-search'
 import { getExperimentalPaneSearchEntries, getExperimentalSearchEntry } from './experimental-search'
 import { HiddenExperimentalGroup } from './HiddenExperimentalGroup'
-import { SettingsSwitch } from './SettingsFormControls'
+import { NumberField, SettingsSwitch } from './SettingsFormControls'
 import { translate } from '@/i18n/i18n'
+import {
+  DEFAULT_AGENT_HIBERNATION_IDLE_MS,
+  MAX_AGENT_HIBERNATION_IDLE_MS,
+  MIN_AGENT_HIBERNATION_IDLE_MS,
+  getEffectiveAgentHibernationIdleMs
+} from '@/lib/agent-hibernation-planner'
 
 export { getExperimentalPaneSearchEntries }
+
+const MS_PER_MINUTE = 60 * 1000
 
 type ExperimentalPaneProps = {
   settings: GlobalSettings
@@ -38,6 +46,9 @@ export function ExperimentalPane({
     getExperimentalSearchEntry().agentHibernation
   ])
   const agentHibernationEnabled = settings.experimentalAgentHibernation === true
+  const agentHibernationIdleMinutes = Math.round(
+    getEffectiveAgentHibernationIdleMs(settings.agentHibernationIdleMs) / MS_PER_MINUTE
+  )
 
   return (
     <div className="space-y-4">
@@ -189,7 +200,7 @@ export function ExperimentalPane({
           )}
           description={translate(
             'auto.components.settings.ExperimentalPane.agentHibernation.description',
-            'Stops idle background agent terminals after 30 minutes and resumes supported sessions when you open them again.'
+            'Stops idle background agent terminals after the configured idle window and resumes supported sessions when you open them again.'
           )}
           keywords={getExperimentalSearchEntry().agentHibernation.keywords}
           className="space-y-3 py-2"
@@ -206,7 +217,7 @@ export function ExperimentalPane({
               <p className="text-xs text-muted-foreground">
                 {translate(
                   'auto.components.settings.ExperimentalPane.agentHibernation.copy',
-                  'Stops idle background agent terminals after 30 minutes and resumes supported sessions when you open them again. Experimental while we tune the safety model.'
+                  'Stops idle background agent terminals after the configured idle window and resumes supported sessions when you open them again. Experimental while we tune the safety model.'
                 )}
               </p>
             </div>
@@ -223,6 +234,30 @@ export function ExperimentalPane({
               }
             />
           </div>
+          <NumberField
+            label={translate(
+              'auto.components.settings.ExperimentalPane.agentHibernation.idleMinutesLabel',
+              'Hibernate after'
+            )}
+            description={translate(
+              'auto.components.settings.ExperimentalPane.agentHibernation.idleMinutesDescription',
+              'How many idle minutes a completed background agent must wait before Orca can hibernate it.'
+            )}
+            value={agentHibernationIdleMinutes}
+            defaultValue={DEFAULT_AGENT_HIBERNATION_IDLE_MS / MS_PER_MINUTE}
+            min={MIN_AGENT_HIBERNATION_IDLE_MS / MS_PER_MINUTE}
+            max={MAX_AGENT_HIBERNATION_IDLE_MS / MS_PER_MINUTE}
+            step={1}
+            suffix={translate(
+              'auto.components.settings.ExperimentalPane.agentHibernation.idleMinutesSuffix',
+              'minutes'
+            )}
+            onChange={(minutes) =>
+              updateSettings({
+                agentHibernationIdleMs: minutes * MS_PER_MINUTE
+              })
+            }
+          />
         </SearchableSetting>
       ) : null}
 

@@ -8,7 +8,8 @@ import { parsePaneKey } from '../../../shared/stable-pane-id'
 import type { GlobalSettings, TerminalLayoutSnapshot, TerminalTab } from '../../../shared/types'
 
 export const DEFAULT_AGENT_HIBERNATION_IDLE_MS = 30 * 60 * 1000
-export const MIN_AGENT_HIBERNATION_IDLE_MS = DEFAULT_AGENT_HIBERNATION_IDLE_MS
+export const MIN_AGENT_HIBERNATION_IDLE_MS = 60 * 1000
+export const MAX_AGENT_HIBERNATION_IDLE_MS = 24 * 60 * 60 * 1000
 
 export type AgentHibernationPlannerSnapshot = {
   settings: Pick<GlobalSettings, 'experimentalAgentHibernation' | 'agentHibernationIdleMs'> | null
@@ -49,7 +50,8 @@ type EligiblePane = {
 export function getEffectiveAgentHibernationIdleMs(value: unknown): number {
   return typeof value === 'number' &&
     Number.isFinite(value) &&
-    value >= MIN_AGENT_HIBERNATION_IDLE_MS
+    value >= MIN_AGENT_HIBERNATION_IDLE_MS &&
+    value <= MAX_AGENT_HIBERNATION_IDLE_MS
     ? value
     : DEFAULT_AGENT_HIBERNATION_IDLE_MS
 }

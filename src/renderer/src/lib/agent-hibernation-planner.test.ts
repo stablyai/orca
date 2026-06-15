@@ -3,6 +3,8 @@ import type { AgentStatusEntry } from '../../../shared/agent-status-types'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../../shared/types'
 import {
   DEFAULT_AGENT_HIBERNATION_IDLE_MS,
+  MAX_AGENT_HIBERNATION_IDLE_MS,
+  MIN_AGENT_HIBERNATION_IDLE_MS,
   confirmAgentHibernationCandidates,
   getEffectiveAgentHibernationIdleMs,
   planAgentHibernationCandidates,
@@ -184,9 +186,18 @@ describe('agent hibernation planner', () => {
     ).toEqual([])
   })
 
-  it('clamps corrupt or too-low idle durations to the conservative default', () => {
+  it('clamps corrupt or out-of-range idle durations to the default', () => {
     expect(getEffectiveAgentHibernationIdleMs(0)).toBe(DEFAULT_AGENT_HIBERNATION_IDLE_MS)
     expect(getEffectiveAgentHibernationIdleMs(Number.NaN)).toBe(DEFAULT_AGENT_HIBERNATION_IDLE_MS)
+    expect(getEffectiveAgentHibernationIdleMs(MIN_AGENT_HIBERNATION_IDLE_MS - 1)).toBe(
+      DEFAULT_AGENT_HIBERNATION_IDLE_MS
+    )
+    expect(getEffectiveAgentHibernationIdleMs(MAX_AGENT_HIBERNATION_IDLE_MS + 1)).toBe(
+      DEFAULT_AGENT_HIBERNATION_IDLE_MS
+    )
+    expect(getEffectiveAgentHibernationIdleMs(MIN_AGENT_HIBERNATION_IDLE_MS)).toBe(
+      MIN_AGENT_HIBERNATION_IDLE_MS
+    )
     expect(getEffectiveAgentHibernationIdleMs(DEFAULT_AGENT_HIBERNATION_IDLE_MS + 1)).toBe(
       DEFAULT_AGENT_HIBERNATION_IDLE_MS + 1
     )

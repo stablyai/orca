@@ -151,7 +151,7 @@ export const getExperimentalPaneSearchEntries = createLocalizedCatalog(
       ),
       description: translate(
         'auto.components.settings.experimental.search.agentHibernation.description',
-        'Stops idle background agent terminals after 30 minutes and resumes supported sessions when opened again.'
+        'Stops idle background agent terminals after the configured idle window and resumes supported sessions when opened again.'
       ),
       keywords: [
         ...translateSearchKeyword(
@@ -173,6 +173,10 @@ export const getExperimentalPaneSearchEntries = createLocalizedCatalog(
         ...translateSearchKeyword(
           'auto.components.settings.experimental.search.agentHibernation.sleep',
           'sleep'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.experimental.search.agentHibernation.minutes',
+          'minutes'
         ),
         ...translateSearchKeyword(
           'auto.components.settings.experimental.search.agentHibernation.terminal',
