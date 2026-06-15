@@ -73,6 +73,14 @@ export type DockerContainerInspect = {
   restartPolicy: string
 }
 
+export type DockerContainerAction =
+  | 'start'
+  | 'stop'
+  | 'restart'
+  | 'pause'
+  | 'unpause'
+  | 'remove'
+
 export type DockerConnectionStatus = 'unknown' | 'reachable' | 'unreachable'
 
 /** Just the fields the SSH transport fallback needs from an SshTarget. */
