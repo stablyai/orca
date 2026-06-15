@@ -23,4 +23,12 @@ describe('detectLanguage', () => {
     expect(detectLanguage('scripts/setup.bat')).toBe('bat')
     expect(detectLanguage('C:\\repo\\scripts\\bootstrap.CMD')).toBe('bat')
   })
+
+  it('maps SystemVerilog and Verilog files to their Monaco language ids', () => {
+    expect(detectLanguage('rtl/cpu.sv')).toBe('systemverilog')
+    expect(detectLanguage('rtl/pkg.svh')).toBe('systemverilog')
+    expect(detectLanguage('rtl/alu.v')).toBe('verilog')
+    expect(detectLanguage('rtl/defs.vh')).toBe('verilog')
+    expect(detectLanguage('C:\\rtl\\TOP.SV')).toBe('systemverilog')
+  })
 })
