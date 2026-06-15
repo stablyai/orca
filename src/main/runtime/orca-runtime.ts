@@ -11077,7 +11077,7 @@ export class OrcaRuntimeService {
       } catch (error) {
         return { error: error instanceof Error ? error.message : 'Could not resolve git remote.' }
       }
-      const knownHosts = await getGlabKnownHosts()
+      const knownHosts = await getGlabKnownHosts(repo.connectionId ?? null)
       const projectRef = await getGitLabProjectRefForRemote(
         repo.path,
         remote,
@@ -11165,7 +11165,7 @@ export class OrcaRuntimeService {
     preference?: Repo['issueSourcePreference'],
     connectionId?: string | null
   ): Promise<string> {
-    const knownHosts = await getGlabKnownHosts()
+    const knownHosts = await getGlabKnownHosts(connectionId)
     if (preference === 'origin') {
       const origin = await getGitLabProjectRefForRemote(
         repoPath,

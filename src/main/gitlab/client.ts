@@ -230,7 +230,7 @@ export async function getProjectSlug(
   repoPath: string,
   connectionId?: string | null
 ): Promise<ProjectRef | null> {
-  const knownHosts = await getGlabKnownHosts()
+  const knownHosts = await getGlabKnownHosts(connectionId)
   return getProjectRef(repoPath, knownHosts, connectionId)
 }
 
@@ -244,7 +244,7 @@ export async function getMergeRequest(
   iid: number,
   connectionId?: string | null
 ): Promise<MRInfo | null> {
-  const knownHosts = await getGlabKnownHosts()
+  const knownHosts = await getGlabKnownHosts(connectionId)
   const projectRef = await getProjectRef(repoPath, knownHosts, connectionId)
   await acquire()
   try {
@@ -289,7 +289,7 @@ export async function getMergeRequestForBranch(
   if (!branchName && linkedMRIid == null) {
     return null
   }
-  const knownHosts = await getGlabKnownHosts()
+  const knownHosts = await getGlabKnownHosts(connectionId)
   const projectRef = await getProjectRef(repoPath, knownHosts, connectionId)
   if (!projectRef) {
     return null
@@ -370,7 +370,7 @@ export async function listMergeRequests(
   query?: string,
   connectionId?: string | null
 ): Promise<ListMergeRequestsResult> {
-  const knownHosts = await getGlabKnownHosts()
+  const knownHosts = await getGlabKnownHosts(connectionId)
   // Why: MRs sit on `origin` in the fork model (the user's fork is where
   // they push branches and submit MRs). Mirror github's `getOwnerRepo`
   // call site by going through the upstream/origin preference resolver
@@ -398,7 +398,7 @@ export async function listMergeRequests(
       }
     }
     // Why: fallback — let glab infer project from cwd, same as listIssues.
-    // Used when the repo's remote host is not in getGlabKnownHosts()
+    // Used when the repo's remote host is not in getGlabKnownHosts(connectionId)
     // (e.g. a fresh self-hosted instance), but glab itself can still
     // resolve it from the local git config.
     const stateFlag = mrListStateFlags(state)
@@ -558,7 +558,7 @@ export async function listWorkItems(
   connectionId?: string | null
 ): Promise<GitLabPagedResult<GitLabWorkItem>> {
   const issueState = mrStateToIssueState(state)
-  const knownHosts = await getGlabKnownHosts()
+  const knownHosts = await getGlabKnownHosts(connectionId)
   const { source: projectRef } = await resolveIssueSource(
     repoPath,
     preference,
@@ -671,7 +671,7 @@ export async function listTodos(
   repoPath: string,
   connectionId?: string | null
 ): Promise<GitLabTodo[]> {
-  const projectRef = await getProjectRef(repoPath, await getGlabKnownHosts(), connectionId)
+  const projectRef = await getProjectRef(repoPath, await getGlabKnownHosts(connectionId), connectionId)
   if (connectionId && !projectRef) {
     return []
   }
@@ -742,7 +742,7 @@ async function withProjectRef<T>(
 ): Promise<T> {
   const projectRef =
     explicitProjectRef ??
-    (await resolveIssueSource(repoPath, preference, await getGlabKnownHosts(), connectionId)).source
+    (await resolveIssueSource(repoPath, preference, await getGlabKnownHosts(connectionId), connectionId)).source
   if (!projectRef) {
     return fallback
   }

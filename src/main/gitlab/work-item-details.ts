@@ -350,7 +350,7 @@ export async function getWorkItemDetails(
   // and a detail sheet from another.
   const projectRef =
     projectRefOverride ??
-    (await resolveIssueSource(repoPath, preference, await getGlabKnownHosts(), connectionId)).source
+    (await resolveIssueSource(repoPath, preference, await getGlabKnownHosts(connectionId), connectionId)).source
   if (!projectRef) {
     return null
   }
