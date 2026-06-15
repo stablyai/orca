@@ -87,6 +87,7 @@ import {
   getFolderWorkspacePathStatusForPath
 } from '../project-groups/folder-workspace-path-status'
 import { getGitCloneFailureMessage } from '../../shared/git-clone-failure-message'
+import { prepareLocalWorktreeRootForRepo } from '../worktree-root-preparation'
 
 // Why: `method` answers "which entry point did the user take?", not "what did
 // they add?" — so the IPC the renderer invoked IS the method. We never send
@@ -203,6 +204,7 @@ async function addLocalRepoFromPath(
   }
 
   store.addRepo(repo)
+  await prepareLocalWorktreeRootForRepo(store, repo)
   return { repo, alreadyExisted: false }
 }
 
@@ -1212,7 +1214,16 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
       invalidateAuthorizedRootsCache()
       notifyReposChanged(mainWindow)
       emitRepoAdded('folder_picker', result.alreadyExisted)
-      return alignRepoWithRequestedProject(store, result.repo, args.projectId, args.setupMethod)
+      const aligned = alignRepoWithRequestedProject(
+        store,
+        result.repo,
+        args.projectId,
+        args.setupMethod
+      )
+      if (result.alreadyExisted) {
+        await prepareLocalWorktreeRootForRepo(store, aligned.repo)
+      }
+      return aligned
     }
   )
 
@@ -1492,6 +1503,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
               : {})
           }
           store.addRepo(repo)
+          await prepareLocalWorktreeRootForRepo(store, repo)
           if (args.connectionId) {
             getActiveMultiplexer(args.connectionId)?.notify('session.registerRoot', {
               rootPath: repoPath
@@ -1540,6 +1552,9 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
       const result = await addLocalRepoFromPath(store, args.path, args.kind)
       if ('error' in result) {
         return result
+      }
+      if (result.alreadyExisted) {
+        await prepareLocalWorktreeRootForRepo(store, result.repo)
       }
       invalidateAuthorizedRootsCache()
       notifyReposChanged(mainWindow)
@@ -1784,6 +1799,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
       }
 
       store.addRepo(repo)
+      await prepareLocalWorktreeRootForRepo(store, repo)
       invalidateAuthorizedRootsCache()
       notifyReposChanged(mainWindow)
       // Why: `repos:create` git-inits when kind is 'git', so `repoKind` is the
@@ -1927,6 +1943,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
       const updated = store.updateRepo(args.repoId, updates)
       if (updated) {
         if ('worktreeBasePath' in updates) {
+          void prepareLocalWorktreeRootForRepo(store, updated)
           invalidateAuthorizedRootsCache()
         }
         notifyReposChanged(mainWindow)
@@ -2190,6 +2207,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
           }
 
           store.addRepo(repo)
+          await prepareLocalWorktreeRootForRepo(store, repo)
           invalidateAuthorizedRootsCache()
           notifyReposChanged(mainWindow)
           emitRepoAdded('clone_url', false, true)

@@ -81,7 +81,7 @@ import {
   configureCreatedWorktreePushTargetWithExec,
   prepareWorktreePushTargetWithExec
 } from './worktree-push-target-setup'
-import { invalidateAuthorizedRootsCache, isENOENT } from './filesystem-auth'
+import { isENOENT, registerWorktreeRootsForRepo } from './filesystem-auth'
 import { createWorktreeSymlinks } from './worktree-symlinks'
 import { normalizeSparseDirectories } from './sparse-checkout-directories'
 import { joinWorktreeRelativePath } from '../runtime/runtime-relative-paths'
@@ -2169,12 +2169,13 @@ export async function createLocalWorktree(
     return { worktree: mergeWorktree(repo.id, created, meta) }
   })
   const workspaceLineage = recordWorkspaceLineageForCreatedWorktree(store, args, worktree, now)
-  // Why: the authorized-roots cache is consulted lazily on the next filesystem
-  // access (`ensureAuthorizedRootsCache` rebuilds on demand when dirty). We
-  // just invalidate the cache marker instead of blocking worktree creation on
-  // an immediate rebuild, which can spawn `git worktree list` per repo and
-  // adds 100ms+ to every create.
-  invalidateAuthorizedRootsCache()
+  // Why: creation already paid for `git worktree list`; seed the exact roots
+  // now so the next file/git IPC does not lazily rescan and trip macOS privacy
+  // prompts for the newly-created workspace.
+  registerWorktreeRootsForRepo(store, repo.id, [
+    repo.path,
+    ...gitWorktrees.map((worktree) => worktree.path)
+  ])
 
   // Why: create user-configured symlinks from the primary checkout into the
   // new worktree before any setup script runs, so scripts that reuse shared

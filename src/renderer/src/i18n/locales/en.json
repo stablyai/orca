@@ -4613,7 +4613,7 @@
           "e7bb06007c": "Local Network",
           "4a73f5217a": "Apple Events for scripts that control other local apps.",
           "e119f0d66b": "Automation",
-          "7ca17b62c8": "Persistent access to protected folders from terminal sessions.",
+          "7ca17b62c8": "Recommended when projects, worktrees, or symlinked files touch macOS-protected folders.",
           "c566bca278": "Full Disk Access",
           "9f35980756": "Keystroke injection, window control, and UI automation tools.",
           "5b2f22ca2d": "Accessibility",
@@ -6645,7 +6645,7 @@
               "a0c19119fb": "downloads",
               "4438f81bfa": "documents",
               "c10e36cbd1": "full disk access",
-              "05ab708ee5": "Open the macOS privacy pane for broad terminal file access.",
+              "05ab708ee5": "Open the macOS privacy pane for protected project and worktree file access.",
               "bbf543a3a1": "Full Disk Access",
               "7f145a3984": "window",
               "5610022e1e": "automation",
@@ -9598,6 +9598,17 @@
                 "close_step": "Close"
               }
             }
+          },
+          "FullDiskAccessSetupPrompt": {
+            "bbb3f1e404": "Checking",
+            "48d87edcd2": "Granted",
+            "6db9a69f4e": "Recommended",
+            "fa809e8ada": "Opened macOS Privacy & Security",
+            "bfa3402305": "Could not request permission",
+            "c566bca278": "Full Disk Access",
+            "0d6efe9cf4": "Recommended on macOS when projects or worktrees live in protected folders.",
+            "dac08ec03e": "Opening...",
+            "6e3d62b816": "Open Full Disk Access"
           }
         },
         "tips": {

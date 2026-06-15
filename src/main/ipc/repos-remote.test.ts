@@ -19,7 +19,8 @@ const {
   mockGitProvider,
   mockFilesystemProvider,
   mockMultiplexer,
-  gitSpawnMock
+  gitSpawnMock,
+  prepareLocalWorktreeRootForRepoMock
 } = vi.hoisted(() => ({
   handleMock: vi.fn(),
   mockStore: {
@@ -62,7 +63,8 @@ const {
     request: vi.fn(),
     notify: vi.fn()
   },
-  gitSpawnMock: vi.fn()
+  gitSpawnMock: vi.fn(),
+  prepareLocalWorktreeRootForRepoMock: vi.fn()
 }))
 
 vi.mock('electron', () => ({
@@ -98,6 +100,10 @@ vi.mock('../git/runner', () => ({
 
 vi.mock('./filesystem-auth', () => ({
   invalidateAuthorizedRootsCache: vi.fn()
+}))
+
+vi.mock('../worktree-root-preparation', () => ({
+  prepareLocalWorktreeRootForRepo: prepareLocalWorktreeRootForRepoMock
 }))
 
 vi.mock('../providers/ssh-git-dispatch', () => ({
@@ -161,6 +167,7 @@ describe('projectGroups IPC validation', () => {
     vi.mocked(isGitRepo).mockReturnValue(true)
     mockMultiplexer.notify.mockReset()
     mockMultiplexer.request.mockReset()
+    prepareLocalWorktreeRootForRepoMock.mockReset().mockResolvedValue(undefined)
 
     registerRepoHandlers(mockWindow as never, mockStore as never)
   })
@@ -752,6 +759,7 @@ describe('repos:getGitUsername', () => {
     mockStore.getRepo.mockReset()
     mockGitProvider.exec.mockReset()
     mockWindow.webContents.send.mockReset()
+    prepareLocalWorktreeRootForRepoMock.mockReset().mockResolvedValue(undefined)
 
     registerRepoHandlers(mockWindow as never, mockStore as never)
   })
@@ -845,6 +853,7 @@ describe('repos:addRemote', () => {
     mockMultiplexer.request.mockReset()
     mockMultiplexer.notify.mockReset()
     gitSpawnMock.mockReset()
+    prepareLocalWorktreeRootForRepoMock.mockReset().mockResolvedValue(undefined)
     gitSpawnMock.mockImplementation(() => {
       const proc = new EventEmitter() as EventEmitter & { stderr: EventEmitter }
       proc.stderr = new EventEmitter()
@@ -1545,6 +1554,7 @@ describe('repos:add + repos:clone', () => {
     mockStore.updateRepo.mockReset()
     mockWindow.webContents.send.mockReset()
     gitSpawnMock.mockReset()
+    prepareLocalWorktreeRootForRepoMock.mockReset().mockResolvedValue(undefined)
     gitSpawnMock.mockImplementation(() => {
       const proc = createMockCloneProcess()
       queueMicrotask(() => proc.emit('close', 0, null))
@@ -1580,6 +1590,15 @@ describe('repos:add + repos:clone', () => {
       })
     )
     expect(result).toHaveProperty('repo.externalWorktreeVisibility', 'hide')
+  })
+
+  it('prepares the worktree root when adding a local git repo', async () => {
+    await handlers.get('repos:add')!(null, { path: '/tmp/from-add', kind: 'git' })
+
+    expect(prepareLocalWorktreeRootForRepoMock).toHaveBeenCalledWith(
+      mockStore,
+      expect.objectContaining({ path: '/tmp/from-add', kind: 'git' })
+    )
   })
 
   it('returns existing badgeColor unchanged on repos:add dedupe', async () => {
@@ -2021,6 +2040,7 @@ describe('repos:getBaseRefDefault envelope', () => {
     })
     mockStore.getRepos.mockReset().mockReturnValue([])
     mockStore.getRepo.mockReset()
+    prepareLocalWorktreeRootForRepoMock.mockReset().mockResolvedValue(undefined)
     // Reset exec to default: later SSH tests replace this with custom mocks, and
     // without this reset any future test added to this block would inherit the
     // last test's exec mock — latent fragility we guard against here.
@@ -2208,6 +2228,7 @@ describe('repos:searchBaseRefs SSH relay', () => {
     })
     mockStore.getRepos.mockReset().mockReturnValue([])
     mockStore.getRepo.mockReset()
+    prepareLocalWorktreeRootForRepoMock.mockReset().mockResolvedValue(undefined)
     mockGitProvider.exec = vi.fn().mockResolvedValue({ stdout: '', stderr: '' })
     registerRepoHandlers(mockWindow as never, mockStore as never)
   })
