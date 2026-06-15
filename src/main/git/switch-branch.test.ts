@@ -1,7 +1,8 @@
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { SWITCH_BRANCH_STASH_LABEL } from '../../shared/git-branch-switch'
 import {
   isDirtyOverwriteError,
+  isNothingToStash,
   normalizeSwitchBranchExecError,
   runSwitchBranch,
   switchGitBranch,
@@ -11,7 +12,8 @@ import {
 
 const runnerMocks = vi.hoisted(() => ({ gitExecFileAsync: vi.fn() }))
 vi.mock('./runner', () => ({ gitExecFileAsync: runnerMocks.gitExecFileAsync }))
-vi.mock('../providers/ssh-git-dispatch', () => ({ getSshGitProvider: () => null }))
+const sshMocks = vi.hoisted(() => ({ getSshGitProvider: vi.fn(() => null) }))
+vi.mock('../providers/ssh-git-dispatch', () => ({ getSshGitProvider: sshMocks.getSshGitProvider }))
 
 const ok = (stdout = ''): SwitchBranchExecResult => ({ stdout, stderr: '', exitCode: 0 })
 const fail = (stderr: string, exitCode = 1): SwitchBranchExecResult => ({
@@ -32,6 +34,26 @@ function execScript(results: SwitchBranchExecResult[]): {
   }
   return { exec, calls }
 }
+
+beforeEach(() => {
+  // Why: default to no SSH provider so local tests are unaffected; SSH tests
+  // opt in with mockReturnValueOnce.
+  sshMocks.getSshGitProvider.mockReset()
+  sshMocks.getSshGitProvider.mockReturnValue(null)
+  runnerMocks.gitExecFileAsync.mockReset()
+})
+
+describe('isNothingToStash', () => {
+  it('detects the no-op message in stdout (case-insensitive)', () => {
+    expect(isNothingToStash({ stdout: 'No local changes to save', stderr: '' })).toBe(true)
+  })
+  it('detects the no-op message in stderr (case-insensitive)', () => {
+    expect(isNothingToStash({ stdout: '', stderr: 'NO LOCAL CHANGES TO SAVE' })).toBe(true)
+  })
+  it('returns false when something was stashed', () => {
+    expect(isNothingToStash({ stdout: 'Saved working directory', stderr: '' })).toBe(false)
+  })
+})
 
 describe('isDirtyOverwriteError', () => {
   it('matches tracked overwrite', () => {
@@ -138,6 +160,23 @@ describe('switchGitBranch', () => {
       reason: 'stash_pop_conflict'
     })
   })
+
+  it('stash mode skips the pop when nothing was stashed and the switch succeeds', async () => {
+    const { exec, calls } = execScript([ok('No local changes to save'), ok()])
+    expect(await switchGitBranch(exec, { branch: 'main', mode: 'stash' })).toEqual({ ok: true })
+    expect(calls.length).toBe(2)
+    expect(calls[1]).toEqual(['switch', 'main'])
+  })
+
+  it('stash mode skips the pop when nothing was stashed and the switch fails', async () => {
+    const { exec, calls } = execScript([ok('No local changes to save'), fail('fatal: boom')])
+    expect(await switchGitBranch(exec, { branch: 'main', mode: 'stash' })).toEqual({
+      ok: false,
+      reason: 'failed',
+      message: 'fatal: boom'
+    })
+    expect(calls.length).toBe(2)
+  })
 })
 
 describe('runSwitchBranch (local)', () => {
@@ -165,5 +204,47 @@ describe('runSwitchBranch (local)', () => {
       options: { branch: 'main', mode: 'plain' }
     })
     expect(result).toEqual({ ok: false, reason: 'dirty_conflict' })
+  })
+})
+
+describe('runSwitchBranch (SSH)', () => {
+  it('runs git switch through the provider and returns ok', async () => {
+    const exec = vi.fn().mockResolvedValue({ stdout: '', stderr: '' })
+    sshMocks.getSshGitProvider.mockReturnValueOnce({ exec } as never)
+    const result = await runSwitchBranch({
+      cwd: '/remote/repo',
+      connectionId: 'conn-1',
+      options: { branch: 'feature', mode: 'plain' }
+    })
+    expect(result).toEqual({ ok: true })
+    expect(exec).toHaveBeenCalledWith(['switch', 'feature'], '/remote/repo')
+  })
+
+  it('maps a rejected provider exec into dirty_conflict', async () => {
+    const exec = vi
+      .fn()
+      .mockRejectedValue(
+        Object.assign(new Error('x'), {
+          stderr: 'Your local changes would be overwritten by checkout'
+        })
+      )
+    sshMocks.getSshGitProvider.mockReturnValueOnce({ exec } as never)
+    const result = await runSwitchBranch({
+      cwd: '/remote/repo',
+      connectionId: 'conn-1',
+      options: { branch: 'feature', mode: 'plain' }
+    })
+    expect(result).toEqual({ ok: false, reason: 'dirty_conflict' })
+  })
+
+  it('throws when the SSH provider is unavailable', async () => {
+    sshMocks.getSshGitProvider.mockReturnValueOnce(null)
+    await expect(
+      runSwitchBranch({
+        cwd: '/remote/repo',
+        connectionId: 'conn-1',
+        options: { branch: 'feature', mode: 'plain' }
+      })
+    ).rejects.toThrow('SSH git provider unavailable')
   })
 })

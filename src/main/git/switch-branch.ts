@@ -36,6 +36,13 @@ export function normalizeSwitchBranchExecError(err: unknown): SwitchBranchExecRe
   return { stdout, stderr, exitCode }
 }
 
+// Why: `git stash push` exits 0 even when there's nothing to stash; detecting
+// that no-op prevents a later `stash pop` from applying an unrelated stash.
+export function isNothingToStash(result: { stdout: string; stderr: string }): boolean {
+  const text = `${result.stdout} ${result.stderr}`.toLowerCase()
+  return text.includes('no local changes to save')
+}
+
 export async function switchGitBranch(
   exec: SwitchBranchExec,
   options: SwitchBranchOptions
@@ -71,12 +78,20 @@ export async function switchGitBranch(
   if (stashed.exitCode !== 0) {
     return { ok: false, reason: 'failed', message: stashed.stderr.trim() }
   }
+  const createdStash = !isNothingToStash(stashed)
   const switched = await exec(['switch', options.branch])
   if (switched.exitCode !== 0) {
-    // Why: the switch failed after we stashed — restore the user's work so we
-    // never strand it on the original branch behind a silent stash.
-    await exec(['stash', 'pop'])
+    // Why: only restore if we actually stashed — otherwise `pop` would apply an
+    // unrelated pre-existing stash and strand foreign changes here.
+    if (createdStash) {
+      await exec(['stash', 'pop'])
+    }
     return { ok: false, reason: 'failed', message: switched.stderr.trim() }
+  }
+  // Why: nothing was stashed, so there is nothing to pop; popping would apply a
+  // foreign stash.
+  if (!createdStash) {
+    return { ok: true }
   }
   const popped = await exec(['stash', 'pop'])
   if (popped.exitCode !== 0) {

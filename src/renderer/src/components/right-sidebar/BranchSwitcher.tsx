@@ -17,7 +17,8 @@ export function BranchSwitcherList({
   loading,
   candidates,
   onSelect,
-  onCreate
+  onCreate,
+  disabled = false
 }: {
   query: string
   setQuery: (value: string) => void
@@ -25,6 +26,7 @@ export function BranchSwitcherList({
   candidates: BranchSwitchCandidate[]
   onSelect: (candidate: BranchSwitchCandidate) => void
   onCreate: (name: string) => void
+  disabled?: boolean
 }): React.JSX.Element {
   const [creating, setCreating] = useState(false)
   const [newName, setNewName] = useState('')
@@ -57,14 +59,24 @@ export function BranchSwitcherList({
           {locals.length > 0 && (
             <Section label={translate('auto.branchSwitch.local', 'Local')}>
               {locals.map((c) => (
-                <BranchRow key={`local:${c.branchName}`} candidate={c} onSelect={onSelect} />
+                <BranchRow
+                  key={`local:${c.branchName}`}
+                  candidate={c}
+                  onSelect={onSelect}
+                  disabled={disabled}
+                />
               ))}
             </Section>
           )}
           {remotes.length > 0 && (
             <Section label={translate('auto.branchSwitch.remote', 'Remote')}>
               {remotes.map((c) => (
-                <BranchRow key={`remote:${c.refName}`} candidate={c} onSelect={onSelect} />
+                <BranchRow
+                  key={`remote:${c.refName}`}
+                  candidate={c}
+                  onSelect={onSelect}
+                  disabled={disabled}
+                />
               ))}
             </Section>
           )}
@@ -87,8 +99,9 @@ export function BranchSwitcherList({
               onChange={(e) => setNewName(e.target.value)}
               placeholder={translate('auto.branchSwitch.newName', 'New branch name')}
               className="h-8"
+              disabled={disabled}
             />
-            <Button type="submit" size="sm" className="h-8">
+            <Button type="submit" size="sm" className="h-8" disabled={disabled}>
               {translate('auto.branchSwitch.create', 'Create')}
             </Button>
           </form>
@@ -96,7 +109,11 @@ export function BranchSwitcherList({
           <button
             type="button"
             onClick={() => setCreating(true)}
-            className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm hover:bg-accent"
+            disabled={disabled}
+            className={cn(
+              'flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm hover:bg-accent',
+              disabled && 'pointer-events-none opacity-50'
+            )}
           >
             <Plus className="size-3.5 shrink-0" aria-hidden="true" />
             {translate('auto.branchSwitch.createNew', 'Create new branch…')}
@@ -126,10 +143,12 @@ function Section({
 
 function BranchRow({
   candidate,
-  onSelect
+  onSelect,
+  disabled = false
 }: {
   candidate: BranchSwitchCandidate
   onSelect: (candidate: BranchSwitchCandidate) => void
+  disabled?: boolean
 }): React.JSX.Element {
   // Why: git refuses to check out a branch held by another worktree, so a row
   // for one is rendered muted and the click jumps to that workspace instead.
@@ -138,10 +157,12 @@ function BranchRow({
     <button
       type="button"
       onClick={() => onSelect(candidate)}
+      disabled={disabled}
       className={cn(
         'flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm hover:bg-accent',
         candidate.isCurrent && 'font-medium',
-        disabledElsewhere && 'text-muted-foreground'
+        disabledElsewhere && 'text-muted-foreground',
+        disabled && 'pointer-events-none opacity-50'
       )}
     >
       {candidate.isCurrent ? (
@@ -177,17 +198,18 @@ export function BranchSwitcher(props: {
   onSwitched: () => void
 }): React.JSX.Element {
   const [open, setOpen] = useState(false)
-  const { query, setQuery, loading, candidates, switchToCandidate, createBranch } = useBranchSwitch({
-    repoId: props.repoId,
-    worktrees: props.worktrees,
-    activeWorktreeId: props.activeWorktreeId,
-    activeBranchName: props.activeBranchName,
-    gitContext: props.gitContext,
-    onSwitched: () => {
-      setOpen(false)
-      props.onSwitched()
-    }
-  })
+  const { query, setQuery, loading, candidates, isSwitching, switchToCandidate, createBranch } =
+    useBranchSwitch({
+      repoId: props.repoId,
+      worktrees: props.worktrees,
+      activeWorktreeId: props.activeWorktreeId,
+      activeBranchName: props.activeBranchName,
+      gitContext: props.gitContext,
+      onSwitched: () => {
+        setOpen(false)
+        props.onSwitched()
+      }
+    })
 
   // Why: detached HEAD label wins; otherwise show the branch, falling back to a
   // placeholder. Parens are required since `??` and `||` can't be mixed bare.
@@ -215,6 +237,7 @@ export function BranchSwitcher(props: {
           candidates={candidates}
           onSelect={(c) => void switchToCandidate(c)}
           onCreate={(name) => void createBranch(name)}
+          disabled={isSwitching}
         />
       </PopoverContent>
     </Popover>

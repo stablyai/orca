@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
@@ -44,6 +44,11 @@ export function useBranchSwitch(input: {
   const [loading, setLoading] = useState(false)
   const [refs, setRefs] = useState<BaseRefSearchResult[]>([])
   const [isSwitching, setIsSwitching] = useState(false)
+  // Why: a ref blocks overlapping switches across the async confirm/await window
+  // — React state updates too late for a rapid double-click. It lives at the
+  // public callbacks (not inside runSwitch) so the dirty_conflict→stash
+  // recursion still runs.
+  const inFlightRef = useRef(false)
 
   useEffect(() => {
     if (!repoId) {
@@ -135,7 +140,13 @@ export function useBranchSwitch(input: {
         return
       }
       if (candidate.isCurrent) { return }
-      await runSwitch(candidate.branchName, 'plain')
+      if (inFlightRef.current) { return }
+      inFlightRef.current = true
+      try {
+        await runSwitch(candidate.branchName, 'plain')
+      } finally {
+        inFlightRef.current = false
+      }
     },
     [runSwitch, setActiveWorktree]
   )
@@ -144,7 +155,13 @@ export function useBranchSwitch(input: {
     async (name: string): Promise<void> => {
       const trimmed = name.trim()
       if (!trimmed || trimmed.startsWith('-')) { return }
-      await runSwitch(trimmed, 'create')
+      if (inFlightRef.current) { return }
+      inFlightRef.current = true
+      try {
+        await runSwitch(trimmed, 'create')
+      } finally {
+        inFlightRef.current = false
+      }
     },
     [runSwitch]
   )
