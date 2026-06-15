@@ -23,9 +23,9 @@ type Props = {
 // One inline agent row: state dot → identity → last message/prompt → time ago.
 // Mirrors desktop DashboardAgentRow's compact in-card layout.
 export function WorktreeAgentRow({ agent, depth, now, unvisited }: Props) {
-  const dotState = agentDotState(agent)
+  const dotState = agentDotState(agent, now)
   const identity = agentIdentityLabel(agent.agentType)
-  const label = agentDisplayLabel(agent)
+  const label = agentDisplayLabel(agent, now)
   const ts = formatTimeAgo(agent.stateStartedAt, now)
 
   return (

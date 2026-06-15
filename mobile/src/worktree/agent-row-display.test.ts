@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { AGENT_STATUS_STALE_AFTER_MS } from '../../../src/shared/agent-status-types'
 import type { RuntimeWorktreeAgentRow } from '../../../src/shared/runtime-types'
 import {
   agentDisplayLabel,
@@ -26,25 +27,53 @@ function row(overrides: Partial<RuntimeWorktreeAgentRow> = {}): RuntimeWorktreeA
 
 describe('agentDotState', () => {
   it('maps known states through and unknown to idle', () => {
-    expect(agentDotState(row({ state: 'working' }))).toBe('working')
-    expect(agentDotState(row({ state: 'blocked' }))).toBe('blocked')
-    expect(agentDotState(row({ state: 'waiting' }))).toBe('waiting')
-    expect(agentDotState(row({ state: 'done' }))).toBe('done')
-    expect(agentDotState(row({ state: 'unknown-state' as never }))).toBe('idle')
+    expect(agentDotState(row({ state: 'working', updatedAt: 0 }), 0)).toBe('working')
+    expect(agentDotState(row({ state: 'blocked', updatedAt: 0 }), 0)).toBe('blocked')
+    expect(agentDotState(row({ state: 'waiting', updatedAt: 0 }), 0)).toBe('waiting')
+    expect(agentDotState(row({ state: 'done', updatedAt: 0 }), 0)).toBe('done')
+    expect(agentDotState(row({ state: 'unknown-state' as never }), 0)).toBe('idle')
   })
 
   it('reports interrupted regardless of state', () => {
-    expect(agentDotState(row({ state: 'done', interrupted: true }))).toBe('interrupted')
+    expect(agentDotState(row({ state: 'done', interrupted: true }), 0)).toBe('interrupted')
+  })
+
+  it('decays a stale active state to idle, matching desktop', () => {
+    const stale = AGENT_STATUS_STALE_AFTER_MS + 1
+    // Active states past the staleness window read as idle…
+    expect(agentDotState(row({ state: 'working', updatedAt: 0 }), stale)).toBe('idle')
+    expect(agentDotState(row({ state: 'blocked', updatedAt: 0 }), stale)).toBe('idle')
+    expect(agentDotState(row({ state: 'waiting', updatedAt: 0 }), stale)).toBe('idle')
+    // …exactly at the threshold it is still fresh (decay is strictly past it).
+    expect(
+      agentDotState(row({ state: 'working', updatedAt: 0 }), AGENT_STATUS_STALE_AFTER_MS)
+    ).toBe('working')
+    // 'done' never decays; interrupted still wins.
+    expect(agentDotState(row({ state: 'done', updatedAt: 0 }), stale)).toBe('done')
+    expect(agentDotState(row({ state: 'working', updatedAt: 0, interrupted: true }), stale)).toBe(
+      'interrupted'
+    )
   })
 })
 
 describe('agentDisplayLabel', () => {
   it('prefers last message, then prompt, then state label', () => {
-    expect(agentDisplayLabel(row({ lastAssistantMessage: 'hello there' }))).toBe('hello there')
-    expect(agentDisplayLabel(row({ lastAssistantMessage: '   ', prompt: 'do the thing' }))).toBe(
+    expect(agentDisplayLabel(row({ lastAssistantMessage: 'hello there' }), 0)).toBe('hello there')
+    expect(agentDisplayLabel(row({ lastAssistantMessage: '   ', prompt: 'do the thing' }), 0)).toBe(
       'do the thing'
     )
-    expect(agentDisplayLabel(row({ state: 'working', prompt: '' }))).toBe('Working')
+    expect(agentDisplayLabel(row({ state: 'working', prompt: '', updatedAt: 0 }), 0)).toBe(
+      'Working'
+    )
+  })
+
+  it('falls back to the decayed state label when stale', () => {
+    expect(
+      agentDisplayLabel(
+        row({ state: 'working', prompt: '', updatedAt: 0 }),
+        AGENT_STATUS_STALE_AFTER_MS + 1
+      )
+    ).toBe('Idle')
   })
 })
 

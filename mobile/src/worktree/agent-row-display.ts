@@ -1,3 +1,4 @@
+import { AGENT_STATUS_STALE_AFTER_MS } from '../../../src/shared/agent-status-types'
 import type { RuntimeWorktreeAgentRow } from '../../../src/shared/runtime-types'
 
 // Mirrors the desktop AgentStateDot vocabulary. The wire `state` is the agent
@@ -6,7 +7,8 @@ import type { RuntimeWorktreeAgentRow } from '../../../src/shared/runtime-types'
 export type AgentDotState = 'working' | 'blocked' | 'waiting' | 'done' | 'idle' | 'interrupted'
 
 export function agentDotState(
-  row: Pick<RuntimeWorktreeAgentRow, 'state' | 'interrupted'>
+  row: Pick<RuntimeWorktreeAgentRow, 'state' | 'interrupted' | 'updatedAt'>,
+  now: number
 ): AgentDotState {
   if (row.interrupted) {
     return 'interrupted'
@@ -15,8 +17,12 @@ export function agentDotState(
     case 'working':
     case 'blocked':
     case 'waiting':
+      // Why: an agent that exits without a final report would otherwise read as
+      // active forever. Decay a stale active state to idle, matching desktop's
+      // renderer-side staleness decay (worktree-agent-rows.ts).
+      return now - row.updatedAt > AGENT_STATUS_STALE_AFTER_MS ? 'idle' : row.state
     case 'done':
-      return row.state
+      return 'done'
   }
   return 'idle'
 }
@@ -42,7 +48,7 @@ export function agentStateLabel(state: AgentDotState): string {
 // Primary row text: prefer the agent's last message, then the user prompt, then
 // a human-readable state label so a row is never blank. Matches the desktop
 // DashboardAgentRow displayLabel fallback chain.
-export function agentDisplayLabel(row: RuntimeWorktreeAgentRow): string {
+export function agentDisplayLabel(row: RuntimeWorktreeAgentRow, now: number): string {
   const message = row.lastAssistantMessage?.trim()
   if (message) {
     return message
@@ -51,7 +57,7 @@ export function agentDisplayLabel(row: RuntimeWorktreeAgentRow): string {
   if (prompt) {
     return prompt
   }
-  return agentStateLabel(agentDotState(row))
+  return agentStateLabel(agentDotState(row, now))
 }
 
 // Short agent identity label by type (Claude/Codex/Gemini/…), used when no
