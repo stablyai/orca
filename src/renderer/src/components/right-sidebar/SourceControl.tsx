@@ -144,12 +144,14 @@ import {
   stageRuntimeGitPath,
   unstageRuntimeGitPath,
   type RuntimeGenerateCommitMessageOverrides,
-  type RuntimeGeneratePullRequestFieldsOverrides
+  type RuntimeGeneratePullRequestFieldsOverrides,
+  type RuntimeGitContext
 } from '@/runtime/runtime-git-client'
 import { getRuntimeRepoBaseRefDefault } from '@/runtime/runtime-repo-client'
 import { PullRequestIcon } from './checks-panel-content'
 import { stripBaseRef, useCreatePullRequestDialogFields } from './useCreatePullRequestDialogFields'
 import { GitHistoryPanel, type GitHistoryPanelState } from './GitHistoryPanel'
+import { BranchSwitcher } from './BranchSwitcher'
 import type { GitHistoryItem } from '../../../../shared/git-history'
 import { normalizeHostedReviewHeadRef } from '../../../../shared/hosted-review-refs'
 import { shouldForcePushWithLeaseForUpstream } from '../../../../shared/git-upstream-status'
@@ -3146,6 +3148,32 @@ function SourceControlInner(): React.JSX.Element {
 
   refreshBranchCompareRef.current = refreshBranchCompare
 
+  // Why: a branch switch changes status, ahead/behind, and the linked review —
+  // refresh the same projections the panel already refreshes after remote ops.
+  const handleBranchSwitched = useCallback(() => {
+    void refreshActiveGitStatus()
+    void refreshBranchCompare()
+  }, [refreshActiveGitStatus, refreshBranchCompare])
+
+  const branchSwitcherWorktrees = useMemo(
+    () =>
+      activeRepo
+        ? Array.from(worktreeMap.values()).filter((w) => w.repoId === activeRepo.id)
+        : [],
+    [worktreeMap, activeRepo]
+  )
+
+  const branchSwitcherGitContext = useMemo<RuntimeGitContext>(
+    () => ({
+      settings: activeRepoSettings,
+      worktreeId: activeWorktreeId,
+      worktreePath: worktreePath ?? '',
+      // Why: connectionId is what routes git ops over SSH; pass it through.
+      connectionId: activeConnectionId ?? undefined
+    }),
+    [activeRepoSettings, activeWorktreeId, worktreePath, activeConnectionId]
+  )
+
   const refreshGitHistory = useCallback(async (): Promise<void> => {
     if (
       !activeWorktreeId ||
@@ -3823,6 +3851,18 @@ function SourceControlInner(): React.JSX.Element {
               />
             </div>
           )}
+        </div>
+
+        <div className="border-b border-border">
+          <BranchSwitcher
+            repoId={activeRepo?.id ?? null}
+            worktrees={branchSwitcherWorktrees}
+            activeWorktreeId={activeWorktreeId}
+            activeBranchName={branchName}
+            detachedLabel={detachedHeadDisplay?.sourceControlLabel ?? null}
+            gitContext={branchSwitcherGitContext}
+            onSwitched={handleBranchSwitched}
+          />
         </div>
 
         {detachedHeadDisplay && (
