@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process'
-import type { DockerConnection, DockerContainerInspect, DockerContainerSummary, DockerSshTargetRef } from '../../shared/docker-types'
+import type { DockerConnection, DockerContainerAction, DockerContainerInspect, DockerContainerSummary, DockerSshTargetRef } from '../../shared/docker-types'
 import { parseDockerContainers } from './docker-output-parser'
 import { parseDockerInspect } from './docker-inspect-parser'
 
@@ -137,4 +137,42 @@ export async function inspectContainer(
     throw new DockerCommandError(result.code, `Unexpected docker inspect output for ${containerId}`)
   }
   return inspect
+}
+
+function actionToArgs(action: DockerContainerAction, containerId: string): string[] {
+  switch (action) {
+    case 'start':
+      return ['start', containerId]
+    case 'stop':
+      return ['stop', containerId]
+    case 'restart':
+      return ['restart', containerId]
+    case 'pause':
+      return ['pause', containerId]
+    case 'unpause':
+      return ['unpause', containerId]
+    case 'remove':
+      // -f so removing a running container doesn't error; the UI confirms first.
+      return ['rm', '-f', containerId]
+  }
+}
+
+export async function runContainerAction(
+  conn: DockerConnection,
+  containerId: string,
+  action: DockerContainerAction,
+  deps: DockerRunnerDeps = {}
+): Promise<void> {
+  const exec = deps.exec ?? localCapturedExec
+  const invocation = buildInvocation(conn, actionToArgs(action, containerId), {
+    dockerBinary: deps.dockerBinary,
+    sshTarget: deps.sshTarget
+  })
+  const result = await exec(invocation.file, invocation.args, {
+    env: invocation.env,
+    timeout: DOCKER_COMMAND_TIMEOUT_MS
+  })
+  if (result.code !== 0) {
+    throw new DockerCommandError(result.code, result.stderr)
+  }
 }

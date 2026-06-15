@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import type { DockerConnection } from '../../shared/docker-types'
-import { buildInvocation, defaultDockerBinary, listContainers, DockerCommandError, inspectContainer } from './docker-command-runner'
+import type { DockerConnection, DockerContainerAction } from '../../shared/docker-types'
+import { buildInvocation, defaultDockerBinary, listContainers, DockerCommandError, inspectContainer, runContainerAction } from './docker-command-runner'
 
 const ARGS = ['ps', '-a', '--format', '{{json .}}']
 
@@ -137,6 +137,33 @@ describe('inspectContainer', () => {
     const exec = async () => ({ stdout: '[]', stderr: '', code: 0 })
     await expect(
       inspectContainer({ id: 'local', label: 'Local', kind: 'local' }, 'abc', { exec })
+    ).rejects.toThrow(DockerCommandError)
+  })
+})
+
+describe('runContainerAction', () => {
+  const cases: Array<[DockerContainerAction, string[]]> = [
+    ['start', ['start', 'abc']],
+    ['stop', ['stop', 'abc']],
+    ['restart', ['restart', 'abc']],
+    ['pause', ['pause', 'abc']],
+    ['unpause', ['unpause', 'abc']],
+    ['remove', ['rm', '-f', 'abc']]
+  ]
+  it.each(cases)('maps %s to the right docker argv', async (action, expectedArgs) => {
+    const calls: Array<{ file: string; args: string[] }> = []
+    const exec = async (file: string, args: string[]) => {
+      calls.push({ file, args })
+      return { stdout: '', stderr: '', code: 0 }
+    }
+    await runContainerAction({ id: 'local', label: 'Local', kind: 'local' }, 'abc', action, { exec })
+    expect(calls[0]).toEqual({ file: 'docker', args: expectedArgs })
+  })
+
+  it('throws DockerCommandError on a non-zero exit', async () => {
+    const exec = async () => ({ stdout: '', stderr: 'permission denied', code: 1 })
+    await expect(
+      runContainerAction({ id: 'local', label: 'Local', kind: 'local' }, 'abc', 'stop', { exec })
     ).rejects.toThrow(DockerCommandError)
   })
 })
