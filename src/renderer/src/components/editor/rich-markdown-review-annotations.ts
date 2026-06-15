@@ -10,9 +10,9 @@ import {
 import type { RichMarkdownReviewNotePosition } from './rich-markdown-review-note-layout'
 import { findRichMarkdownSelectedTextRanges } from './rich-markdown-review-text-ranges'
 
-const RICH_MARKDOWN_ANNOTATION_BUTTON_SIZE_PX = 22
+const RICH_MARKDOWN_ANNOTATION_BUTTON_SIZE_PX = 24
 const RICH_MARKDOWN_ANNOTATION_EDGE_PADDING_PX = 8
-const RICH_MARKDOWN_ANNOTATION_SELECTION_GAP_PX = 6
+const RICH_MARKDOWN_ANNOTATION_SELECTION_GAP_PX = 8
 const RICH_MARKDOWN_ANNOTATION_MIN_LEFT_PX = 56
 const RICH_MARKDOWN_ANNOTATION_RIGHT_OFFSET_PX = 42
 const RICH_MARKDOWN_ANNOTATION_POPOVER_WIDTH_PX = 420

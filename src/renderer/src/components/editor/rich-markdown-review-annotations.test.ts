@@ -6,11 +6,11 @@ import {
 
 describe('getRichMarkdownAnnotationButtonTop', () => {
   it('keeps the add-note button below short visible selections', () => {
-    expect(getRichMarkdownAnnotationButtonTop(120, 500)).toBe(126)
+    expect(getRichMarkdownAnnotationButtonTop(120, 500)).toBe(128)
   })
 
   it('clamps the add-note button inside the visible editor shell for long selections', () => {
-    expect(getRichMarkdownAnnotationButtonTop(760, 500)).toBe(470)
+    expect(getRichMarkdownAnnotationButtonTop(760, 500)).toBe(468)
   })
 })
 
@@ -20,6 +20,6 @@ describe('getRichMarkdownAnnotationButtonLeft', () => {
   })
 
   it('clamps the add-note button inside narrow editor shells', () => {
-    expect(getRichMarkdownAnnotationButtonLeft(72)).toBe(42)
+    expect(getRichMarkdownAnnotationButtonLeft(72)).toBe(40)
   })
 })
