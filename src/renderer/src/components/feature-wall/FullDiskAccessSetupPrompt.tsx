@@ -6,9 +6,9 @@ import type {
   DeveloperPermissionState,
   DeveloperPermissionStatus
 } from '../../../../shared/developer-permissions-types'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { useMountedRef } from '@/hooks/useMountedRef'
-import { cn } from '@/lib/utils'
 import { isMacUserAgent } from '../terminal-pane/pane-helpers'
 import { translate } from '@/i18n/i18n'
 
@@ -130,6 +130,8 @@ function useFullDiskAccessStatus(): FullDiskAccessStatusState & { refresh: () =>
     if (!isMac) {
       return
     }
+    // Why: users grant Full Disk Access outside Orca, so focus is the first
+    // cheap signal that System Settings may have changed the permission state.
     window.addEventListener('focus', refreshIfLive)
     return () => {
       window.removeEventListener('focus', refreshIfLive)
@@ -200,16 +202,9 @@ export function FullDiskAccessSetupPrompt(): React.JSX.Element | null {
                 'Full Disk Access'
               )}
             </span>
-            <span
-              className={cn(
-                'rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider',
-                ready
-                  ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
-                  : 'border-border bg-background text-muted-foreground'
-              )}
-            >
+            <Badge variant={ready ? 'secondary' : 'outline'} className="uppercase tracking-wider">
               {getFullDiskAccessStatusLabel({ checking, status })}
-            </span>
+            </Badge>
           </div>
           <p className="text-xs leading-snug text-muted-foreground">
             {translate(

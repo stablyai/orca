@@ -1,12 +1,13 @@
 import { mkdir } from 'fs/promises'
 import type { Store } from './persistence'
 import type { Repo } from '../shared/types'
+import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../shared/execution-host'
 import { isFolderRepo } from '../shared/repo-kind'
 import { authorizeExternalPath } from './ipc/filesystem-auth'
 import { computeWorkspaceRoot, getWorktreePathSettings } from './ipc/worktree-logic'
 
 export async function prepareLocalWorktreeRootForRepo(store: Store, repo: Repo): Promise<void> {
-  if (repo.connectionId || isFolderRepo(repo)) {
+  if (getRepoExecutionHostId(repo) !== LOCAL_EXECUTION_HOST_ID || isFolderRepo(repo)) {
     return
   }
 

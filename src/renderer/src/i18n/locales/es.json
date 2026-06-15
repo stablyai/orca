@@ -9600,15 +9600,15 @@
             }
           },
           "FullDiskAccessSetupPrompt": {
-            "bbb3f1e404": "Checking",
-            "48d87edcd2": "Granted",
-            "6db9a69f4e": "Recommended",
-            "fa809e8ada": "Opened macOS Privacy & Security",
-            "bfa3402305": "Could not request permission",
-            "c566bca278": "Full Disk Access",
-            "0d6efe9cf4": "Recommended on macOS when projects or worktrees live in protected folders.",
-            "dac08ec03e": "Opening...",
-            "6e3d62b816": "Open Full Disk Access"
+            "bbb3f1e404": "Comprobando",
+            "48d87edcd2": "Concedido",
+            "6db9a69f4e": "Recomendado",
+            "fa809e8ada": "Privacidad y seguridad de macOS abiertas",
+            "bfa3402305": "No se pudo solicitar permiso",
+            "c566bca278": "Acceso completo al disco",
+            "0d6efe9cf4": "Recomendado en macOS cuando los proyectos o worktrees están en carpetas protegidas.",
+            "dac08ec03e": "Abriendo...",
+            "6e3d62b816": "Abrir Acceso completo al disco"
           }
         },
         "tips": {

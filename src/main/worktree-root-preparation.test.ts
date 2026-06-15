@@ -56,8 +56,16 @@ describe('prepareLocalWorktreeRootForRepo', () => {
     expect(authorizeExternalPathMock).toHaveBeenCalledWith('/projects/worktrees')
   })
 
-  it('skips SSH and folder repos', async () => {
+  it('skips non-local and folder repos', async () => {
     await prepareLocalWorktreeRootForRepo(store as never, { ...repo, connectionId: 'ssh-1' })
+    await prepareLocalWorktreeRootForRepo(store as never, {
+      ...repo,
+      executionHostId: 'ssh:ssh-1'
+    })
+    await prepareLocalWorktreeRootForRepo(store as never, {
+      ...repo,
+      executionHostId: 'runtime:env-1'
+    })
     await prepareLocalWorktreeRootForRepo(store as never, { ...repo, kind: 'folder' })
 
     expect(mkdirMock).not.toHaveBeenCalled()

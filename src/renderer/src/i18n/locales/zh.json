@@ -9600,15 +9600,15 @@
             }
           },
           "FullDiskAccessSetupPrompt": {
-            "bbb3f1e404": "Checking",
-            "48d87edcd2": "Granted",
-            "6db9a69f4e": "Recommended",
-            "fa809e8ada": "Opened macOS Privacy & Security",
-            "bfa3402305": "Could not request permission",
-            "c566bca278": "Full Disk Access",
-            "0d6efe9cf4": "Recommended on macOS when projects or worktrees live in protected folders.",
-            "dac08ec03e": "Opening...",
-            "6e3d62b816": "Open Full Disk Access"
+            "bbb3f1e404": "检查中",
+            "48d87edcd2": "已授予",
+            "6db9a69f4e": "推荐",
+            "fa809e8ada": "已打开 macOS 隐私与安全性",
+            "bfa3402305": "无法请求权限",
+            "c566bca278": "完全磁盘访问权限",
+            "0d6efe9cf4": "当项目或 worktree 位于受保护文件夹时，建议在 macOS 上开启。",
+            "dac08ec03e": "正在打开...",
+            "6e3d62b816": "打开完全磁盘访问权限"
           }
         },
         "tips": {
