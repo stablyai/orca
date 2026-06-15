@@ -76,6 +76,17 @@ describe('ModifierDoubleTapDetector', () => {
     expect(d.process(down('Shift'), 100)).toBeNull()
   })
 
+  it('handles a second keyDown of the same modifier without an intervening keyUp', () => {
+    const d = new ModifierDoubleTapDetector()
+    d.process(down('Shift'), 0)
+    // Missed keyUp — a fresh (non-repeat) keyDown for the same modifier just
+    // restarts the first tap rather than emitting.
+    d.process(down('Shift'), 50)
+    d.process(up('Shift'), 60)
+    // The next press within the window still completes the gesture.
+    expect(d.process(down('Shift'), 200)).toEqual({ modifier: 'Shift' })
+  })
+
   it('clears state on reset()', () => {
     const d = new ModifierDoubleTapDetector()
     d.process(down('Shift'), 0)

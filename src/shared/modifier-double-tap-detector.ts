@@ -95,8 +95,9 @@ export class ModifierDoubleTapDetector {
   private state: DetectorState = { phase: 'idle' }
 
   process(event: ModifierDoubleTapEvent, timestampMs: number): DetectedDoubleTap | null {
-    // Any non-modifier key, or a modifier combined with another modifier,
-    // breaks an in-progress gesture.
+    // A non-modifier key, or a modifier chorded with another, breaks the gesture.
+    // (On keyUp, isModifierOnly:false means another modifier is still held — the
+    // gesture was already reset at that modifier's keyDown.)
     if (event.modifier === null || !event.isModifierOnly) {
       this.state = { phase: 'idle' }
       return null
