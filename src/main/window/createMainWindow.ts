@@ -15,8 +15,13 @@ import {
   getWindowShortcutActionId,
   matchesRecentTabSwitcherChord,
   resolveWindowShortcutAction,
-  windowShortcutActionCapturesTerminal
+  windowShortcutActionCapturesTerminal,
+  type WindowShortcutAction
 } from '../../shared/window-shortcut-policy'
+import {
+  ModifierDoubleTapDetector,
+  toModifierDoubleTapEvent
+} from '../../shared/modifier-double-tap-detector'
 import {
   keybindingMatchesAction,
   normalizeTerminalShortcutPolicy,
@@ -655,6 +660,66 @@ export function createMainWindow(
     clearRendererRecoveryTimer()
   })
 
+  const doubleTapDetector = new ModifierDoubleTapDetector()
+
+  // Why: one place maps a resolved window-shortcut action to its IPC/side effect,
+  // reused by the normal keydown path and the double-tap path so they cannot drift.
+  const sendResolvedWindowShortcutAction = (action: WindowShortcutAction): void => {
+    switch (action.type) {
+      case 'dictationKeyDown':
+        mainWindow.webContents.send('ui:dictationKeyDown')
+        return
+      case 'zoom':
+        mainWindow.webContents.send('terminal:zoom', action.direction)
+        return
+      case 'openSettings':
+        mainWindow.webContents.send('ui:openSettings')
+        return
+      case 'exportPdf':
+        mainWindow.webContents.send('export:requestPdf')
+        return
+      case 'forceReload':
+        opts?.onBeforeReload?.({ ignoreCache: true, webContentsId: mainWindow.webContents.id })
+        mainWindow.webContents.reloadIgnoringCache()
+        return
+      case 'toggleLeftSidebar':
+        mainWindow.webContents.send('ui:toggleLeftSidebar')
+        return
+      case 'toggleRightSidebar':
+        mainWindow.webContents.send('ui:toggleRightSidebar')
+        return
+      case 'toggleWorktreePalette':
+        mainWindow.webContents.send('ui:toggleWorktreePalette')
+        return
+      case 'toggleFloatingTerminal':
+        mainWindow.webContents.send('ui:toggleFloatingTerminal')
+        return
+      case 'openQuickOpen':
+        mainWindow.webContents.send('ui:openQuickOpen')
+        return
+      case 'openNewWorkspace':
+        mainWindow.webContents.send('ui:openNewWorkspace')
+        return
+      case 'deleteCurrentWorkspace':
+        mainWindow.webContents.send('ui:deleteCurrentWorkspace')
+        return
+      case 'openTasks':
+        mainWindow.webContents.send('ui:openTasks')
+        return
+      case 'switchRecentTab':
+        mainWindow.webContents.send('ui:switchRecentTab')
+        return
+      case 'jumpToWorktreeIndex':
+        mainWindow.webContents.send('ui:jumpToWorktreeIndex', action.index)
+        return
+      case 'jumpToTabIndex':
+        mainWindow.webContents.send('ui:jumpToTabIndex', action.index)
+        return
+      case 'worktreeHistoryNavigate':
+        mainWindow.webContents.send('ui:worktreeHistoryNavigate', action.direction)
+    }
+  }
+
   mainWindow.webContents.on('before-input-event', (event, input) => {
     if (shortcutRecorderFocused) {
       return
@@ -677,6 +742,43 @@ export function createMainWindow(
         store?.getSettings().terminalShortcutPolicy
       )
     }
+
+    // Why: detect double-tap-modifier gestures on the raw key stream. A bare
+    // modifier emits no terminal bytes, so this never steals readline input.
+    if (input.type === 'keyDown' || input.type === 'keyUp') {
+      const detected = doubleTapDetector.process(
+        toModifierDoubleTapEvent({
+          type: input.type,
+          code: input.code,
+          key: input.key,
+          shift: input.shift,
+          control: input.control,
+          alt: input.alt,
+          meta: input.meta,
+          isAutoRepeat: input.isAutoRepeat
+        }),
+        Date.now()
+      )
+      if (detected) {
+        const doubleTapAction = resolveWindowShortcutAction(
+          { type: 'keyDown', doubleTapModifier: detected.modifier },
+          process.platform,
+          keybindings,
+          terminalShortcutContext
+        )
+        if (doubleTapAction) {
+          // Only preventDefault the emitting keydown — never the first tap's
+          // down/up. This suppresses the renderer DOM keydown so the renderer
+          // detector cannot also fire for the same gesture.
+          event.preventDefault()
+          sendResolvedWindowShortcutAction(doubleTapAction)
+          return
+        }
+        // No allowlisted action: let the keydown reach the renderer, whose
+        // detector completes and dispatches inline.
+      }
+    }
+
     if (
       input.type === 'keyDown' &&
       matchesRecentTabSwitcherChord(input, process.platform, keybindings, terminalShortcutContext)
@@ -771,99 +873,12 @@ export function createMainWindow(
       })
     }
 
-    if (action.type === 'zoom') {
-      mainWindow.webContents.send('terminal:zoom', action.direction)
-      return
-    }
-
-    if (action.type === 'openSettings') {
-      mainWindow.webContents.send('ui:openSettings')
-      return
-    }
-
-    if (action.type === 'exportPdf') {
-      mainWindow.webContents.send('export:requestPdf')
-      return
-    }
-
-    if (action.type === 'forceReload') {
-      opts?.onBeforeReload?.({
-        ignoreCache: true,
-        webContentsId: mainWindow.webContents.id
-      })
-      mainWindow.webContents.reloadIgnoringCache()
-      return
-    }
-
-    if (action.type === 'toggleLeftSidebar') {
-      mainWindow.webContents.send('ui:toggleLeftSidebar')
-      return
-    }
-
-    if (action.type === 'toggleRightSidebar') {
-      mainWindow.webContents.send('ui:toggleRightSidebar')
-      return
-    }
-
-    if (action.type === 'toggleWorktreePalette') {
-      // Why: embedded browser guests can keep keyboard focus inside Chromium's
-      // guest webContents, which bypasses the renderer's window-level keydown
-      // listener. Forward the worktree-switch shortcut through the main window
-      // so Cmd+J (macOS) or Ctrl+Shift+J (Win/Linux) works consistently from browser tabs too.
-      mainWindow.webContents.send('ui:toggleWorktreePalette')
-      return
-    }
-
-    if (action.type === 'toggleFloatingTerminal') {
-      mainWindow.webContents.send('ui:toggleFloatingTerminal')
-      return
-    }
-
-    if (action.type === 'openQuickOpen') {
-      mainWindow.webContents.send('ui:openQuickOpen')
-      return
-    }
-
-    if (action.type === 'openNewWorkspace') {
-      // Why: routed through the main process so focus contexts that bypass
-      // the renderer's window-level keydown (contentEditable markdown editor,
-      // browser-guest webContents) still reach the new-workspace composer.
-      mainWindow.webContents.send('ui:openNewWorkspace')
-      return
-    }
-
-    if (action.type === 'deleteCurrentWorkspace') {
-      mainWindow.webContents.send('ui:deleteCurrentWorkspace')
-      return
-    }
-
-    if (action.type === 'openTasks') {
-      mainWindow.webContents.send('ui:openTasks')
-      return
-    }
-
-    if (action.type === 'switchRecentTab') {
-      mainWindow.webContents.send('ui:switchRecentTab')
-      return
-    }
-
-    if (action.type === 'jumpToWorktreeIndex') {
-      mainWindow.webContents.send('ui:jumpToWorktreeIndex', action.index)
-      return
-    }
-
-    if (action.type === 'jumpToTabIndex') {
-      mainWindow.webContents.send('ui:jumpToTabIndex', action.index)
-      return
-    }
-
-    if (action.type === 'worktreeHistoryNavigate') {
-      // Why: routed through main so the chord reaches the renderer even when
-      // a terminal (xterm.js) or a browser guest has focus — both surfaces
-      // otherwise absorb Arrow keys before the renderer's window listener.
-      mainWindow.webContents.send('ui:worktreeHistoryNavigate', action.direction)
-    }
+    sendResolvedWindowShortcutAction(action)
   })
+
+  // Why: a mid-gesture focus loss must not leave the detector armed so the next
+  // unrelated modifier press completes a phantom double-tap.
+  mainWindow.on('blur', () => doubleTapDetector.reset())
 
   mainWindow.webContents.on('zoom-changed', (event, zoomDirection) => {
     // Why: Some keyboard layouts/platforms consume Ctrl/Cmd+Minus before
