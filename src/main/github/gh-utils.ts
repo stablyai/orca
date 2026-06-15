@@ -1,8 +1,26 @@
 import { execFile } from 'child_process'
 import { promisify } from 'util'
 import { gitExecFileAsync, ghExecFileAsync, extractExecError } from '../git/runner'
-import type { ClassifiedError, GitHubOwnerRepo, IssueSourcePreference } from '../../shared/types'
+import type { IssueSourcePreference } from '../../shared/types'
 import { getSshGitProvider } from '../providers/ssh-git-dispatch'
+import {
+  normalizeGitHubApiHost,
+  parseGitHubOwnerRepo,
+  parseGitHubRemoteIdentity,
+  preferredGitHubApiHost
+} from './remote-identity'
+import type { GitHubRemoteIdentity, OwnerRepo } from './remote-identity'
+
+// Why: keep gh-utils the stable import surface for callers that historically
+// imported these primitives from here.
+export {
+  normalizeGitHubApiHost,
+  parseGitHubOwnerRepo,
+  parseGitHubRemoteIdentity,
+  preferredGitHubApiHost
+}
+export type { GitHubRemoteIdentity, OwnerRepo }
+export { classifyGhError, classifyListIssuesError } from './gh-error-classification'
 
 // Why: legacy generic execFile wrapper — only used by callers that don't need
 // WSL-aware routing (e.g. non-repo-scoped gh commands). Repo-scoped callers
@@ -36,85 +54,7 @@ export function release(): void {
   }
 }
 
-// ── Error classification ─────────────────────────────────────────────
-// Why: gh CLI surfaces API errors as unstructured stderr. This helper maps
-// known patterns to typed errors so callers can show user-friendly messages.
-export function classifyGhError(stderr: string): ClassifiedError {
-  const s = stderr.toLowerCase()
-  if (s.includes('http 403') || s.includes('resource not accessible')) {
-    return {
-      type: 'permission_denied',
-      message: "You don't have permission to edit this issue. Check your GitHub token scopes."
-    }
-  }
-  // Why: the full gh message is "Could not resolve to a Repository with the
-  // name ...". Matching the substring 'could not resolve' alone would also
-  // capture DNS failures like "could not resolve host: api.github.com" and
-  // misclassify them as not_found. Anchor on the 'repository' qualifier so
-  // DNS errors fall through to the network_error branch below.
-  if (s.includes('http 404') || s.includes('could not resolve to a repository')) {
-    return { type: 'not_found', message: 'Issue not found — it may have been deleted.' }
-  }
-  // Why: `gh issue list` prints "the '<owner>/<repo>' repository has disabled
-  // issues" when Issues are turned off in repo settings (common on forks). This
-  // hits during feature-2 when a user flips the selector to an origin fork —
-  // without a dedicated branch the raw "Command failed: gh issue list …" line
-  // leaks verbatim into the banner via the `unknown` fallback.
-  if (s.includes('has disabled issues')) {
-    return { type: 'issues_disabled', message: 'Issues are disabled on this repository.' }
-  }
-  if (s.includes('http 422') || s.includes('validation failed')) {
-    return { type: 'validation_error', message: `Invalid update — ${stderr.trim()}` }
-  }
-  if (s.includes('rate limit')) {
-    return {
-      type: 'rate_limited',
-      message: 'GitHub rate limit hit. Try again in a few minutes.'
-    }
-  }
-  if (
-    s.includes('timeout') ||
-    s.includes('no such host') ||
-    s.includes('network') ||
-    s.includes('could not resolve host')
-  ) {
-    return { type: 'network_error', message: 'Network error — check your connection.' }
-  }
-  return { type: 'unknown', message: `Failed to update issue: ${stderr.trim()}` }
-}
-
-// Why: classifyGhError's copy is phrased for edit/update operations, but
-// `listIssues` is a read op and the renderer interpolates err.message verbatim
-// into a read-context banner. Rewrite the message for read contexts while
-// keeping the typed classification so callers/telemetry are unaffected.
-export function classifyListIssuesError(stderr: string): ClassifiedError {
-  const c = classifyGhError(stderr)
-  const trimmed = stderr.trim()
-  // Why: provide an explicit entry for every `ClassifiedError['type']` value
-  // (even when the copy matches the generic fallback) so the read-context
-  // rewrite is complete and any newly added error type surfaces as a
-  // TypeScript error rather than silently falling through to edit-phrased copy.
-  const readMessages: Record<ClassifiedError['type'], string> = {
-    permission_denied:
-      "You don't have permission to read issues for this repository. Check your GitHub token scopes.",
-    not_found: 'Repository not found.',
-    issues_disabled: 'Issues are disabled on this repository.',
-    validation_error: `Invalid request — ${trimmed}`,
-    rate_limited: 'GitHub rate limit hit. Try again in a few minutes.',
-    network_error: 'Network error — check your connection.',
-    unknown: `Failed to load issues: ${trimmed}`
-  }
-  return { type: c.type, message: readMessages[c.type] }
-}
-
 // ── Owner/repo resolution for gh api --cache ──────────────────────────
-// Why: alias the shared shape so `src/shared/types.ts#GitHubOwnerRepo` remains
-// the single source of truth while main-side call sites can keep using the
-// short local name `OwnerRepo`.
-export type OwnerRepo = GitHubOwnerRepo
-
-export type GitHubRemoteIdentity = GitHubOwnerRepo & { host: string }
-
 export type GitHubRepoContext = {
   repoPath: string
   connectionId?: string | null
@@ -174,78 +114,6 @@ function pruneOwnerRepoCache(now: number): void {
     }
     ownerRepoCache.delete(oldestKey)
   }
-}
-
-export function parseGitHubOwnerRepo(remoteUrl: string): OwnerRepo | null {
-  const identity = parseGitHubRemoteIdentity(remoteUrl)
-  if (!identity || identity.host.toLowerCase() !== 'github.com') {
-    return null
-  }
-  return { owner: identity.owner, repo: identity.repo }
-}
-
-function normalizeGitHubRemoteHost(host: string): string {
-  const normalizedHost = host.toLowerCase()
-  // Why: GitHub documents ssh.github.com:443 as SSH-over-HTTPS for github.com repos.
-  return normalizedHost === 'ssh.github.com' ? 'github.com' : normalizedHost
-}
-
-function parseGitHubRemotePath(path: string): Pick<GitHubRemoteIdentity, 'owner' | 'repo'> | null {
-  const parts = path.replace(/^\/+/, '').replace(/\/+$/, '').split('/')
-  if (parts.length !== 2) {
-    return null
-  }
-  const [owner, repoWithSuffix] = parts
-  const repo = repoWithSuffix.replace(/\.git$/i, '')
-  if (!owner || !repo) {
-    return null
-  }
-  return { owner, repo }
-}
-
-export function parseGitHubRemoteIdentity(remoteUrl: string): GitHubRemoteIdentity | null {
-  const trimmed = remoteUrl.trim()
-  const sshMatch = trimmed.match(/^git@([^:]+):([^/]+)\/([^/]+?)(?:\.git)?$/i)
-  if (sshMatch) {
-    return { host: normalizeGitHubRemoteHost(sshMatch[1]), owner: sshMatch[2], repo: sshMatch[3] }
-  }
-
-  try {
-    const url = new URL(trimmed)
-    if (!['git:', 'git+ssh:', 'http:', 'https:', 'ssh:'].includes(url.protocol.toLowerCase())) {
-      return null
-    }
-    const path = parseGitHubRemotePath(url.pathname)
-    return path ? { host: normalizeGitHubRemoteHost(url.hostname), ...path } : null
-  } catch {
-    return null
-  }
-}
-
-function normalizeGitHubApiHost(host: string): string | null {
-  const normalized = host.trim().toLowerCase()
-  if (!/^[a-z0-9.-]+(?::[0-9]+)?$/.test(normalized)) {
-    return null
-  }
-  const hostname = normalized.split(':')[0]
-  // Why: ProjectV2 is GitHub-only. Do not reinterpret obvious non-GitHub
-  // remotes as GitHub Enterprise just because they have owner/repo-shaped URLs.
-  if (
-    hostname === 'gitlab.com' ||
-    hostname.endsWith('.gitlab.com') ||
-    hostname === 'bitbucket.org' ||
-    hostname.endsWith('.bitbucket.org') ||
-    hostname === 'dev.azure.com' ||
-    hostname.endsWith('.visualstudio.com')
-  ) {
-    return null
-  }
-  return normalized
-}
-
-function preferredGitHubApiHost(host: string): boolean {
-  const hostname = host.split(':')[0]
-  return hostname === 'github.com' || hostname.includes('github') || hostname.includes('ghe')
 }
 
 export async function getGitHubApiHostForRepo(
