@@ -1113,12 +1113,14 @@ export default function HostScreen() {
                 {section.icon === 'pin' && (
                   <Pin size={12} color={colors.textMuted} style={styles.sectionIcon} />
                 )}
-                {repoSectionIcon ? (
+                {groupMode === 'repo' ? (
                   <View style={styles.sectionRepoIcon}>
-                    <MobileRepoIcon repoIcon={repoSectionIcon} size={14} />
+                    <MobileRepoIcon
+                      repoIcon={repoSectionIcon}
+                      size={14}
+                      color={repoSectionColor ?? colors.textSecondary}
+                    />
                   </View>
-                ) : repoSectionColor ? (
-                  <View style={[styles.sectionRepoDot, { backgroundColor: repoSectionColor }]} />
                 ) : null}
                 <Text style={styles.sectionTitle}>{section.title}</Text>
                 <Text style={styles.sectionCount}>{count}</Text>
@@ -1490,12 +1492,6 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.xs
   },
   sectionIcon: {
-    marginRight: spacing.xs
-  },
-  sectionRepoDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
     marginRight: spacing.xs
   },
   sectionRepoIcon: {

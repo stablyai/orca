@@ -108,11 +108,10 @@ export function WorktreeListRow<T extends WorktreeListRowItem>({
           />
         </View>
         <View style={styles.worktreeMetaRow}>
-          {repoIcon ? (
-            <MobileRepoIcon repoIcon={repoIcon} size={11} color={colors.textSecondary} />
-          ) : (
-            <View style={[styles.repoDot, { backgroundColor: repoColor }]} />
-          )}
+          {/* Always render the repo glyph — MobileRepoIcon falls back to a Folder
+              when no custom icon is set, matching desktop's RepoIconGlyph default
+              (desktop never shows a bare colored dot here). */}
+          <MobileRepoIcon repoIcon={repoIcon} size={11} color={repoColor} />
           <Text style={styles.repoName} numberOfLines={1}>
             {item.repo}
           </Text>
@@ -204,11 +203,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 2,
     gap: spacing.xs
-  },
-  repoDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3
   },
   repoName: {
     fontSize: 11,
