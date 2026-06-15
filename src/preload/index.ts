@@ -112,6 +112,11 @@ import type {
   EnrichedDetectedPort
 } from '../shared/ssh-types'
 import type {
+  DockerConnectionStatus,
+  DockerContainerSummary,
+  DockerResourcesChangedEvent
+} from '../shared/docker-types'
+import type {
   AgentStatusIpcPayload,
   MigrationUnsupportedPtyEntry
 } from '../shared/agent-status-types'
@@ -3604,6 +3609,21 @@ const api = {
 
     submitCredential: (args: { requestId: string; value: string | null }): Promise<void> =>
       ipcRenderer.invoke('ssh:submitCredential', args)
+  },
+
+  docker: {
+    listContainers: (args: { connectionId: string }): Promise<DockerContainerSummary[]> =>
+      ipcRenderer.invoke('docker:listContainers', args),
+    pingConnection: (args: {
+      connectionId: string
+    }): Promise<{ status: DockerConnectionStatus; error?: string }> =>
+      ipcRenderer.invoke('docker:pingConnection', args),
+    onResourcesChanged: (callback: (data: DockerResourcesChangedEvent) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, data: DockerResourcesChangedEvent) =>
+        callback(data)
+      ipcRenderer.on('docker:resources-changed', listener)
+      return () => ipcRenderer.removeListener('docker:resources-changed', listener)
+    }
   },
 
   automations: {

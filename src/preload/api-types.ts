@@ -329,6 +329,11 @@ import type {
   EnrichedDetectedPort
 } from '../shared/ssh-types'
 import type {
+  DockerConnectionStatus,
+  DockerContainerSummary,
+  DockerResourcesChangedEvent
+} from '../shared/docker-types'
+import type {
   CodexUsageBreakdownKind,
   CodexUsageBreakdownRow,
   CodexUsageDailyPoint,
@@ -2596,6 +2601,13 @@ export type PreloadApi = {
     ) => () => void
     onCredentialResolved: (callback: (data: { requestId: string }) => void) => () => void
     submitCredential: (args: { requestId: string; value: string | null }) => Promise<void>
+  }
+  docker: {
+    listContainers: (args: { connectionId: string }) => Promise<DockerContainerSummary[]>
+    pingConnection: (args: {
+      connectionId: string
+    }) => Promise<{ status: DockerConnectionStatus; error?: string }>
+    onResourcesChanged: (callback: (data: DockerResourcesChangedEvent) => void) => () => void
   }
   automations: {
     list: () => Promise<Automation[]>
