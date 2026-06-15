@@ -830,4 +830,17 @@ describe('keybindings', () => {
       false
     )
   })
+
+  it('reports conflicts across two double-tap bindings', () => {
+    // Both actions share the same DoubleTap+Shift binding via overrides, so both
+    // are in customizedActions and the conflict detector must flag them.
+    const conflicts = findKeybindingConflicts('darwin', {
+      'worktree.quickOpen': ['DoubleTap+Shift'],
+      'view.tasks': ['DoubleTap+Shift']
+    })
+    expect(conflicts).toContainEqual({
+      binding: 'DoubleTap+Shift',
+      actionIds: expect.arrayContaining(['worktree.quickOpen', 'view.tasks'])
+    })
+  })
 })
