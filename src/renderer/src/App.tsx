@@ -52,6 +52,8 @@ import { onOnboardingReopened } from './components/onboarding/show-onboarding-ev
 import { shouldShowOnboarding } from './components/onboarding/should-show-onboarding'
 import { MarkdownTemplatePicker } from './components/editor/MarkdownTemplatePicker'
 import { FloatingTerminalToggleButton } from './components/floating-terminal/FloatingTerminalToggleButton'
+import { ClaudeIdeDiffPanel } from './components/editor/ClaudeIdeDiffPanel'
+import { useClaudeIdeContext } from './components/editor/useClaudeIdeContext'
 import { TOGGLE_FLOATING_TERMINAL_EVENT } from '@/lib/floating-terminal'
 import {
   isFloatingWorkspacePanelFocused,
@@ -317,6 +319,11 @@ function shouldMountUpdateCardForStatus(status: UpdateStatus): boolean {
     return status.userInitiated === true
   }
   return true
+}
+
+function ClaudeIdeContextBridge(): null {
+  useClaudeIdeContext()
+  return null
 }
 
 function App(): React.JSX.Element {
@@ -2281,6 +2288,15 @@ function App(): React.JSX.Element {
               compact
             >
               <MarkdownTemplatePicker />
+            </RecoverableRenderErrorBoundary>
+            <RecoverableRenderErrorBoundary
+              boundaryId="overlay.claude-ide-diff"
+              surface="overlay"
+              resetKey={activeView}
+              compact
+            >
+              <ClaudeIdeDiffPanel />
+              <ClaudeIdeContextBridge />
             </RecoverableRenderErrorBoundary>
             <RecoverableRenderErrorBoundary
               boundaryId="modal.crash-report"

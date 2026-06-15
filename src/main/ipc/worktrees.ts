@@ -710,7 +710,8 @@ function buildDisconnectedDetectedWorktrees(
 export function registerWorktreeHandlers(
   mainWindow: BrowserWindow,
   store: Store,
-  runtime: OrcaRuntimeService
+  runtime: OrcaRuntimeService,
+  ideLifecycle?: { onWorktreeClose(worktreeId: string): Promise<void> }
 ): void {
   // Remove any previously registered handlers so we can re-register them
   // (e.g. when macOS re-activates the app and creates a new window).
@@ -1125,6 +1126,11 @@ export function registerWorktreeHandlers(
           }
           // Why: folder workspaces share one filesystem root, so there is no Git
           // remove step to close shells; sweep PTYs before dropping metadata.
+          try {
+            await ideLifecycle?.onWorktreeClose(args.worktreeId)
+          } catch (err) {
+            console.error('[claude-ide] failed to close IDE server on removal:', err)
+          }
           await killAllProcessesForWorktree(args.worktreeId, {
             runtime,
             localProvider: getLocalPtyProvider(),
@@ -1324,6 +1330,14 @@ export function registerWorktreeHandlers(
           // Why: orphan cleanup does not need live shells to be killed first,
           // and preflight did not prove the worktree is cleanly removable.
           shouldTearDownPtys = false
+        }
+
+        // Why: shut down the IDE server for this worktree before git removal so
+        // the lockfile is cleaned up while the directory still exists.
+        try {
+          await ideLifecycle?.onWorktreeClose(args.worktreeId)
+        } catch (err) {
+          console.error('[claude-ide] failed to close IDE server on removal:', err)
         }
 
         if (shouldTearDownPtys) {

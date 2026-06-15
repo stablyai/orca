@@ -1629,6 +1629,114 @@ const api = {
     }): Promise<unknown> => ipcRenderer.invoke('claudeAccounts:select', args)
   },
 
+  claudeIde: {
+    onOpenDiff: (
+      callback: (data: {
+        worktreeId: string
+        requestId: string
+        oldPath: string
+        newPath: string
+        newContents: string
+      }) => void
+    ): (() => void) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        data: {
+          worktreeId: string
+          requestId: string
+          oldPath: string
+          newPath: string
+          newContents: string
+        }
+      ) => callback(data)
+      ipcRenderer.on('claudeIde:openDiff', listener)
+      return () => ipcRenderer.removeListener('claudeIde:openDiff', listener)
+    },
+    reply: (payload: {
+      kind: 'verdict' | 'data'
+      worktreeId: string
+      requestId: string
+      value: unknown
+    }): void => {
+      ipcRenderer.send('claudeIde:reply', payload)
+    },
+    onRequest: (
+      channel: string,
+      callback: (data: { worktreeId: string; requestId: string; [k: string]: unknown }) => void
+    ): (() => void) => {
+      // Why: this is a generic ipcRenderer.on bridge — restrict it to Claude IDE
+      // channels so renderer code cannot subscribe to unrelated preload events.
+      if (!channel.startsWith('claudeIde:')) {
+        throw new Error(`claudeIde.onRequest only accepts claudeIde:* channels, got "${channel}"`)
+      }
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        data: { worktreeId: string; requestId: string; [k: string]: unknown }
+      ) => callback(data)
+      ipcRenderer.on(channel, listener)
+      return () => ipcRenderer.removeListener(channel, listener)
+    },
+    notifySelectionChanged: (payload: {
+      worktreeId: string
+      selection: { text: string; filePath: string } | null
+    }): void => {
+      ipcRenderer.send('claudeIde:selectionChanged', payload)
+    }
+  },
+
+  claudeChat: {
+    send: (payload: {
+      worktreeId: string
+      cwd: string
+      text: string
+      model?: string
+      effort?: string
+      attachments?: string[]
+    }): Promise<void> => ipcRenderer.invoke('claudeChat:send', payload),
+    stop: (payload: { worktreeId: string }): void => {
+      ipcRenderer.send('claudeChat:stop', payload)
+    },
+    onEvent: (cb: (payload: { worktreeId: string; event: unknown }) => void): (() => void) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        data: { worktreeId: string; event: unknown }
+      ) => cb(data)
+      ipcRenderer.on('claudeChat:event', listener)
+      return () => ipcRenderer.removeListener('claudeChat:event', listener)
+    },
+    listModels: (): Promise<{ id: string; isDefault: boolean }[]> =>
+      ipcRenderer.invoke('claudeChat:listModels'),
+    listMcp: (payload: { cwd: string }): Promise<string[]> =>
+      ipcRenderer.invoke('claudeChat:listMcp', payload),
+    listCommands: (payload: {
+      cwd: string
+    }): Promise<{ name: string; description: string; source: string }[]> =>
+      ipcRenderer.invoke('claudeChat:listCommands', payload),
+    listSessions: (payload: {
+      cwd: string
+    }): Promise<{ id: string; date: string; summary: string }[]> =>
+      ipcRenderer.invoke('claudeChat:listSessions', payload),
+    loadSession: (payload: { cwd: string; sessionId: string }): Promise<unknown[]> =>
+      ipcRenderer.invoke('claudeChat:loadSession', payload),
+    resume: (payload: { worktreeId: string; cwd: string; sessionId: string }): void => {
+      ipcRenderer.send('claudeChat:resume', payload)
+    },
+    status: (payload: {
+      worktreeId: string
+    }): Promise<{ sessionId: string | null; running: boolean }> =>
+      ipcRenderer.invoke('claudeChat:status', payload),
+    reset: (payload: { worktreeId: string }): void => {
+      ipcRenderer.send('claudeChat:reset', payload)
+    },
+    revert: (payload: { cwd: string; sha: string }): Promise<boolean> =>
+      ipcRenderer.invoke('claudeChat:revert', payload),
+    changedFiles: (payload: {
+      cwd: string
+      sha: string
+    }): Promise<{ status: string; path: string }[]> =>
+      ipcRenderer.invoke('claudeChat:changedFiles', payload)
+  },
+
   cli: {
     getInstallStatus: (): Promise<CliInstallStatus> => ipcRenderer.invoke('cli:getInstallStatus'),
     install: (): Promise<CliInstallStatus> => ipcRenderer.invoke('cli:install'),

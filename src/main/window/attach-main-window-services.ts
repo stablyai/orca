@@ -1,5 +1,8 @@
 /* eslint-disable max-lines -- Why: this file is the central main-window IPC wiring point; splitting it during the mobile release compatibility rebase would increase release risk. */
 import { randomUUID } from 'node:crypto'
+import { homedir } from 'node:os'
+import { join } from 'node:path'
+import { existsSync, mkdirSync } from 'node:fs'
 
 import { app, ipcMain } from 'electron'
 import type { BrowserWindow } from 'electron'
@@ -9,6 +12,10 @@ import { registerRepoHandlers } from '../ipc/repos'
 import { registerWorktreeHandlers } from '../ipc/worktrees'
 import { registerWorkspaceCleanupHandlers } from '../ipc/workspace-cleanup'
 import { getLocalPtyProvider, registerPtyHandlers } from '../ipc/pty'
+import { IdeLifecycle } from '../claude-ide/ide-lifecycle'
+import { startIdeServer } from '../claude-ide/ide-server'
+import { writeLockfile, removeLockfile, sweepOrphanLockfiles } from '../claude-ide/lockfile'
+import { parseWorktreeId } from '../ipc/worktree-logic'
 import { registerDaemonManagementHandlers } from '../ipc/pty-management'
 import { registerSshHandlers } from '../ipc/ssh'
 import { registerRemoteWorkspaceHandlers } from '../ipc/remote-workspace'
@@ -36,11 +43,31 @@ import type { NativeFileDropPayload } from '../../shared/native-file-drop'
 import { requestMobileMarkdownFromRenderer } from './mobile-markdown-request-relay'
 import type { CodexAccountSelectionTarget } from '../codex-accounts/runtime-selection'
 import type { ClaudeAccountSelectionTarget } from '../claude-accounts/runtime-selection'
+import { ClaudeChatManager } from '../claude-chat/claude-chat-manager'
+import { ChatCheckpoints, execGitRunner } from '../claude-chat/chat-checkpoints'
+import { listMcpServers } from '../claude-chat/mcp-list'
+import { listSessions, loadSessionTranscript } from '../claude-chat/session-history'
+import { listModels } from '../claude-chat/model-catalog'
+import { listSlashCommands } from '../claude-chat/slash-commands'
 
 let appReloadHandlerTokenCounter = 0
 let activeAppReloadHandlerToken: number | null = null
 let runtimeNotifierTokenCounter = 0
 let activeRuntimeNotifierToken: number | null = null
+
+// Why: IDE servers/lockfiles and claude chat sessions must survive macOS
+// window re-creation — attachMainWindowServices re-runs per window, so these
+// live at module scope and only the destination window reference is swapped.
+let claudeSendWindow: BrowserWindow | null = null
+let ideLifecycleSingleton: IdeLifecycle | null = null
+let claudeChatManagerSingleton: ClaudeChatManager | null = null
+let claudeCheckpointsSingleton: ChatCheckpoints | null = null
+
+function sendToClaudeWindow(channel: string, payload: unknown): void {
+  if (claudeSendWindow && !claudeSendWindow.isDestroyed()) {
+    claudeSendWindow.webContents.send(channel, payload)
+  }
+}
 
 export function attachMainWindowServices(
   mainWindow: BrowserWindow,
@@ -55,9 +82,117 @@ export function attachMainWindowServices(
     onBeforeRendererReload?: (args: { webContentsId: number; ignoreCache: boolean }) => void
   }
 ): void {
+  // Why: one IDE lifecycle per app process; sweep stale lockfiles from prior
+  // crashes before starting new servers so Claude Code sees a clean slate.
+  // The singleton survives window re-creation; only the send target changes.
+  claudeSendWindow = mainWindow
+  if (ideLifecycleSingleton === null) {
+    const ideDir = join(homedir(), '.claude', 'ide')
+    mkdirSync(ideDir, { recursive: true })
+    sweepOrphanLockfiles(ideDir)
+    ideLifecycleSingleton = new IdeLifecycle({
+      ideDir,
+      pid: process.pid,
+      runningInWindows: process.platform === 'win32',
+      send: sendToClaudeWindow,
+      startIdeServer,
+      writeLockfile,
+      removeLockfile
+    })
+  }
+  const ideLifecycle = ideLifecycleSingleton
+
+  // Why: renderer posts replies from Claude Code IDE tool calls back to main.
+  ipcMain.removeAllListeners('claudeIde:reply')
+  ipcMain.on('claudeIde:reply', (_e, m) => ideLifecycle.resolveReply(m))
+
+  // Why: renderer notifies main when the active editor selection changes so the
+  // IDE server can push a selection_changed JSON-RPC notification to the CLI.
+  ipcMain.removeAllListeners('claudeIde:selectionChanged')
+  ipcMain.on(
+    'claudeIde:selectionChanged',
+    (_e, m: { worktreeId: string; selection: { text: string; filePath: string } | null }) => {
+      ideLifecycle.notifySelectionChanged(m.worktreeId, m.selection)
+    }
+  )
+
+  // Why: app-process singletons so live claude sessions survive macOS window
+  // re-creation; events route to whichever window is currently attached.
+  if (claudeCheckpointsSingleton === null) {
+    claudeCheckpointsSingleton = new ChatCheckpoints(execGitRunner)
+  }
+  const checkpoints = claudeCheckpointsSingleton
+  if (claudeChatManagerSingleton === null) {
+    claudeChatManagerSingleton = new ClaudeChatManager({
+      send: sendToClaudeWindow,
+      checkpoints
+    })
+  }
+  const claudeChatManager = claudeChatManagerSingleton
+  ipcMain.removeHandler('claudeChat:send')
+  ipcMain.handle(
+    'claudeChat:send',
+    (
+      _e,
+      a: {
+        worktreeId: string
+        cwd: string
+        text: string
+        model?: string
+        effort?: string
+        attachments?: string[]
+      }
+    ) => {
+      return claudeChatManager.send(a.worktreeId, a.cwd, a.text, {
+        model: a.model,
+        effort: a.effort,
+        attachments: a.attachments
+      })
+    }
+  )
+  ipcMain.removeAllListeners('claudeChat:stop')
+  ipcMain.on('claudeChat:stop', (_e, a: { worktreeId: string }) => {
+    claudeChatManager.stop(a.worktreeId)
+  })
+  ipcMain.removeHandler('claudeChat:listMcp')
+  ipcMain.handle('claudeChat:listMcp', (_e, a: { cwd: string }) => listMcpServers(a.cwd))
+  ipcMain.removeHandler('claudeChat:listModels')
+  ipcMain.handle('claudeChat:listModels', () => listModels())
+  ipcMain.removeHandler('claudeChat:listSessions')
+  ipcMain.handle('claudeChat:listSessions', (_e, a: { cwd: string }) => listSessions(a.cwd))
+  ipcMain.removeHandler('claudeChat:loadSession')
+  ipcMain.handle('claudeChat:loadSession', (_e, a: { cwd: string; sessionId: string }) =>
+    loadSessionTranscript(a.cwd, a.sessionId)
+  )
+  ipcMain.removeAllListeners('claudeChat:resume')
+  ipcMain.on(
+    'claudeChat:resume',
+    (_e, a: { worktreeId: string; cwd: string; sessionId: string }) => {
+      claudeChatManager.resume(a.worktreeId, a.cwd, a.sessionId)
+    }
+  )
+  ipcMain.removeAllListeners('claudeChat:reset')
+  ipcMain.on('claudeChat:reset', (_e, a: { worktreeId: string }) => {
+    claudeChatManager.reset(a.worktreeId)
+  })
+  ipcMain.removeHandler('claudeChat:listCommands')
+  ipcMain.handle('claudeChat:listCommands', (_e, a: { cwd: string }) => listSlashCommands(a.cwd))
+  ipcMain.removeHandler('claudeChat:status')
+  ipcMain.handle('claudeChat:status', (_e, a: { worktreeId: string }) =>
+    claudeChatManager.status(a.worktreeId)
+  )
+  ipcMain.removeHandler('claudeChat:revert')
+  ipcMain.handle('claudeChat:revert', (_e, a: { cwd: string; sha: string }) =>
+    checkpoints.revert(a.cwd, a.sha)
+  )
+  ipcMain.removeHandler('claudeChat:changedFiles')
+  ipcMain.handle('claudeChat:changedFiles', (_e, a: { cwd: string; sha: string }) =>
+    checkpoints.changedFiles(a.cwd, a.sha)
+  )
+
   registerAppReloadHandler(mainWindow, options?.onBeforeRendererReload)
   registerRepoHandlers(mainWindow, store)
-  registerWorktreeHandlers(mainWindow, store, runtime)
+  registerWorktreeHandlers(mainWindow, store, runtime, ideLifecycle)
   registerWorkspaceCleanupHandlers(store, { runtime, getLocalPtyProvider })
   registerPtyHandlers(
     mainWindow,
@@ -68,7 +203,8 @@ export function attachMainWindowServices(
     store,
     {
       awaitLocalPtyStartup: options?.awaitLocalPtyStartup
-    }
+    },
+    ideLifecycle
   )
   // Why: the Manage Sessions settings panel (docs/daemon-staleness-ux.md §Phase 1)
   // uses a narrow `pty:management:*` IPC surface that reads the live
@@ -132,7 +268,7 @@ export function attachMainWindowServices(
       store.updateUI({ dismissedUpdateNudgeId: id })
     }
   })
-  registerRuntimeWindowLifecycle(mainWindow, runtime)
+  registerRuntimeWindowLifecycle(mainWindow, runtime, ideLifecycle)
 
   const allowedPermissions = new Set(['media', 'fullscreen', 'pointerLock'])
   mainWindow.webContents.session.setPermissionRequestHandler(
@@ -198,7 +334,8 @@ function registerAppReloadHandler(
 
 function registerRuntimeWindowLifecycle(
   mainWindow: BrowserWindow,
-  runtime: OrcaRuntimeService
+  runtime: OrcaRuntimeService,
+  ideLifecycle: IdeLifecycle
 ): void {
   const notifierToken = ++runtimeNotifierTokenCounter
   activeRuntimeNotifierToken = notifierToken
@@ -220,6 +357,17 @@ function registerRuntimeWindowLifecycle(
       startup?: WorktreeStartupLaunch,
       defaultTabs?: CreateWorktreeResult['defaultTabs']
     ) => {
+      // Why: start the IDE server for the worktree as soon as it becomes active.
+      try {
+        const { worktreePath } = parseWorktreeId(worktreeId)
+        // Why: folder-mode instance ids are synthetic (path + instance suffix);
+        // only hand real directories to the IDE server / lockfile.
+        if (existsSync(worktreePath)) {
+          void ideLifecycle.onWorktreeOpen(worktreeId, worktreePath)
+        }
+      } catch {
+        // Why: invalid worktreeId should not block the UI activation.
+      }
       send('ui:activateWorktree', {
         repoId,
         worktreeId,

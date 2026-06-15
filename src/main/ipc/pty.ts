@@ -332,6 +332,14 @@ export type BuildPtyHostEnvOptions = {
   isWsl?: boolean
   agentStatusHooksEnabled: boolean
   networkProxySettings?: NetworkProxySettings
+  /** Why: injects CLAUDE_CODE_SSE_PORT / ENABLE_IDE_INTEGRATION for worktrees
+   *  that have an active IDE server. Optional so callers without a lifecycle
+   *  instance (tests, daemon init) are unaffected. */
+  ideLifecycle?: { envForWorktree(worktreeId: string): Record<string, string> }
+  /** Why: the authoritative worktree for this spawn. Some spawn paths never
+   *  mirror it into env (no pane key), so relying on baseEnv alone would skip
+   *  IDE env injection for runtime-owned PTYs. */
+  worktreeId?: string
 }
 
 function readInheritedPath(baseEnv: Record<string, string>): string {
@@ -764,6 +772,14 @@ export function buildPtyHostEnv(
     })
   })
 
+  // Why: inject Claude Code IDE port/flag for worktrees with an active IDE server.
+  const ideWorktreeId =
+    opts.worktreeId ??
+    (typeof baseEnv.ORCA_WORKTREE_ID === 'string' ? baseEnv.ORCA_WORKTREE_ID : undefined)
+  if (opts.ideLifecycle && ideWorktreeId !== undefined) {
+    Object.assign(baseEnv, opts.ideLifecycle.envForWorktree(ideWorktreeId))
+  }
+
   return baseEnv
 }
 
@@ -1020,7 +1036,8 @@ export function registerPtyHandlers(
   store?: Store,
   options?: {
     awaitLocalPtyStartup?: () => Promise<void>
-  }
+  },
+  ideLifecycle?: { envForWorktree(worktreeId: string): Record<string, string> }
 ): void {
   const getLocalPtyStartupPromise = (connectionId?: string | null): Promise<void> | undefined => {
     if (connectionId) {
@@ -1085,7 +1102,8 @@ export function registerPtyHandlers(
           shellPath: ctx?.shellPath,
           isWsl: ctx?.isWsl,
           agentStatusHooksEnabled: isAgentStatusHooksEnabled(getSettings?.()),
-          networkProxySettings: getSettings?.()
+          networkProxySettings: getSettings?.(),
+          ideLifecycle
         })
         // Why: agents need their own terminal handle at process start so they
         // can self-identify in orchestration messages without an extra RPC.
@@ -1699,7 +1717,9 @@ export function registerPtyHandlers(
           shellPath: daemonShellOverride ?? process.env.COMSPEC,
           isWsl: shouldSkipCodexHomeEnvForWindowsShell(daemonShellOverride, args.cwd),
           agentStatusHooksEnabled: isAgentStatusHooksEnabled(getSettings?.()),
-          networkProxySettings: getSettings?.()
+          networkProxySettings: getSettings?.(),
+          ideLifecycle,
+          worktreeId: typeof args.worktreeId === 'string' ? args.worktreeId : undefined
         })
         promoteAgentTeamsShimPath(env, requestedAgentTeamsPath)
       }
@@ -2236,7 +2256,9 @@ export function registerPtyHandlers(
             shellPath: effectiveShellOverride ?? process.env.COMSPEC,
             isWsl: shouldSkipCodexHomeEnvForWindowsShell(effectiveShellOverride, args.cwd),
             agentStatusHooksEnabled: isAgentStatusHooksEnabled(getSettings?.()),
-            networkProxySettings: getSettings?.()
+            networkProxySettings: getSettings?.(),
+            ideLifecycle,
+            worktreeId: typeof args.worktreeId === 'string' ? args.worktreeId : undefined
           })
           promoteAgentTeamsShimPath(env, requestedAgentTeamsPath)
         } catch (err) {
