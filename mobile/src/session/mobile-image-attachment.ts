@@ -12,6 +12,10 @@ export type AttachMobileImageDeps = {
   readonly getConnectionId: () => Promise<string | null>
   // Injected so this module stays free of expo/react-native imports (and unit-testable).
   readonly pickImage: (source: MobileImageSource) => Promise<PickedMobileImage | null>
+  // Fired once the user has picked an image and the host upload is about to
+  // start — lets the UI show a sending spinner only for the transfer, not the
+  // (potentially long) time the picker is open.
+  readonly onUploadStart?: () => void
 }
 
 // Uploads a picked image to the host and pastes the resulting file path into the
@@ -20,12 +24,20 @@ export type AttachMobileImageDeps = {
 // when the user cancelled the picker.
 export async function attachMobileImageToTerminal(
   source: MobileImageSource,
-  { client, terminal, deviceToken, getConnectionId, pickImage }: AttachMobileImageDeps
+  {
+    client,
+    terminal,
+    deviceToken,
+    getConnectionId,
+    pickImage,
+    onUploadStart
+  }: AttachMobileImageDeps
 ): Promise<boolean> {
   const picked = await pickImage(source)
   if (!picked) {
     return false
   }
+  onUploadStart?.()
   const connectionId = await getConnectionId()
   const imagePath = await saveMobileClipboardImageAsTempFile(client, picked.base64, {
     connectionId

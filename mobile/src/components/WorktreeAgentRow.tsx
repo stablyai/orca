@@ -1,13 +1,9 @@
 import { StyleSheet, Text, View } from 'react-native'
 import type { RuntimeWorktreeAgentRow } from '../../../src/shared/runtime-types'
-import { colors, spacing, typography } from '../theme/mobile-theme'
-import {
-  agentDisplayLabel,
-  agentDotState,
-  agentIdentityLabel,
-  formatTimeAgo
-} from '../worktree/agent-row-display'
+import { colors, spacing } from '../theme/mobile-theme'
+import { agentDisplayLabel, agentDotState, formatTimeAgo } from '../worktree/agent-row-display'
 import { AgentStateDot } from './AgentStateDot'
+import { MobileAgentIcon } from './MobileAgentIcon'
 
 const INDENT_PER_DEPTH = 14
 
@@ -24,14 +20,15 @@ type Props = {
 // Mirrors desktop DashboardAgentRow's compact in-card layout.
 export function WorktreeAgentRow({ agent, depth, now, unvisited }: Props) {
   const dotState = agentDotState(agent, now)
-  const identity = agentIdentityLabel(agent.agentType)
   const label = agentDisplayLabel(agent, now)
   const ts = formatTimeAgo(agent.stateStartedAt, now)
 
   return (
     <View style={[styles.row, { paddingLeft: depth * INDENT_PER_DEPTH }]}>
       <AgentStateDot state={dotState} />
-      {identity ? <Text style={styles.identity}>{identity}</Text> : null}
+      {/* Agent identity logo (Claude/Codex/…), matching the desktop sidebar's
+          agent icons instead of a two-letter text code. */}
+      {agent.agentType ? <MobileAgentIcon agentId={agent.agentType} size={13} /> : null}
       <Text style={[styles.label, unvisited && styles.labelUnvisited]} numberOfLines={1}>
         {label}
       </Text>
@@ -46,12 +43,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.xs,
     marginTop: 3
-  },
-  identity: {
-    fontSize: 9,
-    fontWeight: '700',
-    color: colors.textMuted,
-    fontFamily: typography.monoFamily
   },
   label: {
     flex: 1,

@@ -3258,7 +3258,7 @@ export default function SessionScreen() {
     showToast
   ])
 
-  const { attachImage } = useMobileImageAttachment({
+  const { attachImage, isAttaching } = useMobileImageAttachment({
     client,
     activeHandle,
     canSend,
@@ -4428,12 +4428,19 @@ export default function SessionScreen() {
                   onSubmitEditing={() => void handleSend()}
                 />
                 <Pressable
-                  style={[styles.dictationButton, !canSend && styles.sendButtonDisabled]}
-                  disabled={!canSend}
+                  style={[
+                    styles.dictationButton,
+                    (!canSend || isAttaching) && styles.sendButtonDisabled
+                  ]}
+                  disabled={!canSend || isAttaching}
                   onPress={() => setShowImageSourceSheet(true)}
-                  accessibilityLabel="Attach an image"
+                  accessibilityLabel={isAttaching ? 'Sending image' : 'Attach an image'}
                 >
-                  <ImagePlus size={17} color={colors.textSecondary} strokeWidth={2.4} />
+                  {isAttaching ? (
+                    <ActivityIndicator size="small" color={colors.textSecondary} />
+                  ) : (
+                    <ImagePlus size={17} color={colors.textSecondary} strokeWidth={2.4} />
+                  )}
                 </Pressable>
                 <Pressable
                   style={[

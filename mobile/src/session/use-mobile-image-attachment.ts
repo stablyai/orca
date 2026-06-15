@@ -1,4 +1,4 @@
-import { useCallback } from 'react'
+import { useCallback, useState } from 'react'
 import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState } from '../transport/types'
 import { attachMobileImageToTerminal } from './mobile-image-attachment'
@@ -28,6 +28,9 @@ type UseMobileImageAttachmentArgs = {
 
 type MobileImageAttachment = {
   readonly attachImage: (source: MobileImageSource) => Promise<void>
+  // True only while the picked image is uploading to the host (not while the
+  // picker is open) — drives the send spinner so the 3-5s transfer isn't a no-op.
+  readonly isAttaching: boolean
 }
 
 function getErrorMessage(error: unknown): string {
@@ -45,6 +48,7 @@ export function useMobileImageAttachment({
   onSuccess,
   onError
 }: UseMobileImageAttachmentArgs): MobileImageAttachment {
+  const [isAttaching, setIsAttaching] = useState(false)
   const attachImage = useCallback(
     async (source: MobileImageSource): Promise<void> => {
       if (!client || !activeHandle || !canSend) {
@@ -56,7 +60,8 @@ export function useMobileImageAttachment({
           terminal: activeHandle,
           deviceToken: deviceTokenRef.current,
           getConnectionId: getActiveWorktreeConnectionId,
-          pickImage: pickMobileImage
+          pickImage: pickMobileImage,
+          onUploadStart: () => setIsAttaching(true)
         })
         // Cancelled picker: no error, no toast.
         if (sent) {
@@ -77,6 +82,8 @@ export function useMobileImageAttachment({
           return
         }
         showToast('Attach failed', 1500)
+      } finally {
+        setIsAttaching(false)
       }
     },
     [
@@ -92,5 +99,5 @@ export function useMobileImageAttachment({
     ]
   )
 
-  return { attachImage }
+  return { attachImage, isAttaching }
 }

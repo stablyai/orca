@@ -1,9 +1,11 @@
 import { Bell, GitPullRequest } from 'lucide-react-native'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
+import type { RepoIcon } from '../../../src/shared/repo-icon'
 import type { RuntimeWorktreeAgentRow } from '../../../src/shared/runtime-types'
 import { triggerMediumImpact } from '../platform/haptics'
 import { colors, spacing, typography } from '../theme/mobile-theme'
 import { AgentSpinner } from './AgentSpinner'
+import { MobileRepoIcon } from './MobileRepoIcon'
 import { WorktreeAgentList } from './WorktreeAgentList'
 import { WorktreeMetaGlyphs, prStateColor } from './WorktreeMetaGlyphs'
 
@@ -34,6 +36,7 @@ type Props<T extends WorktreeListRowItem> = {
   isReadOnly: boolean
   now: number
   repoColor: string
+  repoIcon?: RepoIcon | null
   status: WorktreeRollupStatus
   onPress: (item: T) => void
   onLongPress: (item: T) => void
@@ -44,6 +47,7 @@ export function WorktreeListRow<T extends WorktreeListRowItem>({
   isReadOnly,
   now,
   repoColor,
+  repoIcon,
   status,
   onPress,
   onLongPress
@@ -104,7 +108,11 @@ export function WorktreeListRow<T extends WorktreeListRowItem>({
           />
         </View>
         <View style={styles.worktreeMetaRow}>
-          <View style={[styles.repoDot, { backgroundColor: repoColor }]} />
+          {repoIcon ? (
+            <MobileRepoIcon repoIcon={repoIcon} size={11} color={colors.textSecondary} />
+          ) : (
+            <View style={[styles.repoDot, { backgroundColor: repoColor }]} />
+          )}
           <Text style={styles.repoName} numberOfLines={1}>
             {item.repo}
           </Text>

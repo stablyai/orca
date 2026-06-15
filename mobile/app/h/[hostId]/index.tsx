@@ -43,9 +43,11 @@ import {
 import type { RpcSuccess } from '../../../src/transport/types'
 import { StatusDot } from '../../../src/components/StatusDot'
 import { NewWorktreeModal } from '../../../src/components/NewWorktreeModal'
+import { MobileRepoIcon } from '../../../src/components/MobileRepoIcon'
 import { WorktreeListRow } from '../../../src/components/WorktreeListRow'
 import { useNow } from '../../../src/hooks/use-now'
 import { useActiveWorktreeScroll } from '../../../src/hooks/use-active-worktree-scroll'
+import type { RepoIcon } from '../../../../src/shared/repo-icon'
 import type { RuntimeWorktreeAgentRow } from '../../../../src/shared/runtime-types'
 import { PickerModal, type PickerOption } from '../../../src/components/PickerModal'
 import { ActionSheetContent } from '../../../src/components/ActionSheetModal'
@@ -108,6 +110,7 @@ type Worktree = {
 type RepoSummary = {
   displayName: string
   badgeColor?: string
+  repoIcon?: RepoIcon | null
 }
 
 type SortMode = 'smart' | 'name' | 'recent' | 'repo'
@@ -370,6 +373,7 @@ export default function HostScreen() {
   // One tick drives every visible agent row's relative timestamp.
   const now = useNow(30_000)
   const [repoColorsByName, setRepoColorsByName] = useState<Map<string, string>>(new Map())
+  const [repoIconsByName, setRepoIconsByName] = useState<Map<string, RepoIcon>>(new Map())
   const [hostName, setHostName] = useState('')
   const [error, setError] = useState('')
   const [compatVerdict, setCompatVerdict] = useState<CompatVerdict>({ kind: 'ok' })
@@ -449,6 +453,7 @@ export default function HostScreen() {
     setError('')
     setCompatVerdict({ kind: 'ok' })
     setRepoColorsByName(new Map())
+    setRepoIconsByName(new Map())
     // Why: re-seed from the current host's cache on every hostId change.
     // The useState initializer only runs on first mount, so if Expo Router
     // reuses this screen with a different hostId, we must reset here.
@@ -517,6 +522,13 @@ export default function HostScreen() {
                   repo.displayName,
                   repo.badgeColor || repoColor(repo.displayName)
                 ])
+              )
+            )
+            setRepoIconsByName(
+              new Map(
+                repoResult.repos.flatMap((repo) =>
+                  repo.repoIcon ? [[repo.displayName, repo.repoIcon] as const] : []
+                )
               )
             )
           })
@@ -1087,6 +1099,7 @@ export default function HostScreen() {
             const count = rawSection?.data.length ?? 0
             const repoSectionColor =
               groupMode === 'repo' ? uniqueRepoColors.get(section.title) : null
+            const repoSectionIcon = groupMode === 'repo' ? repoIconsByName.get(section.title) : null
             return (
               <Pressable
                 style={styles.sectionHeader}
@@ -1100,7 +1113,11 @@ export default function HostScreen() {
                 {section.icon === 'pin' && (
                   <Pin size={12} color={colors.textMuted} style={styles.sectionIcon} />
                 )}
-                {repoSectionColor ? (
+                {repoSectionIcon ? (
+                  <View style={styles.sectionRepoIcon}>
+                    <MobileRepoIcon repoIcon={repoSectionIcon} size={14} />
+                  </View>
+                ) : repoSectionColor ? (
                   <View style={[styles.sectionRepoDot, { backgroundColor: repoSectionColor }]} />
                 ) : null}
                 <Text style={styles.sectionTitle}>{section.title}</Text>
@@ -1116,6 +1133,7 @@ export default function HostScreen() {
               now={now}
               status={getWorktreeStatus(item)}
               repoColor={uniqueRepoColors.get(item.repo) ?? repoColor(item.repo)}
+              repoIcon={repoIconsByName.get(item.repo) ?? null}
               onPress={openWorktreeSession}
               onLongPress={setActionTarget}
             />
@@ -1478,6 +1496,9 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
+    marginRight: spacing.xs
+  },
+  sectionRepoIcon: {
     marginRight: spacing.xs
   },
   sectionTitle: {
