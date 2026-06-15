@@ -761,6 +761,10 @@ function openMainWindow(): BrowserWindow {
         return
       }
       maybeAutoRenameBranchOnFirstWorkFromHook({ paneKey, tabId, worktreeId, payload, isReplay })
+      // Why: agent status mostly arrives via hooks, not OSC terminal output, so
+      // feed the runtime's snapshot map here too — otherwise mobile's worktree.ps
+      // never sees these agents and shows no inline agent rows.
+      runtime?.retainAgentRowSnapshotFromHook({ paneKey, worktreeId, tabId, payload })
       const orchestration = runtime?.getAgentStatusOrchestrationContextForPaneKey(paneKey)
       const terminalHandle = runtime?.getAgentStatusTerminalHandleForPaneKey(paneKey)
       mainWindow?.webContents.send('agentStatus:set', {

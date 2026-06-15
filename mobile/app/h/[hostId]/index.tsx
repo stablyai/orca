@@ -1136,6 +1136,7 @@ export default function HostScreen() {
               status={getWorktreeStatus(item)}
               repoColor={uniqueRepoColors.get(item.repo) ?? repoColor(item.repo)}
               repoIcon={repoIconsByName.get(item.repo) ?? null}
+              hideRepo={groupMode === 'repo'}
               onPress={openWorktreeSession}
               onLongPress={setActionTarget}
             />

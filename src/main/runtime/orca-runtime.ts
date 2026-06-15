@@ -3947,6 +3947,35 @@ export class OrcaRuntimeService {
     })
   }
 
+  // Why: agent status normally arrives via hooks (agent-hooks/server → IPC), not
+  // OSC terminal output, so the OSC-fed retain path above never sees most agents.
+  // The hook listener calls this so mobile's worktree.ps gets the same inline
+  // agent rows the desktop sidebar shows. Resolves a ptyId from the paneKey when
+  // possible so pty-exit cleanup still applies.
+  retainAgentRowSnapshotFromHook(args: {
+    paneKey: string
+    worktreeId?: string
+    tabId?: string
+    payload: ParsedAgentStatusPayload
+  }): void {
+    const ptyId = this.resolvePtyIdForPaneKey(args.paneKey) ?? ''
+    this.retainAgentRowSnapshot(ptyId, args.paneKey, args.worktreeId, args.tabId, args.payload)
+  }
+
+  private resolvePtyIdForPaneKey(paneKey: string): string | undefined {
+    for (const leaf of this.leaves.values()) {
+      if (leaf.ptyId && this.makeRuntimePaneKey(leaf) === paneKey) {
+        return leaf.ptyId
+      }
+    }
+    for (const pty of this.ptysById.values()) {
+      if (pty.paneKey === paneKey) {
+        return pty.ptyId
+      }
+    }
+    return undefined
+  }
+
   private clearAgentRowSnapshotsForPty(ptyId: string): void {
     for (const [paneKey, snapshot] of this.latestAgentStatusByPaneKey) {
       if (snapshot.ptyId === ptyId) {

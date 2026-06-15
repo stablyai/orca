@@ -10737,6 +10737,58 @@ describe('OrcaRuntimeService', () => {
     ])
   })
 
+  it('attaches inline agent rows from hook-reported status (not just OSC)', async () => {
+    // Why: agent status normally arrives via hooks, not OSC terminal output;
+    // worktree.ps must surface those agents too or mobile shows none.
+    const runtime = new OrcaRuntimeService(store)
+    const leafId = '33333333-3333-4333-8333-333333333333'
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, {
+      tabs: [
+        {
+          tabId: 'tab-1',
+          worktreeId: TEST_WORKTREE_ID,
+          title: 'Claude',
+          activeLeafId: leafId,
+          layout: null
+        }
+      ],
+      leaves: [
+        {
+          tabId: 'tab-1',
+          worktreeId: TEST_WORKTREE_ID,
+          leafId,
+          paneRuntimeId: 1,
+          ptyId: 'pty-1'
+        }
+      ]
+    })
+
+    runtime.retainAgentRowSnapshotFromHook({
+      paneKey: `tab-1:${leafId}`,
+      worktreeId: TEST_WORKTREE_ID,
+      tabId: 'tab-1',
+      payload: {
+        state: 'working',
+        prompt: 'ship it',
+        agentType: 'claude',
+        lastAssistantMessage: 'on it'
+      }
+    })
+
+    const { worktrees } = await runtime.getWorktreePs()
+    const summary = worktrees.find((w) => w.worktreeId === TEST_WORKTREE_ID)
+    expect(summary?.agents).toEqual([
+      expect.objectContaining({
+        paneKey: `tab-1:${leafId}`,
+        state: 'working',
+        agentType: 'claude',
+        prompt: 'ship it',
+        lastAssistantMessage: 'on it'
+      })
+    ])
+  })
+
   it('marks the desktop-active worktree as isActive', async () => {
     const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(
       makeWorkspaceSessionWithHeadlessTerminal()

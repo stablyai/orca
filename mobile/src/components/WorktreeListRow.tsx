@@ -37,6 +37,9 @@ type Props<T extends WorktreeListRowItem> = {
   now: number
   repoColor: string
   repoIcon?: RepoIcon | null
+  // When the list is already grouped under this repo's section header, the row
+  // omits its own repo icon+name to avoid the redundant "📁 orca" on every row.
+  hideRepo?: boolean
   status: WorktreeRollupStatus
   onPress: (item: T) => void
   onLongPress: (item: T) => void
@@ -48,6 +51,7 @@ export function WorktreeListRow<T extends WorktreeListRowItem>({
   now,
   repoColor,
   repoIcon,
+  hideRepo = false,
   status,
   onPress,
   onLongPress
@@ -108,13 +112,17 @@ export function WorktreeListRow<T extends WorktreeListRowItem>({
           />
         </View>
         <View style={styles.worktreeMetaRow}>
-          {/* Always render the repo glyph — MobileRepoIcon falls back to a Folder
-              when no custom icon is set, matching desktop's RepoIconGlyph default
-              (desktop never shows a bare colored dot here). */}
-          <MobileRepoIcon repoIcon={repoIcon} size={11} color={repoColor} />
-          <Text style={styles.repoName} numberOfLines={1}>
-            {item.repo}
-          </Text>
+          {/* Repo glyph+name only when not already grouped under this repo;
+              MobileRepoIcon falls back to a Folder (matching desktop's default)
+              rather than a bare colored dot. */}
+          {!hideRepo && (
+            <>
+              <MobileRepoIcon repoIcon={repoIcon} size={11} color={repoColor} />
+              <Text style={styles.repoName} numberOfLines={1}>
+                {item.repo}
+              </Text>
+            </>
+          )}
           <Text style={styles.branchName} numberOfLines={1}>
             {item.branch}
           </Text>
