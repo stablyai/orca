@@ -2601,6 +2601,13 @@ const api = {
       worktreePath: string
       connectionId?: string
     }): Promise<void> => ipcRenderer.invoke('git:cancelGeneratePullRequestFields', args),
+    switchBranch: (args: {
+      worktreePath: string
+      branch: string
+      mode: 'plain' | 'stash' | 'create'
+      connectionId?: string
+    }): Promise<import('../shared/git-branch-switch').SwitchBranchResult> =>
+      ipcRenderer.invoke('git:switchBranch', args),
     stage: (args: {
       worktreePath: string
       filePath: string

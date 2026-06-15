@@ -68,6 +68,7 @@ import { getPullRequestDraftContext } from '../text-generation/pull-request-cont
 import { getUpstreamStatus } from '../git/upstream'
 import { gitFastForward, gitFetch, gitPull, gitPullRebaseFromBase, gitPush } from '../git/remote'
 import { checkIgnoredPaths } from '../git/check-ignored-paths'
+import { runSwitchBranch } from '../git/switch-branch'
 import {
   appendFolderToGitignore,
   findKnownHugeFolderPathsToIgnore
@@ -1536,6 +1537,36 @@ export function registerFilesystemHandlers(
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
       const filePath = validateGitRelativeFilePath(worktreePath, args.filePath)
       await stageFile(worktreePath, filePath)
+    }
+  )
+
+  ipcMain.handle(
+    'git:switchBranch',
+    async (
+      _event,
+      args: {
+        worktreePath: string
+        branch: string
+        mode: 'plain' | 'stash' | 'create'
+        connectionId?: string
+      }
+    ) => {
+      // Why: reject ref names that could be parsed as `git switch` flags (e.g.
+      // "--orphan") before they reach the shell-free exec.
+      if (!args.branch || args.branch.startsWith('-')) {
+        throw new Error('Invalid branch name')
+      }
+      if (args.mode !== 'plain' && args.mode !== 'stash' && args.mode !== 'create') {
+        throw new Error('Invalid switch mode')
+      }
+      const worktreePath = args.connectionId
+        ? args.worktreePath
+        : await resolveRegisteredWorktreePath(args.worktreePath, store)
+      return runSwitchBranch({
+        cwd: worktreePath,
+        connectionId: args.connectionId,
+        options: { branch: args.branch, mode: args.mode }
+      })
     }
   )
 

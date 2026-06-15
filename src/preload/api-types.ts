@@ -2212,6 +2212,12 @@ export type PreloadApi = {
       worktreePath: string
       connectionId?: string
     }) => Promise<void>
+    switchBranch: (args: {
+      worktreePath: string
+      branch: string
+      mode: 'plain' | 'stash' | 'create'
+      connectionId?: string
+    }) => Promise<import('../shared/git-branch-switch').SwitchBranchResult>
     stage: (args: {
       worktreePath: string
       filePath: string

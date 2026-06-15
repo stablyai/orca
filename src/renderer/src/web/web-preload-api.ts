@@ -1480,6 +1480,16 @@ function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
       )
     }),
     cancelGeneratePullRequestFields: () => Promise.resolve(),
+    // Why: branch switching in the web runtime is handled by the runtime
+    // environment's own dispatch; the local IPC path is desktop-only.
+    switchBranch: async ({ worktreePath, branch, mode }) => {
+      const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
+      return callRuntimeResult('git.switchBranch', {
+        worktree: toRuntimeWorktreeSelector(worktree.id),
+        branch,
+        mode
+      })
+    },
     stage: async ({ worktreePath, filePath }) => mutateGitPath('git.stage', worktreePath, filePath),
     bulkStage: async ({ worktreePath, filePaths }) =>
       mutateGitPaths('git.bulkStage', worktreePath, filePaths),
