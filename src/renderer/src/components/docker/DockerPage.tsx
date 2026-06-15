@@ -3,6 +3,7 @@ import { RefreshCw } from 'lucide-react'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
 import { Button } from '@/components/ui/button'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { LOCAL_DOCKER_CONNECTION_ID } from '../../../../shared/docker-types'
 import { DockerResourceTree } from './DockerResourceTree'
 import { DockerContainerDetail } from './DockerContainerDetail'
@@ -42,9 +43,14 @@ export default function DockerPage(): React.JSX.Element {
         <span className="text-sm font-medium">Docker</span>
         <span className="text-xs text-muted-foreground">Local</span>
         <div className="flex-1" />
-        <Button variant="ghost" size="icon-sm" onClick={() => void refreshDockerContainers()}>
-          <RefreshCw />
-        </Button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button variant="ghost" size="icon-sm" onClick={() => void refreshDockerContainers()}>
+              <RefreshCw />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Refresh</TooltipContent>
+        </Tooltip>
       </div>
       {dockerConnectionError ? (
         <div className="border-b border-border bg-card px-3 py-2 text-xs text-destructive">
