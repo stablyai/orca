@@ -34,7 +34,7 @@ export function BranchSwitcherList({
   const remotes = candidates.filter((c) => c.kind === 'remote')
 
   return (
-    <div className="flex w-72 flex-col">
+    <div className="flex w-full flex-col">
       <div className="border-b border-border p-2">
         <Input
           autoFocus
@@ -44,7 +44,9 @@ export function BranchSwitcherList({
           className="h-8"
         />
       </div>
-      <ScrollArea className="max-h-72">
+      {/* Why: the cap must sit on the radix viewport (the scrolling element), not
+          the root — on the root the list overflows and paints over the footer. */}
+      <ScrollArea viewportClassName="max-h-72">
         <div className="p-1">
           {loading && (
             <div className="px-2 py-1.5 text-xs text-muted-foreground">
@@ -229,7 +231,7 @@ export function BranchSwitcher(props: {
           <ChevronDown className="ml-auto size-3.5 shrink-0 opacity-60" aria-hidden="true" />
         </button>
       </PopoverTrigger>
-      <PopoverContent align="start" className="p-0">
+      <PopoverContent align="start" className="w-[var(--radix-popover-trigger-width)] p-0">
         <BranchSwitcherList
           query={query}
           setQuery={setQuery}
