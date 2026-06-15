@@ -159,7 +159,11 @@ This reuses the exact disambiguation normal shortcuts already rely on:
   modifier keydown, resolves it, and calls `preventDefault()`. That suppresses
   the corresponding renderer DOM keydown, so the renderer detector never
   completes its second tap → it does not fire. (The renderer detector may have
-  observed the first tap's down/up; it simply times out and resets.)
+  observed the first tap's down/up. It has no timer: the second-press window is
+  enforced by comparing the next keydown's timestamp against a deadline. The
+  suppressed second keydown never arrives, but its keyup still does — a keyup of
+  the armed modifier with no intervening second keydown clears the armed state,
+  so a later lone press of the same modifier cannot phantom-complete the gesture.)
 - For a **non-allowlisted** action, main's detector still emits but
   `resolveWindowShortcutAction` returns `null`, so main does not call
   `preventDefault()`. The second-keydown DOM event reaches the renderer, whose

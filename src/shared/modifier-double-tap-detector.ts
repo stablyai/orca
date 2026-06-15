@@ -140,6 +140,14 @@ export class ModifierDoubleTapDetector {
   private onModifierUp(modifier: ModifierToken, timestampMs: number): void {
     if (this.state.phase === 'down1' && this.state.modifier === modifier) {
       this.state = { phase: 'armed', modifier, deadlineMs: timestampMs + DOUBLE_TAP_WINDOW_MS }
+      return
+    }
+    // Why: a keyup of the armed modifier with no intervening second keydown means
+    // the second press was consumed elsewhere (the main process suppresses it for
+    // an allowlisted action). Clear armed so a later lone press of the same
+    // modifier can't phantom-complete a double-tap.
+    if (this.state.phase === 'armed' && this.state.modifier === modifier) {
+      this.state = { phase: 'idle' }
     }
   }
 }

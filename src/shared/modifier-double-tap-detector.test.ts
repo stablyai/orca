@@ -87,6 +87,18 @@ describe('ModifierDoubleTapDetector', () => {
     expect(d.process(down('Shift'), 200)).toEqual({ modifier: 'Shift' })
   })
 
+  it('clears armed state when the second keydown was suppressed (allowlisted path)', () => {
+    const d = new ModifierDoubleTapDetector()
+    d.process(down('Shift'), 0) // first tap down → down1
+    d.process(up('Shift'), 10) // first tap up → armed
+    // The main process suppressed the second keydown (an allowlisted action fired
+    // there), but the second tap's keyup still reaches this detector.
+    d.process(up('Shift'), 20)
+    // A later lone Shift press (e.g. typing a capital) must NOT phantom-complete
+    // a double-tap from the stale armed state.
+    expect(d.process(down('Shift'), 200)).toBeNull()
+  })
+
   it('clears state on reset()', () => {
     const d = new ModifierDoubleTapDetector()
     d.process(down('Shift'), 0)
