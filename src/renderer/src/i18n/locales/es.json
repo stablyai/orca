@@ -3914,7 +3914,9 @@
           "0dc4d1b657": "Introduzca una ruta de servidor para el destino del clon."
         },
         "useAddRepoLocalFolderFlow": {
-          "7ab10e4974": "Utilice una ruta de servidor para agregar proyectos desde un tiempo de ejecución remoto."
+          "7ab10e4974": "Utilice una ruta de servidor para agregar proyectos desde un tiempo de ejecución remoto.",
+          "skippedBatchFolders": "Some folders were skipped",
+          "skippedBatchFoldersDescription": "Add non-Git folders individually to review or confirm them."
         },
         "useAddRepoNestedImportFlow": {
           "680cac2c82": "{{value0}} falló",

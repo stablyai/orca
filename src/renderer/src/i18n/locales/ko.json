@@ -3895,7 +3895,9 @@
           "0dc4d1b657": "복제 대상의 서버 경로를 입력합니다."
         },
         "useAddRepoLocalFolderFlow": {
-          "7ab10e4974": "원격 런타임에서 프로젝트를 추가하려면 서버 경로를 사용하세요."
+          "7ab10e4974": "원격 런타임에서 프로젝트를 추가하려면 서버 경로를 사용하세요.",
+          "skippedBatchFolders": "Some folders were skipped",
+          "skippedBatchFoldersDescription": "Add non-Git folders individually to review or confirm them."
         },
         "useAddRepoNestedImportFlow": {
           "680cac2c82": "{{value0}} 실패",

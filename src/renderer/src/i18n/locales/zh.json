@@ -3895,7 +3895,9 @@
           "0dc4d1b657": "输入克隆目标的服务器路径。"
         },
         "useAddRepoLocalFolderFlow": {
-          "7ab10e4974": "使用服务器路径从远程运行时添加项目。"
+          "7ab10e4974": "使用服务器路径从远程运行时添加项目。",
+          "skippedBatchFolders": "Some folders were skipped",
+          "skippedBatchFoldersDescription": "Add non-Git folders individually to review or confirm them."
         },
         "useAddRepoNestedImportFlow": {
           "680cac2c82": "{{value0}} 失败",

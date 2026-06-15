@@ -1012,6 +1012,7 @@ function createReposApi(): NonNullable<Partial<PreloadApi>['repos']> {
     update: async ({ repoId, updates }) =>
       (await callRuntimeResult<{ repo: Repo }>('repo.update', { repo: repoId, updates })).repo,
     pickFolder: () => Promise.resolve(null),
+    pickFolders: () => Promise.resolve([]),
     pickDirectory: () => Promise.resolve(null),
     clone: async ({ url, destination }) => {
       invalidateRuntimeWorktreeCaches()

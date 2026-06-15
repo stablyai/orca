@@ -3928,7 +3928,9 @@
           "0dc4d1b657": "Enter a host path for the clone destination."
         },
         "useAddRepoLocalFolderFlow": {
-          "7ab10e4974": "Use a host path to add projects from a remote host."
+          "7ab10e4974": "Use a host path to add projects from a remote host.",
+          "skippedBatchFolders": "Some folders were skipped",
+          "skippedBatchFoldersDescription": "Add non-Git folders individually to review or confirm them."
         },
         "useAddRepoNestedImportFlow": {
           "680cac2c82": "{{value0}} failed",

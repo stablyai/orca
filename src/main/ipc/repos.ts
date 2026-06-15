@@ -1101,6 +1101,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
   ipcMain.removeHandler('folderWorkspaces:delete')
   ipcMain.removeHandler('folderWorkspaces:getPathStatus')
   ipcMain.removeHandler('repos:pickFolder')
+  ipcMain.removeHandler('repos:pickFolders')
   ipcMain.removeHandler('repos:pickDirectory')
   ipcMain.removeHandler('repos:clone')
   ipcMain.removeHandler('repos:cloneAbort')
@@ -2026,6 +2027,16 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
       return null
     }
     return result.filePaths[0]
+  })
+
+  ipcMain.handle('repos:pickFolders', async () => {
+    const result = await dialog.showOpenDialog(mainWindow, {
+      properties: ['openDirectory', 'multiSelections']
+    })
+    if (result.canceled || result.filePaths.length === 0) {
+      return []
+    }
+    return result.filePaths
   })
 
   // Why: pickDirectory is a generic "choose a folder" picker, separate from

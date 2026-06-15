@@ -477,6 +477,8 @@ const api = {
 
     pickFolder: () => ipcRenderer.invoke('repos:pickFolder'),
 
+    pickFolders: () => ipcRenderer.invoke('repos:pickFolders'),
+
     pickDirectory: () => ipcRenderer.invoke('repos:pickDirectory'),
 
     clone: (args) => ipcRenderer.invoke('repos:clone', args),
