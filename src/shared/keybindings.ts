@@ -1663,12 +1663,31 @@ export function keybindingMatchesAction(
   )
 }
 
+function formatModifierGlyph(modifier: ModifierToken, isMac: boolean): string {
+  switch (modifier) {
+    case 'Mod':
+      return isMac ? '⌘' : 'Ctrl'
+    case 'Cmd':
+      return isMac ? '⌘' : 'Cmd'
+    case 'Ctrl':
+      return isMac ? '⌃' : 'Ctrl'
+    case 'Alt':
+      return isMac ? '⌥' : 'Alt'
+    case 'Shift':
+      return isMac ? '⇧' : 'Shift'
+  }
+}
+
 export function formatKeybinding(binding: string, platform: NodeJS.Platform): string[] {
   const parsed = parseKeybinding(binding)
   if (!parsed) {
     return [binding]
   }
   const isMac = platform === 'darwin'
+  if (parsed.doubleTapModifier) {
+    const glyph = formatModifierGlyph(parsed.doubleTapModifier, isMac)
+    return [glyph, glyph]
+  }
   const parts: string[] = []
   if (parsed.mod) {
     parts.push(isMac ? '⌘' : 'Ctrl')

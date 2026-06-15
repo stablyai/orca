@@ -6,6 +6,7 @@ import {
   agentTabActionId,
   getKeybindingDefinition,
   findKeybindingConflicts,
+  formatKeybinding,
   formatKeybindingList,
   getEffectiveKeybindingsForAction,
   isDoubleTapBinding,
@@ -754,6 +755,15 @@ describe('keybindings', () => {
         'worktree.quickOpen': ['DoubleTap+Shift']
       })
     ).toBe(false)
+  })
+
+  it('formats double-tap bindings as the modifier glyph twice', () => {
+    expect(formatKeybinding('DoubleTap+Shift', 'darwin')).toEqual(['⇧', '⇧'])
+    expect(formatKeybinding('DoubleTap+Shift', 'linux')).toEqual(['Shift', 'Shift'])
+    expect(formatKeybinding('DoubleTap+Mod', 'darwin')).toEqual(['⌘', '⌘'])
+    expect(formatKeybinding('DoubleTap+Mod', 'win32')).toEqual(['Ctrl', 'Ctrl'])
+    expect(formatKeybinding('DoubleTap+Cmd', 'win32')).toEqual(['Cmd', 'Cmd'])
+    expect(formatKeybinding('DoubleTap+Alt', 'darwin')).toEqual(['⌥', '⌥'])
   })
 
   it('matches macOS Option-composed bracket shortcuts for all-type tab switching', () => {
