@@ -2,8 +2,10 @@ import { z } from 'zod'
 import { defineMethod, type RpcMethod } from '../core'
 import { saveClipboardImageBufferAsTempFile } from '../../../window/clipboard-image-temp-file'
 import { randomUUID } from 'node:crypto'
+import { clipboard } from 'electron'
 
 const MAX_CLIPBOARD_IMAGE_BASE64_CHARS = 24 * 1024 * 1024
+export const MAX_CLIPBOARD_TEXT_BYTES = 256 * 1024
 export const CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS = 512 * 1024
 export const CLIPBOARD_IMAGE_UPLOAD_MAX_CONCURRENT = 8
 const CLIPBOARD_IMAGE_UPLOAD_TTL_MS = 5 * 60 * 1000
@@ -71,6 +73,21 @@ function assertValidBase64Content(value: string): void {
   }
 }
 
+function assertClipboardTextWithinLimit(text: string): void {
+  if (Buffer.byteLength(text, 'utf8') > MAX_CLIPBOARD_TEXT_BYTES) {
+    throw new Error('Clipboard text is too large')
+  }
+}
+
+const WriteText = z.object({
+  text: z
+    .string()
+    .refine(
+      (text) => Buffer.byteLength(text, 'utf8') <= MAX_CLIPBOARD_TEXT_BYTES,
+      'Clipboard text is too large'
+    )
+})
+
 const SaveImageAsTempFile = z.object({
   contentBase64: z
     .unknown()
@@ -113,6 +130,23 @@ const AbortImageUpload = z.object({
 })
 
 export const CLIPBOARD_METHODS: RpcMethod[] = [
+  defineMethod({
+    name: 'clipboard.readText',
+    params: null,
+    handler: () => {
+      const text = clipboard.readText()
+      assertClipboardTextWithinLimit(text)
+      return { available: text.length > 0, text }
+    }
+  }),
+  defineMethod({
+    name: 'clipboard.writeText',
+    params: WriteText,
+    handler: (params) => {
+      clipboard.writeText(params.text)
+      return { written: true }
+    }
+  }),
   defineMethod({
     name: 'clipboard.saveImageAsTempFile',
     params: SaveImageAsTempFile,

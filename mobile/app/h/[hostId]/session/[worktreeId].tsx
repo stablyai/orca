@@ -126,6 +126,8 @@ import {
   buildMobileImagePastePayload,
   saveMobileClipboardImageAsTempFile
 } from '../../../../src/session/mobile-clipboard-image'
+import { buildTerminalTextPastePayload } from '../../../../src/session/mobile-clipboard-text'
+import { useMobileTextClipboardActions } from '../../../../src/session/mobile-text-clipboard-actions'
 import { TerminalPaneView } from '../../../../src/session/TerminalPaneView'
 import {
   getRepoIdFromMobileWorktreeId,
@@ -3029,6 +3031,22 @@ export default function SessionScreen() {
     })
   }, [])
 
+  const { handlePasteFromDesktop, handleCopyPhoneClipboardToDesktop } =
+    useMobileTextClipboardActions({
+      client,
+      activeHandle,
+      canSend,
+      connState,
+      ptyModesRef,
+      deviceTokenRef,
+      readPhoneClipboardText: Clipboard.getStringAsync,
+      refreshCanPaste,
+      showToast,
+      onPasteSuccess: triggerSelection,
+      onCopySuccess: triggerSuccess,
+      onError: triggerError
+    })
+
   const handlePaste = useCallback(async () => {
     if (!client || !activeHandle || !canSend) {
       return
@@ -3037,21 +3055,11 @@ export default function SessionScreen() {
       const text = await Clipboard.getStringAsync()
       let payload: string | null = null
       if (text.length > 0) {
-        const modes = ptyModesRef.current.get(activeHandle) || {
-          bracketedPasteMode: false,
-          altScreen: false,
-          mouseTrackingMode: 'none',
-          sgrMouseMode: false,
-          sgrMousePixelsMode: false
-        }
-        const wrap = modes.bracketedPasteMode && !modes.altScreen
-        // Why: strip embedded bracketed-paste markers from clipboard text so a
-        // malicious copy containing `\x1b[201~` can't terminate paste mode early
-        // and have the trailing bytes interpreted as shell commands. Matches
-        // xterm.js / iTerm2 behavior.
-        // eslint-disable-next-line no-control-regex -- intentional bracketed-paste marker stripping
-        const sanitized = wrap ? text.replace(/\x1b\[20[01]~/g, '') : text
-        payload = wrap ? `\x1b[200~${sanitized}\x1b[201~` : sanitized
+        const modes = ptyModesRef.current.get(activeHandle)
+        payload = buildTerminalTextPastePayload(
+          text,
+          Boolean(modes?.bracketedPasteMode && !modes.altScreen)
+        )
       } else {
         const image = await Clipboard.getImageAsync({ format: 'png' })
         if (!image) {
@@ -3091,6 +3099,8 @@ export default function SessionScreen() {
       console.warn('[mobile-clip] paste failed', { name: err.name, message: err.message })
       if (isDisconnected) {
         showToast('Paste failed (disconnected)', 1500)
+      } else if (err.message === 'Clipboard text is too large') {
+        showToast('Paste too large (max 256 KiB)', 1500)
       } else if (err.message === 'Clipboard image is too large') {
         showToast('Image too large to paste', 1500)
       } else {
@@ -4106,6 +4116,38 @@ export default function SessionScreen() {
                     </Text>
                   </Pressable>
                 )}
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.accessoryKey,
+                    pressed && styles.accessoryKeyPressed,
+                    !canSend && styles.accessoryKeyDisabled
+                  ]}
+                  disabled={!canSend}
+                  onPress={() => void handlePasteFromDesktop()}
+                  accessibilityLabel="Paste from desktop clipboard"
+                >
+                  <Text
+                    style={[styles.accessoryKeyText, !canSend && styles.accessoryKeyTextDisabled]}
+                  >
+                    Desk Paste
+                  </Text>
+                </Pressable>
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.accessoryKey,
+                    pressed && styles.accessoryKeyPressed,
+                    !canSend && styles.accessoryKeyDisabled
+                  ]}
+                  disabled={!canSend}
+                  onPress={() => void handleCopyPhoneClipboardToDesktop()}
+                  accessibilityLabel="Copy phone clipboard to desktop"
+                >
+                  <Text
+                    style={[styles.accessoryKeyText, !canSend && styles.accessoryKeyTextDisabled]}
+                  >
+                    To Desk
+                  </Text>
+                </Pressable>
                 {visibleBuiltInAccessoryKeys.map((key) => (
                   <Pressable
                     key={key.id}
@@ -4206,7 +4248,7 @@ export default function SessionScreen() {
                   smartInsertDelete={false}
                   keyboardType={Platform.OS === 'ios' ? 'ascii-capable' : 'visible-password'}
                   returnKeyType="default"
-                  blurOnSubmit={false}
+                  submitBehavior="submit"
                   editable={canSend}
                   importantForAutofill="no"
                   textContentType="none"
