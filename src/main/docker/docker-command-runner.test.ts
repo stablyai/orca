@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { DockerConnection } from '../../shared/docker-types'
-import { buildInvocation, defaultDockerBinary } from './docker-command-runner'
+import { buildInvocation, defaultDockerBinary, listContainers, DockerCommandError } from './docker-command-runner'
 
 const ARGS = ['ps', '-a', '--format', '{{json .}}']
 
@@ -74,5 +74,38 @@ describe('defaultDockerBinary', () => {
     expect(defaultDockerBinary('win32')).toBe('docker.exe')
     expect(defaultDockerBinary('darwin')).toBe('docker')
     expect(defaultDockerBinary('linux')).toBe('docker')
+  })
+})
+
+const PS_OUTPUT = JSON.stringify({
+  ID: 'abc123',
+  Names: 'web',
+  Image: 'nginx',
+  State: 'running',
+  Status: 'Up 1 minute',
+  Labels: ''
+})
+
+describe('listContainers', () => {
+  it('runs `docker ps -a` and returns parsed summaries', async () => {
+    const calls: Array<{ file: string; args: string[] }> = []
+    const exec = async (file: string, args: string[], _options?: unknown) => {
+      calls.push({ file, args })
+      return { stdout: PS_OUTPUT, stderr: '', code: 0 }
+    }
+    const result = await listContainers({ id: 'local', label: 'Local', kind: 'local' }, { exec })
+    expect(calls[0]).toEqual({ file: 'docker', args: ['ps', '-a', '--format', '{{json .}}'] })
+    expect(result).toHaveLength(1)
+    expect(result[0]).toMatchObject({ id: 'abc123', state: 'running' })
+  })
+
+  it('throws DockerCommandError carrying the stderr message and exit code', async () => {
+    const exec = async () => ({ stdout: '', stderr: 'Cannot connect to the Docker daemon', code: 1 })
+    const error = await listContainers({ id: 'local', label: 'Local', kind: 'local' }, { exec }).catch(
+      (e) => e
+    )
+    expect(error).toBeInstanceOf(DockerCommandError)
+    expect(error.message).toContain('Cannot connect to the Docker daemon')
+    expect(error.code).toBe(1)
   })
 })

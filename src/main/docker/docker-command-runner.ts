@@ -1,4 +1,6 @@
-import type { DockerConnection, DockerSshTargetRef } from '../../shared/docker-types'
+import { execFile } from 'node:child_process'
+import type { DockerConnection, DockerContainerSummary, DockerSshTargetRef } from '../../shared/docker-types'
+import { parseDockerContainers } from './docker-output-parser'
 
 export const DOCKER_COMMAND_TIMEOUT_MS = 15_000
 
@@ -50,4 +52,64 @@ export function buildInvocation(
       return { file, args: dockerArgs, env: { DOCKER_HOST: `ssh://${user}${target.host}${port}` } }
     }
   }
+}
+
+export class DockerCommandError extends Error {
+  constructor(
+    readonly code: number,
+    readonly stderr: string
+  ) {
+    super(stderr.trim() || `docker exited with code ${code}`)
+    this.name = 'DockerCommandError'
+  }
+}
+
+export type CapturedExecResult = { stdout: string; stderr: string; code: number }
+
+export type CapturedExec = (
+  file: string,
+  args: string[],
+  options: { env?: NodeJS.ProcessEnv; timeout?: number }
+) => Promise<CapturedExecResult>
+
+export type DockerRunnerDeps = {
+  exec?: CapturedExec
+  dockerBinary?: string
+  sshTarget?: DockerSshTargetRef
+}
+
+/** Default executor: a local child process. Never throws on non-zero exit — returns the code. */
+export const localCapturedExec: CapturedExec = (file, args, options) =>
+  new Promise((resolve) => {
+    execFile(
+      file,
+      args,
+      { env: { ...process.env, ...options.env }, timeout: options.timeout, windowsHide: true },
+      (error, stdout, stderr) => {
+        // execFile sets error.code to the numeric exit code on a non-zero exit,
+        // or a string (e.g. 'ENOENT'/timeout) on a spawn failure — map the latter to 1.
+        const err = error as (NodeJS.ErrnoException & { code?: number | string }) | null
+        const code = err == null ? 0 : typeof err.code === 'number' ? err.code : 1
+        resolve({ stdout: stdout.toString(), stderr: stderr.toString(), code })
+      }
+    )
+  })
+
+export async function listContainers(
+  conn: DockerConnection,
+  deps: DockerRunnerDeps = {}
+): Promise<DockerContainerSummary[]> {
+  const exec = deps.exec ?? localCapturedExec
+  const invocation = buildInvocation(conn, ['ps', '-a', '--format', '{{json .}}'], {
+    dockerBinary: deps.dockerBinary,
+    sshTarget: deps.sshTarget
+  })
+  const result = await exec(invocation.file, invocation.args, {
+    env: invocation.env,
+    timeout: DOCKER_COMMAND_TIMEOUT_MS
+  })
+  if (result.code !== 0) {
+    throw new DockerCommandError(result.code, result.stderr)
+  }
+  return parseDockerContainers(result.stdout)
 }
