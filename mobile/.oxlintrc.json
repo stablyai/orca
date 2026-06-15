@@ -28,7 +28,13 @@
     {
       "files": ["src/terminal/TerminalWebView.tsx"],
       "rules": {
-        "max-lines": ["error", { "max": 2069, "skipBlankLines": true, "skipComments": true }]
+        "max-lines": ["error", { "max": 379, "skipBlankLines": true, "skipComments": true }]
+      }
+    },
+    {
+      "files": ["src/terminal/terminal-webview-html.ts"],
+      "rules": {
+        "max-lines": ["error", { "max": 1778, "skipBlankLines": true, "skipComments": true }]
       }
     },
     {

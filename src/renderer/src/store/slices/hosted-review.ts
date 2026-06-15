@@ -58,7 +58,9 @@ function findHostedReviewRepoByPath(
   repoPath: string,
   repoId?: string | null
 ): Repo | undefined {
-  return repos?.find((candidate) => (repoId ? candidate.id === repoId : candidate.path === repoPath))
+  return repos?.find((candidate) =>
+    repoId ? candidate.id === repoId : candidate.path === repoPath
+  )
 }
 
 function shouldRefetchForLinkedHint(

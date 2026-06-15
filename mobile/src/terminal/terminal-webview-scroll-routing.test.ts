@@ -1,7 +1,11 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
-const source = readFileSync(new URL('./TerminalWebView.tsx', import.meta.url), 'utf8')
+// The in-WebView JS lives in terminal-webview-html.ts; the RN wrapper in
+// TerminalWebView.tsx. Concatenate both so assertions resolve regardless of file.
+const source =
+  readFileSync(new URL('./TerminalWebView.tsx', import.meta.url), 'utf8') +
+  readFileSync(new URL('./terminal-webview-html.ts', import.meta.url), 'utf8')
 const sessionSource = readFileSync(
   new URL('../../app/h/[hostId]/session/[worktreeId].tsx', import.meta.url),
   'utf8'
