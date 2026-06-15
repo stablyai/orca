@@ -16,7 +16,8 @@ const mocks = vi.hoisted(() => ({
   generateCommitMessageFromContext: vi.fn(),
   generatePullRequestFieldsFromContext: vi.fn(),
   resolveCommitMessageSettings: vi.fn(),
-  getSshGitProvider: vi.fn()
+  getSshGitProvider: vi.fn(),
+  runSwitchBranch: vi.fn()
 }))
 
 vi.mock('../git/status', async () => ({
@@ -45,6 +46,8 @@ vi.mock('../text-generation/pull-request-context', async () => ({
 vi.mock('../providers/ssh-git-dispatch', () => ({
   getSshGitProvider: mocks.getSshGitProvider
 }))
+
+vi.mock('../git/switch-branch', () => ({ runSwitchBranch: mocks.runSwitchBranch }))
 
 const tempDirs: string[] = []
 
@@ -328,6 +331,20 @@ describe('RuntimeGitCommands', () => {
         cwd: worktreePath
       })
     )
+  })
+
+  it('switchRuntimeGitBranch delegates to runSwitchBranch with the resolved cwd', async () => {
+    mocks.runSwitchBranch.mockResolvedValue({ ok: true })
+    const dir = mkdtempSync(join(tmpdir(), 'switch-'))
+    tempDirs.push(dir)
+    const commands = makeCommands(dir)
+    const result = await commands.switchRuntimeGitBranch('wt-1', { branch: 'main', mode: 'plain' })
+    expect(result).toEqual({ ok: true })
+    expect(mocks.runSwitchBranch).toHaveBeenCalledWith({
+      cwd: dir,
+      connectionId: undefined,
+      options: { branch: 'main', mode: 'plain' }
+    })
   })
 
   it('resolves remote commit-message settings against the SSH host cache', async () => {

@@ -66,6 +66,8 @@ import { prepareLocalCommitMessageAgentEnv } from '../text-generation/commit-mes
 import { getPullRequestDraftContext } from '../text-generation/pull-request-context'
 import { normalizeRuntimeRelativePath } from './runtime-relative-paths'
 import { gitExecFileAsync } from '../git/runner'
+import { runSwitchBranch } from '../git/switch-branch'
+import type { SwitchBranchOptions, SwitchBranchResult } from '../../shared/git-branch-switch'
 
 export type ResolvedRuntimeGitWorktree = Worktree & { git: GitWorktreeInfo }
 type RuntimeCommitMessageSettingsOverride = Partial<
@@ -441,6 +443,18 @@ export class RuntimeGitCommands {
       return provider.commit(target.worktree.path, message)
     }
     return commitChanges(target.worktree.path, message)
+  }
+
+  async switchRuntimeGitBranch(
+    worktreeSelector: string,
+    options: SwitchBranchOptions
+  ): Promise<SwitchBranchResult> {
+    const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
+    return runSwitchBranch({
+      cwd: target.worktree.path,
+      connectionId: target.connectionId,
+      options
+    })
   }
 
   async generateRuntimeCommitMessage(
