@@ -340,6 +340,7 @@ import type {
   HostedReviewInfo
 } from '../../shared/hosted-review'
 import { getHostedReviewForBranch as getHostedReviewForBranchFromRepo } from '../source-control/hosted-review'
+import type { ForgeProviderId } from '../source-control/forge-provider'
 import {
   createHostedReview as createHostedReviewFromRepo,
   getHostedReviewCreationEligibility as getHostedReviewCreationEligibilityFromRepo
@@ -1091,6 +1092,9 @@ function mergeRuntimeFolderWorkspace(repo: Repo, worktreeId: string, meta: Workt
     linkedLinearIssueOrganizationUrlKey: meta.linkedLinearIssueOrganizationUrlKey ?? null,
     linkedGitLabMR: meta.linkedGitLabMR ?? null,
     linkedGitLabIssue: meta.linkedGitLabIssue ?? null,
+    linkedBitbucketPR: meta.linkedBitbucketPR ?? null,
+    linkedAzureDevOpsPR: meta.linkedAzureDevOpsPR ?? null,
+    linkedGiteaPR: meta.linkedGiteaPR ?? null,
     isArchived: meta.isArchived ?? false,
     isUnread: meta.isUnread ?? false,
     isPinned: meta.isPinned ?? false,
@@ -1174,6 +1178,32 @@ function normalizeLocalBranchName(branchName: string | undefined): string {
   return branchName?.replace(/^refs\/heads\//, '') ?? ''
 }
 
+// Clamp terminal dimensions to the PTY's supported range (cols 20–240, rows 8–120).
+function clampTerminalViewport(cols: number, rows: number): { cols: number; rows: number } {
+  return {
+    cols: Math.max(20, Math.min(240, Math.round(cols))),
+    rows: Math.max(8, Math.min(120, Math.round(rows)))
+  }
+}
+
+// Subscribe a listener to a per-key Set, pruning the key's entry once its last
+// listener unsubscribes. Returns the unsubscribe callback.
+function addListenerToMap<T>(map: Map<string, Set<T>>, key: string, listener: T): () => void {
+  let listeners = map.get(key)
+  if (!listeners) {
+    listeners = new Set<T>()
+    map.set(key, listeners)
+  }
+  const set = listeners
+  set.add(listener)
+  return () => {
+    set.delete(listener)
+    if (set.size === 0) {
+      map.delete(key)
+    }
+  }
+}
+
 async function canCheckoutExistingLocalBranch(
   repoPath: string,
   branchName: string,
@@ -1211,22 +1241,57 @@ async function canCheckoutExistingLocalBranch(
   return !worktrees.some((worktree) => normalizeLocalBranchName(worktree.branch) === branchName)
 }
 
-type SelectedPrBranchInput = {
+type SelectedReviewBranchInput = {
   branchNameOverride?: string
   linkedPR?: number | null
+  linkedGitLabMR?: number | null
+  linkedBitbucketPR?: number | null
+  linkedAzureDevOpsPR?: number | null
+  linkedGiteaPR?: number | null
   pushTarget?: GitPushTarget
 }
 
+type SelectedReviewBranch = {
+  provider: ForgeProviderId
+  number: number
+}
+
+function getSelectedReviewBranch(args: SelectedReviewBranchInput): SelectedReviewBranch | null {
+  if (typeof args.linkedPR === 'number') {
+    return { provider: 'github', number: args.linkedPR }
+  }
+  if (typeof args.linkedGitLabMR === 'number') {
+    return { provider: 'gitlab', number: args.linkedGitLabMR }
+  }
+  if (typeof args.linkedBitbucketPR === 'number') {
+    return { provider: 'bitbucket', number: args.linkedBitbucketPR }
+  }
+  if (typeof args.linkedAzureDevOpsPR === 'number') {
+    return { provider: 'azure-devops', number: args.linkedAzureDevOpsPR }
+  }
+  if (typeof args.linkedGiteaPR === 'number') {
+    return { provider: 'gitea', number: args.linkedGiteaPR }
+  }
+  return null
+}
+
 function isSelectedGitHubPrBranchOverride(
-  args: SelectedPrBranchInput,
+  args: SelectedReviewBranchInput,
   branchName: string
 ): boolean {
   return typeof args.linkedPR === 'number' && args.branchNameOverride === branchName
 }
 
+function isSelectedReviewBranchOverride(
+  args: SelectedReviewBranchInput,
+  branchName: string
+): boolean {
+  return getSelectedReviewBranch(args) !== null && args.branchNameOverride === branchName
+}
+
 function isMatchingSelectedGitHubPr(
   existingPR: Awaited<ReturnType<typeof getPRForBranch>>,
-  args: SelectedPrBranchInput,
+  args: SelectedReviewBranchInput,
   branchName: string
 ): boolean {
   return Boolean(
@@ -1239,13 +1304,54 @@ function isMatchingSelectedGitHubPr(
 function isAllowedPushTargetRemoteConflict(
   conflictKind: 'local' | 'remote' | null,
   branchName: string,
-  args: SelectedPrBranchInput
+  args: SelectedReviewBranchInput
 ): boolean {
   return (
     conflictKind === 'remote' &&
-    isSelectedGitHubPrBranchOverride(args, branchName) &&
+    isSelectedReviewBranchOverride(args, branchName) &&
     args.pushTarget?.branchName === branchName
   )
+}
+
+function getSelectedReviewLookupHints(args: SelectedReviewBranchInput): {
+  linkedGitHubPR?: number | null
+  linkedGitLabMR?: number | null
+  linkedBitbucketPR?: number | null
+  linkedAzureDevOpsPR?: number | null
+  linkedGiteaPR?: number | null
+} {
+  return {
+    linkedGitHubPR: args.linkedPR ?? null,
+    linkedGitLabMR: args.linkedGitLabMR ?? null,
+    linkedBitbucketPR: args.linkedBitbucketPR ?? null,
+    linkedAzureDevOpsPR: args.linkedAzureDevOpsPR ?? null,
+    linkedGiteaPR: args.linkedGiteaPR ?? null
+  }
+}
+
+async function getSelectedHostedReviewForBranch(
+  repo: Pick<Repo, 'path' | 'connectionId'>,
+  branchName: string,
+  args: SelectedReviewBranchInput
+): Promise<{ matchesSelected: boolean; number: number } | null> {
+  const selectedReview = getSelectedReviewBranch(args)
+  if (!selectedReview) {
+    return null
+  }
+  const review = await getHostedReviewForBranchFromRepo({
+    repoPath: repo.path,
+    connectionId: repo.connectionId ?? null,
+    branch: branchName,
+    ...getSelectedReviewLookupHints(args)
+  })
+  if (!review) {
+    return null
+  }
+  return {
+    matchesSelected:
+      review.provider === selectedReview.provider && review.number === selectedReview.number,
+    number: review.number
+  }
 }
 
 async function pathExists(pathValue: string): Promise<boolean> {
@@ -3788,51 +3894,18 @@ export class OrcaRuntimeService {
     ptyId: string,
     listener: (data: string, meta?: { seq?: number; rawLength?: number }) => void
   ): () => void {
-    let listeners = this.dataListeners.get(ptyId)
-    if (!listeners) {
-      listeners = new Set()
-      this.dataListeners.set(ptyId, listeners)
-    }
-    listeners.add(listener)
-    return () => {
-      listeners.delete(listener)
-      if (listeners.size === 0) {
-        this.dataListeners.delete(ptyId)
-      }
-    }
+    return addListenerToMap(this.dataListeners, ptyId, listener)
   }
 
   subscribeToFitOverrideChanges(
     ptyId: string,
     listener: (event: { mode: 'mobile-fit' | 'desktop-fit'; cols: number; rows: number }) => void
   ): () => void {
-    let listeners = this.fitOverrideListeners.get(ptyId)
-    if (!listeners) {
-      listeners = new Set()
-      this.fitOverrideListeners.set(ptyId, listeners)
-    }
-    listeners.add(listener)
-    return () => {
-      listeners.delete(listener)
-      if (listeners.size === 0) {
-        this.fitOverrideListeners.delete(ptyId)
-      }
-    }
+    return addListenerToMap(this.fitOverrideListeners, ptyId, listener)
   }
 
   subscribeToDriverChanges(ptyId: string, listener: (driver: DriverState) => void): () => void {
-    let listeners = this.driverListeners.get(ptyId)
-    if (!listeners) {
-      listeners = new Set()
-      this.driverListeners.set(ptyId, listeners)
-    }
-    listeners.add(listener)
-    return () => {
-      listeners.delete(listener)
-      if (listeners.size === 0) {
-        this.driverListeners.delete(ptyId)
-      }
-    }
+    return addListenerToMap(this.driverListeners, ptyId, listener)
   }
 
   private notifyFitOverrideListeners(
@@ -4125,9 +4198,6 @@ export class OrcaRuntimeService {
       // If renderer serialization races reload/unmount, the runtime snapshot
       // below can still preserve colored terminal state.
     }
-    if (rendererSnapshot && rendererSnapshot.data.length > 0) {
-      return { ...rendererSnapshot, source: 'renderer' }
-    }
     return rendererSnapshot ? { ...rendererSnapshot, source: 'renderer' } : null
   }
 
@@ -4291,6 +4361,13 @@ export class OrcaRuntimeService {
         }
       }
       cleanup()
+    }
+  }
+
+  cleanupSubscriptionsByPrefix(prefix: string): void {
+    const ids = Array.from(this.subscriptionCleanups.keys()).filter((id) => id.startsWith(prefix))
+    for (const id of ids) {
+      this.cleanupSubscription(id)
     }
   }
 
@@ -4642,8 +4719,7 @@ export class OrcaRuntimeService {
       if (cols == null || rows == null || !Number.isFinite(cols) || !Number.isFinite(rows)) {
         throw new Error('invalid_dimensions')
       }
-      const clampedCols = Math.max(20, Math.min(240, Math.round(cols)))
-      const clampedRows = Math.max(8, Math.min(120, Math.round(rows)))
+      const { cols: clampedCols, rows: clampedRows } = clampTerminalViewport(cols, rows)
 
       const currentSize = this.getTerminalSize(ptyId)
       const existing = this.terminalFitOverrides.get(ptyId)
@@ -4880,7 +4956,7 @@ export class OrcaRuntimeService {
       }
       this.setDriver(ptyId, { kind: 'mobile', clientId: next.clientId })
 
-      const mode = this.mobileDisplayModes.get(ptyId) ?? 'auto'
+      const mode = this.getMobileDisplayMode(ptyId)
       if (mode === 'desktop') {
         continue
       }
@@ -5080,7 +5156,7 @@ export class OrcaRuntimeService {
     sub.viewport = viewport
     sub.lastActedAt = Date.now()
 
-    const mode = this.mobileDisplayModes.get(ptyId) ?? 'auto'
+    const mode = this.getMobileDisplayMode(ptyId)
     if (mode === 'desktop') {
       // Watching at desktop dims — viewport is informational only.
       return true
@@ -5092,8 +5168,10 @@ export class OrcaRuntimeService {
     }
     const winnerSub = inner!.get(winner.clientId)
     const driveViewport = winnerSub?.viewport ?? viewport
-    const clampedCols = Math.max(20, Math.min(240, Math.round(driveViewport.cols)))
-    const clampedRows = Math.max(8, Math.min(120, Math.round(driveViewport.rows)))
+    const { cols: clampedCols, rows: clampedRows } = clampTerminalViewport(
+      driveViewport.cols,
+      driveViewport.rows
+    )
 
     sub.wasResizedToPhone = true
     // The driver is already mobile{this client} when we got here; refresh
@@ -5126,8 +5204,7 @@ export class OrcaRuntimeService {
     ptyId: string,
     viewport: { cols: number; rows: number }
   ): Promise<boolean> {
-    const cols = Math.max(20, Math.min(240, Math.round(viewport.cols)))
-    const rows = Math.max(8, Math.min(120, Math.round(viewport.rows)))
+    const { cols, rows } = clampTerminalViewport(viewport.cols, viewport.rows)
     if (this.terminalFitOverrides.has(ptyId)) {
       // Why: remote desktop panes do not have the local pty:reportGeometry
       // IPC. While phone-fit holds the PTY, treat their viewport RPC as a
@@ -5604,7 +5681,7 @@ export class OrcaRuntimeService {
     clientId: string,
     viewport?: { cols: number; rows: number }
   ): Promise<boolean> {
-    const mode = this.mobileDisplayModes.get(ptyId) ?? 'auto'
+    const mode = this.getMobileDisplayMode(ptyId)
 
     // Cancel pending restore timer for this ptyId — any new subscriber
     // supersedes any old client's pending restore.
@@ -5636,8 +5713,10 @@ export class OrcaRuntimeService {
       }
       this.setDriver(ptyId, { kind: 'mobile', clientId })
       if (mode !== 'desktop') {
-        const clampedCols = Math.max(20, Math.min(240, Math.round(viewport.cols)))
-        const clampedRows = Math.max(8, Math.min(120, Math.round(viewport.rows)))
+        const { cols: clampedCols, rows: clampedRows } = clampTerminalViewport(
+          viewport.cols,
+          viewport.rows
+        )
         this.freshSubscribeGuard.add(ptyId)
         try {
           await this.enqueueLayout(ptyId, {
@@ -5701,8 +5780,10 @@ export class OrcaRuntimeService {
       return false
     }
 
-    const clampedCols = Math.max(20, Math.min(240, Math.round(viewport.cols)))
-    const clampedRows = Math.max(8, Math.min(120, Math.round(viewport.rows)))
+    const { cols: clampedCols, rows: clampedRows } = clampTerminalViewport(
+      viewport.cols,
+      viewport.rows
+    )
 
     if (mode === 'desktop') {
       // Passive watch — null baseline (we'll capture later if user toggles
@@ -5815,7 +5896,7 @@ export class OrcaRuntimeService {
 
     // Last subscriber leaving — clean up.
     this.mobileSubscribers.delete(ptyId)
-    const mode = this.mobileDisplayModes.get(ptyId) ?? 'auto'
+    const mode = this.getMobileDisplayMode(ptyId)
 
     // Resubscribe-grace: hold driver=mobile{clientId} for ~250ms so a quick
     // re-subscribe (older clients without updateViewport) doesn't flash the
@@ -5908,7 +5989,7 @@ export class OrcaRuntimeService {
   // phone-fit dims. The earliest-by-subscribe-time subscriber's
   // previousCols/Rows drive the desktop-restore target.
   async applyMobileDisplayMode(ptyId: string): Promise<void> {
-    const mode = this.mobileDisplayModes.get(ptyId) ?? 'auto'
+    const mode = this.getMobileDisplayMode(ptyId)
     const inner = this.mobileSubscribers.get(ptyId)
     const subscriber = inner ? this.pickMostRecentActor(inner) : null
     const subscriberRecord = subscriber && inner ? inner.get(subscriber.clientId) : null
@@ -6063,18 +6144,7 @@ export class OrcaRuntimeService {
       seq?: number
     }) => void
   ): () => void {
-    let listeners = this.resizeListeners.get(ptyId)
-    if (!listeners) {
-      listeners = new Set()
-      this.resizeListeners.set(ptyId, listeners)
-    }
-    listeners.add(listener)
-    return () => {
-      listeners.delete(listener)
-      if (listeners.size === 0) {
-        this.resizeListeners.delete(ptyId)
-      }
-    }
+    return addListenerToMap(this.resizeListeners, ptyId, listener)
   }
 
   private notifyTerminalResize(
@@ -9486,6 +9556,9 @@ export class OrcaRuntimeService {
     linkedLinearIssueOrganizationUrlKey?: string | null
     linkedGitLabMR?: number | null
     linkedGitLabIssue?: number | null
+    linkedBitbucketPR?: number | null
+    linkedAzureDevOpsPR?: number | null
+    linkedGiteaPR?: number | null
     comment?: string
     displayName?: string
     telemetrySource?: WorkspaceCreateTelemetrySource
@@ -9574,6 +9647,13 @@ export class OrcaRuntimeService {
           ? { linkedGitLabIssue: args.linkedGitLabIssue }
           : {}),
         ...(args.linkedGitLabMR !== undefined ? { linkedGitLabMR: args.linkedGitLabMR } : {}),
+        ...(args.linkedBitbucketPR !== undefined
+          ? { linkedBitbucketPR: args.linkedBitbucketPR }
+          : {}),
+        ...(args.linkedAzureDevOpsPR !== undefined
+          ? { linkedAzureDevOpsPR: args.linkedAzureDevOpsPR }
+          : {}),
+        ...(args.linkedGiteaPR !== undefined ? { linkedGiteaPR: args.linkedGiteaPR } : {}),
         ...(effectiveCreatedWithAgent ? { createdWithAgent: effectiveCreatedWithAgent } : {}),
         ...(args.comment !== undefined ? { comment: args.comment } : {}),
         ...(args.manualOrder !== undefined ? { manualOrder: args.manualOrder } : {}),
@@ -9718,24 +9798,38 @@ export class OrcaRuntimeService {
 
     if (!checkoutExistingBranch) {
       let existingPR: Awaited<ReturnType<typeof getPRForBranch>> | null = null
-      try {
-        existingPR = await getPRForBranch(repo.path, branchName)
-      } catch {
-        if (allowedPushTargetRemoteConflict) {
-          throw new Error(`Could not verify selected PR branch "${branchName}". Try again.`)
+      const selectedReview = getSelectedReviewBranch(args)
+      if (selectedReview?.provider === 'github' || !allowedPushTargetRemoteConflict) {
+        try {
+          existingPR = await getPRForBranch(repo.path, branchName)
+        } catch {
+          if (allowedPushTargetRemoteConflict) {
+            throw new Error(`Could not verify selected PR branch "${branchName}". Try again.`)
+          }
+          // Why: worktree creation should not hard-fail on transient GitHub reachability
+          // issues because git state is still the source of truth for whether the
+          // worktree can be created locally.
         }
-        // Why: worktree creation should not hard-fail on transient GitHub reachability
-        // issues because git state is still the source of truth for whether the
-        // worktree can be created locally.
       }
-      if (
-        allowedPushTargetRemoteConflict &&
-        !isMatchingSelectedGitHubPr(existingPR, args, branchName)
-      ) {
-        if (existingPR) {
-          throw new Error(`Branch "${branchName}" already has PR #${existingPR.number}.`)
+      if (allowedPushTargetRemoteConflict) {
+        if (selectedReview?.provider === 'github') {
+          if (!isMatchingSelectedGitHubPr(existingPR, args, branchName)) {
+            if (existingPR) {
+              throw new Error(`Branch "${branchName}" already has PR #${existingPR.number}.`)
+            }
+            throw new Error(`Branch "${branchName}" already exists on a remote.`)
+          }
+        } else if (selectedReview) {
+          const hostedReview = await getSelectedHostedReviewForBranch(repo, branchName, args).catch(
+            () => null
+          )
+          if (!hostedReview?.matchesSelected) {
+            if (hostedReview) {
+              throw new Error(`Branch "${branchName}" already has PR #${hostedReview.number}.`)
+            }
+            throw new Error(`Branch "${branchName}" already exists on a remote.`)
+          }
         }
-        throw new Error(`Branch "${branchName}" already exists on a remote.`)
       }
       if (existingPR && !isMatchingSelectedGitHubPr(existingPR, args, branchName)) {
         throw new Error(`Branch "${branchName}" already has PR #${existingPR.number}.`)
@@ -9973,6 +10067,13 @@ export class OrcaRuntimeService {
         ? { linkedGitLabIssue: args.linkedGitLabIssue }
         : {}),
       ...(args.linkedGitLabMR !== undefined ? { linkedGitLabMR: args.linkedGitLabMR } : {}),
+      ...(args.linkedBitbucketPR !== undefined
+        ? { linkedBitbucketPR: args.linkedBitbucketPR }
+        : {}),
+      ...(args.linkedAzureDevOpsPR !== undefined
+        ? { linkedAzureDevOpsPR: args.linkedAzureDevOpsPR }
+        : {}),
+      ...(args.linkedGiteaPR !== undefined ? { linkedGiteaPR: args.linkedGiteaPR } : {}),
       ...(effectiveCreatedWithAgent ? { createdWithAgent: effectiveCreatedWithAgent } : {}),
       ...(args.pendingFirstAgentMessageRename === true && effectiveCreatedWithAgent
         ? { pendingFirstAgentMessageRename: true }
@@ -10229,6 +10330,9 @@ export class OrcaRuntimeService {
       linkedLinearIssueOrganizationUrlKey?: string | null
       linkedGitLabMR?: number | null
       linkedGitLabIssue?: number | null
+      linkedBitbucketPR?: number | null
+      linkedAzureDevOpsPR?: number | null
+      linkedGiteaPR?: number | null
       comment?: string
       displayName?: string
       workspaceStatus?: string
@@ -10278,6 +10382,11 @@ export class OrcaRuntimeService {
           : {}),
         ...(args.linkedGitLabMR != null ? { linkedGitLabMR: args.linkedGitLabMR } : {}),
         ...(args.linkedGitLabIssue != null ? { linkedGitLabIssue: args.linkedGitLabIssue } : {}),
+        ...(args.linkedBitbucketPR != null ? { linkedBitbucketPR: args.linkedBitbucketPR } : {}),
+        ...(args.linkedAzureDevOpsPR != null
+          ? { linkedAzureDevOpsPR: args.linkedAzureDevOpsPR }
+          : {}),
+        ...(args.linkedGiteaPR != null ? { linkedGiteaPR: args.linkedGiteaPR } : {}),
         ...(args.pushTarget ? { pushTarget: args.pushTarget } : {}),
         ...(args.workspaceStatus ? { workspaceStatus: args.workspaceStatus as never } : {}),
         ...(args.manualOrder !== undefined ? { manualOrder: args.manualOrder } : {}),
@@ -13267,6 +13376,7 @@ export class OrcaRuntimeService {
       return []
     }
     const now = Date.now()
+    const metaById = this.store.getAllWorktreeMeta() ?? {}
     const perRepoWorktrees = await Promise.all(
       this.store.getRepos().map(async (repo) => {
         if (isFolderRepo(repo)) {
@@ -13297,7 +13407,6 @@ export class OrcaRuntimeService {
         if (scan.ok) {
           this.pruneLineageForMissingRepoWorktrees(repo, gitWorktrees)
         }
-        const metaById = this.store?.getAllWorktreeMeta() ?? {}
         return gitWorktrees.map((gitWorktree) => {
           const worktreeId = `${repo.id}::${gitWorktree.path}`
           // Why: lineage validation needs a durable instance ID even when the
@@ -18407,15 +18516,11 @@ function branchSelectorMatches(branch: string, selector: string): boolean {
   // or `foo` depending on which plumbing path produced the record. Orca's
   // branch selectors should accept either form so newly created worktrees stay
   // discoverable without exposing internal ref-shape differences to users.
-  return normalizeBranchRef(branch) === normalizeBranchRef(selector)
+  return normalizeLocalBranchName(branch) === normalizeLocalBranchName(selector)
 }
 
 function runtimePathsEqual(left: string, right: string): boolean {
   return normalizeRuntimePathForComparison(left) === normalizeRuntimePathForComparison(right)
-}
-
-function normalizeBranchRef(branch: string): string {
-  return branch.startsWith('refs/heads/') ? branch.slice('refs/heads/'.length) : branch
 }
 
 function inferWorktreeIdFromPtyId(ptyId: string): string | null {

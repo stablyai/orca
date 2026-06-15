@@ -28,6 +28,8 @@ export type RuntimeStatusSlice = {
   clearRuntimeEnvironmentStatus: (environmentId: string) => void
   /** Drops every entry whose id is not in the saved-environments set. */
   retainRuntimeEnvironmentStatuses: (environmentIds: Iterable<string>) => void
+  /** Probes one saved runtime and records the latest reachable/unreachable state. */
+  refreshRuntimeEnvironmentStatus: (environmentId: string, timeoutMs?: number) => Promise<boolean>
   /** Best-effort: list saved environments and probe each so the sidebar shows
    * live health at boot, before the settings pane is ever opened. */
   hydrateRuntimeEnvironmentStatuses: () => Promise<void>
@@ -88,6 +90,24 @@ export const createRuntimeStatusSlice: StateCreator<AppState, [], [], RuntimeSta
       return changed ? { runtimeStatusByEnvironmentId: next } : s
     }),
 
+  refreshRuntimeEnvironmentStatus: async (environmentId, timeoutMs = 10_000) => {
+    try {
+      const response = await window.api.runtimeEnvironments.getStatus({
+        selector: environmentId,
+        timeoutMs
+      })
+      const status = unwrapRuntimeRpcResult<RuntimeStatus>(response)
+      get().setRuntimeEnvironmentStatus(environmentId, { status, checkedAt: Date.now() })
+      return true
+    } catch {
+      get().setRuntimeEnvironmentStatus(environmentId, {
+        status: null,
+        checkedAt: Date.now()
+      })
+      return false
+    }
+  },
+
   hydrateRuntimeEnvironmentStatuses: async () => {
     let environments: PublicKnownRuntimeEnvironment[]
     try {
@@ -100,21 +120,7 @@ export const createRuntimeStatusSlice: StateCreator<AppState, [], [], RuntimeSta
     // Why: fire-and-forget per env; one unreachable server must not block the
     // others, and a failure records a null status rather than nothing.
     await Promise.allSettled(
-      environments.map(async (environment) => {
-        try {
-          const response = await window.api.runtimeEnvironments.getStatus({
-            selector: environment.id,
-            timeoutMs: 10_000
-          })
-          const status = unwrapRuntimeRpcResult<RuntimeStatus>(response)
-          get().setRuntimeEnvironmentStatus(environment.id, { status, checkedAt: Date.now() })
-        } catch {
-          get().setRuntimeEnvironmentStatus(environment.id, {
-            status: null,
-            checkedAt: Date.now()
-          })
-        }
-      })
+      environments.map((environment) => get().refreshRuntimeEnvironmentStatus(environment.id))
     )
   }
 })

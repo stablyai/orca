@@ -343,6 +343,70 @@ describe('buildRows with pinned worktrees', () => {
     ])
   })
 
+  it('splits same-host checkouts of one project into separate per-setup groups', () => {
+    // Why: multiple local clones/worktrees of one repo share the GitHub slug, so
+    // collapsing to the project would merge them into one arbitrarily-named group.
+    // They are distinct ProjectHostSetups on the same host and must stay separate.
+    const repoB: Repo = { ...repo, id: 'repo-2', path: '/tmp/orca-2', displayName: 'orca-2' }
+    const worktreeB: Worktree = {
+      ...worktree,
+      id: 'wt-2',
+      repoId: repoB.id,
+      path: '/tmp/orca-2-feature',
+      displayName: 'feature-b'
+    }
+    const localSetupB: ProjectHostSetup = {
+      ...projectHostSetups[0]!,
+      id: repoB.id,
+      repoId: repoB.id,
+      path: repoB.path,
+      displayName: repoB.displayName
+    }
+    const rows = buildRows(
+      'repo',
+      [worktree, worktreeB],
+      new Map([
+        [repo.id, repo],
+        [repoB.id, repoB]
+      ]),
+      null,
+      new Set(),
+      undefined,
+      undefined,
+      undefined,
+      {},
+      new Map([
+        [worktree.id, worktree],
+        [worktreeB.id, worktreeB]
+      ]),
+      false,
+      undefined,
+      [],
+      new Set(),
+      new Map(),
+      [],
+      {
+        projects: [{ ...project, sourceRepoIds: [repo.id, repoB.id] }],
+        projectHostSetups: [projectHostSetups[0]!, localSetupB]
+      }
+    )
+
+    const headers = rows.filter((row) => row.type === 'header')
+    expect(headers).toHaveLength(2)
+    expect(headers).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          key: 'project:github:stablyai/orca::setup:repo-1',
+          label: 'orca'
+        }),
+        expect.objectContaining({
+          key: 'project:github:stablyai/orca::setup:repo-2',
+          label: 'orca-2'
+        })
+      ])
+    )
+  })
+
   it('uses saved host labels for mixed-host sidebar card badges', () => {
     const runtimeRepo: Repo = {
       ...remoteRepo,

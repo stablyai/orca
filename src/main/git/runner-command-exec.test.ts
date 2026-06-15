@@ -13,7 +13,7 @@ vi.mock('node:child_process', () => ({
   spawn: spawnMock
 }))
 
-import { commandExecFileAsync, gitExecFileAsync } from './runner'
+import { commandExecFileAsync, gitExecFileAsync, gitStreamStdout } from './runner'
 
 type MockChildProcess = EventEmitter & {
   stdout: EventEmitter
@@ -229,5 +229,96 @@ describe('runner execFile timeout handling', () => {
     expect(capturedEnv?.GIT_ASKPASS).toBe('')
     expect(capturedEnv?.SSH_ASKPASS).toBe('')
     expect(capturedEnv?.GIT_SSH_COMMAND).toContain('BatchMode=yes')
+  })
+})
+
+describe('gitStreamStdout', () => {
+  beforeEach(() => {
+    spawnMock.mockReset()
+  })
+
+  it('streams chunks to onStdout and resolves cleanly on a zero exit', async () => {
+    const child = createMockChildProcess(1234)
+    spawnMock.mockReturnValue(child)
+
+    const chunks: string[] = []
+    const promise = gitStreamStdout(['status', '--porcelain=v2'], {
+      cwd: '/repo',
+      onStdout: (chunk) => {
+        chunks.push(chunk)
+      }
+    })
+    child.stdout.emit('data', Buffer.from('? a.txt\n'))
+    child.stdout.emit('data', Buffer.from('? b.txt\n'))
+    child.emit('close', 0)
+
+    await expect(promise).resolves.toEqual({ stoppedEarly: false })
+    expect(chunks).toEqual(['? a.txt\n', '? b.txt\n'])
+    expect(child.kill).not.toHaveBeenCalled()
+  })
+
+  it('kills git early and resolves stoppedEarly when onStdout requests a stop', async () => {
+    const child = createMockChildProcess(1234)
+    spawnMock.mockReturnValue(child)
+
+    let calls = 0
+    const promise = gitStreamStdout(['status'], {
+      cwd: '/repo',
+      // Stop after the first chunk — mirrors a parser hitting its entry limit.
+      onStdout: () => {
+        calls += 1
+        return true
+      }
+    })
+    child.stdout.emit('data', Buffer.from('? a.txt\n'))
+
+    await expect(promise).resolves.toEqual({ stoppedEarly: true })
+    expect(child.kill).toHaveBeenCalled()
+    expect(calls).toBe(1)
+  })
+
+  it('rejects when stdout exceeds the maxBuffer backstop', async () => {
+    const child = createMockChildProcess(1234)
+    spawnMock.mockReturnValue(child)
+
+    const promise = gitStreamStdout(['status'], {
+      cwd: '/repo',
+      maxBuffer: 4,
+      onStdout: () => {}
+    })
+    const rejection = expect(promise).rejects.toThrow('git stdout exceeded maxBuffer.')
+    child.stdout.emit('data', Buffer.from('way too much'))
+
+    await rejection
+    expect(child.kill).toHaveBeenCalled()
+  })
+
+  it('rejects on a non-zero exit with stderr context', async () => {
+    const child = createMockChildProcess(1234)
+    spawnMock.mockReturnValue(child)
+
+    const promise = gitStreamStdout(['status'], { cwd: '/repo', onStdout: () => {} })
+    const rejection = expect(promise).rejects.toThrow('git exited with 128')
+    child.stderr.emit('data', Buffer.from('fatal: not a git repository'))
+    child.emit('close', 128)
+
+    await rejection
+  })
+
+  it('rejects (not crashes) when the onStdout callback throws', async () => {
+    const child = createMockChildProcess(1234)
+    spawnMock.mockReturnValue(child)
+
+    const promise = gitStreamStdout(['status'], {
+      cwd: '/repo',
+      onStdout: () => {
+        throw new Error('parser blew up')
+      }
+    })
+    const rejection = expect(promise).rejects.toThrow('parser blew up')
+    child.stdout.emit('data', Buffer.from('? a.txt\n'))
+
+    await rejection
+    expect(child.kill).toHaveBeenCalled()
   })
 })

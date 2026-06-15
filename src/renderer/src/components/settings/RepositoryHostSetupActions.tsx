@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Plus, X } from 'lucide-react'
 import { type ExecutionHostId } from '../../../../shared/execution-host'
 import type {
   ProjectHostSetup,
@@ -7,10 +8,15 @@ import type {
 } from '../../../../shared/types'
 import { translate } from '@/i18n/i18n'
 import { Button } from '../ui/button'
-import { Input } from '../ui/input'
 import { Label } from '../ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
 import type { SetupHostOption } from './repository-host-setup-options'
+import {
+  HostSetupCloneStep,
+  HostSetupExistingFolderStep,
+  HostSetupPlannedStep,
+  HostSetupStartActions
+} from './repository-host-add-project-steps'
 
 type RepositoryHostSetupActionsProps = {
   repoDisplayName: string
@@ -40,6 +46,8 @@ type RepositoryHostSetupActionsProps = {
   onOpenSetup: (repoId: string) => void
 }
 
+type SetupStep = 'choose' | 'existing' | 'clone' | 'planned'
+
 export function RepositoryHostSetupActions({
   repoDisplayName,
   selectedProjectHostSetup,
@@ -49,6 +57,8 @@ export function RepositoryHostSetupActions({
   createProjectHostSetup,
   onOpenSetup
 }: RepositoryHostSetupActionsProps): React.JSX.Element | null {
+  const [isOpen, setIsOpen] = useState(false)
+  const [step, setStep] = useState<SetupStep>('choose')
   const [selectedSetupHostId, setSelectedSetupHostId] = useState<ExecutionHostId | null>(null)
   const [setupPath, setSetupPath] = useState('')
   const [setupKind, setSetupKind] = useState<'git' | 'folder'>('git')
@@ -68,23 +78,145 @@ export function RepositoryHostSetupActions({
     return null
   }
 
-  return (
-    <div className="space-y-3 rounded-md border border-border bg-muted/20 p-3">
-      <div className="space-y-1">
-        <Label className="text-sm font-semibold">
+  const resetFlow = (): void => {
+    setIsOpen(false)
+    setStep('choose')
+    setSelectedSetupHostId(null)
+    setSetupPath('')
+    setCloneUrl('')
+    setCloneDestination('')
+  }
+
+  const handleExistingFolder = async (): Promise<void> => {
+    if (!setupTargetHostId || !canUseSetupTargetHost || !setupPath.trim()) {
+      return
+    }
+    setIsSettingUp(true)
+    try {
+      const result = await setupProjectExistingFolder({
+        projectId: selectedProjectHostSetup.projectId,
+        hostId: setupTargetHostId,
+        path: setupPath.trim(),
+        kind: setupKind,
+        displayName: repoDisplayName
+      })
+      if (result) {
+        resetFlow()
+        onOpenSetup(result.repo.id)
+      }
+    } finally {
+      setIsSettingUp(false)
+    }
+  }
+
+  const handleClone = async (): Promise<void> => {
+    if (
+      !setupTargetHostId ||
+      !canUseSetupTargetHost ||
+      !cloneUrl.trim() ||
+      !cloneDestination.trim()
+    ) {
+      return
+    }
+    setIsCloning(true)
+    try {
+      const result = await setupProjectClone({
+        projectId: selectedProjectHostSetup.projectId,
+        hostId: setupTargetHostId,
+        url: cloneUrl.trim(),
+        destination: cloneDestination.trim(),
+        displayName: repoDisplayName
+      })
+      if (result) {
+        resetFlow()
+        onOpenSetup(result.repo.id)
+      }
+    } finally {
+      setIsCloning(false)
+    }
+  }
+
+  const handleCreatePendingSetup = async (): Promise<void> => {
+    if (!setupTargetHostId || !canUseSetupTargetHost) {
+      return
+    }
+    setIsCreatingPendingSetup(true)
+    try {
+      const result = await createProjectHostSetup({
+        projectId: selectedProjectHostSetup.projectId,
+        hostId: setupTargetHostId,
+        displayName: repoDisplayName,
+        setupState: 'not-set-up',
+        setupMethod: 'provisioned'
+      })
+      if (result) {
+        resetFlow()
+      }
+    } finally {
+      setIsCreatingPendingSetup(false)
+    }
+  }
+
+  if (!isOpen) {
+    return (
+      <div className="flex items-center justify-between gap-3 rounded-md border border-border bg-muted/20 p-3">
+        <div className="min-w-0 space-y-1">
+          <Label className="text-sm font-semibold">
+            {translate(
+              'auto.components.settings.RepositoryPane.hostAvailability',
+              'Host availability'
+            )}
+          </Label>
+          <p className="text-xs text-muted-foreground">
+            {translate(
+              'auto.components.settings.RepositoryPane.hostAvailabilityHelp',
+              'Add this same project on another connected host.'
+            )}
+          </p>
+        </div>
+        <Button type="button" variant="outline" size="sm" onClick={() => setIsOpen(true)}>
+          <Plus className="size-4" />
           {translate(
-            'auto.components.settings.RepositoryPane.setupProjectOnHost',
-            'Set up on another host'
+            'auto.components.settings.RepositoryPane.addToAnotherHost',
+            'Add to another host'
           )}
-        </Label>
-        <p className="text-xs text-muted-foreground">
-          {translate(
-            'auto.components.settings.RepositoryPane.setupProjectOnHostHelp',
-            'Choose a host, then import an existing checkout, clone the repository there, or track a setup that will be provisioned later.'
-          )}
-        </p>
+        </Button>
       </div>
-      <div className="max-w-48">
+    )
+  }
+
+  return (
+    <div className="space-y-3 rounded-md border border-border bg-background p-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 space-y-1">
+          <Label className="text-sm font-semibold">
+            {translate(
+              'auto.components.settings.RepositoryPane.addProjectHost',
+              'Add project to host'
+            )}
+          </Label>
+          <p className="text-xs text-muted-foreground">
+            {translate(
+              'auto.components.settings.RepositoryPane.addProjectHostHelp',
+              'Choose where this project should also be available.'
+            )}
+          </p>
+        </div>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-sm"
+          aria-label={translate('auto.components.settings.RepositoryPane.closeHostSetup', 'Close')}
+          onClick={resetFlow}
+        >
+          <X className="size-4" />
+        </Button>
+      </div>
+
+      <div className="space-y-2">
+        <Label className="text-xs font-medium text-muted-foreground">
+          {translate('auto.components.settings.RepositoryPane.setupHostLabel', 'Host')}
+        </Label>
         <Select
           value={setupTargetHostId ?? undefined}
           onValueChange={(value) => setSelectedSetupHostId(value as ExecutionHostId)}
@@ -107,153 +239,52 @@ export function RepositoryHostSetupActions({
             ))}
           </SelectContent>
         </Select>
+        {!canUseSetupTargetHost && setupTargetHostOption ? (
+          <p className="text-xs text-muted-foreground">{setupTargetHostOption.detail}</p>
+        ) : null}
       </div>
-      <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto_auto]">
-        <Input
-          value={setupPath}
-          onChange={(event) => setSetupPath(event.target.value)}
-          placeholder={translate(
-            'auto.components.settings.RepositoryPane.setupExistingFolderPathPlaceholder',
-            '/path/to/project/on/host'
-          )}
-          className="h-9 min-w-0"
+
+      {step === 'choose' ? (
+        <HostSetupStartActions
+          disabled={!canUseSetupTargetHost}
+          onBrowse={() => setStep('existing')}
+          onClone={() => setStep('clone')}
+          onPlan={() => setStep('planned')}
         />
-        <Select
-          value={setupKind}
-          onValueChange={(value) => setSetupKind(value as 'git' | 'folder')}
-        >
-          <SelectTrigger className="h-9 w-32 text-xs">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="git">
-              {translate('auto.components.settings.RepositoryPane.setupKindGit', 'Git repo')}
-            </SelectItem>
-            <SelectItem value="folder">
-              {translate('auto.components.settings.RepositoryPane.setupKindFolder', 'Folder')}
-            </SelectItem>
-          </SelectContent>
-        </Select>
-        <Button
-          type="button"
-          size="sm"
-          disabled={!canUseSetupTargetHost || !setupPath.trim() || isSettingUp}
-          onClick={async () => {
-            if (!setupTargetHostId || !canUseSetupTargetHost || !setupPath.trim()) {
-              return
-            }
-            setIsSettingUp(true)
-            const result = await setupProjectExistingFolder({
-              projectId: selectedProjectHostSetup.projectId,
-              hostId: setupTargetHostId,
-              path: setupPath.trim(),
-              kind: setupKind,
-              displayName: repoDisplayName
-            })
-            setIsSettingUp(false)
-            if (result) {
-              setSetupPath('')
-              setSelectedSetupHostId(null)
-              onOpenSetup(result.repo.id)
-            }
-          }}
-        >
-          {isSettingUp
-            ? translate('auto.components.settings.RepositoryPane.settingUpHost', 'Importing...')
-            : translate('auto.components.settings.RepositoryPane.setupHost', 'Import')}
-        </Button>
-      </div>
-      <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
-        <Input
-          value={cloneUrl}
-          onChange={(event) => setCloneUrl(event.target.value)}
-          placeholder={translate(
-            'auto.components.settings.RepositoryPane.cloneUrlPlaceholder',
-            'Repository URL'
-          )}
-          className="h-9 min-w-0"
+      ) : null}
+      {step === 'existing' ? (
+        <HostSetupExistingFolderStep
+          setupPath={setupPath}
+          setupKind={setupKind}
+          disabled={!canUseSetupTargetHost}
+          isSettingUp={isSettingUp}
+          onBack={() => setStep('choose')}
+          onPathChange={setSetupPath}
+          onKindChange={setSetupKind}
+          onSubmit={handleExistingFolder}
         />
-        <Input
-          value={cloneDestination}
-          onChange={(event) => setCloneDestination(event.target.value)}
-          placeholder={translate(
-            'auto.components.settings.RepositoryPane.cloneDestinationPlaceholder',
-            '/destination/on/host'
-          )}
-          className="h-9 min-w-0"
+      ) : null}
+      {step === 'clone' ? (
+        <HostSetupCloneStep
+          cloneUrl={cloneUrl}
+          cloneDestination={cloneDestination}
+          disabled={!canUseSetupTargetHost}
+          isCloning={isCloning}
+          onBack={() => setStep('choose')}
+          onCloneUrlChange={setCloneUrl}
+          onCloneDestinationChange={setCloneDestination}
+          onSubmit={handleClone}
         />
-        <Button
-          type="button"
-          size="sm"
-          disabled={
-            !canUseSetupTargetHost || !cloneUrl.trim() || !cloneDestination.trim() || isCloning
-          }
-          onClick={async () => {
-            if (
-              !setupTargetHostId ||
-              !canUseSetupTargetHost ||
-              !cloneUrl.trim() ||
-              !cloneDestination.trim()
-            ) {
-              return
-            }
-            setIsCloning(true)
-            const result = await setupProjectClone({
-              projectId: selectedProjectHostSetup.projectId,
-              hostId: setupTargetHostId,
-              url: cloneUrl.trim(),
-              destination: cloneDestination.trim(),
-              displayName: repoDisplayName
-            })
-            setIsCloning(false)
-            if (result) {
-              setCloneUrl('')
-              setCloneDestination('')
-              setSelectedSetupHostId(null)
-              onOpenSetup(result.repo.id)
-            }
-          }}
-        >
-          {isCloning
-            ? translate('auto.components.settings.RepositoryPane.cloningHost', 'Cloning...')
-            : translate('auto.components.settings.RepositoryPane.cloneHost', 'Clone')}
-        </Button>
-      </div>
-      <div className="flex justify-end">
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          disabled={!canUseSetupTargetHost || isCreatingPendingSetup}
-          onClick={async () => {
-            if (!setupTargetHostId || !canUseSetupTargetHost) {
-              return
-            }
-            setIsCreatingPendingSetup(true)
-            const result = await createProjectHostSetup({
-              projectId: selectedProjectHostSetup.projectId,
-              hostId: setupTargetHostId,
-              displayName: repoDisplayName,
-              setupState: 'not-set-up',
-              setupMethod: 'provisioned'
-            })
-            setIsCreatingPendingSetup(false)
-            if (result) {
-              setSelectedSetupHostId(null)
-            }
-          }}
-        >
-          {isCreatingPendingSetup
-            ? translate(
-                'auto.components.settings.RepositoryPane.creatingPendingSetup',
-                'Creating...'
-              )
-            : translate(
-                'auto.components.settings.RepositoryPane.createPendingSetup',
-                'Track setup'
-              )}
-        </Button>
-      </div>
+      ) : null}
+      {step === 'planned' ? (
+        <HostSetupPlannedStep
+          disabled={!canUseSetupTargetHost}
+          isCreatingPendingSetup={isCreatingPendingSetup}
+          hostLabel={setupTargetHostOption?.label ?? ''}
+          onBack={() => setStep('choose')}
+          onSubmit={handleCreatePendingSetup}
+        />
+      ) : null}
     </div>
   )
 }

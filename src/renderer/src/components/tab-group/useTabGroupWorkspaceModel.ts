@@ -28,6 +28,7 @@ import { openTabBarEntry, type TabCreateEntryArgs } from '../tab-bar/tab-create-
 import { openMobileEmulatorTab } from '@/lib/open-mobile-emulator-tab'
 import { ensureSimulatorTab, getSimulatorTabForWorktree } from '@/lib/ensure-simulator-tab'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { browserWorkspaceHasRemoteOwner } from '@/runtime/remote-browser-tab-ownership'
 
 export function recordTerminalTabGroupSplit(createdTerminal: TerminalTab | null | undefined): void {
   if (!createdTerminal) {
@@ -249,7 +250,11 @@ export function useTabGroupWorkspaceModel({
         }
         return
       }
-      if (item.contentType === 'browser' && isWebRuntimeSessionActive(runtimeEnvironmentId)) {
+      if (
+        item.contentType === 'browser' &&
+        isWebRuntimeSessionActive(runtimeEnvironmentId) &&
+        browserWorkspaceHasRemoteOwner(useAppStore.getState(), item.entityId, runtimeEnvironmentId)
+      ) {
         // Why: paired web clients mirror host-owned tabs. Closing locally races
         // the host session snapshot and leaves stale terminal/browser handles.
         void closeWebRuntimeSessionTab({
@@ -297,7 +302,13 @@ export function useTabGroupWorkspaceModel({
           worktreeId
         )
         if (
-          (item.contentType === 'terminal' || item.contentType === 'browser') &&
+          (item.contentType === 'terminal' ||
+            (item.contentType === 'browser' &&
+              browserWorkspaceHasRemoteOwner(
+                useAppStore.getState(),
+                item.entityId,
+                runtimeEnvironmentId
+              ))) &&
           isWebRuntimeSessionActive(runtimeEnvironmentId)
         ) {
           void closeWebRuntimeSessionTab({
@@ -410,7 +421,10 @@ export function useTabGroupWorkspaceModel({
         useAppStore.getState(),
         worktreeId
       )
-      if (isWebRuntimeSessionActive(runtimeEnvironmentId)) {
+      if (
+        isWebRuntimeSessionActive(runtimeEnvironmentId) &&
+        browserWorkspaceHasRemoteOwner(useAppStore.getState(), browserTabId, runtimeEnvironmentId)
+      ) {
         void activateWebRuntimeSessionTab({
           worktreeId,
           tabId: item.id,
@@ -606,14 +620,16 @@ export function useTabGroupWorkspaceModel({
           if (!source) {
             return
           }
+          const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(state, worktreeId)
           if (
-            await createWebRuntimeSessionBrowserTab({
+            browserWorkspaceHasRemoteOwner(state, source.id, runtimeEnvironmentId) &&
+            (await createWebRuntimeSessionBrowserTab({
               worktreeId,
-              environmentId: getRuntimeEnvironmentIdForWorktree(state, worktreeId),
+              environmentId: runtimeEnvironmentId,
               url: source.url,
               profileId: source.sessionProfileId,
               targetGroupId: groupId
-            })
+            }))
           ) {
             return
           }

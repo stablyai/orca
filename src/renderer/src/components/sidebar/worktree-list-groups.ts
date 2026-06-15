@@ -134,6 +134,14 @@ type WorktreeGroupEntry = {
 type ProjectGroupingIndex = {
   projectById: Map<string, Project>
   setupByRepoId: Map<string, ProjectHostSetup>
+  // Why: `${projectId}::${hostId}` pairs that back more than one setup — i.e. the
+  // same project checked out multiple times on one host (independent clones or
+  // worktrees). Those setups must not collapse into a single project group.
+  multiSetupProjectHostKeys: Set<string>
+}
+
+function projectHostKey(projectId: string, hostId: string): string {
+  return `${projectId}::${hostId}`
 }
 
 function buildProjectGroupingIndex(model?: ProjectGroupingModel): ProjectGroupingIndex | null {
@@ -142,9 +150,21 @@ function buildProjectGroupingIndex(model?: ProjectGroupingModel): ProjectGroupin
   if (projects.length === 0 || projectHostSetups.length === 0) {
     return null
   }
+  const setupCountByProjectHost = new Map<string, number>()
+  for (const setup of projectHostSetups) {
+    const key = projectHostKey(setup.projectId, setup.hostId)
+    setupCountByProjectHost.set(key, (setupCountByProjectHost.get(key) ?? 0) + 1)
+  }
+  const multiSetupProjectHostKeys = new Set<string>()
+  for (const [key, count] of setupCountByProjectHost) {
+    if (count > 1) {
+      multiSetupProjectHostKeys.add(key)
+    }
+  }
   return {
     projectById: new Map(projects.map((project) => [project.id, project])),
-    setupByRepoId: new Map(projectHostSetups.map((setup) => [setup.repoId, setup]))
+    setupByRepoId: new Map(projectHostSetups.map((setup) => [setup.repoId, setup])),
+    multiSetupProjectHostKeys
   }
 }
 
@@ -161,6 +181,17 @@ function getProjectGroupingForRepo(
       key: `repo:${repoId}`,
       label: repo?.displayName ?? 'Unknown',
       repo
+    }
+  }
+  if (projectIndex?.multiSetupProjectHostKeys.has(projectHostKey(setup.projectId, setup.hostId))) {
+    // Why: this project is set up more than once on this host, so each checkout
+    // keeps its own group (labelled by its folder) instead of collapsing into a
+    // single project header named after whichever folder was added first.
+    return {
+      key: `project:${project.id}::setup:${repoId}`,
+      label: repo?.displayName ?? setup.displayName,
+      repo,
+      projectId: project.id
     }
   }
   return {

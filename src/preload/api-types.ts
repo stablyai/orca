@@ -2079,6 +2079,8 @@ export type PreloadApi = {
       paths: string[]
       connectionId?: string
     }) => Promise<string[]>
+    findHugeFoldersToIgnore: (args: { worktreePath: string }) => Promise<string[]>
+    appendGitignore: (args: { worktreePath: string; folderName: string }) => Promise<boolean>
     history: (
       args: { worktreePath: string; connectionId?: string } & GitHistoryOptions
     ) => Promise<GitHistoryResult>

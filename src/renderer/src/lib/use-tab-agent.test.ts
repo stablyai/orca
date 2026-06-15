@@ -297,13 +297,29 @@ describe('resolveTabAgentFromSignals', () => {
     ).toBe('codex')
   })
 
-  it('suppresses stale launch intent after a completed hook and shell title', () => {
+  it('keeps completed remote hook identity after the terminal title returns to a shell', () => {
     expect(
       resolveTabAgentFromSignals({
         foreground: undefined,
         hasObservedAgentSignal: true,
         shellForegroundAfterAgentSignal: false,
         isRemote: true,
+        title: 'zsh',
+        hookAgent: null,
+        hasCompletedHook: true,
+        completedHookAgent: 'codex',
+        launchAgent: 'codex'
+      })
+    ).toBe('codex')
+  })
+
+  it('suppresses stale local launch intent after a completed hook and shell title', () => {
+    expect(
+      resolveTabAgentFromSignals({
+        foreground: undefined,
+        hasObservedAgentSignal: true,
+        shellForegroundAfterAgentSignal: false,
+        isRemote: false,
         title: 'zsh',
         hookAgent: null,
         hasCompletedHook: true,

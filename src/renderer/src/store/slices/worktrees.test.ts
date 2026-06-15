@@ -3069,6 +3069,9 @@ describe('worktree remote runtime mutations', () => {
       repoId: 'repo1',
       linkedGitHubPR: null,
       linkedGitLabMR: null,
+      linkedBitbucketPR: null,
+      linkedAzureDevOpsPR: null,
+      linkedGiteaPR: null,
       force: true
     })
   })
@@ -3098,6 +3101,9 @@ describe('worktree remote runtime mutations', () => {
       repoId: 'repo1',
       linkedGitHubPR: null,
       linkedGitLabMR: 789,
+      linkedBitbucketPR: null,
+      linkedAzureDevOpsPR: null,
+      linkedGiteaPR: null,
       force: true
     })
   })

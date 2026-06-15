@@ -157,6 +157,8 @@ function getAutomationSourceAvailability(
   }
   const providerLabel = getAutomationSourceProviderLabel(sourceContext.provider)
   switch (availability.reason) {
+    case undefined:
+      break
     case 'missing-provider-auth':
       return unavailable(
         'source-auth-needed',

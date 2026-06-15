@@ -10,6 +10,15 @@ import {
 import type { RichMarkdownReviewNotePosition } from './rich-markdown-review-note-layout'
 import { findRichMarkdownSelectedTextRanges } from './rich-markdown-review-text-ranges'
 
+const RICH_MARKDOWN_ANNOTATION_BUTTON_SIZE_PX = 24
+const RICH_MARKDOWN_ANNOTATION_EDGE_PADDING_PX = 8
+const RICH_MARKDOWN_ANNOTATION_SELECTION_GAP_PX = 8
+const RICH_MARKDOWN_ANNOTATION_MIN_LEFT_PX = 56
+const RICH_MARKDOWN_ANNOTATION_RIGHT_OFFSET_PX = 42
+const RICH_MARKDOWN_ANNOTATION_POPOVER_WIDTH_PX = 420
+const RICH_MARKDOWN_ANNOTATION_POPOVER_RIGHT_OFFSET_PX = 24
+const RICH_MARKDOWN_ANNOTATION_POPOVER_MIN_HEIGHT_PX = 220
+
 export type RichMarkdownCommentBlock = {
   key: string
   startLine: number
@@ -235,6 +244,30 @@ function getCurrentRichMarkdownSelectionRect(root: HTMLElement): DOMRect | null 
   return Array.from(range.getClientRects()).find((candidate) => candidate.width > 0) ?? null
 }
 
+export function getRichMarkdownAnnotationButtonTop(
+  selectionBottomInRoot: number,
+  rootHeight: number
+): number {
+  const preferredTop = selectionBottomInRoot + RICH_MARKDOWN_ANNOTATION_SELECTION_GAP_PX
+  const maxTop = Math.max(
+    RICH_MARKDOWN_ANNOTATION_EDGE_PADDING_PX,
+    rootHeight - RICH_MARKDOWN_ANNOTATION_BUTTON_SIZE_PX - RICH_MARKDOWN_ANNOTATION_EDGE_PADDING_PX
+  )
+  return Math.max(RICH_MARKDOWN_ANNOTATION_EDGE_PADDING_PX, Math.min(preferredTop, maxTop))
+}
+
+export function getRichMarkdownAnnotationButtonLeft(rootWidth: number): number {
+  const preferredLeft = Math.max(
+    RICH_MARKDOWN_ANNOTATION_MIN_LEFT_PX,
+    rootWidth - RICH_MARKDOWN_ANNOTATION_RIGHT_OFFSET_PX
+  )
+  const maxLeft = Math.max(
+    RICH_MARKDOWN_ANNOTATION_EDGE_PADDING_PX,
+    rootWidth - RICH_MARKDOWN_ANNOTATION_BUTTON_SIZE_PX - RICH_MARKDOWN_ANNOTATION_EDGE_PADDING_PX
+  )
+  return Math.min(preferredLeft, maxLeft)
+}
+
 export function getRichMarkdownAnnotationTarget(
   editor: Editor,
   root: HTMLElement
@@ -251,10 +284,22 @@ export function getRichMarkdownAnnotationTarget(
     return null
   }
   const rootRect = root.getBoundingClientRect()
-  const popoverWidth = 420
-  const left = Math.max(56, rootRect.width - popoverWidth - 24)
-  const buttonTop = Math.max(8, rect.bottom - rootRect.top + 6)
-  const popoverTop = Math.max(8, Math.min(buttonTop + 28, rootRect.height - 220))
+  // Why: long selections can extend below the visible editor shell; keep the
+  // add-note affordance reachable instead of anchoring to hidden selection area.
+  const buttonTop = getRichMarkdownAnnotationButtonTop(rect.bottom - rootRect.top, rootRect.height)
+  const left = Math.max(
+    RICH_MARKDOWN_ANNOTATION_MIN_LEFT_PX,
+    rootRect.width -
+      RICH_MARKDOWN_ANNOTATION_POPOVER_WIDTH_PX -
+      RICH_MARKDOWN_ANNOTATION_POPOVER_RIGHT_OFFSET_PX
+  )
+  const popoverTop = Math.max(
+    RICH_MARKDOWN_ANNOTATION_EDGE_PADDING_PX,
+    Math.min(
+      buttonTop + RICH_MARKDOWN_ANNOTATION_BUTTON_SIZE_PX + 6,
+      rootRect.height - RICH_MARKDOWN_ANNOTATION_POPOVER_MIN_HEIGHT_PX
+    )
+  )
   return {
     ...getRichMarkdownSelectionRange(editor),
     from: editor.state.selection.from,
@@ -263,6 +308,6 @@ export function getRichMarkdownAnnotationTarget(
     top: popoverTop,
     left,
     buttonTop,
-    buttonLeft: Math.max(56, rootRect.width - 42)
+    buttonLeft: getRichMarkdownAnnotationButtonLeft(rootRect.width)
   }
 }

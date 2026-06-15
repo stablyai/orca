@@ -81,10 +81,21 @@ export async function resolveAgentForegroundProcess(
 }
 
 function resolveAgentForegroundProcessFromPs(stdout: string, shellPid: number): string | null {
-  const candidates = collectDescendants(parsePsRows(stdout), shellPid).sort(
+  const rows = parsePsRows(stdout)
+  const shellRow = rows.find((row) => row.pid === shellPid)
+  const candidates = collectDescendants(rows, shellPid).sort(
     (a, b) => candidateScore(b) - candidateScore(a)
   )
+  // Why: `+` in `ps stat` marks the process holding the terminal foreground.
+  // The root shell can hold it after Ctrl-Z, so use the whole PTY tree as the
+  // foreground gate; otherwise a stopped agent child still masquerades as live.
+  const foregroundIsKnown =
+    shellRow?.stat.includes('+') === true ||
+    candidates.some((candidate) => candidate.stat.includes('+'))
   for (const candidate of candidates) {
+    if (foregroundIsKnown && !candidate.stat.includes('+')) {
+      continue
+    }
     const recognized = recognizeAgentProcessFromCommandLine(candidate.command)
     if (recognized) {
       return recognized.processName

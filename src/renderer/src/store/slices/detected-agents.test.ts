@@ -2,11 +2,21 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { create } from 'zustand'
 import type { AppState } from '../types'
 import type { Repo, Worktree } from '../../../../shared/types'
-import { _getRemoteDetectPromiseCountForTest, createDetectedAgentsSlice } from './detected-agents'
+import {
+  _getRemoteDetectPromiseCountForTest,
+  _getRuntimeDetectPromiseCountForTest,
+  createDetectedAgentsSlice
+} from './detected-agents'
+import {
+  MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
+  RUNTIME_PROTOCOL_VERSION
+} from '../../../../shared/protocol-version'
+import { clearRuntimeCompatibilityCacheForTests } from '@/runtime/runtime-rpc-client'
 
 const detectAgents = vi.fn()
 const refreshAgents = vi.fn()
 const detectRemoteAgents = vi.fn()
+const runtimeEnvironmentCall = vi.fn()
 
 globalThis.window = {
   api: {
@@ -14,6 +24,9 @@ globalThis.window = {
       detectAgents,
       refreshAgents,
       detectRemoteAgents
+    },
+    runtimeEnvironments: {
+      call: runtimeEnvironmentCall
     }
   } as unknown as Window['api']
 } as Window & typeof globalThis
@@ -70,6 +83,7 @@ function makeWorktree(
 
 describe('createDetectedAgentsSlice WSL context', () => {
   beforeEach(() => {
+    clearRuntimeCompatibilityCacheForTests()
     detectAgents.mockReset().mockResolvedValue(['claude'])
     refreshAgents.mockReset().mockResolvedValue({
       agents: ['codex'],
@@ -79,6 +93,12 @@ describe('createDetectedAgentsSlice WSL context', () => {
       pathFailureReason: 'none'
     })
     detectRemoteAgents.mockReset().mockResolvedValue([])
+    runtimeEnvironmentCall.mockReset().mockResolvedValue({
+      id: 'default',
+      ok: true,
+      result: [],
+      _meta: { runtimeId: 'runtime' }
+    })
   })
 
   it('detects local agents inside the active WSL worktree distro', async () => {
@@ -208,6 +228,7 @@ describe('createDetectedAgentsSlice WSL context', () => {
 
 describe('createDetectedAgentsSlice remote detection', () => {
   beforeEach(() => {
+    clearRuntimeCompatibilityCacheForTests()
     detectAgents.mockReset().mockResolvedValue(['claude'])
     refreshAgents.mockReset().mockResolvedValue({
       agents: ['codex'],
@@ -217,6 +238,27 @@ describe('createDetectedAgentsSlice remote detection', () => {
       pathFailureReason: 'none'
     })
     detectRemoteAgents.mockReset().mockResolvedValue([])
+    runtimeEnvironmentCall.mockReset().mockImplementation(({ method }: { method: string }) => {
+      const result =
+        method === 'status.get'
+          ? {
+              runtimeId: 'remote-runtime',
+              rendererGraphEpoch: 1,
+              graphStatus: 'ready',
+              authoritativeWindowId: null,
+              liveTabCount: 0,
+              liveLeafCount: 0,
+              runtimeProtocolVersion: RUNTIME_PROTOCOL_VERSION,
+              minCompatibleRuntimeClientVersion: MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION
+            }
+          : ['codex']
+      return Promise.resolve({
+        id: method,
+        ok: true,
+        result,
+        _meta: { runtimeId: 'remote-runtime' }
+      })
+    })
   })
 
   it('retains remote detection promises only while requests are in flight', async () => {
@@ -243,5 +285,33 @@ describe('createDetectedAgentsSlice remote detection', () => {
 
     await expect(store.getState().ensureRemoteDetectedAgents('ssh-1')).resolves.toEqual(['claude'])
     expect(detectRemoteAgents).toHaveBeenCalledTimes(1)
+  })
+
+  it('detects runtime environment agents through the owning runtime', async () => {
+    const store = createTestStore()
+
+    const first = store.getState().ensureRuntimeDetectedAgents('env-1')
+    const second = store.getState().ensureRuntimeDetectedAgents('env-1')
+
+    expect(_getRuntimeDetectPromiseCountForTest()).toBe(1)
+    await expect(first).resolves.toEqual(['codex'])
+    await expect(second).resolves.toEqual(['codex'])
+    expect(store.getState().runtimeDetectedAgentIds['env-1']).toEqual(['codex'])
+    expect(_getRuntimeDetectPromiseCountForTest()).toBe(0)
+
+    await expect(store.getState().ensureRuntimeDetectedAgents('env-1')).resolves.toEqual(['codex'])
+    expect(runtimeEnvironmentCall).toHaveBeenCalledTimes(2)
+    expect(runtimeEnvironmentCall).toHaveBeenNthCalledWith(1, {
+      selector: 'env-1',
+      method: 'status.get',
+      params: undefined,
+      timeoutMs: undefined
+    })
+    expect(runtimeEnvironmentCall).toHaveBeenNthCalledWith(2, {
+      selector: 'env-1',
+      method: 'preflight.detectAgents',
+      params: undefined,
+      timeoutMs: undefined
+    })
   })
 })

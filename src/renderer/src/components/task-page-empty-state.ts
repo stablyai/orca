@@ -1,3 +1,5 @@
+import { translate } from '@/i18n/i18n'
+
 export type RepoBackedTaskEmptyStateProvider = 'github' | 'gitlab'
 
 export type RepoBackedTaskEmptyState = {
@@ -12,32 +14,59 @@ export function getRepoBackedTaskEmptyState(args: {
 }): RepoBackedTaskEmptyState {
   if (args.selectedRepoCount === 0) {
     return {
-      title: 'No project sources selected',
-      description:
+      title: translate(
+        'auto.components.taskPageEmptyState.noProjectSourcesTitle',
+        'No project sources selected'
+      ),
+      description: translate(
+        'auto.components.taskPageEmptyState.noProjectSourcesDescription',
         'Select at least one project source so Orca knows which host/account to fetch tasks from.'
+      )
     }
   }
   if (args.provider === 'github') {
     return {
-      title: 'No matching GitHub work',
-      description: 'Change the query or clear it.'
+      title: translate(
+        'auto.components.taskPageEmptyState.noMatchingGitHubWorkTitle',
+        'No matching GitHub work'
+      ),
+      description: translate(
+        'auto.components.taskPageEmptyState.changeQueryDescription',
+        'Change the query or clear it.'
+      )
     }
   }
   switch (args.gitlabView) {
     case 'issues':
       return {
-        title: 'No GitLab issues',
-        description: 'No GitLab issues match this filter.'
+        title: translate(
+          'auto.components.taskPageEmptyState.noGitLabIssuesTitle',
+          'No GitLab issues'
+        ),
+        description: translate(
+          'auto.components.taskPageEmptyState.noGitLabIssuesDescription',
+          'No GitLab issues match this filter.'
+        )
       }
     case 'mrs':
       return {
-        title: 'No GitLab merge requests',
-        description: 'No GitLab MRs match this filter.'
+        title: translate(
+          'auto.components.taskPageEmptyState.noGitLabMrsTitle',
+          'No GitLab merge requests'
+        ),
+        description: translate(
+          'auto.components.taskPageEmptyState.noGitLabMrsDescription',
+          'No GitLab MRs match this filter.'
+        )
       }
-    default:
+    case 'todos':
+    case undefined:
       return {
-        title: 'No GitLab work',
-        description: 'No GitLab work matches this filter.'
+        title: translate('auto.components.taskPageEmptyState.noGitLabWorkTitle', 'No GitLab work'),
+        description: translate(
+          'auto.components.taskPageEmptyState.noGitLabWorkDescription',
+          'No GitLab work matches this filter.'
+        )
       }
   }
 }

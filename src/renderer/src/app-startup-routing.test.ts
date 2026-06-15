@@ -125,6 +125,21 @@ describe('renderer startup runtime routing', () => {
     expect(source).toContain('shouldMountTerminalWorkbench ?')
   })
 
+  it('keeps the new-workspace composer eager because it is a critical create surface', () => {
+    const source = readFileSync(join(process.cwd(), 'src/renderer/src/App.tsx'), 'utf8')
+    const lazyModalSource = readFileSync(
+      join(process.cwd(), 'src/renderer/src/lazy-modal-mount-state.ts'),
+      'utf8'
+    )
+
+    expect(source).toContain(
+      "import NewWorkspaceComposerModal from './components/NewWorkspaceComposerModal'"
+    )
+    expect(source).not.toContain("import('./components/NewWorkspaceComposerModal')")
+    expect(source).toContain("activeModal === 'new-workspace-composer'")
+    expect(lazyModalSource).not.toContain("'new-workspace-composer'")
+  })
+
   it('does not eagerly import inactive sidebar dialog flows on startup', () => {
     const source = readFileSync(
       join(process.cwd(), 'src/renderer/src/components/sidebar/index.tsx'),

@@ -3,6 +3,7 @@ import { isExplicitAgentStatusFresh } from '@/lib/agent-status'
 import type { RetainedAgentEntry } from '@/store/slices/agent-status'
 import {
   AGENT_STATUS_STALE_AFTER_MS,
+  type AgentType,
   type AgentStatusEntry,
   type AgentStatusOrchestrationContext
 } from '../../../../shared/agent-status-types'
@@ -17,7 +18,10 @@ import type {
   TerminalTab
 } from '../../../../shared/types'
 import { resolveRuntimePaneTitleLeafId } from '@/lib/runtime-pane-title-leaf-id'
-import { buildTitleDerivedAgentRows } from './worktree-title-derived-agent-rows'
+import {
+  buildTitleDerivedAgentRows,
+  resolveAgentTypeFromTerminalTitle
+} from './worktree-title-derived-agent-rows'
 
 function tabFromAttributedStatusEntry(entry: AgentStatusEntry): TerminalTab | null {
   const parsed = parsePaneKey(entry.paneKey)
@@ -34,6 +38,18 @@ function tabFromAttributedStatusEntry(entry: AgentStatusEntry): TerminalTab | nu
     sortOrder: Number.MAX_SAFE_INTEGER,
     createdAt: entry.stateStartedAt
   }
+}
+
+function resolveRowAgentType(entry: AgentStatusEntry, tab?: TerminalTab | null): AgentType {
+  if (entry.agentType && entry.agentType !== 'unknown') {
+    return entry.agentType
+  }
+  return (
+    tab?.launchAgent ??
+    resolveAgentTypeFromTerminalTitle(entry.terminalTitle ?? tab?.title) ??
+    entry.agentType ??
+    'unknown'
+  )
 }
 
 function orchestrationContextsEqual(
@@ -167,7 +183,7 @@ export function buildWorktreeAgentRows(args: {
         paneKey: rowEntry.paneKey,
         entry: rowEntry,
         tab,
-        agentType: rowEntry.agentType ?? 'unknown',
+        agentType: resolveRowAgentType(rowEntry, tab),
         state: shouldDecay ? 'idle' : rowEntry.state,
         startedAt: rowEntry.stateHistory[0]?.startedAt ?? rowEntry.stateStartedAt
       })
@@ -197,7 +213,7 @@ export function buildWorktreeAgentRows(args: {
       paneKey: rowEntry.paneKey,
       entry: rowEntry,
       tab,
-      agentType: rowEntry.agentType ?? 'unknown',
+      agentType: resolveRowAgentType(rowEntry, tab),
       state: shouldDecay ? 'idle' : rowEntry.state,
       startedAt: rowEntry.stateHistory[0]?.startedAt ?? rowEntry.stateStartedAt
     })
@@ -225,7 +241,7 @@ export function buildWorktreeAgentRows(args: {
       paneKey: rowEntry.paneKey,
       entry: rowEntry,
       tab: ra.tab,
-      agentType: rowEntry.agentType ?? ra.agentType,
+      agentType: resolveRowAgentType(rowEntry, ra.tab),
       state: 'done',
       startedAt: ra.startedAt
     })

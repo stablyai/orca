@@ -74,9 +74,11 @@ describe('sidebar host options', () => {
     })
 
     expect(hosts.map((host) => host.id)).toEqual(['local', 'runtime:runtime-1'])
+    // Without live status the focused runtime has no proof of reachability, so it
+    // reads 'disconnected' rather than defaulting to 'available'/"Connected".
     expect(hosts.find((host) => host.id === 'runtime:runtime-1')).toMatchObject({
       detail: 'Orca server',
-      health: 'available'
+      health: 'disconnected'
     })
   })
 

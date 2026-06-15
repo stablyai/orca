@@ -11,6 +11,16 @@ const { existsSyncMock, gitExecFileAsyncMock, readFileMock } = vi.hoisted(() => 
 
 vi.mock('./runner', () => ({
   gitExecFileAsync: gitExecFileAsyncMock,
+  // Why: getStatus streams status output; forward args to the same mock so this
+  // suite's arg-routing implementation still matches the status read.
+  gitStreamStdout: async (
+    args: string[],
+    options: { onStdout: (chunk: string) => boolean | void }
+  ) => {
+    const { stdout } = await gitExecFileAsyncMock(args)
+    const stoppedEarly = options.onStdout(stdout ?? '') === true
+    return { stoppedEarly }
+  },
   gitOptionalLocksDisabledEnv: (env: NodeJS.ProcessEnv = process.env) => ({
     ...env,
     GIT_OPTIONAL_LOCKS: '0'

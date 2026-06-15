@@ -3,7 +3,12 @@ import { Loader2 } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import { useMountedRef } from '@/hooks/useMountedRef'
 
-export type RuntimeHostConnectionState = 'connected' | 'available' | 'checking' | 'disconnected'
+export type RuntimeHostConnectionState =
+  | 'connected'
+  | 'available'
+  | 'checking'
+  | 'reconnecting'
+  | 'disconnected'
 
 function runtimeStatusLabel(state: RuntimeHostConnectionState): string {
   switch (state) {
@@ -13,6 +18,11 @@ function runtimeStatusLabel(state: RuntimeHostConnectionState): string {
       return translate('auto.components.status.bar.SshStatusSegment.runtime_available', 'Available')
     case 'checking':
       return translate('auto.components.status.bar.SshStatusSegment.runtime_checking', 'Checking')
+    case 'reconnecting':
+      return translate(
+        'auto.components.status.bar.SshStatusSegment.runtime_reconnecting',
+        'Reconnecting'
+      )
     case 'disconnected':
       return translate(
         'auto.components.status.bar.SshStatusSegment.runtime_unavailable',
@@ -26,6 +36,7 @@ function runtimeDotColor(state: RuntimeHostConnectionState): string {
     case 'connected':
       return 'bg-emerald-500'
     case 'checking':
+    case 'reconnecting':
       return 'bg-yellow-500'
     case 'available':
     case 'disconnected':
@@ -34,7 +45,7 @@ function runtimeDotColor(state: RuntimeHostConnectionState): string {
 }
 
 function runtimeStatusTone(state: RuntimeHostConnectionState): string {
-  if (state === 'checking') {
+  if (state === 'checking' || state === 'reconnecting') {
     return 'text-yellow-500'
   }
   return 'text-muted-foreground'
@@ -48,6 +59,7 @@ function runtimeActionLabel(state: RuntimeHostConnectionState): string | null {
     case 'disconnected':
       return translate('auto.components.status.bar.SshStatusSegment.63f36455cc', 'Connect')
     case 'checking':
+    case 'reconnecting':
       return null
   }
 }
@@ -55,11 +67,13 @@ function runtimeActionLabel(state: RuntimeHostConnectionState): string | null {
 export function RuntimeHostStatusRow({
   label,
   state,
+  detail,
   onConnect,
   onDisconnect
 }: {
   label: string
   state: RuntimeHostConnectionState
+  detail?: string
   onConnect?: () => Promise<void>
   onDisconnect?: () => Promise<void>
 }): React.JSX.Element {
@@ -96,9 +110,17 @@ export function RuntimeHostStatusRow({
           </span>
           <span aria-hidden="true">·</span>
           <span className={`inline-flex min-w-0 items-center gap-1 ${runtimeStatusTone(state)}`}>
-            {state === 'checking' ? <Loader2 className="size-2.5 shrink-0 animate-spin" /> : null}
+            {state === 'checking' || state === 'reconnecting' ? (
+              <Loader2 className="size-2.5 shrink-0 animate-spin" />
+            ) : null}
             <span className="truncate">{runtimeStatusLabel(state)}</span>
           </span>
+          {detail ? (
+            <>
+              <span aria-hidden="true">·</span>
+              <span className="truncate">{detail}</span>
+            </>
+          ) : null}
         </div>
       </div>
       {busy ? (

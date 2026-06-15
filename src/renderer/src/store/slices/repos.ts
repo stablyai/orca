@@ -302,10 +302,23 @@ function mergeProjectHostSetupCompatibility(
   derived: Pick<RepoSlice, 'projects' | 'projectHostSetups'>,
   fetched: ProjectHostSetupProjection
 ): Pick<RepoSlice, 'projects' | 'projectHostSetups'> {
+  const fetchedSetupOwners = new Set(fetched.setups.map(getProjectHostSetupOwnerKey))
+  const derivedSetups = derived.projectHostSetups.filter(
+    (setup) => !fetchedSetupOwners.has(getProjectHostSetupOwnerKey(setup))
+  )
+  const projectHostSetups = mergeById(derivedSetups, fetched.setups)
+  const setupProjectIds = new Set(projectHostSetups.map((setup) => setup.projectId))
+  const fetchedProjectIds = new Set(fetched.projects.map((project) => project.id))
   return {
-    projects: mergeById(derived.projects, fetched.projects),
-    projectHostSetups: mergeById(derived.projectHostSetups, fetched.setups)
+    projects: mergeById(derived.projects, fetched.projects).filter(
+      (project) => fetchedProjectIds.has(project.id) || setupProjectIds.has(project.id)
+    ),
+    projectHostSetups
   }
+}
+
+function getProjectHostSetupOwnerKey(setup: ProjectHostSetup): string {
+  return `${setup.hostId}:${setup.repoId ?? setup.id}`
 }
 
 function mergeById<T extends { id: string }>(base: readonly T[], overlay: readonly T[]): T[] {
@@ -347,6 +360,40 @@ function mergeFetchedReposForHost(
     previous,
     merged.filter((repo) => preservedById.has(repo.id) || fetchedIds.has(repo.id))
   )
+}
+
+async function fetchReposForTarget(
+  target: ReturnType<typeof getActiveRuntimeTarget>,
+  currentRepos: readonly Repo[]
+): Promise<{
+  repos: Repo[]
+  projectCompatibility: Pick<RepoSlice, 'projects' | 'projectHostSetups'>
+  hostId: ReturnType<typeof getRuntimeTargetHostId>
+}> {
+  const fetchedRepos =
+    target.kind === 'local'
+      ? await window.api.repos.list()
+      : (
+          await callRuntimeRpc<{ repos: Repo[] }>(target, 'repo.list', undefined, {
+            timeoutMs: 15_000
+          })
+        ).repos
+  const hostId = getRuntimeTargetHostId(target)
+  const repos = fetchedRepos.map((repo) => repoWithFetchedOwner(repo, target))
+  const fetchedProjectCompatibility = await fetchProjectHostSetupCompatibility(target, repos)
+  const reconciledRepos = mergeFetchedReposForHost(currentRepos, repos, hostId)
+  const projectCompatibility =
+    target.kind === 'local'
+      ? mergeProjectHostSetupCompatibility(
+          projectCompatibilityFromRepos(reconciledRepos),
+          fetchedProjectCompatibility
+        )
+      : mergeProjectHostSetupCompatibility(
+          projectCompatibilityFromRepos(reconciledRepos),
+          fetchedProjectCompatibility
+        )
+
+  return { repos: reconciledRepos, projectCompatibility, hostId }
 }
 
 function settingsForRepoOwner(state: Pick<AppState, 'repos' | 'settings'>, repoId: string) {
@@ -492,6 +539,7 @@ export type RepoSlice = {
   folderWorkspacePathStatuses: Record<string, FolderWorkspacePathStatusCacheEntry>
   activeRepoId: string | null
   fetchRepos: () => Promise<void>
+  fetchRuntimeEnvironmentRepos: (environmentId: string) => Promise<Repo[]>
   fetchProjectGroups: () => Promise<void>
   fetchFolderWorkspaces: () => Promise<void>
   addRepo: () => Promise<Repo | null>
@@ -597,36 +645,12 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
   fetchRepos: async () => {
     try {
       const target = getActiveRuntimeTarget(get().settings)
-      const fetchedRepos =
-        target.kind === 'local'
-          ? await window.api.repos.list()
-          : (
-              await callRuntimeRpc<{ repos: Repo[] }>(
-                target,
-                'repo.list',
-                undefined,
-                // Why: remote environment fetches cross the network; keep the
-                // boot-time repo hydration bounded instead of inheriting an
-                // unbounded renderer promise.
-                { timeoutMs: 15_000 }
-              )
-            ).repos
-      const hostId = getRuntimeTargetHostId(target)
-      const repos = fetchedRepos.map((repo) => repoWithFetchedOwner(repo, target))
-      const fetchedProjectCompatibility = await fetchProjectHostSetupCompatibility(target, repos)
+      const { repos: reconciledRepos, projectCompatibility } = await fetchReposForTarget(
+        target,
+        get().repos
+      )
       set((s) => {
-        const reconciledRepos = mergeFetchedReposForHost(s.repos, repos, hostId)
         const validRepoIds = new Set(reconciledRepos.map((repo) => repo.id))
-        const projectCompatibility =
-          target.kind === 'local'
-            ? {
-                projects: fetchedProjectCompatibility.projects,
-                projectHostSetups: fetchedProjectCompatibility.setups
-              }
-            : mergeProjectHostSetupCompatibility(
-                projectCompatibilityFromRepos(reconciledRepos),
-                fetchedProjectCompatibility
-              )
         return {
           repos: reconciledRepos,
           ...projectCompatibility,
@@ -641,6 +665,32 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
       })
     } catch (err) {
       console.error('Failed to fetch repos:', err)
+    }
+  },
+
+  fetchRuntimeEnvironmentRepos: async (environmentId) => {
+    try {
+      const target = { kind: 'environment' as const, environmentId }
+      const {
+        repos: reconciledRepos,
+        projectCompatibility,
+        hostId
+      } = await fetchReposForTarget(target, get().repos)
+      const validRepoIds = new Set(reconciledRepos.map((repo) => repo.id))
+      set((s) => ({
+        repos: reconciledRepos,
+        ...projectCompatibility,
+        activeRepoId: s.activeRepoId && validRepoIds.has(s.activeRepoId) ? s.activeRepoId : null,
+        filterRepoIds: s.filterRepoIds.filter((projectId) => validRepoIds.has(projectId)),
+        setupScriptPromptDismissedRepoIds: filterSetupScriptPromptDismissalsToValidRepos(
+          s.setupScriptPromptDismissedRepoIds,
+          validRepoIds
+        )
+      }))
+      return reconciledRepos.filter((repo) => getRepoExecutionHostId(repo) === hostId)
+    } catch (err) {
+      console.error(`Failed to fetch repos for runtime environment ${environmentId}:`, err)
+      return []
     }
   },
 

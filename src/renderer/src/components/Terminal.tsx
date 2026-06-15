@@ -101,6 +101,7 @@ import { openTabBarEntry, type TabCreateEntryArgs } from './tab-bar/tab-create-e
 import { closeTerminalTab } from './terminal/terminal-tab-actions'
 import { translate } from '@/i18n/i18n'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { browserWorkspaceHasRemoteOwner } from '@/runtime/remote-browser-tab-ownership'
 
 const EditorPanel = lazy(() => import('./editor/EditorPanel'))
 
@@ -790,18 +791,19 @@ function Terminal(): React.JSX.Element | null {
       const targetGroupId =
         useAppStore.getState().activeGroupIdByWorktree[activeWorktreeId] ??
         useAppStore.getState().groupsByWorktree[activeWorktreeId]?.[0]?.id
-      if (!shellOverride && targetGroupId) {
-        void openNewTerminalTabInActiveWorkspace(targetGroupId)
-        return
-      }
       const runtimeEnvironmentId = getActiveWorktreeRuntimeEnvironmentId(activeWorktreeId)
       if (isWebRuntimeSessionActive(runtimeEnvironmentId)) {
         void createWebRuntimeSessionTerminal({
           worktreeId: activeWorktreeId,
           environmentId: runtimeEnvironmentId,
+          targetGroupId,
           command: shellOverride,
           activate: true
         })
+        return
+      }
+      if (!shellOverride && targetGroupId) {
+        void openNewTerminalTabInActiveWorkspace(targetGroupId)
         return
       }
       const newTab = createTab(activeWorktreeId, undefined, shellOverride)
@@ -928,7 +930,10 @@ function Terminal(): React.JSX.Element | null {
         return
       }
       const runtimeEnvironmentId = getActiveWorktreeRuntimeEnvironmentId(activeWorktreeId)
-      if (isWebRuntimeSessionActive(runtimeEnvironmentId)) {
+      if (
+        isWebRuntimeSessionActive(runtimeEnvironmentId) &&
+        browserWorkspaceHasRemoteOwner(state, source.id, runtimeEnvironmentId)
+      ) {
         void createWebRuntimeSessionBrowserTab({
           worktreeId: activeWorktreeId,
           environmentId: runtimeEnvironmentId,
@@ -976,7 +981,10 @@ function Terminal(): React.JSX.Element | null {
         return
       }
       const runtimeEnvironmentId = getActiveWorktreeRuntimeEnvironmentId(owningWorktreeId)
-      if (isWebRuntimeSessionActive(runtimeEnvironmentId)) {
+      if (
+        isWebRuntimeSessionActive(runtimeEnvironmentId) &&
+        browserWorkspaceHasRemoteOwner(state, tabId, runtimeEnvironmentId)
+      ) {
         void closeWebRuntimeSessionTab({
           worktreeId: owningWorktreeId,
           tabId,
@@ -1056,7 +1064,9 @@ function Terminal(): React.JSX.Element | null {
         const runtimeEnvironmentId = getActiveWorktreeRuntimeEnvironmentId(activeWorktreeId)
         if (
           isWebRuntimeSessionActive(runtimeEnvironmentId) &&
-          (unifiedTab?.contentType === 'terminal' || unifiedTab?.contentType === 'browser')
+          (unifiedTab?.contentType === 'terminal' ||
+            (unifiedTab?.contentType === 'browser' &&
+              browserWorkspaceHasRemoteOwner(state, unifiedTab.entityId, runtimeEnvironmentId)))
         ) {
           void closeWebRuntimeSessionTab({
             worktreeId: activeWorktreeId,
@@ -1113,7 +1123,9 @@ function Terminal(): React.JSX.Element | null {
         const runtimeEnvironmentId = getActiveWorktreeRuntimeEnvironmentId(activeWorktreeId)
         if (
           isWebRuntimeSessionActive(runtimeEnvironmentId) &&
-          (unifiedTab?.contentType === 'terminal' || unifiedTab?.contentType === 'browser')
+          (unifiedTab?.contentType === 'terminal' ||
+            (unifiedTab?.contentType === 'browser' &&
+              browserWorkspaceHasRemoteOwner(state, unifiedTab.entityId, runtimeEnvironmentId)))
         ) {
           void closeWebRuntimeSessionTab({
             worktreeId: activeWorktreeId,
@@ -1199,8 +1211,13 @@ function Terminal(): React.JSX.Element | null {
 
   const handleActivateBrowserTab = useCallback(
     (tabId: string) => {
+      const state = useAppStore.getState()
       const runtimeEnvironmentId = getActiveWorktreeRuntimeEnvironmentId(activeWorktreeId)
-      if (activeWorktreeId && isWebRuntimeSessionActive(runtimeEnvironmentId)) {
+      if (
+        activeWorktreeId &&
+        isWebRuntimeSessionActive(runtimeEnvironmentId) &&
+        browserWorkspaceHasRemoteOwner(state, tabId, runtimeEnvironmentId)
+      ) {
         void activateWebRuntimeSessionTab({
           worktreeId: activeWorktreeId,
           tabId,

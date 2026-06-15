@@ -63,6 +63,7 @@ import { createFloatingWorkspaceTourInteractionSnapshot } from '@/lib/floating-w
 import { requestScrollToCurrentWorkspaceRevealAndRename } from '@/lib/scroll-to-current-workspace-status'
 import { WorkspacePortScanner } from './components/ports/WorkspacePortScanner'
 import { CrashReportDialog } from './components/crash-report/CrashReportDialog'
+import NewWorkspaceComposerModal from './components/NewWorkspaceComposerModal'
 import { RecoverableRenderErrorBoundary } from './components/error-boundaries/RecoverableRenderErrorBoundary'
 import { ConfirmationDialogProvider } from './components/confirmation-dialog'
 import { LinkRoutingPreferenceDialogProvider } from './components/link-routing-preference-dialog'
@@ -231,7 +232,6 @@ const WorkspaceSpacePage = lazy(() => import('./components/workspace-space/Works
 const MobilePage = lazy(() => import('./components/mobile/MobilePage'))
 const QuickOpen = lazy(() => import('./components/QuickOpen'))
 const WorktreeJumpPalette = lazy(() => import('./components/WorktreeJumpPalette'))
-const NewWorkspaceComposerModal = lazy(() => import('./components/NewWorkspaceComposerModal'))
 const WorkspaceCleanupDialog = lazy(
   () => import('./components/workspace-cleanup/WorkspaceCleanupDialog')
 )
@@ -2104,19 +2104,21 @@ function App(): React.JSX.Element {
                 </RecoverableRenderErrorBoundary>
               </Suspense>
             ) : null}
+            {/* Why: workspace creation is a core action; keeping it in the
+            entry bundle avoids stale/corrupt lazy chunks stranding users at Create. */}
+            {activeModal === 'new-workspace-composer' ? (
+              <RecoverableRenderErrorBoundary
+                boundaryId="modal.new-workspace-composer"
+                surface="modal"
+                resetKey
+                compact
+              >
+                <NewWorkspaceComposerModal />
+              </RecoverableRenderErrorBoundary>
+            ) : null}
             {/* Why: root overlays can render Radix <Tooltip>s; keep them inside
             the shared provider so lazy surfaces mount safely from any entry point. */}
             <Suspense fallback={null}>
-              {resolvedMountedLazyModalIds.has('new-workspace-composer') ? (
-                <RecoverableRenderErrorBoundary
-                  boundaryId="modal.new-workspace-composer"
-                  surface="modal"
-                  resetKey={activeModal === 'new-workspace-composer'}
-                  compact
-                >
-                  <NewWorkspaceComposerModal />
-                </RecoverableRenderErrorBoundary>
-              ) : null}
               {resolvedMountedLazyModalIds.has('workspace-cleanup') ? (
                 <RecoverableRenderErrorBoundary
                   boundaryId="modal.workspace-cleanup"
