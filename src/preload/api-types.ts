@@ -330,6 +330,7 @@ import type {
 } from '../shared/ssh-types'
 import type {
   DockerConnectionStatus,
+  DockerContainerInspect,
   DockerContainerSummary,
   DockerResourcesChangedEvent
 } from '../shared/docker-types'
@@ -2604,6 +2605,7 @@ export type PreloadApi = {
   }
   docker: {
     listContainers: (args: { connectionId: string }) => Promise<DockerContainerSummary[]>
+    inspect: (args: { connectionId: string; containerId: string }) => Promise<DockerContainerInspect>
     pingConnection: (args: {
       connectionId: string
     }) => Promise<{ status: DockerConnectionStatus; error?: string }>

@@ -113,6 +113,7 @@ import type {
 } from '../shared/ssh-types'
 import type {
   DockerConnectionStatus,
+  DockerContainerInspect,
   DockerContainerSummary,
   DockerResourcesChangedEvent
 } from '../shared/docker-types'
@@ -3614,6 +3615,8 @@ const api = {
   docker: {
     listContainers: (args: { connectionId: string }): Promise<DockerContainerSummary[]> =>
       ipcRenderer.invoke('docker:listContainers', args),
+    inspect: (args: { connectionId: string; containerId: string }): Promise<DockerContainerInspect> =>
+      ipcRenderer.invoke('docker:inspect', args),
     pingConnection: (args: {
       connectionId: string
     }): Promise<{ status: DockerConnectionStatus; error?: string }> =>
