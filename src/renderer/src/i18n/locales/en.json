@@ -2440,7 +2440,9 @@
             "efb33546ff": "Git Bash",
             "1a8af49530": "CMD Prompt",
             "2148f65e04": "PowerShell",
-            "ab589350e5": "Could not build launch command for {{value0}}."
+            "ab589350e5": "Could not build launch command for {{value0}}.",
+            "7a9b4af2af": "Scroll tabs left",
+            "232e075b07": "Scroll tabs right"
           },
           "TabBarCreateEntry": {
             "d62d63b807": "Create file",

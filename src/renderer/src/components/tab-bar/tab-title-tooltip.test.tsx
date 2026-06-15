@@ -247,6 +247,9 @@ describe('tab title tooltips', () => {
     const root = openingTag(markup, 'data-testid', 'sortable-tab')
     expect(root).toContain('role="tab"')
     expect(root).toContain('tabindex="0"')
+    expect(root).toContain('min-w-[88px]')
+    expect(root).toContain('max-w-[280px]')
+    expect(root).toContain('flex-[1_1_180px]')
   })
 
   it("shows the provider icon while stripping the agent's leading status glyph from the label", () => {
@@ -303,6 +306,8 @@ describe('tab title tooltips', () => {
     expect(root).toContain('data-tooltip-trigger="true"')
     expect(root).toContain('role="tab"')
     expect(root).toContain('tabindex="0"')
+    expect(root).toContain('data-tab-id="browser-1"')
+    expect(root).toContain('max-w-[280px]')
   })
 
   it('uses the editor display label while leaving adjacent adornments outside the label', () => {
@@ -331,5 +336,7 @@ describe('tab title tooltips', () => {
     expect(root).toContain('data-tooltip-trigger="true"')
     expect(root).toContain('role="tab"')
     expect(root).toContain('tabindex="0"')
+    expect(root).toContain('data-tab-id="editor-tab-1"')
+    expect(root).toContain('max-w-[280px]')
   })
 })

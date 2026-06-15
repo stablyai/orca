@@ -486,17 +486,6 @@
   height: 0;
 }
 
-/* Hide tab-strip scrollbars to prevent drag-time scrollbar flashes */
-.terminal-tab-strip {
-  -ms-overflow-style: none;
-  scrollbar-width: none;
-}
-
-.terminal-tab-strip::-webkit-scrollbar {
-  width: 0;
-  height: 0;
-}
-
 .project-view-tab-strip {
   /* Why: project views load after the table shell; keeping the row stable
      prevents the list below from jumping when the tabs arrive. */

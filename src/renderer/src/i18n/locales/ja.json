@@ -2440,7 +2440,9 @@
             "efb33546ff": "Git Bash",
             "1a8af49530": "CMDプロンプト",
             "2148f65e04": "PowerShell",
-            "ab589350e5": "{{value0}} の起動コマンドを構築できませんでした。"
+            "ab589350e5": "{{value0}} の起動コマンドを構築できませんでした。",
+            "7a9b4af2af": "Scroll tabs left",
+            "232e075b07": "Scroll tabs right"
           },
           "TabBarCreateEntry": {
             "d62d63b807": "ファイルの作成",
