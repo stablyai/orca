@@ -7,9 +7,9 @@ import {
   type DockerConnectionStatus,
   type DockerSshTargetRef
 } from '../../shared/docker-types'
-import { listContainers, DockerCommandError } from '../docker/docker-command-runner'
+import { listContainers, inspectContainer, DockerCommandError } from '../docker/docker-command-runner'
 
-const DOCKER_IPC_CHANNELS = ['docker:listContainers', 'docker:pingConnection'] as const
+const DOCKER_IPC_CHANNELS = ['docker:listContainers', 'docker:pingConnection', 'docker:inspect'] as const
 const POLL_INTERVAL_MS = 3_000
 
 let currentGetMainWindow: (() => BrowserWindow | null) | null = null
@@ -76,6 +76,14 @@ export function registerDockerHandlers(
   }
   currentGetMainWindow = getMainWindow
   getSshTargetById = getSshTarget
+
+  ipcMain.handle(
+    'docker:inspect',
+    async (_event, args: { connectionId: string; containerId: string }) => {
+      const conn = resolveConnection(store, args.connectionId)
+      return inspectContainer(conn, args.containerId, { sshTarget: resolveSshTarget(conn) })
+    }
+  )
 
   ipcMain.handle('docker:listContainers', async (_event, args: { connectionId: string }) => {
     const conn = resolveConnection(store, args.connectionId)
