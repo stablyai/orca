@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { DockerConnection } from '../../shared/docker-types'
-import { buildInvocation, defaultDockerBinary, listContainers, DockerCommandError } from './docker-command-runner'
+import { buildInvocation, defaultDockerBinary, listContainers, DockerCommandError, inspectContainer } from './docker-command-runner'
 
 const ARGS = ['ps', '-a', '--format', '{{json .}}']
 
@@ -107,5 +107,36 @@ describe('listContainers', () => {
     expect(error).toBeInstanceOf(DockerCommandError)
     expect(error.message).toContain('Cannot connect to the Docker daemon')
     expect(error.code).toBe(1)
+  })
+})
+
+const INSPECT_OUTPUT = JSON.stringify([
+  { Id: 'abc', Created: '2026-01-01T00:00:00Z', Config: { Env: [] }, HostConfig: { RestartPolicy: { Name: 'no' } } }
+])
+
+describe('inspectContainer', () => {
+  it('runs `docker inspect <id>` and returns the parsed inspect', async () => {
+    const calls: Array<{ file: string; args: string[] }> = []
+    const exec = async (file: string, args: string[]) => {
+      calls.push({ file, args })
+      return { stdout: INSPECT_OUTPUT, stderr: '', code: 0 }
+    }
+    const result = await inspectContainer({ id: 'local', label: 'Local', kind: 'local' }, 'abc', { exec })
+    expect(calls[0]).toEqual({ file: 'docker', args: ['inspect', 'abc'] })
+    expect(result).toMatchObject({ id: 'abc', restartPolicy: 'no' })
+  })
+
+  it('throws DockerCommandError on a non-zero exit', async () => {
+    const exec = async () => ({ stdout: '', stderr: 'No such object: abc', code: 1 })
+    await expect(
+      inspectContainer({ id: 'local', label: 'Local', kind: 'local' }, 'abc', { exec })
+    ).rejects.toThrow(DockerCommandError)
+  })
+
+  it('throws DockerCommandError when output cannot be parsed', async () => {
+    const exec = async () => ({ stdout: '[]', stderr: '', code: 0 })
+    await expect(
+      inspectContainer({ id: 'local', label: 'Local', kind: 'local' }, 'abc', { exec })
+    ).rejects.toThrow(DockerCommandError)
   })
 })

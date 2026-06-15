@@ -1,6 +1,7 @@
 import { execFile } from 'node:child_process'
-import type { DockerConnection, DockerContainerSummary, DockerSshTargetRef } from '../../shared/docker-types'
+import type { DockerConnection, DockerContainerInspect, DockerContainerSummary, DockerSshTargetRef } from '../../shared/docker-types'
 import { parseDockerContainers } from './docker-output-parser'
+import { parseDockerInspect } from './docker-inspect-parser'
 
 export const DOCKER_COMMAND_TIMEOUT_MS = 15_000
 
@@ -112,4 +113,28 @@ export async function listContainers(
     throw new DockerCommandError(result.code, result.stderr)
   }
   return parseDockerContainers(result.stdout)
+}
+
+export async function inspectContainer(
+  conn: DockerConnection,
+  containerId: string,
+  deps: DockerRunnerDeps = {}
+): Promise<DockerContainerInspect> {
+  const exec = deps.exec ?? localCapturedExec
+  const invocation = buildInvocation(conn, ['inspect', containerId], {
+    dockerBinary: deps.dockerBinary,
+    sshTarget: deps.sshTarget
+  })
+  const result = await exec(invocation.file, invocation.args, {
+    env: invocation.env,
+    timeout: DOCKER_COMMAND_TIMEOUT_MS
+  })
+  if (result.code !== 0) {
+    throw new DockerCommandError(result.code, result.stderr)
+  }
+  const inspect = parseDockerInspect(result.stdout)
+  if (!inspect) {
+    throw new DockerCommandError(result.code, `Unexpected docker inspect output for ${containerId}`)
+  }
+  return inspect
 }
