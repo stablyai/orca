@@ -178,8 +178,8 @@ export function useTabStripOverflowNavigation({
     if (!strip || !activeVisibleTabId) {
       return
     }
-    const activeTab = Array.from(strip.querySelectorAll<HTMLElement>('[data-tab-id]')).find(
-      (candidate) => candidate.getAttribute('data-tab-id') === activeVisibleTabId
+    const activeTab = strip.querySelector<HTMLElement>(
+      `[data-tab-id="${CSS.escape(activeVisibleTabId)}"]`
     )
     if (!activeTab) {
       return

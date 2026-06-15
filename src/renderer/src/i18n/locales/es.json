@@ -2441,8 +2441,8 @@
             "1a8af49530": "Mensaje CMD",
             "2148f65e04": "PowerShell",
             "ab589350e5": "No se pudo generar el comando de inicio para {{value0}}.",
-            "7a9b4af2af": "Scroll tabs left",
-            "232e075b07": "Scroll tabs right"
+            "7a9b4af2af": "Desplazar pestañas a la izquierda",
+            "232e075b07": "Desplazar pestañas a la derecha"
           },
           "TabBarCreateEntry": {
             "d62d63b807": "crear archivo",

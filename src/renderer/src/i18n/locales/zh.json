@@ -2441,8 +2441,8 @@
             "1a8af49530": "命令提示符",
             "2148f65e04": "电源外壳",
             "ab589350e5": "无法为 {{value0}} 构建启动命令。",
-            "7a9b4af2af": "Scroll tabs left",
-            "232e075b07": "Scroll tabs right"
+            "7a9b4af2af": "向左滚动标签页",
+            "232e075b07": "向右滚动标签页"
           },
           "TabBarCreateEntry": {
             "d62d63b807": "创建文件",

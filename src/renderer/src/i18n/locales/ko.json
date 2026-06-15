@@ -2441,8 +2441,8 @@
             "1a8af49530": "CMD 프롬프트",
             "2148f65e04": "파워셸",
             "ab589350e5": "{{value0}}에 대한 실행 명령을 작성할 수 없습니다.",
-            "7a9b4af2af": "Scroll tabs left",
-            "232e075b07": "Scroll tabs right"
+            "7a9b4af2af": "탭을 왼쪽으로 스크롤",
+            "232e075b07": "탭을 오른쪽으로 스크롤"
           },
           "TabBarCreateEntry": {
             "d62d63b807": "파일 생성",

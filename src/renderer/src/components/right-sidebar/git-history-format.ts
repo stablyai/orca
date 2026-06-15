@@ -4,7 +4,7 @@ const gitHistoryTimestampFormatter = new Intl.DateTimeFormat(undefined, {
 })
 
 export function formatGitHistoryTimestamp(timestamp: number | undefined): string {
-  if (!timestamp) {
+  if (timestamp == null) {
     return ''
   }
   return gitHistoryTimestampFormatter.format(new Date(timestamp))
