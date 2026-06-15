@@ -41,6 +41,27 @@ function makeHistoryResult(): GitHistoryResult {
 }
 
 describe('GitHistoryPanel', () => {
+  it.each([Number.NaN, Number.MAX_VALUE])(
+    'renders commits with malformed timestamp %s without crashing',
+    (malformedTimestamp) => {
+      const result = makeHistoryResult()
+      result.items[0].timestamp = malformedTimestamp
+
+      const markup = renderToStaticMarkup(
+        <GitHistoryPanel
+          state={{ status: 'ready', result }}
+          collapsed={false}
+          onToggle={vi.fn()}
+          onRefresh={vi.fn()}
+          onOpenCommit={vi.fn()}
+        />
+      )
+
+      expect(markup).toContain('Fix tab overflow')
+      expect(markup).toContain('Taylor')
+    }
+  )
+
   it('renders a timestamped commit row without crashing', () => {
     const markup = renderToStaticMarkup(
       <GitHistoryPanel

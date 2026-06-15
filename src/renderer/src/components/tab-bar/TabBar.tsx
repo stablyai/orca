@@ -42,6 +42,7 @@ import { resolveWindowsShellLaunchTarget } from './windows-shell-launch'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import { type AgentDetectionTarget, useDetectedAgents } from '@/hooks/useDetectedAgents'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
+import { normalizeRelativePath } from '@/lib/path'
 import {
   getWindowsTerminalCapabilityOwnerKey,
   useWindowsTerminalCapabilities
@@ -168,6 +169,31 @@ function getTabDragLabel(item: TabItem, generatedTitlesEnabled: boolean): string
     return item.data.label || 'Mobile Emulator'
   }
   return getEditorDisplayLabel(item.data)
+}
+
+function getTabLayoutSignature(
+  item: TabItem,
+  {
+    generatedTitlesEnabled,
+    isExpanded,
+    status
+  }: {
+    generatedTitlesEnabled: boolean
+    isExpanded: boolean
+    status?: string | null
+  }
+): string {
+  const label = getTabDragLabel(item, generatedTitlesEnabled)
+  if (item.type === 'terminal') {
+    return `${item.type}:${item.id}:${item.isPinned}:${isExpanded}:${Boolean(item.data.color)}:${label}`
+  }
+  if (item.type === 'browser') {
+    return `${item.type}:${item.id}:${item.isPinned}:${item.data.loading}:${item.data.loadError}:${label}`
+  }
+  if (item.type === 'editor') {
+    return `${item.type}:${item.id}:${item.isPinned}:${item.data.isDirty}:${item.data.isPreview}:${item.data.externalMutation ?? ''}:${status ?? ''}:${label}`
+  }
+  return `${item.type}:${item.id}:${item.isPinned}:${label}`
 }
 
 function createUnifiedTabLookup(tabs: readonly Tab[], groupId: string): Map<string, Tab> {
@@ -833,6 +859,22 @@ function TabBarInner({
     activeTabType,
     orderedItems
   ])
+  const tabStripLayoutKey = useMemo(
+    () =>
+      orderedItems
+        .map((item) =>
+          getTabLayoutSignature(item, {
+            generatedTitlesEnabled: generatedTabTitlesEnabled,
+            isExpanded: expandedPaneByTabId[item.id] === true,
+            status:
+              item.type === 'editor'
+                ? (statusByRelativePath.get(normalizeRelativePath(item.data.relativePath)) ?? null)
+                : null
+          })
+        )
+        .join('\u001f'),
+    [expandedPaneByTabId, generatedTabTitlesEnabled, orderedItems, statusByRelativePath]
+  )
 
   const togglePinned = (item: TabItem): void => {
     if (item.isPinned) {
@@ -848,6 +890,7 @@ function TabBarInner({
 
   const { tabStripRef, tabStripOverflowState, scrollTabStrip } = useTabStripOverflowNavigation({
     activeVisibleTabId,
+    layoutKey: tabStripLayoutKey,
     tabCount: orderedItems.length,
     worktreeId
   })
@@ -875,7 +918,6 @@ function TabBarInner({
                 'auto.components.tab.bar.TabBar.7a9b4af2af',
                 'Scroll tabs left'
               )}
-              title={translate('auto.components.tab.bar.TabBar.7a9b4af2af', 'Scroll tabs left')}
               disabled={!tabStripOverflowState.canScrollStart}
               onClick={() => scrollTabStrip('start')}
             >
@@ -1055,7 +1097,6 @@ function TabBarInner({
                 'auto.components.tab.bar.TabBar.232e075b07',
                 'Scroll tabs right'
               )}
-              title={translate('auto.components.tab.bar.TabBar.232e075b07', 'Scroll tabs right')}
               disabled={!tabStripOverflowState.canScrollEnd}
               onClick={() => scrollTabStrip('end')}
             >

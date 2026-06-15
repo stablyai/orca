@@ -38,10 +38,12 @@ function sameTabStripOverflowState(
 
 export function useTabStripOverflowNavigation({
   activeVisibleTabId,
+  layoutKey,
   tabCount,
   worktreeId
 }: {
   activeVisibleTabId: string | null
+  layoutKey: string
   tabCount: number
   worktreeId: string
 }): {
@@ -143,6 +145,7 @@ export function useTabStripOverflowNavigation({
     }
     if (!prev || prev.worktreeId !== worktreeId) {
       prevStripLenRef.current = { worktreeId, len: tabCount }
+      updateTabStripOverflowState()
       return
     }
     if (stickToEndRef.current) {
@@ -171,7 +174,9 @@ export function useTabStripOverflowNavigation({
       requestAnimationFrame(scrollToEnd)
     }
     prevStripLenRef.current = { worktreeId, len: tabCount }
-  }, [tabCount, updateTabStripOverflowState, worktreeId])
+    updateTabStripOverflowState()
+    requestAnimationFrame(updateTabStripOverflowState)
+  }, [layoutKey, tabCount, updateTabStripOverflowState, worktreeId])
 
   useLayoutEffect(() => {
     const strip = tabStripRef.current

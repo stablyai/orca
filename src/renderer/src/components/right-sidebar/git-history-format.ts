@@ -4,8 +4,12 @@ const gitHistoryTimestampFormatter = new Intl.DateTimeFormat(undefined, {
 })
 
 export function formatGitHistoryTimestamp(timestamp: number | undefined): string {
-  if (timestamp == null) {
+  if (timestamp == null || !Number.isFinite(timestamp)) {
     return ''
   }
-  return gitHistoryTimestampFormatter.format(new Date(timestamp))
+  const date = new Date(timestamp)
+  if (Number.isNaN(date.getTime())) {
+    return ''
+  }
+  return gitHistoryTimestampFormatter.format(date)
 }
