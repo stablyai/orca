@@ -800,7 +800,9 @@ export default function MonacoEditor({
           find: {
             addExtraSpaceOnTop: false,
             autoFindInSelection: 'never',
-            seedSearchStringFromSelection: 'never'
+            // Why: prefill Cmd+F with the current selection (or the word under the
+            // cursor) — Monaco's default — so selecting then searching works.
+            seedSearchStringFromSelection: 'always'
           },
           // Why: Monaco has its own Linux primary-selection integration; keep
           // it aligned with Orca's app-level opt-out instead of relying on the
