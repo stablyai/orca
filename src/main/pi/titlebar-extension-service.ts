@@ -1,4 +1,12 @@
-import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'fs'
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  realpathSync,
+  statSync,
+  writeFileSync
+} from 'fs'
 import { homedir } from 'os'
 import { basename, join } from 'path'
 import { app } from 'electron'
@@ -10,7 +18,8 @@ import {
 import {
   isSafeDescendCandidate as sharedIsSafeDescendCandidate,
   mirrorEntry,
-  safeRemoveOverlay
+  safeRemoveOverlay,
+  safeRemoveTree
 } from '../pty/overlay-mirror'
 import { mergePiOverlayUiSettings } from '../../shared/pi-overlay-ui-settings'
 import type { PiAgentKind } from '../../shared/pi-agent-kind'
@@ -25,6 +34,12 @@ const ORCA_PI_EXTENSION_FILE = 'orca-titlebar-spinner.ts'
 const ORCA_PI_PREFILL_EXTENSION_FILE = 'orca-prefill.ts'
 const PI_AGENT_SUBDIR = 'agent'
 const PI_AGENT_SETTINGS_FILE = 'settings.json'
+const PI_OVERLAY_MANIFEST_FILE = '.orca-pi-overlay-manifest.json'
+
+type PiOverlayManifest = {
+  topLevelEntries: string[]
+  extensionEntries: string[]
+}
 
 // Why: each agent owns its own overlay tree so OMP launches never touch
 // Pi's overlay dir (and vice versa). Shadowing one inside the other would
@@ -163,9 +178,16 @@ export class PiTitlebarExtensionService {
     return join(app.getPath('userData'), OVERLAY_ROOT_DIR_NAME[kind])
   }
 
-  private getOverlayDir(ptyId: string, kind: PiAgentKind): string {
-    // Why: daemon PTY session ids include worktree paths. Hashing keeps the
-    // overlay stable across daemon cold restore without path-shaped dirs.
+  private getSourceOverlayDir(sourceAgentDir: string, kind: PiAgentKind): string {
+    // Why: PI_CODING_AGENT_DIR is Pi's whole mutable home. Scope overlays to
+    // the source home, not a PTY, so Orca Pi terminals share config/session
+    // state while still avoiding writes to the user's real agent dir.
+    return join(this.getOverlayRoot(kind), toSafeOverlayDirName(`source:${sourceAgentDir}`))
+  }
+
+  private getPtyOverlayDir(ptyId: string, kind: PiAgentKind): string {
+    // Why: old Orca versions used PTY-scoped hashed overlays. Keep resolving
+    // that path so new spawns/teardowns can clean stale pre-migration dirs.
     return join(this.getOverlayRoot(kind), toSafeOverlayDirName(ptyId))
   }
 
@@ -180,8 +202,46 @@ export class PiTitlebarExtensionService {
     safeRemoveOverlay(overlayDir, this.getOverlayRoot(kind))
   }
 
+  private readOverlayManifest(overlayDir: string): PiOverlayManifest {
+    try {
+      const parsed = JSON.parse(
+        readFileSync(join(overlayDir, PI_OVERLAY_MANIFEST_FILE), 'utf8')
+      ) as Partial<PiOverlayManifest>
+      return {
+        topLevelEntries: Array.isArray(parsed.topLevelEntries) ? parsed.topLevelEntries : [],
+        extensionEntries: Array.isArray(parsed.extensionEntries) ? parsed.extensionEntries : []
+      }
+    } catch {
+      return { topLevelEntries: [], extensionEntries: [] }
+    }
+  }
+
+  private writeOverlayManifest(overlayDir: string, manifest: PiOverlayManifest): void {
+    writeFileSync(
+      join(overlayDir, PI_OVERLAY_MANIFEST_FILE),
+      `${JSON.stringify(manifest, null, 2)}\n`
+    )
+  }
+
+  private clearManifestEntries(overlayDir: string, manifest: PiOverlayManifest): void {
+    for (const entryName of manifest.topLevelEntries) {
+      safeRemoveTree(join(overlayDir, entryName))
+    }
+
+    const overlayExtensionsDir = join(overlayDir, 'extensions')
+    for (const entryName of manifest.extensionEntries) {
+      safeRemoveTree(join(overlayExtensionsDir, entryName))
+    }
+  }
+
   private mirrorAgentDir(sourceAgentDir: string, overlayDir: string): void {
+    const previousManifest = this.readOverlayManifest(overlayDir)
+    this.clearManifestEntries(overlayDir, previousManifest)
+
+    const nextManifest: PiOverlayManifest = { topLevelEntries: [], extensionEntries: [] }
+
     if (!existsSync(sourceAgentDir)) {
+      this.writeOverlayManifest(overlayDir, nextManifest)
       return
     }
 
@@ -192,14 +252,42 @@ export class PiTitlebarExtensionService {
         continue
       }
 
-      if (entry.name === 'extensions' && entry.isDirectory()) {
+      if (entry.name === 'extensions') {
+        const isSymlink = entry.isSymbolicLink()
+        let isLinkPointingToDir = false
+        if (isSymlink) {
+          try {
+            isLinkPointingToDir = statSync(sourcePath).isDirectory()
+          } catch {
+            isLinkPointingToDir = false
+          }
+        }
+
+        if (!entry.isDirectory() && !isLinkPointingToDir) {
+          mirrorEntry(sourcePath, join(overlayDir, basename(sourcePath)))
+          nextManifest.topLevelEntries.push(entry.name)
+          continue
+        }
+
+        // Why: `extensions/` must be a real overlay directory so Orca's
+        // bundled files are written only into userData, never through a user
+        // symlink/junction that points at their real extension store.
+        const resolvedSource = isLinkPointingToDir ? realpathSync(sourcePath) : sourcePath
         const overlayExtensionsDir = join(overlayDir, 'extensions')
         mkdirSync(overlayExtensionsDir, { recursive: true })
-        for (const extensionEntry of readdirSync(sourcePath, { withFileTypes: true })) {
+        for (const extensionEntry of readdirSync(resolvedSource, { withFileTypes: true })) {
+          if (
+            extensionEntry.name === ORCA_PI_EXTENSION_FILE ||
+            extensionEntry.name === ORCA_PI_PREFILL_EXTENSION_FILE ||
+            extensionEntry.name === ORCA_PI_AGENT_STATUS_EXTENSION_FILE
+          ) {
+            continue
+          }
           mirrorEntry(
-            join(sourcePath, extensionEntry.name),
+            join(resolvedSource, extensionEntry.name),
             join(overlayExtensionsDir, extensionEntry.name)
           )
+          nextManifest.extensionEntries.push(extensionEntry.name)
         }
         continue
       }
@@ -209,7 +297,10 @@ export class PiTitlebarExtensionService {
       // the overlay so enabling Orca's titlebar extension preserves auth,
       // sessions, skills, prompts, themes, and any future files stored there.
       mirrorEntry(sourcePath, join(overlayDir, basename(sourcePath)))
+      nextManifest.topLevelEntries.push(entry.name)
     }
+
+    this.writeOverlayManifest(overlayDir, nextManifest)
   }
 
   private readPiSettings(sourceAgentDir: string): unknown {
@@ -241,10 +332,10 @@ export class PiTitlebarExtensionService {
     kind: PiAgentKind
   ): Record<string, string> {
     const sourceAgentDir = existingAgentDir || getDefaultPiAgentDir(kind)
-    const overlayDir = this.getOverlayDir(ptyId, kind)
+    const overlayDir = this.getSourceOverlayDir(sourceAgentDir, kind)
 
     try {
-      this.safeRemoveOverlay(overlayDir, kind)
+      this.safeRemoveOverlay(this.getPtyOverlayDir(ptyId, kind), kind)
       this.safeRemoveOverlay(this.getLegacyOverlayDir(ptyId, kind), kind)
     } catch {
       // Why: on Windows the overlay directory can be locked by another process
@@ -268,7 +359,9 @@ export class PiTitlebarExtensionService {
       // the user's existing extensions instead of replacing that directory,
       // otherwise Orca terminals would silently disable the user's
       // customization inside Orca only.
+      safeRemoveTree(join(extensionsDir, ORCA_PI_EXTENSION_FILE))
       writeFileSync(join(extensionsDir, ORCA_PI_EXTENSION_FILE), getPiTitlebarExtensionSource())
+      safeRemoveTree(join(extensionsDir, ORCA_PI_PREFILL_EXTENSION_FILE))
       writeFileSync(
         join(extensionsDir, ORCA_PI_PREFILL_EXTENSION_FILE),
         getPiPrefillExtensionSource(kind)
@@ -278,6 +371,7 @@ export class PiTitlebarExtensionService {
       // unified /hook/<kind> endpoint. Without this, panes would have no entry in
       // agentStatusByPaneKey and the dashboard would fall back to terminal-title
       // heuristics like any uninstrumented CLI.
+      safeRemoveTree(join(extensionsDir, ORCA_PI_AGENT_STATUS_EXTENSION_FILE))
       writeFileSync(
         join(extensionsDir, ORCA_PI_AGENT_STATUS_EXTENSION_FILE),
         getPiAgentStatusExtensionSource(kind)
@@ -299,18 +393,18 @@ export class PiTitlebarExtensionService {
 
   clearPty(ptyId: string): void {
     // Why: PTY teardown doesn't know which kind was launched (the daemon
-    // exit path discards the launch command). Sweep both overlay roots so
-    // either kind's overlay is cleaned up; the per-kind root scoping keeps
-    // each safeRemoveOverlay call bounded to its own tree.
+    // exit path discards the launch command). Sweep both old PTY-scoped
+    // overlay roots for migration cleanup, but leave source-scoped overlays
+    // alive because another Pi terminal may be using the same source home.
     for (const kind of Object.keys(OVERLAY_ROOT_DIR_NAME) as PiAgentKind[]) {
       try {
-        this.safeRemoveOverlay(this.getOverlayDir(ptyId, kind), kind)
+        this.safeRemoveOverlay(this.getPtyOverlayDir(ptyId, kind), kind)
         this.safeRemoveOverlay(this.getLegacyOverlayDir(ptyId, kind), kind)
       } catch {
         // Why: on Windows the overlay dir can be locked (EPERM/EBUSY) by
         // antivirus or indexers. Overlay cleanup is best-effort - a stale
-        // directory in userData is harmless and will be overwritten on the
-        // next PTY spawn attempt.
+        // old PTY-scoped directory in userData is harmless and will be
+        // retried on the next PTY spawn/teardown.
       }
     }
   }

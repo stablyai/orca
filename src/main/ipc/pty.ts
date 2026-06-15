@@ -309,7 +309,7 @@ function finishPtyShutdown(
 // account home, dev-mode CLI overrides, GitHub attribution shims). They used
 // to be implemented twice, which silently drifted — daemon-backed PTYs never
 // got the OpenCode plugin, Pi overlay, Codex home, or dev CLI PATH prepend,
-// so status dots, per-PTY Pi state, Codex account switching, and CLI→dev
+// so status dots, Pi state, Codex account switching, and CLI→dev
 // routing were all broken for daemon users (the common case).
 //
 // Centralizing the injections here makes future additions fail-safe: a new
@@ -621,7 +621,7 @@ export function buildPtyHostEnv(
   if (opts.agentStatusHooksEnabled) {
     // Why: OPENCODE_CONFIG_DIR is a singular path, not a colon-list, so a user
     // value cannot coexist with an Orca-only injection. Hand the user's value
-    // (when present) to the hook service and let it materialize a per-PTY
+    // (when present) to the hook service and let it materialize a source-scoped
     // mirror overlay that lets the user's plugins and Orca's status plugin
     // load together — same pattern Pi uses below for PI_CODING_AGENT_DIR. See
     // docs/opencode-config-dir-collision.md.
@@ -663,13 +663,9 @@ export function buildPtyHostEnv(
 
   // Why: PI_CODING_AGENT_DIR owns Pi's / OMP's full config/session root (OMP
   // inherits the env var name from Pi by design; its CHANGELOG documents the
-  // OMP_CODING_AGENT_DIR -> PI_CODING_AGENT_DIR rename. Build a PTY-scoped
-  // overlay from the caller's chosen root so sessions keep their user state
-  // without sharing a mutable overlay across terminals. Under the daemon path,
-  // `id` is the daemon sessionId — the overlay survives daemon cold restore
-  // because the sessionId is stable across restarts by design. A future reader
-  // should NOT "simplify" id allocation back to a fresh UUID per spawn; that
-  // would discard user state on every daemon reconnect.
+  // OMP_CODING_AGENT_DIR -> PI_CODING_AGENT_DIR rename. Build a source-scoped
+  // overlay from the caller's chosen root so Orca extensions load without
+  // making each terminal look like a separate Pi home.
   if (opts.agentStatusHooksEnabled) {
     clearPiAgentShadowEnv(baseEnv, 'pi')
     clearPiAgentShadowEnv(baseEnv, 'omp')
@@ -2100,19 +2096,16 @@ export function registerPtyHandlers(
       // CLI bin, attribution shim dir) that would resolve to nothing — or
       // something misleading — on the remote machine.
       const isDaemonHostSpawn = !args.connectionId && !(provider instanceof LocalPtyProvider)
-      // Why: Pi's PTY overlay is keyed on the id we pass down, and the daemon
-      // path needs a stable id BEFORE provider.spawn so the overlay can be
-      // materialized in buildPtyHostEnv. DaemonPtyAdapter.doSpawn mints an id
-      // the same way when sessionId is absent — lifting the mint here gives
-      // pty.ts the id up-front without changing daemon semantics (the daemon
-      // still honors opts.sessionId ?? mint()).
+      // Why: daemon host-env setup needs a stable id BEFORE provider.spawn so
+      // provider hooks and legacy Pi overlay cleanup can run in buildPtyHostEnv.
+      // DaemonPtyAdapter.doSpawn mints an id the same way when sessionId is
+      // absent — lifting the mint here gives pty.ts the id up-front without
+      // changing daemon semantics (the daemon still honors opts.sessionId ?? mint()).
       //
       // Note: the sessionId is STABLE across daemon restarts by design —
       // DaemonPtyAdapter.reconcileOnStartup reuses it so that users' live
-      // shells survive crashes. Keying the Pi overlay on this same id means
-      // the user's Pi state (auth, sessions, skills) survives daemon cold
-      // restore too. Do NOT "simplify" id allocation back to a fresh UUID
-      // per spawn; that would discard Pi state on every reconnect.
+      // shells survive crashes. Do NOT "simplify" id allocation back to a
+      // fresh UUID per spawn; that would orphan reconnectable terminal state.
       // Why: only state for ids we minted in THIS request should be cleared on
       // spawn failure. If the caller supplied args.sessionId it may refer to
       // an existing PTY whose state (OpenCode hooks, Pi overlay, agent-hook
@@ -2214,11 +2207,10 @@ export function registerPtyHandlers(
           throw new Error('Invariant violation: daemon spawn without sessionId')
         }
         const sessionIdForEnv = effectiveSessionId
-        // Why: Pi overlay paths are derived from the session id; reject
-        // traversal sequences / path separators so a crafted IPC payload
-        // cannot escape the overlay root. If the renderer ever forwards a
-        // malicious sessionId or worktreeId the spawn is refused before any
-        // filesystem side-effects run.
+        // Why: this id still reaches filesystem side-effects for provider
+        // hook state and stale pre-migration Pi overlay cleanup; reject
+        // traversal/path separators before a crafted IPC payload can escape
+        // the expected roots.
         if (!isSafePtySessionId(sessionIdForEnv, app.getPath('userData'))) {
           throw new Error('Invalid PTY session id')
         }
@@ -2344,8 +2336,8 @@ export function registerPtyHandlers(
           }
           store?.markSshRemotePtyLease(args.connectionId, effectiveSessionRelayId, 'expired')
         }
-        // Why: when buildPtyHostEnv materialized a Pi overlay for this id
-        // but provider.spawn failed, the overlay would leak.
+        // Why: if buildPtyHostEnv materialized provider state for this minted
+        // id but provider.spawn failed, that state would otherwise leak.
         if (isMintedSessionId && effectiveSessionId !== undefined) {
           clearProviderPtyState(effectiveSessionId)
         }
