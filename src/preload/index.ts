@@ -113,6 +113,7 @@ import type {
 } from '../shared/ssh-types'
 import type {
   DockerConnectionStatus,
+  DockerContainerAction,
   DockerContainerInspect,
   DockerContainerSummary,
   DockerResourcesChangedEvent
@@ -3626,7 +3627,12 @@ const api = {
         callback(data)
       ipcRenderer.on('docker:resources-changed', listener)
       return () => ipcRenderer.removeListener('docker:resources-changed', listener)
-    }
+    },
+    containerAction: (args: {
+      connectionId: string
+      containerId: string
+      action: DockerContainerAction
+    }): Promise<void> => ipcRenderer.invoke('docker:containerAction', args)
   },
 
   automations: {

@@ -330,6 +330,7 @@ import type {
 } from '../shared/ssh-types'
 import type {
   DockerConnectionStatus,
+  DockerContainerAction,
   DockerContainerInspect,
   DockerContainerSummary,
   DockerResourcesChangedEvent
@@ -2610,6 +2611,11 @@ export type PreloadApi = {
       connectionId: string
     }) => Promise<{ status: DockerConnectionStatus; error?: string }>
     onResourcesChanged: (callback: (data: DockerResourcesChangedEvent) => void) => () => void
+    containerAction: (args: {
+      connectionId: string
+      containerId: string
+      action: DockerContainerAction
+    }) => Promise<void>
   }
   automations: {
     list: () => Promise<Automation[]>
