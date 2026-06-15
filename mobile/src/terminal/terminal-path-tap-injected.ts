@@ -7,8 +7,14 @@
 // the two in sync. The TS module is the source of truth for the algorithm and
 // has the regression tests; this string only exists because the WebView can't
 // import RN modules.
+//
+// Matches both slash-bearing paths AND bare filenames with an extension
+// (README.md, src/index.ts:5) — like desktop, we propose candidates and let the
+// host's files.resolveTerminalPath existence check reject non-files. Agents
+// often print a bare filename (the markdown link target is consumed, leaving
+// only the label text), so requiring a slash would miss the common case.
 export const TERMINAL_PATH_TAP_JS = String.raw`
-  var FILE_PATH_RE = /(?:~[\\/]|[\\/]|\.{1,2}[\\/]|[A-Za-z]:[\\/]|[A-Za-z0-9._-]+[\\/])[A-Za-z0-9._~\-\/%+@\\()[\]]*(?::\d+)?(?::\d+)?/g;
+  var FILE_PATH_RE = /(?:~[\\/]|[\\/]|\.{1,2}[\\/]|[A-Za-z]:[\\/]|[A-Za-z0-9._-]+[\\/]|(?=[A-Za-z0-9._-]*\.[A-Za-z0-9]))[A-Za-z0-9._~\-\/%+@\\()[\]]*(?::\d+)?(?::\d+)?/g;
   var PATH_LEADING_TRIM = { '(': 1, '[': 1, '{': 1, '"': 1, "'": 1 };
   var PATH_TRAILING_TRIM = { ')': 1, ']': 1, '}': 1, '"': 1, "'": 1, ',': 1, ';': 1, '.': 1 };
 
@@ -43,14 +49,15 @@ export const TERMINAL_PATH_TAP_JS = String.raw`
     return null;
   }
 
-  // Emits terminal-file-tap when the tap lands on a path, else terminal-tap.
-  // Relies on viewportToCell/getLineText/notify from the host script scope.
+  // Emits terminal-file-tap when the tap lands on a path candidate, else
+  // terminal-tap. The host resolves + existence-checks the candidate, so a
+  // false positive (a non-file word) just opens nothing. Relies on
+  // viewportToCell/getLineText/notify from the host script scope.
   function notifyTapOrFilePath(originX, originY) {
-    var tappedPath = null;
     var tapCell = viewportToCell(originX, originY);
-    if (tapCell) {
-      tappedPath = matchFilePathAtColumn(getLineText(tapCell.row), tapCell.col);
-    }
+    var tappedPath = tapCell
+      ? matchFilePathAtColumn(getLineText(tapCell.row), tapCell.col)
+      : null;
     if (tappedPath) {
       notify({
         type: 'terminal-file-tap',

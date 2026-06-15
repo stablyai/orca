@@ -9,14 +9,15 @@ export type TappedFilePath = {
   column: number | null
 }
 
-// Separator-anchored path tokens (absolute, relative, ~/, drive-letter, UNC),
-// optionally suffixed with :line or :line:col. Ported from LOCAL_PATH_REGEX.
-// The desktop's spaced-path variants are intentionally not ported: a tap always
-// lands inside one whitespace-bounded segment, so this regex already covers the
-// real cases (a tap on any segment of a spaced path yields a valid sub-path),
-// while the spaced variants would only fire on a tap landing on a space.
+// Separator-anchored path tokens (absolute, relative, ~/, drive-letter, UNC) OR
+// a bare filename with an extension (README.md, index.ts), optionally suffixed
+// with :line or :line:col. Like desktop, we propose candidates and let the host
+// existence-check reject non-files — agents often print a bare filename, so
+// requiring a slash would miss the common case. The desktop's spaced-path
+// variants are intentionally not ported: a tap always lands inside one
+// whitespace-bounded segment, so this already covers the real cases.
 const LOCAL_PATH_REGEX =
-  /(?:~[\\/]|[\\/]|\.{1,2}[\\/]|[A-Za-z]:[\\/]|[A-Za-z0-9._-]+[\\/])[A-Za-z0-9._~\-/%+@\\()[\]]*(?::\d+)?(?::\d+)?/g
+  /(?:~[\\/]|[\\/]|\.{1,2}[\\/]|[A-Za-z]:[\\/]|[A-Za-z0-9._-]+[\\/]|(?=[A-Za-z0-9._-]*\.[A-Za-z0-9]))[A-Za-z0-9._~\-/%+@\\()[\]]*(?::\d+)?(?::\d+)?/g
 
 const LEADING_TRIM_CHARS = new Set(['(', '[', '{', '"', "'"])
 const TRAILING_TRIM_CHARS = new Set([')', ']', '}', '"', "'", ',', ';', '.'])

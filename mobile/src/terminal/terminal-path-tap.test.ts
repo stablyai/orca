@@ -73,4 +73,17 @@ describe('matchFilePathAtColumn', () => {
     const line = 'prefix /tmp/x.ts'
     expect(matchFilePathAtColumn(line, 0)).toBeNull()
   })
+
+  it('matches a bare filename with an extension (no slash)', () => {
+    // Why: agents commonly print a bare filename (e.g. a markdown link whose
+    // target was consumed). The host existence-check rejects non-files.
+    const line = '• Here you go: README.md'
+    const result = matchFilePathAtColumn(line, colOf(line, 'README'))
+    expect(result?.pathText).toBe('README.md')
+  })
+
+  it('does not match a plain word without an extension', () => {
+    const line = '• Here you go: README.md'
+    expect(matchFilePathAtColumn(line, colOf(line, 'Here'))).toBeNull()
+  })
 })
