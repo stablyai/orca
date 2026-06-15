@@ -4527,7 +4527,12 @@ export class OrcaRuntimeService {
         progress: state?.progress ?? null
       }
     })
-    return { enabled: voice.enabled === true, selectedModelId: voice.sttModel ?? '', models }
+    return {
+      enabled: voice.enabled === true,
+      selectedModelId: voice.sttModel ?? '',
+      dictationMode: voice.dictationMode === 'hold' ? 'hold' : 'toggle',
+      models
+    }
   }
 
   // Fire-and-forget model download; the ModelManager writes progress into its
@@ -4555,6 +4560,7 @@ export class OrcaRuntimeService {
   async configureMobileDictation(params: {
     enabled?: boolean
     modelId?: string
+    dictationMode?: 'toggle' | 'hold'
   }): Promise<RuntimeSpeechSetupState> {
     if (!this.store?.getSettings || !this.store.updateSettings) {
       throw new Error('voice_dictation_unavailable')
@@ -4569,7 +4575,8 @@ export class OrcaRuntimeService {
     const nextVoice: VoiceSettings = {
       ...current,
       ...(params.enabled !== undefined ? { enabled: params.enabled } : {}),
-      ...(params.modelId !== undefined ? { sttModel: params.modelId } : {})
+      ...(params.modelId !== undefined ? { sttModel: params.modelId } : {}),
+      ...(params.dictationMode !== undefined ? { dictationMode: params.dictationMode } : {})
     }
     this.store.updateSettings({ voice: nextVoice }, { notifyListeners: true })
     return this.listMobileSpeechModels()

@@ -44,7 +44,8 @@ const SpeechModelDownload = z.object({
 
 const DictationSetup = z.object({
   enabled: z.boolean().optional(),
-  modelId: OptionalString
+  modelId: OptionalString,
+  dictationMode: z.enum(['toggle', 'hold']).optional()
 })
 
 export const SPEECH_METHODS: RpcMethod[] = [
@@ -64,7 +65,8 @@ export const SPEECH_METHODS: RpcMethod[] = [
     handler: async (params, { runtime }) =>
       runtime.configureMobileDictation({
         ...(params.enabled !== undefined ? { enabled: params.enabled } : {}),
-        ...(params.modelId !== undefined ? { modelId: params.modelId } : {})
+        ...(params.modelId !== undefined ? { modelId: params.modelId } : {}),
+        ...(params.dictationMode !== undefined ? { dictationMode: params.dictationMode } : {})
       })
   }),
   defineMethod({

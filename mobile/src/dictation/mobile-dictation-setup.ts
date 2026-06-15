@@ -36,7 +36,7 @@ export async function downloadDictationModel(
 
 export async function setDictationConfig(
   client: Pick<RpcClient, 'sendRequest'>,
-  params: { enabled?: boolean; modelId?: string }
+  params: { enabled?: boolean; modelId?: string; dictationMode?: 'toggle' | 'hold' }
 ): Promise<MobileSpeechSetup> {
   const response = await client.sendRequest('speech.dictation.setup', params)
   if (!response.ok) {

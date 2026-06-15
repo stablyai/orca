@@ -479,6 +479,8 @@ export type RuntimeSpeechModelSummary = {
 export type RuntimeSpeechSetupState = {
   enabled: boolean
   selectedModelId: string
+  /** 'toggle' = press once to start/stop; 'hold' = dictate while held. */
+  dictationMode: 'toggle' | 'hold'
   models: RuntimeSpeechModelSummary[]
 }
 
