@@ -156,7 +156,7 @@ function buildTitleDerivedAgentRow(args: {
   }
 }
 
-function resolveTitleDerivedAgentType(title: string, label: string): AgentType | null {
+export function resolveTitleDerivedAgentType(title: string, label: string): AgentType | null {
   const agentType = TITLE_AGENT_LABEL_TO_TYPE[label] ?? 'unknown'
   if (agentType !== 'claude') {
     return agentType
@@ -165,6 +165,16 @@ function resolveTitleDerivedAgentType(title: string, label: string): AgentType |
   // split panes it can match arbitrary terminal spinners, so sidebar rows only
   // accept Claude when the title itself names Claude.
   return CLAUDE_AGENT_TOKEN_RE.test(title) ? agentType : null
+}
+
+export function resolveAgentTypeFromTerminalTitle(
+  title: string | null | undefined
+): AgentType | null {
+  if (!title) {
+    return null
+  }
+  const label = getAgentLabel(title)
+  return label ? resolveTitleDerivedAgentType(title, label) : null
 }
 
 function titleStatusToRowState(

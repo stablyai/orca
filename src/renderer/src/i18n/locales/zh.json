@@ -499,7 +499,8 @@
       "useAutomationDispatchEvents": {
         "59718b120b": "目标工作区不再可用。",
         "16a21d6413": "SSH 重新连接需要交互式凭据。",
-        "386db94f3e": "目标项目不再可用。"
+        "386db94f3e": "目标项目不再可用。",
+        "3ad7d77f57": "The target workspace is on a different host than this automation run target."
       },
       "useComposerState": {
         "7eb3f44ff7": "所选 Agent 已禁用。创建之前选择启用的 Agent。",
@@ -1038,7 +1039,21 @@
         "connected": "Connected",
         "reconnectingSsh": "Reconnecting SSH...",
         "sshReconnectionFailed": "SSH reconnection failed",
-        "notConnected": "Not connected"
+        "notConnected": "Not connected",
+        "runOn": "Run on",
+        "setupHostExistingFolderTitle": "Set up {{value0}}",
+        "cloneProjectOnHost": "Clone project",
+        "cloneUrlPlaceholder": "https://github.com/owner/repo.git",
+        "cloneDestinationPlaceholder": "/parent/directory/on/host",
+        "cloningHostSetup": "Cloning...",
+        "cloneHostSetup": "Clone",
+        "importExistingFolderOnHost": "Import existing folder",
+        "setupHostExistingFolderPlaceholder": "/path/to/project/on/host",
+        "setupKindGit": "Git repo",
+        "setupKindFolder": "Folder",
+        "setupHostExistingFolderHelp": "Link a checkout that already exists there, then create this workspace on that host.",
+        "importingHostSetup": "Importing...",
+        "importHostSetup": "Import"
       },
       "NewWorkspaceComposerModal": {
         "fa90f739a5": "创建工作区之前选择项目、工作区名称和 Agent。"
@@ -1635,7 +1650,8 @@
         "worktreesHeader": "工作树",
         "recentWorktreesHeader": "最近的工作树",
         "settingsBadge": "设置",
-        "actionBadge": "操作"
+        "actionBadge": "操作",
+        "paletteHostBadge": "Host: {{value0}}"
       },
       "github": {
         "pr": {
@@ -1891,7 +1907,8 @@
                 "1f2f28a4de": "搜索接口",
                 "c377a4f06a": "搜索",
                 "c392c749a6": "休息API",
-                "bb227706a6": "休息"
+                "bb227706a6": "休息",
+                "budget_scope_prefix": "Budget scope"
               }
             }
           }
@@ -2606,7 +2623,14 @@
             "remote_server": "Remote Server",
             "runtime_checking": "Checking",
             "runtime_online": "Connected",
-            "runtime_unavailable": "Disconnected"
+            "runtime_unavailable": "Disconnected",
+            "runtime_available": "Available",
+            "runtime_connect_unavailable": "Remote host is not reachable",
+            "runtime_disconnect_failed": "Disconnect failed",
+            "runtime_reconnecting": "Reconnecting",
+            "runtime_last_close_reason": "Closed: {{value0}}",
+            "runtime_reconnect_attempt": "Attempt {{value0}}",
+            "runtime_channel_counts": "{{value0}} pending · {{value1}} streams"
           },
           "StatusBar": {
             "9659e38343": "端口",
@@ -2792,6 +2816,9 @@
             "7ad719c4bf": "受限",
             "e740f92596": "刷新失败",
             "8418ec448d": "无法刷新 {{value0}} 使用情况。代理会话可能仍已登录。"
+          },
+          "SshTargetStatusRow": {
+            "sshHost": "SSH Host"
           }
         }
       },
@@ -3165,14 +3192,7 @@
           "c234df77f7": "创建前请选择或输入服务器父文件夹。",
           "3a13f6e88b": "未选择位置",
           "6ed14c0281": "未选择服务器文件夹",
-          "createProjectTitle": "创建项目",
-          "createProjectDescription": "创建本地 Git 存储库和第一个工作区。",
-          "projectNameLabel": "项目名称",
-          "createsGitRepoHelp": "Git 存储库：",
-          "parentFolderLabel": "父文件夹",
-          "browseParentFolder": "浏览",
-          "gitRequiredError": "创建项目需要 Git。",
-          "createAction": "创建"
+          "ssh_parent_manual": "Enter an SSH parent path."
         },
         "AddRepoNestedImportStep": {
           "496f68cf8c": "扫描存储库。单击停止。",
@@ -3195,7 +3215,9 @@
           "8401a7a0d0": "1 个仓库",
           "d4f1df62ef": "{{value0}} 个仓库",
           "b4263a2ac4": "在 {{value1}} 中找到 {{value0}}。",
-          "24eda6c8b2": "正在扫描... {{value0}}"
+          "24eda6c8b2": "正在扫描... {{value0}}",
+          "b20bb7c24f": "Keeps these repos together in one group. Best for related repos like microservices.",
+          "e907ec8935": "What is a monorepo name?"
         },
         "AddRepoRemoteStep": {
           "5b205b5281": "停止扫描",
@@ -3209,7 +3231,10 @@
           "007651bdf9": "导航到目录并单击“选择”以选择它。",
           "dd3ff65486": "浏览远程文件系统",
           "36d427bb66": "添加远程项目",
-          "35831a7312": "添加..."
+          "35831a7312": "添加...",
+          "lockedDescription": "Enter the path to a Git repository on {{value0}}.",
+          "lockedDisconnected": "{{value0}} is disconnected.",
+          "93e0221434": "Connect"
         },
         "AddRepoServerStartStep": {
           "ae990c86a0": "返回添加选项",
@@ -3256,7 +3281,9 @@
           "df8b0e6c22": "添加了远程项目",
           "3e64e8a70d": "连接失败",
           "32a7256d85": "克隆",
-          "69f5b5380d": "克隆..."
+          "69f5b5380d": "克隆...",
+          "cloneOnHostDescription": "Enter the Git URL and choose where to clone it on {{value0}}.",
+          "cloneParentFolder": "Parent folder"
         },
         "AutoRenameFailedDialog": {
           "aed1623b1e": "关闭",
@@ -3540,7 +3567,14 @@
           "e029a2d775": "状态",
           "c2c7a45cda": "没有任何",
           "680043342f": "紧凑",
-          "c7591b6014": "repo"
+          "c7591b6014": "repo",
+          "hosts": "Hosts",
+          "allHostsDetail": "Show every host",
+          "configuredSshHost": "Configured SSH",
+          "projectSshHost": "Project SSH",
+          "activeRuntimeHost": "Active server",
+          "projectRuntimeHost": "Project server",
+          "631b97eea9": "Host scope"
         },
         "SshDisconnectedDialog": {
           "ca4a7892af": "正在连接...",
@@ -3617,6 +3651,9 @@
         },
         "WorktreeCardAgents": {
           "1b0a156717": "Agents"
+        },
+        "WorktreeCardReviewDetailSection": {
+          "reviewHeader": "{{value0}} #{{value1}}"
         },
         "WorktreeCardMeta": {
           "3e65e11cc6": "工作区元数据",
@@ -3718,7 +3755,10 @@
           "b667b59632": "Some projects could not be removed from Orca",
           "f94466bc39": "{{value0}} of {{value1}} contained project{{value2}} remained after deleting the group.",
           "groupDeleteFailed": "Failed to delete group",
-          "groupDeleteFailedDesc": "Something went wrong while deleting the group. No projects were removed."
+          "groupDeleteFailedDesc": "Something went wrong while deleting the group. No projects were removed.",
+          "7a8b9c0d1e": "Update required",
+          "hostAuthNeeded": "Authentication needed",
+          "hostDisconnected": "Disconnected"
         },
         "WorktreeMetaDialog": {
           "3db0a2a593": "取消",
@@ -3778,8 +3818,10 @@
                   "3d162cc76f": "远程项目",
                   "fb4fc5380e": "本地项目、Git repo 或包含多个 repos 的文件夹",
                   "2281fdc8c7": "浏览文件夹",
-                  "createProjectTitle": "创建项目",
-                  "createGitProjectDescription": "创建本地 Git 存储库"
+                  "sshCreateUnavailable": "Not available for SSH hosts yet",
+                  "sshBrowseTitle": "Open project on SSH host",
+                  "sshBrowseDescription": "Existing Git repository or folder on this SSH host",
+                  "runtimeBrowseDescription": "Existing Git repository or folder on this host"
                 }
               }
             }
@@ -3988,13 +4030,61 @@
           "title": "创建文件夹工作区",
           "create": "创建工作区",
           "sourceProject": "任务来源",
-          "chooseSourceProject": "选择任务来源"
+          "chooseSourceProject": "选择任务来源",
+          "createStart": "Create & Start Agent"
         },
         "ProjectOrderManualDefaultNotice": {
           "a1f4c2d8e0": "手动项目排序现在是默认设置",
           "822ff300ad": "关闭",
           "b7e3a91c4f": "拖动项目标题即可重新排序，或在工作区选项中切换到",
           "e8c1f4a2b9": "。"
+        },
+        "AddRepoHostSelector": {
+          "host": "Host",
+          "local": "Local",
+          "runtime": "Server",
+          "ssh": "SSH"
+        },
+        "sidebarHostOptions": {
+          "3e102f111c": "All hosts",
+          "visibleHostsCount": "{{value0}} hosts"
+        },
+        "SidebarHostScopeStrip": {
+          "scopedTo": "{{value0}} visible",
+          "backToAll": "All hosts"
+        },
+        "HostRemoveDialog": {
+          "1a2b3c4d5e": "Removed {{value0}}",
+          "2b3c4d5e6f": "Failed to remove host",
+          "3c4d5e6f7a": "Remove {{value0}}?",
+          "4d5e6f7a8b": "This opens the Orca servers settings where you can remove this server.",
+          "5e6f7a8b9c": "This removes the saved SSH host and its credentials from this computer. Remote files are not deleted.",
+          "6f7a8b9c0d": "Cancel",
+          "7a8b9c0d1e": "Open settings",
+          "8b9c0d1e2f": "Remove host"
+        },
+        "HostRenameDialog": {
+          "1a2b3c4d5e": "Rename host",
+          "2b3c4d5e6f": "This label is shown only on this computer. Leave it blank to use the default name.",
+          "3c4d5e6f7a": "Display name",
+          "4d5e6f7a8b": "Reset to default",
+          "5e6f7a8b9c": "Cancel",
+          "6f7a8b9c0d": "Save"
+        },
+        "HostSectionHeaderMenu": {
+          "5b8b4b6a01": "Update server required",
+          "9b3c1d2e44": "Update client required",
+          "2c29e2de68": "Connection failed",
+          "bf07aee59e": "Disconnect failed",
+          "7f1a2b3c4d": "{{value0}} is reachable",
+          "4f2c8a9b10": "Host actions for {{value0}}",
+          "6b7c8d9e10": "Host actions",
+          "8d1e2f3a4b": "Rename…",
+          "63f36455cc": "Reconnect",
+          "59b553e2aa": "Disconnect",
+          "2d3e4f5a6b": "Check connection",
+          "3c4d5e6f7a": "Manage host…",
+          "6e7f8a9b0c": "Remove host…"
         }
       },
       "shared": {
@@ -4214,7 +4304,6 @@
           "0f28e7b30c": "选择 Orca 在应用程序窗口中的外观。",
           "leftSidebarAppearance": {
             "title": "左侧边栏外观",
-            "description": "让左侧边栏匹配终端、保持默认，或使用色调。",
             "rowDescription": "让左侧边栏匹配终端、保持默认，或使用色调。",
             "default": "默认",
             "matchTerminal": "匹配终端",
@@ -4311,7 +4400,11 @@
           "64898ecdab": "创建",
           "7b649a578a": "创建中…",
           "4399c77caa": "默认",
-          "4af9a17947": "卡吉"
+          "4af9a17947": "卡吉",
+          "c0f85056d9": "Browser profiles on this Orca server.",
+          "86b7c83fee": "This computer",
+          "6480776a03": "Browser profiles for the selected host.",
+          "5e19a692f7": "Host"
         },
         "BrowserProfileRow": {
           "8e636cae25": "已删除配置文件“{{value0}}”。",
@@ -5033,8 +5126,7 @@
           "9bedd2a6e5": "使 Agent 能够通过 Orca 传递上下文并协调工作。",
           "07641b9768": "编排技能",
           "2aacdb0517": "跨切换、工作树切换和子 Agent 工作协调编码 Agent。",
-          "191ac34567": "Agent 编排",
-          "thisDevice": "This device"
+          "191ac34567": "Agent 编排"
         },
         "OrchestrationSetupCard": {
           "e7d2a5146c": "使 Agent 能够通过 Orca 传递上下文并协调工作。",
@@ -5245,7 +5337,55 @@
           "0909e5d650": "删除项目",
           "ee5a290616": "作为文件夹打开。 Git 功能对此工作区不可用。",
           "323debba71": "类型：",
-          "499a437335": "身份"
+          "499a437335": "身份",
+          "availableHosts": "Available Hosts",
+          "availableHostsDescription": "Hosts where this project is set up.",
+          "availableHostsHelp": "Project paths and worktree settings are host-specific; creating a workspace can target any ready setup.",
+          "viewingHost": "Viewing host",
+          "currentSetup": "Current",
+          "hostSetupStateReady": "Ready",
+          "hostSetupStateNotSetUp": "Not set up",
+          "hostSetupStateSettingUp": "Setting up",
+          "hostSetupStateError": "Error",
+          "hostSetupStateUnsupported": "Unsupported",
+          "setupPathPending": "Path pending",
+          "openSetup": "Open",
+          "removeSetup": "Remove",
+          "hostSetupBlockedVersion": "Orca server version is incompatible",
+          "hostSetupMissingCapability": "Update Orca on this host to set up projects",
+          "setupProjectOnHost": "Set up on another host",
+          "setupProjectOnHostHelp": "Choose a host, then import an existing checkout, clone the repository there, or track a setup that will be provisioned later.",
+          "setupExistingFolder": "Import existing folder",
+          "setupExistingFolderHelp": "Make this project available on another host by linking a checkout that already exists there.",
+          "setupExistingFolderPathPlaceholder": "/path/to/project/on/host",
+          "cloneUrlPlaceholder": "Repository URL",
+          "cloneDestinationPlaceholder": "/destination/on/host",
+          "setupKindGit": "Git repo",
+          "setupKindFolder": "Folder",
+          "settingUpHost": "Importing...",
+          "setupHost": "Import",
+          "cloningHost": "Cloning...",
+          "cloneHost": "Clone",
+          "creatingPendingSetup": "Creating...",
+          "createPendingSetup": "Track setup",
+          "hostSetupCheckingCapability": "Checking host capabilities",
+          "hostAvailability": "Host availability",
+          "hostAvailabilityHelp": "Add this same project on another connected host.",
+          "addToAnotherHost": "Add to another host",
+          "addProjectHost": "Add project to host",
+          "addProjectHostHelp": "Choose where this project should also be available.",
+          "closeHostSetup": "Close",
+          "setupHostLabel": "Host",
+          "browseFolder": "Browse folder",
+          "browseFolderHelp": "Use an existing checkout or folder on this host.",
+          "otherWaysToAdd": "Other ways to add",
+          "cloneFromUrl": "Clone from URL",
+          "cloneFromUrlHelp": "Clone this repository onto the selected host.",
+          "addPlannedHost": "Add host placeholder",
+          "addPlannedHostHelp": "Remember this host and finish adding the project later.",
+          "existingFolder": "Existing folder",
+          "addPlannedHostToHost": "Add {{host}}",
+          "addPlannedHostConfirm": "This only records that the project should be available on this host. You can add the folder or clone later."
         },
         "RepositorySourceControlAiActionRows": {
           "548a6e1281": "命令模板",
@@ -5307,20 +5447,20 @@
           "aeb26635d2": "删除 {{value0}}",
           "af53761f31": "取消",
           "bb90dd6487": "删除服务器",
-          "d2e00809e4": "转变",
+          "d2e00809e4": "切换",
           "05e0fc3ebf": "切换到",
-          "b2290ed203": "Orca 将在从下一个服务器加载项目之前关闭当前服务器的远程 terminals 和浏览器选项卡。",
+          "b2290ed203": "Orca 会聚焦此主机并加载其项目。其他主机上的现有终端和浏览器标签页会保持运行。",
           "d570c35a99": "切换服务器",
           "84b9b2be05": "创建可撤销的访问授权，以便浏览器或其他 Orca 客户端可以连接。",
           "6e1280ca55": "分享此 Orca 服务器",
           "9a3758d983": "没有保存的服务器。",
           "9bee6bbeeb": "添加服务器",
-          "55fcc964cd": "在服务器上并粘贴打印的配对 URL。",
+          "55fcc964cd": "在服务器上运行，并粘贴输出的配对 URL。",
           "960e901ae4": "orca serve --pairing-address <host>",
-          "163671f7b5": "跑步",
+          "163671f7b5": "运行",
           "c3d772c514": "orca://pair?code=...",
           "9bc9b83474": "配对码",
-          "e038625857": "开发盒",
+          "e038625857": "开发环境",
           "54ebacc600": "服务器名称",
           "1826bd0608": "已保存的服务器",
           "6ce4664003": "刷新服务器",
@@ -5330,20 +5470,50 @@
           "99ac81fb43": "切换到 {{value0}}。",
           "b5b5114cb0": "删除了 {{value0}}。",
           "6cb6eae14f": "无法保存运行时环境。",
-          "7b5986c8df": "已保存 {{value0}}。准备好后使用 Active Server 进行切换。",
+          "7b5986c8df": "已保存 {{value0}}。准备好后可通过活动服务器进行切换。",
           "a5b58465b6": "连接到 {{value0}}。",
           "5ef712f407": "名为“{{value0}}”的服务器已存在。",
           "0c55a47480": "需要名称和配对代码。",
           "e6410d72c3": "无法加载运行时环境。",
           "6ef71985da": "无终点",
           "ed3e3f069d": "这将从 Orca 中删除保存的服务器。它不会更改活动服务器。",
-          "b2fda48c39": "删除活动服务器会断开该浏览器的连接并关闭该服务器的远程 terminals 和浏览器选项卡。",
-          "9f7665a01b": "删除活动服务器首先将 Orca 切换回本地桌面，并关闭该服务器的远程 terminals 和浏览器选项卡。",
+          "b2fda48c39": "删除活动服务器会使此浏览器与该主机断开连接。现有主机会话会保持不变。",
+          "9f7665a01b": "删除活动服务器会先将 Orca 切换回本地桌面。现有主机会话会保持不变。",
           "3595fd1948": "新链接",
           "54dee18f5c": "隐藏表格",
-          "8cf8790697": "保存的服务器通过配对的 Orca 运行时路由该浏览器。",
-          "f75ce1c7a5": "本地保留了当今的桌面行为。保存的服务器通过远程运行时路由支持的客户端调用。",
-          "d25f0688b1": "移除"
+          "8cf8790697": "已保存的服务器会通过配对的 Orca 运行时路由此浏览器。",
+          "f75ce1c7a5": "本地会保留当前的桌面行为。已保存的服务器会通过远程运行时路由受支持的客户端调用。",
+          "d25f0688b1": "移除",
+          "f3a3d6d834": "{{value0}} 功能",
+          "0ef838094a": "协议 {{value0}}",
+          "9a91c4a0eb": "兼容",
+          "86ed75bec8": "更新服务器",
+          "62ac182a27": "更新客户端",
+          "c8791efc45": "状态不可用",
+          "5120beaac6": "正在检查…",
+          "4b5c6d7e8f": "未报告任何功能",
+          "hostModelCapabilityUnknown": "主机模型支持：正在检查服务器功能",
+          "hostModelCapabilitySupported": "主机模型支持：就绪",
+          "hostModelCapabilityMissing": "主机模型支持：请更新服务器以使用 {{value0}}",
+          "hostModelCapabilityProjectSetup": "项目设置",
+          "hostModelCapabilityTaskSourceContext": "任务来源上下文",
+          "hostModelCapabilityWorkspaceRunContext": "工作区运行上下文",
+          "3f67e8078a": "默认使用此电脑。仅当你希望受支持的项目、文件、终端、提供商检查以及浏览器/移动端接续通过某个服务器运行时，才选择已保存的服务器。",
+          "2c85efb3e8": "选择已保存的服务器后，此浏览器会将配对的 Orca 运行时用作默认主机。",
+          "serverConnected": "已连接",
+          "serverChecking": "正在检查…",
+          "serverDisconnected": "已断开连接",
+          "disconnectedServer": "已断开与 {{value0}} 的连接。",
+          "connectToRemoteServers": "连接到远程服务器",
+          "connectToRemoteServersHelp": "配对另一个 Orca 运行时，然后在此处连接或断开连接。仅当你想更改默认主机时，才使用高级 > 活动服务器。",
+          "activeServerRowHelp": "用于通过服务器路由的项目、终端和提供商检查的活动服务器。",
+          "disconnect": "断开连接",
+          "connect": "连接",
+          "advanced": "高级",
+          "serverDetails": "服务器详细信息",
+          "advertiseThisApp": "将此应用作为服务器公布",
+          "advertiseThisAppHelp": "创建访问链接，让浏览器、移动客户端或另一个 Orca 客户端连接回这个正在运行的应用。",
+          "runtimeReachable": "可连接到 {{value0}}。"
         },
         "RuntimePairingGeneratedUrlRows": {
           "0495f68959": "复制 {{value0}}"
@@ -5448,8 +5618,7 @@
           "9abb9be3bc": "初始设置",
           "23c6874fdf": "AI 能力",
           "2309068a6f": "destructive",
-          "65358016ea": "放弃",
-          "thisDevice": "This device"
+          "65358016ea": "放弃"
         },
         "SettingsFormControls": {
           "42a4d15a30": "没有匹配的字体。",
@@ -7114,7 +7283,13 @@
             "cd73b976d7": "存储库名称",
             "92af66c7ce": "项目名称",
             "883aad2801": "侧边栏和选项卡的项目特定显示详细信息。",
-            "7e1e456a95": "显示名称"
+            "7e1e456a95": "显示名称",
+            "availableHosts": "Available Hosts",
+            "availableHostsDescription": "Hosts where this project is set up.",
+            "host": "host",
+            "ssh": "ssh",
+            "remote": "remote",
+            "vm": "vm"
           }
         },
         "runtime": {
@@ -7574,7 +7749,8 @@
                   "23cb5a0dee": "Install the GitHub CLI to enable pull requests, issues, and checks.",
                   "6f30fc4216": "GitHub CLI status is not available in this runtime yet.",
                   "6b2cfb52b4": "gh",
-                  "b4d900e7f1": "Pull requests, issues, and checks via the"
+                  "b4d900e7f1": "Pull requests, issues, and checks via the",
+                  "account_scope_prefix": "Account scope"
                 }
               }
             }
@@ -7604,15 +7780,7 @@
                 "fe9231215b": "Checking Linear access before showing setup actions.",
                 "e1f5e6424c": "{{value0}} workspace{{value1}} connected",
                 "disconnect_all": "全部断开连接",
-                "linearSkillTitle": "Linear agent 技能",
-                "linearSkillDescription": "安装主机 agent 技能，供 Agent 用于更丰富的已链接 Linear 任务交接。",
-                "linearSkillTerminalTitle": "安装 Linear agent 技能",
-                "linearSkillTerminalAria": "Linear agent 技能安装 terminal",
-                "linearSkillInstall": "安装 CLI 和技能",
-                "linearSkillOptionalHint": "可选下一步：安装 Linear agent 技能，让 agent 交接更了解 ticket 背景。",
-                "linearSkillDismissHint": "关闭可选的 Linear agent 技能设置提示",
-                "linearSkillWslDescription": "安装 WSL agent 技能，供 Agent 用于更丰富的已链接 Linear 任务交接。",
-                "linearSkillWslLabel": "WSL 默认值"
+                "account_scope_prefix": "Account scope"
               }
             }
           }
@@ -7671,6 +7839,38 @@
         },
         "computerUseSkillRuntime": {
           "thisDevice": "This device"
+        },
+        "WorkspaceDirectorySetting": {
+          "1a2b3c4d5e": "Client default",
+          "2b3c4d5e6f": "Apply to",
+          "3c4d5e6f7a": "Overrides client default",
+          "4d5e6f7a8b": "Inherits the client default",
+          "5e6f7a8b9c": "Reset"
+        },
+        "ProviderHostScopeControl": {
+          "scope_label": "{{value0}}: {{value1}}",
+          "change_host": "Open Remote Servers"
+        },
+        "providerAccountScope": {
+          "remoteServer": "Remote server: {{value0}}",
+          "remoteServerCredentials": "Credentials and account checks for this provider are owned by this remote server. Use Settings > Remote Orca Servers > Advanced to edit another default runtime scope.",
+          "localMac": "Local Mac",
+          "localCredentials": "Credentials and account checks for this provider are owned by this desktop client. Use Settings > Remote Orca Servers > Advanced to edit server-owned credentials.",
+          "remoteServerRateLimit": "{{value0}} API budget is fetched from the CLI on this remote server. Use Settings > Remote Orca Servers > Advanced to view another default runtime budget.",
+          "localRateLimit": "{{value0}} API budget is fetched from the CLI on this desktop client. Use Settings > Remote Orca Servers > Advanced to view server-owned budgets."
+        },
+        "settingOwnership": {
+          "clientDefault": "Client default",
+          "sourceControlAiDefaults": "Recipes, prompts, and hosted-review defaults are shared by this client; model choices and discovery stay scoped to the host where the agent runs.",
+          "projectOnThisHost": "Project on this host",
+          "repositorySourceControlAi": "These overrides apply to this project setup and inherit the client Source Control AI defaults until customized.",
+          "agentLaunchDefaults": "Default agent, command overrides, CLI arguments, and launch environment are client preferences. SSH and remote server launches still validate host availability at run time.",
+          "clientDefaultProjectScopes": "Client default + project scopes",
+          "terminalQuickCommands": "Commands are saved on this client, then scoped globally or to a project setup so they run from the selected terminal context.",
+          "hostOverride": "Host override",
+          "workspaceDirectory": "The client default is inherited until a host needs its own worktree directory.",
+          "providerHost": "Provider host",
+          "providerAccounts": "Credentials and account checks belong to the local client or selected remote server that owns the provider integration."
         }
       },
       "right": {
@@ -7718,9 +7918,7 @@
             "f273f2271c": "已启动 agent。已标记 {{value0}} 个为已解决，跳过 {{value1}} 个，失败 {{value2}} 个。",
             "aa95b81a3a": "已启动 agent。已标记 {{value0}} 个为已解决，跳过 {{value1}} 个，失败 {{value2}} 个。",
             "495b2f8c4b": "已启动 agent，但无法将选中的评论标记为已解决。",
-            "3c3ad3a1d2": "已启动 agent。选中的评论中没有可在托管平台上标记为已解决的评论。",
-            "b4f3ec62a1": "More {{value0}} actions",
-            "a9d7c128e4": "unlink {{value0}}"
+            "3c3ad3a1d2": "已启动 agent。选中的评论中没有可在托管平台上标记为已解决的评论。"
           },
           "CreatePullRequestDialog": {
             "2bc1b4345e": "取消",
@@ -8084,7 +8282,9 @@
             "d206117f90": "{{value0}} 冲突 ({{value1}})",
             "f3a8b2c1d0e5": "请输入 {{value0}} 标题。",
             "e2b7a1c0d9f4": "创建 {{value0}} 失败",
-            "e9e238b260": "Custom command is empty. Add one in Settings -> Git -> Source Control AI."
+            "hugeRepoIgnorePrompt": "此存储库的活动更改过多。是否将 \"{{value0}}\" 添加到 .gitignore？",
+            "hugeRepoIgnoreAction": "添加到 .gitignore",
+            "tooManyChanges": "检测到过多更改。仅显示前 {{value0}} 项。"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "无法启动选定的 Agent。",
@@ -8212,7 +8412,7 @@
                 "ae8a04ef17": "冲突文件详细信息不可用",
                 "73d0675356": "刷新冲突细节...",
                 "5dc3af25c0": "选择评论",
-                "d7a2f9c401": "发送所有未解决",
+                "d7a2f9c401": "Send unresolved {{value0}} comments",
                 "d91f2a6c39": "发送 {{value0}} 条已排队评论",
                 "a6de3e5a20": "清除已排队评论",
                 "49ea0937e4": "将评论添加到解决列表",
@@ -8278,7 +8478,8 @@
             "6306b48afd": "源代码控制",
             "ef182dcb12": "搜索",
             "fc3095d2ed": "探险家",
-            "aiVaultSessionHistory": "Agents"
+            "aiVaultSessionHistory": "Agents",
+            "folderWorkspaces": "Attached worktrees"
           },
           "right": {
             "panel": {
@@ -8765,6 +8966,14 @@
             "3e8bb1176a": "在设置中连接 Linear 以搜索议题。",
             "69ce292138": "Linear",
             "9c004911c3": "GitLab"
+          },
+          "ProjectHostSetupCombobox": {
+            "empty": "No hosts are ready for this project.",
+            "placeholder": "Choose host"
+          },
+          "ProjectCombobox": {
+            "search": "Search projects...",
+            "empty": "No projects match your search."
           }
         }
       },
@@ -8928,7 +9137,8 @@
                 "3e2c982cfa": "向左，重置于",
                 "ea8ad0bae8": "的",
                 "0a891e8935": "休息API",
-                "953f7c6062": "此 GitLab 主机未返回速率限制标头。"
+                "953f7c6062": "此 GitLab 主机未返回速率限制标头。",
+                "budget_scope_prefix": "Budget scope"
               }
             }
           }
@@ -9002,9 +9212,7 @@
             "3a59452a67": "技能命令已复制并插入到下方以供评审。",
             "c605f51f2b": "能力设置就绪",
             "1aa657d8f4": "一些能力设置需要注意",
-            "c89534cbe9": "安装 CLI 和技能",
-            "linearTicketsTitle": "Linear agent 技能",
-            "linearTicketsDescription": "当 Agent 从已链接的 Linear 任务开始工作时推荐使用。"
+            "c89534cbe9": "安装 CLI 和技能"
           },
           "AiCommitPrSettingsCard": {
             "8d4152701a": "例如llama 运行 llama3.1 {{value0}}",
@@ -10283,7 +10491,8 @@
           "de0fedac06": "每次运行新的",
           "51a470b966": "SSH",
           "b09b2384fd": "已暂停",
-          "eaa02014f8": "启用"
+          "eaa02014f8": "启用",
+          "29baf8f4c2": "Source"
         },
         "AutomationEditorDialog": {
           "fb1896a5e7": "取消",
@@ -10438,7 +10647,9 @@
           "dd0bc7a1ba": "每次运行新的",
           "7b2e285552": "SSH 连接在此客户端中不可用。",
           "d441032f7e": "暂停",
-          "5918020edc": "跑步"
+          "5918020edc": "跑步",
+          "a21f6c33ad": "Automation source refreshed.",
+          "53f06f0ad5": "Retry source"
         },
         "CreateFromPicker": {
           "f061f49e3f": "搜索 repo 分支...",
@@ -10539,6 +10750,13 @@
               }
             }
           }
+        },
+        "AutomationProjectCombobox": {
+          "search": "Search projects/folders...",
+          "empty": "No projects/folders match your search.",
+          "chooseHost": "Choose automation host",
+          "adding": "Adding project…",
+          "addProject": "Add project"
         }
       },
       "agent": {
@@ -10614,6 +10832,17 @@
           }
         }
       },
+      "rightSidebar": {
+        "FolderWorkspaceWorktreesPanel": {
+          "unavailable": "Workspaces are only shown for folder workspaces.",
+          "label": "Workspaces",
+          "description": "Shows worktrees attached to this folder workspace.",
+          "countOne": "1 attached worktree",
+          "countMany": "{{value0}} attached worktrees",
+          "emptyTitle": "No attached worktrees yet",
+          "emptyCopy": "Worktrees created from this workspace will show up here."
+        }
+      },
       "link": {
         "routing": {
           "preference": {
@@ -10651,6 +10880,37 @@
             }
           }
         }
+      },
+      "task": {
+        "project": {
+          "source": {
+            "combobox": {
+              "noProjects": "No projects",
+              "allProjects": "All projects",
+              "hostCount": "{{value0}} hosts",
+              "searchProjects": "Search projects...",
+              "noMatches": "No projects match your search.",
+              "chooseSource": "Choose task source"
+            }
+          }
+        }
+      },
+      "taskPageEmptyState": {
+        "noProjectSourcesTitle": "No project sources selected",
+        "noProjectSourcesDescription": "Select at least one project source so Orca knows which host/account to fetch tasks from.",
+        "noMatchingGitHubWorkTitle": "No matching GitHub work",
+        "changeQueryDescription": "Change the query or clear it.",
+        "noGitLabIssuesTitle": "No GitLab issues",
+        "noGitLabIssuesDescription": "No GitLab issues match this filter.",
+        "noGitLabMrsTitle": "No GitLab merge requests",
+        "noGitLabMrsDescription": "No GitLab MRs match this filter.",
+        "noGitLabWorkTitle": "No GitLab work",
+        "noGitLabWorkDescription": "No GitLab work matches this filter."
+      },
+      "taskSourceContextSummary": {
+        "sourceUnavailable": "{{value0}} source unavailable: {{value1}}",
+        "someSourceHostsUnavailable": "Some {{value0}} source hosts unavailable: {{value1}}",
+        "reconnectOrUpdateTitle": "Reconnect or update {{value0}} to load this source."
       }
     },
     "i18n": {

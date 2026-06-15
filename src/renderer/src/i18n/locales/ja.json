@@ -499,7 +499,8 @@
       "useAutomationDispatchEvents": {
         "59718b120b": "ターゲット ワークスペースは使用できなくなりました。",
         "16a21d6413": "SSH の再接続には対話型の認証情報が必要です。",
-        "386db94f3e": "対象のプロジェクトは利用できなくなりました。"
+        "386db94f3e": "対象のプロジェクトは利用できなくなりました。",
+        "3ad7d77f57": "The target workspace is on a different host than this automation run target."
       },
       "useComposerState": {
         "7eb3f44ff7": "選択した agent は無効になっています。作成する前に、有効な agent を選択。",
@@ -1038,7 +1039,21 @@
         "connected": "Connected",
         "reconnectingSsh": "Reconnecting SSH...",
         "sshReconnectionFailed": "SSH reconnection failed",
-        "notConnected": "Not connected"
+        "notConnected": "Not connected",
+        "runOn": "Run on",
+        "setupHostExistingFolderTitle": "Set up {{value0}}",
+        "cloneProjectOnHost": "Clone project",
+        "cloneUrlPlaceholder": "https://github.com/owner/repo.git",
+        "cloneDestinationPlaceholder": "/parent/directory/on/host",
+        "cloningHostSetup": "Cloning...",
+        "cloneHostSetup": "Clone",
+        "importExistingFolderOnHost": "Import existing folder",
+        "setupHostExistingFolderPlaceholder": "/path/to/project/on/host",
+        "setupKindGit": "Git repo",
+        "setupKindFolder": "Folder",
+        "setupHostExistingFolderHelp": "Link a checkout that already exists there, then create this workspace on that host.",
+        "importingHostSetup": "Importing...",
+        "importHostSetup": "Import"
       },
       "NewWorkspaceComposerModal": {
         "fa90f739a5": "ワークスペースを作成する前に、プロジェクト、ワークスペース名、および agent を選択します。"
@@ -1635,7 +1650,8 @@
         "worktreesHeader": "ワークツリー",
         "recentWorktreesHeader": "最近のワークツリー",
         "settingsBadge": "設定",
-        "actionBadge": "操作"
+        "actionBadge": "操作",
+        "paletteHostBadge": "Host: {{value0}}"
       },
       "github": {
         "pr": {
@@ -1891,7 +1907,8 @@
                 "1f2f28a4de": "検索API",
                 "c377a4f06a": "検索",
                 "c392c749a6": "REST API",
-                "bb227706a6": "REST"
+                "bb227706a6": "REST",
+                "budget_scope_prefix": "Budget scope"
               }
             }
           }
@@ -2606,7 +2623,14 @@
             "remote_server": "Remote Server",
             "runtime_checking": "Checking",
             "runtime_online": "Connected",
-            "runtime_unavailable": "Disconnected"
+            "runtime_unavailable": "Disconnected",
+            "runtime_available": "Available",
+            "runtime_connect_unavailable": "Remote host is not reachable",
+            "runtime_disconnect_failed": "Disconnect failed",
+            "runtime_reconnecting": "Reconnecting",
+            "runtime_last_close_reason": "Closed: {{value0}}",
+            "runtime_reconnect_attempt": "Attempt {{value0}}",
+            "runtime_channel_counts": "{{value0}} pending · {{value1}} streams"
           },
           "StatusBar": {
             "9659e38343": "ポート",
@@ -2792,6 +2816,9 @@
             "7ad719c4bf": "制限中",
             "e740f92596": "更新に失敗しました",
             "8418ec448d": "{{value0}} の使用状況を更新できませんでした。エージェントセッションは引き続きサインイン済みの場合があります。"
+          },
+          "SshTargetStatusRow": {
+            "sshHost": "SSH Host"
           }
         }
       },
@@ -3165,14 +3192,7 @@
           "c234df77f7": "作成する前に、サーバーの親フォルダを選択または入力してください。",
           "3a13f6e88b": "場所が選択されていません",
           "6ed14c0281": "サーバーフォルダが選択されていません",
-          "createProjectTitle": "プロジェクトの作成",
-          "createProjectDescription": "ローカルの Git リポジトリと最初のワークスペースを作成します。",
-          "projectNameLabel": "プロジェクト名",
-          "createsGitRepoHelp": "Git リポジトリ：",
-          "parentFolderLabel": "親フォルダ",
-          "browseParentFolder": "参照",
-          "gitRequiredError": "プロジェクトを作成するには Git が必要です。",
-          "createAction": "作成"
+          "ssh_parent_manual": "Enter an SSH parent path."
         },
         "AddRepoNestedImportStep": {
           "496f68cf8c": "リポジトリをスキャンしています。クリックして停止します。",
@@ -3195,7 +3215,9 @@
           "8401a7a0d0": "1 個のリポジトリ",
           "d4f1df62ef": "{{value0}} 個のリポジトリ",
           "b4263a2ac4": "{{value1}} で {{value0}} が見つかりました。",
-          "24eda6c8b2": "スキャン中... {{value0}}"
+          "24eda6c8b2": "スキャン中... {{value0}}",
+          "b20bb7c24f": "Keeps these repos together in one group. Best for related repos like microservices.",
+          "e907ec8935": "What is a monorepo name?"
         },
         "AddRepoRemoteStep": {
           "5b205b5281": "スキャンの停止",
@@ -3209,7 +3231,10 @@
           "007651bdf9": "ディレクトリに移動し、「選択」をクリックして選択します。",
           "dd3ff65486": "リモートファイルシステムを参照する",
           "36d427bb66": "リモートプロジェクトを追加",
-          "35831a7312": "追加中..."
+          "35831a7312": "追加中...",
+          "lockedDescription": "Enter the path to a Git repository on {{value0}}.",
+          "lockedDisconnected": "{{value0}} is disconnected.",
+          "93e0221434": "Connect"
         },
         "AddRepoServerStartStep": {
           "ae990c86a0": "オプションの追加に戻る",
@@ -3256,7 +3281,9 @@
           "df8b0e6c22": "リモートプロジェクトが追加されました",
           "3e64e8a70d": "接続に失敗しました",
           "32a7256d85": "クローン",
-          "69f5b5380d": "クローン作成中..."
+          "69f5b5380d": "クローン作成中...",
+          "cloneOnHostDescription": "Enter the Git URL and choose where to clone it on {{value0}}.",
+          "cloneParentFolder": "Parent folder"
         },
         "AutoRenameFailedDialog": {
           "aed1623b1e": "閉じる",
@@ -3540,7 +3567,14 @@
           "e029a2d775": "状態",
           "c2c7a45cda": "なし",
           "680043342f": "コンパクト",
-          "c7591b6014": "repo"
+          "c7591b6014": "repo",
+          "hosts": "Hosts",
+          "allHostsDetail": "Show every host",
+          "configuredSshHost": "Configured SSH",
+          "projectSshHost": "Project SSH",
+          "activeRuntimeHost": "Active server",
+          "projectRuntimeHost": "Project server",
+          "631b97eea9": "Host scope"
         },
         "SshDisconnectedDialog": {
           "ca4a7892af": "接続中...",
@@ -3617,6 +3651,9 @@
         },
         "WorktreeCardAgents": {
           "1b0a156717": "Agents"
+        },
+        "WorktreeCardReviewDetailSection": {
+          "reviewHeader": "{{value0}} #{{value1}}"
         },
         "WorktreeCardMeta": {
           "3e65e11cc6": "ワークスペースのメタデータ",
@@ -3718,7 +3755,10 @@
           "b667b59632": "Some projects could not be removed from Orca",
           "f94466bc39": "{{value0}} of {{value1}} contained project{{value2}} remained after deleting the group.",
           "groupDeleteFailed": "Failed to delete group",
-          "groupDeleteFailedDesc": "Something went wrong while deleting the group. No projects were removed."
+          "groupDeleteFailedDesc": "Something went wrong while deleting the group. No projects were removed.",
+          "7a8b9c0d1e": "Update required",
+          "hostAuthNeeded": "Authentication needed",
+          "hostDisconnected": "Disconnected"
         },
         "WorktreeMetaDialog": {
           "3db0a2a593": "キャンセル",
@@ -3778,8 +3818,10 @@
                   "3d162cc76f": "リモートプロジェクト",
                   "fb4fc5380e": "ローカルプロジェクト、Git repo、または多数の repos を含むフォルダー",
                   "2281fdc8c7": "フォルダを参照する",
-                  "createProjectTitle": "プロジェクトの作成",
-                  "createGitProjectDescription": "ローカルの Git リポジトリを作成"
+                  "sshCreateUnavailable": "Not available for SSH hosts yet",
+                  "sshBrowseTitle": "Open project on SSH host",
+                  "sshBrowseDescription": "Existing Git repository or folder on this SSH host",
+                  "runtimeBrowseDescription": "Existing Git repository or folder on this host"
                 }
               }
             }
@@ -3988,13 +4030,61 @@
           "title": "フォルダーワークスペースを作成",
           "create": "ワークスペースを作成",
           "sourceProject": "タスクソース",
-          "chooseSourceProject": "タスクソースを選択"
+          "chooseSourceProject": "タスクソースを選択",
+          "createStart": "Create & Start Agent"
         },
         "ProjectOrderManualDefaultNotice": {
           "a1f4c2d8e0": "手動のプロジェクト順序がデフォルトになりました",
           "822ff300ad": "閉じる",
           "b7e3a91c4f": "プロジェクトヘッダーをドラッグして並べ替えるか、",
           "e8c1f4a2b9": "をワークスペースオプションで選択してください。"
+        },
+        "AddRepoHostSelector": {
+          "host": "Host",
+          "local": "Local",
+          "runtime": "Server",
+          "ssh": "SSH"
+        },
+        "sidebarHostOptions": {
+          "3e102f111c": "All hosts",
+          "visibleHostsCount": "{{value0}} hosts"
+        },
+        "SidebarHostScopeStrip": {
+          "scopedTo": "{{value0}} visible",
+          "backToAll": "All hosts"
+        },
+        "HostRemoveDialog": {
+          "1a2b3c4d5e": "Removed {{value0}}",
+          "2b3c4d5e6f": "Failed to remove host",
+          "3c4d5e6f7a": "Remove {{value0}}?",
+          "4d5e6f7a8b": "This opens the Orca servers settings where you can remove this server.",
+          "5e6f7a8b9c": "This removes the saved SSH host and its credentials from this computer. Remote files are not deleted.",
+          "6f7a8b9c0d": "Cancel",
+          "7a8b9c0d1e": "Open settings",
+          "8b9c0d1e2f": "Remove host"
+        },
+        "HostRenameDialog": {
+          "1a2b3c4d5e": "Rename host",
+          "2b3c4d5e6f": "This label is shown only on this computer. Leave it blank to use the default name.",
+          "3c4d5e6f7a": "Display name",
+          "4d5e6f7a8b": "Reset to default",
+          "5e6f7a8b9c": "Cancel",
+          "6f7a8b9c0d": "Save"
+        },
+        "HostSectionHeaderMenu": {
+          "5b8b4b6a01": "Update server required",
+          "9b3c1d2e44": "Update client required",
+          "2c29e2de68": "Connection failed",
+          "bf07aee59e": "Disconnect failed",
+          "7f1a2b3c4d": "{{value0}} is reachable",
+          "4f2c8a9b10": "Host actions for {{value0}}",
+          "6b7c8d9e10": "Host actions",
+          "8d1e2f3a4b": "Rename…",
+          "63f36455cc": "Reconnect",
+          "59b553e2aa": "Disconnect",
+          "2d3e4f5a6b": "Check connection",
+          "3c4d5e6f7a": "Manage host…",
+          "6e7f8a9b0c": "Remove host…"
         }
       },
       "shared": {
@@ -4214,7 +4304,6 @@
           "0f28e7b30c": "アプリ ウィンドウで Orca がどのように見えるかを選択します。",
           "leftSidebarAppearance": {
             "title": "左サイドバーの外観",
-            "description": "左サイドバーをターミナルに合わせるか、既定のままにするか、色合いを加えます。",
             "rowDescription": "左サイドバーをターミナルに合わせるか、既定のままにするか、色合いを加えます。",
             "default": "デフォルト",
             "matchTerminal": "ターミナルに合わせる",
@@ -4311,7 +4400,11 @@
           "64898ecdab": "作成",
           "7b649a578a": "作成…",
           "4399c77caa": "デフォルト",
-          "4af9a17947": "kagi"
+          "4af9a17947": "kagi",
+          "c0f85056d9": "Browser profiles on this Orca server.",
+          "86b7c83fee": "This computer",
+          "6480776a03": "Browser profiles for the selected host.",
+          "5e19a692f7": "Host"
         },
         "BrowserProfileRow": {
           "8e636cae25": "プロファイル「{{value0}}」が削除されました。",
@@ -5070,8 +5163,7 @@
           "9bedd2a6e5": "agents がコンテキストを引き継ぎ、Orca を通じて作業を調整できるようにします。",
           "07641b9768": "オーケストレーションスキル",
           "2aacdb0517": "ハンドオフ、ワークツリーのハンドオーバー、および子 agents の作業全体にわたってコーディング agents を調整します。",
-          "191ac34567": "Agent オーケストレーション",
-          "thisDevice": "This device"
+          "191ac34567": "Agent オーケストレーション"
         },
         "OrchestrationSetupCard": {
           "e7d2a5146c": "agents がコンテキストを引き継ぎ、Orca を通じて作業を調整できるようにします。",
@@ -5282,7 +5374,55 @@
           "0909e5d650": "プロジェクトの削除",
           "ee5a290616": "フォルダーとして開きます。このワークスペースでは Git 機能を使用できません。",
           "323debba71": "タイプ：",
-          "499a437335": "身元"
+          "499a437335": "身元",
+          "availableHosts": "Available Hosts",
+          "availableHostsDescription": "Hosts where this project is set up.",
+          "availableHostsHelp": "Project paths and worktree settings are host-specific; creating a workspace can target any ready setup.",
+          "viewingHost": "Viewing host",
+          "currentSetup": "Current",
+          "hostSetupStateReady": "Ready",
+          "hostSetupStateNotSetUp": "Not set up",
+          "hostSetupStateSettingUp": "Setting up",
+          "hostSetupStateError": "Error",
+          "hostSetupStateUnsupported": "Unsupported",
+          "setupPathPending": "Path pending",
+          "openSetup": "Open",
+          "removeSetup": "Remove",
+          "hostSetupBlockedVersion": "Orca server version is incompatible",
+          "hostSetupMissingCapability": "Update Orca on this host to set up projects",
+          "setupProjectOnHost": "Set up on another host",
+          "setupProjectOnHostHelp": "Choose a host, then import an existing checkout, clone the repository there, or track a setup that will be provisioned later.",
+          "setupExistingFolder": "Import existing folder",
+          "setupExistingFolderHelp": "Make this project available on another host by linking a checkout that already exists there.",
+          "setupExistingFolderPathPlaceholder": "/path/to/project/on/host",
+          "cloneUrlPlaceholder": "Repository URL",
+          "cloneDestinationPlaceholder": "/destination/on/host",
+          "setupKindGit": "Git repo",
+          "setupKindFolder": "Folder",
+          "settingUpHost": "Importing...",
+          "setupHost": "Import",
+          "cloningHost": "Cloning...",
+          "cloneHost": "Clone",
+          "creatingPendingSetup": "Creating...",
+          "createPendingSetup": "Track setup",
+          "hostSetupCheckingCapability": "Checking host capabilities",
+          "hostAvailability": "Host availability",
+          "hostAvailabilityHelp": "Add this same project on another connected host.",
+          "addToAnotherHost": "Add to another host",
+          "addProjectHost": "Add project to host",
+          "addProjectHostHelp": "Choose where this project should also be available.",
+          "closeHostSetup": "Close",
+          "setupHostLabel": "Host",
+          "browseFolder": "Browse folder",
+          "browseFolderHelp": "Use an existing checkout or folder on this host.",
+          "otherWaysToAdd": "Other ways to add",
+          "cloneFromUrl": "Clone from URL",
+          "cloneFromUrlHelp": "Clone this repository onto the selected host.",
+          "addPlannedHost": "Add host placeholder",
+          "addPlannedHostHelp": "Remember this host and finish adding the project later.",
+          "existingFolder": "Existing folder",
+          "addPlannedHostToHost": "Add {{host}}",
+          "addPlannedHostConfirm": "This only records that the project should be available on this host. You can add the folder or clone later."
         },
         "RepositorySourceControlAiActionRows": {
           "548a6e1281": "コマンドテンプレート",
@@ -5344,20 +5484,20 @@
           "aeb26635d2": "{{value0}} を削除",
           "af53761f31": "キャンセル",
           "bb90dd6487": "サーバーの削除",
-          "d2e00809e4": "スイッチ",
-          "05e0fc3ebf": "に切り替えます",
-          "b2290ed203": "Orca は、次のサーバーからプロジェクトをロードする前に、現在のサーバーからリモート terminals とブラウザ タブを閉じます。",
-          "d570c35a99": "スイッチサーバー",
+          "d2e00809e4": "切り替え",
+          "05e0fc3ebf": "切り替え先",
+          "b2290ed203": "Orca はこのホストにフォーカスして、そのプロジェクトを読み込みます。他のホスト上の既存のターミナルとブラウザータブは動作したままです。",
+          "d570c35a99": "サーバーを切り替え",
           "84b9b2be05": "ブラウザまたは別の Orca クライアントが接続できるように、取り消し可能なアクセス許可を作成します。",
           "6e1280ca55": "この Orca サーバーを共有する",
           "9a3758d983": "保存されたサーバーはありません。",
           "9bee6bbeeb": "サーバーの追加",
-          "55fcc964cd": "サーバーに接続し、印刷されたペアリング URL を貼り付けます。",
-          "960e901ae4": "orcaserve --pairing-address <ホスト>",
-          "163671f7b5": "走る",
+          "55fcc964cd": "をサーバーで実行し、出力されたペアリング URL を貼り付けます。",
+          "960e901ae4": "orca serve --pairing-address <host>",
+          "163671f7b5": "実行",
           "c3d772c514": "orca://pair?code=...",
           "9bc9b83474": "ペアリングコード",
-          "e038625857": "開発ボックス",
+          "e038625857": "開発環境",
           "54ebacc600": "サーバー名",
           "1826bd0608": "保存されたサーバー",
           "6ce4664003": "サーバーを更新する",
@@ -5367,20 +5507,50 @@
           "99ac81fb43": "{{value0}} に切り替えました。",
           "b5b5114cb0": "{{value0}} を削除しました。",
           "6cb6eae14f": "実行環境の保存に失敗しました。",
-          "7b5986c8df": "{{value0}} を保存しました。準備ができたら、アクティブ サーバーを使用して切り替えます。",
+          "7b5986c8df": "{{value0}} を保存しました。準備ができたら、アクティブサーバーで切り替えてください。",
           "a5b58465b6": "{{value0}} に接続されています。",
           "5ef712f407": "「{{value0}}」という名前のサーバーはすでに存在します。",
           "0c55a47480": "名前とペアリングコードは必須です。",
           "e6410d72c3": "ランタイム環境の読み込みに失敗しました。",
           "6ef71985da": "エンドポイントなし",
           "ed3e3f069d": "これにより、保存されたサーバーが Orca から削除されます。アクティブなサーバーは変更されません。",
-          "b2fda48c39": "アクティブなサーバーを削除すると、このブラウザが切断され、そのサーバーのリモート terminals とブラウザ タブが閉じます。",
-          "9f7665a01b": "アクティブ サーバーを削除すると、まず Orca がローカル デスクトップに戻り、そのサーバーのリモート terminals とブラウザ タブが閉じます。",
+          "b2fda48c39": "アクティブサーバーを削除すると、このブラウザーはそのホストから切断されます。既存のホストセッションはそのまま残ります。",
+          "9f7665a01b": "アクティブサーバーを削除すると、まず Orca はローカルデスクトップに戻ります。既存のホストセッションはそのまま残ります。",
           "3595fd1948": "新規リンク",
           "54dee18f5c": "フォームを隠す",
-          "8cf8790697": "保存されたサーバーは、ペアになった Orca ランタイムを介してこのブラウザーをルーティングします。",
-          "f75ce1c7a5": "ローカルでは、現在のデスクトップの動作が維持されます。保存されたサーバーは、サポートされているクライアント呼び出しをリモート ランタイム経由でルーティングします。",
-          "d25f0688b1": "削除"
+          "8cf8790697": "保存済みサーバーは、ペアリング済みの Orca ランタイム経由でこのブラウザーをルーティングします。",
+          "f75ce1c7a5": "ローカルでは現在のデスクトップ動作を維持します。保存済みサーバーは、対応しているクライアント呼び出しをリモートランタイム経由でルーティングします。",
+          "d25f0688b1": "削除",
+          "f3a3d6d834": "{{value0}} の機能",
+          "0ef838094a": "プロトコル {{value0}}",
+          "9a91c4a0eb": "互換性あり",
+          "86ed75bec8": "サーバーを更新",
+          "62ac182a27": "クライアントを更新",
+          "c8791efc45": "ステータスを取得できません",
+          "5120beaac6": "確認中…",
+          "4b5c6d7e8f": "報告された機能はありません",
+          "hostModelCapabilityUnknown": "ホストモデル対応: サーバー機能を確認中",
+          "hostModelCapabilitySupported": "ホストモデル対応: 準備完了",
+          "hostModelCapabilityMissing": "ホストモデル対応: {{value0}} にはサーバーの更新が必要です",
+          "hostModelCapabilityProjectSetup": "プロジェクト設定",
+          "hostModelCapabilityTaskSourceContext": "タスクソースコンテキスト",
+          "hostModelCapabilityWorkspaceRunContext": "ワークスペース実行コンテキスト",
+          "3f67e8078a": "既定ではこのコンピューターを使用します。対応しているプロジェクト、ファイル、ターミナル、プロバイダーチェック、ブラウザー/モバイルのハンドオフをそのサーバー経由で実行したい場合にのみ、保存済みサーバーを選択してください。",
+          "2c85efb3e8": "保存済みサーバーを選択すると、このブラウザーはペアリング済みの Orca ランタイムを既定のホストとして使用します。",
+          "serverConnected": "接続済み",
+          "serverChecking": "確認中…",
+          "serverDisconnected": "切断済み",
+          "disconnectedServer": "{{value0}} から切断しました。",
+          "connectToRemoteServers": "リモートサーバーに接続",
+          "connectToRemoteServersHelp": "別の Orca ランタイムをペアリングし、ここで接続または切断します。既定のホストを変更したい場合にのみ、詳細 > アクティブサーバーを使用してください。",
+          "activeServerRowHelp": "サーバー経由のプロジェクト、ターミナル、プロバイダーチェックに使うアクティブサーバーです。",
+          "disconnect": "切断",
+          "connect": "接続",
+          "advanced": "詳細",
+          "serverDetails": "サーバーの詳細",
+          "advertiseThisApp": "このアプリをサーバーとして公開",
+          "advertiseThisAppHelp": "ブラウザー、モバイルクライアント、または別の Orca クライアントがこの実行中のアプリへ接続できるように、アクセスリンクを作成します。",
+          "runtimeReachable": "{{value0}} に到達できます。"
         },
         "RuntimePairingGeneratedUrlRows": {
           "0495f68959": "{{value0}}をコピー"
@@ -5485,8 +5655,7 @@
           "9abb9be3bc": "セットアップ",
           "23c6874fdf": "AI 機能",
           "2309068a6f": "破壊的な",
-          "65358016ea": "破棄",
-          "thisDevice": "This device"
+          "65358016ea": "破棄"
         },
         "SettingsFormControls": {
           "42a4d15a30": "一致するフォントがありません。",
@@ -7151,7 +7320,13 @@
             "cd73b976d7": "リポジトリ名",
             "92af66c7ce": "プロジェクト名",
             "883aad2801": "サイドバーとタブのプロジェクト固有の表示詳細。",
-            "7e1e456a95": "表示名"
+            "7e1e456a95": "表示名",
+            "availableHosts": "Available Hosts",
+            "availableHostsDescription": "Hosts where this project is set up.",
+            "host": "host",
+            "ssh": "ssh",
+            "remote": "remote",
+            "vm": "vm"
           }
         },
         "runtime": {
@@ -7574,7 +7749,8 @@
                   "23cb5a0dee": "Install the GitHub CLI to enable pull requests, issues, and checks.",
                   "6f30fc4216": "GitHub CLI status is not available in this runtime yet.",
                   "6b2cfb52b4": "gh",
-                  "b4d900e7f1": "Pull requests, issues, and checks via the"
+                  "b4d900e7f1": "Pull requests, issues, and checks via the",
+                  "account_scope_prefix": "Account scope"
                 }
               }
             }
@@ -7604,15 +7780,7 @@
                 "fe9231215b": "Checking Linear access before showing setup actions.",
                 "e1f5e6424c": "{{value0}} workspace{{value1}} connected",
                 "disconnect_all": "すべて切断",
-                "linearSkillTitle": "Linear agent スキル",
-                "linearSkillDescription": "リンクされた Linear タスクの引き継ぎをより充実させるために agents が使うホスト agent スキルをインストールします。",
-                "linearSkillTerminalTitle": "Linear agent スキルをインストール",
-                "linearSkillTerminalAria": "Linear agent スキルのインストール terminal",
-                "linearSkillInstall": "CLI とスキルをインストール",
-                "linearSkillOptionalHint": "任意の次の手順: チケットを踏まえた agent の引き継ぎのために Linear agent スキルをインストールします。",
-                "linearSkillDismissHint": "任意の Linear agent スキル設定メモを閉じる",
-                "linearSkillWslDescription": "リンクされた Linear タスクの引き継ぎをより充実させるために agents が使う WSL agent スキルをインストールします。",
-                "linearSkillWslLabel": "WSL 既定"
+                "account_scope_prefix": "Account scope"
               }
             }
           }
@@ -7671,6 +7839,38 @@
         },
         "computerUseSkillRuntime": {
           "thisDevice": "This device"
+        },
+        "WorkspaceDirectorySetting": {
+          "1a2b3c4d5e": "Client default",
+          "2b3c4d5e6f": "Apply to",
+          "3c4d5e6f7a": "Overrides client default",
+          "4d5e6f7a8b": "Inherits the client default",
+          "5e6f7a8b9c": "Reset"
+        },
+        "ProviderHostScopeControl": {
+          "scope_label": "{{value0}}: {{value1}}",
+          "change_host": "Open Remote Servers"
+        },
+        "providerAccountScope": {
+          "remoteServer": "Remote server: {{value0}}",
+          "remoteServerCredentials": "Credentials and account checks for this provider are owned by this remote server. Use Settings > Remote Orca Servers > Advanced to edit another default runtime scope.",
+          "localMac": "Local Mac",
+          "localCredentials": "Credentials and account checks for this provider are owned by this desktop client. Use Settings > Remote Orca Servers > Advanced to edit server-owned credentials.",
+          "remoteServerRateLimit": "{{value0}} API budget is fetched from the CLI on this remote server. Use Settings > Remote Orca Servers > Advanced to view another default runtime budget.",
+          "localRateLimit": "{{value0}} API budget is fetched from the CLI on this desktop client. Use Settings > Remote Orca Servers > Advanced to view server-owned budgets."
+        },
+        "settingOwnership": {
+          "clientDefault": "Client default",
+          "sourceControlAiDefaults": "Recipes, prompts, and hosted-review defaults are shared by this client; model choices and discovery stay scoped to the host where the agent runs.",
+          "projectOnThisHost": "Project on this host",
+          "repositorySourceControlAi": "These overrides apply to this project setup and inherit the client Source Control AI defaults until customized.",
+          "agentLaunchDefaults": "Default agent, command overrides, CLI arguments, and launch environment are client preferences. SSH and remote server launches still validate host availability at run time.",
+          "clientDefaultProjectScopes": "Client default + project scopes",
+          "terminalQuickCommands": "Commands are saved on this client, then scoped globally or to a project setup so they run from the selected terminal context.",
+          "hostOverride": "Host override",
+          "workspaceDirectory": "The client default is inherited until a host needs its own worktree directory.",
+          "providerHost": "Provider host",
+          "providerAccounts": "Credentials and account checks belong to the local client or selected remote server that owns the provider integration."
         }
       },
       "right": {
@@ -7718,9 +7918,7 @@
             "f273f2271c": "agent を開始しました。{{value0}} 件を解決済みにし、{{value1}} 件をスキップ、{{value2}} 件が失敗しました。",
             "aa95b81a3a": "agent を開始しました。{{value0}} 件を解決済みにし、{{value1}} 件をスキップ、{{value2}} 件が失敗しました。",
             "495b2f8c4b": "agent を開始しましたが、選択したコメントを解決済みにできませんでした。",
-            "3c3ad3a1d2": "agent を開始しました。選択したコメントにホスト上で解決済みにできるものはありません。",
-            "b4f3ec62a1": "More {{value0}} actions",
-            "a9d7c128e4": "unlink {{value0}}"
+            "3c3ad3a1d2": "agent を開始しました。選択したコメントにホスト上で解決済みにできるものはありません。"
           },
           "CreatePullRequestDialog": {
             "2bc1b4345e": "キャンセル",
@@ -8084,7 +8282,9 @@
             "d206117f90": "{{value0}} コンフリクト ({{value1}})",
             "f3a8b2c1d0e5": "{{value0}} のタイトルを入力してください。",
             "e2b7a1c0d9f4": "{{value0}} の作成に失敗しました",
-            "e9e238b260": "Custom command is empty. Add one in Settings -> Git -> Source Control AI."
+            "hugeRepoIgnorePrompt": "このリポジトリにはアクティブな変更が多すぎます。「{{value0}}」を .gitignore に追加しますか？",
+            "hugeRepoIgnoreAction": ".gitignore に追加",
+            "tooManyChanges": "検出された変更が多すぎます。最初の {{value0}} 件のみ表示しています。"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "選択した agent を開始できませんでした。",
@@ -8212,7 +8412,7 @@
                 "ae8a04ef17": "競合ファイルの詳細は利用できません",
                 "73d0675356": "競合の詳細を更新しています…",
                 "5dc3af25c0": "コメントを選択",
-                "d7a2f9c401": "未解決をすべて送信",
+                "d7a2f9c401": "Send unresolved {{value0}} comments",
                 "d91f2a6c39": "キュー内の {{value0}} 件のコメントを送信",
                 "a6de3e5a20": "キュー内のコメントをクリア",
                 "49ea0937e4": "コメントを解決リストに追加",
@@ -8278,7 +8478,8 @@
             "6306b48afd": "ソース管理",
             "ef182dcb12": "検索",
             "fc3095d2ed": "エクスプローラ",
-            "aiVaultSessionHistory": "Agents"
+            "aiVaultSessionHistory": "Agents",
+            "folderWorkspaces": "Attached worktrees"
           },
           "right": {
             "panel": {
@@ -8765,6 +8966,14 @@
             "3e8bb1176a": "設定で Linear を接続してイシューを検索します。",
             "69ce292138": "Linear",
             "9c004911c3": "gitlab"
+          },
+          "ProjectHostSetupCombobox": {
+            "empty": "No hosts are ready for this project.",
+            "placeholder": "Choose host"
+          },
+          "ProjectCombobox": {
+            "search": "Search projects...",
+            "empty": "No projects match your search."
           }
         }
       },
@@ -8928,7 +9137,8 @@
                 "3e2c982cfa": "左、リセット",
                 "ea8ad0bae8": "の",
                 "0a891e8935": "REST API",
-                "953f7c6062": "この GitLab ホストはレート制限ヘッダーを返しませんでした。"
+                "953f7c6062": "この GitLab ホストはレート制限ヘッダーを返しませんでした。",
+                "budget_scope_prefix": "Budget scope"
               }
             }
           }
@@ -9002,9 +9212,7 @@
             "3a59452a67": "スキル コマンドをコピーして確認のために以下に挿入しました。",
             "c605f51f2b": "機能セットアップの準備完了",
             "1aa657d8f4": "一部の機能の設定には注意が必要です",
-            "c89534cbe9": "CLIとスキルのインストール",
-            "linearTicketsTitle": "Linear agent スキル",
-            "linearTicketsDescription": "Agents がリンクされた Linear タスクから作業する場合に推奨されます。"
+            "c89534cbe9": "CLIとスキルのインストール"
           },
           "AiCommitPrSettingsCard": {
             "8d4152701a": "例えばオラマはラマ3.1 {{value0}}を実行します",
@@ -10283,7 +10491,8 @@
           "de0fedac06": "実行ごとの新規",
           "51a470b966": "ssh",
           "b09b2384fd": "一時停止中",
-          "eaa02014f8": "有効"
+          "eaa02014f8": "有効",
+          "29baf8f4c2": "Source"
         },
         "AutomationEditorDialog": {
           "fb1896a5e7": "キャンセル",
@@ -10438,7 +10647,9 @@
           "dd0bc7a1ba": "実行ごとの新規",
           "7b2e285552": "このクライアントでは SSH 接続は利用できません。",
           "d441032f7e": "一時停止",
-          "5918020edc": "走る"
+          "5918020edc": "走る",
+          "a21f6c33ad": "Automation source refreshed.",
+          "53f06f0ad5": "Retry source"
         },
         "CreateFromPicker": {
           "f061f49e3f": "repo ブランチを検索...",
@@ -10539,6 +10750,13 @@
               }
             }
           }
+        },
+        "AutomationProjectCombobox": {
+          "search": "Search projects/folders...",
+          "empty": "No projects/folders match your search.",
+          "chooseHost": "Choose automation host",
+          "adding": "Adding project…",
+          "addProject": "Add project"
         }
       },
       "agent": {
@@ -10614,6 +10832,17 @@
           }
         }
       },
+      "rightSidebar": {
+        "FolderWorkspaceWorktreesPanel": {
+          "unavailable": "Workspaces are only shown for folder workspaces.",
+          "label": "Workspaces",
+          "description": "Shows worktrees attached to this folder workspace.",
+          "countOne": "1 attached worktree",
+          "countMany": "{{value0}} attached worktrees",
+          "emptyTitle": "No attached worktrees yet",
+          "emptyCopy": "Worktrees created from this workspace will show up here."
+        }
+      },
       "link": {
         "routing": {
           "preference": {
@@ -10651,6 +10880,37 @@
             }
           }
         }
+      },
+      "task": {
+        "project": {
+          "source": {
+            "combobox": {
+              "noProjects": "No projects",
+              "allProjects": "All projects",
+              "hostCount": "{{value0}} hosts",
+              "searchProjects": "Search projects...",
+              "noMatches": "No projects match your search.",
+              "chooseSource": "Choose task source"
+            }
+          }
+        }
+      },
+      "taskPageEmptyState": {
+        "noProjectSourcesTitle": "No project sources selected",
+        "noProjectSourcesDescription": "Select at least one project source so Orca knows which host/account to fetch tasks from.",
+        "noMatchingGitHubWorkTitle": "No matching GitHub work",
+        "changeQueryDescription": "Change the query or clear it.",
+        "noGitLabIssuesTitle": "No GitLab issues",
+        "noGitLabIssuesDescription": "No GitLab issues match this filter.",
+        "noGitLabMrsTitle": "No GitLab merge requests",
+        "noGitLabMrsDescription": "No GitLab MRs match this filter.",
+        "noGitLabWorkTitle": "No GitLab work",
+        "noGitLabWorkDescription": "No GitLab work matches this filter."
+      },
+      "taskSourceContextSummary": {
+        "sourceUnavailable": "{{value0}} source unavailable: {{value1}}",
+        "someSourceHostsUnavailable": "Some {{value0}} source hosts unavailable: {{value1}}",
+        "reconnectOrUpdateTitle": "Reconnect or update {{value0}} to load this source."
       }
     },
     "i18n": {

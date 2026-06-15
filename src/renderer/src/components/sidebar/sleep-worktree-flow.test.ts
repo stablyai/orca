@@ -124,7 +124,8 @@ describe('runSleepWorktree', () => {
     }
     const option = {
       dataset: { worktreeId: 'wt-1' },
-      closest: (selector: string) => (selector === '[data-worktree-virtual-row]' ? row : null)
+      closest: (selector: string) => (selector === '[data-worktree-virtual-row]' ? row : null),
+      querySelector: () => null
     }
     vi.stubGlobal('document', {
       querySelector: (selector: string) =>
@@ -137,6 +138,70 @@ describe('runSleepWorktree', () => {
     await runSleepWorktree('wt-1')
 
     expect(requestAnimationFrame).toHaveBeenCalledTimes(1)
+  })
+
+  it('anchors sleep restoration to the primary duplicate row', async () => {
+    let frameCount = 0
+    const requestAnimationFrame = vi.fn((callback: FrameRequestCallback) => {
+      frameCount += 1
+      if (frameCount === 1) {
+        callback(0)
+      }
+      return frameCount
+    })
+    const scroller = {
+      dispatchEvent: vi.fn(),
+      scrollHeight: 100,
+      scrollTop: 0
+    }
+    const pinnedRow = {
+      closest: (selector: string) =>
+        selector === '[data-worktree-virtual-row]' ? pinnedRow : null,
+      getBoundingClientRect: () => ({ top: 10 })
+    }
+    let naturalTop = 40
+    const naturalRow = {
+      closest: (selector: string) =>
+        selector === '[data-worktree-virtual-row]' ? naturalRow : null,
+      getBoundingClientRect: () => ({ top: naturalTop })
+    }
+    const pinnedOption = {
+      dataset: {
+        worktreeId: 'wt-1',
+        worktreeRowKey: 'pinned:wt-1',
+        worktreeSectionKey: 'pinned'
+      },
+      closest: (selector: string) =>
+        selector === '[data-worktree-virtual-row]' ? pinnedRow : null,
+      querySelector: () => null
+    }
+    const naturalOption = {
+      dataset: {
+        worktreeId: 'wt-1',
+        worktreeRowKey: 'all:wt-1',
+        worktreeSectionKey: 'all'
+      },
+      closest: (selector: string) =>
+        selector === '[data-worktree-virtual-row]' ? naturalRow : null,
+      querySelector: (selector: string) =>
+        selector === '[data-worktree-card-active="primary"]' ? {} : null
+    }
+    vi.stubGlobal('document', {
+      querySelector: (selector: string) =>
+        selector === '[data-worktree-sidebar]' ? scroller : null,
+      querySelectorAll: (selector: string) =>
+        selector === '[data-worktree-id]' ? [pinnedOption, naturalOption] : []
+    })
+    vi.stubGlobal('window', { requestAnimationFrame })
+    mocks.state.activeWorktreeId = 'wt-1'
+
+    mocks.state.setActiveWorktree.mockImplementation(() => {
+      naturalTop = 45
+    })
+
+    await runSleepWorktree('wt-1')
+
+    expect(scroller.scrollTop).toBe(5)
   })
 
   it('leaves activeWorktreeId alone when sleeping a background worktree', async () => {

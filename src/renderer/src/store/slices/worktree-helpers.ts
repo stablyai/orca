@@ -10,6 +10,7 @@ import type {
   TuiAgent,
   WorkspaceCreateTelemetrySource,
   WorkspaceStatus,
+  WorkspaceLineage,
   WorktreeStartupLaunch,
   Worktree,
   WorktreeBaseStatusEvent,
@@ -47,6 +48,7 @@ export type WorktreeSlice = {
   worktreesByRepo: Record<string, Worktree[]>
   detectedWorktreesByRepo: Record<string, DetectedWorktreeListResult>
   worktreeLineageById: Record<string, WorktreeLineage>
+  workspaceLineageByChildKey: Record<WorkspaceKey, WorkspaceLineage>
   activeWorktreeId: string | null
   activeWorkspaceKey: WorkspaceKey | null
   /**
@@ -141,7 +143,10 @@ export type WorktreeSlice = {
      *  renderer pending creation. Synchronous callers omit it. */
     creationId?: string,
     linkedLinearIssueWorkspaceId?: string | null,
-    linkedLinearIssueOrganizationUrlKey?: string | null
+    linkedLinearIssueOrganizationUrlKey?: string | null,
+    linkedBitbucketPR?: number | null,
+    linkedAzureDevOpsPR?: number | null,
+    linkedGiteaPR?: number | null
   ) => Promise<CreateWorktreeResult>
   /** Register an in-flight background creation and make it the active surface. */
   beginPendingWorktreeCreation: (entry: PendingWorktreeCreation) => void

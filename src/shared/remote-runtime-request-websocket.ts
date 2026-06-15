@@ -19,7 +19,7 @@ export type RemoteRuntimeWebSocket = {
 }
 
 export type RemoteRuntimeWebSocketCallbacks = {
-  onClose: (ws: WebSocket) => void
+  onClose: (ws: WebSocket, code: number, reason: Buffer) => void
   onError: (ws: WebSocket, error: RemoteRuntimeClientError) => void
   onTextFrame: (ws: WebSocket, frame: string) => void
 }
@@ -51,7 +51,7 @@ export function openRemoteRuntimeWebSocket(
       remoteRuntimeUnavailableError('Could not connect to the remote Orca runtime.')
     )
   }
-  const onClose = (): void => callbacks.onClose(ws)
+  const onClose = (code: number, reason: Buffer): void => callbacks.onClose(ws, code, reason)
   const onMessage = (data: WebSocket.RawData, isBinary: boolean): void => {
     if (isBinary) {
       callbacks.onError(

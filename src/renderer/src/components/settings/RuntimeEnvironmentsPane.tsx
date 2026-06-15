@@ -182,7 +182,7 @@ export function getActiveServerModeDescription(allowLocalRuntime: boolean): stri
   return allowLocalRuntime
     ? translate(
         'auto.components.settings.RuntimeEnvironmentsPane.3f67e8078a',
-        "Local keeps today's desktop behavior. Selecting a saved server makes that server the default Host for server-routed projects, files, terminals, provider accounts, and browser/mobile handoff."
+        'Use this computer by default. Choose a saved server only when you want supported projects, files, terminals, provider checks, and browser/mobile handoff to run through that server.'
       )
     : translate(
         'auto.components.settings.RuntimeEnvironmentsPane.2c85efb3e8',
@@ -190,11 +190,11 @@ export function getActiveServerModeDescription(allowLocalRuntime: boolean): stri
       )
 }
 
-type RuntimeServerConnectionState = 'connected' | 'available' | 'checking' | 'disconnected'
+type RuntimeServerConnectionState = 'connected' | 'checking' | 'disconnected'
 
 function getRuntimeServerConnectionState(
   details: RuntimeHostDetails | undefined,
-  active: boolean
+  _active: boolean
 ): RuntimeServerConnectionState {
   if (!details || details.status === 'loading') {
     return 'checking'
@@ -202,7 +202,7 @@ function getRuntimeServerConnectionState(
   if (details.status !== 'ready' || details.compatibility?.kind === 'blocked') {
     return 'disconnected'
   }
-  return active ? 'connected' : 'available'
+  return 'connected'
 }
 
 function getRuntimeServerConnectionLabel(state: RuntimeServerConnectionState): string {
@@ -211,11 +211,6 @@ function getRuntimeServerConnectionLabel(state: RuntimeServerConnectionState): s
       return translate(
         'auto.components.settings.RuntimeEnvironmentsPane.serverConnected',
         'Connected'
-      )
-    case 'available':
-      return translate(
-        'auto.components.settings.RuntimeEnvironmentsPane.serverAvailable',
-        'Available'
       )
     case 'checking':
       return translate(
@@ -234,8 +229,6 @@ function getRuntimeServerDotClass(state: RuntimeServerConnectionState): string {
   switch (state) {
     case 'connected':
       return 'bg-emerald-500'
-    case 'available':
-      return 'bg-muted-foreground/50'
     case 'checking':
       return 'bg-yellow-500'
     case 'disconnected':
@@ -255,6 +248,7 @@ export function RuntimeEnvironmentsPane({
   const [detailsByEnvironmentId, setDetailsByEnvironmentId] = useState<
     Record<string, RuntimeHostDetails>
   >({})
+  const [connectingId, setConnectingId] = useState<string | null>(null)
   const [switchingValue, setSwitchingValue] = useState<string | null>(null)
   const [removingId, setRemovingId] = useState<string | null>(null)
   const [disconnectingId, setDisconnectingId] = useState<string | null>(null)
@@ -272,7 +266,11 @@ export function RuntimeEnvironmentsPane({
     settings.activeRuntimeEnvironmentId ??
     (allowLocalRuntime ? LOCAL_RUNTIME_VALUE : NO_RUNTIME_VALUE)
   const isBusy =
-    isSaving || switchingValue !== null || removingId !== null || disconnectingId !== null
+    isSaving ||
+    connectingId !== null ||
+    switchingValue !== null ||
+    removingId !== null ||
+    disconnectingId !== null
   const removingActiveServer = pendingRemove?.id === settings.activeRuntimeEnvironmentId
   const searchEntry = canGeneratePairingUrl
     ? getRuntimeEnvironmentsSearchEntry()
@@ -589,6 +587,86 @@ export function RuntimeEnvironmentsPane({
     }
   }
 
+  const connectEnvironment = async (
+    environment: PublicKnownRuntimeEnvironment
+  ): Promise<boolean> => {
+    setConnectingId(environment.id)
+    setSwitchError(null)
+    try {
+      const response = await window.api.runtimeEnvironments.getStatus({
+        selector: environment.id,
+        timeoutMs: 15_000
+      })
+      const runtimeStatus = unwrapRuntimeRpcResult<RuntimeStatus>(response)
+      const compatibility = evaluateHostDetails(runtimeStatus)
+      // Why: row Connect is reachability only. The Advanced selector is the
+      // explicit default-host control and should be the only active-server path.
+      useAppStore.getState().setRuntimeEnvironmentStatus(environment.id, {
+        status: runtimeStatus,
+        checkedAt: Date.now()
+      })
+      if (mountedRef.current) {
+        setDetailsByEnvironmentId((current) => ({
+          ...current,
+          [environment.id]: {
+            status: 'ready',
+            runtimeStatus,
+            compatibility,
+            error: null
+          }
+        }))
+      }
+      if (compatibility.kind === 'blocked') {
+        const message = describeRuntimeCompatBlock(compatibility)
+        if (mountedRef.current) {
+          setSwitchError(message)
+          toast.error(message)
+        }
+        return false
+      }
+      const store = useAppStore.getState()
+      // Why: Connect is not the Active Server selector anymore, but connected
+      // hosts should still contribute their projects/workspaces to the sidebar.
+      const repos = await store.fetchRuntimeEnvironmentRepos(environment.id)
+      await Promise.all(repos.map((repo) => useAppStore.getState().fetchWorktrees(repo.id)))
+      await useAppStore.getState().fetchWorktreeLineage()
+      if (mountedRef.current) {
+        toast.success(
+          translate(
+            'auto.components.settings.RuntimeEnvironmentsPane.runtimeReachable',
+            '{{value0}} is reachable.',
+            { value0: environment.name }
+          )
+        )
+      }
+      return true
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to connect server.'
+      useAppStore.getState().setRuntimeEnvironmentStatus(environment.id, {
+        status: null,
+        checkedAt: Date.now()
+      })
+      if (mountedRef.current) {
+        setDetailsByEnvironmentId((current) => ({
+          ...current,
+          [environment.id]: {
+            status: 'error',
+            runtimeStatus: null,
+            compatibility: null,
+            error: message
+          }
+        }))
+        setSwitchError(message)
+        toast.error(message)
+      }
+      return false
+    } finally {
+      if (mountedRef.current) {
+        setConnectingId(null)
+      }
+    }
+  }
+
   const switchToValue = async (value: string): Promise<boolean> => {
     if (value === NO_RUNTIME_VALUE) {
       return false
@@ -658,7 +736,7 @@ export function RuntimeEnvironmentsPane({
             <p className="text-xs text-muted-foreground">
               {translate(
                 'auto.components.settings.RuntimeEnvironmentsPane.connectToRemoteServersHelp',
-                'Pair another Orca runtime, then connect when you want this client to use it as the default host.'
+                'Pair another Orca runtime, then connect or disconnect it here. Use Advanced > Active Server only when you want to change the default host.'
               )}
             </p>
           </div>
@@ -787,7 +865,9 @@ export function RuntimeEnvironmentsPane({
                     const detailsDescription = getHostDetailsDescription(details)
                     const isActive = settings.activeRuntimeEnvironmentId === environment.id
                     const connectionState = getRuntimeServerConnectionState(details, isActive)
+                    const isReachable = connectionState === 'connected'
                     const actionBusy =
+                      connectingId === environment.id ||
                       switchingValue === environment.id ||
                       disconnectingId === environment.id ||
                       removingId === environment.id
@@ -816,7 +896,7 @@ export function RuntimeEnvironmentsPane({
                             {isActive
                               ? translate(
                                   'auto.components.settings.RuntimeEnvironmentsPane.activeServerRowHelp',
-                                  'Default host for server-routed projects, terminals, and provider checks.'
+                                  'Active server for server-routed projects, terminals, and provider checks.'
                                 )
                               : getHostDetailsSummary(details)}
                           </p>
@@ -834,7 +914,7 @@ export function RuntimeEnvironmentsPane({
                           ) : null}
                         </div>
                         <div className="flex shrink-0 items-center gap-1">
-                          {isActive ? (
+                          {isReachable ? (
                             <Button
                               type="button"
                               variant="ghost"
@@ -859,10 +939,10 @@ export function RuntimeEnvironmentsPane({
                               variant="ghost"
                               size="xs"
                               className="gap-1.5"
-                              onClick={() => void switchToValue(environment.id)}
+                              onClick={() => void connectEnvironment(environment)}
                               disabled={actionBusy || connectionState === 'checking'}
                             >
-                              {switchingValue === environment.id ? (
+                              {connectingId === environment.id ? (
                                 <Loader2 className="size-3 animate-spin" />
                               ) : (
                                 <Server className="size-3" />
@@ -930,7 +1010,7 @@ export function RuntimeEnvironmentsPane({
           <div className="min-h-0">
             <div
               className={cn(
-                'space-y-2 px-1 pt-1 pb-1 transition-[opacity,transform] duration-150 ease-out',
+                'space-y-2 px-1 pt-3 pb-1 transition-[opacity,transform] duration-150 ease-out',
                 advancedOpen
                   ? 'translate-y-0 opacity-100 delay-200'
                   : '-translate-y-1 opacity-0 delay-0'

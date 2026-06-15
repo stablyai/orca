@@ -232,7 +232,7 @@ describe('session tab RPC methods', () => {
     })
 
     expect(runtime.registerSubscriptionCleanup).toHaveBeenCalledWith(
-      'session.tabs:conn-1:*',
+      'session.tabs:conn-1:*:req-1',
       expect.any(Function),
       'conn-1'
     )
@@ -249,6 +249,113 @@ describe('session tab RPC methods', () => {
     ])
   })
 
+  it('keeps duplicate all-session-tab subscribers independent on one connection', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      listAllMobileSessionTabs: vi.fn(() => []),
+      onMobileSessionTabsChanged: vi.fn(() => vi.fn()),
+      registerSubscriptionCleanup: vi.fn()
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: SESSION_TAB_METHODS })
+
+    await dispatcher.dispatchStreaming(
+      { ...makeRequest('session.tabs.subscribeAll'), id: 'sub-all-1' },
+      vi.fn(),
+      { connectionId: 'conn-1' }
+    )
+    await dispatcher.dispatchStreaming(
+      { ...makeRequest('session.tabs.subscribeAll'), id: 'sub-all-2' },
+      vi.fn(),
+      { connectionId: 'conn-1' }
+    )
+
+    expect(runtime.registerSubscriptionCleanup).toHaveBeenCalledWith(
+      'session.tabs:conn-1:*:sub-all-1',
+      expect.any(Function),
+      'conn-1'
+    )
+    expect(runtime.registerSubscriptionCleanup).toHaveBeenCalledWith(
+      'session.tabs:conn-1:*:sub-all-2',
+      expect.any(Function),
+      'conn-1'
+    )
+  })
+
+  it('registers session tab subscription cleanup with the resolved worktree id', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      listMobileSessionTabs: vi.fn().mockResolvedValue({
+        worktree: 'wt-1',
+        publicationEpoch: 'epoch-1',
+        snapshotVersion: 1,
+        activeGroupId: null,
+        activeTabId: null,
+        activeTabType: null,
+        tabs: []
+      }),
+      onMobileSessionTabsChanged: vi.fn(() => vi.fn()),
+      registerSubscriptionCleanup: vi.fn()
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: SESSION_TAB_METHODS })
+
+    await dispatcher.dispatchStreaming(
+      makeRequest('session.tabs.subscribe', { worktree: 'id:wt-1' }),
+      vi.fn(),
+      { connectionId: 'conn-1' }
+    )
+
+    expect(runtime.registerSubscriptionCleanup).toHaveBeenCalledWith(
+      'session.tabs:conn-1:wt-1:req-1',
+      expect.any(Function),
+      'conn-1'
+    )
+    expect(runtime.registerSubscriptionCleanup).not.toHaveBeenCalledWith(
+      'session.tabs:conn-1:id:wt-1',
+      expect.any(Function),
+      'conn-1'
+    )
+  })
+
+  it('keeps duplicate session tab subscribers for one worktree independent', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      listMobileSessionTabs: vi.fn().mockResolvedValue({
+        worktree: 'wt-1',
+        publicationEpoch: 'epoch-1',
+        snapshotVersion: 1,
+        activeGroupId: null,
+        activeTabId: null,
+        activeTabType: null,
+        tabs: []
+      }),
+      onMobileSessionTabsChanged: vi.fn(() => vi.fn()),
+      registerSubscriptionCleanup: vi.fn()
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: SESSION_TAB_METHODS })
+
+    await dispatcher.dispatchStreaming(
+      { ...makeRequest('session.tabs.subscribe', { worktree: 'id:wt-1' }), id: 'sub-1' },
+      vi.fn(),
+      { connectionId: 'conn-1' }
+    )
+    await dispatcher.dispatchStreaming(
+      { ...makeRequest('session.tabs.subscribe', { worktree: 'wt-1' }), id: 'sub-2' },
+      vi.fn(),
+      { connectionId: 'conn-1' }
+    )
+
+    expect(runtime.registerSubscriptionCleanup).toHaveBeenCalledWith(
+      'session.tabs:conn-1:wt-1:sub-1',
+      expect.any(Function),
+      'conn-1'
+    )
+    expect(runtime.registerSubscriptionCleanup).toHaveBeenCalledWith(
+      'session.tabs:conn-1:wt-1:sub-2',
+      expect.any(Function),
+      'conn-1'
+    )
+  })
+
   it('unsubscribes a session tabs stream using the resolved worktree id and connection id', async () => {
     const cleanupSubscription = vi.fn()
     const runtime = {
@@ -262,7 +369,8 @@ describe('session tab RPC methods', () => {
         activeTabType: null,
         tabs: []
       }),
-      cleanupSubscription
+      cleanupSubscription,
+      cleanupSubscriptionsByPrefix: vi.fn()
     } as unknown as OrcaRuntimeService
     const dispatcher = new RpcDispatcher({ runtime, methods: SESSION_TAB_METHODS })
     const messages: string[] = []
@@ -278,5 +386,54 @@ describe('session tab RPC methods', () => {
       ok: true,
       result: { unsubscribed: true }
     })
+  })
+
+  it('unsubscribes one shared-control session tab stream by subscription id', async () => {
+    const cleanupSubscription = vi.fn()
+    const cleanupSubscriptionsByPrefix = vi.fn()
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      listMobileSessionTabs: vi.fn().mockResolvedValue({
+        worktree: 'wt-1',
+        publicationEpoch: 'test',
+        snapshotVersion: 1,
+        activeGroupId: null,
+        activeTabId: null,
+        activeTabType: null,
+        tabs: []
+      }),
+      cleanupSubscription,
+      cleanupSubscriptionsByPrefix
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: SESSION_TAB_METHODS })
+
+    await dispatcher.dispatchStreaming(
+      makeRequest('session.tabs.unsubscribe', { worktree: 'id:wt-1', subscriptionId: 'sub-1' }),
+      vi.fn(),
+      { connectionId: 'conn-1' }
+    )
+
+    expect(cleanupSubscription).toHaveBeenCalledWith('session.tabs:conn-1:wt-1:sub-1')
+    expect(cleanupSubscriptionsByPrefix).not.toHaveBeenCalled()
+  })
+
+  it('unsubscribes one shared-control all-session-tabs stream by subscription id', async () => {
+    const cleanupSubscription = vi.fn()
+    const cleanupSubscriptionsByPrefix = vi.fn()
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      cleanupSubscription,
+      cleanupSubscriptionsByPrefix
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: SESSION_TAB_METHODS })
+
+    await dispatcher.dispatchStreaming(
+      makeRequest('session.tabs.unsubscribeAll', { subscriptionId: 'sub-all-1' }),
+      vi.fn(),
+      { connectionId: 'conn-1' }
+    )
+
+    expect(cleanupSubscription).toHaveBeenCalledWith('session.tabs:conn-1:*:sub-all-1')
+    expect(cleanupSubscriptionsByPrefix).not.toHaveBeenCalled()
   })
 })

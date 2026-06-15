@@ -1,3 +1,4 @@
+import { translate } from '@/i18n/i18n'
 import { getExecutionHostLabel } from '../../../shared/execution-host'
 import type { ExecutionHostScope } from '../../../shared/execution-host'
 import type { ExecutionHostHealth } from '../../../shared/execution-host-registry'
@@ -83,9 +84,21 @@ export function getTaskSourceAvailabilityNotice(args: {
     unavailableHosts.length === 1 ? hostStatusLabels[0] : `${unavailableHosts.length} source hosts`
   return {
     label: blocking
-      ? `${args.providerLabel} source unavailable: ${target}`
-      : `Some ${args.providerLabel} source hosts unavailable: ${target}`,
-    title: `Reconnect or update ${formatLongList(hostStatusLabels)} to load this source.`,
+      ? translate(
+          'auto.components.taskSourceContextSummary.sourceUnavailable',
+          '{{value0}} source unavailable: {{value1}}',
+          { value0: args.providerLabel, value1: target }
+        )
+      : translate(
+          'auto.components.taskSourceContextSummary.someSourceHostsUnavailable',
+          'Some {{value0}} source hosts unavailable: {{value1}}',
+          { value0: args.providerLabel, value1: target }
+        ),
+    title: translate(
+      'auto.components.taskSourceContextSummary.reconnectOrUpdateTitle',
+      'Reconnect or update {{value0}} to load this source.',
+      { value0: formatLongList(hostStatusLabels) }
+    ),
     blocking
   }
 }
@@ -229,6 +242,8 @@ function getUnavailableHosts(
 
 function getAvailabilityStatusLabel(availability: TaskSourceHostAvailability): string | null {
   switch (availability.reason) {
+    case undefined:
+      break
     case 'checking-task-source-capability':
       return 'checking server capabilities'
     case 'missing-task-source-capability':

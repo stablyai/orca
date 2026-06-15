@@ -128,6 +128,24 @@ describe('terminal path helpers', () => {
       })
     })
 
+    it('keeps trailing separators on directory-like absolute paths', () => {
+      const links = extractTerminalFileLinks('/Users/alice/worktree/')
+      expect(links).toHaveLength(1)
+      expect(links[0]).toMatchObject({
+        pathText: '/Users/alice/worktree/',
+        displayText: '/Users/alice/worktree/'
+      })
+    })
+
+    it('does not linkify root-only or relative trailing separator tokens', () => {
+      expect(extractTerminalFileLinks('progress 1 / 3')).toEqual([])
+      expect(extractTerminalFileLinks('/')).toEqual([])
+      expect(extractTerminalFileLinks('./')).toEqual([])
+      expect(extractTerminalFileLinks('../')).toEqual([])
+      expect(extractTerminalFileLinks('~/')).toEqual([])
+      expect(extractTerminalFileLinks('C:\\')).toEqual([])
+    })
+
     it('detects an extensionless relative path ending in a spaced segment', () => {
       const links = extractTerminalFileLinks('./My Folder')
       expect(links).toHaveLength(1)

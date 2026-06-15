@@ -88,6 +88,22 @@ function typeIntoInput(input: HTMLInputElement, value: string): void {
   })
 }
 
+function findButton(label: string): HTMLButtonElement | undefined {
+  const buttons = Array.from(container.querySelectorAll('button'))
+  return (
+    buttons.find((button) => button.textContent?.trim() === label) ??
+    buttons.find((button) => button.textContent?.includes(label))
+  )
+}
+
+function clickButton(label: string): void {
+  const button = findButton(label)
+  expect(button).toBeTruthy()
+  act(() => {
+    button?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+  })
+}
+
 describe('RepositoryHostSetupsSection', () => {
   it('shows a viewing-host selector when the project has multiple settings-backed hosts', () => {
     const localRepo = makeRepo({
@@ -286,15 +302,16 @@ describe('RepositoryHostSetupsSection', () => {
     })
 
     renderSection(localRepo)
+    clickButton('Add to another host')
+    clickButton('Browse folder')
+
     const pathInput = container.querySelector<HTMLInputElement>(
       'input[placeholder="/path/to/project/on/host"]'
     )
     expect(pathInput).toBeTruthy()
     typeIntoInput(pathInput!, '/home/alice/orca')
 
-    const importButton = Array.from(container.querySelectorAll('button')).find(
-      (button) => button.textContent === 'Import'
-    )
+    const importButton = findButton('Import')
     expect(importButton).toBeTruthy()
 
     await act(async () => {
@@ -355,6 +372,9 @@ describe('RepositoryHostSetupsSection', () => {
     })
 
     renderSection(localRepo)
+    clickButton('Add to another host')
+    clickButton('Clone from URL')
+
     const urlInput = container.querySelector<HTMLInputElement>(
       'input[placeholder="Repository URL"]'
     )
@@ -366,9 +386,7 @@ describe('RepositoryHostSetupsSection', () => {
     typeIntoInput(urlInput!, 'https://github.com/stablyai/orca.git')
     typeIntoInput(destinationInput!, '/home/alice')
 
-    const cloneButton = Array.from(container.querySelectorAll('button')).find(
-      (button) => button.textContent === 'Clone'
-    )
+    const cloneButton = findButton('Clone')
     expect(cloneButton).toBeTruthy()
 
     await act(async () => {
@@ -445,13 +463,14 @@ describe('RepositoryHostSetupsSection', () => {
 
     renderSection(localRepo)
 
-    const trackButton = Array.from(container.querySelectorAll('button')).find(
-      (button) => button.textContent === 'Track setup'
-    )
-    expect(trackButton).toBeTruthy()
+    clickButton('Add to another host')
+    clickButton('Add host placeholder')
+
+    const addHostButton = findButton('Add gpu')
+    expect(addHostButton).toBeTruthy()
 
     await act(async () => {
-      trackButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      addHostButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
 
     expect(createProjectHostSetup).toHaveBeenCalledWith({
@@ -511,15 +530,16 @@ describe('RepositoryHostSetupsSection', () => {
     })
 
     renderSection(localRepo)
+    clickButton('Add to another host')
 
     expect(container.textContent).toContain('Update Orca on this host to set up projects')
-    const trackButton = Array.from(container.querySelectorAll('button')).find(
-      (button) => button.textContent === 'Track setup'
-    )
-    expect(trackButton?.disabled).toBe(true)
+    const browseButton = findButton('Browse folder')
+    const plannedButton = findButton('Add host placeholder')
+    expect(browseButton?.disabled).toBe(true)
+    expect(plannedButton?.disabled).toBe(true)
 
     await act(async () => {
-      trackButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      plannedButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
 
     expect(createProjectHostSetup).not.toHaveBeenCalled()
@@ -586,13 +606,13 @@ describe('RepositoryHostSetupsSection', () => {
 
     renderSection(localRepo)
 
+    clickButton('Add to another host')
     expect(container.textContent).toContain('gpu')
-    const trackButton = Array.from(container.querySelectorAll('button')).find(
-      (button) => button.textContent === 'Track setup'
-    )
+    clickButton('Add host placeholder')
+    const addHostButton = findButton('Add gpu')
 
     await act(async () => {
-      trackButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      addHostButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
 
     expect(createProjectHostSetup).toHaveBeenCalledWith({

@@ -5,6 +5,11 @@ import { readFile, rm, stat } from 'fs/promises'
 import { randomUUID } from 'crypto'
 import type { Store } from '../persistence'
 import { isFolderRepo } from '../../shared/repo-kind'
+import {
+  isWorkspaceKey,
+  parseWorkspaceKey,
+  worktreeWorkspaceKey
+} from '../../shared/workspace-scope'
 import { inspectSetupScriptImportCandidates } from '../../shared/setup-script-imports'
 import { getProjectHostSetupWorktreeMeta } from '../../shared/project-host-setup-projection'
 import { deleteWorktreeHistoryDir } from '../terminal-history'
@@ -378,6 +383,18 @@ function pruneLineageForMissingRepoWorktrees(
   }
   const liveIds = new Set(gitWorktrees.map((worktree) => `${repo.id}::${worktree.path}`))
   const repoPrefix = `${repo.id}::`
+  for (const childWorkspaceKey of Object.keys(store.getAllWorkspaceLineage?.() ?? {})) {
+    const childScope = parseWorkspaceKey(childWorkspaceKey)
+    if (
+      childScope?.type === 'worktree' &&
+      childScope.worktreeId.startsWith(repoPrefix) &&
+      !liveIds.has(childScope.worktreeId)
+    ) {
+      if (isWorkspaceKey(childWorkspaceKey)) {
+        store.removeWorkspaceLineage?.(childWorkspaceKey)
+      }
+    }
+  }
   for (const [childId, lineage] of Object.entries(store.getAllWorktreeLineage())) {
     if (childId.startsWith(repoPrefix) && !liveIds.has(childId)) {
       // Why: path-derived IDs can disappear and later be reused by a different
@@ -386,6 +403,7 @@ function pruneLineageForMissingRepoWorktrees(
       // parents stay readable so the UI can show the repairable "Missing
       // parent" state.
       store.removeWorktreeLineage(childId)
+      store.removeWorkspaceLineage?.(worktreeWorkspaceKey(childId))
     }
     if (lineage.parentWorktreeId.startsWith(repoPrefix) && !liveIds.has(lineage.parentWorktreeId)) {
       const parentMeta = store.getWorktreeMeta(lineage.parentWorktreeId)
@@ -561,6 +579,9 @@ function mergeFolderWorkspace(repo: Repo, worktreeId: string, meta: WorktreeMeta
     linkedLinearIssueOrganizationUrlKey: meta.linkedLinearIssueOrganizationUrlKey ?? null,
     linkedGitLabMR: meta.linkedGitLabMR ?? null,
     linkedGitLabIssue: meta.linkedGitLabIssue ?? null,
+    linkedBitbucketPR: meta.linkedBitbucketPR ?? null,
+    linkedAzureDevOpsPR: meta.linkedAzureDevOpsPR ?? null,
+    linkedGiteaPR: meta.linkedGiteaPR ?? null,
     isArchived: meta.isArchived ?? false,
     isUnread: meta.isUnread ?? false,
     isPinned: meta.isPinned ?? false,
@@ -670,7 +691,12 @@ function createFolderWorkspace(
     ...(args.manualOrder !== undefined ? { manualOrder: args.manualOrder } : {}),
     ...(args.workspaceStatus !== undefined ? { workspaceStatus: args.workspaceStatus } : {}),
     ...(args.linkedGitLabIssue !== undefined ? { linkedGitLabIssue: args.linkedGitLabIssue } : {}),
-    ...(args.linkedGitLabMR !== undefined ? { linkedGitLabMR: args.linkedGitLabMR } : {})
+    ...(args.linkedGitLabMR !== undefined ? { linkedGitLabMR: args.linkedGitLabMR } : {}),
+    ...(args.linkedBitbucketPR !== undefined ? { linkedBitbucketPR: args.linkedBitbucketPR } : {}),
+    ...(args.linkedAzureDevOpsPR !== undefined
+      ? { linkedAzureDevOpsPR: args.linkedAzureDevOpsPR }
+      : {}),
+    ...(args.linkedGiteaPR !== undefined ? { linkedGiteaPR: args.linkedGiteaPR } : {})
   })
   return { worktree: mergeFolderWorkspace(repo, worktreeId, meta) }
 }
@@ -1488,7 +1514,10 @@ export function registerWorktreeHandlers(
 
   ipcMain.handle('worktrees:listLineage', async () => {
     await runtime.hydrateInferredWorktreeLineage()
-    return store.getAllWorktreeLineage()
+    return {
+      lineage: store.getAllWorktreeLineage(),
+      workspaceLineage: store.getAllWorkspaceLineage()
+    }
   })
 
   ipcMain.handle(

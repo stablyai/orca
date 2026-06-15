@@ -19,6 +19,9 @@ type TerminalViewportRefitOptions = {
   deviceTokenRef: RefObject<string | null>
   initializedHandlesRef: RefObject<Set<string>>
   tabStripVisible: boolean
+  // Why: terminal text size (font scale) — changing it changes the cell size, so
+  // the PTY must be re-fitted to a new column count and reflowed.
+  textScale: number
   unsubscribeTerminal: (handle: string) => void
   subscribeToTerminal: (handle: string) => void
 }
@@ -40,6 +43,7 @@ export function useTerminalViewportRefit(options: TerminalViewportRefitOptions):
     deviceTokenRef,
     initializedHandlesRef,
     tabStripVisible,
+    textScale,
     unsubscribeTerminal,
     subscribeToTerminal
   } = options
@@ -163,6 +167,20 @@ export function useTerminalViewportRefit(options: TerminalViewportRefitOptions):
     viewportMeasuredRef.current = false
     scheduleViewportRefit()
   }, [windowWidth, windowHeight, viewportMeasuredRef, scheduleViewportRefit])
+
+  // Why: the text size changed, so the WebView is re-rendering at a new font/cell
+  // size. Re-measure and resize the PTY so the server reflows to the new column
+  // count. The refit's own 150ms debounce gives the WebView a frame to apply the
+  // new fontSize before we measure the resulting cell metrics.
+  const prevTextScaleRef = useRef(textScale)
+  useEffect(() => {
+    if (prevTextScaleRef.current === textScale) {
+      return
+    }
+    prevTextScaleRef.current = textScale
+    viewportMeasuredRef.current = false
+    scheduleViewportRefit()
+  }, [textScale, viewportMeasuredRef, scheduleViewportRefit])
 
   useEffect(() => {
     disposedRef.current = false

@@ -34,6 +34,7 @@ export type ExecutionHostRegistryEntry = {
   protocolVersion?: number | null
   minCompatibleClientVersion?: number | null
   platform?: NodeJS.Platform | null
+  remoteControlState?: RuntimeStatus['remoteControl']
 }
 
 type RuntimeEnvironmentSummary = {
@@ -68,11 +69,37 @@ function runtimeCompatibility(
   })
 }
 
-function runtimeHealth(compatibility: RuntimeCompatVerdict | null): ExecutionHostHealth {
+function runtimeHealth(
+  status: RuntimeStatus | null | undefined,
+  compatibility: RuntimeCompatVerdict | null
+): ExecutionHostHealth {
+  // Why: with no live status we have no evidence the Orca server is reachable, so
+  // it must read 'disconnected' (like SSH) rather than defaulting to 'available'.
+  // A configured-but-never-connected host was showing "Connected" otherwise.
+  if (!status) {
+    return 'disconnected'
+  }
   if (!compatibility) {
     return 'available'
   }
   return compatibility.kind === 'blocked' ? 'blocked' : 'available'
+}
+
+function runtimeControlHealth(
+  remoteControl: RuntimeStatus['remoteControl'] | null | undefined
+): ExecutionHostHealth | null {
+  switch (remoteControl?.state) {
+    case 'awaiting_authenticated':
+    case 'awaiting_ready':
+    case 'reconnecting':
+      return 'connecting'
+    case 'closed':
+      return remoteControl.lastError ? 'error' : 'disconnected'
+    case 'ready':
+      return null
+    case undefined:
+      return null
+  }
 }
 
 function sshHealth(state: SshConnectionState | undefined): ExecutionHostHealth {
@@ -98,9 +125,18 @@ function setHost(
   entry: ExecutionHostRegistryEntry
 ): void {
   const existing = hosts.get(entry.id)
-  if (!existing || existing.health === 'disconnected') {
+  if (!existing) {
     hosts.set(entry.id, entry)
+    return
   }
+  if (existing.health !== 'disconnected') {
+    return
+  }
+  // Why: a later status-bearing registration may upgrade health, but the first
+  // (named) registration is authoritative for the label — runtime envs are
+  // seeded with a friendly name before the id-labeled status/focus/repo
+  // fallbacks run, so keep the existing label on a health-only upgrade.
+  hosts.set(entry.id, { ...entry, label: existing.label })
 }
 
 function addRuntimeHost(
@@ -113,19 +149,21 @@ function addRuntimeHost(
   const runtimeStatus = statusByEnvironmentId?.get(environmentId)
   const status = runtimeStatus?.status
   const compatibility = runtimeCompatibility(status)
+  const controlHealth = runtimeControlHealth(status?.remoteControl)
   setHost(hosts, {
     id: hostId,
     kind: 'runtime',
     label,
     detail: 'Orca server',
-    health: runtimeHealth(compatibility),
+    health: controlHealth ?? runtimeHealth(status, compatibility),
     compatibility: compatibility ?? undefined,
     capabilities: status?.capabilities,
     appVersion: runtimeStatus?.appVersion ?? null,
     protocolVersion: status?.runtimeProtocolVersion ?? status?.protocolVersion ?? null,
     minCompatibleClientVersion:
       status?.minCompatibleRuntimeClientVersion ?? status?.minCompatibleMobileVersion ?? null,
-    platform: status?.hostPlatform ?? null
+    platform: status?.hostPlatform ?? null,
+    remoteControlState: status?.remoteControl ?? null
   })
 }
 

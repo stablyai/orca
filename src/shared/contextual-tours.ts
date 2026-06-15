@@ -66,12 +66,6 @@ export const CONTEXTUAL_TOURS = [
         body: 'Drag workspaces between lanes as their status changes.',
         targetSelector:
           '[data-contextual-tour-target="workspace-board-done-lane"], [data-contextual-tour-target="workspace-board-lanes"]'
-      },
-      {
-        title: 'Tune density',
-        body: 'Use board settings to switch between detailed and compact cards.',
-        targetSelector:
-          '[data-contextual-tour-target="workspace-board-settings"], [data-contextual-tour-target="workspace-board-lanes"]'
       }
     ]
   },

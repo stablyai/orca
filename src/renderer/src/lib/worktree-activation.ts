@@ -42,7 +42,7 @@ import {
   getRuntimeEnvironmentIdForWorktree,
   type WorktreeRuntimeOwnerState
 } from '@/lib/worktree-runtime-owner'
-import { folderWorkspaceKey } from '../../../shared/workspace-scope'
+import { folderWorkspaceKey, parseWorkspaceKey } from '../../../shared/workspace-scope'
 import {
   folderWorkspaceActivationBlocked,
   getFolderWorkspacePathStatusDescription,
@@ -332,7 +332,9 @@ export function activateAndRevealWorktree(
     }
   }
 
-  ensureWebRuntimeWorktreeTerminalAfterWake(worktreeId)
+  if (opts?.notifyHostRuntime !== false) {
+    ensureWebRuntimeWorktreeTerminalAfterWake(worktreeId)
+  }
 
   return { primaryTabId }
 }
@@ -349,10 +351,6 @@ export function ensureWebRuntimeWorktreeTerminalAfterWake(worktreeId: string): v
   }
 
   const tabs = state.tabsByWorktree[worktreeId] ?? []
-  if (tabs.length === 0) {
-    return
-  }
-
   const hasLivePty = tabs.some((tab) => tabHasLivePty(state.ptyIdsByTabId, tab.id))
   if (hasLivePty) {
     return
@@ -370,7 +368,7 @@ export function ensureWebRuntimeWorktreeTerminalAfterWake(worktreeId: string): v
   }
 
   const { renderableTabCount } = state.reconcileWorktreeTabModel(worktreeId)
-  if (renderableTabCount === 0) {
+  if (tabs.length > 0 && renderableTabCount === 0) {
     return
   }
 
@@ -564,11 +562,17 @@ function queueSetupAndIssueCommands(
   }
 }
 
-// Why: break the import cycle — the nav-history slice must call
-// activateAndRevealWorktree from goBack/goForward, but the slice lives under
-// @/store, which activation already imports from. Registering the activator
-// at module init here lets the slice call back without importing this file.
-setWorktreeNavActivator(activateAndRevealWorktree)
+// Why: break the import cycle — the nav-history slice must activate workspace
+// entries from goBack/goForward, but it lives under @/store, which activation
+// already imports from. Registering here keeps folder workspace replay on the
+// same path as direct folder activation.
+setWorktreeNavActivator((workspaceId) => {
+  const workspaceScope = parseWorkspaceKey(workspaceId)
+  if (workspaceScope?.type === 'folder') {
+    return activateAndRevealFolderWorkspace(workspaceScope.folderWorkspaceId)
+  }
+  return activateAndRevealWorktree(workspaceId)
+})
 
 // Why: page entries in nav history replay through setActiveView(...)
 // (not open*Page) so back/forward does not mutate previousViewBefore* or

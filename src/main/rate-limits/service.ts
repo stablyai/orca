@@ -80,6 +80,7 @@ export class RateLimitService {
   private codexOnlyFetchQueued = false
   private claudeOnlyFetchQueued = false
   private fetchIdleResolvers: (() => void)[] = []
+  private hasCompletedFetch = false
   private codexFetchGeneration = 0
   private claudeFetchGeneration = 0
   private opencodeFetchGeneration = 0
@@ -556,6 +557,9 @@ export class RateLimitService {
     if (!this.shouldBackgroundPoll()) {
       return
     }
+    if (!this.hasCompletedFetch) {
+      return
+    }
     if (Date.now() - this.lastFetchAt < MIN_REFETCH_MS) {
       return
     }
@@ -592,6 +596,7 @@ export class RateLimitService {
         }
       }
     } finally {
+      this.hasCompletedFetch = true
       this.isFetching = false
       this.resolveFetchIdleWaiters()
     }
@@ -627,6 +632,7 @@ export class RateLimitService {
         }
       }
     } finally {
+      this.hasCompletedFetch = true
       this.isFetching = false
       this.resolveFetchIdleWaiters()
     }
@@ -662,6 +668,7 @@ export class RateLimitService {
         }
       }
     } finally {
+      this.hasCompletedFetch = true
       this.isFetching = false
       this.resolveFetchIdleWaiters()
     }

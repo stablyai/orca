@@ -51,6 +51,8 @@ import type {
   SparsePreset,
   WorktreeMeta,
   WorktreeLineage,
+  WorkspaceLineage,
+  WorkspaceKey,
   GlobalSettings,
   OrcaWorkspaceLayout,
   NotificationSettings,
@@ -172,7 +174,12 @@ import {
   normalizeFolderWorkspaceName,
   normalizeFolderWorkspaces
 } from '../shared/folder-workspaces'
-import { folderWorkspaceKey } from '../shared/workspace-scope'
+import {
+  folderWorkspaceKey,
+  isWorkspaceKey,
+  parseWorkspaceKey,
+  worktreeWorkspaceKey
+} from '../shared/workspace-scope'
 import {
   collectTerminalScrollbackSnapshotRefs,
   deleteTerminalScrollbackSnapshotSync,
@@ -491,6 +498,7 @@ function normalizeRightSidebarTab(tab: unknown): PersistedState['ui']['rightSide
     tab === 'explorer' ||
     tab === 'search' ||
     tab === 'vault' ||
+    tab === 'workspaces' ||
     tab === 'source-control' ||
     tab === 'checks' ||
     tab === 'ports'
@@ -498,6 +506,51 @@ function normalizeRightSidebarTab(tab: unknown): PersistedState['ui']['rightSide
     return tab
   }
   return getDefaultUIState().rightSidebarTab
+}
+
+function normalizeWorkspaceLineageByChildKey(
+  value: unknown
+): Record<WorkspaceKey, WorkspaceLineage> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return {}
+  }
+  const normalized: Record<WorkspaceKey, WorkspaceLineage> = {}
+  for (const [key, entry] of Object.entries(value)) {
+    if (!isWorkspaceKey(key) || !entry || typeof entry !== 'object') {
+      continue
+    }
+    const lineage = entry as Partial<WorkspaceLineage>
+    const childWorkspaceKey =
+      typeof lineage.childWorkspaceKey === 'string' && isWorkspaceKey(lineage.childWorkspaceKey)
+        ? lineage.childWorkspaceKey
+        : key
+    const parentWorkspaceKey = lineage.parentWorkspaceKey
+    if (
+      !isWorkspaceKey(childWorkspaceKey) ||
+      typeof parentWorkspaceKey !== 'string' ||
+      !isWorkspaceKey(parentWorkspaceKey) ||
+      childWorkspaceKey !== key ||
+      childWorkspaceKey === parentWorkspaceKey
+    ) {
+      continue
+    }
+    normalized[childWorkspaceKey] = {
+      childWorkspaceKey,
+      childInstanceId: lineage.childInstanceId ?? null,
+      parentWorkspaceKey,
+      parentInstanceId: lineage.parentInstanceId ?? null,
+      origin: lineage.origin ?? 'cli',
+      capture: lineage.capture ?? { source: 'manual-action', confidence: 'inferred' },
+      ...(lineage.taskId ? { taskId: lineage.taskId } : {}),
+      ...(lineage.orchestrationRunId ? { orchestrationRunId: lineage.orchestrationRunId } : {}),
+      ...(lineage.coordinatorHandle ? { coordinatorHandle: lineage.coordinatorHandle } : {}),
+      ...(lineage.createdByTerminalHandle
+        ? { createdByTerminalHandle: lineage.createdByTerminalHandle }
+        : {}),
+      createdAt: Number.isFinite(lineage.createdAt) ? Number(lineage.createdAt) : Date.now()
+    }
+  }
+  return normalized
 }
 
 function normalizeRightSidebarExplorerView(
@@ -2514,6 +2567,9 @@ export class Store {
             normalizedProjectGroups
           ),
           worktreeLineageById: parsed.worktreeLineageById ?? {},
+          workspaceLineageByChildKey: normalizeWorkspaceLineageByChildKey(
+            parsed.workspaceLineageByChildKey
+          ),
           settings: {
             ...defaults.settings,
             ...parsed.settings,
@@ -3260,6 +3316,7 @@ export class Store {
           this.state.workspaceSession,
           folderWorkspaceKey(workspace.id)
         )!
+        this.removeWorkspaceLineageForFolderParent(workspace.id)
       }
     }
     this.state.folderWorkspaces = (this.state.folderWorkspaces ?? []).filter(
@@ -3413,6 +3470,7 @@ export class Store {
       this.state.workspaceSession,
       folderWorkspaceKey(id)
     )!
+    this.removeWorkspaceLineageForFolderParent(id)
     this.scheduleSave()
     return true
   }
@@ -3491,6 +3549,17 @@ export class Store {
     for (const [childId, lineage] of Object.entries(this.state.worktreeLineageById)) {
       if (childId.startsWith(prefix) || lineage.parentWorktreeId.startsWith(prefix)) {
         delete this.state.worktreeLineageById[childId]
+      }
+    }
+    for (const [childKey, lineage] of Object.entries(this.state.workspaceLineageByChildKey)) {
+      const childScope = parseWorkspaceKey(childKey)
+      const parentScope = parseWorkspaceKey(lineage.parentWorkspaceKey)
+      if (childScope?.type === 'worktree' && childScope.worktreeId.startsWith(prefix)) {
+        delete this.state.workspaceLineageByChildKey[childKey as WorkspaceKey]
+        continue
+      }
+      if (parentScope?.type === 'worktree' && parentScope.worktreeId.startsWith(prefix)) {
+        delete this.state.workspaceLineageByChildKey[childKey as WorkspaceKey]
       }
     }
     this.scheduleSave()
@@ -4028,6 +4097,7 @@ export class Store {
   removeWorktreeMeta(worktreeId: string): void {
     delete this.state.worktreeMeta[worktreeId]
     delete this.state.worktreeLineageById[worktreeId]
+    delete this.state.workspaceLineageByChildKey[worktreeWorkspaceKey(worktreeId)]
     this.scheduleSave()
   }
 
@@ -4048,6 +4118,34 @@ export class Store {
   removeWorktreeLineage(worktreeId: string): void {
     delete this.state.worktreeLineageById[worktreeId]
     this.scheduleSave()
+  }
+
+  getWorkspaceLineage(childWorkspaceKey: WorkspaceKey): WorkspaceLineage | undefined {
+    return this.state.workspaceLineageByChildKey[childWorkspaceKey]
+  }
+
+  getAllWorkspaceLineage(): Record<WorkspaceKey, WorkspaceLineage> {
+    return this.state.workspaceLineageByChildKey
+  }
+
+  setWorkspaceLineage(lineage: WorkspaceLineage): WorkspaceLineage {
+    this.state.workspaceLineageByChildKey[lineage.childWorkspaceKey] = lineage
+    this.scheduleSave()
+    return lineage
+  }
+
+  removeWorkspaceLineage(childWorkspaceKey: WorkspaceKey): void {
+    delete this.state.workspaceLineageByChildKey[childWorkspaceKey]
+    this.scheduleSave()
+  }
+
+  private removeWorkspaceLineageForFolderParent(folderWorkspaceId: string): void {
+    const parentKey = folderWorkspaceKey(folderWorkspaceId)
+    for (const [childKey, lineage] of Object.entries(this.state.workspaceLineageByChildKey)) {
+      if (lineage.parentWorkspaceKey === parentKey) {
+        delete this.state.workspaceLineageByChildKey[childKey as WorkspaceKey]
+      }
+    }
   }
 
   // ── Settings ───────────────────────────────────────────────────────
@@ -5128,6 +5226,9 @@ function getDefaultWorktreeMeta(): WorktreeMeta {
     linkedLinearIssue: null,
     linkedGitLabMR: null,
     linkedGitLabIssue: null,
+    linkedBitbucketPR: null,
+    linkedAzureDevOpsPR: null,
+    linkedGiteaPR: null,
     isArchived: false,
     isUnread: false,
     isPinned: false,

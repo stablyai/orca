@@ -7,6 +7,7 @@ import {
   getTaskSourceCacheScope,
   type TaskSourceContext
 } from '../../../../shared/task-source-context'
+import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 
 // Why: cap the per-session history so a long-lived workspace with many
 // worktree jumps cannot grow the array unbounded. 50 is generous enough
@@ -135,6 +136,12 @@ function getHistoryEntryKey(entry: WorktreeNavHistoryEntry): string {
 function isLiveEntry(entry: WorktreeNavHistoryEntry, state: AppState): boolean {
   if (isViewEntry(entry)) {
     return true
+  }
+  const workspaceScope = parseWorkspaceKey(entry)
+  if (workspaceScope?.type === 'folder') {
+    return state.folderWorkspaces.some(
+      (workspace) => workspace.id === workspaceScope.folderWorkspaceId
+    )
   }
   return findWorktreeById(state.worktreesByRepo, entry) !== undefined
 }

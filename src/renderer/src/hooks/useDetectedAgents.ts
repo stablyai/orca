@@ -13,6 +13,26 @@ export type UseDetectedAgentsResult = {
   refresh: () => Promise<TuiAgent[]>
 }
 
+export type AgentDetectionTarget =
+  | { kind: 'local' }
+  | { kind: 'ssh'; connectionId: string }
+  | { kind: 'runtime'; environmentId: string }
+
+function normalizeAgentDetectionTarget(
+  target: AgentDetectionTarget | string | null | undefined
+): AgentDetectionTarget | undefined {
+  if (target === undefined) {
+    return undefined
+  }
+  if (target === null) {
+    return { kind: 'local' }
+  }
+  if (typeof target === 'string') {
+    return { kind: 'ssh', connectionId: target }
+  }
+  return target
+}
+
 /**
  * Single source of truth for detected agent IDs across the renderer.
  *
@@ -21,27 +41,36 @@ export type UseDetectedAgentsResult = {
  * that doesn't refresh when Settings → Agents refreshes would feel broken;
  * centralizing the state eliminates multi-owner drift.
  *
- * @param connectionId — Pass a string to detect agents on a remote SSH host.
- * Pass null for local detection. Pass undefined (or omit) when the connection
- * context is not yet known (store not hydrated) — returns loading state.
- * Backward-compatible: all existing callers pass no argument.
+ * @param connectionId — Pass a string for legacy SSH callers, or an
+ * AgentDetectionTarget for local/SSH/runtime hosts. Pass null for local
+ * detection. Pass undefined when the connection context is not yet known
+ * (store not hydrated) — returns loading state.
  */
 export function useDetectedAgents(
-  connectionId: string | null | undefined = null
+  connectionId: AgentDetectionTarget | string | null | undefined = null
 ): UseDetectedAgentsResult {
+  const target = normalizeAgentDetectionTarget(connectionId)
   // Why: undefined means "store not yet hydrated" — we don't know if the
-  // worktree is local or remote yet. null means confirmed-local. string means
-  // confirmed-remote. This three-way distinction prevents flashing local agents
-  // for remote worktrees during hydration.
-  const isRemote = typeof connectionId === 'string'
-  const isUnknown = connectionId === undefined
+  // worktree is local or remote yet. This prevents flashing local agents for
+  // remote worktrees during hydration.
+  const isUnknown = target === undefined
+  const targetKind = target?.kind
+  const targetId =
+    target?.kind === 'ssh'
+      ? target.connectionId
+      : target?.kind === 'runtime'
+        ? target.environmentId
+        : null
 
   const detectedIds = useAppStore((s) => {
     if (isUnknown) {
       return null
     }
-    if (isRemote) {
-      return s.remoteDetectedAgentIds[connectionId] ?? null
+    if (targetKind === 'ssh' && targetId) {
+      return s.remoteDetectedAgentIds[targetId] ?? null
+    }
+    if (targetKind === 'runtime' && targetId) {
+      return s.runtimeDetectedAgentIds[targetId] ?? null
     }
     return s.detectedAgentIds
   })
@@ -49,30 +78,38 @@ export function useDetectedAgents(
     if (isUnknown) {
       return true
     }
-    if (isRemote) {
-      return s.isDetectingRemoteAgents[connectionId] ?? false
+    if (targetKind === 'ssh' && targetId) {
+      return s.isDetectingRemoteAgents[targetId] ?? false
+    }
+    if (targetKind === 'runtime' && targetId) {
+      return s.isDetectingRuntimeAgents[targetId] ?? false
     }
     return s.isDetectingAgents
   })
-  const isRefreshing = useAppStore((s) => (isRemote || isUnknown ? false : s.isRefreshingAgents))
+  const isRefreshing = useAppStore((s) => (targetKind === 'local' ? s.isRefreshingAgents : false))
   const ensureLocal = useAppStore((s) => s.ensureDetectedAgents)
   const ensureRemote = useAppStore((s) => s.ensureRemoteDetectedAgents)
+  const ensureRuntime = useAppStore((s) => s.ensureRuntimeDetectedAgents)
   const refresh = useAppStore((s) => s.refreshDetectedAgents)
 
   useEffect(() => {
     if (isUnknown) {
       return
     }
-    if (isRemote) {
+    if (targetKind === 'ssh' && targetId) {
       if (detectedIds === null) {
-        void ensureRemote(connectionId)
+        void ensureRemote(targetId)
+      }
+    } else if (targetKind === 'runtime' && targetId) {
+      if (detectedIds === null) {
+        void ensureRuntime(targetId)
       }
     } else {
       if (detectedIds === null) {
         void ensureLocal()
       }
     }
-  }, [isRemote, isUnknown, connectionId, detectedIds, ensureLocal, ensureRemote])
+  }, [isUnknown, targetKind, targetId, detectedIds, ensureLocal, ensureRemote, ensureRuntime])
 
   return { detectedIds, isLoading, isRefreshing, refresh }
 }

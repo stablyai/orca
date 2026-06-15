@@ -68,6 +68,10 @@ import { getPullRequestDraftContext } from '../text-generation/pull-request-cont
 import { getUpstreamStatus } from '../git/upstream'
 import { gitFastForward, gitFetch, gitPull, gitPullRebaseFromBase, gitPush } from '../git/remote'
 import { checkIgnoredPaths } from '../git/check-ignored-paths'
+import {
+  appendFolderToGitignore,
+  findKnownHugeFolderPathsToIgnore
+} from '../git/huge-folder-ignore'
 import { assertGitPushTargetShape } from '../../shared/git-push-target-validation'
 import { getCommitMessageModelDiscoveryHostKey } from '../../shared/commit-message-host-key'
 import type { ResolvedSourceControlAiGenerationParams } from '../../shared/source-control-ai'
@@ -821,6 +825,26 @@ export function registerFilesystemHandlers(
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
       const paths = args.paths.map((p) => validateGitRelativeFilePath(worktreePath, p))
       return checkIgnoredPaths(worktreePath, paths)
+    }
+  )
+
+  // Why: when status hits the entry limit, the SCM view offers to .gitignore the
+  // folder that's flooding it. These two handlers back that flow. Local-only:
+  // the huge-untracked-folder case is a local-dev pathology, and routing a
+  // .gitignore write through the SSH provider isn't worth the surface here.
+  ipcMain.handle(
+    'git:findHugeFoldersToIgnore',
+    async (_event, args: { worktreePath: string }): Promise<string[]> => {
+      const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
+      return findKnownHugeFolderPathsToIgnore(worktreePath)
+    }
+  )
+
+  ipcMain.handle(
+    'git:appendGitignore',
+    async (_event, args: { worktreePath: string; folderName: string }): Promise<boolean> => {
+      const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
+      return appendFolderToGitignore(worktreePath, args.folderName)
     }
   )
 

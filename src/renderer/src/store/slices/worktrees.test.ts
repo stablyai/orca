@@ -10,7 +10,8 @@ import type {
   FolderWorkspace,
   LocalBaseRefRefreshResult,
   Worktree,
-  WorktreeLineage
+  WorktreeLineage,
+  WorkspaceLineage
 } from '../../../../shared/types'
 import { toast } from 'sonner'
 import {
@@ -90,7 +91,7 @@ import {
   unregisterPersistentWebview
 } from '../../components/browser-pane/webview-registry'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
-import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
+import { folderWorkspaceKey, worktreeWorkspaceKey } from '../../../../shared/workspace-scope'
 
 function resetRemoteRuntimeMocks() {
   clearRuntimeCompatibilityCacheForTests()
@@ -198,6 +199,19 @@ function makeLineage(overrides: Partial<WorktreeLineage> = {}): WorktreeLineage 
     origin: 'manual',
     capture: { source: 'manual-action', confidence: 'explicit' },
     createdAt: 1,
+    ...overrides
+  }
+}
+
+function makeWorkspaceLineage(overrides: Partial<WorkspaceLineage> = {}): WorkspaceLineage {
+  return {
+    childWorkspaceKey: 'worktree:repo1::/path/child',
+    childInstanceId: 'child-instance',
+    parentWorkspaceKey: 'folder:folder-1',
+    parentInstanceId: null,
+    origin: 'cli',
+    capture: { source: 'env-workspace', confidence: 'inferred' },
+    createdAt: 2,
     ...overrides
   }
 }
@@ -923,6 +937,39 @@ describe('worktree lineage state', () => {
 
     expect(mockApi.worktrees.listLineage).toHaveBeenCalled()
     expect(store.getState().worktreeLineageById).toEqual({ [lineage.worktreeId]: lineage })
+    expect(store.getState().workspaceLineageByChildKey).toEqual({})
+  })
+
+  it('fetches workspace lineage from the expanded local lineage response', async () => {
+    const store = createTestStore()
+    const lineage = makeLineage()
+    const workspaceLineage = makeWorkspaceLineage()
+    mockApi.worktrees.listLineage.mockResolvedValue({
+      lineage: { [lineage.worktreeId]: lineage },
+      workspaceLineage: { [workspaceLineage.childWorkspaceKey]: workspaceLineage }
+    })
+
+    await store.getState().fetchWorktreeLineage()
+
+    expect(store.getState().worktreeLineageById).toEqual({ [lineage.worktreeId]: lineage })
+    expect(store.getState().workspaceLineageByChildKey).toEqual({
+      [workspaceLineage.childWorkspaceKey]: workspaceLineage
+    })
+  })
+
+  it('clears workspace lineage on successful old-shape lineage refresh', async () => {
+    const store = createTestStore()
+    const lineage = makeLineage()
+    const workspaceLineage = makeWorkspaceLineage()
+    store.setState({
+      workspaceLineageByChildKey: { [workspaceLineage.childWorkspaceKey]: workspaceLineage }
+    } as Partial<AppState>)
+    mockApi.worktrees.listLineage.mockResolvedValue({ [lineage.worktreeId]: lineage })
+
+    await store.getState().fetchWorktreeLineage()
+
+    expect(store.getState().worktreeLineageById).toEqual({ [lineage.worktreeId]: lineage })
+    expect(store.getState().workspaceLineageByChildKey).toEqual({})
   })
 
   it('updates a child lineage entry and bumps sortEpoch', async () => {
@@ -943,19 +990,56 @@ describe('worktree lineage state', () => {
     expect(store.getState().sortEpoch).toBe(4)
   })
 
-  it('removes a child lineage entry when the backend clears the parent link', async () => {
+  it('removes child lineage entries when the backend clears the parent link', async () => {
     const store = createTestStore()
     const lineage = makeLineage()
+    const workspaceLineage = makeWorkspaceLineage({
+      childWorkspaceKey: worktreeWorkspaceKey(lineage.worktreeId)
+    })
     mockApi.worktrees.updateLineage.mockResolvedValue(null)
     store.setState({
       worktreeLineageById: { [lineage.worktreeId]: lineage },
+      workspaceLineageByChildKey: { [workspaceLineage.childWorkspaceKey]: workspaceLineage },
       sortEpoch: 3
     } as Partial<AppState>)
 
     await store.getState().updateWorktreeLineage(lineage.worktreeId, { noParent: true })
 
     expect(store.getState().worktreeLineageById).toEqual({})
+    expect(store.getState().workspaceLineageByChildKey).toEqual({})
     expect(store.getState().sortEpoch).toBe(4)
+  })
+
+  it('syncs workspace lineage when a child is manually reparented', async () => {
+    const store = createTestStore()
+    const lineage = makeLineage({
+      origin: 'manual',
+      capture: { source: 'manual-action', confidence: 'explicit' }
+    })
+    const oldWorkspaceLineage = makeWorkspaceLineage({
+      childWorkspaceKey: worktreeWorkspaceKey(lineage.worktreeId),
+      parentWorkspaceKey: folderWorkspaceKey('folder-1')
+    })
+    mockApi.worktrees.updateLineage.mockResolvedValue(lineage)
+    store.setState({
+      workspaceLineageByChildKey: { [oldWorkspaceLineage.childWorkspaceKey]: oldWorkspaceLineage }
+    } as Partial<AppState>)
+
+    await store.getState().updateWorktreeLineage(lineage.worktreeId, {
+      parentWorktreeId: lineage.parentWorktreeId
+    })
+
+    expect(store.getState().workspaceLineageByChildKey).toEqual({
+      [worktreeWorkspaceKey(lineage.worktreeId)]: {
+        childWorkspaceKey: worktreeWorkspaceKey(lineage.worktreeId),
+        childInstanceId: lineage.worktreeInstanceId,
+        parentWorkspaceKey: worktreeWorkspaceKey(lineage.parentWorktreeId),
+        parentInstanceId: lineage.parentWorktreeInstanceId,
+        origin: lineage.origin,
+        capture: lineage.capture,
+        createdAt: lineage.createdAt
+      }
+    })
   })
 
   it('refetches lineage after an update failure', async () => {
@@ -1341,6 +1425,39 @@ describe('createWorktree base status merge', () => {
       linkedLinearIssue: 'ENG-123',
       workspaceStatus: 'in-review',
       pendingFirstAgentMessageRename: true
+    })
+  })
+
+  it('passes the active folder workspace as parent for in-app worktree creates', async () => {
+    const store = createTestStore()
+    const wt = makeWorktree({
+      id: 'repo1::/path/wt1',
+      repoId: 'repo1',
+      path: '/path/wt1',
+      instanceId: 'child-instance'
+    })
+    const workspaceLineage = makeWorkspaceLineage({
+      childWorkspaceKey: worktreeWorkspaceKey(wt.id),
+      childInstanceId: 'child-instance',
+      parentWorkspaceKey: folderWorkspaceKey('folder-1'),
+      capture: { source: 'active-workspace', confidence: 'explicit' }
+    })
+    store.setState({
+      activeWorkspaceKey: folderWorkspaceKey('folder-1')
+    } as Partial<AppState>)
+    mockApi.worktrees.create.mockResolvedValue({ worktree: wt, workspaceLineage })
+
+    await store.getState().createWorktree('repo1', 'feature', 'origin/main')
+
+    expect(mockApi.worktrees.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        repoId: 'repo1',
+        name: 'feature',
+        parentWorkspace: folderWorkspaceKey('folder-1')
+      })
+    )
+    expect(store.getState().workspaceLineageByChildKey).toEqual({
+      [workspaceLineage.childWorkspaceKey]: workspaceLineage
     })
   })
 
@@ -2952,6 +3069,9 @@ describe('worktree remote runtime mutations', () => {
       repoId: 'repo1',
       linkedGitHubPR: null,
       linkedGitLabMR: null,
+      linkedBitbucketPR: null,
+      linkedAzureDevOpsPR: null,
+      linkedGiteaPR: null,
       force: true
     })
   })
@@ -2981,6 +3101,9 @@ describe('worktree remote runtime mutations', () => {
       repoId: 'repo1',
       linkedGitHubPR: null,
       linkedGitLabMR: 789,
+      linkedBitbucketPR: null,
+      linkedAzureDevOpsPR: null,
+      linkedGiteaPR: null,
       force: true
     })
   })

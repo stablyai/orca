@@ -16,6 +16,9 @@ export function folderWorkspaceToWorktree(folderWorkspace: FolderWorkspace): Wor
     linkedGitLabMR: null,
     linkedGitLabIssue:
       linkedTask?.provider === 'gitlab' && linkedTask.type === 'issue' ? linkedTask.number : null,
+    linkedBitbucketPR: null,
+    linkedAzureDevOpsPR: null,
+    linkedGiteaPR: null,
     isArchived: folderWorkspace.isArchived,
     isUnread: folderWorkspace.isUnread,
     isPinned: folderWorkspace.isPinned,

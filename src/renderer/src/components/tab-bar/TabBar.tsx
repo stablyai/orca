@@ -31,7 +31,7 @@ import TabBarCreateEntry from './TabBarCreateEntry'
 import { ShellIcon } from './shell-icons'
 import { resolveWindowsShellLaunchTarget } from './windows-shell-launch'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
-import { useDetectedAgents } from '@/hooks/useDetectedAgents'
+import { type AgentDetectionTarget, useDetectedAgents } from '@/hooks/useDetectedAgents'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
 import {
   getWindowsTerminalCapabilityOwnerKey,
@@ -66,6 +66,7 @@ type GitStatusEntries = ReturnType<typeof useAppStore.getState>['gitStatusByWork
 const EMPTY_GIT_STATUS_ENTRIES: GitStatusEntries = []
 const EMPTY_AGENT_CMD_OVERRIDES: Partial<Record<TuiAgent, string>> = {}
 const EMPTY_UNIFIED_TABS: readonly Tab[] = []
+const AGENT_DETECTION_LOCAL_TARGET_KEY = 'local'
 
 type TabBarProps = {
   tabs: (TerminalTab & { unifiedTabId?: string })[]
@@ -250,16 +251,39 @@ function TabBarInner({
   const agentCmdOverrides = useAppStore(
     (s) => s.settings?.agentCmdOverrides ?? EMPTY_AGENT_CMD_OVERRIDES
   )
-  const connectionId = useAppStore((s) => {
+  const agentDetectionTargetKey = useAppStore((s): string | undefined => {
     const allWorktrees = Object.values(s.worktreesByRepo ?? {}).flat()
     const worktree = allWorktrees.find((w) => w.id === worktreeId)
     if (!worktree) {
       return undefined
     }
     const repo = s.repos?.find((r) => r.id === worktree.repoId)
-    return repo?.connectionId ?? null
+    const repoConnectionId = repo?.connectionId?.trim()
+    if (repoConnectionId) {
+      return `ssh:${repoConnectionId}`
+    }
+    const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(s, worktreeId)?.trim()
+    if (runtimeEnvironmentId) {
+      return `runtime:${runtimeEnvironmentId}`
+    }
+    return AGENT_DETECTION_LOCAL_TARGET_KEY
   })
-  const { detectedIds } = useDetectedAgents(connectionId)
+  const agentDetectionTarget = useMemo<AgentDetectionTarget | undefined>(() => {
+    if (agentDetectionTargetKey === undefined) {
+      return undefined
+    }
+    if (agentDetectionTargetKey === AGENT_DETECTION_LOCAL_TARGET_KEY) {
+      return { kind: 'local' }
+    }
+    if (agentDetectionTargetKey.startsWith('ssh:')) {
+      return { kind: 'ssh', connectionId: agentDetectionTargetKey.slice('ssh:'.length) }
+    }
+    if (agentDetectionTargetKey.startsWith('runtime:')) {
+      return { kind: 'runtime', environmentId: agentDetectionTargetKey.slice('runtime:'.length) }
+    }
+    return { kind: 'local' }
+  }, [agentDetectionTargetKey])
+  const { detectedIds } = useDetectedAgents(agentDetectionTarget)
   const agentLaunchOptions = useMemo(
     () =>
       buildTabAgentLaunchOptions(

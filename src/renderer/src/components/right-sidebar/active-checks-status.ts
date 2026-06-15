@@ -54,7 +54,12 @@ export function getActiveChecksStatus(state: ActiveChecksStatusState): CheckStat
   if (hostedReview && hostedReview.provider !== 'github') {
     return hostedReview.status
   }
-  if ((activeWorktree.linkedGitLabMR ?? null) !== null) {
+  if (
+    (activeWorktree.linkedGitLabMR ?? null) !== null ||
+    (activeWorktree.linkedBitbucketPR ?? null) !== null ||
+    (activeWorktree.linkedAzureDevOpsPR ?? null) !== null ||
+    (activeWorktree.linkedGiteaPR ?? null) !== null
+  ) {
     return null
   }
   return state.prCache[prCacheKey]?.data?.checksStatus ?? hostedReview?.status ?? null

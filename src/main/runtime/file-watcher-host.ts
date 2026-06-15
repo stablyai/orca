@@ -23,11 +23,43 @@ const RUNTIME_FILE_WATCH_IGNORE = [
   '.venv'
 ]
 
+// Why: clean teardown is async (the worker awaits subscription.unsubscribe()
+// before closing its port and exiting). Wait this long for the worker to exit on
+// its own before force-terminating, so the native watcher thread isn't freed
+// mid-flight.
+const WORKER_TEARDOWN_TIMEOUT_MS = 5000
+type WorkerExitWaitResult = 'exit' | 'timeout'
+
 function getFileWatcherWorkerPath(): string {
   if (app.isPackaged) {
     return join(process.resourcesPath, 'app.asar', 'out', 'main', 'file-watcher-worker.js')
   }
   return join(__dirname, 'file-watcher-worker.js')
+}
+
+function waitForWorkerExit(worker: Worker, timeoutMs: number): Promise<WorkerExitWaitResult> {
+  return new Promise((resolve) => {
+    let settled = false
+    let timer: ReturnType<typeof setTimeout> | undefined
+    let onExit: (() => void) | undefined
+    const finish = (result: WorkerExitWaitResult): void => {
+      if (settled) {
+        return
+      }
+      settled = true
+      if (timer) {
+        clearTimeout(timer)
+      }
+      if (onExit) {
+        worker.off('exit', onExit)
+      }
+      resolve(result)
+    }
+
+    onExit = () => finish('exit')
+    worker.once('exit', onExit)
+    timer = setTimeout(() => finish('timeout'), timeoutMs)
+  })
 }
 
 /** Start a recursive file watch in a worker thread. Resolves to an unsubscribe
@@ -44,26 +76,42 @@ export function watchFileExplorerInWorker(
 
     let ready = false
     let disposed = false
+    let exited = false
+    let disposePromise: Promise<void> | undefined
 
-    // Why: returns a promise that resolves once the worker is actually down, so
-    // the shutdown drain (awaitRuntimeFileWatcherUnsubscribes) doesn't finish
-    // while the native watcher thread is still alive.
-    const dispose = async (): Promise<void> => {
+    const runDispose = async (): Promise<void> => {
       if (disposed) {
         return
       }
       disposed = true
-      // Ask the worker to unsubscribe its native watcher, then terminate as a
-      // backstop in case the worker is wedged and never closes its own port.
+      if (exited) {
+        return
+      }
+      // Ask the worker to unsubscribe its native watcher and exit on its own.
+      // Why: worker.terminate() force-frees the worker's V8 env while
+      // @parcel/watcher's native watch thread / inflight async work is still
+      // live, which faults inside napi (Watcher::findCallback,
+      // PromiseRunner::onWorkComplete). Only terminate as a backstop if the
+      // worker wedges and never exits.
       try {
         worker.postMessage({ type: 'unsubscribe' } satisfies FileWatcherHostMessage)
       } catch {
-        // Worker already gone — terminate below covers it.
+        // Worker already gone — the exit wait and timeout backstop cover it.
       }
-      await worker.terminate().then(
-        () => undefined,
-        () => undefined
-      )
+      const exitResult = await waitForWorkerExit(worker, WORKER_TEARDOWN_TIMEOUT_MS)
+      if (exitResult === 'timeout' && !exited) {
+        await worker.terminate().then(
+          () => undefined,
+          () => undefined
+        )
+      }
+    }
+
+    // Why: racing dispose callers must share the same worker-exit drain instead
+    // of letting later calls resolve while teardown is still in flight.
+    const dispose = (): Promise<void> => {
+      disposePromise ??= runDispose()
+      return disposePromise
     }
 
     worker.on('message', (message: FileWatcherWorkerMessage) => {
@@ -107,6 +155,7 @@ export function watchFileExplorerInWorker(
     })
 
     worker.on('exit', (code) => {
+      exited = true
       if (!ready && !disposed) {
         disposed = true
         reject(new Error(`file watcher worker exited before ready (code ${code})`))

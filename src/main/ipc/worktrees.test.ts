@@ -20,6 +20,7 @@ const {
   getDefaultRemoteMock,
   getBranchConflictKindMock,
   getPRForBranchMock,
+  getHostedReviewForBranchMock,
   getWorkItemMock,
   getPullRequestPushTargetMock,
   getEffectiveHooksMock,
@@ -67,6 +68,7 @@ const {
   getDefaultRemoteMock: vi.fn(),
   getBranchConflictKindMock: vi.fn(),
   getPRForBranchMock: vi.fn(),
+  getHostedReviewForBranchMock: vi.fn(),
   getWorkItemMock: vi.fn(),
   getPullRequestPushTargetMock: vi.fn(),
   getEffectiveHooksMock: vi.fn(),
@@ -123,6 +125,10 @@ vi.mock('../github/client', () => ({
   getPRForBranch: getPRForBranchMock,
   getWorkItem: getWorkItemMock,
   getPullRequestPushTarget: getPullRequestPushTargetMock
+}))
+
+vi.mock('../source-control/hosted-review', () => ({
+  getHostedReviewForBranch: getHostedReviewForBranchMock
 }))
 
 vi.mock('../providers/ssh-git-dispatch', () => ({
@@ -264,6 +270,7 @@ describe('registerWorktreeHandlers', () => {
       getDefaultRemoteMock,
       getBranchConflictKindMock,
       getPRForBranchMock,
+      getHostedReviewForBranchMock,
       getWorkItemMock,
       getPullRequestPushTargetMock,
       getEffectiveHooksMock,
@@ -360,6 +367,7 @@ describe('registerWorktreeHandlers', () => {
     getDefaultRemoteMock.mockResolvedValue('origin')
     getBranchConflictKindMock.mockResolvedValue(null)
     getPRForBranchMock.mockResolvedValue(null)
+    getHostedReviewForBranchMock.mockResolvedValue(null)
     getWorkItemMock.mockResolvedValue(null)
     getPullRequestPushTargetMock.mockResolvedValue(null)
     // Why: createLocalWorktree can still hit legacy git fetch fallback in
@@ -958,6 +966,92 @@ describe('registerWorktreeHandlers', () => {
       { cwd: '/workspace/fix-title' }
     )
     expect(getPRForBranchMock).toHaveBeenCalledWith('/workspace/repo', 'feature/fix')
+  })
+
+  it('allows a selected Bitbucket PR branch override to match its remote push target', async () => {
+    getBranchConflictKindMock.mockImplementation(async (_repoPath: string, branch: string) =>
+      branch === 'feature/bitbucket' ? 'remote' : null
+    )
+    listWorktreesMock.mockResolvedValue([
+      {
+        path: '/workspace/bitbucket-title',
+        head: 'abc123',
+        branch: 'refs/heads/feature/bitbucket',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+    store.setWorktreeMeta.mockImplementation((_worktreeId, meta) => meta)
+    getHostedReviewForBranchMock.mockResolvedValueOnce({
+      provider: 'bitbucket',
+      number: 11,
+      title: 'Bitbucket PR',
+      state: 'open',
+      url: 'https://bitbucket.org/team/repo/pull-requests/11',
+      status: 'success',
+      updatedAt: '2026-05-21T00:00:00Z',
+      mergeable: 'UNKNOWN'
+    })
+
+    await handlers['worktrees:create'](null, {
+      repoId: 'repo-1',
+      name: 'bitbucket-title',
+      baseBranch: 'abc123',
+      branchNameOverride: 'feature/bitbucket',
+      linkedBitbucketPR: 11,
+      pushTarget: { remoteName: 'origin', branchName: 'feature/bitbucket' }
+    })
+
+    expect(addWorktreeMock).toHaveBeenCalledWith(
+      '/workspace/repo',
+      '/workspace/bitbucket-title',
+      'feature/bitbucket',
+      'abc123',
+      false
+    )
+    expect(store.setWorktreeMeta).toHaveBeenCalledWith(
+      'repo-1::/workspace/bitbucket-title',
+      expect.objectContaining({ linkedBitbucketPR: 11 })
+    )
+    expect(getHostedReviewForBranchMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        repoPath: '/workspace/repo',
+        branch: 'feature/bitbucket',
+        linkedBitbucketPR: 11
+      })
+    )
+    expect(getPRForBranchMock).not.toHaveBeenCalled()
+  })
+
+  it('rejects a selected Bitbucket PR branch when the existing PR is different', async () => {
+    getBranchConflictKindMock.mockImplementation(async (_repoPath: string, branch: string) =>
+      branch === 'feature/bitbucket' ? 'remote' : null
+    )
+    getHostedReviewForBranchMock.mockResolvedValueOnce({
+      provider: 'bitbucket',
+      number: 12,
+      title: 'Different Bitbucket PR',
+      state: 'open',
+      url: 'https://bitbucket.org/team/repo/pull-requests/12',
+      status: 'success',
+      updatedAt: '2026-05-21T00:00:00Z',
+      mergeable: 'UNKNOWN'
+    })
+
+    await expect(
+      handlers['worktrees:create'](null, {
+        repoId: 'repo-1',
+        name: 'bitbucket-title',
+        baseBranch: 'abc123',
+        branchNameOverride: 'feature/bitbucket',
+        linkedBitbucketPR: 11,
+        pushTarget: { remoteName: 'origin', branchName: 'feature/bitbucket' }
+      })
+    ).rejects.toThrow(
+      'Branch "feature/bitbucket" already has PR #12. Pick a different worktree name.'
+    )
+
+    expect(addWorktreeMock).not.toHaveBeenCalled()
   })
 
   it('rejects a matching push target branch without selected PR metadata', async () => {

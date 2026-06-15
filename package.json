@@ -1,6 +1,6 @@
 {
   "name": "orca",
-  "version": "1.4.67-rc.0",
+  "version": "1.4.70-rc.1",
   "description": "Next-gen IDE for parallel agentic development",
   "homepage": "https://github.com/stablyai/orca",
   "author": "stablyai",
@@ -79,7 +79,8 @@
     "test:e2e:terminal-perf:summarize": "node config/scripts/summarize-terminal-perf-report.mjs",
     "test:e2e:ssh-docker-perf": "node config/scripts/run-ssh-docker-perf-e2e.mjs",
     "test:e2e:headful": "pnpm run ensure:electron-runtime && npx playwright test --config tests/playwright.config.ts --project electron-headful",
-    "test:e2e:computer": "vitest run --config tests/e2e/vitest.config.ts"
+    "test:e2e:computer": "vitest run --config tests/e2e/vitest.config.ts",
+    "bench:idle-cpu": "pnpm run ensure:electron-runtime && node config/scripts/run-idle-cpu-benchmark.mjs"
   },
   "dependencies": {
     "@electron-toolkit/preload": "^3.0.2",

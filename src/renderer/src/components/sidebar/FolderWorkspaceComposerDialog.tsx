@@ -42,6 +42,7 @@ import { useFolderWorkspaceComposerPathStatus } from './folder-workspace-compose
 import { submitFolderWorkspaceCreate } from './folder-workspace-composer-submit'
 import { projectHostSetupProjectionFromRepos } from '../../../../shared/project-host-setup-projection'
 import { useFolderWorkspaceComposerKeyboard } from './folder-workspace-composer-keyboard'
+import { getWorkspaceComposerInitialFocusTarget } from '@/lib/workspace-composer-initial-focus'
 
 type FolderWorkspaceComposerDialogProps = {
   projectGroup: ProjectGroup | null
@@ -308,10 +309,7 @@ export function FolderWorkspaceComposerDialog({
           onOpenAutoFocus={(event) => {
             event.preventDefault()
             const content = event.currentTarget as HTMLElement
-            const trigger = content.querySelector<HTMLElement>(
-              '[data-project-combobox-root="true"][role="combobox"]'
-            )
-            trigger?.focus({ preventScroll: true })
+            getWorkspaceComposerInitialFocusTarget(content)?.focus({ preventScroll: true })
           }}
         >
           <DialogHeader className="gap-1">

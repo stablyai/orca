@@ -7,6 +7,7 @@
     "../src/preload/api-types.ts",
     "../src/shared/**/*",
     "../src/main/ipc/worktree-logic.ts",
+    "../src/main/ipc/worktree-linked-work-item-metadata.ts",
     "../src/main/wsl.ts"
   ],
   "compilerOptions": {
