@@ -326,6 +326,8 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     experimentalActivity: false,
     experimentalActivityDefaultedOffForAllUsers: true,
     experimentalTerminalAttention: false,
+    experimentalAgentHibernation: false,
+    agentHibernationIdleMs: 30 * 60 * 1000,
     compactWorktreeCards: false,
     experimentalWorktreeSymlinks: false,
     // Why: local desktop remains the default server until the user explicitly
@@ -396,6 +398,7 @@ export function getDefaultPersistedState(homedir: string): PersistedState {
     sparsePresetsByRepo: {},
     worktreeMeta: {},
     worktreeLineageById: {},
+    workspaceLineageByChildKey: {},
     settings: getDefaultSettings(homedir),
     ui: getDefaultUIState(),
     githubCache: { pr: {}, issue: {} },

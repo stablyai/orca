@@ -993,9 +993,26 @@ const GH_RETRY_DELAYS_MS = [250, 1000] as const
 // at 30s so a single transient gh call can never block the IPC main thread
 // for longer than the user's patience budget for an interactive action.
 const GH_RETRY_AFTER_MAX_MS = 30_000
+const DEFAULT_GH_EXEC_TIMEOUT_MS = 30_000
 
 async function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+function defaultGhExecTimeoutMs(env: NodeJS.ProcessEnv = process.env): number {
+  const raw = env.ORCA_GH_EXEC_TIMEOUT_MS
+  if (!raw) {
+    return DEFAULT_GH_EXEC_TIMEOUT_MS
+  }
+  const parsed = Number(raw)
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_GH_EXEC_TIMEOUT_MS
+}
+
+function nonInteractiveGhEnv(env: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
+  return {
+    ...env,
+    GH_PROMPT_DISABLED: env.GH_PROMPT_DISABLED ?? '1'
+  }
 }
 
 /**
@@ -1020,8 +1037,10 @@ export async function ghExecFileAsync(
         cwd: resolved.cwd,
         encoding: (options.encoding ?? 'utf-8') as BufferEncoding,
         maxBuffer: options.maxBuffer,
-        timeout: options.timeout,
-        env: options.env
+        // Why: GitHub detail IPC powers PR cards, Tasks, and URL worktree
+        // creation; one stuck gh child must fail visibly, not wedge every lane.
+        timeout: options.timeout ?? defaultGhExecTimeoutMs(options.env),
+        env: nonInteractiveGhEnv(options.env)
       })
       return { stdout: stdout as string, stderr: stderr as string }
     } catch (err) {

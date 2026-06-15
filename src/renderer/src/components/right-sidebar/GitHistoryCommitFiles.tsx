@@ -8,6 +8,7 @@ import {
 import { getFileTypeIcon } from '@/lib/file-type-icons'
 import { basename, dirname } from '@/lib/path'
 import { translate } from '@/i18n/i18n'
+import { formatGitHistoryTimestamp } from './git-history-format'
 import type { GitBranchChangeEntry, GitFileStatus } from '../../../../shared/types'
 
 // State for a single commit's lazily-loaded file list. Owned by GitHistoryPanel,
@@ -51,17 +52,6 @@ function CommitFileRow({
       </span>
     </button>
   )
-}
-
-function formatCommitDate(timestamp: number | undefined): string {
-  if (!timestamp) {
-    return ''
-  }
-  return new Intl.DateTimeFormat(undefined, {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric'
-  }).format(new Date(timestamp))
 }
 
 function CommitFilesBody({
@@ -144,7 +134,7 @@ export function GitHistoryCommitFiles({
   onOpenAll?: () => void
 }): React.JSX.Element {
   // Author and date move off the dense commit row and surface here on expand.
-  const meta = [author, formatCommitDate(timestamp)].filter(Boolean).join(' · ')
+  const meta = [author, formatGitHistoryTimestamp(timestamp)].filter(Boolean).join(' · ')
   return (
     <div className="border-l border-border/60 bg-muted/20">
       {meta && <div className="py-1 pl-9 pr-3 text-[11px] text-muted-foreground">{meta}</div>}

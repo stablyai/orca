@@ -2440,7 +2440,9 @@
             "efb33546ff": "Git bash",
             "1a8af49530": "Mensaje CMD",
             "2148f65e04": "PowerShell",
-            "ab589350e5": "No se pudo generar el comando de inicio para {{value0}}."
+            "ab589350e5": "No se pudo generar el comando de inicio para {{value0}}.",
+            "7a9b4af2af": "Desplazar pestañas a la izquierda",
+            "232e075b07": "Desplazar pestañas a la derecha"
           },
           "TabBarCreateEntry": {
             "d62d63b807": "crear archivo",
@@ -3671,6 +3673,9 @@
         "WorktreeCardAgents": {
           "1b0a156717": "Agents"
         },
+        "WorktreeCardReviewDetailSection": {
+          "reviewHeader": "{{value0}} #{{value1}}"
+        },
         "WorktreeCardMeta": {
           "3e65e11cc6": "Metadatos del espacio de trabajo",
           "c7fa72ead0": "Editar notas",
@@ -4610,7 +4615,7 @@
           "e7bb06007c": "Red Local",
           "4a73f5217a": "Apple Events para scripts que controlan otras aplicaciones locales.",
           "e119f0d66b": "Automatización",
-          "7ca17b62c8": "Acceso persistente a carpetas protegidas desde sesiones de terminal.",
+          "7ca17b62c8": "Recomendado cuando proyectos, worktrees o archivos con enlaces simbólicos usan carpetas protegidas de macOS.",
           "c566bca278": "Acceso completo al disco",
           "9f35980756": "Herramientas de inyección de pulsaciones de teclas, control de ventanas y automatización de UI.",
           "5b2f22ca2d": "Accesibilidad",
@@ -4634,7 +4639,16 @@
           "f63ea281e3": "Feed integrado en la barra lateral izquierda para completar agentes y estados de bloqueo.",
           "ca2219fe5e": "Muestra una pequeña mascota animada fijada en la esquina inferior derecha. Elige un personaje (Claudino, OpenCode, Gremlin) o carga tu propio PNG, APNG, GIF, WebP, JPG o SVG desde el menú de mascotas de la barra de estado. Ocultarlo en cualquier momento desde el mismo menú sin desactivar esta configuración.",
           "dd6f0a1d45": "Mascota",
-          "0e89a574ae": "Mascota animada flotante en la esquina inferior derecha."
+          "0e89a574ae": "Mascota animada flotante en la esquina inferior derecha.",
+          "agentHibernation": {
+            "copy": "Stops idle background agent terminals after the configured idle window and resumes supported sessions when you open them again. Experimental while we tune the safety model.",
+            "description": "Stops idle background agent terminals after the configured idle window and resumes supported sessions when you open them again.",
+            "idleMinutesDescription": "How many idle minutes a completed background agent must wait before Orca can hibernate it.",
+            "idleMinutesLabel": "Hibernate after",
+            "idleMinutesSuffix": "minutes",
+            "title": "Agent hibernation",
+            "toggleLabel": "Toggle agent hibernation"
+          }
         },
         "FloatingWorkspacePane": {
           "aeaf76fda9": "Barra de estado",
@@ -6605,7 +6619,7 @@
               "a0c19119fb": "descargas",
               "4438f81bfa": "documentos",
               "c10e36cbd1": "acceso completo al disco",
-              "05ab708ee5": "Abra el panel de privacidad de macOS para obtener un amplio acceso a los archivos del terminal.",
+              "05ab708ee5": "Abra el panel de privacidad de macOS para acceder a archivos de proyectos y worktrees protegidos.",
               "bbf543a3a1": "Acceso completo al disco",
               "7f145a3984": "ventana",
               "5610022e1e": "automatización",
@@ -6675,7 +6689,17 @@
             "b54cea709b": "compañero",
             "051203d37c": "mascota",
             "6b5a56ac35": "Mascota animada flotante en la esquina inferior derecha.",
-            "87d99e634b": "Mascota"
+            "87d99e634b": "Mascota",
+            "agentHibernation": {
+              "agent": "agent",
+              "agents": "agents",
+              "description": "Stops idle background agent terminals after the configured idle window and resumes supported sessions when opened again.",
+              "hibernate": "hibernate",
+              "minutes": "minutes",
+              "sleep": "sleep",
+              "terminal": "terminal",
+              "title": "Agent hibernation"
+            }
           }
         },
         "floating": {
@@ -8483,7 +8507,8 @@
             "6306b48afd": "control de fuente",
             "ef182dcb12": "buscar",
             "fc3095d2ed": "explorador",
-            "aiVaultSessionHistory": "Agents"
+            "aiVaultSessionHistory": "Agents",
+            "folderWorkspaces": "Attached worktrees"
           },
           "right": {
             "panel": {
@@ -9616,6 +9641,17 @@
                 "close_step": "Close"
               }
             }
+          },
+          "FullDiskAccessSetupPrompt": {
+            "bbb3f1e404": "Comprobando",
+            "48d87edcd2": "Concedido",
+            "6db9a69f4e": "Recomendado",
+            "fa809e8ada": "Privacidad y seguridad de macOS abiertas",
+            "bfa3402305": "No se pudo solicitar permiso",
+            "c566bca278": "Acceso completo al disco",
+            "0d6efe9cf4": "Recomendado en macOS cuando los proyectos o worktrees están en carpetas protegidas.",
+            "dac08ec03e": "Abriendo...",
+            "6e3d62b816": "Abrir Acceso completo al disco"
           }
         },
         "tips": {
@@ -9815,7 +9851,9 @@
           "f5cf81cec2": "Cargando diferencias...",
           "72f71f52eb": "La diferenciación de texto no está disponible para este archivo.",
           "7ce8436458": "La diferencia de texto no está disponible para este archivo en la comparación de ramas.",
-          "bdbf02d5df": "binario"
+          "bdbf02d5df": "binario",
+          "b5675b0694": "Guardar",
+          "593f2193f6": "Este borrador superó el límite seguro de visualización, pero aún se puede guardar."
         },
         "DiffSectionHeader": {
           "8915726e93": "Copiar ruta"
@@ -10182,6 +10220,23 @@
         },
         "useRichMarkdownReviewData": {
           "f9d2acd6b0": "Todas las notas no enviadas"
+        },
+        "LargeDiffFallback": {
+          "a3c74f8a21": "el conteo de líneas supera el límite seguro de visualización",
+          "fd92fbde46": "el conteo de caracteres supera el límite seguro de visualización",
+          "7d424bb761": "Este diff es demasiado grande para mostrarse de forma segura.",
+          "28aa2cc90b": "Líneas originales",
+          "20857938dd": "Líneas modificadas",
+          "e5f0d2182e": "Caracteres",
+          "877c25a02f": "Motivo",
+          "5fca073b72": "Límites",
+          "f1d136a163": "líneas por lado",
+          "23433fcdea": "caracteres combinados",
+          "7944ed9fb8": "No contado"
+        },
+        "DiffViewer": {
+          "b5675b0694": "Guardar",
+          "593f2193f6": "Este borrador superó el límite seguro de visualización, pero aún se puede guardar."
         }
       },
       "diff": {
@@ -10848,6 +10903,17 @@
             "d785c42b8b": "Use a Jira Cloud site URL, Atlassian email, and API token to browse issues.",
             "8388bdea2b": "Connect Jira site"
           }
+        }
+      },
+      "rightSidebar": {
+        "FolderWorkspaceWorktreesPanel": {
+          "unavailable": "Workspaces are only shown for folder workspaces.",
+          "label": "Workspaces",
+          "description": "Shows worktrees attached to this folder workspace.",
+          "countOne": "1 attached worktree",
+          "countMany": "{{value0}} attached worktrees",
+          "emptyTitle": "No attached worktrees yet",
+          "emptyCopy": "Worktrees created from this workspace will show up here."
         }
       },
       "link": {

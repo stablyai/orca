@@ -2,17 +2,13 @@ import type React from 'react'
 import { ChevronDown } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
-import type { GitHistoryItem, GitHistoryResult } from '../../../../shared/git-history'
+import type { GitHistoryItem, GitHistoryItemRef } from '../../../../shared/git-history'
 import type { GitHistoryItemViewModel } from '../../../../shared/git-history-graph'
 import { GitHistoryGraphSvg, graphColor } from './GitHistoryGraphSvg'
 import { dedupeRemoteTrackingRefs } from '../../../../shared/git-history-ref-display'
 import { translate } from '@/i18n/i18n'
 
-function GitHistoryRefBadge({
-  itemRef
-}: {
-  itemRef: NonNullable<GitHistoryResult['currentRef']>
-}): React.JSX.Element {
+function GitHistoryRefBadge({ itemRef }: { itemRef: GitHistoryItemRef }): React.JSX.Element {
   const refLabel = itemRef.category ? `${itemRef.name} (${itemRef.category})` : itemRef.name
 
   return (

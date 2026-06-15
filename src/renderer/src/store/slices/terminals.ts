@@ -401,7 +401,7 @@ export type TerminalSlice = {
   clearTabPtyId: (tabId: string, ptyId?: string) => void
   shutdownWorktreeTerminals: (
     worktreeId: string,
-    opts?: { keepIdentifiers?: boolean }
+    opts?: { keepIdentifiers?: boolean; sleepingPaneKeys?: string[] }
   ) => Promise<void>
   suppressPtyExit: (ptyId: string) => void
   consumeSuppressedPtyExit: (ptyId: string) => boolean
@@ -446,6 +446,10 @@ export type TerminalSlice = {
    *  independently. null means no active timer for that pane. */
   cacheTimerByKey: Record<string, number | null>
   setCacheTimerStartedAt: (key: string, ts: number | null) => void
+  /** Wall-clock user input markers keyed by paneKey. Hibernation uses these to
+   *  avoid sleeping a completed agent pane that the user has turned into a shell. */
+  lastTerminalInputAtByPaneKey: Record<string, number>
+  recordTerminalInput: (paneKey: string, timestamp?: number) => void
   /** Scan all tabs and seed cache timers for any idle Claude sessions that don't
    *  already have a timer. Called when the feature is enabled mid-session. */
   seedCacheTimersForIdleTabs: () => void
@@ -510,6 +514,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
   deferredSshReconnectTargets: [],
   deferredSshSessionIdsByTabId: {},
   cacheTimerByKey: {},
+  lastTerminalInputAtByPaneKey: {},
   recentQuickCommandIdByGroup: {},
 
   setRecentQuickCommandForGroup: (groupId, quickCommandId) => {
@@ -517,6 +522,18 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       recentQuickCommandIdByGroup: {
         ...s.recentQuickCommandIdByGroup,
         [groupId]: quickCommandId
+      }
+    }))
+  },
+
+  recordTerminalInput: (paneKey, timestamp = Date.now()) => {
+    if (!paneKey || !Number.isFinite(timestamp)) {
+      return
+    }
+    set((s) => ({
+      lastTerminalInputAtByPaneKey: {
+        ...s.lastTerminalInputAtByPaneKey,
+        [paneKey]: timestamp
       }
     }))
   },
@@ -855,6 +872,12 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
           delete nextUnreadAgentCompletionPanes[paneKey]
         }
       }
+      const nextLastTerminalInputAtByPaneKey = { ...s.lastTerminalInputAtByPaneKey }
+      for (const paneKey of Object.keys(nextLastTerminalInputAtByPaneKey)) {
+        if (paneKey.startsWith(`${tabId}:`)) {
+          delete nextLastTerminalInputAtByPaneKey[paneKey]
+        }
+      }
       const nextPendingStartupByTabId = { ...s.pendingStartupByTabId }
       delete nextPendingStartupByTabId[tabId]
       const nextPendingSetupSplitByTabId = { ...s.pendingSetupSplitByTabId }
@@ -926,6 +949,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         ...(nextUnreadAgentCompletionPanes !== s.unreadAgentCompletionPanes
           ? { unreadAgentCompletionPanes: nextUnreadAgentCompletionPanes }
           : {}),
+        lastTerminalInputAtByPaneKey: nextLastTerminalInputAtByPaneKey,
         expandedPaneByTabId: nextExpanded,
         canExpandPaneByTabId: nextCanExpand,
         terminalLayoutsByTabId: nextLayouts,
@@ -1674,6 +1698,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       let nextUnreadTerminalTabs = s.unreadTerminalTabs
       let nextUnreadTerminalPanes = s.unreadTerminalPanes
       let nextUnreadAgentCompletionPanes = s.unreadAgentCompletionPanes
+      let nextLastTerminalInputAtByPaneKey = s.lastTerminalInputAtByPaneKey
       for (const tab of tabs) {
         if (!keepIdentifiers) {
           delete nextRuntimePaneTitlesByTabId[tab.id]
@@ -1700,6 +1725,14 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
               nextUnreadAgentCompletionPanes = { ...s.unreadAgentCompletionPanes }
             }
             delete nextUnreadAgentCompletionPanes[paneKey]
+          }
+        }
+        for (const paneKey of Object.keys(nextLastTerminalInputAtByPaneKey)) {
+          if (paneKey.startsWith(`${tab.id}:`)) {
+            if (nextLastTerminalInputAtByPaneKey === s.lastTerminalInputAtByPaneKey) {
+              nextLastTerminalInputAtByPaneKey = { ...s.lastTerminalInputAtByPaneKey }
+            }
+            delete nextLastTerminalInputAtByPaneKey[paneKey]
           }
         }
         if (!keepIdentifiers) {
@@ -1749,12 +1782,15 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
           : {}),
         ...(nextUnreadAgentCompletionPanes !== s.unreadAgentCompletionPanes
           ? { unreadAgentCompletionPanes: nextUnreadAgentCompletionPanes }
+          : {}),
+        ...(nextLastTerminalInputAtByPaneKey !== s.lastTerminalInputAtByPaneKey
+          ? { lastTerminalInputAtByPaneKey: nextLastTerminalInputAtByPaneKey }
           : {})
       }
     })
 
     if (keepIdentifiers) {
-      get().captureSleepingAgentSessionsByWorktree(worktreeId)
+      get().captureSleepingAgentSessionsByWorktree(worktreeId, opts?.sleepingPaneKeys)
     } else {
       get().clearSleepingAgentSessionsByWorktree(worktreeId)
     }

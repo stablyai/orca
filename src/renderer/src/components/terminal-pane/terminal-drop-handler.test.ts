@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => ({
   toastDismiss: vi.fn(),
   toastError: vi.fn(),
   importExternalPathsToRuntime: vi.fn(),
+  recordTerminalUserInputForLeaf: vi.fn(),
   storeState: {
     settings: { activeRuntimeEnvironmentId: 'env-1' as string | null },
     repos: [
@@ -39,6 +40,10 @@ vi.mock('@/runtime/runtime-file-client', () => ({
   importExternalPathsToRuntime: mocks.importExternalPathsToRuntime
 }))
 
+vi.mock('./terminal-input-activity', () => ({
+  recordTerminalUserInputForLeaf: mocks.recordTerminalUserInputForLeaf
+}))
+
 import { handleTerminalFileDrop, resolveTerminalDropTargetShell } from './terminal-drop-handler'
 
 describe('handleTerminalFileDrop', () => {
@@ -63,10 +68,10 @@ describe('handleTerminalFileDrop', () => {
         }
       ]
     })
-    const sendInput = vi.fn()
+    const sendInput = vi.fn(() => true)
     const focus = vi.fn()
     const manager = {
-      getActivePane: () => ({ id: 1, terminal: { focus } }),
+      getActivePane: () => ({ id: 1, leafId: 'leaf-1', terminal: { focus } }),
       getPanes: () => []
     }
     const paneTransports = new Map([[1, { sendInput }]])
@@ -75,6 +80,7 @@ describe('handleTerminalFileDrop', () => {
       manager: manager as never,
       paneTransports: paneTransports as never,
       worktreeId: 'wt-1',
+      tabId: 'tab-1',
       cwd: undefined,
       data: { paths: ['/Users/me/logo.png'], target: 'terminal' }
     })
@@ -90,6 +96,7 @@ describe('handleTerminalFileDrop', () => {
     )
     expect(sendInput).toHaveBeenCalledWith('/remote/repo/.orca/drops/logo.png ')
     expect(focus).toHaveBeenCalled()
+    expect(mocks.recordTerminalUserInputForLeaf).toHaveBeenCalledWith('tab-1', 'leaf-1')
     expect(mocks.toastError).not.toHaveBeenCalled()
     expect(mocks.toastDismiss).toHaveBeenCalledWith('toast-1')
   })
@@ -109,10 +116,10 @@ describe('handleTerminalFileDrop', () => {
         }
       ]
     })
-    const sendInput = vi.fn()
+    const sendInput = vi.fn(() => true)
     const focus = vi.fn()
     const manager = {
-      getActivePane: () => ({ id: 1, terminal: { focus } }),
+      getActivePane: () => ({ id: 1, leafId: 'leaf-1', terminal: { focus } }),
       getPanes: () => []
     }
     const paneTransports = new Map([[1, { sendInput }]])
@@ -121,6 +128,7 @@ describe('handleTerminalFileDrop', () => {
       manager: manager as never,
       paneTransports: paneTransports as never,
       worktreeId: 'wt-1',
+      tabId: 'tab-1',
       cwd: undefined,
       data: { paths: ['/Users/me/logo.png'], target: 'terminal' }
     })
@@ -153,10 +161,10 @@ describe('handleTerminalFileDrop', () => {
         }
       ]
     })
-    const sendInput = vi.fn()
+    const sendInput = vi.fn(() => true)
     const focus = vi.fn()
     const manager = {
-      getActivePane: () => ({ id: 1, terminal: { focus } }),
+      getActivePane: () => ({ id: 1, leafId: 'leaf-1', terminal: { focus } }),
       getPanes: () => []
     }
     const paneTransports = new Map([[1, { sendInput }]])
@@ -165,6 +173,7 @@ describe('handleTerminalFileDrop', () => {
       manager: manager as never,
       paneTransports: paneTransports as never,
       worktreeId: 'wt-1',
+      tabId: 'tab-1',
       cwd: undefined,
       data: { paths: ['/Users/me/spec.pdf'], target: 'terminal' }
     })
@@ -184,10 +193,10 @@ describe('handleTerminalFileDrop', () => {
   it('keeps explicit local worktree drops local while a runtime is focused', async () => {
     mocks.storeState.settings = { activeRuntimeEnvironmentId: 'focused-runtime' }
     mocks.storeState.repos = [{ id: 'repo1', connectionId: null, executionHostId: 'local' }]
-    const sendInput = vi.fn()
+    const sendInput = vi.fn(() => true)
     const focus = vi.fn()
     const manager = {
-      getActivePane: () => ({ id: 1, terminal: { focus } }),
+      getActivePane: () => ({ id: 1, leafId: 'leaf-1', terminal: { focus } }),
       getPanes: () => []
     }
     const paneTransports = new Map([[1, { sendInput }]])
@@ -196,6 +205,7 @@ describe('handleTerminalFileDrop', () => {
       manager: manager as never,
       paneTransports: paneTransports as never,
       worktreeId: 'wt-1',
+      tabId: 'tab-1',
       cwd: undefined,
       data: { paths: ['/Users/me/spec.pdf'], target: 'terminal' }
     })

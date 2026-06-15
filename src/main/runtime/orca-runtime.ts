@@ -68,6 +68,8 @@ import type {
   StatsSummary,
   Worktree,
   WorktreeLineage,
+  WorkspaceLineage,
+  WorkspaceKey,
   WorktreeLineageWarning,
   WorktreeMeta,
   WorktreeBaseStatusEvent,
@@ -153,7 +155,12 @@ import {
   isPathInsideOrEqual,
   normalizeRuntimePathForComparison
 } from '../../shared/cross-platform-path'
-import { folderWorkspaceKey, parseWorkspaceKey } from '../../shared/workspace-scope'
+import {
+  folderWorkspaceKey,
+  isWorkspaceKey,
+  parseWorkspaceKey,
+  worktreeWorkspaceKey
+} from '../../shared/workspace-scope'
 import type {
   FolderWorkspacePathStatus,
   FolderWorkspacePathStatusRequest
@@ -544,6 +551,7 @@ import {
 } from '../worktree-removal-safety'
 import { prefetchWorktreeCreateBase } from '../worktree-create-base-prefetch'
 import { invalidateAuthorizedRootsCache } from '../ipc/filesystem-auth'
+import { prepareLocalWorktreeRootForRepo } from '../worktree-root-preparation'
 import { HeadlessEmulator } from '../daemon/headless-emulator'
 import { killAllProcessesForWorktree } from './worktree-teardown'
 import { MOBILE_SUBSCRIBE_SCROLLBACK_ROWS } from './scrollback-limits'
@@ -627,6 +635,9 @@ type RuntimeStore = {
   getAllWorktreeLineage?: Store['getAllWorktreeLineage']
   setWorktreeLineage?: Store['setWorktreeLineage']
   removeWorktreeLineage?: Store['removeWorktreeLineage']
+  getAllWorkspaceLineage?: Store['getAllWorkspaceLineage']
+  setWorkspaceLineage?: Store['setWorkspaceLineage']
+  removeWorkspaceLineage?: Store['removeWorkspaceLineage']
   getGitHubCache: Store['getGitHubCache']
   getWorkspaceSession?: Store['getWorkspaceSession']
   setWorkspaceSession?: Store['setWorkspaceSession']
@@ -1426,6 +1437,8 @@ type TerminalWorkspaceLaunchScope = {
 }
 
 type WorktreeLineageInput = {
+  parentWorkspace?: string
+  envParentWorkspace?: string
   parentWorktree?: string
   cwdParentWorktree?: string
   noParent?: boolean
@@ -1439,10 +1452,24 @@ type WorktreeLineageInput = {
   }
 }
 
+type ResolvedWorkspaceParent =
+  | {
+      type: 'worktree'
+      workspaceKey: WorkspaceKey
+      worktree: ResolvedWorktree
+      instanceId: string | null
+    }
+  | {
+      type: 'folder'
+      workspaceKey: WorkspaceKey
+      folderWorkspace: FolderWorkspace
+      instanceId: string | null
+    }
+
 type WorktreeLineageResolution =
   | {
       kind: 'lineage'
-      parent: ResolvedWorktree
+      parent: ResolvedWorkspaceParent
       origin: WorktreeLineage['origin']
       capture: WorktreeLineage['capture']
       orchestrationRunId?: string
@@ -1460,8 +1487,8 @@ type RuntimeWorktreeScanResult =
   | { ok: false; worktrees: GitWorktreeInfo[] }
 
 type WorktreeLineageCandidate = {
-  source: 'cwd-context' | 'terminal-context' | 'orchestration-context'
-  parent: ResolvedWorktree
+  source: 'env-workspace' | 'cwd-context' | 'terminal-context' | 'orchestration-context'
+  parent: ResolvedWorkspaceParent
   orchestrationRunId?: string
   taskId?: string
   coordinatorHandle?: string
@@ -6868,6 +6895,10 @@ export class OrcaRuntimeService {
     if (!result) {
       throw new Error(`Project host setup not found: ${args.setupId}`)
     }
+    if ('worktreeBasePath' in args.updates && result.repo) {
+      void prepareLocalWorktreeRootForRepo(this.store, result.repo)
+      invalidateAuthorizedRootsCache()
+    }
     return result
   }
 
@@ -7266,6 +7297,7 @@ export class OrcaRuntimeService {
         : {})
     }
     this.store.addRepo(repo)
+    await prepareLocalWorktreeRootForRepo(this.store, repo)
     this.invalidateResolvedWorktreeCache()
     this.notifyReposChanged()
     return this.store.getRepo(repo.id) ?? repo
@@ -7385,6 +7417,7 @@ export class OrcaRuntimeService {
         : {})
     }
     this.store.addRepo(repo)
+    await prepareLocalWorktreeRootForRepo(this.store, repo)
     invalidateAuthorizedRootsCache()
     this.invalidateResolvedWorktreeCache()
     this.notifyReposChanged()
@@ -7505,6 +7538,9 @@ export class OrcaRuntimeService {
       if (isFolderRepo(existing)) {
         const updated = this.store.updateRepo(existing.id, { kind: 'git' })
         if (updated) {
+          await prepareLocalWorktreeRootForRepo(this.store, updated)
+          invalidateAuthorizedRootsCache()
+          this.invalidateResolvedWorktreeCache()
           this.notifyReposChanged()
           return updated
         }
@@ -7525,6 +7561,7 @@ export class OrcaRuntimeService {
       externalWorktreeVisibilityLegacy: false
     }
     this.store.addRepo(repo)
+    await prepareLocalWorktreeRootForRepo(this.store, repo)
     invalidateAuthorizedRootsCache()
     this.invalidateResolvedWorktreeCache()
     this.notifyReposChanged()
@@ -7590,6 +7627,7 @@ export class OrcaRuntimeService {
       throw new Error('repo_not_found')
     }
     if ('worktreeBasePath' in updates) {
+      await prepareLocalWorktreeRootForRepo(this.store, updated)
       invalidateAuthorizedRootsCache()
     }
     this.invalidateResolvedWorktreeCache()
@@ -9282,20 +9320,31 @@ export class OrcaRuntimeService {
   private recordCreatedWorktreeLineage(
     worktree: Pick<Worktree, 'id' | 'instanceId'>,
     lineageResolution: WorktreeLineageResolution
-  ): { lineage: WorktreeLineage | null; warnings: WorktreeLineageWarning[] } {
+  ): {
+    lineage: WorktreeLineage | null
+    workspaceLineage: WorkspaceLineage | null
+    warnings: WorktreeLineageWarning[]
+  } {
     const warnings = lineageResolution.kind === 'none' ? [...lineageResolution.warnings] : []
     let lineage: WorktreeLineage | null = null
+    let workspaceLineage: WorkspaceLineage | null = null
     if (lineageResolution.kind !== 'lineage') {
-      return { lineage, warnings }
+      return { lineage, workspaceLineage, warnings }
     }
 
     const childInstanceId = worktree.instanceId
     const parentInstanceId = lineageResolution.parent.instanceId
-    if (childInstanceId && parentInstanceId && this.store?.setWorktreeLineage) {
+    const createdAt = Date.now()
+    if (
+      lineageResolution.parent.type === 'worktree' &&
+      childInstanceId &&
+      parentInstanceId &&
+      this.store?.setWorktreeLineage
+    ) {
       lineage = this.store.setWorktreeLineage(worktree.id, {
         worktreeId: worktree.id,
         worktreeInstanceId: childInstanceId,
-        parentWorktreeId: lineageResolution.parent.id,
+        parentWorktreeId: lineageResolution.parent.worktree.id,
         parentWorktreeInstanceId: parentInstanceId,
         origin: lineageResolution.origin,
         capture: lineageResolution.capture,
@@ -9309,9 +9358,9 @@ export class OrcaRuntimeService {
         ...(lineageResolution.createdByTerminalHandle
           ? { createdByTerminalHandle: lineageResolution.createdByTerminalHandle }
           : {}),
-        createdAt: Date.now()
+        createdAt
       })
-    } else {
+    } else if (lineageResolution.parent.type === 'worktree') {
       warnings.push({
         code: 'LINEAGE_PARENT_CONTEXT_MISSING',
         message:
@@ -9323,7 +9372,28 @@ export class OrcaRuntimeService {
         }
       })
     }
-    return { lineage, warnings }
+    if (childInstanceId && this.store?.setWorkspaceLineage) {
+      workspaceLineage = this.store.setWorkspaceLineage({
+        childWorkspaceKey: worktreeWorkspaceKey(worktree.id),
+        childInstanceId,
+        parentWorkspaceKey: lineageResolution.parent.workspaceKey,
+        parentInstanceId,
+        origin: lineageResolution.origin,
+        capture: lineageResolution.capture,
+        ...(lineageResolution.taskId ? { taskId: lineageResolution.taskId } : {}),
+        ...(lineageResolution.orchestrationRunId
+          ? { orchestrationRunId: lineageResolution.orchestrationRunId }
+          : {}),
+        ...(lineageResolution.coordinatorHandle
+          ? { coordinatorHandle: lineageResolution.coordinatorHandle }
+          : {}),
+        ...(lineageResolution.createdByTerminalHandle
+          ? { createdByTerminalHandle: lineageResolution.createdByTerminalHandle }
+          : {}),
+        createdAt
+      })
+    }
+    return { lineage, workspaceLineage, warnings }
   }
 
   private pasteStartupDraftWhenReady(handle: string, draft: WorktreeStartupDraftPaste): void {
@@ -9686,10 +9756,15 @@ export class OrcaRuntimeService {
           ...result.worktree,
           parentWorktreeId: recordedLineage.lineage?.parentWorktreeId ?? null,
           childWorktreeIds: result.worktree.childWorktreeIds ?? [],
-          lineage: recordedLineage.lineage
+          lineage: recordedLineage.lineage,
+          workspaceLineage: recordedLineage.workspaceLineage
         },
         ...(lineageInput
-          ? { lineage: recordedLineage.lineage, warnings: recordedLineage.warnings }
+          ? {
+              lineage: recordedLineage.lineage,
+              workspaceLineage: recordedLineage.workspaceLineage,
+              warnings: recordedLineage.warnings
+            }
           : {})
       }
     }
@@ -10022,10 +10097,11 @@ export class OrcaRuntimeService {
       ...(args.workspaceStatus !== undefined ? { workspaceStatus: args.workspaceStatus } : {})
     })
     const worktree = mergeWorktree(repo.id, created, meta)
-    const { lineage, warnings: lineageWarnings } = this.recordCreatedWorktreeLineage(
-      worktree,
-      lineageResolution
-    )
+    const {
+      lineage,
+      workspaceLineage,
+      warnings: lineageWarnings
+    } = this.recordCreatedWorktreeLineage(worktree, lineageResolution)
 
     if (
       settings.experimentalWorktreeSymlinks &&
@@ -10229,9 +10305,10 @@ export class OrcaRuntimeService {
         parentWorktreeId: lineage?.parentWorktreeId ?? null,
         childWorktreeIds: [],
         lineage,
+        workspaceLineage,
         git: created
       },
-      ...(lineageInput ? { lineage, warnings: lineageWarnings } : {}),
+      ...(lineageInput ? { lineage, workspaceLineage, warnings: lineageWarnings } : {}),
       ...(setup ? { setup } : {}),
       ...(defaultTabs ? { defaultTabs } : {}),
       ...(warning ? { warning } : {}),
@@ -10920,6 +10997,7 @@ export class OrcaRuntimeService {
     const { lineage, ...metaUpdates } = updates
     if (lineage?.noParent === true) {
       this.store.removeWorktreeLineage?.(worktree.id)
+      this.store.removeWorkspaceLineage?.(worktreeWorkspaceKey(worktree.id))
     } else if (lineage?.parentWorktree) {
       const parent = await this.resolveWorktreeSelector(lineage.parentWorktree)
       this.validateLineageParent(worktree, parent)
@@ -10935,6 +11013,7 @@ export class OrcaRuntimeService {
           'Workspace lineage storage was unavailable.'
         )
       }
+      const createdAt = Date.now()
       this.store.setWorktreeLineage(worktree.id, {
         worktreeId: worktree.id,
         worktreeInstanceId: worktree.instanceId,
@@ -10942,7 +11021,16 @@ export class OrcaRuntimeService {
         parentWorktreeInstanceId: parent.instanceId,
         origin: 'manual',
         capture: { source: 'manual-action', confidence: 'explicit' },
-        createdAt: Date.now()
+        createdAt
+      })
+      this.store.setWorkspaceLineage?.({
+        childWorkspaceKey: worktreeWorkspaceKey(worktree.id),
+        childInstanceId: worktree.instanceId,
+        parentWorkspaceKey: worktreeWorkspaceKey(parent.id),
+        parentInstanceId: parent.instanceId,
+        origin: 'manual',
+        capture: { source: 'manual-action', confidence: 'explicit' },
+        createdAt
       })
     }
     this.store.setWorktreeMeta(
@@ -12825,6 +12913,33 @@ export class OrcaRuntimeService {
     throw new Error('selector_not_found')
   }
 
+  private async resolveWorkspaceParentSelector(selector: string): Promise<ResolvedWorkspaceParent> {
+    const rawSelector = selector.startsWith('id:') ? selector.slice('id:'.length) : selector
+    const parsed = parseWorkspaceKey(rawSelector)
+    if (parsed?.type === 'folder') {
+      const folderWorkspace = this.store
+        ?.getFolderWorkspaces?.()
+        .find((workspace) => workspace.id === parsed.folderWorkspaceId)
+      if (!folderWorkspace) {
+        throw new Error('selector_not_found')
+      }
+      return {
+        type: 'folder',
+        workspaceKey: folderWorkspaceKey(folderWorkspace.id),
+        folderWorkspace,
+        instanceId: null
+      }
+    }
+    const worktreeSelector = parsed?.type === 'worktree' ? `id:${parsed.worktreeId}` : selector
+    const worktree = await this.resolveWorktreeSelector(worktreeSelector)
+    return {
+      type: 'worktree',
+      workspaceKey: worktreeWorkspaceKey(worktree.id),
+      worktree,
+      instanceId: worktree.instanceId ?? null
+    }
+  }
+
   private validateLineageParent(child: ResolvedWorktree, parent: ResolvedWorktree): void {
     const childWorktreeId = child.id
     const parentWorktreeId = parent.id
@@ -12873,10 +12988,16 @@ export class OrcaRuntimeService {
       return { kind: 'none', warnings: [] }
     }
 
-    if (input.noParent === true && input.parentWorktree) {
+    if (input.noParent === true && (input.parentWorkspace || input.parentWorktree)) {
       throw new RuntimeLineageError(
         'LINEAGE_PARENT_CONTEXT_CONFLICT',
-        'Choose either --parent-worktree or --no-parent, not both.'
+        'Choose either a parent workspace flag or --no-parent, not both.'
+      )
+    }
+    if (input.parentWorkspace && input.parentWorktree) {
+      throw new RuntimeLineageError(
+        'LINEAGE_PARENT_CONTEXT_CONFLICT',
+        'Choose either --parent-workspace or --parent-worktree, not both.'
       )
     }
 
@@ -12884,12 +13005,39 @@ export class OrcaRuntimeService {
       return { kind: 'none', warnings: [] }
     }
 
+    if (input.parentWorkspace) {
+      try {
+        return {
+          kind: 'lineage',
+          parent: await this.resolveWorkspaceParentSelector(input.parentWorkspace),
+          origin: 'cli',
+          capture: { source: 'explicit-cli-flag', confidence: 'explicit' }
+        }
+      } catch {
+        throw new RuntimeLineageError(
+          'LINEAGE_PARENT_NOT_FOUND',
+          'Parent workspace was not found.',
+          {
+            nextSteps: [
+              'Pass a valid --parent-workspace selector such as folder:<id> or worktree:<id>.',
+              'Retry with --no-parent to create without lineage.'
+            ]
+          }
+        )
+      }
+    }
+
     if (input.parentWorktree) {
       try {
         const parent = await this.resolveWorktreeSelector(input.parentWorktree)
         return {
           kind: 'lineage',
-          parent,
+          parent: {
+            type: 'worktree',
+            workspaceKey: worktreeWorkspaceKey(parent.id),
+            worktree: parent,
+            instanceId: parent.instanceId ?? null
+          },
           origin: 'cli',
           capture: { source: 'explicit-cli-flag', confidence: 'explicit' }
         }
@@ -12912,13 +13060,35 @@ export class OrcaRuntimeService {
     let cwdCandidate: WorktreeLineageCandidate | null = null
     let terminalContextResolved = false
 
-    if (input.orchestrationContext?.parentWorktreeId) {
+    if (input.envParentWorkspace) {
       try {
         candidates.push({
+          source: 'env-workspace',
+          parent: await this.resolveWorkspaceParentSelector(input.envParentWorkspace)
+        })
+      } catch {
+        warnings.push({
+          code: 'LINEAGE_PARENT_CONTEXT_MISSING',
+          message:
+            'Worktree created, but Orca could not validate the environment parent workspace.',
+          details: { envParentWorkspace: input.envParentWorkspace }
+        })
+      }
+    }
+
+    if (input.orchestrationContext?.parentWorktreeId) {
+      try {
+        const parent = await this.resolveWorktreeSelector(
+          `id:${input.orchestrationContext.parentWorktreeId}`
+        )
+        candidates.push({
           source: 'orchestration-context',
-          parent: await this.resolveWorktreeSelector(
-            `id:${input.orchestrationContext.parentWorktreeId}`
-          )
+          parent: {
+            type: 'worktree',
+            workspaceKey: worktreeWorkspaceKey(parent.id),
+            worktree: parent,
+            instanceId: parent.instanceId ?? null
+          }
         })
       } catch {
         // Keep creation recoverable; the warning below covers missing inferred context.
@@ -12936,7 +13106,9 @@ export class OrcaRuntimeService {
     if (input.callerTerminalHandle) {
       try {
         const terminal = await this.showTerminal(input.callerTerminalHandle)
-        const terminalParent = await this.resolveWorktreeSelector(`id:${terminal.worktreeId}`)
+        const terminalParent = await this.resolveWorkspaceParentSelector(
+          `id:${terminal.worktreeId}`
+        )
         const activeDispatch = this._orchestrationDb?.getActiveDispatchForTerminal(
           input.callerTerminalHandle
         )
@@ -12977,7 +13149,7 @@ export class OrcaRuntimeService {
       try {
         cwdCandidate = {
           source: 'cwd-context',
-          parent: await this.resolveWorktreeSelector(input.cwdParentWorktree)
+          parent: await this.resolveWorkspaceParentSelector(input.cwdParentWorktree)
         }
       } catch {
         warnings.push({
@@ -12998,7 +13170,9 @@ export class OrcaRuntimeService {
     }
 
     const [first] = candidates
-    const conflict = candidates.find((candidate) => candidate.parent.id !== first.parent.id)
+    const conflict = candidates.find(
+      (candidate) => candidate.parent.workspaceKey !== first.parent.workspaceKey
+    )
     if (conflict) {
       return {
         kind: 'none',
@@ -13007,11 +13181,13 @@ export class OrcaRuntimeService {
             code: 'LINEAGE_PARENT_CONTEXT_CONFLICT',
             message: 'Worktree created, but Orca could not prove which parent workspace caused it.',
             details: {
-              terminalParentWorktreeId: candidates.find((c) => c.source === 'terminal-context')
-                ?.parent.id,
-              orchestrationParentWorktreeId: candidates.find(
+              terminalParentWorkspaceKey: candidates.find((c) => c.source === 'terminal-context')
+                ?.parent.workspaceKey,
+              envParentWorkspaceKey: candidates.find((c) => c.source === 'env-workspace')?.parent
+                .workspaceKey,
+              orchestrationParentWorkspaceKey: candidates.find(
                 (c) => c.source === 'orchestration-context'
-              )?.parent.id
+              )?.parent.workspaceKey
             }
           }
         ]
@@ -13019,7 +13195,9 @@ export class OrcaRuntimeService {
     }
 
     const preferred =
-      candidates.find((candidate) => candidate.source === 'orchestration-context') ?? first
+      candidates.find((candidate) => candidate.source === 'env-workspace') ??
+      candidates.find((candidate) => candidate.source === 'orchestration-context') ??
+      first
     return {
       kind: 'lineage',
       parent: preferred.parent,
@@ -13060,9 +13238,15 @@ export class OrcaRuntimeService {
     }
     try {
       const terminal = await this.showTerminal(parentHandle)
+      const parent = await this.resolveWorktreeSelector(`id:${terminal.worktreeId}`)
       return {
         source: 'orchestration-context',
-        parent: await this.resolveWorktreeSelector(`id:${terminal.worktreeId}`),
+        parent: {
+          type: 'worktree',
+          workspaceKey: worktreeWorkspaceKey(parent.id),
+          worktree: parent,
+          instanceId: parent.instanceId ?? null
+        },
         taskId
       }
     } catch {
@@ -13098,18 +13282,22 @@ export class OrcaRuntimeService {
         continue
       }
       const candidate = await this.resolveLineageCandidateForTaskId(taskId)
-      if (!candidate?.parent.instanceId || candidate.parent.id === worktree.id) {
+      if (
+        !candidate?.parent.instanceId ||
+        candidate.parent.type !== 'worktree' ||
+        candidate.parent.worktree.id === worktree.id
+      ) {
         continue
       }
       try {
-        this.validateLineageParent(worktree, candidate.parent)
+        this.validateLineageParent(worktree, candidate.parent.worktree)
       } catch {
         continue
       }
       store.setWorktreeLineage(worktree.id, {
         worktreeId: worktree.id,
         worktreeInstanceId: worktree.instanceId,
-        parentWorktreeId: candidate.parent.id,
+        parentWorktreeId: candidate.parent.worktree.id,
         parentWorktreeInstanceId: candidate.parent.instanceId,
         origin: 'orchestration',
         capture: { source: 'orchestration-context', confidence: 'inferred' },
@@ -13122,6 +13310,11 @@ export class OrcaRuntimeService {
   async listWorktreeLineage(): Promise<Record<string, WorktreeLineage>> {
     await this.hydrateInferredWorktreeLineage()
     return this.store?.getAllWorktreeLineage?.() ?? {}
+  }
+
+  async listWorkspaceLineage(): Promise<Record<WorkspaceKey, WorkspaceLineage>> {
+    await this.hydrateInferredWorktreeLineage()
+    return this.store?.getAllWorkspaceLineage?.() ?? {}
   }
 
   private async resolveRepoSelector(selector: string): Promise<Repo> {
@@ -13316,12 +13509,25 @@ export class OrcaRuntimeService {
     }
     const liveIds = new Set(gitWorktrees.map((worktree) => `${repo.id}::${worktree.path}`))
     const repoPrefix = `${repo.id}::`
+    for (const childWorkspaceKey of Object.keys(store.getAllWorkspaceLineage?.() ?? {})) {
+      const childScope = parseWorkspaceKey(childWorkspaceKey)
+      if (
+        childScope?.type === 'worktree' &&
+        childScope.worktreeId.startsWith(repoPrefix) &&
+        !liveIds.has(childScope.worktreeId)
+      ) {
+        if (isWorkspaceKey(childWorkspaceKey)) {
+          store.removeWorkspaceLineage?.(childWorkspaceKey)
+        }
+      }
+    }
     for (const [childId, lineage] of Object.entries(store.getAllWorktreeLineage())) {
       if (childId.startsWith(repoPrefix) && !liveIds.has(childId)) {
         // Why: runtime selector scans can be the only scan before a path is
         // reused. Once a successful scan proves the child is gone, stale
         // lineage must not survive into the replacement checkout.
         store.removeWorktreeLineage(childId)
+        store.removeWorkspaceLineage?.(worktreeWorkspaceKey(childId))
       }
       if (
         lineage.parentWorktreeId.startsWith(repoPrefix) &&

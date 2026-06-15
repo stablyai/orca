@@ -365,7 +365,7 @@ describe('WorktreeList real child WorktreeCard integration', () => {
 
   it('renders GitLab MR metadata from a child through the real WorktreeCard path', async () => {
     const container = await renderWorktreeList()
-    const childOption = container.querySelector('#worktree-list-option-child')
+    const childOption = container.querySelector('[id="worktree-list-option-all%3Achild"]')
 
     expect(childOption?.textContent).toContain('MR #42')
     expect(childOption?.textContent).toContain('Child GitLab MR')
@@ -375,7 +375,7 @@ describe('WorktreeList real child WorktreeCard integration', () => {
   it('double-clicking a nested child opens edit metadata for the child only', async () => {
     const container = await renderWorktreeList()
     const childCard = container.querySelector<HTMLElement>(
-      '#worktree-list-option-child [data-worktree-card-surface="true"]'
+      '[id="worktree-list-option-all%3Achild"] [data-worktree-card-surface="true"]'
     )
 
     expect(childCard).not.toBeNull()
@@ -402,7 +402,7 @@ describe('WorktreeList real child WorktreeCard integration', () => {
     setLineageState({ deletingChild: true })
     const container = await renderWorktreeList()
     const childCard = container.querySelector<HTMLElement>(
-      '#worktree-list-option-child [data-worktree-card-surface="true"]'
+      '[id="worktree-list-option-all%3Achild"] [data-worktree-card-surface="true"]'
     )
 
     expect(childCard?.textContent).toContain('Deleting')

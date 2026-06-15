@@ -9,11 +9,13 @@ import type { PtyTransport } from './pty-transport'
 import { importExternalPathsToRuntime } from '@/runtime/runtime-file-client'
 import { isWindowsAbsolutePathLike } from '../../../../shared/cross-platform-path'
 import { translate } from '@/i18n/i18n'
+import { recordTerminalUserInputForLeaf } from './terminal-input-activity'
 
 type Args = {
   manager: PaneManager
   paneTransports: Map<number, PtyTransport>
   worktreeId: string
+  tabId: string
   cwd: string | undefined
   data: { paths: string[]; target: string; tabId?: string }
 }
@@ -53,7 +55,7 @@ export function resolveTerminalDropTargetShell({
  * docs/terminal-drop-ssh.md.
  */
 export async function handleTerminalFileDrop(args: Args): Promise<void> {
-  const { manager, paneTransports, worktreeId, cwd, data } = args
+  const { manager, paneTransports, worktreeId, tabId, cwd, data } = args
   if (data.paths.length === 0) {
     return
   }
@@ -107,11 +109,16 @@ export async function handleTerminalFileDrop(args: Args): Promise<void> {
       const failed = results.filter((result) => result.status === 'failed')
       const liveTransport = paneTransports.get(paneId)
       if (liveTransport) {
+        let sentAnyPath = false
         for (const result of imported) {
           const shellPath = isWindowsPathLike(worktreePath)
             ? result.destPath.replace(/\//g, '\\')
             : result.destPath
-          liveTransport.sendInput(`${shellEscapePath(shellPath, targetShell)} `)
+          sentAnyPath =
+            liveTransport.sendInput(`${shellEscapePath(shellPath, targetShell)} `) || sentAnyPath
+        }
+        if (sentAnyPath) {
+          recordTerminalUserInputForLeaf(tabId, pane.leafId)
         }
         pane.terminal.focus()
       }
@@ -149,8 +156,12 @@ export async function handleTerminalFileDrop(args: Args): Promise<void> {
   // zero-latency drop behavior. Trailing space separates multiple paths in
   // the terminal input, matching standard drag-and-drop UX conventions.
   if (!isRemote) {
+    let sentAnyPath = false
     for (const p of data.paths) {
-      transport.sendInput(`${shellEscapePath(p, targetShell)} `)
+      sentAnyPath = transport.sendInput(`${shellEscapePath(p, targetShell)} `) || sentAnyPath
+    }
+    if (sentAnyPath) {
+      recordTerminalUserInputForLeaf(tabId, pane.leafId)
     }
     pane.terminal.focus()
     return
@@ -175,8 +186,12 @@ export async function handleTerminalFileDrop(args: Args): Promise<void> {
     // acknowledged limitation — see docs/terminal-drop-ssh.md.
     const liveTransport = paneTransports.get(paneId)
     if (liveTransport) {
+      let sentAnyPath = false
       for (const p of resolvedPaths) {
-        liveTransport.sendInput(`${shellEscapePath(p, targetShell)} `)
+        sentAnyPath = liveTransport.sendInput(`${shellEscapePath(p, targetShell)} `) || sentAnyPath
+      }
+      if (sentAnyPath) {
+        recordTerminalUserInputForLeaf(tabId, pane.leafId)
       }
       pane.terminal.focus()
     }

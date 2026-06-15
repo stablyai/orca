@@ -71,6 +71,7 @@ import {
   areWorktreePathsEqual
 } from './worktree-logic'
 import { getRepoIdFromWorktreeId } from '../../shared/worktree-id'
+import { parseWorkspaceKey, worktreeWorkspaceKey } from '../../shared/workspace-scope'
 import {
   cleanupUnusedWorktreePushTargetRemoteWithExec,
   sameGitHubRemoteUrl,
@@ -80,7 +81,7 @@ import {
   configureCreatedWorktreePushTargetWithExec,
   prepareWorktreePushTargetWithExec
 } from './worktree-push-target-setup'
-import { invalidateAuthorizedRootsCache, isENOENT } from './filesystem-auth'
+import { isENOENT, registerWorktreeRootsForRepo } from './filesystem-auth'
 import { createWorktreeSymlinks } from './worktree-symlinks'
 import { normalizeSparseDirectories } from './sparse-checkout-directories'
 import { joinWorktreeRelativePath } from '../runtime/runtime-relative-paths'
@@ -131,6 +132,69 @@ type RemoteLocalBaseRefRefreshability =
 
 function appendWorktreeCreateWarning(current: string | undefined, next: string): string {
   return current ? `${current} Also ${next[0]?.toLowerCase() ?? ''}${next.slice(1)}` : next
+}
+
+function validateWorkspaceLineageParentBeforeCreate(
+  store: Store,
+  parentWorkspace: CreateWorktreeArgs['parentWorkspace'],
+  childWorkspaceKey: ReturnType<typeof worktreeWorkspaceKey>
+): void {
+  if (!parentWorkspace) {
+    return
+  }
+  if (parentWorkspace === childWorkspaceKey) {
+    throw new Error('A worktree cannot be attached to itself.')
+  }
+  const parentScope = parseWorkspaceKey(parentWorkspace)
+  if (!parentScope) {
+    throw new Error(`Invalid parent workspace: ${parentWorkspace}`)
+  }
+  if (parentScope.type === 'folder' && !store.getFolderWorkspace(parentScope.folderWorkspaceId)) {
+    throw new Error(`Parent folder workspace not found: ${parentWorkspace}`)
+  }
+  if (parentScope.type === 'worktree' && !store.getWorktreeMeta(parentScope.worktreeId)) {
+    throw new Error(`Parent worktree workspace not found: ${parentWorkspace}`)
+  }
+}
+
+function recordWorkspaceLineageForCreatedWorktree(
+  store: Store,
+  args: CreateWorktreeArgs,
+  worktree: Worktree,
+  createdAt: number
+): CreateWorktreeResult['workspaceLineage'] {
+  if (!args.parentWorkspace || !worktree.instanceId) {
+    return null
+  }
+  const childWorkspaceKey = worktreeWorkspaceKey(worktree.id)
+  if (args.parentWorkspace === childWorkspaceKey) {
+    console.warn(`[worktree-create] refusing to attach ${worktree.id} to itself`)
+    return null
+  }
+  const parentScope = parseWorkspaceKey(args.parentWorkspace)
+  if (!parentScope) {
+    console.warn(`[worktree-create] ignoring invalid parent workspace ${args.parentWorkspace}`)
+    return null
+  }
+  if (parentScope.type === 'folder' && !store.getFolderWorkspace(parentScope.folderWorkspaceId)) {
+    console.warn(`[worktree-create] parent folder workspace disappeared: ${args.parentWorkspace}`)
+    return null
+  }
+  const parentWorktreeMeta =
+    parentScope.type === 'worktree' ? store.getWorktreeMeta(parentScope.worktreeId) : null
+  if (parentScope.type === 'worktree' && !parentWorktreeMeta) {
+    console.warn(`[worktree-create] parent worktree workspace disappeared: ${args.parentWorkspace}`)
+    return null
+  }
+  return store.setWorkspaceLineage({
+    childWorkspaceKey,
+    childInstanceId: worktree.instanceId,
+    parentWorkspaceKey: args.parentWorkspace,
+    parentInstanceId: parentWorktreeMeta?.instanceId ?? null,
+    origin: 'manual',
+    capture: { source: 'active-workspace', confidence: 'explicit' },
+    createdAt
+  })
 }
 
 function countNonEmptyGitOutputLines(output: string): number {
@@ -1320,6 +1384,12 @@ export async function createRemoteWorktree(
     )
   }
 
+  validateWorkspaceLineageParentBeforeCreate(
+    store,
+    args.parentWorkspace,
+    worktreeWorkspaceKey(`${repo.id}::${remotePath}`)
+  )
+
   const sparseDirectories = args.sparseCheckout
     ? normalizeSparseDirectories(args.sparseCheckout.directories)
     : []
@@ -1561,6 +1631,7 @@ export async function createRemoteWorktree(
     const meta = store.setWorktreeMeta(worktreeId, metaUpdates)
     return { worktree: mergeWorktree(repo.id, created, meta) }
   })
+  const workspaceLineage = recordWorkspaceLineageForCreatedWorktree(store, args, worktree, now)
 
   // Why: `experimentalWorktreeSymlinks` is intentionally not wired up for
   // remote (SSH) worktrees. Creating symlinks on the remote host would
@@ -1614,7 +1685,8 @@ export async function createRemoteWorktree(
 
   notifyWorktreesChanged(mainWindow, repo.id)
   return {
-    worktree,
+    worktree: { ...worktree, workspaceLineage },
+    ...(workspaceLineage ? { workspaceLineage } : {}),
     ...(setup ? { setup } : {}),
     ...(defaultTabs ? { defaultTabs } : {}),
     ...(localBaseRefRefresh ? { localBaseRefRefresh } : {}),
@@ -1875,6 +1947,12 @@ export async function createLocalWorktree(
     )
   }
 
+  validateWorkspaceLineageParentBeforeCreate(
+    store,
+    args.parentWorkspace,
+    worktreeWorkspaceKey(`${repo.id}::${worktreePath}`)
+  )
+
   if (remoteTrackingRefresh) {
     await timing.time('refresh_base_ref', async () => {
       const result = await remoteTrackingRefresh.promise
@@ -2090,12 +2168,14 @@ export async function createLocalWorktree(
     const meta = store.setWorktreeMeta(worktreeId, metaUpdates)
     return { worktree: mergeWorktree(repo.id, created, meta) }
   })
-  // Why: the authorized-roots cache is consulted lazily on the next filesystem
-  // access (`ensureAuthorizedRootsCache` rebuilds on demand when dirty). We
-  // just invalidate the cache marker instead of blocking worktree creation on
-  // an immediate rebuild, which can spawn `git worktree list` per repo and
-  // adds 100ms+ to every create.
-  invalidateAuthorizedRootsCache()
+  const workspaceLineage = recordWorkspaceLineageForCreatedWorktree(store, args, worktree, now)
+  // Why: creation already paid for `git worktree list`; seed the exact roots
+  // now so the next file/git IPC does not lazily rescan and trip macOS privacy
+  // prompts for the newly-created workspace.
+  registerWorktreeRootsForRepo(store, repo.id, [
+    repo.path,
+    ...gitWorktrees.map((worktree) => worktree.path)
+  ])
 
   // Why: create user-configured symlinks from the primary checkout into the
   // new worktree before any setup script runs, so scripts that reuse shared
@@ -2178,7 +2258,8 @@ export async function createLocalWorktree(
 
   notifyWorktreesChanged(mainWindow, repo.id)
   return {
-    worktree,
+    worktree: { ...worktree, workspaceLineage },
+    ...(workspaceLineage ? { workspaceLineage } : {}),
     ...(setup && !stagedStartup.didSpawnSetup ? { setup } : {}),
     ...(defaultTabs ? { defaultTabs } : {}),
     ...(addResult.localBaseRefRefresh

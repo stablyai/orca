@@ -21,6 +21,7 @@ import type { PtyTransport } from './pty-transport'
 import { fitPanes, isWindowsUserAgent, shellEscapePath } from './pane-helpers'
 import { getConnectionId } from '@/lib/connection-context'
 import { resolveTerminalDropTargetShell } from './terminal-drop-handler'
+import { recordTerminalUserInputForLeaf } from './terminal-input-activity'
 import { EMPTY_LAYOUT, serializeTerminalLayout } from './layout-serialization'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import {
@@ -1108,6 +1109,7 @@ export default function TerminalPane({
   useTerminalFontZoom({ isActive, managerRef, paneFontSizesRef, settingsRef })
 
   useTerminalKeyboardShortcuts({
+    tabId,
     isActive,
     keyboardScopeRef: containerRef,
     managerRef,
@@ -1289,6 +1291,9 @@ export default function TerminalPane({
         forceBracketedMultilineTextPaste,
         pasteText: (text, options) => {
           pasteTerminalText(pane.terminal, text, options)
+          if (text) {
+            recordTerminalUserInputForLeaf(tabId, pane.leafId)
+          }
           if (options?.recoverImagePasteWebglAtlas) {
             scheduleImagePasteWebglAtlasRecovery()
           }
@@ -1395,7 +1400,7 @@ export default function TerminalPane({
       container.removeEventListener('keydown', onKeyPaste, { capture: true })
       container.removeEventListener('paste', onPaste, { capture: true })
     }
-  }, [isActive, worktreeId, keybindings, forceBracketedMultilineTextPaste])
+  }, [isActive, worktreeId, keybindings, forceBracketedMultilineTextPaste, tabId])
 
   // Why: a click inside the terminal container is a deliberate interaction
   // with the pane — dismiss the attention indicator for this tab and worktree
@@ -1820,10 +1825,11 @@ export default function TerminalPane({
       void readPrimarySelectionText().then((text) => {
         if (text) {
           pasteTerminalText(clickedPane.terminal, text)
+          recordTerminalUserInputForLeaf(tabId, clickedPane.leafId)
         }
       })
     },
-    [getPrimarySelectionMiddleClickPane]
+    [getPrimarySelectionMiddleClickPane, tabId]
   )
 
   const handlePrimarySelectionAuxClick = useCallback(
@@ -1924,7 +1930,9 @@ export default function TerminalPane({
             // worktree's path shape; legacy SSH drops remain POSIX.
             connectionId: getConnectionId(worktreeId)
           })
-          transport.sendInput(shellEscapePath(filePath, targetShell))
+          if (transport.sendInput(shellEscapePath(filePath, targetShell))) {
+            recordTerminalUserInputForLeaf(tabId, pane.leafId)
+          }
           // Move focus to the terminal so the user can keep typing where the
           // dropped path just landed. Without this, focus stays on the file
           // tree row that originated the drag and subsequent keystrokes do

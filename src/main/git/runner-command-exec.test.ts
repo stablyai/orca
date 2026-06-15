@@ -13,7 +13,7 @@ vi.mock('node:child_process', () => ({
   spawn: spawnMock
 }))
 
-import { commandExecFileAsync, gitExecFileAsync, gitStreamStdout } from './runner'
+import { commandExecFileAsync, ghExecFileAsync, gitExecFileAsync, gitStreamStdout } from './runner'
 
 type MockChildProcess = EventEmitter & {
   stdout: EventEmitter
@@ -209,6 +209,56 @@ describe('runner execFile timeout handling', () => {
 
     await rejection
     expect(child.kill).toHaveBeenCalled()
+  })
+
+  it('rejects gh executions that never call back using the default timeout', async () => {
+    const child = createMockChildProcess(1234)
+    execFileMock.mockReturnValue(child)
+
+    const promise = ghExecFileAsync(['api', 'repos/stablyai/orca/issues/5388'], {
+      cwd: '/repo'
+    })
+    const rejection = expect(promise).rejects.toThrow('gh timed out.')
+    await vi.advanceTimersByTimeAsync(30_000)
+
+    await rejection
+    expect(child.kill).toHaveBeenCalled()
+  })
+
+  it('honors explicit gh timeouts', async () => {
+    const child = createMockChildProcess(1234)
+    execFileMock.mockReturnValue(child)
+
+    const promise = ghExecFileAsync(['api', 'repos/stablyai/orca/issues/5388'], {
+      cwd: '/repo',
+      timeout: 1234
+    })
+    const rejection = expect(promise).rejects.toThrow('gh timed out.')
+    await vi.advanceTimersByTimeAsync(1233)
+    expect(child.kill).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(1)
+
+    await rejection
+    expect(child.kill).toHaveBeenCalled()
+  })
+
+  it('runs gh non-interactively while preserving explicit env', async () => {
+    const child = createMockChildProcess(1234)
+    let capturedEnv: NodeJS.ProcessEnv | undefined
+    execFileMock.mockImplementation((_cmd, _args, opts, cb) => {
+      capturedEnv = opts.env
+      cb(null, 'ok', '')
+      return child
+    })
+
+    await ghExecFileAsync(['api', 'user'], {
+      cwd: '/repo',
+      env: { ...process.env, GH_PROMPT_DISABLED: '0', ORCA_TEST_ENV: 'kept' },
+      timeout: 1234
+    })
+
+    expect(capturedEnv?.GH_PROMPT_DISABLED).toBe('0')
+    expect(capturedEnv?.ORCA_TEST_ENV).toBe('kept')
   })
 
   // Issue #5308: git read-path calls must be forced non-interactive so a

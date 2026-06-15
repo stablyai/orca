@@ -39,6 +39,7 @@ import { useShallow } from 'zustand/react/shallow'
 import { isRemoteWorkspaceSnapshotApplyInProgress, useIpcEvents } from './hooks/useIpcEvents'
 import { useAutomationDispatchEvents } from './hooks/useAutomationDispatchEvents'
 import RetainedAgentsSyncGate from './components/dashboard/RetainedAgentsSyncGate'
+import { AgentHibernationGate } from './components/AgentHibernationGate'
 import { ActivityTitlebarControls } from './components/activity/ActivityTitlebarControls'
 import Sidebar from './components/Sidebar'
 import { shutdownBufferCaptures } from './components/terminal-pane/shutdown-buffer-captures'
@@ -1819,6 +1820,7 @@ function App(): React.JSX.Element {
             {/* Why: leaf-mounted retention sync keeps agent-status retention
             subscriptions from re-rendering the App tree. */}
             <RetainedAgentsSyncGate />
+            <AgentHibernationGate />
             {/* Why: workspace activation is a hot path; including activeWorktreeId
             in reset keys remounts whole surfaces during wake. */}
             <RecoverableRenderErrorBoundary

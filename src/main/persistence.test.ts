@@ -23,6 +23,7 @@ import type {
   TerminalPaneLayoutNode,
   TerminalTab,
   WorktreeLineage,
+  WorkspaceLineage,
   WorkspaceSessionState
 } from '../shared/types'
 import { isTerminalLeafId, makePaneKey } from '../shared/stable-pane-id'
@@ -34,7 +35,7 @@ import {
   ONBOARDING_FINAL_STEP,
   ONBOARDING_FLOW_VERSION
 } from '../shared/constants'
-import { folderWorkspaceKey } from '../shared/workspace-scope'
+import { folderWorkspaceKey, worktreeWorkspaceKey } from '../shared/workspace-scope'
 import { toRuntimeExecutionHostId, toSshExecutionHostId } from '../shared/execution-host'
 import { SshConnectionStore } from './ssh/ssh-connection-store'
 
@@ -222,6 +223,17 @@ const makeWorktreeLineage = (overrides: Partial<WorktreeLineage> = {}): Worktree
   parentWorktreeInstanceId: 'parent-instance',
   origin: 'manual',
   capture: { source: 'manual-action', confidence: 'explicit' },
+  createdAt: 1,
+  ...overrides
+})
+
+const makeWorkspaceLineage = (overrides: Partial<WorkspaceLineage> = {}): WorkspaceLineage => ({
+  childWorkspaceKey: worktreeWorkspaceKey('r1::/path/child'),
+  childInstanceId: 'child-instance',
+  parentWorkspaceKey: folderWorkspaceKey('folder-1'),
+  parentInstanceId: null,
+  origin: 'cli',
+  capture: { source: 'env-workspace', confidence: 'inferred' },
   createdAt: 1,
   ...overrides
 })
@@ -7413,6 +7425,49 @@ describe('Store', () => {
 
     expect(store.getWorktreeMeta(lineage.worktreeId)).toBeUndefined()
     expect(store.getWorktreeLineage(lineage.worktreeId)).toBeUndefined()
+  })
+
+  it('stores workspace lineage and removes it with the child worktree metadata', async () => {
+    const store = await createStore()
+    const lineage = makeWorkspaceLineage()
+
+    store.setWorktreeMeta('r1::/path/child', { displayName: 'child' })
+    store.setWorkspaceLineage(lineage)
+
+    expect(store.getWorkspaceLineage(lineage.childWorkspaceKey)).toEqual(lineage)
+    expect(store.getAllWorkspaceLineage()).toEqual({ [lineage.childWorkspaceKey]: lineage })
+
+    store.removeWorktreeMeta('r1::/path/child')
+
+    expect(store.getWorkspaceLineage(lineage.childWorkspaceKey)).toBeUndefined()
+  })
+
+  it('removeFolderWorkspace deletes child workspace lineage for that folder parent', async () => {
+    const store = await createStore()
+    const group = store.createProjectGroup({
+      name: 'Platform',
+      parentPath: '/workspace/platform',
+      createdFrom: 'folder-scan'
+    })
+    const workspace = store.createFolderWorkspace({
+      projectGroupId: group.id,
+      name: 'Folder parent'
+    })
+    const folderLineage = makeWorkspaceLineage({
+      parentWorkspaceKey: folderWorkspaceKey(workspace.id)
+    })
+    const unrelatedLineage = makeWorkspaceLineage({
+      childWorkspaceKey: worktreeWorkspaceKey('r2::/other-child'),
+      parentWorkspaceKey: folderWorkspaceKey('other-folder')
+    })
+
+    store.setWorkspaceLineage(folderLineage)
+    store.setWorkspaceLineage(unrelatedLineage)
+
+    store.removeFolderWorkspace(workspace.id)
+
+    expect(store.getWorkspaceLineage(folderLineage.childWorkspaceKey)).toBeUndefined()
+    expect(store.getWorkspaceLineage(unrelatedLineage.childWorkspaceKey)).toEqual(unrelatedLineage)
   })
 
   // ── Rolling backups (issue #1158) ──────────────────────────────────

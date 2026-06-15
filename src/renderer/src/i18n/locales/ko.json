@@ -2440,7 +2440,9 @@
             "efb33546ff": "힘내 배쉬",
             "1a8af49530": "CMD 프롬프트",
             "2148f65e04": "파워셸",
-            "ab589350e5": "{{value0}}에 대한 실행 명령을 작성할 수 없습니다."
+            "ab589350e5": "{{value0}}에 대한 실행 명령을 작성할 수 없습니다.",
+            "7a9b4af2af": "탭을 왼쪽으로 스크롤",
+            "232e075b07": "탭을 오른쪽으로 스크롤"
           },
           "TabBarCreateEntry": {
             "d62d63b807": "파일 생성",
@@ -3652,6 +3654,9 @@
         "WorktreeCardAgents": {
           "1b0a156717": "Agents"
         },
+        "WorktreeCardReviewDetailSection": {
+          "reviewHeader": "{{value0}} #{{value1}}"
+        },
         "WorktreeCardMeta": {
           "3e65e11cc6": "워크스페이스 메타데이터",
           "c7fa72ead0": "메모 편집",
@@ -4595,7 +4600,7 @@
           "e7bb06007c": "로컬 네트워크",
           "4a73f5217a": "다른 로컬 앱을 제어하는 ​​스크립트를 위한 Apple 이벤트.",
           "e119f0d66b": "오토메이션",
-          "7ca17b62c8": "terminal 세션에서 보호된 폴더에 대한 지속적인 액세스.",
+          "7ca17b62c8": "프로젝트, worktree 또는 심볼릭 링크된 파일이 macOS 보호 폴더에 닿을 때 권장됩니다.",
           "c566bca278": "전체 디스크 액세스",
           "9f35980756": "키 입력 주입, 창 제어 및 UI 자동화 도구입니다.",
           "5b2f22ca2d": "접근성",
@@ -4619,7 +4624,16 @@
           "f63ea281e3": "agent 완료 및 차단 상태에 대한 스레드 왼쪽 사이드바 피드입니다.",
           "ca2219fe5e": "오른쪽 하단에 고정된 작은 애니메이션 애완동물을 표시합니다. 캐릭터(Claudino, OpenCode, Gremlin)를 선택하거나 상태 표시줄 애완동물 메뉴에서 자신만의 PNG, APNG, GIF, WebP, JPG 또는 SVG를 업로드하세요. 이 설정을 비활성화하지 않고 동일한 메뉴에서 언제든지 숨길 수 있습니다.",
           "dd6f0a1d45": "애완 동물",
-          "0e89a574ae": "오른쪽 하단에 떠 있는 애니메이션 애완동물."
+          "0e89a574ae": "오른쪽 하단에 떠 있는 애니메이션 애완동물.",
+          "agentHibernation": {
+            "copy": "Stops idle background agent terminals after the configured idle window and resumes supported sessions when you open them again. Experimental while we tune the safety model.",
+            "description": "Stops idle background agent terminals after the configured idle window and resumes supported sessions when you open them again.",
+            "idleMinutesDescription": "How many idle minutes a completed background agent must wait before Orca can hibernate it.",
+            "idleMinutesLabel": "Hibernate after",
+            "idleMinutesSuffix": "minutes",
+            "title": "Agent hibernation",
+            "toggleLabel": "Toggle agent hibernation"
+          }
         },
         "FloatingWorkspacePane": {
           "aeaf76fda9": "상태 표시줄",
@@ -6590,7 +6604,7 @@
               "a0c19119fb": "다운로드",
               "4438f81bfa": "서류",
               "c10e36cbd1": "전체 디스크 액세스",
-              "05ab708ee5": "광범위한 terminal 파일 액세스를 위해 macOS 개인정보 보호 창을 엽니다.",
+              "05ab708ee5": "보호된 프로젝트 및 worktree 파일 액세스를 위해 macOS 개인정보 보호 창을 엽니다.",
               "bbf543a3a1": "전체 디스크 액세스",
               "7f145a3984": "창문",
               "5610022e1e": "오토메이션",
@@ -6660,7 +6674,17 @@
             "b54cea709b": "친구",
             "051203d37c": "애완 동물",
             "6b5a56ac35": "오른쪽 하단에 떠 있는 애니메이션 애완동물.",
-            "87d99e634b": "애완 동물"
+            "87d99e634b": "애완 동물",
+            "agentHibernation": {
+              "agent": "agent",
+              "agents": "agents",
+              "description": "Stops idle background agent terminals after the configured idle window and resumes supported sessions when opened again.",
+              "hibernate": "hibernate",
+              "minutes": "minutes",
+              "sleep": "sleep",
+              "terminal": "terminal",
+              "title": "Agent hibernation"
+            }
           }
         },
         "floating": {
@@ -8483,7 +8507,8 @@
             "6306b48afd": "소스 제어",
             "ef182dcb12": "검색",
             "fc3095d2ed": "탐침",
-            "aiVaultSessionHistory": "Agents"
+            "aiVaultSessionHistory": "Agents",
+            "folderWorkspaces": "Attached worktrees"
           },
           "right": {
             "panel": {
@@ -9616,6 +9641,17 @@
                 "close_step": "Close"
               }
             }
+          },
+          "FullDiskAccessSetupPrompt": {
+            "bbb3f1e404": "확인 중",
+            "48d87edcd2": "허용됨",
+            "6db9a69f4e": "권장",
+            "fa809e8ada": "macOS 개인 정보 보호 및 보안을 열었습니다",
+            "bfa3402305": "권한을 요청할 수 없습니다",
+            "c566bca278": "전체 디스크 액세스",
+            "0d6efe9cf4": "프로젝트나 worktree가 보호된 폴더에 있는 경우 macOS에서 권장됩니다.",
+            "dac08ec03e": "여는 중...",
+            "6e3d62b816": "전체 디스크 액세스 열기"
           }
         },
         "tips": {
@@ -9815,7 +9851,9 @@
           "f5cf81cec2": "차이점 로드 중...",
           "72f71f52eb": "이 파일에는 텍스트 비교를 사용할 수 없습니다.",
           "7ce8436458": "브랜치 비교에서는 이 파일에 대해 텍스트 비교를 사용할 수 없습니다.",
-          "bdbf02d5df": "바이너리"
+          "bdbf02d5df": "바이너리",
+          "b5675b0694": "저장",
+          "593f2193f6": "이 초안은 안전한 표시 한도를 초과했지만 계속 저장할 수 있습니다."
         },
         "DiffSectionHeader": {
           "8915726e93": "경로 복사"
@@ -10182,6 +10220,23 @@
         },
         "useRichMarkdownReviewData": {
           "f9d2acd6b0": "보내지 않은 모든 메모"
+        },
+        "LargeDiffFallback": {
+          "a3c74f8a21": "줄 수가 안전한 표시 제한을 초과했습니다",
+          "fd92fbde46": "문자 수가 안전한 표시 제한을 초과했습니다",
+          "7d424bb761": "이 diff는 너무 커서 안전하게 표시할 수 없습니다.",
+          "28aa2cc90b": "원본 줄 수",
+          "20857938dd": "수정된 줄 수",
+          "e5f0d2182e": "문자 수",
+          "877c25a02f": "이유",
+          "5fca073b72": "제한",
+          "f1d136a163": "한쪽당 줄 수",
+          "23433fcdea": "합산 문자 수",
+          "7944ed9fb8": "계산하지 않음"
+        },
+        "DiffViewer": {
+          "b5675b0694": "저장",
+          "593f2193f6": "이 초안은 안전한 표시 한도를 초과했지만 계속 저장할 수 있습니다."
         }
       },
       "diff": {
@@ -10848,6 +10903,17 @@
             "d785c42b8b": "Use a Jira Cloud site URL, Atlassian email, and API token to browse issues.",
             "8388bdea2b": "Connect Jira site"
           }
+        }
+      },
+      "rightSidebar": {
+        "FolderWorkspaceWorktreesPanel": {
+          "unavailable": "Workspaces are only shown for folder workspaces.",
+          "label": "Workspaces",
+          "description": "Shows worktrees attached to this folder workspace.",
+          "countOne": "1 attached worktree",
+          "countMany": "{{value0}} attached worktrees",
+          "emptyTitle": "No attached worktrees yet",
+          "emptyCopy": "Worktrees created from this workspace will show up here."
         }
       },
       "link": {

@@ -49,6 +49,7 @@ import {
   waitForTerminalOutputParsed,
   writeTerminalOutput
 } from '@/lib/pane-manager/pane-terminal-output-scheduler'
+import { recordAgentHibernationPaneOutput } from '@/lib/agent-hibernation-output-activity'
 import { isLocalNativeWindowsPty } from '@/lib/pane-manager/windows-pty-compatibility'
 import { recordTerminalOutput, restoreScrollStateAfterLayout } from '@/lib/pane-manager/pane-scroll'
 import type { ScrollState } from '@/lib/pane-manager/pane-manager-types'
@@ -1471,6 +1472,13 @@ export function connectPanePty(
   const markTerminalInputSent = (): void => {
     lastTerminalInputAt = performance.now()
   }
+  const recordAcceptedTerminalInputForHibernation = (): void => {
+    useAppStore.getState().recordTerminalInput(cacheKey)
+  }
+  const markAcceptedTerminalInputSent = (): void => {
+    markTerminalInputSent()
+    recordAcceptedTerminalInputForHibernation()
+  }
   const transportOptions = {
     cwd: deps.cwd,
     env: paneEnv,
@@ -1578,6 +1586,7 @@ export function connectPanePty(
         .sendInputAccepted(data)
         .then((accepted) => {
           if (accepted) {
+            recordAcceptedTerminalInputForHibernation()
             observeAcceptedTerminalInput(data, acknowledgedIntent)
             interruptInference.observeInputIntent(acknowledgedIntent)
             observeTitleOnlyInterrupt()
@@ -1591,14 +1600,14 @@ export function connectPanePty(
     }
     if (intent) {
       if (transport.sendInput(data)) {
-        markTerminalInputSent()
+        markAcceptedTerminalInputSent()
         observeAcceptedTerminalInput(data, intent)
       }
       clearPendingTerminalInputIntent()
       return
     }
     if (transport.sendInput(data)) {
-      markTerminalInputSent()
+      markAcceptedTerminalInputSent()
       observeAcceptedTerminalInput(data)
       observeSentTerminalInputIntent(data)
     } else {
@@ -2638,6 +2647,7 @@ export function connectPanePty(
     const dataCallback = (data: string, meta?: PtyDataMeta): void => {
       if (data.length > 0) {
         hasReceivedPtyOutput = true
+        recordAgentHibernationPaneOutput(cacheKey)
       }
       resetHiddenOutputRestoreIfPtyChanged()
       observeTerminalBracketedPasteModeOutput(pane.terminal, data)

@@ -102,7 +102,7 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
     path: ['worktree', 'create'],
     summary: 'Create a new Orca-managed worktree',
     usage:
-      'orca worktree create --name <name> [--repo <selector>|--project <id> [--host <host-id>]|--project-host-setup <id>] [--agent <id>] [--prompt <text>] [--setup run|skip|inherit] [--base-branch <ref>] [--issue <number>] [--linear-issue <identifier-or-url>] [--comment <text>] [--parent-worktree <selector>] [--no-parent] [--run-hooks] [--activate] [--json]',
+      'orca worktree create --name <name> [--repo <selector>|--project <id> [--host <host-id>]|--project-host-setup <id>] [--agent <id>] [--prompt <text>] [--setup run|skip|inherit] [--base-branch <ref>] [--issue <number>] [--linear-issue <identifier-or-url>] [--comment <text>] [--parent-workspace <selector>|--parent-worktree <selector>] [--no-parent] [--run-hooks] [--activate] [--json]',
     allowedFlags: [
       ...GLOBAL_FLAGS,
       'repo',
@@ -117,6 +117,7 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
       'linear-issue',
       'comment',
       'setup',
+      'parent-workspace',
       'parent-worktree',
       'no-parent',
       'run-hooks',
@@ -126,7 +127,7 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
       'By default, Orca records the new worktree as a child of the caller workspace when it can infer one from the Orca terminal or current directory.',
       'If --repo is omitted, Orca infers the repo from the current Orca-managed worktree.',
       'Use --project with --host to create on a ready project host setup without spelling the backing repo id.',
-      'For related work, use the inferred parent or pass --parent-worktree active to make the current workspace relationship explicit.',
+      'For related work, use the inferred parent or pass --parent-workspace folder:<id> or worktree:<id>, or --parent-worktree active, to make the relationship explicit.',
       'Use --no-parent when the new worktree should be independent of the current workspace.',
       'By default this creates the worktree and its first terminal without switching the active Orca workspace.',
       'Pass --agent to launch an agent in the first terminal; --prompt sends initial work to that agent.',
@@ -140,6 +141,7 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
       'orca worktree create --project github:stablyai/orca --host runtime:gpu --name benchmark --json',
       'orca worktree create --repo id:<repoId> --name linear-task --linear-issue https://linear.app/stably/issue/STA-335/test-issue --json',
       'orca worktree create --repo id:<repoId> --name agent-task --agent codex --prompt "hi" --json',
+      'orca worktree create --repo id:<repoId> --name folder-child --parent-workspace folder:<folderWorkspaceId> --json',
       'orca worktree create --repo id:<repoId> --name related-task --parent-worktree active --json',
       'orca worktree create --repo id:<repoId> --name independent-task --no-parent --json'
     ]

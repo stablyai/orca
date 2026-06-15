@@ -2440,7 +2440,9 @@
             "efb33546ff": "Git Bash",
             "1a8af49530": "CMDプロンプト",
             "2148f65e04": "PowerShell",
-            "ab589350e5": "{{value0}} の起動コマンドを構築できませんでした。"
+            "ab589350e5": "{{value0}} の起動コマンドを構築できませんでした。",
+            "7a9b4af2af": "タブを左にスクロール",
+            "232e075b07": "タブを右にスクロール"
           },
           "TabBarCreateEntry": {
             "d62d63b807": "ファイルの作成",
@@ -3652,6 +3654,9 @@
         "WorktreeCardAgents": {
           "1b0a156717": "Agents"
         },
+        "WorktreeCardReviewDetailSection": {
+          "reviewHeader": "{{value0}} #{{value1}}"
+        },
         "WorktreeCardMeta": {
           "3e65e11cc6": "ワークスペースのメタデータ",
           "c7fa72ead0": "メモを編集する",
@@ -4595,7 +4600,7 @@
           "e7bb06007c": "ローカルネットワーク",
           "4a73f5217a": "他のローカル アプリを制御するスクリプトの Apple Events。",
           "e119f0d66b": "オートメーション",
-          "7ca17b62c8": "terminal セッションから保護されたフォルダーへの永続的なアクセス。",
+          "7ca17b62c8": "プロジェクト、worktree、またはシンボリックリンクされたファイルが macOS の保護フォルダーに触れる場合に推奨されます。",
           "c566bca278": "フルディスクアクセス",
           "9f35980756": "キーストローク インジェクション、ウィンドウ コントロール、UI 自動化ツール。",
           "5b2f22ca2d": "アクセシビリティ",
@@ -4619,7 +4624,16 @@
           "f63ea281e3": "agent の完了とブロック状態を示すスレッド化された左側のサイドバー フィード。",
           "ca2219fe5e": "右下隅に固定された小さなアニメーションのペットを表示します。キャラクター (Claudino、OpenCode、Gremlin) を選択するか、ステータス バーのペット メニューから独自の PNG、APNG、GIF、WebP、JPG、または SVG をアップロードします。この設定を無効にしなくても、同じメニューからいつでも非表示にできます。",
           "dd6f0a1d45": "ペット",
-          "0e89a574ae": "右下隅に浮かぶアニメーションのペット。"
+          "0e89a574ae": "右下隅に浮かぶアニメーションのペット。",
+          "agentHibernation": {
+            "copy": "Stops idle background agent terminals after the configured idle window and resumes supported sessions when you open them again. Experimental while we tune the safety model.",
+            "description": "Stops idle background agent terminals after the configured idle window and resumes supported sessions when you open them again.",
+            "idleMinutesDescription": "How many idle minutes a completed background agent must wait before Orca can hibernate it.",
+            "idleMinutesLabel": "Hibernate after",
+            "idleMinutesSuffix": "minutes",
+            "title": "Agent hibernation",
+            "toggleLabel": "Toggle agent hibernation"
+          }
         },
         "FloatingWorkspacePane": {
           "aeaf76fda9": "ステータスバー",
@@ -6627,7 +6641,7 @@
               "a0c19119fb": "ダウンロード",
               "4438f81bfa": "書類",
               "c10e36cbd1": "フルディスクアクセス",
-              "05ab708ee5": "macOS のプライバシー ペインを開いて、広範囲の terminal ファイルにアクセスします。",
+              "05ab708ee5": "保護されたプロジェクトと worktree のファイルアクセスのために macOS のプライバシーペインを開きます。",
               "bbf543a3a1": "フルディスクアクセス",
               "7f145a3984": "ウィンドウ",
               "5610022e1e": "オートメーション",
@@ -6697,7 +6711,17 @@
             "b54cea709b": "相棒",
             "051203d37c": "ペット",
             "6b5a56ac35": "右下隅に浮かぶアニメーションのペット。",
-            "87d99e634b": "ペット"
+            "87d99e634b": "ペット",
+            "agentHibernation": {
+              "agent": "agent",
+              "agents": "agents",
+              "description": "Stops idle background agent terminals after the configured idle window and resumes supported sessions when opened again.",
+              "hibernate": "hibernate",
+              "minutes": "minutes",
+              "sleep": "sleep",
+              "terminal": "terminal",
+              "title": "Agent hibernation"
+            }
           }
         },
         "floating": {
@@ -8483,7 +8507,8 @@
             "6306b48afd": "ソース管理",
             "ef182dcb12": "検索",
             "fc3095d2ed": "エクスプローラ",
-            "aiVaultSessionHistory": "Agents"
+            "aiVaultSessionHistory": "Agents",
+            "folderWorkspaces": "Attached worktrees"
           },
           "right": {
             "panel": {
@@ -9616,6 +9641,17 @@
                 "close_step": "Close"
               }
             }
+          },
+          "FullDiskAccessSetupPrompt": {
+            "bbb3f1e404": "確認中",
+            "48d87edcd2": "許可済み",
+            "6db9a69f4e": "推奨",
+            "fa809e8ada": "macOS のプライバシーとセキュリティを開きました",
+            "bfa3402305": "権限をリクエストできませんでした",
+            "c566bca278": "フルディスクアクセス",
+            "0d6efe9cf4": "プロジェクトや worktree が保護されたフォルダーにある場合、macOS で推奨されます。",
+            "dac08ec03e": "開いています...",
+            "6e3d62b816": "フルディスクアクセスを開く"
           }
         },
         "tips": {
@@ -9815,7 +9851,9 @@
           "f5cf81cec2": "差分を読み込み中...",
           "72f71f52eb": "このファイルではテキストの差分を使用できません。",
           "7ce8436458": "ブランチ比較では、このファイルのテキスト差分は使用できません。",
-          "bdbf02d5df": "バイナリ"
+          "bdbf02d5df": "バイナリ",
+          "b5675b0694": "保存",
+          "593f2193f6": "この下書きは安全に表示できる上限を超えましたが、保存はできます。"
         },
         "DiffSectionHeader": {
           "8915726e93": "パスをコピーする"
@@ -10182,6 +10220,23 @@
         },
         "useRichMarkdownReviewData": {
           "f9d2acd6b0": "すべての未送信のメモ"
+        },
+        "LargeDiffFallback": {
+          "a3c74f8a21": "行数が安全な表示制限を超えています",
+          "fd92fbde46": "文字数が安全な表示制限を超えています",
+          "7d424bb761": "この差分は大きすぎるため安全に表示できません。",
+          "28aa2cc90b": "元の行数",
+          "20857938dd": "変更後の行数",
+          "e5f0d2182e": "文字数",
+          "877c25a02f": "理由",
+          "5fca073b72": "制限",
+          "f1d136a163": "片側あたりの行数",
+          "23433fcdea": "合計文字数",
+          "7944ed9fb8": "未カウント"
+        },
+        "DiffViewer": {
+          "b5675b0694": "保存",
+          "593f2193f6": "この下書きは安全に表示できる上限を超えましたが、保存はできます。"
         }
       },
       "diff": {
@@ -10848,6 +10903,17 @@
             "d785c42b8b": "Use a Jira Cloud site URL, Atlassian email, and API token to browse issues.",
             "8388bdea2b": "Connect Jira site"
           }
+        }
+      },
+      "rightSidebar": {
+        "FolderWorkspaceWorktreesPanel": {
+          "unavailable": "Workspaces are only shown for folder workspaces.",
+          "label": "Workspaces",
+          "description": "Shows worktrees attached to this folder workspace.",
+          "countOne": "1 attached worktree",
+          "countMany": "{{value0}} attached worktrees",
+          "emptyTitle": "No attached worktrees yet",
+          "emptyCopy": "Worktrees created from this workspace will show up here."
         }
       },
       "link": {

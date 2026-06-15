@@ -451,9 +451,14 @@ describe('uploadBundle and deleteBundle', () => {
   })
 
   it('does not include transport error details in thrown errors', async () => {
+    const baseUrl = await listen((req) => {
+      // Why: external DNS failures are CI-timing dependent; destroying a local
+      // socket exercises the same transport-error redaction path deterministically.
+      req.socket.destroy(new Error('transport detail with sk-ant-api03-secret'))
+    })
     await expect(
       uploadBundle({
-        tokenEndpoint: 'http://diagnostics-secret.example.invalid/diagnostics/token',
+        tokenEndpoint: `${baseUrl}/diagnostics/token`,
         payload: '{}\n',
         bundleSubmissionId: generateBundleSubmissionId()
       })

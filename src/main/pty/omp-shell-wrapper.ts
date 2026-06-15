@@ -1,5 +1,5 @@
 // Why: OMP 15.x discovers built-in user extensions from ~/.omp/agent, not
-// PI_CODING_AGENT_DIR/extensions. Orca's per-PTY status extension must be
+// PI_CODING_AGENT_DIR/extensions. Orca's status extension must be
 // passed explicitly when users type `omp` in an existing terminal.
 
 const OMP_SUBCOMMANDS = [
