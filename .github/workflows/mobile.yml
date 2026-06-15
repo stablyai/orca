@@ -36,7 +36,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Typecheck
-        run: npx tsc --noEmit
+        run: npx tsc --noEmit --explainFiles 2>&1 | grep -E "remote-runtime-client|e2ee-crypto" | head -40; echo "---"; npx tsc --noEmit
 
       - name: Test
         run: pnpm test
