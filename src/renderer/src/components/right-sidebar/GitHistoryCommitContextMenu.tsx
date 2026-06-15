@@ -22,21 +22,21 @@ export function GitHistoryCommitContextMenu({
       <ContextMenuItem onSelect={() => onAction('open-remote', item)}>
         <Globe className="size-3.5" />
         {translate(
-          'auto.components.right.sidebar.GitHistoryCommitContextMenu.8e5b',
+          'auto.components.right.sidebar.GitHistoryCommitContextMenu.7b1c4e9a02',
           'Open commit in browser'
         )}
       </ContextMenuItem>
       <ContextMenuItem onSelect={() => onAction('copy-hash', item)}>
         <Hash className="size-3.5" />
         {translate(
-          'auto.components.right.sidebar.GitHistoryCommitContextMenu.9f60',
+          'auto.components.right.sidebar.GitHistoryCommitContextMenu.8c2d5fab13',
           'Copy commit hash'
         )}
       </ContextMenuItem>
       <ContextMenuItem onSelect={() => onAction('copy-message', item)}>
         <Copy className="size-3.5" />
         {translate(
-          'auto.components.right.sidebar.GitHistoryCommitContextMenu.a071',
+          'auto.components.right.sidebar.GitHistoryCommitContextMenu.9d3e60bc24',
           'Copy commit message'
         )}
       </ContextMenuItem>
@@ -44,7 +44,7 @@ export function GitHistoryCommitContextMenu({
       <ContextMenuItem onSelect={() => onAction('explain', item)}>
         <Sparkles className="size-3.5" />
         {translate(
-          'auto.components.right.sidebar.GitHistoryCommitContextMenu.b182',
+          'auto.components.right.sidebar.GitHistoryCommitContextMenu.ae4f71cd35',
           'Explain changes'
         )}
       </ContextMenuItem>

@@ -8009,7 +8009,7 @@
             "62e685d5ec": "idle",
             "111e1d0db4": "error",
             "e5e81e59a6": "Cambiar el tamaño de las commits",
-            "6d1e0a7c3b": "Failed to load commit files"
+            "6d1e0a7c3b": "No se pudieron cargar los archivos del commit"
           },
           "HostedReviewActions": {
             "4d5fb5a284": "Cerca",
@@ -8283,13 +8283,13 @@
             "hugeRepoIgnorePrompt": "Este repositorio tiene demasiados cambios activos. ¿Agregar \"{{value0}}\" a .gitignore?",
             "hugeRepoIgnoreAction": "Agregar a .gitignore",
             "tooManyChanges": "Se detectaron demasiados cambios. Solo se muestran los primeros {{value0}}.",
-            "cp1a09f2": "{{value0}} copied",
-            "cp2b17e4": "Failed to copy {{value0}}",
-            "cp3c25a6": "Commit hash",
-            "cp4d33b8": "Commit message",
-            "cp5e41c9": "No agent available to explain this commit",
-            "cp6f52da": "This repository has no supported web remote",
-            "cp7a63eb": "Failed to open commit in browser"
+            "bf5082de46": "{{value0}} copiado",
+            "c06193ef57": "No se pudo copiar {{value0}}",
+            "d172a4f068": "Hash del commit",
+            "e283b50179": "Mensaje del commit",
+            "f394c6128a": "No hay ningún agente disponible para explicar este commit",
+            "04a5d7239b": "Este repositorio no tiene un remoto web compatible",
+            "15b6e834ac": "No se pudo abrir el commit en el navegador"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "No se pudo iniciar el agente seleccionado.",
@@ -8714,22 +8714,18 @@
             "tokenCount": "{{value0}} tok"
           },
           "GitHistoryCommitFiles": {
-            "a1b2c3d4e5": "Loading files…",
-            "b2c3d4e5f6": "No file changes in this commit",
-            "c3d4e5f6a7": "Open all changes together"
+            "a1b2c3d4e5": "Cargando archivos…",
+            "b2c3d4e5f6": "No hay cambios de archivos en este commit",
+            "c3d4e5f6a7": "Abrir todos los cambios juntos"
           },
           "GitHistoryRow": {
-            "2f9c41ab07": "Show files in commit {{value0}}: {{value1}}"
+            "2f9c41ab07": "Mostrar archivos del commit {{value0}}: {{value1}}"
           },
           "GitHistoryCommitContextMenu": {
-            "4a1f": "Open on GitHub",
-            "5b2e": "Open on GitLab",
-            "6c3d": "Open on Bitbucket",
-            "7d4c": "Open on Azure DevOps",
-            "8e5b": "Open commit in browser",
-            "9f60": "Copy commit hash",
-            "a071": "Copy commit message",
-            "b182": "Explain changes"
+            "7b1c4e9a02": "Abrir commit en el navegador",
+            "8c2d5fab13": "Copiar hash del commit",
+            "9d3e60bc24": "Copiar mensaje del commit",
+            "ae4f71cd35": "Explicar los cambios"
           }
         }
       },

@@ -8009,7 +8009,7 @@
             "62e685d5ec": "idle",
             "111e1d0db4": "错误",
             "e5e81e59a6": "调整 commits 大小",
-            "6d1e0a7c3b": "Failed to load commit files"
+            "6d1e0a7c3b": "无法加载提交文件"
           },
           "HostedReviewActions": {
             "4d5fb5a284": "关闭",
@@ -8283,13 +8283,13 @@
             "hugeRepoIgnorePrompt": "此存储库的活动更改过多。是否将 \"{{value0}}\" 添加到 .gitignore？",
             "hugeRepoIgnoreAction": "添加到 .gitignore",
             "tooManyChanges": "检测到过多更改。仅显示前 {{value0}} 项。",
-            "cp1a09f2": "{{value0}} copied",
-            "cp2b17e4": "Failed to copy {{value0}}",
-            "cp3c25a6": "Commit hash",
-            "cp4d33b8": "Commit message",
-            "cp5e41c9": "No agent available to explain this commit",
-            "cp6f52da": "This repository has no supported web remote",
-            "cp7a63eb": "Failed to open commit in browser"
+            "bf5082de46": "已复制{{value0}}",
+            "c06193ef57": "无法复制{{value0}}",
+            "d172a4f068": "提交哈希",
+            "e283b50179": "提交信息",
+            "f394c6128a": "没有可用于解释此提交的代理",
+            "04a5d7239b": "此仓库没有受支持的网页远程库",
+            "15b6e834ac": "无法在浏览器中打开提交"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "无法启动选定的 Agent。",
@@ -8714,22 +8714,18 @@
             "tokenCount": "{{value0}} tok"
           },
           "GitHistoryCommitFiles": {
-            "a1b2c3d4e5": "Loading files…",
-            "b2c3d4e5f6": "No file changes in this commit",
-            "c3d4e5f6a7": "Open all changes together"
+            "a1b2c3d4e5": "正在加载文件…",
+            "b2c3d4e5f6": "此提交没有文件更改",
+            "c3d4e5f6a7": "一起打开所有更改"
           },
           "GitHistoryRow": {
-            "2f9c41ab07": "Show files in commit {{value0}}: {{value1}}"
+            "2f9c41ab07": "显示提交{{value0}}中的文件：{{value1}}"
           },
           "GitHistoryCommitContextMenu": {
-            "4a1f": "Open on GitHub",
-            "5b2e": "Open on GitLab",
-            "6c3d": "Open on Bitbucket",
-            "7d4c": "Open on Azure DevOps",
-            "8e5b": "Open commit in browser",
-            "9f60": "Copy commit hash",
-            "a071": "Copy commit message",
-            "b182": "Explain changes"
+            "7b1c4e9a02": "在浏览器中打开提交",
+            "8c2d5fab13": "复制提交哈希",
+            "9d3e60bc24": "复制提交信息",
+            "ae4f71cd35": "解释更改"
           }
         }
       },

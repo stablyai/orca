@@ -8283,13 +8283,13 @@
             "hugeRepoIgnorePrompt": "This repository has too many active changes. Add \"{{value0}}\" to .gitignore?",
             "hugeRepoIgnoreAction": "Add to .gitignore",
             "tooManyChanges": "Too many changes detected. Only the first {{value0}} are shown.",
-            "cp1a09f2": "{{value0}} copied",
-            "cp2b17e4": "Failed to copy {{value0}}",
-            "cp3c25a6": "Commit hash",
-            "cp4d33b8": "Commit message",
-            "cp5e41c9": "No agent available to explain this commit",
-            "cp6f52da": "This repository has no supported web remote",
-            "cp7a63eb": "Failed to open commit in browser"
+            "bf5082de46": "{{value0}} copied",
+            "c06193ef57": "Failed to copy {{value0}}",
+            "d172a4f068": "Commit hash",
+            "e283b50179": "Commit message",
+            "f394c6128a": "No agent available to explain this commit",
+            "04a5d7239b": "This repository has no supported web remote",
+            "15b6e834ac": "Failed to open commit in browser"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "Could not start the selected agent.",
@@ -8722,14 +8722,10 @@
             "2f9c41ab07": "Show files in commit {{value0}}: {{value1}}"
           },
           "GitHistoryCommitContextMenu": {
-            "4a1f": "Open on GitHub",
-            "5b2e": "Open on GitLab",
-            "6c3d": "Open on Bitbucket",
-            "7d4c": "Open on Azure DevOps",
-            "8e5b": "Open commit in browser",
-            "9f60": "Copy commit hash",
-            "a071": "Copy commit message",
-            "b182": "Explain changes"
+            "7b1c4e9a02": "Open commit in browser",
+            "8c2d5fab13": "Copy commit hash",
+            "9d3e60bc24": "Copy commit message",
+            "ae4f71cd35": "Explain changes"
           }
         }
       },

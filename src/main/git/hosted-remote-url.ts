@@ -128,7 +128,8 @@ export function buildHostedRemoteFileUrl(
 }
 
 export function buildHostedRemoteCommitUrl(remoteUrl: string, sha: string): string | null {
-  if (!sha) {
+  const normalizedSha = sha.trim()
+  if (!normalizedSha) {
     return null
   }
   const remote = parseHostedRemote(remoteUrl)
@@ -137,7 +138,7 @@ export function buildHostedRemoteCommitUrl(remoteUrl: string, sha: string): stri
   }
 
   const baseUrl = `https://${remote.host}/${encodeRemotePath(remote.path)}`
-  const encodedSha = encodeURIComponent(sha)
+  const encodedSha = encodeURIComponent(normalizedSha)
 
   if (remote.provider === 'gitlab') {
     return `${baseUrl}/-/commit/${encodedSha}`

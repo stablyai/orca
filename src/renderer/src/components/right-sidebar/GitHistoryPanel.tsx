@@ -345,7 +345,8 @@ export function GitHistoryPanel({
             const item = viewModel.historyItem
             const isBoundaryNode =
               viewModel.kind === 'incoming-changes' || viewModel.kind === 'outgoing-changes'
-            const canExpand = !isBoundaryNode && Boolean(onOpenCommitFile)
+            const canExpand =
+              !isBoundaryNode && Boolean(onLoadCommitFiles) && Boolean(onOpenCommitFile)
             const isExpanded = canExpand && expanded.has(item.id)
             const row = (
               <GitHistoryRow
