@@ -757,6 +757,31 @@ describe('keybindings', () => {
     ).toBe(false)
   })
 
+  it('captures double-tap gestures into canonical bindings', () => {
+    expect(keybindingFromInput({ doubleTapModifier: 'Shift' }, 'darwin')).toEqual({
+      ok: true,
+      value: 'DoubleTap+Shift'
+    })
+    // The platform primary modifier canonicalizes to Mod, matching normal capture.
+    expect(keybindingFromInput({ doubleTapModifier: 'Cmd' }, 'darwin')).toEqual({
+      ok: true,
+      value: 'DoubleTap+Mod'
+    })
+    expect(keybindingFromInput({ doubleTapModifier: 'Ctrl' }, 'win32')).toEqual({
+      ok: true,
+      value: 'DoubleTap+Mod'
+    })
+    // A non-primary modifier keeps its explicit token.
+    expect(keybindingFromInput({ doubleTapModifier: 'Ctrl' }, 'darwin')).toEqual({
+      ok: true,
+      value: 'DoubleTap+Ctrl'
+    })
+    expect(keybindingFromInput({ doubleTapModifier: 'Alt' }, 'linux')).toEqual({
+      ok: true,
+      value: 'DoubleTap+Alt'
+    })
+  })
+
   it('formats double-tap bindings as the modifier glyph twice', () => {
     expect(formatKeybinding('DoubleTap+Shift', 'darwin')).toEqual(['⇧', '⇧'])
     expect(formatKeybinding('DoubleTap+Shift', 'linux')).toEqual(['Shift', 'Shift'])

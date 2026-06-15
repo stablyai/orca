@@ -1327,11 +1327,30 @@ function keyTokenFromInput(input: KeybindingInput, platform: NodeJS.Platform): s
   return physicalCodeKeyTokenFromInput(input)
 }
 
+// Why: the platform primary modifier canonicalizes to Mod, mirroring normal
+// capture where Cmd on macOS / Ctrl elsewhere both become Mod.
+function canonicalDoubleTapToken(modifier: ModifierToken, platform: NodeJS.Platform): ModifierToken {
+  const isMac = platform === 'darwin'
+  if (modifier === 'Cmd' && isMac) {
+    return 'Mod'
+  }
+  if (modifier === 'Ctrl' && !isMac) {
+    return 'Mod'
+  }
+  return modifier
+}
+
 function keybindingFromInputWithOptions(
   input: KeybindingInput,
   platform: NodeJS.Platform,
   options: NormalizeKeybindingOptions = {}
 ): KeybindingValidationResult {
+  if (input.doubleTapModifier) {
+    return normalizeKeybindingWithOptions(
+      `DoubleTap+${canonicalDoubleTapToken(input.doubleTapModifier, platform)}`,
+      options
+    )
+  }
   const key = keyTokenFromInput(input, platform)
   if (!key) {
     return { ok: false, error: 'Press a key, not only a modifier.' }
