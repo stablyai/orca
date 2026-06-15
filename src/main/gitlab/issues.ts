@@ -43,25 +43,24 @@ export async function getIssue(
   issueNumber: number,
   connectionId?: string | null
 ): Promise<GitLabIssueInfo | null> {
-  const knownHosts = await getGlabKnownHosts()
+  const knownHosts = await getGlabKnownHosts(connectionId)
   const projectRef = await getIssueProjectRef(repoPath, knownHosts, connectionId)
+  // Why: don't fall back to a cwd-inferred `glab issue view` when the project
+  // can't be resolved — on an SSH connection cwd is not the repo dir, so glab
+  // hits a non-repo dir and fails with `git: exit status 128`. Return null
+  // (the caller already treats a missing project as "no issue") instead of
+  // spawning a doomed cwd-dependent call.
+  if (!projectRef) {
+    return null
+  }
   await acquire()
   try {
-    if (projectRef) {
-      const { stdout } = await glabExecFileAsync(
-        [
-          'api',
-          ...glabHostnameArgs(projectRef, connectionId),
-          `projects/${encodedProject(projectRef.path)}/issues/${issueNumber}`
-        ],
-        glabRepoExecOptions(repoPath, connectionId)
-      )
-      const data = JSON.parse(stdout)
-      return mapGitLabIssueInfo(data)
-    }
-    // Fallback for non-GitLab remotes — let glab infer the project from cwd.
     const { stdout } = await glabExecFileAsync(
-      ['issue', 'view', String(issueNumber), '--output', 'json'],
+      [
+        'api',
+        ...glabHostnameArgs(projectRef, connectionId),
+        `projects/${encodedProject(projectRef.path)}/issues/${issueNumber}`
+      ],
       glabRepoExecOptions(repoPath, connectionId)
     )
     const data = JSON.parse(stdout)
@@ -91,56 +90,45 @@ export async function listIssues(
   assignee?: string,
   connectionId?: string | null
 ): Promise<IssueListResult> {
-  const knownHosts = await getGlabKnownHosts()
+  const knownHosts = await getGlabKnownHosts(connectionId)
   const { source: projectRef } = await resolveIssueSource(
     repoPath,
     preference,
     knownHosts,
     connectionId
   )
-  await acquire()
-  try {
-    if (projectRef) {
-      const stateParam = state === 'all' ? '' : `&state=${state}`
-      const scopeParam = assignee === '@me' ? '&scope=assigned_to_me' : ''
-      const { stdout } = await glabExecFileAsync(
-        [
-          'api',
-          ...glabHostnameArgs(projectRef, connectionId),
-          `projects/${encodedProject(projectRef.path)}/issues?per_page=${limit}&order_by=updated_at&sort=desc${stateParam}${scopeParam}`
-        ],
-        glabRepoExecOptions(repoPath, connectionId)
-      )
-      const data = JSON.parse(stdout) as Record<string, unknown>[]
-      // Why: GitLab's project issues endpoint returns true issues only
-      // (MRs are a separate endpoint), so no equivalent of GitHub's
-      // pull_request filter is needed here.
-      return {
-        items: data.map((d) => mapGitLabIssueInfo(d as Parameters<typeof mapGitLabIssueInfo>[0]))
+  // Why: when the project can't be resolved we must NOT fall back to an
+  // unscoped `glab issue list` that infers the project from cwd. For a repo
+  // on an SSH connection there is no local cwd matching the repo, so glab
+  // runs git resolution in a non-repo dir and fails with `git: exit status
+  // 128`. In an "All projects" aggregate one such failure must not sink the
+  // whole panel — return a structured, isolated result so the resolvable
+  // projects still load.
+  if (!projectRef) {
+    return {
+      items: [],
+      error: {
+        type: 'not_found',
+        message: 'Could not resolve a GitLab project for this repository.'
       }
     }
-    // Fallback — let glab infer project from cwd. glab issue list defaults
-    // to opened; only pass --closed / --all when explicitly requested.
-    const stateFlag = state === 'closed' ? ['--closed'] : state === 'all' ? ['--all'] : []
-    const assigneeFlag = assignee ? ['--assignee', assignee] : []
+  }
+  await acquire()
+  try {
+    const stateParam = state === 'all' ? '' : `&state=${state}`
+    const scopeParam = assignee === '@me' ? '&scope=assigned_to_me' : ''
     const { stdout } = await glabExecFileAsync(
       [
-        'issue',
-        'list',
-        '--output',
-        'json',
-        '--per-page',
-        String(limit),
-        '--order',
-        'updated_at',
-        '--sort',
-        'desc',
-        ...stateFlag,
-        ...assigneeFlag
+        'api',
+        ...glabHostnameArgs(projectRef, connectionId),
+        `projects/${encodedProject(projectRef.path)}/issues?per_page=${limit}&order_by=updated_at&sort=desc${stateParam}${scopeParam}`
       ],
       glabRepoExecOptions(repoPath, connectionId)
     )
-    const data = JSON.parse(stdout) as unknown[]
+    const data = JSON.parse(stdout) as Record<string, unknown>[]
+    // Why: GitLab's project issues endpoint returns true issues only
+    // (MRs are a separate endpoint), so no equivalent of GitHub's
+    // pull_request filter is needed here.
     return {
       items: data.map((d) => mapGitLabIssueInfo(d as Parameters<typeof mapGitLabIssueInfo>[0]))
     }
@@ -170,7 +158,7 @@ export async function createIssue(
   if (!trimmedTitle) {
     return { ok: false, error: 'Title is required' }
   }
-  const knownHosts = await getGlabKnownHosts()
+  const knownHosts = await getGlabKnownHosts(connectionId)
   const { source: projectRef } = await resolveIssueSource(
     repoPath,
     preference,
@@ -234,7 +222,7 @@ export async function updateIssue(
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const projectRef =
     projectRefOverride ??
-    (await resolveIssueSource(repoPath, preference, await getGlabKnownHosts(), connectionId)).source
+    (await resolveIssueSource(repoPath, preference, await getGlabKnownHosts(connectionId), connectionId)).source
   if (!projectRef) {
     return {
       ok: false,
@@ -359,7 +347,7 @@ export async function addIssueComment(
 ): Promise<GitLabCommentResult> {
   const projectRef =
     projectRefOverride ??
-    (await resolveIssueSource(repoPath, preference, await getGlabKnownHosts(), connectionId)).source
+    (await resolveIssueSource(repoPath, preference, await getGlabKnownHosts(connectionId), connectionId)).source
   if (!projectRef) {
     return {
       ok: false,
@@ -412,7 +400,7 @@ export async function listLabels(
   preference?: IssueSourcePreference,
   connectionId?: string | null
 ): Promise<string[]> {
-  const knownHosts = await getGlabKnownHosts()
+  const knownHosts = await getGlabKnownHosts(connectionId)
   const { source: projectRef } = await resolveIssueSource(
     repoPath,
     preference,
@@ -451,7 +439,7 @@ export async function listAssignableUsers(
   preference?: IssueSourcePreference,
   connectionId?: string | null
 ): Promise<GitLabAssignableUser[]> {
-  const knownHosts = await getGlabKnownHosts()
+  const knownHosts = await getGlabKnownHosts(connectionId)
   const { source: projectRef } = await resolveIssueSource(
     repoPath,
     preference,
