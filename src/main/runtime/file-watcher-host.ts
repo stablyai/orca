@@ -23,6 +23,12 @@ const RUNTIME_FILE_WATCH_IGNORE = [
   '.venv'
 ]
 
+// Why: clean teardown is async (the worker awaits subscription.unsubscribe()
+// before closing its port and exiting). Wait this long for the worker to exit on
+// its own before force-terminating, so the native watcher thread isn't freed
+// mid-flight.
+const WORKER_TEARDOWN_TIMEOUT_MS = 5000
+
 function getFileWatcherWorkerPath(): string {
   if (app.isPackaged) {
     return join(process.resourcesPath, 'app.asar', 'out', 'main', 'file-watcher-worker.js')
@@ -44,6 +50,7 @@ export function watchFileExplorerInWorker(
 
     let ready = false
     let disposed = false
+    let exited = false
 
     // Why: returns a promise that resolves once the worker is actually down, so
     // the shutdown drain (awaitRuntimeFileWatcherUnsubscribes) doesn't finish
@@ -53,17 +60,37 @@ export function watchFileExplorerInWorker(
         return
       }
       disposed = true
-      // Ask the worker to unsubscribe its native watcher, then terminate as a
-      // backstop in case the worker is wedged and never closes its own port.
+      if (exited) {
+        return
+      }
+      // Ask the worker to unsubscribe its native watcher and exit on its own.
+      // Why: worker.terminate() force-frees the worker's V8 env while
+      // @parcel/watcher's native watch thread / inflight async work is still
+      // live, which faults inside napi (Watcher::findCallback,
+      // PromiseRunner::onWorkComplete). Only terminate as a backstop if the
+      // worker wedges and never exits.
+      const cleanExit = new Promise<boolean>((resolveExit) => {
+        worker.on('exit', () => resolveExit(false))
+      })
       try {
         worker.postMessage({ type: 'unsubscribe' } satisfies FileWatcherHostMessage)
       } catch {
         // Worker already gone — terminate below covers it.
       }
-      await worker.terminate().then(
-        () => undefined,
-        () => undefined
-      )
+      let timer: ReturnType<typeof setTimeout> | undefined
+      const wedged = new Promise<boolean>((resolveWedged) => {
+        timer = setTimeout(() => resolveWedged(true), WORKER_TEARDOWN_TIMEOUT_MS)
+      })
+      const shouldTerminate = await Promise.race([cleanExit, wedged])
+      if (timer) {
+        clearTimeout(timer)
+      }
+      if (shouldTerminate && !exited) {
+        await worker.terminate().then(
+          () => undefined,
+          () => undefined
+        )
+      }
     }
 
     worker.on('message', (message: FileWatcherWorkerMessage) => {
@@ -107,6 +134,7 @@ export function watchFileExplorerInWorker(
     })
 
     worker.on('exit', (code) => {
+      exited = true
       if (!ready && !disposed) {
         disposed = true
         reject(new Error(`file watcher worker exited before ready (code ${code})`))

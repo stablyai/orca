@@ -128,15 +128,19 @@ describe('watchFileExplorerInWorker', () => {
     expect(onEvents).toHaveBeenCalledWith([{ kind: 'overflow', absolutePath: '/repo' }])
   })
 
-  it('unsubscribes and terminates the worker on dispose', async () => {
+  it('unsubscribes and waits for a clean worker exit without force-terminating', async () => {
     const promise = watchFileExplorerInWorker('/repo', vi.fn())
     const worker = lastWorker()
     worker.emit('message', { type: 'ready' })
     const dispose = await promise
 
-    await dispose()
+    const disposed = dispose()
     expect(worker.postedMessages).toContainEqual({ type: 'unsubscribe' })
-    expect(worker.terminated).toBe(true)
+    // The worker unsubscribes its native watcher, closes its port and exits on
+    // its own — no force terminate, which is what corrupts the native watcher.
+    worker.emit('exit', 0)
+    await disposed
+    expect(worker.terminated).toBe(false)
 
     // Idempotent: a second dispose does nothing further.
     await dispose()
@@ -145,13 +149,34 @@ describe('watchFileExplorerInWorker', () => {
     ).toHaveLength(1)
   })
 
+  it('force-terminates the worker only if it fails to exit within the timeout', async () => {
+    vi.useFakeTimers()
+    try {
+      const promise = watchFileExplorerInWorker('/repo', vi.fn())
+      const worker = lastWorker()
+      worker.emit('message', { type: 'ready' })
+      const dispose = await promise
+
+      const disposed = dispose()
+      expect(worker.postedMessages).toContainEqual({ type: 'unsubscribe' })
+      // Worker is wedged and never emits exit: the backstop must terminate it.
+      await vi.advanceTimersByTimeAsync(10_000)
+      await disposed
+      expect(worker.terminated).toBe(true)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('stops forwarding events after dispose', async () => {
     const onEvents = vi.fn<(events: FsChangeEvent[]) => void>()
     const promise = watchFileExplorerInWorker('/repo', onEvents)
     const worker = lastWorker()
     worker.emit('message', { type: 'ready' })
     const dispose = await promise
-    await dispose()
+    const disposed = dispose()
+    worker.emit('exit', 0)
+    await disposed
     onEvents.mockClear()
 
     worker.emit('message', {
