@@ -43,6 +43,7 @@ describe('keybindings', () => {
     expect(normalizeKeybinding('DoubleTap+Mod')).toEqual({ ok: true, value: 'DoubleTap+Mod' })
     expect(normalizeKeybinding('DoubleTap+Cmd')).toEqual({ ok: true, value: 'DoubleTap+Cmd' })
     expect(normalizeKeybinding('DoubleTap+Alt')).toEqual({ ok: true, value: 'DoubleTap+Alt' })
+    expect(normalizeKeybinding('DoubleTap+Ctrl')).toEqual({ ok: true, value: 'DoubleTap+Ctrl' })
 
     // A key after DoubleTap is invalid.
     expect(normalizeKeybinding('DoubleTap+Shift+P')).toMatchObject({ ok: false })
