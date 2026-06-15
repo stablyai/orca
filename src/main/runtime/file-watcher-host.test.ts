@@ -6,9 +6,12 @@ type MockWorker = {
   postedMessages: unknown[]
   workerData: unknown
   on(event: string, listener: (arg?: unknown) => void): MockWorker
+  once(event: string, listener: (arg?: unknown) => void): MockWorker
+  off(event: string, listener: (arg?: unknown) => void): MockWorker
   postMessage(message: unknown): void
   terminate(): Promise<number>
   emit(event: string, arg?: unknown): void
+  listenerCount(event: string): number
 }
 
 const workerState = vi.hoisted(() => {
@@ -17,7 +20,7 @@ const workerState = vi.hoisted(() => {
     terminated = false
     postedMessages: unknown[] = []
     workerData: unknown
-    private listeners = new Map<string, ((arg?: unknown) => void)[]>()
+    private listeners = new Map<string, { listener: (arg?: unknown) => void; once: boolean }[]>()
 
     constructor(_workerPath: string, options: { workerData?: unknown }) {
       this.workerData = options.workerData
@@ -26,8 +29,24 @@ const workerState = vi.hoisted(() => {
 
     on(event: string, listener: (arg?: unknown) => void): this {
       const list = this.listeners.get(event) ?? []
-      list.push(listener)
+      list.push({ listener, once: false })
       this.listeners.set(event, list)
+      return this
+    }
+
+    once(event: string, listener: (arg?: unknown) => void): this {
+      const list = this.listeners.get(event) ?? []
+      list.push({ listener, once: true })
+      this.listeners.set(event, list)
+      return this
+    }
+
+    off(event: string, listener: (arg?: unknown) => void): this {
+      const list = this.listeners.get(event) ?? []
+      this.listeners.set(
+        event,
+        list.filter((entry) => entry.listener !== listener)
+      )
       return this
     }
 
@@ -41,9 +60,17 @@ const workerState = vi.hoisted(() => {
     }
 
     emit(event: string, arg?: unknown): void {
-      for (const listener of this.listeners.get(event) ?? []) {
-        listener(arg)
+      const entries = this.listeners.get(event)?.slice() ?? []
+      for (const entry of entries) {
+        if (entry.once) {
+          this.off(event, entry.listener)
+        }
+        entry.listener(arg)
       }
+    }
+
+    listenerCount(event: string): number {
+      return this.listeners.get(event)?.length ?? 0
     }
   }
   return { instances, MockWorkerImpl }
@@ -141,6 +168,7 @@ describe('watchFileExplorerInWorker', () => {
     worker.emit('exit', 0)
     await disposed
     expect(worker.terminated).toBe(false)
+    expect(worker.listenerCount('exit')).toBe(1)
 
     // Idempotent: a second dispose does nothing further.
     await dispose()
@@ -159,10 +187,12 @@ describe('watchFileExplorerInWorker', () => {
 
       const disposed = dispose()
       expect(worker.postedMessages).toContainEqual({ type: 'unsubscribe' })
+      expect(worker.listenerCount('exit')).toBe(2)
       // Worker is wedged and never emits exit: the backstop must terminate it.
       await vi.advanceTimersByTimeAsync(10_000)
       await disposed
       expect(worker.terminated).toBe(true)
+      expect(worker.listenerCount('exit')).toBe(1)
     } finally {
       vi.useRealTimers()
     }

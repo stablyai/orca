@@ -28,12 +28,38 @@ const RUNTIME_FILE_WATCH_IGNORE = [
 // its own before force-terminating, so the native watcher thread isn't freed
 // mid-flight.
 const WORKER_TEARDOWN_TIMEOUT_MS = 5000
+type WorkerExitWaitResult = 'exit' | 'timeout'
 
 function getFileWatcherWorkerPath(): string {
   if (app.isPackaged) {
     return join(process.resourcesPath, 'app.asar', 'out', 'main', 'file-watcher-worker.js')
   }
   return join(__dirname, 'file-watcher-worker.js')
+}
+
+function waitForWorkerExit(worker: Worker, timeoutMs: number): Promise<WorkerExitWaitResult> {
+  return new Promise((resolve) => {
+    let settled = false
+    let timer: ReturnType<typeof setTimeout> | undefined
+    let onExit: (() => void) | undefined
+    const finish = (result: WorkerExitWaitResult): void => {
+      if (settled) {
+        return
+      }
+      settled = true
+      if (timer) {
+        clearTimeout(timer)
+      }
+      if (onExit) {
+        worker.off('exit', onExit)
+      }
+      resolve(result)
+    }
+
+    onExit = () => finish('exit')
+    worker.once('exit', onExit)
+    timer = setTimeout(() => finish('timeout'), timeoutMs)
+  })
 }
 
 /** Start a recursive file watch in a worker thread. Resolves to an unsubscribe
@@ -69,23 +95,13 @@ export function watchFileExplorerInWorker(
       // live, which faults inside napi (Watcher::findCallback,
       // PromiseRunner::onWorkComplete). Only terminate as a backstop if the
       // worker wedges and never exits.
-      const cleanExit = new Promise<boolean>((resolveExit) => {
-        worker.on('exit', () => resolveExit(false))
-      })
       try {
         worker.postMessage({ type: 'unsubscribe' } satisfies FileWatcherHostMessage)
       } catch {
         // Worker already gone — terminate below covers it.
       }
-      let timer: ReturnType<typeof setTimeout> | undefined
-      const wedged = new Promise<boolean>((resolveWedged) => {
-        timer = setTimeout(() => resolveWedged(true), WORKER_TEARDOWN_TIMEOUT_MS)
-      })
-      const shouldTerminate = await Promise.race([cleanExit, wedged])
-      if (timer) {
-        clearTimeout(timer)
-      }
-      if (shouldTerminate && !exited) {
+      const exitResult = await waitForWorkerExit(worker, WORKER_TEARDOWN_TIMEOUT_MS)
+      if (exitResult === 'timeout' && !exited) {
         await worker.terminate().then(
           () => undefined,
           () => undefined
