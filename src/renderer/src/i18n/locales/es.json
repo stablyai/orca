@@ -27,7 +27,8 @@
         "kimiToggleDescription": "Muestra el uso de la suscripción de Kimi para el espacio de trabajo activo.",
         "sshToggleDescription": "Show configured SSH and remote Orca hosts when any are available.",
         "resourceUsageToggleDescription": "Muestra el Administrador de recursos. Haga clic en él para ver la CPU, la memoria, las sesiones, los controles del demonio y los análisis del disco del espacio de trabajo.",
-        "portsToggleDescription": "Mostrar puertos del espacio de trabajo en vivo. Haga clic en él para puertos con ámbito de espacio de trabajo y oyentes externos."
+        "portsToggleDescription": "Mostrar puertos del espacio de trabajo en vivo. Haga clic en él para puertos con ámbito de espacio de trabajo y oyentes externos.",
+        "zaiToggleDescription": "Muestra el uso de la suscripción de Z.AI en la barra de estado."
       }
     }
   },
@@ -2673,7 +2674,9 @@
             "cd9d7b40ff": "Reiniciar {{value0}} sesiones",
             "6cd6650b4c": "Reiniciar sesión",
             "1446d0d8a0": "{{value0}} Las sesiones del Codex todavía están en la cuenta anterior.",
-            "605901a495": "1 sesión del Codex todavía está en la cuenta anterior"
+            "605901a495": "1 sesión del Codex todavía está en la cuenta anterior",
+            "89fe3f951b": "Uso de Z.AI",
+            "zaiDetails": "Abrir detalles de uso de Z.AI"
           },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "Conectar una cuenta",
@@ -4209,7 +4212,21 @@
           "75ca9b718e": "Codex informó que la cuenta activa necesita un nuevo inicio de sesión. Vuelva a autenticarlo antes de iniciar nuevas sesiones del Codex.",
           "b11078a9c2": "wsl",
           "350b2a1aa7": "Usa tu actual",
-          "e05d0ff737": "Utilice su inicio de sesión actual de {{value0}} Claude."
+          "e05d0ff737": "Usa tu inicio de sesión actual de Claude en {{value0}}.",
+          "zaiTitle": "Z.AI",
+          "zaiDescription": "Guarda una clave API de Z.AI para el uso compatible con Anthropic en https://api.z.ai/api/anthropic y el seguimiento de cuota en vivo.",
+          "zaiApiKeyLoadFailed": "No se pudo cargar el estado de la clave API de Z.AI.",
+          "zaiApiKeySaveFailed": "No se pudo actualizar la clave API de Z.AI.",
+          "zaiApiKeyClearFailed": "No se pudo actualizar la clave API de Z.AI.",
+          "zaiApiKeyTitle": "Clave API de Z.AI",
+          "zaiApiKeyDescription": "Guarda una clave API de Z.AI para el acceso compatible con Anthropic en https://api.z.ai/api/anthropic y la consulta de uso.",
+          "zaiApiKeyLabel": "Clave API",
+          "zaiApiKeyEndpointCopy": "Endpoint de Anthropic: https://api.z.ai/api/anthropic",
+          "zaiApiKeyPlaceholder": "sk-...",
+          "zaiApiKeySave": "Guardar",
+          "zaiApiKeyClear": "Borrar",
+          "zaiApiKeyConfigured": "Configurada",
+          "92731d3ff7": "Claude terminal restart recommended"
         },
         "AdvancedPane": {
           "40b29e0bf3": "Reanudar",
@@ -5524,7 +5541,8 @@
           "advanced": "Advanced",
           "serverDetails": "Server details",
           "advertiseThisApp": "Advertise this app as a server",
-          "advertiseThisAppHelp": "Create access links for browsers, mobile clients, or another Orca client to connect back to this running app."
+          "advertiseThisAppHelp": "Crea enlaces de acceso para que navegadores, clientes móviles u otro cliente de Orca se conecten a esta aplicación en ejecución.",
+          "runtimeReachable": "Se puede acceder a {{value0}}."
         },
         "RuntimePairingGeneratedUrlRows": {
           "0495f68959": "Copiar {{value0}}"
@@ -6222,7 +6240,9 @@
             "bdbd1e668e": "ventanas",
             "593720c17f": "ubicación",
             "b84a5b0c8a": "Elija si las cuentas de proveedor se inspeccionan y agregan en este dispositivo o en WSL.",
-            "d09fb5ca92": "Ubicación de la cuenta"
+            "d09fb5ca92": "Ubicación de la cuenta",
+            "zaiTitle": "Clave API de Z.AI",
+            "zaiDescription": "Configuración de clave API y seguimiento de cuota en vivo para Z.AI."
           }
         },
         "advanced": {
@@ -6414,7 +6434,9 @@
             "leftSidebarAppearance": {
               "title": "Apariencia de la barra lateral izquierda",
               "description": "Haz que la barra lateral izquierda coincida con tu terminal, conserve el valor predeterminado o use un tinte."
-            }
+            },
+            "a5336dd0d1": "Uso de Z.AI",
+            "2ffd3d3343": "Muestra el uso de la suscripción de Z.AI en la barra de estado."
           }
         },
         "auto": {

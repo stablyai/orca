@@ -10,6 +10,8 @@ import { fetchClaudeRateLimits, fetchManagedAccountUsage } from './claude-fetche
 import { fetchCodexRateLimits } from './codex-fetcher'
 import { fetchGeminiRateLimits } from './gemini-usage-fetcher'
 import { fetchOpenCodeGoRateLimits } from './opencode-go-usage-fetcher'
+import { fetchKimiRateLimits } from './kimi-fetcher'
+import { fetchZaiRateLimits } from './zai-fetcher'
 
 vi.mock('./claude-fetcher', () => ({
   fetchClaudeRateLimits: vi.fn(),
@@ -27,6 +29,13 @@ vi.mock('./gemini-usage-fetcher', () => ({
 vi.mock('./opencode-go-usage-fetcher', () => ({
   fetchOpenCodeGoRateLimits: vi.fn()
 }))
+vi.mock('./kimi-fetcher', () => ({
+  fetchKimiRateLimits: vi.fn()
+}))
+
+vi.mock('./zai-fetcher', () => ({
+  fetchZaiRateLimits: vi.fn()
+}))
 
 type Deferred<T> = {
   promise: Promise<T>
@@ -34,15 +43,12 @@ type Deferred<T> = {
 }
 
 function deferred<T>(): Deferred<T> {
-  let resolve!: (value: T) => void
-  const promise = new Promise<T>((res) => {
-    resolve = res
-  })
+  const { promise, resolve } = Promise.withResolvers<T>()
   return { promise, resolve }
 }
 
 function okProvider(
-  provider: 'claude' | 'codex' | 'gemini' | 'opencode-go',
+  provider: 'claude' | 'codex' | 'gemini' | 'opencode-go' | 'kimi' | 'zai',
   usedPercent: number,
   updatedAt = Date.now()
 ): ProviderRateLimits {
@@ -62,7 +68,7 @@ function okProvider(
 }
 
 function errorProvider(
-  provider: 'claude' | 'codex' | 'gemini' | 'opencode-go',
+  provider: 'claude' | 'codex' | 'gemini' | 'opencode-go' | 'kimi' | 'zai',
   message: string
 ): ProviderRateLimits {
   return {
@@ -112,6 +118,8 @@ describe('RateLimitService', () => {
     vi.clearAllMocks()
     vi.mocked(fetchGeminiRateLimits).mockResolvedValue(okProvider('gemini', 0, Date.now()))
     vi.mocked(fetchOpenCodeGoRateLimits).mockResolvedValue(okProvider('opencode-go', 0, Date.now()))
+    vi.mocked(fetchKimiRateLimits).mockResolvedValue(okProvider('kimi', 0, Date.now()))
+    vi.mocked(fetchZaiRateLimits).mockResolvedValue(okProvider('zai', 0, Date.now()))
   })
 
   it('does not refetch Claude when a Codex account switch is queued during fetchAll', async () => {
@@ -304,8 +312,10 @@ describe('RateLimitService', () => {
     expect(fetchCodexRateLimits).toHaveBeenCalledTimes(2)
   })
 
-  it('fetches Gemini and OpenCode Go alongside Claude and Codex', async () => {
+  it('fetches Gemini, OpenCode Go, Kimi, and Z.AI alongside Claude and Codex', async () => {
     const service = new RateLimitService()
+    const apiKey = 'zai-token'
+    service.setZaiApiKeyResolver(() => apiKey)
     service.setSettingsResolver(() => ({
       opencodeSessionCookie: 'session=abc123',
       opencodeWorkspaceId: ''
@@ -317,6 +327,8 @@ describe('RateLimitService', () => {
     vi.mocked(fetchOpenCodeGoRateLimits).mockResolvedValueOnce(
       okProvider('opencode-go', 40, Date.now())
     )
+    vi.mocked(fetchKimiRateLimits).mockResolvedValueOnce(okProvider('kimi', 50, Date.now()))
+    vi.mocked(fetchZaiRateLimits).mockResolvedValueOnce(okProvider('zai', 60, Date.now()))
 
     await service.refresh()
 
@@ -329,6 +341,9 @@ describe('RateLimitService', () => {
     expect(fetchGeminiRateLimits).toHaveBeenCalledTimes(1)
     expect(fetchOpenCodeGoRateLimits).toHaveBeenCalledTimes(1)
     expect(fetchOpenCodeGoRateLimits).toHaveBeenCalledWith('session=abc123', undefined)
+    expect(fetchKimiRateLimits).toHaveBeenCalledTimes(1)
+    expect(fetchZaiRateLimits).toHaveBeenCalledTimes(1)
+    expect(fetchZaiRateLimits).toHaveBeenCalledWith(apiKey)
 
     const state = service.getState()
     expect(state.claude?.status).toBe('ok')
@@ -339,6 +354,36 @@ describe('RateLimitService', () => {
     expect(state.gemini?.session?.usedPercent).toBe(30)
     expect(state.opencodeGo?.status).toBe('ok')
     expect(state.opencodeGo?.session?.usedPercent).toBe(40)
+    expect(state.kimi?.status).toBe('ok')
+    expect(state.kimi?.session?.usedPercent).toBe(50)
+    expect(state.zai?.status).toBe('ok')
+    expect(state.zai?.session?.usedPercent).toBe(60)
+  })
+  it('keeps other providers updating when the Z.AI key resolver throws', async () => {
+    const service = new RateLimitService()
+    service.setZaiApiKeyResolver(() => {
+      throw new Error('key store unavailable')
+    })
+
+    vi.mocked(fetchClaudeRateLimits).mockResolvedValueOnce(okProvider('claude', 10, Date.now()))
+    vi.mocked(fetchCodexRateLimits).mockResolvedValueOnce(okProvider('codex', 20, Date.now()))
+    vi.mocked(fetchGeminiRateLimits).mockResolvedValueOnce(okProvider('gemini', 30, Date.now()))
+    vi.mocked(fetchOpenCodeGoRateLimits).mockResolvedValueOnce(
+      okProvider('opencode-go', 40, Date.now())
+    )
+    vi.mocked(fetchKimiRateLimits).mockResolvedValueOnce(okProvider('kimi', 50, Date.now()))
+
+    await service.refresh()
+
+    expect(fetchZaiRateLimits).not.toHaveBeenCalled()
+    const state = service.getState()
+    expect(state.claude?.session?.usedPercent).toBe(10)
+    expect(state.codex?.session?.usedPercent).toBe(20)
+    expect(state.gemini?.session?.usedPercent).toBe(30)
+    expect(state.opencodeGo?.session?.usedPercent).toBe(40)
+    expect(state.kimi?.session?.usedPercent).toBe(50)
+    expect(state.zai?.status).toBe('error')
+    expect(state.zai?.error).toBe('key store unavailable')
   })
 
   it('passes the selected WSL Codex home into active account rate-limit fetches', async () => {
@@ -654,6 +699,7 @@ describe('RateLimitService', () => {
     vi.mocked(fetchClaudeRateLimits).mockRejectedValueOnce(new Error('claude down'))
     vi.mocked(fetchCodexRateLimits).mockResolvedValueOnce(okProvider('codex', 20, Date.now()))
     vi.mocked(fetchGeminiRateLimits).mockRejectedValueOnce(new Error('gemini down'))
+    vi.mocked(fetchZaiRateLimits).mockRejectedValueOnce(new Error('zai down'))
     vi.mocked(fetchOpenCodeGoRateLimits).mockResolvedValueOnce(
       okProvider('opencode-go', 40, Date.now())
     )
@@ -667,6 +713,8 @@ describe('RateLimitService', () => {
     expect(state.gemini?.status).toBe('error')
     expect(state.gemini?.error).toBe('gemini down')
     expect(state.opencodeGo?.status).toBe('ok')
+    expect(state.zai?.status).toBe('error')
+    expect(state.zai?.error).toBe('zai down')
   })
 
   it('discards stale data when a provider becomes unavailable', async () => {

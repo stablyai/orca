@@ -1,4 +1,5 @@
 import React from 'react'
+import { AgentLetterIcon } from '../../lib/agent-icon-glyphs'
 
 export function OpenAIIcon({ size = 14 }: { size?: number }): React.JSX.Element {
   return (
@@ -306,6 +307,9 @@ export function ClaudeIcon({ size = 14 }: { size?: number }): React.JSX.Element 
       />
     </svg>
   )
+}
+export function ZaiIcon({ size = 14 }: { size?: number }): React.JSX.Element {
+  return <AgentLetterIcon letter="Z" size={size} />
 }
 
 export function DroidIcon({ size = 14 }: { size?: number }): React.JSX.Element {

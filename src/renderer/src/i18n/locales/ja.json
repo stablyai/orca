@@ -27,7 +27,8 @@
         "kimiToggleDescription": "Kimi サブスクリプション",
         "sshToggleDescription": "Show configured SSH and remote Orca hosts when any are available.",
         "resourceUsageToggleDescription": "リソースマネージャーを表示します。これをクリックすると、CPU、メモリ、セッション、デーモン コントロール、およびワークスペース ディスク スキャンが行われます。",
-        "portsToggleDescription": "ライブワークスペースポートを表示します。ワークスペーススコープのポートと外部リスナーの場合はこれをクリックします。"
+        "portsToggleDescription": "ライブワークスペースポートを表示します。ワークスペーススコープのポートと外部リスナーの場合はこれをクリックします。",
+        "zaiToggleDescription": "ステータスバーに Z.AI サブスクリプションの使用状況を表示します。"
       }
     }
   },
@@ -2673,7 +2674,9 @@
             "cd9d7b40ff": "{{value0}} セッションを再起動します",
             "6cd6650b4c": "セッションを再開する",
             "1446d0d8a0": "{{value0}} Codex セッションはまだ古いアカウントにあります。",
-            "605901a495": "1 Codex セッションはまだ古いアカウントにあります"
+            "605901a495": "1 Codex セッションはまだ古いアカウントにあります",
+            "89fe3f951b": "Z.AI 使用状況",
+            "zaiDetails": "Z.AI 使用状況の詳細を開く"
           },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "アカウントを接続する",
@@ -4194,7 +4197,21 @@
           "75ca9b718e": "Codex は、アクティブなアカウントには新たにサインインする必要があると報告しました。新規 Codex セッションを開始する前に、再認証してください。",
           "b11078a9c2": "wsl",
           "350b2a1aa7": "Use your current",
-          "e05d0ff737": "現在の {{value0}} Claude ログインを使用します。"
+          "e05d0ff737": "現在の {{value0}} の Claude ログインを使用します。",
+          "zaiTitle": "Z.AI",
+          "zaiDescription": "https://api.z.ai/api/anthropic での Anthropic 互換利用とライブクォータ追跡のために、Z.AI API キーを保存します。",
+          "zaiApiKeyLoadFailed": "Z.AI API キーの状態を読み込めませんでした。",
+          "zaiApiKeySaveFailed": "Z.AI API キーの更新に失敗しました。",
+          "zaiApiKeyClearFailed": "Z.AI API キーの更新に失敗しました。",
+          "zaiApiKeyTitle": "Z.AI API キー",
+          "zaiApiKeyDescription": "https://api.z.ai/api/anthropic での Anthropic 互換アクセスと使用量取得のために、Z.AI API キーを保存します。",
+          "zaiApiKeyLabel": "API キー",
+          "zaiApiKeyEndpointCopy": "Anthropic エンドポイント: https://api.z.ai/api/anthropic",
+          "zaiApiKeyPlaceholder": "sk-...",
+          "zaiApiKeySave": "保存",
+          "zaiApiKeyClear": "クリア",
+          "zaiApiKeyConfigured": "設定済み",
+          "92731d3ff7": "Claude terminal restart recommended"
         },
         "AdvancedPane": {
           "40b29e0bf3": "再起動",
@@ -5546,7 +5563,8 @@
           "advanced": "Advanced",
           "serverDetails": "Server details",
           "advertiseThisApp": "Advertise this app as a server",
-          "advertiseThisAppHelp": "Create access links for browsers, mobile clients, or another Orca client to connect back to this running app."
+          "advertiseThisAppHelp": "ブラウザー、モバイル クライアント、または別の Orca クライアントがこの実行中のアプリに接続できるアクセスリンクを作成します。",
+          "runtimeReachable": "{{value0}} に到達できます。"
         },
         "RuntimePairingGeneratedUrlRows": {
           "0495f68959": "{{value0}}をコピー"
@@ -6244,7 +6262,9 @@
             "bdbd1e668e": "窓",
             "593720c17f": "場所",
             "b84a5b0c8a": "プロバイダー アカウントをこのデバイスまたは WSL で検査および追加するかどうかを選択します。",
-            "d09fb5ca92": "アカウントの場所"
+            "d09fb5ca92": "アカウントの場所",
+            "zaiTitle": "Z.AI API キー",
+            "zaiDescription": "Z.AI の API キー設定とライブクォータ追跡。"
           }
         },
         "advanced": {
@@ -6436,7 +6456,9 @@
             "leftSidebarAppearance": {
               "title": "左サイドバーの外観",
               "description": "左サイドバーをターミナルに合わせるか、既定のままにするか、色合いを加えます。"
-            }
+            },
+            "a5336dd0d1": "Z.AI 使用状況",
+            "2ffd3d3343": "ステータスバーに Z.AI サブスクリプションの使用状況を表示します。"
           }
         },
         "auto": {

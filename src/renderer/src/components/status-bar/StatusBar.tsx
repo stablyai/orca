@@ -36,7 +36,7 @@ import type {
   RateLimitWindow
 } from '../../../../shared/rate-limit-types'
 import { ProviderIcon, ProviderPanel, barColor, getProviderUsageStatusLabel } from './tooltip'
-import { ClaudeIcon, GeminiIcon, OpenAIIcon, OpenCodeGoIcon } from './icons'
+import { ClaudeIcon, GeminiIcon, OpenAIIcon, OpenCodeGoIcon, ZaiIcon } from './icons'
 import { AgentIcon } from '@/lib/agent-catalog'
 import { formatWindowLabel } from '@/lib/window-label-formatter'
 import { markLiveCodexSessionsForRestart } from '@/lib/codex-session-restart'
@@ -1500,7 +1500,9 @@ export function ProviderDetailsMenu({
                       ? 'O'
                       : provider.provider === 'kimi'
                         ? 'K'
-                        : 'X'}
+                        : provider.provider === 'zai'
+                          ? 'Z'
+                          : 'X'}
               </span>
             </span>
           ) : (
@@ -1641,7 +1643,7 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
     return null
   }
 
-  const { claude, codex, gemini, opencodeGo, kimi } = rateLimits
+  const { claude, codex, gemini, opencodeGo, kimi, zai } = rateLimits
 
   // Why: a provider only earns a bar once it's configured (isProviderConfigured
   // drops the `unavailable` state — Gemini OAuth off, OpenCode Go cookie unset,
@@ -1665,7 +1667,8 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
     isProviderConfigured(kimi) &&
     statusBarItems.includes('kimi') &&
     isStatusBarItemAvailable('kimi', detectedAgentIds)
-  // Why: OpenCode Go is a web/cookie-auth provider, not a CLI on PATH, so
+  const showZai = isProviderConfigured(zai) && statusBarItems.includes('zai')
+  // Why: OpenCode Go and Z.AI are web/app-auth providers, not CLIs on PATH, so
   // detection-gating doesn't apply.
   const showOpencodeGo = isProviderConfigured(opencodeGo) && statusBarItems.includes('opencode-go')
   const showSsh = statusBarItems.includes('ssh')
@@ -1674,7 +1677,13 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
   const showFloatingTerminalToggle =
     floatingTerminalEnabled && floatingTerminalTriggerLocation === 'status-bar'
   const anyVisible =
-    showClaude || showCodex || showGemini || showOpencodeGo || showKimi || showResourceUsage
+    showClaude ||
+    showCodex ||
+    showGemini ||
+    showOpencodeGo ||
+    showKimi ||
+    showZai ||
+    showResourceUsage
   // Why: a brand-new user with no provider configured would otherwise see an
   // empty left side of the status bar and wonder what's missing. The CTA
   // names the surface and points to the setup path. Detection is on
@@ -1685,7 +1694,8 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
     !isProviderConfigured(codex) &&
     !isProviderConfigured(gemini) &&
     !isProviderConfigured(opencodeGo) &&
-    !isProviderConfigured(kimi)
+    !isProviderConfigured(kimi) &&
+    !isProviderConfigured(zai)
   // Why: the teaching CTA is a one-time nudge — once the user hides it, keep it
   // hidden even after providers are disconnected again.
   const showEmptyUsageCta = isEmptyUsageState && !usageEmptyStateDismissed
@@ -1694,7 +1704,8 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
     codex?.status === 'fetching' ||
     gemini?.status === 'fetching' ||
     opencodeGo?.status === 'fetching' ||
-    kimi?.status === 'fetching'
+    kimi?.status === 'fetching' ||
+    zai?.status === 'fetching'
 
   const compact = containerWidth < 900
   const iconOnly = containerWidth < 500
@@ -1764,6 +1775,17 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
                 ariaLabel={translate(
                   'auto.components.status.bar.StatusBar.fda8146810',
                   'Open Kimi usage details'
+                )}
+              />
+            )}
+            {showZai && (
+              <ProviderDetailsMenu
+                provider={zai}
+                compact={compact}
+                iconOnly={iconOnly}
+                ariaLabel={translate(
+                  'auto.components.status.bar.StatusBar.zaiDetails',
+                  'Open Z.AI usage details'
                 )}
               />
             )}
@@ -1897,6 +1919,16 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
               {translate('auto.components.status.bar.StatusBar.5e59007df4', 'Kimi Usage')}
             </DropdownMenuCheckboxItem>
           )}
+          <DropdownMenuCheckboxItem
+            checked={statusBarItems.includes('zai')}
+            onCheckedChange={() => {
+              recordFeatureInteraction('usage-tracking')
+              toggleStatusBarItem('zai')
+            }}
+          >
+            <ZaiIcon size={14} />
+            {translate('auto.components.status.bar.StatusBar.89fe3f951b', 'Z.AI Usage')}
+          </DropdownMenuCheckboxItem>
           <DropdownMenuCheckboxItem
             checked={statusBarItems.includes('ssh')}
             onCheckedChange={() => {

@@ -588,6 +588,7 @@ function createWebPreloadApi(): Partial<PreloadApi> {
     rateLimits: createRateLimitsApi(),
     codexAccounts: createAccountsApi(),
     claudeAccounts: createAccountsApi(),
+    zaiApiKey: createZaiApiKeyApi(),
     cli: createCliApi(),
     agentHooks: createAgentHooksApi(),
     developerPermissions: createDeveloperPermissionsApi(),
@@ -2217,6 +2218,7 @@ function createRateLimitsApi(): NonNullable<Partial<PreloadApi>['rateLimits']> {
     gemini: null,
     opencodeGo: null,
     kimi: null,
+    zai: null,
     claudeTarget: { runtime: 'host', wslDistro: null },
     codexTarget: { runtime: 'host', wslDistro: null },
     inactiveClaudeAccounts: [],
@@ -2247,6 +2249,15 @@ function createAccountsApi(): never {
     remove: () => Promise.resolve(empty),
     select: () => Promise.resolve(empty)
   } as never
+}
+// Why: paired web clients cannot access the desktop-local encrypted key store,
+// so Z.AI API-key management stays unavailable in the browser adapter.
+function createZaiApiKeyApi(): NonNullable<Partial<PreloadApi>['zaiApiKey']> {
+  return {
+    getStatus: () => Promise.resolve({ configured: false }),
+    save: () => Promise.resolve({ configured: false }),
+    clear: () => Promise.resolve({ configured: false })
+  }
 }
 
 function createUpdaterApi(): NonNullable<Partial<PreloadApi>['updater']> {

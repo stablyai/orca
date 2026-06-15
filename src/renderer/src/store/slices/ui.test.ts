@@ -1003,11 +1003,41 @@ describe('createUISlice hydratePersistedUI', () => {
       })
     )
 
-    expect(store.getState().statusBarItems).toEqual(['claude', 'resource-usage', 'ports', 'kimi'])
+    expect(store.getState().statusBarItems).toEqual([
+      'claude',
+      'resource-usage',
+      'ports',
+      'kimi',
+      'zai'
+    ])
     expect(setUI).toHaveBeenCalledWith({
-      statusBarItems: ['claude', 'resource-usage', 'ports', 'kimi'],
+      statusBarItems: ['claude', 'resource-usage', 'ports', 'kimi', 'zai'],
       _portsStatusBarDefaultAdded: true,
-      _kimiStatusBarDefaultAdded: true
+      _kimiStatusBarDefaultAdded: true,
+      _zaiStatusBarDefaultAdded: true
+    })
+  })
+
+  it('does not duplicate Z.AI when persisting the one-shot default-on migration', () => {
+    const setUI = vi.fn().mockResolvedValue(undefined)
+    vi.stubGlobal('window', { api: { ui: { set: setUI } } })
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(
+      makePersistedUI({
+        statusBarItems: ['claude', 'zai'],
+        _portsStatusBarDefaultAdded: true,
+        _kimiStatusBarDefaultAdded: true,
+        _zaiStatusBarDefaultAdded: false
+      })
+    )
+
+    expect(store.getState().statusBarItems).toEqual(['claude', 'zai'])
+    expect(setUI).toHaveBeenCalledWith({
+      statusBarItems: ['claude', 'zai'],
+      _portsStatusBarDefaultAdded: true,
+      _kimiStatusBarDefaultAdded: true,
+      _zaiStatusBarDefaultAdded: true
     })
   })
 
@@ -1020,7 +1050,8 @@ describe('createUISlice hydratePersistedUI', () => {
       makePersistedUI({
         statusBarItems: ['claude', 'resource-usage'],
         _portsStatusBarDefaultAdded: true,
-        _kimiStatusBarDefaultAdded: true
+        _kimiStatusBarDefaultAdded: true,
+        _zaiStatusBarDefaultAdded: true
       })
     )
 

@@ -16,12 +16,12 @@ export type RateLimitBucket = RateLimitWindow & {
 }
 
 export type ProviderRateLimits = {
-  provider: 'claude' | 'codex' | 'gemini' | 'opencode-go' | 'kimi'
+  provider: 'claude' | 'codex' | 'gemini' | 'opencode-go' | 'kimi' | 'zai'
   /** 5-hour session window, null if not available. */
   session: RateLimitWindow | null
   /** 7-day weekly window, null if not available. */
   weekly: RateLimitWindow | null
-  /** 30-day monthly window (OpenCode Go only), null if not available. */
+  /** 30-day monthly window, null if not available. */
   monthly?: RateLimitWindow | null
   /** Named per-model buckets (Gemini only). */
   buckets?: RateLimitBucket[]
@@ -50,6 +50,7 @@ export type RateLimitState = {
   gemini: ProviderRateLimits | null
   opencodeGo: ProviderRateLimits | null
   kimi: ProviderRateLimits | null
+  zai: ProviderRateLimits | null
   claudeTarget: RateLimitRuntimeTarget
   codexTarget: RateLimitRuntimeTarget
   inactiveClaudeAccounts: InactiveAccountUsage[]

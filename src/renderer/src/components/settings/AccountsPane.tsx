@@ -17,11 +17,12 @@ import { Separator } from '../ui/separator'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
 import { AlertTriangle, Loader2, Plus, RefreshCw, Trash2 } from 'lucide-react'
 import { useAppStore } from '../../store'
-import { ClaudeIcon, GeminiIcon, OpenAIIcon, OpenCodeGoIcon } from '../status-bar/icons'
+import { ClaudeIcon, GeminiIcon, OpenAIIcon, OpenCodeGoIcon, ZaiIcon } from '../status-bar/icons'
 import { toast } from 'sonner'
 import {
   getAccountsClaudeSearchEntries,
   getAccountsCodexSearchEntries,
+  getAccountsZaiSearchEntries,
   getAccountsGeminiSearchEntries,
   getAccountsLocationSearchEntries,
   getAccountsOpencodeSearchEntries,
@@ -120,7 +121,6 @@ function getClaudeAccountLabel(
   }
   return state.accounts.find((account) => account.id === accountId)?.email ?? 'Claude account'
 }
-
 function getCodexAccountRuntimeLabel(
   account: CodexRateLimitAccountsState['accounts'][number]
 ): string {
@@ -147,11 +147,6 @@ function getCodexAccountErrorDescription(error: unknown): string {
     .trim()
   const normalizedMessage = message.toLowerCase()
 
-  // Why: Codex account actions cross the Electron IPC boundary, and invoke()
-  // failures often include transport-level wrapper text that is useful in
-  // devtools but noisy in product UI. Normalize the handful of expected auth
-  // failures here so users see actionable sign-in guidance instead of IPC
-  // internals or raw upstream wording.
   if (normalizedMessage.includes('timed out waiting for codex login to finish')) {
     return 'Codex sign-in took too long to finish. Please try again.'
   }
@@ -180,6 +175,16 @@ function getClaudeAccountErrorDescription(error: unknown): string {
       .replace(/^Error invoking remote method 'claudeAccounts:[^']+':\s*/i, '')
       .replace(/^Error:\s*/i, '')
       .trim() || 'Claude sign-in failed. Please try again.'
+  )
+}
+
+function getZaiApiKeyErrorDescription(error: unknown): string {
+  return (
+    String((error as Error)?.message ?? error)
+      .replace(/^Error occurred in handler for 'zaiApiKey:[^']+':\s*/i, '')
+      .replace(/^Error invoking remote method 'zaiApiKey:[^']+':\s*/i, '')
+      .replace(/^Error:\s*/i, '')
+      .trim() || 'Z.AI API key update failed. Try again.'
   )
 }
 
@@ -278,6 +283,9 @@ export function AccountsPane({
   const [claudeAction, setClaudeAction] = useState<
     'idle' | 'adding' | `reauth:${string}` | `remove:${string}` | `select:${string | 'system'}`
   >('idle')
+  const [zaiApiKeyDraft, setZaiApiKeyDraft] = useState('')
+  const [zaiApiKeyConfigured, setZaiApiKeyConfigured] = useState(false)
+  const [zaiApiKeyPending, setZaiApiKeyPending] = useState(false)
   const [removeAccountId, setRemoveAccountId] = useState<string | null>(null)
   const [removeClaudeAccountId, setRemoveClaudeAccountId] = useState<string | null>(null)
   const visibleClaudeAccounts = claudeAccounts.accounts.filter((account) =>
@@ -356,8 +364,30 @@ export function AccountsPane({
       }
     }
 
+    const loadZaiApiKeyStatus = async (): Promise<void> => {
+      try {
+        const next = await window.api.zaiApiKey.getStatus()
+        if (!stale) {
+          setZaiApiKeyConfigured(next.configured)
+        }
+      } catch (error) {
+        if (!stale) {
+          toast.error(
+            translate(
+              'auto.components.settings.AccountsPane.zaiApiKeyLoadFailed',
+              'Could not load Z.AI API key status.'
+            ),
+            {
+              description: getZaiApiKeyErrorDescription(error)
+            }
+          )
+        }
+      }
+    }
+
     void loadCodexAccounts()
     void loadClaudeAccounts()
+    void loadZaiApiKeyStatus()
 
     return () => {
       stale = true
@@ -533,10 +563,14 @@ export function AccountsPane({
         previousActiveAccountId !== nextActiveAccountId ||
         (action.startsWith('reauth:') &&
           nextActiveAccountId !== null &&
-          action === `reauth:${nextActiveAccountId}`)
+          action === `reauth:${nextActiveAccountId}`) ||
+        (action.startsWith('remove:') && previousActiveAccountId !== nextActiveAccountId)
       if (shouldPromptRestart) {
         toast.info(
-          translate('auto.components.settings.AccountsPane.f921d32606', 'Claude account updated.'),
+          translate(
+            'auto.components.settings.AccountsPane.92731d3ff7',
+            'Claude terminal restart recommended'
+          ),
           {
             description: translate(
               'auto.components.settings.AccountsPane.b15ce90870',
@@ -561,6 +595,54 @@ export function AccountsPane({
       )
     } finally {
       setClaudeAction('idle')
+    }
+  }
+
+  const saveZaiApiKey = async (): Promise<void> => {
+    setZaiApiKeyPending(true)
+    try {
+      const next = await window.api.zaiApiKey.save(zaiApiKeyDraft.trim())
+      setZaiApiKeyConfigured(next.configured)
+      setZaiApiKeyDraft('')
+      recordFeatureInteraction('usage-tracking')
+      await useAppStore.getState().refreshRateLimits()
+      await fetchSettings()
+    } catch (error) {
+      toast.error(
+        translate(
+          'auto.components.settings.AccountsPane.zaiApiKeySaveFailed',
+          'Z.AI API key update failed.'
+        ),
+        {
+          description: getZaiApiKeyErrorDescription(error)
+        }
+      )
+    } finally {
+      setZaiApiKeyPending(false)
+    }
+  }
+
+  const clearZaiApiKey = async (): Promise<void> => {
+    setZaiApiKeyPending(true)
+    try {
+      const next = await window.api.zaiApiKey.clear()
+      setZaiApiKeyConfigured(next.configured)
+      setZaiApiKeyDraft('')
+      recordFeatureInteraction('usage-tracking')
+      await useAppStore.getState().refreshRateLimits()
+      await fetchSettings()
+    } catch (error) {
+      toast.error(
+        translate(
+          'auto.components.settings.AccountsPane.zaiApiKeyClearFailed',
+          'Z.AI API key update failed.'
+        ),
+        {
+          description: getZaiApiKeyErrorDescription(error)
+        }
+      )
+    } finally {
+      setZaiApiKeyPending(false)
     }
   }
 
@@ -1107,6 +1189,100 @@ export function AccountsPane({
                 )
               })
             )}
+          </div>
+        </SearchableSetting>
+      </section>
+    ) : null,
+    matchesSettingsSearch(searchQuery, getAccountsZaiSearchEntries()) ? (
+      <section key="zai-accounts" id="accounts-zai" className="space-y-4 scroll-mt-6">
+        <div className="space-y-1">
+          <h3 className="flex items-center gap-2 text-sm font-semibold">
+            <ZaiIcon size={16} />
+            {translate('auto.components.settings.AccountsPane.zaiTitle', 'Z.AI')}
+          </h3>
+          <p className="text-xs text-muted-foreground">
+            {translate(
+              'auto.components.settings.AccountsPane.zaiDescription',
+              'Save a Z.AI API key for Anthropic-compatible usage at https://api.z.ai/api/anthropic and live quota tracking.'
+            )}
+          </p>
+        </div>
+
+        <SearchableSetting
+          title={translate('auto.components.settings.AccountsPane.zaiApiKeyTitle', 'Z.AI API Key')}
+          description={translate(
+            'auto.components.settings.AccountsPane.zaiApiKeyDescription',
+            'Save a Z.AI API key for Anthropic-compatible access at https://api.z.ai/api/anthropic and usage fetching.'
+          )}
+          // Why: SearchableSetting matches against a flat keyword list; flatten
+          // the shared catalog entry so Z.AI search stays aligned with settings navigation.
+          keywords={getAccountsZaiSearchEntries().flatMap((entry) => [
+            entry.title,
+            entry.description ?? '',
+            ...(entry.keywords ?? [])
+          ])}
+          className="space-y-3 py-2"
+        >
+          <div className="space-y-3">
+            <div className="space-y-0.5">
+              <Label htmlFor="zai-api-key">
+                {translate('auto.components.settings.AccountsPane.zaiApiKeyLabel', 'API Key')}
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                {translate(
+                  'auto.components.settings.AccountsPane.zaiApiKeyEndpointCopy',
+                  'Anthropic endpoint: https://api.z.ai/api/anthropic'
+                )}
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <Input
+                id="zai-api-key"
+                type="password"
+                value={zaiApiKeyDraft}
+                onChange={(event) => setZaiApiKeyDraft(event.target.value)}
+                placeholder={translate(
+                  'auto.components.settings.AccountsPane.zaiApiKeyPlaceholder',
+                  'sk-...'
+                )}
+                autoComplete="off"
+                spellCheck={false}
+                className="font-mono"
+              />
+              <Button
+                variant="outline"
+                size="xs"
+                onClick={() => void saveZaiApiKey()}
+                disabled={zaiApiKeyPending || zaiApiKeyDraft.trim().length === 0}
+              >
+                {zaiApiKeyPending ? (
+                  <Loader2 className="size-3 animate-spin" />
+                ) : (
+                  translate('auto.components.settings.AccountsPane.zaiApiKeySave', 'Save')
+                )}
+              </Button>
+              <Button
+                variant="ghost"
+                size="xs"
+                onClick={() => void clearZaiApiKey()}
+                disabled={zaiApiKeyPending || !zaiApiKeyConfigured}
+              >
+                {translate('auto.components.settings.AccountsPane.zaiApiKeyClear', 'Clear')}
+              </Button>
+            </div>
+            {zaiApiKeyConfigured ? (
+              <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+                <Badge
+                  variant="outline"
+                  className="h-4 shrink-0 rounded px-1.5 text-[10px] font-medium leading-none text-foreground/80"
+                >
+                  {translate(
+                    'auto.components.settings.AccountsPane.zaiApiKeyConfigured',
+                    'Configured'
+                  )}
+                </Badge>
+              </div>
+            ) : null}
           </div>
         </SearchableSetting>
       </section>

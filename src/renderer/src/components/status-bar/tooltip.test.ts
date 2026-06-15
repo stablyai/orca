@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { ProviderRateLimits } from '../../../../shared/rate-limit-types'
 import {
   formatResetCountdown,
+  getProviderDisplayName,
   getProviderUsageErrorMessage,
   getProviderUsageStatusLabel,
   getWindowSections
@@ -121,6 +122,19 @@ describe('provider usage error copy', () => {
     expect(getProviderUsageErrorMessage(oauth)).toBe('OAuth API returned 500')
     expect(getProviderUsageErrorMessage(network)).toBe(
       'Network error while refreshing OAuth usage: ECONNRESET'
+    )
+  })
+
+  it('uses Z.AI display name in auth-shaped usage failures', () => {
+    const p = provider({
+      provider: 'zai',
+      error: 'Z.AI usage request unauthorized. Check your API key.'
+    })
+
+    expect(getProviderDisplayName('zai')).toBe('Z.AI')
+    expect(getProviderUsageStatusLabel(p)).toBe('Refresh failed')
+    expect(getProviderUsageErrorMessage(p)).toBe(
+      'Z.AI usage could not be refreshed. Agent sessions may still be signed in.'
     )
   })
 })
@@ -254,5 +268,21 @@ describe('getWindowSections', () => {
     expect(sections[0].label).toBe('Pro')
     expect(sections[0].window!.resetsAt).toBe(18000000)
     expect(sections[0].window!.resetDescription).toBe('5:00 PM')
+  })
+
+  it('includes monthly quota windows for Z.AI', () => {
+    const p = provider({
+      provider: 'zai',
+      session: { usedPercent: 16, windowMinutes: 300, resetsAt: null, resetDescription: null },
+      weekly: { usedPercent: 4, windowMinutes: 10080, resetsAt: null, resetDescription: null },
+      monthly: { usedPercent: 0, windowMinutes: 43200, resetsAt: null, resetDescription: null },
+      status: 'ok'
+    })
+
+    expect(getWindowSections(p)).toEqual([
+      { label: 'Session', window: p.session },
+      { label: 'Weekly', window: p.weekly },
+      { label: 'Monthly', window: p.monthly }
+    ])
   })
 })

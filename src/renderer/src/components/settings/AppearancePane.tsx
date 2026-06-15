@@ -394,7 +394,9 @@ export function AppearancePane({
                       toggle.id === 'claude' ||
                       toggle.id === 'codex' ||
                       toggle.id === 'gemini' ||
-                      toggle.id === 'opencode-go'
+                      toggle.id === 'opencode-go' ||
+                      toggle.id === 'kimi' ||
+                      toggle.id === 'zai'
                     ) {
                       recordFeatureInteraction('usage-tracking')
                     }
