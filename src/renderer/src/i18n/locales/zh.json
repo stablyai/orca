@@ -3896,8 +3896,8 @@
         },
         "useAddRepoLocalFolderFlow": {
           "7ab10e4974": "使用服务器路径从远程运行时添加项目。",
-          "skippedBatchFolders": "Some folders were skipped",
-          "skippedBatchFoldersDescription": "Add non-Git folders individually to review or confirm them."
+          "skippedBatchFolders": "已跳过部分文件夹",
+          "skippedBatchFoldersDescription": "请单独添加已跳过的文件夹，以便逐个查看或确认。"
         },
         "useAddRepoNestedImportFlow": {
           "680cac2c82": "{{value0}} 失败",

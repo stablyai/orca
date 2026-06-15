@@ -1,3 +1,4 @@
+import { join, sep } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { handleMock, removeHandlerMock, showOpenDialogMock } = vi.hoisted(() => ({
@@ -81,12 +82,14 @@ describe('repos folder pickers', () => {
   })
 
   it('picks multiple folders for the add-project browse flow', async () => {
+    const projectA = join(sep, 'projects', 'a')
+    const projectB = join(sep, 'projects', 'b')
     showOpenDialogMock.mockResolvedValue({
       canceled: false,
-      filePaths: ['/projects/a', '/projects/b']
+      filePaths: [projectA, projectB]
     })
 
-    await expect(callPickFolders()).resolves.toEqual(['/projects/a', '/projects/b'])
+    await expect(callPickFolders()).resolves.toEqual([projectA, projectB])
 
     expect(showOpenDialogMock).toHaveBeenCalledWith(mockWindow, {
       properties: ['openDirectory', 'multiSelections']

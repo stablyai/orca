@@ -3896,8 +3896,8 @@
         },
         "useAddRepoLocalFolderFlow": {
           "7ab10e4974": "サーバー パスを使用して、リモート ランタイムからプロジェクトを追加します。",
-          "skippedBatchFolders": "Some folders were skipped",
-          "skippedBatchFoldersDescription": "Add non-Git folders individually to review or confirm them."
+          "skippedBatchFolders": "一部のフォルダーはスキップされました",
+          "skippedBatchFoldersDescription": "スキップされたフォルダーは個別に追加して確認または確定してください。"
         },
         "useAddRepoNestedImportFlow": {
           "680cac2c82": "{{value0}} は失敗しました",

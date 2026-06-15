@@ -253,7 +253,7 @@ export function useAddRepoLocalFolderFlow({
           {
             description: translate(
               'auto.components.sidebar.useAddRepoLocalFolderFlow.skippedBatchFoldersDescription',
-              'Add non-Git folders individually to review or confirm them.'
+              'Add skipped folders individually to review or confirm them.'
             )
           }
         )
