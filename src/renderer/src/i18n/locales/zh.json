@@ -8704,6 +8704,10 @@
             "copyLogPath": "Copy Log Path",
             "messageCount": "{{value0}} msgs",
             "tokenCount": "{{value0}} tok"
+          },
+          "SourceControlViewModeToggle": {
+            "3e1e60f138": "Show changes as list",
+            "3b429e0f68": "Show changes as tree"
           }
         }
       },

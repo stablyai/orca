@@ -63,6 +63,11 @@ import {
   type DropdownEntry
 } from './source-control-dropdown-items'
 import { BulkActionBar } from './BulkActionBar'
+import { SourceControlViewModeToggle } from './SourceControlViewModeToggle'
+import {
+  requestSourceControlViewModePreferenceWrite,
+  type SourceControlViewModePreferenceWriteState
+} from './source-control-view-mode'
 import { useSourceControlSelection, type FlatEntry } from './useSourceControlSelection'
 import {
   getDiscardAllPaths,
@@ -833,10 +838,28 @@ function SourceControlInner(): React.JSX.Element {
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(
     createDefaultCollapsedSections
   )
+  const [optimisticSourceControlViewMode, setOptimisticSourceControlViewMode] =
+    useState<SourceControlViewMode | null>(null)
+  const sourceControlViewModeWriteStateRef = useRef<SourceControlViewModePreferenceWriteState>({
+    writeChain: Promise.resolve(),
+    writeSeq: 0
+  })
   const persistedSourceControlViewMode = normalizeSourceControlViewMode(
     settings?.sourceControlViewMode
   )
-  const sourceControlViewMode = persistedSourceControlViewMode
+  // Why: optimistic value keeps the toggle responsive across the async settings
+  // write; it clears once the authoritative settings snapshot settles.
+  const sourceControlViewMode = optimisticSourceControlViewMode ?? persistedSourceControlViewMode
+  const isSourceControlViewModeHydrated = settings !== null
+  const handleToggleSourceControlViewMode = useCallback(() => {
+    requestSourceControlViewModePreferenceWrite({
+      hydrated: isSourceControlViewModeHydrated,
+      currentMode: sourceControlViewMode,
+      writeState: sourceControlViewModeWriteStateRef.current,
+      setOptimisticMode: setOptimisticSourceControlViewMode,
+      updateSettings
+    })
+  }, [isSourceControlViewModeHydrated, sourceControlViewMode, updateSettings])
   const [collapsedTreeDirs, setCollapsedTreeDirs] = useState<Set<string>>(new Set())
   const [baseRefDialogOpen, setBaseRefDialogOpen] = useState(false)
   const [pendingDiscard, setPendingDiscard] = useState<PendingDiscardConfirmation | null>(null)
@@ -4010,6 +4033,11 @@ function SourceControlInner(): React.JSX.Element {
               <X className="size-3.5" />
             </button>
           )}
+          <SourceControlViewModeToggle
+            viewMode={sourceControlViewMode}
+            disabled={!isSourceControlViewModeHydrated}
+            onToggle={handleToggleSourceControlViewMode}
+          />
         </div>
 
         <div
