@@ -353,7 +353,7 @@ export async function syncRuntimeGitForkDefaultBranch(
       worktree: toRuntimeWorktreeSelector(context.worktreeId),
       ...(expectedUpstream ? { expectedUpstream } : {})
     },
-    { timeoutMs: 30_000 }
+    { timeoutMs: 60_000 }
   )
 }
 

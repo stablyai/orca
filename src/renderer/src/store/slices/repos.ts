@@ -50,10 +50,7 @@ import {
   callRuntimeRpc,
   getActiveRuntimeTarget
 } from '../../runtime/runtime-rpc-client'
-import {
-  syncRuntimeGitForkDefaultBranch,
-  type RuntimeGitContext
-} from '../../runtime/runtime-git-client'
+import { syncRuntimeGitForkDefaultBranch } from '../../runtime/runtime-git-client'
 import { toRuntimeWorktreeSelector } from '../../runtime/runtime-worktree-selector'
 import { buildDismissedOnboardingFolderAgentStartup } from '@/lib/onboarding-folder-agent-startup'
 import { markOnboardingProjectAdded } from '@/lib/onboarding-project-checklist'
@@ -215,11 +212,7 @@ function getSafeAutoForkSyncKey(repo: Repo): string {
   return `${getRepoExecutionHostId(repo)}:${repo.id}:${repo.path}`
 }
 
-function scheduleSafeAutoForkSync(
-  get: () => AppState,
-  repos: readonly Repo[],
-  settingsOverride?: RuntimeGitContext['settings']
-): void {
+function scheduleSafeAutoForkSync(get: () => AppState, repos: readonly Repo[]): void {
   for (const repo of repos) {
     if (repo.kind === 'folder' || repo.forkSyncMode !== 'safe-auto' || !repo.upstream) {
       continue
@@ -235,7 +228,7 @@ function scheduleSafeAutoForkSync(
     }
     const promise = syncRuntimeGitForkDefaultBranch(
       {
-        settings: settingsOverride ?? get().settings,
+        settings: settingsForRepoOwner(get(), repo.id),
         worktreeId: repo.id,
         worktreePath: repo.path,
         connectionId: repo.connectionId ?? undefined
@@ -751,10 +744,7 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
           validRepoIds
         )
       }))
-      scheduleSafeAutoForkSync(get, reconciledRepos, {
-        ...get().settings,
-        activeRuntimeEnvironmentId: environmentId
-      })
+      scheduleSafeAutoForkSync(get, reconciledRepos)
       return reconciledRepos.filter((repo) => getRepoExecutionHostId(repo) === hostId)
     } catch (err) {
       console.error(`Failed to fetch repos for runtime environment ${environmentId}:`, err)

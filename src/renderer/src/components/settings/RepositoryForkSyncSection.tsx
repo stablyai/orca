@@ -16,7 +16,9 @@ type RepositoryForkSyncSectionProps = {
 }
 
 function formatForkSyncResult(result: GitForkSyncResult): { title: string; description?: string } {
-  const branch = result.branchName ?? 'default branch'
+  const branch =
+    result.branchName ??
+    translate('auto.components.settings.RepositoryForkSyncSection.defaultBranch', 'default branch')
   const commitLabel = result.behind === 1 ? 'commit' : 'commits'
   if (result.status === 'synced') {
     return {
@@ -67,13 +69,14 @@ function formatForkSyncResult(result: GitForkSyncResult): { title: string; descr
       'origin has commits that are not in upstream.'
     )
   }
+  const blockedDescription = result.reason ? reasonLabels[result.reason] : undefined
   return {
     title: translate(
       'auto.components.settings.RepositoryForkSyncSection.blocked',
       'Fork sync skipped'
     ),
     description:
-      reasonLabels[result.reason ?? 'diverged'] ??
+      blockedDescription ??
       translate(
         'auto.components.settings.RepositoryForkSyncSection.blockedFallback',
         'Orca could not fast-forward this fork safely.'
@@ -97,6 +100,8 @@ export function RepositoryForkSyncSection({
   const updateMode = (nextMode: ForkSyncMode) => {
     updateRepo(repo.id, { forkSyncMode: nextMode })
     if (nextMode === 'safe-auto') {
+      // Why: users enabling automation should immediately learn whether the
+      // fork can be fast-forwarded safely instead of waiting for the next reload.
       void syncNow()
     }
   }

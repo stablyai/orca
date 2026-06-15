@@ -780,6 +780,7 @@ export type PreloadApi = {
           | 'externalWorktreeVisibilityPromptDismissedAt'
           | 'projectGroupId'
           | 'projectGroupOrder'
+          | 'forkSyncMode'
         >
       > & { sourceControlAi?: Repo['sourceControlAi'] | null }
     }) => Promise<Repo>

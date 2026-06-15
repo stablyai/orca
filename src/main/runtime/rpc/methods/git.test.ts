@@ -318,7 +318,7 @@ describe('git RPC methods', () => {
     } as unknown as OrcaRuntimeService
     const dispatcher = new RpcDispatcher({ runtime, methods: GIT_METHODS })
 
-    await dispatcher.dispatch(
+    const response = await dispatcher.dispatch(
       makeRequest('git.forkSync', {
         worktree: 'id:wt-1',
         expectedUpstream: { owner: 'stablyai', repo: 'orca' }
@@ -328,6 +328,10 @@ describe('git RPC methods', () => {
     expect(runtime.syncRuntimeGitForkDefaultBranch).toHaveBeenCalledWith('id:wt-1', {
       owner: 'stablyai',
       repo: 'orca'
+    })
+    expect(response).toMatchObject({
+      ok: true,
+      result: { status: 'up-to-date', branchName: 'main', ahead: 0, behind: 0 }
     })
   })
 
