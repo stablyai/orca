@@ -180,7 +180,7 @@ async function resolveProjectRefForRemote(
     ) {
       // Why: `glab auth status` is process-global and can be stale or formatted
       // differently across versions; the origin host itself is the durable repo context.
-      rememberGlabKnownHost(remoteCandidate.host)
+      rememberGlabKnownHost(remoteCandidate.host, connectionId)
       rememberProjectRefCacheEntry(cacheKey, remoteCandidate)
       return remoteCandidate
     }
@@ -273,14 +273,26 @@ export function glabHostnameArgs(
 // "what hosts have I authenticated with". Parse hostnames out of
 // `glab auth status` output and cache the result process-wide.
 
-let knownHostsCache: readonly string[] | null = null
+// Why: known hosts are cached PER connection. A repo on an SSH connection
+// authenticates against a different glab context than the local one, so a
+// process-global cache would leak one connection's hosts into another (and
+// poison a connection that probes before its tunnel is ready). The local
+// context uses the `'local'` key.
+const LOCAL_CONNECTION_KEY = 'local'
+const knownHostsCacheByConnection = new Map<string, readonly string[]>()
 
-function rememberGlabKnownHost(host: string): void {
+function connectionCacheKey(connectionId?: string | null): string {
+  return connectionId ?? LOCAL_CONNECTION_KEY
+}
+
+function rememberGlabKnownHost(host: string, connectionId?: string | null): void {
   const normalizedHost = normalizeGitLabHost(host)
-  if (!knownHostsCache || knownHostsCache.map(normalizeGitLabHost).includes(normalizedHost)) {
+  const key = connectionCacheKey(connectionId)
+  const cached = knownHostsCacheByConnection.get(key)
+  if (!cached || cached.map(normalizeGitLabHost).includes(normalizedHost)) {
     return
   }
-  knownHostsCache = [...knownHostsCache, normalizedHost]
+  knownHostsCacheByConnection.set(key, [...cached, normalizedHost])
 }
 
 async function isGlabConfiguredForRemoteHost(
@@ -307,14 +319,23 @@ async function isGlabConfiguredForRemoteHost(
 
 /** @internal — exposed for tests only */
 export function _resetKnownHostsCache(): void {
-  knownHostsCache = null
+  knownHostsCacheByConnection.clear()
 }
 
-export async function getGlabKnownHosts(): Promise<readonly string[]> {
-  if (knownHostsCache) {
-    return knownHostsCache
+export async function getGlabKnownHosts(
+  connectionId?: string | null
+): Promise<readonly string[]> {
+  const key = connectionCacheKey(connectionId)
+  const cached = knownHostsCacheByConnection.get(key)
+  if (cached) {
+    return cached
   }
   try {
+    // Why: `glab auth status` is host-scoped, not cwd-scoped — glab reads its
+    // own config to list authenticated hosts. The connectionId is threaded so
+    // the RESULT is cached per connection (a connected repo can have a
+    // different set of authenticated self-hosted hosts than the local one),
+    // mirroring how project-ref resolution caches per connection.
     const { stdout, stderr } = await glabExecFileAsync(['auth', 'status'])
     // Why: glab writes auth status to stderr in some versions, stdout in
     // others. Concatenate so the parser sees both.
@@ -322,14 +343,14 @@ export async function getGlabKnownHosts(): Promise<readonly string[]> {
     // Always include gitlab.com so a fresh-install user with no auth
     // still recognizes the canonical host.
     const merged = Array.from(new Set([...DEFAULT_GITLAB_HOSTS, ...hosts]))
-    knownHostsCache = merged
+    knownHostsCacheByConnection.set(key, merged)
     return merged
   } catch {
-    // Auth check failed (glab not installed, no auth, etc.) — fall back
-    // to the canonical default. The caller will hit the auth error on
-    // the first real request anyway.
-    knownHostsCache = [...DEFAULT_GITLAB_HOSTS]
-    return knownHostsCache
+    // Auth check failed (glab not installed, no auth, tunnel not ready,
+    // etc.) — fall back to the canonical default for THIS call, but do NOT
+    // cache the fallback. A later probe (e.g. after the SSH tunnel comes
+    // up) must be able to discover the real self-hosted host.
+    return [...DEFAULT_GITLAB_HOSTS]
   }
 }
 
@@ -383,13 +404,19 @@ export function parseGlabApiResponse(stdout: string): GlabApiResponse {
 // hostname.
 export function parseGlabAuthStatusHosts(output: string): string[] {
   const hosts = new Set<string>()
-  for (const m of output.matchAll(/logged in to ([a-zA-Z0-9.-]+)/gi)) {
+  // Why: self-hosted GitLab can run on a non-default port (e.g.
+  // `database:8080`); capture the optional `:port` so two services on the
+  // same hostname but different ports stay distinct downstream.
+  for (const m of output.matchAll(/logged in to ([a-zA-Z0-9.-]+(?::\d+)?)/gi)) {
     hosts.add(m[1].toLowerCase())
   }
   for (const line of output.split('\n')) {
     const bareLine = line.trim()
     const hostLine = bareLine.endsWith(':') ? bareLine.slice(0, -1) : bareLine
-    if (line === bareLine && /^[a-zA-Z0-9](?:[a-zA-Z0-9.-]*[a-zA-Z0-9])?$/.test(hostLine)) {
+    if (
+      line === bareLine &&
+      /^[a-zA-Z0-9](?:[a-zA-Z0-9.-]*[a-zA-Z0-9])?(?::\d+)?$/.test(hostLine)
+    ) {
       hosts.add(hostLine.toLowerCase())
     }
   }
