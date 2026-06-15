@@ -135,6 +135,8 @@ export type KeybindingDefinition = {
   conflictGroup?: string
 }
 
+export type ModifierToken = 'Mod' | 'Cmd' | 'Ctrl' | 'Alt' | 'Shift'
+
 export type KeybindingInput = {
   key?: string
   code?: string
@@ -155,6 +157,7 @@ type ParsedKeybinding = {
   alt: boolean
   shift: boolean
   key: string
+  doubleTapModifier?: ModifierToken
 }
 
 type NormalizeKeybindingOptions = {
@@ -945,6 +948,84 @@ function normalizeKeyToken(token: string): string | null {
   return simple[upper] ?? null
 }
 
+function parseModifierToken(rawPart: string): ModifierToken | null {
+  const part = rawPart.toLowerCase()
+  if (part === 'mod' || part === 'cmdorctrl' || part === 'commandorcontrol') {
+    return 'Mod'
+  }
+  if (part === 'cmd' || part === 'command' || part === 'meta' || rawPart === '⌘') {
+    return 'Cmd'
+  }
+  if (part === 'ctrl' || part === 'control' || rawPart === '⌃') {
+    return 'Ctrl'
+  }
+  if (part === 'alt' || part === 'option' || part === 'opt' || rawPart === '⌥') {
+    return 'Alt'
+  }
+  if (part === 'shift' || rawPart === '⇧') {
+    return 'Shift'
+  }
+  return null
+}
+
+function applyModifierToken(parsed: ParsedKeybinding, modifier: ModifierToken): void {
+  if (modifier === 'Mod') {
+    parsed.mod = true
+  } else if (modifier === 'Cmd') {
+    parsed.meta = true
+  } else if (modifier === 'Ctrl') {
+    parsed.control = true
+  } else if (modifier === 'Alt') {
+    parsed.alt = true
+  } else {
+    parsed.shift = true
+  }
+}
+
+function emptyParsedKeybinding(): ParsedKeybinding {
+  return { mod: false, meta: false, control: false, alt: false, shift: false, key: '' }
+}
+
+// Why: a double-tap is a bare modifier with no key, so it cannot reuse the
+// normal "one key required" parse path; validation of conflicting/extra
+// modifiers is deferred to normalizeKeybindingWithOptions for shared errors.
+function parseDoubleTapKeybinding(rawParts: string[]): ParsedKeybinding | null {
+  const modifiers: ModifierToken[] = []
+  let sawDoubleTap = false
+  for (const rawPart of rawParts) {
+    if (rawPart.toLowerCase() === 'doubletap') {
+      if (sawDoubleTap) {
+        return null
+      }
+      sawDoubleTap = true
+      continue
+    }
+    const modifier = parseModifierToken(rawPart)
+    if (!modifier) {
+      return null
+    }
+    modifiers.push(modifier)
+  }
+  if (modifiers.length === 0) {
+    return null
+  }
+  const parsed = emptyParsedKeybinding()
+  for (const modifier of modifiers) {
+    applyModifierToken(parsed, modifier)
+  }
+  // Mod combined with a platform-specific modifier: keep both flags so normalize
+  // emits the shared "Mod or platform-specific, not both" error.
+  if (parsed.mod && (parsed.meta || parsed.control)) {
+    parsed.doubleTapModifier = 'Mod'
+    return parsed
+  }
+  if (modifiers.length > 1) {
+    return null
+  }
+  parsed.doubleTapModifier = modifiers[0]
+  return parsed
+}
+
 function parseKeybinding(binding: string): ParsedKeybinding | null {
   const rawParts = binding
     .split('+')
@@ -954,35 +1035,15 @@ function parseKeybinding(binding: string): ParsedKeybinding | null {
     return null
   }
 
-  const parsed: ParsedKeybinding = {
-    mod: false,
-    meta: false,
-    control: false,
-    alt: false,
-    shift: false,
-    key: ''
+  if (rawParts.some((part) => part.toLowerCase() === 'doubletap')) {
+    return parseDoubleTapKeybinding(rawParts)
   }
 
+  const parsed = emptyParsedKeybinding()
   for (const rawPart of rawParts) {
-    const part = rawPart.toLowerCase()
-    if (part === 'mod' || part === 'cmdorctrl' || part === 'commandorcontrol') {
-      parsed.mod = true
-      continue
-    }
-    if (part === 'cmd' || part === 'command' || part === 'meta' || rawPart === '⌘') {
-      parsed.meta = true
-      continue
-    }
-    if (part === 'ctrl' || part === 'control' || rawPart === '⌃') {
-      parsed.control = true
-      continue
-    }
-    if (part === 'alt' || part === 'option' || part === 'opt' || rawPart === '⌥') {
-      parsed.alt = true
-      continue
-    }
-    if (part === 'shift' || rawPart === '⇧') {
-      parsed.shift = true
+    const modifier = parseModifierToken(rawPart)
+    if (modifier) {
+      applyModifierToken(parsed, modifier)
       continue
     }
     if (parsed.key) {
@@ -999,6 +1060,9 @@ function parseKeybinding(binding: string): ParsedKeybinding | null {
 }
 
 function canonicalizeParsedKeybinding(parsed: ParsedKeybinding): string {
+  if (parsed.doubleTapModifier) {
+    return `DoubleTap+${parsed.doubleTapModifier}`
+  }
   const parts: string[] = []
   if (parsed.mod) {
     parts.push('Mod')
@@ -1049,6 +1113,9 @@ function normalizeKeybindingWithOptions(
   if (parsed.mod && (parsed.meta || parsed.control)) {
     return { ok: false, error: 'Use either Mod or a platform-specific modifier, not both.' }
   }
+  if (parsed.doubleTapModifier) {
+    return { ok: true, value: canonicalizeParsedKeybinding(parsed) }
+  }
   const isShiftInsert = parsed.shift && parsed.key === 'Insert'
   const isBareAllowed = options.allowBareKeybindings === true && isSafeBareKey(parsed)
   if (
@@ -1066,6 +1133,10 @@ function normalizeKeybindingWithOptions(
 
 export function normalizeKeybinding(binding: string): KeybindingValidationResult {
   return normalizeKeybindingWithOptions(binding)
+}
+
+export function isDoubleTapBinding(binding: string): boolean {
+  return Boolean(parseKeybinding(binding)?.doubleTapModifier)
 }
 
 function normalizeKeybindingListWithOptions(

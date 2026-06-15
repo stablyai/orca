@@ -8,6 +8,7 @@ import {
   findKeybindingConflicts,
   formatKeybindingList,
   getEffectiveKeybindingsForAction,
+  isDoubleTapBinding,
   keybindingFromInput,
   keybindingFromInputForAction,
   keybindingMatchesAction,
@@ -34,6 +35,30 @@ describe('keybindings', () => {
     expect(normalizeKeybinding('Shift+P')).toMatchObject({ ok: false })
     expect(normalizeKeybinding('Mod+Ctrl+P')).toMatchObject({ ok: false })
     expect(normalizeKeybinding('Ctrl+Nope')).toMatchObject({ ok: false })
+  })
+
+  it('parses, normalizes, and rejects double-tap modifier bindings', () => {
+    expect(normalizeKeybinding('DoubleTap+Shift')).toEqual({ ok: true, value: 'DoubleTap+Shift' })
+    expect(normalizeKeybinding(' doubletap + shift ')).toEqual({ ok: true, value: 'DoubleTap+Shift' })
+    expect(normalizeKeybinding('DoubleTap+Mod')).toEqual({ ok: true, value: 'DoubleTap+Mod' })
+    expect(normalizeKeybinding('DoubleTap+Cmd')).toEqual({ ok: true, value: 'DoubleTap+Cmd' })
+    expect(normalizeKeybinding('DoubleTap+Alt')).toEqual({ ok: true, value: 'DoubleTap+Alt' })
+
+    // A key after DoubleTap is invalid.
+    expect(normalizeKeybinding('DoubleTap+Shift+P')).toMatchObject({ ok: false })
+    // Two modifiers is invalid.
+    expect(normalizeKeybinding('DoubleTap+Shift+Alt')).toMatchObject({ ok: false })
+    // Mod + platform-specific reuses the shared error.
+    expect(normalizeKeybinding('DoubleTap+Mod+Cmd')).toEqual({
+      ok: false,
+      error: 'Use either Mod or a platform-specific modifier, not both.'
+    })
+    // Bare DoubleTap is invalid.
+    expect(normalizeKeybinding('DoubleTap')).toMatchObject({ ok: false })
+
+    expect(isDoubleTapBinding('DoubleTap+Shift')).toBe(true)
+    expect(isDoubleTapBinding('Mod+P')).toBe(false)
+    expect(isDoubleTapBinding('not-a-binding')).toBe(false)
   })
 
   it('allows safe bare keys only for scoped actions that opt in', () => {
