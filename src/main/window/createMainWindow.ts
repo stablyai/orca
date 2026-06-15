@@ -666,6 +666,8 @@ export function createMainWindow(
   // reused by the normal keydown path and the double-tap path so they cannot drift.
   const sendResolvedWindowShortcutAction = (action: WindowShortcutAction): void => {
     switch (action.type) {
+      // The renderer's DictationController re-checks enabled/sttModel and ignores
+      // hold mode, so this path needs no voice guards.
       case 'dictationKeyDown':
         mainWindow.webContents.send('ui:dictationKeyDown')
         return
