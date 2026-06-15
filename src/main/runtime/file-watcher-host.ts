@@ -77,11 +77,9 @@ export function watchFileExplorerInWorker(
     let ready = false
     let disposed = false
     let exited = false
+    let disposePromise: Promise<void> | undefined
 
-    // Why: returns a promise that resolves once the worker is actually down, so
-    // the shutdown drain (awaitRuntimeFileWatcherUnsubscribes) doesn't finish
-    // while the native watcher thread is still alive.
-    const dispose = async (): Promise<void> => {
+    const runDispose = async (): Promise<void> => {
       if (disposed) {
         return
       }
@@ -98,7 +96,7 @@ export function watchFileExplorerInWorker(
       try {
         worker.postMessage({ type: 'unsubscribe' } satisfies FileWatcherHostMessage)
       } catch {
-        // Worker already gone — terminate below covers it.
+        // Worker already gone — the exit wait and timeout backstop cover it.
       }
       const exitResult = await waitForWorkerExit(worker, WORKER_TEARDOWN_TIMEOUT_MS)
       if (exitResult === 'timeout' && !exited) {
@@ -107,6 +105,13 @@ export function watchFileExplorerInWorker(
           () => undefined
         )
       }
+    }
+
+    // Why: racing dispose callers must share the same worker-exit drain instead
+    // of letting later calls resolve while teardown is still in flight.
+    const dispose = (): Promise<void> => {
+      disposePromise ??= runDispose()
+      return disposePromise
     }
 
     worker.on('message', (message: FileWatcherWorkerMessage) => {

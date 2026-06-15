@@ -177,6 +177,24 @@ describe('watchFileExplorerInWorker', () => {
     ).toHaveLength(1)
   })
 
+  it('shares pending dispose work across racing callers', async () => {
+    const promise = watchFileExplorerInWorker('/repo', vi.fn())
+    const worker = lastWorker()
+    worker.emit('message', { type: 'ready' })
+    const dispose = await promise
+
+    const firstDispose = dispose()
+    const secondDispose = dispose()
+    expect(secondDispose).toBe(firstDispose)
+    expect(
+      worker.postedMessages.filter((m) => (m as { type?: string }).type === 'unsubscribe')
+    ).toHaveLength(1)
+
+    worker.emit('exit', 0)
+    await Promise.all([firstDispose, secondDispose])
+    expect(worker.terminated).toBe(false)
+  })
+
   it('force-terminates the worker only if it fails to exit within the timeout', async () => {
     vi.useFakeTimers()
     try {
