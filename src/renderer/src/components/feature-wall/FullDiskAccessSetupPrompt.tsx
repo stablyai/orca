@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Check, ExternalLink, HardDrive, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import type {
@@ -85,6 +85,7 @@ function FullDiskAccessButtonIcon(props: FullDiskAccessButtonState): React.JSX.E
 function useFullDiskAccessStatus(): FullDiskAccessStatusState & { refresh: () => void } {
   const isMac = isMacUserAgent()
   const mountedRef = useMountedRef()
+  const refreshSequenceRef = useRef(0)
   const [state, setState] = useState<FullDiskAccessStatusState>({
     status: undefined,
     checking: isMac
@@ -110,13 +111,18 @@ function useFullDiskAccessStatus(): FullDiskAccessStatusState & { refresh: () =>
     if (mountedRef.current) {
       setState((current) => (current.checking ? current : { ...current, checking: true }))
     }
+    const refreshId = ++refreshSequenceRef.current
     window.api.developerPermissions
       .getStatus()
       .then((states) => {
-        finishRefresh(getFullDiskAccessStatus(states))
+        if (refreshId === refreshSequenceRef.current) {
+          finishRefresh(getFullDiskAccessStatus(states))
+        }
       })
       .catch(() => {
-        finishRefresh(undefined)
+        if (refreshId === refreshSequenceRef.current) {
+          finishRefresh(undefined)
+        }
       })
   }, [finishRefresh, isMac, mountedRef])
 

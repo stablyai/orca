@@ -1152,6 +1152,10 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
       if (!result) {
         throw new Error(`Project host setup not found: ${args.setupId}`)
       }
+      if ('worktreeBasePath' in args.updates && result.repo) {
+        void prepareLocalWorktreeRootForRepo(store, result.repo)
+        invalidateAuthorizedRootsCache()
+      }
       notifyReposChanged(mainWindow)
       return result
     }
@@ -2182,6 +2186,8 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
                 projectHostSetupMethod: 'cloned'
               })
               if (updated) {
+                await prepareLocalWorktreeRootForRepo(store, updated)
+                invalidateAuthorizedRootsCache()
                 notifyReposChanged(mainWindow)
                 // Why: folder→git upgrade is a real new git repo provisioning event.
                 emitRepoAdded('clone_url', false, true)

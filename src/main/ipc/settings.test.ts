@@ -237,6 +237,36 @@ describe('registerSettingsHandlers', () => {
     expect(prepareLocalWorktreeRootsForReposMock).toHaveBeenCalledWith(store)
   })
 
+  it('prepares local worktree roots when workspace nesting changes', async () => {
+    store.getSettings.mockReturnValue({ workspaceDir: '/workspaces', nestWorkspaces: false })
+    store.updateSettings.mockReturnValue({ workspaceDir: '/workspaces', nestWorkspaces: true })
+    registerSettingsHandlers(store as never)
+
+    const handler = handleMock.mock.calls.find((call) => call[0] === 'settings:set')?.[1] as (
+      _event: unknown,
+      args: unknown
+    ) => Promise<unknown>
+
+    await handler(settingsInvokeEvent, { nestWorkspaces: true })
+
+    expect(prepareLocalWorktreeRootsForReposMock).toHaveBeenCalledWith(store)
+  })
+
+  it('does not prepare local worktree roots when workspace layout values do not change', async () => {
+    store.getSettings.mockReturnValue({ workspaceDir: '/workspaces', nestWorkspaces: false })
+    store.updateSettings.mockReturnValue({ workspaceDir: '/workspaces', nestWorkspaces: false })
+    registerSettingsHandlers(store as never)
+
+    const handler = handleMock.mock.calls.find((call) => call[0] === 'settings:set')?.[1] as (
+      _event: unknown,
+      args: unknown
+    ) => Promise<unknown>
+
+    await handler(settingsInvokeEvent, { workspaceDir: '/workspaces', nestWorkspaces: false })
+
+    expect(prepareLocalWorktreeRootsForReposMock).not.toHaveBeenCalled()
+  })
+
   it('does not accept floating workspace trust grants from renderer settings IPC', async () => {
     store.getSettings.mockReturnValue({ floatingTerminalTrustedCwds: [] })
     store.updateSettings.mockReturnValue({ floatingTerminalTrustedCwds: [] })

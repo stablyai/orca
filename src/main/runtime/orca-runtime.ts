@@ -551,6 +551,7 @@ import {
 } from '../worktree-removal-safety'
 import { prefetchWorktreeCreateBase } from '../worktree-create-base-prefetch'
 import { invalidateAuthorizedRootsCache } from '../ipc/filesystem-auth'
+import { prepareLocalWorktreeRootForRepo } from '../worktree-root-preparation'
 import { HeadlessEmulator } from '../daemon/headless-emulator'
 import { killAllProcessesForWorktree } from './worktree-teardown'
 import { MOBILE_SUBSCRIBE_SCROLLBACK_ROWS } from './scrollback-limits'
@@ -6892,6 +6893,10 @@ export class OrcaRuntimeService {
     if (!result) {
       throw new Error(`Project host setup not found: ${args.setupId}`)
     }
+    if ('worktreeBasePath' in args.updates && result.repo) {
+      void prepareLocalWorktreeRootForRepo(this.store, result.repo)
+      invalidateAuthorizedRootsCache()
+    }
     return result
   }
 
@@ -7290,6 +7295,7 @@ export class OrcaRuntimeService {
         : {})
     }
     this.store.addRepo(repo)
+    await prepareLocalWorktreeRootForRepo(this.store, repo)
     this.invalidateResolvedWorktreeCache()
     this.notifyReposChanged()
     return this.store.getRepo(repo.id) ?? repo
@@ -7409,6 +7415,7 @@ export class OrcaRuntimeService {
         : {})
     }
     this.store.addRepo(repo)
+    await prepareLocalWorktreeRootForRepo(this.store, repo)
     invalidateAuthorizedRootsCache()
     this.invalidateResolvedWorktreeCache()
     this.notifyReposChanged()
@@ -7529,6 +7536,9 @@ export class OrcaRuntimeService {
       if (isFolderRepo(existing)) {
         const updated = this.store.updateRepo(existing.id, { kind: 'git' })
         if (updated) {
+          await prepareLocalWorktreeRootForRepo(this.store, updated)
+          invalidateAuthorizedRootsCache()
+          this.invalidateResolvedWorktreeCache()
           this.notifyReposChanged()
           return updated
         }
@@ -7549,6 +7559,7 @@ export class OrcaRuntimeService {
       externalWorktreeVisibilityLegacy: false
     }
     this.store.addRepo(repo)
+    await prepareLocalWorktreeRootForRepo(this.store, repo)
     invalidateAuthorizedRootsCache()
     this.invalidateResolvedWorktreeCache()
     this.notifyReposChanged()
@@ -7614,6 +7625,7 @@ export class OrcaRuntimeService {
       throw new Error('repo_not_found')
     }
     if ('worktreeBasePath' in updates) {
+      await prepareLocalWorktreeRootForRepo(this.store, updated)
       invalidateAuthorizedRootsCache()
     }
     this.invalidateResolvedWorktreeCache()

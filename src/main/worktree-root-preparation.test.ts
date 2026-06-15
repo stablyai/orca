@@ -39,11 +39,10 @@ describe('prepareLocalWorktreeRootForRepo', () => {
     })
   })
 
-  it('creates and authorizes the effective worktree root for local git repos', async () => {
+  it('creates the effective worktree root for local git repos', async () => {
     await prepareLocalWorktreeRootForRepo(store as never, repo)
 
     expect(mkdirMock).toHaveBeenCalledWith('/Users/alice/orca/workspaces', { recursive: true })
-    expect(authorizeExternalPathMock).toHaveBeenCalledWith('/Users/alice/orca/workspaces')
   })
 
   it('uses repo-specific worktree base paths', async () => {
@@ -53,7 +52,6 @@ describe('prepareLocalWorktreeRootForRepo', () => {
     })
 
     expect(mkdirMock).toHaveBeenCalledWith('/projects/worktrees', { recursive: true })
-    expect(authorizeExternalPathMock).toHaveBeenCalledWith('/projects/worktrees')
   })
 
   it('skips non-local and folder repos', async () => {

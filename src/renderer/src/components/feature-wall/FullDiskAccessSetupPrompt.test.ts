@@ -113,6 +113,47 @@ describe('FullDiskAccessSetupPrompt state helpers', () => {
     root.unmount()
   })
 
+  it('keeps the latest macOS status when overlapping refreshes finish out of order', async () => {
+    setUserAgent('Macintosh')
+    let resolveFirst!: (states: DeveloperPermissionState[]) => void
+    const firstRefresh = new Promise<DeveloperPermissionState[]>((resolve) => {
+      resolveFirst = resolve
+    })
+    const getStatus = vi
+      .fn()
+      .mockReturnValueOnce(firstRefresh)
+      .mockResolvedValueOnce([{ id: 'full-disk-access', status: 'granted' }])
+    installDeveloperPermissionsApi({ getStatus })
+
+    const { container, root } = await renderPrompt()
+    await act(async () => {
+      window.dispatchEvent(new Event('focus'))
+      await Promise.resolve()
+    })
+    expect(container.textContent).toContain('Granted')
+
+    await act(async () => {
+      resolveFirst([{ id: 'full-disk-access', status: 'unknown' }])
+      await Promise.resolve()
+    })
+
+    expect(container.textContent).toContain('Granted')
+    root.unmount()
+  })
+
+  it('does not query or render the macOS Full Disk Access prompt on non-macOS', async () => {
+    setUserAgent('Windows NT 10.0')
+    const getStatus = vi.fn().mockResolvedValue([{ id: 'full-disk-access', status: 'unknown' }])
+    installDeveloperPermissionsApi({ getStatus })
+
+    const { container, root } = await renderPrompt()
+
+    expect(container.textContent).not.toContain('Full Disk Access')
+    expect(getStatus).not.toHaveBeenCalled()
+    expect(window.api.developerPermissions.request).not.toHaveBeenCalled()
+    root.unmount()
+  })
+
   it('opens Full Disk Access settings from the prompt action', async () => {
     setUserAgent('Macintosh')
     installDeveloperPermissionsApi({
