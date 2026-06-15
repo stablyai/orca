@@ -12,6 +12,7 @@ export function resolveZoomTarget(args: {
     | 'space'
     | 'skills'
     | 'mobile'
+    | 'docker'
   activeTabType: 'terminal' | 'editor' | 'browser' | 'simulator'
   activeBrowserPageId?: string | null
   activeElement: unknown
