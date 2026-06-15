@@ -46,6 +46,33 @@ export type DockerContainerSummary = {
   composeProject?: string
 }
 
+export type DockerContainerMount = {
+  type: string
+  source: string
+  destination: string
+  mode: string
+  rw: boolean
+}
+
+export type DockerContainerPortBinding = {
+  /** e.g. '80/tcp' */
+  containerPort: string
+  /** Empty when the port is exposed but not published to the host. */
+  hostIp: string
+  hostPort: string
+}
+
+export type DockerContainerInspect = {
+  id: string
+  createdAt: string
+  /** KEY=VALUE strings, verbatim from `.Config.Env`. */
+  env: string[]
+  mounts: DockerContainerMount[]
+  ports: DockerContainerPortBinding[]
+  /** `.HostConfig.RestartPolicy.Name`, e.g. 'no' | 'always' | 'unless-stopped' | 'on-failure'. */
+  restartPolicy: string
+}
+
 export type DockerConnectionStatus = 'unknown' | 'reachable' | 'unreachable'
 
 /** Just the fields the SSH transport fallback needs from an SshTarget. */
