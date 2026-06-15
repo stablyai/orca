@@ -76,6 +76,7 @@ import {
   isENOENT,
   registerWorktreeRootsForRepo
 } from './filesystem-auth'
+import { closeLocalWatcherForWorktreePath } from './filesystem-watcher'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { killAllProcessesForWorktree } from '../runtime/worktree-teardown'
 import { clearProviderPtyState, getLocalPtyProvider } from './pty'
@@ -129,6 +130,25 @@ function removeWorktreeMetadataAndTransientState(store: Store, worktreeId: strin
   store.removeWorktreeMeta(worktreeId)
   advertisedUrlWatcher.forgetWorktree(worktreeId)
   deleteWorktreeHistoryDir(worktreeId)
+}
+
+async function closeLocalWatcherForRemoval(worktreePath: string): Promise<void> {
+  await closeLocalWatcherForWorktreePath(worktreePath).catch((err) => {
+    console.warn(`[filesystem-watcher] failed to close ${worktreePath}:`, err)
+  })
+}
+
+function dedupeGitWorktreesByPath(gitWorktrees: GitWorktreeInfo[]): GitWorktreeInfo[] {
+  const uniqueGitWorktrees: GitWorktreeInfo[] = []
+  for (const gitWorktree of gitWorktrees) {
+    if (
+      uniqueGitWorktrees.some((existing) => areWorktreePathsEqual(existing.path, gitWorktree.path))
+    ) {
+      continue
+    }
+    uniqueGitWorktrees.push(gitWorktree)
+  }
+  return uniqueGitWorktrees
 }
 
 function getProjectHostSetupMetaUpdates(
@@ -479,7 +499,7 @@ function buildDetectedGitWorktrees(
   const settings = store.getSettings()
   const knownOrcaLayouts = buildKnownOrcaWorkspaceLayouts(settings, repo)
   const isLegacyRepoForVisibility = isLegacyRepoForExternalWorktreeVisibility(repo)
-  return gitWorktrees.map((gitWorktree) => {
+  return dedupeGitWorktreesByPath(gitWorktrees).map((gitWorktree) => {
     const worktreeId = `${repo.id}::${gitWorktree.path}`
     let meta = store.getWorktreeMeta(worktreeId)
     const worktree = mergeWorktree(repo.id, gitWorktree, meta, repo.displayName)
@@ -1198,6 +1218,7 @@ export function registerWorktreeHandlers(
                 store
               )
             } else {
+              await closeLocalWatcherForRemoval(worktreePath)
               await rm(worktreePath, { recursive: true, force: true })
               await cleanupUnusedWorktreePushTargetRemote(
                 repo.path,
@@ -1326,9 +1347,11 @@ export function registerWorktreeHandlers(
           shouldTearDownPtys = false
         }
 
+        await closeLocalWatcherForRemoval(canonicalWorktreePath)
+
         if (shouldTearDownPtys) {
           // Why: once preflight proves normal deletion is clean, kill PTYs before
-          // git-level removal so shells cannot keep the directory busy.
+          // git-level removal so Windows handles cannot keep the directory busy.
           await killAllProcessesForWorktree(args.worktreeId, {
             runtime,
             localProvider: getLocalPtyProvider(),
@@ -1364,6 +1387,7 @@ export function registerWorktreeHandlers(
               `[worktrees] Orphaned worktree detected at ${canonicalWorktreePath}, cleaning up`
             )
             if (await canSafelyRemoveOrphanedWorktreeDirectory(canonicalWorktreePath, repo.path)) {
+              await closeLocalWatcherForRemoval(canonicalWorktreePath)
               await rm(canonicalWorktreePath, { recursive: true, force: true }).catch(() => {})
             } else {
               console.warn(
