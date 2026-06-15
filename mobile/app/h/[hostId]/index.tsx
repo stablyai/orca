@@ -346,7 +346,9 @@ export default function HostScreen() {
     const requestHostId = hostId
 
     try {
-      const response = await requestClient.sendRequest('worktree.ps')
+      // Why: worktree.ps defaults to 200 and silently truncates; match the
+      // desktop's high cap so large hosts don't drop workspaces on mobile.
+      const response = await requestClient.sendRequest('worktree.ps', { limit: 10000 })
       if (clientRef.current !== requestClient || hostId !== requestHostId) {
         return
       }
