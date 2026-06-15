@@ -115,7 +115,17 @@ export function useFileExplorerKeys(opts: {
         `[data-index="${index}"]`
       )
       const button = wrapper?.querySelector<HTMLButtonElement>('button')
-      button?.focus()
+      if (button) {
+        button.focus()
+        return
+      }
+      // Why: on a large jump the target row is outside the virtualizer's
+      // overscan window and not yet in the DOM. If we leave focus on the
+      // previously-focused button it unmounts as it scrolls out, focus
+      // falls to <body>, and focusInExplorer() then drops every following
+      // keypress. Re-anchor focus on the explorer shell so the next
+      // keydown still passes the focusInExplorer() gate.
+      opts.containerRef.current?.focus()
     }
 
     const isDirExpanded = (path: string): boolean => {

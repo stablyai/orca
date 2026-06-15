@@ -179,10 +179,14 @@ export function applyFileExplorerNavigation(ctx: NavigationContext, e: KeyboardE
 
   // Why: focusing the row button keeps subsequent arrow keys anchored to
   // the new row and lets the existing Enter/Delete shortcuts pick it up
-  // without a separate focus call from the caller.
+  // without a separate focus call from the caller. Scroll first so the
+  // virtualizer has a chance to mount the target wrapper; otherwise on a
+  // large jump the focus query misses, the previously-focused button then
+  // unmounts as it scrolls out of overscan, focus falls to <body>, and the
+  // focusInExplorer() gate silently swallows every following keypress.
+  ctx.handlers.scrollToIndex(resolved.targetIndex)
   requestAnimationFrame(() => {
     ctx.handlers.focusRowAtIndex(resolved.targetIndex)
-    ctx.handlers.scrollToIndex(resolved.targetIndex)
   })
   return true
 }

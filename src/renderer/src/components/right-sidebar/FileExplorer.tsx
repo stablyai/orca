@@ -495,7 +495,12 @@ function FileExplorerFiles(): React.JSX.Element {
         data-selected-folder-relative-path={
           selectedNode?.isDirectory ? selectedNode.relativePath : undefined
         }
-        className="flex h-full min-h-0 flex-col"
+        // Why: keyboard navigation may target a row outside the virtualizer's
+        // overscan window. If we cannot focus the row button (not yet
+        // rendered) we re-anchor focus on the shell so focusInExplorer()
+        // still passes on the next keydown; the shell must be focusable.
+        tabIndex={-1}
+        className="flex h-full min-h-0 flex-col outline-none"
       >
         <FileExplorerToolbar
           repoName={repoName}
