@@ -160,7 +160,9 @@ const styles = StyleSheet.create({
   // desktop sidebar's selected-card treatment (raised fill + left accent).
   worktreeRowActive: {
     backgroundColor: colors.bgPanel,
-    borderLeftColor: colors.accentBlue
+    // Neutral grey accent, matching the desktop's active-tab indicator rather
+    // than a blue line.
+    borderLeftColor: colors.textSecondary
   },
   indicatorCol: {
     width: 20,

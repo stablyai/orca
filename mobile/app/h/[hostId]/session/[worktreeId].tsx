@@ -869,7 +869,6 @@ export default function SessionScreen() {
   >(new Map())
   const [selectModeActive, setSelectModeActive] = useState(false)
   const [canPaste, setCanPaste] = useState(false)
-  const [showImageSourceSheet, setShowImageSourceSheet] = useState(false)
   const [showDictationSetup, setShowDictationSetup] = useState(false)
   const [toastMessage, setToastMessage] = useState<string | null>(null)
   const toastOpacityRef = useRef(new Animated.Value(0))
@@ -3270,14 +3269,6 @@ export default function SessionScreen() {
     onError: triggerError
   })
 
-  const handlePickImage = useCallback(
-    (source: 'library' | 'files') => {
-      setShowImageSourceSheet(false)
-      void attachImage(source)
-    },
-    [attachImage]
-  )
-
   // Why: refresh canPaste on mount, AppState active, after paste.
   useEffect(() => {
     let mounted = true
@@ -4433,8 +4424,13 @@ export default function SessionScreen() {
                     (!canSend || isAttaching) && styles.sendButtonDisabled
                   ]}
                   disabled={!canSend || isAttaching}
-                  onPress={() => setShowImageSourceSheet(true)}
-                  accessibilityLabel={isAttaching ? 'Sending image' : 'Attach an image'}
+                  // Tap opens the photo library straight away (one-tap, like
+                  // Discord); long-press is the escape hatch for picking a file.
+                  onPress={() => void attachImage('library')}
+                  onLongPress={() => void attachImage('files')}
+                  delayLongPress={350}
+                  accessibilityLabel={isAttaching ? 'Sending image' : 'Attach a photo'}
+                  accessibilityHint="Long press to attach a file instead"
                 >
                   {isAttaching ? (
                     <ActivityIndicator size="small" color={colors.textSecondary} />
@@ -4499,24 +4495,6 @@ export default function SessionScreen() {
           </View>
         )}
       </View>
-
-      <ActionSheetModal
-        visible={showImageSourceSheet}
-        title="Attach Image"
-        onClose={() => setShowImageSourceSheet(false)}
-        actions={[
-          {
-            label: 'Photo Library',
-            icon: ImagePlus,
-            onPress: () => handlePickImage('library')
-          },
-          {
-            label: 'Browse Files',
-            icon: Folder,
-            onPress: () => handlePickImage('files')
-          }
-        ]}
-      />
 
       <ActionSheetModal
         visible={showCreateTabDrawer}
