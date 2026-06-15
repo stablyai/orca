@@ -114,7 +114,10 @@ export default function IssueSourceSelector({
   const group = (
     <div
       role="group"
-      aria-label={translate("auto.components.github.IssueSourceSelector.787c970baf", "Issue source")}
+      aria-label={translate(
+        'auto.components.github.IssueSourceSelector.787c970baf',
+        'Issue source'
+      )}
       className={cn(
         // Why: an inner rounded track with subtle divider between segments.
         // Thin border matches the outer chip's border weight so the control
@@ -135,7 +138,9 @@ export default function IssueSourceSelector({
         }}
         className={segmentClass(effective === 'upstream' ? 'active' : 'inactive', disabled)}
       >
-        {density === "compact" ? 'U' : translate("auto.components.github.IssueSourceSelector.30b2c9df91", "Upstream")}
+        {density === 'compact'
+          ? 'U'
+          : translate('auto.components.github.IssueSourceSelector.30b2c9df91', 'Upstream')}
       </button>
       <button
         type="button"
@@ -153,7 +158,9 @@ export default function IssueSourceSelector({
           'border-l border-border/40'
         )}
       >
-        {density === "compact" ? 'O' : translate("auto.components.github.IssueSourceSelector.51d1608920", "Origin")}
+        {density === 'compact'
+          ? 'O'
+          : translate('auto.components.github.IssueSourceSelector.51d1608920', 'Origin')}
       </button>
     </div>
   )
@@ -171,8 +178,8 @@ export default function IssueSourceSelector({
     <Tooltip>
       <TooltipTrigger asChild>{group}</TooltipTrigger>
       <TooltipContent side="bottom" sideOffset={4} className="max-w-[260px]">
-        {translate("auto.components.github.IssueSourceSelector.d6aeb2012b", "Showing issues from")}{' '}
-        <span className="font-mono">{effective === "upstream" ? upstreamSlug : originSlug}</span>
+        {translate('auto.components.github.IssueSourceSelector.d6aeb2012b', 'Showing issues from')}{' '}
+        <span className="font-mono">{effective === 'upstream' ? upstreamSlug : originSlug}</span>
       </TooltipContent>
     </Tooltip>
   )

@@ -56,6 +56,25 @@ describe('getDefaultSettings', () => {
   it('keeps compact worktree cards disabled by default', () => {
     expect(getDefaultSettings('/tmp').compactWorktreeCards).toBe(false)
   })
+
+  it('defaults agent launch args to yolo mode where the CLI supports it', () => {
+    const settings = getDefaultSettings('/tmp')
+
+    expect(settings.agentDefaultArgs).toMatchObject({
+      claude: '--dangerously-skip-permissions',
+      codex: '--dangerously-bypass-approvals-and-sandbox',
+      gemini: '--yolo',
+      cursor: '--yolo',
+      copilot: '--yolo',
+      grok: '--permission-mode bypassPermissions'
+    })
+    expect(settings.agentDefaultArgs).not.toHaveProperty('opencode')
+    expect(settings.agentDefaultArgs).not.toHaveProperty('kilo')
+    expect(settings.agentDefaultEnv).toMatchObject({
+      goose: { GOOSE_MODE: 'auto' }
+    })
+    expect(settings.agentYoloDefaultsMigrated).toBe(true)
+  })
 })
 
 describe('getDefaultPrimarySelectionMiddleClickPaste', () => {

@@ -4,6 +4,10 @@ import {
   type FeatureInteractionId
 } from '../../../../shared/feature-interactions'
 import { isFeatureTipId } from '../../../../shared/feature-tips'
+import {
+  normalizeTuiAgentArgsRecord,
+  normalizeTuiAgentEnvRecord
+} from '../../../../shared/tui-agent-launch-defaults'
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import { isTaskProvider } from '../../../../shared/task-providers'
 import { normalizeDisabledTuiAgents } from '../../../../shared/tui-agent-selection'
@@ -114,6 +118,14 @@ const SettingsUpdate = z
       .unknown()
       .transform((value) => normalizeDisabledTuiAgents(value))
       .optional(),
+    agentDefaultArgs: z
+      .unknown()
+      .transform((value) => normalizeTuiAgentArgsRecord(value))
+      .optional(),
+    agentDefaultEnv: z
+      .unknown()
+      .transform((value) => normalizeTuiAgentEnvRecord(value))
+      .optional(),
     defaultTaskSource: TaskProviderParam.optional(),
     visibleTaskProviders: z.array(TaskProviderParam).optional(),
     defaultTaskViewPreset: z
@@ -133,15 +145,22 @@ const UiUpdate = z
     lastActiveWorktreeId: NullableString.optional(),
     sidebarWidth: z.number().finite().optional(),
     rightSidebarOpen: z.boolean().optional(),
-    rightSidebarTab: z.enum(['explorer', 'search', 'source-control', 'checks', 'ports']).optional(),
+    rightSidebarTab: z
+      .enum(['explorer', 'search', 'vault', 'source-control', 'checks', 'ports'])
+      .optional(),
+    rightSidebarExplorerView: z.enum(['files', 'search']).optional(),
     rightSidebarWidth: z.number().finite().optional(),
     groupBy: z.enum(['none', 'workspace-status', 'repo', 'pr-status']).optional(),
     showWorkspaceLineage: z.boolean().optional(),
     sortBy: z.enum(['name', 'smart', 'recent', 'repo', 'manual']).optional(),
+    projectOrderBy: z.enum(['manual', 'recent']).optional(),
     showActiveOnly: z.boolean().optional(),
     hideSleepingWorkspaces: z.boolean().optional(),
     showSleepingWorkspaces: z.boolean().optional(),
     showInactiveWorkspaces: z.boolean().optional(),
+    workspaceHostScope: z.string().optional(),
+    visibleWorkspaceHostIds: z.array(z.string()).nullable().optional(),
+    workspaceHostOrder: z.array(z.string()).optional(),
     hideDefaultBranchWorkspace: z.boolean().optional(),
     filterRepoIds: StringArray.optional(),
     collapsedGroups: StringArray.optional(),
@@ -190,6 +209,7 @@ const UiUpdate = z
     starNagCompleted: z.boolean().optional(),
     trustedOrcaHooks: z.record(z.string(), z.unknown()).optional(),
     setupScriptPromptDismissedRepoIds: StringArray.optional(),
+    projectOrderManualDefaultNoticeDismissed: z.boolean().optional(),
     usageEmptyStateDismissed: z.boolean().optional(),
     petVisible: z.boolean().optional(),
     petId: z.string().optional(),

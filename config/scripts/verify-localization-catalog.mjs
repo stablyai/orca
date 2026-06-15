@@ -9,6 +9,8 @@ const SOURCE_EXTENSIONS = new Set(['.ts', '.tsx', '.js', '.jsx', '.mts', '.cts']
 const SKIP_PATH_PARTS = new Set(['.git', 'dist', 'node_modules', 'out', '__snapshots__', 'assets'])
 const LOCALIZATION_FUNCTION_NAMES = new Set(['t', 'translate', 'translateMain'])
 const PLACEHOLDER_RE = /\{\{[^}]+\}\}/g
+const LOCALES_RELATIVE_DIR = path.join('src', 'renderer', 'src', 'i18n', 'locales')
+const SOURCE_RELATIVE_ROOTS = [path.join('src', 'renderer', 'src'), path.join('src', 'main')]
 
 function normalizePath(root, filePath) {
   return path.relative(root, filePath).split(path.sep).join('/')
@@ -208,7 +210,61 @@ function flattenCatalogEntries(value, prefix = '', entries = new Map()) {
   return entries
 }
 
-function verifyLocaleParity(enCatalog, localeName, localeCatalog) {
+function getCatalogEntry(catalog, key) {
+  return key.split('.').reduce((cursor, part) => cursor?.[part], catalog)
+}
+
+function setCatalogEntry(catalog, key, value) {
+  const parts = key.split('.')
+  let cursor = catalog
+  for (const part of parts.slice(0, -1)) {
+    if (typeof cursor[part] !== 'object' || cursor[part] === null || Array.isArray(cursor[part])) {
+      cursor[part] = {}
+    }
+    cursor = cursor[part]
+  }
+  cursor[parts.at(-1)] = value
+}
+
+function deleteCatalogEntry(catalog, key) {
+  const parts = key.split('.')
+  const stack = []
+  let cursor = catalog
+
+  for (const part of parts.slice(0, -1)) {
+    if (
+      typeof cursor?.[part] !== 'object' ||
+      cursor[part] === null ||
+      Array.isArray(cursor[part])
+    ) {
+      return false
+    }
+    stack.push([cursor, part])
+    cursor = cursor[part]
+  }
+
+  const leafKey = parts.at(-1)
+  if (!Object.hasOwn(cursor, leafKey)) {
+    return false
+  }
+
+  delete cursor[leafKey]
+  for (let index = stack.length - 1; index >= 0; index -= 1) {
+    const [parent, part] = stack[index]
+    const child = parent[part]
+    if (
+      typeof child === 'object' &&
+      child !== null &&
+      !Array.isArray(child) &&
+      Object.keys(child).length === 0
+    ) {
+      delete parent[part]
+    }
+  }
+  return true
+}
+
+function collectLocaleParityIssues(enCatalog, localeCatalog) {
   const enEntries = flattenCatalogEntries(enCatalog)
   const localeEntries = flattenCatalogEntries(localeCatalog)
   const missingInLocale = [...enEntries.keys()].filter((key) => !localeEntries.has(key))
@@ -225,6 +281,71 @@ function verifyLocaleParity(enCatalog, localeName, localeCatalog) {
       interpolationMismatches.push(key)
     }
   }
+
+  return { enEntries, localeEntries, missingInLocale, extraInLocale, interpolationMismatches }
+}
+
+function repairLocaleParity(enCatalog, localeCatalog) {
+  const { enEntries, missingInLocale, extraInLocale, interpolationMismatches } =
+    collectLocaleParityIssues(enCatalog, localeCatalog)
+  let changed = 0
+
+  for (const key of missingInLocale) {
+    setCatalogEntry(localeCatalog, key, enEntries.get(key))
+    changed += 1
+  }
+
+  for (const key of extraInLocale) {
+    if (deleteCatalogEntry(localeCatalog, key)) {
+      changed += 1
+    }
+  }
+
+  for (const key of interpolationMismatches) {
+    setCatalogEntry(localeCatalog, key, enEntries.get(key))
+    changed += 1
+  }
+
+  return changed
+}
+
+function referencesMissingFallbacks(missing) {
+  return missing.filter((reference) => typeof reference.fallback !== 'string')
+}
+
+function collectMissingCatalogEntries(missing) {
+  const entries = new Map()
+
+  for (const reference of missing) {
+    if (typeof reference.fallback !== 'string') {
+      continue
+    }
+    if (!entries.has(reference.key)) {
+      entries.set(reference.key, reference.fallback)
+    }
+  }
+
+  return entries
+}
+
+function applyMissingEnglishEntries(catalog, missing) {
+  const entries = collectMissingCatalogEntries(missing)
+  let changed = 0
+
+  for (const [key, fallback] of entries) {
+    if (getCatalogEntry(catalog, key) !== undefined) {
+      continue
+    }
+    setCatalogEntry(catalog, key, fallback)
+    changed += 1
+  }
+
+  return changed
+}
+
+function verifyLocaleParity(enCatalog, localeName, localeCatalog) {
+  const { localeEntries, missingInLocale, extraInLocale, interpolationMismatches } =
+    collectLocaleParityIssues(enCatalog, localeCatalog)
 
   if (
     missingInLocale.length > 0 ||
@@ -262,12 +383,18 @@ function verifyLocaleParity(enCatalog, localeName, localeCatalog) {
   return 0
 }
 
-export async function main(root = process.cwd()) {
-  const localesDir = path.join(root, 'src', 'renderer', 'src', 'i18n', 'locales')
+function parseArgs(argv) {
+  return {
+    fix: argv.includes('--fix')
+  }
+}
+
+export async function main(root = process.cwd(), options = parseArgs(process.argv.slice(2))) {
+  const localesDir = path.join(root, LOCALES_RELATIVE_DIR)
   const catalogPath = path.join(localesDir, 'en.json')
   const catalog = JSON.parse(await fs.readFile(catalogPath, 'utf8'))
-  const catalogKeys = new Set(flattenCatalogKeys(catalog))
-  const sourceRoots = [path.join(root, 'src', 'renderer', 'src'), path.join(root, 'src', 'main')]
+  let catalogKeys = new Set(flattenCatalogKeys(catalog))
+  const sourceRoots = SOURCE_RELATIVE_ROOTS.map((sourceRoot) => path.join(root, sourceRoot))
   const references = []
 
   for (const sourceRoot of sourceRoots) {
@@ -281,9 +408,33 @@ export async function main(root = process.cwd()) {
 
   const missing = references.filter((reference) => !catalogKeys.has(reference.key))
   if (missing.length > 0) {
+    const missingFallbacks = referencesMissingFallbacks(missing)
+    if (options.fix && missingFallbacks.length === 0) {
+      const added = applyMissingEnglishEntries(catalog, missing)
+      await fs.writeFile(catalogPath, `${JSON.stringify(catalog, null, 2)}\n`, 'utf8')
+      catalogKeys = new Set(flattenCatalogKeys(catalog))
+      console.log(`Added ${added} missing localization key(s) to en.json.`)
+    } else {
+      if (options.fix && missingFallbacks.length > 0) {
+        console.error('Some missing localization keys do not have string fallbacks to bootstrap.')
+        console.error('')
+        console.error(formatMissingReferences(missingFallbacks))
+        return 1
+      }
+      console.error('Localization keys are missing from src/renderer/src/i18n/locales/en.json.')
+      console.error('')
+      console.error(formatMissingReferences(missing))
+      console.error('')
+      console.error('Run `pnpm run sync:localization-catalog` to add keys with string fallbacks.')
+      return 1
+    }
+  }
+
+  const remainingMissing = references.filter((reference) => !catalogKeys.has(reference.key))
+  if (remainingMissing.length > 0) {
     console.error('Localization keys are missing from src/renderer/src/i18n/locales/en.json.')
     console.error('')
-    console.error(formatMissingReferences(missing))
+    console.error(formatMissingReferences(remainingMissing))
     return 1
   }
 
@@ -311,8 +462,19 @@ export async function main(root = process.cwd()) {
     const localeName = fileName.replace(/\.json$/, '')
     const localeCatalogPath = path.join(localesDir, fileName)
     const localeCatalog = JSON.parse(await fs.readFile(localeCatalogPath, 'utf8'))
+    if (options.fix) {
+      const repaired = repairLocaleParity(catalog, localeCatalog)
+      if (repaired > 0) {
+        await fs.writeFile(localeCatalogPath, `${JSON.stringify(localeCatalog, null, 2)}\n`, 'utf8')
+        console.log(`Repaired ${fileName} parity (${repaired} key update(s)).`)
+      }
+    }
     const exitCode = verifyLocaleParity(catalog, localeName, localeCatalog)
     if (exitCode !== 0) {
+      if (!options.fix) {
+        console.error('')
+        console.error('Run `pnpm run sync:localization-catalog` to repair locale parity.')
+      }
       return exitCode
     }
   }

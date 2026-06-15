@@ -93,6 +93,10 @@ docs/reference/react-performance-audit.md
 validation-screenshots/
 .stably-browser
 
+# PR verification evidence screenshots are referenced from notes but should not
+# be committed.
+notes/artifacts/
+
 # Playwright
 test-results/
 playwright-report/

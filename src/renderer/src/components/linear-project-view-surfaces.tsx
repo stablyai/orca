@@ -192,8 +192,16 @@ export function LinearCollectionNotice({
         <div className="flex flex-wrap items-center justify-center gap-2 px-4 py-3">
           {onLoadMore ? null : (
             <span>
-              {translate("auto.components.linear.project.view.surfaces.06b887d622", "Showing first")} {count} {label}
-              {translate("auto.components.linear.project.view.surfaces.98730088a6", ". Search or open Linear for the full set.")}</span>
+              {translate(
+                'auto.components.linear.project.view.surfaces.06b887d622',
+                'Showing first'
+              )}{' '}
+              {count} {label}
+              {translate(
+                'auto.components.linear.project.view.surfaces.98730088a6',
+                '. Search or open Linear for the full set.'
+              )}
+            </span>
           )}
           {onLoadMore ? (
             <Button
@@ -207,7 +215,8 @@ export function LinearCollectionNotice({
               {loading ? (
                 <>
                   <LoaderCircle className="size-3.5 animate-spin" />
-                  {translate("auto.components.linear.project.view.surfaces.93e1f6bfca", "Loading")}</>
+                  {translate('auto.components.linear.project.view.surfaces.93e1f6bfca', 'Loading')}
+                </>
               ) : (
                 <>
                   {loadMoreLabel}
@@ -258,10 +267,26 @@ export function LinearProjectTable({
     return (
       <div className="px-4 py-10 text-center">
         <p className="text-sm font-medium text-foreground">
-          {hasError ? translate("auto.components.linear.project.view.surfaces.c9b6e9f90d", "Unable to load Linear projects") : translate("auto.components.linear.project.view.surfaces.a2f31c4cd6", "No Linear projects found")}
+          {hasError
+            ? translate(
+                'auto.components.linear.project.view.surfaces.c9b6e9f90d',
+                'Unable to load Linear projects'
+              )
+            : translate(
+                'auto.components.linear.project.view.surfaces.a2f31c4cd6',
+                'No Linear projects found'
+              )}
         </p>
         <p className="mt-2 text-sm text-muted-foreground">
-          {hasError ? translate("auto.components.linear.project.view.surfaces.f4c79cff5f", "Review the workspace error below, then refresh.") : translate("auto.components.linear.project.view.surfaces.30402d2c6e", "Try search or refresh.")}
+          {hasError
+            ? translate(
+                'auto.components.linear.project.view.surfaces.f4c79cff5f',
+                'Review the workspace error below, then refresh.'
+              )
+            : translate(
+                'auto.components.linear.project.view.surfaces.30402d2c6e',
+                'Try search or refresh.'
+              )}
         </p>
       </div>
     )
@@ -317,21 +342,23 @@ export function LinearProjectTable({
               <ProjectStatusBadge project={projectLike} />
             </div>
             <span className="truncate text-[12px] text-muted-foreground">
-              {textFromUnknown(projectLike.health) ?? translate("auto.components.linear.project.view.surfaces.8bbecb2510", "None")}
+              {textFromUnknown(projectLike.health) ??
+                translate('auto.components.linear.project.view.surfaces.8bbecb2510', 'None')}
             </span>
             <span className="truncate text-[12px] text-muted-foreground">
               {priorityLabel(projectLike.priority, projectLike.priorityLabel)}
             </span>
             <span className="truncate text-[12px] text-muted-foreground">
-              {textFromUnknown(projectLike.lead) ?? translate("auto.components.linear.project.view.surfaces.df4bd63c1d", "Unassigned")}
+              {textFromUnknown(projectLike.lead) ??
+                translate('auto.components.linear.project.view.surfaces.df4bd63c1d', 'Unassigned')}
             </span>
             <span className="truncate text-[12px] text-muted-foreground">
               {dateLabel(project.targetDate)}
             </span>
             <span className="text-[12px] text-muted-foreground">
-              {typeof project.issueCount === "number"
+              {typeof project.issueCount === 'number'
                 ? project.issueCount
-                : typeof project.scope === "number"
+                : typeof project.scope === 'number'
                   ? project.scope
                   : progress !== null
                     ? `${progress}%`
@@ -348,13 +375,18 @@ export function LinearProjectTable({
                         event.stopPropagation()
                         onUseProjectIssues(project)
                       }}
-                      aria-label={translate("auto.components.linear.project.view.surfaces.7616c986c6", "Open {{value0}} issues", { value0: project.name })}
+                      aria-label={translate(
+                        'auto.components.linear.project.view.surfaces.7616c986c6',
+                        'Open {{value0}} issues',
+                        { value0: project.name }
+                      )}
                     >
                       <ArrowRight className="size-3.5" />
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent side="bottom" sideOffset={6}>
-                    {translate("auto.components.linear.project.view.surfaces.ee3d2caabd", "Issues")}</TooltipContent>
+                    {translate('auto.components.linear.project.view.surfaces.ee3d2caabd', 'Issues')}
+                  </TooltipContent>
                 </Tooltip>
               ) : null}
               <Tooltip>
@@ -366,13 +398,21 @@ export function LinearProjectTable({
                       event.stopPropagation()
                       onOpenProject(project)
                     }}
-                    aria-label={translate("auto.components.linear.project.view.surfaces.7616c986c6", "Open {{value0}} in Linear", { value0: project.name })}
+                    aria-label={translate(
+                      'auto.components.linear.project.view.surfaces.7616c986c6',
+                      'Open {{value0}} in Linear',
+                      { value0: project.name }
+                    )}
                   >
                     <ExternalLink className="size-3.5" />
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent side="bottom" sideOffset={6}>
-                  {translate("auto.components.linear.project.view.surfaces.aac9a4afc6", "Open in Linear")}</TooltipContent>
+                  {translate(
+                    'auto.components.linear.project.view.surfaces.aac9a4afc6',
+                    'Open in Linear'
+                  )}
+                </TooltipContent>
               </Tooltip>
             </div>
           </div>
@@ -415,12 +455,26 @@ export function LinearCustomViewTable({
     return (
       <div className="px-4 py-10 text-center">
         <p className="text-sm font-medium text-foreground">
-          {hasError ? translate("auto.components.linear.project.view.surfaces.c0a50f96a4", "Unable to load views") : translate("auto.components.linear.project.view.surfaces.ef90b21366", "No views found")}
+          {hasError
+            ? translate(
+                'auto.components.linear.project.view.surfaces.c0a50f96a4',
+                'Unable to load views'
+              )
+            : translate(
+                'auto.components.linear.project.view.surfaces.ef90b21366',
+                'No views found'
+              )}
         </p>
         <p className="mt-2 text-sm text-muted-foreground">
           {hasError
-            ? translate("auto.components.linear.project.view.surfaces.f4c79cff5f", "Review the workspace error below, then refresh.")
-            : translate("auto.components.linear.project.view.surfaces.9f0f51fd9e", "Create or save views in Linear, then refresh.")}
+            ? translate(
+                'auto.components.linear.project.view.surfaces.f4c79cff5f',
+                'Review the workspace error below, then refresh.'
+              )
+            : translate(
+                'auto.components.linear.project.view.surfaces.9f0f51fd9e',
+                'Create or save views in Linear, then refresh.'
+              )}
         </p>
       </div>
     )
@@ -471,13 +525,18 @@ export function LinearCustomViewTable({
               {view.model}
             </Badge>
             <span className="truncate text-[12px] text-muted-foreground">
-              {view.shared ? translate("auto.components.linear.project.view.surfaces.27d91cb1a6", "Shared") : translate("auto.components.linear.project.view.surfaces.f059181bd9", "Private")}
+              {view.shared
+                ? translate('auto.components.linear.project.view.surfaces.27d91cb1a6', 'Shared')
+                : translate('auto.components.linear.project.view.surfaces.f059181bd9', 'Private')}
             </span>
             <span className="truncate text-[12px] text-muted-foreground">
-              {textFromUnknown(view.owner ?? view.creator) ?? translate("auto.components.linear.project.view.surfaces.20b9d09b7d", "Unknown")}
+              {textFromUnknown(view.owner ?? view.creator) ??
+                translate('auto.components.linear.project.view.surfaces.20b9d09b7d', 'Unknown')}
             </span>
             <span className="truncate text-[12px] text-muted-foreground">
-              {view.updatedAt ? dateLabel(view.updatedAt) : translate("auto.components.linear.project.view.surfaces.20b9d09b7d", "Unknown")}
+              {view.updatedAt
+                ? dateLabel(view.updatedAt)
+                : translate('auto.components.linear.project.view.surfaces.20b9d09b7d', 'Unknown')}
             </span>
             <div className="flex justify-end md:opacity-0 md:transition-opacity md:group-hover/row:opacity-100 md:group-focus-within/row:opacity-100">
               <Tooltip>
@@ -489,13 +548,21 @@ export function LinearCustomViewTable({
                       event.stopPropagation()
                       onOpenView(view)
                     }}
-                    aria-label={translate("auto.components.linear.project.view.surfaces.7616c986c6", "Open {{value0}} in Linear", { value0: view.name })}
+                    aria-label={translate(
+                      'auto.components.linear.project.view.surfaces.7616c986c6',
+                      'Open {{value0}} in Linear',
+                      { value0: view.name }
+                    )}
                   >
                     <ExternalLink className="size-3.5" />
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent side="bottom" sideOffset={6}>
-                  {translate("auto.components.linear.project.view.surfaces.aac9a4afc6", "Open in Linear")}</TooltipContent>
+                  {translate(
+                    'auto.components.linear.project.view.surfaces.aac9a4afc6',
+                    'Open in Linear'
+                  )}
+                </TooltipContent>
               </Tooltip>
             </div>
           </div>
@@ -528,17 +595,33 @@ export function LinearProjectOverview({
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex h-10 flex-none items-center justify-between gap-3 border-b border-border/50 bg-muted/35 px-3">
         <div className="flex min-w-0 items-center gap-2">
-          <Button variant="ghost" size="icon-xs" onClick={onBack} aria-label={translate("auto.components.linear.project.view.surfaces.5f79bc76b0", "Back to projects")}>
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            onClick={onBack}
+            aria-label={translate(
+              'auto.components.linear.project.view.surfaces.5f79bc76b0',
+              'Back to projects'
+            )}
+          >
             <ArrowLeft className="size-3.5" />
           </Button>
           <div className="min-w-0">
             <div className="truncate text-[13px] font-medium text-foreground">
-              {project?.name ?? translate("auto.components.linear.project.view.surfaces.85607ff793", "Project")}
+              {project?.name ??
+                translate('auto.components.linear.project.view.surfaces.85607ff793', 'Project')}
             </div>
             <div className="truncate text-[11px] text-muted-foreground">
               {project?.workspaceName
-                ? translate("auto.components.linear.project.view.surfaces.906b5e4cb8", "Linear / Projects / {{value0}}", { value0: project.workspaceName })
-                : translate("auto.components.linear.project.view.surfaces.f2cc1e0ff6", "Linear / Projects")}
+                ? translate(
+                    'auto.components.linear.project.view.surfaces.906b5e4cb8',
+                    'Linear / Projects / {{value0}}',
+                    { value0: project.workspaceName }
+                  )
+                : translate(
+                    'auto.components.linear.project.view.surfaces.f2cc1e0ff6',
+                    'Linear / Projects'
+                  )}
             </div>
           </div>
         </div>
@@ -551,7 +634,8 @@ export function LinearProjectOverview({
               className="gap-1 border-border/50 bg-background/70"
             >
               <Layers3 className="size-3.5" />
-              {translate("auto.components.linear.project.view.surfaces.ee3d2caabd", "Issues")}</Button>
+              {translate('auto.components.linear.project.view.surfaces.ee3d2caabd', 'Issues')}
+            </Button>
           ) : null}
           <Button
             variant="outline"
@@ -561,7 +645,8 @@ export function LinearProjectOverview({
             className="gap-1 border-border/50 bg-background/70"
           >
             <RefreshCw className={cn('size-3.5', loading && 'animate-spin')} />
-            {translate("auto.components.linear.project.view.surfaces.a9785c7158", "Refresh")}</Button>
+            {translate('auto.components.linear.project.view.surfaces.a9785c7158', 'Refresh')}
+          </Button>
           {project ? (
             <Button
               variant="outline"
@@ -570,7 +655,8 @@ export function LinearProjectOverview({
               className="gap-1 border-border/50 bg-background/70"
             >
               <ExternalLink className="size-3.5" />
-              {translate("auto.components.linear.project.view.surfaces.7b147907dc", "Linear")}</Button>
+              {translate('auto.components.linear.project.view.surfaces.7b147907dc', 'Linear')}
+            </Button>
           ) : null}
         </div>
       </div>
@@ -602,41 +688,70 @@ export function LinearProjectOverview({
                     {body}
                   </p>
                 ) : (
-                  <p className="mt-3 text-sm text-muted-foreground">{translate("auto.components.linear.project.view.surfaces.bb5664d456", "No project description.")}</p>
+                  <p className="mt-3 text-sm text-muted-foreground">
+                    {translate(
+                      'auto.components.linear.project.view.surfaces.bb5664d456',
+                      'No project description.'
+                    )}
+                  </p>
                 )}
               </section>
 
               {progress !== null ? (
                 <section className="rounded-md border border-border/50 bg-muted/20 p-4">
                   <div className="mb-2 flex items-center justify-between text-sm">
-                    <span className="font-medium text-foreground">{translate("auto.components.linear.project.view.surfaces.563501f191", "Progress")}</span>
+                    <span className="font-medium text-foreground">
+                      {translate(
+                        'auto.components.linear.project.view.surfaces.563501f191',
+                        'Progress'
+                      )}
+                    </span>
                     <span className="text-muted-foreground">{progress}%</span>
                   </div>
                   <Progress value={Math.max(0, Math.min(100, progress))} />
-                  {typeof projectLike.scope === "number" ? (
+                  {typeof projectLike.scope === 'number' ? (
                     <div className="mt-2 text-xs text-muted-foreground">
-                      {projectLike.scope} {translate("auto.components.linear.project.view.surfaces.3ad562bdf4", "scoped issues")}</div>
+                      {projectLike.scope}{' '}
+                      {translate(
+                        'auto.components.linear.project.view.surfaces.3ad562bdf4',
+                        'scoped issues'
+                      )}
+                    </div>
                   ) : null}
                 </section>
               ) : null}
 
               {milestones.length > 0 || resources.length > 0 || latestUpdate ? (
                 <section className="rounded-md border border-border/50 bg-muted/20 p-4">
-                  <h3 className="text-sm font-medium text-foreground">{translate("auto.components.linear.project.view.surfaces.5d99315fb8", "Planning")}</h3>
+                  <h3 className="text-sm font-medium text-foreground">
+                    {translate(
+                      'auto.components.linear.project.view.surfaces.5d99315fb8',
+                      'Planning'
+                    )}
+                  </h3>
                   <div className="mt-3 grid gap-3 md:grid-cols-3">
                     <MetadataList
                       icon={<FolderKanban className="size-3.5" />}
-                      label={translate("auto.components.linear.project.view.surfaces.bb1405eff8", "Milestones")}
+                      label={translate(
+                        'auto.components.linear.project.view.surfaces.bb1405eff8',
+                        'Milestones'
+                      )}
                       items={milestones}
                     />
                     <MetadataList
                       icon={<FileText className="size-3.5" />}
-                      label={translate("auto.components.linear.project.view.surfaces.c8db98b73b", "Resources")}
+                      label={translate(
+                        'auto.components.linear.project.view.surfaces.c8db98b73b',
+                        'Resources'
+                      )}
                       items={resources}
                     />
                     <MetadataList
                       icon={<RefreshCw className="size-3.5" />}
-                      label={translate("auto.components.linear.project.view.surfaces.0a6a5a7dd6", "Latest update")}
+                      label={translate(
+                        'auto.components.linear.project.view.surfaces.0a6a5a7dd6',
+                        'Latest update'
+                      )}
                       items={latestUpdate ? [latestUpdate] : []}
                     />
                   </div>
@@ -646,37 +761,77 @@ export function LinearProjectOverview({
 
             <aside className="min-w-0 space-y-3">
               <PropertyRow
-                label={translate("auto.components.linear.project.view.surfaces.9ddb58edbd", "Status")}
+                label={translate(
+                  'auto.components.linear.project.view.surfaces.9ddb58edbd',
+                  'Status'
+                )}
                 value={textFromUnknown(projectLike.status) ?? 'Backlog'}
               />
-              <PropertyRow label={translate("auto.components.linear.project.view.surfaces.f5ef24cf46", "Health")} value={textFromUnknown(projectLike.health) ?? 'None'} />
               <PropertyRow
-                label={translate("auto.components.linear.project.view.surfaces.3be47aed6f", "Priority")}
+                label={translate(
+                  'auto.components.linear.project.view.surfaces.f5ef24cf46',
+                  'Health'
+                )}
+                value={textFromUnknown(projectLike.health) ?? 'None'}
+              />
+              <PropertyRow
+                label={translate(
+                  'auto.components.linear.project.view.surfaces.3be47aed6f',
+                  'Priority'
+                )}
                 value={priorityLabel(projectLike.priority, projectLike.priorityLabel)}
               />
               <PropertyRow
-                label={translate("auto.components.linear.project.view.surfaces.111bef9aa8", "Lead")}
+                label={translate('auto.components.linear.project.view.surfaces.111bef9aa8', 'Lead')}
                 value={textFromUnknown(projectLike.lead) ?? 'Unassigned'}
                 icon={<UserRound className="size-3.5" />}
               />
               <PropertyRow
-                label={translate("auto.components.linear.project.view.surfaces.3fb6473111", "Start")}
+                label={translate(
+                  'auto.components.linear.project.view.surfaces.3fb6473111',
+                  'Start'
+                )}
                 value={dateLabel(projectLike.startDate)}
                 icon={<CalendarDays className="size-3.5" />}
               />
               <PropertyRow
-                label={translate("auto.components.linear.project.view.surfaces.25a2196732", "Target")}
+                label={translate(
+                  'auto.components.linear.project.view.surfaces.25a2196732',
+                  'Target'
+                )}
                 value={dateLabel(projectLike.targetDate)}
                 icon={<CalendarDays className="size-3.5" />}
               />
-              <MetadataList label={translate("auto.components.linear.project.view.surfaces.c5f79616c3", "Teams")} items={teams} />
-              <MetadataList label={translate("auto.components.linear.project.view.surfaces.65bda65159", "Members")} items={members} />
-              <MetadataList label={translate("auto.components.linear.project.view.surfaces.1748d3b9af", "Labels")} items={labels} />
+              <MetadataList
+                label={translate(
+                  'auto.components.linear.project.view.surfaces.c5f79616c3',
+                  'Teams'
+                )}
+                items={teams}
+              />
+              <MetadataList
+                label={translate(
+                  'auto.components.linear.project.view.surfaces.65bda65159',
+                  'Members'
+                )}
+                items={members}
+              />
+              <MetadataList
+                label={translate(
+                  'auto.components.linear.project.view.surfaces.1748d3b9af',
+                  'Labels'
+                )}
+                items={labels}
+              />
             </aside>
           </div>
         ) : (
           <div className="px-4 py-10 text-center text-sm text-muted-foreground">
-            {translate("auto.components.linear.project.view.surfaces.e1fa97d21d", "Select a project to view its overview.")}</div>
+            {translate(
+              'auto.components.linear.project.view.surfaces.e1fa97d21d',
+              'Select a project to view its overview.'
+            )}
+          </div>
         )}
       </div>
     </div>
@@ -727,7 +882,9 @@ function MetadataList({
           ))}
         </div>
       ) : (
-        <div className="mt-1 text-sm text-muted-foreground">{translate("auto.components.linear.project.view.surfaces.8bbecb2510", "None")}</div>
+        <div className="mt-1 text-sm text-muted-foreground">
+          {translate('auto.components.linear.project.view.surfaces.8bbecb2510', 'None')}
+        </div>
       )}
     </div>
   )

@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import { PullRequestComposer } from './SourceControl'
+import { CreateHostedReviewComposer } from './CreateHostedReviewComposer'
 import { resolveDropdownItems } from './source-control-dropdown-items'
 import { resolvePrimaryAction } from './source-control-primary-action'
 
@@ -31,7 +31,7 @@ function renderPullRequestComposer({
 
   return renderToStaticMarkup(
     <TooltipProvider>
-      <PullRequestComposer
+      <CreateHostedReviewComposer
         provider="github"
         branch="branch-login-issue"
         base="master"
@@ -77,7 +77,7 @@ function elementByLabel(markup: string, tagName: string, label: string): string 
   return element
 }
 
-describe('PullRequestComposer generate tooltip', () => {
+describe('CreateHostedReviewComposer generate tooltip', () => {
   it('renders hosted review labels without leaking interpolation placeholders', () => {
     const markup = renderPullRequestComposer()
 

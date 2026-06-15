@@ -24,7 +24,9 @@ import { Label } from '../ui/label'
 import { SearchableSetting } from './SearchableSetting'
 import { SourceControlAiActionRecipeDefaults } from './SourceControlAiActionRecipeDefaults'
 import { matchesSettingsSearch } from './settings-search'
+import { getSettingOwnershipSummary } from './setting-ownership'
 import { translate } from '@/i18n/i18n'
+import { HostedReviewCreationDefaults } from './HostedReviewCreationDefaults'
 
 type CommitMessageAiPaneProps = {
   settings: GlobalSettings
@@ -99,6 +101,7 @@ export function CommitMessageAiPane({
   const storeSearchQuery = useAppStore((s) => s.settingsSearchQuery)
   const searchQuery = settingsSearchQuery ?? storeSearchQuery
   const config = readSettings(settings)
+  const ownership = getSettingOwnershipSummary('sourceControlAiDefaults')
   const settingsWriteQueueRef = useRef<Promise<void>>(Promise.resolve())
 
   const localWriteConfig = (patch: SourceControlAiSettingsPatch): Promise<void> => {
@@ -150,24 +153,51 @@ export function CommitMessageAiPane({
 
   if (
     matchesSettingsSearch(searchQuery, {
-      title: translate("auto.components.settings.CommitMessageAiPane.d5b45a3628", "Show Source Control AI actions"),
-      description:
-        translate("auto.components.settings.CommitMessageAiPane.7bcad2b200", "Adds action recipes for Source Control commit, pull request, branch-name, and fix actions."),
-      keywords: [translate("auto.components.settings.CommitMessageAiPane.0b7eafe55f", "ai"), translate("auto.components.settings.CommitMessageAiPane.ca433708cb", "commit"), translate("auto.components.settings.CommitMessageAiPane.8cd2be0948", "message"), translate("auto.components.settings.CommitMessageAiPane.34d0348e34", "generate"), translate("auto.components.settings.CommitMessageAiPane.4ec89c319e", "agent"), translate("auto.components.settings.CommitMessageAiPane.d54c64163d", "enabled")]
+      title: translate(
+        'auto.components.settings.CommitMessageAiPane.d5b45a3628',
+        'Show Source Control AI actions'
+      ),
+      description: translate(
+        'auto.components.settings.CommitMessageAiPane.7bcad2b200',
+        'Adds action recipes for Source Control commit, pull request, branch-name, and fix actions.'
+      ),
+      keywords: [
+        translate('auto.components.settings.CommitMessageAiPane.0b7eafe55f', 'ai'),
+        translate('auto.components.settings.CommitMessageAiPane.ca433708cb', 'commit'),
+        translate('auto.components.settings.CommitMessageAiPane.8cd2be0948', 'message'),
+        translate('auto.components.settings.CommitMessageAiPane.34d0348e34', 'generate'),
+        translate('auto.components.settings.CommitMessageAiPane.4ec89c319e', 'agent'),
+        translate('auto.components.settings.CommitMessageAiPane.d54c64163d', 'enabled')
+      ]
     })
   ) {
     sections.push(
       <SearchableSetting
         key="enabled"
-        title={translate("auto.components.settings.CommitMessageAiPane.d5b45a3628", "Show Source Control AI actions")}
-        description={translate("auto.components.settings.CommitMessageAiPane.7bcad2b200", "Adds action recipes for Source Control commit, pull request, branch-name, and fix actions.")}
+        title={translate(
+          'auto.components.settings.CommitMessageAiPane.d5b45a3628',
+          'Show Source Control AI actions'
+        )}
+        description={translate(
+          'auto.components.settings.CommitMessageAiPane.7bcad2b200',
+          'Adds action recipes for Source Control commit, pull request, branch-name, and fix actions.'
+        )}
         keywords={['ai', 'commit', 'message', 'generate', 'agent', 'enabled']}
         className="flex items-center justify-between gap-4 py-2"
       >
         <div className="space-y-1">
-          <Label>{translate("auto.components.settings.CommitMessageAiPane.d5b45a3628", "Show Source Control AI actions")}</Label>
+          <Label>
+            {translate(
+              'auto.components.settings.CommitMessageAiPane.d5b45a3628',
+              'Show Source Control AI actions'
+            )}
+          </Label>
           <p className="text-xs text-muted-foreground">
-            {translate("auto.components.settings.CommitMessageAiPane.2339a89104", "Adds AI buttons that run the selected agent with the command template for that action.")}</p>
+            {translate(
+              'auto.components.settings.CommitMessageAiPane.2339a89104',
+              'Adds AI buttons that run the selected agent with the command template for that action.'
+            )}
+          </p>
         </div>
         <button
           role="switch"
@@ -203,23 +233,55 @@ export function CommitMessageAiPane({
     config.enabled &&
     (customCommandInUse ||
       matchesSettingsSearch(searchQuery, {
-        title: translate("auto.components.settings.CommitMessageAiPane.47e45cbd5a", "Custom command"),
-        description: translate("auto.components.settings.CommitMessageAiPane.1ef29f8c29", "Command line Orca runs when a text recipe uses Custom command."),
-        keywords: [translate("auto.components.settings.CommitMessageAiPane.25350d670f", "custom"), translate("auto.components.settings.CommitMessageAiPane.54038660e0", "command"), translate("auto.components.settings.CommitMessageAiPane.407d28bde6", "cli"), translate("auto.components.settings.CommitMessageAiPane.1df7d71313", "binary"), translate("auto.components.settings.CommitMessageAiPane.a69e1fe91a", "prompt"), translate("auto.components.settings.CommitMessageAiPane.fc1a525fa5", "placeholder")]
+        title: translate(
+          'auto.components.settings.CommitMessageAiPane.47e45cbd5a',
+          'Custom command'
+        ),
+        description: translate(
+          'auto.components.settings.CommitMessageAiPane.1ef29f8c29',
+          'Command line Orca runs when a text recipe uses Custom command.'
+        ),
+        keywords: [
+          translate('auto.components.settings.CommitMessageAiPane.25350d670f', 'custom'),
+          translate('auto.components.settings.CommitMessageAiPane.54038660e0', 'command'),
+          translate('auto.components.settings.CommitMessageAiPane.407d28bde6', 'cli'),
+          translate('auto.components.settings.CommitMessageAiPane.1df7d71313', 'binary'),
+          translate('auto.components.settings.CommitMessageAiPane.a69e1fe91a', 'prompt'),
+          translate('auto.components.settings.CommitMessageAiPane.fc1a525fa5', 'placeholder')
+        ]
       }))
   ) {
     sections.push(
       <SearchableSetting
         key="custom-command"
-        title={translate("auto.components.settings.CommitMessageAiPane.47e45cbd5a", "Custom command")}
-        description={translate("auto.components.settings.CommitMessageAiPane.1ef29f8c29", "Command line Orca runs when a text recipe uses Custom command.")}
+        title={translate(
+          'auto.components.settings.CommitMessageAiPane.47e45cbd5a',
+          'Custom command'
+        )}
+        description={translate(
+          'auto.components.settings.CommitMessageAiPane.1ef29f8c29',
+          'Command line Orca runs when a text recipe uses Custom command.'
+        )}
         keywords={['custom', 'command', 'cli', 'binary', 'prompt', 'placeholder']}
         className="space-y-2 py-2"
       >
         <div className="space-y-0.5">
-          <Label htmlFor="source-control-ai-custom-command">{translate("auto.components.settings.CommitMessageAiPane.47e45cbd5a", "Custom command")}</Label>
+          <Label htmlFor="source-control-ai-custom-command">
+            {translate('auto.components.settings.CommitMessageAiPane.47e45cbd5a', 'Custom command')}
+          </Label>
           <p className="text-xs text-muted-foreground">
-            {translate("auto.components.settings.CommitMessageAiPane.4f722a5f53", "Used by commit-message, pull-request, and branch-name recipes that select Custom command. Use")}<code className="font-mono">{translate("auto.components.settings.CommitMessageAiPane.b8b6fd55b4", "{prompt}")}</code> {translate("auto.components.settings.CommitMessageAiPane.3f1b26cc91", "to pass the command input as an argument; otherwise Orca pipes it on stdin.")}</p>
+            {translate(
+              'auto.components.settings.CommitMessageAiPane.4f722a5f53',
+              'Used by commit-message, pull-request, and branch-name recipes that select Custom command. Use'
+            )}
+            <code className="font-mono">
+              {translate('auto.components.settings.CommitMessageAiPane.b8b6fd55b4', '{prompt}')}
+            </code>{' '}
+            {translate(
+              'auto.components.settings.CommitMessageAiPane.3f1b26cc91',
+              'to pass the command input as an argument; otherwise Orca pipes it on stdin.'
+            )}
+          </p>
         </div>
         <Input
           id="source-control-ai-custom-command"
@@ -228,7 +290,10 @@ export function CommitMessageAiPane({
           autoCapitalize="off"
           value={config.customAgentCommand}
           onChange={(event) => onCustomCommandChange(event.target.value)}
-          placeholder={translate("auto.components.settings.CommitMessageAiPane.15b60d54b2", "e.g. ollama run llama3.1 {prompt}")}
+          placeholder={translate(
+            'auto.components.settings.CommitMessageAiPane.15b60d54b2',
+            'e.g. ollama run llama3.1 {prompt}'
+          )}
           className="h-8 font-mono text-xs"
         />
       </SearchableSetting>
@@ -238,89 +303,33 @@ export function CommitMessageAiPane({
   if (
     config.enabled &&
     matchesSettingsSearch(searchQuery, {
-      title: translate("auto.components.settings.CommitMessageAiPane.2dafc7646e", "Hosted-review creation defaults"),
-      description: translate("auto.components.settings.CommitMessageAiPane.e9d46a544d", "Defaults used when the hosted-review composer opens."),
+      title: translate(
+        'auto.components.settings.CommitMessageAiPane.2dafc7646e',
+        'Hosted-review creation defaults'
+      ),
+      description: translate(
+        'auto.components.settings.CommitMessageAiPane.e9d46a544d',
+        'Defaults used when the hosted-review composer opens.'
+      ),
       keywords: [
-        translate("auto.components.settings.CommitMessageAiPane.19e10a12bb", "hosted review"),
-        translate("auto.components.settings.CommitMessageAiPane.b388463881", "pull request"),
-        translate("auto.components.settings.CommitMessageAiPane.fdee745b87", "merge request"),
-        translate("auto.components.settings.CommitMessageAiPane.02bab6542c", "pr"),
-        translate("auto.components.settings.CommitMessageAiPane.ebed4d2a29", "draft"),
-        translate("auto.components.settings.CommitMessageAiPane.6c84ba6de3", "template"),
-        translate("auto.components.settings.CommitMessageAiPane.34d0348e34", "generate"),
-        translate("auto.components.settings.CommitMessageAiPane.2c5436c018", "open")
+        translate('auto.components.settings.CommitMessageAiPane.19e10a12bb', 'hosted review'),
+        translate('auto.components.settings.CommitMessageAiPane.b388463881', 'pull request'),
+        translate('auto.components.settings.CommitMessageAiPane.fdee745b87', 'merge request'),
+        translate('auto.components.settings.CommitMessageAiPane.02bab6542c', 'pr'),
+        translate('auto.components.settings.CommitMessageAiPane.ebed4d2a29', 'draft'),
+        translate('auto.components.settings.CommitMessageAiPane.6c84ba6de3', 'template'),
+        translate('auto.components.settings.CommitMessageAiPane.34d0348e34', 'generate'),
+        translate('auto.components.settings.CommitMessageAiPane.2c5436c018', 'open')
       ]
     })
   ) {
     const prDefaults = config.prCreationDefaults ?? {}
-    const rows: {
-      key: keyof NonNullable<SourceControlAiSettings['prCreationDefaults']>
-      label: string
-      description: string
-    }[] = [
-      {
-        key: 'draft',
-        label: translate("auto.components.settings.CommitMessageAiPane.6ba48f07a4", "Draft by default"),
-        description: translate("auto.components.settings.CommitMessageAiPane.e001734396", "Create hosted reviews as drafts unless changed in the composer.")
-      },
-      {
-        key: 'useTemplate',
-        label: translate("auto.components.settings.CommitMessageAiPane.d8b6764d79", "Use review template when available"),
-        description: translate("auto.components.settings.CommitMessageAiPane.6278c0ce43", "Prefer repository pull request templates when no description is set.")
-      },
-      {
-        key: 'generateDetailsOnOpen',
-        label: translate("auto.components.settings.CommitMessageAiPane.d5f0de6309", "Generate details when opening Create PR"),
-        description: translate("auto.components.settings.CommitMessageAiPane.b27b0809f3", "Run hosted-review detail generation once when the composer opens.")
-      },
-      {
-        key: 'openAfterCreate',
-        label: translate("auto.components.settings.CommitMessageAiPane.7662715213", "Open hosted review after creation"),
-        description: translate("auto.components.settings.CommitMessageAiPane.b125eabffa", "Open the created hosted review in your browser after submit.")
-      }
-    ]
     sections.push(
-      <SearchableSetting
+      <HostedReviewCreationDefaults
         key="pr-creation-defaults"
-        title={translate("auto.components.settings.CommitMessageAiPane.2dafc7646e", "Hosted-review creation defaults")}
-        description={translate("auto.components.settings.CommitMessageAiPane.e9d46a544d", "Defaults used when the hosted-review composer opens.")}
-        keywords={[
-          'hosted review',
-          'pull request',
-          'merge request',
-          'pr',
-          'draft',
-          'template',
-          'generate',
-          'open'
-        ]}
-        className="space-y-3 px-1 py-2"
-      >
-        <div className="space-y-0.5">
-          <Label>{translate("auto.components.settings.CommitMessageAiPane.2dafc7646e", "Hosted-review creation defaults")}</Label>
-          <p className="text-xs text-muted-foreground">
-            {translate("auto.components.settings.CommitMessageAiPane.347094560b", "Used by repositories that inherit global hosted-review defaults.")}</p>
-        </div>
-        <div className="space-y-2">
-          {rows.map((row) => (
-            <label
-              key={row.key}
-              className="flex items-start justify-between gap-4 rounded-md border border-border px-3 py-2"
-            >
-              <span className="space-y-0.5">
-                <span className="block text-xs font-medium text-foreground">{row.label}</span>
-                <span className="block text-[11px] text-muted-foreground">{row.description}</span>
-              </span>
-              <input
-                type="checkbox"
-                checked={prDefaults[row.key] === true}
-                onChange={(event) => onPrDefaultChange(row.key, event.target.checked)}
-                className="mt-0.5 size-4 rounded border-border accent-primary"
-              />
-            </label>
-          ))}
-        </div>
-      </SearchableSetting>
+        prDefaults={prDefaults}
+        onPrDefaultChange={onPrDefaultChange}
+      />
     )
   }
 
@@ -331,9 +340,13 @@ export function CommitMessageAiPane({
       className="space-y-4 border-t border-border/40 pt-4"
     >
       <div className="space-y-0.5">
-        <h3 className="text-sm font-semibold">{translate("auto.components.settings.CommitMessageAiPane.ad66ff886d", "Source Control AI defaults")}</h3>
-        <p className="text-xs text-muted-foreground">
-          {translate("auto.components.settings.CommitMessageAiPane.841ed9884a", "Used by repositories that have not customized Source Control AI.")}</p>
+        <h3 className="text-sm font-semibold">
+          {translate(
+            'auto.components.settings.CommitMessageAiPane.ad66ff886d',
+            'Source Control AI defaults'
+          )}
+        </h3>
+        <p className="text-xs text-muted-foreground">{ownership.description}</p>
       </div>
       {sections}
     </div>

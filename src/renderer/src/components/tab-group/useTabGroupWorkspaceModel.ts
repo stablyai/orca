@@ -27,6 +27,7 @@ import { closeTerminalTab } from '../terminal/terminal-tab-actions'
 import { openTabBarEntry, type TabCreateEntryArgs } from '../tab-bar/tab-create-entry-action'
 import { openMobileEmulatorTab } from '@/lib/open-mobile-emulator-tab'
 import { ensureSimulatorTab, getSimulatorTabForWorktree } from '@/lib/ensure-simulator-tab'
+import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 
 export function recordTerminalTabGroupSplit(createdTerminal: TerminalTab | null | undefined): void {
   if (!createdTerminal) {
@@ -237,9 +238,10 @@ export function useTabGroupWorkspaceModel({
       if (item.isPinned) {
         return
       }
-      const runtimeEnvironmentId = useAppStore
-        .getState()
-        .settings?.activeRuntimeEnvironmentId?.trim()
+      const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(
+        useAppStore.getState(),
+        worktreeId
+      )
       if (item.contentType === 'terminal') {
         closeTerminalTab(item.entityId)
         if (!opts?.skipEmptyCheck) {
@@ -290,9 +292,10 @@ export function useTabGroupWorkspaceModel({
         if (!item || item.isPinned) {
           continue
         }
-        const runtimeEnvironmentId = useAppStore
-          .getState()
-          .settings?.activeRuntimeEnvironmentId?.trim()
+        const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(
+          useAppStore.getState(),
+          worktreeId
+        )
         if (
           (item.contentType === 'terminal' || item.contentType === 'browser') &&
           isWebRuntimeSessionActive(runtimeEnvironmentId)
@@ -332,9 +335,10 @@ export function useTabGroupWorkspaceModel({
       }
       focusGroup(worktreeId, groupId)
       activateTab(item.id)
-      const runtimeEnvironmentId = useAppStore
-        .getState()
-        .settings?.activeRuntimeEnvironmentId?.trim()
+      const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(
+        useAppStore.getState(),
+        worktreeId
+      )
       if (isWebRuntimeSessionActive(runtimeEnvironmentId)) {
         void activateWebRuntimeSessionTab({
           worktreeId,
@@ -402,9 +406,10 @@ export function useTabGroupWorkspaceModel({
       }
       focusGroup(worktreeId, groupId)
       activateTab(item.id)
-      const runtimeEnvironmentId = useAppStore
-        .getState()
-        .settings?.activeRuntimeEnvironmentId?.trim()
+      const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(
+        useAppStore.getState(),
+        worktreeId
+      )
       if (isWebRuntimeSessionActive(runtimeEnvironmentId)) {
         void activateWebRuntimeSessionTab({
           worktreeId,
@@ -604,6 +609,7 @@ export function useTabGroupWorkspaceModel({
           if (
             await createWebRuntimeSessionBrowserTab({
               worktreeId,
+              environmentId: getRuntimeEnvironmentIdForWorktree(state, worktreeId),
               url: source.url,
               profileId: source.sessionProfileId,
               targetGroupId: groupId
@@ -633,6 +639,7 @@ export function useTabGroupWorkspaceModel({
           if (
             await createWebRuntimeSessionTerminal({
               worktreeId,
+              environmentId: getRuntimeEnvironmentIdForWorktree(useAppStore.getState(), worktreeId),
               targetGroupId: groupId,
               command: shellOverride,
               activate: true

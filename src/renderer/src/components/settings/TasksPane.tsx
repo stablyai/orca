@@ -26,26 +26,54 @@ const TASK_PROVIDER_OPTIONS: readonly {
 }[] = [
   {
     id: 'github',
-    label: translate("auto.components.settings.TasksPane.e14063e727", "GitHub"),
-    description: translate("auto.components.settings.TasksPane.1db47236cd", "Show GitHub in the Tasks source picker and sidebar shortcuts."),
+    get label() {
+      return translate('auto.components.settings.TasksPane.e14063e727', 'GitHub')
+    },
+    get description() {
+      return translate(
+        'auto.components.settings.TasksPane.1db47236cd',
+        'Show GitHub in the Tasks source picker and sidebar shortcuts.'
+      )
+    },
     Icon: ({ className }) => <Github className={className} />
   },
   {
     id: 'gitlab',
-    label: translate("auto.components.settings.TasksPane.7c5d7fdc20", "GitLab"),
-    description: translate("auto.components.settings.TasksPane.dd67a1b6e1", "Show GitLab in the Tasks source picker and sidebar shortcuts."),
+    get label() {
+      return translate('auto.components.settings.TasksPane.7c5d7fdc20', 'GitLab')
+    },
+    get description() {
+      return translate(
+        'auto.components.settings.TasksPane.dd67a1b6e1',
+        'Show GitLab in the Tasks source picker and sidebar shortcuts.'
+      )
+    },
     Icon: ({ className }) => <Gitlab className={className} />
   },
   {
     id: 'linear',
-    label: translate("auto.components.settings.TasksPane.09ae2d7c51", "Linear"),
-    description: translate("auto.components.settings.TasksPane.e4170c9615", "Show Linear in the Tasks source picker and sidebar shortcuts."),
+    get label() {
+      return translate('auto.components.settings.TasksPane.09ae2d7c51', 'Linear')
+    },
+    get description() {
+      return translate(
+        'auto.components.settings.TasksPane.e4170c9615',
+        'Show Linear in the Tasks source picker and sidebar shortcuts.'
+      )
+    },
     Icon: ({ className }) => <LinearIcon className={className} />
   },
   {
     id: 'jira',
-    label: translate("auto.components.settings.TasksPane.6b23a34f6d", "Jira"),
-    description: translate("auto.components.settings.TasksPane.8e1305fcc6", "Show Jira in the Tasks source picker and sidebar shortcuts."),
+    get label() {
+      return translate('auto.components.settings.TasksPane.6b23a34f6d', 'Jira')
+    },
+    get description() {
+      return translate(
+        'auto.components.settings.TasksPane.8e1305fcc6',
+        'Show Jira in the Tasks source picker and sidebar shortcuts.'
+      )
+    },
     Icon: ({ className }) => <JiraIcon className={className} />
   }
 ]
@@ -73,13 +101,19 @@ export function TasksPane({ settings, updateSettings }: TasksPaneProps): React.J
     <div className="space-y-6">
       <section className="space-y-3">
         <SettingsSubsectionHeader
-          title={translate("auto.components.settings.TasksPane.93e72ef659", "Task Sources")}
-          description={translate("auto.components.settings.TasksPane.71644aba56", "Choose which task providers appear in the Tasks page source picker and sidebar shortcuts. At least one provider must stay visible.")}
+          title={translate('auto.components.settings.TasksPane.93e72ef659', 'Task Sources')}
+          description={translate(
+            'auto.components.settings.TasksPane.71644aba56',
+            'Choose which task providers appear in the Tasks page source picker and sidebar shortcuts. At least one provider must stay visible.'
+          )}
         />
 
         <SearchableSetting
-          title={translate("auto.components.settings.TasksPane.f71d8a9dd3", "Task Providers")}
-          description={translate("auto.components.settings.TasksPane.3a72b9745e", "Choose which task providers appear in the Tasks page and sidebar shortcuts.")}
+          title={translate('auto.components.settings.TasksPane.f71d8a9dd3', 'Task Providers')}
+          description={translate(
+            'auto.components.settings.TasksPane.3a72b9745e',
+            'Choose which task providers appear in the Tasks page and sidebar shortcuts.'
+          )}
           keywords={[
             'tasks',
             'provider',

@@ -21,6 +21,7 @@ import type { FsChangedPayload } from '../../../shared/types'
 import { findWorktreeById } from '@/store/slices/worktree-helpers'
 import type { OpenFile } from '@/store/slices/editor'
 import { readRuntimeFileContent, subscribeRuntimeFileChanges } from '@/runtime/runtime-file-client'
+import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 
 // Why: atomic-write patterns (Claude Code's Edit tool, editors like vim,
 // VSCode) land as a short burst of `update` events — or `delete + create` on
@@ -88,6 +89,7 @@ export type EditorExternalWatchTargetState = Pick<
   | 'settings'
   | 'rightSidebarOpen'
   | 'rightSidebarTab'
+  | 'rightSidebarExplorerView'
 >
 
 let cachedOpenFiles: AppState['openFiles'] | null = null
@@ -97,6 +99,7 @@ let cachedActiveWorktreeId: string | null = null
 let cachedRuntimeEnvironmentId: string | undefined
 let cachedRightSidebarOpen: boolean | null = null
 let cachedRightSidebarTab: AppState['rightSidebarTab'] | null = null
+let cachedRightSidebarExplorerView: AppState['rightSidebarExplorerView'] | null = null
 let cachedWatchedTargetsSnapshot: WatchedTargetsSnapshot = { targets: [], targetsKey: '' }
 
 export function getWatchedTargetKey(target: WatchedTarget): string {
@@ -121,7 +124,8 @@ export function getEditorExternalWatchTargets(
     cachedActiveWorktreeId === state.activeWorktreeId &&
     cachedRuntimeEnvironmentId === runtimeEnvironmentId &&
     cachedRightSidebarOpen === state.rightSidebarOpen &&
-    cachedRightSidebarTab === state.rightSidebarTab
+    cachedRightSidebarTab === state.rightSidebarTab &&
+    cachedRightSidebarExplorerView === state.rightSidebarExplorerView
   ) {
     return cachedWatchedTargetsSnapshot
   }
@@ -141,7 +145,12 @@ export function getEditorExternalWatchTargets(
     // storing the tab, so an ownerless stored tab must stay local here.
     owners.add(openFileRuntimeOwner(f))
   }
-  if (state.activeWorktreeId && state.rightSidebarOpen && state.rightSidebarTab === 'explorer') {
+  if (
+    state.activeWorktreeId &&
+    state.rightSidebarOpen &&
+    state.rightSidebarTab === 'explorer' &&
+    state.rightSidebarExplorerView === 'files'
+  ) {
     // Why: the right sidebar stays mounted while hidden; do not create a
     // worktree-level watcher just because the user clicked a workspace.
     // macOS can surface privacy prompts for those passive filesystem probes.
@@ -150,7 +159,9 @@ export function getEditorExternalWatchTargets(
       owners = new Set()
       targetOwnersByWorktreeId.set(state.activeWorktreeId, owners)
     }
-    owners.add(runtimeEnvironmentId ?? null)
+    // Why: the Explorer is mounted for the selected worktree. Its watcher must
+    // follow that worktree's host owner, not the host currently focused in the UI.
+    owners.add(getRuntimeEnvironmentIdForWorktree(state, state.activeWorktreeId))
   }
 
   const nextTargets: WatchedTarget[] = []
@@ -185,6 +196,7 @@ export function getEditorExternalWatchTargets(
   cachedRuntimeEnvironmentId = runtimeEnvironmentId
   cachedRightSidebarOpen = state.rightSidebarOpen
   cachedRightSidebarTab = state.rightSidebarTab
+  cachedRightSidebarExplorerView = state.rightSidebarExplorerView
 
   if (targetsKey === cachedWatchedTargetsSnapshot.targetsKey) {
     return cachedWatchedTargetsSnapshot

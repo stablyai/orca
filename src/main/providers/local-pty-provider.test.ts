@@ -345,10 +345,11 @@ describe('LocalPtyProvider', () => {
         '-d',
         'Debian',
         '--',
-        'bash',
+        'sh',
         '-c',
-        'cd \'/mnt/c/Users/jin/repo\' && export PATH="$HOME/.local/bin:$PATH" && exec bash -l'
+        expect.stringContaining("cd '/mnt/c/Users/jin/repo'")
       ])
+      expect(spawnCall[1][5]).toContain('exec "\\$_orca_wsl_shell" -l')
     })
 
     it('marks Orca terminal handle for WSL import when buildSpawnEnv opts in', async () => {
@@ -517,14 +518,7 @@ describe('LocalPtyProvider', () => {
 
       expect(spawnMock).toHaveBeenCalledWith(
         'wsl.exe',
-        [
-          '-d',
-          'Ubuntu',
-          '--',
-          'bash',
-          '-c',
-          'cd \'/home/jin/repo/subdir\' && export PATH="$HOME/.local/bin:$PATH" && exec bash -l'
-        ],
+        ['-d', 'Ubuntu', '--', 'sh', '-c', expect.stringContaining("cd '/home/jin/repo/subdir'")],
         expect.objectContaining({ cwd: expect.any(String) })
       )
     })

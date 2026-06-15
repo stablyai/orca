@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { SelectedTextCopyMenu } from '@/components/SelectedTextCopyMenu'
 import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
+import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import {
   canStopWorkspacePort,
   goToWorkspacePortOwner,
@@ -41,7 +42,11 @@ export function WorktreeCardPortsTrigger({
     <button
       type="button"
       className="inline-flex size-3.5 shrink-0 items-center justify-center rounded text-muted-foreground/70 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-worktree-sidebar-ring"
-      aria-label={translate("auto.components.sidebar.WorktreeCardPorts.fed49903c9", "{{value0}} live {{value1}}", { value0: ports.length, value1: ports.length === 1 ? 'port' : 'ports' })}
+      aria-label={translate(
+        'auto.components.sidebar.WorktreeCardPorts.fed49903c9',
+        '{{value0}} live {{value1}}',
+        { value0: ports.length, value1: ports.length === 1 ? 'port' : 'ports' }
+      )}
       onClick={(event) => {
         event.stopPropagation()
         recordFeatureInteraction('ports')
@@ -94,12 +99,19 @@ function PortAction({
 
 function WorktreePortRow({ port }: { port: WorkspacePort }): React.JSX.Element {
   const settings = useAppStore((s) => s.settings)
+  const runtimeEnvironmentId = useAppStore((s) =>
+    getRuntimeEnvironmentIdForWorktree(s, port.kind === 'workspace' ? port.owner.worktreeId : null)
+  )
   const createBrowserTab = useAppStore((s) => s.createBrowserTab)
   const setRemoteBrowserPageHandle = useAppStore((s) => s.setRemoteBrowserPageHandle)
   const setWorkspacePortScan = useAppStore((s) => s.setWorkspacePortScan)
+  const setWorkspacePortScanForKey = useAppStore((s) => s.setWorkspacePortScanForKey)
   const setWorkspacePortScanRefreshing = useAppStore((s) => s.setWorkspacePortScanRefreshing)
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
-  const runtimeTarget = useMemo(() => getActiveRuntimeTarget(settings), [settings])
+  const runtimeTarget = useMemo(
+    () => getActiveRuntimeTarget({ ...settings, activeRuntimeEnvironmentId: runtimeEnvironmentId }),
+    [runtimeEnvironmentId, settings]
+  )
   const processLabel = port.processName ?? (port.pid ? `PID ${port.pid}` : 'Unknown process')
   const address = addressForPort(port)
   const canStop = canStopWorkspacePort(port)
@@ -116,7 +128,13 @@ function WorktreePortRow({ port }: { port: WorkspacePort }): React.JSX.Element {
         openInOrcaBrowser: shouldOpenWorkspacePortInOrcaBrowser(settings)
       }).then((result) => {
         if (!result.ok) {
-          toast.error(translate("auto.components.sidebar.WorktreeCardPorts.d1113f4660", "Failed to open browser"), { description: result.reason })
+          toast.error(
+            translate(
+              'auto.components.sidebar.WorktreeCardPorts.d1113f4660',
+              'Failed to open browser'
+            ),
+            { description: result.reason }
+          )
         }
       })
     },
@@ -136,7 +154,11 @@ function WorktreePortRow({ port }: { port: WorkspacePort }): React.JSX.Element {
       recordFeatureInteraction('ports')
       const address = addressForPort(port)
       void window.api.ui.writeClipboardText(address)
-      toast.success(translate("auto.components.sidebar.WorktreeCardPorts.c89f290e25", "Copied {{value0}}", { value0: address }))
+      toast.success(
+        translate('auto.components.sidebar.WorktreeCardPorts.c89f290e25', 'Copied {{value0}}', {
+          value0: address
+        })
+      )
     },
     [port, recordFeatureInteraction]
   )
@@ -158,16 +180,30 @@ function WorktreePortRow({ port }: { port: WorkspacePort }): React.JSX.Element {
           toast.error(result.reason)
           return
         }
-        toast.success(translate("auto.components.sidebar.WorktreeCardPorts.5d1a5d51bb", "Stopped process on {{value0}}", { value0: port.port }))
+        toast.success(
+          translate(
+            'auto.components.sidebar.WorktreeCardPorts.5d1a5d51bb',
+            'Stopped process on {{value0}}',
+            { value0: port.port }
+          )
+        )
         const refreshResult = await refreshWorkspacePortScanAfterStop({
           runtimeTarget,
           setWorkspacePortScan,
+          setWorkspacePortScanForKey,
+          getWorkspacePortScansByKey: () => useAppStore.getState().workspacePortScansByKey,
           setWorkspacePortScanRefreshing
         })
         if (!refreshResult.ok) {
-          toast.error(translate("auto.components.sidebar.WorktreeCardPorts.9950fe2d20", "Failed to refresh ports"), {
-            description: refreshResult.reason
-          })
+          toast.error(
+            translate(
+              'auto.components.sidebar.WorktreeCardPorts.9950fe2d20',
+              'Failed to refresh ports'
+            ),
+            {
+              description: refreshResult.reason
+            }
+          )
         }
       }
       void run()
@@ -177,6 +213,7 @@ function WorktreePortRow({ port }: { port: WorkspacePort }): React.JSX.Element {
       recordFeatureInteraction,
       runtimeTarget,
       setWorkspacePortScan,
+      setWorkspacePortScanForKey,
       setWorkspacePortScanRefreshing
     ]
   )
@@ -206,13 +243,33 @@ function WorktreePortRow({ port }: { port: WorkspacePort }): React.JSX.Element {
           </TooltipContent>
         </Tooltip>
         <div className="absolute inset-y-0 right-0 flex items-center gap-0.5 rounded-md border border-border/40 bg-popover/95 px-0.5 opacity-0 shadow-xs transition-opacity group-hover/port:opacity-100 group-focus-within/port:opacity-100">
-          <PortAction label={translate("auto.components.sidebar.WorktreeCardPorts.33bc7d7495", "Open in Browser")} onClick={handleOpen}>
+          <PortAction
+            label={translate(
+              'auto.components.sidebar.WorktreeCardPorts.33bc7d7495',
+              'Open in Browser'
+            )}
+            onClick={handleOpen}
+          >
             <ExternalLink className="size-3" />
           </PortAction>
-          <PortAction label={translate("auto.components.sidebar.WorktreeCardPorts.c8067a829a", "Copy {{value0}}", { value0: address })} onClick={handleCopy}>
+          <PortAction
+            label={translate(
+              'auto.components.sidebar.WorktreeCardPorts.c8067a829a',
+              'Copy {{value0}}',
+              { value0: address }
+            )}
+            onClick={handleCopy}
+          >
             <Copy className="size-3" />
           </PortAction>
-          <PortAction label={translate("auto.components.sidebar.WorktreeCardPorts.2f854442ff", "Stop Process")} disabled={!canStop} onClick={handleStop}>
+          <PortAction
+            label={translate(
+              'auto.components.sidebar.WorktreeCardPorts.2f854442ff',
+              'Stop Process'
+            )}
+            disabled={!canStop}
+            onClick={handleStop}
+          >
             <Trash2 className="size-3" />
           </PortAction>
         </div>
@@ -231,7 +288,9 @@ export function WorktreeCardPortsDetails({
       recordFeatureInteraction('ports')
       const ownerPort = ports[0]
       if (!ownerPort || !goToWorkspacePortOwner(ownerPort)) {
-        toast.error(translate("auto.components.sidebar.WorktreeCardPorts.3e5f66564e", "Workspace unavailable"))
+        toast.error(
+          translate('auto.components.sidebar.WorktreeCardPorts.3e5f66564e', 'Workspace unavailable')
+        )
       }
     },
     [ports, recordFeatureInteraction]
@@ -245,9 +304,17 @@ export function WorktreeCardPortsDetails({
     <WorktreeCardDetailSection>
       <div className="flex items-center gap-1.5 px-1 text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
         <Plug className="size-3" />
-        <span>{translate("auto.components.sidebar.WorktreeCardPorts.3240f320d7", "Live Ports")}</span>
+        <span>
+          {translate('auto.components.sidebar.WorktreeCardPorts.3240f320d7', 'Live Ports')}
+        </span>
         <div className="ml-auto flex items-center gap-1">
-          <PortAction label={translate("auto.components.sidebar.WorktreeCardPorts.34f733dda2", "Go to Worktree")} onClick={handleGoToWorktree}>
+          <PortAction
+            label={translate(
+              'auto.components.sidebar.WorktreeCardPorts.34f733dda2',
+              'Go to Worktree'
+            )}
+            onClick={handleGoToWorktree}
+          >
             <FolderOpen className="size-3" />
           </PortAction>
           <span className="font-normal tabular-nums text-muted-foreground/70">{ports.length}</span>

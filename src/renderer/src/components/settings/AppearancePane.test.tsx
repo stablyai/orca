@@ -100,6 +100,24 @@ function createGhosttyStub() {
   }
 }
 
+function createWarpThemesStub() {
+  return {
+    open: false,
+    preview: null,
+    loading: false,
+    desktopOnly: false,
+    applyError: null,
+    importSignal: 0,
+    selectedThemeIds: new Set<string>(),
+    handleClick: vi.fn(),
+    handlePreviewSource: vi.fn(),
+    handleToggleTheme: vi.fn(),
+    handleToggleAll: vi.fn(),
+    handleApply: vi.fn(),
+    handleOpenChange: vi.fn()
+  }
+}
+
 async function renderAppearancePane(
   settings: GlobalSettings,
   updateSettings: (updates: Partial<GlobalSettings>) => void = vi.fn()
@@ -120,6 +138,7 @@ async function renderAppearancePane(
           terminalFontSuggestions={[]}
           systemPrefersDark={false}
           ghostty={createGhosttyStub() as never}
+          warpThemes={createWarpThemesStub() as never}
         />
       </I18nextProvider>
     )
@@ -173,6 +192,27 @@ describe('AppearancePane', () => {
     })
 
     expect(updateSettings).toHaveBeenCalledWith({ uiLanguage: 'zh' })
+  })
+
+  it('updates the left sidebar appearance from sidebar settings', async () => {
+    mocks.state.settingsSearchQuery = 'left sidebar'
+    const updateSettings = vi.fn()
+    const settings = getDefaultSettings('/tmp')
+
+    const container = await renderAppearancePane(settings, updateSettings)
+    const matchTerminalButton = Array.from(
+      container.querySelectorAll<HTMLButtonElement>('button[role="radio"]')
+    ).find((button) => button.textContent === 'Match Terminal')
+
+    expect(matchTerminalButton).toBeDefined()
+
+    await act(async () => {
+      matchTerminalButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    expect(updateSettings).toHaveBeenCalledWith({
+      leftSidebarAppearanceMode: 'match-terminal'
+    })
   })
 
   it('restores the Automations sidebar button from the sidebar settings switch', async () => {

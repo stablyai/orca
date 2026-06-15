@@ -2,11 +2,26 @@
 import { HeadlessEmulator } from './headless-emulator'
 import { isValidPtySize, normalizePtySize } from './daemon-pty-size'
 import { PostReadyFlushGate } from './post-ready-flush-gate'
-import type { SessionState, ShellReadyState, TerminalSnapshot } from './types'
+import type {
+  PendingOutputRecord,
+  SessionState,
+  ShellReadyState,
+  TakePendingOutputResult,
+  TerminalSnapshot
+} from './types'
 
 const SHELL_READY_TIMEOUT_MS = 15_000
 const KILL_TIMEOUT_MS = 5_000
 const SHELL_READY_MARKER = '\x1b]777;orca-shell-ready\x07'
+// Why: pending records exist so the 5s checkpoint can persist increments
+// instead of re-serializing the whole buffer. If no client drains them (main
+// process gone, history disabled), memory must stay bounded — past the cap we
+// drop the records and flag overflow so the next take falls back to one full
+// snapshot, which subsumes everything dropped.
+// Counted in UTF-16 code units (string .length), which tracks JS heap cost.
+// Worst-case wire size for a full take is ~6x this (each control char
+// JSON-escapes to six bytes) and must stay under NDJSON_MAX_LINE_BYTES (16MB).
+const PENDING_OUTPUT_MAX_BYTES = 2 * 1024 * 1024
 
 export type SubprocessHandle = {
   pid: number
@@ -56,6 +71,10 @@ export class Session {
   private shellReadyTimer: ReturnType<typeof setTimeout> | null = null
   private killTimer: ReturnType<typeof setTimeout> | null = null
   private postReadyFlushGate: PostReadyFlushGate
+  private pendingOutputRecords: PendingOutputRecord[] = []
+  private pendingOutputBytes = 0
+  private pendingOutputOverflowed = false
+  private pendingOutputSeq = 0
 
   constructor(opts: SessionOptions) {
     this.sessionId = opts.sessionId
@@ -134,6 +153,9 @@ export class Session {
       return
     }
     this.emulator.resize(cols, rows)
+    // Why: the record stream must mirror the order operations were applied to
+    // the emulator, or cold-restore replay reflows at the wrong point.
+    this.recordPendingOutput({ kind: 'resize', cols, rows })
     this.subprocess.resize(cols, rows)
   }
 
@@ -183,6 +205,28 @@ export class Session {
     return this.emulator.getSnapshot()
   }
 
+  /** Drains the records accumulated since the last take. Runs synchronously —
+   *  when includeSnapshot is set, the serialize happens in the same turn so no
+   *  PTY data can land between the drain and the snapshot (which would later
+   *  be replayed twice on cold restore). */
+  takePendingOutput(includeSnapshot: boolean): TakePendingOutputResult | null {
+    if (this._disposed) {
+      return null
+    }
+    const records = this.pendingOutputRecords
+    const overflowed = this.pendingOutputOverflowed
+    this.pendingOutputRecords = []
+    this.pendingOutputBytes = 0
+    this.pendingOutputOverflowed = false
+    this.pendingOutputSeq += 1
+    return {
+      records: includeSnapshot ? [] : records,
+      seq: this.pendingOutputSeq,
+      overflowed,
+      snapshot: includeSnapshot ? this.emulator.getSnapshot() : null
+    }
+  }
+
   getCwd(): string | null {
     return this.emulator.getCwd()
   }
@@ -196,6 +240,7 @@ export class Session {
       return
     }
     this.emulator.clearScrollback()
+    this.recordPendingOutput({ kind: 'clear' })
   }
 
   dispose(): void {
@@ -301,6 +346,29 @@ export class Session {
     }
   }
 
+  private recordPendingOutput(record: PendingOutputRecord): void {
+    if (this.pendingOutputOverflowed) {
+      return
+    }
+    const bytes = record.kind === 'output' ? record.data.length : 8
+    if (this.pendingOutputBytes + bytes > PENDING_OUTPUT_MAX_BYTES) {
+      this.pendingOutputRecords = []
+      this.pendingOutputBytes = 0
+      this.pendingOutputOverflowed = true
+      return
+    }
+    // Why: TUIs emit thousands of tiny chunks between checkpoint ticks;
+    // coalescing adjacent output keeps the take RPC and log frames compact.
+    // The 64KB segment cap bounds per-chunk string-append cost.
+    const last = this.pendingOutputRecords.at(-1)
+    if (record.kind === 'output' && last?.kind === 'output' && last.data.length < 64 * 1024) {
+      last.data += record.data
+    } else {
+      this.pendingOutputRecords.push(record)
+    }
+    this.pendingOutputBytes += bytes
+  }
+
   private handleSubprocessData(data: string): void {
     if (this._disposed) {
       return
@@ -308,6 +376,7 @@ export class Session {
 
     // Feed data to headless emulator for state tracking
     this.emulator.write(data)
+    this.recordPendingOutput({ kind: 'output', data })
 
     if (this._shellState === 'pending') {
       this.scanForShellMarker(data)

@@ -125,37 +125,58 @@ export function runWorktreeDeleteWithToast(
         description: toastCopy.description,
         duration: 10000,
         cancel: {
-          label: translate("auto.components.sidebar.delete.worktree.flow.7488ed8711", "View"),
+          label: translate('auto.components.sidebar.delete.worktree.flow.7488ed8711', 'View'),
           onClick: () => viewWorktreeDiff(worktreeId)
         },
         action: canForceDelete
           ? {
-              label: translate("auto.components.sidebar.delete.worktree.flow.2b20ce87b3", "Force Delete"),
+              label: translate(
+                'auto.components.sidebar.delete.worktree.flow.2b20ce87b3',
+                'Force Delete'
+              ),
               onClick: () => {
                 useAppStore
                   .getState()
                   .removeWorktree(worktreeId, true)
                   .then((forceResult) => {
                     if (!forceResult.ok) {
-                      toast.error(translate("auto.components.sidebar.delete.worktree.flow.4f3876c0f5", "Force delete failed"), {
-                        description: forceResult.error,
-                        action: {
-                          label: translate("auto.components.sidebar.delete.worktree.flow.7488ed8711", "View"),
-                          onClick: () => viewWorktreeDiff(worktreeId)
+                      toast.error(
+                        translate(
+                          'auto.components.sidebar.delete.worktree.flow.4f3876c0f5',
+                          'Force delete failed'
+                        ),
+                        {
+                          description: forceResult.error,
+                          action: {
+                            label: translate(
+                              'auto.components.sidebar.delete.worktree.flow.7488ed8711',
+                              'View'
+                            ),
+                            onClick: () => viewWorktreeDiff(worktreeId)
+                          }
                         }
-                      })
+                      )
                       return
                     }
                     options.onForceDeleted?.(worktreeId)
                   })
                   .catch((err: unknown) => {
-                    toast.error(translate("auto.components.sidebar.delete.worktree.flow.ae57cbf6e4", "Failed to delete workspace"), {
-                      description: err instanceof Error ? err.message : String(err),
-                      action: {
-                        label: translate("auto.components.sidebar.delete.worktree.flow.7488ed8711", "View"),
-                        onClick: () => viewWorktreeDiff(worktreeId)
+                    toast.error(
+                      translate(
+                        'auto.components.sidebar.delete.worktree.flow.ae57cbf6e4',
+                        'Failed to delete workspace'
+                      ),
+                      {
+                        description: err instanceof Error ? err.message : String(err),
+                        action: {
+                          label: translate(
+                            'auto.components.sidebar.delete.worktree.flow.7488ed8711',
+                            'View'
+                          ),
+                          onClick: () => viewWorktreeDiff(worktreeId)
+                        }
                       }
-                    })
+                    )
                   })
               }
             }
@@ -164,9 +185,15 @@ export function runWorktreeDeleteWithToast(
       return false
     })
     .catch((err: unknown) => {
-      toast.error(translate("auto.components.sidebar.delete.worktree.flow.ae57cbf6e4", "Failed to delete workspace"), {
-        description: err instanceof Error ? err.message : String(err)
-      })
+      toast.error(
+        translate(
+          'auto.components.sidebar.delete.worktree.flow.ae57cbf6e4',
+          'Failed to delete workspace'
+        ),
+        {
+          description: err instanceof Error ? err.message : String(err)
+        }
+      )
       return false
     })
 }
@@ -227,9 +254,18 @@ export function runWorktreeBatchDelete(
     .filter((worktree): worktree is Worktree => worktree != null && !worktree.isMainWorktree)
 
   if (targets.length === 0) {
-    toast.info(translate("auto.components.sidebar.delete.worktree.flow.7243145cd6", "No deletable workspaces selected"), {
-      description: translate("auto.components.sidebar.delete.worktree.flow.b81b4e40ca", "Refresh Space and try again if the workspace list looks stale.")
-    })
+    toast.info(
+      translate(
+        'auto.components.sidebar.delete.worktree.flow.7243145cd6',
+        'No deletable workspaces selected'
+      ),
+      {
+        description: translate(
+          'auto.components.sidebar.delete.worktree.flow.b81b4e40ca',
+          'Refresh Space and try again if the workspace list looks stale.'
+        )
+      }
+    )
     return false
   }
 

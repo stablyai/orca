@@ -42,12 +42,14 @@ import type {
   JiraTransition,
   JiraUser
 } from '../../../shared/types'
+import type { TaskSourceContext } from '../../../shared/task-source-context'
 import { translate } from '@/i18n/i18n'
 
 type JiraIssueWorkspaceProps = {
   issue: JiraIssue | null
   onUse: (issue: JiraIssue) => void
   onClose: () => void
+  sourceContext?: TaskSourceContext | null
 }
 
 const relativeFormatter = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' })
@@ -94,18 +96,28 @@ function jiraStatusClass(categoryKey: string): string {
 async function copyTextToClipboard(text: string, label: string): Promise<void> {
   try {
     await window.api.ui.writeClipboardText(text)
-    toast.success(translate("auto.components.JiraIssueWorkspace.2ff69a3545", "{{value0}} copied", { value0: label }))
+    toast.success(
+      translate('auto.components.JiraIssueWorkspace.2ff69a3545', '{{value0}} copied', {
+        value0: label
+      })
+    )
   } catch {
-    toast.error(translate("auto.components.JiraIssueWorkspace.6c41a9bcea", "Failed to copy {{value0}}", { value0: label.toLowerCase() }))
+    toast.error(
+      translate('auto.components.JiraIssueWorkspace.6c41a9bcea', 'Failed to copy {{value0}}', {
+        value0: label.toLowerCase()
+      })
+    )
   }
 }
 
 export default function JiraIssueWorkspace({
   issue,
   onUse,
-  onClose
+  onClose,
+  sourceContext
 }: JiraIssueWorkspaceProps): React.JSX.Element {
   const settings = useAppStore((s) => s.settings)
+  const providerSettings = sourceContext ?? settings
   const patchJiraIssue = useAppStore((s) => s.patchJiraIssue)
   const [fullIssue, setFullIssue] = useState<JiraIssue | null>(null)
   const [issueLoading, setIssueLoading] = useState(false)
@@ -131,7 +143,7 @@ export default function JiraIssueWorkspace({
       setCommentsLoading(true)
       setCommentsError(null)
       try {
-        let fetched = await jiraIssueComments(settings, targetIssue.key, targetIssue.siteId)
+        let fetched = await jiraIssueComments(providerSettings, targetIssue.key, targetIssue.siteId)
         if (requestId !== requestIdRef.current) {
           return
         }
@@ -151,7 +163,7 @@ export default function JiraIssueWorkspace({
         }
       }
     },
-    [settings]
+    [providerSettings]
   )
 
   useEffect(() => {
@@ -178,7 +190,7 @@ export default function JiraIssueWorkspace({
     setCommentsError(null)
     setIssueLoading(true)
 
-    void jiraGetIssue(settings, issue.key, issue.siteId)
+    void jiraGetIssue(providerSettings, issue.key, issue.siteId)
       .then((result) => {
         if (requestId !== requestIdRef.current) {
           return
@@ -197,9 +209,9 @@ export default function JiraIssueWorkspace({
       })
 
     void Promise.all([
-      jiraListTransitions(settings, issue.key, issue.siteId),
-      jiraListPriorities(settings, issue.siteId),
-      jiraListAssignableUsers(settings, issue.key, undefined, issue.siteId)
+      jiraListTransitions(providerSettings, issue.key, issue.siteId),
+      jiraListPriorities(providerSettings, issue.siteId),
+      jiraListAssignableUsers(providerSettings, issue.key, undefined, issue.siteId)
     ])
       .then(([nextTransitions, nextPriorities, nextUsers]) => {
         if (requestId !== requestIdRef.current) {
@@ -212,22 +224,22 @@ export default function JiraIssueWorkspace({
       .catch(() => {})
 
     void loadComments(issue, requestId)
-  }, [issue, loadComments, settings])
+  }, [issue, loadComments, providerSettings])
 
   const refreshIssue = useCallback(async (): Promise<void> => {
     if (!displayed) {
       return
     }
     try {
-      const latest = await jiraGetIssue(settings, displayed.key, displayed.siteId)
+      const latest = await jiraGetIssue(providerSettings, displayed.key, displayed.siteId)
       if (latest) {
         setFullIssue(latest)
-        patchJiraIssue(latest.key, latest)
+        patchJiraIssue(latest.key, latest, { sourceContext })
       }
     } catch {
       // Keep the visible issue snapshot if refresh fails.
     }
-  }, [displayed, patchJiraIssue, settings])
+  }, [displayed, patchJiraIssue, providerSettings, sourceContext])
 
   const mutateIssue = useCallback(
     async (
@@ -243,22 +255,29 @@ export default function JiraIssueWorkspace({
       try {
         if (optimistic) {
           setFullIssue({ ...displayed, ...optimistic })
-          patchJiraIssue(displayed.key, optimistic)
+          patchJiraIssue(displayed.key, optimistic, { sourceContext })
         }
-        const result = await jiraUpdateIssue(settings, displayed.key, updates, siteId)
+        const result = await jiraUpdateIssue(providerSettings, displayed.key, updates, siteId)
         if (!result.ok) {
           throw new Error(result.error)
         }
         await refreshIssue()
       } catch (error) {
         setFullIssue(previous)
-        patchJiraIssue(previous.key, previous)
-        toast.error(error instanceof Error ? error.message : translate("auto.components.JiraIssueWorkspace.ea21952aa3", "Failed to update Jira issue."))
+        patchJiraIssue(previous.key, previous, { sourceContext })
+        toast.error(
+          error instanceof Error
+            ? error.message
+            : translate(
+                'auto.components.JiraIssueWorkspace.ea21952aa3',
+                'Failed to update Jira issue.'
+              )
+        )
       } finally {
         setPendingField(null)
       }
     },
-    [displayed, patchJiraIssue, pendingField, refreshIssue, settings, siteId]
+    [displayed, patchJiraIssue, pendingField, refreshIssue, providerSettings, siteId, sourceContext]
   )
 
   const handleSaveTitle = useCallback(() => {
@@ -294,7 +313,12 @@ export default function JiraIssueWorkspace({
     }
     setCommentSubmitting(true)
     try {
-      const result = await jiraAddIssueComment(settings, displayed.key, body, displayed.siteId)
+      const result = await jiraAddIssueComment(
+        providerSettings,
+        displayed.key,
+        body,
+        displayed.siteId
+      )
       if (!result.ok) {
         throw new Error(result.error)
       }
@@ -308,11 +332,15 @@ export default function JiraIssueWorkspace({
       setComments((prev) => [...prev, comment])
       setCommentDraft('')
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : translate("auto.components.JiraIssueWorkspace.fa132c8aed", "Failed to add comment."))
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : translate('auto.components.JiraIssueWorkspace.fa132c8aed', 'Failed to add comment.')
+      )
     } finally {
       setCommentSubmitting(false)
     }
-  }, [commentDraft, commentSubmitting, displayed, settings])
+  }, [commentDraft, commentSubmitting, displayed, providerSettings])
 
   const actionItems = useMemo(() => {
     if (!displayed) {
@@ -320,27 +348,30 @@ export default function JiraIssueWorkspace({
     }
     return [
       {
-        label: translate("auto.components.JiraIssueWorkspace.69da9a208c", "Open in Jira"),
+        label: translate('auto.components.JiraIssueWorkspace.69da9a208c', 'Open in Jira'),
         icon: ExternalLink,
         action: () => window.api.shell.openUrl(displayed.url)
       },
       {
-        label: translate("auto.components.JiraIssueWorkspace.779bb91ee0", "Copy URL"),
+        label: translate('auto.components.JiraIssueWorkspace.779bb91ee0', 'Copy URL'),
         icon: Clipboard,
         action: () => void copyTextToClipboard(displayed.url, 'URL')
       },
       {
-        label: translate("auto.components.JiraIssueWorkspace.38839801e8", "Copy key"),
+        label: translate('auto.components.JiraIssueWorkspace.38839801e8', 'Copy key'),
         icon: Clipboard,
         action: () => void copyTextToClipboard(displayed.key, 'Key')
       },
       {
-        label: translate("auto.components.JiraIssueWorkspace.80efa101c5", "Copy suggested branch name"),
+        label: translate(
+          'auto.components.JiraIssueWorkspace.80efa101c5',
+          'Copy suggested branch name'
+        ),
         icon: GitBranch,
         action: () => void copyTextToClipboard(buildJiraBranchName(displayed), 'Branch name')
       },
       {
-        label: translate("auto.components.JiraIssueWorkspace.0cc62bd690", "Copy prompt"),
+        label: translate('auto.components.JiraIssueWorkspace.0cc62bd690', 'Copy prompt'),
         icon: Clipboard,
         action: () => void copyTextToClipboard(buildJiraPrompt(displayed), 'Prompt')
       }
@@ -356,11 +387,18 @@ export default function JiraIssueWorkspace({
         onOpenAutoFocus={(event) => event.preventDefault()}
       >
         <VisuallyHidden.Root asChild>
-          <SheetTitle>{displayed?.title ?? translate("auto.components.JiraIssueWorkspace.ef21405c6d", "Jira issue")}</SheetTitle>
+          <SheetTitle>
+            {displayed?.title ??
+              translate('auto.components.JiraIssueWorkspace.ef21405c6d', 'Jira issue')}
+          </SheetTitle>
         </VisuallyHidden.Root>
         <VisuallyHidden.Root asChild>
           <SheetDescription>
-            {translate("auto.components.JiraIssueWorkspace.857bd2f88f", "Preview, edit, and start work from the selected issue.")}</SheetDescription>
+            {translate(
+              'auto.components.JiraIssueWorkspace.857bd2f88f',
+              'Preview, edit, and start work from the selected issue.'
+            )}
+          </SheetDescription>
         </VisuallyHidden.Root>
 
         {displayed ? (
@@ -384,7 +422,8 @@ export default function JiraIssueWorkspace({
                   className="hidden shrink-0 gap-2 sm:inline-flex"
                   size="sm"
                 >
-                  {translate("auto.components.JiraIssueWorkspace.2441be6f9f", "Start workspace")}<ArrowRight className="size-4" />
+                  {translate('auto.components.JiraIssueWorkspace.2441be6f9f', 'Start workspace')}
+                  <ArrowRight className="size-4" />
                 </Button>
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -393,13 +432,17 @@ export default function JiraIssueWorkspace({
                       size="icon-sm"
                       className="shrink-0"
                       onClick={onClose}
-                      aria-label={translate("auto.components.JiraIssueWorkspace.76513c7898", "Close Jira issue preview")}
+                      aria-label={translate(
+                        'auto.components.JiraIssueWorkspace.76513c7898',
+                        'Close Jira issue preview'
+                      )}
                     >
                       <X className="size-4" />
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent side="bottom" sideOffset={6}>
-                    {translate("auto.components.JiraIssueWorkspace.7a96985ca0", "Close")}</TooltipContent>
+                    {translate('auto.components.JiraIssueWorkspace.7a96985ca0', 'Close')}
+                  </TooltipContent>
                 </Tooltip>
               </div>
             </div>
@@ -416,7 +459,7 @@ export default function JiraIssueWorkspace({
                     )}
                   >
                     {displayed.status.name}
-                    {pendingField === "transition" ? (
+                    {pendingField === 'transition' ? (
                       <LoaderCircle className="size-3 animate-spin" />
                     ) : null}
                   </button>
@@ -451,8 +494,9 @@ export default function JiraIssueWorkspace({
                     disabled={pendingField === 'priority'}
                     className="rounded-md px-1.5 py-0.5 text-[11px] text-muted-foreground transition hover:bg-muted/40 disabled:opacity-50"
                   >
-                    {displayed.priority?.name ?? translate("auto.components.JiraIssueWorkspace.51bed73f88", "No priority")}
-                    {pendingField === "priority" ? (
+                    {displayed.priority?.name ??
+                      translate('auto.components.JiraIssueWorkspace.51bed73f88', 'No priority')}
+                    {pendingField === 'priority' ? (
                       <LoaderCircle className="ml-1 inline size-3 animate-spin" />
                     ) : null}
                   </button>
@@ -468,7 +512,8 @@ export default function JiraIssueWorkspace({
                     }
                     className="flex w-full items-center rounded-sm px-2 py-1.5 text-left text-[12px] hover:bg-accent"
                   >
-                    {translate("auto.components.JiraIssueWorkspace.51bed73f88", "No priority")}</button>
+                    {translate('auto.components.JiraIssueWorkspace.51bed73f88', 'No priority')}
+                  </button>
                   {priorities.map((priority) => (
                     <button
                       key={priority.id}
@@ -491,8 +536,9 @@ export default function JiraIssueWorkspace({
                     disabled={pendingField === 'assignee'}
                     className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] text-muted-foreground transition hover:bg-muted/40 disabled:opacity-50"
                   >
-                    {displayed.assignee?.displayName ?? translate("auto.components.JiraIssueWorkspace.54649eaeab", "+ Assignee")}
-                    {pendingField === "assignee" ? (
+                    {displayed.assignee?.displayName ??
+                      translate('auto.components.JiraIssueWorkspace.54649eaeab', '+ Assignee')}
+                    {pendingField === 'assignee' ? (
                       <LoaderCircle className="size-3 animate-spin" />
                     ) : null}
                   </button>
@@ -512,7 +558,8 @@ export default function JiraIssueWorkspace({
                     }
                     className="flex w-full items-center rounded-sm px-2 py-1.5 text-left text-[12px] hover:bg-accent"
                   >
-                    {translate("auto.components.JiraIssueWorkspace.0b6b5646ed", "Unassigned")}</button>
+                    {translate('auto.components.JiraIssueWorkspace.0b6b5646ed', 'Unassigned')}
+                  </button>
                   {users.map((user) => (
                     <button
                       key={user.accountId}
@@ -540,7 +587,9 @@ export default function JiraIssueWorkspace({
               <div className="min-h-0 overflow-y-auto scrollbar-sleek">
                 <section className="border-b border-border/40 px-4 py-4">
                   <div className="grid gap-2">
-                    <label className="text-[11px] font-medium text-muted-foreground">{translate("auto.components.JiraIssueWorkspace.444865b4a8", "Title")}</label>
+                    <label className="text-[11px] font-medium text-muted-foreground">
+                      {translate('auto.components.JiraIssueWorkspace.444865b4a8', 'Title')}
+                    </label>
                     <div className="flex gap-2">
                       <Input
                         value={titleDraft}
@@ -559,7 +608,7 @@ export default function JiraIssueWorkspace({
                         onClick={handleSaveTitle}
                         disabled={pendingField === 'title'}
                       >
-                        {pendingField === "title" ? (
+                        {pendingField === 'title' ? (
                           <LoaderCircle className="size-4 animate-spin" />
                         ) : (
                           <Save className="size-4" />
@@ -567,12 +616,16 @@ export default function JiraIssueWorkspace({
                       </Button>
                     </div>
                     <label className="mt-2 text-[11px] font-medium text-muted-foreground">
-                      {translate("auto.components.JiraIssueWorkspace.aee97b6913", "Labels")}</label>
+                      {translate('auto.components.JiraIssueWorkspace.aee97b6913', 'Labels')}
+                    </label>
                     <div className="flex gap-2">
                       <Input
                         value={labelsDraft}
                         onChange={(event) => setLabelsDraft(event.target.value)}
-                        placeholder={translate("auto.components.JiraIssueWorkspace.0f3c07a901", "backend, bug")}
+                        placeholder={translate(
+                          'auto.components.JiraIssueWorkspace.0f3c07a901',
+                          'backend, bug'
+                        )}
                         className="h-8 text-xs"
                       />
                       <Button
@@ -581,7 +634,7 @@ export default function JiraIssueWorkspace({
                         onClick={handleSaveLabels}
                         disabled={pendingField === 'labels'}
                       >
-                        {pendingField === "labels" ? (
+                        {pendingField === 'labels' ? (
                           <LoaderCircle className="size-4 animate-spin" />
                         ) : (
                           <Save className="size-4" />
@@ -598,7 +651,9 @@ export default function JiraIssueWorkspace({
                       {displayed.issueType.name}
                     </span>
                     <span className="text-xs text-muted-foreground">
-                      {displayed.project.key} · {displayed.assignee?.displayName ?? translate("auto.components.JiraIssueWorkspace.0b6b5646ed", "Unassigned")}
+                      {displayed.project.key} ·{' '}
+                      {displayed.assignee?.displayName ??
+                        translate('auto.components.JiraIssueWorkspace.0b6b5646ed', 'Unassigned')}
                     </span>
                   </div>
                   {displayed.description?.trim() ? (
@@ -607,14 +662,21 @@ export default function JiraIssueWorkspace({
                       className="text-[14px] leading-relaxed"
                     />
                   ) : (
-                    <p className="text-sm italic text-muted-foreground">{translate("auto.components.JiraIssueWorkspace.c4889a47e4", "No description provided.")}</p>
+                    <p className="text-sm italic text-muted-foreground">
+                      {translate(
+                        'auto.components.JiraIssueWorkspace.c4889a47e4',
+                        'No description provided.'
+                      )}
+                    </p>
                   )}
                 </section>
 
                 <section className="px-4 py-4">
                   <div className="mb-3 flex items-center justify-between gap-3">
                     <div className="flex items-center gap-2">
-                      <span className="text-[13px] font-medium text-foreground">{translate("auto.components.JiraIssueWorkspace.9a980b06b9", "Comments")}</span>
+                      <span className="text-[13px] font-medium text-foreground">
+                        {translate('auto.components.JiraIssueWorkspace.9a980b06b9', 'Comments')}
+                      </span>
                       {comments.length > 0 ? (
                         <span className="text-[12px] text-muted-foreground">{comments.length}</span>
                       ) : null}
@@ -632,7 +694,8 @@ export default function JiraIssueWorkspace({
                         ) : (
                           <RefreshCw className="size-3" />
                         )}
-                        {translate("auto.components.JiraIssueWorkspace.5cd09beaf9", "Retry")}</Button>
+                        {translate('auto.components.JiraIssueWorkspace.5cd09beaf9', 'Retry')}
+                      </Button>
                     ) : null}
                   </div>
                   {commentsError ? (
@@ -644,7 +707,12 @@ export default function JiraIssueWorkspace({
                       <LoaderCircle className="size-4 animate-spin text-muted-foreground" />
                     </div>
                   ) : comments.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">{translate("auto.components.JiraIssueWorkspace.9178090e26", "No comments yet.")}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {translate(
+                        'auto.components.JiraIssueWorkspace.9178090e26',
+                        'No comments yet.'
+                      )}
+                    </p>
                   ) : (
                     <div className="flex flex-col gap-3">
                       {comments.map((comment) => (
@@ -661,7 +729,11 @@ export default function JiraIssueWorkspace({
                               />
                             ) : null}
                             <span className="truncate text-[13px] font-semibold text-foreground">
-                              {comment.user?.displayName ?? translate("auto.components.JiraIssueWorkspace.666cfdd835", "Unknown")}
+                              {comment.user?.displayName ??
+                                translate(
+                                  'auto.components.JiraIssueWorkspace.666cfdd835',
+                                  'Unknown'
+                                )}
                             </span>
                             <span className="shrink-0 text-[12px] text-muted-foreground">
                               {formatRelativeTime(comment.createdAt)}
@@ -685,7 +757,8 @@ export default function JiraIssueWorkspace({
                   onClick={() => onUse(displayed)}
                   className="mb-3 w-full justify-center gap-2 sm:hidden"
                 >
-                  {translate("auto.components.JiraIssueWorkspace.2441be6f9f", "Start workspace")}<ArrowRight className="size-4" />
+                  {translate('auto.components.JiraIssueWorkspace.2441be6f9f', 'Start workspace')}
+                  <ArrowRight className="size-4" />
                 </Button>
                 <div className="grid gap-1">
                   {actionItems.map((item) => {
@@ -717,7 +790,10 @@ export default function JiraIssueWorkspace({
                 <textarea
                   value={commentDraft}
                   onChange={(event) => setCommentDraft(event.target.value)}
-                  placeholder={translate("auto.components.JiraIssueWorkspace.a585fd204e", "Add a Jira comment...")}
+                  placeholder={translate(
+                    'auto.components.JiraIssueWorkspace.a585fd204e',
+                    'Add a Jira comment...'
+                  )}
                   rows={2}
                   disabled={commentSubmitting}
                   className="min-h-10 flex-1 resize-none rounded-md border border-input bg-transparent px-3 py-2 text-sm outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
@@ -732,7 +808,8 @@ export default function JiraIssueWorkspace({
                   ) : (
                     <Send className="size-4" />
                   )}
-                  {translate("auto.components.JiraIssueWorkspace.b0b92666c9", "Comment")}</Button>
+                  {translate('auto.components.JiraIssueWorkspace.b0b92666c9', 'Comment')}
+                </Button>
               </div>
             </div>
           </div>

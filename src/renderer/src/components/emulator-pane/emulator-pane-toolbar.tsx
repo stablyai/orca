@@ -65,7 +65,12 @@ export function EmulatorPaneToolbar({
         disabled={loading || devices.length === 0}
       >
         <SelectTrigger className="h-7 w-[180px] text-xs">
-          <SelectValue placeholder={translate("auto.components.emulator.pane.emulator.pane.toolbar.3d836b879c", "Choose emulator")} />
+          <SelectValue
+            placeholder={translate(
+              'auto.components.emulator.pane.emulator.pane.toolbar.3d836b879c',
+              'Choose emulator'
+            )}
+          />
         </SelectTrigger>
         <SelectContent position="popper" side="bottom" align="start" sideOffset={4}>
           {devices.map((d) => (
@@ -84,14 +89,23 @@ export function EmulatorPaneToolbar({
             className="h-7 gap-1 px-2 text-xs"
             onClick={onRotate}
             disabled={!isLive || loading}
-            aria-label={translate("auto.components.emulator.pane.emulator.pane.toolbar.6bd8dff42a", "Rotate")}
+            aria-label={translate(
+              'auto.components.emulator.pane.emulator.pane.toolbar.6bd8dff42a',
+              'Rotate'
+            )}
           >
             <RotateCw className="size-3.5" />
-            <span className="hidden sm:inline">{translate("auto.components.emulator.pane.emulator.pane.toolbar.6bd8dff42a", "Rotate")}</span>
+            <span className="hidden sm:inline">
+              {translate(
+                'auto.components.emulator.pane.emulator.pane.toolbar.6bd8dff42a',
+                'Rotate'
+              )}
+            </span>
           </Button>
         </TooltipTrigger>
         <TooltipContent side="bottom" sideOffset={4}>
-          {translate("auto.components.emulator.pane.emulator.pane.toolbar.6bd8dff42a", "Rotate")}</TooltipContent>
+          {translate('auto.components.emulator.pane.emulator.pane.toolbar.6bd8dff42a', 'Rotate')}
+        </TooltipContent>
       </Tooltip>
       <Tooltip>
         <TooltipTrigger asChild>
@@ -102,13 +116,17 @@ export function EmulatorPaneToolbar({
             className="size-7"
             onClick={onHome}
             disabled={!isLive || loading}
-            aria-label={translate("auto.components.emulator.pane.emulator.pane.toolbar.e7a0d1897e", "Home")}
+            aria-label={translate(
+              'auto.components.emulator.pane.emulator.pane.toolbar.e7a0d1897e',
+              'Home'
+            )}
           >
             <Home className="size-3.5" />
           </Button>
         </TooltipTrigger>
         <TooltipContent side="bottom" sideOffset={4}>
-          {translate("auto.components.emulator.pane.emulator.pane.toolbar.e7a0d1897e", "Home")}</TooltipContent>
+          {translate('auto.components.emulator.pane.emulator.pane.toolbar.e7a0d1897e', 'Home')}
+        </TooltipContent>
       </Tooltip>
       {isLive ? (
         <Tooltip>
@@ -120,13 +138,20 @@ export function EmulatorPaneToolbar({
               className="size-7 text-muted-foreground hover:text-destructive"
               onClick={onShutdown}
               disabled={loading}
-              aria-label={translate("auto.components.emulator.pane.emulator.pane.toolbar.06e10d7356", "Shut down emulator")}
+              aria-label={translate(
+                'auto.components.emulator.pane.emulator.pane.toolbar.06e10d7356',
+                'Shut down emulator'
+              )}
             >
               <Power className="size-3.5" />
             </Button>
           </TooltipTrigger>
           <TooltipContent side="bottom" sideOffset={4}>
-            {translate("auto.components.emulator.pane.emulator.pane.toolbar.06e10d7356", "Shut down emulator")}</TooltipContent>
+            {translate(
+              'auto.components.emulator.pane.emulator.pane.toolbar.06e10d7356',
+              'Shut down emulator'
+            )}
+          </TooltipContent>
         </Tooltip>
       ) : (
         <Button
@@ -137,7 +162,15 @@ export function EmulatorPaneToolbar({
           onClick={onAttach}
           disabled={loading || devices.length === 0}
         >
-          {loading ? translate("auto.components.emulator.pane.emulator.pane.toolbar.868c0f2938", "Working…") : translate("auto.components.emulator.pane.emulator.pane.toolbar.81b3571a07", "Connect")}
+          {loading
+            ? translate(
+                'auto.components.emulator.pane.emulator.pane.toolbar.868c0f2938',
+                'Working…'
+              )
+            : translate(
+                'auto.components.emulator.pane.emulator.pane.toolbar.81b3571a07',
+                'Connect'
+              )}
         </Button>
       )}
     </div>

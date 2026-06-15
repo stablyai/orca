@@ -53,13 +53,27 @@ export function useSidebarProjectDrop(): {
         return
       }
       if (pathResolution.status === 'multiple') {
-        toast.warning(translate("auto.components.sidebar.useSidebarProjectDrop.c0315153d1", "Drop one folder at a time."))
+        toast.warning(
+          translate(
+            'auto.components.sidebar.useSidebarProjectDrop.c0315153d1',
+            'Drop one folder at a time.'
+          )
+        )
         return
       }
       if (remoteRuntimeActive) {
-        toast.error(translate("auto.components.sidebar.useSidebarProjectDrop.849ef13dc0", "Local folder drops are unavailable for server runtimes."), {
-          description: translate("auto.components.sidebar.useSidebarProjectDrop.5ccb56c7be", "Use Add Project to enter a server path.")
-        })
+        toast.error(
+          translate(
+            'auto.components.sidebar.useSidebarProjectDrop.849ef13dc0',
+            'Local folder drops are unavailable for server runtimes.'
+          ),
+          {
+            description: translate(
+              'auto.components.sidebar.useSidebarProjectDrop.5ccb56c7be',
+              'Use Add Project to enter a host path.'
+            )
+          }
+        )
         return
       }
 
@@ -71,15 +85,26 @@ export function useSidebarProjectDrop(): {
           return
         }
         if (!stat.isDirectory) {
-          toast.error(translate("auto.components.sidebar.useSidebarProjectDrop.451a4638db", "Drop a folder to add it as a project."))
+          toast.error(
+            translate(
+              'auto.components.sidebar.useSidebarProjectDrop.451a4638db',
+              'Drop a folder to add it as a project.'
+            )
+          )
           return
         }
         openModal('add-repo', { droppedLocalPath: pathResolution.path })
       } catch (error) {
         if (mountedRef.current) {
-          toast.error(translate("auto.components.sidebar.useSidebarProjectDrop.f34a286c0d", "Could not add dropped folder."), {
-            description: error instanceof Error ? error.message : String(error)
-          })
+          toast.error(
+            translate(
+              'auto.components.sidebar.useSidebarProjectDrop.f34a286c0d',
+              'Could not add dropped folder.'
+            ),
+            {
+              description: error instanceof Error ? error.message : String(error)
+            }
+          )
         }
       } finally {
         if (mountedRef.current) {

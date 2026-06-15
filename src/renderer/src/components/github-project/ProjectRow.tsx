@@ -12,6 +12,7 @@ import type {
   GitHubProjectFieldMutationValue,
   GitHubProjectRow as GitHubProjectRowType
 } from '../../../../shared/github-project-types'
+import type { GlobalSettings } from '../../../../shared/types'
 import { translate } from '@/i18n/i18n'
 
 const PROJECT_FROZEN_COLUMN_SURFACE_CLASS =
@@ -33,6 +34,7 @@ type Props = {
   onEditIssueType?: (issueType: GitHubIssueType | null) => void
   onStartWork?: () => void
   onOpenInBrowser?: () => void
+  sourceSettings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
 }
 
 export default function ProjectRow({
@@ -48,7 +50,8 @@ export default function ProjectRow({
   onEditLabels,
   onEditIssueType,
   onStartWork,
-  onOpenInBrowser
+  onOpenInBrowser,
+  sourceSettings
 }: Props): React.JSX.Element {
   const disabled = row.itemType === 'REDACTED'
   // Why: design doc §Row actions — draft-issue rows have no URL or number, so
@@ -97,6 +100,7 @@ export default function ProjectRow({
                 onEditLabels={onEditLabels}
                 onEditIssueType={onEditIssueType}
                 onOpenDialog={f.dataType === 'TITLE' ? onOpenDialog : undefined}
+                sourceSettings={sourceSettings}
               />
             </div>
             {next ? (
@@ -118,28 +122,38 @@ export default function ProjectRow({
               <button
                 type="button"
                 onClick={onOpenInBrowser}
-                aria-label={translate("auto.components.github.project.ProjectRow.e12be8b4d4", "Open in GitHub")}
+                aria-label={translate(
+                  'auto.components.github.project.ProjectRow.e12be8b4d4',
+                  'Open in GitHub'
+                )}
                 className="rounded p-1 hover:bg-muted"
               >
                 <ExternalLink className="size-3.5" />
               </button>
             </TooltipTrigger>
-            <TooltipContent>{translate("auto.components.github.project.ProjectRow.e12be8b4d4", "Open in GitHub")}</TooltipContent>
+            <TooltipContent>
+              {translate('auto.components.github.project.ProjectRow.e12be8b4d4', 'Open in GitHub')}
+            </TooltipContent>
           </Tooltip>
         ) : null}
-        {!disabled && row.itemType !== "DRAFT_ISSUE" && row.content.number != null ? (
+        {!disabled && row.itemType !== 'DRAFT_ISSUE' && row.content.number != null ? (
           <Tooltip>
             <TooltipTrigger asChild>
               <button
                 type="button"
                 onClick={onStartWork}
-                aria-label={translate("auto.components.github.project.ProjectRow.75b5d816e3", "Start work")}
+                aria-label={translate(
+                  'auto.components.github.project.ProjectRow.75b5d816e3',
+                  'Start work'
+                )}
                 className="rounded p-1 hover:bg-muted"
               >
                 <Play className="size-3.5" />
               </button>
             </TooltipTrigger>
-            <TooltipContent>{translate("auto.components.github.project.ProjectRow.75b5d816e3", "Start work")}</TooltipContent>
+            <TooltipContent>
+              {translate('auto.components.github.project.ProjectRow.75b5d816e3', 'Start work')}
+            </TooltipContent>
           </Tooltip>
         ) : null}
       </div>

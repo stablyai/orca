@@ -38,7 +38,11 @@ export function ShortcutRowsList({
           className
         )}
       >
-        {translate("auto.components.settings.ShortcutRowsList.4ce3cd24d9", "No shortcuts match those filters.")}</div>
+        {translate(
+          'auto.components.settings.ShortcutRowsList.4ce3cd24d9',
+          'No shortcuts match those filters.'
+        )}
+      </div>
     )
   }
 

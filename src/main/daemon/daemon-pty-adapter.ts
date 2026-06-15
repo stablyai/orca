@@ -15,7 +15,8 @@ import {
   type DaemonEvent,
   type GetSnapshotResult,
   type ListSessionsResult,
-  type SessionInfo
+  type SessionInfo,
+  type TakePendingOutputResult
 } from './types'
 import type { IPtyProvider, PtySpawnOptions, PtySpawnResult } from '../providers/types'
 import { isShellProcess } from '../../shared/agent-detection'
@@ -71,11 +72,20 @@ export class DaemonPtyAdapter implements IPtyProvider {
   private coldRestoreCache = new Map<string, { scrollback: string; cwd: string }>()
   private activeSessionIds = new Set<string>()
   private dirtySessionVersions = new Map<string, number>()
+  // Why: a cold-restored session is a fresh shell whose on-disk checkpoint and
+  // log belong to the pre-crash session. Incremental appends would land on
+  // that stale log (and be rejected by its sequence check on restore), so the
+  // first tick must re-anchor with a full snapshot checkpoint, which resets
+  // the log to a new generation.
+  private sessionsNeedingFullCheckpoint = new Set<string>()
   private checkpointTimer: ReturnType<typeof setTimeout> | null = null
   private checkpointInFlight: Promise<void> | null = null
   // Why: checkpoint-based persistence requires the getSnapshot RPC (v4+).
   // Legacy daemons reject it, causing noisy log spam every 5 seconds.
   private supportsCheckpoints: boolean
+  // Why: incremental checkpoints require the takePendingOutput RPC (v13+).
+  // Against older daemons the tick falls back to full-snapshot checkpoints.
+  private supportsIncrementalCheckpoints: boolean
   private static CHECKPOINT_INTERVAL_MS = 5_000
 
   constructor(opts: DaemonPtyAdapterOptions) {
@@ -91,6 +101,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
     this.historyReader = opts.historyPath ? new HistoryReader(opts.historyPath) : null
     this.respawnFn = opts.respawn ?? null
     this.supportsCheckpoints = this.protocolVersion >= 4
+    this.supportsIncrementalCheckpoints = this.protocolVersion >= 13
   }
 
   getHistoryManager(): HistoryManager | null {
@@ -188,6 +199,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
       // the next 5s tick, the checkpoint is the only recovery data available.
       if (this.historyManager) {
         this.historyManager.registerWriter(sessionId)
+        this.sessionsNeedingFullCheckpoint.add(sessionId)
       }
       if (scrollback) {
         const coldRestore = { scrollback, cwd: restoreInfo.cwd }
@@ -615,17 +627,22 @@ export class DaemonPtyAdapter implements IPtyProvider {
   }
 
   // Why: the adapter runs in the Electron main process and does not have direct
-  // access to daemon Session objects. It calls the getSnapshot RPC over the
-  // daemon socket per session. Returns a promise that resolves when all
-  // checkpoint writes complete (callers that don't need to wait can void it).
+  // access to daemon Session objects. It calls checkpoint RPCs over the daemon
+  // socket per session. Returns a promise that resolves when all checkpoint
+  // writes complete (callers that don't need to wait can void it).
+  // Why final=true here: this runs on clean disconnect, where the full-depth
+  // snapshot (not the increment log) must be the restore source.
   private async checkpointAllSessions(): Promise<void> {
-    const completed = await this.checkpointSessions(this.activeSessionIds)
+    const completed = await this.checkpointSessions(this.activeSessionIds, { final: true })
     for (const sessionId of completed) {
       this.dirtySessionVersions.delete(sessionId)
     }
   }
 
-  private async checkpointSessions(sessionIds: Iterable<string>): Promise<Set<string>> {
+  private async checkpointSessions(
+    sessionIds: Iterable<string>,
+    opts?: { final?: boolean }
+  ): Promise<Set<string>> {
     const completed = new Set<string>()
     if (!this.historyManager) {
       return completed
@@ -641,16 +658,9 @@ export class DaemonPtyAdapter implements IPtyProvider {
           return
         }
         const sessionId = ids[index]
-        await this.client
-          .request<GetSnapshotResult>('getSnapshot', { sessionId })
-          .then((result) => {
-            if (result.snapshot && this.historyManager) {
-              return this.historyManager.checkpoint(sessionId, result.snapshot).then(() => {
-                completed.add(sessionId)
-              })
-            }
+        await this.checkpointSession(sessionId, opts?.final === true)
+          .then(() => {
             completed.add(sessionId)
-            return undefined
           })
           .catch((err) => console.warn('[history] checkpoint failed:', sessionId, err))
       }
@@ -663,6 +673,65 @@ export class DaemonPtyAdapter implements IPtyProvider {
     )
     await Promise.all(workers)
     return completed
+  }
+
+  private async checkpointSession(sessionId: string, final: boolean): Promise<void> {
+    if (!this.supportsIncrementalCheckpoints) {
+      const result = await this.client.request<GetSnapshotResult>('getSnapshot', { sessionId })
+      if (result.snapshot && this.historyManager) {
+        await this.historyManager.checkpoint(sessionId, result.snapshot)
+      }
+      return
+    }
+    if (final || this.sessionsNeedingFullCheckpoint.has(sessionId)) {
+      // Why take-with-snapshot instead of plain getSnapshot: the take clears
+      // the daemon's pending records in the same synchronous turn as the
+      // serialize. A plain snapshot would leave pre-snapshot records pending;
+      // a later warm reattach would append them to the fresh log and cold
+      // restore would replay them on top of a checkpoint that already
+      // contains them.
+      await this.takeSnapshotAndCheckpoint(sessionId)
+      this.sessionsNeedingFullCheckpoint.delete(sessionId)
+      return
+    }
+    const take = await this.client.request<TakePendingOutputResult | null>('takePendingOutput', {
+      sessionId
+    })
+    if (!take) {
+      return
+    }
+    if (take.overflowed) {
+      // Why: overflow dropped records, so the log has a hole — only a full
+      // snapshot (which reflects everything ever written) can re-anchor it.
+      await this.takeSnapshotAndCheckpoint(sessionId)
+      return
+    }
+    if (take.records.length === 0) {
+      return
+    }
+    if (!this.historyManager) {
+      return
+    }
+    const appendResult = await this.historyManager.appendIncrements(
+      sessionId,
+      take.seq,
+      take.records
+    )
+    if (appendResult === 'needs-checkpoint') {
+      // Why dropping take.records is lossless: they were applied to the live
+      // emulator before the take, so the snapshot below contains them.
+      await this.takeSnapshotAndCheckpoint(sessionId)
+    }
+  }
+
+  private async takeSnapshotAndCheckpoint(sessionId: string): Promise<void> {
+    const take = await this.client.request<TakePendingOutputResult | null>('takePendingOutput', {
+      sessionId,
+      includeSnapshot: true
+    })
+    if (take?.snapshot && this.historyManager) {
+      await this.historyManager.checkpoint(sessionId, take.snapshot)
+    }
   }
 
   // Why: when the daemon process dies, operations fail with ENOENT (socket

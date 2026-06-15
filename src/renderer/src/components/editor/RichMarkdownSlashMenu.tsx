@@ -30,21 +30,35 @@ export function RichMarkdownSlashMenu({
       className="rich-markdown-slash-menu"
       style={{ left: slashMenu.left, top: slashMenu.top }}
       role="dialog"
-      aria-label={translate("auto.components.editor.RichMarkdownSlashMenu.2e0400b958", "Slash commands")}
+      aria-label={translate(
+        'auto.components.editor.RichMarkdownSlashMenu.2e0400b958',
+        'Slash commands'
+      )}
     >
       <div className="rich-markdown-slash-search" onMouseDown={(event) => event.preventDefault()}>
         <Search className="size-3.5" />
         <input
-          aria-label={translate("auto.components.editor.RichMarkdownSlashMenu.550189b06c", "Search blocks")}
+          aria-label={translate(
+            'auto.components.editor.RichMarkdownSlashMenu.550189b06c',
+            'Search blocks'
+          )}
           readOnly
           type="text"
           value={slashMenu.query}
-          placeholder={translate("auto.components.editor.RichMarkdownSlashMenu.dbdd2ad15f", "Search blocks...")}
+          placeholder={translate(
+            'auto.components.editor.RichMarkdownSlashMenu.dbdd2ad15f',
+            'Search blocks...'
+          )}
         />
       </div>
       <div className="rich-markdown-slash-results scrollbar-sleek" role="listbox">
         {filteredCommands.length === 0 ? (
-          <div className="rich-markdown-slash-empty">{translate("auto.components.editor.RichMarkdownSlashMenu.82c6816ff8", "No blocks found")}</div>
+          <div className="rich-markdown-slash-empty">
+            {translate(
+              'auto.components.editor.RichMarkdownSlashMenu.82c6816ff8',
+              'No blocks found'
+            )}
+          </div>
         ) : (
           filteredCommands.map((command, index) => {
             const showGroup = command.group !== currentGroup

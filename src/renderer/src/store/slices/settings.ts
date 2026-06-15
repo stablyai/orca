@@ -1,26 +1,25 @@
-/* eslint-disable max-lines */
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { GlobalSettings } from '../../../../shared/types'
 import { toast } from 'sonner'
 import {
-  callRuntimeRpc,
   clearRuntimeCompatibilityCache,
   markRuntimeEnvironmentCompatible,
   unwrapRuntimeRpcResult
 } from '@/runtime/runtime-rpc-client'
 import { assertRuntimeStatusCompatible } from '@/runtime/runtime-protocol-compat'
-import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
-import {
-  getRemoteRuntimePtyEnvironmentId,
-  getRemoteRuntimeTerminalHandle
-} from '@/runtime/runtime-terminal-stream'
 import type { RuntimeStatus } from '../../../../shared/runtime-types'
 import { normalizeTerminalQuickCommands } from '../../../../shared/terminal-quick-commands'
+import { normalizeTerminalCustomThemes } from '../../../../shared/terminal-custom-themes'
 import { normalizeTaskProviderSettings } from '../../../../shared/task-providers'
 import { normalizeOpenInApplications } from '../../../../shared/open-in-applications'
 import { createSettingsSearchState, type SettingsSearchState } from './settings-search-state'
 import { normalizeDisabledTuiAgents } from '../../../../shared/tui-agent-selection'
+import {
+  normalizeTuiAgentArgsRecord,
+  normalizeTuiAgentEnvRecord
+} from '../../../../shared/tui-agent-launch-defaults'
+import { bumpProviderRuntimeSessionGeneration } from '@/lib/provider-runtime-context'
 import { normalizeUiLanguage } from '../../../../shared/ui-language'
 import { translate } from '@/i18n/i18n'
 
@@ -40,206 +39,6 @@ function createOpenInApplicationId(): string {
   return (
     globalThis.crypto?.randomUUID?.() ??
     `open-in-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`
-  )
-}
-
-function runtimeScopedStateReset(): Partial<AppState> {
-  return {
-    repos: [],
-    projectGroups: [],
-    activeRepoId: null,
-    sparsePresetsByRepo: {},
-    sparsePresetsLoadingByRepo: {},
-    sparsePresetsLoadStatusByRepo: {},
-    sparsePresetsErrorByRepo: {},
-    worktreesByRepo: {},
-    detectedWorktreesByRepo: {},
-    worktreeLineageById: {},
-    activeWorktreeId: null,
-    deleteStateByWorktreeId: {},
-    baseStatusByWorktreeId: {},
-    remoteBranchConflictByWorktreeId: {},
-    sortEpoch: 0,
-    everActivatedWorktreeIds: new Set<string>(),
-    lastVisitedAtByWorktreeId: {},
-    hasHydratedWorktreePurge: false,
-    unifiedTabsByWorktree: {},
-    groupsByWorktree: {},
-    activeGroupIdByWorktree: {},
-    layoutByWorktree: {},
-    tabsByWorktree: {},
-    activeTabId: null,
-    activeTabIdByWorktree: {},
-    ptyIdsByTabId: {},
-    runtimePaneTitlesByTabId: {},
-    unreadTerminalTabs: {},
-    suppressedPtyExitIds: {},
-    pendingCodexPaneRestartIds: {},
-    codexRestartNoticeByPtyId: {},
-    expandedPaneByTabId: {},
-    canExpandPaneByTabId: {},
-    terminalLayoutsByTabId: {},
-    pendingStartupByTabId: {},
-    pendingSetupSplitByTabId: {},
-    pendingIssueCommandSplitByTabId: {},
-    tabBarOrderByWorktree: {},
-    pendingReconnectWorktreeIds: [],
-    pendingReconnectTabByWorktree: {},
-    pendingReconnectPtyIdByTabId: {},
-    lastKnownRelayPtyIdByTabId: {},
-    pendingSnapshotByPtyId: {},
-    pendingColdRestoreByPtyId: {},
-    deferredSshReconnectTargets: [],
-    deferredSshSessionIdsByTabId: {},
-    cacheTimerByKey: {},
-    recentQuickCommandIdByGroup: {},
-    showDotfilesByWorktree: {},
-    expandedDirs: {},
-    pendingExplorerReveal: null,
-    openFiles: [],
-    editorDrafts: {},
-    markdownViewMode: {},
-    editorViewMode: {},
-    markdownFrontmatterVisible: {},
-    editorCursorLine: {},
-    gitIgnoredPathsByWorktree: {},
-    activeFileId: null,
-    activeFileIdByWorktree: {},
-    activeTabTypeByWorktree: {},
-    activeTabType: 'terminal',
-    recentlyClosedEditorTabsByWorktree: {},
-    browserTabsByWorktree: {},
-    browserPagesByWorkspace: {},
-    browserAnnotationsByPageId: {},
-    remoteBrowserPageHandlesByPageId: {},
-    activeBrowserTabId: null,
-    activeBrowserTabIdByWorktree: {},
-    recentlyClosedBrowserTabsByWorktree: {},
-    recentlyClosedBrowserPagesByWorkspace: {},
-    pendingAddressBarFocusByTabId: {},
-    pendingAddressBarFocusByPageId: {},
-    browserSessionProfiles: [],
-    browserSessionImportState: null,
-    defaultBrowserSessionProfileId: null,
-    detectedBrowsers: [],
-    detectedBrowsersLoaded: false,
-    prCache: {},
-    issueCache: {},
-    checksCache: {},
-    commentsCache: {},
-    workItemsCache: {},
-    workItemsInvalidationNonce: 0,
-    projectViewCache: {},
-    linearStatus: { connected: false, viewer: null },
-    linearStatusChecked: false,
-    linearIssueCache: {},
-    linearSearchCache: {},
-    linearListCache: {},
-    linearTeamCache: {},
-    linearProjectCache: {},
-    linearProjectDetailCache: {},
-    linearProjectIssueCache: {},
-    linearCustomViewCache: {},
-    linearCustomViewDetailCache: {},
-    linearCustomViewIssueCache: {},
-    linearCustomViewProjectCache: {},
-    jiraStatus: { connected: false, viewer: null },
-    jiraStatusChecked: false,
-    jiraIssueCache: {},
-    jiraSearchCache: {}
-  }
-}
-
-function hasUnsavedEditorState(state: AppState): boolean {
-  return state.openFiles.some((file) => file.isDirty || state.editorDrafts[file.id] !== undefined)
-}
-
-function isPairedWebClient(): boolean {
-  return Boolean((globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__)
-}
-
-async function closeRemoteBrowserPagesBeforeRuntimeSwitch(state: AppState): Promise<void> {
-  const worktreeIdByPageId = new Map<string, string>()
-  for (const pages of Object.values(state.browserPagesByWorkspace)) {
-    for (const page of pages) {
-      worktreeIdByPageId.set(page.id, page.worktreeId)
-    }
-  }
-  await Promise.allSettled(
-    Object.entries(state.remoteBrowserPageHandlesByPageId).map(([pageId, handle]) => {
-      const worktreeId = worktreeIdByPageId.get(pageId)
-      if (!worktreeId) {
-        return Promise.resolve()
-      }
-      return callRuntimeRpc(
-        { kind: 'environment', environmentId: handle.environmentId },
-        'browser.tabClose',
-        { worktree: toRuntimeWorktreeSelector(worktreeId), page: handle.remotePageId },
-        { timeoutMs: 15_000 }
-      )
-    })
-  )
-}
-
-function collectRemoteTerminalHandlesForRuntimeSwitch(
-  state: AppState,
-  fallbackEnvironmentId: string | null
-): Map<string, Set<string>> {
-  const handlesByEnvironmentId = new Map<string, Set<string>>()
-  const collect = (ptyId: string | null | undefined): void => {
-    if (!ptyId) {
-      return
-    }
-    const handle = getRemoteRuntimeTerminalHandle(ptyId)
-    if (!handle) {
-      return
-    }
-    const environmentId = getRemoteRuntimePtyEnvironmentId(ptyId) ?? fallbackEnvironmentId
-    if (!environmentId) {
-      return
-    }
-    const handles = handlesByEnvironmentId.get(environmentId) ?? new Set<string>()
-    handles.add(handle)
-    handlesByEnvironmentId.set(environmentId, handles)
-  }
-
-  for (const ptyIds of Object.values(state.ptyIdsByTabId)) {
-    for (const ptyId of ptyIds) {
-      collect(ptyId)
-    }
-  }
-  for (const tabs of Object.values(state.tabsByWorktree)) {
-    for (const tab of tabs) {
-      collect(tab.ptyId)
-    }
-  }
-  for (const layout of Object.values(state.terminalLayoutsByTabId)) {
-    for (const ptyId of Object.values(layout.ptyIdsByLeafId ?? {})) {
-      collect(ptyId)
-    }
-  }
-  return handlesByEnvironmentId
-}
-
-async function closeRemoteTerminalsBeforeRuntimeSwitch(
-  state: AppState,
-  fallbackEnvironmentId: string | null
-): Promise<void> {
-  const handlesByEnvironmentId = collectRemoteTerminalHandlesForRuntimeSwitch(
-    state,
-    fallbackEnvironmentId
-  )
-  await Promise.allSettled(
-    Array.from(handlesByEnvironmentId.entries()).flatMap(([environmentId, handles]) =>
-      Array.from(handles).map((terminal) =>
-        callRuntimeRpc(
-          { kind: 'environment', environmentId },
-          'terminal.close',
-          { terminal },
-          { timeoutMs: 15_000 }
-        )
-      )
-    )
   )
 }
 
@@ -266,6 +65,10 @@ export const createSettingsSlice: StateCreator<AppState, [], [], SettingsSlice> 
     try {
       const settings = await window.api.settings.get()
       set({ settings })
+      // Why: best-effort boot probe so sidebar host pickers show live runtime
+      // health before the settings pane is ever opened. Fire-and-forget to keep
+      // startup off the network round-trips.
+      void get().hydrateRuntimeEnvironmentStatuses()
     } catch (err) {
       console.error('Failed to fetch settings:', err)
     }
@@ -277,6 +80,11 @@ export const createSettingsSlice: StateCreator<AppState, [], [], SettingsSlice> 
       if ('terminalQuickCommands' in updates) {
         sanitizedUpdates.terminalQuickCommands = normalizeTerminalQuickCommands(
           updates.terminalQuickCommands
+        )
+      }
+      if ('terminalCustomThemes' in updates) {
+        sanitizedUpdates.terminalCustomThemes = normalizeTerminalCustomThemes(
+          updates.terminalCustomThemes
         )
       }
       if ('visibleTaskProviders' in updates || 'defaultTaskSource' in updates) {
@@ -304,6 +112,14 @@ export const createSettingsSlice: StateCreator<AppState, [], [], SettingsSlice> 
       if ('disabledTuiAgents' in updates) {
         sanitizedUpdates.disabledTuiAgents = normalizeDisabledTuiAgents(updates.disabledTuiAgents)
       }
+      if ('agentDefaultArgs' in updates) {
+        sanitizedUpdates.agentDefaultArgs = normalizeTuiAgentArgsRecord(updates.agentDefaultArgs)
+        sanitizedUpdates.agentYoloDefaultsMigrated = true
+      }
+      if ('agentDefaultEnv' in updates) {
+        sanitizedUpdates.agentDefaultEnv = normalizeTuiAgentEnvRecord(updates.agentDefaultEnv)
+        sanitizedUpdates.agentYoloDefaultsMigrated = true
+      }
       if ('uiLanguage' in updates) {
         sanitizedUpdates.uiLanguage = normalizeUiLanguage(updates.uiLanguage)
       }
@@ -320,41 +136,30 @@ export const createSettingsSlice: StateCreator<AppState, [], [], SettingsSlice> 
     if (previousId === nextId) {
       return true
     }
-    if (hasUnsavedEditorState(get())) {
-      toast.error(translate("auto.store.slices.settings.faa8fb83dd", "Save or close unsaved editor tabs before switching servers."))
-      return false
-    }
     try {
       clearRuntimeCompatibilityCache(nextId)
       await verifyRuntimeEnvironmentReachable(nextId)
-      if (!isPairedWebClient()) {
-        // Why: desktop-created remote resources live on their owning server.
-        // Paired web clients only mirror host-owned tabs/PTYs, so switching
-        // pairings must detach local state without killing the host session.
-        await closeRemoteTerminalsBeforeRuntimeSwitch(get(), previousId)
-        await closeRemoteBrowserPagesBeforeRuntimeSwitch(get())
-      }
       const nextSettings = await window.api.settings.set({
         activeRuntimeEnvironmentId: nextId
       })
+      bumpProviderRuntimeSessionGeneration()
       set((s) => ({
-        ...runtimeScopedStateReset(),
+        // Why: in the multi-host model this is a focus/default-host change,
+        // not a teardown boundary. Existing host-owned sessions stay alive.
         settings:
           (nextSettings as GlobalSettings | undefined) ??
           (s.settings ? { ...s.settings, activeRuntimeEnvironmentId: nextId } : null)
       }))
-      // Why: server-owned state is cleared before refetch so old worktree,
-      // terminal, browser, and issue IDs cannot be used against the new server
-      // while the new environment is loading.
+      // Why: hydration is host-merged by downstream slices. Switching focus
+      // should add/update the selected host without discarding other hosts.
       await get().fetchRepos()
-      await get().fetchProjectGroups()
       await get().fetchAllWorktrees()
       await get().fetchWorktreeLineage()
       await get().fetchBrowserSessionProfiles()
       return true
     } catch (err) {
       console.error('Failed to switch runtime environment:', err)
-      toast.error(translate("auto.store.slices.settings.e12dab333b", "Failed to switch servers"), {
+      toast.error(translate('auto.store.slices.settings.e12dab333b', 'Failed to switch servers'), {
         description: err instanceof Error ? err.message : String(err)
       })
       return false

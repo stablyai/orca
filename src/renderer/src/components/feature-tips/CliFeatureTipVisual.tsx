@@ -64,7 +64,12 @@ export function CliFeatureTipVisual(): JSX.Element {
         </div>
         <div className="space-y-1.5 px-3 py-3 font-mono text-[10.5px] leading-[1.35] text-foreground">
           <div className="truncate text-muted-foreground">
-            <span className="mr-1.5 text-foreground">●</span>{translate("auto.components.feature.tips.CliFeatureTipVisual.22e62f3bab", "Claude Code session started")}</div>
+            <span className="mr-1.5 text-foreground">●</span>
+            {translate(
+              'auto.components.feature.tips.CliFeatureTipVisual.22e62f3bab',
+              'Claude Code session started'
+            )}
+          </div>
           {CLI_AGENT_COMMANDS.map((command, index) => {
             const isVisible = index < visibleCommandCount
             const isCurrentLine = isVisible && index === visibleCommandCount - 1
@@ -73,7 +78,9 @@ export function CliFeatureTipVisual(): JSX.Element {
                 key={command}
                 className={`truncate ${isVisible ? 'animate-cli-tip-command-line' : 'invisible'}`}
               >
-                <span className="text-foreground">{translate("auto.components.feature.tips.CliFeatureTipVisual.badb4fc342", ">")}</span>
+                <span className="text-foreground">
+                  {translate('auto.components.feature.tips.CliFeatureTipVisual.badb4fc342', '>')}
+                </span>
                 <span>{command}</span>
                 {isCurrentLine ? (
                   <span className="animate-cli-tip-caret ml-0.5 inline-block h-3 w-1 translate-y-0.5 rounded-sm bg-foreground/70" />

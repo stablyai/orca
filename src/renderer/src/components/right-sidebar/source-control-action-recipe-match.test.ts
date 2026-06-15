@@ -80,6 +80,33 @@ describe('sourceControlActionRecipeMatchesTarget', () => {
     ).toBe(true)
   })
 
+  it('returns true when the resolve conflicts recipe matches the repo saved recipe', () => {
+    expect(
+      sourceControlActionRecipeMatchesTarget({
+        actionId: 'resolveConflicts',
+        target: { type: 'repo', repoId: 'repo-1' },
+        recipe: {
+          agentId: 'codex',
+          commandInputTemplate: '{basePrompt}',
+          agentArgs: ''
+        },
+        settings: settings(),
+        repo: {
+          sourceControlAi: {
+            enabled: true,
+            actionOverrides: {
+              resolveConflicts: {
+                agentId: 'codex',
+                commandInputTemplate: '{basePrompt}',
+                agentArgs: ''
+              }
+            }
+          }
+        } satisfies Pick<Repo, 'sourceControlAi'>
+      })
+    ).toBe(true)
+  })
+
   it('returns true when a repo recipe inherits the global command template', () => {
     const currentSettings = settings()
     currentSettings.sourceControlAi = {

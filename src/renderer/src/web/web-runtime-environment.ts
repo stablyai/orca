@@ -58,7 +58,7 @@ export function createStoredWebRuntimeEnvironment(args: {
       {
         id: `ws-${id}`,
         kind: 'websocket',
-        label: translate("auto.web.web.runtime.environment.07f788de83", "WebSocket"),
+        label: translate('auto.web.web.runtime.environment.07f788de83', 'WebSocket'),
         endpoint: args.offer.endpoint,
         deviceToken: args.offer.deviceToken,
         publicKeyB64: args.offer.publicKeyB64

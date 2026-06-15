@@ -83,7 +83,11 @@ export function buildBrowserAddressBarSuggestions({
     topAction = {
       url: buildSearchUrl(trimmed, searchEngine, { kagiSessionLink }),
       title: trimmed,
-      subtitle: translate("auto.components.browser.pane.browser.address.bar.suggestions.87fcdd0da9", "{{value0}} Search", { value0: SEARCH_ENGINE_LABELS[searchEngine] }),
+      subtitle: translate(
+        'auto.components.browser.pane.browser.address.bar.suggestions.87fcdd0da9',
+        '{{value0}} Search',
+        { value0: SEARCH_ENGINE_LABELS[searchEngine] }
+      ),
       lastVisitedAt: 0,
       visitCount: 0,
       isSearch: true

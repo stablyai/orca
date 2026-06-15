@@ -14,6 +14,7 @@ import type {
 } from '../../../../shared/types'
 import { GRAB_BUDGET, type BrowserPageAnnotation } from '../../../../shared/browser-grab-types'
 import { FLOATING_TERMINAL_WORKTREE_ID, ORCA_BROWSER_BLANK_URL } from '../../../../shared/constants'
+import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 import { redactKagiSessionToken } from '../../../../shared/browser-url'
 import {
   MAX_BROWSER_HISTORY_ENTRIES,
@@ -38,6 +39,16 @@ import type {
 } from '../../../../shared/runtime-types'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { translate } from '@/i18n/i18n'
+import {
+  getSettingsFocusedExecutionHostId,
+  LOCAL_EXECUTION_HOST_ID,
+  toRuntimeExecutionHostId,
+  type ExecutionHostId
+} from '../../../../shared/execution-host'
+import {
+  getExecutionHostIdForWorktree,
+  getRuntimeEnvironmentIdForWorktree
+} from '@/lib/worktree-runtime-owner'
 
 type CreateBrowserTabOptions = {
   activate?: boolean
@@ -53,11 +64,13 @@ type CreateBrowserTabOptions = {
   // (context menu, window.open, http link routing) leave this unset so focus
   // stays on the webview. When omitted, we fall back to the blank-URL check.
   focusAddressBar?: boolean
+  browserRuntimeEnvironmentId?: string | null
 }
 
 type CreateBrowserPageOptions = {
   activate?: boolean
   title?: string
+  browserRuntimeEnvironmentId?: string | null
 }
 
 type BrowserTabPageState = {
@@ -157,6 +170,7 @@ export type BrowserSlice = {
   hydrateBrowserSession: (session: WorkspaceSessionState) => void
   switchBrowserTabProfile: (workspaceId: string, profileId: string | null) => void
   browserSessionProfiles: BrowserSessionProfile[]
+  browserSessionProfilesByHostId: Partial<Record<ExecutionHostId, BrowserSessionProfile[]>>
   browserSessionImportState: {
     profileId: string
     status: 'idle' | 'importing' | 'success' | 'error'
@@ -189,6 +203,7 @@ export type BrowserSlice = {
   addBrowserHistoryEntry: (url: string, title: string) => void
   clearBrowserHistory: () => void
   defaultBrowserSessionProfileId: string | null
+  defaultBrowserSessionProfileIdByHostId: Partial<Record<ExecutionHostId, string | null>>
   setDefaultBrowserSessionProfileId: (profileId: string | null) => void
 }
 
@@ -225,6 +240,44 @@ function isRuntimeEnvironmentActive(state: AppState): boolean {
   return Boolean(state.settings?.activeRuntimeEnvironmentId?.trim())
 }
 
+function getBrowserSettingsHostId(state: Pick<AppState, 'settings'>): ExecutionHostId {
+  return getSettingsFocusedExecutionHostId(state.settings)
+}
+
+function getBrowserWorktreeHostId(state: AppState, worktreeId: string): ExecutionHostId {
+  return getExecutionHostIdForWorktree(state, worktreeId)
+}
+
+function getBrowserSessionProfileHostId(
+  state: AppState,
+  worktreeId: string,
+  browserRuntimeEnvironmentId: string | null | undefined
+): ExecutionHostId {
+  if (browserRuntimeEnvironmentId === null) {
+    return LOCAL_EXECUTION_HOST_ID
+  }
+  if (browserRuntimeEnvironmentId !== undefined) {
+    const runtimeEnvironmentId = browserRuntimeEnvironmentId.trim()
+    return runtimeEnvironmentId
+      ? toRuntimeExecutionHostId(runtimeEnvironmentId)
+      : LOCAL_EXECUTION_HOST_ID
+  }
+  return getBrowserWorktreeHostId(state, worktreeId)
+}
+
+function profileListByHostUpdate(
+  state: Pick<AppState, 'browserSessionProfilesByHostId' | 'settings'>,
+  profiles: BrowserSessionProfile[]
+): Partial<BrowserSlice> {
+  return {
+    browserSessionProfiles: profiles,
+    browserSessionProfilesByHostId: {
+      ...state.browserSessionProfilesByHostId,
+      [getBrowserSettingsHostId(state)]: profiles
+    }
+  }
+}
+
 function closeRemoteBrowserPageInOwningEnvironment(
   worktreeId: string,
   handle: RemoteBrowserPageHandle
@@ -242,7 +295,8 @@ function buildBrowserPage(
   workspaceId: string,
   worktreeId: string,
   url: string,
-  title?: string
+  title?: string,
+  browserRuntimeEnvironmentId?: string | null
 ): BrowserPage {
   const normalizedUrl = normalizeUrl(url)
   return {
@@ -259,7 +313,8 @@ function buildBrowserPage(
     canGoBack: false,
     canGoForward: false,
     loadError: null,
-    createdAt: Date.now()
+    createdAt: Date.now(),
+    ...(browserRuntimeEnvironmentId !== undefined ? { browserRuntimeEnvironmentId } : {})
   }
 }
 
@@ -298,7 +353,7 @@ function mirrorWorkspaceFromActivePage(
       activePageId: null,
       pageIds: pages.map((page) => page.id),
       url: 'about:blank',
-      title: translate("auto.store.slices.browser.08fc23631d", "Browser"),
+      title: translate('auto.store.slices.browser.08fc23631d', 'Browser'),
       loading: false,
       faviconUrl: null,
       canGoBack: false,
@@ -412,24 +467,40 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
   pendingAddressBarFocusByTabId: {},
   pendingAddressBarFocusByPageId: {},
   browserSessionProfiles: [],
+  browserSessionProfilesByHostId: {},
   browserSessionImportState: null,
   browserUrlHistory: [],
   defaultBrowserSessionProfileId: null,
+  defaultBrowserSessionProfileIdByHostId: {},
 
   setDefaultBrowserSessionProfileId: (profileId) => {
-    set({ defaultBrowserSessionProfileId: profileId })
+    set((s) => ({
+      defaultBrowserSessionProfileId: profileId,
+      defaultBrowserSessionProfileIdByHostId: {
+        ...s.defaultBrowserSessionProfileIdByHostId,
+        [getBrowserSettingsHostId(s)]: profileId
+      }
+    }))
   },
 
   createBrowserTab: (worktreeId, url, options) => {
     const workspaceId = createBrowserUuid()
-    const page = buildBrowserPage(workspaceId, worktreeId, url, options?.title)
+    const page = buildBrowserPage(
+      workspaceId,
+      worktreeId,
+      url,
+      options?.title,
+      options?.browserRuntimeEnvironmentId
+    )
     // Why: when no explicit profile is passed, inherit the user's chosen default
     // profile. This lets users set a preferred profile in Settings that all new
     // browser tabs use automatically.
     const sessionProfileId =
       options?.sessionProfileId !== undefined
         ? options.sessionProfileId
-        : get().defaultBrowserSessionProfileId
+        : (get().defaultBrowserSessionProfileIdByHostId[
+            getBrowserSessionProfileHostId(get(), worktreeId, options?.browserRuntimeEnvironmentId)
+          ] ?? get().defaultBrowserSessionProfileId)
     const browserTab = buildWorkspaceFromPage(
       workspaceId,
       worktreeId,
@@ -530,27 +601,41 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
       return
     }
     const defaultUrl = state.browserDefaultUrl ?? 'about:blank'
-    const pairedWebRuntimeEnvironmentId = (globalThis as { __ORCA_WEB_CLIENT__?: boolean })
-      .__ORCA_WEB_CLIENT__
-      ? state.settings?.activeRuntimeEnvironmentId?.trim()
-      : null
-    if (pairedWebRuntimeEnvironmentId) {
+    const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(state, worktreeId)
+    if (runtimeEnvironmentId) {
       const { createWebRuntimeSessionBrowserTab } = await import('@/runtime/web-runtime-session')
-      await createWebRuntimeSessionBrowserTab({
-        worktreeId,
-        environmentId: pairedWebRuntimeEnvironmentId,
-        url: defaultUrl,
-        targetGroupId: groupId
+      try {
+        const created = await createWebRuntimeSessionBrowserTab({
+          worktreeId,
+          environmentId: runtimeEnvironmentId,
+          url: defaultUrl,
+          targetGroupId: groupId
+        })
+        if (created) {
+          get().recordFeatureInteraction('browser-tab-created')
+          return
+        }
+      } catch {
+        // Fall through to the client-local fallback below.
+      }
+      // Why: headless remote runtimes cannot host browser panes yet. Keep the
+      // workspace remote-owned, but open this browser page on the desktop client.
+      get().createBrowserTab(worktreeId, defaultUrl, {
+        title: translate('auto.store.slices.browser.d175274b6d', 'New Browser Tab'),
+        focusAddressBar: true,
+        targetGroupId: groupId,
+        browserRuntimeEnvironmentId: null
       })
+      get().recordFeatureInteraction('browser-tab-created')
       return
     }
     get().createBrowserTab(worktreeId, defaultUrl, {
-      title: translate("auto.store.slices.browser.d175274b6d", "New Browser Tab"),
+      title: translate('auto.store.slices.browser.d175274b6d', 'New Browser Tab'),
       focusAddressBar: true,
       targetGroupId: groupId
     })
+    get().recordFeatureInteraction('browser-tab-created')
   },
-
   closeBrowserTab: (tabId) => {
     let remotePagesToClose: { worktreeId: string; handle: RemoteBrowserPageHandle }[] = []
     set((s) => {
@@ -752,13 +837,15 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
     const restored = get().createBrowserTab(worktreeId, firstPage.url, {
       title: firstPage.title,
       activate: true,
-      sessionProfileId
+      sessionProfileId,
+      browserRuntimeEnvironmentId: firstPage.browserRuntimeEnvironmentId
     })
 
     for (const p of restPages) {
       get().createBrowserPage(restored.id, p.url, {
         activate: false,
-        title: p.title
+        title: p.title,
+        browserRuntimeEnvironmentId: p.browserRuntimeEnvironmentId
       })
     }
 
@@ -826,7 +913,13 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
     if (!workspace) {
       return null
     }
-    const page = buildBrowserPage(workspaceId, workspace.worktreeId, url, options?.title)
+    const page = buildBrowserPage(
+      workspaceId,
+      workspace.worktreeId,
+      url,
+      options?.title,
+      options?.browserRuntimeEnvironmentId
+    )
 
     set((s) => {
       const pages = s.browserPagesByWorkspace[workspaceId] ?? []
@@ -1002,7 +1095,8 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
 
     return get().createBrowserPage(workspaceId, pageToRestore.url, {
       title: pageToRestore.title,
-      activate: true
+      activate: true,
+      browserRuntimeEnvironmentId: pageToRestore.browserRuntimeEnvironmentId
     })
   },
 
@@ -1410,6 +1504,9 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
         .map((worktree) => worktree.id)
     )
     validWorktreeIdsForCleanup.add(FLOATING_TERMINAL_WORKTREE_ID)
+    for (const workspace of currentState.folderWorkspaces) {
+      validWorktreeIdsForCleanup.add(folderWorkspaceKey(workspace.id))
+    }
 
     // Why: mirror closeBrowserTab's contract — reducers are pure, imperative
     // side effects bracket them. Compute dropped workspaces first, destroy
@@ -1439,6 +1536,9 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
           .map((worktree) => worktree.id)
       )
       validWorktreeIds.add(FLOATING_TERMINAL_WORKTREE_ID)
+      for (const workspace of s.folderWorkspaces) {
+        validWorktreeIds.add(folderWorkspaceKey(workspace.id))
+      }
 
       const browserTabsByWorktree: Record<string, BrowserWorkspace[]> = {}
       const browserPagesByWorkspace: Record<string, BrowserPage[]> = {}
@@ -1613,15 +1713,15 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
           undefined,
           { timeoutMs: 15_000 }
         )
-        set({ browserSessionProfiles: result.profiles })
+        set((s) => profileListByHostUpdate(s, result.profiles))
       } catch {
-        set({ browserSessionProfiles: [] })
+        set((s) => profileListByHostUpdate(s, []))
       }
       return
     }
     try {
       const profiles = (await window.api.browser.sessionListProfiles()) as BrowserSessionProfile[]
-      set({ browserSessionProfiles: profiles })
+      set((s) => profileListByHostUpdate(s, profiles))
     } catch {
       /* best-effort — stale profile list is preferable to a crash */
     }
@@ -1639,7 +1739,7 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
         const profile = result.profile
         if (profile) {
           set((s) => ({
-            browserSessionProfiles: [...s.browserSessionProfiles, profile]
+            ...profileListByHostUpdate(s, [...s.browserSessionProfiles, profile])
           }))
         }
         return profile
@@ -1654,7 +1754,7 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
       })) as BrowserSessionProfile | null
       if (profile) {
         set((s) => ({
-          browserSessionProfiles: [...s.browserSessionProfiles, profile]
+          ...profileListByHostUpdate(s, [...s.browserSessionProfiles, profile])
         }))
       }
       return profile
@@ -1674,9 +1774,18 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
         )
         if (result.deleted) {
           set((s) => ({
-            browserSessionProfiles: s.browserSessionProfiles.filter((p) => p.id !== profileId),
+            ...profileListByHostUpdate(
+              s,
+              s.browserSessionProfiles.filter((p) => p.id !== profileId)
+            ),
             ...(s.defaultBrowserSessionProfileId === profileId
-              ? { defaultBrowserSessionProfileId: null }
+              ? {
+                  defaultBrowserSessionProfileId: null,
+                  defaultBrowserSessionProfileIdByHostId: {
+                    ...s.defaultBrowserSessionProfileIdByHostId,
+                    [getBrowserSettingsHostId(s)]: null
+                  }
+                }
               : {})
           }))
         }
@@ -1689,9 +1798,18 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
       const ok = await window.api.browser.sessionDeleteProfile({ profileId })
       if (ok) {
         set((s) => ({
-          browserSessionProfiles: s.browserSessionProfiles.filter((p) => p.id !== profileId),
+          ...profileListByHostUpdate(
+            s,
+            s.browserSessionProfiles.filter((p) => p.id !== profileId)
+          ),
           ...(s.defaultBrowserSessionProfileId === profileId
-            ? { defaultBrowserSessionProfileId: null }
+            ? {
+                defaultBrowserSessionProfileId: null,
+                defaultBrowserSessionProfileIdByHostId: {
+                  ...s.defaultBrowserSessionProfileIdByHostId,
+                  [getBrowserSettingsHostId(s)]: null
+                }
+              }
             : {})
         }))
       }

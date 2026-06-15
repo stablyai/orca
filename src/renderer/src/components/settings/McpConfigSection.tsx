@@ -6,13 +6,9 @@ import type { Repo, Worktree } from '../../../../shared/types'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree-id'
 import {
   canInspectLocalMcpConfigRoot,
-  getMcpConfigCandidateParentDir,
-  getMcpConfigParentDirs,
   inspectMcpConfigContent,
   MCP_CONFIG_CANDIDATES,
-  MCP_STARTER_CONFIG,
-  selectExistingMcpConfigCandidates,
-  type McpConfigDirectoryEntry
+  MCP_STARTER_CONFIG
 } from '../../../../shared/mcp-config'
 import { useAppStore } from '../../store'
 import { joinPath } from '../../lib/path'
@@ -20,6 +16,8 @@ import { extractIpcErrorMessage } from '../../lib/ipc-error'
 import { Button } from '../ui/button'
 import { isWindowsUserAgent } from '../terminal-pane/pane-helpers'
 import { McpConfigFileRow, type LoadedMcpConfigInspection } from './McpConfigFileRow'
+import { McpMissingConfigList } from './McpMissingConfigList'
+import { loadMcpConfigInspections } from './mcp-config-inspection'
 import { translate } from '@/i18n/i18n'
 
 type McpConfigSectionProps = {
@@ -27,11 +25,6 @@ type McpConfigSectionProps = {
 }
 
 const EMPTY_WORKTREES: Worktree[] = []
-
-function isMissingFileError(error: unknown): boolean {
-  const message = error instanceof Error ? error.message : String(error)
-  return /ENOENT|no such file|not found/i.test(message)
-}
 
 function countServers(configs: LoadedMcpConfigInspection[]): number {
   return configs.reduce((sum, config) => sum + config.servers.length, 0)
@@ -138,81 +131,7 @@ export function McpConfigSection({ repo }: McpConfigSectionProps): React.JSX.Ele
         return
       }
 
-      const entriesByRelativeDir = new Map<string, readonly McpConfigDirectoryEntry[]>()
-      const rootEntries = await window.api.fs.readDir({ dirPath: targetRootPath, connectionId })
-      entriesByRelativeDir.set('', rootEntries)
-
-      const rootDirectoryNames = new Set(
-        rootEntries.filter((entry) => entry.isDirectory).map((entry) => entry.name)
-      )
-      const unreadableParentDirMessages = new Map<string, string>()
-      await Promise.all(
-        getMcpConfigParentDirs().map(async (relativeDir) => {
-          if (!rootDirectoryNames.has(relativeDir)) {
-            return
-          }
-          try {
-            const entries = await window.api.fs.readDir({
-              dirPath: joinPath(targetRootPath, relativeDir),
-              connectionId
-            })
-            entriesByRelativeDir.set(relativeDir, entries)
-          } catch (error) {
-            unreadableParentDirMessages.set(
-              relativeDir,
-              extractIpcErrorMessage(error, `Unable to inspect ${relativeDir}.`)
-            )
-          }
-        })
-      )
-
-      const existingRelativePaths = new Set(
-        selectExistingMcpConfigCandidates(entriesByRelativeDir).map(
-          (candidate) => candidate.relativePath
-        )
-      )
-
-      const next = await Promise.all(
-        MCP_CONFIG_CANDIDATES.map(async (candidate): Promise<LoadedMcpConfigInspection> => {
-          const absolutePath = joinPath(targetRootPath, candidate.relativePath)
-          const parentDirReadError = unreadableParentDirMessages.get(
-            getMcpConfigCandidateParentDir(candidate)
-          )
-          if (parentDirReadError) {
-            return {
-              ...inspectMcpConfigContent(candidate, null),
-              exists: false,
-              status: 'invalid',
-              absolutePath,
-              readError: parentDirReadError
-            }
-          }
-
-          if (!existingRelativePaths.has(candidate.relativePath)) {
-            return { ...inspectMcpConfigContent(candidate, null), absolutePath }
-          }
-
-          try {
-            const result = await window.api.fs.readFile({ filePath: absolutePath, connectionId })
-            const inspection = inspectMcpConfigContent(
-              candidate,
-              result.isBinary ? '' : result.content
-            )
-            return { ...inspection, absolutePath }
-          } catch (error) {
-            if (isMissingFileError(error)) {
-              return { ...inspectMcpConfigContent(candidate, null), absolutePath }
-            }
-            return {
-              ...inspectMcpConfigContent(candidate, null),
-              exists: false,
-              status: 'invalid',
-              absolutePath,
-              readError: extractIpcErrorMessage(error, 'Unable to read config file.')
-            }
-          }
-        })
-      )
+      const next = await loadMcpConfigInspections(targetRootPath, connectionId)
       if (mountedRef.current) {
         setConfigs(next)
       }
@@ -294,7 +213,15 @@ export function McpConfigSection({ repo }: McpConfigSectionProps): React.JSX.Ele
         { targetGroupId }
       )
       setActiveView('terminal')
-      toast.success(translate("auto.components.settings.McpConfigSection.1f3665e35a", "MCP config created"), { description: translate("auto.components.settings.McpConfigSection.9ee215caf6", ".mcp.json") })
+      toast.success(
+        translate('auto.components.settings.McpConfigSection.1f3665e35a', 'MCP config created'),
+        {
+          description: translate(
+            'auto.components.settings.McpConfigSection.9ee215caf6',
+            '.mcp.json'
+          )
+        }
+      )
     } catch (error) {
       toast.error(extractIpcErrorMessage(error, 'Failed to create MCP config.'))
     }
@@ -304,12 +231,22 @@ export function McpConfigSection({ repo }: McpConfigSectionProps): React.JSX.Ele
     <section className="space-y-4">
       <div className="flex items-start justify-between gap-4">
         <div className="space-y-1">
-          <h3 className="text-sm font-semibold">{translate("auto.components.settings.McpConfigSection.55eea3ef47", "MCP Configs")}</h3>
+          <h3 className="text-sm font-semibold">
+            {translate('auto.components.settings.McpConfigSection.55eea3ef47', 'MCP Configs')}
+          </h3>
           <p className="text-xs text-muted-foreground">
-            {translate("auto.components.settings.McpConfigSection.96f5609b04", "Inspect MCP server definitions that agents can use while working in this repo.")}</p>
+            {translate(
+              'auto.components.settings.McpConfigSection.96f5609b04',
+              'Inspect MCP server definitions that agents can use while working in this repo.'
+            )}
+          </p>
           {repo.connectionId ? (
             <p className="text-xs text-muted-foreground">
-              {translate("auto.components.settings.McpConfigSection.6bac9ddfc6", "SSH repos are read through the remote filesystem. Starter creation is limited to the workspace root config.")}</p>
+              {translate(
+                'auto.components.settings.McpConfigSection.6bac9ddfc6',
+                'SSH repos are read through the remote filesystem. Starter creation is limited to the workspace root config.'
+              )}
+            </p>
           ) : null}
         </div>
         <div className="flex shrink-0 items-center gap-2">
@@ -317,7 +254,10 @@ export function McpConfigSection({ repo }: McpConfigSectionProps): React.JSX.Ele
             variant="ghost"
             size="icon-sm"
             onClick={() => void loadConfigs()}
-            aria-label={translate("auto.components.settings.McpConfigSection.f34c152dc0", "Refresh MCP configs")}
+            aria-label={translate(
+              'auto.components.settings.McpConfigSection.f34c152dc0',
+              'Refresh MCP configs'
+            )}
           >
             {loading ? (
               <LoaderCircle className="size-3.5 animate-spin" />
@@ -333,7 +273,15 @@ export function McpConfigSection({ repo }: McpConfigSectionProps): React.JSX.Ele
               onClick={() => void handleCreateStarter()}
             >
               <Plus className="size-3.5" />
-              {createConfirm ? translate("auto.components.settings.McpConfigSection.0a5c1ead54", "Create empty config") : translate("auto.components.settings.McpConfigSection.82436439eb", "Add MCP config")}
+              {createConfirm
+                ? translate(
+                    'auto.components.settings.McpConfigSection.0a5c1ead54',
+                    'Create empty config'
+                  )
+                : translate(
+                    'auto.components.settings.McpConfigSection.82436439eb',
+                    'Add MCP config'
+                  )}
             </Button>
           ) : null}
         </div>
@@ -342,7 +290,11 @@ export function McpConfigSection({ repo }: McpConfigSectionProps): React.JSX.Ele
       <div className="rounded-md border border-border/50 bg-muted/20">
         <div className="flex items-center justify-between border-b border-border/50 px-3 py-2 text-xs text-muted-foreground">
           <span>
-            {detectedCount} {translate("auto.components.settings.McpConfigSection.251b96564a", "detected ·")}{serverCount} {translate("auto.components.settings.McpConfigSection.3b224167ff", "server")}{serverCount === 1 ? '' : 's'}
+            {detectedCount}{' '}
+            {translate('auto.components.settings.McpConfigSection.251b96564a', 'detected ·')}{' '}
+            {serverCount}{' '}
+            {translate('auto.components.settings.McpConfigSection.3b224167ff', 'server')}
+            {serverCount === 1 ? '' : 's'}
           </span>
           {loading ? <LoaderCircle className="size-3.5 animate-spin" /> : null}
         </div>
@@ -358,7 +310,11 @@ export function McpConfigSection({ repo }: McpConfigSectionProps): React.JSX.Ele
                 <span>{inspectionUnavailableMessage}</span>
               ) : (
                 <span>
-                  {translate("auto.components.settings.McpConfigSection.b900cd6282", "No MCP config found. Add an empty workspace config when you want this repo to define its own MCP servers.")}</span>
+                  {translate(
+                    'auto.components.settings.McpConfigSection.b900cd6282',
+                    'No MCP config found. Add an empty workspace config when you want this repo to define its own MCP servers.'
+                  )}
+                </span>
               )}
             </div>
           ) : (
@@ -373,21 +329,7 @@ export function McpConfigSection({ repo }: McpConfigSectionProps): React.JSX.Ele
             </div>
           )}
 
-          {missingConfigs.length > 0 && !inspectionUnavailable ? (
-            <div className="space-y-1.5 border-t border-border/50 px-3 py-2">
-              <p className="text-[11px] text-muted-foreground">{translate("auto.components.settings.McpConfigSection.4d16a0d9ac", "Checked")}</p>
-              <div className="flex flex-wrap gap-1.5">
-                {missingConfigs.map((config) => (
-                  <span
-                    key={config.candidate.relativePath}
-                    className="rounded-md border border-border/50 bg-background/40 px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground"
-                  >
-                    {config.candidate.relativePath}
-                  </span>
-                ))}
-              </div>
-            </div>
-          ) : null}
+          {!inspectionUnavailable ? <McpMissingConfigList missingConfigs={missingConfigs} /> : null}
         </div>
       </div>
     </section>

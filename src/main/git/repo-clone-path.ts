@@ -14,6 +14,21 @@ export type ClaimedCloneTarget = {
 
 type CloneDirectoryIdentity = Pick<Stats, 'dev' | 'ino' | 'birthtimeMs'>
 
+export function deriveCloneRepoNameFromUrl(url: string): string {
+  // Why: direct callers can supply URLs whose default git clone folder would
+  // be "." or ".."; rejecting them prevents parent/destination deletion.
+  const source = url.replace(/\.git\/?$/, '')
+  const isWindowsLocalSource = /^[A-Za-z]:[\\/]/.test(source) || source.startsWith('\\\\')
+  const repoName = isWindowsLocalSource ? win32.basename(source) : posix.basename(source)
+  if (!repoName || repoName === '.' || repoName === '..') {
+    throw new Error('Invalid repository name derived from URL')
+  }
+  if (repoName.includes('/') || repoName.includes('\\')) {
+    throw new Error('Invalid repository name derived from URL')
+  }
+  return repoName
+}
+
 export function deriveValidatedClonePath(args: { url: string; destination: string }): string {
   if (
     !args.destination ||
@@ -23,17 +38,7 @@ export function deriveValidatedClonePath(args: { url: string; destination: strin
     throw new Error('Clone destination must be an absolute path')
   }
 
-  // Why: direct callers can supply URLs whose default git clone folder would
-  // be "." or ".."; rejecting them prevents parent/destination deletion.
-  const source = args.url.replace(/\.git\/?$/, '')
-  const isWindowsLocalSource = /^[A-Za-z]:[\\/]/.test(source) || source.startsWith('\\\\')
-  const repoName = isWindowsLocalSource ? win32.basename(source) : posix.basename(source)
-  if (!repoName || repoName === '.' || repoName === '..') {
-    throw new Error('Invalid repository name derived from URL')
-  }
-  if (repoName.includes('/') || repoName.includes('\\')) {
-    throw new Error('Invalid repository name derived from URL')
-  }
+  const repoName = deriveCloneRepoNameFromUrl(args.url)
 
   const clonePath = join(args.destination, repoName)
   const resolvedDestination = resolve(args.destination)

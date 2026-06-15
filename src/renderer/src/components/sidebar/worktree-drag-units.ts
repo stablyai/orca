@@ -6,10 +6,12 @@ export type WorktreeDragUnitGroup = WorktreeDragGroup & {
 }
 
 type WorktreeDragUnitRow =
+  | { type: 'host-header' }
   | { type: 'header'; key: string }
   | { type: 'item'; worktree: { id: string }; depth: number; sectionKey: string }
   | { type: 'imported-worktrees-card' }
   | { type: 'pending-creation' }
+  | { type: 'folder-workspace' }
 
 export function getWorktreeDragUnitGroups(
   rows: readonly WorktreeDragUnitRow[]
@@ -27,7 +29,12 @@ export function getWorktreeDragUnitGroups(
       })
       continue
     }
-    if (row.type === 'imported-worktrees-card' || row.type === 'pending-creation') {
+    if (
+      row.type === 'host-header' ||
+      row.type === 'imported-worktrees-card' ||
+      row.type === 'pending-creation' ||
+      row.type === 'folder-workspace'
+    ) {
       continue
     }
     if (row.sectionKey === PINNED_GROUP_KEY) {

@@ -7,6 +7,7 @@ import { tmpdir } from 'os'
 import { join } from 'path'
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs'
 import type * as ShellReadyModule from './shell-ready'
+import { getZshShellReadyMarkerRegistrationBlock } from '../shell-templates'
 
 async function importFreshShellReady(): Promise<typeof ShellReadyModule> {
   vi.resetModules()
@@ -16,6 +17,96 @@ async function importFreshShellReady(): Promise<typeof ShellReadyModule> {
 const describePosix = process.platform === 'win32' ? describe.skip : describe
 const hasBash = process.platform !== 'win32' && spawnSync('bash', ['--version']).status === 0
 const itWithBash = hasBash ? it : it.skip
+const hasZsh = process.platform !== 'win32' && spawnSync('zsh', ['--version']).status === 0
+const itWithZsh = hasZsh ? it : it.skip
+
+const SHELL_READY_MARKER_OUTPUT = '\x1b]777;orca-shell-ready\x07'
+
+// Why: the shell-ready marker is emitted from zle-line-init, which only fires
+// on a real TTY — spawn through node-pty instead of spawnSync.
+async function runInteractiveZshLogin(args: {
+  tempHome: string
+  wrapperZdotdir: string
+  isDone: (output: string) => boolean
+}): Promise<string> {
+  const pty = await import('node-pty')
+  // Why: -o noglobalrcs skips /etc/zsh/* on CI runners, whose insecure (group-
+  // writable) fpath dirs make the global compinit block on an interactive
+  // "insecure directories" [y/n] prompt before zle-line-init ever fires. The
+  // marker contract lives entirely in our ZDOTDIR files, which still load.
+  const proc = pty.spawn('zsh', ['-o', 'noglobalrcs', '-l'], {
+    name: 'xterm-256color',
+    cols: 80,
+    rows: 24,
+    cwd: args.tempHome,
+    env: {
+      PATH: process.env.PATH ?? '/usr/bin:/bin',
+      HOME: args.tempHome,
+      TERM: 'xterm-256color',
+      ZDOTDIR: args.wrapperZdotdir,
+      ORCA_ORIG_ZDOTDIR: args.tempHome,
+      ORCA_ZSHENV_SOURCE_DIR: args.tempHome,
+      ORCA_SHELL_READY_MARKER: '1'
+    }
+  })
+  let output = ''
+  let settle = (): void => {}
+  const done = new Promise<void>((resolve) => {
+    settle = resolve
+  })
+  const deadline = setTimeout(settle, 10_000)
+  proc.onData((chunk) => {
+    output += chunk
+    if (args.isDone(output)) {
+      settle()
+    }
+  })
+  await done
+  clearTimeout(deadline)
+  proc.kill()
+  return output
+}
+
+// Why: exercise an arbitrary interactive zsh rc (its own ZDOTDIR, no wrapper)
+// so a test can source the marker block directly — e.g. twice, to check the
+// registration is idempotent and keeps chaining the user's prior widget.
+async function runInteractiveZshRc(args: {
+  zdotdir: string
+  isDone: (output: string) => boolean
+}): Promise<string> {
+  const pty = await import('node-pty')
+  // Why: -o noglobalrcs skips /etc/zsh/* so the CI runner's global compinit
+  // can't block on an insecure-directory [y/n] prompt before our marker fires.
+  const proc = pty.spawn('zsh', ['-o', 'noglobalrcs', '-i'], {
+    name: 'xterm-256color',
+    cols: 80,
+    rows: 24,
+    cwd: args.zdotdir,
+    env: {
+      PATH: process.env.PATH ?? '/usr/bin:/bin',
+      HOME: args.zdotdir,
+      TERM: 'xterm-256color',
+      ZDOTDIR: args.zdotdir,
+      ORCA_SHELL_READY_MARKER: '1'
+    }
+  })
+  let output = ''
+  let settle = (): void => {}
+  const done = new Promise<void>((resolve) => {
+    settle = resolve
+  })
+  const deadline = setTimeout(settle, 10_000)
+  proc.onData((chunk) => {
+    output += chunk
+    if (args.isDone(output)) {
+      settle()
+    }
+  })
+  await done
+  clearTimeout(deadline)
+  proc.kill()
+  return output
+}
 
 function runInteractiveBashRcfile(rcfileContent: string, tempDir: string): string {
   const rcfile = join(tempDir, 'bash-osc133-rcfile')
@@ -236,6 +327,139 @@ describePosix('daemon shell-ready launch config', () => {
     expectFinalZdotdirRestoreContext(zshrc)
     expectFinalZdotdirRestoreContext(zlogin)
   })
+
+  it('owns zle-line-init for the shell-ready marker instead of an azhw hook', async () => {
+    const { getShellReadyLaunchConfig } = await importFreshShellReady()
+
+    getShellReadyLaunchConfig('/bin/zsh')
+
+    const zlogin = readFileSync(join(userDataPath, 'shell-ready', 'zsh', '.zlogin'), 'utf8')
+    expect(zlogin).toContain('zle -N zle-line-init __orca_prompt_mark')
+    expect(zlogin).toContain('__orca_prev_line_init_fn="${widgets[zle-line-init]#user:}"')
+    expect(zlogin).toContain('printf "\\033]777;orca-shell-ready\\007"')
+    // Why: add-zle-hook-widget aborts its hook chain when an earlier hook
+    // exits non-zero, so the marker must not be registered through it.
+    expect(zlogin).not.toContain('add-zle-hook-widget line-init')
+    // Why: re-source guard — skip re-capturing when we are already the bound
+    // widget so the prior widget chain survives a second source.
+    expect(zlogin).toContain('== "user:__orca_prompt_mark"')
+  })
+
+  // Why: regression guard — oh-my-zsh vi-mode installs a raw zle-line-init
+  // that returns non-zero when VI_MODE_SET_CURSOR is unset. Registering the
+  // marker via add-zle-hook-widget let that failing widget abort the hook
+  // chain, so the marker never fired and every queued startup command sat on
+  // the daemon's pre-ready timeout (a 15s "bare shell" before the agent).
+  itWithZsh(
+    'emits the shell-ready marker even when a user zle-line-init widget fails (oh-my-zsh vi-mode shape)',
+    async () => {
+      const { getShellReadyLaunchConfig } = await importFreshShellReady()
+      const config = getShellReadyLaunchConfig('/bin/zsh')
+      const tempHome = mkdtempSync(join(tmpdir(), 'orca-zsh-vi-mode-'))
+      writeFileSync(
+        join(tempHome, '.zshrc'),
+        [
+          'function zle-line-init() {',
+          '  [[ "${VI_MODE_SET_CURSOR:-}" = true ]] || return',
+          '}',
+          'zle -N zle-line-init',
+          ''
+        ].join('\n')
+      )
+      try {
+        const output = await runInteractiveZshLogin({
+          tempHome,
+          wrapperZdotdir: config.env.ZDOTDIR,
+          isDone: (current) => current.includes(SHELL_READY_MARKER_OUTPUT)
+        })
+        expect(output).toContain(SHELL_READY_MARKER_OUTPUT)
+      } finally {
+        rmSync(tempHome, { recursive: true, force: true })
+      }
+    },
+    15_000
+  )
+
+  itWithZsh(
+    'still runs user add-zle-hook-widget line-init hooks after the marker',
+    async () => {
+      const { getShellReadyLaunchConfig } = await importFreshShellReady()
+      const config = getShellReadyLaunchConfig('/bin/zsh')
+      const tempHome = mkdtempSync(join(tmpdir(), 'orca-zsh-azhw-'))
+      const userHookOutput = 'ORCA-TEST-USER-HOOK'
+      writeFileSync(
+        join(tempHome, '.zshrc'),
+        [
+          `__orca_test_line_init_hook() { printf "${userHookOutput}" }`,
+          'autoload -Uz add-zle-hook-widget',
+          'zle -N __orca_test_line_init_hook',
+          'add-zle-hook-widget line-init __orca_test_line_init_hook',
+          ''
+        ].join('\n')
+      )
+      try {
+        const output = await runInteractiveZshLogin({
+          tempHome,
+          wrapperZdotdir: config.env.ZDOTDIR,
+          isDone: (current) =>
+            current.includes(SHELL_READY_MARKER_OUTPUT) && current.includes(userHookOutput)
+        })
+        // Why: the marker widget chains to the previously installed widget, so
+        // an azhw dispatcher registered by user config must keep dispatching.
+        expect(output).toContain(SHELL_READY_MARKER_OUTPUT)
+        expect(output).toContain(userHookOutput)
+        expect(output.indexOf(SHELL_READY_MARKER_OUTPUT)).toBeLessThan(
+          output.indexOf(userHookOutput)
+        )
+      } finally {
+        rmSync(tempHome, { recursive: true, force: true })
+      }
+    },
+    15_000
+  )
+
+  // Why: the marker block is normally sourced once per shell, but a re-source
+  // (nested Orca, manual re-source) must stay idempotent — it must keep
+  // chaining the user's original zle-line-init instead of clobbering the
+  // captured function to empty and silently dropping it on later prompts.
+  itWithZsh(
+    'keeps chaining the prior zle-line-init widget when the marker block is sourced twice',
+    async () => {
+      const zdotdir = mkdtempSync(join(tmpdir(), 'orca-zsh-resource-'))
+      const userHookOutput = 'ORCA-TEST-PRIOR-WIDGET'
+      const block = getZshShellReadyMarkerRegistrationBlock('\\033]777;orca-shell-ready\\007')
+      writeFileSync(
+        join(zdotdir, '.zshrc'),
+        [
+          // A user widget that mimics oh-my-zsh vi-mode owning zle-line-init.
+          `__orca_test_prior_widget() { printf "${userHookOutput}" }`,
+          'zle -N zle-line-init __orca_test_prior_widget',
+          block,
+          // Second source of the exact same block — must not drop the chain.
+          block,
+          ''
+        ].join('\n')
+      )
+      try {
+        const output = await runInteractiveZshRc({
+          zdotdir,
+          isDone: (current) =>
+            current.includes(SHELL_READY_MARKER_OUTPUT) && current.includes(userHookOutput)
+        })
+        expect(output).toContain(SHELL_READY_MARKER_OUTPUT)
+        expect(output).toContain(userHookOutput)
+        expect(output.indexOf(SHELL_READY_MARKER_OUTPUT)).toBeLessThan(
+          output.indexOf(userHookOutput)
+        )
+        // Why: idempotent — the marker must fire exactly once per prompt, not
+        // duplicated by the second registration.
+        expect(output.split(SHELL_READY_MARKER_OUTPUT)).toHaveLength(2)
+      } finally {
+        rmSync(zdotdir, { recursive: true, force: true })
+      }
+    },
+    15_000
+  )
 
   it('writes wrappers that restore OpenCode and Pi config after user startup files', async () => {
     const { getShellReadyLaunchConfig } = await importFreshShellReady()

@@ -15,6 +15,7 @@ import {
   type FetchExternalAutomationRuns
 } from './ExternalAutomationRunTable'
 import { getExternalAutomationScheduleDisplay } from './external-automation-schedule-display'
+import { getExternalAutomationActionDisabledMessage } from './external-automation-source-availability'
 import { translate } from '@/i18n/i18n'
 
 type ExternalAutomationManagersProps = {
@@ -59,7 +60,7 @@ function getProviderLabel(manager: ExternalAutomationManager): string {
 }
 
 function getTargetKindLabel(manager: ExternalAutomationManager): string {
-  return manager.target.type === 'ssh' ? 'Remote SSH' : 'Local'
+  return manager.target.type === 'ssh' ? 'SSH host' : 'Local'
 }
 
 function ExternalActionButton({
@@ -111,10 +112,24 @@ export function ExternalAutomationManagers({
     <div className="rounded-md border border-border/50 bg-muted/20 shadow-sm">
       <div className="flex items-center justify-between border-b border-border/50 px-3 py-2">
         <div>
-          <div className="text-sm font-medium">{translate("auto.components.automations.ExternalAutomationManagers.c6695e6fbd", "External automations")}</div>
+          <div className="text-sm font-medium">
+            {translate(
+              'auto.components.automations.ExternalAutomationManagers.c6695e6fbd',
+              'External automations'
+            )}
+          </div>
         </div>
         <Badge variant="outline">
-          {automationCount} {automationCount === 1 ? translate("auto.components.automations.ExternalAutomationManagers.701515f010", "automation") : translate("auto.components.automations.ExternalAutomationManagers.e2532150ed", "automations")}
+          {automationCount}{' '}
+          {automationCount === 1
+            ? translate(
+                'auto.components.automations.ExternalAutomationManagers.701515f010',
+                'automation'
+              )
+            : translate(
+                'auto.components.automations.ExternalAutomationManagers.e2532150ed',
+                'automations'
+              )}
         </Badge>
       </div>
       <div className="divide-y divide-border/50">
@@ -127,9 +142,18 @@ export function ExternalAutomationManagers({
                   {getProviderLabel(manager)} / {getTargetKindLabel(manager)} ·{' '}
                   {manager.status === 'available'
                     ? manager.canManage
-                      ? translate("auto.components.automations.ExternalAutomationManagers.0a2d4359a8", "Manageable")
-                      : translate("auto.components.automations.ExternalAutomationManagers.dbdcec22bd", "Read-only")
-                    : translate("auto.components.automations.ExternalAutomationManagers.92405f1431", "Unavailable")}
+                      ? translate(
+                          'auto.components.automations.ExternalAutomationManagers.0a2d4359a8',
+                          'Manageable'
+                        )
+                      : translate(
+                          'auto.components.automations.ExternalAutomationManagers.dbdcec22bd',
+                          'Read-only'
+                        )
+                    : translate(
+                        'auto.components.automations.ExternalAutomationManagers.92405f1431',
+                        'Unavailable'
+                      )}
                   {manager.error ? ` - ${manager.error}` : null}
                 </div>
               </div>
@@ -140,6 +164,10 @@ export function ExternalAutomationManagers({
             <div className="divide-y divide-border/40">
               {manager.jobs.map((job) => {
                 const scheduleDisplay = getExternalAutomationScheduleDisplay(manager, job)
+                const disabledMessage = getExternalAutomationActionDisabledMessage({
+                  manager,
+                  actionInProgress: runningActionKey !== null
+                })
                 return (
                   <div
                     key={job.id}
@@ -149,19 +177,45 @@ export function ExternalAutomationManagers({
                       <div className="flex min-w-0 items-center gap-2">
                         <span className="truncate font-medium">{job.name}</span>
                         <Badge variant={job.enabled ? 'secondary' : 'outline'}>
-                          {job.enabled ? translate("auto.components.automations.ExternalAutomationManagers.b3feba84c7", "Active") : translate("auto.components.automations.ExternalAutomationManagers.2b0adbce21", "Paused")}
+                          {job.enabled
+                            ? translate(
+                                'auto.components.automations.ExternalAutomationManagers.b3feba84c7',
+                                'Active'
+                              )
+                            : translate(
+                                'auto.components.automations.ExternalAutomationManagers.2b0adbce21',
+                                'Paused'
+                              )}
                         </Badge>
                       </div>
                       <div className="mt-1 truncate text-xs font-medium text-foreground/80">
                         {scheduleDisplay.label}
                       </div>
                       <div className="mt-1 truncate text-xs text-muted-foreground">
-                        {translate("auto.components.automations.ExternalAutomationManagers.20fd7a3a15", "next")} {formatExternalDate(job.nextRunAt, now)} · {getProviderLabel(manager)}{' '}
-                        / {manager.targetLabel}
+                        {translate(
+                          'auto.components.automations.ExternalAutomationManagers.20fd7a3a15',
+                          'next'
+                        )}{' '}
+                        {formatExternalDate(job.nextRunAt, now)} · {getProviderLabel(manager)} /{' '}
+                        {manager.targetLabel}
                       </div>
-                      {manager.provider === "hermes" ? (
+                      {manager.provider === 'hermes' ? (
                         <div className="mt-1 truncate text-xs text-muted-foreground">
-                          {job.runCount} {job.runCount === 1 ? translate("auto.components.automations.ExternalAutomationManagers.8e9165af08", "run") : translate("auto.components.automations.ExternalAutomationManagers.e66091daf4", "runs")} {translate("auto.components.automations.ExternalAutomationManagers.844f1acb72", "found")}</div>
+                          {job.runCount}{' '}
+                          {job.runCount === 1
+                            ? translate(
+                                'auto.components.automations.ExternalAutomationManagers.8e9165af08',
+                                'run'
+                              )
+                            : translate(
+                                'auto.components.automations.ExternalAutomationManagers.e66091daf4',
+                                'runs'
+                              )}{' '}
+                          {translate(
+                            'auto.components.automations.ExternalAutomationManagers.844f1acb72',
+                            'found'
+                          )}
+                        </div>
                       ) : null}
                       {job.promptPreview || job.lastError ? (
                         <div className="mt-1 truncate text-xs text-muted-foreground">
@@ -170,13 +224,23 @@ export function ExternalAutomationManagers({
                       ) : null}
                     </div>
                     <div className="hidden min-w-0 text-xs text-muted-foreground md:block">
-                      {translate("auto.components.automations.ExternalAutomationManagers.5820648765", "Last")}{formatExternalDate(job.lastRunAt, now)}
+                      {translate(
+                        'auto.components.automations.ExternalAutomationManagers.5820648765',
+                        'Last'
+                      )}
+                      {formatExternalDate(job.lastRunAt, now)}
                       {job.lastStatus ? ` · ${job.lastStatus}` : null}
                     </div>
                     <div className="flex items-center justify-end gap-1">
                       <ExternalActionButton
-                        label={translate("auto.components.automations.ExternalAutomationManagers.cc77ba88ff", "Run external automation")}
-                        disabled={!manager.canManage || runningActionKey !== null}
+                        label={
+                          disabledMessage ??
+                          translate(
+                            'auto.components.automations.ExternalAutomationManagers.cc77ba88ff',
+                            'Run external automation'
+                          )
+                        }
+                        disabled={disabledMessage !== null}
                         onClick={() => onAction(manager, job, 'run')}
                       >
                         {runningActionKey === actionKey(manager, job, 'run') ? (
@@ -185,10 +249,16 @@ export function ExternalAutomationManagers({
                           <Play className="size-3.5" />
                         )}
                       </ExternalActionButton>
-                      {manager.provider === "hermes" ? (
+                      {manager.provider === 'hermes' ? (
                         <ExternalActionButton
-                          label={translate("auto.components.automations.ExternalAutomationManagers.1df491fd00", "Edit external automation")}
-                          disabled={!manager.canManage || runningActionKey !== null}
+                          label={
+                            disabledMessage ??
+                            translate(
+                              'auto.components.automations.ExternalAutomationManagers.1df491fd00',
+                              'Edit external automation'
+                            )
+                          }
+                          disabled={disabledMessage !== null}
                           onClick={() => onEdit?.(manager, job)}
                         >
                           <Pencil className="size-3.5" />
@@ -196,9 +266,18 @@ export function ExternalAutomationManagers({
                       ) : null}
                       <ExternalActionButton
                         label={
-                          job.enabled ? translate("auto.components.automations.ExternalAutomationManagers.0def1693bb", "Pause external automation") : translate("auto.components.automations.ExternalAutomationManagers.1c3bfd38fe", "Resume external automation")
+                          disabledMessage ??
+                          (job.enabled
+                            ? translate(
+                                'auto.components.automations.ExternalAutomationManagers.0def1693bb',
+                                'Pause external automation'
+                              )
+                            : translate(
+                                'auto.components.automations.ExternalAutomationManagers.1c3bfd38fe',
+                                'Resume external automation'
+                              ))
                         }
-                        disabled={!manager.canManage || runningActionKey !== null}
+                        disabled={disabledMessage !== null}
                         onClick={() => onAction(manager, job, job.enabled ? 'pause' : 'resume')}
                       >
                         {runningActionKey ===
@@ -211,9 +290,15 @@ export function ExternalAutomationManagers({
                         )}
                       </ExternalActionButton>
                       <ExternalActionButton
-                        label={translate("auto.components.automations.ExternalAutomationManagers.a42bf2b27e", "Delete external automation")}
+                        label={
+                          disabledMessage ??
+                          translate(
+                            'auto.components.automations.ExternalAutomationManagers.a42bf2b27e',
+                            'Delete external automation'
+                          )
+                        }
                         className="text-destructive hover:text-destructive"
-                        disabled={!manager.canManage || runningActionKey !== null}
+                        disabled={disabledMessage !== null}
                         onClick={() => onAction(manager, job, 'delete')}
                       >
                         {runningActionKey === actionKey(manager, job, 'delete') ? (
@@ -223,7 +308,7 @@ export function ExternalAutomationManagers({
                         )}
                       </ExternalActionButton>
                     </div>
-                    {manager.provider === "hermes" ? (
+                    {manager.provider === 'hermes' ? (
                       <div className="col-span-3">
                         <ExternalAutomationRunTable
                           manager={manager}
@@ -239,15 +324,35 @@ export function ExternalAutomationManagers({
               })}
               {manager.jobs.length === 0 ? (
                 <div className="px-3 py-4 text-sm text-muted-foreground">
-                  {translate("auto.components.automations.ExternalAutomationManagers.3d58d5b67d", "No")}{' '}
-                  {manager.provider === 'hermes' ? translate("auto.components.automations.ExternalAutomationManagers.766abf833c", "Hermes") : translate("auto.components.automations.ExternalAutomationManagers.5524365227", "OpenClaw")} {translate("auto.components.automations.ExternalAutomationManagers.6da3bfba4b", "automations found.")}</div>
+                  {translate(
+                    'auto.components.automations.ExternalAutomationManagers.3d58d5b67d',
+                    'No'
+                  )}{' '}
+                  {manager.provider === 'hermes'
+                    ? translate(
+                        'auto.components.automations.ExternalAutomationManagers.766abf833c',
+                        'Hermes'
+                      )
+                    : translate(
+                        'auto.components.automations.ExternalAutomationManagers.5524365227',
+                        'OpenClaw'
+                      )}{' '}
+                  {translate(
+                    'auto.components.automations.ExternalAutomationManagers.6da3bfba4b',
+                    'automations found.'
+                  )}
+                </div>
               ) : null}
             </div>
           </div>
         ))}
         {managers.length === 0 ? (
           <div className="px-3 py-6 text-center text-sm text-muted-foreground">
-            {translate("auto.components.automations.ExternalAutomationManagers.e02f970595", "No external automation managers found.")}</div>
+            {translate(
+              'auto.components.automations.ExternalAutomationManagers.e02f970595',
+              'No external automation managers found.'
+            )}
+          </div>
         ) : null}
       </div>
     </div>

@@ -36,7 +36,10 @@ function getSelectedAgentRuntime(
     settings.localAgentRuntime ?? (settings.terminalWindowsShell === 'wsl.exe' ? 'wsl' : 'host')
   if (wslSupportedPlatform && configuredRuntime === 'wsl') {
     if (!wslAvailable && !wslCapabilitiesLoading) {
-      return { runtime: 'wsl', label: translate("auto.components.settings.AgentLocationSetting.43663b5e69", "WSL") }
+      return {
+        runtime: 'wsl',
+        label: translate('auto.components.settings.AgentLocationSetting.43663b5e69', 'WSL')
+      }
     }
     const configuredDistro =
       settings.localAgentWslDistro?.trim() || settings.terminalWindowsWslDistro?.trim() || null
@@ -80,17 +83,30 @@ export function AgentLocationSetting({
   return (
     <section className="space-y-3">
       <SettingsRow
-        label={translate("auto.components.settings.AgentLocationSetting.9bccf48906", "Agent location")}
+        label={translate(
+          'auto.components.settings.AgentLocationSetting.9bccf48906',
+          'Agent location'
+        )}
         alignTop
         description={
-          agentRuntime.runtime === "wsl" && !wslAvailable && !wslCapabilitiesLoading
-            ? translate("auto.components.settings.AgentLocationSetting.c7c516946f", "WSL is not available on this machine.")
-            : translate("auto.components.settings.AgentLocationSetting.d00949e59b", "Show installed agents from {{value0}}. Refresh re-checks PATH in that environment.", { value0: agentRuntime.label })
+          agentRuntime.runtime === 'wsl' && !wslAvailable && !wslCapabilitiesLoading
+            ? translate(
+                'auto.components.settings.AgentLocationSetting.c7c516946f',
+                'WSL is not available on this machine.'
+              )
+            : translate(
+                'auto.components.settings.AgentLocationSetting.d00949e59b',
+                'Show installed agents from {{value0}}. Refresh re-checks PATH in that environment.',
+                { value0: agentRuntime.label }
+              )
         }
         control={
           <div className="flex w-44 flex-col items-stretch gap-2">
             <SettingsSegmentedControl
-              ariaLabel={translate("auto.components.settings.AgentLocationSetting.9bccf48906", "Agent location")}
+              ariaLabel={translate(
+                'auto.components.settings.AgentLocationSetting.9bccf48906',
+                'Agent location'
+              )}
               value={agentRuntime.runtime}
               onChange={(value) => updateAgentLocation({ localAgentRuntime: value })}
               equalWidth
@@ -100,14 +116,17 @@ export function AgentLocationSetting({
                   ? [
                       {
                         value: 'wsl',
-                        label: translate("auto.components.settings.AgentLocationSetting.43663b5e69", "WSL"),
+                        label: translate(
+                          'auto.components.settings.AgentLocationSetting.43663b5e69',
+                          'WSL'
+                        ),
                         disabled: wslCapabilitiesLoading || !wslAvailable
                       } as const
                     ]
                   : [])
               ]}
             />
-            {wslSupportedPlatform && agentRuntime.runtime === "wsl" ? (
+            {wslSupportedPlatform && agentRuntime.runtime === 'wsl' ? (
               <Select
                 value={agentRuntime.wslDistro ?? '__default__'}
                 onValueChange={(value) =>
@@ -120,11 +139,26 @@ export function AgentLocationSetting({
               >
                 <SelectTrigger size="sm" className="w-full min-w-44">
                   <SelectValue
-                    placeholder={wslCapabilitiesLoading ? translate("auto.components.settings.AgentLocationSetting.fc806485ae", "Loading WSL") : translate("auto.components.settings.AgentLocationSetting.92f4238f1a", "WSL default")}
+                    placeholder={
+                      wslCapabilitiesLoading
+                        ? translate(
+                            'auto.components.settings.AgentLocationSetting.fc806485ae',
+                            'Loading WSL'
+                          )
+                        : translate(
+                            'auto.components.settings.AgentLocationSetting.92f4238f1a',
+                            'WSL default'
+                          )
+                    }
                   />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="__default__">{translate("auto.components.settings.AgentLocationSetting.92f4238f1a", "WSL default")}</SelectItem>
+                  <SelectItem value="__default__">
+                    {translate(
+                      'auto.components.settings.AgentLocationSetting.92f4238f1a',
+                      'WSL default'
+                    )}
+                  </SelectItem>
                   {wslDistros.map((distro) => (
                     <SelectItem key={distro} value={distro}>
                       {distro}

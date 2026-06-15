@@ -137,7 +137,8 @@ describe('removeWorktree cascade', () => {
       activeFileId: '/path/wt1/file.ts',
       activeTabType: 'editor',
       activeFileIdByWorktree: { [worktreeId]: '/path/wt1/file.ts' },
-      activeTabTypeByWorktree: { [worktreeId]: 'editor' }
+      activeTabTypeByWorktree: { [worktreeId]: 'editor' },
+      rightSidebarExplorerViewByWorktree: { [worktreeId]: 'search' }
     })
 
     const result = await store.getState().removeWorktree(worktreeId)
@@ -159,6 +160,7 @@ describe('removeWorktree cascade', () => {
     expect(s.activeTabType).toBe('terminal')
     expect(s.activeFileIdByWorktree[worktreeId]).toBeUndefined()
     expect(s.activeTabTypeByWorktree[worktreeId]).toBeUndefined()
+    expect(s.rightSidebarExplorerViewByWorktree[worktreeId]).toBeUndefined()
   })
 
   it('warns when workspace removal keeps the local branch', async () => {
@@ -759,7 +761,7 @@ describe('setActiveWorktree', () => {
         ]
       },
       rightSidebarTab: 'checks',
-      rightSidebarTabByWorktree: { [wt1]: 'search', [wt2]: 'explorer' }
+      rightSidebarTabByWorktree: { [wt1]: 'search' as never, [wt2]: 'explorer' }
     })
 
     store.getState().setActiveWorktree(wt1)
@@ -770,6 +772,41 @@ describe('setActiveWorktree', () => {
 
     store.getState().setActiveWorktree(wt1)
     expect(store.getState().rightSidebarTab).toBe('checks')
+  })
+
+  it('restores the Explorer files/search subview per worktree when switching', () => {
+    const store = createTestStore()
+    const wt1 = 'repo1::/path/wt1'
+    const wt2 = 'repo1::/path/wt2'
+    const wt3 = 'repo1::/path/wt3'
+
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [
+          makeWorktree({ id: wt1, repoId: 'repo1', path: '/path/wt1' }),
+          makeWorktree({ id: wt2, repoId: 'repo1', path: '/path/wt2' }),
+          makeWorktree({ id: wt3, repoId: 'repo1', path: '/path/wt3' })
+        ]
+      },
+      rightSidebarTab: 'explorer',
+      rightSidebarExplorerView: 'search',
+      rightSidebarExplorerViewByWorktree: {
+        [wt1]: 'search',
+        [wt2]: 'files'
+      }
+    })
+
+    store.getState().setActiveWorktree(wt1)
+    expect(store.getState().rightSidebarExplorerView).toBe('search')
+
+    store.getState().setActiveWorktree(wt2)
+    expect(store.getState().rightSidebarExplorerView).toBe('files')
+
+    store.getState().setActiveWorktree(wt3)
+    expect(store.getState().rightSidebarExplorerView).toBe('files')
+
+    store.getState().setActiveWorktree(wt1)
+    expect(store.getState().rightSidebarExplorerView).toBe('search')
   })
 
   it('does not reset the right sidebar tab for worktrees without remembered sidebar state', () => {
@@ -851,7 +888,7 @@ describe('setActiveWorktree', () => {
     seedStore(store, {
       activeWorktreeId: 'repo1::/path/wt1',
       rightSidebarTab: 'checks',
-      rightSidebarTabByWorktree: { 'repo1::/path/wt1': 'search' }
+      rightSidebarTabByWorktree: { 'repo1::/path/wt1': 'search' as never }
     })
 
     store.getState().setActiveWorktree(null)
@@ -2068,6 +2105,105 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
     await store.getState().shutdownWorktreeTerminals(wt, { keepIdentifiers: true })
 
     expect(capture).toHaveBeenCalledWith({ includeLocalBuffers: false })
+  })
+
+  it('does not stop the active runtime when sleeping an SSH-owned worktree', async () => {
+    const store = createTestStore()
+    const wt = 'repo1::/path/wt1'
+
+    seedStore(store, {
+      settings: { ...getDefaultSettings('/tmp'), activeRuntimeEnvironmentId: 'runtime-1' },
+      repos: [
+        {
+          id: 'repo1',
+          path: '/repo1',
+          displayName: 'Repo 1',
+          badgeColor: '#000',
+          addedAt: 0,
+          connectionId: 'ssh-1'
+        }
+      ],
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+      },
+      tabsByWorktree: {
+        [wt]: [makeTab({ id: 'tab-1', worktreeId: wt, ptyId: 'ssh:ssh-1@@pty-1' })]
+      },
+      ptyIdsByTabId: { 'tab-1': ['ssh:ssh-1@@pty-1'] }
+    })
+
+    await store.getState().shutdownWorktreeTerminals(wt, { keepIdentifiers: true })
+
+    expect(mockApi.runtimeEnvironments.call).not.toHaveBeenCalledWith(
+      expect.objectContaining({ method: 'terminal.stop' })
+    )
+    expect(mockApi.pty.kill).toHaveBeenCalledWith('ssh:ssh-1@@pty-1', { keepHistory: true })
+  })
+
+  it('stops the owner runtime when sleeping a runtime-owned compatibility worktree', async () => {
+    const store = createTestStore()
+    const wt = 'repo1::/path/wt1'
+
+    seedStore(store, {
+      settings: { ...getDefaultSettings('/tmp'), activeRuntimeEnvironmentId: 'runtime-1' },
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+      },
+      tabsByWorktree: {
+        [wt]: [makeTab({ id: 'tab-1', worktreeId: wt, ptyId: 'pty-1' })]
+      },
+      ptyIdsByTabId: { 'tab-1': ['pty-1'] }
+    })
+
+    await store.getState().shutdownWorktreeTerminals(wt, { keepIdentifiers: true })
+
+    expect(mockApi.runtimeEnvironments.call).toHaveBeenCalledWith(
+      expect.objectContaining({
+        selector: 'runtime-1',
+        method: 'terminal.stop'
+      })
+    )
+  })
+
+  it('stops the explicit owner runtime when another host is focused', async () => {
+    const store = createTestStore()
+    const wt = 'repo1::/path/wt1'
+
+    seedStore(store, {
+      settings: { ...getDefaultSettings('/tmp'), activeRuntimeEnvironmentId: 'focused-runtime' },
+      repos: [
+        {
+          id: 'repo1',
+          path: '/path/repo1',
+          displayName: 'Repo 1',
+          badgeColor: '#000',
+          addedAt: 0,
+          executionHostId: 'runtime:owner-runtime'
+        }
+      ],
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+      },
+      tabsByWorktree: {
+        [wt]: [makeTab({ id: 'tab-1', worktreeId: wt, ptyId: 'pty-1' })]
+      },
+      ptyIdsByTabId: { 'tab-1': ['pty-1'] }
+    })
+
+    await store.getState().shutdownWorktreeTerminals(wt, { keepIdentifiers: true })
+
+    expect(mockApi.runtimeEnvironments.call).toHaveBeenCalledWith(
+      expect.objectContaining({
+        selector: 'owner-runtime',
+        method: 'terminal.stop'
+      })
+    )
+    expect(mockApi.runtimeEnvironments.call).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        selector: 'focused-runtime',
+        method: 'terminal.stop'
+      })
+    )
   })
 
   it('drops live agentStatusByPaneKey entries on sleep so the working row disappears', async () => {

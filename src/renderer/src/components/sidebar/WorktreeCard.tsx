@@ -2,6 +2,7 @@
 import React, { useEffect, useCallback, useState } from 'react'
 import { useAppStore } from '@/store'
 import { getHostedReviewCacheKey } from '@/store/slices/hosted-review'
+import { issueCacheKey as getIssueCacheKey } from '@/store/slices/github'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
@@ -46,6 +47,7 @@ import { WorktreeCardPortsDetails, WorktreeCardPortsTrigger } from './WorktreeCa
 import { writeWorkspaceDragData } from './workspace-status'
 import { getWorktreeCardPrDisplay } from './worktree-card-pr-display'
 import { useWorktreeCardDetailsHoverControl } from './worktree-card-details-hover-state'
+import { isEventTargetInsideCurrentTarget } from './worktree-card-dom-events'
 import { getWorkspacePortsByWorktreeId } from '@/lib/workspace-port-groups'
 import { RepoBadgeMark } from '@/components/repo/RepoBadgeLabel'
 import { RepoIconGlyph } from '@/components/repo/repo-icon'
@@ -60,7 +62,9 @@ import {
 } from './workspace-delete-quick-action'
 import { DetachedHeadBadge } from '@/components/DetachedHeadBadge'
 import { getWorktreeGitIdentityDisplay } from '@/lib/worktree-git-identity-display'
+import { getFlushWorktreeCardPaddingLeft } from './worktree-list-indentation'
 import { translate } from '@/i18n/i18n'
+import { folderWorkspaceKey, parseWorkspaceKey } from '../../../../shared/workspace-scope'
 
 type WorktreeRenameRequest = {
   worktreeId: string
@@ -81,6 +85,7 @@ type WorktreeCardProps = {
   revealHighlightTone?: 'default' | 'ai'
   selectedWorktrees?: readonly Worktree[]
   hideRepoBadge?: boolean
+  hostContextLabel?: string
   inPinnedSection?: boolean
   activationRowKey?: string
   renameRowKey?: string
@@ -126,6 +131,12 @@ function formatSparseDirectoryPreview(directories: string[]): string {
 
 function isWebClient(): boolean {
   return Boolean((window as unknown as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__)
+}
+
+function getDirectoryName(folderPath: string): string {
+  const normalized = folderPath.replace(/[\\/]+$/, '')
+  const parts = normalized.split(/[\\/]+/)
+  return parts.at(-1) || normalized || folderPath
 }
 
 // Why: the pinned repo icon and the compact inline badge share one chip shell;
@@ -176,6 +187,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
   onCardDragEnd,
   nativeDragEnabled = true,
   hideRepoBadge,
+  hostContextLabel,
   inPinnedSection = false,
   activationRowKey,
   renameRowKey,
@@ -189,6 +201,8 @@ const WorktreeCard = React.memo(function WorktreeCard({
   const openModal = useAppStore((s) => s.openModal)
   const openTaskPage = useAppStore((s) => s.openTaskPage)
   const updateWorktreeMeta = useAppStore((s) => s.updateWorktreeMeta)
+  const deleteFolderWorkspace = useAppStore((s) => s.deleteFolderWorkspace)
+  const setActiveWorktree = useAppStore((s) => s.setActiveWorktree)
   const renamingWorktreeId = useAppStore((s) => s.renamingWorktreeId)
   const setRenamingWorktreeId = useAppStore((s) => s.setRenamingWorktreeId)
   const fetchHostedReviewForBranch = useAppStore((s) => s.fetchHostedReviewForBranch)
@@ -272,12 +286,32 @@ const WorktreeCard = React.memo(function WorktreeCard({
   const gitIdentityDisplay = getWorktreeGitIdentityDisplay(worktree)
   const detachedHeadDisplay = gitIdentityDisplay?.kind === 'detached' ? gitIdentityDisplay : null
   const branch = gitIdentityDisplay?.kind === 'branch' ? gitIdentityDisplay.branchName : ''
-  const isFolder = repo ? isFolderRepo(repo) : false
+  const workspaceScope = parseWorkspaceKey(worktree.id)
+  const folderWorkspaceId =
+    workspaceScope?.type === 'folder' ? workspaceScope.folderWorkspaceId : null
+  const isFolder = repo ? isFolderRepo(repo) : folderWorkspaceId !== null
   const hostedReviewCacheKey =
     repo && branch
-      ? getHostedReviewCacheKey(repo.path, branch, settings, repo.id, repo.connectionId)
+      ? getHostedReviewCacheKey(
+          repo.path,
+          branch,
+          settings,
+          repo.id,
+          repo.connectionId,
+          repo.executionHostId
+        )
       : ''
-  const issueCacheKey = repo && worktree.linkedIssue ? `${repo.id}::${worktree.linkedIssue}` : ''
+  const issueCacheKey =
+    repo && worktree.linkedIssue
+      ? getIssueCacheKey(
+          repo.path,
+          repo.id,
+          worktree.linkedIssue,
+          settings,
+          repo.connectionId,
+          repo.executionHostId
+        )
+      : ''
   // Why: use 'all' to fetch from all Linear workspaces. The issue might belong
   // to a different workspace than the currently selected one.
   const linearIssueCacheKey = worktree.linkedLinearIssue ? `all::${worktree.linkedLinearIssue}` : ''
@@ -489,6 +523,9 @@ const WorktreeCard = React.memo(function WorktreeCard({
   // Stable click handler – ignore clicks that are really text selections.
   const handleClick = useCallback(
     (event: React.MouseEvent<HTMLDivElement>) => {
+      if (!isEventTargetInsideCurrentTarget(event.currentTarget, event.target)) {
+        return
+      }
       const selection = window.getSelection()
       // Why: only suppress the click when the selection is *inside this card*
       // (a real drag-select on the card's own text). A selection anchored
@@ -544,22 +581,28 @@ const WorktreeCard = React.memo(function WorktreeCard({
     [updateWorktreeMeta, worktree.id]
   )
 
-  const handleDoubleClick = useCallback(() => {
-    openModal('edit-meta', {
-      worktreeId: worktree.id,
-      currentDisplayName: worktree.displayName,
-      currentIssue: worktree.linkedIssue,
-      currentPR: worktree.linkedPR,
-      currentComment: worktree.comment
-    })
-  }, [
-    openModal,
-    worktree.comment,
-    worktree.displayName,
-    worktree.id,
-    worktree.linkedIssue,
-    worktree.linkedPR
-  ])
+  const handleDoubleClick = useCallback(
+    (event: React.MouseEvent<HTMLDivElement>) => {
+      if (!isEventTargetInsideCurrentTarget(event.currentTarget, event.target)) {
+        return
+      }
+      openModal('edit-meta', {
+        worktreeId: worktree.id,
+        currentDisplayName: worktree.displayName,
+        currentIssue: worktree.linkedIssue,
+        currentPR: worktree.linkedPR,
+        currentComment: worktree.comment
+      })
+    },
+    [
+      openModal,
+      worktree.comment,
+      worktree.displayName,
+      worktree.id,
+      worktree.linkedIssue,
+      worktree.linkedPR
+    ]
+  )
 
   const handleToggleUnreadQuick = useCallback(
     (event: React.MouseEvent<HTMLButtonElement>) => {
@@ -581,10 +624,27 @@ const WorktreeCard = React.memo(function WorktreeCard({
       event.preventDefault()
       event.stopPropagation()
       if (showDeleteQuickAction) {
+        if (folderWorkspaceId) {
+          void deleteFolderWorkspace(folderWorkspaceId).then((deleted) => {
+            if (
+              deleted &&
+              useAppStore.getState().activeWorktreeId === folderWorkspaceKey(folderWorkspaceId)
+            ) {
+              setActiveWorktree(null)
+            }
+          })
+          return
+        }
         runWorktreeDelete(worktree.id)
       }
     },
-    [showDeleteQuickAction, worktree.id]
+    [
+      deleteFolderWorkspace,
+      folderWorkspaceId,
+      setActiveWorktree,
+      showDeleteQuickAction,
+      worktree.id
+    ]
   )
   const handlePendingFirstAgentMessageRenameInfo = useCallback(
     (event: React.MouseEvent<HTMLButtonElement>) => {
@@ -633,6 +693,10 @@ const WorktreeCard = React.memo(function WorktreeCard({
 
   const handleDragStart = useCallback(
     (event: React.DragEvent<HTMLDivElement>) => {
+      if (!isEventTargetInsideCurrentTarget(event.currentTarget, event.target)) {
+        event.preventDefault()
+        return
+      }
       if (isDeleting) {
         event.preventDefault()
         return
@@ -645,6 +709,16 @@ const WorktreeCard = React.memo(function WorktreeCard({
       onCardDragStart?.(event, worktree.id, Array.isArray(dragIds) ? dragIds : [dragIds])
     },
     [isDeleting, isMultiSelected, onCardDragStart, selectedWorktrees, worktree.id]
+  )
+
+  const handleDragEnd = useCallback(
+    (event: React.DragEvent<HTMLDivElement>) => {
+      if (!isEventTargetInsideCurrentTarget(event.currentTarget, event.target)) {
+        return
+      }
+      onCardDragEnd?.(event)
+    },
+    [onCardDragEnd]
   )
 
   const handleContextMenuSelect = useCallback(
@@ -751,6 +825,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
   const showInlineRepoBadge =
     compactCards && !!repo && !hideRepoBadge && !isFolder && !showPinnedRepoIcon
   const showRepoBadgeInMetaRow = !compactCards && !!repo && !hideRepoBadge && !showPinnedRepoIcon
+  const showHostContextBadge = !compactCards && !!hostContextLabel
   const showDetachedHeadInMetaRow = !compactCards && !isFolder && detachedHeadDisplay !== null
   const showBranch =
     !isFolder && branch.length > 0 && (!compactCards || branch !== worktree.displayName)
@@ -772,6 +847,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
   // metadata lane unless branch or detached-head identity has content.
   const hasDetailedMetaRowContent = Boolean(
     (showRepoBadgeInMetaRow && repo) ||
+    showHostContextBadge ||
     isFolder ||
     showBranch ||
     showDetachedHeadInMetaRow ||
@@ -789,8 +865,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
   // aligned with the pre-inset layout and the repo header hierarchy.
   const cardStyle = flushSurface
     ? {
-        paddingLeft:
-          contentIndent > 0 ? `max(0.125rem, calc(${contentIndent}px - 0.625rem))` : '0.125rem'
+        paddingLeft: getFlushWorktreeCardPaddingLeft(contentIndent)
       }
     : contentIndent > 0
       ? { paddingLeft: `calc(0.125rem + ${contentIndent}px)` }
@@ -896,7 +971,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
       onDoubleClick={handleDoubleClick}
       draggable={nativeDragEnabled && !isDeleting && !titleRenaming}
       onDragStart={nativeDragEnabled ? handleDragStart : undefined}
-      onDragEnd={nativeDragEnabled ? onCardDragEnd : undefined}
+      onDragEnd={nativeDragEnabled ? handleDragEnd : undefined}
       aria-busy={isDeleting}
       style={cardStyle}
     >
@@ -965,7 +1040,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
                       )
                     : translate(
                         'auto.components.sidebar.WorktreeCard.ca74db7550',
-                        'Remote project via SSH'
+                        'Project on SSH host'
                       )}
                 </TooltipContent>
               </Tooltip>
@@ -996,6 +1071,17 @@ const WorktreeCard = React.memo(function WorktreeCard({
               )}
               onBeginEditingConsumed={() => setRenamingWorktreeId(null)}
             />
+
+            {isFolder && (
+              <Badge
+                variant="secondary"
+                className="h-[16px] px-1.5 text-[10px] font-medium rounded shrink-0 text-muted-foreground bg-accent border border-border dark:bg-accent/80 dark:border-border/50 leading-none"
+              >
+                {repo
+                  ? getRepoKindLabel(repo)
+                  : translate('auto.components.sidebar.WorktreeCard.93aebe4529', 'Folder')}
+              </Badge>
+            )}
 
             {typeof worktree.firstAgentMessageRenameError === 'string' &&
             worktree.firstAgentMessageRenameError.length > 0 &&
@@ -1186,15 +1272,22 @@ const WorktreeCard = React.memo(function WorktreeCard({
                 </div>
               )}
 
-              {isFolder ? (
+              {showHostContextBadge && (
                 <Badge
                   variant="secondary"
-                  className="h-[16px] px-1.5 text-[10px] font-medium rounded shrink-0 text-muted-foreground bg-accent border border-border dark:bg-accent/80 dark:border-border/50 leading-none"
+                  className="h-[16px] max-w-[7rem] shrink-0 rounded border border-border bg-accent px-1.5 text-[10px] font-medium leading-none text-muted-foreground dark:bg-accent/80 dark:border-border/50"
                 >
-                  {repo
-                    ? getRepoKindLabel(repo)
-                    : translate('auto.components.sidebar.WorktreeCard.93aebe4529', 'Folder')}
+                  <span className="truncate">{hostContextLabel}</span>
                 </Badge>
+              )}
+
+              {isFolder ? (
+                <span
+                  className="min-w-0 truncate font-mono text-[11px] leading-none text-muted-foreground"
+                  title={worktree.path}
+                >
+                  {getDirectoryName(worktree.path)}
+                </span>
               ) : showBranch ? (
                 <span className="min-w-0 text-[11px] text-muted-foreground truncate leading-none">
                   {branch}

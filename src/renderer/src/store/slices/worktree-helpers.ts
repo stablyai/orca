@@ -15,13 +15,15 @@ import type {
   WorktreeBaseStatusEvent,
   WorktreeLineage,
   WorktreeRemoteBranchConflictEvent,
-  WorktreeMeta
+  WorktreeMeta,
+  WorkspaceKey
 } from '../../../../shared/types'
 import type { TerminalGitHubPRLink } from '@/lib/terminal-github-pr-link-detector'
 import type {
   PendingWorktreeCreation,
   WorktreeCreationPhase
 } from '@/lib/pending-worktree-creation'
+import { getRepoIdFromWorktreeId } from '../../../../shared/worktree-id'
 export { getRepoIdFromWorktreeId } from '../../../../shared/worktree-id'
 
 export type WorktreeDeleteState = {
@@ -46,6 +48,7 @@ export type WorktreeSlice = {
   detectedWorktreesByRepo: Record<string, DetectedWorktreeListResult>
   worktreeLineageById: Record<string, WorktreeLineage>
   activeWorktreeId: string | null
+  activeWorkspaceKey: WorkspaceKey | null
   /**
    * In-flight / failed background worktree creations, keyed by a renderer
    * `creationId`. Kept separate from `worktreesByRepo` on purpose — a real
@@ -136,7 +139,9 @@ export type WorktreeSlice = {
     pendingFirstAgentMessageRename?: boolean,
     /** When set, correlates the backend's `createWorktree:progress` events to a
      *  renderer pending creation. Synchronous callers omit it. */
-    creationId?: string
+    creationId?: string,
+    linkedLinearIssueWorkspaceId?: string | null,
+    linkedLinearIssueOrganizationUrlKey?: string | null
   ) => Promise<CreateWorktreeResult>
   /** Register an in-flight background creation and make it the active surface. */
   beginPendingWorktreeCreation: (entry: PendingWorktreeCreation) => void
@@ -212,6 +217,7 @@ export type WorktreeSlice = {
    */
   seedActiveWorktreeLastVisitedIfMissing: () => void
   setActiveWorktree: (worktreeId: string | null) => void
+  setActiveFolderWorkspace: (folderWorkspaceId: string) => void
   setRenamingWorktreeId: (request: string | WorktreeRenameRequest | null) => void
   allWorktrees: () => Worktree[]
   getKnownWorktreeById: (worktreeId: string) => Worktree | DetectedWorktree | undefined
@@ -248,24 +254,24 @@ export function applyWorktreeUpdates(
   worktreeId: string,
   updates: Partial<WorktreeMeta>
 ): Record<string, Worktree[]> {
-  let changed = false
-  const next: Record<string, Worktree[]> = {}
-
-  for (const [repoId, worktrees] of Object.entries(worktreesByRepo)) {
-    let repoChanged = false
-    const nextWorktrees = worktrees.map((worktree) => {
-      if (worktree.id !== worktreeId) {
-        return worktree
-      }
-
-      const updatedWorktree = { ...worktree, ...updates }
-      repoChanged = true
-      changed = true
-      return updatedWorktree
-    })
-
-    next[repoId] = repoChanged ? nextWorktrees : worktrees
+  const repoId = getRepoIdFromWorktreeId(worktreeId)
+  const worktrees = worktreesByRepo[repoId]
+  if (!worktrees) {
+    return worktreesByRepo
   }
 
-  return changed ? next : worktreesByRepo
+  let changed = false
+  const nextWorktrees = worktrees.map((worktree) => {
+    if (worktree.id !== worktreeId) {
+      return worktree
+    }
+
+    changed = true
+    return { ...worktree, ...updates }
+  })
+  if (!changed) {
+    return worktreesByRepo
+  }
+
+  return { ...worktreesByRepo, [repoId]: nextWorktrees }
 }

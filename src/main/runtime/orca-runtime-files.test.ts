@@ -14,7 +14,7 @@ const {
   renameMock,
   resolveAuthorizedPathMock,
   statMock,
-  subscribeParcelWatcherMock,
+  watchInWorkerMock,
   checkRgAvailableMock,
   wslAwareSpawnMock,
   watchMock
@@ -25,7 +25,7 @@ const {
   renameMock: vi.fn(),
   resolveAuthorizedPathMock: vi.fn(),
   statMock: vi.fn(),
-  subscribeParcelWatcherMock: vi.fn(),
+  watchInWorkerMock: vi.fn(),
   wslAwareSpawnMock: vi.fn(),
   watchMock: vi.fn()
 }))
@@ -49,8 +49,8 @@ vi.mock('fs/promises', async () => {
   }
 })
 
-vi.mock('@parcel/watcher', () => ({
-  subscribe: subscribeParcelWatcherMock
+vi.mock('./file-watcher-host', () => ({
+  watchFileExplorerInWorker: watchInWorkerMock
 }))
 
 vi.mock('../ipc/filesystem-auth', async () => {
@@ -160,7 +160,7 @@ describe('RuntimeFileCommands', () => {
     renameMock.mockReset()
     resolveAuthorizedPathMock.mockReset()
     statMock.mockReset()
-    subscribeParcelWatcherMock.mockReset()
+    watchInWorkerMock.mockReset()
     watchMock.mockReset()
     checkRgAvailableMock.mockReset()
     wslAwareSpawnMock.mockReset()
@@ -364,64 +364,19 @@ describe('RuntimeFileCommands', () => {
     expect(close).toHaveBeenCalledTimes(1)
   })
 
-  it('tracks native Parcel watcher unsubscribe work so shutdown can await it', async () => {
+  it('delegates local recursive watching to the worker thread', async () => {
     resolveAuthorizedPathMock.mockResolvedValue('/repo')
     statMock.mockResolvedValue({ isDirectory: () => true })
-    let resolveUnsubscribe: () => void = () => {}
-    const unsubscribeMock = vi.fn(
-      () =>
-        new Promise<void>((resolve) => {
-          resolveUnsubscribe = resolve
-        })
-    )
-    subscribeParcelWatcherMock.mockResolvedValue({ unsubscribe: unsubscribeMock })
+    const dispose = vi.fn()
+    watchInWorkerMock.mockResolvedValue(dispose)
     const { commands } = createRuntimeFileCommands()
 
     const unsubscribe = await commands.watchFileExplorer('id:wt-1', vi.fn())
+    expect(watchInWorkerMock).toHaveBeenCalledWith('/repo', expect.any(Function))
+
     unsubscribe()
-
-    let drained = false
-    const drainPromise = awaitRuntimeFileWatcherUnsubscribes().then(() => {
-      drained = true
-    })
-    await Promise.resolve()
-
-    expect(unsubscribeMock).toHaveBeenCalledTimes(1)
-    expect(drained).toBe(false)
-
-    resolveUnsubscribe()
-    await drainPromise
-    expect(drained).toBe(true)
-  })
-
-  it('collapses large Parcel watcher batches to an overflow refresh', async () => {
-    resolveAuthorizedPathMock.mockResolvedValue('/repo')
-    statMock.mockResolvedValue({ isDirectory: () => true })
-    type ParcelCallback = (err: Error | null, events: { type: 'create'; path: string }[]) => void
-    const parcelCallbackRef: { current: ParcelCallback | null } = { current: null }
-    subscribeParcelWatcherMock.mockImplementation(async (_rootPath, callback) => {
-      parcelCallbackRef.current = callback as ParcelCallback
-      return { unsubscribe: vi.fn() }
-    })
-    const { commands } = createRuntimeFileCommands()
-    const onEvents = vi.fn()
-
-    await commands.watchFileExplorer('id:wt-1', onEvents)
-    statMock.mockClear()
-    if (!parcelCallbackRef.current) {
-      throw new Error('Parcel watcher callback was not registered')
-    }
-    parcelCallbackRef.current(
-      null,
-      Array.from({ length: 201 }, (_, index) => ({
-        type: 'create',
-        path: `/repo/generated-${index}.txt`
-      }))
-    )
-    await Promise.resolve()
-
-    expect(statMock).not.toHaveBeenCalled()
-    expect(onEvents).toHaveBeenCalledWith([{ kind: 'overflow', absolutePath: '/repo' }])
+    await awaitRuntimeFileWatcherUnsubscribes()
+    expect(dispose).toHaveBeenCalledTimes(1)
   })
 
   it('settles and detaches runtime rg searches when timeout kill is ignored', async () => {

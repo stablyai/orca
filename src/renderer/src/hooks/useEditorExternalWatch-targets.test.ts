@@ -17,13 +17,15 @@ vi.mock('@/components/editor/editor-autosave', () => ({
 describe('getEditorExternalWatchTargets', () => {
   const makeRepo = (
     id: string,
-    connectionId: string | null = null
+    connectionId: string | null = null,
+    executionHostId?: EditorExternalWatchTargetState['repos'][number]['executionHostId']
   ): EditorExternalWatchTargetState['repos'][number] =>
     ({
       id,
       path: `/${id}`,
       kind: 'git',
-      connectionId
+      connectionId,
+      executionHostId
     }) as EditorExternalWatchTargetState['repos'][number]
 
   const makeWorktree = (
@@ -58,6 +60,7 @@ describe('getEditorExternalWatchTargets', () => {
     runtimeEnvironmentId?: string | null
     rightSidebarOpen?: boolean
     rightSidebarTab?: EditorExternalWatchTargetState['rightSidebarTab']
+    rightSidebarExplorerView?: EditorExternalWatchTargetState['rightSidebarExplorerView']
   }): EditorExternalWatchTargetState => ({
     openFiles: args.openFiles ?? [],
     worktreesByRepo: { [args.repo.id]: [args.worktree] },
@@ -65,6 +68,7 @@ describe('getEditorExternalWatchTargets', () => {
     activeWorktreeId: args.activeWorktreeId ?? null,
     rightSidebarOpen: args.rightSidebarOpen ?? false,
     rightSidebarTab: args.rightSidebarTab ?? 'explorer',
+    rightSidebarExplorerView: args.rightSidebarExplorerView ?? 'files',
     settings:
       args.runtimeEnvironmentId === undefined
         ? null
@@ -126,6 +130,24 @@ describe('getEditorExternalWatchTargets', () => {
         runtimeEnvironmentId: null
       }
     ])
+  })
+
+  it('does not watch the active worktree while Explorer search is visible', () => {
+    const repo = makeRepo('repo-active-search')
+    const worktree = makeWorktree(repo.id, 'wt-active-search')
+
+    expect(
+      getEditorExternalWatchTargets(
+        makeState({
+          repo,
+          worktree,
+          activeWorktreeId: worktree.id,
+          rightSidebarOpen: true,
+          rightSidebarTab: 'explorer',
+          rightSidebarExplorerView: 'search'
+        })
+      ).targets
+    ).toEqual([])
   })
 
   it('does not watch the active worktree when a different right sidebar tab is visible', () => {

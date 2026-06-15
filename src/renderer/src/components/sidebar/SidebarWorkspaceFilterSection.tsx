@@ -13,17 +13,25 @@ const SidebarWorkspaceFilterSection = React.memo(function SidebarWorkspaceFilter
   return (
     <>
       <div className="flex items-center justify-between px-2 py-1">
-        <span className="text-[11px] font-semibold text-muted-foreground">{translate("auto.components.sidebar.SidebarWorkspaceFilterSection.82594419ba", "Filters")}</span>
+        <span className="text-[11px] font-semibold text-muted-foreground">
+          {translate('auto.components.sidebar.SidebarWorkspaceFilterSection.82594419ba', 'Filters')}
+        </span>
       </div>
       <FilterToggleRow
         icon={<Moon className="size-3.5" />}
-        label={translate("auto.components.sidebar.SidebarWorkspaceFilterSection.ed1611b65b", "Hide sleeping")}
+        label={translate(
+          'auto.components.sidebar.SidebarWorkspaceFilterSection.ed1611b65b',
+          'Hide sleeping'
+        )}
         checked={!showSleepingWorkspaces}
         onChange={(hideSleeping) => setShowSleepingWorkspaces(!hideSleeping)}
       />
       <FilterToggleRow
         icon={<GitBranch className="size-3.5" />}
-        label={translate("auto.components.sidebar.SidebarWorkspaceFilterSection.c3fa13dc2e", "Hide default branch")}
+        label={translate(
+          'auto.components.sidebar.SidebarWorkspaceFilterSection.c3fa13dc2e',
+          'Hide default branch'
+        )}
         checked={hideDefaultBranchWorkspace}
         onChange={setHideDefaultBranchWorkspace}
       />

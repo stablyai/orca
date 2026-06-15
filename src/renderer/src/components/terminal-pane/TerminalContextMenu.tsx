@@ -118,7 +118,9 @@ export default function TerminalContextMenu({
       )}
       <span className="min-w-0 flex-1 truncate">{command.label}</span>
       {!isTerminalAgentQuickCommand(command) && !command.appendEnter ? (
-        <DropdownMenuShortcut className="shrink-0">{translate("auto.components.terminal.pane.TerminalContextMenu.c2f0b72b8d", "Insert")}</DropdownMenuShortcut>
+        <DropdownMenuShortcut className="shrink-0">
+          {translate('auto.components.terminal.pane.TerminalContextMenu.c2f0b72b8d', 'Insert')}
+        </DropdownMenuShortcut>
       ) : null}
     </DropdownMenuItem>
   )
@@ -169,16 +171,22 @@ export default function TerminalContextMenu({
       >
         <DropdownMenuItem onSelect={onCopy}>
           <Copy />
-          {translate("auto.components.terminal.pane.TerminalContextMenu.f3eeb1de13", "Copy")}<DropdownMenuShortcut>{shortcuts.copy}</DropdownMenuShortcut>
+          {translate('auto.components.terminal.pane.TerminalContextMenu.f3eeb1de13', 'Copy')}
+          <DropdownMenuShortcut>{shortcuts.copy}</DropdownMenuShortcut>
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={onPaste}>
           <Clipboard />
-          {translate("auto.components.terminal.pane.TerminalContextMenu.0a917b591a", "Paste")}<DropdownMenuShortcut>{shortcuts.paste}</DropdownMenuShortcut>
+          {translate('auto.components.terminal.pane.TerminalContextMenu.0a917b591a', 'Paste')}
+          <DropdownMenuShortcut>{shortcuts.paste}</DropdownMenuShortcut>
         </DropdownMenuItem>
         <DropdownMenuSub>
           <DropdownMenuSubTrigger>
             <Play fill="currentColor" strokeWidth={0} />
-            {translate("auto.components.terminal.pane.TerminalContextMenu.ec85df5914", "Quick Commands")}</DropdownMenuSubTrigger>
+            {translate(
+              'auto.components.terminal.pane.TerminalContextMenu.ec85df5914',
+              'Quick Commands'
+            )}
+          </DropdownMenuSubTrigger>
           <DropdownMenuSubContent className="w-60">
             {hasQuickCommands ? (
               <>
@@ -194,7 +202,12 @@ export default function TerminalContextMenu({
                   <>
                     {repoQuickCommands.length > 0 ? <DropdownMenuSeparator /> : null}
                     {repoQuickCommands.length > 0 ? (
-                      <DropdownMenuLabel>{translate("auto.components.terminal.pane.TerminalContextMenu.3ce594a4a0", "Global")}</DropdownMenuLabel>
+                      <DropdownMenuLabel>
+                        {translate(
+                          'auto.components.terminal.pane.TerminalContextMenu.3ce594a4a0',
+                          'Global'
+                        )}
+                      </DropdownMenuLabel>
                     ) : null}
                     {globalQuickCommands.map(renderQuickCommandItem)}
                   </>
@@ -202,7 +215,11 @@ export default function TerminalContextMenu({
               </>
             ) : (
               <DropdownMenuItem disabled className="text-muted-foreground">
-                {translate("auto.components.terminal.pane.TerminalContextMenu.9528a65ef8", "No quick commands")}</DropdownMenuItem>
+                {translate(
+                  'auto.components.terminal.pane.TerminalContextMenu.9528a65ef8',
+                  'No quick commands'
+                )}
+              </DropdownMenuItem>
             )}
             <DropdownMenuSeparator />
             <DropdownMenuItem
@@ -214,25 +231,45 @@ export default function TerminalContextMenu({
               }}
             >
               <Plus />
-              {translate("auto.components.terminal.pane.TerminalContextMenu.0a82b0608c", "Add Quick Command…")}</DropdownMenuItem>
+              {translate(
+                'auto.components.terminal.pane.TerminalContextMenu.0a82b0608c',
+                'Add Quick Command…'
+              )}
+            </DropdownMenuItem>
           </DropdownMenuSubContent>
         </DropdownMenuSub>
         <DropdownMenuItem onSelect={onForkAgentSession}>
           <GitFork />
-          {translate("auto.components.terminal.pane.TerminalContextMenu.8a7ddb8b8a", "Fork Agent Session…")}</DropdownMenuItem>
+          {translate(
+            'auto.components.terminal.pane.TerminalContextMenu.8a7ddb8b8a',
+            'Fork Agent Session…'
+          )}
+        </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={onSplitRight}>
           <PanelRightClose />
-          {translate("auto.components.terminal.pane.TerminalContextMenu.20e565d865", "Split Terminal Right")}<DropdownMenuShortcut>{shortcuts.splitRight}</DropdownMenuShortcut>
+          {translate(
+            'auto.components.terminal.pane.TerminalContextMenu.20e565d865',
+            'Split Terminal Right'
+          )}
+          <DropdownMenuShortcut>{shortcuts.splitRight}</DropdownMenuShortcut>
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={onSplitDown}>
           <PanelBottomClose />
-          {translate("auto.components.terminal.pane.TerminalContextMenu.98bccf4fa2", "Split Terminal Down")}<DropdownMenuShortcut>{shortcuts.splitDown}</DropdownMenuShortcut>
+          {translate(
+            'auto.components.terminal.pane.TerminalContextMenu.98bccf4fa2',
+            'Split Terminal Down'
+          )}
+          <DropdownMenuShortcut>{shortcuts.splitDown}</DropdownMenuShortcut>
         </DropdownMenuItem>
         {canEqualizePaneSizes && (
           <DropdownMenuItem onSelect={onEqualizePaneSizes}>
             <PanelsTopLeft />
-            {translate("auto.components.terminal.pane.TerminalContextMenu.06c2b0f043", "Equalize Pane Sizes")}{showEqualizeShortcut ? (
+            {translate(
+              'auto.components.terminal.pane.TerminalContextMenu.06c2b0f043',
+              'Equalize Pane Sizes'
+            )}
+            {showEqualizeShortcut ? (
               <DropdownMenuShortcut>{shortcuts.equalize}</DropdownMenuShortcut>
             ) : null}
           </DropdownMenuItem>
@@ -240,30 +277,51 @@ export default function TerminalContextMenu({
         {canExpandPane && (
           <DropdownMenuItem onSelect={onToggleExpand}>
             {menuPaneIsExpanded ? <Minimize2 /> : <Maximize2 />}
-            {menuPaneIsExpanded ? translate("auto.components.terminal.pane.TerminalContextMenu.df766809e0", "Collapse Pane") : translate("auto.components.terminal.pane.TerminalContextMenu.925f49f210", "Expand Pane")}
+            {menuPaneIsExpanded
+              ? translate(
+                  'auto.components.terminal.pane.TerminalContextMenu.df766809e0',
+                  'Collapse Pane'
+                )
+              : translate(
+                  'auto.components.terminal.pane.TerminalContextMenu.925f49f210',
+                  'Expand Pane'
+                )}
             <DropdownMenuShortcut>{shortcuts.expand}</DropdownMenuShortcut>
           </DropdownMenuItem>
         )}
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={onSetTitle}>
           <Pencil />
-          {translate("auto.components.terminal.pane.TerminalContextMenu.39809d152f", "Set Title…")}</DropdownMenuItem>
+          {translate('auto.components.terminal.pane.TerminalContextMenu.39809d152f', 'Set Title…')}
+        </DropdownMenuItem>
         <DropdownMenuItem onSelect={onCopyPaneId}>
           <Copy />
-          {translate("auto.components.terminal.pane.TerminalContextMenu.2cf85a6a55", "Copy Pane ID")}</DropdownMenuItem>
+          {translate(
+            'auto.components.terminal.pane.TerminalContextMenu.2cf85a6a55',
+            'Copy Pane ID'
+          )}
+        </DropdownMenuItem>
         {canClosePane && (
           <>
             <DropdownMenuSeparator />
             <DropdownMenuItem variant="destructive" onSelect={onClosePane}>
               <X />
-              {translate("auto.components.terminal.pane.TerminalContextMenu.8c17d6786d", "Close Pane")}<DropdownMenuShortcut>{shortcuts.close}</DropdownMenuShortcut>
+              {translate(
+                'auto.components.terminal.pane.TerminalContextMenu.8c17d6786d',
+                'Close Pane'
+              )}
+              <DropdownMenuShortcut>{shortcuts.close}</DropdownMenuShortcut>
             </DropdownMenuItem>
           </>
         )}
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={onClearScreen}>
           <Eraser />
-          {translate("auto.components.terminal.pane.TerminalContextMenu.b4cdd9314e", "Clear Screen")}</DropdownMenuItem>
+          {translate(
+            'auto.components.terminal.pane.TerminalContextMenu.b4cdd9314e',
+            'Clear Screen'
+          )}
+        </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   )

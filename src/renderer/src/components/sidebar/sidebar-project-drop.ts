@@ -41,22 +41,40 @@ export function getSidebarProjectDropAffordance(args: {
     return {
       visible: true,
       tone: 'busy',
-      label: translate("auto.components.sidebar.sidebar.project.drop.18d3cf40e9", "Checking folder"),
-      description: translate("auto.components.sidebar.sidebar.project.drop.d0f8943f8b", "Preparing the project add flow")
+      label: translate(
+        'auto.components.sidebar.sidebar.project.drop.18d3cf40e9',
+        'Checking folder'
+      ),
+      description: translate(
+        'auto.components.sidebar.sidebar.project.drop.d0f8943f8b',
+        'Preparing the project add flow'
+      )
     }
   }
   if (args.remoteRuntimeActive) {
     return {
       visible: true,
       tone: 'blocked',
-      label: translate("auto.components.sidebar.sidebar.project.drop.e344666fb8", "Server runtime active"),
-      description: translate("auto.components.sidebar.sidebar.project.drop.740e8d0d46", "Use Add Project for server paths")
+      label: translate(
+        'auto.components.sidebar.sidebar.project.drop.e344666fb8',
+        'Server runtime active'
+      ),
+      description: translate(
+        'auto.components.sidebar.sidebar.project.drop.740e8d0d46',
+        'Use Add Project for host paths'
+      )
     }
   }
   return {
     visible: true,
     tone: 'ready',
-    label: translate("auto.components.sidebar.sidebar.project.drop.ffc769ca29", "Drop folder to add project"),
-    description: translate("auto.components.sidebar.sidebar.project.drop.669e12dd97", "Local folders and Git repositories")
+    label: translate(
+      'auto.components.sidebar.sidebar.project.drop.ffc769ca29',
+      'Drop folder to add project'
+    ),
+    description: translate(
+      'auto.components.sidebar.sidebar.project.drop.669e12dd97',
+      'Local folders and Git repositories'
+    )
   }
 }

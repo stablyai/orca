@@ -39,18 +39,42 @@ export function planSourceControlAgentActionLaunch(args: {
 }): SourceControlLaunchPlanResult {
   const agent = args.agent
   if (!agent) {
-    return { ok: false, error: translate("auto.lib.source.control.agent.action.plan.a7ac8717c7", "Choose an agent before starting.") }
+    return {
+      ok: false,
+      error: translate(
+        'auto.lib.source.control.agent.action.plan.a7ac8717c7',
+        'Choose an agent before starting.'
+      )
+    }
   }
   if (!isTuiAgentEnabled(agent, args.disabledAgents)) {
-    return { ok: false, error: translate("auto.lib.source.control.agent.action.plan.b96e091fc9", "The selected agent is disabled in Settings.") }
+    return {
+      ok: false,
+      error: translate(
+        'auto.lib.source.control.agent.action.plan.b96e091fc9',
+        'The selected agent is disabled in Settings.'
+      )
+    }
   }
   if (!args.detectedAgents.includes(agent)) {
-    return { ok: false, error: translate("auto.lib.source.control.agent.action.plan.8eb541cc83", "The selected agent was not detected on this workspace host.") }
+    return {
+      ok: false,
+      error: translate(
+        'auto.lib.source.control.agent.action.plan.8eb541cc83',
+        'The selected agent was not detected on this workspace host.'
+      )
+    }
   }
 
   const trimmedInput = args.commandInput.trim()
   if (!trimmedInput) {
-    return { ok: false, error: translate("auto.lib.source.control.agent.action.plan.46f1a2c9bd", "Command input is empty.") }
+    return {
+      ok: false,
+      error: translate(
+        'auto.lib.source.control.agent.action.plan.46f1a2c9bd',
+        'Command input is empty.'
+      )
+    }
   }
 
   const cmdOverrides = args.cmdOverrides ?? {}
@@ -124,7 +148,13 @@ export function planSourceControlAgentActionLaunch(args: {
   }
 
   if (!startupPlan) {
-    return { ok: false, error: translate("auto.lib.source.control.agent.action.plan.3f0ea9aa0d", "Could not build the agent launch command.") }
+    return {
+      ok: false,
+      error: translate(
+        'auto.lib.source.control.agent.action.plan.3f0ea9aa0d',
+        'Could not build the agent launch command.'
+      )
+    }
   }
 
   const summary =

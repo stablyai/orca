@@ -43,6 +43,32 @@ describe('buildChecksPanelGitStatusContextKey', () => {
       })
     )
   })
+
+  it('changes when linked hosted review metadata changes', () => {
+    const base = {
+      repoId: 'repo-1',
+      worktreeId: 'worktree-1',
+      worktreePath: 'repo-worktree',
+      branch: 'feature/checks',
+      runtimeEnvironmentId: 'runtime-1',
+      repoConnectionId: 'ssh-1',
+      pushTarget: null
+    }
+
+    expect(
+      buildChecksPanelGitStatusContextKey({
+        ...base,
+        linkedGitHubPR: 12,
+        linkedGitLabMR: null
+      })
+    ).not.toBe(
+      buildChecksPanelGitStatusContextKey({
+        ...base,
+        linkedGitHubPR: null,
+        linkedGitLabMR: null
+      })
+    )
+  })
 })
 
 describe('readChecksPanelGitStatusSnapshot', () => {

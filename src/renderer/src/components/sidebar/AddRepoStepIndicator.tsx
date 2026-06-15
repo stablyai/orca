@@ -13,7 +13,12 @@ export function AddRepoStepIndicator({
   isAdding,
   onBack
 }: AddRepoStepIndicatorProps): React.JSX.Element | null {
-  const showBack = step === 'clone' || step === 'remote' || step === 'create' || step === 'nested'
+  const showBack =
+    step === 'clone' ||
+    step === 'remote' ||
+    step === 'server-path' ||
+    step === 'create' ||
+    step === 'nested'
 
   if (!showBack) {
     return null
@@ -27,7 +32,8 @@ export function AddRepoStepIndicator({
         onClick={onBack}
       >
         <ArrowLeft className="size-3" />
-        {translate("auto.components.sidebar.AddRepoStepIndicator.3bb655c117", "Back")}</button>
+        {translate('auto.components.sidebar.AddRepoStepIndicator.3bb655c117', 'Back')}
+      </button>
     </div>
   )
 }

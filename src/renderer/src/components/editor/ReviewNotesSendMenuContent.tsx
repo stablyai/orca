@@ -38,19 +38,34 @@ export function ReviewNotesSendMenuContent({
     if (!hasPrompt || !canSendToActiveAgent) {
       return
     }
-    const pending = toast.loading(translate("auto.components.editor.ReviewNotesSendMenuContent.50f7e753ea", "Sending notes to active agent..."))
+    const pending = toast.loading(
+      translate(
+        'auto.components.editor.ReviewNotesSendMenuContent.50f7e753ea',
+        'Sending notes to active agent...'
+      )
+    )
     void sendNotesToActiveAgentSession({ worktreeId, prompt })
       .then((result) => {
         if (result.status === 'sent') {
           onPromptDelivered?.()
-          toast.success(translate("auto.components.editor.ReviewNotesSendMenuContent.bb9c69a0c9", "Notes sent to active agent."))
+          toast.success(
+            translate(
+              'auto.components.editor.ReviewNotesSendMenuContent.bb9c69a0c9',
+              'Notes sent to active agent.'
+            )
+          )
           return
         }
         toast.message(activeAgentNotesSendFailureMessage(result.status))
       })
       .catch((error) => {
         console.error('Failed to send notes to active agent:', error)
-        toast.error(translate("auto.components.editor.ReviewNotesSendMenuContent.f5096c6e4e", "Could not send notes to the active agent."))
+        toast.error(
+          translate(
+            'auto.components.editor.ReviewNotesSendMenuContent.f5096c6e4e',
+            'Could not send notes to the active agent.'
+          )
+        )
       })
       .finally(() => {
         toast.dismiss(pending)
@@ -59,16 +74,24 @@ export function ReviewNotesSendMenuContent({
 
   return (
     <>
-      <DropdownMenuLabel>{translate("auto.components.editor.ReviewNotesSendMenuContent.03378aea75", "Send notes to")}</DropdownMenuLabel>
+      <DropdownMenuLabel>
+        {translate('auto.components.editor.ReviewNotesSendMenuContent.03378aea75', 'Send notes to')}
+      </DropdownMenuLabel>
       <DropdownMenuItem
         disabled={!hasPrompt || !canSendToActiveAgent}
         onSelect={sendToActiveAgent}
         className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
       >
         <SquareTerminal className="size-3.5" />
-        {translate("auto.components.editor.ReviewNotesSendMenuContent.e84705f223", "Active agent session")}</DropdownMenuItem>
+        {translate(
+          'auto.components.editor.ReviewNotesSendMenuContent.e84705f223',
+          'Active agent session'
+        )}
+      </DropdownMenuItem>
       <DropdownMenuSeparator />
-      <DropdownMenuLabel>{translate("auto.components.editor.ReviewNotesSendMenuContent.a49800405b", "New agent")}</DropdownMenuLabel>
+      <DropdownMenuLabel>
+        {translate('auto.components.editor.ReviewNotesSendMenuContent.a49800405b', 'New agent')}
+      </DropdownMenuLabel>
       <QuickLaunchAgentMenuItems
         worktreeId={worktreeId}
         groupId={groupId}

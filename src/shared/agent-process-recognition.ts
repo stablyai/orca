@@ -22,6 +22,18 @@ function firstCommandToken(command: string): string {
   return command.trim().split(/\s+/)[0] ?? ''
 }
 
+const INTERPRETER_PROCESS_NAMES = new Set([
+  'node',
+  'python',
+  'python3',
+  'bash',
+  'zsh',
+  'sh',
+  'fish',
+  'pwsh',
+  'powershell'
+])
+
 const PROCESS_TO_AGENT = new Map<string, TuiAgent>()
 const AGENT_TYPE_IDS = new Set<TuiAgent>()
 
@@ -37,7 +49,12 @@ for (const [agent, config] of Object.entries(TUI_AGENT_CONFIG) as [
   ]) {
     const normalized = normalizeProcessName(candidate)
     if (normalized) {
-      PROCESS_TO_AGENT.set(normalized, agent)
+      // Why: claude-agent-teams is an Orca wrapper whose child process is the
+      // real `claude` binary. Do not let wrapper configs overwrite canonical
+      // CLI ownership for the same foreground process name.
+      if (!PROCESS_TO_AGENT.has(normalized)) {
+        PROCESS_TO_AGENT.set(normalized, agent)
+      }
     }
   }
 }
@@ -52,7 +69,62 @@ function agentForNormalizedProcess(normalized: string): TuiAgent | undefined {
   if (normalized.startsWith('codex-')) {
     return PROCESS_TO_AGENT.get('codex')
   }
+  if (normalized.startsWith('grok-')) {
+    return PROCESS_TO_AGENT.get('grok')
+  }
   return undefined
+}
+
+function tokenizeCommandLine(commandLine: string): string[] {
+  const tokens: string[] = []
+  let current = ''
+  let quote: '"' | "'" | null = null
+  let escaped = false
+  for (const char of commandLine) {
+    if (escaped) {
+      current += char
+      escaped = false
+      continue
+    }
+    if (char === '\\' && quote !== "'") {
+      escaped = true
+      continue
+    }
+    if ((char === '"' || char === "'") && quote === null) {
+      quote = char
+      continue
+    }
+    if (quote === char) {
+      quote = null
+      continue
+    }
+    if (/\s/.test(char) && quote === null) {
+      if (current) {
+        tokens.push(current)
+        current = ''
+      }
+      continue
+    }
+    current += char
+  }
+  if (current) {
+    tokens.push(current)
+  }
+  return tokens
+}
+
+function tokenLooksExecutable(token: string, index: number, firstNormalized: string): boolean {
+  if (index === 0) {
+    return true
+  }
+  if (!INTERPRETER_PROCESS_NAMES.has(firstNormalized)) {
+    return false
+  }
+  // Why: only inspect interpreter script paths. Prompt text can mention other
+  // agents ("compare opencode vs orca"), and treating every argv token as an
+  // executable would reintroduce the substring-style false identity class that
+  // foreground-process detection is meant to avoid.
+  return token.includes('/') || token.includes('\\') || EXTENSION_RE.test(token)
 }
 
 export function isExpectedAgentProcess(
@@ -79,6 +151,26 @@ export function recognizeAgentProcess(
     return null
   }
   return { agent, processName: normalized }
+}
+
+export function recognizeAgentProcessFromCommandLine(
+  commandLine: string | null | undefined
+): RecognizedAgentProcess | null {
+  if (!commandLine) {
+    return null
+  }
+  const tokens = tokenizeCommandLine(commandLine)
+  const firstNormalized = normalizeProcessName(tokens[0])
+  for (const [index, token] of tokens.entries()) {
+    if (!tokenLooksExecutable(token, index, firstNormalized)) {
+      continue
+    }
+    const recognized = recognizeAgentProcess(token)
+    if (recognized) {
+      return recognized
+    }
+  }
+  return null
 }
 
 export function isRecognizedAgentType(agentType: AgentType | null | undefined): boolean {

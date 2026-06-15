@@ -22,9 +22,11 @@ import {
   resolveSourceControlAiForOperation
 } from '../../../../shared/source-control-ai'
 import type { SourceControlAiPrCreationDefaults } from '../../../../shared/source-control-ai-types'
+import type {
+  PullRequestFieldName,
+  PullRequestFieldRevisions
+} from '@/store/slices/pull-request-generation'
 
-type PullRequestFieldName = 'base' | 'title' | 'body' | 'draft'
-export type PullRequestFieldRevisions = Record<PullRequestFieldName, number>
 type PullRequestDraftFields = {
   base: string
   title: string
@@ -231,6 +233,18 @@ export function useCreatePullRequestDialogFields({
     if (initializedFromEligibilityRef.current === initializationKey) {
       return
     }
+    if (!hasExternalGeneration) {
+      // Why: a branch/context switch invalidates any local AI request; cancel
+      // it before reseeding fields so stale generated text cannot land later.
+      generationRequestIdRef.current += 1
+      const requestContext = generationSeedRef.current?.context
+      if (generateInFlightRef.current && requestContext?.worktreePath) {
+        void cancelRuntimeGeneratePullRequestFields(requestContext)
+      }
+      generateInFlightRef.current = false
+      generationSeedRef.current = null
+      setGenerating(false)
+    }
     // Why: eligibility refreshes while the dialog is open; only seed fields
     // once per branch so late refreshes do not overwrite user edits.
     initializedFromEligibilityRef.current = initializationKey
@@ -332,7 +346,9 @@ export function useCreatePullRequestDialogFields({
       generationRequestIdRef.current = requestId
       const connectionId = getConnectionId(worktreeId) ?? undefined
       const requestContext = {
-        settings: useAppStore.getState().settings,
+        // Why: PR generation belongs to the visible worktree owner. Global
+        // focused-host changes must not retarget an in-flight generation.
+        settings,
         worktreeId,
         worktreePath,
         connectionId
@@ -404,6 +420,7 @@ export function useCreatePullRequestDialogFields({
       generation,
       generateDisabled,
       onBranchChangedByGeneration,
+      settings,
       title,
       worktreeId,
       worktreePath

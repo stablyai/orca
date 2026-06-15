@@ -349,6 +349,7 @@ export type RuntimeTerminalSend = {
 
 export type RuntimeTerminalCreate = {
   handle: string
+  tabId?: string
   worktreeId: string
   title: string | null
   surface?: 'background' | 'visible'

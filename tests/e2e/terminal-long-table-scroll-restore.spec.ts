@@ -758,14 +758,19 @@ test.describe('Terminal long table scroll restore repro', () => {
         })
         .toContain(marker)
 
-      await scrollActiveTerminalToText(orcaPage, 'Singer')
+      // Why: rows near the top of this heavily wrapped table can fall out of
+      // xterm scrollback on CI, and narrow columns split names like "Peacock"
+      // across terminal lines. A lower cell fragment still exercises the
+      // restored markdown-table viewport without depending on early output.
+      const retainedEmojiCell = 'Peac'
+      await scrollActiveTerminalToText(orcaPage, retainedEmojiCell)
       await closeFeatureTips(orcaPage)
       await expect
         .poll(() => readActiveTerminalVisibleText(orcaPage), {
           timeout: 5_000,
-          message: 'Singer row should be visible before screenshot'
+          message: `${retainedEmojiCell} row fragment should be visible before screenshot`
         })
-        .toContain('Singer')
+        .toContain(retainedEmojiCell)
       const diagnostics = await readTerminalRenderDiagnostics(orcaPage)
       const overpaint = await readTerminalRightEdgeOverpaint(orcaPage)
       const wrapDiagnostics = await readTerminalBoxTableWrapDiagnostics(orcaPage)

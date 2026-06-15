@@ -29,6 +29,7 @@ import { buildHydratedTabState, pruneTabGroupLayoutForGroups } from './tabs-hydr
 import { buildOrphanTerminalCleanupPatch, getOrphanTerminalIds } from './terminal-orphan-helpers'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
+import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 
 export type TabSplitDirection = 'left' | 'right' | 'up' | 'down'
 
@@ -855,6 +856,7 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
         ...(shouldDeactivateWorktree
           ? {
               activeWorktreeId: null,
+              activeWorkspaceKey: null,
               activeTabId: null,
               activeBrowserTabId: null,
               activeFileId: null,
@@ -1818,6 +1820,9 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
         .map((w) => w.id)
     )
     validWorktreeIds.add(FLOATING_TERMINAL_WORKTREE_ID)
+    for (const workspace of state.folderWorkspaces) {
+      validWorktreeIds.add(folderWorkspaceKey(workspace.id))
+    }
     set(buildHydratedTabState(session, validWorktreeIds))
   }
 })

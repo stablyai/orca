@@ -53,7 +53,7 @@ export function McpConfigFileRow({ config, onOpen }: McpConfigFileRowProps): Rea
   return (
     <div className="space-y-2 px-3 py-2.5">
       <div className="flex items-center gap-2">
-        {config.status === "valid" && !config.readError ? (
+        {config.status === 'valid' && !config.readError ? (
           <CheckCircle2 className="size-3.5 shrink-0 text-muted-foreground" />
         ) : (
           <AlertCircle className="size-3.5 shrink-0 text-destructive" />
@@ -73,7 +73,8 @@ export function McpConfigFileRow({ config, onOpen }: McpConfigFileRowProps): Rea
         </span>
         {config.exists ? (
           <Button variant="outline" size="xs" onClick={() => onOpen(config)}>
-            {translate("auto.components.settings.McpConfigFileRow.e720c139cd", "Open")}</Button>
+            {translate('auto.components.settings.McpConfigFileRow.e720c139cd', 'Open')}
+          </Button>
         ) : null}
       </div>
 
@@ -100,7 +101,7 @@ export function McpConfigFileRow({ config, onOpen }: McpConfigFileRowProps): Rea
                 </p>
                 {server.env && Object.keys(server.env).length > 0 ? (
                   <p className="mt-0.5 truncate font-mono text-[11px] text-muted-foreground">
-                    {translate("auto.components.settings.McpConfigFileRow.b145eb6009", "env:")}{' '}
+                    {translate('auto.components.settings.McpConfigFileRow.b145eb6009', 'env:')}{' '}
                     {Object.entries(server.env)
                       .map(([key, value]) => `${key}=${value}`)
                       .join(', ')}

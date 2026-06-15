@@ -529,7 +529,11 @@ export class SshRelaySession {
     )
     registerSshFilesystemProvider(this.targetId, fsProvider)
 
-    const gitProvider = new SshGitProvider(this.targetId, mux)
+    const gitProvider = new SshGitProvider(
+      this.targetId,
+      mux,
+      this.remoteCliBridgeEnv?.hostPlatform ?? null
+    )
     registerSshGitProvider(this.targetId, gitProvider)
 
     this.wireUpPtyEvents(ptyProvider)
@@ -651,7 +655,13 @@ export class SshRelaySession {
               )
             )
           : {}
-      return await runRemoteOrcaCli(this.runtime, { argv, cwd, env })
+      const stdin = typeof params.stdin === 'string' ? params.stdin : undefined
+      return await runRemoteOrcaCli(this.runtime, {
+        argv,
+        cwd,
+        env,
+        ...(stdin !== undefined ? { stdin } : {})
+      })
     })
   }
 

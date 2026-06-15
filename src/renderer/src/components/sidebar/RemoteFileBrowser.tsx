@@ -639,7 +639,10 @@ export function RemoteFileBrowser({
           onChange={(e) => handleInputChange(e.target.value)}
           onPaste={handleInputPaste}
           onKeyDown={handleFilterKeyDown}
-          placeholder={translate("auto.components.sidebar.RemoteFileBrowser.2300612806", "Type to filter or enter a path…")}
+          placeholder={translate(
+            'auto.components.sidebar.RemoteFileBrowser.2300612806',
+            'Type to filter or enter a path…'
+          )}
           aria-invalid={!!preview?.error}
           aria-describedby={preview?.error ? 'remote-file-browser-path-error' : undefined}
           className={cn(
@@ -683,13 +686,24 @@ export function RemoteFileBrowser({
             </div>
           ) : !isPreviewActive && entries.length === 0 ? (
             <div className="flex items-center justify-center h-full">
-              <p className="text-xs text-muted-foreground">{translate("auto.components.sidebar.RemoteFileBrowser.51001182e3", "Empty directory")}</p>
+              <p className="text-xs text-muted-foreground">
+                {translate(
+                  'auto.components.sidebar.RemoteFileBrowser.51001182e3',
+                  'Empty directory'
+                )}
+              </p>
             </div>
           ) : displayEntries.length === 0 && !preview?.error ? (
             // Directory has contents; filter hides them all. Distinguishing
             // filter emptiness from directory emptiness keeps copy accurate.
             <div className="flex items-center justify-center h-full">
-              <p className="text-xs text-muted-foreground">{translate("auto.components.sidebar.RemoteFileBrowser.00c4235c10", "No matches for '{{value0}}'", { value0: isPreviewActive ? preview!.filter : filter })}</p>
+              <p className="text-xs text-muted-foreground">
+                {translate(
+                  'auto.components.sidebar.RemoteFileBrowser.00c4235c10',
+                  "No matches for '{{value0}}'",
+                  { value0: isPreviewActive ? preview!.filter : filter }
+                )}
+              </p>
             </div>
           ) : (
             displayEntries.map((entry) => {
@@ -730,11 +744,18 @@ export function RemoteFileBrowser({
         className="block text-[10px] text-muted-foreground truncate w-full"
         title={fileHint ? undefined : resolvedPath}
       >
-        {fileHint ? FILE_HINT_TEXT : translate("auto.components.sidebar.RemoteFileBrowser.971d85cc84", "Opens as a remote project · {{value0}}", { value0: resolvedPath })}
+        {fileHint
+          ? FILE_HINT_TEXT
+          : translate(
+              'auto.components.sidebar.RemoteFileBrowser.971d85cc84',
+              'Opens as a project on this host · {{value0}}',
+              { value0: resolvedPath }
+            )}
       </p>
       <div className="flex items-center justify-end gap-2">
         <Button variant="outline" size="sm" className="h-7 text-xs" onClick={onCancel}>
-          {translate("auto.components.sidebar.RemoteFileBrowser.f8b1deb1a4", "Cancel")}</Button>
+          {translate('auto.components.sidebar.RemoteFileBrowser.f8b1deb1a4', 'Cancel')}
+        </Button>
         <Button
           size="sm"
           className="h-7 text-xs"
@@ -742,7 +763,8 @@ export function RemoteFileBrowser({
           disabled={selectDisabled}
           title={resolvedPath}
         >
-          {translate("auto.components.sidebar.RemoteFileBrowser.9e060f5815", "Select folder")}</Button>
+          {translate('auto.components.sidebar.RemoteFileBrowser.9e060f5815', 'Select folder')}
+        </Button>
       </div>
     </div>
   )

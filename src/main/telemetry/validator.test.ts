@@ -41,6 +41,43 @@ describe('validate', () => {
     expect(result.ok).toBe(true)
   })
 
+  it('accepts a well-formed star_nag_outcome payload with cohort context', () => {
+    const result = validate('star_nag_outcome', {
+      outcome: 'opened_web',
+      source: 'force_show',
+      mode: 'web',
+      threshold: 35,
+      agents_since_baseline: 42,
+      agents_since_baseline_bucket: '35-69',
+      nth_repo_added: 4
+    })
+    expect(result.ok).toBe(true)
+  })
+
+  it('rejects malformed star_nag_outcome payloads', () => {
+    expect(
+      validate('star_nag_outcome', {
+        outcome: 'opened_web',
+        source: 'force_show',
+        mode: 'web',
+        threshold: 35,
+        agents_since_baseline: 42,
+        agents_since_baseline_bucket: '35-69',
+        raw_error: 'nope'
+      } as never).ok
+    ).toBe(false)
+    expect(
+      validate('star_nag_outcome', {
+        outcome: 'opened_web',
+        source: 'force_show',
+        mode: 'web',
+        threshold: 0,
+        agents_since_baseline: 42,
+        agents_since_baseline_bucket: '35-69'
+      } as never).ok
+    ).toBe(false)
+  })
+
   it('drops unknown event names', () => {
     const result = validate('not_a_real_event' as never, {})
     expect(result.ok).toBe(false)
@@ -125,6 +162,53 @@ describe('validate', () => {
 
   it('accepts repo_added with nth_repo_added=1', () => {
     const result = validate('repo_added', { method: 'folder_picker', nth_repo_added: 1 })
+    expect(result.ok).toBe(true)
+  })
+
+  // ── repo_added.is_git_repo (docs/reference/telemetry-availability.md)
+  // The git-vs-folder signal moved here from onboarding_completed once project
+  // selection left onboarding. Optional so SSH/remote edges can omit it.
+
+  it('accepts repo_added with is_git_repo=true', () => {
+    const result = validate('repo_added', { method: 'clone_url', is_git_repo: true })
+    expect(result.ok).toBe(true)
+  })
+
+  it('accepts repo_added with is_git_repo=false', () => {
+    const result = validate('repo_added', { method: 'folder_picker', is_git_repo: false })
+    expect(result.ok).toBe(true)
+  })
+
+  it('accepts repo_added without is_git_repo (SSH/remote degraded mode)', () => {
+    const result = validate('repo_added', { method: 'folder_picker' })
+    expect(result.ok).toBe(true)
+  })
+
+  it('rejects non-boolean is_git_repo on repo_added', () => {
+    const result = validate('repo_added', {
+      method: 'folder_picker',
+      is_git_repo: 'yes'
+    } as never)
+    expect(result.ok).toBe(false)
+  })
+
+  it('rejects the retired is_git_repo field on onboarding_completed', () => {
+    // Why: the field moved to repo_added; onboarding_completed is .strict() so
+    // the vestigial key must now drop. Guards against a stale call site
+    // re-adding the meaningless always-false signal.
+    const result = validate('onboarding_completed', {
+      path: 'add_project_modal',
+      is_git_repo: false,
+      total_duration_ms: 100
+    } as never)
+    expect(result.ok).toBe(false)
+  })
+
+  it('accepts onboarding_completed without is_git_repo', () => {
+    const result = validate('onboarding_completed', {
+      path: 'add_project_modal',
+      total_duration_ms: 100
+    })
     expect(result.ok).toBe(true)
   })
 

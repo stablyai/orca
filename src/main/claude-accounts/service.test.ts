@@ -803,7 +803,7 @@ describe('ClaudeAccountService credential capture', () => {
     }
     const runtimeAuth = {
       syncForCurrentSelection: vi.fn(async () => {
-        throw new Error('unverified live auth')
+        throw new Error('runtime sync failed')
       }),
       forceMaterializeCurrentSelectionForRollback: vi.fn(async () => {})
     }
@@ -817,7 +817,7 @@ describe('ClaudeAccountService credential capture', () => {
       runtimeAuth as never
     )
 
-    await expect(service.selectAccount('account-2')).rejects.toThrow('unverified live auth')
+    await expect(service.selectAccount('account-2')).rejects.toThrow('runtime sync failed')
 
     expect(settings.activeClaudeManagedAccountId).toBe('account-1')
     expect(settings.activeClaudeManagedAccountIdsByRuntime).toEqual({

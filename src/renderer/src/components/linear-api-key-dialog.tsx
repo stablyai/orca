@@ -139,12 +139,16 @@ export function LinearApiKeyDialog({
         <div className="space-y-3">
           <div className="space-y-2">
             <Label htmlFor={apiKeyInputId} className="text-xs">
-              {translate("auto.components.linear.api.key.dialog.7d498f653c", "Personal API key")}</Label>
+              {translate('auto.components.linear.api.key.dialog.7d498f653c', 'Personal API key')}
+            </Label>
             <Input
               id={apiKeyInputId}
               autoFocus
               type="password"
-              placeholder={translate("auto.components.linear.api.key.dialog.edec49dfae", "lin_api_...")}
+              placeholder={translate(
+                'auto.components.linear.api.key.dialog.edec49dfae',
+                'lin_api_...'
+              )}
               value={apiKeyDraft}
               onChange={(event) => {
                 const nextDraft = event.target.value
@@ -166,15 +170,29 @@ export function LinearApiKeyDialog({
           ) : null}
           <div className="space-y-2 text-xs leading-relaxed text-muted-foreground">
             <p>
-              {translate("auto.components.linear.api.key.dialog.af52a6227f", "Create a Personal API key from Account > Security & Access.")}{' '}
+              {translate(
+                'auto.components.linear.api.key.dialog.af52a6227f',
+                'Create a Personal API key from Account > Security & Access.'
+              )}{' '}
               {!workspace
-                ? translate("auto.components.linear.api.key.dialog.c9889a09f8", "Use Linear to choose the intended workspace before creating the key.")
+                ? translate(
+                    'auto.components.linear.api.key.dialog.c9889a09f8',
+                    'Use Linear to choose the intended workspace before creating the key.'
+                  )
                 : null}
             </p>
             <p>
-              {translate("auto.components.linear.api.key.dialog.d56d3629f4", "Prefer full access when Orca should show every team the account can access in that workspace. Restricted keys only expose permitted teams, and private teams require the key owner to have access.")}</p>
+              {translate(
+                'auto.components.linear.api.key.dialog.d56d3629f4',
+                'Prefer full access when Orca should show every team the account can access in that workspace. Restricted keys only expose permitted teams, and private teams require the key owner to have access.'
+              )}
+            </p>
             <p>
-              {translate("auto.components.linear.api.key.dialog.e3100b36b9", "If member API keys are blocked, ask a workspace admin to allow them from workspace API settings.")}</p>
+              {translate(
+                'auto.components.linear.api.key.dialog.e3100b36b9',
+                'If member API keys are blocked, ask a workspace admin to allow them from workspace API settings.'
+              )}
+            </p>
             <div className="flex flex-wrap items-center gap-2 pt-1">
               <button
                 type="button"
@@ -182,7 +200,8 @@ export function LinearApiKeyDialog({
                 onClick={() => window.api.shell.openUrl(personalKeyUrl)}
               >
                 <ExternalLink className="size-3" />
-                {translate("auto.components.linear.api.key.dialog.dc7ccb0f7c", "Personal API keys")}</button>
+                {translate('auto.components.linear.api.key.dialog.dc7ccb0f7c', 'Personal API keys')}
+              </button>
               <span className="text-muted-foreground/60">|</span>
               <button
                 type="button"
@@ -190,7 +209,11 @@ export function LinearApiKeyDialog({
                 onClick={() => window.api.shell.openUrl(workspaceApiUrl)}
               >
                 <ExternalLink className="size-3" />
-                {translate("auto.components.linear.api.key.dialog.e603ee9156", "Workspace API settings")}</button>
+                {translate(
+                  'auto.components.linear.api.key.dialog.e603ee9156',
+                  'Workspace API settings'
+                )}
+              </button>
             </div>
           </div>
           <p className="flex items-center gap-1.5 text-[11px] text-muted-foreground/70">
@@ -204,15 +227,17 @@ export function LinearApiKeyDialog({
             onClick={() => onOpenChange(false)}
             disabled={connectState === 'connecting'}
           >
-            {translate("auto.components.linear.api.key.dialog.f8f704a019", "Cancel")}</Button>
+            {translate('auto.components.linear.api.key.dialog.f8f704a019', 'Cancel')}
+          </Button>
           <Button
             onClick={() => void handleConnect()}
             disabled={!apiKeyDraft.trim() || connectState === 'connecting'}
           >
-            {connectState === "connecting" ? (
+            {connectState === 'connecting' ? (
               <>
                 <LoaderCircle className="size-4 animate-spin" />
-                {translate("auto.components.linear.api.key.dialog.834a52c084", "Verifying...")}</>
+                {translate('auto.components.linear.api.key.dialog.834a52c084', 'Verifying...')}
+              </>
             ) : (
               submitLabel
             )}

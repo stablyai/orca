@@ -29,7 +29,7 @@ import type {
   AgentStatusEntry,
   MigrationUnsupportedPtyEntry
 } from '../../../../shared/agent-status-types'
-import type { GitStatusResult, TerminalTab, Worktree } from '../../../../shared/types'
+import type { GitStatusResult, Repo, TerminalTab, Worktree } from '../../../../shared/types'
 import type {
   WorkspaceSpaceItem,
   WorkspaceSpaceWorktree
@@ -38,8 +38,9 @@ import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { useAppStore } from '../../store'
-import { getWorktreeMapFromState } from '../../store/selectors'
+import { getRepoMapFromState, getWorktreeMapFromState } from '../../store/selectors'
 import { getHostedReviewCacheKey } from '../../store/slices/hosted-review'
+import { issueCacheKey as getIssueCacheKey } from '../../store/slices/github'
 import { refreshGitStatusForWorktree } from '../right-sidebar/git-status-refresh'
 import { runWorktreeBatchDelete } from '../sidebar/delete-worktree-flow'
 import { branchDisplayName } from '../sidebar/WorktreeCardHelpers'
@@ -120,6 +121,7 @@ type WorkspaceDecisionDetails = {
 }
 
 type WorkspaceDecisionInputs = {
+  repoMap: Map<string, Repo>
   worktreeMap: Map<string, Worktree>
   tabsByWorktree: Record<string, TerminalTab[]>
   ptyIdsByTabId: Record<string, string[]>
@@ -211,7 +213,20 @@ function getWorkspaceDecisionDetails(
         ? `PR #${linkedPR}`
         : null
   const linkedIssue = workspaceRecord?.linkedIssue ?? null
-  const issue = linkedIssue ? inputs.issueCache[`${worktree.repoId}::${linkedIssue}`]?.data : null
+  const repo = inputs.repoMap.get(worktree.repoId)
+  const issue =
+    linkedIssue && repo
+      ? inputs.issueCache[
+          getIssueCacheKey(
+            repo.path,
+            repo.id,
+            linkedIssue,
+            inputs.settings,
+            repo.connectionId,
+            repo.executionHostId
+          )
+        ]?.data
+      : null
   const issueLabel = linkedIssue
     ? issue
       ? `#${issue.number} ${issue.state}: ${issue.title}`
@@ -1205,6 +1220,7 @@ export function WorkspaceSpaceManagerPanel(): React.JSX.Element {
   const removeWorkspaceSpaceWorktrees = useAppStore((state) => state.removeWorkspaceSpaceWorktrees)
   const removeWorktree = useAppStore((state) => state.removeWorktree)
   const deleteStateByWorktreeId = useAppStore((state) => state.deleteStateByWorktreeId)
+  const repoMap = useAppStore((state) => getRepoMapFromState(state))
   const worktreeMap = useAppStore((state) => getWorktreeMapFromState(state))
   const tabsByWorktree = useAppStore((state) => state.tabsByWorktree)
   const ptyIdsByTabId = useAppStore((state) => state.ptyIdsByTabId)
@@ -1260,6 +1276,7 @@ export function WorkspaceSpaceManagerPanel(): React.JSX.Element {
       details.set(
         worktree.worktreeId,
         getWorkspaceDecisionDetails(worktree, {
+          repoMap,
           worktreeMap,
           tabsByWorktree,
           ptyIdsByTabId,
@@ -1294,6 +1311,7 @@ export function WorkspaceSpaceManagerPanel(): React.JSX.Element {
     linearIssueCache,
     openFiles,
     ptyIdsByTabId,
+    repoMap,
     remoteStatusesByWorktree,
     retainedAgentsByPaneKey,
     migrationUnsupportedByPtyId,
@@ -1999,6 +2017,7 @@ export function WorkspaceSpaceManagerPanel(): React.JSX.Element {
                     decisionDetails={
                       decisionDetailsByWorktreeId.get(worktree.worktreeId) ??
                       getWorkspaceDecisionDetails(worktree, {
+                        repoMap,
                         worktreeMap,
                         tabsByWorktree,
                         ptyIdsByTabId,

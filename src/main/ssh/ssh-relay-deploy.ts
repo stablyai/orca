@@ -35,7 +35,7 @@ import {
   type RemoteHostPlatform
 } from './ssh-remote-platform'
 import { detectRemoteHostPlatform } from './ssh-remote-platform-detection'
-import { powerShellCommand, powerShellLiteral } from './ssh-remote-powershell'
+import { powerShellCommand, powerShellLiteral, powerShellNativeArg } from './ssh-remote-powershell'
 import { relaySocketNameForInstanceId } from './ssh-relay-instance-id'
 import {
   isWindowsRelayPipePath,
@@ -63,15 +63,24 @@ export type RelayDeployResult = {
 // Why: individual exec commands have 30s timeouts, but the full deploy
 // pipeline (detect platform → check existing → upload → npm install →
 // launch) has no overall bound. A hanging `npm install` or slow SFTP
-// upload could block the connection indefinitely.
-const RELAY_DEPLOY_TIMEOUT_MS = 120_000
+// upload could block the connection indefinitely. First-time installs need
+// room for the longer native dependency install bound below.
+const RELAY_DEPLOY_TIMEOUT_MS = 300_000
+
+// npm install on a cold Windows cache plus antivirus scanning can exceed the
+// default 30s exec timeout.
+const NATIVE_DEPS_INSTALL_TIMEOUT_MS = 240_000
 
 function execHostCommand(
   conn: SshConnection,
   hostPlatform: RemoteHostPlatform,
-  command: string
+  command: string,
+  options?: { timeoutMs?: number }
 ): Promise<string> {
-  return execCommand(conn, command, { wrapCommand: !isWindowsRemoteHost(hostPlatform) })
+  return execCommand(conn, command, {
+    wrapCommand: !isWindowsRemoteHost(hostPlatform),
+    timeoutMs: options?.timeoutMs
+  })
 }
 
 /**
@@ -330,7 +339,7 @@ async function hasRequiredNativeDeps(
           hostPlatform,
           nodePath,
           remoteDir,
-          `try { & ${powerShellLiteral(nodePath)} -e ${powerShellLiteral('require.resolve("node-pty"); require.resolve("@parcel/watcher"); console.log("ORCA-NATIVE-DEPS-OK")')} } catch { 'MISSING' }`
+          `try { & ${powerShellLiteral(nodePath)} -e ${powerShellNativeArg('require.resolve("node-pty"); require.resolve("@parcel/watcher"); console.log("ORCA-NATIVE-DEPS-OK")')} } catch { 'MISSING' }`
         )
       : commandWithNodePath(
           hostPlatform,
@@ -431,7 +440,9 @@ async function installNativeDeps(
           remoteDir,
           `npm install --omit=dev --no-audit --no-fund ${installArgs} 2>&1`
         )
-    await execHostCommand(conn, hostPlatform, command)
+    await execHostCommand(conn, hostPlatform, command, {
+      timeoutMs: NATIVE_DEPS_INSTALL_TIMEOUT_MS
+    })
   } catch (err) {
     // Don't write .install-complete on hard fail; reconnect retries on a
     // partial install. Greppable token so user bug reports paste something
@@ -467,7 +478,7 @@ async function installNativeDeps(
         hostPlatform,
         nodePath,
         remoteDir,
-        `try { & ${powerShellLiteral(nodePath)} -e ${powerShellLiteral('require("node-pty"); console.log(process.argv[1])')} ${powerShellLiteral(PROBE_OK)}; if ($LASTEXITCODE -ne 0) { 'MISSING' } } catch { 'MISSING' }`
+        `try { & ${powerShellLiteral(nodePath)} -e ${powerShellNativeArg('require("node-pty"); console.log(process.argv[1])')} ${powerShellLiteral(PROBE_OK)}; if ($LASTEXITCODE -ne 0) { 'MISSING' } } catch { 'MISSING' }`
       )
     : commandWithNodePath(
         hostPlatform,
@@ -906,19 +917,32 @@ function windowsRelayLaunchCommand(
   errFile: string
 ): string {
   const relayScript = joinRemotePath(hostPlatform, remoteDir, 'relay.js')
+  // Why: Windows sshd kills the exec channel's process tree when the channel
+  // closes. WMI re-parents the detached relay so the named pipe stays alive.
+  const quoted = (value: string): string => `"${value.replace(/"/g, '\\"')}"`
+  const relayCommandLine = [
+    quoted(nodePath),
+    quoted(relayScript),
+    '--detached',
+    '--grace-time',
+    String(graceTime),
+    '--sock-path',
+    quoted(sockPath),
+    '--endpoint-dir',
+    quoted(endpointDir),
+    `1>${quoted(logFile)}`,
+    `2>${quoted(errFile)}`
+  ].join(' ')
+  const wmiCommandLine = `cmd.exe /d /s /c "${relayCommandLine}"`
   return commandWithNodePath(
     hostPlatform,
     nodePath,
     remoteDir,
     [
-      `$args = @(${windowsStartProcessArgumentLiteral(relayScript)}, '--detached', '--grace-time', ${powerShellLiteral(String(graceTime))}, '--sock-path', ${windowsStartProcessArgumentLiteral(sockPath)}, '--endpoint-dir', ${windowsStartProcessArgumentLiteral(endpointDir)})`,
-      `Start-Process -FilePath ${powerShellLiteral(nodePath)} -ArgumentList $args -WorkingDirectory ${powerShellLiteral(remoteDir)} -RedirectStandardOutput ${powerShellLiteral(logFile)} -RedirectStandardError ${powerShellLiteral(errFile)} -WindowStyle Hidden`
+      `$result = Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{ CommandLine = ${powerShellLiteral(wmiCommandLine)}; CurrentDirectory = ${powerShellLiteral(remoteDir)} }`,
+      `if ($result.ReturnValue -ne 0) { throw "Win32_Process.Create failed with $($result.ReturnValue)" }`
     ].join('; ')
   )
-}
-
-function windowsStartProcessArgumentLiteral(value: string): string {
-  return powerShellLiteral(`"${value.replace(/"/g, '\\"')}"`)
 }
 
 async function probeWindowsRelayPipe(
@@ -980,7 +1004,7 @@ function windowsRelayProbeCommand(
     hostPlatform,
     nodePath,
     remoteDir,
-    `& ${powerShellLiteral(nodePath)} -e ${powerShellLiteral(js)} ${powerShellLiteral(sockPath)}`
+    `& ${powerShellLiteral(nodePath)} -e ${powerShellNativeArg(js)} ${powerShellNativeArg(sockPath)}`
   )
 }
 
@@ -1017,8 +1041,8 @@ function windowsRelayWaitCommand(
     [
       `& ${powerShellLiteral(nodePath)}`,
       '-e',
-      powerShellLiteral(js),
-      powerShellLiteral(sockPath),
+      powerShellNativeArg(js),
+      powerShellNativeArg(sockPath),
       powerShellLiteral(String(opts.timeoutMs)),
       powerShellLiteral(String(opts.intervalMs))
     ].join(' ')

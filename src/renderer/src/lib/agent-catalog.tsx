@@ -187,7 +187,9 @@ export const getAgentCatalog = createLocalizedCatalog((): AgentCatalogEntry[] =>
   {
     id: 'continue',
     label: translate('auto.lib.agent.catalog.9e2a9bb87b', 'Continue'),
-    cmd: 'continue',
+    // Why: Continue's terminal agent installs as `cn`; `continue` resolves to
+    // a shell builtin in common shells and is not a reliable executable hint.
+    cmd: 'cn',
     faviconDomain: 'continue.dev',
     homepageUrl: 'https://docs.continue.dev/guides/cli'
   },
@@ -241,6 +243,13 @@ export const getAgentCatalog = createLocalizedCatalog((): AgentCatalogEntry[] =>
     cmd: 'hermes',
     faviconDomain: 'nousresearch.com',
     homepageUrl: 'https://hermes-agent.nousresearch.com/docs/'
+  },
+  {
+    id: 'devin',
+    label: translate('auto.lib.agent.catalog.fc80296033', 'Devin'),
+    cmd: 'devin',
+    faviconDomain: 'devin.ai',
+    homepageUrl: 'https://devin.ai/cli'
   },
   {
     id: 'openclaw',

@@ -43,6 +43,7 @@ export function useFileExplorerKeys(opts: {
 }): void {
   const rightSidebarOpen = useAppStore((s) => s.rightSidebarOpen)
   const rightSidebarTab = useAppStore((s) => s.rightSidebarTab)
+  const rightSidebarExplorerView = useAppStore((s) => s.rightSidebarExplorerView)
   const keybindings = useAppStore((s) => s.keybindings)
 
   const rowProjectionRef = useRef(opts.rowProjection)
@@ -127,7 +128,11 @@ export function useFileExplorerKeys(opts: {
     }
 
     const onKeyDown = (e: KeyboardEvent): void => {
-      if (!rightSidebarOpen || rightSidebarTab !== 'explorer') {
+      if (
+        !rightSidebarOpen ||
+        rightSidebarTab !== 'explorer' ||
+        rightSidebarExplorerView !== 'files'
+      ) {
         return
       }
       if (inlineInputRef.current) {
@@ -149,7 +154,14 @@ export function useFileExplorerKeys(opts: {
         e.preventDefault()
         const run = wantRedo ? redoFileExplorer() : undoFileExplorer()
         void run.catch((err: unknown) => {
-          toast.error(err instanceof Error ? err.message : translate("auto.components.right.sidebar.useFileExplorerKeys.8adb953095", "Operation failed"))
+          toast.error(
+            err instanceof Error
+              ? err.message
+              : translate(
+                  'auto.components.right.sidebar.useFileExplorerKeys.8adb953095',
+                  'Operation failed'
+                )
+          )
         })
         return
       }
@@ -264,5 +276,5 @@ export function useFileExplorerKeys(opts: {
 
     window.addEventListener('keydown', onKeyDown, { capture: true })
     return () => window.removeEventListener('keydown', onKeyDown, { capture: true })
-  }, [keybindings, rightSidebarOpen, rightSidebarTab, opts.containerRef])
+  }, [keybindings, rightSidebarExplorerView, rightSidebarOpen, rightSidebarTab, opts.containerRef])
 }

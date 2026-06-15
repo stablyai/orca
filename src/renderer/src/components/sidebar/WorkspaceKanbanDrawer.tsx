@@ -35,6 +35,7 @@ import { makeWorkspaceStatusId } from '../../../../shared/workspace-statuses'
 import { useContextualTour } from '@/components/contextual-tours/use-contextual-tour'
 
 type WorkspaceKanbanDrawerProps = {
+  leftSidebarStyle?: React.CSSProperties
   open: boolean
   preserveOpenForMenu: boolean
   onOpenChange: (open: boolean) => void
@@ -42,6 +43,7 @@ type WorkspaceKanbanDrawerProps = {
 }
 
 export default function WorkspaceKanbanDrawer({
+  leftSidebarStyle,
   open,
   preserveOpenForMenu,
   onOpenChange,
@@ -481,6 +483,7 @@ export default function WorkspaceKanbanDrawer({
         overlayStyle={{ top: 36, left: drawerLeftCss, pointerEvents: 'none' }}
         style={
           {
+            ...leftSidebarStyle,
             // Why: the board is a companion to the workspace sidebar, so it
             // expands from the sidebar edge instead of covering the sidebar.
             left: drawerLeftCss,
@@ -490,6 +493,7 @@ export default function WorkspaceKanbanDrawer({
           } as React.CSSProperties
         }
         data-contextual-tour-target="workspace-board-surface"
+        data-workspace-board-sheet=""
         onOpenAutoFocus={(event) => {
           // Why: Radix focuses the first toolbar button on open, which opens
           // its tooltip without hover and makes the drawer feel noisy.

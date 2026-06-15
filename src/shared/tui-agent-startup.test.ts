@@ -5,6 +5,7 @@ import {
   buildAgentStartupPlan,
   buildShellCommandFromArgv
 } from './tui-agent-startup'
+import { normalizeTuiAgentArgsRecord, resolveTuiAgentLaunchArgs } from './tui-agent-launch-defaults'
 
 describe('tui agent startup plans', () => {
   it('uses POSIX quoting when the target shell is Linux', () => {
@@ -172,6 +173,59 @@ describe('tui agent startup plans', () => {
     expect(plan?.launchCommand).toBe("claude '--model' 'sonnet' '--name' 'Bob''s' 'fix it'")
   })
 
+  it('carries agent launch environment defaults into startup plans', () => {
+    const plan = buildAgentStartupPlan({
+      agent: 'goose',
+      prompt: '',
+      cmdOverrides: {},
+      agentEnv: { GOOSE_MODE: 'auto' },
+      platform: 'linux',
+      allowEmptyPromptLaunch: true
+    })
+
+    expect(plan?.launchCommand).toBe('goose')
+    expect(plan?.env).toEqual({ GOOSE_MODE: 'auto' })
+  })
+
+  it('does not append the unsupported OpenCode TUI skip-permissions arg', () => {
+    const agentDefaultArgs = normalizeTuiAgentArgsRecord({
+      opencode: '--dangerously-skip-permissions'
+    })
+    const plan = buildAgentStartupPlan({
+      agent: 'opencode',
+      prompt: 'fix it',
+      cmdOverrides: {},
+      agentArgs: resolveTuiAgentLaunchArgs('opencode', agentDefaultArgs),
+      platform: 'linux'
+    })
+
+    expect(plan?.launchCommand).toBe("opencode --prompt 'fix it'")
+  })
+
+  it('appends Kiro trust defaults to the chat subcommand that accepts them', () => {
+    const plan = buildAgentStartupPlan({
+      agent: 'kiro',
+      prompt: 'fix it',
+      cmdOverrides: {},
+      agentArgs: '--trust-all-tools',
+      platform: 'linux'
+    })
+
+    expect(plan?.launchCommand).toBe("kiro-cli chat --tui '--trust-all-tools'")
+  })
+
+  it('launches Continue through the documented cn binary', () => {
+    const plan = buildAgentStartupPlan({
+      agent: 'continue',
+      prompt: 'fix it',
+      cmdOverrides: {},
+      agentArgs: '--allow "*"',
+      platform: 'linux'
+    })
+
+    expect(plan?.launchCommand).toBe("cn '--allow' '*'")
+  })
+
   it('clears draft environment variables with the target shell syntax', () => {
     expect(
       buildAgentDraftLaunchPlan({
@@ -211,5 +265,25 @@ describe('tui agent startup plans', () => {
     expect(plan?.env).toEqual({ ORCA_OMP_PREFILL: 'fix the omp regression' })
     expect(plan?.expectedProcess).toBe('omp')
     expect(plan?.launchCommand).toBe('omp; unset ORCA_OMP_PREFILL')
+  })
+
+  it('launches Devin with stdin-after-start prompt delivery', () => {
+    const plan = buildAgentStartupPlan({
+      agent: 'devin',
+      prompt: 'fix the tests',
+      cmdOverrides: {},
+      agentArgs: resolveTuiAgentLaunchArgs('devin', null),
+      platform: 'linux'
+    })
+    expect(plan).toEqual({
+      agent: 'devin',
+      launchCommand: "devin '--permission-mode' 'bypass'",
+      expectedProcess: 'devin',
+      followupPrompt: 'fix the tests'
+    })
+  })
+
+  it('appends Devin default permission-mode bypass before stdin prompt delivery', () => {
+    expect(resolveTuiAgentLaunchArgs('devin', null)).toBe('--permission-mode bypass')
   })
 })

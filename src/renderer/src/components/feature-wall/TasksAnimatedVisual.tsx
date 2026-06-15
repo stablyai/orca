@@ -12,7 +12,17 @@ type Issue = {
   title: string
 }
 
-const ISSUES: readonly Issue[] = [{ number: 1842, title: translate("auto.components.feature.wall.TasksAnimatedVisual.b13375617e", "Worktree picker truncates names") }]
+const ISSUES: readonly Issue[] = [
+  {
+    number: 1842,
+    get title() {
+      return translate(
+        'auto.components.feature.wall.TasksAnimatedVisual.b13375617e',
+        'Worktree picker truncates names'
+      )
+    }
+  }
+]
 
 type Phase =
   | { kind: 'idle' }
@@ -245,7 +255,11 @@ export function TasksAnimatedVisual(props: { reducedMotion: boolean }): JSX.Elem
               <div className="relative flex items-center justify-end">
                 {!isActive ? (
                   <span className="inline-flex items-center justify-center rounded-full border border-emerald-500/35 bg-emerald-500/10 px-2 py-px text-[10px] font-semibold text-emerald-700 dark:text-emerald-300">
-                    {translate("auto.components.feature.wall.TasksAnimatedVisual.4331c4d0f8", "Open")}</span>
+                    {translate(
+                      'auto.components.feature.wall.TasksAnimatedVisual.4331c4d0f8',
+                      'Open'
+                    )}
+                  </span>
                 ) : (
                   <button
                     type="button"
@@ -258,7 +272,11 @@ export function TasksAnimatedVisual(props: { reducedMotion: boolean }): JSX.Elem
                       isPressing ? 'scale-[0.94] brightness-[1.4]' : 'scale-100'
                     }`}
                   >
-                    {translate("auto.components.feature.wall.TasksAnimatedVisual.b68c92fbdc", "Start workspace")}<ArrowRight className="size-2.5" aria-hidden />
+                    {translate(
+                      'auto.components.feature.wall.TasksAnimatedVisual.b68c92fbdc',
+                      'Start workspace'
+                    )}
+                    <ArrowRight className="size-2.5" aria-hidden />
                   </button>
                 )}
               </div>
@@ -280,7 +298,17 @@ export function TasksAnimatedVisual(props: { reducedMotion: boolean }): JSX.Elem
           ) : (
             <span className="inline-block size-[9px] rounded-full bg-emerald-500" />
           )}
-          <span>{workspaceCreating ? translate("auto.components.feature.wall.TasksAnimatedVisual.61ffda7601", "Creating workspace") : translate("auto.components.feature.wall.TasksAnimatedVisual.fe47c9c9e8", "Workspace ready")}</span>
+          <span>
+            {workspaceCreating
+              ? translate(
+                  'auto.components.feature.wall.TasksAnimatedVisual.61ffda7601',
+                  'Creating workspace'
+                )
+              : translate(
+                  'auto.components.feature.wall.TasksAnimatedVisual.fe47c9c9e8',
+                  'Workspace ready'
+                )}
+          </span>
         </div>
         {workspaceIssue ? (
           <div
@@ -302,7 +330,11 @@ export function TasksAnimatedVisual(props: { reducedMotion: boolean }): JSX.Elem
                 </span>
                 <ClaudeIcon size={14} />
                 <span className="truncate font-mono text-[11px] leading-[1.2] text-muted-foreground">
-                  {translate("auto.components.feature.wall.TasksAnimatedVisual.efba6f77eb", "Reading issue #")}{workspaceIssue.number}…
+                  {translate(
+                    'auto.components.feature.wall.TasksAnimatedVisual.efba6f77eb',
+                    'Reading issue #'
+                  )}
+                  {workspaceIssue.number}…
                 </span>
               </div>
             </div>
@@ -319,7 +351,7 @@ export function TasksAnimatedVisual(props: { reducedMotion: boolean }): JSX.Elem
       >
         <div className="relative">
           <CursorIcon />
-          {phase.kind === "pressing" ? <FeatureWallClickRing key={rippleKey} /> : null}
+          {phase.kind === 'pressing' ? <FeatureWallClickRing key={rippleKey} /> : null}
         </div>
       </div>
     </div>

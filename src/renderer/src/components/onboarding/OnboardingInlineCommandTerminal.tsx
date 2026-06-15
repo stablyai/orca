@@ -292,7 +292,11 @@ export function OnboardingInlineCommandTerminal({
           ) : (
             <div className="flex h-full items-center justify-center gap-2 text-xs text-muted-foreground">
               <Loader2 className="size-4 animate-spin" />
-              {translate("auto.components.onboarding.OnboardingInlineCommandTerminal.4123609efd", "Starting terminal...")}</div>
+              {translate(
+                'auto.components.onboarding.OnboardingInlineCommandTerminal.4123609efd',
+                'Starting terminal...'
+              )}
+            </div>
           )}
         </div>
       </section>

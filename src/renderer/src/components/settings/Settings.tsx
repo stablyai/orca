@@ -24,6 +24,7 @@ import { ShortcutsPane } from './ShortcutsPane'
 import { TerminalPane } from './TerminalPane'
 import { FloatingWorkspacePane } from './FloatingWorkspacePane'
 import { useGhosttyImport } from './useGhosttyImport'
+import { useWarpThemeImport } from './useWarpThemeImport'
 import { RepositoryPane } from './RepositoryPane'
 import { GitPane } from './GitPane'
 import { CommitMessageAiPane } from './CommitMessageAiPane'
@@ -51,6 +52,7 @@ import { ActiveSettingsSectionProvider, SettingsSection } from './SettingsSectio
 import { matchesSettingsSearch } from './settings-search'
 import { cn } from '@/lib/utils'
 import { isIntentionalAppRestartInProgress } from '@/lib/updater-beforeunload'
+import { registerWindowCloseGuard } from '../window-close-request-coordinator'
 import { checkRuntimeHooks } from '@/runtime/runtime-hooks-client'
 import {
   getWindowsTerminalCapabilityOwnerKey,
@@ -88,29 +90,44 @@ import { translate } from '@/i18n/i18n'
 const SETTINGS_NAV_GROUPS = [
   {
     id: 'capabilities',
-    title: translate('auto.components.settings.Settings.23c6874fdf', 'AI Capabilities')
+    titleKey: 'auto.components.settings.Settings.23c6874fdf',
+    titleDefault: 'AI Capabilities'
   },
-  { id: 'setup', title: translate('auto.components.settings.Settings.9abb9be3bc', 'Set Up') },
+  { id: 'setup', titleKey: 'auto.components.settings.Settings.9abb9be3bc', titleDefault: 'Set Up' },
   {
     id: 'workflows',
-    title: translate('auto.components.settings.Settings.e1578cd4bc', 'Workflows')
+    titleKey: 'auto.components.settings.Settings.e1578cd4bc',
+    titleDefault: 'Workflows'
   },
   {
     id: 'interface',
-    title: translate('auto.components.settings.Settings.8bd117d669', 'Interface')
+    titleKey: 'auto.components.settings.Settings.8bd117d669',
+    titleDefault: 'Interface'
   },
   {
     id: 'remote',
-    title: translate('auto.components.settings.Settings.23931df7e8', 'Remote Access')
+    titleKey: 'auto.components.settings.Settings.23931df7e8',
+    titleDefault: 'Remote Hosts'
+  },
+  {
+    id: 'mobile',
+    titleKey: 'auto.components.settings.Settings.mobile_group',
+    titleDefault: 'Mobile'
   },
   {
     id: 'security',
-    title: translate('auto.components.settings.Settings.084d8fac5b', 'Privacy & Security')
+    titleKey: 'auto.components.settings.Settings.084d8fac5b',
+    titleDefault: 'Privacy & Security'
   },
-  { id: 'advanced', title: translate('auto.components.settings.Settings.1c87f8d024', 'Advanced') },
+  {
+    id: 'advanced',
+    titleKey: 'auto.components.settings.Settings.1c87f8d024',
+    titleDefault: 'Advanced'
+  },
   {
     id: 'experimental',
-    title: translate('auto.components.settings.Settings.8b017f2506', 'Experimental')
+    titleKey: 'auto.components.settings.Settings.8b017f2506',
+    titleDefault: 'Experimental'
   }
 ] as const
 
@@ -249,6 +266,7 @@ function Settings(): React.JSX.Element {
   // Why: Appearance owns terminal visual controls, but the Ghostty import flow
   // still needs Settings-level state so the modal survives section remounts.
   const ghostty = useGhosttyImport(updateSettings, settings)
+  const warpThemes = useWarpThemeImport(updateSettings, settings)
   const [fontSuggestions, setFontSuggestions] = useState<string[]>(
     Array.from(new Set([DEFAULT_APP_FONT_FAMILY, ...getFallbackTerminalFonts()]))
   )
@@ -280,6 +298,11 @@ function Settings(): React.JSX.Element {
 
   const hasUnsavedSourceControlAiPromptChanges =
     hasUnsavedCommitPromptChanges || hasUnsavedBranchPromptChanges
+  // Why: the window-close guard registers once for Settings' lifetime, so it
+  // reads the latest dirty state from a ref instead of a closure that would lag
+  // behind the draft state until the next effect commit.
+  const hasUnsavedSourceControlAiPromptChangesRef = useRef(hasUnsavedSourceControlAiPromptChanges)
+  hasUnsavedSourceControlAiPromptChangesRef.current = hasUnsavedSourceControlAiPromptChanges
 
   const writeSourceControlAiSettings = useCallback(
     (patch: SourceControlAiSettingsPatch): Promise<void> => {
@@ -322,11 +345,11 @@ function Settings(): React.JSX.Element {
     cancelPendingSettingsSubsectionScrollFrame(pendingSubsectionScrollFrameRef)
   }, [])
 
-  const confirmDiscardSourceControlAiPromptChanges = useCallback(async (): Promise<boolean> => {
-    if (!hasUnsavedSourceControlAiPromptChanges) {
-      return true
-    }
-    const shouldDiscard = await confirm({
+  // Pure "discard and leave?" prompt — no side effects. Why separate from the
+  // discard helper below: the window-close guard must ask without clearing the
+  // drafts, since a later guard/handler can still cancel the close.
+  const promptDiscardSourceControlAiPromptChanges = useCallback((): Promise<boolean> => {
+    return confirm({
       title: translate(
         'auto.components.settings.Settings.17bdee4ff1',
         'Discard unsaved Git AI Author changes?'
@@ -338,13 +361,20 @@ function Settings(): React.JSX.Element {
       confirmLabel: translate('auto.components.settings.Settings.65358016ea', 'Discard'),
       confirmVariant: 'destructive'
     })
+  }, [confirm])
+
+  const confirmDiscardSourceControlAiPromptChanges = useCallback(async (): Promise<boolean> => {
+    if (!hasUnsavedSourceControlAiPromptChanges) {
+      return true
+    }
+    const shouldDiscard = await promptDiscardSourceControlAiPromptChanges()
     if (shouldDiscard) {
       setSourceControlAiPromptDiscardSignal((signal) => signal + 1)
       setHasUnsavedCommitPromptChanges(false)
       setHasUnsavedBranchPromptChanges(false)
     }
     return shouldDiscard
-  }, [confirm, hasUnsavedSourceControlAiPromptChanges])
+  }, [promptDiscardSourceControlAiPromptChanges, hasUnsavedSourceControlAiPromptChanges])
 
   const closeSettingsPageWithPromptGuard = useCallback(async (): Promise<void> => {
     if (!(await confirmDiscardSourceControlAiPromptChanges())) {
@@ -445,19 +475,25 @@ function Settings(): React.JSX.Element {
     return () => document.removeEventListener('keydown', handleKeyDown)
   }, [activeSectionId, closeSettingsPageWithPromptGuard])
 
+  // Why: route window close / quit through the same discard dialog as in-app
+  // navigation. A raw beforeunload preventDefault only silently vetoes the close
+  // (no UI), which on the no-workspace Settings page reads as an unquittable
+  // window. Register one stable guard for Settings' lifetime, reading the latest
+  // dirty state from a ref. Why the pure prompt (no discard side effect): a
+  // downstream guard/handler can still cancel the close (e.g. a dirty-editor save
+  // dialog), and clearing the drafts up front would lose them while the window
+  // stays open; on an actual close they fall away with the renderer anyway.
   useEffect(() => {
-    const handleBeforeUnload = (event: BeforeUnloadEvent): void => {
+    return registerWindowCloseGuard(() => {
       if (isIntentionalAppRestartInProgress()) {
-        return
+        return true
       }
-      if (!hasUnsavedSourceControlAiPromptChanges) {
-        return
+      if (!hasUnsavedSourceControlAiPromptChangesRef.current) {
+        return true
       }
-      event.preventDefault()
-    }
-    window.addEventListener('beforeunload', handleBeforeUnload)
-    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
-  }, [hasUnsavedSourceControlAiPromptChanges])
+      return promptDiscardSourceControlAiPromptChanges()
+    })
+  }, [promptDiscardSourceControlAiPromptChanges])
 
   useEffect(() => {
     const handleFindShortcut = (event: KeyboardEvent): void => {
@@ -895,7 +931,8 @@ function Settings(): React.JSX.Element {
 
   const generalNavSections = visibleNavSections.filter((section) => !section.id.startsWith('repo-'))
   const generalNavGroups: SettingsNavGroup[] = SETTINGS_NAV_GROUPS.map((group) => ({
-    ...group,
+    id: group.id,
+    title: translate(group.titleKey, group.titleDefault),
     sections: generalNavSections.filter((section) => section.group === group.id)
   })).filter((group) => group.sections.length > 0 || group.id === 'setup')
   const repoNavSections = visibleNavSections
@@ -922,6 +959,7 @@ function Settings(): React.JSX.Element {
       className="settings-view-shell flex min-h-0 flex-1 overflow-hidden bg-background"
     >
       <SettingsSidebar
+        settings={settings}
         activeSectionId={activeSectionId}
         generalGroups={generalNavGroups}
         repoSections={repoNavSections}
@@ -1277,6 +1315,7 @@ function Settings(): React.JSX.Element {
                       )}
                       systemPrefersDark={systemPrefersDark}
                       ghostty={ghostty}
+                      warpThemes={warpThemes}
                     />
                   ) : null}
                 </SettingsSection>
@@ -1362,7 +1401,7 @@ function Settings(): React.JSX.Element {
                         )
                       : translate(
                           'auto.components.settings.Settings.b5ee17826b',
-                          'Switch between local desktop mode and paired remote Orca runtimes.'
+                          'Pair remote Orca runtimes for persistent sessions, richer remote state, and web or mobile handoff.'
                         )
                   }
                   searchEntries={getSectionSearchEntries('servers')}
@@ -1384,7 +1423,7 @@ function Settings(): React.JSX.Element {
                       title={translate('auto.components.settings.Settings.9b02492d1f', 'SSH Hosts')}
                       description={translate(
                         'auto.components.settings.Settings.c2ee313198',
-                        'Remote SSH hosts for files, terminals, and git.'
+                        'Use existing machines over SSH for files, terminals, Git, and workspaces.'
                       )}
                       searchEntries={getSectionSearchEntries('ssh')}
                     >

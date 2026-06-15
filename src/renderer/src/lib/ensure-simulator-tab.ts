@@ -66,7 +66,7 @@ export function ensureSimulatorTab(
     )
     if (reusableRightGroupId) {
       const tab = store.createUnifiedTab(worktreeId, 'simulator', {
-        label: translate("auto.lib.ensure.simulator.tab.372d21d428", "Mobile Emulator"),
+        label: translate('auto.lib.ensure.simulator.tab.372d21d428', 'Mobile Emulator'),
         targetGroupId: reusableRightGroupId,
         activate: true
       })
@@ -86,7 +86,7 @@ export function ensureSimulatorTab(
         splitDirection: 'right'
       },
       {
-        label: translate("auto.lib.ensure.simulator.tab.372d21d428", "Mobile Emulator"),
+        label: translate('auto.lib.ensure.simulator.tab.372d21d428', 'Mobile Emulator'),
         activate: true
       }
     )
@@ -96,7 +96,7 @@ export function ensureSimulatorTab(
   }
 
   const tab = store.createUnifiedTab(worktreeId, 'simulator', {
-    label: translate("auto.lib.ensure.simulator.tab.372d21d428", "Mobile Emulator"),
+    label: translate('auto.lib.ensure.simulator.tab.372d21d428', 'Mobile Emulator'),
     targetGroupId: sourceGroupId,
     activate: shouldSurface
   })

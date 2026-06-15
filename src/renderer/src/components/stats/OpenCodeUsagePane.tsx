@@ -26,57 +26,42 @@ import {
 } from '../ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip'
 import { ClaudeUsageLoadingState } from './ClaudeUsageLoadingState'
-import { CodexUsageDailyChart } from './CodexUsageDailyChart'
+import { OpenCodeUsageDetails } from './OpenCodeUsageDetails'
 import { StatCard } from './StatCard'
+import { formatCost, formatTokens, formatUpdatedAt } from './usage-formatters'
 import { translate } from '@/i18n/i18n'
 
 const RANGE_OPTIONS: OpenCodeUsageRange[] = ['7d', '30d', '90d', 'all']
 const SCOPE_OPTIONS: { value: OpenCodeUsageScope; label: string }[] = [
-  { value: 'orca', label: translate("auto.components.stats.OpenCodeUsagePane.e04c58327c", "Orca worktrees only") },
-  { value: 'all', label: translate("auto.components.stats.OpenCodeUsagePane.144a6050e9", "All local OpenCode usage") }
+  {
+    value: 'orca',
+    get label() {
+      return translate('auto.components.stats.OpenCodeUsagePane.e04c58327c', 'Orca worktrees only')
+    }
+  },
+  {
+    value: 'all',
+    get label() {
+      return translate(
+        'auto.components.stats.OpenCodeUsagePane.144a6050e9',
+        'All local OpenCode usage'
+      )
+    }
+  }
 ]
 const RANGE_LABELS: Record<OpenCodeUsageRange, string> = {
-  '7d': 'Last 7 days',
-  '30d': 'Last 30 days',
-  '90d': 'Last 90 days',
-  all: 'All time'
-}
-
-function formatTokens(value: number): string {
-  if (value >= 1_000_000) {
-    return `${(value / 1_000_000).toFixed(1)}M`
+  get '7d'() {
+    return translate('auto.components.stats.OpenCodeUsagePane.rangeLast7Days', 'Last 7 days')
+  },
+  get '30d'() {
+    return translate('auto.components.stats.OpenCodeUsagePane.rangeLast30Days', 'Last 30 days')
+  },
+  get '90d'() {
+    return translate('auto.components.stats.OpenCodeUsagePane.rangeLast90Days', 'Last 90 days')
+  },
+  get all() {
+    return translate('auto.components.stats.OpenCodeUsagePane.rangeAllTime', 'All time')
   }
-  if (value >= 1_000) {
-    return `${(value / 1_000).toFixed(1)}k`
-  }
-  return value.toLocaleString()
-}
-
-function formatCost(value: number | null): string {
-  if (value === null) {
-    return 'n/a'
-  }
-  return value < 0.01 ? `$${value.toFixed(4)}` : `$${value.toFixed(2)}`
-}
-
-function formatUpdatedAt(timestamp: number | null): string {
-  if (!timestamp) {
-    return 'Not scanned yet'
-  }
-  return `Updated ${new Date(timestamp).toLocaleString()}`
-}
-
-function formatSessionTime(timestamp: string): string {
-  const parsed = new Date(timestamp)
-  if (Number.isNaN(parsed.getTime())) {
-    return timestamp
-  }
-  return parsed.toLocaleString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit'
-  })
 }
 
 export function OpenCodeUsagePane(): React.JSX.Element {
@@ -109,15 +94,27 @@ export function OpenCodeUsagePane(): React.JSX.Element {
       <div className="rounded-lg border border-border/60 bg-card/40 p-4">
         <div className="flex items-start justify-between gap-4">
           <div className="space-y-2">
-            <h3 className="text-sm font-semibold text-foreground">{translate("auto.components.stats.OpenCodeUsagePane.bea80ceae0", "OpenCode Usage Tracking")}</h3>
+            <h3 className="text-sm font-semibold text-foreground">
+              {translate(
+                'auto.components.stats.OpenCodeUsagePane.bea80ceae0',
+                'OpenCode Usage Tracking'
+              )}
+            </h3>
             <p className="text-sm text-muted-foreground">
-              {translate("auto.components.stats.OpenCodeUsagePane.b8b3522436", "Reads local OpenCode usage logs to show token, model, and session stats.")}</p>
+              {translate(
+                'auto.components.stats.OpenCodeUsagePane.b8b3522436',
+                'Reads local OpenCode usage logs to show token, model, and session stats.'
+              )}
+            </p>
           </div>
           <button
             type="button"
             role="switch"
             aria-checked={false}
-            aria-label={translate("auto.components.stats.OpenCodeUsagePane.f04131b3be", "Enable OpenCode usage analytics")}
+            aria-label={translate(
+              'auto.components.stats.OpenCodeUsagePane.f04131b3be',
+              'Enable OpenCode usage analytics'
+            )}
             onClick={() => handleSetEnabled(true)}
             className="relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border border-transparent bg-muted-foreground/30 transition-colors"
           >
@@ -131,7 +128,10 @@ export function OpenCodeUsagePane(): React.JSX.Element {
   if (!summary && (scanState.isScanning || scanState.lastScanCompletedAt === null)) {
     return (
       <ClaudeUsageLoadingState
-        title={translate("auto.components.stats.OpenCodeUsagePane.bea80ceae0", "OpenCode Usage Tracking")}
+        title={translate(
+          'auto.components.stats.OpenCodeUsagePane.bea80ceae0',
+          'OpenCode Usage Tracking'
+        )}
         summaryCardCount={6}
         summaryGridClassName="md:grid-cols-3"
       />
@@ -144,10 +144,21 @@ export function OpenCodeUsagePane(): React.JSX.Element {
     <div className="space-y-4 rounded-lg border border-border/60 bg-card/30 p-4">
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0 flex-1">
-          <h3 className="text-sm font-semibold text-foreground">{translate("auto.components.stats.OpenCodeUsagePane.bea80ceae0", "OpenCode Usage Tracking")}</h3>
+          <h3 className="text-sm font-semibold text-foreground">
+            {translate(
+              'auto.components.stats.OpenCodeUsagePane.bea80ceae0',
+              'OpenCode Usage Tracking'
+            )}
+          </h3>
           <p className="mt-1 text-xs text-muted-foreground">
             {formatUpdatedAt(scanState.lastScanCompletedAt)}
-            {scanState.lastScanError ? translate("auto.components.stats.OpenCodeUsagePane.6cc7782458", " • Last scan error: {{value0}}", { value0: scanState.lastScanError }) : ''}
+            {scanState.lastScanError
+              ? translate(
+                  'auto.components.stats.OpenCodeUsagePane.6cc7782458',
+                  ' • Last scan error: {{value0}}',
+                  { value0: scanState.lastScanError }
+                )
+              : ''}
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-2 self-start">
@@ -156,17 +167,27 @@ export function OpenCodeUsagePane(): React.JSX.Element {
               <Tooltip>
                 <TooltipTrigger asChild>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon-xs" aria-label={translate("auto.components.stats.OpenCodeUsagePane.230d6de108", "OpenCode usage options")}>
+                    <Button
+                      variant="ghost"
+                      size="icon-xs"
+                      aria-label={translate(
+                        'auto.components.stats.OpenCodeUsagePane.230d6de108',
+                        'OpenCode usage options'
+                      )}
+                    >
                       <SlidersHorizontal className="size-3.5" />
                     </Button>
                   </DropdownMenuTrigger>
                 </TooltipTrigger>
                 <TooltipContent side="bottom" sideOffset={6}>
-                  {translate("auto.components.stats.OpenCodeUsagePane.01583b30aa", "Filters")}</TooltipContent>
+                  {translate('auto.components.stats.OpenCodeUsagePane.01583b30aa', 'Filters')}
+                </TooltipContent>
               </Tooltip>
             </TooltipProvider>
             <DropdownMenuContent align="end" className="w-60">
-              <DropdownMenuLabel>{translate("auto.components.stats.OpenCodeUsagePane.40d283c837", "Scope")}</DropdownMenuLabel>
+              <DropdownMenuLabel>
+                {translate('auto.components.stats.OpenCodeUsagePane.40d283c837', 'Scope')}
+              </DropdownMenuLabel>
               <DropdownMenuRadioGroup
                 value={scope}
                 onValueChange={(value) => void setOpenCodeUsageScope(value as OpenCodeUsageScope)}
@@ -178,7 +199,9 @@ export function OpenCodeUsagePane(): React.JSX.Element {
                 ))}
               </DropdownMenuRadioGroup>
               <DropdownMenuSeparator />
-              <DropdownMenuLabel>{translate("auto.components.stats.OpenCodeUsagePane.b5ed5c9fd0", "Range")}</DropdownMenuLabel>
+              <DropdownMenuLabel>
+                {translate('auto.components.stats.OpenCodeUsagePane.b5ed5c9fd0', 'Range')}
+              </DropdownMenuLabel>
               <DropdownMenuRadioGroup
                 value={range}
                 onValueChange={(value) => void setOpenCodeUsageRange(value as OpenCodeUsageRange)}
@@ -199,20 +222,27 @@ export function OpenCodeUsagePane(): React.JSX.Element {
                   size="icon-xs"
                   onClick={() => void refreshOpenCodeUsage()}
                   disabled={scanState.isScanning}
-                  aria-label={translate("auto.components.stats.OpenCodeUsagePane.bed558df0b", "Refresh OpenCode usage")}
+                  aria-label={translate(
+                    'auto.components.stats.OpenCodeUsagePane.bed558df0b',
+                    'Refresh OpenCode usage'
+                  )}
                 >
                   <RefreshCw className={`size-3.5 ${scanState.isScanning ? 'animate-spin' : ''}`} />
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="bottom" sideOffset={6}>
-                {translate("auto.components.stats.OpenCodeUsagePane.603cd138dc", "Refresh")}</TooltipContent>
+                {translate('auto.components.stats.OpenCodeUsagePane.603cd138dc', 'Refresh')}
+              </TooltipContent>
             </Tooltip>
           </TooltipProvider>
           <button
             type="button"
             role="switch"
             aria-checked={true}
-            aria-label={translate("auto.components.stats.OpenCodeUsagePane.f04131b3be", "Enable OpenCode usage analytics")}
+            aria-label={translate(
+              'auto.components.stats.OpenCodeUsagePane.f04131b3be',
+              'Enable OpenCode usage analytics'
+            )}
             onClick={() => handleSetEnabled(false)}
             className="relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border border-transparent bg-foreground transition-colors"
           >
@@ -229,140 +259,77 @@ export function OpenCodeUsagePane(): React.JSX.Element {
 
       {!hasAnyData ? (
         <div className="rounded-lg border border-dashed border-border/60 bg-card/30 px-4 py-6 text-sm text-muted-foreground">
-          {translate("auto.components.stats.OpenCodeUsagePane.bb6363e08c", "No local OpenCode usage found yet for this scope.")}</div>
+          {translate(
+            'auto.components.stats.OpenCodeUsagePane.bb6363e08c',
+            'No local OpenCode usage found yet for this scope.'
+          )}
+        </div>
       ) : (
         <>
           <div className="grid gap-3 md:grid-cols-3">
             <StatCard
-              label={translate("auto.components.stats.OpenCodeUsagePane.d637a892ed", "Input tokens")}
+              label={translate(
+                'auto.components.stats.OpenCodeUsagePane.d637a892ed',
+                'Input tokens'
+              )}
               value={formatTokens(summary?.inputTokens ?? 0)}
               icon={<Sparkles className="size-4" />}
             />
             <StatCard
-              label={translate("auto.components.stats.OpenCodeUsagePane.7aa4d8ce35", "Output tokens")}
+              label={translate(
+                'auto.components.stats.OpenCodeUsagePane.7aa4d8ce35',
+                'Output tokens'
+              )}
               value={formatTokens(summary?.outputTokens ?? 0)}
               icon={<Activity className="size-4" />}
             />
             <StatCard
-              label={translate("auto.components.stats.OpenCodeUsagePane.603504ee3b", "Cached input")}
+              label={translate(
+                'auto.components.stats.OpenCodeUsagePane.603504ee3b',
+                'Cached input'
+              )}
               value={formatTokens(summary?.cachedInputTokens ?? 0)}
               icon={<DatabaseZap className="size-4" />}
             />
             <StatCard
-              label={translate("auto.components.stats.OpenCodeUsagePane.5a65d68b77", "Reasoning output")}
+              label={translate(
+                'auto.components.stats.OpenCodeUsagePane.5a65d68b77',
+                'Reasoning output'
+              )}
               value={formatTokens(summary?.reasoningOutputTokens ?? 0)}
               icon={<Brain className="size-4" />}
             />
             <StatCard
-              label={translate("auto.components.stats.OpenCodeUsagePane.7e9433469a", "Sessions / Events")}
+              label={translate(
+                'auto.components.stats.OpenCodeUsagePane.7e9433469a',
+                'Sessions / Events'
+              )}
               value={`${(summary?.sessions ?? 0).toLocaleString()} / ${(summary?.events ?? 0).toLocaleString()}`}
               icon={<FolderKanban className="size-4" />}
             />
             <StatCard
-              label={translate("auto.components.stats.OpenCodeUsagePane.15c34d4b08", "Recorded cost")}
+              label={translate(
+                'auto.components.stats.OpenCodeUsagePane.15c34d4b08',
+                'Recorded cost'
+              )}
               value={formatCost(summary?.estimatedCostUsd ?? null)}
               icon={<Coins className="size-4" />}
             />
           </div>
           <p className="px-1 text-xs text-muted-foreground">
-            {translate("auto.components.stats.OpenCodeUsagePane.e5bb23d85e", "Cost comes from the local OpenCode database when the assistant message recorded one.")}</p>
+            {translate(
+              'auto.components.stats.OpenCodeUsagePane.e5bb23d85e',
+              'Cost comes from the local OpenCode database when the assistant message recorded one.'
+            )}
+          </p>
 
-          <CodexUsageDailyChart daily={daily} />
-
-          <div className="grid gap-4 xl:grid-cols-2">
-            <section className="rounded-lg border border-border/60 bg-card/40 p-4">
-              <div className="mb-3">
-                <h4 className="text-sm font-semibold text-foreground">{translate("auto.components.stats.OpenCodeUsagePane.040c044d39", "By model")}</h4>
-                <p className="text-xs text-muted-foreground">
-                  {translate("auto.components.stats.OpenCodeUsagePane.a15206a63a", "Top model:")}{summary?.topModel ?? translate("auto.components.stats.OpenCodeUsagePane.8095a63426", "n/a")}
-                </p>
-              </div>
-              <div className="space-y-3">
-                {modelBreakdown.slice(0, 5).map((row) => (
-                  <div key={row.key} className="space-y-1">
-                    <div className="flex items-center justify-between gap-3 text-sm">
-                      <span className="truncate text-foreground">{row.label}</span>
-                      <span className="shrink-0 text-muted-foreground">
-                        {formatTokens(row.totalTokens)}
-                      </span>
-                    </div>
-                    <div className="text-xs text-muted-foreground">
-                      {row.sessions} {translate("auto.components.stats.OpenCodeUsagePane.bc0cb89901", "sessions •")}{row.events} {translate("auto.components.stats.OpenCodeUsagePane.1e5d410df0", "events")}{row.estimatedCostUsd !== null
-                        ? ` • ${formatCost(row.estimatedCostUsd)}`
-                        : ''}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </section>
-
-            <section className="rounded-lg border border-border/60 bg-card/40 p-4">
-              <div className="mb-3">
-                <h4 className="text-sm font-semibold text-foreground">{translate("auto.components.stats.OpenCodeUsagePane.0f0a1684bb", "By project")}</h4>
-                <p className="text-xs text-muted-foreground">
-                  {translate("auto.components.stats.OpenCodeUsagePane.048ffe4d65", "Top project:")}{summary?.topProject ?? translate("auto.components.stats.OpenCodeUsagePane.8095a63426", "n/a")}
-                </p>
-              </div>
-              <div className="space-y-3">
-                {projectBreakdown.slice(0, 5).map((row) => (
-                  <div key={row.key} className="space-y-1">
-                    <div className="flex items-center justify-between gap-3 text-sm">
-                      <span className="truncate text-foreground">{row.label}</span>
-                      <span className="shrink-0 text-muted-foreground">
-                        {formatTokens(row.totalTokens)}
-                      </span>
-                    </div>
-                    <div className="text-xs text-muted-foreground">
-                      {row.sessions} {translate("auto.components.stats.OpenCodeUsagePane.bc0cb89901", "sessions •")}{row.events} {translate("auto.components.stats.OpenCodeUsagePane.1e5d410df0", "events")}</div>
-                  </div>
-                ))}
-              </div>
-            </section>
-          </div>
-
-          <section className="rounded-lg border border-border/60 bg-card/40 p-4">
-            <div className="mb-3">
-              <h4 className="text-sm font-semibold text-foreground">{translate("auto.components.stats.OpenCodeUsagePane.4799177b1c", "Recent sessions")}</h4>
-              <p className="text-xs text-muted-foreground">
-                {translate("auto.components.stats.OpenCodeUsagePane.81817a641a", "Most recent local OpenCode sessions in this scope.")}</p>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="min-w-full text-sm">
-                <thead>
-                  <tr className="border-b border-border/60 text-left text-xs text-muted-foreground">
-                    <th className="px-2 py-2 font-medium">{translate("auto.components.stats.OpenCodeUsagePane.d97bdf6e27", "Last active")}</th>
-                    <th className="px-2 py-2 font-medium">{translate("auto.components.stats.OpenCodeUsagePane.a4738de041", "Project")}</th>
-                    <th className="px-2 py-2 font-medium">{translate("auto.components.stats.OpenCodeUsagePane.08c78441b7", "Model")}</th>
-                    <th className="px-2 py-2 font-medium">{translate("auto.components.stats.OpenCodeUsagePane.d416f5cf92", "Events")}</th>
-                    <th className="px-2 py-2 font-medium">{translate("auto.components.stats.OpenCodeUsagePane.0f2f266c9d", "Input")}</th>
-                    <th className="px-2 py-2 font-medium">{translate("auto.components.stats.OpenCodeUsagePane.dfc4513657", "Output")}</th>
-                    <th className="px-2 py-2 font-medium">{translate("auto.components.stats.OpenCodeUsagePane.349f7c3f5c", "Total")}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {recentSessions.map((row) => (
-                    <tr key={row.sessionId} className="border-b border-border/40 last:border-b-0">
-                      <td className="px-2 py-2 text-muted-foreground">
-                        {formatSessionTime(row.lastActiveAt)}
-                      </td>
-                      <td className="px-2 py-2 text-foreground">{row.projectLabel}</td>
-                      <td className="px-2 py-2 text-muted-foreground">{row.model ?? translate("auto.components.stats.OpenCodeUsagePane.362231082f", "Unknown")}</td>
-                      <td className="px-2 py-2 text-muted-foreground">{row.events}</td>
-                      <td className="px-2 py-2 text-muted-foreground">
-                        {formatTokens(row.inputTokens)}
-                      </td>
-                      <td className="px-2 py-2 text-muted-foreground">
-                        {formatTokens(row.outputTokens)}
-                      </td>
-                      <td className="px-2 py-2 text-muted-foreground">
-                        {formatTokens(row.totalTokens)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </section>
+          <OpenCodeUsageDetails
+            daily={daily}
+            modelBreakdown={modelBreakdown}
+            projectBreakdown={projectBreakdown}
+            recentSessions={recentSessions}
+            summary={summary}
+          />
         </>
       )}
     </div>

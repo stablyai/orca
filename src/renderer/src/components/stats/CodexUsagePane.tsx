@@ -23,58 +23,40 @@ import {
 } from '../ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip'
 import { ClaudeUsageLoadingState } from './ClaudeUsageLoadingState'
-import { CodexUsageDailyChart } from './CodexUsageDailyChart'
+import { CodexUsageDetails } from './CodexUsageDetails'
 import { ShareUsageButton } from './ShareUsageButton'
 import { StatCard } from './StatCard'
+import { formatCost, formatTokens, formatUpdatedAt } from './usage-formatters'
 import { translate } from '@/i18n/i18n'
 
 const RANGE_OPTIONS: CodexUsageRange[] = ['7d', '30d', '90d', 'all']
 const SCOPE_OPTIONS: { value: CodexUsageScope; label: string }[] = [
-  { value: 'orca', label: translate("auto.components.stats.CodexUsagePane.201766b754", "Orca worktrees only") },
-  { value: 'all', label: translate("auto.components.stats.CodexUsagePane.4fe8820098", "All local Codex usage") }
+  {
+    value: 'orca',
+    get label() {
+      return translate('auto.components.stats.CodexUsagePane.201766b754', 'Orca worktrees only')
+    }
+  },
+  {
+    value: 'all',
+    get label() {
+      return translate('auto.components.stats.CodexUsagePane.4fe8820098', 'All local Codex usage')
+    }
+  }
 ]
 const RANGE_LABELS: Record<CodexUsageRange, string> = {
-  '7d': 'Last 7 days',
-  '30d': 'Last 30 days',
-  '90d': 'Last 90 days',
-  all: 'All time'
-}
-
-function formatTokens(value: number): string {
-  if (value >= 1_000_000) {
-    return `${(value / 1_000_000).toFixed(1)}M`
+  get '7d'() {
+    return translate('auto.components.stats.CodexUsagePane.rangeLast7Days', 'Last 7 days')
+  },
+  get '30d'() {
+    return translate('auto.components.stats.CodexUsagePane.rangeLast30Days', 'Last 30 days')
+  },
+  get '90d'() {
+    return translate('auto.components.stats.CodexUsagePane.rangeLast90Days', 'Last 90 days')
+  },
+  get all() {
+    return translate('auto.components.stats.CodexUsagePane.rangeAllTime', 'All time')
   }
-  if (value >= 1_000) {
-    return `${(value / 1_000).toFixed(1)}k`
-  }
-  return value.toLocaleString()
-}
-
-function formatCost(value: number | null): string {
-  if (value === null) {
-    return 'n/a'
-  }
-  return value < 0.01 ? `$${value.toFixed(4)}` : `$${value.toFixed(2)}`
-}
-
-function formatUpdatedAt(timestamp: number | null): string {
-  if (!timestamp) {
-    return 'Not scanned yet'
-  }
-  return `Updated ${new Date(timestamp).toLocaleString()}`
-}
-
-function formatSessionTime(timestamp: string): string {
-  const parsed = new Date(timestamp)
-  if (Number.isNaN(parsed.getTime())) {
-    return timestamp
-  }
-  return parsed.toLocaleString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit'
-  })
 }
 
 export function CodexUsagePane(): React.JSX.Element {
@@ -107,15 +89,24 @@ export function CodexUsagePane(): React.JSX.Element {
       <div className="rounded-lg border border-border/60 bg-card/40 p-4">
         <div className="flex items-start justify-between gap-4">
           <div className="space-y-2">
-            <h3 className="text-sm font-semibold text-foreground">{translate("auto.components.stats.CodexUsagePane.408210470c", "Codex Usage Tracking")}</h3>
+            <h3 className="text-sm font-semibold text-foreground">
+              {translate('auto.components.stats.CodexUsagePane.408210470c', 'Codex Usage Tracking')}
+            </h3>
             <p className="text-sm text-muted-foreground">
-              {translate("auto.components.stats.CodexUsagePane.13badcd8f2", "Reads local Codex usage logs to show token, model, and session stats.")}</p>
+              {translate(
+                'auto.components.stats.CodexUsagePane.13badcd8f2',
+                'Reads local Codex usage logs to show token, model, and session stats.'
+              )}
+            </p>
           </div>
           <button
             type="button"
             role="switch"
             aria-checked={false}
-            aria-label={translate("auto.components.stats.CodexUsagePane.f7c1affbd5", "Enable Codex usage analytics")}
+            aria-label={translate(
+              'auto.components.stats.CodexUsagePane.f7c1affbd5',
+              'Enable Codex usage analytics'
+            )}
             onClick={() => handleSetEnabled(true)}
             className="relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border border-transparent bg-muted-foreground/30 transition-colors"
           >
@@ -129,7 +120,7 @@ export function CodexUsagePane(): React.JSX.Element {
   if (!summary && (scanState.isScanning || scanState.lastScanCompletedAt === null)) {
     return (
       <ClaudeUsageLoadingState
-        title={translate("auto.components.stats.CodexUsagePane.408210470c", "Codex Usage Tracking")}
+        title={translate('auto.components.stats.CodexUsagePane.408210470c', 'Codex Usage Tracking')}
         summaryCardCount={6}
         summaryGridClassName="md:grid-cols-3"
       />
@@ -142,10 +133,18 @@ export function CodexUsagePane(): React.JSX.Element {
     <div className="space-y-4 rounded-lg border border-border/60 bg-card/30 p-4">
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0 flex-1">
-          <h3 className="text-sm font-semibold text-foreground">{translate("auto.components.stats.CodexUsagePane.408210470c", "Codex Usage Tracking")}</h3>
+          <h3 className="text-sm font-semibold text-foreground">
+            {translate('auto.components.stats.CodexUsagePane.408210470c', 'Codex Usage Tracking')}
+          </h3>
           <p className="mt-1 text-xs text-muted-foreground">
             {formatUpdatedAt(scanState.lastScanCompletedAt)}
-            {scanState.lastScanError ? translate("auto.components.stats.CodexUsagePane.8a6655f7a2", " • Last scan error: {{value0}}", { value0: scanState.lastScanError }) : ''}
+            {scanState.lastScanError
+              ? translate(
+                  'auto.components.stats.CodexUsagePane.8a6655f7a2',
+                  ' • Last scan error: {{value0}}',
+                  { value0: scanState.lastScanError }
+                )
+              : ''}
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-2 self-start">
@@ -157,17 +156,27 @@ export function CodexUsagePane(): React.JSX.Element {
               <Tooltip>
                 <TooltipTrigger asChild>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon-xs" aria-label={translate("auto.components.stats.CodexUsagePane.70b5b8581f", "Codex usage options")}>
+                    <Button
+                      variant="ghost"
+                      size="icon-xs"
+                      aria-label={translate(
+                        'auto.components.stats.CodexUsagePane.70b5b8581f',
+                        'Codex usage options'
+                      )}
+                    >
                       <SlidersHorizontal className="size-3.5" />
                     </Button>
                   </DropdownMenuTrigger>
                 </TooltipTrigger>
                 <TooltipContent side="bottom" sideOffset={6}>
-                  {translate("auto.components.stats.CodexUsagePane.1af1a39b2f", "Filters")}</TooltipContent>
+                  {translate('auto.components.stats.CodexUsagePane.1af1a39b2f', 'Filters')}
+                </TooltipContent>
               </Tooltip>
             </TooltipProvider>
             <DropdownMenuContent align="end" className="w-60">
-              <DropdownMenuLabel>{translate("auto.components.stats.CodexUsagePane.6d68e8399a", "Scope")}</DropdownMenuLabel>
+              <DropdownMenuLabel>
+                {translate('auto.components.stats.CodexUsagePane.6d68e8399a', 'Scope')}
+              </DropdownMenuLabel>
               <DropdownMenuRadioGroup
                 value={scope}
                 onValueChange={(value) => void setCodexUsageScope(value as CodexUsageScope)}
@@ -179,7 +188,9 @@ export function CodexUsagePane(): React.JSX.Element {
                 ))}
               </DropdownMenuRadioGroup>
               <DropdownMenuSeparator />
-              <DropdownMenuLabel>{translate("auto.components.stats.CodexUsagePane.89162e019b", "Range")}</DropdownMenuLabel>
+              <DropdownMenuLabel>
+                {translate('auto.components.stats.CodexUsagePane.89162e019b', 'Range')}
+              </DropdownMenuLabel>
               <DropdownMenuRadioGroup
                 value={range}
                 onValueChange={(value) => void setCodexUsageRange(value as CodexUsageRange)}
@@ -200,20 +211,27 @@ export function CodexUsagePane(): React.JSX.Element {
                   size="icon-xs"
                   onClick={() => void refreshCodexUsage()}
                   disabled={scanState.isScanning}
-                  aria-label={translate("auto.components.stats.CodexUsagePane.ec4d270e2c", "Refresh Codex usage")}
+                  aria-label={translate(
+                    'auto.components.stats.CodexUsagePane.ec4d270e2c',
+                    'Refresh Codex usage'
+                  )}
                 >
                   <RefreshCw className={`size-3.5 ${scanState.isScanning ? 'animate-spin' : ''}`} />
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="bottom" sideOffset={6}>
-                {translate("auto.components.stats.CodexUsagePane.3022cda443", "Refresh")}</TooltipContent>
+                {translate('auto.components.stats.CodexUsagePane.3022cda443', 'Refresh')}
+              </TooltipContent>
             </Tooltip>
           </TooltipProvider>
           <button
             type="button"
             role="switch"
             aria-checked={true}
-            aria-label={translate("auto.components.stats.CodexUsagePane.f7c1affbd5", "Enable Codex usage analytics")}
+            aria-label={translate(
+              'auto.components.stats.CodexUsagePane.f7c1affbd5',
+              'Enable Codex usage analytics'
+            )}
             onClick={() => handleSetEnabled(false)}
             className="relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border border-transparent bg-foreground transition-colors"
           >
@@ -230,141 +248,68 @@ export function CodexUsagePane(): React.JSX.Element {
 
       {!hasAnyData ? (
         <div className="rounded-lg border border-dashed border-border/60 bg-card/30 px-4 py-6 text-sm text-muted-foreground">
-          {translate("auto.components.stats.CodexUsagePane.4c865393b4", "No local Codex usage found yet for this scope.")}</div>
+          {translate(
+            'auto.components.stats.CodexUsagePane.4c865393b4',
+            'No local Codex usage found yet for this scope.'
+          )}
+        </div>
       ) : (
         <>
           <div className="grid gap-3 md:grid-cols-3">
             <StatCard
-              label={translate("auto.components.stats.CodexUsagePane.e365eaa6fd", "Input tokens")}
+              label={translate('auto.components.stats.CodexUsagePane.e365eaa6fd', 'Input tokens')}
               value={formatTokens(summary?.inputTokens ?? 0)}
               icon={<Sparkles className="size-4" />}
             />
             <StatCard
-              label={translate("auto.components.stats.CodexUsagePane.5d8eba87bd", "Output tokens")}
+              label={translate('auto.components.stats.CodexUsagePane.5d8eba87bd', 'Output tokens')}
               value={formatTokens(summary?.outputTokens ?? 0)}
               icon={<Activity className="size-4" />}
             />
             <StatCard
-              label={translate("auto.components.stats.CodexUsagePane.a9ac0f423a", "Cached input")}
+              label={translate('auto.components.stats.CodexUsagePane.a9ac0f423a', 'Cached input')}
               value={formatTokens(summary?.cachedInputTokens ?? 0)}
               icon={<DatabaseZap className="size-4" />}
             />
             <StatCard
-              label={translate("auto.components.stats.CodexUsagePane.6e18146e9b", "Reasoning output")}
+              label={translate(
+                'auto.components.stats.CodexUsagePane.6e18146e9b',
+                'Reasoning output'
+              )}
               value={formatTokens(summary?.reasoningOutputTokens ?? 0)}
               icon={<Brain className="size-4" />}
             />
             <StatCard
-              label={translate("auto.components.stats.CodexUsagePane.907b31865f", "Sessions / Events")}
+              label={translate(
+                'auto.components.stats.CodexUsagePane.907b31865f',
+                'Sessions / Events'
+              )}
               value={`${(summary?.sessions ?? 0).toLocaleString()} / ${(summary?.events ?? 0).toLocaleString()}`}
               icon={<FolderKanban className="size-4" />}
             />
             <StatCard
-              label={translate("auto.components.stats.CodexUsagePane.1a18fbd56b", "Est. API-equivalent cost")}
+              label={translate(
+                'auto.components.stats.CodexUsagePane.1a18fbd56b',
+                'Est. API-equivalent cost'
+              )}
               value={formatCost(summary?.estimatedCostUsd ?? null)}
               icon={<Coins className="size-4" />}
             />
           </div>
           <p className="px-1 text-xs text-muted-foreground">
-            {translate("auto.components.stats.CodexUsagePane.94ac1f1ee7", "Reasoning tokens are shown for visibility, but cost is calculated from uncached input, cached input, and output only.")}</p>
+            {translate(
+              'auto.components.stats.CodexUsagePane.94ac1f1ee7',
+              'Reasoning tokens are shown for visibility, but cost is calculated from uncached input, cached input, and output only.'
+            )}
+          </p>
 
-          <CodexUsageDailyChart daily={daily} />
-
-          <div className="grid gap-4 xl:grid-cols-2">
-            <section className="rounded-lg border border-border/60 bg-card/40 p-4">
-              <div className="mb-3">
-                <h4 className="text-sm font-semibold text-foreground">{translate("auto.components.stats.CodexUsagePane.5a0d1d69cd", "By model")}</h4>
-                <p className="text-xs text-muted-foreground">
-                  {translate("auto.components.stats.CodexUsagePane.95d2d89285", "Top model:")}{summary?.topModel ?? translate("auto.components.stats.CodexUsagePane.ae255c3dba", "n/a")}
-                </p>
-              </div>
-              <div className="space-y-3">
-                {modelBreakdown.slice(0, 5).map((row) => (
-                  <div key={row.key} className="space-y-1">
-                    <div className="flex items-center justify-between gap-3 text-sm">
-                      <span className="truncate text-foreground">{row.label}</span>
-                      <span className="shrink-0 text-muted-foreground">
-                        {formatTokens(row.totalTokens)}
-                      </span>
-                    </div>
-                    <div className="text-xs text-muted-foreground">
-                      {row.sessions} {translate("auto.components.stats.CodexUsagePane.bf1bf2f674", "sessions •")}{row.events} {translate("auto.components.stats.CodexUsagePane.79a69522a5", "events")}{row.hasInferredPricing ? translate("auto.components.stats.CodexUsagePane.247c93ca92", "• inferred pricing") : ''}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </section>
-
-            <section className="rounded-lg border border-border/60 bg-card/40 p-4">
-              <div className="mb-3">
-                <h4 className="text-sm font-semibold text-foreground">{translate("auto.components.stats.CodexUsagePane.b98718aaab", "By project")}</h4>
-                <p className="text-xs text-muted-foreground">
-                  {translate("auto.components.stats.CodexUsagePane.829ee743f2", "Top project:")}{summary?.topProject ?? translate("auto.components.stats.CodexUsagePane.ae255c3dba", "n/a")}
-                </p>
-              </div>
-              <div className="space-y-3">
-                {projectBreakdown.slice(0, 5).map((row) => (
-                  <div key={row.key} className="space-y-1">
-                    <div className="flex items-center justify-between gap-3 text-sm">
-                      <span className="truncate text-foreground">{row.label}</span>
-                      <span className="shrink-0 text-muted-foreground">
-                        {formatTokens(row.totalTokens)}
-                      </span>
-                    </div>
-                    <div className="text-xs text-muted-foreground">
-                      {row.sessions} {translate("auto.components.stats.CodexUsagePane.bf1bf2f674", "sessions •")}{row.events} {translate("auto.components.stats.CodexUsagePane.79a69522a5", "events")}</div>
-                  </div>
-                ))}
-              </div>
-            </section>
-          </div>
-
-          <section className="rounded-lg border border-border/60 bg-card/40 p-4">
-            <div className="mb-3">
-              <h4 className="text-sm font-semibold text-foreground">{translate("auto.components.stats.CodexUsagePane.0cb0983c07", "Recent sessions")}</h4>
-              <p className="text-xs text-muted-foreground">
-                {translate("auto.components.stats.CodexUsagePane.0bd8655475", "Most recent local Codex sessions in this scope.")}</p>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="min-w-full text-sm">
-                <thead>
-                  <tr className="border-b border-border/60 text-left text-xs text-muted-foreground">
-                    <th className="px-2 py-2 font-medium">{translate("auto.components.stats.CodexUsagePane.0c36b100be", "Last active")}</th>
-                    <th className="px-2 py-2 font-medium">{translate("auto.components.stats.CodexUsagePane.1a65900aea", "Project")}</th>
-                    <th className="px-2 py-2 font-medium">{translate("auto.components.stats.CodexUsagePane.c2478bcc3c", "Model")}</th>
-                    <th className="px-2 py-2 font-medium">{translate("auto.components.stats.CodexUsagePane.bd0822ca47", "Events")}</th>
-                    <th className="px-2 py-2 font-medium">{translate("auto.components.stats.CodexUsagePane.3acc582214", "Input")}</th>
-                    <th className="px-2 py-2 font-medium">{translate("auto.components.stats.CodexUsagePane.bbd20344b8", "Output")}</th>
-                    <th className="px-2 py-2 font-medium">{translate("auto.components.stats.CodexUsagePane.e0b988599d", "Total")}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {recentSessions.map((row) => (
-                    <tr key={row.sessionId} className="border-b border-border/40 last:border-b-0">
-                      <td className="px-2 py-2 text-muted-foreground">
-                        {formatSessionTime(row.lastActiveAt)}
-                      </td>
-                      <td className="px-2 py-2 text-foreground">{row.projectLabel}</td>
-                      <td className="px-2 py-2 text-muted-foreground">
-                        {row.model ?? translate("auto.components.stats.CodexUsagePane.bf6cf2d4dd", "Unknown")}
-                        {row.hasInferredPricing ? ' *' : ''}
-                      </td>
-                      <td className="px-2 py-2 text-muted-foreground">{row.events}</td>
-                      <td className="px-2 py-2 text-muted-foreground">
-                        {formatTokens(row.inputTokens)}
-                      </td>
-                      <td className="px-2 py-2 text-muted-foreground">
-                        {formatTokens(row.outputTokens)}
-                      </td>
-                      <td className="px-2 py-2 text-muted-foreground">
-                        {formatTokens(row.totalTokens)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </section>
+          <CodexUsageDetails
+            daily={daily}
+            modelBreakdown={modelBreakdown}
+            projectBreakdown={projectBreakdown}
+            recentSessions={recentSessions}
+            summary={summary}
+          />
         </>
       )}
     </div>

@@ -34,6 +34,7 @@ function createEditorStore(): StoreApi<AppState> {
     browserTabsByWorktree: {},
     activeBrowserTabId: null,
     activeBrowserTabIdByWorktree: {},
+    recordFeatureInteraction: vi.fn(),
     ...createEditorSlice(...(args as Parameters<typeof createEditorSlice>))
   })) as unknown as StoreApi<AppState>
 }
@@ -46,6 +47,7 @@ function createEditorTabsStore(): StoreApi<AppState> {
     browserTabsByWorktree: {},
     activeBrowserTabId: null,
     activeBrowserTabIdByWorktree: {},
+    recordFeatureInteraction: vi.fn(),
     ...createTabsSlice(...(args as Parameters<typeof createTabsSlice>)),
     ...createEditorSlice(...(args as Parameters<typeof createEditorSlice>))
   })) as unknown as StoreApi<AppState>
@@ -66,6 +68,22 @@ function ownedEditorFileId(
 }
 
 describe('createEditorSlice right sidebar state', () => {
+  it('does not record markdown-file-created when opening an existing markdown file', () => {
+    const store = createEditorStore()
+
+    store.getState().openFile({
+      filePath: '/repo/docs/existing.md',
+      relativePath: 'docs/existing.md',
+      worktreeId: 'wt-1',
+      language: 'markdown',
+      mode: 'edit'
+    })
+
+    expect(store.getState().recordFeatureInteraction).not.toHaveBeenCalledWith(
+      'markdown-file-created'
+    )
+  })
+
   it('right sidebar is closed by default', () => {
     const store = createEditorStore()
     expect(store.getState().rightSidebarOpen).toBe(false)
@@ -96,9 +114,9 @@ describe('createEditorSlice right sidebar state', () => {
   it('setRightSidebarTab updates the global tab without writing a worktree entry', () => {
     const store = createEditorStore()
 
-    store.getState().setRightSidebarTab('search')
+    store.getState().setRightSidebarTab('checks')
 
-    expect(store.getState().rightSidebarTab).toBe('search')
+    expect(store.getState().rightSidebarTab).toBe('checks')
     expect(store.getState().rightSidebarTabByWorktree).toEqual({})
   })
 
@@ -107,18 +125,97 @@ describe('createEditorSlice right sidebar state', () => {
     const remembered = { 'wt-1': 'checks' as const }
     store.setState({ activeWorktreeId: null, rightSidebarTabByWorktree: remembered })
 
-    store.getState().setRightSidebarTab('search')
+    store.getState().setRightSidebarTab('checks')
 
-    expect(store.getState().rightSidebarTab).toBe('search')
+    expect(store.getState().rightSidebarTab).toBe('checks')
     expect(store.getState().rightSidebarTabByWorktree).toBe(remembered)
+  })
+
+  it('showRightSidebarFiles opens Explorer files', () => {
+    const store = createEditorStore()
+    store.setState({ rightSidebarOpen: false, rightSidebarTab: 'checks' })
+
+    store.getState().showRightSidebarFiles()
+
+    expect(store.getState().rightSidebarOpen).toBe(true)
+    expect(store.getState().rightSidebarTab).toBe('explorer')
+    expect(store.getState().rightSidebarExplorerView).toBe('files')
+    expect(store.getState().rightSidebarExplorerViewByWorktree).toEqual({ 'wt-1': 'files' })
+  })
+
+  it('showRightSidebarSearch opens Explorer search and requests focus without payload', () => {
+    const store = createEditorStore()
+    store.getState().updateFileSearchState('wt-1', {
+      query: 'needle',
+      results: { files: [], totalMatches: 1, truncated: false }
+    })
+
+    store.getState().showRightSidebarSearch()
+
+    expect(store.getState().rightSidebarOpen).toBe(true)
+    expect(store.getState().rightSidebarTab).toBe('explorer')
+    expect(store.getState().rightSidebarExplorerView).toBe('search')
+    expect(store.getState().rightSidebarExplorerViewByWorktree).toEqual({ 'wt-1': 'search' })
+    expect(store.getState().fileSearchStateByWorktree['wt-1']).toMatchObject({
+      query: 'needle',
+      results: { files: [], totalMatches: 1, truncated: false },
+      focusRequestId: 1
+    })
+    expect(store.getState().fileSearchStateByWorktree['wt-1']?.seedRequestId).toBeUndefined()
+  })
+
+  it('showRightSidebarSearch seeds query and include together with one request', () => {
+    const store = createEditorStore()
+
+    store.getState().showRightSidebarSearch({ query: 'needle', includePattern: 'src/**' })
+
+    expect(store.getState().fileSearchStateByWorktree['wt-1']).toMatchObject({
+      query: 'needle',
+      includePattern: 'src/**',
+      results: null,
+      loading: false,
+      seedRequestId: 1
+    })
+  })
+
+  it('showRightSidebarSearch include-only focuses when the query is empty', () => {
+    const store = createEditorStore()
+
+    store.getState().showRightSidebarSearch({ includePattern: 'src/**' })
+
+    expect(store.getState().fileSearchStateByWorktree['wt-1']).toMatchObject({
+      query: '',
+      includePattern: 'src/**',
+      focusRequestId: 1
+    })
+    expect(store.getState().fileSearchStateByWorktree['wt-1']?.seedRequestId).toBeUndefined()
+  })
+
+  it('showRightSidebarSearch include-only reruns an existing query', () => {
+    const store = createEditorStore()
+    store.getState().updateFileSearchState('wt-1', {
+      query: 'needle',
+      results: { files: [], totalMatches: 1, truncated: false }
+    })
+
+    store.getState().showRightSidebarSearch({ includePattern: 'src/**' })
+
+    expect(store.getState().fileSearchStateByWorktree['wt-1']).toMatchObject({
+      query: 'needle',
+      includePattern: 'src/**',
+      results: null,
+      loading: false,
+      seedRequestId: 1
+    })
   })
 
   it('revealInExplorer selects explorer globally without writing a worktree entry', () => {
     const store = createEditorStore()
-    const remembered = { 'wt-1': 'search' as const, 'wt-2': 'checks' as const }
+    const remembered = { 'wt-1': 'explorer' as const, 'wt-2': 'checks' as const }
     store.setState({
       activeWorktreeId: 'wt-1',
-      rightSidebarTab: 'search',
+      rightSidebarTab: 'explorer',
+      rightSidebarExplorerView: 'search',
       rightSidebarTabByWorktree: remembered
     })
 
@@ -126,6 +223,8 @@ describe('createEditorSlice right sidebar state', () => {
 
     expect(store.getState().rightSidebarOpen).toBe(true)
     expect(store.getState().rightSidebarTab).toBe('explorer')
+    expect(store.getState().rightSidebarExplorerView).toBe('files')
+    expect(store.getState().rightSidebarExplorerViewByWorktree).toEqual({ 'wt-2': 'files' })
     expect(store.getState().rightSidebarTabByWorktree).toBe(remembered)
     expect(store.getState().pendingExplorerReveal).toMatchObject({
       worktreeId: 'wt-2',
@@ -1999,6 +2098,28 @@ describe('createEditorSlice remote branch actions', () => {
     expect(toastErrorMock).not.toHaveBeenCalled()
   })
 
+  it('routes git operations through the explicit runtime owner instead of ambient focus', async () => {
+    const store = createEditorStore()
+    store.setState({ settings: { activeRuntimeEnvironmentId: 'focused-runtime' } as never })
+
+    await store.getState().pushBranch('wt-1', '/repo', false, undefined, undefined, {
+      runtimeTargetSettings: { activeRuntimeEnvironmentId: null }
+    })
+
+    expect(gitPushMock).toHaveBeenCalledWith({
+      worktreePath: '/repo',
+      publish: false,
+      connectionId: undefined,
+      pushTarget: undefined,
+      forceWithLease: undefined
+    })
+    expect(gitUpstreamStatusMock).toHaveBeenCalledWith({
+      worktreePath: '/repo',
+      connectionId: undefined,
+      pushTarget: undefined
+    })
+  })
+
   it('runs rebase from base and refreshes upstream on success', async () => {
     const store = createEditorStore()
     const pushTarget = { remoteName: 'fork', branchName: 'feature' }
@@ -2308,6 +2429,64 @@ describe('createEditorSlice remote branch actions', () => {
     await flushAsyncRemoteRefresh()
 
     expect(gitStatusMock).not.toHaveBeenCalled()
+    expect(gitFetchMock).toHaveBeenCalledWith({
+      worktreePath: '/repo',
+      connectionId: undefined
+    })
+    expect(gitUpstreamStatusMock).toHaveBeenCalledWith({
+      worktreePath: '/repo',
+      connectionId: undefined
+    })
+    expect(store.getState().isRemoteOperationActive).toBe(false)
+  })
+
+  it('surfaces submodule push failures with the submodule name', async () => {
+    const store = createEditorStore()
+    const pushError = new Error(
+      "Command failed: git push\nPushing submodule 'find-cmux-followers'\n" +
+        ' ! [rejected]        master -> master (fetch first)\n' +
+        "Unable to push submodule 'find-cmux-followers'\n" +
+        'fatal: failed to push all needed submodules'
+    )
+    gitPushMock.mockRejectedValueOnce(pushError)
+
+    await expect(store.getState().pushBranch('wt-1', '/repo', false)).rejects.toThrow(
+      pushError.message
+    )
+
+    expect(toastErrorMock).toHaveBeenCalledWith(
+      "Push failed. Submodule 'find-cmux-followers' has remote changes. Pull inside the submodule, then try again."
+    )
+    await flushAsyncRemoteRefresh()
+
+    expect(gitStatusMock).not.toHaveBeenCalled()
+    expect(gitFetchMock).toHaveBeenCalledWith({
+      worktreePath: '/repo',
+      connectionId: undefined
+    })
+    expect(gitUpstreamStatusMock).toHaveBeenCalledWith({
+      worktreePath: '/repo',
+      connectionId: undefined
+    })
+    expect(store.getState().isRemoteOperationActive).toBe(false)
+  })
+
+  it('surfaces transport-prefixed normalized submodule push failures', async () => {
+    const store = createEditorStore()
+    const pushError = new Error(
+      "Error invoking remote method 'git:push': Error: Submodule 'find-cmux-followers' has remote changes. Pull inside the submodule, then try again."
+    )
+    gitPushMock.mockRejectedValueOnce(pushError)
+
+    await expect(store.getState().pushBranch('wt-1', '/repo', false)).rejects.toThrow(
+      pushError.message
+    )
+
+    expect(toastErrorMock).toHaveBeenCalledWith(
+      "Push failed. Submodule 'find-cmux-followers' has remote changes. Pull inside the submodule, then try again."
+    )
+    await flushAsyncRemoteRefresh()
+
     expect(gitFetchMock).toHaveBeenCalledWith({
       worktreePath: '/repo',
       connectionId: undefined

@@ -43,7 +43,9 @@ export function DeleteWorktreeDialogFooter({
   return (
     <>
       <Button variant="outline" onClick={onCancel} disabled={isDeleting}>
-        {isMainWorktree ? translate("auto.components.sidebar.DeleteWorktreeDialogFooter.cf95e3b5bb", "Close") : translate("auto.components.sidebar.DeleteWorktreeDialogFooter.c0e972d726", "Cancel")}
+        {isMainWorktree
+          ? translate('auto.components.sidebar.DeleteWorktreeDialogFooter.cf95e3b5bb', 'Close')
+          : translate('auto.components.sidebar.DeleteWorktreeDialogFooter.c0e972d726', 'Cancel')}
       </Button>
       {!isMainWorktree && (
         <Button

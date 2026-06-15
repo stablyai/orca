@@ -49,22 +49,31 @@ export function SetupGuideSidebarEntry(): React.JSX.Element | null {
   const setupProgress = useSetupGuideProgress(true, false, false)
   const setupComplete = isSetupGuideSidebarComplete(setupProgress)
   const setupActive = activeModal === 'setup-guide'
-  const firstUnfinishedSetupStepId = React.useMemo<FeatureWallSetupStepId>(
-    () => getFirstIncompleteFeatureWallSetupStepId(setupProgress.stepDone),
-    [setupProgress.stepDone]
-  )
   const showSetupGuideEntry = shouldShowSetupGuideEntry({
     ready: getSetupGuideSidebarEntryReady(persistedUIReady, setupProgress.ready),
     setupComplete,
     dismissed: setupGuideSidebarDismissed
   })
+  const lastVisibleProgressRef = React.useRef<FeatureWallSetupProgress | null>(null)
+  if (showSetupGuideEntry) {
+    lastVisibleProgressRef.current = setupProgress
+  }
+  // Why: host/workspace switches can briefly refresh setup probes. Once the
+  // checklist is visibly available, keep that stable row through the refresh.
+  const renderedProgress = showSetupGuideEntry
+    ? setupProgress
+    : !setupProgress.ready && !setupGuideSidebarDismissed
+      ? lastVisibleProgressRef.current
+      : null
   const handleHideSetupGuide = React.useCallback(() => {
     setSetupGuideSidebarDismissed(true)
   }, [setSetupGuideSidebarDismissed])
 
-  if (!showSetupGuideEntry) {
+  if (!renderedProgress) {
     return null
   }
+  const firstUnfinishedSetupStepId: FeatureWallSetupStepId =
+    getFirstIncompleteFeatureWallSetupStepId(renderedProgress.stepDone)
 
   return (
     <ContextMenu>
@@ -87,19 +96,28 @@ export function SetupGuideSidebarEntry(): React.JSX.Element | null {
           )}
         >
           <SetupGuideProgressRing
-            done={setupProgress.coreDoneCount}
-            total={setupProgress.coreTotal}
+            done={renderedProgress.coreDoneCount}
+            total={renderedProgress.coreTotal}
             sizeClassName="size-4"
           />
           <span className="flex min-w-0 flex-1 flex-col">
-            <span className="truncate">{translate("auto.components.sidebar.SetupGuideSidebarEntry.88d402b71d", "Onboarding checklist")}</span>
+            <span className="truncate">
+              {translate(
+                'auto.components.sidebar.SetupGuideSidebarEntry.88d402b71d',
+                'Onboarding checklist'
+              )}
+            </span>
           </span>
         </button>
       </ContextMenuTrigger>
       <ContextMenuContent>
         <ContextMenuItem onSelect={handleHideSetupGuide}>
           <EyeOff className="size-3.5" />
-          {translate("auto.components.sidebar.SetupGuideSidebarEntry.b0a7bfc34c", "Hide from sidebar")}</ContextMenuItem>
+          {translate(
+            'auto.components.sidebar.SetupGuideSidebarEntry.b0a7bfc34c',
+            'Hide from sidebar'
+          )}
+        </ContextMenuItem>
       </ContextMenuContent>
     </ContextMenu>
   )

@@ -279,6 +279,11 @@ export function mergeWorktree(
     id: `${repoId}::${git.path}`,
     ...(meta?.instanceId !== undefined ? { instanceId: meta.instanceId } : {}),
     repoId,
+    ...(meta?.projectId !== undefined ? { projectId: meta.projectId } : {}),
+    ...(meta?.hostId !== undefined ? { hostId: meta.hostId } : {}),
+    ...(meta?.projectHostSetupId !== undefined
+      ? { projectHostSetupId: meta.projectHostSetupId }
+      : {}),
     path: git.path,
     head: git.head,
     branch: git.branch,
@@ -290,6 +295,8 @@ export function mergeWorktree(
     linkedIssue: meta?.linkedIssue ?? null,
     linkedPR: meta?.linkedPR ?? null,
     linkedLinearIssue: meta?.linkedLinearIssue ?? null,
+    linkedLinearIssueWorkspaceId: meta?.linkedLinearIssueWorkspaceId ?? null,
+    linkedLinearIssueOrganizationUrlKey: meta?.linkedLinearIssueOrganizationUrlKey ?? null,
     linkedGitLabMR: meta?.linkedGitLabMR ?? null,
     linkedGitLabIssue: meta?.linkedGitLabIssue ?? null,
     isArchived: meta?.isArchived ?? false,
@@ -319,7 +326,8 @@ export function mergeWorktree(
     // Why: diff comments are persisted on WorktreeMeta (see `WorktreeMeta` in
     // shared/types) and forwarded verbatim so the renderer store mirrors
     // on-disk state. `undefined` here means the worktree has no comments yet.
-    diffComments: meta?.diffComments
+    diffComments: meta?.diffComments,
+    mobileDiffReview: meta?.mobileDiffReview
   }
 }
 

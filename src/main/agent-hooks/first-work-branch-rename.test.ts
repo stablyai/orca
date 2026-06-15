@@ -47,6 +47,8 @@ import {
 
 const REPO_ID = 'repo1'
 const WORKTREE_ID = `${REPO_ID}${WORKTREE_ID_SEPARATOR}/repo/wt`
+const FOLDER_WORKSPACE_ID = 'folder-workspace-1'
+const FOLDER_WORKTREE_ID = `folder:${FOLDER_WORKSPACE_ID}`
 const TAB_ID = 'tab-1'
 const PANE_KEY = `${TAB_ID}:leaf-1`
 
@@ -190,6 +192,41 @@ describe('maybeAutoRenameBranchOnFirstWork', () => {
     const { deps } = makeDeps({ getSettings: () => settings })
     await maybeAutoRenameBranchOnFirstWork(workingEvent(), deps)
     expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
+  })
+
+  it('renames a pending folder workspace title without touching git', async () => {
+    const { deps, onRenamed, setDisplayName } = makeDeps({
+      resolveWorktreeIdForTab: () => FOLDER_WORKTREE_ID,
+      getFolderWorkspacePath: () => '/workspace/platform',
+      isPendingFirstAgentMessageRename: () => true,
+      getCurrentDisplayName: () => 'Platform workspace'
+    })
+
+    await maybeAutoRenameBranchOnFirstWork(workingEvent(), deps)
+
+    expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
+    expect(resolveTextGenerationParamsMock).toHaveBeenCalledWith(
+      expect.anything(),
+      'local',
+      'branchName',
+      null
+    )
+    expect(setDisplayName).toHaveBeenCalledWith(FOLDER_WORKTREE_ID, 'Fix auth')
+    expect(onRenamed).toHaveBeenCalledWith(FOLDER_WORKTREE_ID)
+  })
+
+  it('does not rename folder workspace titles without the pending marker', async () => {
+    const { deps, setDisplayName } = makeDeps({
+      resolveWorktreeIdForTab: () => FOLDER_WORKTREE_ID,
+      getFolderWorkspacePath: () => '/workspace/platform',
+      isPendingFirstAgentMessageRename: () => false
+    })
+
+    await maybeAutoRenameBranchOnFirstWork(workingEvent(), deps)
+
+    expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
+    expect(generateBranchNameMock).not.toHaveBeenCalled()
+    expect(setDisplayName).not.toHaveBeenCalled()
   })
 
   it('ignores replayed events and non-working states', async () => {

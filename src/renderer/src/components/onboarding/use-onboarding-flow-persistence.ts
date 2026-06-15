@@ -91,9 +91,11 @@ export function useCloseWith({
       onOnboardingChange(nextState)
       if (outcome === 'completed' && completedPath) {
         const total = Math.max(0, Date.now() - startTimeRef.current)
+        // Why: no `is_git_repo` — project selection now happens in the Add
+        // Project modal after this fires, so the signal moved to
+        // `repo_added.is_git_repo`. See docs/reference/telemetry-availability.md.
         track('onboarding_completed', {
           path: completedPath,
-          is_git_repo: checklist.addedRepo === true,
           total_duration_ms: total
         })
         // Why: checklist items completed by the wizard itself must fire

@@ -75,7 +75,11 @@ export function WorkspaceCombobox({
           className={cn('h-9 w-full justify-between px-3 text-sm font-normal', triggerClassName)}
         >
           <span className={cn('truncate', !selected && 'text-muted-foreground')}>
-            {selected?.displayName ?? translate("auto.components.automations.WorkspaceCombobox.66a0cd9628", "Select workspace")}
+            {selected?.displayName ??
+              translate(
+                'auto.components.automations.WorkspaceCombobox.66a0cd9628',
+                'Select workspace'
+              )}
           </span>
           <ChevronsUpDown className="size-4 opacity-50" />
         </Button>
@@ -89,9 +93,20 @@ export function WorkspaceCombobox({
         }}
       >
         <Command>
-          <CommandInput ref={setInputNode} placeholder={translate("auto.components.automations.WorkspaceCombobox.8e9c8cc6b5", "Search workspaces...")} />
+          <CommandInput
+            ref={setInputNode}
+            placeholder={translate(
+              'auto.components.automations.WorkspaceCombobox.8e9c8cc6b5',
+              'Search workspaces...'
+            )}
+          />
           <CommandList className="max-h-72">
-            <CommandEmpty>{translate("auto.components.automations.WorkspaceCombobox.ee5b280eba", "No workspaces found.")}</CommandEmpty>
+            <CommandEmpty>
+              {translate(
+                'auto.components.automations.WorkspaceCombobox.ee5b280eba',
+                'No workspaces found.'
+              )}
+            </CommandEmpty>
             {worktrees.map((worktree) => (
               <CommandItem
                 key={worktree.id}

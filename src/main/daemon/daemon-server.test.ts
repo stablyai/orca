@@ -198,19 +198,18 @@ describe('DaemonServer', () => {
       expect(result).toEqual({ pong: true })
     })
 
-    it('handles ptySpawnHealth through the daemon process', async () => {
-      const ptySpawnHealthCheck = vi.fn(async () => {})
-      server = new DaemonServer({
-        socketPath,
-        tokenPath,
-        ptySpawnHealthCheck,
-        spawnSubprocess: () => createMockSubprocess()
-      })
-      await server.start()
+    it('replies with an error to unknown request types and keeps serving', async () => {
+      await startServer()
       const c = await connectClient()
 
-      await expect(c.request('ptySpawnHealth', undefined)).resolves.toEqual({ healthy: true })
-      expect(ptySpawnHealthCheck).toHaveBeenCalledOnce()
+      // Why: downgraded clients can send request types this daemon does not
+      // know. Reject gracefully instead of crashing the session server.
+      await expect(c.request('definitelyUnknownRequest', undefined)).rejects.toThrow(
+        'Unknown request type: definitelyUnknownRequest'
+      )
+      await expect(c.request<{ pong: boolean }>('ping', undefined)).resolves.toEqual({
+        pong: true
+      })
     })
 
     it('handles systemResolverHealth', async () => {

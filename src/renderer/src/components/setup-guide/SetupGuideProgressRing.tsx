@@ -38,7 +38,11 @@ export function SetupGuideProgressRing({
             sizeClassName,
             className
           )}
-          aria-label={translate("auto.components.setup.guide.SetupGuideProgressRing.dac3a4724a", "{{value0}} of {{value1}} setup steps complete", { value0: boundedDone, value1: boundedTotal })}
+          aria-label={translate(
+            'auto.components.setup.guide.SetupGuideProgressRing.dac3a4724a',
+            '{{value0}} of {{value1}} setup steps complete',
+            { value0: boundedDone, value1: boundedTotal }
+          )}
         >
           <svg className={cn('-rotate-90', sizeClassName)} viewBox="0 0 20 20" aria-hidden>
             <circle

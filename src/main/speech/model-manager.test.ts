@@ -6,26 +6,24 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { SPEECH_MODEL_CATALOG } from './model-catalog'
 import { ModelManager } from './model-manager'
 
-const { hasOpenAiSpeechApiKeyMock, httpsGetMock, spawnMock } = vi.hoisted(() => ({
+const { hasOpenAiSpeechApiKeyMock, netRequestMock, spawnMock } = vi.hoisted(() => ({
   hasOpenAiSpeechApiKeyMock: vi.fn(),
-  httpsGetMock: vi.fn(),
+  netRequestMock: vi.fn(),
   spawnMock: vi.fn()
 }))
 
 vi.mock('electron', () => ({
   app: {
     getPath: () => '/tmp/orca-speech-models-test'
+  },
+  net: {
+    request: netRequestMock
   }
 }))
 
 vi.mock('child_process', async () => {
   const actual = await vi.importActual('child_process')
   return { ...(actual as Record<string, unknown>), spawn: spawnMock }
-})
-
-vi.mock('https', async () => {
-  const actual = await vi.importActual('https')
-  return { ...(actual as Record<string, unknown>), get: httpsGetMock }
 })
 
 vi.mock('./openai-api-key-store', () => ({
@@ -52,7 +50,7 @@ type ModelManagerInternals = {
 
 describe('ModelManager', () => {
   beforeEach(() => {
-    httpsGetMock.mockReset()
+    netRequestMock.mockReset()
     hasOpenAiSpeechApiKeyMock.mockReset()
     hasOpenAiSpeechApiKeyMock.mockReturnValue(false)
     spawnMock.mockReset()
@@ -129,23 +127,30 @@ describe('ModelManager', () => {
     try {
       const manifest = SPEECH_MODEL_CATALOG[0]
       const errorHandlers: ((err: Error) => void)[] = []
-      const timeoutHandlers: (() => void)[] = []
+      const responseHandlers: ((response: unknown) => void)[] = []
+      const redirectHandlers: ((
+        statusCode: number,
+        method: string,
+        redirectUrl: string
+      ) => void)[] = []
       const request = {
-        destroy: vi.fn((err?: Error) => {
+        abort: vi.fn(() => {
           queueMicrotask(() => {
             for (const handler of errorHandlers) {
-              handler(err ?? new Error('destroyed'))
+              handler(new Error('Aborted'))
             }
           })
-          return request
-        }),
-        setTimeout: vi.fn((_ms: number, cb: () => void) => {
-          timeoutHandlers.push(cb)
           return request
         }),
         on: vi.fn((event: string, cb: (err: Error) => void) => {
           if (event === 'error') {
             errorHandlers.push(cb)
+          } else if (event === 'response') {
+            responseHandlers.push(cb as unknown as (response: unknown) => void)
+          } else if (event === 'redirect') {
+            redirectHandlers.push(
+              cb as unknown as (statusCode: number, method: string, redirectUrl: string) => void
+            )
           }
           return request
         }),
@@ -156,42 +161,128 @@ describe('ModelManager', () => {
               errorHandlers.splice(index, 1)
             }
           }
-          if (event === 'timeout') {
-            const index = timeoutHandlers.indexOf(cb as () => void)
+          if (event === 'response') {
+            const index = responseHandlers.indexOf(cb as (response: unknown) => void)
             if (index !== -1) {
-              timeoutHandlers.splice(index, 1)
+              responseHandlers.splice(index, 1)
+            }
+          }
+          if (event === 'redirect') {
+            const index = redirectHandlers.indexOf(
+              cb as (statusCode: number, method: string, redirectUrl: string) => void
+            )
+            if (index !== -1) {
+              redirectHandlers.splice(index, 1)
             }
           }
           return request
-        })
+        }),
+        end: vi.fn(() => request)
       }
-      httpsGetMock.mockImplementation(
-        (
-          _url: URL,
-          options: { signal?: AbortSignal } | ((response: unknown) => void),
-          _cb?: (response: unknown) => void
-        ) => {
-          if (typeof options !== 'function') {
-            options.signal?.addEventListener('abort', () => request.destroy(new Error('Aborted')), {
-              once: true
-            })
-          }
-          return request
-        }
-      )
+      netRequestMock.mockReturnValue(request)
       const manager = new ModelManager(dir)
 
       const download = manager.downloadModel(manifest.id)
       manager.cancelDownload(manifest.id)
       await expect(download).resolves.toBeUndefined()
 
-      expect(request.destroy).toHaveBeenCalledWith(expect.any(Error))
+      expect(netRequestMock).toHaveBeenCalledWith({
+        method: 'GET',
+        url: expect.stringMatching(/^https:\/\//)
+      })
+      expect(request.end).toHaveBeenCalled()
+      expect(request.abort).toHaveBeenCalled()
       expect(request.off).toHaveBeenCalledWith('error', expect.any(Function))
-      expect(request.off).toHaveBeenCalledWith('timeout', expect.any(Function))
+      expect(request.off).toHaveBeenCalledWith('response', expect.any(Function))
+      expect(request.off).toHaveBeenCalledWith('redirect', expect.any(Function))
       expect(errorHandlers).toHaveLength(0)
-      expect(timeoutHandlers).toHaveLength(0)
+      expect(responseHandlers).toHaveLength(0)
+      expect(redirectHandlers).toHaveLength(0)
       expect((await manager.getModelState(manifest.id)).status).toBe('not-downloaded')
     } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('settles immediately when the abort signal fires before a response', async () => {
+    vi.useFakeTimers()
+    const dir = mkdtempSync(join(tmpdir(), 'orca-model-manager-'))
+    try {
+      const errorHandlers: ((err: Error) => void)[] = []
+      const responseHandlers: ((response: unknown) => void)[] = []
+      const redirectHandlers: ((
+        statusCode: number,
+        method: string,
+        redirectUrl: string
+      ) => void)[] = []
+      const request = {
+        abort: vi.fn(() => request),
+        on: vi.fn((event: string, cb: (err: Error) => void) => {
+          if (event === 'error') {
+            errorHandlers.push(cb)
+          } else if (event === 'response') {
+            responseHandlers.push(cb as unknown as (response: unknown) => void)
+          } else if (event === 'redirect') {
+            redirectHandlers.push(
+              cb as unknown as (statusCode: number, method: string, redirectUrl: string) => void
+            )
+          }
+          return request
+        }),
+        off: vi.fn((event: string, cb: ((err: Error) => void) | (() => void)) => {
+          if (event === 'error') {
+            const index = errorHandlers.indexOf(cb as (err: Error) => void)
+            if (index !== -1) {
+              errorHandlers.splice(index, 1)
+            }
+          }
+          if (event === 'response') {
+            const index = responseHandlers.indexOf(cb as (response: unknown) => void)
+            if (index !== -1) {
+              responseHandlers.splice(index, 1)
+            }
+          }
+          if (event === 'redirect') {
+            const index = redirectHandlers.indexOf(
+              cb as (statusCode: number, method: string, redirectUrl: string) => void
+            )
+            if (index !== -1) {
+              redirectHandlers.splice(index, 1)
+            }
+          }
+          return request
+        }),
+        end: vi.fn(() => request)
+      }
+      netRequestMock.mockReturnValue(request)
+      const controller = new AbortController()
+      const manager = new ModelManager(dir) as unknown as ModelManagerInternals
+
+      const download = manager.downloadFile(
+        'https://example.com/model.tar.bz2',
+        join(dir, 'model.tar.bz2'),
+        1,
+        'm',
+        () => true,
+        controller.signal
+      )
+      const outcomePromise = download.then(
+        () => 'resolved',
+        (error) => (error instanceof Error ? error.message : String(error))
+      )
+      controller.abort()
+      await vi.advanceTimersByTimeAsync(0)
+
+      await expect(outcomePromise).resolves.toBe('Aborted')
+      expect(request.abort).toHaveBeenCalled()
+      expect(request.off).toHaveBeenCalledWith('error', expect.any(Function))
+      expect(request.off).toHaveBeenCalledWith('response', expect.any(Function))
+      expect(request.off).toHaveBeenCalledWith('redirect', expect.any(Function))
+      expect(errorHandlers).toHaveLength(0)
+      expect(responseHandlers).toHaveLength(0)
+      expect(redirectHandlers).toHaveLength(0)
+    } finally {
+      vi.useRealTimers()
       rmSync(dir, { recursive: true, force: true })
     }
   })
@@ -201,30 +292,23 @@ describe('ModelManager', () => {
     const dir = mkdtempSync(join(tmpdir(), 'orca-model-manager-'))
     try {
       const errorHandlers: ((err: Error) => void)[] = []
-      const timeoutHandlers: (() => void)[] = []
+      const responseHandlers: ((response: unknown) => void)[] = []
+      const redirectHandlers: ((
+        statusCode: number,
+        method: string,
+        redirectUrl: string
+      ) => void)[] = []
       const request = {
-        destroy: vi.fn((err?: Error) => {
-          if (err) {
-            queueMicrotask(() => {
-              for (const handler of errorHandlers) {
-                handler(err)
-              }
-            })
-          }
-          return request
-        }),
-        setTimeout: vi.fn((ms: number, cb: () => void) => {
-          timeoutHandlers.push(cb)
-          setTimeout(() => {
-            for (const handler of timeoutHandlers) {
-              handler()
-            }
-          }, ms)
-          return request
-        }),
+        abort: vi.fn(() => request),
         on: vi.fn((event: string, cb: (err: Error) => void) => {
           if (event === 'error') {
             errorHandlers.push(cb)
+          } else if (event === 'response') {
+            responseHandlers.push(cb as unknown as (response: unknown) => void)
+          } else if (event === 'redirect') {
+            redirectHandlers.push(
+              cb as unknown as (statusCode: number, method: string, redirectUrl: string) => void
+            )
           }
           return request
         }),
@@ -235,16 +319,25 @@ describe('ModelManager', () => {
               errorHandlers.splice(index, 1)
             }
           }
-          if (event === 'timeout') {
-            const index = timeoutHandlers.indexOf(cb as () => void)
+          if (event === 'response') {
+            const index = responseHandlers.indexOf(cb as (response: unknown) => void)
             if (index !== -1) {
-              timeoutHandlers.splice(index, 1)
+              responseHandlers.splice(index, 1)
+            }
+          }
+          if (event === 'redirect') {
+            const index = redirectHandlers.indexOf(
+              cb as (statusCode: number, method: string, redirectUrl: string) => void
+            )
+            if (index !== -1) {
+              redirectHandlers.splice(index, 1)
             }
           }
           return request
-        })
+        }),
+        end: vi.fn(() => request)
       }
-      httpsGetMock.mockReturnValue(request)
+      netRequestMock.mockReturnValue(request)
       const manager = new ModelManager(dir) as unknown as ModelManagerInternals
 
       const download = manager.downloadFile(
@@ -263,11 +356,13 @@ describe('ModelManager', () => {
       const outcome = await Promise.race([outcomePromise, Promise.resolve('pending')])
 
       expect(outcome).toBe('Model download timed out after 120 seconds without network activity')
-      expect(request.destroy).toHaveBeenCalledWith()
+      expect(request.abort).toHaveBeenCalledWith()
       expect(request.off).toHaveBeenCalledWith('error', expect.any(Function))
-      expect(request.off).toHaveBeenCalledWith('timeout', expect.any(Function))
+      expect(request.off).toHaveBeenCalledWith('response', expect.any(Function))
+      expect(request.off).toHaveBeenCalledWith('redirect', expect.any(Function))
       expect(errorHandlers).toHaveLength(0)
-      expect(timeoutHandlers).toHaveLength(0)
+      expect(responseHandlers).toHaveLength(0)
+      expect(redirectHandlers).toHaveLength(0)
     } finally {
       vi.useRealTimers()
       rmSync(dir, { recursive: true, force: true })

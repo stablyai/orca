@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { Check, Globe2, MonitorCog, Workflow } from 'lucide-react'
+import { Check, Globe2, MonitorCog, TicketCheck, Workflow } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type {
   OnboardingFeatureSetupId,
@@ -23,24 +23,76 @@ type FeatureSetupRow = {
 const FEATURE_SETUP_ROWS: readonly FeatureSetupRow[] = [
   {
     id: 'browserUse',
-    title: translate("auto.components.onboarding.FeatureSetupChecklist.ea85d9e628", "Agent Browser Use"),
-    description: translate("auto.components.onboarding.FeatureSetupChecklist.01426f3a23", "Agents can navigate sites, inspect pages, and work through browser tasks."),
+    get title() {
+      return translate(
+        'auto.components.onboarding.FeatureSetupChecklist.ea85d9e628',
+        'Agent Browser Use'
+      )
+    },
+    get description() {
+      return translate(
+        'auto.components.onboarding.FeatureSetupChecklist.01426f3a23',
+        'Agents can navigate sites, inspect pages, and work through browser tasks.'
+      )
+    },
     setupSummary: 'Enables browser use, prepares orca-cli, and leaves cookies for Settings.',
     icon: <Globe2 className="size-4" />
   },
   {
     id: 'computerUse',
-    title: translate("auto.components.onboarding.FeatureSetupChecklist.1ecfb490ac", "Computer Use"),
-    description: translate("auto.components.onboarding.FeatureSetupChecklist.c5292c409d", "Agents can inspect app windows and operate local apps when you ask."),
+    get title() {
+      return translate(
+        'auto.components.onboarding.FeatureSetupChecklist.1ecfb490ac',
+        'Computer Use'
+      )
+    },
+    get description() {
+      return translate(
+        'auto.components.onboarding.FeatureSetupChecklist.c5292c409d',
+        'Agents can inspect app windows and operate local apps when you ask.'
+      )
+    },
     setupSummary: 'Registers the Orca CLI, opens permissions, and prepares the skill.',
     icon: <MonitorCog className="size-4" />
   },
   {
     id: 'orchestration',
-    title: translate("auto.components.onboarding.FeatureSetupChecklist.399cf885c0", "Agent Orchestration"),
-    description: translate("auto.components.onboarding.FeatureSetupChecklist.77f74946f5", "Agents can message each other, take tasks, and coordinate handoffs."),
+    get title() {
+      return translate(
+        'auto.components.onboarding.FeatureSetupChecklist.399cf885c0',
+        'Agent Orchestration'
+      )
+    },
+    get description() {
+      return translate(
+        'auto.components.onboarding.FeatureSetupChecklist.77f74946f5',
+        'Agents can message each other, take tasks, and coordinate handoffs.'
+      )
+    },
     setupSummary: 'Registers the Orca CLI, enables orchestration, and prepares the skill.',
     icon: <Workflow className="size-4" />
+  },
+  {
+    id: 'linearTickets',
+    get title() {
+      return translate(
+        'auto.components.onboarding.FeatureSetupChecklist.linearTicketsTitle',
+        'Linear agent skill'
+      )
+    },
+    get description() {
+      return translate(
+        'auto.components.onboarding.FeatureSetupChecklist.linearTicketsDescription',
+        'Agents can use linked Linear tasks for richer ticket-aware handoffs.'
+      )
+    },
+    get setupSummary() {
+      return translate(
+        'auto.components.onboarding.FeatureSetupChecklist.linearTicketsSetupSummary',
+        'Recommended for Linear workspaces; does not affect Linear connection setup.'
+      )
+    },
+    icon: <TicketCheck className="size-4" />
   }
 ]
 
@@ -50,7 +102,7 @@ export function FeatureSetupChecklist({
 }: FeatureSetupChecklistProps): React.JSX.Element {
   return (
     <section className="mt-6">
-      <div className="grid gap-3 md:grid-cols-3">
+      <div className="grid gap-3 md:grid-cols-4">
         {FEATURE_SETUP_ROWS.map((row) => {
           const selected = value[row.id]
           return (
@@ -63,7 +115,7 @@ export function FeatureSetupChecklist({
                 'flex min-h-40 flex-col rounded-lg border px-4 py-3 text-left transition-colors',
                 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
                 selected
-                  ? 'border-violet-500/60 bg-violet-500/10 text-foreground ring-2 ring-violet-500/30'
+                  ? 'border-ring bg-accent text-foreground ring-2 ring-ring/25'
                   : 'border-border bg-muted/20 text-muted-foreground hover:bg-muted/40'
               )}
               onClick={() => onChange({ ...value, [row.id]: !selected })}
@@ -84,7 +136,7 @@ export function FeatureSetupChecklist({
                   className={cn(
                     'flex size-5 items-center justify-center rounded-full border transition-colors',
                     selected
-                      ? 'border-violet-500 bg-violet-500 text-white'
+                      ? 'border-primary bg-primary text-primary-foreground'
                       : 'border-border bg-background'
                   )}
                 >

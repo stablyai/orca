@@ -89,23 +89,35 @@ export function PrivacyPane({ settings }: PrivacyPaneProps): React.JSX.Element {
         <div className="space-y-0.5">
           <div className="flex items-center gap-2">
             <ShieldCheck className="size-4" />
-            <Label>{translate("auto.components.settings.PrivacyPane.fe904ac984", "Share anonymous usage data")}</Label>
+            <Label>
+              {translate(
+                'auto.components.settings.PrivacyPane.fe904ac984',
+                'Share anonymous usage data'
+              )}
+            </Label>
           </div>
           <p className="text-xs text-muted-foreground">
-            {translate("auto.components.settings.PrivacyPane.8bfdd23a88", "Help us figure out what to build next. Orca sends anonymous counts of which features you use and where things break.")}{' '}
+            {translate(
+              'auto.components.settings.PrivacyPane.8bfdd23a88',
+              'Help us figure out what to build next. Orca sends anonymous counts of which features you use and where things break.'
+            )}{' '}
             <button
               type="button"
               className="underline underline-offset-2 hover:text-foreground"
               onClick={() => void window.api.shell.openUrl(PRIVACY_URL)}
             >
-              {translate("auto.components.settings.PrivacyPane.77410e0566", "Privacy policy")}</button>
+              {translate('auto.components.settings.PrivacyPane.77410e0566', 'Privacy policy')}
+            </button>
             .
           </p>
         </div>
         <button
           role="switch"
           aria-checked={toggleChecked}
-          aria-label={translate("auto.components.settings.PrivacyPane.fe904ac984", "Share anonymous usage data")}
+          aria-label={translate(
+            'auto.components.settings.PrivacyPane.fe904ac984',
+            'Share anonymous usage data'
+          )}
           aria-describedby={blocked ? PRIVACY_PANE_BLOCKED_HELPER_ID : undefined}
           disabled={blocked !== null || inFlight}
           onClick={handleToggle}
@@ -130,15 +142,27 @@ export function PrivacyPane({ settings }: PrivacyPaneProps): React.JSX.Element {
 function BlockedHelper({ blocked, id }: { blocked: BlockedReason; id: string }): React.JSX.Element {
   return (
     <div id={id} className="pb-2 text-xs text-muted-foreground">
-      {blocked.reason === "ci" ? (
-        <p>{translate("auto.components.settings.PrivacyPane.e3970bbbf5", "Telemetry is disabled because a CI environment variable is set. Unset it and restart.")}</p>
+      {blocked.reason === 'ci' ? (
+        <p>
+          {translate(
+            'auto.components.settings.PrivacyPane.e3970bbbf5',
+            'Telemetry is disabled because a CI environment variable is set. Unset it and restart.'
+          )}
+        </p>
       ) : (
         <p>
-          {translate("auto.components.settings.PrivacyPane.79a0f3c16c", "Telemetry is disabled by the")}{' '}
+          {translate(
+            'auto.components.settings.PrivacyPane.79a0f3c16c',
+            'Telemetry is disabled by the'
+          )}{' '}
           <code className="rounded bg-muted px-1 py-0.5 font-mono text-[11px]">
             {envVarNameForReason(blocked.reason)}
           </code>{' '}
-          {translate("auto.components.settings.PrivacyPane.36e0e2e63b", "environment variable. Unset it and restart to re-enable.")}</p>
+          {translate(
+            'auto.components.settings.PrivacyPane.36e0e2e63b',
+            'environment variable. Unset it and restart to re-enable.'
+          )}
+        </p>
       )}
     </div>
   )

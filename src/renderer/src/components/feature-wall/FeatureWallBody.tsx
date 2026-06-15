@@ -268,7 +268,8 @@ export function FeatureWallBody(props: {
           >
             <>
               <div className="text-center text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
-                {translate("auto.components.feature.wall.FeatureWallBody.25ec5356d6", "Setup")}</div>
+                {translate('auto.components.feature.wall.FeatureWallBody.25ec5356d6', 'Setup')}
+              </div>
               {settingContent}
             </>
           </TourZone>

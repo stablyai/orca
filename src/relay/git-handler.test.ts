@@ -90,6 +90,7 @@ describe('GitHandler', () => {
     expect(methods).toContain('git.refreshLocalBaseRefForWorktreeCreate')
     expect(methods).toContain('git.renameCurrentBranch')
     expect(methods).toContain('git.exec')
+    expect(methods).toContain('git.clone')
     expect(methods).toContain('git.isGitRepo')
   })
 

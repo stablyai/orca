@@ -78,14 +78,22 @@ export default function WebConnect({
             <Server size={18} aria-hidden />
           </div>
           <div className="min-w-0">
-            <h1 className="text-base font-semibold leading-6">{translate("auto.web.WebConnect.e3bcd082ac", "Connect to Orca")}</h1>
+            <h1 className="text-base font-semibold leading-6">
+              {translate('auto.web.WebConnect.e3bcd082ac', 'Connect to Orca')}
+            </h1>
             <p className="mt-1 text-sm leading-5 text-muted-foreground">
-              {translate("auto.web.WebConnect.3affe7de3a", "Paste a pairing URL from an Orca server that this browser can reach.")}</p>
+              {translate(
+                'auto.web.WebConnect.3affe7de3a',
+                'Paste a pairing URL from an Orca server that this browser can reach.'
+              )}
+            </p>
           </div>
         </div>
 
         <div className="grid gap-2">
-          <Label htmlFor="web-runtime-name">{translate("auto.web.WebConnect.cb4d287238", "Server name")}</Label>
+          <Label htmlFor="web-runtime-name">
+            {translate('auto.web.WebConnect.cb4d287238', 'Server name')}
+          </Label>
           <Input
             id="web-runtime-name"
             value={name}
@@ -95,12 +103,14 @@ export default function WebConnect({
         </div>
 
         <div className="grid gap-2">
-          <Label htmlFor="web-runtime-pairing-code">{translate("auto.web.WebConnect.7a566540de", "Pairing URL or code")}</Label>
+          <Label htmlFor="web-runtime-pairing-code">
+            {translate('auto.web.WebConnect.7a566540de', 'Pairing URL or code')}
+          </Label>
           <Input
             id="web-runtime-pairing-code"
             value={pairingCode}
             onChange={(event) => setPairingCode(event.target.value)}
-            placeholder={translate("auto.web.WebConnect.27393856e4", "orca://pair?code=...")}
+            placeholder={translate('auto.web.WebConnect.27393856e4', 'orca://pair?code=...')}
             autoComplete="off"
             spellCheck={false}
           />
@@ -108,7 +118,7 @@ export default function WebConnect({
 
         {parsedOffer && (
           <div className="rounded-md border border-border bg-muted px-3 py-2 text-xs text-muted-foreground">
-            {translate("auto.web.WebConnect.4a4c017be1", "Endpoint:")} {parsedOffer.endpoint}
+            {translate('auto.web.WebConnect.4a4c017be1', 'Endpoint:')} {parsedOffer.endpoint}
           </div>
         )}
 
@@ -121,7 +131,8 @@ export default function WebConnect({
         <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-between">
           <Button type="button" variant="outline" onClick={clear} className="gap-2">
             <Trash2 size={15} aria-hidden />
-            {translate("auto.web.WebConnect.2cf9e5a294", "Clear saved server")}</Button>
+            {translate('auto.web.WebConnect.2cf9e5a294', 'Clear saved server')}
+          </Button>
           <Button
             type="button"
             onClick={() => void connect()}
@@ -133,7 +144,8 @@ export default function WebConnect({
             ) : (
               <Cable size={15} aria-hidden />
             )}
-            {translate("auto.web.WebConnect.b411ec0069", "Connect")}</Button>
+            {translate('auto.web.WebConnect.b411ec0069', 'Connect')}
+          </Button>
         </div>
       </div>
     </div>

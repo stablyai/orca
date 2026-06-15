@@ -1,4 +1,5 @@
 import { branchName } from '@/lib/git-utils'
+import { issueCacheKey as getIssueCacheKey } from '@/store/slices/github'
 import type { Repo, Worktree } from '../../../shared/types'
 
 export type MatchRange = { start: number; end: number }
@@ -301,7 +302,16 @@ export function searchWorktrees(
       continue
     }
 
-    const issueKey = repo ? `${repo.path}::${worktree.linkedIssue}` : ''
+    const issueKey = repo
+      ? getIssueCacheKey(
+          repo.path,
+          repo.id,
+          worktree.linkedIssue,
+          undefined,
+          repo.connectionId,
+          repo.executionHostId
+        )
+      : ''
     const issue = issueKey && issueCache ? issueCache[issueKey]?.data : undefined
     if (!issue?.title) {
       continue

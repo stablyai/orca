@@ -36,17 +36,30 @@ export function StatusBarUsageEmptyCta(): React.JSX.Element {
         <button
           type="button"
           onClick={handleOpenSettings}
-          aria-label={translate("auto.components.status.bar.StatusBarUsageEmptyCta.d663430cf9", "Connect an AI account to see usage")}
+          aria-label={translate(
+            'auto.components.status.bar.StatusBarUsageEmptyCta.d663430cf9',
+            'Connect an AI account to see usage'
+          )}
           className="inline-flex h-5 cursor-pointer items-center gap-1.5 rounded px-1.5 text-xs font-normal text-muted-foreground transition-colors hover:bg-accent/70 hover:text-foreground"
         >
           <BarChart3 className="size-3.5" />
-          <span>{translate("auto.components.status.bar.StatusBarUsageEmptyCta.d663430cf9", "Connect an AI account to see usage")}</span>
+          <span>
+            {translate(
+              'auto.components.status.bar.StatusBarUsageEmptyCta.d663430cf9',
+              'Connect an AI account to see usage'
+            )}
+          </span>
         </button>
       </HoverCardTrigger>
       <HoverCardContent side="top" align="start" sideOffset={8} className="w-[260px] p-2.5">
         <div className="space-y-2 text-xs leading-[1.45]">
           <div className="flex items-start justify-between gap-2">
-            <div className="font-semibold text-foreground">{translate("auto.components.status.bar.StatusBarUsageEmptyCta.84c3b15dca", "Agent usage limits")}</div>
+            <div className="font-semibold text-foreground">
+              {translate(
+                'auto.components.status.bar.StatusBarUsageEmptyCta.84c3b15dca',
+                'Agent usage limits'
+              )}
+            </div>
             {/* Why: permanently hide the teaching CTA — styling mirrors the
                 SetupGuideSidebarEntry hover-state icon (muted → foreground). */}
             <Tooltip>
@@ -54,22 +67,38 @@ export function StatusBarUsageEmptyCta(): React.JSX.Element {
                 <button
                   type="button"
                   onClick={handleHide}
-                  aria-label={translate("auto.components.status.bar.StatusBarUsageEmptyCta.9a542f46c7", "Hide from status bar")}
+                  aria-label={translate(
+                    'auto.components.status.bar.StatusBarUsageEmptyCta.9a542f46c7',
+                    'Hide from status bar'
+                  )}
                   className="-mr-1 -mt-0.5 inline-flex size-5 shrink-0 cursor-pointer items-center justify-center rounded text-muted-foreground transition-colors hover:bg-accent/70 hover:text-foreground"
                 >
                   <EyeOff className="size-3.5" />
                 </button>
               </TooltipTrigger>
               <TooltipContent side="top" sideOffset={6}>
-                {translate("auto.components.status.bar.StatusBarUsageEmptyCta.9a542f46c7", "Hide from status bar")}</TooltipContent>
+                {translate(
+                  'auto.components.status.bar.StatusBarUsageEmptyCta.9a542f46c7',
+                  'Hide from status bar'
+                )}
+              </TooltipContent>
             </Tooltip>
           </div>
           <p className="text-muted-foreground">
-            {translate("auto.components.status.bar.StatusBarUsageEmptyCta.97957ad3a3", "Connect your AI provider accounts to see their usage in real time and easily switch between accounts.")}</p>
+            {translate(
+              'auto.components.status.bar.StatusBarUsageEmptyCta.97957ad3a3',
+              'Connect your AI provider accounts to see their usage in real time and easily switch between accounts.'
+            )}
+          </p>
           {/* Why: name the full provider set so the feature doesn't read as
               support for just one agent. */}
           <div className="flex items-center gap-1.5 text-muted-foreground">
-            <span>{translate("auto.components.status.bar.StatusBarUsageEmptyCta.caa0f39811", "Supports:")}</span>
+            <span>
+              {translate(
+                'auto.components.status.bar.StatusBarUsageEmptyCta.caa0f39811',
+                'Supports:'
+              )}
+            </span>
             <ClaudeIcon size={13} />
             <OpenAIIcon size={13} />
             <GeminiIcon size={13} />
@@ -83,7 +112,11 @@ export function StatusBarUsageEmptyCta(): React.JSX.Element {
             onClick={handleOpenSettings}
             className="mt-0.5 h-7 w-full text-xs"
           >
-            {translate("auto.components.status.bar.StatusBarUsageEmptyCta.828c764a79", "Connect an account")}</Button>
+            {translate(
+              'auto.components.status.bar.StatusBarUsageEmptyCta.828c764a79',
+              'Connect an account'
+            )}
+          </Button>
         </div>
       </HoverCardContent>
     </HoverCard>

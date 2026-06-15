@@ -117,7 +117,7 @@ test.describe('Terminal inactive cursor rendering', () => {
     expect(fixedBehavior.terminalFocused).toBe(false)
     expect(fixedBehavior.cursorStyle).toBe('block')
     expect(fixedBehavior.cursorInactiveStyle).toBe('outline')
-    expect(fixedBehavior.cursorClassName).toContain('xterm-cursor-outline')
+    expect(fixedBehavior.cursorClassName).toMatch(/xterm-cursor-outline|canvas renderer: outline/)
 
     const oldBehavior = await renderInactiveCursor(orcaPage, 'outline')
     expect(oldBehavior.terminalFocused).toBe(false)

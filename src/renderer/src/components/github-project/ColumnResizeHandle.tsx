@@ -75,7 +75,10 @@ export default function ColumnResizeHandle({
       ref={handleRef}
       role="separator"
       aria-orientation="vertical"
-      aria-label={translate("auto.components.github.project.ColumnResizeHandle.1304289353", "Resize column")}
+      aria-label={translate(
+        'auto.components.github.project.ColumnResizeHandle.1304289353',
+        'Resize column'
+      )}
       onMouseDown={(e) => {
         if (e.button !== 0) {
           return

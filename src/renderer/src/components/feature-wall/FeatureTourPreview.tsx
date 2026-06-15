@@ -7,48 +7,26 @@ import {
   MailGlyph,
   WorkingSpinner
 } from './feature-tour-preview-glyphs'
+import {
+  FEATURE_TOUR_ORCHESTRATION_CHILDREN,
+  FEATURE_TOUR_PREVIEW_COPY
+} from './feature-tour-preview-copy'
 import { FeatureTourWorkspaceCard } from './FeatureTourWorkspaceCard'
+import { FeatureTourTerminalFrame } from './FeatureTourTerminalFrame'
 import { translate } from '@/i18n/i18n'
 
-type FrameId = 1 | 2 | 3 | 4
-
-export type FeatureTourPreviewFrameCopy = {
-  id: FrameId
-  title: string
-  caption: string
-}
-
-export const FEATURE_TOUR_PREVIEW_COPY: readonly FeatureTourPreviewFrameCopy[] = [
-  {
-    id: 1,
-    title: translate("auto.components.feature.wall.FeatureTourPreview.56a0271428", "Isolated workspaces"),
-    caption:
-      'Ship several things at once. Each workspace keeps its branch, terminal, and agent activity together.'
-  },
-  {
-    id: 2,
-    title: translate("auto.components.feature.wall.FeatureTourPreview.e44269e97d", "Agent orchestration"),
-    caption: 'Hand off a goal and walk away. A coordinator agent fans out and ships parallel PRs.'
-  },
-  {
-    id: 3,
-    title: translate("auto.components.feature.wall.FeatureTourPreview.ef737dcee1", "GitHub & Linear tasks"),
-    caption:
-      'Skip the tab-switching. Pick from your GitHub or Linear backlog and start a workspace in one click.'
-  },
-  {
-    id: 4,
-    title: translate("auto.components.feature.wall.FeatureTourPreview.1aa8a9a24a", "Splittable terminal"),
-    caption:
-      'Open any workspace to return to its terminal, then split panes for tests, logs, and agents.'
-  }
-]
+export { FEATURE_TOUR_PREVIEW_COPY } from './feature-tour-preview-copy'
+export type { FeatureTourPreviewFrameCopy } from './feature-tour-preview-copy'
 
 function WorkspaceFrame(): JSX.Element {
   return (
     <div className="absolute inset-0 flex flex-col gap-5 bg-card px-4 py-4">
       <div className="text-[14.5px] font-semibold uppercase tracking-[0.07em] leading-none text-muted-foreground">
-        {translate("auto.components.feature.wall.FeatureTourPreview.56a0271428", "Isolated workspaces")}</div>
+        {translate(
+          'auto.components.feature.wall.FeatureTourPreview.56a0271428',
+          'Isolated workspaces'
+        )}
+      </div>
       {/* Why: 3 cards in a row tells the "ship several at once" story by
           composition; the wide preview aspect (~4.9:1) makes a vertical stack
           read as wasted space. The grid auto-sizes (no flex-1) so the cards
@@ -57,7 +35,10 @@ function WorkspaceFrame(): JSX.Element {
       <div className="grid grid-cols-3 gap-3 px-4">
         <FeatureTourWorkspaceCard
           status="working"
-          title={translate("auto.components.feature.wall.FeatureTourPreview.3c4adfd821", "fix login race condition")}
+          title={translate(
+            'auto.components.feature.wall.FeatureTourPreview.3c4adfd821',
+            'fix login race condition'
+          )}
           agents={[
             { kind: 'claude', barWidth: '60%', state: 'working' },
             { kind: 'codex', barWidth: '52%', state: 'working' }
@@ -65,34 +46,24 @@ function WorkspaceFrame(): JSX.Element {
         />
         <FeatureTourWorkspaceCard
           status="done"
-          title={translate("auto.components.feature.wall.FeatureTourPreview.9c812e0d7c", "speed up CI pipeline")}
+          title={translate(
+            'auto.components.feature.wall.FeatureTourPreview.9c812e0d7c',
+            'speed up CI pipeline'
+          )}
           agents={[{ kind: 'opencode-go', barWidth: '70%', state: 'done' }]}
         />
         <FeatureTourWorkspaceCard
           status="working"
-          title={translate("auto.components.feature.wall.FeatureTourPreview.e38112b289", "refactor billing webhook")}
+          title={translate(
+            'auto.components.feature.wall.FeatureTourPreview.e38112b289',
+            'refactor billing webhook'
+          )}
           agents={[{ kind: 'claude', barWidth: '38%', state: 'working' }]}
         />
       </div>
     </div>
   )
 }
-
-type OrchChildAgent = 'claude' | 'codex' | 'opencode-go'
-
-const ORCH_CHILDREN: readonly {
-  key: 'top' | 'mid' | 'bot'
-  position: string
-  label: string
-  agent: OrchChildAgent
-}[] = [
-  // Why: card vertical centers anchor to 18% / 50% / 82% — the same Y
-  // endpoints the dashed SVG paths terminate at — so the connectors land on
-  // each card's center regardless of card height.
-  { key: 'top', position: 'top-[18%] -translate-y-1/2', label: translate("auto.components.feature.wall.FeatureTourPreview.b1f17bcc74", "PR 1/3"), agent: 'claude' },
-  { key: 'mid', position: 'top-1/2 -translate-y-1/2', label: translate("auto.components.feature.wall.FeatureTourPreview.cfdfd4d6b4", "PR 2/3"), agent: 'codex' },
-  { key: 'bot', position: 'top-[82%] -translate-y-1/2', label: translate("auto.components.feature.wall.FeatureTourPreview.ec4a73f5e6", "PR 3/3"), agent: 'opencode-go' }
-]
 
 function OrchestrationFrame(): JSX.Element {
   // Why: a horizontal fan (root → 3 children L→R) reads naturally as
@@ -104,7 +75,11 @@ function OrchestrationFrame(): JSX.Element {
   return (
     <div className="absolute inset-0 flex flex-col gap-5 bg-card px-4 py-4">
       <div className="text-[14.5px] font-semibold uppercase tracking-[0.07em] leading-none text-muted-foreground">
-        {translate("auto.components.feature.wall.FeatureTourPreview.e44269e97d", "Agent orchestration")}</div>
+        {translate(
+          'auto.components.feature.wall.FeatureTourPreview.e44269e97d',
+          'Agent orchestration'
+        )}
+      </div>
       <div className="relative w-full flex-1">
         {/* Why: viewBox is percent-units (100×100, preserveAspectRatio="none")
             so endpoints anchor to the same percentage anchors as the cards
@@ -158,20 +133,28 @@ function OrchestrationFrame(): JSX.Element {
           <div className="flex items-center gap-2">
             <WorkingSpinner />
             <span className="truncate text-[15px] font-medium leading-none text-foreground">
-              {translate("auto.components.feature.wall.FeatureTourPreview.cebc7769cd", "redesign auth flow")}</span>
+              {translate(
+                'auto.components.feature.wall.FeatureTourPreview.cebc7769cd',
+                'redesign auth flow'
+              )}
+            </span>
           </div>
           <div className="mt-2 flex items-center gap-1.5 pl-3.5">
             <WorkingSpinner size="xs" />
             <ClaudeIcon size={13} />
             <span className="truncate text-[12.5px] leading-none text-muted-foreground">
-              {translate("auto.components.feature.wall.FeatureTourPreview.5171768676", "orchestrating 3 agents")}</span>
+              {translate(
+                'auto.components.feature.wall.FeatureTourPreview.5171768676',
+                'orchestrating 3 agents'
+              )}
+            </span>
           </div>
         </div>
 
         {/* Why: children mirror the parent's WorkspaceCard composition so the
             fan reads as "coordinator workspace dispatches to 3 child
             workspaces, each running its own agent." */}
-        {ORCH_CHILDREN.map(({ key, position, label, agent }) => (
+        {FEATURE_TOUR_ORCHESTRATION_CHILDREN.map(({ key, position, label, agent }) => (
           <div
             key={key}
             className={cn(
@@ -188,9 +171,9 @@ function OrchestrationFrame(): JSX.Element {
             </div>
             <div className="mt-2 flex items-center gap-1.5 pl-3.5">
               <WorkingSpinner size="xs" />
-              {agent === "claude" ? (
+              {agent === 'claude' ? (
                 <ClaudeIcon size={12} />
-              ) : agent === "codex" ? (
+              ) : agent === 'codex' ? (
                 <CodexInlineIcon />
               ) : (
                 <OpenCodeGoIcon size={12} />
@@ -200,7 +183,7 @@ function OrchestrationFrame(): JSX.Element {
           </div>
         ))}
 
-        {ORCH_CHILDREN.map(({ key }) => (
+        {FEATURE_TOUR_ORCHESTRATION_CHILDREN.map(({ key }) => (
           <div key={`bubble-${key}`} className={cn('feature-tour-orch-bubble', key)}>
             <MailGlyph />
           </div>
@@ -218,12 +201,17 @@ function TasksFrame(): JSX.Element {
   return (
     <div className="absolute inset-0 flex flex-col gap-5 bg-card px-4 py-4">
       <div className="text-[14.5px] font-semibold uppercase tracking-[0.07em] leading-none text-muted-foreground">
-        {translate("auto.components.feature.wall.FeatureTourPreview.bee6b4088d", "GitHub & Linear tasks")}</div>
+        {translate(
+          'auto.components.feature.wall.FeatureTourPreview.bee6b4088d',
+          'GitHub & Linear tasks'
+        )}
+      </div>
       <div className="relative grid flex-1 grid-cols-[minmax(0,1fr)_minmax(0,1fr)] items-center gap-4 px-4">
         <div className="flex flex-col gap-2">
           <div className="flex h-9 items-center gap-2.5 rounded-md border border-border bg-background px-3">
             <span className="inline-flex h-5 items-center justify-center rounded-[3px] border border-border bg-muted px-1.5 font-mono text-[13px] leading-none text-muted-foreground">
-              {translate("auto.components.feature.wall.FeatureTourPreview.0688842445", "GH #1799")}</span>
+              {translate('auto.components.feature.wall.FeatureTourPreview.0688842445', 'GH #1799')}
+            </span>
             {/* Why: surrounding rows show only the issue number + a skeleton
                 so the user's eye is drawn to the row that has real text — the
                 one the cursor clicks on. */}
@@ -231,12 +219,18 @@ function TasksFrame(): JSX.Element {
           </div>
           <div className="feature-tour-tasks-row relative flex h-9 items-center gap-2.5 rounded-md border border-border bg-background px-3">
             <span className="inline-flex h-5 items-center justify-center rounded-[3px] border border-border bg-muted px-1.5 font-mono text-[13px] leading-none text-muted-foreground">
-              {translate("auto.components.feature.wall.FeatureTourPreview.fc0cc0b267", "GH #1842")}</span>
+              {translate('auto.components.feature.wall.FeatureTourPreview.fc0cc0b267', 'GH #1842')}
+            </span>
             <span className="truncate text-[15px] font-medium leading-none text-foreground">
-              {translate("auto.components.feature.wall.FeatureTourPreview.c1f28c03b2", "Worktree picker truncates")}</span>
+              {translate(
+                'auto.components.feature.wall.FeatureTourPreview.c1f28c03b2',
+                'Worktree picker truncates'
+              )}
+            </span>
             <span className="feature-tour-tasks-pill relative ml-auto flex h-6 items-center justify-center overflow-hidden rounded-full border border-emerald-500/30 bg-emerald-500/15">
               <span className="feature-tour-tasks-pill-label flex items-center gap-1 whitespace-nowrap pl-3 pr-2.5 text-[13px] font-semibold leading-none tracking-[0.01em] text-primary-foreground">
-                {translate("auto.components.feature.wall.FeatureTourPreview.40bbd92ef4", "Start")}<svg
+                {translate('auto.components.feature.wall.FeatureTourPreview.40bbd92ef4', 'Start')}
+                <svg
                   width="11"
                   height="11"
                   viewBox="0 0 16 16"
@@ -262,7 +256,8 @@ function TasksFrame(): JSX.Element {
           </div>
           <div className="flex h-9 items-center gap-2.5 rounded-md border border-border bg-background px-3">
             <span className="inline-flex h-5 items-center justify-center rounded-[3px] border border-border bg-muted px-1.5 font-mono text-[13px] leading-none text-muted-foreground">
-              {translate("auto.components.feature.wall.FeatureTourPreview.d54aefe09e", "LIN-329")}</span>
+              {translate('auto.components.feature.wall.FeatureTourPreview.d54aefe09e', 'LIN-329')}
+            </span>
             <span className="h-2 w-[45%] rounded-full bg-foreground/12" />
           </div>
         </div>
@@ -271,7 +266,11 @@ function TasksFrame(): JSX.Element {
           <div className="flex items-center gap-2.5">
             <WorkingSpinner />
             <span className="truncate text-[15.5px] font-medium leading-none text-foreground">
-              {translate("auto.components.feature.wall.FeatureTourPreview.3822d8d14b", "fix/worktree-picker-truncates")}</span>
+              {translate(
+                'auto.components.feature.wall.FeatureTourPreview.3822d8d14b',
+                'fix/worktree-picker-truncates'
+              )}
+            </span>
             <span className="ml-auto inline-flex">
               <ClaudeIcon size={13} />
             </span>
@@ -281,83 +280,11 @@ function TasksFrame(): JSX.Element {
             <ClaudeIcon size={12} />
             <span className="h-2 w-[55%] rounded-full bg-foreground/15" />
           </div>
-          <div className="text-[13.5px] leading-none text-muted-foreground">{translate("auto.components.feature.wall.FeatureTourPreview.2a7cfc82c8", "Linked to GH #1842")}</div>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function TerminalFrame(): JSX.Element {
-  return (
-    <div className="absolute inset-0 flex flex-col gap-5 bg-card px-4 py-4">
-      <div className="text-[14.5px] font-semibold uppercase tracking-[0.07em] leading-none text-muted-foreground">
-        {translate("auto.components.feature.wall.FeatureTourPreview.1aa8a9a24a", "Splittable terminal")}</div>
-      <div className="mx-4 flex min-h-0 flex-1 flex-col overflow-hidden rounded-md border border-border bg-background">
-        <div className="flex items-center gap-1.5 border-b border-border bg-muted/40 px-2 py-1">
-          <span className="size-1.5 rounded-full bg-foreground/15" />
-          <span className="size-1.5 rounded-full bg-foreground/15" />
-          <span className="size-1.5 rounded-full bg-foreground/15" />
-          <span className="ml-2 font-mono text-[13.5px] leading-none text-muted-foreground">
-            {translate("auto.components.feature.wall.FeatureTourPreview.04d54d50ec", "orca · zsh")}</span>
-        </div>
-        <div className="grid flex-1 grid-cols-2 divide-x divide-border font-mono text-[14.5px] leading-[1.4] text-foreground">
-          <div className="min-w-0 p-2">
-            <div className="flex items-center gap-1">
-              <span className="text-emerald-500">$</span>
-              <span className="feature-tour-terminal-line relative inline-block whitespace-nowrap text-foreground">
-                {translate("auto.components.feature.wall.FeatureTourPreview.6218a9014d", "pnpm playwright test")}</span>
-            </div>
-            <div className="mt-1.5 flex flex-col gap-1">
-              <div
-                className="feature-tour-terminal-output truncate text-muted-foreground"
-                data-line="1"
-              >
-                {translate("auto.components.feature.wall.FeatureTourPreview.8279e9d95b", "Running 12 tests")}</div>
-              <div
-                className="feature-tour-terminal-output flex min-w-0 items-center gap-1.5"
-                data-line="2"
-              >
-                <span className="font-bold text-emerald-600">✓</span>
-                <span className="truncate">{translate("auto.components.feature.wall.FeatureTourPreview.24fedd5a52", "login.spec.ts")}</span>
-              </div>
-              <div
-                className="feature-tour-terminal-output flex min-w-0 items-center gap-1.5"
-                data-line="3"
-              >
-                <span className="inline-block size-2 animate-spin rounded-full border-[1.5px] border-foreground/20 border-t-foreground" />
-                <span className="truncate">{translate("auto.components.feature.wall.FeatureTourPreview.6ed43cb0e0", "dashboard.spec.ts")}</span>
-              </div>
-            </div>
-          </div>
-          <div className="min-w-0 p-2">
-            <div className="flex items-center gap-1">
-              <span className="text-emerald-500">$</span>
-              <span className="text-foreground">{translate("auto.components.feature.wall.FeatureTourPreview.771d8881c2", "claude")}</span>
-            </div>
-            <div className="mt-1.5 flex flex-col gap-1">
-              <div
-                className="feature-tour-terminal-output flex min-w-0 items-center gap-1.5"
-                data-line="1"
-              >
-                <ClaudeIcon size={12} />
-                <span className="truncate text-muted-foreground">{translate("auto.components.feature.wall.FeatureTourPreview.952d3ddd9a", "session started")}</span>
-              </div>
-              <div
-                className="feature-tour-terminal-output flex min-w-0 items-center gap-1"
-                data-line="2"
-              >
-                <span className="text-amber-600">{translate("auto.components.feature.wall.FeatureTourPreview.1170621527", ">")}</span>
-                <span className="truncate">{translate("auto.components.feature.wall.FeatureTourPreview.ef8b164dd1", "review src/auth")}</span>
-              </div>
-              <div
-                className="feature-tour-terminal-output flex min-w-0 items-center gap-1.5"
-                data-line="3"
-              >
-                <span className="inline-block size-2 animate-spin rounded-full border-[1.5px] border-amber-600/20 border-t-amber-600" />
-                <span className="truncate text-muted-foreground">{translate("auto.components.feature.wall.FeatureTourPreview.304ad0dfc1", "Thinking...")}</span>
-              </div>
-            </div>
+          <div className="text-[13.5px] leading-none text-muted-foreground">
+            {translate(
+              'auto.components.feature.wall.FeatureTourPreview.2a7cfc82c8',
+              'Linked to GH #1842'
+            )}
           </div>
         </div>
       </div>
@@ -385,7 +312,7 @@ export function FeatureTourPreview(props: { className?: string }): JSX.Element {
         <TasksFrame />
       </div>
       <div className="feature-tour-frame" data-frame="4">
-        <TerminalFrame />
+        <FeatureTourTerminalFrame />
       </div>
       <div className="pointer-events-none absolute inset-x-0 bottom-0 z-[6] h-[66px] border-t border-border/70 bg-card/95">
         {FEATURE_TOUR_PREVIEW_COPY.map((frame) => (

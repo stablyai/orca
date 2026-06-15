@@ -90,7 +90,9 @@ async function executeWorktreeCreation(
         request.linkedGitLabIssue,
         request.startup,
         request.pendingFirstAgentMessageRename,
-        creationId
+        creationId,
+        request.linkedLinearIssueWorkspaceId,
+        request.linkedLinearIssueOrganizationUrlKey
       )
   } catch (error) {
     // Why: a missing entry means the user cancelled mid-flight — abandon

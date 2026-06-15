@@ -253,11 +253,23 @@ test.describe('Terminal output scheduler', () => {
       )
       .toBe(true)
 
+    await expect
+      .poll(
+        async () => {
+          const debug = await getSchedulerDebug(orcaPage)
+          return debug.backgroundEnqueueCount > 0
+            ? debug.backgroundWriteCount >= backgroundCommands.length
+            : true
+        },
+        {
+          timeout: 10_000,
+          message: 'Queued background terminal output did not drain through the scheduler'
+        }
+      )
+      .toBe(true)
+
     const debug = await getSchedulerDebug(orcaPage)
     expect(debug.foregroundWriteCount).toBeGreaterThan(0)
-    if (debug.backgroundEnqueueCount > 0) {
-      expect(debug.backgroundWriteCount).toBeGreaterThanOrEqual(backgroundCommands.length)
-    }
     if (debug.drainWrites.length > 0) {
       expect(Math.max(...debug.drainWrites)).toBeLessThanOrEqual(2)
     }

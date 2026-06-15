@@ -1,5 +1,9 @@
+import type { TaskSourceContext } from '../../shared/task-source-context'
+
 export type WorkItemArgs = {
   repoPath: string
+  repoId?: string | null
+  sourceContext?: TaskSourceContext | null
   number: number
   type?: 'issue' | 'pr'
 }

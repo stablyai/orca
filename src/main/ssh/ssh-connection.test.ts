@@ -9,6 +9,7 @@ import { join } from 'path'
 let eventHandlers: Map<string, Set<(...args: unknown[]) => void>>
 let connectBehavior: 'ready' | 'error' = 'ready'
 let connectErrorMessage = ''
+let connectErrorCode = ''
 let destroyErrorMessage = ''
 let connectSequence: ('ready' | Error)[] = []
 let execBehavior: 'callback' | 'pending' = 'callback'
@@ -68,7 +69,11 @@ vi.mock('ssh2', () => {
           return
         }
         if (connectBehavior === 'error') {
-          emitSshEvent('error', new Error(connectErrorMessage))
+          const err = new Error(connectErrorMessage) as NodeJS.ErrnoException
+          if (connectErrorCode) {
+            err.code = connectErrorCode
+          }
+          emitSshEvent('error', err)
         } else {
           emitSshEvent('ready')
         }
@@ -187,6 +192,7 @@ describe('SshConnection', () => {
     eventHandlers = new Map()
     connectBehavior = 'ready'
     connectErrorMessage = ''
+    connectErrorCode = ''
     destroyErrorMessage = ''
     connectSequence = []
     execBehavior = 'callback'
@@ -706,6 +712,48 @@ describe('SshConnection', () => {
       'echo ORCA-SYSTEM-SSH-OK',
       { wrapCommand: false }
     )
+  })
+
+  it('falls back to system SSH when ssh2 hits a local network policy reachability error', async () => {
+    connectBehavior = 'error'
+    connectErrorMessage = 'connect EHOSTUNREACH 192.168.0.210:22 - Local (192.168.0.2:52112)'
+    connectErrorCode = 'EHOSTUNREACH'
+    const conn = new SshConnection(
+      createTarget({ host: '192.168.0.210', label: 'LAN Linux', username: 'hydra' }),
+      createCallbacks()
+    )
+
+    await conn.connect()
+
+    expect(conn.getState().status).toBe('connected')
+    expect(conn.usesSystemSshTransport()).toBe(true)
+    expect(clientInstances).toHaveLength(1)
+    expect(spawnSystemSshCommandMock).toHaveBeenCalledWith(
+      expect.objectContaining({ host: '192.168.0.210' }),
+      'echo ORCA-SYSTEM-SSH-OK',
+      { wrapCommand: false }
+    )
+  })
+
+  it('keeps the original ssh2 reachability error when the system SSH probe fails', async () => {
+    connectBehavior = 'error'
+    connectErrorMessage = 'connect EHOSTUNREACH 192.168.0.210:22 - Local (192.168.0.2:52112)'
+    connectErrorCode = 'EHOSTUNREACH'
+    spawnSystemSshCommandMock.mockImplementation(() => {
+      throw new Error('No system ssh binary found. Install OpenSSH to use system SSH transport.')
+    })
+    const conn = new SshConnection(
+      createTarget({ host: '192.168.0.210', label: 'LAN Linux', username: 'hydra' }),
+      createCallbacks()
+    )
+    const privateConn = conn as unknown as {
+      attemptConnect: () => Promise<void>
+    }
+
+    await expect(privateConn.attemptConnect()).rejects.toThrow(
+      'connect EHOSTUNREACH 192.168.0.210:22'
+    )
+    expect(conn.usesSystemSshTransport()).toBe(false)
   })
 
   it('passes the detected host platform to system SSH file operations', async () => {

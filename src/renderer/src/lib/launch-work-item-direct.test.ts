@@ -237,6 +237,11 @@ describe('launchWorkItemDirect', () => {
       'feature/fix',
       undefined,
       undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
       undefined
     )
   })
@@ -271,6 +276,11 @@ describe('launchWorkItemDirect', () => {
       undefined,
       undefined,
       'ENG-42',
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
       undefined,
       undefined,
       undefined,
@@ -327,12 +337,16 @@ describe('launchWorkItemDirect', () => {
       agent: 'cursor',
       draft: 'https://github.com/acme/repo/issues/77',
       cmdOverrides: {},
+      agentArgs: '--yolo',
+      agentEnv: {},
       platform: 'linux'
     })
     expect(buildAgentStartupPlan).toHaveBeenCalledWith({
       agent: 'cursor',
       prompt: '',
       cmdOverrides: {},
+      agentArgs: '--yolo',
+      agentEnv: {},
       platform: 'linux',
       allowEmptyPromptLaunch: true
     })

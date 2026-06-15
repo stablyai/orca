@@ -1,4 +1,5 @@
 import React from 'react'
+import { useTranslation } from 'react-i18next'
 import {
   Code,
   Eye,
@@ -27,29 +28,41 @@ type ViewModeMetadata = { label: string; icon: LucideIcon; title?: string }
 
 const DEFAULT_VIEW_MODE_METADATA: Record<EditorToggleValue, ViewModeMetadata> = {
   source: {
-    label: translate("auto.components.editor.EditorViewToggle.4d6ccb7ba6", "Source"),
+    get label() {
+      return translate('auto.components.editor.EditorViewToggle.4d6ccb7ba6', 'Source')
+    },
     icon: Code
   },
   rich: {
-    label: translate("auto.components.editor.EditorViewToggle.aff15f94f5", "Rich Editor"),
+    get label() {
+      return translate('auto.components.editor.EditorViewToggle.aff15f94f5', 'Rich Editor')
+    },
     icon: Pencil
   },
   preview: {
-    label: translate("auto.components.editor.EditorViewToggle.0d193dc03c", "Preview"),
+    get label() {
+      return translate('auto.components.editor.EditorViewToggle.0d193dc03c', 'Preview')
+    },
     icon: Eye
   },
   edit: {
-    label: translate("auto.components.editor.EditorViewToggle.ac3bb87913", "Edit"),
+    get label() {
+      return translate('auto.components.editor.EditorViewToggle.ac3bb87913', 'Edit')
+    },
     icon: FileText
   },
   changes: {
-    label: translate("auto.components.editor.EditorViewToggle.4837f3f578", "Changes"),
+    get label() {
+      return translate('auto.components.editor.EditorViewToggle.4837f3f578', 'Changes')
+    },
     icon: GitCompareArrows,
     // Why: "Changes" collides with the Source Control sidebar's "Branch
     // Changes" section, which diffs against the base ref. This toggle shows
     // uncommitted changes (working tree vs HEAD), so disambiguate in the
     // hover title without repeating the button label.
-    title: translate("auto.components.editor.EditorViewToggle.167f45888c", "Uncommitted changes")
+    get title() {
+      return translate('auto.components.editor.EditorViewToggle.167f45888c', 'Uncommitted changes')
+    }
   }
 }
 
@@ -58,14 +71,18 @@ const DEFAULT_VIEW_MODE_METADATA: Record<EditorToggleValue, ViewModeMetadata> = 
 // which we don't offer, so callers can override the per-mode presentation.
 export const CSV_VIEW_MODE_METADATA: Partial<Record<MarkdownViewMode, ViewModeMetadata>> = {
   rich: {
-    label: translate("auto.components.editor.EditorViewToggle.e408aa9cd5", "Table"),
+    get label() {
+      return translate('auto.components.editor.EditorViewToggle.e408aa9cd5', 'Table')
+    },
     icon: TableIcon
   }
 }
 
 export const NOTEBOOK_VIEW_MODE_METADATA: Partial<Record<MarkdownViewMode, ViewModeMetadata>> = {
   rich: {
-    label: translate("auto.components.editor.EditorViewToggle.b3410cd5e0", "Notebook"),
+    get label() {
+      return translate('auto.components.editor.EditorViewToggle.b3410cd5e0', 'Notebook')
+    },
     icon: NotebookText
   }
 }
@@ -83,6 +100,9 @@ export default function EditorViewToggle({
   onChange,
   metadataOverride
 }: EditorViewToggleProps): React.JSX.Element {
+  // Why: metadata labels are lightweight getters, so subscribe this compact
+  // control to repaint when the active language changes.
+  useTranslation()
   return (
     <TooltipProvider delayDuration={300}>
       <ToggleGroup

@@ -384,8 +384,18 @@ describe('ConflictSummaryCard', () => {
     expect(cherryPickMarkup).not.toContain('Abort rebase')
   })
 
-  it('renders rebase abort with the quiet outline review-conflicts button treatment', () => {
-    const markup = renderToStaticMarkup(
+  it('renders abort actions with operation-specific button treatment', () => {
+    const mergeMarkup = renderToStaticMarkup(
+      <ConflictSummaryCard
+        conflictOperation="merge"
+        unresolvedCount={1}
+        isResolvingWithAI={false}
+        onAbortOperation={vi.fn()}
+        onResolveWithAI={vi.fn()}
+        onReview={vi.fn()}
+      />
+    )
+    const rebaseMarkup = renderToStaticMarkup(
       <ConflictSummaryCard
         conflictOperation="rebase"
         unresolvedCount={1}
@@ -396,8 +406,10 @@ describe('ConflictSummaryCard', () => {
       />
     )
 
-    expect(buttonContaining(markup, 'Review conflicts')).toContain('data-variant="outline"')
-    expect(buttonContaining(markup, 'Abort rebase')).toContain('data-variant="outline"')
+    expect(buttonContaining(mergeMarkup, 'Review conflicts')).toContain('data-variant="outline"')
+    expect(buttonContaining(mergeMarkup, 'Abort merge')).toContain('data-variant="destructive"')
+    expect(buttonContaining(rebaseMarkup, 'Review conflicts')).toContain('data-variant="outline"')
+    expect(buttonContaining(rebaseMarkup, 'Abort rebase')).toContain('data-variant="outline"')
   })
 
   it('renders the Sparkles icon on the idle Resolve with AI button', () => {
@@ -435,7 +447,7 @@ describe('OperationBanner', () => {
     expect(cherryPickMarkup).not.toContain('Abort rebase')
   })
 
-  it('keeps rebase abort non-destructive while preserving merge abort styling', () => {
+  it('renders abort actions with operation-specific button treatment', () => {
     const mergeMarkup = renderToStaticMarkup(
       <OperationBanner conflictOperation="merge" onAbortOperation={vi.fn()} />
     )

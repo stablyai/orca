@@ -32,6 +32,10 @@ export function DeleteWorktreeSkipConfirmOption({
       >
         {dontAskAgain ? <Check className="size-3" strokeWidth={3} /> : null}
       </span>
-      {translate("auto.components.sidebar.DeleteWorktreeSkipConfirmOption.29aefb7e52", "Don't ask again")}</button>
+      {translate(
+        'auto.components.sidebar.DeleteWorktreeSkipConfirmOption.29aefb7e52',
+        "Don't ask again"
+      )}
+    </button>
   )
 }

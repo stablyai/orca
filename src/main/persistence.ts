@@ -24,6 +24,7 @@ import type {
   AutomationPrecheckResult,
   AutomationRunOutputSnapshot,
   AutomationRun,
+  AutomationSchedulerOwner,
   AutomationRunTrigger,
   AutomationUpdateInput
 } from '../shared/automations-types'
@@ -31,11 +32,22 @@ import {
   latestAutomationOccurrenceAtOrBefore,
   nextAutomationOccurrenceAfter
 } from '../shared/automation-schedules'
+import { getAutomationLegacyRepoId } from '../shared/automation-run-identity'
 import { normalizeAutomationPrecheck } from '../shared/automation-precheck'
 import type {
   PersistedState,
+  Project,
+  ProjectHostSetup,
+  ProjectHostSetupCreateArgs,
+  ProjectHostSetupCreateResult,
+  ProjectHostSetupDeleteArgs,
+  ProjectHostSetupDeleteResult,
+  ProjectHostSetupUpdateArgs,
+  ProjectHostSetupUpdateResult,
+  RepoProjectHostSetupMethod,
   Repo,
   ProjectGroup,
+  FolderWorkspace,
   SparsePreset,
   WorktreeMeta,
   WorktreeLineage,
@@ -52,10 +64,16 @@ import type {
   WorkspaceSessionPatch,
   WorkspaceSessionState
 } from '../shared/types'
+import { projectHostSetupProjectionFromRepos } from '../shared/project-host-setup-projection'
+import {
+  buildTaskSourceContextFromRepo,
+  buildWorkspaceRunContext
+} from '../shared/task-source-context'
 import type { MigrationUnsupportedPtyEntry } from '../shared/agent-status-types'
 import type { SshRemotePtyLease, SshTarget } from '../shared/ssh-types'
 import { isFolderRepo } from '../shared/repo-kind'
 import { getGitUsername } from './git/repo'
+import { getRepoExecutionHostId, parseExecutionHostId } from '../shared/execution-host'
 import {
   getDefaultPersistedState,
   getDefaultNotificationSettings,
@@ -70,6 +88,13 @@ import {
   ONBOARDING_FINAL_STEP
 } from '../shared/constants'
 import { parseWorkspaceSession } from '../shared/workspace-session-schema'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  normalizeExecutionHostOrder,
+  normalizeExecutionHostId,
+  normalizeVisibleExecutionHostIds,
+  type ExecutionHostId
+} from '../shared/execution-host'
 import { toRelaySshPtyId } from './providers/ssh-pty-id'
 import {
   isTerminalLeafId,
@@ -85,15 +110,23 @@ import { agentHookServer } from './agent-hooks/server'
 import { pruneLocalTerminalScrollbackBuffers } from '../shared/workspace-session-terminal-buffers'
 import { pruneWorkspaceSessionBrowserHistory } from '../shared/workspace-session-browser-history'
 import { getRepoIdFromWorktreeId, getWorktreePathBasenameFromId } from '../shared/worktree-id'
-import { normalizeRuntimePathForComparison } from '../shared/cross-platform-path'
+import {
+  isPathInsideOrEqual,
+  normalizeRuntimePathForComparison
+} from '../shared/cross-platform-path'
 import { normalizeTerminalQuickCommands } from '../shared/terminal-quick-commands'
 import { normalizeTaskProviderSettings } from '../shared/task-providers'
 import { normalizeAutoRenameBranchFromWorkDefaultOn } from '../shared/auto-rename-branch-from-work-settings'
 import { normalizeOpenInApplications } from '../shared/open-in-applications'
 import { normalizeTerminalShortcutPolicy } from '../shared/keybindings'
 import { normalizeAppIconId } from '../shared/app-icon'
+import { normalizeTerminalCustomThemes } from '../shared/terminal-custom-themes'
 import {
+  compareFeatureInteractionUsageBuckets,
+  getFeatureInteractionCategory,
+  getFeatureInteractionUsageBucket,
   normalizeFeatureInteractions,
+  normalizeFeatureInteractionTelemetryBuckets,
   type FeatureInteractionId
 } from '../shared/feature-interactions'
 import { normalizeContextualTourIds } from '../shared/contextual-tours'
@@ -116,6 +149,7 @@ import {
   normalizeProjectGroupName,
   normalizeProjectGroups
 } from '../shared/project-groups'
+import { createNestedProjectGroupResolver } from './project-groups/nested-repo-import'
 import {
   mergeLegacyCommitMessageAiIntoSourceControlAi,
   normalizeRepoSourceControlAiOverrides,
@@ -124,15 +158,29 @@ import {
   sourceControlAiSettingsFromLegacy
 } from '../shared/source-control-ai'
 import { normalizeDisabledTuiAgents } from '../shared/tui-agent-selection'
+import {
+  DEFAULT_TUI_AGENT_ARGS,
+  DEFAULT_TUI_AGENT_ENV,
+  hasUnsupportedTuiAgentArgs,
+  normalizeTuiAgentArgsRecord,
+  normalizeTuiAgentEnvRecord
+} from '../shared/tui-agent-launch-defaults'
 import { normalizeTerminalCursorStyleDefault } from '../shared/terminal-cursor-style-settings'
 import { normalizeUiLanguage } from '../shared/ui-language'
 import { normalizeBrowserPageZoomLevel } from '../shared/browser-page-zoom'
+import {
+  normalizeFolderWorkspaceName,
+  normalizeFolderWorkspaces
+} from '../shared/folder-workspaces'
+import { folderWorkspaceKey } from '../shared/workspace-scope'
 import {
   collectTerminalScrollbackSnapshotRefs,
   deleteTerminalScrollbackSnapshotSync,
   migrateWorkspaceSessionTerminalScrollbackSnapshots,
   readTerminalScrollbackSnapshotSync
 } from './terminal-scrollback-snapshots'
+import { track } from './telemetry/client'
+import { getCohortAtEmit } from './telemetry/cohort-classifier'
 
 function encrypt(plaintext: string): string {
   if (!plaintext || !safeStorage.isEncryptionAvailable()) {
@@ -214,6 +262,39 @@ function workspaceSessionPatchNeedsFullNormalization(patch: WorkspaceSessionPatc
   )
 }
 
+/** Normalize the persisted non-'local' host partitions. 'local' is intentionally
+ *  dropped here — it is the legacy workspaceSession blob — so the two surfaces
+ *  never diverge. Each partition is zod-validated independently: a corrupt host
+ *  drops to defaults without taking out the others. Idempotent: re-running on an
+ *  already-normalized map yields the same shape. */
+function parseWorkspaceSessionsByHostId(
+  raw: unknown,
+  defaults: WorkspaceSessionState
+): Partial<Record<ExecutionHostId, WorkspaceSessionState>> {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    return {}
+  }
+  const partitions: Partial<Record<ExecutionHostId, WorkspaceSessionState>> = {}
+  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+    const hostId = normalizeExecutionHostId(key)
+    // Why: 'local' belongs in workspaceSession; an invalid/local key here is
+    // legacy noise and must not shadow the canonical local partition.
+    if (!hostId || hostId === LOCAL_EXECUTION_HOST_ID) {
+      continue
+    }
+    const result = parseWorkspaceSession(value)
+    if (!result.ok) {
+      console.error(
+        `[persistence] Corrupt workspace session for host ${hostId}, using defaults:`,
+        result.error
+      )
+      continue
+    }
+    partitions[hostId] = { ...defaults, ...result.value }
+  }
+  return partitions
+}
+
 function backupPath(dataFile: string, index: number): string {
   return `${dataFile}.bak.${index}`
 }
@@ -250,6 +331,53 @@ function buildWorkspaceDirHistoryForUpdate(
 
 function getWorkspaceLayoutHistoryKey(layout: OrcaWorkspaceLayout): string {
   return `${normalizeRuntimePathForComparison(layout.path)}:${layout.nestWorkspaces}`
+}
+
+function migrateAgentYoloDefaults(
+  settings: GlobalSettings | undefined
+): Pick<GlobalSettings, 'agentDefaultArgs' | 'agentDefaultEnv' | 'agentYoloDefaultsMigrated'> {
+  const existingArgs = normalizeTuiAgentArgsRecord(settings?.agentDefaultArgs)
+  const existingEnv = normalizeTuiAgentEnvRecord(settings?.agentDefaultEnv)
+  if (settings?.agentYoloDefaultsMigrated === true) {
+    return {
+      agentDefaultArgs: existingArgs,
+      agentDefaultEnv: existingEnv,
+      agentYoloDefaultsMigrated: true
+    }
+  }
+
+  const commandOverrides = settings?.agentCmdOverrides ?? {}
+  const migratedArgs = { ...existingArgs }
+  for (const [agent, args] of Object.entries(DEFAULT_TUI_AGENT_ARGS)) {
+    if (agent in migratedArgs) {
+      continue
+    }
+    if (agent in commandOverrides) {
+      migratedArgs[agent as keyof typeof DEFAULT_TUI_AGENT_ARGS] = ''
+      continue
+    }
+    migratedArgs[agent as keyof typeof DEFAULT_TUI_AGENT_ARGS] = args
+  }
+
+  const migratedEnv = { ...existingEnv }
+  for (const [agent, env] of Object.entries(DEFAULT_TUI_AGENT_ENV)) {
+    if (agent in migratedEnv) {
+      continue
+    }
+    if (agent in commandOverrides) {
+      migratedEnv[agent as keyof typeof DEFAULT_TUI_AGENT_ENV] = {}
+      continue
+    }
+    migratedEnv[agent as keyof typeof DEFAULT_TUI_AGENT_ENV] = { ...env }
+  }
+
+  return {
+    // Why: legacy users could only customize per-agent launch defaults via
+    // command overrides, so those agents are treated as already user-owned.
+    agentDefaultArgs: migratedArgs,
+    agentDefaultEnv: migratedEnv,
+    agentYoloDefaultsMigrated: true
+  }
 }
 
 function normalizeGroupBy(groupBy: unknown): PersistedState['ui']['groupBy'] {
@@ -323,6 +451,21 @@ function mergeContextualTourSeenIds(
   return [...merged]
 }
 
+function stripMainOwnedTelemetryMarkerFromUI(
+  value: Partial<PersistedState['ui']> | undefined
+): Partial<PersistedState['ui']> {
+  if (!value || typeof value !== 'object') {
+    return {}
+  }
+  const { featureInteractionTelemetryBuckets: _reserved, ...ui } = value as Partial<
+    PersistedState['ui']
+  > & {
+    featureInteractionTelemetryBuckets?: unknown
+  }
+  void _reserved
+  return ui
+}
+
 function normalizeSortBy(sortBy: unknown): PersistedState['ui']['sortBy'] {
   if (
     sortBy === 'smart' ||
@@ -347,6 +490,7 @@ function normalizeRightSidebarTab(tab: unknown): PersistedState['ui']['rightSide
   if (
     tab === 'explorer' ||
     tab === 'search' ||
+    tab === 'vault' ||
     tab === 'source-control' ||
     tab === 'checks' ||
     tab === 'ports'
@@ -354,6 +498,20 @@ function normalizeRightSidebarTab(tab: unknown): PersistedState['ui']['rightSide
     return tab
   }
   return getDefaultUIState().rightSidebarTab
+}
+
+function normalizeRightSidebarExplorerView(
+  view: unknown,
+  tab?: unknown
+): PersistedState['ui']['rightSidebarExplorerView'] {
+  // Why: older builds persisted Search as a standalone activity tab.
+  if (tab === 'search') {
+    return 'search'
+  }
+  if (view === 'files' || view === 'search') {
+    return view
+  }
+  return getDefaultUIState().rightSidebarExplorerView
 }
 
 function normalizeNotificationSettings(value: unknown): NotificationSettings {
@@ -458,6 +616,116 @@ function normalizeAutomationSessionReuse(automation: Automation): Automation {
     ...automation,
     precheck: normalizeAutomationPrecheck(automation.precheck),
     reuseSession: automation.workspaceMode === 'existing' && automation.reuseSession === true
+  }
+}
+
+function getAutomationContextsForRepo(
+  repo: Repo | undefined,
+  projectHostSetups: readonly ProjectHostSetup[]
+): Pick<Automation, 'runContext' | 'sourceContext'> {
+  if (!repo) {
+    return {
+      runContext: null,
+      sourceContext: null
+    }
+  }
+  const projection = projectHostSetupProjectionFromRepos([repo])
+  const projectedProject = projection.projects[0]
+  const projectedSetup = projection.setups[0]
+  const setup =
+    projectHostSetups.find((candidate) => candidate.repoId === repo.id) ?? projectedSetup
+  const runContext = setup
+    ? buildWorkspaceRunContext({
+        projectId: setup.projectId,
+        hostId: setup.hostId,
+        projectHostSetupId: setup.id,
+        repoId: repo.id,
+        path: setup.path
+      })
+    : null
+  const providerIdentity = projectedProject?.providerIdentity
+  const sourceContext = providerIdentity
+    ? buildTaskSourceContextFromRepo({
+        provider: providerIdentity.provider,
+        projectId: providerIdentity.provider === 'github' ? (setup?.projectId ?? repo.id) : repo.id,
+        repo,
+        projectHostSetupId: setup?.id,
+        providerIdentity
+      })
+    : null
+  return {
+    runContext,
+    sourceContext
+  }
+}
+
+function getAutomationSchedulerOwner(repo: Repo | undefined): AutomationSchedulerOwner {
+  if (!repo) {
+    return 'local_host_service'
+  }
+  const host = parseExecutionHostId(getRepoExecutionHostId(repo))
+  if (host?.kind === 'ssh') {
+    return 'ssh_bridge'
+  }
+  if (host?.kind === 'runtime') {
+    return 'remote_host_service'
+  }
+  return 'local_host_service'
+}
+
+function backfillLegacyAutomationContexts(
+  state: Pick<PersistedState, 'automations' | 'automationRuns' | 'repos' | 'projectHostSetups'>
+): {
+  state: Pick<PersistedState, 'automations' | 'automationRuns' | 'repos' | 'projectHostSetups'>
+  changed: boolean
+} {
+  let changed = false
+  const contextsByAutomationId = new Map<string, Pick<Automation, 'runContext' | 'sourceContext'>>()
+  const automations = (state.automations ?? []).map((automation) => {
+    const contexts = getAutomationContextsForRepo(
+      state.repos.find((repo) => repo.id === getAutomationLegacyRepoId(automation)),
+      state.projectHostSetups ?? []
+    )
+    const next: Automation = { ...automation }
+    if (!Object.hasOwn(next, 'runContext')) {
+      // Why: pre-host-context automations only stored a repo id. Backfill the
+      // explicit run target once so dispatch/precheck no longer infer it later.
+      next.runContext = contexts.runContext
+      changed = true
+    }
+    if (!Object.hasOwn(next, 'sourceContext')) {
+      next.sourceContext = contexts.sourceContext
+      changed = true
+    }
+    contextsByAutomationId.set(next.id, {
+      runContext: next.runContext ?? null,
+      sourceContext: next.sourceContext ?? null
+    })
+    return next
+  })
+  const automationRuns = (state.automationRuns ?? []).map((run) => {
+    const automationContexts = contextsByAutomationId.get(run.automationId)
+    const next: AutomationRun = { ...run }
+    if (!Object.hasOwn(next, 'runContext')) {
+      next.runContext = automationContexts?.runContext ?? null
+      changed = true
+    }
+    if (!Object.hasOwn(next, 'sourceContext')) {
+      next.sourceContext = automationContexts?.sourceContext ?? null
+      changed = true
+    }
+    return next
+  })
+  if (!changed) {
+    return { state, changed: false }
+  }
+  return {
+    state: {
+      ...state,
+      automations,
+      automationRuns
+    },
+    changed: true
   }
 }
 
@@ -698,8 +966,19 @@ function sanitizeRepoUpstream(value: unknown): Repo['upstream'] | undefined {
   return owner && repo ? { owner, repo } : undefined
 }
 
+function sanitizeRepoProjectHostSetupMethod(
+  value: unknown
+): RepoProjectHostSetupMethod | undefined {
+  return value === 'imported-existing-folder' || value === 'cloned' ? value : undefined
+}
+
 function sanitizeRepoUpdatesForPersistence<
-  T extends Partial<Pick<Repo, 'badgeColor' | 'repoIcon' | 'upstream' | 'worktreeBasePath'>>
+  T extends Partial<
+    Pick<
+      Repo,
+      'badgeColor' | 'repoIcon' | 'upstream' | 'worktreeBasePath' | 'projectHostSetupMethod'
+    >
+  >
 >(updates: T): T {
   const sanitized = { ...updates }
   if ('badgeColor' in sanitized) {
@@ -732,6 +1011,14 @@ function sanitizeRepoUpdatesForPersistence<
       sanitized.worktreeBasePath = sanitized.worktreeBasePath.trim() || undefined
     } else {
       delete sanitized.worktreeBasePath
+    }
+  }
+  if ('projectHostSetupMethod' in sanitized) {
+    const setupMethod = sanitizeRepoProjectHostSetupMethod(sanitized.projectHostSetupMethod)
+    if (setupMethod === undefined) {
+      delete sanitized.projectHostSetupMethod
+    } else {
+      sanitized.projectHostSetupMethod = setupMethod
     }
   }
   return sanitized
@@ -1525,6 +1812,74 @@ function migrationUnsupportedEntriesEqual(
   })
 }
 
+function projectHostSetupCompatibilityStateEqual(
+  state: Pick<PersistedState, 'projects' | 'projectHostSetups'>,
+  nextState: Pick<PersistedState, 'projects' | 'projectHostSetups'>
+): boolean {
+  return (
+    JSON.stringify(state.projects ?? []) === JSON.stringify(nextState.projects) &&
+    JSON.stringify(state.projectHostSetups ?? []) === JSON.stringify(nextState.projectHostSetups)
+  )
+}
+
+function isRepoBackedProjectHostSetup(
+  setup: ProjectHostSetup,
+  currentRepoIds: ReadonlySet<string>
+): boolean {
+  const repoId = typeof setup.repoId === 'string' ? setup.repoId : ''
+  return repoId.length > 0 && (currentRepoIds.has(repoId) || setup.id === repoId)
+}
+
+function mergeProjectHostSetupCompatibilityState(
+  state: Pick<PersistedState, 'projects' | 'projectHostSetups'>,
+  repos: readonly Repo[]
+): Pick<PersistedState, 'projects' | 'projectHostSetups'> {
+  const projection = projectHostSetupProjectionFromRepos(repos)
+  const currentRepoIds = new Set(repos.map((repo) => repo.id))
+  const projectedProjectIds = new Set(projection.projects.map((project) => project.id))
+  const projectedSetupIds = new Set(projection.setups.map((setup) => setup.id))
+  // Why: legacy/repo-backed setup rows use the repo id as the setup id. Keep
+  // only independent setup rows here so repo deletion does not leave ghosts.
+  const independentSetups = (state.projectHostSetups ?? []).filter((setup) => {
+    if (projectedSetupIds.has(setup.id)) {
+      return false
+    }
+    return !isRepoBackedProjectHostSetup(setup, currentRepoIds)
+  })
+  const independentProjectIds = new Set(independentSetups.map((setup) => setup.projectId))
+  const independentProjects = (state.projects ?? [])
+    .filter(
+      (project) => independentProjectIds.has(project.id) && !projectedProjectIds.has(project.id)
+    )
+    .map((project) => ({
+      ...project,
+      sourceRepoIds: project.sourceRepoIds.filter((repoId) => currentRepoIds.has(repoId))
+    }))
+  return {
+    projects: [...projection.projects, ...independentProjects],
+    projectHostSetups: [...projection.setups, ...independentSetups]
+  }
+}
+
+function makeProjectHostSetupId(
+  projectId: string,
+  hostId: ExecutionHostId,
+  existingIds: ReadonlySet<string>,
+  requestedId?: string
+): string {
+  const baseId = requestedId?.trim() || `${projectId}::${hostId}`
+  if (!existingIds.has(baseId)) {
+    return baseId
+  }
+  let suffix = 2
+  let candidate = `${baseId}::${suffix}`
+  while (existingIds.has(candidate)) {
+    suffix++
+    candidate = `${baseId}::${suffix}`
+  }
+  return candidate
+}
+
 function createMinimalPersistedTerminalTab(args: {
   worktreeId: string
   tabId: string
@@ -1549,6 +1904,167 @@ function createMinimalPersistedTerminalTab(args: {
 
 function cloneWorkspaceSessionState(session: WorkspaceSessionState): WorkspaceSessionState {
   return structuredClone(session)
+}
+
+function removeWorkspaceSessionOwner(
+  session: WorkspaceSessionState | undefined,
+  ownerKey: string
+): WorkspaceSessionState | undefined {
+  if (!session) {
+    return session
+  }
+  const next = cloneWorkspaceSessionState(session)
+  const removedTerminalTabs = next.tabsByWorktree?.[ownerKey] ?? []
+  if (next.tabsByWorktree) {
+    delete next.tabsByWorktree[ownerKey]
+  }
+  for (const tab of removedTerminalTabs) {
+    delete next.terminalLayoutsByTabId[tab.id]
+    if (next.activeTabId === tab.id) {
+      next.activeTabId = null
+    }
+  }
+
+  if (next.openFilesByWorktree) {
+    delete next.openFilesByWorktree[ownerKey]
+  }
+  if (next.activeFileIdByWorktree) {
+    delete next.activeFileIdByWorktree[ownerKey]
+  }
+  const browserWorkspaces = next.browserTabsByWorktree?.[ownerKey] ?? []
+  if (next.browserTabsByWorktree) {
+    delete next.browserTabsByWorktree[ownerKey]
+  }
+  if (next.browserPagesByWorkspace) {
+    for (const workspace of browserWorkspaces) {
+      delete next.browserPagesByWorkspace[workspace.id]
+    }
+  }
+  if (next.activeBrowserTabIdByWorktree) {
+    delete next.activeBrowserTabIdByWorktree[ownerKey]
+  }
+  if (next.activeTabTypeByWorktree) {
+    delete next.activeTabTypeByWorktree[ownerKey]
+  }
+  if (next.activeTabIdByWorktree) {
+    delete next.activeTabIdByWorktree[ownerKey]
+  }
+  if (next.unifiedTabs) {
+    delete next.unifiedTabs[ownerKey]
+  }
+  if (next.tabGroups) {
+    delete next.tabGroups[ownerKey]
+  }
+  if (next.tabGroupLayouts) {
+    delete next.tabGroupLayouts[ownerKey]
+  }
+  if (next.activeGroupIdByWorktree) {
+    delete next.activeGroupIdByWorktree[ownerKey]
+  }
+  if (next.lastVisitedAtByWorktreeId) {
+    delete next.lastVisitedAtByWorktreeId[ownerKey]
+  }
+  if (next.defaultTerminalTabsAppliedByWorktreeId) {
+    delete next.defaultTerminalTabsAppliedByWorktreeId[ownerKey]
+  }
+  if (next.sleepingAgentSessionsByPaneKey) {
+    for (const [paneKey, record] of Object.entries(next.sleepingAgentSessionsByPaneKey)) {
+      if (record.worktreeId === ownerKey) {
+        delete next.sleepingAgentSessionsByPaneKey[paneKey]
+      }
+    }
+  }
+  if (next.activeWorkspaceKey === ownerKey) {
+    next.activeWorkspaceKey = null
+  }
+  if (next.activeWorktreeId === ownerKey) {
+    next.activeWorktreeId = null
+  }
+  next.activeWorktreeIdsOnShutdown = next.activeWorktreeIdsOnShutdown?.filter(
+    (worktreeId) => worktreeId !== ownerKey
+  )
+  return next
+}
+
+function inferFolderScopeConnectionIdForMigration(args: {
+  folderPath: string
+  projectGroupId: string
+  projectGroups: readonly ProjectGroup[]
+  repos: readonly Repo[]
+}): string | null {
+  const groupIds = getProjectGroupSubtreeIds(args.projectGroups, args.projectGroupId)
+  const groupRepos = args.repos.filter(
+    (repo) => typeof repo.projectGroupId === 'string' && groupIds.has(repo.projectGroupId)
+  )
+  const candidateRepos =
+    groupRepos.length > 0
+      ? groupRepos
+      : args.repos.filter((repo) => isPathInsideOrEqual(args.folderPath, repo.path))
+  if (candidateRepos.length === 0) {
+    return null
+  }
+  let hasLocalRepo = false
+  const connectionIds = new Set<string>()
+  for (const repo of candidateRepos) {
+    if (repo.connectionId) {
+      connectionIds.add(repo.connectionId)
+    } else {
+      hasLocalRepo = true
+    }
+  }
+  if (hasLocalRepo || connectionIds.size !== 1) {
+    return null
+  }
+  return [...connectionIds][0]
+}
+
+function backfillFolderScopeConnectionIds(state: PersistedState): {
+  state: PersistedState
+  changed: boolean
+} {
+  const groups = state.projectGroups ?? []
+  const repos = state.repos ?? []
+  let changed = false
+  const projectGroups = groups.map((group) => {
+    if (group.connectionId || !group.parentPath) {
+      return group
+    }
+    const connectionId = inferFolderScopeConnectionIdForMigration({
+      folderPath: group.parentPath,
+      projectGroupId: group.id,
+      projectGroups: groups,
+      repos
+    })
+    if (!connectionId) {
+      return group
+    }
+    changed = true
+    return { ...group, connectionId }
+  })
+  const groupsById = new Map(projectGroups.map((group) => [group.id, group]))
+  const folderWorkspaces = (state.folderWorkspaces ?? []).map((workspace) => {
+    if (workspace.connectionId) {
+      return workspace
+    }
+    const groupConnectionId = groupsById.get(workspace.projectGroupId)?.connectionId ?? null
+    const connectionId =
+      groupConnectionId ??
+      inferFolderScopeConnectionIdForMigration({
+        folderPath: workspace.folderPath,
+        projectGroupId: workspace.projectGroupId,
+        projectGroups,
+        repos
+      })
+    if (!connectionId) {
+      return workspace
+    }
+    changed = true
+    return { ...workspace, connectionId }
+  })
+  return {
+    changed,
+    state: changed ? { ...state, projectGroups, folderWorkspaces } : state
+  }
 }
 
 function deleteRemovedTerminalScrollbackSnapshots(
@@ -1585,6 +2101,7 @@ export class Store {
     const loaded = this.load()
     const normalized = normalizePersistedPaneIdentityState(loaded)
     this.state = normalized.state
+    const adaptedProjectGroups = this.adaptFlatFolderScanProjectGroups()
     for (const entry of normalized.migrationUnsupportedEntries) {
       setMigrationUnsupportedPty(entry)
     }
@@ -1605,13 +2122,93 @@ export class Store {
       this.state.legacyPaneKeyAliasEntries = entries
       this.scheduleSave()
     })
-    if (normalized.changed || this.loadNeedsSave) {
+    if (normalized.changed || this.loadNeedsSave || adaptedProjectGroups) {
       // Why: upgraded sessions may contain legacy pane:1 leaves. Rewrite them at
       // the main persistence boundary so older renderer writes cannot revive them.
       // Other one-shot load migrations also set loadNeedsSave to persist their
       // guard flags before the next restart.
       this.scheduleSave()
     }
+  }
+
+  private adaptFlatFolderScanProjectGroups(): boolean {
+    // Why: older folder imports persisted a real parent path but kept all repos
+    // flat. Upgrade that shape into v1 sparse folder scopes on load.
+    const groups = this.state.projectGroups ?? []
+    const repos = this.state.repos
+    if (groups.length === 0 || repos.length === 0) {
+      return false
+    }
+
+    let changed = false
+    let maxOrder = -1
+    for (const group of groups) {
+      maxOrder = Math.max(maxOrder, group.tabOrder)
+    }
+
+    const childGroupIds = new Set(
+      groups.flatMap((group) => (group.parentGroupId ? [group.parentGroupId] : []))
+    )
+    const initialGroupCount = groups.length
+    for (let groupIndex = 0; groupIndex < initialGroupCount; groupIndex += 1) {
+      const rootGroup = groups[groupIndex]
+      if (!rootGroup) {
+        continue
+      }
+      if (
+        rootGroup.createdFrom !== 'folder-scan' ||
+        !rootGroup.parentPath ||
+        rootGroup.parentGroupId ||
+        childGroupIds.has(rootGroup.id)
+      ) {
+        continue
+      }
+      const rootPath = rootGroup.parentPath
+      const repoCandidates = repos.filter(
+        (repo) =>
+          !isFolderRepo(repo) &&
+          repo.projectGroupId === rootGroup.id &&
+          isPathInsideOrEqual(rootPath, repo.path)
+      )
+      if (repoCandidates.length < 2) {
+        continue
+      }
+
+      const resolver = createNestedProjectGroupResolver({
+        parentPath: rootPath,
+        groupName: rootGroup.name,
+        mode: 'group',
+        repoPaths: repoCandidates.map((repo) => repo.path),
+        createGroup: (input) => {
+          if (!input.parentGroupId) {
+            return rootGroup
+          }
+          maxOrder += 1
+          const group = createProjectGroup({
+            ...input,
+            tabOrder: maxOrder
+          })
+          groups.push(group)
+          changed = true
+          return group
+        }
+      })
+      const nextOrderByGroupId = new Map<string, number>()
+      for (const repo of repoCandidates) {
+        const group = resolver.getGroupForRepo(repo.path)
+        if (!group) {
+          continue
+        }
+        const nextOrder = nextOrderByGroupId.get(group.id) ?? 0
+        nextOrderByGroupId.set(group.id, nextOrder + 1)
+        if (repo.projectGroupId !== group.id || repo.projectGroupOrder !== nextOrder) {
+          repo.projectGroupId = group.id
+          repo.projectGroupOrder = nextOrder
+          changed = true
+        }
+      }
+    }
+    return changed
   }
 
   // Why (issue #1158): debounced writes fire as often as every 300ms during
@@ -1880,6 +2477,14 @@ export class Store {
         const migratedDisabledTuiAgents = normalizeDisabledTuiAgents(
           parsed.settings?.disabledTuiAgents
         )
+        const migratedAgentYoloDefaults = migrateAgentYoloDefaults(parsed.settings)
+        if (
+          parsed.settings?.agentYoloDefaultsMigrated !== true ||
+          hasUnsupportedTuiAgentArgs('opencode', parsed.settings?.agentDefaultArgs?.opencode) ||
+          hasUnsupportedTuiAgentArgs('kilo', parsed.settings?.agentDefaultArgs?.kilo)
+        ) {
+          this.loadNeedsSave = true
+        }
         if (
           !claudeAgentTeamsDefaultDisabledMigrated &&
           !migratedDisabledTuiAgents.includes('claude-agent-teams')
@@ -1896,10 +2501,18 @@ export class Store {
         if (!parsed.onboarding) {
           this.loadNeedsSave = true
         }
+        const normalizedProjectGroups = normalizeProjectGroups(parsed.projectGroups)
         result = {
           ...defaults,
           ...parsed,
-          projectGroups: normalizeProjectGroups(parsed.projectGroups),
+          featureInteractionTelemetryBuckets: normalizeFeatureInteractionTelemetryBuckets(
+            parsed.featureInteractionTelemetryBuckets
+          ),
+          projectGroups: normalizedProjectGroups,
+          folderWorkspaces: normalizeFolderWorkspaces(
+            parsed.folderWorkspaces,
+            normalizedProjectGroups
+          ),
           worktreeLineageById: parsed.worktreeLineageById ?? {},
           settings: {
             ...defaults.settings,
@@ -1941,6 +2554,9 @@ export class Store {
             terminalQuickCommands: normalizeTerminalQuickCommands(
               parsed.settings?.terminalQuickCommands
             ),
+            terminalCustomThemes: normalizeTerminalCustomThemes(
+              parsed.settings?.terminalCustomThemes
+            ),
             appIcon: normalizeAppIconId(parsed.settings?.appIcon),
             uiLanguage: normalizeUiLanguage(parsed.settings?.uiLanguage),
             defaultTaskSource: taskProviderSettings.defaultTaskSource,
@@ -1950,6 +2566,7 @@ export class Store {
               parsed.settings?.terminalShortcutPolicy
             ),
             disabledTuiAgents: migratedDisabledTuiAgents,
+            ...migratedAgentYoloDefaults,
             claudeAgentTeamsDefaultDisabledMigrated: true,
             openInApplications: normalizeOpenInApplications(parsed.settings?.openInApplications, {
               seedDefaults: true
@@ -2102,7 +2719,7 @@ export class Store {
             }
             return {
               ...defaults.ui,
-              ...parsed.ui,
+              ...stripMainOwnedTelemetryMarkerFromUI(parsed.ui),
               // Why: migrate once from the retired Appearance setting only
               // when no explicit persisted chrome preference exists yet.
               rightSidebarOpen,
@@ -2155,6 +2772,15 @@ export class Store {
             }
             return { ...defaults.workspaceSession, ...result.value }
           })(),
+          // Why: per-host session partitions for non-'local' hosts. 'local'
+          // stays in workspaceSession (legacy field) so a downgrade still
+          // reads the user's workspace. Each entry is zod-validated the same
+          // way as the legacy blob — a corrupt partition drops to that host's
+          // defaults without poisoning the others.
+          workspaceSessionsByHostId: parseWorkspaceSessionsByHostId(
+            parsed.workspaceSessionsByHostId,
+            defaults.workspaceSession
+          ),
           sshTargets: (parsed.sshTargets ?? []).map(normalizeSshTarget),
           sshRemotePtyLeases: (parsed.sshRemotePtyLeases ?? [])
             .map(normalizeSshRemotePtyLease)
@@ -2207,11 +2833,36 @@ export class Store {
       this.loadNeedsSave = true
     }
 
+    const repos = clearMissingProjectGroupMemberships(result.repos, result.projectGroups ?? [])
+    const projectHostSetupCompatibility = mergeProjectHostSetupCompatibilityState(result, repos)
+    if (!projectHostSetupCompatibilityStateEqual(result, projectHostSetupCompatibility)) {
+      this.loadNeedsSave = true
+    }
+
+    const automationContextMigration = backfillLegacyAutomationContexts({
+      ...result,
+      repos,
+      ...projectHostSetupCompatibility
+    })
+    if (automationContextMigration.changed) {
+      this.loadNeedsSave = true
+    }
     result = {
       ...result,
-      repos: clearMissingProjectGroupMemberships(result.repos, result.projectGroups ?? []),
-      workspaceSession: migratedScrollback.session
+      automations: automationContextMigration.state.automations,
+      automationRuns: automationContextMigration.state.automationRuns
     }
+
+    const folderScopeConnectionMigration = backfillFolderScopeConnectionIds({
+      ...result,
+      repos,
+      ...projectHostSetupCompatibility,
+      workspaceSession: migratedScrollback.session
+    })
+    if (folderScopeConnectionMigration.changed) {
+      this.loadNeedsSave = true
+    }
+    result = folderScopeConnectionMigration.state
 
     return this.migrateTelemetry(result, fileExistedOnLoad)
   }
@@ -2425,6 +3076,101 @@ export class Store {
     return this.state.repos.map((repo) => this.hydrateRepo(repo))
   }
 
+  getProjects(): Project[] {
+    return [...this.state.projects]
+  }
+
+  getProjectHostSetups(): ProjectHostSetup[] {
+    return [...this.state.projectHostSetups]
+  }
+
+  createProjectHostSetup(args: ProjectHostSetupCreateArgs): ProjectHostSetupCreateResult | null {
+    const project = this.state.projects.find((entry) => entry.id === args.projectId)
+    if (!project) {
+      return null
+    }
+    const hostId = normalizeExecutionHostId(args.hostId)
+    if (!hostId) {
+      throw new Error(`Invalid host ID: ${args.hostId}`)
+    }
+    const duplicateSetup = this.state.projectHostSetups.find(
+      (entry) => entry.projectId === project.id && entry.hostId === hostId
+    )
+    if (duplicateSetup) {
+      throw new Error(`Project host setup already exists: ${duplicateSetup.id}`)
+    }
+    const now = Date.now()
+    const existingIds = new Set(this.state.projectHostSetups.map((entry) => entry.id))
+    const setup: ProjectHostSetup = {
+      id: makeProjectHostSetupId(project.id, hostId, existingIds, args.setupId),
+      projectId: project.id,
+      hostId,
+      repoId: '',
+      path: args.path?.trim() ?? '',
+      displayName: args.displayName?.trim() || project.displayName,
+      ...(args.kind ? { kind: args.kind } : {}),
+      ...(args.worktreeBasePath?.trim() ? { worktreeBasePath: args.worktreeBasePath.trim() } : {}),
+      ...(args.gitUsername?.trim() ? { gitUsername: args.gitUsername.trim() } : {}),
+      setupState: args.setupState ?? 'not-set-up',
+      setupMethod: args.setupMethod ?? 'provisioned',
+      createdAt: now,
+      updatedAt: now
+    }
+    // Why: this is the first non-repo-backed setup creation path; it must
+    // persist independently so future repo projection sync does not erase it.
+    this.state.projectHostSetups.push(setup)
+    this.scheduleSave()
+    return { project, setup }
+  }
+
+  updateProjectHostSetup(args: ProjectHostSetupUpdateArgs): ProjectHostSetupUpdateResult | null {
+    const setup = this.state.projectHostSetups.find((entry) => entry.id === args.setupId)
+    if (!setup) {
+      return null
+    }
+    const project = this.state.projects.find((entry) => entry.id === setup.projectId)
+    if (!project) {
+      return null
+    }
+    const repo = setup.repoId
+      ? this.state.repos.find((entry) => entry.id === setup.repoId)
+      : undefined
+    if (repo) {
+      const updated = this.updateRepoBackedProjectHostSetup(setup, repo, args.updates)
+      const updatedProject = updated
+        ? this.state.projects.find((entry) => entry.id === updated.setup.projectId)
+        : undefined
+      return updated && updatedProject
+        ? { project: updatedProject, setup: updated.setup, repo: updated.repo }
+        : null
+    }
+    const updatedSetup = this.updateIndependentProjectHostSetup(setup, args.updates)
+    return { project, setup: updatedSetup }
+  }
+
+  deleteProjectHostSetup(args: ProjectHostSetupDeleteArgs): ProjectHostSetupDeleteResult | null {
+    const setup = this.state.projectHostSetups.find((entry) => entry.id === args.setupId)
+    if (!setup) {
+      return null
+    }
+    const project = this.state.projects.find((entry) => entry.id === setup.projectId)
+    if (!project) {
+      return null
+    }
+    const repo = setup.repoId
+      ? this.state.repos.find((entry) => entry.id === setup.repoId)
+      : undefined
+    if (repo) {
+      this.removeProject(repo.id)
+      return { project, setup, repo: this.hydrateRepo(repo) }
+    }
+    this.state.projectHostSetups = this.state.projectHostSetups.filter(
+      (entry) => entry.id !== setup.id
+    )
+    this.scheduleSave()
+    return { project, setup }
+  }
+
   /**
    * O(1) read of the persisted repo count. Use this when you only need the
    * count (e.g. cohort-classifier) — `getRepos()` hydrates each repo and
@@ -2449,6 +3195,7 @@ export class Store {
   createProjectGroup(input: {
     name: string
     parentPath?: string | null
+    connectionId?: string | null
     parentGroupId?: string | null
     createdFrom: ProjectGroup['createdFrom']
   }): ProjectGroup {
@@ -2507,6 +3254,165 @@ export class Store {
         ? { ...repo, projectGroupId: null }
         : repo
     )
+    for (const workspace of this.state.folderWorkspaces ?? []) {
+      if (deletedGroupIds.has(workspace.projectGroupId)) {
+        this.state.workspaceSession = removeWorkspaceSessionOwner(
+          this.state.workspaceSession,
+          folderWorkspaceKey(workspace.id)
+        )!
+      }
+    }
+    this.state.folderWorkspaces = (this.state.folderWorkspaces ?? []).filter(
+      (workspace) => !deletedGroupIds.has(workspace.projectGroupId)
+    )
+    this.scheduleSave()
+    return true
+  }
+
+  getFolderWorkspaces(): FolderWorkspace[] {
+    return [...(this.state.folderWorkspaces ?? [])].sort(
+      (left, right) => right.sortOrder - left.sortOrder || left.name.localeCompare(right.name)
+    )
+  }
+
+  getFolderWorkspace(id: string): FolderWorkspace | undefined {
+    return (this.state.folderWorkspaces ?? []).find((workspace) => workspace.id === id)
+  }
+
+  createFolderWorkspace(input: {
+    projectGroupId: string
+    name?: string
+    folderPath?: string | null
+    linkedTask?: FolderWorkspace['linkedTask']
+    connectionId?: string | null
+    createdWithAgent?: FolderWorkspace['createdWithAgent']
+    pendingFirstAgentMessageRename?: boolean
+  }): FolderWorkspace {
+    const group = (this.state.projectGroups ?? []).find(
+      (entry) => entry.id === input.projectGroupId
+    )
+    const folderPath =
+      typeof input.folderPath === 'string' && input.folderPath.trim().length > 0
+        ? input.folderPath
+        : group?.parentPath
+    if (!group || !folderPath) {
+      throw new Error('Folder-backed project group not found.')
+    }
+    const now = Date.now()
+    const workspace: FolderWorkspace = {
+      id: randomUUID(),
+      projectGroupId: group.id,
+      name: normalizeFolderWorkspaceName(input.name, `${group.name} workspace`),
+      folderPath,
+      connectionId: input.connectionId ?? group.connectionId ?? null,
+      linkedTask: input.linkedTask ?? null,
+      comment: '',
+      isArchived: false,
+      isUnread: false,
+      isPinned: false,
+      sortOrder: now,
+      ...(input.createdWithAgent ? { createdWithAgent: input.createdWithAgent } : {}),
+      ...(input.pendingFirstAgentMessageRename === true && input.createdWithAgent
+        ? { pendingFirstAgentMessageRename: true }
+        : {}),
+      lastActivityAt: 0,
+      createdAt: now,
+      updatedAt: now
+    }
+    this.state.folderWorkspaces = [workspace, ...(this.state.folderWorkspaces ?? [])]
+    this.scheduleSave()
+    return workspace
+  }
+
+  updateFolderWorkspace(
+    id: string,
+    updates: Partial<
+      Pick<
+        FolderWorkspace,
+        | 'name'
+        | 'folderPath'
+        | 'linkedTask'
+        | 'comment'
+        | 'isArchived'
+        | 'isUnread'
+        | 'isPinned'
+        | 'sortOrder'
+        | 'manualOrder'
+        | 'workspaceStatus'
+        | 'createdWithAgent'
+        | 'pendingFirstAgentMessageRename'
+        | 'firstAgentMessageRenameError'
+        | 'lastActivityAt'
+      >
+    >
+  ): FolderWorkspace | null {
+    const workspace = this.getFolderWorkspace(id)
+    if (!workspace) {
+      return null
+    }
+    if (updates.name !== undefined) {
+      workspace.name = normalizeFolderWorkspaceName(updates.name, workspace.name)
+    }
+    if (typeof updates.folderPath === 'string' && updates.folderPath.trim().length > 0) {
+      workspace.folderPath = updates.folderPath
+    }
+    if (updates.linkedTask !== undefined) {
+      workspace.linkedTask = updates.linkedTask
+    }
+    if (updates.comment !== undefined) {
+      workspace.comment = updates.comment
+    }
+    if (updates.isArchived !== undefined) {
+      workspace.isArchived = updates.isArchived
+    }
+    if (updates.isUnread !== undefined) {
+      workspace.isUnread = updates.isUnread
+    }
+    if (updates.isPinned !== undefined) {
+      workspace.isPinned = updates.isPinned
+    }
+    if (updates.sortOrder !== undefined && Number.isFinite(updates.sortOrder)) {
+      workspace.sortOrder = updates.sortOrder
+    }
+    if (updates.manualOrder !== undefined) {
+      if (Number.isFinite(updates.manualOrder)) {
+        workspace.manualOrder = updates.manualOrder
+      } else {
+        delete workspace.manualOrder
+      }
+    }
+    if (updates.workspaceStatus !== undefined) {
+      workspace.workspaceStatus = updates.workspaceStatus
+    }
+    if (updates.createdWithAgent !== undefined) {
+      workspace.createdWithAgent = updates.createdWithAgent
+    }
+    if (updates.pendingFirstAgentMessageRename !== undefined) {
+      workspace.pendingFirstAgentMessageRename = updates.pendingFirstAgentMessageRename
+    }
+    if (updates.firstAgentMessageRenameError !== undefined) {
+      workspace.firstAgentMessageRenameError = updates.firstAgentMessageRenameError
+    }
+    if (updates.lastActivityAt !== undefined && Number.isFinite(updates.lastActivityAt)) {
+      workspace.lastActivityAt = updates.lastActivityAt
+    }
+    workspace.updatedAt = Date.now()
+    this.scheduleSave()
+    return workspace
+  }
+
+  removeFolderWorkspace(id: string): boolean {
+    const before = this.state.folderWorkspaces?.length ?? 0
+    this.state.folderWorkspaces = (this.state.folderWorkspaces ?? []).filter(
+      (workspace) => workspace.id !== id
+    )
+    if ((this.state.folderWorkspaces?.length ?? 0) === before) {
+      return false
+    }
+    this.state.workspaceSession = removeWorkspaceSessionOwner(
+      this.state.workspaceSession,
+      folderWorkspaceKey(id)
+    )!
     this.scheduleSave()
     return true
   }
@@ -2532,6 +3438,7 @@ export class Store {
 
   addRepo(repo: Repo): void {
     this.state.repos.push(repo)
+    this.syncProjectHostSetupCompatibilityState()
     this.scheduleSave()
   }
 
@@ -2563,12 +3470,14 @@ export class Store {
       next.push(repo)
     }
     this.state.repos = next
+    this.syncProjectHostSetupCompatibilityState()
     this.scheduleSave()
     return true
   }
 
   removeProject(id: string): void {
     this.state.repos = this.state.repos.filter((r) => r.id !== id)
+    this.syncProjectHostSetupCompatibilityState()
     // Why: presets are repo-scoped, so removing the repo means the presets
     // can never be referenced again — drop them with the parent.
     delete this.state.sparsePresetsByRepo[id]
@@ -2606,6 +3515,7 @@ export class Store {
         | 'externalWorktreeVisibilityPromptDismissedAt'
         | 'projectGroupId'
         | 'projectGroupOrder'
+        | 'projectHostSetupMethod'
       >
     > & { sourceControlAi?: Repo['sourceControlAi'] | null }
   ): Repo | null {
@@ -2674,8 +3584,95 @@ export class Store {
       }
     }
     Object.assign(repo, sanitizedUpdates)
+    this.syncProjectHostSetupCompatibilityState()
     this.scheduleSave()
     return this.hydrateRepo(repo)
+  }
+
+  private syncProjectHostSetupCompatibilityState(): void {
+    const compatibilityState = mergeProjectHostSetupCompatibilityState(this.state, this.state.repos)
+    this.state.projects = compatibilityState.projects
+    this.state.projectHostSetups = compatibilityState.projectHostSetups
+  }
+
+  private updateRepoBackedProjectHostSetup(
+    setup: ProjectHostSetup,
+    repo: Repo,
+    updates: ProjectHostSetupUpdateArgs['updates']
+  ): { setup: ProjectHostSetup; repo: Repo } | null {
+    if (updates.path !== undefined && updates.path !== repo.path) {
+      throw new Error(
+        'Repo-backed project host setup paths must be changed by re-importing the project.'
+      )
+    }
+    if (updates.setupState !== undefined && updates.setupState !== 'ready') {
+      throw new Error('Repo-backed project host setups cannot be marked unavailable.')
+    }
+    const repoUpdates: Parameters<Store['updateRepo']>[1] = {}
+    if (updates.displayName !== undefined) {
+      repoUpdates.displayName = updates.displayName
+    }
+    if (updates.worktreeBasePath !== undefined) {
+      repoUpdates.worktreeBasePath = updates.worktreeBasePath
+    }
+    if (updates.kind !== undefined) {
+      repoUpdates.kind = updates.kind
+    }
+    if (updates.setupMethod === 'provisioned') {
+      throw new Error('Repo-backed project host setups cannot be marked provisioned.')
+    }
+    if (updates.setupMethod !== undefined && updates.setupMethod !== 'legacy-repo') {
+      repoUpdates.projectHostSetupMethod = updates.setupMethod
+    }
+    const updatedRepo =
+      Object.keys(repoUpdates).length > 0 ? this.updateRepo(repo.id, repoUpdates) : repo
+    if (!updatedRepo) {
+      return null
+    }
+    return {
+      setup: this.state.projectHostSetups.find((entry) => entry.id === setup.id) ?? setup,
+      repo: updatedRepo
+    }
+  }
+
+  private updateIndependentProjectHostSetup(
+    setup: ProjectHostSetup,
+    updates: ProjectHostSetupUpdateArgs['updates']
+  ): ProjectHostSetup {
+    if (updates.displayName !== undefined) {
+      setup.displayName = updates.displayName.trim() || setup.displayName
+    }
+    if (updates.path !== undefined) {
+      setup.path = updates.path.trim() || setup.path
+    }
+    if (updates.worktreeBasePath !== undefined) {
+      const worktreeBasePath = updates.worktreeBasePath.trim()
+      if (worktreeBasePath) {
+        setup.worktreeBasePath = worktreeBasePath
+      } else {
+        delete setup.worktreeBasePath
+      }
+    }
+    if (updates.kind !== undefined) {
+      setup.kind = updates.kind
+    }
+    if (updates.gitUsername !== undefined) {
+      const gitUsername = updates.gitUsername.trim()
+      if (gitUsername) {
+        setup.gitUsername = gitUsername
+      } else {
+        delete setup.gitUsername
+      }
+    }
+    if (updates.setupState !== undefined) {
+      setup.setupState = updates.setupState
+    }
+    if (updates.setupMethod !== undefined) {
+      setup.setupMethod = updates.setupMethod
+    }
+    setup.updatedAt = Date.now()
+    this.scheduleSave()
+    return setup
   }
 
   private hydrateRepo(repo: Repo): Repo {
@@ -2683,11 +3680,13 @@ export class Store {
       repoIcon: rawRepoIcon,
       upstream: rawUpstream,
       sourceControlAi: rawSourceControlAi,
+      projectHostSetupMethod: rawProjectHostSetupMethod,
       ...repoWithoutIcon
     } = repo
     const repoIcon = sanitizeRepoIcon(rawRepoIcon)
     const upstream = sanitizeRepoUpstream(rawUpstream)
     const sourceControlAi = normalizeRepoSourceControlAiOverrides(rawSourceControlAi)
+    const projectHostSetupMethod = sanitizeRepoProjectHostSetupMethod(rawProjectHostSetupMethod)
     const gitUsername = isFolderRepo(repo)
       ? ''
       : (this.gitUsernameCache.get(repo.path) ??
@@ -2702,6 +3701,7 @@ export class Store {
       ...(repoIcon !== undefined ? { repoIcon } : {}),
       ...(upstream !== undefined ? { upstream } : {}),
       ...(sourceControlAi !== undefined ? { sourceControlAi } : {}),
+      ...(projectHostSetupMethod !== undefined ? { projectHostSetupMethod } : {}),
       kind: isFolderRepo(repo) ? 'folder' : 'git',
       gitUsername,
       hookSettings: {
@@ -2762,16 +3762,20 @@ export class Store {
     const repo = this.state.repos.find((entry) => entry.id === input.projectId)
     const now = Date.now()
     const executionTargetType = repo?.connectionId ? 'ssh' : 'local'
+    const schedulerOwner = getAutomationSchedulerOwner(repo)
+    const contexts = getAutomationContextsForRepo(repo, this.state.projectHostSetups ?? [])
     const automation: Automation = {
       id: randomUUID(),
       name: input.name.trim() || 'Untitled automation',
       prompt: input.prompt,
       precheck: normalizeAutomationPrecheck(input.precheck),
       agentId: input.agentId,
+      runContext: input.runContext ?? contexts.runContext,
+      sourceContext: input.sourceContext ?? contexts.sourceContext,
       projectId: input.projectId,
       executionTargetType,
       executionTargetId: executionTargetType === 'ssh' ? (repo?.connectionId ?? '') : 'local',
-      schedulerOwner: executionTargetType === 'ssh' ? 'ssh_bridge' : 'local_host_service',
+      schedulerOwner,
       workspaceMode: input.workspaceMode,
       workspaceId: input.workspaceMode === 'existing' ? (input.workspaceId ?? null) : null,
       baseBranch: input.workspaceMode === 'new_per_run' ? (input.baseBranch ?? null) : null,
@@ -2801,6 +3805,8 @@ export class Store {
     const repoId = updates.projectId ?? current.projectId
     const repo = this.state.repos.find((entry) => entry.id === repoId)
     const executionTargetType = repo?.connectionId ? 'ssh' : 'local'
+    const schedulerOwner = getAutomationSchedulerOwner(repo)
+    const contexts = getAutomationContextsForRepo(repo, this.state.projectHostSetups ?? [])
     const rrule = updates.rrule ?? current.rrule
     const dtstart = updates.dtstart ?? current.dtstart
     const scheduleChanged = updates.rrule !== undefined || updates.dtstart !== undefined
@@ -2814,9 +3820,19 @@ export class Store {
         ? normalizeAutomationPrecheck(updates.precheck)
         : normalizeAutomationPrecheck(current.precheck),
       projectId: repoId,
+      runContext: Object.hasOwn(updates, 'runContext')
+        ? (updates.runContext ?? null)
+        : updates.projectId !== undefined
+          ? contexts.runContext
+          : (current.runContext ?? contexts.runContext),
+      sourceContext: Object.hasOwn(updates, 'sourceContext')
+        ? (updates.sourceContext ?? null)
+        : updates.projectId !== undefined
+          ? contexts.sourceContext
+          : (current.sourceContext ?? contexts.sourceContext),
       executionTargetType,
       executionTargetId: executionTargetType === 'ssh' ? (repo?.connectionId ?? '') : 'local',
-      schedulerOwner: executionTargetType === 'ssh' ? 'ssh_bridge' : 'local_host_service',
+      schedulerOwner,
       workspaceMode,
       workspaceId:
         workspaceMode === 'existing'
@@ -2872,6 +3888,8 @@ export class Store {
     const run: AutomationRun = {
       id: randomUUID(),
       automationId: automation.id,
+      runContext: automation.runContext ?? null,
+      sourceContext: automation.sourceContext ?? null,
       title: `${automation.name} run ${runNumber}`,
       scheduledFor,
       status: 'pending',
@@ -3068,9 +4086,22 @@ export class Store {
     if ('disabledTuiAgents' in updates) {
       sanitizedUpdates.disabledTuiAgents = normalizeDisabledTuiAgents(updates.disabledTuiAgents)
     }
+    if ('agentDefaultArgs' in updates) {
+      sanitizedUpdates.agentDefaultArgs = normalizeTuiAgentArgsRecord(updates.agentDefaultArgs)
+      sanitizedUpdates.agentYoloDefaultsMigrated = true
+    }
+    if ('agentDefaultEnv' in updates) {
+      sanitizedUpdates.agentDefaultEnv = normalizeTuiAgentEnvRecord(updates.agentDefaultEnv)
+      sanitizedUpdates.agentYoloDefaultsMigrated = true
+    }
     if ('terminalQuickCommands' in updates) {
       sanitizedUpdates.terminalQuickCommands = normalizeTerminalQuickCommands(
         updates.terminalQuickCommands
+      )
+    }
+    if ('terminalCustomThemes' in updates) {
+      sanitizedUpdates.terminalCustomThemes = normalizeTerminalCustomThemes(
+        updates.terminalCustomThemes
       )
     }
     if ('visibleTaskProviders' in updates || 'defaultTaskSource' in updates) {
@@ -3166,13 +4197,18 @@ export class Store {
   // ── UI State ───────────────────────────────────────────────────────
 
   getUI(): PersistedState['ui'] {
+    const uiState = stripMainOwnedTelemetryMarkerFromUI(this.state.ui)
     return {
       ...getDefaultUIState(),
-      ...this.state.ui,
+      ...uiState,
       groupBy: normalizeGroupBy(this.state.ui?.groupBy),
       sortBy: normalizeSortBy(this.state.ui?.sortBy),
       projectOrderBy: normalizeProjectOrderBy(this.state.ui?.projectOrderBy),
       rightSidebarTab: normalizeRightSidebarTab(this.state.ui?.rightSidebarTab),
+      rightSidebarExplorerView: normalizeRightSidebarExplorerView(
+        this.state.ui?.rightSidebarExplorerView,
+        this.state.ui?.rightSidebarTab
+      ),
       worktreeCardProperties: normalizeWorktreeCardProperties(
         this.state.ui?.worktreeCardProperties
       ),
@@ -3184,6 +4220,10 @@ export class Store {
       workspaceBoardColumnWidth: clampWorkspaceBoardColumnWidth(
         this.state.ui?.workspaceBoardColumnWidth
       ),
+      visibleWorkspaceHostIds: normalizeVisibleExecutionHostIds(
+        this.state.ui?.visibleWorkspaceHostIds
+      ),
+      workspaceHostOrder: normalizeExecutionHostOrder(this.state.ui?.workspaceHostOrder),
       browserDefaultZoomLevel: normalizeBrowserPageZoomLevel(
         this.state.ui?.browserDefaultZoomLevel
       ),
@@ -3197,40 +4237,67 @@ export class Store {
   }
 
   updateUI(updates: Partial<PersistedState['ui']>): void {
+    const sanitizedUpdates = stripMainOwnedTelemetryMarkerFromUI(updates)
+    const currentUI = {
+      ...getDefaultUIState(),
+      ...stripMainOwnedTelemetryMarkerFromUI(this.state.ui)
+    }
+    const nextRightSidebarTab =
+      sanitizedUpdates.rightSidebarTab !== undefined
+        ? normalizeRightSidebarTab(sanitizedUpdates.rightSidebarTab)
+        : normalizeRightSidebarTab(this.state.ui?.rightSidebarTab)
+    const nextRightSidebarExplorerView =
+      sanitizedUpdates.rightSidebarExplorerView !== undefined
+        ? normalizeRightSidebarExplorerView(
+            sanitizedUpdates.rightSidebarExplorerView,
+            nextRightSidebarTab
+          )
+        : sanitizedUpdates.rightSidebarTab === 'search'
+          ? 'search'
+          : normalizeRightSidebarExplorerView(
+              this.state.ui?.rightSidebarExplorerView,
+              nextRightSidebarTab
+            )
     this.state.ui = {
-      ...this.state.ui,
-      ...updates,
-      groupBy: updates.groupBy
-        ? normalizeGroupBy(updates.groupBy)
+      ...currentUI,
+      ...sanitizedUpdates,
+      groupBy: sanitizedUpdates.groupBy
+        ? normalizeGroupBy(sanitizedUpdates.groupBy)
         : normalizeGroupBy(this.state.ui?.groupBy),
-      sortBy: updates.sortBy
-        ? normalizeSortBy(updates.sortBy)
+      sortBy: sanitizedUpdates.sortBy
+        ? normalizeSortBy(sanitizedUpdates.sortBy)
         : normalizeSortBy(this.state.ui?.sortBy),
       projectOrderBy: updates.projectOrderBy
         ? normalizeProjectOrderBy(updates.projectOrderBy)
         : normalizeProjectOrderBy(this.state.ui?.projectOrderBy),
-      rightSidebarTab:
-        updates.rightSidebarTab !== undefined
-          ? normalizeRightSidebarTab(updates.rightSidebarTab)
-          : normalizeRightSidebarTab(this.state.ui?.rightSidebarTab),
+      rightSidebarTab: nextRightSidebarTab,
+      rightSidebarExplorerView: nextRightSidebarExplorerView,
       worktreeCardProperties:
-        updates.worktreeCardProperties !== undefined
-          ? normalizeWorktreeCardProperties(updates.worktreeCardProperties)
+        sanitizedUpdates.worktreeCardProperties !== undefined
+          ? normalizeWorktreeCardProperties(sanitizedUpdates.worktreeCardProperties)
           : normalizeWorktreeCardProperties(this.state.ui?.worktreeCardProperties),
       agentActivityDisplayMode:
         updates.agentActivityDisplayMode !== undefined
           ? normalizeAgentActivityDisplayMode(updates.agentActivityDisplayMode)
           : normalizeAgentActivityDisplayMode(this.state.ui?.agentActivityDisplayMode),
       workspaceStatuses:
-        updates.workspaceStatuses !== undefined
-          ? normalizeWorkspaceStatuses(updates.workspaceStatuses)
+        sanitizedUpdates.workspaceStatuses !== undefined
+          ? normalizeWorkspaceStatuses(sanitizedUpdates.workspaceStatuses)
           : normalizeWorkspaceStatuses(this.state.ui?.workspaceStatuses),
       workspaceBoardOpacity: clampWorkspaceBoardOpacity(
-        updates.workspaceBoardOpacity ?? this.state.ui?.workspaceBoardOpacity
+        sanitizedUpdates.workspaceBoardOpacity ?? this.state.ui?.workspaceBoardOpacity
       ),
       workspaceBoardColumnWidth: clampWorkspaceBoardColumnWidth(
-        updates.workspaceBoardColumnWidth ?? this.state.ui?.workspaceBoardColumnWidth
+        sanitizedUpdates.workspaceBoardColumnWidth ?? this.state.ui?.workspaceBoardColumnWidth
       ),
+      visibleWorkspaceHostIds:
+        updates.visibleWorkspaceHostIds !== undefined
+          ? normalizeVisibleExecutionHostIds(updates.visibleWorkspaceHostIds)
+          : normalizeVisibleExecutionHostIds(this.state.ui?.visibleWorkspaceHostIds),
+      workspaceHostOrder:
+        updates.workspaceHostOrder !== undefined
+          ? normalizeExecutionHostOrder(updates.workspaceHostOrder)
+          : normalizeExecutionHostOrder(this.state.ui?.workspaceHostOrder),
       browserDefaultZoomLevel: normalizeBrowserPageZoomLevel(
         updates.browserDefaultZoomLevel ?? this.state.ui?.browserDefaultZoomLevel
       ),
@@ -3239,8 +4306,8 @@ export class Store {
           ? normalizeShowDotfilesByWorktree(updates.showDotfilesByWorktree)
           : normalizeShowDotfilesByWorktree(this.state.ui?.showDotfilesByWorktree),
       featureTipsSeenIds:
-        updates.featureTipsSeenIds !== undefined
-          ? normalizeFeatureTipIds(updates.featureTipsSeenIds)
+        sanitizedUpdates.featureTipsSeenIds !== undefined
+          ? normalizeFeatureTipIds(sanitizedUpdates.featureTipsSeenIds)
           : normalizeFeatureTipIds(this.state.ui?.featureTipsSeenIds),
       // Why: renderer and paired clients can mark different tours seen from
       // stale UI snapshots; union them so completed tours stay suppressed.
@@ -3255,10 +4322,10 @@ export class Store {
       // Merge instead of replacing so a stale renderer snapshot cannot erase
       // runtime-only feature interactions.
       featureInteractions:
-        updates.featureInteractions !== undefined
+        sanitizedUpdates.featureInteractions !== undefined
           ? mergeFeatureInteractions(
               this.state.ui?.featureInteractions,
-              updates.featureInteractions
+              sanitizedUpdates.featureInteractions
             )
           : normalizeFeatureInteractions(this.state.ui?.featureInteractions)
     }
@@ -3267,16 +4334,46 @@ export class Store {
 
   recordFeatureInteraction(id: FeatureInteractionId): PersistedState['ui'] {
     const featureInteractions = normalizeFeatureInteractions(this.state.ui?.featureInteractions)
+    const telemetryBuckets = normalizeFeatureInteractionTelemetryBuckets(
+      this.state.featureInteractionTelemetryBuckets
+    )
     const existing = featureInteractions[id]
+    const previousCount = existing?.interactionCount ?? 0
+    const nextCount = previousCount + 1
+    const previousBucket = getFeatureInteractionUsageBucket(previousCount)
+    const nextBucket = getFeatureInteractionUsageBucket(nextCount)
+    const lastEmittedBucket = telemetryBuckets[id] ?? null
+    const shouldEmit =
+      nextBucket !== null &&
+      (lastEmittedBucket === null ||
+        compareFeatureInteractionUsageBuckets(nextBucket, lastEmittedBucket) > 0)
+
     this.updateUI({
       featureInteractions: {
         ...featureInteractions,
         [id]: {
           firstInteractedAt: existing?.firstInteractedAt ?? Date.now(),
-          interactionCount: (existing?.interactionCount ?? 0) + 1
+          interactionCount: nextCount
         }
       }
     })
+    this.state.featureInteractionTelemetryBuckets = shouldEmit
+      ? { ...telemetryBuckets, [id]: nextBucket }
+      : telemetryBuckets
+    this.scheduleSave()
+
+    if (shouldEmit) {
+      track('feature_interaction_usage_bucket_reached', {
+        feature_id: id,
+        feature_category: getFeatureInteractionCategory(id),
+        count_bucket: nextBucket,
+        bucket_source:
+          lastEmittedBucket === null && previousBucket !== null && previousBucket === nextBucket
+            ? 'observed_existing'
+            : 'crossed_now',
+        ...getCohortAtEmit()
+      })
+    }
     return this.getUI()
   }
 
@@ -3325,8 +4422,19 @@ export class Store {
 
   // ── Workspace Session ─────────────────────────────────────────────
 
-  getWorkspaceSession(): PersistedState['workspaceSession'] {
-    return this.state.workspaceSession ?? getDefaultWorkspaceSession()
+  /** Resolve an execution host argument to a canonical id. Unknown/empty
+   *  values fall back to 'local' so legacy callers without a hostId keep
+   *  reading and writing the local partition exactly as before. */
+  private resolveHostId(hostId?: string | null): ExecutionHostId {
+    return normalizeExecutionHostId(hostId) ?? LOCAL_EXECUTION_HOST_ID
+  }
+
+  getWorkspaceSession(hostId?: string | null): PersistedState['workspaceSession'] {
+    const resolved = this.resolveHostId(hostId)
+    if (resolved === LOCAL_EXECUTION_HOST_ID) {
+      return this.state.workspaceSession ?? getDefaultWorkspaceSession()
+    }
+    return this.state.workspaceSessionsByHostId?.[resolved] ?? getDefaultWorkspaceSession()
   }
 
   readTerminalScrollbackSnapshot(ref: string): string | null {
@@ -3339,7 +4447,30 @@ export class Store {
     return findWorktreeIdForTab(this.getWorkspaceSession(), tabId)
   }
 
-  setWorkspaceSession(session: PersistedState['workspaceSession']): void {
+  setWorkspaceSession(session: PersistedState['workspaceSession'], hostId?: string | null): void {
+    const resolved = this.resolveHostId(hostId)
+    if (resolved === LOCAL_EXECUTION_HOST_ID) {
+      this.setLocalWorkspaceSession(session)
+      return
+    }
+    this.setHostWorkspaceSession(resolved, session)
+  }
+
+  /** Persist a non-'local' host partition. The PTY-binding race protections in
+   *  setLocalWorkspaceSession only apply to the local daemon, so remote hosts
+   *  take the lighter prune-and-store path. */
+  private setHostWorkspaceSession(hostId: ExecutionHostId, session: WorkspaceSessionState): void {
+    const pruned = pruneWorkspaceSessionBrowserHistory(
+      pruneLocalTerminalScrollbackBuffers(session, this.state.repos)
+    )
+    this.state.workspaceSessionsByHostId = {
+      ...this.state.workspaceSessionsByHostId,
+      [hostId]: pruned
+    }
+    this.scheduleSave()
+  }
+
+  private setLocalWorkspaceSession(session: PersistedState['workspaceSession']): void {
     session = pruneWorkspaceSessionBrowserHistory(
       pruneLocalTerminalScrollbackBuffers(session, this.state.repos)
     )
@@ -3488,22 +4619,30 @@ export class Store {
     this.scheduleSave()
   }
 
-  patchWorkspaceSession(patch: WorkspaceSessionPatch): void {
+  patchWorkspaceSession(patch: WorkspaceSessionPatch, hostId?: string | null): void {
+    const resolved = this.resolveHostId(hostId)
     // Why: the renderer's debounced hot path sends only changed top-level
     // session slices. Scalar/UI patches avoid the terminal normalization path;
     // terminal topology/layout patches still reuse the stale-PTY protections.
     let next: WorkspaceSessionState = {
-      ...this.getWorkspaceSession(),
+      ...this.getWorkspaceSession(resolved),
       ...patch
     }
     if (workspaceSessionPatchNeedsFullNormalization(patch)) {
-      this.setWorkspaceSession(next)
+      this.setWorkspaceSession(next, resolved)
       return
     }
     if (Object.hasOwn(patch, 'browserUrlHistory')) {
       next = pruneWorkspaceSessionBrowserHistory(next)
     }
-    this.state.workspaceSession = next
+    if (resolved === LOCAL_EXECUTION_HOST_ID) {
+      this.state.workspaceSession = next
+    } else {
+      this.state.workspaceSessionsByHostId = {
+        ...this.state.workspaceSessionsByHostId,
+        [resolved]: next
+      }
+    }
     this.scheduleSave()
   }
 

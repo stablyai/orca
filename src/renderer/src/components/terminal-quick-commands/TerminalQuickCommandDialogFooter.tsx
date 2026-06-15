@@ -18,14 +18,26 @@ export function TerminalQuickCommandDialogFooter({
   return (
     <DialogFooter>
       <Button type="button" variant="outline" onClick={onCancel}>
-        {translate("auto.components.terminal.quick.commands.TerminalQuickCommandDialogFooter.28370f16b9", "Cancel")}</Button>
+        {translate(
+          'auto.components.terminal.quick.commands.TerminalQuickCommandDialogFooter.28370f16b9',
+          'Cancel'
+        )}
+      </Button>
       <Button
         type="button"
         onClick={onSave}
         disabled={!canSave}
-        title={translate("auto.components.terminal.quick.commands.TerminalQuickCommandDialogFooter.8dff838dea", "Save ({{value0}})", { value0: submitShortcutLabel })}
+        title={translate(
+          'auto.components.terminal.quick.commands.TerminalQuickCommandDialogFooter.8dff838dea',
+          'Save ({{value0}})',
+          { value0: submitShortcutLabel }
+        )}
       >
-        {translate("auto.components.terminal.quick.commands.TerminalQuickCommandDialogFooter.2e2b958dfc", "Save")}<span className="ml-1 text-[10px] opacity-60">{submitShortcutLabel}</span>
+        {translate(
+          'auto.components.terminal.quick.commands.TerminalQuickCommandDialogFooter.2e2b958dfc',
+          'Save'
+        )}
+        <span className="ml-1 text-[10px] opacity-60">{submitShortcutLabel}</span>
       </Button>
     </DialogFooter>
   )

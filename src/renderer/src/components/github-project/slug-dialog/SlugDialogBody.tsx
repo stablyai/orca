@@ -6,8 +6,10 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
 import { useAppStore } from '@/store'
+import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import type { GitHubWorkItemDetails } from '../../../../../shared/types'
 import type { GitHubItemDialogProjectOrigin } from '@/components/GitHubItemDialog'
+import type { GlobalSettings } from '../../../../../shared/types'
 import { LabelsEditor } from './LabelsEditor'
 import { AssigneesEditor } from './AssigneesEditor'
 import { CommentsList, NewCommentForm } from './Comments'
@@ -15,9 +17,11 @@ import { translate } from '@/i18n/i18n'
 
 export function SlugDialogBody({
   projectOrigin,
+  sourceSettings,
   onClose
 }: {
   projectOrigin: GitHubItemDialogProjectOrigin
+  sourceSettings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
   onClose: () => void
 }): React.JSX.Element {
   const { owner, repo, number, type, cacheKey } = projectOrigin
@@ -52,8 +56,19 @@ export function SlugDialogBody({
     setLoading(true)
     setError(null)
     setDetails(null)
-    window.api.gh
-      .projectWorkItemDetailsBySlug({ owner, repo, number, type })
+    const target = getActiveRuntimeTarget(sourceSettings)
+    const request =
+      target.kind === 'environment'
+        ? callRuntimeRpc<
+            { ok: true; details: GitHubWorkItemDetails } | { ok: false; error: { message: string } }
+          >(
+            target,
+            'github.project.workItemDetailsBySlug',
+            { owner, repo, number, type },
+            { timeoutMs: 30_000 }
+          )
+        : window.api.gh.projectWorkItemDetailsBySlug({ owner, repo, number, type })
+    request
       .then((res) => {
         if (rid !== requestIdRef.current) {
           return
@@ -76,7 +91,7 @@ export function SlugDialogBody({
         }
         setLoading(false)
       })
-  }, [owner, repo, number, type])
+  }, [owner, repo, number, type, sourceSettings])
 
   const title = row?.content.title ?? details?.item.title ?? ''
   const url = row?.content.url ?? details?.item.url ?? null
@@ -165,7 +180,11 @@ export function SlugDialogBody({
                   setEditingTitle(true)
                 }}
               >
-                {title || translate("auto.components.github.project.slug.dialog.SlugDialogBody.7c302f8174", "Untitled")}
+                {title ||
+                  translate(
+                    'auto.components.github.project.slug.dialog.SlugDialogBody.7c302f8174',
+                    'Untitled'
+                  )}
               </button>
             )}
           </div>
@@ -176,7 +195,10 @@ export function SlugDialogBody({
                 size="icon"
                 className="h-7 w-7"
                 onClick={() => void window.api.shell.openUrl(url)}
-                aria-label={translate("auto.components.github.project.slug.dialog.SlugDialogBody.69caf40ae8", "Open in GitHub")}
+                aria-label={translate(
+                  'auto.components.github.project.slug.dialog.SlugDialogBody.69caf40ae8',
+                  'Open in GitHub'
+                )}
               >
                 <ExternalLink className="size-3.5" />
               </Button>
@@ -186,7 +208,10 @@ export function SlugDialogBody({
               size="icon"
               className="h-7 w-7"
               onClick={onClose}
-              aria-label={translate("auto.components.github.project.slug.dialog.SlugDialogBody.ae98897edf", "Close")}
+              aria-label={translate(
+                'auto.components.github.project.slug.dialog.SlugDialogBody.ae98897edf',
+                'Close'
+              )}
             >
               <X className="size-3.5" />
             </Button>
@@ -198,6 +223,7 @@ export function SlugDialogBody({
             repo={repo}
             selected={labels}
             disabled={!row}
+            sourceSettings={sourceSettings}
             onChange={async (add, remove) => {
               // Why: bail rather than call the helper with an empty id —
               // see commitTitle above. Trigger is also disabled when !row.
@@ -218,6 +244,7 @@ export function SlugDialogBody({
             repo={repo}
             selected={assignees}
             disabled={!row}
+            sourceSettings={sourceSettings}
             onChange={async (add, remove) => {
               if (!row) {
                 return
@@ -237,7 +264,12 @@ export function SlugDialogBody({
       <div className="flex-1 min-h-0 overflow-y-auto px-4 py-3 scrollbar-sleek">
         {loading && !details ? (
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <LoaderCircle className="size-4 animate-spin" /> {translate("auto.components.github.project.slug.dialog.SlugDialogBody.e4ef8281e9", "Loading…")}</div>
+            <LoaderCircle className="size-4 animate-spin" />{' '}
+            {translate(
+              'auto.components.github.project.slug.dialog.SlugDialogBody.e4ef8281e9',
+              'Loading…'
+            )}
+          </div>
         ) : error ? (
           <div className="text-sm text-destructive">{error}</div>
         ) : details ? (
@@ -253,9 +285,17 @@ export function SlugDialogBody({
                   />
                   <div className="flex gap-2">
                     <Button size="sm" onClick={() => void commitBody()}>
-                      {translate("auto.components.github.project.slug.dialog.SlugDialogBody.e64f6c3eff", "Save")}</Button>
+                      {translate(
+                        'auto.components.github.project.slug.dialog.SlugDialogBody.e64f6c3eff',
+                        'Save'
+                      )}
+                    </Button>
                     <Button size="sm" variant="ghost" onClick={() => setEditingBody(false)}>
-                      {translate("auto.components.github.project.slug.dialog.SlugDialogBody.a91735d19f", "Cancel")}</Button>
+                      {translate(
+                        'auto.components.github.project.slug.dialog.SlugDialogBody.a91735d19f',
+                        'Cancel'
+                      )}
+                    </Button>
                   </div>
                 </div>
               ) : body ? (
@@ -280,22 +320,32 @@ export function SlugDialogBody({
                     setEditingBody(true)
                   }}
                 >
-                  {translate("auto.components.github.project.slug.dialog.SlugDialogBody.41169e41fb", "Add a description…")}</button>
+                  {translate(
+                    'auto.components.github.project.slug.dialog.SlugDialogBody.41169e41fb',
+                    'Add a description…'
+                  )}
+                </button>
               )}
             </section>
             <section className="flex flex-col gap-3">
               <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                {translate("auto.components.github.project.slug.dialog.SlugDialogBody.598ad6a517", "Comments")}</h3>
+                {translate(
+                  'auto.components.github.project.slug.dialog.SlugDialogBody.598ad6a517',
+                  'Comments'
+                )}
+              </h3>
               <CommentsList
                 owner={owner}
                 repo={repo}
                 comments={details.comments}
+                sourceSettings={sourceSettings}
                 onChange={(next) => setDetails((d) => (d ? { ...d, comments: next } : d))}
               />
               <NewCommentForm
                 owner={owner}
                 repo={repo}
                 number={number}
+                sourceSettings={sourceSettings}
                 onAdded={(c) => setDetails((d) => (d ? { ...d, comments: [...d.comments, c] } : d))}
               />
             </section>

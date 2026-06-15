@@ -1,36 +1,106 @@
 import React from 'react'
-import { FolderPlus } from 'lucide-react'
-import { useAppStore } from '@/store'
+import { Kanban } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { ScrollToCurrentWorkspaceToolbarButton } from './ScrollToCurrentWorkspaceToolbarButton'
 import { SidebarSettingsHelpMenu } from './SidebarSettingsHelpMenu'
 import { translate } from '@/i18n/i18n'
+import { useAppStore } from '@/store'
+import { hasFeatureInteraction } from '../../../../shared/feature-interactions'
 
-const SidebarToolbar = React.memo(function SidebarToolbar() {
-  const openModal = useAppStore((s) => s.openModal)
+const WORKSPACE_BOARD_MOVED_HINT_STORAGE_KEY = 'orca.workspaceBoardMovedHintSeen.v1'
+const WORKSPACE_BOARD_MOVED_HINT_DURATION_MS = 12000
+
+type SidebarToolbarProps = {
+  workspaceBoardOpen: boolean
+  onWorkspaceBoardToggle: () => void
+}
+
+const SidebarToolbar = React.memo(function SidebarToolbar({
+  workspaceBoardOpen,
+  onWorkspaceBoardToggle
+}: SidebarToolbarProps) {
+  const [workspaceBoardMovedHintOpen, setWorkspaceBoardMovedHintOpen] = React.useState(false)
+  const movedHintEligibleRef = React.useRef<boolean | null>(null)
+  const persistedUIReady = useAppStore((state) => state.persistedUIReady)
+  const hasUsedWorkspaceBoard = useAppStore((state) =>
+    hasFeatureInteraction(state.featureInteractions, 'workspace-board')
+  )
+
+  React.useEffect(() => {
+    if (!persistedUIReady) {
+      return
+    }
+    // Why: only users who had already opened the old board location should
+    // see the relocation hint; first-time users should not become eligible.
+    if (movedHintEligibleRef.current === null) {
+      movedHintEligibleRef.current = hasUsedWorkspaceBoard
+    }
+    if (!movedHintEligibleRef.current) {
+      return
+    }
+    try {
+      if (window.localStorage.getItem(WORKSPACE_BOARD_MOVED_HINT_STORAGE_KEY) === 'true') {
+        return
+      }
+      window.localStorage.setItem(WORKSPACE_BOARD_MOVED_HINT_STORAGE_KEY, 'true')
+    } catch {
+      return
+    }
+
+    setWorkspaceBoardMovedHintOpen(true)
+    const timeoutId = window.setTimeout(() => {
+      setWorkspaceBoardMovedHintOpen(false)
+    }, WORKSPACE_BOARD_MOVED_HINT_DURATION_MS)
+    return () => window.clearTimeout(timeoutId)
+  }, [hasUsedWorkspaceBoard, persistedUIReady])
+
+  const handleWorkspaceBoardClick = (): void => {
+    setWorkspaceBoardMovedHintOpen(false)
+    onWorkspaceBoardToggle()
+  }
 
   return (
     <div className="mt-auto shrink-0">
       <div className="flex items-center justify-between border-t border-worktree-sidebar-border px-2 py-1.5">
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="xs"
-              onClick={() => openModal('add-repo')}
-              className="gap-1.5 text-muted-foreground"
-            >
-              <FolderPlus className="size-3.5" />
-              <span className="text-[11px]">{translate("auto.components.sidebar.SidebarToolbar.abc62b6328", "Add Project")}</span>
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="top" sideOffset={4}>
-            {translate("auto.components.sidebar.SidebarToolbar.19e32d0e5f", "Open folder picker to add a project")}</TooltipContent>
-        </Tooltip>
-        <div className="flex items-center gap-1">
+        <SidebarSettingsHelpMenu />
+        <div className="flex items-center gap-2">
           <ScrollToCurrentWorkspaceToolbarButton />
-          <SidebarSettingsHelpMenu />
+          <Tooltip open={workspaceBoardMovedHintOpen ? true : undefined}>
+            <TooltipTrigger asChild>
+              <Button
+                variant={workspaceBoardOpen ? 'secondary' : 'ghost'}
+                size="icon-xs"
+                type="button"
+                aria-label={translate(
+                  'auto.components.sidebar.SidebarToolbar.49f62c5665',
+                  'Workspace board'
+                )}
+                aria-pressed={workspaceBoardOpen}
+                data-workspace-board-trigger=""
+                onClick={handleWorkspaceBoardClick}
+                className="text-muted-foreground"
+              >
+                <Kanban className="size-3.5" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="top" sideOffset={4}>
+              {workspaceBoardMovedHintOpen
+                ? translate(
+                    'auto.components.sidebar.SidebarToolbar.87d0064026',
+                    'Workspace board moved to the bottom bar'
+                  )
+                : workspaceBoardOpen
+                  ? translate(
+                      'auto.components.sidebar.SidebarToolbar.a30e34eb5c',
+                      'Close workspace board'
+                    )
+                  : translate(
+                      'auto.components.sidebar.SidebarToolbar.49f62c5665',
+                      'Workspace board'
+                    )}
+            </TooltipContent>
+          </Tooltip>
         </div>
       </div>
     </div>

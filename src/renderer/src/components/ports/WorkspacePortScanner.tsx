@@ -3,11 +3,14 @@ import { useAppStore } from '@/store'
 import { getHasAnyWorktreesFromState } from '@/store/selectors'
 import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import {
+  mergeWorkspacePortScans,
+  runtimeTargetForExecutionHostId,
   scanWorkspacePortsForTarget,
-  workspacePortRuntimeTargetKey
+  workspacePortScanKeyForTarget
 } from '@/lib/workspace-port-actions'
 import { installWindowVisibilityInterval, isWindowVisible } from '@/lib/window-visibility-interval'
 import type { WorkspacePortScanResult } from '../../../../shared/workspace-ports'
+import { buildExecutionHostRegistry } from '../../../../shared/execution-host-registry'
 
 const WORKSPACE_PORT_SCAN_INTERVAL_MS = 30_000
 const WORKSPACE_PORT_ADVERTISED_URL_SETTLE_MS = 1_000
@@ -23,17 +26,26 @@ function makeUnavailableScan(reason: string): WorkspacePortScanResult {
 
 export function WorkspacePortScanner({ enabled = true }: { enabled?: boolean }): null {
   const settings = useAppStore((s) => s.settings)
+  const repos = useAppStore((s) => s.repos)
   const hasWorktrees = useAppStore(getHasAnyWorktreesFromState)
   const setWorkspacePortScan = useAppStore((s) => s.setWorkspacePortScan)
+  const setWorkspacePortScanForKey = useAppStore((s) => s.setWorkspacePortScanForKey)
   const setWorkspacePortScanRefreshing = useAppStore((s) => s.setWorkspacePortScanRefreshing)
   const inFlightRef = useRef<Promise<void> | null>(null)
   const generationRef = useRef(0)
 
   const runtimeTarget = useMemo(() => getActiveRuntimeTarget(settings), [settings])
-  const scanKey = `${workspacePortRuntimeTargetKey(runtimeTarget)}:all`
+  const scanKey = workspacePortScanKeyForTarget(runtimeTarget)
+  const scanTargets = useMemo(
+    () =>
+      buildExecutionHostRegistry({ repos, settings })
+        .map((host) => runtimeTargetForExecutionHostId(host.id))
+        .filter((target): target is NonNullable<typeof target> => target !== null),
+    [repos, settings]
+  )
 
   const refresh = useCallback(() => {
-    if (!hasWorktrees) {
+    if (!hasWorktrees || scanTargets.length === 0) {
       setWorkspacePortScan(null)
       setWorkspacePortScanRefreshing(false)
       return Promise.resolve()
@@ -43,30 +55,57 @@ export function WorkspacePortScanner({ enabled = true }: { enabled?: boolean }):
     }
 
     const generation = generationRef.current
-    const promise = scanWorkspacePortsForTarget(runtimeTarget)
-      .then((result) => {
-        if (generation === generationRef.current) {
-          setWorkspacePortScan({ key: scanKey, result })
+    setWorkspacePortScanRefreshing(true)
+    const promise = Promise.all(
+      scanTargets.map(async (target) => {
+        const key = workspacePortScanKeyForTarget(target)
+        try {
+          const result = await scanWorkspacePortsForTarget(target)
+          return { key, result }
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error)
+          return { key, result: makeUnavailableScan(message || 'Workspace port scan failed.') }
         }
       })
-      .catch((error) => {
-        if (generation !== generationRef.current) {
-          return
+    )
+      .then((results) => {
+        if (generation === generationRef.current) {
+          const scansByKey = Object.fromEntries(results.map(({ key, result }) => [key, result]))
+          for (const { key, result } of results) {
+            setWorkspacePortScanForKey(key, result)
+          }
+          const activeScan = scansByKey[scanKey]
+          const merged = mergeWorkspacePortScans(scansByKey)
+          const projectionKey =
+            results.length > 1 ? 'all-hosts:all' : activeScan ? scanKey : results[0].key
+          setWorkspacePortScan(
+            merged
+              ? {
+                  key: projectionKey,
+                  result: merged
+                }
+              : null
+          )
         }
-        const message = error instanceof Error ? error.message : String(error)
-        setWorkspacePortScan({
-          key: scanKey,
-          result: makeUnavailableScan(message || 'Workspace port scan failed.')
-        })
       })
       .finally(() => {
         if (inFlightRef.current === promise) {
           inFlightRef.current = null
         }
+        if (generation === generationRef.current) {
+          setWorkspacePortScanRefreshing(false)
+        }
       })
     inFlightRef.current = promise
     return promise
-  }, [hasWorktrees, runtimeTarget, scanKey, setWorkspacePortScan, setWorkspacePortScanRefreshing])
+  }, [
+    hasWorktrees,
+    scanKey,
+    scanTargets,
+    setWorkspacePortScan,
+    setWorkspacePortScanForKey,
+    setWorkspacePortScanRefreshing
+  ])
 
   useEffect(() => {
     if (!enabled) {

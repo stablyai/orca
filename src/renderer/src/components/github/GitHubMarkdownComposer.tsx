@@ -2,8 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { EditorContent, useEditor } from '@tiptap/react'
 import type { Editor } from '@tiptap/react'
 import Placeholder from '@tiptap/extension-placeholder'
-import { ImageIcon } from 'lucide-react'
-import { toast } from 'sonner'
+import { ImageIcon, Paperclip } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
@@ -17,6 +16,13 @@ import {
 } from '@/components/editor/RichMarkdownLinkBubble'
 import { encodeRawMarkdownHtmlForRichEditor } from '@/components/editor/raw-markdown-html'
 import { normalizeSoftBreaks } from '@/components/editor/rich-markdown-normalize'
+import { GitHubMarkdownComposerPreviewPane } from '@/components/github/github-markdown-composer-preview-pane'
+import {
+  GitHubMarkdownComposerTabbar,
+  type ComposerTab
+} from '@/components/github/github-markdown-composer-tabbar'
+import { useImageInput } from '@/components/github/use-image-input'
+import type { GitHubOwnerRepo } from '../../../../shared/types'
 import { translate } from '@/i18n/i18n'
 
 type GitHubMarkdownComposerProps = {
@@ -28,15 +34,8 @@ type GitHubMarkdownComposerProps = {
   disabled?: boolean
   autoFocus?: boolean
   onSubmitShortcut?: () => void
-}
-
-function isHttpImageUrl(value: string): boolean {
-  try {
-    const parsed = new URL(value)
-    return parsed.protocol === 'https:' || parsed.protocol === 'http:'
-  } catch {
-    return false
-  }
+  layout?: 'stacked' | 'tabbed'
+  previewGithubRepo?: GitHubOwnerRepo | null
 }
 
 export function GitHubMarkdownComposer({
@@ -47,7 +46,9 @@ export function GitHubMarkdownComposer({
   className,
   disabled = false,
   autoFocus = false,
-  onSubmitShortcut
+  onSubmitShortcut,
+  layout = 'stacked',
+  previewGithubRepo = null
 }: GitHubMarkdownComposerProps): React.JSX.Element {
   const rootRef = useRef<HTMLDivElement | null>(null)
   const editorRef = useRef<Editor | null>(null)
@@ -57,18 +58,25 @@ export function GitHubMarkdownComposer({
   const onSubmitShortcutRef = useRef(onSubmitShortcut)
   const disabledRef = useRef(disabled)
   const isEditingLinkRef = useRef(false)
-  const imageInputOpenRef = useRef(false)
+  const [activeTab, setActiveTab] = useState<ComposerTab>('write')
   const [linkBubble, setLinkBubble] = useState<LinkBubbleState | null>(null)
   const [isEditingLink, setIsEditingLink] = useState(false)
-  const [imageInputOpen, setImageInputOpen] = useState(false)
-  const [imageUrl, setImageUrl] = useState('')
-  const imageInputRef = useRef<HTMLInputElement | null>(null)
+  const isTabbed = layout === 'tabbed'
+
+  const {
+    imageUrl,
+    imageInputOpen,
+    imageInputRef,
+    openImagePicker,
+    setImageUrl,
+    setImageInputOpen,
+    insertImageUrl
+  } = useImageInput(editorRef, disabledRef, () => setActiveTab('write'))
 
   onChangeRef.current = onChange
   onSubmitShortcutRef.current = onSubmitShortcut
   disabledRef.current = disabled
   isEditingLinkRef.current = isEditingLink
-  imageInputOpenRef.current = imageInputOpen
 
   const extensions = useMemo(
     () => [
@@ -125,7 +133,7 @@ export function GitHubMarkdownComposer({
           openLinkEditor()
           return true
         }
-        if (event.key === 'Escape' && imageInputOpenRef.current) {
+        if (event.key === 'Escape' && imageInputOpen) {
           event.preventDefault()
           event.stopPropagation()
           setImageInputOpen(false)
@@ -183,6 +191,23 @@ export function GitHubMarkdownComposer({
     if (!editor) {
       return
     }
+    // Why: parent clears to '' after submit; always reset the editor so stale
+    // draft text never survives a successful comment post.
+    if (!value.trim()) {
+      if (editor.getMarkdown().trim()) {
+        applyingExternalValueRef.current = true
+        try {
+          editor.commands.clearContent(true)
+          normalizeSoftBreaks(editor)
+          lastSyncedMarkdownRef.current = ''
+        } finally {
+          applyingExternalValueRef.current = false
+        }
+      } else {
+        lastSyncedMarkdownRef.current = ''
+      }
+      return
+    }
     if (value === lastSyncedMarkdownRef.current || value === editor.getMarkdown()) {
       lastSyncedMarkdownRef.current = value
       return
@@ -199,12 +224,6 @@ export function GitHubMarkdownComposer({
       applyingExternalValueRef.current = false
     }
   }, [editor, value])
-
-  useEffect(() => {
-    if (imageInputOpen) {
-      requestAnimationFrame(() => imageInputRef.current?.focus())
-    }
-  }, [imageInputOpen])
 
   const handleLinkSave = useCallback((href: string) => {
     const editor = editorRef.current
@@ -249,82 +268,107 @@ export function GitHubMarkdownComposer({
     }
   }, [linkBubble?.href])
 
-  const insertImageUrl = useCallback(() => {
-    const editor = editorRef.current
-    const trimmed = imageUrl.trim()
-    if (!editor || !trimmed) {
-      return
-    }
-    if (!isHttpImageUrl(trimmed)) {
-      toast.error(translate("auto.components.github.GitHubMarkdownComposer.ec6310b731", "Use an http:// or https:// image URL."))
-      return
-    }
-    editor
-      .chain()
-      .focus()
-      .insertContent({ type: 'image', attrs: { src: trimmed } })
-      .run()
-    setImageUrl('')
-    setImageInputOpen(false)
-  }, [imageUrl])
+  const toolbar = (
+    <RichMarkdownToolbar
+      editor={editor}
+      onToggleLink={openLinkEditor}
+      onImagePick={openImagePicker}
+    />
+  )
+
+  const imageInputRow = imageInputOpen ? (
+    <form
+      className="github-markdown-composer-image-row"
+      onSubmit={(event) => {
+        event.preventDefault()
+        insertImageUrl()
+      }}
+    >
+      <ImageIcon className="size-3.5 shrink-0 text-muted-foreground" />
+      <Input
+        ref={imageInputRef}
+        value={imageUrl}
+        onChange={(event) => setImageUrl(event.target.value)}
+        onKeyDown={(event) => {
+          if (isScreenSubmitShortcut(event)) {
+            event.preventDefault()
+            event.stopPropagation()
+            insertImageUrl()
+            return
+          }
+          if (event.key === 'Escape') {
+            event.preventDefault()
+            event.stopPropagation()
+            setImageInputOpen(false)
+          }
+        }}
+        placeholder={translate(
+          'auto.components.github.GitHubMarkdownComposer.f24783f470',
+          'https://...'
+        )}
+        disabled={disabled}
+        className="h-8 min-w-0 text-xs"
+      />
+      <Button type="submit" size="xs" disabled={disabled || !imageUrl.trim()}>
+        {translate('auto.components.github.GitHubMarkdownComposer.e3bd59143c', 'Insert')}
+      </Button>
+      <Button type="button" variant="ghost" size="xs" onClick={() => setImageInputOpen(false)}>
+        {translate('auto.components.github.GitHubMarkdownComposer.015b4e607d', 'Cancel')}
+      </Button>
+    </form>
+  ) : null
+
+  const editorPane = (
+    <div className="max-h-[360px] overflow-y-auto scrollbar-sleek">
+      <EditorContent editor={editor} />
+    </div>
+  )
+
+  const previewPane = (
+    <GitHubMarkdownComposerPreviewPane
+      value={value}
+      minHeightClassName={minHeightClassName}
+      previewGithubRepo={previewGithubRepo}
+    />
+  )
+
+  const attachmentFooter = isTabbed ? (
+    <button
+      type="button"
+      className="github-markdown-composer-attachment"
+      disabled={disabled}
+      onClick={openImagePicker}
+    >
+      <Paperclip className="size-3.5 shrink-0" />
+      <span>
+        {translate(
+          'auto.components.github.GitHubMarkdownComposer.b7e4a1c902',
+          'Paste, drop, or click to add files'
+        )}
+      </span>
+    </button>
+  ) : null
 
   return (
     <div
       ref={rootRef}
       className={cn(
         'github-markdown-composer relative overflow-hidden rounded-md border border-input bg-background shadow-xs',
+        isTabbed && 'github-markdown-composer-tabbed',
         disabled && 'opacity-60',
         className
       )}
     >
-      <RichMarkdownToolbar
-        editor={editor}
-        onToggleLink={openLinkEditor}
-        onImagePick={() => {
-          if (!disabledRef.current) {
-            setImageInputOpen(true)
-          }
-        }}
-      />
-      {imageInputOpen ? (
-        <form
-          className="github-markdown-composer-image-row"
-          onSubmit={(event) => {
-            event.preventDefault()
-            insertImageUrl()
-          }}
-        >
-          <ImageIcon className="size-3.5 shrink-0 text-muted-foreground" />
-          <Input
-            ref={imageInputRef}
-            value={imageUrl}
-            onChange={(event) => setImageUrl(event.target.value)}
-            onKeyDown={(event) => {
-              if (isScreenSubmitShortcut(event)) {
-                event.preventDefault()
-                event.stopPropagation()
-                insertImageUrl()
-                return
-              }
-              if (event.key === 'Escape') {
-                event.preventDefault()
-                event.stopPropagation()
-                setImageInputOpen(false)
-              }
-            }}
-            placeholder={translate("auto.components.github.GitHubMarkdownComposer.f24783f470", "https://...")}
-            disabled={disabled}
-            className="h-8 min-w-0 text-xs"
-          />
-          <Button type="submit" size="xs" disabled={disabled || !imageUrl.trim()}>
-            {translate("auto.components.github.GitHubMarkdownComposer.e3bd59143c", "Insert")}</Button>
-          <Button type="button" variant="ghost" size="xs" onClick={() => setImageInputOpen(false)}>
-            {translate("auto.components.github.GitHubMarkdownComposer.015b4e607d", "Cancel")}</Button>
-        </form>
-      ) : null}
-      <div className="max-h-[360px] overflow-y-auto scrollbar-sleek">
-        <EditorContent editor={editor} />
-      </div>
+      {isTabbed ? (
+        <GitHubMarkdownComposerTabbar activeTab={activeTab} onTabChange={setActiveTab}>
+          {toolbar}
+        </GitHubMarkdownComposerTabbar>
+      ) : (
+        toolbar
+      )}
+      {imageInputRow}
+      {isTabbed ? (activeTab === 'write' ? editorPane : previewPane) : editorPane}
+      {attachmentFooter}
       {linkBubble ? (
         <RichMarkdownLinkBubble
           linkBubble={linkBubble}

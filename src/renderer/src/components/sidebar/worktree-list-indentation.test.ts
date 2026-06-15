@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import {
   WORKTREE_SECTION_HEADER_PADDING_LEFT,
+  getFlushWorktreeCardPaddingLeft,
   getProjectGroupHeaderPaddingLeft,
-  getWorktreeCardContentIndent
+  getWorktreeCardContentIndent,
+  getWorktreeCardSurfaceInset
 } from './worktree-list-indentation'
 
 describe('worktree list indentation', () => {
@@ -39,5 +41,22 @@ describe('worktree list indentation', () => {
 
   it('aligns flat section headers with top-level project headers', () => {
     expect(WORKTREE_SECTION_HEADER_PADDING_LEFT).toBe(getProjectGroupHeaderPaddingLeft(0))
+  })
+
+  it('keeps root repo cards flush but insets cards inside project groups', () => {
+    expect(getWorktreeCardSurfaceInset({ isGrouped: true, groupDepth: 0 })).toBe(0)
+    expect(getWorktreeCardSurfaceInset({ isGrouped: true, groupDepth: 1 })).toBe(14)
+  })
+
+  it('does not inset card surfaces outside grouped views', () => {
+    expect(getWorktreeCardSurfaceInset({ isGrouped: false, groupDepth: 4 })).toBe(0)
+  })
+
+  it('pulls flush card content back by the tuned inset gap', () => {
+    expect(getFlushWorktreeCardPaddingLeft(20)).toBe('max(2px, calc(20px - 4px))')
+  })
+
+  it('keeps flush card content off the sidebar edge without indentation', () => {
+    expect(getFlushWorktreeCardPaddingLeft(0)).toBe('2px')
   })
 })

@@ -1,6 +1,6 @@
 /* eslint-disable max-lines -- Why: Claude rate-limit fallback tests share account/keychain/PTY mocks that would be noisier split apart. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fetchClaudeRateLimits, fetchManagedAccountUsage } from './claude-fetcher'
@@ -449,5 +449,57 @@ describe('fetchClaudeRateLimits', () => {
 
     expect(netFetchMock).not.toHaveBeenCalled()
     expect(readFileMock).not.toHaveBeenCalled()
+  })
+
+  it('refreshes and persists an expiring inactive account before fetching usage', async () => {
+    setPlatform('linux')
+    tempDir = mkdtempSync(join(tmpdir(), 'orca-claude-fetcher-'))
+    appGetPathMock.mockReturnValue(tempDir)
+    const ownedAuthPath = join(tempDir, 'claude-accounts', 'account-1', 'auth')
+    mkdirSync(ownedAuthPath, { recursive: true })
+    writeFileSync(join(ownedAuthPath, '.orca-managed-claude-auth'), 'account-1\n', 'utf-8')
+    const credentialsPath = join(ownedAuthPath, '.credentials.json')
+    writeFileSync(
+      credentialsPath,
+      JSON.stringify({
+        claudeAiOauth: {
+          accessToken: 'stale-access',
+          refreshToken: 'stale-refresh',
+          expiresAt: Date.now() - 60_000
+        }
+      }),
+      'utf-8'
+    )
+
+    // First net.fetch call is the OAuth refresh (token endpoint); second is the
+    // usage fetch with the refreshed access token.
+    netFetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        access_token: 'fresh-access',
+        expires_in: 3600,
+        refresh_token: 'fresh-refresh'
+      })
+    })
+    netFetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ five_hour: { utilization: 12 }, seven_day: { utilization: 34 } })
+    })
+
+    const result = await fetchManagedAccountUsage({
+      id: 'account-1',
+      managedAuthPath: ownedAuthPath
+    })
+
+    expect(result.status).toBe('ok')
+    // Rotated token persisted back to managed storage.
+    const persisted = JSON.parse(readFileSync(credentialsPath, 'utf-8'))
+    expect(persisted.claudeAiOauth.accessToken).toBe('fresh-access')
+    expect(persisted.claudeAiOauth.refreshToken).toBe('fresh-refresh')
+    // Usage fetch used the fresh access token.
+    const usageCall = netFetchMock.mock.calls.find(([url]) =>
+      String(url).includes('/api/oauth/usage')
+    )
+    expect(usageCall?.[1]?.headers?.Authorization).toBe('Bearer fresh-access')
   })
 })

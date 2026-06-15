@@ -123,6 +123,7 @@ export function resolveDropdownItems(inputs: DropdownActionInputs): DropdownEntr
     hostedReviewCreation,
     conflictOperation = 'unknown',
     branchCommitsAhead,
+    hasCurrentBranch = true,
     rebaseBaseRef,
     isPullRequestOperationActive = false
   } = inputs
@@ -140,6 +141,7 @@ export function resolveDropdownItems(inputs: DropdownActionInputs): DropdownEntr
   const hasUpstream = upstreamStatus?.hasUpstream ?? false
   const publishBlockedByMergedPR = !hasUpstream && prState === 'merged'
   const publishBlockedByPRLoading = !hasUpstream && !!isPRStateLoading
+  const publishBlockedByDetachedHead = !hasUpstream && !hasCurrentBranch
   const publishBlockedByNoBranchCommits = !hasUpstream && branchCommitsAhead === 0
   const publishBlockedByUncommittedChanges = publishBlockedByNoBranchCommits && hasDirtyLocalChanges
   const ahead = upstreamStatus?.ahead ?? 0
@@ -194,14 +196,16 @@ export function resolveDropdownItems(inputs: DropdownActionInputs): DropdownEntr
       ? 'Checking PR status…'
       : publishBlockedByMergedPR
         ? 'PR is already merged'
-        : !hasUpstream
-          ? 'Publish the branch first to push commits'
-          : (commitDisabledReason ??
-            (shouldForcePushWithLease
-              ? 'Commit staged changes and force push with lease'
-              : behind > 0
-                ? 'Use Commit & Sync to pull remote changes before pushing'
-                : 'Commit staged changes and push'))
+        : publishBlockedByDetachedHead
+          ? 'Check out a branch before pushing commits'
+          : !hasUpstream
+            ? 'Publish the branch first to push commits'
+            : (commitDisabledReason ??
+              (shouldForcePushWithLease
+                ? 'Commit staged changes and force push with lease'
+                : behind > 0
+                  ? 'Use Commit & Sync to pull remote changes before pushing'
+                  : 'Commit staged changes and push'))
   const commitPushItem: DropdownItem = {
     kind: 'commit_push',
     label: shouldForcePushWithLease ? 'Commit & Force Push' : 'Commit & Push',
@@ -210,6 +214,7 @@ export function resolveDropdownItems(inputs: DropdownActionInputs): DropdownEntr
       globalBusy ||
       upstreamLoading ||
       !hasUpstream ||
+      publishBlockedByDetachedHead ||
       (behind > 0 && !shouldForcePushWithLease) ||
       publishBlockedByPRLoading ||
       publishBlockedByMergedPR ||
@@ -225,6 +230,9 @@ export function resolveDropdownItems(inputs: DropdownActionInputs): DropdownEntr
     }
     if (publishBlockedByMergedPR) {
       return 'PR is already merged'
+    }
+    if (publishBlockedByDetachedHead) {
+      return 'Check out a branch before syncing commits'
     }
     if (!hasUpstream) {
       // Why: mirror pushItem/syncItem — direct the user to Publish Branch
@@ -254,6 +262,7 @@ export function resolveDropdownItems(inputs: DropdownActionInputs): DropdownEntr
       globalBusy ||
       upstreamLoading ||
       !hasUpstream ||
+      publishBlockedByDetachedHead ||
       shouldForcePushWithLease ||
       behind === 0 ||
       commitDisabledReason !== null
@@ -268,19 +277,22 @@ export function resolveDropdownItems(inputs: DropdownActionInputs): DropdownEntr
         ? 'Checking PR status…'
         : publishBlockedByMergedPR
           ? 'PR is already merged'
-          : !hasUpstream
-            ? 'Publish the branch first to push commits'
-            : shouldForcePushWithLease
-              ? 'Use Force Push — remote only has older copies of local commits'
-              : behind > 0 && ahead > 0
-                ? 'Sync first to pull remote changes before pushing'
-                : ahead === 0
-                  ? `Nothing to push${upstreamStatus?.upstreamName ? ` to ${upstreamStatus.upstreamName}` : ''}`
-                  : describePushCount(ahead),
+          : publishBlockedByDetachedHead
+            ? 'Check out a branch before pushing commits'
+            : !hasUpstream
+              ? 'Publish the branch first to push commits'
+              : shouldForcePushWithLease
+                ? 'Use Force Push — remote only has older copies of local commits'
+                : behind > 0 && ahead > 0
+                  ? 'Sync first to pull remote changes before pushing'
+                  : ahead === 0
+                    ? `Nothing to push${upstreamStatus?.upstreamName ? ` to ${upstreamStatus.upstreamName}` : ''}`
+                    : describePushCount(ahead),
     disabled:
       globalBusy ||
       upstreamLoading ||
       !hasUpstream ||
+      publishBlockedByDetachedHead ||
       ahead === 0 ||
       shouldForcePushWithLease ||
       (behind > 0 && !shouldForcePushWithLease)
@@ -295,14 +307,17 @@ export function resolveDropdownItems(inputs: DropdownActionInputs): DropdownEntr
         ? 'Checking PR status…'
         : publishBlockedByMergedPR
           ? 'PR is already merged'
-          : !hasUpstream
-            ? 'Publish the branch first to force push commits'
-            : ahead === 0
-              ? `Nothing to force push${upstreamStatus?.upstreamName ? ` to ${upstreamStatus.upstreamName}` : ''}`
-              : shouldForcePushWithLease
-                ? forcePushTitle
-                : formatManualForcePushTitle(ahead, behind, upstreamStatus?.upstreamName),
-    disabled: globalBusy || upstreamLoading || !hasUpstream || ahead === 0
+          : publishBlockedByDetachedHead
+            ? 'Check out a branch before force pushing commits'
+            : !hasUpstream
+              ? 'Publish the branch first to force push commits'
+              : ahead === 0
+                ? `Nothing to force push${upstreamStatus?.upstreamName ? ` to ${upstreamStatus.upstreamName}` : ''}`
+                : shouldForcePushWithLease
+                  ? forcePushTitle
+                  : formatManualForcePushTitle(ahead, behind, upstreamStatus?.upstreamName),
+    disabled:
+      globalBusy || upstreamLoading || !hasUpstream || publishBlockedByDetachedHead || ahead === 0
   }
 
   const pullItem: DropdownItem = {
@@ -314,15 +329,22 @@ export function resolveDropdownItems(inputs: DropdownActionInputs): DropdownEntr
         ? 'Checking PR status…'
         : publishBlockedByMergedPR
           ? 'PR is already merged'
-          : !hasUpstream
-            ? 'Publish the branch first to pull commits'
-            : shouldForcePushWithLease
-              ? 'Nothing new to pull — remote only has older copies of local commits'
-              : behind === 0
-                ? 'Nothing to pull'
-                : describePullCount(behind),
+          : publishBlockedByDetachedHead
+            ? 'Check out a branch before pulling commits'
+            : !hasUpstream
+              ? 'Publish the branch first to pull commits'
+              : shouldForcePushWithLease
+                ? 'Nothing new to pull — remote only has older copies of local commits'
+                : behind === 0
+                  ? 'Nothing to pull'
+                  : describePullCount(behind),
     disabled:
-      globalBusy || upstreamLoading || !hasUpstream || behind === 0 || shouldForcePushWithLease
+      globalBusy ||
+      upstreamLoading ||
+      !hasUpstream ||
+      publishBlockedByDetachedHead ||
+      behind === 0 ||
+      shouldForcePushWithLease
   }
 
   const fastForwardItem: DropdownItem = {
@@ -334,19 +356,22 @@ export function resolveDropdownItems(inputs: DropdownActionInputs): DropdownEntr
         ? 'Checking PR status…'
         : publishBlockedByMergedPR
           ? 'PR is already merged'
-          : !hasUpstream
-            ? 'Publish the branch first to fast-forward'
-            : shouldForcePushWithLease
-              ? 'Nothing new to fast-forward — remote only has older copies of local commits'
-              : behind === 0
-                ? 'Nothing to fast-forward'
-                : ahead > 0
-                  ? 'Local commits prevent a fast-forward pull'
-                  : describeFastForwardCount(behind),
+          : publishBlockedByDetachedHead
+            ? 'Check out a branch before fast-forwarding'
+            : !hasUpstream
+              ? 'Publish the branch first to fast-forward'
+              : shouldForcePushWithLease
+                ? 'Nothing new to fast-forward — remote only has older copies of local commits'
+                : behind === 0
+                  ? 'Nothing to fast-forward'
+                  : ahead > 0
+                    ? 'Local commits prevent a fast-forward pull'
+                    : describeFastForwardCount(behind),
     disabled:
       globalBusy ||
       upstreamLoading ||
       !hasUpstream ||
+      publishBlockedByDetachedHead ||
       behind === 0 ||
       ahead > 0 ||
       shouldForcePushWithLease
@@ -361,17 +386,20 @@ export function resolveDropdownItems(inputs: DropdownActionInputs): DropdownEntr
         ? 'Checking PR status…'
         : publishBlockedByMergedPR
           ? 'PR is already merged'
-          : !hasUpstream
-            ? 'Publish the branch first to sync commits'
-            : shouldForcePushWithLease
-              ? 'Use Force Push — remote only has older copies of local commits'
-              : ahead === 0 && behind === 0
-                ? 'Branch is up to date'
-                : describeSyncCounts(ahead, behind),
+          : publishBlockedByDetachedHead
+            ? 'Check out a branch before syncing commits'
+            : !hasUpstream
+              ? 'Publish the branch first to sync commits'
+              : shouldForcePushWithLease
+                ? 'Use Force Push — remote only has older copies of local commits'
+                : ahead === 0 && behind === 0
+                  ? 'Branch is up to date'
+                  : describeSyncCounts(ahead, behind),
     disabled:
       globalBusy ||
       upstreamLoading ||
       !hasUpstream ||
+      publishBlockedByDetachedHead ||
       shouldForcePushWithLease ||
       (ahead === 0 && behind === 0)
   }
@@ -416,30 +444,35 @@ export function resolveDropdownItems(inputs: DropdownActionInputs): DropdownEntr
     label:
       publishBlockedByMergedPR || publishBlockedByPRLoading
         ? 'PR Status'
-        : publishBlockedByUncommittedChanges
-          ? 'Commit Changes First'
-          : publishBlockedByNoBranchCommits
-            ? 'No Branch Changes'
-            : 'Publish Branch',
+        : publishBlockedByDetachedHead
+          ? 'No Branch'
+          : publishBlockedByUncommittedChanges
+            ? 'Commit Changes First'
+            : publishBlockedByNoBranchCommits
+              ? 'No Branch Changes'
+              : 'Publish Branch',
     title: upstreamLoading
       ? 'Checking branch status…'
       : publishBlockedByPRLoading
         ? 'Checking PR status…'
         : publishBlockedByMergedPR
           ? 'PR is already merged'
-          : publishBlockedByUncommittedChanges
-            ? 'Commit changes before publishing the branch'
-            : publishBlockedByNoBranchCommits
-              ? 'Nothing to publish'
-              : hasUpstream
-                ? 'Branch is already published'
-                : 'Publish this branch to origin',
+          : publishBlockedByDetachedHead
+            ? 'Check out a branch before publishing commits'
+            : publishBlockedByUncommittedChanges
+              ? 'Commit changes before publishing the branch'
+              : publishBlockedByNoBranchCommits
+                ? 'Nothing to publish'
+                : hasUpstream
+                  ? 'Branch is already published'
+                  : 'Publish this branch to origin',
     disabled:
       globalBusy ||
       upstreamLoading ||
       hasUpstream ||
       publishBlockedByPRLoading ||
       publishBlockedByMergedPR ||
+      publishBlockedByDetachedHead ||
       publishBlockedByNoBranchCommits
   }
 

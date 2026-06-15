@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import { useAppStore } from '@/store'
 import type { Repo, Worktree } from '../../../../shared/types'
 import { computeVisibleWorktreeIds } from './visible-worktrees'
+import { getSettingsFocusedExecutionHostId } from '../../../../shared/execution-host'
 
 type UseVisibleWorkspaceKanbanWorktreeIdsParams = {
   allWorktrees: readonly Worktree[]
@@ -15,6 +16,9 @@ export function useVisibleWorkspaceKanbanWorktreeIds({
   const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
   const showSleepingWorkspaces = useAppStore((s) => s.showSleepingWorkspaces)
   const hideDefaultBranchWorkspace = useAppStore((s) => s.hideDefaultBranchWorkspace)
+  const workspaceHostScope = useAppStore((s) => s.workspaceHostScope)
+  const visibleWorkspaceHostIds = useAppStore((s) => s.visibleWorkspaceHostIds)
+  const settings = useAppStore((s) => s.settings)
   const filterRepoIds = useAppStore((s) => s.filterRepoIds)
   const tabsByWorktree = useAppStore((s) => (!showSleepingWorkspaces ? s.tabsByWorktree : null))
   const ptyIdsByTabId = useAppStore((s) => (!showSleepingWorkspaces ? s.ptyIdsByTabId : null))
@@ -35,6 +39,9 @@ export function useVisibleWorkspaceKanbanWorktreeIds({
         browserTabsByWorktree,
         hideDefaultBranchWorkspace,
         repoMap,
+        workspaceHostScope,
+        visibleWorkspaceHostIds,
+        defaultHostId: getSettingsFocusedExecutionHostId(settings),
         // Why: the board has no nested lineage presentation. Ancestor injection
         // would make filtered-out parents appear as ordinary cards.
         worktreeLineageById: {}
@@ -45,6 +52,9 @@ export function useVisibleWorkspaceKanbanWorktreeIds({
     browserTabsByWorktree,
     filterRepoIds,
     hideDefaultBranchWorkspace,
+    workspaceHostScope,
+    visibleWorkspaceHostIds,
+    settings,
     ptyIdsByTabId,
     repoMap,
     showSleepingWorkspaces,

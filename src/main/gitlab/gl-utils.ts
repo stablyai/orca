@@ -1,9 +1,16 @@
 import { execFile } from 'child_process'
 import { promisify } from 'util'
 import { gitExecFileAsync, glabExecFileAsync } from '../git/runner'
-import type { ClassifiedError, GitLabProjectRef, IssueSourcePreference } from '../../shared/types'
+import type { ClassifiedError, IssueSourcePreference } from '../../shared/types'
 import { getSshGitProvider } from '../providers/ssh-git-dispatch'
 import { clearProjectRefInFlight, runProjectRefProbeOnce } from './project-ref-inflight'
+import {
+  DEFAULT_GITLAB_HOSTS,
+  normalizeGitLabHost,
+  parseGitLabProjectRef,
+  parseRemoteProjectRefCandidate,
+  type ProjectRef
+} from './project-ref-parser'
 
 // Why: legacy generic execFile wrapper — only used by callers that don't need
 // WSL-aware routing. Repo-scoped callers should use glabExecFileAsync from
@@ -98,11 +105,8 @@ export function classifyListIssuesError(stderr: string): ClassifiedError {
   return { type: c.type, message: readMessages[c.type] }
 }
 
-// ── Project ref resolution ──────────────────────────────────────────
-// Why: alias the shared shape so `src/shared/types.ts#GitLabProjectRef`
-// remains the single source of truth while main-side call sites can use
-// the short local name `ProjectRef`.
-export type ProjectRef = GitLabProjectRef
+export { DEFAULT_GITLAB_HOSTS, parseGitLabProjectRef }
+export type { ProjectRef }
 
 const PROJECT_REF_CACHE_MAX_ENTRIES = 512
 const projectRefCache = new Map<string, ProjectRef | null>()
@@ -126,61 +130,6 @@ function rememberProjectRefCacheEntry(cacheKey: string, value: ProjectRef | null
       return
     }
     projectRefCache.delete(oldestKey)
-  }
-}
-
-/**
- * Hosts always treated as GitLab. Self-hosted instances are added at
- * runtime via `getGlabKnownHosts()`, which inspects `glab auth status`.
- */
-export const DEFAULT_GITLAB_HOSTS = ['gitlab.com'] as const
-
-function normalizeHost(value: string): string {
-  return value.trim().toLowerCase()
-}
-
-function stripGitSuffix(path: string): string {
-  return path.replace(/\/+$/, '').replace(/\.git$/i, '')
-}
-
-function makeProjectRef(
-  host: string,
-  path: string,
-  knownHosts: readonly string[]
-): ProjectRef | null {
-  const normalizedHost = normalizeHost(host)
-  if (!knownHosts.map(normalizeHost).includes(normalizedHost)) {
-    return null
-  }
-  const normalizedPath = stripGitSuffix(path.replace(/^\/+/, '')).trim()
-  // Reject paths without at least one group segment — `gitlab.com:foo`
-  // alone is not a project reference.
-  if (!normalizedPath.includes('/')) {
-    return null
-  }
-  return { host: normalizedHost, path: normalizedPath }
-}
-
-export function parseGitLabProjectRef(
-  remoteUrl: string,
-  knownHosts: readonly string[] = DEFAULT_GITLAB_HOSTS
-): ProjectRef | null {
-  const trimmed = remoteUrl.trim()
-  if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed)) {
-    const scpLike = trimmed.match(/^(?:[^@/:]+@)?([^:\s/]+):([^\s]+?)(?:\.git)?$/)
-    if (scpLike) {
-      return makeProjectRef(scpLike[1], scpLike[2], knownHosts)
-    }
-  }
-
-  try {
-    const url = new URL(trimmed)
-    if (!['http:', 'https:', 'ssh:', 'git:', 'git+ssh:'].includes(url.protocol.toLowerCase())) {
-      return null
-    }
-    return makeProjectRef(url.hostname, url.pathname, knownHosts)
-  } catch {
-    return null
   }
 }
 
@@ -223,6 +172,17 @@ async function resolveProjectRefForRemote(
     if (result) {
       rememberProjectRefCacheEntry(cacheKey, result)
       return result
+    }
+    const remoteCandidate = parseRemoteProjectRefCandidate(stdout)
+    if (
+      remoteCandidate &&
+      (await isGlabConfiguredForRemoteHost(repoPath, remoteCandidate, connectionId))
+    ) {
+      // Why: `glab auth status` is process-global and can be stale or formatted
+      // differently across versions; the origin host itself is the durable repo context.
+      rememberGlabKnownHost(remoteCandidate.host)
+      rememberProjectRefCacheEntry(cacheKey, remoteCandidate)
+      return remoteCandidate
     }
   } catch {
     if (connectionId) {
@@ -315,6 +275,36 @@ export function glabHostnameArgs(
 
 let knownHostsCache: readonly string[] | null = null
 
+function rememberGlabKnownHost(host: string): void {
+  const normalizedHost = normalizeGitLabHost(host)
+  if (!knownHostsCache || knownHostsCache.map(normalizeGitLabHost).includes(normalizedHost)) {
+    return
+  }
+  knownHostsCache = [...knownHostsCache, normalizedHost]
+}
+
+async function isGlabConfiguredForRemoteHost(
+  repoPath: string,
+  projectRef: Pick<ProjectRef, 'host'>,
+  connectionId?: string | null
+): Promise<boolean> {
+  try {
+    const result = await glabExecFileAsync(
+      ['auth', 'status', '--hostname', projectRef.host],
+      glabRepoExecOptions(repoPath, connectionId)
+    )
+    return result !== undefined
+  } catch (error) {
+    const execLike = error as { stdout?: unknown; stderr?: unknown; message?: unknown }
+    const output =
+      [execLike.stdout, execLike.stderr, execLike.message]
+        .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+        .join('\n') || String(error)
+    const hosts = parseGlabAuthStatusHosts(output).map(normalizeGitLabHost)
+    return hosts.includes(normalizeGitLabHost(projectRef.host))
+  }
+}
+
 /** @internal — exposed for tests only */
 export function _resetKnownHostsCache(): void {
   knownHostsCache = null
@@ -397,9 +387,10 @@ export function parseGlabAuthStatusHosts(output: string): string[] {
     hosts.add(m[1].toLowerCase())
   }
   for (const line of output.split('\n')) {
-    const m = line.match(/^([a-zA-Z0-9][a-zA-Z0-9.-]*\.[a-zA-Z]{2,}):\s*$/)
-    if (m) {
-      hosts.add(m[1].toLowerCase())
+    const bareLine = line.trim()
+    const hostLine = bareLine.endsWith(':') ? bareLine.slice(0, -1) : bareLine
+    if (line === bareLine && /^[a-zA-Z0-9](?:[a-zA-Z0-9.-]*[a-zA-Z0-9])?$/.test(hostLine)) {
+      hosts.add(hostLine.toLowerCase())
     }
   }
   return Array.from(hosts)

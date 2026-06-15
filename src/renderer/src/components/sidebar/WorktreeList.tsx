@@ -6,13 +6,18 @@ import {
 } from '@tanstack/react-virtual'
 import type { Range } from '@tanstack/react-virtual'
 import {
+  AlertTriangle,
   ChevronDown,
   CircleX,
   Ellipsis,
   Eye,
   FolderInput,
   FolderPlus,
+  FolderX,
+  Loader2,
   Plus,
+  Server,
+  ServerOff,
   Shapes,
   SlidersHorizontal,
   Trash2
@@ -27,6 +32,8 @@ import {
   useWorktreeMap
 } from '@/store/selectors'
 import WorktreeCard, { type ActiveSurfaceVariant } from './WorktreeCard'
+import { folderWorkspaceToWorktree } from '../../../../shared/folder-workspace-worktree'
+import { FolderWorkspaceComposerDialog } from './FolderWorkspaceComposerDialog'
 import { PendingWorktreeRow } from './PendingWorktreeRow'
 import { SUPPRESS_WORKTREE_LIST_SCROLL_ADJUSTMENT_EVENT } from './WorktreeCardAgents'
 import { Button } from '@/components/ui/button'
@@ -45,6 +52,7 @@ import { cn } from '@/lib/utils'
 import type {
   Worktree,
   Repo,
+  FolderWorkspace,
   ProjectGroup,
   ProjectOrderBy,
   WorktreeLineage,
@@ -65,6 +73,7 @@ import { deriveRunningAgentSendTargets } from '@/lib/running-agent-targets'
 import { rightSidebarShowsPullRequestData } from '@/lib/right-sidebar-visibility'
 import {
   type Row,
+  type ProjectGroupingModel,
   type WorktreeGroupBy,
   ALL_GROUP_KEY,
   PINNED_GROUP_KEY,
@@ -75,7 +84,7 @@ import {
 import {
   estimateRenderRowSize,
   extractWorktreeVirtualRowIndexes,
-  getActiveStickyHeaderIndexForScroll,
+  getActiveStickyIndexesForScroll,
   getStickyHeaderIndexes,
   getVirtualRowTransform,
   shouldUseHeaderTopSpacing,
@@ -110,6 +119,11 @@ import {
   type VirtualizedScrollAnchor
 } from '@/hooks/useVirtualizedScrollAnchor'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
+import { useFolderWorkspacePathStatusCacheExpiryTick } from '@/lib/folder-workspace-path-status-cache-expiry'
+import {
+  getFolderWorkspacePathStatusDescription,
+  getFolderWorkspacePathStatusTitle
+} from '@/lib/folder-workspace-path-status'
 import { getShortcutPlatform } from '@/lib/shortcut-platform'
 import {
   SCROLL_TO_CURRENT_WORKSPACE_REVEAL_REQUEST_EVENT,
@@ -167,13 +181,22 @@ import {
   pruneWorktreeSelection,
   updateWorktreeSelection
 } from './worktree-multi-selection'
-import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { splitWorktreeSortOrderByHost } from '@/lib/worktree-sort-order-host-split'
+import {
+  ALL_EXECUTION_HOSTS_SCOPE,
+  getRepoExecutionHostId,
+  getSettingsFocusedExecutionHostId,
+  type ExecutionHostId,
+  parseExecutionHostId
+} from '../../../../shared/execution-host'
 import { getRepoHeaderCreateState } from './repo-header-create-state'
 import type { PendingSidebarWorktreeReveal } from '@/store/slices/ui'
 import { getRepositoryIconSectionId } from '@/components/settings/repository-settings-targets'
 import { keybindingMatchesAction } from '../../../../shared/keybindings'
 import { ProjectGroupNameDialog } from './ProjectGroupNameDialog'
 import { ProjectGroupDeleteDialog } from './ProjectGroupDeleteDialog'
+import { selectProjectGroupRemovalTargets } from '@/store/slices/project-group-removal-targets'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import {
   effectiveExternalWorktreeVisibility,
@@ -191,9 +214,27 @@ import { buildImportedWorktreesCardCandidates } from './imported-worktrees-card-
 import {
   WORKTREE_SECTION_HEADER_PADDING_LEFT,
   getProjectGroupHeaderPaddingLeft,
-  getWorktreeCardContentIndent
+  getWorktreeCardContentIndent,
+  getWorktreeCardSurfaceInset
 } from './worktree-list-indentation'
+import { addHostSectionRows, type HostHeaderRow, type HostSectionRow } from './host-section-rows'
+import { orderHostSectionOptions } from './host-section-order'
+import { useHostHeaderDrag } from './host-header-drag'
+import { buildSidebarHostOptions } from './sidebar-host-options'
+import { HostSectionHeaderMenu } from './HostSectionHeaderMenu'
+import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
+import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
+import { getHostDisplayLabelOverrides } from '../../../../shared/host-setting-overrides'
+import {
+  isConfirmedStaleFolderPathStatus,
+  type FolderWorkspacePathStatus
+} from '../../../../shared/folder-workspace-path-status'
+import {
+  getFolderWorkspaceRevealGroupKeys,
+  getKnownSidebarWorktreeById,
+  sidebarWorkspaceStillExists
+} from './worktree-list-folder-reveal'
 
 export {
   getScrollTopToRevealBounds,
@@ -207,6 +248,7 @@ type ProjectGroupNameDialogState =
 type ProjectGroupDeleteDialogState = {
   groupId: string
   groupName: string
+  removeContainedProjects: boolean
 }
 
 // How long to wait after a sortEpoch bump before actually re-sorting.
@@ -354,9 +396,12 @@ function markSidebarWorktreeActiveImmediately(worktreeId: string, primaryRowKey?
 function revealMountedWorktreeElement(
   container: HTMLElement,
   worktreeId: string,
-  behavior: ScrollBehavior
+  behavior: ScrollBehavior,
+  optionId?: string
 ): HTMLElement | null {
-  const element = getMountedWorktreeOptions(worktreeId, container)[0]
+  const element = optionId
+    ? document.getElementById(optionId)
+    : getMountedWorktreeOptions(worktreeId, container)[0]
   if (!element || !container.contains(element)) {
     return null
   }
@@ -372,12 +417,8 @@ function getWorktreeVisibilityMenuLabel(repo: Repo): string {
 }
 
 const SIDEBAR_POINTER_DRAG_THRESHOLD_PX = 4
-// Why: nested child worktree cards sit inside the parent card body. Preserve
-// the legacy lineage surface offset instead of using the full sidebar tree step.
-const NESTED_LINEAGE_CARD_INDENT = 14
-
 type VirtualizedWorktreeViewportProps = {
-  rows: Row[]
+  rows: HostSectionRow[]
   activeWorktreeId: string | null
   currentWorktreeId: string | null
   groupBy: WorktreeGroupBy
@@ -396,11 +437,13 @@ type VirtualizedWorktreeViewportProps = {
   handleRemoveProjectFromGroup: (repo: Repo) => void
   handleRenameProjectGroup: (groupId: string, currentName: string) => void
   handleDeleteProjectGroup: (groupId: string, groupName: string) => void
+  handleCreateFolderWorkspace: (projectGroup: ProjectGroup) => void
   activeModal: string
   pendingRevealWorktree: PendingSidebarWorktreeReveal | null
   clearPendingRevealWorktreeId: () => void
   agentSendTargetWorktreeId: string | null
   worktrees: Worktree[]
+  folderWorkspaces: readonly FolderWorkspace[]
   selectedWorktreeIds: ReadonlySet<string>
   selectedWorktrees: readonly Worktree[]
   onSelectionGesture: (event: React.MouseEvent<HTMLElement>, worktreeId: string) => boolean
@@ -418,8 +461,11 @@ type VirtualizedWorktreeViewportProps = {
   // (filtered out / collapsed-only). Visible-only ids would silently drop the
   // hidden repos on reorder.
   allRepoIds: string[]
+  onReorderHostSections: (orderedHostIds: ExecutionHostId[]) => void
+  onHostDragActiveChange: (active: boolean) => void
   prCache: Record<string, unknown> | null
   workspaceStatuses: readonly WorkspaceStatusDefinition[]
+  projectGrouping?: ProjectGroupingModel
   projectGroups?: readonly ProjectGroup[]
   onMoveWorktreeToStatus: (worktreeId: string, status: WorkspaceStatus) => void
   onMoveWorktreesToStatus: (worktreeIds: readonly string[], status: WorkspaceStatus) => void
@@ -454,7 +500,8 @@ type VirtualizedWorktreeViewportProps = {
   scrollAnchorRef: React.MutableRefObject<VirtualizedScrollAnchor>
 }
 
-type WorktreeItemRow = Extract<Row, { type: 'item' }>
+type WorktreeItemRow = Extract<HostSectionRow, { type: 'item' }>
+type FolderWorkspaceItemRow = Extract<HostSectionRow, { type: 'folder-workspace' }>
 
 function formatSectionActivityLabel(count: number, label: string): string {
   return `${count} ${label}${count === 1 ? '' : 's'}`
@@ -479,6 +526,176 @@ function SectionMetricsBadge({ count }: { count: number }): React.JSX.Element {
         </TooltipContent>
       </Tooltip>
     </span>
+  )
+}
+
+function HostHeaderHealthIcon({
+  health
+}: {
+  health: HostHeaderRow['health']
+}): React.JSX.Element | null {
+  // Why: healthy is the default state — indicating it adds noise. Only states
+  // needing active attention get a separate mark.
+  if (health === 'connecting') {
+    return <Loader2 className="size-3 shrink-0 animate-spin text-muted-foreground" />
+  }
+  if (health === 'blocked' || health === 'error') {
+    return <AlertTriangle className="size-3 shrink-0 text-destructive" />
+  }
+  return null
+}
+
+function getHostHeaderDetail(row: HostHeaderRow): { text: string; isWarning: boolean } | null {
+  // Why: a blocked compatibility verdict gets a compact warning treatment so one
+  // skewed host stands out without altering how its siblings render.
+  if (row.health === 'blocked') {
+    return {
+      text: translate('auto.components.sidebar.WorktreeList.7a8b9c0d1e', 'Update required'),
+      isWarning: true
+    }
+  }
+  // Why: auth-expired SSH hosts must say so in words — the plan requires a clear
+  // auth-needed status, and the health icon alone doesn't explain the fix.
+  if (row.connectionStatus === 'auth-failed') {
+    return {
+      text: translate(
+        'auto.components.sidebar.WorktreeList.hostAuthNeeded',
+        'Authentication needed'
+      ),
+      isWarning: true
+    }
+  }
+  if (row.health === 'disconnected') {
+    return {
+      text: translate('auto.components.sidebar.WorktreeList.hostDisconnected', 'Disconnected'),
+      isWarning: false
+    }
+  }
+  // Why: the transport suffix only earns space on remote hosts; "This
+  // computer" on Local Mac is noise.
+  if (row.kind !== 'local') {
+    return { text: row.detail, isWarning: false }
+  }
+  return null
+}
+
+function HostSectionHeader({
+  row,
+  onToggle,
+  onDragPointerDown,
+  dragging
+}: {
+  row: HostHeaderRow
+  onToggle: () => void
+  onDragPointerDown?: (event: React.PointerEvent<HTMLElement>) => void
+  dragging?: boolean
+}): React.JSX.Element {
+  const isBlocked = row.health === 'blocked'
+  const isDisconnected = row.health === 'disconnected'
+  const detail = getHostHeaderDetail(row)
+  return (
+    <div className="px-2 pt-1">
+      {/* Why: hosts are machines, not just groups — the outlined card with a
+          server glyph keeps that distinction visible. Status stays quiet: a
+          mark renders only when the host needs attention. */}
+      <div
+        role="button"
+        tabIndex={0}
+        data-host-header-drag-id={row.hostId}
+        aria-expanded={!row.collapsed}
+        className={cn(
+          'group/host-header flex h-8 w-full cursor-pointer items-center gap-2 rounded-md border px-2 text-left transition-all',
+          onDragPointerDown && 'cursor-grab active:cursor-grabbing',
+          isBlocked
+            ? 'border-destructive/40 bg-destructive/10'
+            : isDisconnected
+              ? 'border-worktree-sidebar-border/70 bg-worktree-sidebar-accent/35 text-muted-foreground'
+              : 'border-worktree-sidebar-border bg-worktree-sidebar-accent/70',
+          dragging && 'pointer-events-none opacity-0'
+        )}
+        onPointerDown={onDragPointerDown}
+        onClick={onToggle}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault()
+            onToggle()
+          }
+        }}
+      >
+        {isDisconnected ? (
+          <ServerOff className="size-3.5 shrink-0 text-muted-foreground/80" />
+        ) : (
+          <Server className="size-3.5 shrink-0 text-muted-foreground" />
+        )}
+        <HostHeaderHealthIcon health={row.health} />
+        {/* Why: the badge hugs the label like repo headers do — anchoring it
+            right would leave it floating beside the hover-only controls. */}
+        <div className="flex min-w-0 flex-1 items-baseline gap-1.5">
+          <span
+            className={cn(
+              'min-w-0 truncate text-[12px] font-semibold leading-none',
+              isDisconnected ? 'text-muted-foreground' : 'text-foreground'
+            )}
+          >
+            {row.label}
+          </span>
+          {detail ? (
+            <span
+              className={cn(
+                'shrink-0 truncate text-[10px] leading-none',
+                detail.isWarning ? 'text-destructive' : 'text-muted-foreground/70'
+              )}
+            >
+              {detail.text}
+            </span>
+          ) : null}
+          <SectionMetricsBadge count={row.count} />
+        </div>
+        <div className="flex size-4 shrink-0 items-center justify-center text-muted-foreground/60 opacity-0 transition-opacity group-hover/host-header:opacity-100">
+          <ChevronDown
+            className={cn('size-3.5 transition-transform', row.collapsed && '-rotate-90')}
+          />
+        </div>
+        <span data-host-header-action="">
+          <HostSectionHeaderMenu row={row} />
+        </span>
+      </div>
+    </div>
+  )
+}
+
+function FolderPathStatusIndicator({
+  status
+}: {
+  status: FolderWorkspacePathStatus | null | undefined
+}): React.JSX.Element | null {
+  const title = getFolderWorkspacePathStatusTitle(status)
+  if (!status || status.exists || !title) {
+    return null
+  }
+  const destructive = isConfirmedStaleFolderPathStatus(status)
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span
+          className={cn(
+            'inline-flex size-4 shrink-0 items-center justify-center rounded-[4px]',
+            destructive ? 'text-destructive' : 'text-muted-foreground'
+          )}
+          aria-label={title}
+        >
+          <FolderX className="size-3.5" />
+        </span>
+      </TooltipTrigger>
+      <TooltipContent side="bottom" sideOffset={6} className="max-w-72">
+        <div className="space-y-1">
+          <div className="font-medium">{title}</div>
+          <div className="text-muted-foreground">
+            {getFolderWorkspacePathStatusDescription(status)}
+          </div>
+        </div>
+      </TooltipContent>
+    </Tooltip>
   )
 }
 
@@ -603,13 +820,16 @@ function shouldPreferSidebarStatusDropTarget(args: {
   return sourceStatus !== null && args.target.status !== sourceStatus
 }
 
-function isWorktreeItemRow(row: Row): row is WorktreeItemRow {
+function isWorktreeItemRow(row: HostSectionRow): row is WorktreeItemRow {
   return row.type === 'item'
 }
 
 export function renderRowContainsWorktree(row: RenderRow, worktreeId: string | null): boolean {
   if (worktreeId === null) {
     return false
+  }
+  if (row.type === 'folder-workspace') {
+    return folderWorkspaceKey(row.folderWorkspace.id) === worktreeId
   }
   if (row.type === 'lineage-group') {
     return row.rows.some((item) => item.worktree.id === worktreeId)
@@ -631,16 +851,46 @@ function getRenderRowOptionId(
   if (row.type === 'item') {
     return getWorktreeOptionId(row.rowKey)
   }
+  if (row.type === 'folder-workspace') {
+    return getWorktreeOptionId(folderWorkspaceKey(row.folderWorkspace.id))
+  }
   return undefined
+}
+
+function renderRowContainsNaturalWorktree(row: RenderRow, worktreeId: string): boolean {
+  if (row.type === 'lineage-group') {
+    return row.rows.some(
+      (item) => item.worktree.id === worktreeId && item.sectionKey !== PINNED_GROUP_KEY
+    )
+  }
+  return (
+    row.type === 'item' && row.worktree.id === worktreeId && row.sectionKey !== PINNED_GROUP_KEY
+  )
 }
 
 function getActiveDescendantOptionId(args: {
   activeWorktreeId: string | null
+  primaryActiveRowKey?: string
   renderRows: readonly RenderRow[]
   virtualItems: readonly { index: number }[]
 }): string | undefined {
   if (args.activeWorktreeId === null) {
     return undefined
+  }
+  if (args.primaryActiveRowKey) {
+    const primaryOptionId = getWorktreeOptionId(args.primaryActiveRowKey)
+    for (const item of args.virtualItems) {
+      const row = args.renderRows[item.index]
+      if (row && getRenderRowOptionId(row, args.activeWorktreeId) === primaryOptionId) {
+        return primaryOptionId
+      }
+    }
+  }
+  for (const item of args.virtualItems) {
+    const row = args.renderRows[item.index]
+    if (row && renderRowContainsNaturalWorktree(row, args.activeWorktreeId)) {
+      return getRenderRowOptionId(row, args.activeWorktreeId)
+    }
   }
   for (const item of args.virtualItems) {
     const row = args.renderRows[item.index]
@@ -655,7 +905,7 @@ function uniqueWorktreeIds(ids: readonly string[]): string[] {
   return Array.from(new Set(ids))
 }
 
-function buildRenderableRows(rows: Row[]): RenderRow[] {
+function buildRenderableRows(rows: HostSectionRow[]): RenderRow[] {
   const renderRows: RenderRow[] = []
   for (let index = 0; index < rows.length; index++) {
     const row = rows[index]
@@ -691,6 +941,9 @@ function buildRenderableRows(rows: Row[]): RenderRow[] {
 }
 
 export function getRenderRowKey(row: RenderRow): string {
+  if (row.type === 'host-header') {
+    return `host:${row.hostId}`
+  }
   if (row.type === 'header') {
     return `hdr:${row.key}`
   }
@@ -703,10 +956,13 @@ export function getRenderRowKey(row: RenderRow): string {
   if (row.type === 'pending-creation') {
     return `pending:${row.creationId}`
   }
+  if (row.type === 'folder-workspace') {
+    return `folder-workspace:${row.folderWorkspace.id}`
+  }
   return `wt:${row.rowKey}`
 }
 
-export function getWorktreeDragGroups(rows: Row[]): WorktreeDragGroup[] {
+export function getWorktreeDragGroups(rows: HostSectionRow[]): WorktreeDragGroup[] {
   const groups: WorktreeDragGroup[] = []
   let current: { key: string; ids: string[] } | null = null
 
@@ -716,7 +972,12 @@ export function getWorktreeDragGroups(rows: Row[]): WorktreeDragGroup[] {
       groups.push({ key: current.key, worktreeIds: current.ids })
       continue
     }
-    if (row.type === 'imported-worktrees-card' || row.type === 'pending-creation') {
+    if (
+      row.type === 'host-header' ||
+      row.type === 'imported-worktrees-card' ||
+      row.type === 'pending-creation' ||
+      row.type === 'folder-workspace'
+    ) {
       continue
     }
     if (row.sectionKey === PINNED_GROUP_KEY) {
@@ -739,7 +1000,7 @@ export function canKeepImportedWorktreesHidden(
   return row.placement === 'repo-group' && actionState?.forceVisible !== true
 }
 
-function getWorktreeDragIndexes(rows: readonly Row[]): {
+function getWorktreeDragIndexes(rows: readonly HostSectionRow[]): {
   groupKeyByRowKey: Map<string, string>
   groupIndexByRowKey: Map<string, number>
 } {
@@ -791,11 +1052,13 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
   handleRemoveProjectFromGroup,
   handleRenameProjectGroup,
   handleDeleteProjectGroup,
+  handleCreateFolderWorkspace,
   activeModal,
   pendingRevealWorktree,
   clearPendingRevealWorktreeId,
   agentSendTargetWorktreeId,
   worktrees,
+  folderWorkspaces,
   selectedWorktreeIds,
   selectedWorktrees,
   onSelectionGesture,
@@ -806,8 +1069,11 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
   worktreeLineageById,
   repoOrder,
   allRepoIds,
+  onReorderHostSections,
+  onHostDragActiveChange,
   prCache,
   workspaceStatuses,
+  projectGrouping,
   projectGroups = EMPTY_PROJECT_GROUPS,
   onMoveWorktreeToStatus,
   onMoveWorktreesToStatus,
@@ -941,6 +1207,22 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
     onCommit: commitRepoReorder,
     getScrollContainer: () => scrollRef.current
   })
+  const orderedHostIds = useMemo(
+    () =>
+      rows
+        .filter((row): row is HostHeaderRow => row.type === 'host-header')
+        .map((row) => row.hostId),
+    [rows]
+  )
+  const hostDrag = useHostHeaderDrag({
+    orderedHostIds,
+    onCommit: onReorderHostSections,
+    getScrollContainer: () => scrollRef.current
+  })
+  useEffect(() => {
+    onHostDragActiveChange(hostDrag.state.draggingHostId !== null)
+  }, [hostDrag.state.draggingHostId, onHostDragActiveChange])
+  useEffect(() => () => onHostDragActiveChange(false), [onHostDragActiveChange])
   const worktreeDragGroups = useMemo(() => getWorktreeDragGroups(rows), [rows])
   const worktreeDragUnitGroups = useMemo(() => getWorktreeDragUnitGroups(rows), [rows])
   const worktreeLineageDragRows = useMemo(
@@ -1104,7 +1386,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
     [onImmediateWorktreeActivate]
   )
   const firstHeaderIndex = useMemo(
-    () => renderRows.findIndex((row) => row.type === 'header'),
+    () => renderRows.findIndex((row) => row.type === 'header' || row.type === 'host-header'),
     [renderRows]
   )
   const firstHeaderIndexRef = useRef(firstHeaderIndex)
@@ -1113,8 +1395,85 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
   const stickyHeaderIndexesRef = useRef(stickyHeaderIndexes)
   stickyHeaderIndexesRef.current = stickyHeaderIndexes
   const activeStickyHeaderIndexRef = useRef<number | null>(null)
+  const activeStickyHostIndexRef = useRef<number | null>(null)
   const stickyRangeStartIndexRef = useRef(0)
   const sshConnectionStates = useAppStore((s) => s.sshConnectionStates)
+  const {
+    folderWorkspacePathStatuses,
+    fetchFolderWorkspacePathStatus,
+    getFolderWorkspacePathStatusCacheKey,
+    getFreshFolderWorkspacePathStatus,
+    activeRuntimeEnvironmentId
+  } = useAppStore(
+    useShallow((s) => ({
+      folderWorkspacePathStatuses: s.folderWorkspacePathStatuses,
+      fetchFolderWorkspacePathStatus: s.fetchFolderWorkspacePathStatus,
+      getFolderWorkspacePathStatusCacheKey: s.getFolderWorkspacePathStatusCacheKey,
+      getFreshFolderWorkspacePathStatus: s.getFreshFolderWorkspacePathStatus,
+      activeRuntimeEnvironmentId: s.settings?.activeRuntimeEnvironmentId ?? null
+    }))
+  )
+  const folderPathStatusRepoMembershipKey = useMemo(
+    () =>
+      allRepoIds
+        .map((repoId) => {
+          const repo = repoMap.get(repoId)
+          return `${repoId}:${repo?.path ?? ''}:${repo?.projectGroupId ?? ''}:${repo?.connectionId ?? ''}`
+        })
+        .join('\0'),
+    [allRepoIds, repoMap]
+  )
+  const folderPathStatusSshConnectionKey = useMemo(
+    () =>
+      [...sshConnectionStates.entries()]
+        .map(([connectionId, state]) => `${connectionId}:${state.status}`)
+        .sort()
+        .join('\0'),
+    [sshConnectionStates]
+  )
+  const folderPathStatusCacheExpiryTick = useFolderWorkspacePathStatusCacheExpiryTick(
+    folderWorkspacePathStatuses
+  )
+  useEffect(() => {
+    const requests = new Map<string, Parameters<typeof fetchFolderWorkspacePathStatus>[0]>()
+    for (const group of projectGroups) {
+      if (group.parentPath) {
+        const request = { scope: 'project-group' as const, projectGroupId: group.id }
+        requests.set(getFolderWorkspacePathStatusCacheKey(request), request)
+      }
+    }
+    for (const workspace of folderWorkspaces) {
+      const request = { scope: 'folder-workspace' as const, folderWorkspaceId: workspace.id }
+      requests.set(getFolderWorkspacePathStatusCacheKey(request), request)
+    }
+    for (const request of requests.values()) {
+      void fetchFolderWorkspacePathStatus(request, { force: true })
+    }
+  }, [
+    activeRuntimeEnvironmentId,
+    fetchFolderWorkspacePathStatus,
+    folderPathStatusRepoMembershipKey,
+    folderPathStatusSshConnectionKey,
+    folderWorkspaces,
+    getFolderWorkspacePathStatusCacheKey,
+    projectGroups
+  ])
+  const getCachedFolderWorkspacePathStatus = useCallback(
+    (request: Parameters<typeof fetchFolderWorkspacePathStatus>[0]) => {
+      const cacheKey = getFolderWorkspacePathStatusCacheKey(request)
+      // Why: expired negative statuses should not keep disabling folder
+      // workspaces while a fresh status request is in flight.
+      void folderWorkspacePathStatuses[cacheKey]
+      void folderPathStatusCacheExpiryTick
+      return getFreshFolderWorkspacePathStatus(request)
+    },
+    [
+      folderWorkspacePathStatuses,
+      folderPathStatusCacheExpiryTick,
+      getFolderWorkspacePathStatusCacheKey,
+      getFreshFolderWorkspacePathStatus
+    ]
+  )
   const renderRowsRef = useRef(renderRows)
   renderRowsRef.current = renderRows
   const getVirtualItemKey = useCallback(
@@ -1167,7 +1526,11 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
         )
       }
       const index = getVirtualRowIndex(element)
-      if (index !== null && renderRowsRef.current[index]?.type === 'header') {
+      if (
+        index !== null &&
+        (renderRowsRef.current[index]?.type === 'header' ||
+          renderRowsRef.current[index]?.type === 'host-header')
+      ) {
         return estimateRenderRowSize(
           renderRowsRef.current,
           index,
@@ -1216,7 +1579,11 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
     rangeExtractor: useCallback(
       (range: Range) => {
         stickyRangeStartIndexRef.current = range.startIndex
-        return extractWorktreeVirtualRowIndexes({ range, stickyHeaderIndexes })
+        return extractWorktreeVirtualRowIndexes({
+          range,
+          stickyHeaderIndexes,
+          rows: renderRowsRef.current
+        })
       },
       [stickyHeaderIndexes]
     ),
@@ -1268,51 +1635,64 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
     }
 
     if (agentSendTargetWorktreeId !== pendingRevealWorktree.worktreeId) {
-      const targetWorktree = worktrees.find((w) => w.id === pendingRevealWorktree.worktreeId)
-      if (targetWorktree && !targetWorktree.isPinned) {
-        const seen = new Set<string>()
-        let current: Worktree | undefined = targetWorktree
-        while (current && !seen.has(current.id)) {
-          seen.add(current.id)
-          const lineage = worktreeLineageById[current.id]
-          const parent = lineage ? worktreeMap.get(lineage.parentWorktreeId) : undefined
-          if (
-            !lineage ||
-            !parent ||
-            current.instanceId !== lineage.worktreeInstanceId ||
-            parent.instanceId !== lineage.parentWorktreeInstanceId
-          ) {
-            break
-          }
-          const lineageGroupKey = getLineageGroupKey(parent.id)
-          if (collapsedGroups.has(lineageGroupKey)) {
-            toggleGroup(lineageGroupKey)
-          }
-          current = parent
-        }
-      }
-
-      if (targetWorktree?.isPinned) {
-        // Why: pinned worktrees live in the dedicated "Pinned" section regardless
-        // of their PR-status / project group. Only uncollapse the Pinned header
-        // itself — expanding the underlying status group would be surprising since
-        // the user intentionally collapsed it.
-        if (collapsedGroups.has(PINNED_GROUP_KEY)) {
-          toggleGroup(PINNED_GROUP_KEY)
-        }
-      } else if (targetWorktree) {
-        const groupKeys = getGroupKeysForWorktree(
-          groupBy,
-          targetWorktree,
-          repoMap,
-          prCache,
-          workspaceStatuses,
-          settings,
-          projectGroups
-        )
-        for (const groupKey of groupKeys) {
+      const folderGroupKeys = getFolderWorkspaceRevealGroupKeys(
+        pendingRevealWorktree.worktreeId,
+        folderWorkspaces,
+        projectGroups
+      )
+      if (folderGroupKeys.length > 0) {
+        for (const groupKey of folderGroupKeys) {
           if (collapsedGroups.has(groupKey)) {
             toggleGroup(groupKey)
+          }
+        }
+      } else {
+        const targetWorktree = worktrees.find((w) => w.id === pendingRevealWorktree.worktreeId)
+        if (targetWorktree && !targetWorktree.isPinned) {
+          const seen = new Set<string>()
+          let current: Worktree | undefined = targetWorktree
+          while (current && !seen.has(current.id)) {
+            seen.add(current.id)
+            const lineage = worktreeLineageById[current.id]
+            const parent = lineage ? worktreeMap.get(lineage.parentWorktreeId) : undefined
+            if (
+              !lineage ||
+              !parent ||
+              current.instanceId !== lineage.worktreeInstanceId ||
+              parent.instanceId !== lineage.parentWorktreeInstanceId
+            ) {
+              break
+            }
+            const lineageGroupKey = getLineageGroupKey(parent.id)
+            if (collapsedGroups.has(lineageGroupKey)) {
+              toggleGroup(lineageGroupKey)
+            }
+            current = parent
+          }
+        }
+
+        if (targetWorktree?.isPinned) {
+          // Why: pinned worktrees live in the dedicated "Pinned" section regardless
+          // of their PR-status / project group. Only uncollapse the Pinned header
+          // itself — expanding the underlying status group would be surprising since
+          // the user intentionally collapsed it.
+          if (collapsedGroups.has(PINNED_GROUP_KEY)) {
+            toggleGroup(PINNED_GROUP_KEY)
+          }
+        } else if (targetWorktree) {
+          const groupKeys = getGroupKeysForWorktree(
+            groupBy,
+            targetWorktree,
+            repoMap,
+            prCache,
+            workspaceStatuses,
+            settings,
+            projectGroups
+          )
+          for (const groupKey of groupKeys) {
+            if (collapsedGroups.has(groupKey)) {
+              toggleGroup(groupKey)
+            }
           }
         }
       }
@@ -1323,8 +1703,10 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
       if (cancelled) {
         return
       }
-      const targetWorktreeStillExists = worktrees.some(
-        (worktree) => worktree.id === pendingRevealWorktree.worktreeId
+      const targetWorktreeStillExists = sidebarWorkspaceStillExists(
+        pendingRevealWorktree.worktreeId,
+        worktrees,
+        folderWorkspaces
       )
       const targetIndex = renderRows.findIndex((row) =>
         renderRowContainsWorktree(row, pendingRevealWorktree.worktreeId)
@@ -1358,7 +1740,8 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
           ? revealMountedWorktreeElement(
               container,
               pendingRevealWorktree.worktreeId,
-              pendingRevealWorktree.behavior
+              pendingRevealWorktree.behavior,
+              getRenderRowOptionId(targetRow, pendingRevealWorktree.worktreeId)
             )
           : null
         if (revealedOption) {
@@ -1412,6 +1795,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
     agentSendTargetWorktreeId,
     groupBy,
     worktrees,
+    folderWorkspaces,
     repoMap,
     prCache,
     worktreeLineageById,
@@ -1439,13 +1823,15 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
   )
   const totalSize = virtualizer.getTotalSize()
   const virtualItems = virtualizer.getVirtualItems()
-  const activeStickyHeaderIndex = getActiveStickyHeaderIndexForScroll({
+  const activeStickyIndexes = getActiveStickyIndexesForScroll({
+    rows: renderRows,
     rangeStartIndex: stickyRangeStartIndexRef.current,
     scrollOffset: virtualizer.scrollOffset ?? scrollOffsetRef.current,
     stickyHeaderIndexes,
     virtualItems
   })
-  activeStickyHeaderIndexRef.current = activeStickyHeaderIndex
+  activeStickyHeaderIndexRef.current = activeStickyIndexes.groupIndex
+  activeStickyHostIndexRef.current = activeStickyIndexes.hostIndex
 
   const measureMountedRows = useCallback(() => {
     virtualizer.elementsCache.forEach((element) => {
@@ -1524,7 +1910,11 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
         worktreeMap,
         true,
         settings,
-        projectGroups
+        projectGroups,
+        new Set(),
+        new Map(),
+        [],
+        projectGrouping
       ).filter((r): r is Extract<Row, { type: 'item' }> => r.type === 'item')
       const seenWorktreeIds = new Set<string>()
       const worktreeRows = allWorktreeRows.filter((row) => {
@@ -1579,7 +1969,8 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
       worktreeLineageById,
       worktreeMap,
       settings,
-      projectGroups
+      projectGroups,
+      projectGrouping
     ]
   )
 
@@ -2570,7 +2961,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
     const visibleRows = virtualItems
       .filter((item) => item.start < viewportBottom && item.end > viewportTop)
       .map((item) => renderRows[item.index])
-      .filter((row): row is Extract<Row, { type: 'item' }> => row?.type === 'item')
+      .filter((row): row is WorktreeItemRow => row?.type === 'item')
       .filter((row) => row.repo?.kind === 'git' && !row.worktree.isBare && row.worktree.branch)
     const visibleWorktreeIds = new Set(visibleRows.map((row) => row.worktree.id))
     if (
@@ -2610,6 +3001,10 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
 
   const activeDescendantId = getActiveDescendantOptionId({
     activeWorktreeId,
+    primaryActiveRowKey:
+      primaryActiveWorktreeRow?.worktreeId === activeWorktreeId
+        ? primaryActiveWorktreeRow.rowKey
+        : undefined,
     renderRows,
     virtualItems
   })
@@ -2853,6 +3248,17 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
               style={{ top: `${repoDrag.state.dropIndicatorY}px` }}
             />
           ) : null}
+          {hostDrag.state.draggingHostId !== null && hostDrag.state.dropIndicatorY !== null ? (
+            <div
+              role="presentation"
+              className="pointer-events-none absolute left-3 right-2 z-40 flex h-3 -translate-y-1/2 items-center"
+              style={{ top: `${hostDrag.state.dropIndicatorY}px` }}
+            >
+              <span className="size-1.5 shrink-0 rounded-full bg-worktree-sidebar-ring shadow-[0_0_0_2px_var(--worktree-sidebar)]" />
+              <span className="h-0.5 flex-1 rounded-full bg-worktree-sidebar-ring shadow-[0_0_0_2px_var(--worktree-sidebar)]" />
+              <span className="size-1.5 shrink-0 rounded-full bg-worktree-sidebar-ring shadow-[0_0_0_2px_var(--worktree-sidebar)]" />
+            </div>
+          ) : null}
           {worktreeDragState.draggingWorktreeId !== null &&
           worktreeDragState.dropIndicatorY !== null ? (
             <div
@@ -2871,8 +3277,58 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
               return null
             }
 
+            if (row.type === 'host-header') {
+              // Why: the host card is the outer hierarchy tier — it pins above
+              // group headers (z-30 vs z-20) and stays put while they hand off.
+              const isActiveStickyHost = activeStickyHostIndexRef.current === vItem.index
+              const hasHeaderTopSpacing = shouldUseHeaderTopSpacing({
+                rows: renderRows,
+                index: vItem.index,
+                firstHeaderIndex
+              })
+              return (
+                <div
+                  key={vItem.key}
+                  role="presentation"
+                  data-worktree-virtual-row
+                  data-worktree-virtual-row-key={String(vItem.key)}
+                  data-worktree-sticky-header=""
+                  data-worktree-sticky-header-active={isActiveStickyHost ? '' : undefined}
+                  data-index={vItem.index}
+                  ref={measureVirtualRowElement}
+                  className={cn(
+                    'left-0 right-0',
+                    hasHeaderTopSpacing && !isActiveStickyHost && 'pt-1',
+                    isActiveStickyHost
+                      ? 'sticky -top-px z-30 bg-worktree-sidebar'
+                      : 'absolute top-0'
+                  )}
+                  style={
+                    isActiveStickyHost
+                      ? undefined
+                      : { transform: getVirtualRowTransform(vItem.start) }
+                  }
+                >
+                  <HostSectionHeader
+                    row={row}
+                    onToggle={() => toggleGroupWithScrollAnchor(row.key)}
+                    onDragPointerDown={
+                      orderedHostIds.length > 1
+                        ? (e) => hostDrag.onHandlePointerDown(e, row.hostId)
+                        : undefined
+                    }
+                    dragging={hostDrag.state.draggingHostId === row.hostId}
+                  />
+                </div>
+              )
+            }
+
             if (row.type === 'header') {
               const isActiveStickyHeader = activeStickyHeaderIndexRef.current === vItem.index
+              // Why: when a host card is pinned, the group tier pins flush
+              // beneath it instead of at the viewport top.
+              const stickyTopClass =
+                activeStickyHostIndexRef.current !== null ? 'top-[35px]' : '-top-px'
               const hasHeaderTopSpacing = shouldUseHeaderTopSpacing({
                 rows: renderRows,
                 index: vItem.index,
@@ -2904,6 +3360,20 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                       : null
                   })
                 : null
+              const projectGroupPathStatus =
+                isProjectGroupHeader &&
+                row.projectGroup &&
+                'parentPath' in row.projectGroup &&
+                row.projectGroup.parentPath
+                  ? getCachedFolderWorkspacePathStatus({
+                      scope: 'project-group',
+                      projectGroupId: row.projectGroup.id
+                    })
+                  : null
+              const folderWorkspaceCreateDisabled =
+                projectGroupPathStatus?.exists === false &&
+                (isConfirmedStaleFolderPathStatus(projectGroupPathStatus) ||
+                  projectGroupPathStatus.reason === 'ambiguous-connection')
               const projectGroupDepth = row.projectGroupDepth ?? 0
               // Why: non-project section headers like "All" are labels for the
               // flat list, so they should not reserve project hierarchy indent.
@@ -2931,7 +3401,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                     // so the previous repo no longer stays pinned over it.
                     hasHeaderTopSpacing && !isActiveStickyHeader && 'pt-1',
                     isActiveStickyHeader
-                      ? 'sticky -top-px z-20 bg-worktree-sidebar'
+                      ? cn('sticky z-20 bg-worktree-sidebar', stickyTopClass)
                       : 'absolute top-0'
                   )}
                   style={
@@ -3032,6 +3502,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                           {row.label}
                         </div>
                         <RepoForkIndicator upstream={row.repo?.upstream} />
+                        <FolderPathStatusIndicator status={projectGroupPathStatus} />
                         <SectionMetricsBadge count={row.count} />
                       </div>
                     </div>
@@ -3107,6 +3578,61 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
+                    ) : null}
+
+                    {isProjectGroupHeader &&
+                    !row.repo &&
+                    row.projectGroup &&
+                    'parentPath' in row.projectGroup &&
+                    row.projectGroup.parentPath ? (
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon-xs"
+                            data-repo-header-action=""
+                            className={cn(
+                              'size-5 shrink-0 rounded-md text-muted-foreground opacity-0 transition-opacity hover:bg-accent/70 hover:text-foreground focus:opacity-100 group-hover:opacity-100',
+                              folderWorkspaceCreateDisabled &&
+                                'cursor-not-allowed text-muted-foreground/60 hover:bg-transparent hover:text-muted-foreground/60'
+                            )}
+                            aria-label={translate(
+                              'auto.components.sidebar.WorktreeList.bd37a57ac8',
+                              'Create workspace for {{value0}}',
+                              { value0: row.label }
+                            )}
+                            aria-disabled={folderWorkspaceCreateDisabled}
+                            onKeyDown={stopRepoHeaderKeyboardToggle}
+                            onPointerDown={handleRepoHeaderActionPointerDown}
+                            onClick={(event) => {
+                              event.preventDefault()
+                              event.stopPropagation()
+                              if (folderWorkspaceCreateDisabled) {
+                                return
+                              }
+                              if (
+                                row.projectGroup &&
+                                'parentPath' in row.projectGroup &&
+                                row.projectGroup.parentPath
+                              ) {
+                                handleCreateFolderWorkspace(row.projectGroup)
+                              }
+                            }}
+                          >
+                            <Plus className="size-3" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent side="bottom" sideOffset={6}>
+                          {projectGroupPathStatus?.exists === false
+                            ? getFolderWorkspacePathStatusDescription(projectGroupPathStatus)
+                            : translate(
+                                'auto.components.sidebar.WorktreeList.bd37a57ac8',
+                                'Create workspace for {{value0}}',
+                                { value0: row.label }
+                              )}
+                        </TooltipContent>
+                      </Tooltip>
                     ) : null}
 
                     {row.repo && groupBy === 'repo' ? (
@@ -3346,7 +3872,10 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
               // still owns the project/group inset inside each card surface.
               const paddingDepth = nested ? Math.max(0, itemRow.depth - 1) : itemRow.depth
               const nestedCardPaddingLeft = nested
-                ? Math.max(0, itemRow.depth) * NESTED_LINEAGE_CARD_INDENT
+                ? getWorktreeCardSurfaceInset({
+                    isGrouped: true,
+                    groupDepth: itemRow.depth
+                  })
                 : 0
               const inheritedCardContentIndent = getWorktreeCardContentIndent({
                 isGrouped: groupBy !== 'none',
@@ -3360,7 +3889,16 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                 groupDepth: itemRow.groupDepth,
                 lineageDepth: paddingDepth
               })
-              const cardContentIndent = nested ? inheritedCardContentIndent : paddingLeft
+              const surfaceInset = nested
+                ? nestedCardPaddingLeft
+                : getWorktreeCardSurfaceInset({
+                    isGrouped: groupBy !== 'none',
+                    groupDepth: itemRow.groupDepth
+                  })
+              const cardContentIndent = Math.max(
+                0,
+                (nested ? inheritedCardContentIndent : paddingLeft) - surfaceInset
+              )
               const worktreeDragGroupKey = groupKeyByRowKey.get(itemRow.rowKey)
               const worktreeDragGroupIndex = groupIndexByRowKey.get(itemRow.rowKey)
               const revealHighlightTone =
@@ -3405,8 +3943,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                       : handleWorktreeRowPointerDown(event, itemRow.worktree.id, itemRow.rowKey)
                   }
                   style={{
-                    paddingLeft:
-                      nested && nestedCardPaddingLeft > 0 ? `${nestedCardPaddingLeft}px` : undefined
+                    paddingLeft: surfaceInset > 0 ? `${surfaceInset}px` : undefined
                   }}
                 >
                   <WorktreeCard
@@ -3436,6 +3973,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                     hideRepoBadge={groupBy === 'repo'}
                     // Why: pinned worktrees also render in their natural group;
                     // only the overlay row is the mixed-repo section needing icons.
+                    hostContextLabel={itemRow.hostContextLabel}
                     inPinnedSection={isPinnedOverlayRow}
                     renameRowKey={itemRow.rowKey}
                     lineageChildCount={itemRow.lineageChildCount}
@@ -3483,7 +4021,6 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                 childNodes.push(renderWorktreeRow(child, true, childLineageChildren))
                 cursor = nextSiblingIndex
               }
-
               return childNodes.length > 0 ? childNodes : undefined
             }
 
@@ -3574,6 +4111,80 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
               )
             }
 
+            if (row.type === 'folder-workspace') {
+              const folderWorkspaceRow = row as FolderWorkspaceItemRow
+              const folderWorktree = folderWorkspaceToWorktree(folderWorkspaceRow.folderWorkspace)
+              const folderWorkspacePathStatus = getCachedFolderWorkspacePathStatus({
+                scope: 'folder-workspace',
+                folderWorkspaceId: folderWorkspaceRow.folderWorkspace.id
+              })
+              const folderWorkspaceActivationDisabled =
+                folderWorkspacePathStatus?.exists === false &&
+                (isConfirmedStaleFolderPathStatus(folderWorkspacePathStatus) ||
+                  folderWorkspacePathStatus.reason === 'ambiguous-connection')
+              const contentIndent = getWorktreeCardContentIndent({
+                isGrouped: groupBy !== 'none',
+                groupDepth: folderWorkspaceRow.groupDepth,
+                lineageDepth: folderWorkspaceRow.depth
+              })
+              // Why: folder workspace surfaces should step inward with their
+              // project-group nesting, matching lineage child card surfaces
+              // instead of spanning from the sidebar edge at every depth.
+              const surfaceInset = getWorktreeCardSurfaceInset({
+                isGrouped: groupBy !== 'none',
+                groupDepth: folderWorkspaceRow.groupDepth
+              })
+              const insetContentIndent = Math.max(0, contentIndent - surfaceInset)
+              return (
+                <div
+                  key={vItem.key}
+                  id={getWorktreeOptionId(folderWorktree.id)}
+                  role="option"
+                  aria-selected={selectedWorktreeIds.has(folderWorktree.id)}
+                  aria-current={activeWorktreeId === folderWorktree.id ? 'page' : undefined}
+                  data-worktree-id={folderWorktree.id}
+                  data-worktree-row-key={folderWorktree.id}
+                  data-worktree-virtual-row
+                  data-worktree-virtual-row-key={String(vItem.key)}
+                  data-worktree-virtual-row-start={vItem.start}
+                  data-index={vItem.index}
+                  ref={measureVirtualRowElement}
+                  className="absolute left-0 right-0 top-0"
+                  style={{ transform: getVirtualRowTransform(vItem.start) }}
+                  onClickCapture={handleWorktreeRowClickCapture}
+                  onPointerDown={(event) =>
+                    handleWorktreeRowPointerDown(event, folderWorktree.id, folderWorktree.id)
+                  }
+                >
+                  <div
+                    className="relative"
+                    style={surfaceInset > 0 ? { paddingLeft: surfaceInset } : undefined}
+                  >
+                    <WorktreeCard
+                      worktree={folderWorktree}
+                      repo={undefined}
+                      isActive={activeWorktreeId === folderWorktree.id}
+                      isCurrentWorktree={currentWorktreeId === folderWorktree.id}
+                      contentIndent={insetContentIndent}
+                      flushSurface
+                      nativeDragEnabled={false}
+                      onImmediateActivate={
+                        folderWorkspaceActivationDisabled
+                          ? undefined
+                          : handleImmediateWorktreeRowActivate
+                      }
+                      activationRowKey={folderWorktree.id}
+                      onSelectionGesture={onSelectionGesture}
+                      onContextMenuSelect={onContextMenuSelect}
+                    />
+                    <div className="pointer-events-auto absolute right-3 top-1.5">
+                      <FolderPathStatusIndicator status={folderWorkspacePathStatus} />
+                    </div>
+                  </div>
+                </div>
+              )
+            }
+
             const itemWorkspaceStatus =
               groupBy === 'workspace-status'
                 ? getWorkspaceStatus(row.worktree, workspaceStatuses)
@@ -3646,6 +4257,10 @@ const WorktreeList = React.memo(function WorktreeList({
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
   const currentSidebarWorktreeId = activeWorktreeId
   const groupBy = useAppStore((s) => s.groupBy)
+  const workspaceHostScope = useAppStore((s) => s.workspaceHostScope)
+  const visibleWorkspaceHostIds = useAppStore((s) => s.visibleWorkspaceHostIds)
+  const workspaceHostOrder = useAppStore((s) => s.workspaceHostOrder)
+  const setWorkspaceHostOrder = useAppStore((s) => s.setWorkspaceHostOrder)
   const workspaceStatuses = useAppStore((s) => s.workspaceStatuses)
   const sortBy = useAppStore((s) => s.sortBy)
   const setSortBy = useAppStore((s) => s.setSortBy)
@@ -3725,6 +4340,10 @@ const WorktreeList = React.memo(function WorktreeList({
     groupBy === 'pr-status' || cardProps.includes('pr') ? s.prCache : null
   )
   const settings = useAppStore((s) => s.settings)
+  const sshTargetLabels = useAppStore((s) => s.sshTargetLabels)
+  const sshConnectionStates = useAppStore((s) => s.sshConnectionStates)
+  const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
+  const runtimeStatusByEnvironmentId = useAppStore((s) => s.runtimeStatusByEnvironmentId)
 
   const sortEpoch = useAppStore((s) => s.sortEpoch)
 
@@ -3954,15 +4573,24 @@ const WorktreeList = React.memo(function WorktreeList({
     if (sortBy !== 'smart' || sortedIds.length === 0 || !sessionHasHadPty.current) {
       return
     }
-    const target = getActiveRuntimeTarget(useAppStore.getState().settings)
-    void (target.kind === 'environment'
-      ? callRuntimeRpc(
-          target,
-          'worktree.persistSortOrder',
-          { orderedIds: sortedIds },
-          { timeoutMs: 15_000 }
-        )
-      : window.api.worktrees.persistSortOrder({ orderedIds: sortedIds }))
+    // Why: sortOrder is persisted in each host's worktreeMeta and enriched from
+    // the owner host, so persist each host's ids on that host.
+    const state = useAppStore.getState()
+    for (const group of splitWorktreeSortOrderByHost(state, sortedIds)) {
+      const parsed = parseExecutionHostId(group.hostId)
+      const target =
+        parsed?.kind === 'runtime'
+          ? ({ kind: 'environment', environmentId: parsed.environmentId } as const)
+          : ({ kind: 'local' } as const)
+      void (target.kind === 'environment'
+        ? callRuntimeRpc(
+            target,
+            'worktree.persistSortOrder',
+            { orderedIds: group.orderedIds },
+            { timeoutMs: 15_000 }
+          )
+        : window.api.worktrees.persistSortOrder({ orderedIds: group.orderedIds }))
+    }
   }, [sortedIds, sortBy])
 
   // Flatten, filter, and apply stable sort order via the shared utility so
@@ -3976,6 +4604,9 @@ const WorktreeList = React.memo(function WorktreeList({
       browserTabsByWorktree,
       hideDefaultBranchWorkspace,
       repoMap,
+      workspaceHostScope,
+      visibleWorkspaceHostIds,
+      defaultHostId: getSettingsFocusedExecutionHostId(settings),
       worktreeLineageById
     })
     if (
@@ -3994,6 +4625,9 @@ const WorktreeList = React.memo(function WorktreeList({
     filterRepoIds,
     showSleepingWorkspaces,
     hideDefaultBranchWorkspace,
+    workspaceHostScope,
+    visibleWorkspaceHostIds,
+    settings,
     repoMap,
     tabsByWorktree,
     ptyIdsByTabId,
@@ -4011,7 +4645,14 @@ const WorktreeList = React.memo(function WorktreeList({
   // Why: manual repo header order is bound to state.repos. Recent/Smart derive
   // header order from the sorted visible worktree stream instead.
   const repos = useAppStore((s) => s.repos)
+  const projects = useAppStore((s) => s.projects)
+  const projectHostSetups = useAppStore((s) => s.projectHostSetups)
+  const projectGrouping = useMemo(
+    () => ({ projects, projectHostSetups }),
+    [projectHostSetups, projects]
+  )
   const projectGroups = useAppStore((s) => s.projectGroups ?? EMPTY_PROJECT_GROUPS)
+  const folderWorkspaces = useAppStore((s) => s.folderWorkspaces)
   const effectiveCollapsedGroups = useMemo(() => {
     if (!agentSendTargetWorktreeId) {
       return collapsedGroups
@@ -4031,7 +4672,8 @@ const WorktreeList = React.memo(function WorktreeList({
         prCache,
         workspaceStatuses,
         settings,
-        projectGroups
+        projectGroups,
+        projectGrouping
       )) {
         next.delete(groupKey)
       }
@@ -4061,12 +4703,57 @@ const WorktreeList = React.memo(function WorktreeList({
     groupBy,
     prCache,
     projectGroups,
+    projectGrouping,
     repoMap,
     settings,
     workspaceStatuses,
     worktreeLineageById,
     worktreeMap
   ])
+  const defaultHostId = getSettingsFocusedExecutionHostId(settings)
+  const visibleHostIdSet = useMemo(() => {
+    const visibleHostIds =
+      visibleWorkspaceHostIds ??
+      (workspaceHostScope === ALL_EXECUTION_HOSTS_SCOPE ? null : [workspaceHostScope])
+    return visibleHostIds ? new Set<ExecutionHostId>(visibleHostIds) : null
+  }, [visibleWorkspaceHostIds, workspaceHostScope])
+  const visibleReposForRows = useMemo(() => {
+    if (!visibleHostIdSet) {
+      return repos
+    }
+    return repos.filter((repo) => {
+      const hostId =
+        repo.connectionId || repo.executionHostId ? getRepoExecutionHostId(repo) : defaultHostId
+      return visibleHostIdSet.has(hostId)
+    })
+  }, [defaultHostId, repos, visibleHostIdSet])
+  const visibleProjectGroupsForRows = useMemo(() => {
+    if (!visibleHostIdSet) {
+      return projectGroups
+    }
+    return projectGroups.filter((group) => {
+      const hostId = group.connectionId
+        ? (`ssh:${encodeURIComponent(group.connectionId)}` as ExecutionHostId)
+        : defaultHostId
+      return visibleHostIdSet.has(hostId)
+    })
+  }, [defaultHostId, projectGroups, visibleHostIdSet])
+  const visibleFolderWorkspacesForRows = useMemo(() => {
+    if (!visibleHostIdSet) {
+      return folderWorkspaces
+    }
+    const projectGroupById = new Map(projectGroups.map((group) => [group.id, group]))
+    return folderWorkspaces.filter((folderWorkspace) => {
+      const connectionId =
+        folderWorkspace.connectionId ??
+        projectGroupById.get(folderWorkspace.projectGroupId)?.connectionId ??
+        null
+      const hostId = connectionId
+        ? (`ssh:${encodeURIComponent(connectionId)}` as ExecutionHostId)
+        : defaultHostId
+      return visibleHostIdSet.has(hostId)
+    })
+  }, [defaultHostId, folderWorkspaces, projectGroups, visibleHostIdSet])
   const repoOrder = useMemo(() => {
     const map = new Map<string, number>()
     repos.forEach((r, i) => map.set(r.id, i))
@@ -4082,15 +4769,20 @@ const WorktreeList = React.memo(function WorktreeList({
         .map(([repoId]) => repoId)
     )
     return buildImportedWorktreesCardCandidates({
-      repos,
+      repos: visibleReposForRows,
       detectedWorktreesByRepo,
       filterRepoIds,
       forceVisibleRepoIds
     })
-  }, [detectedWorktreesByRepo, filterRepoIds, importedWorktreeCardActionState, repos])
+  }, [detectedWorktreesByRepo, filterRepoIds, importedWorktreeCardActionState, visibleReposForRows])
   const placeholderRepoIds = useMemo(() => {
-    return getEmptyProjectPlaceholderRepoIds({ groupBy, repos, worktreesByRepo, filterRepoIds })
-  }, [filterRepoIds, groupBy, repos, worktreesByRepo])
+    return getEmptyProjectPlaceholderRepoIds({
+      groupBy,
+      repos: visibleReposForRows,
+      worktreesByRepo,
+      filterRepoIds
+    })
+  }, [filterRepoIds, groupBy, visibleReposForRows, worktreesByRepo])
   const allRepoIds = useMemo(() => repos.map((r) => r.id), [repos])
 
   // Why: buildRows only needs which creates exist and their repo. Subscribe on a
@@ -4113,6 +4805,32 @@ const WorktreeList = React.memo(function WorktreeList({
       }),
     [pendingCreationKeys]
   )
+  const hostLabelOverrides = useMemo(() => getHostDisplayLabelOverrides(settings), [settings])
+  const hostOptions = useMemo(
+    () =>
+      buildSidebarHostOptions({
+        repos,
+        sshTargetLabels,
+        sshConnectionStates,
+        settings,
+        runtimeEnvironments,
+        runtimeStatusByEnvironmentId,
+        hostLabelOverrides
+      }),
+    [
+      repos,
+      sshTargetLabels,
+      sshConnectionStates,
+      settings,
+      runtimeEnvironments,
+      runtimeStatusByEnvironmentId,
+      hostLabelOverrides
+    ]
+  )
+  const hostLabelById = useMemo(
+    () => new Map(hostOptions.map((host) => [host.id, host.label])),
+    [hostOptions]
+  )
 
   // Build flat row list for rendering
   const rows: Row[] = useMemo(
@@ -4130,10 +4848,13 @@ const WorktreeList = React.memo(function WorktreeList({
         worktreeMap,
         true,
         settings,
-        projectGroups,
+        visibleProjectGroupsForRows,
         placeholderRepoIds,
         importedWorktreesByRepo,
-        pendingCreations
+        pendingCreations,
+        projectGrouping,
+        visibleFolderWorkspacesForRows,
+        hostLabelById
       ),
     [
       groupBy,
@@ -4147,15 +4868,69 @@ const WorktreeList = React.memo(function WorktreeList({
       worktreeLineageById,
       worktreeMap,
       settings,
-      projectGroups,
+      projectGrouping,
+      visibleProjectGroupsForRows,
+      visibleFolderWorkspacesForRows,
       placeholderRepoIds,
       importedWorktreesByRepo,
-      pendingCreations
+      pendingCreations,
+      hostLabelById
+    ]
+  )
+  const orderedHostOptions = useMemo(
+    () => orderHostSectionOptions(hostOptions, workspaceHostOrder),
+    [hostOptions, workspaceHostOrder]
+  )
+  const [hostDragActive, setHostDragActive] = useState(false)
+  const handleReorderHostSections = useCallback(
+    (orderedVisibleHostIds: ExecutionHostId[]) => {
+      const visibleHostIds = new Set(orderedVisibleHostIds)
+      const hostOptionIds = orderedHostOptions.map((host) => host.id)
+      const knownHostIds = new Set(hostOptionIds)
+      const nextOrder: ExecutionHostId[] = [...orderedVisibleHostIds]
+      const seen = new Set(nextOrder)
+      // Why: dragging only covers rendered host sections. Keep non-rendered
+      // SSH/runtime hosts in the saved preference so they return in the same
+      // place when their workspaces become visible again.
+      for (const hostId of [...workspaceHostOrder, ...hostOptionIds]) {
+        if (!knownHostIds.has(hostId) || visibleHostIds.has(hostId) || seen.has(hostId)) {
+          continue
+        }
+        nextOrder.push(hostId)
+        seen.add(hostId)
+      }
+      setWorkspaceHostOrder(nextOrder)
+    },
+    [orderedHostOptions, setWorkspaceHostOrder, workspaceHostOrder]
+  )
+  const sectionRows = useMemo(
+    () =>
+      addHostSectionRows({
+        rows,
+        hostOptions: orderedHostOptions,
+        workspaceHostScope,
+        visibleWorkspaceHostIds,
+        defaultHostId,
+        collapsedHostKeys: effectiveCollapsedGroups,
+        forceCollapseHosts: hostDragActive,
+        // Why: projects/workspaces are now the primary sidebar object in every
+        // grouping mode; host sections are only an explicit host-filter view.
+        preferProjectGrouping: true
+      }),
+    [
+      defaultHostId,
+      effectiveCollapsedGroups,
+      hostDragActive,
+      orderedHostOptions,
+      rows,
+      visibleWorkspaceHostIds,
+      workspaceHostScope
     ]
   )
   // Why: status headers change during wake (inactive -> active). Key only on
   // the grouping mode so row identity survives those ordinary status moves.
-  const viewportResetKey = `group:${groupBy}:lineage`
+  const visibleHostResetKey = visibleWorkspaceHostIds?.join(',') ?? 'all'
+  const viewportResetKey = `group:${groupBy}:host:${visibleHostResetKey}:lineage`
 
   // Why: derive the rendered item order from the post-buildRows() row list,
   // not the flat `worktrees` array, because grouping (groupBy: 'repo' or
@@ -4164,10 +4939,16 @@ const WorktreeList = React.memo(function WorktreeList({
   // positions when grouping is active.
   const renderedWorktrees = useMemo(
     () =>
-      rows
-        .filter((r): r is Extract<Row, { type: 'item' }> => r.type === 'item')
-        .map((r) => r.worktree),
-    [rows]
+      sectionRows.flatMap((row) => {
+        if (row.type === 'item') {
+          return [row.worktree]
+        }
+        if (row.type === 'folder-workspace') {
+          return [folderWorkspaceToWorktree(row.folderWorkspace)]
+        }
+        return []
+      }),
+    [sectionRows]
   )
   const renderedWorktreeIds = useMemo(
     () => uniqueWorktreeIds(renderedWorktrees.map((worktree) => worktree.id)),
@@ -4352,11 +5133,16 @@ const WorktreeList = React.memo(function WorktreeList({
   const moveProjectToGroup = useAppStore((s) => s.moveProjectToGroup)
   const createProjectGroup = useAppStore((s) => s.createProjectGroup)
   const updateProjectGroup = useAppStore((s) => s.updateProjectGroup)
-  const deleteProjectGroup = useAppStore((s) => s.deleteProjectGroup)
+  const deleteProjectGroupWithContainedProjects = useAppStore(
+    (s) => s.deleteProjectGroupWithContainedProjects
+  )
   const [projectGroupNameDialog, setProjectGroupNameDialog] =
     useState<ProjectGroupNameDialogState | null>(null)
   const [projectGroupDeleteDialog, setProjectGroupDeleteDialog] =
     useState<ProjectGroupDeleteDialogState | null>(null)
+  const [folderWorkspaceCreateGroup, setFolderWorkspaceCreateGroup] = useState<ProjectGroup | null>(
+    null
+  )
 
   const handleCreateGroupFromRepo = useCallback((repo: Repo) => {
     setProjectGroupNameDialog({ type: 'create-from-repo', repo })
@@ -4400,16 +5186,93 @@ const WorktreeList = React.memo(function WorktreeList({
     [createProjectGroup, moveProjectToGroup, projectGroupNameDialog, updateProjectGroup]
   )
 
+  const projectGroupDeleteTargets = useMemo(() => {
+    if (!projectGroupDeleteDialog) {
+      return null
+    }
+    return selectProjectGroupRemovalTargets(projectGroups, repos, projectGroupDeleteDialog.groupId)
+  }, [projectGroupDeleteDialog, projectGroups, repos])
+  const projectGroupDeleteProjectCount = projectGroupDeleteTargets?.projectIds.length ?? 0
+  const projectGroupDeleteProjectNames = useMemo(
+    () =>
+      (projectGroupDeleteTargets?.projectIds ?? []).map(
+        (projectId) => repoMap.get(projectId)?.displayName ?? projectId
+      ),
+    [projectGroupDeleteTargets, repoMap]
+  )
+  const projectGroupRemoveContainedProjects =
+    projectGroupDeleteProjectCount > 0 && projectGroupDeleteDialog?.removeContainedProjects === true
+
   const handleDeleteProjectGroup = useCallback((groupId: string, groupName: string) => {
-    setProjectGroupDeleteDialog({ groupId, groupName })
+    setProjectGroupDeleteDialog({ groupId, groupName, removeContainedProjects: false })
   }, [])
 
   const handleConfirmDeleteProjectGroup = useCallback(async () => {
     if (!projectGroupDeleteDialog) {
       return
     }
-    await deleteProjectGroup(projectGroupDeleteDialog.groupId)
-  }, [deleteProjectGroup, projectGroupDeleteDialog])
+    try {
+      const result = await deleteProjectGroupWithContainedProjects(
+        projectGroupDeleteDialog.groupId,
+        {
+          removeContainedProjects: projectGroupRemoveContainedProjects
+        }
+      )
+      // Why: a missing group is already in the desired end state, so close
+      // quietly; only a real delete failure warrants an error toast.
+      if (result.status === 'group-delete-failed') {
+        toast.error(
+          translate(
+            'auto.components.sidebar.WorktreeList.groupDeleteFailed',
+            'Failed to delete group'
+          ),
+          {
+            description: translate(
+              'auto.components.sidebar.WorktreeList.groupDeleteFailedDesc',
+              'Something went wrong while deleting the group. No projects were removed.'
+            )
+          }
+        )
+        return
+      }
+      if (result.status === 'deleted-group' && result.failedProjectRemovals.length > 0) {
+        const failedCount = result.failedProjectRemovals.length
+        const requestedCount = result.requestedProjectIds.length
+        toast.error(
+          translate(
+            'auto.components.sidebar.WorktreeList.b667b59632',
+            'Some projects could not be removed from Orca'
+          ),
+          {
+            description: translate(
+              'auto.components.sidebar.WorktreeList.f94466bc39',
+              '{{value0}} of {{value1}} contained project{{value2}} remained after deleting the group.',
+              {
+                value0: failedCount,
+                value1: requestedCount,
+                value2: requestedCount === 1 ? '' : 's'
+              }
+            )
+          }
+        )
+      }
+    } finally {
+      // Why: deleting contained projects can empty the sidebar and unmount this
+      // dialog before its own close handler runs, so the parent owns cleanup.
+      setProjectGroupDeleteDialog(null)
+    }
+  }, [
+    deleteProjectGroupWithContainedProjects,
+    projectGroupRemoveContainedProjects,
+    projectGroupDeleteDialog
+  ])
+
+  const handleCreateFolderWorkspace = useCallback((projectGroup: ProjectGroup) => {
+    if (!projectGroup.parentPath) {
+      return
+    }
+    setFolderWorkspaceCreateGroup(projectGroup)
+  }, [])
 
   const moveWorktreeToStatus = useCallback(
     (worktreeId: string, status: WorkspaceStatus) => {
@@ -4593,13 +5456,19 @@ const WorktreeList = React.memo(function WorktreeList({
   // worktree is a default-branch row and who just toggled hide on would see
   // "No workspaces found" with no way back short of reopening the filter menu.
   const filterState = useMemo(
-    () => ({ showSleepingWorkspaces, filterRepoIds, hideDefaultBranchWorkspace }),
-    [showSleepingWorkspaces, filterRepoIds, hideDefaultBranchWorkspace]
+    () => ({
+      showSleepingWorkspaces,
+      filterRepoIds,
+      hideDefaultBranchWorkspace,
+      visibleWorkspaceHostIds
+    }),
+    [showSleepingWorkspaces, filterRepoIds, hideDefaultBranchWorkspace, visibleWorkspaceHostIds]
   )
   const hasFilters = sidebarHasActiveFilters(filterState)
   const setShowSleepingWorkspaces = useAppStore((s) => s.setShowSleepingWorkspaces)
   const setHideDefaultBranchWorkspace = useAppStore((s) => s.setHideDefaultBranchWorkspace)
   const setFilterRepoIds = useAppStore((s) => s.setFilterRepoIds)
+  const setVisibleWorkspaceHostIds = useAppStore((s) => s.setVisibleWorkspaceHostIds)
 
   const clearFilters = useCallback(() => {
     const actions = computeClearFilterActions(filterState)
@@ -4612,7 +5481,16 @@ const WorktreeList = React.memo(function WorktreeList({
     if (actions.resetHideDefaultBranchWorkspace) {
       setHideDefaultBranchWorkspace(false)
     }
-  }, [setShowSleepingWorkspaces, setFilterRepoIds, setHideDefaultBranchWorkspace, filterState])
+    if (actions.resetVisibleWorkspaceHostIds) {
+      setVisibleWorkspaceHostIds(null)
+    }
+  }, [
+    setShowSleepingWorkspaces,
+    setFilterRepoIds,
+    setHideDefaultBranchWorkspace,
+    setVisibleWorkspaceHostIds,
+    filterState
+  ])
 
   const handleRevealCurrentWorkspaceRequest = useCallback(
     (event: Event) => {
@@ -4623,11 +5501,15 @@ const WorktreeList = React.memo(function WorktreeList({
       if (!activeWorktreeId) {
         return
       }
-      const activeWorktree = worktreeMap.get(activeWorktreeId)
+      const activeWorktree = getKnownSidebarWorktreeById(
+        activeWorktreeId,
+        worktreeMap,
+        folderWorkspaces
+      )
       if (!activeWorktree || activeWorktree.isArchived) {
         return
       }
-      if (!worktrees.some((worktree) => worktree.id === activeWorktreeId)) {
+      if (!renderedWorktreeIds.includes(activeWorktreeId)) {
         // Why: the toolbar action promises to reveal the current workspace; when
         // sidebar filters hide it, relax those filters before queuing the reveal.
         clearFilters()
@@ -4638,7 +5520,14 @@ const WorktreeList = React.memo(function WorktreeList({
         beginRename: detail?.beginRename === true
       })
     },
-    [activeWorktreeId, clearFilters, revealWorktreeInSidebar, worktreeMap, worktrees]
+    [
+      activeWorktreeId,
+      clearFilters,
+      folderWorkspaces,
+      renderedWorktreeIds,
+      revealWorktreeInSidebar,
+      worktreeMap
+    ]
   )
 
   useEffect(() => {
@@ -4726,6 +5615,14 @@ const WorktreeList = React.memo(function WorktreeList({
       <ProjectGroupDeleteDialog
         open={projectGroupDeleteDialog !== null}
         groupName={projectGroupDeleteDialog?.groupName ?? ''}
+        projectCount={projectGroupDeleteProjectCount}
+        projectNames={projectGroupDeleteProjectNames}
+        removeContainedProjects={projectGroupRemoveContainedProjects}
+        onRemoveContainedProjectsChange={(removeContainedProjects) => {
+          setProjectGroupDeleteDialog((current) =>
+            current ? { ...current, removeContainedProjects } : current
+          )
+        }}
         onOpenChange={(open) => {
           if (!open) {
             setProjectGroupDeleteDialog(null)
@@ -4733,9 +5630,18 @@ const WorktreeList = React.memo(function WorktreeList({
         }}
         onConfirm={handleConfirmDeleteProjectGroup}
       />
+      <FolderWorkspaceComposerDialog
+        open={folderWorkspaceCreateGroup !== null}
+        projectGroup={folderWorkspaceCreateGroup}
+        onOpenChange={(open) => {
+          if (!open) {
+            setFolderWorkspaceCreateGroup(null)
+          }
+        }}
+      />
       <VirtualizedWorktreeViewport
         key={viewportResetKey}
-        rows={rows}
+        rows={sectionRows}
         activeWorktreeId={selectedSidebarWorktreeId}
         currentWorktreeId={currentSidebarWorktreeId}
         groupBy={groupBy}
@@ -4754,11 +5660,13 @@ const WorktreeList = React.memo(function WorktreeList({
         handleRemoveProjectFromGroup={handleRemoveProjectFromGroup}
         handleRenameProjectGroup={handleRenameProjectGroup}
         handleDeleteProjectGroup={handleDeleteProjectGroup}
+        handleCreateFolderWorkspace={handleCreateFolderWorkspace}
         activeModal={activeModal}
         pendingRevealWorktree={pendingRevealWorktree}
         clearPendingRevealWorktreeId={clearPendingRevealWorktreeId}
         agentSendTargetWorktreeId={agentSendTargetWorktreeId}
         worktrees={worktrees}
+        folderWorkspaces={folderWorkspaces}
         selectedWorktreeIds={selectedWorktreeIds}
         selectedWorktrees={selectedWorktrees}
         onSelectionGesture={updateSelectionForGesture}
@@ -4769,8 +5677,11 @@ const WorktreeList = React.memo(function WorktreeList({
         worktreeLineageById={worktreeLineageById}
         repoOrder={repoOrder}
         allRepoIds={allRepoIds}
+        onReorderHostSections={handleReorderHostSections}
+        onHostDragActiveChange={setHostDragActive}
         prCache={prCache}
         workspaceStatuses={workspaceStatuses}
+        projectGrouping={projectGrouping}
         projectGroups={projectGroups}
         onMoveWorktreeToStatus={moveWorktreeToStatus}
         onMoveWorktreesToStatus={moveWorktreesToStatus}

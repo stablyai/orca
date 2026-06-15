@@ -69,7 +69,7 @@ export async function createFloatingWorkspaceBrowserTab(
   }
 
   return store.createBrowserTab(FLOATING_TERMINAL_WORKTREE_ID, url, {
-    title: translate("auto.lib.floating.workspace.tab.creation.f3785eddc2", "New Browser Tab"),
+    title: translate('auto.lib.floating.workspace.tab.creation.f3785eddc2', 'New Browser Tab'),
     focusAddressBar: true,
     targetGroupId
   })

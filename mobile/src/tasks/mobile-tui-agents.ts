@@ -34,6 +34,7 @@ export const MOBILE_TUI_AGENT_AUTO_PICK_ORDER = [
   'qwen-code',
   'rovo',
   'hermes',
+  'devin',
   'openclaw'
 ] as const satisfies readonly TuiAgent[]
 
@@ -68,11 +69,11 @@ export const MOBILE_TUI_AGENT_LABELS: Record<TuiAgent, string> = {
   'qwen-code': 'Qwen Code',
   rovo: 'Rovo Dev',
   hermes: 'Hermes',
+  devin: 'Devin',
   openclaw: 'OpenClaw'
 }
 
 export const MOBILE_TUI_AGENT_FAVICON_DOMAINS: Partial<Record<TuiAgent, string>> = {
-  'claude-agent-teams': 'anthropic.com',
   openclaude: 'openclaude.gitlawb.com',
   grok: 'x.ai',
   copilot: 'github.com',
@@ -98,6 +99,7 @@ export const MOBILE_TUI_AGENT_FAVICON_DOMAINS: Partial<Record<TuiAgent, string>>
   'qwen-code': 'qwenlm.github.io',
   rovo: 'atlassian.com',
   hermes: 'nousresearch.com',
+  devin: 'devin.ai',
   openclaw: 'openclaw.ai'
 }
 
@@ -132,6 +134,7 @@ export const MOBILE_TUI_AGENT_LAUNCH_COMMANDS: Record<TuiAgent, string> = {
   'qwen-code': 'qwen-code',
   rovo: 'rovo',
   hermes: 'hermes',
+  devin: 'devin',
   openclaw: 'openclaw'
 }
 

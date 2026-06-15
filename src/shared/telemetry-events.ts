@@ -25,9 +25,21 @@ import {
   TERMINAL_PANE_SPLIT_SOURCES
 } from './feature-education-telemetry'
 import { FEATURE_WALL_SETUP_STEP_IDS } from './feature-wall-setup-steps'
+import {
+  FEATURE_INTERACTION_CATEGORIES,
+  FEATURE_INTERACTION_IDS,
+  FEATURE_INTERACTION_USAGE_BUCKETS,
+  getFeatureInteractionCategory
+} from './feature-interactions'
 import { SETUP_SCRIPT_IMPORT_PROVIDERS } from './setup-script-import-providers'
 import { WORKSPACE_SOURCE_VALUES, type WorkspaceSource } from './workspace-source'
 import { appStarSourceSchema } from './gh-star-source'
+import {
+  starNagAgentBucketSchema,
+  starNagOutcomeSchema,
+  starNagPromptModeSchema,
+  starNagPromptSourceSchema
+} from './star-nag-telemetry'
 import {
   NESTED_REPO_COUNT_BUCKETS,
   NESTED_REPO_IMPORT_ACTIONS,
@@ -88,6 +100,7 @@ export const AGENT_KIND_VALUES = [
   'openclaw',
   'copilot',
   'grok',
+  'devin',
   'other'
 ] as const
 export const agentKindSchema = z.enum(AGENT_KIND_VALUES)
@@ -301,8 +314,39 @@ const nthRepoAddedSchema = z.number().int().nonnegative().optional()
 
 const appOpenedSchema = z.object({ nth_repo_added: nthRepoAddedSchema }).strict()
 
+export const featureInteractionIdSchema = z.enum(FEATURE_INTERACTION_IDS)
+export const featureInteractionCategorySchema = z.enum(FEATURE_INTERACTION_CATEGORIES)
+export const featureInteractionUsageBucketSchema = z.enum(FEATURE_INTERACTION_USAGE_BUCKETS)
+export const featureInteractionUsageBucketSourceSchema = z.enum([
+  'crossed_now',
+  'observed_existing'
+])
+const featureInteractionUsageBucketReachedSchema = z
+  .object({
+    feature_id: featureInteractionIdSchema,
+    feature_category: featureInteractionCategorySchema,
+    count_bucket: featureInteractionUsageBucketSchema,
+    bucket_source: featureInteractionUsageBucketSourceSchema,
+    nth_repo_added: nthRepoAddedSchema
+  })
+  .strict()
+  .refine((value) => getFeatureInteractionCategory(value.feature_id) === value.feature_category, {
+    message: 'feature_category must match feature_id',
+    path: ['feature_category']
+  })
+
 const repoAddedSchema = z
-  .object({ method: repoMethodSchema, nth_repo_added: nthRepoAddedSchema })
+  // Why: `is_git_repo` is the real git-vs-folder signal, sourced from git
+  // detection at the add point. It moved here from `onboarding_completed`
+  // once project selection left onboarding (1.4.46). `.optional()` so
+  // SSH/remote or any path that genuinely can't determine git-ness validates
+  // cleanly instead of crashing the track call — same fail-soft intent as
+  // `nthRepoAddedSchema`. Never default-guess `false`; omit instead.
+  .object({
+    method: repoMethodSchema,
+    is_git_repo: z.boolean().optional(),
+    nth_repo_added: nthRepoAddedSchema
+  })
   .strict()
 
 const appStarredOrcaSchema = z
@@ -311,6 +355,23 @@ const appStarredOrcaSchema = z
     nth_repo_added: nthRepoAddedSchema
   })
   .strict()
+
+const starNagOutcomeEventSchema = z
+  .object({
+    outcome: starNagOutcomeSchema,
+    source: starNagPromptSourceSchema,
+    mode: starNagPromptModeSchema,
+    threshold: z.number().int().positive(),
+    agents_since_baseline: z.number().int().nonnegative(),
+    agents_since_baseline_bucket: starNagAgentBucketSchema,
+    nth_repo_added: nthRepoAddedSchema,
+    next_threshold: z.number().int().positive().optional()
+  })
+  .strict()
+  .refine((payload) => payload.next_threshold === undefined || payload.outcome === 'dismissed', {
+    message: 'next_threshold is only valid for dismissed outcomes',
+    path: ['next_threshold']
+  })
 
 const workspaceCreatedSchema = z
   .object({
@@ -684,16 +745,23 @@ const onboardingChecklistItemSchema = z.enum([
   'openedFile',
   'ranAgentOnFile'
 ])
-const onboardingFeatureSetupFeatureSchema = z.enum(['browser_use', 'computer_use', 'orchestration'])
+const onboardingFeatureSetupFeatureSchema = z.enum([
+  'browser_use',
+  'computer_use',
+  'orchestration',
+  'linear_tickets'
+])
 const onboardingFeatureSetupSelectionSchema = {
   browser_use: z.boolean(),
   computer_use: z.boolean(),
+  linear_tickets: z.boolean(),
   orchestration: z.boolean(),
   selected_count: z.number().int().min(0).max(3)
 } as const
 type OnboardingFeatureSetupSelectionTelemetry = {
   browser_use: boolean
   computer_use: boolean
+  linear_tickets: boolean
   orchestration: boolean
   selected_count: number
 }
@@ -705,6 +773,8 @@ const onboardingFeatureSetupSelectedCountRefinement = {
 function hasMatchingOnboardingFeatureSetupSelectedCount(
   props: OnboardingFeatureSetupSelectionTelemetry
 ): boolean {
+  // Why: Linear ticket setup is a recommended add-on and must not affect
+  // onboarding progress metrics.
   const selectedCount =
     (props.browser_use ? 1 : 0) + (props.computer_use ? 1 : 0) + (props.orchestration ? 1 : 0)
   return props.selected_count === selectedCount
@@ -939,10 +1009,12 @@ const onboardingTaskSourcesSnapshotSchema = z
     cohort: cohortSchema
   })
   .strict()
+// Why: no `is_git_repo` here — the signal moved to `repo_added.is_git_repo`.
+// Project selection left onboarding in 1.4.46, so this event now fires before
+// any repo is chosen; the old field was always `false` and meaningless.
 const onboardingCompletedSchema = z
   .object({
     path: onboardingPathSchema,
-    is_git_repo: z.boolean(),
     total_duration_ms: z.number().int().nonnegative(),
     cohort: cohortSchema
   })
@@ -1243,6 +1315,8 @@ const terminalPaneSplitSchema = z
 export const eventSchemas = {
   app_opened: appOpenedSchema,
   app_starred_orca: appStarredOrcaSchema,
+  star_nag_outcome: starNagOutcomeEventSchema,
+  feature_interaction_usage_bucket_reached: featureInteractionUsageBucketReachedSchema,
 
   repo_added: repoAddedSchema,
   add_repo_setup_step_action: addRepoSetupStepActionEventSchema,
@@ -1323,10 +1397,27 @@ export type EventProps<N extends EventName> = EventMap[N]
 // Safely skips non-`ZodObject` schemas (e.g. a future `z.discriminatedUnion`
 // or `z.union`) — those have no `.shape`, and probing `key in undefined`
 // would throw at module load and take the telemetry module down on import.
+function eventSchemaShape(schema: z.ZodTypeAny): z.ZodRawShape | null {
+  if (schema instanceof z.ZodObject) {
+    return schema.shape
+  }
+
+  const shapeBearingSchema = schema as { shape?: unknown }
+  // Why: refined object schemas may still expose `.shape` even if a Zod
+  // version stops preserving `instanceof ZodObject` through refinement.
+  if (shapeBearingSchema.shape && typeof shapeBearingSchema.shape === 'object') {
+    return shapeBearingSchema.shape as z.ZodRawShape
+  }
+  return null
+}
+
 function eventsWithShapeKey(key: string): ReadonlySet<EventName> {
   return new Set(
     (Object.entries(eventSchemas) as [EventName, z.ZodTypeAny][])
-      .filter(([, schema]) => schema instanceof z.ZodObject && key in schema.shape)
+      .filter(([, schema]) => {
+        const shape = eventSchemaShape(schema)
+        return shape !== null && key in shape
+      })
       .map(([name]) => name)
   )
 }
@@ -1351,6 +1442,8 @@ export const COHORT_EXTENDED: readonly EventName[] = Array.from(COHORT_EXTENDED_
 type _CohortExtendedRoster =
   | 'app_opened'
   | 'app_starred_orca'
+  | 'star_nag_outcome'
+  | 'feature_interaction_usage_bucket_reached'
   | 'repo_added'
   | 'add_repo_setup_step_action'
   | 'add_repo_existing_workspaces_detected'

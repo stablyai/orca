@@ -1,4 +1,3 @@
-/* eslint-disable max-lines */
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { createTestStore, makeWorktree } from './store-test-helpers'
 import type { AppState } from '../types'
@@ -23,6 +22,7 @@ vi.mock('@/lib/agent-status', async (importOriginal) => {
 const runtimeEnvironmentCall = vi.fn()
 const runtimeEnvironmentGetStatus = vi.fn()
 const settingsSet = vi.fn().mockResolvedValue(undefined)
+const worktreesListDetected = vi.fn()
 
 const env2Lineage: WorktreeLineage = {
   worktreeId: 'repo-env-2::/env-2/repo',
@@ -49,70 +49,92 @@ beforeEach(() => {
     },
     _meta: { runtimeId: 'runtime-2' }
   })
-  runtimeEnvironmentCall.mockImplementation(({ method }: { method: string }) => {
-    const result =
-      method === 'status.get'
-        ? {
-            runtimeId: 'runtime-2',
-            graphStatus: 'ready',
-            runtimeProtocolVersion: RUNTIME_PROTOCOL_VERSION,
-            minCompatibleRuntimeClientVersion: MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION
-          }
-        : method === 'repo.list'
+  runtimeEnvironmentCall.mockImplementation(
+    ({ method, params }: { method: string; params?: { repo?: string } }) => {
+      const detectedRepoId = params?.repo ?? 'repo-env-2'
+      const detectedPath = detectedRepoId === 'repo-env-1' ? '/env-1/repo' : '/env-2/repo'
+      const result =
+        method === 'status.get'
           ? {
-              repos: [
-                {
-                  id: 'repo-env-2',
-                  path: '/env-2/repo',
-                  displayName: 'Env 2',
-                  badgeColor: 'blue',
-                  addedAt: 1
-                }
-              ]
+              runtimeId: 'runtime-2',
+              graphStatus: 'ready',
+              runtimeProtocolVersion: RUNTIME_PROTOCOL_VERSION,
+              minCompatibleRuntimeClientVersion: MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION
             }
-          : method === 'worktree.list'
+          : method === 'repo.list'
             ? {
-                worktrees: [
-                  makeWorktree({
-                    id: 'repo-env-2::/env-2/repo',
-                    repoId: 'repo-env-2',
-                    path: '/env-2/repo'
-                  })
-                ],
-                totalCount: 1,
-                truncated: false
+                repos: [
+                  {
+                    id: 'repo-env-2',
+                    path: '/env-2/repo',
+                    displayName: 'Env 2',
+                    badgeColor: 'blue',
+                    addedAt: 1
+                  }
+                ]
               }
-            : method === 'worktree.detectedList'
+            : method === 'worktree.list'
               ? {
-                  repoId: 'repo-env-2',
-                  authoritative: true,
-                  source: 'git',
                   worktrees: [
-                    {
-                      ...makeWorktree({
-                        id: 'repo-env-2::/env-2/repo',
-                        repoId: 'repo-env-2',
-                        path: '/env-2/repo'
-                      }),
-                      ownership: 'orca-managed',
-                      selectedCheckout: true,
-                      visible: true
-                    }
-                  ]
+                    makeWorktree({
+                      id: 'repo-env-2::/env-2/repo',
+                      repoId: 'repo-env-2',
+                      path: '/env-2/repo'
+                    })
+                  ],
+                  totalCount: 1,
+                  truncated: false
                 }
-              : method === 'browser.profile.list'
-                ? { profiles: [] }
-                : method === 'projectGroup.list'
-                  ? { groups: [] }
-                  : method === 'worktree.lineageList'
-                    ? { lineage: { [env2Lineage.worktreeId]: env2Lineage } }
-                    : {}
-    return Promise.resolve({ id: 'rpc-1', ok: true, result, _meta: { runtimeId: 'runtime-2' } })
+              : method === 'worktree.detectedList'
+                ? {
+                    repoId: detectedRepoId,
+                    authoritative: true,
+                    source: 'git',
+                    worktrees: [
+                      {
+                        ...makeWorktree({
+                          id: `${detectedRepoId}::${detectedPath}`,
+                          repoId: detectedRepoId,
+                          path: detectedPath
+                        }),
+                        ownership: 'orca-managed',
+                        selectedCheckout: true,
+                        visible: true
+                      }
+                    ]
+                  }
+                : method === 'browser.profileList'
+                  ? { profiles: [] }
+                  : method === 'projectGroup.list'
+                    ? { groups: [] }
+                    : method === 'worktree.lineageList'
+                      ? { lineage: { [env2Lineage.worktreeId]: env2Lineage } }
+                      : {}
+      return Promise.resolve({ id: 'rpc-1', ok: true, result, _meta: { runtimeId: 'runtime-2' } })
+    }
+  )
+  worktreesListDetected.mockResolvedValue({
+    repoId: 'repo-env-1',
+    authoritative: true,
+    source: 'git',
+    worktrees: [
+      {
+        ...makeWorktree({
+          id: 'repo-env-1::/env-1/repo',
+          repoId: 'repo-env-1',
+          path: '/env-1/repo'
+        }),
+        ownership: 'orca-managed',
+        selectedCheckout: true,
+        visible: true
+      }
+    ]
   })
   vi.stubGlobal('window', {
     api: {
       settings: { set: settingsSet },
-      runtimeEnvironments: { call: runtimeEnvironmentCall, getStatus: runtimeEnvironmentGetStatus }
+      runtimeEnvironments: { call: runtimeEnvironmentCall, getStatus: runtimeEnvironmentGetStatus },
+      worktrees: { listDetected: worktreesListDetected }
     }
   })
 })
@@ -163,11 +185,18 @@ describe('createSettingsSlice runtime switching', () => {
     ])
   })
 
-  it('clears stale runtime-owned state before loading the selected environment', async () => {
+  it('preserves existing host state while loading the selected environment', async () => {
     const store = createTestStore()
     store.setState({
       settings: { activeRuntimeEnvironmentId: 'env-1' } as AppState['settings'],
-      repos: [{ id: 'repo-env-1', path: '/env-1/repo', displayName: 'Env 1' } as never],
+      repos: [
+        {
+          id: 'repo-env-1',
+          path: '/env-1/repo',
+          displayName: 'Env 1',
+          executionHostId: 'runtime:env-1'
+        } as never
+      ],
       projectGroups: [
         {
           id: 'group-env-1',
@@ -229,7 +258,7 @@ describe('createSettingsSlice runtime switching', () => {
       selector: 'env-2',
       timeoutMs: 15_000
     })
-    expect(runtimeEnvironmentCall).not.toHaveBeenCalledWith(
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
       expect.objectContaining({ selector: 'env-2', method: 'status.get' })
     )
     expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
@@ -238,49 +267,59 @@ describe('createSettingsSlice runtime switching', () => {
     expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
       expect.objectContaining({ selector: 'env-2', method: 'worktree.lineageList' })
     )
-    expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
-      expect.objectContaining({
-        selector: 'env-1',
-        method: 'terminal.close',
-        params: { terminal: 'terminal-a' }
-      })
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalledWith(
+      expect.objectContaining({ selector: 'env-1', method: 'terminal.close' })
     )
-    expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
-      expect.objectContaining({
-        selector: 'env-1',
-        method: 'terminal.close',
-        params: { terminal: 'legacy-terminal' }
-      })
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalledWith(
+      expect.objectContaining({ selector: 'env-1', method: 'browser.tabClose' })
     )
-    expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
-      expect.objectContaining({
-        selector: 'env-1',
-        method: 'browser.tabClose',
-        params: { worktree: 'id:repo-env-1::/env-1/repo', page: 'remote-page-1' }
-      })
+    expect(store.getState().repos.map((repo) => repo.id)).toEqual(['repo-env-1', 'repo-env-2'])
+    expect(store.getState().repos.find((repo) => repo.id === 'repo-env-2')?.executionHostId).toBe(
+      'runtime:env-2'
     )
-    expect(store.getState().repos.map((repo) => repo.id)).toEqual(['repo-env-2'])
-    expect(store.getState().projectGroups).toEqual([])
+    expect(store.getState().projectGroups.map((group) => group.id)).toEqual(['group-env-1'])
+    expect(store.getState().worktreesByRepo['repo-env-1']?.map((worktree) => worktree.id)).toEqual([
+      'repo-env-1::/env-1/repo'
+    ])
     expect(store.getState().worktreesByRepo['repo-env-2']?.map((worktree) => worktree.id)).toEqual([
       'repo-env-2::/env-2/repo'
     ])
     expect(store.getState().worktreeLineageById).toEqual({
+      'repo-env-1::/env-1/repo': {
+        ...env2Lineage,
+        worktreeId: 'repo-env-1::/env-1/repo',
+        parentWorktreeId: 'repo-env-1::/env-1/parent'
+      },
       [env2Lineage.worktreeId]: env2Lineage
     })
-    expect(store.getState().activeWorktreeId).toBeNull()
-    expect(store.getState().openFiles).toEqual([])
-    expect(store.getState().editorDrafts).toEqual({})
-    expect(store.getState().markdownViewMode).toEqual({})
-    expect(store.getState().editorViewMode).toEqual({})
-    expect(store.getState().markdownFrontmatterVisible).toEqual({})
-    expect(store.getState().editorCursorLine).toEqual({})
-    expect(store.getState().showDotfilesByWorktree).toEqual({})
-    expect(store.getState().gitIgnoredPathsByWorktree).toEqual({})
-    expect(store.getState().ptyIdsByTabId).toEqual({})
-    expect(store.getState().browserTabsByWorktree).toEqual({})
-    expect(store.getState().prCache).toEqual({})
-    expect(store.getState().linearIssueCache).toEqual({})
-    expect(store.getState().jiraIssueCache).toEqual({})
+    expect(store.getState().activeWorktreeId).toBe('repo-env-1::/env-1/repo')
+    expect(store.getState().openFiles).toEqual([
+      { id: '/env-1/repo/a.md', worktreeId: 'repo-env-1::/env-1/repo' }
+    ])
+    expect(store.getState().editorDrafts).toEqual({ '/env-1/repo/stale.md': 'stale' })
+    expect(store.getState().markdownViewMode).toEqual({ '/env-1/repo/stale.md': 'rich' })
+    expect(store.getState().editorViewMode).toEqual({ '/env-1/repo/stale.md': 'changes' })
+    expect(store.getState().markdownFrontmatterVisible).toEqual({
+      '/env-1/repo/stale.md': true
+    })
+    expect(store.getState().editorCursorLine).toEqual({ '/env-1/repo/stale.md': 4 })
+    expect(store.getState().showDotfilesByWorktree).toEqual({ 'repo-env-1::/env-1/repo': false })
+    expect(store.getState().gitIgnoredPathsByWorktree).toEqual({
+      'repo-env-1::/env-1/repo': ['dist/']
+    })
+    expect(store.getState().ptyIdsByTabId).toEqual({ tab1: ['remote:env-1@@terminal-a'] })
+    expect(store.getState().browserTabsByWorktree).toEqual({
+      'repo-env-1::/env-1/repo': [{ id: 'browser-env-1' }]
+    })
+    expect(store.getState().prCache).toEqual({
+      '/env-1/repo::main': expect.objectContaining({ data: null })
+    })
+    expect(store.getState().linearIssueCache).toEqual({
+      'LIN-1': expect.objectContaining({ data: { id: 'LIN-1' } })
+    })
+    expect(store.getState().jiraIssueCache).toEqual({
+      'JIRA-1': expect.objectContaining({ data: { key: 'JIRA-1' } })
+    })
   })
 
   it('does not close host-owned mirrored resources when a paired web client switches servers', async () => {
@@ -288,7 +327,14 @@ describe('createSettingsSlice runtime switching', () => {
     const store = createTestStore()
     store.setState({
       settings: { activeRuntimeEnvironmentId: 'env-1' } as AppState['settings'],
-      repos: [{ id: 'repo-env-1', path: '/env-1/repo', displayName: 'Env 1' } as never],
+      repos: [
+        {
+          id: 'repo-env-1',
+          path: '/env-1/repo',
+          displayName: 'Env 1',
+          executionHostId: 'runtime:env-1'
+        } as never
+      ],
       worktreesByRepo: {
         'repo-env-1': [makeWorktree({ id: 'repo-env-1::/env-1/repo', repoId: 'repo-env-1' })]
       },
@@ -335,11 +381,108 @@ describe('createSettingsSlice runtime switching', () => {
     expect(runtimeEnvironmentCall).not.toHaveBeenCalledWith(
       expect.objectContaining({ selector: 'env-1', method: 'browser.tabClose' })
     )
-    expect(store.getState().ptyIdsByTabId).toEqual({})
-    expect(store.getState().remoteBrowserPageHandlesByPageId).toEqual({})
+    expect(store.getState().ptyIdsByTabId).toEqual({
+      'web-terminal-host-tab-1': ['remote:env-1@@terminal-a']
+    })
+    expect(store.getState().remoteBrowserPageHandlesByPageId).toEqual({
+      'page-env-1': { environmentId: 'env-1', remotePageId: 'remote-page-1' }
+    })
   })
 
-  it('refuses to switch environments while editor tabs have unsaved state', async () => {
+  it('keeps the previous host live terminal and browser resources intact on switch (multi-host keepalive)', async () => {
+    const store = createTestStore()
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-1' } as AppState['settings'],
+      repos: [
+        {
+          id: 'repo-env-1',
+          path: '/env-1/repo',
+          displayName: 'Env 1',
+          executionHostId: 'runtime:env-1'
+        } as never
+      ],
+      worktreesByRepo: {
+        'repo-env-1': [makeWorktree({ id: 'repo-env-1::/env-1/repo', repoId: 'repo-env-1' })]
+      },
+      activeWorktreeId: 'repo-env-1::/env-1/repo',
+      tabsByWorktree: {
+        'repo-env-1::/env-1/repo': [
+          {
+            id: 'host-tab-1',
+            ptyId: 'remote:env-1@@terminal-a',
+            worktreeId: 'repo-env-1::/env-1/repo',
+            title: 'Terminal 1',
+            defaultTitle: 'Terminal 1',
+            customTitle: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1
+          }
+        ]
+      },
+      ptyIdsByTabId: { 'host-tab-1': ['remote:env-1@@terminal-a'] },
+      terminalLayoutsByTabId: {
+        'host-tab-1': {
+          root: null,
+          activeLeafId: null,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { 'pane:1': 'remote:env-1@@terminal-a' }
+        }
+      },
+      browserPagesByWorkspace: {
+        'browser-env-1': [{ id: 'page-env-1', worktreeId: 'repo-env-1::/env-1/repo' }] as never
+      },
+      remoteBrowserPageHandlesByPageId: {
+        'page-env-1': { environmentId: 'env-1', remotePageId: 'remote-page-1' }
+      }
+    })
+
+    await expect(store.getState().switchRuntimeEnvironment('env-2')).resolves.toBe(true)
+
+    // No teardown RPC was issued against the previous host's live resources.
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalledWith(
+      expect.objectContaining({ selector: 'env-1', method: 'terminal.close' })
+    )
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalledWith(
+      expect.objectContaining({ selector: 'env-1', method: 'browser.tabClose' })
+    )
+
+    // Every previous-host map is byte-for-byte unchanged after the switch.
+    expect(store.getState().tabsByWorktree).toEqual({
+      'repo-env-1::/env-1/repo': [
+        {
+          id: 'host-tab-1',
+          ptyId: 'remote:env-1@@terminal-a',
+          worktreeId: 'repo-env-1::/env-1/repo',
+          title: 'Terminal 1',
+          defaultTitle: 'Terminal 1',
+          customTitle: null,
+          color: null,
+          sortOrder: 0,
+          createdAt: 1
+        }
+      ]
+    })
+    expect(store.getState().ptyIdsByTabId).toEqual({
+      'host-tab-1': ['remote:env-1@@terminal-a']
+    })
+    expect(store.getState().terminalLayoutsByTabId).toEqual({
+      'host-tab-1': {
+        root: null,
+        activeLeafId: null,
+        expandedLeafId: null,
+        ptyIdsByLeafId: { 'pane:1': 'remote:env-1@@terminal-a' }
+      }
+    })
+    expect(store.getState().browserPagesByWorkspace).toEqual({
+      'browser-env-1': [{ id: 'page-env-1', worktreeId: 'repo-env-1::/env-1/repo' }]
+    })
+    expect(store.getState().remoteBrowserPageHandlesByPageId).toEqual({
+      'page-env-1': { environmentId: 'env-1', remotePageId: 'remote-page-1' }
+    })
+  })
+
+  it('allows switching focus while editor tabs have unsaved state', async () => {
     const store = createTestStore()
     store.setState({
       settings: { activeRuntimeEnvironmentId: 'env-1' } as AppState['settings'],
@@ -353,16 +496,16 @@ describe('createSettingsSlice runtime switching', () => {
       editorDrafts: { '/env-1/repo/dirty.md': 'draft' }
     })
 
-    await expect(store.getState().switchRuntimeEnvironment('env-2')).resolves.toBe(false)
+    await expect(store.getState().switchRuntimeEnvironment('env-2')).resolves.toBe(true)
 
-    expect(settingsSet).not.toHaveBeenCalled()
-    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
-    expect(store.getState().settings?.activeRuntimeEnvironmentId).toBe('env-1')
+    expect(settingsSet).toHaveBeenCalledWith({ activeRuntimeEnvironmentId: 'env-2' })
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
+      expect.objectContaining({ selector: 'env-2', method: 'repo.list' })
+    )
+    expect(store.getState().settings?.activeRuntimeEnvironmentId).toBe('env-2')
     expect(store.getState().openFiles).toHaveLength(1)
     expect(store.getState().editorDrafts).toEqual({ '/env-1/repo/dirty.md': 'draft' })
-    expect(toast.error).toHaveBeenCalledWith(
-      'Save or close unsaved editor tabs before switching servers.'
-    )
+    expect(toast.error).not.toHaveBeenCalled()
   })
 
   it('keeps the current environment when the selected remote server is unreachable', async () => {

@@ -235,10 +235,19 @@ export async function updateIssue(
   if (updates.state) {
     await acquire()
     try {
-      const cmd = updates.state === 'closed' ? 'close' : 'reopen'
-      await ghExecFileAsync(['issue', cmd, String(issueNumber), '--repo', repo], {
-        ...ghOptions
-      })
+      if (updates.state === 'closed') {
+        const closeArgs = ['issue', 'close', String(issueNumber), '--repo', repo]
+        if (updates.stateReason === 'completed') {
+          closeArgs.push('--reason', 'completed')
+        } else if (updates.stateReason === 'not_planned') {
+          closeArgs.push('--reason', 'not planned')
+        } else if (updates.stateReason === 'duplicate' && updates.duplicateOf) {
+          closeArgs.push('--duplicate-of', String(updates.duplicateOf))
+        }
+        await ghExecFileAsync(closeArgs, ghOptions)
+      } else {
+        await ghExecFileAsync(['issue', 'reopen', String(issueNumber), '--repo', repo], ghOptions)
+      }
     } catch (err) {
       const stderr = err instanceof Error ? err.message : String(err)
       // Treat "already closed/open" as a no-op

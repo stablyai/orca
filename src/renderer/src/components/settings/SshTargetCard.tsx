@@ -29,7 +29,9 @@ export const STATUS_LABELS: Record<SshConnectionStatus, string> = {
   connected: 'Connected',
   reconnecting: 'Reconnecting\u2026',
   'reconnection-failed': 'Reconnection failed',
-  error: translate("auto.components.settings.SshTargetCard.18968ede9e", "Error")
+  get error() {
+    return translate('auto.components.settings.SshTargetCard.18968ede9e', 'Error')
+  }
 }
 
 export function statusColor(status: SshConnectionStatus): string {
@@ -144,7 +146,17 @@ export function SshTargetCard({
           onClick={handleTerminateSessions}
           className="size-7 text-muted-foreground hover:text-red-400"
           disabled={hasActionInFlight}
-          aria-label={terminateInFlight ? translate("auto.components.settings.SshTargetCard.c77f1abfe3", "Ending remote terminals") : translate("auto.components.settings.SshTargetCard.da16e108e6", "End remote terminals")}
+          aria-label={
+            terminateInFlight
+              ? translate(
+                  'auto.components.settings.SshTargetCard.c77f1abfe3',
+                  'Ending remote terminals'
+                )
+              : translate(
+                  'auto.components.settings.SshTargetCard.da16e108e6',
+                  'End remote terminals'
+                )
+          }
         >
           {terminateInFlight ? (
             <Loader2 className="size-3 animate-spin" />
@@ -154,7 +166,8 @@ export function SshTargetCard({
         </Button>
       </TooltipTrigger>
       <TooltipContent side="top" sideOffset={4}>
-        {translate("auto.components.settings.SshTargetCard.da16e108e6", "End remote terminals")}</TooltipContent>
+        {translate('auto.components.settings.SshTargetCard.da16e108e6', 'End remote terminals')}
+      </TooltipContent>
     </Tooltip>
   )
 
@@ -167,7 +180,14 @@ export function SshTargetCard({
           onClick={handleResetRelay}
           className="size-7 text-muted-foreground hover:text-red-400"
           disabled={hasActionInFlight}
-          aria-label={resetInFlight ? translate("auto.components.settings.SshTargetCard.97dea4e8cf", "Resetting remote relay") : translate("auto.components.settings.SshTargetCard.762a48c662", "Reset remote relay")}
+          aria-label={
+            resetInFlight
+              ? translate(
+                  'auto.components.settings.SshTargetCard.97dea4e8cf',
+                  'Resetting remote relay'
+                )
+              : translate('auto.components.settings.SshTargetCard.762a48c662', 'Reset remote relay')
+          }
         >
           {resetInFlight ? (
             <Loader2 className="size-3 animate-spin" />
@@ -177,7 +197,8 @@ export function SshTargetCard({
         </Button>
       </TooltipTrigger>
       <TooltipContent side="top" sideOffset={4}>
-        {translate("auto.components.settings.SshTargetCard.762a48c662", "Reset remote relay")}</TooltipContent>
+        {translate('auto.components.settings.SshTargetCard.762a48c662', 'Reset remote relay')}
+      </TooltipContent>
     </Tooltip>
   )
 
@@ -193,13 +214,17 @@ export function SshTargetCard({
             onClick={() => onEdit(target)}
             className="size-7"
             disabled={hasActionInFlight}
-            aria-label={translate("auto.components.settings.SshTargetCard.3d8af2949f", "Edit target")}
+            aria-label={translate(
+              'auto.components.settings.SshTargetCard.3d8af2949f',
+              'Edit target'
+            )}
           >
             <Pencil className="size-3" />
           </Button>
         </TooltipTrigger>
         <TooltipContent side="top" sideOffset={4}>
-          {translate("auto.components.settings.SshTargetCard.3d8af2949f", "Edit target")}</TooltipContent>
+          {translate('auto.components.settings.SshTargetCard.3d8af2949f', 'Edit target')}
+        </TooltipContent>
       </Tooltip>
       <Tooltip>
         <TooltipTrigger asChild>
@@ -209,7 +234,11 @@ export function SshTargetCard({
             onClick={() => onRemove(target.id)}
             className="size-7 text-muted-foreground hover:text-red-400"
             disabled={hasActionInFlight}
-            aria-label={removeInFlight ? translate("auto.components.settings.SshTargetCard.3d21a22d0e", "Removing target") : translate("auto.components.settings.SshTargetCard.7f7b3d7ab4", "Remove target")}
+            aria-label={
+              removeInFlight
+                ? translate('auto.components.settings.SshTargetCard.3d21a22d0e', 'Removing target')
+                : translate('auto.components.settings.SshTargetCard.7f7b3d7ab4', 'Remove target')
+            }
           >
             {removeInFlight ? (
               <Loader2 className="size-3 animate-spin" />
@@ -219,7 +248,8 @@ export function SshTargetCard({
           </Button>
         </TooltipTrigger>
         <TooltipContent side="top" sideOffset={4}>
-          {translate("auto.components.settings.SshTargetCard.7f7b3d7ab4", "Remove target")}</TooltipContent>
+          {translate('auto.components.settings.SshTargetCard.7f7b3d7ab4', 'Remove target')}
+        </TooltipContent>
       </Tooltip>
     </div>
   )
@@ -247,7 +277,7 @@ export function SshTargetCard({
       </div>
 
       <div className="flex shrink-0 items-center gap-1">
-        {status === "connected" ? (
+        {status === 'connected' ? (
           <>
             {renderSecondaryIconActions(true)}
             <Button
@@ -258,14 +288,16 @@ export function SshTargetCard({
               disabled={hasActionInFlight}
             >
               <ServerOff className="size-3" />
-              {translate("auto.components.settings.SshTargetCard.4c86f30877", "Disconnect")}</Button>
+              {translate('auto.components.settings.SshTargetCard.4c86f30877', 'Disconnect')}
+            </Button>
           </>
         ) : isSshTargetConnecting(status) ? (
           <>
             {renderSecondaryIconActions(false)}
             <Button variant="ghost" size="xs" disabled className="gap-1.5">
               <Loader2 className="size-3 animate-spin" />
-              {translate("auto.components.settings.SshTargetCard.1810b51482", "Connecting")}</Button>
+              {translate('auto.components.settings.SshTargetCard.1810b51482', 'Connecting')}
+            </Button>
           </>
         ) : (
           <>
@@ -282,7 +314,8 @@ export function SshTargetCard({
               ) : (
                 <MonitorSmartphone className="size-3" />
               )}
-              {translate("auto.components.settings.SshTargetCard.0e53e9f8e8", "Test")}</Button>
+              {translate('auto.components.settings.SshTargetCard.0e53e9f8e8', 'Test')}
+            </Button>
             <Button
               variant="ghost"
               size="xs"
@@ -290,12 +323,13 @@ export function SshTargetCard({
               className="gap-1.5"
               disabled={hasActionInFlight}
             >
-              {actionInFlight === "connect" ? (
+              {actionInFlight === 'connect' ? (
                 <Loader2 className="size-3 animate-spin" />
               ) : (
                 <Server className="size-3" />
               )}
-              {translate("auto.components.settings.SshTargetCard.ec6543cee9", "Connect")}</Button>
+              {translate('auto.components.settings.SshTargetCard.ec6543cee9', 'Connect')}
+            </Button>
           </>
         )}
       </div>

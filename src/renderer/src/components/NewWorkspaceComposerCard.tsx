@@ -2,6 +2,7 @@
 composer card markup together so the inline and modal variants share one UI
 surface without splitting the controlled form into hard-to-follow fragments. */
 import React from 'react'
+import { useTranslation } from 'react-i18next'
 import {
   AlertTriangle,
   Check,
@@ -14,7 +15,7 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import RepoCombobox from '@/components/repo/RepoCombobox'
+import type RepoCombobox from '@/components/repo/RepoCombobox'
 import AgentCombobox from '@/components/agent/AgentCombobox'
 import { getAgentCatalog } from '@/lib/agent-catalog'
 import { useAppStore } from '@/store'
@@ -34,12 +35,18 @@ import SparseCheckoutPresetSelect from '@/components/sparse/SparseCheckoutPreset
 import SmartWorkspaceNameField, {
   type SmartWorkspaceNameSelection
 } from '@/components/new-workspace/SmartWorkspaceNameField'
+import ProjectCombobox from '@/components/new-workspace/ProjectCombobox'
+import ProjectHostSetupCombobox from '@/components/new-workspace/ProjectHostSetupCombobox'
 import type { SetupConfig } from '@/lib/new-workspace'
+import type { NewWorkspaceProjectOption } from '@/lib/new-workspace-project-options'
+import type { ProjectHostSetupOption } from '@/lib/project-host-setup-options'
 import type { WorkspaceCreateErrorDisplay } from '@/lib/workspace-create-error-format'
 import type { SshConnectionStatus } from '../../../shared/ssh-types'
 import { translate } from '@/i18n/i18n'
 
 type RepoOption = React.ComponentProps<typeof RepoCombobox>['repos'][number]
+const EMPTY_PROJECT_HOST_SETUP_OPTIONS: ProjectHostSetupOption[] = []
+const EMPTY_PROJECT_OPTIONS: NewWorkspaceProjectOption[] = []
 
 type NewWorkspaceComposerCardProps = {
   contextualTourSource?: string
@@ -51,9 +58,19 @@ type NewWorkspaceComposerCardProps = {
   onQuickAgentChange: (agent: TuiAgent | null) => void
   eligibleRepos: RepoOption[]
   repoId: string
+  projectOptions?: NewWorkspaceProjectOption[]
+  selectedProjectId?: string | null
   selectedRepoIsGit: boolean
   onRepoChange: (value: string) => void
+  onProjectChange: (value: string) => void
+  projectHostSetupOptions?: ProjectHostSetupOption[]
+  selectedProjectHostSetupId?: string | null
+  onProjectHostSetupChange?: (setupId: string) => void
   primaryActionLabel: string
+  projectLabel?: string
+  projectPlaceholder?: string
+  emptyProjectMessage?: string
+  showAddProjectButton?: boolean
   name: string
   onNameValueChange: (value: string) => void
   onSmartGitHubItemSelect: (item: GitHubWorkItem) => void
@@ -86,21 +103,59 @@ type NewWorkspaceComposerCardProps = {
   selectedRepoRequiresConnection: boolean
   selectedRepoConnectInProgress: boolean
   onConnectSelectedRepo: () => Promise<void>
+  branchesEnabled?: boolean
+  setupControlsEnabled?: boolean
   canUseSparseCheckout: boolean
   sparsePresets: SparsePreset[]
   sparseSelectedPresetId: string | null
   onSparseSelectPreset: (preset: SparsePreset | null) => void
+  sparseControlsEnabled?: boolean
 }
 
-const SSH_STATUS_LABELS: Record<SshConnectionStatus, string> = {
-  disconnected: 'SSH not connected',
-  connecting: 'Connecting SSH...',
-  'auth-failed': 'SSH authentication failed',
-  'deploying-relay': 'Preparing SSH connection...',
-  connected: 'Connected',
-  reconnecting: 'Reconnecting SSH...',
-  'reconnection-failed': 'SSH reconnection failed',
-  error: translate('auto.components.NewWorkspaceComposerCard.a239038146', 'SSH connection error')
+const SSH_STATUS_LABELS: Partial<Record<SshConnectionStatus, string>> = {
+  get disconnected() {
+    return translate(
+      'auto.components.NewWorkspaceComposerCard.sshNotConnected',
+      'SSH not connected'
+    )
+  },
+  get connecting() {
+    return translate('auto.components.NewWorkspaceComposerCard.connectingSsh', 'Connecting SSH...')
+  },
+  get 'auth-failed'() {
+    return translate(
+      'auto.components.NewWorkspaceComposerCard.sshAuthenticationFailed',
+      'SSH authentication failed'
+    )
+  },
+  get 'deploying-relay'() {
+    return translate(
+      'auto.components.NewWorkspaceComposerCard.preparingSshConnection',
+      'Preparing SSH connection...'
+    )
+  },
+  get connected() {
+    return translate('auto.components.NewWorkspaceComposerCard.connected', 'Connected')
+  },
+  get reconnecting() {
+    return translate(
+      'auto.components.NewWorkspaceComposerCard.reconnectingSsh',
+      'Reconnecting SSH...'
+    )
+  },
+  get 'reconnection-failed'() {
+    return translate(
+      'auto.components.NewWorkspaceComposerCard.sshReconnectionFailed',
+      'SSH reconnection failed'
+    )
+  },
+  get error() {
+    return translate('auto.components.NewWorkspaceComposerCard.a239038146', 'SSH connection error')
+  }
+}
+
+function getSshStatusLabel(status: SshConnectionStatus): string {
+  return SSH_STATUS_LABELS[status] ?? status
 }
 
 function SetupCommandPreview({
@@ -231,9 +286,19 @@ export default function NewWorkspaceComposerCard({
   onQuickAgentChange,
   eligibleRepos,
   repoId,
+  projectOptions = EMPTY_PROJECT_OPTIONS,
+  selectedProjectId = null,
   selectedRepoIsGit,
   onRepoChange,
+  onProjectChange,
+  projectHostSetupOptions = EMPTY_PROJECT_HOST_SETUP_OPTIONS,
+  selectedProjectHostSetupId = null,
+  onProjectHostSetupChange,
   primaryActionLabel,
+  projectLabel,
+  projectPlaceholder,
+  emptyProjectMessage,
+  showAddProjectButton = true,
   name,
   onNameValueChange,
   onSmartGitHubItemSelect,
@@ -265,11 +330,17 @@ export default function NewWorkspaceComposerCard({
   selectedRepoRequiresConnection,
   selectedRepoConnectInProgress,
   onConnectSelectedRepo,
+  branchesEnabled = true,
+  setupControlsEnabled = true,
   canUseSparseCheckout,
   sparsePresets,
   sparseSelectedPresetId,
-  onSparseSelectPreset
+  onSparseSelectPreset,
+  sparseControlsEnabled = true
 }: NewWorkspaceComposerCardProps): React.JSX.Element {
+  // Why: this form uses the lightweight translate() helper directly; subscribe
+  // so an already-open create dialog repaints when the UI language changes.
+  useTranslation()
   const { isFileDragOver, dragHandlers } = useComposerFileDragOver()
   const openModal = useAppStore((s) => s.openModal)
   const activeModal = useAppStore((s) => s.activeModal)
@@ -283,8 +354,8 @@ export default function NewWorkspaceComposerCard({
     return repo?.displayName ?? repo?.path ?? 'This project'
   }, [eligibleRepos, repoId])
   const sshStatusLabel = selectedRepoSshStatus
-    ? SSH_STATUS_LABELS[selectedRepoSshStatus]
-    : 'Not connected'
+    ? getSshStatusLabel(selectedRepoSshStatus)
+    : translate('auto.components.NewWorkspaceComposerCard.notConnected', 'Not connected')
   const connectButtonLabel =
     selectedRepoSshStatus === 'disconnected' || selectedRepoSshStatus === null
       ? 'Connect'
@@ -372,6 +443,16 @@ export default function NewWorkspaceComposerCard({
     openModal('add-repo')
   }, [openModal])
   const projectDescriptionId = React.useId()
+  const readyProjectHostSetupOptions = React.useMemo(
+    () => projectHostSetupOptions.filter((option) => option.kind === 'ready'),
+    [projectHostSetupOptions]
+  )
+  const handleProjectHostSetupChange = React.useCallback(
+    (setupId: string): void => {
+      onProjectHostSetupChange?.(setupId)
+    },
+    [onProjectHostSetupChange]
+  )
   useContextualTour(
     'workspace-creation',
     eligibleRepos.length > 0 && Boolean(repoId),
@@ -402,38 +483,41 @@ export default function NewWorkspaceComposerCard({
         <div className="space-y-1" data-contextual-tour-target="workspace-creation-project">
           <div className="flex items-center justify-between gap-2">
             <label className="text-xs font-medium text-muted-foreground">
-              {translate('auto.components.NewWorkspaceComposerCard.969a8bff66', 'Project')}
+              {projectLabel ??
+                translate('auto.components.NewWorkspaceComposerCard.969a8bff66', 'Project')}
             </label>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-xs"
-                  onClick={handleAddRepo}
-                  className="size-5 shrink-0 rounded-sm text-muted-foreground hover:text-foreground"
-                  aria-label={translate(
-                    'auto.components.NewWorkspaceComposerCard.d6b0a96f32',
-                    'Add project'
-                  )}
-                >
-                  <FolderPlus className="size-3" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="top" sideOffset={6}>
-                {translate('auto.components.NewWorkspaceComposerCard.d6b0a96f32', 'Add project')}
-              </TooltipContent>
-            </Tooltip>
+            {showAddProjectButton ? (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-xs"
+                    onClick={handleAddRepo}
+                    className="size-5 shrink-0 rounded-sm text-muted-foreground hover:text-foreground"
+                    aria-label={translate(
+                      'auto.components.NewWorkspaceComposerCard.d6b0a96f32',
+                      'Add project'
+                    )}
+                  >
+                    <FolderPlus className="size-3" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="top" sideOffset={6}>
+                  {translate('auto.components.NewWorkspaceComposerCard.d6b0a96f32', 'Add project')}
+                </TooltipContent>
+              </Tooltip>
+            ) : null}
           </div>
-          <RepoCombobox
-            repos={eligibleRepos}
-            value={repoId}
-            onValueChange={onRepoChange}
+          <ProjectCombobox
+            options={projectOptions}
+            value={selectedProjectId}
+            onValueChange={onProjectChange}
             onValueSelected={focusNameInput}
-            placeholder={translate(
-              'auto.components.NewWorkspaceComposerCard.dccd26d4e4',
-              'Choose project'
-            )}
+            placeholder={
+              projectPlaceholder ??
+              translate('auto.components.NewWorkspaceComposerCard.dccd26d4e4', 'Choose project')
+            }
             // Why: programmatic .focus() from the Dialog's onOpenAutoFocus
             // handler does not reliably trigger :focus-visible in Chromium.
             // Mirror the Input component's standard ring (border-ring +
@@ -441,7 +525,6 @@ export default function NewWorkspaceComposerCard({
             // paints the familiar field ring instead of leaving no visible
             // focus state.
             triggerClassName="h-9 w-full border-input text-sm focus:border-ring focus:ring-[3px] focus:ring-ring/50"
-            showStandaloneAddButton={false}
             invalid={Boolean(projectError)}
             describedBy={projectDescriptionId}
           />
@@ -451,11 +534,24 @@ export default function NewWorkspaceComposerCard({
             </p>
           ) : eligibleRepos.length === 0 ? (
             <p id={projectDescriptionId} className="text-[11px] text-muted-foreground">
-              {translate(
-                'auto.components.NewWorkspaceComposerCard.addProjectBeforeWorkspace',
-                'Add a project before creating a workspace.'
-              )}
+              {emptyProjectMessage ??
+                translate(
+                  'auto.components.NewWorkspaceComposerCard.addProjectBeforeWorkspace',
+                  'Add a project before creating a workspace.'
+                )}
             </p>
+          ) : null}
+          {readyProjectHostSetupOptions.length > 1 ? (
+            <div className="space-y-1">
+              <label className="block min-w-0 truncate text-xs font-medium text-muted-foreground">
+                {translate('auto.components.NewWorkspaceComposerCard.runOn', 'Run on')}
+              </label>
+              <ProjectHostSetupCombobox
+                options={readyProjectHostSetupOptions}
+                value={selectedProjectHostSetupId ?? null}
+                onValueChange={handleProjectHostSetupChange}
+              />
+            </div>
           ) : null}
           {selectedRepoRequiresConnection && selectedRepoConnectionId ? (
             <div
@@ -522,6 +618,7 @@ export default function NewWorkspaceComposerCard({
             disabled={selectedRepoRequiresConnection}
             disabledPlaceholder="Connect this repo first"
             textOnly={!selectedRepoIsGit}
+            branchesEnabled={branchesEnabled}
             onPlainEnter={() => {
               // Why: Enter on the workspace name advances focus to the next
               // field (Agent combobox) rather than submitting, letting the user
@@ -669,7 +766,7 @@ export default function NewWorkspaceComposerCard({
                 />
               </div>
 
-              {setupConfig ? (
+              {setupControlsEnabled && setupConfig ? (
                 <div className="space-y-2">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <label className="text-xs font-medium text-muted-foreground">
@@ -771,29 +868,31 @@ export default function NewWorkspaceComposerCard({
                 </div>
               ) : null}
 
-              <div className="space-y-1.5">
-                <label className="text-xs font-medium text-muted-foreground">
-                  {translate(
-                    'auto.components.NewWorkspaceComposerCard.d861de981b',
-                    'Sparse checkout'
-                  )}
-                </label>
-                <SparseCheckoutPresetSelect
-                  repoId={repoId}
-                  presets={sparsePresets}
-                  selectedPresetId={sparseSelectedPresetId}
-                  onSelectPreset={onSparseSelectPreset}
-                  disabled={!canUseSparseCheckout}
-                />
-                {!canUseSparseCheckout ? (
-                  <p className="text-[11px] text-muted-foreground">
+              {sparseControlsEnabled ? (
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-muted-foreground">
                     {translate(
-                      'auto.components.NewWorkspaceComposerCard.cbb47ee0dc',
-                      'Only available for local Git projects.'
+                      'auto.components.NewWorkspaceComposerCard.d861de981b',
+                      'Sparse checkout'
                     )}
-                  </p>
-                ) : null}
-              </div>
+                  </label>
+                  <SparseCheckoutPresetSelect
+                    repoId={repoId}
+                    presets={sparsePresets}
+                    selectedPresetId={sparseSelectedPresetId}
+                    onSelectPreset={onSparseSelectPreset}
+                    disabled={!canUseSparseCheckout}
+                  />
+                  {!canUseSparseCheckout ? (
+                    <p className="text-[11px] text-muted-foreground">
+                      {translate(
+                        'auto.components.NewWorkspaceComposerCard.cbb47ee0dc',
+                        'Only available for local Git projects.'
+                      )}
+                    </p>
+                  ) : null}
+                </div>
+              ) : null}
             </div>
           </div>
         </div>

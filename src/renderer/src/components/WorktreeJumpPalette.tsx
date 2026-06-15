@@ -56,6 +56,8 @@ import {
   queueBrowserFocusRequest
 } from '@/components/browser-pane/browser-focus'
 import { RepoBadgeMark } from '@/components/repo/RepoBadgeLabel'
+import { buildSidebarHostOptions } from '@/components/sidebar/sidebar-host-options'
+import { getPaletteHostBadge, type PaletteHostBadge } from '@/components/cmd-j/palette-host-badge'
 import { useSettingsNavigationMetadata } from '@/hooks/useSettingsNavigationMetadata'
 import { runWorktreeDelete } from '@/components/sidebar/delete-worktree-flow'
 import {
@@ -79,9 +81,15 @@ import {
   getComposerEligibleRepos,
   resolveComposerGitRepoId
 } from '@/lib/new-workspace-composer-repo'
+import {
+  lookupGitHubWorkItemByOwnerRepoForSource,
+  lookupGitHubWorkItemForSource
+} from '@/lib/github-work-item-source-lookup'
 import type { SettingsNavTarget } from '@/lib/settings-navigation-types'
+import { getHostDisplayLabelOverrides } from '../../../shared/host-setting-overrides'
 import type { BrowserPage, BrowserWorkspace, Worktree } from '../../../shared/types'
 import { isGitRepoKind } from '../../../shared/repo-kind'
+import { buildTaskSourceContextFromRepo } from '../../../shared/task-source-context'
 import { translate } from '@/i18n/i18n'
 
 type WorktreePaletteItem = {
@@ -152,7 +160,8 @@ function getComposerPrefetchRepoId(
   return resolveComposerGitRepoId({
     eligibleRepos: getComposerEligibleRepos(state.repos),
     initialRepoId,
-    activeRepoId: state.activeRepoId
+    activeRepoId: state.activeRepoId,
+    focusedHostScope: state.workspaceHostScope
   })
 }
 
@@ -212,6 +221,29 @@ function FooterKey({ children }: { children: React.ReactNode }): React.JSX.Eleme
   )
 }
 
+function PaletteHostBadgeChip({
+  badge
+}: {
+  badge: PaletteHostBadge | null
+}): React.JSX.Element | null {
+  if (!badge) {
+    return null
+  }
+  // Host labels come from the registry and are intentionally not translated.
+  return (
+    <span
+      aria-label={translate(
+        'auto.components.WorktreeJumpPalette.paletteHostBadge',
+        'Host: {{value0}}',
+        { value0: badge.label }
+      )}
+      className="max-w-[140px] truncate rounded-[6px] border border-border/60 bg-background/45 px-1.5 py-px text-[9px] font-medium leading-normal text-muted-foreground/88"
+    >
+      {badge.label}
+    </span>
+  )
+}
+
 function findBrowserSelection(
   pageId: string,
   workspaceId: string,
@@ -255,6 +287,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
   const openModal = useAppStore((s) => s.openModal)
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
+  const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
   const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
   const allWorktrees = useAllWorktrees()
   const repos = useAppStore((s) => s.repos)
@@ -282,8 +315,11 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
   const unifiedTabsByWorktree = useAppStore((s) => s.unifiedTabsByWorktree)
   const activeGroupIdByWorktree = useAppStore((s) => s.activeGroupIdByWorktree)
   const groupsByWorktree = useAppStore((s) => s.groupsByWorktree)
-  useAppStore((s) => s.settings?.activeRuntimeEnvironmentId)
+  const settings = useAppStore((s) => s.settings)
+  const sshTargetLabels = useAppStore((s) => s.sshTargetLabels)
   const sshConnectionStates = useAppStore((s) => s.sshConnectionStates)
+  const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
+  const runtimeStatusByEnvironmentId = useAppStore((s) => s.runtimeStatusByEnvironmentId)
   const hideDefaultBranchWorkspace = useAppStore((s) => s.hideDefaultBranchWorkspace)
   const showSleepingWorkspaces = useAppStore((s) => s.showSleepingWorkspaces)
   const lastVisitedAtByWorktreeId = useAppStore((s) => s.lastVisitedAtByWorktreeId)
@@ -316,6 +352,30 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
   const preserveCreateLookupOnCloseRef = useRef(false)
 
   const repoMap = useMemo(() => new Map(repos.map((r) => [r.id, r])), [repos])
+  const hostLabelOverrides = useMemo(() => getHostDisplayLabelOverrides(settings), [settings])
+  // Why: host badges only appear when more than one execution host exists; reuse
+  // the same registry the sidebar host-scope strip builds so labels stay in sync.
+  const hostOptions = useMemo(
+    () =>
+      buildSidebarHostOptions({
+        repos,
+        sshTargetLabels,
+        sshConnectionStates,
+        settings,
+        runtimeEnvironments,
+        runtimeStatusByEnvironmentId,
+        hostLabelOverrides
+      }),
+    [
+      repos,
+      sshTargetLabels,
+      sshConnectionStates,
+      settings,
+      runtimeEnvironments,
+      runtimeStatusByEnvironmentId,
+      hostLabelOverrides
+    ]
+  )
   const canCreateWorktree = repos.length > 0
 
   const hasQuery = deferredQuery.trim().length > 0
@@ -799,6 +859,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
 
   useEffect(() => {
     if (visible && !wasVisibleRef.current) {
+      recordFeatureInteraction('cmd-j')
       createLookupGuard.invalidate()
       activeGroupSnapshotRef.current = captureCmdJActiveGroupSnapshot(
         useAppStore.getState(),
@@ -845,6 +906,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
     activeWorktreeId,
     browserTabsByWorktree,
     createLookupGuard,
+    recordFeatureInteraction,
     visible
   ])
 
@@ -953,12 +1015,13 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
         return
       }
       activateAndRevealWorktree(worktreeId)
+      recordFeatureInteraction('cmd-j-workspace-open')
       skipRestoreFocusRef.current = true
       closeModal()
       setSelectedItemId('')
       focusFallbackSurface()
     },
-    [closeModal, focusFallbackSurface]
+    [closeModal, focusFallbackSurface, recordFeatureInteraction]
   )
 
   const handleSelectBrowserPage = useCallback(
@@ -989,6 +1052,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
       const state = useAppStore.getState()
       state.setActiveBrowserTab(workspace.id)
       state.setActiveBrowserPage(workspace.id, pageId)
+      recordFeatureInteraction('cmd-j-browser-page-open')
       skipRestoreFocusRef.current = true
       closeModal()
       setSelectedItemId('')
@@ -997,7 +1061,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
         target: isBlankBrowserUrl(page.url) ? 'address-bar' : 'webview'
       })
     },
-    [closeModal, requestBrowserFocus]
+    [closeModal, recordFeatureInteraction, requestBrowserFocus]
   )
 
   const handleSelectSimulatorTab = useCallback(
@@ -1046,8 +1110,9 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
       setSelectedItemId('')
       openSettingsTarget(target)
       openSettingsPage()
+      recordFeatureInteraction('cmd-j-settings-open')
     },
-    [closeModal, openSettingsPage, openSettingsTarget]
+    [closeModal, openSettingsPage, openSettingsTarget, recordFeatureInteraction]
   )
 
   const handleSelectQuickAction = useCallback(
@@ -1059,10 +1124,16 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
       void action.run(ctx).then((result) => {
         if (result.status === 'unavailable') {
           toast.error(getUnavailableQuickActionMessage(action.title, result.reason))
+          return
         }
+        if (action.id === 'create-workspace') {
+          recordFeatureInteraction('cmd-j-create-workspace')
+          return
+        }
+        recordFeatureInteraction('cmd-j-quick-action')
       })
     },
-    [buildQuickActionContext, closeModal]
+    [buildQuickActionContext, closeModal, recordFeatureInteraction]
   )
 
   const handleSelectItem = useCallback(
@@ -1099,6 +1170,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
         typeof data.initialRepoId === 'string' ? data.initialRepoId : undefined
       )
       closeModal()
+      recordFeatureInteraction('cmd-j-create-workspace')
       // Why: defer opening so Radix fully unmounts the palette's dialog before
       // the composer modal mounts, avoiding focus churn between the two.
       queueMicrotask(() =>
@@ -1122,6 +1194,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
       if (activeMatch) {
         closeModal()
         activateAndRevealWorktree(activeMatch.id)
+        recordFeatureInteraction('cmd-j-workspace-open')
         return
       }
 
@@ -1136,21 +1209,27 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
       }
 
       prefetchCreateWorkspaceBaseForComposer(repoForLookup.id)
+      const sourceContext = buildTaskSourceContextFromRepo({
+        provider: 'github',
+        projectId: repoForLookup.id,
+        repo: repoForLookup
+      })
       // Why: awaiting inside the user gesture would leave the palette open
       // indefinitely on slow networks. Close immediately and populate the
       // composer once the lookup returns.
       const lookupToken = createLookupGuard.start()
       preserveCreateLookupOnCloseRef.current = true
+      recordFeatureInteraction('cmd-j-create-workspace')
       closeModal()
-      void window.api.gh
-        .workItemByOwnerRepo({
-          repoPath: repoForLookup.path,
-          repoId: repoForLookup.id,
-          owner: slug.owner,
-          repo: slug.repo,
-          number,
-          type: ghLink.type
-        })
+      void lookupGitHubWorkItemByOwnerRepoForSource({
+        repoPath: repoForLookup.path,
+        repoId: repoForLookup.id,
+        sourceContext,
+        owner: slug.owner,
+        repo: slug.repo,
+        number,
+        type: ghLink.type
+      })
         .then((item) => {
           if (!createLookupGuard.isCurrent(lookupToken)) {
             return
@@ -1199,6 +1278,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
       if (activeMatch) {
         closeModal()
         activateAndRevealWorktree(activeMatch.id)
+        recordFeatureInteraction('cmd-j-workspace-open')
         return
       }
 
@@ -1211,11 +1291,21 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
       }
 
       prefetchCreateWorkspaceBaseForComposer(repoForLookup.id)
+      const sourceContext = buildTaskSourceContextFromRepo({
+        provider: 'github',
+        projectId: repoForLookup.id,
+        repo: repoForLookup
+      })
       const lookupToken = createLookupGuard.start()
       preserveCreateLookupOnCloseRef.current = true
+      recordFeatureInteraction('cmd-j-create-workspace')
       closeModal()
-      void window.api.gh
-        .workItem({ repoPath: repoForLookup.path, repoId: repoForLookup.id, number: ghNumber })
+      void lookupGitHubWorkItemForSource({
+        repoPath: repoForLookup.path,
+        repoId: repoForLookup.id,
+        sourceContext,
+        number: ghNumber
+      })
         .then((item) => {
           if (!createLookupGuard.isCurrent(lookupToken)) {
             return
@@ -1263,6 +1353,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
     createWorktreeName,
     openModal,
     prefetchCreateWorkspaceBaseForComposer,
+    recordFeatureInteraction,
     repoMap
   ])
 
@@ -1434,6 +1525,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
                   ? (sshConnectionStates.get(sshConnectionId)?.status ?? 'disconnected')
                   : null
                 const isSshDisconnected = sshStatus != null && sshStatus !== 'connected'
+                const hostBadge = getPaletteHostBadge(repo, hostOptions)
 
                 return (
                   <CommandItem
@@ -1549,6 +1641,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
                               </span>
                             </span>
                           )}
+                          <PaletteHostBadgeChip badge={hostBadge} />
                         </div>
                       </div>
                     </div>
@@ -1600,6 +1693,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
                   ? repoMap.get(simulatorWorktree.repoId)
                   : undefined
                 const simulatorRepoName = simulatorRepo?.displayName ?? result.repoName
+                const simulatorHostBadge = getPaletteHostBadge(simulatorRepo, hostOptions)
 
                 return (
                   <CommandItem
@@ -1665,6 +1759,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
                               </span>
                             </span>
                           )}
+                          <PaletteHostBadgeChip badge={simulatorHostBadge} />
                         </div>
                       </div>
                     </div>
@@ -1676,6 +1771,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
               const browserWorktree = worktreeMap.get(result.worktreeId)
               const browserRepo = browserWorktree ? repoMap.get(browserWorktree.repoId) : undefined
               const browserRepoName = browserRepo?.displayName ?? result.repoName
+              const browserHostBadge = getPaletteHostBadge(browserRepo, hostOptions)
 
               return (
                 <CommandItem
@@ -1741,6 +1837,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
                             </span>
                           </span>
                         )}
+                        <PaletteHostBadgeChip badge={browserHostBadge} />
                       </div>
                     </div>
                   </div>

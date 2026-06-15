@@ -1,100 +1,50 @@
-import { useEffect, useState } from 'react'
-import { AlertCircle, CheckCircle2, ExternalLink, LoaderCircle, Unlink } from 'lucide-react'
+import { useState } from 'react'
+import { AlertCircle, CheckCircle2, LoaderCircle, Unlink } from 'lucide-react'
+import { JiraConnectDialog } from '@/components/jira-connect-dialog'
 import { JiraIcon } from '@/components/icons/JiraIcon'
+import { Button } from '@/components/ui/button'
 import { useMountedRef } from '@/hooks/useMountedRef'
+import {
+  getProviderRuntimeContextKey,
+  hasRemoteProviderRuntime
+} from '@/lib/provider-runtime-context'
 import { useAppStore } from '@/store'
-import type { JiraSite } from '../../../../shared/types'
-import { Button } from '../ui/button'
-import { Input } from '../ui/input'
+import { IntegrationCardDetails, IntegrationCardShell } from './integration-card-shell'
+import { getProviderAccountScope } from './provider-account-scope'
+import { ProviderHostScopeControl } from './ProviderHostScopeControl'
 import { translate } from '@/i18n/i18n'
 
-type JiraFormMode =
-  | { kind: 'add' }
-  | {
-      kind: 'update'
-      site: JiraSite
-    }
-
-type JiraTestResult = { state: 'ok' | 'error'; error?: string }
-
-function getJiraSiteLabel(site: JiraSite): string {
-  return `${site.displayName} · ${site.email}`
-}
+type VerificationResult = { state: 'ok' | 'error'; error?: string }
 
 export function JiraIntegrationCard(): React.JSX.Element {
   const jiraStatus = useAppStore((s) => s.jiraStatus)
+  const jiraStatusChecked = useAppStore((s) => s.jiraStatusChecked)
+  const jiraStatusContextKey = useAppStore((s) => s.jiraStatusContextKey)
   const checkJiraConnection = useAppStore((s) => s.checkJiraConnection)
-  const connectJira = useAppStore((s) => s.connectJira)
   const disconnectJira = useAppStore((s) => s.disconnectJira)
   const testJiraConnection = useAppStore((s) => s.testJiraConnection)
+  const settings = useAppStore((s) => s.settings)
   const mountedRef = useMountedRef()
 
-  const [formMode, setFormMode] = useState<JiraFormMode | null>(null)
-  const [siteUrlDraft, setSiteUrlDraft] = useState('')
-  const [emailDraft, setEmailDraft] = useState('')
-  const [apiTokenDraft, setApiTokenDraft] = useState('')
-  const [connectState, setConnectState] = useState<'idle' | 'connecting' | 'error'>('idle')
-  const [connectError, setConnectError] = useState<string | null>(null)
+  const [dialogOpen, setDialogOpen] = useState(false)
   const [testingSiteId, setTestingSiteId] = useState<string | null>(null)
-  const [testResultBySite, setTestResultBySite] = useState<Record<string, JiraTestResult>>({})
+  const [testResultBySite, setTestResultBySite] = useState<Record<string, VerificationResult>>({})
 
-  const jiraSites = jiraStatus.sites ?? []
+  const contextMatches = jiraStatusContextKey === getProviderRuntimeContextKey(settings)
+  const checking = !contextMatches || !jiraStatusChecked
+  const connected = contextMatches && jiraStatus.connected
+  const sites = jiraStatus.sites ?? []
+  const siteCount = sites.length || (connected ? 1 : 0)
+  const accountScope = getProviderAccountScope(settings)
+  const credentialCopy = hasRemoteProviderRuntime(settings)
+    ? 'Connect a Jira Cloud site with your Atlassian email and an API token. Credentials are sent to the selected remote runtime and stored there with runtime-supported encryption.'
+    : 'Connect a Jira Cloud site with your Atlassian email and an API token. Credentials are stored locally and encrypted when local runtime storage supports it.'
 
-  useEffect(() => {
-    void checkJiraConnection()
-  }, [checkJiraConnection])
-
-  const openAddForm = (): void => {
-    setFormMode({ kind: 'add' })
-    setSiteUrlDraft('')
-    setEmailDraft('')
-    setApiTokenDraft('')
-    setConnectState('idle')
-    setConnectError(null)
-  }
-
-  const openUpdateForm = (site: JiraSite): void => {
-    setFormMode({ kind: 'update', site })
-    setSiteUrlDraft(site.siteUrl)
-    setEmailDraft(site.email)
-    setApiTokenDraft('')
-    setConnectState('idle')
-    setConnectError(null)
-  }
-
-  const closeForm = (): void => {
-    if (connectState === 'connecting') {
-      return
-    }
-    setFormMode(null)
-    setConnectError(null)
-    setConnectState('idle')
-  }
-
-  const handleConnect = async (): Promise<void> => {
-    const siteUrl = siteUrlDraft.trim()
-    const email = emailDraft.trim()
-    const apiToken = apiTokenDraft.trim()
-    if (!siteUrl || !email || !apiToken) {
-      return
-    }
-    setConnectState('connecting')
-    setConnectError(null)
-    const result = await connectJira({ siteUrl, email, apiToken })
-    if (!mountedRef.current) {
-      return
-    }
-    if (result.ok) {
-      setFormMode(null)
-      setSiteUrlDraft('')
-      setEmailDraft('')
-      setApiTokenDraft('')
-      setConnectState('idle')
+  const handleDisconnect = async (siteId?: string): Promise<void> => {
+    await disconnectJira(siteId)
+    if (mountedRef.current) {
       setTestResultBySite({})
-      return
     }
-    setConnectState('error')
-    setConnectError(result.error)
   }
 
   const handleTest = async (siteId: string): Promise<void> => {
@@ -115,134 +65,61 @@ export function JiraIntegrationCard(): React.JSX.Element {
     setTestingSiteId(null)
   }
 
-  const handleDisconnect = async (siteId: string): Promise<void> => {
-    await disconnectJira(siteId)
-    if (!mountedRef.current) {
-      return
-    }
-    setTestResultBySite((prev) => {
-      const next = { ...prev }
-      delete next[siteId]
-      return next
-    })
-  }
-
   return (
-    <div className="rounded-md border border-border/50 bg-muted/30 px-4 py-3">
-      <div className="flex items-center gap-3">
-        <JiraIcon className="size-5 shrink-0 text-muted-foreground" />
-        <div className="min-w-0 flex-1 space-y-0.5">
-          <p className="text-sm font-medium">{translate("auto.components.settings.jira.integration.card.09742875cd", "Jira")}</p>
-          <p className="text-xs text-muted-foreground">
-            {jiraStatus.connected
-              ? translate("auto.components.settings.jira.integration.card.74f3063026", "{{value0}} site{{value1}} connected", { value0: jiraSites.length, value1: jiraSites.length === 1 ? '' : 's' })
-              : translate("auto.components.settings.jira.integration.card.9a9f8d4910", "Connect Jira Cloud to browse, create, and link issues.")}
-          </p>
-        </div>
-        {jiraStatus.connected ? (
-          <div className="flex shrink-0 items-center gap-1.5">
-            <Button variant="outline" size="sm" onClick={openAddForm}>
-              {translate("auto.components.settings.jira.integration.card.efaab83c5d", "Add site")}</Button>
-            <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-medium text-emerald-700 dark:text-emerald-300">
-              {translate("auto.components.settings.jira.integration.card.9bb34706ca", "Connected")}</span>
-          </div>
-        ) : (
-          <button
-            className="shrink-0 rounded-full border border-border/50 bg-muted/40 px-2.5 py-1 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-            onClick={openAddForm}
+    <IntegrationCardShell
+      icon={<JiraIcon className="size-5" />}
+      name="Jira"
+      description={
+        connected
+          ? translate(
+              'auto.components.settings.task.tracker.integration.cards.9fa04a032e',
+              '{{value0}} site{{value1}} connected',
+              { value0: siteCount, value1: siteCount === 1 ? '' : 's' }
+            )
+          : checking
+            ? translate(
+                'auto.components.settings.task.tracker.integration.cards.a1093a06c7',
+                'Checking Jira access before showing setup actions.'
+              )
+            : translate(
+                'auto.components.settings.task.tracker.integration.cards.7ca5ffffdb',
+                'Browse, create, and start work from Jira Cloud issues.'
+              )
+      }
+      checking={checking}
+      statusTone={connected ? 'connected' : 'attention'}
+      statusLabel={connected ? 'Connected' : 'Not connected'}
+      actions={
+        !checking ? (
+          <Button
+            variant={connected ? 'outline' : 'default'}
+            size="sm"
+            onClick={() => setDialogOpen(true)}
           >
-            {translate("auto.components.settings.jira.integration.card.a28f417220", "Connect Jira")}</button>
-        )}
-      </div>
-
-      {formMode ? (
-        <div className="mt-3 rounded-md border border-border/30 bg-background/50 px-3 py-2.5">
-          <div className="grid gap-2 md:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
-            <Input
-              placeholder={translate("auto.components.settings.jira.integration.card.27dae4ab60", "https://example.atlassian.net")}
-              value={siteUrlDraft}
-              onChange={(e) => {
-                setSiteUrlDraft(e.target.value)
-                setConnectError(null)
-                setConnectState('idle')
-              }}
-              disabled={connectState === 'connecting'}
-            />
-            <Input
-              type="email"
-              placeholder={translate("auto.components.settings.jira.integration.card.09d310e42d", "you@example.com")}
-              value={emailDraft}
-              onChange={(e) => {
-                setEmailDraft(e.target.value)
-                setConnectError(null)
-                setConnectState('idle')
-              }}
-              disabled={connectState === 'connecting'}
-            />
-            <Input
-              className="md:col-span-2"
-              type="password"
-              placeholder={translate("auto.components.settings.jira.integration.card.1ab7f551f3", "Atlassian API token")}
-              value={apiTokenDraft}
-              onChange={(e) => {
-                setApiTokenDraft(e.target.value)
-                setConnectError(null)
-                setConnectState('idle')
-              }}
-              disabled={connectState === 'connecting'}
-            />
-          </div>
-          {connectState === 'error' && connectError ? (
-            <p className="mt-2 text-xs text-destructive">{connectError}</p>
-          ) : null}
-          <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
-            <button
-              className="inline-flex items-center gap-1.5 text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
-              onClick={() =>
-                window.api.shell.openUrl(
-                  'https://id.atlassian.com/manage-profile/security/api-tokens'
+            {connected
+              ? translate(
+                  'auto.components.settings.task.tracker.integration.cards.60996beda6',
+                  'Add Jira site'
                 )
-              }
-            >
-              <ExternalLink className="size-3.5" />
-              {translate("auto.components.settings.jira.integration.card.1666f8d562", "Create an Atlassian API token")}</button>
-            <div className="flex items-center gap-2">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={closeForm}
-                disabled={connectState === 'connecting'}
-              >
-                {translate("auto.components.settings.jira.integration.card.5936977fcd", "Cancel")}</Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => void handleConnect()}
-                disabled={
-                  !siteUrlDraft.trim() ||
-                  !emailDraft.trim() ||
-                  !apiTokenDraft.trim() ||
-                  connectState === 'connecting'
-                }
-              >
-                {connectState === "connecting" ? (
-                  <>
-                    <LoaderCircle className="size-3.5 mr-1.5 animate-spin" />
-                    {translate("auto.components.settings.jira.integration.card.d914d7ab70", "Verifying…")}</>
-                ) : formMode.kind === "update" ? (
-                  translate("auto.components.settings.jira.integration.card.33a8b261ee", "Update credentials")
-                ) : (
-                  translate("auto.components.settings.jira.integration.card.2e8bb790fd", "Connect")
+              : translate(
+                  'auto.components.settings.task.tracker.integration.cards.e2ff968276',
+                  'Connect Jira'
                 )}
-              </Button>
-            </div>
-          </div>
-        </div>
-      ) : null}
-
-      {jiraStatus.connected ? (
+          </Button>
+        ) : null
+      }
+    >
+      <ProviderHostScopeControl
+        labelPrefix={translate(
+          'auto.components.settings.task.tracker.integration.cards.account_scope_prefix',
+          'Account scope'
+        )}
+        scope={accountScope}
+        className="mt-3 rounded-md border border-border/40 bg-background/50 px-3 py-2 text-xs"
+      />
+      {connected && sites.length > 0 ? (
         <div className="mt-3 space-y-2">
-          {jiraSites.map((site) => {
+          {sites.map((site) => {
             const testResult = testResultBySite[site.id]
             const testing = testingSiteId === site.id
             return (
@@ -251,15 +128,20 @@ export function JiraIntegrationCard(): React.JSX.Element {
                 className="flex items-center gap-3 rounded-md border border-border/50 bg-background/60 px-3 py-2"
               >
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium text-foreground">
-                    {getJiraSiteLabel(site)}
+                  <p className="truncate text-sm font-medium text-foreground">{site.displayName}</p>
+                  <p className="truncate text-xs text-muted-foreground">
+                    {site.siteUrl}
+                    {site.email ? ` · ${site.email}` : ''}
                   </p>
-                  <p className="truncate text-xs text-muted-foreground">{site.siteUrl}</p>
                 </div>
-                {testResult?.state === "ok" ? (
-                  <span className="flex shrink-0 items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400">
+                {testResult?.state === 'ok' ? (
+                  <span className="flex shrink-0 items-center gap-1 text-xs text-status-success">
                     <CheckCircle2 className="size-3.5" />
-                    {translate("auto.components.settings.jira.integration.card.ab350991b8", "Verified")}</span>
+                    {translate(
+                      'auto.components.settings.task.tracker.integration.cards.a2c0015fb8',
+                      'Verified'
+                    )}
+                  </span>
                 ) : null}
                 {testResult?.state === 'error' ? (
                   <span className="flex min-w-0 max-w-[220px] shrink items-center gap-1 truncate text-xs text-destructive">
@@ -276,16 +158,25 @@ export function JiraIntegrationCard(): React.JSX.Element {
                   {testing ? (
                     <>
                       <LoaderCircle className="size-3.5 mr-1.5 animate-spin" />
-                      {translate("auto.components.settings.jira.integration.card.cec06a0f79", "Testing…")}</>
+                      {translate(
+                        'auto.components.settings.task.tracker.integration.cards.3e7c10d286',
+                        'Testing...'
+                      )}
+                    </>
                   ) : (
-                    translate("auto.components.settings.jira.integration.card.255bfe98ec", "Test")
+                    translate(
+                      'auto.components.settings.task.tracker.integration.cards.c24e56c532',
+                      'Test'
+                    )
                   )}
                 </Button>
-                <Button variant="outline" size="sm" onClick={() => openUpdateForm(site)}>
-                  {translate("auto.components.settings.jira.integration.card.eaffa454e9", "Update")}</Button>
                 <button
                   onClick={() => void handleDisconnect(site.id)}
-                  aria-label={translate("auto.components.settings.jira.integration.card.9046a20d4c", "Disconnect {{value0}}", { value0: getJiraSiteLabel(site) })}
+                  aria-label={translate(
+                    'auto.components.settings.task.tracker.integration.cards.dd3529015d',
+                    'Disconnect {{value0}}',
+                    { value0: site.displayName }
+                  )}
                   className="rounded-md p-1 text-muted-foreground/50 transition-colors hover:text-destructive"
                 >
                   <Unlink className="size-3.5" />
@@ -294,9 +185,54 @@ export function JiraIntegrationCard(): React.JSX.Element {
             )
           })}
           <p className="text-[11px] text-muted-foreground/70">
-            {translate("auto.components.settings.jira.integration.card.8ff73fef62", "Jira tokens are encrypted by the active runtime and stored locally. Re-entering the same site URL and email replaces that site's API token.")}</p>
+            {translate(
+              'auto.components.settings.task.tracker.integration.cards.8c20e76308',
+              'Each connected Jira site has one token stored by the active runtime.'
+            )}
+          </p>
         </div>
+      ) : connected ? (
+        <IntegrationCardDetails>
+          <p className="text-xs text-muted-foreground">
+            {translate(
+              'auto.components.settings.task.tracker.integration.cards.8b2408a8e5',
+              'Jira is connected for this runtime. Re-check if the connected site list looks stale.'
+            )}
+          </p>
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="sm" onClick={() => void checkJiraConnection()}>
+              {translate(
+                'auto.components.settings.task.tracker.integration.cards.c90f2ef419',
+                'Re-check'
+              )}
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => void handleDisconnect()}>
+              {translate(
+                'auto.components.settings.task.tracker.integration.cards.disconnect_all',
+                'Disconnect'
+              )}
+            </Button>
+          </div>
+        </IntegrationCardDetails>
+      ) : !checking ? (
+        <IntegrationCardDetails>
+          <p className="text-xs text-muted-foreground">{credentialCopy}</p>
+          <Button variant="ghost" size="sm" onClick={() => void checkJiraConnection()}>
+            {translate(
+              'auto.components.settings.task.tracker.integration.cards.c90f2ef419',
+              'Re-check'
+            )}
+          </Button>
+        </IntegrationCardDetails>
       ) : null}
-    </div>
+
+      <JiraConnectDialog
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+        onConnected={() => setTestResultBySite({})}
+        overlayClassName="z-[110]"
+        contentClassName="z-[120]"
+      />
+    </IntegrationCardShell>
   )
 }

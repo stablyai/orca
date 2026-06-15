@@ -77,3 +77,45 @@ export const getTerminalLightThemeSearchEntries = createLocalizedCatalog(() => [
     ]
   }
 ])
+
+export const getTerminalYamlImportSearchEntries = createLocalizedCatalog(() => [
+  {
+    title: translate(
+      'auto.components.settings.terminal.search.yaml_import.title',
+      'Import from YAML'
+    ),
+    description: translate(
+      'auto.components.settings.terminal.search.yaml_import.description',
+      'Import theme YAML files as Orca terminal themes.'
+    ),
+    keywords: [
+      translate('auto.components.settings.terminal.search.yaml_import.keyword_yaml', 'yaml'),
+      translate('auto.components.settings.terminal.search.fd752b3cac', 'import'),
+      translate('auto.components.settings.terminal.search.f66a7cf715', 'terminal'),
+      translate('auto.components.settings.terminal.search.0ce176909a', 'theme'),
+      translate('auto.components.settings.terminal.search.warp_import.keyword_themes', 'themes'),
+      translate('auto.components.settings.terminal.search.yaml_import.keyword_custom', 'custom')
+    ]
+  }
+])
+
+export const getTerminalWarpImportSearchEntries = createLocalizedCatalog(() => [
+  {
+    title: translate(
+      'auto.components.settings.terminal.search.warp_import.title',
+      'Import themes from Warp'
+    ),
+    description: translate(
+      'auto.components.settings.terminal.search.warp_import.description',
+      'Import Warp themes as Orca terminal themes.'
+    ),
+    keywords: [
+      translate('auto.components.settings.terminal.search.warp_import.keyword_warp', 'warp'),
+      translate('auto.components.settings.terminal.search.fd752b3cac', 'import'),
+      translate('auto.components.settings.terminal.search.f66a7cf715', 'terminal'),
+      translate('auto.components.settings.terminal.search.0ce176909a', 'theme'),
+      translate('auto.components.settings.terminal.search.warp_import.keyword_themes', 'themes'),
+      translate('auto.components.settings.terminal.search.warp_import.keyword_yaml', 'yaml')
+    ]
+  }
+])

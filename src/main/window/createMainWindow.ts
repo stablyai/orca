@@ -43,10 +43,6 @@ function forceRepaint(window: BrowserWindow): void {
   }, 32)
 }
 
-function isControlKeyRelease(input: Electron.Input): boolean {
-  return input.type === 'keyUp' && (input.code === 'ControlLeft' || input.code === 'ControlRight')
-}
-
 function nativeZoomCommandMatchesKeybindings(
   direction: 'in' | 'out',
   platform: NodeJS.Platform,
@@ -234,6 +230,10 @@ export function createMainWindow(
     minHeight: MIN_HEIGHT,
     title: opts?.title ?? 'Orca',
     show: false,
+    // Why: macOS swallows the app-activating click by default, so clicking
+    // back into Orca (e.g. the floating workspace) needed a second click.
+    // macOS-only option; Windows/Linux already deliver that click.
+    acceptFirstMouse: true,
     // Why: on macOS the menu lives in the system menu bar, so the in-window
     // menu bar is irrelevant. On Windows/Linux we auto-hide so the menu bar
     // doesn't consume a dedicated row of vertical space on every launch —
@@ -655,7 +655,6 @@ export function createMainWindow(
     clearRendererRecoveryTimer()
   })
 
-  let ctrlTabSwitching = false
   mainWindow.webContents.on('before-input-event', (event, input) => {
     if (shortcutRecorderFocused) {
       return
@@ -679,23 +678,11 @@ export function createMainWindow(
       )
     }
     if (
+      input.type === 'keyDown' &&
       matchesRecentTabSwitcherChord(input, process.platform, keybindings, terminalShortcutContext)
     ) {
-      // Why: Ctrl+Tab is a held-key interaction. Route both press and release
-      // through IPC so renderer keyup suppression from preventDefault cannot
-      // leave the switcher overlay stranded.
-      event.preventDefault()
-      if (input.type === 'keyDown') {
-        ctrlTabSwitching = true
-        mainWindow.webContents.send('ui:ctrlTabKeyDown', { shiftKey: input.shift === true })
-      }
-      return
-    }
-
-    if (ctrlTabSwitching && isControlKeyRelease(input)) {
-      event.preventDefault()
-      ctrlTabSwitching = false
-      mainWindow.webContents.send('ui:ctrlTabKeyUp')
+      // Why: the held switcher commits on modifier keyup. If main prevents the
+      // keydown, Electron can suppress the renderer keyup and strand the overlay.
       return
     }
 
@@ -938,6 +925,9 @@ export function createMainWindow(
       return
     }
     e.preventDefault()
+    // Why: the renderer owns the close decision (dirty-file save dialogs,
+    // running-process confirmation). The subscription lives at the always-
+    // mounted App root, so even pre-workspace states reply — see #5144.
     mainWindow.webContents.send('window:close-requested', {
       isQuitting: opts?.getIsQuitting?.() ?? false
     })

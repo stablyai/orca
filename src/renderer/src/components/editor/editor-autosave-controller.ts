@@ -9,6 +9,7 @@ import {
   buildWorkspaceSessionPayload,
   shouldPersistWorkspaceSession
 } from '@/lib/workspace-session'
+import { persistWorkspaceSessionByHostSync } from '@/lib/workspace-session-host-persistence'
 import { findWorktreeById } from '@/store/slices/worktree-helpers'
 import { writeRuntimeFile } from '@/runtime/runtime-file-client'
 import { settingsForRuntimeOwner } from '@/runtime/runtime-rpc-client'
@@ -285,7 +286,13 @@ export function attachEditorAutosaveController(store: AppStoreApi): () => void {
       // Why: restart/update may quit before the debounced session writer fires.
       // Write the full session now so dirty drafts restore as unsaved tabs.
       if (shouldPersistWorkspaceSession(state)) {
-        window.api.session.setSync(buildWorkspaceSessionPayload(state))
+        // Why: runtime-owned worktree slices persist under their host
+        // partition, mirroring the debounced writer's split.
+        persistWorkspaceSessionByHostSync(
+          window.api.session,
+          buildWorkspaceSessionPayload(state),
+          state
+        )
       }
       detail.resolve()
     } catch (error) {

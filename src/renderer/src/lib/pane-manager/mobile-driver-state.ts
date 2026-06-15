@@ -46,6 +46,10 @@ export function getDriverForPty(ptyId: string): DriverState {
   return driverByPtyId.get(ptyId) ?? { kind: 'idle' }
 }
 
+export function getAllDrivers(): Map<string, DriverState> {
+  return new Map(driverByPtyId)
+}
+
 export function isPtyLocked(ptyId: string): boolean {
   return driverByPtyId.get(ptyId)?.kind === 'mobile'
 }

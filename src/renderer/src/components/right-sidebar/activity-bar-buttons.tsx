@@ -1,6 +1,6 @@
 import React from 'react'
 import { MoreHorizontal } from 'lucide-react'
-import type { RightSidebarTab } from '@/store/slices/editor'
+import type { ActiveRightSidebarTab } from '@/store/slices/editor'
 import type { CheckStatus } from '../../../../shared/types'
 import { cn } from '@/lib/utils'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -15,7 +15,7 @@ import {
 import { translate } from '@/i18n/i18n'
 
 export type ActivityBarItem = {
-  id: RightSidebarTab
+  id: ActiveRightSidebarTab
   icon: React.ComponentType<{ size?: number; className?: string }>
   title: string
   shortcut: string
@@ -39,8 +39,8 @@ export function TopActivityOverflowMenu({
   checksStatus
 }: {
   items: ActivityBarItem[]
-  activeTab: RightSidebarTab
-  onSelect: (tab: RightSidebarTab) => void
+  activeTab: ActiveRightSidebarTab
+  onSelect: (tab: ActiveRightSidebarTab) => void
   checksStatus?: CheckStatus | null
 }): React.JSX.Element {
   const hiddenChecksStatus =
@@ -57,7 +57,10 @@ export function TopActivityOverflowMenu({
             'relative flex h-[36px] w-8 shrink-0 items-center justify-center text-muted-foreground/60 transition-colors hover:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
             RIGHT_SIDEBAR_HEADER_NO_DRAG_CLASS_NAME
           )}
-          aria-label={translate("auto.components.right.sidebar.activity.bar.buttons.1fd284e931", "More sidebar tabs")}
+          aria-label={translate(
+            'auto.components.right.sidebar.activity.bar.buttons.1fd284e931',
+            'More sidebar tabs'
+          )}
         >
           <MoreHorizontal size={16} />
           {hiddenChecksStatus && (
@@ -124,7 +127,7 @@ export function ActivityBarButton({
         >
           <Icon size={isTop ? 16 : 18} />
 
-          {statusIndicator && statusIndicator !== "neutral" && (
+          {statusIndicator && statusIndicator !== 'neutral' && (
             <div
               className={cn(
                 'absolute rounded-full size-[7px] ring-1 ring-sidebar',

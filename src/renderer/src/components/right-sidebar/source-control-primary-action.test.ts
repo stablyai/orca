@@ -201,6 +201,22 @@ describe('resolvePrimaryAction', () => {
     })
   })
 
+  it('does not offer Publish Branch when HEAD is detached', () => {
+    const result = resolvePrimaryAction(
+      inputs({
+        upstreamStatus: { hasUpstream: false, ahead: 0, behind: 0 },
+        branchCommitsAhead: 4,
+        hasCurrentBranch: false
+      })
+    )
+    expect(result).toEqual({
+      kind: 'commit',
+      label: 'Commit',
+      title: 'Check out a branch before publishing commits.',
+      disabled: true
+    })
+  })
+
   it('does not offer Publish Branch when an unpublished branch has no commits ahead', () => {
     const result = resolvePrimaryAction(
       inputs({ upstreamStatus: { hasUpstream: false, ahead: 0, behind: 0 }, branchCommitsAhead: 0 })

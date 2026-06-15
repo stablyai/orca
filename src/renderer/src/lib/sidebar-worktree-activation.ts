@@ -1,7 +1,11 @@
 import { useAppStore } from '@/store'
-import { activateAndRevealWorktree } from '@/lib/worktree-activation'
+import {
+  activateAndRevealFolderWorkspace,
+  activateAndRevealWorktree
+} from '@/lib/worktree-activation'
 import { tabHasLivePty } from '@/lib/tab-has-live-pty'
 import { markInputQuietSchedulerInput, scheduleAfterInputQuiet } from '@/lib/input-quiet-scheduler'
+import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 
 const SLEPT_WORKTREE_ACTIVATION_INPUT_QUIET_MS = 450
 const SLEPT_WORKTREE_ACTIVATION_IDLE_TIMEOUT_MS = 120
@@ -37,6 +41,11 @@ function shouldDeferSidebarWorktreeActivation(worktreeId: string): boolean {
 
 export function activateWorktreeFromSidebar(worktreeId: string): void {
   cancelPendingSidebarWorktreeActivation()
+  const workspaceScope = parseWorkspaceKey(worktreeId)
+  if (workspaceScope?.type === 'folder') {
+    activateAndRevealFolderWorkspace(workspaceScope.folderWorkspaceId)
+    return
+  }
 
   const activate = (): void => {
     if (pendingSidebarWorktreeActivation?.worktreeId === worktreeId) {

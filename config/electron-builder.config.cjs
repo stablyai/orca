@@ -238,12 +238,19 @@ module.exports = {
     artifactName: 'orca-macos-${arch}.${ext}'
   },
   linux: {
-    // Why: Ubuntu 26 ships GNOME Orca as the `orca` package and /usr/bin/orca.
+    // Why: Ubuntu desktop ships GNOME Orca as the `orca` package and /usr/bin/orca.
     // The Linux installer should not claim those system package/file names.
     executableName: 'orca-ide',
     // Why: the icns source lets electron-builder emit standard hicolor PNG
     // sizes; a single 1024px PNG is ignored by some Linux docks/launchers.
     icon: 'resources/build/icon.icns',
+    desktop: {
+      entry: {
+        // Why: Electron reports WM_CLASS=orca for the visible Linux window;
+        // GNOME docks need an exact match to group it with orca-ide.desktop.
+        StartupWMClass: 'orca'
+      }
+    },
     extraResources: [
       ...commonExtraResources,
       linuxSpeechNativeResource,

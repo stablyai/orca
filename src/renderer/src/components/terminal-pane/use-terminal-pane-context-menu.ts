@@ -53,6 +53,7 @@ type UseTerminalPaneContextMenuDeps = {
   onSetTitle: (paneId: number) => void
   onPasteError: (message: string) => void
   onAgentSessionForkReady: (fork: PreparedAgentSessionFork) => void
+  forceBracketedMultilineTextPaste: boolean
   rightClickToPaste: boolean
 }
 
@@ -92,6 +93,7 @@ export function useTerminalPaneContextMenu({
   onSetTitle,
   onPasteError,
   onAgentSessionForkReady,
+  forceBracketedMultilineTextPaste,
   rightClickToPaste
 }: UseTerminalPaneContextMenuDeps): TerminalMenuState {
   const contextPaneIdRef = useRef<number | null>(null)
@@ -168,13 +170,11 @@ export function useTerminalPaneContextMenu({
       readClipboardText: window.api.ui.readClipboardText,
       saveClipboardImageAsTempFile: window.api.ui.saveClipboardImageAsTempFile,
       connectionId,
+      forceBracketedMultilineTextPaste,
       pasteText: (text, options) => {
         pasteTerminalText(pane.terminal, text, options)
-        if (options?.forceBracketedPaste) {
-          const manager = managerRef.current
-          if (manager) {
-            scheduleImagePasteWebglAtlasRecovery(manager)
-          }
+        if (options?.recoverImagePasteWebglAtlas) {
+          scheduleImagePasteWebglAtlasRecovery()
         }
       },
       onImagePasteError: (error) => {

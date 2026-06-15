@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, useState } from 'react'
-import { Check, ChevronsUpDown, Server } from 'lucide-react'
+import { Check, ChevronsUpDown } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   Command,
@@ -28,15 +28,24 @@ type RepoMultiComboboxProps = {
    *  signal, so the caller can persist `null` (sticky-all) rather than a
    *  frozen snapshot that would exclude repos added later. */
   onSelectAll: () => void
+  getRepoHostLabel?: (repo: Repo) => string | null | undefined
   triggerClassName?: string
 }
 
 function renderTriggerLabel(repos: Repo[], selected: ReadonlySet<string>): React.JSX.Element {
   if (repos.length === 0) {
-    return <span className="text-muted-foreground">{translate("auto.components.ui.repo.multi.combobox.65a3dae41d", "No projects")}</span>
+    return (
+      <span className="text-muted-foreground">
+        {translate('auto.components.ui.repo.multi.combobox.65a3dae41d', 'No projects')}
+      </span>
+    )
   }
   if (selected.size === repos.length) {
-    return <span className="inline-flex min-w-0 items-center gap-1.5">{translate("auto.components.ui.repo.multi.combobox.bfd8ce21c6", "All projects")}</span>
+    return (
+      <span className="inline-flex min-w-0 items-center gap-1.5">
+        {translate('auto.components.ui.repo.multi.combobox.bfd8ce21c6', 'All projects')}
+      </span>
+    )
   }
   const selectedRepos = repos.filter((r) => selected.has(r.id))
   const [first, second, ...rest] = selectedRepos
@@ -55,11 +64,17 @@ function renderTriggerLabel(repos: Repo[], selected: ReadonlySet<string>): React
   )
 }
 
+export function getRepoMultiComboboxDetail(repo: Repo, hostLabel?: string | null): string {
+  const trimmedHostLabel = hostLabel?.trim()
+  return trimmedHostLabel ? `${trimmedHostLabel} · ${repo.path}` : repo.path
+}
+
 export default function RepoMultiCombobox({
   repos,
   selected,
   onChange,
   onSelectAll,
+  getRepoHostLabel,
   triggerClassName
 }: RepoMultiComboboxProps): React.JSX.Element {
   const [open, setOpen] = useState(false)
@@ -136,7 +151,10 @@ export default function RepoMultiCombobox({
         <Command shouldFilter={false} value={commandValue} onValueChange={setCommandValue}>
           <CommandInput
             autoFocus
-            placeholder={translate("auto.components.ui.repo.multi.combobox.a58a0cd100", "Search projects...")}
+            placeholder={translate(
+              'auto.components.ui.repo.multi.combobox.a58a0cd100',
+              'Search projects...'
+            )}
             value={query}
             onValueChange={setQuery}
             className="text-xs"
@@ -162,14 +180,22 @@ export default function RepoMultiCombobox({
                   allSelected ? 'opacity-70' : 'opacity-0'
                 )}
               />
-              <span>{translate("auto.components.ui.repo.multi.combobox.bfd8ce21c6", "All projects")}</span>
+              <span>
+                {translate('auto.components.ui.repo.multi.combobox.bfd8ce21c6', 'All projects')}
+              </span>
             </button>
           </div>
           <CommandList>
-            <CommandEmpty>{translate("auto.components.ui.repo.multi.combobox.4471d4a1c0", "No projects match your search.")}</CommandEmpty>
+            <CommandEmpty>
+              {translate(
+                'auto.components.ui.repo.multi.combobox.4471d4a1c0',
+                'No projects match your search.'
+              )}
+            </CommandEmpty>
             {filteredRepos.map((repo) => {
               const isSelected = selected.has(repo.id)
               const isLastSelected = isSelected && selected.size <= 1
+              const detail = getRepoMultiComboboxDetail(repo, getRepoHostLabel?.(repo))
               return (
                 <CommandItem
                   key={repo.id}
@@ -191,13 +217,8 @@ export default function RepoMultiCombobox({
                         color={repo.badgeColor}
                         className="max-w-full"
                       />
-                      {repo.connectionId && (
-                        <span className="shrink-0 inline-flex items-center gap-0.5 rounded bg-muted px-1 py-0.5 text-[9px] font-medium leading-none text-muted-foreground">
-                          <Server className="size-2.5" />
-                          {translate("auto.components.ui.repo.multi.combobox.286ce70256", "SSH")}</span>
-                      )}
                     </span>
-                    <p className="mt-0.5 truncate text-[10px] text-muted-foreground">{repo.path}</p>
+                    <p className="mt-0.5 truncate text-[10px] text-muted-foreground">{detail}</p>
                   </div>
                 </CommandItem>
               )

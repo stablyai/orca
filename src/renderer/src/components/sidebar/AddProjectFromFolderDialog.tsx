@@ -88,7 +88,13 @@ const AddProjectFromFolderDialog = React.memo(function AddProjectFromFolderDialo
         if (!mountedRef.current || gen !== addGenRef.current) {
           return
         }
-        toast.success(translate("auto.components.sidebar.AddProjectFromFolderDialog.e643b30398", "Remote project added"), { description: repo.displayName })
+        toast.success(
+          translate(
+            'auto.components.sidebar.AddProjectFromFolderDialog.e643b30398',
+            'Project added on SSH host'
+          ),
+          { description: repo.displayName }
+        )
       } else {
         repo = await addRepoPath(folderPath)
       }
@@ -157,8 +163,18 @@ const AddProjectFromFolderDialog = React.memo(function AddProjectFromFolderDialo
     <Dialog open={isOpen} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>{translate("auto.components.sidebar.AddProjectFromFolderDialog.7d1f51678c", "Add Project")}</DialogTitle>
-          <DialogDescription>{translate("auto.components.sidebar.AddProjectFromFolderDialog.046751dbfb", "Add this folder as a separate Orca project.")}</DialogDescription>
+          <DialogTitle>
+            {translate(
+              'auto.components.sidebar.AddProjectFromFolderDialog.7d1f51678c',
+              'Add Project'
+            )}
+          </DialogTitle>
+          <DialogDescription>
+            {translate(
+              'auto.components.sidebar.AddProjectFromFolderDialog.046751dbfb',
+              'Add this folder as a separate Orca project.'
+            )}
+          </DialogDescription>
         </DialogHeader>
 
         {folderPath && (
@@ -171,14 +187,19 @@ const AddProjectFromFolderDialog = React.memo(function AddProjectFromFolderDialo
 
         <DialogFooter>
           <Button variant="outline" onClick={() => handleOpenChange(false)} disabled={isAdding}>
-            {translate("auto.components.sidebar.AddProjectFromFolderDialog.7726a16374", "Cancel")}</Button>
+            {translate('auto.components.sidebar.AddProjectFromFolderDialog.7726a16374', 'Cancel')}
+          </Button>
           <Button onClick={handleConfirm} disabled={!folderPath || isAdding}>
             {isAdding ? (
               <Loader2 className="size-4 animate-spin" />
             ) : (
               <FolderPlus className="size-4" />
             )}
-            {translate("auto.components.sidebar.AddProjectFromFolderDialog.7d1f51678c", "Add Project")}</Button>
+            {translate(
+              'auto.components.sidebar.AddProjectFromFolderDialog.7d1f51678c',
+              'Add Project'
+            )}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

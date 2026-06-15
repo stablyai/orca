@@ -31,6 +31,16 @@ type WorktreeListComponent = React.ComponentType<{
 
 let WorktreeList: WorktreeListComponent
 
+function makeFolderWorkspacePathStatusMockState(): Record<string, unknown> {
+  return {
+    fetchFolderWorkspacePathStatus: vi.fn(),
+    folderWorkspaces: [],
+    folderWorkspacePathStatuses: {},
+    getFolderWorkspacePathStatusCacheKey: (request: unknown) => JSON.stringify(request),
+    getFreshFolderWorkspacePathStatus: () => null
+  }
+}
+
 vi.mock('@/store', () => {
   const useAppStore = ((selector: (state: Record<string, unknown>) => unknown) =>
     selector(mockStore.state)) as ((
@@ -203,6 +213,16 @@ function makeHostedReview(overrides: Partial<HostedReviewInfo> = {}): HostedRevi
   }
 }
 
+function makeFolderWorkspacePathStatusState(): Record<string, unknown> {
+  return {
+    fetchFolderWorkspacePathStatus: vi.fn(),
+    folderWorkspacePathStatuses: {},
+    folderWorkspaces: [],
+    getFolderWorkspacePathStatusCacheKey: (request: unknown) => JSON.stringify(request),
+    getFreshFolderWorkspacePathStatus: vi.fn(() => null)
+  }
+}
+
 function setLineageState(options: { deletingChild?: boolean } = {}): void {
   const repo = makeRepo()
   const parent = makeWorktree({
@@ -224,6 +244,7 @@ function setLineageState(options: { deletingChild?: boolean } = {}): void {
     }
   })
   mockStore.state = {
+    ...makeFolderWorkspacePathStatusMockState(),
     activeModal: '',
     activeView: 'terminal',
     activeWorktreeId: null,
@@ -240,6 +261,7 @@ function setLineageState(options: { deletingChild?: boolean } = {}): void {
     fetchIssue: mockStore.fetchIssue,
     fetchLinearIssue: mockStore.fetchLinearIssue,
     filterRepoIds: [],
+    ...makeFolderWorkspacePathStatusState(),
     gitConflictOperationByWorktree: {},
     groupBy: 'none',
     hideDefaultBranchWorkspace: false,
@@ -289,6 +311,7 @@ function setLineageState(options: { deletingChild?: boolean } = {}): void {
     updateRepo: vi.fn(),
     updateWorktreeMeta: mockStore.updateWorktreeMeta,
     updateWorktreesMeta: vi.fn(),
+    workspaceHostScope: 'all',
     workspacePortScan: null,
     workspaceStatuses: [],
     worktreeCardProperties: [

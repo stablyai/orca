@@ -7,7 +7,13 @@ import { RIGHT_SIDEBAR_HEADER_NO_DRAG_CLASS_NAME } from './right-sidebar-titleba
 
 const mockAppState = vi.hoisted(() => ({
   rightSidebarOpen: true,
-  activityBarPosition: 'top' as 'top' | 'side'
+  activityBarPosition: 'top' as 'top' | 'side',
+  activeWorktreeId: 'worktree-1',
+  activeRepo: { id: 'repo-1', kind: 'git', connectionId: null } as {
+    id: string
+    kind: 'git' | 'folder'
+    connectionId: string | null
+  } | null
 }))
 
 vi.mock('@/hooks/useSidebarResize', () => ({
@@ -29,8 +35,12 @@ vi.mock('@/store', () => ({
       rightSidebarWidth: 350,
       setRightSidebarWidth: vi.fn(),
       rightSidebarTab: 'explorer',
+      rightSidebarExplorerView: 'files',
       setRightSidebarTab: vi.fn(),
+      showRightSidebarFiles: vi.fn(),
       toggleRightSidebar: vi.fn(),
+      activeWorktreeId: mockAppState.activeWorktreeId,
+      getKnownWorktreeById: () => ({ id: mockAppState.activeWorktreeId, repoId: 'repo-1' }),
       activityBarPosition: mockAppState.activityBarPosition,
       setActivityBarPosition: vi.fn(),
       checksByWorktreeId: {},
@@ -40,7 +50,8 @@ vi.mock('@/store', () => ({
 
 vi.mock('@/store/selectors', () => ({
   useActiveWorktree: () => ({ id: 'worktree-1', repoId: 'repo-1' }),
-  useRepoById: () => ({ id: 'repo-1', kind: 'git', connectionId: null })
+  useRepoById: () => mockAppState.activeRepo,
+  getWorktreeMapFromState: () => new Map()
 }))
 
 vi.mock('@/components/ui/tooltip', () => ({
@@ -96,10 +107,6 @@ vi.mock('./SourceControl', () => ({
   default: () => <div data-source-control />
 }))
 
-vi.mock('./Search', () => ({
-  default: () => <div data-search-panel />
-}))
-
 vi.mock('./ChecksPanel', () => ({
   default: () => <div data-checks-panel />
 }))
@@ -133,6 +140,8 @@ describe('rendered right sidebar titlebar drag regions', () => {
   beforeEach(() => {
     mockAppState.rightSidebarOpen = true
     mockAppState.activityBarPosition = 'top'
+    mockAppState.activeWorktreeId = 'worktree-1'
+    mockAppState.activeRepo = { id: 'repo-1', kind: 'git', connectionId: null }
   })
 
   it('keeps the rendered top activity strip draggable, context-menuable, and only controls no-drag', () => {
@@ -146,7 +155,6 @@ describe('rendered right sidebar titlebar drag regions', () => {
     expect(markup).toContain('right-sidebar-header-drag')
 
     expectNoDrag(buttonOpeningTag(markup, 'Explorer'))
-    expectNoDrag(buttonOpeningTag(markup, 'Search'))
     expectNoDrag(buttonOpeningTag(markup, 'Source Control'))
     expectNoDrag(buttonOpeningTag(markup, 'Checks'))
     expect(buttonOpeningTag(markup, 'Toggle right sidebar')).toContain('sidebar-toggle')
@@ -185,10 +193,22 @@ describe('rendered right sidebar titlebar drag regions', () => {
     expect(sideStrip).toContain('data-context-menu-trigger="true"')
 
     expectNoDrag(buttonOpeningTag(markup, 'Explorer'))
-    expectNoDrag(buttonOpeningTag(markup, 'Search'))
     expectNoDrag(buttonOpeningTag(markup, 'Source Control'))
     expectNoDrag(buttonOpeningTag(markup, 'Checks'))
     expect(buttonOpeningTag(markup, 'Toggle right sidebar')).toContain('sidebar-toggle')
+  })
+
+  it('hides git-only activity buttons for folder workspace ids without a backing repo', () => {
+    mockAppState.activeWorktreeId = 'folder:folder-1'
+    mockAppState.activeRepo = null
+
+    const markup = renderToStaticMarkup(<RightSidebar />)
+
+    expect(markup).toContain('aria-label="Explorer')
+    expect(markup).toContain('aria-label="Agents')
+    expect(markup).not.toContain('aria-label="Search')
+    expect(markup).not.toContain('aria-label="Source Control')
+    expect(markup).not.toContain('aria-label="Checks')
   })
 
   it('does not render hidden panel content while the sidebar is closed', () => {
@@ -198,7 +218,6 @@ describe('rendered right sidebar titlebar drag regions', () => {
 
     expect(markup).not.toContain('data-file-explorer')
     expect(markup).not.toContain('data-source-control')
-    expect(markup).not.toContain('data-search-panel')
     expect(markup).not.toContain('data-checks-panel')
     expect(markup).not.toContain('data-ports-panel')
   })
