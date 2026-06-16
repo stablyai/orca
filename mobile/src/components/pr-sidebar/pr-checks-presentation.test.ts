@@ -89,6 +89,20 @@ describe('summarizePRChecks', () => {
   it('reports success when all pass', () => {
     expect(summarizePRChecks([check({ conclusion: 'success' })]).outcome).toBe('success')
   })
+  it('reports a neutral-only set as neutral with a labeled count (not empty success)', () => {
+    const summary = summarizePRChecks([
+      check({ conclusion: 'neutral' }),
+      check({ conclusion: 'skipped' })
+    ])
+    expect(summary).toMatchObject({
+      total: 2,
+      passed: 0,
+      pending: 0,
+      failed: 0,
+      outcome: 'neutral'
+    })
+    expect(summary.label).toBe('2 neutral')
+  })
 })
 
 describe('prCheckKey', () => {

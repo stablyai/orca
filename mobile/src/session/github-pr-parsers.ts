@@ -20,9 +20,11 @@ import {
   readCheckStatus,
   readCheckSummary,
   readMergeableState,
+  readMergeMethodSettings,
   readNumber,
   readPRState,
   readProvider,
+  readRepoIdentity,
   readReviewDecision,
   readReviewSummary,
   readString,
@@ -94,7 +96,11 @@ export function readPRForBranch(value: unknown): PRInfo | null {
         ? null
         : (readBoolean(value.mergeQueueRequired) ?? undefined),
     mergeStateStatus: value.mergeStateStatus === null ? null : readString(value.mergeStateStatus),
-    headSha: readString(value.headSha)
+    headSha: readString(value.headSha),
+    // prRepo identifies a fork PR's head repo; checks/merge are keyed on it.
+    prRepo: readRepoIdentity(value.prRepo),
+    // mergeMethodSettings drives which merge methods the picker may offer.
+    mergeMethodSettings: readMergeMethodSettings(value.mergeMethodSettings)
   }
 }
 

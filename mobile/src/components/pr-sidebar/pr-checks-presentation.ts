@@ -72,6 +72,7 @@ export function summarizePRChecks(checks: readonly PRCheckDetail[]): PRChecksSum
   let passed = 0
   let pending = 0
   let failed = 0
+  let neutral = 0
   for (const check of checks) {
     const outcome = checkOutcome(check)
     if (outcome === 'failure') {
@@ -80,10 +81,22 @@ export function summarizePRChecks(checks: readonly PRCheckDetail[]): PRChecksSum
       pending += 1
     } else if (outcome === 'success') {
       passed += 1
+    } else {
+      neutral += 1
     }
   }
   // Worst-case wins so a single failure colors the summary red even if others passed.
-  const outcome: CheckOutcome = failed > 0 ? 'failure' : pending > 0 ? 'pending' : 'success'
+  // A neutral-only set reads as neutral (not success) with a non-empty label.
+  const outcome: CheckOutcome | 'none' =
+    failed > 0
+      ? 'failure'
+      : pending > 0
+        ? 'pending'
+        : passed > 0
+          ? 'success'
+          : neutral > 0
+            ? 'neutral'
+            : 'none'
   const parts: string[] = []
   if (failed > 0) {
     parts.push(`${failed} failing`)
@@ -93,6 +106,9 @@ export function summarizePRChecks(checks: readonly PRCheckDetail[]): PRChecksSum
   }
   if (passed > 0) {
     parts.push(`${passed} passed`)
+  }
+  if (neutral > 0) {
+    parts.push(`${neutral} neutral`)
   }
   return {
     total: checks.length,

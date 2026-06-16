@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
 import { GitMerge } from 'lucide-react-native'
 import { colors } from '../../theme/mobile-theme'
@@ -31,6 +31,21 @@ export function PRActionsSection({ pr, actions }: Props) {
     pr.mergeMethodSettings?.defaultMethod ?? 'squash'
   )
   const [confirm, setConfirm] = useState<Confirm | null>(null)
+
+  // Only offer methods the repo allows; selecting a disabled method would make the
+  // merge fail. Fall back to all methods when the repo settings are unknown.
+  const availableMethods = useMemo(() => {
+    const allowed = pr.mergeMethodSettings?.allowedMethods
+    if (!allowed) {
+      return MERGE_METHODS
+    }
+    const filtered = MERGE_METHODS.filter((m) => allowed[m.method])
+    return filtered.length > 0 ? filtered : MERGE_METHODS
+  }, [pr.mergeMethodSettings])
+  // Keep the active method valid even if the default isn't an allowed option.
+  const effectiveMethod = availableMethods.some((m) => m.method === method)
+    ? method
+    : availableMethods[0].method
 
   const state = actions.resolveState(pr.state)
   const autoMerge = actions.resolveAutoMerge(pr.autoMergeEnabled ?? false)
@@ -80,8 +95,8 @@ export function PRActionsSection({ pr, actions }: Props) {
 
       {/* Merge-method picker: one-step selection, then a single Merge CTA. */}
       <View style={styles.methodRow}>
-        {MERGE_METHODS.map((m) => {
-          const selected = m.method === method
+        {availableMethods.map((m) => {
+          const selected = m.method === effectiveMethod
           return (
             <Pressable
               key={m.method}
@@ -106,10 +121,10 @@ export function PRActionsSection({ pr, actions }: Props) {
           styles.actionButtonPrimary,
           (mergeBusy || !isOpen) && styles.actionButtonDisabled
         ]}
-        onPress={() => setConfirm({ kind: 'merge', method })}
+        onPress={() => setConfirm({ kind: 'merge', method: effectiveMethod })}
         disabled={mergeBusy || !isOpen}
         accessibilityRole="button"
-        accessibilityLabel={`${methodLabel(method)} pull request`}
+        accessibilityLabel={`${methodLabel(effectiveMethod)} pull request`}
       >
         {mergeBusy ? (
           <ActivityIndicator color="#fff" />
@@ -117,7 +132,7 @@ export function PRActionsSection({ pr, actions }: Props) {
           <GitMerge size={16} color="#fff" strokeWidth={2.2} />
         )}
         <Text style={[styles.actionButtonText, styles.actionButtonTextPrimary]}>
-          {methodLabel(method)}
+          {methodLabel(effectiveMethod)}
         </Text>
       </Pressable>
 
@@ -126,7 +141,7 @@ export function PRActionsSection({ pr, actions }: Props) {
         <Text style={styles.toggleLabel}>Auto-merge when ready</Text>
         <Pressable
           style={[styles.togglePill, autoMerge && styles.togglePillOn]}
-          onPress={() => actions.setAutoMerge(!autoMerge, method)}
+          onPress={() => actions.setAutoMerge(!autoMerge, effectiveMethod)}
           disabled={autoMergeBusy || !isOpen}
           accessibilityRole="switch"
           accessibilityState={{ checked: autoMerge }}

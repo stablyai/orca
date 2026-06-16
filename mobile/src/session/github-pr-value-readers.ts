@@ -2,7 +2,10 @@ import type {
   CheckStatus,
   GitHubAssignableUser,
   GitHubPRCheckSummary,
+  GitHubPRMergeMethod,
+  GitHubPRMergeMethodSettings,
   GitHubPRReviewSummary,
+  GitHubRepositoryIdentity,
   PRCheckDetail,
   PRMergeableState,
   PRReviewDecision,
@@ -128,6 +131,41 @@ export function readReviewSummary(value: unknown): GitHubPRReviewSummary | null 
     login,
     state: readString(value.state) ?? null,
     avatarUrl: readString(value.avatarUrl) ?? null
+  }
+}
+
+export function readRepoIdentity(value: unknown): GitHubRepositoryIdentity | undefined {
+  if (!isRecord(value)) {
+    return undefined
+  }
+  const owner = readString(value.owner)
+  const repo = readString(value.repo)
+  if (owner === undefined || repo === undefined) {
+    return undefined
+  }
+  return { owner, repo }
+}
+
+function readMergeMethod(value: unknown): GitHubPRMergeMethod | undefined {
+  return value === 'merge' || value === 'squash' || value === 'rebase' ? value : undefined
+}
+
+export function readMergeMethodSettings(value: unknown): GitHubPRMergeMethodSettings | undefined {
+  if (!isRecord(value)) {
+    return undefined
+  }
+  const defaultMethod = readMergeMethod(value.defaultMethod)
+  if (defaultMethod === undefined || !isRecord(value.allowedMethods)) {
+    return undefined
+  }
+  const allowed = value.allowedMethods
+  return {
+    defaultMethod,
+    allowedMethods: {
+      merge: readBoolean(allowed.merge) ?? false,
+      squash: readBoolean(allowed.squash) ?? false,
+      rebase: readBoolean(allowed.rebase) ?? false
+    }
   }
 }
 

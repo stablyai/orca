@@ -107,19 +107,6 @@ function MountedRightDrawer({
     }
   }, [onHidden, visible])
 
-  // Why: KeyboardAvoidingView and useAnimatedKeyboard are both unreliable inside
-  // overlay-style views; dismiss the keyboard when the drawer closes so a focused
-  // input inside it doesn't linger over the diff. The right-anchored panel is
-  // full-height, so the keyboard needs no X translation — only this cleanup.
-  useEffect(() => {
-    if (!visible) {
-      return
-    }
-    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide'
-    const onHide = Keyboard.addListener(hideEvent, () => {})
-    return () => onHide.remove()
-  }, [visible])
-
   useEffect(() => {
     if (!visible) {
       return

@@ -97,6 +97,34 @@ describe('readPRForBranch', () => {
     expect(readPRForBranch({ state: 'open' })).toBeNull()
     expect(readPRForBranch({ number: 1 })).toBeNull()
   })
+
+  it('parses prRepo and mergeMethodSettings when present', () => {
+    const parsed = readPRForBranch({
+      number: 3,
+      state: 'open',
+      prRepo: { owner: 'forkOwner', repo: 'forkRepo' },
+      mergeMethodSettings: {
+        defaultMethod: 'squash',
+        allowedMethods: { merge: false, squash: true, rebase: true }
+      }
+    })
+    expect(parsed?.prRepo).toEqual({ owner: 'forkOwner', repo: 'forkRepo' })
+    expect(parsed?.mergeMethodSettings).toEqual({
+      defaultMethod: 'squash',
+      allowedMethods: { merge: false, squash: true, rebase: true }
+    })
+  })
+
+  it('drops a malformed prRepo / mergeMethodSettings without throwing', () => {
+    const parsed = readPRForBranch({
+      number: 3,
+      state: 'open',
+      prRepo: { owner: 'onlyOwner' },
+      mergeMethodSettings: { allowedMethods: {} }
+    })
+    expect(parsed?.prRepo).toBeUndefined()
+    expect(parsed?.mergeMethodSettings).toBeUndefined()
+  })
 })
 
 describe('readWorkItemDetails', () => {

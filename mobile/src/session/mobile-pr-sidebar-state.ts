@@ -112,7 +112,9 @@ export async function loadPrSidebarData(
     deps.fetchPRChecks(args.worktreeId, {
       prNumber: pr.number,
       headSha: args.headSha ?? pr.headSha ?? null,
-      prRepo: args.prRepo ?? null
+      // Prefer the fetched PR's own repo identity so fork PRs key their cached
+      // checks correctly; fall back to an explicit override then null.
+      prRepo: pr.prRepo ?? args.prRepo ?? null
     })
   ])
   if (!detailsOutcome.ok) {
