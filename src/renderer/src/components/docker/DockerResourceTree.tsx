@@ -68,21 +68,25 @@ export function DockerResourceTree({
               services.map(({ service, containers: serviceContainers }) => {
                 // A service group with an empty name renders containers directly under the project node
                 if (service === '') {
-                  return serviceContainers.map((c) => (
-                    <ContainerRow
-                      key={c.id}
-                      container={c}
-                      selected={selected}
-                      onSelect={onSelect}
-                      depth={1}
-                    />
-                  ))
+                  return (
+                    <React.Fragment key={`service:${project}/`}>
+                      {serviceContainers.map((c) => (
+                        <ContainerRow
+                          key={c.id}
+                          container={c}
+                          selected={selected}
+                          onSelect={onSelect}
+                          depth={1}
+                        />
+                      ))}
+                    </React.Fragment>
+                  )
                 }
 
                 const serviceKey = `service:${project}/${service}`
                 const serviceCollapsed = collapsed.has(serviceKey)
                 return (
-                  <div key={service}>
+                  <div key={serviceKey}>
                     <TreeNodeHeader
                       label={service}
                       collapsed={serviceCollapsed}
