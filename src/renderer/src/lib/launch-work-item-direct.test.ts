@@ -165,7 +165,10 @@ describe('launchWorkItemDirect', () => {
       settings: {
         defaultTuiAgent: 'codex',
         disabledTuiAgents: [],
-        agentCmdOverrides: {}
+        agentCmdOverrides: {},
+        // These cases exercise the draft-launch mechanics (native prefill, env
+        // var, paste), so opt out of the submit-on-launch default.
+        submitWorkItemPromptOnLaunch: false
       },
       ensureDetectedAgents: mocks.ensureDetectedAgents,
       ensureRemoteDetectedAgents: mocks.ensureRemoteDetectedAgents,
@@ -299,7 +302,10 @@ describe('launchWorkItemDirect', () => {
         connectionId: 'ssh-1'
       }
     ] as AppState['repos']
-    mocks.store.settings = { defaultTuiAgent: 'cursor' } as AppState['settings']
+    mocks.store.settings = {
+      defaultTuiAgent: 'cursor',
+      submitWorkItemPromptOnLaunch: false
+    } as AppState['settings']
     mocks.store.ensureRemoteDetectedAgents.mockResolvedValue(['cursor'])
     vi.mocked(pickTuiAgent).mockReturnValueOnce('cursor')
     vi.mocked(buildAgentDraftLaunchPlan).mockReturnValueOnce(null)
@@ -436,7 +442,8 @@ describe('launchWorkItemDirect', () => {
     mocks.store.settings = {
       defaultTuiAgent: 'pi',
       disabledTuiAgents: [],
-      agentCmdOverrides: {}
+      agentCmdOverrides: {},
+      submitWorkItemPromptOnLaunch: false
     }
     mocks.store.repos = [
       {

@@ -72,6 +72,7 @@ import RecentTabSwitcher from './components/tab-bar/RecentTabSwitcher'
 import { useGitStatusPolling } from './components/right-sidebar/useGitStatusPolling'
 import { useEditorExternalWatch } from './hooks/useEditorExternalWatch'
 import { useAutoAckViewedAgent } from './hooks/useAutoAckViewedAgent'
+import { useGitLabAssigneeAutoStart } from './hooks/useGitLabAssigneeAutoStart'
 import { useUnreadDockBadge } from './hooks/useUnreadDockBadge'
 import {
   resolvePrimarySelectionMiddleClickPaste,
@@ -617,6 +618,7 @@ function App(): React.JSX.Element {
   useEditorExternalWatch()
   useGlobalFileDrop()
   useAutoAckViewedAgent()
+  useGitLabAssigneeAutoStart()
 
   useEffect(() => {
     return onOnboardingReopened(setOnboarding)

@@ -89,7 +89,12 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
   // Why: preflight (PR base + hooks probe) must run on the repo's owner host so it
   // matches the owner-routed createWorktree below, not the focused runtime.
   const repoOwnerSettings = getSettingsForRepoRuntimeOwner(store, repoId)
-  const promptDelivery = args.promptDelivery ?? 'draft'
+  // Why: when the user opts into submitting the work-item prompt on launch, an
+  // explicit caller arg still wins; otherwise the global setting decides whether
+  // the linked context is sent as the first turn (submit) or left as a draft.
+  const promptDelivery =
+    args.promptDelivery ??
+    (settings?.submitWorkItemPromptOnLaunch === false ? 'draft' : 'submit-after-ready')
   const repoConnectionId = repo.connectionId?.trim() || null
   const preflightLaunchPlatform =
     args.launchPlatform ??

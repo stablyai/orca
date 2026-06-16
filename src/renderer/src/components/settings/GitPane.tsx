@@ -9,6 +9,7 @@ import { matchesSettingsSearch } from './settings-search'
 import { GitHubRateLimitPanel } from '../github/github-rate-limit-display'
 import { GitLabRateLimitPanel } from '../gitlab/gitlab-rate-limit-display'
 import { AutoRenameBranchFromWorkSetting } from './AutoRenameBranchFromWorkSetting'
+import { WorkItemLaunchSettings } from './WorkItemLaunchSettings'
 import { getAutoRenameBranchSearchEntries } from './auto-rename-branch-search'
 import {
   KEEP_LOCAL_MAIN_UP_TO_DATE_SECTION_ID,
@@ -210,6 +211,11 @@ export function GitPane({
         settingsSearchQuery={searchQuery}
       />
     ) : null,
+    <WorkItemLaunchSettings
+      key="work-item-launch"
+      settings={settings}
+      updateSettings={updateSettings}
+    />,
     matchesSettingsSearch(searchQuery, {
       title: translate('auto.components.settings.GitPane.612a440e57', 'GitHub API Budget'),
       description: translate(

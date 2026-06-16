@@ -2639,10 +2639,21 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         const quickLinearCliAvailable = submitLinkedWorkItem?.linearIdentifier
           ? await isOrcaCliAvailableForLaunch({ remote: isRemote })
           : false
-        const { prompt: quickPrompt, draftPrompt: quickDraftPrompt } =
+        const { prompt: rawQuickPrompt, draftPrompt: rawQuickDraftPrompt } =
           resolveQuickCreateLinkedWorkItemPrompt(submitLinkedWorkItem, trimmedNote, {
             cliAvailable: quickLinearCliAvailable
           })
+        // Why: when "submit work-item prompt on launch" is enabled, deliver the
+        // linked context as the agent's first turn (argv → auto-submitted via the
+        // shell newline) instead of an unsubmitted draft (--prefill). Clearing the
+        // draft keeps the downstream plan on the submit path. Off preserves the
+        // legacy draft-only behavior so the user can review before sending.
+        const submitWorkItemPromptOnLaunch = settings?.submitWorkItemPromptOnLaunch !== false
+        const quickPrompt =
+          submitWorkItemPromptOnLaunch && rawQuickDraftPrompt
+            ? [rawQuickPrompt, rawQuickDraftPrompt].filter(Boolean).join('\n\n')
+            : rawQuickPrompt
+        const quickDraftPrompt = submitWorkItemPromptOnLaunch ? null : rawQuickDraftPrompt
         const draftLaunchPlan =
           agent === null || !quickDraftPrompt
             ? null
@@ -2799,6 +2810,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       settings?.agentDefaultArgs,
       settings?.agentDefaultEnv,
       settings?.autoRenameBranchFromWork,
+      settings?.submitWorkItemPromptOnLaunch,
       disabledTuiAgents,
       setupDecision,
       sparseEnabled,
