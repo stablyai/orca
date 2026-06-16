@@ -3565,6 +3565,37 @@ describe('ClaudeRuntimeAuthService', () => {
     expect(readFileSync(runtimeCredentialsPath, 'utf-8')).toBe(reauthedCredentials)
   })
 
+  it('leaves host system-default credentials untouched before launch', async () => {
+    const runtimeCredentialsPath = join(testState.fakeHomeDir, '.claude', '.credentials.json')
+    const expired = createClaudeCredentialsJson('system@example.com', 'system-expired', null, 1_000)
+    writeFileSync(runtimeCredentialsPath, expired, 'utf-8')
+    testState.scopedKeychainCredentials = expired
+    testState.legacyKeychainCredentials = expired
+    const settings = createSettings({
+      activeClaudeManagedAccountId: null
+    })
+    const store = createStore(settings)
+
+    vi.mocked(isOauthTokenExpiring).mockReturnValue(true)
+    vi.mocked(refreshClaudeOauthCredentials).mockResolvedValue(
+      createClaudeCredentialsJson('system@example.com', 'system-refreshed')
+    )
+
+    const { ClaudeRuntimeAuthService } = await import('./runtime-auth-service')
+    const service = new ClaudeRuntimeAuthService(store as never)
+    const preparation = await service.prepareForClaudeLaunch()
+
+    expect(isOauthTokenExpiring).not.toHaveBeenCalled()
+    expect(refreshClaudeOauthCredentials).not.toHaveBeenCalled()
+    expect(preparation.provenance).toBe('system')
+    expect(readFileSync(runtimeCredentialsPath, 'utf-8')).toBe(expired)
+    expect(testState.scopedKeychainCredentials).toBe(expired)
+    expect(testState.legacyKeychainCredentials).toBe(expired)
+
+    vi.mocked(isOauthTokenExpiring).mockReturnValue(false)
+    vi.mocked(refreshClaudeOauthCredentials).mockResolvedValue(null)
+  })
+
   it('proactively refreshes and persists an expiring account on switch-in', async () => {
     const runtimeCredentialsPath = join(testState.fakeHomeDir, '.claude', '.credentials.json')
     const account1Stale = createClaudeCredentialsJson('one@example.com', 'one-stale', null, 1_000)

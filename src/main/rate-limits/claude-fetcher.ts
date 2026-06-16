@@ -68,6 +68,11 @@ type OAuthCredentialReadResult = {
   hasRefreshableCredentials: boolean
 }
 
+type OAuthCredentialReadOptions = {
+  credentialsFileConfigDir?: string
+  keychainConfigDir?: string
+}
+
 // Why: factored out so both the active-account Keychain reader and the
 // managed-account reader share the same JSON parsing + refreshability check.
 function parseOAuthCredentialsJson(raw: string): OAuthCredentialReadResult {
@@ -167,9 +172,11 @@ async function readFromCredentialsFile(configDir?: string): Promise<OAuthCredent
  * here — those are API keys which return 401 on the OAuth usage endpoint.
  * API-key users are served by the PTY fallback instead.
  */
-async function readOAuthCredentials(configDir?: string): Promise<OAuthCredentialReadResult> {
+async function readOAuthCredentials(
+  options?: OAuthCredentialReadOptions
+): Promise<OAuthCredentialReadResult> {
   // 1. macOS Keychain (Claude Max/Pro OAuth)
-  const fromKeychain = await readFromKeychain(configDir)
+  const fromKeychain = await readFromKeychain(options?.keychainConfigDir)
   if (fromKeychain.token) {
     return fromKeychain
   }
@@ -178,7 +185,7 @@ async function readOAuthCredentials(configDir?: string): Promise<OAuthCredential
   }
 
   // 2. Legacy credentials file
-  const fromFile = await readFromCredentialsFile(configDir)
+  const fromFile = await readFromCredentialsFile(options?.credentialsFileConfigDir)
   if (fromFile.token) {
     return fromFile
   }
@@ -187,6 +194,23 @@ async function readOAuthCredentials(configDir?: string): Promise<OAuthCredential
   }
 
   return emptyOAuthCredentialReadResult()
+}
+
+function resolveOAuthCredentialReadOptions(
+  authPreparation?: ClaudeRuntimeAuthPreparation
+): OAuthCredentialReadOptions | undefined {
+  if (!authPreparation) {
+    return undefined
+  }
+  const readOptions: OAuthCredentialReadOptions = {
+    credentialsFileConfigDir: authPreparation.configDir
+  }
+  // Why: host system-default launches do not inject CLAUDE_CONFIG_DIR, so
+  // their Keychain lookup must mirror Claude's legacy service ordering.
+  if (authPreparation.envPatch.CLAUDE_CONFIG_DIR) {
+    readOptions.keychainConfigDir = authPreparation.configDir
+  }
+  return readOptions
 }
 
 // ---------------------------------------------------------------------------
@@ -305,7 +329,9 @@ export async function fetchClaudeRateLimits(
   }
 
   // Path A: try OAuth API if we have a genuine OAuth token
-  const oauthCredentials = await readOAuthCredentials(options?.authPreparation?.configDir)
+  const oauthCredentials = await readOAuthCredentials(
+    resolveOAuthCredentialReadOptions(options?.authPreparation)
+  )
   if (oauthCredentials.token) {
     try {
       return await fetchViaOAuth(oauthCredentials.token)
