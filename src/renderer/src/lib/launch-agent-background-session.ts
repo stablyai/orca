@@ -21,6 +21,7 @@ import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-cl
 import { getSettingsForWorktreeRuntimeOwner } from '@/lib/worktree-runtime-owner'
 import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
 import { singlePaneLayoutSnapshot } from '@/store/slices/terminal-helpers'
+import { createBrowserUuid } from '@/lib/browser-uuid'
 import {
   getRemoteRuntimeTerminalHandle,
   subscribeToRuntimeTerminalData,
@@ -114,8 +115,10 @@ export async function launchAgentBackgroundSession(
     store.setTabCustomTitle(tab.id, title, { recordInteraction: false })
   }
   // Why: agent hook callbacks are keyed by pane, and background automation
-  // tabs never mount a TerminalPane to inject this env for us.
-  const leafId = globalThis.crypto.randomUUID()
+  // tabs never mount a TerminalPane to inject this env for us. createBrowserUuid
+  // (not crypto.randomUUID) because the latter is undefined in non-secure
+  // browser contexts — the LAN web client served over plain HTTP.
+  const leafId = createBrowserUuid()
   const paneKey = makePaneKey(tab.id, leafId)
   // Why: `title` labels the tab/worktree entry. Pane titles render as an
   // in-terminal title row, so background sessions must not persist it there.

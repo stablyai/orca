@@ -16,6 +16,7 @@ import {
 } from '@/lib/workspace-create-error-format'
 import type { CreateWorktreeResult } from '../../../shared/types'
 import type { WorktreeCreationRequest } from '@/lib/pending-worktree-creation'
+import { createBrowserUuid } from '@/lib/browser-uuid'
 
 // Why: most local creates finish in well under this window; holding the loader
 // back this long means a fast create swaps prior content → terminal with no
@@ -196,7 +197,9 @@ async function executeWorktreeCreation(
  * surface on the pending creation's sidebar row and content panel.
  */
 export function runBackgroundWorktreeCreation(request: WorktreeCreationRequest): void {
-  const creationId = crypto.randomUUID()
+  // Why: crypto.randomUUID is undefined in non-secure browser contexts (LAN web
+  // client over plain HTTP). createBrowserUuid falls back to getRandomValues.
+  const creationId = createBrowserUuid()
   const store = useAppStore.getState()
   // Why: the remote/runtime create path emits no progress events, so the stepped
   // checklist would freeze on step 1. Mark it indeterminate up front so the panel
