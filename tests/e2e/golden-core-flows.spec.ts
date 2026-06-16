@@ -380,8 +380,13 @@ async function requestAgentSessionsTour(page: Page): Promise<void> {
 }
 
 async function completeWorkspaceCreationTour(page: Page, workspaceName: string): Promise<void> {
-  await expect(page.getByRole('dialog', { name: /Pick a project/i })).toBeVisible()
-  await page.getByRole('button', { name: /^Next$/ }).click()
+  const pickProjectStep = page.getByRole('dialog', { name: /Pick a project/i })
+  await expect(pickProjectStep).toBeVisible()
+  // Why: the project picker can leave its command popover open after the tour
+  // starts. Keyboard-activate the step button so the golden verifies the tour
+  // transition instead of pointer geometry around that popover.
+  await pickProjectStep.getByRole('button', { name: /^Next$/ }).focus()
+  await page.keyboard.press('Enter')
   const nameStep = page.getByRole('dialog', { name: /Name it, or start from existing work/i })
   await expect(nameStep).toBeVisible()
   const autoNameSwitch = nameStep.getByRole('switch', {
