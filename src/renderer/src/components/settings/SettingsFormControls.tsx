@@ -71,11 +71,13 @@ export function SettingsRow({
 }: SettingsRowProps): React.JSX.Element {
   return (
     <div
-      className={cn('flex gap-4 py-2', alignTop ? 'items-start' : 'items-center justify-between')}
+      className={cn('flex gap-4 py-2.5', alignTop ? 'items-start' : 'items-center justify-between')}
     >
       <div className="min-w-0 flex-1 space-y-0.5">
         <Label id={labelId}>{label}</Label>
-        {description ? <p className="text-xs text-muted-foreground">{description}</p> : null}
+        {description ? (
+          <p className="text-xs leading-5 text-muted-foreground">{description}</p>
+        ) : null}
       </div>
       <div className="shrink-0">{control}</div>
     </div>
@@ -225,7 +227,9 @@ export function SettingsSubsectionHeader({
     <div className="flex items-start justify-between gap-3">
       <div className="space-y-1">
         <h3 className="text-sm font-semibold">{title}</h3>
-        {description ? <p className="text-xs text-muted-foreground">{description}</p> : null}
+        {description ? (
+          <p className="text-xs leading-5 text-muted-foreground">{description}</p>
+        ) : null}
       </div>
       {action ? <div className="shrink-0">{action}</div> : null}
     </div>
@@ -329,7 +333,7 @@ export function ThemePicker({
     <div className="space-y-3">
       <div className="space-y-1">
         <Label>{label}</Label>
-        <p className="text-xs text-muted-foreground">{description}</p>
+        <p className="text-xs leading-5 text-muted-foreground">{description}</p>
       </div>
       <Input
         value={query}
