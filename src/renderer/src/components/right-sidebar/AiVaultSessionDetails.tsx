@@ -167,13 +167,24 @@ function SessionDetailCopyRow({
 }): React.JSX.Element {
   const handleCopy = (event: React.MouseEvent<HTMLButtonElement>): void => {
     event.stopPropagation()
-    void window.api.ui.writeClipboardText(value).then(() => {
-      toast.success(
-        translate('auto.components.right.sidebar.AiVaultPanel.valueCopied', '{{value0}} copied', {
-          value0: copyLabel
-        })
-      )
-    })
+    void window.api.ui
+      .writeClipboardText(value)
+      .then(() => {
+        toast.success(
+          translate('auto.components.right.sidebar.AiVaultPanel.valueCopied', '{{value0}} copied', {
+            value0: copyLabel
+          })
+        )
+      })
+      .catch(() => {
+        toast.error(
+          translate(
+            'auto.components.right.sidebar.AiVaultPanel.valueCopyFailed',
+            'Unable to copy {{value0}}',
+            { value0: copyLabel }
+          )
+        )
+      })
   }
 
   return (

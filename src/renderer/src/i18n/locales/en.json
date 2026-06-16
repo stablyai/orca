@@ -8668,6 +8668,7 @@
           "AiVaultPanel": {
             "resumeCommandCopied": "Resume command copied",
             "valueCopied": "{{value0}} copied",
+            "valueCopyFailed": "Unable to copy {{value0}}",
             "openWorkspaceBeforeResuming": "Open a workspace before resuming a session.",
             "localWorkspacesOnly": "Resume from history is only available in local workspaces.",
             "agentSessionQueued": "{{value0}} session queued",

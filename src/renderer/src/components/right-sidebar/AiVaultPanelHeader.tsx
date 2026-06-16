@@ -59,6 +59,7 @@ export function AiVaultPanelHeader({
       <div className="flex items-center gap-1.5 @max-[300px]/ai-vault:items-start">
         <div className="min-w-0 flex-1">
           <div className="truncate text-xs font-semibold text-foreground">
+            {/* Why: below 300px the header competes with fixed controls, so compact copy prevents overlap. */}
             <span className="@max-[300px]/ai-vault:hidden">
               {translate(
                 'auto.components.right.sidebar.AiVaultPanel.sessionHistory',

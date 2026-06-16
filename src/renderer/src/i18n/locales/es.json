@@ -8668,6 +8668,7 @@
           "AiVaultPanel": {
             "resumeCommandCopied": "Resume command copied",
             "valueCopied": "{{value0}} copied",
+            "valueCopyFailed": "No se pudo copiar {{value0}}",
             "openWorkspaceBeforeResuming": "Open a workspace before resuming a session.",
             "localWorkspacesOnly": "Resume from history is only available in local workspaces.",
             "agentSessionQueued": "{{value0}} session queued",
@@ -8681,10 +8682,10 @@
             "transcriptsSkipped": "{{count}} transcript skipped",
             "noAgentSessionsFound": "No agent sessions found",
             "noSessionsMatchFilters": "No sessions match the current filters",
-            "sessionId": "Session ID",
-            "logPath": "Log path",
-            "agents": "Agents",
-            "sessionsShownCompact": "{{value0}} shown"
+            "sessionId": "ID de sesión",
+            "logPath": "Ruta del registro",
+            "agents": "Agentes",
+            "sessionsShownCompact": "{{value0}} mostradas"
           },
           "AiVaultPanelControls": {
             "scanningSessions": "Scanning sessions",
@@ -8748,7 +8749,7 @@
             "daysAgo": "{{value0}}d ago",
             "monthsAgo": "{{value0}}mo ago",
             "yearsAgo": "{{value0}}y ago",
-            "sessionId": "Session ID"
+            "sessionId": "ID de sesión"
           },
           "AiVaultSessionRow": {
             "resumeAgentSession": "Resume {{value0}} session",
@@ -8761,11 +8762,11 @@
             "copyLogPath": "Copy Log Path",
             "messageCount": "{{value0}} msgs",
             "tokenCount": "{{value0}} tok",
-            "toggleSessionDetails": "{{value0}} session details",
-            "hideDetails": "Hide Details",
-            "showDetails": "Show Details",
-            "moreSessionActions": "More Session Actions",
-            "moreActions": "More Actions"
+            "toggleSessionDetails": "Detalles de sesión de {{value0}}",
+            "hideDetails": "Ocultar detalles",
+            "showDetails": "Mostrar detalles",
+            "moreSessionActions": "Más acciones de sesión",
+            "moreActions": "Más acciones"
           },
           "GitHistoryCommitFiles": {
             "a1b2c3d4e5": "Cargando archivos…",
