@@ -376,7 +376,7 @@ export function TabBarQuickCommandsMenu({
                 <Plus className="size-3.5" />
                 {translate(
                   'auto.components.tab.bar.TabBarQuickCommandsButton.a2c7a33831',
-                  'Add command'
+                  'Command'
                 )}
               </button>
             </div>
