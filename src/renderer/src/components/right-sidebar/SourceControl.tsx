@@ -19,6 +19,8 @@ import {
   Copy,
   Folder,
   FolderOpen,
+  FolderTree,
+  List,
   GitFork,
   GitMerge,
   GitPullRequestArrow,
@@ -3966,6 +3968,30 @@ function SourceControlInner(): React.JSX.Element {
               <X className="size-3.5" />
             </button>
           )}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                className="inline-flex size-6 items-center justify-center rounded shrink-0 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                onClick={() => {
+                  const next = sourceControlViewMode === 'list' ? 'tree' : 'list'
+                  void updateSettings({ sourceControlViewMode: next })
+                }}
+                aria-label={
+                  sourceControlViewMode === 'list' ? 'Switch to tree view' : 'Switch to list view'
+                }
+              >
+                {sourceControlViewMode === 'list' ? (
+                  <List className="size-3.5" />
+                ) : (
+                  <FolderTree className="size-3.5" />
+                )}
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" sideOffset={6}>
+              {sourceControlViewMode === 'list' ? 'Switch to tree view' : 'Switch to list view'}
+            </TooltipContent>
+          </Tooltip>
         </div>
 
         <div
