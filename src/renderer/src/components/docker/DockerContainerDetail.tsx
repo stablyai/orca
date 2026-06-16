@@ -1,7 +1,10 @@
-import React from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
+import { cn } from '@/lib/utils'
+import { Plus, X } from 'lucide-react'
 import type {
   DockerConnection,
   DockerContainerInspect,
@@ -22,6 +25,42 @@ export function DockerContainerDetail({
   inspect: DockerContainerInspect | null
   inspectError: string | null
 }): React.JSX.Element {
+  const [activeTab, setActiveTab] = useState('details')
+  const [terminalIds, setTerminalIds] = useState<number[]>([1])
+  // Tracks the next id to assign; starts at 2 since id 1 is pre-seeded above.
+  const nextId = useRef(2)
+
+  // Reset terminal state when the container changes so stale PTY keys don't
+  // linger across container selections, but preserve non-terminal active tabs.
+  useEffect(() => {
+    setTerminalIds([1])
+    nextId.current = 2
+    setActiveTab((prev) => (prev.startsWith('terminal-') ? 'terminal-1' : prev))
+  }, [container?.id])
+
+  function addTerminal(): void {
+    const id = nextId.current++
+    setTerminalIds((prev) => [...prev, id])
+    setActiveTab(`terminal-${id}`)
+  }
+
+  function closeTerminal(id: number): void {
+    setTerminalIds((prev) => {
+      const next = prev.filter((t) => t !== id)
+      // If the closed terminal was active, switch to the nearest remaining one
+      // or fall back to 'logs' when no terminals are left.
+      setActiveTab((current) => {
+        if (current !== `terminal-${id}`) return current
+        if (next.length === 0) return 'logs'
+        // Find the neighbour: prefer the one before, else the one after.
+        const closedIndex = prev.indexOf(id)
+        const neighbour = next[Math.max(0, closedIndex - 1)]
+        return `terminal-${neighbour}`
+      })
+      return next
+    })
+  }
+
   if (!container) {
     return (
       <div className="flex h-full items-center justify-center p-6 text-sm text-muted-foreground">
@@ -31,7 +70,7 @@ export function DockerContainerDetail({
   }
 
   return (
-    <Tabs defaultValue="details" className="flex h-full min-h-0 flex-col">
+    <Tabs value={activeTab} onValueChange={setActiveTab} className="flex h-full min-h-0 flex-col">
       {/* Persistent header: container name/status on the left, lifecycle actions on the right. */}
       <div className="flex items-center justify-between gap-2 border-b border-border/60 px-4 py-2">
         <div className="flex min-w-0 flex-col gap-0.5">
@@ -58,9 +97,52 @@ export function DockerContainerDetail({
         <TabsTrigger value="logs" className="px-3 py-2.5">
           {translate('auto.components.docker.DockerContainerDetail.8e913f1e01', 'Logs')}
         </TabsTrigger>
-        <TabsTrigger value="terminal" className="px-3 py-2.5">
-          {translate('auto.components.docker.DockerContainerDetail.65267b5ce5', 'Terminal')}
-        </TabsTrigger>
+
+        {/* One trigger per open terminal. The close affordance is a sibling span
+            (not a nested button) to avoid invalid button-in-button HTML. */}
+        {terminalIds.map((id, index) => (
+          <div key={id} className="flex items-center">
+            <TabsTrigger value={`terminal-${id}`} className="px-3 py-2.5 pr-1">
+              {translate(
+                'auto.components.docker.DockerContainerDetail.8b405f5f30',
+                'Terminal ({{value0}})',
+                { value0: index + 1 }
+              )}
+            </TabsTrigger>
+            {/* span acts as the close button; stopPropagation prevents the
+                enclosing TabsTrigger from receiving the click and re-selecting. */}
+            <span
+              role="button"
+              tabIndex={0}
+              aria-label="Close terminal"
+              className="ml-0.5 flex size-4 cursor-pointer items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring"
+              onClick={(e) => {
+                e.stopPropagation()
+                closeTerminal(id)
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  closeTerminal(id)
+                }
+              }}
+            >
+              <X className="size-2.5" />
+            </span>
+          </div>
+        ))}
+
+        {/* "+" button to open an additional terminal. */}
+        <Button
+          variant="ghost"
+          size="icon-xs"
+          aria-label="Open new terminal"
+          onClick={addTerminal}
+        >
+          <Plus />
+        </Button>
+
         <TabsTrigger value="env" className="px-3 py-2.5">
           {translate('auto.components.docker.DockerContainerDetail.7b6a28f972', 'Env')}
         </TabsTrigger>
@@ -113,13 +195,24 @@ export function DockerContainerDetail({
         />
       </TabsContent>
 
-      {/* Terminal tab — key forces remount (kills old PTY) when container or connection changes */}
-      <TabsContent value="terminal" className="min-h-0 flex-1">
-        <DockerEmbeddedTerminal
-          key={`shell:${container.id}`}
-          {...buildDockerTerminalCommand(connection, 'shell', container.id)}
-        />
-      </TabsContent>
+      {/* Terminal tabs — forceMount keeps each PTY alive across tab switches.
+          The `hidden` class (display:none) hides inactive panes without
+          unmounting them; revealing one triggers the ResizeObserver in
+          useEmbeddedPtyTerminal to re-fit the xterm. Closing a terminal removes
+          its id from terminalIds, which unmounts its TabsContent and kills the PTY. */}
+      {terminalIds.map((id) => (
+        <TabsContent
+          key={id}
+          value={`terminal-${id}`}
+          forceMount
+          className={cn('mt-0 min-h-0 flex-1', activeTab !== `terminal-${id}` && 'hidden')}
+        >
+          <DockerEmbeddedTerminal
+            key={`${container.id}:term:${id}`}
+            {...buildDockerTerminalCommand(connection, 'shell', container.id)}
+          />
+        </TabsContent>
+      ))}
 
       {/* Env tab */}
       <TabsContent value="env" className="min-h-0 flex-1">
