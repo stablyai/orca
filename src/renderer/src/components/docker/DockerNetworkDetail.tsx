@@ -22,6 +22,7 @@ export function DockerNetworkDetail({
         translate('auto.components.docker.DockerNetworkDetail.ec90189068', 'Remove network failed'),
         { description: String(error) }
       )
+      throw error // keep the confirm dialog open on failure
     }
   }
 

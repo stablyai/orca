@@ -27,6 +27,7 @@ export function DockerImageDetail({ image }: { image: DockerImageSummary }): Rea
         translate('auto.components.docker.DockerImageDetail.07b83a4ee4', 'Remove image failed'),
         { description: String(error) }
       )
+      throw error // keep the confirm dialog open on failure
     }
   }
 

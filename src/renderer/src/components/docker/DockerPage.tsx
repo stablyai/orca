@@ -158,6 +158,7 @@ export default function DockerPage(): React.JSX.Element {
         translate('auto.components.docker.DockerPage.1225452538', 'Prune failed'),
         { description: String(error) }
       )
+      throw error // keep the confirm dialog open on failure
     }
   }
 
@@ -180,7 +181,7 @@ export default function DockerPage(): React.JSX.Element {
               <RefreshCw />
             </Button>
           </TooltipTrigger>
-          <TooltipContent>Refresh</TooltipContent>
+          <TooltipContent>{translate('auto.components.docker.DockerPage.3b170f8fdb', 'Refresh')}</TooltipContent>
         </Tooltip>
       </div>
       {dockerConnectionError ? (

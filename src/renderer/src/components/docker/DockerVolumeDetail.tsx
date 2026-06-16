@@ -18,6 +18,7 @@ export function DockerVolumeDetail({ volume }: { volume: DockerVolumeSummary }):
         translate('auto.components.docker.DockerVolumeDetail.4f695bd438', 'Remove volume failed'),
         { description: String(error) }
       )
+      throw error // keep the confirm dialog open on failure
     }
   }
 

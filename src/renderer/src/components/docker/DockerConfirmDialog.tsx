@@ -21,6 +21,9 @@ export function DockerConfirmDialog({
     try {
       await onConfirm()
       onOpenChange(false)
+    } catch (error) {
+      // onConfirm owns user-facing error display (toast); keep the dialog open for retry/dismiss.
+      console.error('DockerConfirmDialog: confirm failed', error)
     } finally {
       setPending(false)
     }
