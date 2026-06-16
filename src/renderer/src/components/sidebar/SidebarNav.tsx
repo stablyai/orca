@@ -1,5 +1,5 @@
 import React from 'react'
-import { Bell, CalendarClock, Search, Smartphone } from 'lucide-react'
+import { Bell, CalendarClock, Container, Search, Smartphone } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
 import type { GlobalSettings } from '../../../../shared/types'
@@ -32,6 +32,12 @@ export function shouldShowAutomationsButton(
   return settings?.showAutomationsButton !== false
 }
 
+export function shouldShowDockerButton(
+  settings: Pick<GlobalSettings, 'showDockerButton'> | null | undefined
+): boolean {
+  return settings?.showDockerButton !== false
+}
+
 const SidebarNav = React.memo(function SidebarNav() {
   const worktreePaletteShortcut = useShortcutLabel('worktree.palette')
   const openAutomationsPage = useAppStore((s) => s.openAutomationsPage)
@@ -43,10 +49,13 @@ const SidebarNav = React.memo(function SidebarNav() {
   const showAgentsButton = useAppStore((s) => shouldShowAgentsButton(s.settings))
   const showAutomationsButton = useAppStore((s) => shouldShowAutomationsButton(s.settings))
   const showMobileButton = useAppStore((s) => shouldShowMobileButton(s.settings))
+  const openDockerPage = useAppStore((s) => s.openDockerPage)
+  const showDockerButton = useAppStore((s) => shouldShowDockerButton(s.settings))
 
   const automationsActive = activeView === 'automations'
   const activityActive = activeView === 'activity'
   const mobileActive = activeView === 'mobile'
+  const dockerActive = activeView === 'docker'
   const activityUnreadCount = useActivityUnreadCount(showAgentsButton, 'sidebar-badge')
   const mobileOnboardingBadge = useMobileSidebarOnboardingBadge(showMobileButton)
   const hideAutomationsButton = React.useCallback(() => {
@@ -54,6 +63,9 @@ const SidebarNav = React.memo(function SidebarNav() {
   }, [updateSettings])
   const hideMobileButton = React.useCallback(() => {
     void updateSettings({ showMobileButton: false })
+  }, [updateSettings])
+  const hideDockerButton = React.useCallback(() => {
+    void updateSettings({ showDockerButton: false })
   }, [updateSettings])
 
   return (
@@ -156,6 +168,30 @@ const SidebarNav = React.memo(function SidebarNav() {
             </button>
           </ContextMenuTrigger>
           <HideSidebarMenu onHide={hideMobileButton} />
+        </ContextMenu>
+      ) : null}
+      {showDockerButton ? (
+        <ContextMenu>
+          <ContextMenuTrigger asChild>
+            <button
+              type="button"
+              onClick={openDockerPage}
+              aria-current={dockerActive ? 'page' : undefined}
+              className={cn(
+                'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] font-medium tracking-tight transition-colors',
+                dockerActive
+                  ? 'bg-worktree-sidebar-accent text-worktree-sidebar-accent-foreground'
+                  : 'text-worktree-sidebar-foreground/60 hover:bg-worktree-sidebar-foreground/8'
+              )}
+            >
+              <Container
+                className={cn('size-4 shrink-0', !dockerActive && 'text-worktree-sidebar-foreground/30')}
+                strokeWidth={dockerActive ? 2.25 : 1.75}
+              />
+              <span className="flex-1">{translate('auto.components.sidebar.SidebarNav.729082bde5', 'Docker')}</span>
+            </button>
+          </ContextMenuTrigger>
+          <HideSidebarMenu onHide={hideDockerButton} />
         </ContextMenu>
       ) : null}
       <button

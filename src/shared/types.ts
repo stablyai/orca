@@ -34,6 +34,7 @@ import type { ClaudeAgentTeamsMode } from './claude-agent-teams-tmux-compat'
 import type { TerminalCustomTheme } from './terminal-custom-themes'
 import type { UiLanguage } from './ui-language'
 import type { ForkSyncMode } from './git-fork-sync'
+import type { DockerConnection } from './docker-types'
 
 // Re-exported for backward compat with renderer call sites that import
 // `WorkspaceCreateTelemetrySource` from '../../../shared/types'.
@@ -2699,6 +2700,10 @@ export type GlobalSettings = {
    *  effectively present at runtime — the renderer should still fall back to
    *  defaults when reading optional sub-fields. */
   voice?: VoiceSettings
+  /** User-defined Docker connections (ssh/tcp). The built-in `local` connection is implicit. */
+  dockerConnections?: DockerConnection[]
+  /** Show the Docker tab in the sidebar. Defaults to true when undefined. */
+  showDockerButton?: boolean
 }
 
 export type OrcaWorkspaceLayout = {

@@ -59,6 +59,7 @@ import {
   getWebRuntimeEnvironmentsSearchEntry
 } from '@/components/settings/runtime-environments-search'
 import { getSshPaneSearchEntries } from '@/components/settings/ssh-search'
+import { getDockerPaneSearchEntries } from '@/components/settings/docker-search'
 import { getMobileSettingsPaneSearchEntries } from '@/components/settings/mobile-settings-search'
 import { getMobileEmulatorSearchEntries } from '@/components/settings/mobile-emulator-search'
 import { getComputerUsePaneSearchEntries } from '@/components/settings/computer-use-search'
@@ -411,6 +412,20 @@ export function buildSettingsNavigationMetadata({
             ),
             icon: Cable,
             searchEntries: getSshPaneSearchEntries(),
+            group: 'remote'
+          },
+          {
+            id: 'docker',
+            title: translate(
+              'auto.hooks.useSettingsNavigationMetadata.74fc6a63c9',
+              'Docker'
+            ),
+            description: translate(
+              'auto.hooks.useSettingsNavigationMetadata.698dc92726',
+              'Connect to local, SSH, or TCP Docker daemons.'
+            ),
+            icon: Server,
+            searchEntries: getDockerPaneSearchEntries(),
             group: 'remote'
           },
           {

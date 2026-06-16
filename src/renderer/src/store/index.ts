@@ -32,6 +32,7 @@ import { createWorkspaceCleanupSlice } from './slices/workspace-cleanup'
 import { createRuntimeStatusSlice } from './slices/runtime-status'
 import { createPullRequestGenerationSlice } from './slices/pull-request-generation'
 import { createCommitMessageGenerationSlice } from './slices/commit-message-generation'
+import { createDockerSlice } from './slices/docker'
 import { e2eConfig } from '@/lib/e2e-config'
 import { registerHttpLinkStoreAccessor } from '@/lib/http-link-routing'
 
@@ -67,7 +68,8 @@ export const useAppStore = create<AppState>()((...a) => ({
   ...createWorkspaceCleanupSlice(...a),
   ...createRuntimeStatusSlice(...a),
   ...createPullRequestGenerationSlice(...a),
-  ...createCommitMessageGenerationSlice(...a)
+  ...createCommitMessageGenerationSlice(...a),
+  ...createDockerSlice(...a)
 }))
 
 registerHttpLinkStoreAccessor(() => useAppStore.getState())

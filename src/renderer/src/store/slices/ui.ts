@@ -544,6 +544,7 @@ export type UISlice = {
     | 'space'
     | 'skills'
     | 'mobile'
+    | 'docker'
   previousViewBeforeTasks:
     | 'terminal'
     | 'settings'
@@ -552,6 +553,7 @@ export type UISlice = {
     | 'space'
     | 'skills'
     | 'mobile'
+    | 'docker'
   previousViewBeforeSettings:
     | 'terminal'
     | 'tasks'
@@ -560,6 +562,7 @@ export type UISlice = {
     | 'space'
     | 'skills'
     | 'mobile'
+    | 'docker'
   previousViewBeforeActivity:
     | 'terminal'
     | 'settings'
@@ -568,6 +571,7 @@ export type UISlice = {
     | 'space'
     | 'skills'
     | 'mobile'
+    | 'docker'
   previousViewBeforeAutomations:
     | 'terminal'
     | 'settings'
@@ -576,6 +580,7 @@ export type UISlice = {
     | 'space'
     | 'skills'
     | 'mobile'
+    | 'docker'
   previousViewBeforeSpace:
     | 'terminal'
     | 'settings'
@@ -584,6 +589,7 @@ export type UISlice = {
     | 'automations'
     | 'skills'
     | 'mobile'
+    | 'docker'
   previousViewBeforeSkills:
     | 'terminal'
     | 'settings'
@@ -592,6 +598,7 @@ export type UISlice = {
     | 'automations'
     | 'space'
     | 'mobile'
+    | 'docker'
   previousViewBeforeMobile:
     | 'terminal'
     | 'settings'
@@ -600,6 +607,16 @@ export type UISlice = {
     | 'automations'
     | 'space'
     | 'skills'
+    | 'docker'
+  previousViewBeforeDocker:
+    | 'terminal'
+    | 'settings'
+    | 'tasks'
+    | 'activity'
+    | 'automations'
+    | 'space'
+    | 'skills'
+    | 'mobile'
   setActiveView: (view: UISlice['activeView']) => void
   taskPageData: {
     preselectedRepoId?: string
@@ -668,6 +685,8 @@ export type UISlice = {
   closeSkillsPage: () => void
   openMobilePage: () => void
   closeMobilePage: () => void
+  openDockerPage: () => void
+  closeDockerPage: () => void
   setNewWorkspaceDraft: (draft: NonNullable<UISlice['newWorkspaceDraft']>) => void
   clearNewWorkspaceDraft: () => void
   openSettingsPage: () => void
@@ -1080,6 +1099,7 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
   previousViewBeforeSpace: 'terminal',
   previousViewBeforeSkills: 'terminal',
   previousViewBeforeMobile: 'terminal',
+  previousViewBeforeDocker: 'terminal',
   setActiveView: (view) => set({ activeView: view }),
   taskPageData: {},
   taskResumeState: undefined,
@@ -1353,6 +1373,16 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
   closeMobilePage: () =>
     set((state) => ({
       activeView: state.previousViewBeforeMobile
+    })),
+  openDockerPage: () =>
+    set((state) => ({
+      activeView: 'docker',
+      previousViewBeforeDocker:
+        state.activeView === 'docker' ? state.previousViewBeforeDocker : state.activeView
+    })),
+  closeDockerPage: () =>
+    set((state) => ({
+      activeView: state.previousViewBeforeDocker
     })),
   setNewWorkspaceDraft: (draft) => set({ newWorkspaceDraft: draft }),
   clearNewWorkspaceDraft: () => set({ newWorkspaceDraft: null }),

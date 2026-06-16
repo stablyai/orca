@@ -2974,6 +2974,14 @@ export function useIpcEvents(): void {
       })
     )
 
+    // Why: guard with ?. so a stale preload bundle that lacks window.api.docker
+    // does not crash the subscription setup; the ?? fallback is a no-op unsub.
+    unsubs.push(
+      window.api.docker?.onResourcesChanged((data) => {
+        useAppStore.getState().applyDockerResources(data)
+      }) ?? (() => {})
+    )
+
     // Why: hydrate mobile-owned terminal state on renderer reload. Subscribe
     // first and buffer live events during the snapshot round trip; otherwise an
     // older snapshot could overwrite a newer live lock and hide the overlay.

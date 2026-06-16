@@ -32,6 +32,7 @@ import { GitProviderApiBudgetPane } from './GitProviderApiBudgetPane'
 import { NotificationsPane } from './NotificationsPane'
 import { VoicePane } from './VoicePane'
 import { SshPane } from './SshPane'
+import { DockerPane } from './DockerPane'
 import { ExperimentalPane } from './ExperimentalPane'
 import { AgentsPane } from './AgentsPane'
 import { OrchestrationPane } from './OrchestrationPane'
@@ -1430,6 +1431,21 @@ function Settings(): React.JSX.Element {
                       searchEntries={getSectionSearchEntries('ssh')}
                     >
                       {isSectionMounted('ssh') ? <SshPane /> : null}
+                    </SettingsSection>
+
+                    <SettingsSection
+                      id="docker"
+                      title={translate(
+                        'auto.components.settings.Settings.e82812f3fa',
+                        'Docker'
+                      )}
+                      description={translate(
+                        'auto.components.settings.Settings.ee7cd032da',
+                        'Connect to local, SSH, or TCP Docker daemons.'
+                      )}
+                      searchEntries={getSectionSearchEntries('docker')}
+                    >
+                      {isSectionMounted('docker') ? <DockerPane /> : null}
                     </SettingsSection>
 
                     <SettingsSection

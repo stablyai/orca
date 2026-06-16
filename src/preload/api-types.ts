@@ -329,6 +329,17 @@ import type {
   EnrichedDetectedPort
 } from '../shared/ssh-types'
 import type {
+  DockerConnectionStatus,
+  DockerContainerAction,
+  DockerContainerInspect,
+  DockerContainerSummary,
+  DockerImageSummary,
+  DockerNetworkSummary,
+  DockerResourceKind,
+  DockerResourcesChangedEvent,
+  DockerVolumeSummary
+} from '../shared/docker-types'
+import type {
   CodexUsageBreakdownKind,
   CodexUsageBreakdownRow,
   CodexUsageDailyPoint,
@@ -2596,6 +2607,32 @@ export type PreloadApi = {
     ) => () => void
     onCredentialResolved: (callback: (data: { requestId: string }) => void) => () => void
     submitCredential: (args: { requestId: string; value: string | null }) => Promise<void>
+  }
+  docker: {
+    listContainers: (args: { connectionId: string }) => Promise<DockerContainerSummary[]>
+    inspect: (args: {
+      connectionId: string
+      containerId: string
+    }) => Promise<DockerContainerInspect>
+    pingConnection: (args: {
+      connectionId: string
+    }) => Promise<{ status: DockerConnectionStatus; error?: string }>
+    onResourcesChanged: (callback: (data: DockerResourcesChangedEvent) => void) => () => void
+    containerAction: (args: {
+      connectionId: string
+      containerId: string
+      action: DockerContainerAction
+    }) => Promise<void>
+    listImages: (args: { connectionId: string }) => Promise<DockerImageSummary[]>
+    listVolumes: (args: { connectionId: string }) => Promise<DockerVolumeSummary[]>
+    listNetworks: (args: { connectionId: string }) => Promise<DockerNetworkSummary[]>
+    resourceRemove: (args: {
+      connectionId: string
+      kind: DockerResourceKind
+      id: string
+    }) => Promise<void>
+    resourcePrune: (args: { connectionId: string; kind: DockerResourceKind }) => Promise<void>
+    setPollingActive: (args: { active: boolean }) => Promise<void>
   }
   automations: {
     list: () => Promise<Automation[]>

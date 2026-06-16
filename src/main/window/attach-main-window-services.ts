@@ -11,6 +11,7 @@ import { registerWorkspaceCleanupHandlers } from '../ipc/workspace-cleanup'
 import { getLocalPtyProvider, registerPtyHandlers } from '../ipc/pty'
 import { registerDaemonManagementHandlers } from '../ipc/pty-management'
 import { registerSshHandlers } from '../ipc/ssh'
+import { registerDockerHandlers } from '../ipc/docker'
 import { registerRemoteWorkspaceHandlers } from '../ipc/remote-workspace'
 import { browserManager } from '../browser/browser-manager'
 import { hasSystemMediaAccess, requestSystemMediaAccess } from '../browser/browser-media-access'
@@ -104,7 +105,12 @@ export function attachMainWindowServices(
         )
       })
   }
-  registerSshHandlers(store, () => mainWindow, runtime)
+  const sshHandles = registerSshHandlers(store, () => mainWindow, runtime)
+  registerDockerHandlers(
+    store,
+    () => mainWindow,
+    (id) => sshHandles.sshStore.listTargets().find((t) => t.id === id)
+  )
   registerRemoteWorkspaceHandlers(store, () => mainWindow)
   registerFileDropRelay(mainWindow)
   setupAutoUpdater(mainWindow, {

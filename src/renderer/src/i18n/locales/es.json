@@ -591,7 +591,9 @@
         "b1c2f8b0ac": "Cambio de cuenta opcional para Claude, Codex, Gemini y OpenCode Go.",
         "f70ac54d38": "Cuentas de proveedores de IA",
         "4121f7a0a2": "Administre agents de IA, establezca un valor predeterminado y personalice comandos.",
-        "b49abbd2f7": "Agents"
+        "b49abbd2f7": "Agents",
+        "74fc6a63c9": "Docker",
+        "698dc92726": "Connect to local, SSH, or TCP Docker daemons."
       }
     },
     "components": {
@@ -3517,7 +3519,8 @@
           "196c1b5362": "Abrir tareas de GitLab",
           "0ccba862b8": "Abrir tareas de GitHub",
           "fee535205b": "Tareas",
-          "d599269755": "Ocultar de la barra lateral"
+          "d599269755": "Ocultar de la barra lateral",
+          "729082bde5": "Docker"
         },
         "SidebarRepositoryFilterSection": {
           "d3a9c4cea1": "Claro",
@@ -5656,7 +5659,9 @@
           "9abb9be3bc": "Configuración",
           "23c6874fdf": "Capacidades de IA",
           "2309068a6f": "destructivo",
-          "65358016ea": "Desechar"
+          "65358016ea": "Desechar",
+          "e82812f3fa": "Docker",
+          "ee7cd032da": "Connect to local, SSH, or TCP Docker daemons."
         },
         "SettingsFormControls": {
           "42a4d15a30": "No hay fuentes coincidentes.",
@@ -7946,6 +7951,38 @@
           "ask": "Preguntar",
           "safeAuto": "Seguro automático",
           "off": "Desactivado"
+        },
+        "DockerPane": {
+          "5376fcfd12": "Docker connections",
+          "06c5aa419f": "Add connections to remote Docker daemons via SSH or TCP. The built-in Local connection is always available and cannot be removed.",
+          "9057b5e881": "Add connection",
+          "62a42ba95e": "No connections configured.",
+          "137bb072b2": "Edit",
+          "18953f5560": "Remove",
+          "5df5b4a07f": "Editing connection",
+          "c6b030f1bd": "Label",
+          "828891863d": "Kind",
+          "629de6fba3": "ssh",
+          "25b3c0539d": "tcp",
+          "2b71443426": "SSH host",
+          "b31014c60f": "No SSH targets configured. Add one in Remote Hosts first.",
+          "cea67e3330": "Host",
+          "0b65603482": "Port",
+          "64ae773bd2": "Save",
+          "ab331bd060": "Cancel",
+          "7b01b87358": "Remove Docker connection",
+          "a09ce2c718": "This will remove the connection \"{{value0}}\".",
+          "78a9fd8cf7": "Remove connection",
+          "98f7505da3": "A label is required.",
+          "fa6dd8e4bb": "Select an SSH host.",
+          "443f60f98d": "A TCP host is required.",
+          "b3d4e078cf": "A valid TCP port is required."
+        },
+        "docker": {
+          "search": {
+            "633b31f94b": "Docker Connections",
+            "2230311be7": "Manage Docker daemons."
+          }
         }
       },
       "right": {
@@ -11227,6 +11264,101 @@
         "sourceUnavailable": "{{value0}} source unavailable: {{value1}}",
         "someSourceHostsUnavailable": "Some {{value0}} source hosts unavailable: {{value1}}",
         "reconnectOrUpdateTitle": "Reconnect or update {{value0}} to load this source."
+      },
+      "docker": {
+        "DockerContainerDetail": {
+          "3785677742": "Mounts & Ports",
+          "73a03cf4fc": "Details",
+          "8e913f1e01": "Logs",
+          "65267b5ce5": "Terminal",
+          "7b6a28f972": "Env",
+          "d3541f3e1d": "Created",
+          "37810d101e": "Restart policy",
+          "dcd88f653a": "No environment variables.",
+          "7d87fc3379": "No mounts.",
+          "23d6458b14": "exposed",
+          "e8306d8d6e": "No published ports.",
+          "dc6f85fe97": "Select a container to see its details.",
+          "f10977e945": "Mounts",
+          "618e10b649": "Ports",
+          "3f56801f68": "Status",
+          "8b405f5f30": "Terminal ({{value0}})",
+          "9624eeb3d3": "Environment variables",
+          "fc5533a07d": "Close terminal",
+          "a76923f400": "State",
+          "f30fa89199": "ID",
+          "fd2b310c03": "Compose"
+        },
+        "DockerContainerActions": {
+          "174ec8f170": "Docker action failed",
+          "e3f8420199": "Remove container",
+          "61b45d53bd": "Permanently remove {{value0}}? This cannot be undone.",
+          "b6ca17b955": "Cancel",
+          "bdbc34eec1": "Remove",
+          "023ec2a235": "Start",
+          "359f30fd47": "Stop",
+          "36ac523335": "Restart",
+          "03e884a128": "Pause",
+          "c0c163323f": "Resume"
+        },
+        "DockerResourceTree": {
+          "467cfca8f2": "Containers",
+          "7964843ebd": "No containers.",
+          "b9b10ffd73": "Images",
+          "ef8715fa3c": "No images.",
+          "12b0eb1a8a": "Volumes",
+          "fb6116f299": "No volumes.",
+          "340bf27dfd": "Networks",
+          "2fe5d96a6c": "No networks.",
+          "03f84060b4": "Prune",
+          "71037a0124": "Docker-compose: {{value0}}"
+        },
+        "DockerConfirmDialog": {
+          "cc2263a02e": "Cancel"
+        },
+        "DockerImageDetail": {
+          "07b83a4ee4": "Remove image failed",
+          "59bb4e75a1": "Repository",
+          "f149921de1": "Tag",
+          "1cc6d277be": "ID",
+          "18cd49f788": "Size",
+          "656e03218c": "Created",
+          "4471eb1783": "Remove",
+          "adb63093a6": "Remove image",
+          "698395402c": "Remove {{value0}}? This cannot be undone."
+        },
+        "DockerNetworkDetail": {
+          "ec90189068": "Remove network failed",
+          "81e34d5dc0": "Name",
+          "6832680cb6": "ID",
+          "d22b44e993": "Driver",
+          "9bdc0f1920": "Scope",
+          "84c366377a": "Remove",
+          "1c4c7c8eaa": "Remove network",
+          "fcc0b34426": "Remove {{value0}}? This cannot be undone."
+        },
+        "DockerPage": {
+          "1225452538": "Prune failed",
+          "e33ba23c23": "container",
+          "286b0c6e34": "image",
+          "9ee5213fa5": "volume",
+          "9b72705845": "network",
+          "916726d215": "Prune {{value0}}",
+          "79cedd713b": "Prune all stopped {{value0}} resources? This cannot be undone.",
+          "59c7b69676": "Prune",
+          "3b170f8fdb": "Refresh",
+          "77e6e492c6": "Manage connections"
+        },
+        "DockerVolumeDetail": {
+          "4f695bd438": "Remove volume failed",
+          "98fb57bff4": "Name",
+          "33ffc167f8": "Driver",
+          "fc5e2a0073": "Scope",
+          "967e44535f": "Mountpoint",
+          "1637268c8c": "Remove",
+          "4928a5801c": "Remove volume",
+          "4847a3b597": "Remove {{value0}}? This cannot be undone."
+        }
       }
     },
     "i18n": {
