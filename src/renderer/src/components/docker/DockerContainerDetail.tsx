@@ -4,7 +4,7 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
-import { Plus, X } from 'lucide-react'
+import { Terminal, X } from 'lucide-react'
 import type {
   DockerConnection,
   DockerContainerInspect,
@@ -26,16 +26,17 @@ export function DockerContainerDetail({
   inspectError: string | null
 }): React.JSX.Element {
   const [activeTab, setActiveTab] = useState('details')
-  const [terminalIds, setTerminalIds] = useState<number[]>([1])
-  // Tracks the next id to assign; starts at 2 since id 1 is pre-seeded above.
-  const nextId = useRef(2)
+  // No terminal is open by default; the user opens one explicitly via the header button.
+  const [terminalIds, setTerminalIds] = useState<number[]>([])
+  const nextId = useRef(1)
 
   // Reset terminal state when the container changes so stale PTY keys don't
   // linger across container selections, but preserve non-terminal active tabs.
   useEffect(() => {
-    setTerminalIds([1])
-    nextId.current = 2
-    setActiveTab((prev) => (prev.startsWith('terminal-') ? 'terminal-1' : prev))
+    setTerminalIds([])
+    nextId.current = 1
+    // No terminals after reset — drop back to Details if a terminal tab was active.
+    setActiveTab((prev) => (prev.startsWith('terminal-') ? 'details' : prev))
   }, [container?.id])
 
   function addTerminal(): void {
@@ -82,7 +83,13 @@ export function DockerContainerDetail({
             {container.status}
           </span>
         </div>
-        <DockerContainerActions container={container} />
+        <div className="flex items-center gap-1.5">
+          <Button variant="outline" size="xs" onClick={addTerminal}>
+            <Terminal />
+            {translate('auto.components.docker.DockerContainerDetail.65267b5ce5', 'Terminal')}
+          </Button>
+          <DockerContainerActions container={container} />
+        </div>
       </div>
 
       {/* Why: page-level tabs sit on a flat strip; the line variant paints an
@@ -132,16 +139,6 @@ export function DockerContainerDetail({
             </span>
           </div>
         ))}
-
-        {/* "+" button to open an additional terminal. */}
-        <Button
-          variant="ghost"
-          size="icon-xs"
-          aria-label="Open new terminal"
-          onClick={addTerminal}
-        >
-          <Plus />
-        </Button>
 
         <TabsTrigger value="env" className="px-3 py-2.5">
           {translate('auto.components.docker.DockerContainerDetail.7b6a28f972', 'Env')}
