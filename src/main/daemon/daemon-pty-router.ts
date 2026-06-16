@@ -121,10 +121,10 @@ export class DaemonPtyRouter implements IPtyProvider {
   }
 
   async listProcesses(): Promise<{ id: string; cwd: string; title: string }[]> {
-    const results = await Promise.allSettled(
-      this.allAdapters().map((adapter) => adapter.listProcesses())
-    )
-    return results.flatMap((result) => (result.status === 'fulfilled' ? result.value : []))
+    // Why: runtime exact-stop/liveness flows must fail closed if any adapter
+    // cannot provide a trustworthy process list.
+    const results = await Promise.all(this.allAdapters().map((adapter) => adapter.listProcesses()))
+    return results.flat()
   }
 
   async getDefaultShell(): Promise<string> {

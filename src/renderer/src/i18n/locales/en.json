@@ -9880,6 +9880,70 @@
                   "f1c0179002": "Stream is not producing frames."
                 }
               }
+            },
+            "mobile": {
+              "emulator": {
+                "agent": {
+                  "setup": {
+                    "state": {
+                      "fdcca1ec75": "Registering...",
+                      "69fb2c2289": "Enabled",
+                      "c6705092ba": "Fix PATH",
+                      "7c1b6bdb1e": "Enable",
+                      "51074ccb05": "Failed to load CLI status.",
+                      "35dea1ae12": "Agent control is ready.",
+                      "9dff3a6338": "Skill is installed. Enable the Orca CLI to finish setup.",
+                      "15986a1080": "Orca CLI is ready. Install the skill to finish setup.",
+                      "4c26913def": "Still not set up. Complete both steps to enable agent control.",
+                      "c94ff11e91": "Could not re-check setup status.",
+                      "2b519eed94": "Registered the Orca CLI in PATH."
+                    }
+                  }
+                },
+                "tab": {
+                  "intro": {
+                    "actions": {
+                      "68a5dc6604": "Could not hide Mobile Emulator."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "MobileEmulatorAgentSetupGuide": {
+            "2fda9ff015": "Set up agent control",
+            "0ac0fef514": "Agent control is ready.",
+            "2bdfff8763": "Agent control (optional).",
+            "72736b051f": "Set up Orca CLI + skill when you want agents to drive this simulator.",
+            "d10ae98046": "Done",
+            "3756cbeca7": "Not now",
+            "6d950431d2": "Hide",
+            "ebceac65a4": "Set up",
+            "3f003507f4": "Open full setup in Settings"
+          },
+          "MobileEmulatorAgentSetupGuideSteps": {
+            "9b49d892e3": "Enable Orca CLI",
+            "3d8dc52c93": "Registers the orca command for emulator control in agent shells.",
+            "21f5687c07": "Orca CLI skill",
+            "64fb057667": "Teaches agents the orca emulator commands for this worktree.",
+            "5c59ea96ca": "Mobile emulator Orca CLI skill setup",
+            "bff5341ac3": "Mobile emulator Orca CLI skill install terminal"
+          },
+          "MobileEmulatorTabIntroCallout": {
+            "1924982130": "Dismiss",
+            "5789936d9a": "Preview iOS simulators while agents drive the screen.",
+            "8014b4b80b": "Keep",
+            "6e051a40b7": "Hide"
+          },
+          "mobile": {
+            "emulator": {
+              "hidden": {
+                "toast": {
+                  "e8f098a870": "Mobile Emulator hidden",
+                  "c46c979c1d": "Re-enable Mobile Emulator anytime in",
+                  "600f9a745a": "Settings › Mobile Emulator"
+                }
+              }
             }
           }
         }

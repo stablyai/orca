@@ -13,7 +13,7 @@ type Props = {
   preInstallNotice?: ReactNode
   getPrerequisiteStatus?: () => Promise<Awaited<ReturnType<typeof window.api.cli.getInstallStatus>>>
   onBeforeOpenTerminal?: () => void | Promise<void>
-  onRecheck: () => void | Promise<void>
+  onRecheck: () => void | Promise<unknown>
 }
 
 export function BrowserUseSkillStep({

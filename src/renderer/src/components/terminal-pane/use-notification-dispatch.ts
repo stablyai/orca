@@ -27,7 +27,9 @@ export type TerminalNotificationEvent = {
 
 function hasLivePtyForWorktree(state: StoreSnapshot, candidateWorktreeId: string): boolean {
   const tabs = state.tabsByWorktree[candidateWorktreeId] ?? []
-  return tabs.some((tab) => (state.ptyIdsByTabId[tab.id] ?? []).length > 0)
+  return tabs.some((tab) =>
+    (state.ptyIdsByTabId[tab.id] ?? []).some((ptyId) => !isSuppressedPtyHint(state, ptyId))
+  )
 }
 
 function hasLivePtyForPaneKey(state: StoreSnapshot, paneKey: string | undefined): boolean {
@@ -35,7 +37,10 @@ function hasLivePtyForPaneKey(state: StoreSnapshot, paneKey: string | undefined)
     return false
   }
   const tabId = getPaneKeyTabId(paneKey)
-  return tabId !== null && (state.ptyIdsByTabId[tabId] ?? []).length > 0
+  return (
+    tabId !== null &&
+    (state.ptyIdsByTabId[tabId] ?? []).some((ptyId) => !isSuppressedPtyHint(state, ptyId))
+  )
 }
 
 function hasLivePtyForNotification(
@@ -76,7 +81,9 @@ function isCurrentLivePaneKey(state: StoreSnapshot, worktreeId: string, paneKey:
     return false
   }
 
-  const livePtyIds = state.ptyIdsByTabId[parsed.tabId] ?? []
+  const livePtyIds = (state.ptyIdsByTabId[parsed.tabId] ?? []).filter(
+    (ptyId) => !isSuppressedPtyHint(state, ptyId)
+  )
   if (livePtyIds.length === 0) {
     return false
   }

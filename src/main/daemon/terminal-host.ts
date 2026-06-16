@@ -160,9 +160,13 @@ export class TerminalHost {
     this.getAliveSession(sessionId).resize(cols, rows)
   }
 
-  kill(sessionId: string): void {
+  kill(sessionId: string, opts: { immediate?: boolean } = {}): void {
     const session = this.getAliveSession(sessionId)
     this.recordTombstone(sessionId)
+    if (opts.immediate) {
+      session.forceKillAndDisposeSubprocess()
+      return
+    }
     session.kill()
   }
 

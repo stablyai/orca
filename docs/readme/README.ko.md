@@ -4,7 +4,7 @@
 
 <p align="center">
   <a href="https://github.com/stablyai/orca/stargazers"><img src="https://badgen.net/github/stars/stablyai/orca?label=%E2%98%85" alt="GitHub 스타" /></a>
-  <a href="https://github.com/stablyai/orca/releases"><img src="https://img.shields.io/github/downloads/stablyai/orca/total?label=downloads" alt="전체 릴리스 누적 다운로드 수" /></a>
+  <a href="https://github.com/stablyai/orca/releases"><img src="../assets/readme-downloads.svg" alt="전체 릴리스 누적 다운로드 수" /></a>
   <img src="https://badgen.net/github/license/stablyai/orca" alt="라이선스" />
   <a href="https://discord.gg/fzjDKHxv8Q"><img src="https://img.shields.io/badge/Discord-5865F2?logo=discord&logoColor=white" alt="Orca Discord 참여" /></a>
   <img src="https://img.shields.io/badge/macOS%20%7C%20Windows%20%7C%20Linux-4493F8?style=flat-square" alt="지원 플랫폼: macOS, Windows, Linux" />

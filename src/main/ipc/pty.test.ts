@@ -313,6 +313,7 @@ describe('registerPtyHandlers', () => {
 
   afterEach(() => {
     _resetWslCachesForTests()
+    vi.useRealTimers()
     unregisterSshPtyProvider('ssh-1')
     setLocalPtyProvider(new LocalPtyProvider())
     if (savedOpenCodeConfigDir !== undefined) {
@@ -2136,6 +2137,164 @@ describe('registerPtyHandlers', () => {
         expect(runtime.onPtyExit).toHaveBeenCalledWith('remote-pty', -1)
       })
 
+      it('passes keepHistory through runtime controller stopAndWait', async () => {
+        vi.useFakeTimers()
+        const shutdown = vi.fn(async () => undefined)
+        const store = {
+          markSshRemotePtyLease: vi.fn()
+        }
+        const runtime = {
+          setPtyController: vi.fn(),
+          onPtyExit: vi.fn()
+        }
+        registerSshPtyProvider('ssh-1', {
+          spawn: vi.fn(),
+          write: vi.fn(),
+          resize: vi.fn(),
+          shutdown,
+          sendSignal: vi.fn(),
+          getCwd: vi.fn(),
+          getInitialCwd: vi.fn(),
+          clearBuffer: vi.fn(),
+          acknowledgeDataEvent: vi.fn(),
+          hasChildProcesses: vi.fn(),
+          getForegroundProcess: vi.fn(),
+          serialize: vi.fn(),
+          revive: vi.fn(),
+          onData: vi.fn(() => () => {}),
+          onReplay: vi.fn(() => () => {}),
+          onExit: vi.fn(() => () => {}),
+          listProcesses: vi.fn(async () => []),
+          attach: vi.fn(),
+          getDefaultShell: vi.fn(),
+          getProfiles: vi.fn()
+        } as never)
+        setPtyOwnership('remote-pty', 'ssh-1')
+        handlers.clear()
+        registerPtyHandlers(
+          mainWindow as never,
+          runtime as never,
+          undefined,
+          undefined,
+          undefined,
+          store as never
+        )
+        const controller = runtime.setPtyController.mock.calls[0]?.[0] as {
+          stopAndWait: (ptyId: string, opts?: { keepHistory?: boolean }) => Promise<boolean>
+        }
+
+        const stopPromise = controller.stopAndWait('remote-pty', { keepHistory: true })
+        await vi.advanceTimersByTimeAsync(1_200)
+        await expect(stopPromise).resolves.toBe(true)
+
+        expect(shutdown).toHaveBeenCalledWith('remote-pty', {
+          immediate: true,
+          keepHistory: true
+        })
+        expect(store.markSshRemotePtyLease).toHaveBeenCalledWith(
+          'ssh-1',
+          'remote-pty',
+          'terminated'
+        )
+        expect(runtime.onPtyExit).toHaveBeenCalledWith('remote-pty', -1)
+      })
+
+      it('runtime controller stopAndWait fails when keepHistory allows the PTY to revive', async () => {
+        vi.useFakeTimers()
+        const shutdown = vi.fn(async () => undefined)
+        const listProcesses = vi
+          .fn()
+          .mockResolvedValueOnce([])
+          .mockResolvedValueOnce([{ id: 'local-pty', cwd: '/tmp/demo', title: 'shell' }])
+        setLocalPtyProvider({
+          spawn: vi.fn(),
+          write: vi.fn(),
+          resize: vi.fn(),
+          shutdown,
+          sendSignal: vi.fn(),
+          getCwd: vi.fn(),
+          getInitialCwd: vi.fn(),
+          clearBuffer: vi.fn(),
+          acknowledgeDataEvent: vi.fn(),
+          hasChildProcesses: vi.fn(),
+          getForegroundProcess: vi.fn(),
+          serialize: vi.fn(),
+          revive: vi.fn(),
+          onData: vi.fn(() => () => {}),
+          onReplay: vi.fn(() => () => {}),
+          onExit: vi.fn(() => () => {}),
+          listProcesses,
+          attach: vi.fn(),
+          getDefaultShell: vi.fn(),
+          getProfiles: vi.fn()
+        } as never)
+        const runtime = {
+          setPtyController: vi.fn(),
+          onPtyExit: vi.fn()
+        }
+        handlers.clear()
+        registerPtyHandlers(mainWindow as never, runtime as never)
+        const controller = runtime.setPtyController.mock.calls[0]?.[0] as {
+          stopAndWait: (ptyId: string, opts?: { keepHistory?: boolean }) => Promise<boolean>
+        }
+
+        const stopPromise = controller.stopAndWait('local-pty', { keepHistory: true })
+        await vi.advanceTimersByTimeAsync(200)
+
+        await expect(stopPromise).resolves.toBe(false)
+        expect(shutdown).toHaveBeenCalledWith('local-pty', {
+          immediate: true,
+          keepHistory: true
+        })
+        expect(runtime.onPtyExit).not.toHaveBeenCalled()
+      })
+
+      it('runtime controller stopAndWait preserves ownership when proof fails after shutdown', async () => {
+        const shutdown = vi.fn(async () => undefined)
+        const listProcesses = vi.fn().mockRejectedValue(new Error('legacy unavailable'))
+        setLocalPtyProvider({
+          spawn: vi.fn(),
+          write: vi.fn(),
+          resize: vi.fn(),
+          shutdown,
+          sendSignal: vi.fn(),
+          getCwd: vi.fn(),
+          getInitialCwd: vi.fn(),
+          clearBuffer: vi.fn(),
+          acknowledgeDataEvent: vi.fn(),
+          hasChildProcesses: vi.fn(),
+          getForegroundProcess: vi.fn(),
+          serialize: vi.fn(),
+          revive: vi.fn(),
+          onData: vi.fn(() => () => {}),
+          onReplay: vi.fn(() => () => {}),
+          onExit: vi.fn(() => () => {}),
+          listProcesses,
+          attach: vi.fn(),
+          getDefaultShell: vi.fn(),
+          getProfiles: vi.fn()
+        } as never)
+        const runtime = {
+          setPtyController: vi.fn(),
+          onPtyExit: vi.fn()
+        }
+        handlers.clear()
+        registerPtyHandlers(mainWindow as never, runtime as never)
+        const controller = runtime.setPtyController.mock.calls[0]?.[0] as {
+          stopAndWait: (ptyId: string, opts?: { keepHistory?: boolean }) => Promise<boolean>
+        }
+
+        await expect(controller.stopAndWait('local-pty', { keepHistory: true })).resolves.toBe(
+          false
+        )
+
+        expect(shutdown).toHaveBeenCalledWith('local-pty', {
+          immediate: true,
+          keepHistory: true
+        })
+        expect(runtime.onPtyExit).not.toHaveBeenCalled()
+      })
+
       it('runtime controller kill routes app-scoped SSH ids through the parsed provider when ownership is absent', async () => {
         const localShutdown = vi.fn()
         setLocalPtyProvider({
@@ -2507,6 +2666,46 @@ describe('registerPtyHandlers', () => {
     await expect(handlers.get('pty:kill')!(null, { id: 'local-pty' })).rejects.toThrow(
       'daemon unavailable'
     )
+  })
+
+  it('synthesizes runtime exit after ordinary daemon-backed pty kill', async () => {
+    const shutdown = vi.fn(async () => undefined)
+    const runtime = {
+      setPtyController: vi.fn(),
+      onPtyExit: vi.fn()
+    }
+    setLocalPtyProvider({
+      spawn: vi.fn(),
+      write: vi.fn(),
+      resize: vi.fn(),
+      shutdown,
+      sendSignal: vi.fn(),
+      getCwd: vi.fn(),
+      getInitialCwd: vi.fn(),
+      clearBuffer: vi.fn(),
+      acknowledgeDataEvent: vi.fn(),
+      hasChildProcesses: vi.fn(),
+      getForegroundProcess: vi.fn(),
+      serialize: vi.fn(),
+      revive: vi.fn(),
+      onData: vi.fn(() => () => {}),
+      onReplay: vi.fn(() => () => {}),
+      onExit: vi.fn(() => () => {}),
+      listProcesses: vi.fn(async () => []),
+      attach: vi.fn(),
+      getDefaultShell: vi.fn(),
+      getProfiles: vi.fn()
+    } as never)
+    handlers.clear()
+    registerPtyHandlers(mainWindow as never, runtime as never)
+
+    await handlers.get('pty:kill')!(null, { id: 'local-pty', keepHistory: true })
+
+    expect(shutdown).toHaveBeenCalledWith('local-pty', {
+      immediate: true,
+      keepHistory: true
+    })
+    expect(runtime.onPtyExit).toHaveBeenCalledWith('local-pty', -1)
   })
 
   it('waits for the desktop startup barrier before renderer local spawns resolve the provider', async () => {

@@ -9880,6 +9880,70 @@
                   "f1c0179002": "La transmisión no produce fotogramas."
                 }
               }
+            },
+            "mobile": {
+              "emulator": {
+                "agent": {
+                  "setup": {
+                    "state": {
+                      "fdcca1ec75": "Registrando...",
+                      "69fb2c2289": "Habilitado",
+                      "c6705092ba": "Corregir PATH",
+                      "7c1b6bdb1e": "Habilitar",
+                      "51074ccb05": "Error al cargar el estado del CLI.",
+                      "35dea1ae12": "El control del agent está listo.",
+                      "9dff3a6338": "La skill está instalada. Habilita el CLI de Orca para completar la configuración.",
+                      "15986a1080": "El CLI de Orca está listo. Instala la skill para completar la configuración.",
+                      "4c26913def": "Aún no está configurado. Completa ambos pasos para habilitar el control del agent.",
+                      "c94ff11e91": "No se pudo volver a verificar el estado de la configuración.",
+                      "2b519eed94": "Se registró el CLI de Orca en PATH."
+                    }
+                  }
+                },
+                "tab": {
+                  "intro": {
+                    "actions": {
+                      "68a5dc6604": "No se pudo ocultar el Emulador Móvil."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "MobileEmulatorAgentSetupGuide": {
+            "2fda9ff015": "Configurar control del agent",
+            "0ac0fef514": "El control del agent está listo.",
+            "2bdfff8763": "Control del agent (opcional).",
+            "72736b051f": "Configura el CLI de Orca + skill cuando quieras que los agents controlen este simulador.",
+            "d10ae98046": "Listo",
+            "3756cbeca7": "Ahora no",
+            "6d950431d2": "Ocultar",
+            "ebceac65a4": "Configurar",
+            "3f003507f4": "Abrir configuración completa en Ajustes"
+          },
+          "MobileEmulatorAgentSetupGuideSteps": {
+            "9b49d892e3": "Habilitar CLI de Orca",
+            "3d8dc52c93": "Registra el comando orca para control del emulador en los shells de los agents.",
+            "21f5687c07": "Skill del CLI de Orca",
+            "64fb057667": "Enseña a los agents los comandos del emulador orca para este worktree.",
+            "5c59ea96ca": "Mobile emulator Orca CLI skill setup",
+            "bff5341ac3": "Mobile emulator Orca CLI skill install terminal"
+          },
+          "MobileEmulatorTabIntroCallout": {
+            "1924982130": "Descartar",
+            "5789936d9a": "Vista previa de simuladores iOS mientras los agents controlan la pantalla.",
+            "8014b4b80b": "Mantener",
+            "6e051a40b7": "Ocultar"
+          },
+          "mobile": {
+            "emulator": {
+              "hidden": {
+                "toast": {
+                  "e8f098a870": "Emulador Móvil oculto",
+                  "c46c979c1d": "Vuelve a habilitar el Emulador Móvil en cualquier momento en",
+                  "600f9a745a": "Ajustes › Emulador Móvil"
+                }
+              }
             }
           }
         }

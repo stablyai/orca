@@ -460,6 +460,8 @@ export function getDefaultUIState(): PersistedUIState {
     setupGuideBrowserMilestoneMigrated: true,
     setupGuideBrowserMilestoneLegacyComplete: false,
     browserImportHintHidden: false,
+    mobileEmulatorTabIntroDismissed: false,
+    mobileEmulatorAgentSetupDismissed: false,
     // Why: brand-new profiles never saw recent project ordering; only upgraded
     // profiles get the one-time sidebar notice on first launch.
     projectOrderManualDefaultNoticeDismissed: true,

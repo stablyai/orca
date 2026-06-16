@@ -1011,6 +1011,36 @@
   background: color-mix(in srgb, var(--worktree-sidebar-foreground) 14%, var(--worktree-sidebar));
 }
 
+/* Why: the first-run Mobile Emulator intro sits directly under that menu row;
+   an upward caret aligned to the phone icon reads as a callout, not a footer. */
+.mobile-emulator-tab-intro-callout--menu {
+  position: relative;
+}
+
+.mobile-emulator-tab-intro-callout--menu::before {
+  content: '';
+  position: absolute;
+  top: -5px;
+  left: 0.75rem;
+  width: 10px;
+  height: 10px;
+  transform: rotate(45deg);
+  border-left: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+  border-top: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+  background: color-mix(in srgb, var(--card) 80%, var(--background));
+}
+
+/* Why: anchor the optional setup card over the emulator without blurring the
+   device preview, which read as a rendering glitch. */
+.mobile-emulator-agent-setup-guide-scrim {
+  background: linear-gradient(
+    to top,
+    color-mix(in srgb, var(--background) 92%, transparent),
+    transparent
+  );
+  pointer-events: none;
+}
+
 /* Why: the detected command is editable, but a pure app-background fill reads
    like a black box in dark mode and overpowers the prompt card. */
 .setup-script-prompt-command {

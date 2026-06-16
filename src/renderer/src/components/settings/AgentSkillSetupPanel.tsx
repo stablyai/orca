@@ -44,7 +44,7 @@ type AgentSkillSetupPanelProps = {
   installedInstallLabel?: string
   actionHint?: ReactNode
   footer?: ReactNode
-  onRecheck: () => void | Promise<void>
+  onRecheck: () => void | Promise<unknown>
 }
 
 export function AgentSkillSetupPanel({

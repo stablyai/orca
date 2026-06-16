@@ -197,6 +197,9 @@ export const LOCALE_PHRASE_FIXES = {
       replacement: '拉取请求已合并',
       whenEnIncludes: 'Pull request merged'
     },
+    { pattern: /PR已/g, replacement: '拉取请求已', whenEnIncludes: 'Pull request' },
+    { pattern: /此PR/g, replacement: '此拉取请求', whenEnIncludes: 'pull request' },
+    { pattern: /先生！/g, replacement: 'MR !', whenEnIncludes: 'MR' },
     { pattern: /USB设备/g, replacement: 'USB 设备', whenEnIncludes: 'USB Devices' },
     { pattern: /球队/g, replacement: '团队', whenEnIncludes: 'teams' },
     {

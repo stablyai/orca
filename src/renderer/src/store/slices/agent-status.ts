@@ -222,6 +222,58 @@ function sleepingRecordFromEntry(args: {
   }
 }
 
+export function collectSleepingAgentSessionRecordsForWorktree(
+  state: AppState,
+  worktreeId: string,
+  paneKeys?: string[]
+): Record<string, SleepingAgentSessionRecord> {
+  const capturedAt = Date.now()
+  const allowedPaneKeys = paneKeys ? new Set(paneKeys) : null
+  const tabPrefixes = (state.tabsByWorktree[worktreeId] ?? []).map((tab) => `${tab.id}:`)
+  const records: Record<string, SleepingAgentSessionRecord> = {}
+
+  for (const retained of Object.values(state.retainedAgentsByPaneKey)) {
+    if (allowedPaneKeys && !allowedPaneKeys.has(retained.entry.paneKey)) {
+      continue
+    }
+    if (retained.worktreeId !== worktreeId) {
+      continue
+    }
+    const record = sleepingRecordFromEntry({
+      state,
+      entry: retained.entry,
+      worktreeId,
+      tab: retained.tab,
+      capturedAt
+    })
+    if (record) {
+      records[record.paneKey] = record
+    }
+  }
+
+  for (const [paneKey, entry] of Object.entries(state.agentStatusByPaneKey)) {
+    if (allowedPaneKeys && !allowedPaneKeys.has(paneKey)) {
+      continue
+    }
+    const belongsToWorktree =
+      entry.worktreeId === worktreeId || paneKeyMatchesAnyTabPrefix(paneKey, tabPrefixes)
+    if (!belongsToWorktree) {
+      continue
+    }
+    const record = sleepingRecordFromEntry({
+      state,
+      entry,
+      worktreeId,
+      capturedAt
+    })
+    if (record) {
+      records[record.paneKey] = record
+    }
+  }
+
+  return records
+}
+
 function pruneMigrationUnsupportedEntries(
   entries: Record<string, MigrationUnsupportedPtyEntry>,
   predicate: (entry: MigrationUnsupportedPtyEntry) => boolean
@@ -1017,50 +1069,14 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
 
     captureSleepingAgentSessionsByWorktree: (worktreeId, paneKeys) => {
       set((s) => {
-        const capturedAt = Date.now()
-        const allowedPaneKeys = paneKeys ? new Set(paneKeys) : null
-        const tabPrefixes = (s.tabsByWorktree[worktreeId] ?? []).map((tab) => `${tab.id}:`)
+        const records = collectSleepingAgentSessionRecordsForWorktree(s, worktreeId, paneKeys)
         const next: Record<string, SleepingAgentSessionRecord> = {
           ...s.sleepingAgentSessionsByPaneKey
         }
         let changed = false
 
-        for (const retained of Object.values(s.retainedAgentsByPaneKey)) {
-          if (allowedPaneKeys && !allowedPaneKeys.has(retained.entry.paneKey)) {
-            continue
-          }
-          if (retained.worktreeId !== worktreeId) {
-            continue
-          }
-          const record = sleepingRecordFromEntry({
-            state: s,
-            entry: retained.entry,
-            worktreeId,
-            tab: retained.tab,
-            capturedAt
-          })
-          if (record && next[record.paneKey] !== record) {
-            next[record.paneKey] = record
-            changed = true
-          }
-        }
-
-        for (const [paneKey, entry] of Object.entries(s.agentStatusByPaneKey)) {
-          if (allowedPaneKeys && !allowedPaneKeys.has(paneKey)) {
-            continue
-          }
-          const belongsToWorktree =
-            entry.worktreeId === worktreeId || paneKeyMatchesAnyTabPrefix(paneKey, tabPrefixes)
-          if (!belongsToWorktree) {
-            continue
-          }
-          const record = sleepingRecordFromEntry({
-            state: s,
-            entry,
-            worktreeId,
-            capturedAt
-          })
-          if (record && next[record.paneKey] !== record) {
+        for (const record of Object.values(records)) {
+          if (next[record.paneKey] !== record) {
             next[record.paneKey] = record
             changed = true
           }

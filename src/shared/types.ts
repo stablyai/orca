@@ -3040,6 +3040,11 @@ export type PersistedUIState = {
   /** User-dismissed browser import hint in the browser toolbar. Import remains
    *  available from Settings > Browser and the toolbar overflow menu. */
   browserImportHintHidden?: boolean
+  /** User dismissed the first-run Mobile Emulator intro (Keep, Hide, or close).
+   *  Reversible only by re-enabling the feature in Settings. */
+  mobileEmulatorTabIntroDismissed?: boolean
+  /** User deferred the in-pane Mobile Emulator CLI + skill setup guide. */
+  mobileEmulatorAgentSetupDismissed?: boolean
   /** One-shot rollout notice for manual project ordering becoming the default.
    *  Absent or true means the sidebar callout stays hidden. */
   projectOrderManualDefaultNoticeDismissed?: boolean

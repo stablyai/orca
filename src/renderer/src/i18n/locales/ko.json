@@ -9880,6 +9880,70 @@
                   "f1c0179002": "스트림이 프레임을 생성하지 않습니다."
                 }
               }
+            },
+            "mobile": {
+              "emulator": {
+                "agent": {
+                  "setup": {
+                    "state": {
+                      "fdcca1ec75": "등록 중...",
+                      "69fb2c2289": "활성화됨",
+                      "c6705092ba": "PATH 수정",
+                      "7c1b6bdb1e": "활성화",
+                      "51074ccb05": "CLI 상태를 불러오지 못했습니다.",
+                      "35dea1ae12": "agent 제어가 준비되었습니다.",
+                      "9dff3a6338": "스킬이 설치되었습니다. Orca CLI를 활성화하여 설정을 완료하세요.",
+                      "15986a1080": "Orca CLI가 준비되었습니다. 스킬을 설치하여 설정을 완료하세요.",
+                      "4c26913def": "아직 설정되지 않았습니다. agent 제어를 활성화하려면 두 단계를 모두 완료하세요.",
+                      "c94ff11e91": "설정 상태를 다시 확인할 수 없습니다.",
+                      "2b519eed94": "Orca CLI가 PATH에 등록되었습니다."
+                    }
+                  }
+                },
+                "tab": {
+                  "intro": {
+                    "actions": {
+                      "68a5dc6604": "모바일 에뮬레이터를 숨길 수 없습니다."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "MobileEmulatorAgentSetupGuide": {
+            "2fda9ff015": "agent 제어 설정",
+            "0ac0fef514": "agent 제어가 준비되었습니다.",
+            "2bdfff8763": "agent 제어(선택 사항).",
+            "72736b051f": "agents가 이 시뮬레이터를 제어하도록 하려면 Orca CLI + 스킬을 설정하세요.",
+            "d10ae98046": "완료",
+            "3756cbeca7": "나중에",
+            "6d950431d2": "숨기기",
+            "ebceac65a4": "설정",
+            "3f003507f4": "설정에서 전체 설정 열기"
+          },
+          "MobileEmulatorAgentSetupGuideSteps": {
+            "9b49d892e3": "Orca CLI 활성화",
+            "3d8dc52c93": "agents 셸에서 에뮬레이터 제어를 위해 orca 명령을 등록합니다.",
+            "21f5687c07": "Orca CLI 스킬",
+            "64fb057667": "이 워크트리의 orca 에뮬레이터 명령을 agents에게 알려줍니다.",
+            "5c59ea96ca": "Mobile emulator Orca CLI skill setup",
+            "bff5341ac3": "Mobile emulator Orca CLI skill install terminal"
+          },
+          "MobileEmulatorTabIntroCallout": {
+            "1924982130": "닫기",
+            "5789936d9a": "agents가 화면을 제어하는 동안 iOS 시뮬레이터를 미리 볼 수 있습니다.",
+            "8014b4b80b": "유지",
+            "6e051a40b7": "숨기기"
+          },
+          "mobile": {
+            "emulator": {
+              "hidden": {
+                "toast": {
+                  "e8f098a870": "모바일 에뮬레이터가 숨겨졌습니다",
+                  "c46c979c1d": "모바일 에뮬레이터를 언제든지 다시 활성화할 수 있습니다",
+                  "600f9a745a": "설정 › 모바일 에뮬레이터"
+                }
+              }
             }
           }
         }

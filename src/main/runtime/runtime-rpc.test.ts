@@ -2147,7 +2147,10 @@ describe('OrcaRuntimeRpcServer', () => {
     })
     expect(listResponse).toMatchObject({
       id: 'req_list',
-      ok: true
+      ok: true,
+      result: {
+        terminals: [expect.objectContaining({ ptyId: 'pty-1' })]
+      }
     })
 
     const handle = (
