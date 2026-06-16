@@ -1,5 +1,8 @@
 import type { LinearProjectListResult } from './linear-agent-result-types'
 
+// Why: non-JSON project output aligns ids with the existing compact Linear tables.
+const LINEAR_PROJECT_NAME_COLUMN_WIDTH = 28
+
 export function formatLinearProjectListRows(result: LinearProjectListResult): string {
   if (result.projects.length === 0) {
     return 'No Linear projects found.'
@@ -8,11 +11,14 @@ export function formatLinearProjectListRows(result: LinearProjectListResult): st
     .map((project) => {
       const teams =
         project.teams
-          ?.map((team) => team.key ?? team.name)
+          ?.map((team) => {
+            const key = team.key?.trim()
+            return key ? key : team.name
+          })
           .filter(Boolean)
           .join(',') || 'no-teams'
       const workspace = project.workspaceName ? ` ${project.workspaceName}` : ''
-      return `${project.name.padEnd(28)} ${project.id} ${teams}${workspace}`
+      return `${project.name.padEnd(LINEAR_PROJECT_NAME_COLUMN_WIDTH)} ${project.id} ${teams}${workspace}`
     })
     .join('\n')
 }

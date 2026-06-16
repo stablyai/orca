@@ -890,7 +890,7 @@ export async function listProjectsByExactName(
   if (!projectName) {
     throw new Error('Project name is required')
   }
-  const normalized = projectName.toLocaleLowerCase()
+  const normalized = projectName.toLowerCase()
   const concreteWorkspaceId = normalizeConcreteWorkspaceId(workspaceId)
   const key = `listProjectsByExactName:${concreteWorkspaceId}:${normalized}`
   return coalesce(
@@ -916,7 +916,7 @@ export async function listProjectsByExactName(
           })
           const connection = result.data?.searchProjects
           for (const project of connection?.nodes ?? []) {
-            if (project.name.trim().toLocaleLowerCase() === normalized) {
+            if (project.name.trim().toLowerCase() === normalized) {
               matches.push(mapProjectForWorkspace(entry, project))
             }
           }

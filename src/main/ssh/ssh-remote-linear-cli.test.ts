@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
+import { isLinearProjectListResult } from './ssh-remote-linear-result-guards'
 import { runRemoteOrcaCli } from './ssh-remote-orca-cli'
 
 function createRuntime() {
@@ -359,6 +360,33 @@ describe('runRemoteOrcaCli Linear commands', () => {
     expect(result.stdout).toContain('ENG')
     expect(result.stdout).toContain('Acme')
     expect(result.stderr).toBe('')
+  })
+
+  it('rejects malformed SSH Linear project list results before formatting', () => {
+    expect(
+      isLinearProjectListResult({
+        projects: [{ id: 'project-1' }],
+        meta: {
+          limit: 5,
+          returned: 1,
+          hasMore: false,
+          partial: false,
+          workspaceErrors: []
+        }
+      })
+    ).toBe(false)
+    expect(
+      isLinearProjectListResult({
+        projects: [{ id: 'project-1', name: 'Launch', teams: [{ id: 'team-1' }] }],
+        meta: {
+          limit: 5,
+          returned: 1,
+          hasMore: false,
+          partial: false,
+          workspaceErrors: []
+        }
+      })
+    ).toBe(false)
   })
 
   it('dispatches Linear status writes through the remote runtime with SSH context hints', async () => {

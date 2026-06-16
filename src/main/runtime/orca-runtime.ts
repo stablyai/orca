@@ -16143,9 +16143,9 @@ export class OrcaRuntimeService {
       await this.assertLinearProjectIncludesTeam(byId, team.id, team.workspaceId, trimmed)
       return byId
     }
-    const projects = await this.readLinearProjectsForCreate(trimmed, team.workspaceId)
-    const normalized = trimmed.toLocaleLowerCase()
-    const idMatch = projects.find((project) => project.id.toLocaleLowerCase() === normalized)
+    const searchCandidates = await this.readLinearProjectsForCreate(trimmed, team.workspaceId)
+    const normalized = trimmed.toLowerCase()
+    const idMatch = searchCandidates.find((project) => project.id.toLowerCase() === normalized)
     if (idMatch) {
       await this.assertLinearProjectIncludesTeam(idMatch, team.id, team.workspaceId, trimmed)
       return idMatch
@@ -16177,7 +16177,7 @@ export class OrcaRuntimeService {
       await this.assertLinearProjectIncludesTeam(nameMatches[0], team.id, team.workspaceId, trimmed)
     }
     throw linearError('linear_invalid_project', `No Linear project exactly matched "${trimmed}".`, {
-      projects: projects.map((project) => ({
+      projects: searchCandidates.map((project) => ({
         id: project.id,
         name: project.name,
         teams: project.teams
