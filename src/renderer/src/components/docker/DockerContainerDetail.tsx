@@ -1,6 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { ScrollArea } from '@/components/ui/scroll-area'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
@@ -139,16 +138,11 @@ export function DockerContainerDetail({
             </span>
           </div>
         ))}
-
-        <TabsTrigger value="env" className="px-3 py-2.5">
-          {translate('auto.components.docker.DockerContainerDetail.7b6a28f972', 'Env')}
-        </TabsTrigger>
-        <TabsTrigger value="mounts" className="px-3 py-2.5">
-          {translate('auto.components.docker.DockerContainerDetail.3785677742', 'Mounts & Ports')}
-        </TabsTrigger>
       </TabsList>
 
-      {/* Details tab */}
+      {/* Details tab — env, ports, and mounts are folded in as stacked sections
+          below the definition list, PhpStorm-style. The pane is already
+          overflow-y-auto so no extra ScrollArea is needed. */}
       <TabsContent value="details" className="flex-1 overflow-y-auto p-4">
         <div className="flex flex-col gap-3">
           <div className="flex flex-col gap-1">
@@ -181,14 +175,104 @@ export function DockerContainerDetail({
               </>
             ) : null}
           </dl>
+
+          {/* Environment variables section */}
+          <section className="flex flex-col gap-1">
+            <span className="font-medium text-muted-foreground uppercase tracking-wide text-[10px]">
+              {translate('auto.components.docker.DockerContainerDetail.9624eeb3d3', 'Environment variables')}
+            </span>
+            {inspectError ? (
+              <div className="text-xs text-destructive">{inspectError}</div>
+            ) : inspect?.env && inspect.env.length > 0 ? (
+              <div className="flex flex-col gap-1 text-xs">
+                {inspect.env.map((entry) => {
+                  // Split on the FIRST '=' only so values containing '=' are preserved.
+                  const eqIdx = entry.indexOf('=')
+                  const envKey = eqIdx >= 0 ? entry.slice(0, eqIdx) : entry
+                  const envVal = eqIdx >= 0 ? entry.slice(eqIdx + 1) : ''
+                  return (
+                    <div key={envKey} className="flex gap-2">
+                      <span className="font-mono text-muted-foreground">{envKey}</span>
+                      <span className="font-mono">{envVal}</span>
+                    </div>
+                  )
+                })}
+              </div>
+            ) : (
+              <span className="text-xs text-muted-foreground">
+                {translate('auto.components.docker.DockerContainerDetail.dcd88f653a', 'No environment variables.')}
+              </span>
+            )}
+          </section>
+
+          {/* Ports section */}
+          <section className="flex flex-col gap-1">
+            <span className="font-medium text-muted-foreground uppercase tracking-wide text-[10px]">
+              {translate('auto.components.docker.DockerContainerDetail.618e10b649', 'Ports')}
+            </span>
+            {inspectError ? (
+              <div className="text-xs text-destructive">{inspectError}</div>
+            ) : inspect && inspect.ports.length > 0 ? (
+              <div className="flex flex-col gap-1 text-xs">
+                {inspect.ports.map((port, i) => (
+                  <div key={i} className="flex gap-1 rounded border border-border p-2">
+                    <span className="font-mono">{port.containerPort}</span>
+                    <span className="text-muted-foreground">→</span>
+                    {port.hostPort ? (
+                      <span className="font-mono">{port.hostIp ? `${port.hostIp}:` : ''}{port.hostPort}</span>
+                    ) : (
+                      <span className="text-muted-foreground">
+                        {translate('auto.components.docker.DockerContainerDetail.23d6458b14', 'exposed')}
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <span className="text-xs text-muted-foreground">
+                {translate('auto.components.docker.DockerContainerDetail.e8306d8d6e', 'No published ports.')}
+              </span>
+            )}
+          </section>
+
+          {/* Mounts section */}
+          <section className="flex flex-col gap-1">
+            <span className="font-medium text-muted-foreground uppercase tracking-wide text-[10px]">
+              {translate('auto.components.docker.DockerContainerDetail.f10977e945', 'Mounts')}
+            </span>
+            {inspectError ? (
+              <div className="text-xs text-destructive">{inspectError}</div>
+            ) : inspect && inspect.mounts.length > 0 ? (
+              <div className="flex flex-col gap-1 text-xs">
+                {inspect.mounts.map((mount, i) => (
+                  <div key={i} className="flex flex-col gap-0.5 rounded border border-border p-2">
+                    <div className="flex gap-1">
+                      <span className="font-mono text-muted-foreground">{mount.source}</span>
+                      <span className="text-muted-foreground">→</span>
+                      <span className="font-mono">{mount.destination}</span>
+                    </div>
+                    <span className="text-muted-foreground">
+                      {mount.mode}{mount.mode ? ' · ' : ''}{mount.rw ? 'rw' : 'ro'}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <span className="text-xs text-muted-foreground">
+                {translate('auto.components.docker.DockerContainerDetail.7d87fc3379', 'No mounts.')}
+              </span>
+            )}
+          </section>
         </div>
       </TabsContent>
 
-      {/* Logs tab — key forces remount (kills old PTY) when container or connection changes */}
+      {/* Logs tab — key forces remount (kills old PTY) when container or connection changes.
+          readOnly: the log stream is display-only; keyboard input must not reach the PTY. */}
       <TabsContent value="logs" className="min-h-0 flex-1">
         <DockerEmbeddedTerminal
           key={`logs:${container.id}`}
           {...buildDockerTerminalCommand(connection, 'logs', container.id)}
+          readOnly
         />
       </TabsContent>
 
@@ -210,96 +294,6 @@ export function DockerContainerDetail({
           />
         </TabsContent>
       ))}
-
-      {/* Env tab */}
-      <TabsContent value="env" className="min-h-0 flex-1">
-        {inspectError ? (
-          <div className="p-4 text-xs text-destructive">{inspectError}</div>
-        ) : inspect?.env && inspect.env.length > 0 ? (
-          <ScrollArea className="h-full">
-            <div className="flex flex-col gap-1 p-4 text-xs">
-              {inspect.env.map((entry) => {
-                // Split on the FIRST '=' only so values containing '=' are preserved.
-                const eqIdx = entry.indexOf('=')
-                const envKey = eqIdx >= 0 ? entry.slice(0, eqIdx) : entry
-                const envVal = eqIdx >= 0 ? entry.slice(eqIdx + 1) : ''
-                return (
-                  <div key={envKey} className="flex gap-2">
-                    <span className="font-mono text-muted-foreground">{envKey}</span>
-                    <span className="font-mono">{envVal}</span>
-                  </div>
-                )
-              })}
-            </div>
-          </ScrollArea>
-        ) : (
-          <div className="p-4 text-xs text-muted-foreground">
-            {translate('auto.components.docker.DockerContainerDetail.dcd88f653a', 'No environment variables.')}
-          </div>
-        )}
-      </TabsContent>
-
-      {/* Mounts & Ports tab */}
-      <TabsContent value="mounts" className="min-h-0 flex-1">
-        {inspectError ? (
-          <div className="p-4 text-xs text-destructive">{inspectError}</div>
-        ) : (
-          <ScrollArea className="h-full">
-            <div className="flex flex-col gap-4 p-4 text-xs">
-              {/* Mounts section */}
-              <section className="flex flex-col gap-1">
-                <span className="font-medium text-muted-foreground uppercase tracking-wide text-[10px]">
-                  {translate('auto.components.docker.DockerContainerDetail.f10977e945', 'Mounts')}
-                </span>
-                {inspect && inspect.mounts.length > 0 ? (
-                  inspect.mounts.map((mount, i) => (
-                    <div key={i} className="flex flex-col gap-0.5 rounded border border-border p-2">
-                      <div className="flex gap-1">
-                        <span className="font-mono text-muted-foreground">{mount.source}</span>
-                        <span className="text-muted-foreground">→</span>
-                        <span className="font-mono">{mount.destination}</span>
-                      </div>
-                      <span className="text-muted-foreground">
-                        {mount.mode}{mount.mode ? ' · ' : ''}{mount.rw ? 'rw' : 'ro'}
-                      </span>
-                    </div>
-                  ))
-                ) : (
-                  <span className="text-muted-foreground">
-                    {translate('auto.components.docker.DockerContainerDetail.7d87fc3379', 'No mounts.')}
-                  </span>
-                )}
-              </section>
-
-              {/* Ports section */}
-              <section className="flex flex-col gap-1">
-                <span className="font-medium text-muted-foreground uppercase tracking-wide text-[10px]">
-                  {translate('auto.components.docker.DockerContainerDetail.618e10b649', 'Ports')}
-                </span>
-                {inspect && inspect.ports.length > 0 ? (
-                  inspect.ports.map((port, i) => (
-                    <div key={i} className="flex gap-1 rounded border border-border p-2">
-                      <span className="font-mono">{port.containerPort}</span>
-                      <span className="text-muted-foreground">→</span>
-                      {port.hostPort ? (
-                        <span className="font-mono">{port.hostIp ? `${port.hostIp}:` : ''}{port.hostPort}</span>
-                      ) : (
-                        <span className="text-muted-foreground">
-                          {translate('auto.components.docker.DockerContainerDetail.23d6458b14', 'exposed')}
-                        </span>
-                      )}
-                    </div>
-                  ))
-                ) : (
-                  <span className="text-muted-foreground">
-                    {translate('auto.components.docker.DockerContainerDetail.e8306d8d6e', 'No published ports.')}
-                  </span>
-                )}
-              </section>
-            </div>
-          </ScrollArea>
-        )}
-      </TabsContent>
     </Tabs>
   )
 }

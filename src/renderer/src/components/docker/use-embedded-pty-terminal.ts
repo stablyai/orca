@@ -8,10 +8,14 @@ import { createIpcPtyTransport } from '../terminal-pane/pty-transport'
  * Bind a fresh xterm Terminal to a PTY spawned with `command`/`connectionId`,
  * reusing the shared IPC PTY transport. The PTY is created on mount and killed
  * on unmount; callers remount (via a React key) to retarget a new container/tab.
+ *
+ * When `readOnly` is true the terminal rejects keyboard input — suitable for
+ * log streams where user input must not reach the PTY.
  */
 export function useEmbeddedPtyTerminal(params: {
   command: string
   connectionId: string | null
+  readOnly?: boolean
 }): { containerRef: React.RefObject<HTMLDivElement | null> } {
   const containerRef = useRef<HTMLDivElement | null>(null)
 
@@ -19,7 +23,12 @@ export function useEmbeddedPtyTerminal(params: {
     const host = containerRef.current
     if (!host) return
 
-    const term = new Terminal(buildDefaultTerminalOptions())
+    const term = new Terminal({
+      ...buildDefaultTerminalOptions(),
+      // disableStdin + cursorBlink:false signal to xterm that this is a read-only
+      // display; no input events are forwarded to the PTY.
+      ...(params.readOnly ? { disableStdin: true, cursorBlink: false } : {})
+    })
     const fitAddon = new FitAddon()
     term.loadAddon(fitAddon)
     term.open(host)
@@ -58,7 +67,9 @@ export function useEmbeddedPtyTerminal(params: {
       if (!disposed) term.writeln(`\r\n\x1b[31m[orca] ${String(error)}\x1b[0m`)
     })
 
-    const inputSub = term.onData((data) => transport.sendInput(data))
+    // Only forward keyboard input for interactive terminals; read-only streams
+    // (e.g. docker logs) must not send user keystrokes to the PTY.
+    const inputSub = params.readOnly ? null : term.onData((data) => transport.sendInput(data))
 
     const observer = new ResizeObserver(() => {
       try {
@@ -73,11 +84,11 @@ export function useEmbeddedPtyTerminal(params: {
     return () => {
       disposed = true
       observer.disconnect()
-      inputSub.dispose()
+      inputSub?.dispose()
       transport.destroy?.()
       term.dispose()
     }
-  }, [params.command, params.connectionId])
+  }, [params.command, params.connectionId, params.readOnly])
 
   return { containerRef }
 }

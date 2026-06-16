@@ -9,28 +9,28 @@ const SSH: DockerConnection = { id: 's', label: 'Box', kind: 'ssh', sshTargetId:
 describe('buildDockerTerminalCommand', () => {
   it('builds a local logs command with a null connectionId', () => {
     expect(buildDockerTerminalCommand(LOCAL, 'logs', 'abc')).toEqual({
-      command: 'docker logs -f --tail 1000 abc',
+      command: 'clear && docker logs -f --tail 1000 abc',
       connectionId: null
     })
   })
 
   it('builds a local shell command', () => {
     expect(buildDockerTerminalCommand(LOCAL, 'shell', 'abc')).toEqual({
-      command: 'docker exec -it abc sh',
+      command: 'clear && docker exec -it abc sh',
       connectionId: null
     })
   })
 
   it('adds -H for tcp connections, still local transport', () => {
     expect(buildDockerTerminalCommand(TCP, 'logs', 'abc')).toEqual({
-      command: 'docker -H tcp://10.0.0.5:2376 logs -f --tail 1000 abc',
+      command: 'clear && docker -H tcp://10.0.0.5:2376 logs -f --tail 1000 abc',
       connectionId: null
     })
   })
 
   it('routes ssh connections through the relay via the sshTargetId', () => {
     expect(buildDockerTerminalCommand(SSH, 'shell', 'abc')).toEqual({
-      command: 'docker exec -it abc sh',
+      command: 'clear && docker exec -it abc sh',
       connectionId: 'target-1'
     })
   })

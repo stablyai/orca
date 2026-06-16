@@ -11218,7 +11218,8 @@
           "f10977e945": "Mounts",
           "618e10b649": "Ports",
           "3f56801f68": "Status",
-          "8b405f5f30": "Terminal ({{value0}})"
+          "8b405f5f30": "Terminal ({{value0}})",
+          "9624eeb3d3": "Environment variables"
         },
         "DockerContainerActions": {
           "174ec8f170": "Docker action failed",

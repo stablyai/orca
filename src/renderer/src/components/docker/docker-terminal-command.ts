@@ -21,8 +21,9 @@ export function buildDockerTerminalCommand(
       : dockerBinary
   const inner =
     kind === 'logs' ? `logs -f --tail 1000 ${containerId}` : `exec -it ${containerId} sh`
+  // clear wipes the host shell's echoed prompt/command line before docker takes over (POSIX/PowerShell; cmd.exe would need cls).
   return {
-    command: `${base} ${inner}`,
+    command: `clear && ${base} ${inner}`,
     connectionId: conn.kind === 'ssh' ? (conn.sshTargetId ?? null) : null
   }
 }
