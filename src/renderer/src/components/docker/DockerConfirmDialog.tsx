@@ -28,15 +28,24 @@ export function DockerConfirmDialog({
       setPending(false)
     }
   }
+  // Why: a destructive op keeps running even if its confirmation UI is dismissed,
+  // so block dismissal (Cancel, Esc, overlay) while it's in flight to avoid a
+  // confusing state where the action completes after the dialog disappears.
+  const handleOpenChange = (next: boolean): void => {
+    if (pending && !next) {
+      return
+    }
+    onOpenChange(next)
+  }
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent showCloseButton={false}>
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
         <DialogFooter>
-          <Button variant="ghost" onClick={() => onOpenChange(false)}>
+          <Button variant="ghost" disabled={pending} onClick={() => onOpenChange(false)}>
             {translate('auto.components.docker.DockerConfirmDialog.cc2263a02e', 'Cancel')}
           </Button>
           <Button variant="destructive" disabled={pending} onClick={() => void handleConfirm()}>

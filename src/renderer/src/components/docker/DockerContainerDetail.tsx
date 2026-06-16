@@ -46,6 +46,10 @@ export function DockerContainerDetail({
     )
   }
 
+  // The embedded PTY's screen-clear command is shell-specific (cmd.exe rejects
+  // `clear`), so the host platform selects the right one for local/tcp terminals.
+  const hostPlatform = window.api.platform.get().platform
+
   return (
     <Tabs
       value={tabState.activeTab}
@@ -101,7 +105,7 @@ export function DockerContainerDetail({
             <span
               role="button"
               tabIndex={0}
-              aria-label="Close terminal"
+              aria-label={translate('auto.components.docker.DockerContainerDetail.fc5533a07d', 'Close terminal')}
               className="ml-0.5 flex size-4 cursor-pointer items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring"
               onClick={(e) => {
                 e.stopPropagation()
@@ -131,15 +135,23 @@ export function DockerContainerDetail({
             <span className="font-mono text-xs text-muted-foreground">{container.image}</span>
           </div>
           <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-xs">
-            <dt className="text-muted-foreground">State</dt>
+            <dt className="text-muted-foreground">
+              {translate('auto.components.docker.DockerContainerDetail.a76923f400', 'State')}
+            </dt>
             <dd>{container.state}</dd>
-            <dt className="text-muted-foreground">Status</dt>
+            <dt className="text-muted-foreground">
+              {translate('auto.components.docker.DockerContainerDetail.3f56801f68', 'Status')}
+            </dt>
             <dd>{container.status}</dd>
-            <dt className="text-muted-foreground">ID</dt>
+            <dt className="text-muted-foreground">
+              {translate('auto.components.docker.DockerContainerDetail.f30fa89199', 'ID')}
+            </dt>
             <dd className="font-mono">{container.id.slice(0, 12)}</dd>
             {container.composeProject ? (
               <>
-                <dt className="text-muted-foreground">Compose</dt>
+                <dt className="text-muted-foreground">
+                  {translate('auto.components.docker.DockerContainerDetail.fd2b310c03', 'Compose')}
+                </dt>
                 <dd>{container.composeProject}</dd>
               </>
             ) : null}
@@ -159,7 +171,7 @@ export function DockerContainerDetail({
 
           {/* Environment variables section */}
           <section className="flex flex-col gap-1">
-            <span className="font-medium text-muted-foreground uppercase tracking-wide text-[10px]">
+            <span className="font-medium text-muted-foreground uppercase tracking-wide text-xs">
               {translate('auto.components.docker.DockerContainerDetail.9624eeb3d3', 'Environment variables')}
             </span>
             {inspectError ? (
@@ -188,7 +200,7 @@ export function DockerContainerDetail({
 
           {/* Ports section */}
           <section className="flex flex-col gap-1">
-            <span className="font-medium text-muted-foreground uppercase tracking-wide text-[10px]">
+            <span className="font-medium text-muted-foreground uppercase tracking-wide text-xs">
               {translate('auto.components.docker.DockerContainerDetail.618e10b649', 'Ports')}
             </span>
             {inspectError ? (
@@ -218,7 +230,7 @@ export function DockerContainerDetail({
 
           {/* Mounts section */}
           <section className="flex flex-col gap-1">
-            <span className="font-medium text-muted-foreground uppercase tracking-wide text-[10px]">
+            <span className="font-medium text-muted-foreground uppercase tracking-wide text-xs">
               {translate('auto.components.docker.DockerContainerDetail.f10977e945', 'Mounts')}
             </span>
             {inspectError ? (
@@ -252,7 +264,7 @@ export function DockerContainerDetail({
       <TabsContent value="logs" className="min-h-0 flex-1">
         <DockerEmbeddedTerminal
           key={`logs:${container.id}`}
-          {...buildDockerTerminalCommand(connection, 'logs', container.id)}
+          {...buildDockerTerminalCommand(connection, 'logs', container.id, 'docker', hostPlatform)}
           readOnly
         />
       </TabsContent>
@@ -271,7 +283,7 @@ export function DockerContainerDetail({
         >
           <DockerEmbeddedTerminal
             key={`${container.id}:term:${id}`}
-            {...buildDockerTerminalCommand(connection, 'shell', container.id)}
+            {...buildDockerTerminalCommand(connection, 'shell', container.id, 'docker', hostPlatform)}
           />
         </TabsContent>
       ))}

@@ -59,8 +59,13 @@ describe('parseDockerContainers', () => {
     expect(parseDockerContainers('')).toEqual([])
   })
 
-  it('tolerates a container row with a missing ID', () => {
+  it('skips a container row with a missing ID (would collide as a React key)', () => {
     const line = JSON.stringify({ Names: 'x', Image: 'nginx', State: 'running', Status: '' })
-    expect(parseDockerContainers(line)[0]).toMatchObject({ id: '', names: ['x'] })
+    expect(parseDockerContainers(line)).toEqual([])
+  })
+
+  it('skips a row whose ID is only whitespace', () => {
+    const line = JSON.stringify({ ID: '   ', Names: 'x', Image: 'nginx', State: 'running', Status: '' })
+    expect(parseDockerContainers(line)).toEqual([])
   })
 })

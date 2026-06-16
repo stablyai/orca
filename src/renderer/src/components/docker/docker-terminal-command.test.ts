@@ -40,9 +40,29 @@ describe('buildDockerTerminalCommand', () => {
     })
   })
 
-  it('omits the clear prefix when clearScreen is false', () => {
-    expect(buildDockerTerminalCommand(LOCAL, 'logs', 'abc', 'docker', false)).toEqual({
-      command: 'docker logs -f --tail 1000 abc',
+  it('uses cls for local/tcp terminals on Windows (cmd.exe rejects clear)', () => {
+    expect(buildDockerTerminalCommand(LOCAL, 'logs', 'abc', 'docker', 'win32')).toEqual({
+      command: 'cls && docker logs -f --tail 1000 abc',
+      connectionId: null
+    })
+  })
+
+  it('keeps clear for ssh terminals even on a Windows client (remote is POSIX)', () => {
+    expect(buildDockerTerminalCommand(SSH, 'shell', 'abc', 'docker', 'win32')).toEqual({
+      command: 'clear && docker exec -it abc sh',
+      connectionId: 'target-1'
+    })
+  })
+
+  it('adds --tlsverify for tls-enabled tcp connections', () => {
+    const tcpTls: DockerConnection = {
+      id: 't',
+      label: 'CI',
+      kind: 'tcp',
+      tcp: { host: '10.0.0.5', port: 2376, tls: true }
+    }
+    expect(buildDockerTerminalCommand(tcpTls, 'logs', 'abc')).toEqual({
+      command: 'clear && docker -H tcp://10.0.0.5:2376 --tlsverify logs -f --tail 1000 abc',
       connectionId: null
     })
   })

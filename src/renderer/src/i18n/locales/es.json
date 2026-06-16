@@ -11255,7 +11255,11 @@
           "618e10b649": "Ports",
           "3f56801f68": "Status",
           "8b405f5f30": "Terminal ({{value0}})",
-          "9624eeb3d3": "Environment variables"
+          "9624eeb3d3": "Environment variables",
+          "fc5533a07d": "Close terminal",
+          "a76923f400": "State",
+          "f30fa89199": "ID",
+          "fd2b310c03": "Compose"
         },
         "DockerContainerActions": {
           "174ec8f170": "Docker action failed",

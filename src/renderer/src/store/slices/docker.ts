@@ -178,7 +178,11 @@ export const createDockerSlice: StateCreator<AppState, [], [], DockerSlice> = (s
         resourcesError: null
       }))
     } catch (error) {
-      set({ resourcesError: String(error) })
+      // Only surface the error if this connection is still active, so a failure
+      // for a since-abandoned connection can't overwrite the current one's state.
+      if (get().activeConnectionId === connectionId) {
+        set({ resourcesError: String(error) })
+      }
     }
   },
 

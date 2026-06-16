@@ -34,7 +34,7 @@ describe('buildInvocation', () => {
       id: 'c1',
       label: 'CI',
       kind: 'tcp',
-      tcp: { host: '10.0.0.5', port: 2376, tls: {} }
+      tcp: { host: '10.0.0.5', port: 2376, tls: true }
     }
     expect(buildInvocation(conn, ARGS)).toEqual({
       file: EXPECTED_BINARY,

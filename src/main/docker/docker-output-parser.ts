@@ -60,8 +60,14 @@ export function parseDockerContainers(stdout: string): DockerContainerSummary[] 
     } catch {
       continue
     }
+    // Skip rows without a usable ID: the renderer keys/selects containers by id,
+    // so a blank id would collide across rows (duplicate React keys, ambiguous selection).
+    const id = typeof raw.ID === 'string' ? raw.ID.trim() : ''
+    if (id.length === 0) {
+      continue
+    }
     summaries.push({
-      id: typeof raw.ID === 'string' ? raw.ID : '',
+      id,
       names: splitNames(raw.Names),
       image: typeof raw.Image === 'string' ? raw.Image : '',
       state: normalizeState(raw.State),

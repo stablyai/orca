@@ -51,6 +51,7 @@ export default function DockerPage(): React.JSX.Element {
     networksByConnection,
     selectedResource,
     dockerConnectionError,
+    resourcesError,
     settings,
     inspectByContainerId,
     inspectErrorByContainerId,
@@ -69,6 +70,7 @@ export default function DockerPage(): React.JSX.Element {
       networksByConnection: s.networksByConnection,
       selectedResource: s.selectedResource,
       dockerConnectionError: s.dockerConnectionError,
+      resourcesError: s.resourcesError,
       settings: s.settings,
       inspectByContainerId: s.inspectByContainerId,
       inspectErrorByContainerId: s.inspectErrorByContainerId,
@@ -262,6 +264,11 @@ export default function DockerPage(): React.JSX.Element {
       {dockerConnectionError ? (
         <div className="border-b border-border bg-card px-3 py-2 text-xs text-destructive">
           {dockerConnectionError}
+        </div>
+      ) : null}
+      {resourcesError ? (
+        <div className="border-b border-border bg-card px-3 py-2 text-xs text-destructive">
+          {resourcesError}
         </div>
       ) : null}
       <div className="flex min-h-0 flex-1">

@@ -5,7 +5,9 @@ export type DockerConnectionKind = 'local' | 'ssh' | 'tcp'
 export type DockerTcpConfig = {
   host: string
   port: number
-  tls?: { caPath?: string; certPath?: string; keyPath?: string }
+  // A boolean flag (maps to DOCKER_TLS_VERIFY) rather than cert paths: no UI
+  // collects custom cert files, and the docker CLI reads them from ~/.docker.
+  tls?: boolean
 }
 
 export type DockerConnection = {

@@ -14,21 +14,22 @@ export function buildDockerTerminalCommand(
   kind: DockerTerminalKind,
   containerId: string,
   dockerBinary = 'docker',
-  clearScreen = true
+  platform: NodeJS.Platform = 'linux'
 ): { command: string; connectionId: string | null } {
   if (conn.kind === 'tcp' && !conn.tcp) {
     throw new Error('TCP Docker connection is missing host/port configuration')
   }
   const base =
     conn.kind === 'tcp' && conn.tcp
-      ? `${dockerBinary} -H tcp://${conn.tcp.host}:${conn.tcp.port}`
+      ? `${dockerBinary} -H tcp://${conn.tcp.host}:${conn.tcp.port}${conn.tcp.tls ? ' --tlsverify' : ''}`
       : dockerBinary
   const inner =
     kind === 'logs' ? `logs -f --tail 1000 ${containerId}` : `exec -it ${containerId} sh`
-  // clear is only emitted when the host shell supports it (POSIX/PowerShell); callers pass clearScreen:false on Windows.
-  const prefix = clearScreen ? 'clear && ' : ''
+  // The clear command runs in the host shell: cmd.exe/PowerShell on Windows
+  // reject `clear` (they use `cls`); SSH always reaches a remote POSIX shell.
+  const clear = conn.kind !== 'ssh' && platform === 'win32' ? 'cls' : 'clear'
   return {
-    command: `${prefix}${base} ${inner}`,
+    command: `${clear} && ${base} ${inner}`,
     connectionId: conn.kind === 'ssh' ? (conn.sshTargetId ?? null) : null
   }
 }

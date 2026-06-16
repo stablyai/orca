@@ -315,17 +315,21 @@ function TreeNodeHeader({
   onPrune?: (kind: DockerResourceKind) => void
 }): React.JSX.Element {
   const Chevron = collapsed ? ChevronRight : ChevronDown
+  // Why: a button nested inside another button is invalid HTML and causes flaky
+  // click behaviour. Toggle and prune are siblings inside a flex row container.
   return (
-    <button
-      type="button"
-      onClick={onToggle}
-      style={{ paddingLeft: `${depth * 16 + 8}px` }}
-      className="mt-1 flex w-full items-center gap-1 rounded-md py-1 pr-2 text-left transition-colors hover:bg-accent"
-    >
-      <Chevron className="size-3.5 shrink-0 text-muted-foreground" />
-      <span className="flex-1 text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
-        {label}
-      </span>
+    <div className="mt-1 flex w-full items-center gap-1 rounded-md pr-2 transition-colors hover:bg-accent">
+      <button
+        type="button"
+        onClick={onToggle}
+        style={{ paddingLeft: `${depth * 16 + 8}px` }}
+        className="flex flex-1 items-center gap-1 py-1 text-left"
+      >
+        <Chevron className="size-3.5 shrink-0 text-muted-foreground" />
+        <span className="flex-1 text-xs font-semibold uppercase tracking-[0.05em] text-muted-foreground">
+          {label}
+        </span>
+      </button>
       {pruneKind !== undefined && onPrune !== undefined && (
         <Button
           variant="ghost"
@@ -341,7 +345,7 @@ function TreeNodeHeader({
           <Eraser />
         </Button>
       )}
-    </button>
+    </div>
   )
 }
 

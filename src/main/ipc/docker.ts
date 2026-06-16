@@ -6,6 +6,7 @@ import {
   type DockerConnection,
   type DockerConnectionStatus,
   type DockerContainerAction,
+  type DockerContainerSummary,
   type DockerResourceKind,
   type DockerSshTargetRef
 } from '../../shared/docker-types'
@@ -67,7 +68,7 @@ function resolveSshTarget(conn: DockerConnection): DockerSshTargetRef | undefine
   return target ? { host: target.host, port: target.port, username: target.username } : undefined
 }
 
-function broadcastResources(connectionId: string, containers: unknown): void {
+function broadcastResources(connectionId: string, containers: DockerContainerSummary[]): void {
   const win = currentGetMainWindow?.()
   if (win && !win.isDestroyed()) {
     win.webContents.send('docker:resources-changed', { connectionId, containers })
