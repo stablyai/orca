@@ -30,7 +30,8 @@ const DOCKER_IPC_CHANNELS = [
   'docker:listVolumes',
   'docker:listNetworks',
   'docker:resourceRemove',
-  'docker:resourcePrune'
+  'docker:resourcePrune',
+  'docker:setPollingActive'
 ] as const
 const POLL_INTERVAL_MS = 3_000
 
@@ -40,6 +41,10 @@ let pollTimer: NodeJS.Timeout | null = null
 // Foundation tracks a single active connection; multi-connection polling is out of scope here.
 let activeConnectionId = LOCAL_DOCKER_CONNECTION.id
 let polling = false
+// Why: poller is gated on renderer visibility so we don't run `docker ps` every few
+// seconds while the Docker panel is hidden. The renderer signals active=true on mount
+// and active=false on unmount via docker:setPollingActive.
+let pollingActive = false
 
 function resolveConnection(store: Store, connectionId: string): DockerConnection {
   if (connectionId === LOCAL_DOCKER_CONNECTION.id) {
@@ -69,6 +74,22 @@ function broadcastResources(connectionId: string, containers: unknown): void {
   }
 }
 
+function startPolling(store: Store): void {
+  // Why: only arm the interval when both a reachable connection exists (tracked via
+  // activeConnectionId being set by pingConnection) and the panel has signalled active.
+  // Either condition alone is insufficient.
+  if (pollTimer === null && pollingActive) {
+    pollTimer = setInterval(() => void pollOnce(store), POLL_INTERVAL_MS)
+  }
+}
+
+function stopPolling(): void {
+  if (pollTimer !== null) {
+    clearInterval(pollTimer)
+    pollTimer = null
+  }
+}
+
 async function pollOnce(store: Store): Promise<void> {
   if (polling) {
     return // no-overlap guard: a slow remote `docker ps` must not stack
@@ -90,11 +111,9 @@ export function registerDockerHandlers(
   getMainWindow: () => BrowserWindow | null,
   getSshTarget: (id: string) => SshTarget | undefined
 ): void {
-  if (pollTimer !== null) {
-    clearInterval(pollTimer)
-    pollTimer = null
-  }
+  stopPolling()
   polling = false
+  pollingActive = false
 
   for (const channel of DOCKER_IPC_CHANNELS) {
     ipcMain.removeHandler(channel) // re-registration safety (mirrors ssh.ts)
@@ -159,6 +178,15 @@ export function registerDockerHandlers(
     }
   )
 
+  ipcMain.handle('docker:setPollingActive', async (_event, args: { active: boolean }) => {
+    pollingActive = args.active
+    if (pollingActive) {
+      startPolling(store)
+    } else {
+      stopPolling()
+    }
+  })
+
   ipcMain.handle(
     'docker:pingConnection',
     async (
@@ -169,12 +197,10 @@ export function registerDockerHandlers(
       try {
         await listContainers(conn, { sshTarget: resolveSshTarget(conn) })
         activeConnectionId = conn.id
-        if (pollTimer === null) {
-          // Start polling on the first reachable connection rather than at registration,
-          // so we don't run `docker ps` every few seconds while the panel is closed.
-          // The renderer always calls pingConnection before listing, so this always runs first.
-          pollTimer = setInterval(() => void pollOnce(store), POLL_INTERVAL_MS)
-        }
+        // Why: startPolling is a no-op unless pollingActive is true (set by
+        // docker:setPollingActive when the panel mounts). This prevents polling
+        // from running while the Docker panel is closed.
+        startPolling(store)
         return { status: 'reachable' }
       } catch (error) {
         const message = error instanceof DockerCommandError ? error.message : String(error)
@@ -186,12 +212,10 @@ export function registerDockerHandlers(
 
 /** Reset module-level state. Mirrors ssh.ts so tests and window recreation start clean. */
 export function resetDockerHandlerStateForTests(): void {
-  if (pollTimer !== null) {
-    clearInterval(pollTimer)
-    pollTimer = null
-  }
+  stopPolling()
   currentGetMainWindow = null
   getSshTargetById = null
   activeConnectionId = LOCAL_DOCKER_CONNECTION.id
   polling = false
+  pollingActive = false
 }

@@ -5,10 +5,19 @@ import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
 import { buildDockerConnectionList } from '@/store/slices/docker'
 import { Button } from '@/components/ui/button'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from '@/components/ui/select'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
-import { LOCAL_DOCKER_CONNECTION, LOCAL_DOCKER_CONNECTION_ID } from '../../../../shared/docker-types'
+import {
+  LOCAL_DOCKER_CONNECTION,
+  LOCAL_DOCKER_CONNECTION_ID
+} from '../../../../shared/docker-types'
 import type { DockerResourceKind } from '../../../../shared/docker-types'
 import { translate } from '@/i18n/i18n'
 import { DockerResourceTree } from './DockerResourceTree'
@@ -82,8 +91,15 @@ export default function DockerPage(): React.JSX.Element {
   const { width: treeWidth, isResizing, onResizeStart } = useDockerTreeResize()
 
   // Derive the selected container id from the unified resource selection.
-  const selectedContainerId =
-    selectedResource?.kind === 'container' ? selectedResource.id : null
+  const selectedContainerId = selectedResource?.kind === 'container' ? selectedResource.id : null
+
+  // Signal main to start polling while this panel is mounted, stop when it unmounts.
+  useEffect(() => {
+    void window.api.docker.setPollingActive({ active: true })
+    return () => {
+      void window.api.docker.setPollingActive({ active: false })
+    }
+  }, [])
 
   // Connect to the local daemon on first open and fetch all resources.
   useEffect(() => {
@@ -98,7 +114,9 @@ export default function DockerPage(): React.JSX.Element {
 
   // Trigger inspect whenever the selected container or active connection changes.
   useEffect(() => {
-    if (selectedContainerId) void inspectDockerContainer(selectedContainerId)
+    if (selectedContainerId) {
+      void inspectDockerContainer(selectedContainerId)
+    }
   }, [selectedContainerId, activeConnectionId, inspectDockerContainer])
 
   const containers = containersByConnection[activeConnectionId] ?? []
@@ -106,8 +124,9 @@ export default function DockerPage(): React.JSX.Element {
   const volumes = volumesByConnection[activeConnectionId] ?? []
   const networks = networksByConnection[activeConnectionId] ?? []
   const connection =
-    buildDockerConnectionList(settings?.dockerConnections).find((c) => c.id === activeConnectionId) ??
-    LOCAL_DOCKER_CONNECTION
+    buildDockerConnectionList(settings?.dockerConnections).find(
+      (c) => c.id === activeConnectionId
+    ) ?? LOCAL_DOCKER_CONNECTION
 
   function renderDetail(): React.JSX.Element {
     if (!selectedResource) {
@@ -127,8 +146,12 @@ export default function DockerPage(): React.JSX.Element {
           <DockerContainerDetail
             container={c}
             connection={connection}
-            inspect={selectedContainerId ? (inspectByContainerId[selectedContainerId] ?? null) : null}
-            inspectError={selectedContainerId ? (inspectErrorByContainerId[selectedContainerId] ?? null) : null}
+            inspect={
+              selectedContainerId ? (inspectByContainerId[selectedContainerId] ?? null) : null
+            }
+            inspectError={
+              selectedContainerId ? (inspectErrorByContainerId[selectedContainerId] ?? null) : null
+            }
           />
         )
       }
@@ -137,7 +160,12 @@ export default function DockerPage(): React.JSX.Element {
         return img ? (
           <DockerImageDetail image={img} />
         ) : (
-          <DockerContainerDetail container={null} connection={connection} inspect={null} inspectError={null} />
+          <DockerContainerDetail
+            container={null}
+            connection={connection}
+            inspect={null}
+            inspectError={null}
+          />
         )
       }
       case 'volume': {
@@ -145,7 +173,12 @@ export default function DockerPage(): React.JSX.Element {
         return vol ? (
           <DockerVolumeDetail volume={vol} />
         ) : (
-          <DockerContainerDetail container={null} connection={connection} inspect={null} inspectError={null} />
+          <DockerContainerDetail
+            container={null}
+            connection={connection}
+            inspect={null}
+            inspectError={null}
+          />
         )
       }
       case 'network': {
@@ -153,21 +186,27 @@ export default function DockerPage(): React.JSX.Element {
         return net ? (
           <DockerNetworkDetail network={net} />
         ) : (
-          <DockerContainerDetail container={null} connection={connection} inspect={null} inspectError={null} />
+          <DockerContainerDetail
+            container={null}
+            connection={connection}
+            inspect={null}
+            inspectError={null}
+          />
         )
       }
     }
   }
 
   const handlePruneConfirm = async (): Promise<void> => {
-    if (!pruneKind) return
+    if (!pruneKind) {
+      return
+    }
     try {
       await pruneDockerResources(pruneKind)
     } catch (error) {
-      toast.error(
-        translate('auto.components.docker.DockerPage.1225452538', 'Prune failed'),
-        { description: String(error) }
-      )
+      toast.error(translate('auto.components.docker.DockerPage.1225452538', 'Prune failed'), {
+        description: String(error)
+      })
       throw error // keep the confirm dialog open on failure
     }
   }
@@ -176,7 +215,10 @@ export default function DockerPage(): React.JSX.Element {
     <div className="flex h-full flex-col">
       <div className="flex items-center gap-2 border-b border-border px-3 py-2">
         <span className="text-sm font-medium">Docker</span>
-        <Select value={activeConnectionId} onValueChange={(id) => void setActiveDockerConnection(id)}>
+        <Select
+          value={activeConnectionId}
+          onValueChange={(id) => void setActiveDockerConnection(id)}
+        >
           <SelectTrigger size="sm" className="h-7 w-44">
             <SelectValue />
           </SelectTrigger>
@@ -212,7 +254,9 @@ export default function DockerPage(): React.JSX.Element {
               <RefreshCw />
             </Button>
           </TooltipTrigger>
-          <TooltipContent>{translate('auto.components.docker.DockerPage.3b170f8fdb', 'Refresh')}</TooltipContent>
+          <TooltipContent>
+            {translate('auto.components.docker.DockerPage.3b170f8fdb', 'Refresh')}
+          </TooltipContent>
         </Tooltip>
       </div>
       {dockerConnectionError ? (
@@ -245,20 +289,20 @@ export default function DockerPage(): React.JSX.Element {
             )}
           />
         </div>
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-          {renderDetail()}
-        </div>
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">{renderDetail()}</div>
       </div>
 
       {pruneKind !== null ? (
         <DockerConfirmDialog
           open={true}
-          onOpenChange={(open) => { if (!open) setPruneKind(null) }}
-          title={translate(
-            'auto.components.docker.DockerPage.916726d215',
-            'Prune {{value0}}',
-            { value0: kindLabel(pruneKind) }
-          )}
+          onOpenChange={(open) => {
+            if (!open) {
+              setPruneKind(null)
+            }
+          }}
+          title={translate('auto.components.docker.DockerPage.916726d215', 'Prune {{value0}}', {
+            value0: kindLabel(pruneKind)
+          })}
           description={translate(
             'auto.components.docker.DockerPage.79cedd713b',
             'Prune all stopped {{value0}} resources? This cannot be undone.',

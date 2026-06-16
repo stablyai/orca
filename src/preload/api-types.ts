@@ -2610,7 +2610,10 @@ export type PreloadApi = {
   }
   docker: {
     listContainers: (args: { connectionId: string }) => Promise<DockerContainerSummary[]>
-    inspect: (args: { connectionId: string; containerId: string }) => Promise<DockerContainerInspect>
+    inspect: (args: {
+      connectionId: string
+      containerId: string
+    }) => Promise<DockerContainerInspect>
     pingConnection: (args: {
       connectionId: string
     }) => Promise<{ status: DockerConnectionStatus; error?: string }>
@@ -2629,6 +2632,7 @@ export type PreloadApi = {
       id: string
     }) => Promise<void>
     resourcePrune: (args: { connectionId: string; kind: DockerResourceKind }) => Promise<void>
+    setPollingActive: (args: { active: boolean }) => Promise<void>
   }
   automations: {
     list: () => Promise<Automation[]>

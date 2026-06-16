@@ -3620,8 +3620,10 @@ const api = {
   docker: {
     listContainers: (args: { connectionId: string }): Promise<DockerContainerSummary[]> =>
       ipcRenderer.invoke('docker:listContainers', args),
-    inspect: (args: { connectionId: string; containerId: string }): Promise<DockerContainerInspect> =>
-      ipcRenderer.invoke('docker:inspect', args),
+    inspect: (args: {
+      connectionId: string
+      containerId: string
+    }): Promise<DockerContainerInspect> => ipcRenderer.invoke('docker:inspect', args),
     pingConnection: (args: {
       connectionId: string
     }): Promise<{ status: DockerConnectionStatus; error?: string }> =>
@@ -3649,7 +3651,9 @@ const api = {
       id: string
     }): Promise<void> => ipcRenderer.invoke('docker:resourceRemove', args),
     resourcePrune: (args: { connectionId: string; kind: DockerResourceKind }): Promise<void> =>
-      ipcRenderer.invoke('docker:resourcePrune', args)
+      ipcRenderer.invoke('docker:resourcePrune', args),
+    setPollingActive: (args: { active: boolean }): Promise<void> =>
+      ipcRenderer.invoke('docker:setPollingActive', args)
   },
 
   automations: {
