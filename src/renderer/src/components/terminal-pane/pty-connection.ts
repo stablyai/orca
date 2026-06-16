@@ -56,10 +56,7 @@ import type { ScrollState } from '@/lib/pane-manager/pane-manager-types'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { createTerminalCommandLifecycle } from './terminal-command-lifecycle'
 import { e2eConfig } from '@/lib/e2e-config'
-import type {
-  AgentStatusEntry,
-  ParsedAgentStatusPayload
-} from '../../../../shared/agent-status-types'
+import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import { isWebTerminalSurfaceTabId } from '@/runtime/web-terminal-surface-id'
 import {
   createAgentInterruptInference,
@@ -71,6 +68,7 @@ import {
   type AgentInterruptInputIntent
 } from '../../../../shared/agent-interrupt-intent'
 import { createAgentCompletionCoordinator } from './agent-completion-coordinator'
+import type { AgentCompletionStatusSnapshot } from './agent-completion-coordinator-types'
 import {
   markTerminalBracketedPasteInterrupted,
   observeTerminalBracketedPasteModeOutput,
@@ -1455,7 +1453,7 @@ export function connectPanePty(
     title: string,
     options: {
       allowDoneDetailAfterGrace?: boolean
-      agentStatusSnapshot?: ParsedAgentStatusPayload
+      agentStatusSnapshot?: AgentCompletionStatusSnapshot
     } = {}
   ): void => {
     if (!syncAgentTaskCompleteTrackingEnabled()) {
@@ -1678,7 +1676,12 @@ export function connectPanePty(
             const title = currentState.runtimePaneTitlesByTabId?.[deps.tabId]?.[pane.id]
             currentState.setAgentStatus(cacheKey, payload, title)
             if (syncAgentTaskCompleteTrackingEnabled()) {
-              agentCompletionCoordinator.observeHookStatus(payload)
+              const storedStatus = useAppStore.getState().agentStatusByPaneKey[cacheKey]
+              const notificationPayload =
+                typeof storedStatus?.stateStartedAt === 'number'
+                  ? { ...payload, stateStartedAt: storedStatus.stateStartedAt }
+                  : payload
+              agentCompletionCoordinator.observeHookStatus(notificationPayload)
             }
             if (payload.state === 'working' && pendingTerminalBellNotification) {
               scheduleTerminalBellNotification()

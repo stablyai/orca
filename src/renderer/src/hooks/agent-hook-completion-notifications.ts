@@ -1,8 +1,10 @@
 import { useAppStore } from '@/store'
-import type { ParsedAgentStatusPayload } from '../../../shared/agent-status-types'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
 import { createAgentCompletionCoordinator } from '@/components/terminal-pane/agent-completion-coordinator'
-import type { AgentCompletionCoordinator } from '@/components/terminal-pane/agent-completion-coordinator-types'
+import type {
+  AgentCompletionCoordinator,
+  AgentCompletionStatusSnapshot
+} from '@/components/terminal-pane/agent-completion-coordinator-types'
 import type { RuntimeTerminalProcessInspection } from '@/runtime/runtime-terminal-inspection'
 import { dispatchTerminalNotification } from '@/components/terminal-pane/use-notification-dispatch'
 import { collectLeafIdsInOrder } from '@/components/terminal-pane/layout-serialization'
@@ -168,7 +170,7 @@ export function observeAgentHookCompletionForNotification({
 }: {
   paneKey: string
   worktreeId: string
-  payload: ParsedAgentStatusPayload
+  payload: AgentCompletionStatusSnapshot
 }): void {
   pruneClosedPaneCoordinators()
   if (!paneCanReceiveHookCompletion(paneKey)) {

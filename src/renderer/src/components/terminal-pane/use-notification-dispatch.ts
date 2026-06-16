@@ -4,10 +4,11 @@ import { getRepoMapFromState, getWorktreeMapFromState } from '@/store/selectors'
 import { playDesktopNotificationSound } from '@/lib/desktop-notification-sound'
 import { isExplicitAgentStatusFresh } from '@/lib/agent-status'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status-types'
-import type { ParsedAgentStatusPayload } from '../../../../shared/agent-status-types'
 import { buildAgentNotificationId } from '../../../../shared/agent-notification-id'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
 import type { TerminalPaneLayoutNode } from '../../../../shared/types'
+import { isSupersededAgentCompletionSnapshot } from './agent-completion-snapshot-staleness'
+import type { AgentCompletionStatusSnapshot } from './agent-completion-coordinator-types'
 import {
   isOrcaWindowForegroundFocused,
   isVisibleForegroundPaneKey
@@ -21,7 +22,7 @@ export type TerminalNotificationEvent = {
   source: 'terminal-bell' | 'agent-task-complete'
   terminalTitle?: string
   paneKey?: string
-  agentStatusSnapshot?: ParsedAgentStatusPayload
+  agentStatusSnapshot?: AgentCompletionStatusSnapshot
   suppressOsNotification?: boolean
 }
 
@@ -251,6 +252,14 @@ export function dispatchTerminalNotification(
     event.source === 'agent-task-complete'
       ? (event.agentStatusSnapshot ?? freshStoredAgentStatus)
       : undefined
+  if (
+    event.source === 'agent-task-complete' &&
+    isSupersededAgentCompletionSnapshot(storedAgentStatus, event.agentStatusSnapshot)
+  ) {
+    return
+  }
+  const agentNotificationStateStartedAt =
+    freshStoredAgentStatus?.stateStartedAt ?? event.agentStatusSnapshot?.stateStartedAt
   // Why: main-process hook IPC can update inactive/unmounted worktrees before
   // the renderer's live-PTY map catches up. A fresh accepted hook snapshot is
   // authoritative for agent completion; title/BEL-only paths still need PTY liveness.
@@ -336,7 +345,10 @@ export function dispatchTerminalNotification(
       ? buildAgentNotificationId({
           worktreeId,
           paneKey: event.paneKey,
-          stateStartedAt: freshStoredAgentStatus?.stateStartedAt
+          // Why: delayed hook completions may dispatch after PTY teardown has
+          // removed the live row; carry the hook timing so the OS notification
+          // still has the same dismissible id as the unread agent event.
+          stateStartedAt: agentNotificationStateStartedAt
         })
       : null
 

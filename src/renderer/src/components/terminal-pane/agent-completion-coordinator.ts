@@ -12,7 +12,8 @@ import {
 } from './agent-process-inspection-queue'
 import type {
   AgentCompletionCoordinator,
-  AgentCompletionCoordinatorOptions
+  AgentCompletionCoordinatorOptions,
+  AgentCompletionStatusSnapshot
 } from './agent-completion-coordinator-types'
 import type { RuntimeTerminalProcessInspection } from '@/runtime/runtime-terminal-inspection'
 import {
@@ -54,7 +55,7 @@ export function createAgentCompletionCoordinator(
   let pendingTitleTimer: ReturnType<typeof setTimeout> | null = null
   let pendingHookDoneTimer: ReturnType<typeof setTimeout> | null = null
   let pendingHookDoneTitle: string | null = null
-  let pendingHookDonePayload: ParsedAgentStatusPayload | null = null
+  let pendingHookDonePayload: AgentCompletionStatusSnapshot | null = null
   let pendingTitleSequence = 0
   let pendingTitle: {
     id: number
@@ -119,7 +120,7 @@ export function createAgentCompletionCoordinator(
   function dispatchCompletion(
     source: CompletionSource,
     title: string,
-    optionsOverride: { quietedHookDone?: boolean; agentStatus?: ParsedAgentStatusPayload } = {}
+    optionsOverride: { quietedHookDone?: boolean; agentStatus?: AgentCompletionStatusSnapshot } = {}
   ): void {
     if (source !== 'hook' && pendingHookDoneTimer !== null) {
       return
@@ -151,7 +152,7 @@ export function createAgentCompletionCoordinator(
     }
   }
 
-  function scheduleHookDoneCompletion(title: string, payload: ParsedAgentStatusPayload): void {
+  function scheduleHookDoneCompletion(title: string, payload: AgentCompletionStatusSnapshot): void {
     pendingHookDoneTitle = title
     pendingHookDonePayload = payload
     if (pendingHookDoneTimer !== null) {
@@ -442,7 +443,7 @@ export function createAgentCompletionCoordinator(
     }
   }
 
-  function observeHookStatus(payload: ParsedAgentStatusPayload): void {
+  function observeHookStatus(payload: AgentCompletionStatusSnapshot): void {
     if (isRecognizedAgentType(payload.agentType)) {
       establishAgentEvidence()
     }

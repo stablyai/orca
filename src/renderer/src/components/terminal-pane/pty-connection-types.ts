@@ -1,6 +1,6 @@
 import type { PtyTransport } from './pty-transport'
 import type { ReplayingPanesRef } from './replay-guard'
-import type { ParsedAgentStatusPayload } from '../../../../shared/agent-status-types'
+import type { AgentCompletionStatusSnapshot } from './agent-completion-coordinator-types'
 import type { EventProps } from '../../../../shared/telemetry-events'
 import type { TerminalColorSchemeMode } from '../../../../shared/terminal-color-scheme-protocol'
 import type { TuiAgent } from '../../../../shared/types'
@@ -51,7 +51,7 @@ export type PtyConnectionDeps = {
     source: 'terminal-bell' | 'agent-task-complete'
     terminalTitle?: string
     paneKey?: string
-    agentStatusSnapshot?: ParsedAgentStatusPayload
+    agentStatusSnapshot?: AgentCompletionStatusSnapshot
     suppressOsNotification?: boolean
   }) => void
   setCacheTimerStartedAt: (key: string, ts: number | null) => void

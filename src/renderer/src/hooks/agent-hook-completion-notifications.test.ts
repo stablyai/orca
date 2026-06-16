@@ -266,6 +266,35 @@ describe('agent hook completion notifications', () => {
     )
   })
 
+  it('carries hook stateStartedAt into delayed completion notifications', async () => {
+    const { observeAgentHookCompletionForNotification } =
+      await import('./agent-hook-completion-notifications')
+
+    observeAgentHookCompletionForNotification({
+      paneKey,
+      worktreeId: 'wt-1',
+      payload: { ...hookStatus('working'), stateStartedAt: 1_700_000_000_000 }
+    })
+    observeAgentHookCompletionForNotification({
+      paneKey,
+      worktreeId: 'wt-1',
+      payload: { ...hookStatus('done'), stateStartedAt: 1_700_000_010_000 }
+    })
+    vi.advanceTimersByTime(HOOK_DONE_QUIET_MS)
+
+    expect(dispatchTerminalNotification).toHaveBeenCalledWith(
+      'wt-1',
+      expect.objectContaining({
+        source: 'agent-task-complete',
+        paneKey,
+        agentStatusSnapshot: expect.objectContaining({
+          state: 'done',
+          stateStartedAt: 1_700_000_010_000
+        })
+      })
+    )
+  })
+
   it('prunes retained coordinators when pane liveness is removed from the store', async () => {
     const {
       _getAgentHookCompletionNotificationCoordinatorCountForTest,
