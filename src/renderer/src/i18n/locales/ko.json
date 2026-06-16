@@ -591,7 +591,9 @@
         "b1c2f8b0ac": "Claude, Codex, Gemini 및 OpenCode Go에 대한 선택적 계정 전환.",
         "f70ac54d38": "AI 제공업체 계정",
         "4121f7a0a2": "AI agents를 관리하고, 기본값을 설정하고, 명령을 사용자 정의하세요.",
-        "b49abbd2f7": "Agents"
+        "b49abbd2f7": "Agents",
+        "74fc6a63c9": "Docker",
+        "698dc92726": "Connect to local, SSH, or TCP Docker daemons."
       }
     },
     "components": {
@@ -5642,7 +5644,9 @@
           "9abb9be3bc": "설정 시작",
           "23c6874fdf": "AI 기능",
           "2309068a6f": "파괴적인",
-          "65358016ea": "버리기"
+          "65358016ea": "버리기",
+          "e82812f3fa": "Docker",
+          "ee7cd032da": "Connect to local, SSH, or TCP Docker daemons."
         },
         "SettingsFormControls": {
           "42a4d15a30": "일치하는 글꼴이 없습니다.",
@@ -7947,6 +7951,34 @@
           "ask": "묻기",
           "safeAuto": "안전 자동",
           "off": "끄기"
+        },
+        "DockerPane": {
+          "5376fcfd12": "Docker connections",
+          "06c5aa419f": "Add connections to remote Docker daemons via SSH or TCP. The built-in Local connection is always available and cannot be removed.",
+          "9057b5e881": "Add connection",
+          "62a42ba95e": "No connections configured.",
+          "137bb072b2": "Edit",
+          "18953f5560": "Remove",
+          "5df5b4a07f": "Editing connection",
+          "c6b030f1bd": "Label",
+          "828891863d": "Kind",
+          "629de6fba3": "ssh",
+          "25b3c0539d": "tcp",
+          "2b71443426": "SSH host",
+          "b31014c60f": "No SSH targets configured. Add one in Remote Hosts first.",
+          "cea67e3330": "Host",
+          "0b65603482": "Port",
+          "64ae773bd2": "Save",
+          "ab331bd060": "Cancel",
+          "7b01b87358": "Remove Docker connection",
+          "a09ce2c718": "This will remove the connection \"{{value0}}\".",
+          "78a9fd8cf7": "Remove connection"
+        },
+        "docker": {
+          "search": {
+            "633b31f94b": "Docker Connections",
+            "2230311be7": "Manage Docker daemons."
+          }
         }
       },
       "right": {
