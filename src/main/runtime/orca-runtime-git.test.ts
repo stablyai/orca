@@ -11,6 +11,8 @@ import { RuntimeGitCommands, type ResolvedRuntimeGitWorktree } from './orca-runt
 const mocks = vi.hoisted(() => ({
   abortMerge: vi.fn(),
   abortRebase: vi.fn(),
+  checkoutBranch: vi.fn(),
+  listLocalBranches: vi.fn(),
   getStagedCommitContext: vi.fn(),
   getPullRequestDraftContext: vi.fn(),
   generateCommitMessageFromContext: vi.fn(),
@@ -24,6 +26,11 @@ vi.mock('../git/status', async () => ({
   abortMerge: mocks.abortMerge,
   abortRebase: mocks.abortRebase,
   getStagedCommitContext: mocks.getStagedCommitContext
+}))
+
+vi.mock('../git/checkout', () => ({
+  checkoutBranch: mocks.checkoutBranch,
+  listLocalBranches: mocks.listLocalBranches
 }))
 
 vi.mock('../text-generation/commit-message-text-generation', async () => ({
@@ -80,6 +87,8 @@ describe('RuntimeGitCommands', () => {
     mocks.generatePullRequestFieldsFromContext.mockReset()
     mocks.resolveCommitMessageSettings.mockReset()
     mocks.getSshGitProvider.mockReset()
+    mocks.checkoutBranch.mockReset()
+    mocks.listLocalBranches.mockReset()
   })
 
   afterEach(() => {
@@ -142,6 +151,76 @@ describe('RuntimeGitCommands', () => {
 
     expect(provider.abortRebase).toHaveBeenCalledWith('/remote/repo')
     expect(mocks.abortRebase).not.toHaveBeenCalled()
+  })
+
+  it('checks out a local branch through the resolved worktree', async () => {
+    const worktreePath = mkdtempSync(join(tmpdir(), 'orca-runtime-git-'))
+    tempDirs.push(worktreePath)
+    const commands = makeCommands(worktreePath)
+    mocks.checkoutBranch.mockResolvedValue(undefined)
+
+    await expect(commands.checkoutRuntimeGitBranch('id:wt-1', 'feature/x')).resolves.toEqual({
+      ok: true,
+      branch: 'feature/x'
+    })
+
+    expect(mocks.checkoutBranch).toHaveBeenCalledWith(worktreePath, 'feature/x')
+  })
+
+  it('checks out a remote branch through the SSH git provider', async () => {
+    const provider = { checkoutBranch: vi.fn().mockResolvedValue(undefined) }
+    mocks.getSshGitProvider.mockReturnValue(provider)
+    const commands = new RuntimeGitCommands({
+      resolveRuntimeGitTarget: async () => ({
+        worktree: makeWorktree('/remote/repo'),
+        connectionId: 'conn-1'
+      }),
+      getRuntimeSettings: () => ({}) as GlobalSettings
+    })
+
+    await expect(commands.checkoutRuntimeGitBranch('id:wt-1', 'feature/x')).resolves.toEqual({
+      ok: true,
+      branch: 'feature/x'
+    })
+
+    expect(provider.checkoutBranch).toHaveBeenCalledWith('/remote/repo', 'feature/x')
+    expect(mocks.checkoutBranch).not.toHaveBeenCalled()
+  })
+
+  it('lists local branches through the resolved worktree', async () => {
+    const worktreePath = mkdtempSync(join(tmpdir(), 'orca-runtime-git-'))
+    tempDirs.push(worktreePath)
+    const commands = makeCommands(worktreePath)
+    mocks.listLocalBranches.mockResolvedValue({ current: 'main', branches: ['main', 'feature/x'] })
+
+    await expect(commands.listRuntimeGitLocalBranches('id:wt-1')).resolves.toEqual({
+      current: 'main',
+      branches: ['main', 'feature/x']
+    })
+
+    expect(mocks.listLocalBranches).toHaveBeenCalledWith(worktreePath)
+  })
+
+  it('lists remote local branches through the SSH git provider', async () => {
+    const provider = {
+      listLocalBranches: vi.fn().mockResolvedValue({ current: 'main', branches: ['main'] })
+    }
+    mocks.getSshGitProvider.mockReturnValue(provider)
+    const commands = new RuntimeGitCommands({
+      resolveRuntimeGitTarget: async () => ({
+        worktree: makeWorktree('/remote/repo'),
+        connectionId: 'conn-1'
+      }),
+      getRuntimeSettings: () => ({}) as GlobalSettings
+    })
+
+    await expect(commands.listRuntimeGitLocalBranches('id:wt-1')).resolves.toEqual({
+      current: 'main',
+      branches: ['main']
+    })
+
+    expect(provider.listLocalBranches).toHaveBeenCalledWith('/remote/repo')
+    expect(mocks.listLocalBranches).not.toHaveBeenCalled()
   })
 
   it('rejects slash-only git mutation paths before they can target the worktree root', async () => {

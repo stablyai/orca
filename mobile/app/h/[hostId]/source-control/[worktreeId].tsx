@@ -14,27 +14,48 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import {
-  ChevronLeft,
   ArrowDown,
   ArrowDownUp,
   ArrowUp,
   Check,
+  ChevronLeft,
   CloudUpload,
   FileText,
   GitBranch,
   GitPullRequest,
+  History,
   Minus,
   MoreHorizontal,
   Plus,
   RefreshCw,
+  Sparkles,
   Trash2,
-  X
+  X,
+  type LucideIcon
 } from 'lucide-react-native'
+import type { MobileSourceControlActionIcon } from '../../../../src/source-control/mobile-source-control-actions'
 import { useHostClient, useForceReconnect } from '../../../../src/transport/client-context'
 import { getWorktreeLabel } from '../../../../src/session/worktree-label'
 import type { RpcSuccess } from '../../../../src/transport/types'
 import { MobileSourceControlReviewEntry } from '../../../../src/source-control/mobile-source-control-review-entry'
 import { resolveMobileBranchCompareBaseRef } from '../../../../src/source-control/mobile-branch-base-ref'
+import {
+  cancelMobileCommitMessage,
+  requestMobileCommitMessage
+} from '../../../../src/source-control/mobile-commit-message-ai'
+import { buildMobileSourceControlActions } from '../../../../src/source-control/mobile-source-control-actions'
+import {
+  MobilePrComposeSheet,
+  openMobilePrUrl
+} from '../../../../src/components/MobilePrComposeSheet'
+import {
+  resolveMobilePrPrefill,
+  type MobilePrPrefill
+} from '../../../../src/source-control/mobile-pr-create'
+import { PickerModal } from '../../../../src/components/PickerModal'
+import type { RuntimeGitLocalBranches } from '../../../../../src/shared/runtime-types'
+
+type MobileGitLocalBranches = RuntimeGitLocalBranches
 import {
   ActionSheetModal,
   type ActionSheetAction
@@ -142,6 +163,19 @@ type GitDiffTextResult = {
 }
 
 const KEYBOARD_COMMIT_BAR_CLEARANCE = 10
+
+const SOURCE_CONTROL_ACTION_ICONS: Record<MobileSourceControlActionIcon, LucideIcon> = {
+  commit: Check,
+  push: ArrowUp,
+  pull: ArrowDown,
+  sync: ArrowDownUp,
+  fetch: RefreshCw,
+  publish: CloudUpload,
+  rebase: GitBranch,
+  pr: GitPullRequest,
+  branch: GitBranch,
+  history: History
+}
 const SELECTOR_RETRY_COUNT = 3
 const SELECTOR_RETRY_DELAY_MS = 250
 
@@ -201,6 +235,12 @@ export default function MobileSourceControlScreen() {
   )
   const [busyAction, setBusyAction] = useState<string | null>(null)
   const [commitMessage, setCommitMessage] = useState('')
+  const [generatingMessage, setGeneratingMessage] = useState(false)
+  const [showPrSheet, setShowPrSheet] = useState(false)
+  const [showBranchPicker, setShowBranchPicker] = useState(false)
+  const [localBranches, setLocalBranches] = useState<MobileGitLocalBranches | null>(null)
+  const [createdPrUrl, setCreatedPrUrl] = useState<string | null>(null)
+  const [prPrefill, setPrPrefill] = useState<MobilePrPrefill | null>(null)
   const [discardTarget, setDiscardTarget] = useState<MobileGitStatusEntry | null>(null)
   const [showActionSheet, setShowActionSheet] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
@@ -637,6 +677,109 @@ export default function MobileSourceControlScreen() {
     )
   }, [commitMessage, runGitWorkflow, sendCommitRequest])
 
+  // AI-generate a commit message from the staged diff. Matches desktop: the
+  // button is always available; a missing model surfaces as a toast.
+  const generateCommitMessage = useCallback(async () => {
+    if (!client || generatingMessage || busyActionRef.current) {
+      return
+    }
+    setGeneratingMessage(true)
+    setActionError(null)
+    try {
+      const result = await requestMobileCommitMessage(client, worktreeId)
+      if (!mountedRef.current) {
+        return
+      }
+      if (result.success) {
+        setCommitMessage(result.message)
+        triggerSuccess()
+      } else if (!result.canceled) {
+        triggerError()
+        setActionError(result.error)
+      }
+    } finally {
+      if (mountedRef.current) {
+        setGeneratingMessage(false)
+      }
+    }
+  }, [client, generatingMessage, worktreeId])
+
+  const cancelGenerateCommitMessage = useCallback(() => {
+    if (client) {
+      void cancelMobileCommitMessage(client, worktreeId)
+    }
+  }, [client, worktreeId])
+
+  const openPrSheet = useCallback(
+    async (pushFirst: boolean) => {
+      setShowActionSheet(false)
+      if (pushFirst) {
+        const pushed = await runGitWorkflow('push-create-pr', async () => {
+          await sendGitRequest<unknown>('git.push')
+        })
+        if (!pushed || !mountedRef.current) {
+          return
+        }
+      }
+      const up = status?.upstreamStatus
+      const prefill: MobilePrPrefill = client
+        ? await resolveMobilePrPrefill(client, worktreeId, {
+            branch: status?.branch,
+            title: branchLabel,
+            hasUncommittedChanges: (status?.entries?.length ?? 0) > 0,
+            hasUpstream: up?.hasUpstream === true,
+            ahead: up?.ahead ?? 0,
+            behind: up?.behind ?? 0
+          })
+        : { provider: 'github', base: 'main', title: branchLabel, body: '' }
+      if (!mountedRef.current) {
+        return
+      }
+      setPrPrefill(prefill)
+      setShowPrSheet(true)
+    },
+    [branchLabel, client, runGitWorkflow, sendGitRequest, status, worktreeId]
+  )
+
+  const openBranchPicker = useCallback(() => {
+    setShowActionSheet(false)
+    setLocalBranches(null)
+    setShowBranchPicker(true)
+    if (client) {
+      void sendGitRequest<MobileGitLocalBranches>('git.localBranches')
+        .then((result) => {
+          if (mountedRef.current) {
+            setLocalBranches(result)
+          }
+        })
+        .catch(() => {
+          if (mountedRef.current) {
+            setLocalBranches({ current: null, branches: [] })
+          }
+        })
+    }
+  }, [client, sendGitRequest])
+
+  const openHistory = useCallback(() => {
+    setShowActionSheet(false)
+    if (hostId && worktreeId) {
+      router.push(
+        `/h/${hostId}/history/${encodeURIComponent(worktreeId)}` as Parameters<
+          typeof router.push
+        >[0]
+      )
+    }
+  }, [hostId, router, worktreeId])
+
+  // Switch to a local branch, then reload status.
+  const checkoutBranch = useCallback(
+    async (branch: string) => {
+      setShowBranchPicker(false)
+      await runGitAction('checkout', 'git.checkout', { branch })
+    },
+    [runGitAction]
+  )
+
   const runCommitFollowUps = useCallback(
     async (actionId: string, afterCommit: () => Promise<void>) => {
       const message = commitMessage.trim()
@@ -743,6 +886,33 @@ export default function MobileSourceControlScreen() {
     await runGitSync('sync')
     setShowActionSheet(false)
   }, [runGitSync])
+
+  const runActionSheetRebase = useCallback(async () => {
+    await runGitWorkflow('rebase', async () => {
+      if (!client) {
+        throw new Error('Waiting for desktop...')
+      }
+      const baseRef = await resolveMobileBranchCompareBaseRef(client, worktreeId)
+      if (!baseRef) {
+        throw new Error('No base branch to rebase onto')
+      }
+      await sendGitRequest<unknown>('git.rebaseFromBase', { baseRef })
+    })
+    setShowActionSheet(false)
+  }, [client, runGitWorkflow, sendGitRequest, worktreeId])
+
+  // Abort an in-progress merge/rebase from the conflict banner.
+  const abortConflictOperation = useCallback(
+    async (operation: string) => {
+      const method =
+        operation === 'merge' ? 'git.abortMerge' : operation === 'rebase' ? 'git.abortRebase' : null
+      if (!method) {
+        return
+      }
+      await runGitAction(`abort-${operation}`, method, {})
+    },
+    [runGitAction]
+  )
 
   const openFile = useCallback(
     async (entry: MobileGitStatusEntry) => {
@@ -888,144 +1058,58 @@ export default function MobileSourceControlScreen() {
     [branchCompareState, client, connState, worktreeId]
   )
 
-  const actionSheetActions = useMemo<ActionSheetAction[]>(() => {
-    const hasMessage = commitMessage.trim().length > 0
-    const hasStaged = stagedCount > 0
-    const hasUpstream = upstream?.hasUpstream === true
-    const ahead = upstream?.ahead ?? 0
-    const behind = upstream?.behind ?? 0
-    const busy = busyAction !== null || openingPath !== null || openingBranchPath !== null
-    const commitHint = !hasStaged
-      ? 'Stage at least one file'
-      : !hasMessage
-        ? 'Enter a commit message'
-        : undefined
-    const remoteHint = !upstreamKnown
-      ? 'Checking branch status...'
-      : hasUpstream
-        ? undefined
-        : 'Publish Branch first'
-    const createPrHint = 'Pull requests are not available on mobile yet'
-
-    return [
-      {
-        label: 'Commit',
-        icon: Check,
-        disabled: busy || !!commitHint,
-        hint: commitHint,
-        loading: busyAction === 'commit',
-        skipAutoClose: true,
-        onPress: () => void runActionSheetCommit()
-      },
-      {
-        label: 'Commit & Push',
-        icon: ArrowUp,
-        disabled: busy || !!commitHint || !upstreamKnown || !hasUpstream,
-        hint: commitHint ?? remoteHint,
-        loading: busyAction === 'commit-push',
-        skipAutoClose: true,
-        onPress: () => void runActionSheetCommitSequence('commit-push', [{ method: 'git.push' }])
-      },
-      {
-        label: 'Commit & Sync',
-        icon: ArrowDownUp,
-        disabled: busy || !!commitHint || !upstreamKnown || !hasUpstream || behind === 0,
-        hint:
-          commitHint ??
-          (!upstreamKnown || !hasUpstream
-            ? remoteHint
-            : behind === 0
-              ? 'Nothing to pull'
-              : undefined),
-        loading: busyAction === 'commit-sync',
-        skipAutoClose: true,
-        onPress: () => void runActionSheetCommitSync()
-      },
-      {
-        label: ahead > 0 ? `Push (${ahead})` : 'Push',
-        icon: ArrowUp,
-        disabled: busy || !upstreamKnown || !hasUpstream || ahead === 0,
-        hint: !hasUpstream ? remoteHint : ahead === 0 ? 'Nothing to push' : undefined,
-        loading: busyAction === 'push',
-        skipAutoClose: true,
-        onPress: () => void runActionSheetGitSequence('push', [{ method: 'git.push' }])
-      },
-      {
-        label: 'Create PR',
-        icon: GitPullRequest,
-        disabled: true,
-        hint: createPrHint,
-        onPress: () => {}
-      },
-      {
-        label: 'Push & Create PR',
-        icon: GitPullRequest,
-        disabled: true,
-        hint: createPrHint,
-        onPress: () => {}
-      },
-      {
-        label: behind > 0 ? `Pull (${behind})` : 'Pull',
-        icon: ArrowDown,
-        disabled: busy || !upstreamKnown || !hasUpstream || behind === 0,
-        hint: !hasUpstream ? remoteHint : behind === 0 ? 'Nothing to pull' : undefined,
-        loading: busyAction === 'pull',
-        skipAutoClose: true,
-        onPress: () => void runActionSheetGitSequence('pull', [{ method: 'git.pull' }])
-      },
-      {
-        label: ahead > 0 || behind > 0 ? `Sync (↓${behind} ↑${ahead})` : 'Sync',
-        icon: ArrowDownUp,
-        disabled: busy || !upstreamKnown || !hasUpstream || (ahead === 0 && behind === 0),
-        hint:
-          !upstreamKnown || !hasUpstream
-            ? remoteHint
-            : ahead === 0 && behind === 0
-              ? 'Branch is up to date'
-              : undefined,
-        loading: busyAction === 'sync',
-        skipAutoClose: true,
-        onPress: () => void runActionSheetGitSync()
-      },
-      {
-        label: 'Fetch',
-        icon: RefreshCw,
-        disabled: busy,
-        loading: busyAction === 'fetch',
-        skipAutoClose: true,
-        onPress: () => void runActionSheetGitSequence('fetch', [{ method: 'git.fetch' }])
-      },
-      {
-        label: 'Publish Branch',
-        icon: CloudUpload,
-        disabled: busy || !upstreamKnown || hasUpstream,
-        hint: !upstreamKnown
-          ? 'Checking branch status...'
-          : hasUpstream
-            ? 'Branch is already published'
-            : undefined,
-        loading: busyAction === 'publish',
-        skipAutoClose: true,
-        onPress: () =>
-          void runActionSheetGitSequence('publish', [
-            { method: 'git.push', params: { publish: true } }
-          ])
-      }
+  const actionSheetActions = useMemo<ActionSheetAction[]>(
+    () =>
+      buildMobileSourceControlActions({
+        commitMessage,
+        stagedCount,
+        upstream: upstream ?? null,
+        upstreamKnown,
+        busyAction,
+        openingPath,
+        openingBranchPath,
+        prAvailable: upstreamKnown && upstream?.hasUpstream === true,
+        handlers: {
+          commit: () => void runActionSheetCommit(),
+          commitPush: () =>
+            void runActionSheetCommitSequence('commit-push', [{ method: 'git.push' }]),
+          commitSync: () => void runActionSheetCommitSync(),
+          push: () => void runActionSheetGitSequence('push', [{ method: 'git.push' }]),
+          pull: () => void runActionSheetGitSequence('pull', [{ method: 'git.pull' }]),
+          sync: () => void runActionSheetGitSync(),
+          fetch: () => void runActionSheetGitSequence('fetch', [{ method: 'git.fetch' }]),
+          publish: () =>
+            void runActionSheetGitSequence('publish', [
+              { method: 'git.push', params: { publish: true } }
+            ]),
+          fastForward: () =>
+            void runActionSheetGitSequence('fast-forward', [{ method: 'git.fastForward' }]),
+          rebase: () => void runActionSheetRebase(),
+          createPr: () => void openPrSheet(false),
+          pushAndCreatePr: () => void openPrSheet(true),
+          checkout: () => void openBranchPicker(),
+          history: () => void openHistory()
+        }
+      }).map((action) => ({ ...action, icon: SOURCE_CONTROL_ACTION_ICONS[action.iconKey] })),
+    [
+      busyAction,
+      commitMessage,
+      openBranchPicker,
+      openHistory,
+      openingBranchPath,
+      openingPath,
+      openPrSheet,
+      runActionSheetCommit,
+      runActionSheetCommitSequence,
+      runActionSheetCommitSync,
+      runActionSheetGitSequence,
+      runActionSheetGitSync,
+      runActionSheetRebase,
+      stagedCount,
+      upstream,
+      upstreamKnown
     ]
-  }, [
-    busyAction,
-    commitMessage,
-    openingBranchPath,
-    openingPath,
-    runActionSheetCommit,
-    runActionSheetCommitSequence,
-    runActionSheetCommitSync,
-    runActionSheetGitSequence,
-    runActionSheetGitSync,
-    stagedCount,
-    upstream,
-    upstreamKnown
-  ])
+  )
 
   const renderItem = useCallback<
     SectionListRenderItem<
@@ -1412,7 +1496,23 @@ export default function MobileSourceControlScreen() {
                 <Text style={styles.countText}>{branchEntries.length} on branch</Text>
               ) : null}
               {status && status.conflictOperation !== 'unknown' ? (
-                <Text style={styles.conflictText}>{status.conflictOperation}</Text>
+                <View style={styles.conflictRow}>
+                  <Text style={styles.conflictText}>{status.conflictOperation}</Text>
+                  {(status.conflictOperation === 'merge' ||
+                    status.conflictOperation === 'rebase') && (
+                    <Pressable
+                      style={({ pressed }) => [styles.abortButton, pressed && styles.abortPressed]}
+                      disabled={busyAction !== null}
+                      onPress={() => void abortConflictOperation(status.conflictOperation)}
+                    >
+                      <Text style={styles.abortText}>
+                        {busyAction === `abort-${status.conflictOperation}`
+                          ? 'Aborting…'
+                          : `Abort ${status.conflictOperation}`}
+                      </Text>
+                    </Pressable>
+                  )}
+                </View>
               ) : null}
             </View>
             {actionError ? (
@@ -1556,6 +1656,30 @@ export default function MobileSourceControlScreen() {
               )}
               <Pressable
                 style={({ pressed }) => [
+                  styles.generateButton,
+                  (stagedCount === 0 || busyAction !== null) && styles.commitButtonDisabled,
+                  pressed && styles.commitButtonPressed
+                ]}
+                // Why: stay tappable while generating so the press can cancel
+                // (disabling it here made the cancel branch below unreachable).
+                disabled={stagedCount === 0 || busyAction !== null}
+                onPress={() =>
+                  generatingMessage ? cancelGenerateCommitMessage() : void generateCommitMessage()
+                }
+                accessibilityLabel={
+                  generatingMessage
+                    ? 'Cancel commit message generation'
+                    : 'Generate commit message with AI'
+                }
+              >
+                {generatingMessage ? (
+                  <ActivityIndicator size="small" color={colors.textSecondary} />
+                ) : (
+                  <Sparkles size={16} color={colors.textSecondary} strokeWidth={2.1} />
+                )}
+              </Pressable>
+              <Pressable
+                style={({ pressed }) => [
                   styles.commitButton,
                   (!commitMessage.trim() ||
                     stagedCount === 0 ||
@@ -1612,6 +1736,52 @@ export default function MobileSourceControlScreen() {
           }
         }}
         onCancel={() => setDiscardTarget(null)}
+      />
+
+      <MobilePrComposeSheet
+        visible={showPrSheet}
+        client={client}
+        worktreeId={worktreeId ?? ''}
+        prefill={prPrefill ?? { provider: 'github', base: 'main', title: branchLabel, body: '' }}
+        onClose={() => setShowPrSheet(false)}
+        onCreated={(url) => {
+          setShowPrSheet(false)
+          setCreatedPrUrl(url)
+          void loadStatus({ preserveReadyOnFailure: true, force: true })
+        }}
+      />
+
+      <PickerModal
+        visible={showBranchPicker}
+        title="Switch Branch"
+        options={(localBranches?.branches ?? []).map((b) => ({
+          value: b,
+          label: b,
+          subtitle: b === localBranches?.current ? 'current' : undefined
+        }))}
+        selected={localBranches?.current ?? ''}
+        onSelect={(branch) => {
+          if (branch !== localBranches?.current) {
+            void checkoutBranch(branch)
+          } else {
+            setShowBranchPicker(false)
+          }
+        }}
+        onClose={() => setShowBranchPicker(false)}
+      />
+
+      <ConfirmModal
+        visible={createdPrUrl !== null}
+        title="Pull Request Created"
+        message="Open it in your browser?"
+        confirmLabel="Open"
+        onConfirm={() => {
+          if (createdPrUrl) {
+            openMobilePrUrl(createdPrUrl)
+          }
+          setCreatedPrUrl(null)
+        }}
+        onCancel={() => setCreatedPrUrl(null)}
       />
     </View>
   )
@@ -1713,9 +1883,30 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     fontSize: typography.metaSize
   },
+  conflictRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm
+  },
   conflictText: {
     color: colors.statusAmber,
     fontSize: typography.metaSize,
+    textTransform: 'capitalize'
+  },
+  abortButton: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+    borderRadius: radii.button,
+    borderWidth: 1,
+    borderColor: colors.statusAmber
+  },
+  abortPressed: {
+    backgroundColor: colors.bgRaised
+  },
+  abortText: {
+    color: colors.statusAmber,
+    fontSize: typography.metaSize,
+    fontWeight: '600',
     textTransform: 'capitalize'
   },
   actionError: {
@@ -1922,6 +2113,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: spacing.md
+  },
+  generateButton: {
+    width: 42,
+    minHeight: 42,
+    borderRadius: radii.button,
+    backgroundColor: colors.bgRaised,
+    alignItems: 'center',
+    justifyContent: 'center'
   },
   commitButtonDisabled: {
     opacity: 0.45

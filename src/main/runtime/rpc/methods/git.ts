@@ -7,6 +7,7 @@ import {
   GitBranchDiff,
   GitBulkPaths,
   GitCheckIgnored,
+  GitCheckout,
   GitCommit,
   GitCommitCompare,
   GitCommitDiff,
@@ -120,6 +121,17 @@ export const GIT_METHODS: RpcMethod[] = [
     name: 'git.abortRebase',
     params: WorktreeSelector,
     handler: async (params, { runtime }) => runtime.abortRuntimeGitRebase(params.worktree)
+  }),
+  defineMethod({
+    name: 'git.checkout',
+    params: GitCheckout,
+    handler: async (params, { runtime }) =>
+      runtime.checkoutRuntimeGitBranch(params.worktree, params.branch)
+  }),
+  defineMethod({
+    name: 'git.localBranches',
+    params: WorktreeSelector,
+    handler: async (params, { runtime }) => runtime.listRuntimeGitLocalBranches(params.worktree)
   }),
   defineMethod({
     name: 'git.diff',

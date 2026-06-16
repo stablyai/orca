@@ -1062,6 +1062,15 @@ export function useIpcEvents(): void {
       })
     )
 
+    // Why: UI view-state (group/sort/filters, collapsed groups, etc.) is shared
+    // with mobile via the ui.set RPC. When mobile changes it, main broadcasts so
+    // the desktop re-hydrates and the sidebar reflects it live — bi-directional.
+    unsubs.push(
+      window.api.ui.onStateChanged((ui) => {
+        useAppStore.getState().hydratePersistedUI(ui)
+      })
+    )
+
     if (window.api.keybindings) {
       unsubs.push(
         window.api.keybindings.onChanged((snapshot) => {
@@ -1955,11 +1964,15 @@ export function useIpcEvents(): void {
               )
             : undefined
 
+          // Why: a user-initiated open (data.activate, e.g. mobile tapping an HTML
+          // path) foregrounds the tab so it lands in the active group's order and
+          // publishes to mobile in the right place. Agent/automation opens stay in
+          // the background (activate:false) in the active browser group.
           const workspace = store.createBrowserTab(worktreeId, data.url, {
             title: data.url,
-            targetGroupId: activeBrowserUnifiedTab?.groupId,
+            targetGroupId: data.activate ? undefined : activeBrowserUnifiedTab?.groupId,
             sessionProfileId: data.sessionProfileId,
-            activate: false
+            activate: data.activate === true
           })
           // Why: registerGuest fires with the page ID (not workspace ID) as
           // browserPageId. Return the page ID so waitForTabRegistration can

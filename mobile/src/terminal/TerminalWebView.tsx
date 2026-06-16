@@ -33,6 +33,8 @@ export type TerminalSelectionEvents = {
   onHaptic?: (kind: 'selection' | 'success' | 'error' | 'edge-bump') => void
   onTerminalInput?: (bytes: string) => void
   onTerminalTap?: () => void
+  // Tap landed on a detected file path; RN resolves + opens it.
+  onFileTap?: (pathText: string, line: number | null, column: number | null) => void
   // Why: pinch-to-zoom in the terminal snaps to a text-size preset and reports it
   // here so the app persists it and keeps Settings + other panes in sync.
   onTextScaleChange?: (scale: number) => void
@@ -100,6 +102,7 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
     onHaptic,
     onTerminalInput,
     onTerminalTap,
+    onFileTap,
     onTextScaleChange
   },
   ref
@@ -247,6 +250,13 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
         }
       } else if (msg.type === 'terminal-tap') {
         onTerminalTap?.()
+      } else if (msg.type === 'terminal-file-tap') {
+        const pathText = typeof msg.pathText === 'string' ? msg.pathText : ''
+        if (pathText.length > 0) {
+          const line = typeof msg.line === 'number' ? msg.line : null
+          const column = typeof msg.column === 'number' ? msg.column : null
+          onFileTap?.(pathText, line, column)
+        }
       } else if (msg.type === 'keyboard-avoidance-metrics') {
         const cursorY = typeof msg.cursorY === 'number' ? msg.cursorY : 0
         const rows = typeof msg.rows === 'number' ? msg.rows : 0
@@ -286,6 +296,7 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
       onHaptic,
       onTerminalInput,
       onTerminalTap,
+      onFileTap,
       onTextScaleChange
     ]
   )

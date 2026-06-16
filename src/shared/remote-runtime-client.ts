@@ -20,18 +20,14 @@ import {
   RuntimeRpcEnvelopeSchema,
   type RuntimeRpcResponse
 } from './runtime-rpc-envelope'
+// Re-export so existing value importers of `RemoteRuntimeClientError` are
+// unaffected; the class lives in a ws-free module so type-only consumers
+// (and mobile's typecheck) don't compile this file's Node-only deps.
+import { RemoteRuntimeClientError } from './remote-runtime-client-error'
+
+export { RemoteRuntimeClientError } from './remote-runtime-client-error'
 
 type HandshakeState = 'awaiting_ready' | 'awaiting_authenticated' | 'ready'
-
-export class RemoteRuntimeClientError extends Error {
-  readonly code: string
-
-  constructor(code: string, message: string) {
-    super(message)
-    this.name = 'RemoteRuntimeClientError'
-    this.code = code
-  }
-}
 
 function ignoreSettledRemoteRuntimeSocketError(): void {}
 

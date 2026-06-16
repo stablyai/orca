@@ -1,4 +1,4 @@
-import type { RemoteRuntimeClientError } from './remote-runtime-client'
+import type { RemoteRuntimeClientError } from './remote-runtime-client-error'
 import { remoteRuntimeUnavailableError } from './remote-runtime-request-frames'
 import type { RuntimeRpcResponse } from './runtime-rpc-envelope'
 import type {

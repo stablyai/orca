@@ -604,4 +604,54 @@ describe('git RPC methods', () => {
     expect(response.ok).toBe(false)
     expect(runtime.getRuntimeGitHistory).not.toHaveBeenCalled()
   })
+
+  it('checks out a branch', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      checkoutRuntimeGitBranch: vi.fn().mockResolvedValue({ ok: true, branch: 'feature/x' })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: GIT_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('git.checkout', { worktree: 'id:wt-1', branch: 'feature/x' })
+    )
+
+    expect(runtime.checkoutRuntimeGitBranch).toHaveBeenCalledWith('id:wt-1', 'feature/x')
+    expect(response).toMatchObject({ ok: true, result: { ok: true, branch: 'feature/x' } })
+  })
+
+  it('rejects a checkout branch that starts with a dash', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      checkoutRuntimeGitBranch: vi.fn()
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: GIT_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('git.checkout', { worktree: 'id:wt-1', branch: '--force' })
+    )
+
+    expect(response.ok).toBe(false)
+    expect(runtime.checkoutRuntimeGitBranch).not.toHaveBeenCalled()
+  })
+
+  it('lists local branches', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      listRuntimeGitLocalBranches: vi
+        .fn()
+        .mockResolvedValue({ current: 'main', branches: ['main', 'feature/x'] })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: GIT_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('git.localBranches', { worktree: 'id:wt-1' })
+    )
+
+    expect(runtime.listRuntimeGitLocalBranches).toHaveBeenCalledWith('id:wt-1')
+    expect(response).toMatchObject({
+      ok: true,
+      result: { current: 'main', branches: ['main', 'feature/x'] }
+    })
+  })
 })

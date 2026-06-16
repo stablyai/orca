@@ -538,6 +538,7 @@ describe('useIpcEvents browser tab create routing', () => {
           onRemoteBranchConflict: () => () => {}
         },
         ui: {
+          onStateChanged: () => () => {},
           onOpenSettings: () => () => {},
           onOpenFeatureTour: () => () => {},
           onToggleLeftSidebar: () => () => {},
@@ -756,6 +757,7 @@ describe('useIpcEvents updater integration', () => {
           onRemoteBranchConflict: () => () => {}
         },
         ui: {
+          onStateChanged: () => () => {},
           onOpenSettings: () => () => {},
           onOpenFeatureTour: () => () => {},
           onToggleLeftSidebar: () => () => {},
@@ -993,6 +995,7 @@ describe('useIpcEvents updater integration', () => {
           onRemoteBranchConflict: () => () => {}
         },
         ui: {
+          onStateChanged: () => () => {},
           onOpenSettings: () => () => {},
           onOpenFeatureTour: () => () => {},
           onToggleLeftSidebar: () => () => {},
@@ -1383,6 +1386,7 @@ describe('useIpcEvents updater integration', () => {
           onRemoteBranchConflict: () => () => {}
         },
         ui: {
+          onStateChanged: () => () => {},
           onOpenSettings: () => () => {},
           onOpenFeatureTour: () => () => {},
           onToggleLeftSidebar: () => () => {},
@@ -1913,6 +1917,7 @@ describe('useIpcEvents browser tab close routing', () => {
           onRemoteBranchConflict: () => () => {}
         },
         ui: {
+          onStateChanged: () => () => {},
           onOpenSettings: () => () => {},
           onOpenFeatureTour: () => () => {},
           onToggleLeftSidebar: () => () => {},
@@ -2127,6 +2132,7 @@ describe('useIpcEvents browser tab close routing', () => {
           onRemoteBranchConflict: () => () => {}
         },
         ui: {
+          onStateChanged: () => () => {},
           onOpenSettings: () => () => {},
           onOpenFeatureTour: () => () => {},
           onToggleLeftSidebar: () => () => {},
@@ -2336,6 +2342,7 @@ describe('useIpcEvents browser tab close routing', () => {
           onRemoteBranchConflict: () => () => {}
         },
         ui: {
+          onStateChanged: () => () => {},
           onOpenSettings: () => () => {},
           onOpenFeatureTour: () => () => {},
           onToggleLeftSidebar: () => () => {},
@@ -2563,6 +2570,7 @@ describe('useIpcEvents CLI-created worktree activation', () => {
           onRemoteBranchConflict: () => () => {}
         },
         ui: {
+          onStateChanged: () => () => {},
           onOpenSettings: () => () => {},
           onOpenFeatureTour: () => () => {},
           onToggleLeftSidebar: () => () => {},
@@ -2816,6 +2824,7 @@ describe('useIpcEvents CLI-created worktree activation', () => {
         },
         runtimeEnvironments: { subscribe: runtimeSubscribe },
         ui: {
+          onStateChanged: () => () => {},
           onOpenSettings: () => () => {},
           onOpenFeatureTour: () => () => {},
           onToggleLeftSidebar: () => () => {},
@@ -3042,6 +3051,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
           onRemoteBranchConflict: () => () => {}
         },
         ui: {
+          onStateChanged: () => () => {},
           onOpenSettings: () => () => {},
           onOpenFeatureTour: () => () => {},
           onToggleLeftSidebar: () => () => {},

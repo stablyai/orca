@@ -2167,6 +2167,7 @@ export class Store {
       originWebContentsId?: number
     ) => void
   >()
+  private uiChangeListeners = new Set<(ui: PersistedState['ui']) => void>()
 
   constructor() {
     const loaded = this.load()
@@ -4386,6 +4387,27 @@ export class Store {
     }
   }
 
+  // Why: UI view-state (group/sort/filters etc.) is written from both the
+  // desktop renderer and mobile (via the ui.set RPC) into one shared store.
+  // Without this, a mobile change persisted but the desktop renderer — which
+  // hydrates UI state once — never learned of it, breaking bi-directional sync.
+  onUIChanged(listener: (ui: PersistedState['ui']) => void): () => void {
+    this.uiChangeListeners.add(listener)
+    return () => {
+      this.uiChangeListeners.delete(listener)
+    }
+  }
+
+  private notifyUIChanged(): void {
+    if (this.uiChangeListeners.size === 0) {
+      return
+    }
+    const ui = this.getUI()
+    for (const listener of this.uiChangeListeners) {
+      listener(ui)
+    }
+  }
+
   updateSettings(
     updates: Partial<GlobalSettings>,
     options: { notifyListeners?: boolean; originWebContentsId?: number } = {}
@@ -4642,6 +4664,7 @@ export class Store {
           : normalizeFeatureInteractions(this.state.ui?.featureInteractions)
     }
     this.scheduleSave()
+    this.notifyUIChanged()
   }
 
   recordFeatureInteraction(id: FeatureInteractionId): PersistedState['ui'] {

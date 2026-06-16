@@ -1,0 +1,67 @@
+import { describe, expect, it } from 'vitest'
+import {
+  applyDesktopViewSettings,
+  groupModeFromDesktop,
+  groupModeToDesktop,
+  sortModeFromDesktop,
+  type MobileViewState
+} from './workspace-view-settings'
+
+const base: MobileViewState = {
+  groupMode: 'repo',
+  sortMode: 'recent',
+  hideSleeping: false,
+  hideDefaultBranch: false,
+  filterRepoIds: [],
+  collapsedGroups: []
+}
+
+describe('group mode mapping', () => {
+  it('round-trips every mobile group mode through the desktop value', () => {
+    for (const mode of ['none', 'workspaceStatus', 'repo', 'prStatus'] as const) {
+      expect(groupModeFromDesktop(groupModeToDesktop(mode))).toBe(mode)
+    }
+  })
+
+  it('maps the desktop kebab-case values back to mobile', () => {
+    expect(groupModeFromDesktop('workspace-status')).toBe('workspaceStatus')
+    expect(groupModeFromDesktop('pr-status')).toBe('prStatus')
+    expect(groupModeFromDesktop(undefined)).toBeNull()
+  })
+})
+
+describe('sort mode mapping', () => {
+  it('accepts shared sort values and rejects unknown', () => {
+    expect(sortModeFromDesktop('manual')).toBe('manual')
+    expect(sortModeFromDesktop('smart')).toBe('smart')
+    expect(sortModeFromDesktop(undefined)).toBeNull()
+    expect(sortModeFromDesktop('bogus' as never)).toBeNull()
+  })
+})
+
+describe('applyDesktopViewSettings', () => {
+  it('applies provided desktop fields and leaves missing ones untouched', () => {
+    const next = applyDesktopViewSettings(base, {
+      groupBy: 'pr-status',
+      hideSleepingWorkspaces: true,
+      filterRepoIds: ['repo-1']
+    })
+    expect(next).toEqual({
+      groupMode: 'prStatus',
+      sortMode: 'recent', // unchanged (sortBy absent)
+      hideSleeping: true,
+      hideDefaultBranch: false, // unchanged
+      filterRepoIds: ['repo-1'],
+      collapsedGroups: []
+    })
+  })
+
+  it('keeps current values when the desktop payload is empty', () => {
+    expect(applyDesktopViewSettings(base, {})).toEqual(base)
+  })
+
+  it('ignores an unrecognized groupBy rather than blanking the mode', () => {
+    const next = applyDesktopViewSettings(base, { groupBy: 'mystery' as never })
+    expect(next.groupMode).toBe('repo')
+  })
+})

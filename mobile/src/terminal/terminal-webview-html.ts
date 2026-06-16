@@ -3,6 +3,7 @@
 import type { RuntimeMobileTerminalTheme } from '../../../src/shared/runtime-types'
 import { colors } from '../theme/mobile-theme'
 import { TERMINAL_TEXT_SCALES } from '../storage/preferences'
+import { TERMINAL_PATH_TAP_JS } from './terminal-path-tap-injected'
 
 const DEFAULT_TERMINAL_THEME: RuntimeMobileTerminalTheme['theme'] = {
   background: colors.terminalBg,
@@ -1315,6 +1316,10 @@ export const XTERM_HTML = `<!DOCTYPE html>
     return line.translateToString(false);
   }
 
+  // File-path-under-tap detection (matchFilePathAtColumn). See
+  // terminal-path-tap-injected.ts; mirrors the unit-tested terminal-path-tap.ts.
+  ${TERMINAL_PATH_TAP_JS}
+
   function seedWordSelection(col, absRow) {
     var line = getLineText(absRow);
     if (!line) {
@@ -1636,7 +1641,8 @@ export const XTERM_HTML = `<!DOCTYPE html>
         if (clickInput) {
           notify({ type: 'terminal-input', bytes: clickInput });
         } else if (!isClickMouseTrackingMode(getMouseTrackingMode())) {
-          notify({ type: 'terminal-tap' });
+          // Tap on a file path → terminal-file-tap (RN opens it); else focus.
+          notifyTapOrFilePath(longPressOrigin.x, longPressOrigin.y);
         }
       }
       clearLongPress();

@@ -215,6 +215,19 @@ export const GitRebaseFromBase = WorktreeSelector.extend({
     )
 })
 
+export const GitCheckout = WorktreeSelector.extend({
+  branch: z
+    .unknown()
+    .transform((v) => (typeof v === 'string' ? v : ''))
+    .pipe(
+      z
+        .string()
+        .min(1, 'Missing branch')
+        // Why: never let a branch arg be parsed as a git flag (arg injection).
+        .refine((value) => !value.startsWith('-'), 'Branch must not start with -')
+    )
+})
+
 export const GitRemoteFileUrl = WorktreeSelector.extend({
   relativePath: z
     .unknown()

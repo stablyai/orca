@@ -1,5 +1,10 @@
 /* eslint-disable max-lines -- Why: shared type definitions for all runtime RPC methods live in one file for discoverability and import simplicity. */
-import type { AgentStatusEntry, AgentStatusOrchestrationContext } from './agent-status-types'
+import type {
+  AgentStatusEntry,
+  AgentStatusOrchestrationContext,
+  AgentStatusState,
+  AgentType
+} from './agent-status-types'
 import type {
   BaseRefSearchResult,
   BrowserCookieImportResult,
@@ -291,6 +296,19 @@ export type RuntimeFileReadResult = {
   byteLength: number
 }
 
+/** Result of resolving a file path tapped in the mobile terminal against the
+ *  worktree root (+ optional cwd). relativePath is null when the path resolves
+ *  outside the worktree (not openable via the worktree-scoped file RPCs). */
+export type RuntimeTerminalPathResolution = {
+  worktree: string
+  relativePath: string | null
+  /** Absolute on-disk path (or remote path), present when relativePath is.
+   *  Used to build a file:// URL for opening HTML in a browser tab. */
+  absolutePath: string | null
+  exists: boolean
+  isDirectory: boolean
+}
+
 export type RuntimeFilePreviewResult = {
   content: string
   isBinary: boolean
@@ -394,6 +412,25 @@ export type RuntimeTerminalWait = {
   blockedReason?: RuntimeTerminalWaitBlockedReason
 }
 
+/** One agent's live status as carried to mobile in a worktree.ps summary.
+ *  Flat shape (parentPaneKey points to another row in the same worktree's list)
+ *  so the client can rebuild the spawn-lineage tree desktop renders inline. */
+export type RuntimeWorktreeAgentRow = {
+  paneKey: string
+  /** paneKey of the orchestration parent, or null for a root agent. */
+  parentPaneKey: string | null
+  state: AgentStatusState
+  agentType: AgentType | null
+  prompt: string
+  lastAssistantMessage: string | null
+  toolName: string | null
+  toolInput: string | null
+  interrupted: boolean
+  /** When the current `state` was first reported (ms). Drives "Xm ago". */
+  stateStartedAt: number
+  updatedAt: number
+}
+
 export type RuntimeWorktreePsSummary = {
   worktreeId: string
   repoId: string
@@ -405,13 +442,54 @@ export type RuntimeWorktreePsSummary = {
   displayName: string
   linkedIssue: number | null
   linkedPR: { number: number; state: string } | null
+  linkedLinearIssue: string | null
+  linkedGitLabMR: number | null
+  linkedGitLabIssue: number | null
+  comment: string
   isPinned: boolean
+  /** True for the worktree currently focused on the desktop/host
+   *  (session.activeWorktreeId). Mobile scrolls it into view and highlights it
+   *  so the list reflects the desktop's current selection. */
+  isActive: boolean
   unread: boolean
   liveTerminalCount: number
   hasAttachedPty: boolean
   lastOutputAt: number | null
   preview: string
   status: RuntimeWorktreeStatus
+  /** Live agents in this worktree, newest-state-first. Empty for shell-only
+   *  worktrees. Mirrors desktop's inline agent list (WorktreeCardAgents). */
+  agents: RuntimeWorktreeAgentRow[]
+}
+
+export type RuntimeGitLocalBranches = {
+  current: string | null
+  branches: string[]
+}
+
+/** One speech model as presented to the mobile dictation-setup sheet: catalog
+ *  metadata joined with live download/ready state. */
+export type RuntimeSpeechModelSummary = {
+  id: string
+  label: string
+  provider: 'local' | 'openai'
+  sizeBytes: number | null
+  recommended: boolean
+  status: 'ready' | 'not-downloaded' | 'downloading' | 'extracting' | 'error'
+  progress: number | null
+}
+
+export type RuntimeSpeechSetupState = {
+  enabled: boolean
+  selectedModelId: string
+  /** 'toggle' = press once to start/stop; 'hold' = dictate while held. */
+  dictationMode: 'toggle' | 'hold'
+  models: RuntimeSpeechModelSummary[]
+}
+
+export type RuntimeGitCheckoutResult = {
+  ok: true
+  branch: string
 }
 
 export type RuntimeWorktreeStatus = 'active' | 'working' | 'permission' | 'done' | 'inactive'

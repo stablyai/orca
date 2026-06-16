@@ -71,6 +71,8 @@ describe('GitHandler', () => {
     expect(methods).toContain('git.bulkUnstage')
     expect(methods).toContain('git.abortMerge')
     expect(methods).toContain('git.abortRebase')
+    expect(methods).toContain('git.checkout')
+    expect(methods).toContain('git.localBranches')
     expect(methods).toContain('git.discard')
     expect(methods).toContain('git.bulkDiscard')
     expect(methods).toContain('git.conflictOperation')
@@ -152,6 +154,43 @@ describe('GitHandler', () => {
       await expect(fs.access(path.join(tmpDir, '.git', 'rebase-merge'))).rejects.toThrow()
       await expect(fs.access(path.join(tmpDir, '.git', 'rebase-apply'))).rejects.toThrow()
       await expect(fs.readFile(path.join(tmpDir, 'file.txt'), 'utf-8')).resolves.toBe('feature\n')
+    })
+  })
+
+  describe('checkout / localBranches', () => {
+    it('switches to an existing local branch and lists branches current-first', async () => {
+      gitInit(tmpDir)
+      writeFileSync(path.join(tmpDir, 'file.txt'), 'base\n')
+      gitCommit(tmpDir, 'initial')
+      const baseBranch = execFileSync('git', ['branch', '--show-current'], {
+        cwd: tmpDir,
+        encoding: 'utf-8',
+        stdio: 'pipe'
+      }).trim()
+      execFileSync('git', ['branch', 'feature'], { cwd: tmpDir, stdio: 'pipe' })
+
+      const before = (await dispatcher.callRequest('git.localBranches', {
+        worktreePath: tmpDir
+      })) as { current: string | null; branches: string[] }
+      expect(before.current).toBe(baseBranch)
+      expect(before.branches).toContain('feature')
+      expect(before.branches[0]).toBe(baseBranch)
+
+      await dispatcher.callRequest('git.checkout', { worktreePath: tmpDir, branch: 'feature' })
+
+      expect(
+        execFileSync('git', ['branch', '--show-current'], {
+          cwd: tmpDir,
+          encoding: 'utf-8',
+          stdio: 'pipe'
+        }).trim()
+      ).toBe('feature')
+
+      const after = (await dispatcher.callRequest('git.localBranches', {
+        worktreePath: tmpDir
+      })) as { current: string | null; branches: string[] }
+      expect(after.current).toBe('feature')
+      expect(after.branches[0]).toBe('feature')
     })
   })
 

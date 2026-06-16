@@ -1,6 +1,6 @@
 import type WebSocket from 'ws'
 import type { PairingOffer } from './pairing'
-import type { RemoteRuntimeClientError } from './remote-runtime-client'
+import type { RemoteRuntimeClientError } from './remote-runtime-client-error'
 import { remoteRuntimeUnavailableError } from './remote-runtime-request-frames'
 import {
   openRemoteRuntimeWebSocket,
