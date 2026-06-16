@@ -23,6 +23,8 @@ import type {
   GitHubCommentResult,
   GitHubWorkItem,
   GitPushTarget,
+  GitForkSyncExpectedUpstream,
+  GitForkSyncResult,
   GitUpstreamStatus,
   GhosttyImportPreview,
   ListWorkItemsResult,
@@ -475,6 +477,8 @@ const api = {
 
     pickFolder: () => ipcRenderer.invoke('repos:pickFolder'),
 
+    pickFolders: () => ipcRenderer.invoke('repos:pickFolders'),
+
     pickDirectory: () => ipcRenderer.invoke('repos:pickDirectory'),
 
     clone: (args) => ipcRenderer.invoke('repos:clone', args),
@@ -609,9 +613,16 @@ const api = {
 
     persistSortOrder: (args) => ipcRenderer.invoke('worktrees:persistSortOrder', args),
 
-    onChanged: (callback: (data: { repoId: string }) => void): (() => void) => {
-      const listener = (_event: Electron.IpcRendererEvent, data: { repoId: string }) =>
-        callback(data)
+    onChanged: (
+      callback: (data: {
+        repoId: string
+        renamed?: { oldWorktreeId: string; newWorktreeId: string }
+      }) => void
+    ): (() => void) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        data: { repoId: string; renamed?: { oldWorktreeId: string; newWorktreeId: string } }
+      ) => callback(data)
       ipcRenderer.on('worktrees:changed', listener)
       return () => ipcRenderer.removeListener('worktrees:changed', listener)
     },
@@ -1096,6 +1107,7 @@ const api = {
       sourceContext?: TaskSourceContext | null
       prNumber: number
       enabled: boolean
+      method?: 'merge' | 'squash' | 'rebase'
       prRepo?: { owner: string; repo: string } | null
     }): Promise<{ ok: true } | { ok: false; error: string }> =>
       ipcRenderer.invoke('gh:setPRAutoMerge', args),
@@ -2526,6 +2538,11 @@ const api = {
       connectionId?: string
       pushTarget?: GitPushTarget
     }): Promise<void> => ipcRenderer.invoke('git:fetch', args),
+    syncFork: (args: {
+      worktreePath: string
+      connectionId?: string
+      expectedUpstream: GitForkSyncExpectedUpstream
+    }): Promise<GitForkSyncResult> => ipcRenderer.invoke('git:syncFork', args),
     push: (args: {
       worktreePath: string
       publish?: boolean
@@ -2636,7 +2653,12 @@ const api = {
       relativePath: string
       line: number
       connectionId?: string
-    }): Promise<string | null> => ipcRenderer.invoke('git:remoteFileUrl', args)
+    }): Promise<string | null> => ipcRenderer.invoke('git:remoteFileUrl', args),
+    remoteCommitUrl: (args: {
+      worktreePath: string
+      sha: string
+      connectionId?: string
+    }): Promise<string | null> => ipcRenderer.invoke('git:remoteCommitUrl', args)
   },
 
   ui: {

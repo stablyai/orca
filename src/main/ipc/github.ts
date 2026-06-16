@@ -762,6 +762,7 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
         sourceContext?: TaskSourceContext | null
         prNumber: number
         enabled: boolean
+        method?: 'merge' | 'squash' | 'rebase'
         prRepo?: GitHubOwnerRepo | null
       }
     ) => {
@@ -770,6 +771,7 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
         repo.path,
         args.prNumber,
         args.enabled,
+        args.method,
         repoConnectionId(repo),
         args.prRepo ?? null
       )

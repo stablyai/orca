@@ -1,5 +1,6 @@
 import type { RpcResponse } from '../runtime/rpc/core'
 import type { RpcDispatcher } from '../runtime/rpc/dispatcher'
+import { isLinearUuid } from '../../shared/linear-uuid'
 
 type ParsedRemoteCli = {
   commandPath: string[]
@@ -16,7 +17,6 @@ export class RemoteLinearWriteArgumentError extends Error {
   }
 }
 
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const REPEATED_FLAG_SEPARATOR = '\u0000'
 const LINEAR_PRIORITY_VALUES = new Map([
   ['none', 0],
@@ -114,7 +114,7 @@ export function optionalWriteId(flags: Map<string, string | boolean>): string | 
     return undefined
   }
   const writeId = requiredString(flags, 'write-id')
-  if (!UUID_PATTERN.test(writeId)) {
+  if (!isLinearUuid(writeId)) {
     throw new RemoteLinearWriteArgumentError('linear_invalid_write_id', '--write-id must be a UUID')
   }
   return writeId

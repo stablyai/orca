@@ -50,9 +50,11 @@ import {
   callRuntimeRpc,
   getActiveRuntimeTarget
 } from '../../runtime/runtime-rpc-client'
+import { syncRuntimeGitForkDefaultBranch } from '../../runtime/runtime-git-client'
 import { toRuntimeWorktreeSelector } from '../../runtime/runtime-worktree-selector'
 import { buildDismissedOnboardingFolderAgentStartup } from '@/lib/onboarding-folder-agent-startup'
 import { markOnboardingProjectAdded } from '@/lib/onboarding-project-checklist'
+import { getSettingsForRepoRuntimeOwner } from '@/lib/repo-runtime-owner'
 import { filterSetupScriptPromptDismissalsToValidRepos } from '@/lib/setup-script-prompt'
 import { translate } from '@/i18n/i18n'
 import {
@@ -65,6 +67,8 @@ import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 import { formatFolderWorkspaceCreateError } from '../../lib/folder-workspace-path-status'
 
 const ERROR_TOAST_DURATION = 60_000
+const SAFE_AUTO_FORK_SYNC_COOLDOWN_MS = 10 * 60 * 1000
+const safeAutoForkSyncAttempts = new Map<string, { attemptedAt: number; promise?: Promise<void> }>()
 
 type RepoUpdate = Partial<
   Pick<
@@ -79,6 +83,7 @@ type RepoUpdate = Partial<
     | 'kind'
     | 'symlinkPaths'
     | 'issueSourcePreference'
+    | 'forkSyncMode'
     | 'externalWorktreeVisibility'
     | 'externalWorktreeVisibilityPromptDismissedAt'
     | 'projectGroupId'
@@ -153,6 +158,15 @@ function sanitizeRepoUpdate(updates: RepoUpdate): RepoUpdate {
   if ('worktreeBasePath' in sanitized && sanitized.worktreeBasePath !== undefined) {
     sanitized.worktreeBasePath = sanitized.worktreeBasePath.trim() || undefined
   }
+  if (
+    'forkSyncMode' in sanitized &&
+    sanitized.forkSyncMode !== undefined &&
+    sanitized.forkSyncMode !== 'ask' &&
+    sanitized.forkSyncMode !== 'safe-auto' &&
+    sanitized.forkSyncMode !== 'off'
+  ) {
+    delete sanitized.forkSyncMode
+  }
   return sanitized
 }
 
@@ -193,6 +207,50 @@ function getProjectSetupRuntimeTarget(
   return parsedHost?.kind === 'runtime'
     ? { kind: 'environment', environmentId: parsedHost.environmentId }
     : { kind: 'local' }
+}
+
+function getSafeAutoForkSyncKey(repo: Repo): string {
+  return `${getRepoExecutionHostId(repo)}:${repo.id}:${repo.path}`
+}
+
+function scheduleSafeAutoForkSync(get: () => AppState, repos: readonly Repo[]): void {
+  for (const repo of repos) {
+    if (repo.kind === 'folder' || repo.forkSyncMode !== 'safe-auto' || !repo.upstream) {
+      continue
+    }
+    const key = getSafeAutoForkSyncKey(repo)
+    const existingAttempt = safeAutoForkSyncAttempts.get(key)
+    const now = Date.now()
+    if (
+      existingAttempt?.promise ||
+      (existingAttempt && now - existingAttempt.attemptedAt < SAFE_AUTO_FORK_SYNC_COOLDOWN_MS)
+    ) {
+      continue
+    }
+    const promise = syncRuntimeGitForkDefaultBranch(
+      {
+        settings: settingsForRepoOwner(get(), repo.id),
+        worktreeId: repo.id,
+        worktreePath: repo.path,
+        connectionId: repo.connectionId ?? undefined
+      },
+      repo.upstream
+    )
+      .then(() => undefined)
+      .catch((error) => {
+        // Why: safe-auto is opportunistic. Auth/protection/divergence failures
+        // should not create startup noise; the settings row exposes Sync Now
+        // for explicit, toast-backed diagnosis.
+        console.info('Safe fork auto-sync skipped', error)
+      })
+      .finally(() => {
+        const current = safeAutoForkSyncAttempts.get(key)
+        if (current?.promise === promise) {
+          safeAutoForkSyncAttempts.set(key, { attemptedAt: now })
+        }
+      })
+    safeAutoForkSyncAttempts.set(key, { attemptedAt: now, promise })
+  }
 }
 
 function repoWithFetchedOwner(repo: Repo, target: ReturnType<typeof getActiveRuntimeTarget>): Repo {
@@ -397,30 +455,7 @@ async function fetchReposForTarget(
 }
 
 function settingsForRepoOwner(state: Pick<AppState, 'repos' | 'settings'>, repoId: string) {
-  const repo = state.repos.find((entry) => entry.id === repoId)
-  if (!repo) {
-    return state.settings
-  }
-  if (!repo.executionHostId && !repo.connectionId) {
-    return state.settings
-  }
-  const parsed = parseExecutionHostId(getRepoExecutionHostId(repo))
-  if (parsed?.kind === 'runtime') {
-    return state.settings
-      ? { ...state.settings, activeRuntimeEnvironmentId: parsed.environmentId }
-      : ({ activeRuntimeEnvironmentId: parsed.environmentId } as AppState['settings'])
-  }
-  if (parsed?.kind === 'local' && state.settings?.activeRuntimeEnvironmentId) {
-    return { ...state.settings, activeRuntimeEnvironmentId: null }
-  }
-  if (parsed?.kind !== 'ssh') {
-    return state.settings
-  }
-  // Why: SSH repos are owned through local IPC/SSH plumbing. Existing repo
-  // mutations must not follow whichever runtime server is currently focused.
-  return state.settings
-    ? { ...state.settings, activeRuntimeEnvironmentId: null }
-    : ({ activeRuntimeEnvironmentId: null } as AppState['settings'])
+  return getSettingsForRepoRuntimeOwner(state, repoId) as AppState['settings']
 }
 
 function getFolderWorkspacePathStatusScopeKey(request: FolderWorkspacePathStatusRequest): string {
@@ -645,10 +680,11 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
   fetchRepos: async () => {
     try {
       const target = getActiveRuntimeTarget(get().settings)
-      const { repos: reconciledRepos, projectCompatibility } = await fetchReposForTarget(
-        target,
-        get().repos
-      )
+      const {
+        repos: reconciledRepos,
+        projectCompatibility,
+        hostId
+      } = await fetchReposForTarget(target, get().repos)
       set((s) => {
         const validRepoIds = new Set(reconciledRepos.map((repo) => repo.id))
         return {
@@ -663,6 +699,10 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
           )
         }
       })
+      scheduleSafeAutoForkSync(
+        get,
+        reconciledRepos.filter((repo) => getRepoExecutionHostId(repo) === hostId)
+      )
     } catch (err) {
       console.error('Failed to fetch repos:', err)
     }
@@ -687,7 +727,11 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
           validRepoIds
         )
       }))
-      return reconciledRepos.filter((repo) => getRepoExecutionHostId(repo) === hostId)
+      const fetchedHostRepos = reconciledRepos.filter(
+        (repo) => getRepoExecutionHostId(repo) === hostId
+      )
+      scheduleSafeAutoForkSync(get, fetchedHostRepos)
+      return fetchedHostRepos
     } catch (err) {
       console.error(`Failed to fetch repos for runtime environment ${environmentId}:`, err)
       return []

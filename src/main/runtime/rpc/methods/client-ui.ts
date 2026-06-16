@@ -150,6 +150,7 @@ const UiUpdate = z
       .optional(),
     rightSidebarExplorerView: z.enum(['files', 'search']).optional(),
     rightSidebarWidth: z.number().finite().optional(),
+    markdownTocPanelWidth: z.number().finite().optional(),
     groupBy: z.enum(['none', 'workspace-status', 'repo', 'pr-status']).optional(),
     showWorkspaceLineage: z.boolean().optional(),
     sortBy: z.enum(['name', 'smart', 'recent', 'repo', 'manual']).optional(),

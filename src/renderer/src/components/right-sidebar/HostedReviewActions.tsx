@@ -60,6 +60,7 @@ export default function HostedReviewActions({
       reviewDecision: review.reviewDecision,
       checksStatus: review.status,
       autoMergeEnabled: review.autoMergeEnabled,
+      autoMergeAllowed: review.autoMergeAllowed,
       mergeQueueRequired: review.mergeQueueRequired
     })
   }, [githubPR, isGitLab, review])

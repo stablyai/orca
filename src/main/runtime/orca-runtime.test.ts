@@ -6809,6 +6809,154 @@ describe('OrcaRuntimeService', () => {
     await expect(runtime.isTerminalRunningAgent(handle)).resolves.toBe(true)
   })
 
+  it('lets adopted neutral pane titles retry wrapper foregrounds until recognized', async () => {
+    const getForegroundProcess = vi
+      .fn()
+      .mockResolvedValueOnce('node')
+      .mockResolvedValueOnce('codex')
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess
+    })
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+    const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
+      command: 'bash',
+      title: 'bash'
+    })
+
+    syncSinglePty(runtime, 'pty-bg', { paneTitle: 'bash' })
+
+    await expect(runtime.isTerminalRunningAgent(handle)).resolves.toBe(true)
+    expect(getForegroundProcess).toHaveBeenCalledTimes(2)
+  })
+
+  it('waits for delayed wrapper foreground cache enrichment', async () => {
+    const getForegroundProcess = vi.fn(async () => (Date.now() >= 4_000 ? 'codex' : 'node'))
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess
+    })
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+    const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
+      command: 'bash',
+      title: 'bash'
+    })
+
+    syncSinglePty(runtime, 'pty-bg', { paneTitle: 'bash' })
+    vi.useFakeTimers()
+    vi.setSystemTime(0)
+    try {
+      const result = runtime.isTerminalRunningAgent(handle)
+      await vi.advanceTimersByTimeAsync(4_200)
+
+      await expect(result).resolves.toBe(true)
+      expect(getForegroundProcess.mock.calls.length).toBeGreaterThan(20)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('does not recognize arbitrary foreground TUIs as running agents', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => 'vim'
+    })
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+    const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
+      command: 'bash',
+      title: 'bash'
+    })
+
+    syncSinglePty(runtime, 'pty-bg', { paneTitle: 'bash' })
+
+    await expect(runtime.isTerminalRunningAgent(handle)).resolves.toBe(false)
+  })
+
+  it('does not recognize unresolved wrapper foregrounds as running agents', async () => {
+    const getForegroundProcess = vi.fn().mockResolvedValue('node')
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess
+    })
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+    const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
+      command: 'bash',
+      title: 'bash'
+    })
+
+    syncSinglePty(runtime, 'pty-bg', { paneTitle: 'bash' })
+
+    vi.useFakeTimers()
+    try {
+      const result = runtime.isTerminalRunningAgent(handle)
+      await vi.advanceTimersByTimeAsync(7_000)
+
+      await expect(result).resolves.toBe(false)
+      expect(getForegroundProcess.mock.calls.length).toBeGreaterThan(2)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('lets live neutral pane titles retry wrapper foregrounds until recognized', async () => {
+    const getForegroundProcess = vi
+      .fn()
+      .mockResolvedValueOnce('node')
+      .mockResolvedValueOnce('codex')
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess
+    })
+    syncSinglePty(runtime, 'pty-1', { paneTitle: 'bash' })
+    const [terminal] = (await runtime.listTerminals()).terminals
+
+    await expect(runtime.isTerminalRunningAgent(terminal.handle)).resolves.toBe(true)
+    expect(getForegroundProcess).toHaveBeenCalledTimes(2)
+  })
+
+  it('keeps Claude management titles suppressed after wrapper foreground refreshes', async () => {
+    const getForegroundProcess = vi
+      .fn()
+      .mockResolvedValueOnce('node')
+      .mockResolvedValueOnce('claude')
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess
+    })
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+    const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
+      command: 'claude agents',
+      title: 'claude agents'
+    })
+
+    syncSinglePty(runtime, 'pty-bg', { paneTitle: 'claude agents' })
+
+    await expect(runtime.isTerminalRunningAgent(handle)).resolves.toBe(false)
+    expect(getForegroundProcess).toHaveBeenCalledTimes(2)
+  })
+
   it('lets adopted Claude agents pane titles use non-Claude foreground fallback', async () => {
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({

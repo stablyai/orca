@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { getTerminalPaneSearchEntries } from './terminal-search'
 import { getAppearancePaneSearchEntries, getSidebarEntries } from './appearance-search'
+import { getWorkspaceCardLayoutEntry } from './appearance-sidebar-search'
+import { matchesSettingsSearch } from './settings-search'
 
 describe('getTerminalPaneSearchEntries', () => {
   it('includes the Windows right-click setting on Windows', () => {
@@ -105,5 +107,23 @@ describe('getTerminalPaneSearchEntries', () => {
     expect(
       getAppearancePaneSearchEntries().some((entry) => entry.title === 'Show Automations Button')
     ).toBe(true)
+  })
+
+  it('includes workspace card layout guidance in the sidebar and Appearance catalogs', () => {
+    const entry = getWorkspaceCardLayoutEntry()
+
+    expect(getSidebarEntries()).toContainEqual(entry)
+    expect(getAppearancePaneSearchEntries()).toContainEqual(entry)
+  })
+
+  it.each(['compact', 'compact display', 'workspace cards', 'sidebar', 'card layout'])(
+    'matches workspace card layout search for %s',
+    (query) => {
+      expect(matchesSettingsSearch(query, getWorkspaceCardLayoutEntry())).toBe(true)
+    }
+  )
+
+  it('matches the Appearance catalog for compact workspace card searches', () => {
+    expect(matchesSettingsSearch('compact', getAppearancePaneSearchEntries())).toBe(true)
   })
 })

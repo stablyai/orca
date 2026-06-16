@@ -81,6 +81,7 @@ import {
   cloneDefaultWorkspaceStatuses,
   normalizeWorkspaceStatuses
 } from '../../../../shared/workspace-statuses'
+import { clampMarkdownTocPanelWidth } from '../../../../shared/markdown-toc-panel-width'
 import { normalizeKagiSessionLink } from '../../../../shared/browser-url'
 import type { OrcaHookScriptKind } from '../../lib/orca-hook-trust'
 import type { SettingsNavTarget } from '@/lib/settings-navigation-types'
@@ -2134,6 +2135,11 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
           ui.rightSidebarWidth,
           s.rightSidebarWidth,
           MAX_RIGHT_SIDEBAR_WIDTH
+        ),
+        markdownTocPanelWidth: clampMarkdownTocPanelWidth(
+          ui.markdownTocPanelWidth,
+          undefined,
+          s.markdownTocPanelWidth
         ),
         rightSidebarOpen: typeof ui.rightSidebarOpen === 'boolean' ? ui.rightSidebarOpen : true,
         rightSidebarTab: rightSidebarRoute.rightSidebarTab,

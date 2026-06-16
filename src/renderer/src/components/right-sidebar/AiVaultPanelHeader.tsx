@@ -56,28 +56,47 @@ export function AiVaultPanelHeader({
 }: AiVaultPanelHeaderProps): React.JSX.Element {
   return (
     <div className="shrink-0 border-b border-sidebar-border px-2.5 py-2">
-      <div className="flex items-center gap-1.5">
+      <div className="flex items-center gap-1.5 @max-[300px]/ai-vault:items-start">
         <div className="min-w-0 flex-1">
           <div className="truncate text-xs font-semibold text-foreground">
-            {translate(
-              'auto.components.right.sidebar.AiVaultPanel.sessionHistory',
-              'Agent Session History'
-            )}
+            {/* Why: below 300px the header competes with fixed controls, so compact copy prevents overlap. */}
+            <span className="@max-[300px]/ai-vault:hidden">
+              {translate(
+                'auto.components.right.sidebar.AiVaultPanel.sessionHistory',
+                'Agent Session History'
+              )}
+            </span>
+            <span className="hidden @max-[300px]/ai-vault:inline">
+              {translate('auto.components.right.sidebar.AiVaultPanel.agents', 'Agents')}
+            </span>
           </div>
           <div className="truncate text-[11px] text-muted-foreground">
-            {hasScanResult
-              ? translate(
-                  'auto.components.right.sidebar.AiVaultPanel.shownRecent',
-                  '{{value0}} shown · {{value1}} recent',
-                  { value0: shownCount, value1: sessionCount }
-                )
-              : translate(
-                  'auto.components.right.sidebar.AiVaultPanel.resumePastSessions',
-                  'Resume past sessions'
-                )}
+            {hasScanResult ? (
+              <>
+                <span className="@max-[300px]/ai-vault:hidden">
+                  {translate(
+                    'auto.components.right.sidebar.AiVaultPanel.shownRecent',
+                    '{{value0}} shown · {{value1}} recent',
+                    { value0: shownCount, value1: sessionCount }
+                  )}
+                </span>
+                <span className="hidden @max-[300px]/ai-vault:inline">
+                  {translate(
+                    'auto.components.right.sidebar.AiVaultPanel.sessionsShownCompact',
+                    '{{value0}} shown',
+                    { value0: shownCount }
+                  )}
+                </span>
+              </>
+            ) : (
+              translate(
+                'auto.components.right.sidebar.AiVaultPanel.resumePastSessions',
+                'Resume past sessions'
+              )
+            )}
           </div>
         </div>
-        <div className="flex shrink-0 items-center gap-1">
+        <div className="flex shrink-0 items-center gap-1 @max-[300px]/ai-vault:gap-0.5">
           <VaultScopeSwitch
             scope={scope}
             workspaceAvailable={Boolean(activeWorktreePath)}

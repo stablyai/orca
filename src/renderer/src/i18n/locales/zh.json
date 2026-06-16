@@ -1793,7 +1793,8 @@
             "fd15491034": "在 GitHub 中打开视图",
             "22df63c393": "您的 Token 无法获取子议题数据。",
             "067119985c": "GitHub 搜索，例如负责人：@我是：开放",
-            "1850fceac8": "{{value0}}/{{value1}} 未添加到 Orca。添加它以开始工作，或在 GitHub 中打开。"
+            "1850fceac8": "{{value0}}/{{value1}} 未添加到 Orca。添加它以开始工作，或在 GitHub 中打开。",
+            "1aa7c952b9": "Project view"
           },
           "slug": {
             "dialog": {
@@ -2440,7 +2441,9 @@
             "efb33546ff": "git 重击",
             "1a8af49530": "命令提示符",
             "2148f65e04": "电源外壳",
-            "ab589350e5": "无法为 {{value0}} 构建启动命令。"
+            "ab589350e5": "无法为 {{value0}} 构建启动命令。",
+            "7a9b4af2af": "向左滚动标签页",
+            "232e075b07": "向右滚动标签页"
           },
           "TabBarCreateEntry": {
             "d62d63b807": "创建文件",
@@ -3892,7 +3895,9 @@
           "0dc4d1b657": "输入克隆目标的服务器路径。"
         },
         "useAddRepoLocalFolderFlow": {
-          "7ab10e4974": "使用服务器路径从远程运行时添加项目。"
+          "7ab10e4974": "使用服务器路径从远程运行时添加项目。",
+          "skippedBatchFolders": "已跳过部分文件夹",
+          "skippedBatchFoldersDescription": "请单独添加已跳过的文件夹，以便逐个查看或确认。"
         },
         "useAddRepoNestedImportFlow": {
           "680cac2c82": "{{value0}} 失败",
@@ -4262,7 +4267,13 @@
           "cfb3f35775": "Arguments",
           "6f99bf5dd0": "No default arguments",
           "8fbe1f37c1": "Environment",
-          "2d133152fa": "No default environment"
+          "2d133152fa": "No default environment",
+          "agentPermissions": "Agent Permissions",
+          "agentPermissionsInfo": "Agent permissions info",
+          "agentPermissionsTooltip": "Custom agent arguments stay unchanged when switching modes.",
+          "agentPermissionsDescription": "Choose whether Orca launches agents with fewer permission prompts or with manual checks.",
+          "agentPermissionsYolo": "Yolo",
+          "agentPermissionsManual": "Manual"
         },
         "AppIconSelector": {
           "d5a112dc9b": "下一个图标",
@@ -4312,7 +4323,8 @@
             "tintColorDescription": "混入左侧边栏表面的颜色。",
             "tintOpacity": "色调强度",
             "tintOpacityDescription": "控制色调混入边栏的强度。"
-          }
+          },
+          "workspaceCardLayoutGuidance": "使用工作区侧边栏选项菜单 > 卡片布局 > 紧凑。"
         },
         "AutoRenameBranchFromWorkSetting": {
           "1626524572": "Nautilus",
@@ -4622,7 +4634,16 @@
           "f63ea281e3": "用于 Agent 完成和阻塞状态的螺纹左侧边栏提要。",
           "ca2219fe5e": "显示固定在右下角的小动画宠物。从状态栏宠物菜单中选择一个角色（Claudino、OpenCode、Gremlin）或上传您自己的 PNG、APNG、GIF、WebP、JPG 或 SVG。随时从同一菜单隐藏它，而不禁用此设置。",
           "dd6f0a1d45": "宠物",
-          "0e89a574ae": "右下角漂浮的动画宠物。"
+          "0e89a574ae": "右下角漂浮的动画宠物。",
+          "agentHibernation": {
+            "copy": "在配置的空闲时间后停止后台 agent 终端，并在你再次打开时恢复受支持的会话。我们仍在调校安全模型，此功能为实验性功能。",
+            "description": "在配置的空闲时间后停止后台 agent 终端，并在你再次打开时恢复受支持的会话。",
+            "idleMinutesDescription": "已完成的后台 agent 在 Orca 可以将其休眠前需要等待的空闲分钟数。",
+            "idleMinutesLabel": "休眠等待时间",
+            "idleMinutesSuffix": "分钟",
+            "title": "Agent 休眠",
+            "toggleLabel": "切换 agent 休眠"
+          }
         },
         "FloatingWorkspacePane": {
           "aeaf76fda9": "状态栏",
@@ -6286,7 +6307,9 @@
             "5784ae8c43": "重命名",
             "8a17fd6026": "稳定",
             "a79d266f71": "会话",
-            "afbf35be68": "稳定会话"
+            "afbf35be68": "稳定会话",
+            "agentPermissions": "Agent Permissions",
+            "agentPermissionsDescription": "Switch agent permission defaults between Yolo and Manual."
           }
         },
         "appearance": {
@@ -6403,6 +6426,17 @@
             "leftSidebarAppearance": {
               "title": "左侧边栏外观",
               "description": "让左侧边栏匹配终端、保持默认，或使用色调。"
+            },
+            "workspaceCardLayout": {
+              "title": "工作区卡片布局",
+              "description": "从工作区侧边栏选项菜单在紧凑和详细工作区卡片之间切换。",
+              "compact": "紧凑",
+              "compactDisplay": "紧凑显示",
+              "workspaceCards": "工作区卡片",
+              "worktreeCards": "工作树卡片",
+              "cardLayout": "卡片布局",
+              "workspaceOptions": "工作区选项",
+              "detailed": "详细"
             }
           }
         },
@@ -6663,7 +6697,17 @@
             "b54cea709b": "伙伴",
             "051203d37c": "宠物",
             "6b5a56ac35": "右下角漂浮的动画宠物。",
-            "87d99e634b": "宠物"
+            "87d99e634b": "宠物",
+            "agentHibernation": {
+              "agent": "agent",
+              "agents": "agents",
+              "description": "在配置的空闲时间后停止后台 agent 终端，并在再次打开时恢复受支持的会话。",
+              "hibernate": "休眠",
+              "minutes": "分钟",
+              "sleep": "睡眠",
+              "terminal": "终端",
+              "title": "Agent 休眠"
+            }
           }
         },
         "floating": {
@@ -7289,7 +7333,9 @@
             "host": "host",
             "ssh": "ssh",
             "remote": "remote",
-            "vm": "vm"
+            "vm": "vm",
+            "keepForkUpToDate": "保持 Fork 最新",
+            "keepForkUpToDateDescription": "从 upstream 安全地快进此 Fork。"
           }
         },
         "runtime": {
@@ -7871,6 +7917,33 @@
           "workspaceDirectory": "The client default is inherited until a host needs its own worktree directory.",
           "providerHost": "Provider host",
           "providerAccounts": "Credentials and account checks belong to the local client or selected remote server that owns the provider integration."
+        },
+        "RepositoryForkSyncSection": {
+          "defaultBranch": "默认分支",
+          "synced": "Fork 已更新",
+          "syncedDescriptionSingular": "已将 {{branch}} 快进 1 个提交。",
+          "syncedDescriptionPlural": "已将 {{branch}} 快进 {{count}} 个提交。",
+          "upToDate": "Fork 已是最新",
+          "upToDateDescription": "{{branch}} 已与 upstream 一致。",
+          "missingOrigin": "缺少 origin 远程。",
+          "missingUpstream": "缺少 upstream 远程。",
+          "upstreamMismatch": "upstream 远程不再匹配此 Fork。",
+          "missingUpstreamBranch": "无法解析 upstream 默认分支。",
+          "missingOriginBranch": "origin 没有 upstream 默认分支。",
+          "diverged": "origin 有 upstream 中不存在的提交。",
+          "blocked": "已跳过 Fork 同步",
+          "blockedFallback": "Orca 无法安全地快进此 Fork。",
+          "failed": "Fork 同步失败",
+          "title": "保持 Fork 最新",
+          "description": "从 upstream 安全地快进此 Fork。",
+          "longDescription": "当此 Fork 落后于 upstream 时，Orca 可以安全地快进其默认分支。如果该分支有仅本地提交或冲突，Orca 会跳过更新。",
+          "forkOf": "{{owner}}/{{repo}} 的 Fork",
+          "syncing": "同步中",
+          "syncNow": "立即同步",
+          "modeLabel": "Fork 同步模式",
+          "ask": "询问",
+          "safeAuto": "安全自动",
+          "off": "关闭"
         }
       },
       "right": {
@@ -7957,7 +8030,8 @@
           "FileExplorer": {
             "79b1537dd3": "选择一个工作区来浏览文件",
             "4da4d89845": "返回资源管理器",
-            "6ed5ce817b": "搜索"
+            "6ed5ce817b": "搜索",
+            "2f4483d6c4": "没有文件匹配此筛选条件"
           },
           "FileExplorerBackgroundMenu": {
             "3b5e2dcb8d": "新建文件夹",
@@ -7994,7 +8068,8 @@
             "31b4c3195d": "更多资源管理器操作",
             "d95e30fe28": "刷新资源管理器",
             "6026b16950": "全部折叠",
-            "693cbeadd0": "搜索"
+            "693cbeadd0": "搜索",
+            "c1f3f3ec70": "搜索文件内容"
           },
           "FileExplorerTreeStatus": {
             "ce03835e1f": "此工作区中没有文件",
@@ -8011,7 +8086,8 @@
             "9a8b85882d": "加载中",
             "62e685d5ec": "idle",
             "111e1d0db4": "错误",
-            "e5e81e59a6": "调整 commits 大小"
+            "e5e81e59a6": "调整 commits 大小",
+            "6d1e0a7c3b": "无法加载提交文件"
           },
           "HostedReviewActions": {
             "4d5fb5a284": "关闭",
@@ -8119,6 +8195,10 @@
             "4567e6e0b6": "匹配整个单词",
             "464ae3974f": "火柴盒",
             "693cbeadd0": "搜索"
+          },
+          "SearchQueryRow": {
+            "queryLabel": "搜索文件",
+            "clearLabel": "清除搜索"
           },
           "SearchResultItems": {
             "cc06595a3b": "复制线路径",
@@ -8284,7 +8364,14 @@
             "e2b7a1c0d9f4": "创建 {{value0}} 失败",
             "hugeRepoIgnorePrompt": "此存储库的活动更改过多。是否将 \"{{value0}}\" 添加到 .gitignore？",
             "hugeRepoIgnoreAction": "添加到 .gitignore",
-            "tooManyChanges": "检测到过多更改。仅显示前 {{value0}} 项。"
+            "tooManyChanges": "检测到过多更改。仅显示前 {{value0}} 项。",
+            "bf5082de46": "已复制{{value0}}",
+            "c06193ef57": "无法复制{{value0}}",
+            "d172a4f068": "提交哈希",
+            "e283b50179": "提交信息",
+            "f394c6128a": "没有可用于解释此提交的代理",
+            "04a5d7239b": "此仓库没有受支持的网页远程库",
+            "15b6e834ac": "无法在浏览器中打开提交"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "无法启动选定的 Agent。",
@@ -8618,6 +8705,7 @@
           "AiVaultPanel": {
             "resumeCommandCopied": "Resume command copied",
             "valueCopied": "{{value0}} copied",
+            "valueCopyFailed": "无法复制 {{value0}}",
             "openWorkspaceBeforeResuming": "Open a workspace before resuming a session.",
             "localWorkspacesOnly": "Resume from history is only available in local workspaces.",
             "agentSessionQueued": "{{value0}} session queued",
@@ -8631,8 +8719,10 @@
             "transcriptsSkipped": "{{count}} transcript skipped",
             "noAgentSessionsFound": "No agent sessions found",
             "noSessionsMatchFilters": "No sessions match the current filters",
-            "sessionId": "Session ID",
-            "logPath": "Log path"
+            "sessionId": "会话 ID",
+            "logPath": "日志路径",
+            "agents": "智能体",
+            "sessionsShownCompact": "已显示 {{value0}} 个"
           },
           "AiVaultPanelControls": {
             "scanningSessions": "Scanning sessions",
@@ -8695,7 +8785,8 @@
             "hoursAgo": "{{value0}}h ago",
             "daysAgo": "{{value0}}d ago",
             "monthsAgo": "{{value0}}mo ago",
-            "yearsAgo": "{{value0}}y ago"
+            "yearsAgo": "{{value0}}y ago",
+            "sessionId": "会话 ID"
           },
           "AiVaultSessionRow": {
             "resumeAgentSession": "Resume {{value0}} session",
@@ -8707,7 +8798,37 @@
             "copySessionId": "Copy Session ID",
             "copyLogPath": "Copy Log Path",
             "messageCount": "{{value0}} msgs",
-            "tokenCount": "{{value0}} tok"
+            "tokenCount": "{{value0}} tok",
+            "toggleSessionDetails": "{{value0}} 会话详情",
+            "hideDetails": "隐藏详情",
+            "showDetails": "显示详情",
+            "moreSessionActions": "更多会话操作",
+            "moreActions": "更多操作"
+          },
+          "FileExplorerNameFilter": {
+            "26fb73c6e3": "查找文件",
+            "4d5a6b2a49": "清除文件筛选器",
+            "7a9fb1e6aa": "内容"
+          },
+          "FileExplorerViewSwitch": {
+            "c4e9a2b713": "名称",
+            "b3c8f1a902": "按名称筛选文件",
+            "f8a2c4d1e0": "资源管理器搜索模式"
+          },
+          "GitHistoryCommitFiles": {
+            "a1b2c3d4e5": "正在加载文件…",
+            "b2c3d4e5f6": "此提交没有文件更改",
+            "c3d4e5f6a7": "一起打开所有更改"
+          },
+          "GitHistoryRow": {
+            "2f9c41ab07": "显示提交{{value0}}中的文件：{{value1}}",
+            "4a8d9e0c1f": "隐藏提交{{value0}}中的文件：{{value1}}"
+          },
+          "GitHistoryCommitContextMenu": {
+            "7b1c4e9a02": "在浏览器中打开提交",
+            "8c2d5fab13": "复制提交哈希",
+            "9d3e60bc24": "复制提交信息",
+            "ae4f71cd35": "解释更改"
           }
         }
       },
@@ -8777,7 +8898,10 @@
           "69af7e9c1c": "尚未加入 PATH。Orca 会将其设为默认，你可随时安装。",
           "1eee1c7bd8": "PATH 中未检测到 agents。可选择一个稍后安装，或使用空白 terminal 继续。",
           "hideAgents": "隐藏 Agent",
-          "showMoreAgents": "显示另外 {{value0}} 个 Agent→"
+          "showMoreAgents": "显示另外 {{value0}} 个 Agent→",
+          "yoloPermissionsLabel": "Yolo / Dangerously skip permissions",
+          "yoloPermissionsInfo": "Agent permission info",
+          "yoloPermissionsTooltip": "Skip permission checks for agents for less interruptions"
         },
         "FeatureSetupChecklist": {
           "77f74946f5": "Agent 可互相通信、领取任务并协调交接。",

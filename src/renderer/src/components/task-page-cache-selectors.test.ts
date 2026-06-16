@@ -181,12 +181,14 @@ describe('task page cache selectors', () => {
       type: 'pr' as const,
       state: 'open' as const,
       autoMergeEnabled: false,
+      autoMergeAllowed: false,
       mergeQueueRequired: null,
       updatedAt: '2026-01-01'
     }
     const refreshedFirst = {
       ...first,
       autoMergeEnabled: true,
+      autoMergeAllowed: true,
       mergeQueueRequired: true
     }
 

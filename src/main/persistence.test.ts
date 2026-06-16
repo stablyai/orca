@@ -2956,6 +2956,43 @@ describe('Store', () => {
     expect(reloaded.getRepo('r1')!.issueSourcePreference).toBe('upstream')
   })
 
+  it('updateRepo persists fork sync mode across reloads', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo())
+
+    const updated = store.updateRepo('r1', { forkSyncMode: 'safe-auto' })
+    expect(updated!.forkSyncMode).toBe('safe-auto')
+
+    store.flush()
+    const reloaded = await createStore()
+    expect(reloaded.getRepo('r1')!.forkSyncMode).toBe('safe-auto')
+  })
+
+  it('updateRepo ignores invalid fork sync mode updates', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo({ forkSyncMode: 'ask' }))
+
+    const updated = store.updateRepo('r1', { forkSyncMode: 'always' as never })
+
+    expect(updated!.forkSyncMode).toBe('ask')
+
+    store.flush()
+    const reloaded = await createStore()
+    expect(reloaded.getRepo('r1')!.forkSyncMode).toBe('ask')
+  })
+
+  it('getRepo does not expose invalid persisted fork sync mode values', async () => {
+    writeDataFile({
+      ...getDefaultPersistedState(testState.dir),
+      repos: [makeRepo({ forkSyncMode: 'always' as never })]
+    })
+
+    const store = await createStore()
+
+    expect(store.getRepo('r1')!.forkSyncMode).toBeUndefined()
+    expect(store.getRepos()[0]!.forkSyncMode).toBeUndefined()
+  })
+
   it('updateRepo with issueSourcePreference=undefined clears the preference', async () => {
     const store = await createStore()
     store.addRepo(makeRepo({ issueSourcePreference: 'origin' }))
@@ -7853,6 +7890,171 @@ describe('Store', () => {
       installId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
       existedBeforeTelemetryRelease: false
     })
+  })
+})
+
+describe('Store.migrateWorktreeIdentity', () => {
+  const OLD = 'repo1::/ws/cunner'
+  const NEW = 'repo1::/ws/worktree-creation-spinner'
+  const OLD_WORKSPACE_KEY = worktreeWorkspaceKey(OLD)
+  const NEW_WORKSPACE_KEY = worktreeWorkspaceKey(NEW)
+
+  beforeEach(() => {
+    testState.dir = mkdtempSync(join(tmpdir(), 'orca-test-'))
+  })
+
+  afterEach(() => {
+    rmSync(testState.dir, { recursive: true, force: true })
+  })
+
+  it('moves meta, lineage, tabs, active pointers, and records the prior id', async () => {
+    const store = await createStore()
+    store.setWorktreeMeta(OLD, { displayName: 'Cunner', linkedIssue: 42 })
+    store.setWorktreeLineage(OLD, makeWorktreeLineage({ worktreeId: OLD }))
+    store.setWorkspaceLineage(
+      makeWorkspaceLineage({
+        childWorkspaceKey: OLD_WORKSPACE_KEY,
+        parentWorkspaceKey: folderWorkspaceKey('folder-parent')
+      })
+    )
+    store.setWorkspaceLineage(
+      makeWorkspaceLineage({
+        childWorkspaceKey: worktreeWorkspaceKey('repo1::/ws/child'),
+        parentWorkspaceKey: OLD_WORKSPACE_KEY
+      })
+    )
+    store.setWorkspaceSession({
+      activeRepoId: 'repo1',
+      activeWorkspaceKey: OLD_WORKSPACE_KEY,
+      activeWorktreeId: OLD,
+      activeTabId: 'tab1',
+      tabsByWorktree: { [OLD]: [makeTerminalTab({ id: 'tab1', worktreeId: OLD })] },
+      activeWorktreeIdsOnShutdown: [OLD],
+      openFilesByWorktree: {
+        [OLD]: [
+          { filePath: '/ws/cunner/a.ts', relativePath: 'a.ts', worktreeId: OLD, language: 'ts' }
+        ]
+      },
+      activeFileIdByWorktree: { [OLD]: '/ws/cunner/a.ts' },
+      browserTabsByWorktree: {
+        [OLD]: [{ id: 'browser1', worktreeId: OLD, title: 'Browser', url: 'about:blank' }]
+      },
+      browserPagesByWorkspace: {
+        browser1: [{ id: 'page1', workspaceId: 'browser1', worktreeId: OLD }]
+      },
+      activeBrowserTabIdByWorktree: { [OLD]: 'browser1' },
+      activeTabTypeByWorktree: { [OLD]: 'browser' },
+      activeTabIdByWorktree: { [OLD]: 'tab1' },
+      unifiedTabs: { [OLD]: [{ id: 'unified1', worktreeId: OLD }] },
+      tabGroups: {
+        [OLD]: [{ id: 'group1', worktreeId: OLD, activeTabId: 'unified1', tabOrder: ['unified1'] }]
+      },
+      tabGroupLayouts: { [OLD]: { type: 'leaf', groupId: 'group1' } },
+      activeGroupIdByWorktree: { [OLD]: 'group1' },
+      lastVisitedAtByWorktreeId: { [OLD]: 123 },
+      defaultTerminalTabsAppliedByWorktreeId: { [OLD]: true },
+      sleepingAgentSessionsByPaneKey: {
+        'tab1:leaf': {
+          paneKey: 'tab1:leaf',
+          tabId: 'tab1',
+          worktreeId: OLD,
+          agent: 'codex',
+          providerSession: { key: 'session_id', id: 'session-1' },
+          prompt: 'Do work',
+          state: 'done',
+          capturedAt: 1,
+          updatedAt: 1
+        }
+      },
+      terminalLayoutsByTabId: {}
+    } as unknown as WorkspaceSessionState)
+    store.setWorkspaceSession(
+      {
+        ...getDefaultWorkspaceSession(),
+        activeRepoId: 'repo1',
+        activeWorkspaceKey: OLD_WORKSPACE_KEY,
+        activeWorktreeId: OLD,
+        tabsByWorktree: { [OLD]: [makeTerminalTab({ id: 'host-tab', worktreeId: OLD })] },
+        terminalLayoutsByTabId: {}
+      },
+      'runtime:env-a'
+    )
+
+    store.migrateWorktreeIdentity(OLD, NEW)
+
+    expect(store.getWorktreeMeta(OLD)).toBeUndefined()
+    const meta = store.getWorktreeMeta(NEW)
+    expect(meta?.displayName).toBe('Cunner')
+    expect(meta?.linkedIssue).toBe(42)
+    expect(meta?.priorWorktreeIds).toEqual([OLD])
+
+    expect(store.getWorktreeLineage(OLD)).toBeUndefined()
+    expect(store.getWorktreeLineage(NEW)?.worktreeId).toBe(NEW)
+    expect(store.getWorkspaceLineage(OLD_WORKSPACE_KEY)).toBeUndefined()
+    expect(store.getWorkspaceLineage(NEW_WORKSPACE_KEY)?.childWorkspaceKey).toBe(NEW_WORKSPACE_KEY)
+    expect(
+      store.getWorkspaceLineage(worktreeWorkspaceKey('repo1::/ws/child'))?.parentWorkspaceKey
+    ).toBe(NEW_WORKSPACE_KEY)
+
+    // The live session's tab keeps its frozen ptyId but now belongs to the new id.
+    expect(store.getWorktreeIdForTab('tab1')).toBe(NEW)
+    const session = store.getWorkspaceSession()
+    expect(session.tabsByWorktree[OLD]).toBeUndefined()
+    expect(session.tabsByWorktree[NEW]?.[0]?.worktreeId).toBe(NEW)
+    expect(session.activeWorkspaceKey).toBe(NEW_WORKSPACE_KEY)
+    expect(session.activeWorktreeIdsOnShutdown).toEqual([NEW])
+    expect(session.openFilesByWorktree?.[OLD]).toBeUndefined()
+    expect(session.openFilesByWorktree?.[NEW]?.[0]?.worktreeId).toBe(NEW)
+    expect(session.activeFileIdByWorktree?.[NEW]).toBe('/ws/cunner/a.ts')
+    expect(session.browserTabsByWorktree?.[OLD]).toBeUndefined()
+    expect(session.browserTabsByWorktree?.[NEW]?.[0]?.worktreeId).toBe(NEW)
+    expect(session.browserPagesByWorkspace?.browser1?.[0]?.worktreeId).toBe(NEW)
+    expect(session.activeBrowserTabIdByWorktree?.[NEW]).toBe('browser1')
+    expect(session.activeTabTypeByWorktree?.[NEW]).toBe('browser')
+    expect(session.activeWorktreeId).toBe(NEW)
+    expect(session.activeTabIdByWorktree?.[NEW]).toBe('tab1')
+    expect(session.unifiedTabs?.[NEW]?.[0]?.worktreeId).toBe(NEW)
+    expect(session.tabGroups?.[NEW]?.[0]?.worktreeId).toBe(NEW)
+    expect(session.tabGroupLayouts?.[NEW]).toEqual({ type: 'leaf', groupId: 'group1' })
+    expect(session.activeGroupIdByWorktree?.[NEW]).toBe('group1')
+    expect(session.lastVisitedAtByWorktreeId?.[NEW]).toBe(123)
+    expect(session.defaultTerminalTabsAppliedByWorktreeId?.[NEW]).toBe(true)
+    expect(session.sleepingAgentSessionsByPaneKey?.['tab1:leaf']?.worktreeId).toBe(NEW)
+
+    const hostSession = store.getWorkspaceSession('runtime:env-a')
+    expect(hostSession.tabsByWorktree[OLD]).toBeUndefined()
+    expect(hostSession.tabsByWorktree[NEW]?.[0]?.worktreeId).toBe(NEW)
+    expect(hostSession.activeWorkspaceKey).toBe(NEW_WORKSPACE_KEY)
+  })
+
+  it('rewrites parentWorktreeId back-references in other lineage entries', async () => {
+    const store = await createStore()
+    store.setWorktreeMeta(OLD, { displayName: 'Cunner' })
+    const CHILD = 'repo1::/ws/child'
+    store.setWorktreeLineage(
+      CHILD,
+      makeWorktreeLineage({ worktreeId: CHILD, parentWorktreeId: OLD })
+    )
+
+    store.migrateWorktreeIdentity(OLD, NEW)
+
+    expect(store.getWorktreeLineage(CHILD)?.parentWorktreeId).toBe(NEW)
+  })
+
+  it('accumulates prior ids across chained renames', async () => {
+    const store = await createStore()
+    store.setWorktreeMeta(OLD, { displayName: 'Cunner' })
+    store.migrateWorktreeIdentity(OLD, NEW)
+    const NEWER = 'repo1::/ws/final-name'
+    store.migrateWorktreeIdentity(NEW, NEWER)
+    expect(store.getWorktreeMeta(NEWER)?.priorWorktreeIds).toEqual([OLD, NEW])
+  })
+
+  it('is a no-op when the ids match', async () => {
+    const store = await createStore()
+    store.setWorktreeMeta(OLD, { displayName: 'Cunner' })
+    store.migrateWorktreeIdentity(OLD, OLD)
+    expect(store.getWorktreeMeta(OLD)?.priorWorktreeIds).toBeUndefined()
   })
 })
 

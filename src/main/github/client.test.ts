@@ -337,6 +337,7 @@ describe('getPRForBranch', () => {
               mergeCommitAllowed: false,
               rebaseMergeAllowed: true,
               squashMergeAllowed: true,
+              autoMergeAllowed: true,
               mergeQueue: null
             }
           }
@@ -354,6 +355,7 @@ describe('getPRForBranch', () => {
       }
     })
     expect(pr?.mergeQueueRequired).toBe(false)
+    expect(pr?.autoMergeAllowed).toBe(true)
     expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
       2,
       expect.arrayContaining([
@@ -1809,13 +1811,13 @@ describe('GitHub GraphQL rate-limit guard', () => {
     ghExecFileAsyncMock.mockResolvedValue({ stdout: '', stderr: '' })
 
     await expect(
-      setPRAutoMerge('/remote/repo-root', 7, true, 'ssh-1', {
+      setPRAutoMerge('/remote/repo-root', 7, true, 'squash', 'ssh-1', {
         owner: 'stablyai',
         repo: 'orca'
       })
     ).resolves.toEqual({ ok: true })
     await expect(
-      setPRAutoMerge('/remote/repo-root', 7, false, 'ssh-1', {
+      setPRAutoMerge('/remote/repo-root', 7, false, 'squash', 'ssh-1', {
         owner: 'stablyai',
         repo: 'orca'
       })
@@ -1823,7 +1825,7 @@ describe('GitHub GraphQL rate-limit guard', () => {
 
     expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
       1,
-      ['pr', 'merge', '7', '--auto', '--repo', 'stablyai/orca'],
+      ['pr', 'merge', '7', '--auto', '--squash', '--repo', 'stablyai/orca'],
       expect.objectContaining({
         env: expect.objectContaining({ GH_PROMPT_DISABLED: '1' })
       })

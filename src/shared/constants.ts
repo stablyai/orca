@@ -424,6 +424,7 @@ export function getDefaultUIState(): PersistedUIState {
     rightSidebarTab: 'explorer',
     rightSidebarExplorerView: 'files',
     rightSidebarWidth: 350,
+    markdownTocPanelWidth: 240,
     groupBy: 'repo',
     sortBy: 'recent',
     projectOrderBy: 'manual',

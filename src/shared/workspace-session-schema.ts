@@ -135,6 +135,7 @@ const tabContentTypeSchema = z.enum([
   'editor',
   'diff',
   'conflict-review',
+  'check-details',
   'browser',
   'simulator'
 ])

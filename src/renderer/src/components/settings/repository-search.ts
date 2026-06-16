@@ -63,6 +63,50 @@ export function getRepositoryPaneSearchEntries(repo: Repo): SettingsSearchEntry[
         )
       ]
     },
+    ...(repo.upstream && !isFolder
+      ? [
+          {
+            title: translate(
+              'auto.components.settings.repository.search.keepForkUpToDate',
+              'Keep Fork Up to Date'
+            ),
+            description: translate(
+              'auto.components.settings.repository.search.keepForkUpToDateDescription',
+              'Safely fast-forward this fork from upstream.'
+            ),
+            keywords: [
+              repo.displayName,
+              repo.upstream.owner,
+              repo.upstream.repo,
+              ...translateSearchKeyword('auto.components.settings.repository.search.fork', 'fork'),
+              ...translateSearchKeyword(
+                'auto.components.settings.repository.search.upstream',
+                'upstream'
+              ),
+              ...translateSearchKeyword(
+                'auto.components.settings.repository.search.syncFork',
+                'sync fork'
+              ),
+              ...translateSearchKeyword(
+                'auto.components.settings.repository.search.fastForward',
+                'fast-forward'
+              ),
+              ...translateSearchKeyword(
+                'auto.components.settings.repository.search.behindUpstream',
+                'behind upstream'
+              ),
+              ...translateSearchKeyword(
+                'auto.components.settings.repository.search.origin',
+                'origin'
+              ),
+              ...translateSearchKeyword(
+                'auto.components.settings.repository.search.defaultBranch',
+                'default branch'
+              )
+            ]
+          }
+        ]
+      : []),
     ...(isFolder ? [] : getRepositoryGitWorktreeSearchEntries(repo)),
     {
       title: translate('auto.components.settings.repository.search.c5266c2c9d', 'Remove Project'),

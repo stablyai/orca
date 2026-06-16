@@ -146,6 +146,7 @@ function taskPageWorkItemStatusSignature(item: GitHubWorkItem): string {
     item.checksSummary?.pending ?? null,
     item.mergeable ?? null,
     item.autoMergeEnabled ?? null,
+    item.autoMergeAllowed ?? null,
     item.mergeQueueRequired ?? null,
     item.mergeStateStatus ?? null,
     item.updatedAt

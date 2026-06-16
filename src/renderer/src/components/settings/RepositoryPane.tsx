@@ -20,6 +20,7 @@ import { RepositoryIconPicker } from './RepositoryIconPicker'
 import { getRepositoryPaneSearchEntries } from './repository-search'
 import { RepositoryHostSetupsSection } from './RepositoryHostSetupsSection'
 import { RepoSettingsDraftInput } from './RepositorySettingsDraftInput'
+import { RepositoryForkSyncSection } from './RepositoryForkSyncSection'
 import { translate } from '@/i18n/i18n'
 export { getRepositoryPaneSearchEntries }
 
@@ -123,15 +124,18 @@ export function RepositoryPane({
   }
 
   const allEntries = getRepositoryPaneSearchEntries(repo)
-  const identityEntries = allEntries.filter((entry) =>
-    [
-      'Display Name',
-      'Project Icon',
-      'Default Worktree Base',
-      'Worktree Location',
-      'Remove Project'
-    ].includes(entry.title)
-  )
+  const identityEntryTitles = new Set([
+    translate('auto.components.settings.repository.search.7e1e456a95', 'Display Name'),
+    translate('auto.components.settings.repository.search.b24f00294a', 'Project Icon'),
+    translate(
+      'auto.components.settings.repository.search.keepForkUpToDate',
+      'Keep Fork Up to Date'
+    ),
+    translate('auto.components.settings.repository.search.094adbe930', 'Default Worktree Base'),
+    translate('auto.components.settings.repository.search.443d127b5a', 'Worktree Location'),
+    translate('auto.components.settings.repository.search.c5266c2c9d', 'Remove Project')
+  ])
+  const identityEntries = allEntries.filter((entry) => identityEntryTitles.has(entry.title))
   const sparsePresetEntries = allEntries.filter((entry) =>
     ['Sparse Checkout Presets'].includes(entry.title)
   )
@@ -282,6 +286,12 @@ export function RepositoryPane({
               forceVisible={forceFullPaneForRepoMatch}
               searchQuery={searchQuery}
               searchEntries={hostSetupEntries}
+            />
+
+            <RepositoryForkSyncSection
+              repo={repo}
+              updateRepo={updateRepo}
+              forceVisible={forceFullPaneForRepoMatch}
             />
 
             <SearchableSetting

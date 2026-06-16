@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest'
+import { getLocalExecutionHostLabel } from '../../../../shared/execution-host'
 import { getProviderAccountScope, getProviderRateLimitScope } from './provider-account-scope'
 
 describe('getProviderAccountScope', () => {
   it('describes provider accounts as client-owned without an active runtime', () => {
     expect(getProviderAccountScope({ activeRuntimeEnvironmentId: null })).toEqual({
-      label: 'Local Mac',
+      label: getLocalExecutionHostLabel(),
       description:
         'Credentials and account checks for this provider are owned by this desktop client. Use Settings > Remote Orca Servers > Advanced to edit server-owned credentials.'
     })
@@ -20,7 +21,7 @@ describe('getProviderAccountScope', () => {
 
   it('describes provider API budgets as host-scoped', () => {
     expect(getProviderRateLimitScope({ activeRuntimeEnvironmentId: null }, 'GitHub')).toEqual({
-      label: 'Local Mac',
+      label: getLocalExecutionHostLabel(),
       description:
         'GitHub API budget is fetched from the CLI on this desktop client. Use Settings > Remote Orca Servers > Advanced to view server-owned budgets.'
     })

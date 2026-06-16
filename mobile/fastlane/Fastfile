@@ -1,0 +1,57 @@
+# Orca Mobile iOS release lane.
+#
+# Builds the prebuilt iOS workspace, signs it with the distribution identity
+# already imported into the CI keychain, and uploads the resulting .ipa to
+# TestFlight / App Store Connect. All Apple credentials come from CI env vars
+# (see .github/workflows/mobile-build.yml) so nothing secret lives in the repo.
+#
+# Provisioning profiles are generated/refreshed automatically from the App
+# Store Connect API key via `-allowProvisioningUpdates`; only the distribution
+# certificate's private key must be pre-supplied (the API key cannot recreate
+# it across runs), which is why we import a .p12 into the keychain first.
+
+default_platform(:ios)
+
+WORKSPACE = "ios/Orca.xcworkspace"
+SCHEME = "Orca"
+
+platform :ios do
+  desc "Build, sign, and upload Orca Mobile to TestFlight"
+  lane :release do
+    api_key = app_store_connect_api_key(
+      key_id: ENV.fetch("ASC_KEY_ID"),
+      issuer_id: ENV.fetch("ASC_ISSUER_ID"),
+      key_content: ENV.fetch("ASC_API_KEY_P8"),
+      is_key_content_base64: true,
+      in_house: false,
+    )
+
+    team_id = ENV.fetch("APPLE_TEAM_ID")
+
+    build_app(
+      workspace: WORKSPACE,
+      scheme: SCHEME,
+      configuration: "Release",
+      export_method: "app-store",
+      # Why: let xcodebuild create/download the App Store provisioning profile
+      # from the API key instead of committing one. The distribution cert
+      # itself is pre-imported into the keychain by the workflow.
+      xcargs: "-allowProvisioningUpdates DEVELOPMENT_TEAM=#{team_id}",
+      export_options: {
+        teamID: team_id,
+        signingStyle: "automatic",
+      },
+      output_directory: "build",
+      output_name: "Orca.ipa",
+      clean: true,
+    )
+
+    upload_to_testflight(
+      api_key: api_key,
+      skip_waiting_for_build_processing: true,
+      # Why: the human still drafts "What's New" + review notes in the ASC web
+      # UI (see the mobile-app-store-release skill). CI only delivers the build.
+      distribute_external: false,
+    )
+  end
+end

@@ -62,7 +62,7 @@ export function MergedReviewActions({
   return (
     <Button
       type="button"
-      variant="secondary"
+      variant="destructive"
       size="xs"
       className="cursor-pointer text-[11px] hover:cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
       onClick={onDeleteWorktree}

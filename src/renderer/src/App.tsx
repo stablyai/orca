@@ -544,6 +544,7 @@ function App(): React.JSX.Element {
   const shouldMountSetupGuideTelemetryObserver = persistedUIReady
   const shouldMountUpdateCard = shouldMountUpdateCardForStatus(updateStatus)
   const rightSidebarWidth = useAppStore((s) => s.rightSidebarWidth)
+  const markdownTocPanelWidth = useAppStore((s) => s.markdownTocPanelWidth)
   const rightSidebarOpen = useAppStore((s) => s.rightSidebarOpen)
   const rightSidebarTab = useAppStore((s) => s.rightSidebarTab)
   const rightSidebarExplorerView = useAppStore((s) => s.rightSidebarExplorerView)
@@ -1174,6 +1175,7 @@ function App(): React.JSX.Element {
         rightSidebarTab,
         rightSidebarExplorerView,
         rightSidebarWidth,
+        markdownTocPanelWidth,
         groupBy,
         sortBy,
         projectOrderBy,
@@ -1200,6 +1202,7 @@ function App(): React.JSX.Element {
     rightSidebarTab,
     rightSidebarExplorerView,
     rightSidebarWidth,
+    markdownTocPanelWidth,
     groupBy,
     sortBy,
     projectOrderBy,

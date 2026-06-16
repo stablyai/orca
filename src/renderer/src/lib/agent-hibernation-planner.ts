@@ -147,6 +147,28 @@ function signatureFor(worktreeId: string, panes: EligiblePane[]): string {
   return `${worktreeId}|${parts.join('|')}`
 }
 
+function getAgentEntriesByTabId(
+  agentStatusByPaneKey: AgentHibernationPlannerSnapshot['agentStatusByPaneKey']
+): Map<string, AgentStatusEntry[]> {
+  const entriesByTabId = new Map<string, AgentStatusEntry[]>()
+  for (const entry of Object.values(agentStatusByPaneKey)) {
+    if (!entry) {
+      continue
+    }
+    const tabId = getEntryTabId(entry)
+    if (!tabId) {
+      continue
+    }
+    const entries = entriesByTabId.get(tabId)
+    if (entries) {
+      entries.push(entry)
+    } else {
+      entriesByTabId.set(tabId, [entry])
+    }
+  }
+  return entriesByTabId
+}
+
 export function planAgentHibernationCandidates(
   snapshot: AgentHibernationPlannerSnapshot
 ): AgentHibernationCandidate[] {
@@ -156,6 +178,7 @@ export function planAgentHibernationCandidates(
   const idleMs = getEffectiveAgentHibernationIdleMs(snapshot.settings.agentHibernationIdleMs)
   const mobileLockedPtyIds = new Set(snapshot.mobileLockedPtyIds)
   const foregroundWorktreeIds = new Set(snapshot.foregroundWorktreeIds)
+  const agentEntriesByTabId = getAgentEntriesByTabId(snapshot.agentStatusByPaneKey)
   const candidates: AgentHibernationCandidate[] = []
   for (const [worktreeId, tabs] of Object.entries(snapshot.tabsByWorktree)) {
     if (
@@ -181,10 +204,7 @@ export function planAgentHibernationCandidates(
         continue
       }
       const layout = snapshot.terminalLayoutsByTabId[tab.id]
-      for (const entry of Object.values(snapshot.agentStatusByPaneKey)) {
-        if (!entry || getEntryTabId(entry) !== tab.id) {
-          continue
-        }
+      for (const entry of agentEntriesByTabId.get(tab.id) ?? []) {
         const eligible = getEligiblePane({
           entry,
           tab,

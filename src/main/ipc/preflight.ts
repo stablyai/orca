@@ -13,6 +13,7 @@ import { getActiveMultiplexer } from './ssh'
 import { detectWslCommandsOnPath, type WslPreflightTarget } from './preflight-wsl-agent-detection'
 import { runPreflightCommandInWsl } from './preflight-wsl-command'
 import { detectCommandsInInstallDirs } from './local-agent-install-dir-detection'
+import { buildLocalPreflightEnv } from './preflight-local-env'
 const execFileAsync = promisify(execFile)
 const PREFLIGHT_COMMAND_TIMEOUT_MS = 5000
 
@@ -91,9 +92,11 @@ async function execLocalPreflightCommand(
   command: string,
   args: string[]
 ): Promise<PreflightCommandResult> {
+  const env = buildLocalPreflightEnv()
   const commandPromise = execFileAsync(command, args, {
     encoding: 'utf-8',
-    timeout: PREFLIGHT_COMMAND_TIMEOUT_MS
+    timeout: PREFLIGHT_COMMAND_TIMEOUT_MS,
+    ...(env ? { env } : {})
   }) as Promise<PreflightCommandResult>
 
   return withPreflightTimeout(command, commandPromise)

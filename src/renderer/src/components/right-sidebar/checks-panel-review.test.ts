@@ -25,7 +25,8 @@ describe('gitHubPRToChecksPanelReview', () => {
         reviewDecision: 'REVIEW_REQUIRED',
         mergeQueueRequired: true,
         mergeStateStatus: 'BLOCKED',
-        autoMergeEnabled: true
+        autoMergeEnabled: true,
+        autoMergeAllowed: false
       })
     )
 
@@ -33,6 +34,7 @@ describe('gitHubPRToChecksPanelReview', () => {
     expect(review.mergeQueueRequired).toBe(true)
     expect(review.mergeStateStatus).toBe('BLOCKED')
     expect(review.autoMergeEnabled).toBe(true)
+    expect(review.autoMergeAllowed).toBe(false)
   })
 
   it('carries the base identity fields', () => {

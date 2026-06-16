@@ -158,48 +158,50 @@ export default function OnboardingFlow({
   }, [requestSkipConfirmation, skipConfirmOpen])
 
   return (
-    <div
-      className="fixed inset-0 z-[100] flex items-center justify-center overflow-hidden bg-black/50 p-4 text-foreground backdrop-blur-[2px]"
-      data-onboarding-overlay
-      onPointerDown={(event) => {
-        if (!shouldRequestOnboardingSkipConfirmation(event)) {
-          return
-        }
-        requestSkipConfirmation('button')
-      }}
-    >
+    <TooltipProvider delayDuration={0} skipDelayDuration={0}>
       <div
-        className="absolute inset-x-0 top-0 h-8"
-        style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
-      />
-
-      <section
-        ref={flow.setLifecycleRootRef}
-        role="dialog"
-        aria-label={translate(
-          'auto.components.onboarding.OnboardingFlow.277ba45540',
-          'Orca onboarding'
-        )}
-        aria-modal="true"
-        data-onboarding-modal
-        className={cn(
-          'relative flex h-[calc(100vh-2rem)] max-h-[960px] min-h-0 w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-xl border border-border bg-card text-card-foreground shadow-[0_10px_24px_rgba(0,0,0,0.18)] transition-[max-width] duration-[760ms] ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none',
-          'max-w-[1100px]'
-        )}
+        className="fixed inset-0 z-[100] flex items-center justify-center overflow-hidden bg-black/50 p-4 text-foreground backdrop-blur-[2px]"
+        data-onboarding-overlay
+        onPointerDown={(event) => {
+          if (!shouldRequestOnboardingSkipConfirmation(event)) {
+            return
+          }
+          requestSkipConfirmation('button')
+        }}
       >
-        <div className="relative flex h-full min-h-0 flex-col px-6 pb-6 pt-8 sm:px-8 sm:pb-8 sm:pt-9">
-          <div className="flex items-center gap-3 text-base font-semibold tracking-tight">
-            <img
-              src={logo}
-              alt=""
-              aria-hidden="true"
-              className="h-7 w-auto shrink-0 invert dark:invert-0"
-            />
-            <span>{translate('auto.components.onboarding.OnboardingFlow.a249f81538', 'Orca')}</span>
-          </div>
+        <div
+          className="absolute inset-x-0 top-0 h-8"
+          style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
+        />
 
-          <div className="mt-10 flex items-center gap-2 transition-[margin-top] duration-[760ms] ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none">
-            <TooltipProvider delayDuration={0} skipDelayDuration={0}>
+        <section
+          ref={flow.setLifecycleRootRef}
+          role="dialog"
+          aria-label={translate(
+            'auto.components.onboarding.OnboardingFlow.277ba45540',
+            'Orca onboarding'
+          )}
+          aria-modal="true"
+          data-onboarding-modal
+          className={cn(
+            'relative flex h-[calc(100vh-2rem)] max-h-[960px] min-h-0 w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-xl border border-border bg-card text-card-foreground shadow-[0_10px_24px_rgba(0,0,0,0.18)] transition-[max-width] duration-[760ms] ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none',
+            'max-w-[1100px]'
+          )}
+        >
+          <div className="relative flex h-full min-h-0 flex-col px-6 pb-6 pt-8 sm:px-8 sm:pb-8 sm:pt-9">
+            <div className="flex items-center gap-3 text-base font-semibold tracking-tight">
+              <img
+                src={logo}
+                alt=""
+                aria-hidden="true"
+                className="h-7 w-auto shrink-0 invert dark:invert-0"
+              />
+              <span>
+                {translate('auto.components.onboarding.OnboardingFlow.a249f81538', 'Orca')}
+              </span>
+            </div>
+
+            <div className="mt-10 flex items-center gap-2 transition-[margin-top] duration-[760ms] ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none">
               {flow.visibleSteps.map(({ step, index: realStepIndex }, visibleIdx) => {
                 const isActive = realStepIndex === stepIndex
                 const isDone = realStepIndex < stepIndex
@@ -233,82 +235,86 @@ export default function OnboardingFlow({
                   </Tooltip>
                 )
               })}
-            </TooltipProvider>
-            <span className="ml-3 text-xs font-medium text-muted-foreground">
-              {flow.visibleStepIndex + 1}{' '}
-              {translate('auto.components.onboarding.OnboardingFlow.4db04f2f57', 'of')}{' '}
-              {flow.visibleSteps.length}
-            </span>
-          </div>
+              <span className="ml-3 text-xs font-medium text-muted-foreground">
+                {flow.visibleStepIndex + 1}{' '}
+                {translate('auto.components.onboarding.OnboardingFlow.4db04f2f57', 'of')}{' '}
+                {flow.visibleSteps.length}
+              </span>
+            </div>
 
-          <div className="mt-8 shrink-0">
-            {stepIndex === 0 && (
-              <div className="mb-2 text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
-                {translate(
-                  'auto.components.onboarding.OnboardingFlow.1b5e182e9f',
-                  'Welcome to Orca'
-                )}
-              </div>
-            )}
-            <h1 className="text-[34px] font-semibold leading-[1.15] tracking-tight text-foreground">
-              {copy.title}
-            </h1>
-            {copy.subtitle ? (
-              <p className="mt-3 max-w-[58ch] text-[15px] leading-relaxed text-muted-foreground">
-                {copy.subtitle}
-              </p>
-            ) : null}
-          </div>
+            <div className="mt-8 shrink-0">
+              {stepIndex === 0 && (
+                <div className="mb-2 text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
+                  {translate(
+                    'auto.components.onboarding.OnboardingFlow.1b5e182e9f',
+                    'Welcome to Orca'
+                  )}
+                </div>
+              )}
+              <h1 className="text-[34px] font-semibold leading-[1.15] tracking-tight text-foreground">
+                {copy.title}
+              </h1>
+              {copy.subtitle ? (
+                <p className="mt-3 text-[15px] leading-relaxed text-muted-foreground">
+                  {copy.subtitle}
+                </p>
+              ) : null}
+            </div>
 
-          <div
-            className={cn(
-              'min-h-0 flex-1 transition-[margin-top] duration-[760ms] ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none',
-              // Why: long setup output should scroll inside the step so the footer
-              // actions stay anchored across every onboarding page.
-              cn('scrollbar-sleek overflow-y-auto pr-1', 'mt-10')
-            )}
-          >
-            {currentStep.id === 'agent' && (
-              <AgentStep
-                selectedAgent={flow.selectedAgent}
-                onSelect={flow.setSelectedAgent}
-                detectedSet={flow.detectedSet}
-                isDetecting={flow.isDetectingAgents}
-              />
-            )}
-            {currentStep.id === 'theme' && (
-              <ThemeStep
-                theme={flow.theme}
-                onThemeChange={flow.setTheme}
-                settings={flow.settings}
-                updateSettings={flow.updateSettings}
-              />
-            )}
-            {currentStep.id === 'notifications' && (
-              <NotificationStep settings={flow.settings} updateSettings={flow.updateSettings} />
-            )}
-            {currentStep.id === 'integrations' && <IntegrationsStep />}
-          </div>
+            <div
+              className={cn(
+                'min-h-0 flex-1 transition-[margin-top] duration-[760ms] ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none',
+                // Why: agent step pins permissions below a capped agent grid scroll
+                // region; other steps keep the shared outer scroll container.
+                currentStep.id === 'agent'
+                  ? 'mt-10 flex flex-col overflow-hidden'
+                  : cn('scrollbar-sleek overflow-y-auto pr-1', 'mt-10')
+              )}
+            >
+              {currentStep.id === 'agent' && (
+                <AgentStep
+                  selectedAgent={flow.selectedAgent}
+                  onSelect={flow.setSelectedAgent}
+                  detectedSet={flow.detectedSet}
+                  isDetecting={flow.isDetectingAgents}
+                  yoloPermissions={flow.yoloPermissions}
+                  onYoloPermissionsChange={flow.setYoloPermissions}
+                />
+              )}
+              {currentStep.id === 'theme' && (
+                <ThemeStep
+                  theme={flow.theme}
+                  onThemeChange={flow.setTheme}
+                  settings={flow.settings}
+                  updateSettings={flow.updateSettings}
+                />
+              )}
+              {currentStep.id === 'notifications' && (
+                <NotificationStep settings={flow.settings} updateSettings={flow.updateSettings} />
+              )}
+              {currentStep.id === 'integrations' && <IntegrationsStep />}
+            </div>
 
-          <OnboardingFooter
-            shouldShowSkipToProjectSetup={shouldShowSkipToProjectSetup}
-            busyLabel={busyLabel}
-            onSkipToRepo={() => void flow.skipToRepo()}
-            stepIndex={stepIndex}
-            onBack={flow.nestedScan ? flow.cancelNested : flow.back}
-            showPrimary
-            primaryBusy={shouldShowFooterBusy}
-            primaryLabel={footerPrimaryLabel}
-            shortcutModifierLabel={continueShortcutModifierLabel}
-            onPrimary={() => void flow.next()}
-          />
-        </div>
-      </section>
-      <OnboardingSkipConfirmationDialog
-        open={skipConfirmOpen}
-        onOpenChange={setSkipConfirmOpen}
-        onSkip={confirmSkipOnboarding}
-      />
-    </div>
+            <OnboardingFooter
+              shouldShowSkipToProjectSetup={shouldShowSkipToProjectSetup}
+              busyLabel={busyLabel}
+              onSkipToRepo={() => void flow.skipToRepo()}
+              stepIndex={stepIndex}
+              onBack={flow.nestedScan ? flow.cancelNested : flow.back}
+              showPrimary
+              primaryBusy={shouldShowFooterBusy}
+              primaryLabel={footerPrimaryLabel}
+              shortcutModifierLabel={continueShortcutModifierLabel}
+              onPrimary={() => void flow.next()}
+            />
+          </div>
+        </section>
+        <OnboardingSkipConfirmationDialog
+          open={skipConfirmOpen}
+          onOpenChange={setSkipConfirmOpen}
+          onSkip={confirmSkipOnboarding}
+        />
+      </div>
+    </TooltipProvider>
   )
 }

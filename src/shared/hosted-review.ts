@@ -21,6 +21,7 @@ export type HostedReviewInfo = {
   mergeable: PRMergeableState
   reviewDecision?: PRReviewDecision | null
   autoMergeEnabled?: boolean
+  autoMergeAllowed?: boolean | null
   mergeQueueRequired?: boolean | null
   mergeStateStatus?: string | null
   headSha?: string

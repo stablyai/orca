@@ -5,6 +5,11 @@ import { joinPath } from '@/lib/path'
 import { toast } from 'sonner'
 import { isPathInsideOrEqual } from '../../../../shared/cross-platform-path'
 import { resolveMarkdownLinkTarget } from '@/components/editor/markdown-internal-links'
+import {
+  buildCheckRunDetailsTabId,
+  getCheckRunDetailsTabLabel,
+  type OpenCheckRunDetailsState
+} from '@/components/editor/check-run-details-tab'
 import { openHttpLink } from '@/lib/http-link-routing'
 import { isLocalPathOpenBlocked, showLocalPathOpenBlockedToast } from '@/lib/local-path-open-guard'
 import { detectLanguage } from '@/lib/language-detect'
@@ -35,6 +40,7 @@ import {
   stripCredentialsFromMessage
 } from '../../../../shared/git-remote-error'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
+import { clampMarkdownTocPanelWidth } from '../../../../shared/markdown-toc-panel-width'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 import type { RemoteOpKind } from '@/components/right-sidebar/source-control-primary-action'
 import { shouldForcePushWithLeaseForUpstream } from '../../../../shared/git-upstream-status'
@@ -216,7 +222,10 @@ export type OpenFile = {
    * tab from the tree bumps this so the panel refetches instead of reusing a
    * stale snapshot. */
   diffContentReloadNonce?: number
-  mode: 'edit' | 'diff' | 'conflict-review' | 'markdown-preview'
+  /** Why: CI check full-details tabs are virtual editor tabs backed by fetched
+   *  PR check-run metadata instead of a file on disk. */
+  checkRunDetails?: OpenCheckRunDetailsState
+  mode: 'edit' | 'diff' | 'conflict-review' | 'markdown-preview' | 'check-details'
 }
 
 export type ActivityBarPosition = 'top' | 'side'
@@ -332,6 +341,10 @@ export type EditorSlice = {
   // true values keeps the record minimal and the default implicit.
   markdownFrontmatterVisible: Record<string, boolean>
   setMarkdownFrontmatterVisible: (fileId: string, visible: boolean) => void
+
+  // Markdown table of contents
+  markdownTocPanelWidth: number
+  setMarkdownTocPanelWidth: (width: number) => void
 
   // Right sidebar
   rightSidebarOpen: boolean
@@ -466,6 +479,19 @@ export type EditorSlice = {
     entries: ConflictReviewEntry[],
     source: ConflictReviewState['source']
   ) => void
+  openCheckRunDetails: (
+    worktreeId: string,
+    contextKey: string,
+    check: OpenCheckRunDetailsState['check'],
+    state: Pick<OpenCheckRunDetailsState, 'details' | 'loading' | 'error'>
+  ) => void
+  patchOpenCheckRunDetails: (
+    worktreeId: string,
+    contextKey: string,
+    check: OpenCheckRunDetailsState['check'],
+    state: Pick<OpenCheckRunDetailsState, 'details' | 'loading' | 'error'>
+  ) => void
+  reloadOpenCheckRunDetailsTab: (fileId: string) => Promise<void>
   openBranchAllDiffs: (
     worktreeId: string,
     worktreePath: string,
@@ -618,7 +644,7 @@ function openWorkspaceEditorItem(
   fileId: string,
   worktreeId: string,
   label: string,
-  contentType: 'editor' | 'diff' | 'conflict-review',
+  contentType: 'editor' | 'diff' | 'conflict-review' | 'check-details',
   isPreview?: boolean,
   targetGroupId?: string
 ): string {
@@ -647,7 +673,12 @@ function openWorkspaceEditorItem(
 }
 
 function isEditorTabContentType(contentType: Tab['contentType']): boolean {
-  return contentType === 'editor' || contentType === 'diff' || contentType === 'conflict-review'
+  return (
+    contentType === 'editor' ||
+    contentType === 'diff' ||
+    contentType === 'conflict-review' ||
+    contentType === 'check-details'
+  )
 }
 
 function getReplaceablePreviewFileId(
@@ -1451,6 +1482,13 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       return { markdownFrontmatterVisible: { ...s.markdownFrontmatterVisible, [fileId]: true } }
     }),
 
+  // Markdown table of contents
+  markdownTocPanelWidth: 240,
+  setMarkdownTocPanelWidth: (width) =>
+    set((s) => ({
+      markdownTocPanelWidth: clampMarkdownTocPanelWidth(width, undefined, s.markdownTocPanelWidth)
+    })),
+
   // Right sidebar
   rightSidebarOpen: false,
   rightSidebarWidth: 280,
@@ -1618,8 +1656,14 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
     let editorItemWorktreeId = file.worktreeId
     let editorItemFileId = file.filePath
     let editorItemLabel = file.relativePath
-    let editorItemContentType: 'editor' | 'diff' | 'conflict-review' =
-      file.mode === 'conflict-review' ? 'conflict-review' : file.mode === 'diff' ? 'diff' : 'editor'
+    let editorItemContentType: 'editor' | 'diff' | 'conflict-review' | 'check-details' =
+      file.mode === 'conflict-review'
+        ? 'conflict-review'
+        : file.mode === 'check-details'
+          ? 'check-details'
+          : file.mode === 'diff'
+            ? 'diff'
+            : 'editor'
     let editorItemTargetGroupId = options?.targetGroupId
     set((s) => {
       const worktreeId = file.worktreeId
@@ -2206,7 +2250,8 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
           entry.entityId === fileId &&
           (entry.contentType === 'editor' ||
             entry.contentType === 'diff' ||
-            entry.contentType === 'conflict-review')
+            entry.contentType === 'conflict-review' ||
+            entry.contentType === 'check-details')
       )
       if (unifiedTab) {
         get().closeUnifiedTab(unifiedTab.id)
@@ -2249,7 +2294,8 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         (item) =>
           (item.contentType === 'editor' ||
             item.contentType === 'diff' ||
-            item.contentType === 'conflict-review') &&
+            item.contentType === 'conflict-review' ||
+            item.contentType === 'check-details') &&
           (!activeWorktreeId || item.worktreeId === activeWorktreeId)
       )
       .map((item) => item.id)
@@ -3083,6 +3129,152 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       }
     })
     void openWorkspaceEditorItem(get(), id, worktreeId, 'Conflict Review', 'conflict-review')
+  },
+
+  // Why: the checks sidebar only has room for inline summaries; full logs and
+  // annotations belong in the center editor pane like diff tabs.
+  openCheckRunDetails: (worktreeId, contextKey, check, state) => {
+    const id = buildCheckRunDetailsTabId(worktreeId, check)
+    const label = getCheckRunDetailsTabLabel(check)
+    const checkRunDetails: OpenCheckRunDetailsState = {
+      contextKey,
+      check,
+      details: state.details,
+      loading: state.loading,
+      error: state.error
+    }
+    set((s) => {
+      const existing = s.openFiles.find((f) => f.id === id)
+      if (existing) {
+        return {
+          openFiles: s.openFiles.map((f) =>
+            f.id === id
+              ? {
+                  ...f,
+                  mode: 'check-details' as const,
+                  relativePath: label,
+                  language: 'plaintext',
+                  checkRunDetails
+                }
+              : f
+          ),
+          activeFileId: id,
+          activeTabType: 'editor',
+          activeFileIdByWorktree: { ...s.activeFileIdByWorktree, [worktreeId]: id },
+          activeTabTypeByWorktree: { ...s.activeTabTypeByWorktree, [worktreeId]: 'editor' }
+        }
+      }
+
+      const newFile: OpenFile = {
+        id,
+        filePath: id,
+        relativePath: label,
+        worktreeId,
+        language: 'plaintext',
+        isDirty: false,
+        mode: 'check-details',
+        checkRunDetails
+      }
+
+      return {
+        openFiles: [...s.openFiles, newFile],
+        activeFileId: id,
+        activeTabType: 'editor',
+        activeFileIdByWorktree: { ...s.activeFileIdByWorktree, [worktreeId]: id },
+        activeTabTypeByWorktree: { ...s.activeTabTypeByWorktree, [worktreeId]: 'editor' }
+      }
+    })
+    void openWorkspaceEditorItem(get(), id, worktreeId, label, 'check-details')
+  },
+
+  // Why: sidebar detail fetches can finish after a full-details tab is already
+  // open; this updates the tab snapshot without stealing focus from the user.
+  patchOpenCheckRunDetails: (worktreeId, contextKey, check, state) => {
+    const id = buildCheckRunDetailsTabId(worktreeId, check)
+    const nextCheckRunDetails: OpenCheckRunDetailsState = {
+      contextKey,
+      check,
+      details: state.details,
+      loading: state.loading,
+      error: state.error
+    }
+    set((s) => {
+      const existing = s.openFiles.find((f) => f.id === id)
+      if (!existing?.checkRunDetails) {
+        return s
+      }
+      const current = existing.checkRunDetails
+      if (
+        current.contextKey === nextCheckRunDetails.contextKey &&
+        current.check.status === nextCheckRunDetails.check.status &&
+        current.check.conclusion === nextCheckRunDetails.check.conclusion &&
+        current.loading === nextCheckRunDetails.loading &&
+        current.error === nextCheckRunDetails.error &&
+        current.details === nextCheckRunDetails.details
+      ) {
+        return s
+      }
+      return {
+        openFiles: s.openFiles.map((f) =>
+          f.id === id ? { ...f, checkRunDetails: nextCheckRunDetails } : f
+        )
+      }
+    })
+  },
+
+  reloadOpenCheckRunDetailsTab: async (fileId) => {
+    const state = get()
+    const file = state.openFiles.find((candidate) => candidate.id === fileId)
+    const checkRunDetails = file?.checkRunDetails
+    if (!file || file.mode !== 'check-details' || !checkRunDetails) {
+      return
+    }
+    const worktree = findWorktreeById(state.worktreesByRepo, file.worktreeId)
+    const repoId = worktree?.repoId ?? getRepoIdFromWorktreeId(file.worktreeId)
+    const repo = state.repos.find((candidate) => candidate.id === repoId)
+    if (!repo?.path) {
+      return
+    }
+    const { contextKey, check } = checkRunDetails
+    const patch = (next: Pick<OpenCheckRunDetailsState, 'details' | 'loading' | 'error'>): void => {
+      get().patchOpenCheckRunDetails(file.worktreeId, contextKey, check, next)
+    }
+    patch({ details: checkRunDetails.details, loading: true, error: null })
+    try {
+      const details = await get().fetchPRCheckDetails(
+        repo.path,
+        {
+          checkRunId: check.checkRunId,
+          workflowRunId: check.workflowRunId,
+          checkName: check.name,
+          url: check.url,
+          prRepo: null
+        },
+        { repoId: repo.id }
+      )
+      patch({
+        details,
+        loading: false,
+        error: details
+          ? null
+          : translate(
+              'auto.store.slices.editor.checkRunDetailsUnavailable',
+              'No details are available for this check.'
+            )
+      })
+    } catch (error) {
+      patch({
+        details: null,
+        loading: false,
+        error:
+          error instanceof Error
+            ? error.message
+            : translate(
+                'auto.store.slices.editor.checkRunDetailsLoadFailed',
+                'Failed to load check details.'
+              )
+      })
+    }
   },
 
   openBranchAllDiffs: (worktreeId, worktreePath, compare, alternate) => {
@@ -4259,7 +4451,7 @@ function reconcileOpenFilesForStatus(
       return [file]
     }
 
-    if (file.mode === 'conflict-review') {
+    if (file.mode === 'conflict-review' || file.mode === 'check-details') {
       return [file]
     }
 

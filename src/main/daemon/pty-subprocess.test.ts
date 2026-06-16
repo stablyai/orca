@@ -242,6 +242,61 @@ describe('createPtySubprocess', () => {
     }
   })
 
+  it('serves daemon Windows wrapper agent foreground from an async cache', async () => {
+    const proc = mockPtyProcess()
+    proc.process = 'node.exe'
+    spawnMock.mockReturnValue(proc)
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+    let resolveForeground!: (processName: string) => void
+    resolveAgentForegroundProcessMock.mockReturnValue(
+      new Promise<string>((resolve) => {
+        resolveForeground = resolve
+      })
+    )
+
+    try {
+      const handle = createPtySubprocess({
+        sessionId: 'test',
+        cols: 80,
+        rows: 24
+      })
+
+      expect(handle.getForegroundProcess()).toBe('node.exe')
+      expect(resolveAgentForegroundProcessMock).toHaveBeenCalledWith(proc.pid, 'node.exe')
+
+      resolveForeground('codex')
+      await vi.waitFor(() => expect(handle.getForegroundProcess()).toBe('codex'))
+    } finally {
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
+  })
+
+  it('does not schedule foreground enrichment for arbitrary Windows TUIs', () => {
+    const proc = mockPtyProcess()
+    proc.process = 'vim.exe'
+    spawnMock.mockReturnValue(proc)
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+
+    try {
+      const handle = createPtySubprocess({
+        sessionId: 'test',
+        cols: 80,
+        rows: 24
+      })
+
+      expect(handle.getForegroundProcess()).toBe('vim.exe')
+      expect(resolveAgentForegroundProcessMock).not.toHaveBeenCalled()
+    } finally {
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
+  })
+
   it('treats node-pty terminal name as inconclusive foreground process', () => {
     const proc = mockPtyProcess()
     proc.process = 'xterm-256color'

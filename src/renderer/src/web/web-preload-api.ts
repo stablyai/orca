@@ -1012,6 +1012,7 @@ function createReposApi(): NonNullable<Partial<PreloadApi>['repos']> {
     update: async ({ repoId, updates }) =>
       (await callRuntimeResult<{ repo: Repo }>('repo.update', { repo: repoId, updates })).repo,
     pickFolder: () => Promise.resolve(null),
+    pickFolders: () => Promise.resolve([]),
     pickDirectory: () => Promise.resolve(null),
     clone: async ({ url, destination }) => {
       invalidateRuntimeWorktreeCaches()
@@ -1403,6 +1404,17 @@ function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
         pushTarget
       })
     },
+    syncFork: async ({ worktreePath, expectedUpstream }) => {
+      const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
+      return callRuntimeResult(
+        'git.forkSync',
+        {
+          worktree: toRuntimeWorktreeSelector(worktree.id),
+          expectedUpstream
+        },
+        60_000
+      )
+    },
     push: async ({ worktreePath, publish, pushTarget }) => {
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
       await callRuntimeResult('git.push', {
@@ -1501,6 +1513,13 @@ function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
         worktree: toRuntimeWorktreeSelector(worktree.id),
         relativePath,
         line
+      })
+    },
+    remoteCommitUrl: async ({ worktreePath, sha }) => {
+      const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
+      return callRuntimeResult('git.remoteCommitUrl', {
+        worktree: toRuntimeWorktreeSelector(worktree.id),
+        sha
       })
     }
   }

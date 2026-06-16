@@ -1,0 +1,2 @@
+app_identifier(ENV["IOS_BUNDLE_IDENTIFIER"] || "com.stably.orca.mobile")
+team_id(ENV["APPLE_TEAM_ID"])

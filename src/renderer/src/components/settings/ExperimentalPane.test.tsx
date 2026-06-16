@@ -20,6 +20,7 @@ afterEach(() => {
 
 async function renderExperimentalPane(args: {
   updateSettings: (settings: Partial<GlobalSettings>) => void
+  settings?: GlobalSettings
 }): Promise<{ root: Root; container: HTMLDivElement }> {
   const container = document.createElement('div')
   document.body.appendChild(container)
@@ -27,7 +28,7 @@ async function renderExperimentalPane(args: {
   await act(async () => {
     root.render(
       <ExperimentalPane
-        settings={getDefaultSettings('/tmp')}
+        settings={args.settings ?? getDefaultSettings('/tmp')}
         updateSettings={args.updateSettings}
       />
     )
@@ -56,8 +57,7 @@ describe('ExperimentalPane', () => {
     expect(settings.experimentalAgentHibernation).toBe(false)
     expect(settings.agentHibernationIdleMs).toBe(30 * 60 * 1000)
     expect(markup).toContain('Agent hibernation')
-    expect(markup).toContain('Hibernate after')
-    expect(markup).toContain('minutes')
+    expect(markup).not.toContain('Hibernate after')
     expect(markup).toContain('aria-checked="false"')
     expect(getExperimentalPaneSearchEntries().map((entry) => entry.title)).toContain(
       'Agent hibernation'
@@ -66,7 +66,11 @@ describe('ExperimentalPane', () => {
 
   it('renders the agent hibernation idle duration as configurable minutes', async () => {
     const updateSettings = vi.fn()
-    const { root, container } = await renderExperimentalPane({ updateSettings })
+    const settings = {
+      ...getDefaultSettings('/tmp'),
+      experimentalAgentHibernation: true
+    }
+    const { root, container } = await renderExperimentalPane({ updateSettings, settings })
 
     const idleInput = container.querySelector<HTMLInputElement>(
       '#experimental-agent-hibernation input[type="number"]'

@@ -30,5 +30,7 @@ describe('MarkdownTableOfContentsPanel', () => {
     expect(html).toContain('Collapse Intro')
     expect(html).toContain('Intro')
     expect(html).toContain('Setup')
+    expect(html).toContain('data-markdown-toc-resize-handle')
+    expect(html).toContain('Resize table of contents')
   })
 })

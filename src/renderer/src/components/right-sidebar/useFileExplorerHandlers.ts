@@ -20,6 +20,7 @@ type UseFileExplorerHandlersParams = {
   ) => void
   makePreviewFilePermanent: (filePath: string) => void
   toggleDir: (worktreeId: string, dirPath: string) => void
+  canToggleDirectories?: boolean
   loadDir: (
     dirPath: string,
     depth: number,
@@ -45,6 +46,7 @@ export async function activateFileExplorerNode(args: {
   activeWorktreeId: string | null
   openFile: (params: OpenFileParams, options?: OpenFileOptions) => void
   toggleDir: (worktreeId: string, dirPath: string) => void
+  canToggleDirectories?: boolean
   loadDir: UseFileExplorerHandlersParams['loadDir']
   statPath: UseFileExplorerHandlersParams['statPath']
   markPathAsDirectory: (path: string) => void
@@ -55,6 +57,7 @@ export async function activateFileExplorerNode(args: {
     activeWorktreeId,
     openFile,
     toggleDir,
+    canToggleDirectories = true,
     loadDir,
     statPath,
     markPathAsDirectory,
@@ -65,6 +68,9 @@ export async function activateFileExplorerNode(args: {
   }
   setSelectedPath(node.path)
   if (node.isDirectory) {
+    if (!canToggleDirectories) {
+      return
+    }
     toggleDir(activeWorktreeId, node.path)
     return
   }
@@ -90,7 +96,9 @@ export async function activateFileExplorerNode(args: {
       })
       if (loadedAsDirectory) {
         markPathAsDirectory(node.path)
-        toggleDir(activeWorktreeId, node.path)
+        if (canToggleDirectories) {
+          toggleDir(activeWorktreeId, node.path)
+        }
       } else {
         toast.error(
           translate(
@@ -119,6 +127,7 @@ export function useFileExplorerHandlers({
   openFile,
   makePreviewFilePermanent,
   toggleDir,
+  canToggleDirectories = true,
   loadDir,
   statPath,
   markPathAsDirectory,
@@ -132,13 +141,23 @@ export function useFileExplorerHandlers({
         activeWorktreeId,
         openFile,
         toggleDir,
+        canToggleDirectories,
         loadDir,
         statPath,
         markPathAsDirectory,
         setSelectedPath
       })
     },
-    [activeWorktreeId, loadDir, markPathAsDirectory, openFile, statPath, toggleDir, setSelectedPath]
+    [
+      activeWorktreeId,
+      canToggleDirectories,
+      loadDir,
+      markPathAsDirectory,
+      openFile,
+      statPath,
+      toggleDir,
+      setSelectedPath
+    ]
   )
 
   const handleDoubleClick = useCallback(

@@ -728,6 +728,23 @@ export async function addSparseWorktree(
 }
 
 /**
+ * Move a worktree's directory to a new path with `git worktree move`, which
+ * relocates the working tree and rewrites git's gitdir pointers so the linkage
+ * stays intact — a raw `fs.rename` would corrupt the `.git` file and the
+ * `.git/worktrees/<name>/gitdir` back-pointer. Local worktrees only: the
+ * first-work folder rename skips SSH/remote, so there is no relay parity handler
+ * for this op. The caller owns migrating Orca's path-derived worktree identity
+ * after a successful move, and pre-checks that the destination is free.
+ */
+export async function moveWorktree(
+  repoPath: string,
+  oldPath: string,
+  newPath: string
+): Promise<void> {
+  await gitExecFileAsync(['worktree', 'move', oldPath, newPath], { cwd: repoPath })
+}
+
+/**
  * Remove a worktree.
  */
 export async function removeWorktree(

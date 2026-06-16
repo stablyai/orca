@@ -753,6 +753,27 @@ describe('SshGitProvider', () => {
     })
   })
 
+  it('syncForkDefaultBranch sends git.forkSync request', async () => {
+    const syncResult = {
+      status: 'synced',
+      originRemote: 'origin',
+      upstreamRemote: 'upstream',
+      branchName: 'main',
+      ahead: 0,
+      behind: 2
+    }
+    mux.request.mockResolvedValue(syncResult)
+
+    const expectedUpstream = { owner: 'stablyai', repo: 'orca' }
+    const result = await provider.syncForkDefaultBranch('/home/user/repo', expectedUpstream)
+
+    expect(mux.request).toHaveBeenCalledWith('git.forkSync', {
+      worktreePath: '/home/user/repo',
+      expectedUpstream
+    })
+    expect(result).toEqual(syncResult)
+  })
+
   it('fetchRemoteTrackingRef sends git.fetchRemoteTrackingRef request', async () => {
     await provider.fetchRemoteTrackingRef(
       '/home/user/repo',

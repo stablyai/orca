@@ -227,7 +227,7 @@ describe('listWorkItems', () => {
     ])
   })
 
-  it('hydrates PR list rows with repository merge method settings', async () => {
+  it('hydrates PR list rows with repository merge metadata', async () => {
     getIssueOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
     getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
     ghExecFileAsyncMock
@@ -255,7 +255,8 @@ describe('listWorkItems', () => {
               viewerDefaultMergeMethod: 'REBASE',
               mergeCommitAllowed: false,
               rebaseMergeAllowed: true,
-              squashMergeAllowed: true
+              squashMergeAllowed: true,
+              autoMergeAllowed: false
             }
           }
         })
@@ -272,6 +273,7 @@ describe('listWorkItems', () => {
         rebase: true
       }
     })
+    expect(items[0]?.autoMergeAllowed).toBe(false)
     expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
       2,
       expect.arrayContaining(['api', 'graphql', '-f', 'owner=acme', '-f', 'repo=widgets']),

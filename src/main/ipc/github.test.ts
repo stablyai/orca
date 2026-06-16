@@ -361,14 +361,22 @@ describe('registerGitHubHandlers', () => {
         repoPath: '/workspace/repo',
         prNumber: 42,
         enabled: true,
+        method: 'squash',
         prRepo: { owner: 'acme', repo: 'orca' }
       }
     )
 
-    expect(setPRAutoMergeMock).toHaveBeenCalledWith('/workspace/repo', 42, true, 'openclaw-2', {
-      owner: 'acme',
-      repo: 'orca'
-    })
+    expect(setPRAutoMergeMock).toHaveBeenCalledWith(
+      '/workspace/repo',
+      42,
+      true,
+      'squash',
+      'openclaw-2',
+      {
+        owner: 'acme',
+        repo: 'orca'
+      }
+    )
   })
 
   it('forwards the authenticated viewer lookup', async () => {

@@ -70,6 +70,7 @@ function createUIStore(): StoreApi<AppState> {
     worktreesByRepo: {},
     rightSidebarOpen: false,
     rightSidebarWidth: 280,
+    markdownTocPanelWidth: 240,
     rightSidebarTab: 'explorer',
     rightSidebarExplorerView: 'files',
     ...createSettingsSearchState(args[0]),
@@ -866,6 +867,18 @@ describe('createUISlice hydratePersistedUI', () => {
 
     expect(store.getState().sidebarWidth).toBe(220)
     expect(store.getState().rightSidebarWidth).toBe(220)
+  })
+
+  it('clamps persisted markdown toc panel widths into the supported range', () => {
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(
+      makePersistedUI({
+        markdownTocPanelWidth: 100
+      })
+    )
+
+    expect(store.getState().markdownTocPanelWidth).toBe(200)
   })
 
   it('preserves right sidebar widths above the former 500px cap', () => {

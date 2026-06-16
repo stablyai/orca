@@ -1793,7 +1793,8 @@
             "fd15491034": "GitHub에서 보기 열기",
             "22df63c393": "토큰에 대한 하위 이슈 데이터를 사용할 수 없습니다.",
             "067119985c": "GitHub 검색, 예: 담당자:@나 현재:열림",
-            "1850fceac8": "{{value0}}/{{value1}}은 Orca에 추가되지 않습니다. 작업을 시작하려면 추가하거나 GitHub에서 엽니다."
+            "1850fceac8": "{{value0}}/{{value1}}은 Orca에 추가되지 않습니다. 작업을 시작하려면 추가하거나 GitHub에서 엽니다.",
+            "1aa7c952b9": "Project view"
           },
           "slug": {
             "dialog": {
@@ -2440,7 +2441,9 @@
             "efb33546ff": "힘내 배쉬",
             "1a8af49530": "CMD 프롬프트",
             "2148f65e04": "파워셸",
-            "ab589350e5": "{{value0}}에 대한 실행 명령을 작성할 수 없습니다."
+            "ab589350e5": "{{value0}}에 대한 실행 명령을 작성할 수 없습니다.",
+            "7a9b4af2af": "탭을 왼쪽으로 스크롤",
+            "232e075b07": "탭을 오른쪽으로 스크롤"
           },
           "TabBarCreateEntry": {
             "d62d63b807": "파일 생성",
@@ -3892,7 +3895,9 @@
           "0dc4d1b657": "복제 대상의 서버 경로를 입력합니다."
         },
         "useAddRepoLocalFolderFlow": {
-          "7ab10e4974": "원격 런타임에서 프로젝트를 추가하려면 서버 경로를 사용하세요."
+          "7ab10e4974": "원격 런타임에서 프로젝트를 추가하려면 서버 경로를 사용하세요.",
+          "skippedBatchFolders": "일부 폴더를 건너뛰었습니다",
+          "skippedBatchFoldersDescription": "건너뛴 폴더를 검토하거나 확인하려면 개별적으로 추가하세요."
         },
         "useAddRepoNestedImportFlow": {
           "680cac2c82": "{{value0}} 실패",
@@ -4262,7 +4267,13 @@
           "cfb3f35775": "Arguments",
           "6f99bf5dd0": "No default arguments",
           "8fbe1f37c1": "Environment",
-          "2d133152fa": "No default environment"
+          "2d133152fa": "No default environment",
+          "agentPermissions": "Agent Permissions",
+          "agentPermissionsInfo": "Agent permissions info",
+          "agentPermissionsTooltip": "Custom agent arguments stay unchanged when switching modes.",
+          "agentPermissionsDescription": "Choose whether Orca launches agents with fewer permission prompts or with manual checks.",
+          "agentPermissionsYolo": "Yolo",
+          "agentPermissionsManual": "Manual"
         },
         "AppIconSelector": {
           "d5a112dc9b": "다음 아이콘",
@@ -4312,7 +4323,8 @@
             "tintColorDescription": "왼쪽 사이드바 표면에 섞을 색상입니다.",
             "tintOpacity": "색조 강도",
             "tintOpacityDescription": "사이드바에 색조를 얼마나 강하게 섞을지 조절합니다."
-          }
+          },
+          "workspaceCardLayoutGuidance": "작업 공간 사이드바 옵션 메뉴 > 카드 레이아웃 > 컴팩트를 사용하세요."
         },
         "AutoRenameBranchFromWorkSetting": {
           "1626524572": "Nautilus",
@@ -4622,7 +4634,16 @@
           "f63ea281e3": "agent 완료 및 차단 상태에 대한 스레드 왼쪽 사이드바 피드입니다.",
           "ca2219fe5e": "오른쪽 하단에 고정된 작은 애니메이션 애완동물을 표시합니다. 캐릭터(Claudino, OpenCode, Gremlin)를 선택하거나 상태 표시줄 애완동물 메뉴에서 자신만의 PNG, APNG, GIF, WebP, JPG 또는 SVG를 업로드하세요. 이 설정을 비활성화하지 않고 동일한 메뉴에서 언제든지 숨길 수 있습니다.",
           "dd6f0a1d45": "애완 동물",
-          "0e89a574ae": "오른쪽 하단에 떠 있는 애니메이션 애완동물."
+          "0e89a574ae": "오른쪽 하단에 떠 있는 애니메이션 애완동물.",
+          "agentHibernation": {
+            "copy": "설정된 유휴 시간이 지난 백그라운드 agent 터미널을 중지하고, 다시 열 때 지원되는 세션을 재개합니다. 안전 모델을 조정하는 동안 제공되는 실험적 기능입니다.",
+            "description": "설정된 유휴 시간이 지난 백그라운드 agent 터미널을 중지하고, 다시 열 때 지원되는 세션을 재개합니다.",
+            "idleMinutesDescription": "완료된 백그라운드 agent를 Orca가 최대 절전 모드로 전환하기 전에 기다릴 유휴 시간(분)입니다.",
+            "idleMinutesLabel": "최대 절전까지",
+            "idleMinutesSuffix": "분",
+            "title": "Agent 최대 절전",
+            "toggleLabel": "Agent 최대 절전 전환"
+          }
         },
         "FloatingWorkspacePane": {
           "aeaf76fda9": "상태 표시줄",
@@ -6286,7 +6307,9 @@
             "5784ae8c43": "이름 변경",
             "8a17fd6026": "안정적",
             "a79d266f71": "세션",
-            "afbf35be68": "안정적인 세션"
+            "afbf35be68": "안정적인 세션",
+            "agentPermissions": "Agent Permissions",
+            "agentPermissionsDescription": "Switch agent permission defaults between Yolo and Manual."
           }
         },
         "appearance": {
@@ -6403,6 +6426,17 @@
             "leftSidebarAppearance": {
               "title": "왼쪽 사이드바 모양",
               "description": "왼쪽 사이드바를 터미널에 맞추거나 기본값을 유지하거나 은은한 색조를 적용합니다."
+            },
+            "workspaceCardLayout": {
+              "title": "작업 공간 카드 레이아웃",
+              "description": "작업 공간 사이드바 옵션 메뉴에서 작업 공간 카드를 컴팩트 또는 상세 보기로 전환합니다.",
+              "compact": "컴팩트",
+              "compactDisplay": "컴팩트 보기",
+              "workspaceCards": "작업 공간 카드",
+              "worktreeCards": "워크트리 카드",
+              "cardLayout": "카드 레이아웃",
+              "workspaceOptions": "작업 공간 옵션",
+              "detailed": "상세"
             }
           }
         },
@@ -6663,7 +6697,17 @@
             "b54cea709b": "친구",
             "051203d37c": "애완 동물",
             "6b5a56ac35": "오른쪽 하단에 떠 있는 애니메이션 애완동물.",
-            "87d99e634b": "애완 동물"
+            "87d99e634b": "애완 동물",
+            "agentHibernation": {
+              "agent": "agent",
+              "agents": "agents",
+              "description": "설정된 유휴 시간이 지난 백그라운드 agent 터미널을 중지하고, 다시 열 때 지원되는 세션을 재개합니다.",
+              "hibernate": "최대 절전",
+              "minutes": "분",
+              "sleep": "절전",
+              "terminal": "터미널",
+              "title": "Agent 최대 절전"
+            }
           }
         },
         "floating": {
@@ -7289,7 +7333,9 @@
             "host": "host",
             "ssh": "ssh",
             "remote": "remote",
-            "vm": "vm"
+            "vm": "vm",
+            "keepForkUpToDate": "포크를 최신 상태로 유지",
+            "keepForkUpToDateDescription": "이 포크를 upstream에서 안전하게 fast-forward합니다."
           }
         },
         "runtime": {
@@ -7871,6 +7917,33 @@
           "workspaceDirectory": "The client default is inherited until a host needs its own worktree directory.",
           "providerHost": "Provider host",
           "providerAccounts": "Credentials and account checks belong to the local client or selected remote server that owns the provider integration."
+        },
+        "RepositoryForkSyncSection": {
+          "defaultBranch": "기본 브랜치",
+          "synced": "포크가 업데이트됨",
+          "syncedDescriptionSingular": "{{branch}} 브랜치를 1개 커밋만큼 fast-forward했습니다.",
+          "syncedDescriptionPlural": "{{branch}} 브랜치를 {{count}}개 커밋만큼 fast-forward했습니다.",
+          "upToDate": "포크가 이미 최신 상태입니다",
+          "upToDateDescription": "{{branch}} 브랜치가 이미 upstream과 일치합니다.",
+          "missingOrigin": "origin 원격이 없습니다.",
+          "missingUpstream": "upstream 원격이 없습니다.",
+          "upstreamMismatch": "upstream 원격이 더 이상 이 포크와 일치하지 않습니다.",
+          "missingUpstreamBranch": "upstream 기본 브랜치를 확인할 수 없습니다.",
+          "missingOriginBranch": "origin에 upstream 기본 브랜치가 없습니다.",
+          "diverged": "origin에 upstream에 없는 커밋이 있습니다.",
+          "blocked": "포크 동기화를 건너뜀",
+          "blockedFallback": "Orca가 이 포크를 안전하게 fast-forward할 수 없습니다.",
+          "failed": "포크 동기화 실패",
+          "title": "포크를 최신 상태로 유지",
+          "description": "이 포크를 upstream에서 안전하게 fast-forward합니다.",
+          "longDescription": "이 포크가 upstream보다 뒤처진 경우 Orca가 기본 브랜치를 안전하게 fast-forward할 수 있습니다. 브랜치에 로컬 전용 커밋이나 충돌이 있으면 Orca가 업데이트를 건너뜁니다.",
+          "forkOf": "{{owner}}/{{repo}}의 포크",
+          "syncing": "동기화 중",
+          "syncNow": "지금 동기화",
+          "modeLabel": "포크 동기화 모드",
+          "ask": "묻기",
+          "safeAuto": "안전 자동",
+          "off": "끄기"
         }
       },
       "right": {
@@ -7957,7 +8030,8 @@
           "FileExplorer": {
             "79b1537dd3": "파일을 찾아보려면 워크스페이스를 선택하세요.",
             "4da4d89845": "탐색기로 돌아가기",
-            "6ed5ce817b": "검색"
+            "6ed5ce817b": "검색",
+            "2f4483d6c4": "이 필터와 일치하는 파일이 없습니다"
           },
           "FileExplorerBackgroundMenu": {
             "3b5e2dcb8d": "새 폴더",
@@ -7994,7 +8068,8 @@
             "31b4c3195d": "추가 탐색기 작업",
             "d95e30fe28": "탐색기 새로 고침",
             "6026b16950": "모두 축소",
-            "693cbeadd0": "검색"
+            "693cbeadd0": "검색",
+            "c1f3f3ec70": "파일 내용 검색"
           },
           "FileExplorerTreeStatus": {
             "ce03835e1f": "이 워크스페이스에는 파일이 없습니다.",
@@ -8011,7 +8086,8 @@
             "9a8b85882d": "로드 중",
             "62e685d5ec": "idle",
             "111e1d0db4": "오류",
-            "e5e81e59a6": "commits 크기 조정"
+            "e5e81e59a6": "commits 크기 조정",
+            "6d1e0a7c3b": "커밋 파일을 로드하지 못했습니다"
           },
           "HostedReviewActions": {
             "4d5fb5a284": "닫기",
@@ -8119,6 +8195,10 @@
             "4567e6e0b6": "전체 단어 일치",
             "464ae3974f": "대소문자 일치",
             "693cbeadd0": "검색"
+          },
+          "SearchQueryRow": {
+            "queryLabel": "파일 검색",
+            "clearLabel": "검색 지우기"
           },
           "SearchResultItems": {
             "cc06595a3b": "라인 경로 복사",
@@ -8284,7 +8364,14 @@
             "e2b7a1c0d9f4": "{{value0}} 생성에 실패했습니다",
             "hugeRepoIgnorePrompt": "이 저장소에 활성 변경 사항이 너무 많습니다. \"{{value0}}\"을(를) .gitignore에 추가하시겠습니까?",
             "hugeRepoIgnoreAction": ".gitignore에 추가",
-            "tooManyChanges": "변경 사항이 너무 많이 감지되었습니다. 처음 {{value0}}개만 표시됩니다."
+            "tooManyChanges": "변경 사항이 너무 많이 감지되었습니다. 처음 {{value0}}개만 표시됩니다.",
+            "bf5082de46": "{{value0}}이(가) 복사됨",
+            "c06193ef57": "{{value0}}을(를) 복사하지 못했습니다",
+            "d172a4f068": "커밋 해시",
+            "e283b50179": "커밋 메시지",
+            "f394c6128a": "이 커밋을 설명할 에이전트가 없습니다",
+            "04a5d7239b": "이 저장소에는 지원되는 웹 원격이 없습니다",
+            "15b6e834ac": "브라우저에서 커밋을 열지 못했습니다"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "선택한 agent를 시작할 수 없습니다.",
@@ -8618,6 +8705,7 @@
           "AiVaultPanel": {
             "resumeCommandCopied": "Resume command copied",
             "valueCopied": "{{value0}} copied",
+            "valueCopyFailed": "{{value0}}을(를) 복사할 수 없습니다",
             "openWorkspaceBeforeResuming": "Open a workspace before resuming a session.",
             "localWorkspacesOnly": "Resume from history is only available in local workspaces.",
             "agentSessionQueued": "{{value0}} session queued",
@@ -8631,8 +8719,10 @@
             "transcriptsSkipped": "{{count}} transcript skipped",
             "noAgentSessionsFound": "No agent sessions found",
             "noSessionsMatchFilters": "No sessions match the current filters",
-            "sessionId": "Session ID",
-            "logPath": "Log path"
+            "sessionId": "세션 ID",
+            "logPath": "로그 경로",
+            "agents": "에이전트",
+            "sessionsShownCompact": "{{value0}} 표시됨"
           },
           "AiVaultPanelControls": {
             "scanningSessions": "Scanning sessions",
@@ -8695,7 +8785,8 @@
             "hoursAgo": "{{value0}}h ago",
             "daysAgo": "{{value0}}d ago",
             "monthsAgo": "{{value0}}mo ago",
-            "yearsAgo": "{{value0}}y ago"
+            "yearsAgo": "{{value0}}y ago",
+            "sessionId": "세션 ID"
           },
           "AiVaultSessionRow": {
             "resumeAgentSession": "Resume {{value0}} session",
@@ -8707,7 +8798,37 @@
             "copySessionId": "Copy Session ID",
             "copyLogPath": "Copy Log Path",
             "messageCount": "{{value0}} msgs",
-            "tokenCount": "{{value0}} tok"
+            "tokenCount": "{{value0}} tok",
+            "toggleSessionDetails": "{{value0}} 세션 세부정보",
+            "hideDetails": "세부정보 숨기기",
+            "showDetails": "세부정보 표시",
+            "moreSessionActions": "세션 추가 작업",
+            "moreActions": "추가 작업"
+          },
+          "FileExplorerNameFilter": {
+            "26fb73c6e3": "파일 찾기",
+            "4d5a6b2a49": "파일 필터 지우기",
+            "7a9fb1e6aa": "내용"
+          },
+          "FileExplorerViewSwitch": {
+            "c4e9a2b713": "이름",
+            "b3c8f1a902": "이름으로 파일 필터링",
+            "f8a2c4d1e0": "탐색기 검색 모드"
+          },
+          "GitHistoryCommitFiles": {
+            "a1b2c3d4e5": "파일 로드 중…",
+            "b2c3d4e5f6": "이 커밋에는 파일 변경 사항이 없습니다",
+            "c3d4e5f6a7": "모든 변경 사항을 함께 열기"
+          },
+          "GitHistoryRow": {
+            "2f9c41ab07": "커밋 {{value0}}의 파일 표시: {{value1}}",
+            "4a8d9e0c1f": "커밋 {{value0}}의 파일 숨기기: {{value1}}"
+          },
+          "GitHistoryCommitContextMenu": {
+            "7b1c4e9a02": "브라우저에서 커밋 열기",
+            "8c2d5fab13": "커밋 해시 복사",
+            "9d3e60bc24": "커밋 메시지 복사",
+            "ae4f71cd35": "변경 사항 설명"
           }
         }
       },
@@ -8777,7 +8898,10 @@
           "69af7e9c1c": "아직 PATH에 없습니다. Orca는 이를 기본값으로 설정하며 언제든지 설치할 수 있습니다.",
           "1eee1c7bd8": "PATH에서 agents가 감지되지 않습니다. 나중에 설치할 항목을 선택하거나 빈 terminal을 계속 사용하세요.",
           "hideAgents": "agents 숨기기",
-          "showMoreAgents": "{{value0}}개 더 많은 agents 표시→"
+          "showMoreAgents": "{{value0}}개 더 많은 agents 표시→",
+          "yoloPermissionsLabel": "Yolo / Dangerously skip permissions",
+          "yoloPermissionsInfo": "Agent permission info",
+          "yoloPermissionsTooltip": "Skip permission checks for agents for less interruptions"
         },
         "FeatureSetupChecklist": {
           "77f74946f5": "Agents는 서로 메시지를 보내고, 작업을 수행하고, 핸드오프를 조정할 수 있습니다.",

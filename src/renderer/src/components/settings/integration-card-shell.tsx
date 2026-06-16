@@ -22,7 +22,10 @@ export function IntegrationCardShell(props: {
 }): React.JSX.Element {
   return (
     <div
-      className={cn('rounded-md border border-border/50 bg-muted/30 px-4 py-3', props.className)}
+      className={cn(
+        'rounded-xl border border-border/60 bg-card/40 px-4 py-3.5 shadow-xs',
+        props.className
+      )}
     >
       <div className="flex items-center gap-3">
         <span className="shrink-0 text-muted-foreground">{props.icon}</span>
@@ -56,12 +59,7 @@ export function IntegrationCardDetails(props: {
   children: React.ReactNode
 }): React.JSX.Element {
   return (
-    <div
-      className={cn(
-        'mt-3 space-y-2 rounded-md border border-border/30 bg-background/50 px-3 py-2.5',
-        props.className
-      )}
-    >
+    <div className={cn('mt-3 space-y-2 border-t border-border/40 pt-3', props.className)}>
       {props.children}
     </div>
   )

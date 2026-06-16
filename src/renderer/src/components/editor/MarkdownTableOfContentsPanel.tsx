@@ -10,6 +10,14 @@ import {
   toggleMarkdownTocCollapsedId
 } from './markdown-toc-collapse-state'
 import { translate } from '@/i18n/i18n'
+import { useSidebarResize } from '@/hooks/useSidebarResize'
+import { useAppStore } from '@/store'
+import {
+  MARKDOWN_TOC_PANEL_MIN_WIDTH,
+  MARKDOWN_TOC_RESIZE_HANDLE_CLASS_NAME,
+  clampMarkdownTocPanelWidth,
+  computeMaxMarkdownTocPanelWidth
+} from './markdown-toc-panel-width'
 
 type MarkdownTableOfContentsPanelProps = {
   items: MarkdownTocItem[]
@@ -106,10 +114,43 @@ export function MarkdownTableOfContentsPanel({
   onNavigate
 }: MarkdownTableOfContentsPanelProps): React.JSX.Element {
   const [collapsedIds, setCollapsedIds] = useState<Set<string>>(() => new Set())
+  const markdownTocPanelWidth = useAppStore((s) => s.markdownTocPanelWidth)
+  const setMarkdownTocPanelWidth = useAppStore((s) => s.setMarkdownTocPanelWidth)
+  const [layoutWidth, setLayoutWidth] = useState<number | null>(null)
+  const maxPanelWidth = computeMaxMarkdownTocPanelWidth(layoutWidth ?? 0)
+  const renderedPanelWidth = clampMarkdownTocPanelWidth(
+    markdownTocPanelWidth,
+    layoutWidth ?? undefined
+  )
+  const { containerRef, onResizeStart } = useSidebarResize<HTMLElement>({
+    isOpen: true,
+    width: renderedPanelWidth,
+    minWidth: MARKDOWN_TOC_PANEL_MIN_WIDTH,
+    maxWidth: maxPanelWidth,
+    deltaSign: 1,
+    setWidth: setMarkdownTocPanelWidth
+  })
 
   useEffect(() => {
     setCollapsedIds((current) => pruneMarkdownTocCollapsedIds(current, items))
   }, [items])
+
+  useEffect(() => {
+    const container = containerRef.current
+    const layout = container?.parentElement
+    if (!layout) {
+      return
+    }
+
+    const updateMaxWidth = (): void => {
+      setLayoutWidth(layout.clientWidth)
+    }
+
+    updateMaxWidth()
+    const observer = new ResizeObserver(updateMaxWidth)
+    observer.observe(layout)
+    return () => observer.disconnect()
+  }, [containerRef])
 
   const collapseToLevel = (level: MarkdownTocLevel): void => {
     setCollapsedIds(collapseMarkdownTocToLevel(items, level))
@@ -121,6 +162,7 @@ export function MarkdownTableOfContentsPanel({
 
   return (
     <aside
+      ref={containerRef}
       className="markdown-toc-panel"
       aria-label={translate(
         'auto.components.editor.MarkdownTableOfContentsPanel.27d0a9c49a',
@@ -220,6 +262,17 @@ export function MarkdownTableOfContentsPanel({
           </div>
         )}
       </div>
+      <div
+        data-markdown-toc-resize-handle=""
+        className={MARKDOWN_TOC_RESIZE_HANDLE_CLASS_NAME}
+        role="separator"
+        aria-orientation="vertical"
+        aria-label={translate(
+          'auto.components.editor.MarkdownTableOfContentsPanel.8f4d2c1a9b',
+          'Resize table of contents'
+        )}
+        onMouseDown={onResizeStart}
+      />
     </aside>
   )
 }
