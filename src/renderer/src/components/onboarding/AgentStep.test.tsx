@@ -20,6 +20,10 @@ describe('AgentStep', () => {
     )
 
     expect(html).toContain(`Show ${AGENT_CATALOG.length - 1} more agents→`)
+    expect(html).toContain('data-agent-grid-scroll')
+    expect(html).toContain('data-slot="checkbox"')
+    expect(html).toContain('Yolo / Dangerously skip permissions')
+    expect(html).not.toContain('role="radiogroup"')
   })
 
   it('labels the fallback agents summary as hide when expanded', () => {

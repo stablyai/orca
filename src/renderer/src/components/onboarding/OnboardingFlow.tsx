@@ -255,7 +255,7 @@ export default function OnboardingFlow({
                 {copy.title}
               </h1>
               {copy.subtitle ? (
-                <p className="mt-3 max-w-[58ch] text-[15px] leading-relaxed text-muted-foreground">
+                <p className="mt-3 text-[15px] leading-relaxed text-muted-foreground">
                   {copy.subtitle}
                 </p>
               ) : null}
@@ -264,9 +264,11 @@ export default function OnboardingFlow({
             <div
               className={cn(
                 'min-h-0 flex-1 transition-[margin-top] duration-[760ms] ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none',
-                // Why: long setup output should scroll inside the step so the footer
-                // actions stay anchored across every onboarding page.
-                cn('scrollbar-sleek overflow-y-auto pr-1', 'mt-10')
+                // Why: agent step pins permissions below a capped agent grid scroll
+                // region; other steps keep the shared outer scroll container.
+                currentStep.id === 'agent'
+                  ? 'mt-10 flex flex-col overflow-hidden'
+                  : cn('scrollbar-sleek overflow-y-auto pr-1', 'mt-10')
               )}
             >
               {currentStep.id === 'agent' && (
