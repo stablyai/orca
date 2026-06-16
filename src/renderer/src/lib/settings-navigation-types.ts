@@ -26,6 +26,7 @@ export type SettingsNavTarget =
   | 'shortcuts'
   | 'stats'
   | 'ssh'
+  | 'docker'
   | 'experimental'
   | 'agents'
   | 'orchestration'
