@@ -35,6 +35,50 @@ export const getLeftSidebarAppearanceEntry = createLocalizedCatalog(
   })
 )
 
+export const getWorkspaceCardLayoutEntry = createLocalizedCatalog(
+  (): SettingsSearchEntry => ({
+    title: translate(
+      'auto.components.settings.appearance.search.workspaceCardLayout.title',
+      'Workspace Card Layout'
+    ),
+    description: translate(
+      'auto.components.settings.appearance.search.workspaceCardLayout.description',
+      'Switch between compact and detailed workspace cards from the workspace sidebar options menu.'
+    ),
+    keywords: [
+      ...translateSearchKeyword(
+        'auto.components.settings.appearance.search.workspaceCardLayout.compact',
+        'compact'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.appearance.search.workspaceCardLayout.compactDisplay',
+        'compact display'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.appearance.search.workspaceCardLayout.workspaceCards',
+        'workspace cards'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.appearance.search.workspaceCardLayout.worktreeCards',
+        'worktree cards'
+      ),
+      ...translateSearchKeyword('auto.components.settings.appearance.search.5bff6a2ef0', 'sidebar'),
+      ...translateSearchKeyword(
+        'auto.components.settings.appearance.search.workspaceCardLayout.cardLayout',
+        'card layout'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.appearance.search.workspaceCardLayout.workspaceOptions',
+        'workspace options'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.appearance.search.workspaceCardLayout.detailed',
+        'detailed'
+      )
+    ]
+  })
+)
+
 export const getSidebarEntries = createLocalizedCatalog((): SettingsSearchEntry[] => [
   {
     title: translate('auto.components.settings.appearance.search.155a1e7438', 'Show Tasks Button'),
@@ -99,5 +143,6 @@ export const getSidebarEntries = createLocalizedCatalog((): SettingsSearchEntry[
       ...translateSearchKeyword('auto.components.settings.appearance.search.839fb1e3ed', 'toolbox')
     ]
   },
+  getWorkspaceCardLayoutEntry(),
   getLeftSidebarAppearanceEntry()
 ])

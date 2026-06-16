@@ -1,6 +1,6 @@
 {
   "name": "orca",
-  "version": "1.4.71-rc.0",
+  "version": "1.4.71-rc.2",
   "description": "Next-gen IDE for parallel agentic development",
   "homepage": "https://github.com/stablyai/orca",
   "author": "stablyai",
@@ -193,6 +193,8 @@
     "unified": "^11.0.5",
     "vite": "^7.3.2",
     "vitest": "^4.1.5",
+    "vscode-oniguruma": "^2.0.1",
+    "vscode-textmate": "^9.3.2",
     "zustand": "^5.0.13"
   },
   "optionalDependencies": {

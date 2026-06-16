@@ -1743,6 +1743,25 @@ describe('repos:add + repos:clone', () => {
     expect(invalidateAuthorizedRootsCacheMock).toHaveBeenCalled()
   })
 
+  it('dedupes repos:add by normalized local path on Windows', async () => {
+    const existing = {
+      id: 'repo-add-windows-existing',
+      path: 'C:\\Users\\Ava\\Repo',
+      displayName: 'Repo',
+      kind: 'folder',
+      badgeColor: '#22c55e'
+    }
+    mockStore.getRepos.mockReturnValue([existing])
+
+    const result = await handlers.get('repos:add')!(null, {
+      path: 'c:/Users/Ava/Repo',
+      kind: 'folder'
+    })
+
+    expect(result).toEqual({ repo: existing })
+    expect(mockStore.addRepo).not.toHaveBeenCalled()
+  })
+
   it('defaults repos:clone badgeColor to DEFAULT_REPO_BADGE_COLOR', async () => {
     const destination = await createTempRoot()
 

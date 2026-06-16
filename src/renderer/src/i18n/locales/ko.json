@@ -1793,7 +1793,8 @@
             "fd15491034": "GitHub에서 보기 열기",
             "22df63c393": "토큰에 대한 하위 이슈 데이터를 사용할 수 없습니다.",
             "067119985c": "GitHub 검색, 예: 담당자:@나 현재:열림",
-            "1850fceac8": "{{value0}}/{{value1}}은 Orca에 추가되지 않습니다. 작업을 시작하려면 추가하거나 GitHub에서 엽니다."
+            "1850fceac8": "{{value0}}/{{value1}}은 Orca에 추가되지 않습니다. 작업을 시작하려면 추가하거나 GitHub에서 엽니다.",
+            "1aa7c952b9": "Project view"
           },
           "slug": {
             "dialog": {
@@ -4314,7 +4315,8 @@
             "tintColorDescription": "왼쪽 사이드바 표면에 섞을 색상입니다.",
             "tintOpacity": "색조 강도",
             "tintOpacityDescription": "사이드바에 색조를 얼마나 강하게 섞을지 조절합니다."
-          }
+          },
+          "workspaceCardLayoutGuidance": "작업 공간 사이드바 옵션 메뉴 > 카드 레이아웃 > 컴팩트를 사용하세요."
         },
         "AutoRenameBranchFromWorkSetting": {
           "1626524572": "Nautilus",
@@ -4626,13 +4628,13 @@
           "dd6f0a1d45": "애완 동물",
           "0e89a574ae": "오른쪽 하단에 떠 있는 애니메이션 애완동물.",
           "agentHibernation": {
-            "copy": "Stops idle background agent terminals after the configured idle window and resumes supported sessions when you open them again. Experimental while we tune the safety model.",
-            "description": "Stops idle background agent terminals after the configured idle window and resumes supported sessions when you open them again.",
-            "idleMinutesDescription": "How many idle minutes a completed background agent must wait before Orca can hibernate it.",
-            "idleMinutesLabel": "Hibernate after",
-            "idleMinutesSuffix": "minutes",
-            "title": "Agent hibernation",
-            "toggleLabel": "Toggle agent hibernation"
+            "copy": "설정된 유휴 시간이 지난 백그라운드 agent 터미널을 중지하고, 다시 열 때 지원되는 세션을 재개합니다. 안전 모델을 조정하는 동안 제공되는 실험적 기능입니다.",
+            "description": "설정된 유휴 시간이 지난 백그라운드 agent 터미널을 중지하고, 다시 열 때 지원되는 세션을 재개합니다.",
+            "idleMinutesDescription": "완료된 백그라운드 agent를 Orca가 최대 절전 모드로 전환하기 전에 기다릴 유휴 시간(분)입니다.",
+            "idleMinutesLabel": "최대 절전까지",
+            "idleMinutesSuffix": "분",
+            "title": "Agent 최대 절전",
+            "toggleLabel": "Agent 최대 절전 전환"
           }
         },
         "FloatingWorkspacePane": {
@@ -6414,6 +6416,17 @@
             "leftSidebarAppearance": {
               "title": "왼쪽 사이드바 모양",
               "description": "왼쪽 사이드바를 터미널에 맞추거나 기본값을 유지하거나 은은한 색조를 적용합니다."
+            },
+            "workspaceCardLayout": {
+              "title": "작업 공간 카드 레이아웃",
+              "description": "작업 공간 사이드바 옵션 메뉴에서 작업 공간 카드를 컴팩트 또는 상세 보기로 전환합니다.",
+              "compact": "컴팩트",
+              "compactDisplay": "컴팩트 보기",
+              "workspaceCards": "작업 공간 카드",
+              "worktreeCards": "워크트리 카드",
+              "cardLayout": "카드 레이아웃",
+              "workspaceOptions": "작업 공간 옵션",
+              "detailed": "상세"
             }
           }
         },
@@ -6678,12 +6691,12 @@
             "agentHibernation": {
               "agent": "agent",
               "agents": "agents",
-              "description": "Stops idle background agent terminals after the configured idle window and resumes supported sessions when opened again.",
-              "hibernate": "hibernate",
-              "minutes": "minutes",
-              "sleep": "sleep",
-              "terminal": "terminal",
-              "title": "Agent hibernation"
+              "description": "설정된 유휴 시간이 지난 백그라운드 agent 터미널을 중지하고, 다시 열 때 지원되는 세션을 재개합니다.",
+              "hibernate": "최대 절전",
+              "minutes": "분",
+              "sleep": "절전",
+              "terminal": "터미널",
+              "title": "Agent 최대 절전"
             }
           }
         },
@@ -8744,7 +8757,8 @@
             "c3d4e5f6a7": "모든 변경 사항을 함께 열기"
           },
           "GitHistoryRow": {
-            "2f9c41ab07": "커밋 {{value0}}의 파일 표시: {{value1}}"
+            "2f9c41ab07": "커밋 {{value0}}의 파일 표시: {{value1}}",
+            "4a8d9e0c1f": "커밋 {{value0}}의 파일 숨기기: {{value1}}"
           },
           "GitHistoryCommitContextMenu": {
             "7b1c4e9a02": "브라우저에서 커밋 열기",

@@ -178,7 +178,10 @@ async function addLocalRepoFromPath(
     return { error: `Not a valid git repository: ${path}` }
   }
 
-  const existing = store.getRepos().find((r) => r.path === path)
+  const pathKey = normalizeRuntimePathForComparison(path)
+  const existing = store
+    .getRepos()
+    .find((repo) => !repo.connectionId && normalizeRuntimePathForComparison(repo.path) === pathKey)
   if (existing) {
     return { repo: existing, alreadyExisted: true }
   }

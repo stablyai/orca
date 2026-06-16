@@ -8,7 +8,6 @@ import { HiddenExperimentalGroup } from './HiddenExperimentalGroup'
 import { NumberField, SettingsSwitch } from './SettingsFormControls'
 import { translate } from '@/i18n/i18n'
 import {
-  DEFAULT_AGENT_HIBERNATION_IDLE_MS,
   MAX_AGENT_HIBERNATION_IDLE_MS,
   MIN_AGENT_HIBERNATION_IDLE_MS,
   getEffectiveAgentHibernationIdleMs
@@ -236,31 +235,32 @@ export function ExperimentalPane({
               }
             />
           </div>
-          <NumberField
-            label={translate(
-              'auto.components.settings.ExperimentalPane.agentHibernation.idleMinutesLabel',
-              'Hibernate after'
-            )}
-            description={translate(
-              'auto.components.settings.ExperimentalPane.agentHibernation.idleMinutesDescription',
-              'How many idle minutes a completed background agent must wait before Orca can hibernate it.'
-            )}
-            value={agentHibernationIdleMinutes}
-            defaultValue={DEFAULT_AGENT_HIBERNATION_IDLE_MS / MS_PER_MINUTE}
-            min={MIN_AGENT_HIBERNATION_IDLE_MS / MS_PER_MINUTE}
-            max={MAX_AGENT_HIBERNATION_IDLE_MS / MS_PER_MINUTE}
-            step={1}
-            suffix={translate(
-              'auto.components.settings.ExperimentalPane.agentHibernation.idleMinutesSuffix',
-              'minutes'
-            )}
-            onChange={(minutes) =>
-              updateSettings({
-                // Why: settings persist the planner contract, not the display unit.
-                agentHibernationIdleMs: minutes * MS_PER_MINUTE
-              })
-            }
-          />
+          {agentHibernationEnabled ? (
+            <NumberField
+              label={translate(
+                'auto.components.settings.ExperimentalPane.agentHibernation.idleMinutesLabel',
+                'Hibernate after'
+              )}
+              description={translate(
+                'auto.components.settings.ExperimentalPane.agentHibernation.idleMinutesDescription',
+                'How many idle minutes a completed background agent must wait before Orca can hibernate it.'
+              )}
+              value={agentHibernationIdleMinutes}
+              min={MIN_AGENT_HIBERNATION_IDLE_MS / MS_PER_MINUTE}
+              max={MAX_AGENT_HIBERNATION_IDLE_MS / MS_PER_MINUTE}
+              step={1}
+              suffix={translate(
+                'auto.components.settings.ExperimentalPane.agentHibernation.idleMinutesSuffix',
+                'minutes'
+              )}
+              onChange={(minutes) =>
+                updateSettings({
+                  // Why: settings persist the planner contract, not the display unit.
+                  agentHibernationIdleMs: minutes * MS_PER_MINUTE
+                })
+              }
+            />
+          ) : null}
         </SearchableSetting>
       ) : null}
 

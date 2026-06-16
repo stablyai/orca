@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { MIN_COMPATIBLE_RUNTIME_SERVER_VERSION, RUNTIME_PROTOCOL_VERSION } from './protocol-version'
+import { getLocalExecutionHostLabel } from './execution-host'
 import { buildExecutionHostRegistry } from './execution-host-registry'
 
 describe('execution host registry', () => {
@@ -13,7 +14,7 @@ describe('execution host registry', () => {
       {
         id: 'local',
         kind: 'local',
-        label: 'Local Mac',
+        label: getLocalExecutionHostLabel(),
         detail: 'This computer',
         health: 'local'
       }
@@ -188,7 +189,7 @@ describe('execution host registry', () => {
     })
 
     expect(hosts).toMatchObject([
-      { id: 'local', label: 'Local Mac' },
+      { id: 'local', label: getLocalExecutionHostLabel() },
       { id: 'ssh:repo-ssh', label: 'Derived SSH' }
     ])
   })

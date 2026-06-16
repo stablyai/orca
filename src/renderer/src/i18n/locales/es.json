@@ -1793,7 +1793,8 @@
             "fd15491034": "Abrir vista en GitHub",
             "22df63c393": "Los datos de la subemisión no están disponibles para su token.",
             "067119985c": "Búsqueda de GitHub, p. cesionario:@yo es:abierto",
-            "1850fceac8": "{{value0}}/{{value1}} no se agrega a Orca. Agréguelo para comenzar a trabajar o ábralo en GitHub."
+            "1850fceac8": "{{value0}}/{{value1}} no se agrega a Orca. Agréguelo para comenzar a trabajar o ábralo en GitHub.",
+            "1aa7c952b9": "Project view"
           },
           "slug": {
             "dialog": {
@@ -4329,7 +4330,8 @@
             "tintColorDescription": "El color que se mezcla en la superficie de la barra lateral izquierda.",
             "tintOpacity": "Intensidad del tinte",
             "tintOpacityDescription": "Controla con qué fuerza se mezcla el tinte en la barra lateral."
-          }
+          },
+          "workspaceCardLayoutGuidance": "Usa el menú de opciones de la barra lateral de espacios de trabajo > Diseño de tarjeta > Compacto."
         },
         "AutoRenameBranchFromWorkSetting": {
           "1626524572": "Nautilus",
@@ -4641,13 +4643,13 @@
           "dd6f0a1d45": "Mascota",
           "0e89a574ae": "Mascota animada flotante en la esquina inferior derecha.",
           "agentHibernation": {
-            "copy": "Stops idle background agent terminals after the configured idle window and resumes supported sessions when you open them again. Experimental while we tune the safety model.",
-            "description": "Stops idle background agent terminals after the configured idle window and resumes supported sessions when you open them again.",
-            "idleMinutesDescription": "How many idle minutes a completed background agent must wait before Orca can hibernate it.",
-            "idleMinutesLabel": "Hibernate after",
-            "idleMinutesSuffix": "minutes",
-            "title": "Agent hibernation",
-            "toggleLabel": "Toggle agent hibernation"
+            "copy": "Detiene los terminales de agentes en segundo plano que estén inactivos después del intervalo configurado y reanuda las sesiones compatibles cuando las vuelves a abrir. Experimental mientras ajustamos el modelo de seguridad.",
+            "description": "Detiene los terminales de agentes en segundo plano que estén inactivos después del intervalo configurado y reanuda las sesiones compatibles cuando las vuelves a abrir.",
+            "idleMinutesDescription": "Cuántos minutos inactivo debe esperar un agente en segundo plano completado antes de que Orca pueda hibernarlo.",
+            "idleMinutesLabel": "Hibernar después de",
+            "idleMinutesSuffix": "minutos",
+            "title": "Hibernación de agentes",
+            "toggleLabel": "Alternar hibernación de agentes"
           }
         },
         "FloatingWorkspacePane": {
@@ -6429,6 +6431,17 @@
             "leftSidebarAppearance": {
               "title": "Apariencia de la barra lateral izquierda",
               "description": "Haz que la barra lateral izquierda coincida con tu terminal, conserve el valor predeterminado o use un tinte."
+            },
+            "workspaceCardLayout": {
+              "title": "Diseño de tarjetas de espacios de trabajo",
+              "description": "Cambia entre tarjetas de espacios de trabajo compactas y detalladas desde el menú de opciones de la barra lateral de espacios de trabajo.",
+              "compact": "compacto",
+              "compactDisplay": "vista compacta",
+              "workspaceCards": "tarjetas de espacios de trabajo",
+              "worktreeCards": "tarjetas de worktree",
+              "cardLayout": "diseño de tarjeta",
+              "workspaceOptions": "opciones de espacios de trabajo",
+              "detailed": "detallado"
             }
           }
         },
@@ -6691,14 +6704,14 @@
             "6b5a56ac35": "Mascota animada flotante en la esquina inferior derecha.",
             "87d99e634b": "Mascota",
             "agentHibernation": {
-              "agent": "agent",
-              "agents": "agents",
-              "description": "Stops idle background agent terminals after the configured idle window and resumes supported sessions when opened again.",
-              "hibernate": "hibernate",
-              "minutes": "minutes",
-              "sleep": "sleep",
+              "agent": "agente",
+              "agents": "agentes",
+              "description": "Detiene los terminales de agentes en segundo plano que estén inactivos después del intervalo configurado y reanuda las sesiones compatibles cuando se vuelven a abrir.",
+              "hibernate": "hibernar",
+              "minutes": "minutos",
+              "sleep": "suspender",
               "terminal": "terminal",
-              "title": "Agent hibernation"
+              "title": "Hibernación de agentes"
             }
           }
         },
@@ -8744,7 +8757,8 @@
             "c3d4e5f6a7": "Abrir todos los cambios juntos"
           },
           "GitHistoryRow": {
-            "2f9c41ab07": "Mostrar archivos del commit {{value0}}: {{value1}}"
+            "2f9c41ab07": "Mostrar archivos del commit {{value0}}: {{value1}}",
+            "4a8d9e0c1f": "Ocultar archivos del commit {{value0}}: {{value1}}"
           },
           "GitHistoryCommitContextMenu": {
             "7b1c4e9a02": "Abrir commit en el navegador",

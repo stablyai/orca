@@ -1793,7 +1793,8 @@
             "fd15491034": "在 GitHub 中打开视图",
             "22df63c393": "您的 Token 无法获取子议题数据。",
             "067119985c": "GitHub 搜索，例如负责人：@我是：开放",
-            "1850fceac8": "{{value0}}/{{value1}} 未添加到 Orca。添加它以开始工作，或在 GitHub 中打开。"
+            "1850fceac8": "{{value0}}/{{value1}} 未添加到 Orca。添加它以开始工作，或在 GitHub 中打开。",
+            "1aa7c952b9": "Project view"
           },
           "slug": {
             "dialog": {
@@ -4314,7 +4315,8 @@
             "tintColorDescription": "混入左侧边栏表面的颜色。",
             "tintOpacity": "色调强度",
             "tintOpacityDescription": "控制色调混入边栏的强度。"
-          }
+          },
+          "workspaceCardLayoutGuidance": "使用工作区侧边栏选项菜单 > 卡片布局 > 紧凑。"
         },
         "AutoRenameBranchFromWorkSetting": {
           "1626524572": "Nautilus",
@@ -4626,13 +4628,13 @@
           "dd6f0a1d45": "宠物",
           "0e89a574ae": "右下角漂浮的动画宠物。",
           "agentHibernation": {
-            "copy": "Stops idle background agent terminals after the configured idle window and resumes supported sessions when you open them again. Experimental while we tune the safety model.",
-            "description": "Stops idle background agent terminals after the configured idle window and resumes supported sessions when you open them again.",
-            "idleMinutesDescription": "How many idle minutes a completed background agent must wait before Orca can hibernate it.",
-            "idleMinutesLabel": "Hibernate after",
-            "idleMinutesSuffix": "minutes",
-            "title": "Agent hibernation",
-            "toggleLabel": "Toggle agent hibernation"
+            "copy": "在配置的空闲时间后停止后台 agent 终端，并在你再次打开时恢复受支持的会话。我们仍在调校安全模型，此功能为实验性功能。",
+            "description": "在配置的空闲时间后停止后台 agent 终端，并在你再次打开时恢复受支持的会话。",
+            "idleMinutesDescription": "已完成的后台 agent 在 Orca 可以将其休眠前需要等待的空闲分钟数。",
+            "idleMinutesLabel": "休眠等待时间",
+            "idleMinutesSuffix": "分钟",
+            "title": "Agent 休眠",
+            "toggleLabel": "切换 agent 休眠"
           }
         },
         "FloatingWorkspacePane": {
@@ -6414,6 +6416,17 @@
             "leftSidebarAppearance": {
               "title": "左侧边栏外观",
               "description": "让左侧边栏匹配终端、保持默认，或使用色调。"
+            },
+            "workspaceCardLayout": {
+              "title": "工作区卡片布局",
+              "description": "从工作区侧边栏选项菜单在紧凑和详细工作区卡片之间切换。",
+              "compact": "紧凑",
+              "compactDisplay": "紧凑显示",
+              "workspaceCards": "工作区卡片",
+              "worktreeCards": "工作树卡片",
+              "cardLayout": "卡片布局",
+              "workspaceOptions": "工作区选项",
+              "detailed": "详细"
             }
           }
         },
@@ -6678,12 +6691,12 @@
             "agentHibernation": {
               "agent": "agent",
               "agents": "agents",
-              "description": "Stops idle background agent terminals after the configured idle window and resumes supported sessions when opened again.",
-              "hibernate": "hibernate",
-              "minutes": "minutes",
-              "sleep": "sleep",
-              "terminal": "terminal",
-              "title": "Agent hibernation"
+              "description": "在配置的空闲时间后停止后台 agent 终端，并在再次打开时恢复受支持的会话。",
+              "hibernate": "休眠",
+              "minutes": "分钟",
+              "sleep": "睡眠",
+              "terminal": "终端",
+              "title": "Agent 休眠"
             }
           }
         },
@@ -8744,7 +8757,8 @@
             "c3d4e5f6a7": "一起打开所有更改"
           },
           "GitHistoryRow": {
-            "2f9c41ab07": "显示提交{{value0}}中的文件：{{value1}}"
+            "2f9c41ab07": "显示提交{{value0}}中的文件：{{value1}}",
+            "4a8d9e0c1f": "隐藏提交{{value0}}中的文件：{{value1}}"
           },
           "GitHistoryCommitContextMenu": {
             "7b1c4e9a02": "在浏览器中打开提交",

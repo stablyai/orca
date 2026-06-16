@@ -1793,7 +1793,8 @@
             "fd15491034": "Open view in GitHub",
             "22df63c393": "Sub-issue data is unavailable for your token.",
             "067119985c": "GitHub search, e.g. assignee:@me is:open",
-            "1850fceac8": "{{value0}}/{{value1}} isn't added to Orca. Add it to start work, or open in GitHub."
+            "1850fceac8": "{{value0}}/{{value1}} isn't added to Orca. Add it to start work, or open in GitHub.",
+            "1aa7c952b9": "Project view"
           },
           "slug": {
             "dialog": {
@@ -4329,7 +4330,8 @@
             "tintColorDescription": "The color mixed into the left sidebar surface.",
             "tintOpacity": "Tint Strength",
             "tintOpacityDescription": "Controls how strongly the tint is mixed into the sidebar."
-          }
+          },
+          "workspaceCardLayoutGuidance": "Use the workspace sidebar options menu > Card layout > Compact."
         },
         "AutoRenameBranchFromWorkSetting": {
           "1626524572": "Nautilus",
@@ -6466,6 +6468,17 @@
             "leftSidebarAppearance": {
               "title": "Left Sidebar Appearance",
               "description": "Make the left sidebar match your terminal, stay default, or use a tint."
+            },
+            "workspaceCardLayout": {
+              "title": "Workspace Card Layout",
+              "description": "Switch between compact and detailed workspace cards from the workspace sidebar options menu.",
+              "compact": "compact",
+              "compactDisplay": "compact display",
+              "workspaceCards": "workspace cards",
+              "worktreeCards": "worktree cards",
+              "cardLayout": "card layout",
+              "workspaceOptions": "workspace options",
+              "detailed": "detailed"
             }
           }
         },

@@ -2,6 +2,7 @@ import type { PtyTransport } from './pty-transport'
 import type { ReplayingPanesRef } from './replay-guard'
 import type { ParsedAgentStatusPayload } from '../../../../shared/agent-status-types'
 import type { EventProps } from '../../../../shared/telemetry-events'
+import type { TerminalColorSchemeMode } from '../../../../shared/terminal-color-scheme-protocol'
 import type { TuiAgent } from '../../../../shared/types'
 
 export type PtyConnectionDeps = {
@@ -23,6 +24,8 @@ export type PtyConnectionDeps = {
   restoredLeafId?: string | null
   restoredPtyIdByLeafId?: Record<string, string>
   paneTransportsRef: React.RefObject<Map<number, PtyTransport>>
+  paneMode2031Ref: React.RefObject<Map<number, boolean>>
+  paneLastThemeModeRef: React.RefObject<Map<number, TerminalColorSchemeMode>>
   replayingPanesRef: ReplayingPanesRef
   isActiveRef: React.RefObject<boolean>
   isVisibleRef: React.RefObject<boolean>

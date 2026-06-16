@@ -1793,7 +1793,8 @@
             "fd15491034": "GitHub でビューを開く",
             "22df63c393": "トークンではサブイシューデータを利用できません。",
             "067119985c": "GitHub 検索、例:担当者:@me は:開いています",
-            "1850fceac8": "{{value0}}/{{value1}} は Orca に追加されません。これを追加して作業を開始するか、GitHub で開きます。"
+            "1850fceac8": "{{value0}}/{{value1}} は Orca に追加されません。これを追加して作業を開始するか、GitHub で開きます。",
+            "1aa7c952b9": "Project view"
           },
           "slug": {
             "dialog": {
@@ -4314,7 +4315,8 @@
             "tintColorDescription": "左サイドバーの表面に混ぜる色です。",
             "tintOpacity": "色合いの強さ",
             "tintOpacityDescription": "サイドバーに色合いをどの程度強く混ぜるかを調整します。"
-          }
+          },
+          "workspaceCardLayoutGuidance": "ワークスペースサイドバーのオプションメニュー > カードレイアウト > コンパクト を使用します。"
         },
         "AutoRenameBranchFromWorkSetting": {
           "1626524572": "Nautilus",
@@ -4626,13 +4628,13 @@
           "dd6f0a1d45": "ペット",
           "0e89a574ae": "右下隅に浮かぶアニメーションのペット。",
           "agentHibernation": {
-            "copy": "Stops idle background agent terminals after the configured idle window and resumes supported sessions when you open them again. Experimental while we tune the safety model.",
-            "description": "Stops idle background agent terminals after the configured idle window and resumes supported sessions when you open them again.",
-            "idleMinutesDescription": "How many idle minutes a completed background agent must wait before Orca can hibernate it.",
-            "idleMinutesLabel": "Hibernate after",
-            "idleMinutesSuffix": "minutes",
-            "title": "Agent hibernation",
-            "toggleLabel": "Toggle agent hibernation"
+            "copy": "設定したアイドル時間が経過したバックグラウンド agent ターミナルを停止し、対応しているセッションは再度開いたときに再開します。安全モデルを調整中の実験的機能です。",
+            "description": "設定したアイドル時間が経過したバックグラウンド agent ターミナルを停止し、対応しているセッションは再度開いたときに再開します。",
+            "idleMinutesDescription": "完了したバックグラウンド agent を Orca が休止状態にできるまで待つアイドル時間（分）。",
+            "idleMinutesLabel": "休止まで",
+            "idleMinutesSuffix": "分",
+            "title": "Agent の休止",
+            "toggleLabel": "Agent の休止を切り替え"
           }
         },
         "FloatingWorkspacePane": {
@@ -6451,6 +6453,17 @@
             "leftSidebarAppearance": {
               "title": "左サイドバーの外観",
               "description": "左サイドバーをターミナルに合わせるか、既定のままにするか、色合いを加えます。"
+            },
+            "workspaceCardLayout": {
+              "title": "ワークスペースカードのレイアウト",
+              "description": "ワークスペースサイドバーのオプションメニューから、コンパクト表示と詳細表示のワークスペースカードを切り替えます。",
+              "compact": "コンパクト",
+              "compactDisplay": "コンパクト表示",
+              "workspaceCards": "ワークスペースカード",
+              "worktreeCards": "ワークツリーカード",
+              "cardLayout": "カードレイアウト",
+              "workspaceOptions": "ワークスペースオプション",
+              "detailed": "詳細"
             }
           }
         },
@@ -6715,12 +6728,12 @@
             "agentHibernation": {
               "agent": "agent",
               "agents": "agents",
-              "description": "Stops idle background agent terminals after the configured idle window and resumes supported sessions when opened again.",
-              "hibernate": "hibernate",
-              "minutes": "minutes",
-              "sleep": "sleep",
-              "terminal": "terminal",
-              "title": "Agent hibernation"
+              "description": "設定したアイドル時間が経過したバックグラウンド agent ターミナルを停止し、再度開いたときに対応セッションを再開します。",
+              "hibernate": "休止",
+              "minutes": "分",
+              "sleep": "スリープ",
+              "terminal": "ターミナル",
+              "title": "Agent の休止"
             }
           }
         },
@@ -8744,7 +8757,8 @@
             "c3d4e5f6a7": "すべての変更をまとめて開く"
           },
           "GitHistoryRow": {
-            "2f9c41ab07": "コミット{{value0}}のファイルを表示: {{value1}}"
+            "2f9c41ab07": "コミット{{value0}}のファイルを表示: {{value1}}",
+            "4a8d9e0c1f": "コミット{{value0}}のファイルを非表示: {{value1}}"
           },
           "GitHistoryCommitContextMenu": {
             "7b1c4e9a02": "コミットをブラウザーで開く",

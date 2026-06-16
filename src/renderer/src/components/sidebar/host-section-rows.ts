@@ -1,6 +1,7 @@
 import {
   ALL_EXECUTION_HOSTS_SCOPE,
   LOCAL_EXECUTION_HOST_ID,
+  getLocalExecutionHostLabel,
   getRepoExecutionHostId,
   type ExecutionHostId,
   type ExecutionHostKind,
@@ -85,7 +86,7 @@ function getFallbackHost(hostId: ExecutionHostId): HostSectionOption {
   return {
     id: hostId,
     kind: isLocal ? 'local' : hostId.startsWith('ssh:') ? 'ssh' : 'runtime',
-    label: isLocal ? 'Local Mac' : hostId,
+    label: isLocal ? getLocalExecutionHostLabel() : hostId,
     detail: isLocal ? 'This computer' : 'Host',
     health: isLocal ? 'local' : 'available'
   }

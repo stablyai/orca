@@ -15,6 +15,7 @@ import {
   type AiVaultSession,
   type AiVaultSort
 } from '../../../../shared/ai-vault-types'
+import { getLocalExecutionHostLabel } from '../../../../shared/execution-host'
 import { translate } from '@/i18n/i18n'
 import { AiVaultPanelHeader } from './AiVaultPanelHeader'
 import { AiVaultSessionVirtualList } from './AiVaultSessionVirtualList'
@@ -247,7 +248,8 @@ export default function AiVaultPanel(): React.JSX.Element {
         <div className="border-b border-sidebar-border px-3 py-2 text-[11px] leading-4 text-muted-foreground">
           {translate(
             'auto.components.right.sidebar.AiVaultPanel.remoteBrowseLocalHistory',
-            'SSH-host workspaces can browse local history. Resume actions run from Local Mac workspaces.'
+            'SSH-host workspaces can browse local history. Resume actions run from {{value0}} workspaces.',
+            { value0: getLocalExecutionHostLabel() }
           )}
         </div>
       ) : null}
