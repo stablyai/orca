@@ -36,6 +36,9 @@ import { formatMessagesForInjection } from './orchestration/formatter'
 import type {
   Automation,
   AutomationCreateInput,
+  AutomationFolder,
+  AutomationFolderCreateInput,
+  AutomationFolderUpdateInput,
   AutomationRun,
   AutomationUpdateInput,
   AutomationWorkspaceMode
@@ -673,6 +676,10 @@ type RuntimeStore = {
   createAutomation?: Store['createAutomation']
   updateAutomation?: Store['updateAutomation']
   deleteAutomation?: Store['deleteAutomation']
+  listAutomationFolders?: Store['listAutomationFolders']
+  createAutomationFolder?: Store['createAutomationFolder']
+  updateAutomationFolder?: Store['updateAutomationFolder']
+  deleteAutomationFolder?: Store['deleteAutomationFolder']
   getSparsePresets?: Store['getSparsePresets']
   saveSparsePreset?: Store['saveSparsePreset']
   getSettings(): {
@@ -2119,7 +2126,8 @@ export class OrcaRuntimeService {
       rrule: input.rrule,
       dtstart: input.dtstart,
       enabled: input.enabled,
-      missedRunGraceMinutes: input.missedRunGraceMinutes
+      missedRunGraceMinutes: input.missedRunGraceMinutes,
+      folderId: input.folderId
     })
   }
 
@@ -2168,6 +2176,9 @@ export class OrcaRuntimeService {
     if (hasRuntimeAutomationUpdateValue(updates, 'missedRunGraceMinutes')) {
       patch.missedRunGraceMinutes = updates.missedRunGraceMinutes
     }
+    if (hasRuntimeAutomationUpdateValue(updates, 'folderId')) {
+      patch.folderId = updates.folderId
+    }
     const targetChanged =
       hasRuntimeAutomationUpdateValue(updates, 'repo') ||
       hasRuntimeAutomationUpdateValue(updates, 'workspace') ||
@@ -2204,6 +2215,44 @@ export class OrcaRuntimeService {
       throw new Error('runtime_unavailable')
     }
     return await this.automationService.runNow(id)
+  }
+
+  listAutomationFolders(): AutomationFolder[] {
+    if (!this.store?.listAutomationFolders) {
+      throw new Error('runtime_unavailable')
+    }
+    return this.store.listAutomationFolders()
+  }
+
+  createAutomationFolder(input: AutomationFolderCreateInput): AutomationFolder {
+    if (!this.store?.createAutomationFolder) {
+      throw new Error('runtime_unavailable')
+    }
+    return this.store.createAutomationFolder(input)
+  }
+
+  updateAutomationFolder(id: string, updates: AutomationFolderUpdateInput): AutomationFolder {
+    if (!this.store?.updateAutomationFolder) {
+      throw new Error('runtime_unavailable')
+    }
+    return this.store.updateAutomationFolder(id, updates)
+  }
+
+  deleteAutomationFolder(id: string): { id: string; unfiledCount: number } {
+    if (!this.store?.deleteAutomationFolder || !this.store?.listAutomations) {
+      throw new Error('runtime_unavailable')
+    }
+    // Why: the store reverts the folder's automations to unfiled but returns
+    // void, so count them before deletion to report how many were unfiled.
+    const unfiledCount = this.store
+      .listAutomations()
+      .filter((automation) => automation.folderId === id).length
+    this.store.deleteAutomationFolder(id)
+    return { id, unfiledCount }
+  }
+
+  async moveAutomationToFolder(automationId: string, folderId: string | null): Promise<Automation> {
+    return this.updateAutomation(automationId, { folderId })
   }
 
   private async resolveAutomationTarget(

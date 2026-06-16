@@ -125,6 +125,81 @@ describe('automation RPC methods', () => {
     ).resolves.toMatchObject({ ok: false, error: { code: 'invalid_argument' } })
   })
 
+  it('routes automation folder operations and move-to-folder to the runtime server', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      listAutomationFolders: vi.fn().mockReturnValue([{ id: 'fld-1', name: 'Release' }]),
+      createAutomationFolder: vi.fn().mockReturnValue({ id: 'fld-2', name: 'Nightly' }),
+      updateAutomationFolder: vi.fn().mockReturnValue({ id: 'fld-1', name: 'Releases' }),
+      deleteAutomationFolder: vi.fn().mockReturnValue({ id: 'fld-1', unfiledCount: 2 }),
+      moveAutomationToFolder: vi
+        .fn()
+        .mockResolvedValue({ id: 'auto-1', name: 'Daily', folderId: 'fld-1' })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: AUTOMATION_METHODS })
+
+    await dispatcher.dispatch(makeRequest('automation.listFolders'))
+    await dispatcher.dispatch(
+      makeRequest('automation.createFolder', {
+        name: 'Nightly',
+        color: 'blue',
+        parentFolderId: null
+      })
+    )
+    await dispatcher.dispatch(
+      makeRequest('automation.updateFolder', { id: 'fld-1', updates: { name: 'Releases' } })
+    )
+    await dispatcher.dispatch(makeRequest('automation.deleteFolder', { id: 'fld-1' }))
+    await dispatcher.dispatch(
+      makeRequest('automation.moveToFolder', { automationId: 'auto-1', folderId: 'fld-1' })
+    )
+    await dispatcher.dispatch(
+      makeRequest('automation.moveToFolder', { automationId: 'auto-1', folderId: null })
+    )
+
+    expect(runtime.listAutomationFolders).toHaveBeenCalled()
+    expect(runtime.createAutomationFolder).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'Nightly', color: 'blue' })
+    )
+    expect(runtime.updateAutomationFolder).toHaveBeenCalledWith(
+      'fld-1',
+      expect.objectContaining({ name: 'Releases' })
+    )
+    expect(runtime.deleteAutomationFolder).toHaveBeenCalledWith('fld-1')
+    expect(runtime.moveAutomationToFolder).toHaveBeenCalledWith('auto-1', 'fld-1')
+    // null folderId (unfile) must survive validation rather than coercing to undefined.
+    expect(runtime.moveAutomationToFolder).toHaveBeenCalledWith('auto-1', null)
+  })
+
+  it('passes folderId through automation create and update', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      createAutomation: vi.fn().mockResolvedValue({ id: 'auto-2', folderId: 'fld-1' }),
+      updateAutomation: vi.fn().mockResolvedValue({ id: 'auto-1', folderId: null })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: AUTOMATION_METHODS })
+
+    await dispatcher.dispatch(
+      makeRequest('automation.create', {
+        name: 'Filed',
+        prompt: 'Run',
+        agentId: 'codex',
+        repo: 'repo-1',
+        rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
+        dtstart: 1,
+        folderId: 'fld-1'
+      })
+    )
+    await dispatcher.dispatch(
+      makeRequest('automation.update', { id: 'auto-1', updates: { folderId: null } })
+    )
+
+    expect(runtime.createAutomation).toHaveBeenCalledWith(
+      expect.objectContaining({ folderId: 'fld-1' })
+    )
+    expect(runtime.updateAutomation).toHaveBeenCalledWith('auto-1', { folderId: null })
+  })
+
   it('preserves null baseBranch update values through the RPC boundary', async () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',

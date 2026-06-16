@@ -43,7 +43,12 @@ export {
   formatTerminalWait
 } from './terminal-format'
 export {
+  formatAutomationFolderCreated,
+  formatAutomationFolderDeleted,
+  formatAutomationFolderList,
+  formatAutomationFolderRenamed,
   formatAutomationList,
+  formatAutomationMoved,
   formatAutomationRemoved,
   formatAutomationRun,
   formatAutomationRuns,

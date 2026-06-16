@@ -114,7 +114,8 @@ const AutomationCreate = z.object({
   rrule: AutomationSchedule,
   dtstart: requiredNumber('Missing trigger start time'),
   enabled: OptionalBoolean,
-  missedRunGraceMinutes: OptionalPositiveInt
+  missedRunGraceMinutes: OptionalPositiveInt,
+  folderId: OptionalNullablePlainString
 })
 
 const AutomationUpdateFields = z.object({
@@ -134,7 +135,35 @@ const AutomationUpdateFields = z.object({
   rrule: AutomationSchedule.optional(),
   dtstart: requiredNumber('Missing trigger start time').optional(),
   enabled: OptionalBoolean,
-  missedRunGraceMinutes: OptionalPositiveInt
+  missedRunGraceMinutes: OptionalPositiveInt,
+  folderId: OptionalNullablePlainString
+})
+
+const AutomationFolderCreate = z.object({
+  name: requiredString('Missing folder name'),
+  color: OptionalNullablePlainString,
+  parentFolderId: OptionalNullablePlainString
+})
+
+const AutomationFolderUpdate = z.object({
+  id: requiredString('Missing folder id'),
+  updates: z.object({
+    name: OptionalString,
+    color: OptionalNullablePlainString,
+    isCollapsed: OptionalBoolean,
+    parentFolderId: OptionalNullablePlainString
+  })
+})
+
+const AutomationFolderId = z.object({
+  id: requiredString('Missing folder id')
+})
+
+const AutomationMoveToFolder = z.object({
+  automationId: requiredString('Missing automation id'),
+  // Why: null is the explicit "unfile" value, so it must pass validation rather
+  // than being coerced to undefined like an omitted optional string.
+  folderId: z.union([z.string(), z.null()])
 })
 
 const AutomationUpdate = z.object({
@@ -182,6 +211,35 @@ export const AUTOMATION_METHODS: RpcMethod[] = [
     params: AutomationRuns,
     handler: (params, { runtime }) => ({
       runs: runtime.listAutomationRuns(params.automationId)
+    })
+  }),
+  defineMethod({
+    name: 'automation.listFolders',
+    params: null,
+    handler: (_params, { runtime }) => ({ folders: runtime.listAutomationFolders() })
+  }),
+  defineMethod({
+    name: 'automation.createFolder',
+    params: AutomationFolderCreate,
+    handler: (params, { runtime }) => ({ folder: runtime.createAutomationFolder(params) })
+  }),
+  defineMethod({
+    name: 'automation.updateFolder',
+    params: AutomationFolderUpdate,
+    handler: (params, { runtime }) => ({
+      folder: runtime.updateAutomationFolder(params.id, params.updates)
+    })
+  }),
+  defineMethod({
+    name: 'automation.deleteFolder',
+    params: AutomationFolderId,
+    handler: (params, { runtime }) => runtime.deleteAutomationFolder(params.id)
+  }),
+  defineMethod({
+    name: 'automation.moveToFolder',
+    params: AutomationMoveToFolder,
+    handler: async (params, { runtime }) => ({
+      automation: await runtime.moveAutomationToFolder(params.automationId, params.folderId)
     })
   })
 ]

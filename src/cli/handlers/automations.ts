@@ -2,11 +2,20 @@
 import type {
   Automation,
   AutomationCreateInput,
+  AutomationFolder,
   AutomationPrecheck,
   AutomationRun,
+  AutomationRunStatus,
   AutomationSchedulePreset,
   AutomationUpdateInput
 } from '../../shared/automations-types'
+import {
+  filterAutomations,
+  type AutomationFilterCriteria,
+  type AutomationLastRunFilter,
+  type AutomationLastRunStatusLookup,
+  type AutomationStatusFilter
+} from '../../shared/automations-filter'
 import {
   buildWorkspaceRunContext,
   normalizeTaskSourceContext,
@@ -22,7 +31,12 @@ import { buildAutomationRrule, isValidAutomationSchedule } from '../../shared/au
 import { isTuiAgent } from '../../shared/tui-agent-config'
 import type { CommandHandler } from '../dispatch'
 import {
+  formatAutomationFolderCreated,
+  formatAutomationFolderDeleted,
+  formatAutomationFolderList,
+  formatAutomationFolderRenamed,
   formatAutomationList,
+  formatAutomationMoved,
   formatAutomationRemoved,
   formatAutomationRun,
   formatAutomationRuns,
@@ -421,9 +435,164 @@ function buildAutomationRunContextFromSetup(setup: ProjectHostSetup): WorkspaceR
   return runContext
 }
 
+type FolderResolutionClient = Parameters<CommandHandler>[0]['client']
+
+async function listAutomationFolders(client: FolderResolutionClient): Promise<AutomationFolder[]> {
+  const response = await client.call<{ folders: AutomationFolder[] }>('automation.listFolders')
+  return response.result.folders
+}
+
+/** Resolve --folder/--folder-id (and optionally --create-folder) into a concrete
+ *  folderId, or undefined when neither flag was passed. Returns null only when an
+ *  explicit empty/`null` --folder-id selects the unfiled bucket. */
+async function resolveFolderIdFlag(
+  flags: Map<string, string | boolean>,
+  client: FolderResolutionClient,
+  options: { allowUnfile?: boolean } = {}
+): Promise<string | null | undefined> {
+  const folderIdRaw = flags.get('folder-id')
+  const folderName = getOptionalStringFlag(flags, 'folder')
+  const wantsUnfile = options.allowUnfile === true && flags.get('unfile') === true
+  const provided = [folderIdRaw !== undefined, folderName !== undefined, wantsUnfile].filter(
+    Boolean
+  ).length
+  if (provided === 0) {
+    return undefined
+  }
+  if (provided > 1) {
+    throw new RuntimeClientError(
+      'invalid_argument',
+      options.allowUnfile
+        ? 'Use only one of --folder, --folder-id, or --unfile.'
+        : 'Use either --folder or --folder-id, not both.'
+    )
+  }
+  if (wantsUnfile) {
+    return null
+  }
+  if (folderIdRaw !== undefined) {
+    return resolveExactFolderId(folderIdRaw, client)
+  }
+  return resolveFolderIdByName(folderName as string, flags, client)
+}
+
+async function resolveExactFolderId(
+  folderIdRaw: string | boolean,
+  client: FolderResolutionClient
+): Promise<string | null> {
+  // Empty or literal "null" --folder-id selects the unfiled bucket.
+  if (folderIdRaw === true || folderIdRaw === '' || folderIdRaw === 'null') {
+    return null
+  }
+  const folders = await listAutomationFolders(client)
+  const match = folders.find((folder) => folder.id === folderIdRaw)
+  if (!match) {
+    throw new RuntimeClientError('invalid_argument', `No automation folder with id: ${folderIdRaw}`)
+  }
+  return match.id
+}
+
+async function resolveFolderIdByName(
+  folderName: string,
+  flags: Map<string, string | boolean>,
+  client: FolderResolutionClient
+): Promise<string> {
+  const folders = await listAutomationFolders(client)
+  const matches = folders.filter((folder) => folder.name === folderName)
+  if (matches.length === 1) {
+    return matches[0].id
+  }
+  if (matches.length > 1) {
+    throw new RuntimeClientError(
+      'invalid_argument',
+      `Multiple folders named "${folderName}"; pass --folder-id to disambiguate.`
+    )
+  }
+  // Why: a missing name is treated as a typo unless --create-folder opts in, so
+  // automations are never silently filed under a brand-new folder.
+  if (flags.get('create-folder') !== true) {
+    throw new RuntimeClientError(
+      'invalid_argument',
+      `No automation folder named "${folderName}". Pass --create-folder to create it.`
+    )
+  }
+  const created = await client.call<{ folder: AutomationFolder }>('automation.createFolder', {
+    name: folderName
+  })
+  return created.result.folder.id
+}
+
+function getStatusFilterFlag(flags: Map<string, string | boolean>): AutomationStatusFilter {
+  const value = getOptionalStringFlag(flags, 'status')
+  if (value === undefined) {
+    return 'all'
+  }
+  if (value === 'enabled' || value === 'paused' || value === 'all') {
+    return value
+  }
+  throw new RuntimeClientError('invalid_argument', '--status must be enabled, paused, or all')
+}
+
+function getLastRunFilterFlag(flags: Map<string, string | boolean>): AutomationLastRunFilter {
+  const value = getOptionalStringFlag(flags, 'last-run')
+  if (value === undefined) {
+    return 'any'
+  }
+  if (value === 'completed' || value === 'failed' || value === 'skipped' || value === 'any') {
+    return value
+  }
+  throw new RuntimeClientError(
+    'invalid_argument',
+    '--last-run must be completed, failed, skipped, or any'
+  )
+}
+
+/** Build the automationId -> latest run status lookup from the runs source the
+ *  CLI already uses. automation.runs returns newest-first, so the first run seen
+ *  per automation is its latest. */
+async function buildLastRunStatusLookup(
+  client: FolderResolutionClient
+): Promise<AutomationLastRunStatusLookup> {
+  const response = await client.call<{ runs: AutomationRun[] }>('automation.runs', {})
+  const lookup: Record<string, AutomationRunStatus> = {}
+  for (const run of response.result.runs) {
+    if (!(run.automationId in lookup)) {
+      lookup[run.automationId] = run.status
+    }
+  }
+  return lookup
+}
+
+async function resolveListFilterCriteria(
+  flags: Map<string, string | boolean>,
+  client: FolderResolutionClient
+): Promise<{ criteria: AutomationFilterCriteria; lastRunLookup: AutomationLastRunStatusLookup }> {
+  const status = getStatusFilterFlag(flags)
+  const lastRun = getLastRunFilterFlag(flags)
+  const search = getOptionalStringFlag(flags, 'search')
+  const folderId = await resolveFolderIdFlag(flags, client)
+  const lastRunLookup = lastRun === 'any' ? {} : await buildLastRunStatusLookup(client)
+  return {
+    criteria: {
+      status,
+      lastRun,
+      ...(search !== undefined ? { search } : {}),
+      ...(folderId !== undefined ? { folderId } : {})
+    },
+    lastRunLookup
+  }
+}
+
 export const AUTOMATION_HANDLERS: Record<string, CommandHandler> = {
-  'automations list': async ({ client, json }) => {
-    const result = await client.call<{ automations: Automation[] }>('automation.list')
+  'automations list': async ({ flags, client, json }) => {
+    const response = await client.call<{ automations: Automation[] }>('automation.list')
+    const folders = await listAutomationFolders(client)
+    const { criteria, lastRunLookup } = await resolveListFilterCriteria(flags, client)
+    const automations = filterAutomations(response.result.automations, criteria, lastRunLookup)
+    // Why: reshape the success envelope so --json runs through the same printResult
+    // path while gaining folderId (already on each automation) plus a top-level
+    // folders array for scripts that render the folder tree.
+    const result = { ...response, result: { automations, folders } }
     printResult(result, json, formatAutomationList)
   },
   'automations show': async ({ flags, client, json }) => {
@@ -439,6 +608,7 @@ export const AUTOMATION_HANDLERS: Record<string, CommandHandler> = {
     }
     const target = await resolveDefaultTarget(flags, cwd, client)
     const sourceContext = getSourceContextFlag(flags)
+    const folderId = await resolveFolderIdFlag(flags, client)
     const workspaceMode =
       getWorkspaceModeFlag(flags) ?? (target.workspace ? 'existing' : 'new_per_run')
     const result = await client.call<{ automation: Automation }>('automation.create', {
@@ -448,6 +618,7 @@ export const AUTOMATION_HANDLERS: Record<string, CommandHandler> = {
       agentId: getProviderFlag(flags),
       ...(target.runContext ? { runContext: target.runContext } : {}),
       ...(sourceContext !== undefined ? { sourceContext } : {}),
+      ...(folderId !== undefined ? { folderId } : {}),
       repo: target.repo,
       workspace: target.workspace,
       workspaceMode,
@@ -464,6 +635,7 @@ export const AUTOMATION_HANDLERS: Record<string, CommandHandler> = {
     const target = await getExplicitTarget(flags, cwd, client)
     const schedule = getScheduleFlag(flags, false)
     const sourceContext = getSourceContextFlag(flags)
+    const folderId = await resolveFolderIdFlag(flags, client)
     const result = await client.call<{ automation: Automation }>('automation.update', {
       id: getRequiredStringFlag(flags, 'id'),
       updates: {
@@ -473,6 +645,7 @@ export const AUTOMATION_HANDLERS: Record<string, CommandHandler> = {
         agentId: getOptionalProviderFlag(flags),
         ...(target.runContext ? { runContext: target.runContext } : {}),
         ...(sourceContext !== undefined ? { sourceContext } : {}),
+        ...(folderId !== undefined ? { folderId } : {}),
         repo: target.repo,
         workspace: target.workspace,
         workspaceMode: getWorkspaceModeFlag(flags),
@@ -502,5 +675,45 @@ export const AUTOMATION_HANDLERS: Record<string, CommandHandler> = {
       automationId: getOptionalStringFlag(flags, 'id')
     })
     printResult(result, json, formatAutomationRuns)
+  },
+  'automations move': async ({ flags, client, json }) => {
+    const folderId = await resolveFolderIdFlag(flags, client, { allowUnfile: true })
+    if (folderId === undefined) {
+      throw new RuntimeClientError(
+        'invalid_argument',
+        'Pass one of --folder, --folder-id, or --unfile.'
+      )
+    }
+    const result = await client.call<{ automation: Automation }>('automation.moveToFolder', {
+      automationId: getRequiredStringFlag(flags, 'id'),
+      folderId
+    })
+    printResult(result, json, formatAutomationMoved)
+  },
+  'automations folders list': async ({ client, json }) => {
+    const result = await client.call<{ folders: AutomationFolder[] }>('automation.listFolders')
+    printResult(result, json, formatAutomationFolderList)
+  },
+  'automations folders create': async ({ flags, client, json }) => {
+    const result = await client.call<{ folder: AutomationFolder }>('automation.createFolder', {
+      name: getRequiredStringFlag(flags, 'name'),
+      color: getOptionalStringFlag(flags, 'color'),
+      parentFolderId: getOptionalStringFlag(flags, 'parent')
+    })
+    printResult(result, json, formatAutomationFolderCreated)
+  },
+  'automations folders rename': async ({ flags, client, json }) => {
+    const result = await client.call<{ folder: AutomationFolder }>('automation.updateFolder', {
+      id: getRequiredStringFlag(flags, 'id'),
+      updates: { name: getRequiredStringFlag(flags, 'name') }
+    })
+    printResult(result, json, formatAutomationFolderRenamed)
+  },
+  'automations folders delete': async ({ flags, client, json }) => {
+    const result = await client.call<{ id: string; unfiledCount: number }>(
+      'automation.deleteFolder',
+      { id: getRequiredStringFlag(flags, 'id') }
+    )
+    printResult(result, json, formatAutomationFolderDeleted)
   }
 }

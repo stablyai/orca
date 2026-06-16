@@ -3984,4 +3984,266 @@ describe('orca cli worktree awareness', () => {
       setupId: 'setup-gpu'
     })
   })
+
+  it('lists automation folders and applies folder + last-run filters', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_list', {
+        automations: [
+          {
+            id: 'auto-1',
+            name: 'Nightly',
+            prompt: 'p',
+            agentId: 'codex',
+            folderId: 'fld-release',
+            enabled: true,
+            rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
+            nextRunAt: 0
+          },
+          {
+            id: 'auto-2',
+            name: 'Triage',
+            prompt: 'p',
+            agentId: 'codex',
+            folderId: null,
+            enabled: true,
+            rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
+            nextRunAt: 0
+          }
+        ]
+      }),
+      okFixture('req_folders', {
+        folders: [
+          {
+            id: 'fld-release',
+            name: 'Release',
+            parentFolderId: null,
+            isCollapsed: false,
+            color: null,
+            sortOrder: 0,
+            createdAt: 0,
+            updatedAt: 0
+          }
+        ]
+      }),
+      // resolveFolderIdFlag re-fetches folders to resolve the --folder name.
+      okFixture('req_folders_resolve', {
+        folders: [
+          {
+            id: 'fld-release',
+            name: 'Release',
+            parentFolderId: null,
+            isCollapsed: false,
+            color: null,
+            sortOrder: 0,
+            createdAt: 0,
+            updatedAt: 0
+          }
+        ]
+      }),
+      okFixture('req_runs', {
+        runs: [
+          { id: 'run-1', automationId: 'auto-1', status: 'completed', createdAt: 2 },
+          { id: 'run-0', automationId: 'auto-1', status: 'dispatch_failed', createdAt: 1 }
+        ]
+      })
+    )
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      ['automations', 'list', '--folder', 'Release', '--last-run', 'completed', '--json'],
+      '/tmp/repo'
+    )
+
+    expect(callMock).toHaveBeenNthCalledWith(1, 'automation.list')
+    expect(callMock).toHaveBeenNthCalledWith(2, 'automation.listFolders')
+    expect(callMock).toHaveBeenNthCalledWith(3, 'automation.listFolders')
+    expect(callMock).toHaveBeenNthCalledWith(4, 'automation.runs', {})
+    const output = JSON.parse(logSpy.mock.calls.at(-1)?.[0] as string)
+    expect(output.result.automations).toHaveLength(1)
+    expect(output.result.automations[0].id).toBe('auto-1')
+    expect(output.result.automations[0].folderId).toBe('fld-release')
+    expect(output.result.folders).toHaveLength(1)
+  })
+
+  it('errors on an unknown --folder name unless --create-folder is passed', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_list', { automations: [] }),
+      okFixture('req_folders', { folders: [] }),
+      okFixture('req_folders_resolve', { folders: [] })
+    )
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const priorExitCode = process.exitCode
+
+    await main(['automations', 'list', '--folder', 'Missing'], '/tmp/repo')
+
+    expect([...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')).toContain(
+      'No automation folder named "Missing"'
+    )
+    expect(process.exitCode).toBe(1)
+    process.exitCode = priorExitCode
+  })
+
+  it('creates an automation folder on miss when --create-folder is set', async () => {
+    queueFixtures(
+      callMock,
+      worktreeListFixture([buildWorktree('/tmp/repo/feature', 'feature/foo', 'abc', 'repo-1')]),
+      okFixture('req_folders', { folders: [] }),
+      okFixture('req_folder_create', {
+        folder: {
+          id: 'fld-new',
+          name: 'Release',
+          parentFolderId: null,
+          isCollapsed: false,
+          color: null,
+          sortOrder: 0,
+          createdAt: 0,
+          updatedAt: 0
+        }
+      }),
+      okFixture('req_automation_create', { automation: { id: 'auto-1', name: 'Nightly' } })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      [
+        'automations',
+        'create',
+        '--name',
+        'Nightly',
+        '--trigger',
+        'daily',
+        '--prompt',
+        'Run checks',
+        '--provider',
+        'codex',
+        '--folder',
+        'Release',
+        '--create-folder',
+        '--json'
+      ],
+      '/tmp/repo/feature/src'
+    )
+
+    expect(callMock).toHaveBeenCalledWith('automation.createFolder', { name: 'Release' })
+    expect(callMock).toHaveBeenCalledWith(
+      'automation.create',
+      expect.objectContaining({ folderId: 'fld-new' })
+    )
+  })
+
+  it('moves an automation to a folder by id', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_folders', {
+        folders: [
+          {
+            id: 'fld-1',
+            name: 'Release',
+            parentFolderId: null,
+            isCollapsed: false,
+            color: null,
+            sortOrder: 0,
+            createdAt: 0,
+            updatedAt: 0
+          }
+        ]
+      }),
+      okFixture('req_move', { automation: { id: 'auto-1', name: 'Nightly', folderId: 'fld-1' } })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(['automations', 'move', 'auto-1', '--folder-id', 'fld-1', '--json'], '/tmp/repo')
+
+    expect(callMock).toHaveBeenCalledWith('automation.moveToFolder', {
+      automationId: 'auto-1',
+      folderId: 'fld-1'
+    })
+  })
+
+  it('unfiles an automation with --unfile', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_move', { automation: { id: 'auto-1', name: 'Nightly', folderId: null } })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(['automations', 'move', 'auto-1', '--unfile', '--json'], '/tmp/repo')
+
+    expect(callMock).toHaveBeenCalledWith('automation.moveToFolder', {
+      automationId: 'auto-1',
+      folderId: null
+    })
+  })
+
+  it('rejects combining move folder selectors', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const priorExitCode = process.exitCode
+
+    await main(
+      ['automations', 'move', 'auto-1', '--folder-id', 'fld-1', '--unfile', '--json'],
+      '/tmp/repo'
+    )
+
+    expect(callMock).not.toHaveBeenCalled()
+    expect([...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')).toContain(
+      'Use only one of --folder, --folder-id, or --unfile.'
+    )
+    expect(process.exitCode).toBe(1)
+    process.exitCode = priorExitCode
+  })
+
+  it('reports how many automations were unfiled when deleting a folder', async () => {
+    queueFixtures(callMock, okFixture('req_folder_delete', { id: 'fld-1', unfiledCount: 3 }))
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(['automations', 'folders', 'delete', 'fld-1'], '/tmp/repo')
+
+    expect(callMock).toHaveBeenCalledWith('automation.deleteFolder', { id: 'fld-1' })
+    expect(logSpy.mock.calls.flat().join('\n')).toContain('Unfiled 3 automations')
+  })
+
+  it('creates an automation folder with color and parent', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_folder_create', {
+        folder: {
+          id: 'fld-1',
+          name: 'Nightly',
+          parentFolderId: 'fld-parent',
+          isCollapsed: false,
+          color: 'blue',
+          sortOrder: 0,
+          createdAt: 0,
+          updatedAt: 0
+        }
+      })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      [
+        'automations',
+        'folders',
+        'create',
+        '--name',
+        'Nightly',
+        '--color',
+        'blue',
+        '--parent',
+        'fld-parent',
+        '--json'
+      ],
+      '/tmp/repo'
+    )
+
+    expect(callMock).toHaveBeenCalledWith('automation.createFolder', {
+      name: 'Nightly',
+      color: 'blue',
+      parentFolderId: 'fld-parent'
+    })
+  })
 })

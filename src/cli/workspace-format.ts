@@ -1,4 +1,4 @@
-import type { Automation, AutomationRun } from '../shared/automations-types'
+import type { Automation, AutomationFolder, AutomationRun } from '../shared/automations-types'
 import { getAutomationLegacyRepoId } from '../shared/automation-run-identity'
 import { formatAutomationPrecheckTimeout } from '../shared/automation-precheck'
 import { formatAutomationSchedule } from '../shared/automation-schedules'
@@ -165,16 +165,57 @@ export function formatWorktreeShow(result: { worktree: RuntimeWorktreeRecord }):
     .join('\n')
 }
 
-export function formatAutomationList(result: { automations: Automation[] }): string {
+export function formatAutomationList(result: {
+  automations: Automation[]
+  folders?: AutomationFolder[]
+}): string {
   if (result.automations.length === 0) {
     return 'No automations found.'
   }
+  const folderNameById = new Map((result.folders ?? []).map((folder) => [folder.id, folder.name]))
   return result.automations
     .map((automation) => {
       const status = automation.enabled ? 'enabled' : 'disabled'
-      return `${automation.id}  ${automation.name}  ${automation.agentId}  ${status}\n${formatAutomationSchedule(automation.rrule)}  next: ${new Date(automation.nextRunAt).toISOString()}`
+      const folder = automation.folderId
+        ? (folderNameById.get(automation.folderId) ?? automation.folderId)
+        : 'unfiled'
+      return `${automation.id}  ${automation.name}  ${automation.agentId}  ${status}  folder: ${folder}\n${formatAutomationSchedule(automation.rrule)}  next: ${new Date(automation.nextRunAt).toISOString()}`
     })
     .join('\n\n')
+}
+
+export function formatAutomationFolderList(result: { folders: AutomationFolder[] }): string {
+  if (result.folders.length === 0) {
+    return 'No automation folders found.'
+  }
+  return result.folders
+    .map((folder) => {
+      const parent = folder.parentFolderId ? `  parent: ${folder.parentFolderId}` : ''
+      const color = folder.color ? `  color: ${folder.color}` : ''
+      return `${folder.id}  ${folder.name}${color}${parent}`
+    })
+    .join('\n')
+}
+
+export function formatAutomationFolderCreated(result: { folder: AutomationFolder }): string {
+  return `Created folder ${result.folder.id} (${result.folder.name}).`
+}
+
+export function formatAutomationFolderRenamed(result: { folder: AutomationFolder }): string {
+  return `Renamed folder ${result.folder.id} to ${result.folder.name}.`
+}
+
+export function formatAutomationFolderDeleted(result: {
+  id: string
+  unfiledCount: number
+}): string {
+  const plural = result.unfiledCount === 1 ? 'automation' : 'automations'
+  return `Deleted folder ${result.id}. Unfiled ${result.unfiledCount} ${plural}.`
+}
+
+export function formatAutomationMoved(result: { automation: Automation }): string {
+  const folder = result.automation.folderId ?? 'unfiled'
+  return `Moved automation ${result.automation.id} to ${folder}.`
 }
 
 export function formatAutomationShow(result: { automation: Automation }): string {
