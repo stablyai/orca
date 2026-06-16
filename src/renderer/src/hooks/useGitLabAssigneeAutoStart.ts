@@ -138,7 +138,10 @@ export function useGitLabAssigneeAutoStart(): void {
           // Recovered: a prior error for this repo no longer applies.
           reportedRepoErrorsRef.current.delete(repo.id)
           for (const item of response?.items ?? []) {
-            if (launched >= MAX_LAUNCHES_PER_TICK) {
+            // Re-check `cancelled` each iteration: launches are awaited, so a
+            // cleanup (feature disabled / unmount) mid-tick must stop further
+            // launches rather than keep spawning workspaces after teardown.
+            if (cancelled || launched >= MAX_LAUNCHES_PER_TICK) {
               break
             }
             if (item.type !== 'issue' || isAlreadyStarted(repo.id, item.number)) {
