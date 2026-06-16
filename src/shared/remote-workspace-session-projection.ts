@@ -79,6 +79,17 @@ export function exportRemoteWorkspaceSession(
     }
   }
 
+  const defaultTerminalTabsAppliedByWorktreePath: Record<string, true> = {}
+  for (const worktreeId of Object.keys(session.defaultTerminalTabsAppliedByWorktreeId ?? {})) {
+    if (!options.isTargetWorktree(worktreeId)) {
+      continue
+    }
+    const worktreePath = worktreePathFromId(worktreeId)
+    if (worktreePath) {
+      defaultTerminalTabsAppliedByWorktreePath[worktreePath] = true
+    }
+  }
+
   return {
     activeWorktreePath,
     activeTabId,
@@ -100,7 +111,8 @@ export function exportRemoteWorkspaceSession(
           )
         )
       : undefined,
-    lastVisitedAtByWorktreePath
+    lastVisitedAtByWorktreePath,
+    defaultTerminalTabsAppliedByWorktreePath
   }
 }
 
@@ -157,6 +169,14 @@ export function importRemoteWorkspaceSession(
     }
   }
 
+  const defaultTerminalTabsAppliedByWorktreeId: Record<string, true> = {}
+  for (const worktreePath of Object.keys(remote.defaultTerminalTabsAppliedByWorktreePath ?? {})) {
+    const worktreeId = resolvePath(worktreePath)
+    if (worktreeId) {
+      defaultTerminalTabsAppliedByWorktreeId[worktreeId] = true
+    }
+  }
+
   return {
     ...session,
     activeRepoId: activeWorktreeId ? (splitWorktreeId(activeWorktreeId)?.repoId ?? null) : null,
@@ -179,6 +199,7 @@ export function importRemoteWorkspaceSession(
           )
         )
       : undefined,
-    lastVisitedAtByWorktreeId
+    lastVisitedAtByWorktreeId,
+    defaultTerminalTabsAppliedByWorktreeId
   }
 }

@@ -21,7 +21,12 @@ import {
   isPowerShellExecutableName
 } from '../powershell-osc133-bootstrap'
 import { getPosixOmpShellWrapper } from '../pty/omp-shell-wrapper'
-import { getZshEnvTemplate } from '../shell-templates'
+import {
+  getZshEnvTemplate,
+  getZshFinalZdotdirRestoreBlock,
+  getZshShellReadyMarkerRegistrationBlock,
+  getZshStartupFileSourceBlock
+} from '../shell-templates'
 
 let didEnsureShellReadyWrappers = false
 
@@ -159,8 +164,16 @@ __orca_restore_attribution_path() {
   export PATH="\${ORCA_ATTRIBUTION_SHIM_DIR}:$PATH"
 }
 __orca_restore_attribution_path
+__orca_restore_agent_teams_path() {
+  [[ -n "\${ORCA_AGENT_TEAMS_SHIM_DIR:-}" ]] || return 0
+  case "$PATH" in
+    "\${ORCA_AGENT_TEAMS_SHIM_DIR}"|"\${ORCA_AGENT_TEAMS_SHIM_DIR}:"*) return 0 ;;
+  esac
+  export PATH="\${ORCA_AGENT_TEAMS_SHIM_DIR}:$PATH"
+}
+__orca_restore_agent_teams_path
 # Why: user startup files may set the default OpenCode config after Orca's
-# spawn env; restore the PTY-scoped overlay before the first prompt.
+# spawn env; restore the Orca-managed config dir before the first prompt.
 [[ -n "\${ORCA_OPENCODE_CONFIG_DIR:-}" ]] && export OPENCODE_CONFIG_DIR="\${ORCA_OPENCODE_CONFIG_DIR}"
 # Why: bare shells carry both Pi and OMP shadows so a later typed OMP can
 # switch on demand. Keep Pi as the shell default unless this PTY is OMP-only.
@@ -259,10 +272,11 @@ trap '__orca_osc133_preexec' DEBUG
 
 export function getZshShellReadyRcfileContent(): string {
   return `# Orca zsh shell-ready wrapper
-_orca_home="\${ORCA_ORIG_ZDOTDIR:-$HOME}"
-if [[ "$_orca_home" != "$ZDOTDIR" && -o interactive && -f "$_orca_home/.zshrc" ]]; then
-  source "$_orca_home/.zshrc"
-fi
+${getZshStartupFileSourceBlock({
+  fileName: '.zshrc',
+  interactiveOnly: true,
+  skipWhenHomeIsCurrentZdotdir: true
+})}
 __orca_restore_attribution_path() {
   [[ -n "\${ORCA_ATTRIBUTION_SHIM_DIR:-}" ]] || return 0
   case "$PATH" in
@@ -271,6 +285,14 @@ __orca_restore_attribution_path() {
   export PATH="\${ORCA_ATTRIBUTION_SHIM_DIR}:$PATH"
 }
 [[ ! -o login ]] && __orca_restore_attribution_path
+__orca_restore_agent_teams_path() {
+  [[ -n "\${ORCA_AGENT_TEAMS_SHIM_DIR:-}" ]] || return 0
+  case "$PATH" in
+    "\${ORCA_AGENT_TEAMS_SHIM_DIR}"|"\${ORCA_AGENT_TEAMS_SHIM_DIR}:"*) return 0 ;;
+  esac
+  export PATH="\${ORCA_AGENT_TEAMS_SHIM_DIR}:$PATH"
+}
+[[ ! -o login ]] && __orca_restore_agent_teams_path
 if [[ ! -o login ]]; then
   # Why: ~/.zshrc can export the user's default OpenCode config after spawn.
   [[ -n "\${ORCA_OPENCODE_CONFIG_DIR:-}" ]] && export OPENCODE_CONFIG_DIR="\${ORCA_OPENCODE_CONFIG_DIR}"
@@ -299,6 +321,9 @@ __orca_osc133_preexec() {
 # Why: prepend so Orca captures $? before user prompt hooks can overwrite it.
 precmd_functions=(__orca_osc133_precmd \${precmd_functions[@]})
 preexec_functions=(__orca_osc133_preexec \${preexec_functions[@]})
+if [[ ! -o login ]]; then
+${getZshFinalZdotdirRestoreBlock()}
+fi
 `
 }
 
@@ -317,21 +342,11 @@ function ensureShellReadyWrappers(): void {
 
   const zshEnv = getZshEnvTemplate(zshDir)
   const zshProfile = `# Orca zsh shell-ready wrapper
-_orca_home="\${ORCA_ORIG_ZDOTDIR:-$HOME}"
-case "\${_orca_home%/}" in
-  */shell-ready/zsh) _orca_home="$HOME" ;;
-esac
-[[ -f "$_orca_home/.zprofile" ]] && source "$_orca_home/.zprofile"
+${getZshStartupFileSourceBlock({ fileName: '.zprofile' })}
 `
   const zshRc = getZshShellReadyRcfileContent()
   const zshLogin = `# Orca zsh shell-ready wrapper
-_orca_home="\${ORCA_ORIG_ZDOTDIR:-$HOME}"
-case "\${_orca_home%/}" in
-  */shell-ready/zsh) _orca_home="$HOME" ;;
-esac
-if [[ -o interactive && -f "$_orca_home/.zlogin" ]]; then
-  source "$_orca_home/.zlogin"
-fi
+${getZshStartupFileSourceBlock({ fileName: '.zlogin', interactiveOnly: true })}
 __orca_restore_attribution_path() {
   [[ -n "\${ORCA_ATTRIBUTION_SHIM_DIR:-}" ]] || return 0
   case "$PATH" in
@@ -340,6 +355,14 @@ __orca_restore_attribution_path() {
   export PATH="\${ORCA_ATTRIBUTION_SHIM_DIR}:$PATH"
 }
 __orca_restore_attribution_path
+__orca_restore_agent_teams_path() {
+  [[ -n "\${ORCA_AGENT_TEAMS_SHIM_DIR:-}" ]] || return 0
+  case "$PATH" in
+    "\${ORCA_AGENT_TEAMS_SHIM_DIR}"|"\${ORCA_AGENT_TEAMS_SHIM_DIR}:"*) return 0 ;;
+  esac
+  export PATH="\${ORCA_AGENT_TEAMS_SHIM_DIR}:$PATH"
+}
+__orca_restore_agent_teams_path
 # Why: .zlogin is the final login startup file before the prompt is shown.
 [[ -n "\${ORCA_OPENCODE_CONFIG_DIR:-}" ]] && export OPENCODE_CONFIG_DIR="\${ORCA_OPENCODE_CONFIG_DIR}"
 [[ -n "\${ORCA_PI_CODING_AGENT_DIR:-}" ]] && export PI_CODING_AGENT_DIR="\${ORCA_PI_CODING_AGENT_DIR}"
@@ -348,16 +371,8 @@ if [[ -z "\${ORCA_PI_CODING_AGENT_DIR:-}" && -n "\${ORCA_OMP_CODING_AGENT_DIR:-}
 fi
 ${getPosixOmpShellWrapper()}
 [[ -n "\${ORCA_CODEX_HOME:-}" ]] && export CODEX_HOME="\${ORCA_CODEX_HOME}"
-# Why: zsh precmd runs before the prompt is drawn and before zle owns input,
-# which can double-echo startup commands. line-init fires when zle is ready.
-if [[ "\${ORCA_SHELL_READY_MARKER:-0}" == "1" ]]; then
-  __orca_prompt_mark() {
-    printf "${SHELL_READY_MARKER_ESCAPED}"
-  }
-  autoload -Uz add-zle-hook-widget
-  zle -N __orca_prompt_mark
-  add-zle-hook-widget line-init __orca_prompt_mark
-fi
+${getZshShellReadyMarkerRegistrationBlock(SHELL_READY_MARKER_ESCAPED)}
+${getZshFinalZdotdirRestoreBlock()}
 `
   const bashRc = getBashShellReadyRcfileContent()
 

@@ -137,7 +137,8 @@ describe('removeWorktree cascade', () => {
       activeFileId: '/path/wt1/file.ts',
       activeTabType: 'editor',
       activeFileIdByWorktree: { [worktreeId]: '/path/wt1/file.ts' },
-      activeTabTypeByWorktree: { [worktreeId]: 'editor' }
+      activeTabTypeByWorktree: { [worktreeId]: 'editor' },
+      rightSidebarExplorerViewByWorktree: { [worktreeId]: 'search' }
     })
 
     const result = await store.getState().removeWorktree(worktreeId)
@@ -159,6 +160,7 @@ describe('removeWorktree cascade', () => {
     expect(s.activeTabType).toBe('terminal')
     expect(s.activeFileIdByWorktree[worktreeId]).toBeUndefined()
     expect(s.activeTabTypeByWorktree[worktreeId]).toBeUndefined()
+    expect(s.rightSidebarExplorerViewByWorktree[worktreeId]).toBeUndefined()
   })
 
   it('warns when workspace removal keeps the local branch', async () => {
@@ -170,7 +172,14 @@ describe('removeWorktree cascade', () => {
 
     seedStore(store, {
       worktreesByRepo: {
-        repo1: [makeWorktree({ id: worktreeId, repoId: 'repo1', path: '/path/wt1' })]
+        repo1: [
+          makeWorktree({
+            id: worktreeId,
+            repoId: 'repo1',
+            path: '/path/wt1',
+            displayName: 'Review cleanup'
+          })
+        ]
       }
     })
 
@@ -180,9 +189,9 @@ describe('removeWorktree cascade', () => {
       ok: true,
       preservedBranch: { branchName: 'feature/test', head: 'def456' }
     })
-    expect(toast.warning).toHaveBeenCalledWith('Workspace deleted, branch kept', {
+    expect(toast.warning).toHaveBeenCalledWith('Worktree deleted, branch kept', {
       description:
-        'Git could not safely delete "feature/test", so Orca kept it to avoid losing local commits.',
+        'Git could not safely delete branch "feature/test" after deleting worktree "Review cleanup", so Orca kept it to avoid losing local commits.',
       action: {
         label: 'Force Delete Branch',
         onClick: expect.any(Function)
@@ -240,6 +249,25 @@ describe('removeWorktree cascade', () => {
     expect(s.activeWorktreeId).toBe(worktreeId)
   })
 
+  it('marks multiple worktrees deleting in one optimistic state update', () => {
+    const store = createTestStore()
+    const first = 'repo1::/path/wt1'
+    const second = 'repo1::/path/wt2'
+
+    seedStore(store, {
+      deleteStateByWorktreeId: {
+        [first]: { isDeleting: false, error: 'old failure', canForceDelete: true }
+      }
+    })
+
+    store.getState().markWorktreesDeleting([first, second, first])
+
+    expect(store.getState().deleteStateByWorktreeId).toMatchObject({
+      [first]: { isDeleting: true, error: null, canForceDelete: false },
+      [second]: { isDeleting: true, error: null, canForceDelete: false }
+    })
+  })
+
   it('offers force delete for Electron-wrapped local dirty preflight errors', async () => {
     const store = createTestStore()
     const worktreeId = 'repo1::/workspace/feature-wt'
@@ -272,6 +300,33 @@ describe('removeWorktree cascade', () => {
     const worktreeId = 'repo1::/workspace/feature-wt'
     const error =
       "fatal: '/workspace/feature-wt' contains modified or untracked files, use --force to delete it"
+
+    mockApi.worktrees.remove.mockRejectedValueOnce(new Error(error))
+
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: worktreeId, repoId: 'repo1' })]
+      },
+      tabsByWorktree: {},
+      ptyIdsByTabId: {},
+      terminalLayoutsByTabId: {}
+    })
+
+    const result = await store.getState().removeWorktree(worktreeId)
+
+    expect(result).toEqual({ ok: false, error })
+    expect(store.getState().deleteStateByWorktreeId[worktreeId]).toEqual({
+      isDeleting: false,
+      error,
+      canForceDelete: true
+    })
+  })
+
+  it('offers force delete when Git already removed an unregistered worktree', async () => {
+    const store = createTestStore()
+    const worktreeId = 'repo1::/workspace/deleted-wt'
+    const error =
+      "Error invoking remote method 'worktrees:remove': Error: Worktree is no longer registered with Git and its directory is already gone."
 
     mockApi.worktrees.remove.mockRejectedValueOnce(new Error(error))
 
@@ -706,7 +761,7 @@ describe('setActiveWorktree', () => {
         ]
       },
       rightSidebarTab: 'checks',
-      rightSidebarTabByWorktree: { [wt1]: 'search', [wt2]: 'explorer' }
+      rightSidebarTabByWorktree: { [wt1]: 'search' as never, [wt2]: 'explorer' }
     })
 
     store.getState().setActiveWorktree(wt1)
@@ -717,6 +772,41 @@ describe('setActiveWorktree', () => {
 
     store.getState().setActiveWorktree(wt1)
     expect(store.getState().rightSidebarTab).toBe('checks')
+  })
+
+  it('restores the Explorer files/search subview per worktree when switching', () => {
+    const store = createTestStore()
+    const wt1 = 'repo1::/path/wt1'
+    const wt2 = 'repo1::/path/wt2'
+    const wt3 = 'repo1::/path/wt3'
+
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [
+          makeWorktree({ id: wt1, repoId: 'repo1', path: '/path/wt1' }),
+          makeWorktree({ id: wt2, repoId: 'repo1', path: '/path/wt2' }),
+          makeWorktree({ id: wt3, repoId: 'repo1', path: '/path/wt3' })
+        ]
+      },
+      rightSidebarTab: 'explorer',
+      rightSidebarExplorerView: 'search',
+      rightSidebarExplorerViewByWorktree: {
+        [wt1]: 'search',
+        [wt2]: 'files'
+      }
+    })
+
+    store.getState().setActiveWorktree(wt1)
+    expect(store.getState().rightSidebarExplorerView).toBe('search')
+
+    store.getState().setActiveWorktree(wt2)
+    expect(store.getState().rightSidebarExplorerView).toBe('files')
+
+    store.getState().setActiveWorktree(wt3)
+    expect(store.getState().rightSidebarExplorerView).toBe('files')
+
+    store.getState().setActiveWorktree(wt1)
+    expect(store.getState().rightSidebarExplorerView).toBe('search')
   })
 
   it('does not reset the right sidebar tab for worktrees without remembered sidebar state', () => {
@@ -735,13 +825,70 @@ describe('setActiveWorktree', () => {
     expect(store.getState().rightSidebarTab).toBe('checks')
   })
 
+  it('does not notify subscribers when reselecting the already-active reconciled worktree', () => {
+    const store = createTestStore()
+    const wt = 'repo1::/path/wt1'
+    const tabId = 'terminal-1'
+    const groupId = 'group-1'
+
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+      },
+      activeWorktreeId: wt,
+      activeTabId: tabId,
+      activeTabType: 'terminal',
+      activeTabTypeByWorktree: { [wt]: 'terminal' },
+      tabsByWorktree: {
+        [wt]: [makeTab({ id: tabId, worktreeId: wt, ptyId: 'pty-1' })]
+      },
+      ptyIdsByTabId: { [tabId]: ['pty-1'] },
+      unifiedTabsByWorktree: {
+        [wt]: [
+          makeUnifiedTab({
+            id: tabId,
+            entityId: tabId,
+            worktreeId: wt,
+            groupId,
+            contentType: 'terminal'
+          })
+        ]
+      },
+      groupsByWorktree: {
+        [wt]: [
+          makeTabGroup({
+            id: groupId,
+            worktreeId: wt,
+            activeTabId: tabId,
+            tabOrder: [tabId]
+          })
+        ]
+      },
+      activeGroupIdByWorktree: { [wt]: groupId },
+      layoutByWorktree: { [wt]: { type: 'leaf', groupId } },
+      everActivatedWorktreeIds: new Set([wt]),
+      refreshGitHubForWorktree: vi.fn(),
+      refreshGitHubForWorktreeIfStale: vi.fn()
+    })
+
+    const before = store.getState()
+    const listener = vi.fn()
+    const unsubscribe = store.subscribe(listener)
+
+    store.getState().setActiveWorktree(wt)
+
+    unsubscribe()
+    expect(listener).not.toHaveBeenCalled()
+    expect(store.getState()).toBe(before)
+  })
+
   it('does not clobber the current right sidebar tab when clearing the active worktree', () => {
     const store = createTestStore()
 
     seedStore(store, {
       activeWorktreeId: 'repo1::/path/wt1',
       rightSidebarTab: 'checks',
-      rightSidebarTabByWorktree: { 'repo1::/path/wt1': 'search' }
+      rightSidebarTabByWorktree: { 'repo1::/path/wt1': 'search' as never }
     })
 
     store.getState().setActiveWorktree(null)
@@ -966,6 +1113,35 @@ describe('setActiveWorktree', () => {
     )
     expect(groups[0].activeTabId).toBe(terminal.id)
     expect(groups[0].tabOrder).toEqual([terminal.id])
+  })
+
+  it('stores trimmed quick command labels on terminal and unified tabs', () => {
+    const store = createTestStore()
+    const wt = 'repo1::/path/wt1'
+
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+      }
+    })
+
+    const labeled = store
+      .getState()
+      .createTab(wt, undefined, undefined, { quickCommandLabel: '  Run tests  ' })
+    const unlabeled = store
+      .getState()
+      .createTab(wt, undefined, undefined, { quickCommandLabel: '   ' })
+    const state = store.getState()
+
+    expect(state.tabsByWorktree[wt].find((tab) => tab.id === labeled.id)?.quickCommandLabel).toBe(
+      'Run tests'
+    )
+    expect(
+      state.unifiedTabsByWorktree[wt].find((tab) => tab.entityId === labeled.id)?.quickCommandLabel
+    ).toBe('Run tests')
+    expect(state.tabsByWorktree[wt].find((tab) => tab.id === unlabeled.id)).not.toHaveProperty(
+      'quickCommandLabel'
+    )
   })
 
   it('stamps the Windows default shell onto new terminal tabs', () => {
@@ -1910,6 +2086,14 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
     shutdownBufferCaptures.clear()
   })
 
+  it('records terminal input even before agent hibernation is enabled', () => {
+    const store = createTestStore()
+
+    store.getState().recordTerminalInput('tab-1:leaf-1', 1000)
+
+    expect(store.getState().lastTerminalInputAtByPaneKey['tab-1:leaf-1']).toBe(1000)
+  })
+
   it('asks sleep-time buffer capture to skip local scrollback serialization', async () => {
     const store = createTestStore()
     const wt = 'repo1::/path/wt1'
@@ -1929,6 +2113,105 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
     await store.getState().shutdownWorktreeTerminals(wt, { keepIdentifiers: true })
 
     expect(capture).toHaveBeenCalledWith({ includeLocalBuffers: false })
+  })
+
+  it('does not stop the active runtime when sleeping an SSH-owned worktree', async () => {
+    const store = createTestStore()
+    const wt = 'repo1::/path/wt1'
+
+    seedStore(store, {
+      settings: { ...getDefaultSettings('/tmp'), activeRuntimeEnvironmentId: 'runtime-1' },
+      repos: [
+        {
+          id: 'repo1',
+          path: '/repo1',
+          displayName: 'Repo 1',
+          badgeColor: '#000',
+          addedAt: 0,
+          connectionId: 'ssh-1'
+        }
+      ],
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+      },
+      tabsByWorktree: {
+        [wt]: [makeTab({ id: 'tab-1', worktreeId: wt, ptyId: 'ssh:ssh-1@@pty-1' })]
+      },
+      ptyIdsByTabId: { 'tab-1': ['ssh:ssh-1@@pty-1'] }
+    })
+
+    await store.getState().shutdownWorktreeTerminals(wt, { keepIdentifiers: true })
+
+    expect(mockApi.runtimeEnvironments.call).not.toHaveBeenCalledWith(
+      expect.objectContaining({ method: 'terminal.stop' })
+    )
+    expect(mockApi.pty.kill).toHaveBeenCalledWith('ssh:ssh-1@@pty-1', { keepHistory: true })
+  })
+
+  it('stops the owner runtime when sleeping a runtime-owned compatibility worktree', async () => {
+    const store = createTestStore()
+    const wt = 'repo1::/path/wt1'
+
+    seedStore(store, {
+      settings: { ...getDefaultSettings('/tmp'), activeRuntimeEnvironmentId: 'runtime-1' },
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+      },
+      tabsByWorktree: {
+        [wt]: [makeTab({ id: 'tab-1', worktreeId: wt, ptyId: 'pty-1' })]
+      },
+      ptyIdsByTabId: { 'tab-1': ['pty-1'] }
+    })
+
+    await store.getState().shutdownWorktreeTerminals(wt, { keepIdentifiers: true })
+
+    expect(mockApi.runtimeEnvironments.call).toHaveBeenCalledWith(
+      expect.objectContaining({
+        selector: 'runtime-1',
+        method: 'terminal.stop'
+      })
+    )
+  })
+
+  it('stops the explicit owner runtime when another host is focused', async () => {
+    const store = createTestStore()
+    const wt = 'repo1::/path/wt1'
+
+    seedStore(store, {
+      settings: { ...getDefaultSettings('/tmp'), activeRuntimeEnvironmentId: 'focused-runtime' },
+      repos: [
+        {
+          id: 'repo1',
+          path: '/path/repo1',
+          displayName: 'Repo 1',
+          badgeColor: '#000',
+          addedAt: 0,
+          executionHostId: 'runtime:owner-runtime'
+        }
+      ],
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+      },
+      tabsByWorktree: {
+        [wt]: [makeTab({ id: 'tab-1', worktreeId: wt, ptyId: 'pty-1' })]
+      },
+      ptyIdsByTabId: { 'tab-1': ['pty-1'] }
+    })
+
+    await store.getState().shutdownWorktreeTerminals(wt, { keepIdentifiers: true })
+
+    expect(mockApi.runtimeEnvironments.call).toHaveBeenCalledWith(
+      expect.objectContaining({
+        selector: 'owner-runtime',
+        method: 'terminal.stop'
+      })
+    )
+    expect(mockApi.runtimeEnvironments.call).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        selector: 'focused-runtime',
+        method: 'terminal.stop'
+      })
+    )
   })
 
   it('drops live agentStatusByPaneKey entries on sleep so the working row disappears', async () => {
@@ -1956,6 +2239,157 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
 
     const s = store.getState()
     expect(s.agentStatusByPaneKey['tab-1:0']).toBeUndefined()
+  })
+
+  it('captures resumable provider session metadata before dropping sleep-time rows', async () => {
+    const store = createTestStore()
+    const wt = 'repo1::/path/wt1'
+
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+      },
+      tabsByWorktree: {
+        [wt]: [makeTab({ id: 'tab-1', worktreeId: wt, title: 'Codex' })]
+      },
+      ptyIdsByTabId: { 'tab-1': ['pty-1'] }
+    })
+
+    store.getState().setAgentStatus(
+      'tab-1:0',
+      {
+        state: 'working',
+        prompt: 'resume this',
+        agentType: 'codex'
+      },
+      'Codex',
+      { updatedAt: 1000, stateStartedAt: 1000 },
+      { tabId: 'tab-1', worktreeId: wt },
+      { providerSession: { key: 'session_id', id: 'codex-session-1' } }
+    )
+
+    await store.getState().shutdownWorktreeTerminals(wt, { keepIdentifiers: true })
+
+    const state = store.getState()
+    expect(state.agentStatusByPaneKey['tab-1:0']).toBeUndefined()
+    expect(state.sleepingAgentSessionsByPaneKey['tab-1:0']).toMatchObject({
+      paneKey: 'tab-1:0',
+      tabId: 'tab-1',
+      worktreeId: wt,
+      agent: 'codex',
+      providerSession: { key: 'session_id', id: 'codex-session-1' },
+      prompt: 'resume this',
+      terminalTitle: 'Codex'
+    })
+  })
+
+  it('captures only allowlisted sleeping pane sessions when requested', async () => {
+    const store = createTestStore()
+    const wt = 'repo1::/path/wt1'
+
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+      },
+      tabsByWorktree: {
+        [wt]: [makeTab({ id: 'tab-1', worktreeId: wt, title: 'Codex' })]
+      },
+      ptyIdsByTabId: { 'tab-1': ['pty-1'] }
+    })
+
+    store.getState().setAgentStatus(
+      'tab-1:live',
+      {
+        state: 'done',
+        prompt: 'resume live',
+        agentType: 'codex'
+      },
+      'Codex',
+      { updatedAt: 1000, stateStartedAt: 1000 },
+      { tabId: 'tab-1', worktreeId: wt },
+      { providerSession: { key: 'session_id', id: 'live-session' } }
+    )
+    store.getState().retainAgents([
+      {
+        entry: {
+          paneKey: 'tab-1:retained',
+          state: 'done',
+          stateStartedAt: 900,
+          updatedAt: 900,
+          prompt: 'old retained',
+          agentType: 'codex',
+          providerSession: { key: 'session_id', id: 'old-session' },
+          stateHistory: []
+        },
+        tab: makeTab({ id: 'tab-1', worktreeId: wt, title: 'Old Codex' }),
+        worktreeId: wt,
+        agentType: 'codex',
+        startedAt: 900
+      }
+    ])
+
+    await store.getState().shutdownWorktreeTerminals(wt, {
+      keepIdentifiers: true,
+      sleepingPaneKeys: ['tab-1:live']
+    })
+
+    const state = store.getState()
+    expect(state.sleepingAgentSessionsByPaneKey['tab-1:live']).toMatchObject({
+      paneKey: 'tab-1:live',
+      providerSession: { key: 'session_id', id: 'live-session' }
+    })
+    expect(state.sleepingAgentSessionsByPaneKey['tab-1:retained']).toBeUndefined()
+  })
+
+  it('does not preserve provider session metadata when a pane switches agent type', async () => {
+    const store = createTestStore()
+    const wt = 'repo1::/path/wt1'
+
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+      },
+      tabsByWorktree: {
+        [wt]: [makeTab({ id: 'tab-1', worktreeId: wt, title: 'Claude' })]
+      },
+      ptyIdsByTabId: { 'tab-1': ['pty-1'] }
+    })
+
+    store.getState().setAgentStatus(
+      'tab-1:0',
+      {
+        state: 'done',
+        prompt: 'codex prompt',
+        agentType: 'codex',
+        interrupted: false
+      },
+      'Codex',
+      { updatedAt: 1000, stateStartedAt: 1000 },
+      { tabId: 'tab-1', worktreeId: wt },
+      { providerSession: { key: 'session_id', id: 'codex-session-1' } }
+    )
+
+    store.getState().setAgentStatus(
+      'tab-1:0',
+      {
+        state: 'working',
+        prompt: 'claude prompt',
+        agentType: 'claude'
+      },
+      'Claude',
+      { updatedAt: 2000, stateStartedAt: 2000 },
+      { tabId: 'tab-1', worktreeId: wt }
+    )
+
+    const liveEntry = store.getState().agentStatusByPaneKey['tab-1:0']
+    expect(liveEntry?.agentType).toBe('claude')
+    expect(liveEntry?.providerSession).toBeUndefined()
+
+    await store.getState().shutdownWorktreeTerminals(wt, { keepIdentifiers: true })
+
+    const state = store.getState()
+    expect(state.agentStatusByPaneKey['tab-1:0']).toBeUndefined()
+    expect(state.sleepingAgentSessionsByPaneKey['tab-1:0']).toBeUndefined()
   })
 
   it('drops retainedAgentsByPaneKey entries for the slept worktree', async () => {

@@ -1,21 +1,16 @@
 import { detectAgentStatusFromTitle, isExplicitAgentStatusFresh } from '@/lib/agent-status'
 import { migrationUnsupportedToAgentStatusEntry } from '@/lib/migration-unsupported-agent-entry'
 import { tabHasLivePty } from '@/lib/tab-has-live-pty'
+import { resolveRuntimePaneTitleLeafId } from '@/lib/runtime-pane-title-leaf-id'
 import type { AgentStatus } from '../../../../shared/agent-detection'
-import type {
-  TerminalLayoutSnapshot,
-  TerminalPaneLayoutNode,
-  TerminalTab,
-  Worktree
-} from '../../../../shared/types'
+import type { TerminalLayoutSnapshot, TerminalTab, Worktree } from '../../../../shared/types'
 import {
   AGENT_STATUS_STALE_AFTER_MS,
   type AgentStateHistoryEntry,
   type AgentStatusEntry,
   type MigrationUnsupportedPtyEntry
 } from '../../../../shared/agent-status-types'
-import { isTerminalLeafId, parsePaneKey } from '../../../../shared/stable-pane-id'
-import { FIRST_PANE_ID } from '../../../../shared/pane-key'
+import { parsePaneKey } from '../../../../shared/stable-pane-id'
 
 /**
  * Ordinal class for the "Smart" sort. Lower number = more attention-demanding.
@@ -238,52 +233,6 @@ export function buildExplicitEntriesByTabId(
  */
 function leafIdFromPaneKey(paneKey: string): string | null {
   return parsePaneKey(paneKey)?.leafId ?? null
-}
-
-function getLeftmostLeafId(node: TerminalPaneLayoutNode): string {
-  return node.type === 'leaf' ? node.leafId : getLeftmostLeafId(node.first)
-}
-
-function collectReplayCreatedPaneLeafIds(
-  node: Extract<TerminalPaneLayoutNode, { type: 'split' }>,
-  leafIdsInReplayCreationOrder: string[]
-): void {
-  leafIdsInReplayCreationOrder.push(getLeftmostLeafId(node.second))
-
-  if (node.first.type === 'split') {
-    collectReplayCreatedPaneLeafIds(node.first, leafIdsInReplayCreationOrder)
-  }
-  if (node.second.type === 'split') {
-    collectReplayCreatedPaneLeafIds(node.second, leafIdsInReplayCreationOrder)
-  }
-}
-
-function collectLeafIdsInReplayCreationOrder(
-  node: TerminalPaneLayoutNode | null | undefined
-): string[] {
-  if (!node) {
-    return []
-  }
-  const leafIdsInReplayCreationOrder = [getLeftmostLeafId(node)]
-  if (node.type === 'split') {
-    collectReplayCreatedPaneLeafIds(node, leafIdsInReplayCreationOrder)
-  }
-  return leafIdsInReplayCreationOrder
-}
-
-function resolveRuntimePaneTitleLeafId(
-  tabLayout: TerminalLayoutSnapshot | undefined,
-  runtimePaneId: string
-): string | null {
-  if (isTerminalLeafId(runtimePaneId)) {
-    return runtimePaneId
-  }
-  const numericPaneId = Number(runtimePaneId)
-  if (!Number.isInteger(numericPaneId) || numericPaneId < FIRST_PANE_ID) {
-    return null
-  }
-  const leafIds = collectLeafIdsInReplayCreationOrder(tabLayout?.root)
-  return leafIds[numericPaneId - FIRST_PANE_ID] ?? null
 }
 
 /**

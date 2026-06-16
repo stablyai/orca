@@ -1,7 +1,4 @@
-/* eslint-disable max-lines -- Why: the generated URL cache, grant list, and
-   settings form stay together so revocation and cache invalidation remain
-   auditable. */
-import { Check, Copy, Loader2, RefreshCw } from 'lucide-react'
+import { Loader2, RefreshCw } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { useMountedRef } from '@/hooks/useMountedRef'
@@ -11,7 +8,9 @@ import { Input } from '../ui/input'
 import { Label } from '../ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
+import { GeneratedUrlRow, UnavailableUrlRow } from './RuntimePairingGeneratedUrlRows'
 import { RuntimeAccessGrantList } from './RuntimeAccessGrantList'
+import { translate } from '@/i18n/i18n'
 
 const LOOPBACK_ADDRESS = '127.0.0.1'
 
@@ -29,58 +28,6 @@ const runtimePairingUrlCache: {
   runtimePairingUrl: null,
   webClientUrl: null,
   runtimePairingDeviceId: null
-}
-
-function GeneratedUrlRow({
-  label,
-  description,
-  value,
-  copied,
-  onCopy
-}: {
-  label: string
-  description?: string
-  value: string
-  copied: boolean
-  onCopy: () => void
-}): React.JSX.Element {
-  return (
-    <div className="space-y-1">
-      <Label>{label}</Label>
-      {description ? <p className="text-xs text-muted-foreground">{description}</p> : null}
-      <div className="flex min-w-0 items-center gap-2 rounded-md border border-border/60 bg-background/70 px-2 py-1.5">
-        <code className="min-w-0 flex-1 overflow-x-auto whitespace-nowrap text-[11px] text-muted-foreground">
-          {value}
-        </code>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-xs"
-          onClick={onCopy}
-          aria-label={`Copy ${label}`}
-        >
-          {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
-        </Button>
-      </div>
-    </div>
-  )
-}
-
-function UnavailableUrlRow({
-  label,
-  description
-}: {
-  label: string
-  description: string
-}): React.JSX.Element {
-  return (
-    <div className="space-y-1">
-      <Label>{label}</Label>
-      <div className="rounded-md border border-border/60 px-2 py-1.5">
-        <p className="text-xs text-muted-foreground">{description}</p>
-      </div>
-    </div>
-  )
 }
 
 type RuntimePairingUrlGeneratorProps = {
@@ -116,20 +63,27 @@ export function RuntimePairingUrlGenerator({
   const [isGeneratingPairing, setIsGeneratingPairing] = useState(false)
   const networkInterfaceLoadIdRef = useRef(0)
   const accessGrantLoadIdRef = useRef(0)
+  const copiedTargetResetTimerRef = useRef<number | null>(null)
   const mountedRef = useMountedRef()
 
-  useEffect(() => {
-    if (copiedTarget === null) {
+  const clearCopiedTargetResetTimer = useCallback((): void => {
+    if (copiedTargetResetTimerRef.current === null) {
       return
     }
-    const target = copiedTarget
-    const timeout = window.setTimeout(() => {
-      if (mountedRef.current) {
-        setCopiedTarget((current) => (current === target ? null : current))
+    window.clearTimeout(copiedTargetResetTimerRef.current)
+    copiedTargetResetTimerRef.current = null
+  }, [])
+
+  const setContainerNode = useCallback(
+    (node: HTMLDivElement | null): void => {
+      // Why: copy feedback timers are owned by this settings surface; clear
+      // them when Settings collapses or navigates away.
+      if (!node) {
+        clearCopiedTargetResetTimer()
       }
-    }, 1400)
-    return () => window.clearTimeout(timeout)
-  }, [copiedTarget, mountedRef])
+    },
+    [clearCopiedTargetResetTimer]
+  )
 
   const loadRuntimeAccessGrants = useCallback(
     async (options: { showToastOnError?: boolean } = {}): Promise<void> => {
@@ -150,7 +104,7 @@ export function RuntimePairingUrlGenerator({
           options.showToastOnError
         ) {
           toast.error(
-            error instanceof Error ? error.message : 'Failed to load shared access grants.'
+            error instanceof Error ? error.message : translate("auto.components.settings.RuntimePairingUrlGenerator.1b4e0bbcc5", "Failed to load shared access grants.")
           )
         }
       } finally {
@@ -180,7 +134,7 @@ export function RuntimePairingUrlGenerator({
           loadId === networkInterfaceLoadIdRef.current &&
           options.showToastOnError
         ) {
-          toast.error('Failed to refresh network interfaces.')
+          toast.error(translate("auto.components.settings.RuntimePairingUrlGenerator.95b8be4cea", "Failed to refresh network interfaces."))
         }
       } finally {
         if (mountedRef.current && loadId === networkInterfaceLoadIdRef.current) {
@@ -227,7 +181,7 @@ export function RuntimePairingUrlGenerator({
       if (!result.available) {
         clearGeneratedUrls()
         if (mountedRef.current) {
-          toast.error('Runtime pairing is unavailable.')
+          toast.error(translate("auto.components.settings.RuntimePairingUrlGenerator.2752126f3e", "Runtime pairing is unavailable."))
         }
         return
       }
@@ -241,11 +195,11 @@ export function RuntimePairingUrlGenerator({
       }
       await loadRuntimeAccessGrants()
       if (mountedRef.current) {
-        toast.success(result.webClientUrl ? 'Generated web client URL.' : 'Generated pairing URL.')
+        toast.success(result.webClientUrl ? translate("auto.components.settings.RuntimePairingUrlGenerator.6dd594a507", "Generated web client URL.") : translate("auto.components.settings.RuntimePairingUrlGenerator.11d5248e62", "Generated pairing URL."))
       }
     } catch (error) {
       if (mountedRef.current) {
-        toast.error(error instanceof Error ? error.message : 'Failed to generate pairing URL.')
+        toast.error(error instanceof Error ? error.message : translate("auto.components.settings.RuntimePairingUrlGenerator.2ed55c841a", "Failed to generate pairing URL."))
       }
     } finally {
       if (mountedRef.current) {
@@ -260,7 +214,7 @@ export function RuntimePairingUrlGenerator({
       const result = await window.api.mobile.revokeRuntimeAccess({ deviceId: grant.deviceId })
       if (!result.revoked) {
         if (mountedRef.current) {
-          toast.error('Shared access was already revoked.')
+          toast.error(translate("auto.components.settings.RuntimePairingUrlGenerator.d797f516b1", "Shared access was already revoked."))
         }
         await loadRuntimeAccessGrants()
         return
@@ -274,11 +228,11 @@ export function RuntimePairingUrlGenerator({
         clearGeneratedUrls()
       }
       if (mountedRef.current) {
-        toast.success('Shared access revoked.')
+        toast.success(translate("auto.components.settings.RuntimePairingUrlGenerator.9f8e037c4a", "Shared access revoked."))
       }
     } catch (error) {
       if (mountedRef.current) {
-        toast.error(error instanceof Error ? error.message : 'Failed to revoke shared access.')
+        toast.error(error instanceof Error ? error.message : translate("auto.components.settings.RuntimePairingUrlGenerator.e8d83f2b0f", "Failed to revoke shared access."))
       }
     } finally {
       if (mountedRef.current) {
@@ -291,12 +245,19 @@ export function RuntimePairingUrlGenerator({
     try {
       await window.api.ui.writeClipboardText(value)
       if (mountedRef.current) {
+        clearCopiedTargetResetTimer()
         setCopiedTarget(target)
-        toast.success(target === 'web' ? 'Copied web client URL.' : 'Copied pairing URL.')
+        copiedTargetResetTimerRef.current = window.setTimeout(() => {
+          copiedTargetResetTimerRef.current = null
+          if (mountedRef.current) {
+            setCopiedTarget((current) => (current === target ? null : current))
+          }
+        }, 1400)
+        toast.success(target === "web" ? translate("auto.components.settings.RuntimePairingUrlGenerator.13704d635e", "Copied web client URL.") : translate("auto.components.settings.RuntimePairingUrlGenerator.df0aa45a86", "Copied pairing URL."))
       }
     } catch (error) {
       if (mountedRef.current) {
-        toast.error(error instanceof Error ? error.message : 'Failed to copy URL.')
+        toast.error(error instanceof Error ? error.message : translate("auto.components.settings.RuntimePairingUrlGenerator.d6c081adf4", "Failed to copy URL."))
       }
     }
   }
@@ -317,13 +278,12 @@ export function RuntimePairingUrlGenerator({
   }
 
   return (
-    <div className={containerClassName}>
+    <div ref={setContainerNode} className={containerClassName}>
       {showHeader ? (
         <div className="space-y-1">
-          <Label id="runtime-share-server-label">Share this Orca server</Label>
+          <Label id="runtime-share-server-label">{translate("auto.components.settings.RuntimePairingUrlGenerator.f8500e134a", "Share this Orca server")}</Label>
           <p className="text-xs text-muted-foreground">
-            Create a revocable access grant for browser or desktop clients.
-          </p>
+            {translate("auto.components.settings.RuntimePairingUrlGenerator.ff80904fc4", "Create a revocable access grant for browser or desktop clients.")}</p>
         </div>
       ) : null}
       {showGeneratorForm ? (
@@ -332,8 +292,7 @@ export function RuntimePairingUrlGenerator({
             <div className="grid gap-3 sm:grid-cols-[minmax(0,260px)_minmax(0,1fr)]">
               <div className="space-y-1">
                 <Label id="runtime-pairing-address-label" htmlFor="runtime-pairing-address">
-                  Connection address
-                </Label>
+                  {translate("auto.components.settings.RuntimePairingUrlGenerator.de77eb1b65", "Connection address")}</Label>
                 <div className="flex min-w-0 items-center gap-2">
                   <Select value={selectedAddress} onValueChange={updateSelectedAddress}>
                     <SelectTrigger
@@ -346,7 +305,7 @@ export function RuntimePairingUrlGenerator({
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value={LOOPBACK_ADDRESS}>
-                        This computer ({LOOPBACK_ADDRESS})
+                        {translate("auto.components.settings.RuntimePairingUrlGenerator.de6d5cff95", "This computer (")}{LOOPBACK_ADDRESS})
                       </SelectItem>
                       {networkInterfaces.map((networkInterface, index) => (
                         <SelectItem
@@ -368,33 +327,30 @@ export function RuntimePairingUrlGenerator({
                         size="icon-sm"
                         onClick={() => void loadNetworkInterfaces({ showToastOnError: true })}
                         disabled={refreshingNetworkInterfaces}
-                        aria-label="Refresh connection addresses"
+                        aria-label={translate("auto.components.settings.RuntimePairingUrlGenerator.360c548cf3", "Refresh connection addresses")}
                         className="text-muted-foreground"
                       >
                         <RefreshCw className={refreshingNetworkInterfaces ? 'animate-spin' : ''} />
                       </Button>
                     </TooltipTrigger>
                     <TooltipContent side="bottom" sideOffset={6}>
-                      Refresh connection addresses
-                    </TooltipContent>
+                      {translate("auto.components.settings.RuntimePairingUrlGenerator.360c548cf3", "Refresh connection addresses")}</TooltipContent>
                   </Tooltip>
                 </div>
               </div>
               <div className="min-w-0 space-y-1">
-                <Label htmlFor="runtime-pairing-custom-address">Custom address</Label>
+                <Label htmlFor="runtime-pairing-custom-address">{translate("auto.components.settings.RuntimePairingUrlGenerator.4531ea3158", "Custom address")}</Label>
                 <Input
                   id="runtime-pairing-custom-address"
                   value={customAddress}
                   onChange={(event) => updateCustomAddress(event.target.value)}
-                  placeholder="host, host:port, or wss://host/path"
+                  placeholder={translate("auto.components.settings.RuntimePairingUrlGenerator.45cf476df3", "host, host:port, or wss://host/path")}
                   className="h-8 font-mono text-xs"
                 />
               </div>
             </div>
             <p className="text-xs text-muted-foreground">
-              127.0.0.1 only works on this computer. Use a LAN, Tailscale, or custom address for
-              another device.
-            </p>
+              {translate("auto.components.settings.RuntimePairingUrlGenerator.279e0dcb57", "127.0.0.1 only works on this computer. Use a LAN, Tailscale, or custom address for another device.")}</p>
             <div className="flex justify-end">
               <Button
                 type="button"
@@ -405,30 +361,29 @@ export function RuntimePairingUrlGenerator({
                 disabled={isGeneratingPairing}
               >
                 {isGeneratingPairing ? <Loader2 className="animate-spin" /> : <RefreshCw />}
-                Generate Access Link
-              </Button>
+                {translate("auto.components.settings.RuntimePairingUrlGenerator.8de0f84fff", "Generate Access Link")}</Button>
             </div>
           </div>
 
           {webClientUrl ? (
             <GeneratedUrlRow
-              label="Open in browser"
-              description="Use this URL from a browser that can reach the selected address."
+              label={translate("auto.components.settings.RuntimePairingUrlGenerator.6b9ca3e69b", "Open in browser")}
+              description={translate("auto.components.settings.RuntimePairingUrlGenerator.1ca2e5194d", "Use this URL from a browser that can reach the selected address.")}
               value={webClientUrl}
               copied={copiedTarget === 'web'}
               onCopy={() => void copyGeneratedUrl('web', webClientUrl)}
             />
           ) : runtimePairingUrl ? (
             <UnavailableUrlRow
-              label="Open in browser"
-              description="Browser link unavailable in this build. The pairing URL still works for Orca clients."
+              label={translate("auto.components.settings.RuntimePairingUrlGenerator.6b9ca3e69b", "Open in browser")}
+              description={translate("auto.components.settings.RuntimePairingUrlGenerator.f7cafdc9f3", "Browser link unavailable in this build. The pairing URL still works for Orca clients.")}
             />
           ) : null}
 
           {runtimePairingUrl ? (
             <GeneratedUrlRow
-              label="Pair another Orca client"
-              description="Paste this pairing URL into another Orca client."
+              label={translate("auto.components.settings.RuntimePairingUrlGenerator.2e5c4e3c93", "Pair another Orca client")}
+              description={translate("auto.components.settings.RuntimePairingUrlGenerator.849825e829", "Paste this pairing URL into another Orca client.")}
               value={runtimePairingUrl}
               copied={copiedTarget === 'pairing'}
               onCopy={() => void copyGeneratedUrl('pairing', runtimePairingUrl)}

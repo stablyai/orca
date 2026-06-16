@@ -7,13 +7,15 @@ const {
   serveOrcaAppMock,
   getDefaultUserDataPathMock,
   addEnvironmentFromPairingCodeMock,
-  listEnvironmentsMock
+  listEnvironmentsMock,
+  spawnMock
 } = vi.hoisted(() => ({
   callMock: vi.fn(),
   serveOrcaAppMock: vi.fn(),
   getDefaultUserDataPathMock: vi.fn(() => '/tmp/orca-user-data'),
   addEnvironmentFromPairingCodeMock: vi.fn(),
-  listEnvironmentsMock: vi.fn()
+  listEnvironmentsMock: vi.fn(),
+  spawnMock: vi.fn()
 }))
 
 vi.mock('./runtime-client', () => {
@@ -79,6 +81,17 @@ vi.mock('./runtime/environments', () => ({
   resolveEnvironment: vi.fn()
 }))
 
+vi.mock('child_process', async () => {
+  const { EventEmitter } = await import('events')
+  return {
+    spawn: spawnMock.mockImplementation(() => {
+      const child = new EventEmitter()
+      process.nextTick(() => child.emit('exit', 0, null))
+      return child
+    })
+  }
+})
+
 import {
   buildCurrentWorktreeSelector,
   COMMAND_SPECS,
@@ -113,21 +126,115 @@ describe('COMMAND_SPECS collision check', () => {
   })
 })
 
+describe('orca root help', () => {
+  it('advertises computer-use capabilities discovery', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(['--help'], '/tmp/repo')
+
+    expect(logSpy.mock.calls[0][0]).toContain(
+      'computer capabilities     Show computer-use provider capabilities'
+    )
+    expect(logSpy.mock.calls[0][0]).toContain(
+      'computer permissions      Show or open computer-use permission setup'
+    )
+    expect(logSpy.mock.calls[0][0]).toContain(
+      'computer press-key        Press a single key such as Return or Escape'
+    )
+    expect(logSpy.mock.calls[0][0]).toContain(
+      'project setup-existing-folder Make a project available on a host by importing an existing folder'
+    )
+    expect(logSpy.mock.calls[0][0]).toContain(
+      'project setup-create      Create independent project host setup metadata'
+    )
+    expect(logSpy.mock.calls[0][0]).toContain(
+      'project setup-update      Update project host setup metadata'
+    )
+    expect(logSpy.mock.calls[0][0]).toContain(
+      'project setup-delete      Remove a project host setup'
+    )
+    expect(callMock).not.toHaveBeenCalled()
+  })
+
+  it('progressively discloses Linear commands', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(['--help'], '/tmp/repo')
+
+    const rootHelp = String(logSpy.mock.calls[0][0])
+    expect(rootHelp).toContain('Linear:')
+    expect(rootHelp).toContain('linear                    Read Linear ticket context for agents')
+    expect(rootHelp).not.toContain('linear issue')
+    expect(rootHelp).not.toContain('linear search')
+
+    logSpy.mockClear()
+    await main(['linear', '--help'], '/tmp/repo')
+
+    const groupHelp = String(logSpy.mock.calls[0][0])
+    expect(groupHelp).toContain('orca linear')
+    expect(groupHelp).toContain('issue')
+    expect(groupHelp).toContain('search')
+    expect(groupHelp).not.toContain('--comments')
+    expect(groupHelp).not.toContain('--attachments')
+
+    logSpy.mockClear()
+    await main(['linear', 'issue', '--help'], '/tmp/repo')
+
+    const issueHelp = String(logSpy.mock.calls[0][0])
+    expect(issueHelp).toContain('orca linear issue [<id>]')
+    expect(issueHelp).toContain('--comments             Include threaded Linear comments')
+    expect(issueHelp).toContain('--attachments          Include attachment metadata and URLs')
+    expect(issueHelp).toContain('--workspace <id>      Connected Linear workspace id')
+    expect(issueHelp).toContain('--id <id>             Linear issue key, id, or URL')
+
+    logSpy.mockClear()
+    await main(['linear', 'search', '--help'], '/tmp/repo')
+
+    const searchHelp = String(logSpy.mock.calls[0][0])
+    expect(searchHelp).toContain('orca linear search <query>')
+    expect(searchHelp).toContain('--workspace <id|all>  Connected Linear workspace id, or all')
+    expect(searchHelp).toContain('--query <text>        Text to search across Linear issues')
+    expect(callMock).not.toHaveBeenCalled()
+  })
+
+  it('advertises Linear issue linking on worktree create and set help', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    logSpy.mockClear()
+
+    await main(['worktree', 'create', '--help'], '/tmp/repo')
+
+    expect(String(logSpy.mock.calls[0][0])).toContain('--linear-issue <identifier-or-url>')
+
+    logSpy.mockClear()
+    await main(['worktree', 'set', '--help'], '/tmp/repo')
+
+    const setHelp = String(logSpy.mock.calls[0][0])
+    expect(setHelp).toContain('--linear-issue <identifier-or-url|null>')
+    expect(setHelp).toContain('--linear-issue <id|url|null> Linked Linear issue identifier or URL')
+    expect(callMock).not.toHaveBeenCalled()
+  })
+})
+
 describe('orca cli worktree awareness', () => {
   const originalTerminalHandle = process.env.ORCA_TERMINAL_HANDLE
   const originalUserDataPath = process.env.ORCA_USER_DATA_PATH
   const originalPairingCode = process.env.ORCA_PAIRING_CODE
   const originalRemotePairing = process.env.ORCA_REMOTE_PAIRING
   const originalEnvironment = process.env.ORCA_ENVIRONMENT
+  const originalWorkspaceId = process.env.ORCA_WORKSPACE_ID
+  const originalWorktreeId = process.env.ORCA_WORKTREE_ID
 
   beforeEach(() => {
     callMock.mockReset()
     delete process.env.ORCA_TERMINAL_HANDLE
     delete process.env.ORCA_USER_DATA_PATH
+    delete process.env.ORCA_WORKSPACE_ID
+    delete process.env.ORCA_WORKTREE_ID
     serveOrcaAppMock.mockReset()
     getDefaultUserDataPathMock.mockClear()
     addEnvironmentFromPairingCodeMock.mockReset()
     listEnvironmentsMock.mockReset()
+    spawnMock.mockClear()
     addEnvironmentFromPairingCodeMock.mockReturnValue({
       id: 'env-1',
       name: 'desk',
@@ -177,6 +284,16 @@ describe('orca cli worktree awareness', () => {
     } else {
       process.env.ORCA_ENVIRONMENT = originalEnvironment
     }
+    if (originalWorkspaceId === undefined) {
+      delete process.env.ORCA_WORKSPACE_ID
+    } else {
+      process.env.ORCA_WORKSPACE_ID = originalWorkspaceId
+    }
+    if (originalWorktreeId === undefined) {
+      delete process.env.ORCA_WORKTREE_ID
+    } else {
+      process.env.ORCA_WORKTREE_ID = originalWorktreeId
+    }
   })
 
   it('builds the current worktree selector from cwd', () => {
@@ -198,6 +315,7 @@ describe('orca cli worktree awareness', () => {
     queueFixtures(
       callMock,
       worktreeListFixture([
+        buildWorktree('/tmp/repo', 'main'),
         buildWorktree('/tmp/repo/feature', 'feature/foo'),
         buildWorktree('/tmp/repo/feature', 'feature/foo', 'abc', 'duplicate-repo')
       ]),
@@ -213,12 +331,115 @@ describe('orca cli worktree awareness', () => {
 
     await main(['worktree', 'current', '--json'], '/tmp/repo/feature/src')
 
-    expect(callMock).toHaveBeenNthCalledWith(1, 'worktree.list', { limit: 10_000 })
+    expect(callMock).toHaveBeenNthCalledWith(1, 'worktree.list', {
+      limit: 10_000
+    })
     expect(callMock).toHaveBeenNthCalledWith(2, 'worktree.show', {
       worktree: 'id:repo::/tmp/repo/feature'
     })
     expect(logSpy).toHaveBeenCalledTimes(1)
   })
+
+  it.skipIf(process.platform === 'win32')(
+    'prepares and starts Claude Agent Teams in the current Orca terminal',
+    async () => {
+      process.env.ORCA_PANE_KEY = 'tab-1:11111111-1111-4111-8111-111111111111'
+      queueFixtures(
+        callMock,
+        okFixture('req_agent_teams_prepare', {
+          launch: {
+            env: {
+              CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: '1',
+              TMUX: '/tmp/orca-claude-agent-teams/team-1,0,1',
+              TMUX_PANE: '%1',
+              PATH: '/tmp/orca-shim:/usr/bin'
+            }
+          }
+        })
+      )
+
+      await main(['claude-teams'], '/tmp/repo')
+
+      expect(callMock).toHaveBeenCalledWith('agentTeams.prepareLaunch', {
+        paneKey: 'tab-1:11111111-1111-4111-8111-111111111111',
+        env: expect.objectContaining({
+          ORCA_PANE_KEY: 'tab-1:11111111-1111-4111-8111-111111111111'
+        })
+      })
+      expect(spawnMock).toHaveBeenCalledWith('claude', ['--teammate-mode', 'auto'], {
+        stdio: 'inherit',
+        env: expect.objectContaining({
+          CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: '1',
+          TMUX_PANE: '%1'
+        })
+      })
+    }
+  )
+
+  it.skipIf(process.platform === 'win32')(
+    'passes Claude Agent Teams arguments through to Claude Code',
+    async () => {
+      process.env.ORCA_PANE_KEY = 'tab-1:11111111-1111-4111-8111-111111111111'
+      queueFixtures(
+        callMock,
+        okFixture('req_agent_teams_prepare', {
+          launch: {
+            env: {
+              CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: '1',
+              TMUX: '/tmp/orca-claude-agent-teams/team-1,0,1',
+              TMUX_PANE: '%1',
+              PATH: '/tmp/orca-shim:/usr/bin'
+            }
+          }
+        })
+      )
+
+      await main(
+        ['claude-teams', '--resume', 'session-1', '--model', 'sonnet', 'review this'],
+        '/tmp/repo'
+      )
+
+      expect(spawnMock).toHaveBeenCalledWith(
+        'claude',
+        ['--teammate-mode', 'auto', '--resume', 'session-1', '--model', 'sonnet', 'review this'],
+        {
+          stdio: 'inherit',
+          env: expect.objectContaining({
+            CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: '1',
+            TMUX_PANE: '%1'
+          })
+        }
+      )
+    }
+  )
+
+  it.skipIf(process.platform === 'win32')(
+    'does not duplicate an explicit Claude teammate mode',
+    async () => {
+      process.env.ORCA_PANE_KEY = 'tab-1:11111111-1111-4111-8111-111111111111'
+      queueFixtures(
+        callMock,
+        okFixture('req_agent_teams_prepare', {
+          launch: {
+            env: {
+              CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: '1',
+              TMUX: '/tmp/orca-claude-agent-teams/team-1,0,1',
+              TMUX_PANE: '%1',
+              PATH: '/tmp/orca-shim:/usr/bin'
+            }
+          }
+        })
+      )
+
+      await main(['claude-teams', '--teammate-mode', 'in-process'], '/tmp/repo')
+
+      expect(spawnMock).toHaveBeenCalledWith(
+        'claude',
+        ['--teammate-mode', 'in-process'],
+        expect.objectContaining({ stdio: 'inherit' })
+      )
+    }
+  )
 
   it('rejects remote `worktree current` without listing worktrees from client cwd', async () => {
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
@@ -426,9 +647,340 @@ describe('orca cli worktree awareness', () => {
       displayName: undefined,
       linkedIssue: undefined,
       comment: undefined,
+      workspaceStatus: undefined,
       parentWorktree: undefined,
       noParent: true
     })
+  })
+
+  it('passes Linear URL metadata through worktree.set', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_set_linear', {
+        worktree: {
+          ...buildWorktree('/tmp/repo/child', 'feature/child'),
+          linkedLinearIssue: 'STA-335',
+          linkedLinearIssueWorkspaceId: null,
+          linkedLinearIssueOrganizationUrlKey: 'stably'
+        }
+      })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      [
+        'worktree',
+        'set',
+        '--worktree',
+        'id:repo::/tmp/repo/child',
+        '--linear-issue',
+        'https://linear.app/stably/issue/STA-335/test-issue',
+        '--json'
+      ],
+      '/tmp/repo'
+    )
+
+    expect(callMock).toHaveBeenCalledWith('worktree.set', {
+      worktree: 'id:repo::/tmp/repo/child',
+      displayName: undefined,
+      linkedIssue: undefined,
+      linkedLinearIssue: 'STA-335',
+      linkedLinearIssueWorkspaceId: null,
+      linkedLinearIssueOrganizationUrlKey: 'stably',
+      comment: undefined,
+      workspaceStatus: undefined,
+      parentWorktree: undefined,
+      noParent: false
+    })
+  })
+
+  it('clears all Linear metadata through worktree.set', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_clear_linear', {
+        worktree: {
+          ...buildWorktree('/tmp/repo/child', 'feature/child'),
+          linkedLinearIssue: null,
+          linkedLinearIssueWorkspaceId: null,
+          linkedLinearIssueOrganizationUrlKey: null
+        }
+      })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      [
+        'worktree',
+        'set',
+        '--worktree',
+        'id:repo::/tmp/repo/child',
+        '--linear-issue',
+        'null',
+        '--json'
+      ],
+      '/tmp/repo'
+    )
+
+    expect(callMock).toHaveBeenCalledWith('worktree.set', {
+      worktree: 'id:repo::/tmp/repo/child',
+      displayName: undefined,
+      linkedIssue: undefined,
+      linkedLinearIssue: null,
+      linkedLinearIssueWorkspaceId: null,
+      linkedLinearIssueOrganizationUrlKey: null,
+      comment: undefined,
+      workspaceStatus: undefined,
+      parentWorktree: undefined,
+      noParent: false
+    })
+  })
+
+  it('rejects invalid Linear issue values on worktree.set before RPC', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const priorExitCode = process.exitCode
+
+    await main(
+      [
+        'worktree',
+        'set',
+        '--worktree',
+        'id:repo::/tmp/repo/child',
+        '--linear-issue',
+        'not-a-linear-link',
+        '--json'
+      ],
+      '/tmp/repo'
+    )
+
+    expect(callMock).not.toHaveBeenCalled()
+    expect([...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')).toContain(
+      'Pass a Linear issue identifier like STA-335'
+    )
+    expect(process.exitCode).toBe(1)
+
+    process.exitCode = priorExitCode
+  })
+
+  it('passes workspace status through worktree.set', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_set_status', {
+        worktree: {
+          ...buildWorktree('/tmp/repo/child', 'feature/child'),
+          workspaceStatus: 'in-review'
+        }
+      })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      [
+        'worktree',
+        'set',
+        '--worktree',
+        'id:repo::/tmp/repo/child',
+        '--workspace-status',
+        'in-review',
+        '--json'
+      ],
+      '/tmp/repo'
+    )
+
+    expect(callMock).toHaveBeenCalledWith('worktree.set', {
+      worktree: 'id:repo::/tmp/repo/child',
+      displayName: undefined,
+      linkedIssue: undefined,
+      comment: undefined,
+      workspaceStatus: 'in-review',
+      parentWorktree: undefined,
+      noParent: false
+    })
+  })
+
+  it('passes Linear issue metadata through worktree.create', async () => {
+    queueFixtures(
+      callMock,
+      worktreeListFixture([buildWorktree('/tmp/repo', 'main', 'abc', 'repo-1')]),
+      okFixture('req_create_linear', {
+        worktree: {
+          ...buildWorktree('/tmp/repo/feature', 'feature', 'abc', 'repo-1'),
+          linkedLinearIssue: 'STA-335',
+          linkedLinearIssueWorkspaceId: null,
+          linkedLinearIssueOrganizationUrlKey: 'stably'
+        }
+      })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      [
+        'worktree',
+        'create',
+        '--repo',
+        'id:repo-1',
+        '--name',
+        'feature',
+        '--linear-issue',
+        'https://linear.app/stably/issue/STA-335/test-issue',
+        '--json'
+      ],
+      '/tmp/repo'
+    )
+
+    expect(callMock).toHaveBeenNthCalledWith(2, 'worktree.create', {
+      repo: 'id:repo-1',
+      name: 'feature',
+      baseBranch: undefined,
+      linkedIssue: undefined,
+      linkedLinearIssue: 'STA-335',
+      linkedLinearIssueWorkspaceId: null,
+      linkedLinearIssueOrganizationUrlKey: 'stably',
+      comment: undefined,
+      runHooks: false,
+      activate: false,
+      parentWorktree: undefined,
+      cwdParentWorktree: 'id:repo-1::/tmp/repo',
+      noParent: false,
+      callerTerminalHandle: undefined
+    })
+  })
+
+  it('normalizes bare Linear identifiers through worktree.create', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_create_linear_id', {
+        worktree: {
+          ...buildWorktree('/tmp/repo/feature', 'feature', 'abc', 'repo-1'),
+          linkedLinearIssue: 'STA-335'
+        },
+        lineage: null,
+        warnings: []
+      })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    await main(
+      [
+        'worktree',
+        'create',
+        '--repo',
+        'id:repo-1',
+        '--name',
+        'feature',
+        '--linear-issue',
+        'sta-335',
+        '--no-parent',
+        '--json'
+      ],
+      '/tmp/repo'
+    )
+
+    expect(callMock).toHaveBeenCalledWith('worktree.create', {
+      repo: 'id:repo-1',
+      name: 'feature',
+      baseBranch: undefined,
+      linkedIssue: undefined,
+      linkedLinearIssue: 'STA-335',
+      linkedLinearIssueWorkspaceId: null,
+      linkedLinearIssueOrganizationUrlKey: null,
+      comment: undefined,
+      runHooks: false,
+      activate: false,
+      parentWorktree: undefined,
+      noParent: true,
+      callerTerminalHandle: undefined
+    })
+  })
+
+  it('rejects null Linear issue values on worktree.create before RPC', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const priorExitCode = process.exitCode
+
+    await main(
+      [
+        'worktree',
+        'create',
+        '--repo',
+        'id:repo-1',
+        '--name',
+        'feature',
+        '--linear-issue',
+        'null',
+        '--no-parent',
+        '--json'
+      ],
+      '/tmp/repo'
+    )
+
+    expect(callMock).not.toHaveBeenCalled()
+    expect([...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')).toContain(
+      'Omit --linear-issue on create'
+    )
+    expect(process.exitCode).toBe(1)
+
+    process.exitCode = priorExitCode
+  })
+
+  it('rejects invalid Linear issue values on worktree.create before RPC', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const priorExitCode = process.exitCode
+
+    await main(
+      [
+        'worktree',
+        'create',
+        '--repo',
+        'id:repo-1',
+        '--name',
+        'feature',
+        '--linear-issue',
+        'not-a-linear-link',
+        '--no-parent',
+        '--json'
+      ],
+      '/tmp/repo'
+    )
+
+    expect(callMock).not.toHaveBeenCalled()
+    expect([...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')).toContain(
+      'Pass a Linear issue identifier like STA-335'
+    )
+    expect(process.exitCode).toBe(1)
+
+    process.exitCode = priorExitCode
+  })
+
+  it('rejects missing Linear issue values on worktree.create before RPC', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const priorExitCode = process.exitCode
+
+    await main(
+      [
+        'worktree',
+        'create',
+        '--repo',
+        'id:repo-1',
+        '--name',
+        'feature',
+        '--linear-issue',
+        '--no-parent',
+        '--json'
+      ],
+      '/tmp/repo'
+    )
+
+    expect(callMock).not.toHaveBeenCalled()
+    expect([...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')).toContain(
+      'Missing value for --linear-issue'
+    )
+    expect(process.exitCode).toBe(1)
+
+    process.exitCode = priorExitCode
   })
 
   it('passes explicit activation through worktree.create', async () => {
@@ -459,6 +1011,153 @@ describe('orca cli worktree awareness', () => {
       noParent: false,
       callerTerminalHandle: undefined
     })
+  })
+
+  it('resolves project and host flags to the matching repo for worktree.create', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_project_setups', {
+        setups: [
+          {
+            id: 'setup-local',
+            projectId: 'github:stablyai/orca',
+            hostId: 'local',
+            repoId: 'repo-local',
+            path: '/tmp/orca',
+            displayName: 'Orca',
+            setupState: 'ready',
+            setupMethod: 'legacy-repo',
+            createdAt: 1,
+            updatedAt: 1
+          },
+          {
+            id: 'setup-gpu',
+            projectId: 'github:stablyai/orca',
+            hostId: 'runtime:gpu',
+            repoId: 'repo-gpu',
+            path: '/srv/orca',
+            displayName: 'Orca',
+            setupState: 'ready',
+            setupMethod: 'legacy-repo',
+            createdAt: 1,
+            updatedAt: 1
+          }
+        ]
+      }),
+      okFixture('req_create', {
+        worktree: buildWorktree('/srv/orca/feature', 'feature', 'abc', 'repo-gpu'),
+        lineage: null,
+        warnings: []
+      })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      [
+        'worktree',
+        'create',
+        '--project',
+        'github:stablyai/orca',
+        '--host',
+        'runtime:gpu',
+        '--name',
+        'feature',
+        '--no-parent',
+        '--json'
+      ],
+      '/tmp/repo'
+    )
+
+    expect(callMock).toHaveBeenNthCalledWith(1, 'projectHostSetup.list')
+    expect(callMock).toHaveBeenNthCalledWith(2, 'worktree.create', {
+      repo: 'id:repo-gpu',
+      name: 'feature',
+      baseBranch: undefined,
+      linkedIssue: undefined,
+      comment: undefined,
+      runHooks: false,
+      activate: false,
+      parentWorktree: undefined,
+      noParent: true,
+      callerTerminalHandle: undefined
+    })
+  })
+
+  it('resolves project-host-setup directly for worktree.create', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_project_setups', {
+        setups: [
+          {
+            id: 'setup-gpu',
+            projectId: 'github:stablyai/orca',
+            hostId: 'runtime:gpu',
+            repoId: 'repo-gpu',
+            path: '/srv/orca',
+            displayName: 'Orca',
+            setupState: 'ready',
+            setupMethod: 'legacy-repo',
+            createdAt: 1,
+            updatedAt: 1
+          }
+        ]
+      }),
+      okFixture('req_create', {
+        worktree: buildWorktree('/srv/orca/feature', 'feature', 'abc', 'repo-gpu'),
+        lineage: null,
+        warnings: []
+      })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      [
+        'worktree',
+        'create',
+        '--project-host-setup',
+        'setup-gpu',
+        '--name',
+        'feature',
+        '--no-parent',
+        '--json'
+      ],
+      '/tmp/repo'
+    )
+
+    expect(callMock).toHaveBeenNthCalledWith(
+      2,
+      'worktree.create',
+      expect.objectContaining({ repo: 'id:repo-gpu' })
+    )
+  })
+
+  it('rejects mixing repo and project target flags on worktree.create', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const priorExitCode = process.exitCode
+
+    await main(
+      [
+        'worktree',
+        'create',
+        '--repo',
+        'id:repo-local',
+        '--project',
+        'github:stablyai/orca',
+        '--name',
+        'feature',
+        '--json'
+      ],
+      '/tmp/repo'
+    )
+
+    expect(callMock).not.toHaveBeenCalled()
+    expect([...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')).toContain(
+      'Choose either --repo or project target flags, not both.'
+    )
+    expect(process.exitCode).toBe(1)
+
+    process.exitCode = priorExitCode
   })
 
   it('passes an explicit parent through worktree.create without cwd inference', async () => {
@@ -518,6 +1217,112 @@ describe('orca cli worktree awareness', () => {
       runHooks: false,
       activate: false,
       parentWorktree: 'id:repo-1::/tmp/repo/parent',
+      noParent: false,
+      callerTerminalHandle: undefined
+    })
+  })
+
+  it('passes an explicit parent workspace through worktree.create without cwd inference', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_create', {
+        worktree: {
+          ...buildWorktree('/tmp/repo/child', 'child', 'abc', 'repo-1'),
+          workspaceLineage: {
+            childWorkspaceKey: 'worktree:repo-1::/tmp/repo/child',
+            childInstanceId: 'child-instance',
+            parentWorkspaceKey: 'folder:folder-1',
+            parentInstanceId: null,
+            origin: 'cli',
+            capture: { source: 'explicit-cli-flag', confidence: 'explicit' },
+            createdAt: 1
+          }
+        },
+        lineage: null,
+        workspaceLineage: {
+          childWorkspaceKey: 'worktree:repo-1::/tmp/repo/child',
+          childInstanceId: 'child-instance',
+          parentWorkspaceKey: 'folder:folder-1',
+          parentInstanceId: null,
+          origin: 'cli',
+          capture: { source: 'explicit-cli-flag', confidence: 'explicit' },
+          createdAt: 1
+        },
+        warnings: []
+      })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    await main(
+      [
+        'worktree',
+        'create',
+        '--repo',
+        'id:repo-1',
+        '--name',
+        'child',
+        '--parent-workspace',
+        'folder:folder-1',
+        '--json'
+      ],
+      '/tmp/repo/parent/src'
+    )
+
+    expect(callMock).toHaveBeenCalledTimes(1)
+    expect(callMock).toHaveBeenCalledWith('worktree.create', {
+      repo: 'id:repo-1',
+      name: 'child',
+      baseBranch: undefined,
+      linkedIssue: undefined,
+      comment: undefined,
+      runHooks: false,
+      activate: false,
+      parentWorktree: undefined,
+      parentWorkspace: 'folder:folder-1',
+      noParent: false,
+      callerTerminalHandle: undefined
+    })
+  })
+
+  it('passes folder workspace environment lineage through worktree.create', async () => {
+    process.env.ORCA_WORKSPACE_ID = 'folder:folder-1'
+    queueFixtures(
+      callMock,
+      worktreeListFixture([buildWorktree('/tmp/repo', 'main', 'abc', 'repo-1')]),
+      okFixture('req_create', {
+        worktree: buildWorktree('/tmp/repo/child', 'child', 'abc', 'repo-1'),
+        lineage: null,
+        workspaceLineage: {
+          childWorkspaceKey: 'worktree:repo-1::/tmp/repo/child',
+          childInstanceId: 'child-instance',
+          parentWorkspaceKey: 'folder:folder-1',
+          parentInstanceId: null,
+          origin: 'cli',
+          capture: { source: 'env-workspace', confidence: 'inferred' },
+          createdAt: 1
+        },
+        warnings: []
+      })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      ['worktree', 'create', '--repo', 'id:repo-1', '--name', 'child', '--json'],
+      '/tmp/repo'
+    )
+
+    expect(callMock).toHaveBeenNthCalledWith(2, 'worktree.create', {
+      repo: 'id:repo-1',
+      name: 'child',
+      baseBranch: undefined,
+      linkedIssue: undefined,
+      comment: undefined,
+      runHooks: false,
+      activate: false,
+      parentWorktree: undefined,
+      envParentWorkspace: 'folder:folder-1',
+      cwdParentWorktree: 'id:repo-1::/tmp/repo',
       noParent: false,
       callerTerminalHandle: undefined
     })
@@ -589,6 +1394,37 @@ describe('orca cli worktree awareness', () => {
     expect(callMock).not.toHaveBeenCalled()
     expect([...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')).toContain(
       'Choose either --parent-worktree or --no-parent, not both.'
+    )
+    expect(process.exitCode).toBe(1)
+
+    process.exitCode = priorExitCode
+  })
+
+  it('rejects contradictory parent workspace flags on worktree.create', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const priorExitCode = process.exitCode
+
+    await main(
+      [
+        'worktree',
+        'create',
+        '--repo',
+        'id:repo-1',
+        '--name',
+        'child',
+        '--parent-workspace',
+        'folder:folder-1',
+        '--parent-worktree',
+        'current',
+        '--json'
+      ],
+      '/tmp/not-managed'
+    )
+
+    expect(callMock).not.toHaveBeenCalled()
+    expect([...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')).toContain(
+      'Choose either --parent-workspace or --parent-worktree, not both.'
     )
     expect(process.exitCode).toBe(1)
 
@@ -824,6 +1660,174 @@ describe('orca cli worktree awareness', () => {
     })
   })
 
+  it('lists projects through the project-first runtime API', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_project_list', {
+        projects: [
+          {
+            id: 'github:stablyai/orca',
+            displayName: 'Orca',
+            badgeColor: '#7c3aed',
+            providerIdentity: {
+              provider: 'github',
+              owner: 'stablyai',
+              repo: 'orca'
+            },
+            sourceRepoIds: ['repo-1'],
+            createdAt: 1,
+            updatedAt: 1
+          }
+        ]
+      })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(['project', 'list', '--json'], '/tmp/repo')
+
+    expect(callMock).toHaveBeenCalledWith('project.list')
+  })
+
+  it('filters project host setups locally after fetching setup compatibility state', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_project_setups', {
+        setups: [
+          {
+            id: 'setup-local',
+            projectId: 'github:stablyai/orca',
+            hostId: 'local',
+            repoId: 'repo-local',
+            path: '/tmp/orca',
+            displayName: 'Orca',
+            setupState: 'ready',
+            setupMethod: 'legacy-repo',
+            createdAt: 1,
+            updatedAt: 1
+          },
+          {
+            id: 'setup-remote',
+            projectId: 'github:stablyai/orca',
+            hostId: 'runtime:gpu',
+            repoId: 'repo-remote',
+            path: '/srv/orca',
+            displayName: 'Orca',
+            setupState: 'ready',
+            setupMethod: 'legacy-repo',
+            createdAt: 1,
+            updatedAt: 1
+          }
+        ]
+      })
+    )
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      ['project', 'setups', '--project', 'github:stablyai/orca', '--host', 'runtime:gpu'],
+      '/tmp/repo'
+    )
+
+    expect(callMock).toHaveBeenCalledWith('projectHostSetup.list')
+    expect(logSpy.mock.calls[0]?.[0]).toContain('setup-remote')
+    expect(logSpy.mock.calls[0]?.[0]).not.toContain('setup-local')
+  })
+
+  it('sets up an existing project folder with a path resolved against the local cli cwd', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_project_setup', {
+        result: {
+          project: {
+            id: 'github:stablyai/orca',
+            displayName: 'Orca',
+            badgeColor: '#7c3aed',
+            sourceRepoIds: ['repo-1'],
+            createdAt: 1,
+            updatedAt: 1
+          },
+          setup: {
+            id: 'setup-local',
+            projectId: 'github:stablyai/orca',
+            hostId: 'local',
+            repoId: 'repo-1',
+            path: path.resolve('/tmp/orca'),
+            displayName: 'Orca',
+            setupState: 'ready',
+            setupMethod: 'imported-existing-folder',
+            createdAt: 1,
+            updatedAt: 1
+          },
+          repo: {
+            id: 'repo-1',
+            path: path.resolve('/tmp/orca'),
+            displayName: 'Orca',
+            badgeColor: '#7c3aed',
+            addedAt: 1
+          }
+        }
+      })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      [
+        'project',
+        'setup-existing-folder',
+        '--project',
+        'github:stablyai/orca',
+        '--host',
+        'local',
+        '--path',
+        '..',
+        '--kind',
+        'git',
+        '--display-name',
+        'Orca',
+        '--json'
+      ],
+      '/tmp/orca/worktrees/feature'
+    )
+
+    expect(callMock).toHaveBeenCalledWith('projectHostSetup.setupExistingFolder', {
+      projectId: 'github:stablyai/orca',
+      hostId: 'local',
+      path: path.resolve('/tmp/orca/worktrees'),
+      kind: 'git',
+      displayName: 'Orca'
+    })
+  })
+
+  it('rejects remote project setup relative paths instead of resolving against client cwd', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const priorExitCode = process.exitCode
+
+    await main(
+      [
+        'project',
+        'setup-existing-folder',
+        '--project',
+        'github:stablyai/orca',
+        '--host',
+        'runtime:gpu',
+        '--path',
+        './orca',
+        '--pairing-code',
+        'remote-runtime',
+        '--json'
+      ],
+      '/tmp/repo'
+    )
+
+    expect(callMock).not.toHaveBeenCalled()
+    expect([...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')).toContain(
+      'Remote project setup requires --path to be an absolute path on the remote server.'
+    )
+    expect(process.exitCode).toBe(1)
+
+    process.exitCode = priorExitCode
+  })
+
   it('rejects remote repo.add relative paths instead of resolving against client cwd', async () => {
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
     const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
@@ -922,6 +1926,225 @@ describe('orca cli worktree awareness', () => {
     })
   })
 
+  it('passes agent prompt and setup policy through worktree.create', async () => {
+    queueFixtures(
+      callMock,
+      worktreeListFixture([buildWorktree('/tmp/repo', 'main', 'abc', 'repo-1')]),
+      okFixture('req_create', {
+        worktree: buildWorktree('/tmp/repo/agent-task', 'agent-task', 'abc', 'repo-1'),
+        lineage: null,
+        warnings: []
+      })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      [
+        'worktree',
+        'create',
+        '--repo',
+        'id:repo-1',
+        '--name',
+        'agent-task',
+        '--agent',
+        'codex',
+        '--prompt',
+        'hi',
+        '--setup',
+        'run',
+        '--json'
+      ],
+      '/tmp/repo/src'
+    )
+
+    expect(callMock).toHaveBeenNthCalledWith(2, 'worktree.create', {
+      repo: 'id:repo-1',
+      name: 'agent-task',
+      baseBranch: undefined,
+      linkedIssue: undefined,
+      comment: undefined,
+      runHooks: false,
+      activate: true,
+      setupDecision: 'run',
+      parentWorktree: undefined,
+      cwdParentWorktree: 'id:repo-1::/tmp/repo',
+      noParent: false,
+      callerTerminalHandle: undefined,
+      startupAgent: 'codex',
+      startupPrompt: 'hi'
+    })
+  })
+
+  it('infers the repo from the current worktree on worktree.create', async () => {
+    queueFixtures(
+      callMock,
+      worktreeListFixture([buildWorktree('/tmp/repo', 'main', 'abc', 'repo-1')]),
+      okFixture('req_create', {
+        worktree: buildWorktree('/tmp/repo/agent-task', 'agent-task', 'abc', 'repo-1'),
+        lineage: null,
+        warnings: []
+      })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      [
+        'worktree',
+        'create',
+        '--name',
+        'agent-task',
+        '--agent',
+        'codex',
+        '--prompt',
+        'hi',
+        '--json'
+      ],
+      '/tmp/repo/src'
+    )
+
+    expect(callMock).toHaveBeenNthCalledWith(2, 'worktree.create', {
+      repo: 'id:repo-1',
+      name: 'agent-task',
+      baseBranch: undefined,
+      linkedIssue: undefined,
+      comment: undefined,
+      runHooks: false,
+      activate: true,
+      parentWorktree: undefined,
+      cwdParentWorktree: 'id:repo-1::/tmp/repo',
+      noParent: false,
+      callerTerminalHandle: undefined,
+      startupAgent: 'codex',
+      startupPrompt: 'hi'
+    })
+  })
+
+  it('rejects prompt without agent on worktree.create', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const priorExitCode = process.exitCode
+
+    await main(
+      ['worktree', 'create', '--repo', 'id:repo-1', '--name', 'child', '--prompt', 'hi', '--json'],
+      '/tmp/repo'
+    )
+
+    expect(callMock).not.toHaveBeenCalled()
+    expect([...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')).toContain(
+      '--prompt requires --agent'
+    )
+    expect(process.exitCode).toBe(1)
+
+    process.exitCode = priorExitCode
+  })
+
+  it('rejects unknown agents on worktree.create', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const priorExitCode = process.exitCode
+
+    await main(
+      ['worktree', 'create', '--repo', 'id:repo-1', '--name', 'child', '--agent', 'wat', '--json'],
+      '/tmp/repo'
+    )
+
+    expect(callMock).not.toHaveBeenCalled()
+    expect(JSON.parse(String(logSpy.mock.calls[0]?.[0]))).toMatchObject({
+      ok: false,
+      error: {
+        code: 'invalid_argument',
+        message: 'Unknown TUI agent "wat"'
+      }
+    })
+    expect(process.exitCode).toBe(1)
+
+    process.exitCode = priorExitCode
+  })
+
+  it('rejects agent, prompt, and setup flags without values on worktree.create', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const priorExitCode = process.exitCode
+
+    await main(
+      ['worktree', 'create', '--repo', 'id:repo-1', '--name', 'child', '--agent'],
+      '/tmp/repo'
+    )
+    expect(callMock.mock.calls.some(([method]) => method === 'worktree.create')).toBe(false)
+    expect([...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')).toContain(
+      'Missing value for --agent'
+    )
+
+    callMock.mockClear()
+    logSpy.mockClear()
+    errSpy.mockClear()
+    process.exitCode = priorExitCode
+
+    await main(
+      [
+        'worktree',
+        'create',
+        '--repo',
+        'id:repo-1',
+        '--name',
+        'child',
+        '--agent',
+        'codex',
+        '--prompt'
+      ],
+      '/tmp/repo'
+    )
+    expect(callMock.mock.calls.some(([method]) => method === 'worktree.create')).toBe(false)
+    expect([...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')).toContain(
+      'Missing value for --prompt'
+    )
+
+    callMock.mockClear()
+    logSpy.mockClear()
+    errSpy.mockClear()
+    process.exitCode = priorExitCode
+
+    await main(
+      ['worktree', 'create', '--repo', 'id:repo-1', '--name', 'child', '--setup'],
+      '/tmp/repo'
+    )
+    expect(callMock.mock.calls.some(([method]) => method === 'worktree.create')).toBe(false)
+    expect([...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')).toContain(
+      'Missing value for --setup'
+    )
+
+    process.exitCode = priorExitCode
+  })
+
+  it('rejects contradictory setup flags on worktree.create', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const priorExitCode = process.exitCode
+
+    await main(
+      [
+        'worktree',
+        'create',
+        '--repo',
+        'id:repo-1',
+        '--name',
+        'child',
+        '--run-hooks',
+        '--setup',
+        'skip',
+        '--json'
+      ],
+      '/tmp/repo'
+    )
+
+    expect(callMock).not.toHaveBeenCalled()
+    expect([...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')).toContain(
+      'Choose either --run-hooks or --setup run'
+    )
+    expect(process.exitCode).toBe(1)
+
+    process.exitCode = priorExitCode
+  })
+
   it('passes explicit focus through terminal.create', async () => {
     queueFixtures(
       callMock,
@@ -955,6 +2178,42 @@ describe('orca cli worktree awareness', () => {
       title: 'RUNNER',
       focus: true
     })
+  })
+
+  it('prints terminal.read fallback screen lines in json mode', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_terminal_read', {
+        terminal: {
+          handle: 'term_worker',
+          status: 'running',
+          tail: ['Claude Code', 'Checking files', 'Waiting for input'],
+          truncated: false,
+          limited: true,
+          oldestCursor: '0',
+          nextCursor: '3000',
+          latestCursor: '3000',
+          returnedLineCount: 3
+        }
+      })
+    )
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      ['terminal', 'read', '--terminal', 'term_worker', '--limit', '120', '--json'],
+      '/tmp/repo'
+    )
+
+    expect(callMock).toHaveBeenCalledWith('terminal.read', {
+      terminal: 'term_worker',
+      limit: 120
+    })
+    const printed = JSON.parse(String(logSpy.mock.calls[0]?.[0]))
+    expect(printed.result.terminal.tail).toEqual([
+      'Claude Code',
+      'Checking files',
+      'Waiting for input'
+    ])
   })
 
   it('keeps interactive Codex startup commands backgrounded unless focus is explicit', async () => {
@@ -1537,6 +2796,62 @@ describe('orca cli worktree awareness', () => {
     })
   })
 
+  it('collects and formats memory diagnostics', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_memory', {
+        app: {
+          cpu: 1.25,
+          memory: 1024 * 1024,
+          main: { cpu: 0.5, memory: 512 * 1024 },
+          renderer: { cpu: 0.5, memory: 384 * 1024 },
+          other: { cpu: 0.25, memory: 128 * 1024 },
+          history: [1024 * 1024]
+        },
+        worktrees: [
+          {
+            worktreeId: 'repo::/tmp/repo/feature',
+            worktreeName: 'feature',
+            repoId: 'repo',
+            repoName: 'Orca',
+            cpu: 2.5,
+            memory: 1024 * 1024,
+            sessions: [
+              {
+                sessionId: 'pty-1',
+                paneKey: null,
+                pid: 123,
+                cpu: 2.5,
+                memory: 1024 * 1024
+              }
+            ],
+            history: [1024 * 1024]
+          }
+        ],
+        host: {
+          totalMemory: 8 * 1024 * 1024,
+          freeMemory: 2 * 1024 * 1024,
+          usedMemory: 6 * 1024 * 1024,
+          memoryUsagePercent: 75,
+          cpuCoreCount: 8,
+          loadAverage1m: 1.25
+        },
+        totalCpu: 3.75,
+        totalMemory: 2 * 1024 * 1024,
+        collectedAt: 1000
+      })
+    )
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(['diagnostics', 'memory'], '/tmp/repo')
+
+    expect(callMock).toHaveBeenCalledWith('diagnostics.memory')
+    const output = logSpy.mock.calls.flat().join('\n')
+    expect(output).toContain('totalMemory: 2.0 MB')
+    expect(output).toContain('app: 1.0 MB')
+    expect(output).toContain('- feature  1.0 MB  2.5%  1 session')
+  })
+
   it('exits nonzero when terminal wait returns an unsatisfied blocked result', async () => {
     process.env.ORCA_TERMINAL_HANDLE = 'term_worker'
     callMock.mockResolvedValueOnce({
@@ -1635,7 +2950,94 @@ describe('orca cli worktree awareness', () => {
     await main(['tab', 'current', '--pairing-code', 'remote-runtime', '--json'], '/tmp/client/src')
 
     expect(callMock).toHaveBeenCalledTimes(1)
-    expect(callMock).toHaveBeenCalledWith('browser.tabCurrent', { worktree: undefined })
+    expect(callMock).toHaveBeenCalledWith('browser.tabCurrent', {
+      worktree: undefined
+    })
+  })
+
+  it('passes emulator gesture points through to the runtime', async () => {
+    const points = [
+      { type: 'begin', x: 0.5, y: 0.98, edge: 3 },
+      { type: 'move', x: 0.5, y: 0.4, edge: 3 },
+      { type: 'end', x: 0.5, y: 0.2, edge: 3 }
+    ]
+    queueFixtures(callMock, okFixture('req_emulator_gesture', { ok: true }))
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      ['emulator', 'gesture', JSON.stringify(points), '--worktree', 'id:wt-1', '--json'],
+      '/tmp/repo'
+    )
+
+    expect(callMock).toHaveBeenCalledWith('emulator.gesture', {
+      points,
+      device: undefined,
+      emulator: undefined,
+      worktree: 'id:wt-1'
+    })
+  })
+
+  it('rejects emulator gesture points outside normalized coordinates', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const priorExitCode = process.exitCode
+
+    await main(
+      [
+        'emulator',
+        'gesture',
+        JSON.stringify([
+          { type: 'begin', x: 1.2, y: 0.8 },
+          { type: 'end', x: 0.5, y: 0.2 }
+        ]),
+        '--worktree',
+        'id:wt-1',
+        '--json'
+      ],
+      '/tmp/repo'
+    )
+
+    expect(callMock).not.toHaveBeenCalled()
+    expect(JSON.parse(String(logSpy.mock.calls[0]?.[0]))).toMatchObject({
+      ok: false,
+      error: {
+        code: 'invalid_argument',
+        message: '--points[0].x must be between 0 and 1'
+      }
+    })
+    expect(process.exitCode).toBe(1)
+
+    process.exitCode = priorExitCode
+  })
+
+  it('rejects emulator gesture points with invalid edge markers', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const priorExitCode = process.exitCode
+
+    await main(
+      [
+        'emulator',
+        'gesture',
+        JSON.stringify([
+          { type: 'begin', x: 0.5, y: 0.98, edge: 8 },
+          { type: 'end', x: 0.5, y: 0.2, edge: 8 }
+        ]),
+        '--worktree',
+        'id:wt-1',
+        '--json'
+      ],
+      '/tmp/repo'
+    )
+
+    expect(callMock).not.toHaveBeenCalled()
+    expect(JSON.parse(String(logSpy.mock.calls[0]?.[0]))).toMatchObject({
+      ok: false,
+      error: {
+        code: 'invalid_argument',
+        message: 'gesture point 0 edge must be an integer between 0 and 4'
+      }
+    })
+
+    process.exitCode = priorExitCode
   })
 
   it('creates an automation for the enclosing worktree by default', async () => {
@@ -1686,7 +3088,9 @@ describe('orca cli worktree awareness', () => {
       '/tmp/repo/feature/src'
     )
 
-    expect(callMock).toHaveBeenNthCalledWith(1, 'worktree.list', { limit: 10_000 })
+    expect(callMock).toHaveBeenNthCalledWith(1, 'worktree.list', {
+      limit: 10_000
+    })
     expect(callMock).toHaveBeenNthCalledWith(2, 'automation.create', {
       name: 'Daily review',
       prompt: 'Review open changes',
@@ -1702,6 +3106,243 @@ describe('orca cli worktree awareness', () => {
       rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
       dtstart: expect.any(Number)
     })
+  })
+
+  it('resolves project and host flags for automation create', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_project_setups', {
+        setups: [
+          {
+            id: 'setup-local',
+            projectId: 'github:stablyai/orca',
+            hostId: 'local',
+            repoId: 'repo-local',
+            path: '/tmp/orca',
+            displayName: 'Orca',
+            setupState: 'ready',
+            setupMethod: 'legacy-repo',
+            createdAt: 1,
+            updatedAt: 1
+          },
+          {
+            id: 'setup-gpu',
+            projectId: 'github:stablyai/orca',
+            hostId: 'runtime:gpu',
+            repoId: 'repo-gpu',
+            path: '/srv/orca',
+            displayName: 'Orca',
+            setupState: 'ready',
+            setupMethod: 'legacy-repo',
+            createdAt: 1,
+            updatedAt: 1
+          }
+        ]
+      }),
+      okFixture('req_automation_create', {
+        automation: { id: 'auto-1', name: 'GPU review' }
+      })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      [
+        'automations',
+        'create',
+        '--name',
+        'GPU review',
+        '--trigger',
+        'daily',
+        '--prompt',
+        'Review open changes',
+        '--provider',
+        'codex',
+        '--project',
+        'github:stablyai/orca',
+        '--host',
+        'runtime:gpu',
+        '--json'
+      ],
+      '/tmp/repo'
+    )
+
+    expect(callMock).toHaveBeenNthCalledWith(1, 'projectHostSetup.list')
+    expect(callMock).toHaveBeenNthCalledWith(
+      2,
+      'automation.create',
+      expect.objectContaining({
+        repo: 'id:repo-gpu',
+        runContext: {
+          kind: 'workspace-run',
+          projectId: 'github:stablyai/orca',
+          hostId: 'runtime:gpu',
+          projectHostSetupId: 'setup-gpu',
+          repoId: 'repo-gpu',
+          path: '/srv/orca'
+        },
+        workspace: undefined,
+        workspaceMode: 'new_per_run'
+      })
+    )
+  })
+
+  it('resolves project-host-setup flags for automation edit with explicit run context', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_project_setups', {
+        setups: [
+          {
+            id: 'setup-gpu',
+            projectId: 'github:stablyai/orca',
+            hostId: 'runtime:gpu',
+            repoId: 'repo-gpu',
+            path: '/srv/orca',
+            displayName: 'Orca',
+            setupState: 'ready',
+            setupMethod: 'legacy-repo',
+            createdAt: 1,
+            updatedAt: 1
+          }
+        ]
+      }),
+      okFixture('req_edit', {
+        automation: { id: 'auto-1', name: 'GPU review' }
+      })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      ['automations', 'edit', 'auto-1', '--project-host-setup', 'setup-gpu', '--json'],
+      '/tmp/repo'
+    )
+
+    expect(callMock).toHaveBeenNthCalledWith(1, 'projectHostSetup.list')
+    expect(callMock).toHaveBeenNthCalledWith(
+      2,
+      'automation.update',
+      expect.objectContaining({
+        id: 'auto-1',
+        updates: expect.objectContaining({
+          repo: 'id:repo-gpu',
+          runContext: {
+            kind: 'workspace-run',
+            projectId: 'github:stablyai/orca',
+            hostId: 'runtime:gpu',
+            projectHostSetupId: 'setup-gpu',
+            repoId: 'repo-gpu',
+            path: '/srv/orca'
+          }
+        })
+      })
+    )
+  })
+
+  it('passes automation source context JSON through create', async () => {
+    const sourceContext = {
+      kind: 'task-source',
+      provider: 'github',
+      projectId: 'github:stablyai/orca',
+      hostId: 'runtime:gpu',
+      projectHostSetupId: 'setup-gpu',
+      repoId: 'repo-gpu',
+      providerIdentity: { provider: 'github', owner: 'stablyai', repo: 'orca' },
+      accountLabel: 'gpu-bot'
+    }
+    queueFixtures(
+      callMock,
+      okFixture('req_automation_create', {
+        automation: { id: 'auto-1', name: 'GPU task review' }
+      })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      [
+        'automations',
+        'create',
+        '--name',
+        'GPU task review',
+        '--trigger',
+        'daily',
+        '--prompt',
+        'Review open work',
+        '--provider',
+        'codex',
+        '--repo',
+        'id:repo-gpu',
+        '--source-context',
+        JSON.stringify(sourceContext),
+        '--json'
+      ],
+      '/tmp/repo'
+    )
+
+    expect(callMock).toHaveBeenNthCalledWith(
+      1,
+      'automation.create',
+      expect.objectContaining({
+        repo: 'id:repo-gpu',
+        sourceContext
+      })
+    )
+  })
+
+  it('clears automation source context on edit with null', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_edit', {
+        automation: { id: 'auto-1', name: 'GPU task review' }
+      })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(['automations', 'edit', 'auto-1', '--source-context', 'null', '--json'], '/tmp/repo')
+
+    expect(callMock).toHaveBeenNthCalledWith(
+      1,
+      'automation.update',
+      expect.objectContaining({
+        id: 'auto-1',
+        updates: expect.objectContaining({
+          sourceContext: null
+        })
+      })
+    )
+  })
+
+  it('rejects invalid automation source context JSON before calling the runtime', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const priorExitCode = process.exitCode
+
+    await main(
+      [
+        'automations',
+        'create',
+        '--name',
+        'GPU task review',
+        '--trigger',
+        'daily',
+        '--prompt',
+        'Review open work',
+        '--provider',
+        'codex',
+        '--repo',
+        'id:repo-gpu',
+        '--source-context',
+        '{nope',
+        '--json'
+      ],
+      '/tmp/repo'
+    )
+
+    expect(callMock).not.toHaveBeenCalled()
+    expect([...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')).toContain(
+      '--source-context must be valid JSON'
+    )
+    expect(process.exitCode).toBe(1)
+
+    process.exitCode = priorExitCode
   })
 
   it('rejects invalid automation --day values before calling the runtime', async () => {
@@ -1874,8 +3515,12 @@ describe('orca cli worktree awareness', () => {
     queueFixtures(
       callMock,
       worktreeListFixture([buildWorktree('/tmp/repo/feature', 'feature/foo', 'abc', 'repo-1')]),
-      okFixture('req_create', { automation: { id: 'auto-1', name: 'Daily review' } }),
-      okFixture('req_edit', { automation: { id: 'auto-1', name: 'Daily review' } })
+      okFixture('req_create', {
+        automation: { id: 'auto-1', name: 'Daily review' }
+      }),
+      okFixture('req_edit', {
+        automation: { id: 'auto-1', name: 'Daily review' }
+      })
     )
     vi.spyOn(console, 'log').mockImplementation(() => {})
 
@@ -1900,7 +3545,9 @@ describe('orca cli worktree awareness', () => {
     )
     await main(['automations', 'edit', 'auto-1', '--fresh-session', '--json'], '/tmp/repo')
 
-    expect(callMock).toHaveBeenNthCalledWith(1, 'worktree.list', { limit: 10_000 })
+    expect(callMock).toHaveBeenNthCalledWith(1, 'worktree.list', {
+      limit: 10_000
+    })
     expect(callMock).toHaveBeenNthCalledWith(
       2,
       'automation.create',
@@ -1964,8 +3611,16 @@ describe('orca cli worktree awareness', () => {
   })
 
   it.each([
-    { flag: 'enabled', value: 'false', message: '--enabled does not take a value' },
-    { flag: 'disabled', value: 'false', message: '--disabled does not take a value' }
+    {
+      flag: 'enabled',
+      value: 'false',
+      message: '--enabled does not take a value'
+    },
+    {
+      flag: 'disabled',
+      value: 'false',
+      message: '--disabled does not take a value'
+    }
   ])('rejects automation create --$flag with a string value', async ({ flag, value, message }) => {
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
     const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
@@ -2003,7 +3658,9 @@ describe('orca cli worktree awareness', () => {
     queueFixtures(
       callMock,
       worktreeListFixture([buildWorktree('/tmp/repo/feature', 'feature/foo', 'abc', 'repo-1')]),
-      okFixture('req_automation_create', { automation: { id: 'auto-1', name: 'Daily review' } })
+      okFixture('req_automation_create', {
+        automation: { id: 'auto-1', name: 'Daily review' }
+      })
     )
     vi.spyOn(console, 'log').mockImplementation(() => {})
 
@@ -2026,7 +3683,9 @@ describe('orca cli worktree awareness', () => {
       '/tmp/repo/feature/src'
     )
 
-    expect(callMock).toHaveBeenNthCalledWith(1, 'worktree.list', { limit: 10_000 })
+    expect(callMock).toHaveBeenNthCalledWith(1, 'worktree.list', {
+      limit: 10_000
+    })
     expect(callMock).toHaveBeenNthCalledWith(2, 'automation.create', {
       name: 'Daily review',
       prompt: 'Review open changes',
@@ -2047,7 +3706,9 @@ describe('orca cli worktree awareness', () => {
     queueFixtures(
       callMock,
       worktreeListFixture([buildWorktree('/tmp/repo/feature', 'feature/foo', 'abc', 'repo-1')]),
-      okFixture('req_edit', { automation: { id: 'auto-1', name: 'Daily review' } })
+      okFixture('req_edit', {
+        automation: { id: 'auto-1', name: 'Daily review' }
+      })
     )
     vi.spyOn(console, 'log').mockImplementation(() => {})
 
@@ -2056,7 +3717,9 @@ describe('orca cli worktree awareness', () => {
       '/tmp/repo/feature/src'
     )
 
-    expect(callMock).toHaveBeenNthCalledWith(1, 'worktree.list', { limit: 10_000 })
+    expect(callMock).toHaveBeenNthCalledWith(1, 'worktree.list', {
+      limit: 10_000
+    })
     expect(callMock).toHaveBeenNthCalledWith(2, 'automation.update', {
       id: 'auto-1',
       updates: {
@@ -2124,9 +3787,15 @@ describe('orca cli worktree awareness', () => {
         missedRunGraceMinutes: undefined
       }
     })
-    expect(callMock).toHaveBeenNthCalledWith(2, 'automation.delete', { id: 'auto-1' })
-    expect(callMock).toHaveBeenNthCalledWith(3, 'automation.runNow', { id: 'auto-1' })
-    expect(callMock).toHaveBeenNthCalledWith(4, 'automation.show', { id: 'auto-1' })
+    expect(callMock).toHaveBeenNthCalledWith(2, 'automation.delete', {
+      id: 'auto-1'
+    })
+    expect(callMock).toHaveBeenNthCalledWith(3, 'automation.runNow', {
+      id: 'auto-1'
+    })
+    expect(callMock).toHaveBeenNthCalledWith(4, 'automation.show', {
+      id: 'auto-1'
+    })
   })
 
   it('rejects ambiguous positional and flag automation ids before dispatch', async () => {
@@ -2147,5 +3816,172 @@ describe('orca cli worktree awareness', () => {
     expect(process.exitCode).toBe(1)
 
     process.exitCode = priorExitCode
+  })
+
+  it('updates project host setup metadata through the project-first runtime API', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_project_setup_update', {
+        result: {
+          project: {
+            id: 'github:stablyai/orca',
+            displayName: 'Orca',
+            badgeColor: '#7c3aed',
+            sourceRepoIds: [],
+            createdAt: 1,
+            updatedAt: 1
+          },
+          setup: {
+            id: 'setup-gpu',
+            projectId: 'github:stablyai/orca',
+            hostId: 'runtime:gpu',
+            repoId: '',
+            path: '/srv/orca',
+            displayName: 'GPU VM',
+            setupState: 'ready',
+            setupMethod: 'imported-existing-folder',
+            createdAt: 1,
+            updatedAt: 2
+          }
+        }
+      })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      [
+        'project',
+        'setup-update',
+        '--setup',
+        'setup-gpu',
+        '--display-name',
+        'GPU VM',
+        '--path',
+        '/srv/orca',
+        '--worktree-base-path',
+        '../worktrees',
+        '--state',
+        'ready',
+        '--method',
+        'imported-existing-folder',
+        '--json'
+      ],
+      '/tmp/repo'
+    )
+
+    expect(callMock).toHaveBeenCalledWith('projectHostSetup.update', {
+      setupId: 'setup-gpu',
+      updates: {
+        displayName: 'GPU VM',
+        path: path.resolve('/tmp/repo', '/srv/orca'),
+        worktreeBasePath: '../worktrees',
+        gitUsername: undefined,
+        kind: undefined,
+        setupState: 'ready',
+        setupMethod: 'imported-existing-folder'
+      }
+    })
+  })
+
+  it('creates independent project host setup metadata through the project-first runtime API', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_project_setup_create', {
+        result: {
+          project: {
+            id: 'github:stablyai/orca',
+            displayName: 'Orca',
+            badgeColor: '#7c3aed',
+            sourceRepoIds: [],
+            createdAt: 1,
+            updatedAt: 1
+          },
+          setup: {
+            id: 'setup-gpu',
+            projectId: 'github:stablyai/orca',
+            hostId: 'runtime:gpu',
+            repoId: '',
+            path: '',
+            displayName: 'GPU VM',
+            setupState: 'setting-up',
+            setupMethod: 'provisioned',
+            createdAt: 1,
+            updatedAt: 2
+          }
+        }
+      })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      [
+        'project',
+        'setup-create',
+        '--project',
+        'github:stablyai/orca',
+        '--host',
+        'runtime:gpu',
+        '--setup-id',
+        'setup-gpu',
+        '--display-name',
+        'GPU VM',
+        '--state',
+        'setting-up',
+        '--method',
+        'provisioned',
+        '--json'
+      ],
+      '/tmp/repo'
+    )
+
+    expect(callMock).toHaveBeenCalledWith('projectHostSetup.create', {
+      projectId: 'github:stablyai/orca',
+      hostId: 'runtime:gpu',
+      setupId: 'setup-gpu',
+      path: undefined,
+      kind: undefined,
+      displayName: 'GPU VM',
+      worktreeBasePath: undefined,
+      gitUsername: undefined,
+      setupState: 'setting-up',
+      setupMethod: 'provisioned'
+    })
+  })
+
+  it('deletes project host setup metadata through the project-first runtime API', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_project_setup_delete', {
+        result: {
+          project: {
+            id: 'github:stablyai/orca',
+            displayName: 'Orca',
+            badgeColor: '#7c3aed',
+            sourceRepoIds: [],
+            createdAt: 1,
+            updatedAt: 1
+          },
+          setup: {
+            id: 'setup-gpu',
+            projectId: 'github:stablyai/orca',
+            hostId: 'runtime:gpu',
+            repoId: '',
+            path: '/srv/orca',
+            displayName: 'GPU VM',
+            setupState: 'ready',
+            setupMethod: 'imported-existing-folder',
+            createdAt: 1,
+            updatedAt: 2
+          }
+        }
+      })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(['project', 'setup-delete', '--setup', 'setup-gpu', '--json'], '/tmp/repo')
+
+    expect(callMock).toHaveBeenCalledWith('projectHostSetup.delete', {
+      setupId: 'setup-gpu'
+    })
   })
 })

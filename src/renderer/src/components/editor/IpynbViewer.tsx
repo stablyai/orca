@@ -2,6 +2,7 @@
 controls share one parsed document/update path for this first notebook editor
 slice; splitting before the model stabilizes would make save/run mutations
 harder to audit. */
+/* oxlint-disable react-doctor/no-adjust-state-on-prop-change -- Why: source drafts are reconciled against parsed notebook cells after editor flushes so stale drafts do not overwrite external notebook updates. */
 import React, {
   useCallback,
   useEffect,
@@ -64,6 +65,7 @@ import {
   type IpynbCellKind,
   type IpynbOutputItem
 } from './ipynb-parse'
+import { translate } from '@/i18n/i18n'
 
 type IpynbViewerProps = {
   content: string
@@ -179,29 +181,56 @@ function NotebookCellHeader({
         onChange={(event) => onKindChange(event.target.value as IpynbCellKind)}
         className="h-7 rounded-md border border-input bg-background px-2 text-xs text-foreground"
       >
-        <option value="code">Code</option>
-        <option value="markdown">Markdown</option>
-        <option value="raw">Raw</option>
+        <option value="code">
+          {translate('auto.components.editor.IpynbViewer.7005960d73', 'Code')}
+        </option>
+        <option value="markdown">
+          {translate('auto.components.editor.IpynbViewer.1833dbbc43', 'Markdown')}
+        </option>
+        <option value="raw">
+          {translate('auto.components.editor.IpynbViewer.3e4cbf15ea', 'Raw')}
+        </option>
       </select>
       {cell.kind === 'code' ? (
-        <NotebookHeaderButton label="Run cell" disabled={running} onClick={onRun}>
+        <NotebookHeaderButton
+          label={translate('auto.components.editor.IpynbViewer.859bf9fc21', 'Run cell')}
+          disabled={running}
+          onClick={onRun}
+        >
           {running ? <Loader2 className="size-3.5 animate-spin" /> : <Play className="size-3.5" />}
         </NotebookHeaderButton>
       ) : null}
-      <NotebookHeaderButton label="Move cell up" disabled={!canMoveUp} onClick={onMoveUp}>
+      <NotebookHeaderButton
+        label={translate('auto.components.editor.IpynbViewer.fd8ac707bc', 'Move cell up')}
+        disabled={!canMoveUp}
+        onClick={onMoveUp}
+      >
         <MoveUp className="size-3.5" />
       </NotebookHeaderButton>
-      <NotebookHeaderButton label="Move cell down" disabled={!canMoveDown} onClick={onMoveDown}>
+      <NotebookHeaderButton
+        label={translate('auto.components.editor.IpynbViewer.27e064e2db', 'Move cell down')}
+        disabled={!canMoveDown}
+        onClick={onMoveDown}
+      >
         <MoveDown className="size-3.5" />
       </NotebookHeaderButton>
-      <NotebookHeaderButton label="Insert code cell above" onClick={() => onInsertAbove('code')}>
+      <NotebookHeaderButton
+        label={translate('auto.components.editor.IpynbViewer.53b839b8a0', 'Insert code cell above')}
+        onClick={() => onInsertAbove('code')}
+      >
         <ArrowUpToLine className="size-3.5" />
       </NotebookHeaderButton>
-      <NotebookHeaderButton label="Insert code cell below" onClick={() => onInsertBelow('code')}>
+      <NotebookHeaderButton
+        label={translate('auto.components.editor.IpynbViewer.b4208cad7e', 'Insert code cell below')}
+        onClick={() => onInsertBelow('code')}
+      >
         <ArrowDownToLine className="size-3.5" />
       </NotebookHeaderButton>
       <NotebookHeaderButton
-        label="Insert markdown cell above"
+        label={translate(
+          'auto.components.editor.IpynbViewer.ffc1ac2699',
+          'Insert markdown cell above'
+        )}
         onClick={() => onInsertAbove('markdown')}
       >
         <span className="relative size-4">
@@ -210,7 +239,10 @@ function NotebookCellHeader({
         </span>
       </NotebookHeaderButton>
       <NotebookHeaderButton
-        label="Insert markdown cell below"
+        label={translate(
+          'auto.components.editor.IpynbViewer.b42f6a9547',
+          'Insert markdown cell below'
+        )}
         onClick={() => onInsertBelow('markdown')}
       >
         <span className="relative size-4">
@@ -218,7 +250,10 @@ function NotebookCellHeader({
           <MoveDown className="absolute -bottom-0.5 -right-0.5 size-2.5" />
         </span>
       </NotebookHeaderButton>
-      <NotebookHeaderButton label="Delete cell" onClick={onDelete}>
+      <NotebookHeaderButton
+        label={translate('auto.components.editor.IpynbViewer.781abd6926', 'Delete cell')}
+        onClick={onDelete}
+      >
         <Trash2 className="size-3.5" />
       </NotebookHeaderButton>
       <span className="ml-auto font-mono">#{index + 1}</span>
@@ -295,6 +330,10 @@ function CodeCell({
   const editorFontZoomLevel = useAppStore((s) => s.editorFontZoomLevel)
   const onDeactivateRef = useRef(onDeactivate)
   const onSaveRequestRef = useRef(onSaveRequest)
+  // Why: Monaco commands/listeners are installed once on mount and need the
+  // latest callbacks without rebuilding the embedded editor.
+  onDeactivateRef.current = onDeactivate
+  onSaveRequestRef.current = onSaveRequest
   const fontSize = computeEditorFontSize(settings?.terminalFontSize ?? 13, editorFontZoomLevel)
   const lineCount = Math.max(3, source.split('\n').length + 1)
   const editorHeight = Math.min(520, Math.max(96, lineCount * (fontSize + 8)))
@@ -324,11 +363,6 @@ function CodeCell({
       onDeactivateRef.current()
     })
   }, [])
-
-  useEffect(() => {
-    onDeactivateRef.current = onDeactivate
-    onSaveRequestRef.current = onSaveRequest
-  }, [onDeactivate, onSaveRequest])
 
   useEffect(() => {
     monaco.editor.setTheme(isDark ? 'vs-dark' : 'vs')
@@ -437,7 +471,7 @@ function OutputItem({ item }: { item: IpynbOutputItem }): React.JSX.Element | nu
     })
     return (
       <iframe
-        title="Notebook HTML output"
+        title={translate('auto.components.editor.IpynbViewer.66a3f7d330', 'Notebook HTML output')}
         sandbox=""
         referrerPolicy="no-referrer"
         loading="lazy"
@@ -622,12 +656,19 @@ export default function IpynbViewer({
     return registerPendingEditorFlush(fileId, flushSourceDrafts)
   }, [fileId, flushSourceDrafts])
 
-  useEffect(() => {
-    return () => {
+  const setRootRef = useCallback(
+    (node: HTMLDivElement | null): void => {
+      rootRef.current = node
+      if (node !== null) {
+        return
+      }
+      // Why: pending source edits and structural mutation frames belong to the
+      // notebook scroll root; clear them when that DOM owner detaches.
       void flushSourceDrafts()
       cancelIpynbStructuralContentFrames(structuralContentFrameIdsRef)
-    }
-  }, [flushSourceDrafts])
+    },
+    [flushSourceDrafts]
+  )
 
   useEffect(() => {
     if (!parsed.notebook || Object.keys(sourceDraftsRef.current).length === 0) {
@@ -722,7 +763,12 @@ export default function IpynbViewer({
         <div className="flex max-w-md items-start gap-3 rounded-md border border-border bg-background p-4">
           <AlertCircle className="mt-0.5 size-4 text-destructive" />
           <div>
-            <div className="font-medium text-foreground">Unable to render notebook</div>
+            <div className="font-medium text-foreground">
+              {translate(
+                'auto.components.editor.IpynbViewer.c1601b23b2',
+                'Unable to render notebook'
+              )}
+            </div>
             <div className="mt-1">{parsed.error}</div>
           </div>
         </div>
@@ -821,7 +867,7 @@ export default function IpynbViewer({
 
   return (
     <div
-      ref={rootRef}
+      ref={setRootRef}
       className="h-full min-h-0 overflow-auto bg-editor-surface scrollbar-editor"
       style={{ fontSize, fontFamily: settings?.terminalFontFamily || undefined }}
       onKeyDownCapture={handleNotebookKeyDownCapture}
@@ -829,28 +875,34 @@ export default function IpynbViewer({
     >
       <div className="sticky top-0 z-10 flex items-center gap-3 border-b border-border/60 bg-background/95 px-4 py-2 text-xs text-muted-foreground backdrop-blur">
         <span className="font-medium text-foreground">{filePath.split(/[/\\]/).pop()}</span>
-        <span>{notebook.cells.length} cells</span>
+        <span>
+          {notebook.cells.length}{' '}
+          {translate('auto.components.editor.IpynbViewer.07e7d96612', 'cells')}
+        </span>
         <span>{notebook.language}</span>
         {notebook.kernelName ? <span>{notebook.kernelName}</span> : null}
         {runError ? <span className="text-destructive">{runError}</span> : null}
         <div className="ml-auto flex items-center gap-2">
           <NotebookHeaderButton
-            label="Save notebook"
+            label={translate('auto.components.editor.IpynbViewer.15ec40a735', 'Save notebook')}
             shortcutKeys={saveShortcutKeys}
             onClick={() => void saveNotebook()}
           >
             <Save className="size-3.5" />
           </NotebookHeaderButton>
           <span className="rounded-sm border border-border bg-muted px-1.5 py-0.5 font-medium text-muted-foreground">
-            BETA
+            {translate('auto.components.editor.IpynbViewer.329764e9fc', 'BETA')}
           </span>
-          <span className="font-mono">nbformat {notebook.nbformat}</span>
+          <span className="font-mono">
+            {translate('auto.components.editor.IpynbViewer.8c3b21369a', 'nbformat')}
+            {notebook.nbformat}
+          </span>
         </div>
       </div>
       <div className="mx-auto flex max-w-[980px] flex-col gap-3 px-5 py-5">
         {notebook.cells.length === 0 ? (
           <div className="flex items-center justify-center rounded-md border border-border bg-background p-8 text-sm text-muted-foreground">
-            Empty notebook
+            {translate('auto.components.editor.IpynbViewer.d6f37a640b', 'Empty notebook')}
           </div>
         ) : (
           notebook.cells.map((cell, index) => {
@@ -921,18 +973,22 @@ export default function IpynbViewer({
       >
         <DialogContent className="max-w-md sm:max-w-md" showCloseButton={false}>
           <DialogHeader>
-            <DialogTitle className="text-sm">Run Notebook Code?</DialogTitle>
+            <DialogTitle className="text-sm">
+              {translate('auto.components.editor.IpynbViewer.9e06ae5d36', 'Run Notebook Code?')}
+            </DialogTitle>
             <DialogDescription className="text-xs">
-              Notebook cells execute local Python on this machine from the notebook folder. Only run
-              cells from files you trust.
+              {translate(
+                'auto.components.editor.IpynbViewer.10ed04a685',
+                'Notebook cells execute local Python on this machine from the notebook folder. Only run cells from files you trust.'
+              )}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="gap-2">
             <Button type="button" variant="outline" size="sm" onClick={cancelPendingRun}>
-              Cancel
+              {translate('auto.components.editor.IpynbViewer.7f0d7077c6', 'Cancel')}
             </Button>
             <Button type="button" size="sm" autoFocus onClick={confirmPendingRun}>
-              Run cell
+              {translate('auto.components.editor.IpynbViewer.859bf9fc21', 'Run cell')}
             </Button>
           </DialogFooter>
         </DialogContent>

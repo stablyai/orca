@@ -2,7 +2,7 @@
    preflight validation, and lifecycle guards that must stay in one execution path. */
 import * as pty from 'node-pty'
 import { statSync } from 'fs'
-import { win32 as pathWin32 } from 'path'
+import { delimiter, win32 as pathWin32 } from 'path'
 import type { SubprocessHandle } from './session'
 import { DaemonProtocolError } from './types'
 import {
@@ -24,10 +24,16 @@ import { removeInheritedNoColor } from '../pty/terminal-color-env'
 import { parseWslPath } from '../wsl'
 import { addWslEnvKeys } from '../wsl-env'
 import { getWslContextFromSessionId } from './wsl-session-context'
+import { addOrcaWslInteropEnv } from '../pty/wsl-orca-env'
 import { isWindowsGitBashShellPath, resolveWindowsGitBashShellPath } from '../git-bash'
 import { WINDOWS_GIT_BASH_SHELL } from '../../shared/windows-terminal-shell'
+import { resolveAgentForegroundProcess } from '../providers/agent-foreground-process'
+import { recognizeAgentProcess } from '../../shared/agent-process-recognition'
+import { isShellProcess } from '../../shared/shell-process-detection'
 
 const PANE_IDENTITY_ENV_KEYS = ['ORCA_PANE_KEY', 'ORCA_TAB_ID', 'ORCA_WORKTREE_ID'] as const
+const FOREGROUND_AGENT_CACHE_TTL_MS = 1000
+const PTY_SPAWN_HEALTH_TIMEOUT_MS = 2_000
 
 export type PtySubprocessOptions = {
   sessionId: string
@@ -73,6 +79,21 @@ function removeUnspecifiedPaneIdentityEnv(
   }
 }
 
+function promoteAgentTeamsShimPath(
+  env: Record<string, string>,
+  requestedPath: string | undefined
+): void {
+  if (!env.ORCA_AGENT_TEAMS_TEAM_ID || !requestedPath) {
+    return
+  }
+  const shimDir = requestedPath.split(delimiter)[0]
+  if (!shimDir) {
+    return
+  }
+  const currentParts = env.PATH?.split(delimiter).filter(Boolean) ?? []
+  env.PATH = [shimDir, ...currentParts.filter((part) => part !== shimDir)].join(delimiter)
+}
+
 function removeInheritedDevAgentHookEndpoint(
   env: Record<string, string>,
   explicitEnv: Record<string, string> | undefined
@@ -108,23 +129,62 @@ function formatMissingDaemonPathError(kind: 'helper' | 'cwd', path: string): Dae
   )
 }
 
+function isExistingDirectory(path: string | undefined): path is string {
+  if (!path) {
+    return false
+  }
+  try {
+    return statSync(path).isDirectory()
+  } catch {
+    return false
+  }
+}
+
+function repairDaemonCwd(): string | null {
+  const candidates = [
+    process.env.ORCA_USER_DATA_PATH,
+    getDefaultCwd(),
+    process.platform === 'win32' ? 'C:\\' : '/'
+  ]
+  for (const candidate of candidates) {
+    if (isExistingDirectory(candidate)) {
+      try {
+        process.chdir(candidate)
+        return candidate
+      } catch {
+        // Try the next stable cwd candidate.
+      }
+    }
+  }
+  return null
+}
+
+function preflightDaemonCwd(): void {
+  let daemonCwd = '<unavailable>'
+  try {
+    daemonCwd = process.cwd()
+    if (isExistingDirectory(daemonCwd)) {
+      return
+    }
+  } catch {
+    // Recover below; process.cwd() throws after the original cwd is deleted.
+  }
+
+  // Why: older detached daemons were launched from the repo cwd. If that
+  // worktree disappears, node-pty's macOS spawn-helper can fail even when the
+  // requested terminal cwd is valid.
+  if (repairDaemonCwd()) {
+    return
+  }
+  throw formatMissingDaemonPathError('cwd', daemonCwd)
+}
+
 function preflightMacNodePtySpawnEnvironment(): void {
   if (process.platform !== 'darwin') {
     return
   }
 
-  let daemonCwd: string
-  try {
-    daemonCwd = process.cwd()
-    if (!statSync(daemonCwd).isDirectory()) {
-      throw formatMissingDaemonPathError('cwd', daemonCwd)
-    }
-  } catch (error) {
-    if (error instanceof DaemonProtocolError) {
-      throw error
-    }
-    throw formatMissingDaemonPathError('cwd', '<unavailable>')
-  }
+  preflightDaemonCwd()
 
   let candidates: string[]
   try {
@@ -176,6 +236,75 @@ function formatPtySpawnError(err: unknown, shellPath: string, spawnCwd: string):
   return formatted
 }
 
+export async function checkPtySpawnHealth(): Promise<void> {
+  if (process.platform !== 'darwin') {
+    return
+  }
+
+  ensureNodePtySpawnHelperExecutable()
+  preflightMacNodePtySpawnEnvironment()
+
+  const cwd = isExistingDirectory(process.env.ORCA_USER_DATA_PATH)
+    ? process.env.ORCA_USER_DATA_PATH
+    : getDefaultCwd()
+
+  let proc: pty.IPty
+  try {
+    proc = pty.spawn('/bin/sh', ['-c', 'exit 0'], {
+      name: 'xterm-256color',
+      cols: 2,
+      rows: 1,
+      cwd,
+      env: {
+        ...process.env,
+        TERM: 'xterm-256color'
+      }
+    })
+  } catch (err) {
+    throw formatPtySpawnError(err, '/bin/sh', cwd)
+  }
+
+  await new Promise<void>((resolve, reject) => {
+    let settled = false
+    let exitDisposable: { dispose(): void } | undefined
+    const finish = (error?: Error, opts?: { kill?: boolean }): void => {
+      if (settled) {
+        return
+      }
+      settled = true
+      clearTimeout(timer)
+      exitDisposable?.dispose()
+      if (opts?.kill) {
+        try {
+          proc.kill()
+        } catch {
+          // Best-effort cleanup for a short-lived health probe.
+        }
+      }
+      if (error) {
+        reject(error)
+        return
+      }
+      resolve()
+    }
+    const timer = setTimeout(() => {
+      finish(new Error(`PTY spawn health check timed out after ${PTY_SPAWN_HEALTH_TIMEOUT_MS}ms`), {
+        kill: true
+      })
+    }, PTY_SPAWN_HEALTH_TIMEOUT_MS)
+
+    // Why: ping only proves the daemon protocol is alive. A real short-lived
+    // PTY spawn catches stale node-pty helper paths captured by this process.
+    exitDisposable = proc.onExit(({ exitCode }) => {
+      if (exitCode === 0) {
+        finish()
+        return
+      }
+      finish(new Error(`PTY spawn health check exited with code ${exitCode}`))
+    })
+  })
+}
+
 function normalizeForegroundProcessName(processName: string | null | undefined): string | null {
   const trimmed = processName?.trim().replace(/^["']|["']$/g, '') ?? ''
   if (!trimmed || trimmed === 'xterm-256color') {
@@ -207,6 +336,9 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
   } as Record<string, string>
   for (const key of opts.envToDelete ?? []) {
     delete env[key]
+  }
+  if (opts.env?.TERM) {
+    env.TERM = opts.env.TERM
   }
   // Why: the daemon is forked from Electron and can inherit the pane identity
   // of the terminal that launched `pn dev`; each PTY must opt into its own.
@@ -333,7 +465,18 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
       delete env.CODEX_HOME
       delete env.ORCA_CODEX_HOME
     }
+    if (pathWin32.basename(shellPath).toLowerCase() === 'wsl.exe') {
+      addOrcaWslInteropEnv(env)
+    }
   } else {
+    // Why: relay-side launch modes can ask for host defaults to stay scrubbed
+    // even after environment normalization above.
+    for (const key of opts.envToDelete ?? []) {
+      delete env[key]
+    }
+    if (opts.env?.TERM) {
+      env.TERM = opts.env.TERM
+    }
     // Why: any Orca-injected overlay env that user rc files can clobber
     // needs the wrapper so the post-rc restore line runs.
     const shellLaunch = opts.command
@@ -342,7 +485,8 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
           env.ORCA_OPENCODE_CONFIG_DIR ||
           env.ORCA_PI_CODING_AGENT_DIR ||
           env.ORCA_OMP_CODING_AGENT_DIR ||
-          env.ORCA_CODEX_HOME
+          env.ORCA_CODEX_HOME ||
+          env.ORCA_AGENT_TEAMS_SHIM_DIR
         ? getAttributionShellLaunchConfig(shellPath)
         : null
     if (shellLaunch) {
@@ -350,6 +494,7 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
     }
     shellArgs = shellLaunch?.args ?? ['-l']
   }
+  promoteAgentTeamsShimPath(env, opts.env?.PATH)
 
   // Why: asar packaging can strip the +x bit from node-pty's spawn-helper
   // binary. The main process fixes this via LocalPtyProvider, but the daemon
@@ -364,7 +509,7 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
   let proc: pty.IPty
   try {
     proc = pty.spawn(shellPath, shellArgs, {
-      name: 'xterm-256color',
+      name: env.TERM ?? 'xterm-256color',
       cols: size.cols,
       rows: size.rows,
       cwd: spawnCwd,
@@ -390,8 +535,52 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
   // propagates to std::terminate, killing the entire daemon process.
   let dead = false
   let disposed = false
+  let nodePtyKillIssued = false
+  let cachedAgentForeground: { processName: string; refreshedAt: number } | null = null
+  let foregroundRefreshInFlight = false
+  let lastForegroundRefreshStartedAt = 0
+  const getFallbackForegroundProcess = (): string | null =>
+    normalizeForegroundProcessName(proc.process)
+  const scheduleAgentForegroundRefresh = (fallbackProcess: string | null): void => {
+    if (dead || process.platform === 'win32' || !proc.pid) {
+      return
+    }
+    if (
+      !fallbackProcess ||
+      isShellProcess(fallbackProcess) ||
+      recognizeAgentProcess(fallbackProcess)
+    ) {
+      return
+    }
+    const now = Date.now()
+    if (
+      foregroundRefreshInFlight ||
+      now - lastForegroundRefreshStartedAt < FOREGROUND_AGENT_CACHE_TTL_MS
+    ) {
+      return
+    }
+    foregroundRefreshInFlight = true
+    lastForegroundRefreshStartedAt = now
+    // Why: daemon `getForegroundProcess()` is sync and runs on the IPC hot path.
+    // Refresh wrapper-derived identities (node/python → codex/gemini/etc.) in
+    // the background and serve them from a short cache on later reads.
+    void resolveAgentForegroundProcess(proc.pid, fallbackProcess)
+      .then((processName) => {
+        if (dead || !processName || !recognizeAgentProcess(processName)) {
+          return
+        }
+        cachedAgentForeground = { processName, refreshedAt: Date.now() }
+      })
+      .catch(() => {
+        // Best-effort only: foreground enrichment must never affect PTY health.
+      })
+      .finally(() => {
+        foregroundRefreshInFlight = false
+      })
+  }
   proc.onExit(() => {
     dead = true
+    cachedAgentForeground = null
     // Why: UnixTerminal.destroy() registers `_socket.once('close', () => this.kill('SIGHUP'))`
     // (unixTerminal.js:219-229). After the child exits, the master socket's
     // 'close' event can fire before our dispose() path gets to neutralize
@@ -417,7 +606,23 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
         return null
       }
       try {
-        return normalizeForegroundProcessName(proc.process)
+        const fallbackProcess = getFallbackForegroundProcess()
+        if (fallbackProcess && isShellProcess(fallbackProcess)) {
+          cachedAgentForeground = null
+          return fallbackProcess
+        }
+        if (fallbackProcess && recognizeAgentProcess(fallbackProcess)) {
+          cachedAgentForeground = { processName: fallbackProcess, refreshedAt: Date.now() }
+          return fallbackProcess
+        }
+        scheduleAgentForegroundRefresh(fallbackProcess)
+        if (
+          cachedAgentForeground &&
+          Date.now() - cachedAgentForeground.refreshedAt <= FOREGROUND_AGENT_CACHE_TTL_MS
+        ) {
+          return cachedAgentForeground.processName
+        }
+        return fallbackProcess
       } catch {
         return null
       }
@@ -450,6 +655,7 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
         return
       }
       try {
+        nodePtyKillIssued = true
         proc.kill()
       } catch {
         dead = true
@@ -467,6 +673,7 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
         process.kill(proc.pid, 'SIGKILL')
       } catch {
         try {
+          nodePtyKillIssued = true
           proc.kill()
         } catch {
           // Process may already be dead
@@ -513,6 +720,11 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
       // ConPTY agent. The SIGHUP hazard is POSIX-only, so the guard is too.
       if (process.platform !== 'win32') {
         ;(proc as unknown as { kill: (sig?: string) => void }).kill = () => {}
+      } else if (nodePtyKillIssued) {
+        // Why: WindowsTerminal.destroy() calls kill() internally. If this
+        // daemon handle already used node-pty's kill(), destroying here can
+        // close the same ConPTY handle twice and trip Windows heap corruption.
+        return
       }
       try {
         ;(proc as unknown as { destroy?: () => void }).destroy?.()

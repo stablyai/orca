@@ -1,14 +1,20 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const callMock = vi.fn()
+const getTerminalHandleMock = vi.hoisted(() => vi.fn())
 const originalTerminalHandle = process.env.ORCA_TERMINAL_HANDLE
+function lifecycleGroupRecipientError(type: 'worker_done' | 'heartbeat'): string {
+  return `${type} messages must be sent to a concrete coordinator terminal handle, not a group address.`
+}
 
 // Why: isolate the handler's flag-to-param mapping; printResult only writes output.
 vi.mock('../format', () => ({ printResult: vi.fn() }))
+vi.mock('../selectors', () => ({ getTerminalHandle: getTerminalHandleMock }))
 
 import { ORCHESTRATION_HANDLERS } from './orchestration'
 
 afterEach(() => {
+  getTerminalHandleMock.mockReset()
   if (originalTerminalHandle === undefined) {
     delete process.env.ORCA_TERMINAL_HANDLE
   } else {
@@ -52,6 +58,132 @@ describe('orchestration reset CLI handler', () => {
       all: true,
       tasks: undefined,
       messages: undefined
+    })
+  })
+})
+
+describe('orchestration send structured payload flags', () => {
+  beforeEach(() => {
+    callMock.mockReset().mockResolvedValue({ result: { message: { id: 'msg_1' } } })
+    getTerminalHandleMock.mockReset()
+    delete process.env.ORCA_TERMINAL_HANDLE
+  })
+
+  const invokeSend = (flags: Map<string, string | boolean>) =>
+    ORCHESTRATION_HANDLERS['orchestration send']({
+      flags,
+      client: { call: callMock },
+      cwd: '/tmp/repo',
+      json: true
+    } as never)
+
+  it('serializes common worker payload fields as JSON', async () => {
+    await invokeSend(
+      new Map<string, string | boolean>([
+        ['from', 'term_worker'],
+        ['to', 'term_coord'],
+        ['subject', 'done'],
+        ['type', 'worker_done'],
+        ['task-id', 'task_1'],
+        ['dispatch-id', 'ctx_1'],
+        ['files-modified', 'src/a.ts, src/b.ts'],
+        ['report-path', 'reports/done.md']
+      ])
+    )
+
+    expect(callMock).toHaveBeenCalledWith('orchestration.send', {
+      from: 'term_worker',
+      to: 'term_coord',
+      subject: 'done',
+      body: undefined,
+      type: 'worker_done',
+      priority: undefined,
+      threadId: undefined,
+      payload: JSON.stringify({
+        taskId: 'task_1',
+        dispatchId: 'ctx_1',
+        filesModified: ['src/a.ts', 'src/b.ts'],
+        reportPath: 'reports/done.md'
+      }),
+      devMode: false
+    })
+  })
+
+  it('rejects mixing raw payload with structured payload flags', async () => {
+    await expect(
+      invokeSend(
+        new Map<string, string | boolean>([
+          ['from', 'term_worker'],
+          ['to', 'term_coord'],
+          ['subject', 'done'],
+          ['payload', '{"taskId":"task_1"}'],
+          ['task-id', 'task_1']
+        ])
+      )
+    ).rejects.toThrow(/structured payload/)
+    expect(callMock).not.toHaveBeenCalled()
+  })
+
+  it('rejects worker_done group sends before resolving a sender handle', async () => {
+    getTerminalHandleMock.mockRejectedValue(new Error('sender resolution should not run'))
+
+    await expect(
+      invokeSend(
+        new Map<string, string | boolean>([
+          ['to', '@all'],
+          ['subject', 'done'],
+          ['type', 'worker_done']
+        ])
+      )
+    ).rejects.toMatchObject({
+      code: 'invalid_argument',
+      message: lifecycleGroupRecipientError('worker_done')
+    })
+
+    expect(getTerminalHandleMock).not.toHaveBeenCalled()
+    expect(callMock).not.toHaveBeenCalled()
+  })
+
+  it('rejects heartbeat group sends before resolving a sender handle', async () => {
+    getTerminalHandleMock.mockRejectedValue(new Error('sender resolution should not run'))
+
+    await expect(
+      invokeSend(
+        new Map<string, string | boolean>([
+          ['to', '@idle'],
+          ['subject', 'alive'],
+          ['type', 'heartbeat']
+        ])
+      )
+    ).rejects.toMatchObject({
+      code: 'invalid_argument',
+      message: lifecycleGroupRecipientError('heartbeat')
+    })
+
+    expect(getTerminalHandleMock).not.toHaveBeenCalled()
+    expect(callMock).not.toHaveBeenCalled()
+  })
+
+  it('continues to allow worker_done to a concrete terminal handle', async () => {
+    await invokeSend(
+      new Map<string, string | boolean>([
+        ['from', 'term_worker'],
+        ['to', 'term_coord'],
+        ['subject', 'done'],
+        ['type', 'worker_done']
+      ])
+    )
+
+    expect(callMock).toHaveBeenCalledWith('orchestration.send', {
+      from: 'term_worker',
+      to: 'term_coord',
+      subject: 'done',
+      body: undefined,
+      type: 'worker_done',
+      priority: undefined,
+      threadId: undefined,
+      payload: undefined,
+      devMode: false
     })
   })
 })

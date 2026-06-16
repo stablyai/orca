@@ -12,10 +12,12 @@ import {
   openFilePathLinkAtBufferPosition,
   openDetectedFilePath
 } from './terminal-link-handlers'
+import { TERMINAL_PATH_EXISTS_CACHE_MAX_ENTRIES } from './terminal-path-exists-cache'
 import { handleOscLink } from './terminal-osc-link-routing'
 import { installHttpLinkClickFallback } from './terminal-url-link-hit-testing'
 import { registerHttpLinkStoreAccessor } from '@/lib/http-link-routing'
 import { getConnectionId } from '@/lib/connection-context'
+import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import {
   createCompatibleRuntimeStatusResponseIfNeeded,
   type RuntimeEnvironmentCallRequest
@@ -28,6 +30,7 @@ const openFilePathMock = vi.fn()
 const openFileMock = vi.fn()
 const authorizeExternalPathMock = vi.fn()
 const statMock = vi.fn().mockResolvedValue({ isDirectory: false })
+const fsPathExistsMock = vi.fn().mockResolvedValue(true)
 const runtimeEnvironmentCallMock = vi.fn()
 const runtimeEnvironmentTransportCallMock = vi.fn()
 const setActiveWorktreeMock = vi.fn()
@@ -37,12 +40,17 @@ const setPendingEditorRevealMock = vi.fn()
 const deps = { worktreeId: 'wt-1', worktreePath: '/tmp' }
 const storeState = {
   settings: undefined as
-    | { openLinksInApp?: boolean; activeRuntimeEnvironmentId?: string | null }
+    | {
+        openLinksInApp?: boolean
+        openLinksInAppPreferencePrompted?: boolean
+        activeRuntimeEnvironmentId?: string | null
+      }
     | undefined,
   setActiveWorktree: setActiveWorktreeMock,
   createBrowserTab: createBrowserTabMock,
   openFile: openFileMock,
-  setPendingEditorReveal: setPendingEditorRevealMock
+  setPendingEditorReveal: setPendingEditorRevealMock,
+  worktreesByRepo: {} as Record<string, { id: string; path: string }[]>
 }
 
 vi.mock('@/store', () => ({
@@ -98,6 +106,7 @@ beforeEach(() => {
   vi.mocked(getConnectionId).mockReturnValue(null)
   openFilePathMock.mockResolvedValue(true)
   storeState.settings = undefined
+  storeState.worktreesByRepo = {}
   registerHttpLinkStoreAccessor(() => storeState)
   vi.stubGlobal('window', {
     dispatchEvent: vi.fn(),
@@ -110,6 +119,7 @@ beforeEach(() => {
       },
       fs: {
         authorizeExternalPath: authorizeExternalPathMock,
+        pathExists: fsPathExistsMock,
         stat: statMock
       },
       runtimeEnvironments: { call: runtimeEnvironmentTransportCallMock }
@@ -175,16 +185,40 @@ describe('handleOscLink', () => {
     expect(stopPropagation).not.toHaveBeenCalled()
   })
 
-  it('defaults to Orca when settings have not hydrated yet', () => {
+  it('defaults to the system browser when settings have not hydrated yet', () => {
     setPlatform('Macintosh')
     storeState.settings = undefined
 
     handleOscLink('https://example.com', { metaKey: true, ctrlKey: false, shiftKey: false }, deps)
 
+    expect(openUrlMock).toHaveBeenCalledWith('https://example.com/')
+    expect(createBrowserTabMock).not.toHaveBeenCalled()
+    expect(setActiveWorktreeMock).not.toHaveBeenCalled()
+  })
+
+  it('waits for the first-use preference before routing terminal http links', async () => {
+    setPlatform('Macintosh')
+    storeState.settings = { openLinksInApp: false, openLinksInAppPreferencePrompted: false }
+    const requestOpenLinksInAppPreference = vi.fn(async () => {
+      storeState.settings = { openLinksInApp: true, openLinksInAppPreferencePrompted: true }
+      return true
+    })
+
+    handleOscLink(
+      'https://example.com',
+      { metaKey: true, ctrlKey: false, shiftKey: false },
+      { ...deps, requestOpenLinksInAppPreference }
+    )
+
+    expect(requestOpenLinksInAppPreference).toHaveBeenCalledWith('https://example.com/')
+    expect(openUrlMock).not.toHaveBeenCalled()
+    expect(createBrowserTabMock).not.toHaveBeenCalled()
+
+    await flushAsyncWork()
+
     expect(createBrowserTabMock).toHaveBeenCalledWith('wt-1', 'https://example.com/', {
       activate: true
     })
-    expect(setActiveWorktreeMock).toHaveBeenCalledWith('wt-1')
     expect(openUrlMock).not.toHaveBeenCalled()
   })
 
@@ -371,6 +405,36 @@ describe('handleOscLink', () => {
     expect(openFilePathMock).not.toHaveBeenCalled()
   })
 
+  it('opens Windows absolute OSC link targets that parse as URL schemes', async () => {
+    setPlatform('Windows')
+
+    handleOscLink(
+      'C:\\repo\\src\\index.ts:12:3',
+      { metaKey: false, ctrlKey: true },
+      {
+        ...deps,
+        startupCwd: 'C:\\repo',
+        worktreePath: 'C:\\repo'
+      }
+    )
+    await flushAsyncWork()
+    await flushDoubleRaf()
+
+    expect(authorizeExternalPathMock).toHaveBeenCalledWith({
+      targetPath: 'C:/repo/src/index.ts'
+    })
+    expect(openFileMock).toHaveBeenCalledWith(
+      expect.objectContaining({ filePath: 'C:/repo/src/index.ts' })
+    )
+    expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(1, null)
+    expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(2, {
+      filePath: 'C:/repo/src/index.ts',
+      line: 12,
+      column: 3,
+      matchLength: 0
+    })
+  })
+
   it('opens Windows UNC file URL links from Windows worktrees', async () => {
     setPlatform('Windows')
 
@@ -471,6 +535,38 @@ describe('handleOscLink', () => {
     })
   })
 
+  it('opens UNC file URL links with line and column anchors', async () => {
+    setPlatform('Windows')
+
+    handleOscLink(
+      'file://Server/Share/Repo/src/app.ts#L12C3',
+      { metaKey: false, ctrlKey: true },
+      {
+        ...deps,
+        worktreePath: '//Server/Share/Repo'
+      }
+    )
+    await flushAsyncWork()
+    await flushDoubleRaf()
+
+    expect(authorizeExternalPathMock).toHaveBeenCalledWith({
+      targetPath: '//server/Share/Repo/src/app.ts'
+    })
+    expect(openFileMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        filePath: '//server/Share/Repo/src/app.ts',
+        relativePath: 'src/app.ts'
+      })
+    )
+    expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(1, null)
+    expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(2, {
+      filePath: '//server/Share/Repo/src/app.ts',
+      line: 12,
+      column: 3,
+      matchLength: 0
+    })
+  })
+
   it('opens relative OSC file links against the terminal cwd', async () => {
     setPlatform('Macintosh')
 
@@ -542,7 +638,7 @@ describe('handleOscLink', () => {
       expect(runtimeEnvironmentCallMock).toHaveBeenCalledWith({
         selector: 'env-1',
         method: 'files.stat',
-        params: { worktree: 'wt-1', relativePath: 'src/main.ts' },
+        params: { worktree: 'id:wt-1', relativePath: 'src/main.ts' },
         timeoutMs: 15_000
       })
     })
@@ -574,7 +670,7 @@ describe('handleOscLink', () => {
       expect(runtimeEnvironmentCallMock).toHaveBeenCalledWith({
         selector: 'env-1',
         method: 'files.stat',
-        params: { worktree: 'wt-1', relativePath: 'src/main.ts' },
+        params: { worktree: 'id:wt-1', relativePath: 'src/main.ts' },
         timeoutMs: 15_000
       })
     })
@@ -642,6 +738,114 @@ describe('handleOscLink', () => {
     })
     await new Promise((resolve) => setTimeout(resolve, 0))
 
+    expect(openFilePathMock).not.toHaveBeenCalled()
+    expect(openFileMock).not.toHaveBeenCalled()
+  })
+
+  it('switches to an exact known worktree root without local auth or stat', async () => {
+    setPlatform('Macintosh')
+    storeState.worktreesByRepo = {
+      repo: [{ id: 'wt-2', path: '/tmp/other-worktree' }]
+    }
+
+    openDetectedFilePath('/tmp/other-worktree', null, null, deps)
+    await flushAsyncWork()
+
+    expect(activateAndRevealWorktree).toHaveBeenCalledWith('wt-2')
+    expect(authorizeExternalPathMock).not.toHaveBeenCalled()
+    expect(statMock).not.toHaveBeenCalled()
+    expect(openFilePathMock).not.toHaveBeenCalled()
+    expect(openFileMock).not.toHaveBeenCalled()
+  })
+
+  it('coalesces duplicate known-root activation from provider and mouseup fallback', async () => {
+    setPlatform('Macintosh')
+    storeState.worktreesByRepo = {
+      repo: [{ id: 'wt-2', path: '/tmp/other-worktree' }]
+    }
+
+    openDetectedFilePath('/tmp/other-worktree', null, null, deps)
+    openDetectedFilePath('/tmp/other-worktree', null, null, deps)
+    await flushAsyncWork()
+
+    expect(activateAndRevealWorktree).toHaveBeenCalledTimes(1)
+    expect(activateAndRevealWorktree).toHaveBeenCalledWith('wt-2')
+    expect(authorizeExternalPathMock).not.toHaveBeenCalled()
+    expect(statMock).not.toHaveBeenCalled()
+  })
+
+  it('keeps shift+cmd/ctrl-click external open for a known worktree root', async () => {
+    setPlatform('Macintosh')
+    statMock.mockResolvedValueOnce({ isDirectory: true })
+    storeState.worktreesByRepo = {
+      repo: [{ id: 'wt-2', path: '/tmp/other-worktree' }]
+    }
+
+    openDetectedFilePath('/tmp/other-worktree', null, null, {
+      ...deps,
+      openWithSystemDefault: true
+    })
+    await flushAsyncWork()
+
+    expect(authorizeExternalPathMock).toHaveBeenCalledWith({
+      targetPath: '/tmp/other-worktree'
+    })
+    expect(statMock).toHaveBeenCalled()
+    expect(openFilePathMock).toHaveBeenCalledWith('/tmp/other-worktree')
+    expect(activateAndRevealWorktree).not.toHaveBeenCalled()
+    expect(openFileMock).not.toHaveBeenCalled()
+  })
+
+  it('switches to an SSH worktree root from store state without filesystem probing', async () => {
+    setPlatform('Macintosh')
+    vi.mocked(getConnectionId).mockReturnValue('ssh-1')
+    storeState.worktreesByRepo = {
+      repo: [{ id: 'wt-2', path: '/home/me/other-worktree' }]
+    }
+
+    openDetectedFilePath('/home/me/other-worktree', null, null, {
+      worktreeId: 'wt-1',
+      worktreePath: '/home/me/repo'
+    })
+    await flushAsyncWork()
+
+    expect(activateAndRevealWorktree).toHaveBeenCalledWith('wt-2')
+    expect(authorizeExternalPathMock).not.toHaveBeenCalled()
+    expect(statMock).not.toHaveBeenCalled()
+    expect(openFilePathMock).not.toHaveBeenCalled()
+  })
+
+  it('switches to a Windows worktree root when resolved separators differ from store state', async () => {
+    setPlatform('Windows')
+    storeState.worktreesByRepo = {
+      repo: [{ id: 'wt-win', path: 'C:\\Users\\Alice\\Repo' }]
+    }
+
+    openDetectedFilePath('C:/Users/Alice/Repo', null, null, {
+      worktreeId: 'wt-1',
+      worktreePath: 'C:/Users/Alice/Current'
+    })
+    await flushAsyncWork()
+
+    expect(activateAndRevealWorktree).toHaveBeenCalledWith('wt-win')
+    expect(authorizeExternalPathMock).not.toHaveBeenCalled()
+    expect(statMock).not.toHaveBeenCalled()
+    expect(openFilePathMock).not.toHaveBeenCalled()
+  })
+
+  it('does not fall back to file or directory open if known-root activation fails', async () => {
+    setPlatform('Macintosh')
+    vi.mocked(activateAndRevealWorktree).mockReturnValueOnce(false)
+    storeState.worktreesByRepo = {
+      repo: [{ id: 'wt-2', path: '/tmp/other-worktree' }]
+    }
+
+    openDetectedFilePath('/tmp/other-worktree', null, null, deps)
+    await flushAsyncWork()
+
+    expect(activateAndRevealWorktree).toHaveBeenCalledWith('wt-2')
+    expect(authorizeExternalPathMock).not.toHaveBeenCalled()
+    expect(statMock).not.toHaveBeenCalled()
     expect(openFilePathMock).not.toHaveBeenCalled()
     expect(openFileMock).not.toHaveBeenCalled()
   })
@@ -734,7 +938,16 @@ describe('createFilePathLinkProvider range bounds', () => {
     }
   }
 
-  function createProviderSetup(rows: TestBufferLine[]) {
+  function createProviderSetup(
+    rows: TestBufferLine[],
+    pathExistsCache = new Map<string, boolean>([
+      ['/repo', true],
+      ['/repo/CLAUDE.md', true],
+      ['/repo/package.json', true],
+      ['/repo/Folder With Space/content.js', true],
+      ['/repo/My Folder', true]
+    ])
+  ) {
     const pane = makePane(rows)
     const managerRef = {
       current: { getPanes: () => [pane] } as unknown as PaneManager
@@ -748,12 +961,7 @@ describe('createFilePathLinkProvider range bounds', () => {
         startupCwd: '/repo',
         managerRef,
         linkProviderDisposablesRef: { current: new Map<number, IDisposable>() },
-        pathExistsCache: new Map<string, boolean>([
-          ['/repo/CLAUDE.md', true],
-          ['/repo/package.json', true],
-          ['/repo/Folder With Space/content.js', true],
-          ['/repo/My Folder', true]
-        ])
+        pathExistsCache
       },
       linkTooltip,
       getTerminalFileOpenHint()
@@ -900,6 +1108,96 @@ describe('createFilePathLinkProvider range bounds', () => {
     )
   })
 
+  it('shows switch and external-open hint for known worktree root hover', async () => {
+    setPlatform('Macintosh')
+    storeState.worktreesByRepo = {
+      repo: [{ id: 'wt-1', path: '/repo' }]
+    }
+    const { provider, linkTooltip } = createProviderSetup([makeBufferLine('/repo')])
+
+    const links = await new Promise<ILink[]>((resolve) => {
+      provider.provideLinks(1, (provided) => resolve(provided ?? []))
+    })
+    expect(links[0]).toBeDefined()
+    links[0]!.hover?.({} as MouseEvent, links[0]!.text)
+
+    expect(linkTooltip.textContent).toBe(
+      '/repo (⌘+click to switch workspace or ⇧⌘+click to open in Finder)'
+    )
+  })
+
+  it('shows a known worktree root link even when the exists cache says missing', async () => {
+    setPlatform('Macintosh')
+    storeState.worktreesByRepo = {
+      repo: [{ id: 'wt-1', path: '/repo' }]
+    }
+    const { provider, linkTooltip } = createProviderSetup(
+      [makeBufferLine('/repo')],
+      new Map([['active\0/repo', false]])
+    )
+
+    const links = await new Promise<ILink[]>((resolve) => {
+      provider.provideLinks(1, (provided) => resolve(provided ?? []))
+    })
+    expect(links.map((link) => link.text)).toEqual(['/repo'])
+    links[0]!.hover?.({} as MouseEvent, links[0]!.text)
+
+    expect(window.api.shell.pathExists).not.toHaveBeenCalled()
+    expect(linkTooltip.textContent).toBe(
+      '/repo (⌘+click to switch workspace or ⇧⌘+click to open in Finder)'
+    )
+  })
+
+  it('does not show an unknown trailing-slash directory link', async () => {
+    setPlatform('Macintosh')
+    const { provider } = createProviderSetup(
+      [makeBufferLine('/repo/unknown-dir/')],
+      new Map([['active\0/repo/unknown-dir', true]])
+    )
+
+    const links = await new Promise<ILink[]>((resolve) => {
+      provider.provideLinks(1, (provided) => resolve(provided ?? []))
+    })
+
+    expect(links).toEqual([])
+    expect(window.api.shell.pathExists).not.toHaveBeenCalled()
+  })
+
+  it('linkifies a known worktree root printed with a trailing slash', async () => {
+    setPlatform('Macintosh')
+    storeState.worktreesByRepo = {
+      repo: [{ id: 'wt-1', path: '/repo' }]
+    }
+    const { provider, linkTooltip } = createProviderSetup([makeBufferLine('/repo/')])
+
+    const links = await new Promise<ILink[]>((resolve) => {
+      provider.provideLinks(1, (provided) => resolve(provided ?? []))
+    })
+    expect(links.map((link) => link.text)).toContain('/repo/')
+    links[0]!.hover?.({} as MouseEvent, links[0]!.text)
+
+    expect(linkTooltip.textContent).toBe(
+      '/repo (⌘+click to switch workspace or ⇧⌘+click to open in Finder)'
+    )
+  })
+
+  it('does not advertise external open for SSH worktree root hover', async () => {
+    setPlatform('Windows')
+    vi.mocked(getConnectionId).mockReturnValue('ssh-1')
+    storeState.worktreesByRepo = {
+      repo: [{ id: 'wt-1', path: '/repo' }]
+    }
+    const { provider, linkTooltip } = createProviderSetup([makeBufferLine('/repo')])
+
+    const links = await new Promise<ILink[]>((resolve) => {
+      provider.provideLinks(1, (provided) => resolve(provided ?? []))
+    })
+    expect(links[0]).toBeDefined()
+    links[0]!.hover?.({} as MouseEvent, links[0]!.text)
+
+    expect(linkTooltip.textContent).toBe('/repo (Ctrl+click to switch workspace)')
+  })
+
   it('shows the Orca hint for SSH file link hover', async () => {
     setPlatform('Macintosh')
     vi.mocked(getConnectionId).mockReturnValue('ssh-1')
@@ -912,6 +1210,91 @@ describe('createFilePathLinkProvider range bounds', () => {
     links[0]!.hover?.({} as MouseEvent, links[0]!.text)
 
     expect(linkTooltip.textContent).toBe('/repo/CLAUDE.md (⌘+click to open in Orca)')
+  })
+
+  it('bounds the terminal path-exists cache while preserving recent probes', async () => {
+    const pathExistsCache = new Map<string, boolean>()
+    for (let index = 0; index < TERMINAL_PATH_EXISTS_CACHE_MAX_ENTRIES; index += 1) {
+      pathExistsCache.set(`active\0/repo/old-${index}.ts`, true)
+    }
+    const pane = makePane([makeBufferLine('fresh.ts')])
+    const managerRef = {
+      current: { getPanes: () => [pane] } as unknown as PaneManager
+    }
+    const provider = createFilePathLinkProvider(
+      1,
+      {
+        worktreeId: 'wt-1',
+        worktreePath: '/repo',
+        startupCwd: '/repo',
+        managerRef,
+        linkProviderDisposablesRef: { current: new Map<number, IDisposable>() },
+        pathExistsCache
+      },
+      { textContent: '', style: { display: '' } } as unknown as HTMLElement,
+      getTerminalFileOpenHint()
+    )
+
+    const links = await new Promise<ILink[]>((resolve) => {
+      provider.provideLinks(1, (provided) => resolve(provided ?? []))
+    })
+
+    expect(links.map((link) => link.text)).toEqual(['fresh.ts'])
+    expect(pathExistsCache.size).toBe(TERMINAL_PATH_EXISTS_CACHE_MAX_ENTRIES)
+    expect(pathExistsCache.has('active\0/repo/old-0.ts')).toBe(false)
+    expect(pathExistsCache.get('active\0/repo/fresh.ts')).toBe(true)
+  })
+
+  it('does not reuse SSH path-exists cache entries across connections', async () => {
+    setPlatform('Macintosh')
+    const pathExistsCache = new Map<string, boolean>()
+    const rows = [makeBufferLine('shared.ts')]
+    const pane = makePane(rows)
+    const managerRef = {
+      current: { getPanes: () => [pane] } as unknown as PaneManager
+    }
+    const deps = {
+      worktreeId: 'wt-1',
+      worktreePath: '/repo',
+      startupCwd: '/repo',
+      managerRef,
+      linkProviderDisposablesRef: { current: new Map<number, IDisposable>() },
+      pathExistsCache
+    }
+
+    vi.mocked(getConnectionId).mockReturnValue('ssh-one')
+    const firstProvider = createFilePathLinkProvider(
+      1,
+      deps,
+      { textContent: '', style: { display: '' } } as unknown as HTMLElement,
+      getTerminalFileOpenHint()
+    )
+    const firstLinks = await new Promise<ILink[]>((resolve) => {
+      firstProvider.provideLinks(1, (provided) => resolve(provided ?? []))
+    })
+    expect(firstLinks.map((link) => link.text)).toEqual(['shared.ts'])
+    expect(fsPathExistsMock).toHaveBeenCalledWith({
+      filePath: '/repo/shared.ts',
+      connectionId: 'ssh-one'
+    })
+
+    vi.mocked(getConnectionId).mockReturnValue('ssh-two')
+    fsPathExistsMock.mockResolvedValueOnce(false)
+    const secondProvider = createFilePathLinkProvider(
+      1,
+      deps,
+      { textContent: '', style: { display: '' } } as unknown as HTMLElement,
+      getTerminalFileOpenHint()
+    )
+    const secondLinks = await new Promise<ILink[]>((resolve) => {
+      secondProvider.provideLinks(1, (provided) => resolve(provided ?? []))
+    })
+
+    expect(secondLinks).toEqual([])
+    expect(fsPathExistsMock).toHaveBeenLastCalledWith({
+      filePath: '/repo/shared.ts',
+      connectionId: 'ssh-two'
+    })
   })
 
   it('opens a single-row file path from a direct modifier-click fallback', async () => {
@@ -940,6 +1323,34 @@ describe('createFilePathLinkProvider range bounds', () => {
       expect.objectContaining({ filePath: '/tmp/package.json' })
     )
     expect(openFilePathMock).not.toHaveBeenCalled()
+  })
+
+  it('switches to a known worktree root from direct fallback even when cache says missing', async () => {
+    setPlatform('Macintosh')
+    storeState.worktreesByRepo = {
+      repo: [{ id: 'wt-2', path: '/tmp/other-worktree' }]
+    }
+
+    const opened = openFilePathLinkAtBufferPosition(
+      makeBuffer([makeBufferLine('/tmp/other-worktree')]),
+      { x: 5, y: 1 },
+      80,
+      {
+        startupCwd: '/tmp',
+        worktreeId: 'wt-1',
+        worktreePath: '/tmp',
+        runtimeEnvironmentId: null,
+        pathExistsCache: new Map([['active\0/tmp/other-worktree', false]])
+      }
+    )
+    await flushAsyncWork()
+
+    expect(opened).toBe(true)
+    expect(activateAndRevealWorktree).toHaveBeenCalledWith('wt-2')
+    expect(authorizeExternalPathMock).not.toHaveBeenCalled()
+    expect(statMock).not.toHaveBeenCalled()
+    expect(openFilePathMock).not.toHaveBeenCalled()
+    expect(openFileMock).not.toHaveBeenCalled()
   })
 
   it('opens a single-row file path with the system default from shift modifier fallback', async () => {
@@ -1100,6 +1511,28 @@ describe('createFilePathLinkProvider range bounds', () => {
     expect(openFilePathMock).not.toHaveBeenCalled()
   })
 
+  it('does not open an unknown trailing-slash directory from direct fallback', async () => {
+    setPlatform('Macintosh')
+
+    const opened = openFilePathLinkAtBufferPosition(
+      makeBuffer([makeBufferLine('/repo/unknown-dir/')]),
+      { x: 8, y: 1 },
+      80,
+      {
+        startupCwd: '/repo',
+        worktreeId: 'wt-1',
+        worktreePath: '/repo',
+        runtimeEnvironmentId: null,
+        pathExistsCache: new Map([['active\0/repo/unknown-dir', true]])
+      }
+    )
+    await flushAsyncWork()
+
+    expect(opened).toBe(false)
+    expect(openFilePathMock).not.toHaveBeenCalled()
+    expect(openFileMock).not.toHaveBeenCalled()
+  })
+
   it('retries a wrapped file click even when xterm already marked the link active', async () => {
     setPlatform('Macintosh')
     const rows = [
@@ -1215,6 +1648,55 @@ describe('createFilePathLinkProvider range bounds', () => {
 
     disposable.dispose()
     expect(element.removeEventListener).toHaveBeenCalledWith('mouseup', mouseUp)
+  })
+
+  it('asks for the first-use preference from the direct URL click fallback', async () => {
+    setPlatform('Macintosh')
+    storeState.settings = { openLinksInApp: false, openLinksInAppPreferencePrompted: false }
+    const rows = [
+      makeBufferLine('PR opened: https://github.com/stablyai/orca-marketing-website/pull/82')
+    ]
+    const requestOpenLinksInAppPreference = vi.fn(async () => {
+      storeState.settings = { openLinksInApp: true, openLinksInAppPreferencePrompted: true }
+      return true
+    })
+    const { terminal, element } = makeFallbackTerminal(rows)
+    const disposable = installHttpLinkClickFallback(terminal, {
+      worktreeId: 'wt-1',
+      requestOpenLinksInAppPreference
+    })
+    const mouseUp = getRegisteredBubbleMouseUpHandler(element)
+    const preventDefault = vi.fn()
+
+    mouseUp({
+      button: 0,
+      metaKey: true,
+      ctrlKey: false,
+      shiftKey: false,
+      defaultPrevented: false,
+      clientX: 230,
+      clientY: 25,
+      preventDefault,
+      stopPropagation: vi.fn()
+    } as unknown as MouseEvent)
+
+    expect(requestOpenLinksInAppPreference).toHaveBeenCalledWith(
+      'https://github.com/stablyai/orca-marketing-website/pull/82'
+    )
+    expect(openUrlMock).not.toHaveBeenCalled()
+    expect(createBrowserTabMock).not.toHaveBeenCalled()
+
+    await flushAsyncWork()
+
+    expect(createBrowserTabMock).toHaveBeenCalledWith(
+      'wt-1',
+      'https://github.com/stablyai/orca-marketing-website/pull/82',
+      { activate: true }
+    )
+    expect(preventDefault).toHaveBeenCalled()
+    expect(terminal.clearSelection).toHaveBeenCalled()
+
+    disposable.dispose()
   })
 
   it('does not double-open URLs when xterm already handled the mouseup', () => {

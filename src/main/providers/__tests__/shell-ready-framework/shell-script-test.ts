@@ -62,7 +62,11 @@ export async function shellScriptTest(
 
     const env: Record<string, string> = {
       ...config.env,
-      HOME: testHome
+      // Why: the framework creates user startup files under testHome after
+      // computing the wrapper config; route wrapper discovery to that fixture.
+      HOME: testHome,
+      ORCA_ORIG_ZDOTDIR: testHome,
+      ORCA_ZSHENV_SOURCE_DIR: testHome
     }
 
     const spawnOptions = {

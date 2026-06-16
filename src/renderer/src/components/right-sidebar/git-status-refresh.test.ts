@@ -76,7 +76,9 @@ describe('refreshGitStatusForWorktree', () => {
     })
 
     expect(deps.setUpstreamStatus).not.toHaveBeenCalled()
-    expect(deps.fetchUpstreamStatus).toHaveBeenCalledWith('wt-1', '/repo', undefined)
+    expect(deps.fetchUpstreamStatus).toHaveBeenCalledWith('wt-1', '/repo', undefined, undefined, {
+      runtimeTargetSettings: undefined
+    })
   })
 
   it('falls back to explicit upstream refresh for legacy status payloads', async () => {
@@ -103,7 +105,9 @@ describe('refreshGitStatusForWorktree', () => {
       branch: 'refs/heads/main'
     })
     expect(deps.setUpstreamStatus).not.toHaveBeenCalled()
-    expect(deps.fetchUpstreamStatus).toHaveBeenCalledWith('wt-2', '/repo', 'ssh-2')
+    expect(deps.fetchUpstreamStatus).toHaveBeenCalledWith('wt-2', '/repo', 'ssh-2', undefined, {
+      runtimeTargetSettings: undefined
+    })
   })
 
   it('leaves ignored-file discovery to the File Explorer instead of status polling', async () => {
@@ -127,5 +131,27 @@ describe('refreshGitStatusForWorktree', () => {
       connectionId: undefined
     })
     expect(deps.setGitStatus).toHaveBeenCalledWith('wt-3', status)
+  })
+
+  it('clears stale branch identity when git status reports detached HEAD', async () => {
+    const status: GitStatusResult = {
+      entries: [],
+      conflictOperation: 'unknown',
+      head: 'abc123456789'
+    }
+    const gitStatus = vi.fn().mockResolvedValue(status)
+    vi.stubGlobal('window', { api: { git: { status: gitStatus } } })
+    const deps = makeDeps()
+
+    await refreshGitStatusForWorktree({
+      worktreeId: 'wt-detached',
+      worktreePath: '/repo',
+      deps
+    })
+
+    expect(deps.updateWorktreeGitIdentity).toHaveBeenCalledWith('wt-detached', {
+      head: 'abc123456789',
+      branch: null
+    })
   })
 })

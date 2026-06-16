@@ -4,16 +4,24 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultUIState } from '../../../../shared/constants'
 import type {
   GitHubWorkItem,
+  JiraIssue,
+  LinearIssue,
   PersistedUIState,
+  TerminalTab,
   Worktree,
   WorktreeCardProperty
 } from '../../../../shared/types'
+import type { GitLabWorkItem } from '../../../../shared/gitlab-types'
 import { createUISlice } from './ui'
 import { createWorktreeNavHistorySlice } from './worktree-nav-history'
 import { createSettingsSearchState } from './settings-search-state'
 import type { AppState } from '../types'
+import type { ContextualTourId } from '../../../../shared/contextual-tours'
 import type { FeatureInteractionState } from '../../../../shared/feature-interactions'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { buildAgentNotificationId } from '../../../../shared/agent-notification-id'
+import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
+import type { TaskSourceContext } from '../../../../shared/task-source-context'
 
 const mocks = vi.hoisted(() => ({
   sendBracketedPasteToRunningAgent: vi.fn(),
@@ -62,6 +70,8 @@ function createUIStore(): StoreApi<AppState> {
     worktreesByRepo: {},
     rightSidebarOpen: false,
     rightSidebarWidth: 280,
+    rightSidebarTab: 'explorer',
+    rightSidebarExplorerView: 'files',
     ...createSettingsSearchState(args[0]),
     ...createWorktreeNavHistorySlice(...(args as Parameters<typeof createWorktreeNavHistorySlice>)),
     ...createUISlice(...(args as Parameters<typeof createUISlice>))
@@ -70,6 +80,31 @@ function createUIStore(): StoreApi<AppState> {
 
 function makeWorktree(id: string): Worktree {
   return { id } as unknown as Worktree
+}
+
+function makeAgentEntry(paneKey: string, stateStartedAt: number): AgentStatusEntry {
+  return {
+    state: 'done',
+    prompt: 'Review complete',
+    updatedAt: stateStartedAt,
+    stateStartedAt,
+    agentType: 'codex',
+    paneKey,
+    stateHistory: []
+  }
+}
+
+function makeTerminalTab(id: string, worktreeId: string): TerminalTab {
+  return {
+    id,
+    worktreeId,
+    ptyId: null,
+    title: 'Terminal',
+    customTitle: null,
+    color: null,
+    sortOrder: 0,
+    createdAt: Date.now()
+  }
 }
 
 function makeGitHubWorkItem(overrides: Partial<GitHubWorkItem> = {}): GitHubWorkItem {
@@ -84,6 +119,60 @@ function makeGitHubWorkItem(overrides: Partial<GitHubWorkItem> = {}): GitHubWork
     updatedAt: '2026-05-20T00:00:00.000Z',
     author: 'octocat',
     repoId: 'repo-1',
+    ...overrides
+  }
+}
+
+function makeLinearIssue(overrides: Partial<LinearIssue> = {}): LinearIssue {
+  return {
+    id: 'lin-1',
+    identifier: 'ORC-1',
+    title: 'Fix task flow',
+    url: 'https://linear.app/orca/issue/ORC-1/fix-task-flow',
+    state: { name: 'Todo', type: 'unstarted', color: '#999' },
+    priority: 0,
+    estimate: null,
+    assignee: null,
+    labels: [],
+    labelIds: [],
+    team: { id: 'team-1', name: 'Orca', key: 'ORC' },
+    workspaceId: 'workspace-1',
+    updatedAt: '2026-05-30T00:00:00.000Z',
+    createdAt: '2026-05-30T00:00:00.000Z',
+    ...overrides
+  } as LinearIssue
+}
+
+function makeGitLabWorkItem(overrides: Partial<GitLabWorkItem> = {}): GitLabWorkItem {
+  return {
+    id: 'mr-12',
+    type: 'mr',
+    number: 12,
+    title: 'Fix runner routing',
+    state: 'opened',
+    url: 'https://gitlab.com/acme/repo/-/merge_requests/12',
+    labels: [],
+    updatedAt: '2026-05-30T00:00:00.000Z',
+    author: 'gitlab-user',
+    repoId: 'repo-1',
+    ...overrides
+  }
+}
+
+function makeJiraIssue(overrides: Partial<JiraIssue> = {}): JiraIssue {
+  return {
+    id: 'ORC-1',
+    key: 'ORC-1',
+    title: 'Fix task source context',
+    url: 'https://example.atlassian.net/browse/ORC-1',
+    siteId: 'site-1',
+    siteName: 'Example Jira',
+    project: { id: '10000', key: 'ORC', name: 'Orca', siteId: 'site-1' },
+    issueType: { id: '10001', name: 'Bug' },
+    status: { id: '1', name: 'Todo', categoryKey: 'new', categoryName: 'To Do' },
+    labels: [],
+    createdAt: '2026-05-30T00:00:00.000Z',
+    updatedAt: '2026-05-30T00:00:00.000Z',
     ...overrides
   }
 }
@@ -394,6 +483,131 @@ describe('createUISlice agent send target mode', () => {
   })
 })
 
+describe('createUISlice acknowledgeAgents notification dismissal', () => {
+  const tabId = 'tab-ack'
+  const livePaneKey = makePaneKey(tabId, '11111111-1111-4111-8111-111111111111')
+  const retainedPaneKey = makePaneKey('tab-retained', '22222222-2222-4222-8222-222222222222')
+  const skippedPaneKey = makePaneKey('tab-skipped', '33333333-3333-4333-8333-333333333333')
+
+  beforeEach(() => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-06-02T12:00:00Z'))
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('dismisses live and retained agent notifications only when the event is unvisited', () => {
+    const dismiss = vi.fn().mockResolvedValue({ dismissed: 0 })
+    vi.stubGlobal('window', { api: { notifications: { dismiss } } })
+    const store = createUIStore()
+    store.setState({
+      tabsByWorktree: {
+        'wt-live': [makeTerminalTab(tabId, 'wt-live')]
+      },
+      agentStatusByPaneKey: {
+        [livePaneKey]: makeAgentEntry(livePaneKey, 1_000),
+        [skippedPaneKey]: makeAgentEntry(skippedPaneKey, 3_000)
+      },
+      retainedAgentsByPaneKey: {
+        [retainedPaneKey]: {
+          entry: makeAgentEntry(retainedPaneKey, 2_000),
+          worktreeId: 'wt-retained',
+          tab: makeTerminalTab('tab-retained', 'wt-retained'),
+          agentType: 'codex',
+          startedAt: 2_000
+        }
+      },
+      acknowledgedAgentsByPaneKey: {
+        [skippedPaneKey]: 4_000
+      }
+    } as Partial<AppState>)
+
+    store.getState().acknowledgeAgents([livePaneKey, retainedPaneKey, skippedPaneKey])
+
+    expect(dismiss).toHaveBeenCalledWith([
+      buildAgentNotificationId({
+        worktreeId: 'wt-live',
+        paneKey: livePaneKey,
+        stateStartedAt: 1_000
+      }),
+      buildAgentNotificationId({
+        worktreeId: 'wt-retained',
+        paneKey: retainedPaneKey,
+        stateStartedAt: 2_000
+      })
+    ])
+
+    dismiss.mockClear()
+    vi.setSystemTime(new Date('2026-06-02T12:00:01Z'))
+    store.getState().acknowledgeAgents([livePaneKey, retainedPaneKey])
+
+    expect(dismiss).not.toHaveBeenCalled()
+  })
+
+  it('falls back to live entry worktree attribution and skips unresolved live entries', () => {
+    const dismiss = vi.fn().mockResolvedValue({ dismissed: 0 })
+    vi.stubGlobal('window', { api: { notifications: { dismiss } } })
+    const store = createUIStore()
+    const fallbackPaneKey = makePaneKey('tab-fallback', '44444444-4444-4444-8444-444444444444')
+    store.setState({
+      tabsByWorktree: {},
+      agentStatusByPaneKey: {
+        [fallbackPaneKey]: {
+          ...makeAgentEntry(fallbackPaneKey, 1_000),
+          worktreeId: 'wt-from-entry'
+        },
+        [livePaneKey]: makeAgentEntry(livePaneKey, 2_000)
+      },
+      retainedAgentsByPaneKey: {}
+    } as Partial<AppState>)
+
+    store.getState().acknowledgeAgents([fallbackPaneKey, livePaneKey])
+
+    expect(dismiss).toHaveBeenCalledWith([
+      buildAgentNotificationId({
+        worktreeId: 'wt-from-entry',
+        paneKey: fallbackPaneKey,
+        stateStartedAt: 1_000
+      })
+    ])
+  })
+
+  it('dedupes identical live and retained notification ids for the same pane', () => {
+    const dismiss = vi.fn().mockResolvedValue({ dismissed: 0 })
+    vi.stubGlobal('window', { api: { notifications: { dismiss } } })
+    const store = createUIStore()
+    store.setState({
+      tabsByWorktree: {
+        'wt-live': [makeTerminalTab(tabId, 'wt-live')]
+      },
+      agentStatusByPaneKey: {
+        [livePaneKey]: makeAgentEntry(livePaneKey, 1_000)
+      },
+      retainedAgentsByPaneKey: {
+        [livePaneKey]: {
+          entry: makeAgentEntry(livePaneKey, 1_000),
+          worktreeId: 'wt-live',
+          tab: makeTerminalTab(tabId, 'wt-live'),
+          agentType: 'codex',
+          startedAt: 1_000
+        }
+      }
+    } as Partial<AppState>)
+
+    store.getState().acknowledgeAgents([livePaneKey])
+
+    expect(dismiss).toHaveBeenCalledWith([
+      buildAgentNotificationId({
+        worktreeId: 'wt-live',
+        paneKey: livePaneKey,
+        stateStartedAt: 1_000
+      })
+    ])
+  })
+})
+
 describe('createUISlice hydratePersistedUI', () => {
   it('defaults persisted right sidebar visibility to open', () => {
     expect(getDefaultUIState().rightSidebarOpen).toBe(true)
@@ -403,6 +617,15 @@ describe('createUISlice hydratePersistedUI', () => {
     const store = createUIStore()
 
     expect(store.getState().showSleepingWorkspaces).toBe(true)
+  })
+
+  it('defaults workspace host scope to all hosts', () => {
+    expect(getDefaultUIState().workspaceHostScope).toBe('all')
+    expect(createUIStore().getState().workspaceHostScope).toBe('all')
+    expect(getDefaultUIState().visibleWorkspaceHostIds).toBeNull()
+    expect(createUIStore().getState().visibleWorkspaceHostIds).toBeNull()
+    expect(getDefaultUIState().workspaceHostOrder).toEqual([])
+    expect(createUIStore().getState().workspaceHostOrder).toEqual([])
   })
 
   it('preserves the current right sidebar width when older persisted UI omits it', () => {
@@ -439,6 +662,183 @@ describe('createUISlice hydratePersistedUI', () => {
     store.getState().hydratePersistedUI(makePersistedUI({ rightSidebarTab: 'checks' }))
 
     expect(store.getState().rightSidebarTab).toBe('checks')
+    expect(store.getState().rightSidebarExplorerView).toBe('files')
+  })
+
+  it('hydrates legacy persisted search tab as Explorer search', () => {
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(makePersistedUI({ rightSidebarTab: 'search' }))
+
+    expect(store.getState().rightSidebarTab).toBe('explorer')
+    expect(store.getState().rightSidebarExplorerView).toBe('search')
+  })
+
+  it('hydrates persisted Explorer search view', () => {
+    const store = createUIStore()
+
+    store
+      .getState()
+      .hydratePersistedUI(
+        makePersistedUI({ rightSidebarTab: 'explorer', rightSidebarExplorerView: 'search' })
+      )
+
+    expect(store.getState().rightSidebarTab).toBe('explorer')
+    expect(store.getState().rightSidebarExplorerView).toBe('search')
+  })
+
+  it('hydrates a persisted workspace host scope', () => {
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(makePersistedUI({ workspaceHostScope: 'ssh:win%20vm' }))
+
+    expect(store.getState().workspaceHostScope).toBe('ssh:win%20vm')
+    expect(store.getState().visibleWorkspaceHostIds).toEqual(['ssh:win%20vm'])
+  })
+
+  it('hydrates a persisted visible workspace host set', () => {
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(
+      makePersistedUI({
+        workspaceHostScope: 'ssh:win%20vm',
+        visibleWorkspaceHostIds: [
+          'local',
+          'ssh:win%20vm',
+          'bogus' as NonNullable<PersistedUIState['visibleWorkspaceHostIds']>[number],
+          'local'
+        ]
+      })
+    )
+
+    expect(store.getState().workspaceHostScope).toBe('ssh:win%20vm')
+    expect(store.getState().visibleWorkspaceHostIds).toEqual(['local', 'ssh:win%20vm'])
+  })
+
+  it('hydrates a persisted workspace host order', () => {
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(
+      makePersistedUI({
+        workspaceHostOrder: [
+          'ssh:win%20vm',
+          'bogus' as NonNullable<PersistedUIState['workspaceHostOrder']>[number],
+          'local',
+          'ssh:win%20vm'
+        ]
+      })
+    )
+
+    expect(store.getState().workspaceHostOrder).toEqual(['ssh:win%20vm', 'local'])
+  })
+
+  it('falls back to all hosts for invalid persisted workspace host scopes', () => {
+    const store = createUIStore()
+
+    store
+      .getState()
+      .hydratePersistedUI(
+        makePersistedUI({ workspaceHostScope: 'bogus' as PersistedUIState['workspaceHostScope'] })
+      )
+
+    expect(store.getState().workspaceHostScope).toBe('all')
+    expect(store.getState().visibleWorkspaceHostIds).toBeNull()
+  })
+
+  it('persists workspace host scope changes', () => {
+    const setUI = vi.fn(() => Promise.resolve())
+    vi.stubGlobal('window', { api: { ui: { set: setUI } } })
+    const store = createUIStore()
+
+    store.getState().setWorkspaceHostScope('runtime:env-1')
+
+    expect(store.getState().workspaceHostScope).toBe('runtime:env-1')
+    expect(store.getState().visibleWorkspaceHostIds).toEqual(['runtime:env-1'])
+    expect(setUI).toHaveBeenCalledWith({
+      workspaceHostScope: 'runtime:env-1',
+      visibleWorkspaceHostIds: ['runtime:env-1']
+    })
+  })
+
+  it('persists visible workspace host changes independently of focused host', () => {
+    const setUI = vi.fn(() => Promise.resolve())
+    vi.stubGlobal('window', { api: { ui: { set: setUI } } })
+    const store = createUIStore()
+
+    store.getState().setWorkspaceHostScope('runtime:env-1')
+    store.getState().setVisibleWorkspaceHostIds(['local', 'runtime:env-1'])
+
+    expect(store.getState().workspaceHostScope).toBe('runtime:env-1')
+    expect(store.getState().visibleWorkspaceHostIds).toEqual(['local', 'runtime:env-1'])
+    expect(setUI).toHaveBeenLastCalledWith({
+      workspaceHostScope: 'runtime:env-1',
+      visibleWorkspaceHostIds: ['local', 'runtime:env-1']
+    })
+  })
+
+  it('persists workspace host order changes', () => {
+    const setUI = vi.fn(() => Promise.resolve())
+    vi.stubGlobal('window', { api: { ui: { set: setUI } } })
+    const store = createUIStore()
+
+    store.getState().setWorkspaceHostOrder(['ssh:win%20vm', 'bogus' as never, 'local'])
+
+    expect(store.getState().workspaceHostOrder).toEqual(['ssh:win%20vm', 'local'])
+    expect(setUI).toHaveBeenCalledWith({ workspaceHostOrder: ['ssh:win%20vm', 'local'] })
+  })
+
+  it('hydrates persisted per-worktree dotfile visibility', () => {
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(
+      makePersistedUI({
+        showDotfilesByWorktree: {
+          'repo-1::/repo': false,
+          'repo-2::/repo': true
+        }
+      })
+    )
+
+    expect(store.getState().showDotfilesByWorktree).toEqual({
+      'repo-1::/repo': false,
+      'repo-2::/repo': true
+    })
+  })
+
+  it('drops invalid persisted per-worktree dotfile visibility entries', () => {
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(
+      makePersistedUI({
+        showDotfilesByWorktree: {
+          'repo-1::/repo': false,
+          'repo-2::/repo': 'nope',
+          constructor: false
+        } as never
+      })
+    )
+
+    expect(store.getState().showDotfilesByWorktree).toEqual({ 'repo-1::/repo': false })
+  })
+
+  it('stores only per-worktree dotfile visibility opt-outs', () => {
+    const store = createUIStore()
+
+    store.getState().setShowDotfilesForWorktree('repo-1::/repo', false)
+    expect(store.getState().showDotfilesByWorktree).toEqual({ 'repo-1::/repo': false })
+
+    store.getState().setShowDotfilesForWorktree('repo-1::/repo', true)
+    expect(store.getState().showDotfilesByWorktree).toEqual({})
+  })
+
+  it('toggles per-worktree dotfile visibility independently', () => {
+    const store = createUIStore()
+
+    store.getState().toggleShowDotfilesForWorktree('repo-1::/repo')
+    store.getState().toggleShowDotfilesForWorktree('repo-2::/repo')
+    store.getState().toggleShowDotfilesForWorktree('repo-2::/repo')
+
+    expect(store.getState().showDotfilesByWorktree).toEqual({ 'repo-1::/repo': false })
   })
 
   it('falls back to explorer for invalid persisted right sidebar tabs', () => {
@@ -451,6 +851,7 @@ describe('createUISlice hydratePersistedUI', () => {
       )
 
     expect(store.getState().rightSidebarTab).toBe('explorer')
+    expect(store.getState().rightSidebarExplorerView).toBe('files')
   })
 
   it('clamps persisted sidebar widths into the supported range', () => {
@@ -481,6 +882,23 @@ describe('createUISlice hydratePersistedUI', () => {
     // so long file names remain readable.
     expect(store.getState().sidebarWidth).toBe(260)
     expect(store.getState().rightSidebarWidth).toBe(900)
+  })
+
+  it('stores pending sidebar reveal rename requests', () => {
+    const store = createUIStore()
+
+    store.getState().revealWorktreeInSidebar('repo1::/feature', {
+      behavior: 'smooth',
+      highlight: true,
+      beginRename: true
+    })
+
+    expect(store.getState().pendingRevealWorktree).toEqual({
+      worktreeId: 'repo1::/feature',
+      behavior: 'smooth',
+      highlight: true,
+      beginRename: true
+    })
   })
 
   it('falls back to existing sidebar widths when persisted values are not finite', () => {
@@ -573,7 +991,7 @@ describe('createUISlice hydratePersistedUI', () => {
     expect(store.getState().worktreeCardProperties).toEqual(['status', 'unread', 'inline-agents'])
   })
 
-  it('adds the default-on Ports status item once for older persisted UI', () => {
+  it('adds default-on status items once for older persisted UI', () => {
     const setUI = vi.fn().mockResolvedValue(undefined)
     vi.stubGlobal('window', { api: { ui: { set: setUI } } })
     const store = createUIStore()
@@ -585,14 +1003,15 @@ describe('createUISlice hydratePersistedUI', () => {
       })
     )
 
-    expect(store.getState().statusBarItems).toEqual(['claude', 'resource-usage', 'ports'])
+    expect(store.getState().statusBarItems).toEqual(['claude', 'resource-usage', 'ports', 'kimi'])
     expect(setUI).toHaveBeenCalledWith({
-      statusBarItems: ['claude', 'resource-usage', 'ports'],
-      _portsStatusBarDefaultAdded: true
+      statusBarItems: ['claude', 'resource-usage', 'ports', 'kimi'],
+      _portsStatusBarDefaultAdded: true,
+      _kimiStatusBarDefaultAdded: true
     })
   })
 
-  it('preserves a user-hidden Ports status item after the one-shot migration ran', () => {
+  it('preserves user-hidden default-on status items after one-shot migrations ran', () => {
     const setUI = vi.fn().mockResolvedValue(undefined)
     vi.stubGlobal('window', { api: { ui: { set: setUI } } })
     const store = createUIStore()
@@ -600,30 +1019,13 @@ describe('createUISlice hydratePersistedUI', () => {
     store.getState().hydratePersistedUI(
       makePersistedUI({
         statusBarItems: ['claude', 'resource-usage'],
-        _portsStatusBarDefaultAdded: true
+        _portsStatusBarDefaultAdded: true,
+        _kimiStatusBarDefaultAdded: true
       })
     )
 
     expect(store.getState().statusBarItems).toEqual(['claude', 'resource-usage'])
     expect(setUI).not.toHaveBeenCalled()
-  })
-
-  it('restores compact workspace board mode only from an explicit true', () => {
-    const store = createUIStore()
-
-    store.getState().hydratePersistedUI(
-      makePersistedUI({
-        workspaceBoardCompact: true
-      })
-    )
-    expect(store.getState().workspaceBoardCompact).toBe(true)
-
-    store.getState().hydratePersistedUI(
-      makePersistedUI({
-        workspaceBoardCompact: 'yes' as unknown as boolean
-      })
-    )
-    expect(store.getState().workspaceBoardCompact).toBe(false)
   })
 
   it('clamps persisted workspace board column width', () => {
@@ -648,6 +1050,29 @@ describe('createUISlice hydratePersistedUI', () => {
     )
 
     expect(store.getState().browserKagiSessionLink).toBe('https://kagi.com/search?token=secret')
+  })
+
+  it('hydrates and normalizes the default browser zoom level', () => {
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(
+      makePersistedUI({
+        browserDefaultZoomLevel: 1.26
+      })
+    )
+
+    expect(store.getState().browserDefaultZoomLevel).toBe(1.5)
+  })
+
+  it('persists normalized default browser zoom changes', () => {
+    const setUI = vi.fn().mockResolvedValue(undefined)
+    vi.stubGlobal('window', { api: { ui: { set: setUI } } })
+    const store = createUIStore()
+
+    store.getState().setBrowserDefaultZoomLevel(10)
+
+    expect(store.getState().browserDefaultZoomLevel).toBe(5)
+    expect(setUI).toHaveBeenCalledWith({ browserDefaultZoomLevel: 5 })
   })
 
   it('drops an invalid Kagi session link during hydration', () => {
@@ -710,7 +1135,9 @@ describe('createUISlice hydratePersistedUI', () => {
           githubItemsPreset: 'invalid',
           githubItemsQuery: 42,
           linearPreset: 'completed',
-          linearQuery: 'label:bug'
+          linearQuery: 'label:bug',
+          jiraPreset: 'reported',
+          jiraQuery: 99
         } as unknown as PersistedUIState['taskResumeState']
       })
     )
@@ -718,7 +1145,8 @@ describe('createUISlice hydratePersistedUI', () => {
     expect(store.getState().taskResumeState).toEqual({
       githubMode: 'project',
       linearPreset: 'completed',
-      linearQuery: 'label:bug'
+      linearQuery: 'label:bug',
+      jiraPreset: 'reported'
     })
   })
 
@@ -982,9 +1410,92 @@ describe('createUISlice settings navigation', () => {
       'repo-1',
       '/repo',
       expect.any(Number),
-      'is:issue is:open'
+      'is:issue is:open',
+      { sourceContext: null }
     )
     expect(prefetchLinearIssues).not.toHaveBeenCalled()
+  })
+
+  it('prefetches direct GitHub task opens with their source context', () => {
+    const store = createUIStore()
+    const prefetchWorkItems = vi.fn()
+    const workItem = makeGitHubWorkItem()
+    const sourceContext: TaskSourceContext = {
+      kind: 'task-source',
+      provider: 'github',
+      projectId: 'project-1',
+      hostId: 'ssh:devbox',
+      projectHostSetupId: 'setup-1',
+      repoId: 'repo-1',
+      providerIdentity: { provider: 'github', owner: 'acme', repo: 'repo' }
+    }
+
+    store.setState({
+      repos: [
+        {
+          id: 'repo-1',
+          path: '/repo',
+          displayName: 'Repo',
+          badgeColor: 'blue',
+          addedAt: 1,
+          kind: 'git'
+        }
+      ],
+      settings: {
+        visibleTaskProviders: ['github'],
+        defaultTaskSource: 'github',
+        defaultTaskViewPreset: 'all'
+      } as unknown as AppState['settings'],
+      prefetchWorkItems
+    } as unknown as Partial<AppState>)
+
+    store.getState().openTaskPage({
+      taskSource: 'github',
+      preselectedRepoId: 'repo-1',
+      openGitHubWorkItem: workItem,
+      openGitHubSourceContext: sourceContext
+    })
+
+    expect(prefetchWorkItems).toHaveBeenCalledWith(
+      'repo-1',
+      '/repo',
+      expect.any(Number),
+      'is:issue is:open',
+      { sourceContext }
+    )
+  })
+
+  it('prefetches direct Linear task opens with their source context', () => {
+    const store = createUIStore()
+    const prefetchLinearIssues = vi.fn()
+    const linearIssue = makeLinearIssue()
+    const sourceContext: TaskSourceContext = {
+      kind: 'task-source',
+      provider: 'linear',
+      projectId: 'project-1',
+      hostId: 'runtime:remote-server',
+      providerIdentity: { provider: 'linear', workspaceId: 'workspace-1' }
+    }
+
+    store.setState({
+      settings: {
+        visibleTaskProviders: ['linear'],
+        defaultTaskSource: 'linear'
+      } as unknown as AppState['settings'],
+      linearStatus: { connected: true } as AppState['linearStatus'],
+      prefetchLinearIssues
+    } as unknown as Partial<AppState>)
+
+    store.getState().openTaskPage({
+      taskSource: 'linear',
+      openLinearIssue: linearIssue,
+      openLinearSourceContext: sourceContext
+    })
+
+    expect(prefetchLinearIssues).toHaveBeenCalledWith(
+      { kind: 'list', filter: 'all', limit: expect.any(Number) },
+      { sourceContext }
+    )
   })
 
   it('returns to the tasks page after visiting settings from an in-progress draft', () => {
@@ -1028,7 +1539,7 @@ describe('createUISlice settings navigation', () => {
 })
 
 describe('createUISlice new workspace draft', () => {
-  it('preserves Linear linked work item metadata and context', () => {
+  it('preserves Linear linked work item metadata', () => {
     const store = createUIStore()
 
     store.getState().setNewWorkspaceDraft({
@@ -1042,12 +1553,7 @@ describe('createUISlice new workspace draft', () => {
         number: 0,
         title: 'Fix launch context handoff',
         url: 'https://linear.app/acme/issue/ENG-123/fix-launch-context-handoff',
-        linearIdentifier: 'ENG-123',
-        linkedContext: {
-          provider: 'linear',
-          version: 1,
-          renderedText: 'Identifier: ENG-123'
-        }
+        linearIdentifier: 'ENG-123'
       },
       agent: 'claude',
       linkedIssue: '',
@@ -1057,12 +1563,7 @@ describe('createUISlice new workspace draft', () => {
     })
 
     expect(store.getState().newWorkspaceDraft?.linkedWorkItem).toMatchObject({
-      linearIdentifier: 'ENG-123',
-      linkedContext: {
-        provider: 'linear',
-        version: 1,
-        renderedText: 'Identifier: ENG-123'
-      }
+      linearIdentifier: 'ENG-123'
     })
   })
 
@@ -1122,7 +1623,13 @@ describe('createUISlice page navigation history', () => {
     expect(store.getState().worktreeNavHistory).toEqual([
       'a',
       'tasks',
-      { kind: 'task-detail', source: 'github', workItem, initialTab: undefined }
+      {
+        kind: 'task-detail',
+        source: 'github',
+        workItem,
+        sourceContext: undefined,
+        initialTab: undefined
+      }
     ])
     expect(store.getState().worktreeNavHistoryIndex).toBe(2)
 
@@ -1131,6 +1638,163 @@ describe('createUISlice page navigation history', () => {
     expect(store.getState().taskPageData).toEqual({})
     expect(store.getState().githubTaskDrawerWorkItem).toBeNull()
     expect(store.getState().worktreeNavHistoryIndex).toBe(0)
+  })
+
+  it('records provider-depth interactions for direct Tasks detail opens', () => {
+    const store = createUIStore()
+    const recordFeatureInteraction = vi.fn()
+    store.setState({ recordFeatureInteraction } as Partial<AppState>)
+    const workItem = makeGitHubWorkItem()
+    const linearIssue = makeLinearIssue()
+    const jiraIssue = makeJiraIssue()
+
+    store.getState().openTaskPage({ taskSource: 'github', openGitHubWorkItem: workItem })
+    store.getState().openTaskPage({ taskSource: 'linear', openLinearIssue: linearIssue })
+    store.getState().openTaskPage({ taskSource: 'jira', openJiraIssue: jiraIssue })
+
+    expect(recordFeatureInteraction).toHaveBeenCalledWith('tasks')
+    expect(recordFeatureInteraction).toHaveBeenCalledWith('github-tasks')
+    expect(recordFeatureInteraction).toHaveBeenCalledWith('linear-tasks')
+    expect(recordFeatureInteraction).toHaveBeenCalledWith('jira-tasks')
+  })
+
+  it('preserves GitHub task detail source context in navigation history', () => {
+    const store = createUIStore()
+    const workItem = makeGitHubWorkItem({ repoId: 'repo-remote' })
+    const sourceContext: TaskSourceContext = {
+      kind: 'task-source',
+      provider: 'github',
+      projectId: 'project-1',
+      hostId: 'ssh:devbox',
+      projectHostSetupId: 'setup-1',
+      repoId: 'repo-remote',
+      providerIdentity: { provider: 'github', owner: 'stablyai', repo: 'orca' }
+    }
+
+    store.getState().openTaskPage({
+      taskSource: 'github',
+      openGitHubWorkItem: workItem,
+      openGitHubSourceContext: sourceContext
+    })
+
+    expect(store.getState().worktreeNavHistory.at(-1)).toEqual({
+      kind: 'task-detail',
+      source: 'github',
+      workItem,
+      sourceContext,
+      initialTab: undefined
+    })
+  })
+
+  it('preserves Linear task detail source context in navigation history', () => {
+    const store = createUIStore()
+    const linearIssue = makeLinearIssue()
+    const sourceContext: TaskSourceContext = {
+      kind: 'task-source',
+      provider: 'linear',
+      projectId: 'project-1',
+      hostId: 'runtime:remote-server',
+      providerIdentity: { provider: 'linear', workspaceId: 'workspace-1' }
+    }
+
+    store.getState().openTaskPage({
+      taskSource: 'linear',
+      openLinearIssue: linearIssue,
+      openLinearSourceContext: sourceContext
+    })
+
+    expect(store.getState().worktreeNavHistory.at(-1)).toEqual({
+      kind: 'task-detail',
+      source: 'linear',
+      issue: linearIssue,
+      sourceContext
+    })
+  })
+
+  it('preserves GitLab task detail source context in navigation history', () => {
+    const store = createUIStore()
+    const workItem = makeGitLabWorkItem({ repoId: 'repo-remote' })
+    const sourceContext: TaskSourceContext = {
+      kind: 'task-source',
+      provider: 'gitlab',
+      projectId: 'project-1',
+      hostId: 'ssh:devbox',
+      projectHostSetupId: 'setup-1',
+      repoId: 'repo-remote',
+      providerIdentity: { provider: 'gitlab', projectId: '1234' }
+    }
+
+    store.getState().openTaskPage({
+      taskSource: 'gitlab',
+      openGitLabWorkItem: workItem,
+      openGitLabSourceContext: sourceContext
+    })
+
+    expect(store.getState().worktreeNavHistory.at(-1)).toEqual({
+      kind: 'task-detail',
+      source: 'gitlab',
+      workItem,
+      sourceContext
+    })
+  })
+
+  it('preserves Jira task detail source context in navigation history', () => {
+    const store = createUIStore()
+    const issue = makeJiraIssue()
+    const sourceContext: TaskSourceContext = {
+      kind: 'task-source',
+      provider: 'jira',
+      projectId: 'project-1',
+      hostId: 'runtime:remote-server',
+      providerIdentity: { provider: 'jira', siteId: 'site-1' },
+      accountLabel: 'Example Jira'
+    }
+
+    store.getState().openTaskPage({
+      taskSource: 'jira',
+      openJiraIssue: issue,
+      openJiraSourceContext: sourceContext
+    })
+
+    expect(store.getState().worktreeNavHistory.at(-1)).toEqual({
+      kind: 'task-detail',
+      source: 'jira',
+      issue,
+      sourceContext
+    })
+  })
+
+  it('can suppress the Tasks surface interaction for in-page provider navigation', () => {
+    const store = createUIStore()
+    const recordFeatureInteraction = vi.fn()
+    store.setState({ recordFeatureInteraction } as Partial<AppState>)
+    const workItem = makeGitHubWorkItem()
+    const linearIssue = makeLinearIssue()
+    const jiraIssue = makeJiraIssue()
+
+    store
+      .getState()
+      .openTaskPage(
+        { taskSource: 'github', openGitHubWorkItem: workItem },
+        { recordTasksInteraction: false }
+      )
+    store
+      .getState()
+      .openTaskPage(
+        { taskSource: 'linear', openLinearIssue: linearIssue },
+        { recordTasksInteraction: false }
+      )
+    store
+      .getState()
+      .openTaskPage(
+        { taskSource: 'jira', openJiraIssue: jiraIssue },
+        { recordTasksInteraction: false }
+      )
+
+    expect(recordFeatureInteraction).not.toHaveBeenCalledWith('tasks')
+    expect(recordFeatureInteraction).toHaveBeenCalledWith('github-tasks')
+    expect(recordFeatureInteraction).toHaveBeenCalledWith('linear-tasks')
+    expect(recordFeatureInteraction).toHaveBeenCalledWith('jira-tasks')
   })
 
   it('skips the whole Tasks detail stack on close', () => {
@@ -1144,7 +1808,13 @@ describe('createUISlice page navigation history', () => {
     expect(store.getState().worktreeNavHistory).toEqual([
       'a',
       'tasks',
-      { kind: 'task-detail', source: 'github', workItem, initialTab: undefined },
+      {
+        kind: 'task-detail',
+        source: 'github',
+        workItem,
+        sourceContext: undefined,
+        initialTab: undefined
+      },
       'tasks'
     ])
 
@@ -1241,6 +1911,113 @@ describe('createUISlice feature tips', () => {
   })
 })
 
+describe('createUISlice setup guide sidebar dismissal', () => {
+  it('persists sidebar dismissal changes once', () => {
+    const setMock = vi.fn(() => Promise.resolve())
+    vi.stubGlobal('window', {
+      api: {
+        ui: {
+          set: setMock
+        }
+      }
+    })
+    const store = createUIStore()
+
+    store.getState().setSetupGuideSidebarDismissed(true)
+    store.getState().setSetupGuideSidebarDismissed(true)
+
+    expect(store.getState().setupGuideSidebarDismissed).toBe(true)
+    expect(setMock).toHaveBeenCalledTimes(1)
+    expect(setMock).toHaveBeenCalledWith({ setupGuideSidebarDismissed: true })
+  })
+
+  it('hydrates only explicit sidebar dismissals as hidden', () => {
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(makePersistedUI({ setupGuideSidebarDismissed: true }))
+    expect(store.getState().setupGuideSidebarDismissed).toBe(true)
+
+    store.getState().hydratePersistedUI(makePersistedUI({ setupGuideSidebarDismissed: undefined }))
+    expect(store.getState().setupGuideSidebarDismissed).toBe(false)
+  })
+
+  it('persists browser milestone migration result once', () => {
+    const setMock = vi.fn(() => Promise.resolve())
+    vi.stubGlobal('window', {
+      api: {
+        ui: {
+          set: setMock
+        }
+      }
+    })
+    const store = createUIStore()
+
+    store.getState().markSetupGuideBrowserMilestoneMigrated(true)
+    store.getState().markSetupGuideBrowserMilestoneMigrated(true)
+
+    expect(store.getState().setupGuideBrowserMilestoneMigrated).toBe(true)
+    expect(store.getState().setupGuideBrowserMilestoneLegacyComplete).toBe(true)
+    expect(setMock).toHaveBeenCalledTimes(1)
+    expect(setMock).toHaveBeenCalledWith({
+      setupGuideBrowserMilestoneMigrated: true,
+      setupGuideBrowserMilestoneLegacyComplete: true
+    })
+  })
+
+  it('hydrates browser milestone migration fields explicitly', () => {
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(
+      makePersistedUI({
+        setupGuideBrowserMilestoneMigrated: true,
+        setupGuideBrowserMilestoneLegacyComplete: true
+      })
+    )
+    expect(store.getState().setupGuideBrowserMilestoneMigrated).toBe(true)
+    expect(store.getState().setupGuideBrowserMilestoneLegacyComplete).toBe(true)
+
+    store.getState().hydratePersistedUI(
+      makePersistedUI({
+        setupGuideBrowserMilestoneMigrated: undefined,
+        setupGuideBrowserMilestoneLegacyComplete: undefined
+      })
+    )
+    expect(store.getState().setupGuideBrowserMilestoneMigrated).toBe(false)
+    expect(store.getState().setupGuideBrowserMilestoneLegacyComplete).toBe(false)
+  })
+})
+
+describe('createUISlice browser import hint dismissal', () => {
+  it('persists browser import hint dismissal changes once', () => {
+    const setMock = vi.fn(() => Promise.resolve())
+    vi.stubGlobal('window', {
+      api: {
+        ui: {
+          set: setMock
+        }
+      }
+    })
+    const store = createUIStore()
+
+    store.getState().setBrowserImportHintHidden(true)
+    store.getState().setBrowserImportHintHidden(true)
+
+    expect(store.getState().browserImportHintHidden).toBe(true)
+    expect(setMock).toHaveBeenCalledTimes(1)
+    expect(setMock).toHaveBeenCalledWith({ browserImportHintHidden: true })
+  })
+
+  it('hydrates only explicit browser import hint dismissals as hidden', () => {
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(makePersistedUI({ browserImportHintHidden: true }))
+    expect(store.getState().browserImportHintHidden).toBe(true)
+
+    store.getState().hydratePersistedUI(makePersistedUI({ browserImportHintHidden: undefined }))
+    expect(store.getState().browserImportHintHidden).toBe(false)
+  })
+})
+
 describe('createUISlice feature interactions', () => {
   it('normalizes persisted feature interaction records during hydration', () => {
     const store = createUIStore()
@@ -1300,7 +2077,8 @@ describe('createUISlice feature interactions', () => {
         makePersistedUI({
           featureInteractions: {
             tasks: { firstInteractedAt: 100, interactionCount: 3 }
-          }
+          },
+          contextualToursSeenIds: ['browser']
         })
       )
     )
@@ -1318,7 +2096,8 @@ describe('createUISlice feature interactions', () => {
       makePersistedUI({
         featureInteractions: {
           tasks: { firstInteractedAt: 100, interactionCount: 2 }
-        }
+        },
+        contextualToursSeenIds: ['tasks']
       })
     )
     setMock.mockClear()
@@ -1332,6 +2111,7 @@ describe('createUISlice feature interactions', () => {
       firstInteractedAt: 100,
       interactionCount: 3
     })
+    expect(store.getState().contextualToursSeenIds).toEqual(['tasks', 'browser'])
   })
 
   it('keeps newer optimistic interaction counts when persistence responses resolve out of order', async () => {
@@ -1393,6 +2173,503 @@ describe('createUISlice feature interactions', () => {
     store.getState().recordFeatureInteraction('tasks')
 
     expect(store.getState().featureInteractions).toEqual({})
+    expect(setMock).not.toHaveBeenCalled()
+  })
+})
+
+function stubContextualTourTargets(selectors: readonly string[]): void {
+  const selectorSet = new Set(selectors)
+  vi.stubGlobal('document', {
+    querySelector: vi.fn((selector: string) =>
+      selectorSet.has(selector)
+        ? {
+            getBoundingClientRect: () => ({
+              left: 10,
+              top: 10,
+              right: 110,
+              bottom: 50,
+              width: 100,
+              height: 40
+            })
+          }
+        : null
+    )
+  })
+}
+
+describe('createUISlice contextual tours', () => {
+  function makeAutoTourEligibleUI(overrides: Partial<PersistedUIState> = {}): PersistedUIState {
+    return makePersistedUI({
+      contextualToursAutoEligible: true,
+      ...overrides
+    })
+  }
+
+  it('normalizes persisted contextual tour ids during hydration', () => {
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(
+      makePersistedUI({
+        contextualToursSeenIds: ['tasks', 'unknown', 'tasks', 'browser'] as never
+      })
+    )
+
+    expect(store.getState().contextualToursSeenIds).toEqual(['tasks', 'browser'])
+  })
+
+  it('normalizes persisted contextual tour auto eligibility during hydration', () => {
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(makePersistedUI())
+    expect(store.getState().contextualToursAutoEligible).toBeNull()
+
+    store.getState().hydratePersistedUI(makePersistedUI({ contextualToursAutoEligible: false }))
+    expect(store.getState().contextualToursAutoEligible).toBe(false)
+
+    store
+      .getState()
+      .hydratePersistedUI(makePersistedUI({ contextualToursAutoEligible: 'yes' as never }))
+    expect(store.getState().contextualToursAutoEligible).toBeNull()
+  })
+
+  it('persists contextual tour auto eligibility once classified', () => {
+    const setMock = vi.fn(() => Promise.resolve())
+    vi.stubGlobal('window', {
+      api: {
+        ui: {
+          set: setMock
+        }
+      }
+    })
+    const store = createUIStore()
+
+    store.getState().setContextualToursAutoEligible(false)
+    store.getState().setContextualToursAutoEligible(false)
+
+    expect(store.getState().contextualToursAutoEligible).toBe(false)
+    expect(setMock).toHaveBeenCalledTimes(1)
+    expect(setMock).toHaveBeenCalledWith({ contextualToursAutoEligible: false })
+  })
+
+  it('marks contextual tours seen and persists them once', () => {
+    const setMock = vi.fn(() => Promise.resolve())
+    vi.stubGlobal('window', {
+      api: {
+        ui: {
+          set: setMock
+        }
+      }
+    })
+    const store = createUIStore()
+
+    store.getState().markContextualToursSeen(['tasks'])
+    store.getState().markContextualToursSeen(['tasks'])
+
+    expect(store.getState().contextualToursSeenIds).toEqual(['tasks'])
+    expect(setMock).toHaveBeenCalledTimes(1)
+    expect(setMock).toHaveBeenCalledWith({ contextualToursSeenIds: ['tasks'] })
+  })
+
+  it('starts a tour only after persisted UI and required first target are ready', () => {
+    const store = createUIStore()
+    const tasksFirstSelector = '[data-contextual-tour-target="tasks-source-filters"]'
+    stubContextualTourTargets([tasksFirstSelector])
+
+    store.getState().requestContextualTour('tasks', 'tasks_open')
+    expect(store.getState().activeContextualTourId).toBeNull()
+
+    store.getState().hydratePersistedUI(makeAutoTourEligibleUI())
+    store.getState().requestContextualTour('tasks', 'tasks_open')
+
+    expect(store.getState().activeContextualTourId).toBe('tasks')
+    expect(store.getState().activeContextualTourStepIndex).toBe(0)
+    expect(store.getState().activeContextualTourSource).toBe('tasks_open')
+    expect(store.getState().contextualTourShownThisSession).toBe(true)
+    expect(store.getState().contextualToursSeenIds).toEqual([])
+  })
+
+  it('stores whether the feature was interacted with before the tour request', () => {
+    const store = createUIStore()
+    const tasksFirstSelector = '[data-contextual-tour-target="tasks-source-filters"]'
+    stubContextualTourTargets([tasksFirstSelector])
+    store.getState().hydratePersistedUI(makeAutoTourEligibleUI())
+
+    store.getState().recordFeatureInteraction('tasks')
+    store.getState().requestContextualTour('tasks', 'tasks_open')
+
+    expect(store.getState().activeContextualTourWasFeaturePreviouslyInteracted).toBe(true)
+  })
+
+  it('lets the caller preserve the pre-enable interaction snapshot for telemetry', () => {
+    const store = createUIStore()
+    const tasksFirstSelector = '[data-contextual-tour-target="tasks-source-filters"]'
+    stubContextualTourTargets([tasksFirstSelector])
+    store.getState().hydratePersistedUI(makeAutoTourEligibleUI())
+
+    store.getState().recordFeatureInteraction('tasks')
+    store.getState().requestContextualTour('tasks', 'tasks_open', false)
+
+    expect(store.getState().activeContextualTourWasFeaturePreviouslyInteracted).toBe(false)
+  })
+
+  it('does not bias first-visit contextual tour telemetry from navigation actions', () => {
+    stubContextualTourTargets([
+      '[data-contextual-tour-target="tasks-source-filters"]',
+      '[data-contextual-tour-target="automations-create"]',
+      '[data-contextual-tour-target="workspace-creation-project"]'
+    ])
+
+    const tasksStore = createUIStore()
+    tasksStore.getState().hydratePersistedUI(makeAutoTourEligibleUI())
+    tasksStore.getState().openTaskPage()
+    tasksStore.getState().requestContextualTour('tasks', 'tasks_open')
+    expect(tasksStore.getState().activeContextualTourWasFeaturePreviouslyInteracted).toBe(false)
+
+    const automationsStore = createUIStore()
+    automationsStore.getState().hydratePersistedUI(makeAutoTourEligibleUI())
+    automationsStore.getState().openAutomationsPage()
+    automationsStore.getState().requestContextualTour('automations', 'automations_open')
+    expect(automationsStore.getState().activeContextualTourWasFeaturePreviouslyInteracted).toBe(
+      false
+    )
+
+    const composerStore = createUIStore()
+    composerStore.getState().hydratePersistedUI(makeAutoTourEligibleUI())
+    composerStore.getState().openModal('new-workspace-composer')
+    composerStore.getState().requestContextualTour('workspace-creation', 'workspace_creation_modal')
+    expect(composerStore.getState().activeContextualTourWasFeaturePreviouslyInteracted).toBe(false)
+  })
+
+  it('does not mark seen when the required first target is absent', () => {
+    const store = createUIStore()
+    stubContextualTourTargets([])
+    store.getState().hydratePersistedUI(makeAutoTourEligibleUI())
+
+    store.getState().requestContextualTour('tasks', 'tasks_open')
+
+    expect(store.getState().activeContextualTourId).toBeNull()
+    expect(store.getState().contextualToursSeenIds).toEqual([])
+    expect(store.getState().contextualTourShownThisSession).toBe(false)
+  })
+
+  it('does not start while a root confirmation surface is visible', () => {
+    const store = createUIStore()
+    stubContextualTourTargets(['[data-contextual-tour-target="tasks-source-filters"]'])
+    store.getState().hydratePersistedUI(makeAutoTourEligibleUI())
+
+    store.getState().setContextualToursBlockingSurfaceVisible(true)
+    store.getState().requestContextualTour('tasks', 'tasks_open')
+
+    expect(store.getState().activeContextualTourId).toBeNull()
+    expect(store.getState().contextualTourShownThisSession).toBe(false)
+  })
+
+  it('does not auto-start tours for profiles that are not eligible', () => {
+    const store = createUIStore()
+    stubContextualTourTargets(['[data-contextual-tour-target="tasks-source-filters"]'])
+    store.getState().hydratePersistedUI(makePersistedUI({ contextualToursAutoEligible: false }))
+
+    store.getState().requestContextualTour('tasks', 'tasks_open')
+
+    expect(store.getState().activeContextualTourId).toBeNull()
+    expect(store.getState().contextualTourShownThisSession).toBe(false)
+  })
+
+  it('force-starts a tour from an explicit user action even after auto tours are unavailable', () => {
+    const store = createUIStore()
+    stubContextualTourTargets([
+      '[data-contextual-tour-target="terminal-pane-split-target"], [data-contextual-tour-target="workspace-agent-terminal-tip"]'
+    ])
+    store.getState().hydratePersistedUI(
+      makePersistedUI({
+        contextualToursAutoEligible: false,
+        contextualToursSeenIds: ['workspace-agent-sessions']
+      })
+    )
+
+    store
+      .getState()
+      .requestContextualTour('workspace-agent-sessions', 'setup_guide_parallel_work', false, {
+        force: true
+      })
+
+    expect(store.getState().activeContextualTourId).toBe('workspace-agent-sessions')
+    expect(store.getState().activeContextualTourSource).toBe('setup_guide_parallel_work')
+    expect(store.getState().activeContextualTourWasFeaturePreviouslyInteracted).toBe(false)
+  })
+
+  it('preserves the bounded setup-guide parallel-work source on forced tour requests', () => {
+    const store = createUIStore()
+    stubContextualTourTargets([
+      '[data-contextual-tour-target="terminal-pane-split-target"], [data-contextual-tour-target="workspace-agent-terminal-tip"]'
+    ])
+    store.getState().hydratePersistedUI(
+      makePersistedUI({
+        contextualToursAutoEligible: false,
+        contextualToursSeenIds: ['workspace-agent-sessions']
+      })
+    )
+
+    store
+      .getState()
+      .requestContextualTour('workspace-agent-sessions', 'setup_guide_parallel_work', false, {
+        force: true
+      })
+
+    expect(store.getState().activeContextualTourId).toBe('workspace-agent-sessions')
+    expect(store.getState().activeContextualTourSource).toBe('setup_guide_parallel_work')
+  })
+
+  it('allows only workspace creation over its workspace composer modal', () => {
+    const store = createUIStore()
+    stubContextualTourTargets([
+      '[data-contextual-tour-target="tasks-source-filters"]',
+      '[data-contextual-tour-target="workspace-creation-project"]'
+    ])
+    store.getState().hydratePersistedUI(makeAutoTourEligibleUI())
+
+    store.getState().openModal('new-workspace-composer')
+    store.getState().requestContextualTour('tasks', 'tasks_open')
+    expect(store.getState().activeContextualTourId).toBeNull()
+
+    store.getState().requestContextualTour('workspace-creation', 'workspace_creation_modal')
+    expect(store.getState().activeContextualTourId).toBe('workspace-creation')
+  })
+
+  it('advances across visible steps and leaves completion to the overlay', () => {
+    const store = createUIStore()
+    const visibleSelectors = [
+      '[data-contextual-tour-target="browser-grab-control"]',
+      '[data-contextual-tour-target="browser-annotation-control"]',
+      '[data-contextual-tour-target="browser-import-cookies-control"]'
+    ]
+    stubContextualTourTargets(visibleSelectors)
+    store.getState().hydratePersistedUI(makeAutoTourEligibleUI())
+    store.getState().requestContextualTour('browser', 'browser_visible')
+
+    store.getState().advanceContextualTour()
+    expect(store.getState().activeContextualTourStepIndex).toBe(1)
+
+    store.getState().advanceContextualTour()
+    expect(store.getState().activeContextualTourId).toBe('browser')
+    expect(store.getState().activeContextualTourStepIndex).toBe(2)
+  })
+
+  it('advances the browser tour to the cookie step before Import Cookies is measurable', () => {
+    const store = createUIStore()
+    const visibleSelectors = [
+      '[data-contextual-tour-target="browser-grab-control"]',
+      '[data-contextual-tour-target="browser-annotation-control"]'
+    ]
+    stubContextualTourTargets(visibleSelectors)
+    store.getState().hydratePersistedUI(makeAutoTourEligibleUI())
+    store.getState().requestContextualTour('browser', 'browser_visible')
+
+    store.getState().advanceContextualTour()
+    expect(store.getState().activeContextualTourStepIndex).toBe(1)
+
+    store.getState().advanceContextualTour()
+    expect(store.getState().activeContextualTourStepIndex).toBe(2)
+  })
+
+  it('advances the active split step when the split command interaction is recorded', () => {
+    const setMock = vi.fn(() => Promise.resolve())
+    vi.stubGlobal('window', {
+      api: {
+        ui: {
+          set: setMock
+        }
+      }
+    })
+    const store = createUIStore()
+    stubContextualTourTargets([
+      '[data-contextual-tour-target="terminal-pane-split-target"], [data-contextual-tour-target="workspace-agent-terminal-tip"]',
+      '[data-contextual-tour-target="workspace-create-control"]'
+    ])
+    store.getState().hydratePersistedUI(makeAutoTourEligibleUI())
+    setMock.mockClear()
+    store
+      .getState()
+      .requestContextualTour('workspace-agent-sessions', 'setup_guide_parallel_work', false, {
+        force: true
+      })
+
+    store.getState().recordFeatureInteraction('terminal-pane-split')
+
+    expect(store.getState().activeContextualTourId).toBe('workspace-agent-sessions')
+    expect(store.getState().activeContextualTourStepIndex).toBe(1)
+    expect(store.getState().featureInteractions['terminal-pane-split']).toMatchObject({
+      interactionCount: 1
+    })
+  })
+
+  it('opens the sidebar and advances the split step when the create-worktree target is hidden', () => {
+    const setMock = vi.fn(() => Promise.resolve())
+    vi.stubGlobal('window', {
+      api: {
+        ui: {
+          set: setMock
+        }
+      }
+    })
+    const store = createUIStore()
+    stubContextualTourTargets([
+      '[data-contextual-tour-target="terminal-pane-split-target"], [data-contextual-tour-target="workspace-agent-terminal-tip"]'
+    ])
+    store.setState({ sidebarOpen: false })
+    store.getState().hydratePersistedUI(makeAutoTourEligibleUI())
+    store
+      .getState()
+      .requestContextualTour('workspace-agent-sessions', 'setup_guide_parallel_work', false, {
+        force: true
+      })
+
+    store.getState().recordFeatureInteraction('terminal-pane-split')
+
+    expect(store.getState().sidebarOpen).toBe(true)
+    expect(store.getState().activeContextualTourId).toBe('workspace-agent-sessions')
+    expect(store.getState().activeContextualTourStepIndex).toBe(1)
+    expect(store.getState().contextualToursSeenIds).toEqual([])
+    expect(store.getState().lastCompletedContextualTourId).toBeNull()
+  })
+
+  it('marks the active contextual tour suppressed when its owning source disables', () => {
+    const store = createUIStore()
+    store.setState({
+      activeContextualTourId: 'browser',
+      activeContextualTourStepIndex: 0,
+      activeContextualTourSource: 'browser_visible',
+      activeContextualTourWasFeaturePreviouslyInteracted: false,
+      contextualTourShownThisSession: true
+    })
+
+    store.getState().suppressContextualTour('tasks', 'tasks_open')
+    expect(store.getState().activeContextualTourSuppressed).toBe(false)
+
+    store.getState().suppressContextualTour('browser', 'browser_visible')
+    expect(store.getState().activeContextualTourSuppressed).toBe(true)
+  })
+
+  it('keeps an intentionally detached contextual tour active when its owning source disables', () => {
+    const store = createUIStore()
+    store.setState({
+      activeContextualTourId: 'workspace-agent-sessions',
+      activeContextualTourStepIndex: 3,
+      activeContextualTourSource: 'workspace_agent_sessions_visible',
+      activeContextualTourWasFeaturePreviouslyInteracted: false,
+      contextualTourShownThisSession: true
+    })
+
+    store
+      .getState()
+      .detachContextualTourSource('workspace-agent-sessions', 'workspace_agent_sessions_visible')
+    store
+      .getState()
+      .suppressContextualTour('workspace-agent-sessions', 'workspace_agent_sessions_visible')
+
+    expect(store.getState().activeContextualTourSourceDetached).toBe(true)
+    expect(store.getState().activeContextualTourSuppressed).toBe(false)
+    expect(store.getState().activeContextualTourId).toBe('workspace-agent-sessions')
+  })
+
+  it('cancels a not-yet-rendered tour without persistence churn', () => {
+    const setMock = vi.fn(() => Promise.resolve())
+    vi.stubGlobal('window', {
+      api: {
+        ui: {
+          set: setMock
+        }
+      }
+    })
+    const store = createUIStore()
+    store.setState({
+      activeContextualTourId: 'tasks',
+      activeContextualTourStepIndex: 0,
+      activeContextualTourSource: 'tasks_open',
+      contextualTourShownThisSession: true
+    })
+
+    store.getState().cancelContextualTour('tasks')
+
+    expect(store.getState().activeContextualTourId).toBeNull()
+    expect(store.getState().contextualTourShownThisSession).toBe(false)
+    expect(store.getState().lastCompletedContextualTourId).toBeNull()
+    expect(store.getState().contextualToursSeenIds).toEqual([])
+    expect(setMock).not.toHaveBeenCalled()
+  })
+
+  it('preserves the session guard when canceling an already-rendered tour', () => {
+    const setMock = vi.fn(() => Promise.resolve())
+    vi.stubGlobal('window', {
+      api: {
+        ui: {
+          set: setMock
+        }
+      }
+    })
+    const store = createUIStore()
+    store.setState({
+      activeContextualTourId: 'tasks',
+      activeContextualTourStepIndex: 0,
+      activeContextualTourSource: 'tasks_open',
+      contextualTourShownThisSession: true,
+      contextualToursSeenIds: ['tasks']
+    })
+
+    store.getState().cancelContextualTour('tasks')
+
+    expect(store.getState().activeContextualTourId).toBeNull()
+    expect(store.getState().contextualTourShownThisSession).toBe(true)
+    expect(store.getState().contextualToursSeenIds).toEqual<ContextualTourId[]>(['tasks'])
+    expect(setMock).not.toHaveBeenCalled()
+  })
+
+  it('dismisses active tours as seen', () => {
+    const setMock = vi.fn(() => Promise.resolve())
+    vi.stubGlobal('window', {
+      api: {
+        ui: {
+          set: setMock
+        }
+      }
+    })
+    const store = createUIStore()
+    store.setState({
+      activeContextualTourId: 'automations',
+      activeContextualTourStepIndex: 0,
+      activeContextualTourSource: 'automations_open',
+      contextualTourShownThisSession: true
+    })
+
+    store.getState().dismissContextualTour('automations')
+
+    expect(store.getState().activeContextualTourId).toBeNull()
+    expect(store.getState().contextualToursSeenIds).toEqual<ContextualTourId[]>(['automations'])
+    expect(store.getState().lastCompletedContextualTourId).toBeNull()
+    expect(setMock).toHaveBeenCalledWith({ contextualToursSeenIds: ['automations'] })
+  })
+
+  it('ignores stale dismissals for a different active tour', () => {
+    const setMock = vi.fn(() => Promise.resolve())
+    vi.stubGlobal('window', {
+      api: {
+        ui: {
+          set: setMock
+        }
+      }
+    })
+    const store = createUIStore()
+    store.setState({
+      activeContextualTourId: 'tasks',
+      activeContextualTourStepIndex: 0,
+      activeContextualTourSource: 'tasks_open',
+      contextualTourShownThisSession: true
+    })
+
+    store.getState().dismissContextualTour('browser')
+
+    expect(store.getState().activeContextualTourId).toBe('tasks')
+    expect(store.getState().contextualToursSeenIds).toEqual([])
     expect(setMock).not.toHaveBeenCalled()
   })
 })

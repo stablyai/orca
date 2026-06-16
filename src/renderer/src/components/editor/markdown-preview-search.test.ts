@@ -73,6 +73,13 @@ describe('findTextMatchRanges', () => {
     expect(findTextMatchRanges('ababa', 'aba')).toEqual([{ start: 0, end: 3 }])
   })
 
+  it('maps locale-lowercase search matches back to original text offsets', () => {
+    const ranges = findTextMatchRanges('İstanbul', 'stan')
+
+    expect(ranges).toEqual([{ start: 1, end: 5 }])
+    expect(ranges.map((range) => 'İstanbul'.slice(range.start, range.end))).toEqual(['stan'])
+  })
+
   it('returns no matches for an empty query', () => {
     expect(findTextMatchRanges('Alpha beta', '')).toEqual([])
   })

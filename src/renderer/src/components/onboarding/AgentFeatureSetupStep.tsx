@@ -1,4 +1,4 @@
-import { Loader2 } from 'lucide-react'
+import { Loader2, Terminal } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { FeatureSetupChecklist } from './FeatureSetupChecklist'
 import { FeatureSetupInlineTerminal } from './FeatureSetupInlineTerminal'
@@ -6,6 +6,7 @@ import {
   hasSelectedOnboardingFeatureSetup,
   type OnboardingFeatureSetupSelection
 } from './onboarding-feature-setup'
+import { translate } from '@/i18n/i18n'
 
 type AgentFeatureSetupStepProps = {
   featureSetup: OnboardingFeatureSetupSelection
@@ -39,8 +40,16 @@ export function AgentFeatureSetupStep({
             disabled={!hasSelectedFeatures || Boolean(setupBusyLabel)}
             onClick={onStartFeatureSetup}
           >
-            {setupBusyLabel ? <Loader2 className="size-4 animate-spin" /> : null}
-            {setupBusyLabel ?? 'Enable capabilities'}
+            {setupBusyLabel ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              <Terminal className="size-4" />
+            )}
+            {setupBusyLabel ??
+              translate(
+                'auto.components.onboarding.AgentFeatureSetupStep.97dcdc010f',
+                'Install CLI & Skills'
+              )}
           </Button>
         </div>
       ) : null}

@@ -1,12 +1,16 @@
 /* eslint-disable max-lines -- Why: this relay handler centralizes the git RPC
 protocol surface so local and SSH git behavior stay in one dispatch table. */
-import { execFile } from 'child_process'
+import { execFile, spawn } from 'child_process'
 import { promisify } from 'util'
 import * as path from 'path'
-import type { RelayDispatcher } from './dispatcher'
+import type { RelayDispatcher, RequestContext } from './dispatcher'
 import type { RelayContext } from './context'
 import { expandTilde } from './context'
-import { parseBranchDiff, parseWorktreeList } from './git-handler-utils'
+import {
+  isUnsupportedWorktreeListZError,
+  parseBranchDiff,
+  parseWorktreeList
+} from './git-handler-utils'
 import { parseNumstat } from '../shared/git-uncommitted-line-stats'
 import {
   computeDiff,
@@ -21,6 +25,7 @@ import {
   removeWorktreeOp,
   worktreeIsCleanOp
 } from './git-handler-worktree-ops'
+import { refreshLocalBaseRefForWorktreeCreateOp } from './git-handler-local-base-ref-refresh'
 import { checkIgnoredPathsOp, detectConflictOperation, getStatusOp } from './git-handler-status-ops'
 import { resolveRelayPushTarget } from './git-handler-push-target'
 import { normalizeGitErrorMessage, isNoUpstreamError } from '../shared/git-remote-error'
@@ -39,6 +44,7 @@ import {
   removeSafeUntrackedDiscardTarget,
   removeSafeUntrackedDiscardTargets
 } from '../shared/git-discard-path-safety'
+import { getGitCloneFailureMessage } from '../shared/git-clone-failure-message'
 
 const execFileAsync = promisify(execFile)
 const MAX_GIT_BUFFER = 10 * 1024 * 1024
@@ -84,15 +90,19 @@ export class GitHandler {
     this.dispatcher.onRequest('git.addWorktree', (p) => this.addWorktree(p))
     this.dispatcher.onRequest('git.removeWorktree', (p) => this.removeWorktree(p))
     this.dispatcher.onRequest('git.worktreeIsClean', (p) => this.worktreeIsClean(p))
+    this.dispatcher.onRequest('git.refreshLocalBaseRefForWorktreeCreate', (p) =>
+      this.refreshLocalBaseRefForWorktreeCreate(p)
+    )
     this.dispatcher.onRequest('git.renameCurrentBranch', (p) => this.renameCurrentBranch(p))
-    this.dispatcher.onRequest('git.exec', (p) => this.exec(p))
+    this.dispatcher.onRequest('git.exec', (p, context) => this.exec(p, context))
+    this.dispatcher.onRequest('git.clone', (p, context) => this.clone(p, context))
     this.dispatcher.onRequest('git.isGitRepo', (p) => this.isGitRepo(p))
   }
 
   private async git(
     args: string[],
     cwd: string,
-    opts?: { maxBuffer?: number; disableOptionalLocks?: boolean }
+    opts?: { maxBuffer?: number; disableOptionalLocks?: boolean; signal?: AbortSignal }
   ): Promise<{ stdout: string; stderr: string }> {
     const env = buildRelayCommandEnv()
     if (opts?.disableOptionalLocks) {
@@ -102,7 +112,8 @@ export class GitHandler {
       cwd: expandTilde(cwd),
       env,
       encoding: 'utf-8',
-      maxBuffer: opts?.maxBuffer ?? MAX_GIT_BUFFER
+      maxBuffer: opts?.maxBuffer ?? MAX_GIT_BUFFER,
+      signal: opts?.signal
     })
   }
 
@@ -139,7 +150,7 @@ export class GitHandler {
     // path.join. Without validation, ../../etc/passwd traverses outside the worktree.
     const resolved = path.resolve(worktreePath, filePath)
     const rel = path.relative(path.resolve(worktreePath), resolved)
-    if (rel.startsWith('..') || path.isAbsolute(rel)) {
+    if (rel === '..' || rel.startsWith(`..${path.sep}`) || path.isAbsolute(rel)) {
       throw new Error(`Path "${filePath}" resolves outside the worktree`)
     }
     return computeDiff(
@@ -577,13 +588,93 @@ export class GitHandler {
     })
   }
 
-  private async exec(params: Record<string, unknown>) {
+  private async exec(params: Record<string, unknown>, context?: RequestContext) {
     const args = params.args as string[]
     const cwd = params.cwd as string
 
     validateGitExecArgs(args)
-    const { stdout, stderr } = await this.git(args, cwd)
+    const { stdout, stderr } = await this.git(args, cwd, { signal: context?.signal })
     return { stdout, stderr }
+  }
+
+  private async clone(params: Record<string, unknown>, context?: RequestContext) {
+    const args = params.args as string[]
+    const cwd = params.cwd as string
+    const progressId = params.progressId
+    validateGitExecArgs(args)
+    if (typeof progressId !== 'string' || progressId.length === 0) {
+      throw new Error('Missing clone progress id.')
+    }
+    if (args[0] !== 'clone') {
+      throw new Error('git.clone only supports clone commands.')
+    }
+    return await this.spawnClone(args, cwd, progressId, context)
+  }
+
+  private async spawnClone(
+    args: string[],
+    cwd: string,
+    progressId: string,
+    context?: RequestContext
+  ): Promise<{ stdout: string; stderr: string }> {
+    return await new Promise((resolve, reject) => {
+      const child = spawn('git', args, {
+        cwd: expandTilde(cwd),
+        env: buildRelayCommandEnv(),
+        stdio: ['ignore', 'pipe', 'pipe']
+      })
+      let stdout = ''
+      let stderr = ''
+      let settled = false
+      const cleanup = (): void => {
+        context?.signal?.removeEventListener('abort', onAbort)
+      }
+      const onAbort = (): void => {
+        child.kill()
+      }
+      context?.signal?.addEventListener('abort', onAbort, { once: true })
+      child.stdout?.on('data', (chunk: Buffer) => {
+        stdout = (stdout + chunk.toString('utf-8')).slice(-4096)
+      })
+      child.stderr?.on('data', (chunk: Buffer) => {
+        const text = chunk.toString('utf-8')
+        stderr = (stderr + text).slice(-4096)
+        for (const line of text.split(/[\r\n]+/)) {
+          const match = line.match(/^([\w\s]+):\s+(\d+)%/)
+          if (match) {
+            this.dispatcher.notify('git.cloneProgress', {
+              progressId,
+              phase: match[1].trim(),
+              percent: parseInt(match[2], 10)
+            })
+          }
+        }
+      })
+      child.on('error', (error) => {
+        if (settled) {
+          return
+        }
+        settled = true
+        cleanup()
+        reject(error)
+      })
+      child.on('close', (code, signal) => {
+        if (settled) {
+          return
+        }
+        settled = true
+        cleanup()
+        if (context?.signal?.aborted) {
+          reject(new Error('Clone aborted'))
+          return
+        }
+        if (code === 0 && !signal) {
+          resolve({ stdout, stderr })
+          return
+        }
+        reject(new Error(`Clone failed: ${getGitCloneFailureMessage(stderr)}`))
+      })
+    })
   }
 
   private async renameCurrentBranch(params: Record<string, unknown>) {
@@ -618,6 +709,17 @@ export class GitHandler {
   private async listWorktrees(params: Record<string, unknown>) {
     const repoPath = params.repoPath as string
     try {
+      const { stdout } = await this.git(['worktree', 'list', '--porcelain', '-z'], repoPath)
+      return parseWorktreeList(stdout, { nulDelimited: true })
+    } catch (error) {
+      if (!isUnsupportedWorktreeListZError(error)) {
+        return []
+      }
+    }
+
+    // Why: `-z` keeps newline-containing SSH worktree paths intact, but older
+    // Git rejects it. Fall back to the original line-block parser there.
+    try {
       const { stdout } = await this.git(['worktree', 'list', '--porcelain'], repoPath)
       return parseWorktreeList(stdout)
     } catch {
@@ -635,5 +737,9 @@ export class GitHandler {
 
   private async worktreeIsClean(params: Record<string, unknown>) {
     return worktreeIsCleanOp(this.git.bind(this), params)
+  }
+
+  private async refreshLocalBaseRefForWorktreeCreate(params: Record<string, unknown>) {
+    return refreshLocalBaseRefForWorktreeCreateOp(this.git.bind(this), params)
   }
 }

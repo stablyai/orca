@@ -19,7 +19,7 @@ describe('hasNativeFileDragTypes', () => {
 })
 
 describe('resolveNativeFileDropPath', () => {
-  it('routes drops on the project sidebar to the add-project surface', () => {
+  it('routes drops on the left sidebar to the add-project surface', () => {
     expect(
       resolveNativeFileDropPath([{ nativeFileDropTarget: NATIVE_FILE_DROP_TARGET.projectSidebar }])
     ).toEqual({ target: NATIVE_FILE_DROP_TARGET.projectSidebar })

@@ -6,6 +6,7 @@ import { ipcMain, webContents } from 'electron'
 import { resolve } from 'path'
 import type {
   Repo,
+  GitHubCreateIssueFields,
   GitHubIssueUpdate,
   GitHubOwnerRepo,
   GitHubPullRequestStateUpdate,
@@ -13,12 +14,15 @@ import type {
   GitHubPRRefreshReason,
   PRRefreshOutcome
 } from '../../shared/types'
+import { getRepoExecutionHostId } from '../../shared/execution-host'
+import type { TaskSourceContext } from '../../shared/task-source-context'
 import type { Store } from '../persistence'
 import type { StatsCollector } from '../stats/collector'
 import {
   getPRForBranch,
   getIssue,
   getRepoSlug,
+  getRepoUpstream,
   listIssues,
   listWorkItems,
   countWorkItems,
@@ -48,6 +52,7 @@ import {
   starOrca
 } from '../github/client'
 import {
+  clearVisiblePRRefreshWindow,
   enqueuePRRefresh,
   refreshPRNow,
   reportVisiblePRRefreshCandidates,
@@ -97,6 +102,8 @@ import { appStarSourceSchema } from '../../shared/gh-star-source'
 import { track } from '../telemetry/client'
 import { getCohortAtEmit } from '../telemetry/cohort-classifier'
 
+const prRefreshVisibilityCleanupRegistered = new Set<number>()
+
 // Why: notify every renderer (each window has its own SWR cache instance)
 // that a work item was mutated locally so they can drop their cached entry
 // and refetch on the next open. Only emitted after a successful mutation.
@@ -125,7 +132,11 @@ function broadcastWorkItemMutated(
 
 // Why: returns the full Repo object instead of just the path string so that
 // callers have access to repo.id for stat tracking and other context.
-type RepoScopedArgs = { repoPath: string; repoId?: string }
+type RepoScopedArgs = {
+  repoPath: string
+  repoId?: string | null
+  sourceContext?: TaskSourceContext | null
+}
 
 function assertRegisteredRepo(args: string | RepoScopedArgs, store: Store): Repo {
   const repoPath = typeof args === 'string' ? args : args.repoPath
@@ -139,6 +150,13 @@ function assertRegisteredRepo(args: string | RepoScopedArgs, store: Store): Repo
   }
   if (repoId && resolve(repo.path) !== resolvedRepoPath) {
     throw new Error('Access denied: repository path does not match repo id')
+  }
+  if (
+    typeof args !== 'string' &&
+    args.sourceContext?.provider === 'github' &&
+    args.sourceContext.hostId !== getRepoExecutionHostId(repo)
+  ) {
+    throw new Error('Access denied: GitHub source host does not match repository host')
   }
   return repo
 }
@@ -247,6 +265,14 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
   ipcMain.handle(
     'gh:reportVisiblePRRefreshCandidates',
     (event, args: { candidates: GitHubPRRefreshCandidate[]; generation: number }) => {
+      const senderId = event.sender.id
+      if (!prRefreshVisibilityCleanupRegistered.has(senderId)) {
+        prRefreshVisibilityCleanupRegistered.add(senderId)
+        event.sender.once('destroyed', () => {
+          prRefreshVisibilityCleanupRegistered.delete(senderId)
+          clearVisiblePRRefreshWindow(senderId)
+        })
+      }
       const candidates = args.candidates.map((candidate) => {
         const repo = assertRegisteredRepo(candidate.repoPath, store)
         return {
@@ -257,15 +283,26 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
           connectionState: repo.connectionId ? 'connected' : candidate.connectionState
         }
       })
-      reportVisiblePRRefreshCandidates(candidates, args.generation, event.sender.id)
+      reportVisiblePRRefreshCandidates(candidates, args.generation, senderId)
       return true
     }
   )
 
-  ipcMain.handle('gh:issue', (_event, args: { repoPath: string; number: number }) => {
-    const repo = assertRegisteredRepo(args, store)
-    return getIssue(repo.path, args.number, repoConnectionId(repo))
-  })
+  ipcMain.handle(
+    'gh:issue',
+    (
+      _event,
+      args: {
+        repoPath: string
+        repoId?: string | null
+        sourceContext?: TaskSourceContext | null
+        number: number
+      }
+    ) => {
+      const repo = assertRegisteredRepo(args, store)
+      return getIssue(repo.path, args.number, repoConnectionId(repo))
+    }
+  )
 
   ipcMain.handle('gh:listIssues', (_event, args: { repoPath: string; limit?: number }) => {
     const repo = assertRegisteredRepo(args, store)
@@ -282,14 +319,19 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
 
   ipcMain.handle(
     'gh:createIssue',
-    (_event, args: { repoPath: string; title: string; body: string }) => {
+    (_event, args: RepoScopedArgs & { title: string; body: string } & GitHubCreateIssueFields) => {
       const repo = assertRegisteredRepo(args, store)
+      const fields =
+        args.labels !== undefined || args.assignees !== undefined
+          ? { labels: args.labels, assignees: args.assignees }
+          : undefined
       return createIssue(
         repo.path,
         args.title,
         args.body,
         repo.issueSourcePreference,
-        repoConnectionId(repo)
+        repoConnectionId(repo),
+        fields
       )
     }
   )
@@ -387,12 +429,19 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
     return getRepoSlug(repo.path, repoConnectionId(repo))
   })
 
+  ipcMain.handle('gh:repoUpstream', (_event, args: { repoPath: string }) => {
+    const repo = assertRegisteredRepo(args, store)
+    return getRepoUpstream(repo.path, repoConnectionId(repo))
+  })
+
   ipcMain.handle(
     'gh:prChecks',
     (
       _event,
       args: {
         repoPath: string
+        repoId?: string | null
+        sourceContext?: TaskSourceContext | null
         prNumber: number
         headSha?: string
         prRepo?: GitHubOwnerRepo | null
@@ -419,6 +468,8 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
       _event,
       args: {
         repoPath: string
+        repoId?: string | null
+        sourceContext?: TaskSourceContext | null
         checkRunId?: number
         workflowRunId?: number
         checkName?: string
@@ -447,6 +498,8 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
       _event,
       args: {
         repoPath: string
+        repoId?: string | null
+        sourceContext?: TaskSourceContext | null
         prNumber: number
         prRepo?: GitHubOwnerRepo | null
         noCache?: boolean
@@ -464,7 +517,16 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
 
   ipcMain.handle(
     'gh:resolveReviewThread',
-    async (_event, args: { repoPath: string; threadId: string; resolve: boolean }) => {
+    async (
+      _event,
+      args: {
+        repoPath: string
+        repoId?: string | null
+        sourceContext?: TaskSourceContext | null
+        threadId: string
+        resolve: boolean
+      }
+    ) => {
       const repo = assertRegisteredRepo(args, store)
       // Why: thread resolve doesn't carry the PR number, so we cannot target
       // a specific cache entry. The renderer cache stores per-(repo, type, number)
@@ -522,12 +584,15 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
       event,
       args: {
         repoPath: string
+        repoId?: string
+        sourceContext?: TaskSourceContext | null
         prNumber: number
         commentId: number
         body: string
         threadId?: string
         path?: string
         line?: number
+        prRepo?: GitHubOwnerRepo | null
       }
     ) => {
       const repo = assertRegisteredRepo(args, store)
@@ -556,7 +621,8 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
         args.threadId,
         args.path,
         args.line,
-        repoConnectionId(repo)
+        repoConnectionId(repo),
+        args.prRepo ?? null
       )
       if (result.ok) {
         broadcastWorkItemMutated(
@@ -661,6 +727,8 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
       event,
       args: {
         repoPath: string
+        repoId?: string | null
+        sourceContext?: TaskSourceContext | null
         prNumber: number
         method?: 'merge' | 'squash' | 'rebase'
         prRepo?: GitHubOwnerRepo | null
@@ -690,6 +758,8 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
       event,
       args: {
         repoPath: string
+        repoId?: string | null
+        sourceContext?: TaskSourceContext | null
         prNumber: number
         enabled: boolean
         prRepo?: GitHubOwnerRepo | null
@@ -717,7 +787,7 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
     'gh:updatePRState',
     async (
       event,
-      args: { repoPath: string; prNumber: number; updates: GitHubPullRequestStateUpdate }
+      args: RepoScopedArgs & { prNumber: number; updates: GitHubPullRequestStateUpdate }
     ) => {
       const repo = assertRegisteredRepo(args, store)
       if (
@@ -747,7 +817,7 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
     'gh:rerunPRChecks',
     async (
       _event,
-      args: { repoPath: string; prNumber: number; headSha?: string; failedOnly?: boolean }
+      args: RepoScopedArgs & { prNumber: number; headSha?: string; failedOnly?: boolean }
     ) => {
       const repo = assertRegisteredRepo(args, store)
       if (
@@ -768,7 +838,7 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
 
   ipcMain.handle(
     'gh:requestPRReviewers',
-    async (event, args: { repoPath: string; prNumber: number; reviewers: string[] }) => {
+    async (event, args: RepoScopedArgs & { prNumber: number; reviewers: string[] }) => {
       const repo = assertRegisteredRepo(args, store)
       const result = await requestPRReviewers(
         repo.path,
@@ -788,7 +858,7 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
 
   ipcMain.handle(
     'gh:removePRReviewers',
-    async (event, args: { repoPath: string; prNumber: number; reviewers: string[] }) => {
+    async (event, args: RepoScopedArgs & { prNumber: number; reviewers: string[] }) => {
       const repo = assertRegisteredRepo(args, store)
       const result = await removePRReviewers(
         repo.path,
@@ -808,10 +878,7 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
 
   ipcMain.handle(
     'gh:updateIssue',
-    async (
-      event,
-      args: { repoPath: string; repoId?: string; number: number; updates: GitHubIssueUpdate }
-    ) => {
+    async (event, args: RepoScopedArgs & { number: number; updates: GitHubIssueUpdate }) => {
       const repo = assertRegisteredRepo(args, store)
       if (typeof args.number !== 'number' || !Number.isInteger(args.number) || args.number < 1) {
         return { ok: false, error: 'Invalid issue number' }
@@ -834,7 +901,15 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
     'gh:addIssueComment',
     async (
       event,
-      args: { repoPath: string; number: number; body: string; type?: 'issue' | 'pr' }
+      args: {
+        repoPath: string
+        repoId?: string
+        sourceContext?: TaskSourceContext | null
+        number: number
+        body: string
+        type?: 'issue' | 'pr'
+        prRepo?: GitHubOwnerRepo | null
+      }
     ) => {
       const repo = assertRegisteredRepo(args, store)
       if (typeof args.number !== 'number' || !Number.isInteger(args.number) || args.number < 1) {
@@ -847,7 +922,8 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
         repo.path,
         args.number,
         args.body.trim(),
-        repoConnectionId(repo)
+        repoConnectionId(repo),
+        args.prRepo ?? null
       )
       if (result.ok) {
         // Why: PR conversation comments hit `/issues/N/comments` too, but the
@@ -864,12 +940,12 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
     }
   )
 
-  ipcMain.handle('gh:listLabels', (_event, args: { repoPath: string }) => {
+  ipcMain.handle('gh:listLabels', (_event, args: RepoScopedArgs) => {
     const repo = assertRegisteredRepo(args, store)
     return listLabels(repo.path, repo.issueSourcePreference, repoConnectionId(repo))
   })
 
-  ipcMain.handle('gh:listAssignableUsers', (_event, args: { repoPath: string }) => {
+  ipcMain.handle('gh:listAssignableUsers', (_event, args: RepoScopedArgs) => {
     const repo = assertRegisteredRepo(args, store)
     return listAssignableUsers(repo.path, repo.issueSourcePreference, repoConnectionId(repo))
   })

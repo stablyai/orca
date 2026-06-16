@@ -18,6 +18,7 @@ export function normalizeProjectGroupName(name: string, fallback = 'Untitled gro
 export function createProjectGroup(input: {
   name: string
   parentPath?: string | null
+  connectionId?: string | null
   parentGroupId?: string | null
   createdFrom: ProjectGroupCreatedFrom
   tabOrder: number
@@ -28,6 +29,7 @@ export function createProjectGroup(input: {
     id: createProjectGroupId(),
     name: normalizeProjectGroupName(input.name),
     parentPath: input.parentPath ?? null,
+    connectionId: input.connectionId ?? null,
     parentGroupId: input.parentGroupId ?? null,
     createdFrom: input.createdFrom,
     tabOrder: input.tabOrder,
@@ -58,6 +60,12 @@ export function normalizeProjectGroups(value: unknown): ProjectGroup[] {
       id: raw.id,
       name: normalizeProjectGroupName(typeof raw.name === 'string' ? raw.name : ''),
       parentPath: typeof raw.parentPath === 'string' ? raw.parentPath : null,
+      connectionId:
+        typeof raw.connectionId === 'string'
+          ? raw.connectionId
+          : raw.connectionId === null
+            ? null
+            : null,
       parentGroupId: typeof raw.parentGroupId === 'string' ? raw.parentGroupId : null,
       createdFrom:
         raw.createdFrom === 'manual' ||

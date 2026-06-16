@@ -43,14 +43,22 @@ export function syncPRChecksStatus(
   headSha?: string,
   prRepo?: GitHubOwnerRepo | null,
   settings?: AppState['settings'],
-  connectionId?: string | null
+  connectionId?: string | null,
+  executionHostId?: string | null
 ): Partial<AppState> | null {
   const normalized = branch ? normalizeBranchName(branch) : ''
   if (!normalized) {
     return null
   }
 
-  const prCacheKey = getGitHubPRCacheKey(repoPath, repoId, normalized, settings, connectionId)
+  const prCacheKey = getGitHubPRCacheKey(
+    repoPath,
+    repoId,
+    normalized,
+    settings,
+    connectionId,
+    executionHostId
+  )
   const prEntry = state.prCache[prCacheKey]
   if (!prEntry?.data) {
     return null

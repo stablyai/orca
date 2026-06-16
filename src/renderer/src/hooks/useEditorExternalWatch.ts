@@ -9,6 +9,7 @@ import { getExternalFileChangeRelativePath } from '@/components/right-sidebar/us
 import { normalizeRuntimePathForComparison } from '../../../shared/cross-platform-path'
 import {
   getOpenFilesForExternalFileChange,
+  isExternalReloadableEditorTab,
   notifyEditorExternalFileChange
 } from '@/components/editor/editor-autosave'
 import {
@@ -20,6 +21,7 @@ import type { FsChangedPayload } from '../../../shared/types'
 import { findWorktreeById } from '@/store/slices/worktree-helpers'
 import type { OpenFile } from '@/store/slices/editor'
 import { readRuntimeFileContent, subscribeRuntimeFileChanges } from '@/runtime/runtime-file-client'
+import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 
 // Why: atomic-write patterns (Claude Code's Edit tool, editors like vim,
 // VSCode) land as a short burst of `update` events — or `delete + create` on
@@ -45,8 +47,9 @@ function scheduleDebouncedExternalReload(notification: {
   worktreeId: string
   worktreePath: string
   relativePath: string
+  runtimeEnvironmentId: string | null
 }): void {
-  const key = `${notification.worktreeId}::${notification.relativePath}`
+  const key = `${notification.worktreeId}::${notification.runtimeEnvironmentId ?? 'client'}::${notification.relativePath}`
   const existing = pendingExternalReloadTimers.get(key)
   if (existing !== undefined) {
     globalThis.clearTimeout(existing)
@@ -62,13 +65,14 @@ type WatchedTarget = {
   worktreeId: string
   worktreePath: string
   connectionId: string | undefined
-  runtimeEnvironmentId: string | undefined
+  runtimeEnvironmentId: string | null
 }
 
 type ExternalWatchNotification = {
   worktreeId: string
   worktreePath: string
   relativePath: string
+  runtimeEnvironmentId: string | null
 }
 
 type WatchedTargetsSnapshot = {
@@ -85,6 +89,7 @@ export type EditorExternalWatchTargetState = Pick<
   | 'settings'
   | 'rightSidebarOpen'
   | 'rightSidebarTab'
+  | 'rightSidebarExplorerView'
 >
 
 let cachedOpenFiles: AppState['openFiles'] | null = null
@@ -94,6 +99,7 @@ let cachedActiveWorktreeId: string | null = null
 let cachedRuntimeEnvironmentId: string | undefined
 let cachedRightSidebarOpen: boolean | null = null
 let cachedRightSidebarTab: AppState['rightSidebarTab'] | null = null
+let cachedRightSidebarExplorerView: AppState['rightSidebarExplorerView'] | null = null
 let cachedWatchedTargetsSnapshot: WatchedTargetsSnapshot = { targets: [], targetsKey: '' }
 
 export function getWatchedTargetKey(target: WatchedTarget): string {
@@ -101,6 +107,10 @@ export function getWatchedTargetKey(target: WatchedTarget): string {
   // provider is ready. Include connectionId so a local/unknown placeholder
   // watch is replaced by the real SSH watch when the repo metadata hydrates.
   return `${target.worktreeId}::${target.worktreePath}::${target.connectionId ?? 'local'}::${target.runtimeEnvironmentId ?? 'client'}`
+}
+
+function openFileRuntimeOwner(file: Pick<OpenFile, 'runtimeEnvironmentId'>): string | null {
+  return file.runtimeEnvironmentId?.trim() || null
 }
 
 export function getEditorExternalWatchTargets(
@@ -114,41 +124,68 @@ export function getEditorExternalWatchTargets(
     cachedActiveWorktreeId === state.activeWorktreeId &&
     cachedRuntimeEnvironmentId === runtimeEnvironmentId &&
     cachedRightSidebarOpen === state.rightSidebarOpen &&
-    cachedRightSidebarTab === state.rightSidebarTab
+    cachedRightSidebarTab === state.rightSidebarTab &&
+    cachedRightSidebarExplorerView === state.rightSidebarExplorerView
   ) {
     return cachedWatchedTargetsSnapshot
   }
 
-  const ids = new Set<string>()
-  // Why: only the set of worktree IDs matters for watcher ownership. Dirty
-  // flags and editor metadata can churn while typing/saving, but should not
-  // re-render App or rebuild watch subscriptions.
+  const targetOwnersByWorktreeId = new Map<string, Set<string | null>>()
+  // Why: watcher ownership is scoped by both worktree and runtime owner.
+  // The same path can be open locally and in a runtime-backed workspace at
+  // once; reads/saves already route per tab owner, so live reloads must too.
   for (const f of state.openFiles) {
-    ids.add(f.worktreeId)
+    let owners = targetOwnersByWorktreeId.get(f.worktreeId)
+    if (!owners) {
+      owners = new Set()
+      targetOwnersByWorktreeId.set(f.worktreeId, owners)
+    }
+    // Why: persisted/restored local tabs may have runtimeEnvironmentId
+    // undefined. New openFile calls resolve active-runtime inheritance before
+    // storing the tab, so an ownerless stored tab must stay local here.
+    owners.add(openFileRuntimeOwner(f))
   }
-  if (state.activeWorktreeId && state.rightSidebarOpen && state.rightSidebarTab === 'explorer') {
+  if (
+    state.activeWorktreeId &&
+    state.rightSidebarOpen &&
+    state.rightSidebarTab === 'explorer' &&
+    state.rightSidebarExplorerView === 'files'
+  ) {
     // Why: the right sidebar stays mounted while hidden; do not create a
     // worktree-level watcher just because the user clicked a workspace.
     // macOS can surface privacy prompts for those passive filesystem probes.
-    ids.add(state.activeWorktreeId)
+    let owners = targetOwnersByWorktreeId.get(state.activeWorktreeId)
+    if (!owners) {
+      owners = new Set()
+      targetOwnersByWorktreeId.set(state.activeWorktreeId, owners)
+    }
+    // Why: the Explorer is mounted for the selected worktree. Its watcher must
+    // follow that worktree's host owner, not the host currently focused in the UI.
+    owners.add(getRuntimeEnvironmentIdForWorktree(state, state.activeWorktreeId))
   }
 
   const nextTargets: WatchedTarget[] = []
   const parts: string[] = []
-  for (const id of Array.from(ids).sort()) {
+  const sortedWorktreeIds = Array.from(targetOwnersByWorktreeId.keys()).sort()
+  for (const id of sortedWorktreeIds) {
     const wt = findWorktreeById(state.worktreesByRepo, id)
     if (!wt) {
       continue
     }
     const repo = state.repos.find((r) => r.id === wt.repoId)
-    const target = {
-      worktreeId: id,
-      worktreePath: wt.path,
-      connectionId: repo?.connectionId ?? undefined,
-      runtimeEnvironmentId
+    const owners = Array.from(targetOwnersByWorktreeId.get(id) ?? []).sort((a, b) =>
+      (a ?? '').localeCompare(b ?? '')
+    )
+    for (const owner of owners) {
+      const target = {
+        worktreeId: id,
+        worktreePath: wt.path,
+        connectionId: repo?.connectionId ?? undefined,
+        runtimeEnvironmentId: owner
+      }
+      nextTargets.push(target)
+      parts.push(getWatchedTargetKey(target))
     }
-    nextTargets.push(target)
-    parts.push(getWatchedTargetKey(target))
   }
 
   const targetsKey = parts.join('|')
@@ -159,6 +196,7 @@ export function getEditorExternalWatchTargets(
   cachedRuntimeEnvironmentId = runtimeEnvironmentId
   cachedRightSidebarOpen = state.rightSidebarOpen
   cachedRightSidebarTab = state.rightSidebarTab
+  cachedRightSidebarExplorerView = state.rightSidebarExplorerView
 
   if (targetsKey === cachedWatchedTargetsSnapshot.targetsKey) {
     return cachedWatchedTargetsSnapshot
@@ -174,8 +212,10 @@ export function getEditorExternalWatchTargets(
 // flickers struck-through for one render before the follow-up create clears
 // it. Debouncing just the 'deleted' signal — keyed by absolute path — lets a
 // same-path create in the next payload cancel the tombstone before it ever
-// paints. A naked delete still resolves to 'deleted' after the window. The
-// in-payload rename correlation is unchanged.
+// paints. Key by owner as well as path so local/runtime tabs for the same
+// worktree file cannot cancel each other's tombstones. A naked delete still
+// resolves to 'deleted' after the window. The in-payload rename correlation
+// is unchanged.
 const EXTERNAL_MUTATION_DEBOUNCE_MS = 75
 
 type PendingDeleteTimer = {
@@ -204,7 +244,9 @@ export function useEditorExternalWatch(): void {
   const latestTargetsRef = useRef<WatchedTarget[]>(targets)
   latestTargetsRef.current = targets
   const remoteWatchUnsubsRef = useRef(new Map<string, () => void>())
-  const fsChangedHandlerRef = useRef<((payload: FsChangedPayload) => void) | null>(null)
+  const fsChangedHandlerRef = useRef<
+    ((payload: FsChangedPayload, runtimeEnvironmentId?: string | null) => void) | null
+  >(null)
 
   // Why: diff previous vs next targets so unchanged worktrees keep their
   // existing subscription. Tearing down every subscription on each targetsKey
@@ -246,7 +288,7 @@ export function useEditorExternalWatch(): void {
             worktreePath: target.worktreePath,
             connectionId: target.connectionId
           },
-          (payload) => fsChangedHandlerRef.current?.(payload),
+          (payload) => fsChangedHandlerRef.current?.(payload, target.runtimeEnvironmentId),
           (err) => warnExternalWatchFailure(target, err)
         )
           .then((unsubscribe) => {
@@ -292,14 +334,16 @@ export function useEditorExternalWatch(): void {
   // change (which would otherwise miss events fired during re-subscription).
   useEffect(() => {
     const remoteWatchUnsubs = remoteWatchUnsubsRef.current
-    const { handleFsChanged, dispose } = createExternalWatchEventHandler((worktreePath) =>
-      targetsRef.current.find(
-        (t) =>
-          normalizeRuntimePathForComparison(t.worktreePath) ===
-          normalizeRuntimePathForComparison(worktreePath)
-      )
+    const { handleFsChanged, dispose } = createExternalWatchEventHandler(
+      (worktreePath, runtimeEnvironmentId) =>
+        targetsRef.current.find(
+          (t) =>
+            normalizeRuntimePathForComparison(t.worktreePath) ===
+              normalizeRuntimePathForComparison(worktreePath) &&
+            t.runtimeEnvironmentId === runtimeEnvironmentId
+        )
     )
-    const unsubscribe = window.api.fs.onFsChanged(handleFsChanged)
+    const unsubscribe = window.api.fs.onFsChanged((payload) => handleFsChanged(payload, null))
     fsChangedHandlerRef.current = handleFsChanged
 
     return () => {
@@ -340,9 +384,12 @@ export function useEditorExternalWatch(): void {
  * `EXTERNAL_MUTATION_DEBOUNCE_MS` for the macOS atomic-write rationale.
  */
 export function createExternalWatchEventHandler(
-  findTarget: (worktreePath: string) => WatchedTarget | undefined
+  findTarget: (
+    worktreePath: string,
+    runtimeEnvironmentId: string | null
+  ) => WatchedTarget | undefined
 ): {
-  handleFsChanged: (payload: FsChangedPayload) => void
+  handleFsChanged: (payload: FsChangedPayload, runtimeEnvironmentId?: string | null) => void
   dispose: () => void
 } {
   // Why: coalesce 'deleted' tombstones across back-to-back payloads so a
@@ -350,11 +397,17 @@ export function createExternalWatchEventHandler(
   // cancels the tombstone before the tab flashes. Keyed by normalized
   // absolute path, scoped per-target. See EXTERNAL_MUTATION_DEBOUNCE_MS.
   const pendingDeletes = new Map<string, PendingDeleteTimer>()
-  const pendingKey = (worktreeId: string, absolutePath: string): string =>
-    `${worktreeId}::${absolutePath}`
+  const pendingKey = (
+    worktreeId: string,
+    runtimeEnvironmentId: string | null,
+    absolutePath: string
+  ): string => `${worktreeId}::${runtimeEnvironmentId ?? 'client'}::${absolutePath}`
 
-  const handleFsChanged = (payload: FsChangedPayload): void => {
-    const target = findTarget(payload.worktreePath)
+  const handleFsChanged = (
+    payload: FsChangedPayload,
+    runtimeEnvironmentId: string | null = null
+  ): void => {
+    const target = findTarget(payload.worktreePath, runtimeEnvironmentId)
     if (!target) {
       return
     }
@@ -372,7 +425,7 @@ export function createExternalWatchEventHandler(
       }
     }
     for (const createdPath of createOrUpdatePaths) {
-      const key = pendingKey(target.worktreeId, createdPath)
+      const key = pendingKey(target.worktreeId, target.runtimeEnvironmentId, createdPath)
       const existing = pendingDeletes.get(key)
       if (existing) {
         clearTimeout(existing.timer)
@@ -392,6 +445,7 @@ export function createExternalWatchEventHandler(
     const deletedOpenEditorIds = collectDeletedOpenEditorIds(
       payload,
       target.worktreeId,
+      target.runtimeEnvironmentId,
       openFilesAtStart
     )
     // Why: correlate creates to deletes by basename OR parent directory to
@@ -417,6 +471,7 @@ export function createExternalWatchEventHandler(
         const deletePathByFileId = buildDeletePathByFileId(
           payload,
           target.worktreeId,
+          target.runtimeEnvironmentId,
           deletedOpenEditorIds,
           openFilesAtStart
         )
@@ -425,7 +480,7 @@ export function createExternalWatchEventHandler(
           if (!absolutePath) {
             continue
           }
-          const key = pendingKey(target.worktreeId, absolutePath)
+          const key = pendingKey(target.worktreeId, target.runtimeEnvironmentId, absolutePath)
           const existing = pendingDeletes.get(key)
           if (existing) {
             clearTimeout(existing.timer)
@@ -459,6 +514,7 @@ export function createExternalWatchEventHandler(
       for (const file of state.openFiles) {
         if (
           file.worktreeId === target.worktreeId &&
+          openFileRuntimeOwner(file) === target.runtimeEnvironmentId &&
           (file.mode === 'edit' || file.mode === 'markdown-preview') &&
           file.externalMutation &&
           createOrUpdatePaths.has(normalizeRuntimePathForComparison(file.filePath))
@@ -520,7 +576,8 @@ export function createExternalWatchEventHandler(
       const notification = {
         worktreeId: target.worktreeId,
         worktreePath: target.worktreePath,
-        relativePath
+        relativePath,
+        runtimeEnvironmentId: target.runtimeEnvironmentId
       }
       const matching = getOpenFilesForExternalFileChange(openFilesSnapshot, notification)
       if (matching.length === 0) {
@@ -530,7 +587,7 @@ export function createExternalWatchEventHandler(
         continue
       }
       const absolutePath = joinPath(notification.worktreePath, notification.relativePath)
-      const recentSelfWrite = getRecentSelfWrite(absolutePath)
+      const recentSelfWrite = getRecentSelfWrite(absolutePath, target.runtimeEnvironmentId)
       if (recentSelfWrite) {
         scheduleSelfWriteAwareExternalReload(target, notification, matching[0], recentSelfWrite)
         continue
@@ -578,13 +635,13 @@ function scheduleSelfWriteAwareExternalReload(
         (result.isBinary || result.content !== recentSelfWrite.content) &&
         hasCleanExternalReloadTarget(notification)
       ) {
-        clearSelfWrite(file.filePath)
+        clearSelfWrite(file.filePath, runtimeEnvironmentId)
         scheduleDebouncedExternalReload(notification)
       }
     })
     .catch(() => {
       if (hasCleanExternalReloadTarget(notification)) {
-        clearSelfWrite(file.filePath)
+        clearSelfWrite(file.filePath, runtimeEnvironmentId)
         scheduleDebouncedExternalReload(notification)
       }
     })
@@ -596,7 +653,9 @@ function hasCleanExternalReloadTarget(notification: ExternalWatchNotification): 
 }
 
 export function getOverflowExternalReloadTargets(
-  target: Pick<WatchedTarget, 'worktreeId' | 'worktreePath'>
+  target: Pick<WatchedTarget, 'worktreeId' | 'worktreePath'> & {
+    runtimeEnvironmentId?: string | null
+  }
 ): ExternalWatchNotification[] {
   const state = useAppStore.getState()
   const notifications: ExternalWatchNotification[] = []
@@ -604,7 +663,8 @@ export function getOverflowExternalReloadTargets(
   for (const file of state.openFiles) {
     if (
       file.worktreeId !== target.worktreeId ||
-      (file.mode !== 'edit' && file.mode !== 'markdown-preview') ||
+      openFileRuntimeOwner(file) !== (target.runtimeEnvironmentId ?? null) ||
+      !isExternalReloadableEditorTab(file) ||
       file.isDirty
     ) {
       continue
@@ -620,7 +680,8 @@ export function getOverflowExternalReloadTargets(
     notifications.push({
       worktreeId: target.worktreeId,
       worktreePath: target.worktreePath,
-      relativePath: file.relativePath
+      relativePath: file.relativePath,
+      runtimeEnvironmentId: target.runtimeEnvironmentId ?? null
     })
   }
 
@@ -630,6 +691,7 @@ export function getOverflowExternalReloadTargets(
 function buildDeletePathByFileId(
   payload: FsChangedPayload,
   worktreeId: string,
+  runtimeEnvironmentId: string | null,
   deletedOpenEditorIds: string[],
   openFiles: OpenFile[]
 ): Map<string, string> {
@@ -645,7 +707,11 @@ function buildDeletePathByFileId(
   }
   const deletedIdSet = new Set(deletedOpenEditorIds)
   for (const file of openFiles) {
-    if (!deletedIdSet.has(file.id) || file.worktreeId !== worktreeId) {
+    if (
+      !deletedIdSet.has(file.id) ||
+      file.worktreeId !== worktreeId ||
+      openFileRuntimeOwner(file) !== runtimeEnvironmentId
+    ) {
       continue
     }
     const normalized = normalizeRuntimePathForComparison(file.filePath)
@@ -659,6 +725,7 @@ function buildDeletePathByFileId(
 function collectDeletedOpenEditorIds(
   payload: FsChangedPayload,
   worktreeId: string,
+  runtimeEnvironmentId: string | null,
   openFiles: OpenFile[]
 ): string[] {
   const deletePaths = new Set<string>()
@@ -674,6 +741,7 @@ function collectDeletedOpenEditorIds(
   for (const file of openFiles) {
     if (
       file.worktreeId !== worktreeId ||
+      openFileRuntimeOwner(file) !== runtimeEnvironmentId ||
       (file.mode !== 'edit' && file.mode !== 'markdown-preview')
     ) {
       continue

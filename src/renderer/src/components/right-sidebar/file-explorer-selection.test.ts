@@ -1,10 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import type { TreeNode } from './file-explorer-types'
 import {
-  countVisibleFileExplorerSelections,
   createSingleFileExplorerSelection,
   formatFileExplorerPathsForClipboard,
-  getFileExplorerActionNodes,
   getFileExplorerSelectionMode,
   updateFileExplorerSelection,
   updateFileExplorerSelectionPaths
@@ -71,27 +69,17 @@ describe('file explorer selection', () => {
     expect(next.activePath).toBe('/repo/a.ts')
   })
 
-  it('copies selected nodes in visible tree order', () => {
+  it('formats copied nodes in the provided order', () => {
     const rows = [
       node('/repo/b.ts', 'b.ts'),
       node('/repo/a.ts', 'a.ts'),
       node('/repo/c.ts', 'c.ts')
     ]
-    const selectedPaths = new Set(['/repo/a.ts', '/repo/b.ts'])
-    const actionNodes = getFileExplorerActionNodes(rows, selectedPaths, rows[0])
 
-    expect(actionNodes.map((entry) => entry.path)).toEqual(['/repo/b.ts', '/repo/a.ts'])
-    expect(formatFileExplorerPathsForClipboard(actionNodes, 'absolute')).toBe(
-      '/repo/b.ts\n/repo/a.ts'
+    expect(formatFileExplorerPathsForClipboard(rows, 'absolute')).toBe(
+      '/repo/b.ts\n/repo/a.ts\n/repo/c.ts'
     )
-    expect(formatFileExplorerPathsForClipboard(actionNodes, 'relative')).toBe('b.ts\na.ts')
-  })
-
-  it('copies only the context-clicked node when it is outside the current selection', () => {
-    const rows = [node('/repo/a.ts'), node('/repo/b.ts')]
-    const actionNodes = getFileExplorerActionNodes(rows, new Set(['/repo/a.ts']), rows[1])
-
-    expect(actionNodes.map((entry) => entry.path)).toEqual(['/repo/b.ts'])
+    expect(formatFileExplorerPathsForClipboard(rows, 'relative')).toBe('b.ts\na.ts\nc.ts')
   })
 
   it('applies legacy path cleanup across the selected set', () => {
@@ -108,19 +96,5 @@ describe('file explorer selection', () => {
     expect(Array.from(next.selectedPaths)).toEqual(['/repo/a.ts', '/repo/c.ts'])
     expect(next.activePath).toBe('/repo/c.ts')
     expect(next.anchorPath).toBe('/repo/a.ts')
-  })
-
-  it('does not scan rows for empty or single selection counts', () => {
-    const rows = new Proxy([node('/repo/a.ts')], {
-      get(target, prop, receiver) {
-        if (prop === 'reduce') {
-          throw new Error('unexpected row scan')
-        }
-        return Reflect.get(target, prop, receiver)
-      }
-    })
-
-    expect(countVisibleFileExplorerSelections(rows, new Set())).toBe(0)
-    expect(countVisibleFileExplorerSelections(rows, new Set(['/repo/a.ts']))).toBe(1)
   })
 })

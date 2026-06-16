@@ -20,21 +20,20 @@ export const COMPUTER_COMMAND_SPECS: CommandSpec[] = [
   {
     path: ['computer', 'list-apps'],
     summary: 'List running apps available to computer-use',
-    usage: 'orca computer list-apps [--worktree <selector>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'worktree']
+    usage: 'orca computer list-apps [--json]',
+    allowedFlags: [...GLOBAL_FLAGS]
   },
   {
     path: ['computer', 'permissions'],
     summary: 'Open computer-use permission setup',
-    usage: 'orca computer permissions [--json]',
-    allowedFlags: [...GLOBAL_FLAGS]
+    usage: 'orca computer permissions [--id <accessibility|screenshots>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'id']
   },
   {
     path: ['computer', 'list-windows'],
     summary: 'List windows for an app available to computer-use',
-    usage:
-      'orca computer list-windows --app <name|bundle|pid:N> [--worktree <selector> | --session <id>] [--json]',
-    allowedFlags: COMPUTER_FLAGS
+    usage: 'orca computer list-windows --app <name|bundle|pid:N> [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'app']
   },
   {
     path: ['computer', 'get-app-state'],
@@ -95,7 +94,7 @@ export const COMPUTER_COMMAND_SPECS: CommandSpec[] = [
   },
   {
     path: ['computer', 'press-key'],
-    summary: 'Press a key using xdotool-style syntax',
+    summary: 'Press a single key such as Return or Escape',
     usage:
       'orca computer press-key --app <app> --key <key> [--window-id <id> | --window-index <n>] [--restore-window] [--no-screenshot] [--json]',
     allowedFlags: [...COMPUTER_ACTION_FLAGS, 'key']

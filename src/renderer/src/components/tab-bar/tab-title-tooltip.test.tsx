@@ -160,6 +160,23 @@ function openingTag(markup: string, attr: string, value: string): string {
   return match[0]
 }
 
+function firstOpeningTag(markup: string): string {
+  const match = markup.match(/^<div[^>]*>/)
+  if (!match) {
+    throw new Error(`first opening div not found in ${markup}`)
+  }
+  return match[0]
+}
+
+function expectTabContainerWidth(markup: string, root: string): void {
+  const container = firstOpeningTag(markup)
+  const widthClasses = 'min-w-[88px] max-w-[280px] flex-[1_1_180px] min-[1280px]:flex-[1_1_220px]'
+  expect(container).toContain(widthClasses)
+  expect(root).not.toContain('min-w-[88px]')
+  expect(root).not.toContain('max-w-[280px]')
+  expect(root).not.toContain('flex-[1_1_180px]')
+}
+
 function expectTooltipContent(markup: string, text: string): void {
   expect(markup).toContain('data-tooltip-content="true"')
   expect(markup).toContain('data-side="bottom"')
@@ -226,6 +243,7 @@ describe('tab title tooltips', () => {
         tabCount={1}
         hasTabsToRight={false}
         isActive={true}
+        isPinned={false}
         isExpanded={false}
         onActivate={vi.fn()}
         onClose={vi.fn()}
@@ -233,6 +251,7 @@ describe('tab title tooltips', () => {
         onCloseToRight={vi.fn()}
         onSetCustomTitle={vi.fn()}
         onSetTabColor={vi.fn()}
+        onTogglePin={vi.fn()}
         onToggleExpand={vi.fn()}
         onSplitGroup={vi.fn()}
         dragData={makeDragData('terminal', 'terminal-1')}
@@ -241,10 +260,11 @@ describe('tab title tooltips', () => {
 
     expectTooltipContent(markup, 'Custom terminal title')
     expect(markup).not.toContain('Runtime terminal title')
+    expect(markup).toContain('data-tooltip-trigger="true"')
     const root = openingTag(markup, 'data-testid', 'sortable-tab')
-    expect(root).toContain('data-tooltip-trigger="true"')
     expect(root).toContain('role="tab"')
     expect(root).toContain('tabindex="0"')
+    expectTabContainerWidth(markup, root)
   })
 
   it("shows the provider icon while stripping the agent's leading status glyph from the label", () => {
@@ -255,6 +275,7 @@ describe('tab title tooltips', () => {
         tabCount={1}
         hasTabsToRight={false}
         isActive={true}
+        isPinned={false}
         isExpanded={false}
         onActivate={vi.fn()}
         onClose={vi.fn()}
@@ -262,6 +283,7 @@ describe('tab title tooltips', () => {
         onCloseToRight={vi.fn()}
         onSetCustomTitle={vi.fn()}
         onSetTabColor={vi.fn()}
+        onTogglePin={vi.fn()}
         onToggleExpand={vi.fn()}
         onSplitGroup={vi.fn()}
         dragData={makeDragData('terminal', 'terminal-1')}
@@ -270,7 +292,8 @@ describe('tab title tooltips', () => {
 
     expect(markup).toContain('data-agent-icon="claude"')
     expectTooltipContent(markup, 'Claude Code')
-    expect(markup).toContain('<span class="truncate max-w-[72px] mr-1">Claude Code</span>')
+    expect(markup).toContain('data-tooltip-trigger="true"')
+    expect(markup).toContain('>Claude Code</span>')
     expect(markup).not.toContain('data-shell-icon="generic"')
     expect(markup).not.toContain('>✳ Claude Code</span>')
   })
@@ -280,12 +303,14 @@ describe('tab title tooltips', () => {
       <BrowserTab
         tab={makeBrowserTab({ title: '' })}
         isActive={false}
+        isPinned={false}
         hasTabsToRight={false}
         onActivate={vi.fn()}
         onClose={vi.fn()}
         onCloseToRight={vi.fn()}
         onSplitGroup={vi.fn()}
         onDuplicate={vi.fn()}
+        onTogglePin={vi.fn()}
         dragData={makeDragData('browser', 'browser-1')}
       />
     )
@@ -296,6 +321,8 @@ describe('tab title tooltips', () => {
     expect(root).toContain('data-tooltip-trigger="true"')
     expect(root).toContain('role="tab"')
     expect(root).toContain('tabindex="0"')
+    expect(root).toContain('data-tab-id="browser-1"')
+    expectTabContainerWidth(markup, root)
   })
 
   it('uses the editor display label while leaving adjacent adornments outside the label', () => {
@@ -303,13 +330,15 @@ describe('tab title tooltips', () => {
       <EditorFileTab
         file={makeEditorFile({ externalMutation: 'renamed', isPreview: true })}
         isActive={false}
+        isPinned={false}
         hasTabsToRight={false}
         statusByRelativePath={new Map<string, GitFileStatus>()}
         onActivate={vi.fn()}
         onClose={vi.fn()}
         onCloseToRight={vi.fn()}
         onCloseAll={vi.fn()}
-        onPin={vi.fn()}
+        onMakePermanent={vi.fn()}
+        onTogglePin={vi.fn()}
         onSplitGroup={vi.fn()}
         dragData={makeDragData('editor', 'editor-tab-1')}
       />
@@ -322,5 +351,7 @@ describe('tab title tooltips', () => {
     expect(root).toContain('data-tooltip-trigger="true"')
     expect(root).toContain('role="tab"')
     expect(root).toContain('tabindex="0"')
+    expect(root).toContain('data-tab-id="editor-tab-1"')
+    expectTabContainerWidth(markup, root)
   })
 })

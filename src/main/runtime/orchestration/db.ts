@@ -610,6 +610,14 @@ export class OrchestrationDb {
       .get(handle) as DispatchContextRow | undefined
   }
 
+  getLatestDispatchForTerminal(handle: string): DispatchContextRow | undefined {
+    return this.db
+      .prepare(
+        'SELECT * FROM dispatch_contexts WHERE assignee_handle = ? ORDER BY rowid DESC LIMIT 1'
+      )
+      .get(handle) as DispatchContextRow | undefined
+  }
+
   completeDispatch(ctxId: string): void {
     this.db
       .prepare(

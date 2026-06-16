@@ -26,6 +26,10 @@ describe('getRelativePathInsideRoot', () => {
     expect(getRelativePathInsideRoot('C:\\Repo\\Docs\\Plan.md', 'c:\\repo')).toBe('Docs/Plan.md')
   })
 
+  it('matches Windows drive-root paths without adding an extra separator', () => {
+    expect(getRelativePathInsideRoot('C:\\Repo\\Docs\\Plan.md', 'c:\\')).toBe('Repo/Docs/Plan.md')
+  })
+
   it('matches Windows UNC paths case-insensitively', () => {
     expect(
       getRelativePathInsideRoot('\\\\Server\\Share\\Repo\\Docs\\Plan.md', '\\\\server\\share\\repo')

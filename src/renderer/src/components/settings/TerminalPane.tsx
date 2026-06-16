@@ -1,29 +1,12 @@
-/* eslint-disable max-lines -- Why: TerminalPane is the single owner of all terminal settings UI;
-   splitting individual settings into separate files would scatter related controls without a
-   meaningful abstraction boundary. Mirrors the same decision made for GeneralPane.tsx. */
-import { useState } from 'react'
+/* eslint-disable max-lines -- Why: TerminalPane keeps terminal workflow, runtime, and recovery
+   settings together so search shows one focused terminal behavior surface. */
 import type { GlobalSettings, SetupScriptLaunchMode } from '../../../../shared/types'
-import {
-  DEFAULT_TERMINAL_FONT_WEIGHT,
-  TERMINAL_FONT_WEIGHT_MAX,
-  TERMINAL_FONT_WEIGHT_MIN,
-  TERMINAL_FONT_WEIGHT_STEP,
-  normalizeTerminalFontWeight
-} from '../../../../shared/terminal-fonts'
-import {
-  fontFamilyHasKnownLigatures,
-  resolveTerminalLigaturesEnabled
-} from '../../../../shared/terminal-ligatures'
-import { Button } from '../ui/button'
 import { Input } from '../ui/input'
 import { Separator } from '../ui/separator'
 import { ToggleGroup, ToggleGroupItem } from '../ui/toggle-group'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
-import { Minus, Plus } from 'lucide-react'
-import { clampNumber, resolvePaneStyleOptions } from '@/lib/terminal-theme'
+import { clampNumber } from '@/lib/terminal-theme'
 import {
-  FontAutocomplete,
-  NumberField,
   SettingsRow,
   SettingsSegmentedControl,
   SettingsSubsectionHeader,
@@ -35,45 +18,32 @@ import { matchesSettingsSearch } from './settings-search'
 import { useAppStore } from '../../store'
 import { isMacUserAgent, isWindowsUserAgent } from '@/components/terminal-pane/pane-helpers'
 import {
-  MANAGE_SESSIONS_SEARCH_ENTRIES,
-  TERMINAL_ADVANCED_SEARCH_ENTRIES,
-  TERMINAL_CURSOR_SEARCH_ENTRIES,
-  TERMINAL_DARK_THEME_SEARCH_ENTRIES,
-  TERMINAL_LIGHT_THEME_SEARCH_ENTRIES,
-  TERMINAL_MAC_OPTION_SEARCH_ENTRIES,
-  TERMINAL_MAC_YEN_SEARCH_ENTRIES,
-  TERMINAL_PANE_STYLE_SEARCH_ENTRIES,
-  TERMINAL_RENDERING_SEARCH_ENTRIES,
-  TERMINAL_SETUP_SCRIPT_SEARCH_ENTRIES,
-  TERMINAL_TYPOGRAPHY_SEARCH_ENTRIES,
-  TERMINAL_WINDOW_SEARCH_ENTRIES
+  getManageSessionsSearchEntries,
+  getTerminalAdvancedSearchEntries,
+  getTerminalMacOptionSearchEntries,
+  getTerminalMacYenSearchEntries,
+  getTerminalPaneInteractionSearchEntries,
+  getTerminalRenderingSearchEntries,
+  getTerminalSetupScriptSearchEntries
 } from './terminal-search'
 import {
-  TERMINAL_RIGHT_CLICK_TO_PASTE_SEARCH_ENTRY,
-  TERMINAL_WINDOWS_POWERSHELL_IMPLEMENTATION_SEARCH_ENTRY,
-  TERMINAL_WINDOWS_SHELL_SEARCH_ENTRY
+  getTerminalRightClickToPasteSearchEntry,
+  getTerminalWindowsPowershellImplementationSearchEntry,
+  getTerminalWindowsShellSearchEntry
 } from './terminal-windows-search'
 import { useDetectedOptionAsAlt } from '@/lib/keyboard-layout/use-effective-mac-option-as-alt'
-import { DarkTerminalThemeSection, LightTerminalThemeSection } from './TerminalThemeSections'
-import { TerminalWindowSection } from './TerminalWindowSection'
-import { GhosttyImportModal } from './GhosttyImportModal'
-import type { UseGhosttyImportReturn } from './useGhosttyImport'
 import { ManageSessionsSection } from './ManageSessionsSection'
-import { TerminalSettingsPreview } from './TerminalSettingsPreview'
 import { OSC52_CLIPBOARD_SETTING_ID } from '../terminal-pane/osc52-clipboard-setting-anchor'
 import { WINDOWS_GIT_BASH_SHELL } from '../../../../shared/windows-terminal-shell'
+import { translate } from '@/i18n/i18n'
+
+const EMPTY_WSL_DISTROS: string[] = []
 
 type TerminalPaneProps = {
   settings: GlobalSettings
   updateSettings: (updates: Partial<GlobalSettings>) => void
-  systemPrefersDark: boolean
-  terminalFontSuggestions: string[]
   scrollbackMode: 'preset' | 'custom'
   setScrollbackMode: (mode: 'preset' | 'custom') => void
-  /** Ghostty import modal state + handlers. Lifted to the Settings shell so
-   *  the section header can render the trigger button as a headerAction
-   *  instead of taking its own row inside the settings list. */
-  ghostty: UseGhosttyImportReturn
   /** Whether WSL is installed on this Windows machine. */
   wslAvailable?: boolean
   /** Installed WSL distro names, used to choose the default WSL terminal target. */
@@ -84,31 +54,26 @@ type TerminalPaneProps = {
   pwshAvailable?: boolean
   /** Whether Git for Windows bash.exe is installed on this machine. */
   gitBashAvailable?: boolean
+  /** Whether the active terminal host is Windows, even if the client is not. */
+  isWindowsTerminalHost?: boolean
 }
 
 export function TerminalPane({
   settings,
   updateSettings,
-  systemPrefersDark,
-  terminalFontSuggestions,
   scrollbackMode,
   setScrollbackMode,
-  ghostty,
   wslAvailable,
-  wslDistros = [],
+  wslDistros = EMPTY_WSL_DISTROS,
   wslCapabilitiesLoading = false,
   pwshAvailable,
-  gitBashAvailable = false
+  gitBashAvailable = false,
+  isWindowsTerminalHost
 }: TerminalPaneProps): React.JSX.Element {
   const searchQuery = useAppStore((state) => state.settingsSearchQuery)
   const isWindows = isWindowsUserAgent()
+  const showWindowsHostSettings = isWindowsTerminalHost ?? isWindows
   const isMac = isMacUserAgent()
-  const [themeSearchDark, setThemeSearchDark] = useState('')
-  const [themeSearchLight, setThemeSearchLight] = useState('')
-  // Why: hover preview lets the font picker update the sample without committing a setting.
-  const [previewFontFamily, setPreviewFontFamily] = useState<string | null>(null)
-
-  const paneStyleOptions = resolvePaneStyleOptions(settings)
   const detectedLayout = useDetectedOptionAsAlt()
   const detectedLayoutLabel =
     detectedLayout === 'us'
@@ -130,21 +95,29 @@ export function TerminalPane({
       ? [selectedWslDistroName, ...wslDistros]
       : wslDistros
   const powerShellImplementation = settings.terminalWindowsPowerShellImplementation ?? 'auto'
-  const showWindowsPowerShellImplementation = isWindows && windowsShell === 'powershell.exe'
+  const showWindowsPowerShellImplementation =
+    showWindowsHostSettings && windowsShell === 'powershell.exe'
   const showGitBashOption = gitBashAvailable || windowsShell === WINDOWS_GIT_BASH_SHELL
 
   const visibleSections = [
-    isWindows && matchesSettingsSearch(searchQuery, TERMINAL_WINDOWS_SHELL_SEARCH_ENTRY) ? (
+    showWindowsHostSettings &&
+    matchesSettingsSearch(searchQuery, getTerminalWindowsShellSearchEntry()) ? (
       <section key="windows-shell" className="space-y-3">
         <SettingsSubsectionHeader
-          title="Windows Shell"
-          description="Default shell for new terminal panes on Windows."
+          title={translate('auto.components.settings.TerminalPane.87e678a8af', 'Windows Shell')}
+          description={translate(
+            'auto.components.settings.TerminalPane.a55eee649f',
+            'Default shell for new terminal panes on Windows.'
+          )}
         />
 
         <div className="divide-y divide-border/40">
           <SearchableSetting
-            title="Default Shell"
-            description="Choose the default shell for new terminal panes on Windows."
+            title={translate('auto.components.settings.TerminalPane.27e301f22c', 'Default Shell')}
+            description={translate(
+              'auto.components.settings.TerminalPane.bd68f3170d',
+              'Choose the default shell for new terminal panes on Windows.'
+            )}
             keywords={[
               'terminal',
               'windows',
@@ -158,26 +131,57 @@ export function TerminalPane({
             ]}
           >
             <SettingsRow
-              label="Default Shell"
-              description="Shell used when opening a new terminal pane. Takes effect for new terminals."
+              label={translate('auto.components.settings.TerminalPane.27e301f22c', 'Default Shell')}
+              description={translate(
+                'auto.components.settings.TerminalPane.09bf02de9a',
+                'Shell used when opening a new terminal pane. Takes effect for new terminals.'
+              )}
               control={
                 <SettingsSegmentedControl
-                  ariaLabel="Default Shell"
+                  ariaLabel={translate(
+                    'auto.components.settings.TerminalPane.27e301f22c',
+                    'Default Shell'
+                  )}
                   value={windowsShell}
                   onChange={(value) => updateSettings({ terminalWindowsShell: value })}
                   options={[
-                    { value: 'powershell.exe', label: 'PowerShell' },
-                    { value: 'cmd.exe', label: 'Command Prompt' },
+                    {
+                      value: 'powershell.exe',
+                      label: translate(
+                        'auto.components.settings.TerminalPane.eb7fc4d98a',
+                        'PowerShell'
+                      )
+                    },
+                    {
+                      value: 'cmd.exe',
+                      label: translate(
+                        'auto.components.settings.TerminalPane.0f1b8669e6',
+                        'Command Prompt'
+                      )
+                    },
                     ...(showGitBashOption
                       ? [
                           {
                             value: WINDOWS_GIT_BASH_SHELL,
-                            label: 'Git Bash',
+                            label: translate(
+                              'auto.components.settings.TerminalPane.f61ac77f16',
+                              'Git Bash'
+                            ),
                             disabled: !gitBashAvailable
                           }
                         ]
                       : []),
-                    ...(wslAvailable ? [{ value: 'wsl.exe', label: 'WSL' }] : [])
+                    ...(wslAvailable
+                      ? [
+                          {
+                            value: 'wsl.exe',
+                            label: translate(
+                              'auto.components.settings.TerminalPane.b637dd57a7',
+                              'WSL'
+                            )
+                          }
+                        ]
+                      : [])
                   ]}
                 />
               }
@@ -185,13 +189,25 @@ export function TerminalPane({
           </SearchableSetting>
           {windowsShell === 'wsl.exe' ? (
             <SearchableSetting
-              title="WSL Distribution"
-              description="Choose which WSL distribution new WSL terminals and local agent scans use."
+              title={translate(
+                'auto.components.settings.TerminalPane.219aaa59f4',
+                'WSL Distribution'
+              )}
+              description={translate(
+                'auto.components.settings.TerminalPane.5fe79a5e56',
+                'Choose which WSL distribution new WSL terminals and local agent scans use.'
+              )}
               keywords={['terminal', 'windows', 'wsl', 'linux', 'distribution', 'distro', 'ubuntu']}
             >
               <SettingsRow
-                label="WSL Distribution"
-                description="Used for new WSL terminal panes and local agent detection when the active workspace is not already inside WSL."
+                label={translate(
+                  'auto.components.settings.TerminalPane.219aaa59f4',
+                  'WSL Distribution'
+                )}
+                description={translate(
+                  'auto.components.settings.TerminalPane.2503f1e86b',
+                  'Used for new WSL terminal panes and local agent detection when the active workspace is not already inside WSL.'
+                )}
                 control={
                   <Select
                     value={selectedWslDistro}
@@ -202,15 +218,35 @@ export function TerminalPane({
                     }
                     disabled={wslCapabilitiesLoading || !wslAvailable}
                   >
-                    <SelectTrigger size="sm" aria-label="WSL Distribution" className="min-w-44">
+                    <SelectTrigger
+                      size="sm"
+                      aria-label={translate(
+                        'auto.components.settings.TerminalPane.219aaa59f4',
+                        'WSL Distribution'
+                      )}
+                      className="min-w-44"
+                    >
                       <SelectValue
                         placeholder={
-                          wslCapabilitiesLoading ? 'Loading distributions' : 'Windows default'
+                          wslCapabilitiesLoading
+                            ? translate(
+                                'auto.components.settings.TerminalPane.d78fc4fdef',
+                                'Loading distributions'
+                              )
+                            : translate(
+                                'auto.components.settings.TerminalPane.cc8c5ca224',
+                                'Windows default'
+                              )
                         }
                       />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="__default__">Windows default</SelectItem>
+                      <SelectItem value="__default__">
+                        {translate(
+                          'auto.components.settings.TerminalPane.cc8c5ca224',
+                          'Windows default'
+                        )}
+                      </SelectItem>
                       {wslDistroOptions.map((distro) => (
                         <SelectItem key={distro} value={distro}>
                           {distro}
@@ -225,207 +261,26 @@ export function TerminalPane({
         </div>
       </section>
     ) : null,
-    matchesSettingsSearch(searchQuery, TERMINAL_TYPOGRAPHY_SEARCH_ENTRIES) ? (
-      <section key="typography" className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
-        <div className="min-w-0 space-y-3">
-          <SettingsSubsectionHeader
-            title="Typography"
-            description="Default terminal typography for new panes and live updates."
-          />
-
-          <div className="divide-y divide-border/40">
-            <SearchableSetting
-              title="Font Size"
-              description="Default terminal font size for new panes and live updates."
-              keywords={['terminal', 'typography', 'text size']}
-            >
-              <SettingsRow
-                label="Font Size"
-                description="Default terminal font size for new panes and live updates."
-                control={
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant="outline"
-                      size="icon-sm"
-                      onClick={() => {
-                        const next = Math.max(10, settings.terminalFontSize - 1)
-                        updateSettings({ terminalFontSize: next })
-                      }}
-                      disabled={settings.terminalFontSize <= 10}
-                    >
-                      <Minus className="size-3" />
-                    </Button>
-                    <Input
-                      type="number"
-                      min={10}
-                      max={24}
-                      value={settings.terminalFontSize}
-                      onChange={(e) => {
-                        const value = parseInt(e.target.value, 10)
-                        if (!Number.isNaN(value) && value >= 10 && value <= 24) {
-                          updateSettings({ terminalFontSize: value })
-                        }
-                      }}
-                      className="w-14 text-center tabular-nums"
-                    />
-                    <Button
-                      variant="outline"
-                      size="icon-sm"
-                      onClick={() => {
-                        const next = Math.min(24, settings.terminalFontSize + 1)
-                        updateSettings({ terminalFontSize: next })
-                      }}
-                      disabled={settings.terminalFontSize >= 24}
-                    >
-                      <Plus className="size-3" />
-                    </Button>
-                    <span className="text-xs text-muted-foreground">px</span>
-                  </div>
-                }
-              />
-            </SearchableSetting>
-
-            <SearchableSetting
-              title="Font Family"
-              description="Default terminal font family for new panes and live updates."
-              keywords={['terminal', 'typography', 'font']}
-            >
-              <SettingsRow
-                alignTop
-                label="Font Family"
-                description="Default terminal font family for new panes and live updates."
-                control={
-                  <FontAutocomplete
-                    value={settings.terminalFontFamily}
-                    suggestions={terminalFontSuggestions}
-                    onChange={(value) => updateSettings({ terminalFontFamily: value })}
-                    onPreviewFontFamily={setPreviewFontFamily}
-                  />
-                }
-              />
-            </SearchableSetting>
-
-            <SearchableSetting
-              title="Font Weight"
-              description="Controls the terminal text font weight."
-              keywords={['terminal', 'typography', 'weight']}
-            >
-              <NumberField
-                label="Font Weight"
-                description="Controls the terminal text font weight."
-                value={normalizeTerminalFontWeight(settings.terminalFontWeight)}
-                defaultValue={DEFAULT_TERMINAL_FONT_WEIGHT}
-                min={TERMINAL_FONT_WEIGHT_MIN}
-                max={TERMINAL_FONT_WEIGHT_MAX}
-                step={TERMINAL_FONT_WEIGHT_STEP}
-                suffix="100–900"
-                onChange={(value) =>
-                  updateSettings({
-                    terminalFontWeight: normalizeTerminalFontWeight(value)
-                  })
-                }
-              />
-            </SearchableSetting>
-
-            <SearchableSetting
-              title="Line Height"
-              description="Controls the terminal line height multiplier."
-              keywords={['terminal', 'typography', 'line height', 'spacing']}
-            >
-              <NumberField
-                label="Line Height"
-                description="Controls the terminal line height multiplier."
-                value={settings.terminalLineHeight}
-                defaultValue={1}
-                min={1}
-                max={3}
-                step={0.1}
-                suffix="1–3"
-                onChange={(value) =>
-                  updateSettings({
-                    terminalLineHeight: clampNumber(value, 1, 3)
-                  })
-                }
-              />
-            </SearchableSetting>
-
-            <SearchableSetting
-              title="Font Ligatures"
-              description='Render programming ligatures (e.g. =>, !=, ===) for fonts that ship them. "Auto" enables ligatures only for known ligature fonts (Fira Code, JetBrains Mono, Cascadia Code, Iosevka, etc.).'
-              keywords={[
-                'terminal',
-                'typography',
-                'ligatures',
-                'ligature',
-                'fira code',
-                'jetbrains mono',
-                'cascadia code',
-                'iosevka',
-                'calt',
-                'font features'
-              ]}
-            >
-              <SettingsRow
-                label="Font Ligatures"
-                description={
-                  settings.terminalLigatures === 'on'
-                    ? 'Always on. Fonts without ligatures simply render as-is.'
-                    : settings.terminalLigatures === 'off'
-                      ? 'Always off, even for fonts that ship them.'
-                      : fontFamilyHasKnownLigatures(settings.terminalFontFamily)
-                        ? `Auto — enabled for "${settings.terminalFontFamily}".`
-                        : `Auto — disabled for "${
-                            settings.terminalFontFamily || 'the current font'
-                          }".`
-                }
-                control={
-                  <SettingsSegmentedControl
-                    ariaLabel="Font Ligatures"
-                    value={settings.terminalLigatures ?? 'auto'}
-                    onChange={(option) => updateSettings({ terminalLigatures: option })}
-                    options={[
-                      { value: 'auto', label: 'Auto' },
-                      { value: 'on', label: 'On' },
-                      { value: 'off', label: 'Off' }
-                    ]}
-                  />
-                }
-              />
-              {/* Why: surface the resolved state explicitly so the "Auto" label
-                  isn't ambiguous when a user is staring at it. */}
-              <p className="sr-only" aria-live="polite">
-                Ligatures are currently{' '}
-                {resolveTerminalLigaturesEnabled(
-                  settings.terminalLigatures,
-                  settings.terminalFontFamily
-                )
-                  ? 'enabled'
-                  : 'disabled'}
-                .
-              </p>
-            </SearchableSetting>
-          </div>
-        </div>
-        <TerminalSettingsPreview
-          title="Preview"
-          settings={settings}
-          systemPrefersDark={systemPrefersDark}
-          previewFontFamily={previewFontFamily}
-          showThemeToggle
-        />
-      </section>
-    ) : null,
-    matchesSettingsSearch(searchQuery, TERMINAL_RENDERING_SEARCH_ENTRIES) ? (
+    matchesSettingsSearch(searchQuery, getTerminalRenderingSearchEntries()) ? (
       <section key="rendering" className="space-y-3">
         <SettingsSubsectionHeader
-          title="Rendering"
-          description="Terminal renderer behavior for live panes and new panes."
+          title={translate('auto.components.settings.TerminalPane.2fba319f21', 'Rendering')}
+          description={translate(
+            'auto.components.settings.TerminalPane.72bc9334a0',
+            'Terminal renderer behavior for live panes and new panes.'
+          )}
         />
 
         <div className="divide-y divide-border/40">
           <SearchableSetting
-            title="GPU Acceleration"
-            description="Controls whether the terminal uses xterm.js WebGL rendering. Auto uses DOM on Linux to avoid driver glyph corruption, and otherwise tries WebGL with DOM fallback."
+            title={translate(
+              'auto.components.settings.TerminalPane.c1fc9e9444',
+              'GPU Acceleration'
+            )}
+            description={translate(
+              'auto.components.settings.TerminalPane.f07dfb4466',
+              'Controls whether the terminal uses xterm.js WebGL rendering. Auto tries WebGL when the renderer is supported, with a conservative Linux fallback for software or unknown GPU renderers.'
+            )}
             keywords={[
               'terminal',
               'gpu',
@@ -434,28 +289,51 @@ export function TerminalPane({
               'renderer',
               'rendering',
               'graphics',
-              'linux',
-              'vscode'
+              'linux'
             ]}
           >
             <SettingsRow
-              label="GPU Acceleration"
+              label={translate(
+                'auto.components.settings.TerminalPane.c1fc9e9444',
+                'GPU Acceleration'
+              )}
               description={
                 settings.terminalGpuAcceleration === 'off'
-                  ? 'WebGL disabled; DOM renderer for max compatibility.'
+                  ? translate(
+                      'auto.components.settings.TerminalPane.fe4acf36c6',
+                      'WebGL disabled; DOM renderer for max compatibility.'
+                    )
                   : settings.terminalGpuAcceleration === 'on'
-                    ? 'WebGL is always attempted for terminal panes.'
-                    : 'Auto uses DOM on Linux; tries WebGL with DOM fallback elsewhere.'
+                    ? translate(
+                        'auto.components.settings.TerminalPane.7eaccc1424',
+                        'WebGL is always attempted for terminal panes.'
+                      )
+                    : translate(
+                        'auto.components.settings.TerminalPane.e0996d141a',
+                        'Auto tries WebGL, with DOM fallback for unsupported or risky renderers.'
+                      )
               }
               control={
                 <SettingsSegmentedControl
-                  ariaLabel="GPU Acceleration"
+                  ariaLabel={translate(
+                    'auto.components.settings.TerminalPane.c1fc9e9444',
+                    'GPU Acceleration'
+                  )}
                   value={settings.terminalGpuAcceleration ?? 'auto'}
                   onChange={(option) => updateSettings({ terminalGpuAcceleration: option })}
                   options={[
-                    { value: 'auto', label: 'Auto' },
-                    { value: 'on', label: 'On' },
-                    { value: 'off', label: 'Off' }
+                    {
+                      value: 'auto',
+                      label: translate('auto.components.settings.TerminalPane.43c2ff7b0e', 'Auto')
+                    },
+                    {
+                      value: 'on',
+                      label: translate('auto.components.settings.TerminalPane.9c0b1c1792', 'On')
+                    },
+                    {
+                      value: 'off',
+                      label: translate('auto.components.settings.TerminalPane.3fe1c5bfe0', 'Off')
+                    }
                   ]}
                 />
               }
@@ -464,142 +342,46 @@ export function TerminalPane({
         </div>
       </section>
     ) : null,
-    matchesSettingsSearch(searchQuery, TERMINAL_CURSOR_SEARCH_ENTRIES) ? (
-      <section key="cursor" className="space-y-3">
+    matchesSettingsSearch(searchQuery, getTerminalPaneInteractionSearchEntries()) ||
+    (isWindows && matchesSettingsSearch(searchQuery, getTerminalRightClickToPasteSearchEntry())) ? (
+      <section key="pane-interaction" className="space-y-3">
         <SettingsSubsectionHeader
-          title="Cursor"
-          description="Default cursor appearance for Orca terminal panes."
+          title={translate(
+            'auto.components.settings.TerminalPane.45721f3e67',
+            'Terminal Interaction'
+          )}
+          description={translate(
+            'auto.components.settings.TerminalPane.96fe15def8',
+            'Mouse and clipboard behavior for terminal panes.'
+          )}
         />
 
         <div className="divide-y divide-border/40">
-          <SearchableSetting
-            title="Cursor Shape"
-            description="Default cursor appearance for Orca terminal panes."
-            keywords={['terminal', 'cursor', 'bar', 'block', 'underline']}
-          >
-            <SettingsRow
-              label="Cursor Shape"
-              description="Default cursor appearance for Orca terminal panes."
-              control={
-                <SettingsSegmentedControl
-                  ariaLabel="Cursor Shape"
-                  value={settings.terminalCursorStyle}
-                  onChange={(option) => updateSettings({ terminalCursorStyle: option })}
-                  options={[
-                    { value: 'bar', label: 'Bar' },
-                    { value: 'block', label: 'Block' },
-                    { value: 'underline', label: 'Underline' }
-                  ]}
-                />
-              }
-            />
-          </SearchableSetting>
-
-          <SearchableSetting
-            title="Blinking Cursor"
-            description="Uses the blinking variant of the selected cursor shape."
-            keywords={['terminal', 'cursor', 'blink']}
-          >
-            <SettingsSwitchRow
-              label="Blinking Cursor"
-              description="Uses the blinking variant of the selected cursor shape."
-              checked={settings.terminalCursorBlink}
-              onChange={() =>
-                updateSettings({ terminalCursorBlink: !settings.terminalCursorBlink })
-              }
-            />
-          </SearchableSetting>
-
-          <SearchableSetting
-            title="Cursor Opacity"
-            description="Opacity of the terminal cursor."
-            keywords={['terminal', 'cursor', 'opacity', 'transparency']}
-          >
-            <NumberField
-              label="Cursor Opacity"
-              description="Opacity of the terminal cursor."
-              value={settings.terminalCursorOpacity ?? 1}
-              defaultValue={1}
-              min={0}
-              max={1}
-              step={0.05}
-              suffix="0–1"
-              onChange={(value) =>
-                updateSettings({
-                  terminalCursorOpacity: clampNumber(value, 0, 1)
-                })
-              }
-            />
-          </SearchableSetting>
-        </div>
-      </section>
-    ) : null,
-    matchesSettingsSearch(searchQuery, TERMINAL_PANE_STYLE_SEARCH_ENTRIES) ||
-    (isWindows &&
-      matchesSettingsSearch(searchQuery, TERMINAL_RIGHT_CLICK_TO_PASTE_SEARCH_ENTRY)) ? (
-      <section key="pane-styling" className="space-y-3">
-        <SettingsSubsectionHeader
-          title="Pane Styling"
-          description="Control inactive pane dimming, divider thickness, mouse behavior, and transition timing."
-        />
-
-        <div className="divide-y divide-border/40">
-          <SearchableSetting
-            title="Inactive Pane Opacity"
-            description="Opacity applied to panes that are not currently active."
-            keywords={['pane', 'opacity', 'dimming']}
-          >
-            <NumberField
-              label="Inactive Pane Opacity"
-              description="Opacity applied to panes that are not currently active."
-              value={paneStyleOptions.inactivePaneOpacity}
-              defaultValue={0.8}
-              min={0}
-              max={1}
-              step={0.05}
-              suffix="0–1"
-              onChange={(value) =>
-                updateSettings({
-                  terminalInactivePaneOpacity: clampNumber(value, 0, 1)
-                })
-              }
-            />
-          </SearchableSetting>
-          <SearchableSetting
-            title="Divider Thickness"
-            description="Thickness of the pane divider line."
-            keywords={['pane', 'divider', 'thickness']}
-          >
-            <NumberField
-              label="Divider Thickness"
-              description="Thickness of the pane divider line."
-              value={paneStyleOptions.dividerThicknessPx}
-              defaultValue={1}
-              min={1}
-              max={32}
-              step={1}
-              suffix="px"
-              onChange={(value) =>
-                updateSettings({
-                  terminalDividerThicknessPx: clampNumber(value, 1, 32)
-                })
-              }
-            />
-          </SearchableSetting>
-
           {/* Why: the Windows-only right-click toggle lives in this section, so the
               section must also match that search term or settings search would hide
               the control even though it is present. */}
           {isWindows &&
-            matchesSettingsSearch(searchQuery, TERMINAL_RIGHT_CLICK_TO_PASTE_SEARCH_ENTRY) && (
+            matchesSettingsSearch(searchQuery, getTerminalRightClickToPasteSearchEntry()) && (
               <SearchableSetting
-                title="Right-click to paste"
-                description="On Windows, right-click pastes the clipboard into the terminal. Use Ctrl+right-click to open the context menu."
+                title={translate(
+                  'auto.components.settings.TerminalPane.9c178cf8aa',
+                  'Right-click to paste'
+                )}
+                description={translate(
+                  'auto.components.settings.TerminalPane.af0c3b6e39',
+                  'On Windows, right-click pastes the clipboard into the terminal. Use Ctrl+right-click to open the context menu.'
+                )}
                 keywords={['terminal', 'windows', 'right click', 'paste', 'context menu']}
               >
                 <SettingsSwitchRow
-                  label="Right-click to paste"
-                  description="On Windows, right-click pastes the clipboard. Ctrl+right-click opens the context menu."
+                  label={translate(
+                    'auto.components.settings.TerminalPane.9c178cf8aa',
+                    'Right-click to paste'
+                  )}
+                  description={translate(
+                    'auto.components.settings.TerminalPane.16753eea48',
+                    'On Windows, right-click pastes the clipboard. Ctrl+right-click opens the context menu.'
+                  )}
                   checked={settings.terminalRightClickToPaste}
                   onChange={() =>
                     updateSettings({
@@ -611,13 +393,25 @@ export function TerminalPane({
             )}
 
           <SearchableSetting
-            title="Focus Follows Mouse"
-            description="Hovering a terminal pane activates it without needing to click."
+            title={translate(
+              'auto.components.settings.TerminalPane.8eefeaa3da',
+              'Focus Follows Mouse'
+            )}
+            description={translate(
+              'auto.components.settings.TerminalPane.9129b7e805',
+              'Hovering a terminal pane activates it without needing to click.'
+            )}
             keywords={['focus', 'follows', 'mouse', 'hover', 'pane', 'ghostty', 'active']}
           >
             <SettingsSwitchRow
-              label="Focus Follows Mouse"
-              description="Hovering a terminal pane activates it without needing to click."
+              label={translate(
+                'auto.components.settings.TerminalPane.8eefeaa3da',
+                'Focus Follows Mouse'
+              )}
+              description={translate(
+                'auto.components.settings.TerminalPane.9129b7e805',
+                'Hovering a terminal pane activates it without needing to click.'
+              )}
               checked={settings.terminalFocusFollowsMouse}
               onChange={() =>
                 updateSettings({
@@ -628,8 +422,11 @@ export function TerminalPane({
           </SearchableSetting>
 
           <SearchableSetting
-            title="Copy on Select"
-            description="Automatically copy terminal selections to the clipboard."
+            title={translate('auto.components.settings.TerminalPane.902f5dee1f', 'Copy on Select')}
+            description={translate(
+              'auto.components.settings.TerminalPane.4729c645fc',
+              'Automatically copy terminal selections to the clipboard.'
+            )}
             keywords={[
               'clipboard',
               'copy',
@@ -644,8 +441,14 @@ export function TerminalPane({
             ]}
           >
             <SettingsSwitchRow
-              label="Copy on Select"
-              description="Automatically copy terminal selections to the clipboard."
+              label={translate(
+                'auto.components.settings.TerminalPane.902f5dee1f',
+                'Copy on Select'
+              )}
+              description={translate(
+                'auto.components.settings.TerminalPane.4729c645fc',
+                'Automatically copy terminal selections to the clipboard.'
+              )}
               checked={settings.terminalClipboardOnSelect}
               onChange={() =>
                 updateSettings({
@@ -657,8 +460,14 @@ export function TerminalPane({
 
           <SearchableSetting
             id={OSC52_CLIPBOARD_SETTING_ID}
-            title="Allow TUI Clipboard Writes (OSC 52)"
-            description="Let tmux, Neovim, and fzf copy to the system clipboard over the PTY (including over SSH)."
+            title={translate(
+              'auto.components.settings.TerminalPane.3338dcf8c1',
+              'Allow TUI Clipboard Writes (OSC 52)'
+            )}
+            description={translate(
+              'auto.components.settings.TerminalPane.69c64a479c',
+              'Let tmux, Neovim, and fzf copy to the system clipboard over the PTY (including over SSH).'
+            )}
             keywords={[
               'osc 52',
               'osc52',
@@ -674,8 +483,14 @@ export function TerminalPane({
             ]}
           >
             <SettingsSwitchRow
-              label="Allow TUI Clipboard Writes (OSC 52)"
-              description="Let programs in the terminal (tmux, Neovim, fzf, SSH) copy to your system clipboard."
+              label={translate(
+                'auto.components.settings.TerminalPane.3338dcf8c1',
+                'Allow TUI Clipboard Writes (OSC 52)'
+              )}
+              description={translate(
+                'auto.components.settings.TerminalPane.6e6480a7df',
+                'Let programs in the terminal (tmux, Neovim, fzf, SSH) copy to your system clipboard.'
+              )}
               checked={settings.terminalAllowOsc52Clipboard}
               onChange={() =>
                 updateSettings({
@@ -687,41 +502,29 @@ export function TerminalPane({
         </div>
       </section>
     ) : null,
-    matchesSettingsSearch(searchQuery, TERMINAL_WINDOW_SEARCH_ENTRIES) ? (
-      <TerminalWindowSection key="window" settings={settings} updateSettings={updateSettings} />
-    ) : null,
-    matchesSettingsSearch(searchQuery, TERMINAL_DARK_THEME_SEARCH_ENTRIES) ? (
-      <DarkTerminalThemeSection
-        key="dark-theme"
-        settings={settings}
-        systemPrefersDark={systemPrefersDark}
-        themeSearchDark={themeSearchDark}
-        setThemeSearchDark={setThemeSearchDark}
-        updateSettings={updateSettings}
-        previewFontFamily={previewFontFamily}
-      />
-    ) : null,
-    matchesSettingsSearch(searchQuery, TERMINAL_LIGHT_THEME_SEARCH_ENTRIES) ? (
-      <LightTerminalThemeSection
-        key="light-theme"
-        settings={settings}
-        themeSearchLight={themeSearchLight}
-        setThemeSearchLight={setThemeSearchLight}
-        updateSettings={updateSettings}
-        previewFontFamily={previewFontFamily}
-      />
-    ) : null,
-    matchesSettingsSearch(searchQuery, TERMINAL_SETUP_SCRIPT_SEARCH_ENTRIES) ? (
+    matchesSettingsSearch(searchQuery, getTerminalSetupScriptSearchEntries()) ? (
       <section key="setup-script" className="space-y-3">
         <SettingsSubsectionHeader
-          title="Workspace Setup Script"
-          description="Where the repository setup script runs when a new workspace is created."
+          title={translate(
+            'auto.components.settings.TerminalPane.21f8da2078',
+            'Workspace Setup Script'
+          )}
+          description={translate(
+            'auto.components.settings.TerminalPane.34a0dfa06e',
+            'Where the repository setup script runs when a new workspace is created.'
+          )}
         />
 
         <div className="divide-y divide-border/40">
           <SearchableSetting
-            title="Setup Script Location"
-            description="Where the repository setup script runs when a new workspace is created."
+            title={translate(
+              'auto.components.settings.TerminalPane.d23b43c5be',
+              'Setup Script Location'
+            )}
+            description={translate(
+              'auto.components.settings.TerminalPane.34a0dfa06e',
+              'Where the repository setup script runs when a new workspace is created.'
+            )}
             keywords={[
               'setup',
               'script',
@@ -736,8 +539,14 @@ export function TerminalPane({
             ]}
           >
             <SettingsRow
-              label="Setup Script Location"
-              description='"New Tab" opens the setup command in a background tab titled "Setup" without stealing focus.'
+              label={translate(
+                'auto.components.settings.TerminalPane.d23b43c5be',
+                'Setup Script Location'
+              )}
+              description={translate(
+                'auto.components.settings.TerminalPane.a9d47451d1',
+                '"New Tab" opens the setup command in a background tab titled "Setup" without stealing focus.'
+              )}
               control={
                 <ToggleGroup
                   type="single"
@@ -757,23 +566,38 @@ export function TerminalPane({
                   <ToggleGroupItem
                     value="new-tab"
                     className="h-8 px-3 text-xs"
-                    aria-label="Run in a new tab"
+                    aria-label={translate(
+                      'auto.components.settings.TerminalPane.6c6a054a1c',
+                      'Run in a new tab'
+                    )}
                   >
-                    New Tab
+                    {translate('auto.components.settings.TerminalPane.1158f8fd55', 'New Tab')}
                   </ToggleGroupItem>
                   <ToggleGroupItem
                     value="split-vertical"
                     className="h-8 px-3 text-xs"
-                    aria-label="Split vertically"
+                    aria-label={translate(
+                      'auto.components.settings.TerminalPane.691ce810e0',
+                      'Split vertically'
+                    )}
                   >
-                    Split Vertically
+                    {translate(
+                      'auto.components.settings.TerminalPane.332e8a2872',
+                      'Split Vertically'
+                    )}
                   </ToggleGroupItem>
                   <ToggleGroupItem
                     value="split-horizontal"
                     className="h-8 px-3 text-xs"
-                    aria-label="Split horizontally"
+                    aria-label={translate(
+                      'auto.components.settings.TerminalPane.623e62df99',
+                      'Split horizontally'
+                    )}
                   >
-                    Split Horizontally
+                    {translate(
+                      'auto.components.settings.TerminalPane.003df129fe',
+                      'Split Horizontally'
+                    )}
                   </ToggleGroupItem>
                 </ToggleGroup>
               }
@@ -782,34 +606,46 @@ export function TerminalPane({
         </div>
       </section>
     ) : null,
-    matchesSettingsSearch(searchQuery, MANAGE_SESSIONS_SEARCH_ENTRIES) ? (
+    matchesSettingsSearch(searchQuery, getManageSessionsSearchEntries()) ? (
       <ManageSessionsSection key="manage-sessions" />
     ) : null,
-    matchesSettingsSearch(searchQuery, TERMINAL_ADVANCED_SEARCH_ENTRIES) ||
+    matchesSettingsSearch(searchQuery, getTerminalAdvancedSearchEntries()) ||
     (showWindowsPowerShellImplementation &&
       matchesSettingsSearch(
         searchQuery,
-        TERMINAL_WINDOWS_POWERSHELL_IMPLEMENTATION_SEARCH_ENTRY
+        getTerminalWindowsPowershellImplementationSearchEntry()
       )) ||
     (isMac &&
-      (matchesSettingsSearch(searchQuery, TERMINAL_MAC_OPTION_SEARCH_ENTRIES) ||
-        matchesSettingsSearch(searchQuery, TERMINAL_MAC_YEN_SEARCH_ENTRIES))) ? (
+      (matchesSettingsSearch(searchQuery, getTerminalMacOptionSearchEntries()) ||
+        matchesSettingsSearch(searchQuery, getTerminalMacYenSearchEntries()))) ? (
       <section key="advanced" className="space-y-3">
         <SettingsSubsectionHeader
-          title="Advanced"
-          description="Scrollback, word boundaries, and platform-specific terminal behaviors."
+          title={translate('auto.components.settings.TerminalPane.5e5f06c82c', 'Advanced')}
+          description={translate(
+            'auto.components.settings.TerminalPane.267d020745',
+            'Scrollback, word boundaries, and platform-specific terminal behaviors.'
+          )}
         />
 
         <div className="divide-y divide-border/40">
           <SearchableSetting
-            title="Scrollback Size"
-            description="Maximum terminal scrollback buffer size."
+            title={translate('auto.components.settings.TerminalPane.9df53f7c14', 'Scrollback Size')}
+            description={translate(
+              'auto.components.settings.TerminalPane.c3810b2b42',
+              'Maximum terminal scrollback buffer size.'
+            )}
             keywords={['terminal', 'scrollback', 'buffer', 'memory']}
           >
             <SettingsRow
               alignTop={scrollbackMode === 'custom'}
-              label="Scrollback Size"
-              description="Maximum terminal scrollback buffer size for new terminal panes."
+              label={translate(
+                'auto.components.settings.TerminalPane.9df53f7c14',
+                'Scrollback Size'
+              )}
+              description={translate(
+                'auto.components.settings.TerminalPane.81d86b2dd2',
+                'Maximum terminal scrollback buffer size for new terminal panes.'
+              )}
               control={
                 <div className="flex flex-col items-end gap-2">
                   <ToggleGroup
@@ -838,17 +674,25 @@ export function TerminalPane({
                         key={preset}
                         value={`${preset}`}
                         className="h-8 px-3 text-xs"
-                        aria-label={`${preset} megabytes`}
+                        aria-label={translate(
+                          'auto.components.settings.TerminalPane.5336c096af',
+                          '{{value0}} megabytes',
+                          { value0: preset }
+                        )}
                       >
-                        {preset} MB
+                        {preset}{' '}
+                        {translate('auto.components.settings.TerminalPane.12e06178fa', 'MB')}
                       </ToggleGroupItem>
                     ))}
                     <ToggleGroupItem
                       value="custom"
                       className="h-8 px-3 text-xs"
-                      aria-label="Custom"
+                      aria-label={translate(
+                        'auto.components.settings.TerminalPane.907b0b9d3e',
+                        'Custom'
+                      )}
                     >
-                      Custom
+                      {translate('auto.components.settings.TerminalPane.907b0b9d3e', 'Custom')}
                     </ToggleGroupItem>
                   </ToggleGroup>
                   {scrollbackMode === 'custom' ? (
@@ -869,7 +713,9 @@ export function TerminalPane({
                         }}
                         className="number-input-clean w-24 tabular-nums"
                       />
-                      <span className="text-xs text-muted-foreground">MB</span>
+                      <span className="text-xs text-muted-foreground">
+                        {translate('auto.components.settings.TerminalPane.12e06178fa', 'MB')}
+                      </span>
                     </div>
                   ) : null}
                 </div>
@@ -878,13 +724,22 @@ export function TerminalPane({
           </SearchableSetting>
 
           <SearchableSetting
-            title="Word Separators"
-            description="Characters treated as word boundaries for double-click selection."
+            title={translate('auto.components.settings.TerminalPane.4bebcc2b2c', 'Word Separators')}
+            description={translate(
+              'auto.components.settings.TerminalPane.8a956cc91e',
+              'Characters treated as word boundaries for double-click selection.'
+            )}
             keywords={['word', 'separator', 'boundary', 'double-click', 'selection']}
           >
             <SettingsRow
-              label="Word Separators"
-              description="Characters treated as word boundaries for double-click selection."
+              label={translate(
+                'auto.components.settings.TerminalPane.4bebcc2b2c',
+                'Word Separators'
+              )}
+              description={translate(
+                'auto.components.settings.TerminalPane.8a956cc91e',
+                'Characters treated as word boundaries for double-click selection.'
+              )}
               control={
                 <Input
                   value={settings.terminalWordSeparator ?? ''}
@@ -902,11 +757,17 @@ export function TerminalPane({
           {showWindowsPowerShellImplementation &&
           matchesSettingsSearch(
             searchQuery,
-            TERMINAL_WINDOWS_POWERSHELL_IMPLEMENTATION_SEARCH_ENTRY
+            getTerminalWindowsPowershellImplementationSearchEntry()
           ) ? (
             <SearchableSetting
-              title="PowerShell Version"
-              description="Choose whether the PowerShell shell option launches Windows PowerShell or PowerShell 7+ for new terminal panes."
+              title={translate(
+                'auto.components.settings.TerminalPane.fe20f79dd1',
+                'PowerShell Version'
+              )}
+              description={translate(
+                'auto.components.settings.TerminalPane.3d88af864d',
+                'Choose whether the PowerShell shell option launches Windows PowerShell or PowerShell 7+ for new terminal panes.'
+              )}
               keywords={[
                 'terminal',
                 'windows',
@@ -920,20 +781,32 @@ export function TerminalPane({
             >
               <SettingsRow
                 alignTop
-                label="PowerShell Version"
+                label={translate(
+                  'auto.components.settings.TerminalPane.fe20f79dd1',
+                  'PowerShell Version'
+                )}
                 description={
                   pwshAvailable ? (
-                    'Choose between Windows PowerShell and PowerShell 7+ for new terminal panes.'
+                    translate(
+                      'auto.components.settings.TerminalPane.5ed5c95344',
+                      'Choose between Windows PowerShell and PowerShell 7+ for new terminal panes.'
+                    )
                   ) : (
                     <>
-                      Auto uses Windows PowerShell now and switches to PowerShell 7+ when installed.{' '}
+                      {translate(
+                        'auto.components.settings.TerminalPane.a016ffbeed',
+                        'Auto uses Windows PowerShell now and switches to PowerShell 7+ when installed.'
+                      )}{' '}
                       <a
                         href="https://github.com/PowerShell/PowerShell/releases/latest"
                         target="_blank"
                         rel="noopener noreferrer"
                         className="underline hover:text-foreground"
                       >
-                        Download PowerShell 7+
+                        {translate(
+                          'auto.components.settings.TerminalPane.822f62ddcd',
+                          'Download PowerShell 7+'
+                        )}
                       </a>
                       .
                     </>
@@ -941,15 +814,34 @@ export function TerminalPane({
                 }
                 control={
                   <SettingsSegmentedControl
-                    ariaLabel="PowerShell Version"
+                    ariaLabel={translate(
+                      'auto.components.settings.TerminalPane.fe20f79dd1',
+                      'PowerShell Version'
+                    )}
                     value={powerShellImplementation}
                     onChange={(value) =>
                       updateSettings({ terminalWindowsPowerShellImplementation: value })
                     }
                     options={[
-                      { value: 'auto', label: 'Auto' },
-                      { value: 'powershell.exe', label: 'Windows PowerShell' },
-                      { value: 'pwsh.exe', label: 'PowerShell 7+', disabled: !pwshAvailable }
+                      {
+                        value: 'auto',
+                        label: translate('auto.components.settings.TerminalPane.43c2ff7b0e', 'Auto')
+                      },
+                      {
+                        value: 'powershell.exe',
+                        label: translate(
+                          'auto.components.settings.TerminalPane.d26174e1dd',
+                          'Windows PowerShell'
+                        )
+                      },
+                      {
+                        value: 'pwsh.exe',
+                        label: translate(
+                          'auto.components.settings.TerminalPane.96be03b8eb',
+                          'PowerShell 7+'
+                        ),
+                        disabled: !pwshAvailable
+                      }
                     ]}
                   />
                 }
@@ -960,8 +852,14 @@ export function TerminalPane({
           {isMac ? (
             <>
               <SearchableSetting
-                title="Option as Alt"
-                description="Controls whether the macOS Option key sends Alt/Esc sequences or composes characters."
+                title={translate(
+                  'auto.components.settings.TerminalPane.0a10420e1a',
+                  'Option as Alt'
+                )}
+                description={translate(
+                  'auto.components.settings.TerminalPane.2561d3fc1b',
+                  'Controls whether the macOS Option key sends Alt/Esc sequences or composes characters.'
+                )}
                 keywords={[
                   'terminal',
                   'option',
@@ -980,27 +878,77 @@ export function TerminalPane({
               >
                 <SettingsRow
                   alignTop
-                  label="Option as Alt"
+                  label={translate(
+                    'auto.components.settings.TerminalPane.0a10420e1a',
+                    'Option as Alt'
+                  )}
                   description={
                     settings.terminalMacOptionAsAlt === 'auto'
-                      ? `Auto — detected: ${detectedLayoutLabel}.`
+                      ? translate(
+                          'auto.components.settings.TerminalPane.d21c493808',
+                          'Auto — detected: {{value0}}.',
+                          { value0: detectedLayoutLabel }
+                        )
                       : settings.terminalMacOptionAsAlt === 'false'
-                        ? 'Option composes special characters for your keyboard layout.'
+                        ? translate(
+                            'auto.components.settings.TerminalPane.d8998bb328',
+                            'Option composes special characters for your keyboard layout.'
+                          )
                         : settings.terminalMacOptionAsAlt === 'true'
-                          ? 'Both Option keys send Alt/Esc sequences.'
-                          : `The ${settings.terminalMacOptionAsAlt} Option key sends Alt/Esc; the other composes special characters.`
+                          ? translate(
+                              'auto.components.settings.TerminalPane.b62373091a',
+                              'Both Option keys send Alt/Esc sequences.'
+                            )
+                          : translate(
+                              'auto.components.settings.TerminalPane.ce3aadf0b2',
+                              'The {{value0}} Option key sends Alt/Esc; the other composes special characters.',
+                              { value0: settings.terminalMacOptionAsAlt }
+                            )
                   }
                   control={
                     <SettingsSegmentedControl
-                      ariaLabel="Option as Alt"
+                      ariaLabel={translate(
+                        'auto.components.settings.TerminalPane.0a10420e1a',
+                        'Option as Alt'
+                      )}
                       value={settings.terminalMacOptionAsAlt}
                       onChange={(option) => updateSettings({ terminalMacOptionAsAlt: option })}
                       options={[
-                        { value: 'auto', label: 'Auto' },
-                        { value: 'true', label: 'Both' },
-                        { value: 'left', label: 'Left' },
-                        { value: 'right', label: 'Right' },
-                        { value: 'false', label: 'Off' }
+                        {
+                          value: 'auto',
+                          label: translate(
+                            'auto.components.settings.TerminalPane.43c2ff7b0e',
+                            'Auto'
+                          )
+                        },
+                        {
+                          value: 'true',
+                          label: translate(
+                            'auto.components.settings.TerminalPane.badb1219fc',
+                            'Both'
+                          )
+                        },
+                        {
+                          value: 'left',
+                          label: translate(
+                            'auto.components.settings.TerminalPane.e7aec1fd60',
+                            'Left'
+                          )
+                        },
+                        {
+                          value: 'right',
+                          label: translate(
+                            'auto.components.settings.TerminalPane.c73d510938',
+                            'Right'
+                          )
+                        },
+                        {
+                          value: 'false',
+                          label: translate(
+                            'auto.components.settings.TerminalPane.3fe1c5bfe0',
+                            'Off'
+                          )
+                        }
                       ]}
                     />
                   }
@@ -1008,8 +956,14 @@ export function TerminalPane({
               </SearchableSetting>
 
               <SearchableSetting
-                title="JIS Yen (¥) to Backslash (\\)"
-                description="Controls whether pressing the JIS Yen (¥) key sends a backslash (\\) instead."
+                title={translate(
+                  'auto.components.settings.TerminalPane.19f4935159',
+                  'JIS Yen (¥) to Backslash (\\\\)'
+                )}
+                description={translate(
+                  'auto.components.settings.TerminalPane.1c337bef4a',
+                  'Controls whether pressing the JIS Yen (¥) key sends a backslash (\\\\) instead.'
+                )}
                 keywords={[
                   'terminal',
                   'yen',
@@ -1023,8 +977,14 @@ export function TerminalPane({
                 ]}
               >
                 <SettingsSwitchRow
-                  label="JIS Yen (¥) to Backslash (\\)"
-                  description="Pressing the JIS Yen (¥) key sends a backslash (\\) instead."
+                  label={translate(
+                    'auto.components.settings.TerminalPane.19f4935159',
+                    'JIS Yen (¥) to Backslash (\\\\)'
+                  )}
+                  description={translate(
+                    'auto.components.settings.TerminalPane.4263e940e0',
+                    'Pressing the JIS Yen (¥) key sends a backslash (\\\\) instead.'
+                  )}
                   checked={settings.terminalJISYenToBackslash ?? false}
                   onChange={() =>
                     updateSettings({
@@ -1048,15 +1008,6 @@ export function TerminalPane({
           {section}
         </div>
       ))}
-      <GhosttyImportModal
-        open={ghostty.open}
-        onOpenChange={ghostty.handleOpenChange}
-        preview={ghostty.preview}
-        loading={ghostty.loading}
-        onApply={ghostty.handleApply}
-        applied={ghostty.applied}
-        applyError={ghostty.applyError}
-      />
     </div>
   )
 }

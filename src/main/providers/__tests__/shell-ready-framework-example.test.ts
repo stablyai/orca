@@ -61,7 +61,7 @@ EOF
 
     expect(stdout).toMatchInlineSnapshot(`
       "HOME=<HOME>
-      ZDOTDIR=<WRAPPER_DIR>
+      ZDOTDIR=<HOME>/.config/zsh
       "
     `)
   })
@@ -85,8 +85,8 @@ EOF
     )
 
     expect(stdout).toMatchInlineSnapshot(`
-      "ORCA_ORIG_ZDOTDIR=<HOME>/.config/zsh-remote
-      ZDOTDIR=<WRAPPER_DIR>
+      "ORCA_ORIG_ZDOTDIR=<HOME>
+      ZDOTDIR=<HOME>/.config/zsh-remote
       "
     `)
   })

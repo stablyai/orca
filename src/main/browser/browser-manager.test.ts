@@ -819,6 +819,91 @@ describe('browserManager', () => {
     expect(guestOnMock.mock.calls.filter(([event]) => event === 'will-redirect')).toHaveLength(1)
   })
 
+  it('cleans attached guest policy state when a guest is destroyed before registration', () => {
+    const guest = {
+      id: 304,
+      isDestroyed: vi.fn(() => false),
+      getType: vi.fn(() => 'webview'),
+      setBackgroundThrottling: guestSetBackgroundThrottlingMock,
+      setWindowOpenHandler: guestSetWindowOpenHandlerMock,
+      on: guestOnMock,
+      off: guestOffMock,
+      openDevTools: guestOpenDevToolsMock
+    }
+    webContentsFromIdMock.mockReturnValue(guest)
+
+    browserManager.attachGuestPolicies(guest as never)
+
+    const destroyedHandler = guestOnMock.mock.calls.find(
+      ([event]) => event === 'destroyed'
+    )?.[1] as (() => void) | undefined
+    expect(destroyedHandler).toBeTypeOf('function')
+
+    destroyedHandler?.()
+    browserManager.registerGuest({
+      browserPageId: 'browser-destroyed-before-register',
+      webContentsId: guest.id,
+      rendererWebContentsId
+    })
+
+    expect(browserManager.getGuestWebContentsId('browser-destroyed-before-register')).toBeNull()
+  })
+
+  it('fully unregisters stale guests discovered during authorization', () => {
+    const guest = {
+      id: 305,
+      isDestroyed: vi.fn(() => false),
+      getType: vi.fn(() => 'webview'),
+      setBackgroundThrottling: guestSetBackgroundThrottlingMock,
+      setWindowOpenHandler: guestSetWindowOpenHandlerMock,
+      on: guestOnMock,
+      off: guestOffMock,
+      openDevTools: guestOpenDevToolsMock
+    }
+    webContentsFromIdMock.mockReturnValue(guest)
+
+    browserManager.attachGuestPolicies(guest as never)
+    browserManager.registerGuest({
+      browserPageId: 'browser-stale',
+      workspaceId: 'workspace-stale',
+      worktreeId: 'worktree-stale',
+      sessionProfileId: 'profile-stale',
+      webContentsId: guest.id,
+      rendererWebContentsId
+    })
+
+    const internals = browserManager as unknown as {
+      rendererWebContentsIdByTabId: Map<string, number>
+      workspaceIdByPageId: Map<string, string>
+      sessionProfileIdByPageId: Map<string, string | null>
+      worktreeIdByTabId: Map<string, string>
+      contextMenuCleanupByTabId: Map<string, () => void>
+      grabShortcutCleanupByTabId: Map<string, () => void>
+      shortcutForwardingCleanupByTabId: Map<string, () => void>
+    }
+    expect(internals.rendererWebContentsIdByTabId.has('browser-stale')).toBe(true)
+    expect(internals.workspaceIdByPageId.has('browser-stale')).toBe(true)
+    expect(internals.sessionProfileIdByPageId.has('browser-stale')).toBe(true)
+    expect(internals.worktreeIdByTabId.has('browser-stale')).toBe(true)
+    expect(internals.contextMenuCleanupByTabId.has('browser-stale')).toBe(true)
+    expect(internals.grabShortcutCleanupByTabId.has('browser-stale')).toBe(true)
+    expect(internals.shortcutForwardingCleanupByTabId.has('browser-stale')).toBe(true)
+
+    webContentsFromIdMock.mockReturnValue(null)
+
+    expect(browserManager.getAuthorizedGuest('browser-stale', rendererWebContentsId)).toBeNull()
+
+    expect(browserManager.getGuestWebContentsId('browser-stale')).toBeNull()
+    expect(internals.rendererWebContentsIdByTabId.has('browser-stale')).toBe(false)
+    expect(internals.workspaceIdByPageId.has('browser-stale')).toBe(false)
+    expect(internals.sessionProfileIdByPageId.has('browser-stale')).toBe(false)
+    expect(internals.worktreeIdByTabId.has('browser-stale')).toBe(false)
+    expect(internals.contextMenuCleanupByTabId.has('browser-stale')).toBe(false)
+    expect(internals.grabShortcutCleanupByTabId.has('browser-stale')).toBe(false)
+    expect(internals.shortcutForwardingCleanupByTabId.has('browser-stale')).toBe(false)
+    expect(guestOffMock).toHaveBeenCalled()
+  })
+
   it('replays a queued main-frame load failure after the guest registers', () => {
     const rendererSendMock = vi.fn()
     const guest = {

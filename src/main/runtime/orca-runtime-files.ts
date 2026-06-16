@@ -30,6 +30,7 @@ import type {
   RuntimeFilePreviewResult,
   RuntimeFileReadResult
 } from '../../shared/runtime-types'
+import { watchFileExplorerInWorker } from './file-watcher-host'
 import { wslAwareSpawn } from '../git/runner'
 import { parseWslPath, toWindowsWslPath } from '../wsl'
 import { isENOENT, resolveAuthorizedPath } from '../ipc/filesystem-auth'
@@ -119,8 +120,19 @@ export type RuntimeFileCommandHost = {
   resolveRuntimeGitTarget(
     selector: string
   ): Promise<{ worktree: ResolvedRuntimeFileWorktree; connectionId?: string }>
-  openFile(worktreeId: string, filePath: string, relativePath: string): void
-  openDiff(worktreeId: string, filePath: string, relativePath: string, staged: boolean): void
+  openFile(
+    worktreeId: string,
+    filePath: string,
+    relativePath: string,
+    runtimeEnvironmentId?: string | null
+  ): void
+  openDiff(
+    worktreeId: string,
+    filePath: string,
+    relativePath: string,
+    staged: boolean,
+    runtimeEnvironmentId?: string | null
+  ): void
 }
 
 export class RuntimeFileCommands {
@@ -172,7 +184,13 @@ export class RuntimeFileCommands {
       return { worktree: worktree.id, relativePath, kind, opened: false }
     }
     const filePath = joinWorktreeRelativePath(worktree.path, relativePath)
-    this.host.openFile(worktree.id, filePath, relativePath)
+    // Why: the service's internal runtimeId is not a registered runtime env selector
+    // (those live in orca-environments.json). Passing it caused Unknown environment
+    // errors on content load for CLI-initiated opens (via files.open from orca cli
+    // used by agents). Instead pass undefined so the renderer openFile falls back to
+    // the current activeRuntimeEnvironmentId (or null), matching sidebar opens and
+    // allowing correct routing for local vs remote envs.
+    this.host.openFile(worktree.id, filePath, relativePath, undefined)
     return { worktree: worktree.id, relativePath, kind, opened: true }
   }
 
@@ -191,7 +209,8 @@ export class RuntimeFileCommands {
         ? 'markdown'
         : 'text'
     const filePath = joinWorktreeRelativePath(worktree.path, relativePath)
-    this.host.openDiff(worktree.id, filePath, relativePath, staged)
+    // Why: see openMobileFile; avoid stamping internal runtimeId as runtimeEnvironmentId.
+    this.host.openDiff(worktree.id, filePath, relativePath, staged, undefined)
     return { worktree: worktree.id, relativePath, kind, opened: true }
   }
 
@@ -275,47 +294,11 @@ export class RuntimeFileCommands {
     if (process.platform === 'win32') {
       return watchWindowsRuntimeFileExplorer(rootPath, callback)
     }
-    const watcher = await import('@parcel/watcher')
-    const subscription = await watcher.subscribe(
-      rootPath,
-      (err, events) => {
-        if (err) {
-          console.error('[runtime-files.watch] watcher error', { rootPath, err })
-          callback([{ kind: 'overflow', absolutePath: rootPath }])
-          return
-        }
-        void Promise.all(
-          events.map(async (event): Promise<FsChangeEvent> => {
-            let isDirectory = false
-            try {
-              isDirectory = (await stat(event.path)).isDirectory()
-            } catch {
-              isDirectory = false
-            }
-            return {
-              kind: event.type,
-              absolutePath: event.path,
-              isDirectory
-            }
-          })
-        ).then(callback)
-      },
-      {
-        ignore: [
-          '.git',
-          'node_modules',
-          'dist',
-          'build',
-          '.next',
-          '.cache',
-          '__pycache__',
-          'target',
-          '.venv'
-        ]
-      }
-    )
+    // Why: the watcher runs in a worker thread so @parcel/watcher's blocking
+    // recursive crawl can't starve the main/`serve` process (issue #5308).
+    const dispose = await watchFileExplorerInWorker(rootPath, callback)
     return () => {
-      trackRuntimeFileWatcherUnsubscribe(rootPath, () => subscription.unsubscribe())
+      trackRuntimeFileWatcherUnsubscribe(rootPath, dispose)
     }
   }
 

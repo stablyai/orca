@@ -4,6 +4,11 @@
 import type { PrimaryActionInputs } from './source-control-primary-action'
 import type { GitConflictOperation } from '../../../../shared/types'
 import { shouldForcePushWithLeaseForUpstream } from '../../../../shared/git-upstream-status'
+import { translate } from '@/i18n/i18n'
+import {
+  localizedHostedReviewCopy,
+  resolveSupportedHostedReviewCopyProvider
+} from '@/i18n/hosted-review-localized-copy'
 
 export type DropdownActionInputs = PrimaryActionInputs & {
   conflictOperation?: GitConflictOperation
@@ -20,6 +25,7 @@ export type DropdownActionKind =
   | 'create_pr'
   | 'push_create_pr'
   | 'push'
+  | 'force_push'
   | 'pull'
   | 'fast_forward'
   | 'sync'
@@ -75,8 +81,27 @@ function formatForcePushTitle(branchCommitsAhead: number | undefined, upstreamNa
   return `Remote only has older copies of local commits. Force push ${countText} with lease to update ${upstreamName ?? 'the remote branch'}.`
 }
 
+function formatManualForcePushTitle(ahead: number, behind: number, upstreamName?: string): string {
+  const commitText = ahead === 1 ? '1 local commit' : `${ahead} local commits`
+  if (behind > 0) {
+    return `Force push ${commitText} with lease to update ${upstreamName ?? 'the remote branch'} and replace remote-only commits.`
+  }
+  return `Force push ${commitText} with lease to update ${upstreamName ?? 'the remote branch'}.`
+}
+
 function formatRebaseBaseRef(baseRef: string): string {
   return baseRef.replace(/^refs\/remotes\//, '').replace(/^remotes\//, '')
+}
+
+function reviewCopy(
+  provider: NonNullable<PrimaryActionInputs['hostedReviewCreation']>['provider'] | undefined
+): ReturnType<typeof localizedHostedReviewCopy> & {
+  authCommand: 'gh auth login' | 'glab auth login'
+} {
+  return {
+    ...localizedHostedReviewCopy(resolveSupportedHostedReviewCopyProvider(provider)),
+    authCommand: provider === 'gitlab' ? 'glab auth login' : 'gh auth login'
+  }
 }
 
 /**
@@ -98,6 +123,7 @@ export function resolveDropdownItems(inputs: DropdownActionInputs): DropdownEntr
     hostedReviewCreation,
     conflictOperation = 'unknown',
     branchCommitsAhead,
+    hasCurrentBranch = true,
     rebaseBaseRef,
     isPullRequestOperationActive = false
   } = inputs
@@ -115,13 +141,16 @@ export function resolveDropdownItems(inputs: DropdownActionInputs): DropdownEntr
   const hasUpstream = upstreamStatus?.hasUpstream ?? false
   const publishBlockedByMergedPR = !hasUpstream && prState === 'merged'
   const publishBlockedByPRLoading = !hasUpstream && !!isPRStateLoading
+  const publishBlockedByDetachedHead = !hasUpstream && !hasCurrentBranch
   const publishBlockedByNoBranchCommits = !hasUpstream && branchCommitsAhead === 0
+  const publishBlockedByUncommittedChanges = publishBlockedByNoBranchCommits && hasDirtyLocalChanges
   const ahead = upstreamStatus?.ahead ?? 0
   const behind = upstreamStatus?.behind ?? 0
   const shouldForcePushWithLease = shouldForcePushWithLeaseForUpstream(upstreamStatus)
   const pushLabelCount =
     shouldForcePushWithLease && branchCommitsAhead !== undefined ? branchCommitsAhead : ahead
   const forcePushTitle = formatForcePushTitle(branchCommitsAhead, upstreamStatus?.upstreamName)
+  const createReviewCopy = reviewCopy(hostedReviewCreation?.provider)
 
   // Why: any in-flight commit or remote operation should lock the whole menu.
   // A running push shouldn't let a second pull/sync click queue up behind it
@@ -146,7 +175,10 @@ export function resolveDropdownItems(inputs: DropdownActionInputs): DropdownEntr
   const canCommit = !globalBusy && commitDisabledReason === null
   const commitItem: DropdownItem = {
     kind: 'commit',
-    label: 'Commit',
+    label: translate(
+      'auto.components.right.sidebar.source.control.dropdown.items.2b8e6595fd',
+      'Commit'
+    ),
     title: commitDisabledReason ?? 'Commit staged changes',
     disabled: !canCommit
   }
@@ -164,14 +196,16 @@ export function resolveDropdownItems(inputs: DropdownActionInputs): DropdownEntr
       ? 'Checking PR status…'
       : publishBlockedByMergedPR
         ? 'PR is already merged'
-        : !hasUpstream
-          ? 'Publish the branch first to push commits'
-          : (commitDisabledReason ??
-            (shouldForcePushWithLease
-              ? 'Commit staged changes and force push with lease'
-              : behind > 0
-                ? 'Use Commit & Sync to pull remote changes before pushing'
-                : 'Commit staged changes and push'))
+        : publishBlockedByDetachedHead
+          ? 'Check out a branch before pushing commits'
+          : !hasUpstream
+            ? 'Publish the branch first to push commits'
+            : (commitDisabledReason ??
+              (shouldForcePushWithLease
+                ? 'Commit staged changes and force push with lease'
+                : behind > 0
+                  ? 'Use Commit & Sync to pull remote changes before pushing'
+                  : 'Commit staged changes and push'))
   const commitPushItem: DropdownItem = {
     kind: 'commit_push',
     label: shouldForcePushWithLease ? 'Commit & Force Push' : 'Commit & Push',
@@ -180,6 +214,7 @@ export function resolveDropdownItems(inputs: DropdownActionInputs): DropdownEntr
       globalBusy ||
       upstreamLoading ||
       !hasUpstream ||
+      publishBlockedByDetachedHead ||
       (behind > 0 && !shouldForcePushWithLease) ||
       publishBlockedByPRLoading ||
       publishBlockedByMergedPR ||
@@ -195,6 +230,9 @@ export function resolveDropdownItems(inputs: DropdownActionInputs): DropdownEntr
     }
     if (publishBlockedByMergedPR) {
       return 'PR is already merged'
+    }
+    if (publishBlockedByDetachedHead) {
+      return 'Check out a branch before syncing commits'
     }
     if (!hasUpstream) {
       // Why: mirror pushItem/syncItem — direct the user to Publish Branch
@@ -215,12 +253,16 @@ export function resolveDropdownItems(inputs: DropdownActionInputs): DropdownEntr
   })()
   const commitSyncItem: DropdownItem = {
     kind: 'commit_sync',
-    label: 'Commit & Sync',
+    label: translate(
+      'auto.components.right.sidebar.source.control.dropdown.items.323bb614aa',
+      'Commit & Sync'
+    ),
     title: commitSyncTitle,
     disabled:
       globalBusy ||
       upstreamLoading ||
       !hasUpstream ||
+      publishBlockedByDetachedHead ||
       shouldForcePushWithLease ||
       behind === 0 ||
       commitDisabledReason !== null
@@ -228,28 +270,54 @@ export function resolveDropdownItems(inputs: DropdownActionInputs): DropdownEntr
 
   const pushItem: DropdownItem = {
     kind: 'push',
-    label: formatCountLabel(shouldForcePushWithLease ? 'Force Push' : 'Push', pushLabelCount),
+    label: formatCountLabel('Push', ahead),
     title: upstreamLoading
       ? 'Checking branch status…'
       : publishBlockedByPRLoading
         ? 'Checking PR status…'
         : publishBlockedByMergedPR
           ? 'PR is already merged'
-          : !hasUpstream
-            ? 'Publish the branch first to push commits'
-            : shouldForcePushWithLease
-              ? forcePushTitle
-              : behind > 0 && ahead > 0
-                ? 'Sync first to pull remote changes before pushing'
-                : ahead === 0
-                  ? `Nothing to push${upstreamStatus?.upstreamName ? ` to ${upstreamStatus.upstreamName}` : ''}`
-                  : describePushCount(ahead),
+          : publishBlockedByDetachedHead
+            ? 'Check out a branch before pushing commits'
+            : !hasUpstream
+              ? 'Publish the branch first to push commits'
+              : shouldForcePushWithLease
+                ? 'Use Force Push — remote only has older copies of local commits'
+                : behind > 0 && ahead > 0
+                  ? 'Sync first to pull remote changes before pushing'
+                  : ahead === 0
+                    ? `Nothing to push${upstreamStatus?.upstreamName ? ` to ${upstreamStatus.upstreamName}` : ''}`
+                    : describePushCount(ahead),
     disabled:
       globalBusy ||
       upstreamLoading ||
       !hasUpstream ||
+      publishBlockedByDetachedHead ||
       ahead === 0 ||
+      shouldForcePushWithLease ||
       (behind > 0 && !shouldForcePushWithLease)
+  }
+
+  const forcePushItem: DropdownItem = {
+    kind: 'force_push',
+    label: formatCountLabel('Force Push', pushLabelCount),
+    title: upstreamLoading
+      ? 'Checking branch status…'
+      : publishBlockedByPRLoading
+        ? 'Checking PR status…'
+        : publishBlockedByMergedPR
+          ? 'PR is already merged'
+          : publishBlockedByDetachedHead
+            ? 'Check out a branch before force pushing commits'
+            : !hasUpstream
+              ? 'Publish the branch first to force push commits'
+              : ahead === 0
+                ? `Nothing to force push${upstreamStatus?.upstreamName ? ` to ${upstreamStatus.upstreamName}` : ''}`
+                : shouldForcePushWithLease
+                  ? forcePushTitle
+                  : formatManualForcePushTitle(ahead, behind, upstreamStatus?.upstreamName),
+    disabled:
+      globalBusy || upstreamLoading || !hasUpstream || publishBlockedByDetachedHead || ahead === 0
   }
 
   const pullItem: DropdownItem = {
@@ -261,15 +329,22 @@ export function resolveDropdownItems(inputs: DropdownActionInputs): DropdownEntr
         ? 'Checking PR status…'
         : publishBlockedByMergedPR
           ? 'PR is already merged'
-          : !hasUpstream
-            ? 'Publish the branch first to pull commits'
-            : shouldForcePushWithLease
-              ? 'Nothing new to pull — remote only has older copies of local commits'
-              : behind === 0
-                ? 'Nothing to pull'
-                : describePullCount(behind),
+          : publishBlockedByDetachedHead
+            ? 'Check out a branch before pulling commits'
+            : !hasUpstream
+              ? 'Publish the branch first to pull commits'
+              : shouldForcePushWithLease
+                ? 'Nothing new to pull — remote only has older copies of local commits'
+                : behind === 0
+                  ? 'Nothing to pull'
+                  : describePullCount(behind),
     disabled:
-      globalBusy || upstreamLoading || !hasUpstream || behind === 0 || shouldForcePushWithLease
+      globalBusy ||
+      upstreamLoading ||
+      !hasUpstream ||
+      publishBlockedByDetachedHead ||
+      behind === 0 ||
+      shouldForcePushWithLease
   }
 
   const fastForwardItem: DropdownItem = {
@@ -281,19 +356,22 @@ export function resolveDropdownItems(inputs: DropdownActionInputs): DropdownEntr
         ? 'Checking PR status…'
         : publishBlockedByMergedPR
           ? 'PR is already merged'
-          : !hasUpstream
-            ? 'Publish the branch first to fast-forward'
-            : shouldForcePushWithLease
-              ? 'Nothing new to fast-forward — remote only has older copies of local commits'
-              : behind === 0
-                ? 'Nothing to fast-forward'
-                : ahead > 0
-                  ? 'Local commits prevent a fast-forward pull'
-                  : describeFastForwardCount(behind),
+          : publishBlockedByDetachedHead
+            ? 'Check out a branch before fast-forwarding'
+            : !hasUpstream
+              ? 'Publish the branch first to fast-forward'
+              : shouldForcePushWithLease
+                ? 'Nothing new to fast-forward — remote only has older copies of local commits'
+                : behind === 0
+                  ? 'Nothing to fast-forward'
+                  : ahead > 0
+                    ? 'Local commits prevent a fast-forward pull'
+                    : describeFastForwardCount(behind),
     disabled:
       globalBusy ||
       upstreamLoading ||
       !hasUpstream ||
+      publishBlockedByDetachedHead ||
       behind === 0 ||
       ahead > 0 ||
       shouldForcePushWithLease
@@ -308,17 +386,20 @@ export function resolveDropdownItems(inputs: DropdownActionInputs): DropdownEntr
         ? 'Checking PR status…'
         : publishBlockedByMergedPR
           ? 'PR is already merged'
-          : !hasUpstream
-            ? 'Publish the branch first to sync commits'
-            : shouldForcePushWithLease
-              ? 'Use Force Push — remote only has older copies of local commits'
-              : ahead === 0 && behind === 0
-                ? 'Branch is up to date'
-                : describeSyncCounts(ahead, behind),
+          : publishBlockedByDetachedHead
+            ? 'Check out a branch before syncing commits'
+            : !hasUpstream
+              ? 'Publish the branch first to sync commits'
+              : shouldForcePushWithLease
+                ? 'Use Force Push — remote only has older copies of local commits'
+                : ahead === 0 && behind === 0
+                  ? 'Branch is up to date'
+                  : describeSyncCounts(ahead, behind),
     disabled:
       globalBusy ||
       upstreamLoading ||
       !hasUpstream ||
+      publishBlockedByDetachedHead ||
       shouldForcePushWithLease ||
       (ahead === 0 && behind === 0)
   }
@@ -350,7 +431,10 @@ export function resolveDropdownItems(inputs: DropdownActionInputs): DropdownEntr
 
   const fetchItem: DropdownItem = {
     kind: 'fetch',
-    label: 'Fetch',
+    label: translate(
+      'auto.components.right.sidebar.source.control.dropdown.items.226b85a3a7',
+      'Fetch'
+    ),
     title: upstreamLoading ? 'Checking branch status…' : 'Fetch from remote without merging',
     disabled: globalBusy || upstreamLoading
   }
@@ -360,26 +444,35 @@ export function resolveDropdownItems(inputs: DropdownActionInputs): DropdownEntr
     label:
       publishBlockedByMergedPR || publishBlockedByPRLoading
         ? 'PR Status'
-        : publishBlockedByNoBranchCommits
-          ? 'No Branch Changes'
-          : 'Publish Branch',
+        : publishBlockedByDetachedHead
+          ? 'No Branch'
+          : publishBlockedByUncommittedChanges
+            ? 'Commit Changes First'
+            : publishBlockedByNoBranchCommits
+              ? 'No Branch Changes'
+              : 'Publish Branch',
     title: upstreamLoading
       ? 'Checking branch status…'
       : publishBlockedByPRLoading
         ? 'Checking PR status…'
         : publishBlockedByMergedPR
           ? 'PR is already merged'
-          : publishBlockedByNoBranchCommits
-            ? 'Nothing to publish'
-            : hasUpstream
-              ? 'Branch is already published'
-              : 'Publish this branch to origin',
+          : publishBlockedByDetachedHead
+            ? 'Check out a branch before publishing commits'
+            : publishBlockedByUncommittedChanges
+              ? 'Commit changes before publishing the branch'
+              : publishBlockedByNoBranchCommits
+                ? 'Nothing to publish'
+                : hasUpstream
+                  ? 'Branch is already published'
+                  : 'Publish this branch to origin',
     disabled:
       globalBusy ||
       upstreamLoading ||
       hasUpstream ||
       publishBlockedByPRLoading ||
       publishBlockedByMergedPR ||
+      publishBlockedByDetachedHead ||
       publishBlockedByNoBranchCommits
   }
 
@@ -398,11 +491,11 @@ export function resolveDropdownItems(inputs: DropdownActionInputs): DropdownEntr
       case 'needs_sync':
         return shouldForcePushWithLease ? 'Force Push first' : 'Sync first'
       case 'auth_required':
-        return 'Run gh auth login in this environment'
+        return `Run ${createReviewCopy.authCommand} in this environment`
       case 'unsupported_provider':
         return 'Unsupported provider'
       case 'existing_review':
-        return 'A pull request already exists'
+        return `A ${createReviewCopy.reviewLabel} already exists`
       case 'fork_head_unsupported':
         return 'Fork head unsupported'
       case null:
@@ -413,9 +506,13 @@ export function resolveDropdownItems(inputs: DropdownActionInputs): DropdownEntr
 
   const createPRItem: DropdownItem = {
     kind: 'create_pr',
-    label: 'Create PR',
+    label: translate(
+      'auto.components.right.sidebar.source.control.dropdown.items.9e779995dd',
+      'Create {{value0}}',
+      { value0: createReviewCopy.shortLabel }
+    ),
     title: hostedReviewCreation?.canCreate
-      ? 'Create a pull request for this branch'
+      ? `Create a ${createReviewCopy.reviewLabel} for this branch`
       : createBlockedHint,
     hint: hostedReviewCreation?.canCreate ? undefined : createBlockedHint,
     disabled: globalBusy || upstreamLoading || !hostedReviewCreation?.canCreate
@@ -424,16 +521,18 @@ export function resolveDropdownItems(inputs: DropdownActionInputs): DropdownEntr
   const canPushAndCreate =
     !globalBusy &&
     !upstreamLoading &&
-    hostedReviewCreation?.provider === 'github' &&
+    (hostedReviewCreation?.provider === 'github' || hostedReviewCreation?.provider === 'gitlab') &&
     (hostedReviewCreation.blockedReason === 'needs_push' ||
       (hostedReviewCreation.blockedReason === 'needs_sync' && shouldForcePushWithLease))
   const pushCreatePRItem: DropdownItem = {
     kind: 'push_create_pr',
-    label: shouldForcePushWithLease ? 'Force Push before PR' : 'Push before PR',
+    label: shouldForcePushWithLease
+      ? `Force Push before ${createReviewCopy.shortLabel}`
+      : `Push before ${createReviewCopy.shortLabel}`,
     title: canPushAndCreate
       ? shouldForcePushWithLease
-        ? 'Force push with lease before creating a pull request'
-        : 'Push local commits before creating a pull request'
+        ? `Force push with lease before creating a ${createReviewCopy.reviewLabel}`
+        : `Push local commits before creating a ${createReviewCopy.reviewLabel}`
       : createBlockedHint,
     hint: canPushAndCreate ? undefined : createBlockedHint,
     disabled: !canPushAndCreate
@@ -445,6 +544,7 @@ export function resolveDropdownItems(inputs: DropdownActionInputs): DropdownEntr
     commitSyncItem,
     { kind: 'separator' },
     pushItem,
+    forcePushItem,
     createPRItem,
     pushCreatePRItem,
     pullItem,
@@ -476,7 +576,10 @@ export function resolveDropdownItems(inputs: DropdownActionInputs): DropdownEntr
       ? entry
       : {
           ...entry,
-          title: 'Pull request operation in progress…',
+          title: translate(
+            'auto.components.right.sidebar.source.control.dropdown.items.7aad2c0240',
+            'Hosted review operation in progress…'
+          ),
           disabled: true
         }
   )

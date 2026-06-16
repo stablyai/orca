@@ -28,6 +28,7 @@ const INSPECTION_TIMEOUT_MS = 15_000
 const PENDING_TITLE_TTL_MS = Math.max(2_000, INSPECTION_TIMEOUT_MS + 500)
 const PENDING_TITLE_MAX_TTL_MS = Math.max(30_000, PENDING_TITLE_TTL_MS)
 const COMPLETION_REPLAY_GUARD_MS = 1_000
+const HOOK_DONE_QUIET_MS = 1_500
 
 function isCompletionHookState(state: ParsedAgentStatusPayload['state']): boolean {
   return state === 'done' || state === 'waiting' || state === 'blocked'
@@ -51,6 +52,9 @@ export function createAgentCompletionCoordinator(
   let requiresFreshWorking = false
   let pollTimer: ReturnType<typeof setTimeout> | null = null
   let pendingTitleTimer: ReturnType<typeof setTimeout> | null = null
+  let pendingHookDoneTimer: ReturnType<typeof setTimeout> | null = null
+  let pendingHookDoneTitle: string | null = null
+  let pendingHookDonePayload: ParsedAgentStatusPayload | null = null
   let pendingTitleSequence = 0
   let pendingTitle: {
     id: number
@@ -80,6 +84,15 @@ export function createAgentCompletionCoordinator(
     pendingTitleTimer = null
   }
 
+  function clearPendingHookDone(): void {
+    if (pendingHookDoneTimer !== null) {
+      clearTimeout(pendingHookDoneTimer)
+      pendingHookDoneTimer = null
+    }
+    pendingHookDoneTitle = null
+    pendingHookDonePayload = null
+  }
+
   function establishAgentEvidence(): void {
     agentIdentityEstablished = true
     hasAgentRunEvidence = true
@@ -103,7 +116,14 @@ export function createAgentCompletionCoordinator(
     return `${source}:${currentTurn}:${processSession}`
   }
 
-  function dispatchCompletion(source: CompletionSource, title: string): void {
+  function dispatchCompletion(
+    source: CompletionSource,
+    title: string,
+    optionsOverride: { quietedHookDone?: boolean; agentStatus?: ParsedAgentStatusPayload } = {}
+  ): void {
+    if (source !== 'hook' && pendingHookDoneTimer !== null) {
+      return
+    }
     if (requiresFreshWorking || lastCompletedTurn === currentTurn) {
       return
     }
@@ -120,7 +140,38 @@ export function createAgentCompletionCoordinator(
     lastCompletedTurn = currentTurn
     lastCompletionSource = source
     workingStatusObserved = false
-    options.dispatchCompletion(title)
+    if (optionsOverride.quietedHookDone === true) {
+      options.dispatchCompletion(title, {
+        source,
+        quietedHookDone: true,
+        ...(optionsOverride.agentStatus ? { agentStatus: optionsOverride.agentStatus } : {})
+      })
+    } else {
+      options.dispatchCompletion(title)
+    }
+  }
+
+  function scheduleHookDoneCompletion(title: string, payload: ParsedAgentStatusPayload): void {
+    pendingHookDoneTitle = title
+    pendingHookDonePayload = payload
+    if (pendingHookDoneTimer !== null) {
+      return
+    }
+    // Why: goal/mission agents can report a temporary done state between
+    // milestones. Wait for a short quiet window so resumed work can cancel it.
+    pendingHookDoneTimer = setTimeout(() => {
+      pendingHookDoneTimer = null
+      const pendingTitle = pendingHookDoneTitle
+      const pendingPayload = pendingHookDonePayload
+      pendingHookDoneTitle = null
+      pendingHookDonePayload = null
+      if (pendingTitle) {
+        dispatchCompletion('hook', pendingTitle, {
+          quietedHookDone: true,
+          ...(pendingPayload ? { agentStatus: pendingPayload } : {})
+        })
+      }
+    }, HOOK_DONE_QUIET_MS)
   }
 
   function dropPendingTitle(): void {
@@ -319,6 +370,9 @@ export function createAgentCompletionCoordinator(
   }
 
   function recordTitleWorking(): boolean {
+    // Why: hooks can report `done` before title tracking notices the next
+    // milestone. The title working signal must cancel that provisional done.
+    clearPendingHookDone()
     if (
       lastCompletionSource === 'hook' &&
       Date.now() - lastCompletionAt < COMPLETION_REPLAY_GUARD_MS
@@ -393,6 +447,7 @@ export function createAgentCompletionCoordinator(
       establishAgentEvidence()
     }
     if (payload.state === 'working') {
+      clearPendingHookDone()
       workingStatusObserved = true
       requiresFreshWorking = false
       currentTurn += 1
@@ -400,6 +455,9 @@ export function createAgentCompletionCoordinator(
       return
     }
     if (isCompletionHookState(payload.state)) {
+      if (payload.state !== 'done') {
+        clearPendingHookDone()
+      }
       if (isRecognizedAgentType(payload.agentType)) {
         establishAgentEvidence()
       }
@@ -414,6 +472,10 @@ export function createAgentCompletionCoordinator(
         // backstops duplicate the same completion.
         currentTurn += 1
       }
+      if (payload.state === 'done' && workingStatusObserved) {
+        scheduleHookDoneCompletion(payload.agentType ?? options.paneKey, payload)
+        return
+      }
       dispatchCompletion('hook', payload.agentType ?? options.paneKey)
     }
   }
@@ -422,7 +484,12 @@ export function createAgentCompletionCoordinator(
     scheduleNextPoll()
   }
 
+  function hasPendingHookDoneCompletion(): boolean {
+    return pendingHookDoneTimer !== null
+  }
+
   function resetCompletionState(options: { requireFreshWorking?: boolean } = {}): void {
+    clearPendingHookDone()
     dropPendingTitle()
     agentIdentityEstablished = false
     hasAgentRunEvidence = false
@@ -440,6 +507,7 @@ export function createAgentCompletionCoordinator(
   function dispose(): void {
     disposed = true
     clearPollTimer()
+    clearPendingHookDone()
     dropPendingTitle()
   }
 
@@ -449,6 +517,7 @@ export function createAgentCompletionCoordinator(
     observeTitleWorking,
     observeHookStatus,
     startProcessTracking,
+    hasPendingHookDoneCompletion,
     resetCompletionState,
     dispose
   }

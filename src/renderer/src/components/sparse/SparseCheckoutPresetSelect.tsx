@@ -7,6 +7,7 @@ import { cn } from '@/lib/utils'
 import { parseSparsePresetDirectories } from '@/lib/sparse-preset-draft'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import type { SparsePreset } from '../../../../shared/types'
+import { translate } from '@/i18n/i18n'
 
 type SparseCheckoutPresetSelectProps = {
   repoId: string
@@ -252,7 +253,7 @@ export default function SparseCheckoutPresetSelect({
             }}
           >
             <div className="border-b border-border px-3 py-2 text-xs font-medium text-foreground">
-              {draft.mode === 'new' ? 'New preset' : 'Edit preset'}
+              {draft.mode === "new" ? translate("auto.components.sparse.SparseCheckoutPresetSelect.c4ac80151d", "New preset") : translate("auto.components.sparse.SparseCheckoutPresetSelect.69c020eddc", "Edit preset")}
             </div>
             <div className="space-y-3 px-3 py-3">
               <div className="space-y-1">
@@ -260,15 +261,14 @@ export default function SparseCheckoutPresetSelect({
                   htmlFor="sparse-preset-name"
                   className="block text-[11px] font-medium text-muted-foreground"
                 >
-                  Name
-                </label>
+                  {translate("auto.components.sparse.SparseCheckoutPresetSelect.b3a500c623", "Name")}</label>
                 <div className="rounded-md border border-border/70 bg-muted/20 px-2.5 shadow-xs transition focus-within:border-ring/70 focus-within:ring-1 focus-within:ring-ring/30">
                   <input
                     id="sparse-preset-name"
                     ref={setNameInputNode}
                     value={draft.name}
                     onChange={(event) => setDraft({ ...draft, name: event.target.value })}
-                    placeholder="Renderer UI"
+                    placeholder={translate("auto.components.sparse.SparseCheckoutPresetSelect.064c1e2d12", "Renderer UI")}
                     maxLength={80}
                     autoComplete="off"
                     spellCheck={false}
@@ -281,8 +281,7 @@ export default function SparseCheckoutPresetSelect({
                   htmlFor="sparse-preset-directories"
                   className="block text-[11px] font-medium text-muted-foreground"
                 >
-                  Directories
-                </label>
+                  {translate("auto.components.sparse.SparseCheckoutPresetSelect.0e9ad9c798", "Directories")}</label>
                 <div className="rounded-md border border-border/70 bg-muted/20 px-2.5 py-1.5 shadow-xs transition focus-within:border-ring/70 focus-within:ring-1 focus-within:ring-ring/30">
                   <textarea
                     id="sparse-preset-directories"
@@ -290,7 +289,7 @@ export default function SparseCheckoutPresetSelect({
                     onChange={(event) =>
                       setDraft({ ...draft, directoriesText: event.target.value })
                     }
-                    placeholder={`src/renderer\npackages/ui`}
+                    placeholder={translate("auto.components.sparse.SparseCheckoutPresetSelect.ddbcaef7be", "src/renderer packages/ui")}
                     rows={3}
                     spellCheck={false}
                     className="max-h-28 w-full min-w-0 resize-none bg-transparent font-mono text-xs leading-5 text-foreground outline-none selection:bg-primary selection:text-primary-foreground placeholder:text-muted-foreground"
@@ -305,9 +304,9 @@ export default function SparseCheckoutPresetSelect({
                 ) : parsedDirectories?.error ? (
                   <span className="text-destructive">{parsedDirectories.error}</span>
                 ) : parsedDirectories?.directories.length === 1 ? (
-                  '1 directory'
+                  translate("auto.components.sparse.SparseCheckoutPresetSelect.e9283eb171", "1 directory")
                 ) : (
-                  `${parsedDirectories?.directories.length ?? 0} directories`
+                  translate("auto.components.sparse.SparseCheckoutPresetSelect.14952d451e", "{{value0}} directories", { value0: parsedDirectories?.directories.length ?? 0 })
                 )}
               </div>
               <div className="flex shrink-0 justify-end gap-1">
@@ -319,12 +318,10 @@ export default function SparseCheckoutPresetSelect({
                   onClick={() => setDraft(null)}
                   disabled={submitting}
                 >
-                  Cancel
-                </Button>
+                  {translate("auto.components.sparse.SparseCheckoutPresetSelect.de8fce5854", "Cancel")}</Button>
                 <Button type="submit" size="sm" className="h-7 px-2 text-xs" disabled={!canSave}>
                   {submitting ? <LoaderCircle className="size-3 animate-spin" /> : null}
-                  Save
-                </Button>
+                  {translate("auto.components.sparse.SparseCheckoutPresetSelect.8b12c0850a", "Save")}</Button>
               </div>
             </div>
           </form>
@@ -342,7 +339,7 @@ export default function SparseCheckoutPresetSelect({
             >
               <RefreshCcw className="size-3.5 text-muted-foreground" />
               <span className="truncate">
-                {hasPresetLoadError ? 'Retry loading presets' : 'Load presets'}
+                {hasPresetLoadError ? translate("auto.components.sparse.SparseCheckoutPresetSelect.a683a4bc8e", "Retry loading presets") : translate("auto.components.sparse.SparseCheckoutPresetSelect.16223dde6a", "Load presets")}
               </span>
             </button>
           </div>
@@ -355,8 +352,7 @@ export default function SparseCheckoutPresetSelect({
                 onClick={handleSelectOff}
               >
                 <Check className={cn('size-4', selectedPreset ? 'opacity-0' : 'opacity-100')} />
-                Off
-              </button>
+                {translate("auto.components.sparse.SparseCheckoutPresetSelect.c7f9b3f0c1", "Off")}</button>
             </div>
             {visiblePresets.length > 0 ? (
               <>
@@ -384,7 +380,7 @@ export default function SparseCheckoutPresetSelect({
                         type="button"
                         variant="ghost"
                         size="icon-xs"
-                        aria-label={`Edit ${preset.name}`}
+                        aria-label={translate("auto.components.sparse.SparseCheckoutPresetSelect.7c3275d307", "Edit {{value0}}", { value0: preset.name })}
                         className="mr-1 size-7 shrink-0 rounded-md text-muted-foreground hover:bg-background/35 hover:text-foreground"
                         onClick={() => startEditPreset(preset)}
                       >
@@ -403,8 +399,7 @@ export default function SparseCheckoutPresetSelect({
                 className="mx-1 my-1 h-8 w-[calc(100%-0.5rem)] justify-start rounded-md px-2 text-xs font-normal"
               >
                 <Plus className="size-3.5 text-muted-foreground" />
-                New preset
-              </Button>
+                {translate("auto.components.sparse.SparseCheckoutPresetSelect.c4ac80151d", "New preset")}</Button>
             </div>
           </div>
         )}

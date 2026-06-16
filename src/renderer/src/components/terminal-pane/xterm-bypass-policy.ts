@@ -145,8 +145,12 @@ export function shouldBypassXtermKeyboardEvent(
 
   if (isMac) {
     // Why: window-level handlers already consume other Cmd chords before xterm
-    // sees them; this path covers native copy, which must bubble to Chromium.
-    return matchesClipboardBinding('Mod+C', event, 'darwin')
+    // sees them in Electron. Web clients still need paste to bubble to
+    // Chromium's native paste event instead of xterm's Kitty encoder.
+    return (
+      matchesClipboardBinding('Mod+C', event, 'darwin') ||
+      matchesClipboardBinding('Mod+V', event, 'darwin')
+    )
   }
 
   // Windows/Linux: standard clipboard bindings bubble; Ctrl+C only bubbles

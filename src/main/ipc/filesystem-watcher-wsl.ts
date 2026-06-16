@@ -14,7 +14,7 @@ import { readdir } from 'fs/promises'
 import * as path from 'path'
 import type { WebContents } from 'electron'
 import type { Event as WatcherEvent } from '@parcel/watcher'
-import { queueWatcherEvents } from './filesystem-watcher-event-batch'
+import { MAX_BATCHED_WATCHER_EVENTS, queueWatcherEvents } from './filesystem-watcher-event-batch'
 
 export type WatcherSubscription = {
   unsubscribe(): Promise<void>
@@ -40,6 +40,8 @@ export type WslWatcherDeps = {
 }
 
 const POLL_INTERVAL_MS = 2000
+const SNAPSHOT_CHILD_READ_CONCURRENCY = 8
+const DIFF_EVENT_OVERFLOW_LIMIT = MAX_BATCHED_WATCHER_EVENTS + 1
 
 type DirSnapshot = Map<string, Set<string>>
 
@@ -56,6 +58,23 @@ function shouldIgnore(name: string, ignoreDirs: string[]): boolean {
   return ignoreDirs.includes(name)
 }
 
+async function forEachWithConcurrency<T>(
+  items: readonly T[],
+  limit: number,
+  worker: (item: T) => Promise<void>
+): Promise<void> {
+  let nextIndex = 0
+  const workerCount = Math.min(limit, items.length)
+  await Promise.all(
+    Array.from({ length: workerCount }, async () => {
+      while (nextIndex < items.length) {
+        const item = items[nextIndex++]
+        await worker(item)
+      }
+    })
+  )
+}
+
 /**
  * Take a snapshot of the root directory and one level of subdirectories.
  * Returns a map of dirPath → set of entry names.
@@ -70,20 +89,22 @@ async function takeSnapshot(rootPath: string, ignoreDirs: string[]): Promise<Dir
   // Why: poll one level of subdirectories so changes inside immediate
   // children are detected, but use Dirent metadata to avoid probing every
   // root-level file with a failing readdir on each WSL poll.
-  await Promise.all(
-    filtered
-      .filter((entry) => entry.isDirectory() || entry.isSymbolicLink())
-      .map(async (entry) => {
-        const childPath = path.join(rootPath, entry.name)
-        const childEntries = await readDirEntriesSafe(childPath)
-        const childFiltered = childEntries
-          .filter((childEntry) => !shouldIgnore(childEntry.name, ignoreDirs))
-          .map((childEntry) => childEntry.name)
-        snapshot.set(childPath, new Set(childFiltered))
-      })
-  )
+  const childDirs = filtered.filter((entry) => entry.isDirectory() || entry.isSymbolicLink())
+  await forEachWithConcurrency(childDirs, SNAPSHOT_CHILD_READ_CONCURRENCY, async (entry) => {
+    const childPath = path.join(rootPath, entry.name)
+    const childEntries = await readDirEntriesSafe(childPath)
+    const childFiltered = childEntries
+      .filter((childEntry) => !shouldIgnore(childEntry.name, ignoreDirs))
+      .map((childEntry) => childEntry.name)
+    snapshot.set(childPath, new Set(childFiltered))
+  })
 
   return snapshot
+}
+
+function appendDiffEvent(events: WatcherEvent[], event: WatcherEvent): boolean {
+  events.push(event)
+  return events.length >= DIFF_EVENT_OVERFLOW_LIMIT
 }
 
 /**
@@ -97,7 +118,14 @@ function diffSnapshots(prev: DirSnapshot, next: DirSnapshot): WatcherEvent[] {
     if (!prevEntries) {
       // New directory appeared — emit create for all entries
       for (const name of nextEntries) {
-        events.push({ type: 'create', path: path.join(dirPath, name) } as WatcherEvent)
+        if (
+          appendDiffEvent(events, {
+            type: 'create',
+            path: path.join(dirPath, name)
+          } as WatcherEvent)
+        ) {
+          return events
+        }
       }
       continue
     }
@@ -105,14 +133,28 @@ function diffSnapshots(prev: DirSnapshot, next: DirSnapshot): WatcherEvent[] {
     // Check for new entries (create)
     for (const name of nextEntries) {
       if (!prevEntries.has(name)) {
-        events.push({ type: 'create', path: path.join(dirPath, name) } as WatcherEvent)
+        if (
+          appendDiffEvent(events, {
+            type: 'create',
+            path: path.join(dirPath, name)
+          } as WatcherEvent)
+        ) {
+          return events
+        }
       }
     }
 
     // Check for removed entries (delete)
     for (const name of prevEntries) {
       if (!nextEntries.has(name)) {
-        events.push({ type: 'delete', path: path.join(dirPath, name) } as WatcherEvent)
+        if (
+          appendDiffEvent(events, {
+            type: 'delete',
+            path: path.join(dirPath, name)
+          } as WatcherEvent)
+        ) {
+          return events
+        }
       }
     }
   }
@@ -120,7 +162,9 @@ function diffSnapshots(prev: DirSnapshot, next: DirSnapshot): WatcherEvent[] {
   // Check for directories that disappeared entirely
   for (const [dirPath] of prev) {
     if (!next.has(dirPath)) {
-      events.push({ type: 'delete', path: dirPath } as WatcherEvent)
+      if (appendDiffEvent(events, { type: 'delete', path: dirPath } as WatcherEvent)) {
+        return events
+      }
     }
   }
 

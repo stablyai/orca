@@ -32,6 +32,7 @@ import {
   resolveRendererWebContents,
   setupGrabShortcutForwarding,
   setupGuestContextMenu,
+  setupGuestMouseWheelZoomForwarding,
   setupGuestShortcutForwarding
 } from './browser-guest-ui'
 import { ANTI_DETECTION_SCRIPT } from './anti-detection'
@@ -165,7 +166,12 @@ function safeOrigin(rawUrl: string): string {
 }
 
 export class BrowserManager {
-  private settingsResolver: (() => { keybindings?: KeybindingOverrides }) | null = null
+  private settingsResolver:
+    | (() => {
+        keybindings?: KeybindingOverrides
+        mobileEmulatorEnabled?: boolean
+      })
+    | null = null
   private readonly webContentsIdByTabId = new Map<string, number>()
   // Why: reverse map enables O(1) guest→tab lookups instead of O(N) linear
   // scans on every mouse event, load failure, permission, and popup event.
@@ -184,6 +190,7 @@ export class BrowserManager {
   private readonly contextMenuCleanupByTabId = new Map<string, () => void>()
   private readonly grabShortcutCleanupByTabId = new Map<string, () => void>()
   private readonly shortcutForwardingCleanupByTabId = new Map<string, () => void>()
+  private readonly mouseWheelZoomCleanupByTabId = new Map<string, () => void>()
   private readonly annotationViewportBridgeOpsByTabId = new Map<string, Promise<unknown>>()
   private readonly worktreeIdByTabId = new Map<string, string>()
   private readonly policyAttachedGuestIds = new Set<number>()
@@ -203,7 +210,12 @@ export class BrowserManager {
   private readonly downloadsById = new Map<string, ActiveDownload>()
   private readonly grabSessionController = new BrowserGrabSessionController()
 
-  setSettingsResolver(resolver: () => { keybindings?: KeybindingOverrides }): void {
+  setSettingsResolver(
+    resolver: () => {
+      keybindings?: KeybindingOverrides
+      mobileEmulatorEnabled?: boolean
+    }
+  ): void {
     this.settingsResolver = resolver
   }
 
@@ -640,12 +652,23 @@ export class BrowserManager {
     guest.on('will-navigate', navigationGuard)
     guest.on('will-redirect', navigationGuard)
     guest.on('did-fail-load', didFailLoadHandler)
+    const handleDestroyed = (): void => {
+      // Why: guests can be destroyed before renderer registration. Without
+      // this, attach-time policy closures remain retained until app shutdown.
+      this.cleanupGuestPolicyAttachment(guest.id)
+    }
+    guest.on('destroyed', handleDestroyed)
 
     // Why: store cleanup so unregisterGuest can remove these listeners when the
     // guest surface is torn down, preventing the callbacks from preventing GC of
     // the underlying WebContents wrapper.
     this.policyCleanupByGuestId.set(guest.id, () => {
       disposeAntiDetection()
+      try {
+        guest.off('destroyed', handleDestroyed)
+      } catch {
+        // guest may already be destroyed
+      }
       if (!guest.isDestroyed()) {
         guest.off('will-navigate', navigationGuard)
         guest.off('will-redirect', navigationGuard)
@@ -660,17 +683,20 @@ export class BrowserManager {
     // resolving to the live page, or stale download/popup/permission callbacks
     // can be delivered to the wrong session after the swap.
     this.tabIdByWebContentsId.delete(previousWebContentsId)
+    this.cleanupGuestPolicyAttachment(previousWebContentsId)
+  }
 
-    const policyCleanup = this.policyCleanupByGuestId.get(previousWebContentsId)
+  private cleanupGuestPolicyAttachment(guestWebContentsId: number): void {
+    const policyCleanup = this.policyCleanupByGuestId.get(guestWebContentsId)
     if (policyCleanup) {
       policyCleanup()
-      this.policyCleanupByGuestId.delete(previousWebContentsId)
+      this.policyCleanupByGuestId.delete(guestWebContentsId)
     }
-    this.policyAttachedGuestIds.delete(previousWebContentsId)
-    this.pendingLoadFailuresByGuestId.delete(previousWebContentsId)
-    this.pendingPermissionEventsByGuestId.delete(previousWebContentsId)
-    this.pendingPopupEventsByGuestId.delete(previousWebContentsId)
-    this.pendingDownloadIdsByGuestId.delete(previousWebContentsId)
+    this.policyAttachedGuestIds.delete(guestWebContentsId)
+    this.pendingLoadFailuresByGuestId.delete(guestWebContentsId)
+    this.pendingPermissionEventsByGuestId.delete(guestWebContentsId)
+    this.pendingPopupEventsByGuestId.delete(guestWebContentsId)
+    this.pendingDownloadIdsByGuestId.delete(guestWebContentsId)
   }
 
   registerGuest({
@@ -737,6 +763,7 @@ export class BrowserManager {
     this.setupContextMenu(browserTabId, guest)
     this.setupGrabShortcut(browserTabId, guest)
     this.setupShortcutForwarding(browserTabId, guest)
+    this.setupMouseWheelZoomForwarding(browserTabId, guest)
     this.flushPendingLoadFailure(browserTabId, webContentsId)
     this.flushPendingPermissionEvents(browserTabId, webContentsId)
     this.flushPendingPopupEvents(browserTabId, webContentsId)
@@ -754,12 +781,7 @@ export class BrowserManager {
     // the underlying Chromium surface after the guest is destroyed.
     const guestWebContentsId = this.webContentsIdByTabId.get(browserTabId)
     if (guestWebContentsId !== undefined) {
-      const policyCleanup = this.policyCleanupByGuestId.get(guestWebContentsId)
-      if (policyCleanup) {
-        policyCleanup()
-        this.policyCleanupByGuestId.delete(guestWebContentsId)
-      }
-      this.policyAttachedGuestIds.delete(guestWebContentsId)
+      this.cleanupGuestPolicyAttachment(guestWebContentsId)
     }
 
     const cleanup = this.contextMenuCleanupByTabId.get(browserTabId)
@@ -776,6 +798,11 @@ export class BrowserManager {
     if (fwdCleanup) {
       fwdCleanup()
       this.shortcutForwardingCleanupByTabId.delete(browserTabId)
+    }
+    const mouseWheelZoomCleanup = this.mouseWheelZoomCleanupByTabId.get(browserTabId)
+    if (mouseWheelZoomCleanup) {
+      mouseWheelZoomCleanup()
+      this.mouseWheelZoomCleanupByTabId.delete(browserTabId)
     }
     // Why: paused downloads wait for explicit product approval. If the owning
     // browser tab disappears first, cancel the request so the app does not
@@ -825,6 +852,7 @@ export class BrowserManager {
     this.pendingPermissionEventsByGuestId.clear()
     this.pendingPopupEventsByGuestId.clear()
     this.pendingDownloadIdsByGuestId.clear()
+    this.mouseWheelZoomCleanupByTabId.clear()
     this.annotationViewportBridgeOpsByTabId.clear()
   }
 
@@ -929,6 +957,11 @@ export class BrowserManager {
     download.pendingCancelTimer = setTimeout(() => {
       this.cancelDownloadInternal(downloadId, 'Timed out waiting for user approval.')
     }, 60_000)
+    // Why: approval timeout is a fail-closed safety net, not a reason to keep
+    // Electron main alive after the browser/runtime is otherwise shutting down.
+    if (typeof download.pendingCancelTimer.unref === 'function') {
+      download.pendingCancelTimer.unref()
+    }
   }
 
   getDownloadPrompt(downloadId: string, senderWebContentsId: number): { filename: string } | null {
@@ -1035,8 +1068,9 @@ export class BrowserManager {
     }
     const guest = webContents.fromId(webContentsId)
     if (!guest || guest.isDestroyed()) {
-      this.webContentsIdByTabId.delete(browserTabId)
-      this.tabIdByWebContentsId.delete(webContentsId)
+      // Why: stale guest discovery must clear every per-tab registry entry,
+      // not just the forward/reverse WebContents maps.
+      this.unregisterGuest(browserTabId)
       return false
     }
     guest.openDevTools({ mode: 'detach' })
@@ -1102,8 +1136,9 @@ export class BrowserManager {
     }
     const guest = webContents.fromId(webContentsId)
     if (!guest || guest.isDestroyed()) {
-      this.webContentsIdByTabId.delete(browserTabId)
-      this.tabIdByWebContentsId.delete(webContentsId)
+      // Why: stale guest discovery must clear every per-tab registry entry,
+      // not just the forward/reverse WebContents maps.
+      this.unregisterGuest(browserTabId)
       return false
     }
 
@@ -1131,8 +1166,9 @@ export class BrowserManager {
     }
     const guest = webContents.fromId(webContentsId)
     if (!guest || guest.isDestroyed()) {
-      this.webContentsIdByTabId.delete(browserTabId)
-      this.tabIdByWebContentsId.delete(webContentsId)
+      // Why: stale guest discovery must clear every per-tab registry entry,
+      // not just the forward/reverse WebContents maps.
+      this.unregisterGuest(browserTabId)
       return false
     }
 
@@ -1238,8 +1274,9 @@ export class BrowserManager {
     }
     const guest = webContents.fromId(guestId)
     if (!guest || guest.isDestroyed()) {
-      this.webContentsIdByTabId.delete(browserTabId)
-      this.tabIdByWebContentsId.delete(guestId)
+      // Why: stale guest discovery must clear every per-tab registry entry,
+      // not just the forward/reverse WebContents maps.
+      this.unregisterGuest(browserTabId)
       return null
     }
     return guest
@@ -1394,7 +1431,26 @@ export class BrowserManager {
         resolveRenderer: (tabId) =>
           resolveRendererWebContents(this.rendererWebContentsIdByTabId, tabId),
         shouldForwardDictationShortcut: () => this.shouldForwardDictationShortcut?.() ?? false,
+        isMobileEmulatorEnabled: () => this.settingsResolver?.().mobileEmulatorEnabled !== false,
         getKeybindings: () => this.settingsResolver?.().keybindings
+      })
+    )
+  }
+
+  private setupMouseWheelZoomForwarding(browserTabId: string, guest: Electron.WebContents): void {
+    const previousCleanup = this.mouseWheelZoomCleanupByTabId.get(browserTabId)
+    if (previousCleanup) {
+      previousCleanup()
+      this.mouseWheelZoomCleanupByTabId.delete(browserTabId)
+    }
+
+    this.mouseWheelZoomCleanupByTabId.set(
+      browserTabId,
+      setupGuestMouseWheelZoomForwarding({
+        browserTabId,
+        guest,
+        resolveRenderer: (tabId) =>
+          resolveRendererWebContents(this.rendererWebContentsIdByTabId, tabId)
       })
     )
   }

@@ -52,7 +52,9 @@ export default function RootLayout() {
     }
 
     void Linking.getInitialURL().then((url) => {
-      if (url) handleUrl(url)
+      if (url) {
+        handleUrl(url)
+      }
     })
 
     const sub = Linking.addEventListener('url', ({ url }) => handleUrl(url))
@@ -144,6 +146,11 @@ export default function RootLayout() {
             headerTitleStyle: { fontSize: 16, fontWeight: '600' },
             contentStyle: { backgroundColor: colors.bgBase },
             headerShadowVisible: false
+            // Why: deliberately no `orientation` screenOption. react-native-screens
+            // has no value that respects the device rotation lock — even 'default'
+            // calls setRequestedOrientation(UNSPECIFIED) at runtime, overriding the
+            // manifest. Leaving it unset lets the manifest's "fullUser" (set by the
+            // android-respect-rotation-lock config plugin) honor the auto-rotate lock.
           }}
         >
           <Stack.Screen

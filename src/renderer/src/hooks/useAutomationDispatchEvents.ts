@@ -7,12 +7,21 @@ import { submitPromptToAgentTab } from '@/lib/agent-paste-draft'
 import { findReusableAutomationSession } from '@/lib/automation-session-reuse'
 import { observeExistingAutomationSession } from '@/lib/automation-session-observer'
 import { useAppStore } from '@/store'
-import type { AutomationDispatchResult } from '../../../shared/automations-types'
+import type {
+  AutomationDispatchResult,
+  AutomationPrecheckResult
+} from '../../../shared/automations-types'
+import { getAutomationRunRepoId } from '../../../shared/automation-run-identity'
+import {
+  didAutomationPrecheckPass,
+  formatAutomationPrecheckFailure
+} from '../../../shared/automation-precheck'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
 import {
   createAutomationRunOutputSnapshotBuffer,
   selectAutomationRunOutputSnapshot
 } from '@/components/automations/automation-run-output-snapshot'
+import { translate } from '@/i18n/i18n'
 
 const AUTOMATIONS_CHANGED_EVENT = 'orca:automations-changed'
 const activeReuseDispatchTabIds = new Set<string>()
@@ -49,13 +58,15 @@ export function useAutomationDispatchEvents(): void {
         activeTabId: state.activeTabId,
         activeTabType: state.activeTabType
       }
-      const repo = state.repos.find((entry) => entry.id === automation.projectId)
+      const runRepoId = getAutomationRunRepoId(automation)
+      const repo = state.repos.find((entry) => entry.id === runRepoId)
       const automationWorktree = automation.workspaceId
         ? state.allWorktrees().find((entry) => entry.id === automation.workspaceId)
         : null
       let dispatchWorkspaceId = automation.workspaceId
       let dispatchWorkspaceDisplayName =
         automationWorktree?.displayName ?? run.workspaceDisplayName ?? null
+      let precheckResult: AutomationPrecheckResult | null = null
 
       if (!repo) {
         await markDispatchResult({
@@ -63,7 +74,10 @@ export function useAutomationDispatchEvents(): void {
           status: 'skipped_unavailable',
           workspaceId: run.workspaceId,
           workspaceDisplayName: run.workspaceDisplayName ?? null,
-          error: 'The target project is no longer available.'
+          error: translate(
+            'auto.hooks.useAutomationDispatchEvents.386db94f3e',
+            'The target project is no longer available.'
+          )
         })
         return
       }
@@ -78,7 +92,10 @@ export function useAutomationDispatchEvents(): void {
             status: 'skipped_needs_interactive_auth',
             workspaceId: dispatchWorkspaceId,
             workspaceDisplayName: dispatchWorkspaceDisplayName,
-            error: 'SSH reconnect requires interactive credentials.'
+            error: translate(
+              'auto.hooks.useAutomationDispatchEvents.16a21d6413',
+              'SSH reconnect requires interactive credentials.'
+            )
           })
           return
         }
@@ -102,6 +119,57 @@ export function useAutomationDispatchEvents(): void {
         }
       }
 
+      if (
+        automation.workspaceMode === 'existing' &&
+        automationWorktree &&
+        automation.runContext?.repoId &&
+        automationWorktree.repoId !== automation.runContext.repoId
+      ) {
+        await markDispatchResult({
+          runId: run.id,
+          status: 'skipped_unavailable',
+          workspaceId: automation.workspaceId,
+          workspaceDisplayName: dispatchWorkspaceDisplayName,
+          error: translate(
+            'auto.hooks.useAutomationDispatchEvents.3ad7d77f57',
+            'The target workspace is on a different host than this automation run target.'
+          )
+        })
+        return
+      }
+
+      if (automation.workspaceMode === 'existing' && !automationWorktree) {
+        await markDispatchResult({
+          runId: run.id,
+          status: 'skipped_unavailable',
+          workspaceId: automation.workspaceId,
+          workspaceDisplayName: dispatchWorkspaceDisplayName,
+          error: translate(
+            'auto.hooks.useAutomationDispatchEvents.59718b120b',
+            'The target workspace is no longer available.'
+          )
+        })
+        return
+      }
+
+      if (run.trigger === 'scheduled' && automation.precheck) {
+        precheckResult = await window.api.automations.runPrecheck({
+          automationId: automation.id,
+          runId: run.id
+        })
+        if (precheckResult && !didAutomationPrecheckPass(precheckResult)) {
+          await markDispatchResult({
+            runId: run.id,
+            status: 'skipped_precheck',
+            workspaceId: dispatchWorkspaceId,
+            workspaceDisplayName: dispatchWorkspaceDisplayName,
+            precheckResult,
+            error: formatAutomationPrecheckFailure(precheckResult)
+          })
+          return
+        }
+      }
+
       try {
         const worktree =
           automation.workspaceMode === 'new_per_run'
@@ -109,7 +177,7 @@ export function useAutomationDispatchEvents(): void {
                 await useAppStore
                   .getState()
                   .createWorktree(
-                    automation.projectId,
+                    runRepoId,
                     buildAutomationWorkspaceName(run.title, run.scheduledFor),
                     automation.baseBranch ?? undefined,
                     'inherit',
@@ -132,7 +200,10 @@ export function useAutomationDispatchEvents(): void {
             status: 'skipped_unavailable',
             workspaceId: automation.workspaceId,
             workspaceDisplayName: dispatchWorkspaceDisplayName,
-            error: 'The target workspace is no longer available.'
+            error: translate(
+              'auto.hooks.useAutomationDispatchEvents.59718b120b',
+              'The target workspace is no longer available.'
+            )
           })
           return
         }
@@ -170,6 +241,7 @@ export function useAutomationDispatchEvents(): void {
             workspaceId: worktree.id,
             workspaceDisplayName: worktree.displayName,
             outputSnapshot: getOutputSnapshot(),
+            precheckResult,
             error: null
           })
         }
@@ -181,6 +253,7 @@ export function useAutomationDispatchEvents(): void {
             workspaceId: worktree.id,
             workspaceDisplayName: worktree.displayName,
             outputSnapshot: getOutputSnapshot(),
+            precheckResult,
             error: code === 0 ? null : `Automation process exited with code ${code}.`
           })
         }
@@ -291,6 +364,7 @@ export function useAutomationDispatchEvents(): void {
                     workspaceId: worktree.id,
                     workspaceDisplayName: worktree.displayName,
                     terminalSessionId: reusableSession.tabId,
+                    precheckResult,
                     error: null
                   })
                   dispatchMarked = true
@@ -338,14 +412,21 @@ export function useAutomationDispatchEvents(): void {
         if (!result) {
           throw new Error('Unable to build an agent launch plan.')
         }
-        observeAgentStatus(result.tabId, dispatchStartedAt)
+        const launchedTabId = result.tabId
+        // Why: host-backed automation terminals may lack a local tab id; skip
+        // pane-key status observation while background session output still
+        // tracks completion.
+        if (launchedTabId) {
+          observeAgentStatus(launchedTabId, dispatchStartedAt)
+        }
         try {
           await markDispatchResult({
             runId: run.id,
             status: 'dispatched',
             workspaceId: worktree.id,
             workspaceDisplayName: worktree.displayName,
-            terminalSessionId: result.tabId,
+            terminalSessionId: launchedTabId,
+            precheckResult,
             error: null
           })
           dispatchMarked = true
@@ -378,6 +459,7 @@ export function useAutomationDispatchEvents(): void {
           status: 'dispatch_failed',
           workspaceId: dispatchWorkspaceId,
           workspaceDisplayName: dispatchWorkspaceDisplayName,
+          precheckResult,
           error: error instanceof Error ? error.message : String(error)
         })
       }

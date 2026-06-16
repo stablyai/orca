@@ -1,7 +1,7 @@
 import { exec, spawn, type ChildProcess } from 'child_process'
 import { existsSync } from 'fs'
 import { delimiter, join } from 'path'
-import type { RelayDispatcher } from './dispatcher'
+import type { RelayDispatcher, RequestContext } from './dispatcher'
 
 const DEFAULT_TIMEOUT_MS = 60_000
 const MAX_TIMEOUT_MS = 5 * 60 * 1000
@@ -107,7 +107,7 @@ function laneKeyFor(cwd: string, operation: unknown): string {
   return JSON.stringify([op, cwd])
 }
 
-type InFlightExec = { child: ChildProcess; markCanceled: () => void }
+type InFlightExec = { child: ChildProcess; cancel: () => void }
 
 type ExecResult = {
   stdout: string
@@ -137,7 +137,9 @@ export class AgentExecHandler {
   }
 
   constructor(dispatcher: RelayDispatcher) {
-    dispatcher.onRequest('agent.execNonInteractive', (p) => this.exec(p as ExecParams))
+    dispatcher.onRequest('agent.execNonInteractive', (p, context) =>
+      this.exec(p as ExecParams, context)
+    )
     dispatcher.onRequest('agent.cancelExec', (p) => this.cancel(p as CancelParams))
   }
 
@@ -147,12 +149,11 @@ export class AgentExecHandler {
     if (!entry) {
       return { canceled: false }
     }
-    entry.markCanceled()
-    killProcessTree(entry.child)
+    entry.cancel()
     return { canceled: true }
   }
 
-  private async exec(params: ExecParams): Promise<ExecResult> {
+  private async exec(params: ExecParams, context?: RequestContext): Promise<ExecResult> {
     const binary = typeof params.binary === 'string' ? params.binary : ''
     if (!binary) {
       throw new Error('agent.execNonInteractive: binary is required')
@@ -201,6 +202,7 @@ export class AgentExecHandler {
       let entry: InFlightExec | null = null
       let timer: ReturnType<typeof setTimeout> | null = null
       let detachChildListeners = (): void => {}
+      let detachRequestAbortListener = (): void => {}
       const finish = (result: ExecResult): void => {
         if (settled) {
           return
@@ -210,18 +212,26 @@ export class AgentExecHandler {
           clearTimeout(timer)
           timer = null
         }
+        detachRequestAbortListener()
         detachChildListeners()
         if (laneKey && entry && this.inFlightByLane.get(laneKey) === entry) {
           this.inFlightByLane.delete(laneKey)
         }
         resolve(result)
       }
+      const cancelCurrent = (): void => {
+        canceled = true
+        killProcessTree(child)
+      }
       if (laneKey) {
+        // Why: the relay owns one visible non-interactive job per cwd+operation.
+        // Replacing the lane without canceling the prior child would orphan
+        // that process until timeout because future cancelExec calls reach only
+        // the newest map entry.
+        this.inFlightByLane.get(laneKey)?.cancel()
         entry = {
           child,
-          markCanceled: () => {
-            canceled = true
-          }
+          cancel: cancelCurrent
         }
         this.inFlightByLane.set(laneKey, entry)
       }
@@ -272,6 +282,17 @@ export class AgentExecHandler {
         child.stderr?.off('data', onStderrData)
         child.off('error', onError)
         child.off('close', onClose)
+      }
+
+      if (context?.signal) {
+        if (context.signal.aborted) {
+          cancelCurrent()
+        } else {
+          context.signal.addEventListener('abort', cancelCurrent, { once: true })
+          detachRequestAbortListener = () => {
+            context.signal?.removeEventListener('abort', cancelCurrent)
+          }
+        }
       }
 
       if (stdinPayload !== null) {

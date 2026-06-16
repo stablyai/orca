@@ -13,6 +13,7 @@ import { resolveTerminalLigaturesEnabled } from '../../../../shared/terminal-lig
 import { PREVIEW_BUFFER } from './terminal-preview-content'
 import { SettingsSwitch } from './SettingsFormControls'
 import type { GlobalSettings } from '../../../../shared/types'
+import { translate } from '@/i18n/i18n'
 
 // Why: pin cols/rows so PREVIEW_BUFFER never wraps. Sized so the longest
 // line (the def total signature, 32 chars) plus a few cols of margin fits
@@ -110,6 +111,7 @@ export function TerminalSettingsPreview({
       effectiveMode,
       settings.terminalThemeDark,
       settings.terminalThemeLight,
+      settings.terminalCustomThemes,
       settings.terminalUseSeparateLightTheme,
       settings.terminalDividerColorDark,
       settings.terminalDividerColorLight,
@@ -281,18 +283,29 @@ export function TerminalSettingsPreview({
           </div>
           <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
             <div className="flex items-center gap-2 rounded-md border border-border/50 bg-background/40 px-2 py-1">
-              <span className="text-xs font-medium text-muted-foreground">Pane divider</span>
+              <span className="text-xs font-medium text-muted-foreground">
+                {translate(
+                  'auto.components.settings.TerminalSettingsPreview.50419052fe',
+                  'Pane divider'
+                )}
+              </span>
               <SettingsSwitch
                 checked={previewPaneDividerVisible}
                 onChange={() => setPreviewPaneDividerVisible((visible) => !visible)}
-                ariaLabel="Show pane divider in preview"
+                ariaLabel={translate(
+                  'auto.components.settings.TerminalSettingsPreview.f8931d407d',
+                  'Show pane divider in preview'
+                )}
               />
             </div>
             {showToggle ? (
               <div
                 className="flex gap-0.5 rounded-md border border-border/50 p-0.5"
                 role="group"
-                aria-label="Preview theme"
+                aria-label={translate(
+                  'auto.components.settings.TerminalSettingsPreview.2c248fcc27',
+                  'Preview theme'
+                )}
               >
                 {(['dark', 'light'] as const).map((mode) => (
                   <button
@@ -300,8 +313,16 @@ export function TerminalSettingsPreview({
                     type="button"
                     onClick={() => setTogglePreviewMode(mode)}
                     aria-pressed={togglePreviewMode === mode}
-                    aria-label={`Preview ${mode} theme`}
-                    title={`Preview ${mode} theme`}
+                    aria-label={translate(
+                      'auto.components.settings.TerminalSettingsPreview.a63953a48a',
+                      'Preview {{value0}} theme',
+                      { value0: mode }
+                    )}
+                    title={translate(
+                      'auto.components.settings.TerminalSettingsPreview.a63953a48a',
+                      'Preview {{value0}} theme',
+                      { value0: mode }
+                    )}
                     className={`rounded-sm p-1 transition-colors ${
                       togglePreviewMode === mode
                         ? 'bg-accent text-accent-foreground'

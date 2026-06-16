@@ -17,9 +17,15 @@ import type {
 } from '../../shared/types'
 import type { GitHistoryOptions, GitHistoryResult } from '../../shared/git-history'
 import { buildHostedRemoteFileUrl } from '../git/hosted-remote-url'
+import { JsonRpcErrorCode } from '../ssh/relay-protocol'
 import type { CommitMessageDraftContext } from '../../shared/commit-message-generation'
 import type { CommitMessagePlan } from '../../shared/commit-message-plan'
 import type { RemoteCommitMessageExecResult } from '../text-generation/commit-message-text-generation'
+import type { RemoteHostPlatform } from '../ssh/ssh-remote-platform'
+import {
+  describeMaxBufferOverflowError,
+  isMaxBufferOverflowError
+} from '../git/max-buffer-overflow'
 
 type NonInteractiveExecQueueEntry = {
   started: boolean
@@ -28,18 +34,48 @@ type NonInteractiveExecQueueEntry = {
   release: () => void
 }
 
+function isJsonRpcMethodNotFoundError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') {
+    return false
+  }
+  return (error as { code?: unknown }).code === JsonRpcErrorCode.MethodNotFound
+}
+
+function formatStatusEntriesForCleanCheck(entries: GitStatusResult['entries']): string | undefined {
+  if (entries.length === 0) {
+    return undefined
+  }
+  return entries.map((entry) => `${entry.area} ${entry.status}: ${entry.path}`).join('\n')
+}
+
+function filterUntrackedPorcelainStatus(stdout: string | undefined): string | undefined {
+  const trackedLines = (stdout ?? '')
+    .split(/\r?\n/)
+    .filter((line) => line.trim().length > 0 && !line.startsWith('?? '))
+  return trackedLines.length > 0 ? trackedLines.join('\n') : undefined
+}
+
 export class SshGitProvider implements IGitProvider {
   private connectionId: string
   private mux: SshChannelMultiplexer
   private nonInteractiveExecQueues = new Map<string, NonInteractiveExecQueueEntry[]>()
+  private loggedWorktreeIsCleanFallback = false
 
-  constructor(connectionId: string, mux: SshChannelMultiplexer) {
+  constructor(
+    connectionId: string,
+    mux: SshChannelMultiplexer,
+    private readonly hostPlatform: RemoteHostPlatform | null = null
+  ) {
     this.connectionId = connectionId
     this.mux = mux
   }
 
   getConnectionId(): string {
     return this.connectionId
+  }
+
+  getHostPlatform(): RemoteHostPlatform | null {
+    return this.hostPlatform
   }
 
   async getStatus(
@@ -92,10 +128,25 @@ export class SshGitProvider implements IGitProvider {
     if (!stagedSummary) {
       return null
     }
-    const { stdout: stagedPatch } = await this.exec(
-      ['diff', '--cached', '--patch', '--minimal', '--no-color', '--no-ext-diff'],
-      worktreePath
-    )
+    let stagedPatch = ''
+    try {
+      const patchResult = await this.exec(
+        ['diff', '--cached', '--patch', '--minimal', '--no-color', '--no-ext-diff'],
+        worktreePath
+      )
+      stagedPatch = patchResult.stdout
+    } catch (error) {
+      if (!isMaxBufferOverflowError(error)) {
+        throw error
+      }
+      // Why: a very large staged diff can overflow the remote exec buffer. The
+      // patch is optional context (truncated later anyway), so degrade to the
+      // file-name summary instead of failing commit-message generation.
+      console.warn(
+        '[ssh-git] Staged patch too large to read; using file summary only:',
+        describeMaxBufferOverflowError(error)
+      )
+    }
     return {
       branch: branchResult.stdout.trim() || null,
       stagedSummary,
@@ -442,21 +493,117 @@ export class SshGitProvider implements IGitProvider {
     })) ?? {}) as RemoveWorktreeResult
   }
 
-  async worktreeIsClean(worktreePath: string): Promise<{ clean: boolean; stdout?: string }> {
-    return (await this.mux.request('git.worktreeIsClean', { worktreePath })) as {
-      clean: boolean
-      stdout?: string
+  async worktreeIsClean(
+    worktreePath: string,
+    options: { includeUntracked?: boolean } = {}
+  ): Promise<{ clean: boolean; stdout?: string }> {
+    try {
+      const result = (await this.mux.request('git.worktreeIsClean', {
+        worktreePath,
+        ...(options.includeUntracked === false ? { includeUntracked: false } : {})
+      })) as {
+        clean: boolean
+        stdout?: string
+      }
+      if (options.includeUntracked === false) {
+        if (!result.clean && result.stdout === undefined) {
+          return result
+        }
+        const trackedStdout = filterUntrackedPorcelainStatus(result.stdout)
+        return { clean: !trackedStdout, ...(trackedStdout ? { stdout: trackedStdout } : {}) }
+      }
+      return result
+    } catch (error) {
+      if (!isJsonRpcMethodNotFoundError(error)) {
+        throw error
+      }
+      if (!this.loggedWorktreeIsCleanFallback) {
+        this.loggedWorktreeIsCleanFallback = true
+        console.warn(
+          '[ssh-git] Relay does not implement git.worktreeIsClean; falling back to git.status clean check'
+        )
+      }
+      // Why: existing SSH relays may predate git.worktreeIsClean, but git.status
+      // is a narrow relay RPC and avoids the generic git.exec allowlist.
+      const status = await this.getStatus(worktreePath)
+      const entries =
+        options.includeUntracked === false
+          ? status.entries.filter((entry) => entry.area !== 'untracked')
+          : status.entries
+      const clean = entries.length === 0
+      return { clean, stdout: formatStatusEntriesForCleanCheck(entries) }
     }
+  }
+
+  async refreshLocalBaseRefForWorktreeCreate(args: {
+    repoPath: string
+    fullRef: string
+    remoteTrackingRef: string
+    ownerWorktreePath?: string
+    checkOnly?: boolean
+  }): Promise<void> {
+    await this.mux.request('git.refreshLocalBaseRefForWorktreeCreate', args)
   }
 
   async renameCurrentBranch(worktreePath: string, newBranch: string): Promise<void> {
     await this.mux.request('git.renameCurrentBranch', { worktreePath, newBranch })
   }
 
-  async exec(args: string[], cwd: string): Promise<{ stdout: string; stderr: string }> {
-    return (await this.mux.request('git.exec', { args, cwd })) as {
+  async exec(
+    args: string[],
+    cwd: string,
+    options?: { signal?: AbortSignal; timeoutMs?: number }
+  ): Promise<{ stdout: string; stderr: string }> {
+    const result = options
+      ? await this.mux.request('git.exec', { args, cwd }, options)
+      : await this.mux.request('git.exec', { args, cwd })
+    return result as {
       stdout: string
       stderr: string
+    }
+  }
+
+  async clone(
+    args: string[],
+    cwd: string,
+    options?: {
+      signal?: AbortSignal
+      timeoutMs?: number
+      onProgress?: (progress: { phase: string; percent: number }) => void
+    }
+  ): Promise<{ stdout: string; stderr: string }> {
+    const progressId = `clone-${Date.now()}-${Math.random().toString(36).slice(2)}`
+    const unsubscribe = options?.onProgress
+      ? this.mux.onNotificationByMethod('git.cloneProgress', (params) => {
+          if (params.progressId !== progressId) {
+            return
+          }
+          const phase = params.phase
+          const percent = params.percent
+          if (typeof phase === 'string' && typeof percent === 'number') {
+            options.onProgress?.({ phase, percent })
+          }
+        })
+      : undefined
+    try {
+      const result = await this.mux.request(
+        'git.clone',
+        { args, cwd, progressId },
+        { signal: options?.signal, timeoutMs: options?.timeoutMs }
+      )
+      return result as {
+        stdout: string
+        stderr: string
+      }
+    } catch (error) {
+      if (isJsonRpcMethodNotFoundError(error)) {
+        throw new Error(
+          'SSH clone support is unavailable on this relay. Reconnect the SSH target to update Orca on the host, then try again.'
+        )
+      }
+      throw error
+    } finally {
+      unsubscribe?.()
     }
   }
 

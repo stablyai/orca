@@ -6,6 +6,7 @@ describe('parseKey', () => {
     ['a', { key: 'a', modifiers: [] }],
     ['7', { key: '7', modifiers: [] }],
     [';', { key: ';', modifiers: [] }],
+    ['+', { key: '+', modifiers: [] }],
     ['Return', { key: 'Enter', modifiers: [] }],
     ['Escape', { key: 'Escape', modifiers: [] }],
     ['BackSpace', { key: 'Backspace', modifiers: [] }],
@@ -42,6 +43,8 @@ describe('parseKey', () => {
     ['cmd+a', { key: 'a', modifiers: ['Meta'] }],
     ['command+a', { key: 'a', modifiers: ['Meta'] }],
     ['CmdOrCtrl+a', { key: 'a', modifiers: [process.platform === 'darwin' ? 'Meta' : 'Ctrl'] }],
+    ['ctrl++', { key: '+', modifiers: ['Ctrl'] }],
+    ['ctrl+shift++', { key: '+', modifiers: ['Ctrl', 'Shift'] }],
     ['super+Left', { key: 'ArrowLeft', modifiers: ['Meta'] }],
     ['win+Right', { key: 'ArrowRight', modifiers: ['Meta'] }]
   ])('maps chord %s', (input, expected) => {

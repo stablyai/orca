@@ -23,7 +23,8 @@ export type AgentDotState =
   // Why: the sidebar's title-based status flow (StatusIndicator/WorktreeCard)
   // collapses blocked + waiting into a single "needs attention" state. Keep
   // this as a distinct member so that flow can render without inventing a new
-  // vocabulary, but treat it identically to `blocked` visually.
+  // vocabulary, while rendering it with the same amber attention color as the
+  // worktree-level permission dot.
   | 'permission'
 
 export function agentStateLabel(state: AgentDotState): string {
@@ -68,7 +69,9 @@ export const AgentStateDot = React.memo(function AgentStateDot({
       >
         <span
           className={cn(
-            'block rounded-full border-2 border-yellow-500 border-t-transparent animate-spin',
+            // Why: match the sidebar worktree spinner's stepped cadence so
+            // long-running visible agents do not keep a full-frame-rate loop.
+            'block rounded-full border-2 border-yellow-500 border-t-transparent [animation:spin_1s_steps(12,end)_infinite]',
             inner
           )}
         />
@@ -100,12 +103,11 @@ export const AgentStateDot = React.memo(function AgentStateDot({
         className={cn(
           'block rounded-full',
           inner,
-          state === 'blocked' ||
-            state === 'waiting' ||
-            state === 'permission' ||
-            state === 'interrupted'
-            ? 'bg-red-500'
-            : 'bg-neutral-500/40'
+          state === 'permission'
+            ? 'bg-amber-500'
+            : state === 'blocked' || state === 'waiting' || state === 'interrupted'
+              ? 'bg-red-500'
+              : 'bg-neutral-500/40'
         )}
       />
     </span>

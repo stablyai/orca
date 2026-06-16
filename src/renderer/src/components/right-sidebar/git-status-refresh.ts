@@ -10,14 +10,15 @@ export type GitStatusRefreshDeps = {
   setGitStatus: (worktreeId: string, status: GitStatusResult) => void
   updateWorktreeGitIdentity: (
     worktreeId: string,
-    identity: { head?: string; branch?: string }
+    identity: { head?: string; branch?: string | null }
   ) => void
   setUpstreamStatus: (worktreeId: string, status: GitUpstreamStatus) => void
   fetchUpstreamStatus: (
     worktreeId: string,
     worktreePath: string,
     connectionId?: string,
-    pushTarget?: GitPushTarget
+    pushTarget?: GitPushTarget,
+    options?: { runtimeTargetSettings?: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null }
   ) => Promise<void>
 }
 
@@ -48,13 +49,17 @@ export async function refreshGitStatusForWorktree({
   // gives us the new identity without a separate worktree-list poll.
   deps.updateWorktreeGitIdentity(worktreeId, {
     head: status.head,
-    branch: status.branch
+    // Why: detached HEAD reports a head oid and no branch. Pass null as an
+    // explicit clear signal so stale branch names don't linger in the UI.
+    branch: status.branch ?? (status.head ? null : undefined)
   })
   if (pushTarget) {
     // Why: porcelain status reports Git's configured upstream. Source Control
     // actions for PR-created worktrees must instead reconcile with Orca's
     // explicit publish target.
-    await deps.fetchUpstreamStatus(worktreeId, worktreePath, connectionId, pushTarget)
+    await deps.fetchUpstreamStatus(worktreeId, worktreePath, connectionId, pushTarget, {
+      runtimeTargetSettings: settings
+    })
     return
   }
   if (status.upstreamStatus) {
@@ -66,11 +71,15 @@ export async function refreshGitStatusForWorktree({
       // Why: porcelain status has counts but cannot tell stale post-rebase
       // upstream commits from real remote work. Writing it first makes the
       // primary action flicker between Sync and Force Push on every poll.
-      await deps.fetchUpstreamStatus(worktreeId, worktreePath, connectionId)
+      await deps.fetchUpstreamStatus(worktreeId, worktreePath, connectionId, undefined, {
+        runtimeTargetSettings: settings
+      })
       return
     }
     deps.setUpstreamStatus(worktreeId, status.upstreamStatus)
     return
   }
-  await deps.fetchUpstreamStatus(worktreeId, worktreePath, connectionId)
+  await deps.fetchUpstreamStatus(worktreeId, worktreePath, connectionId, undefined, {
+    runtimeTargetSettings: settings
+  })
 }

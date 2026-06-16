@@ -52,8 +52,9 @@ describe('skill discovery', () => {
       repos: [makeRepo('/remote/repo', 'ssh-1')]
     })
 
-    expect(roots.map((root) => root.path)).not.toContain('/remote/repo/.claude/skills')
-    expect(roots.map((root) => root.path)).toContain('/workspace/current/.claude/skills')
+    const rootPaths = roots.map((root) => root.path.replace(/\\/g, '/'))
+    expect(rootPaths).not.toContain('/remote/repo/.claude/skills')
+    expect(rootPaths).toContain('/workspace/current/.claude/skills')
   })
 
   it('discovers skill packages through symlinked skill directories', async () => {
@@ -74,6 +75,31 @@ describe('skill discovery', () => {
     const skill = result.skills.find((entry) => entry.name === 'Orca CLI')
     expect(skill?.sourceKind).toBe('home')
     expect(skill?.directoryPath).toBe(linkedSkill)
+  })
+
+  it('keeps home classification when cwd points at the same directory as home', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-skills-'))
+    const home = join(root, 'home')
+    const skillDir = join(home, '.agents', 'skills', 'orca-cli')
+    await mkdir(skillDir, { recursive: true })
+    await writeFile(
+      join(skillDir, 'SKILL.md'),
+      ['---', 'name: orca-cli', 'description: Use the Orca CLI.', '---', ''].join('\n')
+    )
+
+    const result = await discoverSkills({
+      homeDir: home,
+      cwd: home,
+      repos: []
+    })
+
+    expect(result.skills.filter((entry) => entry.name === 'orca-cli')).toMatchObject([
+      {
+        sourceKind: 'home',
+        sourceLabel: 'Agent skills home',
+        directoryPath: skillDir
+      }
+    ])
   })
 
   it('does not loop through recursive symlinked skill directories', async () => {

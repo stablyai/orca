@@ -35,8 +35,14 @@ async function forceCurrentWorkspaceClipped(page: Page, targetId: string): Promi
       throw new Error('Target workspace row is not mounted')
     }
 
-    scroller.style.height = '72px'
-    scroller.style.maxHeight = '72px'
+    // Why: the reveal assertion checks full visibility; keep the synthetic
+    // viewport taller than the real row while still forcing a clipped start.
+    const clippedViewportHeight = Math.max(
+      72,
+      Math.ceil(target.getBoundingClientRect().height) + 16
+    )
+    scroller.style.height = `${clippedViewportHeight}px`
+    scroller.style.maxHeight = `${clippedViewportHeight}px`
     scroller.style.overflowY = 'auto'
 
     const scrollerBounds = scroller.getBoundingClientRect()

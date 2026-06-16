@@ -1,7 +1,9 @@
+/* oxlint-disable react-doctor/no-adjust-state-on-prop-change -- Why: this page is a timed storyboard; phase state intentionally advances from animation effects and reduced-motion gates. */
 import { useEffect, useState } from 'react'
 import type { JSX } from 'react'
 import { ClaudeIcon, OpenAIIcon } from '../../status-bar/icons'
 import { cn } from '@/lib/utils'
+import { translate } from '@/i18n/i18n'
 
 type Phase = 'reset' | 'expanded' | 'targeted' | 'swapped'
 
@@ -77,7 +79,6 @@ function Popover(props: {
   const { expanded, targeted, swapped, pulseKey } = props
   const sessionPctText = swapped ? '100% left' : '4% left'
   const sessionResetText = swapped ? 'Resets in 5h' : 'Resets in 47m'
-  const activeEmail = swapped ? 'eng@acme.com' : 'me@personal.dev'
   const sessionFillWidth = swapped ? '100%' : '4%'
   const weeklyFillWidth = '62%'
 
@@ -97,13 +98,26 @@ function Popover(props: {
           </span>
         </span>
         <div>
-          <div className="text-[13.5px] font-bold leading-[1.1]">Codex</div>
-          <div className="text-[11px] text-muted-foreground">Updated 1m ago</div>
+          <div className="text-[13.5px] font-bold leading-[1.1]">
+            {translate(
+              'auto.components.feature.wall.agents.orchestration.UsagePage.6a4b1d3c38',
+              'Codex'
+            )}
+          </div>
+          <div className="text-[11px] text-muted-foreground">
+            {translate(
+              'auto.components.feature.wall.agents.orchestration.UsagePage.5e45fb1238',
+              'Updated 1m ago'
+            )}
+          </div>
         </div>
       </div>
 
       <UsageBar
-        title="Session"
+        title={translate(
+          'auto.components.feature.wall.agents.orchestration.UsagePage.f421abf962',
+          'Session'
+        )}
         fillWidth={sessionFillWidth}
         warn={!swapped}
         metaLeft={
@@ -120,16 +134,38 @@ function Popover(props: {
         metaRight={<span>{sessionResetText}</span>}
       />
       <UsageBar
-        title="Weekly"
+        title={translate(
+          'auto.components.feature.wall.agents.orchestration.UsagePage.0470aaed99',
+          'Weekly'
+        )}
         fillWidth={weeklyFillWidth}
         warn={false}
-        metaLeft={<span>62% left</span>}
-        metaRight={<span>Resets in 4d 3h</span>}
+        metaLeft={
+          <span>
+            {translate(
+              'auto.components.feature.wall.agents.orchestration.UsagePage.05ce4ecdd3',
+              '62% left'
+            )}
+          </span>
+        }
+        metaRight={
+          <span>
+            {translate(
+              'auto.components.feature.wall.agents.orchestration.UsagePage.4dce5ca3aa',
+              'Resets in 4d 3h'
+            )}
+          </span>
+        }
       />
       <div className="h-px bg-border" />
-      <div className="text-[11px] font-semibold">Codex Account</div>
+      <div className="text-[11px] font-semibold">
+        {translate(
+          'auto.components.feature.wall.agents.orchestration.UsagePage.277a9c65a9',
+          'Codex Account'
+        )}
+      </div>
       <div className="flex items-center justify-between text-[11px]">
-        <span className="truncate">{activeEmail}</span>
+        <AccountNameSkeleton widthClassName={swapped ? 'w-24' : 'w-28'} />
         <span
           className={cn(
             'inline-flex items-center justify-center text-muted-foreground transition-transform duration-[240ms] ease-[cubic-bezier(.2,.8,.2,1)]',
@@ -156,18 +192,21 @@ function Popover(props: {
       >
         <div className="overflow-hidden min-h-0">
           <div className="pb-1 pt-1 text-[10px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
-            Switch to
+            {translate(
+              'auto.components.feature.wall.agents.orchestration.UsagePage.be5a165875',
+              'Switch to'
+            )}
           </div>
           <div className="flex flex-col gap-0.5 rounded-lg border border-border bg-foreground/[0.025] p-[3px]">
             <SwitchAccount
-              email="eng@acme.com"
+              accountWidthClassName="w-24"
               tag="Team"
               fillPct={100}
               metaText="100%"
               highlighted={targeted}
             />
             <SwitchAccount
-              email="side-project@gmail.com"
+              accountWidthClassName="w-32"
               tag={null}
               fillPct={78}
               metaText="78%"
@@ -181,6 +220,12 @@ function Popover(props: {
         aria-hidden
       />
     </div>
+  )
+}
+
+function AccountNameSkeleton(props: { widthClassName: string }): JSX.Element {
+  return (
+    <span className={cn('block h-2.5 rounded-full bg-foreground/[0.14]', props.widthClassName)} />
   )
 }
 
@@ -212,7 +257,7 @@ function UsageBar(props: {
 }
 
 function SwitchAccount(props: {
-  email: string
+  accountWidthClassName: string
   tag: string | null
   fillPct: number
   metaText: string
@@ -226,7 +271,7 @@ function SwitchAccount(props: {
       )}
     >
       <div className="flex min-w-0 items-center gap-1.5">
-        <span className="truncate">{props.email}</span>
+        <AccountNameSkeleton widthClassName={props.accountWidthClassName} />
         {props.tag ? (
           <span className="shrink-0 rounded-full bg-foreground/[0.06] px-1.5 py-px text-[9.5px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
             {props.tag}
@@ -265,7 +310,12 @@ function BottomBar(props: { swapped: boolean }): JSX.Element {
         <span className="block h-1 w-9 overflow-hidden rounded-full bg-foreground/[0.12]">
           <span className="block h-full rounded-full bg-emerald-500" style={{ width: '71%' }} />
         </span>
-        <span>71% 5h</span>
+        <span>
+          {translate(
+            'auto.components.feature.wall.agents.orchestration.UsagePage.64265cb295',
+            '71% 5h'
+          )}
+        </span>
       </div>
       <div className="-my-0.5 inline-flex items-center gap-1.5 rounded-md bg-foreground/[0.06] px-1.5 py-0.5 font-mono text-[10.5px] text-foreground">
         <span style={{ color: '#111' }}>

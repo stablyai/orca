@@ -10,7 +10,10 @@ const {
   getDefaultBaseRefMock,
   getBranchConflictKindMock,
   getPRForBranchMock,
+  createGitHubPullRequestMock,
   getEffectiveHooksMock,
+  getEffectiveHooksFromConfigMock,
+  getDefaultTabsLaunchMock,
   createIssueCommandRunnerScriptMock,
   createSetupRunnerScriptMock,
   shouldRunSetupForCreateMock,
@@ -29,7 +32,10 @@ const {
   getDefaultBaseRefMock: vi.fn(),
   getBranchConflictKindMock: vi.fn(),
   getPRForBranchMock: vi.fn(),
+  createGitHubPullRequestMock: vi.fn(),
   getEffectiveHooksMock: vi.fn(),
+  getEffectiveHooksFromConfigMock: vi.fn(),
+  getDefaultTabsLaunchMock: vi.fn(),
   createIssueCommandRunnerScriptMock: vi.fn(),
   createSetupRunnerScriptMock: vi.fn(),
   shouldRunSetupForCreateMock: vi.fn(),
@@ -68,13 +74,16 @@ vi.mock('../git/repo', () => ({
 }))
 
 vi.mock('../github/client', () => ({
-  getPRForBranch: getPRForBranchMock
+  getPRForBranch: getPRForBranchMock,
+  createGitHubPullRequest: createGitHubPullRequestMock
 }))
 
 vi.mock('../hooks', () => ({
   createIssueCommandRunnerScript: createIssueCommandRunnerScriptMock,
   createSetupRunnerScript: createSetupRunnerScriptMock,
   getEffectiveHooks: getEffectiveHooksMock,
+  getEffectiveHooksFromConfig: getEffectiveHooksFromConfigMock,
+  getDefaultTabsLaunch: getDefaultTabsLaunchMock,
   loadHooks: loadHooksMock,
   runHook: runHookMock,
   hasHooksFile: hasHooksFileMock,
@@ -105,6 +114,7 @@ describe('registerWorktreeHandlers – Windows path handling', () => {
   const store = {
     getRepos: vi.fn(),
     getRepo: vi.fn(),
+    getProjectHostSetups: vi.fn(),
     getSettings: vi.fn(),
     getWorktreeMeta: vi.fn(),
     setWorktreeMeta: vi.fn(),
@@ -121,7 +131,10 @@ describe('registerWorktreeHandlers – Windows path handling', () => {
     getDefaultBaseRefMock.mockReset()
     getBranchConflictKindMock.mockReset()
     getPRForBranchMock.mockReset()
+    createGitHubPullRequestMock.mockReset()
     getEffectiveHooksMock.mockReset()
+    getEffectiveHooksFromConfigMock.mockReset()
+    getDefaultTabsLaunchMock.mockReset()
     createIssueCommandRunnerScriptMock.mockReset()
     createSetupRunnerScriptMock.mockReset()
     shouldRunSetupForCreateMock.mockReset()
@@ -133,6 +146,7 @@ describe('registerWorktreeHandlers – Windows path handling', () => {
     mainWindow.webContents.send.mockReset()
     store.getRepos.mockReset()
     store.getRepo.mockReset()
+    store.getProjectHostSetups.mockReset()
     store.getSettings.mockReset()
     store.getWorktreeMeta.mockReset()
     store.setWorktreeMeta.mockReset()
@@ -163,6 +177,7 @@ describe('registerWorktreeHandlers – Windows path handling', () => {
       addedAt: 0,
       worktreeBaseRef: null
     })
+    store.getProjectHostSetups.mockReturnValue([])
     store.getSettings.mockReturnValue({
       branchPrefix: 'none',
       nestWorkspaces: false,
@@ -176,6 +191,8 @@ describe('registerWorktreeHandlers – Windows path handling', () => {
     getBranchConflictKindMock.mockResolvedValue(null)
     getPRForBranchMock.mockResolvedValue(null)
     getEffectiveHooksMock.mockReturnValue(null)
+    getEffectiveHooksFromConfigMock.mockReturnValue(null)
+    getDefaultTabsLaunchMock.mockReturnValue(undefined)
     shouldRunSetupForCreateMock.mockReturnValue(false)
     computeWorktreePathMock.mockReturnValue('C:\\workspaces\\improve-dashboard')
     ensurePathWithinWorkspaceMock.mockReturnValue('C:\\workspaces\\improve-dashboard')

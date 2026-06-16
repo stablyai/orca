@@ -10,6 +10,7 @@ import type {
   CodexUsageScanState,
   CodexUsageScope,
   CodexUsageSessionRow,
+  CodexUsageSnapshot,
   CodexUsageSummary
 } from '../../shared/codex-usage-types'
 import type { AutomationRunUsage } from '../../shared/automations-types'
@@ -357,7 +358,7 @@ export class CodexUsageStore {
       mkdirSync(dir, { recursive: true })
     }
     const tmpFile = `${usageFile}.${process.pid}.${Date.now()}.${Math.random().toString(16).slice(2)}.tmp`
-    writeFileSync(tmpFile, JSON.stringify(this.state, null, 2), 'utf-8')
+    writeFileSync(tmpFile, JSON.stringify(this.state), 'utf-8')
     renameSync(tmpFile, usageFile)
   }
 
@@ -372,6 +373,21 @@ export class CodexUsageStore {
       ...this.state.scanState,
       isScanning: this.scanPromise !== null,
       hasAnyCodexData: this.state.sessions.length > 0 || this.state.dailyAggregates.length > 0
+    }
+  }
+
+  getSnapshot(
+    scope: CodexUsageScope,
+    range: CodexUsageRange,
+    recentSessionLimit = 10
+  ): CodexUsageSnapshot {
+    return {
+      scanState: this.getScanState(),
+      summary: this.buildSummary(scope, range),
+      daily: this.buildDaily(scope, range),
+      modelBreakdown: this.buildBreakdown(scope, range, 'model'),
+      projectBreakdown: this.buildBreakdown(scope, range, 'project'),
+      recentSessions: this.buildRecentSessions(scope, range, recentSessionLimit)
     }
   }
 
@@ -398,7 +414,7 @@ export class CodexUsageStore {
 
     this.state.scanState.lastScanStartedAt = Date.now()
     this.state.scanState.lastScanError = null
-    this.writeToDisk()
+    // Why: start-only writes rewrite the full usage cache before scan results change.
 
     this.scanPromise = (async () => {
       try {
@@ -429,6 +445,10 @@ export class CodexUsageStore {
 
   async getSummary(scope: CodexUsageScope, range: CodexUsageRange): Promise<CodexUsageSummary> {
     await this.refresh(false)
+    return this.buildSummary(scope, range)
+  }
+
+  private buildSummary(scope: CodexUsageScope, range: CodexUsageRange): CodexUsageSummary {
     const filteredDaily = this.getFilteredDaily(scope, range)
     const filteredSessions = this.getFilteredSessions(scope, range)
 
@@ -491,6 +511,10 @@ export class CodexUsageStore {
 
   async getDaily(scope: CodexUsageScope, range: CodexUsageRange): Promise<CodexUsageDailyPoint[]> {
     await this.refresh(false)
+    return this.buildDaily(scope, range)
+  }
+
+  private buildDaily(scope: CodexUsageScope, range: CodexUsageRange): CodexUsageDailyPoint[] {
     const byDay = new Map<string, CodexUsageDailyPoint>()
     for (const row of this.getFilteredDaily(scope, range)) {
       const existing = byDay.get(row.day) ?? {
@@ -517,6 +541,14 @@ export class CodexUsageStore {
     kind: CodexUsageBreakdownKind
   ): Promise<CodexUsageBreakdownRow[]> {
     await this.refresh(false)
+    return this.buildBreakdown(scope, range, kind)
+  }
+
+  private buildBreakdown(
+    scope: CodexUsageScope,
+    range: CodexUsageRange,
+    kind: CodexUsageBreakdownKind
+  ): CodexUsageBreakdownRow[] {
     const rows = new Map<string, CodexUsageBreakdownRow>()
     const filteredDaily = this.getFilteredDaily(scope, range)
     const filteredSessions = this.getFilteredSessions(scope, range)
@@ -596,6 +628,14 @@ export class CodexUsageStore {
     limit = 12
   ): Promise<CodexUsageSessionRow[]> {
     await this.refresh(false)
+    return this.buildRecentSessions(scope, range, limit)
+  }
+
+  private buildRecentSessions(
+    scope: CodexUsageScope,
+    range: CodexUsageRange,
+    limit = 12
+  ): CodexUsageSessionRow[] {
     return this.getFilteredSessions(scope, range)
       .slice(0, limit)
       .map((session) => {
@@ -684,7 +724,7 @@ export class CodexUsageStore {
       return unavailable('no_matching_session', 'Run session metadata is incomplete.')
     }
 
-    const scanState = await this.refresh(true)
+    const scanState = await this.refresh(this.shouldForceAutomationUsageScan(input.completedAt))
     if (scanState.lastScanError) {
       return unavailable('scan_failed', scanState.lastScanError)
     }
@@ -879,6 +919,15 @@ export class CodexUsageStore {
       return scopedModels[0]?.modelLabel ?? null
     }
     return 'Mixed models'
+  }
+
+  private shouldForceAutomationUsageScan(completedAt: number): boolean {
+    const { lastScanCompletedAt, lastScanError } = this.state.scanState
+    // Why: attribution needs a scan after the run finishes, but repeated
+    // lookups after that point should not rescan all Codex session history.
+    return (
+      Boolean(lastScanError) || lastScanCompletedAt === null || lastScanCompletedAt < completedAt
+    )
   }
 
   private async getCurrentWorktreeFingerprint(): Promise<string> {

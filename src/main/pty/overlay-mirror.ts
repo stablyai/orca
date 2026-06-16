@@ -1,5 +1,5 @@
 // Why: Pi (PI_CODING_AGENT_DIR) and OpenCode (OPENCODE_CONFIG_DIR) both inject
-// Orca-owned files into per-PTY overlay directories that mirror a user-owned
+// Orca-owned files into overlay directories that mirror a user-owned
 // source dir via symlinks/junctions. The safety guarantees here -- never
 // descend into a symlink/junction during teardown, refuse to operate outside
 // the overlay root, lstat-not-stat to avoid following links -- are the result

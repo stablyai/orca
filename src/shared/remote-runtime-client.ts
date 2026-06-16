@@ -35,6 +35,20 @@ export class RemoteRuntimeClientError extends Error {
 
 function ignoreSettledRemoteRuntimeSocketError(): void {}
 
+function formatRemoteRuntimeCloseMessage(code: number, reason: Buffer): string {
+  const suffixParts: string[] = []
+  if (code !== 1005 && code !== 1006) {
+    suffixParts.push(String(code))
+  }
+  const reasonText = reason.toString().trim()
+  if (reasonText) {
+    suffixParts.push(reasonText)
+  }
+  return suffixParts.length > 0
+    ? `Remote Orca runtime closed the connection (${suffixParts.join(': ')}).`
+    : 'Remote Orca runtime closed the connection.'
+}
+
 export type RemoteRuntimeSubscription = {
   requestId: string
   close: () => void
@@ -143,13 +157,13 @@ export async function sendRemoteRuntimeRequest<TResult>(
       })
     }
 
-    function onClose(): void {
+    function onClose(code: number, reason: Buffer): void {
       if (!settled) {
         finish({
           ok: false,
           error: new RemoteRuntimeClientError(
             'remote_runtime_unavailable',
-            'Remote Orca runtime closed the connection.'
+            formatRemoteRuntimeCloseMessage(code, reason)
           )
         })
       }
@@ -411,6 +425,11 @@ export async function subscribeRemoteRuntimeRequest<TResult>(
         return
       }
       callbacks.onError(error)
+      // Why: after a subscription is established, protocol failures are
+      // terminal for this socket. Closing here releases the WebSocket listeners
+      // and lets the IPC subscription registry drop its retained callbacks.
+      closeSocketAfterCleanup()
+      callbacks.onClose?.()
     }
 
     try {
@@ -439,7 +458,7 @@ export async function subscribeRemoteRuntimeRequest<TResult>(
       )
     }
 
-    function onClose(): void {
+    function onClose(code: number, reason: Buffer): void {
       clearTimeout(timeout)
       cleanupSocketListeners()
       if (!settled) {
@@ -447,7 +466,7 @@ export async function subscribeRemoteRuntimeRequest<TResult>(
         reject(
           new RemoteRuntimeClientError(
             'remote_runtime_unavailable',
-            'Remote Orca runtime closed the connection.'
+            formatRemoteRuntimeCloseMessage(code, reason)
           )
         )
         return

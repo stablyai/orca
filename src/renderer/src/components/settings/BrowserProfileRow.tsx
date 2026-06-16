@@ -15,6 +15,7 @@ import {
 } from '../ui/dropdown-menu'
 import { useAppStore } from '../../store'
 import { BROWSER_FAMILY_LABELS } from '../../../../shared/constants'
+import { translate } from '@/i18n/i18n'
 
 type DetectedBrowser = {
   family: string
@@ -58,7 +59,26 @@ export function BrowserProfileRow({
     if (result.ok) {
       const browser = detectedBrowsers.find((b) => b.family === browserFamily)
       toast.success(
-        `Imported ${result.summary.importedCookies} cookies from ${browser?.label ?? browserFamily}${browserProfile ? ` (${browserProfile})` : ''} into ${profile.label}.`
+        browserProfile
+          ? translate(
+              'auto.components.settings.BrowserProfileRow.a3f8c2d1e0b4',
+              'Imported {{value0}} cookies from {{value1}} ({{value2}}) into {{value3}}.',
+              {
+                value0: result.summary.importedCookies,
+                value1: browser?.label ?? browserFamily,
+                value2: browserProfile,
+                value3: profile.label
+              }
+            )
+          : translate(
+              'auto.components.settings.BrowserProfileRow.b4e9d3f2a1c5',
+              'Imported {{value0}} cookies from {{value1}} into {{value2}}.',
+              {
+                value0: result.summary.importedCookies,
+                value1: browser?.label ?? browserFamily,
+                value2: profile.label
+              }
+            )
       )
     } else {
       toast.error(result.reason)
@@ -69,7 +89,11 @@ export function BrowserProfileRow({
     const result = await useAppStore.getState().importCookiesToProfile(profile.id)
     if (result.ok) {
       toast.success(
-        `Imported ${result.summary.importedCookies} cookies from file into ${profile.label}.`
+        translate(
+          'auto.components.settings.BrowserProfileRow.b4c167764d',
+          'Imported {{value0}} cookies from file into {{value1}}.',
+          { value0: result.summary.importedCookies, value1: profile.label }
+        )
       )
     } else if (result.reason !== 'canceled') {
       toast.error(result.reason)
@@ -105,14 +129,19 @@ export function BrowserProfileRow({
           <span className="truncate text-sm font-medium">{profile.label}</span>
           {isActive ? (
             <span className="shrink-0 rounded border border-border/50 px-1.5 text-[10px] font-medium leading-4 text-foreground/80">
-              Active
+              {translate('auto.components.settings.BrowserProfileRow.c29648fe5b', 'Active')}
             </span>
           ) : null}
         </div>
         {sourceLabel ? (
           <p className="truncate text-[11px] text-muted-foreground">{sourceLabel}</p>
         ) : (
-          <p className="text-[11px] text-muted-foreground">No cookies imported</p>
+          <p className="text-[11px] text-muted-foreground">
+            {translate(
+              'auto.components.settings.BrowserProfileRow.796d846483',
+              'No cookies imported'
+            )}
+          </p>
         )}
       </div>
       <div className="flex shrink-0 items-center gap-1" onClick={(e) => e.stopPropagation()}>
@@ -137,14 +166,17 @@ export function BrowserProfileRow({
               ) : (
                 <Import className="size-3" />
               )}
-              Import Cookies
+              {translate('auto.components.settings.BrowserProfileRow.cdec84552f', 'Import Cookies')}
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             {detectedBrowsers.map((browser) =>
               browser.profiles.length > 1 ? (
                 <DropdownMenuSub key={browser.family}>
-                  <DropdownMenuSubTrigger>From {browser.label}</DropdownMenuSubTrigger>
+                  <DropdownMenuSubTrigger>
+                    {translate('auto.components.settings.BrowserProfileRow.7df818977e', 'From')}
+                    {browser.label}
+                  </DropdownMenuSubTrigger>
                   <DropdownMenuPortal>
                     <DropdownMenuSubContent>
                       {browser.profiles.map((bp) => (
@@ -165,13 +197,14 @@ export function BrowserProfileRow({
                   key={browser.family}
                   onSelect={() => void handleImportFromBrowser(browser.family)}
                 >
-                  From {browser.label}
+                  {translate('auto.components.settings.BrowserProfileRow.7df818977e', 'From')}
+                  {browser.label}
                 </DropdownMenuItem>
               )
             )}
             {detectedBrowsers.length > 0 && <DropdownMenuSeparator />}
             <DropdownMenuItem onSelect={() => void handleImportFromFile()}>
-              From File…
+              {translate('auto.components.settings.BrowserProfileRow.ebb78dfd6f', 'From File…')}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -184,7 +217,12 @@ export function BrowserProfileRow({
             onClick={async () => {
               const ok = await useAppStore.getState().clearDefaultSessionCookies()
               if (ok) {
-                toast.success('Default cookies cleared.')
+                toast.success(
+                  translate(
+                    'auto.components.settings.BrowserProfileRow.2d4bea7f35',
+                    'Default cookies cleared.'
+                  )
+                )
               }
             }}
           >
@@ -198,7 +236,13 @@ export function BrowserProfileRow({
             onClick={async () => {
               const ok = await useAppStore.getState().deleteBrowserSessionProfile(profile.id)
               if (ok) {
-                toast.success(`Profile "${profile.label}" removed.`)
+                toast.success(
+                  translate(
+                    'auto.components.settings.BrowserProfileRow.8e636cae25',
+                    'Profile "{{value0}}" removed.',
+                    { value0: profile.label }
+                  )
+                )
               }
             }}
           >

@@ -1,13 +1,15 @@
 import { readFile, stat } from 'fs/promises'
-import type { RepoKind } from '../shared/types'
+import type { GitHubRepositoryIdentity, RepoKind } from '../shared/types'
 import {
   faviconUrlFromWebsite,
+  githubAvatarIcon,
   MAX_REPO_ICON_UPLOAD_BYTES,
   type RepoIcon
 } from '../shared/repo-icon'
-import { getRepoSlug } from './github/client'
+import { getRepoSlug, getRepoUpstream } from './github/client'
 import { getSshFilesystemProvider } from './providers/ssh-filesystem-dispatch'
 import type { IFilesystemProvider } from './providers/types'
+import { iconHrefCandidates } from './repo-icon-href-candidates'
 import { joinWorktreeRelativePath } from './runtime/runtime-relative-paths'
 
 const REPO_ICON_FILE_CANDIDATES = [
@@ -33,6 +35,10 @@ const REPO_ICON_SOURCE_FILE_CANDIDATES = [
   'src/root.tsx',
   'src/index.html'
 ]
+
+// Why: repo icon detection runs while adding repos; declared-icon probing should
+// not read large app entrypoints just to find a small favicon href.
+const MAX_REPO_ICON_SOURCE_BYTES = 256 * 1024
 
 const LINK_ICON_HTML_RE =
   /<link\b(?=[^>]*\brel=["'](?:icon|shortcut icon)["'])(?=[^>]*\bhref=["']([^"'?]+))[^>]*>/i
@@ -73,27 +79,6 @@ function shouldUseWebsiteFavicon(rawUrl: string): boolean {
 
 function extractIconHref(source: string): string | null {
   return source.match(LINK_ICON_HTML_RE)?.[1] ?? source.match(LINK_ICON_OBJECT_RE)?.[1] ?? null
-}
-
-function normalizeIconHrefPath(href: string): string | null {
-  const trimmed = href.trim()
-  if (!trimmed || trimmed.startsWith('//') || /^[a-zA-Z][a-zA-Z\d+.-]*:/.test(trimmed)) {
-    return null
-  }
-
-  const pathOnly = (trimmed.split(/[?#]/)[0] ?? '').replace(/^\/+/, '').replace(/\\/g, '/')
-  const parts = pathOnly.split('/').filter((part) => part && part !== '.')
-  // Why: declared icon hrefs are repo content. Never let a best-effort icon
-  // probe resolve outside the worktree through `../` path segments.
-  if (parts.length === 0 || parts.some((part) => part === '..')) {
-    return null
-  }
-  return parts.join('/')
-}
-
-function iconHrefCandidates(href: string): string[] {
-  const clean = normalizeIconHrefPath(href)
-  return clean ? [`public/${clean}`, clean] : []
 }
 
 async function readLocalPngIcon(repoPath: string, relativePath: string): Promise<RepoIcon | null> {
@@ -153,12 +138,17 @@ async function detectLocalPngIcon(repoPath: string): Promise<RepoIcon | null> {
   }
   for (const sourceFile of REPO_ICON_SOURCE_FILE_CANDIDATES) {
     try {
-      const source = await readFile(joinWorktreeRelativePath(repoPath, sourceFile), 'utf8')
+      const sourcePath = joinWorktreeRelativePath(repoPath, sourceFile)
+      const sourceInfo = await stat(sourcePath)
+      if (!sourceInfo.isFile() || sourceInfo.size > MAX_REPO_ICON_SOURCE_BYTES) {
+        continue
+      }
+      const source = await readFile(sourcePath, 'utf8')
       const href = extractIconHref(source)
       if (!href) {
         continue
       }
-      for (const relativePath of iconHrefCandidates(href)) {
+      for (const relativePath of iconHrefCandidates(href, sourceFile)) {
         try {
           const icon = await readLocalPngIcon(repoPath, relativePath)
           if (icon) {
@@ -191,7 +181,12 @@ async function detectRemotePngIcon(
   }
   for (const sourceFile of REPO_ICON_SOURCE_FILE_CANDIDATES) {
     try {
-      const result = await fsProvider.readFile(joinWorktreeRelativePath(repoPath, sourceFile))
+      const sourcePath = joinWorktreeRelativePath(repoPath, sourceFile)
+      const sourceInfo = await fsProvider.stat(sourcePath)
+      if (sourceInfo.type !== 'file' || sourceInfo.size > MAX_REPO_ICON_SOURCE_BYTES) {
+        continue
+      }
+      const result = await fsProvider.readFile(sourcePath)
       if (result.isBinary) {
         continue
       }
@@ -199,7 +194,7 @@ async function detectRemotePngIcon(
       if (!href) {
         continue
       }
-      for (const relativePath of iconHrefCandidates(href)) {
+      for (const relativePath of iconHrefCandidates(href, sourceFile)) {
         try {
           const icon = await readRemotePngIcon(repoPath, fsProvider, relativePath)
           if (icon) {
@@ -263,18 +258,13 @@ async function detectRemotePackageHomepageIcon(
 
 async function detectGitHubAvatarIcon(
   repoPath: string,
-  connectionId?: string | null
+  connectionId?: string | null,
+  upstream?: GitHubRepositoryIdentity | null
 ): Promise<RepoIcon | null> {
   try {
-    const slug = await getRepoSlug(repoPath, connectionId)
-    return slug
-      ? {
-          type: 'image',
-          src: `https://github.com/${encodeURIComponent(slug.owner)}.png?size=64`,
-          source: 'github',
-          label: `${slug.owner}/${slug.repo}`
-        }
-      : null
+    // Why: a fork's origin is the personal copy, so prefer the upstream owner.
+    const slug = upstream ?? (await getRepoSlug(repoPath, connectionId))
+    return slug ? githubAvatarIcon(slug) : null
   } catch {
     return null
   }
@@ -283,11 +273,13 @@ async function detectGitHubAvatarIcon(
 export async function detectRepoIcon({
   repoPath,
   kind,
-  connectionId
+  connectionId,
+  upstream
 }: {
   repoPath: string
   kind: RepoKind
   connectionId?: string | null
+  upstream?: GitHubRepositoryIdentity | null
 }): Promise<RepoIcon | undefined> {
   try {
     const fsProvider = connectionId ? getSshFilesystemProvider(connectionId) : undefined
@@ -306,10 +298,33 @@ export async function detectRepoIcon({
     }
 
     if (kind === 'git') {
-      return (await detectGitHubAvatarIcon(repoPath, connectionId)) ?? undefined
+      return (await detectGitHubAvatarIcon(repoPath, connectionId, upstream)) ?? undefined
     }
   } catch {
     // Repo creation must not fail because a best-effort icon probe failed.
   }
   return undefined
+}
+
+/**
+ * Detect a repo's icon and its fork upstream together. The upstream is resolved
+ * once and reused for the avatar so a fork shows the upstream owner's avatar.
+ * Returns a spread-ready slice of `Repo`. For git repos, `upstream: null`
+ * is a resolved "not a fork" marker and prevents repeated best-effort probes.
+ */
+export async function detectRepoIconAndUpstream({
+  repoPath,
+  kind,
+  connectionId
+}: {
+  repoPath: string
+  kind: RepoKind
+  connectionId?: string | null
+}): Promise<{ repoIcon?: RepoIcon; upstream?: GitHubRepositoryIdentity | null }> {
+  const upstream = kind === 'git' ? await getRepoUpstream(repoPath, connectionId) : null
+  const repoIcon = await detectRepoIcon({ repoPath, kind, connectionId, upstream })
+  return {
+    ...(repoIcon ? { repoIcon } : {}),
+    ...(kind === 'git' ? { upstream: upstream ?? null } : {})
+  }
 }

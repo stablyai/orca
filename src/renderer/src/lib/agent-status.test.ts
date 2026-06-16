@@ -10,6 +10,7 @@ import {
   getAgentLabel,
   isGeminiTerminalTitle,
   isClaudeAgent,
+  isClaudeManagementTitle,
   normalizeTerminalTitle,
   isExplicitAgentStatusFresh,
   mapAgentStatusStateToVisualStatus,
@@ -170,6 +171,22 @@ describe('detectAgentStatusFromTitle', () => {
     expect(detectAgentStatusFromTitle('⠋ OpenClaude')).toBe('working')
   })
 
+  it('excludes the exact Claude agents management title', () => {
+    expect(detectAgentStatusFromTitle('claude agents')).toBeNull()
+    expect(detectAgentStatusFromTitle('  Claude Agents  ')).toBeNull()
+    expect(detectAgentStatusFromTitle('claude.exe agents')).toBeNull()
+    expect(detectAgentStatusFromTitle('Claude.CMD agents')).toBeNull()
+    expect(detectAgentStatusFromTitle('claude.bat agents')).toBeNull()
+    expect(detectAgentStatusFromTitle('Claude.PS1 agents')).toBeNull()
+    expect(
+      detectAgentStatusFromTitle('C:\\Users\\dev\\AppData\\Roaming\\npm\\claude.cmd agents')
+    ).toBeNull()
+    expect(
+      detectAgentStatusFromTitle('"C:\\Users\\dev\\AppData\\Roaming\\npm\\claude.cmd" agents')
+    ).toBeNull()
+    expect(detectAgentStatusFromTitle('claude agents working')).toBe('working')
+  })
+
   it('detects Pi idle titles', () => {
     expect(detectAgentStatusFromTitle('π - my-project')).toBe('idle')
     expect(detectAgentStatusFromTitle('π - session-name - my-project')).toBe('idle')
@@ -226,14 +243,15 @@ describe('detectAgentStatusFromTitle', () => {
     expect(detectAgentStatusFromTitle('Codex Working')).toBe('working')
   })
 
-  // Why: `detectAgentStatusFromTitle` uses a substring-based `containsAgentName`
-  // fallback, so a cwd-path containing an agent-name fragment without a strong
-  // keyword or ". "/"* " prefix still falls through to the 'idle' branch. Pin
-  // the behavior so a future tightening (or deliberate relaxation) of
-  // `containsAgentName` is an explicit decision.
-  it('still returns idle for cwd-path containing agent name (known containsAgentName gap)', () => {
-    expect(detectAgentStatusFromTitle('~/codex-scratch')).toBe('idle')
-    expect(detectAgentStatusFromTitle('~/codex already built')).toBe('idle')
+  // Why: `containsAgentName` token-matches legacy agent names, so a cwd-path
+  // fragment like "~/codex-scratch" (hyphen-adjacent) or "opencode-blinker"
+  // (the worktree name that mislabeled Codex tabs as OpenCode) no longer mints
+  // an 'idle' agent signal. A bare "~/codex" path still has no strong keyword.
+  it('does not treat cwd-path agent-name fragments as agent activity', () => {
+    expect(detectAgentStatusFromTitle('~/codex-scratch')).toBeNull()
+    expect(detectAgentStatusFromTitle('~/codex already built')).toBeNull()
+    expect(detectAgentStatusFromTitle('opencode-blinker')).toBeNull()
+    expect(detectAgentStatusFromTitle('claude-scratch')).toBeNull()
   })
 
   // Why: short agent names are unsafe under substring detection. Telemetry now
@@ -393,6 +411,12 @@ describe('getAgentLabel', () => {
     expect(getAgentLabel('⠋ π - my-project')).toBe('Pi')
   })
 
+  it('treats Claude Code prefixed task titles as Claude even when they mention another CLI', () => {
+    expect(getAgentLabel('✳ Gemini CLI')).toBe('Claude Code')
+    expect(getAgentLabel('. Compare Opencode Vs Orca')).toBe('Claude Code')
+    expect(getAgentLabel('* Review Codex behavior')).toBe('Claude Code')
+  })
+
   it('labels supported agent families consistently', () => {
     expect(getAgentLabel('✦ Gemini CLI')).toBe('Gemini CLI')
     expect(getAgentLabel('⠂ Claude Code')).toBe('Claude Code')
@@ -408,6 +432,10 @@ describe('getAgentLabel', () => {
     expect(getAgentLabel('Hermes ready')).toBe('Hermes')
   })
 
+  it('does not label the Claude agents management title', () => {
+    expect(getAgentLabel('claude agents')).toBeNull()
+  })
+
   it('labels GitHub Copilot CLI', () => {
     expect(getAgentLabel('copilot working')).toBe('GitHub Copilot')
     expect(getAgentLabel('copilot idle')).toBe('GitHub Copilot')
@@ -417,6 +445,27 @@ describe('getAgentLabel', () => {
   it('does not label Android titles as Droid', () => {
     expect(getAgentLabel('android emulator ready')).toBeNull()
   })
+
+  // Why: cwd/worktree titles embed agent-name fragments. Substring matching
+  // mislabeled a Codex tab whose title fell back to the "opencode-blinker"
+  // worktree name as OpenCode. Token matching must reject these fragments for
+  // every legacy agent name.
+  it('does not label cwd/worktree path fragments as an agent', () => {
+    expect(getAgentLabel('opencode-blinker')).toBeNull()
+    expect(getAgentLabel('claude-scratch')).toBeNull()
+    expect(getAgentLabel('~/projects/codex-scratch')).toBeNull()
+    expect(getAgentLabel('~/cursor-rules')).toBeNull()
+    expect(getAgentLabel('grok-fixtures')).toBeNull()
+    expect(getAgentLabel('aider-config')).toBeNull()
+  })
+
+  it('still labels real agent titles that contain the name as a token', () => {
+    expect(getAgentLabel('OpenCode ready')).toBe('OpenCode')
+    expect(getAgentLabel('claude.exe')).toBe('Claude Code')
+    expect(getAgentLabel('openclaude.cmd')).toBe('OpenClaude')
+    expect(getAgentLabel('⠋ Codex')).toBe('Codex')
+    expect(getAgentLabel('Aider idle')).toBe('Aider')
+  })
 })
 
 describe('isClaudeAgent', () => {
@@ -424,6 +473,26 @@ describe('isClaudeAgent', () => {
     expect(isClaudeAgent('⠋ Claude Code')).toBe(true)
     expect(isClaudeAgent('⠋ OpenClaude')).toBe(false)
     expect(isClaudeAgent('OpenClaude ready')).toBe(false)
+  })
+
+  it('does not classify non-prefix Claude mentions as Claude agent titles', () => {
+    expect(isClaudeAgent('ask claude later')).toBe(false)
+    expect(getAgentLabel('ask claude later')).toBeNull()
+  })
+
+  it('does not classify the Claude agents management title as a Claude agent', () => {
+    expect(isClaudeManagementTitle('  Claude Agents  ')).toBe(true)
+    expect(isClaudeManagementTitle('claude.exe agents')).toBe(true)
+    expect(isClaudeManagementTitle('claude.cmd agents')).toBe(true)
+    expect(isClaudeManagementTitle('claude.bat agents')).toBe(true)
+    expect(isClaudeManagementTitle('claude.ps1 agents')).toBe(true)
+    expect(
+      isClaudeManagementTitle('C:\\Users\\dev\\AppData\\Roaming\\npm\\claude.cmd agents')
+    ).toBe(true)
+    expect(
+      isClaudeManagementTitle('"C:\\Users\\dev\\AppData\\Roaming\\npm\\claude.cmd" agents')
+    ).toBe(true)
+    expect(isClaudeAgent('claude agents')).toBe(false)
   })
 })
 

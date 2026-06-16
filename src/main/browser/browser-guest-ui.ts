@@ -9,17 +9,47 @@ import {
   redactKagiSessionToken
 } from '../../shared/browser-url'
 import {
+  isRecentTabSwitcherCommitRelease,
   matchesRecentTabSwitcherChord,
   resolveWindowShortcutAction
 } from '../../shared/window-shortcut-policy'
 import { readGuestNavigationState } from './browser-guest-navigation-state'
 import { keybindingMatchesAction, type KeybindingOverrides } from '../../shared/keybindings'
+import type { BrowserPageZoomDirection } from '../../shared/browser-page-zoom'
 
 type ResolveRenderer = (browserTabId: string) => Electron.WebContents | null
 type ShouldForwardDictationShortcut = () => boolean
+type IsMobileEmulatorEnabled = () => boolean
 
-function isControlKeyRelease(input: Electron.Input): boolean {
-  return input.type === 'keyUp' && (input.code === 'ControlLeft' || input.code === 'ControlRight')
+const CONTROL_MODIFIERS = new Set(['control', 'ctrl'])
+const MAC_COMMAND_MODIFIERS = new Set(['meta', 'command', 'cmd'])
+const WHEEL_ZOOM_BLOCKING_MODIFIERS = new Set(['alt', 'shift'])
+
+function hasModifier(mouse: Electron.MouseInputEvent, modifiers: ReadonlySet<string>): boolean {
+  return mouse.modifiers?.some((modifier) => modifiers.has(modifier)) ?? false
+}
+
+export function resolveGuestMouseWheelZoomDirection(
+  mouse: Electron.MouseInputEvent,
+  platform: NodeJS.Platform = process.platform
+): BrowserPageZoomDirection | null {
+  if (mouse.type !== 'mouseWheel') {
+    return null
+  }
+  if (hasModifier(mouse, WHEEL_ZOOM_BLOCKING_MODIFIERS)) {
+    return null
+  }
+  const hasZoomModifier =
+    hasModifier(mouse, CONTROL_MODIFIERS) ||
+    (platform === 'darwin' && hasModifier(mouse, MAC_COMMAND_MODIFIERS))
+  if (!hasZoomModifier) {
+    return null
+  }
+  const deltaY = (mouse as Electron.MouseWheelInputEvent).deltaY
+  if (typeof deltaY !== 'number' || deltaY === 0) {
+    return null
+  }
+  return deltaY < 0 ? 'in' : 'out'
 }
 
 export function setupGuestContextMenu(args: {
@@ -221,24 +251,32 @@ export function setupGuestShortcutForwarding(args: {
   guest: Electron.WebContents
   resolveRenderer: ResolveRenderer
   shouldForwardDictationShortcut?: ShouldForwardDictationShortcut
+  isMobileEmulatorEnabled?: IsMobileEmulatorEnabled
   getKeybindings?: () => KeybindingOverrides | undefined
 }): () => void {
-  const { browserTabId, guest, resolveRenderer, shouldForwardDictationShortcut, getKeybindings } =
-    args
+  const {
+    browserTabId,
+    guest,
+    resolveRenderer,
+    shouldForwardDictationShortcut,
+    isMobileEmulatorEnabled,
+    getKeybindings
+  } = args
   let ctrlTabSwitching = false
   const handler = (event: Electron.Event, input: Electron.Input): void => {
     const keybindings = getKeybindings?.()
-    if (matchesRecentTabSwitcherChord(input, process.platform, keybindings)) {
+    if (
+      input.type === 'keyDown' &&
+      matchesRecentTabSwitcherChord(input, process.platform, keybindings)
+    ) {
       event.preventDefault()
-      if (input.type === 'keyDown') {
-        ctrlTabSwitching = true
-        const renderer = resolveRenderer(browserTabId)
-        renderer?.send('ui:ctrlTabKeyDown', { shiftKey: input.shift === true })
-      }
+      ctrlTabSwitching = true
+      const renderer = resolveRenderer(browserTabId)
+      renderer?.send('ui:ctrlTabKeyDown', { shiftKey: input.shift === true })
       return
     }
 
-    if (ctrlTabSwitching && isControlKeyRelease(input)) {
+    if (ctrlTabSwitching && isRecentTabSwitcherCommitRelease(input)) {
       event.preventDefault()
       ctrlTabSwitching = false
       const renderer = resolveRenderer(browserTabId)
@@ -255,6 +293,14 @@ export function setupGuestShortcutForwarding(args: {
     // which rejects Alt. Every other chord handled further down can reuse
     // the same `action` rather than re-running the full predicate chain.
     const action = resolveWindowShortcutAction(input, process.platform, keybindings)
+    if (action?.type === 'zoom') {
+      // Why: browser page zoom must consume repeats and teardown races before
+      // Chromium or the guest page can apply its own shortcut behavior.
+      event.preventDefault()
+      const renderer = resolveRenderer(browserTabId)
+      renderer?.send('ui:zoomBrowserPage', action.direction)
+      return
+    }
     if (input.isAutoRepeat) {
       if (action?.type === 'dictationKeyDown' && shouldForwardDictationShortcut?.()) {
         event.preventDefault()
@@ -333,6 +379,14 @@ export function setupGuestShortcutForwarding(args: {
     }
     if (keybindingMatchesAction('tab.newBrowser', input, process.platform, keybindings)) {
       renderer.send('ui:newBrowserTab')
+    } else if (
+      process.platform === 'darwin' &&
+      (isMobileEmulatorEnabled?.() ?? true) &&
+      keybindingMatchesAction('tab.newSimulator', input, process.platform, keybindings)
+    ) {
+      renderer.send('ui:newSimulatorTab')
+    } else if (keybindingMatchesAction('tab.newMarkdown', input, process.platform, keybindings)) {
+      renderer.send('ui:newMarkdownTab')
     } else if (keybindingMatchesAction('tab.newTerminal', input, process.platform, keybindings)) {
       // Why: Cmd/Ctrl+T opens a terminal in the user's active terminal surface
       // even when focus is inside a browser guest. Cmd/Ctrl+Shift+B is the
@@ -408,6 +462,33 @@ export function setupGuestShortcutForwarding(args: {
   return () => {
     try {
       guest.off('before-input-event', handler)
+    } catch {
+      // Why: best-effort — guest may already be destroyed during teardown.
+    }
+  }
+}
+
+export function setupGuestMouseWheelZoomForwarding(args: {
+  browserTabId: string
+  guest: Electron.WebContents
+  resolveRenderer: ResolveRenderer
+}): () => void {
+  const { browserTabId, guest, resolveRenderer } = args
+  const handler = (event: Electron.Event, mouse: Electron.MouseInputEvent): void => {
+    const direction = resolveGuestMouseWheelZoomDirection(mouse)
+    if (!direction) {
+      return
+    }
+    // Why: wheel input over a focused webview does not reach renderer DOM
+    // handlers, so consume it here and forward to the existing page-zoom path.
+    event.preventDefault()
+    resolveRenderer(browserTabId)?.send('ui:zoomBrowserPage', direction)
+  }
+
+  guest.on('before-mouse-event', handler)
+  return () => {
+    try {
+      guest.off('before-mouse-event', handler)
     } catch {
       // Why: best-effort — guest may already be destroyed during teardown.
     }

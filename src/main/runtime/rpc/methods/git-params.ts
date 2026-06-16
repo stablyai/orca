@@ -100,6 +100,16 @@ const CommitMessageAiSettings = z.object({
 })
 
 const SourceControlAiSettings = CommitMessageAiSettings.omit({ customPrompt: true }).extend({
+  actions: z
+    .record(
+      z.string(),
+      z.object({
+        agentId: z.string().nullable().optional(),
+        commandInputTemplate: z.string().optional(),
+        agentArgs: z.string().optional()
+      })
+    )
+    .optional(),
   instructionsByOperation: z.record(z.string(), z.string()).optional(),
   modelOverridesByOperation: z
     .record(
@@ -120,12 +130,34 @@ const SourceControlAiSettings = CommitMessageAiSettings.omit({ customPrompt: tru
       generateDetailsOnOpen: z.boolean().optional(),
       openAfterCreate: z.boolean().optional()
     })
+    .optional(),
+  launchActionDefaults: z
+    .record(
+      z.string(),
+      z.object({
+        agentId: z.string().nullable().optional(),
+        commandInputTemplate: z.string().optional(),
+        agentArgs: z.string().optional()
+      })
+    )
     .optional()
+})
+
+const ResolvedSourceControlAiGenerationParams = z.object({
+  agentId: z.string(),
+  model: z.string(),
+  thinkingLevel: z.string().optional(),
+  customPrompt: z.string().optional(),
+  commandInputTemplate: z.string().optional(),
+  agentArgs: z.string().optional(),
+  customAgentCommand: z.string().optional(),
+  agentCommandOverride: z.string().optional()
 })
 
 export const GitGenerateCommitMessage = WorktreeSelector.extend({
   commitMessageAi: CommitMessageAiSettings.optional(),
   sourceControlAi: SourceControlAiSettings.optional(),
+  sourceControlAiResolvedParams: ResolvedSourceControlAiGenerationParams.optional(),
   agentCmdOverrides: z.record(z.string(), z.string()).optional(),
   enableGitHubAttribution: z.boolean().optional(),
   commitMessageDiscoveryHostKey: z.string().optional()

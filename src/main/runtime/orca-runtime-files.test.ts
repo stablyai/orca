@@ -14,7 +14,7 @@ const {
   renameMock,
   resolveAuthorizedPathMock,
   statMock,
-  subscribeParcelWatcherMock,
+  watchInWorkerMock,
   checkRgAvailableMock,
   wslAwareSpawnMock,
   watchMock
@@ -25,7 +25,7 @@ const {
   renameMock: vi.fn(),
   resolveAuthorizedPathMock: vi.fn(),
   statMock: vi.fn(),
-  subscribeParcelWatcherMock: vi.fn(),
+  watchInWorkerMock: vi.fn(),
   wslAwareSpawnMock: vi.fn(),
   watchMock: vi.fn()
 }))
@@ -49,8 +49,8 @@ vi.mock('fs/promises', async () => {
   }
 })
 
-vi.mock('@parcel/watcher', () => ({
-  subscribe: subscribeParcelWatcherMock
+vi.mock('./file-watcher-host', () => ({
+  watchFileExplorerInWorker: watchInWorkerMock
 }))
 
 vi.mock('../ipc/filesystem-auth', async () => {
@@ -118,6 +118,7 @@ function mockLocalPathStats(entries: Record<string, [number, number]>) {
 
 function createRuntimeFileCommands(options?: {
   path?: string
+  openFile?: ReturnType<typeof vi.fn>
   openDiff?: ReturnType<typeof vi.fn>
   resolveRuntimeGitTarget?: ReturnType<typeof vi.fn>
 }) {
@@ -134,7 +135,7 @@ function createRuntimeFileCommands(options?: {
       path
     })),
     resolveRuntimeGitTarget: options?.resolveRuntimeGitTarget ?? vi.fn(),
-    openFile: vi.fn(),
+    openFile: options?.openFile ?? vi.fn(),
     ...(options?.openDiff ? { openDiff: options.openDiff } : {})
   } as never)
   return { commands, store }
@@ -159,7 +160,7 @@ describe('RuntimeFileCommands', () => {
     renameMock.mockReset()
     resolveAuthorizedPathMock.mockReset()
     statMock.mockReset()
-    subscribeParcelWatcherMock.mockReset()
+    watchInWorkerMock.mockReset()
     watchMock.mockReset()
     checkRgAvailableMock.mockReset()
     wslAwareSpawnMock.mockReset()
@@ -181,13 +182,39 @@ describe('RuntimeFileCommands', () => {
     vi.useRealTimers()
   })
 
-  it('opens source control diffs through the renderer host', async () => {
+  it('opens source control diffs through the renderer host (inheriting active runtime env)', async () => {
     const openDiff = vi.fn()
     const { commands } = createRuntimeFileCommands({ openDiff })
 
     const result = await commands.openMobileDiff('id:wt-1', 'docs/readme.md', true)
 
-    expect(openDiff).toHaveBeenCalledWith('wt-1', '/repo/docs/readme.md', 'docs/readme.md', true)
+    expect(openDiff).toHaveBeenCalledWith(
+      'wt-1',
+      '/repo/docs/readme.md',
+      'docs/readme.md',
+      true,
+      undefined
+    )
+    expect(result).toEqual({
+      worktree: 'wt-1',
+      relativePath: 'docs/readme.md',
+      kind: 'markdown',
+      opened: true
+    })
+  })
+
+  it('opens text files through the renderer host (inheriting active runtime env)', async () => {
+    const openFile = vi.fn()
+    const { commands } = createRuntimeFileCommands({ openFile })
+
+    const result = await commands.openMobileFile('id:wt-1', 'docs/readme.md')
+
+    expect(openFile).toHaveBeenCalledWith(
+      'wt-1',
+      '/repo/docs/readme.md',
+      'docs/readme.md',
+      undefined
+    )
     expect(result).toEqual({
       worktree: 'wt-1',
       relativePath: 'docs/readme.md',
@@ -337,34 +364,19 @@ describe('RuntimeFileCommands', () => {
     expect(close).toHaveBeenCalledTimes(1)
   })
 
-  it('tracks native Parcel watcher unsubscribe work so shutdown can await it', async () => {
+  it('delegates local recursive watching to the worker thread', async () => {
     resolveAuthorizedPathMock.mockResolvedValue('/repo')
     statMock.mockResolvedValue({ isDirectory: () => true })
-    let resolveUnsubscribe: () => void = () => {}
-    const unsubscribeMock = vi.fn(
-      () =>
-        new Promise<void>((resolve) => {
-          resolveUnsubscribe = resolve
-        })
-    )
-    subscribeParcelWatcherMock.mockResolvedValue({ unsubscribe: unsubscribeMock })
+    const dispose = vi.fn()
+    watchInWorkerMock.mockResolvedValue(dispose)
     const { commands } = createRuntimeFileCommands()
 
     const unsubscribe = await commands.watchFileExplorer('id:wt-1', vi.fn())
+    expect(watchInWorkerMock).toHaveBeenCalledWith('/repo', expect.any(Function))
+
     unsubscribe()
-
-    let drained = false
-    const drainPromise = awaitRuntimeFileWatcherUnsubscribes().then(() => {
-      drained = true
-    })
-    await Promise.resolve()
-
-    expect(unsubscribeMock).toHaveBeenCalledTimes(1)
-    expect(drained).toBe(false)
-
-    resolveUnsubscribe()
-    await drainPromise
-    expect(drained).toBe(true)
+    await awaitRuntimeFileWatcherUnsubscribes()
+    expect(dispose).toHaveBeenCalledTimes(1)
   })
 
   it('settles and detaches runtime rg searches when timeout kill is ignored', async () => {

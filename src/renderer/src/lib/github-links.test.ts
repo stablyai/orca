@@ -26,6 +26,9 @@ describe('parseGitHubIssueOrPRNumber', () => {
     expect(parseGitHubIssueOrPRNumber('#42')).toBe(42)
     expect(parseGitHubIssueOrPRNumber('https://github.com/stablyai/orca/pull/123')).toBe(123)
     expect(parseGitHubIssueOrPRNumber('https://github.com/stablyai/orca/issues/923')).toBe(923)
+    expect(parseGitHubIssueOrPRNumber('https://github.my-company.net/MyOrg/my_repo/pull/395')).toBe(
+      395
+    )
   })
 
   it('parses GitHub item URLs with trailing page segments', () => {
@@ -47,10 +50,6 @@ describe('parseGitHubIssueOrPRNumber', () => {
   })
 
   it('rejects invalid GitHub item URLs', () => {
-    expect(parseGitHubIssueOrPRNumber('https://example.com/stablyai/orca/pull/123')).toBeNull()
-    expect(
-      parseGitHubIssueOrPRNumber('https://github.example.com/stablyai/orca/pull/123')
-    ).toBeNull()
     expect(
       parseGitHubIssueOrPRNumber('https://github.com/o/r/pull/not-a-number/changes')
     ).toBeNull()
@@ -65,6 +64,20 @@ describe('parseGitHubIssueOrPRLink', () => {
     expect(parseGitHubIssueOrPRLink('https://github.com/stablyai/orca/pull/123')).toEqual({
       slug: { owner: 'stablyai', repo: 'orca' },
       number: 123,
+      type: 'pr'
+    })
+
+    expect(
+      parseGitHubIssueOrPRLink('https://github.my-company.net/MyOrg/my_repo/pull/395')
+    ).toEqual({
+      slug: { owner: 'MyOrg', repo: 'my_repo' },
+      number: 395,
+      type: 'pr'
+    })
+
+    expect(parseGitHubIssueOrPRLink('https://git.corp.com/MyOrg/my_repo/pull/395')).toEqual({
+      slug: { owner: 'MyOrg', repo: 'my_repo' },
+      number: 395,
       type: 'pr'
     })
     expect(parseGitHubIssueOrPRLink('https://github.com/stablyai/orca/issues/923')).toEqual({
@@ -103,7 +116,6 @@ describe('parseGitHubIssueOrPRLink', () => {
   })
 
   it('rejects non-GitHub and malformed item URLs', () => {
-    expect(parseGitHubIssueOrPRLink('https://example.com/o/r/pull/1965/changes')).toBeNull()
     expect(parseGitHubIssueOrPRLink('https://github.com/o/r/pull/not-a-number/changes')).toBeNull()
     expect(parseGitHubIssueOrPRLink('https://github.com/o/r/pull/')).toBeNull()
     expect(parseGitHubIssueOrPRLink('https://github.com/o/r/issues/123abc')).toBeNull()

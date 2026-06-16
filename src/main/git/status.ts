@@ -1,6 +1,6 @@
 /* eslint-disable max-lines */
 import { existsSync } from 'fs'
-import { readFile } from 'fs/promises'
+import { readFile, stat } from 'fs/promises'
 import * as path from 'path'
 import type {
   GitBranchChangeEntry,
@@ -28,18 +28,48 @@ import {
   parseNumstat,
   type GitLineStats
 } from '../../shared/git-uncommitted-line-stats'
-import { gitExecFileAsync, gitExecFileAsyncBuffer, gitOptionalLocksDisabledEnv } from './runner'
+import { decodeGitCQuotedPath } from '../../shared/git-cquoted-path'
+import {
+  gitExecFileAsync,
+  gitExecFileAsyncBuffer,
+  gitOptionalLocksDisabledEnv,
+  gitStreamStdout
+} from './runner'
+import { StatusPorcelainParser } from './status-porcelain-parser'
+import { DEFAULT_GIT_STATUS_LIMIT } from '../../shared/git-status-limit'
+import { describeMaxBufferOverflowError, isMaxBufferOverflowError } from './max-buffer-overflow'
 import {
   removeSafeUntrackedDiscardTarget,
   removeSafeUntrackedDiscardTargets
 } from '../../shared/git-discard-path-safety'
+import { resolveWorktreeAddBaseRef } from '../../shared/worktree-base-ref'
+import { hasWorktreeBaseCommitRef } from './worktree-base-ref-probe'
 
 const MAX_GIT_SHOW_BYTES = 10 * 1024 * 1024
 const MAX_STAGED_COMMIT_CONTEXT_BYTES = MAX_GIT_SHOW_BYTES
 const BULK_CHUNK_SIZE = 100
+const EFFECTIVE_UPSTREAM_NEGATIVE_CACHE_TTL_MS = 30_000
+
+type EffectiveUpstreamStatusCacheEntry = {
+  expiresAt: number
+  status: GitUpstreamStatus
+}
+
+const effectiveUpstreamStatusCache = new Map<string, EffectiveUpstreamStatusCacheEntry>()
+const effectiveUpstreamStatusInFlight = new Map<string, Promise<GitUpstreamStatus>>()
+
+export function clearEffectiveUpstreamStatusCacheForTests(): void {
+  effectiveUpstreamStatusCache.clear()
+  effectiveUpstreamStatusInFlight.clear()
+}
 
 export type GetStatusOptions = {
   includeIgnored?: boolean
+  /**
+   * Max changed-file entries before git is stopped and the result is marked
+   * `didHitLimit`. Defaults to DEFAULT_GIT_STATUS_LIMIT; 0 disables the cap.
+   */
+  limit?: number
 }
 
 /**
@@ -49,14 +79,15 @@ export async function getStatus(
   worktreePath: string,
   options: GetStatusOptions = {}
 ): Promise<GitStatusResult> {
-  const entries: GitStatusEntry[] = []
-  const ignoredPaths: string[] = []
-  let head: string | undefined
-  let branch: string | undefined
-  let upstreamName: string | undefined
-  let upstreamAheadBehind: { ahead: number; behind: number } | null = null
   let effectiveUpstreamStatus: GitUpstreamStatus | undefined
   let statusSucceeded = false
+  // Why: a negative/fractional/NaN limit would trigger spurious early-stop or
+  // inconsistent truncation; fall back to the default unless it's a valid
+  // non-negative integer (0 explicitly disables the cap).
+  const limit =
+    typeof options.limit === 'number' && Number.isInteger(options.limit) && options.limit >= 0
+      ? options.limit
+      : DEFAULT_GIT_STATUS_LIMIT
 
   // Why: detectConflictOperation (4 existsSync + readFile) and git status are
   // independent. Running them concurrently saves one round-trip of I/O latency.
@@ -76,102 +107,57 @@ export async function getStatus(
   if (options.includeIgnored) {
     statusArgs.push('--ignored=matching')
   }
-  const statusPromise = gitExecFileAsync(statusArgs, {
-    cwd: worktreePath,
-    // Why: status polling is read-like; avoid refreshing the index and racing
-    // terminal Git commands on `.git/worktrees/*/index.lock`.
-    env: gitOptionalLocksDisabledEnv()
-  })
+
+  // Why: stream + parse incrementally and stop git the moment the entry count
+  // crosses `limit`, so a repo with an enormous un-ignored folder never buffers
+  // a status listing big enough to crash the process. See StatusPorcelainParser.
+  const parser = new StatusPorcelainParser()
+  let didHitLimit = false
   const conflictOperation = await conflictPromise
 
   try {
-    const { stdout } = await statusPromise
+    const { stoppedEarly } = await gitStreamStdout(statusArgs, {
+      cwd: worktreePath,
+      // Why: status polling is read-like; avoid refreshing the index and racing
+      // terminal Git commands on `.git/worktrees/*/index.lock`.
+      env: gitOptionalLocksDisabledEnv(),
+      onStdout: (chunk) => parser.update(chunk, limit)
+    })
+    if (!stoppedEarly) {
+      parser.finish()
+    }
+    didHitLimit = stoppedEarly
+    statusSucceeded = true
+  } catch {
+    // Not a git repo or git not available
+  }
 
-    // [Fix]: Split by /\r?\n/ instead of '\n' to correctly parse git output on Windows,
-    // avoiding trailing \r characters in parsed paths.
-    for (const line of stdout.split(/\r?\n/)) {
-      if (!line) {
-        continue
-      }
+  // Why: the parser stops one entry past the limit (it checks after pushing), so
+  // trim back to exactly `limit` for a stable "first N shown" contract.
+  const entries = didHitLimit ? parser.entries.slice(0, limit) : parser.entries
+  const { head, branch, upstreamName, upstreamAheadBehind } = parser.branch
 
-      if (line.startsWith('# branch.oid ')) {
-        head = line.slice('# branch.oid '.length).trim()
-        continue
-      }
-
-      if (line.startsWith('# branch.head ')) {
-        const branchHead = line.slice('# branch.head '.length).trim()
-        // Why: undefined (not '') for detached/empty so renderer's
-        // `identity.branch ?? worktree.branch` preserves the prior branch
-        // value when git can't report one, instead of overwriting it with ''.
-        branch = branchHead && branchHead !== '(detached)' ? `refs/heads/${branchHead}` : undefined
-        continue
-      }
-
-      if (line.startsWith('# branch.upstream ')) {
-        upstreamName = line.slice('# branch.upstream '.length).trim() || undefined
-        continue
-      }
-
-      if (line.startsWith('# branch.ab ')) {
-        upstreamAheadBehind = parseBranchAheadBehind(line)
-        continue
-      }
-
-      if (line.startsWith('1 ') || line.startsWith('2 ')) {
-        // Changed entries: "1 XY sub mH mI mW hH path" or "2 XY sub mH mI mW hH X\tscore\tpath\torigPath"
-        const parts = line.split(' ')
-        const xy = parts[1]
-        const indexStatus = xy[0]
-        const worktreeStatus = xy[1]
-
-        if (line.startsWith('2 ')) {
-          // Why: porcelain v2 type-2 records put the new path after 9 fixed
-          // space-delimited fields and the old path after the tab. Preserving
-          // spaces here keeps row actions and numstat counts keyed correctly.
-          const tabParts = line.split('\t')
-          const path = tabParts[0].split(' ').slice(9).join(' ')
-          const oldPath = tabParts.slice(1).join('\t')
-          if (indexStatus !== '.') {
-            entries.push({ path, status: parseStatusChar(indexStatus), area: 'staged', oldPath })
-          }
-          if (worktreeStatus !== '.') {
-            entries.push({
-              path,
-              status: parseStatusChar(worktreeStatus),
-              area: 'unstaged',
-              oldPath
-            })
-          }
-        } else {
-          // Regular change entry
-          const path = parts.slice(8).join(' ')
-          if (indexStatus !== '.') {
-            entries.push({ path, status: parseStatusChar(indexStatus), area: 'staged' })
-          }
-          if (worktreeStatus !== '.') {
-            entries.push({ path, status: parseStatusChar(worktreeStatus), area: 'unstaged' })
-          }
-        }
-      } else if (line.startsWith('? ')) {
-        // Untracked file
-        const path = line.slice(2)
-        entries.push({ path, status: 'untracked', area: 'untracked' })
-      } else if (line.startsWith('! ')) {
-        ignoredPaths.push(line.slice(2))
-      } else if (line.startsWith('u ')) {
-        const unmergedEntry = await parseUnmergedEntry(worktreePath, line)
-        if (unmergedEntry) {
-          entries.push(unmergedEntry)
-        }
+  // Why: unmerged (`u`) records need async per-file git lookups, so the parser
+  // collected their raw lines; resolve them now. Conflicts are rare and never
+  // the source of huge output, so this stays off the streamed hot path.
+  if (!didHitLimit) {
+    for (const line of parser.unmergedLines) {
+      const unmergedEntry = await parseUnmergedEntry(worktreePath, line)
+      if (unmergedEntry) {
+        entries.push(unmergedEntry)
       }
     }
-    statusSucceeded = true
+  }
 
-    if (shouldProbeEffectiveUpstreamStatus(branch, upstreamName)) {
+  if (statusSucceeded && !didHitLimit && shouldProbeEffectiveUpstreamStatus(branch, upstreamName)) {
+    const branchName = getShortBranchName(branch)
+    if (branchName) {
+      const cacheKey = getEffectiveUpstreamStatusCacheKey(worktreePath, branchName, upstreamName)
       try {
-        effectiveUpstreamStatus = await getEffectiveGitUpstreamStatus((args) =>
-          gitExecFileAsync(args, { cwd: worktreePath })
+        effectiveUpstreamStatus = await readOrProbeEffectiveUpstreamStatus(
+          cacheKey,
+          worktreePath,
+          branchName
         )
       } catch {
         // Why: git status polling should not fail just because the richer
@@ -179,23 +165,24 @@ export async function getStatus(
         // upstream-status path will surface those failures when invoked.
       }
     }
-  } catch {
-    // Not a git repo or git not available
   }
 
   // Why: attach per-area line counts for the sidebar. Diffs run after status
   // (we need the entry list first) and only for areas that have entries, so a
-  // clean tree costs zero extra git calls. Staged and unstaged are diffed
-  // separately so each row reflects only its own staging area; untracked files
-  // have no baseline and count their full contents as additions.
-  await attachLineStats(worktreePath, entries)
+  // clean tree costs zero extra git calls. Skipped when the limit was hit —
+  // running numstat over a huge change set would reintroduce the cost the limit
+  // exists to avoid, matching how a "huge" repo disables extra git features.
+  if (!didHitLimit) {
+    await attachLineStats(worktreePath, entries)
+  }
 
   return {
     entries,
     conflictOperation,
     head,
     branch,
-    ...(options.includeIgnored ? { ignoredPaths } : {}),
+    ...(options.includeIgnored ? { ignoredPaths: parser.ignoredPaths } : {}),
+    ...(didHitLimit ? { didHitLimit: true, statusLength: parser.statusLength } : {}),
     ...(statusSucceeded
       ? {
           upstreamStatus:
@@ -219,7 +206,15 @@ async function runNumstat(
 ): Promise<Map<string, GitLineStats>> {
   try {
     const { stdout } = await gitExecFileAsync(
-      ['-c', 'core.quotePath=false', 'diff', ...(cached ? ['--cached'] : []), '--numstat', '-M'],
+      [
+        '-c',
+        'core.quotePath=false',
+        'diff',
+        '-z',
+        ...(cached ? ['--cached'] : []),
+        '--numstat',
+        '-M'
+      ],
       { cwd: worktreePath, env: gitOptionalLocksDisabledEnv() }
     )
     return parseNumstat(stdout)
@@ -262,6 +257,100 @@ function getShortBranchName(branch: string | undefined): string | null {
   return branch?.startsWith(prefix) ? branch.slice(prefix.length) : null
 }
 
+function getEffectiveUpstreamStatusCacheKey(
+  worktreePath: string,
+  branchName: string,
+  upstreamName: string | undefined
+): string {
+  return [worktreePath, branchName, upstreamName ?? ''].join('\0')
+}
+
+function readCachedEffectiveUpstreamStatus(
+  cacheKey: string,
+  now: number
+): GitUpstreamStatus | undefined {
+  const entry = effectiveUpstreamStatusCache.get(cacheKey)
+  if (!entry) {
+    return undefined
+  }
+  if (entry.expiresAt <= now) {
+    effectiveUpstreamStatusCache.delete(cacheKey)
+    return undefined
+  }
+  return entry.status
+}
+
+function rememberEffectiveUpstreamStatus(
+  cacheKey: string,
+  status: GitUpstreamStatus,
+  now: number,
+  probedSameNameOriginRef: boolean
+): void {
+  if (status.hasUpstream) {
+    effectiveUpstreamStatusCache.delete(cacheKey)
+    return
+  }
+  if (!probedSameNameOriginRef) {
+    return
+  }
+  // Why: a stable no-upstream branch should not spawn failed git probes every
+  // source-control poll, but remote refs can appear after push/fetch.
+  effectiveUpstreamStatusCache.set(cacheKey, {
+    status,
+    expiresAt: now + EFFECTIVE_UPSTREAM_NEGATIVE_CACHE_TTL_MS
+  })
+}
+
+async function readOrProbeEffectiveUpstreamStatus(
+  cacheKey: string,
+  worktreePath: string,
+  branchName: string
+): Promise<GitUpstreamStatus> {
+  const cached = readCachedEffectiveUpstreamStatus(cacheKey, Date.now())
+  if (cached) {
+    return cached
+  }
+
+  const inFlight = effectiveUpstreamStatusInFlight.get(cacheKey)
+  if (inFlight) {
+    return inFlight
+  }
+
+  // Why: source-control mount and root git refresh can overlap during startup.
+  // Coalesce the richer upstream probe so a stable missing ref fails once.
+  const probe = probeEffectiveUpstreamStatus(worktreePath, branchName).then((result) => {
+    rememberEffectiveUpstreamStatus(
+      cacheKey,
+      result.status,
+      Date.now(),
+      result.probedSameNameOriginRef
+    )
+    return result.status
+  })
+  effectiveUpstreamStatusInFlight.set(cacheKey, probe)
+  try {
+    return await probe
+  } finally {
+    if (effectiveUpstreamStatusInFlight.get(cacheKey) === probe) {
+      effectiveUpstreamStatusInFlight.delete(cacheKey)
+    }
+  }
+}
+
+async function probeEffectiveUpstreamStatus(
+  worktreePath: string,
+  branchName: string
+): Promise<{ status: GitUpstreamStatus; probedSameNameOriginRef: boolean }> {
+  let probedSameNameOriginRef = false
+  const status = await getEffectiveGitUpstreamStatus((args) => {
+    if (args[0] === 'rev-parse' && args.includes(`refs/remotes/origin/${branchName}`)) {
+      probedSameNameOriginRef = true
+    }
+    return gitExecFileAsync(args, { cwd: worktreePath })
+  })
+  return { status, probedSameNameOriginRef }
+}
+
 function shouldProbeEffectiveUpstreamStatus(
   branch: string | undefined,
   upstreamName: string | undefined
@@ -275,34 +364,6 @@ function shouldProbeEffectiveUpstreamStatus(
   }
   const parsed = splitRemoteBranchName(upstreamName)
   return parsed?.remoteName === 'origin' && parsed.branchName !== branchName
-}
-
-function parseBranchAheadBehind(line: string): { ahead: number; behind: number } | null {
-  const match = line.match(/^# branch\.ab \+(\d+) -(\d+)$/)
-  if (!match) {
-    return null
-  }
-  return {
-    ahead: Number.parseInt(match[1], 10),
-    behind: Number.parseInt(match[2], 10)
-  }
-}
-
-function parseStatusChar(char: string): GitFileStatus {
-  switch (char) {
-    case 'M':
-      return 'modified'
-    case 'A':
-      return 'added'
-    case 'D':
-      return 'deleted'
-    case 'R':
-      return 'renamed'
-    case 'C':
-      return 'copied'
-    default:
-      return 'modified'
-  }
 }
 
 function parseBranchStatusChar(char: string): GitBranchChangeStatus {
@@ -337,7 +398,7 @@ async function parseUnmergedEntry(
   const modeStage1 = parts[3]
   const modeStage2 = parts[4]
   const modeStage3 = parts[5]
-  const filePath = parts.slice(10).join(' ')
+  const filePath = decodeGitCQuotedPath(parts.slice(10).join(' '))
   if (!filePath) {
     return null
   }
@@ -548,6 +609,11 @@ export async function getBranchCompare(
 
   const compareRef = await resolveCompareRef(worktreePath)
   summary.compareRef = compareRef
+  // Why: short remote display refs like "origin/main" can collide with a local
+  // branch of the same name. Compare against the proven remote-tracking ref.
+  const resolvedBaseRef = await resolveWorktreeAddBaseRef(baseRef, (qualifiedRef) =>
+    hasWorktreeBaseCommitRef(worktreePath, qualifiedRef)
+  )
 
   let headOid = ''
   let baseOid = ''
@@ -556,7 +622,7 @@ export async function getBranchCompare(
     summary.headOid = headOid
   } catch {
     try {
-      baseOid = await resolveRefOid(worktreePath, baseRef)
+      baseOid = await resolveRefOid(worktreePath, resolvedBaseRef)
       summary.baseOid = baseOid
       // Why: new remote worktrees can be on an unborn branch until the first
       // commit. There are no committed branch changes yet; surfacing this as a
@@ -576,7 +642,7 @@ export async function getBranchCompare(
   }
 
   try {
-    baseOid = await resolveRefOid(worktreePath, baseRef)
+    baseOid = await resolveRefOid(worktreePath, resolvedBaseRef)
     summary.baseOid = baseOid
   } catch {
     summary.status = 'invalid-base'
@@ -746,7 +812,7 @@ async function loadBranchChanges(
       gitOptions
     ),
     gitExecFileAsync(
-      ['-c', 'core.quotePath=false', 'diff', '--numstat', '-M', '-C', mergeBase, headOid],
+      ['-c', 'core.quotePath=false', 'diff', '-z', '--numstat', '-M', '-C', mergeBase, headOid],
       gitOptions
     )
   ])
@@ -789,11 +855,12 @@ async function loadCommitChanges(
         commitOid
       ]
   const numstatArgs = parentOid
-    ? ['-c', 'core.quotePath=false', 'diff', '--numstat', '-M', '-C', parentOid, commitOid]
+    ? ['-c', 'core.quotePath=false', 'diff', '-z', '--numstat', '-M', '-C', parentOid, commitOid]
     : [
         '-c',
         'core.quotePath=false',
         'diff-tree',
+        '-z',
         '--root',
         '--no-commit-id',
         '--numstat',
@@ -830,15 +897,15 @@ function parseBranchChangeLine(line: string): GitBranchChangeEntry | null {
   const status = parseBranchStatusChar(rawStatus[0] ?? 'M')
 
   if (rawStatus.startsWith('R') || rawStatus.startsWith('C')) {
-    const oldPath = parts[1]
-    const path = parts[2]
+    const oldPath = decodeGitCQuotedPath(parts[1] ?? '')
+    const path = decodeGitCQuotedPath(parts[2] ?? '')
     if (!path) {
       return null
     }
     return { path, oldPath, status }
   }
 
-  const path = parts[1]
+  const path = decodeGitCQuotedPath(parts[1] ?? '')
   if (!path) {
     return null
   }
@@ -941,6 +1008,15 @@ async function readGitBlobAtOidPath(
 
 async function readWorkingTreeFile(filePath: string): Promise<GitBlobReadResult> {
   try {
+    const fileStat = await stat(filePath)
+    if (!fileStat.isFile()) {
+      return { content: '', isBinary: false, exists: false }
+    }
+    if (fileStat.size > MAX_GIT_SHOW_BYTES) {
+      // Why: git blob reads are capped through maxBuffer; mirror that bound for
+      // unstaged working-tree content before readFile can pull in huge assets.
+      return { content: '', isBinary: true, exists: true }
+    }
     const buffer = await readFile(filePath)
     return bufferToBlob(buffer, filePath)
   } catch {
@@ -1049,16 +1125,28 @@ export async function getStagedCommitContext(
     return null
   }
 
-  const { stdout: stagedPatch } = await gitExecFileAsync(
-    ['diff', '--cached', '--patch', '--minimal', '--no-color', '--no-ext-diff'],
-    {
-      cwd: worktreePath,
-      // Why: the prompt builder truncates large staged patches later. Give git
-      // enough buffer room to reach that truncation step instead of failing at
-      // Node's default execFile limit first.
-      maxBuffer: MAX_STAGED_COMMIT_CONTEXT_BYTES
+  let stagedPatch = ''
+  try {
+    const patchResult = await gitExecFileAsync(
+      ['diff', '--cached', '--patch', '--minimal', '--no-color', '--no-ext-diff'],
+      {
+        cwd: worktreePath,
+        maxBuffer: MAX_STAGED_COMMIT_CONTEXT_BYTES
+      }
+    )
+    stagedPatch = patchResult.stdout
+  } catch (error) {
+    if (!isMaxBufferOverflowError(error)) {
+      throw error
     }
-  )
+    // Why: a very large staged diff overflows maxBuffer (ENOBUFS). The patch is
+    // optional context that gets truncated to STAGED_DIFF_BYTE_BUDGET anyway, so
+    // degrade to the file-name summary instead of failing commit-message generation.
+    console.warn(
+      '[git] Staged patch too large to read; using file summary only:',
+      describeMaxBufferOverflowError(error)
+    )
+  }
 
   return {
     branch: branchResult.stdout.trim() || null,

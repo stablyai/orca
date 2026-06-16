@@ -194,4 +194,31 @@ describe('openTabEntryWithOperations', () => {
     })
     expect(operations.createBrowserTab).not.toHaveBeenCalled()
   })
+
+  it('falls back to a local browser tab when paired runtime browser creation fails', async () => {
+    const operations = makeOperations({
+      createWebRuntimeSessionBrowserTab: vi.fn().mockResolvedValue(false),
+      isWebRuntimeSessionActive: vi.fn().mockReturnValue(true)
+    })
+
+    await openTabEntryWithOperations({
+      ...baseArgs,
+      query: 'https://example.com',
+      activeRuntimeEnvironmentId: 'runtime-1',
+      operations
+    })
+
+    expect(operations.createWebRuntimeSessionBrowserTab).toHaveBeenCalledWith({
+      worktreeId: 'wt-1',
+      environmentId: 'runtime-1',
+      url: 'https://example.com/',
+      targetGroupId: 'group-1'
+    })
+    expect(operations.createBrowserTab).toHaveBeenCalledWith('wt-1', 'https://example.com/', {
+      activate: true,
+      browserRuntimeEnvironmentId: null,
+      targetGroupId: 'group-1',
+      title: 'https://example.com/'
+    })
+  })
 })

@@ -5,11 +5,13 @@ import { createServer, type Server, type Socket } from 'net'
 import { randomUUID } from 'crypto'
 import { performance } from 'perf_hooks'
 import { writeFileSync, chmodSync, unlinkSync } from 'fs'
+import { StringDecoder } from 'string_decoder'
 import { encodeNdjson, createNdjsonParser } from './ndjson'
 import { TerminalHost } from './terminal-host'
 import { DaemonStreamDataBatcher } from './daemon-stream-data-batcher'
 import { readCurrentProcessMacSystemResolverHealth } from '../network/macos-system-resolver-health'
 import type { SubprocessHandle } from './session'
+import { checkPtySpawnHealth } from './pty-subprocess'
 import {
   PROTOCOL_VERSION,
   NOTIFY_PREFIX,
@@ -21,6 +23,7 @@ import {
 export type DaemonServerOptions = {
   socketPath: string
   tokenPath: string
+  ptySpawnHealthCheck?: () => Promise<void>
   spawnSubprocess: (opts: {
     sessionId: string
     cols: number
@@ -44,6 +47,7 @@ export class DaemonServer {
   private host: TerminalHost
   private socketPath: string
   private tokenPath: string
+  private ptySpawnHealthCheck: () => Promise<void>
 
   private clients = new Map<string, ConnectedClient>()
   private streamDataBatcher = new DaemonStreamDataBatcher((clientId) => this.clients.get(clientId))
@@ -61,6 +65,7 @@ export class DaemonServer {
     this.tokenPath = opts.tokenPath
     this.token = randomUUID()
     this.host = new TerminalHost({ spawnSubprocess: opts.spawnSubprocess })
+    this.ptySpawnHealthCheck = opts.ptySpawnHealthCheck ?? checkPtySpawnHealth
   }
 
   async start(): Promise<void> {
@@ -113,6 +118,9 @@ export class DaemonServer {
   }
 
   private handleConnection(socket: Socket): void {
+    // Why: clients can send multibyte prompt/input text split across socket
+    // chunks; keep UTF-8 sequences intact before NDJSON parsing.
+    const decoder = new StringDecoder('utf8')
     const parser = createNdjsonParser(
       (msg) => this.handleFirstMessage(socket, msg, parser),
       () => {
@@ -120,7 +128,7 @@ export class DaemonServer {
       }
     )
 
-    socket.on('data', (chunk) => parser.feed(chunk.toString()))
+    socket.on('data', (chunk) => parser.feed(decoder.write(chunk)))
     socket.on('error', () => socket.destroy())
   }
 
@@ -151,6 +159,7 @@ export class DaemonServer {
     socket.write(encodeNdjson({ type: 'hello', ok: true }))
 
     if (hello.role === 'control') {
+      const previous = this.clients.get(hello.clientId)
       const client: ConnectedClient = {
         clientId: hello.clientId,
         controlSocket: socket,
@@ -158,16 +167,29 @@ export class DaemonServer {
       }
       this.clients.set(hello.clientId, client)
       this.setupControlSocket(socket, hello.clientId)
+      if (previous) {
+        // Why: a reconnect can reuse a clientId before the old sockets notice
+        // their close. Tear them down after installing the new owner so stale
+        // close events cannot delete the replacement client entry.
+        previous.streamSocket?.destroy()
+        previous.controlSocket.destroy()
+      }
     } else if (hello.role === 'stream') {
       const client = this.clients.get(hello.clientId)
-      if (client) {
-        client.streamSocket = socket
+      if (!client) {
+        // Why: stream sockets are only meaningful beside a control socket; an
+        // orphan stream would otherwise stay open with no tracked owner.
+        socket.destroy()
+        return
       }
-      // Stream socket is receive-only from daemon's perspective (for events)
+      this.setupStreamSocket(socket, client)
     }
   }
 
   private setupControlSocket(socket: Socket, clientId: string): void {
+    // Why: terminal writes and startup commands can contain emoji/Unicode.
+    // Decoding per Buffer would corrupt split multibyte sequences.
+    const decoder = new StringDecoder('utf8')
     const parser = createNdjsonParser(
       (msg) => this.handleRequest(socket, clientId, msg as DaemonRequest),
       () => {} // Ignore parse errors
@@ -175,12 +197,42 @@ export class DaemonServer {
 
     // Remove the initial data listener and replace with the RPC parser
     socket.removeAllListeners('data')
-    socket.on('data', (chunk) => parser.feed(chunk.toString()))
+    socket.on('data', (chunk) => parser.feed(decoder.write(chunk)))
 
     socket.on('close', () => {
+      const client = this.clients.get(clientId)
+      if (client?.controlSocket !== socket) {
+        return
+      }
       this.streamDataBatcher.clear(clientId)
+      client.streamSocket?.destroy()
       this.clients.delete(clientId)
     })
+  }
+
+  private setupStreamSocket(socket: Socket, client: ConnectedClient): void {
+    const previous = client.streamSocket
+    socket.removeAllListeners('data')
+    client.streamSocket = socket
+
+    const cleanup = (): void => {
+      socket.removeListener('close', cleanup)
+      socket.removeListener('error', cleanup)
+      if (this.clients.get(client.clientId) !== client || client.streamSocket !== socket) {
+        return
+      }
+      this.streamDataBatcher.clear(client.clientId)
+      client.streamSocket = null
+    }
+
+    socket.on('close', cleanup)
+    socket.on('error', cleanup)
+
+    if (previous && previous !== socket) {
+      // Why: replacing a stream socket must not leave the old receive-only
+      // channel alive and untracked.
+      previous.destroy()
+    }
   }
 
   private async handleRequest(
@@ -321,11 +373,25 @@ export class DaemonServer {
       case 'getSnapshot':
         return { snapshot: this.host.getSnapshot(request.payload.sessionId) }
 
+      case 'takePendingOutput':
+        // Why no await before this call: with includeSnapshot, drain and
+        // serialize must share one synchronous turn — an intervening await
+        // would let PTY data land in between, and cold restore would replay
+        // those bytes on top of a snapshot that already contains them.
+        return this.host.takePendingOutput(
+          request.payload.sessionId,
+          request.payload.includeSnapshot === true
+        )
+
       case 'ping':
         return { pong: true }
 
       case 'systemResolverHealth':
-        return { health: readCurrentProcessMacSystemResolverHealth() }
+        return { health: await readCurrentProcessMacSystemResolverHealth() }
+
+      case 'ptySpawnHealth':
+        await this.ptySpawnHealthCheck()
+        return { healthy: true }
 
       case 'shutdown':
         if (request.payload.killSessions) {

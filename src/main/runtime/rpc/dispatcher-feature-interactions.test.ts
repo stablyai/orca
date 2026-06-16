@@ -106,6 +106,11 @@ const METHODS = [
     handler: () => ({ opened: true })
   }),
   defineMethod({
+    name: 'computer.permissionsStatus',
+    params: z.object({}),
+    handler: () => ({ permissions: [] })
+  }),
+  defineMethod({
     name: 'computer.click',
     params: z.object({}),
     handler: () => ({ clicked: true })
@@ -143,6 +148,7 @@ describe('RpcDispatcher feature interactions', () => {
     const dispatcher = new RpcDispatcher({ runtime, methods: METHODS })
 
     await dispatcher.dispatch(makeRequest('computer.permissions'))
+    await dispatcher.dispatch(makeRequest('computer.permissionsStatus'))
     await dispatcher.dispatch(makeRequest('browser.profileImportFromBrowser'))
     await dispatcher.dispatch(makeRequest('browser.profileList'))
     await dispatcher.dispatch(makeRequest('browser.profileClearDefaultCookies'))

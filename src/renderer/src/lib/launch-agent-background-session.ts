@@ -4,6 +4,10 @@ import { buildAgentStartupPlan, type AgentStartupPlan } from '@/lib/tui-agent-st
 import { CLIENT_PLATFORM } from '@/lib/new-workspace'
 import { track, tuiAgentToAgentKind } from '@/lib/telemetry'
 import { pasteDraftWhenAgentReady } from '@/lib/agent-paste-draft'
+import {
+  resolveTuiAgentLaunchArgs,
+  resolveTuiAgentLaunchEnv
+} from '../../../shared/tui-agent-launch-defaults'
 import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
 import type { TuiAgent } from '../../../shared/types'
 import type { LaunchSource } from '../../../shared/telemetry-events'
@@ -13,16 +17,19 @@ import {
   subscribeToPtyData,
   subscribeToPtyExit
 } from '@/components/terminal-pane/pty-dispatcher'
-import { createAgentStatusOscProcessor } from '@/components/terminal-pane/agent-status-osc'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
+import { getSettingsForWorktreeRuntimeOwner } from '@/lib/worktree-runtime-owner'
+import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
 import { singlePaneLayoutSnapshot } from '@/store/slices/terminal-helpers'
 import {
   getRemoteRuntimeTerminalHandle,
   subscribeToRuntimeTerminalData,
   toRemoteRuntimePtyId
 } from '@/runtime/runtime-terminal-stream'
+import { createAgentStatusOscProcessor } from '../../../shared/agent-status-osc'
 import type { ParsedAgentStatusPayload } from '../../../shared/agent-status-types'
 import type { RuntimeTerminalCreate } from '../../../shared/runtime-types'
+import { translate } from '@/i18n/i18n'
 
 export type LaunchAgentBackgroundSessionArgs = {
   agent: TuiAgent
@@ -63,6 +70,8 @@ export async function launchAgentBackgroundSession(
     }
   }
   const cmdOverrides = store.settings?.agentCmdOverrides ?? {}
+  const agentArgs = resolveTuiAgentLaunchArgs(agent, store.settings?.agentDefaultArgs)
+  const agentEnv = resolveTuiAgentLaunchEnv(agent, store.settings?.agentDefaultEnv)
   const trimmedPrompt = prompt?.trim() ?? ''
   const hasPrompt = trimmedPrompt.length > 0
   const isFollowupPath = TUI_AGENT_CONFIG[agent].promptInjectionMode === 'stdin-after-start'
@@ -74,6 +83,8 @@ export async function launchAgentBackgroundSession(
       agent,
       prompt: '',
       cmdOverrides,
+      agentArgs,
+      agentEnv,
       platform: CLIENT_PLATFORM,
       allowEmptyPromptLaunch: true
     })
@@ -83,6 +94,8 @@ export async function launchAgentBackgroundSession(
       agent,
       prompt: hasPrompt ? trimmedPrompt : '',
       cmdOverrides,
+      agentArgs,
+      agentEnv,
       platform: CLIENT_PLATFORM,
       allowEmptyPromptLaunch: !hasPrompt
     })
@@ -141,7 +154,11 @@ export async function launchAgentBackgroundSession(
       window.api.pty.write(ptyId, submittedCommand)
     }, 50)
   }
-  const runtimeTarget = getActiveRuntimeTarget(store.settings)
+  // Route by the worktree's owner host: the agent terminal must spawn on the host
+  // that owns this worktree, not on the focused runtime.
+  const runtimeTarget = getActiveRuntimeTarget(
+    getSettingsForWorktreeRuntimeOwner(store, worktreeId)
+  )
   let ptyId: string
   try {
     if (runtimeTarget.kind === 'environment') {
@@ -151,7 +168,7 @@ export async function launchAgentBackgroundSession(
         runtimeTarget,
         'terminal.create',
         {
-          worktree: worktreeId,
+          worktree: toRuntimeWorktreeSelector(worktreeId),
           command: startupPlan.launchCommand,
           env: paneEnv,
           title,
@@ -255,7 +272,12 @@ export async function launchAgentBackgroundSession(
       agent,
       submit: true,
       onTimeout: () => {
-        toast.message("Your automation prompt wasn't sent — open the workspace and paste it.")
+        toast.message(
+          translate(
+            'auto.lib.launch.agent.background.session.4ca0651d56',
+            "Your automation prompt wasn't sent — open the workspace and paste it."
+          )
+        )
         track('agent_error', {
           error_class: 'paste_readiness_timeout',
           agent_kind: tuiAgentToAgentKind(agent)

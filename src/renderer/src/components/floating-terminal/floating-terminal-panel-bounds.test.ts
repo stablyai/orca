@@ -4,13 +4,17 @@ import {
   MIN_PANEL_HEIGHT,
   MIN_PANEL_WIDTH,
   TITLEBAR_SAFE_TOP,
+  anchorFloatingTerminalPanelBounds,
+  canAnchorFloatingTerminalPanelBounds,
   clampFloatingTerminalBounds,
+  getDefaultFloatingTerminalCommittedBounds,
   getDefaultFloatingTerminalBounds,
   getMaximizedFloatingTerminalBounds,
   hasUsableFloatingTerminalPanelViewport,
   parseFloatingTerminalPanelBounds,
   persistFloatingTerminalPanelBounds,
   readPersistedFloatingTerminalPanelBounds,
+  resolveFloatingTerminalPanelCommittedBounds,
   resolveFloatingTerminalPanelBounds,
   shouldReconcileFloatingTerminalPanelBounds
 } from './floating-terminal-panel-bounds'
@@ -73,6 +77,50 @@ describe('floating terminal panel bounds', () => {
     expect(getDefaultFloatingTerminalBounds().top).toBeGreaterThanOrEqual(TITLEBAR_SAFE_TOP)
   })
 
+  it('defaults to a bottom-right committed anchor', () => {
+    stubViewport(1200, 800, 'Macintosh')
+
+    expect(getDefaultFloatingTerminalCommittedBounds()).toEqual({
+      anchorX: 'right',
+      anchorY: 'bottom',
+      offsetX: 24,
+      offsetY: 84,
+      width: 920,
+      height: 560
+    })
+    expect(getDefaultFloatingTerminalBounds()).toEqual({
+      left: 256,
+      top: 156,
+      width: 920,
+      height: 560
+    })
+  })
+
+  it('converts each anchored panel placement into viewport coordinates', () => {
+    stubViewport(1200, 800, 'Macintosh')
+
+    expect(
+      resolveFloatingTerminalPanelCommittedBounds({
+        anchorX: 'left',
+        anchorY: 'top',
+        offsetX: 32,
+        offsetY: 48,
+        width: 640,
+        height: 360
+      })
+    ).toEqual({ left: 32, top: 48, width: 640, height: 360 })
+    expect(
+      resolveFloatingTerminalPanelCommittedBounds({
+        anchorX: 'right',
+        anchorY: 'bottom',
+        offsetX: 24,
+        offsetY: 84,
+        width: 920,
+        height: 560
+      })
+    ).toEqual({ left: 256, top: 156, width: 920, height: 560 })
+  })
+
   it('parses only complete finite persisted bounds', () => {
     expect(
       parseFloatingTerminalPanelBounds('{"left":12,"top":36,"width":700,"height":400}')
@@ -86,6 +134,23 @@ describe('floating terminal panel bounds', () => {
     expect(parseFloatingTerminalPanelBounds('{"left":12,"top":36,"width":700}')).toBeNull()
     expect(
       parseFloatingTerminalPanelBounds('{"left":12,"top":36,"width":700,"height":null}')
+    ).toBeNull()
+    expect(
+      parseFloatingTerminalPanelBounds(
+        '{"anchorX":"right","anchorY":"bottom","offsetX":24,"offsetY":84,"width":920,"height":560}'
+      )
+    ).toEqual({
+      anchorX: 'right',
+      anchorY: 'bottom',
+      offsetX: 24,
+      offsetY: 84,
+      width: 920,
+      height: 560
+    })
+    expect(
+      parseFloatingTerminalPanelBounds(
+        '{"anchorX":"center","anchorY":"bottom","offsetX":24,"offsetY":84,"width":920,"height":560}'
+      )
     ).toBeNull()
   })
 
@@ -118,11 +183,18 @@ describe('floating terminal panel bounds', () => {
     }
     stubViewport(1200, 800, 'Macintosh', localStorage)
 
-    persistFloatingTerminalPanelBounds({ left: 20, top: 40, width: 700, height: 400 })
+    persistFloatingTerminalPanelBounds({
+      anchorX: 'left',
+      anchorY: 'top',
+      offsetX: 20,
+      offsetY: 40,
+      width: 700,
+      height: 400
+    })
 
     expect(localStorage.setItem).toHaveBeenCalledWith(
       FLOATING_TERMINAL_PANEL_BOUNDS_STORAGE_KEY,
-      '{"left":20,"top":40,"width":700,"height":400}'
+      '{"anchorX":"left","anchorY":"top","offsetX":20,"offsetY":40,"width":700,"height":400}'
     )
   })
 
@@ -159,6 +231,74 @@ describe('floating terminal panel bounds', () => {
       top: TITLEBAR_SAFE_TOP,
       width: MIN_PANEL_WIDTH,
       height: MIN_PANEL_HEIGHT
+    })
+  })
+
+  it('does not derive anchors from a viewport smaller than the minimum panel', () => {
+    stubViewport(300, 260)
+
+    expect(canAnchorFloatingTerminalPanelBounds()).toBe(false)
+    expect(
+      anchorFloatingTerminalPanelBounds(
+        clampFloatingTerminalBounds({
+          left: 200,
+          top: 200,
+          width: 900,
+          height: 500
+        })
+      )
+    ).toBeNull()
+  })
+
+  it('preserves committed size through temporary viewport shrink', () => {
+    const committed = {
+      anchorX: 'right' as const,
+      anchorY: 'bottom' as const,
+      offsetX: 40,
+      offsetY: 84,
+      width: 920,
+      height: 560
+    }
+
+    stubViewport(520, 360)
+    expect(resolveFloatingTerminalPanelBounds(committed, 'user')).toEqual({
+      left: 8,
+      top: 36,
+      width: 504,
+      height: 316
+    })
+
+    stubViewport(1200, 800)
+    expect(resolveFloatingTerminalPanelBounds(committed, 'user')).toEqual({
+      left: 240,
+      top: 156,
+      width: 920,
+      height: 560
+    })
+  })
+
+  it('anchors explicit left-top and right-bottom user placements by nearest edge', () => {
+    stubViewport(1200, 800)
+
+    expect(
+      anchorFloatingTerminalPanelBounds({ left: 24, top: 48, width: 640, height: 360 })
+    ).toEqual({
+      anchorX: 'left',
+      anchorY: 'top',
+      offsetX: 24,
+      offsetY: 48,
+      width: 640,
+      height: 360
+    })
+    expect(
+      anchorFloatingTerminalPanelBounds({ left: 536, top: 336, width: 640, height: 360 })
+    ).toEqual({
+      anchorX: 'right',
+      anchorY: 'bottom',
+      offsetX: 24,
+      offsetY: 104,
+      width: 640,
+      height: 360
     })
   })
 

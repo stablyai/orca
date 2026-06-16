@@ -10,6 +10,7 @@
     "test": "vitest run",
     "lint": "oxlint",
     "format": "oxfmt --write .",
+    "format:check": "oxfmt --check .",
     "mock-server": "npx tsx scripts/mock-server.ts"
   },
   "dependencies": {
@@ -22,9 +23,11 @@
     "expo-clipboard": "^55.0.13",
     "expo-constants": "^55.0.16",
     "expo-crypto": "^55.0.14",
+    "expo-dev-client": "~55.0.35",
     "expo-haptics": "^55.0.14",
     "expo-linking": "^55.0.15",
     "expo-modules-core": "~55.0.25",
+    "expo-network": "~55.0.14",
     "expo-notifications": "^55.0.22",
     "expo-router": "^55.0.14",
     "expo-secure-store": "^55.0.13",
@@ -33,6 +36,7 @@
     "lowlight": "^3.3.0",
     "lucide-react-native": "^1.14.0",
     "react": "^19.2.6",
+    "react-dom": "19.2.6",
     "react-native": "^0.83.9",
     "react-native-gesture-handler": "^2.31.2",
     "react-native-reanimated": "^4.3.0",

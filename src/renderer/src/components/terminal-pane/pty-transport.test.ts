@@ -1050,7 +1050,7 @@ describe('createRemoteRuntimePtyTransport', () => {
       selector: 'env-1',
       method: 'terminal.create',
       params: {
-        worktree: 'repo1::/remote/wt',
+        worktree: 'id:repo1::/remote/wt',
         command: 'claude',
         env: { ORCA_TAB_ID: 'tab-1' },
         tabId: 'tab-1',
@@ -1104,10 +1104,10 @@ describe('createRemoteRuntimePtyTransport', () => {
 
     expect(onReplayData).toHaveBeenCalledWith('hello')
     expect(onConnect).toHaveBeenCalled()
-    expect(onData).toHaveBeenCalledWith(' world')
+    expect(onData).toHaveBeenCalledWith(' world', expect.objectContaining({ seq: 4 }))
   })
 
-  it('forwards input and cleanup through runtime RPC', async () => {
+  it('forwards input over the stream and disconnects without closing shared remote sessions', async () => {
     vi.useFakeTimers()
     try {
       const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
@@ -1135,12 +1135,11 @@ describe('createRemoteRuntimePtyTransport', () => {
 
       transport.disconnect()
       expect(unsubscribeFn).toHaveBeenCalled()
-      expect(runtimeCall).toHaveBeenCalledWith({
-        selector: 'env-1',
-        method: 'terminal.close',
-        params: { terminal: 'term-remote' },
-        timeoutMs: 15_000
-      })
+      expect(runtimeCall).not.toHaveBeenCalledWith(
+        expect.objectContaining({
+          method: 'terminal.close'
+        })
+      )
     } finally {
       vi.useRealTimers()
     }

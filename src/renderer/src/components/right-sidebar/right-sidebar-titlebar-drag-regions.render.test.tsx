@@ -4,9 +4,19 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import RightSidebar from './index'
 import { TopActivityOverflowMenu } from './activity-bar-buttons'
 import { RIGHT_SIDEBAR_HEADER_NO_DRAG_CLASS_NAME } from './right-sidebar-titlebar-drag-regions'
+import type { ActiveRightSidebarTab } from '@/store/slices/editor'
 
 const mockAppState = vi.hoisted(() => ({
-  activityBarPosition: 'top' as 'top' | 'side'
+  rightSidebarOpen: true,
+  rightSidebarTab: 'explorer' as ActiveRightSidebarTab,
+  setRightSidebarTab: vi.fn(),
+  activityBarPosition: 'top' as 'top' | 'side',
+  activeWorktreeId: 'worktree-1',
+  activeRepo: { id: 'repo-1', kind: 'git', connectionId: null } as {
+    id: string
+    kind: 'git' | 'folder'
+    connectionId: string | null
+  } | null
 }))
 
 vi.mock('@/hooks/useSidebarResize', () => ({
@@ -24,12 +34,16 @@ vi.mock('@/hooks/useShortcutLabel', () => ({
 vi.mock('@/store', () => ({
   useAppStore: (selector: (state: Record<string, unknown>) => unknown) =>
     selector({
-      rightSidebarOpen: true,
+      rightSidebarOpen: mockAppState.rightSidebarOpen,
       rightSidebarWidth: 350,
       setRightSidebarWidth: vi.fn(),
-      rightSidebarTab: 'explorer',
-      setRightSidebarTab: vi.fn(),
+      rightSidebarTab: mockAppState.rightSidebarTab,
+      rightSidebarExplorerView: 'files',
+      setRightSidebarTab: mockAppState.setRightSidebarTab,
+      showRightSidebarFiles: vi.fn(),
       toggleRightSidebar: vi.fn(),
+      activeWorktreeId: mockAppState.activeWorktreeId,
+      getKnownWorktreeById: () => ({ id: mockAppState.activeWorktreeId, repoId: 'repo-1' }),
       activityBarPosition: mockAppState.activityBarPosition,
       setActivityBarPosition: vi.fn(),
       checksByWorktreeId: {},
@@ -39,7 +53,8 @@ vi.mock('@/store', () => ({
 
 vi.mock('@/store/selectors', () => ({
   useActiveWorktree: () => ({ id: 'worktree-1', repoId: 'repo-1' }),
-  useRepoById: () => ({ id: 'repo-1', kind: 'git', connectionId: null })
+  useRepoById: () => mockAppState.activeRepo,
+  getWorktreeMapFromState: () => new Map()
 }))
 
 vi.mock('@/components/ui/tooltip', () => ({
@@ -91,12 +106,12 @@ vi.mock('./FileExplorer', () => ({
   default: () => <div data-file-explorer />
 }))
 
-vi.mock('./SourceControl', () => ({
-  default: () => <div data-source-control />
+vi.mock('./FolderWorkspaceWorktreesPanel', () => ({
+  default: () => <div data-folder-workspace-worktrees-panel />
 }))
 
-vi.mock('./Search', () => ({
-  default: () => <div data-search-panel />
+vi.mock('./SourceControl', () => ({
+  default: () => <div data-source-control />
 }))
 
 vi.mock('./ChecksPanel', () => ({
@@ -130,7 +145,12 @@ function expectNoDrag(tag: string): void {
 
 describe('rendered right sidebar titlebar drag regions', () => {
   beforeEach(() => {
+    mockAppState.rightSidebarOpen = true
+    mockAppState.rightSidebarTab = 'explorer'
+    mockAppState.setRightSidebarTab = vi.fn()
     mockAppState.activityBarPosition = 'top'
+    mockAppState.activeWorktreeId = 'worktree-1'
+    mockAppState.activeRepo = { id: 'repo-1', kind: 'git', connectionId: null }
   })
 
   it('keeps the rendered top activity strip draggable, context-menuable, and only controls no-drag', () => {
@@ -144,7 +164,6 @@ describe('rendered right sidebar titlebar drag regions', () => {
     expect(markup).toContain('right-sidebar-header-drag')
 
     expectNoDrag(buttonOpeningTag(markup, 'Explorer'))
-    expectNoDrag(buttonOpeningTag(markup, 'Search'))
     expectNoDrag(buttonOpeningTag(markup, 'Source Control'))
     expectNoDrag(buttonOpeningTag(markup, 'Checks'))
     expect(buttonOpeningTag(markup, 'Toggle right sidebar')).toContain('sidebar-toggle')
@@ -183,9 +202,44 @@ describe('rendered right sidebar titlebar drag regions', () => {
     expect(sideStrip).toContain('data-context-menu-trigger="true"')
 
     expectNoDrag(buttonOpeningTag(markup, 'Explorer'))
-    expectNoDrag(buttonOpeningTag(markup, 'Search'))
     expectNoDrag(buttonOpeningTag(markup, 'Source Control'))
     expectNoDrag(buttonOpeningTag(markup, 'Checks'))
     expect(buttonOpeningTag(markup, 'Toggle right sidebar')).toContain('sidebar-toggle')
+  })
+
+  it('hides git-only activity buttons for folder workspace ids without a backing repo', () => {
+    mockAppState.activeWorktreeId = 'folder:folder-1'
+    mockAppState.activeRepo = null
+
+    const markup = renderToStaticMarkup(<RightSidebar />)
+
+    expect(markup).toContain('aria-label="Explorer')
+    expect(markup).toContain('aria-label="Agents')
+    expect(markup).not.toContain('aria-label="Search')
+    expect(markup).not.toContain('aria-label="Source Control')
+    expect(markup).not.toContain('aria-label="Checks')
+  })
+
+  it('renders a visible fallback without overwriting a hidden folder-only tab', () => {
+    mockAppState.rightSidebarTab = 'workspaces'
+    mockAppState.activeWorktreeId = 'worktree-1'
+    mockAppState.activeRepo = { id: 'repo-1', kind: 'git', connectionId: null }
+
+    const markup = renderToStaticMarkup(<RightSidebar />)
+
+    expect(markup).toContain('data-file-explorer')
+    expect(markup).not.toContain('data-folder-workspace-worktrees-panel')
+    expect(mockAppState.setRightSidebarTab).not.toHaveBeenCalled()
+  })
+
+  it('does not render hidden panel content while the sidebar is closed', () => {
+    mockAppState.rightSidebarOpen = false
+
+    const markup = renderToStaticMarkup(<RightSidebar />)
+
+    expect(markup).not.toContain('data-file-explorer')
+    expect(markup).not.toContain('data-source-control')
+    expect(markup).not.toContain('data-checks-panel')
+    expect(markup).not.toContain('data-ports-panel')
   })
 })

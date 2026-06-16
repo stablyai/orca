@@ -1,11 +1,19 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { useAppStore } from '@/store'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle
+} from '@/components/ui/dialog'
 import NewWorkspaceComposerCard from '@/components/NewWorkspaceComposerCard'
 import AgentSettingsDialog from '@/components/agent/AgentSettingsDialog'
 import { useComposerState } from '@/hooks/useComposerState'
-import { isTuiAgentEnabled } from '../../../shared/tui-agent-selection'
-import { pickQuickWorkspaceAgent } from '@/lib/quick-workspace-agent-selection'
+import {
+  pickQuickWorkspaceAgent,
+  resolveQuickWorkspaceAgentSelection
+} from '@/lib/quick-workspace-agent-selection'
 import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
 import { shouldAllowComposerEnterSubmitTarget } from '@/lib/new-workspace-enter-guard'
 import { isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
@@ -14,11 +22,15 @@ import type {
   WorkspaceCreateTelemetrySource,
   WorkspaceStatus
 } from '../../../shared/types'
+import type { TaskSourceContext } from '../../../shared/task-source-context'
+import { translate } from '@/i18n/i18n'
+import { getWorkspaceComposerInitialFocusTarget } from '@/lib/workspace-composer-initial-focus'
 
 type ComposerModalData = {
   prefilledName?: string
   initialRepoId?: string
   linkedWorkItem?: LinkedWorkItemSummary | null
+  taskSourceContext?: TaskSourceContext | null
   initialBaseBranch?: string
   initialWorkspaceStatus?: WorkspaceStatus
   /** Telemetry surface that opened the composer. Set by each
@@ -26,6 +38,8 @@ type ComposerModalData = {
    *  `workspace_created.source` carries the right value. Falls back to
    *  `unknown` when omitted. */
   telemetrySource?: WorkspaceCreateTelemetrySource
+  contextualTourSource?: string
+  setupGuideTourRequestId?: string
 }
 
 export default function NewWorkspaceComposerModal(): React.JSX.Element | null {
@@ -70,7 +84,7 @@ function ComposerModalBody({
   return (
     <Dialog open onOpenChange={onOpenChange}>
       <DialogContent
-        className="flex flex-col sm:max-w-lg"
+        className="flex max-h-[calc(100vh-2rem)] flex-col overflow-hidden sm:max-w-lg"
         onOpenAutoFocus={(event) => {
           // Why: Radix's FocusScope fires this once the dialog has mounted.
           // preventDefault stops it from focusing whatever first-tabbable it
@@ -78,10 +92,7 @@ function ComposerModalBody({
           // keyboard flow starts at the top of the unified create form.
           event.preventDefault()
           const content = event.currentTarget as HTMLElement
-          const trigger = content.querySelector<HTMLElement>(
-            '[data-repo-combobox-root="true"][role="combobox"]'
-          )
-          trigger?.focus({ preventScroll: true })
+          getWorkspaceComposerInitialFocusTarget(content)?.focus({ preventScroll: true })
         }}
       >
         <QuickTabBody modalData={modalData} onClose={onClose} active />
@@ -113,6 +124,7 @@ function QuickTabBody({
     // intentionally ignored even if older callers still send it.
     initialPrompt: '',
     initialLinkedWorkItem: modalData.linkedWorkItem ?? null,
+    initialTaskSourceContext: modalData.taskSourceContext ?? null,
     initialRepoId: modalData.initialRepoId,
     initialWorkspaceStatus: modalData.initialWorkspaceStatus,
     ...(modalData.initialBaseBranch ? { initialBaseBranch: modalData.initialBaseBranch } : {}),
@@ -143,24 +155,18 @@ function QuickTabBody({
     // prior catalog fallback while filtering disabled agents out of that choice.
     return pickQuickWorkspaceAgent(pref, cardProps.detectedAgentIds, settings?.disabledTuiAgents)
   }, [cardProps.detectedAgentIds, settings?.defaultTuiAgent, settings?.disabledTuiAgents])
-  const quickAgent = quickAgentOverride === undefined ? preferredQuickAgent : quickAgentOverride
-
-  useEffect(() => {
-    if (
-      quickAgentOverride === undefined ||
-      quickAgentOverride === null ||
-      (isTuiAgentEnabled(quickAgentOverride, settings?.disabledTuiAgents) &&
-        (cardProps.detectedAgentIds === null || cardProps.detectedAgentIds.has(quickAgentOverride)))
-    ) {
-      return
-    }
-    setQuickAgentOverride(preferredQuickAgent)
-  }, [
-    cardProps.detectedAgentIds,
-    preferredQuickAgent,
+  const resolvedQuickAgentSelection = resolveQuickWorkspaceAgentSelection({
     quickAgentOverride,
-    settings?.disabledTuiAgents
-  ])
+    preferredQuickAgent,
+    detectedAgentIds: cardProps.detectedAgentIds,
+    disabledTuiAgents: settings?.disabledTuiAgents
+  })
+  if (resolvedQuickAgentSelection.quickAgentOverride !== quickAgentOverride) {
+    // Why: detection/settings changes can invalidate a user-picked agent; repair
+    // before the child selector renders an unavailable option for one commit.
+    setQuickAgentOverride(resolvedQuickAgentSelection.quickAgentOverride)
+  }
+  const quickAgent = resolvedQuickAgentSelection.quickAgent
 
   const handleQuickAgentChange = useCallback((agent: TuiAgent | null) => {
     setQuickAgentOverride(agent)
@@ -223,8 +229,19 @@ function QuickTabBody({
     <>
       <DialogHeader className="gap-1">
         <DialogTitle className="text-base font-semibold">{primaryActionLabel}</DialogTitle>
+        <DialogDescription className="sr-only">
+          {translate(
+            'auto.components.NewWorkspaceComposerModal.fa90f739a5',
+            'Choose the project, workspace name, and agent before creating the workspace.'
+          )}
+        </DialogDescription>
       </DialogHeader>
       <NewWorkspaceComposerCard
+        contextualTourSource={modalData.contextualTourSource}
+        // Why: the scroll container clips children, while Orca's standard
+        // field focus ring paints 3px outside the control. Inset both sides so
+        // keyboard focus stays fully visible at the dialog edges.
+        containerClassName="min-h-0 flex-1 overflow-y-auto px-1 scrollbar-sleek"
         composerRef={composerRef}
         onComposerNodeChange={onComposerNodeChange}
         nameInputRef={nameInputRef}

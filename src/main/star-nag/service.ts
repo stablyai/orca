@@ -1,13 +1,28 @@
 import { app, BrowserWindow, ipcMain } from 'electron'
 import { STAR_NAG_INITIAL_THRESHOLD } from '../../shared/constants'
-import { checkOrcaStarred } from '../github/client'
+import { checkOrcaStarred, starOrca } from '../github/client'
 import type { Store } from '../persistence'
 import type { StatsCollector } from '../stats/collector'
+import { track } from '../telemetry/client'
+import { getCohortAtEmit } from '../telemetry/cohort-classifier'
+import {
+  bucketStarNagAgentsSinceBaseline,
+  type StarNagOutcome,
+  type StarNagPromptMode,
+  type StarNagPromptSource
+} from '../../shared/star-nag-telemetry'
+import type { EventProps } from '../../shared/telemetry-events'
+
+type StarNagPromptContext = Omit<EventProps<'star_nag_outcome'>, 'outcome' | 'next_threshold'>
+
+type StarNagPromptSession = StarNagPromptContext & {
+  starAttemptPromise?: Promise<boolean>
+}
 
 /**
  * Service that decides when to prompt the user with the "star Orca on GitHub"
  * notification. Counts agents spawned since the current app version was first
- * seen; crosses a doubling threshold (default 50 → 100 → 200 …) to fire the
+ * seen; crosses a doubling threshold (default 35 → 70 → 140 …) to fire the
  * renderer notification via 'star-nag:show'.
  *
  * State lives in PersistedUIState so it survives restarts alongside the rest
@@ -21,13 +36,18 @@ export class StarNagService {
   // dismisses or stars. Without this in-memory guard, every subsequent
   // agent_start past the threshold would re-enter maybeShow() and spawn a new
   // `gh api` subprocess on each spawn — cheap individually, but a power user
-  // at 55 agents with threshold 50 would fork gh on every spawn until they
+  // at 40 agents with threshold 35 would fork gh on every spawn until they
   // act on the card.
   private promptVisible = false
   // Why: prevent concurrent gh invocations if agents spawn rapidly during the
   // tiny window between crossing the threshold and the first gh check
   // resolving.
   private evaluating = false
+  private pendingForceShow = false
+  // Why: dismissal backoff and action telemetry must use the prompt context
+  // that was delivered, not whatever threshold/source happens to be current
+  // when the renderer later reports a user action.
+  private promptSession: StarNagPromptSession | null = null
 
   constructor(store: Store, stats: StatsCollector) {
     this.store = store
@@ -54,6 +74,9 @@ export class StarNagService {
   registerIpcHandlers(): void {
     ipcMain.handle('star-nag:dismiss', () => this.dismiss())
     ipcMain.handle('star-nag:complete', () => this.markCompleted())
+    ipcMain.handle('star-nag:disable', () => this.disable())
+    ipcMain.handle('star-nag:openWeb', () => this.openWeb())
+    ipcMain.handle('star-nag:starOrca', () => this.starOrcaFromNag())
     ipcMain.handle('star-nag:forceShow', () => this.forceShow())
   }
 
@@ -99,44 +122,141 @@ export class StarNagService {
     if (sinceBaseline < threshold) {
       return
     }
-    void this.maybeShow()
+    void this.maybeShow('threshold')
   }
 
-  private async maybeShow(): Promise<void> {
+  private async maybeShow(source: StarNagPromptSource): Promise<void> {
     if (this.promptVisible || this.evaluating) {
       return
     }
     this.evaluating = true
     try {
-      // Why: the notification is only useful for users whose gh CLI can
-      // actually perform the star. Calling checkOrcaStarred both gates on gh
-      // availability and skips users who already starred outside the app.
-      // Errors (network, gh missing) map to null — skip silently and leave
-      // state unchanged so we retry on the next spawn without racing forward
-      // to the next threshold.
+      // Why: checkOrcaStarred lets us skip users who already starred outside
+      // the app. When gh cannot tell us, keep the prompt available but route
+      // the renderer to the browser fallback instead of a dead direct-star
+      // button.
       const starred = await checkOrcaStarred()
+      if (this.store.getUI().starNagCompleted) {
+        this.pendingForceShow = false
+        return
+      }
       if (starred === null) {
+        this.broadcastShow(source, 'web')
         return
       }
       if (starred) {
+        this.trackAlreadyStarredSuppressed(source)
         // Already starred somewhere — lock in the permanent suppression so we
         // stop recomputing thresholds on every spawn.
         this.markCompleted()
         return
       }
-      this.promptVisible = true
-      this.broadcastShow()
+      if (this.promptVisible) {
+        return
+      }
+      this.broadcastShow(source, 'gh')
     } finally {
       this.evaluating = false
+      this.flushPendingForceShow()
     }
   }
 
-  private broadcastShow(): void {
-    const win = BrowserWindow.getAllWindows().find((w) => !w.isDestroyed())
-    if (!win) {
+  private flushPendingForceShow(): void {
+    if (!this.pendingForceShow || this.evaluating) {
       return
     }
-    win.webContents.send('star-nag:show')
+    this.pendingForceShow = false
+    if (this.promptVisible) {
+      return
+    }
+    this.broadcastShow('force_show', 'gh')
+  }
+
+  private broadcastShow(source: StarNagPromptSource, mode: StarNagPromptMode): boolean {
+    const win = BrowserWindow.getAllWindows().find((w) => !w.isDestroyed())
+    if (!win) {
+      this.promptVisible = false
+      this.promptSession = null
+      return false
+    }
+    const context = this.createPromptContext(source, mode)
+    win.webContents.send('star-nag:show', { mode })
+    this.promptVisible = true
+    this.promptSession = context
+    this.trackOutcome('shown')
+    this.logConsoleEvent('star_nag_shown', source)
+    return true
+  }
+
+  private createPromptContext(
+    source: StarNagPromptSource,
+    mode: StarNagPromptMode
+  ): StarNagPromptContext {
+    const ui = this.store.getUI()
+    const threshold = ui.starNagNextThreshold ?? STAR_NAG_INITIAL_THRESHOLD
+    const agentsSinceBaseline = Math.max(
+      0,
+      this.stats.getTotalAgentsSpawned() - (ui.starNagBaselineAgents ?? 0)
+    )
+    return {
+      source,
+      mode,
+      threshold,
+      agents_since_baseline: agentsSinceBaseline,
+      agents_since_baseline_bucket: bucketStarNagAgentsSinceBaseline(agentsSinceBaseline),
+      ...getCohortAtEmit()
+    }
+  }
+
+  private trackOutcome(
+    outcome: StarNagOutcome,
+    options: { mode?: StarNagPromptMode; nextThreshold?: number } = {}
+  ): void {
+    const session = this.promptSession
+    if (!session) {
+      return
+    }
+    this.trackSessionOutcome(session, outcome, options)
+  }
+
+  private trackSessionOutcome(
+    session: StarNagPromptSession,
+    outcome: StarNagOutcome,
+    options: { mode?: StarNagPromptMode; nextThreshold?: number } = {}
+  ): void {
+    const { starAttemptPromise: _starAttemptPromise, ...context } = session
+    track('star_nag_outcome', {
+      ...context,
+      outcome,
+      ...(options.mode === undefined ? {} : { mode: options.mode }),
+      ...(options.nextThreshold === undefined ? {} : { next_threshold: options.nextThreshold })
+    })
+  }
+
+  private trackAlreadyStarredSuppressed(source: StarNagPromptSource): void {
+    track('star_nag_outcome', {
+      ...this.createPromptContext(source, 'gh'),
+      outcome: 'already_starred_suppressed'
+    })
+  }
+
+  private logConsoleEvent(
+    event: 'star_nag_shown' | 'star_nag_dismissed',
+    source: StarNagPromptSource,
+    nextThreshold?: number
+  ): void {
+    const ui = this.store.getUI()
+    const threshold = ui.starNagNextThreshold ?? STAR_NAG_INITIAL_THRESHOLD
+    const agentsSinceBaseline = this.stats.getTotalAgentsSpawned() - (ui.starNagBaselineAgents ?? 0)
+
+    console.info({
+      event,
+      app_version: app.getVersion(),
+      threshold,
+      agents_since_baseline: agentsSinceBaseline,
+      source,
+      ...(nextThreshold === undefined ? {} : { next_threshold: nextThreshold })
+    })
   }
 
   // ── Public actions (invoked from IPC) ─────────────────────────────
@@ -145,28 +265,95 @@ export class StarNagService {
    * User closed the notification without starring → double the threshold and
    * rebase the baseline so the next fire is "threshold more agents since this
    * dismissal" (not "threshold total since install"). This matches the
-   * product intent of exponential back-off: 50 more, then 100 more, then 200
+   * product intent of exponential back-off: 35 more, then 70 more, then 140
    * more, etc.
    */
   private dismiss(): void {
+    const session = this.promptSession
+    if (!session) {
+      this.promptVisible = false
+      return
+    }
     const ui = this.store.getUI()
     const threshold = ui.starNagNextThreshold ?? STAR_NAG_INITIAL_THRESHOLD
+    const nextThreshold = threshold * 2
+    this.trackOutcome('dismissed', { nextThreshold })
+    this.logConsoleEvent('star_nag_dismissed', session.source, nextThreshold)
     this.store.updateUI({
-      starNagNextThreshold: threshold * 2,
+      starNagNextThreshold: nextThreshold,
       starNagBaselineAgents: this.stats.getTotalAgentsSpawned()
     })
     this.promptVisible = false
+    this.promptSession = null
   }
 
-  /** User successfully starred → never nag again. */
+  private disable(): void {
+    this.trackOutcome('disabled')
+    this.markCompleted()
+  }
+
+  private openWeb(): void {
+    this.trackOutcome('opened_web', { mode: 'web' })
+    this.markCompleted()
+  }
+
+  private async starOrcaFromNag(): Promise<boolean> {
+    const session = this.promptSession
+    if (!session) {
+      return false
+    }
+    if (session.starAttemptPromise) {
+      return session.starAttemptPromise
+    }
+    const attempt = this.runStarOrcaAttempt(session)
+    session.starAttemptPromise = attempt
+    try {
+      return await attempt
+    } finally {
+      if (this.promptSession === session) {
+        delete session.starAttemptPromise
+      }
+    }
+  }
+
+  private async runStarOrcaAttempt(session: StarNagPromptSession): Promise<boolean> {
+    this.trackSessionOutcome(session, 'star_attempted', { mode: 'gh' })
+    const starred = await starOrca()
+    if (!starred) {
+      if (this.promptSession === session) {
+        this.trackSessionOutcome(session, 'star_failed', { mode: 'gh' })
+        session.mode = 'web'
+      }
+      return false
+    }
+    this.trackSessionOutcome(session, 'star_succeeded', { mode: 'gh' })
+    // Why: app_starred_orca remains the canonical cross-surface success event;
+    // star_nag_outcome is only the nag-funnel companion.
+    track('app_starred_orca', {
+      source: 'star_nag',
+      ...getCohortAtEmit()
+    })
+    this.markCompleted()
+    return true
+  }
+
+  /** User successfully starred or opted out → never nag again. */
   private markCompleted(): void {
     this.store.updateUI({ starNagCompleted: true })
     this.promptVisible = false
+    this.promptSession = null
+    this.pendingForceShow = false
   }
 
   /** Dev-only entry point: skip all gating and fire the notification. */
   private forceShow(): void {
-    this.promptVisible = true
-    this.broadcastShow()
+    if (this.promptVisible) {
+      return
+    }
+    if (this.evaluating) {
+      this.pendingForceShow = true
+      return
+    }
+    this.broadcastShow('force_show', 'gh')
   }
 }

@@ -41,7 +41,7 @@ describe('AgentSkillSetupPanel', () => {
     const html = renderPanel({ installed: true })
 
     expect(html).toContain('Installed')
-    expect(buttonLabels(html)).toContain('Install')
+    expect(buttonLabels(html)).toContain('Update')
     expect(buttonLabels(html)).toContain('Re-check')
   })
 
@@ -49,8 +49,28 @@ describe('AgentSkillSetupPanel', () => {
     const html = renderPanel({ installed: true, showRecheckWhenInstalled: false })
 
     expect(html).toContain('Installed')
-    expect(buttonLabels(html)).toContain('Install')
+    expect(buttonLabels(html)).toContain('Update')
     expect(buttonLabels(html)).not.toContain('Re-check')
+  })
+
+  it('keeps update copy until the installed panel checks CLI prerequisites', () => {
+    const html = renderPanel({
+      installed: true,
+      installLabel: 'Install CLI & Skill',
+      preInstallNotice: 'Install the Orca CLI before running agent skill setup.'
+    })
+
+    expect(html).toContain('Installed')
+    expect(buttonLabels(html)).toContain('Update')
+    expect(buttonLabels(html)).not.toContain('Install CLI &amp; Skill')
+  })
+
+  it('can hide install after the skill is detected', () => {
+    const html = renderPanel({ installed: true, showInstallWhenInstalled: false })
+
+    expect(html).toContain('Installed')
+    expect(buttonLabels(html)).not.toContain('Install')
+    expect(buttonLabels(html)).toContain('Re-check')
   })
 
   it('keeps re-check visible before install when installed re-checks are disabled', () => {

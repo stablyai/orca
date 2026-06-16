@@ -189,6 +189,72 @@ describe('hosted review slice', () => {
     )
   })
 
+  it('routes runtime-owned review lookups through the owning runtime when local is focused', async () => {
+    runtimeRpc.callRuntimeRpc.mockResolvedValueOnce(review)
+    const store = makeStore(null)
+    store.setState({
+      repos: [
+        {
+          id: 'repo-1',
+          path: '/runtime/repo',
+          connectionId: null,
+          executionHostId: 'runtime:env-1'
+        } as unknown as AppState['repos'][number]
+      ]
+    } as Partial<AppState>)
+
+    await expect(
+      store.getState().fetchHostedReviewForBranch('/runtime/repo', 'feature/runtime', {
+        repoId: 'repo-1'
+      })
+    ).resolves.toEqual(review)
+
+    expect(mockApi.hostedReview.forBranch).not.toHaveBeenCalled()
+    expect(runtimeRpc.callRuntimeRpc).toHaveBeenCalledWith(
+      { kind: 'environment', environmentId: 'env-1' },
+      'hostedReview.forBranch',
+      expect.objectContaining({ repo: 'repo-1', branch: 'feature/runtime' }),
+      { timeoutMs: 30_000 }
+    )
+    expect(store.getState().hostedReviewCache['runtime:env-1::repo-1::feature/runtime']).toEqual(
+      expect.objectContaining({ data: review })
+    )
+  })
+
+  it('uses SSH ownership instead of the focused runtime for branch review lookups', async () => {
+    mockApi.hostedReview.forBranch.mockResolvedValueOnce(review)
+    const store = makeStore({
+      activeRuntimeEnvironmentId: 'env-focused'
+    } as AppState['settings'])
+    store.setState({
+      repos: [
+        {
+          id: 'repo-1',
+          path: '/ssh/repo',
+          connectionId: 'ssh-1',
+          executionHostId: 'ssh:ssh-1'
+        } as unknown as AppState['repos'][number]
+      ]
+    } as Partial<AppState>)
+
+    await expect(
+      store.getState().fetchHostedReviewForBranch('/ssh/repo', 'feature/ssh', {
+        repoId: 'repo-1'
+      })
+    ).resolves.toEqual(review)
+
+    expect(runtimeRpc.callRuntimeRpc).not.toHaveBeenCalled()
+    expect(mockApi.hostedReview.forBranch).toHaveBeenCalledWith(
+      expect.objectContaining({ repoPath: '/ssh/repo', repoId: 'repo-1', branch: 'feature/ssh' })
+    )
+    expect(store.getState().hostedReviewCache['ssh:ssh-1::repo-1::feature/ssh']).toEqual(
+      expect.objectContaining({ data: review })
+    )
+    expect(
+      store.getState().hostedReviewCache['runtime:env-focused::repo-1::feature/ssh']
+    ).toBeUndefined()
+  })
+
   it('forwards the selected worktree path when creating a local pull request', async () => {
     mockApi.hostedReview.create.mockResolvedValueOnce({
       ok: true,
@@ -209,6 +275,7 @@ describe('hosted review slice', () => {
 
     expect(mockApi.hostedReview.create).toHaveBeenCalledWith({
       repoPath: '/repo',
+      repoId: 'repo-1',
       connectionId: null,
       provider: 'github',
       base: 'main',
@@ -241,6 +308,7 @@ describe('hosted review slice', () => {
 
     expect(mockApi.hostedReview.create).toHaveBeenCalledWith({
       repoPath: '/repo',
+      repoId: 'repo-1',
       connectionId: 'ssh-1',
       provider: 'github',
       base: 'main',
@@ -272,6 +340,7 @@ describe('hosted review slice', () => {
 
     expect(mockApi.hostedReview.getCreationEligibility).toHaveBeenCalledWith({
       repoPath: '/repo',
+      repoId: 'repo-1',
       connectionId: 'ssh-1',
       worktreePath: '/remote/worktree',
       branch: 'feature/create-pr',
