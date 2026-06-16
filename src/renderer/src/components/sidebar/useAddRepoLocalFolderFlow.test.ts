@@ -116,12 +116,14 @@ describe('useAddRepoLocalFolderFlow', () => {
 
   it('skips nested-review folders in a multi-folder add and continues with git folders', async () => {
     pickFolders.mockResolvedValue(['/projects/monorepo', '/projects/later'])
-    scanNestedRepos.mockResolvedValueOnce(
-      makeScan('/projects/monorepo', {
+    scanNestedRepos.mockImplementationOnce(async (_path, _connectionId, controls) => {
+      const scan = makeScan('/projects/monorepo', {
         selectedPathKind: 'non_git_folder',
         repos: [{ path: '/projects/monorepo/app', displayName: 'app', depth: 1 }]
       })
-    )
+      controls?.onProgress?.(scan)
+      return scan
+    })
     const { useAddRepoLocalFolderFlow } = await import('./useAddRepoLocalFolderFlow')
 
     const { handleBrowse } = useAddRepoLocalFolderFlow({

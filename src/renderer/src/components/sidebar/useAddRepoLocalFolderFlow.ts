@@ -105,6 +105,7 @@ export function useAddRepoLocalFolderFlow({
           onProgress: (progressScan) => {
             if (
               gen !== localAddGenRef.current ||
+              mode === 'batch' ||
               progressScan.selectedPathKind !== 'non_git_folder' ||
               progressScan.repos.length === 0
             ) {
