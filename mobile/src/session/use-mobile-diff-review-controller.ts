@@ -251,9 +251,11 @@ export function useMobileDiffReviewController(input: ControllerInput) {
     ...interactions,
     ...prSidebar,
     // Exposed so the screen can thread the RPC client + worktree into the PR
-    // sidebar's lazy check-detail fetches (U5).
+    // sidebar's lazy check-detail fetches (U5) and mutation actions (U6).
     client,
+    connState,
     worktreeId,
+    prSidebarHeadSha,
     actionError,
     activeHunkIndex,
     busyAction,

@@ -1,10 +1,11 @@
 import { useCallback, useState } from 'react'
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
-import { ChevronDown, ChevronRight } from 'lucide-react-native'
+import { ChevronDown, ChevronRight, RotateCw } from 'lucide-react-native'
 import { colors } from '../../theme/mobile-theme'
 import type { PRCheckDetail, PRCheckRunDetails } from '../../../../src/shared/types'
 import type { RpcClient } from '../../transport/rpc-client'
 import { fetchPRCheckDetails, type GitHubPrRepoSlug } from '../../session/github-pr-rpc'
+import type { MobilePrActions } from '../../session/use-mobile-pr-actions'
 import {
   checkOutcome,
   checkOutcomeToken,
@@ -20,6 +21,8 @@ type Props = {
   client: RpcClient | null
   worktreeId: string
   prRepo?: GitHubPrRepoSlug | null
+  // Optional so display-only usages (e.g. tests/storybook) can omit mutations.
+  actions?: MobilePrActions
 }
 
 // Per-check lazily-fetched detail. `loading`/`error` track the in-flight fetch;
@@ -32,9 +35,10 @@ type DetailEntry =
 // Checks summary (counts) + sorted per-check rows. Each row expands to lazily
 // fetch github.prCheckDetails, cached per check key (U5). Display-only; the
 // rerun action is U6.
-export function PRChecksSection({ checks, client, worktreeId, prRepo }: Props) {
+export function PRChecksSection({ checks, client, worktreeId, prRepo, actions }: Props) {
   const sorted = sortPRChecks(checks)
   const summary = summarizePRChecks(checks)
+  const rerunBusy = actions?.isBusy({ kind: 'rerun' }) ?? false
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [detailCache, setDetailCache] = useState<Record<string, DetailEntry>>({})
 
@@ -93,6 +97,22 @@ export function PRChecksSection({ checks, client, worktreeId, prRepo }: Props) {
         >
           {summary.label}
         </Text>
+        {/* Rerun is offered only when something failed; spinner-in-place while in-flight. */}
+        {actions && summary.failed > 0 ? (
+          <Pressable
+            style={styles.iconButton}
+            onPress={() => actions.rerunFailingChecks()}
+            disabled={rerunBusy}
+            accessibilityRole="button"
+            accessibilityLabel="Rerun failing checks"
+          >
+            {rerunBusy ? (
+              <ActivityIndicator color={colors.textSecondary} />
+            ) : (
+              <RotateCw size={14} color={colors.accentBlue} strokeWidth={2.2} />
+            )}
+          </Pressable>
+        ) : null}
       </View>
       {sorted.map((check) => {
         const key = prCheckKey(check)
