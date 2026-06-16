@@ -9882,7 +9882,9 @@
             "9b49d892e3": "Orca CLI 활성화",
             "3d8dc52c93": "agents 셸에서 에뮬레이터 제어를 위해 orca 명령을 등록합니다.",
             "21f5687c07": "Orca CLI 스킬",
-            "64fb057667": "이 워크트리의 orca 에뮬레이터 명령을 agents에게 알려줍니다."
+            "64fb057667": "이 워크트리의 orca 에뮬레이터 명령을 agents에게 알려줍니다.",
+            "5c59ea96ca": "Mobile emulator Orca CLI skill setup",
+            "bff5341ac3": "Mobile emulator Orca CLI skill install terminal"
           },
           "MobileEmulatorTabIntroCallout": {
             "1924982130": "닫기",

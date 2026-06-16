@@ -77,7 +77,10 @@ export function useMobileEmulatorAgentSetupState(enabled = true): {
   const refreshCliStatus = useCallback(async (): Promise<void> => {
     setCliLoading(true)
     try {
-      setCliInstallStatus(await window.api.cli.getInstallStatus())
+      const status = await window.api.cli.getInstallStatus()
+      if (mountedRef.current) {
+        setCliInstallStatus(status)
+      }
     } catch (error) {
       if (mountedRef.current) {
         toast.error(
@@ -88,8 +91,8 @@ export function useMobileEmulatorAgentSetupState(enabled = true): {
                 'Failed to load CLI status.'
               )
         )
+        setCliInstallStatus(null)
       }
-      setCliInstallStatus(null)
     } finally {
       if (mountedRef.current) {
         setCliLoading(false)

@@ -131,8 +131,14 @@ export function MobileEmulatorAgentSetupGuideSteps({
               'Teaches agents the orca emulator commands for this worktree.'
             )}
             command={ORCA_CLI_SKILL_INSTALL_COMMAND}
-            terminalTitle="Mobile emulator Orca CLI skill setup"
-            terminalAriaLabel="Mobile emulator Orca CLI skill install terminal"
+            terminalTitle={translate(
+              'auto.components.emulator.pane.MobileEmulatorAgentSetupGuideSteps.5c59ea96ca',
+              'Mobile emulator Orca CLI skill setup'
+            )}
+            terminalAriaLabel={translate(
+              'auto.components.emulator.pane.MobileEmulatorAgentSetupGuideSteps.bff5341ac3',
+              'Mobile emulator Orca CLI skill install terminal'
+            )}
             terminalWorktreeId={terminalWorktreeId}
             installed={setup.cliSkillInstalled}
             loading={setup.cliSkillLoading || setup.setupRechecking}

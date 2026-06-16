@@ -9882,7 +9882,9 @@
             "9b49d892e3": "Habilitar CLI de Orca",
             "3d8dc52c93": "Registra el comando orca para control del emulador en los shells de los agents.",
             "21f5687c07": "Skill del CLI de Orca",
-            "64fb057667": "Enseña a los agents los comandos del emulador orca para este worktree."
+            "64fb057667": "Enseña a los agents los comandos del emulador orca para este worktree.",
+            "5c59ea96ca": "Mobile emulator Orca CLI skill setup",
+            "bff5341ac3": "Mobile emulator Orca CLI skill install terminal"
           },
           "MobileEmulatorTabIntroCallout": {
             "1924982130": "Descartar",

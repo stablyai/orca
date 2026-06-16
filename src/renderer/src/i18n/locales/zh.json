@@ -9882,7 +9882,9 @@
             "9b49d892e3": "启用 Orca CLI",
             "3d8dc52c93": "在 agent shell 中注册用于模拟器控制的 orca 命令。",
             "21f5687c07": "Orca CLI 技能",
-            "64fb057667": "教授 agents 此工作区的 orca 模拟器命令。"
+            "64fb057667": "教授 agents 此工作区的 orca 模拟器命令。",
+            "5c59ea96ca": "Mobile emulator Orca CLI skill setup",
+            "bff5341ac3": "Mobile emulator Orca CLI skill install terminal"
           },
           "MobileEmulatorTabIntroCallout": {
             "1924982130": "关闭",
