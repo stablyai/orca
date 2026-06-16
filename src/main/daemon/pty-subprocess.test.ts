@@ -318,18 +318,15 @@ describe('createPtySubprocess', () => {
     }
   })
 
-  it('bootstraps menu startup agent foreground while shell enrichment is pending', async () => {
+  it('keeps menu startup agent foreground through early negative shell enrichment', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-06-16T12:00:00.000Z'))
     const proc = mockPtyProcess()
     proc.process = 'powershell.exe'
     spawnMock.mockReturnValue(proc)
     const platform = Object.getOwnPropertyDescriptor(process, 'platform')
     Object.defineProperty(process, 'platform', { value: 'win32' })
-    let resolveForeground!: (processName: string) => void
-    resolveAgentForegroundProcessMock.mockReturnValue(
-      new Promise<string>((resolve) => {
-        resolveForeground = resolve
-      })
-    )
+    resolveAgentForegroundProcessMock.mockResolvedValue('powershell.exe')
 
     try {
       const handle = createPtySubprocess({
@@ -346,9 +343,16 @@ describe('createPtySubprocess', () => {
         expect.any(Object)
       )
 
-      resolveForeground('powershell.exe')
-      await vi.waitFor(() => expect(handle.getForegroundProcess()).toBe('powershell.exe'))
+      await Promise.resolve()
+      expect(handle.getForegroundProcess()).toBe('codex')
+
+      vi.advanceTimersByTime(4_999)
+      expect(handle.getForegroundProcess()).toBe('codex')
+
+      vi.advanceTimersByTime(2)
+      expect(handle.getForegroundProcess()).toBe('powershell.exe')
     } finally {
+      vi.useRealTimers()
       if (platform) {
         Object.defineProperty(process, 'platform', platform)
       }
@@ -395,6 +399,37 @@ describe('createPtySubprocess', () => {
       await vi.runAllTimersAsync()
     } finally {
       vi.useRealTimers()
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
+  })
+
+  it('uses the spawned Windows shell when node-pty reports only the terminal name', async () => {
+    const proc = mockPtyProcess()
+    proc.process = 'xterm-256color'
+    spawnMock.mockReturnValue(proc)
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+    resolveAgentForegroundProcessMock.mockResolvedValue('codex')
+
+    try {
+      const handle = createPtySubprocess({
+        sessionId: 'test',
+        cols: 80,
+        rows: 24,
+        shellOverride: 'powershell.exe'
+      })
+
+      expect(handle.getForegroundProcess()).toBe('powershell.exe')
+      expect(resolveAgentForegroundProcessMock).toHaveBeenCalledWith(
+        proc.pid,
+        'powershell.exe',
+        expect.any(Object)
+      )
+
+      await vi.waitFor(() => expect(handle.getForegroundProcess()).toBe('codex'))
+    } finally {
       if (platform) {
         Object.defineProperty(process, 'platform', platform)
       }

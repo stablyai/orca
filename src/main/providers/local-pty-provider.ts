@@ -168,6 +168,26 @@ function normalizeLocalCallerSessionId(sessionId: string | undefined): string | 
   return requested
 }
 
+function normalizeForegroundProcessName(processName: string | null | undefined): string | null {
+  const trimmed = processName?.trim().replace(/^["']|["']$/g, '') ?? ''
+  if (!trimmed || trimmed === 'xterm-256color') {
+    return null
+  }
+  return trimmed.split(/[\\/]/).pop() || null
+}
+
+function resolveForegroundFallbackProcess(
+  processName: string | null | undefined,
+  shellName: string | undefined
+): string | null {
+  if (process.platform !== 'win32' || normalizeForegroundProcessName(processName)) {
+    return processName || null
+  }
+  // Why: Windows node-pty can expose only the terminal name (`xterm-256color`).
+  // The spawned shell is the best fallback for agent foreground enrichment.
+  return shellName ?? processName ?? null
+}
+
 function destroyPtyProcess(proc: pty.IPty, options: { alreadyKilled?: boolean } = {}): void {
   // Why: node-pty's UnixTerminal.destroy() closes the master socket, which
   // releases the ptmx fd to the OS — without this call the fd leaks until GC
@@ -660,6 +680,7 @@ export class LocalPtyProvider implements IPtyProvider {
     destroyPtyProcess(proc, { alreadyKilled: true })
     ptyProcesses.delete(id)
     ptyShellName.delete(id)
+    ptyAgentForegroundContextPaths.delete(id)
     ptyLoadGeneration.delete(id)
     this.opts.onExit?.(id, -1)
     for (const cb of exitListeners) {
@@ -727,9 +748,13 @@ export class LocalPtyProvider implements IPtyProvider {
       return null
     }
     try {
-      return await resolveAgentForegroundProcess(proc.pid, proc.process || null, {
-        contextPaths: ptyAgentForegroundContextPaths.get(id)
-      })
+      return await resolveAgentForegroundProcess(
+        proc.pid,
+        resolveForegroundFallbackProcess(proc.process || null, ptyShellName.get(id)),
+        {
+          contextPaths: ptyAgentForegroundContextPaths.get(id)
+        }
+      )
     } catch {
       return null
     }

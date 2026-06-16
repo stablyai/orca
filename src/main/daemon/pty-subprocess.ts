@@ -39,6 +39,7 @@ import { parsePtySessionId } from './pty-session-id'
 
 const PANE_IDENTITY_ENV_KEYS = ['ORCA_PANE_KEY', 'ORCA_TAB_ID', 'ORCA_WORKTREE_ID'] as const
 const FOREGROUND_AGENT_CACHE_TTL_MS = 1000
+const SHELL_FOREGROUND_REFRESH_RETRY_MS = 5_000
 const STARTUP_AGENT_FOREGROUND_BOOTSTRAP_MS = 5_000
 const PTY_SPAWN_HEALTH_TIMEOUT_MS = 2_000
 
@@ -328,6 +329,19 @@ function normalizeForegroundProcessName(processName: string | null | undefined):
   return trimmed.split(/[\\/]/).pop() || null
 }
 
+function resolveFallbackForegroundProcess(
+  processName: string | null | undefined,
+  shellPath: string
+): string | null {
+  const normalized = normalizeForegroundProcessName(processName)
+  if (normalized || process.platform !== 'win32') {
+    return normalized
+  }
+  // Why: Windows node-pty can report the terminal name instead of the shell.
+  // Use the spawned shell so shell-rooted foreground enrichment still runs.
+  return normalizeForegroundProcessName(pathWin32.basename(shellPath))
+}
+
 export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandle {
   const size = normalizePtySize(opts.cols, opts.rows)
   const env: Record<string, string> = {
@@ -564,7 +578,19 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
   let foregroundRefreshInFlight = false
   let lastForegroundRefreshStartedAt = 0
   const getFallbackForegroundProcess = (): string | null =>
-    normalizeForegroundProcessName(proc.process)
+    resolveFallbackForegroundProcess(proc.process, shellPath)
+  const getActiveStartupAgentForeground = (
+    now = Date.now()
+  ): { processName: string; expiresAt: number } | null => {
+    if (!startupAgentForeground) {
+      return null
+    }
+    if (now > startupAgentForeground.expiresAt) {
+      startupAgentForeground = null
+      return null
+    }
+    return startupAgentForeground
+  }
   const shouldInspectFallbackForegroundProcess = (fallbackProcess: string | null): boolean =>
     fallbackProcess !== null &&
     (isShellProcess(fallbackProcess) || isAgentForegroundWrapperProcess(fallbackProcess))
@@ -581,10 +607,11 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
       return
     }
     const now = Date.now()
-    if (
-      foregroundRefreshInFlight ||
-      now - lastForegroundRefreshStartedAt < FOREGROUND_AGENT_CACHE_TTL_MS
-    ) {
+    const retryMs =
+      fallbackIsShell && !getActiveStartupAgentForeground(now) && !cachedAgentForeground
+        ? SHELL_FOREGROUND_REFRESH_RETRY_MS
+        : FOREGROUND_AGENT_CACHE_TTL_MS
+    if (foregroundRefreshInFlight || now - lastForegroundRefreshStartedAt < retryMs) {
       return
     }
     foregroundRefreshInFlight = true
@@ -600,7 +627,7 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
           return
         }
         if (!processName || !recognizeAgentProcess(processName)) {
-          if (fallbackIsShell) {
+          if (fallbackIsShell && !getActiveStartupAgentForeground()) {
             cachedAgentForeground = null
             startupAgentForeground = null
           }
@@ -659,13 +686,9 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
         ) {
           return cachedAgentForeground.processName
         }
-        if (
-          fallbackProcess &&
-          isShellProcess(fallbackProcess) &&
-          startupAgentForeground &&
-          now <= startupAgentForeground.expiresAt
-        ) {
-          return startupAgentForeground.processName
+        const activeStartupAgentForeground = getActiveStartupAgentForeground(now)
+        if (fallbackProcess && isShellProcess(fallbackProcess) && activeStartupAgentForeground) {
+          return activeStartupAgentForeground.processName
         }
         return fallbackProcess
       } catch {

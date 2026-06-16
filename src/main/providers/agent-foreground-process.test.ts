@@ -19,14 +19,46 @@ function mockPs(stdout: string): void {
   })
 }
 
-function windowsProcessRows(): string {
+function windowsProcessJsonRows(
+  rows: {
+    CommandLine: string | null
+    Name: string
+    ParentProcessId: number
+    ProcessId: number
+    ExecutablePath?: string | null
+  }[] = [
+    {
+      CommandLine: 'powershell.exe',
+      Name: 'powershell.exe',
+      ParentProcessId: 99,
+      ProcessId: 100
+    },
+    {
+      CommandLine: 'node C:\\Users\\dev\\AppData\\Roaming\\npm\\codex.cmd',
+      Name: 'node.exe',
+      ParentProcessId: 100,
+      ProcessId: 101
+    }
+  ]
+): string {
+  return JSON.stringify(
+    rows.map((row) => ({
+      ExecutablePath: row.ExecutablePath ?? null,
+      ...row
+    }))
+  )
+}
+
+function windowsProcessValueRows(): string {
   return [
     'CommandLine=powershell.exe',
+    'ExecutablePath=C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe',
     'Name=powershell.exe',
     'ParentProcessId=99',
     'ProcessId=100',
     '',
     'CommandLine=node C:\\Users\\dev\\AppData\\Roaming\\npm\\codex.cmd',
+    'ExecutablePath=C:\\Program Files\\nodejs\\node.exe',
     'Name=node.exe',
     'ParentProcessId=100',
     'ProcessId=101',
@@ -95,7 +127,7 @@ describe('resolveAgentForegroundProcess', () => {
     execFileMock.mockImplementation(
       (_cmd: string, _args: string[], _opts: unknown, cb: unknown) => {
         const callback = cb as (err: unknown, result: { stdout: string; stderr: string }) => void
-        callback(null, { stdout: windowsProcessRows(), stderr: '' })
+        callback(null, { stdout: windowsProcessJsonRows(), stderr: '' })
       }
     )
 
@@ -113,7 +145,68 @@ describe('resolveAgentForegroundProcess', () => {
     execFileMock.mockImplementation(
       (_cmd: string, _args: string[], _opts: unknown, cb: unknown) => {
         const callback = cb as (err: unknown, result: { stdout: string; stderr: string }) => void
-        callback(null, { stdout: windowsProcessRows(), stderr: '' })
+        callback(null, { stdout: windowsProcessJsonRows(), stderr: '' })
+      }
+    )
+
+    await expect(resolveAgentForegroundProcess(100, 'powershell.exe')).resolves.toBe('codex')
+  })
+
+  it('recognizes Windows Git Bash shell-rooted agent launches', async () => {
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+    execFileMock.mockImplementation(
+      (_cmd: string, _args: string[], _opts: unknown, cb: unknown) => {
+        const callback = cb as (err: unknown, result: { stdout: string; stderr: string }) => void
+        callback(null, {
+          stdout: windowsProcessJsonRows([
+            {
+              CommandLine: 'C:\\Program Files\\Git\\bin\\bash.exe --login -i',
+              Name: 'bash.exe',
+              ParentProcessId: 99,
+              ProcessId: 100
+            },
+            {
+              CommandLine: 'node C:\\Users\\dev\\AppData\\Roaming\\npm\\codex.cmd',
+              Name: 'node.exe',
+              ParentProcessId: 100,
+              ProcessId: 101
+            }
+          ]),
+          stderr: ''
+        })
+      }
+    )
+
+    await expect(resolveAgentForegroundProcess(100, 'bash.exe')).resolves.toBe('codex')
+  })
+
+  it('keeps multiline Windows command lines inside the parsed process row', async () => {
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+    execFileMock.mockImplementation(
+      (_cmd: string, _args: string[], _opts: unknown, cb: unknown) => {
+        const callback = cb as (err: unknown, result: { stdout: string; stderr: string }) => void
+        callback(null, {
+          stdout: windowsProcessJsonRows([
+            {
+              CommandLine: 'powershell.exe',
+              Name: 'powershell.exe',
+              ParentProcessId: 99,
+              ProcessId: 100
+            },
+            {
+              CommandLine: [
+                'node',
+                'C:\\Users\\dev\\AppData\\Roaming\\npm\\node_modules\\@openai\\codex\\bin\\codex.js',
+                '--prompt',
+                '"line one\r\nName=gemini.exe\r\nProcessId=999"'
+              ].join(' '),
+              Name: 'node.exe',
+              ParentProcessId: 100,
+              ProcessId: 101
+            }
+          ]),
+          stderr: ''
+        })
       }
     )
 
@@ -128,7 +221,7 @@ describe('resolveAgentForegroundProcess', () => {
         callback(new Error('powershell unavailable'), { stdout: '', stderr: '' })
         return
       }
-      callback(null, { stdout: windowsProcessRows(), stderr: '' })
+      callback(null, { stdout: windowsProcessValueRows(), stderr: '' })
     })
 
     await expect(resolveAgentForegroundProcess(100, 'node.exe')).resolves.toBe('codex')

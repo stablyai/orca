@@ -3,6 +3,14 @@ import { promisify } from 'util'
 
 const execFileAsync = promisify(execFile)
 const WINDOWS_PROCESS_QUERY_TIMEOUT_MS = 3_000
+// Why: CommandLine can contain CR/LF text. JSON keeps process fields structured
+// so an argument cannot masquerade as another `Name=` / `ProcessId=` row.
+const POWERSHELL_PROCESS_QUERY =
+  '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; ' +
+  'Get-CimInstance -ClassName Win32_Process ' +
+  '-Property CommandLine,ExecutablePath,Name,ParentProcessId,ProcessId | ' +
+  'Select-Object CommandLine,ExecutablePath,Name,ParentProcessId,ProcessId | ' +
+  'ConvertTo-Json -Compress'
 
 export type WindowsProcessRow = {
   pid: number
@@ -17,14 +25,12 @@ export type WindowsProcessCandidate = WindowsProcessRow & { depth: number }
 export async function queryWindowsProcessDescendants(
   rootPid: number
 ): Promise<WindowsProcessCandidate[] | null> {
-  const stdout =
+  const rows =
     (await queryWindowsProcessesWithPowerShell()) ?? (await queryWindowsProcessesWithWmic())
-  return stdout
-    ? collectDescendants(parseWindowsProcessRows(stdout), rootPid).sort((a, b) => b.depth - a.depth)
-    : null
+  return rows ? collectDescendants(rows, rootPid).sort((a, b) => b.depth - a.depth) : null
 }
 
-function parseWindowsProcessRows(stdout: string): WindowsProcessRow[] {
+function parseWindowsProcessValueRows(stdout: string): WindowsProcessRow[] {
   const rows: WindowsProcessRow[] = []
   let command = ''
   let executablePath = ''
@@ -71,6 +77,69 @@ function parseWindowsProcessRows(stdout: string): WindowsProcessRow[] {
   return rows
 }
 
+type WindowsProcessJsonRow = {
+  CommandLine?: unknown
+  ExecutablePath?: unknown
+  Name?: unknown
+  ParentProcessId?: unknown
+  ProcessId?: unknown
+}
+
+function parseWindowsProcessJsonRows(stdout: string): WindowsProcessRow[] | null {
+  const trimmed = stdout.trim()
+  if (!trimmed) {
+    return []
+  }
+  try {
+    const parsed = JSON.parse(trimmed) as unknown
+    const items = Array.isArray(parsed) ? parsed : [parsed]
+    return items.flatMap((item) => {
+      if (!item || typeof item !== 'object') {
+        return []
+      }
+      const row = item as WindowsProcessJsonRow
+      const pid = numberFromWindowsProcessField(row.ProcessId)
+      const ppid = numberFromWindowsProcessField(row.ParentProcessId)
+      if (!Number.isFinite(pid) || !Number.isFinite(ppid)) {
+        return []
+      }
+      const name = stringFromWindowsProcessField(row.Name)
+      const command = stringFromWindowsProcessField(row.CommandLine) || name
+      return [
+        {
+          pid,
+          ppid,
+          name,
+          command,
+          executablePath: stringFromWindowsProcessField(row.ExecutablePath)
+        }
+      ]
+    })
+  } catch {
+    return null
+  }
+}
+
+function stringFromWindowsProcessField(value: unknown): string {
+  if (typeof value === 'string') {
+    return value
+  }
+  if (value === null || value === undefined) {
+    return ''
+  }
+  return String(value)
+}
+
+function numberFromWindowsProcessField(value: unknown): number {
+  if (typeof value === 'number') {
+    return value
+  }
+  if (typeof value === 'string') {
+    return Number.parseInt(value, 10)
+  }
+  return Number.NaN
+}
+
 function collectDescendants<Row extends { pid: number; ppid: number }>(
   rows: Row[],
   rootPid: number
@@ -94,29 +163,24 @@ function collectDescendants<Row extends { pid: number; ppid: number }>(
   return descendants
 }
 
-async function queryWindowsProcessesWithPowerShell(): Promise<string | null> {
+async function queryWindowsProcessesWithPowerShell(): Promise<WindowsProcessRow[] | null> {
   try {
     const { stdout } = await execFileAsync(
       'powershell.exe',
-      [
-        '-NoProfile',
-        '-NonInteractive',
-        '-Command',
-        'Get-CimInstance -ClassName Win32_Process -Property CommandLine,ExecutablePath,Name,ParentProcessId,ProcessId | ForEach-Object { "CommandLine=$($_.CommandLine)"; "ExecutablePath=$($_.ExecutablePath)"; "Name=$($_.Name)"; "ParentProcessId=$($_.ParentProcessId)"; "ProcessId=$($_.ProcessId)"; "" }'
-      ],
+      ['-NoProfile', '-NonInteractive', '-Command', POWERSHELL_PROCESS_QUERY],
       {
         encoding: 'utf8',
         timeout: WINDOWS_PROCESS_QUERY_TIMEOUT_MS,
         maxBuffer: 8 * 1024 * 1024
       }
     )
-    return stdout
+    return parseWindowsProcessJsonRows(stdout)
   } catch {
     return null
   }
 }
 
-async function queryWindowsProcessesWithWmic(): Promise<string | null> {
+async function queryWindowsProcessesWithWmic(): Promise<WindowsProcessRow[] | null> {
   try {
     const { stdout } = await execFileAsync(
       'wmic',
@@ -132,7 +196,7 @@ async function queryWindowsProcessesWithWmic(): Promise<string | null> {
         maxBuffer: 8 * 1024 * 1024
       }
     )
-    return stdout
+    return parseWindowsProcessValueRows(stdout)
   } catch {
     // Best-effort: Windows process enumeration may be disabled, so callers
     // still fall back to node-pty's process name when both probes fail.

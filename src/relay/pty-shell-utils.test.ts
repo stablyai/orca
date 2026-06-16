@@ -127,6 +127,42 @@ describe('getForegroundProcessName', () => {
     await expect(getForegroundProcessName(100, 'node')).resolves.toBe('codex')
   })
 
+  it('recognizes Windows SSH relay shell-rooted agent descendants', async () => {
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+    mockExecFile((command) => {
+      if (command === 'powershell.exe') {
+        return {
+          stdout: JSON.stringify([
+            {
+              CommandLine: 'powershell.exe',
+              ExecutablePath: 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe',
+              Name: 'powershell.exe',
+              ParentProcessId: 99,
+              ProcessId: 100
+            },
+            {
+              CommandLine: 'node C:\\Users\\dev\\AppData\\Roaming\\npm\\codex.cmd',
+              ExecutablePath: 'C:\\Program Files\\nodejs\\node.exe',
+              Name: 'node.exe',
+              ParentProcessId: 100,
+              ProcessId: 101
+            }
+          ])
+        }
+      }
+      return new Error('unexpected command')
+    })
+
+    try {
+      await expect(getForegroundProcessName(100, 'powershell.exe')).resolves.toBe('codex')
+    } finally {
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
+  })
+
   it('recognizes SSH relay wrapped agents when no foreground marker is available', async () => {
     mockExecFile((_command, args) => {
       if (args[0] === '-axo') {

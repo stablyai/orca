@@ -10,6 +10,10 @@ import {
   recognizeAgentProcessFromCommandLine
 } from '../shared/agent-process-recognition'
 import { isShellProcess } from '../shared/shell-process-detection'
+import {
+  resolveWindowsAgentForegroundProcess,
+  shouldInspectWindowsAgentForeground
+} from '../main/providers/windows-agent-foreground-process'
 
 const execFile = promisify(execFileCb)
 
@@ -258,6 +262,14 @@ export async function getForegroundProcessName(
     const fallbackRecognition = recognizeAgentProcess(fallbackProcess)
     if (fallbackRecognition) {
       return fallbackRecognition.processName
+    }
+    if (process.platform === 'win32') {
+      if (!shouldInspectWindowsAgentForeground(fallbackProcess)) {
+        return fallbackProcess
+      }
+      return (
+        (await resolveWindowsAgentForegroundProcess(pid, fallbackProcess, {})) ?? fallbackProcess
+      )
     }
     if (!isShellProcess(fallbackProcess) && !isAgentForegroundWrapperProcess(fallbackProcess)) {
       return fallbackProcess
