@@ -10,7 +10,7 @@ import { resolveProcessCwd } from './process-cwd'
 import { existsSync } from 'fs'
 import * as pty from 'node-pty'
 import { parseWslPath, isWslAvailable } from '../wsl'
-import { splitWorktreeId, splitWorktreeIdForFilesystem } from '../../shared/worktree-id'
+import { splitWorktreeId } from '../../shared/worktree-id'
 import {
   injectHistoryEnv,
   updateHistFileForFallback,
@@ -40,6 +40,7 @@ import {
 } from '../git-bash'
 import { WINDOWS_GIT_BASH_SHELL } from '../../shared/windows-terminal-shell'
 import { resolveAgentForegroundProcess } from './agent-foreground-process'
+import { getAgentForegroundContextPaths } from './agent-foreground-context-paths'
 
 const PANE_IDENTITY_ENV_KEYS = ['ORCA_PANE_KEY', 'ORCA_TAB_ID', 'ORCA_WORKTREE_ID'] as const
 
@@ -128,16 +129,6 @@ function getWslContextFromPreferredDistro(
 ): { distro: string } | undefined {
   const trimmed = distro?.trim()
   return trimmed ? { distro: trimmed } : undefined
-}
-
-function getAgentForegroundContextPaths(
-  cwd: string | undefined,
-  worktreeId: string | undefined
-): string[] {
-  const worktreePath = worktreeId
-    ? splitWorktreeIdForFilesystem(worktreeId)?.worktreePath
-    : undefined
-  return [...new Set([cwd, worktreePath].filter((path): path is string => Boolean(path)))]
 }
 
 function clearPtyState(id: string): void {
@@ -521,7 +512,7 @@ export class LocalPtyProvider implements IPtyProvider {
     ptyShellName.set(id, basename(shellPath))
     ptyAgentForegroundContextPaths.set(
       id,
-      getAgentForegroundContextPaths(args.cwd, args.worktreeId)
+      getAgentForegroundContextPaths({ cwd: args.cwd, worktreeId: args.worktreeId })
     )
     ptyLoadGeneration.set(id, loadGeneration)
     this.opts.onSpawned?.(id)

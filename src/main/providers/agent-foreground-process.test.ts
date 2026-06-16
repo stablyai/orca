@@ -140,6 +140,26 @@ describe('resolveAgentForegroundProcess', () => {
     )
   })
 
+  it('falls back to WMIC when Windows PowerShell returns no process rows', async () => {
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+    execFileMock.mockImplementation((cmd: string, _args: string[], _opts: unknown, cb: unknown) => {
+      const callback = cb as (err: unknown, result: { stdout: string; stderr: string }) => void
+      if (cmd === 'powershell.exe') {
+        callback(null, { stdout: '   \r\n', stderr: '' })
+        return
+      }
+      callback(null, { stdout: windowsProcessRows(), stderr: '' })
+    })
+
+    await expect(resolveAgentForegroundProcess(100, 'node.exe')).resolves.toBe('codex')
+    expect(execFileMock).toHaveBeenCalledWith(
+      'wmic',
+      expect.any(Array),
+      expect.objectContaining({ timeout: 3000 }),
+      expect.any(Function)
+    )
+  })
+
   it('does not use unrelated Windows agent descendants for wrapper fallbacks', async () => {
     Object.defineProperty(process, 'platform', { value: 'win32' })
     execFileMock.mockImplementation(

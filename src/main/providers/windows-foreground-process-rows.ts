@@ -24,6 +24,10 @@ export async function queryWindowsProcessDescendants(
     : null
 }
 
+function usableWindowsProcessStdout(stdout: string): string | null {
+  return stdout.trim() ? stdout : null
+}
+
 function parseWindowsProcessRows(stdout: string): WindowsProcessRow[] {
   const rows: WindowsProcessRow[] = []
   let command = ''
@@ -110,7 +114,7 @@ async function queryWindowsProcessesWithPowerShell(): Promise<string | null> {
         maxBuffer: 8 * 1024 * 1024
       }
     )
-    return stdout
+    return usableWindowsProcessStdout(stdout)
   } catch {
     return null
   }
@@ -132,7 +136,7 @@ async function queryWindowsProcessesWithWmic(): Promise<string | null> {
         maxBuffer: 8 * 1024 * 1024
       }
     )
-    return stdout
+    return usableWindowsProcessStdout(stdout)
   } catch {
     // Best-effort: Windows process enumeration may be disabled, so callers
     // still fall back to node-pty's process name when both probes fail.

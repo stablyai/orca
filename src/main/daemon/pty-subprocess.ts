@@ -34,8 +34,8 @@ import {
   recognizeAgentProcessFromCommandLine
 } from '../../shared/agent-process-recognition'
 import { isShellProcess } from '../../shared/shell-process-detection'
-import { splitWorktreeIdForFilesystem } from '../../shared/worktree-id'
 import { parsePtySessionId } from './pty-session-id'
+import { getAgentForegroundContextPaths } from '../providers/agent-foreground-context-paths'
 
 const PANE_IDENTITY_ENV_KEYS = ['ORCA_PANE_KEY', 'ORCA_TAB_ID', 'ORCA_WORKTREE_ID'] as const
 const FOREGROUND_AGENT_CACHE_TTL_MS = 1000
@@ -118,14 +118,6 @@ function getWslContextFromPreferredDistro(
 ): { distro: string } | undefined {
   const trimmed = distro?.trim()
   return trimmed ? { distro: trimmed } : undefined
-}
-
-function getAgentForegroundContextPaths(opts: PtySubprocessOptions): string[] {
-  const worktreeId = parsePtySessionId(opts.sessionId).worktreeId
-  const worktreePath = worktreeId
-    ? splitWorktreeIdForFilesystem(worktreeId)?.worktreePath
-    : undefined
-  return [...new Set([opts.cwd, worktreePath].filter((path): path is string => Boolean(path)))]
 }
 
 function removeInheritedElectronRunAsNode(env: Record<string, string>): void {
@@ -552,7 +544,10 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
   let disposed = false
   let nodePtyKillIssued = false
   let cachedAgentForeground: { processName: string; refreshedAt: number } | null = null
-  const agentForegroundContextPaths = getAgentForegroundContextPaths(opts)
+  const agentForegroundContextPaths = getAgentForegroundContextPaths({
+    cwd: opts.cwd,
+    worktreeId: parsePtySessionId(opts.sessionId).worktreeId
+  })
   const startupAgentRecognition = recognizeAgentProcessFromCommandLine(opts.command)
   let startupAgentForeground: { processName: string; expiresAt: number } | null =
     startupAgentRecognition
@@ -600,7 +595,12 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
           return
         }
         if (!processName || !recognizeAgentProcess(processName)) {
-          if (fallbackIsShell) {
+          const currentFallbackProcess = getFallbackForegroundProcess()
+          if (
+            fallbackIsShell &&
+            currentFallbackProcess !== null &&
+            isShellProcess(currentFallbackProcess)
+          ) {
             cachedAgentForeground = null
             startupAgentForeground = null
           }
