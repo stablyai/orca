@@ -137,6 +137,10 @@ export default function HostScreen() {
   const forceReconnectHost = useForceReconnect()
   const [worktrees, setWorktrees] = useState<Worktree[]>(initialCache ?? [])
   const [worktreesLoaded, setWorktreesLoaded] = useState(initialCache != null)
+  // Why: opening a worktree activates it on the host, but the active-row
+  // highlight otherwise waits for the next worktree.ps poll to reflect it.
+  // Track the locally-opened worktree so the highlight moves instantly.
+  const [optimisticActiveWorktreeId, setOptimisticActiveWorktreeId] = useState<string | null>(null)
   // One tick drives every visible agent row's relative timestamp.
   const now = useNow(30_000)
   const [repoColorsByName, setRepoColorsByName] = useState<Map<string, string>>(new Map())
@@ -357,6 +361,14 @@ export default function HostScreen() {
         setWorktrees(result.worktrees)
         setLastKnownWorktrees(result.worktrees)
         setWorktreesLoaded(true)
+        // Drop the optimistic active override once the host confirms it (the
+        // activate RPC has landed and worktree.ps now reports it active), so we
+        // stop overriding and respect any later desktop-driven change.
+        setOptimisticActiveWorktreeId((pending) =>
+          pending && result.worktrees.some((w) => w.worktreeId === pending && w.isActive)
+            ? null
+            : pending
+        )
 
         void requestClient
           .sendRequest('repo.list')
@@ -579,6 +591,8 @@ export default function HostScreen() {
 
   const openWorktreeSession = useCallback(
     (item: Worktree) => {
+      // Highlight the row immediately; the next worktree.ps poll confirms it.
+      setOptimisticActiveWorktreeId(item.worktreeId)
       if (client && connState === 'connected') {
         void client
           .sendRequest('worktree.activate', {
@@ -649,15 +663,22 @@ export default function HostScreen() {
       connState === 'disconnected' || connState === 'reconnecting' || connState === 'auth-failed'
         ? lastKnownWorktrees
         : worktrees
-    if (sleptIds.size === 0) {
+    if (sleptIds.size === 0 && optimisticActiveWorktreeId === null) {
       return base
     }
-    return base.map((w) =>
-      sleptIds.has(w.worktreeId)
-        ? { ...w, liveTerminalCount: 0, hasAttachedPty: false, status: 'inactive' as const }
-        : w
-    )
-  }, [connState, worktrees, lastKnownWorktrees, sleptIds])
+    return base.map((w) => {
+      const slept = sleptIds.has(w.worktreeId)
+        ? { liveTerminalCount: 0, hasAttachedPty: false, status: 'inactive' as const }
+        : null
+      // Force the just-opened worktree active (and the rest inactive) until the
+      // next poll confirms it, so the highlight doesn't lag the navigation.
+      const active =
+        optimisticActiveWorktreeId !== null
+          ? { isActive: w.worktreeId === optimisticActiveWorktreeId }
+          : null
+      return slept || active ? { ...w, ...slept, ...active } : w
+    })
+  }, [connState, worktrees, lastKnownWorktrees, sleptIds, optimisticActiveWorktreeId])
 
   const uniqueRepos = useMemo(() => {
     const repos = new Map<string, { id: string; color: string }>()
