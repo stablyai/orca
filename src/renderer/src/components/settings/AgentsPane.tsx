@@ -192,6 +192,7 @@ export function AgentPermissionsSetting({
   mode,
   onChange
 }: AgentPermissionsSettingProps): React.JSX.Element {
+  const visibleMode: Exclude<AgentPermissionMode, 'mixed'> = mode === 'manual' ? 'manual' : 'yolo'
   return (
     <section className="space-y-3">
       <SettingsSubsectionHeader
@@ -214,7 +215,7 @@ export function AgentPermissionsSetting({
               <TooltipContent side="top" sideOffset={6}>
                 {translate(
                   'auto.components.settings.AgentsPane.agentPermissionsTooltip',
-                  'Custom agent arguments stay unchanged when switching modes.'
+                  "Doesn't apply to agents where you've overridden launch arguments."
                 )}
               </TooltipContent>
             </Tooltip>
@@ -226,7 +227,7 @@ export function AgentPermissionsSetting({
         )}
         action={
           <SettingsSegmentedControl<AgentPermissionMode>
-            value={mode}
+            value={visibleMode}
             onChange={(nextMode) => {
               if (nextMode !== 'mixed') {
                 onChange(nextMode)
@@ -248,14 +249,6 @@ export function AgentPermissionsSetting({
                   'auto.components.settings.AgentsPane.agentPermissionsManual',
                   'Manual'
                 )
-              },
-              {
-                value: 'mixed',
-                label: translate(
-                  'auto.components.settings.AgentsPane.agentPermissionsMixed',
-                  'Mixed'
-                ),
-                disabled: mode !== 'mixed'
               }
             ]}
           />

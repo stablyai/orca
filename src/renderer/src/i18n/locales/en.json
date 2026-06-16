@@ -4283,11 +4283,10 @@
           "2d133152fa": "No default environment",
           "agentPermissions": "Agent Permissions",
           "agentPermissionsInfo": "Agent permissions info",
-          "agentPermissionsTooltip": "Custom agent arguments stay unchanged when switching modes.",
+          "agentPermissionsTooltip": "Doesn't apply to agents where you've overridden launch arguments.",
           "agentPermissionsDescription": "Choose whether Orca launches agents with fewer permission prompts or with manual checks.",
           "agentPermissionsYolo": "Yolo",
-          "agentPermissionsManual": "Manual",
-          "agentPermissionsMixed": "Mixed"
+          "agentPermissionsManual": "Manual"
         },
         "AppIconSelector": {
           "d5a112dc9b": "Next icon",

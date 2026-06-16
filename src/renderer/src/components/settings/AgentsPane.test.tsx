@@ -271,15 +271,17 @@ describe('AgentsPane', () => {
     expect(matchesSettingsSearch('manual', getAgentsPaneSearchEntries())).toBe(true)
   })
 
-  it('applies the selected agent permission mode from settings', () => {
+  it('applies the selected agent permission mode from settings without a mixed segment', () => {
     const onChange = vi.fn()
     const element = AgentPermissionsSetting({ mode: 'mixed', onChange })
     const props = element.props.children.props.action.props as {
-      value: 'mixed'
+      value: 'yolo'
       onChange: (value: 'yolo' | 'manual' | 'mixed') => void
+      options: { value: string }[]
     }
 
-    expect(props.value).toBe('mixed')
+    expect(props.value).toBe('yolo')
+    expect(props.options.map((option) => option.value)).toEqual(['yolo', 'manual'])
     props.onChange('mixed')
     expect(onChange).not.toHaveBeenCalled()
 

@@ -4286,8 +4286,7 @@
           "agentPermissionsTooltip": "Custom agent arguments stay unchanged when switching modes.",
           "agentPermissionsDescription": "Choose whether Orca launches agents with fewer permission prompts or with manual checks.",
           "agentPermissionsYolo": "Yolo",
-          "agentPermissionsManual": "Manual",
-          "agentPermissionsMixed": "Mixed"
+          "agentPermissionsManual": "Manual"
         },
         "AppIconSelector": {
           "d5a112dc9b": "Icono siguiente",
