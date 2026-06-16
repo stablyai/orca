@@ -11241,6 +11241,50 @@
           "340bf27dfd": "Networks",
           "2fe5d96a6c": "No networks.",
           "03f84060b4": "Prune"
+        },
+        "DockerConfirmDialog": {
+          "cc2263a02e": "Cancel"
+        },
+        "DockerImageDetail": {
+          "07b83a4ee4": "Remove image failed",
+          "59bb4e75a1": "Repository",
+          "f149921de1": "Tag",
+          "1cc6d277be": "ID",
+          "18cd49f788": "Size",
+          "656e03218c": "Created",
+          "4471eb1783": "Remove",
+          "adb63093a6": "Remove image",
+          "698395402c": "Remove {{value0}}? This cannot be undone."
+        },
+        "DockerNetworkDetail": {
+          "ec90189068": "Remove network failed",
+          "81e34d5dc0": "Name",
+          "6832680cb6": "ID",
+          "d22b44e993": "Driver",
+          "9bdc0f1920": "Scope",
+          "84c366377a": "Remove",
+          "1c4c7c8eaa": "Remove network",
+          "fcc0b34426": "Remove {{value0}}? This cannot be undone."
+        },
+        "DockerPage": {
+          "1225452538": "Prune failed",
+          "e33ba23c23": "container",
+          "286b0c6e34": "image",
+          "9ee5213fa5": "volume",
+          "9b72705845": "network",
+          "916726d215": "Prune {{value0}}",
+          "79cedd713b": "Prune all stopped {{value0}} resources? This cannot be undone.",
+          "59c7b69676": "Prune"
+        },
+        "DockerVolumeDetail": {
+          "4f695bd438": "Remove volume failed",
+          "98fb57bff4": "Name",
+          "33ffc167f8": "Driver",
+          "fc5e2a0073": "Scope",
+          "967e44535f": "Mountpoint",
+          "1637268c8c": "Remove",
+          "4928a5801c": "Remove volume",
+          "4847a3b597": "Remove {{value0}}? This cannot be undone."
         }
       }
     },

@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react'
+import React, { useEffect, useState } from 'react'
 import { RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
 import { useShallow } from 'zustand/react/shallow'
@@ -8,8 +8,27 @@ import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { LOCAL_DOCKER_CONNECTION, LOCAL_DOCKER_CONNECTION_ID } from '../../../../shared/docker-types'
 import type { DockerResourceKind } from '../../../../shared/docker-types'
+import { translate } from '@/i18n/i18n'
 import { DockerResourceTree } from './DockerResourceTree'
 import { DockerContainerDetail } from './DockerContainerDetail'
+import { DockerImageDetail } from './DockerImageDetail'
+import { DockerVolumeDetail } from './DockerVolumeDetail'
+import { DockerNetworkDetail } from './DockerNetworkDetail'
+import { DockerConfirmDialog } from './DockerConfirmDialog'
+
+function kindLabel(kind: DockerResourceKind): string {
+  // Why: literal-key translate calls so the catalog scanner can detect and sync these strings.
+  switch (kind) {
+    case 'container':
+      return translate('auto.components.docker.DockerPage.e33ba23c23', 'container')
+    case 'image':
+      return translate('auto.components.docker.DockerPage.286b0c6e34', 'image')
+    case 'volume':
+      return translate('auto.components.docker.DockerPage.9ee5213fa5', 'volume')
+    case 'network':
+      return translate('auto.components.docker.DockerPage.9b72705845', 'network')
+  }
+}
 
 export default function DockerPage(): React.JSX.Element {
   const {
@@ -50,6 +69,8 @@ export default function DockerPage(): React.JSX.Element {
     }))
   )
 
+  const [pruneKind, setPruneKind] = useState<DockerResourceKind | null>(null)
+
   // Derive the selected container id from the unified resource selection.
   const selectedContainerId =
     selectedResource?.kind === 'container' ? selectedResource.id : null
@@ -74,16 +95,69 @@ export default function DockerPage(): React.JSX.Element {
   const images = imagesByConnection[activeConnectionId] ?? []
   const volumes = volumesByConnection[activeConnectionId] ?? []
   const networks = networksByConnection[activeConnectionId] ?? []
-  const selected = containers.find((c) => c.id === selectedContainerId) ?? null
   const connection =
     buildDockerConnectionList(settings?.dockerConnections).find((c) => c.id === activeConnectionId) ??
     LOCAL_DOCKER_CONNECTION
 
-  async function prune(kind: DockerResourceKind): Promise<void> {
+  function renderDetail(): React.JSX.Element {
+    if (!selectedResource) {
+      return (
+        <DockerContainerDetail
+          container={null}
+          connection={connection}
+          inspect={null}
+          inspectError={null}
+        />
+      )
+    }
+    switch (selectedResource.kind) {
+      case 'container': {
+        const c = containers.find((x) => x.id === selectedResource.id) ?? null
+        return (
+          <DockerContainerDetail
+            container={c}
+            connection={connection}
+            inspect={selectedContainerId ? (inspectByContainerId[selectedContainerId] ?? null) : null}
+            inspectError={selectedContainerId ? (inspectErrorByContainerId[selectedContainerId] ?? null) : null}
+          />
+        )
+      }
+      case 'image': {
+        const img = images.find((x) => x.id === selectedResource.id)
+        return img ? (
+          <DockerImageDetail image={img} />
+        ) : (
+          <DockerContainerDetail container={null} connection={connection} inspect={null} inspectError={null} />
+        )
+      }
+      case 'volume': {
+        const vol = volumes.find((x) => x.name === selectedResource.id)
+        return vol ? (
+          <DockerVolumeDetail volume={vol} />
+        ) : (
+          <DockerContainerDetail container={null} connection={connection} inspect={null} inspectError={null} />
+        )
+      }
+      case 'network': {
+        const net = networks.find((x) => x.id === selectedResource.id)
+        return net ? (
+          <DockerNetworkDetail network={net} />
+        ) : (
+          <DockerContainerDetail container={null} connection={connection} inspect={null} inspectError={null} />
+        )
+      }
+    }
+  }
+
+  const handlePruneConfirm = async (): Promise<void> => {
+    if (!pruneKind) return
     try {
-      await pruneDockerResources(kind)
+      await pruneDockerResources(pruneKind)
     } catch (error) {
-      toast.error('Prune failed', { description: String(error) })
+      toast.error(
+        translate('auto.components.docker.DockerPage.1225452538', 'Prune failed'),
+        { description: String(error) }
+      )
     }
   }
 
@@ -123,18 +197,32 @@ export default function DockerPage(): React.JSX.Element {
             networks={networks}
             selected={selectedResource}
             onSelect={selectResource}
-            onPrune={(kind) => void prune(kind)}
+            onPrune={(kind) => setPruneKind(kind)}
           />
         </div>
         <div className="flex min-h-0 min-w-0 flex-1">
-          <DockerContainerDetail
-            container={selected}
-            connection={connection}
-            inspect={selectedContainerId ? (inspectByContainerId[selectedContainerId] ?? null) : null}
-            inspectError={selectedContainerId ? (inspectErrorByContainerId[selectedContainerId] ?? null) : null}
-          />
+          {renderDetail()}
         </div>
       </div>
+
+      {pruneKind !== null ? (
+        <DockerConfirmDialog
+          open={true}
+          onOpenChange={(open) => { if (!open) setPruneKind(null) }}
+          title={translate(
+            'auto.components.docker.DockerPage.916726d215',
+            'Prune {{value0}}',
+            { value0: kindLabel(pruneKind) }
+          )}
+          description={translate(
+            'auto.components.docker.DockerPage.79cedd713b',
+            'Prune all stopped {{value0}} resources? This cannot be undone.',
+            { value0: kindLabel(pruneKind) }
+          )}
+          confirmLabel={translate('auto.components.docker.DockerPage.59c7b69676', 'Prune')}
+          onConfirm={handlePruneConfirm}
+        />
+      ) : null}
     </div>
   )
 }
