@@ -30,10 +30,11 @@ export function DockerResourceTree({
   onSelect: (selection: DockerResourceSelection) => void
   onPrune: (kind: DockerResourceKind) => void
 }): React.JSX.Element {
-  const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
+  // Default empty set = all nodes collapsed; only keys in `expanded` are open
+  const [expanded, setExpanded] = useState<Set<string>>(new Set())
 
   function toggle(key: string): void {
-    setCollapsed((prev) => {
+    setExpanded((prev) => {
       const next = new Set(prev)
       if (next.has(key)) {
         next.delete(key)
@@ -51,7 +52,7 @@ export function DockerResourceTree({
       {/* Compose project nodes */}
       {groups.composeProjects.map(({ project, services }) => {
         const projectKey = `project:${project}`
-        const projectCollapsed = collapsed.has(projectKey)
+        const projectCollapsed = !expanded.has(projectKey)
         return (
           <div key={project}>
             <TreeNodeHeader
@@ -84,7 +85,7 @@ export function DockerResourceTree({
                 }
 
                 const serviceKey = `service:${project}/${service}`
-                const serviceCollapsed = collapsed.has(serviceKey)
+                const serviceCollapsed = !expanded.has(serviceKey)
                 return (
                   <div key={serviceKey}>
                     <TreeNodeHeader
@@ -113,7 +114,7 @@ export function DockerResourceTree({
       {/* Standalone Containers node */}
       {(() => {
         const key = 'section:containers'
-        const isCollapsed = collapsed.has(key)
+        const isCollapsed = !expanded.has(key)
         return (
           <div>
             <TreeNodeHeader
@@ -152,7 +153,7 @@ export function DockerResourceTree({
       {/* Images node */}
       {(() => {
         const key = 'section:images'
-        const isCollapsed = collapsed.has(key)
+        const isCollapsed = !expanded.has(key)
         return (
           <div>
             <TreeNodeHeader
@@ -202,7 +203,7 @@ export function DockerResourceTree({
       {/* Networks node */}
       {(() => {
         const key = 'section:networks'
-        const isCollapsed = collapsed.has(key)
+        const isCollapsed = !expanded.has(key)
         return (
           <div>
             <TreeNodeHeader
@@ -250,7 +251,7 @@ export function DockerResourceTree({
       {/* Volumes node */}
       {(() => {
         const key = 'section:volumes'
-        const isCollapsed = collapsed.has(key)
+        const isCollapsed = !expanded.has(key)
         return (
           <div>
             <TreeNodeHeader
