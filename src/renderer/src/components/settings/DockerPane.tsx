@@ -104,9 +104,11 @@ export function DockerPane(): React.JSX.Element {
     }
     setSaving(true)
     try {
+      // Read fresh from store so a concurrent settings write isn't dropped.
+      const fresh = useAppStore.getState().settings?.dockerConnections ?? []
       const next = editingId
-        ? userConnections.map((c) => (c.id === editingId ? result.connection : c))
-        : [...userConnections, result.connection]
+        ? fresh.map((c) => (c.id === editingId ? result.connection : c))
+        : [...fresh, result.connection]
       await updateSettings({ dockerConnections: next })
       cancelForm()
     } finally {
@@ -117,7 +119,9 @@ export function DockerPane(): React.JSX.Element {
   const handleRemoveConfirm = async (): Promise<void> => {
     if (!removeTarget) return
     const id = removeTarget.id
-    await updateSettings({ dockerConnections: userConnections.filter((c) => c.id !== id) })
+    // Read fresh from store so a concurrent settings write isn't dropped.
+    const fresh = useAppStore.getState().settings?.dockerConnections ?? []
+    await updateSettings({ dockerConnections: fresh.filter((c) => c.id !== id) })
   }
 
   return (
@@ -332,7 +336,11 @@ export function DockerPane(): React.JSX.Element {
           'auto.components.settings.DockerPane.7b01b87358',
           'Remove Docker connection'
         )}
-        description={`${translate('auto.components.settings.DockerPane.e26705cecb', 'This will remove the connection')} "${removeTarget?.label ?? ''}".`}
+        description={translate(
+          'auto.components.settings.DockerPane.a09ce2c718',
+          'This will remove the connection "{{value0}}".',
+          { value0: removeTarget?.label ?? '' }
+        )}
         confirmLabel={translate(
           'auto.components.settings.DockerPane.78a9fd8cf7',
           'Remove connection'
