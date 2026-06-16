@@ -4,10 +4,10 @@ import { TUI_AGENT_CONFIG } from './tui-agent-config'
  * Pi-compatible agent kinds. Both Pi and OMP (omp.sh) consume the same
  * `PI_CODING_AGENT_DIR` env contract and the same extension API, but each
  * defaults its on-disk config dir to a different `~/.<kind>/agent` path.
- * The Orca per-PTY overlay needs to know which agent is being launched so it
- * mirrors the user's actual source dir for THAT agent, with no cross-agent
- * fallback (otherwise switching agents in the same workspace silently shadows
- * the other agent's user extensions).
+ * The Orca overlay needs to know which agent is being launched so it mirrors
+ * the user's actual source dir for THAT agent, with no cross-agent fallback
+ * (otherwise switching agents in the same workspace silently shadows the
+ * other agent's user extensions).
  */
 export type PiAgentKind = 'pi' | 'omp'
 

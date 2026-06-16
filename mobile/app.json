@@ -78,6 +78,7 @@
     },
     "plugins": [
       "expo-router",
+      "./plugins/android-respect-rotation-lock.js",
       [
         "expo-splash-screen",
         {

@@ -1793,7 +1793,8 @@
             "fd15491034": "Open view in GitHub",
             "22df63c393": "Sub-issue data is unavailable for your token.",
             "067119985c": "GitHub search, e.g. assignee:@me is:open",
-            "1850fceac8": "{{value0}}/{{value1}} isn't added to Orca. Add it to start work, or open in GitHub."
+            "1850fceac8": "{{value0}}/{{value1}} isn't added to Orca. Add it to start work, or open in GitHub.",
+            "1aa7c952b9": "Project view"
           },
           "slug": {
             "dialog": {
@@ -2440,7 +2441,9 @@
             "efb33546ff": "Git Bash",
             "1a8af49530": "CMD Prompt",
             "2148f65e04": "PowerShell",
-            "ab589350e5": "Could not build launch command for {{value0}}."
+            "ab589350e5": "Could not build launch command for {{value0}}.",
+            "7a9b4af2af": "Scroll tabs left",
+            "232e075b07": "Scroll tabs right"
           },
           "TabBarCreateEntry": {
             "d62d63b807": "Create file",
@@ -3685,6 +3688,9 @@
         "WorktreeCardAgents": {
           "1b0a156717": "Agents"
         },
+        "WorktreeCardReviewDetailSection": {
+          "reviewHeader": "{{value0}} #{{value1}}"
+        },
         "WorktreeCardMeta": {
           "3e65e11cc6": "Workspace metadata",
           "c7fa72ead0": "Edit notes",
@@ -4324,7 +4330,8 @@
             "tintColorDescription": "The color mixed into the left sidebar surface.",
             "tintOpacity": "Tint Strength",
             "tintOpacityDescription": "Controls how strongly the tint is mixed into the sidebar."
-          }
+          },
+          "workspaceCardLayoutGuidance": "Use the workspace sidebar options menu > Card layout > Compact."
         },
         "AutoRenameBranchFromWorkSetting": {
           "1626524572": "Nautilus",
@@ -4610,7 +4617,7 @@
           "e7bb06007c": "Local Network",
           "4a73f5217a": "Apple Events for scripts that control other local apps.",
           "e119f0d66b": "Automation",
-          "7ca17b62c8": "Persistent access to protected folders from terminal sessions.",
+          "7ca17b62c8": "Recommended when projects, worktrees, or symlinked files touch macOS-protected folders.",
           "c566bca278": "Full Disk Access",
           "9f35980756": "Keystroke injection, window control, and UI automation tools.",
           "5b2f22ca2d": "Accessibility",
@@ -4632,6 +4639,15 @@
           "0277901cf7": "Adds an Agents entry to the left sidebar with a threaded worktree feed for completed agents, blocking questions, unread state, and worktree creation events. Experimental — the event model and UI may change.",
           "a05bcdaf57": "Agents View",
           "f63ea281e3": "Threaded left-sidebar feed for agent completions and blocking states.",
+          "agentHibernation": {
+            "copy": "Stops idle background agent terminals after the configured idle window and resumes supported sessions when you open them again. Experimental while we tune the safety model.",
+            "description": "Stops idle background agent terminals after the configured idle window and resumes supported sessions when you open them again.",
+            "idleMinutesDescription": "How many idle minutes a completed background agent must wait before Orca can hibernate it.",
+            "idleMinutesLabel": "Hibernate after",
+            "idleMinutesSuffix": "minutes",
+            "title": "Agent hibernation",
+            "toggleLabel": "Toggle agent hibernation"
+          },
           "ca2219fe5e": "Shows a small animated pet pinned to the bottom-right corner. Pick a character (Claudino, OpenCode, Gremlin) or upload your own PNG, APNG, GIF, WebP, JPG, or SVG from the status-bar pet menu. Hide it any time from the same menu without disabling this setting.",
           "dd6f0a1d45": "Pet",
           "0e89a574ae": "Floating animated pet in the bottom-right corner."
@@ -6452,6 +6468,17 @@
             "leftSidebarAppearance": {
               "title": "Left Sidebar Appearance",
               "description": "Make the left sidebar match your terminal, stay default, or use a tint."
+            },
+            "workspaceCardLayout": {
+              "title": "Workspace Card Layout",
+              "description": "Switch between compact and detailed workspace cards from the workspace sidebar options menu.",
+              "compact": "compact",
+              "compactDisplay": "compact display",
+              "workspaceCards": "workspace cards",
+              "worktreeCards": "worktree cards",
+              "cardLayout": "card layout",
+              "workspaceOptions": "workspace options",
+              "detailed": "detailed"
             }
           }
         },
@@ -6642,7 +6669,7 @@
               "a0c19119fb": "downloads",
               "4438f81bfa": "documents",
               "c10e36cbd1": "full disk access",
-              "05ab708ee5": "Open the macOS privacy pane for broad terminal file access.",
+              "05ab708ee5": "Open the macOS privacy pane for protected project and worktree file access.",
               "bbf543a3a1": "Full Disk Access",
               "7f145a3984": "window",
               "5610022e1e": "automation",
@@ -6696,6 +6723,16 @@
             "9bb3bd5098": "terminal",
             "11877246fc": "Persistent pane highlight for terminal bell and agent-completion events.",
             "9e4ddf776d": "Terminal attention",
+            "agentHibernation": {
+              "agent": "agent",
+              "agents": "agents",
+              "description": "Stops idle background agent terminals after the configured idle window and resumes supported sessions when opened again.",
+              "hibernate": "hibernate",
+              "minutes": "minutes",
+              "sleep": "sleep",
+              "terminal": "terminal",
+              "title": "Agent hibernation"
+            },
             "fe5688b761": "sidebar",
             "ca5d1f3f46": "timeline",
             "d01b3882ba": "notifications",
@@ -8475,7 +8512,8 @@
             "6306b48afd": "source-control",
             "ef182dcb12": "search",
             "fc3095d2ed": "explorer",
-            "aiVaultSessionHistory": "Agents"
+            "aiVaultSessionHistory": "Agents",
+            "folderWorkspaces": "Attached worktrees"
           },
           "right": {
             "panel": {
@@ -9594,6 +9632,17 @@
                 "close_step": "Close"
               }
             }
+          },
+          "FullDiskAccessSetupPrompt": {
+            "bbb3f1e404": "Checking",
+            "48d87edcd2": "Granted",
+            "6db9a69f4e": "Recommended",
+            "fa809e8ada": "Opened macOS Privacy & Security",
+            "bfa3402305": "Could not request permission",
+            "c566bca278": "Full Disk Access",
+            "0d6efe9cf4": "Recommended on macOS when projects or worktrees live in protected folders.",
+            "dac08ec03e": "Opening...",
+            "6e3d62b816": "Open Full Disk Access"
           }
         },
         "tips": {
@@ -9793,7 +9842,9 @@
           "f5cf81cec2": "Loading diff...",
           "72f71f52eb": "Text diff is unavailable for this file.",
           "7ce8436458": "Text diff is unavailable for this file in branch compare.",
-          "bdbf02d5df": "binary"
+          "bdbf02d5df": "binary",
+          "b5675b0694": "Save",
+          "593f2193f6": "This draft crossed the safe display limit, but it can still be saved."
         },
         "DiffSectionHeader": {
           "8915726e93": "Copy path"
@@ -10160,6 +10211,23 @@
         },
         "useRichMarkdownReviewData": {
           "f9d2acd6b0": "All unsent notes"
+        },
+        "LargeDiffFallback": {
+          "a3c74f8a21": "line count exceeds the safe display limit",
+          "fd92fbde46": "character count exceeds the safe display limit",
+          "7d424bb761": "This diff is too large to display safely.",
+          "28aa2cc90b": "Original lines",
+          "20857938dd": "Modified lines",
+          "e5f0d2182e": "Characters",
+          "877c25a02f": "Reason",
+          "5fca073b72": "Limits",
+          "f1d136a163": "lines per side",
+          "23433fcdea": "combined characters",
+          "7944ed9fb8": "Not counted"
+        },
+        "DiffViewer": {
+          "b5675b0694": "Save",
+          "593f2193f6": "This draft crossed the safe display limit, but it can still be saved."
         }
       },
       "diff": {
@@ -10826,6 +10894,17 @@
             "d785c42b8b": "Use a Jira Cloud site URL, Atlassian email, and API token to browse issues.",
             "8388bdea2b": "Connect Jira site"
           }
+        }
+      },
+      "rightSidebar": {
+        "FolderWorkspaceWorktreesPanel": {
+          "unavailable": "Workspaces are only shown for folder workspaces.",
+          "label": "Workspaces",
+          "description": "Shows worktrees attached to this folder workspace.",
+          "countOne": "1 attached worktree",
+          "countMany": "{{value0}} attached worktrees",
+          "emptyTitle": "No attached worktrees yet",
+          "emptyCopy": "Worktrees created from this workspace will show up here."
         }
       },
       "link": {

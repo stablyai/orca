@@ -92,7 +92,9 @@ describe('sidebar worktree activation', () => {
     activateWorktreeFromSidebar('wt-live')
 
     expect(mocks.scheduleAfterInputQuiet).not.toHaveBeenCalled()
-    expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith('wt-live')
+    expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith('wt-live', {
+      revealInSidebar: false
+    })
   })
 
   it('routes folder workspace activation through the guarded folder path', () => {
@@ -111,6 +113,8 @@ describe('sidebar worktree activation', () => {
     activateWorktreeFromSidebar('wt-web-slept')
 
     expect(mocks.scheduleAfterInputQuiet).not.toHaveBeenCalled()
-    expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith('wt-web-slept')
+    expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith('wt-web-slept', {
+      revealInSidebar: false
+    })
   })
 })

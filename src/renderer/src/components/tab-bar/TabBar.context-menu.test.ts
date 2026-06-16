@@ -54,6 +54,7 @@ vi.mock('react', async () => {
     memo: <T>(component: T) => component,
     useEffect: () => {},
     useLayoutEffect: () => {},
+    useCallback: <T>(callback: T) => callback,
     useMemo: <T>(factory: () => T) => factory(),
     useRef: <T>(current: T) => ({ current }),
     useState: <T>(initial: T) => [initial, vi.fn()] as const
@@ -312,6 +313,24 @@ describe('TabBar context menu wiring', () => {
     const sortable = findChildrenByType(element, 'SortableTab')
     expect(sortable).toHaveLength(1)
     expect(sortable[0].props.tabCount).toBe(2)
+  })
+
+  it('keeps the tab strip content-sized until horizontal scrolling is needed', async () => {
+    const element = await renderTabBar({
+      tabs: [TERMINAL_TAB],
+      editorFiles: [EDITOR_FILE],
+      browserTabs: [],
+      tabBarOrder: ['term-1', 'unified-editor-1']
+    })
+    const strip = findChildrenByType(element, 'div').find((candidate) =>
+      String(candidate.props.className ?? '').includes('terminal-tab-strip')
+    )
+
+    expect(strip).toBeTruthy()
+    expect(strip?.props.className).toContain('min-w-0')
+    expect(strip?.props.className).toContain('flex-[0_1_auto]')
+    expect(strip?.props.className).toContain('overflow-x-auto')
+    expect(strip?.props.className).toContain('scrollbar-sleek')
   })
 
   it('passes the editor unifiedTabId when EditorFileTab triggers onCloseToRight', async () => {

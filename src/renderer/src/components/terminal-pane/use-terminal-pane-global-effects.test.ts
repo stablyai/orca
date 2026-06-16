@@ -1,7 +1,7 @@
 /* eslint-disable max-lines -- Why: these hook tests share a mocked React lifecycle harness with global event cases. */
 import type * as ReactModule from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { SYNC_FIT_PANES_EVENT } from '@/constants/terminal'
+import { PASTE_TERMINAL_TEXT_EVENT, SYNC_FIT_PANES_EVENT } from '@/constants/terminal'
 import {
   registerLivePaneManager,
   unregisterLivePaneManager
@@ -15,6 +15,8 @@ const mocks = vi.hoisted(() => ({
   flushTerminalOutput: vi.fn(),
   getTerminalOutputEpoch: vi.fn(() => 0),
   handleTerminalFileDrop: vi.fn(),
+  pasteTerminalText: vi.fn(),
+  recordTerminalUserInputForLeaf: vi.fn(),
   requestTerminalBacklogRecovery: vi.fn(),
   restoreScrollState: vi.fn(),
   restoreScrollStateAfterLayout: vi.fn()
@@ -72,6 +74,14 @@ vi.mock('@/lib/pane-manager/pane-scroll', () => ({
 
 vi.mock('./terminal-drop-handler', () => ({
   handleTerminalFileDrop: mocks.handleTerminalFileDrop
+}))
+
+vi.mock('./terminal-bracketed-paste', () => ({
+  pasteTerminalText: mocks.pasteTerminalText
+}))
+
+vi.mock('./terminal-input-activity', () => ({
+  recordTerminalUserInputForLeaf: mocks.recordTerminalUserInputForLeaf
 }))
 
 class MockResizeObserver {
@@ -383,6 +393,51 @@ describe('useTerminalPaneGlobalEffects', () => {
     expect(manager.resetWebglTextureAtlases).toHaveBeenCalledTimes(1)
   })
 
+  it('records terminal input for targeted paste events', () => {
+    const terminal = { name: 'terminal-a', focus: vi.fn() }
+    const pane = { id: 1, leafId: 'leaf-1', terminal }
+    const manager = {
+      getPanes: vi.fn(() => [pane]),
+      resumeRendering: vi.fn(),
+      resetWebglTextureAtlases: vi.fn(),
+      suspendRendering: vi.fn(),
+      getActivePane: vi.fn(() => pane)
+    }
+
+    beginHookRender()
+    useTerminalPaneGlobalEffects({
+      tabId: 'tab-1',
+      worktreeId: 'wt-1',
+      isActive: true,
+      isVisible: true,
+      isSyncFitEnabled: true,
+      paneCount: 1,
+      managerRef: { current: manager as never },
+      containerRef: { current: null },
+      paneTransportsRef: { current: new Map() },
+      isActiveRef: { current: false },
+      isVisibleRef: { current: false },
+      toggleExpandPane: vi.fn()
+    })
+
+    const pasteListener = vi
+      .mocked(window.addEventListener)
+      .mock.calls.find(([eventName]) => eventName === PASTE_TERMINAL_TEXT_EVENT)
+
+    expect(pasteListener).toBeDefined()
+    const listener = pasteListener?.[1]
+    if (typeof listener !== 'function') {
+      throw new Error('expected paste listener')
+    }
+    listener(
+      new CustomEvent(PASTE_TERMINAL_TEXT_EVENT, { detail: { tabId: 'tab-1', text: 'git status' } })
+    )
+
+    expect(mocks.pasteTerminalText).toHaveBeenCalledWith(terminal, 'git status')
+    expect(mocks.recordTerminalUserInputForLeaf).toHaveBeenCalledWith('tab-1', 'leaf-1')
+    expect(terminal.focus).toHaveBeenCalledOnce()
+  })
+
   it('ignores terminal file drops for another terminal tab', () => {
     const { onFileDrop } = useMountForFileDrop()
 
@@ -403,6 +458,7 @@ describe('useTerminalPaneGlobalEffects', () => {
       manager,
       paneTransports,
       worktreeId: 'wt-1',
+      tabId: 'tab-1',
       cwd: '/worktree',
       data
     })
@@ -418,6 +474,7 @@ describe('useTerminalPaneGlobalEffects', () => {
       manager,
       paneTransports,
       worktreeId: 'wt-1',
+      tabId: 'tab-1',
       cwd: undefined,
       data
     })
