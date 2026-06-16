@@ -1306,6 +1306,7 @@ export class RuntimeBrowserCommands {
     worktree?: string
     profileId?: string
     waitForRegistration?: boolean
+    activate?: boolean
   }): Promise<{ browserPageId: string }> {
     const url = params.url ?? 'about:blank'
     const worktreeId = params.worktree
@@ -1320,7 +1321,8 @@ export class RuntimeBrowserCommands {
     const { browserPageId } = await this.createBrowserTabInRenderer(
       url,
       worktreeId,
-      params.profileId
+      params.profileId,
+      params.activate
     )
 
     // Why: the renderer creates the Zustand tab immediately, but the webview must
@@ -1700,7 +1702,8 @@ export class RuntimeBrowserCommands {
   private async createBrowserTabInRenderer(
     url: string,
     worktreeId?: string,
-    profileId?: string
+    profileId?: string,
+    activate?: boolean
   ): Promise<{ browserPageId: string }> {
     const win = this.host.getAuthoritativeWindow()
     const requestId = randomUUID()
@@ -1731,7 +1734,8 @@ export class RuntimeBrowserCommands {
         requestId,
         url,
         worktreeId,
-        sessionProfileId: profileId
+        sessionProfileId: profileId,
+        activate
       })
     })
 

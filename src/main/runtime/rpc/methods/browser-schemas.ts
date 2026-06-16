@@ -118,7 +118,9 @@ export const TabCreate = z.object({
   url: OptionalString,
   worktree: OptionalString,
   profileId: OptionalString,
-  waitForRegistration: z.boolean().optional()
+  waitForRegistration: z.boolean().optional(),
+  // User-initiated opens focus the tab; agent/automation opens stay background.
+  activate: z.boolean().optional()
 })
 
 export const TabShow = z.object({
@@ -153,9 +155,7 @@ export const ProfileCreate = z.object({
   scope: z.enum(['isolated', 'imported'])
 })
 
-export const ProfileDelete = z.object({
-  profileId: requiredString('Missing required --profile')
-})
+export const ProfileDelete = z.object({ profileId: requiredString('Missing required --profile') })
 
 export const ProfileImportFromBrowser = z.object({
   profileId: requiredString('Missing required --profile'),

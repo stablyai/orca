@@ -715,20 +715,6 @@ export function buildMobileSessionTabSnapshots(
       }
     }
 
-    // Why: the group projection only emits browser tabs that belong to a laid-out
-    // group, so a CLI/RPC-created tab (e.g. an HTML file opened from the mobile
-    // terminal, created in the background with activate:false) was never
-    // published to mobile. Append any remaining browser workspace so mobile sees
-    // every browser tab on the worktree, the way it already sees every terminal.
-    const publishedBrowserWorkspaceIds = new Set(
-      tabs.flatMap((tab) => (tab.type === 'browser' ? [tab.browserWorkspaceId] : []))
-    )
-    for (const workspace of browserWorkspaceByIdForWorktree.values()) {
-      if (!publishedBrowserWorkspaceIds.has(workspace.id)) {
-        tabs.push(buildMobileBrowserTab(state, workspace))
-      }
-    }
-
     const active = tabs.find((tab) => tab.isActive) ?? null
     snapshots.push({
       worktree: worktreeId,

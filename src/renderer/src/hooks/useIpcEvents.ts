@@ -1913,11 +1913,15 @@ export function useIpcEvents(): void {
               )
             : undefined
 
+          // Why: a user-initiated open (data.activate, e.g. mobile tapping an HTML
+          // path) foregrounds the tab so it lands in the active group's order and
+          // publishes to mobile in the right place. Agent/automation opens stay in
+          // the background (activate:false) in the active browser group.
           const workspace = store.createBrowserTab(worktreeId, data.url, {
             title: data.url,
-            targetGroupId: activeBrowserUnifiedTab?.groupId,
+            targetGroupId: data.activate ? undefined : activeBrowserUnifiedTab?.groupId,
             sessionProfileId: data.sessionProfileId,
-            activate: false
+            activate: data.activate === true
           })
           // Why: registerGuest fires with the page ID (not workspace ID) as
           // browserPageId. Return the page ID so waitForTabRegistration can
