@@ -1,8 +1,22 @@
 import { execFile } from 'node:child_process'
-import type { DockerConnection, DockerContainerAction, DockerContainerInspect, DockerContainerSummary, DockerImageSummary, DockerNetworkSummary, DockerResourceKind, DockerSshTargetRef, DockerVolumeSummary } from '../../shared/docker-types'
+import type {
+  DockerConnection,
+  DockerContainerAction,
+  DockerContainerInspect,
+  DockerContainerSummary,
+  DockerImageSummary,
+  DockerNetworkSummary,
+  DockerResourceKind,
+  DockerSshTargetRef,
+  DockerVolumeSummary
+} from '../../shared/docker-types'
 import { parseDockerContainers } from './docker-output-parser'
 import { parseDockerInspect } from './docker-inspect-parser'
-import { parseDockerImages, parseDockerNetworks, parseDockerVolumes } from './docker-resource-parsers'
+import {
+  parseDockerImages,
+  parseDockerNetworks,
+  parseDockerVolumes
+} from './docker-resource-parsers'
 
 export const DOCKER_COMMAND_TIMEOUT_MS = 15_000
 
@@ -46,7 +60,9 @@ export function buildInvocation(
     }
     case 'ssh': {
       if (!options.sshTarget) {
-        throw new Error(`Docker connection "${conn.id}" is kind 'ssh' but no sshTarget was provided`)
+        throw new Error(
+          `Docker connection "${conn.id}" is kind 'ssh' but no sshTarget was provided`
+        )
       }
       const target = options.sshTarget
       const user = target.username ? `${target.username}@` : ''
@@ -54,6 +70,24 @@ export function buildInvocation(
       return { file, args: dockerArgs, env: { DOCKER_HOST: `ssh://${user}${target.host}${port}` } }
     }
   }
+}
+
+const INHERITED_DOCKER_ENV_KEYS = [
+  'DOCKER_HOST',
+  'DOCKER_CONTEXT',
+  'DOCKER_TLS_VERIFY',
+  'DOCKER_CERT_PATH'
+] as const
+
+// Why: a stray DOCKER_HOST/CONTEXT in the user's shell env must not silently
+// redirect the built-in "Local" (or a TCP) connection to a different daemon.
+// Our per-connection env (set by buildInvocation) is overlaid afterward and still wins.
+export function sanitizedBaseEnv(): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = { ...process.env }
+  for (const key of INHERITED_DOCKER_ENV_KEYS) {
+    delete env[key]
+  }
+  return env
 }
 
 export class DockerCommandError extends Error {
@@ -86,7 +120,11 @@ export const localCapturedExec: CapturedExec = (file, args, options) =>
     execFile(
       file,
       args,
-      { env: { ...process.env, ...options.env }, timeout: options.timeout, windowsHide: true },
+      {
+        env: { ...sanitizedBaseEnv(), ...options.env },
+        timeout: options.timeout,
+        windowsHide: true
+      },
       (error, stdout, stderr) => {
         // execFile sets error.code to the numeric exit code on a non-zero exit,
         // or a string (e.g. 'ENOENT'/timeout) on a spawn failure — map the latter to 1.
@@ -185,23 +223,38 @@ async function listResource<T>(
   deps: DockerRunnerDeps
 ): Promise<T> {
   const exec = deps.exec ?? localCapturedExec
-  const invocation = buildInvocation(conn, args, { dockerBinary: deps.dockerBinary, sshTarget: deps.sshTarget })
-  const result = await exec(invocation.file, invocation.args, { env: invocation.env, timeout: DOCKER_COMMAND_TIMEOUT_MS })
+  const invocation = buildInvocation(conn, args, {
+    dockerBinary: deps.dockerBinary,
+    sshTarget: deps.sshTarget
+  })
+  const result = await exec(invocation.file, invocation.args, {
+    env: invocation.env,
+    timeout: DOCKER_COMMAND_TIMEOUT_MS
+  })
   if (result.code !== 0) {
     throw new DockerCommandError(result.code, result.stderr)
   }
   return parse(result.stdout)
 }
 
-export function listImages(conn: DockerConnection, deps: DockerRunnerDeps = {}): Promise<DockerImageSummary[]> {
+export function listImages(
+  conn: DockerConnection,
+  deps: DockerRunnerDeps = {}
+): Promise<DockerImageSummary[]> {
   return listResource(conn, ['images', '--format', '{{json .}}'], parseDockerImages, deps)
 }
 
-export function listVolumes(conn: DockerConnection, deps: DockerRunnerDeps = {}): Promise<DockerVolumeSummary[]> {
+export function listVolumes(
+  conn: DockerConnection,
+  deps: DockerRunnerDeps = {}
+): Promise<DockerVolumeSummary[]> {
   return listResource(conn, ['volume', 'ls', '--format', '{{json .}}'], parseDockerVolumes, deps)
 }
 
-export function listNetworks(conn: DockerConnection, deps: DockerRunnerDeps = {}): Promise<DockerNetworkSummary[]> {
+export function listNetworks(
+  conn: DockerConnection,
+  deps: DockerRunnerDeps = {}
+): Promise<DockerNetworkSummary[]> {
   return listResource(conn, ['network', 'ls', '--format', '{{json .}}'], parseDockerNetworks, deps)
 }
 
@@ -231,10 +284,20 @@ function pruneArgs(kind: DockerResourceKind): string[] {
   }
 }
 
-async function runVoidCommand(conn: DockerConnection, args: string[], deps: DockerRunnerDeps): Promise<void> {
+async function runVoidCommand(
+  conn: DockerConnection,
+  args: string[],
+  deps: DockerRunnerDeps
+): Promise<void> {
   const exec = deps.exec ?? localCapturedExec
-  const invocation = buildInvocation(conn, args, { dockerBinary: deps.dockerBinary, sshTarget: deps.sshTarget })
-  const result = await exec(invocation.file, invocation.args, { env: invocation.env, timeout: DOCKER_COMMAND_TIMEOUT_MS })
+  const invocation = buildInvocation(conn, args, {
+    dockerBinary: deps.dockerBinary,
+    sshTarget: deps.sshTarget
+  })
+  const result = await exec(invocation.file, invocation.args, {
+    env: invocation.env,
+    timeout: DOCKER_COMMAND_TIMEOUT_MS
+  })
   if (result.code !== 0) {
     throw new DockerCommandError(result.code, result.stderr)
   }

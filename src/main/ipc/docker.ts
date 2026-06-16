@@ -45,8 +45,11 @@ function resolveConnection(store: Store, connectionId: string): DockerConnection
   if (connectionId === LOCAL_DOCKER_CONNECTION.id) {
     return LOCAL_DOCKER_CONNECTION
   }
-  const settings = store.getSettings()
-  return settings.dockerConnections?.find((c) => c.id === connectionId) ?? LOCAL_DOCKER_CONNECTION
+  const found = store.getSettings().dockerConnections?.find((c) => c.id === connectionId)
+  if (!found) {
+    throw new Error(`Unknown Docker connection: ${connectionId}`)
+  }
+  return found
 }
 
 function resolveSshTarget(conn: DockerConnection): DockerSshTargetRef | undefined {
@@ -114,7 +117,9 @@ export function registerDockerHandlers(
       args: { connectionId: string; containerId: string; action: DockerContainerAction }
     ) => {
       const conn = resolveConnection(store, args.connectionId)
-      await runContainerAction(conn, args.containerId, args.action, { sshTarget: resolveSshTarget(conn) })
+      await runContainerAction(conn, args.containerId, args.action, {
+        sshTarget: resolveSshTarget(conn)
+      })
     }
   )
 
