@@ -1,8 +1,10 @@
 import { useState } from 'react'
-import { Check, ExternalLink } from 'lucide-react'
+import { Check, ExternalLink, Info } from 'lucide-react'
 import { getAgentCatalog, AgentIcon, type AgentCatalogEntry } from '@/lib/agent-catalog'
 import { cn } from '@/lib/utils'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import type { TuiAgent } from '../../../../shared/types'
 import { translate } from '@/i18n/i18n'
 
@@ -14,9 +16,18 @@ type AgentStepProps = {
   onSelect: (agent: TuiAgent, fromCollapsedSection: boolean) => void
   detectedSet: Set<TuiAgent>
   isDetecting: boolean
+  yoloPermissions?: boolean
+  onYoloPermissionsChange?: (enabled: boolean) => void
 }
 
-export function AgentStep({ selectedAgent, onSelect, detectedSet, isDetecting }: AgentStepProps) {
+export function AgentStep({
+  selectedAgent,
+  onSelect,
+  detectedSet,
+  isDetecting,
+  yoloPermissions = true,
+  onYoloPermissionsChange
+}: AgentStepProps) {
   const agentCatalog = getAgentCatalog()
   const detected = agentCatalog.filter((agent) => detectedSet.has(agent.id))
   const rest = agentCatalog.filter((agent) => !detectedSet.has(agent.id))
@@ -82,6 +93,44 @@ export function AgentStep({ selectedAgent, onSelect, detectedSet, isDetecting }:
           </button>
         </div>
       )}
+      <label className="flex cursor-pointer items-center justify-between gap-4 rounded-lg border border-border bg-background/50 px-4 py-3 transition-colors hover:bg-accent/50">
+        <span className="flex min-w-0 items-center gap-3">
+          <Checkbox
+            checked={yoloPermissions}
+            onCheckedChange={(checked) => onYoloPermissionsChange?.(checked === true)}
+            aria-label={translate(
+              'auto.components.onboarding.AgentStep.yoloPermissionsLabel',
+              'Yolo / Dangerously skip permissions'
+            )}
+          />
+          <span className="min-w-0 text-sm font-medium text-foreground">
+            {translate(
+              'auto.components.onboarding.AgentStep.yoloPermissionsLabel',
+              'Yolo / Dangerously skip permissions'
+            )}
+          </span>
+        </span>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              aria-label={translate(
+                'auto.components.onboarding.AgentStep.yoloPermissionsInfo',
+                'Agent permission info'
+              )}
+              className="grid size-6 shrink-0 place-items-center rounded-md text-muted-foreground outline-none transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
+            >
+              <Info className="size-3.5" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="top" sideOffset={6} style={{ zIndex: 120 }}>
+            {translate(
+              'auto.components.onboarding.AgentStep.yoloPermissionsTooltip',
+              'Skip permission checks for agents for less interruptions'
+            )}
+          </TooltipContent>
+        </Tooltip>
+      </label>
       <section className="space-y-3">
         <SectionHeader
           label={

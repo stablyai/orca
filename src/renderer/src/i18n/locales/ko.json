@@ -4265,7 +4265,14 @@
           "cfb3f35775": "Arguments",
           "6f99bf5dd0": "No default arguments",
           "8fbe1f37c1": "Environment",
-          "2d133152fa": "No default environment"
+          "2d133152fa": "No default environment",
+          "agentPermissions": "Agent Permissions",
+          "agentPermissionsInfo": "Agent permissions info",
+          "agentPermissionsTooltip": "Custom agent arguments stay unchanged when switching modes.",
+          "agentPermissionsDescription": "Choose whether Orca launches agents with fewer permission prompts or with manual checks.",
+          "agentPermissionsYolo": "Yolo",
+          "agentPermissionsManual": "Manual",
+          "agentPermissionsMixed": "Mixed"
         },
         "AppIconSelector": {
           "d5a112dc9b": "다음 아이콘",
@@ -6299,7 +6306,9 @@
             "5784ae8c43": "이름 변경",
             "8a17fd6026": "안정적",
             "a79d266f71": "세션",
-            "afbf35be68": "안정적인 세션"
+            "afbf35be68": "안정적인 세션",
+            "agentPermissions": "Agent Permissions",
+            "agentPermissionsDescription": "Switch agent permission defaults between Yolo and Manual."
           }
         },
         "appearance": {
@@ -8811,7 +8820,10 @@
           "69af7e9c1c": "아직 PATH에 없습니다. Orca는 이를 기본값으로 설정하며 언제든지 설치할 수 있습니다.",
           "1eee1c7bd8": "PATH에서 agents가 감지되지 않습니다. 나중에 설치할 항목을 선택하거나 빈 terminal을 계속 사용하세요.",
           "hideAgents": "agents 숨기기",
-          "showMoreAgents": "{{value0}}개 더 많은 agents 표시→"
+          "showMoreAgents": "{{value0}}개 더 많은 agents 표시→",
+          "yoloPermissionsLabel": "Yolo / Dangerously skip permissions",
+          "yoloPermissionsInfo": "Agent permission info",
+          "yoloPermissionsTooltip": "Skip permission checks for agents for less interruptions"
         },
         "FeatureSetupChecklist": {
           "77f74946f5": "Agents는 서로 메시지를 보내고, 작업을 수행하고, 핸드오프를 조정할 수 있습니다.",

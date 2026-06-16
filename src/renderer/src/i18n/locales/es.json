@@ -4280,7 +4280,14 @@
           "cfb3f35775": "Arguments",
           "6f99bf5dd0": "No default arguments",
           "8fbe1f37c1": "Environment",
-          "2d133152fa": "No default environment"
+          "2d133152fa": "No default environment",
+          "agentPermissions": "Agent Permissions",
+          "agentPermissionsInfo": "Agent permissions info",
+          "agentPermissionsTooltip": "Custom agent arguments stay unchanged when switching modes.",
+          "agentPermissionsDescription": "Choose whether Orca launches agents with fewer permission prompts or with manual checks.",
+          "agentPermissionsYolo": "Yolo",
+          "agentPermissionsManual": "Manual",
+          "agentPermissionsMixed": "Mixed"
         },
         "AppIconSelector": {
           "d5a112dc9b": "Icono siguiente",
@@ -6314,7 +6321,9 @@
             "5784ae8c43": "rebautizar",
             "8a17fd6026": "estable",
             "a79d266f71": "sesión",
-            "afbf35be68": "sesión estable"
+            "afbf35be68": "sesión estable",
+            "agentPermissions": "Agent Permissions",
+            "agentPermissionsDescription": "Switch agent permission defaults between Yolo and Manual."
           }
         },
         "appearance": {
@@ -8811,7 +8820,10 @@
           "69af7e9c1c": "aún no está en tu RUTA. Orca lo configurará como predeterminado y podrás instalarlo en cualquier momento.",
           "1eee1c7bd8": "No se detectaron agents en su RUTA. Elija uno para instalarlo más tarde o continúe con un terminal en blanco.",
           "hideAgents": "Ocultar agents",
-          "showMoreAgents": "Mostrar {{value0}} más agents→"
+          "showMoreAgents": "Mostrar {{value0}} más agents→",
+          "yoloPermissionsLabel": "Yolo / Dangerously skip permissions",
+          "yoloPermissionsInfo": "Agent permission info",
+          "yoloPermissionsTooltip": "Skip permission checks for agents for less interruptions"
         },
         "FeatureSetupChecklist": {
           "77f74946f5": "Los Agents pueden enviarse mensajes entre sí, realizar tareas y coordinar traspasos.",

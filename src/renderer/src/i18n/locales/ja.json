@@ -4265,7 +4265,14 @@
           "cfb3f35775": "Arguments",
           "6f99bf5dd0": "No default arguments",
           "8fbe1f37c1": "Environment",
-          "2d133152fa": "No default environment"
+          "2d133152fa": "No default environment",
+          "agentPermissions": "Agent Permissions",
+          "agentPermissionsInfo": "Agent permissions info",
+          "agentPermissionsTooltip": "Custom agent arguments stay unchanged when switching modes.",
+          "agentPermissionsDescription": "Choose whether Orca launches agents with fewer permission prompts or with manual checks.",
+          "agentPermissionsYolo": "Yolo",
+          "agentPermissionsManual": "Manual",
+          "agentPermissionsMixed": "Mixed"
         },
         "AppIconSelector": {
           "d5a112dc9b": "次へのアイコン",
@@ -6336,7 +6343,9 @@
             "5784ae8c43": "名前変更",
             "8a17fd6026": "安定",
             "a79d266f71": "セッション",
-            "afbf35be68": "安定したセッション"
+            "afbf35be68": "安定したセッション",
+            "agentPermissions": "Agent Permissions",
+            "agentPermissionsDescription": "Switch agent permission defaults between Yolo and Manual."
           }
         },
         "appearance": {
@@ -8811,7 +8820,10 @@
           "69af7e9c1c": "はまだ PATH 上にありません。 Orca はこれをデフォルトとして設定し、いつでもインストールできます。",
           "1eee1c7bd8": "PATH 上に agents が検出されませんでした。後でインストールするものを選択するか、空の terminal を使用して続行します。",
           "hideAgents": "agents を非表示にする",
-          "showMoreAgents": "{{value0}} 件の agents をさらに表示→"
+          "showMoreAgents": "{{value0}} 件の agents をさらに表示→",
+          "yoloPermissionsLabel": "Yolo / Dangerously skip permissions",
+          "yoloPermissionsInfo": "Agent permission info",
+          "yoloPermissionsTooltip": "Skip permission checks for agents for less interruptions"
         },
         "FeatureSetupChecklist": {
           "77f74946f5": "Agents は相互にメッセージを送信し、タスクを実行し、引き継ぎを調整できます。",

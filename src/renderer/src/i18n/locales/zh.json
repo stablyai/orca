@@ -4265,7 +4265,14 @@
           "cfb3f35775": "Arguments",
           "6f99bf5dd0": "No default arguments",
           "8fbe1f37c1": "Environment",
-          "2d133152fa": "No default environment"
+          "2d133152fa": "No default environment",
+          "agentPermissions": "Agent Permissions",
+          "agentPermissionsInfo": "Agent permissions info",
+          "agentPermissionsTooltip": "Custom agent arguments stay unchanged when switching modes.",
+          "agentPermissionsDescription": "Choose whether Orca launches agents with fewer permission prompts or with manual checks.",
+          "agentPermissionsYolo": "Yolo",
+          "agentPermissionsManual": "Manual",
+          "agentPermissionsMixed": "Mixed"
         },
         "AppIconSelector": {
           "d5a112dc9b": "下一个图标",
@@ -6299,7 +6306,9 @@
             "5784ae8c43": "重命名",
             "8a17fd6026": "稳定",
             "a79d266f71": "会话",
-            "afbf35be68": "稳定会话"
+            "afbf35be68": "稳定会话",
+            "agentPermissions": "Agent Permissions",
+            "agentPermissionsDescription": "Switch agent permission defaults between Yolo and Manual."
           }
         },
         "appearance": {
@@ -8811,7 +8820,10 @@
           "69af7e9c1c": "尚未加入 PATH。Orca 会将其设为默认，你可随时安装。",
           "1eee1c7bd8": "PATH 中未检测到 agents。可选择一个稍后安装，或使用空白 terminal 继续。",
           "hideAgents": "隐藏 Agent",
-          "showMoreAgents": "显示另外 {{value0}} 个 Agent→"
+          "showMoreAgents": "显示另外 {{value0}} 个 Agent→",
+          "yoloPermissionsLabel": "Yolo / Dangerously skip permissions",
+          "yoloPermissionsInfo": "Agent permission info",
+          "yoloPermissionsTooltip": "Skip permission checks for agents for less interruptions"
         },
         "FeatureSetupChecklist": {
           "77f74946f5": "Agent 可互相通信、领取任务并协调交接。",

@@ -4280,7 +4280,14 @@
           "cfb3f35775": "Arguments",
           "6f99bf5dd0": "No default arguments",
           "8fbe1f37c1": "Environment",
-          "2d133152fa": "No default environment"
+          "2d133152fa": "No default environment",
+          "agentPermissions": "Agent Permissions",
+          "agentPermissionsInfo": "Agent permissions info",
+          "agentPermissionsTooltip": "Custom agent arguments stay unchanged when switching modes.",
+          "agentPermissionsDescription": "Choose whether Orca launches agents with fewer permission prompts or with manual checks.",
+          "agentPermissionsYolo": "Yolo",
+          "agentPermissionsManual": "Manual",
+          "agentPermissionsMixed": "Mixed"
         },
         "AppIconSelector": {
           "d5a112dc9b": "Next icon",
@@ -6351,7 +6358,9 @@
             "5784ae8c43": "rename",
             "8a17fd6026": "stable",
             "a79d266f71": "session",
-            "afbf35be68": "stable session"
+            "afbf35be68": "stable session",
+            "agentPermissions": "Agent Permissions",
+            "agentPermissionsDescription": "Switch agent permission defaults between Yolo and Manual."
           }
         },
         "appearance": {
@@ -8811,7 +8820,10 @@
           "69af7e9c1c": "isn't on your PATH yet. Orca will set it as your default and you can install it any time.",
           "1eee1c7bd8": "No agents detected on your PATH. Pick one to install later, or continue with a blank terminal.",
           "hideAgents": "Hide agents",
-          "showMoreAgents": "Show {{value0}} more agents→"
+          "showMoreAgents": "Show {{value0}} more agents→",
+          "yoloPermissionsLabel": "Yolo / Dangerously skip permissions",
+          "yoloPermissionsInfo": "Agent permission info",
+          "yoloPermissionsTooltip": "Skip permission checks for agents for less interruptions"
         },
         "FeatureSetupChecklist": {
           "77f74946f5": "Agents can message each other, take tasks, and coordinate handoffs.",
