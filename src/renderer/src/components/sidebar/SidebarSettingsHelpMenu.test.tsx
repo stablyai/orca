@@ -10,7 +10,7 @@ const mocks = vi.hoisted(() => ({
   appRestart: vi.fn(),
   updaterCheck: vi.fn(),
   shellOpenUrl: vi.fn(),
-  useShortcutLabel: vi.fn(),
+  useShortcutKeys: vi.fn(),
   setupProgress: {
     ready: true,
     coreDoneCount: 2,
@@ -32,7 +32,7 @@ vi.mock('@/store', () => ({
 }))
 
 vi.mock('@/hooks/useShortcutLabel', () => ({
-  useShortcutLabel: mocks.useShortcutLabel
+  useShortcutKeys: mocks.useShortcutKeys
 }))
 
 vi.mock('@/hooks/useMountedRef', () => ({
@@ -72,12 +72,14 @@ vi.mock('@/components/ui/tooltip', () => ({
 vi.mock('@/components/ui/button', () => ({
   Button: ({
     children,
-    onClick
+    onClick,
+    'aria-label': ariaLabel
   }: {
     children: ReactNode
     onClick?: (event: React.MouseEvent) => void
+    'aria-label'?: string
   }) => (
-    <button data-testid="trigger-button" onClick={onClick}>
+    <button data-testid="trigger-button" aria-label={ariaLabel} onClick={onClick}>
       {children}
     </button>
   )
@@ -97,7 +99,7 @@ vi.mock('./SidebarFeedbackDialog', () => ({
 describe('SidebarSettingsHelpMenu', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mocks.useShortcutLabel.mockReturnValue('⌘,')
+    mocks.useShortcutKeys.mockReturnValue(['⌘', ','])
     updateStatus = { state: 'idle' }
     mocks.setupProgress = {
       ready: true,
@@ -112,9 +114,17 @@ describe('SidebarSettingsHelpMenu', () => {
     expect(html).toContain('Help')
   })
 
-  it('renders Settings menu item', () => {
+  it('renders the settings button with correct aria-label', () => {
     const html = renderToStaticMarkup(<SidebarSettingsHelpMenu />)
-    expect(html).toContain('Settings')
+    expect(html).toContain('aria-label="Settings"')
+  })
+
+  it('renders the settings button before the help button', () => {
+    const html = renderToStaticMarkup(<SidebarSettingsHelpMenu />)
+    const settingsIndex = html.indexOf('lucide-settings')
+    const helpIndex = html.indexOf('lucide-circle-question-mark')
+    expect(settingsIndex).toBeGreaterThanOrEqual(0)
+    expect(helpIndex).toBeGreaterThan(settingsIndex)
   })
 
   it('renders Send Feedback menu item', () => {
@@ -179,8 +189,9 @@ describe('SidebarSettingsHelpMenu', () => {
     expect(html).toContain('Check for Updates')
   })
 
-  it('renders shortcut label next to Settings', () => {
+  it('renders shortcut keys in the settings tooltip', () => {
     const html = renderToStaticMarkup(<SidebarSettingsHelpMenu />)
-    expect(html).toContain('⌘,')
+    expect(html).toContain('⌘')
+    expect(html).toContain('>,</span>')
   })
 })

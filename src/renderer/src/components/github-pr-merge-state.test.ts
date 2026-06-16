@@ -23,13 +23,42 @@ describe('presentGitHubPRMergeState', () => {
     })
   })
 
-  it('offers merge-queue auto-merge only after explicit queue detection', () => {
+  it('uses the merge-queue label for auto-merge when a queue is required', () => {
     expect(presentGitHubPRMergeState(pr({ mergeQueueRequired: true }))).toMatchObject({
       label: 'Merge when ready',
       directMergeAvailable: false,
       autoMergeAction: { kind: 'enable', label: 'Merge when ready' }
     })
-    expect(presentGitHubPRMergeState(pr({ mergeQueueRequired: null })).autoMergeAction).toBeNull()
+  })
+
+  it('offers enable auto-merge for open PRs that are waiting on requirements', () => {
+    expect(presentGitHubPRMergeState(pr()).autoMergeAction).toMatchObject({
+      kind: 'enable',
+      label: 'Enable auto-merge'
+    })
+    expect(
+      presentGitHubPRMergeState(pr({ mergeQueueRequired: null })).autoMergeAction
+    ).toMatchObject({ kind: 'enable', label: 'Enable auto-merge' })
+    // Approval-required and checks-pending PRs are exactly when auto-merge helps.
+    expect(
+      presentGitHubPRMergeState(pr({ reviewDecision: 'REVIEW_REQUIRED' })).autoMergeAction
+    ).toMatchObject({ kind: 'enable', label: 'Enable auto-merge' })
+    expect(
+      presentGitHubPRMergeState(
+        pr({ checksSummary: { state: 'pending', total: 1, passed: 0, failed: 0, pending: 1 } })
+      ).autoMergeAction
+    ).toMatchObject({ kind: 'enable', label: 'Enable auto-merge' })
+  })
+
+  it('does not offer enable auto-merge on conflicting PRs (GitHub would reject it)', () => {
+    expect(
+      presentGitHubPRMergeState(pr({ mergeable: 'CONFLICTING', mergeStateStatus: 'DIRTY' }))
+        .autoMergeAction
+    ).toBeNull()
+    expect(
+      presentGitHubPRMergeState(pr({ mergeable: 'UNKNOWN', mergeStateStatus: 'DIRTY' }))
+        .autoMergeAction
+    ).toBeNull()
   })
 
   it('offers disable auto-merge when GitHub reports auto-merge is already enabled', () => {

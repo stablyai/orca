@@ -948,7 +948,7 @@ function CandidateRow({
               {translate(
                 'auto.components.workspace.cleanup.WorkspaceCleanupDialog.352f15d6fc',
                 'Last active'
-              )}
+              )}{' '}
               {formatRelativeTime(candidate.lastActivityAt)}
             </span>
             {blockers.length > 0 ? (
@@ -965,14 +965,14 @@ function CandidateRow({
               {translate(
                 'auto.components.workspace.cleanup.WorkspaceCleanupDialog.0b1766738a',
                 'Repo'
-              )}
+              )}{' '}
               {candidate.repoName}
             </span>
             <span className="min-w-0 truncate font-mono">
               {translate(
                 'auto.components.workspace.cleanup.WorkspaceCleanupDialog.bef0adef9b',
                 'Branch'
-              )}
+              )}{' '}
               {candidate.branch}
             </span>
             <span>{formatGitStatus(candidate)}</span>
@@ -1210,7 +1210,7 @@ function ConfirmRemove({
               {translate(
                 'auto.components.workspace.cleanup.WorkspaceCleanupDialog.cbf2f664e2',
                 'Delete'
-              )}
+              )}{' '}
               {count} {noun}?
             </DialogTitle>
             <DialogDescription className="mt-1.5 text-xs leading-5">
@@ -1260,7 +1260,7 @@ function ConfirmRemove({
           {translate(
             'auto.components.workspace.cleanup.WorkspaceCleanupDialog.cbf2f664e2',
             'Delete'
-          )}
+          )}{' '}
           {count} {noun}
         </Button>
       </DialogFooter>
@@ -1285,7 +1285,7 @@ function ConfirmRemoveRow({
           {translate(
             'auto.components.workspace.cleanup.WorkspaceCleanupDialog.352f15d6fc',
             'Last active'
-          )}
+          )}{' '}
           {formatRelativeTime(candidate.lastActivityAt)}
         </span>
         {dirtyLabel ? <StatusPill tone="destructive">{dirtyLabel}</StatusPill> : null}

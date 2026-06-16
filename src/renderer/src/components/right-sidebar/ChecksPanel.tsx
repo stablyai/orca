@@ -12,7 +12,7 @@ import {
   Link,
   Unlink
 } from 'lucide-react'
-import { useAppStore } from '@/store'
+import { useAppStore, type AppState } from '@/store'
 import {
   mergePRCommentIntoList,
   prChecksCacheSuffix,
@@ -42,10 +42,6 @@ import {
   PRCommentsList,
   PRTriageStrip
 } from './checks-panel-content'
-import {
-  clearPRCommentsListSelection,
-  type PRCommentsListSelectionClearRequest
-} from './pr-comments-list-selection'
 import { ENTRY_REFRESH_GRACE_MS, shouldEntryRefresh } from './checks-entry-refresh'
 import type {
   GitLabDiscussionResolveResult,
@@ -94,12 +90,9 @@ import {
   shouldShowChecksPanelPublishBranchAction
 } from './checks-panel-empty-state'
 import {
-  cancelRuntimeGeneratePullRequestFields,
-  generateRuntimePullRequestFields,
   getRuntimeGitScope,
   getRuntimeGitStatus,
-  getRuntimeGitUpstreamStatus,
-  type RuntimeGeneratePullRequestFieldsOverrides
+  getRuntimeGitUpstreamStatus
 } from '@/runtime/runtime-git-client'
 import {
   buildChecksPanelGitStatusContextKey,
@@ -134,24 +127,10 @@ import {
   type SourceControlAiWriteTarget
 } from '../../../../shared/source-control-ai-recipe-save'
 import { resolveSourceControlLaunchPlatform } from '@/lib/source-control-launch-platform'
+import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { CreateHostedReviewComposer } from './CreateHostedReviewComposer'
 import { formatCreateError } from './create-pull-request-review-copy'
 import { stripBaseRef, useCreatePullRequestDialogFields } from './useCreatePullRequestDialogFields'
-import {
-  resolveChecksPanelHostedReviewBaseRef,
-  shouldOpenChecksPanelCreateComposer
-} from './checks-panel-review-creation'
-import {
-  createRunningPullRequestGenerationRecord,
-  getPullRequestGenerationRecordKey,
-  resolvePullRequestGenerationCancel,
-  resolvePullRequestGenerationFailure,
-  resolvePullRequestGenerationSuccess,
-  shouldHydratePullRequestGenerationResult,
-  type PullRequestFieldRevisions,
-  type PullRequestGenerationContext,
-  type PullRequestGenerationFields
-} from '@/store/slices/pull-request-generation'
 import { localizedHostedReviewCopy } from '@/i18n/hosted-review-localized-copy'
 import { translate } from '@/i18n/i18n'
 import { groupPRComments, type PRCommentGroup } from '@/lib/pr-comment-groups'
@@ -202,8 +181,7 @@ export function ChecksPanelReviewHeader({
   const reviewNumberLabel = review.provider === 'gitlab' ? `!${review.number}` : `#${review.number}`
   const ReviewIcon = review.provider === 'gitlab' ? GitMerge : PullRequestIcon
   const reviewHostLabel = review.provider === 'gitlab' ? 'GitLab' : 'GitHub'
-  const showPullRequestMenu = review.provider === 'github' || review.provider === 'gitlab'
-  const shortReviewLabel = review.provider === 'gitlab' ? 'MR' : 'PR'
+  const showPullRequestMenu = review.provider === 'github'
 
   return (
     <div className="flex items-center gap-2">
@@ -245,14 +223,12 @@ export function ChecksPanelReviewHeader({
               variant="ghost"
               size="icon-xs"
               aria-label={translate(
-                'auto.components.right.sidebar.ChecksPanel.b4f3ec62a1',
-                'More {{value0}} actions',
-                { value0: shortReviewLabel }
+                'auto.components.right.sidebar.ChecksPanel.653c105ecc',
+                'More PR actions'
               )}
               title={translate(
-                'auto.components.right.sidebar.ChecksPanel.b4f3ec62a1',
-                'More {{value0}} actions',
-                { value0: shortReviewLabel }
+                'auto.components.right.sidebar.ChecksPanel.653c105ecc',
+                'More PR actions'
               )}
               className="text-muted-foreground hover:text-foreground"
             >
@@ -262,21 +238,12 @@ export function ChecksPanelReviewHeader({
           <DropdownMenuContent align="end" className="w-44">
             <DropdownMenuItem disabled={!canUnlinkPullRequest} onSelect={onUnlinkPullRequest}>
               <Unlink className="size-3.5" />
-              {translate(
-                'auto.components.right.sidebar.ChecksPanel.a9d7c128e4',
-                'unlink {{value0}}',
-                { value0: shortReviewLabel }
-              )}
+              {translate('auto.components.right.sidebar.ChecksPanel.7202f4a40a', 'unlink PR')}
             </DropdownMenuItem>
-            {review.provider === 'github' ? (
-              <DropdownMenuItem onSelect={onLinkAnotherPullRequest}>
-                <Link className="size-3.5" />
-                {translate(
-                  'auto.components.right.sidebar.ChecksPanel.07871c0589',
-                  'Link another PR'
-                )}
-              </DropdownMenuItem>
-            ) : null}
+            <DropdownMenuItem onSelect={onLinkAnotherPullRequest}>
+              <Link className="size-3.5" />
+              {translate('auto.components.right.sidebar.ChecksPanel.07871c0589', 'Link another PR')}
+            </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       )}
@@ -322,6 +289,7 @@ async function fetchGitLabMRDetailsForChecks(args: {
   }
   return (await window.api.gl.workItemDetails({
     repoPath: args.repoPath,
+    repoId: args.repoId,
     iid: args.iid,
     type: 'mr'
   })) as GitLabWorkItemDetails | null
@@ -351,6 +319,7 @@ async function resolveGitLabMRDiscussionForChecks(args: {
   }
   return window.api.gl.resolveMRDiscussion({
     repoPath: args.repoPath,
+    repoId: args.repoId,
     iid: args.iid,
     discussionId: args.discussionId,
     resolved: args.resolved
@@ -374,12 +343,6 @@ export default function ChecksPanel(): React.JSX.Element {
     (s) => s.getHostedReviewCreationEligibility
   )
   const createHostedReview = useAppStore((s) => s.createHostedReview)
-  const prGenerationRecords = useAppStore((s) => s.pullRequestGenerationRecords)
-  const allocatePullRequestGenerationRequestId = useAppStore(
-    (s) => s.allocatePullRequestGenerationRequestId
-  )
-  const setPullRequestGenerationRecord = useAppStore((s) => s.setPullRequestGenerationRecord)
-  const updatePullRequestGenerationRecord = useAppStore((s) => s.updatePullRequestGenerationRecord)
   const enqueueGitHubPRRefresh = useAppStore((s) => s.enqueueGitHubPRRefresh)
   const conflictOperation = useAppStore((s) =>
     activeWorktreeId ? (s.gitConflictOperationByWorktree[activeWorktreeId] ?? 'unknown') : 'unknown'
@@ -436,8 +399,6 @@ export default function ChecksPanel(): React.JSX.Element {
   const [agentComposerState, setAgentComposerState] = useState<ChecksAgentComposerState | null>(
     null
   )
-  const [commentSelectionClearRequest, setCommentSelectionClearRequest] =
-    useState<PRCommentsListSelectionClearRequest | null>(null)
   const [hostedReviewCreationSnapshot, setHostedReviewCreationSnapshot] =
     useState<HostedReviewCreationSnapshot | null>(null)
   const [gitStatusSnapshot, setGitStatusSnapshot] = useState<ChecksPanelGitStatusSnapshot | null>(
@@ -497,30 +458,22 @@ export default function ChecksPanel(): React.JSX.Element {
   const branch = gitIdentityDisplay?.kind === 'branch' ? gitIdentityDisplay.branchName : ''
   const activeWorktreePath = activeWorktree?.path ?? null
   const activeWorktreePushTarget = activeWorktree?.pushTarget ?? null
-  const hostedReviewCreationBaseRef = resolveChecksPanelHostedReviewBaseRef({
-    worktreeBaseRef: activeWorktree?.baseRef,
-    repoBaseRef: repo?.worktreeBaseRef
-  })
-  const activePullRequestGenerationKey = getPullRequestGenerationRecordKey({
-    worktreeId: activeWorktreeId,
-    worktreePath: activeWorktreePath,
-    repoId: repo?.id,
-    branch
-  })
-  const activePullRequestGenerationRecordCandidate = activePullRequestGenerationKey
-    ? (prGenerationRecords[activePullRequestGenerationKey] ?? null)
-    : null
-  const activePullRequestGenerationRecord =
-    activePullRequestGenerationRecordCandidate &&
-    activePullRequestGenerationRecordCandidate.context.repoId === repo?.id &&
-    activePullRequestGenerationRecordCandidate.context.branch === branch
-      ? activePullRequestGenerationRecordCandidate
-      : null
   const activeSourceControlLaunchPlatform = resolveSourceControlLaunchPlatform({
     connectionId: activeConnectionId,
     worktreePath: activeWorktreePath
   })
-  const runtimeEnvironmentId = settings?.activeRuntimeEnvironmentId?.trim() || null
+  const runtimeEnvironmentId = useAppStore((s) =>
+    getRuntimeEnvironmentIdForWorktree(s, activeWorktreeId)
+  )
+  const ownerSettings = useMemo<AppState['settings']>(
+    () =>
+      !settings
+        ? settings
+        : runtimeEnvironmentId
+          ? { ...settings, activeRuntimeEnvironmentId: runtimeEnvironmentId }
+          : { ...settings, activeRuntimeEnvironmentId: null },
+    [runtimeEnvironmentId, settings]
+  )
   const repoConnectionId = repo?.connectionId?.trim() || null
   const sshConnectionStatus = useAppStore((s) =>
     repoConnectionId ? s.sshConnectionStates.get(repoConnectionId)?.status : undefined
@@ -532,6 +485,9 @@ export default function ChecksPanel(): React.JSX.Element {
     branch,
     linkedGitHubPR: activeWorktree?.linkedPR ?? null,
     linkedGitLabMR: activeWorktree?.linkedGitLabMR ?? null,
+    linkedBitbucketPR: activeWorktree?.linkedBitbucketPR ?? null,
+    linkedAzureDevOpsPR: activeWorktree?.linkedAzureDevOpsPR ?? null,
+    linkedGiteaPR: activeWorktree?.linkedGiteaPR ?? null,
     runtimeEnvironmentId,
     repoConnectionId,
     pushTarget: activeWorktreePushTarget
@@ -598,11 +554,25 @@ export default function ChecksPanel(): React.JSX.Element {
   const isFolder = repo ? isFolderRepo(repo) : false
   const prCacheKey =
     repo && branch
-      ? getGitHubPRCacheKey(repo.path, repo.id, branch, settings, repo.connectionId)
+      ? getGitHubPRCacheKey(
+          repo.path,
+          repo.id,
+          branch,
+          settings,
+          repo.connectionId,
+          repo.executionHostId
+        )
       : ''
   const hostedReviewCacheKey =
     repo && branch
-      ? getHostedReviewCacheKey(repo.path, branch, settings, repo.id, repo.connectionId)
+      ? getHostedReviewCacheKey(
+          repo.path,
+          branch,
+          settings,
+          repo.id,
+          repo.connectionId,
+          repo.executionHostId
+        )
       : ''
   const refreshContextKey = `${activeWorktreeId ?? ''}::${prCacheKey}::${branch}`
   if (refreshContextKey !== refreshContextKeyRef.current) {
@@ -619,6 +589,9 @@ export default function ChecksPanel(): React.JSX.Element {
   const linkedPR = activeWorktree?.linkedPR ?? null
   const fallbackGitHubPRNumber = linkedPR == null ? (pr?.number ?? null) : null
   const linkedGitLabMR = activeWorktree?.linkedGitLabMR ?? null
+  const linkedBitbucketPR = activeWorktree?.linkedBitbucketPR ?? null
+  const linkedAzureDevOpsPR = activeWorktree?.linkedAzureDevOpsPR ?? null
+  const linkedGiteaPR = activeWorktree?.linkedGiteaPR ?? null
   const gitLabHostedReview = hostedReview?.provider === 'gitlab' ? hostedReview : null
   const activeReview: ChecksPanelReview | null =
     gitLabHostedReview ??
@@ -644,7 +617,8 @@ export default function ChecksPanel(): React.JSX.Element {
           repo.id,
           prChecksCacheSuffix(prNumber, pr?.prRepo),
           settings,
-          repo.connectionId
+          repo.connectionId,
+          repo.executionHostId
         )
       : ''
   const commentsCacheKey =
@@ -654,7 +628,8 @@ export default function ChecksPanel(): React.JSX.Element {
           repo.id,
           prCommentsCacheSuffix(prNumber, pr?.prRepo),
           settings,
-          repo.connectionId
+          repo.connectionId,
+          repo.executionHostId
         )
       : ''
   const checksFetchedAt = useAppStore((s) =>
@@ -674,7 +649,7 @@ export default function ChecksPanel(): React.JSX.Element {
           runtimeEnvironmentId,
           connectionId: repoConnectionId,
           branch,
-          base: hostedReviewCreationBaseRef,
+          base: repo.worktreeBaseRef ?? null,
           hasUncommittedChanges:
             gitStatusSnapshot?.contextKey === panelContextKey
               ? gitStatusSnapshot.hasUncommittedChanges
@@ -693,7 +668,10 @@ export default function ChecksPanel(): React.JSX.Element {
               : null,
           linkedGitHubPR: linkedPR,
           fallbackGitHubPR: fallbackGitHubPRNumber,
-          linkedGitLabMR
+          linkedGitLabMR,
+          linkedBitbucketPR,
+          linkedAzureDevOpsPR,
+          linkedGiteaPR
         })
       : ''
   const gitStatusInputs = readChecksPanelGitStatusSnapshot(gitStatusSnapshot, panelContextKey)
@@ -727,143 +705,16 @@ export default function ChecksPanel(): React.JSX.Element {
     // moved, the embedded composer should push before creating the review.
     setCreatePrPushFirst(true)
     const connectionId = activeConnectionId ?? undefined
-    await fetchUpstreamStatus(activeWorktreeId, activeWorktree.path, connectionId)
-  }, [activeConnectionId, activeWorktree?.path, activeWorktreeId, fetchUpstreamStatus])
-  const handleGeneratePullRequestFieldsForActive = useCallback(
-    async (
-      fields: PullRequestGenerationFields,
-      fieldRevisions: PullRequestFieldRevisions,
-      overrides?: RuntimeGeneratePullRequestFieldsOverrides
-    ): Promise<void> => {
-      if (!repo || !activePullRequestGenerationKey || !activeWorktreePath || !branch) {
-        return
-      }
-      const generationKey = activePullRequestGenerationKey
-      if (
-        useAppStore.getState().pullRequestGenerationRecords[generationKey]?.status === 'running'
-      ) {
-        return
-      }
-      const requestId = allocatePullRequestGenerationRequestId()
-      const context: PullRequestGenerationContext = {
-        worktreeId: activeWorktreeId,
-        worktreePath: activeWorktreePath,
-        connectionId: activeConnectionId ?? undefined,
-        requestId,
-        repoId: repo.id,
-        branch
-      }
-      const seed = { ...fields }
-      // Why: Checks stays mounted across tab switches, but the composer itself
-      // can unmount when eligibility refreshes; keep generation tied to the branch.
-      setPullRequestGenerationRecord(
-        generationKey,
-        createRunningPullRequestGenerationRecord(context, seed, fieldRevisions)
-      )
-
-      try {
-        const result = await generateRuntimePullRequestFields(
-          {
-            settings: useAppStore.getState().settings,
-            worktreeId: context.worktreeId,
-            worktreePath: context.worktreePath,
-            connectionId: context.connectionId
-          },
-          {
-            base: stripBaseRef((seed.base ?? '').trim()),
-            title: seed.title,
-            body: seed.body,
-            draft: seed.draft
-          },
-          overrides
-        )
-        if (result.branchChangedByPreparation) {
-          await handleBranchChangedByPullRequestGeneration()
-        }
-        if (result.success) {
-          useAppStore.getState().recordFeatureInteraction('ai-pr-generation')
-        }
-        updatePullRequestGenerationRecord(generationKey, (record) => {
-          if (!result.success) {
-            return resolvePullRequestGenerationFailure({
-              record,
-              requestId,
-              canceled: result.canceled,
-              error: result.canceled ? null : result.error
-            })
-          }
-          if (!record) {
-            return null
-          }
-          return resolvePullRequestGenerationSuccess({
-            record,
-            requestId,
-            result: {
-              base: stripBaseRef(result.fields.base),
-              title: result.fields.title,
-              body: result.fields.body,
-              draft: result.fields.draft
-            }
-          })
-        })
-      } catch (error) {
-        updatePullRequestGenerationRecord(generationKey, (record) =>
-          resolvePullRequestGenerationFailure({
-            record,
-            requestId,
-            error:
-              error instanceof Error ? error.message : 'Failed to generate pull request details'
-          })
-        )
-      }
-    },
-    [
-      activeConnectionId,
-      activePullRequestGenerationKey,
-      activeWorktreeId,
-      activeWorktreePath,
-      allocatePullRequestGenerationRequestId,
-      branch,
-      handleBranchChangedByPullRequestGeneration,
-      repo,
-      setPullRequestGenerationRecord,
-      updatePullRequestGenerationRecord
-    ]
-  )
-  const handleCancelGeneratePullRequestFieldsForActive = useCallback((): void => {
-    if (!activePullRequestGenerationKey) {
-      return
-    }
-    const record = prGenerationRecords[activePullRequestGenerationKey]
-    if (!record || record.status !== 'running') {
-      return
-    }
-    const generationKey = activePullRequestGenerationKey
-    updatePullRequestGenerationRecord(generationKey, (current) => {
-      if (!current || current.context.requestId !== record.context.requestId) {
-        return null
-      }
-      return resolvePullRequestGenerationCancel(current)
+    await fetchUpstreamStatus(activeWorktreeId, activeWorktree.path, connectionId, undefined, {
+      runtimeTargetSettings: ownerSettings
     })
-    void cancelRuntimeGeneratePullRequestFields({
-      settings: useAppStore.getState().settings,
-      worktreeId: record.context.worktreeId,
-      worktreePath: record.context.worktreePath,
-      connectionId: record.context.connectionId
-    }).catch((error) => {
-      updatePullRequestGenerationRecord(generationKey, (current) => {
-        if (!current || current.context.requestId !== record.context.requestId) {
-          return null
-        }
-        return {
-          ...current,
-          status: 'failed',
-          error: error instanceof Error ? error.message : 'Failed to stop pull request generation',
-          hydrated: false
-        }
-      })
-    })
-  }, [activePullRequestGenerationKey, prGenerationRecords, updatePullRequestGenerationRecord])
+  }, [
+    activeConnectionId,
+    activeWorktree?.path,
+    activeWorktreeId,
+    fetchUpstreamStatus,
+    ownerSettings
+  ])
   const prCreationDefaults = useMemo(() => {
     if (!settings) {
       return DEFAULT_SOURCE_CONTROL_AI_PR_CREATION_DEFAULTS
@@ -886,12 +737,12 @@ export default function ChecksPanel(): React.JSX.Element {
           prCreationProductDefaults: DEFAULT_SOURCE_CONTROL_AI_PR_CREATION_DEFAULTS
         })
   }, [repo, settings])
-  const createComposerOpen = shouldOpenChecksPanelCreateComposer({
-    activeReview,
-    isFolder,
-    branch,
-    hostedReviewCreation
-  })
+  const createComposerOpen =
+    !activeReview &&
+    !isFolder &&
+    Boolean(branch) &&
+    (hostedReviewCreation?.canCreate === true ||
+      hostedReviewCreation?.blockedReason === 'needs_push')
   const {
     aiGenerationEnabled: prAiGenerationEnabled,
     base: prBase,
@@ -912,8 +763,7 @@ export default function ChecksPanel(): React.JSX.Element {
     generateDisabled: prGenerateDisabled,
     generateDisabledReason: prGenerateDisabledReason,
     handleGenerate: handleGeneratePullRequestFields,
-    handleCancelGenerate: handleCancelGeneratePullRequestFields,
-    applyGeneratedFields: applyGeneratedPullRequestFields
+    handleCancelGenerate: handleCancelGeneratePullRequestFields
   } = useCreatePullRequestDialogFields({
     open: createComposerOpen,
     repoId: repo?.id ?? '',
@@ -922,60 +772,11 @@ export default function ChecksPanel(): React.JSX.Element {
     branch,
     eligibility: hostedReviewCreation,
     repo,
-    settings,
+    settings: ownerSettings,
     submitting: isCreatingPr,
     prCreationDefaults,
-    onBranchChangedByGeneration: handleBranchChangedByPullRequestGeneration,
-    generation: {
-      generating: activePullRequestGenerationRecord?.status === 'running',
-      generateError: activePullRequestGenerationRecord?.error ?? null,
-      onGenerate: (fields, fieldRevisions, overrides) => {
-        void handleGeneratePullRequestFieldsForActive(fields, fieldRevisions, overrides)
-      },
-      onCancelGenerate: handleCancelGeneratePullRequestFieldsForActive
-    }
+    onBranchChangedByGeneration: handleBranchChangedByPullRequestGeneration
   })
-
-  useEffect(() => {
-    if (
-      !activePullRequestGenerationKey ||
-      !activePullRequestGenerationRecord ||
-      activePullRequestGenerationRecord.status !== 'succeeded' ||
-      !activePullRequestGenerationRecord.result ||
-      activePullRequestGenerationRecord.hydrated
-    ) {
-      return
-    }
-    if (
-      !shouldHydratePullRequestGenerationResult({
-        record: activePullRequestGenerationRecord
-      })
-    ) {
-      return
-    }
-    applyGeneratedPullRequestFields(
-      activePullRequestGenerationRecord.result,
-      activePullRequestGenerationRecord.seedFieldRevisions
-    )
-    updatePullRequestGenerationRecord(activePullRequestGenerationKey, (record) => {
-      if (
-        !record ||
-        record.context.requestId !== activePullRequestGenerationRecord.context.requestId
-      ) {
-        return null
-      }
-      return {
-        ...record,
-        hydrated: true
-      }
-    })
-  }, [
-    activePullRequestGenerationKey,
-    activePullRequestGenerationRecord,
-    applyGeneratedPullRequestFields,
-    updatePullRequestGenerationRecord
-  ])
-
   const handlePrBaseChange = useCallback(
     (value: string): void => {
       setCreatePrError(null)
@@ -1025,6 +826,9 @@ export default function ChecksPanel(): React.JSX.Element {
         linkedGitHubPR: linkedPR,
         fallbackGitHubPR: fallbackGitHubPRNumber,
         linkedGitLabMR,
+        linkedBitbucketPR,
+        linkedAzureDevOpsPR,
+        linkedGiteaPR,
         staleWhileRevalidate: true
       })
       if (activeWorktreeId && !isGitLabReviewContext) {
@@ -1040,6 +844,9 @@ export default function ChecksPanel(): React.JSX.Element {
     isFolder,
     isGitLabReviewContext,
     isPanelVisible,
+    linkedAzureDevOpsPR,
+    linkedBitbucketPR,
+    linkedGiteaPR,
     linkedGitLabMR,
     linkedPR,
     repo
@@ -1121,7 +928,7 @@ export default function ChecksPanel(): React.JSX.Element {
       shouldClearChecksPanelGitStatusSnapshot(snapshot, requestContextKey) ? null : snapshot
     )
     const context = {
-      settings: useAppStore.getState().settings,
+      settings: ownerSettings,
       worktreeId: activeWorktreeId,
       worktreePath: activeWorktreePath,
       connectionId
@@ -1204,6 +1011,7 @@ export default function ChecksPanel(): React.JSX.Element {
     gitStatusRefreshNonce,
     isFolder,
     isPanelVisible,
+    ownerSettings,
     panelContextKey,
     repo,
     repoConnectionId,
@@ -1223,9 +1031,10 @@ export default function ChecksPanel(): React.JSX.Element {
     let stale = false
     void getHostedReviewCreationEligibility({
       repoPath: repo.path,
+      repoId: repo.id,
       ...(activeWorktreePath ? { worktreePath: activeWorktreePath } : {}),
       branch,
-      base: hostedReviewCreationBaseRef,
+      base: repo.worktreeBaseRef ?? null,
       hasUncommittedChanges,
       hasUpstream: remoteStatus?.hasUpstream,
       ahead: remoteStatus?.ahead,
@@ -1233,9 +1042,9 @@ export default function ChecksPanel(): React.JSX.Element {
       linkedGitHubPR: linkedPR,
       fallbackGitHubPR: fallbackGitHubPRNumber,
       linkedGitLabMR,
-      linkedBitbucketPR: null,
-      linkedAzureDevOpsPR: null,
-      linkedGiteaPR: null
+      linkedBitbucketPR,
+      linkedAzureDevOpsPR,
+      linkedGiteaPR
     })
       .then((result) => {
         if (!stale) {
@@ -1263,13 +1072,15 @@ export default function ChecksPanel(): React.JSX.Element {
     getHostedReviewCreationEligibility,
     gitStatusReadyForPanelContext,
     hasUncommittedChanges,
-    hostedReviewCreationBaseRef,
     hostedReviewCreationRequestKey,
     isFolder,
     isPanelVisible,
     linkedPR,
     fallbackGitHubPRNumber,
     linkedGitLabMR,
+    linkedBitbucketPR,
+    linkedAzureDevOpsPR,
+    linkedGiteaPR,
     remoteStatus?.ahead,
     remoteStatus?.behind,
     remoteStatus?.hasUpstream,
@@ -1680,7 +1491,10 @@ export default function ChecksPanel(): React.JSX.Element {
           branch,
           linkedGitHubPR: linkedPR,
           fallbackGitHubPR: fallbackGitHubPRNumber,
-          linkedGitLabMR
+          linkedGitLabMR,
+          linkedBitbucketPR,
+          linkedAzureDevOpsPR,
+          linkedGiteaPR
         })
         if (!isCurrentRequest()) {
           return
@@ -1715,7 +1529,10 @@ export default function ChecksPanel(): React.JSX.Element {
         branch,
         linkedGitHubPR: linkedPR,
         fallbackGitHubPR: refreshedPR?.number ?? fallbackGitHubPRNumber,
-        linkedGitLabMR
+        linkedGitLabMR,
+        linkedBitbucketPR,
+        linkedAzureDevOpsPR,
+        linkedGiteaPR
       })
       if (!isCurrentRequest()) {
         return
@@ -1821,6 +1638,9 @@ export default function ChecksPanel(): React.JSX.Element {
     linkedPR,
     fallbackGitHubPRNumber,
     fetchGitLabDetails,
+    linkedAzureDevOpsPR,
+    linkedBitbucketPR,
+    linkedGiteaPR,
     linkedGitLabMR,
     isGitLabReviewContext,
     fetchPRForBranch,
@@ -1845,7 +1665,10 @@ export default function ChecksPanel(): React.JSX.Element {
           repoId: repo.id,
           linkedGitHubPR: linkedPR,
           fallbackGitHubPR: fallbackGitHubPRNumber,
-          linkedGitLabMR
+          linkedGitLabMR,
+          linkedBitbucketPR,
+          linkedAzureDevOpsPR,
+          linkedGiteaPR
         })
         if (activeGitLabReview) {
           void fetchGitLabDetails()
@@ -1871,6 +1694,9 @@ export default function ChecksPanel(): React.JSX.Element {
       fetchGitLabDetails,
       fetchHostedReviewForBranch,
       isGitLabReviewContext,
+      linkedAzureDevOpsPR,
+      linkedBitbucketPR,
+      linkedGiteaPR,
       linkedGitLabMR,
       linkedPR,
       repo
@@ -1936,7 +1762,10 @@ export default function ChecksPanel(): React.JSX.Element {
         branch,
         linkedGitHubPR: linkedPR,
         fallbackGitHubPR: fallbackGitHubPRNumber,
-        linkedGitLabMR
+        linkedGitLabMR,
+        linkedBitbucketPR,
+        linkedAzureDevOpsPR,
+        linkedGiteaPR
       })
       const refreshedGitLabReview =
         refreshedReview?.provider === 'gitlab' ? refreshedReview : activeGitLabReview
@@ -1962,7 +1791,10 @@ export default function ChecksPanel(): React.JSX.Element {
       branch,
       linkedGitHubPR: linkedPR,
       fallbackGitHubPR: refreshedPR?.number ?? fallbackGitHubPRNumber,
-      linkedGitLabMR
+      linkedGitLabMR,
+      linkedBitbucketPR,
+      linkedAzureDevOpsPR,
+      linkedGiteaPR
     })
   }, [
     activeGitLabReview,
@@ -1973,6 +1805,9 @@ export default function ChecksPanel(): React.JSX.Element {
     fetchGitLabDetails,
     fetchHostedReviewForBranch,
     fetchPRForBranch,
+    linkedAzureDevOpsPR,
+    linkedBitbucketPR,
+    linkedGiteaPR,
     linkedGitLabMR,
     linkedPR,
     repo
@@ -2009,6 +1844,7 @@ export default function ChecksPanel(): React.JSX.Element {
       if (activeReview.provider === 'gitlab') {
         const result = await window.api.gl.updateMR({
           repoPath: repo.path,
+          repoId: repo.id,
           iid: activeReview.number,
           updates: { title: nextTitle }
         })
@@ -2332,7 +2168,7 @@ export default function ChecksPanel(): React.JSX.Element {
       ),
       description: translate(
         'auto.components.right.sidebar.ChecksPanel.abf59262fb',
-        'Review the prompt before starting an agent.'
+        'Review and edit the full command input before starting an agent.'
       ),
       prompt: buildResolvePullRequestConflictsPrompt({
         reviewKind: activeConflictReview.provider === 'gitlab' ? 'MR' : 'PR',
@@ -2586,7 +2422,10 @@ export default function ChecksPanel(): React.JSX.Element {
           repoId: repo.id,
           branch,
           linkedGitHubPR: linkedPRNumber,
-          linkedGitLabMR
+          linkedGitLabMR,
+          linkedBitbucketPR,
+          linkedAzureDevOpsPR,
+          linkedGiteaPR
         })
         if (!isCurrentRequestContext()) {
           return
@@ -2690,6 +2529,9 @@ export default function ChecksPanel(): React.JSX.Element {
       fetchPRComments,
       fetchPRForBranch,
       isCurrentAsyncResult,
+      linkedAzureDevOpsPR,
+      linkedBitbucketPR,
+      linkedGiteaPR,
       linkedGitLabMR,
       panelContextKey,
       prCacheKey,
@@ -2707,17 +2549,11 @@ export default function ChecksPanel(): React.JSX.Element {
   }, [activeReview, activeWorktreeId])
 
   const handleUnlinkPullRequest = useCallback(() => {
-    if (!activeWorktreeId || !activeReview) {
+    if (!activeWorktreeId || activeReview?.provider !== 'github' || linkedPR === null) {
       return
     }
-    if (activeReview.provider === 'github' && linkedPR !== null) {
-      void updateWorktreeMeta(activeWorktreeId, { linkedPR: null })
-      return
-    }
-    if (activeReview.provider === 'gitlab' && linkedGitLabMR !== null) {
-      void updateWorktreeMeta(activeWorktreeId, { linkedGitLabMR: null })
-    }
-  }, [activeReview, activeWorktreeId, linkedGitLabMR, linkedPR, updateWorktreeMeta])
+    void updateWorktreeMeta(activeWorktreeId, { linkedPR: null })
+  }, [activeReview?.provider, activeWorktreeId, linkedPR, updateWorktreeMeta])
 
   const handleLinkAnotherPullRequest = useCallback(() => {
     if (!activeWorktreeId || !activeWorktree || activeReview?.provider !== 'github') {
@@ -2750,14 +2586,24 @@ export default function ChecksPanel(): React.JSX.Element {
         activeWorktree.path,
         false,
         connectionId,
-        activeWorktree.pushTarget
+        activeWorktree.pushTarget,
+        { runtimeTargetSettings: ownerSettings }
       )
-      await fetchUpstreamStatus(activeWorktreeId, activeWorktree.path, connectionId)
+      await fetchUpstreamStatus(activeWorktreeId, activeWorktree.path, connectionId, undefined, {
+        runtimeTargetSettings: ownerSettings
+      })
       return true
     } catch {
       return false
     }
-  }, [activeConnectionId, activeWorktree, activeWorktreeId, fetchUpstreamStatus, pushBranch])
+  }, [
+    activeConnectionId,
+    activeWorktree,
+    activeWorktreeId,
+    fetchUpstreamStatus,
+    ownerSettings,
+    pushBranch
+  ])
 
   const handlePublishBranch = useCallback(async (): Promise<void> => {
     if (
@@ -2776,13 +2622,15 @@ export default function ChecksPanel(): React.JSX.Element {
         activeWorktree.path,
         true,
         connectionId,
-        activeWorktree.pushTarget
+        activeWorktree.pushTarget,
+        { runtimeTargetSettings: ownerSettings }
       )
       await fetchUpstreamStatus(
         activeWorktreeId,
         activeWorktree.path,
         connectionId,
-        activeWorktree.pushTarget
+        activeWorktree.pushTarget,
+        { runtimeTargetSettings: ownerSettings }
       )
     } catch {
       // Store remote actions already surface the publish failure toast.
@@ -2799,6 +2647,7 @@ export default function ChecksPanel(): React.JSX.Element {
     fetchUpstreamStatus,
     isPublishingBranch,
     isRemoteOperationActive,
+    ownerSettings,
     pushBranch
   ])
 
@@ -2827,7 +2676,10 @@ export default function ChecksPanel(): React.JSX.Element {
             branch,
             linkedGitHubPR: linkedPR,
             fallbackGitHubPR: fallbackGitHubPRNumber,
-            linkedGitLabMR: result.number
+            linkedGitLabMR: result.number,
+            linkedBitbucketPR,
+            linkedAzureDevOpsPR,
+            linkedGiteaPR
           })
           const refreshedGitLabReview =
             refreshedReview?.provider === 'gitlab' ? refreshedReview : null
@@ -2848,6 +2700,9 @@ export default function ChecksPanel(): React.JSX.Element {
       fallbackGitHubPRNumber,
       fetchGitLabDetails,
       fetchHostedReviewForBranch,
+      linkedAzureDevOpsPR,
+      linkedBitbucketPR,
+      linkedGiteaPR,
       linkedPR,
       refreshLinkedGitHubPullRequest,
       repo,
@@ -2912,6 +2767,7 @@ export default function ChecksPanel(): React.JSX.Element {
         pushed = true
       }
       const result = await createHostedReview(repo.path, {
+        repoId: repo.id,
         provider: hostedReviewCreateProvider,
         base,
         head: normalizeHostedReviewHeadRef(branch),
@@ -3198,9 +3054,7 @@ export default function ChecksPanel(): React.JSX.Element {
         <ChecksPanelReviewHeader
           review={activeReview}
           isRefreshing={isRefreshing}
-          canUnlinkPullRequest={
-            activeReview.provider === 'gitlab' ? linkedGitLabMR !== null : linkedPR !== null
-          }
+          canUnlinkPullRequest={linkedPR !== null}
           onRefresh={() => void handleRefresh()}
           onOpenReview={handleOpenPR}
           onUnlinkPullRequest={handleUnlinkPullRequest}
@@ -3313,10 +3167,10 @@ export default function ChecksPanel(): React.JSX.Element {
       <PRCommentsList
         comments={comments}
         commentsLoading={commentsLoading}
+        reviewKind={reviewShortLabel}
         commentsDisabled={!canTargetPRComments}
         commentsDisabledReason={commentsDisabledReason}
         selectionContextKey={stateRequestKey}
-        selectionClearRequest={commentSelectionClearRequest}
         resolveCommentsWithAIDisabled={Boolean(resolveCommentsWithAIDisabledReason)}
         resolveCommentsWithAIDisabledReason={resolveCommentsWithAIDisabledReason}
         onAddComment={pr ? handleAddPRComment : undefined}
@@ -3380,14 +3234,6 @@ export default function ChecksPanel(): React.JSX.Element {
         onLaunched={() => {
           const launchedState = agentComposerState
           if (launchedState?.actionId === 'resolveComments' && launchedState.commentResolution) {
-            const { reviewContextKey } = launchedState.commentResolution
-            // Why: once the selected comments are sent to the agent, the queue
-            // is spent even if the host later rejects thread resolution.
-            clearPRCommentsListSelection(reviewContextKey)
-            setCommentSelectionClearRequest((prev) => ({
-              contextKey: reviewContextKey,
-              token: (prev?.token ?? 0) + 1
-            }))
             void resolveSelectedThreadsAfterLaunch(launchedState.commentResolution).catch((err) => {
               console.warn('Failed to resolve selected review comments after AI launch:', err)
               toast.error(

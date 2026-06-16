@@ -7,7 +7,8 @@ import { RemoteFileBrowser } from './RemoteFileBrowser'
 import { translate } from '@/i18n/i18n'
 
 type CreateProjectParentBrowserProps = {
-  runtimeEnvironmentId: string
+  runtimeEnvironmentId?: string | null
+  sshTargetId?: string | null
   createParent: string
   onParentChange: (value: string) => void
   onClose: () => void
@@ -15,6 +16,7 @@ type CreateProjectParentBrowserProps = {
 
 export function CreateProjectParentBrowser({
   runtimeEnvironmentId,
+  sshTargetId,
   createParent,
   onParentChange,
   onClose
@@ -25,7 +27,7 @@ export function CreateProjectParentBrowser({
         <DialogTitle>
           {translate(
             'auto.components.sidebar.CreateProjectLocationField.f520f83a97',
-            'Browse server filesystem'
+            'Browse host filesystem'
           )}
         </DialogTitle>
         <DialogDescription>
@@ -35,15 +37,27 @@ export function CreateProjectParentBrowser({
           )}
         </DialogDescription>
       </DialogHeader>
-      <RemoteFileBrowser
-        runtimeEnvironmentId={runtimeEnvironmentId}
-        initialPath={createParent || '~'}
-        onSelect={(path) => {
-          onParentChange(path)
-          onClose()
-        }}
-        onCancel={onClose}
-      />
+      {sshTargetId ? (
+        <RemoteFileBrowser
+          targetId={sshTargetId}
+          initialPath={createParent || '~'}
+          onSelect={(path) => {
+            onParentChange(path)
+            onClose()
+          }}
+          onCancel={onClose}
+        />
+      ) : (
+        <RemoteFileBrowser
+          runtimeEnvironmentId={runtimeEnvironmentId as string}
+          initialPath={createParent || '~'}
+          onSelect={(path) => {
+            onParentChange(path)
+            onClose()
+          }}
+          onCancel={onClose}
+        />
+      )}
     </>
   )
 }
@@ -53,6 +67,7 @@ type CreateProjectLocationFieldProps = {
   isCreating: boolean
   manualParentEntry: boolean
   runtimeEnvironmentId?: string | null
+  sshTargetId?: string | null
   onParentChange: (value: string) => void
   onPickParent: () => void
   onBrowseServer: () => void
@@ -63,6 +78,7 @@ export function CreateProjectLocationField({
   isCreating,
   manualParentEntry,
   runtimeEnvironmentId,
+  sshTargetId,
   onParentChange,
   onPickParent,
   onBrowseServer
@@ -94,10 +110,10 @@ export function CreateProjectLocationField({
                 size="icon"
                 className="h-11 w-11 shrink-0"
                 onClick={onBrowseServer}
-                disabled={isCreating || !runtimeEnvironmentId}
+                disabled={isCreating || (!runtimeEnvironmentId && !sshTargetId)}
                 aria-label={translate(
                   'auto.components.sidebar.CreateProjectLocationField.f520f83a97',
-                  'Browse server filesystem'
+                  'Browse host filesystem'
                 )}
               >
                 <FolderOpen className="size-4" />
@@ -106,7 +122,7 @@ export function CreateProjectLocationField({
             <TooltipContent side="top" sideOffset={4}>
               {translate(
                 'auto.components.sidebar.CreateProjectLocationField.f520f83a97',
-                'Browse server filesystem'
+                'Browse host filesystem'
               )}
             </TooltipContent>
           </Tooltip>

@@ -1,4 +1,6 @@
 import type { GitHubWorkItem } from '../../../shared/types'
+import type { TaskSourceContext } from '../../../shared/task-source-context'
+import { getTaskSourceCacheScope } from '../../../shared/task-source-context'
 import { getLinkedWorkItemWorkspaceName } from '../../../shared/workspace-name'
 import type { LinkedWorkItemSummary } from './new-workspace'
 import { parseGitHubIssueOrPRLink } from './github-links'
@@ -27,15 +29,18 @@ export type SmartGitHubSubmitResolution = {
 export type SmartGitHubSubmitLookup = {
   repoId: string
   repoPath: string
+  sourceContext?: TaskSourceContext | null
   intent: SmartGitHubSubmitIntent
   workItem: (args: {
     repoPath: string
     repoId: string
+    sourceContext?: TaskSourceContext | null
     number: number
   }) => Promise<GitHubWorkItem | null>
   workItemByOwnerRepo: (args: {
     repoPath: string
     repoId: string
+    sourceContext?: TaskSourceContext | null
     owner: string
     repo: string
     number: number
@@ -109,13 +114,16 @@ function parseGitHubIssueOrPRLinkFromText(
 function getSmartGitHubSubmitLookupCacheKey({
   repoId,
   repoPath,
+  sourceContext,
   intent
 }: {
   repoId: string
   repoPath: string
+  sourceContext?: TaskSourceContext | null
   intent: SmartGitHubSubmitIntent
 }): string {
-  const repoScope = `${repoId}:${repoPath}`
+  const sourceScope = sourceContext ? getTaskSourceCacheScope(sourceContext) : 'default'
+  const repoScope = `${sourceScope}:${repoId}:${repoPath}`
   if (intent.kind === 'hash-number') {
     return `${repoScope}:hash:${intent.number}`
   }
@@ -127,11 +135,12 @@ function getSmartGitHubSubmitLookupCacheKey({
 export function lookupSmartGitHubSubmitItem({
   repoId,
   repoPath,
+  sourceContext,
   intent,
   workItem,
   workItemByOwnerRepo
 }: SmartGitHubSubmitLookup): Promise<GitHubWorkItem | null> {
-  const key = getSmartGitHubSubmitLookupCacheKey({ repoId, repoPath, intent })
+  const key = getSmartGitHubSubmitLookupCacheKey({ repoId, repoPath, sourceContext, intent })
   const now = Date.now()
   pruneSmartGitHubSubmitLookupCache(now)
   const cached = smartGitHubSubmitLookupCache.get(key)
@@ -144,6 +153,7 @@ export function lookupSmartGitHubSubmitItem({
       ? workItemByOwnerRepo({
           repoPath,
           repoId,
+          sourceContext,
           owner: intent.owner,
           repo: intent.repo,
           number: intent.number,
@@ -152,6 +162,7 @@ export function lookupSmartGitHubSubmitItem({
       : workItem({
           repoPath,
           repoId,
+          sourceContext,
           number: intent.number
         })
   const stampedPromise = promise.then((item) => (item ? { ...item, repoId } : null))

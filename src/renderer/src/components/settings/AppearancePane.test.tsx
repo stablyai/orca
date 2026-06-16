@@ -194,6 +194,27 @@ describe('AppearancePane', () => {
     expect(updateSettings).toHaveBeenCalledWith({ uiLanguage: 'zh' })
   })
 
+  it('updates the left sidebar appearance from sidebar settings', async () => {
+    mocks.state.settingsSearchQuery = 'left sidebar'
+    const updateSettings = vi.fn()
+    const settings = getDefaultSettings('/tmp')
+
+    const container = await renderAppearancePane(settings, updateSettings)
+    const matchTerminalButton = Array.from(
+      container.querySelectorAll<HTMLButtonElement>('button[role="radio"]')
+    ).find((button) => button.textContent === 'Match Terminal')
+
+    expect(matchTerminalButton).toBeDefined()
+
+    await act(async () => {
+      matchTerminalButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    expect(updateSettings).toHaveBeenCalledWith({
+      leftSidebarAppearanceMode: 'match-terminal'
+    })
+  })
+
   it('restores the Automations sidebar button from the sidebar settings switch', async () => {
     const updateSettings = vi.fn()
     const settings = {

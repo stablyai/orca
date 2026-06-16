@@ -503,6 +503,10 @@ function buildMirroredTerminalTabs(
       activeSurface.quickCommandLabel?.trim() ||
       surfaces.find((surface) => surface.quickCommandLabel?.trim())?.quickCommandLabel?.trim() ||
       existing?.quickCommandLabel?.trim()
+    const launchAgent =
+      activeSurface.launchAgent ??
+      surfaces.find((surface) => surface.launchAgent)?.launchAgent ??
+      existing?.launchAgent
     return {
       tab: {
         id: localTabId,
@@ -515,7 +519,10 @@ function buildMirroredTerminalTabs(
         color: existing?.color ?? null,
         sortOrder: sortOffset + index,
         createdAt: existing?.createdAt ?? now + index,
-        ...(activeSurface.launchAgent ? { launchAgent: activeSurface.launchAgent } : {})
+        // Why: runtime snapshots can omit launchAgent after the process settles;
+        // keep the client-side launch intent so completed remote tabs do not
+        // briefly lose their provider icon between host status snapshots.
+        ...(launchAgent ? { launchAgent } : {})
       },
       hostTabId: parentTabId,
       ptyIds,
@@ -824,6 +831,7 @@ function buildMirroredBrowserTabs(
       canGoForward: tab.canGoForward,
       loadError: null,
       createdAt,
+      browserRuntimeEnvironmentId: environmentId,
       viewportPresetId: existing?.page.viewportPresetId ?? null
     }
     const workspace: BrowserWorkspace = {
@@ -1320,6 +1328,7 @@ function browserPageEqual(a: BrowserPage, b: BrowserPage): boolean {
     a.loadError?.description === b.loadError?.description &&
     a.loadError?.validatedUrl === b.loadError?.validatedUrl &&
     a.createdAt === b.createdAt &&
+    a.browserRuntimeEnvironmentId === b.browserRuntimeEnvironmentId &&
     a.viewportPresetId === b.viewportPresetId
   )
 }
@@ -1780,10 +1789,24 @@ export function applyWebSessionTabsSnapshot(
           .map((tabId) => hostToLocalTabId.get(tabId))
           .filter((tabId): tabId is string => tabId !== undefined && validTabBarIds.has(tabId))
       ) ?? []
-    return [
-      ...current.filter((tabId) => validTabBarIds.has(tabId) && !mirroredUnifiedIds.has(tabId)),
-      ...(hostTabBarOrder.length > 0 ? hostTabBarOrder : mirroredUnifiedTabs.map((tab) => tab.id))
-    ]
+    const next: string[] = []
+    const push = (tabId: string): void => {
+      if (validTabBarIds.has(tabId) && !next.includes(tabId)) {
+        next.push(tabId)
+      }
+    }
+    // Why: remote snapshots can arrive after the client staged local browser
+    // tabs. Preserve the user's visible mixed order and only append new host
+    // tabs; otherwise terminal-browser-terminal can collapse to browser-terminal-terminal.
+    for (const tabId of current) {
+      push(tabId)
+    }
+    const hostOrMirroredOrder =
+      hostTabBarOrder.length > 0 ? hostTabBarOrder : mirroredUnifiedTabs.map((tab) => tab.id)
+    for (const tabId of hostOrMirroredOrder) {
+      push(tabId)
+    }
+    return next
   })()
 
   let nextPtyIdsByTabId = state.ptyIdsByTabId

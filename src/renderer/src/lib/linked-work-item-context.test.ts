@@ -14,6 +14,17 @@ const LINEAR_ITEM = {
   title: 'Fix launch context handoff',
   linearIdentifier: 'ENG-123'
 }
+const LINEAR_WORKFLOW_SIDE_EFFECT_PHRASES = [
+  'linear-tickets completion flow',
+  'post one PR/MR summary comment',
+  'move the issue to review'
+] as const
+
+function expectNoLinearWorkflowSideEffects(value: string | null | undefined): void {
+  for (const phrase of LINEAR_WORKFLOW_SIDE_EFFECT_PHRASES) {
+    expect(value).not.toContain(phrase)
+  }
+}
 
 describe('contained linked context block (user-initiated copy)', () => {
   it('wraps linked context as untrusted source data', () => {
@@ -62,7 +73,7 @@ describe('contained linked context block (user-initiated copy)', () => {
 })
 
 describe('buildLinearLaunchContextBlock', () => {
-  it('emits the trusted header and a CLI hint when the CLI is available', () => {
+  it('emits the trusted header and an imperative CLI hint when the CLI is available', () => {
     const block = buildLinearLaunchContextBlock({
       identifier: 'ENG-123',
       url: LINEAR_ITEM.url,
@@ -72,9 +83,10 @@ describe('buildLinearLaunchContextBlock', () => {
     expect(block).toContain('Linked Linear issue: ENG-123')
     expect(block).not.toContain('Fix launch context handoff')
     expect(block).toContain('https://linear.app/acme/issue/ENG-123/test')
-    expect(block).toContain('Full ticket context is available with:')
+    expect(block).toContain('Before planning or editing, fetch the full ticket with:')
     expect(block).toContain('orca linear issue --current --full --json')
-    expect(block).not.toContain('meta')
+    expect(block).toContain('check `meta.partial`, `meta.includeErrors`, and `meta.sections`')
+    expectNoLinearWorkflowSideEffects(block)
   })
 
   it('falls back to --current when the identifier is not a Linear key', () => {
@@ -96,6 +108,7 @@ describe('buildLinearLaunchContextBlock', () => {
     expect(block).toContain('Linked Linear issue: ENG-123')
     expect(block).not.toContain('Fix launch context handoff')
     expect(block).not.toContain('orca linear issue')
+    expectNoLinearWorkflowSideEffects(block)
     expect(block).toContain('enable it from Orca Settings')
   })
 
@@ -125,6 +138,7 @@ describe('getLinkedWorkItemPromptContext', () => {
     expect(result.linkedContextBlocks).toHaveLength(1)
     expect(result.linkedContextBlocks[0]).toContain('orca linear issue --current --full --json')
     expect(result.linkedContextBlocks[0]).not.toContain('LINKED WORK ITEM CONTEXT')
+    expectNoLinearWorkflowSideEffects(result.linkedContextBlocks[0])
   })
 
   it('keeps the Linear header but drops the hint when the CLI is unavailable', () => {
@@ -164,6 +178,7 @@ describe('resolveQuickCreateLinkedWorkItemPrompt', () => {
     expect(result.draftPrompt).toContain('typed fallback note')
     expect(result.draftPrompt).toContain('orca linear issue --current --full --json')
     expect(result.draftPrompt).not.toContain('LINKED WORK ITEM CONTEXT')
+    expectNoLinearWorkflowSideEffects(result.draftPrompt)
     expect(result.draftPrompt).toMatch(/\n$/)
   })
 
@@ -211,6 +226,7 @@ describe('getLaunchableWorkItemDraftContent', () => {
     expect(draft).not.toContain('Fix launch context handoff')
     expect(draft).toContain('orca linear issue --current --full --json')
     expect(draft).not.toContain('LINKED WORK ITEM CONTEXT')
+    expectNoLinearWorkflowSideEffects(draft)
     expect(draft).toMatch(/\n$/)
   })
 
@@ -232,14 +248,14 @@ describe('buildAgentPromptWithContext', () => {
       cliAvailable: true
     })
 
-    expect(
-      buildAgentPromptWithContext(
-        'Fix this',
-        ['/tmp/report.txt'],
-        [],
-        linearBlock ? [linearBlock] : []
-      )
-    ).toContain(
+    const prompt = buildAgentPromptWithContext(
+      'Fix this',
+      ['/tmp/report.txt'],
+      [],
+      linearBlock ? [linearBlock] : []
+    )
+
+    expect(prompt).toContain(
       [
         'Fix this',
         '',
@@ -249,5 +265,6 @@ describe('buildAgentPromptWithContext', () => {
         'Linked Linear issue: ENG-123'
       ].join('\n')
     )
+    expectNoLinearWorkflowSideEffects(prompt)
   })
 })

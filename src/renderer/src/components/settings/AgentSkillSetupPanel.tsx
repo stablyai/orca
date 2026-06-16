@@ -78,12 +78,15 @@ export function AgentSkillSetupPanel({
   onRecheck
 }: AgentSkillSetupPanelProps): React.JSX.Element {
   const [terminalOpen, setTerminalOpen] = useState(false)
-  const [preInstallNoticeVisible, setPreInstallNoticeVisible] = useState(Boolean(preInstallNotice))
+  const [preInstallNoticeVisible, setPreInstallNoticeVisible] = useState(
+    Boolean(preInstallNotice && !installed)
+  )
   const mountedRef = useMountedRef()
   const readPrerequisiteStatus = useCallback(
     () => (getPrerequisiteStatus ?? window.api.cli.getInstallStatus)(),
     [getPrerequisiteStatus]
   )
+  const actionLabel = installed && preInstallNoticeVisible ? installLabel : installedInstallLabel
 
   useEffect(() => {
     if (!preInstallNotice) {
@@ -172,7 +175,7 @@ export function AgentSkillSetupPanel({
           disabled={terminalOpen || installDisabled}
         >
           <Terminal className="size-3.5" />
-          {installed ? installedInstallLabel : installLabel}
+          {installed ? actionLabel : installLabel}
         </Button>
       ) : null}
       {!installed || showRecheckWhenInstalled ? (

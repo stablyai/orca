@@ -19,6 +19,7 @@ import {
   useAgentCapabilitySetupStatus,
   type AgentCapabilityInstallStatus
 } from './agent-capability-setup-status'
+import { FullDiskAccessSetupPrompt } from './FullDiskAccessSetupPrompt'
 import { translate } from '@/i18n/i18n'
 
 export function AgentCapabilitiesSetupAction(props: {
@@ -209,6 +210,7 @@ function AgentCapabilitySetupControls(props: {
         onChange={props.onFeatureSetupChange}
         installStatus={props.installStatus}
       />
+      <FullDiskAccessSetupPrompt />
       {showSetupAction ? (
         <div className="mt-6 flex items-center">
           <Button

@@ -14,9 +14,6 @@ import { translate } from '@/i18n/i18n'
 type ConfirmKind = 'killOne'
 
 export function ManageSessionsSection(): React.JSX.Element {
-  const activeRuntimeEnvironmentId = useAppStore(
-    (s) => s.settings?.activeRuntimeEnvironmentId ?? null
-  )
   const [sessions, setSessions] = useState<PtyManagementSession[]>([])
   const [isRefreshing, setIsRefreshing] = useState(true)
   const [hasLoadedOnce, setHasLoadedOnce] = useState(false)
@@ -72,14 +69,6 @@ export function ManageSessionsSection(): React.JSX.Element {
   }, [])
 
   const refresh = useCallback(async (): Promise<PtyManagementSession[]> => {
-    if (activeRuntimeEnvironmentId?.trim()) {
-      if (isMounted.current) {
-        setSessions([])
-        setIsRefreshing(false)
-        setHasLoadedOnce(true)
-      }
-      return []
-    }
     setIsRefreshing(true)
     try {
       const result = await window.api.pty.management.listSessions()
@@ -108,7 +97,7 @@ export function ManageSessionsSection(): React.JSX.Element {
         setHasLoadedOnce(true)
       }
     }
-  }, [activeRuntimeEnvironmentId])
+  }, [])
 
   useEffect(() => {
     void refresh()
@@ -191,40 +180,6 @@ export function ManageSessionsSection(): React.JSX.Element {
   }, [pendingKillSession, handleKillOne])
 
   const isBusy = busyKind !== null || daemonActions.isBusy
-
-  if (activeRuntimeEnvironmentId?.trim()) {
-    return (
-      <section className="space-y-4">
-        <div className="space-y-1">
-          <h3 className="text-sm font-semibold">
-            {translate(
-              'auto.components.settings.ManageSessionsSection.d1b80fd5cd',
-              'Manage Sessions'
-            )}
-          </h3>
-          <p className="text-xs text-muted-foreground">
-            {translate(
-              'auto.components.settings.ManageSessionsSection.ad467eaadc',
-              'Session management is unavailable while a remote runtime server is active.'
-            )}
-          </p>
-        </div>
-        <SearchableSetting
-          title={getManageSessionsSearchEntries()[0].title}
-          description={getManageSessionsSearchEntries()[0].description}
-          keywords={getManageSessionsSearchEntries()[0].keywords}
-          className="space-y-3"
-        >
-          <div className="rounded-lg border border-border/60 px-3 py-3 text-xs text-muted-foreground">
-            {translate(
-              'auto.components.settings.ManageSessionsSection.9c940434af',
-              'Switch back to the local runtime to restart or kill local daemon sessions.'
-            )}
-          </div>
-        </SearchableSetting>
-      </section>
-    )
-  }
 
   return (
     <section className="space-y-4">

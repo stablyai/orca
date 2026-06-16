@@ -53,6 +53,22 @@ function hasFullMergeMetadata(item: GitHubPRMergeStateInput): boolean {
   return item.mergeable !== undefined || item.mergeStateStatus !== undefined
 }
 
+function isConflicting(item: GitHubPRMergeStateInput): boolean {
+  return item.mergeable === 'CONFLICTING' || item.mergeStateStatus === 'DIRTY'
+}
+
+// Why: GitHub rejects enabling auto-merge on a conflicting PR, so offering it
+// there only yields an error toast. Already-armed and merge-queue PRs have their
+// own actions; everything else open can arm auto-merge like GitHub's own box.
+function canEnableAutoMerge(item: GitHubPRMergeStateInput): boolean {
+  return (
+    item.state === 'open' &&
+    item.autoMergeEnabled !== true &&
+    item.mergeQueueRequired !== true &&
+    !isConflicting(item)
+  )
+}
+
 function passedChecksMergePresentation(
   autoMergeAction: GitHubPRAutoMergeAction | null
 ): GitHubPRMergeStatePresentation {
@@ -98,7 +114,19 @@ export function presentGitHubPRMergeState(
                 'Add this pull request to the GitHub merge queue'
               )
             }
-          : null
+          : canEnableAutoMerge(item)
+            ? {
+                kind: 'enable' as const,
+                label: translate(
+                  'auto.components.github.pr.merge.state.4ab19a62ef',
+                  'Enable auto-merge'
+                ),
+                tooltip: translate(
+                  'auto.components.github.pr.merge.state.8f6cb3772f',
+                  'Merge this pull request automatically once requirements are met'
+                )
+              }
+            : null
 
   if (item.state === 'merged') {
     return {
@@ -189,7 +217,7 @@ export function presentGitHubPRMergeState(
       autoMergeAction
     }
   }
-  if (item.mergeable === 'CONFLICTING' || item.mergeStateStatus === 'DIRTY') {
+  if (isConflicting(item)) {
     return {
       label: translate('auto.components.github.pr.merge.state.7e8bbe3cd7', 'Conflicts'),
       tone: DANGER_TONE,

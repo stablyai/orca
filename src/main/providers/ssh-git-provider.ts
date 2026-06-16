@@ -21,6 +21,7 @@ import { JsonRpcErrorCode } from '../ssh/relay-protocol'
 import type { CommitMessageDraftContext } from '../../shared/commit-message-generation'
 import type { CommitMessagePlan } from '../../shared/commit-message-plan'
 import type { RemoteCommitMessageExecResult } from '../text-generation/commit-message-text-generation'
+import type { RemoteHostPlatform } from '../ssh/ssh-remote-platform'
 import {
   describeMaxBufferOverflowError,
   isMaxBufferOverflowError
@@ -60,13 +61,21 @@ export class SshGitProvider implements IGitProvider {
   private nonInteractiveExecQueues = new Map<string, NonInteractiveExecQueueEntry[]>()
   private loggedWorktreeIsCleanFallback = false
 
-  constructor(connectionId: string, mux: SshChannelMultiplexer) {
+  constructor(
+    connectionId: string,
+    mux: SshChannelMultiplexer,
+    private readonly hostPlatform: RemoteHostPlatform | null = null
+  ) {
     this.connectionId = connectionId
     this.mux = mux
   }
 
   getConnectionId(): string {
     return this.connectionId
+  }
+
+  getHostPlatform(): RemoteHostPlatform | null {
+    return this.hostPlatform
   }
 
   async getStatus(
@@ -540,10 +549,61 @@ export class SshGitProvider implements IGitProvider {
     await this.mux.request('git.renameCurrentBranch', { worktreePath, newBranch })
   }
 
-  async exec(args: string[], cwd: string): Promise<{ stdout: string; stderr: string }> {
-    return (await this.mux.request('git.exec', { args, cwd })) as {
+  async exec(
+    args: string[],
+    cwd: string,
+    options?: { signal?: AbortSignal; timeoutMs?: number }
+  ): Promise<{ stdout: string; stderr: string }> {
+    const result = options
+      ? await this.mux.request('git.exec', { args, cwd }, options)
+      : await this.mux.request('git.exec', { args, cwd })
+    return result as {
       stdout: string
       stderr: string
+    }
+  }
+
+  async clone(
+    args: string[],
+    cwd: string,
+    options?: {
+      signal?: AbortSignal
+      timeoutMs?: number
+      onProgress?: (progress: { phase: string; percent: number }) => void
+    }
+  ): Promise<{ stdout: string; stderr: string }> {
+    const progressId = `clone-${Date.now()}-${Math.random().toString(36).slice(2)}`
+    const unsubscribe = options?.onProgress
+      ? this.mux.onNotificationByMethod('git.cloneProgress', (params) => {
+          if (params.progressId !== progressId) {
+            return
+          }
+          const phase = params.phase
+          const percent = params.percent
+          if (typeof phase === 'string' && typeof percent === 'number') {
+            options.onProgress?.({ phase, percent })
+          }
+        })
+      : undefined
+    try {
+      const result = await this.mux.request(
+        'git.clone',
+        { args, cwd, progressId },
+        { signal: options?.signal, timeoutMs: options?.timeoutMs }
+      )
+      return result as {
+        stdout: string
+        stderr: string
+      }
+    } catch (error) {
+      if (isJsonRpcMethodNotFoundError(error)) {
+        throw new Error(
+          'SSH clone support is unavailable on this relay. Reconnect the SSH target to update Orca on the host, then try again.'
+        )
+      }
+      throw error
+    } finally {
+      unsubscribe?.()
     }
   }
 

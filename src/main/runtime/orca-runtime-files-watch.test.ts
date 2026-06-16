@@ -2,15 +2,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as Fs from 'fs'
 import type * as FsPromises from 'fs/promises'
 import type * as FilesystemAuth from '../ipc/filesystem-auth'
+import type { FsChangeEvent } from '../../shared/types'
 
-const { resolveAuthorizedPathMock, statMock, subscribeParcelWatcherMock, watchMock } = vi.hoisted(
-  () => ({
-    resolveAuthorizedPathMock: vi.fn(),
-    statMock: vi.fn(),
-    subscribeParcelWatcherMock: vi.fn(),
-    watchMock: vi.fn()
-  })
-)
+const { resolveAuthorizedPathMock, statMock, watchMock, watchInWorkerMock } = vi.hoisted(() => ({
+  resolveAuthorizedPathMock: vi.fn(),
+  statMock: vi.fn(),
+  watchMock: vi.fn(),
+  watchInWorkerMock: vi.fn()
+}))
 
 vi.mock('fs', async () => {
   const actual = await vi.importActual<typeof Fs>('fs')
@@ -28,8 +27,9 @@ vi.mock('fs/promises', async () => {
   }
 })
 
-vi.mock('@parcel/watcher', () => ({
-  subscribe: subscribeParcelWatcherMock
+// The local (non-Windows, non-SSH) watch path now delegates to a worker thread.
+vi.mock('./file-watcher-host', () => ({
+  watchFileExplorerInWorker: watchInWorkerMock
 }))
 
 vi.mock('../ipc/filesystem-auth', async () => {
@@ -65,8 +65,8 @@ describe('RuntimeFileCommands file watching', () => {
     vi.useFakeTimers()
     resolveAuthorizedPathMock.mockReset()
     statMock.mockReset()
-    subscribeParcelWatcherMock.mockReset()
     watchMock.mockReset()
+    watchInWorkerMock.mockReset()
     Object.defineProperty(process, 'platform', {
       configurable: true,
       value: originalPlatform
@@ -103,6 +103,8 @@ describe('RuntimeFileCommands file watching', () => {
     const unsubscribe = await commands.watchFileExplorer('id:wt-1', onEvents)
 
     expect(watchMock).toHaveBeenCalledWith('C:\\repo', { recursive: true }, expect.any(Function))
+    // Windows path does not go through the worker.
+    expect(watchInWorkerMock).not.toHaveBeenCalled()
     const emit = listener as (() => void) | null
     expect(emit).not.toBeNull()
 
@@ -119,17 +121,59 @@ describe('RuntimeFileCommands file watching', () => {
     expect(close).toHaveBeenCalledTimes(1)
   })
 
-  it('tracks native Parcel watcher unsubscribe work so shutdown can await it', async () => {
+  // Issue #5308: the local recursive watch runs in a worker thread so
+  // @parcel/watcher's blocking initial crawl can't starve the serve runtime.
+  it('delegates local recursive watching to the worker thread', async () => {
+    resolveAuthorizedPathMock.mockResolvedValue('/home5/Brian')
+    statMock.mockResolvedValue({ isDirectory: () => true })
+
+    const captured: { cb?: (events: FsChangeEvent[]) => void } = {}
+    const workerDispose = vi.fn()
+    watchInWorkerMock.mockImplementation((_rootPath, cb) => {
+      captured.cb = cb
+      return Promise.resolve(workerDispose)
+    })
+
+    const onEvents = vi.fn()
+    const { commands } = createRuntimeFileCommands('/home5/Brian')
+    const unsubscribe = await commands.watchFileExplorer('id:wt-1', onEvents)
+
+    expect(watchInWorkerMock).toHaveBeenCalledWith('/home5/Brian', expect.any(Function))
+
+    // Events surfaced by the worker reach the caller.
+    captured.cb?.([{ kind: 'update', absolutePath: '/home5/Brian/a.txt', isDirectory: false }])
+    expect(onEvents).toHaveBeenCalledWith([
+      { kind: 'update', absolutePath: '/home5/Brian/a.txt', isDirectory: false }
+    ])
+
+    // Unsubscribe tears the worker down (dispose runs on the shutdown-drain
+    // microtask, so await the drain before asserting).
+    unsubscribe()
+    await awaitRuntimeFileWatcherUnsubscribes()
+    expect(workerDispose).toHaveBeenCalledTimes(1)
+  })
+
+  it('propagates a worker watch failure to the caller', async () => {
     resolveAuthorizedPathMock.mockResolvedValue('/repo')
     statMock.mockResolvedValue({ isDirectory: () => true })
-    let resolveUnsubscribe: () => void = () => {}
-    const unsubscribeMock = vi.fn(
+    watchInWorkerMock.mockRejectedValue(new Error('worker_failed'))
+    const { commands } = createRuntimeFileCommands('/repo')
+
+    await expect(commands.watchFileExplorer('id:wt-1', vi.fn())).rejects.toThrow('worker_failed')
+  })
+
+  it('tracks worker unsubscribe work so shutdown can await it', async () => {
+    resolveAuthorizedPathMock.mockResolvedValue('/repo')
+    statMock.mockResolvedValue({ isDirectory: () => true })
+
+    let resolveDispose: () => void = () => {}
+    const disposeMock = vi.fn(
       () =>
         new Promise<void>((resolve) => {
-          resolveUnsubscribe = resolve
+          resolveDispose = resolve
         })
     )
-    subscribeParcelWatcherMock.mockResolvedValue({ unsubscribe: unsubscribeMock })
+    watchInWorkerMock.mockResolvedValue(disposeMock)
     const { commands } = createRuntimeFileCommands('/repo')
 
     const unsubscribe = await commands.watchFileExplorer('id:wt-1', vi.fn())
@@ -141,10 +185,10 @@ describe('RuntimeFileCommands file watching', () => {
     })
     await Promise.resolve()
 
-    expect(unsubscribeMock).toHaveBeenCalledTimes(1)
+    expect(disposeMock).toHaveBeenCalledTimes(1)
     expect(drained).toBe(false)
 
-    resolveUnsubscribe()
+    resolveDispose()
     await drainPromise
     expect(drained).toBe(true)
   })

@@ -76,7 +76,9 @@ describe('refreshGitStatusForWorktree', () => {
     })
 
     expect(deps.setUpstreamStatus).not.toHaveBeenCalled()
-    expect(deps.fetchUpstreamStatus).toHaveBeenCalledWith('wt-1', '/repo', undefined)
+    expect(deps.fetchUpstreamStatus).toHaveBeenCalledWith('wt-1', '/repo', undefined, undefined, {
+      runtimeTargetSettings: undefined
+    })
   })
 
   it('falls back to explicit upstream refresh for legacy status payloads', async () => {
@@ -103,7 +105,9 @@ describe('refreshGitStatusForWorktree', () => {
       branch: 'refs/heads/main'
     })
     expect(deps.setUpstreamStatus).not.toHaveBeenCalled()
-    expect(deps.fetchUpstreamStatus).toHaveBeenCalledWith('wt-2', '/repo', 'ssh-2')
+    expect(deps.fetchUpstreamStatus).toHaveBeenCalledWith('wt-2', '/repo', 'ssh-2', undefined, {
+      runtimeTargetSettings: undefined
+    })
   })
 
   it('leaves ignored-file discovery to the File Explorer instead of status polling', async () => {

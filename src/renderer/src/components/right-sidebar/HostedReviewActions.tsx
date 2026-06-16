@@ -22,6 +22,11 @@ import {
   MergedReviewActions
 } from './HostedReviewStateActions'
 import { useHostedReviewActions, type HostedReviewActionInfo } from './use-hosted-review-actions'
+import {
+  RIGHT_SIDEBAR_MERGE_PRIMARY_BUTTON_CLASS,
+  RIGHT_SIDEBAR_PRIMARY_BUTTON_LABEL_CLASS,
+  RIGHT_SIDEBAR_SPLIT_ACTION_ROW_CLASS
+} from './right-sidebar-primary-action-layout'
 import { translate } from '@/i18n/i18n'
 
 export default function HostedReviewActions({
@@ -100,17 +105,23 @@ export default function HostedReviewActions({
     return (
       <div className="space-y-1.5">
         <TooltipProvider delayDuration={300}>
-          <div className="flex items-stretch">
+          <div className={RIGHT_SIDEBAR_SPLIT_ACTION_ROW_CLASS}>
             <Tooltip>
               <TooltipTrigger asChild>
                 {/* Why: wrapping in a <span> so the tooltip trigger receives pointer
                   events even when the merge button inside is disabled. */}
-                <span className={cn('flex flex-1', primaryMergeDisabled && 'cursor-not-allowed')}>
+                <span
+                  className={cn(
+                    'inline-flex min-w-0 max-w-full shrink',
+                    primaryMergeDisabled && 'cursor-not-allowed'
+                  )}
+                >
                   <Button
                     type="button"
                     size="xs"
                     className={cn(
-                      'w-full rounded-r-none px-3 text-[11px]',
+                      'rounded-r-none px-3 text-[11px]',
+                      RIGHT_SIDEBAR_MERGE_PRIMARY_BUTTON_CLASS,
                       'bg-green-600 text-white hover:bg-green-700',
                       'disabled:opacity-50 disabled:cursor-not-allowed'
                     )}
@@ -126,14 +137,16 @@ export default function HostedReviewActions({
                     ) : (
                       <GitMerge className="size-3.5" />
                     )}
-                    {merging
-                      ? translate(
-                          'auto.components.right.sidebar.HostedReviewActions.d2ca293f3d',
-                          'Working...'
-                        )
-                      : mergePresentation.directMergeAvailable
-                        ? mergeMethods.defaultLabel
-                        : (mergePresentation.autoMergeAction?.label ?? mergePresentation.label)}
+                    <span className={RIGHT_SIDEBAR_PRIMARY_BUTTON_LABEL_CLASS}>
+                      {merging
+                        ? translate(
+                            'auto.components.right.sidebar.HostedReviewActions.d2ca293f3d',
+                            'Working...'
+                          )
+                        : mergePresentation.directMergeAvailable
+                          ? mergeMethods.defaultLabel
+                          : (mergePresentation.autoMergeAction?.label ?? mergePresentation.label)}
+                    </span>
                   </Button>
                 </span>
               </TooltipTrigger>

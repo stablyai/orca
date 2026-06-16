@@ -45,6 +45,8 @@ describe('worktree RPC methods', () => {
       linkedIssue: 123,
       linkedPR: 456,
       linkedLinearIssue: undefined,
+      linkedLinearIssueWorkspaceId: undefined,
+      linkedLinearIssueOrganizationUrlKey: undefined,
       linkedGitLabIssue: 789,
       linkedGitLabMR: 321,
       comment: undefined,
@@ -191,7 +193,9 @@ describe('worktree RPC methods', () => {
     )
 
     expect(response).toMatchObject({ ok: false })
-    expect(JSON.stringify(response)).toContain('Choose either --parent-worktree or --no-parent')
+    expect(JSON.stringify(response)).toContain(
+      'Choose either a parent workspace flag or --no-parent'
+    )
     expect(runtime.createManagedWorktree).not.toHaveBeenCalled()
   })
 
@@ -258,6 +262,33 @@ describe('worktree RPC methods', () => {
     })
   })
 
+  it('forwards Linear metadata through worktree.set', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      updateManagedWorktreeMeta: vi.fn().mockResolvedValue({ id: 'wt-1' })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: WORKTREE_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('worktree.set', {
+        worktree: 'id:wt-1',
+        linkedLinearIssue: 'STA-335',
+        linkedLinearIssueWorkspaceId: null,
+        linkedLinearIssueOrganizationUrlKey: 'stably'
+      })
+    )
+
+    expect(response).toMatchObject({ ok: true })
+    expect(runtime.updateManagedWorktreeMeta).toHaveBeenCalledWith(
+      'id:wt-1',
+      expect.objectContaining({
+        linkedLinearIssue: 'STA-335',
+        linkedLinearIssueWorkspaceId: null,
+        linkedLinearIssueOrganizationUrlKey: 'stably'
+      })
+    )
+  })
+
   it('rejects worktree.set when both parent and no-parent are supplied', async () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',
@@ -292,14 +323,16 @@ describe('worktree RPC methods', () => {
     }
     const runtime = {
       getRuntimeId: () => 'test-runtime',
-      listWorktreeLineage: vi.fn().mockResolvedValue(lineage)
+      listWorktreeLineage: vi.fn().mockResolvedValue(lineage),
+      listWorkspaceLineage: vi.fn().mockResolvedValue({})
     } as unknown as OrcaRuntimeService
     const dispatcher = new RpcDispatcher({ runtime, methods: WORKTREE_METHODS })
 
     const response = await dispatcher.dispatch(makeRequest('worktree.lineageList'))
 
     expect(runtime.listWorktreeLineage).toHaveBeenCalled()
-    expect(response).toMatchObject({ ok: true, result: { lineage } })
+    expect(runtime.listWorkspaceLineage).toHaveBeenCalled()
+    expect(response).toMatchObject({ ok: true, result: { lineage, workspaceLineage: {} } })
   })
 
   it('persists smart sort order on the runtime server', async () => {

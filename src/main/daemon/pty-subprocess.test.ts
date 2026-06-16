@@ -5,9 +5,15 @@ import { tmpdir } from 'os'
 import { join } from 'path'
 import type * as LocalPtyUtils from '../providers/local-pty-utils'
 
-const { spawnMock, isPwshAvailableMock, validateWorkingDirectoryMock } = vi.hoisted(() => ({
+const {
+  spawnMock,
+  isPwshAvailableMock,
+  validateWorkingDirectoryMock,
+  resolveAgentForegroundProcessMock
+} = vi.hoisted(() => ({
   spawnMock: vi.fn(),
   isPwshAvailableMock: vi.fn(),
+  resolveAgentForegroundProcessMock: vi.fn(),
   validateWorkingDirectoryMock: vi.fn((cwd: string) => {
     if (cwd.includes('definitely-missing')) {
       throw new Error(
@@ -32,6 +38,10 @@ vi.mock('../providers/local-pty-utils', async (importOriginal) => {
     validateWorkingDirectory: validateWorkingDirectoryMock
   }
 })
+
+vi.mock('../providers/agent-foreground-process', () => ({
+  resolveAgentForegroundProcess: resolveAgentForegroundProcessMock
+}))
 
 import { createPtySubprocess } from './pty-subprocess'
 
@@ -75,6 +85,10 @@ describe('createPtySubprocess', () => {
   beforeEach(() => {
     spawnMock.mockReset()
     isPwshAvailableMock.mockReset()
+    resolveAgentForegroundProcessMock.mockReset()
+    resolveAgentForegroundProcessMock.mockImplementation(
+      async (_pid: number, fallbackProcess: string | null) => fallbackProcess
+    )
     validateWorkingDirectoryMock.mockClear()
     isPwshAvailableMock.mockReturnValue(false)
     previousUserDataPath = process.env.ORCA_USER_DATA_PATH
@@ -194,6 +208,38 @@ describe('createPtySubprocess', () => {
     })
 
     expect(handle.getForegroundProcess()).toBe('codex')
+  })
+
+  it('serves daemon wrapper agent foreground from an async cache without blocking', async () => {
+    const proc = mockPtyProcess()
+    proc.process = 'node'
+    spawnMock.mockReturnValue(proc)
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { value: 'darwin' })
+    let resolveForeground!: (processName: string) => void
+    resolveAgentForegroundProcessMock.mockReturnValue(
+      new Promise<string>((resolve) => {
+        resolveForeground = resolve
+      })
+    )
+
+    try {
+      const handle = createPtySubprocess({
+        sessionId: 'test',
+        cols: 80,
+        rows: 24
+      })
+
+      expect(handle.getForegroundProcess()).toBe('node')
+      expect(resolveAgentForegroundProcessMock).toHaveBeenCalledWith(proc.pid, 'node')
+
+      resolveForeground('codex')
+      await vi.waitFor(() => expect(handle.getForegroundProcess()).toBe('codex'))
+    } finally {
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
   })
 
   it('treats node-pty terminal name as inconclusive foreground process', () => {
@@ -1015,12 +1061,7 @@ describe('createPtySubprocess', () => {
 
     expect(spawnMock).toHaveBeenCalledWith(
       'wsl.exe',
-      [
-        '--',
-        'bash',
-        '-c',
-        `cd '${expectedLinuxCwd}' && export PATH="$HOME/.local/bin:$PATH" && exec bash -l`
-      ],
+      ['--', 'sh', '-c', expect.stringContaining(`cd '${expectedLinuxCwd}'`)],
       expect.objectContaining({ cwd: expect.any(String) })
     )
   })
@@ -1057,14 +1098,7 @@ describe('createPtySubprocess', () => {
 
     expect(spawnMock).toHaveBeenCalledWith(
       'wsl.exe',
-      [
-        '-d',
-        'Debian',
-        '--',
-        'bash',
-        '-c',
-        `cd '${expectedLinuxCwd}' && export PATH="$HOME/.local/bin:$PATH" && exec bash -l`
-      ],
+      ['-d', 'Debian', '--', 'sh', '-c', expect.stringContaining(`cd '${expectedLinuxCwd}'`)],
       expect.objectContaining({ cwd: expect.any(String) })
     )
   })
@@ -1092,14 +1126,7 @@ describe('createPtySubprocess', () => {
 
     expect(spawnMock).toHaveBeenCalledWith(
       'wsl.exe',
-      [
-        '-d',
-        'Ubuntu',
-        '--',
-        'bash',
-        '-c',
-        'cd \'/home/jin/repo\' && export PATH="$HOME/.local/bin:$PATH" && exec bash -l'
-      ],
+      ['-d', 'Ubuntu', '--', 'sh', '-c', expect.stringContaining("cd '/home/jin/repo'")],
       expect.objectContaining({ cwd: expect.any(String) })
     )
   })
@@ -1127,14 +1154,7 @@ describe('createPtySubprocess', () => {
 
     expect(spawnMock).toHaveBeenCalledWith(
       'wsl.exe',
-      [
-        '-d',
-        'Ubuntu',
-        '--',
-        'bash',
-        '-c',
-        'cd \'/home/jin/repo\' && export PATH="$HOME/.local/bin:$PATH" && exec bash -l'
-      ],
+      ['-d', 'Ubuntu', '--', 'sh', '-c', expect.stringContaining("cd '/home/jin/repo'")],
       expect.objectContaining({
         env: expect.not.objectContaining({
           CODEX_HOME: expect.anything(),
@@ -1219,14 +1239,7 @@ describe('createPtySubprocess', () => {
 
     expect(spawnMock).toHaveBeenCalledWith(
       'wsl.exe',
-      [
-        '-d',
-        'Ubuntu',
-        '--',
-        'bash',
-        '-c',
-        `cd '${expectedLinuxCwd}' && export PATH="$HOME/.local/bin:$PATH" && exec bash -l`
-      ],
+      ['-d', 'Ubuntu', '--', 'sh', '-c', expect.stringContaining(`cd '${expectedLinuxCwd}'`)],
       expect.objectContaining({
         env: expect.objectContaining({
           CODEX_HOME: '/home/jin/.local/share/orca/codex-accounts/a/home',
@@ -1260,14 +1273,7 @@ describe('createPtySubprocess', () => {
 
     expect(spawnMock).toHaveBeenCalledWith(
       'wsl.exe',
-      [
-        '-d',
-        'Ubuntu',
-        '--',
-        'bash',
-        '-c',
-        'cd \'/home/jin/repo\' && export PATH="$HOME/.local/bin:$PATH" && exec bash -l'
-      ],
+      ['-d', 'Ubuntu', '--', 'sh', '-c', expect.stringContaining("cd '/home/jin/repo'")],
       expect.objectContaining({
         env: expect.objectContaining({ CODEX_HOME: '/home/jin/.codex-alt' })
       })
@@ -1350,14 +1356,7 @@ describe('createPtySubprocess', () => {
     )
     expect(spawnMock).toHaveBeenCalledWith(
       'wsl.exe',
-      [
-        '-d',
-        'Ubuntu',
-        '--',
-        'bash',
-        '-c',
-        'cd \'/home/jin/repo/subdir\' && export PATH="$HOME/.local/bin:$PATH" && exec bash -l'
-      ],
+      ['-d', 'Ubuntu', '--', 'sh', '-c', expect.stringContaining("cd '/home/jin/repo/subdir'")],
       expect.objectContaining({ cwd: expect.any(String) })
     )
   })

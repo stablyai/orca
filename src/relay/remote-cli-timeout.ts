@@ -25,8 +25,20 @@ function isLinearCliRequest(params: Record<string, unknown>): boolean {
   }
   const commandPath = parseRemoteCommandPath(argv)
   return commandPath.some(
-    (part, index) => part === 'linear' && ['issue', 'search'].includes(commandPath[index + 1] ?? '')
+    (part, index) =>
+      part === 'linear' && isExtendedLinearCliCommand(commandPath.slice(index + 1, index + 4))
   )
+}
+
+function isExtendedLinearCliCommand(command: string[]): boolean {
+  const [first, second] = command
+  if (first === 'issue' || first === 'search' || first === 'attach' || first === 'create') {
+    return true
+  }
+  if (first === 'status' && second === 'set') {
+    return true
+  }
+  return first === 'comment' && second === 'add'
 }
 
 function parseRemoteCommandPath(argv: string[]): string[] {

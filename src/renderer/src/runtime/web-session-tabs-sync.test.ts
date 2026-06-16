@@ -553,6 +553,48 @@ describe('applyWebSessionTabsSnapshot', () => {
     expect(patch.activeTabIdByWorktree?.[WT]).toBe(mirroredId)
   })
 
+  it('preserves mirrored launch intent when a later host snapshot omits it', () => {
+    const existingTab: TerminalTab = {
+      id: toWebTerminalSurfaceTabId('host-tab-1'),
+      ptyId: 'remote:web-env-1@@terminal-1',
+      worktreeId: WT,
+      title: 'Codex',
+      defaultTitle: 'Codex',
+      customTitle: null,
+      color: null,
+      sortOrder: 0,
+      createdAt: NOW,
+      launchAgent: 'codex'
+    }
+
+    const patch = applyWebSessionTabsSnapshot(
+      makeState({
+        tabsByWorktree: { [WT]: [existingTab] },
+        ptyIdsByTabId: { [existingTab.id]: ['remote:web-env-1@@terminal-1'] }
+      }),
+      makeSnapshot([
+        {
+          type: 'terminal',
+          id: HOST_SURFACE_ID,
+          title: 'zsh',
+          parentTabId: 'host-tab-1',
+          leafId: LEAF_ID,
+          isActive: true,
+          status: 'ready',
+          terminal: 'terminal-1'
+        }
+      ]),
+      ENV,
+      NOW + 1
+    ) as Partial<WebSessionTabsSyncState>
+
+    expect(patch.tabsByWorktree?.[WT]?.[0]).toMatchObject({
+      id: existingTab.id,
+      title: 'zsh',
+      launchAgent: 'codex'
+    })
+  })
+
   it('preserves quick command labels from host terminal surfaces', () => {
     const patch = applyWebSessionTabsSnapshot(
       makeState(),
@@ -806,6 +848,149 @@ describe('applyWebSessionTabsSnapshot', () => {
     expect(terminalTab).toMatchObject({ groupId: 'group-terminal' })
     expect(browserTab).toMatchObject({ id: 'host-browser-unified', groupId: 'group-browser' })
     expect(editorTab).toMatchObject({ id: 'host-readme-unified', groupId: 'group-editor' })
+  })
+
+  it('preserves local browser position when appending a new remote terminal', () => {
+    const firstTerminalId = toWebTerminalSurfaceTabId('host-tab-1')
+    const secondTerminalId = toWebTerminalSurfaceTabId('host-tab-2')
+    const localBrowserWorkspace: BrowserWorkspace = {
+      id: 'local-browser-workspace',
+      worktreeId: WT,
+      label: undefined,
+      sessionProfileId: null,
+      activePageId: 'local-browser-page',
+      pageIds: ['local-browser-page'],
+      url: 'about:blank',
+      title: 'New Browser Tab',
+      loading: false,
+      faviconUrl: null,
+      canGoBack: false,
+      canGoForward: false,
+      loadError: null,
+      createdAt: NOW + 1
+    }
+    const localBrowserPage: BrowserPage = {
+      id: 'local-browser-page',
+      workspaceId: localBrowserWorkspace.id,
+      worktreeId: WT,
+      url: 'about:blank',
+      title: 'New Browser Tab',
+      loading: false,
+      faviconUrl: null,
+      canGoBack: false,
+      canGoForward: false,
+      loadError: null,
+      createdAt: NOW + 1,
+      browserRuntimeEnvironmentId: null,
+      viewportPresetId: null
+    }
+    const localBrowserTab: Tab = {
+      id: 'local-browser-tab',
+      entityId: localBrowserWorkspace.id,
+      groupId: 'host-group-1',
+      worktreeId: WT,
+      contentType: 'browser',
+      label: 'New Browser Tab',
+      customLabel: null,
+      color: null,
+      sortOrder: 1,
+      createdAt: NOW + 1,
+      isPreview: false,
+      isPinned: false
+    }
+
+    const patch = applyWebSessionTabsSnapshot(
+      makeState({
+        tabsByWorktree: {
+          [WT]: [
+            {
+              id: firstTerminalId,
+              ptyId: 'remote:web-env-1@@terminal-1',
+              worktreeId: WT,
+              title: 'Terminal 1',
+              customTitle: null,
+              color: null,
+              sortOrder: 0,
+              createdAt: NOW
+            }
+          ]
+        },
+        browserTabsByWorktree: { [WT]: [localBrowserWorkspace] },
+        browserPagesByWorkspace: { [localBrowserWorkspace.id]: [localBrowserPage] },
+        unifiedTabsByWorktree: {
+          [WT]: [
+            {
+              id: firstTerminalId,
+              entityId: firstTerminalId,
+              groupId: 'host-group-1',
+              worktreeId: WT,
+              contentType: 'terminal',
+              label: 'Terminal 1',
+              customLabel: null,
+              color: null,
+              sortOrder: 0,
+              createdAt: NOW,
+              isPreview: false,
+              isPinned: false
+            },
+            localBrowserTab
+          ]
+        },
+        tabBarOrderByWorktree: { [WT]: [firstTerminalId, localBrowserTab.id] },
+        groupsByWorktree: {
+          [WT]: [
+            {
+              id: 'host-group-1',
+              worktreeId: WT,
+              activeTabId: localBrowserTab.id,
+              tabOrder: [firstTerminalId, localBrowserTab.id]
+            }
+          ]
+        }
+      }),
+      makeSnapshot(
+        [
+          {
+            type: 'terminal',
+            id: `host-tab-1::${LEAF_ID}`,
+            title: 'Terminal 1',
+            parentTabId: 'host-tab-1',
+            leafId: LEAF_ID,
+            isActive: false,
+            status: 'ready',
+            terminal: 'terminal-1'
+          },
+          {
+            type: 'terminal',
+            id: `host-tab-2::${SECOND_LEAF_ID}`,
+            title: 'Terminal 2',
+            parentTabId: 'host-tab-2',
+            leafId: SECOND_LEAF_ID,
+            isActive: true,
+            status: 'ready',
+            terminal: 'terminal-2'
+          }
+        ],
+        {
+          activeTabId: `host-tab-2::${SECOND_LEAF_ID}`,
+          tabGroups: [
+            {
+              id: 'host-group-1',
+              activeTabId: 'host-tab-2',
+              tabOrder: ['host-tab-1', 'host-tab-2']
+            }
+          ]
+        }
+      ),
+      ENV,
+      NOW
+    ) as Partial<WebSessionTabsSyncState>
+
+    expect(patch.tabBarOrderByWorktree?.[WT]).toEqual([
+      firstTerminalId,
+      localBrowserTab.id,
+      secondTerminalId
+    ])
   })
 
   it('keeps retained local-only groups reachable when applying a host layout', () => {

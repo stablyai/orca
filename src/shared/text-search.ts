@@ -21,7 +21,8 @@
  */
 import { join, relative } from 'path'
 import { normalizeSearchResult } from './search-match-count'
-import type { SearchFileResult, SearchOptions, SearchResult } from './types'
+import { escapeRegex } from './string-utils'
+import type { SearchFileResult, SearchMatch, SearchOptions, SearchResult } from './types'
 
 export type SearchAccumulator = {
   fileMap: Map<string, SearchFileResult>
@@ -103,6 +104,39 @@ function clampLineContext(
     displayColumn: column,
     displayMatchLength: clampedMatchLength
   }
+}
+
+// Why: rg and git-grep share this append-and-cap step; keeping it in one
+// place preserves the synchronous truncation ordering required by callers.
+function pushMatch(
+  fileResult: SearchFileResult,
+  acc: SearchAccumulator,
+  clamped: ReturnType<typeof clampLineContext>,
+  lineNumber: number,
+  maxResults: number
+): 'continue' | 'stop' {
+  // Why: direct assignment avoids conditional-spread allocations on the
+  // per-match hot path while preserving optional display fields.
+  const match: SearchMatch = {
+    line: lineNumber,
+    column: clamped.column,
+    matchLength: clamped.matchLength,
+    lineContent: clamped.lineContent
+  }
+  if (clamped.displayColumn !== undefined) {
+    match.displayColumn = clamped.displayColumn
+  }
+  if (clamped.displayMatchLength !== undefined) {
+    match.displayMatchLength = clamped.displayMatchLength
+  }
+  fileResult.matches.push(match)
+  acceptMatch(fileResult)
+  acc.totalMatches++
+  if (acc.totalMatches >= maxResults) {
+    acc.truncated = true
+    return 'stop'
+  }
+  return 'continue'
 }
 
 // ─── rg ─────────────────────────────────────────────────────────────
@@ -256,20 +290,7 @@ export function ingestRgJsonLine(
       acc.fileMap.set(absPath, fileResult)
     }
     const clamped = clampLineContext(lineContent, sub.start, sub.end - sub.start)
-    fileResult.matches.push({
-      line: lineNumber,
-      column: clamped.column,
-      matchLength: clamped.matchLength,
-      lineContent: clamped.lineContent,
-      ...(clamped.displayColumn !== undefined ? { displayColumn: clamped.displayColumn } : {}),
-      ...(clamped.displayMatchLength !== undefined
-        ? { displayMatchLength: clamped.displayMatchLength }
-        : {})
-    })
-    acceptMatch(fileResult)
-    acc.totalMatches++
-    if (acc.totalMatches >= maxResults) {
-      acc.truncated = true
+    if (pushMatch(fileResult, acc, clamped, lineNumber, maxResults) === 'stop') {
       return 'stop'
     }
   }
@@ -277,17 +298,6 @@ export function ingestRgJsonLine(
 }
 
 // ─── git grep ───────────────────────────────────────────────────────
-
-// Why: esbuild's parser chokes on regex literals containing brace/bracket
-// character classes, so we escape special chars with a simple loop.
-const REGEX_SPECIAL = '.*+?^${}()|[]\\'
-function escapeRegexSource(str: string): string {
-  let out = ''
-  for (let i = 0; i < str.length; i++) {
-    out += REGEX_SPECIAL.includes(str[i]) ? `\\${str[i]}` : str[i]
-  }
-  return out
-}
 
 /**
  * Convert a user-facing glob pattern into a git pathspec.
@@ -371,7 +381,7 @@ export function buildSubmatchRegex(
   query: string,
   opts: { useRegex?: boolean; wholeWord?: boolean; caseSensitive?: boolean }
 ): RegExp | null {
-  let pattern = opts.useRegex ? query : escapeRegexSource(query)
+  let pattern = opts.useRegex ? query : escapeRegex(query)
   if (opts.wholeWord) {
     pattern = `\\b${pattern}\\b`
   }
@@ -441,23 +451,7 @@ export function ingestGitGrepLine(
   if (submatchRegex === null) {
     const clamped = clampLineContext(lineContent, 0, lineContent.length)
     const fileResult = getFileResult()
-    fileResult.matches.push({
-      line: lineNum,
-      column: clamped.column,
-      matchLength: clamped.matchLength,
-      lineContent: clamped.lineContent,
-      ...(clamped.displayColumn !== undefined ? { displayColumn: clamped.displayColumn } : {}),
-      ...(clamped.displayMatchLength !== undefined
-        ? { displayMatchLength: clamped.displayMatchLength }
-        : {})
-    })
-    acceptMatch(fileResult)
-    acc.totalMatches++
-    if (acc.totalMatches >= maxResults) {
-      acc.truncated = true
-      return 'stop'
-    }
-    return 'continue'
+    return pushMatch(fileResult, acc, clamped, lineNum, maxResults)
   }
 
   submatchRegex.lastIndex = 0
@@ -466,21 +460,8 @@ export function ingestGitGrepLine(
   while ((m = submatchRegex.exec(lineContent)) !== null) {
     const clamped = clampLineContext(lineContent, m.index, m[0].length)
     const fileResult = getFileResult()
-    fileResult.matches.push({
-      line: lineNum,
-      column: clamped.column,
-      matchLength: clamped.matchLength,
-      lineContent: clamped.lineContent,
-      ...(clamped.displayColumn !== undefined ? { displayColumn: clamped.displayColumn } : {}),
-      ...(clamped.displayMatchLength !== undefined
-        ? { displayMatchLength: clamped.displayMatchLength }
-        : {})
-    })
-    acceptMatch(fileResult)
     acceptedLineMatch = true
-    acc.totalMatches++
-    if (acc.totalMatches >= maxResults) {
-      acc.truncated = true
+    if (pushMatch(fileResult, acc, clamped, lineNum, maxResults) === 'stop') {
       return 'stop'
     }
     // Prevent infinite loop on zero-length regex matches.
@@ -494,20 +475,7 @@ export function ingestGitGrepLine(
   if (!acceptedLineMatch) {
     const clamped = clampLineContext(lineContent, 0, lineContent.length)
     const fileResult = getFileResult()
-    fileResult.matches.push({
-      line: lineNum,
-      column: clamped.column,
-      matchLength: clamped.matchLength,
-      lineContent: clamped.lineContent,
-      ...(clamped.displayColumn !== undefined ? { displayColumn: clamped.displayColumn } : {}),
-      ...(clamped.displayMatchLength !== undefined
-        ? { displayMatchLength: clamped.displayMatchLength }
-        : {})
-    })
-    acceptMatch(fileResult)
-    acc.totalMatches++
-    if (acc.totalMatches >= maxResults) {
-      acc.truncated = true
+    if (pushMatch(fileResult, acc, clamped, lineNum, maxResults) === 'stop') {
       return 'stop'
     }
   }

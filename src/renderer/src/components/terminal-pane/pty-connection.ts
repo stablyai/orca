@@ -49,6 +49,7 @@ import {
   waitForTerminalOutputParsed,
   writeTerminalOutput
 } from '@/lib/pane-manager/pane-terminal-output-scheduler'
+import { recordAgentHibernationPaneOutput } from '@/lib/agent-hibernation-output-activity'
 import { isLocalNativeWindowsPty } from '@/lib/pane-manager/windows-pty-compatibility'
 import { recordTerminalOutput, restoreScrollStateAfterLayout } from '@/lib/pane-manager/pane-scroll'
 import type { ScrollState } from '@/lib/pane-manager/pane-manager-types'
@@ -84,6 +85,7 @@ import {
   cancelScheduledHiddenOutputRestore,
   scheduleHiddenOutputRestore
 } from './hidden-output-restore-scheduler'
+import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { CLIENT_PLATFORM } from '@/lib/new-workspace'
 import { buildAgentResumeStartupPlan } from '@/lib/tui-agent-startup'
 import {
@@ -108,7 +110,6 @@ const HIDDEN_OUTPUT_RESTORE_SCROLLBACK_ROWS = 5000
 const HIDDEN_OUTPUT_RESTORE_PENDING_CHARS = 512 * 1024
 const HIDDEN_OUTPUT_RESTORE_DEFERRED_RETRY_MS = 50
 const HIDDEN_OUTPUT_RESTORE_DEFERRED_RETRY_MAX = 3
-const HIDDEN_STARTUP_RENDERER_QUERY_WINDOW_MS = 10_000
 const STARTUP_COMMAND_EXTENSION_RE = /\.(?:exe|cmd|bat|ps1)$/i
 const TERMINAL_RENDERER_RISK_SCAN_TAIL_CHARS = 256
 const CURSOR_SHOW_SEQUENCE = '\x1b[?25h'
@@ -303,6 +304,168 @@ function shouldKeepHiddenStartupRendererQueriesLive(
   startup: PtyConnectionDeps['startup']
 ): boolean {
   return startup?.telemetry?.agent_kind === 'codex' || isCodexStartupCommand(startup?.command ?? '')
+}
+
+function containsHiddenStartupRendererQuery(data: string): boolean {
+  // Why: hidden Codex startup must not live-render ordinary redraw floods, but
+  // query chunks still need xterm's built-in terminal replies to unblock TUIs.
+  return containsCsiRendererQuery(data) || data.includes('\x1b]10;?') || data.includes('\x1b]11;?')
+}
+
+const HIDDEN_STARTUP_RENDERER_QUERY_PENDING_CHARS = 64
+const HIDDEN_STARTUP_OSC_COLOR_QUERY_PREFIXES = ['\x1b]10;?', '\x1b]11;?'] as const
+
+function findOscTerminatorIndex(data: string, offset: number): number {
+  for (let index = offset; index < data.length; index++) {
+    const code = data.charCodeAt(index)
+    if (code === 0x07) {
+      return index + 1
+    }
+    if (code === 0x1b && data[index + 1] === '\\') {
+      return index + 2
+    }
+  }
+  return -1
+}
+
+function extractHiddenStartupRendererQueryData(
+  data: string,
+  pending: string
+): { statelessQueryData: string; statefulQueryData: string; pending: string } {
+  const input = pending + data
+  let statelessQueryData = ''
+  let statefulQueryData = ''
+  let offset = 0
+
+  while (offset < input.length) {
+    const candidateIndex = input.indexOf('\x1b', offset)
+    if (candidateIndex === -1) {
+      break
+    }
+    if (candidateIndex + 1 >= input.length) {
+      return { statelessQueryData, statefulQueryData, pending: input.slice(candidateIndex) }
+    }
+    if (input.startsWith('\x1b[', candidateIndex)) {
+      const finalByteIndex = findCsiFinalByteIndex(input, candidateIndex + 2)
+      if (finalByteIndex === -1) {
+        return {
+          statelessQueryData,
+          statefulQueryData,
+          pending: input.slice(
+            candidateIndex,
+            candidateIndex + HIDDEN_STARTUP_RENDERER_QUERY_PENDING_CHARS
+          )
+        }
+      }
+      const sequence = input.slice(candidateIndex, finalByteIndex + 1)
+      if (isStatelessRendererReplyCsiQuery(sequence)) {
+        statelessQueryData += sequence
+      } else if (isStatefulRendererReplyCsiQuery(sequence)) {
+        statefulQueryData += sequence
+      }
+      offset = finalByteIndex + 1
+      continue
+    }
+
+    if (input.startsWith('\x1b]', candidateIndex)) {
+      const remaining = input.slice(candidateIndex)
+      const matchingPrefix = HIDDEN_STARTUP_OSC_COLOR_QUERY_PREFIXES.find((prefix) =>
+        remaining.startsWith(prefix)
+      )
+      if (!matchingPrefix) {
+        if (
+          HIDDEN_STARTUP_OSC_COLOR_QUERY_PREFIXES.some((prefix) => prefix.startsWith(remaining))
+        ) {
+          return { statelessQueryData, statefulQueryData, pending: remaining }
+        }
+        offset = candidateIndex + 2
+        continue
+      }
+
+      const terminatorIndex = findOscTerminatorIndex(input, candidateIndex + matchingPrefix.length)
+      if (terminatorIndex === -1) {
+        return {
+          statelessQueryData,
+          statefulQueryData,
+          pending: input.slice(
+            candidateIndex,
+            candidateIndex + HIDDEN_STARTUP_RENDERER_QUERY_PENDING_CHARS
+          )
+        }
+      }
+      statelessQueryData += input.slice(candidateIndex, terminatorIndex)
+      offset = terminatorIndex
+      continue
+    }
+
+    if (
+      HIDDEN_STARTUP_OSC_COLOR_QUERY_PREFIXES.some((prefix) =>
+        prefix.startsWith(input.slice(candidateIndex))
+      )
+    ) {
+      return { statelessQueryData, statefulQueryData, pending: input.slice(candidateIndex) }
+    }
+
+    {
+      offset = candidateIndex + 1
+      continue
+    }
+  }
+
+  return { statelessQueryData, statefulQueryData, pending: '' }
+}
+
+function containsCsiRendererQuery(data: string): boolean {
+  let offset = data.indexOf('\x1b[')
+  while (offset !== -1) {
+    const finalByteIndex = findCsiFinalByteIndex(data, offset + 2)
+    if (finalByteIndex === -1) {
+      return false
+    }
+    const sequence = data.slice(offset, finalByteIndex + 1)
+    if (isStatelessRendererReplyCsiQuery(sequence) || isStatefulRendererReplyCsiQuery(sequence)) {
+      return true
+    }
+    offset = data.indexOf('\x1b[', finalByteIndex + 1)
+  }
+  return false
+}
+
+function containsStatefulRendererQuery(data: string): boolean {
+  let offset = data.indexOf('\x1b[')
+  while (offset !== -1) {
+    const finalByteIndex = findCsiFinalByteIndex(data, offset + 2)
+    if (finalByteIndex === -1) {
+      return false
+    }
+    const sequence = data.slice(offset, finalByteIndex + 1)
+    if (isStatefulRendererReplyCsiQuery(sequence)) {
+      return true
+    }
+    offset = data.indexOf('\x1b[', finalByteIndex + 1)
+  }
+  return false
+}
+
+function findCsiFinalByteIndex(data: string, offset: number): number {
+  for (let index = offset; index < data.length; index++) {
+    const code = data.charCodeAt(index)
+    if (code >= 0x40 && code <= 0x7e) {
+      return index
+    }
+  }
+  return -1
+}
+
+function isStatelessRendererReplyCsiQuery(sequence: string): boolean {
+  if (sequence.endsWith('c')) {
+    return true
+  }
+  return sequence === '\x1b[5n'
+}
+
+function isStatefulRendererReplyCsiQuery(sequence: string): boolean {
+  return sequence === '\x1b[6n' || (sequence.startsWith('\x1b[?') && sequence.endsWith('$p'))
 }
 
 let codexRestartNoticePresenceSource: Record<
@@ -1460,8 +1623,8 @@ export function connectPanePty(
     (restoredPtyIdForTransport
       ? getRemoteRuntimePtyEnvironmentId(restoredPtyIdForTransport)
       : null) ?? (tab?.ptyId ? getRemoteRuntimePtyEnvironmentId(tab.ptyId) : null)
-  const activeRuntimeEnvironmentId = state.settings?.activeRuntimeEnvironmentId?.trim() || null
-  const runtimeEnvironmentId = remoteRuntimeOwnerForTransport ?? activeRuntimeEnvironmentId
+  const runtimeEnvironmentId =
+    remoteRuntimeOwnerForTransport ?? getRuntimeEnvironmentIdForWorktree(state, deps.worktreeId)
   const shouldOwnAgentStatusInRenderer = runtimeEnvironmentId !== null
   const shouldDeliverStartupViaTerminalPaste = paneStartup?.delivery === 'terminal-paste'
   const hadExistingPaneTransportAtConnect = deps.paneTransportsRef.current.size > 0
@@ -1469,6 +1632,13 @@ export function connectPanePty(
   let hasReceivedPtyOutput = false
   const markTerminalInputSent = (): void => {
     lastTerminalInputAt = performance.now()
+  }
+  const recordAcceptedTerminalInputForHibernation = (): void => {
+    useAppStore.getState().recordTerminalInput(cacheKey)
+  }
+  const markAcceptedTerminalInputSent = (): void => {
+    markTerminalInputSent()
+    recordAcceptedTerminalInputForHibernation()
   }
   const transportOptions = {
     cwd: deps.cwd,
@@ -1577,6 +1747,7 @@ export function connectPanePty(
         .sendInputAccepted(data)
         .then((accepted) => {
           if (accepted) {
+            recordAcceptedTerminalInputForHibernation()
             observeAcceptedTerminalInput(data, acknowledgedIntent)
             interruptInference.observeInputIntent(acknowledgedIntent)
             observeTitleOnlyInterrupt()
@@ -1590,14 +1761,14 @@ export function connectPanePty(
     }
     if (intent) {
       if (transport.sendInput(data)) {
-        markTerminalInputSent()
+        markAcceptedTerminalInputSent()
         observeAcceptedTerminalInput(data, intent)
       }
       clearPendingTerminalInputIntent()
       return
     }
     if (transport.sendInput(data)) {
-      markTerminalInputSent()
+      markAcceptedTerminalInputSent()
       observeAcceptedTerminalInput(data)
       observeSentTerminalInputIntent(data)
     } else {
@@ -1798,40 +1969,35 @@ export function connectPanePty(
       }
       const state = useAppStore.getState()
       const entry = state.agentStatusByPaneKey[cacheKey]
-      // Why: agentStatusByPaneKey is in-memory only. After an app restart, the
-      // quit-captured sleeping record is the only surviving source of this
-      // pane's provider session id (#5232). Live entries win when present —
-      // they are fresher and setAgentStatus already cleared the record.
-      const sleepingRecord = entry ? null : state.sleepingAgentSessionsByPaneKey[cacheKey]
-      const agentType = entry?.agentType ?? sleepingRecord?.agent
-      const agentState = entry?.state ?? sleepingRecord?.state
-      const rawProviderSession = entry?.providerSession ?? sleepingRecord?.providerSession
-      if (!agentType || agentState === 'done' || !isResumableTuiAgent(agentType)) {
+      const sleepingRecord = state.sleepingAgentSessionsByPaneKey[cacheKey]
+      const useLiveEntry = entry && entry.state !== 'done'
+      const agent = useLiveEntry ? entry.agentType : sleepingRecord?.agent
+      if (!agent || !isResumableTuiAgent(agent)) {
         return false
       }
-      const providerSession = normalizeAgentProviderSession(rawProviderSession)
+      const providerSession = normalizeAgentProviderSession(
+        useLiveEntry ? entry.providerSession : sleepingRecord?.providerSession
+      )
       if (!providerSession) {
         return false
       }
       const startupPlan = buildAgentResumeStartupPlan({
-        agent: agentType,
+        agent,
         providerSession,
         cmdOverrides: state.settings?.agentCmdOverrides ?? {},
-        agentArgs: resolveTuiAgentLaunchArgs(agentType, state.settings?.agentDefaultArgs),
-        agentEnv: resolveTuiAgentLaunchEnv(agentType, state.settings?.agentDefaultEnv),
+        agentArgs: resolveTuiAgentLaunchArgs(agent, state.settings?.agentDefaultArgs),
+        agentEnv: resolveTuiAgentLaunchEnv(agent, state.settings?.agentDefaultEnv),
         platform: getColdRestoreAgentResumePlatform()
       })
       if (!startupPlan) {
         return false
       }
-      if (sleepingRecord) {
-        // Why: the record is one-shot — consuming it here prevents a later
-        // worktree activation from launching a duplicate resume tab.
-        useAppStore.getState().clearSleepingAgentSession(cacheKey)
-      }
       // Why: cold restore means the PTY process is gone but the agent provider
       // session is still resumable, so the replacement shell must launch it.
       pendingStartupCommand = startupPlan.launchCommand
+      if (!useLiveEntry && sleepingRecord) {
+        state.clearSleepingAgentSession(cacheKey)
+      }
       return true
     }
     const schedulePendingStartupCommandDelivery = (): void => {
@@ -1868,6 +2034,8 @@ export function connectPanePty(
     }
 
     const startFreshSpawn = (): void => {
+      clearPaneMode2031State()
+      clearHiddenOutputRestoreState()
       // Why: pre-signal the main process so its cooperation gate suppresses
       // the daemon-snapshot seed for this paneKey. We issue declare and the
       // spawn back-to-back without awaiting, because Electron's
@@ -2011,9 +2179,9 @@ export function connectPanePty(
     let foregroundImmediateBudgetChars = 0
     let foregroundImmediateBudgetWindowStart = 0
     let hiddenMode2031ScanTail = ''
-    const hiddenStartupRendererQueryUntil = shouldKeepHiddenStartupRendererQueriesLive(paneStartup)
-      ? Date.now() + HIDDEN_STARTUP_RENDERER_QUERY_WINDOW_MS
-      : 0
+    const shouldSnapshotHiddenCodexOutput = shouldKeepHiddenStartupRendererQueriesLive(paneStartup)
+    let hiddenStartupRendererQueryPending = ''
+    let hiddenRendererStateDirty = false
 
     function canUseMainBufferSnapshot(ptyId: string | null): ptyId is string {
       return Boolean(ptyId) && !isRemoteRuntimePtyId(ptyId)
@@ -2046,18 +2214,14 @@ export function connectPanePty(
       return transport.serializeBuffer(opts)
     }
 
-    function isHiddenStartupRendererQueryWindowActive(): boolean {
-      return (
-        paneStartup !== null &&
-        Date.now() < hiddenStartupRendererQueryUntil &&
-        !shouldWritePtyOutputForeground(deps.isVisibleRef.current)
-      )
-    }
-
     function respondToSkippedMode2031Subscribe(data: string): void {
       const scan = scanMode2031Sequences(hiddenMode2031ScanTail, data)
       hiddenMode2031ScanTail = scan.tail
-      if (!scan.subscribe) {
+      if (scan.finalState === 'unsubscribed') {
+        deps.paneMode2031Ref.current.delete(pane.id)
+        deps.paneLastThemeModeRef.current.delete(pane.id)
+      }
+      if (scan.finalState !== 'subscribed') {
         return
       }
       const settings = useAppStore.getState().settings
@@ -2065,7 +2229,9 @@ export function connectPanePty(
       // Why: hidden snapshot-backed panes skip xterm.write for PTY bytes. Answer
       // mode 2031 out-of-band so TUIs still render the snapshot with the same
       // theme-dependent styling they would have used in a visible pane.
+      deps.paneMode2031Ref.current.set(pane.id, true)
       transport.sendInput(mode2031SequenceFor(mode))
+      deps.paneLastThemeModeRef.current.set(pane.id, mode)
       recordHiddenMode2031Reply()
     }
     function beforeTerminalOutputWrite(): void {
@@ -2164,14 +2330,19 @@ export function connectPanePty(
       )
     }
 
-    function writePtyOutputToXterm(data: string, foreground: boolean): void {
+    function writePtyOutputToXterm(
+      data: string,
+      foreground: boolean,
+      opts?: { hiddenStartupRendererQuery?: boolean }
+    ): void {
       if (foreground) {
         resetHiddenOutputRestoreIfPtyChanged()
       }
       const parseHiddenStartupOutput =
         !foreground &&
         canUseHiddenOutputSnapshot(transport.getPtyId()) &&
-        isHiddenStartupRendererQueryWindowActive()
+        shouldSnapshotHiddenCodexOutput &&
+        (opts?.hiddenStartupRendererQuery === true || containsHiddenStartupRendererQuery(data))
       const synchronizedOutputStarted =
         shouldProtectNativeWindowsSynchronizedOutput &&
         foreground &&
@@ -2240,18 +2411,124 @@ export function connectPanePty(
     }
 
     function shouldSkipHiddenRendererOutput(foreground: boolean, data: string): boolean {
-      void foreground
-      void data
-      // Why: release correctness beats the hidden-output perf optimization.
-      // Real OpenCode tables still corrupt after workspace switching when PTY
-      // bytes bypass the renderer, so keep hidden panes on the live xterm path
-      // and leave snapshot skipping for a later perf branch.
-      return false
+      if (
+        foreground ||
+        !shouldSnapshotHiddenCodexOutput ||
+        !canUseHiddenOutputSnapshot(transport.getPtyId())
+      ) {
+        return false
+      }
+      // Why: CPR/DECRQM replies depend on ordered terminal state. Keep the rare
+      // clean stateful-query chunk live; after skipped bytes, avoid stale replies.
+      return hiddenRendererStateDirty || !containsStatefulRendererQuery(data)
+    }
+
+    function writeHiddenStartupRendererQueries(data: string): void {
+      const extracted = extractHiddenStartupRendererQueryData(
+        data,
+        hiddenStartupRendererQueryPending
+      )
+      hiddenStartupRendererQueryPending = extracted.pending
+      if (extracted.statelessQueryData) {
+        writePtyOutputToXterm(extracted.statelessQueryData, false, {
+          hiddenStartupRendererQuery: true
+        })
+      }
+      // Stateful hidden queries require ordered terminal state. If this pane's
+      // hidden xterm is dirty, skipping is safer than sending stale CPR/DECRQM.
+    }
+
+    function takeHiddenStartupRendererQueryPendingForForeground(data: string): {
+      statelessQueryData: string
+      statefulQueryData: string
+      remainingData: string
+      consumedCurrentChars: number
+    } {
+      const pending = hiddenStartupRendererQueryPending
+      hiddenStartupRendererQueryPending = ''
+      if (!pending) {
+        return {
+          statelessQueryData: '',
+          statefulQueryData: '',
+          remainingData: data,
+          consumedCurrentChars: 0
+        }
+      }
+
+      const input = pending + data
+      let statelessQueryData = ''
+      let statefulQueryData = ''
+      let consumedInputChars = pending.length
+      let nextPending = ''
+      if (input.startsWith('\x1b[')) {
+        const finalByteIndex = findCsiFinalByteIndex(input, 2)
+        if (finalByteIndex === -1) {
+          nextPending = input.slice(0, HIDDEN_STARTUP_RENDERER_QUERY_PENDING_CHARS)
+          consumedInputChars = input.length
+        } else {
+          const sequence = input.slice(0, finalByteIndex + 1)
+          if (isStatelessRendererReplyCsiQuery(sequence)) {
+            statelessQueryData = sequence
+          } else if (isStatefulRendererReplyCsiQuery(sequence)) {
+            statefulQueryData = sequence
+          }
+          consumedInputChars = finalByteIndex + 1
+        }
+      } else if (input.startsWith('\x1b]')) {
+        const matchingPrefix = HIDDEN_STARTUP_OSC_COLOR_QUERY_PREFIXES.find((prefix) =>
+          input.startsWith(prefix)
+        )
+        const terminatorIndex = findOscTerminatorIndex(input, 2)
+        if (
+          !matchingPrefix &&
+          HIDDEN_STARTUP_OSC_COLOR_QUERY_PREFIXES.some((prefix) => prefix.startsWith(input))
+        ) {
+          nextPending = input
+          consumedInputChars = input.length
+        } else if (terminatorIndex === -1) {
+          nextPending = input.slice(0, HIDDEN_STARTUP_RENDERER_QUERY_PENDING_CHARS)
+          consumedInputChars = input.length
+        } else {
+          if (matchingPrefix) {
+            statelessQueryData = input.slice(0, terminatorIndex)
+          }
+          consumedInputChars = terminatorIndex
+        }
+      } else if (input.length === 1) {
+        nextPending = input
+        consumedInputChars = input.length
+      } else {
+        consumedInputChars = pending.length
+      }
+
+      hiddenStartupRendererQueryPending = nextPending
+      const consumedCurrentChars = Math.max(0, consumedInputChars - pending.length)
+      return {
+        statelessQueryData,
+        statefulQueryData,
+        remainingData: data.slice(consumedCurrentChars),
+        consumedCurrentChars
+      }
+    }
+
+    function metaAfterConsumingCurrentChars(
+      meta: PtyDataMeta | undefined,
+      consumedCurrentChars: number
+    ): PtyDataMeta | undefined {
+      if (consumedCurrentChars === 0 || typeof meta?.rawLength !== 'number') {
+        return meta
+      }
+      return {
+        ...meta,
+        rawLength: Math.max(0, meta.rawLength - consumedCurrentChars)
+      }
     }
 
     function skipHiddenRendererOutput(data: string): void {
+      writeHiddenStartupRendererQueries(data)
       respondToSkippedMode2031Subscribe(data)
       markHiddenOutputRestoreNeeded()
+      hiddenRendererStateDirty = true
       if (hiddenOutputRestoreInFlight) {
         hiddenOutputRestoreFreshSnapshotNeeded = true
       }
@@ -2394,9 +2671,16 @@ export function connectPanePty(
 
     function clearHiddenOutputRestoreState(): void {
       clearPendingLiveChunksDuringRestore()
+      hiddenStartupRendererQueryPending = ''
+      hiddenRendererStateDirty = false
       hiddenOutputRestoreNeeded = false
       hiddenOutputRestorePtyId = null
       hiddenOutputRestoreGeneration += 1
+    }
+
+    function clearPaneMode2031State(): void {
+      deps.paneMode2031Ref.current.delete(pane.id)
+      deps.paneLastThemeModeRef.current.delete(pane.id)
     }
 
     function resetHiddenOutputRestoreIfPtyChanged(): void {
@@ -2407,6 +2691,7 @@ export function connectPanePty(
         // Why: renderer backlog is tied to the old PTY stream; after reattach,
         // queued hidden bytes must not delay or replay before the new PTY.
         clearHiddenOutputRestoreState()
+        clearPaneMode2031State()
         discardTerminalOutput(pane.terminal)
       }
     }
@@ -2470,6 +2755,7 @@ export function connectPanePty(
       writeReplayData('\x1b[2J\x1b[3J\x1b[H')
       writeReplayData(snapshot.data)
       writeReplayData(POST_REPLAY_LIVE_SNAPSHOT_RESET)
+      hiddenRendererStateDirty = false
       recordTerminalOutput(pane.terminal)
       const currentPtyId = transport.getPtyId()
       if (currentPtyId && !getFitOverrideForPty(currentPtyId)) {
@@ -2642,6 +2928,7 @@ export function connectPanePty(
     const dataCallback = (data: string, meta?: PtyDataMeta): void => {
       if (data.length > 0) {
         hasReceivedPtyOutput = true
+        recordAgentHibernationPaneOutput(cacheKey)
       }
       resetHiddenOutputRestoreIfPtyChanged()
       observeTerminalBracketedPasteModeOutput(pane.terminal, data)
@@ -2654,6 +2941,24 @@ export function connectPanePty(
       // output the user is watching. Throttle only when the pane or whole
       // Electron document is hidden.
       const foreground = shouldWritePtyOutputForeground(deps.isVisibleRef.current)
+      if (foreground && hiddenMode2031ScanTail) {
+        respondToSkippedMode2031Subscribe(data)
+      }
+      // Why: a hidden Codex query can be split just before visibility changes;
+      // xterm needs the completed query, while other bytes still follow restore.
+      const pendingForegroundQuery = foreground
+        ? takeHiddenStartupRendererQueryPendingForForeground(data)
+        : null
+      const rendererData = pendingForegroundQuery?.remainingData ?? data
+      const rendererMeta = metaAfterConsumingCurrentChars(
+        meta,
+        pendingForegroundQuery?.consumedCurrentChars ?? 0
+      )
+      if (pendingForegroundQuery?.statelessQueryData) {
+        writePtyOutputToXterm(pendingForegroundQuery.statelessQueryData, true, {
+          hiddenStartupRendererQuery: true
+        })
+      }
       const restoreAppliesToCurrentPty =
         hiddenOutputRestorePtyId !== null && transport.getPtyId() === hiddenOutputRestorePtyId
       if (shouldSkipHiddenRendererOutput(foreground, data)) {
@@ -2663,14 +2968,22 @@ export function connectPanePty(
         restoreAppliesToCurrentPty
       ) {
         if (foreground) {
-          queueLiveChunkDuringRestore(data, meta)
+          if (pendingForegroundQuery?.statefulQueryData) {
+            queueLiveChunkDuringRestore(pendingForegroundQuery.statefulQueryData)
+          }
+          queueLiveChunkDuringRestore(rendererData, rendererMeta)
           requestHiddenOutputRestoreIfNeeded()
         } else if (hiddenOutputRestoreInFlight) {
           hiddenOutputRestoreNeeded = true
           hiddenOutputRestoreFreshSnapshotNeeded = true
         }
       } else {
-        writePtyOutputToXterm(data, foreground)
+        if (pendingForegroundQuery?.statefulQueryData) {
+          writePtyOutputToXterm(pendingForegroundQuery.statefulQueryData, true, {
+            hiddenStartupRendererQuery: true
+          })
+        }
+        writePtyOutputToXterm(rendererData, foreground)
       }
 
       schedulePendingStartupCommandDelivery()
@@ -2975,6 +3288,8 @@ export function connectPanePty(
                 ? Promise.resolve(null)
                 : window.api.pty.declarePendingPaneSerializer(cacheKey).catch(() => null)
             let expiredReattachError = false
+            clearPaneMode2031State()
+            clearHiddenOutputRestoreState()
             const reattachPromise = transport.connect({
               url: '',
               cols,
@@ -3218,6 +3533,8 @@ export function connectPanePty(
       // off — otherwise the next remount reads the same dead ptyId from
       // the store and lands in this branch again in a loop.
       try {
+        clearPaneMode2031State()
+        clearHiddenOutputRestoreState()
         transport.attach({
           existingPtyId: attachPtyId,
           cols,
@@ -3271,6 +3588,8 @@ export function connectPanePty(
             // even if no later spawn event or layout snapshot runs.
             deps.syncPanePtyLayoutBinding(pane.id, spawnedPtyId)
             deps.updateTabPtyId(deps.tabId, spawnedPtyId)
+            clearPaneMode2031State()
+            clearHiddenOutputRestoreState()
             transport.attach({
               existingPtyId: spawnedPtyId,
               cols,

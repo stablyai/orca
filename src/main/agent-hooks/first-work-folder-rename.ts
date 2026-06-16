@@ -7,6 +7,7 @@
 // "folder kept" without disturbing the rename that already succeeded.
 import type { GlobalSettings, Repo } from '../../shared/types'
 import { getRepoIdFromWorktreeId, splitWorktreeId } from '../../shared/worktree-id'
+import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import { planWorktreeFolderRename } from '../ipc/worktree-folder-rename-target'
 
 export type FirstWorkFolderRenameDeps = {
@@ -45,7 +46,7 @@ export async function renameWorktreeFolderOnFirstWork(
     newLeaf,
     settings: deps.getSettings(),
     platform: process.platform,
-    isRemote: Boolean(repo.connectionId)
+    isRemote: getRepoExecutionHostId(repo) !== LOCAL_EXECUTION_HOST_ID
   })
   if (!plan) {
     return false

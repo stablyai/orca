@@ -588,7 +588,35 @@ function unsubscribe(worktreePath: string, senderId: number): void {
   }
 }
 
-// ── Remote watcher state ─────────────────────────────────────────────
+export async function closeLocalWatcherForWorktreePath(worktreePath: string): Promise<void> {
+  const rootKey = normalizeRootPath(worktreePath)
+  const pendingTeardown = pendingTeardowns.get(rootKey)
+  if (pendingTeardown) {
+    clearTimeout(pendingTeardown)
+    pendingTeardowns.delete(rootKey)
+  }
+
+  const inFlight = inFlightLocalInstalls.get(rootKey)
+  if (inFlight) {
+    // Why: Windows keeps watched directories locked; deletion must be able to
+    // cancel an in-flight subscription before Git tries to remove the tree.
+    inFlight.listeners.clear()
+    inFlight.cancelled = true
+  }
+  await pendingLocalInstallPromises.get(rootKey)?.catch(() => undefined)
+
+  const root = watchedRoots.get(rootKey)
+  if (!root) {
+    return
+  }
+  if (root.batch.timer) {
+    clearTimeout(root.batch.timer)
+  }
+  watchedRoots.delete(rootKey)
+  await trackLocalUnsubscribe(rootKey, root)
+}
+
+// Remote watcher state
 type RemoteWatcherState = {
   unwatch: () => void
   listeners: Map<number, WebContents>

@@ -27,7 +27,7 @@ const STATUS_MESSAGES: Partial<Record<SshConnectionStatus, string>> = {
   get disconnected() {
     return translate(
       'auto.components.sidebar.SshDisconnectedDialog.disconnected',
-      'This remote repository is not connected.'
+      'This SSH host is not connected.'
     )
   },
   get reconnecting() {
@@ -108,7 +108,7 @@ export function SshDisconnectedDialog({
     STATUS_MESSAGES.disconnected ??
     translate(
       'auto.components.sidebar.SshDisconnectedDialog.disconnected',
-      'This remote repository is not connected.'
+      'This SSH host is not connected.'
     )
   const message = isConnecting
     ? reconnectingMessage

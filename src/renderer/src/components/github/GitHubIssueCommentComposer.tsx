@@ -20,8 +20,10 @@ import type {
   GitHubOwnerRepo,
   GitHubViewer,
   GitHubWorkItem,
+  GlobalSettings,
   PRComment
 } from '../../../../shared/types'
+import type { TaskSourceContext } from '../../../../shared/task-source-context'
 import { translate } from '@/i18n/i18n'
 
 export function GitHubIssueCommentComposer({
@@ -32,6 +34,8 @@ export function GitHubIssueCommentComposer({
   itemType,
   itemState,
   itemId,
+  sourceContext,
+  sourceSettings,
   projectOrigin,
   previewGithubRepo,
   onCommentAdded,
@@ -45,6 +49,8 @@ export function GitHubIssueCommentComposer({
   itemType: 'issue' | 'pr'
   itemState?: GitHubWorkItem['state']
   itemId?: string
+  sourceContext?: TaskSourceContext | null
+  sourceSettings?: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
   projectOrigin?: GitHubIssueCommentProjectOrigin
   previewGithubRepo?: GitHubOwnerRepo | null
   onCommentAdded: (comment: PRComment) => void
@@ -127,6 +133,7 @@ export function GitHubIssueCommentComposer({
       const result = await addIssueCommentForRepo({
         repoPath,
         repoId: repoId ?? undefined,
+        sourceContext,
         number: issueNumber,
         body: trimmed,
         type: itemType
@@ -162,7 +169,7 @@ export function GitHubIssueCommentComposer({
         setSubmitting(false)
       }
     }
-  }, [body, issueNumber, itemType, mountedRef, onCommentAdded, repoId, repoPath])
+  }, [body, issueNumber, itemType, mountedRef, onCommentAdded, repoId, repoPath, sourceContext])
 
   const handleCloseIssue = useCallback(
     async (reason: GitHubIssueCloseReason = closeReason) => {
@@ -176,6 +183,8 @@ export function GitHubIssueCommentComposer({
         await runIssueStateUpdate({
           repoPath,
           repoId,
+          sourceContext,
+          sourceSettings,
           projectOrigin,
           number: issueNumber,
           updates: { state: 'closed', stateReason: reason }
@@ -212,6 +221,8 @@ export function GitHubIssueCommentComposer({
       projectOrigin,
       repoId,
       repoPath,
+      sourceContext,
+      sourceSettings,
       statePending
     ]
   )
@@ -227,6 +238,8 @@ export function GitHubIssueCommentComposer({
       await runIssueStateUpdate({
         repoPath,
         repoId,
+        sourceContext,
+        sourceSettings,
         projectOrigin,
         number: issueNumber,
         updates: { state: 'open' }
@@ -261,6 +274,8 @@ export function GitHubIssueCommentComposer({
     projectOrigin,
     repoId,
     repoPath,
+    sourceContext,
+    sourceSettings,
     statePending
   ])
 

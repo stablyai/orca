@@ -20,6 +20,7 @@ function isolatedScanRoots(root: string) {
     copilotSessionsDir: join(root, 'copilot-sessions'),
     cursorProjectsDir: join(root, 'cursor-projects'),
     opencodeStorageDir: join(root, 'opencode-storage'),
+    grokSessionsDir: join(root, 'grok-sessions'),
     hermesSessionsDir: join(root, 'hermes-sessions'),
     rovoSessionsDir: join(root, 'rovo-sessions'),
     openclawStateDir: join(root, 'openclaw-state'),
@@ -422,6 +423,42 @@ describe('scanAiVaultSessions', () => {
       })
     )
 
+    await mkdir(join(roots.grokSessionsDir, encodeURIComponent('/tmp/grok'), 'grok-session'), {
+      recursive: true
+    })
+    await writeFile(
+      join(roots.grokSessionsDir, encodeURIComponent('/tmp/grok'), 'grok-session', 'summary.json'),
+      JSON.stringify({
+        info: { id: 'grok-session', cwd: '/tmp/grok' },
+        session_summary: '',
+        created_at: '2026-05-01T10:04:00.000Z',
+        updated_at: '2026-05-01T10:04:01.000Z',
+        num_chat_messages: 2,
+        current_model_id: 'grok-build',
+        head_branch: 'feature/grok-vault'
+      })
+    )
+    await writeFile(
+      join(
+        roots.grokSessionsDir,
+        encodeURIComponent('/tmp/grok'),
+        'grok-session',
+        'chat_history.jsonl'
+      ),
+      jsonLines([
+        {
+          type: 'user',
+          content: [
+            {
+              type: 'text',
+              text: '<user_info>context</user_info><user_query>Grok title</user_query>'
+            }
+          ]
+        },
+        { type: 'assistant', content: 'Done' }
+      ])
+    )
+
     await mkdir(roots.hermesSessionsDir, { recursive: true })
     await writeFile(
       join(roots.hermesSessionsDir, 'session_hermes-session.json'),
@@ -544,6 +581,7 @@ describe('scanAiVaultSessions', () => {
     expect(commandByAgent.get('opencode')).toBe(
       "cd '/tmp/opencode' && opencode --session 'opencode-session'"
     )
+    expect(commandByAgent.get('grok')).toBe("cd '/tmp/grok' && grok --resume 'grok-session'")
     expect(commandByAgent.get('hermes')).toBe(
       "cd '/tmp/hermes' && hermes --resume 'hermes-session'"
     )

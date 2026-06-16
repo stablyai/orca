@@ -712,6 +712,88 @@ describe('mobile rpc-client connection timeout', () => {
     })
   })
 
+  // Issue #5200: a single auth rejection used to latch 'auth-failed'
+  // permanently, forcing a needless re-pair even when the desktop still
+  // listed the device with a valid token. The client now retries the
+  // handshake a bounded number of times before declaring auth dead.
+  describe('auth rejection retry (issue #5200)', () => {
+    function authenticate(socket: MockWebSocket) {
+      socket.open()
+      socket.receive(JSON.stringify({ type: 'e2ee_ready' }))
+      socket.receive('encrypted:{"type":"e2ee_authenticated"}')
+    }
+
+    it('retries the handshake on a transient e2ee_error instead of latching auth-failed', async () => {
+      const client = connect('ws://desktop.invalid', 'token', 'server-key')
+      const first = mockSockets[0]!
+      first.open()
+      first.receive(JSON.stringify({ type: 'e2ee_ready' }))
+
+      // Transient rejection during handshake — must NOT latch auth-failed.
+      first.receive('encrypted:{"type":"e2ee_error","error":{"code":"unauthorized"}}')
+      expect(client.getState()).toBe('reconnecting')
+
+      // A fresh socket gets a fresh handshake; this time it authenticates.
+      await vi.advanceTimersByTimeAsync(500)
+      authenticate(mockSockets[mockSockets.length - 1]!)
+      expect(client.getState()).toBe('connected')
+
+      client.close()
+    })
+
+    it('latches auth-failed once the retry budget is exhausted', async () => {
+      const client = connect('ws://desktop.invalid', 'token', 'server-key')
+
+      // Three consecutive handshake rejections (AUTH_RETRY_BUDGET = 3).
+      for (let i = 0; i < 3; i++) {
+        if (i > 0) {
+          await vi.advanceTimersByTimeAsync(500)
+        }
+        const socket = mockSockets[mockSockets.length - 1]!
+        socket.open()
+        socket.receive(JSON.stringify({ type: 'e2ee_ready' }))
+        socket.receive('encrypted:{"type":"e2ee_error","error":{"code":"unauthorized"}}')
+      }
+
+      expect(client.getState()).toBe('auth-failed')
+
+      client.close()
+    })
+
+    it('resets the budget after a successful connect between rejections', async () => {
+      const client = connect('ws://desktop.invalid', 'token', 'server-key')
+
+      // Two rejections, then a clean connect resets the budget...
+      for (let i = 0; i < 2; i++) {
+        if (i > 0) {
+          await vi.advanceTimersByTimeAsync(500)
+        }
+        const socket = mockSockets[mockSockets.length - 1]!
+        socket.open()
+        socket.receive(JSON.stringify({ type: 'e2ee_ready' }))
+        socket.receive('encrypted:{"type":"e2ee_error","error":{"code":"unauthorized"}}')
+      }
+      await vi.advanceTimersByTimeAsync(500)
+      authenticate(mockSockets[mockSockets.length - 1]!)
+      expect(client.getState()).toBe('connected')
+
+      // ...so a later mid-session rejection gets the full budget again
+      // rather than immediately latching auth-failed.
+      const live = mockSockets[mockSockets.length - 1]!
+      const request = client.sendRequest('status.get').catch(() => undefined)
+      // sendRequest awaits waitForConnected before sending — let it flush.
+      await Promise.resolve()
+      const id = sentRequest(live, 'status.get').id
+      live.receive(
+        `encrypted:${JSON.stringify({ id, ok: false, error: { code: 'unauthorized' } })}`
+      )
+      await request
+      expect(client.getState()).toBe('reconnecting')
+
+      client.close()
+    })
+  })
+
   it('rejects requests waiting for reconnect after the retry cap', async () => {
     const client = connect('ws://desktop.invalid', 'token', 'server-key')
     const socket = mockSockets[0]!

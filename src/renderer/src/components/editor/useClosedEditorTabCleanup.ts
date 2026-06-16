@@ -2,6 +2,10 @@ import { useEffect, useRef } from 'react'
 import * as monaco from 'monaco-editor'
 import type { OpenFile } from '@/store/slices/editor'
 import { cursorPositionCache, diffViewStateCache, scrollTopCache } from '@/lib/scroll-cache'
+import {
+  disposeUnattachedMonacoModelsByPathPrefix,
+  getDiffViewerMonacoModelPathPrefixes
+} from './diff-monaco-model-disposal'
 
 function deleteCacheEntriesByPrefix<T>(cache: Map<string, T>, prefix: string): void {
   for (const key of cache.keys()) {
@@ -47,10 +51,14 @@ function disposeClosedEditorTab(prevId: string, prevFile: OpenFile): void {
       deleteCacheEntriesByPrefix(scrollTopCache, `${prevFile.id}::`)
       break
     case 'diff':
-      // Why: kept diff models are keyed by tab id because one file can appear
-      // in multiple diff tabs with different contents.
-      monaco.editor.getModel(monaco.Uri.parse(`diff:original:${prevId}`))?.dispose()
-      monaco.editor.getModel(monaco.Uri.parse(`diff:modified:${prevId}`))?.dispose()
+      // Why: kept diff models are keyed by tab id, and fallback recovery can
+      // append generation suffixes; closing the tab owns that whole namespace.
+      {
+        const { originalModelPathPrefix, modifiedModelPathPrefix } =
+          getDiffViewerMonacoModelPathPrefixes(prevId)
+        disposeUnattachedMonacoModelsByPathPrefix(monaco, originalModelPathPrefix)
+        disposeUnattachedMonacoModelsByPathPrefix(monaco, modifiedModelPathPrefix)
+      }
       diffViewStateCache.delete(prevId)
       deleteCacheEntriesByPrefix(diffViewStateCache, `${prevId}::`)
       scrollTopCache.delete(`${prevId}:preview`)

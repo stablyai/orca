@@ -57,6 +57,7 @@ import type {
   LinearIssueChildSummary,
   LinearProjectSummary
 } from '../../../shared/types'
+import type { TaskSourceContext } from '../../../shared/task-source-context'
 import { translate } from '@/i18n/i18n'
 
 type LinearIssueWorkspaceProps = {
@@ -66,6 +67,7 @@ type LinearIssueWorkspaceProps = {
   onClose: () => void
   variant?: 'sheet' | 'page'
   backLabel?: string
+  sourceContext?: TaskSourceContext | null
 }
 
 async function copyTextToClipboard(text: string, label: string): Promise<void> {
@@ -111,12 +113,15 @@ function LinearIssueAvatar({
 
 function LinearIssueSubIssueButton({
   issue,
-  onOpenIssue
+  onOpenIssue,
+  sourceContext
 }: {
   issue: LinearIssue
   onOpenIssue: (issue: LinearIssue) => void
+  sourceContext?: TaskSourceContext | null
 }): React.JSX.Element {
   const settings = useAppStore((s) => s.settings)
+  const providerSettings = sourceContext ?? settings
   const fetchLinearIssue = useAppStore((s) => s.fetchLinearIssue)
   const [open, setOpen] = useState(false)
   const [title, setTitle] = useState('')
@@ -145,7 +150,9 @@ function LinearIssueSubIssueButton({
     async (subIssue: LinearIssueChildSummary) => {
       setOpeningSubIssueId(subIssue.id)
       try {
-        const fullIssue = await fetchLinearIssue(subIssue.id, issue.workspaceId)
+        const fullIssue = await fetchLinearIssue(subIssue.id, issue.workspaceId, {
+          sourceContext
+        })
         if (!mountedRef.current) {
           return
         }
@@ -173,7 +180,7 @@ function LinearIssueSubIssueButton({
         }
       }
     },
-    [fetchLinearIssue, issue.workspaceId, mountedRef, onOpenIssue]
+    [fetchLinearIssue, issue.workspaceId, mountedRef, onOpenIssue, sourceContext]
   )
 
   const handleCreate = useCallback(async () => {
@@ -183,7 +190,7 @@ function LinearIssueSubIssueButton({
     }
     setSubmitting(true)
     try {
-      const result = await linearCreateSubIssue(settings, {
+      const result = await linearCreateSubIssue(providerSettings, {
         parentIssueId: issue.id,
         teamId: issue.team.id,
         title: trimmed,
@@ -235,7 +242,7 @@ function LinearIssueSubIssueButton({
     issue.subIssues,
     issue.team.id,
     issue.workspaceId,
-    settings,
+    providerSettings,
     title
   ])
 
@@ -311,12 +318,15 @@ function LinearIssueSubIssueButton({
 
 function LinearIssueSidebarProjectCard({
   issue,
-  onProjectChanged
+  onProjectChanged,
+  sourceContext
 }: {
   issue: LinearIssue
   onProjectChanged: (project: LinearProjectSummary) => void
+  sourceContext?: TaskSourceContext | null
 }): React.JSX.Element {
   const settings = useAppStore((s) => s.settings)
+  const providerSettings = sourceContext ?? settings
   const patchLinearIssue = useAppStore((s) => s.patchLinearIssue)
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
@@ -331,7 +341,7 @@ function LinearIssueSidebarProjectCard({
     let cancelled = false
     const timeout = window.setTimeout(() => {
       setLoading(true)
-      void linearListProjects(settings, query, 20, issue.workspaceId)
+      void linearListProjects(providerSettings, query, 20, issue.workspaceId)
         .then((result) => {
           if (!cancelled) {
             setProjects(result.items)
@@ -359,21 +369,21 @@ function LinearIssueSidebarProjectCard({
       cancelled = true
       window.clearTimeout(timeout)
     }
-  }, [issue.workspaceId, open, query, settings])
+  }, [issue.workspaceId, open, providerSettings, query])
 
   const handleSelectProject = useCallback(
     async (project: LinearProjectSummary) => {
       setSavingProjectId(project.id)
       try {
         const result = await linearUpdateIssue(
-          settings,
+          providerSettings,
           issue.id,
           { projectId: project.id },
           issue.workspaceId
         )
         if (result.ok) {
           onProjectChanged(project)
-          patchLinearIssue(issue.id, { project })
+          patchLinearIssue(issue.id, { project }, { sourceContext })
           toast.success(
             translate('auto.components.LinearIssueWorkspace.f9d4ef9807', 'Project updated')
           )
@@ -394,7 +404,14 @@ function LinearIssueSidebarProjectCard({
         setSavingProjectId(null)
       }
     },
-    [issue.id, issue.workspaceId, onProjectChanged, patchLinearIssue, settings]
+    [
+      issue.id,
+      issue.workspaceId,
+      onProjectChanged,
+      patchLinearIssue,
+      providerSettings,
+      sourceContext
+    ]
   )
 
   return (
@@ -482,9 +499,11 @@ export default function LinearIssueWorkspace({
   onOpenIssue,
   onClose,
   variant = 'sheet',
-  backLabel = 'Back'
+  backLabel = 'Back',
+  sourceContext
 }: LinearIssueWorkspaceProps): React.JSX.Element {
   const settings = useAppStore((s) => s.settings)
+  const providerSettings = sourceContext ?? settings
   const [fullIssue, setFullIssue] = useState<LinearIssue | null>(null)
   const [issueLoading, setIssueLoading] = useState(false)
   const [comments, setComments] = useState<LinearComment[]>([])
@@ -519,7 +538,7 @@ export default function LinearIssueWorkspace({
       }
       try {
         let fetched = (await linearIssueComments(
-          settings,
+          providerSettings,
           targetIssue.id,
           targetIssue.workspaceId
         )) as LinearComment[]
@@ -542,7 +561,7 @@ export default function LinearIssueWorkspace({
         }
       }
     },
-    [mountedRef, settings]
+    [mountedRef, providerSettings]
   )
 
   useEffect(() => {
@@ -558,7 +577,7 @@ export default function LinearIssueWorkspace({
       return
     }
 
-    const issueKey = `${settings?.activeRuntimeEnvironmentId ?? 'local'}:${issue.workspaceId ?? 'selected'}:${issue.id}`
+    const issueKey = `${sourceContext?.hostId ?? settings?.activeRuntimeEnvironmentId ?? 'local'}:${issue.workspaceId ?? 'selected'}:${issue.id}`
     if (hydratedIssueKeyRef.current === issueKey) {
       return
     }
@@ -576,7 +595,7 @@ export default function LinearIssueWorkspace({
 
     // Why: issue hydration and comments are separate surfaces; a comments
     // failure should not blank the issue detail the user selected.
-    void linearGetIssue(settings, issue.id, issue.workspaceId)
+    void linearGetIssue(providerSettings, issue.id, issue.workspaceId)
       .then((issueResult) => {
         if (!mountedRef.current || requestId !== requestIdRef.current) {
           return
@@ -616,7 +635,7 @@ export default function LinearIssueWorkspace({
       })
 
     void loadComments(issue, requestId)
-  }, [issue, loadComments, mountedRef, settings])
+  }, [issue, loadComments, mountedRef, providerSettings, settings, sourceContext?.hostId])
 
   const displayed = fullIssue ?? issue
 
@@ -796,9 +815,17 @@ export default function LinearIssueWorkspace({
       <div className="min-h-0 flex-1 overflow-y-auto scrollbar-sleek">
         <div className="mx-auto grid w-full grid-cols-1 gap-10 px-7 py-10 lg:grid-cols-[minmax(0,1fr)_320px] lg:px-10 xl:px-12">
           <main className="min-w-0">
-            <LinearIssueTextEditor issue={displayed} onIssueChange={handleIssueTextChange} />
+            <LinearIssueTextEditor
+              issue={displayed}
+              onIssueChange={handleIssueTextChange}
+              sourceContext={sourceContext}
+            />
 
-            <LinearIssueSubIssueButton issue={displayed} onOpenIssue={onOpenIssue} />
+            <LinearIssueSubIssueButton
+              issue={displayed}
+              onOpenIssue={onOpenIssue}
+              sourceContext={sourceContext}
+            />
 
             <section className="mt-12 border-t border-border/60 pt-9">
               <div className="mb-8 flex items-center justify-between gap-3">
@@ -894,6 +921,7 @@ export default function LinearIssueWorkspace({
                 workspaceId={displayed.workspaceId}
                 onCommentAdded={handleCommentAdded}
                 variant="linear-page"
+                sourceContext={sourceContext}
               />
             </section>
           </main>
@@ -905,11 +933,13 @@ export default function LinearIssueWorkspace({
                 editState={editState}
                 onEditStateChange={handleEditStateChange}
                 layout="properties"
+                sourceContext={sourceContext}
               />
             ) : null}
             <LinearIssueSidebarProjectCard
               issue={displayed}
               onProjectChanged={handleProjectChanged}
+              sourceContext={sourceContext}
             />
             <section className="rounded-xl border border-border/60 bg-card text-card-foreground shadow-xs">
               <div className="flex h-10 items-center gap-1 border-b border-border/50 px-4 text-sm font-medium text-muted-foreground">

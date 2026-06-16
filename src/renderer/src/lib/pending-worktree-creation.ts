@@ -9,6 +9,7 @@ import type {
 } from '../../../shared/types'
 import type { AgentStartupPlan } from '@/lib/tui-agent-startup'
 import type { AgentStartedTelemetry } from '@/lib/worktree-activation'
+import type { TaskSourceContext, WorkspaceRunContext } from '../../../shared/task-source-context'
 
 /** Two-phase status reported by the main process while a worktree is created.
  *  `fetching` covers the base-ref git fetch; `creating` covers `git worktree
@@ -25,6 +26,13 @@ export type WorktreeCreationPhase = 'fetching' | 'creating'
  */
 export type WorktreeCreationRequest = {
   repoId: string
+  /** Source host/account that produced the linked task. Kept separate from the
+   *  run context so Retry does not infer provider ownership from the run host. */
+  taskSourceContext?: TaskSourceContext | null
+  /** Host/setup where the new workspace should run. Duplicates repoId by design:
+   *  repoId keeps old create APIs working, while this records the project-first
+   *  host intent for retry, diagnostics, and future metadata writes. */
+  workspaceRunContext?: WorkspaceRunContext | null
   name: string
   displayName?: string
   baseBranch?: string
@@ -42,6 +50,9 @@ export type WorktreeCreationRequest = {
   workspaceStatus?: WorkspaceStatus
   linkedGitLabMR?: number
   linkedGitLabIssue?: number
+  linkedBitbucketPR?: number | null
+  linkedAzureDevOpsPR?: number | null
+  linkedGiteaPR?: number | null
   /** Backend-spawn startup payload (`createWorktree` arg). Present only when the
    *  agent launch is self-contained; otherwise the renderer drives startup via
    *  `startupPlan`. */

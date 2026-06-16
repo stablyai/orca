@@ -21,6 +21,7 @@ import type { FsChangedPayload } from '../../../shared/types'
 import { findWorktreeById } from '@/store/slices/worktree-helpers'
 import type { OpenFile } from '@/store/slices/editor'
 import { readRuntimeFileContent, subscribeRuntimeFileChanges } from '@/runtime/runtime-file-client'
+import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 
 // Why: atomic-write patterns (Claude Code's Edit tool, editors like vim,
 // VSCode) land as a short burst of `update` events — or `delete + create` on
@@ -158,7 +159,9 @@ export function getEditorExternalWatchTargets(
       owners = new Set()
       targetOwnersByWorktreeId.set(state.activeWorktreeId, owners)
     }
-    owners.add(runtimeEnvironmentId ?? null)
+    // Why: the Explorer is mounted for the selected worktree. Its watcher must
+    // follow that worktree's host owner, not the host currently focused in the UI.
+    owners.add(getRuntimeEnvironmentIdForWorktree(state, state.activeWorktreeId))
   }
 
   const nextTargets: WatchedTarget[] = []

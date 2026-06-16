@@ -11,6 +11,7 @@ import type {
   AutomationDispatchResult,
   AutomationPrecheckResult
 } from '../../../shared/automations-types'
+import { getAutomationRunRepoId } from '../../../shared/automation-run-identity'
 import {
   didAutomationPrecheckPass,
   formatAutomationPrecheckFailure
@@ -57,7 +58,8 @@ export function useAutomationDispatchEvents(): void {
         activeTabId: state.activeTabId,
         activeTabType: state.activeTabType
       }
-      const repo = state.repos.find((entry) => entry.id === automation.projectId)
+      const runRepoId = getAutomationRunRepoId(automation)
+      const repo = state.repos.find((entry) => entry.id === runRepoId)
       const automationWorktree = automation.workspaceId
         ? state.allWorktrees().find((entry) => entry.id === automation.workspaceId)
         : null
@@ -117,6 +119,25 @@ export function useAutomationDispatchEvents(): void {
         }
       }
 
+      if (
+        automation.workspaceMode === 'existing' &&
+        automationWorktree &&
+        automation.runContext?.repoId &&
+        automationWorktree.repoId !== automation.runContext.repoId
+      ) {
+        await markDispatchResult({
+          runId: run.id,
+          status: 'skipped_unavailable',
+          workspaceId: automation.workspaceId,
+          workspaceDisplayName: dispatchWorkspaceDisplayName,
+          error: translate(
+            'auto.hooks.useAutomationDispatchEvents.3ad7d77f57',
+            'The target workspace is on a different host than this automation run target.'
+          )
+        })
+        return
+      }
+
       if (automation.workspaceMode === 'existing' && !automationWorktree) {
         await markDispatchResult({
           runId: run.id,
@@ -156,7 +177,7 @@ export function useAutomationDispatchEvents(): void {
                 await useAppStore
                   .getState()
                   .createWorktree(
-                    automation.projectId,
+                    runRepoId,
                     buildAutomationWorkspaceName(run.title, run.scheduledFor),
                     automation.baseBranch ?? undefined,
                     'inherit',

@@ -6,6 +6,8 @@ import { installWindowVisibilityInterval } from '@/lib/window-visibility-interva
 import { useAppStore } from '@/store'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import type { GetGitLabRateLimitResult, GitLabRateLimitSnapshot } from '../../../../shared/types'
+import { getProviderRateLimitScope } from '@/components/settings/provider-account-scope'
+import { ProviderHostScopeControl } from '@/components/settings/ProviderHostScopeControl'
 import { translate } from '@/i18n/i18n'
 
 const REFRESH_INTERVAL_MS = 60_000
@@ -146,6 +148,8 @@ function GitLabRateLimitRows({
 
 export function GitLabRateLimitPanel({ className }: { className?: string }): React.JSX.Element {
   const { snapshot, hasError, isFetching, refresh } = useGitLabRateLimitSnapshot()
+  const settings = useAppStore((s) => s.settings)
+  const budgetScope = getProviderRateLimitScope(settings, 'GitLab')
 
   return (
     <div className={cn('space-y-3 rounded-md border border-border/60 p-3', className)}>
@@ -164,6 +168,14 @@ export function GitLabRateLimitPanel({ className }: { className?: string }): Rea
               'Orca uses REST through the GitLab CLI.'
             )}
           </p>
+          <ProviderHostScopeControl
+            labelPrefix={translate(
+              'auto.components.gitlab.gitlab.rate.limit.display.budget_scope_prefix',
+              'Budget scope'
+            )}
+            scope={budgetScope}
+            className="text-xs"
+          />
         </div>
         <Button
           type="button"

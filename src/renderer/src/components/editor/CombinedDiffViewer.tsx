@@ -57,8 +57,11 @@ import {
 } from './editor-autosave'
 import { getCombinedBranchEntries, getCombinedUncommittedEntries } from './combined-diff-entries'
 import { getDiffSectionEstimatedHeight, isIntrinsicHeightImageDiff } from './diff-section-layout'
+import { getLargeDiffRenderLimit } from './large-diff-render-limit'
+import { getStoredTextDiffContent, getStoredTextDiffResult } from './large-diff-section-content'
 import type { DiffSection } from './diff-section-types'
 import { getInitialCombinedDiffSectionLoadIndices } from './combined-diff-initial-section-load'
+import { removeDiffSectionMeasuredHeight } from './diff-section-height-cache'
 import { createCombinedDiffLoadScheduler } from './combined-diff-load-scheduler'
 import {
   beginCombinedDiffScrollbarDrag,
@@ -276,7 +279,11 @@ export default function CombinedDiffViewer({
     if (!container || container.scrollHeight <= container.clientHeight + 1) {
       setScrollThumb((prev) =>
         prev.visible
-          ? { visible: false, top: 0, height: COMBINED_DIFF_SCROLLBAR_THUMB_MIN_HEIGHT }
+          ? {
+              visible: false,
+              top: 0,
+              height: COMBINED_DIFF_SCROLLBAR_THUMB_MIN_HEIGHT
+            }
           : prev
       )
       return
@@ -485,7 +492,8 @@ export default function CombinedDiffViewer({
         loading: true,
         error: undefined,
         dirty: false,
-        diffResult: null
+        diffResult: null,
+        largeDiffRenderLimit: null
       }))
     )
     setSectionHeights({})
@@ -586,21 +594,32 @@ export default function CombinedDiffViewer({
         } as GitDiffResult
       }
 
+      const largeDiffRenderLimit =
+        !error && result.kind === 'text'
+          ? getLargeDiffRenderLimit({
+              originalContent: result.originalContent,
+              modifiedContent: result.modifiedContent
+            })
+          : null
+
       loadingIndicesRef.current.delete(index)
       if (generationRef.current !== gen) {
         return
       }
+      const storedContent = getStoredTextDiffContent(result, largeDiffRenderLimit)
+      const storedResult = getStoredTextDiffResult(result, largeDiffRenderLimit)
       loadedIndicesRef.current.add(index)
       setSections((prev) => {
         return prev.map((s, i) =>
           i === index
             ? {
                 ...s,
-                diffResult: result,
-                originalContent: result.kind === 'text' ? result.originalContent : '',
-                modifiedContent: result.kind === 'text' ? result.modifiedContent : '',
+                diffResult: storedResult,
+                originalContent: storedContent.originalContent,
+                modifiedContent: storedContent.modifiedContent,
                 loading: false,
-                error
+                error,
+                largeDiffRenderLimit
               }
             : s
         )
@@ -676,6 +695,7 @@ export default function CombinedDiffViewer({
       invalidateCombinedDiffViewStateCache()
       generationRef.current += 1
       setGeneration((prev) => prev + 1)
+      setSectionHeights((prev) => removeDiffSectionMeasuredHeight(prev, index))
       setSections((prev) =>
         prev.map((section, sectionIndex) =>
           sectionIndex === index
@@ -686,6 +706,7 @@ export default function CombinedDiffViewer({
                 diffResult: null,
                 originalContent: '',
                 modifiedContent: '',
+                largeDiffRenderLimit: null,
                 contentGeneration: (section.contentGeneration ?? 0) + 1
               }
             : section
@@ -720,7 +741,9 @@ export default function CombinedDiffViewer({
           section.added === undefined && section.removed === undefined
             ? undefined
             : (section.added ?? 0) + (section.removed ?? 0),
-        useIntrinsicImageHeight: isIntrinsicHeightImageDiff(section.diffResult)
+        useIntrinsicImageHeight: isIntrinsicHeightImageDiff(section.diffResult),
+        isLargeDiffLimited: section.largeDiffRenderLimit?.limited === true,
+        lineCounts: section.largeDiffRenderLimit?.lineCounts ?? undefined
       })
     },
     overscan: COMBINED_DIFF_OVERSCAN,
@@ -945,11 +968,11 @@ export default function CombinedDiffViewer({
         return
       }
       const modifiedEditor = modifiedEditorsRef.current.get(index)
-      if (!modifiedEditor) {
+      if (!modifiedEditor && !section.dirty) {
         return
       }
 
-      const content = modifiedEditor.getValue()
+      const content = modifiedEditor?.getValue() ?? section.modifiedContent
       const absolutePath = joinPath(file.filePath, section.path)
       try {
         const connectionId = getConnectionId(file.worktreeId) ?? undefined
@@ -967,20 +990,36 @@ export default function CombinedDiffViewer({
           absolutePath,
           content
         )
+        setSectionHeights((prev) => removeDiffSectionMeasuredHeight(prev, index))
         setSections((prev) =>
           prev.map((s, i) => {
             if (i !== index) {
               return s
             }
 
+            if (s.diffResult?.kind !== 'text') {
+              return {
+                ...s,
+                modifiedContent: content,
+                dirty: false,
+                largeDiffRenderLimit: s.largeDiffRenderLimit
+              }
+            }
+
+            const nextDiffResult = { ...s.diffResult, modifiedContent: content }
+            const nextLargeDiffRenderLimit = getLargeDiffRenderLimit({
+              originalContent: s.originalContent,
+              modifiedContent: content
+            })
+            const storedContent = getStoredTextDiffContent(nextDiffResult, nextLargeDiffRenderLimit)
+
             return {
               ...s,
-              modifiedContent: content,
+              modifiedContent: storedContent.modifiedContent,
+              originalContent: storedContent.originalContent,
               dirty: false,
-              diffResult:
-                s.diffResult?.kind === 'text'
-                  ? { ...s.diffResult, modifiedContent: content }
-                  : s.diffResult
+              diffResult: getStoredTextDiffResult(nextDiffResult, nextLargeDiffRenderLimit),
+              largeDiffRenderLimit: nextLargeDiffRenderLimit
             }
           })
         )

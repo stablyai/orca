@@ -6,6 +6,7 @@ import {
   type ProjectHeaderDragBucketKey
 } from './project-header-drop'
 import {
+  isProjectHeaderDragHandleTarget,
   isRepoHeaderActionTarget,
   type ProjectHeaderDragSession
 } from './project-header-drag-contract'
@@ -19,6 +20,9 @@ export function createProjectHeaderDragSession(args: {
   getScrollContainer: () => HTMLElement | null
 }): ProjectHeaderDragSession | null {
   if (args.event.button !== 0) {
+    return null
+  }
+  if (!isProjectHeaderDragHandleTarget(args.event.target, args.event.currentTarget)) {
     return null
   }
   if (isRepoHeaderActionTarget(args.event.target, args.event.currentTarget)) {
@@ -40,12 +44,8 @@ export function createProjectHeaderDragSession(args: {
     return null
   }
   const handleEl = args.event.currentTarget
-  try {
-    handleEl.setPointerCapture(args.event.pointerId)
-  } catch {
-    // setPointerCapture can throw if the element is detached; the global
-    // pointer listeners still fire, so dragging keeps working.
-  }
+  // Why: defer setPointerCapture until the drag threshold is crossed so a
+  // header click still reaches the inner collapse handler on pointerup.
   return {
     repoId: args.repoId,
     bucketKey,

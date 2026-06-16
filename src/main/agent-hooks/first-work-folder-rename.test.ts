@@ -63,6 +63,14 @@ describe('renameWorktreeFolderOnFirstWork', () => {
     expect(deps.moveWorktree).not.toHaveBeenCalled()
   })
 
+  it('skips runtime-owned worktrees without moving', async () => {
+    const deps = makeDeps({
+      getRepo: vi.fn(() => ({ ...REPO, executionHostId: 'runtime:gpu-vm' as const }))
+    })
+    expect(await renameWorktreeFolderOnFirstWork(OLD_ID, 'fix-auth', deps)).toBe(false)
+    expect(deps.moveWorktree).not.toHaveBeenCalled()
+  })
+
   it('returns false when the repo is unknown', async () => {
     const deps = makeDeps({ getRepo: vi.fn(() => undefined) })
     expect(await renameWorktreeFolderOnFirstWork(OLD_ID, 'fix-auth', deps)).toBe(false)

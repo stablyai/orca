@@ -14,6 +14,7 @@ import { useAppStore } from '@/store'
 import type { OpenFile } from '@/store/slices/editor'
 import type { BrowserTab as BrowserTabState } from '../../../../shared/types'
 import type { RuntimeFileListState } from '../quick-open-file-list'
+import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import {
   classifyTabEntryQuery,
   type TabEntryActionClassification
@@ -41,6 +42,7 @@ export type TabEntryOperations = {
     url: string,
     options?: {
       activate?: boolean
+      browserRuntimeEnvironmentId?: string | null
       targetGroupId?: string
       title?: string
     }
@@ -146,18 +148,26 @@ export async function openTabEntryWithOperations({
   }
 
   if (classification.kind === 'explicit-url' || classification.kind === 'host-url') {
-    if (
-      operations.isWebRuntimeSessionActive(activeRuntimeEnvironmentId) &&
-      !(await operations.createWebRuntimeSessionBrowserTab({
+    const runtimeSessionActive = operations.isWebRuntimeSessionActive(activeRuntimeEnvironmentId)
+    if (runtimeSessionActive) {
+      const created = await operations.createWebRuntimeSessionBrowserTab({
         worktreeId,
         environmentId: activeRuntimeEnvironmentId,
         url: classification.url,
         targetGroupId: groupId
-      }))
-    ) {
-      throw new Error('Failed to create browser tab.')
-    }
-    if (!operations.isWebRuntimeSessionActive(activeRuntimeEnvironmentId)) {
+      })
+      if (created) {
+        return
+      }
+      // Why: headless remote runtimes cannot host browser panes yet; a URL open
+      // should still give the user a usable client-local browser tab.
+      operations.createBrowserTab(worktreeId, classification.url, {
+        activate: true,
+        browserRuntimeEnvironmentId: null,
+        targetGroupId: groupId,
+        title: classification.url
+      })
+    } else {
       operations.createBrowserTab(worktreeId, classification.url, {
         activate: true,
         targetGroupId: groupId,
@@ -210,7 +220,9 @@ export async function openTabBarEntry(args: TabCreateEntryArgs): Promise<void> {
     throw new Error('No active worktree.')
   }
   const runtimeContext: RuntimeFileOperationArgs = {
-    settings: state.settings,
+    settings: {
+      activeRuntimeEnvironmentId: getRuntimeEnvironmentIdForWorktree(state, args.worktreeId)
+    },
     worktreeId: args.worktreeId,
     worktreePath: worktree.path,
     connectionId: getConnectionId(args.worktreeId) ?? undefined
@@ -222,7 +234,7 @@ export async function openTabBarEntry(args: TabCreateEntryArgs): Promise<void> {
     groupId: args.groupId,
     worktreePath: worktree.path,
     runtimeContext,
-    activeRuntimeEnvironmentId: state.settings?.activeRuntimeEnvironmentId?.trim() ?? null,
+    activeRuntimeEnvironmentId: runtimeContext.settings?.activeRuntimeEnvironmentId?.trim() ?? null,
     classification: args.classification,
     operations: {
       createBrowserTab: state.createBrowserTab,

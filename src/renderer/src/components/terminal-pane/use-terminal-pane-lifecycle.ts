@@ -16,7 +16,10 @@ import {
 import { createTerminalHandleLinkProvider } from './terminal-handle-links'
 import type { LinkHandlerDeps } from './terminal-link-handlers'
 import { handleOscLink } from './terminal-osc-link-routing'
-import { installHttpLinkClickFallback } from './terminal-url-link-hit-testing'
+import {
+  installHttpLinkClickFallback,
+  type TerminalLinkRoutingPreferenceRequester
+} from './terminal-url-link-hit-testing'
 import type {
   GlobalSettings,
   SetupSplitDirection,
@@ -133,6 +136,7 @@ type UseTerminalPaneLifecycleDeps = {
   systemPrefersDark: boolean
   settings: GlobalSettings | null | undefined
   settingsRef: React.RefObject<GlobalSettings | null | undefined>
+  requestOpenLinksInAppPreference: TerminalLinkRoutingPreferenceRequester
   /** Resolved Option-as-Alt value: `'auto'` has already been mapped to
    *  `'true' | 'false'` via the keyboard-layout probe. Passed separately
    *  from `settings` because the probe lives outside the settings store. */
@@ -322,6 +326,7 @@ export function useTerminalPaneLifecycle({
   systemPrefersDark,
   settings,
   settingsRef,
+  requestOpenLinksInAppPreference,
   effectiveMacOptionAsAlt,
   effectiveMacOptionAsAltRef,
   initialLayoutRef,
@@ -518,6 +523,8 @@ export function useTerminalPaneLifecycle({
       cwd,
       startup,
       paneTransportsRef,
+      paneMode2031Ref,
+      paneLastThemeModeRef,
       replayingPanesRef,
       isActiveRef,
       isVisibleRef,
@@ -696,10 +703,10 @@ export function useTerminalPaneLifecycle({
           linkDeps
         )
         fileLinkClickFallbackDisposablesRef.current.set(pane.id, fileLinkClickFallbackDisposable)
-        const httpLinkClickFallbackDisposable = installHttpLinkClickFallback(
-          pane.terminal,
-          linkDeps
-        )
+        const httpLinkClickFallbackDisposable = installHttpLinkClickFallback(pane.terminal, {
+          ...linkDeps,
+          requestOpenLinksInAppPreference
+        })
         httpLinkClickFallbackDisposables.set(pane.id, httpLinkClickFallbackDisposable)
         // Why: skip empty selections so clicking to deselect doesn't clobber
         // whatever the user last copied elsewhere.
@@ -766,7 +773,8 @@ export function useTerminalPaneLifecycle({
           activate: (event, text) => {
             handleOscLink(text, event as MouseEvent | undefined, {
               ...linkDeps,
-              runtimeEnvironmentId: linkDeps.getRuntimeEnvironmentIdForPane?.(pane.id) ?? null
+              runtimeEnvironmentId: linkDeps.getRuntimeEnvironmentIdForPane?.(pane.id) ?? null,
+              requestOpenLinksInAppPreference
             })
             // Why: Cmd/Ctrl+clicking a link activates Orca handling (open file,
             // new browser tab, system browser) which can steal focus from the
@@ -1033,7 +1041,8 @@ export function useTerminalPaneLifecycle({
           ...linkDeps,
           runtimeEnvironmentId: activePane
             ? (linkDeps.getRuntimeEnvironmentIdForPane?.(activePane.id) ?? null)
-            : null
+            : null,
+          requestOpenLinksInAppPreference
         })
         // Why: Cmd/Ctrl+click on a plain-text URL (WebLinksAddon) takes focus
         // away from the terminal before the click's mouseup reaches

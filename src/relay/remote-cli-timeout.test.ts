@@ -42,6 +42,17 @@ describe('remoteCliRequestTimeoutMs', () => {
     ).toBe(120_000)
   })
 
+  it('extends SSH remote CLI timeout for Linear writes', () => {
+    for (const argv of [
+      ['linear', 'status', 'set', 'ENG-123', '--to', 'Done'],
+      ['linear', 'comment', 'add', 'ENG-123', '--body', 'Done'],
+      ['linear', 'attach', 'ENG-123', '--url', 'https://example.invalid/review'],
+      ['linear', 'create', '--team', 'ENG', '--title', 'Follow up']
+    ]) {
+      expect(remoteCliRequestTimeoutMs({ argv })).toBe(120_000)
+    }
+  })
+
   it('keeps ordinary remote CLI requests on the relay default timeout', () => {
     expect(remoteCliRequestTimeoutMs({ argv: ['status'] })).toBeUndefined()
   })

@@ -36,6 +36,8 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useAppStore } from '@/store'
+import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { getLocalPreflightContext, localPreflightContextKey } from '@/lib/local-preflight-context'
 import { cn } from '@/lib/utils'
 import RepoBadgeLabel from '@/components/repo/RepoBadgeLabel'
 import { getAgentCatalog } from '@/lib/agent-catalog'
@@ -51,8 +53,18 @@ import type {
   AutomationRun,
   AutomationUpdateInput
 } from '../../../../shared/automations-types'
-import type { SshConnectionStatus } from '../../../../shared/ssh-types'
-import type { Worktree } from '../../../../shared/types'
+import { getAutomationRunRepoId } from '../../../../shared/automation-run-identity'
+import {
+  getLocalExecutionHostLabel,
+  getRepoExecutionHostId,
+  parseExecutionHostId
+} from '../../../../shared/execution-host'
+import { getHostDisplayLabelOverrides } from '../../../../shared/host-setting-overrides'
+import { TASK_SOURCE_CONTEXT_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
+import type { PreflightStatus } from '../../../../preload/api-types'
+import type { RuntimeStatus } from '../../../../shared/runtime-types'
+import type { TaskSourceContext } from '../../../../shared/task-source-context'
+import type { Repo, Worktree } from '../../../../shared/types'
 import { getWorktreePathBasenameFromId } from '../../../../shared/worktree-id'
 import {
   buildAutomationCronSchedule,
@@ -89,6 +101,27 @@ import {
 import { AutomationRunPageFrame } from './AutomationRunPageFrame'
 import { AutomationRunHistory } from './AutomationRunHistory'
 import { getAutomationTemplates, type AutomationTemplate } from './automation-templates'
+import { getAutomationTargetAvailability } from './automation-target-availability'
+import { buildAutomationRunContextForRepo } from './automation-run-context'
+import {
+  getRepoBackedProviderAvailability,
+  type RuntimeProviderPreflightStatus
+} from '../task-source-provider-availability'
+import type { TaskSourceHostAvailability } from '../task-source-context-summary'
+import {
+  getExternalAutomationActionDisabledMessage,
+  getExternalAutomationSourceAvailability,
+  isSshConnectionBusy
+} from './external-automation-source-availability'
+import {
+  createAutomationForTarget,
+  deleteAutomationForTarget,
+  getAutomationListTarget,
+  listAutomationRunsForTarget,
+  listAutomationsForTarget,
+  runAutomationNowForTarget,
+  updateAutomationForTarget
+} from './automation-host-client'
 import { getExternalAutomationScheduleDisplay } from './external-automation-schedule-display'
 import { ExternalAutomationManagers } from './ExternalAutomationManagers'
 import type { FetchExternalAutomationRuns } from './ExternalAutomationRunTable'
@@ -99,6 +132,7 @@ const AGENTS = getAgentCatalog().map((agent) => agent.id)
 const DEFAULT_TIME = '09:00'
 const AUTOMATIONS_CHANGED_EVENT = 'orca:automations-changed'
 type AutomationPaneTab = 'overview' | 'runs'
+type RepoBackedAutomationSourceContext = TaskSourceContext & { provider: 'github' | 'gitlab' }
 
 type ExternalAutomationListEntry =
   | {
@@ -121,6 +155,46 @@ type SelectedExternalRunPage = {
 
 function getDefaultWorktree(worktrees: readonly Worktree[]): Worktree | null {
   return worktrees.find((worktree) => worktree.isMainWorktree) ?? worktrees[0] ?? null
+}
+
+function getRepoBackedAutomationSourceContext(
+  automation: Automation
+): RepoBackedAutomationSourceContext | null {
+  const context = automation.sourceContext
+  return context?.provider === 'github' || context?.provider === 'gitlab'
+    ? (context as RepoBackedAutomationSourceContext)
+    : null
+}
+
+function getRuntimeSourceHostAvailability(
+  context: TaskSourceContext,
+  runtimeStatusByEnvironmentId: ReadonlyMap<
+    string,
+    { status: RuntimeStatus | null; checkedAt: number }
+  >
+): TaskSourceHostAvailability | null {
+  const parsed = parseExecutionHostId(context.hostId)
+  if (parsed?.kind !== 'runtime') {
+    return null
+  }
+  const entry = runtimeStatusByEnvironmentId.get(parsed.environmentId)
+  if (!entry) {
+    return { hostId: context.hostId, reason: 'checking-task-source-capability' }
+  }
+  if (!entry.status) {
+    return { hostId: context.hostId, health: 'disconnected' }
+  }
+  if (entry.status.graphStatus !== 'ready') {
+    return { hostId: context.hostId, health: 'connecting' }
+  }
+  const capabilities = entry.status.capabilities
+  if (!capabilities) {
+    return { hostId: context.hostId, reason: 'checking-task-source-capability' }
+  }
+  if (!capabilities.includes(TASK_SOURCE_CONTEXT_RUNTIME_CAPABILITY)) {
+    return { hostId: context.hostId, reason: 'missing-task-source-capability' }
+  }
+  return null
 }
 
 function formatTimeInput(hour: number, minute: number): string {
@@ -191,11 +265,7 @@ function getExternalProviderLabel(manager: ExternalAutomationManager): string {
 }
 
 function getExternalTargetKindLabel(manager: ExternalAutomationManager): string {
-  return manager.target.type === 'ssh' ? 'Remote SSH' : 'Local'
-}
-
-function isSshConnectionBusy(status: SshConnectionStatus | undefined): boolean {
-  return status === 'connecting' || status === 'deploying-relay' || status === 'reconnecting'
+  return manager.target.type === 'ssh' ? 'SSH host' : 'Local'
 }
 
 function getExternalRunStatusLabel(run: ExternalAutomationRun): string {
@@ -257,6 +327,7 @@ async function waitForAutomationRerunPendingVisibility(pendingStartedAt: number)
 
 export default function AutomationsPage(): React.JSX.Element {
   const repos = useAppStore((s) => s.repos)
+  const projectHostSetups = useAppStore((s) => s.projectHostSetups)
   const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
   const unifiedTabsByWorktree = useAppStore((s) => s.unifiedTabsByWorktree)
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
@@ -269,7 +340,17 @@ export default function AutomationsPage(): React.JSX.Element {
   const agentStatusByPaneKey = useAppStore((s) => s.agentStatusByPaneKey)
   const retainedAgentsByPaneKey = useAppStore((s) => s.retainedAgentsByPaneKey)
   const sshConnectionStates = useAppStore((s) => s.sshConnectionStates)
+  const sshTargetLabels = useAppStore((s) => s.sshTargetLabels)
+  const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
+  const runtimeStatusByEnvironmentId = useAppStore((s) => s.runtimeStatusByEnvironmentId)
   const settings = useAppStore((s) => s.settings)
+  const preflightStatus = useAppStore((s) => s.preflightStatus)
+  const preflightStatusChecked = useAppStore((s) => s.preflightStatusChecked)
+  const preflightStatusContextKey = useAppStore((s) => s.preflightStatusContextKey)
+  const refreshPreflightStatus = useAppStore((s) => s.refreshPreflightStatus)
+  const expectedPreflightContextKey = useAppStore((s) =>
+    localPreflightContextKey(getLocalPreflightContext(s))
+  )
   const selectedId = useAppStore((s) => s.selectedAutomationId)
   const setSelectedId = useAppStore((s) => s.setSelectedAutomationId)
   const repoMap = useRepoMap()
@@ -306,6 +387,11 @@ export default function AutomationsPage(): React.JSX.Element {
   const [selectedExternalKey, setSelectedExternalKey] = useState<string | null>(null)
   const [selectedExternalRunPage, setSelectedExternalRunPage] =
     useState<SelectedExternalRunPage | null>(null)
+  const runtimePreflightMountedRef = useRef(true)
+  const runtimePreflightRequestedHostIdsRef = useRef<Set<TaskSourceContext['hostId']>>(new Set())
+  const [runtimePreflightStatusByHostId, setRuntimePreflightStatusByHostId] = useState<
+    ReadonlyMap<TaskSourceContext['hostId'], RuntimeProviderPreflightStatus>
+  >(() => new Map())
   const selectAutomationId = useCallback(
     (automationId: string | null): void => {
       setSelectedAutomationRunPageId(null)
@@ -482,9 +568,142 @@ export default function AutomationsPage(): React.JSX.Element {
     canRerunAutomationRun({ automation: selected, run: selectedAutomationRunPage })
   const isSelectedAutomationRunPageRerunPending =
     selectedAutomationRunPage !== null && rerunRunIdsInFlight.has(selectedAutomationRunPage.id)
-  const selectedRepo = selected ? (repoMap.get(selected.projectId) ?? null) : null
+  const preflightStatusCurrent = preflightStatusContextKey === expectedPreflightContextKey
+  const repoBackedAutomationSourceContexts = useMemo(
+    () =>
+      automations
+        .map((automation) => getRepoBackedAutomationSourceContext(automation))
+        .filter((context): context is RepoBackedAutomationSourceContext => context !== null),
+    [automations]
+  )
+  const runtimeAutomationSourceHostIds = useMemo(() => {
+    const hostIds = new Set<TaskSourceContext['hostId']>()
+    for (const context of repoBackedAutomationSourceContexts) {
+      const parsed = parseExecutionHostId(context.hostId)
+      if (parsed?.kind !== 'runtime') {
+        continue
+      }
+      const hostAvailability = getRuntimeSourceHostAvailability(
+        context,
+        runtimeStatusByEnvironmentId
+      )
+      if (hostAvailability) {
+        continue
+      }
+      hostIds.add(parsed.id)
+    }
+    return [...hostIds].sort()
+  }, [repoBackedAutomationSourceContexts, runtimeStatusByEnvironmentId])
+  useEffect(
+    () => () => {
+      runtimePreflightMountedRef.current = false
+    },
+    []
+  )
+  useEffect(() => {
+    if (!preflightStatusCurrent || !preflightStatusChecked) {
+      void refreshPreflightStatus()
+    }
+  }, [preflightStatusChecked, preflightStatusCurrent, refreshPreflightStatus])
+  useEffect(() => {
+    const unrequestedHostIds = runtimeAutomationSourceHostIds.filter(
+      (hostId) => !runtimePreflightRequestedHostIdsRef.current.has(hostId)
+    )
+    if (unrequestedHostIds.length === 0) {
+      return
+    }
+    setRuntimePreflightStatusByHostId((current) => {
+      const next = new Map(current)
+      for (const hostId of unrequestedHostIds) {
+        next.set(hostId, { checked: false, status: null })
+      }
+      return next
+    })
+    for (const hostId of unrequestedHostIds) {
+      runtimePreflightRequestedHostIdsRef.current.add(hostId)
+      const parsed = parseExecutionHostId(hostId)
+      if (parsed?.kind !== 'runtime') {
+        continue
+      }
+      // Why: automation sources can be owned by a different remote server than
+      // the run target; provider auth/tooling must be checked on the source host.
+      void callRuntimeRpc<PreflightStatus>(
+        { kind: 'environment', environmentId: parsed.environmentId },
+        'preflight.check',
+        undefined,
+        { timeoutMs: 15_000 }
+      )
+        .then((status) => {
+          if (!runtimePreflightMountedRef.current) {
+            return
+          }
+          setRuntimePreflightStatusByHostId((current) => {
+            const next = new Map(current)
+            next.set(hostId, { checked: true, status })
+            return next
+          })
+        })
+        .catch(() => {
+          if (!runtimePreflightMountedRef.current) {
+            return
+          }
+          setRuntimePreflightStatusByHostId((current) => {
+            const next = new Map(current)
+            next.set(hostId, { checked: true, status: null })
+            return next
+          })
+        })
+    }
+  }, [runtimeAutomationSourceHostIds])
+  const automationSourceHostAvailabilityById = useMemo(() => {
+    const availabilityById = new Map<string, TaskSourceHostAvailability[]>()
+    for (const automation of automations) {
+      const context = getRepoBackedAutomationSourceContext(automation)
+      if (!context) {
+        continue
+      }
+      const hostAvailability = getRuntimeSourceHostAvailability(
+        context,
+        runtimeStatusByEnvironmentId
+      )
+      const providerAvailability = getRepoBackedProviderAvailability({
+        provider: context.provider,
+        contexts: [context],
+        preflightStatus,
+        preflightReady: preflightStatusCurrent && preflightStatusChecked,
+        runtimePreflightStatusByHostId
+      })
+      const availability = [
+        ...(hostAvailability ? [hostAvailability] : []),
+        ...providerAvailability
+      ]
+      if (availability.length > 0) {
+        availabilityById.set(automation.id, availability)
+      }
+    }
+    return availabilityById
+  }, [
+    automations,
+    preflightStatus,
+    preflightStatusChecked,
+    preflightStatusCurrent,
+    runtimePreflightStatusByHostId,
+    runtimeStatusByEnvironmentId
+  ])
+  const selectedRepo = selected ? (repoMap.get(getAutomationRunRepoId(selected)) ?? null) : null
   const selectedWorktree =
     selected && selected.workspaceId ? (worktreeMap.get(selected.workspaceId) ?? null) : null
+  const selectedRunNowAvailability = selected
+    ? getAutomationTargetAvailability({
+        automation: selected,
+        repo: selectedRepo,
+        workspace: selectedWorktree,
+        projectHostSetups,
+        sshConnectionStates,
+        runtimeStatusByEnvironmentId,
+        sourceHostAvailability: automationSourceHostAvailabilityById.get(selected.id)
+      })
+    : null
   const canSaveDraft =
     editingAutomationId === null ||
     !draftAtOpen ||
@@ -497,10 +716,56 @@ export default function AutomationsPage(): React.JSX.Element {
           sourceKey: getExternalAutomationSourceKey(selectedExternal.manager)
         }
       : null
+  const selectedExternalSshStatus = selectedExternalSshSource
+    ? sshConnectionStates.get(selectedExternalSshSource.connectionId)?.status
+    : undefined
+  const selectedExternalSshConnected = selectedExternalSshStatus === 'connected'
   const isSelectedExternalSshConnecting =
     selectedExternalSshSource !== null &&
     (connectingExternalSourceKey === selectedExternalSshSource.sourceKey ||
-      isSshConnectionBusy(sshConnectionStates.get(selectedExternalSshSource.connectionId)?.status))
+      isSshConnectionBusy(selectedExternalSshStatus))
+  const selectedExternalSourceAvailability =
+    selectedExternal?.kind === 'source'
+      ? getExternalAutomationSourceAvailability({
+          manager: selectedExternal.manager,
+          providerLabel: getExternalProviderLabel(selectedExternal.manager),
+          targetKindLabel: getExternalTargetKindLabel(selectedExternal.manager),
+          sshStatus: selectedExternalSshStatus,
+          isConnectingOverride: isSelectedExternalSshConnecting
+        })
+      : null
+
+  const getAutomationRepoHostLabel = useCallback(
+    (repo: Repo): string => {
+      const hostId = getRepoExecutionHostId(repo)
+      const parsed = parseExecutionHostId(hostId)
+      if (parsed?.kind === 'ssh') {
+        return sshTargetLabels.get(parsed.targetId) ?? parsed.targetId
+      }
+      if (parsed?.kind === 'runtime') {
+        return (
+          runtimeEnvironments.find((environment) => environment.id === parsed.environmentId)
+            ?.name ?? parsed.environmentId
+        )
+      }
+      return getLocalExecutionHostLabel()
+    },
+    [runtimeEnvironments, sshTargetLabels]
+  )
+  const hostLabelOverrides = useMemo(() => getHostDisplayLabelOverrides(settings), [settings])
+  const hostLabelById = useMemo(() => {
+    const labels = new Map<string, string>([['local', getLocalExecutionHostLabel()]])
+    for (const [targetId, label] of sshTargetLabels) {
+      labels.set(`ssh:${encodeURIComponent(targetId)}`, label)
+    }
+    for (const environment of runtimeEnvironments) {
+      labels.set(`runtime:${encodeURIComponent(environment.id)}`, environment.name)
+    }
+    for (const [hostId, label] of hostLabelOverrides) {
+      labels.set(hostId, label)
+    }
+    return labels
+  }, [hostLabelOverrides, runtimeEnvironments, sshTargetLabels])
 
   useEffect(() => {
     if ((!selected || selectedExternal) && activePaneTab === 'runs') {
@@ -525,10 +790,11 @@ export default function AutomationsPage(): React.JSX.Element {
 
   const refresh = useCallback(async () => {
     setIsLoading(true)
+    const automationHostTarget = getAutomationListTarget(settings)
     try {
       const [nextAutomations, nextRuns, nextExternalManagers] = await Promise.all([
-        window.api.automations.list(),
-        window.api.automations.listRuns(),
+        listAutomationsForTarget(automationHostTarget),
+        listAutomationRunsForTarget(automationHostTarget),
         window.api.automations.listExternalManagers()
       ])
       const currentSelectedId = useAppStore.getState().selectedAutomationId
@@ -539,7 +805,7 @@ export default function AutomationsPage(): React.JSX.Element {
         ? currentSelectedId
         : (nextAutomations[0]?.id ?? null)
       const nextSelectedRuns = nextSelectedId
-        ? await window.api.automations.listRuns({ automationId: nextSelectedId })
+        ? await listAutomationRunsForTarget(automationHostTarget, nextSelectedId)
         : []
       setAutomations(nextAutomations)
       setRuns(nextRuns)
@@ -554,7 +820,7 @@ export default function AutomationsPage(): React.JSX.Element {
     } finally {
       setIsLoading(false)
     }
-  }, [selectAutomationId])
+  }, [selectAutomationId, settings])
 
   const hydratePersistedUIState = useCallback(async (): Promise<void> => {
     useAppStore.getState().hydratePersistedUI(await window.api.ui.get())
@@ -577,15 +843,17 @@ export default function AutomationsPage(): React.JSX.Element {
       return
     }
     let cancelled = false
-    void window.api.automations.listRuns({ automationId }).then((nextRuns) => {
-      if (!cancelled) {
-        setSelectedAutomationRuns({ automationId, runs: nextRuns })
+    void listAutomationRunsForTarget(getAutomationListTarget(settings), automationId).then(
+      (nextRuns) => {
+        if (!cancelled) {
+          setSelectedAutomationRuns({ automationId, runs: nextRuns })
+        }
       }
-    })
+    )
     return () => {
       cancelled = true
     }
-  }, [selected?.id, runs])
+  }, [selected?.id, runs, settings])
 
   useEffect(() => {
     const onAutomationsChanged = (): void => {
@@ -783,7 +1051,7 @@ export default function AutomationsPage(): React.JSX.Element {
       name: latest.name,
       prompt: latest.prompt,
       agentId: latest.agentId,
-      projectId: latest.projectId,
+      projectId: getAutomationRunRepoId(latest),
       workspaceMode: latest.workspaceMode,
       workspaceId: latest.workspaceId ?? '',
       baseBranch: latest.baseBranch ?? '',
@@ -1035,13 +1303,27 @@ export default function AutomationsPage(): React.JSX.Element {
         ? Math.max(0, rawMissedRunGraceMinutes)
         : 720
       const precheck = buildDraftPrecheck(draft)
+      const runContext = buildAutomationRunContextForRepo({
+        repoId: draft.projectId,
+        repos,
+        projectHostSetups
+      })
+      if (!runContext) {
+        toast.error(
+          translate(
+            'auto.components.automations.AutomationsPage.32534e7c9c',
+            'Choose an available workspace before saving.'
+          )
+        )
+        return
+      }
       let currentAutomation = editingAutomationId
         ? (automations.find((automation) => automation.id === editingAutomationId) ?? null)
         : null
       if (editingAutomationId) {
         try {
           currentAutomation =
-            (await window.api.automations.list()).find(
+            (await listAutomationsForTarget(getAutomationListTarget(settings))).find(
               (automation) => automation.id === editingAutomationId
             ) ?? currentAutomation
         } catch {
@@ -1053,6 +1335,7 @@ export default function AutomationsPage(): React.JSX.Element {
         prompt: draft.prompt,
         precheck,
         agentId: draft.agentId,
+        runContext,
         projectId: draft.projectId,
         workspaceMode: draft.workspaceMode,
         workspaceId: draft.workspaceId,
@@ -1067,15 +1350,18 @@ export default function AutomationsPage(): React.JSX.Element {
         updates.dtstart = now
       }
       const automation = editingAutomationId
-        ? await window.api.automations.update({
-            id: editingAutomationId,
-            updates
-          })
-        : await window.api.automations.create({
+        ? currentAutomation
+          ? await updateAutomationForTarget(currentAutomation, updates)
+          : await window.api.automations.update({
+              id: editingAutomationId,
+              updates
+            })
+        : await createAutomationForTarget({
             name: draft.name,
             prompt: draft.prompt,
             precheck,
             agentId: draft.agentId,
+            runContext,
             projectId: draft.projectId,
             workspaceMode: draft.workspaceMode,
             workspaceId: draft.workspaceId,
@@ -1126,15 +1412,12 @@ export default function AutomationsPage(): React.JSX.Element {
   }
 
   const toggleAutomation = async (automation: Automation): Promise<void> => {
-    await window.api.automations.update({
-      id: automation.id,
-      updates: { enabled: !automation.enabled }
-    })
+    await updateAutomationForTarget(automation, { enabled: !automation.enabled })
     await refresh()
   }
 
   const deleteAutomation = async (automation: Automation): Promise<void> => {
-    await window.api.automations.delete({ id: automation.id })
+    await deleteAutomationForTarget(automation)
     if (useAppStore.getState().selectedAutomationId === automation.id) {
       selectAutomationId(null)
     }
@@ -1195,7 +1478,24 @@ export default function AutomationsPage(): React.JSX.Element {
   }
 
   const runNow = async (automation: Automation): Promise<void> => {
-    await window.api.automations.runNow({ id: automation.id })
+    const repo = repoMap.get(getAutomationRunRepoId(automation)) ?? null
+    const workspace = automation.workspaceId
+      ? (worktreeMap.get(automation.workspaceId) ?? null)
+      : null
+    const availability = getAutomationTargetAvailability({
+      automation,
+      repo,
+      workspace,
+      projectHostSetups,
+      sshConnectionStates,
+      runtimeStatusByEnvironmentId,
+      sourceHostAvailability: automationSourceHostAvailabilityById.get(automation.id)
+    })
+    if (!availability.canRunNow) {
+      toast.error(availability.message)
+      return
+    }
+    await runAutomationNowForTarget(automation)
     useAppStore.getState().recordFeatureInteraction('automation-run')
     await hydratePersistedUIState()
     await refresh()
@@ -1205,7 +1505,6 @@ export default function AutomationsPage(): React.JSX.Element {
   }
 
   const rerunAutomationRun = async (automation: Automation, run: AutomationRun): Promise<void> => {
-    const automationId = automation.id
     const runId = run.id
     if (rerunRunIdsInFlightRef.current.has(runId)) {
       return
@@ -1214,7 +1513,7 @@ export default function AutomationsPage(): React.JSX.Element {
     rerunRunIdsInFlightRef.current.add(runId)
     setRerunRunIdsInFlight(new Set(rerunRunIdsInFlightRef.current))
     try {
-      await window.api.automations.runNow({ id: automationId })
+      await runAutomationNowForTarget(automation)
       await hydratePersistedUIState()
       await refresh()
       toast.message(
@@ -1373,6 +1672,16 @@ export default function AutomationsPage(): React.JSX.Element {
     const sourceKey = getExternalAutomationSourceKey(manager)
     setConnectingExternalSourceKey(sourceKey)
     try {
+      if (sshConnectionStates.get(manager.target.connectionId)?.status === 'connected') {
+        await refresh()
+        toast.success(
+          translate(
+            'auto.components.automations.AutomationsPage.a21f6c33ad',
+            'Automation source refreshed.'
+          )
+        )
+        return
+      }
       const state = await window.api.ssh.connect({ targetId: manager.target.connectionId })
       if (!state || state.status !== 'connected') {
         toast.error(
@@ -1568,6 +1877,7 @@ export default function AutomationsPage(): React.JSX.Element {
         settings={settings}
         draft={draft}
         onProjectChange={handleProjectChange}
+        getRepoHostLabel={getAutomationRepoHostLabel}
         onCreateTargetChange={handleCreateTargetChange}
         onOpenChange={setCreateOpen}
         onDraftChange={setDraft}
@@ -1753,10 +2063,19 @@ export default function AutomationsPage(): React.JSX.Element {
               </div>
             ) : null}
             {automations.map((automation) => {
-              const automationRepo = repoMap.get(automation.projectId)
+              const automationRepo = repoMap.get(getAutomationRunRepoId(automation))
               const automationWorktree = automation.workspaceId
                 ? worktreeMap.get(automation.workspaceId)
                 : null
+              const automationRunAvailability = getAutomationTargetAvailability({
+                automation,
+                repo: automationRepo,
+                workspace: automationWorktree,
+                projectHostSetups,
+                sshConnectionStates,
+                runtimeStatusByEnvironmentId,
+                sourceHostAvailability: automationSourceHostAvailabilityById.get(automation.id)
+              })
               const workspaceLabel =
                 automation.workspaceMode === 'new_per_run'
                   ? `Create from ${automation.baseBranch ?? automationRepo?.worktreeBaseRef ?? 'project default'}`
@@ -1836,12 +2155,25 @@ export default function AutomationsPage(): React.JSX.Element {
                     </button>
                   </ContextMenuTrigger>
                   <ContextMenuContent className="w-48">
-                    <ContextMenuItem onSelect={() => void runNow(automation)}>
+                    <ContextMenuItem
+                      disabled={!automationRunAvailability.canRunNow}
+                      onSelect={(event) => {
+                        if (!automationRunAvailability.canRunNow) {
+                          event.preventDefault()
+                          return
+                        }
+                        void runNow(automation)
+                      }}
+                    >
                       <Play className="size-3.5" />
-                      {translate(
-                        'auto.components.automations.AutomationsPage.2faecab10b',
-                        'Run Now'
-                      )}
+                      <span className="min-w-0 truncate">
+                        {automationRunAvailability.canRunNow
+                          ? translate(
+                              'auto.components.automations.AutomationsPage.2faecab10b',
+                              'Run Now'
+                            )
+                          : automationRunAvailability.message}
+                      </span>
                     </ContextMenuItem>
                     <ContextMenuItem onSelect={() => void openEditDialog(automation)}>
                       <Pencil className="size-3.5" />
@@ -1882,11 +2214,16 @@ export default function AutomationsPage(): React.JSX.Element {
               const providerLabel = getExternalProviderLabel(entry.manager)
               const targetKindLabel = getExternalTargetKindLabel(entry.manager)
               if (entry.kind === 'source') {
-                const sourceStatus =
-                  entry.manager.target.type === 'ssh' ? 'Connect to load jobs' : 'Unavailable'
-                const sourceSummary =
-                  entry.manager.error ??
-                  `${providerLabel} source unavailable until ${targetKindLabel.toLowerCase()} connects.`
+                const sshStatus =
+                  entry.manager.target.type === 'ssh'
+                    ? sshConnectionStates.get(entry.manager.target.connectionId)?.status
+                    : undefined
+                const sourceAvailability = getExternalAutomationSourceAvailability({
+                  manager: entry.manager,
+                  providerLabel,
+                  targetKindLabel,
+                  sshStatus
+                })
                 return (
                   <button
                     key={entry.key}
@@ -1919,12 +2256,12 @@ export default function AutomationsPage(): React.JSX.Element {
                         <span className="truncate">{targetKindLabel}</span>
                       </span>
                       <span className="mt-1 block truncate text-xs text-muted-foreground">
-                        {sourceSummary}
+                        {sourceAvailability.summary}
                       </span>
                     </span>
                     <span className="flex max-w-28 flex-col items-end gap-1 text-right text-xs text-muted-foreground">
                       <Clock className="size-3.5" />
-                      <span className="line-clamp-2">{sourceStatus}</span>
+                      <span className="line-clamp-2">{sourceAvailability.statusLabel}</span>
                     </span>
                   </button>
                 )
@@ -1932,7 +2269,18 @@ export default function AutomationsPage(): React.JSX.Element {
               const nextRunLabel = entry.job.enabled
                 ? formatExternalDate(entry.job.nextRunAt, relativeNow)
                 : 'Paused'
-              const actionDisabled = !entry.manager.canManage || externalActionKey !== null
+              const entrySshStatus =
+                entry.manager.target.type === 'ssh'
+                  ? sshConnectionStates.get(entry.manager.target.connectionId)?.status
+                  : undefined
+              const disabledMessage = getExternalAutomationActionDisabledMessage({
+                manager: entry.manager,
+                providerLabel,
+                targetKindLabel,
+                sshStatus: entrySshStatus,
+                actionInProgress: externalActionKey !== null
+              })
+              const actionDisabled = disabledMessage !== null
               const scheduleDisplay = getExternalAutomationScheduleDisplay(entry.manager, entry.job)
               return (
                 <ContextMenu key={entry.key}>
@@ -1995,10 +2343,13 @@ export default function AutomationsPage(): React.JSX.Element {
                       onSelect={() => requestExternalAction(entry.manager, entry.job, 'run')}
                     >
                       <Play className="size-3.5" />
-                      {translate(
-                        'auto.components.automations.AutomationsPage.2faecab10b',
-                        'Run Now'
-                      )}
+                      <span className="min-w-0 truncate">
+                        {disabledMessage ??
+                          translate(
+                            'auto.components.automations.AutomationsPage.2faecab10b',
+                            'Run Now'
+                          )}
+                      </span>
                     </ContextMenuItem>
                     {entry.manager.provider === 'hermes' ? (
                       <ContextMenuItem
@@ -2134,14 +2485,7 @@ export default function AutomationsPage(): React.JSX.Element {
                         {selectedExternal.manager.targetLabel}
                       </div>
                       <div className="text-xs text-muted-foreground">
-                        {getExternalProviderLabel(selectedExternal.manager)}{' '}
-                        {translate(
-                          'auto.components.automations.AutomationsPage.aaa007846f',
-                          'source unavailable'
-                        )}
-                        {selectedExternal.manager.error
-                          ? ` - ${selectedExternal.manager.error}`
-                          : null}
+                        {selectedExternalSourceAvailability?.summary}
                       </div>
                     </div>
                     {selectedExternalSshSource ? (
@@ -2149,31 +2493,33 @@ export default function AutomationsPage(): React.JSX.Element {
                         type="button"
                         variant="outline"
                         size="sm"
-                        disabled={isSelectedExternalSshConnecting}
+                        disabled={selectedExternalSourceAvailability?.isConnecting ?? false}
                         onClick={() =>
                           void connectExternalAutomationSource(selectedExternalSshSource.manager)
                         }
                       >
-                        {isSelectedExternalSshConnecting ? (
+                        {selectedExternalSourceAvailability?.isConnecting ? (
                           <RefreshCw className="size-3.5 animate-spin" />
                         ) : null}
-                        {isSelectedExternalSshConnecting
+                        {selectedExternalSourceAvailability?.isConnecting
                           ? translate(
                               'auto.components.automations.AutomationsPage.f93ed7a6f8',
                               'Connecting...'
                             )
-                          : translate(
-                              'auto.components.automations.AutomationsPage.7934ee0d81',
-                              'Connect SSH'
-                            )}
+                          : selectedExternalSshConnected
+                            ? translate(
+                                'auto.components.automations.AutomationsPage.53f06f0ad5',
+                                'Retry source'
+                              )
+                            : translate(
+                                'auto.components.automations.AutomationsPage.7934ee0d81',
+                                'Connect SSH'
+                              )}
                       </Button>
                     ) : null}
                   </div>
                   <div className="px-3 py-6 text-sm text-muted-foreground">
-                    {translate(
-                      'auto.components.automations.AutomationsPage.97ff587ee3',
-                      'Connect this source to check for Hermes automations in the remote profile.'
-                    )}
+                    {selectedExternalSourceAvailability?.detail}
                   </div>
                 </div>
               )}
@@ -2213,6 +2559,8 @@ export default function AutomationsPage(): React.JSX.Element {
                       ? 'New workspace each run'
                       : (selectedWorktree?.displayName ?? 'Missing workspace')
                   }
+                  hostLabelById={hostLabelById}
+                  runNowAvailability={selectedRunNowAvailability}
                   now={relativeNow}
                   onRunNow={(automation) => void runNow(automation)}
                   onEdit={(automation) => void openEditDialog(automation)}

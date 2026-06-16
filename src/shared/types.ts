@@ -1,4 +1,5 @@
 /* eslint-disable max-lines */
+import type { ExecutionHostId } from './execution-host'
 import type { SshRemotePtyLease, SshTarget } from './ssh-types'
 import type { Automation, AutomationRun } from './automations-types'
 import type { WorkspaceSource } from './workspace-source'
@@ -87,6 +88,128 @@ export type RepoKind = 'git' | 'folder'
 export type IssueSourcePreference = 'upstream' | 'origin' | 'auto'
 export type ExternalWorktreeVisibility = 'hide' | 'show'
 
+export type ProjectProviderIdentity = {
+  provider: 'github'
+  owner: string
+  repo: string
+}
+
+export type Project = {
+  id: string
+  displayName: string
+  badgeColor: string
+  repoIcon?: RepoIcon | null
+  kind?: RepoKind
+  providerIdentity?: ProjectProviderIdentity
+  sourceRepoIds: string[]
+  createdAt: number
+  updatedAt: number
+}
+
+export type ProjectHostSetupState = 'ready' | 'not-set-up' | 'setting-up' | 'error' | 'unsupported'
+export type ProjectHostSetupMethod =
+  | 'legacy-repo'
+  | 'imported-existing-folder'
+  | 'cloned'
+  | 'provisioned'
+export type RepoProjectHostSetupMethod = Extract<
+  ProjectHostSetupMethod,
+  'imported-existing-folder' | 'cloned'
+>
+
+export type ProjectHostSetup = {
+  id: string
+  projectId: string
+  hostId: ExecutionHostId
+  repoId: string
+  path: string
+  displayName: string
+  kind?: RepoKind
+  connectionId?: string | null
+  executionHostId?: ExecutionHostId | null
+  worktreeBasePath?: string
+  hookSettings?: RepoHookSettings
+  gitUsername?: string
+  setupState: ProjectHostSetupState
+  setupMethod: ProjectHostSetupMethod
+  sourceControlAi?: RepoSourceControlAiOverrides
+  createdAt: number
+  updatedAt: number
+}
+
+export type ProjectHostSetupExistingFolderArgs = {
+  projectId: string
+  hostId: ExecutionHostId
+  path: string
+  kind?: RepoKind
+  displayName?: string
+  setupMethod?: RepoProjectHostSetupMethod
+}
+
+export type ProjectHostSetupCreateArgs = {
+  projectId: string
+  hostId: ExecutionHostId
+  setupId?: string
+  path?: string
+  kind?: RepoKind
+  displayName?: string
+  worktreeBasePath?: string
+  gitUsername?: string
+  setupState?: ProjectHostSetupState
+  setupMethod?: Exclude<ProjectHostSetupMethod, 'legacy-repo'>
+}
+
+export type ProjectHostSetupCloneArgs = {
+  projectId: string
+  hostId: ExecutionHostId
+  url: string
+  destination: string
+  displayName?: string
+}
+
+export type ProjectHostSetupUpdateArgs = {
+  setupId: string
+  updates: Partial<
+    Pick<
+      ProjectHostSetup,
+      | 'displayName'
+      | 'path'
+      | 'worktreeBasePath'
+      | 'setupState'
+      | 'setupMethod'
+      | 'gitUsername'
+      | 'kind'
+    >
+  >
+}
+
+export type ProjectHostSetupDeleteArgs = {
+  setupId: string
+}
+
+export type ProjectHostSetupResult = {
+  project: Project
+  setup: ProjectHostSetup
+  repo: Repo
+}
+
+export type ProjectHostSetupCreateResult = {
+  project: Project
+  setup: ProjectHostSetup
+}
+
+export type ProjectHostSetupUpdateResult = {
+  project: Project
+  setup: ProjectHostSetup
+  repo?: Repo
+}
+
+export type ProjectHostSetupDeleteResult = {
+  project: Project
+  setup: ProjectHostSetup
+  repo?: Repo
+}
+
 export type Repo = {
   id: string
   path: string
@@ -106,6 +229,11 @@ export type Repo = {
   hookSettings?: RepoHookSettings
   /** SSH target ID for remote repos. null/undefined = local. */
   connectionId?: string | null
+  /**
+   * Explicit execution owner for this repo. Runtime-host repos need this
+   * because they otherwise look identical to local repos (`connectionId: null`).
+   */
+  executionHostId?: 'local' | `ssh:${string}` | `runtime:${string}` | null
   /** Per-repo override for issue-source resolution. `undefined` is treated
    *  identically to `'auto'`; writers leave it undefined on creation so
    *  existing persisted records stay forward-compatible. */
@@ -128,6 +256,8 @@ export type Repo = {
   projectGroupOrder?: number
   /** Repo-specific source-control AI overrides. Missing fields inherit global settings. */
   sourceControlAi?: RepoSourceControlAiOverrides
+  /** Transitional source for ProjectHostSetup.setupMethod while Repo remains compatibility storage. */
+  projectHostSetupMethod?: RepoProjectHostSetupMethod
 }
 
 export type ProjectGroupCreatedFrom = 'manual' | 'folder-scan' | 'migration'
@@ -286,6 +416,12 @@ export type Worktree = {
   id: string // `${repoId}::${path}`
   instanceId?: string
   repoId: string
+  /** Durable project identity. Optional while legacy repo-only workspaces migrate. */
+  projectId?: string
+  /** Execution host that owns the workspace. Optional for pre-project-host metadata. */
+  hostId?: ExecutionHostId
+  /** Host-specific setup used to create/run this workspace. */
+  projectHostSetupId?: string
   displayName: string
   comment: string
   linkedIssue: number | null
@@ -293,16 +429,19 @@ export type Worktree = {
   linkedLinearIssue: string | null
   linkedLinearIssueWorkspaceId?: string | null
   linkedLinearIssueOrganizationUrlKey?: string | null
-  // Why: parallel slots for GitLab work-item references. Kept as separate
+  // Why: parallel slots for non-GitHub work-item references. Kept as separate
   // fields (rather than reusing linkedIssue / linkedPR with a provider
   // discriminator) so the persistence layer is unambiguous when a user
-  // has both a GitHub and a GitLab remote on the same repo, and so the
+  // has remotes from several providers on the same repo, and so the
   // existing GitHub renderer code keeps reading linkedPR / linkedIssue
   // unchanged. Optional on the type so existing test fixtures and
   // persisted older worktrees that never carried these fields continue
   // to typecheck and load without migration.
   linkedGitLabMR?: number | null
   linkedGitLabIssue?: number | null
+  linkedBitbucketPR?: number | null
+  linkedAzureDevOpsPR?: number | null
+  linkedGiteaPR?: number | null
   isArchived: boolean
   isUnread: boolean
   isPinned: boolean
@@ -337,6 +476,7 @@ export type Worktree = {
   pushTarget?: GitPushTarget
   workspaceStatus?: WorkspaceStatus
   diffComments?: DiffComment[]
+  mobileDiffReview?: MobileDiffReviewState
 } & GitWorktreeInfo
 
 export type GitPushTarget = {
@@ -362,6 +502,12 @@ export type GitHubPrStartPoint = {
 export type WorktreeMeta = {
   /** Immutable per-workspace-instance ID used to reject stale lineage after path reuse. */
   instanceId?: string
+  /** See Worktree.projectId. Persisted for project-first workspace ownership. */
+  projectId?: string
+  /** See Worktree.hostId. Persisted for project-first workspace ownership. */
+  hostId?: ExecutionHostId
+  /** See Worktree.projectHostSetupId. Persisted for project-first workspace ownership. */
+  projectHostSetupId?: string
   displayName: string
   comment: string
   linkedIssue: number | null
@@ -373,6 +519,12 @@ export type WorktreeMeta = {
   linkedGitLabMR?: number | null
   /** Optional for backward compatibility — see Worktree.linkedGitLabIssue. */
   linkedGitLabIssue?: number | null
+  /** Optional for backward compatibility — see Worktree.linkedBitbucketPR. */
+  linkedBitbucketPR?: number | null
+  /** Optional for backward compatibility — see Worktree.linkedAzureDevOpsPR. */
+  linkedAzureDevOpsPR?: number | null
+  /** Optional for backward compatibility — see Worktree.linkedGiteaPR. */
+  linkedGiteaPR?: number | null
   isArchived: boolean
   isUnread: boolean
   isPinned: boolean
@@ -410,6 +562,7 @@ export type WorktreeMeta = {
    *  hydration recognize sessions minted under an old id instead of reaping
    *  them. Self-prunes when the worktree is deleted. */
   priorWorktreeIds?: string[]
+  mobileDiffReview?: MobileDiffReviewState
 }
 
 export type WorktreeOwnership = 'orca-managed' | 'external' | 'unknown-legacy'
@@ -433,9 +586,11 @@ export type WorktreeLineageOrigin = 'orchestration' | 'cli' | 'manual'
 export type WorktreeLineageCaptureConfidence = 'explicit' | 'inferred'
 export type WorktreeLineageCaptureSource =
   | 'explicit-cli-flag'
+  | 'env-workspace'
   | 'cwd-context'
   | 'terminal-context'
   | 'orchestration-context'
+  | 'active-workspace'
   | 'manual-action'
 
 export type WorktreeLineageCapture = {
@@ -452,6 +607,20 @@ export type WorktreeLineage = {
   capture: WorktreeLineageCapture
   orchestrationRunId?: string
   taskId?: string
+  coordinatorHandle?: string
+  createdByTerminalHandle?: string
+  createdAt: number
+}
+
+export type WorkspaceLineage = {
+  childWorkspaceKey: WorkspaceKey
+  childInstanceId?: string | null
+  parentWorkspaceKey: WorkspaceKey
+  parentInstanceId?: string | null
+  origin: WorktreeLineageOrigin
+  capture: WorktreeLineageCapture
+  taskId?: string
+  orchestrationRunId?: string
   coordinatorHandle?: string
   createdByTerminalHandle?: string
   createdAt: number
@@ -474,6 +643,25 @@ export type WorktreeLineageWarning = {
 // or used to bootstrap a new agent session). Stored on WorktreeMeta so the
 // existing persistence layer writes them to orca-data.json automatically.
 export type DiffCommentSource = 'diff' | 'markdown'
+export type DiffReviewScope = 'unstaged' | 'staged' | 'branch'
+
+export type MobileDiffReviewFileState = {
+  key: string
+  filePath: string
+  oldPath?: string
+  scope: DiffReviewScope
+  lastOpenedAt?: number
+  lastSeenDiffIdentity?: string
+  reviewedAt?: number
+  reviewDiffIdentity?: string
+}
+
+export type MobileDiffReviewState = {
+  version: 1
+  updatedAt?: number
+  completedAt?: number
+  files: Record<string, MobileDiffReviewFileState>
+}
 
 export type DiffComment = {
   id: string
@@ -488,8 +676,12 @@ export type DiffComment = {
   lineNumber: number
   body: string
   createdAt: number
+  updatedAt?: number
   /** Set after the note has been handed to an agent. Edits clear it. */
   sentAt?: number
+  scope?: DiffReviewScope
+  oldPath?: string
+  diffIdentity?: string
   // Reserved for future "comments on the original side" — always 'modified' in v1.
   side: 'modified'
 }
@@ -637,6 +829,9 @@ export type BrowserPage = {
   canGoForward: boolean
   loadError: BrowserLoadError | null
   createdAt: number
+  // Why: remote-owned worktrees can still host client-local fallback browser
+  // pages until headless remote runtimes support real browser panes.
+  browserRuntimeEnvironmentId?: string | null
   /** Active CDP viewport emulation preset. null = default (fill pane, no CDP override) */
   viewportPresetId?: BrowserViewportPresetId | null
 }
@@ -883,6 +1078,7 @@ export type GitHubPRRefreshAlias = {
   branch: string
   worktreeId?: string
   connectionId?: string | null
+  executionHostId?: string | null
   linkedPRNumber?: number | null
   fallbackPRNumber?: number | null
   fallbackPRSource?: 'explicit' | 'pr-cache' | 'hosted-review' | null
@@ -894,6 +1090,7 @@ export type GitHubPRRefreshCandidate = GitHubPRRefreshAlias & {
   isBare?: boolean
   isArchived?: boolean
   connectionId?: string | null
+  executionHostId?: string | null
   connectionState?: 'connected' | 'disconnected' | 'unknown'
   cachedFetchedAt?: number | null
   cachedHasPR?: boolean | null
@@ -1150,6 +1347,8 @@ export type GitHubPRFileContents = {
   modified: string
   originalIsBinary: boolean
   modifiedIsBinary: boolean
+  originalTooLarge?: boolean
+  modifiedTooLarge?: boolean
 }
 
 export type GitHubPRReviewCommentInput = {
@@ -1253,6 +1452,7 @@ export type LinearIssue = {
   }
   estimate?: number | null
   priority: number
+  dueDate?: string | null
   updatedAt: string
 }
 
@@ -1415,6 +1615,7 @@ export type LinearIssueUpdate = {
   assigneeId?: string | null
   estimate?: number | null
   priority?: number
+  dueDate?: string | null
   labelIds?: string[]
   projectId?: string | null
 }
@@ -1698,9 +1899,14 @@ export type CreateWorktreeArgs = {
   linkedLinearIssueOrganizationUrlKey?: string | null
   linkedGitLabIssue?: number
   linkedGitLabMR?: number
+  linkedBitbucketPR?: number | null
+  linkedAzureDevOpsPR?: number | null
+  linkedGiteaPR?: number | null
   pushTarget?: GitPushTarget
   workspaceStatus?: WorkspaceStatus
   manualOrder?: number
+  /** Parent workspace for in-app creates launched from a folder workspace. */
+  parentWorkspace?: WorkspaceKey
   /** Agent selected in the create surface. Omitted for blank-shell creates. */
   createdWithAgent?: TuiAgent
   /** Set when the renderer knows this auto-generated branch should be renamed
@@ -1729,9 +1935,11 @@ export type CreateWorktreeResult = {
     parentWorktreeId?: string | null
     childWorktreeIds?: string[]
     lineage?: WorktreeLineage | null
+    workspaceLineage?: WorkspaceLineage | null
     git?: GitWorktreeInfo
   }
   lineage?: WorktreeLineage | null
+  workspaceLineage?: WorkspaceLineage | null
   warnings?: WorktreeLineageWarning[]
   setup?: WorktreeSetupLaunch
   defaultTabs?: WorktreeDefaultTabsLaunch
@@ -1741,6 +1949,8 @@ export type CreateWorktreeResult = {
   localBaseRefUpdateSuggestion?: LocalBaseRefUpdateSuggestion
   startupTerminal?: {
     spawned: boolean
+    handle?: string
+    tabId?: string
     surface?: 'visible' | 'background'
   }
   timing?: WorktreeCreateTiming
@@ -1967,6 +2177,7 @@ export type TuiAgent =
   | 'openclaw' // OpenClaw
   | 'copilot' // GitHub Copilot CLI
   | 'grok' // xAI Grok CLI
+  | 'devin' // Devin CLI
 
 export type TaskViewPresetId = 'all' | 'issues' | 'review' | 'my-issues' | 'my-prs' | 'prs'
 
@@ -2047,13 +2258,30 @@ export type OpenInApplication = {
 
 export type SourceControlViewMode = 'list' | 'tree'
 
+export type LeftSidebarAppearanceMode = 'default' | 'match-terminal' | 'tinted'
+
 export type FloatingTerminalCwdRequest = {
   path?: string
   requireTrusted?: boolean
 }
 
+/** Per-host overrides for client preferences that genuinely vary by execution
+ *  host. NARROW by design: only settings whose value is meaningless to share
+ *  across hosts belong here.
+ *  - `displayLabel`: a client-side rename for the host shown in sidebar/pickers.
+ *  - `defaultWorktreeLocation`: the host's root worktree directory; a remote
+ *    SSH/runtime host has a different filesystem layout than the local Mac, so
+ *    the client `workspaceDir` default cannot apply unchanged. */
+export type HostSettingOverrides = {
+  displayLabel?: string
+  defaultWorktreeLocation?: string
+}
+
 export type GlobalSettings = {
   workspaceDir: string
+  /** Per-host overrides keyed by ExecutionHostId. Effective value for a
+   *  host-varying setting is `host override ?? client default`. */
+  hostSettingOverrides?: Partial<Record<ExecutionHostId, HostSettingOverrides>>
   nestWorkspaces: boolean
   workspaceDirHistory?: OrcaWorkspaceLayout[]
   refreshLocalBaseRefOnWorktreeCreate: boolean
@@ -2071,6 +2299,10 @@ export type GlobalSettings = {
   branchPrefixCustom: string
   enableGitHubAttribution: boolean
   theme: 'system' | 'dark' | 'light'
+  /** Controls the left sidebar surface without changing terminal brightness. */
+  leftSidebarAppearanceMode: LeftSidebarAppearanceMode
+  leftSidebarTintColor?: string
+  leftSidebarTintOpacity?: number
   uiLanguage: UiLanguage
   appIcon: AppIconId
   appFontFamily: string
@@ -2190,6 +2422,9 @@ export type GlobalSettings = {
    *  The setting stays opt-in so existing workflows continue to use the system browser
    *  until the user explicitly wants worktree-scoped in-app browsing. */
   openLinksInApp: boolean
+  /** Why: terminal link routing asks once at first use instead of silently
+   *  changing where links open for new users. */
+  openLinksInAppPreferencePrompted: boolean
   /** Extra launcher rows for the worktree "Open in" submenu. VS Code is always shown first. */
   openInApplications?: OpenInApplication[]
   /** Deprecated: migration/backward-compat only. Use PersistedUIState.rightSidebarOpen. */
@@ -2388,6 +2623,10 @@ export type GlobalSettings = {
    *  and agent-completion events. Opt-in while the signal/noise balance is
    *  being tested. */
   experimentalTerminalAttention: boolean
+  /** Experimental: automatically sleep completed, resumable background agent terminals. */
+  experimentalAgentHibernation?: boolean
+  /** Milliseconds a completed agent must stay idle before hibernation can be considered. */
+  agentHibernationIdleMs?: number
   /** Compact worktree cards by hiding a redundant metadata row when the title
    *  and branch already say the same thing. */
   compactWorktreeCards: boolean
@@ -2668,6 +2907,7 @@ export type RightSidebarTab =
   | 'explorer'
   | 'search'
   | 'vault'
+  | 'workspaces'
   | 'source-control'
   | 'checks'
   | 'ports'
@@ -2675,6 +2915,9 @@ export type ActiveRightSidebarTab = Exclude<RightSidebarTab, 'search'>
 export type RightSidebarExplorerView = 'files' | 'search'
 
 export type ProjectOrderBy = 'manual' | 'recent'
+export type WorkspaceHostScope = 'all' | 'local' | `ssh:${string}` | `runtime:${string}`
+export type VisibleWorkspaceHostIds = Exclude<WorkspaceHostScope, 'all'>[] | null
+export type WorkspaceHostOrder = Exclude<WorkspaceHostScope, 'all'>[]
 
 export type PersistedUIState = {
   lastActiveRepoId: string | null
@@ -2695,6 +2938,16 @@ export type PersistedUIState = {
   showActiveOnly: boolean
   /** Hide sleeping/inactive workspaces from workspace navigation. Off by default. */
   hideSleepingWorkspaces?: boolean
+  /** Which execution hosts the workspace sidebar shows. `all` keeps the mixed
+   *  command-center view; specific host IDs focus the sidebar without tearing
+   *  down sessions owned by other hosts. */
+  workspaceHostScope?: WorkspaceHostScope
+  /** Which execution hosts the workspace sidebar shows. `null` means sticky
+   *  all-hosts so newly-added hosts appear automatically. */
+  visibleWorkspaceHostIds?: VisibleWorkspaceHostIds
+  /** User-defined sidebar order for host sections. Missing/new hosts append in
+   *  the discovered host order. */
+  workspaceHostOrder?: WorkspaceHostOrder
   /** Deprecated legacy positive-form setting. Ignored on hydration. */
   showSleepingWorkspaces?: boolean
   /** Deprecated legacy name used by a short-lived build. Ignored on hydration. */
@@ -2947,6 +3200,8 @@ export type LegacyPaneKeyAliasEntry = {
 export type PersistedState = {
   schemaVersion: number
   repos: Repo[]
+  projects: Project[]
+  projectHostSetups: ProjectHostSetup[]
   projectGroups: ProjectGroup[]
   folderWorkspaces: FolderWorkspace[]
   /** Sparse-checkout presets keyed by repoId. Empty record on first launch;
@@ -2954,13 +3209,21 @@ export type PersistedState = {
   sparsePresetsByRepo: Record<string, SparsePreset[]>
   worktreeMeta: Record<string, WorktreeMeta>
   worktreeLineageById: Record<string, WorktreeLineage>
+  workspaceLineageByChildKey: Record<WorkspaceKey, WorkspaceLineage>
   settings: GlobalSettings
   ui: PersistedUIState
   githubCache: {
     pr: Record<string, { data: PRInfo | null; fetchedAt: number }>
     issue: Record<string, { data: IssueInfo | null; fetchedAt: number }>
   }
+  /** Legacy single-blob session. Retained as the canonical 'local' execution
+   *  host partition so an app downgrade still reads its workspace. Non-local
+   *  hosts live in workspaceSessionsByHostId, keyed by ExecutionHostId. */
   workspaceSession: WorkspaceSessionState
+  /** Per-execution-host session partitions for non-'local' hosts (ssh:/runtime:).
+   *  Mixed-host writes stay isolated here; 'local' stays in workspaceSession so
+   *  pre-partition builds keep working. Optional/absent on legacy files. */
+  workspaceSessionsByHostId?: Partial<Record<ExecutionHostId, WorkspaceSessionState>>
   sshTargets: SshTarget[]
   sshRemotePtyLeases: SshRemotePtyLease[]
   migrationUnsupportedPtyEntries: MigrationUnsupportedPtyEntry[]

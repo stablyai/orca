@@ -13,6 +13,8 @@ import {
   formatAutomationTokens,
   summarizeAutomationRunUsage
 } from './automation-usage-model'
+import type { AutomationTargetAvailability } from './automation-target-availability'
+import { getAutomationSourceDisplay } from './automation-source-display'
 import { translate } from '@/i18n/i18n'
 
 type AutomationDetailProps = {
@@ -21,6 +23,8 @@ type AutomationDetailProps = {
   projectName: string
   workspaceName: string
   projectDefaultBaseRef: string | null
+  hostLabelById?: ReadonlyMap<string, string>
+  runNowAvailability: AutomationTargetAvailability | null
   now: number
   onRunNow: (automation: Automation) => void
   onEdit: (automation: Automation) => void
@@ -28,11 +32,21 @@ type AutomationDetailProps = {
   onDelete: (automation: Automation) => void
 }
 
-function DetailMetric({ label, value }: { label: string; value: string }): React.JSX.Element {
+function DetailMetric({
+  label,
+  value,
+  title
+}: {
+  label: string
+  value: string
+  title?: string
+}): React.JSX.Element {
   return (
     <div className="min-w-0">
       <div className="text-[11px] font-medium uppercase text-muted-foreground">{label}</div>
-      <div className="mt-1 break-words text-sm font-medium">{value}</div>
+      <div className="mt-1 break-words text-sm font-medium" title={title}>
+        {value}
+      </div>
     </div>
   )
 }
@@ -86,6 +100,8 @@ export function AutomationDetail({
   projectName,
   workspaceName,
   projectDefaultBaseRef,
+  hostLabelById,
+  runNowAvailability,
   now,
   onRunNow,
   onEdit,
@@ -115,6 +131,8 @@ export function AutomationDetail({
     automation.workspaceMode === 'new_per_run'
       ? (automation.baseBranch ?? projectDefaultBaseRef ?? 'Project default')
       : workspaceName
+  const sourceDisplay = getAutomationSourceDisplay(automation.sourceContext, hostLabelById)
+  const runNowDisabled = runNowAvailability?.canRunNow === false
 
   return (
     <div className="flex w-full flex-col gap-4">
@@ -133,10 +151,26 @@ export function AutomationDetail({
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-1">
-          <Button variant="secondary" size="sm" onClick={() => onRunNow(automation)}>
-            <Play className="size-4" />
-            {translate('auto.components.automations.AutomationDetail.2fb1605beb', 'Run Now')}
-          </Button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => onRunNow(automation)}
+                  disabled={runNowDisabled}
+                >
+                  <Play className="size-4" />
+                  {translate('auto.components.automations.AutomationDetail.2fb1605beb', 'Run Now')}
+                </Button>
+              </span>
+            </TooltipTrigger>
+            {runNowDisabled ? (
+              <TooltipContent side="bottom" sideOffset={6}>
+                {runNowAvailability.message}
+              </TooltipContent>
+            ) : null}
+          </Tooltip>
           <ToolbarIconButton
             label={translate(
               'auto.components.automations.AutomationDetail.4b1ea02d2e',
@@ -184,6 +218,12 @@ export function AutomationDetail({
         </div>
       ) : null}
 
+      {runNowAvailability?.canRunNow === false ? (
+        <div className="rounded-md border border-border/50 bg-muted/40 p-3 text-sm text-muted-foreground shadow-sm">
+          {runNowAvailability.message}
+        </div>
+      ) : null}
+
       <div className="grid grid-cols-[repeat(auto-fit,minmax(9rem,1fr))] gap-5 rounded-md border border-border/50 bg-muted/30 px-4 py-3 shadow-sm">
         <DetailMetric
           label={translate('auto.components.automations.AutomationDetail.18763ded26', 'Schedule')}
@@ -209,6 +249,13 @@ export function AutomationDetail({
           label={translate('auto.components.automations.AutomationDetail.15ea446b93', 'Session')}
           value={automation.reuseSession ? 'Reuse live session' : 'Fresh each run'}
         />
+        {sourceDisplay ? (
+          <DetailMetric
+            label={translate('auto.components.automations.AutomationDetail.29baf8f4c2', 'Source')}
+            value={sourceDisplay.label}
+            title={sourceDisplay.title}
+          />
+        ) : null}
         <DetailMetric
           label={translate('auto.components.automations.AutomationDetail.620b22145e', 'Grace')}
           value={formatGrace(automation.missedRunGraceMinutes)}

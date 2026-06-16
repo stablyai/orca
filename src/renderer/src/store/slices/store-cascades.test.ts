@@ -2086,6 +2086,14 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
     shutdownBufferCaptures.clear()
   })
 
+  it('records terminal input even before agent hibernation is enabled', () => {
+    const store = createTestStore()
+
+    store.getState().recordTerminalInput('tab-1:leaf-1', 1000)
+
+    expect(store.getState().lastTerminalInputAtByPaneKey['tab-1:leaf-1']).toBe(1000)
+  })
+
   it('asks sleep-time buffer capture to skip local scrollback serialization', async () => {
     const store = createTestStore()
     const wt = 'repo1::/path/wt1'
@@ -2105,6 +2113,105 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
     await store.getState().shutdownWorktreeTerminals(wt, { keepIdentifiers: true })
 
     expect(capture).toHaveBeenCalledWith({ includeLocalBuffers: false })
+  })
+
+  it('does not stop the active runtime when sleeping an SSH-owned worktree', async () => {
+    const store = createTestStore()
+    const wt = 'repo1::/path/wt1'
+
+    seedStore(store, {
+      settings: { ...getDefaultSettings('/tmp'), activeRuntimeEnvironmentId: 'runtime-1' },
+      repos: [
+        {
+          id: 'repo1',
+          path: '/repo1',
+          displayName: 'Repo 1',
+          badgeColor: '#000',
+          addedAt: 0,
+          connectionId: 'ssh-1'
+        }
+      ],
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+      },
+      tabsByWorktree: {
+        [wt]: [makeTab({ id: 'tab-1', worktreeId: wt, ptyId: 'ssh:ssh-1@@pty-1' })]
+      },
+      ptyIdsByTabId: { 'tab-1': ['ssh:ssh-1@@pty-1'] }
+    })
+
+    await store.getState().shutdownWorktreeTerminals(wt, { keepIdentifiers: true })
+
+    expect(mockApi.runtimeEnvironments.call).not.toHaveBeenCalledWith(
+      expect.objectContaining({ method: 'terminal.stop' })
+    )
+    expect(mockApi.pty.kill).toHaveBeenCalledWith('ssh:ssh-1@@pty-1', { keepHistory: true })
+  })
+
+  it('stops the owner runtime when sleeping a runtime-owned compatibility worktree', async () => {
+    const store = createTestStore()
+    const wt = 'repo1::/path/wt1'
+
+    seedStore(store, {
+      settings: { ...getDefaultSettings('/tmp'), activeRuntimeEnvironmentId: 'runtime-1' },
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+      },
+      tabsByWorktree: {
+        [wt]: [makeTab({ id: 'tab-1', worktreeId: wt, ptyId: 'pty-1' })]
+      },
+      ptyIdsByTabId: { 'tab-1': ['pty-1'] }
+    })
+
+    await store.getState().shutdownWorktreeTerminals(wt, { keepIdentifiers: true })
+
+    expect(mockApi.runtimeEnvironments.call).toHaveBeenCalledWith(
+      expect.objectContaining({
+        selector: 'runtime-1',
+        method: 'terminal.stop'
+      })
+    )
+  })
+
+  it('stops the explicit owner runtime when another host is focused', async () => {
+    const store = createTestStore()
+    const wt = 'repo1::/path/wt1'
+
+    seedStore(store, {
+      settings: { ...getDefaultSettings('/tmp'), activeRuntimeEnvironmentId: 'focused-runtime' },
+      repos: [
+        {
+          id: 'repo1',
+          path: '/path/repo1',
+          displayName: 'Repo 1',
+          badgeColor: '#000',
+          addedAt: 0,
+          executionHostId: 'runtime:owner-runtime'
+        }
+      ],
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+      },
+      tabsByWorktree: {
+        [wt]: [makeTab({ id: 'tab-1', worktreeId: wt, ptyId: 'pty-1' })]
+      },
+      ptyIdsByTabId: { 'tab-1': ['pty-1'] }
+    })
+
+    await store.getState().shutdownWorktreeTerminals(wt, { keepIdentifiers: true })
+
+    expect(mockApi.runtimeEnvironments.call).toHaveBeenCalledWith(
+      expect.objectContaining({
+        selector: 'owner-runtime',
+        method: 'terminal.stop'
+      })
+    )
+    expect(mockApi.runtimeEnvironments.call).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        selector: 'focused-runtime',
+        method: 'terminal.stop'
+      })
+    )
   })
 
   it('drops live agentStatusByPaneKey entries on sleep so the working row disappears', async () => {
@@ -2174,6 +2281,64 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
       prompt: 'resume this',
       terminalTitle: 'Codex'
     })
+  })
+
+  it('captures only allowlisted sleeping pane sessions when requested', async () => {
+    const store = createTestStore()
+    const wt = 'repo1::/path/wt1'
+
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+      },
+      tabsByWorktree: {
+        [wt]: [makeTab({ id: 'tab-1', worktreeId: wt, title: 'Codex' })]
+      },
+      ptyIdsByTabId: { 'tab-1': ['pty-1'] }
+    })
+
+    store.getState().setAgentStatus(
+      'tab-1:live',
+      {
+        state: 'done',
+        prompt: 'resume live',
+        agentType: 'codex'
+      },
+      'Codex',
+      { updatedAt: 1000, stateStartedAt: 1000 },
+      { tabId: 'tab-1', worktreeId: wt },
+      { providerSession: { key: 'session_id', id: 'live-session' } }
+    )
+    store.getState().retainAgents([
+      {
+        entry: {
+          paneKey: 'tab-1:retained',
+          state: 'done',
+          stateStartedAt: 900,
+          updatedAt: 900,
+          prompt: 'old retained',
+          agentType: 'codex',
+          providerSession: { key: 'session_id', id: 'old-session' },
+          stateHistory: []
+        },
+        tab: makeTab({ id: 'tab-1', worktreeId: wt, title: 'Old Codex' }),
+        worktreeId: wt,
+        agentType: 'codex',
+        startedAt: 900
+      }
+    ])
+
+    await store.getState().shutdownWorktreeTerminals(wt, {
+      keepIdentifiers: true,
+      sleepingPaneKeys: ['tab-1:live']
+    })
+
+    const state = store.getState()
+    expect(state.sleepingAgentSessionsByPaneKey['tab-1:live']).toMatchObject({
+      paneKey: 'tab-1:live',
+      providerSession: { key: 'session_id', id: 'live-session' }
+    })
+    expect(state.sleepingAgentSessionsByPaneKey['tab-1:retained']).toBeUndefined()
   })
 
   it('does not preserve provider session metadata when a pane switches agent type', async () => {

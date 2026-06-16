@@ -1,12 +1,9 @@
 import type React from 'react'
-import { FolderOpen } from 'lucide-react'
 import type { GlobalSettings } from '../../../../shared/types'
-import { Button } from '../ui/button'
-import { Input } from '../ui/input'
-import { Label } from '../ui/label'
 import { OpenInMenuSetting } from './OpenInMenuSetting'
 import { SearchableSetting } from './SearchableSetting'
 import { SettingsSubsectionHeader, SettingsSwitchRow } from './SettingsFormControls'
+import { WorkspaceDirectorySetting } from './WorkspaceDirectorySetting'
 import { translate } from '@/i18n/i18n'
 
 type GeneralWorkspaceSettingsSectionProps = {
@@ -18,13 +15,6 @@ export function GeneralWorkspaceSettingsSection({
   settings,
   updateSettings
 }: GeneralWorkspaceSettingsSectionProps): React.JSX.Element {
-  const handleBrowseWorkspace = async (): Promise<void> => {
-    const path = await window.api.repos.pickFolder()
-    if (path) {
-      updateSettings({ workspaceDir: path })
-    }
-  }
-
   return (
     <section key="workspace" className="space-y-4">
       <SettingsSubsectionHeader
@@ -38,50 +28,7 @@ export function GeneralWorkspaceSettingsSection({
         )}
       />
 
-      <SearchableSetting
-        title={translate(
-          'auto.components.settings.GeneralWorkspaceSettingsSection.0e9fc0eadc',
-          'Workspace Directory'
-        )}
-        description={translate(
-          'auto.components.settings.GeneralWorkspaceSettingsSection.a246f5ce6f',
-          'Root directory where workspace folders are created.'
-        )}
-        keywords={['workspace', 'folder', 'path', 'worktree']}
-        className="space-y-2"
-      >
-        <Label>
-          {translate(
-            'auto.components.settings.GeneralWorkspaceSettingsSection.0e9fc0eadc',
-            'Workspace Directory'
-          )}
-        </Label>
-        <div className="flex gap-2">
-          <Input
-            value={settings.workspaceDir}
-            onChange={(e) => updateSettings({ workspaceDir: e.target.value })}
-            className="flex-1 text-xs"
-          />
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleBrowseWorkspace}
-            className="shrink-0 gap-1.5"
-          >
-            <FolderOpen className="size-3.5" />
-            {translate(
-              'auto.components.settings.GeneralWorkspaceSettingsSection.5567191a6e',
-              'Browse'
-            )}
-          </Button>
-        </div>
-        <p className="text-xs text-muted-foreground">
-          {translate(
-            'auto.components.settings.GeneralWorkspaceSettingsSection.a246f5ce6f',
-            'Root directory where workspace folders are created.'
-          )}
-        </p>
-      </SearchableSetting>
+      <WorkspaceDirectorySetting settings={settings} updateSettings={updateSettings} />
 
       <SearchableSetting
         title={translate(

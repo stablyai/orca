@@ -1,4 +1,5 @@
 import type { Automation, AutomationRun } from '../shared/automations-types'
+import { getAutomationLegacyRepoId } from '../shared/automation-run-identity'
 import { formatAutomationPrecheckTimeout } from '../shared/automation-precheck'
 import { formatAutomationSchedule } from '../shared/automation-schedules'
 import type { PublicKnownRuntimeEnvironment } from '../shared/runtime-environments'
@@ -178,6 +179,17 @@ export function formatAutomationList(result: { automations: Automation[] }): str
 
 export function formatAutomationShow(result: { automation: Automation }): string {
   const automation = result.automation
+  const runContext = automation.runContext ?? null
+  const projectLines = runContext
+    ? [
+        `runProjectId: ${runContext.projectId}`,
+        `runHostId: ${runContext.hostId}`,
+        `projectHostSetupId: ${runContext.projectHostSetupId}`,
+        `runRepoId: ${runContext.repoId}`,
+        `runPath: ${runContext.path}`,
+        `legacyRepoId: ${getAutomationLegacyRepoId(automation)}`
+      ]
+    : [`legacyRepoId: ${getAutomationLegacyRepoId(automation)}`]
   return [
     `id: ${automation.id}`,
     `name: ${automation.name}`,
@@ -193,7 +205,7 @@ export function formatAutomationShow(result: { automation: Automation }): string
         : 'none'
     }`,
     `nextRunAt: ${new Date(automation.nextRunAt).toISOString()}`,
-    `projectId: ${automation.projectId}`,
+    ...projectLines,
     `workspaceMode: ${automation.workspaceMode}`,
     `workspaceId: ${automation.workspaceId ?? 'null'}`,
     `baseBranch: ${automation.baseBranch ?? 'null'}`,

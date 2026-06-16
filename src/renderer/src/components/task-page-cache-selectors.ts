@@ -11,6 +11,8 @@ import type { GitHubWorkItem, LinearCollectionResult, LinearIssue } from '../../
 export type TaskPageRepoCacheInput = {
   id: string
   path: string
+  executionHostId?: string | null
+  sourceCacheScope?: string | null
 }
 
 export type TaskPageDialogWorkItemKey = {
@@ -21,6 +23,7 @@ export type TaskPageDialogWorkItemKey = {
 export type TaskPageRepoSourceState = {
   repoId: string
   repoPath: string
+  sourceKey: string
   sources: WorkItemsCacheSources | null
   error: WorkItemsCacheError | null
 }
@@ -51,7 +54,12 @@ export function selectTaskPageWorkItemsCacheEntries(
   limit: number,
   query: string
 ): (CacheEntry<GitHubWorkItem[]> | undefined)[] {
-  return repos.map((repo) => workItemsCache[workItemsCacheKey(repo.id, limit, query)])
+  return repos.map(
+    (repo) =>
+      workItemsCache[
+        workItemsCacheKey(repo.id, limit, query, repo.sourceCacheScope ?? repo.executionHostId)
+      ]
+  )
 }
 
 export function buildTaskPageRepoSourceState(
@@ -63,6 +71,7 @@ export function buildTaskPageRepoSourceState(
     return {
       repoId: repo.id,
       repoPath: repo.path,
+      sourceKey: `${repo.id}::${repo.sourceCacheScope ?? repo.executionHostId ?? 'local'}`,
       sources: entry?.sources ?? null,
       error: entry?.error ?? null
     }

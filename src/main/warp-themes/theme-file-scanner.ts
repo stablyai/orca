@@ -22,12 +22,18 @@ export type WarpThemeScanBudget = {
   isExpired: () => boolean
 }
 
+export type WarpThemeDirectoryScanOptions = {
+  themeFileLimit?: number
+  reportThemeFileLimit?: boolean
+}
+
 type DirectoryScanBudget = {
   directoriesVisited: number
   directoryLimitReported: boolean
   entryLimitReported: boolean
   themeFileLimitHit: boolean
   previewBudgetReported: boolean
+  themeFileLimit: number
 }
 
 type DirectoryScanState = {
@@ -49,8 +55,12 @@ function compareDirentNames(left: Dirent<string>, right: Dirent<string>): number
   return left.name.localeCompare(right.name, undefined, { sensitivity: 'base' })
 }
 
+function isYamlFileEntry(entry: Dirent<string>): boolean {
+  return (entry.isFile() || entry.isSymbolicLink()) && isYamlFile(entry.name)
+}
+
 function couldContainThemeFile(entry: Dirent<string>): boolean {
-  return (entry.isFile() && isYamlFile(entry.name)) || entry.isDirectory()
+  return isYamlFileEntry(entry) || entry.isDirectory()
 }
 
 function reportPreviewBudgetExpired(
@@ -88,7 +98,7 @@ async function collectYamlFilesFromDirectory(
     reportPreviewBudgetExpired(sourceLabel, skippedFiles, budget)
     return
   }
-  if (files.length >= MAX_THEME_FILES) {
+  if (files.length >= budget.themeFileLimit) {
     return
   }
   if (budget.directoriesVisited >= MAX_THEME_DIRECTORIES) {
@@ -150,7 +160,7 @@ async function collectYamlFilesFromDirectory(
       }
       return
     }
-    if (files.length >= MAX_THEME_FILES) {
+    if (files.length >= budget.themeFileLimit) {
       if (sortedEntries.slice(index).some(couldContainThemeFile)) {
         budget.themeFileLimitHit = true
       }
@@ -158,7 +168,7 @@ async function collectYamlFilesFromDirectory(
     }
     const relativeLabel = relativeDirectory ? path.join(relativeDirectory, entry.name) : entry.name
     const entryPath = path.join(directoryPath, entry.name)
-    if (entry.isFile() && isYamlFile(entry.name)) {
+    if (isYamlFileEntry(entry)) {
       files.push({ path: entryPath, label: relativeLabel })
       continue
     }
@@ -182,7 +192,7 @@ async function collectYamlFilesFromDirectory(
         scanBudget
       )
       if (
-        files.length >= MAX_THEME_FILES &&
+        files.length >= budget.themeFileLimit &&
         sortedEntries.slice(index + 1).some(couldContainThemeFile)
       ) {
         budget.themeFileLimitHit = true
@@ -194,14 +204,17 @@ async function collectYamlFilesFromDirectory(
 
 export async function scanWarpThemeDirectory(
   directoryPath: string,
-  scanBudget?: WarpThemeScanBudget
+  scanBudget?: WarpThemeScanBudget,
+  options: WarpThemeDirectoryScanOptions = {}
 ): Promise<{
   sourceLabel: string
   rootReadable: boolean
   files: ThemeFileCandidate[]
   skippedFiles: WarpThemeImportSkippedFile[]
+  themeFileLimitHit: boolean
 }> {
   const sourceLabel = path.basename(directoryPath) || 'Warp themes'
+  const themeFileLimit = options.themeFileLimit ?? MAX_THEME_FILES
   const files: ThemeFileCandidate[] = []
   const skippedFiles: WarpThemeImportSkippedFile[] = []
   const budget: DirectoryScanBudget = {
@@ -209,7 +222,8 @@ export async function scanWarpThemeDirectory(
     directoryLimitReported: false,
     entryLimitReported: false,
     themeFileLimitHit: false,
-    previewBudgetReported: false
+    previewBudgetReported: false,
+    themeFileLimit
   }
   const state: DirectoryScanState = { rootReadable: false }
   await collectYamlFilesFromDirectory(
@@ -223,11 +237,17 @@ export async function scanWarpThemeDirectory(
     state,
     scanBudget
   )
-  if (budget.themeFileLimitHit) {
+  if (budget.themeFileLimitHit && options.reportThemeFileLimit !== false) {
     skippedFiles.push({
       label: sourceLabel,
-      reason: `Only the first ${MAX_THEME_FILES} theme files were scanned.`
+      reason: `Only the first ${themeFileLimit} theme files were scanned.`
     })
   }
-  return { sourceLabel, rootReadable: state.rootReadable, files, skippedFiles }
+  return {
+    sourceLabel,
+    rootReadable: state.rootReadable,
+    files,
+    skippedFiles,
+    themeFileLimitHit: budget.themeFileLimitHit
+  }
 }

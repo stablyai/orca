@@ -6,12 +6,31 @@ import type { StateCreator } from 'zustand'
 import { toast } from 'sonner'
 import type { AppState } from '../types'
 import type {
+  Project,
   Repo,
   ProjectGroup,
+  ProjectHostSetup,
   FolderWorkspace,
   ProjectGroupImportResult,
-  NestedRepoScanResult
+  NestedRepoScanResult,
+  ProjectHostSetupCloneArgs,
+  ProjectHostSetupCreateArgs,
+  ProjectHostSetupCreateResult,
+  ProjectHostSetupDeleteArgs,
+  ProjectHostSetupDeleteResult,
+  ProjectHostSetupExistingFolderArgs,
+  ProjectHostSetupResult,
+  ProjectHostSetupUpdateArgs,
+  ProjectHostSetupUpdateResult
 } from '../../../../shared/types'
+import {
+  projectHostSetupProjectionFromRepos,
+  type ProjectHostSetupProjection
+} from '../../../../shared/project-host-setup-projection'
+import {
+  PROJECT_HOST_SETUP_RUNTIME_CAPABILITY,
+  WORKSPACE_RUN_CONTEXT_RUNTIME_CAPABILITY
+} from '../../../../shared/protocol-version'
 import {
   FOLDER_WORKSPACE_PATH_STATUS_TTL_MS,
   type FolderWorkspacePathStatus,
@@ -25,12 +44,23 @@ import { isPathInsideOrEqual } from '../../../../shared/cross-platform-path'
 import { selectProjectGroupRemovalTargets } from './project-group-removal-targets'
 import { getRepoIdFromWorktreeId } from './worktree-helpers'
 import { reconcileFetchedRepos } from './repo-identity-reconcile'
-import { callRuntimeRpc, getActiveRuntimeTarget } from '../../runtime/runtime-rpc-client'
+import { splitRepoReorderByHost } from './repo-reorder-host-split'
+import {
+  assertRuntimeEnvironmentCapability,
+  callRuntimeRpc,
+  getActiveRuntimeTarget
+} from '../../runtime/runtime-rpc-client'
 import { toRuntimeWorktreeSelector } from '../../runtime/runtime-worktree-selector'
-import { buildDismissedOnboardingFolderAgentStartup } from '../../lib/onboarding-folder-agent-startup'
-import { markOnboardingProjectAdded } from '../../lib/onboarding-project-checklist'
-import { filterSetupScriptPromptDismissalsToValidRepos } from '../../lib/setup-script-prompt'
-import { translate } from '../../i18n/i18n'
+import { buildDismissedOnboardingFolderAgentStartup } from '@/lib/onboarding-folder-agent-startup'
+import { markOnboardingProjectAdded } from '@/lib/onboarding-project-checklist'
+import { filterSetupScriptPromptDismissalsToValidRepos } from '@/lib/setup-script-prompt'
+import { translate } from '@/i18n/i18n'
+import {
+  getRepoExecutionHostId,
+  LOCAL_EXECUTION_HOST_ID,
+  parseExecutionHostId,
+  toRuntimeExecutionHostId
+} from '../../../../shared/execution-host'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 import { formatFolderWorkspaceCreateError } from '../../lib/folder-workspace-path-status'
 
@@ -148,6 +178,251 @@ function getKnownRepoWorktreeIds(state: AppState, projectId: string): string[] {
   return [...ids]
 }
 
+function getRuntimeTargetHostId(
+  target: ReturnType<typeof getActiveRuntimeTarget>
+): ReturnType<typeof toRuntimeExecutionHostId> | typeof LOCAL_EXECUTION_HOST_ID {
+  return target.kind === 'environment'
+    ? toRuntimeExecutionHostId(target.environmentId)
+    : LOCAL_EXECUTION_HOST_ID
+}
+
+function getProjectSetupRuntimeTarget(
+  hostId: ProjectHostSetupExistingFolderArgs['hostId']
+): ReturnType<typeof getActiveRuntimeTarget> {
+  const parsedHost = parseExecutionHostId(hostId)
+  return parsedHost?.kind === 'runtime'
+    ? { kind: 'environment', environmentId: parsedHost.environmentId }
+    : { kind: 'local' }
+}
+
+function repoWithFetchedOwner(repo: Repo, target: ReturnType<typeof getActiveRuntimeTarget>): Repo {
+  if (repo.connectionId) {
+    return { ...repo, executionHostId: getRepoExecutionHostId(repo) }
+  }
+  return { ...repo, executionHostId: getRuntimeTargetHostId(target) }
+}
+
+function setupWithFetchedOwner(
+  setup: ProjectHostSetup,
+  target: ReturnType<typeof getActiveRuntimeTarget>
+): ProjectHostSetup {
+  const hostId = getRuntimeTargetHostId(target)
+  if (target.kind !== 'environment' || setup.hostId !== LOCAL_EXECUTION_HOST_ID) {
+    return setup
+  }
+  return {
+    ...setup,
+    hostId,
+    executionHostId: hostId
+  }
+}
+
+async function fetchProjectHostSetupCompatibility(
+  target: ReturnType<typeof getActiveRuntimeTarget>,
+  repos: readonly Repo[]
+): Promise<ProjectHostSetupProjection> {
+  try {
+    if (target.kind === 'local') {
+      const projectsApi = (
+        window.api as typeof window.api & {
+          projects?: {
+            list?: () => Promise<Project[]>
+            listHostSetups?: () => Promise<ProjectHostSetup[]>
+          }
+        }
+      ).projects
+      if (!projectsApi?.list || !projectsApi.listHostSetups) {
+        throw new Error('projects_api_unavailable')
+      }
+      return {
+        projects: await projectsApi.list(),
+        setups: await projectsApi.listHostSetups()
+      }
+    }
+    await assertProjectHostSetupRuntimeCapability(target)
+    const [projectResponse, setupResponse] = await Promise.all([
+      callRuntimeRpc<{ projects: Project[] }>(target, 'project.list', undefined, {
+        timeoutMs: 15_000
+      }),
+      callRuntimeRpc<{ setups: ProjectHostSetup[] }>(target, 'projectHostSetup.list', undefined, {
+        timeoutMs: 15_000
+      })
+    ])
+    return {
+      projects: projectResponse.projects,
+      setups: setupResponse.setups.map((setup) => setupWithFetchedOwner(setup, target))
+    }
+  } catch {
+    // Why: newer clients must still hydrate against older runtimes/preloads
+    // that only know `repo.list`; derive the transitional model locally.
+    return projectHostSetupProjectionFromRepos(repos)
+  }
+}
+
+async function assertProjectHostSetupRuntimeCapability(
+  target: ReturnType<typeof getActiveRuntimeTarget>
+): Promise<void> {
+  if (target.kind !== 'environment') {
+    return
+  }
+  await assertRuntimeEnvironmentCapability(
+    target.environmentId,
+    PROJECT_HOST_SETUP_RUNTIME_CAPABILITY,
+    'The selected Orca server does not support project host setup yet. Update Orca on the server and try again.',
+    15_000
+  )
+}
+
+async function assertProjectHostSetupMutationRuntimeCapabilities(
+  target: ReturnType<typeof getActiveRuntimeTarget>
+): Promise<void> {
+  if (target.kind !== 'environment') {
+    return
+  }
+  await assertProjectHostSetupRuntimeCapability(target)
+  await assertRuntimeEnvironmentCapability(
+    target.environmentId,
+    WORKSPACE_RUN_CONTEXT_RUNTIME_CAPABILITY,
+    'The selected Orca server does not support explicit workspace run hosts yet. Update Orca on the server and try again.',
+    15_000
+  )
+}
+
+function projectCompatibilityFromRepos(
+  repos: readonly Repo[]
+): Pick<RepoSlice, 'projects' | 'projectHostSetups'> {
+  const projection = projectHostSetupProjectionFromRepos(repos)
+  return {
+    projects: projection.projects,
+    projectHostSetups: projection.setups
+  }
+}
+
+function mergeProjectHostSetupCompatibility(
+  derived: Pick<RepoSlice, 'projects' | 'projectHostSetups'>,
+  fetched: ProjectHostSetupProjection
+): Pick<RepoSlice, 'projects' | 'projectHostSetups'> {
+  const fetchedSetupOwners = new Set(fetched.setups.map(getProjectHostSetupOwnerKey))
+  const derivedSetups = derived.projectHostSetups.filter(
+    (setup) => !fetchedSetupOwners.has(getProjectHostSetupOwnerKey(setup))
+  )
+  const projectHostSetups = mergeById(derivedSetups, fetched.setups)
+  const setupProjectIds = new Set(projectHostSetups.map((setup) => setup.projectId))
+  const fetchedProjectIds = new Set(fetched.projects.map((project) => project.id))
+  return {
+    projects: mergeById(derived.projects, fetched.projects).filter(
+      (project) => fetchedProjectIds.has(project.id) || setupProjectIds.has(project.id)
+    ),
+    projectHostSetups
+  }
+}
+
+function getProjectHostSetupOwnerKey(setup: ProjectHostSetup): string {
+  return `${setup.hostId}:${setup.repoId ?? setup.id}`
+}
+
+function mergeById<T extends { id: string }>(base: readonly T[], overlay: readonly T[]): T[] {
+  const merged = [...base]
+  const indexById = new Map(merged.map((entry, index) => [entry.id, index]))
+  for (const entry of overlay) {
+    const index = indexById.get(entry.id)
+    if (index === undefined) {
+      indexById.set(entry.id, merged.length)
+      merged.push(entry)
+    } else {
+      merged[index] = entry
+    }
+  }
+  return merged
+}
+
+function mergeFetchedReposForHost(
+  previous: readonly Repo[],
+  fetched: Repo[],
+  hostId: string
+): Repo[] {
+  const fetchedIds = new Set(fetched.map((repo) => repo.id))
+  const preserved = previous.filter((repo) => {
+    const existingHostId = getRepoExecutionHostId(repo)
+    return existingHostId !== hostId || fetchedIds.has(repo.id)
+  })
+  const preservedById = new Map(preserved.map((repo) => [repo.id, repo]))
+  const merged = [...preserved]
+  for (const repo of fetched) {
+    const existingIndex = merged.findIndex((entry) => entry.id === repo.id)
+    if (existingIndex === -1) {
+      merged.push(repo)
+      continue
+    }
+    merged[existingIndex] = repo
+  }
+  return reconcileFetchedRepos(
+    previous,
+    merged.filter((repo) => preservedById.has(repo.id) || fetchedIds.has(repo.id))
+  )
+}
+
+async function fetchReposForTarget(
+  target: ReturnType<typeof getActiveRuntimeTarget>,
+  currentRepos: readonly Repo[]
+): Promise<{
+  repos: Repo[]
+  projectCompatibility: Pick<RepoSlice, 'projects' | 'projectHostSetups'>
+  hostId: ReturnType<typeof getRuntimeTargetHostId>
+}> {
+  const fetchedRepos =
+    target.kind === 'local'
+      ? await window.api.repos.list()
+      : (
+          await callRuntimeRpc<{ repos: Repo[] }>(target, 'repo.list', undefined, {
+            timeoutMs: 15_000
+          })
+        ).repos
+  const hostId = getRuntimeTargetHostId(target)
+  const repos = fetchedRepos.map((repo) => repoWithFetchedOwner(repo, target))
+  const fetchedProjectCompatibility = await fetchProjectHostSetupCompatibility(target, repos)
+  const reconciledRepos = mergeFetchedReposForHost(currentRepos, repos, hostId)
+  const projectCompatibility =
+    target.kind === 'local'
+      ? mergeProjectHostSetupCompatibility(
+          projectCompatibilityFromRepos(reconciledRepos),
+          fetchedProjectCompatibility
+        )
+      : mergeProjectHostSetupCompatibility(
+          projectCompatibilityFromRepos(reconciledRepos),
+          fetchedProjectCompatibility
+        )
+
+  return { repos: reconciledRepos, projectCompatibility, hostId }
+}
+
+function settingsForRepoOwner(state: Pick<AppState, 'repos' | 'settings'>, repoId: string) {
+  const repo = state.repos.find((entry) => entry.id === repoId)
+  if (!repo) {
+    return state.settings
+  }
+  if (!repo.executionHostId && !repo.connectionId) {
+    return state.settings
+  }
+  const parsed = parseExecutionHostId(getRepoExecutionHostId(repo))
+  if (parsed?.kind === 'runtime') {
+    return state.settings
+      ? { ...state.settings, activeRuntimeEnvironmentId: parsed.environmentId }
+      : ({ activeRuntimeEnvironmentId: parsed.environmentId } as AppState['settings'])
+  }
+  if (parsed?.kind === 'local' && state.settings?.activeRuntimeEnvironmentId) {
+    return { ...state.settings, activeRuntimeEnvironmentId: null }
+  }
+  if (parsed?.kind !== 'ssh') {
+    return state.settings
+  }
+  // Why: SSH repos are owned through local IPC/SSH plumbing. Existing repo
+  // mutations must not follow whichever runtime server is currently focused.
+  return state.settings
+    ? { ...state.settings, activeRuntimeEnvironmentId: null }
+    : ({ activeRuntimeEnvironmentId: null } as AppState['settings'])
+}
+
 function getFolderWorkspacePathStatusScopeKey(request: FolderWorkspacePathStatusRequest): string {
   return request.scope === 'project-group'
     ? `project-group:${request.projectGroupId}`
@@ -257,15 +532,31 @@ function getFolderWorkspacePathStatusRequestSnapshotForRead(
 
 export type RepoSlice = {
   repos: Repo[]
+  projects: Project[]
+  projectHostSetups: ProjectHostSetup[]
   projectGroups: ProjectGroup[]
   folderWorkspaces: FolderWorkspace[]
   folderWorkspacePathStatuses: Record<string, FolderWorkspacePathStatusCacheEntry>
   activeRepoId: string | null
   fetchRepos: () => Promise<void>
+  fetchRuntimeEnvironmentRepos: (environmentId: string) => Promise<Repo[]>
   fetchProjectGroups: () => Promise<void>
   fetchFolderWorkspaces: () => Promise<void>
   addRepo: () => Promise<Repo | null>
   addRepoPath: (path: string, kind?: 'git' | 'folder') => Promise<Repo | null>
+  setupProjectExistingFolder: (
+    args: ProjectHostSetupExistingFolderArgs
+  ) => Promise<ProjectHostSetupResult | null>
+  createProjectHostSetup: (
+    args: ProjectHostSetupCreateArgs
+  ) => Promise<ProjectHostSetupCreateResult | null>
+  updateProjectHostSetup: (
+    args: ProjectHostSetupUpdateArgs
+  ) => Promise<ProjectHostSetupUpdateResult | null>
+  deleteProjectHostSetup: (
+    args: ProjectHostSetupDeleteArgs
+  ) => Promise<ProjectHostSetupDeleteResult | null>
+  setupProjectClone: (args: ProjectHostSetupCloneArgs) => Promise<ProjectHostSetupResult | null>
   addNonGitFolder: (path: string) => Promise<Repo | null>
   scanNestedRepos: (
     path: string,
@@ -344,6 +635,8 @@ export type RepoSlice = {
 
 export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, get) => ({
   repos: [],
+  projects: [],
+  projectHostSetups: [],
   projectGroups: [],
   folderWorkspaces: [],
   folderWorkspacePathStatuses: {},
@@ -352,25 +645,15 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
   fetchRepos: async () => {
     try {
       const target = getActiveRuntimeTarget(get().settings)
-      const repos =
-        target.kind === 'local'
-          ? await window.api.repos.list()
-          : (
-              await callRuntimeRpc<{ repos: Repo[] }>(
-                target,
-                'repo.list',
-                undefined,
-                // Why: remote environment fetches cross the network; keep the
-                // boot-time repo hydration bounded instead of inheriting an
-                // unbounded renderer promise.
-                { timeoutMs: 15_000 }
-              )
-            ).repos
+      const { repos: reconciledRepos, projectCompatibility } = await fetchReposForTarget(
+        target,
+        get().repos
+      )
       set((s) => {
-        const validRepoIds = new Set(repos.map((repo) => repo.id))
-        const reconciledRepos = reconcileFetchedRepos(s.repos, repos)
+        const validRepoIds = new Set(reconciledRepos.map((repo) => repo.id))
         return {
           repos: reconciledRepos,
+          ...projectCompatibility,
           folderWorkspacePathStatuses: {},
           activeRepoId: s.activeRepoId && validRepoIds.has(s.activeRepoId) ? s.activeRepoId : null,
           filterRepoIds: s.filterRepoIds.filter((projectId) => validRepoIds.has(projectId)),
@@ -382,6 +665,32 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
       })
     } catch (err) {
       console.error('Failed to fetch repos:', err)
+    }
+  },
+
+  fetchRuntimeEnvironmentRepos: async (environmentId) => {
+    try {
+      const target = { kind: 'environment' as const, environmentId }
+      const {
+        repos: reconciledRepos,
+        projectCompatibility,
+        hostId
+      } = await fetchReposForTarget(target, get().repos)
+      const validRepoIds = new Set(reconciledRepos.map((repo) => repo.id))
+      set((s) => ({
+        repos: reconciledRepos,
+        ...projectCompatibility,
+        activeRepoId: s.activeRepoId && validRepoIds.has(s.activeRepoId) ? s.activeRepoId : null,
+        filterRepoIds: s.filterRepoIds.filter((projectId) => validRepoIds.has(projectId)),
+        setupScriptPromptDismissedRepoIds: filterSetupScriptPromptDismissalsToValidRepos(
+          s.setupScriptPromptDismissedRepoIds,
+          validRepoIds
+        )
+      }))
+      return reconciledRepos.filter((repo) => getRepoExecutionHostId(repo) === hostId)
+    } catch (err) {
+      console.error(`Failed to fetch repos for runtime environment ${environmentId}:`, err)
+      return []
     }
   },
 
@@ -683,6 +992,8 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
 
   updateProjectGroup: async (groupId, updates) => {
     try {
+      // Why: project groups are focused-host-scoped by design — fetch/create/update/
+      // delete all route by the focused host, and the list is replaced (not merged).
       const target = getActiveRuntimeTarget(get().settings)
       const updated =
         target.kind === 'local'
@@ -711,6 +1022,7 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
 
   deleteProjectGroup: async (groupId) => {
     try {
+      // Why: project groups are focused-host-scoped by design (see updateProjectGroup).
       const target = getActiveRuntimeTarget(get().settings)
       const deleted =
         target.kind === 'local'
@@ -815,7 +1127,7 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
 
   moveProjectToGroup: async (projectId, groupId, order) => {
     try {
-      const target = getActiveRuntimeTarget(get().settings)
+      const target = getActiveRuntimeTarget(settingsForRepoOwner(get(), projectId))
       const moved =
         target.kind === 'local'
           ? await window.api.projectGroups.moveProject({
@@ -834,8 +1146,9 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
       if (!moved) {
         return false
       }
+      const ownedMoved = repoWithFetchedOwner(moved, target)
       set((s) => ({
-        repos: s.repos.map((repo) => (repo.id === projectId ? moved : repo)),
+        repos: s.repos.map((repo) => (repo.id === projectId ? ownedMoved : repo)),
         folderWorkspacePathStatuses: {}
       }))
       return true
@@ -879,6 +1192,7 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
         openModal('confirm-non-git-folder', { folderPath: path })
         return null
       }
+      repo = repoWithFetchedOwner(repo, target)
       const alreadyAdded = get().repos.some((r) => r.id === repo.id)
       if (alreadyAdded) {
         get().clearOrcaHookTrustForRepo(repo.id)
@@ -887,7 +1201,12 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
         if (s.repos.some((r) => r.id === repo.id)) {
           return s
         }
-        return { repos: [...s.repos, repo], folderWorkspacePathStatuses: {} }
+        const nextRepos = [...s.repos, repo]
+        return {
+          repos: nextRepos,
+          ...projectCompatibilityFromRepos(nextRepos),
+          folderWorkspacePathStatuses: {}
+        }
       })
       if (alreadyAdded) {
         toast.info(translate('auto.store.slices.repos.a8e4b3af5b', 'Project already added'), {
@@ -916,15 +1235,235 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
     }
   },
 
+  setupProjectExistingFolder: async (args) => {
+    try {
+      const target = getProjectSetupRuntimeTarget(args.hostId)
+      await assertProjectHostSetupMutationRuntimeCapabilities(target)
+      const result =
+        target.kind === 'local'
+          ? await window.api.projects.setupExistingFolder(args)
+          : (
+              await callRuntimeRpc<{ result: ProjectHostSetupResult }>(
+                target,
+                'projectHostSetup.setupExistingFolder',
+                args,
+                { timeoutMs: 15_000 }
+              )
+            ).result
+      const repo = repoWithFetchedOwner(result.repo, target)
+      const setup = setupWithFetchedOwner(result.setup, target)
+      set((s) => {
+        const nextRepos = s.repos.some((entry) => entry.id === repo.id)
+          ? s.repos.map((entry) => (entry.id === repo.id ? repo : entry))
+          : [...s.repos, repo]
+        const nextProjects = s.projects.some((entry) => entry.id === result.project.id)
+          ? s.projects.map((entry) => (entry.id === result.project.id ? result.project : entry))
+          : [...s.projects, result.project]
+        const nextSetups = s.projectHostSetups.some((entry) => entry.id === setup.id)
+          ? s.projectHostSetups.map((entry) => (entry.id === setup.id ? setup : entry))
+          : [...s.projectHostSetups, setup]
+        return {
+          repos: nextRepos,
+          projects: nextProjects,
+          projectHostSetups: nextSetups
+        }
+      })
+      toast.success(translate('auto.store.slices.repos.8bb3ad7935', 'Project added'), {
+        description: repo.displayName
+      })
+      return { ...result, repo, setup }
+    } catch (err) {
+      console.error('Failed to set up project on host:', err)
+      const message = err instanceof Error ? err.message : String(err)
+      toast.error(translate('auto.store.slices.repos.c6e022ddfc', 'Failed to add project'), {
+        description: message,
+        duration: ERROR_TOAST_DURATION
+      })
+      return null
+    }
+  },
+
+  createProjectHostSetup: async (args) => {
+    try {
+      const target = getProjectSetupRuntimeTarget(args.hostId)
+      await assertProjectHostSetupMutationRuntimeCapabilities(target)
+      const result =
+        target.kind === 'local'
+          ? await window.api.projects.createHostSetup(args)
+          : (
+              await callRuntimeRpc<{ result: ProjectHostSetupCreateResult }>(
+                target,
+                'projectHostSetup.create',
+                args,
+                { timeoutMs: 15_000 }
+              )
+            ).result
+      const setup = setupWithFetchedOwner(result.setup, target)
+      set((s) => ({
+        projects: s.projects.some((entry) => entry.id === result.project.id)
+          ? s.projects.map((entry) => (entry.id === result.project.id ? result.project : entry))
+          : [...s.projects, result.project],
+        projectHostSetups: s.projectHostSetups.some((entry) => entry.id === setup.id)
+          ? s.projectHostSetups.map((entry) => (entry.id === setup.id ? setup : entry))
+          : [...s.projectHostSetups, setup]
+      }))
+      return { project: result.project, setup }
+    } catch (err) {
+      console.error('Failed to create project host setup:', err)
+      const message = err instanceof Error ? err.message : String(err)
+      toast.error(translate('auto.store.slices.repos.c6e022ddfc', 'Failed to add project'), {
+        description: message,
+        duration: ERROR_TOAST_DURATION
+      })
+      return null
+    }
+  },
+
+  updateProjectHostSetup: async (args) => {
+    try {
+      const currentSetup = get().projectHostSetups.find((setup) => setup.id === args.setupId)
+      const target = currentSetup
+        ? getProjectSetupRuntimeTarget(currentSetup.hostId)
+        : { kind: 'local' as const }
+      await assertProjectHostSetupMutationRuntimeCapabilities(target)
+      const result =
+        target.kind === 'local'
+          ? await window.api.projects.updateHostSetup(args)
+          : (
+              await callRuntimeRpc<{ result: ProjectHostSetupUpdateResult }>(
+                target,
+                'projectHostSetup.update',
+                args,
+                { timeoutMs: 15_000 }
+              )
+            ).result
+      const setup = setupWithFetchedOwner(result.setup, target)
+      const repo = result.repo ? repoWithFetchedOwner(result.repo, target) : undefined
+      set((s) => ({
+        repos: repo
+          ? s.repos.some((entry) => entry.id === repo.id)
+            ? s.repos.map((entry) => (entry.id === repo.id ? repo : entry))
+            : [...s.repos, repo]
+          : s.repos,
+        projects: s.projects.some((entry) => entry.id === result.project.id)
+          ? s.projects.map((entry) => (entry.id === result.project.id ? result.project : entry))
+          : [...s.projects, result.project],
+        projectHostSetups: s.projectHostSetups.some((entry) => entry.id === setup.id)
+          ? s.projectHostSetups.map((entry) => (entry.id === setup.id ? setup : entry))
+          : [...s.projectHostSetups, setup]
+      }))
+      return { ...result, repo, setup }
+    } catch (err) {
+      console.error('Failed to update project host setup:', err)
+      const message = err instanceof Error ? err.message : String(err)
+      toast.error(translate('auto.store.slices.repos.c6e022ddfc', 'Failed to add project'), {
+        description: message,
+        duration: ERROR_TOAST_DURATION
+      })
+      return null
+    }
+  },
+
+  deleteProjectHostSetup: async (args) => {
+    try {
+      const currentSetup = get().projectHostSetups.find((setup) => setup.id === args.setupId)
+      const target = currentSetup
+        ? getProjectSetupRuntimeTarget(currentSetup.hostId)
+        : { kind: 'local' as const }
+      await assertProjectHostSetupMutationRuntimeCapabilities(target)
+      const result =
+        target.kind === 'local'
+          ? await window.api.projects.deleteHostSetup(args)
+          : (
+              await callRuntimeRpc<{ result: ProjectHostSetupDeleteResult }>(
+                target,
+                'projectHostSetup.delete',
+                args,
+                { timeoutMs: 15_000 }
+              )
+            ).result
+      const repo = result.repo ? repoWithFetchedOwner(result.repo, target) : undefined
+      set((s) => {
+        const projectHostSetups = s.projectHostSetups.filter(
+          (setup) => setup.id !== result.setup.id
+        )
+        const repos = repo ? s.repos.filter((entry) => entry.id !== repo.id) : s.repos
+        const projects =
+          repo && !projectHostSetups.some((setup) => setup.projectId === result.project.id)
+            ? s.projects.filter((project) => project.id !== result.project.id)
+            : s.projects
+        return { repos, projects, projectHostSetups }
+      })
+      return { ...result, repo }
+    } catch (err) {
+      console.error('Failed to delete project host setup:', err)
+      const message = err instanceof Error ? err.message : String(err)
+      toast.error(translate('auto.store.slices.repos.c6e022ddfc', 'Failed to add project'), {
+        description: message,
+        duration: ERROR_TOAST_DURATION
+      })
+      return null
+    }
+  },
+
+  setupProjectClone: async (args) => {
+    try {
+      const parsedHost = parseExecutionHostId(args.hostId)
+      const target = getProjectSetupRuntimeTarget(args.hostId)
+      if (parsedHost?.kind !== 'ssh') {
+        await assertProjectHostSetupMutationRuntimeCapabilities(target)
+      }
+      const repo =
+        parsedHost?.kind === 'ssh'
+          ? await window.api.repos.cloneRemote({
+              connectionId: parsedHost.targetId,
+              url: args.url,
+              destination: args.destination
+            })
+          : target.kind === 'local'
+            ? await window.api.repos.clone({
+                url: args.url,
+                destination: args.destination
+              })
+            : (
+                await callRuntimeRpc<{ repo: Repo }>(
+                  target,
+                  'repo.clone',
+                  {
+                    url: args.url,
+                    destination: args.destination
+                  },
+                  { timeoutMs: 10 * 60_000 }
+                )
+              ).repo
+      return await get().setupProjectExistingFolder({
+        projectId: args.projectId,
+        hostId: args.hostId,
+        path: repo.path,
+        kind: 'git',
+        displayName: args.displayName,
+        setupMethod: 'cloned'
+      })
+    } catch (err) {
+      console.error('Failed to clone project on host:', err)
+      const message = err instanceof Error ? err.message : String(err)
+      toast.error(translate('auto.store.slices.repos.c6e022ddfc', 'Failed to add project'), {
+        description: message,
+        duration: ERROR_TOAST_DURATION
+      })
+      return null
+    }
+  },
+
   addRepo: async () => {
     const target = getActiveRuntimeTarget(get().settings)
     if (target.kind !== 'local') {
       // Why: OS folder pickers return client-local paths. Remote environments
-      // need an explicit server path, which the Add Project dialog handles.
+      // need an explicit host path, which the Add Project dialog handles.
       toast.error(
         translate(
           'auto.store.slices.repos.e649269645',
-          'Use a server path to add projects from a remote runtime.'
+          'Use Add Project to enter a path on the selected host.'
         )
       )
       return null
@@ -982,7 +1521,7 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
 
   removeProject: async (projectId) => {
     try {
-      const target = getActiveRuntimeTarget(get().settings)
+      const target = getActiveRuntimeTarget(settingsForRepoOwner(get(), projectId))
       await (target.kind === 'local'
         ? window.api.repos.remove({ repoId: projectId })
         : callRuntimeRpc(target, 'repo.rm', { repo: projectId }, { timeoutMs: 15_000 }))
@@ -1074,6 +1613,7 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
         const nextRepos = s.repos.filter((r) => r.id !== projectId)
         return {
           repos: nextRepos,
+          ...projectCompatibilityFromRepos(nextRepos),
           activeRepoId: s.activeRepoId === projectId ? null : s.activeRepoId,
           filterRepoIds: s.filterRepoIds.filter((id) => id !== projectId),
           worktreesByRepo: nextWorktrees,
@@ -1116,7 +1656,7 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
     const applyRepoUpdate = async () => {
       try {
         const sanitizedUpdates = sanitizeRepoUpdate(updates)
-        const target = getActiveRuntimeTarget(get().settings)
+        const target = getActiveRuntimeTarget(settingsForRepoOwner(get(), projectId))
         const updatedRepo =
           target.kind === 'local'
             ? await window.api.repos.update({ repoId: projectId, updates: sanitizedUpdates })
@@ -1128,13 +1668,13 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
                   { timeoutMs: 15_000 }
                 )
               ).repo
-        set((s) => ({
-          repos: s.repos.map((r) => {
+        set((s) => {
+          const nextRepos = s.repos.map((r) => {
             if (r.id !== projectId) {
               return r
             }
             if (updatedRepo) {
-              return updatedRepo
+              return repoWithFetchedOwner(updatedRepo, target)
             }
             if (sanitizedUpdates.sourceControlAi === null) {
               const { sourceControlAi: _sourceControlAi, ...repoWithoutSourceControlAi } = r
@@ -1148,9 +1688,13 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
               ...updatesWithoutSourceControlAi,
               ...(sourceControlAi !== undefined ? { sourceControlAi } : {})
             }
-          }),
-          folderWorkspacePathStatuses: {}
-        }))
+          })
+          return {
+            repos: nextRepos,
+            ...projectCompatibilityFromRepos(nextRepos),
+            folderWorkspacePathStatuses: {}
+          }
+        })
         return true
       } catch (err) {
         console.error('Failed to update repo:', err)
@@ -1191,19 +1735,34 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
       // Caller passed a non-permutation — refuse to apply locally.
       return
     }
-    set({ repos: next, folderWorkspacePathStatuses: {} })
+    set({
+      repos: next,
+      ...projectCompatibilityFromRepos(next),
+      folderWorkspacePathStatuses: {}
+    })
     try {
-      const target = getActiveRuntimeTarget(get().settings)
-      const result =
-        target.kind === 'local'
-          ? await window.api.repos.reorder({ orderedIds })
-          : await callRuntimeRpc<{ status: 'applied' | 'rejected' }>(
-              target,
-              'repo.reorder',
-              { orderedIds },
-              { timeoutMs: 15_000 }
-            )
-      if (result.status === 'rejected') {
+      // Why: each host persists only its own repos and rejects non-permutations,
+      // so split the cross-host order into per-host permutations and dispatch one
+      // reorder per owner host.
+      const groups = splitRepoReorderByHost(orderedIds, next, get().settings)
+      const results = await Promise.all(
+        groups.map(async (group) => {
+          const parsed = parseExecutionHostId(group.hostId)
+          const target =
+            parsed?.kind === 'runtime'
+              ? ({ kind: 'environment', environmentId: parsed.environmentId } as const)
+              : ({ kind: 'local' } as const)
+          return target.kind === 'local'
+            ? window.api.repos.reorder({ orderedIds: group.orderedIds })
+            : callRuntimeRpc<{ status: 'applied' | 'rejected' }>(
+                target,
+                'repo.reorder',
+                { orderedIds: group.orderedIds },
+                { timeoutMs: 15_000 }
+              )
+        })
+      )
+      if (results.some((result) => result.status === 'rejected')) {
         await get().fetchRepos()
       }
     } catch (err) {

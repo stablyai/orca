@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type {
   DiscoveredSkill,
   SkillDiscoveryResult,
@@ -163,48 +163,64 @@ export function useInstalledAgentSkill(
   const [result, setResult] = useState<SkillDiscoveryResult | null>(cachedDiscovery)
   const [loading, setLoading] = useState(enabled && !cachedDiscovery)
   const [error, setError] = useState<string | null>(null)
+  const currentDiscoveryTargetKeyRef = useRef(discoveryTargetKey)
+  const refreshGenerationRef = useRef(0)
+  currentDiscoveryTargetKeyRef.current = discoveryTargetKey
   // Why: skill scans can outlive transient settings/onboarding panels; keep
   // the module cache update but skip React state writes after unmount.
   const mountedRef = useMountedRef()
 
   const refresh = useCallback(
     async (force = true): Promise<void> => {
-      if (!enabled) {
-        if (mountedRef.current) {
-          setLoading(false)
+      const requestDiscoveryTargetKey = discoveryTargetKey
+      const requestGeneration = ++refreshGenerationRef.current
+      const writeIfCurrent = (write: () => void): void => {
+        if (
+          mountedRef.current &&
+          requestGeneration === refreshGenerationRef.current &&
+          currentDiscoveryTargetKeyRef.current === requestDiscoveryTargetKey
+        ) {
+          write()
         }
+      }
+
+      if (!enabled) {
+        writeIfCurrent(() => {
+          setLoading(false)
+        })
         return
       }
-      if (mountedRef.current) {
+      writeIfCurrent(() => {
         setLoading(true)
-      }
+      })
       try {
         const next = await discoverInstalledAgentSkills(force, discoveryTarget)
-        if (!mountedRef.current) {
-          return
-        }
-        setResult(next)
-        setError(null)
+        writeIfCurrent(() => {
+          setResult(next)
+          setError(null)
+        })
       } catch (refreshError) {
-        if (!mountedRef.current) {
-          return
-        }
-        setError(
-          refreshError instanceof Error ? refreshError.message : 'Could not scan installed skills.'
-        )
+        writeIfCurrent(() => {
+          setError(
+            refreshError instanceof Error
+              ? refreshError.message
+              : 'Could not scan installed skills.'
+          )
+        })
       } finally {
-        if (mountedRef.current) {
+        writeIfCurrent(() => {
           setLoading(false)
-        }
+        })
       }
     },
-    [discoveryTarget, enabled, mountedRef]
+    [discoveryTarget, discoveryTargetKey, enabled, mountedRef]
   )
 
   useEffect(() => {
     const nextCachedDiscovery = cachedDiscoveryByTarget.get(discoveryTargetKey) ?? null
     setResult(nextCachedDiscovery)
     setLoading(enabled && !nextCachedDiscovery)
+    setError(null)
   }, [discoveryTargetKey, enabled])
 
   useEffect(() => {

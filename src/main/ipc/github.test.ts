@@ -8,6 +8,8 @@ const {
   getIssueMock,
   listIssuesMock,
   listWorkItemsMock,
+  listLabelsMock,
+  listAssignableUsersMock,
   getAuthenticatedViewerMock,
   mergePRMock,
   setPRAutoMergeMock,
@@ -22,6 +24,8 @@ const {
   getIssueMock: vi.fn(),
   listIssuesMock: vi.fn(),
   listWorkItemsMock: vi.fn(),
+  listLabelsMock: vi.fn(),
+  listAssignableUsersMock: vi.fn(),
   getAuthenticatedViewerMock: vi.fn(),
   mergePRMock: vi.fn(),
   setPRAutoMergeMock: vi.fn(),
@@ -46,6 +50,8 @@ vi.mock('../github/client', () => ({
   getIssue: getIssueMock,
   listIssues: listIssuesMock,
   listWorkItems: listWorkItemsMock,
+  listLabels: listLabelsMock,
+  listAssignableUsers: listAssignableUsersMock,
   getAuthenticatedViewer: getAuthenticatedViewerMock,
   mergePR: mergePRMock,
   setPRAutoMerge: setPRAutoMergeMock,
@@ -74,6 +80,7 @@ describe('registerGitHubHandlers', () => {
     badgeColor: string
     addedAt: number
     connectionId?: string | null
+    executionHostId?: string | null
     issueSourcePreference?: 'origin' | 'upstream'
   }
   let repos: FixtureRepo[] = []
@@ -91,6 +98,8 @@ describe('registerGitHubHandlers', () => {
     getIssueMock.mockReset()
     listIssuesMock.mockReset()
     listWorkItemsMock.mockReset()
+    listLabelsMock.mockReset()
+    listAssignableUsersMock.mockReset()
     getAuthenticatedViewerMock.mockReset()
     mergePRMock.mockReset()
     setPRAutoMergeMock.mockReset()
@@ -154,6 +163,58 @@ describe('registerGitHubHandlers', () => {
     ).toThrow('Access denied: unknown repository path')
 
     expect(getIssueMock).not.toHaveBeenCalled()
+  })
+
+  it('rejects GitHub source context from a different host', async () => {
+    registerGitHubHandlers(store as never, stats as never)
+
+    expect(() =>
+      handlers['gh:listWorkItems'](null, {
+        repoPath: '/workspace/repo',
+        sourceContext: {
+          kind: 'task-source',
+          provider: 'github',
+          projectId: 'project-1',
+          hostId: 'ssh:openclaw-2',
+          repoId: 'repo-1'
+        }
+      })
+    ).toThrow('Access denied: GitHub source host does not match repository host')
+
+    expect(listWorkItemsMock).not.toHaveBeenCalled()
+  })
+
+  it('guards label metadata lookups with source host context', async () => {
+    listLabelsMock.mockResolvedValue(['bug'])
+    repos = [
+      ...repos,
+      {
+        id: 'repo-ssh',
+        path: '/workspace/remote-repo',
+        displayName: 'repo',
+        badgeColor: '#000',
+        addedAt: 0,
+        connectionId: 'openclaw-2',
+        executionHostId: 'ssh:openclaw-2'
+      }
+    ]
+    registerGitHubHandlers(store as never, stats as never)
+
+    await expect(
+      handlers['gh:listLabels'](null, {
+        repoPath: '/workspace/remote-repo',
+        repoId: 'repo-ssh',
+        sourceContext: {
+          kind: 'task-source',
+          provider: 'github',
+          projectId: 'project-1',
+          hostId: 'ssh:openclaw-2',
+          repoId: 'repo-ssh'
+        }
+      })
+    ).resolves.toEqual(['bug'])
+
+    expect(listLabelsMock).toHaveBeenCalledWith('/workspace/remote-repo', undefined, 'openclaw-2')
   })
 
   it('forwards listIssues for registered repositories and unwraps items', async () => {

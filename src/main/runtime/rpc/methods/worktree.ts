@@ -33,7 +33,10 @@ export const WORKTREE_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'worktree.lineageList',
     params: null,
-    handler: async (_params, { runtime }) => ({ lineage: await runtime.listWorktreeLineage() })
+    handler: async (_params, { runtime }) => ({
+      lineage: await runtime.listWorktreeLineage(),
+      workspaceLineage: await runtime.listWorkspaceLineage()
+    })
   }),
   defineMethod({
     name: 'worktree.show',
@@ -68,6 +71,9 @@ export const WORKTREE_METHODS: RpcMethod[] = [
         linkedLinearIssueOrganizationUrlKey: params.linkedLinearIssueOrganizationUrlKey,
         linkedGitLabMR: params.linkedGitLabMR,
         linkedGitLabIssue: params.linkedGitLabIssue,
+        linkedBitbucketPR: params.linkedBitbucketPR,
+        linkedAzureDevOpsPR: params.linkedAzureDevOpsPR,
+        linkedGiteaPR: params.linkedGiteaPR,
         comment: params.comment,
         displayName: params.displayName,
         telemetrySource: params.telemetrySource,
@@ -89,6 +95,8 @@ export const WORKTREE_METHODS: RpcMethod[] = [
         ...(params.startupPrompt !== undefined ? { startupPrompt: params.startupPrompt } : {}),
         startupDraft: params.startupDraft,
         lineage: {
+          parentWorkspace: params.parentWorkspace,
+          envParentWorkspace: params.envParentWorkspace,
           parentWorktree: params.parentWorktree,
           ...(params.cwdParentWorktree ? { cwdParentWorktree: params.cwdParentWorktree } : {}),
           noParent: params.noParent === true,
@@ -117,8 +125,13 @@ export const WORKTREE_METHODS: RpcMethod[] = [
         linkedIssue: params.linkedIssue,
         linkedPR: params.linkedPR,
         linkedLinearIssue: params.linkedLinearIssue,
+        linkedLinearIssueWorkspaceId: params.linkedLinearIssueWorkspaceId,
+        linkedLinearIssueOrganizationUrlKey: params.linkedLinearIssueOrganizationUrlKey,
         linkedGitLabMR: params.linkedGitLabMR,
         linkedGitLabIssue: params.linkedGitLabIssue,
+        linkedBitbucketPR: params.linkedBitbucketPR,
+        linkedAzureDevOpsPR: params.linkedAzureDevOpsPR,
+        linkedGiteaPR: params.linkedGiteaPR,
         comment: params.comment,
         isArchived: params.isArchived,
         isUnread: params.isUnread,
@@ -134,6 +147,7 @@ export const WORKTREE_METHODS: RpcMethod[] = [
         workspaceStatus: params.workspaceStatus,
         pushTarget: params.pushTarget,
         diffComments: params.diffComments,
+        mobileDiffReview: params.mobileDiffReview,
         lineage:
           params.parentWorktree || params.noParent === true
             ? {

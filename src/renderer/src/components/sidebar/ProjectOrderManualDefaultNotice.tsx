@@ -41,7 +41,7 @@ function ProjectOrderManualDefaultNotice(): React.JSX.Element | null {
           <p className="min-w-0 text-sm font-semibold leading-snug text-worktree-sidebar-foreground">
             {translate(
               'auto.components.sidebar.ProjectOrderManualDefaultNotice.a1f4c2d8e0',
-              'Manual project order is now default'
+              'Manual project order is now the default'
             )}
           </p>
           <Tooltip>

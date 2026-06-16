@@ -16,6 +16,7 @@ import type {
   GitConflictOperation,
   GitConflictResolutionStatus,
   GitConflictStatusSource,
+  GlobalSettings,
   GitPushTarget,
   GitStatusEntry,
   GitStatusResult,
@@ -238,6 +239,10 @@ type EditorOpenTargetOptions = {
   targetGroupId?: string
   preview?: boolean
   runtimeEnvironmentId?: string | null
+}
+
+type GitRuntimeOperationOptions = {
+  runtimeTargetSettings?: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null
 }
 
 export type PendingEditorReveal = {
@@ -482,6 +487,10 @@ export type EditorSlice = {
 
   // Git status cache
   gitStatusByWorktree: Record<string, GitStatusEntry[]>
+  // Why: when status was truncated at the entry limit (a repo with an enormous
+  // un-ignored folder), the SCM view shows a "too many changes" state and
+  // polling pauses. `{ limit }` when huge, absent otherwise.
+  gitStatusHugeByWorktree: Record<string, { limit: number }>
   gitIgnoredPathsByWorktree: Record<string, string[]>
   gitConflictOperationByWorktree: Record<string, GitConflictOperation>
   trackedConflictPathsByWorktree: Record<string, Record<string, GitConflictKind>>
@@ -512,7 +521,8 @@ export type EditorSlice = {
     worktreeId: string,
     worktreePath: string,
     connectionId?: string,
-    pushTarget?: GitPushTarget
+    pushTarget?: GitPushTarget,
+    options?: GitRuntimeOperationOptions
   ) => Promise<void>
   pushBranch: (
     worktreeId: string,
@@ -520,38 +530,43 @@ export type EditorSlice = {
     publish?: boolean,
     connectionId?: string,
     pushTarget?: GitPushTarget,
-    options?: { forceWithLease?: boolean }
+    options?: GitRuntimeOperationOptions & { forceWithLease?: boolean }
   ) => Promise<void>
   pullBranch: (
     worktreeId: string,
     worktreePath: string,
     connectionId?: string,
-    pushTarget?: GitPushTarget
+    pushTarget?: GitPushTarget,
+    options?: GitRuntimeOperationOptions
   ) => Promise<void>
   fastForwardBranch: (
     worktreeId: string,
     worktreePath: string,
     connectionId?: string,
-    pushTarget?: GitPushTarget
+    pushTarget?: GitPushTarget,
+    options?: GitRuntimeOperationOptions
   ) => Promise<void>
   syncBranch: (
     worktreeId: string,
     worktreePath: string,
     connectionId?: string,
-    pushTarget?: GitPushTarget
+    pushTarget?: GitPushTarget,
+    options?: GitRuntimeOperationOptions
   ) => Promise<void>
   rebaseFromBase: (
     worktreeId: string,
     worktreePath: string,
     baseRef: string,
     connectionId?: string,
-    pushTarget?: GitPushTarget
+    pushTarget?: GitPushTarget,
+    options?: GitRuntimeOperationOptions
   ) => Promise<void>
   fetchBranch: (
     worktreeId: string,
     worktreePath: string,
     connectionId?: string,
-    pushTarget?: GitPushTarget
+    pushTarget?: GitPushTarget,
+    options?: GitRuntimeOperationOptions
   ) => Promise<void>
   gitBranchChangesByWorktree: Record<string, GitBranchChangeEntry[]>
   gitBranchCompareSummaryByWorktree: Record<string, GitBranchCompareSummary | null>
@@ -3195,6 +3210,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
 
   // Git status
   gitStatusByWorktree: {},
+  gitStatusHugeByWorktree: {},
   gitIgnoredPathsByWorktree: {},
   gitConflictOperationByWorktree: {},
   trackedConflictPathsByWorktree: {},
@@ -3292,18 +3308,34 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         prevIgnored.length === nextIgnored.length &&
         prevIgnored.every((p, i) => p === nextIgnored[i])
 
+      const prevHuge = s.gitStatusHugeByWorktree[worktreeId]
+      const nextHuge = status.didHitLimit ? { limit: nextEntries.length } : undefined
+      const hugeUnchanged = (prevHuge?.limit ?? null) === (nextHuge?.limit ?? null)
+
       if (
         statusUnchanged &&
         trackedUnchanged &&
         openFilesUnchanged &&
         operationUnchanged &&
-        ignoredUnchanged
+        ignoredUnchanged &&
+        hugeUnchanged
       ) {
         return s
       }
 
+      const nextHugeMap = hugeUnchanged
+        ? s.gitStatusHugeByWorktree
+        : nextHuge
+          ? { ...s.gitStatusHugeByWorktree, [worktreeId]: nextHuge }
+          : (() => {
+              const copy = { ...s.gitStatusHugeByWorktree }
+              delete copy[worktreeId]
+              return copy
+            })()
+
       return {
         openFiles: nextOpenFiles,
+        gitStatusHugeByWorktree: nextHugeMap,
         gitStatusByWorktree: statusUnchanged
           ? s.gitStatusByWorktree
           : { ...s.gitStatusByWorktree, [worktreeId]: nextEntries },
@@ -3385,11 +3417,12 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         inFlightRemoteOpKind: next > 0 ? s.inFlightRemoteOpKind : null
       }
     }),
-  fetchUpstreamStatus: async (worktreeId, worktreePath, connectionId, pushTarget) => {
+  fetchUpstreamStatus: async (worktreeId, worktreePath, connectionId, pushTarget, options) => {
     try {
+      const runtimeSettings = options?.runtimeTargetSettings ?? get().settings
       const status = await getRuntimeGitUpstreamStatus(
         {
-          settings: get().settings,
+          settings: runtimeSettings,
           worktreeId,
           worktreePath,
           connectionId
@@ -3428,9 +3461,10 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       publish ? 'publish' : options.forceWithLease === true ? 'force_push' : 'push'
     )
     let shouldRefreshAfterRejectedPush = false
+    const runtimeSettings = options.runtimeTargetSettings ?? get().settings
     try {
       await pushRuntimeGit(
-        { settings: get().settings, worktreeId, worktreePath, connectionId },
+        { settings: runtimeSettings, worktreeId, worktreePath, connectionId },
         { publish, pushTarget, forceWithLease: options.forceWithLease }
       )
     } catch (error) {
@@ -3446,26 +3480,33 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
     } finally {
       get().endRemoteOperation()
       if (shouldRefreshAfterRejectedPush) {
-        const context = { settings: get().settings, worktreeId, worktreePath, connectionId }
+        const context = { settings: runtimeSettings, worktreeId, worktreePath, connectionId }
         // Why: the rejected push proved the publish branch moved. Fetch first
         // so legacy base-tracking worktrees can discover origin/<branch>, then
         // refresh ahead/behind so Pull/Sync become actionable immediately.
         void fetchRuntimeGit(context, pushTarget)
           .catch(() => undefined)
-          .then(() => get().fetchUpstreamStatus(worktreeId, worktreePath, connectionId, pushTarget))
+          .then(() =>
+            get().fetchUpstreamStatus(worktreeId, worktreePath, connectionId, pushTarget, {
+              runtimeTargetSettings: runtimeSettings
+            })
+          )
       }
     }
-    void get().fetchUpstreamStatus(worktreeId, worktreePath, connectionId, pushTarget)
+    void get().fetchUpstreamStatus(worktreeId, worktreePath, connectionId, pushTarget, {
+      runtimeTargetSettings: runtimeSettings
+    })
     const refreshGitHubForWorktree = get().refreshGitHubForWorktree
     if (typeof refreshGitHubForWorktree === 'function') {
       refreshGitHubForWorktree(worktreeId)
     }
   },
-  pullBranch: async (worktreeId, worktreePath, connectionId, pushTarget) => {
+  pullBranch: async (worktreeId, worktreePath, connectionId, pushTarget, options) => {
     get().beginRemoteOperation('pull')
+    const runtimeSettings = options?.runtimeTargetSettings ?? get().settings
     try {
       await pullRuntimeGit(
-        { settings: get().settings, worktreeId, worktreePath, connectionId },
+        { settings: runtimeSettings, worktreeId, worktreePath, connectionId },
         pushTarget
       )
     } catch (error) {
@@ -3474,17 +3515,20 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
     } finally {
       get().endRemoteOperation()
     }
-    void get().fetchUpstreamStatus(worktreeId, worktreePath, connectionId, pushTarget)
+    void get().fetchUpstreamStatus(worktreeId, worktreePath, connectionId, pushTarget, {
+      runtimeTargetSettings: runtimeSettings
+    })
     const refreshGitHubForWorktree = get().refreshGitHubForWorktree
     if (typeof refreshGitHubForWorktree === 'function') {
       refreshGitHubForWorktree(worktreeId)
     }
   },
-  fastForwardBranch: async (worktreeId, worktreePath, connectionId, pushTarget) => {
+  fastForwardBranch: async (worktreeId, worktreePath, connectionId, pushTarget, options) => {
     get().beginRemoteOperation('fast_forward')
+    const runtimeSettings = options?.runtimeTargetSettings ?? get().settings
     try {
       await fastForwardRuntimeGit(
-        { settings: get().settings, worktreeId, worktreePath, connectionId },
+        { settings: runtimeSettings, worktreeId, worktreePath, connectionId },
         pushTarget
       )
     } catch (error) {
@@ -3493,13 +3537,15 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
     } finally {
       get().endRemoteOperation()
     }
-    void get().fetchUpstreamStatus(worktreeId, worktreePath, connectionId, pushTarget)
+    void get().fetchUpstreamStatus(worktreeId, worktreePath, connectionId, pushTarget, {
+      runtimeTargetSettings: runtimeSettings
+    })
     const refreshGitHubForWorktree = get().refreshGitHubForWorktree
     if (typeof refreshGitHubForWorktree === 'function') {
       refreshGitHubForWorktree(worktreeId)
     }
   },
-  syncBranch: async (worktreeId, worktreePath, connectionId, pushTarget) => {
+  syncBranch: async (worktreeId, worktreePath, connectionId, pushTarget, options) => {
     // Why: same shape as pushBranch / pullBranch — fire-and-forget the
     // post-op upstream refresh after the busy flag clears so the primary
     // button label rotates immediately when the IPC resolves.
@@ -3510,8 +3556,9 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
     // outer catch must then skip toasting to avoid a double-toast.
     let pushStageToastShown = false
     let pushed = false
+    const runtimeSettings = options?.runtimeTargetSettings ?? get().settings
     try {
-      const context = { settings: get().settings, worktreeId, worktreePath, connectionId }
+      const context = { settings: runtimeSettings, worktreeId, worktreePath, connectionId }
       await fetchRuntimeGit(context, pushTarget)
       const upstreamStatusBeforePull = await getRuntimeGitUpstreamStatus(context, pushTarget)
       if (shouldForcePushWithLeaseForUpstream(upstreamStatusBeforePull)) {
@@ -3556,7 +3603,9 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
     } finally {
       get().endRemoteOperation()
     }
-    void get().fetchUpstreamStatus(worktreeId, worktreePath, connectionId, pushTarget)
+    void get().fetchUpstreamStatus(worktreeId, worktreePath, connectionId, pushTarget, {
+      runtimeTargetSettings: runtimeSettings
+    })
     if (pushed) {
       const refreshGitHubForWorktree = get().refreshGitHubForWorktree
       if (typeof refreshGitHubForWorktree === 'function') {
@@ -3564,11 +3613,12 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       }
     }
   },
-  rebaseFromBase: async (worktreeId, worktreePath, baseRef, connectionId, pushTarget) => {
+  rebaseFromBase: async (worktreeId, worktreePath, baseRef, connectionId, pushTarget, options) => {
     get().beginRemoteOperation('rebase')
+    const runtimeSettings = options?.runtimeTargetSettings ?? get().settings
     try {
       await rebaseRuntimeGitFromBase(
-        { settings: get().settings, worktreeId, worktreePath, connectionId },
+        { settings: runtimeSettings, worktreeId, worktreePath, connectionId },
         baseRef
       )
     } catch (error) {
@@ -3577,21 +3627,24 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
     } finally {
       get().endRemoteOperation()
     }
-    void get().fetchUpstreamStatus(worktreeId, worktreePath, connectionId, pushTarget)
+    void get().fetchUpstreamStatus(worktreeId, worktreePath, connectionId, pushTarget, {
+      runtimeTargetSettings: runtimeSettings
+    })
     const refreshGitHubForWorktree = get().refreshGitHubForWorktree
     if (typeof refreshGitHubForWorktree === 'function') {
       refreshGitHubForWorktree(worktreeId)
     }
   },
-  fetchBranch: async (worktreeId, worktreePath, connectionId, pushTarget) => {
+  fetchBranch: async (worktreeId, worktreePath, connectionId, pushTarget, options) => {
     // Why: same shape as pushBranch / pullBranch — fire-and-forget the
     // upstream refresh after the busy flag clears. Fetch updates the
     // remote refs only, so the visible signal we want is the new
     // ahead/behind counts on the upstream-status payload.
     get().beginRemoteOperation('fetch')
+    const runtimeSettings = options?.runtimeTargetSettings ?? get().settings
     try {
       await fetchRuntimeGit(
-        { settings: get().settings, worktreeId, worktreePath, connectionId },
+        { settings: runtimeSettings, worktreeId, worktreePath, connectionId },
         pushTarget
       )
     } catch (error) {
@@ -3600,7 +3653,9 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
     } finally {
       get().endRemoteOperation()
     }
-    void get().fetchUpstreamStatus(worktreeId, worktreePath, connectionId, pushTarget)
+    void get().fetchUpstreamStatus(worktreeId, worktreePath, connectionId, pushTarget, {
+      runtimeTargetSettings: runtimeSettings
+    })
   },
   gitBranchChangesByWorktree: {},
   gitBranchCompareSummaryByWorktree: {},

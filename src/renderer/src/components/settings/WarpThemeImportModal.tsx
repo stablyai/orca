@@ -258,6 +258,14 @@ export function WarpThemeImportModal({
                   )}
                 </p>
               ) : null}
+              {!preview.error && mode !== 'yaml' ? (
+                <p>
+                  {translate(
+                    'auto.components.settings.WarpThemeImportModal.custom_theme_yaml_hint',
+                    "Custom and community themes need to exist as YAML files in a Warp themes folder before auto-import can find them. If you cloned Warp's public themes repo, use Choose Folder to import that checkout."
+                  )}
+                </p>
+              ) : null}
               {!desktopOnly ? (
                 <p>
                   {translate(

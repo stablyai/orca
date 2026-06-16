@@ -24,6 +24,7 @@ import { getPosixOmpShellWrapper } from '../pty/omp-shell-wrapper'
 import {
   getZshEnvTemplate,
   getZshFinalZdotdirRestoreBlock,
+  getZshShellReadyMarkerRegistrationBlock,
   getZshStartupFileSourceBlock
 } from '../shell-templates'
 
@@ -172,7 +173,7 @@ __orca_restore_agent_teams_path() {
 }
 __orca_restore_agent_teams_path
 # Why: user startup files may set the default OpenCode config after Orca's
-# spawn env; restore the PTY-scoped overlay before the first prompt.
+# spawn env; restore the Orca-managed config dir before the first prompt.
 [[ -n "\${ORCA_OPENCODE_CONFIG_DIR:-}" ]] && export OPENCODE_CONFIG_DIR="\${ORCA_OPENCODE_CONFIG_DIR}"
 # Why: bare shells carry both Pi and OMP shadows so a later typed OMP can
 # switch on demand. Keep Pi as the shell default unless this PTY is OMP-only.
@@ -370,16 +371,7 @@ if [[ -z "\${ORCA_PI_CODING_AGENT_DIR:-}" && -n "\${ORCA_OMP_CODING_AGENT_DIR:-}
 fi
 ${getPosixOmpShellWrapper()}
 [[ -n "\${ORCA_CODEX_HOME:-}" ]] && export CODEX_HOME="\${ORCA_CODEX_HOME}"
-# Why: zsh precmd runs before the prompt is drawn and before zle owns input,
-# which can double-echo startup commands. line-init fires when zle is ready.
-if [[ "\${ORCA_SHELL_READY_MARKER:-0}" == "1" ]]; then
-  __orca_prompt_mark() {
-    printf "${SHELL_READY_MARKER_ESCAPED}"
-  }
-  autoload -Uz add-zle-hook-widget
-  zle -N __orca_prompt_mark
-  add-zle-hook-widget line-init __orca_prompt_mark
-fi
+${getZshShellReadyMarkerRegistrationBlock(SHELL_READY_MARKER_ESCAPED)}
 ${getZshFinalZdotdirRestoreBlock()}
 `
   const bashRc = getBashShellReadyRcfileContent()

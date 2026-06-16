@@ -119,6 +119,15 @@ const RECONNECT_DELAYS = [500, 1000, 2000, 4000, 8000, 15_000, 30_000, 60_000]
 // drift the user sees "Reconnecting…" while the loop is silently
 // parked.
 const GIVE_UP_AFTER_ATTEMPTS = 12
+// Why: a single `unauthorized`/`e2ee_error` is not proof the pairing is dead.
+// Issue #5200: a tablet showed "Auth failed" and forced a needless re-pair
+// while the desktop still listed it as paired with a valid token — a transient
+// rejection (mid-session resume race, a stale frame after background) latched
+// the terminal auth-failed state permanently. Retry the full handshake this
+// many times with a clean reconnect before declaring auth dead. A genuinely
+// revoked token is rejected on every attempt and converges to auth-failed in
+// seconds; a one-off glitch self-heals without the user re-pairing.
+const AUTH_RETRY_BUDGET = 3
 const REQUEST_TIMEOUT_MS = 30_000
 const CONNECT_TIMEOUT_MS = 12_000
 const HANDSHAKE_TIMEOUT_MS = 5_000
@@ -182,6 +191,11 @@ export function connect(
   let handshakeTimer: ReturnType<typeof setTimeout> | null = null
   let activityProbeTimer: ReturnType<typeof setInterval> | null = null
   let intentionallyClosed = false
+  // Why: consecutive auth rejections since the last successful connect. We
+  // tolerate up to AUTH_RETRY_BUDGET (issue #5200) before latching auth-failed
+  // so a transient rejection doesn't force a needless re-pair. Reset to 0 on
+  // every 'connected'.
+  let authRejectionCount = 0
   let lastConnectedAt: number | null = null
   // Why: diagnostic — when the rpc-client gets stuck in a state where every
   // openConnection fails with code 1006 and only a force-quit recovers, we
@@ -247,6 +261,9 @@ export function connect(
     })
     if (next === 'connected') {
       lastConnectedAt = Date.now()
+      // Why: a clean handshake proves the token is valid — clear the auth
+      // retry budget so a future isolated rejection gets the full budget again.
+      authRejectionCount = 0
       for (const waiter of connectWaiters.splice(0)) {
         if (waiter.timeout) {
           clearTimeout(waiter.timeout)
@@ -496,18 +513,11 @@ export function connect(
             }
           } else if (msg.type === 'e2ee_error' || (!msg.ok && msg.error?.code === 'unauthorized')) {
             console.log('[net] e2ee auth FAILED', { msgType: msg.type, error: msg.error })
-            emitLog(
-              'error',
-              'Authentication rejected',
-              typeof msg.error?.message === 'string' ? msg.error.message : 'Unauthorized'
-            )
-            intentionallyClosed = true
-            ws?.close()
-            ws = null
-            activeBrowserScreencastRequestId = null
-            pendingBrowserScreencastRequestId = null
-            setState('auth-failed')
-            rejectAllPending('Unauthorized — pairing may be revoked')
+            if (handshakeTimer) {
+              clearTimeout(handshakeTimer)
+              handshakeTimer = null
+            }
+            handleAuthRejection('Unauthorized — pairing may be revoked')
           }
         } catch {
           // Not JSON — ignore during handshake.
@@ -549,16 +559,12 @@ export function connect(
         return
       }
 
-      // Why: auth failure is distinct from transient disconnect — retrying
-      // with a rejected token causes infinite reconnect churn.
+      // Why: a mid-session unauthorized may be a transient glitch, not a dead
+      // pairing (issue #5200). handleAuthRejection retries the handshake a few
+      // times before latching auth-failed, while still bounding churn via the
+      // budget so a genuinely revoked token doesn't reconnect forever.
       if (!response.ok && response.error.code === 'unauthorized') {
-        intentionallyClosed = true
-        ws?.close()
-        ws = null
-        activeBrowserScreencastRequestId = null
-        pendingBrowserScreencastRequestId = null
-        setState('auth-failed')
-        rejectAllPending('Unauthorized — pairing may be revoked')
+        handleAuthRejection('Unauthorized — pairing may be revoked')
         return
       }
 
@@ -734,6 +740,51 @@ export function connect(
     rejectAllPending('Connection interrupted')
     setState('reconnecting')
     scheduleReconnect()
+  }
+
+  // Why: a token rejection (handshake e2ee_error/unauthorized or a mid-session
+  // unauthorized RPC) may be transient — issue #5200. Retry the full handshake
+  // up to AUTH_RETRY_BUDGET times before declaring auth dead, so a one-off
+  // glitch self-heals instead of forcing the user to re-pair. A genuinely
+  // revoked token fails every retry and latches auth-failed within seconds.
+  function handleAuthRejection(reason: string): void {
+    activeBrowserScreencastRequestId = null
+    pendingBrowserScreencastRequestId = null
+    authRejectionCount++
+    if (authRejectionCount < AUTH_RETRY_BUDGET) {
+      console.log('[net] auth rejected — retrying handshake', {
+        attempt: authRejectionCount,
+        budget: AUTH_RETRY_BUDGET,
+        endpoint: redactedEndpoint(endpoint)
+      })
+      emitLog(
+        'warn',
+        'Authentication rejected',
+        `Retrying (${authRejectionCount}/${AUTH_RETRY_BUDGET})`
+      )
+      // Why: close the current socket but DON'T set intentionallyClosed —
+      // we want handleSocketClosed to route into the reconnect path so the
+      // token gets a fresh handshake. rejectAllPending unblocks in-flight RPCs.
+      const closing = ws
+      ws = null
+      sharedKey = null
+      rejectAllPending(reason)
+      if (closing) {
+        closing.close()
+      }
+      setState('reconnecting')
+      scheduleReconnect()
+      return
+    }
+    console.log('[net] auth rejected — budget exhausted, latching auth-failed', {
+      attempt: authRejectionCount,
+      endpoint: redactedEndpoint(endpoint)
+    })
+    intentionallyClosed = true
+    ws?.close()
+    ws = null
+    setState('auth-failed')
+    rejectAllPending(reason)
   }
 
   function scheduleReconnect() {

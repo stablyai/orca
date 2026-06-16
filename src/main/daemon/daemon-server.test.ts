@@ -202,11 +202,10 @@ describe('DaemonServer', () => {
       await startServer()
       const c = await connectClient()
 
-      // Why: older app builds still send the removed ptySpawnHealth probe.
-      // The daemon must reject it gracefully so a downgraded client lands on
-      // its session-preserving branch instead of crashing the daemon.
-      await expect(c.request('ptySpawnHealth', undefined)).rejects.toThrow(
-        'Unknown request type: ptySpawnHealth'
+      // Why: downgraded clients can send request types this daemon does not
+      // know. Reject gracefully instead of crashing the session server.
+      await expect(c.request('definitelyUnknownRequest', undefined)).rejects.toThrow(
+        'Unknown request type: definitelyUnknownRequest'
       )
       await expect(c.request<{ pong: boolean }>('ping', undefined)).resolves.toEqual({
         pong: true

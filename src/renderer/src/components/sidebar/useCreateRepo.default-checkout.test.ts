@@ -9,9 +9,13 @@ const mocks = vi.hoisted(() => ({
   storeState: {
     settings: { activeRuntimeEnvironmentId: null as string | null },
     repos: [] as Repo[],
+    projects: [],
+    projectHostSetups: [],
     worktreesByRepo: {} as Record<string, unknown[]>
   },
   createRepo: vi.fn(),
+  createRemoteRepo: vi.fn(),
+  callRuntimeRpc: vi.fn(),
   fetchWorktrees: vi.fn(),
   onGitRepoReady: vi.fn(),
   activateAndRevealWorktree: vi.fn(),
@@ -72,6 +76,11 @@ vi.mock('sonner', () => ({
   }
 }))
 
+vi.mock('@/runtime/runtime-rpc-client', () => ({
+  getActiveRuntimeTarget: () => ({ kind: 'local' }),
+  callRuntimeRpc: mocks.callRuntimeRpc
+}))
+
 function makeRepo(overrides: Partial<Repo> = {}): Repo {
   return {
     id: 'repo-created',
@@ -89,14 +98,19 @@ describe('useCreateRepo default-checkout handoff', () => {
     vi.clearAllMocks()
     mocks.stateIndex = 0
     mocks.stateSetters = []
-    mocks.stateValues = ['created', '/projects', null, false]
+    mocks.stateValues = ['created', '/projects', 'git', null, false]
     mocks.storeState.repos = []
+    mocks.storeState.projects = []
+    mocks.storeState.projectHostSetups = []
     mocks.storeState.worktreesByRepo = {}
+    mocks.createRepo.mockReset()
+    mocks.createRemoteRepo.mockReset()
     mocks.storeState.settings.activeRuntimeEnvironmentId = null
     vi.stubGlobal('window', {
       api: {
         repos: {
           create: mocks.createRepo,
+          createRemote: mocks.createRemoteRepo,
           pickDirectory: vi.fn()
         }
       }
@@ -120,6 +134,12 @@ describe('useCreateRepo default-checkout handoff', () => {
     expect(mocks.fetchWorktrees).toHaveBeenCalledWith(repo.id, {
       requireAuthoritative: true
     })
+    expect(mocks.storeState.projects).toEqual(
+      expect.arrayContaining([expect.objectContaining({ sourceRepoIds: [repo.id] })])
+    )
+    expect(mocks.storeState.projectHostSetups).toEqual(
+      expect.arrayContaining([expect.objectContaining({ repoId: repo.id, path: repo.path })])
+    )
     expect(mocks.onGitRepoReady).toHaveBeenCalledWith(repo.id)
   })
 
@@ -135,10 +155,11 @@ describe('useCreateRepo default-checkout handoff', () => {
   })
 
   it('does not return a parent path when the runtime target blocks the local picker', async () => {
-    mocks.storeState.settings.activeRuntimeEnvironmentId = 'env-1'
     const { useCreateRepo } = await import('./useCreateRepo')
 
-    const result = useCreateRepo(mocks.fetchWorktrees, vi.fn(), mocks.onGitRepoReady)
+    const result = useCreateRepo(mocks.fetchWorktrees, vi.fn(), mocks.onGitRepoReady, {
+      runtimeEnvironmentId: 'env-1'
+    })
     await expect(result.handlePickParent()).resolves.toBeNull()
 
     expect(window.api.repos.pickDirectory).not.toHaveBeenCalled()
@@ -163,11 +184,11 @@ describe('useCreateRepo default-checkout handoff', () => {
     )
   })
 
-  it('uses the folder completion path if IPC returns a folder project', async () => {
+  it('marks onboarding folder progress when a created folder project opens', async () => {
     const repo = makeRepo({ kind: 'folder' })
     const worktree = { id: `${repo.id}::/projects/created` }
     const closeModal = vi.fn()
-    mocks.stateValues = ['created', '/projects', null, false]
+    mocks.stateValues = ['created', '/projects', 'folder', null, false]
     mocks.createRepo.mockResolvedValue({ repo })
     mocks.fetchWorktrees.mockImplementation(async (repoId: string) => {
       mocks.storeState.worktreesByRepo = { [repoId]: [worktree] }
@@ -181,7 +202,7 @@ describe('useCreateRepo default-checkout handoff', () => {
     expect(mocks.createRepo).toHaveBeenCalledWith({
       parentPath: '/projects',
       name: 'created',
-      kind: 'git'
+      kind: 'folder'
     })
     expect(mocks.fetchWorktrees).toHaveBeenCalledWith(repo.id)
     expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith(worktree.id, {
@@ -190,5 +211,59 @@ describe('useCreateRepo default-checkout handoff', () => {
     expect(mocks.markOnboardingProjectAdded).toHaveBeenCalledWith('addedFolder')
     expect(closeModal).toHaveBeenCalled()
     expect(mocks.onGitRepoReady).not.toHaveBeenCalled()
+  })
+
+  it('creates projects through the SSH host when an SSH target is selected', async () => {
+    const repo = makeRepo({ connectionId: 'ssh-1', path: '/srv/created' })
+    mocks.createRemoteRepo.mockResolvedValue({ repo })
+    mocks.fetchWorktrees.mockResolvedValue(true)
+    const { useCreateRepo } = await import('./useCreateRepo')
+
+    const result = useCreateRepo(mocks.fetchWorktrees, vi.fn(), mocks.onGitRepoReady, {
+      sshTargetId: 'ssh-1'
+    })
+    await result.handleCreate()
+
+    expect(mocks.createRemoteRepo).toHaveBeenCalledWith({
+      connectionId: 'ssh-1',
+      parentPath: '/projects',
+      name: 'created',
+      kind: 'git'
+    })
+    expect(mocks.createRepo).not.toHaveBeenCalled()
+    expect(mocks.fetchWorktrees).toHaveBeenCalledWith(repo.id, {
+      requireAuthoritative: true
+    })
+    expect(mocks.onGitRepoReady).toHaveBeenCalledWith(repo.id)
+  })
+
+  it('creates projects through the selected runtime environment', async () => {
+    const repo = makeRepo({ executionHostId: 'runtime:env-1', path: '/srv/created' })
+    mocks.callRuntimeRpc.mockResolvedValue({ repo })
+    mocks.fetchWorktrees.mockResolvedValue(true)
+    const { useCreateRepo } = await import('./useCreateRepo')
+
+    const result = useCreateRepo(mocks.fetchWorktrees, vi.fn(), mocks.onGitRepoReady, {
+      hostId: 'runtime:env-1',
+      runtimeEnvironmentId: 'env-1'
+    })
+    await result.handleCreate()
+
+    expect(mocks.callRuntimeRpc).toHaveBeenCalledWith(
+      { kind: 'environment', environmentId: 'env-1' },
+      'repo.create',
+      {
+        parentPath: '/projects',
+        name: 'created',
+        kind: 'git'
+      },
+      { timeoutMs: 60_000 }
+    )
+    expect(mocks.createRepo).not.toHaveBeenCalled()
+    expect(mocks.createRemoteRepo).not.toHaveBeenCalled()
+    expect(mocks.fetchWorktrees).toHaveBeenCalledWith(repo.id, {
+      requireAuthoritative: true
+    })
+    expect(mocks.onGitRepoReady).toHaveBeenCalledWith(repo.id)
   })
 })

@@ -20,6 +20,7 @@ const {
   writeFileSyncMock,
   netConnectMock,
   forkMock,
+  checkDaemonHealthMock,
   healthCheckDaemonMock,
   getMacDaemonSystemResolverHealthMock,
   getDaemonLaunchIdentityMock,
@@ -66,6 +67,7 @@ const {
     }
   })
 
+  const checkDaemonHealthMock = vi.fn(async () => 'healthy')
   const healthCheckDaemonMock = vi.fn(async () => true)
   const getMacDaemonSystemResolverHealthMock = vi.fn(() => 'healthy')
   const getDaemonLaunchIdentityMock = vi.fn(() => 'match')
@@ -101,6 +103,7 @@ const {
     writeFileSyncMock,
     netConnectMock,
     forkMock,
+    checkDaemonHealthMock,
     healthCheckDaemonMock,
     getMacDaemonSystemResolverHealthMock,
     getDaemonLaunchIdentityMock,
@@ -172,6 +175,7 @@ vi.mock('child_process', () => ({ fork: forkMock }))
 vi.mock('net', () => ({ connect: netConnectMock }))
 
 vi.mock('./daemon-health', () => ({
+  checkDaemonHealth: checkDaemonHealthMock,
   getDaemonLaunchIdentity: getDaemonLaunchIdentityMock,
   getMacDaemonSystemResolverHealth: getMacDaemonSystemResolverHealthMock,
   healthCheckDaemon: healthCheckDaemonMock,
@@ -268,6 +272,8 @@ async function importFresh() {
   setLocalPtyProviderMock.mockClear()
   unbindLocalProviderListenersMock.mockClear()
   rebindLocalProviderListenersMock.mockClear()
+  checkDaemonHealthMock.mockClear()
+  checkDaemonHealthMock.mockResolvedValue('healthy')
   healthCheckDaemonMock.mockClear()
   healthCheckDaemonMock.mockResolvedValue(true)
   getMacDaemonSystemResolverHealthMock.mockReset()
@@ -1026,9 +1032,9 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     probeSocketExistsMock.mockImplementation(
       (p?: string) => p === '/fake/app/out/main/daemon-entry.js'
     )
-    healthCheckDaemonMock.mockResolvedValueOnce(false)
     const mod = await importFresh()
     getAppPathMock.mockReturnValue('/fake/app/out/main')
+    healthCheckDaemonMock.mockResolvedValue(false)
     await mod.initDaemonPtyProvider()
 
     const launcher = spawnerInstances[0].launcher as (
@@ -1069,8 +1075,8 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
   })
 
   it('removes detached daemon startup listeners after readiness', async () => {
-    healthCheckDaemonMock.mockResolvedValueOnce(false)
     const mod = await importFresh()
+    healthCheckDaemonMock.mockResolvedValue(false)
     await mod.initDaemonPtyProvider()
 
     const launcher = spawnerInstances[0].launcher as (
@@ -1124,8 +1130,8 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
   })
 
   it('removes detached daemon startup listeners after startup error', async () => {
-    healthCheckDaemonMock.mockResolvedValueOnce(false)
     const mod = await importFresh()
+    healthCheckDaemonMock.mockResolvedValue(false)
     await mod.initDaemonPtyProvider()
 
     const launcher = spawnerInstances[0].launcher as (

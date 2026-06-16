@@ -1905,7 +1905,7 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
             }}
           >
             <Server className="size-3.5" />
-            {translate('auto.components.status.bar.StatusBar.24ac89df1a', 'SSH Status')}
+            {translate('auto.components.status.bar.StatusBar.24ac89df1a', 'Remote Hosts')}
           </DropdownMenuCheckboxItem>
           <DropdownMenuCheckboxItem
             checked={statusBarItems.includes('resource-usage')}

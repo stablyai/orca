@@ -16,22 +16,27 @@ import { join } from 'path'
 import { tmpdir } from 'os'
 import type {
   PersistedState,
+  Project,
   ProjectGroup,
+  ProjectHostSetup,
   Repo,
   TerminalPaneLayoutNode,
   TerminalTab,
   WorktreeLineage,
+  WorkspaceLineage,
   WorkspaceSessionState
 } from '../shared/types'
 import { isTerminalLeafId, makePaneKey } from '../shared/stable-pane-id'
 import { TERMINAL_SCROLLBACK_REPLAY_BYTE_LIMIT } from '../shared/terminal-scrollback-limits'
 import { MAX_BROWSER_HISTORY_ENTRIES } from '../shared/workspace-session-browser-history'
 import {
+  getDefaultPersistedState,
   getDefaultWorkspaceSession,
   ONBOARDING_FINAL_STEP,
   ONBOARDING_FLOW_VERSION
 } from '../shared/constants'
-import { folderWorkspaceKey } from '../shared/workspace-scope'
+import { folderWorkspaceKey, worktreeWorkspaceKey } from '../shared/workspace-scope'
+import { toRuntimeExecutionHostId, toSshExecutionHostId } from '../shared/execution-host'
 import { SshConnectionStore } from './ssh/ssh-connection-store'
 
 // Shared mutable state so the electron mock can reference a per-test directory
@@ -175,6 +180,30 @@ const makeRepo = (overrides: Partial<Repo> = {}): Repo => ({
   ...overrides
 })
 
+const makeProject = (overrides: Partial<Project> = {}): Project => ({
+  id: 'project-1',
+  displayName: 'Project',
+  badgeColor: '#737373',
+  sourceRepoIds: [],
+  createdAt: 1,
+  updatedAt: 1,
+  ...overrides
+})
+
+const makeProjectHostSetup = (overrides: Partial<ProjectHostSetup> = {}): ProjectHostSetup => ({
+  id: 'setup-1',
+  projectId: 'project-1',
+  hostId: 'local',
+  repoId: '',
+  path: '/repo',
+  displayName: 'Project',
+  setupState: 'ready',
+  setupMethod: 'imported-existing-folder',
+  createdAt: 1,
+  updatedAt: 1,
+  ...overrides
+})
+
 const makeTerminalTab = (overrides: Partial<TerminalTab> = {}): TerminalTab => ({
   id: 'tab1',
   ptyId: 'pty1',
@@ -194,6 +223,17 @@ const makeWorktreeLineage = (overrides: Partial<WorktreeLineage> = {}): Worktree
   parentWorktreeInstanceId: 'parent-instance',
   origin: 'manual',
   capture: { source: 'manual-action', confidence: 'explicit' },
+  createdAt: 1,
+  ...overrides
+})
+
+const makeWorkspaceLineage = (overrides: Partial<WorkspaceLineage> = {}): WorkspaceLineage => ({
+  childWorkspaceKey: worktreeWorkspaceKey('r1::/path/child'),
+  childInstanceId: 'child-instance',
+  parentWorkspaceKey: folderWorkspaceKey('folder-1'),
+  parentInstanceId: null,
+  origin: 'cli',
+  capture: { source: 'env-workspace', confidence: 'inferred' },
   createdAt: 1,
   ...overrides
 })
@@ -286,6 +326,87 @@ describe('Store', () => {
     const store = await createStore()
     expect(store.getRepos()).toEqual([])
   }, 15_000)
+
+  it('backfills project host setup compatibility records from legacy repos on load', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [
+        makeRepo({
+          id: 'local-repo',
+          path: '/Users/alice/orca',
+          displayName: 'Orca',
+          upstream: { owner: 'StablyAI', repo: 'Orca' }
+        }),
+        makeRepo({
+          id: 'remote-repo',
+          path: '/home/alice/orca',
+          displayName: 'orca',
+          connectionId: 'gpu-vm',
+          upstream: { owner: 'stablyai', repo: 'orca' }
+        })
+      ]
+    })
+
+    const store = await createStore()
+
+    expect(store.getProjects()).toEqual([
+      expect.objectContaining({
+        id: 'github:stablyai/orca',
+        sourceRepoIds: ['local-repo', 'remote-repo']
+      })
+    ])
+    expect(store.getProjectHostSetups()).toEqual([
+      expect.objectContaining({
+        id: 'local-repo',
+        projectId: 'github:stablyai/orca',
+        hostId: 'local',
+        path: '/Users/alice/orca'
+      }),
+      expect.objectContaining({
+        id: 'remote-repo',
+        projectId: 'github:stablyai/orca',
+        hostId: 'ssh:gpu-vm',
+        path: '/home/alice/orca'
+      })
+    ])
+
+    store.flush()
+    const persisted = readDataFile() as PersistedState
+    expect(persisted.projects).toEqual(store.getProjects())
+    expect(persisted.projectHostSetups).toEqual(store.getProjectHostSetups())
+  })
+
+  it('preserves independent project host setup records on load', async () => {
+    const independentProject = makeProject({
+      id: 'cloud-project',
+      displayName: 'Cloud Project'
+    })
+    const independentSetup = makeProjectHostSetup({
+      id: 'cloud-project::gpu-vm',
+      projectId: independentProject.id,
+      hostId: 'runtime:gpu-vm',
+      repoId: '',
+      path: '/srv/cloud-project',
+      displayName: 'GPU VM'
+    })
+    writeDataFile({
+      ...getDefaultPersistedState(testState.dir),
+      repos: [makeRepo({ id: 'r1', path: '/repo', displayName: 'Repo' })],
+      projects: [independentProject],
+      projectHostSetups: [independentSetup]
+    })
+
+    const store = await createStore()
+
+    expect(store.getProjects().map((project) => project.id)).toEqual(['repo:r1', 'cloud-project'])
+    expect(store.getProjectHostSetups().map((setup) => setup.id)).toEqual([
+      'r1',
+      'cloud-project::gpu-vm'
+    ])
+    store.flush()
+    const persisted = readDataFile() as PersistedState
+    expect(persisted.projectHostSetups).toContainEqual(independentSetup)
+  })
 
   it('returns default settings when no data file exists', async () => {
     const store = await createStore()
@@ -671,26 +792,6 @@ describe('Store', () => {
     expect(store.getUI().projectOrderBy).toBe('manual')
   })
 
-  it('shows the manual-default notice for upgraded profiles without projectOrderBy', async () => {
-    writeDataFile({
-      schemaVersion: 1,
-      repos: [{ id: 'repo-1', path: '/tmp/repo', displayName: 'Repo', badgeColor: '#000000' }],
-      ui: {}
-    })
-    const store = await createStore()
-    expect(store.getUI().projectOrderManualDefaultNoticeDismissed).toBe(false)
-  })
-
-  it('hides the manual-default notice for profiles that already chose recent', async () => {
-    writeDataFile({
-      schemaVersion: 1,
-      repos: [{ id: 'repo-1', path: '/tmp/repo', displayName: 'Repo', badgeColor: '#000000' }],
-      ui: { projectOrderBy: 'recent' }
-    })
-    const store = await createStore()
-    expect(store.getUI().projectOrderManualDefaultNoticeDismissed).toBe(true)
-  })
-
   // ── 2. Load from existing valid file ─────────────────────────────────
 
   it('reads repos from an existing data file', async () => {
@@ -1068,6 +1169,155 @@ describe('Store', () => {
     writeDataFile(persisted)
     const reloaded = await createStore()
     expect(reloaded.listAutomations()[0].reuseSession).toBe(false)
+  })
+
+  it('derives automation source and run contexts from the project host setup', async () => {
+    const store = await createStore()
+    store.addRepo(
+      makeRepo({
+        upstream: { owner: 'stablyai', repo: 'orca' },
+        connectionId: 'builder'
+      })
+    )
+
+    const automation = store.createAutomation({
+      name: 'Nightly',
+      prompt: 'Run checks',
+      agentId: 'claude',
+      projectId: 'r1',
+      workspaceMode: 'new_per_run',
+      timezone: 'UTC',
+      rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
+      dtstart: new Date('2026-05-13T00:00:00Z').getTime()
+    })
+
+    expect(automation.runContext).toMatchObject({
+      kind: 'workspace-run',
+      projectId: 'github:stablyai/orca',
+      hostId: toSshExecutionHostId('builder'),
+      projectHostSetupId: 'r1',
+      repoId: 'r1',
+      path: '/repo'
+    })
+    expect(automation.sourceContext).toMatchObject({
+      kind: 'task-source',
+      provider: 'github',
+      projectId: 'github:stablyai/orca',
+      hostId: toSshExecutionHostId('builder'),
+      projectHostSetupId: 'r1',
+      repoId: 'r1',
+      providerIdentity: { provider: 'github', owner: 'stablyai', repo: 'orca' }
+    })
+  })
+
+  it('marks runtime-owned automations as remote-host scheduled', async () => {
+    const store = await createStore()
+    store.addRepo(
+      makeRepo({
+        executionHostId: toRuntimeExecutionHostId('gpu-server'),
+        upstream: { owner: 'stablyai', repo: 'orca' }
+      })
+    )
+
+    const automation = store.createAutomation({
+      name: 'Nightly',
+      prompt: 'Run checks',
+      agentId: 'claude',
+      projectId: 'r1',
+      workspaceMode: 'new_per_run',
+      timezone: 'UTC',
+      rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
+      dtstart: new Date('2026-05-13T00:00:00Z').getTime()
+    })
+
+    expect(automation.schedulerOwner).toBe('remote_host_service')
+    expect(automation.runContext).toMatchObject({
+      hostId: toRuntimeExecutionHostId('gpu-server')
+    })
+  })
+
+  it('snapshots automation contexts onto runs', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo({ upstream: { owner: 'stablyai', repo: 'orca' } }))
+    const automation = store.createAutomation({
+      name: 'Nightly',
+      prompt: 'Run checks',
+      agentId: 'claude',
+      projectId: 'r1',
+      workspaceMode: 'existing',
+      workspaceId: 'wt1',
+      timezone: 'UTC',
+      rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
+      dtstart: new Date('2026-05-13T00:00:00Z').getTime()
+    })
+
+    const run = store.createAutomationRun(automation, new Date('2026-05-13T09:00:00Z').getTime())
+    store.updateAutomation(automation.id, { sourceContext: null, runContext: null })
+
+    expect(run.runContext).toEqual(automation.runContext)
+    expect(run.sourceContext).toEqual(automation.sourceContext)
+    expect(store.listAutomationRuns(automation.id)[0]).toMatchObject({
+      runContext: automation.runContext,
+      sourceContext: automation.sourceContext
+    })
+  })
+
+  it('backfills legacy automation contexts on load', async () => {
+    const store = await createStore()
+    store.addRepo(
+      makeRepo({
+        upstream: { owner: 'stablyai', repo: 'orca' },
+        connectionId: 'builder'
+      })
+    )
+    const automation = store.createAutomation({
+      name: 'Legacy nightly',
+      prompt: 'Run checks',
+      agentId: 'claude',
+      projectId: 'r1',
+      workspaceMode: 'new_per_run',
+      timezone: 'UTC',
+      rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
+      dtstart: new Date('2026-05-13T00:00:00Z').getTime()
+    })
+    const run = store.createAutomationRun(automation, new Date('2026-05-13T09:00:00Z').getTime())
+    const persisted = readDataFile() as {
+      automations: Record<string, unknown>[]
+      automationRuns: Record<string, unknown>[]
+    }
+    delete persisted.automations[0].runContext
+    delete persisted.automations[0].sourceContext
+    delete persisted.automationRuns[0].runContext
+    delete persisted.automationRuns[0].sourceContext
+    writeDataFile(persisted)
+
+    const reloaded = await createStore()
+    const migratedAutomation = reloaded
+      .listAutomations()
+      .find((entry) => entry.id === automation.id)
+    const migratedRun = reloaded
+      .listAutomationRuns(automation.id)
+      .find((entry) => entry.id === run.id)
+
+    expect(migratedAutomation?.runContext).toMatchObject({
+      kind: 'workspace-run',
+      projectId: 'github:stablyai/orca',
+      hostId: toSshExecutionHostId('builder'),
+      projectHostSetupId: 'r1',
+      repoId: 'r1',
+      path: '/repo'
+    })
+    expect(migratedAutomation?.sourceContext).toMatchObject({
+      kind: 'task-source',
+      provider: 'github',
+      projectId: 'github:stablyai/orca',
+      hostId: toSshExecutionHostId('builder'),
+      projectHostSetupId: 'r1',
+      repoId: 'r1',
+      providerIdentity: { provider: 'github', owner: 'stablyai', repo: 'orca' }
+    })
+    expect(migratedRun?.runContext).toEqual(migratedAutomation?.runContext)
+    expect(migratedRun?.sourceContext).toEqual(migratedAutomation?.sourceContext)
   })
 
   it('persists automation precheck config and run results', async () => {
@@ -2284,6 +2534,17 @@ describe('Store', () => {
     expect(store.getWorktreeMeta('r2::/other')!.displayName).toBe('other')
   })
 
+  it('removeProject removes the derived project host setup compatibility record', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo({ id: 'r1' }))
+    store.addRepo(makeRepo({ id: 'r2', path: '/repo2' }))
+
+    store.removeProject('r1')
+
+    expect(store.getProjects().map((project) => project.id)).toEqual(['repo:r2'])
+    expect(store.getProjectHostSetups().map((setup) => setup.id)).toEqual(['r2'])
+  })
+
   it('removeProject deletes child and parent lineage for the repo', async () => {
     const store = await createStore()
     store.addRepo(makeRepo({ id: 'r1' }))
@@ -2328,6 +2589,278 @@ describe('Store', () => {
     expect(updated).not.toBeNull()
     expect(updated!.displayName).toBe('renamed')
     expect(store.getRepo('r1')!.displayName).toBe('renamed')
+  })
+
+  it('updateRepo keeps project host setup compatibility records in sync', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo({ worktreeBasePath: '../worktrees' }))
+
+    store.updateRepo('r1', {
+      displayName: 'renamed',
+      worktreeBasePath: '../new-worktrees',
+      upstream: { owner: 'stablyai', repo: 'orca' }
+    })
+
+    expect(store.getProjects()).toEqual([
+      expect.objectContaining({
+        id: 'github:stablyai/orca',
+        displayName: 'renamed',
+        sourceRepoIds: ['r1']
+      })
+    ])
+    expect(store.getProjectHostSetups()).toEqual([
+      expect.objectContaining({
+        id: 'r1',
+        projectId: 'github:stablyai/orca',
+        displayName: 'renamed',
+        worktreeBasePath: '../new-worktrees'
+      })
+    ])
+  })
+
+  it('repo mutations preserve independent project host setup records', async () => {
+    const independentProject = makeProject({
+      id: 'cloud-project',
+      displayName: 'Cloud Project'
+    })
+    const independentSetup = makeProjectHostSetup({
+      id: 'cloud-project::gpu-vm',
+      projectId: independentProject.id,
+      hostId: 'runtime:gpu-vm',
+      repoId: '',
+      path: '/srv/cloud-project',
+      displayName: 'GPU VM'
+    })
+    writeDataFile({
+      ...getDefaultPersistedState(testState.dir),
+      repos: [makeRepo({ id: 'r1' })],
+      projects: [independentProject],
+      projectHostSetups: [independentSetup]
+    })
+    const store = await createStore()
+
+    store.updateRepo('r1', { displayName: 'renamed' })
+    store.reorderRepos(['r1'])
+
+    expect(store.getProjects().map((project) => project.id)).toEqual(['repo:r1', 'cloud-project'])
+    expect(store.getProjectHostSetups()).toEqual([
+      expect.objectContaining({ id: 'r1', displayName: 'renamed' }),
+      independentSetup
+    ])
+  })
+
+  it('updates independent project host setup records directly', async () => {
+    const independentProject = makeProject({
+      id: 'cloud-project',
+      displayName: 'Cloud Project'
+    })
+    const independentSetup = makeProjectHostSetup({
+      id: 'cloud-project::gpu-vm',
+      projectId: independentProject.id,
+      hostId: 'runtime:gpu-vm',
+      repoId: '',
+      path: '/srv/cloud-project',
+      displayName: 'GPU VM'
+    })
+    writeDataFile({
+      ...getDefaultPersistedState(testState.dir),
+      projects: [independentProject],
+      projectHostSetups: [independentSetup]
+    })
+    const store = await createStore()
+
+    const result = store.updateProjectHostSetup({
+      setupId: independentSetup.id,
+      updates: {
+        displayName: 'GPU VM renamed',
+        path: '/srv/renamed',
+        worktreeBasePath: '../worktrees',
+        setupState: 'ready',
+        setupMethod: 'cloned',
+        gitUsername: 'alice'
+      }
+    })
+
+    expect(result).toEqual({
+      project: independentProject,
+      setup: expect.objectContaining({
+        id: independentSetup.id,
+        displayName: 'GPU VM renamed',
+        path: '/srv/renamed',
+        worktreeBasePath: '../worktrees',
+        setupState: 'ready',
+        setupMethod: 'cloned',
+        gitUsername: 'alice'
+      })
+    })
+    expect(store.getProjectHostSetups()[0]).toMatchObject({
+      displayName: 'GPU VM renamed',
+      path: '/srv/renamed'
+    })
+  })
+
+  it('creates independent project host setup records for provisioning flows', async () => {
+    const store = await createStore()
+    store.addRepo({
+      ...makeRepo({ id: 'r1', displayName: 'Cloud Project' }),
+      upstream: { owner: 'stablyai', repo: 'cloud-project' }
+    })
+
+    const result = store.createProjectHostSetup({
+      projectId: 'github:stablyai/cloud-project',
+      hostId: 'runtime:gpu-vm',
+      setupId: 'cloud-project::gpu-vm',
+      displayName: 'GPU VM',
+      setupState: 'setting-up',
+      setupMethod: 'provisioned'
+    })
+
+    expect(result?.project).toMatchObject({
+      id: 'github:stablyai/cloud-project',
+      displayName: 'Cloud Project'
+    })
+    expect(result?.setup).toMatchObject({
+      id: 'cloud-project::gpu-vm',
+      projectId: 'github:stablyai/cloud-project',
+      hostId: 'runtime:gpu-vm',
+      repoId: '',
+      path: '',
+      displayName: 'GPU VM',
+      setupState: 'setting-up',
+      setupMethod: 'provisioned'
+    })
+    expect(store.getRepos()).toHaveLength(1)
+    expect(store.getProjectHostSetups()).toEqual([
+      expect.objectContaining({ id: 'r1', repoId: 'r1' }),
+      result?.setup
+    ])
+  })
+
+  it('rejects duplicate project host setup creation for the same host', async () => {
+    const store = await createStore()
+    store.addRepo({
+      ...makeRepo({ id: 'r1', displayName: 'Cloud Project' }),
+      upstream: { owner: 'stablyai', repo: 'cloud-project' }
+    })
+    const independentSetup = makeProjectHostSetup({
+      id: 'cloud-project::gpu-vm',
+      projectId: 'github:stablyai/cloud-project',
+      hostId: 'runtime:gpu-vm'
+    })
+    store.createProjectHostSetup({
+      projectId: independentSetup.projectId,
+      hostId: independentSetup.hostId,
+      setupId: independentSetup.id
+    })
+
+    expect(() =>
+      store.createProjectHostSetup({
+        projectId: 'github:stablyai/cloud-project',
+        hostId: 'runtime:gpu-vm',
+        setupId: 'duplicate'
+      })
+    ).toThrow('Project host setup already exists: cloud-project::gpu-vm')
+  })
+
+  it('updates repo-backed project host setup metadata through the repo record', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo({ id: 'r1', displayName: 'Repo', worktreeBasePath: '../old' }))
+
+    const result = store.updateProjectHostSetup({
+      setupId: 'r1',
+      updates: {
+        displayName: 'Repo renamed',
+        worktreeBasePath: '../new',
+        setupMethod: 'cloned'
+      }
+    })
+
+    expect(result?.repo).toMatchObject({
+      id: 'r1',
+      displayName: 'Repo renamed',
+      worktreeBasePath: '../new',
+      projectHostSetupMethod: 'cloned'
+    })
+    expect(result?.project).toMatchObject({
+      id: 'repo:r1',
+      displayName: 'Repo renamed'
+    })
+    expect(result?.setup).toMatchObject({
+      id: 'r1',
+      displayName: 'Repo renamed',
+      worktreeBasePath: '../new',
+      setupMethod: 'cloned'
+    })
+  })
+
+  it('rejects repo-backed project host setup path changes', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo({ id: 'r1', path: '/repo' }))
+
+    expect(() =>
+      store.updateProjectHostSetup({
+        setupId: 'r1',
+        updates: { path: '/other' }
+      })
+    ).toThrow('Repo-backed project host setup paths must be changed by re-importing the project.')
+  })
+
+  it('deletes independent project host setup records without deleting the project', async () => {
+    const independentProject = makeProject({
+      id: 'cloud-project',
+      displayName: 'Cloud Project'
+    })
+    const independentSetup = makeProjectHostSetup({
+      id: 'cloud-project::gpu-vm',
+      projectId: independentProject.id,
+      hostId: 'runtime:gpu-vm',
+      repoId: '',
+      path: '/srv/cloud-project',
+      displayName: 'GPU VM'
+    })
+    writeDataFile({
+      ...getDefaultPersistedState(testState.dir),
+      projects: [independentProject],
+      projectHostSetups: [independentSetup]
+    })
+    const store = await createStore()
+
+    const result = store.deleteProjectHostSetup({ setupId: independentSetup.id })
+
+    expect(result).toEqual({ project: independentProject, setup: independentSetup })
+    expect(store.getProjects()).toEqual([independentProject])
+    expect(store.getProjectHostSetups()).toEqual([])
+  })
+
+  it('deletes repo-backed project host setups by removing the compatibility repo', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo({ id: 'r1', path: '/repo' }))
+    store.setWorktreeMeta('r1::/path/wt1', { displayName: 'wt1' })
+
+    const result = store.deleteProjectHostSetup({ setupId: 'r1' })
+
+    expect(result?.project).toMatchObject({ id: 'repo:r1' })
+    expect(result?.setup).toMatchObject({ id: 'r1', repoId: 'r1' })
+    expect(result?.repo).toMatchObject({ id: 'r1' })
+    expect(store.getRepo('r1')).toBeUndefined()
+    expect(store.getProjects()).toEqual([])
+    expect(store.getProjectHostSetups()).toEqual([])
+    expect(store.getWorktreeMeta('r1::/path/wt1')).toBeUndefined()
+  })
+
+  it('updateRepo preserves repo-backed project host setup method', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo())
+
+    store.updateRepo('r1', { projectHostSetupMethod: 'cloned' })
+
+    expect(store.getRepo('r1')?.projectHostSetupMethod).toBe('cloned')
+    expect(store.getProjectHostSetups()).toEqual([
+      expect.objectContaining({
+        id: 'r1',
+        setupMethod: 'cloned'
+      })
+    ])
   })
 
   it('updateRepo drops repo icons that fail shared sanitization', async () => {
@@ -6894,6 +7427,49 @@ describe('Store', () => {
     expect(store.getWorktreeLineage(lineage.worktreeId)).toBeUndefined()
   })
 
+  it('stores workspace lineage and removes it with the child worktree metadata', async () => {
+    const store = await createStore()
+    const lineage = makeWorkspaceLineage()
+
+    store.setWorktreeMeta('r1::/path/child', { displayName: 'child' })
+    store.setWorkspaceLineage(lineage)
+
+    expect(store.getWorkspaceLineage(lineage.childWorkspaceKey)).toEqual(lineage)
+    expect(store.getAllWorkspaceLineage()).toEqual({ [lineage.childWorkspaceKey]: lineage })
+
+    store.removeWorktreeMeta('r1::/path/child')
+
+    expect(store.getWorkspaceLineage(lineage.childWorkspaceKey)).toBeUndefined()
+  })
+
+  it('removeFolderWorkspace deletes child workspace lineage for that folder parent', async () => {
+    const store = await createStore()
+    const group = store.createProjectGroup({
+      name: 'Platform',
+      parentPath: '/workspace/platform',
+      createdFrom: 'folder-scan'
+    })
+    const workspace = store.createFolderWorkspace({
+      projectGroupId: group.id,
+      name: 'Folder parent'
+    })
+    const folderLineage = makeWorkspaceLineage({
+      parentWorkspaceKey: folderWorkspaceKey(workspace.id)
+    })
+    const unrelatedLineage = makeWorkspaceLineage({
+      childWorkspaceKey: worktreeWorkspaceKey('r2::/other-child'),
+      parentWorkspaceKey: folderWorkspaceKey('other-folder')
+    })
+
+    store.setWorkspaceLineage(folderLineage)
+    store.setWorkspaceLineage(unrelatedLineage)
+
+    store.removeFolderWorkspace(workspace.id)
+
+    expect(store.getWorkspaceLineage(folderLineage.childWorkspaceKey)).toBeUndefined()
+    expect(store.getWorkspaceLineage(unrelatedLineage.childWorkspaceKey)).toEqual(unrelatedLineage)
+  })
+
   // ── Rolling backups (issue #1158) ──────────────────────────────────
 
   describe('rolling backups', () => {
@@ -7283,13 +7859,36 @@ describe('Store', () => {
 describe('Store.migrateWorktreeIdentity', () => {
   const OLD = 'repo1::/ws/cunner'
   const NEW = 'repo1::/ws/worktree-creation-spinner'
+  const OLD_WORKSPACE_KEY = worktreeWorkspaceKey(OLD)
+  const NEW_WORKSPACE_KEY = worktreeWorkspaceKey(NEW)
+
+  beforeEach(() => {
+    testState.dir = mkdtempSync(join(tmpdir(), 'orca-test-'))
+  })
+
+  afterEach(() => {
+    rmSync(testState.dir, { recursive: true, force: true })
+  })
 
   it('moves meta, lineage, tabs, active pointers, and records the prior id', async () => {
     const store = await createStore()
     store.setWorktreeMeta(OLD, { displayName: 'Cunner', linkedIssue: 42 })
     store.setWorktreeLineage(OLD, makeWorktreeLineage({ worktreeId: OLD }))
+    store.setWorkspaceLineage(
+      makeWorkspaceLineage({
+        childWorkspaceKey: OLD_WORKSPACE_KEY,
+        parentWorkspaceKey: folderWorkspaceKey('folder-parent')
+      })
+    )
+    store.setWorkspaceLineage(
+      makeWorkspaceLineage({
+        childWorkspaceKey: worktreeWorkspaceKey('repo1::/ws/child'),
+        parentWorkspaceKey: OLD_WORKSPACE_KEY
+      })
+    )
     store.setWorkspaceSession({
       activeRepoId: 'repo1',
+      activeWorkspaceKey: OLD_WORKSPACE_KEY,
       activeWorktreeId: OLD,
       activeTabId: 'tab1',
       tabsByWorktree: { [OLD]: [makeTerminalTab({ id: 'tab1', worktreeId: OLD })] },
@@ -7317,8 +7916,32 @@ describe('Store.migrateWorktreeIdentity', () => {
       activeGroupIdByWorktree: { [OLD]: 'group1' },
       lastVisitedAtByWorktreeId: { [OLD]: 123 },
       defaultTerminalTabsAppliedByWorktreeId: { [OLD]: true },
+      sleepingAgentSessionsByPaneKey: {
+        'tab1:leaf': {
+          paneKey: 'tab1:leaf',
+          tabId: 'tab1',
+          worktreeId: OLD,
+          agent: 'codex',
+          providerSession: { key: 'session_id', id: 'session-1' },
+          prompt: 'Do work',
+          state: 'done',
+          capturedAt: 1,
+          updatedAt: 1
+        }
+      },
       terminalLayoutsByTabId: {}
     } as unknown as WorkspaceSessionState)
+    store.setWorkspaceSession(
+      {
+        ...getDefaultWorkspaceSession(),
+        activeRepoId: 'repo1',
+        activeWorkspaceKey: OLD_WORKSPACE_KEY,
+        activeWorktreeId: OLD,
+        tabsByWorktree: { [OLD]: [makeTerminalTab({ id: 'host-tab', worktreeId: OLD })] },
+        terminalLayoutsByTabId: {}
+      },
+      'runtime:env-a'
+    )
 
     store.migrateWorktreeIdentity(OLD, NEW)
 
@@ -7330,12 +7953,18 @@ describe('Store.migrateWorktreeIdentity', () => {
 
     expect(store.getWorktreeLineage(OLD)).toBeUndefined()
     expect(store.getWorktreeLineage(NEW)?.worktreeId).toBe(NEW)
+    expect(store.getWorkspaceLineage(OLD_WORKSPACE_KEY)).toBeUndefined()
+    expect(store.getWorkspaceLineage(NEW_WORKSPACE_KEY)?.childWorkspaceKey).toBe(NEW_WORKSPACE_KEY)
+    expect(
+      store.getWorkspaceLineage(worktreeWorkspaceKey('repo1::/ws/child'))?.parentWorkspaceKey
+    ).toBe(NEW_WORKSPACE_KEY)
 
     // The live session's tab keeps its frozen ptyId but now belongs to the new id.
     expect(store.getWorktreeIdForTab('tab1')).toBe(NEW)
     const session = store.getWorkspaceSession()
     expect(session.tabsByWorktree[OLD]).toBeUndefined()
     expect(session.tabsByWorktree[NEW]?.[0]?.worktreeId).toBe(NEW)
+    expect(session.activeWorkspaceKey).toBe(NEW_WORKSPACE_KEY)
     expect(session.activeWorktreeIdsOnShutdown).toEqual([NEW])
     expect(session.openFilesByWorktree?.[OLD]).toBeUndefined()
     expect(session.openFilesByWorktree?.[NEW]?.[0]?.worktreeId).toBe(NEW)
@@ -7353,6 +7982,12 @@ describe('Store.migrateWorktreeIdentity', () => {
     expect(session.activeGroupIdByWorktree?.[NEW]).toBe('group1')
     expect(session.lastVisitedAtByWorktreeId?.[NEW]).toBe(123)
     expect(session.defaultTerminalTabsAppliedByWorktreeId?.[NEW]).toBe(true)
+    expect(session.sleepingAgentSessionsByPaneKey?.['tab1:leaf']?.worktreeId).toBe(NEW)
+
+    const hostSession = store.getWorkspaceSession('runtime:env-a')
+    expect(hostSession.tabsByWorktree[OLD]).toBeUndefined()
+    expect(hostSession.tabsByWorktree[NEW]?.[0]?.worktreeId).toBe(NEW)
+    expect(hostSession.activeWorkspaceKey).toBe(NEW_WORKSPACE_KEY)
   })
 
   it('rewrites parentWorktreeId back-references in other lineage entries', async () => {
@@ -7383,5 +8018,155 @@ describe('Store.migrateWorktreeIdentity', () => {
     store.setWorktreeMeta(OLD, { displayName: 'Cunner' })
     store.migrateWorktreeIdentity(OLD, OLD)
     expect(store.getWorktreeMeta(OLD)?.priorWorktreeIds).toBeUndefined()
+  })
+})
+
+describe('Store host-partitioned workspace sessions', () => {
+  beforeEach(() => {
+    testState.dir = mkdtempSync(join(tmpdir(), 'orca-test-'))
+  })
+
+  afterEach(() => {
+    rmSync(testState.dir, { recursive: true, force: true })
+  })
+
+  const makeHostSession = (activeRepoId: string): WorkspaceSessionState => ({
+    ...getDefaultWorkspaceSession(),
+    activeRepoId
+  })
+
+  it('migrates a legacy workspaceSession blob into the local partition', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      workspaceSession: makeHostSession('legacy-repo')
+    })
+
+    const store = await createStore()
+
+    // The legacy blob is the 'local' partition; an explicit/default hostId reads it.
+    expect(store.getWorkspaceSession().activeRepoId).toBe('legacy-repo')
+    expect(store.getWorkspaceSession('local').activeRepoId).toBe('legacy-repo')
+    // No data was moved, so a downgrade still finds the legacy field intact.
+    store.flush()
+    const persisted = readDataFile() as { workspaceSession?: { activeRepoId?: string } }
+    expect(persisted.workspaceSession?.activeRepoId).toBe('legacy-repo')
+  })
+
+  it('is idempotent: re-loading already-partitioned state preserves all hosts', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      workspaceSession: makeHostSession('local-repo'),
+      workspaceSessionsByHostId: {
+        'runtime:env-a': makeHostSession('runtime-repo'),
+        'ssh:host-b': makeHostSession('ssh-repo')
+      }
+    })
+
+    const readSessionPartitions = (): unknown => {
+      const data = readDataFile() as {
+        workspaceSession?: unknown
+        workspaceSessionsByHostId?: unknown
+      }
+      return {
+        workspaceSession: data.workspaceSession,
+        workspaceSessionsByHostId: data.workspaceSessionsByHostId
+      }
+    }
+
+    const first = await createStore()
+    first.flush()
+    const afterFirst = readSessionPartitions()
+
+    const second = await createStore()
+    second.flush()
+    const afterSecond = readSessionPartitions()
+
+    // Re-running the partition migration must not move or reshape any host.
+    expect(afterSecond).toEqual(afterFirst)
+    expect(second.getWorkspaceSession('runtime:env-a').activeRepoId).toBe('runtime-repo')
+    expect(second.getWorkspaceSession('ssh:host-b').activeRepoId).toBe('ssh-repo')
+    expect(second.getWorkspaceSession('local').activeRepoId).toBe('local-repo')
+  })
+
+  it('drops a stray "local" key in workspaceSessionsByHostId in favor of the legacy blob', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      workspaceSession: makeHostSession('canonical-local'),
+      workspaceSessionsByHostId: {
+        local: makeHostSession('shadow-local')
+      }
+    })
+
+    const store = await createStore()
+
+    expect(store.getWorkspaceSession('local').activeRepoId).toBe('canonical-local')
+  })
+
+  it('isolates writes: setting host A does not mutate host B or local', async () => {
+    const store = await createStore()
+
+    store.setWorkspaceSession(makeHostSession('repo-local'), 'local')
+    store.setWorkspaceSession(makeHostSession('repo-a'), 'runtime:env-a')
+    store.setWorkspaceSession(makeHostSession('repo-b'), 'runtime:env-b')
+
+    expect(store.getWorkspaceSession('local').activeRepoId).toBe('repo-local')
+    expect(store.getWorkspaceSession('runtime:env-a').activeRepoId).toBe('repo-a')
+    expect(store.getWorkspaceSession('runtime:env-b').activeRepoId).toBe('repo-b')
+
+    // Overwriting host A leaves host B and local untouched.
+    store.setWorkspaceSession(makeHostSession('repo-a2'), 'runtime:env-a')
+    expect(store.getWorkspaceSession('runtime:env-a').activeRepoId).toBe('repo-a2')
+    expect(store.getWorkspaceSession('runtime:env-b').activeRepoId).toBe('repo-b')
+    expect(store.getWorkspaceSession('local').activeRepoId).toBe('repo-local')
+  })
+
+  it('patches a single host partition without touching the others', async () => {
+    const store = await createStore()
+    store.setWorkspaceSession(makeHostSession('repo-local'), 'local')
+    store.setWorkspaceSession(makeHostSession('repo-a'), 'runtime:env-a')
+
+    store.patchWorkspaceSession({ activeTabId: 'tab-a' }, 'runtime:env-a')
+
+    expect(store.getWorkspaceSession('runtime:env-a').activeTabId).toBe('tab-a')
+    expect(store.getWorkspaceSession('runtime:env-a').activeRepoId).toBe('repo-a')
+    // Local was never given that tab id.
+    expect(store.getWorkspaceSession('local').activeTabId).toBeNull()
+    expect(store.getWorkspaceSession('local').activeRepoId).toBe('repo-local')
+  })
+
+  it('defaults an omitted hostId to the local partition', async () => {
+    const store = await createStore()
+    store.setWorkspaceSession(makeHostSession('repo-a'), 'runtime:env-a')
+
+    // No hostId → local, which is still empty/default and unaffected by host A.
+    store.setWorkspaceSession(makeHostSession('repo-local'))
+    expect(store.getWorkspaceSession().activeRepoId).toBe('repo-local')
+    expect(store.getWorkspaceSession('runtime:env-a').activeRepoId).toBe('repo-a')
+  })
+
+  it('round-trips host partitions through disk', async () => {
+    const store = await createStore()
+    store.setWorkspaceSession(makeHostSession('repo-a'), 'runtime:env-a')
+    store.flush()
+
+    const reloaded = await createStore()
+    expect(reloaded.getWorkspaceSession('runtime:env-a').activeRepoId).toBe('repo-a')
+  })
+
+  it('drops a corrupt host partition to defaults without failing the others', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      workspaceSessionsByHostId: {
+        'runtime:good': makeHostSession('good-repo'),
+        // activeRepoId must be string|null; a number fails the zod parse.
+        'runtime:bad': { ...makeHostSession('x'), activeRepoId: 123 }
+      }
+    })
+
+    const store = await createStore()
+
+    expect(store.getWorkspaceSession('runtime:good').activeRepoId).toBe('good-repo')
+    // Bad partition collapses to defaults rather than poisoning the map.
+    expect(store.getWorkspaceSession('runtime:bad').activeRepoId).toBeNull()
   })
 })

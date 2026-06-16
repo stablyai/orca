@@ -35,6 +35,12 @@ import { SETUP_SCRIPT_IMPORT_PROVIDERS } from './setup-script-import-providers'
 import { WORKSPACE_SOURCE_VALUES, type WorkspaceSource } from './workspace-source'
 import { appStarSourceSchema } from './gh-star-source'
 import {
+  starNagAgentBucketSchema,
+  starNagOutcomeSchema,
+  starNagPromptModeSchema,
+  starNagPromptSourceSchema
+} from './star-nag-telemetry'
+import {
   NESTED_REPO_COUNT_BUCKETS,
   NESTED_REPO_IMPORT_ACTIONS,
   NESTED_REPO_IMPORT_OUTCOMES,
@@ -94,6 +100,7 @@ export const AGENT_KIND_VALUES = [
   'openclaw',
   'copilot',
   'grok',
+  'devin',
   'other'
 ] as const
 export const agentKindSchema = z.enum(AGENT_KIND_VALUES)
@@ -275,7 +282,9 @@ export type OptInVia = z.infer<typeof optInViaSchema>
 // Kept as an `as const` tuple so the Zod enum below and any call-site usage
 // share one array — typo-drift is impossible.
 type BooleanGlobalSettingsKey = {
-  [Key in keyof GlobalSettings]-?: GlobalSettings[Key] extends boolean ? Key : never
+  // Why: new persisted toggles may be optional for legacy-settings compatibility
+  // while still being boolean settings once defaults are applied.
+  [Key in keyof GlobalSettings]-?: NonNullable<GlobalSettings[Key]> extends boolean ? Key : never
 }[keyof GlobalSettings]
 export const SETTINGS_CHANGED_WHITELIST = [
   'editorAutoSave',
@@ -284,6 +293,7 @@ export const SETTINGS_CHANGED_WHITELIST = [
   'experimentalPet',
   'experimentalActivity',
   'experimentalTerminalAttention',
+  'experimentalAgentHibernation',
   'experimentalWorktreeSymlinks',
   'geminiCliOAuthEnabled'
 ] as const satisfies readonly BooleanGlobalSettingsKey[]
@@ -348,6 +358,23 @@ const appStarredOrcaSchema = z
     nth_repo_added: nthRepoAddedSchema
   })
   .strict()
+
+const starNagOutcomeEventSchema = z
+  .object({
+    outcome: starNagOutcomeSchema,
+    source: starNagPromptSourceSchema,
+    mode: starNagPromptModeSchema,
+    threshold: z.number().int().positive(),
+    agents_since_baseline: z.number().int().nonnegative(),
+    agents_since_baseline_bucket: starNagAgentBucketSchema,
+    nth_repo_added: nthRepoAddedSchema,
+    next_threshold: z.number().int().positive().optional()
+  })
+  .strict()
+  .refine((payload) => payload.next_threshold === undefined || payload.outcome === 'dismissed', {
+    message: 'next_threshold is only valid for dismissed outcomes',
+    path: ['next_threshold']
+  })
 
 const workspaceCreatedSchema = z
   .object({
@@ -721,16 +748,23 @@ const onboardingChecklistItemSchema = z.enum([
   'openedFile',
   'ranAgentOnFile'
 ])
-const onboardingFeatureSetupFeatureSchema = z.enum(['browser_use', 'computer_use', 'orchestration'])
+const onboardingFeatureSetupFeatureSchema = z.enum([
+  'browser_use',
+  'computer_use',
+  'orchestration',
+  'linear_tickets'
+])
 const onboardingFeatureSetupSelectionSchema = {
   browser_use: z.boolean(),
   computer_use: z.boolean(),
+  linear_tickets: z.boolean(),
   orchestration: z.boolean(),
   selected_count: z.number().int().min(0).max(3)
 } as const
 type OnboardingFeatureSetupSelectionTelemetry = {
   browser_use: boolean
   computer_use: boolean
+  linear_tickets: boolean
   orchestration: boolean
   selected_count: number
 }
@@ -742,6 +776,8 @@ const onboardingFeatureSetupSelectedCountRefinement = {
 function hasMatchingOnboardingFeatureSetupSelectedCount(
   props: OnboardingFeatureSetupSelectionTelemetry
 ): boolean {
+  // Why: Linear ticket setup is a recommended add-on and must not affect
+  // onboarding progress metrics.
   const selectedCount =
     (props.browser_use ? 1 : 0) + (props.computer_use ? 1 : 0) + (props.orchestration ? 1 : 0)
   return props.selected_count === selectedCount
@@ -1282,6 +1318,7 @@ const terminalPaneSplitSchema = z
 export const eventSchemas = {
   app_opened: appOpenedSchema,
   app_starred_orca: appStarredOrcaSchema,
+  star_nag_outcome: starNagOutcomeEventSchema,
   feature_interaction_usage_bucket_reached: featureInteractionUsageBucketReachedSchema,
 
   repo_added: repoAddedSchema,
@@ -1408,6 +1445,7 @@ export const COHORT_EXTENDED: readonly EventName[] = Array.from(COHORT_EXTENDED_
 type _CohortExtendedRoster =
   | 'app_opened'
   | 'app_starred_orca'
+  | 'star_nag_outcome'
   | 'feature_interaction_usage_bucket_reached'
   | 'repo_added'
   | 'add_repo_setup_step_action'

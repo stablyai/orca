@@ -2,6 +2,7 @@ import type { RuntimeClient } from './runtime-client'
 import { RuntimeClientError } from './runtime-client'
 import { CORE_HANDLERS } from './handlers/core'
 import { AUTOMATION_HANDLERS } from './handlers/automations'
+import { PROJECT_HANDLERS } from './handlers/project'
 import { REPO_HANDLERS } from './handlers/repo'
 import { WORKTREE_HANDLERS } from './handlers/worktree'
 import { FILE_HANDLERS } from './handlers/file'
@@ -37,6 +38,7 @@ function buildHandlers(): Map<string, CommandHandler> {
   const groups = [
     CORE_HANDLERS,
     AUTOMATION_HANDLERS,
+    PROJECT_HANDLERS,
     REPO_HANDLERS,
     WORKTREE_HANDLERS,
     FILE_HANDLERS,

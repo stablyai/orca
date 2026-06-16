@@ -24,6 +24,7 @@ import type {
   AutomationPrecheckResult,
   AutomationRunOutputSnapshot,
   AutomationRun,
+  AutomationSchedulerOwner,
   AutomationRunTrigger,
   AutomationUpdateInput
 } from '../shared/automations-types'
@@ -31,15 +32,27 @@ import {
   latestAutomationOccurrenceAtOrBefore,
   nextAutomationOccurrenceAfter
 } from '../shared/automation-schedules'
+import { getAutomationLegacyRepoId } from '../shared/automation-run-identity'
 import { normalizeAutomationPrecheck } from '../shared/automation-precheck'
 import type {
   PersistedState,
+  Project,
+  ProjectHostSetup,
+  ProjectHostSetupCreateArgs,
+  ProjectHostSetupCreateResult,
+  ProjectHostSetupDeleteArgs,
+  ProjectHostSetupDeleteResult,
+  ProjectHostSetupUpdateArgs,
+  ProjectHostSetupUpdateResult,
+  RepoProjectHostSetupMethod,
   Repo,
   ProjectGroup,
   FolderWorkspace,
   SparsePreset,
   WorktreeMeta,
   WorktreeLineage,
+  WorkspaceLineage,
+  WorkspaceKey,
   GlobalSettings,
   OrcaWorkspaceLayout,
   NotificationSettings,
@@ -53,10 +66,16 @@ import type {
   WorkspaceSessionPatch,
   WorkspaceSessionState
 } from '../shared/types'
+import { projectHostSetupProjectionFromRepos } from '../shared/project-host-setup-projection'
+import {
+  buildTaskSourceContextFromRepo,
+  buildWorkspaceRunContext
+} from '../shared/task-source-context'
 import type { MigrationUnsupportedPtyEntry } from '../shared/agent-status-types'
 import type { SshRemotePtyLease, SshTarget } from '../shared/ssh-types'
 import { isFolderRepo } from '../shared/repo-kind'
 import { getGitUsername } from './git/repo'
+import { getRepoExecutionHostId, parseExecutionHostId } from '../shared/execution-host'
 import {
   getDefaultPersistedState,
   getDefaultNotificationSettings,
@@ -71,6 +90,13 @@ import {
   ONBOARDING_FINAL_STEP
 } from '../shared/constants'
 import { parseWorkspaceSession } from '../shared/workspace-session-schema'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  normalizeExecutionHostOrder,
+  normalizeExecutionHostId,
+  normalizeVisibleExecutionHostIds,
+  type ExecutionHostId
+} from '../shared/execution-host'
 import { toRelaySshPtyId } from './providers/ssh-pty-id'
 import {
   isTerminalLeafId,
@@ -148,7 +174,12 @@ import {
   normalizeFolderWorkspaceName,
   normalizeFolderWorkspaces
 } from '../shared/folder-workspaces'
-import { folderWorkspaceKey } from '../shared/workspace-scope'
+import {
+  folderWorkspaceKey,
+  isWorkspaceKey,
+  parseWorkspaceKey,
+  worktreeWorkspaceKey
+} from '../shared/workspace-scope'
 import {
   collectTerminalScrollbackSnapshotRefs,
   deleteTerminalScrollbackSnapshotSync,
@@ -236,6 +267,39 @@ function workspaceSessionPatchNeedsFullNormalization(patch: WorkspaceSessionPatc
   return Object.keys(patch).some((key) =>
     WORKSPACE_SESSION_PATCH_FULL_NORMALIZATION_KEYS.has(key as keyof WorkspaceSessionState)
   )
+}
+
+/** Normalize the persisted non-'local' host partitions. 'local' is intentionally
+ *  dropped here — it is the legacy workspaceSession blob — so the two surfaces
+ *  never diverge. Each partition is zod-validated independently: a corrupt host
+ *  drops to defaults without taking out the others. Idempotent: re-running on an
+ *  already-normalized map yields the same shape. */
+function parseWorkspaceSessionsByHostId(
+  raw: unknown,
+  defaults: WorkspaceSessionState
+): Partial<Record<ExecutionHostId, WorkspaceSessionState>> {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    return {}
+  }
+  const partitions: Partial<Record<ExecutionHostId, WorkspaceSessionState>> = {}
+  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+    const hostId = normalizeExecutionHostId(key)
+    // Why: 'local' belongs in workspaceSession; an invalid/local key here is
+    // legacy noise and must not shadow the canonical local partition.
+    if (!hostId || hostId === LOCAL_EXECUTION_HOST_ID) {
+      continue
+    }
+    const result = parseWorkspaceSession(value)
+    if (!result.ok) {
+      console.error(
+        `[persistence] Corrupt workspace session for host ${hostId}, using defaults:`,
+        result.error
+      )
+      continue
+    }
+    partitions[hostId] = { ...defaults, ...result.value }
+  }
+  return partitions
 }
 
 function backupPath(dataFile: string, index: number): string {
@@ -429,16 +493,12 @@ function normalizeProjectOrderBy(projectOrderBy: unknown): PersistedState['ui'][
   return getDefaultUIState().projectOrderBy
 }
 
-import {
-  isExistingPersistedProfile,
-  resolveProjectOrderManualDefaultNoticeDismissed
-} from '../shared/project-order-manual-default-notice'
-
 function normalizeRightSidebarTab(tab: unknown): PersistedState['ui']['rightSidebarTab'] {
   if (
     tab === 'explorer' ||
     tab === 'search' ||
     tab === 'vault' ||
+    tab === 'workspaces' ||
     tab === 'source-control' ||
     tab === 'checks' ||
     tab === 'ports'
@@ -446,6 +506,51 @@ function normalizeRightSidebarTab(tab: unknown): PersistedState['ui']['rightSide
     return tab
   }
   return getDefaultUIState().rightSidebarTab
+}
+
+function normalizeWorkspaceLineageByChildKey(
+  value: unknown
+): Record<WorkspaceKey, WorkspaceLineage> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return {}
+  }
+  const normalized: Record<WorkspaceKey, WorkspaceLineage> = {}
+  for (const [key, entry] of Object.entries(value)) {
+    if (!isWorkspaceKey(key) || !entry || typeof entry !== 'object') {
+      continue
+    }
+    const lineage = entry as Partial<WorkspaceLineage>
+    const childWorkspaceKey =
+      typeof lineage.childWorkspaceKey === 'string' && isWorkspaceKey(lineage.childWorkspaceKey)
+        ? lineage.childWorkspaceKey
+        : key
+    const parentWorkspaceKey = lineage.parentWorkspaceKey
+    if (
+      !isWorkspaceKey(childWorkspaceKey) ||
+      typeof parentWorkspaceKey !== 'string' ||
+      !isWorkspaceKey(parentWorkspaceKey) ||
+      childWorkspaceKey !== key ||
+      childWorkspaceKey === parentWorkspaceKey
+    ) {
+      continue
+    }
+    normalized[childWorkspaceKey] = {
+      childWorkspaceKey,
+      childInstanceId: lineage.childInstanceId ?? null,
+      parentWorkspaceKey,
+      parentInstanceId: lineage.parentInstanceId ?? null,
+      origin: lineage.origin ?? 'cli',
+      capture: lineage.capture ?? { source: 'manual-action', confidence: 'inferred' },
+      ...(lineage.taskId ? { taskId: lineage.taskId } : {}),
+      ...(lineage.orchestrationRunId ? { orchestrationRunId: lineage.orchestrationRunId } : {}),
+      ...(lineage.coordinatorHandle ? { coordinatorHandle: lineage.coordinatorHandle } : {}),
+      ...(lineage.createdByTerminalHandle
+        ? { createdByTerminalHandle: lineage.createdByTerminalHandle }
+        : {}),
+      createdAt: Number.isFinite(lineage.createdAt) ? Number(lineage.createdAt) : Date.now()
+    }
+  }
+  return normalized
 }
 
 function normalizeRightSidebarExplorerView(
@@ -564,6 +669,116 @@ function normalizeAutomationSessionReuse(automation: Automation): Automation {
     ...automation,
     precheck: normalizeAutomationPrecheck(automation.precheck),
     reuseSession: automation.workspaceMode === 'existing' && automation.reuseSession === true
+  }
+}
+
+function getAutomationContextsForRepo(
+  repo: Repo | undefined,
+  projectHostSetups: readonly ProjectHostSetup[]
+): Pick<Automation, 'runContext' | 'sourceContext'> {
+  if (!repo) {
+    return {
+      runContext: null,
+      sourceContext: null
+    }
+  }
+  const projection = projectHostSetupProjectionFromRepos([repo])
+  const projectedProject = projection.projects[0]
+  const projectedSetup = projection.setups[0]
+  const setup =
+    projectHostSetups.find((candidate) => candidate.repoId === repo.id) ?? projectedSetup
+  const runContext = setup
+    ? buildWorkspaceRunContext({
+        projectId: setup.projectId,
+        hostId: setup.hostId,
+        projectHostSetupId: setup.id,
+        repoId: repo.id,
+        path: setup.path
+      })
+    : null
+  const providerIdentity = projectedProject?.providerIdentity
+  const sourceContext = providerIdentity
+    ? buildTaskSourceContextFromRepo({
+        provider: providerIdentity.provider,
+        projectId: providerIdentity.provider === 'github' ? (setup?.projectId ?? repo.id) : repo.id,
+        repo,
+        projectHostSetupId: setup?.id,
+        providerIdentity
+      })
+    : null
+  return {
+    runContext,
+    sourceContext
+  }
+}
+
+function getAutomationSchedulerOwner(repo: Repo | undefined): AutomationSchedulerOwner {
+  if (!repo) {
+    return 'local_host_service'
+  }
+  const host = parseExecutionHostId(getRepoExecutionHostId(repo))
+  if (host?.kind === 'ssh') {
+    return 'ssh_bridge'
+  }
+  if (host?.kind === 'runtime') {
+    return 'remote_host_service'
+  }
+  return 'local_host_service'
+}
+
+function backfillLegacyAutomationContexts(
+  state: Pick<PersistedState, 'automations' | 'automationRuns' | 'repos' | 'projectHostSetups'>
+): {
+  state: Pick<PersistedState, 'automations' | 'automationRuns' | 'repos' | 'projectHostSetups'>
+  changed: boolean
+} {
+  let changed = false
+  const contextsByAutomationId = new Map<string, Pick<Automation, 'runContext' | 'sourceContext'>>()
+  const automations = (state.automations ?? []).map((automation) => {
+    const contexts = getAutomationContextsForRepo(
+      state.repos.find((repo) => repo.id === getAutomationLegacyRepoId(automation)),
+      state.projectHostSetups ?? []
+    )
+    const next: Automation = { ...automation }
+    if (!Object.hasOwn(next, 'runContext')) {
+      // Why: pre-host-context automations only stored a repo id. Backfill the
+      // explicit run target once so dispatch/precheck no longer infer it later.
+      next.runContext = contexts.runContext
+      changed = true
+    }
+    if (!Object.hasOwn(next, 'sourceContext')) {
+      next.sourceContext = contexts.sourceContext
+      changed = true
+    }
+    contextsByAutomationId.set(next.id, {
+      runContext: next.runContext ?? null,
+      sourceContext: next.sourceContext ?? null
+    })
+    return next
+  })
+  const automationRuns = (state.automationRuns ?? []).map((run) => {
+    const automationContexts = contextsByAutomationId.get(run.automationId)
+    const next: AutomationRun = { ...run }
+    if (!Object.hasOwn(next, 'runContext')) {
+      next.runContext = automationContexts?.runContext ?? null
+      changed = true
+    }
+    if (!Object.hasOwn(next, 'sourceContext')) {
+      next.sourceContext = automationContexts?.sourceContext ?? null
+      changed = true
+    }
+    return next
+  })
+  if (!changed) {
+    return { state, changed: false }
+  }
+  return {
+    state: {
+      ...state,
+      automations,
+      automationRuns
+    },
+    changed: true
   }
 }
 
@@ -804,8 +1019,19 @@ function sanitizeRepoUpstream(value: unknown): Repo['upstream'] | undefined {
   return owner && repo ? { owner, repo } : undefined
 }
 
+function sanitizeRepoProjectHostSetupMethod(
+  value: unknown
+): RepoProjectHostSetupMethod | undefined {
+  return value === 'imported-existing-folder' || value === 'cloned' ? value : undefined
+}
+
 function sanitizeRepoUpdatesForPersistence<
-  T extends Partial<Pick<Repo, 'badgeColor' | 'repoIcon' | 'upstream' | 'worktreeBasePath'>>
+  T extends Partial<
+    Pick<
+      Repo,
+      'badgeColor' | 'repoIcon' | 'upstream' | 'worktreeBasePath' | 'projectHostSetupMethod'
+    >
+  >
 >(updates: T): T {
   const sanitized = { ...updates }
   if ('badgeColor' in sanitized) {
@@ -838,6 +1064,14 @@ function sanitizeRepoUpdatesForPersistence<
       sanitized.worktreeBasePath = sanitized.worktreeBasePath.trim() || undefined
     } else {
       delete sanitized.worktreeBasePath
+    }
+  }
+  if ('projectHostSetupMethod' in sanitized) {
+    const setupMethod = sanitizeRepoProjectHostSetupMethod(sanitized.projectHostSetupMethod)
+    if (setupMethod === undefined) {
+      delete sanitized.projectHostSetupMethod
+    } else {
+      sanitized.projectHostSetupMethod = setupMethod
     }
   }
   return sanitized
@@ -1631,6 +1865,74 @@ function migrationUnsupportedEntriesEqual(
   })
 }
 
+function projectHostSetupCompatibilityStateEqual(
+  state: Pick<PersistedState, 'projects' | 'projectHostSetups'>,
+  nextState: Pick<PersistedState, 'projects' | 'projectHostSetups'>
+): boolean {
+  return (
+    JSON.stringify(state.projects ?? []) === JSON.stringify(nextState.projects) &&
+    JSON.stringify(state.projectHostSetups ?? []) === JSON.stringify(nextState.projectHostSetups)
+  )
+}
+
+function isRepoBackedProjectHostSetup(
+  setup: ProjectHostSetup,
+  currentRepoIds: ReadonlySet<string>
+): boolean {
+  const repoId = typeof setup.repoId === 'string' ? setup.repoId : ''
+  return repoId.length > 0 && (currentRepoIds.has(repoId) || setup.id === repoId)
+}
+
+function mergeProjectHostSetupCompatibilityState(
+  state: Pick<PersistedState, 'projects' | 'projectHostSetups'>,
+  repos: readonly Repo[]
+): Pick<PersistedState, 'projects' | 'projectHostSetups'> {
+  const projection = projectHostSetupProjectionFromRepos(repos)
+  const currentRepoIds = new Set(repos.map((repo) => repo.id))
+  const projectedProjectIds = new Set(projection.projects.map((project) => project.id))
+  const projectedSetupIds = new Set(projection.setups.map((setup) => setup.id))
+  // Why: legacy/repo-backed setup rows use the repo id as the setup id. Keep
+  // only independent setup rows here so repo deletion does not leave ghosts.
+  const independentSetups = (state.projectHostSetups ?? []).filter((setup) => {
+    if (projectedSetupIds.has(setup.id)) {
+      return false
+    }
+    return !isRepoBackedProjectHostSetup(setup, currentRepoIds)
+  })
+  const independentProjectIds = new Set(independentSetups.map((setup) => setup.projectId))
+  const independentProjects = (state.projects ?? [])
+    .filter(
+      (project) => independentProjectIds.has(project.id) && !projectedProjectIds.has(project.id)
+    )
+    .map((project) => ({
+      ...project,
+      sourceRepoIds: project.sourceRepoIds.filter((repoId) => currentRepoIds.has(repoId))
+    }))
+  return {
+    projects: [...projection.projects, ...independentProjects],
+    projectHostSetups: [...projection.setups, ...independentSetups]
+  }
+}
+
+function makeProjectHostSetupId(
+  projectId: string,
+  hostId: ExecutionHostId,
+  existingIds: ReadonlySet<string>,
+  requestedId?: string
+): string {
+  const baseId = requestedId?.trim() || `${projectId}::${hostId}`
+  if (!existingIds.has(baseId)) {
+    return baseId
+  }
+  let suffix = 2
+  let candidate = `${baseId}::${suffix}`
+  while (existingIds.has(candidate)) {
+    suffix++
+    candidate = `${baseId}::${suffix}`
+  }
+  return candidate
+}
+
 function createMinimalPersistedTerminalTab(args: {
   worktreeId: string
   tabId: string
@@ -2265,6 +2567,9 @@ export class Store {
             normalizedProjectGroups
           ),
           worktreeLineageById: parsed.worktreeLineageById ?? {},
+          workspaceLineageByChildKey: normalizeWorkspaceLineageByChildKey(
+            parsed.workspaceLineageByChildKey
+          ),
           settings: {
             ...defaults.settings,
             ...parsed.settings,
@@ -2462,25 +2767,9 @@ export class Store {
               parsed.ui?.setupGuideSidebarDismissed,
               normalizedOnboarding
             )
-            const projectOrderManualDefaultNoticeDismissed =
-              resolveProjectOrderManualDefaultNoticeDismissed({
-                rawDismissed: parsed.ui?.projectOrderManualDefaultNoticeDismissed,
-                rawProjectOrderBy: parsed.ui?.projectOrderBy,
-                isExistingProfile: isExistingPersistedProfile({
-                  repoCount: parsed.repos?.length ?? 0,
-                  onboardingClosedAt: normalizedOnboarding.closedAt,
-                  ui: parsed.ui
-                })
-              })
             if (
               parsed.ui?.setupGuideSidebarDismissed !== setupGuideSidebarDismissed &&
               (setupGuideSidebarDismissed || parsed.ui?.setupGuideSidebarDismissed !== undefined)
-            ) {
-              this.loadNeedsSave = true
-            }
-            if (
-              parsed.ui?.projectOrderManualDefaultNoticeDismissed !==
-              projectOrderManualDefaultNoticeDismissed
             ) {
               this.loadNeedsSave = true
             }
@@ -2492,7 +2781,6 @@ export class Store {
               rightSidebarOpen,
               rightSidebarTab: normalizeRightSidebarTab(parsed.ui?.rightSidebarTab),
               setupGuideSidebarDismissed,
-              projectOrderManualDefaultNoticeDismissed,
               setupGuideBrowserMilestoneMigrated:
                 typeof parsed.ui?.setupGuideBrowserMilestoneMigrated === 'boolean'
                   ? parsed.ui.setupGuideBrowserMilestoneMigrated
@@ -2540,6 +2828,15 @@ export class Store {
             }
             return { ...defaults.workspaceSession, ...result.value }
           })(),
+          // Why: per-host session partitions for non-'local' hosts. 'local'
+          // stays in workspaceSession (legacy field) so a downgrade still
+          // reads the user's workspace. Each entry is zod-validated the same
+          // way as the legacy blob — a corrupt partition drops to that host's
+          // defaults without poisoning the others.
+          workspaceSessionsByHostId: parseWorkspaceSessionsByHostId(
+            parsed.workspaceSessionsByHostId,
+            defaults.workspaceSession
+          ),
           sshTargets: (parsed.sshTargets ?? []).map(normalizeSshTarget),
           sshRemotePtyLeases: (parsed.sshRemotePtyLeases ?? [])
             .map(normalizeSshRemotePtyLease)
@@ -2592,9 +2889,30 @@ export class Store {
       this.loadNeedsSave = true
     }
 
+    const repos = clearMissingProjectGroupMemberships(result.repos, result.projectGroups ?? [])
+    const projectHostSetupCompatibility = mergeProjectHostSetupCompatibilityState(result, repos)
+    if (!projectHostSetupCompatibilityStateEqual(result, projectHostSetupCompatibility)) {
+      this.loadNeedsSave = true
+    }
+
+    const automationContextMigration = backfillLegacyAutomationContexts({
+      ...result,
+      repos,
+      ...projectHostSetupCompatibility
+    })
+    if (automationContextMigration.changed) {
+      this.loadNeedsSave = true
+    }
+    result = {
+      ...result,
+      automations: automationContextMigration.state.automations,
+      automationRuns: automationContextMigration.state.automationRuns
+    }
+
     const folderScopeConnectionMigration = backfillFolderScopeConnectionIds({
       ...result,
-      repos: clearMissingProjectGroupMemberships(result.repos, result.projectGroups ?? []),
+      repos,
+      ...projectHostSetupCompatibility,
       workspaceSession: migratedScrollback.session
     })
     if (folderScopeConnectionMigration.changed) {
@@ -2814,6 +3132,101 @@ export class Store {
     return this.state.repos.map((repo) => this.hydrateRepo(repo))
   }
 
+  getProjects(): Project[] {
+    return [...this.state.projects]
+  }
+
+  getProjectHostSetups(): ProjectHostSetup[] {
+    return [...this.state.projectHostSetups]
+  }
+
+  createProjectHostSetup(args: ProjectHostSetupCreateArgs): ProjectHostSetupCreateResult | null {
+    const project = this.state.projects.find((entry) => entry.id === args.projectId)
+    if (!project) {
+      return null
+    }
+    const hostId = normalizeExecutionHostId(args.hostId)
+    if (!hostId) {
+      throw new Error(`Invalid host ID: ${args.hostId}`)
+    }
+    const duplicateSetup = this.state.projectHostSetups.find(
+      (entry) => entry.projectId === project.id && entry.hostId === hostId
+    )
+    if (duplicateSetup) {
+      throw new Error(`Project host setup already exists: ${duplicateSetup.id}`)
+    }
+    const now = Date.now()
+    const existingIds = new Set(this.state.projectHostSetups.map((entry) => entry.id))
+    const setup: ProjectHostSetup = {
+      id: makeProjectHostSetupId(project.id, hostId, existingIds, args.setupId),
+      projectId: project.id,
+      hostId,
+      repoId: '',
+      path: args.path?.trim() ?? '',
+      displayName: args.displayName?.trim() || project.displayName,
+      ...(args.kind ? { kind: args.kind } : {}),
+      ...(args.worktreeBasePath?.trim() ? { worktreeBasePath: args.worktreeBasePath.trim() } : {}),
+      ...(args.gitUsername?.trim() ? { gitUsername: args.gitUsername.trim() } : {}),
+      setupState: args.setupState ?? 'not-set-up',
+      setupMethod: args.setupMethod ?? 'provisioned',
+      createdAt: now,
+      updatedAt: now
+    }
+    // Why: this is the first non-repo-backed setup creation path; it must
+    // persist independently so future repo projection sync does not erase it.
+    this.state.projectHostSetups.push(setup)
+    this.scheduleSave()
+    return { project, setup }
+  }
+
+  updateProjectHostSetup(args: ProjectHostSetupUpdateArgs): ProjectHostSetupUpdateResult | null {
+    const setup = this.state.projectHostSetups.find((entry) => entry.id === args.setupId)
+    if (!setup) {
+      return null
+    }
+    const project = this.state.projects.find((entry) => entry.id === setup.projectId)
+    if (!project) {
+      return null
+    }
+    const repo = setup.repoId
+      ? this.state.repos.find((entry) => entry.id === setup.repoId)
+      : undefined
+    if (repo) {
+      const updated = this.updateRepoBackedProjectHostSetup(setup, repo, args.updates)
+      const updatedProject = updated
+        ? this.state.projects.find((entry) => entry.id === updated.setup.projectId)
+        : undefined
+      return updated && updatedProject
+        ? { project: updatedProject, setup: updated.setup, repo: updated.repo }
+        : null
+    }
+    const updatedSetup = this.updateIndependentProjectHostSetup(setup, args.updates)
+    return { project, setup: updatedSetup }
+  }
+
+  deleteProjectHostSetup(args: ProjectHostSetupDeleteArgs): ProjectHostSetupDeleteResult | null {
+    const setup = this.state.projectHostSetups.find((entry) => entry.id === args.setupId)
+    if (!setup) {
+      return null
+    }
+    const project = this.state.projects.find((entry) => entry.id === setup.projectId)
+    if (!project) {
+      return null
+    }
+    const repo = setup.repoId
+      ? this.state.repos.find((entry) => entry.id === setup.repoId)
+      : undefined
+    if (repo) {
+      this.removeProject(repo.id)
+      return { project, setup, repo: this.hydrateRepo(repo) }
+    }
+    this.state.projectHostSetups = this.state.projectHostSetups.filter(
+      (entry) => entry.id !== setup.id
+    )
+    this.scheduleSave()
+    return { project, setup }
+  }
+
   /**
    * O(1) read of the persisted repo count. Use this when you only need the
    * count (e.g. cohort-classifier) — `getRepos()` hydrates each repo and
@@ -2903,6 +3316,7 @@ export class Store {
           this.state.workspaceSession,
           folderWorkspaceKey(workspace.id)
         )!
+        this.removeWorkspaceLineageForFolderParent(workspace.id)
       }
     }
     this.state.folderWorkspaces = (this.state.folderWorkspaces ?? []).filter(
@@ -3056,6 +3470,7 @@ export class Store {
       this.state.workspaceSession,
       folderWorkspaceKey(id)
     )!
+    this.removeWorkspaceLineageForFolderParent(id)
     this.scheduleSave()
     return true
   }
@@ -3081,6 +3496,7 @@ export class Store {
 
   addRepo(repo: Repo): void {
     this.state.repos.push(repo)
+    this.syncProjectHostSetupCompatibilityState()
     this.scheduleSave()
   }
 
@@ -3112,12 +3528,14 @@ export class Store {
       next.push(repo)
     }
     this.state.repos = next
+    this.syncProjectHostSetupCompatibilityState()
     this.scheduleSave()
     return true
   }
 
   removeProject(id: string): void {
     this.state.repos = this.state.repos.filter((r) => r.id !== id)
+    this.syncProjectHostSetupCompatibilityState()
     // Why: presets are repo-scoped, so removing the repo means the presets
     // can never be referenced again — drop them with the parent.
     delete this.state.sparsePresetsByRepo[id]
@@ -3131,6 +3549,17 @@ export class Store {
     for (const [childId, lineage] of Object.entries(this.state.worktreeLineageById)) {
       if (childId.startsWith(prefix) || lineage.parentWorktreeId.startsWith(prefix)) {
         delete this.state.worktreeLineageById[childId]
+      }
+    }
+    for (const [childKey, lineage] of Object.entries(this.state.workspaceLineageByChildKey)) {
+      const childScope = parseWorkspaceKey(childKey)
+      const parentScope = parseWorkspaceKey(lineage.parentWorkspaceKey)
+      if (childScope?.type === 'worktree' && childScope.worktreeId.startsWith(prefix)) {
+        delete this.state.workspaceLineageByChildKey[childKey as WorkspaceKey]
+        continue
+      }
+      if (parentScope?.type === 'worktree' && parentScope.worktreeId.startsWith(prefix)) {
+        delete this.state.workspaceLineageByChildKey[childKey as WorkspaceKey]
       }
     }
     this.scheduleSave()
@@ -3155,6 +3584,7 @@ export class Store {
         | 'externalWorktreeVisibilityPromptDismissedAt'
         | 'projectGroupId'
         | 'projectGroupOrder'
+        | 'projectHostSetupMethod'
       >
     > & { sourceControlAi?: Repo['sourceControlAi'] | null }
   ): Repo | null {
@@ -3223,8 +3653,95 @@ export class Store {
       }
     }
     Object.assign(repo, sanitizedUpdates)
+    this.syncProjectHostSetupCompatibilityState()
     this.scheduleSave()
     return this.hydrateRepo(repo)
+  }
+
+  private syncProjectHostSetupCompatibilityState(): void {
+    const compatibilityState = mergeProjectHostSetupCompatibilityState(this.state, this.state.repos)
+    this.state.projects = compatibilityState.projects
+    this.state.projectHostSetups = compatibilityState.projectHostSetups
+  }
+
+  private updateRepoBackedProjectHostSetup(
+    setup: ProjectHostSetup,
+    repo: Repo,
+    updates: ProjectHostSetupUpdateArgs['updates']
+  ): { setup: ProjectHostSetup; repo: Repo } | null {
+    if (updates.path !== undefined && updates.path !== repo.path) {
+      throw new Error(
+        'Repo-backed project host setup paths must be changed by re-importing the project.'
+      )
+    }
+    if (updates.setupState !== undefined && updates.setupState !== 'ready') {
+      throw new Error('Repo-backed project host setups cannot be marked unavailable.')
+    }
+    const repoUpdates: Parameters<Store['updateRepo']>[1] = {}
+    if (updates.displayName !== undefined) {
+      repoUpdates.displayName = updates.displayName
+    }
+    if (updates.worktreeBasePath !== undefined) {
+      repoUpdates.worktreeBasePath = updates.worktreeBasePath
+    }
+    if (updates.kind !== undefined) {
+      repoUpdates.kind = updates.kind
+    }
+    if (updates.setupMethod === 'provisioned') {
+      throw new Error('Repo-backed project host setups cannot be marked provisioned.')
+    }
+    if (updates.setupMethod !== undefined && updates.setupMethod !== 'legacy-repo') {
+      repoUpdates.projectHostSetupMethod = updates.setupMethod
+    }
+    const updatedRepo =
+      Object.keys(repoUpdates).length > 0 ? this.updateRepo(repo.id, repoUpdates) : repo
+    if (!updatedRepo) {
+      return null
+    }
+    return {
+      setup: this.state.projectHostSetups.find((entry) => entry.id === setup.id) ?? setup,
+      repo: updatedRepo
+    }
+  }
+
+  private updateIndependentProjectHostSetup(
+    setup: ProjectHostSetup,
+    updates: ProjectHostSetupUpdateArgs['updates']
+  ): ProjectHostSetup {
+    if (updates.displayName !== undefined) {
+      setup.displayName = updates.displayName.trim() || setup.displayName
+    }
+    if (updates.path !== undefined) {
+      setup.path = updates.path.trim() || setup.path
+    }
+    if (updates.worktreeBasePath !== undefined) {
+      const worktreeBasePath = updates.worktreeBasePath.trim()
+      if (worktreeBasePath) {
+        setup.worktreeBasePath = worktreeBasePath
+      } else {
+        delete setup.worktreeBasePath
+      }
+    }
+    if (updates.kind !== undefined) {
+      setup.kind = updates.kind
+    }
+    if (updates.gitUsername !== undefined) {
+      const gitUsername = updates.gitUsername.trim()
+      if (gitUsername) {
+        setup.gitUsername = gitUsername
+      } else {
+        delete setup.gitUsername
+      }
+    }
+    if (updates.setupState !== undefined) {
+      setup.setupState = updates.setupState
+    }
+    if (updates.setupMethod !== undefined) {
+      setup.setupMethod = updates.setupMethod
+    }
+    setup.updatedAt = Date.now()
+    this.scheduleSave()
+    return setup
   }
 
   private hydrateRepo(repo: Repo): Repo {
@@ -3232,11 +3749,13 @@ export class Store {
       repoIcon: rawRepoIcon,
       upstream: rawUpstream,
       sourceControlAi: rawSourceControlAi,
+      projectHostSetupMethod: rawProjectHostSetupMethod,
       ...repoWithoutIcon
     } = repo
     const repoIcon = sanitizeRepoIcon(rawRepoIcon)
     const upstream = sanitizeRepoUpstream(rawUpstream)
     const sourceControlAi = normalizeRepoSourceControlAiOverrides(rawSourceControlAi)
+    const projectHostSetupMethod = sanitizeRepoProjectHostSetupMethod(rawProjectHostSetupMethod)
     const gitUsername = isFolderRepo(repo)
       ? ''
       : (this.gitUsernameCache.get(repo.path) ??
@@ -3251,6 +3770,7 @@ export class Store {
       ...(repoIcon !== undefined ? { repoIcon } : {}),
       ...(upstream !== undefined ? { upstream } : {}),
       ...(sourceControlAi !== undefined ? { sourceControlAi } : {}),
+      ...(projectHostSetupMethod !== undefined ? { projectHostSetupMethod } : {}),
       kind: isFolderRepo(repo) ? 'folder' : 'git',
       gitUsername,
       hookSettings: {
@@ -3311,16 +3831,20 @@ export class Store {
     const repo = this.state.repos.find((entry) => entry.id === input.projectId)
     const now = Date.now()
     const executionTargetType = repo?.connectionId ? 'ssh' : 'local'
+    const schedulerOwner = getAutomationSchedulerOwner(repo)
+    const contexts = getAutomationContextsForRepo(repo, this.state.projectHostSetups ?? [])
     const automation: Automation = {
       id: randomUUID(),
       name: input.name.trim() || 'Untitled automation',
       prompt: input.prompt,
       precheck: normalizeAutomationPrecheck(input.precheck),
       agentId: input.agentId,
+      runContext: input.runContext ?? contexts.runContext,
+      sourceContext: input.sourceContext ?? contexts.sourceContext,
       projectId: input.projectId,
       executionTargetType,
       executionTargetId: executionTargetType === 'ssh' ? (repo?.connectionId ?? '') : 'local',
-      schedulerOwner: executionTargetType === 'ssh' ? 'ssh_bridge' : 'local_host_service',
+      schedulerOwner,
       workspaceMode: input.workspaceMode,
       workspaceId: input.workspaceMode === 'existing' ? (input.workspaceId ?? null) : null,
       baseBranch: input.workspaceMode === 'new_per_run' ? (input.baseBranch ?? null) : null,
@@ -3350,6 +3874,8 @@ export class Store {
     const repoId = updates.projectId ?? current.projectId
     const repo = this.state.repos.find((entry) => entry.id === repoId)
     const executionTargetType = repo?.connectionId ? 'ssh' : 'local'
+    const schedulerOwner = getAutomationSchedulerOwner(repo)
+    const contexts = getAutomationContextsForRepo(repo, this.state.projectHostSetups ?? [])
     const rrule = updates.rrule ?? current.rrule
     const dtstart = updates.dtstart ?? current.dtstart
     const scheduleChanged = updates.rrule !== undefined || updates.dtstart !== undefined
@@ -3363,9 +3889,19 @@ export class Store {
         ? normalizeAutomationPrecheck(updates.precheck)
         : normalizeAutomationPrecheck(current.precheck),
       projectId: repoId,
+      runContext: Object.hasOwn(updates, 'runContext')
+        ? (updates.runContext ?? null)
+        : updates.projectId !== undefined
+          ? contexts.runContext
+          : (current.runContext ?? contexts.runContext),
+      sourceContext: Object.hasOwn(updates, 'sourceContext')
+        ? (updates.sourceContext ?? null)
+        : updates.projectId !== undefined
+          ? contexts.sourceContext
+          : (current.sourceContext ?? contexts.sourceContext),
       executionTargetType,
       executionTargetId: executionTargetType === 'ssh' ? (repo?.connectionId ?? '') : 'local',
-      schedulerOwner: executionTargetType === 'ssh' ? 'ssh_bridge' : 'local_host_service',
+      schedulerOwner,
       workspaceMode,
       workspaceId:
         workspaceMode === 'existing'
@@ -3421,6 +3957,8 @@ export class Store {
     const run: AutomationRun = {
       id: randomUUID(),
       automationId: automation.id,
+      runContext: automation.runContext ?? null,
+      sourceContext: automation.sourceContext ?? null,
       title: `${automation.name} run ${runNumber}`,
       scheduledFor,
       status: 'pending',
@@ -3559,6 +4097,7 @@ export class Store {
   removeWorktreeMeta(worktreeId: string): void {
     delete this.state.worktreeMeta[worktreeId]
     delete this.state.worktreeLineageById[worktreeId]
+    delete this.state.workspaceLineageByChildKey[worktreeWorkspaceKey(worktreeId)]
     this.scheduleSave()
   }
 
@@ -3596,6 +4135,8 @@ export class Store {
     if (oldWorktreeId === newWorktreeId) {
       return
     }
+    const oldWorkspaceKey = worktreeWorkspaceKey(oldWorktreeId)
+    const newWorkspaceKey = worktreeWorkspaceKey(newWorktreeId)
     const moveKey = <T>(
       record: Record<string, T>,
       mapValue: (value: T) => T = (value) => value
@@ -3607,12 +4148,106 @@ export class Store {
       delete record[oldWorktreeId]
       return true
     }
-    const moveOptionalKey = <T>(
-      record: Record<string, T> | undefined,
-      mapValue?: (value: T) => T
-    ): boolean => (record ? moveKey(record, mapValue) : false)
     const withNewWorktreeId = <T extends { worktreeId: string }>(value: T): T =>
       value.worktreeId === oldWorktreeId ? { ...value, worktreeId: newWorktreeId } : value
+    const migrateSession = (session: WorkspaceSessionState | undefined): boolean => {
+      if (!session) {
+        return false
+      }
+      let sessionChanged = false
+      const moveSessionKey = <T>(
+        record: Record<string, T> | undefined,
+        mapValue: (value: T) => T = (value) => value
+      ): boolean => {
+        if (!record) {
+          return false
+        }
+        let moved = false
+        const pairs: [string, string][] = [
+          [oldWorktreeId, newWorktreeId],
+          [oldWorkspaceKey, newWorkspaceKey]
+        ]
+        for (const [oldKey, newKey] of pairs) {
+          if (!(oldKey in record)) {
+            continue
+          }
+          record[newKey] = mapValue(record[oldKey])
+          delete record[oldKey]
+          moved = true
+        }
+        return moved
+      }
+
+      sessionChanged =
+        moveSessionKey(session.tabsByWorktree, (tabs) => tabs.map(withNewWorktreeId)) ||
+        sessionChanged
+      sessionChanged =
+        moveSessionKey(session.openFilesByWorktree, (files) => files.map(withNewWorktreeId)) ||
+        sessionChanged
+      sessionChanged = moveSessionKey(session.activeFileIdByWorktree) || sessionChanged
+      sessionChanged =
+        moveSessionKey(session.browserTabsByWorktree, (workspaces) =>
+          workspaces.map(withNewWorktreeId)
+        ) || sessionChanged
+      if (session.browserPagesByWorkspace) {
+        let pagesChanged = false
+        const nextPagesByWorkspace = { ...session.browserPagesByWorkspace }
+        for (const [workspaceId, pages] of Object.entries(nextPagesByWorkspace)) {
+          if (!pages.some((page) => page.worktreeId === oldWorktreeId)) {
+            continue
+          }
+          nextPagesByWorkspace[workspaceId] = pages.map(withNewWorktreeId)
+          pagesChanged = true
+        }
+        if (pagesChanged) {
+          session.browserPagesByWorkspace = nextPagesByWorkspace
+          sessionChanged = true
+        }
+      }
+      sessionChanged = moveSessionKey(session.activeBrowserTabIdByWorktree) || sessionChanged
+      sessionChanged = moveSessionKey(session.activeTabTypeByWorktree) || sessionChanged
+      sessionChanged = moveSessionKey(session.activeTabIdByWorktree) || sessionChanged
+      sessionChanged =
+        moveSessionKey(session.unifiedTabs, (tabs) => tabs.map(withNewWorktreeId)) || sessionChanged
+      sessionChanged =
+        moveSessionKey(session.tabGroups, (groups) => groups.map(withNewWorktreeId)) ||
+        sessionChanged
+      sessionChanged = moveSessionKey(session.tabGroupLayouts) || sessionChanged
+      sessionChanged = moveSessionKey(session.activeGroupIdByWorktree) || sessionChanged
+      sessionChanged = moveSessionKey(session.lastVisitedAtByWorktreeId) || sessionChanged
+      sessionChanged =
+        moveSessionKey(session.defaultTerminalTabsAppliedByWorktreeId) || sessionChanged
+      if (session.activeWorktreeIdsOnShutdown?.includes(oldWorktreeId)) {
+        session.activeWorktreeIdsOnShutdown = session.activeWorktreeIdsOnShutdown.map((id) =>
+          id === oldWorktreeId ? newWorktreeId : id
+        )
+        sessionChanged = true
+      }
+      if (session.activeWorktreeId === oldWorktreeId) {
+        session.activeWorktreeId = newWorktreeId
+        sessionChanged = true
+      }
+      if (session.activeWorkspaceKey === oldWorkspaceKey) {
+        session.activeWorkspaceKey = newWorkspaceKey
+        sessionChanged = true
+      }
+      if (session.sleepingAgentSessionsByPaneKey) {
+        let sleepingChanged = false
+        const nextSleeping = { ...session.sleepingAgentSessionsByPaneKey }
+        for (const [paneKey, record] of Object.entries(nextSleeping)) {
+          if (record.worktreeId !== oldWorktreeId) {
+            continue
+          }
+          nextSleeping[paneKey] = { ...record, worktreeId: newWorktreeId }
+          sleepingChanged = true
+        }
+        if (sleepingChanged) {
+          session.sleepingAgentSessionsByPaneKey = nextSleeping
+          sessionChanged = true
+        }
+      }
+      return sessionChanged
+    }
 
     let changed = moveKey(this.state.worktreeMeta)
     // Record the prior id so a session minted under it isn't reaped as an orphan.
@@ -3640,51 +4275,28 @@ export class Store {
       }
     }
 
-    const session = this.state.workspaceSession
-    changed =
-      moveOptionalKey(session.tabsByWorktree, (tabs) => tabs.map(withNewWorktreeId)) || changed
-    changed =
-      moveOptionalKey(session.openFilesByWorktree, (files) => files.map(withNewWorktreeId)) ||
-      changed
-    changed = moveOptionalKey(session.activeFileIdByWorktree) || changed
-    changed =
-      moveOptionalKey(session.browserTabsByWorktree, (workspaces) =>
-        workspaces.map(withNewWorktreeId)
-      ) || changed
-    if (session.browserPagesByWorkspace) {
-      let pagesChanged = false
-      const nextPagesByWorkspace = { ...session.browserPagesByWorkspace }
-      for (const [workspaceId, pages] of Object.entries(nextPagesByWorkspace)) {
-        if (!pages.some((page) => page.worktreeId === oldWorktreeId)) {
-          continue
-        }
-        nextPagesByWorkspace[workspaceId] = pages.map(withNewWorktreeId)
-        pagesChanged = true
+    if (oldWorkspaceKey in this.state.workspaceLineageByChildKey) {
+      const lineage = this.state.workspaceLineageByChildKey[oldWorkspaceKey]
+      this.state.workspaceLineageByChildKey[newWorkspaceKey] = {
+        ...lineage,
+        childWorkspaceKey: newWorkspaceKey
       }
-      if (pagesChanged) {
-        session.browserPagesByWorkspace = nextPagesByWorkspace
+      delete this.state.workspaceLineageByChildKey[oldWorkspaceKey]
+      changed = true
+    }
+    for (const [childKey, lineage] of Object.entries(this.state.workspaceLineageByChildKey)) {
+      if (lineage.parentWorkspaceKey === oldWorkspaceKey) {
+        this.state.workspaceLineageByChildKey[childKey as WorkspaceKey] = {
+          ...lineage,
+          parentWorkspaceKey: newWorkspaceKey
+        }
         changed = true
       }
     }
-    changed = moveOptionalKey(session.activeBrowserTabIdByWorktree) || changed
-    changed = moveOptionalKey(session.activeTabTypeByWorktree) || changed
-    changed = moveOptionalKey(session.activeTabIdByWorktree) || changed
-    changed = moveOptionalKey(session.unifiedTabs, (tabs) => tabs.map(withNewWorktreeId)) || changed
-    changed =
-      moveOptionalKey(session.tabGroups, (groups) => groups.map(withNewWorktreeId)) || changed
-    changed = moveOptionalKey(session.tabGroupLayouts) || changed
-    changed = moveOptionalKey(session.activeGroupIdByWorktree) || changed
-    changed = moveOptionalKey(session.lastVisitedAtByWorktreeId) || changed
-    changed = moveOptionalKey(session.defaultTerminalTabsAppliedByWorktreeId) || changed
-    if (session.activeWorktreeIdsOnShutdown?.includes(oldWorktreeId)) {
-      session.activeWorktreeIdsOnShutdown = session.activeWorktreeIdsOnShutdown.map((id) =>
-        id === oldWorktreeId ? newWorktreeId : id
-      )
-      changed = true
-    }
-    if (session.activeWorktreeId === oldWorktreeId) {
-      session.activeWorktreeId = newWorktreeId
-      changed = true
+
+    changed = migrateSession(this.state.workspaceSession) || changed
+    for (const session of Object.values(this.state.workspaceSessionsByHostId ?? {})) {
+      changed = migrateSession(session) || changed
     }
     const showDotfiles = this.state.ui?.showDotfilesByWorktree
     if (showDotfiles) {
@@ -3693,6 +4305,34 @@ export class Store {
 
     if (changed) {
       this.scheduleSave()
+    }
+  }
+
+  getWorkspaceLineage(childWorkspaceKey: WorkspaceKey): WorkspaceLineage | undefined {
+    return this.state.workspaceLineageByChildKey[childWorkspaceKey]
+  }
+
+  getAllWorkspaceLineage(): Record<WorkspaceKey, WorkspaceLineage> {
+    return this.state.workspaceLineageByChildKey
+  }
+
+  setWorkspaceLineage(lineage: WorkspaceLineage): WorkspaceLineage {
+    this.state.workspaceLineageByChildKey[lineage.childWorkspaceKey] = lineage
+    this.scheduleSave()
+    return lineage
+  }
+
+  removeWorkspaceLineage(childWorkspaceKey: WorkspaceKey): void {
+    delete this.state.workspaceLineageByChildKey[childWorkspaceKey]
+    this.scheduleSave()
+  }
+
+  private removeWorkspaceLineageForFolderParent(folderWorkspaceId: string): void {
+    const parentKey = folderWorkspaceKey(folderWorkspaceId)
+    for (const [childKey, lineage] of Object.entries(this.state.workspaceLineageByChildKey)) {
+      if (lineage.parentWorkspaceKey === parentKey) {
+        delete this.state.workspaceLineageByChildKey[childKey as WorkspaceKey]
+      }
     }
   }
 
@@ -3866,6 +4506,10 @@ export class Store {
       workspaceBoardColumnWidth: clampWorkspaceBoardColumnWidth(
         this.state.ui?.workspaceBoardColumnWidth
       ),
+      visibleWorkspaceHostIds: normalizeVisibleExecutionHostIds(
+        this.state.ui?.visibleWorkspaceHostIds
+      ),
+      workspaceHostOrder: normalizeExecutionHostOrder(this.state.ui?.workspaceHostOrder),
       browserDefaultZoomLevel: normalizeBrowserPageZoomLevel(
         this.state.ui?.browserDefaultZoomLevel
       ),
@@ -3932,6 +4576,14 @@ export class Store {
       workspaceBoardColumnWidth: clampWorkspaceBoardColumnWidth(
         sanitizedUpdates.workspaceBoardColumnWidth ?? this.state.ui?.workspaceBoardColumnWidth
       ),
+      visibleWorkspaceHostIds:
+        updates.visibleWorkspaceHostIds !== undefined
+          ? normalizeVisibleExecutionHostIds(updates.visibleWorkspaceHostIds)
+          : normalizeVisibleExecutionHostIds(this.state.ui?.visibleWorkspaceHostIds),
+      workspaceHostOrder:
+        updates.workspaceHostOrder !== undefined
+          ? normalizeExecutionHostOrder(updates.workspaceHostOrder)
+          : normalizeExecutionHostOrder(this.state.ui?.workspaceHostOrder),
       browserDefaultZoomLevel: normalizeBrowserPageZoomLevel(
         updates.browserDefaultZoomLevel ?? this.state.ui?.browserDefaultZoomLevel
       ),
@@ -4056,8 +4708,19 @@ export class Store {
 
   // ── Workspace Session ─────────────────────────────────────────────
 
-  getWorkspaceSession(): PersistedState['workspaceSession'] {
-    return this.state.workspaceSession ?? getDefaultWorkspaceSession()
+  /** Resolve an execution host argument to a canonical id. Unknown/empty
+   *  values fall back to 'local' so legacy callers without a hostId keep
+   *  reading and writing the local partition exactly as before. */
+  private resolveHostId(hostId?: string | null): ExecutionHostId {
+    return normalizeExecutionHostId(hostId) ?? LOCAL_EXECUTION_HOST_ID
+  }
+
+  getWorkspaceSession(hostId?: string | null): PersistedState['workspaceSession'] {
+    const resolved = this.resolveHostId(hostId)
+    if (resolved === LOCAL_EXECUTION_HOST_ID) {
+      return this.state.workspaceSession ?? getDefaultWorkspaceSession()
+    }
+    return this.state.workspaceSessionsByHostId?.[resolved] ?? getDefaultWorkspaceSession()
   }
 
   readTerminalScrollbackSnapshot(ref: string): string | null {
@@ -4070,7 +4733,30 @@ export class Store {
     return findWorktreeIdForTab(this.getWorkspaceSession(), tabId)
   }
 
-  setWorkspaceSession(session: PersistedState['workspaceSession']): void {
+  setWorkspaceSession(session: PersistedState['workspaceSession'], hostId?: string | null): void {
+    const resolved = this.resolveHostId(hostId)
+    if (resolved === LOCAL_EXECUTION_HOST_ID) {
+      this.setLocalWorkspaceSession(session)
+      return
+    }
+    this.setHostWorkspaceSession(resolved, session)
+  }
+
+  /** Persist a non-'local' host partition. The PTY-binding race protections in
+   *  setLocalWorkspaceSession only apply to the local daemon, so remote hosts
+   *  take the lighter prune-and-store path. */
+  private setHostWorkspaceSession(hostId: ExecutionHostId, session: WorkspaceSessionState): void {
+    const pruned = pruneWorkspaceSessionBrowserHistory(
+      pruneLocalTerminalScrollbackBuffers(session, this.state.repos)
+    )
+    this.state.workspaceSessionsByHostId = {
+      ...this.state.workspaceSessionsByHostId,
+      [hostId]: pruned
+    }
+    this.scheduleSave()
+  }
+
+  private setLocalWorkspaceSession(session: PersistedState['workspaceSession']): void {
     session = pruneWorkspaceSessionBrowserHistory(
       pruneLocalTerminalScrollbackBuffers(session, this.state.repos)
     )
@@ -4219,22 +4905,30 @@ export class Store {
     this.scheduleSave()
   }
 
-  patchWorkspaceSession(patch: WorkspaceSessionPatch): void {
+  patchWorkspaceSession(patch: WorkspaceSessionPatch, hostId?: string | null): void {
+    const resolved = this.resolveHostId(hostId)
     // Why: the renderer's debounced hot path sends only changed top-level
     // session slices. Scalar/UI patches avoid the terminal normalization path;
     // terminal topology/layout patches still reuse the stale-PTY protections.
     let next: WorkspaceSessionState = {
-      ...this.getWorkspaceSession(),
+      ...this.getWorkspaceSession(resolved),
       ...patch
     }
     if (workspaceSessionPatchNeedsFullNormalization(patch)) {
-      this.setWorkspaceSession(next)
+      this.setWorkspaceSession(next, resolved)
       return
     }
     if (Object.hasOwn(patch, 'browserUrlHistory')) {
       next = pruneWorkspaceSessionBrowserHistory(next)
     }
-    this.state.workspaceSession = next
+    if (resolved === LOCAL_EXECUTION_HOST_ID) {
+      this.state.workspaceSession = next
+    } else {
+      this.state.workspaceSessionsByHostId = {
+        ...this.state.workspaceSessionsByHostId,
+        [resolved]: next
+      }
+    }
     this.scheduleSave()
   }
 
@@ -4720,6 +5414,9 @@ function getDefaultWorktreeMeta(): WorktreeMeta {
     linkedLinearIssue: null,
     linkedGitLabMR: null,
     linkedGitLabIssue: null,
+    linkedBitbucketPR: null,
+    linkedAzureDevOpsPR: null,
+    linkedGiteaPR: null,
     isArchived: false,
     isUnread: false,
     isPinned: false,

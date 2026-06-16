@@ -346,7 +346,9 @@ export function useCreatePullRequestDialogFields({
       generationRequestIdRef.current = requestId
       const connectionId = getConnectionId(worktreeId) ?? undefined
       const requestContext = {
-        settings: useAppStore.getState().settings,
+        // Why: PR generation belongs to the visible worktree owner. Global
+        // focused-host changes must not retarget an in-flight generation.
+        settings,
         worktreeId,
         worktreePath,
         connectionId
@@ -418,6 +420,7 @@ export function useCreatePullRequestDialogFields({
       generation,
       generateDisabled,
       onBranchChangedByGeneration,
+      settings,
       title,
       worktreeId,
       worktreePath

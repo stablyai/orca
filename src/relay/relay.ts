@@ -59,6 +59,7 @@ import { resolveOpenCodeSourceConfigDir, resolvePiSourceAgentDir } from './plugi
 import { detectPiAgentKindFromCommand } from '../shared/pi-agent-kind'
 import { pickRemoteCliEnv } from './remote-cli-env'
 import { remoteCliRequestTimeoutMs } from './remote-cli-timeout'
+import { shouldReadRemoteCliStdin } from './remote-cli-stdin'
 
 const DEFAULT_GRACE_MS = DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS * 1000
 const SOCK_NAME = 'relay.sock'
@@ -213,8 +214,9 @@ function runConnectMode(sockPath: string): void {
   })
 }
 
-function runOrcaCliMode(sockPath: string, argv: string[]): void {
+async function runOrcaCliMode(sockPath: string, argv: string[]): Promise<void> {
   const myVersion = readLaunchVersion()
+  const stdin = shouldReadRemoteCliStdin(argv) ? await readOrcaCliStdin() : undefined
   const sock = createConnection({ path: sockPath })
   let nextSeq = 1
   let highestReceivedSeq = 0
@@ -230,7 +232,8 @@ function runOrcaCliMode(sockPath: string, argv: string[]): void {
         params: {
           argv,
           cwd: process.cwd(),
-          env
+          env,
+          ...(stdin !== undefined ? { stdin } : {})
         }
       },
       nextSeq++,
@@ -299,6 +302,17 @@ function runOrcaCliMode(sockPath: string, argv: string[]): void {
   })
 }
 
+async function readOrcaCliStdin(): Promise<string | undefined> {
+  if (process.stdin.isTTY) {
+    return undefined
+  }
+  const chunks: Buffer[] = []
+  for await (const chunk of process.stdin) {
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk)))
+  }
+  return Buffer.concat(chunks).toString('utf8')
+}
+
 // ── Normal mode ──────────────────────────────────────────────────────
 
 async function main(): Promise<void> {
@@ -312,7 +326,7 @@ async function main(): Promise<void> {
   }
   if (cliMode) {
     const marker = process.argv.indexOf('--orca-cli')
-    runOrcaCliMode(sockPath, marker >= 0 ? process.argv.slice(marker + 1) : [])
+    await runOrcaCliMode(sockPath, marker >= 0 ? process.argv.slice(marker + 1) : [])
     return
   }
 

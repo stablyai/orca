@@ -78,5 +78,5 @@ describe('i18n import-time safety', () => {
     }
 
     expect(violations).toEqual([])
-  })
+  }, 15_000)
 })

@@ -17,6 +17,7 @@ export type RawIssue = {
   description?: string | null
   priority?: number | null
   estimate?: number | null
+  dueDate?: string | null
   branchName?: string | null
   createdAt?: string | null
   updatedAt?: string | null
@@ -108,6 +109,7 @@ export const ISSUE_FIELDS = `
   description
   priority
   estimate
+  dueDate
   branchName
   createdAt
   updatedAt
@@ -209,6 +211,7 @@ export function mapIssue(issue: RawIssue): LinearIssueSummary {
     labels: issue.labels?.nodes ?? [],
     priority: issue.priority,
     estimate: issue.estimate,
+    dueDate: issue.dueDate,
     branchName: issue.branchName,
     createdAt: issue.createdAt,
     updatedAt: issue.updatedAt
@@ -227,6 +230,9 @@ export function pickSearchIssue(
     team: issue.team,
     project: issue.project,
     assignee: issue.assignee,
+    priority: issue.priority,
+    estimate: issue.estimate,
+    dueDate: issue.dueDate,
     updatedAt: issue.updatedAt
   }
 }

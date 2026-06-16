@@ -9,6 +9,7 @@ describe('isLazyModalId', () => {
   it('recognizes only lazily retained root modal ids', () => {
     expect(isLazyModalId('quick-open')).toBe(true)
     expect(isLazyModalId('feature-tips')).toBe(true)
+    expect(isLazyModalId('new-workspace-composer')).toBe(false)
     expect(isLazyModalId('delete-worktree')).toBe(false)
     expect(isLazyModalId('none')).toBe(false)
   })

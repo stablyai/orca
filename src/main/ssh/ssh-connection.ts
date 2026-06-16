@@ -20,6 +20,7 @@ import {
   isTransientError,
   isAuthError,
   isAgentFallbackError,
+  isSystemSshFallbackError,
   isPassphraseError,
   sleep,
   buildConnectConfig,
@@ -316,6 +317,20 @@ export class SshConnection {
         this.proxyProcess?.kill()
         this.proxyProcess = null
         throw err
+      }
+
+      if (isSystemSshFallbackError(err)) {
+        this.proxyProcess?.kill()
+        this.proxyProcess = null
+        try {
+          // Why: on macOS, per-app network policy can block Orca's direct
+          // TCP socket while the system OpenSSH binary is still allowed.
+          await this.doSystemSshProbe(connectGeneration)
+          return
+        } catch {
+          this.useSystemSshTransport = false
+          throw err
+        }
       }
 
       let authError = err

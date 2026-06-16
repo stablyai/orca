@@ -2,15 +2,15 @@
 // in-process TypeScript extension API (pi.on('agent_start'), 'tool_call',
 // etc.). To get pi panes into the unified agent-hooks pipeline alongside
 // Claude/Codex/Gemini/OpenCode/Cursor, we ship a bundled extension into
-// the per-PTY Pi overlay (PiTitlebarExtensionService) that POSTs to
+// the Pi overlay (PiTitlebarExtensionService) that POSTs to
 // /hook/<kind> using the same ORCA_AGENT_HOOK_* + ORCA_PANE_KEY env that every
 // PTY already receives from ipc/pty.ts.
 //
-// The overlay is per-PTY, so each pi process boots with its own copy of
-// this extension and its own paneKey. Like the OpenCode plugin, the
-// returned source is a string (loaded by jiti from disk inside the pi
-// process), so we keep the source body in plain JS without TS types and
-// avoid pulling pi or any Orca dep into the pi runtime.
+// Each Pi process still gets its own paneKey through env even when multiple
+// PTYs share one source-scoped overlay. Like the OpenCode plugin, the returned
+// source is a string (loaded by jiti from disk inside the pi process), so we
+// keep the source body in plain JS without TS types and avoid pulling pi or
+// any Orca dep into the pi runtime.
 import type { PiAgentKind } from '../../shared/pi-agent-kind'
 
 export const ORCA_PI_AGENT_STATUS_EXTENSION_FILE = 'orca-agent-status.ts'

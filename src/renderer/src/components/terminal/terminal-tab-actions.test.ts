@@ -90,11 +90,35 @@ describe('createNewTerminalTab', () => {
 
     expect(createWebRuntimeSessionTerminalMock).toHaveBeenCalledWith({
       worktreeId: 'wt-1',
+      environmentId: 'web-runtime',
       command: 'pwsh',
       activate: true
     })
     expect(createTab).not.toHaveBeenCalled()
     expect(setActiveTabType).not.toHaveBeenCalled()
+  })
+
+  it('delegates terminal creation to the explicit owner runtime when another runtime is focused', () => {
+    const createTab = vi.fn(() => ({ id: 'tab-1' }))
+    const setActiveTabType = vi.fn()
+    isWebRuntimeSessionActiveMock.mockReturnValue(true)
+    getStateMock.mockReturnValue({
+      settings: { activeRuntimeEnvironmentId: 'focused-runtime' },
+      repos: [{ id: 'repo-1', executionHostId: 'runtime:owner-runtime', connectionId: null }],
+      worktreesByRepo: { 'repo-1': [{ id: 'wt-1', repoId: 'repo-1' }] },
+      createTab,
+      setActiveTabType
+    })
+
+    createNewTerminalTab('wt-1', 'pwsh')
+
+    expect(createWebRuntimeSessionTerminalMock).toHaveBeenCalledWith({
+      worktreeId: 'wt-1',
+      environmentId: 'owner-runtime',
+      command: 'pwsh',
+      activate: true
+    })
+    expect(createTab).not.toHaveBeenCalled()
   })
 })
 

@@ -181,6 +181,7 @@ export default defineConfig({
           'computer-sidecar': resolve('src/main/computer/sidecar-entry.ts'),
           'stt-worker': resolve('src/main/speech/stt-worker.ts'),
           'warp-theme-parser-worker': resolve('src/main/warp-themes/warp-theme-parser-worker.ts'),
+          'file-watcher-worker': resolve('src/main/runtime/file-watcher-worker.ts'),
           // Why: electron-vite cleans out/main in dev. The dev CLI imports
           // this path for `orca agent hooks ...`, so it must survive rebuilds.
           'agent-hooks/managed-agent-hook-controls': resolve(

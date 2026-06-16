@@ -525,7 +525,9 @@ describe('project group store routing', () => {
     expect(folderWorkspacesList).toHaveBeenCalled()
     expect(reposList).toHaveBeenCalled()
     expect(store.getState().projectGroups).toEqual([projectGroup])
-    expect(store.getState().repos).toEqual([importedRepo])
+    // Why: the repos slice stamps fetched repos with their owning execution
+    // host so multi-host routing never has to guess (multi-host design).
+    expect(store.getState().repos).toEqual([{ ...importedRepo, executionHostId: 'local' }])
   })
 
   it('routes local nested scan progress by scanId and unsubscribes after completion', async () => {
@@ -659,7 +661,9 @@ describe('project group store routing', () => {
       groupId: projectGroup.id,
       order: 3
     })
-    expect(store.getState().repos).toEqual([movedRepo])
+    // Why: the repos slice stamps updated repos with their owning execution
+    // host so multi-host routing never has to guess (multi-host design).
+    expect(store.getState().repos).toEqual([{ ...movedRepo, executionHostId: 'local' }])
   })
 
   it('removes local project group subtrees from renderer state after delete', async () => {

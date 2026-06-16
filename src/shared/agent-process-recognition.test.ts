@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest'
 import {
   isExpectedAgentProcess,
   isRecognizedAgentType,
-  recognizeAgentProcess
+  recognizeAgentProcess,
+  recognizeAgentProcessFromCommandLine
 } from './agent-process-recognition'
 
 describe('agent process recognition', () => {
@@ -24,6 +25,10 @@ describe('agent process recognition', () => {
   })
 
   it('matches expected agents from platform-specific foreground process paths', () => {
+    expect(recognizeAgentProcess('claude')).toEqual({
+      agent: 'claude',
+      processName: 'claude'
+    })
     expect(
       isExpectedAgentProcess(String.raw`C:\Users\dev\AppData\Roaming\npm\claude.exe`, 'claude')
     ).toBe(true)
@@ -57,5 +62,33 @@ describe('agent process recognition', () => {
       processName: 'mistral-vibe'
     })
     expect(isRecognizedAgentType('vibe')).toBe(true)
+  })
+
+  it('recognizes agent CLIs launched through interpreter wrappers', () => {
+    expect(
+      recognizeAgentProcessFromCommandLine('node /Users/dev/.nvm/versions/node/bin/codex')
+    ).toEqual({ agent: 'codex', processName: 'codex' })
+    expect(
+      recognizeAgentProcessFromCommandLine('node /Users/dev/.nvm/versions/node/bin/gemini')
+    ).toEqual({ agent: 'gemini', processName: 'gemini' })
+    expect(recognizeAgentProcessFromCommandLine('python3 /opt/homebrew/bin/hermes --tui')).toEqual({
+      agent: 'hermes',
+      processName: 'hermes'
+    })
+  })
+
+  it('does not classify prompt text as a wrapped agent command', () => {
+    expect(
+      recognizeAgentProcessFromCommandLine(
+        'node /tmp/not-an-agent.js "compare opencode vs orca in Gemini CLI"'
+      )
+    ).toBeNull()
+  })
+
+  it('recognizes versioned Grok process names observed from the installed CLI', () => {
+    expect(recognizeAgentProcess('grok-0.2.51')).toEqual({
+      agent: 'grok',
+      processName: 'grok-0.2.51'
+    })
   })
 })

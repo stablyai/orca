@@ -60,6 +60,7 @@ export function useHostedReviewActions({
         const result = isGitLab
           ? await window.api.gl.mergeMR({
               repoPath: repo.path,
+              repoId: repo.id,
               iid: review.number,
               method
             })
@@ -158,8 +159,16 @@ export function useHostedReviewActions({
       try {
         const result = isGitLab
           ? isClosing
-            ? await window.api.gl.closeMR({ repoPath: repo.path, iid: review.number })
-            : await window.api.gl.reopenMR({ repoPath: repo.path, iid: review.number })
+            ? await window.api.gl.closeMR({
+                repoPath: repo.path,
+                repoId: repo.id,
+                iid: review.number
+              })
+            : await window.api.gl.reopenMR({
+                repoPath: repo.path,
+                repoId: repo.id,
+                iid: review.number
+              })
           : await window.api.gh.updatePRState({
               repoPath: repo.path,
               repoId: repo.id,
