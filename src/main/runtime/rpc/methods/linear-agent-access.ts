@@ -35,6 +35,12 @@ const LinearIssueList = z.object({
   workspaceId: z.union([z.string(), z.literal('all')]).optional()
 })
 
+const LinearProjectList = z.object({
+  query: OptionalString,
+  limit: OptionalFiniteNumber,
+  workspaceId: z.union([z.string(), z.literal('all')]).optional()
+})
+
 const LinearIncludeFlags = z.object({
   comments: z.boolean(),
   children: z.boolean(),
@@ -107,6 +113,7 @@ const LinearIssueCreate = z.object({
   estimate: z.number().int().min(0).optional(),
   dueDate: OptionalLinearDueDate,
   labels: z.array(z.string()).optional(),
+  projectInput: OptionalString,
   parentInput: OptionalString,
   parentCurrent: z.boolean().optional(),
   workspaceId: OptionalString.refine((value) => value !== 'all', {
@@ -166,6 +173,11 @@ export const LINEAR_AGENT_ACCESS_METHODS: RpcMethod[] = [
     name: 'linear.agentIssueList',
     params: LinearIssueList,
     handler: async (params, { runtime }) => runtime.linearIssueListForAgents(params)
+  }),
+  defineMethod({
+    name: 'linear.agentProjectList',
+    params: LinearProjectList,
+    handler: async (params, { runtime }) => runtime.linearProjectListForAgents(params)
   }),
   defineMethod({
     name: 'linear.resolveCurrentIssue',

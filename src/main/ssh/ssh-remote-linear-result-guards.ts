@@ -5,6 +5,7 @@ import type {
   LinearIssueContextResult,
   LinearIssueListResult,
   LinearIssueTaskUpdateResult,
+  LinearProjectListResult,
   LinearSearchResult,
   LinearStatusSetResult,
   LinearTeamLabelsResult,
@@ -41,6 +42,16 @@ export function isLinearIssueListResult(result: unknown): result is LinearIssueL
     Array.isArray(result.issues) &&
     isRecord(result.meta) &&
     typeof result.meta.filter === 'string' &&
+    typeof result.meta.hasMore === 'boolean'
+  )
+}
+
+export function isLinearProjectListResult(result: unknown): result is LinearProjectListResult {
+  return (
+    isRecord(result) &&
+    Array.isArray(result.projects) &&
+    isRecord(result.meta) &&
+    typeof result.meta.returned === 'number' &&
     typeof result.meta.hasMore === 'boolean'
   )
 }

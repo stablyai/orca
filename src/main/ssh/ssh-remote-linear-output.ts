@@ -2,6 +2,7 @@ import type {
   LinearIssueContextResult,
   LinearIssueListResult,
   LinearIssueTaskUpdateResult,
+  LinearProjectListResult,
   LinearSearchIssueSummary,
   LinearSearchResult,
   LinearTeamListResult,
@@ -19,6 +20,7 @@ import {
   isLinearCreateResult,
   isLinearIssueContextResult,
   isLinearIssueListResult,
+  isLinearProjectListResult,
   isLinearSearchResult,
   isLinearStatusSetResult,
   isLinearTaskUpdateResult,
@@ -42,6 +44,12 @@ export function formatRemoteLinearCli(result: unknown): { stdout: string; stderr
     return {
       stdout: `${formatLinearIssueRows(result.issues)}\n`,
       stderr: linearListWarnings(result)
+    }
+  }
+  if (isLinearProjectListResult(result)) {
+    return {
+      stdout: `${formatLinearProjectRows(result)}\n`,
+      stderr: linearProjectListWarnings(result)
     }
   }
   if (isLinearTeamListResult(result)) {
@@ -116,6 +124,23 @@ function formatLinearIssueRow(issue: LinearSearchIssueSummary): string {
   const state = issue.state?.name ?? 'unknown'
   const assignee = issue.assignee?.displayName ?? 'unassigned'
   return `${issue.identifier.padEnd(10)} ${state.padEnd(14)} ${assignee.padEnd(18)} ${issue.title}`
+}
+
+function formatLinearProjectRows(result: LinearProjectListResult): string {
+  if (result.projects.length === 0) {
+    return 'No Linear projects found.'
+  }
+  return result.projects
+    .map((project) => {
+      const teams =
+        project.teams
+          ?.map((team) => team.key ?? team.name)
+          .filter(Boolean)
+          .join(',') || 'no-teams'
+      const workspace = project.workspaceName ? ` ${project.workspaceName}` : ''
+      return `${project.name.padEnd(28)} ${project.id} ${teams}${workspace}`
+    })
+    .join('\n')
 }
 
 function formatPriority(priority: number | null | undefined): string {
@@ -195,8 +220,9 @@ function formatLinearAttach(result: LinearAttachResult): string {
 
 function formatLinearCreate(result: LinearCreateResult): string {
   const parent = result.issue.parent ? ` under ${result.issue.parent.identifier}` : ''
+  const project = result.issue.project?.name ? ` in ${result.issue.project.name}` : ''
   const suffix = result.meta.deduplicated ? ' (already created)' : ''
-  return `Created ${result.issue.identifier}${parent}: ${result.issue.title}${suffix}.`
+  return `Created ${result.issue.identifier}${parent}${project}: ${result.issue.title}${suffix}.`
 }
 
 function taskOperationLabel(operation: LinearIssueTaskUpdateResult['operation']): string {
@@ -229,6 +255,17 @@ function linearListWarnings(
   }
   for (const error of meta.workspaceErrors ?? []) {
     warnings.push(`warning: ${error.workspace.name} unavailable for ${label}: ${error.message}`)
+  }
+  return warnings.length > 0 ? `${warnings.join('\n')}\n` : ''
+}
+
+function linearProjectListWarnings(result: LinearProjectListResult): string {
+  const warnings: string[] = []
+  if (result.meta.hasMore) {
+    warnings.push(`warning: showing first ${result.meta.returned} Linear projects`)
+  }
+  for (const error of result.meta.workspaceErrors ?? []) {
+    warnings.push(`warning: ${error.workspace.name} unavailable for Linear: ${error.message}`)
   }
   return warnings.length > 0 ? `${warnings.join('\n')}\n` : ''
 }

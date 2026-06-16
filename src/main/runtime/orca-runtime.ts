@@ -80,6 +80,7 @@ import type {
   JiraIssueUpdate,
   JiraSiteSelection,
   LinearIssueUpdate,
+  LinearProjectSummary,
   LinearWorkspaceSelection,
   NestedRepoScanResult,
   ProjectGroup,
@@ -104,6 +105,7 @@ import type {
   LinearErrorCode,
   LinearIssueListFilter,
   LinearIssueListResult,
+  LinearProjectListResult,
   LinearIssueSummary,
   LinearIssueRequest,
   LinearIssueTaskUpdateRequest,
@@ -114,7 +116,7 @@ import type {
   LinearTeamStatesResult,
   LinearStatusSetResult
 } from '../../shared/linear-agent-access'
-import { LINEAR_WRITE_BODY_CAP } from '../../shared/linear-agent-access'
+import { LINEAR_WRITE_BODY_CAP, clampLinearSearchLimit } from '../../shared/linear-agent-access'
 import type { FeatureInteractionId } from '../../shared/feature-interactions'
 import type { TerminalPaneSplitSource } from '../../shared/feature-education-telemetry'
 import { FOLDER_WORKSPACE_INSTANCE_SEPARATOR, splitWorktreeId } from '../../shared/worktree-id'
@@ -1394,7 +1396,10 @@ type LinearCreateFieldIntent = {
   estimate?: number | null
   dueDate?: string | null
   labelIds?: string[]
+  projectId?: string
 }
+
+const LINEAR_UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 function sameStringSet(left: string[], right: string[]): boolean {
   if (left.length !== right.length) {
@@ -15325,6 +15330,36 @@ export class OrcaRuntimeService {
     }
   }
 
+  async linearProjectListForAgents(params: {
+    query?: string
+    limit?: number
+    workspaceId?: string | 'all'
+  }): Promise<LinearProjectListResult> {
+    const limit = clampLinearSearchLimit(params.limit)
+    try {
+      const result = await listLinearProjects(params.query, limit, params.workspaceId, true)
+      const workspaceErrors = (result.errors ?? []).map((error) => ({
+        workspace: { id: error.workspaceId, name: error.workspaceName ?? error.workspaceId },
+        code: this.linearWorkspaceErrorCode(error.type),
+        message: sanitizeLinearErrorMessage(error.message)
+      }))
+      return {
+        projects: result.items,
+        meta: {
+          query: params.query,
+          workspaceId: params.workspaceId,
+          limit,
+          returned: result.items.length,
+          hasMore: result.hasMore === true,
+          partial: workspaceErrors.length > 0,
+          workspaceErrors
+        }
+      }
+    } catch (error) {
+      throw this.mapLinearReadFailure(error)
+    }
+  }
+
   async linearIssueListForAgents(params: {
     filter?: LinearIssueListFilter
     teamInput?: string
@@ -15782,6 +15817,7 @@ export class OrcaRuntimeService {
     estimate?: number
     dueDate?: string
     labels?: string[]
+    projectInput?: string
     parentInput?: string
     parentCurrent?: boolean
     workspaceId?: string
@@ -16036,6 +16072,7 @@ export class OrcaRuntimeService {
       estimate?: number
       dueDate?: string
       labels?: string[]
+      projectInput?: string
     },
     team: { id: string; workspaceId: string }
   ): Promise<LinearCreateFieldIntent> {
@@ -16071,7 +16108,96 @@ export class OrcaRuntimeService {
       const labels = await this.resolveLinearLabelsForTeam(team.id, params.labels, team.workspaceId)
       fields.labelIds = labels.map((label) => label.id)
     }
+    if (params.projectInput) {
+      const project = await this.resolveLinearCreateProject(params.projectInput, team)
+      fields.projectId = project.id
+    }
     return fields
+  }
+
+  private async resolveLinearCreateProject(
+    input: string,
+    team: { id: string; workspaceId: string }
+  ): Promise<LinearProjectSummary> {
+    const trimmed = input.trim()
+    if (!trimmed) {
+      throw linearError('linear_invalid_project', 'Pass a non-empty Linear project id or name.')
+    }
+    const byId = LINEAR_UUID_PATTERN.test(trimmed)
+      ? await this.readLinearProjectByIdForCreate(trimmed, team.workspaceId)
+      : null
+    if (byId) {
+      this.assertLinearProjectIncludesTeam(byId, team.id, trimmed)
+      return byId
+    }
+    const projects = await this.readLinearProjectsForCreate(trimmed, team.workspaceId)
+    const normalized = trimmed.toLocaleLowerCase()
+    const idMatch = projects.find((project) => project.id.toLocaleLowerCase() === normalized)
+    if (idMatch) {
+      this.assertLinearProjectIncludesTeam(idMatch, team.id, trimmed)
+      return idMatch
+    }
+    const nameMatches = projects.filter(
+      (project) => project.name.trim().toLocaleLowerCase() === normalized
+    )
+    if (nameMatches.length === 1) {
+      this.assertLinearProjectIncludesTeam(nameMatches[0], team.id, trimmed)
+      return nameMatches[0]
+    }
+    throw linearError(
+      'linear_invalid_project',
+      nameMatches.length > 1
+        ? `Multiple Linear projects exactly matched "${trimmed}".`
+        : `No Linear project exactly matched "${trimmed}".`,
+      {
+        projects: projects.map((project) => ({
+          id: project.id,
+          name: project.name,
+          teams: project.teams
+        })),
+        nextSteps: ['Run `orca linear project list --query <name> --json` and retry by id.']
+      }
+    )
+  }
+
+  private async readLinearProjectByIdForCreate(
+    id: string,
+    workspaceId: string
+  ): Promise<LinearProjectSummary | null> {
+    try {
+      return await getLinearProject(id, workspaceId, true)
+    } catch (error) {
+      throw this.mapLinearReadFailure(error)
+    }
+  }
+
+  private async readLinearProjectsForCreate(
+    query: string,
+    workspaceId: string
+  ): Promise<LinearProjectSummary[]> {
+    try {
+      return (await listLinearProjects(query, 50, workspaceId, true)).items
+    } catch (error) {
+      throw this.mapLinearReadFailure(error)
+    }
+  }
+
+  private assertLinearProjectIncludesTeam(
+    project: LinearProjectSummary,
+    teamId: string,
+    input: string
+  ): void {
+    if (project.teams?.some((team) => team.id === teamId)) {
+      return
+    }
+    throw linearError(
+      'linear_invalid_project',
+      `Linear project "${input}" is not available to the target team.`,
+      {
+        project: { id: project.id, name: project.name, teams: project.teams ?? [] },
+        nextSteps: ['Choose a project that includes the create target team, then retry by id.']
+      }
+    )
   }
 
   private async getLinearViewerForWrite(
@@ -16158,6 +16284,9 @@ export class OrcaRuntimeService {
       return false
     }
     if (intent.dueDate !== undefined && (issue.dueDate ?? null) !== intent.dueDate) {
+      return false
+    }
+    if (intent.projectId !== undefined && (issue.project?.id ?? null) !== intent.projectId) {
       return false
     }
     const issueLabelIds = issue.labelIds ?? issue.labels?.map((label) => label.id) ?? []
@@ -16765,6 +16894,9 @@ export class OrcaRuntimeService {
         ? [`--estimate=${fields.estimate}`]
         : []),
       ...(fields.dueDate ? [`--due-date=${fields.dueDate}`] : []),
+      ...(fields.projectId
+        ? [`--project=${this.commandToken(fields.projectId, 'PROJECT_ID')}`]
+        : []),
       ...(fields.labelIds ?? []).map(
         (labelId) => `--label=${this.commandToken(labelId, 'LABEL_ID')}`
       )

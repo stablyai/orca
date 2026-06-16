@@ -5,6 +5,7 @@ import type {
   LinearIssueListFilter,
   LinearIssueTaskUpdateRequest
 } from './linear-agent-access'
+import type { LinearProjectSummary } from './types'
 
 export type LinearIssueSummary = {
   id: string
@@ -216,6 +217,23 @@ export type LinearIssueListResult = {
   }
 }
 
+export type LinearProjectListResult = {
+  projects: LinearProjectSummary[]
+  meta: {
+    query?: string
+    workspaceId?: string | 'all'
+    limit: number
+    returned: number
+    hasMore: boolean
+    partial: boolean
+    workspaceErrors: {
+      workspace: LinearWorkspaceCandidate
+      code: LinearErrorCode
+      message: string
+    }[]
+  }
+}
+
 export type LinearStatusSetResult = {
   issue: LinearWriteIssueRef
   state: { id: string; name: string; type: string }
@@ -264,6 +282,7 @@ export type LinearCreateResult = {
     team: { id: string; key: string; name: string }
     state: { id: string; name: string } | null
     parent: { id: string; identifier: string } | null
+    project?: LinearNamedEntity | null
     assignee?: LinearUserSummary | null
     priority?: number | null
     estimate?: number | null
