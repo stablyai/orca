@@ -1,5 +1,6 @@
 import { extractLastOscTitle, detectAgentStatusFromTitle } from '../../shared/agent-detection'
 import type { AgentStatus } from '../../shared/agent-detection'
+import { extractOscTitleScanTail } from '../../shared/osc-title-scan-tail'
 import type { StatsCollector } from './collector'
 
 type PtyAgentState = 'unknown' | 'agent' | 'stopped'
@@ -44,6 +45,8 @@ function hasMeaningfulContent(chunk: string): boolean {
     // eslint-disable-next-line no-control-regex
     .replace(/\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/g, '') // OSC sequences
     // eslint-disable-next-line no-control-regex
+    .replace(/\x1b\][^\x07]*(?:\x1b)?$/g, '') // incomplete OSC tail
+    // eslint-disable-next-line no-control-regex
     .replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, '') // CSI sequences
     // eslint-disable-next-line no-control-regex
     .replace(/\x1b[@-_]/g, '') // Fe sequences
@@ -73,6 +76,7 @@ function hasMeaningfulContent(chunk: string): boolean {
  */
 export class AgentDetector {
   private ptys = new Map<string, PtyRecord>()
+  private oscTitleScanTailByPtyId = new Map<string, string>()
   private stats: StatsCollector
   private meaningfulContentDetector: MeaningfulContentDetector
 
@@ -104,8 +108,10 @@ export class AgentDetector {
     }
 
     let hasMeaningfulOutput: boolean | null = null
+    const previousTitleTail = this.oscTitleScanTailByPtyId.get(ptyId)
+    const meaningfulData = previousTitleTail ? `${previousTitleTail}${rawData}` : rawData
     const getHasMeaningfulOutput = (): boolean => {
-      hasMeaningfulOutput ??= this.meaningfulContentDetector(rawData)
+      hasMeaningfulOutput ??= this.meaningfulContentDetector(meaningfulData)
       return hasMeaningfulOutput
     }
 
@@ -113,7 +119,7 @@ export class AgentDetector {
       record.lastMeaningfulOutputAt = at
     }
 
-    const title = extractLastOscTitle(rawData)
+    const title = this.extractLastOscTitleForPty(ptyId, rawData)
     if (title === null) {
       return
     }
@@ -173,5 +179,21 @@ export class AgentDetector {
 
     record.state = 'stopped'
     this.ptys.delete(ptyId)
+    this.oscTitleScanTailByPtyId.delete(ptyId)
+  }
+
+  private extractLastOscTitleForPty(ptyId: string, rawData: string): string | null {
+    const previousTail = this.oscTitleScanTailByPtyId.get(ptyId)
+    if (!previousTail && !rawData.includes('\x1b')) {
+      return null
+    }
+    const input = `${previousTail ?? ''}${rawData}`
+    const scanTail = extractOscTitleScanTail(input)
+    if (scanTail.length > 0) {
+      this.oscTitleScanTailByPtyId.set(ptyId, scanTail)
+    } else {
+      this.oscTitleScanTailByPtyId.delete(ptyId)
+    }
+    return extractLastOscTitle(input)
   }
 }

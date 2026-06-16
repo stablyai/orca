@@ -7,6 +7,7 @@ import {
   isClaudeManagementTitle,
   isShellProcess
 } from '../../shared/agent-detection'
+import { extractOscTitleScanTail } from '../../shared/osc-title-scan-tail'
 import type { AgentStatus } from '../../shared/agent-detection'
 import {
   AGENT_STATUS_STALE_AFTER_MS,
@@ -1702,6 +1703,9 @@ export class OrcaRuntimeService {
     string,
     ReturnType<typeof createAgentStatusOscProcessor>
   >()
+  // Why: ordinary OSC 0/1/2 titles can split across PTY chunks, especially over
+  // SSH/relay buffering. Keep a small raw scan tail so status titles are not lost.
+  private oscTitleScanTailByPtyId = new Map<string, string>()
   // Why: latest agent-status payload per pane, retained so worktree.ps can serve
   // mobile the same inline agent rows the desktop sidebar renders. Cleared on pty
   // teardown so dead agents don't linger. See RuntimeAgentRowSnapshot.
@@ -2409,6 +2413,8 @@ export class OrcaRuntimeService {
         existing && existing.ptyId !== ptyId
           ? existing.ptyGeneration + 1
           : (existing?.ptyGeneration ?? 0)
+      const existingPty = ptyId ? this.ptysById.get(ptyId) : undefined
+      const tailSource = existing?.ptyId === ptyId ? existing : existingPty
 
       nextLeaves.set(leafKey, {
         ...leaf,
@@ -2416,17 +2422,17 @@ export class OrcaRuntimeService {
         ptyGeneration,
         connected: ptyId !== null,
         writable: this.graphStatus === 'ready' && ptyId !== null,
-        lastOutputAt: existing?.ptyId === ptyId ? existing.lastOutputAt : null,
-        lastExitCode: existing?.ptyId === ptyId ? existing.lastExitCode : null,
-        tailBuffer: existing?.ptyId === ptyId ? existing.tailBuffer : [],
-        tailPartialLine: existing?.ptyId === ptyId ? existing.tailPartialLine : '',
-        tailPendingAnsi: existing?.ptyId === ptyId ? existing.tailPendingAnsi : '',
-        tailTruncated: existing?.ptyId === ptyId ? existing.tailTruncated : false,
-        tailLinesTotal: existing?.ptyId === ptyId ? existing.tailLinesTotal : 0,
-        preview: existing?.ptyId === ptyId ? existing.preview : '',
-        lastAgentStatus: existing?.ptyId === ptyId ? existing.lastAgentStatus : null,
-        lastOscTitle: existing?.ptyId === ptyId ? existing.lastOscTitle : null,
-        lastOscTitleAt: existing?.ptyId === ptyId ? existing.lastOscTitleAt : null,
+        lastOutputAt: tailSource?.lastOutputAt ?? null,
+        lastExitCode: tailSource?.lastExitCode ?? null,
+        tailBuffer: tailSource?.tailBuffer ?? [],
+        tailPartialLine: tailSource?.tailPartialLine ?? '',
+        tailPendingAnsi: tailSource?.tailPendingAnsi ?? '',
+        tailTruncated: tailSource?.tailTruncated ?? false,
+        tailLinesTotal: tailSource?.tailLinesTotal ?? 0,
+        preview: tailSource?.preview ?? '',
+        lastAgentStatus: tailSource?.lastAgentStatus ?? null,
+        lastOscTitle: tailSource?.lastOscTitle ?? null,
+        lastOscTitleAt: tailSource?.lastOscTitleAt ?? null,
         paneTitleUpdatedAt:
           existing?.ptyId === ptyId && existing.paneTitle === leaf.paneTitle
             ? existing.paneTitleUpdatedAt
@@ -3744,7 +3750,7 @@ export class OrcaRuntimeService {
     // strips the escape sequences. Agent CLIs (Claude Code, Gemini, etc.)
     // announce status via OSC 0/1/2 title sequences — this is the same
     // detection path the renderer uses for notifications and sidebar badges.
-    const oscTitle = extractLastOscTitle(data)
+    const oscTitle = this.extractLastOscTitleForPty(ptyId, data)
     const agentStatus = oscTitle ? detectAgentStatusFromTitle(oscTitle) : null
 
     const pty = this.getOrCreatePtyWorktreeRecord(ptyId)
@@ -3891,6 +3897,21 @@ export class OrcaRuntimeService {
       this.agentStatusOscProcessorsByPtyId.set(ptyId, processor)
     }
     return processor(data)
+  }
+
+  private extractLastOscTitleForPty(ptyId: string, data: string): string | null {
+    const previousTail = this.oscTitleScanTailByPtyId.get(ptyId)
+    if (!previousTail && !data.includes('\x1b')) {
+      return null
+    }
+    const input = `${previousTail ?? ''}${data}`
+    const scanTail = extractOscTitleScanTail(input)
+    if (scanTail.length > 0) {
+      this.oscTitleScanTailByPtyId.set(ptyId, scanTail)
+    } else {
+      this.oscTitleScanTailByPtyId.delete(ptyId)
+    }
+    return extractLastOscTitle(input)
   }
 
   private emitTerminalAgentStatusEvents(ptyId: string, chunk: ProcessedAgentStatusChunk): void {
@@ -5193,6 +5214,7 @@ export class OrcaRuntimeService {
     this.recentPtyOutputById.delete(ptyId)
     this.ptyOutputSequenceById.delete(ptyId)
     this.agentStatusOscProcessorsByPtyId.delete(ptyId)
+    this.oscTitleScanTailByPtyId.delete(ptyId)
     this.clearAgentRowSnapshotsForPty(ptyId)
     // Layout state machine: clear `layouts` and `layoutQueues`. Any
     // already-queued applyLayout work for this ptyId will run, but every
@@ -14101,6 +14123,7 @@ export class OrcaRuntimeService {
     this.recentPtyOutputById.delete(ptyId)
     this.ptyOutputSequenceById.delete(ptyId)
     this.agentStatusOscProcessorsByPtyId.delete(ptyId)
+    this.oscTitleScanTailByPtyId.delete(ptyId)
     this.clearAgentRowSnapshotsForPty(ptyId)
     const handle = this.handleByPtyId.get(ptyId)
     if (handle) {
@@ -19253,7 +19276,7 @@ function normalizeTerminalChunk(
       if (!parsed) {
         return {
           text,
-          pendingAnsi: combined.slice(index).slice(-MAX_TAIL_PENDING_ANSI_CHARS)
+          pendingAnsi: trimPendingAnsiControl(combined.slice(index))
         }
       }
       index = parsed.endIndex
@@ -19288,6 +19311,15 @@ function terminalChunkNeedsNormalization(chunk: string): boolean {
     }
   }
   return false
+}
+
+function trimPendingAnsiControl(value: string): string {
+  if (value.length <= MAX_TAIL_PENDING_ANSI_CHARS) {
+    return value
+  }
+  const introducer = value.slice(0, Math.min(2, value.length))
+  const suffixBudget = Math.max(0, MAX_TAIL_PENDING_ANSI_CHARS - introducer.length)
+  return `${introducer}${value.slice(-suffixBudget)}`
 }
 
 function maxTimestamp(left: number | null, right: number | null): number | null {
