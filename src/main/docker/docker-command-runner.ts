@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process'
-import type { DockerConnection, DockerContainerAction, DockerContainerInspect, DockerContainerSummary, DockerImageSummary, DockerNetworkSummary, DockerSshTargetRef, DockerVolumeSummary } from '../../shared/docker-types'
+import type { DockerConnection, DockerContainerAction, DockerContainerInspect, DockerContainerSummary, DockerImageSummary, DockerNetworkSummary, DockerResourceKind, DockerSshTargetRef, DockerVolumeSummary } from '../../shared/docker-types'
 import { parseDockerContainers } from './docker-output-parser'
 import { parseDockerInspect } from './docker-inspect-parser'
 import { parseDockerImages, parseDockerNetworks, parseDockerVolumes } from './docker-resource-parsers'
@@ -203,4 +203,56 @@ export function listVolumes(conn: DockerConnection, deps: DockerRunnerDeps = {})
 
 export function listNetworks(conn: DockerConnection, deps: DockerRunnerDeps = {}): Promise<DockerNetworkSummary[]> {
   return listResource(conn, ['network', 'ls', '--format', '{{json .}}'], parseDockerNetworks, deps)
+}
+
+function removeArgs(kind: DockerResourceKind, id: string): string[] {
+  switch (kind) {
+    case 'container':
+      return ['rm', '-f', id]
+    case 'image':
+      return ['rmi', id]
+    case 'volume':
+      return ['volume', 'rm', id]
+    case 'network':
+      return ['network', 'rm', id]
+  }
+}
+
+function pruneArgs(kind: DockerResourceKind): string[] {
+  switch (kind) {
+    case 'container':
+      return ['container', 'prune', '-f']
+    case 'image':
+      return ['image', 'prune', '-f']
+    case 'volume':
+      return ['volume', 'prune', '-f']
+    case 'network':
+      return ['network', 'prune', '-f']
+  }
+}
+
+async function runVoidCommand(conn: DockerConnection, args: string[], deps: DockerRunnerDeps): Promise<void> {
+  const exec = deps.exec ?? localCapturedExec
+  const invocation = buildInvocation(conn, args, { dockerBinary: deps.dockerBinary, sshTarget: deps.sshTarget })
+  const result = await exec(invocation.file, invocation.args, { env: invocation.env, timeout: DOCKER_COMMAND_TIMEOUT_MS })
+  if (result.code !== 0) {
+    throw new DockerCommandError(result.code, result.stderr)
+  }
+}
+
+export function runResourceRemove(
+  conn: DockerConnection,
+  kind: DockerResourceKind,
+  id: string,
+  deps: DockerRunnerDeps = {}
+): Promise<void> {
+  return runVoidCommand(conn, removeArgs(kind, id), deps)
+}
+
+export function runResourcePrune(
+  conn: DockerConnection,
+  kind: DockerResourceKind,
+  deps: DockerRunnerDeps = {}
+): Promise<void> {
+  return runVoidCommand(conn, pruneArgs(kind), deps)
 }

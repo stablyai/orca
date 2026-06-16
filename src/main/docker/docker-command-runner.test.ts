@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import type { DockerConnection, DockerContainerAction } from '../../shared/docker-types'
-import { buildInvocation, defaultDockerBinary, listContainers, DockerCommandError, inspectContainer, runContainerAction, listImages, listVolumes, listNetworks } from './docker-command-runner'
+import type { DockerConnection, DockerContainerAction, DockerResourceKind } from '../../shared/docker-types'
+import { buildInvocation, defaultDockerBinary, listContainers, DockerCommandError, inspectContainer, runContainerAction, listImages, listVolumes, listNetworks, runResourceRemove, runResourcePrune } from './docker-command-runner'
 
 const ARGS = ['ps', '-a', '--format', '{{json .}}']
 
@@ -194,5 +194,39 @@ describe('listImages/listVolumes/listNetworks', () => {
   it('listImages throws DockerCommandError on non-zero exit', async () => {
     const exec = async () => ({ stdout: '', stderr: 'boom', code: 1 })
     await expect(listImages({ id: 'local', label: 'Local', kind: 'local' }, { exec })).rejects.toThrow(DockerCommandError)
+  })
+})
+
+describe('runResourceRemove', () => {
+  const cases: Array<[DockerResourceKind, string[]]> = [
+    ['container', ['rm', '-f', 'x']],
+    ['image', ['rmi', 'x']],
+    ['volume', ['volume', 'rm', 'x']],
+    ['network', ['network', 'rm', 'x']]
+  ]
+  it.each(cases)('%s remove → right argv', async (kind, args) => {
+    const calls: Array<{ args: string[] }> = []
+    const exec = async (_file: string, a: string[]) => { calls.push({ args: a }); return { stdout: '', stderr: '', code: 0 } }
+    await runResourceRemove({ id: 'local', label: 'Local', kind: 'local' }, kind, 'x', { exec })
+    expect(calls[0].args).toEqual(args)
+  })
+  it('throws on non-zero exit', async () => {
+    const exec = async () => ({ stdout: '', stderr: 'in use', code: 1 })
+    await expect(runResourceRemove({ id: 'local', label: 'Local', kind: 'local' }, 'image', 'x', { exec })).rejects.toThrow(DockerCommandError)
+  })
+})
+
+describe('runResourcePrune', () => {
+  const cases: Array<[DockerResourceKind, string[]]> = [
+    ['container', ['container', 'prune', '-f']],
+    ['image', ['image', 'prune', '-f']],
+    ['volume', ['volume', 'prune', '-f']],
+    ['network', ['network', 'prune', '-f']]
+  ]
+  it.each(cases)('%s prune → right argv', async (kind, args) => {
+    const calls: Array<{ args: string[] }> = []
+    const exec = async (_file: string, a: string[]) => { calls.push({ args: a }); return { stdout: '', stderr: '', code: 0 } }
+    await runResourcePrune({ id: 'local', label: 'Local', kind: 'local' }, kind, { exec })
+    expect(calls[0].args).toEqual(args)
   })
 })
