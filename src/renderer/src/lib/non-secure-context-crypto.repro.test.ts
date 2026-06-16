@@ -34,6 +34,22 @@ describe('non-secure context (plain HTTP LAN web client)', () => {
     expect(hash).toMatch(/^[0-9a-f]+$/)
   })
 
+  // The fallback must match the secure-context hash, or the shared trust store
+  // mismatches and the user is re-prompted to approve a hook they already
+  // trusted on the desktop app.
+  it('produces the same hash as crypto.subtle did in a secure context', async () => {
+    const { hashOrcaHookScript } = await import('./orca-hook-trust')
+    const secureHash = await (async () => {
+      Object.defineProperty(globalThis, 'crypto', { configurable: true, value: realCrypto })
+      return hashOrcaHookScript('echo hi')
+    })()
+    Object.defineProperty(globalThis, 'crypto', {
+      configurable: true,
+      value: { getRandomValues: realCrypto.getRandomValues.bind(realCrypto) }
+    })
+    expect(await hashOrcaHookScript('echo hi')).toBe(secureHash)
+  })
+
   it('createBrowserUuid does not throw when randomUUID is missing', async () => {
     const { createBrowserUuid } = await import('./browser-uuid')
     expect(createBrowserUuid()).toMatch(
