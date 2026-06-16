@@ -1,31 +1,41 @@
 import { FlatList, Pressable, Text, View } from 'react-native'
-import { ChevronLeft, MoreHorizontal } from 'lucide-react-native'
+import { ChevronLeft, GitPullRequest, MoreHorizontal } from 'lucide-react-native'
 import { colors } from '../theme/mobile-theme'
 import type { MobileDiffReviewQueueFilter } from '../session/mobile-diff-review-queue'
 import { REVIEW_FILTERS, mobileReviewCountLabel } from '../session/mobile-diff-review-screen-model'
+import { shouldShowTrigger } from './mobile-pr-sidebar-presentation'
 import { mobileDiffReviewStyles as styles } from './mobile-diff-review-screen-styles'
 
 type Props = {
   filter: MobileDiffReviewQueueFilter
+  isWideLayout: boolean
+  prSidebarEligible: boolean
   queueLength: number
   reviewedCount: number
   unsentCount: number
   worktreeLabel: string
   onBack: () => void
   onOpenActions: () => void
+  onOpenPRSidebar: () => void
   onSelectFilter: (filter: MobileDiffReviewQueueFilter) => void
 }
 
 export function MobileDiffReviewHeader({
   filter,
+  isWideLayout,
+  prSidebarEligible,
   queueLength,
   reviewedCount,
   unsentCount,
   worktreeLabel,
   onBack,
   onOpenActions,
+  onOpenPRSidebar,
   onSelectFilter
 }: Props) {
+  // Trigger appears only in narrow/overlay mode when a GitHub PR is linked; in wide
+  // mode the sidebar is docked, so it is hidden (not disabled).
+  const showPRTrigger = shouldShowTrigger({ prSidebarEligible, isWideLayout })
   return (
     <View style={styles.header}>
       <View style={styles.topBar}>
@@ -45,6 +55,16 @@ export function MobileDiffReviewHeader({
             {worktreeLabel}
           </Text>
         </View>
+        {showPRTrigger ? (
+          <Pressable
+            style={({ pressed }) => [styles.iconButton, pressed && styles.iconButtonPressed]}
+            onPress={onOpenPRSidebar}
+            accessibilityRole="button"
+            accessibilityLabel="Open pull request sidebar"
+          >
+            <GitPullRequest size={19} color={colors.textPrimary} strokeWidth={2.2} />
+          </Pressable>
+        ) : null}
         <Pressable
           style={({ pressed }) => [styles.iconButton, pressed && styles.iconButtonPressed]}
           onPress={onOpenActions}
