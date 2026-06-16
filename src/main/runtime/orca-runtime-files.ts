@@ -87,6 +87,28 @@ const MOBILE_BINARY_EXTENSIONS = new Set([
   '.webp',
   '.zip'
 ])
+// Raster image extensions the mobile client can render from a base64 data URI
+// via files.readPreview. Mirrors mobile's classifyMobileArtifact image set;
+// SVG/PDF are intentionally excluded (RN <Image> can't decode those data URIs).
+const MOBILE_PREVIEWABLE_IMAGE_EXTENSIONS = new Set([
+  '.png',
+  '.jpg',
+  '.jpeg',
+  '.gif',
+  '.webp',
+  '.bmp',
+  '.ico'
+])
+
+function isMobilePreviewableImagePath(relativePath: string): boolean {
+  const basename = basenameFromRelativePath(relativePath)
+  const dotIndex = basename.lastIndexOf('.')
+  if (dotIndex <= 0) {
+    return false
+  }
+  return MOBILE_PREVIEWABLE_IMAGE_EXTENSIONS.has(basename.slice(dotIndex).toLowerCase())
+}
+
 const RUNTIME_PREVIEWABLE_BINARY_MIME_TYPES: Record<string, string> = {
   '.png': 'image/png',
   '.jpg': 'image/jpeg',
@@ -182,11 +204,15 @@ export class RuntimeFileCommands {
     if (!isSafeMobileRelativePath(relativePath)) {
       throw new Error('invalid_relative_path')
     }
-    const kind = isMobileBinaryPath(relativePath)
-      ? 'binary'
-      : isMobileMarkdownPath(relativePath)
-        ? 'markdown'
-        : 'text'
+    // Previewable images open like text (the mobile viewer renders them via
+    // files.readPreview); other binaries stay unavailable on mobile.
+    const kind = isMobilePreviewableImagePath(relativePath)
+      ? 'image'
+      : isMobileBinaryPath(relativePath)
+        ? 'binary'
+        : isMobileMarkdownPath(relativePath)
+          ? 'markdown'
+          : 'text'
     if (kind === 'binary') {
       return { worktree: worktree.id, relativePath, kind, opened: false }
     }

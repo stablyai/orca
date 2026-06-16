@@ -223,6 +223,41 @@ describe('RuntimeFileCommands', () => {
     })
   })
 
+  it('opens previewable images through the renderer host as an image tab', async () => {
+    const openFile = vi.fn()
+    const { commands } = createRuntimeFileCommands({ openFile })
+
+    const result = await commands.openMobileFile('id:wt-1', 'assets/logo.png')
+
+    expect(openFile).toHaveBeenCalledWith(
+      'wt-1',
+      '/repo/assets/logo.png',
+      'assets/logo.png',
+      undefined
+    )
+    expect(result).toEqual({
+      worktree: 'wt-1',
+      relativePath: 'assets/logo.png',
+      kind: 'image',
+      opened: true
+    })
+  })
+
+  it('leaves non-previewable binaries unavailable on mobile', async () => {
+    const openFile = vi.fn()
+    const { commands } = createRuntimeFileCommands({ openFile })
+
+    const result = await commands.openMobileFile('id:wt-1', 'dist/bundle.zip')
+
+    expect(openFile).not.toHaveBeenCalled()
+    expect(result).toEqual({
+      worktree: 'wt-1',
+      relativePath: 'dist/bundle.zip',
+      kind: 'binary',
+      opened: false
+    })
+  })
+
   it('does not follow symlinks when reading runtime-local file explorer dirs', async () => {
     const { commands } = createRuntimeFileCommands()
     resolveAuthorizedPathMock.mockResolvedValue('/repo')

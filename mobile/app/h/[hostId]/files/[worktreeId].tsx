@@ -10,100 +10,29 @@ import {
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useLocalSearchParams, useRouter } from 'expo-router'
-import { ChevronDown, ChevronLeft, ChevronRight, File, FileText, Folder } from 'lucide-react-native'
+import {
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  File,
+  FileText,
+  Folder,
+  Image as ImageIcon
+} from 'lucide-react-native'
 import { useHostClient, useForceReconnect } from '../../../../src/transport/client-context'
 import { getWorktreeLabel } from '../../../../src/session/worktree-label'
+import { classifyMobileArtifact } from '../../../../src/session/mobile-artifact-kind'
+import {
+  buildTree,
+  flattenTree,
+  isMarkdownPath,
+  type FilesListResult,
+  type MobileFileEntry,
+  type TreeNode
+} from '../../../../src/files/file-tree'
 import type { RpcSuccess } from '../../../../src/transport/types'
 import { triggerError, triggerSelection } from '../../../../src/platform/haptics'
 import { colors, radii, spacing, typography } from '../../../../src/theme/mobile-theme'
-
-type MobileFileEntry = {
-  relativePath: string
-  basename: string
-  kind: 'text' | 'binary'
-}
-
-type FilesListResult = {
-  files: MobileFileEntry[]
-  totalCount: number
-  truncated: boolean
-}
-
-type TreeNode = {
-  id: string
-  name: string
-  relativePath: string
-  depth: number
-  kind: 'directory' | 'text' | 'binary'
-}
-
-type DirectoryNode = {
-  name: string
-  relativePath: string
-  directories: Map<string, DirectoryNode>
-  files: MobileFileEntry[]
-}
-
-function createDirectoryNode(name: string, relativePath: string): DirectoryNode {
-  return { name, relativePath, directories: new Map(), files: [] }
-}
-
-function buildTree(files: MobileFileEntry[]): DirectoryNode {
-  const root = createDirectoryNode('', '')
-  for (const file of files) {
-    const parts = file.relativePath.split('/').filter(Boolean)
-    let current = root
-    for (let index = 0; index < parts.length - 1; index += 1) {
-      const name = parts[index]!
-      const relativePath = parts.slice(0, index + 1).join('/')
-      let child = current.directories.get(name)
-      if (!child) {
-        child = createDirectoryNode(name, relativePath)
-        current.directories.set(name, child)
-      }
-      current = child
-    }
-    current.files.push(file)
-  }
-  return root
-}
-
-function flattenTree(root: DirectoryNode, expanded: ReadonlySet<string>): TreeNode[] {
-  const rows: TreeNode[] = []
-  const visit = (directory: DirectoryNode, depth: number): void => {
-    const dirs = Array.from(directory.directories.values()).sort((a, b) =>
-      a.name.localeCompare(b.name)
-    )
-    for (const child of dirs) {
-      rows.push({
-        id: `dir:${child.relativePath}`,
-        name: child.name,
-        relativePath: child.relativePath,
-        depth,
-        kind: 'directory'
-      })
-      if (expanded.has(child.relativePath)) {
-        visit(child, depth + 1)
-      }
-    }
-    const files = [...directory.files].sort((a, b) => a.basename.localeCompare(b.basename))
-    for (const file of files) {
-      rows.push({
-        id: `file:${file.relativePath}`,
-        name: file.basename,
-        relativePath: file.relativePath,
-        depth,
-        kind: file.kind
-      })
-    }
-  }
-  visit(root, 0)
-  return rows
-}
-
-function isMarkdownPath(relativePath: string): boolean {
-  return /\.(md|mdx|markdown)$/i.test(relativePath)
-}
 
 export default function MobileFileExplorerScreen() {
   const { hostId, worktreeId, name } = useLocalSearchParams<{
@@ -165,8 +94,8 @@ export default function MobileFileExplorerScreen() {
   }, [])
 
   const openFile = useCallback(
-    async (relativePath: string, kind: 'text' | 'binary') => {
-      if (!client || kind === 'binary') {
+    async (relativePath: string) => {
+      if (!client) {
         return
       }
       setOpeningPath(relativePath)
@@ -193,7 +122,10 @@ export default function MobileFileExplorerScreen() {
   const renderItem: ListRenderItem<TreeNode> = ({ item }) => {
     const isDirectory = item.kind === 'directory'
     const isExpanded = expanded.has(item.relativePath)
-    const disabled = item.kind === 'binary'
+    // Images render in the mobile viewer (via files.readPreview), so a binary
+    // image is openable; only non-previewable binaries are unavailable.
+    const isImage = item.kind === 'binary' && classifyMobileArtifact(item.relativePath) === 'image'
+    const disabled = item.kind === 'binary' && !isImage
     const markdown = item.kind === 'text' && isMarkdownPath(item.relativePath)
     return (
       <Pressable
@@ -207,8 +139,8 @@ export default function MobileFileExplorerScreen() {
         onPress={() => {
           if (isDirectory) {
             toggleDirectory(item.relativePath)
-          } else if (item.kind === 'text' || item.kind === 'binary') {
-            void openFile(item.relativePath, item.kind)
+          } else if (!disabled) {
+            void openFile(item.relativePath)
           }
         }}
         accessibilityLabel={
@@ -232,6 +164,8 @@ export default function MobileFileExplorerScreen() {
           <Folder size={17} color={colors.textSecondary} />
         ) : markdown ? (
           <FileText size={17} color={disabled ? colors.textMuted : colors.textSecondary} />
+        ) : isImage ? (
+          <ImageIcon size={17} color={colors.textSecondary} />
         ) : (
           <File size={17} color={disabled ? colors.textMuted : colors.textSecondary} />
         )}
