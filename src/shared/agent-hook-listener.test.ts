@@ -87,6 +87,7 @@ describe('shared agent-hook-listener', () => {
     expect(resolveHookSource('/hook/cursor')).toBe('cursor')
     expect(resolveHookSource('/hook/antigravity')).toBe('antigravity')
     expect(resolveHookSource('/hook/grok')).toBe('grok')
+    expect(resolveHookSource('/hook/abacusai')).toBe('abacusai')
     expect(resolveHookSource('/hook/hermes')).toBe('hermes')
     expect(resolveHookSource('/hook/pi')).toBe('pi')
     expect(resolveHookSource('/hook/omp')).toBe('omp')

@@ -1,5 +1,6 @@
 import type React from 'react'
 import { ClaudeIcon, DroidIcon, OpenAIIcon } from '@/components/status-bar/icons'
+import abacusaiLogoUrl from '../../../../resources/abacusai-logo.png?url'
 import openClaudeLogoUrl from '../../../../resources/openclaude-logo.png?url'
 import type { TuiAgent } from '../../../shared/types'
 import { getTuiAgentLaunchCommand, TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
@@ -286,6 +287,15 @@ export const getAgentCatalog = createLocalizedCatalog((): AgentCatalogEntry[] =>
     cmd: 'openclaw',
     faviconDomain: 'openclaw.ai',
     homepageUrl: 'https://github.com/openclaw/openclaw'
+  },
+  {
+    id: 'abacusai',
+    label: translate('auto.lib.agent.catalog.67ac781223', 'Abacus AI'),
+    cmd: 'abacusai',
+    // Why: bundle the official 192px Abacus.AI mark so tab icons render
+    // crisply instead of the favicon-service 16px thumbnail.
+    iconUrl: abacusaiLogoUrl,
+    homepageUrl: 'https://abacus.ai/help/abacusai-desktop/cli-installation'
   }
 ])
 

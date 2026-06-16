@@ -106,6 +106,9 @@ playwright-report/
 /.agents/skills/
 /skills-lock.json
 
+# Abacus AI CLI runtime config (machine-local, contains user paths)
+/.abacusai/
+
 # Agent hook runtime endpoints (machine-local secrets)
 /agent-hooks/
 validation-screenshots/

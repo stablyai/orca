@@ -30,6 +30,23 @@ describe('buildAgentStartupPlan', () => {
     })
   })
 
+  it('passes Abacus AI prompts as a positional interactive argument', () => {
+    expect(
+      buildAgentStartupPlan({
+        agent: 'abacusai',
+        prompt: 'Fix the bug',
+        cmdOverrides: {},
+        platform: 'darwin'
+      })
+    ).toEqual({
+      agent: 'abacusai',
+      launchCommand: "abacusai 'Fix the bug'",
+      expectedProcess: 'abacusai',
+      followupPrompt: null,
+      launchConfig: emptyLaunchConfig('abacusai')
+    })
+  })
+
   it('uses Gemini interactive prompt mode instead of dropping the prompt', () => {
     expect(
       buildAgentStartupPlan({

@@ -333,6 +333,14 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
     // `followupPrompt` to the PTY as plain input + Enter after startup (not
     // bracketed paste). Use `draftPrompt` / agent-paste-draft for review-before-send.
     promptInjectionMode: 'stdin-after-start'
+  },
+  abacusai: {
+    detectCmd: 'abacusai',
+    launchCmd: 'abacusai',
+    expectedProcess: 'abacusai',
+    // Why: `abacusai "<prompt>"` starts the interactive REPL with the message
+    // already sent (per `abacusai --help`), so argv injection starts the turn.
+    promptInjectionMode: 'argv'
   }
 }
 

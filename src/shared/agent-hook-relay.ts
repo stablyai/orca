@@ -45,6 +45,7 @@ export type AgentHookSource =
   | 'droid'
   | 'command-code'
   | 'grok'
+  | 'abacusai'
   | 'copilot'
   | 'hermes'
   | 'devin'

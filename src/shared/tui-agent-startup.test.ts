@@ -169,6 +169,28 @@ describe('tui agent startup plans', () => {
     expect(plan?.launchCommand).toBe("codex 'resume' 's1'")
   })
 
+  it('builds Abacus AI resume plans with --resume session arguments', () => {
+    const plan = buildAgentResumeStartupPlan({
+      agent: 'abacusai',
+      providerSession: { key: 'session_id', id: 's1' },
+      cmdOverrides: {},
+      platform: 'linux'
+    })
+
+    expect(plan?.launchCommand).toBe("abacusai '--resume' 's1'")
+  })
+
+  it('honors command overrides when building Abacus AI resume plans', () => {
+    const plan = buildAgentResumeStartupPlan({
+      agent: 'abacusai',
+      providerSession: { key: 'session_id', id: 's1' },
+      cmdOverrides: { abacusai: 'abacusai --profile work' },
+      platform: 'linux'
+    })
+
+    expect(plan?.launchCommand).toBe("abacusai --profile work '--resume' 's1'")
+  })
+
   it('honors command overrides when building POSIX resume plans', () => {
     const plan = buildAgentResumeStartupPlan({
       agent: 'codex',

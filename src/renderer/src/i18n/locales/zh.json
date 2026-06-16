@@ -290,7 +290,8 @@
           "0708ed89f1": "Claude",
           "fc80296033": "Devin",
           "da41abbdd4": "Ante",
-          "mimo_code_label": "MiMo Code"
+          "mimo_code_label": "MiMo Code",
+          "67ac781223": "Abacus AI"
         },
         "skill": {
           "cli": {
@@ -7000,6 +7001,7 @@
             "e0b8c8bc25": "点赞 GitHub star 支持该项目（通过 gh CLI ",
             "36a72f0d9e": "GitHub 上的 Star Orca",
             "c61b14be7c": "grok",
+            "65af935975": "abacus",
             "5d9ba08673": "copilot",
             "f472e97440": "助手",
             "3c30fe2d51": "gemini",

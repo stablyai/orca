@@ -290,7 +290,8 @@
           "0708ed89f1": "Claude",
           "fc80296033": "Devin",
           "da41abbdd4": "Ante",
-          "mimo_code_label": "MiMo Code"
+          "mimo_code_label": "MiMo Code",
+          "67ac781223": "Abacus AI"
         },
         "skill": {
           "cli": {
@@ -7000,8 +7001,9 @@
             "e0b8c8bc25": "gh CLI를 통해 GitHub 스타로 프로젝트를 지원하세요.",
             "36a72f0d9e": "GitHub에서 Orca에 스타 주기",
             "c61b14be7c": "그로크",
-            "5d9ba08673": "Copilot",
-            "f472e97440": "aider",
+            "65af935975": "abacus",
+            "5d9ba08673": "부조종사",
+            "f472e97440": "보조원",
             "3c30fe2d51": "gemini",
             "5fdf1dc2d1": "omp",
             "9b0bc30160": "Pi",
