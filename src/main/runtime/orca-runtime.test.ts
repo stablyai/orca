@@ -6173,6 +6173,31 @@ describe('OrcaRuntimeService', () => {
     expect(read.latestCursor).toBe('1')
   })
 
+  it('does not retain split ANSI controls as visible terminal preview text', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    syncSinglePty(runtime)
+
+    const [terminal] = (await runtime.listTerminals()).terminals
+    runtime.onPtyData('pty-1', 'Working\r\x1b[', 100)
+    runtime.onPtyData('pty-1', '38;2;190;210;223;49mWo', 101)
+
+    const colorRead = await runtime.readTerminal(terminal.handle)
+    const colorRetained = colorRead.tail.join('\n')
+    expect(colorRetained).toContain('Wo')
+    expect(colorRetained).not.toContain('38;2')
+    expect(colorRetained).not.toContain('49m')
+
+    runtime.onPtyData('pty-1', 'rking\x1b[?2026', 102)
+    runtime.onPtyData('pty-1', 'l', 103)
+
+    const modeRead = await runtime.readTerminal(terminal.handle)
+    const retained = modeRead.tail.join('\n')
+    expect(retained).toContain('Working')
+    expect(retained).not.toContain('38;2')
+    expect(retained).not.toContain('?2026')
+    expect(retained).not.toContain('49m')
+  })
+
   it('bounds retained partial terminal output before preview reads', async () => {
     const runtime = new OrcaRuntimeService(store)
 
