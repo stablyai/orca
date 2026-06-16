@@ -31,9 +31,95 @@ export const mobilePrSidebarStyles = StyleSheet.create({
     fontSize: typography.bodySize,
     fontWeight: '700'
   },
-  placeholderText: {
-    color: colors.textMuted,
+  // Header section: state badge, title, author, base<-head branches.
+  badge: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+    borderRadius: radii.button,
+    borderWidth: StyleSheet.hairlineWidth
+  },
+  badgeText: {
+    fontSize: typography.metaSize,
+    fontWeight: '700'
+  },
+  prTitle: {
+    color: colors.textPrimary,
+    fontSize: typography.titleSize,
+    fontWeight: '700',
+    lineHeight: 24
+  },
+  prMeta: {
+    color: colors.textSecondary,
     fontSize: typography.metaSize
+  },
+  branchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: spacing.xs
+  },
+  branchPill: {
+    color: colors.textPrimary,
+    fontSize: typography.metaSize,
+    fontFamily: typography.monoFamily,
+    backgroundColor: colors.bgPanel,
+    paddingHorizontal: spacing.xs,
+    paddingVertical: 2,
+    borderRadius: radii.button
+  },
+  // Generic list row, mirroring the diff-review row rhythm (44dp min target).
+  row: {
+    minHeight: 44,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingVertical: spacing.xs
+  },
+  rowMain: {
+    flex: 1,
+    minWidth: 0,
+    gap: 2
+  },
+  rowTitle: {
+    color: colors.textPrimary,
+    fontSize: typography.bodySize
+  },
+  rowSubtitle: {
+    color: colors.textSecondary,
+    fontSize: typography.metaSize
+  },
+  rowStatus: {
+    fontSize: typography.metaSize,
+    fontWeight: '700'
+  },
+  statusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4
+  },
+  emptyText: {
+    color: colors.textSecondary,
+    fontSize: typography.metaSize
+  },
+  summaryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm
+  },
+  summaryLabel: {
+    fontSize: typography.bodySize,
+    fontWeight: '700'
+  },
+  checkDetailArea: {
+    paddingLeft: spacing.lg,
+    paddingBottom: spacing.xs,
+    gap: spacing.xs
+  },
+  checkDetailText: {
+    color: colors.textSecondary,
+    fontSize: typography.metaSize,
+    lineHeight: 18
   },
   stateArea: {
     flex: 1,

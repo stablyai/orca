@@ -92,6 +92,8 @@ export function MobileDiffReviewScreenView({ controller, onBack }: Props) {
             <MobilePRSidebar
               state={controller.prSidebarState}
               onRetry={controller.retryPRSidebar}
+              client={controller.client}
+              worktreeId={controller.worktreeId}
               bottomInset={insets.bottom}
             />
           </View>
@@ -103,7 +105,12 @@ export function MobileDiffReviewScreenView({ controller, onBack }: Props) {
           visible={controller.showPRSidebar}
           onClose={() => controller.setShowPRSidebar(false)}
         >
-          <MobilePRSidebar state={controller.prSidebarState} onRetry={controller.retryPRSidebar} />
+          <MobilePRSidebar
+            state={controller.prSidebarState}
+            onRetry={controller.retryPRSidebar}
+            client={controller.client}
+            worktreeId={controller.worktreeId}
+          />
         </RightDrawer>
       ) : null}
     </SafeAreaView>

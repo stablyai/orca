@@ -2,20 +2,27 @@ import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-nati
 import { RotateCw } from 'lucide-react-native'
 import { colors } from '../theme/mobile-theme'
 import type { PrSidebarState } from '../session/mobile-pr-sidebar-state'
+import type { RpcClient } from '../transport/rpc-client'
 import { prSidebarRenderBranch } from './mobile-pr-sidebar-presentation'
 import { mobilePrSidebarStyles as styles } from './pr-sidebar/mobile-pr-sidebar-styles'
+import { PRSidebarHeader } from './pr-sidebar/PRSidebarHeader'
+import { PRReviewersSection } from './pr-sidebar/PRReviewersSection'
+import { PRChecksSection } from './pr-sidebar/PRChecksSection'
 
 type Props = {
   state: PrSidebarState
   onRetry: () => void
+  // Threaded to PRChecksSection for lazy github.prCheckDetails fetches.
+  client: RpcClient | null
+  worktreeId: string
   // Applied by the docked column so content clears the home indicator (the screen's
   // SafeAreaView is edges={['top']} only).
   bottomInset?: number
 }
 
-// The shell switches on the controller's state machine and renders the section
-// placeholders (U5 fills header/reviewers/checks). Style only from mobile-theme.
-export function MobilePRSidebar({ state, onRetry, bottomInset = 0 }: Props) {
+// The shell switches on the controller's state machine and renders the read-only
+// sections (header/reviewers/checks). Style only from mobile-theme.
+export function MobilePRSidebar({ state, onRetry, client, worktreeId, bottomInset = 0 }: Props) {
   const branch = prSidebarRenderBranch(state)
   return (
     <ScrollView
@@ -23,7 +30,13 @@ export function MobilePRSidebar({ state, onRetry, bottomInset = 0 }: Props) {
       contentContainerStyle={[styles.scrollContent, { paddingBottom: bottomInset }]}
       showsVerticalScrollIndicator={false}
     >
-      <PrSidebarContent branch={branch} state={state} onRetry={onRetry} />
+      <PrSidebarContent
+        branch={branch}
+        state={state}
+        onRetry={onRetry}
+        client={client}
+        worktreeId={worktreeId}
+      />
     </ScrollView>
   )
 }
@@ -31,11 +44,15 @@ export function MobilePRSidebar({ state, onRetry, bottomInset = 0 }: Props) {
 function PrSidebarContent({
   branch,
   state,
-  onRetry
+  onRetry,
+  client,
+  worktreeId
 }: {
   branch: ReturnType<typeof prSidebarRenderBranch>
   state: PrSidebarState
   onRetry: () => void
+  client: RpcClient | null
+  worktreeId: string
 }) {
   if (branch === 'loading') {
     return (
@@ -74,28 +91,31 @@ function PrSidebarContent({
       </View>
     )
   }
-  if (branch === 'ready') {
-    return <PrSidebarSections />
+  if (branch === 'ready' && state.kind === 'ready') {
+    return <PrSidebarSections data={state.data} client={client} worktreeId={worktreeId} />
   }
   return null
 }
 
-// Placeholder section areas; U5 replaces these with the real header/reviewers/checks.
-function PrSidebarSections() {
+function PrSidebarSections({
+  data,
+  client,
+  worktreeId
+}: {
+  data: Extract<PrSidebarState, { kind: 'ready' }>['data']
+  client: RpcClient | null
+  worktreeId: string
+}) {
   return (
     <>
-      <PlaceholderSection label="PR header" />
-      <PlaceholderSection label="Reviewers" />
-      <PlaceholderSection label="Checks" />
+      <PRSidebarHeader pr={data.pr} details={data.details} />
+      <PRReviewersSection details={data.details} />
+      <PRChecksSection
+        checks={data.checks}
+        client={client}
+        worktreeId={worktreeId}
+        prRepo={data.pr.prRepo ?? null}
+      />
     </>
-  )
-}
-
-function PlaceholderSection({ label }: { label: string }) {
-  return (
-    <View style={styles.section}>
-      <Text style={styles.sectionLabel}>{label}</Text>
-      <Text style={styles.placeholderText}>Coming soon</Text>
-    </View>
   )
 }
