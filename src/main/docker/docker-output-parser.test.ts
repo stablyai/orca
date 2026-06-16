@@ -7,7 +7,7 @@ const LINE_RUNNING = JSON.stringify({
   Image: 'nginx:latest',
   State: 'running',
   Status: 'Up 3 minutes',
-  Labels: 'com.docker.compose.project=shop,maintainer=acme'
+  Labels: 'com.docker.compose.project=shop,com.docker.compose.service=web,maintainer=acme'
 })
 
 const LINE_EXITED = JSON.stringify({
@@ -29,7 +29,8 @@ describe('parseDockerContainers', () => {
         image: 'nginx:latest',
         state: 'running',
         status: 'Up 3 minutes',
-        composeProject: 'shop'
+        composeProject: 'shop',
+        composeService: 'web'
       },
       {
         id: 'def456',
@@ -37,7 +38,8 @@ describe('parseDockerContainers', () => {
         image: 'postgres:16',
         state: 'exited',
         status: 'Exited (0) 1 hour ago',
-        composeProject: undefined
+        composeProject: undefined,
+        composeService: undefined
       }
     ])
   })

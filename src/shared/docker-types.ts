@@ -44,6 +44,8 @@ export type DockerContainerSummary = {
   state: DockerContainerState
   status: string
   composeProject?: string
+  /** com.docker.compose.service label, when the container is part of a compose project. */
+  composeService?: string
 }
 
 export type DockerContainerMount = {

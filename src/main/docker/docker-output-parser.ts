@@ -19,13 +19,13 @@ function normalizeState(value: unknown): DockerContainerState {
 
 // `docker ps --format '{{json .}}'` emits Names and Labels as comma-joined strings
 // (CLI formatter context) — not the JSON array/object the raw API / `docker inspect` returns.
-function extractComposeProject(labels: unknown): string | undefined {
+function findComposeLabel(labels: unknown, key: string): string | undefined {
   if (typeof labels !== 'string' || labels.length === 0) {
     return undefined
   }
   for (const pair of labels.split(',')) {
-    const [key, ...rest] = pair.split('=')
-    if (key.trim() === 'com.docker.compose.project') {
+    const [k, ...rest] = pair.split('=')
+    if (k.trim() === key) {
       const value = rest.join('=').trim()
       return value.length > 0 ? value : undefined
     }
@@ -66,7 +66,8 @@ export function parseDockerContainers(stdout: string): DockerContainerSummary[] 
       image: typeof raw.Image === 'string' ? raw.Image : '',
       state: normalizeState(raw.State),
       status: typeof raw.Status === 'string' ? raw.Status : '',
-      composeProject: extractComposeProject(raw.Labels)
+      composeProject: findComposeLabel(raw.Labels, 'com.docker.compose.project'),
+      composeService: findComposeLabel(raw.Labels, 'com.docker.compose.service')
     })
   }
   return summaries
