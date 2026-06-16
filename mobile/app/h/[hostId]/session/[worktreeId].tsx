@@ -903,6 +903,9 @@ export default function SessionScreen() {
   const activeSessionTabTypeRef = useRef<MobileSessionTabType | null>(null)
   const pendingActiveSessionTabIdRef = useRef<string | null>(null)
   const pendingActiveTerminalHandleRef = useRef<string | null>(null)
+  // Why: focus a just-created browser tab as soon as it syncs, keyed by page id
+  // since its session tab id isn't known until the snapshot arrives.
+  const pendingActiveBrowserPageIdRef = useRef<string | null>(null)
   const initialEmptySessionAutoCreateRef = useRef<string | null>(null)
   const markdownSaveSeqRef = useRef<Map<string, number>>(new Map())
   const markdownSaveInFlightRef = useRef<Set<string>>(new Set())
@@ -932,6 +935,10 @@ export default function SessionScreen() {
     activeSessionTab?.type !== 'browser'
   const liveInputEnabled = activeHandle ? liveInputTerminalHandles.has(activeHandle) : false
   const [browserScreencastSupported, setBrowserScreencastSupported] = useState<boolean | null>(null)
+  // Why: stable callbacks (handleFileTap) read the live value via this ref, since
+  // the capability probe resolves after the callbacks are created.
+  const browserScreencastSupportedRef = useRef(browserScreencastSupported)
+  browserScreencastSupportedRef.current = browserScreencastSupported
   // Why: terminal gesture/input callbacks are intentionally stable and
   // imperative; keep their refs current before commit instead of one effect later.
   clientRef.current = client
@@ -1479,7 +1486,19 @@ export default function SessionScreen() {
       const snapshotActive = nextTabs.find((tab) => tab.isActive) ?? nextTabs[0] ?? null
       const pendingActiveSessionTabId = pendingActiveSessionTabIdRef.current
       const pendingActiveTerminalHandle = pendingActiveTerminalHandleRef.current
+      const pendingActiveBrowserPageId = pendingActiveBrowserPageIdRef.current
       let active = snapshotActive
+      if (pendingActiveBrowserPageId) {
+        const pendingBrowserTab = nextTabs.find(
+          (tab) => tab.type === 'browser' && tab.browserPageId === pendingActiveBrowserPageId
+        )
+        if (pendingBrowserTab) {
+          // Focus the just-opened browser tab as soon as it appears, regardless
+          // of the desktop's active flag (which may lag the tabCreate).
+          active = pendingBrowserTab
+          pendingActiveBrowserPageIdRef.current = null
+        }
+      }
       if (pendingActiveSessionTabId) {
         if (snapshotActive?.id === pendingActiveSessionTabId) {
           pendingActiveSessionTabIdRef.current = null
@@ -3532,7 +3551,9 @@ export default function SessionScreen() {
     if (!client || creatingBrowser) {
       return false
     }
-    if (browserScreencastSupported !== true) {
+    // Why: read via ref so a tap that fires before the capability probe resolves
+    // (or from a stale callback) still sees the live support value.
+    if (browserScreencastSupportedRef.current !== true) {
       showToast('Desktop update required for mobile browser streaming', 1600)
       return false
     }
@@ -3558,7 +3579,13 @@ export default function SessionScreen() {
       if (!response.ok) {
         throw new Error((response as RpcFailure).error.message)
       }
+      // Focus the new browser tab once it syncs (keyed by page id).
+      const created = (response as RpcSuccess).result as { browserPageId?: string }
+      if (created.browserPageId) {
+        pendingActiveBrowserPageIdRef.current = created.browserPageId
+      }
       scheduleDelayedAction(() => void fetchSessionTabs(), 300)
+      scheduleDelayedAction(() => void fetchSessionTabs(), 900)
       return true
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to create browser'
