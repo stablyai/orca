@@ -5,6 +5,7 @@ import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
 import { buildDockerConnectionList } from '@/store/slices/docker'
 import { Button } from '@/components/ui/button'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { LOCAL_DOCKER_CONNECTION, LOCAL_DOCKER_CONNECTION_ID } from '../../../../shared/docker-types'
 import type { DockerResourceKind } from '../../../../shared/docker-types'
@@ -68,6 +69,11 @@ export default function DockerPage(): React.JSX.Element {
       inspectDockerContainer: s.inspectDockerContainer
     }))
   )
+
+  const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
+  const openSettingsPage = useAppStore((s) => s.openSettingsPage)
+
+  const connections = buildDockerConnectionList(settings?.dockerConnections)
 
   const [pruneKind, setPruneKind] = useState<DockerResourceKind | null>(null)
 
@@ -166,7 +172,28 @@ export default function DockerPage(): React.JSX.Element {
     <div className="flex h-full flex-col">
       <div className="flex items-center gap-2 border-b border-border px-3 py-2">
         <span className="text-sm font-medium">Docker</span>
-        <span className="text-xs text-muted-foreground">Local</span>
+        <Select value={activeConnectionId} onValueChange={(id) => void setActiveDockerConnection(id)}>
+          <SelectTrigger size="sm" className="h-7 w-44">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {connections.map((c) => (
+              <SelectItem key={c.id} value={c.id}>
+                {c.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Button
+          variant="ghost"
+          size="xs"
+          onClick={() => {
+            openSettingsTarget({ pane: 'docker', repoId: null })
+            openSettingsPage()
+          }}
+        >
+          {translate('auto.components.docker.DockerPage.77e6e492c6', 'Manage connections')}
+        </Button>
         <div className="flex-1" />
         <Tooltip>
           <TooltipTrigger asChild>

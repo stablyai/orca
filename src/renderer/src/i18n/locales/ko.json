@@ -11275,7 +11275,8 @@
           "916726d215": "Prune {{value0}}",
           "79cedd713b": "Prune all stopped {{value0}} resources? This cannot be undone.",
           "59c7b69676": "Prune",
-          "3b170f8fdb": "Refresh"
+          "3b170f8fdb": "Refresh",
+          "77e6e492c6": "Manage connections"
         },
         "DockerVolumeDetail": {
           "4f695bd438": "Remove volume failed",
