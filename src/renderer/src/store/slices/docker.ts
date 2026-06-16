@@ -47,6 +47,11 @@ export type DockerSlice = {
   refreshDockerResources: () => Promise<void>
   removeDockerResource: (kind: DockerResourceKind, id: string) => Promise<void>
   pruneDockerResources: (kind: DockerResourceKind) => Promise<void>
+  // Per-container detail-tab state (open terminal ids + active tab), persisted for the session.
+  dockerContainerTabState: Record<string, { terminalIds: number[]; activeTab: string }>
+  setDockerContainerActiveTab: (containerId: string, tab: string) => void
+  addDockerContainerTerminal: (containerId: string) => void
+  closeDockerContainerTerminal: (containerId: string, terminalId: number) => void
 }
 
 export const createDockerSlice: StateCreator<AppState, [], [], DockerSlice> = (set, get) => ({
@@ -62,6 +67,7 @@ export const createDockerSlice: StateCreator<AppState, [], [], DockerSlice> = (s
   volumesByConnection: {},
   networksByConnection: {},
   resourcesError: null,
+  dockerContainerTabState: {},
 
   setActiveDockerConnection: async (connectionId) => {
     set({ activeConnectionId: connectionId, selectedResource: null })
@@ -180,4 +186,53 @@ export const createDockerSlice: StateCreator<AppState, [], [], DockerSlice> = (s
     if (kind === 'container') await get().refreshDockerContainers()
     else await get().refreshDockerResources()
   },
+
+  setDockerContainerActiveTab: (containerId, tab) =>
+    set((s) => {
+      const prev = s.dockerContainerTabState[containerId] ?? { terminalIds: [], activeTab: 'details' }
+      return {
+        dockerContainerTabState: {
+          ...s.dockerContainerTabState,
+          [containerId]: { ...prev, activeTab: tab }
+        }
+      }
+    }),
+
+  addDockerContainerTerminal: (containerId) =>
+    set((s) => {
+      const prev = s.dockerContainerTabState[containerId] ?? { terminalIds: [], activeTab: 'details' }
+      const nextTerminalId = (prev.terminalIds.length > 0 ? Math.max(...prev.terminalIds) : 0) + 1
+      return {
+        dockerContainerTabState: {
+          ...s.dockerContainerTabState,
+          [containerId]: {
+            terminalIds: [...prev.terminalIds, nextTerminalId],
+            activeTab: `terminal-${nextTerminalId}`
+          }
+        }
+      }
+    }),
+
+  closeDockerContainerTerminal: (containerId, terminalId) =>
+    set((s) => {
+      const prev = s.dockerContainerTabState[containerId]
+      if (!prev) return {}
+      const remaining = prev.terminalIds.filter((t) => t !== terminalId)
+      let activeTab = prev.activeTab
+      if (activeTab === `terminal-${terminalId}`) {
+        if (remaining.length === 0) {
+          activeTab = 'logs'
+        } else {
+          // Prefer the neighbour before the closed one.
+          const closedIndex = prev.terminalIds.indexOf(terminalId)
+          activeTab = `terminal-${remaining[Math.max(0, closedIndex - 1)]}`
+        }
+      }
+      return {
+        dockerContainerTabState: {
+          ...s.dockerContainerTabState,
+          [containerId]: { terminalIds: remaining, activeTab }
+        }
+      }
+    }),
 })
