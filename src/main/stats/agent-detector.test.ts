@@ -136,6 +136,21 @@ describe('AgentDetector', () => {
     expect(stats.onAgentStop).toHaveBeenCalledWith('pty-1', 120)
   })
 
+  it('treats non-ASCII output in escaped chunks as meaningful', () => {
+    const stats = {
+      onAgentStart: vi.fn(),
+      onAgentStop: vi.fn()
+    }
+    const detector = new AgentDetector(stats as never)
+
+    detector.onData('pty-1', oscTitle('Codex working'), 100)
+    detector.onData('pty-1', '\x1b[32m修正中 🌊\x1b[0m', 120)
+    detector.onData('pty-1', oscTitle('Codex done'), 140)
+
+    expect(stats.onAgentStop).toHaveBeenCalledTimes(1)
+    expect(stats.onAgentStop).toHaveBeenCalledWith('pty-1', 120)
+  })
+
   it('keeps capped split OSC title tails from becoming meaningful output', () => {
     const stats = {
       onAgentStart: vi.fn(),

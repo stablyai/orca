@@ -33,7 +33,13 @@ function hasMeaningfulContent(chunk: string): boolean {
   // chain just to prove they contain visible output.
   for (let index = 0; index < chunk.length; index++) {
     const code = chunk.charCodeAt(index)
-    if (code === 0x1b || code < 0x09 || (code > 0x0d && code < 0x20) || code > 0x7e) {
+    if (
+      code === 0x1b ||
+      code === 0x7f ||
+      code < 0x09 ||
+      (code > 0x0d && code < 0x20) ||
+      (code >= 0x80 && code <= 0x9f)
+    ) {
       break
     }
     if (code > 0x20) {
@@ -59,7 +65,7 @@ function hasMeaningfulContent(chunk: string): boolean {
     // eslint-disable-next-line no-control-regex
     .replace(/\u0008/g, '') // backspace
     // eslint-disable-next-line no-control-regex
-    .replace(/[^\x09\x0a\x20-\x7e]/g, '') // non-printable
+    .replace(/[\x00-\x08\x0b-\x1f\x7f-\x9f]/g, '') // non-printable
     .trim()
   return stripped.length > 0
 }

@@ -19302,11 +19302,15 @@ function normalizeTerminalChunk(
     const code = combined.charCodeAt(index)
     if (code === 0x08 || code === 0x09 || code === 0x0a || code === 0x0d) {
       text += char
-    } else if (code >= 0x20 && code <= 0x7e) {
+    } else if (isTerminalPreviewPrintableCodeUnit(code)) {
       text += char
     }
   }
   return { text, pendingAnsi: '' }
+}
+
+function isTerminalPreviewPrintableCodeUnit(code: number): boolean {
+  return code >= 0x20 && code !== 0x7f && (code < 0x80 || code > 0x9f)
 }
 
 function terminalChunkNeedsNormalization(chunk: string): boolean {
@@ -19314,10 +19318,11 @@ function terminalChunkNeedsNormalization(chunk: string): boolean {
     const code = chunk.charCodeAt(index)
     if (
       code === 0x1b ||
+      code === 0x7f ||
       code === 0x0d ||
       code < 0x09 ||
       (code > 0x0a && code < 0x20) ||
-      code > 0x7e
+      (code >= 0x80 && code <= 0x9f)
     ) {
       return true
     }

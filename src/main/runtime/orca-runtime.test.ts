@@ -6227,6 +6227,17 @@ describe('OrcaRuntimeService', () => {
     expect(retained).not.toContain('AAAA')
   })
 
+  it('preserves non-ASCII terminal preview text in chunks with controls', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    syncSinglePty(runtime)
+
+    const [terminal] = (await runtime.listTerminals()).terminals
+    runtime.onPtyData('pty-1', '\x1b[32mHéllo 🌊\x1b[0m\n', 100)
+
+    const read = await runtime.readTerminal(terminal.handle)
+    expect(read.tail).toEqual(['Héllo 🌊'])
+  })
+
   it('detects split OSC titles before retaining terminal previews', async () => {
     const runtime = new OrcaRuntimeService(store)
     syncSinglePty(runtime)
