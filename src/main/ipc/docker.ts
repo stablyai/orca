@@ -6,11 +6,32 @@ import {
   type DockerConnection,
   type DockerConnectionStatus,
   type DockerContainerAction,
+  type DockerResourceKind,
   type DockerSshTargetRef
 } from '../../shared/docker-types'
-import { listContainers, inspectContainer, runContainerAction, DockerCommandError } from '../docker/docker-command-runner'
+import {
+  listContainers,
+  inspectContainer,
+  runContainerAction,
+  listImages,
+  listVolumes,
+  listNetworks,
+  runResourceRemove,
+  runResourcePrune,
+  DockerCommandError
+} from '../docker/docker-command-runner'
 
-const DOCKER_IPC_CHANNELS = ['docker:listContainers', 'docker:pingConnection', 'docker:inspect', 'docker:containerAction'] as const
+const DOCKER_IPC_CHANNELS = [
+  'docker:listContainers',
+  'docker:pingConnection',
+  'docker:inspect',
+  'docker:containerAction',
+  'docker:listImages',
+  'docker:listVolumes',
+  'docker:listNetworks',
+  'docker:resourceRemove',
+  'docker:resourcePrune'
+] as const
 const POLL_INTERVAL_MS = 3_000
 
 let currentGetMainWindow: (() => BrowserWindow | null) | null = null
@@ -101,6 +122,37 @@ export function registerDockerHandlers(
     const conn = resolveConnection(store, args.connectionId)
     return listContainers(conn, { sshTarget: resolveSshTarget(conn) })
   })
+
+  ipcMain.handle('docker:listImages', async (_e, args: { connectionId: string }) => {
+    const conn = resolveConnection(store, args.connectionId)
+    return listImages(conn, { sshTarget: resolveSshTarget(conn) })
+  })
+
+  ipcMain.handle('docker:listVolumes', async (_e, args: { connectionId: string }) => {
+    const conn = resolveConnection(store, args.connectionId)
+    return listVolumes(conn, { sshTarget: resolveSshTarget(conn) })
+  })
+
+  ipcMain.handle('docker:listNetworks', async (_e, args: { connectionId: string }) => {
+    const conn = resolveConnection(store, args.connectionId)
+    return listNetworks(conn, { sshTarget: resolveSshTarget(conn) })
+  })
+
+  ipcMain.handle(
+    'docker:resourceRemove',
+    async (_e, args: { connectionId: string; kind: DockerResourceKind; id: string }) => {
+      const conn = resolveConnection(store, args.connectionId)
+      await runResourceRemove(conn, args.kind, args.id, { sshTarget: resolveSshTarget(conn) })
+    }
+  )
+
+  ipcMain.handle(
+    'docker:resourcePrune',
+    async (_e, args: { connectionId: string; kind: DockerResourceKind }) => {
+      const conn = resolveConnection(store, args.connectionId)
+      await runResourcePrune(conn, args.kind, { sshTarget: resolveSshTarget(conn) })
+    }
+  )
 
   ipcMain.handle(
     'docker:pingConnection',

@@ -116,7 +116,11 @@ import type {
   DockerContainerAction,
   DockerContainerInspect,
   DockerContainerSummary,
-  DockerResourcesChangedEvent
+  DockerImageSummary,
+  DockerNetworkSummary,
+  DockerResourceKind,
+  DockerResourcesChangedEvent,
+  DockerVolumeSummary
 } from '../shared/docker-types'
 import type {
   AgentStatusIpcPayload,
@@ -3632,7 +3636,20 @@ const api = {
       connectionId: string
       containerId: string
       action: DockerContainerAction
-    }): Promise<void> => ipcRenderer.invoke('docker:containerAction', args)
+    }): Promise<void> => ipcRenderer.invoke('docker:containerAction', args),
+    listImages: (args: { connectionId: string }): Promise<DockerImageSummary[]> =>
+      ipcRenderer.invoke('docker:listImages', args),
+    listVolumes: (args: { connectionId: string }): Promise<DockerVolumeSummary[]> =>
+      ipcRenderer.invoke('docker:listVolumes', args),
+    listNetworks: (args: { connectionId: string }): Promise<DockerNetworkSummary[]> =>
+      ipcRenderer.invoke('docker:listNetworks', args),
+    resourceRemove: (args: {
+      connectionId: string
+      kind: DockerResourceKind
+      id: string
+    }): Promise<void> => ipcRenderer.invoke('docker:resourceRemove', args),
+    resourcePrune: (args: { connectionId: string; kind: DockerResourceKind }): Promise<void> =>
+      ipcRenderer.invoke('docker:resourcePrune', args)
   },
 
   automations: {

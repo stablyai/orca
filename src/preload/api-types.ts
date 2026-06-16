@@ -333,7 +333,11 @@ import type {
   DockerContainerAction,
   DockerContainerInspect,
   DockerContainerSummary,
-  DockerResourcesChangedEvent
+  DockerImageSummary,
+  DockerNetworkSummary,
+  DockerResourceKind,
+  DockerResourcesChangedEvent,
+  DockerVolumeSummary
 } from '../shared/docker-types'
 import type {
   CodexUsageBreakdownKind,
@@ -2616,6 +2620,15 @@ export type PreloadApi = {
       containerId: string
       action: DockerContainerAction
     }) => Promise<void>
+    listImages: (args: { connectionId: string }) => Promise<DockerImageSummary[]>
+    listVolumes: (args: { connectionId: string }) => Promise<DockerVolumeSummary[]>
+    listNetworks: (args: { connectionId: string }) => Promise<DockerNetworkSummary[]>
+    resourceRemove: (args: {
+      connectionId: string
+      kind: DockerResourceKind
+      id: string
+    }) => Promise<void>
+    resourcePrune: (args: { connectionId: string; kind: DockerResourceKind }) => Promise<void>
   }
   automations: {
     list: () => Promise<Automation[]>
