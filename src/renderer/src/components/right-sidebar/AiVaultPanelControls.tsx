@@ -6,7 +6,8 @@ import {
   Clock3,
   FolderOpen,
   ListFilter,
-  LoaderCircle
+  LoaderCircle,
+  PanelsTopLeft
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -99,15 +100,21 @@ export function SessionLoadingState(): React.JSX.Element {
 export function VaultScopeSwitch({
   scope,
   workspaceAvailable,
+  projectAvailable,
   onScopeChange
 }: {
   scope: AiVaultScope
   workspaceAvailable: boolean
+  projectAvailable: boolean
   onScopeChange: (scope: AiVaultScope) => void
 }): React.JSX.Element {
-  const worktreeLabel = translate(
-    'auto.components.right.sidebar.AiVaultPanelControls.worktreeScope',
-    'Worktree'
+  const workspaceLabel = translate(
+    'auto.components.right.sidebar.AiVaultPanelControls.workspaceScope',
+    'Workspace'
+  )
+  const projectLabel = translate(
+    'auto.components.right.sidebar.AiVaultPanelControls.projectScope',
+    'Project'
   )
   const allLabel = translate('auto.components.right.sidebar.AiVaultPanelControls.allScope', 'All')
 
@@ -116,7 +123,7 @@ export function VaultScopeSwitch({
       type="single"
       value={scope}
       onValueChange={(value) => {
-        if (value === 'workspace' || value === 'all') {
+        if (value === 'workspace' || value === 'project' || value === 'all') {
           onScopeChange(value)
         }
       }}
@@ -129,25 +136,37 @@ export function VaultScopeSwitch({
           value0:
             scope === 'workspace'
               ? translate(
-                  'auto.components.right.sidebar.AiVaultPanelControls.currentWorktreeLower',
-                  'current worktree'
+                  'auto.components.right.sidebar.AiVaultPanelControls.currentWorkspaceLower',
+                  'current workspace'
                 )
-              : translate(
-                  'auto.components.right.sidebar.AiVaultPanelControls.allSessionsLower',
-                  'all sessions'
-                )
+              : scope === 'project'
+                ? translate(
+                    'auto.components.right.sidebar.AiVaultPanelControls.currentProjectLower',
+                    'current project'
+                  )
+                : translate(
+                    'auto.components.right.sidebar.AiVaultPanelControls.allSessionsLower',
+                    'all sessions'
+                  )
         }
       )}
     >
-      <ToggleGroupItem value="all" className={VAULT_SCOPE_TOGGLE_ITEM_CLASS}>
-        {allLabel}
-      </ToggleGroupItem>
       <ToggleGroupItem
         value="workspace"
         disabled={!workspaceAvailable}
         className={VAULT_SCOPE_TOGGLE_ITEM_CLASS}
       >
-        {worktreeLabel}
+        {workspaceLabel}
+      </ToggleGroupItem>
+      <ToggleGroupItem
+        value="project"
+        disabled={!projectAvailable}
+        className={VAULT_SCOPE_TOGGLE_ITEM_CLASS}
+      >
+        {projectLabel}
+      </ToggleGroupItem>
+      <ToggleGroupItem value="all" className={VAULT_SCOPE_TOGGLE_ITEM_CLASS}>
+        {allLabel}
       </ToggleGroupItem>
     </ToggleGroup>
   )
@@ -253,6 +272,10 @@ export function VaultViewMenu({
           value={group}
           onValueChange={(value) => onGroupChange(value as AiVaultGroup)}
         >
+          <DropdownMenuRadioItem value="project">
+            <PanelsTopLeft className="size-3.5" />
+            {translate('auto.components.right.sidebar.AiVaultPanelControls.project', 'Project')}
+          </DropdownMenuRadioItem>
           <DropdownMenuRadioItem value="folder">
             <FolderOpen className="size-3.5" />
             {translate('auto.components.right.sidebar.AiVaultPanelControls.folder', 'Folder')}

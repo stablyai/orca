@@ -9115,7 +9115,10 @@
             "hideEmptySessions": "隐藏空会话",
             "workspaceScope": "工作区",
             "worktreeScope": "工作树",
-            "globalScope": "全局"
+            "globalScope": "全局",
+            "projectScope": "项目",
+            "currentProjectLower": "当前项目",
+            "project": "项目"
           },
           "AiVaultSessionDetails": {
             "updated": "更新时间",

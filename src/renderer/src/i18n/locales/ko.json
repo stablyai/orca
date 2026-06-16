@@ -9115,7 +9115,10 @@
             "hideEmptySessions": "빈 세션 숨기기",
             "workspaceScope": "워크스페이스",
             "worktreeScope": "워크트리",
-            "globalScope": "전역"
+            "globalScope": "전역",
+            "projectScope": "프로젝트",
+            "currentProjectLower": "현재 프로젝트",
+            "project": "프로젝트"
           },
           "AiVaultSessionDetails": {
             "updated": "업데이트됨",
