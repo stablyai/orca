@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import * as path from 'path'
 import type { GitExec } from './git-handler-ops'
 import { removeWorktreeOp } from './git-handler-worktree-ops'
 
@@ -27,6 +28,10 @@ function nulWorktreeList(...entries: { path: string; branch?: string }[]): strin
     .join('\0')
 }
 
+function resolvedRepoPath(): string {
+  return path.resolve('/repo-feature', '/repo/.git', '..')
+}
+
 describe('relay worktree path parsing', () => {
   it('deletes the matching branch for SSH worktrees whose paths contain newlines', async () => {
     const worktreePath = '/repo-feature\nremote'
@@ -53,7 +58,7 @@ describe('relay worktree path parsing', () => {
 
     await removeWorktreeOp(git, { worktreePath })
 
-    expect(git).toHaveBeenCalledWith(['branch', '-d', '--', 'feature/newline'], '/repo')
+    expect(git).toHaveBeenCalledWith(['branch', '-d', '--', 'feature/newline'], resolvedRepoPath())
   })
 
   it('falls back to line-block worktree listing when remote Git rejects -z', async () => {
@@ -89,13 +94,10 @@ describe('relay worktree path parsing', () => {
 
     expect(calls).toEqual([
       '/repo-feature$ rev-parse --git-common-dir',
-      '/repo$ worktree list --porcelain -z',
-      '/repo$ worktree list --porcelain',
-      '/repo$ worktree remove /repo-feature',
-      '/repo$ worktree prune',
-      '/repo$ worktree list --porcelain -z',
-      '/repo$ worktree list --porcelain',
-      '/repo$ branch -d -- feature/test'
+      `${resolvedRepoPath()}$ worktree list --porcelain -z`,
+      `${resolvedRepoPath()}$ worktree list --porcelain`,
+      `${resolvedRepoPath()}$ worktree remove /repo-feature`,
+      `${resolvedRepoPath()}$ branch -d -- feature/test`
     ])
   })
 })

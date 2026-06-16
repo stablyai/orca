@@ -1392,9 +1392,15 @@ export function registerWorktreeHandlers(
         try {
           removalResult = preserveBranchHeadFallback(
             await (deleteBranch
-              ? removeWorktree(repo.path, canonicalWorktreePath, args.force ?? false)
+              ? removeWorktree(repo.path, canonicalWorktreePath, args.force ?? false, {
+                  // Why: this handler already paid for an authoritative worktree
+                  // list to validate the target; reuse it instead of rescanning
+                  // every sibling worktree during the hot delete path.
+                  knownRemovedWorktree: registeredWorktree
+                })
               : removeWorktree(repo.path, canonicalWorktreePath, args.force ?? false, {
-                  deleteBranch
+                  deleteBranch,
+                  knownRemovedWorktree: registeredWorktree
                 })),
             registeredWorktree.head
           )

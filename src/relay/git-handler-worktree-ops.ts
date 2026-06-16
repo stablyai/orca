@@ -5,6 +5,29 @@ import { deleteAlreadyMergedRelayBranchAfterSafeDeleteFailure } from './git-hand
 import type { GitExec } from './git-handler-ops'
 import { isUnsupportedWorktreeListZError, parseWorktreeList } from './git-handler-utils'
 
+function getErrorText(error: unknown): string {
+  if (typeof error === 'object' && error !== null) {
+    const parts: string[] = []
+    if ('message' in error && typeof error.message === 'string') {
+      parts.push(error.message)
+    }
+    if ('stderr' in error && typeof error.stderr === 'string') {
+      parts.push(error.stderr)
+    }
+    if ('stdout' in error && typeof error.stdout === 'string') {
+      parts.push(error.stdout)
+    }
+    return parts.join('\n')
+  }
+  return String(error)
+}
+
+function isBranchCheckedOutInWorktreeError(error: unknown): boolean {
+  return /cannot delete branch .*(?:used by worktree|checked out)|branch .*is checked out/i.test(
+    getErrorText(error)
+  )
+}
+
 async function persistRelayWorktreeCreationBase(
   git: GitExec,
   targetDir: string,
@@ -145,7 +168,6 @@ export async function removeWorktreeOp(
   }
   args.push(worktreePath)
   await git(args, repoPath)
-  await git(['worktree', 'prune'], repoPath)
 
   if (!branchName) {
     return {}
@@ -157,20 +179,20 @@ export async function removeWorktreeOp(
   // Why: SSH worktree deletion should mirror local deletion. Dropping the
   // branch also removes its upstream config, which lets fork-remotes cleanup
   // after the last PR review worktree is gone.
-  const worktreesAfterPrune = await listRelayWorktrees(git, repoPath)
-  const branchStillInUse = worktreesAfterPrune.some(
-    (worktree) => normalizeLocalBranchRef(worktree.branch ?? '') === branchName
-  )
-  if (branchStillInUse) {
-    return {}
-  }
-
   try {
     // Why: use `-d` (not `-D`) to mirror the local removeWorktree fix — Git
     // refuses to delete a branch with commits not merged into its upstream or
     // HEAD, so unpublished work on a remote worktree is preserved rather than
     // force-deleted. forceBranchDelete is reserved for failed create rollback.
-    await git(['branch', forceBranchDelete ? '-D' : '-d', '--', branchName], repoPath)
+    const branchDeleteResult = await deleteRelayBranchAfterWorktreeRemoval(
+      git,
+      repoPath,
+      branchName,
+      forceBranchDelete
+    )
+    if (branchDeleteResult === 'checked-out') {
+      return {}
+    }
     return {}
   } catch (error) {
     if (!forceBranchDelete && branchHead) {
@@ -199,6 +221,45 @@ export async function removeWorktreeOp(
       error
     )
     return { preservedBranch: { branchName, ...(branchHead ? { head: branchHead } : {}) } }
+  }
+}
+
+async function deleteRelayBranchAfterWorktreeRemoval(
+  git: GitExec,
+  repoPath: string,
+  branchName: string,
+  forceBranchDelete: boolean
+): Promise<'deleted' | 'checked-out'> {
+  const deleteFlag = forceBranchDelete ? '-D' : '-d'
+  try {
+    await git(['branch', deleteFlag, '--', branchName], repoPath)
+    return 'deleted'
+  } catch (error) {
+    if (!isBranchCheckedOutInWorktreeError(error)) {
+      throw error
+    }
+  }
+
+  try {
+    // Why: branch deletion is the cheap live-checkout guard. Only prune when
+    // Git reports a checked-out branch, which may be stale worktree metadata.
+    await git(['worktree', 'prune'], repoPath)
+  } catch (error) {
+    console.warn(
+      `relay removeWorktree: failed to prune worktrees before deleting branch "${branchName}"`,
+      error
+    )
+    return 'checked-out'
+  }
+
+  try {
+    await git(['branch', deleteFlag, '--', branchName], repoPath)
+    return 'deleted'
+  } catch (error) {
+    if (isBranchCheckedOutInWorktreeError(error)) {
+      return 'checked-out'
+    }
+    throw error
   }
 }
 

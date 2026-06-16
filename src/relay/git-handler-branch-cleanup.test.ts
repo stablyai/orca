@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import * as path from 'path'
 import type { GitExec } from './git-handler-ops'
 import { removeWorktreeOp } from './git-handler-worktree-ops'
 
@@ -12,6 +13,10 @@ function worktreeList(...entries: { path: string; branch?: string }[]): string {
       ].join('\n')
     )
     .join('\n\n')
+}
+
+function resolvedRepoPath(): string {
+  return path.resolve('/repo-feature', '/repo/.git', '..')
 }
 
 describe('removeWorktreeOp branch cleanup', () => {
@@ -134,7 +139,7 @@ describe('removeWorktreeOp branch cleanup', () => {
     const updateRefIndex = commandIndex(['update-ref', '-d', 'refs/heads/feature/test', '1'])
 
     expect(fetchIndex).toBeGreaterThanOrEqual(0)
-    expect(calls[fetchIndex]?.cwd).toBe('/repo')
+    expect(calls[fetchIndex]?.cwd).toBe(resolvedRepoPath())
     expect(fetchIndex).toBeLessThan(mergeTreeIndex)
     expect(fetchIndex).toBeLessThan(updateRefIndex)
   })
