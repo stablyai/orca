@@ -13,30 +13,34 @@ export default function DockerPage(): React.JSX.Element {
   const {
     activeConnectionId,
     containersByConnection,
-    selectedContainerId,
+    selectedResource,
     dockerConnectionError,
     settings,
     inspectByContainerId,
     inspectErrorByContainerId,
     setActiveDockerConnection,
     refreshDockerContainers,
-    selectDockerContainer,
+    selectResource,
     inspectDockerContainer
   } = useAppStore(
     useShallow((s) => ({
       activeConnectionId: s.activeConnectionId,
       containersByConnection: s.containersByConnection,
-      selectedContainerId: s.selectedContainerId,
+      selectedResource: s.selectedResource,
       dockerConnectionError: s.dockerConnectionError,
       settings: s.settings,
       inspectByContainerId: s.inspectByContainerId,
       inspectErrorByContainerId: s.inspectErrorByContainerId,
       setActiveDockerConnection: s.setActiveDockerConnection,
       refreshDockerContainers: s.refreshDockerContainers,
-      selectDockerContainer: s.selectDockerContainer,
+      selectResource: s.selectResource,
       inspectDockerContainer: s.inspectDockerContainer
     }))
   )
+
+  // Derive the selected container id from the unified resource selection.
+  const selectedContainerId =
+    selectedResource?.kind === 'container' ? selectedResource.id : null
 
   // Connect to the local daemon on first open.
   useEffect(() => {
@@ -79,7 +83,7 @@ export default function DockerPage(): React.JSX.Element {
           <DockerResourceTree
             containers={containers}
             selectedId={selectedContainerId}
-            onSelect={selectDockerContainer}
+            onSelect={(id) => selectResource({ kind: 'container', id })}
           />
         </div>
         <div className="flex min-h-0 min-w-0 flex-1">

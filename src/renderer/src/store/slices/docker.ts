@@ -8,7 +8,12 @@ import {
   type DockerContainerAction,
   type DockerContainerInspect,
   type DockerContainerSummary,
-  type DockerResourcesChangedEvent
+  type DockerImageSummary,
+  type DockerNetworkSummary,
+  type DockerResourceKind,
+  type DockerResourceSelection,
+  type DockerResourcesChangedEvent,
+  type DockerVolumeSummary
 } from '../../../../shared/docker-types'
 
 export function buildDockerConnectionList(
@@ -25,16 +30,23 @@ export type DockerSlice = {
   dockerConnectionStatus: DockerConnectionStatus
   dockerConnectionError: string | null
   containersByConnection: Record<string, DockerContainerSummary[]>
-  selectedContainerId: string | null
+  selectedResource: DockerResourceSelection | null
   inspectByContainerId: Record<string, DockerContainerInspect>
   inspectErrorByContainerId: Record<string, string>
   setActiveDockerConnection: (connectionId: string) => Promise<void>
   refreshDockerContainers: () => Promise<void>
   applyDockerResources: (event: DockerResourcesChangedEvent) => void
-  selectDockerContainer: (id: string | null) => void
+  selectResource: (selection: DockerResourceSelection | null) => void
   inspectDockerContainer: (containerId: string) => Promise<void>
   actionPendingByContainerId: Record<string, boolean>
   runDockerContainerAction: (containerId: string, action: DockerContainerAction) => Promise<void>
+  imagesByConnection: Record<string, DockerImageSummary[]>
+  volumesByConnection: Record<string, DockerVolumeSummary[]>
+  networksByConnection: Record<string, DockerNetworkSummary[]>
+  resourcesError: string | null
+  refreshDockerResources: () => Promise<void>
+  removeDockerResource: (kind: DockerResourceKind, id: string) => Promise<void>
+  pruneDockerResources: (kind: DockerResourceKind) => Promise<void>
 }
 
 export const createDockerSlice: StateCreator<AppState, [], [], DockerSlice> = (set, get) => ({
@@ -42,13 +54,17 @@ export const createDockerSlice: StateCreator<AppState, [], [], DockerSlice> = (s
   dockerConnectionStatus: 'unknown',
   dockerConnectionError: null,
   containersByConnection: {},
-  selectedContainerId: null,
+  selectedResource: null,
   inspectByContainerId: {},
   inspectErrorByContainerId: {},
   actionPendingByContainerId: {},
+  imagesByConnection: {},
+  volumesByConnection: {},
+  networksByConnection: {},
+  resourcesError: null,
 
   setActiveDockerConnection: async (connectionId) => {
-    set({ activeConnectionId: connectionId, selectedContainerId: null })
+    set({ activeConnectionId: connectionId, selectedResource: null })
     const ping = await window.api.docker.pingConnection({ connectionId })
     set({ dockerConnectionStatus: ping.status, dockerConnectionError: ping.error ?? null })
     if (ping.status === 'reachable') {
@@ -79,7 +95,7 @@ export const createDockerSlice: StateCreator<AppState, [], [], DockerSlice> = (s
     }))
   },
 
-  selectDockerContainer: (id) => set({ selectedContainerId: id }),
+  selectResource: (selection) => set({ selectedResource: selection }),
 
   runDockerContainerAction: async (containerId, action) => {
     const connectionId = get().activeConnectionId
@@ -88,8 +104,12 @@ export const createDockerSlice: StateCreator<AppState, [], [], DockerSlice> = (s
     }))
     try {
       await window.api.docker.containerAction({ connectionId, containerId, action })
-      if (action === 'remove' && get().selectedContainerId === containerId) {
-        set({ selectedContainerId: null })
+      if (
+        action === 'remove' &&
+        get().selectedResource?.kind === 'container' &&
+        get().selectedResource?.id === containerId
+      ) {
+        set({ selectedResource: null })
       }
       // Optimistic refresh: reflect the new state immediately rather than waiting for the poll.
       await get().refreshDockerContainers()
@@ -123,5 +143,41 @@ export const createDockerSlice: StateCreator<AppState, [], [], DockerSlice> = (s
         inspectErrorByContainerId: { ...s.inspectErrorByContainerId, [containerId]: String(error) }
       }))
     }
+  },
+
+  refreshDockerResources: async () => {
+    const connectionId = get().activeConnectionId
+    try {
+      const [images, volumes, networks] = await Promise.all([
+        window.api.docker.listImages({ connectionId }),
+        window.api.docker.listVolumes({ connectionId }),
+        window.api.docker.listNetworks({ connectionId })
+      ])
+      set((s) => ({
+        imagesByConnection: { ...s.imagesByConnection, [connectionId]: images },
+        volumesByConnection: { ...s.volumesByConnection, [connectionId]: volumes },
+        networksByConnection: { ...s.networksByConnection, [connectionId]: networks },
+        resourcesError: null
+      }))
+    } catch (error) {
+      set({ resourcesError: String(error) })
+    }
+  },
+
+  removeDockerResource: async (kind, id) => {
+    const connectionId = get().activeConnectionId
+    await window.api.docker.resourceRemove({ connectionId, kind, id })
+    if (get().selectedResource?.kind === kind && get().selectedResource?.id === id) {
+      set({ selectedResource: null })
+    }
+    if (kind === 'container') await get().refreshDockerContainers()
+    else await get().refreshDockerResources()
+  },
+
+  pruneDockerResources: async (kind) => {
+    const connectionId = get().activeConnectionId
+    await window.api.docker.resourcePrune({ connectionId, kind })
+    if (kind === 'container') await get().refreshDockerContainers()
+    else await get().refreshDockerResources()
   },
 })
