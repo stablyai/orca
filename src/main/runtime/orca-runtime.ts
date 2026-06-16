@@ -116,7 +116,12 @@ import type {
   LinearTeamStatesResult,
   LinearStatusSetResult
 } from '../../shared/linear-agent-access'
-import { LINEAR_WRITE_BODY_CAP, clampLinearSearchLimit } from '../../shared/linear-agent-access'
+import {
+  LINEAR_SEARCH_MAX_LIMIT,
+  LINEAR_WRITE_BODY_CAP,
+  clampLinearSearchLimit
+} from '../../shared/linear-agent-access'
+import { isLinearUuid } from '../../shared/linear-uuid'
 import type { FeatureInteractionId } from '../../shared/feature-interactions'
 import type { TerminalPaneSplitSource } from '../../shared/feature-education-telemetry'
 import { FOLDER_WORKSPACE_INSTANCE_SEPARATOR, splitWorktreeId } from '../../shared/worktree-id'
@@ -387,6 +392,7 @@ import {
   listCustomViewIssues as listLinearCustomViewIssues,
   listCustomViewProjects as listLinearCustomViewProjects,
   listCustomViews as listLinearCustomViews,
+  listProjectsByExactName as listLinearProjectsByExactName,
   listProjectIssues as listLinearProjectIssues,
   listProjectTeams as listLinearProjectTeams,
   listProjects as listLinearProjects,
@@ -1399,8 +1405,6 @@ type LinearCreateFieldIntent = {
   labelIds?: string[]
   projectId?: string
 }
-
-const LINEAR_UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 function sameStringSet(left: string[], right: string[]): boolean {
   if (left.length !== right.length) {
@@ -16132,7 +16136,7 @@ export class OrcaRuntimeService {
     if (!trimmed) {
       throw linearError('linear_invalid_project', 'Pass a non-empty Linear project id or name.')
     }
-    const byId = LINEAR_UUID_PATTERN.test(trimmed)
+    const byId = isLinearUuid(trimmed)
       ? await this.readLinearProjectByIdForCreate(trimmed, team.workspaceId)
       : null
     if (byId) {
@@ -16146,27 +16150,40 @@ export class OrcaRuntimeService {
       await this.assertLinearProjectIncludesTeam(idMatch, team.id, team.workspaceId, trimmed)
       return idMatch
     }
-    const nameMatches = projects.filter(
-      (project) => project.name.trim().toLocaleLowerCase() === normalized
+    const nameMatches = await this.readLinearProjectsByExactNameForCreate(trimmed, team.workspaceId)
+    const compatibleNameMatches = await this.filterLinearProjectsForTeam(
+      nameMatches,
+      team.id,
+      team.workspaceId
     )
-    if (nameMatches.length === 1) {
-      await this.assertLinearProjectIncludesTeam(nameMatches[0], team.id, team.workspaceId, trimmed)
-      return nameMatches[0]
+    if (compatibleNameMatches.length === 1) {
+      return compatibleNameMatches[0]
     }
-    throw linearError(
-      'linear_invalid_project',
-      nameMatches.length > 1
-        ? `Multiple Linear projects exactly matched "${trimmed}".`
-        : `No Linear project exactly matched "${trimmed}".`,
-      {
-        projects: projects.map((project) => ({
-          id: project.id,
-          name: project.name,
-          teams: project.teams
-        })),
-        nextSteps: ['Run `orca linear project list --query <name> --json` and retry by id.']
-      }
-    )
+    if (compatibleNameMatches.length > 1) {
+      throw linearError(
+        'linear_invalid_project',
+        `Multiple Linear projects exactly matched "${trimmed}".`,
+        {
+          projects: compatibleNameMatches.map((project) => ({
+            id: project.id,
+            name: project.name,
+            teams: project.teams
+          })),
+          nextSteps: ['Run `orca linear project list --query <name> --json` and retry by id.']
+        }
+      )
+    }
+    if (nameMatches.length > 0) {
+      await this.assertLinearProjectIncludesTeam(nameMatches[0], team.id, team.workspaceId, trimmed)
+    }
+    throw linearError('linear_invalid_project', `No Linear project exactly matched "${trimmed}".`, {
+      projects: projects.map((project) => ({
+        id: project.id,
+        name: project.name,
+        teams: project.teams
+      })),
+      nextSteps: ['Run `orca linear project list --query <name> --json` and retry by id.']
+    })
   }
 
   private async readLinearProjectByIdForCreate(
@@ -16185,7 +16202,18 @@ export class OrcaRuntimeService {
     workspaceId: string
   ): Promise<LinearProjectSummary[]> {
     try {
-      return (await listLinearProjects(query, 50, workspaceId, true)).items
+      return (await listLinearProjects(query, LINEAR_SEARCH_MAX_LIMIT, workspaceId, true)).items
+    } catch (error) {
+      throw this.mapLinearReadFailure(error)
+    }
+  }
+
+  private async readLinearProjectsByExactNameForCreate(
+    name: string,
+    workspaceId: string
+  ): Promise<LinearProjectSummary[]> {
+    try {
+      return await listLinearProjectsByExactName(name, workspaceId, true)
     } catch (error) {
       throw this.mapLinearReadFailure(error)
     }
@@ -16197,7 +16225,7 @@ export class OrcaRuntimeService {
     workspaceId: string,
     input: string
   ): Promise<void> {
-    if (project.teams?.some((team) => team.id === teamId)) {
+    if (this.linearProjectIncludesTeam(project, teamId)) {
       return
     }
     let teams: NonNullable<LinearProjectSummary['teams']> = []
@@ -16219,6 +16247,33 @@ export class OrcaRuntimeService {
         nextSteps: ['Choose a project that includes the create target team, then retry by id.']
       }
     )
+  }
+
+  private async filterLinearProjectsForTeam(
+    projects: LinearProjectSummary[],
+    teamId: string,
+    workspaceId: string
+  ): Promise<LinearProjectSummary[]> {
+    const compatible: LinearProjectSummary[] = []
+    for (const project of projects) {
+      if (this.linearProjectIncludesTeam(project, teamId)) {
+        compatible.push(project)
+        continue
+      }
+      try {
+        const teams = await listLinearProjectTeams(project.id, workspaceId, true)
+        if (teams.some((team) => team.id === teamId)) {
+          compatible.push({ ...project, teams })
+        }
+      } catch (error) {
+        throw this.mapLinearReadFailure(error)
+      }
+    }
+    return compatible
+  }
+
+  private linearProjectIncludesTeam(project: LinearProjectSummary, teamId: string): boolean {
+    return project.teams?.some((team) => team.id === teamId) === true
   }
 
   private async getLinearViewerForWrite(

@@ -2,8 +2,8 @@ import { z } from 'zod'
 import { defineMethod, type RpcMethod } from '../core'
 import { OptionalFiniteNumber, OptionalString, requiredString } from '../schemas'
 import { linearError } from '../../../linear/issue-context-errors'
+import { isLinearUuid } from '../../../../shared/linear-uuid'
 
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const LINEAR_DUE_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/
 const LinearDueDate = z.string().refine((value) => LINEAR_DUE_DATE_PATTERN.test(value), {
   message: 'Linear due dates must use YYYY-MM-DD'
@@ -127,7 +127,7 @@ function parseLinearWriteId(writeId: string | undefined): string | undefined {
   if (writeId === undefined) {
     return undefined
   }
-  if (!UUID_PATTERN.test(writeId)) {
+  if (!isLinearUuid(writeId)) {
     throw linearError('linear_invalid_write_id', '--write-id must be a UUID')
   }
   return writeId
