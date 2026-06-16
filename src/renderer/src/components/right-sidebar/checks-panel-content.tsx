@@ -1226,7 +1226,7 @@ export function ChecksList({
           <LoaderCircle className="size-5 animate-spin text-muted-foreground" />
         </div>
       ) : checks.length === 0 ? (
-        <div className="flex items-center justify-center py-8 text-[11px] text-muted-foreground">
+        <div className="px-3 py-8 text-[11px] text-muted-foreground">
           {translate(
             'auto.components.right.sidebar.checks.panel.content.991f50c7e4',
             'No checks configured'
