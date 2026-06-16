@@ -1062,6 +1062,10 @@ export function registerPtyHandlers(
           ? (getSettings()?.terminalWindowsPowerShellImplementation ?? 'auto')
           : undefined,
       pwshAvailable: () => isPwshAvailable(),
+      getWindowsPathPowerShell: () => getSettings?.()?.terminalWindowsPathPowerShell,
+      getWindowsPathCmd: () => getSettings?.()?.terminalWindowsPathCmd,
+      getWindowsPathGitBash: () => getSettings?.()?.terminalWindowsPathGitBash,
+      getWindowsPathWsl: () => getSettings?.()?.terminalWindowsPathWsl,
       buildSpawnEnv: (id, baseEnv, ctx) => {
         const codexSelectionTarget: CodexAccountSelectionTarget =
           ctx?.isWsl === true
@@ -1738,6 +1742,10 @@ export function registerPtyHandlers(
         spawnOptions.terminalWindowsPowerShellImplementation = getSettings
           ? (getSettings()?.terminalWindowsPowerShellImplementation ?? 'auto')
           : undefined
+        spawnOptions.terminalWindowsPathPowerShell = getSettings?.()?.terminalWindowsPathPowerShell
+        spawnOptions.terminalWindowsPathCmd = getSettings?.()?.terminalWindowsPathCmd
+        spawnOptions.terminalWindowsPathGitBash = getSettings?.()?.terminalWindowsPathGitBash
+        spawnOptions.terminalWindowsPathWsl = getSettings?.()?.terminalWindowsPathWsl
       }
 
       let result: PtySpawnResult
@@ -2308,6 +2316,10 @@ export function registerPtyHandlers(
         spawnOptions.terminalWindowsPowerShellImplementation = getSettings
           ? (getSettings()?.terminalWindowsPowerShellImplementation ?? 'auto')
           : undefined
+        spawnOptions.terminalWindowsPathPowerShell = getSettings?.()?.terminalWindowsPathPowerShell
+        spawnOptions.terminalWindowsPathCmd = getSettings?.()?.terminalWindowsPathCmd
+        spawnOptions.terminalWindowsPathGitBash = getSettings?.()?.terminalWindowsPathGitBash
+        spawnOptions.terminalWindowsPathWsl = getSettings?.()?.terminalWindowsPathWsl
       }
       let result: PtySpawnResult
       try {

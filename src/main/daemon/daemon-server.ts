@@ -277,6 +277,10 @@ export class DaemonServer {
           shellOverride: p.shellOverride,
           terminalWindowsWslDistro: p.terminalWindowsWslDistro,
           terminalWindowsPowerShellImplementation: p.terminalWindowsPowerShellImplementation,
+          terminalWindowsPathPowerShell: p.terminalWindowsPathPowerShell,
+          terminalWindowsPathCmd: p.terminalWindowsPathCmd,
+          terminalWindowsPathGitBash: p.terminalWindowsPathGitBash,
+          terminalWindowsPathWsl: p.terminalWindowsPathWsl,
           shellReadySupported: p.shellReadySupported,
           streamClient: {
             onData: (data) => {

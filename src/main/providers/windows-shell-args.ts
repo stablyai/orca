@@ -61,11 +61,13 @@ export function resolveWindowsShellLaunchArgs(
   shellPath: string,
   cwd: string,
   defaultCwd: string,
-  wslContext?: WindowsShellWslContext
+  wslContext?: WindowsShellWslContext | null,
+  shellFamilyOverride?: string
 ): WindowsShellLaunchArgs {
   const shellBasename = pathWin32.basename(shellPath).toLowerCase()
+  const family = shellFamilyOverride || shellBasename
 
-  if (shellBasename === 'cmd.exe') {
+  if (family === 'cmd.exe') {
     return {
       shellArgs: ['/K', 'chcp 65001 > nul'],
       effectiveCwd: cwd,
@@ -73,7 +75,7 @@ export function resolveWindowsShellLaunchArgs(
     }
   }
 
-  if (shellBasename === 'powershell.exe' || shellBasename === 'pwsh.exe') {
+  if (family === 'powershell.exe' || family === 'pwsh.exe') {
     // Why: foreground-process status on Windows depends on OSC 133 C/D, and
     // PowerShell needs a prompt/readline bootstrap after profiles finish.
     return {
@@ -88,7 +90,7 @@ export function resolveWindowsShellLaunchArgs(
     }
   }
 
-  if (isWindowsGitBashShellPath(shellPath)) {
+  if (isWindowsGitBashShellPath(shellPath) || family === 'git-bash') {
     return {
       shellArgs: ['--login', '-i'],
       effectiveCwd: cwd,
@@ -96,7 +98,7 @@ export function resolveWindowsShellLaunchArgs(
     }
   }
 
-  if (shellBasename === 'wsl.exe') {
+  if (family === 'wsl.exe') {
     const wslInfo = parseWslPath(cwd)
     if (wslInfo) {
       return {

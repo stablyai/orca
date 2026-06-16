@@ -71,6 +71,24 @@ async function pickFloatingWorkspaceDirectory(
   return selectedDir
 }
 
+async function pickExecutablePath(event: IpcMainInvokeEvent): Promise<string | null> {
+  const parentWindow = BrowserWindow.fromWebContents(event.sender)
+  const options = {
+    properties: ['openFile'],
+    filters: [
+      { name: 'Executables', extensions: ['exe', 'bat', 'cmd', 'com', 'lnk'] },
+      { name: 'All Files', extensions: ['*'] }
+    ]
+  } satisfies Electron.OpenDialogOptions
+  const result = parentWindow
+    ? await dialog.showOpenDialog(parentWindow, options)
+    : await dialog.showOpenDialog(options)
+  if (result.canceled || result.filePaths.length === 0) {
+    return null
+  }
+  return result.filePaths[0]
+}
+
 function getFeatureWallAssetBaseUrl(): string {
   const assetDir = app.isPackaged
     ? path.join(process.resourcesPath, 'onboarding', 'feature-wall')
@@ -245,4 +263,5 @@ export function registerAppHandlers(store: Store, options: RegisterAppHandlersOp
   ipcMain.handle('app:pickFloatingWorkspaceDirectory', (event) =>
     pickFloatingWorkspaceDirectory(event, store)
   )
+  ipcMain.handle('app:pickExecutablePath', (event) => pickExecutablePath(event))
 }

@@ -38,7 +38,10 @@ import {
   resolveGitBashPath,
   resolveWindowsGitBashShellPath
 } from '../git-bash'
-import { WINDOWS_GIT_BASH_SHELL } from '../../shared/windows-terminal-shell'
+import {
+  WINDOWS_GIT_BASH_SHELL,
+  type BuiltInWindowsTerminalShell
+} from '../../shared/windows-terminal-shell'
 import { resolveAgentForegroundProcess } from './agent-foreground-process'
 
 const PANE_IDENTITY_ENV_KEYS = ['ORCA_PANE_KEY', 'ORCA_TAB_ID', 'ORCA_WORKTREE_ID'] as const
@@ -210,6 +213,10 @@ export type LocalPtyProviderOptions = {
   getWindowsShell?: () => string | undefined
   getWindowsPowerShellImplementation?: () => 'auto' | 'powershell.exe' | 'pwsh.exe' | undefined
   pwshAvailable?: () => boolean
+  getWindowsPathPowerShell?: () => string | undefined
+  getWindowsPathCmd?: () => string | undefined
+  getWindowsPathGitBash?: () => string | undefined
+  getWindowsPathWsl?: () => string | undefined
   onSpawned?: (id: string) => void
   onExit?: (id: string, code: number) => void
   onData?: (id: string, data: string, timestamp: number) => void
@@ -256,6 +263,7 @@ export class LocalPtyProvider implements IPtyProvider {
     let shellArgs: string[]
     let effectiveCwd: string
     let validationCwd: string
+    let shellFamilyOverride: BuiltInWindowsTerminalShell | undefined = undefined
     let shellReadyLaunch: ReturnType<typeof getShellReadyLaunchConfig> | null = null
     let getFallbackShellReadyConfig:
       | ((shell: string) => ReturnType<typeof getShellReadyLaunchConfig>)
@@ -276,46 +284,51 @@ export class LocalPtyProvider implements IPtyProvider {
         process.env.COMSPEC ||
         'powershell.exe'
       const shellFamily = worktreeWslContext ? 'wsl.exe' : requestedShellFamily
-      const normalizedShellFamily = pathWin32.basename(shellFamily).toLowerCase()
-      const resolvedGitBashPath = resolveWindowsGitBashShellPath(shellFamily)
-      // Why: shell selection can arrive either as a canonical setting value
-      // ('powershell.exe') or as a concrete PowerShell executable path from a
-      // one-off override. Normalize both forms back to the PowerShell family so
-      // the shared resolver can still fall back to inbox powershell.exe when
-      // pwsh.exe was requested but is unavailable.
-      const powerShellImplementation = this.opts.getWindowsPowerShellImplementation?.()
-      const shouldResolvePowerShellFamily =
-        powerShellImplementation !== undefined || pathWin32.basename(shellFamily) === shellFamily
-      if (resolvedGitBashPath) {
-        shellPath = resolvedGitBashPath
-      } else if (shellFamily === WINDOWS_GIT_BASH_SHELL) {
-        shellPath = 'powershell.exe'
+      const customPath =
+        shellFamily === 'powershell.exe' || shellFamily === 'pwsh.exe'
+          ? args.terminalWindowsPathPowerShell || this.opts.getWindowsPathPowerShell?.()
+          : shellFamily === 'cmd.exe'
+            ? args.terminalWindowsPathCmd || this.opts.getWindowsPathCmd?.()
+            : shellFamily === 'git-bash'
+              ? args.terminalWindowsPathGitBash || this.opts.getWindowsPathGitBash?.()
+              : shellFamily === 'wsl.exe'
+                ? args.terminalWindowsPathWsl || this.opts.getWindowsPathWsl?.()
+                : undefined
+
+      if (customPath && customPath.trim()) {
+        shellPath = customPath.trim()
+        shellFamilyOverride = shellFamily as BuiltInWindowsTerminalShell
       } else {
-        shellPath = shouldResolvePowerShellFamily
-          ? (resolveEffectiveWindowsPowerShell({
-              shellFamily:
-                normalizedShellFamily === 'powershell.exe' || normalizedShellFamily === 'pwsh.exe'
-                  ? 'powershell.exe'
-                  : normalizedShellFamily === 'cmd.exe' || normalizedShellFamily === 'wsl.exe'
-                    ? normalizedShellFamily
-                    : undefined,
-              implementation: powerShellImplementation,
-              pwshAvailable: this.opts.pwshAvailable?.() ?? false
-            }) ?? shellFamily)
-          : shellFamily
+        const normalizedShellFamily = pathWin32.basename(shellFamily).toLowerCase()
+        const resolvedGitBashPath = resolveWindowsGitBashShellPath(shellFamily)
+        const powerShellImplementation = this.opts.getWindowsPowerShellImplementation?.()
+        const shouldResolvePowerShellFamily =
+          powerShellImplementation !== undefined || pathWin32.basename(shellFamily) === shellFamily
+        if (resolvedGitBashPath) {
+          shellPath = resolvedGitBashPath
+        } else if (shellFamily === WINDOWS_GIT_BASH_SHELL) {
+          shellPath = 'powershell.exe'
+        } else {
+          shellPath = shouldResolvePowerShellFamily
+            ? (resolveEffectiveWindowsPowerShell({
+                shellFamily:
+                  normalizedShellFamily === 'powershell.exe' || normalizedShellFamily === 'pwsh.exe'
+                    ? 'powershell.exe'
+                    : normalizedShellFamily === 'cmd.exe' || normalizedShellFamily === 'wsl.exe'
+                      ? normalizedShellFamily
+                      : undefined,
+                implementation: powerShellImplementation,
+                pwshAvailable: this.opts.pwshAvailable?.() ?? false
+              }) ?? shellFamily)
+            : shellFamily
+        }
       }
-      // Why: one-off overrides and persisted shell-family selection keep the
-      // same priority, while the shared resolver chooses which PowerShell
-      // executable is safe to run right now if that family is selected.
-      // Why: both this path and the daemon-subprocess path must derive the
-      // same shellArgs for the same (shell, cwd) pair. The helper keeps CJK
-      // UTF-8 setup (chcp 65001), PowerShell $PROFILE dot-sourcing, and the
-      // wsl.exe /mnt/<drive> cwd translation in one place.
       const resolved = resolveWindowsShellLaunchArgs(
         shellPath,
         cwd,
         defaultCwd,
-        worktreeWslContext ?? preferredWslContext
+        worktreeWslContext ?? preferredWslContext,
+        shellFamilyOverride
       )
       shellArgs = resolved.shellArgs
       effectiveCwd = resolved.effectiveCwd
@@ -370,14 +383,17 @@ export class LocalPtyProvider implements IPtyProvider {
     // Python scripts run inside the terminal.
     if (process.platform === 'win32') {
       spawnEnv.PYTHONUTF8 ??= '1'
-      if (isWindowsGitBashShellPath(shellPath)) {
+      if (isWindowsGitBashShellPath(shellPath) || shellFamilyOverride === 'git-bash') {
         // Why: Git for Windows login startup files otherwise cd to $HOME,
         // ignoring node-pty's cwd for repo-scoped terminals.
         spawnEnv.CHERE_INVOKING ??= '1'
       }
     }
 
-    const isWslShell = Boolean(wslInfo) || pathWin32.basename(shellPath).toLowerCase() === 'wsl.exe'
+    const isWslShell =
+      Boolean(wslInfo) ||
+      pathWin32.basename(shellPath).toLowerCase() === 'wsl.exe' ||
+      shellFamilyOverride === 'wsl.exe'
     const launchWslDistro =
       wslInfo?.distro ?? worktreeWslContext?.distro ?? preferredWslContext?.distro ?? null
     const finalEnv = this.opts.buildSpawnEnv
@@ -399,7 +415,10 @@ export class LocalPtyProvider implements IPtyProvider {
     }
     if (process.platform === 'win32') {
       const codexHomeWslInfo = finalEnv.CODEX_HOME ? parseWslPath(finalEnv.CODEX_HOME) : null
-      if (pathWin32.basename(shellPath).toLowerCase() === 'wsl.exe') {
+      if (
+        pathWin32.basename(shellPath).toLowerCase() === 'wsl.exe' ||
+        shellFamilyOverride === 'wsl.exe'
+      ) {
         if (codexHomeWslInfo) {
           if (launchWslDistro && launchWslDistro !== codexHomeWslInfo.distro) {
             delete finalEnv.CODEX_HOME
@@ -410,9 +429,15 @@ export class LocalPtyProvider implements IPtyProvider {
             // Why: wsl.exe only imports non-default env vars named in WSLENV.
             addWslEnvKeys(finalEnv, ['CODEX_HOME', 'ORCA_CODEX_HOME'])
             if (!launchWslDistro) {
-              const resolved = resolveWindowsShellLaunchArgs(shellPath, cwd, defaultCwd, {
-                distro: codexHomeWslInfo.distro
-              })
+              const resolved = resolveWindowsShellLaunchArgs(
+                shellPath,
+                cwd,
+                defaultCwd,
+                {
+                  distro: codexHomeWslInfo.distro
+                },
+                shellFamilyOverride
+              )
               shellArgs = resolved.shellArgs
               effectiveCwd = resolved.effectiveCwd
               validationCwd = resolved.validationCwd
@@ -474,7 +499,7 @@ export class LocalPtyProvider implements IPtyProvider {
     const historyEnabled = worktreeId && (this.opts.isHistoryEnabled?.() ?? true)
     // Resolve the effective shell kind for history injection. For WSL, the
     // outer executable is wsl.exe but the inner login shell is bash.
-    const effectiveShellPath = wslInfo ? 'bash' : shellPath
+    const effectiveShellPath = wslInfo || isWslShell ? 'bash' : shellPath
     let historyResult: ReturnType<typeof injectHistoryEnv> | null = null
     if (historyEnabled) {
       historyResult = injectHistoryEnv(finalEnv, worktreeId, effectiveShellPath, cwd)

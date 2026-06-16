@@ -2370,6 +2370,14 @@ export type GlobalSettings = {
    *  user's preferred shell. Defaults to 'powershell.exe' which is the
    *  modern choice for an IDE context. Only consulted on Windows. */
   terminalWindowsShell: string
+  /** Custom executable path for PowerShell. */
+  terminalWindowsPathPowerShell?: string
+  /** Custom executable path for Command Prompt. */
+  terminalWindowsPathCmd?: string
+  /** Custom executable path for Git Bash. */
+  terminalWindowsPathGitBash?: string
+  /** Custom executable path for WSL. */
+  terminalWindowsPathWsl?: string
   /** Why: when WSL is the Windows default shell, users with multiple distros
    *  need Orca to launch terminals and scan agents in the same chosen distro
    *  instead of whatever WSL currently marks as its global default. */

@@ -26,6 +26,10 @@ export type CreateOrAttachOptions = {
   shellOverride?: string
   terminalWindowsWslDistro?: string | null
   terminalWindowsPowerShellImplementation?: 'auto' | 'powershell.exe' | 'pwsh.exe'
+  terminalWindowsPathPowerShell?: string
+  terminalWindowsPathCmd?: string
+  terminalWindowsPathGitBash?: string
+  terminalWindowsPathWsl?: string
   shellReadySupported?: boolean
   streamClient: { onData: (data: string) => void; onExit: (code: number) => void }
 }
@@ -50,6 +54,10 @@ export type TerminalHostOptions = {
     shellOverride?: string
     terminalWindowsWslDistro?: string | null
     terminalWindowsPowerShellImplementation?: 'auto' | 'powershell.exe' | 'pwsh.exe'
+    terminalWindowsPathPowerShell?: string
+    terminalWindowsPathCmd?: string
+    terminalWindowsPathGitBash?: string
+    terminalWindowsPathWsl?: string
   }) => SubprocessHandle
   // Why: on graceful shutdown, the host writes final checkpoints for all live
   // sessions before killing them. This bypasses the RPC round-trip — the daemon
@@ -114,7 +122,11 @@ export class TerminalHost {
       command: opts.command,
       shellOverride: opts.shellOverride,
       terminalWindowsWslDistro: opts.terminalWindowsWslDistro,
-      terminalWindowsPowerShellImplementation: opts.terminalWindowsPowerShellImplementation
+      terminalWindowsPowerShellImplementation: opts.terminalWindowsPowerShellImplementation,
+      terminalWindowsPathPowerShell: opts.terminalWindowsPathPowerShell,
+      terminalWindowsPathCmd: opts.terminalWindowsPathCmd,
+      terminalWindowsPathGitBash: opts.terminalWindowsPathGitBash,
+      terminalWindowsPathWsl: opts.terminalWindowsPathWsl
     })
 
     const session = new Session({

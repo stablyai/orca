@@ -230,6 +230,10 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     // and Ctrl+right-click still opens the context menu when paste is enabled.
     terminalRightClickToPaste: true,
     terminalWindowsShell: 'powershell.exe',
+    terminalWindowsPathPowerShell: '',
+    terminalWindowsPathCmd: '',
+    terminalWindowsPathGitBash: '',
+    terminalWindowsPathWsl: '',
     terminalWindowsWslDistro: null,
     localAccountRuntime: 'host',
     localAccountWslDistro: null,

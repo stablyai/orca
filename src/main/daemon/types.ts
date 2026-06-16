@@ -98,6 +98,10 @@ export type CreateOrAttachRequest = {
      *  PowerShell 7+. Forward the persisted implementation choice so the daemon
      *  PTY path resolves the same effective executable as LocalPtyProvider. */
     terminalWindowsPowerShellImplementation?: 'auto' | 'powershell.exe' | 'pwsh.exe'
+    terminalWindowsPathPowerShell?: string
+    terminalWindowsPathCmd?: string
+    terminalWindowsPathGitBash?: string
+    terminalWindowsPathWsl?: string
     shellReadySupported?: boolean
   }
 }

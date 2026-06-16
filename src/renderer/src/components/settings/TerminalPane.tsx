@@ -2,6 +2,8 @@
    settings together so search shows one focused terminal behavior surface. */
 import type { GlobalSettings, SetupScriptLaunchMode } from '../../../../shared/types'
 import { Input } from '../ui/input'
+import { Button } from '../ui/button'
+import { FolderOpen } from 'lucide-react'
 import { Separator } from '../ui/separator'
 import { ToggleGroup, ToggleGroupItem } from '../ui/toggle-group'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
@@ -187,6 +189,235 @@ export function TerminalPane({
               }
             />
           </SearchableSetting>
+          {windowsShell === 'powershell.exe' ? (
+            <SearchableSetting
+              title={translate(
+                'auto.components.settings.TerminalPane.powershellPath',
+                'PowerShell Path'
+              )}
+              description={translate(
+                'auto.components.settings.TerminalPane.powershellPathDesc',
+                'Custom executable path for PowerShell.'
+              )}
+              keywords={['terminal', 'windows', 'powershell', 'path', 'executable', 'custom']}
+            >
+              <SettingsRow
+                alignTop
+                label={translate(
+                  'auto.components.settings.TerminalPane.powershellPath',
+                  'PowerShell Path'
+                )}
+                description={translate(
+                  'auto.components.settings.TerminalPane.powershellPathDesc',
+                  'Custom executable path for PowerShell.'
+                )}
+                control={
+                  <div className="flex w-72 max-w-full gap-2">
+                    <Input
+                      value={settings.terminalWindowsPathPowerShell ?? ''}
+                      onChange={(e) =>
+                        updateSettings({ terminalWindowsPathPowerShell: e.target.value })
+                      }
+                      placeholder={translate(
+                        'auto.components.settings.TerminalPane.powershellPlaceholder',
+                        'powershell.exe'
+                      )}
+                      className="min-w-0 flex-1"
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      aria-label={translate(
+                        'auto.components.settings.TerminalPane.browsePowerShellPath',
+                        'Browse for PowerShell executable'
+                      )}
+                      onClick={async () => {
+                        const path = await window.api.app.pickExecutablePath()
+                        if (path) {
+                          updateSettings({ terminalWindowsPathPowerShell: path })
+                        }
+                      }}
+                    >
+                      <FolderOpen className="size-4" />
+                    </Button>
+                  </div>
+                }
+              />
+            </SearchableSetting>
+          ) : null}
+
+          {windowsShell === 'cmd.exe' ? (
+            <SearchableSetting
+              title={translate(
+                'auto.components.settings.TerminalPane.cmdPath',
+                'Command Prompt Path'
+              )}
+              description={translate(
+                'auto.components.settings.TerminalPane.cmdPathDesc',
+                'Custom executable path for Command Prompt.'
+              )}
+              keywords={[
+                'terminal',
+                'windows',
+                'cmd',
+                'command prompt',
+                'path',
+                'executable',
+                'custom'
+              ]}
+            >
+              <SettingsRow
+                alignTop
+                label={translate(
+                  'auto.components.settings.TerminalPane.cmdPath',
+                  'Command Prompt Path'
+                )}
+                description={translate(
+                  'auto.components.settings.TerminalPane.cmdPathDesc',
+                  'Custom executable path for Command Prompt.'
+                )}
+                control={
+                  <div className="flex w-72 max-w-full gap-2">
+                    <Input
+                      value={settings.terminalWindowsPathCmd ?? ''}
+                      onChange={(e) => updateSettings({ terminalWindowsPathCmd: e.target.value })}
+                      placeholder={translate(
+                        'auto.components.settings.TerminalPane.cmdPlaceholder',
+                        'cmd.exe'
+                      )}
+                      className="min-w-0 flex-1"
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      aria-label={translate(
+                        'auto.components.settings.TerminalPane.browseCmdPath',
+                        'Browse for Command Prompt executable'
+                      )}
+                      onClick={async () => {
+                        const path = await window.api.app.pickExecutablePath()
+                        if (path) {
+                          updateSettings({ terminalWindowsPathCmd: path })
+                        }
+                      }}
+                    >
+                      <FolderOpen className="size-4" />
+                    </Button>
+                  </div>
+                }
+              />
+            </SearchableSetting>
+          ) : null}
+
+          {windowsShell === 'git-bash' ? (
+            <SearchableSetting
+              title={translate(
+                'auto.components.settings.TerminalPane.gitBashPath',
+                'Git Bash Path'
+              )}
+              description={translate(
+                'auto.components.settings.TerminalPane.gitBashPathDesc',
+                'Custom executable path for Git Bash.'
+              )}
+              keywords={['terminal', 'windows', 'git bash', 'bash', 'path', 'executable', 'custom']}
+            >
+              <SettingsRow
+                alignTop
+                label={translate(
+                  'auto.components.settings.TerminalPane.gitBashPath',
+                  'Git Bash Path'
+                )}
+                description={translate(
+                  'auto.components.settings.TerminalPane.gitBashPathDesc',
+                  'Custom executable path for Git Bash.'
+                )}
+                control={
+                  <div className="flex w-72 max-w-full gap-2">
+                    <Input
+                      value={settings.terminalWindowsPathGitBash ?? ''}
+                      onChange={(e) =>
+                        updateSettings({ terminalWindowsPathGitBash: e.target.value })
+                      }
+                      placeholder={translate(
+                        'auto.components.settings.TerminalPane.bashPlaceholder',
+                        'bash.exe'
+                      )}
+                      className="min-w-0 flex-1"
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      aria-label={translate(
+                        'auto.components.settings.TerminalPane.browseGitBashPath',
+                        'Browse for Git Bash executable'
+                      )}
+                      onClick={async () => {
+                        const path = await window.api.app.pickExecutablePath()
+                        if (path) {
+                          updateSettings({ terminalWindowsPathGitBash: path })
+                        }
+                      }}
+                    >
+                      <FolderOpen className="size-4" />
+                    </Button>
+                  </div>
+                }
+              />
+            </SearchableSetting>
+          ) : null}
+
+          {windowsShell === 'wsl.exe' ? (
+            <SearchableSetting
+              title={translate('auto.components.settings.TerminalPane.wslPath', 'WSL Path')}
+              description={translate(
+                'auto.components.settings.TerminalPane.wslPathDesc',
+                'Custom executable path for WSL.'
+              )}
+              keywords={['terminal', 'windows', 'wsl', 'linux', 'path', 'executable', 'custom']}
+            >
+              <SettingsRow
+                alignTop
+                label={translate('auto.components.settings.TerminalPane.wslPath', 'WSL Path')}
+                description={translate(
+                  'auto.components.settings.TerminalPane.wslPathDesc',
+                  'Custom executable path for WSL.'
+                )}
+                control={
+                  <div className="flex w-72 max-w-full gap-2">
+                    <Input
+                      value={settings.terminalWindowsPathWsl ?? ''}
+                      onChange={(e) => updateSettings({ terminalWindowsPathWsl: e.target.value })}
+                      placeholder={translate(
+                        'auto.components.settings.TerminalPane.wslPlaceholder',
+                        'wsl.exe'
+                      )}
+                      className="min-w-0 flex-1"
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      aria-label={translate(
+                        'auto.components.settings.TerminalPane.browseWslPath',
+                        'Browse for WSL executable'
+                      )}
+                      onClick={async () => {
+                        const path = await window.api.app.pickExecutablePath()
+                        if (path) {
+                          updateSettings({ terminalWindowsPathWsl: path })
+                        }
+                      }}
+                    >
+                      <FolderOpen className="size-4" />
+                    </Button>
+                  </div>
+                }
+              />
+            </SearchableSetting>
+          ) : null}
           {windowsShell === 'wsl.exe' ? (
             <SearchableSetting
               title={translate(

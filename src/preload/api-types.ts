@@ -741,6 +741,8 @@ export type AppApi = {
   /** Opens a native directory picker and authorizes the selected directory
    *  for Floating Workspace markdown file creation. */
   pickFloatingWorkspaceDirectory: () => Promise<string | null>
+  /** Opens a native file picker for an executable and returns the selected path. */
+  pickExecutablePath: () => Promise<string | null>
 }
 
 export type PreloadApi = {

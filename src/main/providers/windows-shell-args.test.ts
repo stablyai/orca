@@ -184,4 +184,20 @@ describe('resolveWindowsShellLaunchArgs', () => {
       encodePowerShellCommand(getPowerShellOsc133Bootstrap())
     ])
   })
+
+  it('honors shellFamilyOverride for renamed executables', () => {
+    const result = resolveWindowsShellLaunchArgs(
+      'C:\\tools\\renamed-powershell.exe',
+      'C:\\Users\\alice',
+      'C:\\Users\\alice',
+      null,
+      'powershell.exe'
+    )
+    expect(result.shellArgs).toEqual([
+      '-NoLogo',
+      '-NoExit',
+      '-EncodedCommand',
+      encodePowerShellCommand(getPowerShellOsc133Bootstrap())
+    ])
+  })
 })
