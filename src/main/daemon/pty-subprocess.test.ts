@@ -318,6 +318,43 @@ describe('createPtySubprocess', () => {
     }
   })
 
+  it('does not let stale shell enrichment clear a newer direct agent foreground cache', async () => {
+    const proc = mockPtyProcess()
+    proc.process = 'powershell.exe'
+    spawnMock.mockReturnValue(proc)
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+    let resolveForeground!: (processName: string) => void
+    resolveAgentForegroundProcessMock.mockReturnValue(
+      new Promise<string>((resolve) => {
+        resolveForeground = resolve
+      })
+    )
+
+    try {
+      const handle = createPtySubprocess({
+        sessionId: 'test',
+        cols: 80,
+        rows: 24
+      })
+
+      expect(handle.getForegroundProcess()).toBe('powershell.exe')
+      proc.process = 'codex'
+      expect(handle.getForegroundProcess()).toBe('codex')
+
+      resolveForeground('powershell.exe')
+      await Promise.resolve()
+      await Promise.resolve()
+
+      proc.process = 'powershell.exe'
+      expect(handle.getForegroundProcess()).toBe('codex')
+    } finally {
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
+  })
+
   it('keeps menu startup agent foreground through early negative shell enrichment', async () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-06-16T12:00:00.000Z'))

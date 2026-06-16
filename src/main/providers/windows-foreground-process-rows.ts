@@ -174,7 +174,8 @@ async function queryWindowsProcessesWithPowerShell(): Promise<WindowsProcessRow[
         maxBuffer: 8 * 1024 * 1024
       }
     )
-    return parseWindowsProcessJsonRows(stdout)
+    const rows = parseWindowsProcessJsonRows(stdout)
+    return rows && rows.length > 0 ? rows : null
   } catch {
     return null
   }
