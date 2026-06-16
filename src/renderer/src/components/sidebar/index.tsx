@@ -13,6 +13,8 @@ import { cn } from '@/lib/utils'
 import { FolderPlus, Loader2 } from 'lucide-react'
 import { useSidebarProjectDrop } from './useSidebarProjectDrop'
 import { useWorkspaceBoardPanel } from './useWorkspaceBoardPanel'
+import { resolveLeftSidebarStyleVariables } from '@/lib/left-sidebar-appearance'
+import { useSystemPrefersDark } from '@/components/terminal-pane/use-system-prefers-dark'
 
 const WorktreeMetaDialog = React.lazy(() => import('./WorktreeMetaDialog'))
 const RemoveFolderDialog = React.lazy(() => import('./RemoveFolderDialog'))
@@ -37,6 +39,7 @@ function Sidebar({
   const sidebarOpen = useAppStore((s) => s.sidebarOpen)
   const sidebarWidth = useAppStore((s) => s.sidebarWidth)
   const setSidebarWidth = useAppStore((s) => s.setSidebarWidth)
+  const settings = useAppStore((s) => s.settings)
   const repos = useAppStore((s) => s.repos)
   const fetchAllWorktrees = useAppStore((s) => s.fetchAllWorktrees)
   const activeModal = useAppStore((s) => s.activeModal)
@@ -53,6 +56,14 @@ function Sidebar({
   const setLiveSidebarWidth = React.useCallback((width: number) => {
     document.documentElement.style.setProperty('--workspace-sidebar-live-width', `${width}px`)
   }, [])
+
+  // Why: scope the chosen left-sidebar appearance to this surface so the
+  // workspace sidebar follows the setting, not just the settings preview.
+  const systemPrefersDark = useSystemPrefersDark()
+  const appearanceStyle = React.useMemo(
+    () => resolveLeftSidebarStyleVariables(settings, systemPrefersDark),
+    [settings, systemPrefersDark]
+  ) as React.CSSProperties | undefined
 
   // Fetch worktrees when repos are added/removed
   const repoCount = repos.length
@@ -84,6 +95,7 @@ function Sidebar({
         ref={containerRef}
         data-native-file-drop-target={sidebarOpen ? nativeDropTarget : undefined}
         className="relative min-h-0 flex-shrink-0 bg-worktree-sidebar flex flex-col overflow-hidden scrollbar-sleek-parent"
+        style={appearanceStyle}
         {...dropHandlers}
       >
         {sidebarOpen && (
