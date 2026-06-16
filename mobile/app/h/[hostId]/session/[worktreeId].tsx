@@ -137,7 +137,10 @@ import { useMobileImageAttachment } from '../../../../src/session/use-mobile-ima
 import { classifyMobileArtifact } from '../../../../src/session/mobile-artifact-kind'
 import { MobileHtmlPreview } from '../../../../src/components/MobileHtmlPreview'
 import { MobileDictationSetupSheet } from '../../../../src/components/MobileDictationSetupSheet'
-import { isDictationSetupRequiredError } from '../../../../src/dictation/mobile-dictation-setup'
+import {
+  fetchDictationSetup,
+  isDictationSetupRequiredError
+} from '../../../../src/dictation/mobile-dictation-setup'
 import { TerminalPaneView } from '../../../../src/session/TerminalPaneView'
 import {
   getRepoIdFromMobileWorktreeId,
@@ -870,6 +873,9 @@ export default function SessionScreen() {
   const [selectModeActive, setSelectModeActive] = useState(false)
   const [canPaste, setCanPaste] = useState(false)
   const [showDictationSetup, setShowDictationSetup] = useState(false)
+  // 'hold' makes the mic press-and-hold; 'toggle' makes it tap-to-start/stop.
+  // Mirrors Settings ▸ Voice ▸ Dictation Mode so the button matches the setting.
+  const [dictationMode, setDictationMode] = useState<'toggle' | 'hold'>('toggle')
   const [toastMessage, setToastMessage] = useState<string | null>(null)
   const toastOpacityRef = useRef(new Animated.Value(0))
   const toastHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -1039,6 +1045,62 @@ export default function SessionScreen() {
       showToast(err.message)
     }
   })
+
+  const startDictation = useCallback(() => {
+    void dictation.start().catch((err) => {
+      triggerError()
+      showToast(err instanceof Error ? err.message : String(err))
+    })
+  }, [dictation, triggerError, showToast])
+
+  // Toggle mode: one tap starts, the next stops; long-press cancels mid-record.
+  const handleDictationToggle = useCallback(() => {
+    if (dictation.isProcessing) {
+      void dictation.cancel()
+    } else if (dictation.isStarting) {
+      return
+    } else if (dictation.isRecording) {
+      void dictation.stop()
+    } else {
+      startDictation()
+    }
+  }, [dictation, startDictation])
+
+  // Hold mode: press starts, release stops — like a walkie-talkie.
+  const handleDictationPressIn = useCallback(() => {
+    if (!dictation.isStarting && !dictation.isRecording && !dictation.isProcessing) {
+      startDictation()
+    }
+  }, [dictation, startDictation])
+
+  const handleDictationPressOut = useCallback(() => {
+    if (dictation.isRecording) {
+      void dictation.stop()
+    } else if (dictation.isStarting) {
+      // Released before recording began: cancel so we don't leave a live mic.
+      void dictation.cancel()
+    }
+  }, [dictation])
+
+  const refreshDictationMode = useCallback(async () => {
+    if (!client) {
+      return
+    }
+    try {
+      const setup = await fetchDictationSetup(client)
+      setDictationMode(setup.dictationMode)
+    } catch {
+      // Non-fatal: fall back to the default toggle behavior.
+    }
+  }, [client])
+
+  // Re-read on focus so a Dictation Mode change made in Settings ▸ Voice is
+  // reflected when the user returns to the session.
+  useFocusEffect(
+    useCallback(() => {
+      void refreshDictationMode()
+    }, [refreshDictationMode])
+  )
 
   useEffect(() => {
     diffCommentsRef.current = diffComments
@@ -4498,25 +4560,18 @@ export default function SessionScreen() {
                     !canSend && styles.sendButtonDisabled
                   ]}
                   disabled={!canSend}
-                  onPress={() => {
-                    if (dictation.isProcessing) {
-                      void dictation.cancel()
-                    } else if (dictation.isStarting) {
-                      return
-                    } else if (dictation.isRecording) {
-                      void dictation.stop()
-                    } else {
-                      void dictation.start().catch((err) => {
-                        triggerError()
-                        showToast(err instanceof Error ? err.message : String(err))
-                      })
-                    }
-                  }}
-                  onLongPress={() => {
-                    if (dictation.isRecording || dictation.isProcessing) {
-                      void dictation.cancel()
-                    }
-                  }}
+                  onPress={dictationMode === 'toggle' ? handleDictationToggle : undefined}
+                  onPressIn={dictationMode === 'hold' ? handleDictationPressIn : undefined}
+                  onPressOut={dictationMode === 'hold' ? handleDictationPressOut : undefined}
+                  onLongPress={
+                    dictationMode === 'toggle'
+                      ? () => {
+                          if (dictation.isRecording || dictation.isProcessing) {
+                            void dictation.cancel()
+                          }
+                        }
+                      : undefined
+                  }
                   accessibilityLabel={
                     dictation.isRecording
                       ? 'Stop voice dictation'
