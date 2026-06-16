@@ -300,7 +300,7 @@ This is a product-flow and telemetry-interpretation boundary, not a new event ro
 Dashboard caveats:
 
 - Treat `onboarding_step_*` rows for the removed final code/project picker step as historical first-run onboarding signals after this rollout.
-- Segment numeric onboarding step analysis across this boundary. The active final step changed from the five-step active flow to `ONBOARDING_FINAL_STEP = 4`.
+- Segment numeric onboarding step analysis across this boundary. At this boundary, the active final step changed from the five-step active flow to `ONBOARDING_FINAL_STEP = 4`; later onboarding step rollouts may supersede that final-step value.
 - Do not use absence of new final code/project picker rows as a drop-off signal; that step no longer exists in active onboarding.
 
 ### 2026-06-03 - Add Project Default Checkout Handoff
@@ -355,6 +355,29 @@ Dashboard caveats:
 - Do not stitch historical `onboarding_completed.is_git_repo` and new `repo_added.is_git_repo` series without an explicit version boundary and label change; they are emitted at different funnel moments.
 - Repoint dashboard tile `JlIt5J1N` to use `repo_added.is_git_repo` once the new field is observed in release telemetry.
 - Omitted `repo_added.is_git_repo` means unknown/degraded detection, not plain folder. Only explicit `false` means plain folder.
+
+### 2026-06-16 - Windows Terminal Preferences Onboarding Step
+
+Scope: Windows first-run onboarding adds a terminal preferences step before notifications. The step lets users choose the default Windows terminal shell and right-click paste/menu behavior before their first project handoff.
+
+`onboarding_step_*` rows can now emit `value_kind = 'windows_terminal'` at step `4`. Notifications move to step `5`, so `ONBOARDING_FINAL_STEP = 5` for current active onboarding. Non-Windows clients skip the Windows terminal step but still persist through the skipped step so resumed onboarding lands on notifications.
+
+| Field                    | Value                                                                                  |
+| ------------------------ | -------------------------------------------------------------------------------------- |
+| PR                       | `TBD`                                                                                  |
+| Merge commit             | `TBD`                                                                                  |
+| `code_merged_at_utc`     | `TBD`                                                                                  |
+| First release            | `TBD`                                                                                  |
+| First release commit     | `TBD`                                                                                  |
+| `first_released_at_utc`  | `TBD`                                                                                  |
+| `first_seen_at_utc`      | `TBD` on `onboarding_step_viewed { value_kind: 'windows_terminal' }`                   |
+| `dashboard_ready_at_utc` | `TBD`; use only after first-seen rows exist and Windows/non-Windows split is verified. |
+
+Dashboard caveats:
+
+- Segment numeric onboarding step analysis across this boundary. Step `4` is Windows terminal preferences in the current flow, but was notifications in the previous active flow.
+- Use `value_kind` rather than numeric `step` when comparing notifications or Windows terminal setup across releases.
+- Non-Windows users can have persisted `lastCompletedStep` values that include the skipped Windows step; do not treat that as evidence they viewed the Windows terminal page.
 
 ## Updating This File
 

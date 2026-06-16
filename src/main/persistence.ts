@@ -832,8 +832,14 @@ function remapLegacyOnboardingLastCompletedStep(
   lastCompletedStep: number,
   raw: Record<string, unknown>
 ): number {
-  if (raw.outcome === 'completed' && lastCompletedStep >= ONBOARDING_FINAL_STEP) {
+  if (raw.outcome === 'completed' && lastCompletedStep >= 4) {
     return ONBOARDING_FINAL_STEP
+  }
+  // Why: v3 was the four-step flow before the Windows terminal preference
+  // page. Step 4 already meant notifications, so open progress should resume
+  // there rather than treating it as the newly inserted Windows step.
+  if (raw.flowVersion === 3) {
+    return Math.min(4, lastCompletedStep)
   }
   // Why: v2 was the five-step flow; missing/older versions were seven-step
   // data where step 4 was removed agent setup, not completed integrations.

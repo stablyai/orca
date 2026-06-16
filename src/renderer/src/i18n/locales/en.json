@@ -8979,7 +8979,9 @@
           "a5e5da02f7": "integrations",
           "35bbaf5ae0": "notifications",
           "984338477a": "theme",
-          "c47e1bd149": "agent"
+          "c47e1bd149": "agent",
+          "windowsTerminalTitle": "Set Windows terminal defaults",
+          "windowsTerminalSubtitle": "Choose the DEFAULT Shell for new panes and how right-click behaves in the terminal."
         },
         "OnboardingFooter": {
           "ba58547306": "Back",
@@ -9058,6 +9060,32 @@
         },
         "AgentFeatureSetupStep": {
           "97dcdc010f": "Enable capabilities"
+        },
+        "WindowsTerminalStep": {
+          "powerShell": "PowerShell",
+          "powerShellPwsh": "Uses PowerShell 7+ when available, with Windows PowerShell as fallback.",
+          "powerShellInbox": "Uses the Windows PowerShell available on every supported Windows install.",
+          "commandPrompt": "Command Prompt",
+          "commandPromptDescription": "Opens new terminal panes with classic cmd.exe behavior.",
+          "gitBash": "Git Bash",
+          "gitBashDescription": "Uses Git for Windows bash.exe for Unix-style shell workflows.",
+          "gitBashUnavailable": "Selected, but Git Bash was not detected on this machine.",
+          "wsl": "WSL",
+          "wslDescription": "Starts new terminal panes inside your Windows Subsystem for Linux default.",
+          "wslUnavailable": "Selected, but WSL was not detected on this machine.",
+          "rightClickPaste": "Paste on right-click",
+          "rightClickPasteDescription": "Right-click pastes the clipboard. Ctrl+right-click opens the context menu.",
+          "rightClickMenu": "Open context menu",
+          "rightClickMenuDescription": "Right-click opens the terminal menu. Paste from the menu or keyboard.",
+          "loading": "Loading terminal settings...",
+          "defaultShell": "Default Shell",
+          "defaultShellDescription": "Choose the shell Orca opens for new Windows terminal panes.",
+          "wslDistribution": "WSL Distribution",
+          "wslDistributionDescription": "Use the Windows default distribution or choose a specific installed distro.",
+          "loadingDistros": "Loading distributions",
+          "windowsDefault": "Windows default",
+          "rightClickBehavior": "Right-click behavior",
+          "rightClickBehaviorDescription": "Pick the terminal mouse behavior that matches your Windows muscle memory."
         }
       },
       "new": {

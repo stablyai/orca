@@ -196,6 +196,12 @@ export function usePersistCurrentStep({
           }
         })
         useAppStore.getState().recordFeatureInteraction('notifications')
+        onOnboardingChange(await persistStep(ONBOARDING_FINAL_STEP))
+        return { ok: true }
+      }
+      if (currentStepId === 'windows_terminal') {
+        // Why: the Windows terminal controls persist on selection. Continuing
+        // only marks the preference page complete for resume/telemetry state.
         onOnboardingChange(await persistStep(4))
         return { ok: true }
       }

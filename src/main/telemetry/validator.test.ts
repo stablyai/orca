@@ -384,6 +384,14 @@ describe('validate', () => {
     expect(result.ok).toBe(true)
   })
 
+  it('accepts the Windows terminal onboarding step value kind', () => {
+    const result = validate('onboarding_step_completed', {
+      step: 4,
+      value_kind: 'windows_terminal'
+    })
+    expect(result.ok).toBe(true)
+  })
+
   it('rejects onboarding_step_completed with negative duration_ms', () => {
     const result = validate('onboarding_step_completed', {
       step: 1,
