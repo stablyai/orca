@@ -4,6 +4,7 @@ import { mobileRepoSelectorFromWorktreeId } from '../source-control/mobile-pr-cr
 import {
   buildGithubPrParams,
   fetchAssignableUsers,
+  fetchGithubRepoSlug,
   fetchHostedReviewForBranch,
   fetchPRCheckDetails,
   fetchPRChecks,
@@ -360,6 +361,16 @@ describe('fetch wrappers', () => {
     const [, params] = sendRequest.mock.calls[0]!
     expect(params).toMatchObject({ checkRunId: 3, prRepo: { owner: 'o', repo: 'r' } })
     expect('headSha' in (params as object)).toBe(false)
+  })
+
+  it('fetchGithubRepoSlug returns the slug for a github repo, null otherwise', async () => {
+    const found = await fetchGithubRepoSlug(
+      mockClient(okResponse({ owner: 'o', repo: 'r' })).client,
+      WORKTREE_ID
+    )
+    expect(found).toEqual({ ok: true, result: { owner: 'o', repo: 'r' } })
+    const none = await fetchGithubRepoSlug(mockClient(okResponse(null)).client, WORKTREE_ID)
+    expect(none).toEqual({ ok: true, result: null })
   })
 
   it('fetchAssignableUsers returns empty list edge without prRepo', async () => {

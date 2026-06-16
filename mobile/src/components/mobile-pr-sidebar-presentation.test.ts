@@ -14,17 +14,17 @@ describe('resolvePresentationMode', () => {
 })
 
 describe('shouldShowTrigger', () => {
-  it('shows the trigger only when eligible and in narrow/overlay mode', () => {
-    expect(shouldShowTrigger({ prSidebarEligible: true, isWideLayout: false })).toBe(true)
+  it('shows the trigger on a GitHub repo in narrow/overlay mode', () => {
+    expect(shouldShowTrigger({ isGithubRepo: true, isWideLayout: false })).toBe(true)
   })
 
-  it('hides the trigger in wide/docked mode even when eligible', () => {
-    expect(shouldShowTrigger({ prSidebarEligible: true, isWideLayout: true })).toBe(false)
+  it('hides the trigger in wide/docked mode even on a GitHub repo', () => {
+    expect(shouldShowTrigger({ isGithubRepo: true, isWideLayout: true })).toBe(false)
   })
 
-  it('hides the trigger when not eligible regardless of layout', () => {
-    expect(shouldShowTrigger({ prSidebarEligible: false, isWideLayout: false })).toBe(false)
-    expect(shouldShowTrigger({ prSidebarEligible: false, isWideLayout: true })).toBe(false)
+  it('hides the trigger on a non-GitHub repo regardless of layout', () => {
+    expect(shouldShowTrigger({ isGithubRepo: false, isWideLayout: false })).toBe(false)
+    expect(shouldShowTrigger({ isGithubRepo: false, isWideLayout: true })).toBe(false)
   })
 })
 
@@ -32,6 +32,7 @@ describe('prSidebarRenderBranch', () => {
   const cases: PrSidebarState[] = [
     { kind: 'hidden' },
     { kind: 'loading' },
+    { kind: 'none' },
     { kind: 'error', message: 'boom' },
     { kind: 'blocked', message: 'no auth' },
     { kind: 'ready', data: {} as PrSidebarData }

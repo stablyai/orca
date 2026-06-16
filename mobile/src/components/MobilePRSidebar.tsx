@@ -131,6 +131,15 @@ function PrSidebarContent({
       </View>
     )
   }
+  if (branch === 'none') {
+    // GitHub repo, but the current branch has no open PR — explain rather than
+    // showing a blank panel (the dedicated icon is always available).
+    return (
+      <View style={styles.stateArea}>
+        <Text style={styles.stateText}>No open pull request for this branch.</Text>
+      </View>
+    )
+  }
   if (branch === 'ready' && state.kind === 'ready') {
     return (
       <PrSidebarSections

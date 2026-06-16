@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ConnectionState } from '../transport/types'
 import type { RpcClient } from '../transport/rpc-client'
 import {
+  fetchGithubRepoSlug,
   fetchHostedReviewForBranch,
   fetchPRChecks,
   fetchPRForBranch,
@@ -9,9 +10,7 @@ import {
 } from './github-pr-rpc'
 import {
   loadPrSidebarData,
-  resolvePrSidebarEligibility,
   shouldApplyResult,
-  type PrSidebarEligibility,
   type PrSidebarLoadDeps,
   type PrSidebarState
 } from './mobile-pr-sidebar-state'
@@ -28,7 +27,10 @@ type PrSidebarControllerInput = {
 
 export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
   const { client, connState, worktreeId, branch, headSha } = input
-  const [eligibility, setEligibility] = useState<PrSidebarEligibility>({ kind: 'hidden' })
+  // The dedicated PR icon is available whenever the repo has a GitHub remote —
+  // independent of whether the branch has an open PR (a no-PR branch shows an
+  // empty state rather than hiding the icon).
+  const [isGithubRepo, setIsGithubRepo] = useState(false)
   const [state, setState] = useState<PrSidebarState>({ kind: 'hidden' })
   const [showPRSidebar, setShowPRSidebar] = useState(false)
   const loadSeqRef = useRef(0)
@@ -47,61 +49,51 @@ export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
     }
   }, [client])
 
-  // Resolve trigger eligibility whenever the connection or branch changes. A
-  // non-GitHub provider or a branch with no PR leaves the trigger hidden (KTD4).
+  // Probe whether this is a GitHub repo to decide icon availability (GitHub-only).
   useEffect(() => {
     let cancelled = false
-    if (!ready || !branch) {
-      setEligibility({ kind: 'hidden' })
+    if (!ready || !client) {
+      setIsGithubRepo(false)
       return
     }
-    const deps = buildDeps()
-    if (!deps) {
-      return
-    }
-    void resolvePrSidebarEligibility(deps, { worktreeId, branch }).then((next) => {
+    void fetchGithubRepoSlug(client, worktreeId).then((outcome) => {
       if (!cancelled) {
-        setEligibility(next)
+        setIsGithubRepo(outcome.ok && outcome.result !== null)
       }
     })
     return () => {
       cancelled = true
     }
-  }, [ready, branch, worktreeId, buildDeps])
+  }, [ready, client, worktreeId])
 
   const load = useCallback(async () => {
     const deps = buildDeps()
-    if (!deps || !branch || eligibility.kind !== 'eligible') {
+    if (!deps || !branch) {
       return
     }
     const seq = loadSeqRef.current + 1
     loadSeqRef.current = seq
     setState({ kind: 'loading' })
-    const next = await loadPrSidebarData(deps, {
-      worktreeId,
-      branch,
-      headSha,
-      linkedPRNumber: eligibility.prNumber
-    })
+    // forBranch (inside loadPrSidebarData) supplies the linked-PR hint; prForBranch
+    // is authoritative and a branch with no PR resolves to the `none` empty state.
+    const next = await loadPrSidebarData(deps, { worktreeId, branch, headSha })
     // Stale-response guard: a slower earlier load must not clobber a newer one.
     if (shouldApplyResult(seq, loadSeqRef.current)) {
       setState(next)
     }
-  }, [buildDeps, branch, headSha, worktreeId, eligibility])
+  }, [buildDeps, branch, headSha, worktreeId])
 
   const openPRSidebar = useCallback(() => {
-    if (eligibility.kind !== 'eligible') {
-      return
-    }
     setShowPRSidebar(true)
-    if (state.kind === 'hidden' || state.kind === 'error' || state.kind === 'blocked') {
+    // (Re)load on open unless we already have fresh PR data showing.
+    if (state.kind !== 'ready' && state.kind !== 'loading') {
       void load()
     }
-  }, [eligibility, state.kind, load])
+  }, [state.kind, load])
 
   return {
     prSidebarState: state,
-    prSidebarEligible: eligibility.kind === 'eligible',
+    prSidebarIsGithubRepo: isGithubRepo,
     showPRSidebar,
     setShowPRSidebar,
     openPRSidebar,

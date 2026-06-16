@@ -83,6 +83,29 @@ async function sendGithubPrRead<T>(
   return { ok: true, result: parse((response as RpcSuccess).result) }
 }
 
+// Probes whether the worktree's repo has a GitHub remote (a non-null slug). Used
+// to decide whether the dedicated PR-view icon is available — independent of
+// whether the branch has an open PR.
+export async function fetchGithubRepoSlug(
+  client: Pick<RpcClient, 'sendRequest'>,
+  worktreeId: string
+): Promise<GitHubPrReadOutcome<GitHubPrRepoSlug | null>> {
+  return sendGithubPrRead(
+    client,
+    'github.repoSlug',
+    buildGithubPrParams('github.repoSlug', worktreeId, {}),
+    (value) => {
+      if (!value || typeof value !== 'object') {
+        return null
+      }
+      const record = value as Record<string, unknown>
+      const owner = record.owner
+      const repo = record.repo
+      return typeof owner === 'string' && typeof repo === 'string' ? { owner, repo } : null
+    }
+  )
+}
+
 export async function fetchHostedReviewForBranch(
   client: Pick<RpcClient, 'sendRequest'>,
   worktreeId: string,

@@ -1,5 +1,4 @@
 import type { GitHubWorkItemDetails, PRCheckDetail, PRInfo } from '../../../src/shared/types'
-import type { HostedReviewProvider } from '../../../src/shared/hosted-review'
 import type { GitHubPrReadOutcome, GitHubPrRepoSlug } from './github-pr-rpc'
 
 // Pure state machine for the mobile PR sidebar. Kept free of React/native imports
@@ -18,12 +17,9 @@ export type PrSidebarState =
   | { kind: 'hidden' }
   | { kind: 'loading' }
   | { kind: 'ready'; data: PrSidebarData }
-  | { kind: 'error'; message: string }
-  | { kind: 'blocked'; message: string }
-
-export type PrSidebarEligibility =
-  | { kind: 'hidden' }
-  | { kind: 'eligible'; provider: HostedReviewProvider; prNumber: number }
+  // The branch has no open PR — distinct from `hidden` so the opened sidebar can
+  // explain it (the dedicated icon is always available on a GitHub repo).
+  | { kind: 'none' }
   | { kind: 'error'; message: string }
   | { kind: 'blocked'; message: string }
 
@@ -66,45 +62,32 @@ export type PrSidebarLoadDeps = {
   ) => Promise<GitHubPrReadOutcome<PRCheckDetail[]>>
 }
 
-// Resolves whether the sidebar trigger should appear: GitHub provider + a linked PR.
-// Non-GitHub providers and branches with no PR resolve to `hidden` (KTD4/R8).
-export async function resolvePrSidebarEligibility(
-  deps: Pick<PrSidebarLoadDeps, 'fetchForBranch'>,
-  args: { worktreeId: string; branch: string }
-): Promise<PrSidebarEligibility> {
-  const outcome = await deps.fetchForBranch(args.worktreeId, { branch: args.branch })
-  if (!outcome.ok) {
-    return failureState(outcome.error)
-  }
-  const info = outcome.result
-  if (!info || info.provider !== 'github') {
-    return { kind: 'hidden' }
-  }
-  return { kind: 'eligible', provider: info.provider, prNumber: info.number }
-}
-
-// Loads the authoritative PR + checks once the user opens the sidebar. The linked
-// PR number from eligibility is threaded into github.prForBranch as the hint, then
-// prForBranch's result is authoritative (KTD4).
+// Loads the authoritative PR + checks when the user opens the sidebar. The host's
+// forBranch (provider-agnostic) supplies a linked-PR hint that is threaded into
+// github.prForBranch as the authoritative resolver (KTD4). A failed forBranch is
+// non-fatal — prForBranch is still consulted and surfaces its own error.
 export async function loadPrSidebarData(
-  deps: Omit<PrSidebarLoadDeps, 'fetchForBranch'>,
+  deps: PrSidebarLoadDeps,
   args: {
     worktreeId: string
     branch: string
     headSha?: string | null
-    linkedPRNumber: number
     prRepo?: GitHubPrRepoSlug | null
   }
 ): Promise<PrSidebarState> {
+  const hintOutcome = await deps.fetchForBranch(args.worktreeId, { branch: args.branch })
+  const linkedPRNumber = hintOutcome.ok && hintOutcome.result ? hintOutcome.result.number : null
+
   const prOutcome = await deps.fetchPRForBranch(args.worktreeId, {
     branch: args.branch,
-    linkedPRNumber: args.linkedPRNumber
+    linkedPRNumber
   })
   if (!prOutcome.ok) {
     return failureState(prOutcome.error)
   }
   if (!prOutcome.result) {
-    return { kind: 'hidden' }
+    // GitHub repo, but this branch has no open PR — surfaced as an empty state.
+    return { kind: 'none' }
   }
   const pr = prOutcome.result
   const [detailsOutcome, checksOutcome] = await Promise.all([

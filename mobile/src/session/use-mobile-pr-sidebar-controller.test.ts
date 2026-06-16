@@ -5,7 +5,6 @@ import type { GitHubPrReadOutcome } from './github-pr-rpc'
 import {
   classifyPrSidebarFailure,
   loadPrSidebarData,
-  resolvePrSidebarEligibility,
   shouldApplyResult,
   type PrSidebarLoadDeps
 } from './mobile-pr-sidebar-state'
@@ -27,7 +26,7 @@ const PR: PRInfo = {
   mergeable: 'MERGEABLE',
   reviewDecision: null,
   headSha: 'sha-pr'
-}
+} as unknown as PRInfo
 const DETAILS = { item: { number: 7 }, checks: [] } as unknown as GitHubWorkItemDetails
 const CHECKS: PRCheckDetail[] = [
   { name: 'ci', status: 'completed', conclusion: 'success', url: null }
@@ -61,52 +60,10 @@ describe('classifyPrSidebarFailure', () => {
   })
 })
 
-describe('resolvePrSidebarEligibility', () => {
-  function deps(forBranch: GitHubPrReadOutcome<HostedReviewInfo | null>) {
-    return { fetchForBranch: vi.fn(async () => forBranch) }
-  }
-
-  it('returns eligible for a github PR', async () => {
-    const out = await resolvePrSidebarEligibility(deps(ok(ghInfo())), {
-      worktreeId: 'w',
-      branch: 'feat'
-    })
-    expect(out).toEqual({ kind: 'eligible', provider: 'github', prNumber: 7 })
-  })
-
-  it('hides for a non-github provider', async () => {
-    const out = await resolvePrSidebarEligibility(deps(ok(ghInfo({ provider: 'gitlab' }))), {
-      worktreeId: 'w',
-      branch: 'feat'
-    })
-    expect(out).toEqual({ kind: 'hidden' })
-  })
-
-  it('hides when no PR is linked', async () => {
-    const out = await resolvePrSidebarEligibility(deps(ok(null)), {
-      worktreeId: 'w',
-      branch: 'feat'
-    })
-    expect(out).toEqual({ kind: 'hidden' })
-  })
-
-  it('routes an auth failure to blocked and a network failure to error', async () => {
-    const blocked = await resolvePrSidebarEligibility(deps(fail('not connected')), {
-      worktreeId: 'w',
-      branch: 'feat'
-    })
-    expect(blocked.kind).toBe('blocked')
-    const errored = await resolvePrSidebarEligibility(deps(fail('timeout')), {
-      worktreeId: 'w',
-      branch: 'feat'
-    })
-    expect(errored.kind).toBe('error')
-  })
-})
-
 describe('loadPrSidebarData', () => {
-  function deps(over: Partial<Omit<PrSidebarLoadDeps, 'fetchForBranch'>> = {}) {
+  function deps(over: Partial<PrSidebarLoadDeps> = {}): PrSidebarLoadDeps {
     return {
+      fetchForBranch: vi.fn(async () => ok<HostedReviewInfo | null>(ghInfo())),
       fetchPRForBranch: vi.fn(async () => ok<PRInfo | null>(PR)),
       fetchWorkItemDetails: vi.fn(async () => ok<GitHubWorkItemDetails | null>(DETAILS)),
       fetchPRChecks: vi.fn(async () => ok<PRCheckDetail[]>(CHECKS)),
@@ -114,16 +71,15 @@ describe('loadPrSidebarData', () => {
     }
   }
 
-  it('loads pr + details + checks into ready', async () => {
+  it('loads pr + details + checks into ready, threading the forBranch hint', async () => {
     const d = deps()
     const out = await loadPrSidebarData(d, {
       worktreeId: 'w',
       branch: 'feat',
-      headSha: 'sha-status',
-      linkedPRNumber: 7
+      headSha: 'sha-status'
     })
     expect(out).toEqual({ kind: 'ready', data: { pr: PR, details: DETAILS, checks: CHECKS } })
-    // linked PR number threaded into prForBranch as the hint
+    // forBranch's PR number is threaded into prForBranch as the linked hint
     expect(d.fetchPRForBranch).toHaveBeenCalledWith('w', { branch: 'feat', linkedPRNumber: 7 })
     // headSha forwarded to checks (status SHA wins over pr.headSha)
     expect(d.fetchPRChecks).toHaveBeenCalledWith('w', {
@@ -133,23 +89,24 @@ describe('loadPrSidebarData', () => {
     })
   })
 
-  it('falls back to the PR head SHA when no status SHA is supplied', async () => {
-    const d = deps()
-    await loadPrSidebarData(d, { worktreeId: 'w', branch: 'feat', linkedPRNumber: 7 })
-    expect(d.fetchPRChecks).toHaveBeenCalledWith('w', {
-      prNumber: 7,
-      headSha: 'sha-pr',
-      prRepo: null
-    })
+  it('passes a null hint when forBranch finds no PR, and still consults prForBranch', async () => {
+    const d = deps({ fetchForBranch: vi.fn(async () => ok<HostedReviewInfo | null>(null)) })
+    await loadPrSidebarData(d, { worktreeId: 'w', branch: 'feat' })
+    expect(d.fetchPRForBranch).toHaveBeenCalledWith('w', { branch: 'feat', linkedPRNumber: null })
   })
 
-  it('hides when prForBranch resolves null', async () => {
-    const out = await loadPrSidebarData(deps({ fetchPRForBranch: vi.fn(async () => ok(null)) }), {
-      worktreeId: 'w',
-      branch: 'feat',
-      linkedPRNumber: 7
-    })
-    expect(out).toEqual({ kind: 'hidden' })
+  it('is non-fatal when forBranch errors — prForBranch still resolves', async () => {
+    const d = deps({ fetchForBranch: vi.fn(async () => fail<HostedReviewInfo | null>('timeout')) })
+    const out = await loadPrSidebarData(d, { worktreeId: 'w', branch: 'feat' })
+    expect(out.kind).toBe('ready')
+  })
+
+  it('returns the `none` empty state when the branch has no open PR', async () => {
+    const out = await loadPrSidebarData(
+      deps({ fetchPRForBranch: vi.fn(async () => ok<PRInfo | null>(null)) }),
+      { worktreeId: 'w', branch: 'feat' }
+    )
+    expect(out).toEqual({ kind: 'none' })
   })
 
   it('routes a transient details failure to error', async () => {
@@ -157,7 +114,7 @@ describe('loadPrSidebarData', () => {
       deps({
         fetchWorkItemDetails: vi.fn(async () => fail<GitHubWorkItemDetails | null>('network down'))
       }),
-      { worktreeId: 'w', branch: 'feat', linkedPRNumber: 7 }
+      { worktreeId: 'w', branch: 'feat' }
     )
     expect(out.kind).toBe('error')
   })
@@ -169,7 +126,7 @@ describe('loadPrSidebarData', () => {
           fail<GitHubWorkItemDetails | null>('permission denied')
         )
       }),
-      { worktreeId: 'w', branch: 'feat', linkedPRNumber: 7 }
+      { worktreeId: 'w', branch: 'feat' }
     )
     expect(out.kind).toBe('blocked')
   })
@@ -177,7 +134,7 @@ describe('loadPrSidebarData', () => {
   it('routes a checks failure through the classifier too', async () => {
     const out = await loadPrSidebarData(
       deps({ fetchPRChecks: vi.fn(async () => fail<PRCheckDetail[]>('403 forbidden')) }),
-      { worktreeId: 'w', branch: 'feat', linkedPRNumber: 7 }
+      { worktreeId: 'w', branch: 'feat' }
     )
     expect(out.kind).toBe('blocked')
   })

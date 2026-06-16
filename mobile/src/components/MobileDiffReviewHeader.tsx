@@ -9,7 +9,7 @@ import { mobileDiffReviewStyles as styles } from './mobile-diff-review-screen-st
 type Props = {
   filter: MobileDiffReviewQueueFilter
   isWideLayout: boolean
-  prSidebarEligible: boolean
+  prSidebarIsGithubRepo: boolean
   queueLength: number
   reviewedCount: number
   unsentCount: number
@@ -23,7 +23,7 @@ type Props = {
 export function MobileDiffReviewHeader({
   filter,
   isWideLayout,
-  prSidebarEligible,
+  prSidebarIsGithubRepo,
   queueLength,
   reviewedCount,
   unsentCount,
@@ -33,9 +33,9 @@ export function MobileDiffReviewHeader({
   onOpenPRSidebar,
   onSelectFilter
 }: Props) {
-  // Trigger appears only in narrow/overlay mode when a GitHub PR is linked; in wide
+  // The dedicated PR icon appears on any GitHub repo in narrow/overlay mode; in wide
   // mode the sidebar is docked, so it is hidden (not disabled).
-  const showPRTrigger = shouldShowTrigger({ prSidebarEligible, isWideLayout })
+  const showPRTrigger = shouldShowTrigger({ isGithubRepo: prSidebarIsGithubRepo, isWideLayout })
   return (
     <View style={styles.header}>
       <View style={styles.topBar}>

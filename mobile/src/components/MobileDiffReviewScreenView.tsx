@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Text, View } from 'react-native'
 import type { useMobileDiffReviewController } from '../session/use-mobile-diff-review-controller'
@@ -22,16 +23,26 @@ export function MobileDiffReviewScreenView({ controller, onBack }: Props) {
   const { isWideLayout } = useResponsiveLayout()
   const insets = useSafeAreaInsets()
   const presentationMode = resolvePresentationMode(isWideLayout)
-  // Inline-dock the sidebar only when wide and a PR is eligible; otherwise it lives
-  // in the RightDrawer overlay toggled by showPRSidebar.
-  const showInlineDock = presentationMode === 'inline' && controller.prSidebarEligible
+  // Inline-dock the sidebar only when wide and the repo is GitHub; otherwise it
+  // lives in the RightDrawer overlay toggled by showPRSidebar.
+  const showInlineDock = presentationMode === 'inline' && controller.prSidebarIsGithubRepo
+
+  // The docked sidebar has no trigger to tap, so load its PR data once it becomes
+  // visible (the overlay loads on trigger press instead).
+  const prSidebarKind = controller.prSidebarState.kind
+  const loadPRSidebar = controller.refetchPRSidebar
+  useEffect(() => {
+    if (showInlineDock && prSidebarKind === 'hidden') {
+      loadPRSidebar()
+    }
+  }, [showInlineDock, prSidebarKind, loadPRSidebar])
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
       <MobileDiffReviewHeader
         filter={controller.filter}
         isWideLayout={isWideLayout}
-        prSidebarEligible={controller.prSidebarEligible}
+        prSidebarIsGithubRepo={controller.prSidebarIsGithubRepo}
         queueLength={controller.queue.length}
         reviewedCount={controller.reviewedCount}
         unsentCount={controller.unsentComments.length}

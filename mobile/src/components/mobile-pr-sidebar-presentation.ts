@@ -12,16 +12,14 @@ export function resolvePresentationMode(isWideLayout: boolean): PrSidebarPresent
 }
 
 // The header trigger is only meaningful in overlay mode: in wide/docked mode the
-// sidebar is always visible, so the trigger is hidden (not disabled). It also never
-// shows when the PR is ineligible (non-GitHub / no linked PR).
-export function shouldShowTrigger(args: {
-  prSidebarEligible: boolean
-  isWideLayout: boolean
-}): boolean {
-  return args.prSidebarEligible && !args.isWideLayout
+// sidebar is always visible, so the trigger is hidden (not disabled). The dedicated
+// PR icon shows on any GitHub repo regardless of whether a PR is linked — a no-PR
+// branch opens to an empty state rather than hiding the entry point.
+export function shouldShowTrigger(args: { isGithubRepo: boolean; isWideLayout: boolean }): boolean {
+  return args.isGithubRepo && !args.isWideLayout
 }
 
-export type PrSidebarRenderBranch = 'loading' | 'error' | 'blocked' | 'ready' | 'hidden'
+export type PrSidebarRenderBranch = 'loading' | 'error' | 'blocked' | 'ready' | 'none' | 'hidden'
 
 // Maps the controller's state machine to a render branch the shell switches on.
 export function prSidebarRenderBranch(state: PrSidebarState): PrSidebarRenderBranch {
