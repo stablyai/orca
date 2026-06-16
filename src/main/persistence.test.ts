@@ -2956,6 +2956,43 @@ describe('Store', () => {
     expect(reloaded.getRepo('r1')!.issueSourcePreference).toBe('upstream')
   })
 
+  it('updateRepo persists fork sync mode across reloads', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo())
+
+    const updated = store.updateRepo('r1', { forkSyncMode: 'safe-auto' })
+    expect(updated!.forkSyncMode).toBe('safe-auto')
+
+    store.flush()
+    const reloaded = await createStore()
+    expect(reloaded.getRepo('r1')!.forkSyncMode).toBe('safe-auto')
+  })
+
+  it('updateRepo ignores invalid fork sync mode updates', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo({ forkSyncMode: 'ask' }))
+
+    const updated = store.updateRepo('r1', { forkSyncMode: 'always' as never })
+
+    expect(updated!.forkSyncMode).toBe('ask')
+
+    store.flush()
+    const reloaded = await createStore()
+    expect(reloaded.getRepo('r1')!.forkSyncMode).toBe('ask')
+  })
+
+  it('getRepo does not expose invalid persisted fork sync mode values', async () => {
+    writeDataFile({
+      ...getDefaultPersistedState(testState.dir),
+      repos: [makeRepo({ forkSyncMode: 'always' as never })]
+    })
+
+    const store = await createStore()
+
+    expect(store.getRepo('r1')!.forkSyncMode).toBeUndefined()
+    expect(store.getRepos()[0]!.forkSyncMode).toBeUndefined()
+  })
+
   it('updateRepo with issueSourcePreference=undefined clears the preference', async () => {
     const store = await createStore()
     store.addRepo(makeRepo({ issueSourcePreference: 'origin' }))

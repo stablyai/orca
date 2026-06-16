@@ -7331,7 +7331,9 @@
             "host": "host",
             "ssh": "ssh",
             "remote": "remote",
-            "vm": "vm"
+            "vm": "vm",
+            "keepForkUpToDate": "保持 Fork 最新",
+            "keepForkUpToDateDescription": "从 upstream 安全地快进此 Fork。"
           }
         },
         "runtime": {
@@ -7913,6 +7915,33 @@
           "workspaceDirectory": "The client default is inherited until a host needs its own worktree directory.",
           "providerHost": "Provider host",
           "providerAccounts": "Credentials and account checks belong to the local client or selected remote server that owns the provider integration."
+        },
+        "RepositoryForkSyncSection": {
+          "defaultBranch": "默认分支",
+          "synced": "Fork 已更新",
+          "syncedDescriptionSingular": "已将 {{branch}} 快进 1 个提交。",
+          "syncedDescriptionPlural": "已将 {{branch}} 快进 {{count}} 个提交。",
+          "upToDate": "Fork 已是最新",
+          "upToDateDescription": "{{branch}} 已与 upstream 一致。",
+          "missingOrigin": "缺少 origin 远程。",
+          "missingUpstream": "缺少 upstream 远程。",
+          "upstreamMismatch": "upstream 远程不再匹配此 Fork。",
+          "missingUpstreamBranch": "无法解析 upstream 默认分支。",
+          "missingOriginBranch": "origin 没有 upstream 默认分支。",
+          "diverged": "origin 有 upstream 中不存在的提交。",
+          "blocked": "已跳过 Fork 同步",
+          "blockedFallback": "Orca 无法安全地快进此 Fork。",
+          "failed": "Fork 同步失败",
+          "title": "保持 Fork 最新",
+          "description": "从 upstream 安全地快进此 Fork。",
+          "longDescription": "当此 Fork 落后于 upstream 时，Orca 可以安全地快进其默认分支。如果该分支有仅本地提交或冲突，Orca 会跳过更新。",
+          "forkOf": "{{owner}}/{{repo}} 的 Fork",
+          "syncing": "同步中",
+          "syncNow": "立即同步",
+          "modeLabel": "Fork 同步模式",
+          "ask": "询问",
+          "safeAuto": "安全自动",
+          "off": "关闭"
         }
       },
       "right": {
@@ -8053,7 +8082,8 @@
             "9a8b85882d": "加载中",
             "62e685d5ec": "idle",
             "111e1d0db4": "错误",
-            "e5e81e59a6": "调整 commits 大小"
+            "e5e81e59a6": "调整 commits 大小",
+            "6d1e0a7c3b": "无法加载提交文件"
           },
           "HostedReviewActions": {
             "4d5fb5a284": "关闭",
@@ -8326,7 +8356,14 @@
             "e2b7a1c0d9f4": "创建 {{value0}} 失败",
             "hugeRepoIgnorePrompt": "此存储库的活动更改过多。是否将 \"{{value0}}\" 添加到 .gitignore？",
             "hugeRepoIgnoreAction": "添加到 .gitignore",
-            "tooManyChanges": "检测到过多更改。仅显示前 {{value0}} 项。"
+            "tooManyChanges": "检测到过多更改。仅显示前 {{value0}} 项。",
+            "bf5082de46": "已复制{{value0}}",
+            "c06193ef57": "无法复制{{value0}}",
+            "d172a4f068": "提交哈希",
+            "e283b50179": "提交信息",
+            "f394c6128a": "没有可用于解释此提交的代理",
+            "04a5d7239b": "此仓库没有受支持的网页远程库",
+            "15b6e834ac": "无法在浏览器中打开提交"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "无法启动选定的 Agent。",
@@ -8750,6 +8787,21 @@
             "copyLogPath": "Copy Log Path",
             "messageCount": "{{value0}} msgs",
             "tokenCount": "{{value0}} tok"
+          },
+          "GitHistoryCommitFiles": {
+            "a1b2c3d4e5": "正在加载文件…",
+            "b2c3d4e5f6": "此提交没有文件更改",
+            "c3d4e5f6a7": "一起打开所有更改"
+          },
+          "GitHistoryRow": {
+            "2f9c41ab07": "显示提交{{value0}}中的文件：{{value1}}",
+            "4a8d9e0c1f": "隐藏提交{{value0}}中的文件：{{value1}}"
+          },
+          "GitHistoryCommitContextMenu": {
+            "7b1c4e9a02": "在浏览器中打开提交",
+            "8c2d5fab13": "复制提交哈希",
+            "9d3e60bc24": "复制提交信息",
+            "ae4f71cd35": "解释更改"
           }
         }
       },

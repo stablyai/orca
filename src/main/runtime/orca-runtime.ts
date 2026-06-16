@@ -3563,6 +3563,8 @@ export class OrcaRuntimeService {
   fetchRuntimeGit: RuntimeGitCommands['fetchRuntimeGit'] = this.gitCommands.fetchRuntimeGit.bind(
     this.gitCommands
   )
+  syncRuntimeGitForkDefaultBranch: RuntimeGitCommands['syncRuntimeGitForkDefaultBranch'] =
+    this.gitCommands.syncRuntimeGitForkDefaultBranch.bind(this.gitCommands)
   pullRuntimeGit: RuntimeGitCommands['pullRuntimeGit'] = this.gitCommands.pullRuntimeGit.bind(
     this.gitCommands
   )
@@ -3604,6 +3606,8 @@ export class OrcaRuntimeService {
     this.gitCommands.discardRuntimeGitPath.bind(this.gitCommands)
   getRuntimeGitRemoteFileUrl: RuntimeGitCommands['getRuntimeGitRemoteFileUrl'] =
     this.gitCommands.getRuntimeGitRemoteFileUrl.bind(this.gitCommands)
+  getRuntimeGitRemoteCommitUrl: RuntimeGitCommands['getRuntimeGitRemoteCommitUrl'] =
+    this.gitCommands.getRuntimeGitRemoteCommitUrl.bind(this.gitCommands)
 
   private async resolveRuntimeGitTarget(
     worktreeSelector: string

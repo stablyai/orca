@@ -2,7 +2,6 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
 import type { ReactNode } from 'react'
 import type { GitHistoryResult } from '../../../../shared/git-history'
-import { formatGitHistoryTimestamp } from './git-history-format'
 import { GitHistoryPanel } from './GitHistoryPanel'
 
 vi.mock('@/components/ui/tooltip', () => ({
@@ -58,11 +57,12 @@ describe('GitHistoryPanel', () => {
       )
 
       expect(markup).toContain('Fix tab overflow')
-      expect(markup).toContain('Taylor')
     }
   )
 
-  it('renders a timestamped commit row without crashing', () => {
+  // The dense row is subject-only; author and date now surface on expand, so the
+  // collapsed row shows the subject and short id (the short id via aria-label).
+  it('renders the commit subject row', () => {
     const markup = renderToStaticMarkup(
       <GitHistoryPanel
         state={{ status: 'ready', result: makeHistoryResult() }}
@@ -74,8 +74,6 @@ describe('GitHistoryPanel', () => {
     )
 
     expect(markup).toContain('Fix tab overflow')
-    expect(markup).toContain('Taylor')
-    expect(markup).toContain(formatGitHistoryTimestamp(timestamp))
     expect(markup).toContain('52ad492')
   })
 })

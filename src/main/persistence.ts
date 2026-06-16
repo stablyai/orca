@@ -1025,11 +1025,20 @@ function sanitizeRepoProjectHostSetupMethod(
   return value === 'imported-existing-folder' || value === 'cloned' ? value : undefined
 }
 
+function sanitizeForkSyncMode(value: unknown): Repo['forkSyncMode'] | undefined {
+  return value === 'ask' || value === 'safe-auto' || value === 'off' ? value : undefined
+}
+
 function sanitizeRepoUpdatesForPersistence<
   T extends Partial<
     Pick<
       Repo,
-      'badgeColor' | 'repoIcon' | 'upstream' | 'worktreeBasePath' | 'projectHostSetupMethod'
+      | 'badgeColor'
+      | 'repoIcon'
+      | 'upstream'
+      | 'worktreeBasePath'
+      | 'projectHostSetupMethod'
+      | 'forkSyncMode'
     >
   >
 >(updates: T): T {
@@ -1072,6 +1081,14 @@ function sanitizeRepoUpdatesForPersistence<
       delete sanitized.projectHostSetupMethod
     } else {
       sanitized.projectHostSetupMethod = setupMethod
+    }
+  }
+  if ('forkSyncMode' in sanitized) {
+    const forkSyncMode = sanitizeForkSyncMode(sanitized.forkSyncMode)
+    if (forkSyncMode === undefined) {
+      delete sanitized.forkSyncMode
+    } else {
+      sanitized.forkSyncMode = forkSyncMode
     }
   }
   return sanitized
@@ -3580,6 +3597,7 @@ export class Store {
         | 'kind'
         | 'symlinkPaths'
         | 'issueSourcePreference'
+        | 'forkSyncMode'
         | 'externalWorktreeVisibility'
         | 'externalWorktreeVisibilityPromptDismissedAt'
         | 'projectGroupId'
@@ -3750,12 +3768,14 @@ export class Store {
       upstream: rawUpstream,
       sourceControlAi: rawSourceControlAi,
       projectHostSetupMethod: rawProjectHostSetupMethod,
+      forkSyncMode: rawForkSyncMode,
       ...repoWithoutIcon
     } = repo
     const repoIcon = sanitizeRepoIcon(rawRepoIcon)
     const upstream = sanitizeRepoUpstream(rawUpstream)
     const sourceControlAi = normalizeRepoSourceControlAiOverrides(rawSourceControlAi)
     const projectHostSetupMethod = sanitizeRepoProjectHostSetupMethod(rawProjectHostSetupMethod)
+    const forkSyncMode = sanitizeForkSyncMode(rawForkSyncMode)
     const gitUsername = isFolderRepo(repo)
       ? ''
       : (this.gitUsernameCache.get(repo.path) ??
@@ -3771,6 +3791,7 @@ export class Store {
       ...(upstream !== undefined ? { upstream } : {}),
       ...(sourceControlAi !== undefined ? { sourceControlAi } : {}),
       ...(projectHostSetupMethod !== undefined ? { projectHostSetupMethod } : {}),
+      ...(forkSyncMode !== undefined ? { forkSyncMode } : {}),
       kind: isFolderRepo(repo) ? 'folder' : 'git',
       gitUsername,
       hookSettings: {

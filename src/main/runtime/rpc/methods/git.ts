@@ -13,11 +13,13 @@ import {
   GitDiscoverCommitMessageModels,
   GitDiff,
   GitFilePath,
+  GitForkSync,
   GitGenerateCommitMessage,
   GitGeneratePullRequestFields,
   GitHistory,
   GitPush,
   GitRebaseFromBase,
+  GitRemoteCommitUrl,
   GitRemoteFileUrl,
   GitStatusParams,
   GitTargetedRemote,
@@ -157,6 +159,12 @@ export const GIT_METHODS: RpcMethod[] = [
       params.pushTarget === undefined
         ? runtime.fetchRuntimeGit(params.worktree)
         : runtime.fetchRuntimeGit(params.worktree, params.pushTarget)
+  }),
+  defineMethod({
+    name: 'git.forkSync',
+    params: GitForkSync,
+    handler: async (params, { runtime }) =>
+      runtime.syncRuntimeGitForkDefaultBranch(params.worktree, params.expectedUpstream)
   }),
   defineMethod({
     name: 'git.pull',
@@ -314,5 +322,11 @@ export const GIT_METHODS: RpcMethod[] = [
     params: GitRemoteFileUrl,
     handler: async (params, { runtime }) =>
       runtime.getRuntimeGitRemoteFileUrl(params.worktree, params.relativePath, params.line)
+  }),
+  defineMethod({
+    name: 'git.remoteCommitUrl',
+    params: GitRemoteCommitUrl,
+    handler: async (params, { runtime }) =>
+      runtime.getRuntimeGitRemoteCommitUrl(params.worktree, params.sha)
   })
 ]

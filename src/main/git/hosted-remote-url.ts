@@ -126,3 +126,25 @@ export function buildHostedRemoteFileUrl(
   }
   return `${baseUrl}/src/${encodedBranch}${filePathSuffix}${encodeBitbucketFileLineFragment(relativePath, line)}`
 }
+
+export function buildHostedRemoteCommitUrl(remoteUrl: string, sha: string): string | null {
+  const normalizedSha = sha.trim()
+  if (!normalizedSha) {
+    return null
+  }
+  const remote = parseHostedRemote(remoteUrl)
+  if (!remote) {
+    return null
+  }
+
+  const baseUrl = `https://${remote.host}/${encodeRemotePath(remote.path)}`
+  const encodedSha = encodeURIComponent(normalizedSha)
+
+  if (remote.provider === 'gitlab') {
+    return `${baseUrl}/-/commit/${encodedSha}`
+  }
+  if (remote.provider === 'bitbucket') {
+    return `${baseUrl}/commits/${encodedSha}`
+  }
+  return `${baseUrl}/commit/${encodedSha}`
+}

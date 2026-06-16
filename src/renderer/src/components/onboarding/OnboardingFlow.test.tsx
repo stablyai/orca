@@ -1,9 +1,19 @@
+import type { ComponentProps } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultOnboardingState, getDefaultSettings } from '../../../../shared/constants'
+import { TooltipProvider } from '@/components/ui/tooltip'
 import { useAppStore } from '@/store'
 import OnboardingFlow from './OnboardingFlow'
 import { ONBOARDING_SKIP_CONFIRMATION_COPY } from './OnboardingSkipConfirmationDialog'
+
+function renderOnboardingFlow(props: ComponentProps<typeof OnboardingFlow>): string {
+  return renderToStaticMarkup(
+    <TooltipProvider>
+      <OnboardingFlow {...props} />
+    </TooltipProvider>
+  )
+}
 
 describe('OnboardingFlow', () => {
   beforeEach(() => {
@@ -21,15 +31,13 @@ describe('OnboardingFlow', () => {
   })
 
   it('does not render the removed agent setup or tour steps', () => {
-    const html = renderToStaticMarkup(
-      <OnboardingFlow
-        onboarding={{
-          ...getDefaultOnboardingState(),
-          lastCompletedStep: 3
-        }}
-        onOnboardingChange={vi.fn()}
-      />
-    )
+    const html = renderOnboardingFlow({
+      onboarding: {
+        ...getDefaultOnboardingState(),
+        lastCompletedStep: 3
+      },
+      onOnboardingChange: vi.fn()
+    })
 
     expect(html).toContain('Set up notifications')
     expect(html).not.toContain('Set up Orca for agents')
@@ -47,16 +55,14 @@ describe('OnboardingFlow', () => {
   ])(
     'resumes unversioned seven-step onboarding progress %i at the matching four-step page',
     (legacyStep, title) => {
-      const html = renderToStaticMarkup(
-        <OnboardingFlow
-          onboarding={{
-            ...getDefaultOnboardingState(),
-            flowVersion: 1,
-            lastCompletedStep: legacyStep
-          }}
-          onOnboardingChange={vi.fn()}
-        />
-      )
+      const html = renderOnboardingFlow({
+        onboarding: {
+          ...getDefaultOnboardingState(),
+          flowVersion: 1,
+          lastCompletedStep: legacyStep
+        },
+        onOnboardingChange: vi.fn()
+      })
 
       expect(html).toContain(title)
       expect(html).not.toContain('Set up Orca for agents')
@@ -72,16 +78,14 @@ describe('OnboardingFlow', () => {
   ])(
     'resumes versioned five-step onboarding progress %i at the matching four-step page',
     (legacyStep, title) => {
-      const html = renderToStaticMarkup(
-        <OnboardingFlow
-          onboarding={{
-            ...getDefaultOnboardingState(),
-            flowVersion: 2,
-            lastCompletedStep: legacyStep
-          }}
-          onOnboardingChange={vi.fn()}
-        />
-      )
+      const html = renderOnboardingFlow({
+        onboarding: {
+          ...getDefaultOnboardingState(),
+          flowVersion: 2,
+          lastCompletedStep: legacyStep
+        },
+        onOnboardingChange: vi.fn()
+      })
 
       expect(html).toContain(title)
       expect(html).not.toContain('Set up Orca for agents')
@@ -98,15 +102,13 @@ describe('OnboardingFlow', () => {
       preflightStatusChecked: true
     })
 
-    const html = renderToStaticMarkup(
-      <OnboardingFlow
-        onboarding={{
-          ...getDefaultOnboardingState(),
-          lastCompletedStep: 2
-        }}
-        onOnboardingChange={vi.fn()}
-      />
-    )
+    const html = renderOnboardingFlow({
+      onboarding: {
+        ...getDefaultOnboardingState(),
+        lastCompletedStep: 2
+      },
+      onOnboardingChange: vi.fn()
+    })
 
     expect(html).toContain('Set up notifications')
     expect(html).toContain('Add your first project')
@@ -124,15 +126,13 @@ describe('OnboardingFlow', () => {
       preflightStatusChecked: true
     })
 
-    const html = renderToStaticMarkup(
-      <OnboardingFlow
-        onboarding={{
-          ...getDefaultOnboardingState(),
-          lastCompletedStep: 2
-        }}
-        onOnboardingChange={vi.fn()}
-      />
-    )
+    const html = renderOnboardingFlow({
+      onboarding: {
+        ...getDefaultOnboardingState(),
+        lastCompletedStep: 2
+      },
+      onOnboardingChange: vi.fn()
+    })
 
     expect(html).toContain('Set up GitHub tasks')
     expect(html).toContain('Install the GitHub CLI to:')
@@ -146,9 +146,10 @@ describe('OnboardingFlow', () => {
   })
 
   it('renders onboarding inside a centered modal shell', () => {
-    const html = renderToStaticMarkup(
-      <OnboardingFlow onboarding={getDefaultOnboardingState()} onOnboardingChange={vi.fn()} />
-    )
+    const html = renderOnboardingFlow({
+      onboarding: getDefaultOnboardingState(),
+      onOnboardingChange: vi.fn()
+    })
 
     expect(html).toContain('role="dialog"')
     expect(html).toContain('aria-modal="true"')

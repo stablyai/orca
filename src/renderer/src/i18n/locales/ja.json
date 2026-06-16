@@ -7368,7 +7368,9 @@
             "host": "host",
             "ssh": "ssh",
             "remote": "remote",
-            "vm": "vm"
+            "vm": "vm",
+            "keepForkUpToDate": "フォークを最新に保つ",
+            "keepForkUpToDateDescription": "このフォークを upstream から安全に fast-forward します。"
           }
         },
         "runtime": {
@@ -7913,6 +7915,33 @@
           "workspaceDirectory": "The client default is inherited until a host needs its own worktree directory.",
           "providerHost": "Provider host",
           "providerAccounts": "Credentials and account checks belong to the local client or selected remote server that owns the provider integration."
+        },
+        "RepositoryForkSyncSection": {
+          "defaultBranch": "デフォルトブランチ",
+          "synced": "フォークを更新しました",
+          "syncedDescriptionSingular": "{{branch}} を1コミット分 fast-forward しました。",
+          "syncedDescriptionPlural": "{{branch}} を{{count}}コミット分 fast-forward しました。",
+          "upToDate": "フォークはすでに最新です",
+          "upToDateDescription": "{{branch}} はすでに upstream と一致しています。",
+          "missingOrigin": "origin リモートがありません。",
+          "missingUpstream": "upstream リモートがありません。",
+          "upstreamMismatch": "upstream リモートはこのフォークと一致しなくなっています。",
+          "missingUpstreamBranch": "upstream のデフォルトブランチを解決できませんでした。",
+          "missingOriginBranch": "origin に upstream のデフォルトブランチがありません。",
+          "diverged": "origin には upstream にないコミットがあります。",
+          "blocked": "フォークの同期をスキップしました",
+          "blockedFallback": "Orca はこのフォークを安全に fast-forward できませんでした。",
+          "failed": "フォークの同期に失敗しました",
+          "title": "フォークを最新に保つ",
+          "description": "このフォークを upstream から安全に fast-forward します。",
+          "longDescription": "このフォークが upstream より遅れている場合、Orca はデフォルトブランチを安全に fast-forward できます。ブランチにローカルのみのコミットや競合がある場合、Orca は更新をスキップします。",
+          "forkOf": "{{owner}}/{{repo}} のフォーク",
+          "syncing": "同期中",
+          "syncNow": "今すぐ同期",
+          "modeLabel": "フォーク同期モード",
+          "ask": "確認する",
+          "safeAuto": "安全に自動",
+          "off": "オフ"
         }
       },
       "right": {
@@ -8053,7 +8082,8 @@
             "9a8b85882d": "読み込み中",
             "62e685d5ec": "idle",
             "111e1d0db4": "エラー",
-            "e5e81e59a6": "commits のサイズ変更"
+            "e5e81e59a6": "commits のサイズ変更",
+            "6d1e0a7c3b": "コミットファイルを読み込めませんでした"
           },
           "HostedReviewActions": {
             "4d5fb5a284": "閉じる",
@@ -8326,7 +8356,14 @@
             "e2b7a1c0d9f4": "{{value0}} の作成に失敗しました",
             "hugeRepoIgnorePrompt": "このリポジトリにはアクティブな変更が多すぎます。「{{value0}}」を .gitignore に追加しますか？",
             "hugeRepoIgnoreAction": ".gitignore に追加",
-            "tooManyChanges": "検出された変更が多すぎます。最初の {{value0}} 件のみ表示しています。"
+            "tooManyChanges": "検出された変更が多すぎます。最初の {{value0}} 件のみ表示しています。",
+            "bf5082de46": "{{value0}}をコピーしました",
+            "c06193ef57": "{{value0}}をコピーできませんでした",
+            "d172a4f068": "コミットハッシュ",
+            "e283b50179": "コミットメッセージ",
+            "f394c6128a": "このコミットを説明できるエージェントがありません",
+            "04a5d7239b": "このリポジトリには対応するWebリモートがありません",
+            "15b6e834ac": "コミットをブラウザーで開けませんでした"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "選択した agent を開始できませんでした。",
@@ -8750,6 +8787,21 @@
             "copyLogPath": "Copy Log Path",
             "messageCount": "{{value0}} msgs",
             "tokenCount": "{{value0}} tok"
+          },
+          "GitHistoryCommitFiles": {
+            "a1b2c3d4e5": "ファイルを読み込み中…",
+            "b2c3d4e5f6": "このコミットにはファイルの変更がありません",
+            "c3d4e5f6a7": "すべての変更をまとめて開く"
+          },
+          "GitHistoryRow": {
+            "2f9c41ab07": "コミット{{value0}}のファイルを表示: {{value1}}",
+            "4a8d9e0c1f": "コミット{{value0}}のファイルを非表示: {{value1}}"
+          },
+          "GitHistoryCommitContextMenu": {
+            "7b1c4e9a02": "コミットをブラウザーで開く",
+            "8c2d5fab13": "コミットハッシュをコピー",
+            "9d3e60bc24": "コミットメッセージをコピー",
+            "ae4f71cd35": "変更を説明"
           }
         }
       },

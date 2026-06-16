@@ -7331,7 +7331,9 @@
             "host": "host",
             "ssh": "ssh",
             "remote": "remote",
-            "vm": "vm"
+            "vm": "vm",
+            "keepForkUpToDate": "포크를 최신 상태로 유지",
+            "keepForkUpToDateDescription": "이 포크를 upstream에서 안전하게 fast-forward합니다."
           }
         },
         "runtime": {
@@ -7913,6 +7915,33 @@
           "workspaceDirectory": "The client default is inherited until a host needs its own worktree directory.",
           "providerHost": "Provider host",
           "providerAccounts": "Credentials and account checks belong to the local client or selected remote server that owns the provider integration."
+        },
+        "RepositoryForkSyncSection": {
+          "defaultBranch": "기본 브랜치",
+          "synced": "포크가 업데이트됨",
+          "syncedDescriptionSingular": "{{branch}} 브랜치를 1개 커밋만큼 fast-forward했습니다.",
+          "syncedDescriptionPlural": "{{branch}} 브랜치를 {{count}}개 커밋만큼 fast-forward했습니다.",
+          "upToDate": "포크가 이미 최신 상태입니다",
+          "upToDateDescription": "{{branch}} 브랜치가 이미 upstream과 일치합니다.",
+          "missingOrigin": "origin 원격이 없습니다.",
+          "missingUpstream": "upstream 원격이 없습니다.",
+          "upstreamMismatch": "upstream 원격이 더 이상 이 포크와 일치하지 않습니다.",
+          "missingUpstreamBranch": "upstream 기본 브랜치를 확인할 수 없습니다.",
+          "missingOriginBranch": "origin에 upstream 기본 브랜치가 없습니다.",
+          "diverged": "origin에 upstream에 없는 커밋이 있습니다.",
+          "blocked": "포크 동기화를 건너뜀",
+          "blockedFallback": "Orca가 이 포크를 안전하게 fast-forward할 수 없습니다.",
+          "failed": "포크 동기화 실패",
+          "title": "포크를 최신 상태로 유지",
+          "description": "이 포크를 upstream에서 안전하게 fast-forward합니다.",
+          "longDescription": "이 포크가 upstream보다 뒤처진 경우 Orca가 기본 브랜치를 안전하게 fast-forward할 수 있습니다. 브랜치에 로컬 전용 커밋이나 충돌이 있으면 Orca가 업데이트를 건너뜁니다.",
+          "forkOf": "{{owner}}/{{repo}}의 포크",
+          "syncing": "동기화 중",
+          "syncNow": "지금 동기화",
+          "modeLabel": "포크 동기화 모드",
+          "ask": "묻기",
+          "safeAuto": "안전 자동",
+          "off": "끄기"
         }
       },
       "right": {
@@ -8053,7 +8082,8 @@
             "9a8b85882d": "로드 중",
             "62e685d5ec": "idle",
             "111e1d0db4": "오류",
-            "e5e81e59a6": "commits 크기 조정"
+            "e5e81e59a6": "commits 크기 조정",
+            "6d1e0a7c3b": "커밋 파일을 로드하지 못했습니다"
           },
           "HostedReviewActions": {
             "4d5fb5a284": "닫기",
@@ -8326,7 +8356,14 @@
             "e2b7a1c0d9f4": "{{value0}} 생성에 실패했습니다",
             "hugeRepoIgnorePrompt": "이 저장소에 활성 변경 사항이 너무 많습니다. \"{{value0}}\"을(를) .gitignore에 추가하시겠습니까?",
             "hugeRepoIgnoreAction": ".gitignore에 추가",
-            "tooManyChanges": "변경 사항이 너무 많이 감지되었습니다. 처음 {{value0}}개만 표시됩니다."
+            "tooManyChanges": "변경 사항이 너무 많이 감지되었습니다. 처음 {{value0}}개만 표시됩니다.",
+            "bf5082de46": "{{value0}}이(가) 복사됨",
+            "c06193ef57": "{{value0}}을(를) 복사하지 못했습니다",
+            "d172a4f068": "커밋 해시",
+            "e283b50179": "커밋 메시지",
+            "f394c6128a": "이 커밋을 설명할 에이전트가 없습니다",
+            "04a5d7239b": "이 저장소에는 지원되는 웹 원격이 없습니다",
+            "15b6e834ac": "브라우저에서 커밋을 열지 못했습니다"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "선택한 agent를 시작할 수 없습니다.",
@@ -8750,6 +8787,21 @@
             "copyLogPath": "Copy Log Path",
             "messageCount": "{{value0}} msgs",
             "tokenCount": "{{value0}} tok"
+          },
+          "GitHistoryCommitFiles": {
+            "a1b2c3d4e5": "파일 로드 중…",
+            "b2c3d4e5f6": "이 커밋에는 파일 변경 사항이 없습니다",
+            "c3d4e5f6a7": "모든 변경 사항을 함께 열기"
+          },
+          "GitHistoryRow": {
+            "2f9c41ab07": "커밋 {{value0}}의 파일 표시: {{value1}}",
+            "4a8d9e0c1f": "커밋 {{value0}}의 파일 숨기기: {{value1}}"
+          },
+          "GitHistoryCommitContextMenu": {
+            "7b1c4e9a02": "브라우저에서 커밋 열기",
+            "8c2d5fab13": "커밋 해시 복사",
+            "9d3e60bc24": "커밋 메시지 복사",
+            "ae4f71cd35": "변경 사항 설명"
           }
         }
       },
