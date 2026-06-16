@@ -25,6 +25,7 @@ import type {
   SendSheetState
 } from './mobile-diff-review-screen-model'
 import { useMobileDiffReviewInteractions } from './use-mobile-diff-review-interactions'
+import { useMobilePrSidebarController } from './use-mobile-pr-sidebar-controller'
 
 type ControllerInput = {
   client: RpcClient | null
@@ -200,6 +201,21 @@ export function useMobileDiffReviewController(input: ControllerInput) {
     return map
   }, [commentsForCurrentItem])
 
+  // Head branch + SHA for the PR sidebar come from git.status (the review snapshot),
+  // not the branchCompare base ref. headOid is the branch-compare fallback for the SHA.
+  const prSidebarBranch = screenState.kind === 'ready' ? (screenState.status.branch ?? null) : null
+  const prSidebarHeadSha =
+    screenState.kind === 'ready'
+      ? (screenState.status.head ?? screenState.branchCompare?.summary.headOid ?? null)
+      : null
+  const prSidebar = useMobilePrSidebarController({
+    client,
+    connState,
+    worktreeId,
+    branch: prSidebarBranch,
+    headSha: prSidebarHeadSha
+  })
+
   const interactions = useMobileDiffReviewInteractions({
     client,
     connState,
@@ -233,6 +249,7 @@ export function useMobileDiffReviewController(input: ControllerInput) {
 
   return {
     ...interactions,
+    ...prSidebar,
     actionError,
     activeHunkIndex,
     busyAction,
