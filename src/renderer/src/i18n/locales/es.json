@@ -10896,6 +10896,9 @@
         "sourceUnavailable": "{{value0}} source unavailable: {{value1}}",
         "someSourceHostsUnavailable": "Some {{value0}} source hosts unavailable: {{value1}}",
         "reconnectOrUpdateTitle": "Reconnect or update {{value0}} to load this source."
+      },
+      "ShortcutKeyCombo": {
+        "07eb4985a1": "Double-tap {{value0}}"
       }
     },
     "i18n": {

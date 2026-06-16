@@ -1,5 +1,6 @@
 import React from 'react'
 import { cn } from '@/lib/utils'
+import { translate } from '@/i18n/i18n'
 
 function KeyCap({ label, className }: { label: string; className?: string }): React.JSX.Element {
   return (
@@ -38,7 +39,7 @@ export function ShortcutKeyCombo({
   return (
     <span
       className={cn('inline-flex items-center gap-1', className)}
-      title={doubleTap && keys.length > 0 ? `Double-tap ${keys[0]}` : undefined}
+      title={doubleTap && keys.length > 0 ? translate("auto.components.ShortcutKeyCombo.07eb4985a1", "Double-tap {{value0}}", { value0: keys[0] }) : undefined}
     >
       {keys.map((key, index) => (
         <React.Fragment key={`${key}-${index}`}>
