@@ -112,7 +112,10 @@ export type AgentStatusSlice = {
    *  survive sleep/remove. */
   dropAgentStatusByWorktree: (worktreeId: string) => void
 
-  captureSleepingAgentSessionsByWorktree: (worktreeId: string) => void
+  captureSleepingAgentSessionsByWorktree: (worktreeId: string, paneKeys?: string[]) => void
+  /** Capture resumable agent sessions across every worktree. Called from the
+   *  quit flush so provider session ids survive an app restart. */
+  captureAllSleepingAgentSessions: () => void
   clearSleepingAgentSession: (paneKey: string) => void
   clearSleepingAgentSessionsByWorktree: (worktreeId: string) => void
   pruneSleepingAgentSessions: (validWorktreeIds: Set<string>) => void
@@ -189,6 +192,7 @@ function sleepingRecordFromEntry(args: {
   worktreeId: string
   tab?: TerminalTab
   capturedAt: number
+  origin?: SleepingAgentSessionRecord['origin']
 }): SleepingAgentSessionRecord | null {
   const agent = args.entry.agentType
   if (!isResumableTuiAgent(agent) || !args.entry.providerSession) {
@@ -213,7 +217,8 @@ function sleepingRecordFromEntry(args: {
       : {}),
     ...(args.entry.lastAssistantMessage
       ? { lastAssistantMessage: args.entry.lastAssistantMessage }
-      : {})
+      : {}),
+    ...(args.origin ? { origin: args.origin } : {})
   }
 }
 
@@ -1010,9 +1015,10 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
       }
     },
 
-    captureSleepingAgentSessionsByWorktree: (worktreeId) => {
+    captureSleepingAgentSessionsByWorktree: (worktreeId, paneKeys) => {
       set((s) => {
         const capturedAt = Date.now()
+        const allowedPaneKeys = paneKeys ? new Set(paneKeys) : null
         const tabPrefixes = (s.tabsByWorktree[worktreeId] ?? []).map((tab) => `${tab.id}:`)
         const next: Record<string, SleepingAgentSessionRecord> = {
           ...s.sleepingAgentSessionsByPaneKey
@@ -1020,6 +1026,9 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
         let changed = false
 
         for (const retained of Object.values(s.retainedAgentsByPaneKey)) {
+          if (allowedPaneKeys && !allowedPaneKeys.has(retained.entry.paneKey)) {
+            continue
+          }
           if (retained.worktreeId !== worktreeId) {
             continue
           }
@@ -1037,6 +1046,9 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
         }
 
         for (const [paneKey, entry] of Object.entries(s.agentStatusByPaneKey)) {
+          if (allowedPaneKeys && !allowedPaneKeys.has(paneKey)) {
+            continue
+          }
           const belongsToWorktree =
             entry.worktreeId === worktreeId || paneKeyMatchesAnyTabPrefix(paneKey, tabPrefixes)
           if (!belongsToWorktree) {
@@ -1054,6 +1066,42 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
           }
         }
 
+        return changed ? { sleepingAgentSessionsByPaneKey: next } : s
+      })
+    },
+
+    captureAllSleepingAgentSessions: () => {
+      // Why: the quit flush must persist provider session ids for every live
+      // agent pane — otherwise agents whose daemon PTYs die while the app is
+      // closed have nothing to `--resume` from (#5232). Only live entries are
+      // captured: retained rows belong to panes the user already closed, and
+      // `done` sessions have nothing to resume.
+      set((s) => {
+        const capturedAt = Date.now()
+        const next: Record<string, SleepingAgentSessionRecord> = {
+          ...s.sleepingAgentSessionsByPaneKey
+        }
+        let changed = false
+        for (const entry of Object.values(s.agentStatusByPaneKey)) {
+          if (entry.state === 'done') {
+            continue
+          }
+          const worktreeId = entry.worktreeId ?? findAgentPaneWorktreeId(s, entry.paneKey)
+          if (!worktreeId) {
+            continue
+          }
+          const record = sleepingRecordFromEntry({
+            state: s,
+            entry,
+            worktreeId,
+            capturedAt,
+            origin: 'quit'
+          })
+          if (record && next[record.paneKey] !== record) {
+            next[record.paneKey] = record
+            changed = true
+          }
+        }
         return changed ? { sleepingAgentSessionsByPaneKey: next } : s
       })
     },

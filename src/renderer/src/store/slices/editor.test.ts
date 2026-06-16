@@ -2098,6 +2098,28 @@ describe('createEditorSlice remote branch actions', () => {
     expect(toastErrorMock).not.toHaveBeenCalled()
   })
 
+  it('routes git operations through the explicit runtime owner instead of ambient focus', async () => {
+    const store = createEditorStore()
+    store.setState({ settings: { activeRuntimeEnvironmentId: 'focused-runtime' } as never })
+
+    await store.getState().pushBranch('wt-1', '/repo', false, undefined, undefined, {
+      runtimeTargetSettings: { activeRuntimeEnvironmentId: null }
+    })
+
+    expect(gitPushMock).toHaveBeenCalledWith({
+      worktreePath: '/repo',
+      publish: false,
+      connectionId: undefined,
+      pushTarget: undefined,
+      forceWithLease: undefined
+    })
+    expect(gitUpstreamStatusMock).toHaveBeenCalledWith({
+      worktreePath: '/repo',
+      connectionId: undefined,
+      pushTarget: undefined
+    })
+  })
+
   it('runs rebase from base and refreshes upstream on success', async () => {
     const store = createEditorStore()
     const pushTarget = { remoteName: 'fork', branchName: 'feature' }

@@ -32,6 +32,7 @@ export const NEVER_TRANSLATE_VALUES = new Set([
   'Continue',
   'Cursor',
   'Droid',
+  'Devin',
   'Gemini',
   'GitHub Copilot',
   'Goose',

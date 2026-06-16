@@ -38,7 +38,11 @@ import {
 } from '../../../shared/tui-agent-launch-defaults'
 import { isTuiAgent } from '../../../shared/tui-agent-config'
 import { resumeSleepingAgentSessionsForWorktree } from '@/lib/resume-sleeping-agent-session'
-import { folderWorkspaceKey } from '../../../shared/workspace-scope'
+import {
+  getRuntimeEnvironmentIdForWorktree,
+  type WorktreeRuntimeOwnerState
+} from '@/lib/worktree-runtime-owner'
+import { folderWorkspaceKey, parseWorkspaceKey } from '../../../shared/workspace-scope'
 import {
   folderWorkspaceActivationBlocked,
   getFolderWorkspacePathStatusDescription,
@@ -68,7 +72,7 @@ export type IssueCommandLaunch =
   | WorktreeSetupLaunch
   | { command: string; env?: Record<string, string> }
 
-type WorktreeActivationStore = {
+type WorktreeActivationStore = Partial<WorktreeRuntimeOwnerState> & {
   tabsByWorktree: Record<string, { id: string }[]>
   defaultTerminalTabsAppliedByWorktreeId: Record<string, true>
   createTab: (
@@ -233,6 +237,7 @@ export function activateAndRevealWorktree(
     issueCommand?: IssueCommandLaunch
     sidebarRevealBehavior?: PendingSidebarWorktreeReveal['behavior']
     notifyHostRuntime?: boolean
+    revealInSidebar?: boolean
   }
 ): ActivateAndRevealResult | false {
   const state = useAppStore.getState()
@@ -264,14 +269,16 @@ export function activateAndRevealWorktree(
   // 3. Core activation: sets activeWorktreeId, restores per-worktree state,
   // clears unread, bumps dead PTY generations, triggers GitHub refresh
   state.setActiveWorktree(worktreeId)
-  if (
-    opts?.notifyHostRuntime !== false &&
-    isWebRuntimeSessionActive(useAppStore.getState().settings?.activeRuntimeEnvironmentId)
-  ) {
+  const postActivationState = useAppStore.getState()
+  const ownerRuntimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(postActivationState, wt.id)
+  if (opts?.notifyHostRuntime !== false && isWebRuntimeSessionActive(ownerRuntimeEnvironmentId)) {
     // Why: paired web clients own only local selection state. The desktop host
     // must also activate the worktree so hidden renderer-owned terminal panes
     // mount and publish session surfaces back to the web client.
-    void activateWebRuntimeSessionWorktree({ worktreeId })
+    void activateWebRuntimeSessionWorktree({
+      worktreeId,
+      environmentId: ownerRuntimeEnvironmentId
+    })
   }
 
   // Why: record focus recency for Cmd+J's empty-query ordering BEFORE any
@@ -317,29 +324,33 @@ export function activateAndRevealWorktree(
   }
 
   // 6. Reveal in sidebar
-  if (opts?.sidebarRevealBehavior) {
-    state.revealWorktreeInSidebar(worktreeId, { behavior: opts.sidebarRevealBehavior })
-  } else {
-    state.revealWorktreeInSidebar(worktreeId)
+  if (opts?.revealInSidebar !== false) {
+    if (opts?.sidebarRevealBehavior) {
+      state.revealWorktreeInSidebar(worktreeId, { behavior: opts.sidebarRevealBehavior })
+    } else {
+      state.revealWorktreeInSidebar(worktreeId)
+    }
   }
 
-  ensureWebRuntimeWorktreeTerminalAfterWake(worktreeId)
+  if (opts?.notifyHostRuntime !== false) {
+    ensureWebRuntimeWorktreeTerminalAfterWake(worktreeId)
+  }
 
   return { primaryTabId }
 }
 
 export function ensureWebRuntimeWorktreeTerminalAfterWake(worktreeId: string): void {
   const state = useAppStore.getState()
-  const runtimeEnvironmentId = state.settings?.activeRuntimeEnvironmentId?.trim()
+  const worktree = state.getKnownWorktreeById(worktreeId)
+  if (!worktree) {
+    return
+  }
+  const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(state, worktree.id)
   if (!runtimeEnvironmentId || !isWebRuntimeSessionActive(runtimeEnvironmentId)) {
     return
   }
 
   const tabs = state.tabsByWorktree[worktreeId] ?? []
-  if (tabs.length === 0) {
-    return
-  }
-
   const hasLivePty = tabs.some((tab) => tabHasLivePty(state.ptyIdsByTabId, tab.id))
   if (hasLivePty) {
     return
@@ -357,7 +368,7 @@ export function ensureWebRuntimeWorktreeTerminalAfterWake(worktreeId: string): v
   }
 
   const { renderableTabCount } = state.reconcileWorktreeTabModel(worktreeId)
-  if (renderableTabCount === 0) {
+  if (tabs.length > 0 && renderableTabCount === 0) {
     return
   }
 
@@ -394,9 +405,11 @@ export function ensureWorktreeHasInitialTerminal(
   }
   // Why: remote web clients mirror the runtime server's session tabs. A local
   // activation fallback can spawn a second host terminal before the mirror lands.
-  if (
-    isWebRuntimeSessionActive(useAppStore.getState().settings?.activeRuntimeEnvironmentId ?? null)
-  ) {
+  const ownerState =
+    store.settings !== undefined || store.repos !== undefined || store.worktreesByRepo !== undefined
+      ? store
+      : useAppStore.getState()
+  if (isWebRuntimeSessionActive(getRuntimeEnvironmentIdForWorktree(ownerState, worktreeId))) {
     return null
   }
 
@@ -549,11 +562,17 @@ function queueSetupAndIssueCommands(
   }
 }
 
-// Why: break the import cycle — the nav-history slice must call
-// activateAndRevealWorktree from goBack/goForward, but the slice lives under
-// @/store, which activation already imports from. Registering the activator
-// at module init here lets the slice call back without importing this file.
-setWorktreeNavActivator(activateAndRevealWorktree)
+// Why: break the import cycle — the nav-history slice must activate workspace
+// entries from goBack/goForward, but it lives under @/store, which activation
+// already imports from. Registering here keeps folder workspace replay on the
+// same path as direct folder activation.
+setWorktreeNavActivator((workspaceId) => {
+  const workspaceScope = parseWorkspaceKey(workspaceId)
+  if (workspaceScope?.type === 'folder') {
+    return activateAndRevealFolderWorkspace(workspaceScope.folderWorkspaceId)
+  }
+  return activateAndRevealWorktree(workspaceId)
+})
 
 // Why: page entries in nav history replay through setActiveView(...)
 // (not open*Page) so back/forward does not mutate previousViewBefore* or
@@ -570,8 +589,14 @@ setWorktreeNavViewActivator((entry) => {
       taskPageData: {
         ...state.taskPageData,
         openGitHubWorkItem: undefined,
+        openGitHubSourceContext: undefined,
         openGitHubInitialTab: undefined,
-        openLinearIssue: undefined
+        openGitLabWorkItem: undefined,
+        openGitLabSourceContext: undefined,
+        openLinearIssue: undefined,
+        openLinearSourceContext: undefined,
+        openJiraIssue: undefined,
+        openJiraSourceContext: undefined
       }
     }))
     return
@@ -584,8 +609,55 @@ setWorktreeNavViewActivator((entry) => {
         taskSource: 'github',
         preselectedRepoId: entry.workItem.repoId,
         openGitHubWorkItem: entry.workItem,
+        openGitHubSourceContext: entry.sourceContext,
         openGitHubInitialTab: entry.initialTab,
-        openLinearIssue: undefined
+        openGitLabWorkItem: undefined,
+        openGitLabSourceContext: undefined,
+        openLinearIssue: undefined,
+        openLinearSourceContext: undefined,
+        openJiraIssue: undefined,
+        openJiraSourceContext: undefined
+      }
+    }))
+    return
+  }
+  if (entry.source === 'gitlab') {
+    useAppStore.setState((state) => ({
+      activeView: 'tasks',
+      githubTaskDrawerWorkItem: null,
+      taskPageData: {
+        ...state.taskPageData,
+        taskSource: 'gitlab',
+        preselectedRepoId: entry.workItem.repoId,
+        openGitHubWorkItem: undefined,
+        openGitHubSourceContext: undefined,
+        openGitHubInitialTab: undefined,
+        openGitLabWorkItem: entry.workItem,
+        openGitLabSourceContext: entry.sourceContext,
+        openLinearIssue: undefined,
+        openLinearSourceContext: undefined,
+        openJiraIssue: undefined,
+        openJiraSourceContext: undefined
+      }
+    }))
+    return
+  }
+  if (entry.source === 'jira') {
+    useAppStore.setState((state) => ({
+      activeView: 'tasks',
+      githubTaskDrawerWorkItem: null,
+      taskPageData: {
+        ...state.taskPageData,
+        taskSource: 'jira',
+        openGitHubWorkItem: undefined,
+        openGitHubSourceContext: undefined,
+        openGitHubInitialTab: undefined,
+        openGitLabWorkItem: undefined,
+        openGitLabSourceContext: undefined,
+        openLinearIssue: undefined,
+        openLinearSourceContext: undefined,
+        openJiraIssue: entry.issue,
+        openJiraSourceContext: entry.sourceContext
       }
     }))
     return
@@ -597,8 +669,14 @@ setWorktreeNavViewActivator((entry) => {
       ...state.taskPageData,
       taskSource: 'linear',
       openGitHubWorkItem: undefined,
+      openGitHubSourceContext: undefined,
       openGitHubInitialTab: undefined,
-      openLinearIssue: entry.issue
+      openGitLabWorkItem: undefined,
+      openGitLabSourceContext: undefined,
+      openLinearIssue: entry.issue,
+      openLinearSourceContext: entry.sourceContext,
+      openJiraIssue: undefined,
+      openJiraSourceContext: undefined
     }
   }))
 })

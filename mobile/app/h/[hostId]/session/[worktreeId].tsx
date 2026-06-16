@@ -6,7 +6,6 @@ import {
   FlatList,
   View,
   Text,
-  StyleSheet,
   ScrollView,
   TextInput,
   Pressable,
@@ -47,6 +46,11 @@ import {
 import type { RpcClient } from '../../../../src/transport/rpc-client'
 import { loadHosts } from '../../../../src/transport/host-store'
 import {
+  loadTerminalAutocompleteEnabled,
+  loadTerminalTextScale,
+  saveTerminalTextScale
+} from '../../../../src/storage/preferences'
+import {
   useHostClient,
   useForceReconnect,
   useReconnectAttempt,
@@ -63,9 +67,7 @@ import {
   triggerEdgeBump
 } from '../../../../src/platform/haptics'
 import {
-  TerminalWebView,
   type TerminalKeyboardAvoidanceMetrics,
-  type MobileTerminalTheme,
   type TerminalModes,
   type TerminalWebViewHandle
 } from '../../../../src/terminal/TerminalWebView'
@@ -83,7 +85,7 @@ import {
 } from '../../../../src/terminal/terminal-live-input'
 import { normalizeTerminalTextInput } from '../../../../src/terminal/terminal-text-input-normalization'
 import { countTerminalGestureInputSequences } from '../../../../src/terminal/terminal-gesture-input'
-import { MobileBrowserPane, type MobileBrowserTab } from '../../../../src/browser/MobileBrowserPane'
+import { MobileBrowserPane } from '../../../../src/browser/MobileBrowserPane'
 import { isBlankBrowserUrl, normalizeBrowserUrl } from '../../../../src/browser/browser-url'
 import { StatusDot } from '../../../../src/components/StatusDot'
 import { ActionSheetModal } from '../../../../src/components/ActionSheetModal'
@@ -98,10 +100,7 @@ import {
   saveCustomKeys,
   type CustomKey
 } from '../../../../src/components/CustomKeyModal'
-import {
-  buildMobileDiffLines,
-  type MobileDiffLine
-} from '../../../../src/session/mobile-diff-lines'
+import { buildMobileDiffLines } from '../../../../src/session/mobile-diff-lines'
 import {
   addMobileDiffComment,
   formatDiffComments,
@@ -113,144 +112,67 @@ import {
   buildPlainMobileDiffSyntaxLines,
   highlightMobileCode,
   highlightMobileDiffLines,
-  resolveMobileSyntaxLanguage,
-  type MobileHighlightedDiffLine,
-  type MobileSyntaxSegment
+  resolveMobileSyntaxLanguage
 } from '../../../../src/session/mobile-file-syntax'
 import {
   getTerminalRecordsFromSessionTabs,
   mergeTerminalListWithKnownRecords,
   mergeTerminalRecordsByCurrentOrder,
   mobileSessionTabsEqual,
-  terminalRecordsEqual,
-  type TerminalRecord
+  terminalRecordsEqual
 } from '../../../../src/session/mobile-terminal-records'
 import {
   buildMobileNewTabAgentOptions,
   type MobileNewTabAgentOption,
   type MobileNewTabAgentSettings
 } from '../../../../src/session/mobile-new-tab-agent-options'
+import {
+  buildMobileImagePastePayload,
+  saveMobileClipboardImageAsTempFile
+} from '../../../../src/session/mobile-clipboard-image'
+import { TerminalPaneView } from '../../../../src/session/TerminalPaneView'
+import {
+  getRepoIdFromMobileWorktreeId,
+  isFileExistsErrorMessage,
+  isGestureMouseTrackingMode,
+  MOBILE_SESSION_STATUS_LABELS,
+  TERMINAL_GESTURE_INPUT_BUCKET_CAPACITY,
+  TERMINAL_GESTURE_INPUT_FLUSH_DELAY_MS,
+  TERMINAL_GESTURE_INPUT_MAX_PENDING_SEQUENCES,
+  TERMINAL_GESTURE_INPUT_MAX_QUEUE_AGE_MS,
+  TERMINAL_GESTURE_INPUT_REFILL_PER_SECOND
+} from '../../../../src/session/mobile-session-route-helpers'
 import { resolveMarkdownFloatingActionsBottom } from '../../../../src/session/markdown-floating-actions-layout'
+import { resolveTabStripScrollOffset } from '../../../../src/session/tab-strip-scroll'
 import {
   createMobileSessionCreateWarningState,
   dismissMobileSessionCreateWarningState,
   reconcileMobileSessionCreateWarningState
 } from '../../../../src/session/mobile-session-create-warning-state'
-import { colors, spacing, radii, typography } from '../../../../src/theme/mobile-theme'
+import { colors, spacing } from '../../../../src/theme/mobile-theme'
+import { styles } from './mobile-session-styles'
 import type { DiffComment } from '../../../../../src/shared/types'
-import type { AgentStatusEntry } from '../../../../../src/shared/agent-status-types'
-
-type Terminal = TerminalRecord
-
-type MobileSessionTabType = 'terminal' | 'markdown' | 'file' | 'browser'
-
-type MobileSessionTab =
-  | {
-      type: 'terminal'
-      id: string
-      title: string
-      parentTabId?: string
-      leafId?: string
-      status?: 'pending-handle' | 'ready'
-      terminal: string | null
-      agentStatus?: AgentStatusEntry | null
-      terminalTheme?: MobileTerminalTheme
-      isActive: boolean
-    }
-  | {
-      type: 'markdown'
-      id: string
-      title: string
-      filePath: string
-      relativePath: string
-      isDirty: boolean
-      isActive: boolean
-      documentVersion: string
-    }
-  | {
-      type: 'file'
-      id: string
-      title: string
-      filePath: string
-      relativePath: string
-      language?: string
-      mode?: 'edit' | 'diff'
-      diffSource?: 'staged' | 'unstaged' | 'branch' | 'commit'
-      isDirty: boolean
-      isActive: boolean
-    }
-  | MobileBrowserTab
-
-type SessionTabsResult = {
-  worktree: string
-  publicationEpoch?: string
-  snapshotVersion: number
-  tabs: MobileSessionTab[]
-  activeTabId: string | null
-  activeTabType: MobileSessionTabType | null
-}
-
-type RuntimeStatusResult = {
-  capabilities?: string[]
-}
-
-type MarkdownDocState =
-  | { status: 'loading' }
-  | {
-      status: 'ready'
-      content: string
-      localContent: string
-      baseVersion: string
-      isDirty: boolean
-      editable: boolean
-      stale?: boolean
-      saving?: boolean
-      saveError?: string
-      readOnlyReason?: string
-    }
-  | { status: 'error'; message: string }
-
-type FileDocState =
-  | { status: 'loading' }
-  | { status: 'ready'; kind: 'file'; content: string; truncated: boolean; byteLength: number }
-  | { status: 'ready'; kind: 'diff'; lines: MobileDiffLine[]; truncated: boolean }
-  | { status: 'error'; message: string }
-
-type RenderableDiffLine = MobileHighlightedDiffLine<MobileDiffLine>
-
-type DiffCommentActions = {
-  comments: DiffComment[]
-  busy: boolean
-  onAdd: (filePath: string, lineNumber: number, body: string) => Promise<boolean>
-  onDelete: (commentId: string) => Promise<void>
-  onCopyAll: () => Promise<void>
-  onSendAll: () => void
-}
-
-type DiffNotesDelivery = {
-  prompt: string
-  comments: DiffComment[]
-}
-
-type ReadyFileDocState = Extract<FileDocState, { status: 'ready' }>
-
-type FileSyntaxState = {
-  doc: ReadyFileDocState
-  language: string
-  segments: MobileSyntaxSegment[]
-}
-
-type DiffSyntaxState = {
-  doc: ReadyFileDocState
-  language: string
-  lines: RenderableDiffLine[]
-}
-
-type DirtyMarkdownDraft = {
-  tabId: string
-  title: string
-  content: string
-}
+import type {
+  DiffCommentActions,
+  DiffNotesDelivery,
+  DiffSyntaxState,
+  DirtyMarkdownDraft,
+  FileDocState,
+  FileSyntaxState,
+  MarkdownDocState,
+  MobileDisplayMode,
+  MobileNewTabAgentLoadState,
+  MobileSessionTab,
+  MobileSessionTabType,
+  RenderableDiffLine,
+  RuntimeRepoSummary,
+  RuntimeStatusResult,
+  SessionTabsResult,
+  Terminal,
+  TerminalCreateResult,
+  TerminalGestureInputBucket,
+  TerminalGestureInputQueue
+} from './mobile-session-route-types'
 
 function getActiveTabIdForHandle(
   tabs: MobileSessionTab[],
@@ -287,131 +209,6 @@ function getMobileSessionTabTitle(tab: MobileSessionTab): string {
   return tab.title || 'Terminal'
 }
 
-function isFileExistsErrorMessage(message: string): boolean {
-  const normalized = message.toLowerCase()
-  return normalized.includes('eexist') || normalized.includes('already exists')
-}
-
-type TerminalCreateResult = {
-  tab: Extract<MobileSessionTab, { type: 'terminal' }>
-}
-
-type MobileNewTabAgentLoadState = 'idle' | 'loading' | 'loaded' | 'error'
-
-type RuntimeRepoSummary = {
-  id: string
-  connectionId?: string | null
-}
-
-function getRepoIdFromMobileWorktreeId(id: string): string {
-  // Why: mobile cannot import desktop shared modules in its standalone tsc run,
-  // but the runtime worktree id wire format is still `${repoId}::${path}`.
-  const separatorIdx = id.indexOf('::')
-  return separatorIdx === -1 ? id : id.slice(0, separatorIdx)
-}
-
-type MobileDisplayMode = 'auto' | 'phone' | 'desktop'
-
-const STATUS_LABELS: Record<ConnectionState, string> = {
-  connecting: 'Connecting',
-  handshaking: 'Securing',
-  connected: 'Connected',
-  disconnected: 'Disconnected',
-  reconnecting: 'Reconnecting',
-  'auth-failed': 'Auth failed'
-}
-
-const TERMINAL_GESTURE_INPUT_BUCKET_CAPACITY = 64
-const TERMINAL_GESTURE_INPUT_REFILL_PER_SECOND = 120
-const TERMINAL_GESTURE_INPUT_FLUSH_DELAY_MS = 16
-const TERMINAL_GESTURE_INPUT_MAX_PENDING_SEQUENCES = 32
-const TERMINAL_GESTURE_INPUT_MAX_QUEUE_AGE_MS = 250
-
-type TerminalGestureInputBucket = {
-  tokens: number
-  lastRefillMs: number
-}
-
-type TerminalGestureInputQueue = {
-  bytes: string
-  sequenceCount: number
-  timer: ReturnType<typeof setTimeout> | null
-  lastUpdatedMs: number
-}
-
-function isWheelMouseTrackingMode(mode: TerminalModes['mouseTrackingMode'] | undefined): boolean {
-  return mode === 'vt200' || mode === 'drag' || mode === 'any'
-}
-
-function isGestureMouseTrackingMode(mode: TerminalModes['mouseTrackingMode'] | undefined): boolean {
-  return mode === 'x10' || isWheelMouseTrackingMode(mode)
-}
-
-function TerminalPaneView({
-  handle,
-  active,
-  keyboardLift,
-  terminalTheme,
-  onRef,
-  onWebReady,
-  onSelectionMode,
-  onSelectionCopy,
-  onSelectionEvicted,
-  onModesChanged,
-  onKeyboardAvoidanceMetrics,
-  onHaptic,
-  onTerminalInput,
-  onTerminalTap
-}: {
-  handle: string
-  active: boolean
-  keyboardLift: number
-  terminalTheme?: MobileTerminalTheme
-  onRef: (handle: string, ref: TerminalWebViewHandle | null) => void
-  onWebReady: (handle: string) => void
-  onSelectionMode: (handle: string, active: boolean) => void
-  onSelectionCopy: (handle: string, text: string) => void
-  onSelectionEvicted: (handle: string) => void
-  onModesChanged: (handle: string, modes: TerminalModes) => void
-  onKeyboardAvoidanceMetrics: (handle: string, metrics: TerminalKeyboardAvoidanceMetrics) => void
-  onHaptic: (kind: 'selection' | 'success' | 'error' | 'edge-bump') => void
-  onTerminalInput: (handle: string, bytes: string) => void
-  onTerminalTap: (handle: string) => void
-}) {
-  const setRef = useCallback(
-    (ref: TerminalWebViewHandle | null) => {
-      onRef(handle, ref)
-    },
-    [handle, onRef]
-  )
-
-  return (
-    <View
-      pointerEvents={active ? 'auto' : 'none'}
-      style={[
-        styles.terminalPane,
-        keyboardLift > 0 && { transform: [{ translateY: -keyboardLift }] },
-        !active && styles.terminalPaneHidden
-      ]}
-    >
-      <TerminalWebView
-        ref={setRef}
-        style={styles.terminalWebView}
-        terminalTheme={terminalTheme}
-        onWebReady={() => onWebReady(handle)}
-        onSelectionMode={(a) => onSelectionMode(handle, a)}
-        onSelectionCopy={(t) => onSelectionCopy(handle, t)}
-        onSelectionEvicted={() => onSelectionEvicted(handle)}
-        onModesChanged={(m) => onModesChanged(handle, m)}
-        onKeyboardAvoidanceMetrics={(m) => onKeyboardAvoidanceMetrics(handle, m)}
-        onHaptic={onHaptic}
-        onTerminalInput={(bytes) => onTerminalInput(handle, bytes)}
-        onTerminalTap={() => onTerminalTap(handle)}
-      />
-    </View>
-  )
-}
-
 function MarkdownReader({
   documentId,
   doc,
@@ -431,6 +228,10 @@ function MarkdownReader({
   onDiscard: () => void
   keyboardLift: number
 }) {
+  // The editor lives in a WebView; native Keyboard events under-report its
+  // covered area, so prefer the inset measured inside the WebView when larger.
+  const [webviewKeyboardInset, setWebviewKeyboardInset] = useState(0)
+  const effectiveKeyboardLift = Math.max(keyboardLift, webviewKeyboardInset)
   if (!doc || doc.status === 'loading') {
     return (
       <View style={styles.markdownState}>
@@ -469,6 +270,7 @@ function MarkdownReader({
         content={doc.localContent}
         editable={doc.editable && !doc.saving}
         onChange={onChange}
+        onKeyboardInsetChange={setWebviewKeyboardInset}
       />
       {showFloatingActions ? (
         <View
@@ -479,7 +281,7 @@ function MarkdownReader({
             // Save/Discard controls lifted instead of resizing that surface.
             {
               bottom: resolveMarkdownFloatingActionsBottom({
-                keyboardLift,
+                keyboardLift: effectiveKeyboardLift,
                 restingBottom: spacing.lg,
                 liftedClearance: spacing.md
               })
@@ -941,6 +743,12 @@ export default function SessionScreen() {
   const sessionTabsRef = useRef<MobileSessionTab[]>([])
   const [terminalsLoaded, setTerminalsLoaded] = useState(false)
   const [input, setInput] = useState('')
+  // Why: baseline terminal zoom, reloaded on focus so a Settings → Terminal change
+  // applies in place (the terminal panes stay mounted).
+  const [terminalTextScale, setTerminalTextScale] = useState(1)
+  // Why: local opt-in for keyboard autocomplete/autocorrect on the terminal
+  // command bar; reloaded on focus so a Settings → Terminal toggle takes effect on return.
+  const [autocompleteEnabled, setAutocompleteEnabled] = useState(false)
   const [liveInputCapture, setLiveInputCapture] = useState('')
   const [liveInputTerminalHandles, setLiveInputTerminalHandles] = useState<Set<string>>(
     () => new Set()
@@ -948,6 +756,13 @@ export default function SessionScreen() {
   const [activeHandle, setActiveHandle] = useState<string | null>(null)
   const [activeSessionTabId, setActiveSessionTabId] = useState<string | null>(null)
   const activeSessionTabIdRef = useRef<string | null>(null)
+  // Auto-scroll the tab strip so the active tab (synced from desktop on
+  // worktree entry) is revealed without a manual scroll.
+  const tabStripRef = useRef<ScrollView>(null)
+  const tabStripOffsetRef = useRef(0)
+  const tabStripViewportWidthRef = useRef(0)
+  const tabStripContentWidthRef = useRef(0)
+  const tabLayoutsRef = useRef<Map<string, { x: number; width: number }>>(new Map())
   const [markdownDocs, setMarkdownDocs] = useState<Map<string, MarkdownDocState>>(new Map())
   const markdownDocsRef = useRef<Map<string, MarkdownDocState>>(new Map())
   const [fileDocs, setFileDocs] = useState<Map<string, FileDocState>>(new Map())
@@ -2274,6 +2089,7 @@ export default function SessionScreen() {
     deviceTokenRef,
     initializedHandlesRef,
     tabStripVisible: terminals.length > 1,
+    textScale: terminalTextScale,
     unsubscribeTerminal,
     subscribeToTerminal
   })
@@ -2294,6 +2110,34 @@ export default function SessionScreen() {
       hideSub.remove()
     }
   }, [])
+
+  const scrollActiveTabIntoView = useCallback((tabId: string | null, animated: boolean) => {
+    if (!tabId) {
+      return
+    }
+    const layout = tabLayoutsRef.current.get(tabId)
+    if (!layout) {
+      return
+    }
+    const nextOffset = resolveTabStripScrollOffset({
+      tabX: layout.x,
+      tabWidth: layout.width,
+      viewportWidth: tabStripViewportWidthRef.current,
+      contentWidth: tabStripContentWidthRef.current,
+      currentOffset: tabStripOffsetRef.current
+    })
+    if (nextOffset !== tabStripOffsetRef.current) {
+      tabStripOffsetRef.current = nextOffset
+      tabStripRef.current?.scrollTo({ x: nextOffset, animated })
+    }
+  }, [])
+
+  // Reveal the active tab whenever it changes (e.g. desktop's open tab synced on
+  // worktree entry). Defer one frame so freshly mounted tab layouts are recorded.
+  useEffect(() => {
+    const id = requestAnimationFrame(() => scrollActiveTabIntoView(activeSessionTabId, true))
+    return () => cancelAnimationFrame(id)
+  }, [activeSessionTabId, scrollActiveTabIntoView])
 
   useEffect(() => {
     if (hostId && worktreeId) {
@@ -2468,6 +2312,37 @@ export default function SessionScreen() {
       }, 2000)
       return () => clearInterval(interval)
     }, [connState, fetchSessionTabs, fetchTerminals])
+  )
+
+  // Why: pick up the Settings → Terminal text size when returning here — the
+  // terminal panes stay mounted, so they update in place.
+  useFocusEffect(
+    useCallback(() => {
+      let active = true
+      void loadTerminalTextScale().then((scale) => {
+        if (active) {
+          setTerminalTextScale(scale)
+        }
+      })
+      return () => {
+        active = false
+      }
+    }, [])
+  )
+
+  // Why: pick up the Settings → Terminal autocomplete toggle when returning here.
+  useFocusEffect(
+    useCallback(() => {
+      let active = true
+      void loadTerminalAutocompleteEnabled().then((enabled) => {
+        if (active) {
+          setAutocompleteEnabled(enabled)
+        }
+      })
+      return () => {
+        active = false
+      }
+    }, [])
   )
 
   // Why: unsubscribe the old terminal so the server restores its desktop dims
@@ -3155,30 +3030,65 @@ export default function SessionScreen() {
     }
   }, [])
 
+  const getActiveWorktreeConnectionId = useCallback(async (): Promise<string | null> => {
+    if (!client) {
+      return null
+    }
+    const repoId = getRepoIdFromMobileWorktreeId(worktreeId)
+    const repoResponse = await client.sendRequest('repo.list')
+    if (!repoResponse.ok) {
+      throw new Error((repoResponse as RpcFailure).error.message)
+    }
+    const repos =
+      ((repoResponse as RpcSuccess).result as { repos?: RuntimeRepoSummary[] }).repos ?? []
+    return repos.find((repo) => repo.id === repoId)?.connectionId?.trim() || null
+  }, [client, worktreeId])
+
+  const refreshCanPaste = useCallback(() => {
+    void Promise.all([
+      Clipboard.hasStringAsync().catch(() => false),
+      Clipboard.hasImageAsync().catch(() => false)
+    ]).then(([hasString, hasImage]) => {
+      setCanPaste(hasString || hasImage)
+    })
+  }, [])
+
   const handlePaste = useCallback(async () => {
     if (!client || !activeHandle || !canSend) {
       return
     }
     try {
       const text = await Clipboard.getStringAsync()
-      if (text.length === 0) {
-        return
+      let payload: string | null = null
+      if (text.length > 0) {
+        const modes = ptyModesRef.current.get(activeHandle) || {
+          bracketedPasteMode: false,
+          altScreen: false,
+          mouseTrackingMode: 'none',
+          sgrMouseMode: false,
+          sgrMousePixelsMode: false
+        }
+        const wrap = modes.bracketedPasteMode && !modes.altScreen
+        // Why: strip embedded bracketed-paste markers from clipboard text so a
+        // malicious copy containing `\x1b[201~` can't terminate paste mode early
+        // and have the trailing bytes interpreted as shell commands. Matches
+        // xterm.js / iTerm2 behavior.
+        // eslint-disable-next-line no-control-regex -- intentional bracketed-paste marker stripping
+        const sanitized = wrap ? text.replace(/\x1b\[20[01]~/g, '') : text
+        payload = wrap ? `\x1b[200~${sanitized}\x1b[201~` : sanitized
+      } else {
+        const image = await Clipboard.getImageAsync({ format: 'png' })
+        if (!image) {
+          refreshCanPaste()
+          return
+        }
+        const connectionId = await getActiveWorktreeConnectionId()
+        const imagePath = await saveMobileClipboardImageAsTempFile(client, image.data, {
+          connectionId
+        })
+        payload = buildMobileImagePastePayload(imagePath)
       }
-      const modes = ptyModesRef.current.get(activeHandle) || {
-        bracketedPasteMode: false,
-        altScreen: false,
-        mouseTrackingMode: 'none',
-        sgrMouseMode: false,
-        sgrMousePixelsMode: false
-      }
-      const wrap = modes.bracketedPasteMode && !modes.altScreen
-      // Why: strip embedded bracketed-paste markers from clipboard text so a
-      // malicious copy containing `\x1b[201~` can't terminate paste mode early
-      // and have the trailing bytes interpreted as shell commands. Matches
-      // xterm.js / iTerm2 behavior.
-      // eslint-disable-next-line no-control-regex -- intentional bracketed-paste marker stripping
-      const sanitized = wrap ? text.replace(/\x1b\[20[01]~/g, '') : text
-      const payload = wrap ? `\x1b[200~${sanitized}\x1b[201~` : sanitized
+
       const wrappedBytes = new TextEncoder().encode(payload).byteLength
       if (wrappedBytes > 256 * 1024) {
         triggerError()
@@ -3196,7 +3106,7 @@ export default function SessionScreen() {
           : {})
       })
       triggerSelection()
-      void Clipboard.hasStringAsync().then(setCanPaste)
+      refreshCanPaste()
     } catch (e) {
       triggerError()
       const err = e as { name?: string; message?: string }
@@ -3205,17 +3115,32 @@ export default function SessionScreen() {
       console.warn('[mobile-clip] paste failed', { name: err.name, message: err.message })
       if (isDisconnected) {
         showToast('Paste failed (disconnected)', 1500)
+      } else if (err.message === 'Clipboard image is too large') {
+        showToast('Image too large to paste', 1500)
+      } else {
+        showToast('Paste failed', 1500)
       }
     }
-  }, [client, activeHandle, canSend, connState, showToast])
+  }, [
+    client,
+    activeHandle,
+    canSend,
+    connState,
+    getActiveWorktreeConnectionId,
+    refreshCanPaste,
+    showToast
+  ])
 
   // Why: refresh canPaste on mount, AppState active, after paste.
   useEffect(() => {
     let mounted = true
     const refresh = () => {
-      void Clipboard.hasStringAsync().then((has) => {
+      void Promise.all([
+        Clipboard.hasStringAsync().catch(() => false),
+        Clipboard.hasImageAsync().catch(() => false)
+      ]).then(([hasString, hasImage]) => {
         if (mounted) {
-          setCanPaste(has)
+          setCanPaste(hasString || hasImage)
         }
       })
     }
@@ -3672,7 +3597,7 @@ export default function SessionScreen() {
           : `${visibleTabs.length} tabs`
       : showConnectionRetry
         ? `${connectionVerdict.label} — tap to retry`
-        : STATUS_LABELS[connState]
+        : MOBILE_SESSION_STATUS_LABELS[connState]
 
   // Why: keep safe-area padding in layout at all times, then visually translate
   // the controls over the terminal when the keyboard appears. iOS keyboard
@@ -3867,16 +3792,36 @@ export default function SessionScreen() {
                   (#5106); leaving a non-live tab still closes the keyboard
                   because the live input unmounts. */}
               <ScrollView
+                ref={tabStripRef}
                 horizontal
                 showsHorizontalScrollIndicator={false}
                 style={styles.tabScroll}
                 contentContainerStyle={styles.tabContent}
                 keyboardShouldPersistTaps="handled"
+                scrollEventThrottle={16}
+                onScroll={(e) => {
+                  tabStripOffsetRef.current = e.nativeEvent.contentOffset.x
+                }}
+                onLayout={(e) => {
+                  tabStripViewportWidthRef.current = e.nativeEvent.layout.width
+                  scrollActiveTabIntoView(activeSessionTabIdRef.current, false)
+                }}
+                onContentSizeChange={(width) => {
+                  tabStripContentWidthRef.current = width
+                  scrollActiveTabIntoView(activeSessionTabIdRef.current, false)
+                }}
               >
                 {visibleTabs.map((t) => (
                   <Pressable
                     key={t.id}
                     style={[styles.tab, t.id === activeSessionTabId && styles.tabActive]}
+                    onLayout={(e) => {
+                      const { x, width } = e.nativeEvent.layout
+                      tabLayoutsRef.current.set(t.id, { x, width })
+                      if (t.id === activeSessionTabIdRef.current) {
+                        scrollActiveTabIntoView(t.id, false)
+                      }
+                    }}
                     onPress={() => switchSessionTab(t)}
                     onLongPress={() => {
                       triggerMediumImpact()
@@ -4076,6 +4021,13 @@ export default function SessionScreen() {
                 active={terminal.handle === activeHandle}
                 keyboardLift={terminal.handle === activeHandle ? activeTerminalKeyboardLift : 0}
                 terminalTheme={terminal.terminalTheme}
+                textScale={terminalTextScale}
+                onTextScaleChange={(scale) => {
+                  // Why: pinch-to-zoom in the WebView reports a new preset; persist
+                  // it so the size sticks across panes and app launches.
+                  setTerminalTextScale(scale)
+                  void saveTerminalTextScale(scale)
+                }}
                 onRef={setTerminalWebViewRef}
                 onWebReady={handleTerminalWebReady}
                 onSelectionMode={handleSelectionMode}
@@ -4294,6 +4246,15 @@ export default function SessionScreen() {
             ) : (
               <View style={styles.inputBar}>
                 <TextInput
+                  // Why: Android caches the IME inputType at mount, so toggling
+                  // autocomplete must remount there; iOS can update without a focus-costly remount.
+                  key={
+                    Platform.OS === 'android'
+                      ? autocompleteEnabled
+                        ? 'cmd-input-ac-on'
+                        : 'cmd-input-ac-off'
+                      : 'cmd-input'
+                  }
                   style={styles.textInput}
                   value={input}
                   onChangeText={(text) =>
@@ -4302,10 +4263,18 @@ export default function SessionScreen() {
                   placeholder="Type a command…"
                   placeholderTextColor={colors.textMuted}
                   autoCapitalize="none"
-                  autoCorrect={false}
-                  spellCheck={false}
+                  autoCorrect={autocompleteEnabled}
+                  spellCheck={autocompleteEnabled}
                   smartInsertDelete={false}
-                  keyboardType={Platform.OS === 'ios' ? 'ascii-capable' : 'visible-password'}
+                  // Why: the default keyboard exposes autocomplete/autocorrect;
+                  // ascii-capable (iOS) / visible-password (Android) suppress it.
+                  keyboardType={
+                    autocompleteEnabled
+                      ? 'default'
+                      : Platform.OS === 'ios'
+                        ? 'ascii-capable'
+                        : 'visible-password'
+                  }
                   returnKeyType="send"
                   editable={canSend}
                   onSubmitEditing={() => void handleSend()}
@@ -4716,632 +4685,3 @@ export default function SessionScreen() {
     </View>
   )
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.bgBase
-  },
-  kavInner: {
-    flex: 1
-  },
-  sessionChrome: {
-    backgroundColor: colors.bgPanel,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.borderSubtle
-  },
-  sessionTopBar: {
-    minHeight: 44,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs
-  },
-  backButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: spacing.xs
-  },
-  backButtonPressed: {
-    backgroundColor: colors.bgRaised
-  },
-  filesButton: {
-    width: 36,
-    height: 36,
-    borderRadius: radii.button,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: spacing.xs
-  },
-  filesButtonPressed: {
-    backgroundColor: colors.bgRaised
-  },
-  sessionTitleBlock: {
-    flex: 1,
-    minWidth: 0
-  },
-  sessionTitle: {
-    color: colors.textPrimary,
-    fontSize: 14,
-    fontWeight: '600'
-  },
-  sessionMetaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 2
-  },
-  sessionMetaText: {
-    flexShrink: 1,
-    color: colors.textSecondary,
-    fontSize: typography.metaSize
-  },
-  tabBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderTopWidth: 1,
-    borderTopColor: colors.borderSubtle
-  },
-  tabScroll: {
-    flex: 1,
-    maxHeight: 36
-  },
-  tabContent: {
-    paddingLeft: spacing.sm,
-    paddingRight: spacing.sm
-  },
-  tab: {
-    width: 128,
-    maxWidth: 128,
-    minHeight: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.sm,
-    borderBottomWidth: 2,
-    borderBottomColor: 'transparent'
-  },
-  tabActive: {
-    borderBottomColor: colors.accentBlue
-  },
-  tabLabelRow: {
-    maxWidth: '100%',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs
-  },
-  tabText: {
-    flexShrink: 1,
-    color: colors.textSecondary,
-    fontSize: 13
-  },
-  tabTextActive: {
-    color: colors.textPrimary
-  },
-  newTerminalButton: {
-    width: 40,
-    height: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderBottomWidth: 2,
-    borderBottomColor: 'transparent'
-  },
-  newTerminalButtonPressed: {
-    backgroundColor: colors.bgRaised
-  },
-  newTerminalButtonDisabled: {
-    opacity: 0.45
-  },
-  terminalFrame: {
-    flex: 1,
-    minHeight: 0,
-    position: 'relative',
-    overflow: 'hidden'
-  },
-  terminalPane: {
-    ...StyleSheet.absoluteFillObject
-  },
-  terminalPaneHidden: {
-    opacity: 0
-  },
-  terminalWebView: {
-    flex: 1
-  },
-  markdownFrame: {
-    flex: 1,
-    minHeight: 0,
-    backgroundColor: colors.bgBase
-  },
-  browserFrame: {
-    flex: 1,
-    minHeight: 0,
-    backgroundColor: colors.bgBase
-  },
-  markdownEditor: {
-    flex: 1,
-    position: 'relative'
-  },
-  markdownState: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: spacing.xl,
-    gap: spacing.md
-  },
-  markdownError: {
-    color: colors.statusRed,
-    fontSize: typography.bodySize
-  },
-  markdownTextInput: {
-    flex: 1,
-    minHeight: 0,
-    color: colors.textPrimary,
-    backgroundColor: colors.bgBase,
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.lg,
-    paddingBottom: spacing.xl * 3,
-    fontSize: typography.bodySize,
-    lineHeight: 22,
-    fontFamily: Platform.select({ ios: 'Menlo', android: 'monospace', default: 'monospace' })
-  },
-  filePreviewScroll: {
-    flex: 1,
-    minHeight: 0,
-    backgroundColor: colors.editorSurface
-  },
-  filePreviewContent: {
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.lg,
-    paddingBottom: spacing.xl
-  },
-  filePreviewText: {
-    color: colors.textPrimary,
-    fontSize: typography.bodySize,
-    lineHeight: 22,
-    fontFamily: Platform.select({ ios: 'Menlo', android: 'monospace', default: 'monospace' })
-  },
-  diffNotesToolbar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing.sm,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.borderSubtle,
-    backgroundColor: colors.bgPanel
-  },
-  diffNotesTitleRow: {
-    minWidth: 0,
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs
-  },
-  diffNotesTitle: {
-    color: colors.textSecondary,
-    fontSize: typography.metaSize,
-    fontWeight: '600'
-  },
-  diffNotesActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs
-  },
-  diffNotesActionButton: {
-    minHeight: 30,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    borderRadius: radii.button,
-    paddingHorizontal: spacing.sm,
-    backgroundColor: colors.bgRaised
-  },
-  diffNotesActionText: {
-    color: colors.textSecondary,
-    fontSize: typography.metaSize,
-    fontWeight: '600'
-  },
-  diffLineBlock: {
-    marginBottom: spacing.xs
-  },
-  diffLine: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    borderLeftWidth: 2,
-    borderLeftColor: colors.editorSurface,
-    paddingRight: spacing.sm
-  },
-  diffLineAdded: {
-    backgroundColor: colors.diffAddedBg,
-    borderLeftColor: colors.gitDecorationAdded
-  },
-  diffLineDeleted: {
-    backgroundColor: colors.diffDeletedBg,
-    borderLeftColor: colors.gitDecorationDeleted
-  },
-  diffGutter: {
-    width: 42,
-    paddingRight: spacing.sm,
-    textAlign: 'right',
-    color: colors.textMuted,
-    fontSize: typography.metaSize,
-    lineHeight: 22,
-    fontFamily: Platform.select({ ios: 'Menlo', android: 'monospace', default: 'monospace' })
-  },
-  diffText: {
-    flex: 1,
-    color: colors.textPrimary,
-    fontSize: typography.bodySize,
-    lineHeight: 22,
-    fontFamily: Platform.select({ ios: 'Menlo', android: 'monospace', default: 'monospace' })
-  },
-  diffPrefix: {
-    color: colors.textMuted
-  },
-  diffPrefixAdded: {
-    color: colors.gitDecorationAdded
-  },
-  diffPrefixDeleted: {
-    color: colors.gitDecorationDeleted
-  },
-  diffCommentAddButton: {
-    width: 26,
-    height: 22,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: radii.button
-  },
-  diffCommentAddButtonPressed: {
-    backgroundColor: colors.bgPanel
-  },
-  diffCommentButtonDisabled: {
-    opacity: 0.45
-  },
-  diffCommentList: {
-    gap: spacing.xs,
-    marginLeft: 44,
-    marginRight: spacing.sm,
-    marginTop: spacing.xs
-  },
-  diffCommentCard: {
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    borderRadius: radii.button,
-    backgroundColor: colors.bgPanel,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs
-  },
-  diffCommentHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    marginBottom: 2
-  },
-  diffCommentMeta: {
-    flex: 1,
-    color: colors.textMuted,
-    fontSize: typography.metaSize,
-    fontWeight: '600'
-  },
-  diffCommentDeleteButton: {
-    width: 22,
-    height: 22,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 11
-  },
-  diffCommentBody: {
-    color: colors.textPrimary,
-    fontSize: typography.metaSize,
-    lineHeight: 17
-  },
-  diffCommentComposer: {
-    gap: spacing.xs,
-    marginLeft: 44,
-    marginRight: spacing.sm,
-    marginTop: spacing.xs,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    borderRadius: radii.button,
-    backgroundColor: colors.bgPanel,
-    padding: spacing.sm
-  },
-  diffCommentInput: {
-    minHeight: 70,
-    height: 70,
-    marginRight: 0,
-    paddingTop: spacing.sm,
-    paddingBottom: spacing.sm
-  },
-  diffCommentComposerActions: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    gap: spacing.xs
-  },
-  diffCommentSecondaryAction: {
-    minHeight: 30,
-    justifyContent: 'center',
-    borderRadius: radii.button,
-    paddingHorizontal: spacing.md
-  },
-  diffCommentSecondaryText: {
-    color: colors.textSecondary,
-    fontSize: typography.metaSize,
-    fontWeight: '600'
-  },
-  diffCommentPrimaryAction: {
-    minHeight: 30,
-    justifyContent: 'center',
-    borderRadius: radii.button,
-    backgroundColor: colors.bgRaised,
-    paddingHorizontal: spacing.md
-  },
-  diffCommentPrimaryText: {
-    color: colors.textPrimary,
-    fontSize: typography.metaSize,
-    fontWeight: '700'
-  },
-  markdownRefreshButton: {
-    alignSelf: 'flex-start',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    backgroundColor: colors.bgRaised,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    borderRadius: radii.button,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs
-  },
-  markdownButtonDisabled: {
-    opacity: 0.45
-  },
-  markdownRefreshText: {
-    color: colors.textPrimary,
-    fontSize: 13,
-    fontWeight: '600'
-  },
-  markdownFloatingBar: {
-    position: 'absolute',
-    left: spacing.md,
-    right: spacing.md,
-    bottom: spacing.lg,
-    alignItems: 'flex-end',
-    gap: spacing.xs
-  },
-  markdownFloatingStatus: {
-    maxWidth: '100%',
-    alignSelf: 'flex-end',
-    overflow: 'hidden',
-    color: colors.textSecondary,
-    backgroundColor: colors.bgPanel,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    borderRadius: radii.button,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    fontSize: typography.metaSize
-  },
-  markdownFloatingActions: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'flex-end',
-    gap: spacing.xs
-  },
-  markdownFloatingButton: {
-    minHeight: 34,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    backgroundColor: colors.bgPanel,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    borderRadius: radii.button,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs
-  },
-  markdownSaveButton: {
-    backgroundColor: colors.bgRaised
-  },
-  markdownFloatingButtonText: {
-    color: colors.textPrimary,
-    fontSize: 13,
-    fontWeight: '600'
-  },
-  toast: {
-    position: 'absolute',
-    bottom: spacing.lg,
-    alignSelf: 'center',
-    left: 0,
-    right: 0,
-    alignItems: 'center'
-  },
-  toastText: {
-    backgroundColor: colors.bgRaised,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderSubtle,
-    color: colors.textPrimary,
-    fontSize: 13,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
-    borderRadius: radii.button,
-    overflow: 'hidden'
-  },
-  createWarningBanner: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: spacing.sm,
-    backgroundColor: colors.bgPanel,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.borderSubtle,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm
-  },
-  createWarningText: {
-    flex: 1,
-    color: colors.textPrimary,
-    fontSize: 12,
-    lineHeight: 16
-  },
-  createWarningDismiss: {
-    width: 24,
-    height: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: -4
-  },
-  emptyState: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: spacing.xl
-  },
-  emptyText: {
-    color: colors.textSecondary,
-    fontSize: typography.bodySize,
-    marginBottom: spacing.lg
-  },
-  createError: {
-    color: colors.statusRed,
-    fontSize: 13,
-    marginBottom: spacing.sm
-  },
-  emptyActions: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'center',
-    gap: spacing.sm
-  },
-  createButton: {
-    backgroundColor: colors.bgRaised,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.sm + 2,
-    borderRadius: radii.button
-  },
-  createButtonDisabled: {
-    opacity: 0.5
-  },
-  createButtonText: {
-    color: colors.textPrimary,
-    fontSize: typography.bodySize,
-    fontWeight: '600'
-  },
-  commandDock: {
-    zIndex: 20
-  },
-  accessoryBar: {
-    borderTopWidth: 1,
-    borderTopColor: colors.borderSubtle,
-    backgroundColor: colors.bgPanel
-  },
-  accessoryContent: {
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    gap: spacing.xs
-  },
-  accessoryKey: {
-    backgroundColor: colors.bgRaised,
-    paddingHorizontal: spacing.sm + 2,
-    paddingVertical: spacing.xs,
-    borderRadius: radii.button,
-    minWidth: 36,
-    alignItems: 'center'
-  },
-  accessoryKeyPressed: {
-    backgroundColor: colors.borderSubtle
-  },
-  accessoryKeyActive: {
-    backgroundColor: colors.textPrimary
-  },
-  customAccessoryKey: {
-    borderWidth: 1,
-    borderColor: colors.borderSubtle
-  },
-  accessoryKeyDisabled: {
-    opacity: 0.35
-  },
-  accessoryKeyText: {
-    color: colors.textSecondary,
-    fontSize: 12,
-    fontFamily: typography.monoFamily
-  },
-  accessoryKeyTextActive: {
-    color: colors.bgBase,
-    fontWeight: '700'
-  },
-  accessoryKeyTextDisabled: {
-    color: colors.textMuted
-  },
-  inputBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    minHeight: 46,
-    paddingVertical: spacing.xs + 2,
-    paddingHorizontal: spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: colors.borderSubtle,
-    backgroundColor: colors.bgPanel
-  },
-  textInput: {
-    flex: 1,
-    height: 34,
-    backgroundColor: colors.bgRaised,
-    color: colors.textPrimary,
-    borderRadius: radii.input,
-    paddingHorizontal: spacing.md,
-    paddingVertical: 0,
-    fontSize: 14,
-    fontFamily: typography.monoFamily,
-    marginRight: spacing.sm
-  },
-  liveInputBar: {
-    gap: spacing.sm
-  },
-
-  liveInputHint: {
-    flex: 1,
-    color: colors.textSecondary,
-    fontSize: typography.metaSize,
-    fontFamily: typography.monoFamily
-  },
-  liveInputCapture: {
-    position: 'absolute',
-    opacity: 0,
-    width: 1,
-    height: 1,
-    color: colors.textPrimary
-  },
-  sendButton: {
-    backgroundColor: colors.bgRaised,
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  dictationButton: {
-    backgroundColor: colors.bgRaised,
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    borderWidth: 1,
-    borderColor: 'transparent',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: spacing.sm
-  },
-  dictationButtonActive: {
-    backgroundColor: colors.bgPanel,
-    borderColor: colors.textSecondary
-  },
-  sendButtonDisabled: {
-    opacity: 0.35
-  }
-})

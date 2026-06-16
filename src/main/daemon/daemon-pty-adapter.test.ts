@@ -7,7 +7,6 @@ import { DaemonPtyAdapter } from './daemon-pty-adapter'
 import { DaemonServer } from './daemon-server'
 import { getHistorySessionDirName } from './history-paths'
 import type { SubprocessHandle } from './session'
-import type { GetSnapshotResult, TerminalSnapshot } from './types'
 import type * as DaemonHealthModule from './daemon-health'
 
 const { getMacDaemonSystemResolverHealthMock } = vi.hoisted(() => ({
@@ -55,27 +54,6 @@ function createMockSubprocess(): SubprocessHandle & {
     _simulateExit(code: number) {
       onExitCb?.(code)
     }
-  }
-}
-
-function createTestSnapshot(label: string): TerminalSnapshot {
-  return {
-    snapshotAnsi: label,
-    scrollbackAnsi: '',
-    rehydrateSequences: '',
-    cwd: null,
-    modes: {
-      bracketedPaste: false,
-      mouseTracking: false,
-      mouseTrackingMode: 'none',
-      sgrMouseMode: false,
-      sgrMousePixelsMode: false,
-      applicationCursor: false,
-      alternateScreen: false
-    },
-    cols: 80,
-    rows: 24,
-    scrollbackLines: 0
   }
 }
 
@@ -536,7 +514,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       )
     })
 
-    it('checkpoints only dirty sessions on the periodic timer', async () => {
+    it('appends increments for only dirty sessions on the periodic timer', async () => {
       const adapterClass = DaemonPtyAdapter as unknown as { CHECKPOINT_INTERVAL_MS: number }
       const previousInterval = adapterClass.CHECKPOINT_INTERVAL_MS
       adapterClass.CHECKPOINT_INTERVAL_MS = 25
@@ -550,22 +528,33 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
           sessionId: 'dirty-checkpoint'
         })
         const checkpointSpy = vi.spyOn(historyAdapter.getHistoryManager()!, 'checkpoint')
+        const appendSpy = vi.spyOn(historyAdapter.getHistoryManager()!, 'appendIncrements')
 
         await new Promise((r) => setTimeout(r, 80))
 
         // Why: idle terminals can be numerous. A periodic pass with no data
         // must not serialize every live daemon session just because it exists.
-        expect(checkpointSpy).not.toHaveBeenCalled()
+        expect(appendSpy).not.toHaveBeenCalled()
 
         lastSubprocess._simulateData('new output\r\n')
-        await waitFor(() => checkpointSpy.mock.calls.length === 1)
-        expect(checkpointSpy).toHaveBeenCalledWith(
-          id,
-          expect.objectContaining({ snapshotAnsi: expect.stringContaining('new output') })
-        )
+        await waitFor(() => appendSpy.mock.calls.length === 1)
+        expect(appendSpy).toHaveBeenCalledWith(id, expect.any(Number), [
+          { kind: 'output', data: 'new output\r\n' }
+        ])
+        // Why: the periodic tick must persist increments, never re-serialize
+        // the full emulator buffer (the issue #5096 stall).
+        expect(checkpointSpy).not.toHaveBeenCalled()
+        const logPath = join(historyDir, getHistorySessionDirName(id), 'output.log')
+        await waitFor(() => {
+          try {
+            return readFileSync(logPath).includes('new output')
+          } catch {
+            return false
+          }
+        })
 
         await new Promise((r) => setTimeout(r, 80))
-        expect(checkpointSpy).toHaveBeenCalledTimes(1)
+        expect(appendSpy).toHaveBeenCalledTimes(1)
       } finally {
         adapterClass.CHECKPOINT_INTERVAL_MS = previousInterval
       }
@@ -577,30 +566,38 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       const requestedSessionIds: string[] = []
       let inFlight = 0
       let maxInFlight = 0
-      const request = vi.fn(
-        async (_type: string, payload: { sessionId: string }): Promise<GetSnapshotResult> => {
-          requestedSessionIds.push(payload.sessionId)
-          inFlight++
-          maxInFlight = Math.max(maxInFlight, inFlight)
-          await new Promise<void>((resolve) => {
-            releaseSnapshotRequests.push(() => {
-              inFlight--
-              resolve()
-            })
+      const request = vi.fn(async (_type: string, payload: { sessionId: string }) => {
+        requestedSessionIds.push(payload.sessionId)
+        inFlight++
+        maxInFlight = Math.max(maxInFlight, inFlight)
+        await new Promise<void>((resolve) => {
+          releaseSnapshotRequests.push(() => {
+            inFlight--
+            resolve()
           })
-          return { snapshot: createTestSnapshot(payload.sessionId) }
+        })
+        return {
+          records: [{ kind: 'output', data: payload.sessionId }],
+          seq: 1,
+          overflowed: false,
+          snapshot: null
         }
-      )
+      })
       const checkpoint = vi.fn(async () => {})
+      const appendIncrements = vi.fn(async () => 'ok' as const)
       const dispose = vi.fn(async () => {})
       const disconnect = vi.fn()
       const internals = historyAdapter as unknown as {
         client: { request: typeof request; disconnect: typeof disconnect }
-        historyManager: { checkpoint: typeof checkpoint; dispose: typeof dispose }
+        historyManager: {
+          checkpoint: typeof checkpoint
+          appendIncrements: typeof appendIncrements
+          dispose: typeof dispose
+        }
         checkpointSessions(sessionIds: Iterable<string>): Promise<Set<string>>
       }
       internals.client = { request, disconnect }
-      internals.historyManager = { checkpoint, dispose }
+      internals.historyManager = { checkpoint, appendIncrements, dispose }
 
       const checkpointing = internals.checkpointSessions(['a', 'b', 'c', 'd', 'e', 'f'])
       await waitFor(() => requestedSessionIds.length === 4)
@@ -619,7 +616,8 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         release()
       }
       await expect(checkpointing).resolves.toEqual(new Set(['a', 'b', 'c', 'd', 'e', 'f']))
-      expect(checkpoint).toHaveBeenCalledTimes(6)
+      expect(appendIncrements).toHaveBeenCalledTimes(6)
+      expect(checkpoint).not.toHaveBeenCalled()
     })
 
     it('does not schedule a checkpoint timer until a session is dirty', async () => {
@@ -748,6 +746,58 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         cols: 120,
         rows: 40
       })
+    })
+
+    it('re-anchors a cold-restored session with a full checkpoint on the first tick', async () => {
+      const adapterClass = DaemonPtyAdapter as unknown as { CHECKPOINT_INTERVAL_MS: number }
+      const previousInterval = adapterClass.CHECKPOINT_INTERVAL_MS
+      adapterClass.CHECKPOINT_INTERVAL_MS = 25
+
+      try {
+        // Simulate a previous daemon crash with stale checkpoint + log files.
+        const sessionId = 'cold-restore-reanchor'
+        const sessionDir = join(historyDir, getHistorySessionDirName(sessionId))
+        mkdirSync(sessionDir, { recursive: true })
+        writeFileSync(
+          join(sessionDir, 'meta.json'),
+          JSON.stringify({
+            cwd: '/projects/myapp',
+            cols: 80,
+            rows: 24,
+            startedAt: '2026-04-15T10:00:00Z',
+            endedAt: null,
+            exitCode: null
+          })
+        )
+        writeFileSync(join(sessionDir, 'scrollback.bin'), 'pre-crash output\r\n')
+
+        historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+        const result = await historyAdapter.spawn({ cols: 80, rows: 24, sessionId })
+        expect(result.coldRestore).toBeDefined()
+
+        const checkpointSpy = vi.spyOn(historyAdapter.getHistoryManager()!, 'checkpoint')
+        const appendSpy = vi.spyOn(historyAdapter.getHistoryManager()!, 'appendIncrements')
+
+        lastSubprocess._simulateData('revived session output\r\n')
+        await waitFor(() => checkpointSpy.mock.calls.length === 1)
+
+        // Why: appending the fresh session's records to the pre-crash log
+        // would be rejected by the sequence check on a second crash, reverting
+        // the restore to pre-crash content. The full checkpoint resets the log
+        // to a new generation.
+        expect(appendSpy).not.toHaveBeenCalled()
+        expect(checkpointSpy).toHaveBeenCalledWith(
+          sessionId,
+          expect.objectContaining({ snapshotAnsi: expect.stringContaining('revived session') })
+        )
+
+        // Subsequent ticks return to incremental appends.
+        lastSubprocess._simulateData('later output\r\n')
+        await waitFor(() => appendSpy.mock.calls.length === 1)
+        expect(checkpointSpy).toHaveBeenCalledTimes(1)
+      } finally {
+        adapterClass.CHECKPOINT_INTERVAL_MS = previousInterval
+      }
     })
 
     it('returns same cold restore on StrictMode double-mount (sticky cache)', async () => {

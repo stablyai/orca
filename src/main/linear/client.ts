@@ -60,6 +60,7 @@ type LinearWorkspaceFile = {
 export type LinearClientForWorkspace = {
   workspace: LinearWorkspace
   client: LinearClient
+  apiKey: string
 }
 
 let cachedTokens = new Map<string, string>()
@@ -543,7 +544,7 @@ export function getClients(
     if (!token) {
       continue
     }
-    clients.push({ workspace, client: new LinearClient({ apiKey: token }) })
+    clients.push({ workspace, client: new LinearClient({ apiKey: token }), apiKey: token })
   }
   return clients
 }

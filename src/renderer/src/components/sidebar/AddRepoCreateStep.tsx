@@ -33,6 +33,7 @@ type CreateStepProps = {
   parentDefaultPending?: boolean
   manualParentEntry?: boolean
   runtimeEnvironmentId?: string | null
+  sshTargetId?: string | null
   onNameChange: (value: string) => void
   onParentChange: (value: string) => void
   onKindChange: (kind: RepoKind) => void
@@ -52,6 +53,7 @@ export function CreateStep({
   parentDefaultPending = false,
   manualParentEntry = false,
   runtimeEnvironmentId,
+  sshTargetId,
   onNameChange,
   onParentChange,
   onKindChange,
@@ -61,7 +63,9 @@ export function CreateStep({
   const radioGroupRef = useRef<HTMLDivElement>(null)
   const radioFocusFrameRef = useRef<number | null>(null)
   const [browsingParent, setBrowsingParent] = useState(false)
-  const [advancedOpen, setAdvancedOpen] = useState(false)
+  // Why: SSH hosts need a typed remote path; hiding that field behind the
+  // collapsed defaults makes the create flow look impossible.
+  const [advancedOpen, setAdvancedOpen] = useState(manualParentEntry)
 
   const cancelRadioFocusFrame = useCallback((): void => {
     if (radioFocusFrameRef.current === null) {
@@ -108,8 +112,9 @@ export function CreateStep({
   )
   const missingServerLocationLabel = translate(
     'auto.components.sidebar.AddRepoCreateStep.6ed14c0281',
-    'server folder not selected'
+    'host folder not selected'
   )
+  const isRemoteHost = Boolean(runtimeEnvironmentId || sshTargetId)
 
   const summaryParent = useMemo(
     () =>
@@ -117,12 +122,14 @@ export function CreateStep({
         parent: createParent,
         defaultParent,
         runtimeEnvironmentId,
+        isRemoteHost,
         missingLocationLabel,
         missingServerLocationLabel
       }),
     [
       createParent,
       defaultParent,
+      isRemoteHost,
       missingLocationLabel,
       missingServerLocationLabel,
       runtimeEnvironmentId
@@ -141,10 +148,11 @@ export function CreateStep({
   const showRuntimeMissingParent =
     runtimeEnvironmentId && !createParent.trim() && runtimeParentStatus !== 'checking'
 
-  if (browsingParent && runtimeEnvironmentId) {
+  if (browsingParent && (runtimeEnvironmentId || sshTargetId)) {
     return (
       <CreateProjectParentBrowser
         runtimeEnvironmentId={runtimeEnvironmentId}
+        sshTargetId={sshTargetId}
         createParent={createParent}
         onParentChange={onParentChange}
         onClose={() => setBrowsingParent(false)}
@@ -244,7 +252,7 @@ export function CreateStep({
                 <p className="mt-0.5 text-[11px] text-muted-foreground">
                   {translate(
                     'auto.components.sidebar.AddRepoCreateStep.c234df77f7',
-                    'Choose or enter a server parent folder before creating.'
+                    'Choose or enter a host parent folder before creating.'
                   )}
                 </p>
               ) : targetPathPreview ? (
@@ -353,6 +361,7 @@ export function CreateStep({
                 isCreating={isCreating}
                 manualParentEntry={manualParentEntry}
                 runtimeEnvironmentId={runtimeEnvironmentId}
+                sshTargetId={sshTargetId}
                 onParentChange={onParentChange}
                 onPickParent={onPickParent}
                 onBrowseServer={() => setBrowsingParent(true)}

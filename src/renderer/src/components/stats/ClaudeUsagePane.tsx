@@ -23,9 +23,8 @@ import {
   DropdownMenuTrigger
 } from '../ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip'
-import { ClaudeUsageDailyChart } from './ClaudeUsageDailyChart'
+import { ClaudeUsageDetails } from './ClaudeUsageDetails'
 import { ClaudeUsageLoadingState } from './ClaudeUsageLoadingState'
-import { ClaudeUsageRecentSessionsTable } from './ClaudeUsageRecentSessionsTable'
 import { ShareUsageButton } from './ShareUsageButton'
 import { StatCard } from './StatCard'
 import { formatCost, formatTokens, formatUpdatedAt } from './usage-formatters'
@@ -35,18 +34,30 @@ const RANGE_OPTIONS: ClaudeUsageRange[] = ['7d', '30d', '90d', 'all']
 const SCOPE_OPTIONS: { value: ClaudeUsageScope; label: string }[] = [
   {
     value: 'orca',
-    label: translate('auto.components.stats.ClaudeUsagePane.4f8368c272', 'Orca worktrees only')
+    get label() {
+      return translate('auto.components.stats.ClaudeUsagePane.4f8368c272', 'Orca worktrees only')
+    }
   },
   {
     value: 'all',
-    label: translate('auto.components.stats.ClaudeUsagePane.5ce4842c2c', 'All local Claude usage')
+    get label() {
+      return translate('auto.components.stats.ClaudeUsagePane.5ce4842c2c', 'All local Claude usage')
+    }
   }
 ]
 const RANGE_LABELS: Record<ClaudeUsageRange, string> = {
-  '7d': 'Last 7 days',
-  '30d': 'Last 30 days',
-  '90d': 'Last 90 days',
-  all: 'All time'
+  get '7d'() {
+    return translate('auto.components.stats.ClaudeUsagePane.rangeLast7Days', 'Last 7 days')
+  },
+  get '30d'() {
+    return translate('auto.components.stats.ClaudeUsagePane.rangeLast30Days', 'Last 30 days')
+  },
+  get '90d'() {
+    return translate('auto.components.stats.ClaudeUsagePane.rangeLast90Days', 'Last 90 days')
+  },
+  get all() {
+    return translate('auto.components.stats.ClaudeUsagePane.rangeAllTime', 'All time')
+  }
 }
 
 export function ClaudeUsagePane(): React.JSX.Element {
@@ -311,73 +322,13 @@ export function ClaudeUsagePane(): React.JSX.Element {
             )}
           </p>
 
-          <ClaudeUsageDailyChart daily={daily} />
-
-          <div className="grid gap-4 xl:grid-cols-2">
-            <section className="rounded-lg border border-border/60 bg-card/40 p-4">
-              <div className="mb-3">
-                <h4 className="text-sm font-semibold text-foreground">
-                  {translate('auto.components.stats.ClaudeUsagePane.0f394c24e3', 'By model')}
-                </h4>
-                <p className="text-xs text-muted-foreground">
-                  {translate('auto.components.stats.ClaudeUsagePane.c3fdbc5474', 'Top model:')}{' '}
-                  {summary?.topModel ??
-                    translate('auto.components.stats.ClaudeUsagePane.7765a4c3e1', 'n/a')}
-                </p>
-              </div>
-              <div className="space-y-3">
-                {modelBreakdown.slice(0, 5).map((row) => (
-                  <div key={row.key} className="space-y-1">
-                    <div className="flex items-center justify-between gap-3 text-sm">
-                      <span className="truncate text-foreground">{row.label}</span>
-                      <span className="shrink-0 text-muted-foreground">
-                        {formatTokens(row.inputTokens + row.outputTokens)}
-                      </span>
-                    </div>
-                    <div className="text-xs text-muted-foreground">
-                      {row.sessions}{' '}
-                      {translate('auto.components.stats.ClaudeUsagePane.02a046792e', 'sessions •')}{' '}
-                      {row.turns}{' '}
-                      {translate('auto.components.stats.ClaudeUsagePane.32176e1d44', 'turns')}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </section>
-
-            <section className="rounded-lg border border-border/60 bg-card/40 p-4">
-              <div className="mb-3">
-                <h4 className="text-sm font-semibold text-foreground">
-                  {translate('auto.components.stats.ClaudeUsagePane.7dc9e5613b', 'By project')}
-                </h4>
-                <p className="text-xs text-muted-foreground">
-                  {translate('auto.components.stats.ClaudeUsagePane.f97435845c', 'Top project:')}{' '}
-                  {summary?.topProject ??
-                    translate('auto.components.stats.ClaudeUsagePane.7765a4c3e1', 'n/a')}
-                </p>
-              </div>
-              <div className="space-y-3">
-                {projectBreakdown.slice(0, 5).map((row) => (
-                  <div key={row.key} className="space-y-1">
-                    <div className="flex items-center justify-between gap-3 text-sm">
-                      <span className="truncate text-foreground">{row.label}</span>
-                      <span className="shrink-0 text-muted-foreground">
-                        {formatTokens(row.inputTokens + row.outputTokens)}
-                      </span>
-                    </div>
-                    <div className="text-xs text-muted-foreground">
-                      {row.sessions}{' '}
-                      {translate('auto.components.stats.ClaudeUsagePane.02a046792e', 'sessions •')}{' '}
-                      {row.turns}{' '}
-                      {translate('auto.components.stats.ClaudeUsagePane.32176e1d44', 'turns')}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </section>
-          </div>
-
-          <ClaudeUsageRecentSessionsTable recentSessions={recentSessions} summary={summary} />
+          <ClaudeUsageDetails
+            daily={daily}
+            modelBreakdown={modelBreakdown}
+            projectBreakdown={projectBreakdown}
+            recentSessions={recentSessions}
+            summary={summary}
+          />
         </>
       )}
     </div>

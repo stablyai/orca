@@ -11,6 +11,7 @@ import React, {
   useSyncExternalStore
 } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
+import { useShallow } from 'zustand/react/shallow'
 import type { editor as monacoEditor } from 'monaco-editor'
 import {
   ArrowDown,
@@ -82,7 +83,18 @@ import {
   isIntrinsicHeightImageDiff
 } from '@/components/editor/diff-section-layout'
 import type { DiffSection } from '@/components/editor/diff-section-types'
+import { removeDiffSectionMeasuredHeight } from '@/components/editor/diff-section-height-cache'
+import {
+  MAX_RENDERED_DIFF_COMBINED_CHARACTERS,
+  MAX_RENDERED_DIFF_LINES_PER_SIDE,
+  getLargeDiffRenderLimit,
+  type LargeDiffRenderLimit
+} from '@/components/editor/large-diff-render-limit'
 import type { CombinedDiffFileTreeEntry } from '@/components/editor/combined-diff-file-tree-model'
+import {
+  getStoredTextDiffContent,
+  getStoredTextDiffResult
+} from '@/components/editor/large-diff-section-content'
 import { CHECK_COLOR, CHECK_ICON } from '@/components/right-sidebar/checks-panel-content'
 import { SourceControlAgentActionDialog } from '@/components/right-sidebar/SourceControlAgentActionDialog'
 import {
@@ -177,6 +189,7 @@ import type {
   PRComment
 } from '../../../shared/types'
 import { translate } from '@/i18n/i18n'
+import { getSettingsForRepoRuntimeOwner } from '@/lib/repo-runtime-owner'
 
 // Why: the GH item dialog can be opened from any work-item list surface and
 // doesn't have the full owner/repo context the list's cache entry carries.
@@ -510,7 +523,10 @@ function PRReviewersPanel({
   const [reviewerInput, setReviewerInput] = useState('')
   const [reviewerPickerSide, setReviewerPickerSide] = useState<'top' | 'bottom'>('bottom')
   const [reviewerPickerMaxHeight, setReviewerPickerMaxHeight] = useState<number | null>(null)
-  const [activeReviewerCursor, setActiveReviewerCursor] = useState({ resetKey: '', index: 0 })
+  const [activeReviewerCursor, setActiveReviewerCursor] = useState({
+    resetKey: '',
+    index: 0
+  })
   const [submitting, setSubmitting] = useState(false)
   const [localReviewRequests, setLocalReviewRequests] = useState<GitHubAssignableUser[]>(
     () => item.reviewRequests ?? []
@@ -521,7 +537,9 @@ function PRReviewersPanel({
     reviewRequests: item.reviewRequests
   }))
   const patchWorkItem = useAppStore((s) => s.patchWorkItem)
-  const settings = useAppStore((s) => s.settings)
+  const repoOwnerSettings = useAppStore(
+    useShallow((s) => getSettingsForRepoRuntimeOwner(s, item.repoId ?? null))
+  )
   const reviewerInputRef = useRef<HTMLInputElement | null>(null)
   const reviewerInputFocusFrameRef = useRef<number | null>(null)
   const reviewerPanelMountedRef = useRef(true)
@@ -596,11 +614,12 @@ function PRReviewersPanel({
     open && reviewSlug ? reviewSlug.owner : null,
     open && reviewSlug ? reviewSlug.repo : null,
     reviewerSeedUsers.map((user) => user.login),
-    settings
+    repoOwnerSettings
   )
   const reviewerMetadataByPath = useRepoAssignees(
     open && !reviewSlug ? repoPath : null,
-    open && !reviewSlug ? item.repoId : null
+    open && !reviewSlug ? item.repoId : null,
+    repoOwnerSettings
   )
   const reviewerMetadata = reviewSlug ? reviewerMetadataBySlug : reviewerMetadataByPath
   const displayItem = { ...item, reviewRequests: localReviewRequests }
@@ -699,7 +718,8 @@ function PRReviewersPanel({
     localReviewRequests.length > 0 ||
     item.reviewRequests !== undefined ||
     item.latestReviews !== undefined
-  const canRequestReview = !!repoPath || getActiveRuntimeTarget(settings).kind === 'environment'
+  const canRequestReview =
+    !!repoPath || getActiveRuntimeTarget(repoOwnerSettings).kind === 'environment'
 
   const measureReviewerPickerPlacement = useCallback(() => {
     const rect = reviewerInputRef.current?.getBoundingClientRect()
@@ -742,7 +762,7 @@ function PRReviewersPanel({
       )
       return
     }
-    const target = getActiveRuntimeTarget(settings)
+    const target = getActiveRuntimeTarget(repoOwnerSettings)
     if (target.kind !== 'environment' && !repoPath) {
       toast.error(
         translate(
@@ -816,7 +836,7 @@ function PRReviewersPanel({
     if (logins.length === 0) {
       return
     }
-    const target = getActiveRuntimeTarget(settings)
+    const target = getActiveRuntimeTarget(repoOwnerSettings)
     if (target.kind !== 'environment' && !repoPath) {
       toast.error(
         translate(
@@ -1136,7 +1156,10 @@ function PRReviewersPanel({
                         {translate('auto.components.PullRequestPage.828f045847', 'Suggestions')}
                       </div>
                       {suggestedReviewerRows.map((reviewer, index) =>
-                        renderReviewerPickerRow(reviewer, { suggested: true, activeIndex: index })
+                        renderReviewerPickerRow(reviewer, {
+                          suggested: true,
+                          activeIndex: index
+                        })
                       )}
                     </>
                   ) : null}
@@ -1427,21 +1450,89 @@ if (typeof import.meta !== 'undefined' && import.meta.hot) {
 // Why: bounded LRU — opening many PRs with many files during a session
 // would otherwise grow this module-level map without bound until reload.
 const PR_FILE_CONTENT_CACHE_MAX = 64
-const prFileContentCache = new Map<string, Promise<GitHubPRFileContents> | GitHubPRFileContents>()
+// Why: raw-content overflow is only a sentinel; force the reported size past
+// the render budget so downstream checks reliably choose fallback mode.
+const GITHUB_PR_RAW_CONTENT_OVERFLOW_CHARACTER_COUNT = MAX_RENDERED_DIFF_COMBINED_CHARACTERS + 1
+const PR_FILE_CONTENT_CACHE_MAX_BYTES = MAX_RENDERED_DIFF_COMBINED_CHARACTERS * 4
+type PRFileContentCacheEntry = {
+  value: Promise<GitHubPRFileContents> | GitHubPRFileContents
+  byteCount: number
+}
+const prFileContentCache = new Map<string, PRFileContentCacheEntry>()
+let prFileContentCacheBytes = 0
+
+function getUtf8ByteCount(value: string): number {
+  let byteCount = 0
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index)
+    if (code < 0x80) {
+      byteCount += 1
+    } else if (code < 0x800) {
+      byteCount += 2
+    } else if (code >= 0xd800 && code <= 0xdbff && index + 1 < value.length) {
+      const next = value.charCodeAt(index + 1)
+      if (next >= 0xdc00 && next <= 0xdfff) {
+        byteCount += 4
+        index += 1
+      } else {
+        byteCount += 3
+      }
+    } else {
+      byteCount += 3
+    }
+  }
+  return byteCount
+}
+
+function isPRFileContentsTooLargeSentinel(contents: GitHubPRFileContents): boolean {
+  return contents.originalTooLarge === true || contents.modifiedTooLarge === true
+}
+
+function getPRFileContentsCacheByteCount(contents: GitHubPRFileContents): number {
+  if (isPRFileContentsTooLargeSentinel(contents)) {
+    return 0
+  }
+  return getUtf8ByteCount(contents.original) + getUtf8ByteCount(contents.modified)
+}
+
+function getRetainedPRFileContentsByteCount(contents: GitHubPRFileContents): number | null {
+  if (isPRFileContentsTooLargeSentinel(contents)) {
+    return 0
+  }
+  const byteCount = getPRFileContentsCacheByteCount(contents)
+  return byteCount <= PR_FILE_CONTENT_CACHE_MAX_BYTES ? byteCount : null
+}
 
 function touchPRFileContentCache(
   key: string,
   value: Promise<GitHubPRFileContents> | GitHubPRFileContents
 ): void {
+  const retainedByteCount = value instanceof Promise ? 0 : getRetainedPRFileContentsByteCount(value)
+  if (retainedByteCount === null) {
+    const existing = prFileContentCache.get(key)
+    prFileContentCacheBytes -= existing?.byteCount ?? 0
+    prFileContentCache.delete(key)
+    return
+  }
+
+  const existing = prFileContentCache.get(key)
+  prFileContentCacheBytes -= existing?.byteCount ?? 0
   // Why: re-insert to move to the most-recently-used position; Map preserves
   // insertion order so the oldest key is always first when evicting.
   prFileContentCache.delete(key)
-  prFileContentCache.set(key, value)
-  while (prFileContentCache.size > PR_FILE_CONTENT_CACHE_MAX) {
+  const byteCount = retainedByteCount
+  prFileContentCache.set(key, { value, byteCount })
+  prFileContentCacheBytes += byteCount
+  while (
+    prFileContentCache.size > PR_FILE_CONTENT_CACHE_MAX ||
+    prFileContentCacheBytes > PR_FILE_CONTENT_CACHE_MAX_BYTES
+  ) {
     const oldest = prFileContentCache.keys().next().value
     if (oldest === undefined) {
       break
     }
+    const evicted = prFileContentCache.get(oldest)
+    prFileContentCacheBytes -= evicted?.byteCount ?? 0
     prFileContentCache.delete(oldest)
   }
 }
@@ -1454,8 +1545,9 @@ function getPRFileContentCacheKey(args: {
   headSha: string
   baseSha: string
 }): string {
+  const repositoryKey = args.repoId ? `repo:${args.repoId}` : `path:${args.repoPath}`
   return [
-    args.repoId,
+    repositoryKey,
     args.prNumber,
     args.file.path,
     args.file.oldPath ?? '',
@@ -1476,10 +1568,11 @@ function loadPRFileContents(args: {
   const cacheKey = getPRFileContentCacheKey(args)
   const cached = prFileContentCache.get(cacheKey)
   if (cached) {
-    touchPRFileContentCache(cacheKey, cached)
-    return Promise.resolve(cached)
+    touchPRFileContentCache(cacheKey, cached.value)
+    return Promise.resolve(cached.value)
   }
-  const request = window.api.gh
+  let request: Promise<GitHubPRFileContents>
+  request = window.api.gh
     .prFileContents({
       repoPath: args.repoPath,
       repoId: args.repoId,
@@ -1491,11 +1584,17 @@ function loadPRFileContents(args: {
       baseSha: args.baseSha
     })
     .then((contents) => {
-      touchPRFileContentCache(cacheKey, contents)
+      if (prFileContentCache.get(cacheKey)?.value === request) {
+        touchPRFileContentCache(cacheKey, contents)
+      }
       return contents
     })
     .catch((err) => {
-      prFileContentCache.delete(cacheKey)
+      const cachedRequest = prFileContentCache.get(cacheKey)
+      if (cachedRequest?.value === request) {
+        prFileContentCacheBytes -= cachedRequest.byteCount
+        prFileContentCache.delete(cacheKey)
+      }
       throw err
     })
   touchPRFileContentCache(cacheKey, request)
@@ -1701,6 +1800,30 @@ function gitHubPRFileToBranchEntry(file: GitHubPRFile): GitBranchChangeEntry {
   }
 }
 
+function getPRFileContentsRenderLimit(contents: GitHubPRFileContents): LargeDiffRenderLimit {
+  if (!contents.originalTooLarge && !contents.modifiedTooLarge) {
+    return getLargeDiffRenderLimit({
+      originalContent: contents.original,
+      modifiedContent: contents.modified
+    })
+  }
+
+  return {
+    limited: true,
+    reason: 'character-count' as const,
+    lineCounts: null,
+    characterCount:
+      contents.original.length +
+      contents.modified.length +
+      (contents.originalTooLarge ? GITHUB_PR_RAW_CONTENT_OVERFLOW_CHARACTER_COUNT : 0) +
+      (contents.modifiedTooLarge ? GITHUB_PR_RAW_CONTENT_OVERFLOW_CHARACTER_COUNT : 0),
+    limits: {
+      maxLinesPerSide: MAX_RENDERED_DIFF_LINES_PER_SIDE,
+      maxCombinedCharacters: MAX_RENDERED_DIFF_COMBINED_CHARACTERS
+    }
+  }
+}
+
 function getPRFileDiffResult(contents: GitHubPRFileContents): GitDiffResult {
   if (contents.originalIsBinary) {
     return {
@@ -1784,7 +1907,10 @@ function PRFilesCombinedDiffViewer({
       return entriesCacheRef.current.entries
     }
     const nextEntries = files.map(gitHubPRFileToBranchEntry)
-    entriesCacheRef.current = { signature: diffEntrySignature, entries: nextEntries }
+    entriesCacheRef.current = {
+      signature: diffEntrySignature,
+      entries: nextEntries
+    }
     return nextEntries
   }, [diffEntrySignature, files])
   const fileByPath = useMemo(() => new Map(files.map((file) => [file.path, file])), [files])
@@ -1889,7 +2015,8 @@ function PRFilesCombinedDiffViewer({
         loading: true,
         error: undefined,
         dirty: false,
-        diffResult: null
+        diffResult: null,
+        largeDiffRenderLimit: null
       }))
     )
   }, [entries, entrySignature, viewStateKey])
@@ -1910,7 +2037,11 @@ function PRFilesCombinedDiffViewer({
       const generation = generationRef.current
       loadingIndicesRef.current.add(index)
 
-      const load = async (): Promise<{ result: GitDiffResult; error?: string }> => {
+      const load = async (): Promise<{
+        result: GitDiffResult
+        resultContents?: GitHubPRFileContents
+        error?: string
+      }> => {
         if (file.isBinary) {
           return {
             result: {
@@ -1945,7 +2076,7 @@ function PRFilesCombinedDiffViewer({
           headSha,
           baseSha
         })
-        return { result: getPRFileDiffResult(contents) }
+        return { result: getPRFileDiffResult(contents), resultContents: contents }
       }
 
       load()
@@ -1957,24 +2088,32 @@ function PRFilesCombinedDiffViewer({
             originalIsBinary: false,
             modifiedIsBinary: false
           } as GitDiffResult,
+          resultContents: undefined,
           error: error instanceof Error ? error.message : 'Failed to load diff.'
         }))
-        .then(({ result, error }) => {
+        .then(({ result, resultContents, error }) => {
           loadingIndicesRef.current.delete(index)
           if (generationRef.current !== generation) {
             return
           }
+          const largeDiffRenderLimit =
+            !error && result.kind === 'text' && resultContents
+              ? getPRFileContentsRenderLimit(resultContents)
+              : null
+          const storedContent = getStoredTextDiffContent(result, largeDiffRenderLimit)
+          const storedResult = getStoredTextDiffResult(result, largeDiffRenderLimit)
           loadedIndicesRef.current.add(index)
           setSections((prev) =>
             prev.map((current, currentIndex) =>
               currentIndex === index
                 ? {
                     ...current,
-                    diffResult: result,
-                    originalContent: result.kind === 'text' ? result.originalContent : '',
-                    modifiedContent: result.kind === 'text' ? result.modifiedContent : '',
+                    diffResult: storedResult,
+                    originalContent: storedContent.originalContent,
+                    modifiedContent: storedContent.modifiedContent,
                     loading: false,
-                    error
+                    error,
+                    largeDiffRenderLimit
                   }
                 : current
             )
@@ -1988,6 +2127,7 @@ function PRFilesCombinedDiffViewer({
     (index: number) => {
       loadedIndicesRef.current.delete(index)
       loadingIndicesRef.current.delete(index)
+      setSectionHeights((prev) => removeDiffSectionMeasuredHeight(prev, index))
       setSections((prev) =>
         prev.map((section, sectionIndex) =>
           sectionIndex === index
@@ -1997,7 +2137,8 @@ function PRFilesCombinedDiffViewer({
                 originalContent: '',
                 modifiedContent: '',
                 loading: true,
-                error: undefined
+                error: undefined,
+                largeDiffRenderLimit: null
               }
             : section
         )
@@ -2058,7 +2199,9 @@ function PRFilesCombinedDiffViewer({
           section.added === undefined && section.removed === undefined
             ? undefined
             : (section.added ?? 0) + (section.removed ?? 0),
-        useIntrinsicImageHeight: isIntrinsicHeightImageDiff(section.diffResult)
+        useIntrinsicImageHeight: isIntrinsicHeightImageDiff(section.diffResult),
+        isLargeDiffLimited: section.largeDiffRenderLimit?.limited === true,
+        lineCounts: section.largeDiffRenderLimit?.lineCounts ?? undefined
       })
     },
     overscan: PR_DIFF_OVERSCAN,
@@ -2469,6 +2612,10 @@ function CommentCodeContext({
     )
   }
 
+  if (getPRFileContentsRenderLimit(contents).limited) {
+    return null
+  }
+
   const source = contents.modified || contents.original
   const lines = source.split(/\r?\n/)
   const language = detectLanguage(comment.path)
@@ -2676,6 +2823,7 @@ function CommentCodeContext({
 function ConversationTab({
   item,
   repoPath,
+  repoId,
   body,
   comments,
   files,
@@ -2723,7 +2871,10 @@ function ConversationTab({
   const [bodySaving, setBodySaving] = useState(false)
   const bodyTextareaRef = useRef<HTMLTextAreaElement>(null)
   const bodyTextareaFocusFrameRef = useRef<number | null>(null)
-  const repoAssignees = useRepoAssignees(repoPath, item.repoId)
+  const repoOwnerSettings = useAppStore(
+    useShallow((s) => getSettingsForRepoRuntimeOwner(s, item.repoId ?? repoId ?? null))
+  )
+  const repoAssignees = useRepoAssignees(repoPath, item.repoId, repoOwnerSettings)
   const commentCounts = useMemo(() => getPRCommentAudienceCounts(comments), [comments])
   const visibleComments = useMemo(
     () => filterPRCommentsByAudience(comments, commentFilter),
@@ -4056,7 +4207,11 @@ function ChecksTab({
         return
       }
       setChecksState((current) =>
-        updateGitHubChecksTabDetails(current, key, { loading: true, details: null, error: null })
+        updateGitHubChecksTabDetails(current, key, {
+          loading: true,
+          details: null,
+          error: null
+        })
       )
       void window.api.gh
         .prCheckDetails({
@@ -4781,6 +4936,13 @@ function MentionTextarea({
 // repo. The edit IPCs return a structured `{ ok, error }` shape; we adapt
 // to a thrown rejection so the existing `useImmediateMutation` flow
 // (which expects throws on failure) continues to work unchanged.
+function getGitHubMutationSettings(repoId: string | null | undefined) {
+  const state = useAppStore.getState()
+  // Why: project-origin mutations are slug-addressed, but when we know the
+  // backing repo id they must still execute on that repo's owner host.
+  return getSettingsForRepoRuntimeOwner(state, repoId ?? null)
+}
+
 async function runIssueUpdate(args: {
   repoPath: string | null
   repoId?: string | null
@@ -4789,7 +4951,7 @@ async function runIssueUpdate(args: {
   updates: Parameters<typeof window.api.gh.updateIssue>[0]['updates']
 }): Promise<void> {
   if (args.projectOrigin) {
-    const target = getActiveRuntimeTarget(useAppStore.getState().settings)
+    const target = getActiveRuntimeTarget(getGitHubMutationSettings(args.repoId))
     const updateArgs = {
       owner: args.projectOrigin.owner,
       repo: args.projectOrigin.repo,
@@ -4802,7 +4964,9 @@ async function runIssueUpdate(args: {
             target,
             'github.project.updateIssueBySlug',
             updateArgs,
-            { timeoutMs: 30_000 }
+            {
+              timeoutMs: 30_000
+            }
           )
         : await window.api.gh.updateIssueBySlug(updateArgs)
     if (!res.ok) {
@@ -4838,7 +5002,7 @@ async function runWorkItemBodyUpdate(args: {
     if (!targetSlug) {
       throw new Error('No GitHub repository context available for this pull request.')
     }
-    const target = getActiveRuntimeTarget(useAppStore.getState().settings)
+    const target = getActiveRuntimeTarget(getGitHubMutationSettings(args.item.repoId))
     const updateArgs = {
       owner: targetSlug.owner,
       repo: targetSlug.repo,
@@ -4851,7 +5015,9 @@ async function runWorkItemBodyUpdate(args: {
             target,
             'github.project.updatePullRequestBySlug',
             updateArgs,
-            { timeoutMs: 30_000 }
+            {
+              timeoutMs: 30_000
+            }
           )
         : await window.api.gh.updatePullRequestBySlug(updateArgs)
     if (!res.ok) {
@@ -4877,7 +5043,7 @@ async function runPullRequestStateUpdate(args: {
   updates: { state: 'open' | 'closed' }
 }): Promise<void> {
   if (args.projectOrigin) {
-    const target = getActiveRuntimeTarget(useAppStore.getState().settings)
+    const target = getActiveRuntimeTarget(getGitHubMutationSettings(args.repoId))
     const updateArgs = {
       owner: args.projectOrigin.owner,
       repo: args.projectOrigin.repo,
@@ -4890,7 +5056,9 @@ async function runPullRequestStateUpdate(args: {
             target,
             'github.project.updatePullRequestBySlug',
             updateArgs,
-            { timeoutMs: 30_000 }
+            {
+              timeoutMs: 30_000
+            }
           )
         : await window.api.gh.updatePullRequestBySlug(updateArgs)
     if (!res.ok) {
@@ -4947,6 +5115,9 @@ function GHEditSection({
   const assigneesItemKey = `${item.repoId}\0${item.id}`
   const patchWorkItem = useAppStore((s) => s.patchWorkItem)
   const patchProjectRowContent = useAppStore((s) => s.patchProjectRowContent)
+  const repoOwnerSettings = useAppStore(
+    useShallow((s) => getSettingsForRepoRuntimeOwner(s, item.repoId ?? repoId ?? null))
+  )
   const { isPending, run } = useImmediateMutation()
   // Why: when the dialog opens from a Project view, mutations route through
   // *BySlug IPCs and we must keep `projectViewCache` in sync alongside
@@ -4970,15 +5141,22 @@ function GHEditSection({
   const slugRepo = projectOrigin?.repo ?? null
   const repoLabelsByPath = useRepoLabels(
     projectOrigin ? null : repoPath,
-    projectOrigin ? null : repoId
+    projectOrigin ? null : repoId,
+    repoOwnerSettings
   )
-  const repoLabelsBySlug = useRepoLabelsBySlug(slugOwner, slugRepo)
+  const repoLabelsBySlug = useRepoLabelsBySlug(slugOwner, slugRepo, repoOwnerSettings)
   const repoLabels = projectOrigin ? repoLabelsBySlug : repoLabelsByPath
   const repoAssigneesByPath = useRepoAssignees(
     projectOrigin ? null : repoPath,
-    projectOrigin ? null : repoId
+    projectOrigin ? null : repoId,
+    repoOwnerSettings
   )
-  const repoAssigneesBySlug = useRepoAssigneesBySlug(slugOwner, slugRepo, assignees)
+  const repoAssigneesBySlug = useRepoAssigneesBySlug(
+    slugOwner,
+    slugRepo,
+    assignees,
+    repoOwnerSettings
+  )
   const repoAssignees = projectOrigin ? repoAssigneesBySlug : repoAssigneesByPath
 
   // Why: sync local assignees when item changes or when the detail fetch
@@ -5704,7 +5882,10 @@ export default function PullRequestPage({
     if (missing.length === 0) {
       return cachedDetails
     }
-    return { ...cachedDetails, comments: [...cachedDetails.comments, ...missing] }
+    return {
+      ...cachedDetails,
+      comments: [...cachedDetails.comments, ...missing]
+    }
     // Why: optimisticTick is the rerender signal for cold-open writes — the
     // memo reads optimisticCommentsRef.current (a ref, no subscription), so
     // bumping the tick is what forces this memo to re-run. The lint flags it
@@ -5916,7 +6097,10 @@ export default function PullRequestPage({
           const ids = new Set(prev.details.comments.map((c) => c.id))
           if (!ids.has(comment.id)) {
             touchWorkItemDetailsCache(detailsCacheKey, {
-              details: { ...prev.details, comments: [...prev.details.comments, comment] },
+              details: {
+                ...prev.details,
+                comments: [...prev.details.comments, comment]
+              },
               fetchedAt: 0,
               error: undefined
             })

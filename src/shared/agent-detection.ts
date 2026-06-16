@@ -346,6 +346,16 @@ export function getAgentLabel(title: string): string | null {
   if (isClaudeManagementTitle(title)) {
     return null
   }
+  // Why: Claude Code title text is often the task title. If that task mentions
+  // another CLI, the Claude-specific prefix is the identity signal, not the words.
+  if (
+    title.startsWith(`${CLAUDE_IDLE} `) ||
+    title === CLAUDE_IDLE ||
+    title.startsWith('. ') ||
+    title.startsWith('* ')
+  ) {
+    return 'Claude Code'
+  }
   if (isGeminiTerminalTitle(title)) {
     return 'Gemini CLI'
   }

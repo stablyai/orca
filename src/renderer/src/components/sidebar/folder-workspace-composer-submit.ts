@@ -32,6 +32,7 @@ type SubmitFolderWorkspaceCreateParams = {
   quickAgent: TuiAgent | null
   autoRenameBranchFromWork: boolean | undefined
   agentCmdOverrides: Record<string, string> | undefined
+  isRemote?: boolean
   createFolderWorkspace: (input: FolderWorkspaceCreateInput) => Promise<FolderWorkspace | null>
   onOpenChange: (open: boolean) => void
 }
@@ -45,6 +46,7 @@ export async function submitFolderWorkspaceCreate({
   quickAgent,
   autoRenameBranchFromWork,
   agentCmdOverrides,
+  isRemote,
   createFolderWorkspace,
   onOpenChange
 }: SubmitFolderWorkspaceCreateParams): Promise<void> {
@@ -54,8 +56,10 @@ export async function submitFolderWorkspaceCreate({
     nameIsAutoManaged && linkedName
       ? linkedName
       : name.trim() || linkedName || `${projectGroup.name} workspace`
+  // Why: only suggest `orca linear` when the launched terminal can actually
+  // resolve the CLI; SSH launches get the relay shim, local launches may not.
   const linearCliAvailable = linkedWorkItem?.linearIdentifier
-    ? await isOrcaCliAvailableForLaunch({ remote: projectGroup.connectionId != null })
+    ? await isOrcaCliAvailableForLaunch({ remote: isRemote ?? projectGroup.connectionId != null })
     : false
   const linkedPromptContext = getLinkedWorkItemPromptContext(linkedWorkItem, {
     cliAvailable: linearCliAvailable
@@ -85,6 +89,7 @@ export async function submitFolderWorkspaceCreate({
   if (!workspace) {
     return
   }
+
   const startupPlan = quickAgent
     ? buildAgentStartupPlan({
         agent: quickAgent,

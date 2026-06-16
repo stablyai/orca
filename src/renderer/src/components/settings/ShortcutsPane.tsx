@@ -1,6 +1,5 @@
 import React, { useMemo, useState } from 'react'
 import {
-  KEYBINDING_DEFINITIONS,
   findKeybindingConflicts,
   formatKeybindingList,
   getEffectiveKeybindingsForAction,
@@ -16,6 +15,11 @@ import {
   type KeybindingOverrides,
   type TerminalShortcutPolicy
 } from '../../../../shared/keybindings'
+import {
+  EMPTY_DISABLED_TUI_AGENTS,
+  disabledAgentTabActionIds,
+  groupDefinitions
+} from './shortcut-groups'
 import { useAppStore } from '../../store'
 import { KeybindingsFileActions } from './KeybindingsFileActions'
 import { SettingsSubsectionHeader } from './SettingsFormControls'
@@ -36,25 +40,12 @@ import { clearRecordingActionForShortcutMutation } from './shortcut-recording-st
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { translate } from '@/i18n/i18n'
 
-type ShortcutGroup = {
-  title: string
-  items: KeybindingDefinition[]
-}
-
 const isMac = navigator.userAgent.includes('Mac')
 const platform: NodeJS.Platform = isMac
   ? 'darwin'
   : navigator.userAgent.includes('Windows')
     ? 'win32'
     : 'linux'
-
-function groupDefinitions(): ShortcutGroup[] {
-  const groups = new Map<string, KeybindingDefinition[]>()
-  for (const definition of KEYBINDING_DEFINITIONS) {
-    groups.set(definition.group, [...(groups.get(definition.group) ?? []), definition])
-  }
-  return Array.from(groups.entries()).map(([title, items]) => ({ title, items }))
-}
 
 function sameBindings(a: readonly string[], b: readonly string[]): boolean {
   return a.length === b.length && a.every((binding, index) => binding === b[index])
@@ -141,6 +132,9 @@ export function ShortcutsPane(): React.JSX.Element {
   const updateSettings = useAppStore((state) => state.updateSettings)
   const keybindings = useAppStore((state) => state.keybindings)
   const keybindingSnapshot = useAppStore((state) => state.keybindingSnapshot)
+  const disabledTuiAgents = useAppStore(
+    (state) => state.settings?.disabledTuiAgents ?? EMPTY_DISABLED_TUI_AGENTS
+  )
   const setKeybindingOverride = useAppStore((state) => state.setKeybindingOverride)
   const resetKeybindingOverride = useAppStore((state) => state.resetKeybindingOverride)
   const disableKeybindingAction = useAppStore((state) => state.disableKeybindingAction)
@@ -150,10 +144,16 @@ export function ShortcutsPane(): React.JSX.Element {
   const [shortcutQuery, setShortcutQuery] = useState('')
   const [shortcutFilter, setShortcutFilter] = useState<ShortcutFilter>('all')
 
-  const groups = useMemo(groupDefinitions, [])
+  const groups = useMemo(() => groupDefinitions(disabledTuiAgents), [disabledTuiAgents])
+  const ignoredConflictActionIds = useMemo(
+    () => disabledAgentTabActionIds(disabledTuiAgents),
+    [disabledTuiAgents]
+  )
   const conflictByAction = useMemo(() => {
     const result = new Map<KeybindingActionId, string[]>()
-    for (const conflict of findKeybindingConflicts(platform, keybindings)) {
+    for (const conflict of findKeybindingConflicts(platform, keybindings, {
+      ignoredActionIds: ignoredConflictActionIds
+    })) {
       const labels = conflict.actionIds
         .map((id) => getKeybindingDefinition(id)?.title ?? id)
         .join(', ')
@@ -165,7 +165,7 @@ export function ShortcutsPane(): React.JSX.Element {
       }
     }
     return result
-  }, [keybindings])
+  }, [ignoredConflictActionIds, keybindings])
   const shortcutGroups = useMemo<ShortcutRowsByGroup[]>(
     () =>
       groups.map((group) => ({
@@ -238,9 +238,9 @@ export function ShortcutsPane(): React.JSX.Element {
       (normalizedResult.length === 0 && defaults.length === 0)
         ? removeBindingOverride(keybindings, actionId)
         : { ...keybindings, [actionId]: normalizedResult }
-    const blockingConflict = findKeybindingConflicts(platform, next).find((conflict) =>
-      conflict.actionIds.includes(actionId)
-    )
+    const blockingConflict = findKeybindingConflicts(platform, next, {
+      ignoredActionIds: ignoredConflictActionIds
+    }).find((conflict) => conflict.actionIds.includes(actionId))
     if (blockingConflict) {
       const labels = blockingConflict.actionIds
         .filter((id) => id !== actionId)

@@ -18,12 +18,12 @@ export type CreateRuntimeParentStatus = 'idle' | 'checking' | 'failed'
 
 type AutoFilledCreateParent = {
   parent: string
-  runtimeEnvironmentId: string | null
+  targetKey: string
 }
 
 type CreateParentProvenance = {
   parent: string
-  runtimeEnvironmentId: string | null
+  targetKey: string
 }
 
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
@@ -50,12 +50,14 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
 export function useCreateProjectDefaults({
   step,
   activeRuntimeEnvironmentId,
+  sshTargetId,
   createParent,
   setCreateParent,
   setCreateKind
 }: {
   step: AddRepoDialogStep
   activeRuntimeEnvironmentId: string | null | undefined
+  sshTargetId?: string | null | undefined
   createParent: string
   setCreateParent: (value: string) => void
   setCreateKind: (kind: RepoKind) => void
@@ -80,6 +82,12 @@ export function useCreateProjectDefaults({
   const createParentDefaultGenRef = useRef(0)
   const createGitProbeGenRef = useRef(0)
   const activeCreateParentRuntimeEnvironmentId = activeRuntimeEnvironmentId?.trim() || null
+  const activeCreateParentSshTargetId = sshTargetId?.trim() || null
+  const activeCreateParentTargetKey = activeCreateParentRuntimeEnvironmentId
+    ? `runtime:${activeCreateParentRuntimeEnvironmentId}`
+    : activeCreateParentSshTargetId
+      ? `ssh:${activeCreateParentSshTargetId}`
+      : 'local'
 
   const canReplaceCreateParentDefault = useCallback((parent: string): boolean => {
     if (createParentTouchedRef.current) {
@@ -108,11 +116,11 @@ export function useCreateProjectDefaults({
       autoFilledCreateParentRef.current = null
       createParentProvenanceRef.current = {
         parent: (value ?? createParent).trim(),
-        runtimeEnvironmentId: activeCreateParentRuntimeEnvironmentId
+        targetKey: activeCreateParentTargetKey
       }
       createParentTouchedRef.current = true
     },
-    [activeCreateParentRuntimeEnvironmentId, createParent]
+    [activeCreateParentTargetKey, createParent]
   )
   const markCreateKindTouched = useCallback(() => {
     createKindTouchedRef.current = true
@@ -123,21 +131,19 @@ export function useCreateProjectDefaults({
     !createParentTouchedRef.current &&
     Boolean(createParent.trim()) &&
     autoFilledCreateParentRef.current?.parent === createParent.trim() &&
-    autoFilledCreateParentRef.current.runtimeEnvironmentId !==
-      activeCreateParentRuntimeEnvironmentId
+    autoFilledCreateParentRef.current.targetKey !== activeCreateParentTargetKey
   const createParentTargetPending =
     step === 'create' &&
     Boolean(createParent.trim()) &&
     createParentProvenanceRef.current?.parent === createParent.trim() &&
-    createParentProvenanceRef.current.runtimeEnvironmentId !==
-      activeCreateParentRuntimeEnvironmentId
+    createParentProvenanceRef.current.targetKey !== activeCreateParentTargetKey
   const createParentPending = createParentDefaultPending || createParentTargetPending
 
   useEffect(() => {
     if (step !== 'create') {
       return
     }
-    if (activeCreateParentRuntimeEnvironmentId) {
+    if (activeCreateParentRuntimeEnvironmentId || activeCreateParentSshTargetId) {
       return
     }
     // Why: invalidate any in-flight runtime parent probe once local mode owns the default.
@@ -147,7 +153,7 @@ export function useCreateProjectDefaults({
     }
     if (
       createParent.trim() &&
-      autoFilledCreateParentRef.current?.runtimeEnvironmentId !== null &&
+      autoFilledCreateParentRef.current?.targetKey !== 'local' &&
       autoFilledCreateParentRef.current?.parent === createParent.trim()
     ) {
       setCreateDefaultParent('')
@@ -155,7 +161,7 @@ export function useCreateProjectDefaults({
       return
     }
     if (
-      autoFilledCreateParentRef.current?.runtimeEnvironmentId === null &&
+      autoFilledCreateParentRef.current?.targetKey === 'local' &&
       autoFilledCreateParentRef.current.parent === createParent.trim()
     ) {
       return
@@ -173,8 +179,8 @@ export function useCreateProjectDefaults({
         }
         setCreateDefaultParent(parent)
         createStepAutoFilledRef.current = true
-        autoFilledCreateParentRef.current = { parent, runtimeEnvironmentId: null }
-        createParentProvenanceRef.current = { parent, runtimeEnvironmentId: null }
+        autoFilledCreateParentRef.current = { parent, targetKey: 'local' }
+        createParentProvenanceRef.current = { parent, targetKey: 'local' }
         setCreateParent(parent)
       })
       .catch(() => {
@@ -183,6 +189,7 @@ export function useCreateProjectDefaults({
   }, [
     activeRuntimeEnvironmentId,
     activeCreateParentRuntimeEnvironmentId,
+    activeCreateParentSshTargetId,
     canReplaceCreateParentDefault,
     createParent,
     setCreateParent,
@@ -194,7 +201,7 @@ export function useCreateProjectDefaults({
       return
     }
     const runtimeEnvironmentId = activeCreateParentRuntimeEnvironmentId
-    if (!runtimeEnvironmentId) {
+    if (!runtimeEnvironmentId || activeCreateParentSshTargetId) {
       setCreateRuntimeParentStatus('idle')
       return
     }
@@ -204,7 +211,7 @@ export function useCreateProjectDefaults({
     }
     if (
       createParent.trim() &&
-      autoFilledCreateParentRef.current?.runtimeEnvironmentId !== runtimeEnvironmentId &&
+      autoFilledCreateParentRef.current?.targetKey !== `runtime:${runtimeEnvironmentId}` &&
       autoFilledCreateParentRef.current?.parent === createParent.trim()
     ) {
       setCreateDefaultParent('')
@@ -213,7 +220,7 @@ export function useCreateProjectDefaults({
       return
     }
     if (
-      autoFilledCreateParentRef.current?.runtimeEnvironmentId === runtimeEnvironmentId &&
+      autoFilledCreateParentRef.current?.targetKey === `runtime:${runtimeEnvironmentId}` &&
       autoFilledCreateParentRef.current.parent === createParent.trim()
     ) {
       setCreateRuntimeParentStatus('idle')
@@ -236,8 +243,8 @@ export function useCreateProjectDefaults({
         }
         const parent = getDefaultCreateProjectParent(result.resolvedPath)
         createStepAutoFilledRef.current = true
-        autoFilledCreateParentRef.current = { parent, runtimeEnvironmentId }
-        createParentProvenanceRef.current = { parent, runtimeEnvironmentId }
+        autoFilledCreateParentRef.current = { parent, targetKey: `runtime:${runtimeEnvironmentId}` }
+        createParentProvenanceRef.current = { parent, targetKey: `runtime:${runtimeEnvironmentId}` }
         setCreateDefaultParent(parent)
         setCreateParent(parent)
         setCreateRuntimeParentStatus('idle')
@@ -251,6 +258,7 @@ export function useCreateProjectDefaults({
   }, [
     activeRuntimeEnvironmentId,
     activeCreateParentRuntimeEnvironmentId,
+    activeCreateParentSshTargetId,
     canReplaceCreateParentDefault,
     createParent,
     setCreateParent,
@@ -263,6 +271,12 @@ export function useCreateProjectDefaults({
     }
     const runtimeEnvironmentId = activeRuntimeEnvironmentId?.trim()
     const gen = ++createGitProbeGenRef.current
+    if (activeCreateParentSshTargetId) {
+      // Why: SSH creation happens through the relay; probing client Git would
+      // make the selected host look healthier or less healthy than it is.
+      setCreateGitAvailability('unknown')
+      return
+    }
     setCreateGitAvailability('checking')
     const probe = runtimeEnvironmentId
       ? callRuntimeRpc<{ available: boolean }>(
@@ -293,7 +307,7 @@ export function useCreateProjectDefaults({
         }
         setCreateGitAvailability('unknown')
       })
-  }, [activeRuntimeEnvironmentId, setCreateKind, step])
+  }, [activeRuntimeEnvironmentId, activeCreateParentSshTargetId, setCreateKind, step])
 
   return {
     createDefaultParent,

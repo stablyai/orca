@@ -127,17 +127,22 @@ const TERM_ENTRIES: readonly { entry: TermEntry; minPhase: Phase }[] = [
   {
     entry: {
       kind: 'ok',
-      html: (
-        <>
-          {translate('auto.components.feature.wall.BrowserAnimatedVisual.4fa59ca545', '✓ Updated')}{' '}
-          <code className="text-emerald-600 dark:text-emerald-400">
+      get html() {
+        return (
+          <>
             {translate(
-              'auto.components.feature.wall.BrowserAnimatedVisual.051c97d15a',
-              '.pp-card[data-card="starter"] .pp-cta'
-            )}
-          </code>
-        </>
-      )
+              'auto.components.feature.wall.BrowserAnimatedVisual.4fa59ca545',
+              '✓ Updated'
+            )}{' '}
+            <code className="text-emerald-600 dark:text-emerald-400">
+              {translate(
+                'auto.components.feature.wall.BrowserAnimatedVisual.051c97d15a',
+                '.pp-card[data-card="starter"] .pp-cta'
+              )}
+            </code>
+          </>
+        )
+      }
     },
     minPhase: 'updated'
   },
@@ -156,14 +161,16 @@ const TERM_ENTRIES: readonly { entry: TermEntry; minPhase: Phase }[] = [
   {
     entry: {
       kind: 'ok',
-      html: (
-        <>
-          {translate(
-            'auto.components.feature.wall.BrowserAnimatedVisual.eb88125c6f',
-            '✓ Verified — Try free still works.'
-          )}
-        </>
-      )
+      get html() {
+        return (
+          <>
+            {translate(
+              'auto.components.feature.wall.BrowserAnimatedVisual.eb88125c6f',
+              '✓ Verified — Try free still works.'
+            )}
+          </>
+        )
+      }
     },
     minPhase: 'verified'
   }

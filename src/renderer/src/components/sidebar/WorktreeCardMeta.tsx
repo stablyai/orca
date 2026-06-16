@@ -1,23 +1,7 @@
 import React from 'react'
 import { Badge } from '@/components/ui/badge'
 import { HoverCard, HoverCardTrigger, HoverCardContent } from '@/components/ui/hover-card'
-import {
-  CircleDot,
-  Ellipsis,
-  ExternalLink,
-  MonitorUp,
-  Pencil,
-  StickyNote,
-  Unlink
-} from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger
-} from '@/components/ui/dropdown-menu'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { CircleDot, ExternalLink, MonitorUp, Pencil, StickyNote } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { LinearIcon } from '@/components/icons/LinearIcon'
 import { SelectedTextCopyMenu } from '@/components/SelectedTextCopyMenu'
@@ -28,14 +12,9 @@ import {
   WorktreeCardDetailSectionContent
 } from './WorktreeCardDetailSection'
 import { DetailHeader, MetaIconBadge, MetadataActionIcon } from './WorktreeCardMetadataControls'
-import {
-  IssueStateBadge,
-  LinearStateBadge,
-  ReviewChecksBadge,
-  ReviewStateBadge
-} from './WorktreeCardMetadataStatusBadges'
+import { IssueStateBadge, LinearStateBadge } from './WorktreeCardMetadataStatusBadges'
 import { useWorktreeCardDetailsHoverControl } from './worktree-card-details-hover-state'
-import { getReviewLabel, getProviderName, ReviewIcon } from './worktree-review-helpers'
+import { getReviewLabel, ReviewIcon } from './worktree-review-helpers'
 import type {
   WorktreeCardIssueDisplay,
   WorktreeCardLinearIssueDisplay,
@@ -44,6 +23,7 @@ import type {
   WorktreeCardDetailsHoverProps
 } from './worktree-card-meta-types'
 import { translate } from '@/i18n/i18n'
+import { WorktreeCardReviewDetailSection } from './WorktreeCardReviewDetailSection'
 
 export type {
   WorktreeCardIssueDisplay,
@@ -181,8 +161,6 @@ export function WorktreeCardDetailsHover({
     return children
   }
 
-  const reviewLabel = review ? getReviewLabel(review) : null
-  const reviewProvider = review ? getProviderName(review) : null
   const issueLabels = issue?.labels ?? []
 
   return (
@@ -253,15 +231,17 @@ export function WorktreeCardDetailsHover({
                         <ExternalLink className="size-3" />
                       </MetadataActionIcon>
                     )}
-                    <MetadataActionIcon
-                      label={translate(
-                        'auto.components.sidebar.WorktreeCardMeta.807b13b9ec',
-                        'Edit issue'
-                      )}
-                      onClick={onEditIssue}
-                    >
-                      <Pencil className="size-3" />
-                    </MetadataActionIcon>
+                    {onEditIssue && (
+                      <MetadataActionIcon
+                        label={translate(
+                          'auto.components.sidebar.WorktreeCardMeta.807b13b9ec',
+                          'Edit issue'
+                        )}
+                        onClick={onEditIssue}
+                      >
+                        <Pencil className="size-3" />
+                      </MetadataActionIcon>
+                    )}
                   </>
                 }
               />
@@ -340,102 +320,14 @@ export function WorktreeCardDetailsHover({
             </WorktreeCardDetailSection>
           )}
 
-          {review && reviewLabel && reviewProvider && (
-            <WorktreeCardDetailSection>
-              <DetailHeader
-                icon={<ReviewIcon review={review} className="size-3" />}
-                label={`${reviewLabel} #${review.number}`}
-                actions={
-                  <>
-                    {onUnlinkReview && (
-                      <DropdownMenu
-                        modal={false}
-                        open={reviewMenuOpen}
-                        onOpenChange={handleReviewMenuOpenChange}
-                      >
-                        <Tooltip open={reviewMenuOpen ? false : undefined}>
-                          <TooltipTrigger asChild>
-                            <DropdownMenuTrigger asChild>
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon-xs"
-                                className="size-6"
-                                aria-label={translate(
-                                  'auto.components.sidebar.WorktreeCardMeta.dbe2d18972',
-                                  'More {{value0}} actions',
-                                  { value0: reviewLabel }
-                                )}
-                                onClick={(event) => event.stopPropagation()}
-                              >
-                                <Ellipsis className="size-3" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                          </TooltipTrigger>
-                          <TooltipContent side="top" sideOffset={4}>
-                            {translate(
-                              'auto.components.sidebar.WorktreeCardMeta.dbe2d18972',
-                              'More {{value0}} actions',
-                              { value0: reviewLabel }
-                            )}
-                          </TooltipContent>
-                        </Tooltip>
-                        <DropdownMenuContent align="end" className="w-40">
-                          <DropdownMenuItem
-                            onSelect={() => {
-                              closeHover()
-                              onUnlinkReview?.()
-                            }}
-                          >
-                            <Unlink className="size-3.5" />
-                            {translate(
-                              'auto.components.sidebar.WorktreeCardMeta.ae76907ca6',
-                              'Unlink {{value0}}',
-                              { value0: reviewLabel }
-                            )}
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    )}
-                    {review.url && onOpenReviewInOrca && (
-                      <MetadataActionIcon
-                        label={translate(
-                          'auto.components.sidebar.WorktreeCardMeta.2c67730e07',
-                          'Open in Orca'
-                        )}
-                        onClick={dismissAndRun(onOpenReviewInOrca)}
-                      >
-                        <MonitorUp className="size-3" />
-                      </MetadataActionIcon>
-                    )}
-                    {review.url && (
-                      <MetadataActionIcon
-                        label={translate(
-                          'auto.components.sidebar.WorktreeCardMeta.ad25c3ff05',
-                          'View on {{value0}}',
-                          { value0: reviewProvider }
-                        )}
-                        href={review.url}
-                      >
-                        <ExternalLink className="size-3" />
-                      </MetadataActionIcon>
-                    )}
-                  </>
-                }
-              />
-              <WorktreeCardDetailSectionContent className="space-y-1.5">
-                <div className="text-[13px] font-semibold leading-snug text-foreground break-words">
-                  {review.title}
-                </div>
-                {(review.state || (review.status && review.status !== 'neutral')) && (
-                  <div className="flex flex-wrap gap-1">
-                    <ReviewStateBadge state={review.state} label={reviewLabel} />
-                    <ReviewChecksBadge status={review.status} />
-                  </div>
-                )}
-              </WorktreeCardDetailSectionContent>
-            </WorktreeCardDetailSection>
-          )}
+          <WorktreeCardReviewDetailSection
+            review={review}
+            reviewMenuOpen={reviewMenuOpen}
+            onReviewMenuOpenChange={handleReviewMenuOpenChange}
+            onOpenReviewInOrca={onOpenReviewInOrca}
+            onUnlinkReview={onUnlinkReview}
+            closeHover={closeHover}
+          />
 
           {hasComment(comment) && (
             <WorktreeCardDetailSection>
@@ -443,15 +335,17 @@ export function WorktreeCardDetailsHover({
                 icon={<StickyNote className="size-3 text-muted-foreground" />}
                 label={translate('auto.components.sidebar.WorktreeCardMeta.93cbea12c2', 'Notes')}
                 actions={
-                  <MetadataActionIcon
-                    label={translate(
-                      'auto.components.sidebar.WorktreeCardMeta.c7fa72ead0',
-                      'Edit notes'
-                    )}
-                    onClick={onEditComment}
-                  >
-                    <Pencil className="size-3" />
-                  </MetadataActionIcon>
+                  onEditComment ? (
+                    <MetadataActionIcon
+                      label={translate(
+                        'auto.components.sidebar.WorktreeCardMeta.c7fa72ead0',
+                        'Edit notes'
+                      )}
+                      onClick={onEditComment}
+                    >
+                      <Pencil className="size-3" />
+                    </MetadataActionIcon>
+                  ) : null
                 }
               />
               <WorktreeCardDetailSectionContent className="space-y-2">

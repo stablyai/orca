@@ -33,6 +33,7 @@ import { buildOnboardingFolderAgentStartup } from '@/lib/onboarding-folder-agent
 import { resolveOnboardingSettingsHydration } from './onboarding-settings-hydration'
 import { openProjectDefaultCheckout } from '../sidebar/project-added-default-checkout'
 import { translate } from '@/i18n/i18n'
+import { resolveAgentPermissionModeSummary } from '../../../../shared/tui-agent-permissions'
 
 export { STEPS } from './use-onboarding-flow-types'
 export type { StepId, StepNumber } from './use-onboarding-flow-types'
@@ -240,6 +241,12 @@ export function useOnboardingFlow(
       ? settings.defaultTuiAgent
       : null
   )
+  const [yoloPermissions, setYoloPermissions] = useState(
+    resolveAgentPermissionModeSummary({
+      agentDefaultArgs: settings?.agentDefaultArgs,
+      agentDefaultEnv: settings?.agentDefaultEnv
+    }) !== 'manual'
+  )
   // Why: hydrate theme from saved settings instead of hardcoding 'dark' so users
   // who already configured a theme see their choice preselected.
   const [theme, setTheme] = useState<GlobalSettings['theme']>(settings?.theme ?? 'dark')
@@ -263,6 +270,7 @@ export function useOnboardingFlow(
   // fallback defaults, unless the user already interacted with that field.
   const themeInteractedRef = useRef(false)
   const agentInteractedRef = useRef(false)
+  const yoloPermissionsInteractedRef = useRef(false)
   const [settingsHydrated, setSettingsHydrated] = useState(settings != null)
   const settingsHydration = resolveOnboardingSettingsHydration({
     settings,
@@ -279,6 +287,16 @@ export function useOnboardingFlow(
     }
     if (settingsHydration.selectedAgent !== undefined) {
       setSelectedAgent(settingsHydration.selectedAgent)
+    }
+  }
+  if (settings && !yoloPermissionsInteractedRef.current) {
+    const nextYoloPermissions =
+      resolveAgentPermissionModeSummary({
+        agentDefaultArgs: settings.agentDefaultArgs,
+        agentDefaultEnv: settings.agentDefaultEnv
+      }) !== 'manual'
+    if (nextYoloPermissions !== yoloPermissions) {
+      setYoloPermissions(nextYoloPermissions)
     }
   }
 
@@ -335,6 +353,10 @@ export function useOnboardingFlow(
     },
     []
   )
+  const setYoloPermissionsInteractive = useCallback((enabled: boolean) => {
+    yoloPermissionsInteractedRef.current = true
+    setYoloPermissions(enabled)
+  }, [])
 
   const detectedSet = useMemo(() => new Set(detectedAgentIds ?? []), [detectedAgentIds])
   const currentStep = STEPS[stepIndex]
@@ -573,6 +595,7 @@ export function useOnboardingFlow(
   const persistCurrentStep = usePersistCurrentStep({
     currentStepId: currentStep.id,
     selectedAgent,
+    yoloPermissions,
     theme,
     settings,
     updateSettings,
@@ -705,7 +728,7 @@ export function useOnboardingFlow(
       if (settings?.activeRuntimeEnvironmentId?.trim()) {
         const path = serverPath.trim()
         if (!path) {
-          const message = 'Enter a server path.'
+          const message = 'Enter a path on the selected host.'
           setError(message)
           return
         }
@@ -996,7 +1019,7 @@ export function useOnboardingFlow(
     const destination =
       target.kind === 'environment' ? cloneDestination.trim() : settings.workspaceDir
     if (!destination) {
-      const message = 'Enter a server path for the clone destination.'
+      const message = 'Enter a host path for the clone destination.'
       setError(message)
       return
     }
@@ -1211,6 +1234,8 @@ export function useOnboardingFlow(
     currentStep,
     selectedAgent,
     setSelectedAgent: setSelectedAgentInteractive,
+    yoloPermissions,
+    setYoloPermissions: setYoloPermissionsInteractive,
     theme,
     setTheme: setThemeInteractive,
     cloneUrl,

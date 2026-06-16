@@ -96,11 +96,122 @@
   background: color-mix(in srgb, var(--muted) 38%, var(--background));
 }
 
+.github-markdown-composer-tabbed {
+  border-radius: 8px;
+}
+
+.github-markdown-composer-tabbar {
+  display: flex;
+  align-items: stretch;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 40px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
+  background: color-mix(in srgb, var(--muted) 28%, var(--background));
+}
+
+.github-markdown-composer-tabs {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+}
+
+.github-markdown-composer-tab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 72px;
+  padding: 0 14px;
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.github-markdown-composer-tab:hover {
+  color: var(--foreground);
+}
+
+.github-markdown-composer-tab.is-active {
+  margin-bottom: -1px;
+  border-bottom-color: transparent;
+  background: var(--background);
+  color: var(--foreground);
+}
+
+.github-markdown-composer-tabbar-toolbar {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+  justify-content: flex-end;
+  overflow-x: auto;
+}
+
+.github-markdown-composer-tabbar-toolbar .rich-markdown-editor-toolbar {
+  min-height: 38px;
+  padding: 4px 8px;
+  box-shadow: none;
+  background: transparent;
+}
+
+.github-markdown-composer-preview {
+  padding: 12px 14px 18px;
+}
+
+.github-markdown-composer-attachment {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border: none;
+  border-top: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
+  background: transparent;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.github-markdown-composer-attachment:hover:not(:disabled) {
+  color: var(--foreground);
+  background: color-mix(in srgb, var(--accent) 40%, transparent);
+}
+
+.github-markdown-composer-attachment:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.github-issue-comment-composer .github-markdown-composer-tabbed {
+  border-color: color-mix(in srgb, var(--border) 82%, transparent);
+}
+
 .orca-diff-comment-add-btn.rich-markdown-comment-add-btn {
   display: flex;
-  width: 22px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
   z-index: 1001;
+  /* Why: this button appears on active text selection; keep it readable without hover. */
+  color: var(--primary);
+  border-color: color-mix(in srgb, var(--primary) 52%, var(--border));
+  background: color-mix(in srgb, var(--primary) 14%, var(--background));
+  box-shadow:
+    0 1px 4px color-mix(in srgb, var(--foreground) 16%, transparent),
+    0 0 0 1px color-mix(in srgb, var(--primary) 10%, transparent);
+}
+
+.orca-diff-comment-add-btn.rich-markdown-comment-add-btn:hover {
+  color: var(--primary);
+  border-color: color-mix(in srgb, var(--primary) 68%, var(--border));
+  background: color-mix(in srgb, var(--primary) 22%, var(--background));
+  box-shadow:
+    0 2px 8px color-mix(in srgb, var(--primary) 24%, transparent),
+    0 0 0 1px color-mix(in srgb, var(--primary) 14%, transparent);
 }
 
 .rich-markdown-annotation-selection {

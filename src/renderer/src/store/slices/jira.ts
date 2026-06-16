@@ -24,6 +24,11 @@ import {
 } from '@/runtime/runtime-jira-client'
 import { getProviderRuntimeContextKey } from '@/lib/provider-runtime-context'
 import { translate } from '@/i18n/i18n'
+import {
+  getTaskSourceCacheScope,
+  getTaskSourceRuntimeSettings,
+  type TaskSourceContext
+} from '../../../../shared/task-source-context'
 
 const CACHE_TTL = 60_000
 const MAX_CACHE_ENTRIES = 500
@@ -57,6 +62,16 @@ type InflightJiraReadRequest<T> = {
   promise: Promise<T>
   contextKey: string
   mutationGeneration: number
+}
+
+type JiraReadOptions = { sourceContext?: TaskSourceContext | null }
+type JiraPatchOptions = { sourceContext?: TaskSourceContext | null }
+
+type JiraReadScope = {
+  settings: AppState['settings'] | TaskSourceContext | null
+  contextKey: string
+  cachePrefix: string | null
+  explicitSource: boolean
 }
 
 const inflightIssueRequests = new Map<string, InflightJiraReadRequest<JiraIssue | null>>()
@@ -100,12 +115,38 @@ function isCurrentJiraRuntimeContext(contextKey: string, settings: AppState['set
 function canWriteJiraReadResult(
   contextKey: string,
   mutationGeneration: number,
-  settings: AppState['settings']
+  settings: AppState['settings'],
+  explicitSource = false
 ): boolean {
   return (
     mutationGeneration === jiraMutationGeneration &&
-    isCurrentJiraRuntimeContext(contextKey, settings)
+    (explicitSource || isCurrentJiraRuntimeContext(contextKey, settings))
   )
+}
+
+function getJiraReadScope(
+  settings: AppState['settings'],
+  sourceContext?: TaskSourceContext | null
+): JiraReadScope {
+  if (!sourceContext) {
+    return {
+      settings,
+      contextKey: getProviderRuntimeContextKey(settings),
+      cachePrefix: null,
+      explicitSource: false
+    }
+  }
+  const runtimeSettings = getTaskSourceRuntimeSettings(sourceContext)
+  return {
+    settings: sourceContext,
+    contextKey: `${getProviderRuntimeContextKey(runtimeSettings)}::${getTaskSourceCacheScope(sourceContext)}`,
+    cachePrefix: getTaskSourceCacheScope(sourceContext),
+    explicitSource: true
+  }
+}
+
+function scopedJiraCacheKey(scope: JiraReadScope, key: string): string {
+  return scope.cachePrefix ? `${scope.cachePrefix}::${key}` : key
 }
 
 export type JiraSlice = {
@@ -126,10 +167,18 @@ export type JiraSlice = {
   ) => Promise<{ ok: true; viewer: JiraViewer } | { ok: false; error: string }>
   selectJiraSite: (siteId: JiraSiteSelection) => Promise<void>
   disconnectJira: (siteId?: string | null) => Promise<void>
-  fetchJiraIssue: (key: string, siteId?: string | null) => Promise<JiraIssue | null>
-  searchJiraIssues: (jql: string, limit?: number) => Promise<JiraIssue[]>
-  listJiraIssues: (filter?: JiraIssueFilter, limit?: number) => Promise<JiraIssue[]>
-  patchJiraIssue: (issueKey: string, patch: Partial<JiraIssue>) => void
+  fetchJiraIssue: (
+    key: string,
+    siteId?: string | null,
+    options?: JiraReadOptions
+  ) => Promise<JiraIssue | null>
+  searchJiraIssues: (jql: string, limit?: number, options?: JiraReadOptions) => Promise<JiraIssue[]>
+  listJiraIssues: (
+    filter?: JiraIssueFilter,
+    limit?: number,
+    options?: JiraReadOptions
+  ) => Promise<JiraIssue[]>
+  patchJiraIssue: (issueKey: string, patch: Partial<JiraIssue>, options?: JiraPatchOptions) => void
 }
 
 export const createJiraSlice: StateCreator<AppState, [], [], JiraSlice> = (set, get) => ({
@@ -295,9 +344,10 @@ export const createJiraSlice: StateCreator<AppState, [], [], JiraSlice> = (set, 
     })
   },
 
-  fetchJiraIssue: async (key, siteId) => {
-    const contextKey = getProviderRuntimeContextKey(get().settings)
-    const issueCacheKey = `${siteId ?? 'selected'}::${key}`
+  fetchJiraIssue: async (key, siteId, options) => {
+    const scope = getJiraReadScope(get().settings, options?.sourceContext)
+    const { contextKey } = scope
+    const issueCacheKey = scopedJiraCacheKey(scope, `${siteId ?? 'selected'}::${key}`)
     const cached = get().jiraIssueCache[issueCacheKey] ?? get().jiraIssueCache[key]
     if (isFresh(cached)) {
       return cached.data
@@ -312,11 +362,16 @@ export const createJiraSlice: StateCreator<AppState, [], [], JiraSlice> = (set, 
     }
     let entry: InflightJiraReadRequest<JiraIssue | null>
     const requestMutationGeneration = jiraMutationGeneration
-    const promise = jiraGetIssue(get().settings, key, siteId)
+    const promise = jiraGetIssue(scope.settings, key, siteId)
       .then((issue) => {
         if (
           inflightIssueRequests.get(issueCacheKey) === entry &&
-          canWriteJiraReadResult(contextKey, requestMutationGeneration, get().settings)
+          canWriteJiraReadResult(
+            contextKey,
+            requestMutationGeneration,
+            get().settings,
+            scope.explicitSource
+          )
         ) {
           set((s) => ({
             jiraIssueCache: evictStaleEntries({
@@ -331,14 +386,24 @@ export const createJiraSlice: StateCreator<AppState, [], [], JiraSlice> = (set, 
         console.warn('[jira] fetchJiraIssue failed:', error)
         if (
           isIntegrationCredentialDecryptionError(error) &&
-          canWriteJiraReadResult(contextKey, requestMutationGeneration, get().settings)
+          canWriteJiraReadResult(
+            contextKey,
+            requestMutationGeneration,
+            get().settings,
+            scope.explicitSource
+          )
         ) {
           if (!shouldRefreshStatusAfterRead(siteId, get().jiraStatus)) {
             void get().checkJiraConnection()
           }
         } else if (
           looksLikeAuthError(error) &&
-          canWriteJiraReadResult(contextKey, requestMutationGeneration, get().settings)
+          canWriteJiraReadResult(
+            contextKey,
+            requestMutationGeneration,
+            get().settings,
+            scope.explicitSource
+          )
         ) {
           set({ jiraStatus: { connected: false, viewer: null } })
         }
@@ -350,7 +415,12 @@ export const createJiraSlice: StateCreator<AppState, [], [], JiraSlice> = (set, 
         }
         if (
           shouldRefreshStatusAfterRead(siteId, get().jiraStatus) &&
-          canWriteJiraReadResult(contextKey, requestMutationGeneration, get().settings)
+          canWriteJiraReadResult(
+            contextKey,
+            requestMutationGeneration,
+            get().settings,
+            scope.explicitSource
+          )
         ) {
           void get().checkJiraConnection()
         }
@@ -360,10 +430,11 @@ export const createJiraSlice: StateCreator<AppState, [], [], JiraSlice> = (set, 
     return promise
   },
 
-  searchJiraIssues: async (jql, limit = 30) => {
-    const contextKey = getProviderRuntimeContextKey(get().settings)
+  searchJiraIssues: async (jql, limit = 30, options) => {
+    const scope = getJiraReadScope(get().settings, options?.sourceContext)
+    const { contextKey } = scope
     const siteId = getSelectedSiteId(get().jiraStatus)
-    const cacheKey = `${siteId ?? 'default'}::${jql}::${limit}`
+    const cacheKey = scopedJiraCacheKey(scope, `${siteId ?? 'default'}::${jql}::${limit}`)
     const cached = get().jiraSearchCache[cacheKey]
     if (isFresh(cached)) {
       return cached.data ?? []
@@ -378,11 +449,16 @@ export const createJiraSlice: StateCreator<AppState, [], [], JiraSlice> = (set, 
     }
     let entry: InflightJiraReadRequest<JiraIssue[]>
     const requestMutationGeneration = jiraMutationGeneration
-    const promise = jiraSearchIssues(get().settings, jql, limit, siteId)
+    const promise = jiraSearchIssues(scope.settings, jql, limit, siteId)
       .then((issues) => {
         if (
           inflightSearchRequests.get(cacheKey) === entry &&
-          canWriteJiraReadResult(contextKey, requestMutationGeneration, get().settings)
+          canWriteJiraReadResult(
+            contextKey,
+            requestMutationGeneration,
+            get().settings,
+            scope.explicitSource
+          )
         ) {
           set((s) => ({
             jiraSearchCache: evictStaleEntries({
@@ -397,14 +473,24 @@ export const createJiraSlice: StateCreator<AppState, [], [], JiraSlice> = (set, 
         console.warn('[jira] searchJiraIssues failed:', error)
         if (
           isIntegrationCredentialDecryptionError(error) &&
-          canWriteJiraReadResult(contextKey, requestMutationGeneration, get().settings)
+          canWriteJiraReadResult(
+            contextKey,
+            requestMutationGeneration,
+            get().settings,
+            scope.explicitSource
+          )
         ) {
           if (!shouldRefreshStatusAfterRead(siteId, get().jiraStatus)) {
             void get().checkJiraConnection()
           }
         } else if (
           looksLikeAuthError(error) &&
-          canWriteJiraReadResult(contextKey, requestMutationGeneration, get().settings)
+          canWriteJiraReadResult(
+            contextKey,
+            requestMutationGeneration,
+            get().settings,
+            scope.explicitSource
+          )
         ) {
           set({ jiraStatus: { connected: false, viewer: null } })
         }
@@ -416,7 +502,12 @@ export const createJiraSlice: StateCreator<AppState, [], [], JiraSlice> = (set, 
         }
         if (
           shouldRefreshStatusAfterRead(siteId, get().jiraStatus) &&
-          canWriteJiraReadResult(contextKey, requestMutationGeneration, get().settings)
+          canWriteJiraReadResult(
+            contextKey,
+            requestMutationGeneration,
+            get().settings,
+            scope.explicitSource
+          )
         ) {
           void get().checkJiraConnection()
         }
@@ -426,10 +517,11 @@ export const createJiraSlice: StateCreator<AppState, [], [], JiraSlice> = (set, 
     return promise
   },
 
-  listJiraIssues: async (filter = 'assigned', limit = 30) => {
-    const contextKey = getProviderRuntimeContextKey(get().settings)
+  listJiraIssues: async (filter = 'assigned', limit = 30, options) => {
+    const scope = getJiraReadScope(get().settings, options?.sourceContext)
+    const { contextKey } = scope
     const siteId = getSelectedSiteId(get().jiraStatus)
-    const cacheKey = `${siteId ?? 'default'}::list::${filter}::${limit}`
+    const cacheKey = scopedJiraCacheKey(scope, `${siteId ?? 'default'}::list::${filter}::${limit}`)
     const cached = get().jiraSearchCache[cacheKey]
     if (isFresh(cached)) {
       return cached.data ?? []
@@ -444,11 +536,16 @@ export const createJiraSlice: StateCreator<AppState, [], [], JiraSlice> = (set, 
     }
     let entry: InflightJiraReadRequest<JiraIssue[]>
     const requestMutationGeneration = jiraMutationGeneration
-    const promise = jiraListIssues(get().settings, filter, limit, siteId)
+    const promise = jiraListIssues(scope.settings, filter, limit, siteId)
       .then((issues) => {
         if (
           inflightListRequests.get(cacheKey) === entry &&
-          canWriteJiraReadResult(contextKey, requestMutationGeneration, get().settings)
+          canWriteJiraReadResult(
+            contextKey,
+            requestMutationGeneration,
+            get().settings,
+            scope.explicitSource
+          )
         ) {
           set((s) => ({
             jiraSearchCache: evictStaleEntries({
@@ -463,14 +560,24 @@ export const createJiraSlice: StateCreator<AppState, [], [], JiraSlice> = (set, 
         console.warn('[jira] listJiraIssues failed:', error)
         if (
           isIntegrationCredentialDecryptionError(error) &&
-          canWriteJiraReadResult(contextKey, requestMutationGeneration, get().settings)
+          canWriteJiraReadResult(
+            contextKey,
+            requestMutationGeneration,
+            get().settings,
+            scope.explicitSource
+          )
         ) {
           if (!shouldRefreshStatusAfterRead(siteId, get().jiraStatus)) {
             void get().checkJiraConnection()
           }
         } else if (
           looksLikeAuthError(error) &&
-          canWriteJiraReadResult(contextKey, requestMutationGeneration, get().settings)
+          canWriteJiraReadResult(
+            contextKey,
+            requestMutationGeneration,
+            get().settings,
+            scope.explicitSource
+          )
         ) {
           set({ jiraStatus: { connected: false, viewer: null } })
         }
@@ -482,7 +589,12 @@ export const createJiraSlice: StateCreator<AppState, [], [], JiraSlice> = (set, 
         }
         if (
           shouldRefreshStatusAfterRead(siteId, get().jiraStatus) &&
-          canWriteJiraReadResult(contextKey, requestMutationGeneration, get().settings)
+          canWriteJiraReadResult(
+            contextKey,
+            requestMutationGeneration,
+            get().settings,
+            scope.explicitSource
+          )
         ) {
           void get().checkJiraConnection()
         }
@@ -492,12 +604,18 @@ export const createJiraSlice: StateCreator<AppState, [], [], JiraSlice> = (set, 
     return promise
   },
 
-  patchJiraIssue: (issueKey, patch) => {
+  patchJiraIssue: (issueKey, patch, options) => {
+    const sourceScope =
+      options?.sourceContext?.provider === 'jira'
+        ? getTaskSourceCacheScope(options.sourceContext)
+        : null
+    const canPatchCacheKey = (key: string): boolean =>
+      sourceScope === null || key.startsWith(`${sourceScope}::`)
     set((s) => {
       let changed = false
       const nextIssueCache = { ...s.jiraIssueCache }
       for (const [key, entry] of Object.entries(nextIssueCache)) {
-        if (entry?.data?.key !== issueKey) {
+        if (!canPatchCacheKey(key) || entry?.data?.key !== issueKey) {
           continue
         }
         nextIssueCache[key] = { ...entry, data: { ...entry.data, ...patch }, fetchedAt: 0 }
@@ -506,7 +624,7 @@ export const createJiraSlice: StateCreator<AppState, [], [], JiraSlice> = (set, 
       const nextSearchCache = { ...s.jiraSearchCache }
       for (const key of Object.keys(nextSearchCache)) {
         const entry = nextSearchCache[key]
-        if (!entry?.data) {
+        if (!canPatchCacheKey(key) || !entry?.data) {
           continue
         }
         const index = entry.data.findIndex((issue) => issue.key === issueKey)

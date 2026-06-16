@@ -26,6 +26,7 @@ import {
 import { recordCreatedTerminalPaneSplit } from './terminal-pane-split-completion'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
+import { recordTerminalUserInputForLeaf } from './terminal-input-activity'
 
 const CLOSE_ALL_CONTEXT_MENUS_EVENT = 'orca-close-all-context-menus'
 
@@ -53,6 +54,7 @@ type UseTerminalPaneContextMenuDeps = {
   onSetTitle: (paneId: number) => void
   onPasteError: (message: string) => void
   onAgentSessionForkReady: (fork: PreparedAgentSessionFork) => void
+  forceBracketedMultilineTextPaste: boolean
   rightClickToPaste: boolean
 }
 
@@ -92,6 +94,7 @@ export function useTerminalPaneContextMenu({
   onSetTitle,
   onPasteError,
   onAgentSessionForkReady,
+  forceBracketedMultilineTextPaste,
   rightClickToPaste
 }: UseTerminalPaneContextMenuDeps): TerminalMenuState {
   const contextPaneIdRef = useRef<number | null>(null)
@@ -168,9 +171,13 @@ export function useTerminalPaneContextMenu({
       readClipboardText: window.api.ui.readClipboardText,
       saveClipboardImageAsTempFile: window.api.ui.saveClipboardImageAsTempFile,
       connectionId,
+      forceBracketedMultilineTextPaste,
       pasteText: (text, options) => {
         pasteTerminalText(pane.terminal, text, options)
-        if (options?.forceBracketedPaste) {
+        if (text) {
+          recordTerminalUserInputForLeaf(tabId, pane.leafId)
+        }
+        if (options?.recoverImagePasteWebglAtlas) {
           scheduleImagePasteWebglAtlasRecovery()
         }
       },
@@ -290,6 +297,7 @@ export function useTerminalPaneContextMenu({
     sendTerminalQuickCommandToPane({
       command,
       pane,
+      tabId,
       transport: paneTransportsRef.current.get(pane.id)
     })
   }

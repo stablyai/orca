@@ -4,6 +4,7 @@ import { ScrollArea } from '../ui/scroll-area'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
 import { useAppStore } from '@/store'
+import { getRuntimeEnvironmentIdForRepo } from '@/lib/repo-runtime-owner'
 import {
   getRuntimeRepoBaseRefDefault,
   searchRuntimeRepoBaseRefs
@@ -23,8 +24,8 @@ export function BaseRefPicker({
   onSelect,
   onUsePrimary
 }: BaseRefPickerProps): React.JSX.Element {
-  const activeRuntimeEnvironmentId = useAppStore(
-    (state) => state.settings?.activeRuntimeEnvironmentId ?? null
+  const activeRuntimeEnvironmentId = useAppStore((state) =>
+    getRuntimeEnvironmentIdForRepo(state, repoId)
   )
   // Why: null until the IPC resolves (or when the repo has no default base ref
   // available). We avoid seeding with 'origin/main' because that would display

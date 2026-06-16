@@ -19,6 +19,7 @@ import { splitWebRuntimeTerminal } from '@/runtime/web-runtime-session'
 import { handleEmptyFloatingWorkspacePanelCloseShortcut } from '@/lib/floating-workspace-terminal-actions'
 import { recordCreatedTerminalPaneSplit } from './terminal-pane-split-completion'
 import { useAppStore } from '@/store'
+import { recordTerminalUserInputForLeaf } from './terminal-input-activity'
 
 export function recordKeyboardCreatedTerminalPaneSplit(
   createdPane: unknown,
@@ -104,6 +105,7 @@ export function matchFileSearchShortcut(
 }
 
 type KeyboardHandlersDeps = {
+  tabId: string
   isActive: boolean
   keyboardScopeRef: React.RefObject<HTMLElement | null>
   managerRef: React.RefObject<PaneManager | null>
@@ -129,6 +131,7 @@ type KeyboardHandlersDeps = {
 }
 
 export function useTerminalKeyboardShortcuts({
+  tabId,
   isActive,
   keyboardScopeRef,
   managerRef,
@@ -249,7 +252,10 @@ export function useTerminalKeyboardShortcuts({
         if (!pane) {
           return
         }
-        paneTransportsRef.current.get(pane.id)?.sendInput(action.data)
+        const sent = paneTransportsRef.current.get(pane.id)?.sendInput(action.data) === true
+        if (sent) {
+          recordTerminalUserInputForLeaf(tabId, pane.leafId)
+        }
         return
       }
 
@@ -453,7 +459,8 @@ export function useTerminalKeyboardShortcuts({
     searchStateRef,
     macOptionAsAltRef,
     keybindings,
-    terminalShortcutPolicy
+    terminalShortcutPolicy,
+    tabId
   ])
 }
 

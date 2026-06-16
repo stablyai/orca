@@ -12,7 +12,8 @@ const {
   getBitbucketAuthStatusMock,
   getAzureDevOpsAuthStatusMock,
   getGiteaAuthStatusMock,
-  resolveCliCommandsMock
+  resolveCliCommandsMock,
+  mergePersistedWindowsPathMock
 } = vi.hoisted(() => ({
   handleMock: vi.fn(),
   execFileMock: vi.fn(),
@@ -23,7 +24,8 @@ const {
   getBitbucketAuthStatusMock: vi.fn(),
   getAzureDevOpsAuthStatusMock: vi.fn(),
   getGiteaAuthStatusMock: vi.fn(),
-  resolveCliCommandsMock: vi.fn()
+  resolveCliCommandsMock: vi.fn(),
+  mergePersistedWindowsPathMock: vi.fn()
 }))
 
 vi.mock('electron', () => ({
@@ -49,6 +51,10 @@ vi.mock('../startup/hydrate-shell-path', () => ({
 
 vi.mock('../codex-cli/command', () => ({
   resolveCliCommands: resolveCliCommandsMock
+}))
+
+vi.mock('../pty/windows-environment-path', () => ({
+  mergePersistedWindowsPath: mergePersistedWindowsPathMock
 }))
 
 vi.mock('./ssh', () => ({
@@ -104,6 +110,7 @@ describe('preflight', () => {
     getBitbucketAuthStatusMock.mockReset()
     getAzureDevOpsAuthStatusMock.mockReset()
     getGiteaAuthStatusMock.mockReset()
+    mergePersistedWindowsPathMock.mockReset()
     // Why: existing tests should keep treating `which` as the only source
     // unless a case explicitly exercises the install-dir fallback.
     resolveCliCommandsMock.mockReset()
@@ -278,10 +285,10 @@ describe('preflight', () => {
       }
       if (command === 'wsl.exe') {
         const script = String(args[5])
-        if (script === "'gh' --version") {
+        if (script.includes('gh') && script.includes('--version')) {
           return { stdout: 'gh version 2.0.0\n' }
         }
-        if (script === "'gh' auth status") {
+        if (script.includes('gh') && script.includes('auth status')) {
           return { stdout: 'github.com\n  - Active account: true\n' }
         }
         throw new Error(`unexpected WSL script ${script}`)
@@ -294,14 +301,42 @@ describe('preflight', () => {
     expect(status.gh).toEqual({ installed: true, authenticated: true })
     expect(execFileAsyncMock).toHaveBeenCalledWith(
       'wsl.exe',
-      ['-d', 'Ubuntu', '--', 'bash', '-lc', "'gh' --version"],
+      ['-d', 'Ubuntu', '--', 'sh', '-c', expect.stringMatching(/gh[\s\S]*--version/)],
       { encoding: 'utf-8', timeout: 5000 }
     )
     expect(execFileAsyncMock).toHaveBeenCalledWith(
       'wsl.exe',
-      ['-d', 'Ubuntu', '--', 'bash', '-lc', "'gh' auth status"],
+      ['-d', 'Ubuntu', '--', 'sh', '-c', expect.stringMatching(/gh[\s\S]*auth status/)],
       { encoding: 'utf-8', timeout: 5000 }
     )
+  })
+
+  it('uses the persisted Windows Path when probing host CLIs', async () => {
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: 'win32'
+    })
+    mergePersistedWindowsPathMock.mockImplementation((env: Record<string, string>) => {
+      env.Path = 'C:\\Windows\\System32;C:\\Program Files\\GitHub CLI'
+    })
+    execFileAsyncMock
+      .mockResolvedValueOnce({ stdout: 'git version 2.0.0\n' })
+      .mockResolvedValueOnce({ stdout: 'gh version 2.0.0\n' })
+      .mockResolvedValueOnce({ stdout: 'glab version 1.92.1\n' })
+      .mockResolvedValueOnce({ stdout: 'github.com\n  - Active account: true\n' })
+      .mockResolvedValueOnce({ stdout: 'Logged in to gitlab.com\n' })
+
+    const status = await runPreflightCheck()
+
+    expect(status.gh).toEqual({ installed: true, authenticated: true })
+    expect(mergePersistedWindowsPathMock).toHaveBeenCalled()
+    expect(execFileAsyncMock).toHaveBeenNthCalledWith(2, 'gh', ['--version'], {
+      encoding: 'utf-8',
+      timeout: 5000,
+      env: expect.objectContaining({
+        Path: 'C:\\Windows\\System32;C:\\Program Files\\GitHub CLI'
+      })
+    })
   })
 
   it('times out hung WSL preflight probes', async () => {
@@ -318,10 +353,18 @@ describe('preflight', () => {
         if (command === 'gh' || command === 'glab') {
           return Promise.reject(Object.assign(new Error('spawn ENOENT'), { code: 'ENOENT' }))
         }
-        if (command === 'wsl.exe' && Array.isArray(args) && args.at(-1) === "'gh' --version") {
+        if (
+          command === 'wsl.exe' &&
+          Array.isArray(args) &&
+          String(args.at(-1)).includes("'gh' --version")
+        ) {
           return new Promise(() => {})
         }
-        if (command === 'wsl.exe' && Array.isArray(args) && args.at(-1) === "'glab' --version") {
+        if (
+          command === 'wsl.exe' &&
+          Array.isArray(args) &&
+          String(args.at(-1)).includes("'glab' --version")
+        ) {
           return Promise.reject(Object.assign(new Error('spawn ENOENT'), { code: 'ENOENT' }))
         }
         throw new Error(`unexpected command ${String(command)}`)
@@ -581,6 +624,31 @@ describe('preflight', () => {
     })
   })
 
+  it('returns no remote agents when the SSH connection is unavailable', async () => {
+    getActiveMultiplexerMock.mockReturnValue(null)
+
+    registerPreflightHandlers()
+
+    await expect(
+      handlers['preflight:detectRemoteAgents'](undefined, { connectionId: 'ssh-1' })
+    ).resolves.toEqual([])
+  })
+
+  it('returns no remote agents when the SSH connection is disposed', async () => {
+    const request = vi.fn()
+    getActiveMultiplexerMock.mockReturnValue({
+      isDisposed: () => true,
+      request
+    })
+
+    registerPreflightHandlers()
+
+    await expect(
+      handlers['preflight:detectRemoteAgents'](undefined, { connectionId: 'ssh-1' })
+    ).resolves.toEqual([])
+    expect(request).not.toHaveBeenCalled()
+  })
+
   it('detects agents from the selected WSL distro for a WSL workspace', async () => {
     Object.defineProperty(process, 'platform', {
       configurable: true,
@@ -606,9 +674,9 @@ describe('preflight', () => {
       expect.arrayContaining([
         '-d',
         'Ubuntu',
-        '--exec',
-        'bash',
-        '-ic',
+        '--',
+        'sh',
+        '-c',
         expect.stringContaining("'claude'")
       ]),
       { encoding: 'utf-8', timeout: 10000 }
@@ -637,7 +705,7 @@ describe('preflight', () => {
     expect(resolveCliCommandsMock).not.toHaveBeenCalled()
     expect(execFileAsyncMock).toHaveBeenCalledWith(
       'wsl.exe',
-      expect.arrayContaining(['--exec', 'bash', '-ic', expect.stringContaining("'codex'")]),
+      expect.arrayContaining(['--', 'sh', '-c', expect.stringContaining("'codex'")]),
       { encoding: 'utf-8', timeout: 10000 }
     )
   })

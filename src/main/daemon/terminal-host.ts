@@ -1,7 +1,12 @@
 import { Session, type SubprocessHandle } from './session'
 import { normalizePtySize } from './daemon-pty-size'
 import { resolveProcessCwd } from '../providers/process-cwd'
-import type { SessionInfo, TerminalSnapshot, ShellReadyState } from './types'
+import type {
+  SessionInfo,
+  TakePendingOutputResult,
+  TerminalSnapshot,
+  ShellReadyState
+} from './types'
 import { SessionNotFoundError } from './types'
 
 const DEFAULT_MAX_TOMBSTONES = 1000
@@ -208,6 +213,16 @@ export class TerminalHost {
       return null
     }
     return session.getSnapshot()
+  }
+
+  // Why: same null-not-throw semantics as getSnapshot — incremental
+  // checkpoints are best-effort against sessions that may have just exited.
+  takePendingOutput(sessionId: string, includeSnapshot: boolean): TakePendingOutputResult | null {
+    const session = this.sessions.get(sessionId)
+    if (!session || !session.isAlive) {
+      return null
+    }
+    return session.takePendingOutput(includeSnapshot)
   }
 
   isKilled(sessionId: string): boolean {

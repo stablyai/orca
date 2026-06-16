@@ -1134,10 +1134,10 @@ describe('registerPtyHandlers', () => {
         expect(env.ORCA_OPENCODE_HOOK_PORT).toBe('4567')
       })
 
-      it('mirrors a user-provided OPENCODE_CONFIG_DIR into a per-PTY overlay on the daemon path', async () => {
+      it('mirrors a user-provided OPENCODE_CONFIG_DIR into a source-scoped overlay on the daemon path', async () => {
         const env = await daemonSpawnAndGetEnv({ OPENCODE_CONFIG_DIR: '/user/custom/opencode' })
         // Why: OpenCode loads config from a single dir, so the user's path is
-        // mirrored into a per-PTY overlay rather than passed through literally.
+        // mirrored into a source-scoped overlay rather than passed through literally.
         expect(openCodeBuildPtyEnvMock).toHaveBeenCalledWith(
           expect.any(String),
           '/user/custom/opencode'
@@ -1474,7 +1474,7 @@ describe('registerPtyHandlers', () => {
         }
       })
 
-      it('passes the minted sessionId through to provider.spawn so the Pi overlay is keyed on a stable id', async () => {
+      it('passes the minted sessionId through to provider.spawn and host env setup', async () => {
         const daemonSpawn = setupDaemonAdapter()
         handlers.clear()
         registerPtyHandlers(mainWindow as never)
@@ -1507,10 +1507,10 @@ describe('registerPtyHandlers', () => {
       })
 
       it('prefixes a minted sessionId with the worktreeId when provided', async () => {
-        // Why: daemon reconnect keys Pi overlay and live-shell survival on the
-        // sessionId. Prefixing with worktreeId lets the daemon scope sessions
-        // by worktree while still minting a unique tail. The format contract
-        // is `${worktreeId}@@${8-char-hex}` and must not regress.
+        // Why: daemon reconnect keys live-shell survival on the sessionId.
+        // Prefixing with worktreeId lets the daemon scope sessions by worktree
+        // while still minting a unique tail. The format contract is
+        // `${worktreeId}@@${8-char-hex}` and must not regress.
         const daemonSpawn = setupDaemonAdapter()
         handlers.clear()
         registerPtyHandlers(mainWindow as never)
@@ -1574,9 +1574,9 @@ describe('registerPtyHandlers', () => {
       })
 
       it('rejects a caller-supplied sessionId that escapes userData via ..', async () => {
-        // Why: effectiveSessionId is used as a Pi overlay directory key under
-        // userData. A crafted IPC payload with a traversal sequence must be
-        // refused before any filesystem side-effects run.
+        // Why: effectiveSessionId reaches filesystem side-effects for provider
+        // hook state and stale pre-migration Pi overlay cleanup. A crafted IPC
+        // payload with traversal must be refused before those side-effects run.
         const daemonSpawn = setupDaemonAdapter()
         handlers.clear()
         registerPtyHandlers(mainWindow as never)
@@ -2829,6 +2829,43 @@ describe('registerPtyHandlers', () => {
 
     await expect(handlers.get('pty:kill')!(null, { id: 'remote-pty' })).resolves.toBeUndefined()
     expect(store.markSshRemotePtyLease).toHaveBeenCalledWith('ssh-1', 'remote-pty', 'terminated')
+  })
+
+  it('returns idle process inspection results for detached SSH PTYs without a provider', async () => {
+    const provider = {
+      spawn: vi.fn(),
+      write: vi.fn(),
+      resize: vi.fn(),
+      shutdown: vi.fn(),
+      sendSignal: vi.fn(),
+      getCwd: vi.fn(),
+      getInitialCwd: vi.fn(),
+      clearBuffer: vi.fn(),
+      acknowledgeDataEvent: vi.fn(),
+      onData: vi.fn(() => () => {}),
+      onReplay: vi.fn(() => () => {}),
+      onExit: vi.fn(() => () => {}),
+      listProcesses: vi.fn(),
+      hasChildProcesses: vi.fn(),
+      getForegroundProcess: vi.fn(),
+      serialize: vi.fn(),
+      revive: vi.fn(),
+      getDefaultShell: vi.fn(),
+      getProfiles: vi.fn()
+    }
+    registerSshPtyProvider('ssh-1', provider as never)
+    registerPtyHandlers(mainWindow as never)
+    setPtyOwnership('remote-pty', 'ssh-1')
+    unregisterSshPtyProvider('ssh-1')
+
+    await expect(handlers.get('pty:hasChildProcesses')!(null, { id: 'remote-pty' })).resolves.toBe(
+      false
+    )
+    await expect(
+      handlers.get('pty:getForegroundProcess')!(null, { id: 'remote-pty' })
+    ).resolves.toBeNull()
+    expect(provider.hasChildProcesses).not.toHaveBeenCalled()
+    expect(provider.getForegroundProcess).not.toHaveBeenCalled()
   })
 
   it('injects ORCA_TERMINAL_HANDLE for non-local PTY providers', async () => {

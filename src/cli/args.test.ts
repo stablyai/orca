@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
 
-import { parseArgs, supportsBrowserPageFlag, validateCommandAndFlags } from './args'
+import {
+  REPEATED_FLAG_SEPARATOR,
+  parseArgs,
+  supportsBrowserPageFlag,
+  validateCommandAndFlags
+} from './args'
 
 describe('parseArgs', () => {
   it('keeps an empty string as a flag value', () => {
@@ -36,6 +41,18 @@ describe('parseArgs', () => {
     expect(parsed.commandPath).toEqual(['tab', 'create'])
     expect(parsed.flags.get('json')).toBe(true)
     expect(parsed.flags.get('url')).toBe('https://example.com')
+  })
+
+  it('preserves repeated string flags', () => {
+    const parsed = parseArgs(['linear', 'label', 'add', '--label', 'Bug', '--label=Regression'])
+
+    expect(parsed.flags.get('label')).toBe(`Bug${REPEATED_FLAG_SEPARATOR}Regression`)
+  })
+
+  it('does not apply repeated flag encoding to ordinary string flags', () => {
+    const parsed = parseArgs(['linear', 'list', '--workspace', 'old', '--workspace', 'new'])
+
+    expect(parsed.flags.get('workspace')).toBe('new')
   })
 })
 

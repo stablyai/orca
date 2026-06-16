@@ -63,6 +63,9 @@ export const WorktreeCreate = z
     linkedLinearIssueOrganizationUrlKey: z.union([z.string(), z.null()]).optional(),
     linkedGitLabMR: TriStateLinkedIssue,
     linkedGitLabIssue: TriStateLinkedIssue,
+    linkedBitbucketPR: TriStateLinkedIssue,
+    linkedAzureDevOpsPR: TriStateLinkedIssue,
+    linkedGiteaPR: TriStateLinkedIssue,
     comment: OptionalString,
     displayName: OptionalString,
     telemetrySource: z
@@ -89,6 +92,8 @@ export const WorktreeCreate = z
       .optional(),
     runHooks: OptionalBoolean,
     activate: OptionalBoolean,
+    parentWorkspace: OptionalString,
+    envParentWorkspace: OptionalString,
     parentWorktree: OptionalString,
     cwdParentWorktree: OptionalString,
     noParent: OptionalBoolean,
@@ -125,10 +130,16 @@ export const WorktreeCreate = z
       .optional()
   })
   .superRefine((params, ctx) => {
-    if (params.parentWorktree && params.noParent === true) {
+    if ((params.parentWorkspace || params.parentWorktree) && params.noParent === true) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: 'Choose either --parent-worktree or --no-parent, not both.'
+        message: 'Choose either a parent workspace flag or --no-parent, not both.'
+      })
+    }
+    if (params.parentWorkspace && params.parentWorktree) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Choose either --parent-workspace or --parent-worktree, not both.'
       })
     }
     if (params.startupPrompt !== undefined && params.startupAgent === undefined) {
@@ -155,8 +166,13 @@ export const WorktreeSet = WorktreeSelector.extend({
   linkedIssue: TriStateLinkedIssue,
   linkedPR: TriStateLinkedIssue,
   linkedLinearIssue: z.union([z.string(), z.null()]).optional(),
+  linkedLinearIssueWorkspaceId: z.union([z.string(), z.null()]).optional(),
+  linkedLinearIssueOrganizationUrlKey: z.union([z.string(), z.null()]).optional(),
   linkedGitLabMR: TriStateLinkedIssue,
   linkedGitLabIssue: TriStateLinkedIssue,
+  linkedBitbucketPR: TriStateLinkedIssue,
+  linkedAzureDevOpsPR: TriStateLinkedIssue,
+  linkedGiteaPR: TriStateLinkedIssue,
   isArchived: OptionalBoolean,
   isUnread: OptionalBoolean,
   isPinned: OptionalBoolean,
@@ -177,6 +193,7 @@ export const WorktreeSet = WorktreeSelector.extend({
     })
     .optional(),
   diffComments: z.array(z.unknown()).optional(),
+  mobileDiffReview: z.unknown().optional(),
   parentWorktree: OptionalString,
   noParent: OptionalBoolean
 }).superRefine((params, ctx) => {

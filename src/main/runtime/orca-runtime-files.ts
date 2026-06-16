@@ -30,6 +30,7 @@ import type {
   RuntimeFilePreviewResult,
   RuntimeFileReadResult
 } from '../../shared/runtime-types'
+import { watchFileExplorerInWorker } from './file-watcher-host'
 import { wslAwareSpawn } from '../git/runner'
 import { parseWslPath, toWindowsWslPath } from '../wsl'
 import { isENOENT, resolveAuthorizedPath } from '../ipc/filesystem-auth'
@@ -60,7 +61,6 @@ const MOBILE_FILE_LIST_LIMIT = 5000
 const MOBILE_FILE_READ_MAX_BYTES = 512 * 1024
 const RUNTIME_PREVIEWABLE_BINARY_MAX_BYTES = 10 * 1024 * 1024
 const WINDOWS_RUNTIME_FILE_WATCH_DEBOUNCE_MS = 150
-const RUNTIME_FILE_WATCH_EVENT_STAT_LIMIT = 200
 // Why: runtime files.watch subscriptions are cleaned up through synchronous RPC
 // callbacks. Track native Parcel unsubscribe work so app shutdown can drain it.
 const pendingRuntimeFileWatcherUnsubscribes = new Set<Promise<void>>()
@@ -294,53 +294,11 @@ export class RuntimeFileCommands {
     if (process.platform === 'win32') {
       return watchWindowsRuntimeFileExplorer(rootPath, callback)
     }
-    const watcher = await import('@parcel/watcher')
-    const subscription = await watcher.subscribe(
-      rootPath,
-      (err, events) => {
-        if (err) {
-          console.error('[runtime-files.watch] watcher error', { rootPath, err })
-          callback([{ kind: 'overflow', absolutePath: rootPath }])
-          return
-        }
-        // Why: large watcher batches usually mean a generated directory or
-        // branch switch. Avoid stat fanout and ask the renderer to refresh.
-        if (events.length > RUNTIME_FILE_WATCH_EVENT_STAT_LIMIT) {
-          callback([{ kind: 'overflow', absolutePath: rootPath }])
-          return
-        }
-        void Promise.all(
-          events.map(async (event): Promise<FsChangeEvent> => {
-            let isDirectory = false
-            try {
-              isDirectory = (await stat(event.path)).isDirectory()
-            } catch {
-              isDirectory = false
-            }
-            return {
-              kind: event.type,
-              absolutePath: event.path,
-              isDirectory
-            }
-          })
-        ).then(callback)
-      },
-      {
-        ignore: [
-          '.git',
-          'node_modules',
-          'dist',
-          'build',
-          '.next',
-          '.cache',
-          '__pycache__',
-          'target',
-          '.venv'
-        ]
-      }
-    )
+    // Why: the watcher runs in a worker thread so @parcel/watcher's blocking
+    // recursive crawl can't starve the main/`serve` process (issue #5308).
+    const dispose = await watchFileExplorerInWorker(rootPath, callback)
     return () => {
-      trackRuntimeFileWatcherUnsubscribe(rootPath, () => subscription.unsubscribe())
+      trackRuntimeFileWatcherUnsubscribe(rootPath, dispose)
     }
   }
 

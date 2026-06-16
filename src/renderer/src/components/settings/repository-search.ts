@@ -86,6 +86,41 @@ export function getRepositoryPaneSearchEntries(repo: Repo): SettingsSearchEntry[
         )
       ]
     },
+    {
+      title: translate('auto.components.settings.repository.search.b24f00294a', 'Project Icon'),
+      description: translate(
+        'auto.components.settings.repository.search.a1f3a2bd47',
+        'Project icon and color used in the sidebar and tabs.'
+      ),
+      keywords: [
+        repo.displayName,
+        ...translateSearchKeyword(
+          'auto.components.settings.repository.search.6438a94c63',
+          'project icon'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.repository.search.b2546efab5',
+          'repository icon'
+        ),
+        ...translateSearchKeyword('auto.components.settings.repository.search.8d045419b1', 'color'),
+        ...translateSearchKeyword('auto.components.settings.repository.search.6d8de2f090', 'hex'),
+        ...translateSearchKeyword('auto.components.settings.repository.search.c1075178cf', 'badge'),
+        ...translateSearchKeyword(
+          'auto.components.settings.repository.search.cb4b4de666',
+          'avatar'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.repository.search.9dc60d7f6d',
+          'github'
+        ),
+        ...translateSearchKeyword('auto.components.settings.repository.search.1e73e840ff', 'emoji'),
+        ...translateSearchKeyword(
+          'auto.components.settings.repository.search.27733eb6c1',
+          'favicon'
+        )
+      ]
+    },
+    ...(isFolder ? [] : getRepositoryGitWorktreeSearchEntries(repo)),
     ...(isFolder
       ? []
       : [...getRepositoryGitAuthorSearchEntries(repo), ...getRepositoryGitHooksSearchEntries(repo)])

@@ -10,6 +10,10 @@ const WorktreeTabSelector = z.object({
     .pipe(z.string().min(1, 'Missing worktree selector'))
 })
 
+const SessionTabsUnsubscribe = WorktreeTabSelector.extend({
+  subscriptionId: z.string().min(1).optional()
+})
+
 const ActivateTab = WorktreeTabSelector.extend({
   tabId: z
     .unknown()
@@ -143,14 +147,20 @@ export const SESSION_TAB_METHODS: RpcAnyMethod[] = [
   defineStreamingMethod({
     name: 'session.tabs.subscribe',
     params: WorktreeTabSelector,
-    handler: async (params, { runtime, connectionId }, emit) => {
+    handler: async (params, { runtime, connectionId, requestId }, emit) => {
       let subscribedWorktree: string | null = null
       let unsubscribe = (): void => {}
       let closed = false
-      // Why: initial list errors should return one RPC error, not a leaked
-      // subscription cleanup that later emits a stray end frame.
       let initialized = false
-      const subscriptionId = `session.tabs:${connectionId ?? 'local'}:${params.worktree}`
+      const initial = await runtime.listMobileSessionTabs(params.worktree)
+      if (closed) {
+        return
+      }
+      subscribedWorktree = initial.worktree
+      const cleanupPrefix = `session.tabs:${connectionId ?? 'local'}:${subscribedWorktree}`
+      const subscriptionId = requestId ? `${cleanupPrefix}:${requestId}` : cleanupPrefix
+      // Why: shared-control can carry multiple subscribers for one worktree on
+      // one socket; include the RPC id so one subscriber cannot evict another.
       runtime.registerSubscriptionCleanup(
         subscriptionId,
         () => {
@@ -162,46 +172,56 @@ export const SESSION_TAB_METHODS: RpcAnyMethod[] = [
         },
         connectionId
       )
-      const initial = await Promise.resolve(runtime.listMobileSessionTabs(params.worktree)).catch(
-        (error) => {
-          runtime.cleanupSubscription(subscriptionId)
-          throw error
-        }
-      )
       if (closed) {
         return
       }
-      subscribedWorktree = initial.worktree
       emit({ type: 'snapshot', ...initial })
       initialized = true
+      if (closed) {
+        return
+      }
 
       unsubscribe = runtime.onMobileSessionTabsChanged((snapshot) => {
         if (snapshot.worktree === subscribedWorktree) {
           emit({ type: 'updated', ...snapshot })
         }
       })
+      if (closed) {
+        unsubscribe()
+      }
     }
   }),
   defineMethod({
     name: 'session.tabs.unsubscribe',
-    params: WorktreeTabSelector,
+    params: SessionTabsUnsubscribe,
     handler: async (params, { runtime, connectionId }) => {
       const snapshot = await runtime.listMobileSessionTabs(params.worktree)
-      runtime.cleanupSubscription(`session.tabs:${connectionId ?? 'local'}:${params.worktree}`)
-      runtime.cleanupSubscription(`session.tabs:${connectionId ?? 'local'}:${snapshot.worktree}`)
+      const connection = connectionId ?? 'local'
+      if (params.subscriptionId) {
+        runtime.cleanupSubscription(
+          `session.tabs:${connection}:${snapshot.worktree}:${params.subscriptionId}`
+        )
+        return { unsubscribed: true }
+      }
+      runtime.cleanupSubscription(`session.tabs:${connection}:${params.worktree}`)
+      runtime.cleanupSubscription(`session.tabs:${connection}:${snapshot.worktree}`)
+      runtime.cleanupSubscriptionsByPrefix(`session.tabs:${connection}:${snapshot.worktree}:`)
       return { unsubscribed: true }
     }
   }),
   defineStreamingMethod({
     name: 'session.tabs.subscribeAll',
     params: null,
-    handler: async (_params, { runtime, connectionId }, emit) => {
+    handler: async (_params, { runtime, connectionId, requestId }, emit) => {
       let unsubscribe = (): void => {}
       let closed = false
       // Why: initial listAll errors should return one RPC error, not a leaked
       // subscription cleanup that later emits a stray end frame.
       let initialized = false
-      const subscriptionId = `session.tabs:${connectionId ?? 'local'}:*`
+      const cleanupPrefix = `session.tabs:${connectionId ?? 'local'}:*`
+      const subscriptionId = requestId ? `${cleanupPrefix}:${requestId}` : cleanupPrefix
+      // Why: shared-control can carry multiple all-tab subscribers on one
+      // socket; include the RPC id so closing one does not evict siblings.
       runtime.registerSubscriptionCleanup(
         subscriptionId,
         () => {
@@ -233,6 +253,24 @@ export const SESSION_TAB_METHODS: RpcAnyMethod[] = [
       unsubscribe = runtime.onMobileSessionTabsChanged((snapshot) => {
         emit({ type: 'updated', ...snapshot })
       })
+    }
+  }),
+  defineMethod({
+    name: 'session.tabs.unsubscribeAll',
+    params: z
+      .object({
+        subscriptionId: z.string().min(1).optional()
+      })
+      .nullish(),
+    handler: async (params, { runtime, connectionId }) => {
+      const cleanupPrefix = `session.tabs:${connectionId ?? 'local'}:*`
+      if (params?.subscriptionId) {
+        runtime.cleanupSubscription(`${cleanupPrefix}:${params.subscriptionId}`)
+        return { unsubscribed: true }
+      }
+      runtime.cleanupSubscription(cleanupPrefix)
+      runtime.cleanupSubscriptionsByPrefix(`${cleanupPrefix}:`)
+      return { unsubscribed: true }
     }
   }),
   defineMethod({

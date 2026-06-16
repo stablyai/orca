@@ -6,6 +6,7 @@ type MockMultiplexer = {
   request: ReturnType<typeof vi.fn>
   notify: ReturnType<typeof vi.fn>
   onNotification: ReturnType<typeof vi.fn>
+  onNotificationByMethod: ReturnType<typeof vi.fn>
   dispose: ReturnType<typeof vi.fn>
   isDisposed: ReturnType<typeof vi.fn>
 }
@@ -15,6 +16,7 @@ function createMockMux(): MockMultiplexer {
     request: vi.fn().mockResolvedValue(undefined),
     notify: vi.fn(),
     onNotification: vi.fn(),
+    onNotificationByMethod: vi.fn().mockReturnValue(vi.fn()),
     dispose: vi.fn(),
     isDisposed: vi.fn().mockReturnValue(false)
   }
@@ -77,6 +79,60 @@ describe('SshGitProvider', () => {
       paths: ['dist/bundle.js']
     })
     expect(result).toEqual(['dist/bundle.js'])
+  })
+
+  it('clone sends git.clone request and forwards matching progress notifications', async () => {
+    const unsubscribe = vi.fn()
+    const onProgress = vi.fn()
+    mux.onNotificationByMethod.mockReturnValue(unsubscribe)
+    mux.request.mockImplementationOnce(async (_method, params) => {
+      const progressHandler = mux.onNotificationByMethod.mock.calls[0][1]
+      progressHandler({
+        progressId: params.progressId,
+        phase: 'Receiving objects',
+        percent: 42
+      })
+      progressHandler({
+        progressId: 'other-clone',
+        phase: 'Receiving objects',
+        percent: 99
+      })
+      return { stdout: '', stderr: '' }
+    })
+
+    await provider.clone(['clone', '--progress', '--', 'url', 'repo'], '/home/user', {
+      timeoutMs: 1000,
+      onProgress
+    })
+
+    expect(mux.request).toHaveBeenCalledWith(
+      'git.clone',
+      expect.objectContaining({
+        args: ['clone', '--progress', '--', 'url', 'repo'],
+        cwd: '/home/user',
+        progressId: expect.stringMatching(/^clone-/)
+      }),
+      { signal: undefined, timeoutMs: 1000 }
+    )
+    expect(mux.onNotificationByMethod).toHaveBeenCalledWith(
+      'git.cloneProgress',
+      expect.any(Function)
+    )
+    expect(onProgress).toHaveBeenCalledWith({ phase: 'Receiving objects', percent: 42 })
+    expect(onProgress).toHaveBeenCalledTimes(1)
+    expect(unsubscribe).toHaveBeenCalledTimes(1)
+  })
+
+  it('reports an actionable reconnect message when the relay does not support cloning', async () => {
+    const methodNotFound = new Error('Method not found: git.clone') as Error & { code?: number }
+    methodNotFound.code = -32601
+    mux.request.mockRejectedValueOnce(methodNotFound)
+
+    await expect(
+      provider.clone(['clone', '--progress', '--', 'url', 'repo'], '/home/user')
+    ).rejects.toThrow(
+      'SSH clone support is unavailable on this relay. Reconnect the SSH target to update Orca on the host, then try again.'
+    )
   })
 
   it('getHistory sends git.history request', async () => {
@@ -174,6 +230,32 @@ describe('SshGitProvider', () => {
     await provider.cancelNonInteractiveExec('/home/user/repo')
 
     expect(mux.request).toHaveBeenCalledWith('agent.cancelExec', { cwd: '/home/user/repo' })
+  })
+
+  it('exec forwards abort and timeout options to the relay request', async () => {
+    const controller = new AbortController()
+    mux.request.mockResolvedValue({ stdout: '', stderr: '' })
+
+    await provider.exec(
+      ['clone', '--progress', '--', 'git@example.com:repo.git', 'repo'],
+      '/home/user',
+      {
+        signal: controller.signal,
+        timeoutMs: 60_000
+      }
+    )
+
+    expect(mux.request).toHaveBeenCalledWith(
+      'git.exec',
+      {
+        args: ['clone', '--progress', '--', 'git@example.com:repo.git', 'repo'],
+        cwd: '/home/user'
+      },
+      {
+        signal: controller.signal,
+        timeoutMs: 60_000
+      }
+    )
   })
 
   it('getStagedCommitContext reads branch, staged summary, and staged patch remotely', async () => {

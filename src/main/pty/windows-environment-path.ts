@@ -112,7 +112,9 @@ export function __resetPersistedWindowsPathCacheForTests(): void {
 }
 
 export function mergePersistedWindowsPath(
-  env: Record<string, string>,
+  // Accept NodeJS.ProcessEnv too: callers pass a spread of process.env whose
+  // values are string | undefined; the body already guards for undefined.
+  env: NodeJS.ProcessEnv,
   options: ReadWindowsPathOptions = {}
 ): void {
   const platform = options.platform ?? process.platform

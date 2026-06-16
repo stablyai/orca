@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useAppStore } from '@/store'
 import { getConnectionId } from '@/lib/connection-context'
 import { getRuntimeGitIgnoredPaths } from '@/runtime/runtime-git-client'
+import { getRightSidebarWorktreeRuntimeSettings } from './file-explorer-runtime-owner'
 import { isDotfileRelativePath } from './file-explorer-entries'
 import type { DirCache, TreeNode } from './file-explorer-types'
 import {
@@ -162,7 +163,7 @@ export function useFileExplorerVisibleRowProjection(
     const connectionId = getConnectionId(activeWorktreeId) ?? undefined
     void getRuntimeGitIgnoredPaths(
       {
-        settings: useAppStore.getState().settings,
+        settings: getRightSidebarWorktreeRuntimeSettings(activeWorktreeId),
         worktreeId: activeWorktreeId,
         worktreePath,
         connectionId

@@ -4,7 +4,10 @@ import { MobileDriverOverlay } from './MobileDriverOverlay'
 
 type OverlayProps = {
   actionPending: boolean
+  allActionLabel?: string
+  allActionPending?: boolean
   onAction: () => void | Promise<void>
+  onAllAction?: () => void | Promise<void>
   rootRef: (node: HTMLDivElement | null) => void
 }
 
@@ -53,13 +56,17 @@ vi.mock('react', async () => {
   }
 })
 
-function renderOverlay(onAction: () => void | Promise<void>): OverlayElement {
+function renderOverlay(
+  onAction: () => void | Promise<void>,
+  onAllAction?: () => void | Promise<void>
+): OverlayElement {
   hookRuntime.stateIndex = 0
   hookRuntime.refIndex = 0
   return MobileDriverOverlay({
     driver: { kind: 'mobile', clientId: 'phone-1' } as never,
     hasFitOverride: false,
-    onAction
+    onAction,
+    onAllAction
   }) as OverlayElement
 }
 
@@ -92,5 +99,19 @@ describe('MobileDriverOverlay', () => {
     overlay = renderOverlay(onAction)
 
     expect(overlay.props.actionPending).toBe(false)
+  })
+
+  it('exposes an all-terminals restore action when provided', async () => {
+    const onAction = vi.fn()
+    const onAllAction = vi.fn()
+
+    const overlay = renderOverlay(onAction, onAllAction)
+
+    expect(overlay.props.allActionLabel).toBe('Resize all terminals')
+    expect(overlay.props.allActionPending).toBe(false)
+    await overlay.props.onAllAction?.()
+
+    expect(onAction).not.toHaveBeenCalled()
+    expect(onAllAction).toHaveBeenCalledOnce()
   })
 })

@@ -6,6 +6,7 @@ import type { SourceControlAgentActionDeliveryPlanState } from './SourceControlA
 
 export type UseSourceControlAgentActionDialogResult = {
   handleOpenChange: (nextOpen: boolean) => void
+  shouldRenderDialog: boolean
   agentOptions: ReturnType<typeof getAgentCatalog>
   selectedAgent: TuiAgent | null
   hasEnabledAgents: boolean

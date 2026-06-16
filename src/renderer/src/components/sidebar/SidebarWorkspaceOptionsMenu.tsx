@@ -17,152 +17,27 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import type { AgentActivityDisplayMode, WorktreeCardProperty } from '../../../../shared/types'
+import type { AgentActivityDisplayMode } from '../../../../shared/types'
 import { DEFAULT_SHOW_SLEEPING_WORKSPACES } from '../../../../shared/constants'
 import SidebarRepositoryFilterSection from './SidebarRepositoryFilterSection'
 import SidebarWorkspaceFilterSection from './SidebarWorkspaceFilterSection'
+import { getSidebarHostVisibilityLabel, shouldShowHostScopeControls } from './sidebar-host-options'
+import { useSidebarHostScopeOptions } from './use-sidebar-host-scope-options'
+import { SidebarHostScopeMenuSection } from './SidebarHostScopeMenuSection'
+import {
+  AGENT_ACTIVITY_DISPLAY_OPTIONS,
+  CARD_LAYOUT_OPTIONS,
+  GROUP_BY_OPTIONS,
+  PROJECT_ORDER_OPTIONS,
+  PROPERTY_OPTIONS,
+  SORT_OPTIONS
+} from './sidebar-workspace-option-items'
 import { translate } from '@/i18n/i18n'
 
 type SidebarWorkspaceOptionsMenuProps = {
   preserveWorkspaceBoardOpen?: boolean
   onMenuOpenChange?: (open: boolean) => void
 }
-
-const GROUP_BY_OPTIONS = [
-  {
-    id: 'none',
-    label: translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.c2c7a45cda', 'None')
-  },
-  {
-    id: 'workspace-status',
-    label: translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.e029a2d775', 'Status')
-  },
-  {
-    id: 'pr-status',
-    label: translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.0f9b959b31', 'PR')
-  },
-  {
-    id: 'repo',
-    label: translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.2170d553cf', 'Project')
-  }
-] as const
-
-const CARD_LAYOUT_OPTIONS = [
-  {
-    id: 'detailed',
-    label: translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.cc17bd443b', 'Detailed')
-  },
-  {
-    id: 'compact',
-    label: translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.25105b28cb', 'Compact')
-  }
-] as const
-
-const PROPERTY_OPTIONS: { id: WorktreeCardProperty; label: string }[] = [
-  {
-    id: 'issue',
-    label: translate(
-      'auto.components.sidebar.SidebarWorkspaceOptionsMenu.91dfc653e8',
-      'GitHub ticket'
-    )
-  },
-  {
-    id: 'linear-issue',
-    label: translate(
-      'auto.components.sidebar.SidebarWorkspaceOptionsMenu.ca4d3c522e',
-      'Linear issue'
-    )
-  },
-  {
-    id: 'pr',
-    label: translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.b8dcc6f321', 'PR/MR link')
-  },
-  {
-    id: 'comment',
-    label: translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.26c71e536c', 'Notes')
-  },
-  {
-    id: 'ports',
-    label: translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.b64d8bcca0', 'Ports')
-  },
-  // Why: toggles the inline "Agent activity" list rendered below each
-  // workspace card body (see WorktreeCard -> WorktreeCardAgents). Off hides
-  // the list; there is no alternate surface.
-  {
-    id: 'inline-agents',
-    label: translate(
-      'auto.components.sidebar.SidebarWorkspaceOptionsMenu.d7084e8bc8',
-      'Agent activity'
-    )
-  }
-]
-
-const AGENT_ACTIVITY_DISPLAY_OPTIONS: { id: AgentActivityDisplayMode; label: string }[] = [
-  {
-    id: 'compact',
-    label: translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.25105b28cb', 'Compact')
-  },
-  {
-    id: 'full',
-    label: translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.2a81e07366', 'Full list')
-  }
-]
-
-const SORT_OPTIONS = [
-  {
-    id: 'name',
-    label: translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.3728165cdd', 'Name'),
-    description: null
-  },
-  {
-    id: 'smart',
-    label: translate(
-      'auto.components.sidebar.SidebarWorkspaceOptionsMenu.503462f2b4',
-      'Agent Activity'
-    ),
-    description: translate(
-      'auto.components.sidebar.SidebarWorkspaceOptionsMenu.b759bb87ee',
-      'Agents that need attention, then most recent activity.'
-    )
-  },
-  {
-    id: 'recent',
-    label: translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.b451c8b162', 'Recent'),
-    description: null
-  },
-  {
-    id: 'repo',
-    label: translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.2170d553cf', 'Project'),
-    description: null
-  },
-  {
-    id: 'manual',
-    label: translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.7b316bdd51', 'Manual'),
-    description: translate(
-      'auto.components.sidebar.SidebarWorkspaceOptionsMenu.7153d07485',
-      'Drag workspaces to arrange them within each group.'
-    )
-  }
-] as const
-
-const PROJECT_ORDER_OPTIONS = [
-  {
-    id: 'manual',
-    label: translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.7b316bdd51', 'Manual'),
-    description: translate(
-      'auto.components.sidebar.SidebarWorkspaceOptionsMenu.6664282a7b',
-      'Drag projects to arrange them'
-    )
-  },
-  {
-    id: 'recent',
-    label: translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.b451c8b162', 'Recent'),
-    description: translate(
-      'auto.components.sidebar.SidebarWorkspaceOptionsMenu.af9249c505',
-      'Most recent workspace activity'
-    )
-  }
-] as const
 
 const SidebarWorkspaceOptionsMenu = React.memo(function SidebarWorkspaceOptionsMenu({
   preserveWorkspaceBoardOpen = false,
@@ -176,6 +51,9 @@ const SidebarWorkspaceOptionsMenu = React.memo(function SidebarWorkspaceOptionsM
   const toggleWorktreeCardProperty = useAppStore((s) => s.toggleWorktreeCardProperty)
   const settings = useAppStore((s) => s.settings)
   const updateSettings = useAppStore((s) => s.updateSettings)
+  const setWorkspaceHostScope = useAppStore((s) => s.setWorkspaceHostScope)
+  const visibleWorkspaceHostIds = useAppStore((s) => s.visibleWorkspaceHostIds)
+  const setVisibleWorkspaceHostIds = useAppStore((s) => s.setVisibleWorkspaceHostIds)
   const agentActivityDisplayMode = useAppStore((s) => s.agentActivityDisplayMode)
   const setAgentActivityDisplayMode = useAppStore((s) => s.setAgentActivityDisplayMode)
   const sortBy = useAppStore((s) => s.sortBy)
@@ -186,6 +64,8 @@ const SidebarWorkspaceOptionsMenu = React.memo(function SidebarWorkspaceOptionsM
   const setProjectOrderBy = useAppStore((s) => s.setProjectOrderBy)
 
   const [open, setOpen] = useState(false)
+  const { hostOptions } = useSidebarHostScopeOptions()
+  const showHostScopeControls = shouldShowHostScopeControls(hostOptions)
 
   const handleOpenChange = useCallback(
     (next: boolean) => {
@@ -208,13 +88,19 @@ const SidebarWorkspaceOptionsMenu = React.memo(function SidebarWorkspaceOptionsM
   }, [repos, filterRepoIds])
   const hasRepoFilter = selectedCount > 0
   const hasSleepingFilter = showSleepingWorkspaces !== DEFAULT_SHOW_SLEEPING_WORKSPACES
-  const hasAnyFilter = hasSleepingFilter || hideDefaultBranchWorkspace || hasRepoFilter
+  const hasHostVisibilityFilter = visibleWorkspaceHostIds !== null
+  const hasAnyFilter =
+    hasSleepingFilter || hideDefaultBranchWorkspace || hasRepoFilter || hasHostVisibilityFilter
   const activeFilterCount =
-    (hasSleepingFilter ? 1 : 0) + (hideDefaultBranchWorkspace ? 1 : 0) + selectedCount
+    (hasSleepingFilter ? 1 : 0) +
+    (hideDefaultBranchWorkspace ? 1 : 0) +
+    (hasHostVisibilityFilter ? 1 : 0) +
+    selectedCount
   const activeFilterLabel = `${activeFilterCount} ${activeFilterCount === 1 ? 'filter' : 'filters'}`
   const sortLabel = SORT_OPTIONS.find((opt) => opt.id === sortBy)?.label ?? 'Sort'
   const projectOrderLabel =
     PROJECT_ORDER_OPTIONS.find((opt) => opt.id === projectOrderBy)?.label ?? 'Manual'
+  const hostVisibilityLabel = getSidebarHostVisibilityLabel(visibleWorkspaceHostIds, hostOptions)
   const cardLayout = settings?.compactWorktreeCards ? 'compact' : 'detailed'
   const cardLayoutLabel =
     CARD_LAYOUT_OPTIONS.find((opt) => opt.id === cardLayout)?.label ?? 'Detailed'
@@ -280,6 +166,18 @@ const SidebarWorkspaceOptionsMenu = React.memo(function SidebarWorkspaceOptionsM
         className="w-72 pb-2"
         data-workspace-board-preserve-open={preserveWorkspaceBoardOpen ? '' : undefined}
       >
+        {showHostScopeControls && (
+          <SidebarHostScopeMenuSection
+            hostOptionsCount={hostOptions.length}
+            hostVisibilityLabel={hostVisibilityLabel}
+            hostOptions={hostOptions}
+            preserveWorkspaceBoardOpen={preserveWorkspaceBoardOpen}
+            setWorkspaceHostScope={setWorkspaceHostScope}
+            visibleWorkspaceHostIds={visibleWorkspaceHostIds}
+            setVisibleWorkspaceHostIds={setVisibleWorkspaceHostIds}
+          />
+        )}
+
         <DropdownMenuLabel>
           {translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.dc0bb670bc', 'Group by')}
         </DropdownMenuLabel>

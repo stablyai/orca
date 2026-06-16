@@ -53,7 +53,7 @@ describe('CreateStep', () => {
     expect(html).toContain('aria-expanded="false"')
     expect(html).not.toContain('Project kind')
     expect(html).not.toContain('Location</span>')
-    expect(html).not.toContain('aria-label="Browse server filesystem"')
+    expect(html).not.toContain('aria-label="Browse host filesystem"')
   })
 
   it('shows the Git fallback explanation in the collapsed summary', () => {

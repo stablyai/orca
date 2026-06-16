@@ -8,6 +8,7 @@ type BracketedPasteTerminal = {
 
 type PasteTerminal = BracketedPasteTerminal & {
   options: Pick<Terminal['options'], 'ignoreBracketedPasteMode'>
+  input: (data: string) => void
   paste: (text: string) => void
 }
 
@@ -39,15 +40,11 @@ function sanitizeBracketedPasteText(text: string): string {
 }
 
 function forceBracketedPaste(terminal: PasteTerminal, text: string): void {
-  const previousIgnoreBracketedPasteMode = terminal.options.ignoreBracketedPasteMode
-  terminal.options.ignoreBracketedPasteMode = true
-  try {
-    terminal.paste(
-      `${BRACKETED_PASTE_START}${sanitizeBracketedPasteText(text)}${BRACKETED_PASTE_END}`
-    )
-  } finally {
-    terminal.options.ignoreBracketedPasteMode = previousIgnoreBracketedPasteMode
-  }
+  // Why: forced callers already built the exact paste protocol bytes. Send
+  // them as PTY input so xterm's DOM/native paste machinery cannot defer them.
+  terminal.input(
+    `${BRACKETED_PASTE_START}${sanitizeBracketedPasteText(text)}${BRACKETED_PASTE_END}`
+  )
 }
 
 export function markTerminalBracketedPasteInterrupted(terminal: BracketedPasteTerminal): void {

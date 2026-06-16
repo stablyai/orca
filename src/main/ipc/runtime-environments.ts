@@ -1,38 +1,33 @@
-/* eslint-disable max-lines -- Why: runtime environment IPC is the security boundary for saved server calls and subscriptions; keeping ownership checks, lifecycle cleanup, and binary forwarding together makes the bridge auditable. */
 import { app, ipcMain } from 'electron'
 import { randomUUID } from 'crypto'
 import {
   addEnvironmentFromPairingCode,
   listEnvironments,
-  markEnvironmentUsed,
   removeEnvironment,
-  resolveEnvironment,
-  resolveEnvironmentPairingOffer
+  resolveEnvironment
 } from '../../shared/runtime-environment-store'
 import {
   redactRuntimeEnvironment,
-  getPreferredPairingOffer,
   type PublicKnownRuntimeEnvironment
 } from '../../shared/runtime-environments'
 import type { RuntimeStatus } from '../../shared/runtime-types'
 import type { RuntimeRpcResponse } from '../../shared/runtime-rpc-envelope'
+import type { RemoteRuntimeSubscription } from '../../shared/remote-runtime-client'
+import { closeRemoteRuntimeRequestConnection } from './runtime-environment-request-connections'
 import {
-  sendRemoteRuntimeRequest,
-  subscribeRemoteRuntimeRequest,
-  type RemoteRuntimeSubscription
-} from '../../shared/remote-runtime-client'
-import { enqueueRuntimeCall } from './runtime-environment-call-queue'
-import {
-  closeRemoteRuntimeRequestConnection,
-  sendRemoteRuntimeConnectionRequest
-} from './runtime-environment-request-connections'
+  callRuntimeEnvironment,
+  clearSharedControlSupport,
+  getRuntimeEnvironmentStatus,
+  resetSharedControlSupport,
+  subscribeRuntimeEnvironment
+} from './runtime-environment-transport-routing'
 
-const DEFAULT_REMOTE_RUNTIME_TIMEOUT_MS = 15_000
 const RUNTIME_ENVIRONMENT_HANDLER_CHANNELS = [
   'runtimeEnvironments:list',
   'runtimeEnvironments:addFromPairingCode',
   'runtimeEnvironments:resolve',
   'runtimeEnvironments:remove',
+  'runtimeEnvironments:disconnect',
   'runtimeEnvironments:getStatus',
   'runtimeEnvironments:call',
   'runtimeEnvironments:subscribe',
@@ -50,10 +45,6 @@ function getUserDataPath(): string {
   return app.getPath('userData')
 }
 
-function shouldUseCachedRequestConnection(method: string): boolean {
-  return method === 'terminal.send' || method === 'terminal.updateViewport'
-}
-
 function closeSubscriptionsForEnvironment(environmentId: string): void {
   // Why: removing a saved runtime invalidates its streaming WebSockets too;
   // otherwise terminal/browser subscriptions stay alive until renderer teardown.
@@ -69,6 +60,7 @@ function closeSubscriptionsForEnvironment(environmentId: string): void {
 export function registerRuntimeEnvironmentHandlers(): void {
   // Why: keep direct re-registration safe even though register-core-handlers
   // normally guards this path; otherwise the binary send listener can stack.
+  resetSharedControlSupport()
   for (const channel of RUNTIME_ENVIRONMENT_HANDLER_CHANNELS) {
     ipcMain.removeHandler(channel)
   }
@@ -96,11 +88,29 @@ export function registerRuntimeEnvironmentHandlers(): void {
     (_event, args: { selector: string }): { removed: PublicKnownRuntimeEnvironment } => {
       const removed = removeEnvironment(getUserDataPath(), args.selector)
       closeRemoteRuntimeRequestConnection(removed.id)
+      clearSharedControlSupport(removed.id)
       if (args.selector !== removed.id) {
         closeRemoteRuntimeRequestConnection(args.selector)
+        clearSharedControlSupport(args.selector)
       }
       closeSubscriptionsForEnvironment(removed.id)
       return { removed: redactRuntimeEnvironment(removed) }
+    }
+  )
+  ipcMain.handle(
+    'runtimeEnvironments:disconnect',
+    (_event, args: { selector: string }): { disconnected: PublicKnownRuntimeEnvironment } => {
+      const environment = resolveEnvironment(getUserDataPath(), args.selector)
+      // Why: disconnect is intentionally non-destructive; it drops live
+      // transport state while keeping the paired server available for later.
+      closeRemoteRuntimeRequestConnection(environment.id)
+      clearSharedControlSupport(environment.id)
+      if (args.selector !== environment.id) {
+        closeRemoteRuntimeRequestConnection(args.selector)
+        clearSharedControlSupport(args.selector)
+      }
+      closeSubscriptionsForEnvironment(environment.id)
+      return { disconnected: redactRuntimeEnvironment(environment) }
     }
   )
   ipcMain.handle(
@@ -109,17 +119,7 @@ export function registerRuntimeEnvironmentHandlers(): void {
       _event,
       args: { selector: string; timeoutMs?: number }
     ): Promise<RuntimeRpcResponse<RuntimeStatus>> => {
-      const userDataPath = getUserDataPath()
-      const response = await sendRemoteRuntimeRequest<RuntimeStatus>(
-        resolveEnvironmentPairingOffer(userDataPath, args.selector),
-        'status.get',
-        undefined,
-        args.timeoutMs ?? DEFAULT_REMOTE_RUNTIME_TIMEOUT_MS
-      )
-      if (response.ok === true) {
-        markEnvironmentUsed(userDataPath, args.selector, { runtimeId: response._meta.runtimeId })
-      }
-      return response
+      return getRuntimeEnvironmentStatus(getUserDataPath(), args.selector, args.timeoutMs)
     }
   )
   ipcMain.handle(
@@ -128,7 +128,13 @@ export function registerRuntimeEnvironmentHandlers(): void {
       _event,
       args: { selector: string; method: string; params?: unknown; timeoutMs?: number }
     ): Promise<RuntimeRpcResponse<unknown>> => {
-      return callRuntimeEnvironment(args.selector, args.method, args.params, args.timeoutMs)
+      return callRuntimeEnvironment(
+        getUserDataPath(),
+        args.selector,
+        args.method,
+        args.params,
+        args.timeoutMs
+      )
     }
   )
   ipcMain.handle(
@@ -178,6 +184,7 @@ export function registerRuntimeEnvironmentHandlers(): void {
       destroyedListenerAttached = true
       try {
         subscription = await subscribeRuntimeEnvironment(
+          getUserDataPath(),
           environment.id,
           args.method,
           args.params,
@@ -262,86 +269,4 @@ function toBinaryPayload(value: unknown): Uint8Array<ArrayBufferLike> | null {
     return new Uint8Array(value.buffer, value.byteOffset, value.byteLength)
   }
   return null
-}
-
-async function callRuntimeEnvironment(
-  selector: string,
-  method: string,
-  params: unknown,
-  timeoutMs?: number
-): Promise<RuntimeRpcResponse<unknown>> {
-  const userDataPath = getUserDataPath()
-  const environment = resolveEnvironment(userDataPath, selector)
-  return enqueueRuntimeCall(environment.id, method, async () => {
-    const currentEnvironment = resolveEnvironment(userDataPath, environment.id)
-    const pairing = getPreferredPairingOffer(currentEnvironment)
-    const effectiveTimeoutMs = timeoutMs ?? DEFAULT_REMOTE_RUNTIME_TIMEOUT_MS
-    // Why: the cached request socket is only needed for terminal hot paths.
-    // Startup/control-plane RPCs use the proven one-shot path so repo hydration
-    // cannot be coupled to a stale terminal-control connection.
-    const response = shouldUseCachedRequestConnection(method)
-      ? await sendRemoteRuntimeConnectionRequest(
-          currentEnvironment.id,
-          pairing,
-          method,
-          params,
-          effectiveTimeoutMs
-        )
-      : await sendRemoteRuntimeRequest(pairing, method, params, effectiveTimeoutMs)
-    if (response.ok === true) {
-      markEnvironmentUsed(userDataPath, currentEnvironment.id, {
-        runtimeId: response._meta.runtimeId
-      })
-    }
-    return response
-  })
-}
-
-async function subscribeRuntimeEnvironment(
-  selector: string,
-  method: string,
-  params: unknown,
-  timeoutMs: number | undefined,
-  callbacks: {
-    onEvent: (
-      payload:
-        | { type: 'response'; response: RuntimeRpcResponse<unknown> }
-        | { type: 'binary'; bytes: Uint8Array<ArrayBufferLike> }
-        | { type: 'error'; code: string; message: string }
-        | { type: 'close' }
-    ) => void
-    onClose: () => void
-  }
-): Promise<RemoteRuntimeSubscription> {
-  const userDataPath = getUserDataPath()
-  let markedUsed = false
-  const markUsedOnce = (runtimeId: string): void => {
-    if (markedUsed) {
-      return
-    }
-    markedUsed = true
-    markEnvironmentUsed(userDataPath, selector, { runtimeId })
-  }
-  const subscription = await subscribeRemoteRuntimeRequest(
-    resolveEnvironmentPairingOffer(userDataPath, selector),
-    method,
-    params,
-    timeoutMs ?? DEFAULT_REMOTE_RUNTIME_TIMEOUT_MS,
-    {
-      onResponse: (response) => {
-        if (response.ok === true) {
-          markUsedOnce(response._meta.runtimeId)
-        }
-        callbacks.onEvent({ type: 'response', response })
-      },
-      onBinary: (bytes) => callbacks.onEvent({ type: 'binary', bytes }),
-      onError: (error) =>
-        callbacks.onEvent({ type: 'error', code: error.code, message: error.message }),
-      onClose: () => {
-        callbacks.onEvent({ type: 'close' })
-        callbacks.onClose()
-      }
-    }
-  )
-  return subscription
 }

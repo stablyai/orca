@@ -12,6 +12,7 @@ import type {
   GitHubProjectFieldMutationValue,
   GitHubProjectRow as GitHubProjectRowType
 } from '../../../../shared/github-project-types'
+import type { GlobalSettings } from '../../../../shared/types'
 import { translate } from '@/i18n/i18n'
 
 const PROJECT_FROZEN_COLUMN_SURFACE_CLASS =
@@ -33,6 +34,7 @@ type Props = {
   onEditIssueType?: (issueType: GitHubIssueType | null) => void
   onStartWork?: () => void
   onOpenInBrowser?: () => void
+  sourceSettings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
 }
 
 export default function ProjectRow({
@@ -48,7 +50,8 @@ export default function ProjectRow({
   onEditLabels,
   onEditIssueType,
   onStartWork,
-  onOpenInBrowser
+  onOpenInBrowser,
+  sourceSettings
 }: Props): React.JSX.Element {
   const disabled = row.itemType === 'REDACTED'
   // Why: design doc §Row actions — draft-issue rows have no URL or number, so
@@ -97,6 +100,7 @@ export default function ProjectRow({
                 onEditLabels={onEditLabels}
                 onEditIssueType={onEditIssueType}
                 onOpenDialog={f.dataType === 'TITLE' ? onOpenDialog : undefined}
+                sourceSettings={sourceSettings}
               />
             </div>
             {next ? (

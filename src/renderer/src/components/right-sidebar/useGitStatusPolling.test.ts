@@ -163,7 +163,15 @@ describe('useGitStatusPolling', () => {
     })
 
     expect(state.setUpstreamStatus).not.toHaveBeenCalled()
-    expect(state.fetchUpstreamStatus).toHaveBeenCalledWith(worktree.id, '/repo', undefined)
+    expect(state.fetchUpstreamStatus).toHaveBeenCalledWith(
+      worktree.id,
+      '/repo',
+      undefined,
+      undefined,
+      {
+        runtimeTargetSettings: { activeRuntimeEnvironmentId: null }
+      }
+    )
   })
 
   it('passes the explicit push target to upstream refreshes', async () => {
@@ -182,7 +190,10 @@ describe('useGitStatusPolling', () => {
       worktree.id,
       '/repo',
       undefined,
-      pushTarget
+      pushTarget,
+      {
+        runtimeTargetSettings: { activeRuntimeEnvironmentId: null }
+      }
     )
   })
 

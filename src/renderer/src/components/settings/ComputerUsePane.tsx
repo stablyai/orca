@@ -34,28 +34,28 @@ export { getComputerUsePaneSearchEntries } from './computer-use-search'
 
 type PermissionDefinition = {
   id: ComputerUsePermissionId
-  label: string
-  description: string
+  labelKey: string
+  labelDefault: string
+  descriptionKey: string
+  descriptionDefault: string
   icon: ReactNode
 }
 
 const PERMISSIONS: PermissionDefinition[] = [
   {
     id: 'accessibility',
-    label: translate('auto.components.settings.ComputerUsePane.6b5a2cd3a5', 'Accessibility'),
-    description: translate(
-      'auto.components.settings.ComputerUsePane.4d03dec2d0',
-      'Read app interface trees and perform requested actions.'
-    ),
+    labelKey: 'auto.components.settings.ComputerUsePane.6b5a2cd3a5',
+    labelDefault: 'Accessibility',
+    descriptionKey: 'auto.components.settings.ComputerUsePane.4d03dec2d0',
+    descriptionDefault: 'Read app interface trees and perform requested actions.',
     icon: <Accessibility className="size-4" />
   },
   {
     id: 'screenshots',
-    label: translate('auto.components.settings.ComputerUsePane.07bbe4c4cb', 'Screenshots'),
-    description: translate(
-      'auto.components.settings.ComputerUsePane.0c9a33f468',
-      'Capture app windows so agents can inspect visual state.'
-    ),
+    labelKey: 'auto.components.settings.ComputerUsePane.07bbe4c4cb',
+    labelDefault: 'Screenshots',
+    descriptionKey: 'auto.components.settings.ComputerUsePane.0c9a33f468',
+    descriptionDefault: 'Capture app windows so agents can inspect visual state.',
     icon: <Camera className="size-4" />
   }
 ]
@@ -328,7 +328,9 @@ export function ComputerUsePane(): React.JSX.Element {
                       <div className="mt-0.5 text-muted-foreground">{permission.icon}</div>
                       <div className="min-w-0 space-y-1">
                         <div className="flex flex-wrap items-center gap-2">
-                          <span className="text-sm font-medium">{permission.label}</span>
+                          <span className="text-sm font-medium">
+                            {translate(permission.labelKey, permission.labelDefault)}
+                          </span>
                           <span
                             className={`rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider ${statusClass(
                               status
@@ -337,7 +339,9 @@ export function ComputerUsePane(): React.JSX.Element {
                             {statusLabel(status)}
                           </span>
                         </div>
-                        <p className="text-xs text-muted-foreground">{permission.description}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {translate(permission.descriptionKey, permission.descriptionDefault)}
+                        </p>
                       </div>
                     </div>
                     <div className="flex w-28 shrink-0 justify-end">

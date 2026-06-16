@@ -28,7 +28,13 @@
     {
       "files": ["src/terminal/TerminalWebView.tsx"],
       "rules": {
-        "max-lines": ["error", { "max": 2054, "skipBlankLines": true, "skipComments": true }]
+        "max-lines": ["error", { "max": 369, "skipBlankLines": true, "skipComments": true }]
+      }
+    },
+    {
+      "files": ["src/terminal/terminal-webview-html.ts"],
+      "rules": {
+        "max-lines": ["error", { "max": 1773, "skipBlankLines": true, "skipComments": true }]
       }
     },
     {
@@ -64,7 +70,7 @@
     {
       "files": ["src/transport/rpc-client.ts"],
       "rules": {
-        "max-lines": ["error", { "max": 1070, "skipBlankLines": true, "skipComments": true }]
+        "max-lines": ["error", { "max": 1074, "skipBlankLines": true, "skipComments": true }]
       }
     },
     {

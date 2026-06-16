@@ -23,11 +23,16 @@ import {
 import { getWorkItem, getPRChecks, getPRComments } from './client'
 import { noteRateLimitSpend, rateLimitGuard } from './rate-limit'
 import { getPRReviewCommentLineNumbersFromPatch } from './pr-review-comment-lines'
+import { isMaxBufferOverflowError } from '../git/max-buffer-overflow'
 
 // Why: a PR "changed file" listing returned by the REST endpoint is paginated
 // at 100 per page; we cap at a reasonable total so a massive PR cannot starve
 // the gh semaphore while we fetch file listings.
 const MAX_PR_FILES = 300
+// Why: hosted PR files must exceed the renderer's large-diff threshold before
+// we give up on the raw fetch; otherwise the UI sees an empty diff instead of
+// the safety fallback.
+const GITHUB_RAW_CONTENT_MAX_BUFFER_BYTES = 8 * 1024 * 1024
 
 const PR_FILE_VIEWED_STATES_QUERY = `query($owner: String!, $repo: String!, $number: Int!, $after: String) {
   repository(owner: $owner, name: $repo) {
@@ -292,7 +297,10 @@ async function getPRHeadBaseSha(
       ['pr', 'view', String(prNumber), '--json', 'headRefOid,baseRefOid'],
       ghOptions
     )
-    const data = JSON.parse(stdout) as { headRefOid?: string; baseRefOid?: string }
+    const data = JSON.parse(stdout) as {
+      headRefOid?: string
+      baseRefOid?: string
+    }
     if (data.headRefOid && data.baseRefOid) {
       return { headSha: data.headRefOid, baseSha: data.baseRefOid }
     }
@@ -640,12 +648,22 @@ async function getGitHubUsersByLogin(
     const data = JSON.parse(stdout) as {
       data?: Record<
         string,
-        { login?: string; name?: string | null; avatarUrl?: string | null } | null
+        {
+          login?: string
+          name?: string | null
+          avatarUrl?: string | null
+        } | null
       >
     }
     return Object.values(data.data ?? {})
-      .filter((user): user is { login: string; name?: string | null; avatarUrl?: string | null } =>
-        Boolean(user?.login)
+      .filter(
+        (
+          user
+        ): user is {
+          login: string
+          name?: string | null
+          avatarUrl?: string | null
+        } => Boolean(user?.login)
       )
       .map((user) => ({
         login: user.login,
@@ -741,7 +759,13 @@ export async function getWorkItemDetails(
         participants,
         connectionId
       )
-      return { item, body, comments, assignees, participants: mentionParticipants }
+      return {
+        item,
+        body,
+        comments,
+        assignees,
+        participants: mentionParticipants
+      }
     }
 
     // PR: fetch body + comments + checks + files + head/base SHAs in parallel.
@@ -789,7 +813,7 @@ async function fetchContentAtRef(args: {
   repo: string
   path: string
   ref: string
-}): Promise<{ content: string; isBinary: boolean }> {
+}): Promise<{ content: string; isBinary: boolean; tooLarge?: boolean }> {
   try {
     const { stdout } = await ghExecFileAsync(
       [
@@ -800,7 +824,10 @@ async function fetchContentAtRef(args: {
         'Accept: application/vnd.github.raw',
         `repos/${args.owner}/${args.repo}/contents/${encodeURI(args.path)}?ref=${encodeURIComponent(args.ref)}`
       ],
-      ghRepoExecOptions(githubRepoContext(args.repoPath, args.connectionId))
+      {
+        ...ghRepoExecOptions(githubRepoContext(args.repoPath, args.connectionId)),
+        maxBuffer: GITHUB_RAW_CONTENT_MAX_BUFFER_BYTES
+      }
     )
     // Raw content response: Electron's execFile returns string in utf-8. If the
     // file is binary, the string will contain replacement characters — we treat
@@ -810,7 +837,10 @@ async function fetchContentAtRef(args: {
       return { content: '', isBinary: true }
     }
     return { content: stdout, isBinary: false }
-  } catch {
+  } catch (error) {
+    if (isMaxBufferOverflowError(error)) {
+      return { content: '', isBinary: false, tooLarge: true }
+    }
     return { content: '', isBinary: false }
   }
 }
@@ -855,7 +885,10 @@ export async function getPRFileContents(args: {
             path: originalPath,
             ref: originalRef
           })
-        : Promise.resolve({ content: '', isBinary: false }),
+        : Promise.resolve<{ content: string; isBinary: boolean; tooLarge?: boolean }>({
+            content: '',
+            isBinary: false
+          }),
       needsModified
         ? fetchContentAtRef({
             repoPath: args.repoPath,
@@ -865,14 +898,19 @@ export async function getPRFileContents(args: {
             path: args.path,
             ref: args.headSha
           })
-        : Promise.resolve({ content: '', isBinary: false })
+        : Promise.resolve<{ content: string; isBinary: boolean; tooLarge?: boolean }>({
+            content: '',
+            isBinary: false
+          })
     ])
 
     return {
       original: original.content,
       modified: modified.content,
       originalIsBinary: original.isBinary,
-      modifiedIsBinary: modified.isBinary
+      modifiedIsBinary: modified.isBinary,
+      originalTooLarge: original.tooLarge,
+      modifiedTooLarge: modified.tooLarge
     }
   } finally {
     release()

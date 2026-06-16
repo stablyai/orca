@@ -301,6 +301,17 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
     launchCmd: 'grok',
     expectedProcess: 'grok',
     promptInjectionMode: 'stdin-after-start'
+  },
+  devin: {
+    detectCmd: 'devin',
+    launchCmd: 'devin',
+    expectedProcess: 'devin',
+    // Why: `devin -- <prompt>` auto-submits the prompt (the issue's claim
+    // that it pre-fills without submitting is incorrect per the official
+    // docs at docs.devin.ai/cli/reference/commands). `stdin-after-start`
+    // launches the REPL first, then pastes via bracketed paste so the
+    // user can review before submitting — same as aider, goose, amp, etc.
+    promptInjectionMode: 'stdin-after-start'
   }
 }
 

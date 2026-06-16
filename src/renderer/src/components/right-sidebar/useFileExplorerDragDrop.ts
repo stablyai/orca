@@ -12,6 +12,7 @@ import { remapOpenEditorTabsForPathChange } from '@/lib/remap-open-editor-tabs-f
 import { requestEditorSaveQuiesce } from '@/components/editor/editor-autosave'
 import { commitFileExplorerOp } from './fileExplorerUndoRedo'
 import { renameRuntimePath } from '@/runtime/runtime-file-client'
+import { getRightSidebarWorktreeRuntimeSettings } from './file-explorer-runtime-owner'
 
 function extractIpcErrorMessage(err: unknown, fallback: string): string {
   if (!(err instanceof Error)) {
@@ -233,7 +234,7 @@ export function useFileExplorerDragDrop({
         try {
           const connectionId = getConnectionId(activeWorktreeId ?? null) ?? undefined
           const fileContext = {
-            settings: useAppStore.getState().settings,
+            settings: getRightSidebarWorktreeRuntimeSettings(activeWorktreeId),
             worktreeId: activeWorktreeId,
             worktreePath,
             connectionId

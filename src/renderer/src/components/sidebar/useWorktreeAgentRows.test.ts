@@ -19,7 +19,7 @@ const PANE_KEY_2 = makePaneKey('tab-2', '33333333-3333-4333-8333-333333333333')
 const PANE_KEY_3 = makePaneKey('tab-3', '55555555-5555-4555-8555-555555555555')
 const PANE_KEY_4 = makePaneKey('tab-4', '66666666-6666-4666-8666-666666666666')
 
-function makeTab(id: string): TerminalTab {
+function makeTab(id: string, overrides?: Partial<TerminalTab>): TerminalTab {
   return {
     id,
     worktreeId: 'wt-1',
@@ -28,7 +28,8 @@ function makeTab(id: string): TerminalTab {
     customTitle: null,
     color: null,
     sortOrder: 0,
-    createdAt: 0
+    createdAt: 0,
+    ...overrides
   }
 }
 
@@ -51,13 +52,20 @@ function makeEntry(
   }
 }
 
-function makeRetained(paneKey: string, worktreeId: string, startedAt: number): RetainedAgentEntry {
+function makeRetained(
+  paneKey: string,
+  worktreeId: string,
+  startedAt: number,
+  overrides?: Partial<RetainedAgentEntry>
+): RetainedAgentEntry {
+  const tab = makeTab(paneKey.slice(0, paneKey.indexOf(':')))
   return {
     entry: makeEntry(paneKey, startedAt),
     worktreeId,
-    tab: makeTab(paneKey.slice(0, paneKey.indexOf(':'))),
+    tab,
     agentType: 'claude',
-    startedAt
+    startedAt,
+    ...overrides
   }
 }
 
@@ -96,6 +104,60 @@ describe('buildWorktreeAgentRows', () => {
 
     expect(rows.map((row) => row.paneKey)).toEqual([ORPHAN_PANE_KEY])
     expect(rows[0].state).toBe('done')
+  })
+
+  it('resolves retained unknown Claude rows from their terminal title', () => {
+    const retained = makeRetained(ORPHAN_PANE_KEY, 'wt-1', 1000, {
+      entry: makeEntry(ORPHAN_PANE_KEY, 1000, {
+        agentType: 'unknown',
+        terminalTitle: '✳ Claude Code'
+      }),
+      tab: { ...makeTab('tab-orphan'), title: '✳ Claude Code' },
+      agentType: 'unknown'
+    })
+    const rows = buildWorktreeAgentRows({
+      tabs: [],
+      entries: [],
+      retained: [retained],
+      now: 2000
+    })
+
+    expect(rows[0].agentType).toBe('claude')
+  })
+
+  it('resolves live unknown rows from the launched tab agent', () => {
+    const rows = buildWorktreeAgentRows({
+      tabs: [makeTab('tab-1', { launchAgent: 'codex', title: 'test-thing-2' })],
+      entries: [
+        makeEntry(PANE_KEY_1, 1000, {
+          agentType: undefined,
+          terminalTitle: 'test-thing-2'
+        })
+      ],
+      retained: [],
+      now: 2000
+    })
+
+    expect(rows[0].agentType).toBe('codex')
+  })
+
+  it('resolves retained unknown rows from the launched tab agent', () => {
+    const retained = makeRetained(ORPHAN_PANE_KEY, 'wt-1', 1000, {
+      entry: makeEntry(ORPHAN_PANE_KEY, 1000, {
+        agentType: undefined,
+        terminalTitle: 'test-thing-2'
+      }),
+      tab: makeTab('tab-orphan', { launchAgent: 'codex', title: 'test-thing-2' }),
+      agentType: 'unknown'
+    })
+    const rows = buildWorktreeAgentRows({
+      tabs: [],
+      entries: [],
+      retained: [retained],
+      now: 2000
+    })
+
+    expect(rows[0].agentType).toBe('codex')
   })
 
   it('prefers a live row over a retained snapshot with the same paneKey', () => {

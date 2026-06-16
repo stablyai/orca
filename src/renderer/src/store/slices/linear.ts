@@ -42,6 +42,11 @@ import {
 } from '@/runtime/runtime-linear-client'
 import { getProviderRuntimeContextKey } from '@/lib/provider-runtime-context'
 import { translate } from '@/i18n/i18n'
+import {
+  getTaskSourceCacheScope,
+  getTaskSourceRuntimeSettings,
+  type TaskSourceContext
+} from '../../../../shared/task-source-context'
 
 const CACHE_TTL = 60_000 // 60s — same as GitHub work-items revalidation TTL
 const TEAM_CACHE_TTL = 10 * 60_000 // Teams change rarely and block visible Linear rows.
@@ -249,6 +254,13 @@ function invalidateLinearCaches(): void {
   clearLinearMetadataCache()
 }
 
+function clearLinearIssueCollectionRequestMaps(): void {
+  inflightSearchRequests.clear()
+  inflightListRequests.clear()
+  inflightProjectIssueRequests.clear()
+  inflightCustomViewIssueRequests.clear()
+}
+
 function shouldRefreshStatusAfterRead(
   workspaceId: LinearWorkspaceSelection | null | undefined,
   status: LinearConnectionStatus
@@ -316,7 +328,8 @@ function largestCachedCollectionBelowLimit<T>(
 function patchLinearIssueCollectionCache(
   cache: Record<string, CacheEntry<LinearCollectionResult<LinearIssue>>>,
   issueId: string,
-  patch: Partial<LinearIssue>
+  patch: Partial<LinearIssue>,
+  canPatchCacheKey: (key: string) => boolean
 ): {
   cache: Record<string, CacheEntry<LinearCollectionResult<LinearIssue>>>
   changed: boolean
@@ -324,7 +337,7 @@ function patchLinearIssueCollectionCache(
   let changed = false
   const nextCache = { ...cache }
   for (const [key, entry] of Object.entries(nextCache)) {
-    if (!entry?.data) {
+    if (!canPatchCacheKey(key) || !entry?.data) {
       continue
     }
     const idx = entry.data.items.findIndex((item) => item.id === issueId)
@@ -346,7 +359,15 @@ type LinearIssueReadArgs =
   | { kind: 'search'; query: string; limit?: number }
   | { kind: 'list'; filter?: 'assigned' | 'created' | 'all' | 'completed'; limit?: number }
 
-type LinearFetchOptions = { force?: boolean }
+type LinearFetchOptions = { force?: boolean; sourceContext?: TaskSourceContext | null }
+type LinearPatchOptions = { sourceContext?: TaskSourceContext | null }
+
+type LinearReadScope = {
+  settings: AppState['settings'] | TaskSourceContext | null
+  contextKey: string
+  cachePrefix: string | null
+  explicitSource: boolean
+}
 
 function beginLinearMutation(): number {
   linearMutationGeneration += 1
@@ -369,13 +390,39 @@ function canWriteLinearReadResult(
   contextKey: string,
   generation: number,
   mutationGeneration: number,
-  settings: AppState['settings']
+  settings: AppState['settings'],
+  explicitSource = false
 ): boolean {
   return (
     generation === linearCacheGeneration &&
     mutationGeneration === linearMutationGeneration &&
-    isCurrentLinearRuntimeContext(contextKey, settings)
+    (explicitSource || isCurrentLinearRuntimeContext(contextKey, settings))
   )
+}
+
+function getLinearReadScope(
+  settings: AppState['settings'],
+  sourceContext?: TaskSourceContext | null
+): LinearReadScope {
+  if (!sourceContext) {
+    return {
+      settings,
+      contextKey: getProviderRuntimeContextKey(settings),
+      cachePrefix: null,
+      explicitSource: false
+    }
+  }
+  const runtimeSettings = getTaskSourceRuntimeSettings(sourceContext)
+  return {
+    settings: sourceContext,
+    contextKey: `${getProviderRuntimeContextKey(runtimeSettings)}::${getTaskSourceCacheScope(sourceContext)}`,
+    cachePrefix: getTaskSourceCacheScope(sourceContext),
+    explicitSource: true
+  }
+}
+
+function scopedLinearCacheKey(scope: LinearReadScope, key: string): string {
+  return scope.cachePrefix ? `${scope.cachePrefix}::${key}` : key
 }
 
 export type LinearSlice = {
@@ -407,11 +454,21 @@ export type LinearSlice = {
   selectLinearWorkspace: (workspaceId: LinearWorkspaceSelection) => Promise<void>
   disconnectLinear: () => Promise<void>
   disconnectLinearWorkspace: (workspaceId: string) => Promise<void>
-  fetchLinearIssue: (id: string, workspaceId?: string | null) => Promise<LinearIssue | null>
+  fetchLinearIssue: (
+    id: string,
+    workspaceId?: string | null,
+    options?: LinearFetchOptions
+  ) => Promise<LinearIssue | null>
+  refreshLinearIssue: (
+    id: string,
+    workspaceId?: string | null,
+    options?: LinearFetchOptions
+  ) => Promise<LinearIssue | null>
   getCachedLinearIssues: (
-    args: LinearIssueReadArgs
+    args: LinearIssueReadArgs,
+    options?: Pick<LinearFetchOptions, 'sourceContext'>
   ) => LinearIssue[] | LinearCollectionResult<LinearIssue> | null
-  prefetchLinearIssues: (args: LinearIssueReadArgs) => void
+  prefetchLinearIssues: (args: LinearIssueReadArgs, options?: LinearFetchOptions) => void
   searchLinearIssues: (
     query: string,
     limit?: number,
@@ -422,7 +479,10 @@ export type LinearSlice = {
     limit?: number,
     options?: LinearFetchOptions
   ) => Promise<LinearCollectionResult<LinearIssue>>
-  getCachedLinearTeams: (workspaceId?: LinearWorkspaceSelection | null) => LinearTeam[] | null
+  getCachedLinearTeams: (
+    workspaceId?: LinearWorkspaceSelection | null,
+    options?: Pick<LinearFetchOptions, 'sourceContext'>
+  ) => LinearTeam[] | null
   listLinearTeams: (
     workspaceId?: LinearWorkspaceSelection | null,
     options?: LinearFetchOptions
@@ -430,7 +490,8 @@ export type LinearSlice = {
   getCachedLinearProjects: (
     query?: string,
     limit?: number,
-    workspaceId?: LinearWorkspaceSelection | null
+    workspaceId?: LinearWorkspaceSelection | null,
+    options?: Pick<LinearFetchOptions, 'sourceContext'>
   ) => LinearCollectionResult<LinearProjectSummary> | null
   listLinearProjects: (
     query?: string,
@@ -452,7 +513,8 @@ export type LinearSlice = {
   getCachedLinearCustomViews: (
     model: LinearCustomViewModel,
     limit?: number,
-    workspaceId?: LinearWorkspaceSelection | null
+    workspaceId?: LinearWorkspaceSelection | null,
+    options?: Pick<LinearFetchOptions, 'sourceContext'>
   ) => LinearCollectionResult<LinearCustomViewSummary> | null
   listLinearCustomViews: (
     model: LinearCustomViewModel,
@@ -478,7 +540,11 @@ export type LinearSlice = {
     limit?: number,
     options?: LinearFetchOptions
   ) => Promise<LinearCollectionResult<LinearProjectSummary>>
-  patchLinearIssue: (issueId: string, patch: Partial<LinearIssue>) => void
+  patchLinearIssue: (
+    issueId: string,
+    patch: Partial<LinearIssue>,
+    options?: LinearPatchOptions
+  ) => void
 }
 
 export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (set, get) => ({
@@ -794,9 +860,14 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
     })
   },
 
-  fetchLinearIssue: async (id: string, workspaceId?: string | null) => {
-    const contextKey = getProviderRuntimeContextKey(get().settings)
-    const issueCacheKey = `${workspaceId ?? 'selected'}::${id}`
+  fetchLinearIssue: async (
+    id: string,
+    workspaceId?: string | null,
+    options?: LinearFetchOptions
+  ) => {
+    const scope = getLinearReadScope(get().settings, options?.sourceContext)
+    const { contextKey } = scope
+    const issueCacheKey = scopedLinearCacheKey(scope, `${workspaceId ?? 'selected'}::${id}`)
     const cached = get().linearIssueCache[issueCacheKey] ?? get().linearIssueCache[id]
     if (isFresh(cached)) {
       return cached.data
@@ -814,7 +885,7 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
     let entry: InflightLinearIssueRequest
     const requestCacheGeneration = linearCacheGeneration
     const requestMutationGeneration = linearMutationGeneration
-    const promise = linearGetIssue(get().settings, id, workspaceId)
+    const promise = linearGetIssue(scope.settings, id, workspaceId)
       .then((issue) => {
         const data = issue as LinearIssue | null
         if (
@@ -823,7 +894,8 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
             contextKey,
             requestCacheGeneration,
             requestMutationGeneration,
-            get().settings
+            get().settings,
+            scope.explicitSource
           )
         ) {
           set((s) => ({
@@ -843,7 +915,8 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
             contextKey,
             requestCacheGeneration,
             requestMutationGeneration,
-            get().settings
+            get().settings,
+            scope.explicitSource
           )
         ) {
           void get().checkLinearConnection(true)
@@ -860,7 +933,8 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
             contextKey,
             requestCacheGeneration,
             requestMutationGeneration,
-            get().settings
+            get().settings,
+            scope.explicitSource
           )
         ) {
           void get().checkLinearConnection(true)
@@ -877,23 +951,66 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
     return promise
   },
 
-  getCachedLinearIssues: (args) => {
+  refreshLinearIssue: async (
+    id: string,
+    workspaceId?: string | null,
+    options?: LinearFetchOptions
+  ) => {
+    const scope = getLinearReadScope(get().settings, options?.sourceContext)
+    const issueCacheKey = scopedLinearCacheKey(scope, `${workspaceId ?? 'selected'}::${id}`)
+    inflightIssueRequests.delete(issueCacheKey)
+    clearLinearIssueCollectionRequestMaps()
+    set((s) => {
+      const nextIssueCache = { ...s.linearIssueCache }
+      for (const [key, entry] of Object.entries(nextIssueCache)) {
+        if (
+          key === issueCacheKey ||
+          key === id ||
+          entry?.data?.id === id ||
+          entry?.data?.identifier === id
+        ) {
+          delete nextIssueCache[key]
+        }
+      }
+      return {
+        linearIssueCache: nextIssueCache,
+        linearSearchCache: {},
+        linearListCache: {},
+        linearProjectIssueCache: {},
+        linearCustomViewIssueCache: {}
+      }
+    })
+    return get().fetchLinearIssue(id, workspaceId, options)
+  },
+
+  getCachedLinearIssues: (args, options) => {
+    const scope = getLinearReadScope(get().settings, options?.sourceContext)
     const workspaceId = getSelectedWorkspaceId(get().linearStatus)
     if (args.kind === 'search') {
-      const cacheKey = linearSearchCacheKey(workspaceId, args.query, args.limit ?? 20)
+      const cacheKey = scopedLinearCacheKey(
+        scope,
+        linearSearchCacheKey(workspaceId, args.query, args.limit ?? 20)
+      )
       return get().linearSearchCache[cacheKey]?.data ?? null
     }
     const limit = clampLinearIssueListLimit(args.limit)
-    const cacheKey = linearListCacheKey(workspaceId, args.filter ?? 'assigned', limit)
+    const cacheKey = scopedLinearCacheKey(
+      scope,
+      linearListCacheKey(workspaceId, args.filter ?? 'assigned', limit)
+    )
     return get().linearListCache[cacheKey]?.data ?? null
   },
 
-  prefetchLinearIssues: (args) => {
-    const contextKey = getProviderRuntimeContextKey(get().settings)
+  prefetchLinearIssues: (args, options) => {
+    const scope = getLinearReadScope(get().settings, options?.sourceContext)
+    const { contextKey } = scope
     const workspaceId = getSelectedWorkspaceId(get().linearStatus)
     if (args.kind === 'search') {
       const limit = args.limit ?? 20
-      const cacheKey = linearSearchCacheKey(workspaceId, args.query, limit)
+      const cacheKey = scopedLinearCacheKey(
+        scope,
+        linearSearchCacheKey(workspaceId, args.query, limit)
+      )
       const inflight = inflightSearchRequests.get(cacheKey)
       if (
         isFresh(get().linearSearchCache[cacheKey]) ||
@@ -904,12 +1021,15 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
         return
       }
       void get()
-        .searchLinearIssues(args.query, limit)
+        .searchLinearIssues(args.query, limit, options)
         .catch(() => {})
       return
     }
     const limit = clampLinearIssueListLimit(args.limit)
-    const cacheKey = linearListCacheKey(workspaceId, args.filter ?? 'assigned', limit)
+    const cacheKey = scopedLinearCacheKey(
+      scope,
+      linearListCacheKey(workspaceId, args.filter ?? 'assigned', limit)
+    )
     const inflight = inflightListRequests.get(cacheKey)
     if (
       isFresh(get().linearListCache[cacheKey]) ||
@@ -920,14 +1040,15 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
       return
     }
     void get()
-      .listLinearIssues(args.filter, limit)
+      .listLinearIssues(args.filter, limit, options)
       .catch(() => {})
   },
 
   searchLinearIssues: async (query: string, limit = 20, options) => {
-    const contextKey = getProviderRuntimeContextKey(get().settings)
+    const scope = getLinearReadScope(get().settings, options?.sourceContext)
+    const { contextKey } = scope
     const workspaceId = getSelectedWorkspaceId(get().linearStatus)
-    const cacheKey = linearSearchCacheKey(workspaceId, query, limit)
+    const cacheKey = scopedLinearCacheKey(scope, linearSearchCacheKey(workspaceId, query, limit))
     const cached = get().linearSearchCache[cacheKey]
     if (!options?.force && isFresh(cached)) {
       return cached.data ?? []
@@ -946,7 +1067,7 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
     let entry: InflightLinearListRequest
     const requestCacheGeneration = linearCacheGeneration
     const requestMutationGeneration = linearMutationGeneration
-    const promise = linearSearchIssues(get().settings, query, limit, workspaceId)
+    const promise = linearSearchIssues(scope.settings, query, limit, workspaceId)
       .then((issues) => {
         const data = issues as LinearIssue[]
         if (
@@ -955,7 +1076,8 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
             contextKey,
             requestCacheGeneration,
             requestMutationGeneration,
-            get().settings
+            get().settings,
+            scope.explicitSource
           )
         ) {
           set((s) => ({
@@ -975,7 +1097,8 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
             contextKey,
             requestCacheGeneration,
             requestMutationGeneration,
-            get().settings
+            get().settings,
+            scope.explicitSource
           )
         ) {
           if (!shouldRefreshStatusAfterRead(workspaceId, get().linearStatus)) {
@@ -995,7 +1118,8 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
             contextKey,
             requestCacheGeneration,
             requestMutationGeneration,
-            get().settings
+            get().settings,
+            scope.explicitSource
           )
         ) {
           void get().checkLinearConnection(true)
@@ -1014,10 +1138,14 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
   },
 
   listLinearIssues: async (filter = 'assigned', limit = 20, options) => {
-    const contextKey = getProviderRuntimeContextKey(get().settings)
+    const scope = getLinearReadScope(get().settings, options?.sourceContext)
+    const { contextKey } = scope
     const workspaceId = getSelectedWorkspaceId(get().linearStatus)
     const effectiveLimit = clampLinearIssueListLimit(limit)
-    const cacheKey = linearListCacheKey(workspaceId, filter, effectiveLimit)
+    const cacheKey = scopedLinearCacheKey(
+      scope,
+      linearListCacheKey(workspaceId, filter, effectiveLimit)
+    )
     const cached = get().linearListCache[cacheKey]
     if (!options?.force && isFresh(cached)) {
       return cached.data ?? emptyLinearCollection<LinearIssue>()
@@ -1037,7 +1165,7 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
     const requestCacheGeneration = linearCacheGeneration
     const requestMutationGeneration = linearMutationGeneration
     const promise: Promise<LinearCollectionResult<LinearIssue>> = linearListIssues(
-      get().settings,
+      scope.settings,
       filter,
       effectiveLimit,
       workspaceId
@@ -1050,7 +1178,8 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
             contextKey,
             requestCacheGeneration,
             requestMutationGeneration,
-            get().settings
+            get().settings,
+            scope.explicitSource
           )
         ) {
           set((s) => ({
@@ -1070,7 +1199,8 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
             contextKey,
             requestCacheGeneration,
             requestMutationGeneration,
-            get().settings
+            get().settings,
+            scope.explicitSource
           )
         ) {
           if (!shouldRefreshStatusAfterRead(workspaceId, get().linearStatus)) {
@@ -1090,7 +1220,8 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
             contextKey,
             requestCacheGeneration,
             requestMutationGeneration,
-            get().settings
+            get().settings,
+            scope.explicitSource
           )
         ) {
           void get().checkLinearConnection(true)
@@ -1108,15 +1239,17 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
     return promise
   },
 
-  getCachedLinearTeams: (workspaceId) => {
+  getCachedLinearTeams: (workspaceId, options) => {
+    const scope = getLinearReadScope(get().settings, options?.sourceContext)
     const key = linearTeamsCacheKey(workspaceId ?? getSelectedWorkspaceId(get().linearStatus))
-    return get().linearTeamCache[key]?.data ?? null
+    return get().linearTeamCache[scopedLinearCacheKey(scope, key)]?.data ?? null
   },
 
   listLinearTeams: async (workspaceId, options) => {
-    const contextKey = getProviderRuntimeContextKey(get().settings)
+    const scope = getLinearReadScope(get().settings, options?.sourceContext)
+    const { contextKey } = scope
     const resolvedWorkspaceId = workspaceId ?? getSelectedWorkspaceId(get().linearStatus)
-    const cacheKey = linearTeamsCacheKey(resolvedWorkspaceId)
+    const cacheKey = scopedLinearCacheKey(scope, linearTeamsCacheKey(resolvedWorkspaceId))
     const cached = get().linearTeamCache[cacheKey]
     if (!options?.force && isFresh(cached, TEAM_CACHE_TTL)) {
       return cached.data ?? []
@@ -1135,7 +1268,7 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
     let entry: InflightLinearTeamRequest
     const requestCacheGeneration = linearCacheGeneration
     const requestMutationGeneration = linearMutationGeneration
-    const promise = linearListTeams(get().settings, resolvedWorkspaceId)
+    const promise = linearListTeams(scope.settings, resolvedWorkspaceId)
       .then((teams) => {
         const data = teams as LinearTeam[]
         if (
@@ -1144,7 +1277,8 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
             contextKey,
             requestCacheGeneration,
             requestMutationGeneration,
-            get().settings
+            get().settings,
+            scope.explicitSource
           )
         ) {
           set((s) => ({
@@ -1164,7 +1298,8 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
             contextKey,
             requestCacheGeneration,
             requestMutationGeneration,
-            get().settings
+            get().settings,
+            scope.explicitSource
           )
         ) {
           if (!shouldRefreshStatusAfterRead(resolvedWorkspaceId, get().linearStatus)) {
@@ -1184,7 +1319,8 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
             contextKey,
             requestCacheGeneration,
             requestMutationGeneration,
-            get().settings
+            get().settings,
+            scope.explicitSource
           )
         ) {
           void get().checkLinearConnection(true)
@@ -1202,17 +1338,22 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
     return promise
   },
 
-  getCachedLinearProjects: (query, limit = 20, workspaceId) => {
+  getCachedLinearProjects: (query, limit = 20, workspaceId, options) => {
+    const scope = getLinearReadScope(get().settings, options?.sourceContext)
     const resolvedWorkspaceId = workspaceId ?? getSelectedWorkspaceId(get().linearStatus)
     const cacheKey = linearCollectionCacheKey(resolvedWorkspaceId, 'projects', query?.trim(), limit)
-    return get().linearProjectCache[cacheKey]?.data ?? null
+    return get().linearProjectCache[scopedLinearCacheKey(scope, cacheKey)]?.data ?? null
   },
 
   listLinearProjects: async (query, limit = 20, workspaceId, options) => {
-    const contextKey = getProviderRuntimeContextKey(get().settings)
+    const scope = getLinearReadScope(get().settings, options?.sourceContext)
+    const { contextKey } = scope
     const resolvedWorkspaceId = workspaceId ?? getSelectedWorkspaceId(get().linearStatus)
     const trimmed = query?.trim() || undefined
-    const cacheKey = linearCollectionCacheKey(resolvedWorkspaceId, 'projects', trimmed, limit)
+    const cacheKey = scopedLinearCacheKey(
+      scope,
+      linearCollectionCacheKey(resolvedWorkspaceId, 'projects', trimmed, limit)
+    )
     const cached = get().linearProjectCache[cacheKey]
     if (!options?.force && isFresh(cached)) {
       return cached.data ?? emptyLinearCollection<LinearProjectSummary>()
@@ -1231,7 +1372,7 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
     let entry: InflightLinearCollectionRequest<LinearProjectSummary>
     const requestCacheGeneration = linearCacheGeneration
     const requestMutationGeneration = linearMutationGeneration
-    const promise = linearListProjects(get().settings, trimmed, limit, resolvedWorkspaceId, {
+    const promise = linearListProjects(scope.settings, trimmed, limit, resolvedWorkspaceId, {
       force: options?.force
     })
       .then((result) => {
@@ -1241,7 +1382,8 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
             contextKey,
             requestCacheGeneration,
             requestMutationGeneration,
-            get().settings
+            get().settings,
+            scope.explicitSource
           )
         ) {
           set((s) => ({
@@ -1261,7 +1403,8 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
             contextKey,
             requestCacheGeneration,
             requestMutationGeneration,
-            get().settings
+            get().settings,
+            scope.explicitSource
           )
         ) {
           void get().checkLinearConnection(true)
@@ -1280,7 +1423,8 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
             contextKey,
             requestCacheGeneration,
             requestMutationGeneration,
-            get().settings
+            get().settings,
+            scope.explicitSource
           )
         ) {
           void get().checkLinearConnection(true)
@@ -1299,8 +1443,12 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
   },
 
   fetchLinearProject: async (id, workspaceId, options) => {
-    const contextKey = getProviderRuntimeContextKey(get().settings)
-    const cacheKey = linearCollectionCacheKey(workspaceId, 'project-detail', id)
+    const scope = getLinearReadScope(get().settings, options?.sourceContext)
+    const { contextKey } = scope
+    const cacheKey = scopedLinearCacheKey(
+      scope,
+      linearCollectionCacheKey(workspaceId, 'project-detail', id)
+    )
     const cached = get().linearProjectDetailCache[cacheKey]
     if (!options?.force && isFresh(cached)) {
       return cached.data
@@ -1319,7 +1467,7 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
     let entry: InflightLinearDetailRequest<LinearProjectDetail | null>
     const requestCacheGeneration = linearCacheGeneration
     const requestMutationGeneration = linearMutationGeneration
-    const promise = linearGetProject(get().settings, id, workspaceId, {
+    const promise = linearGetProject(scope.settings, id, workspaceId, {
       force: options?.force
     })
       .then((project) => {
@@ -1329,7 +1477,8 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
             contextKey,
             requestCacheGeneration,
             requestMutationGeneration,
-            get().settings
+            get().settings,
+            scope.explicitSource
           )
         ) {
           set((s) => ({
@@ -1349,7 +1498,8 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
             contextKey,
             requestCacheGeneration,
             requestMutationGeneration,
-            get().settings
+            get().settings,
+            scope.explicitSource
           )
         ) {
           void get().checkLinearConnection(true)
@@ -1373,7 +1523,8 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
             contextKey,
             requestCacheGeneration,
             requestMutationGeneration,
-            get().settings
+            get().settings,
+            scope.explicitSource
           )
         ) {
           void get().checkLinearConnection(true)
@@ -1391,13 +1542,12 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
   },
 
   listLinearProjectIssues: async (projectId, workspaceId, limit = 20, options) => {
-    const contextKey = getProviderRuntimeContextKey(get().settings)
+    const scope = getLinearReadScope(get().settings, options?.sourceContext)
+    const { contextKey } = scope
     const effectiveLimit = clampLinearIssueListLimit(limit)
-    const cacheKey = linearCollectionCacheKey(
-      workspaceId,
-      'project-issues',
-      projectId,
-      effectiveLimit
+    const cacheKey = scopedLinearCacheKey(
+      scope,
+      linearCollectionCacheKey(workspaceId, 'project-issues', projectId, effectiveLimit)
     )
     const cached = get().linearProjectIssueCache[cacheKey]
     if (!options?.force && isFresh(cached)) {
@@ -1418,7 +1568,7 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
     const requestCacheGeneration = linearCacheGeneration
     const requestMutationGeneration = linearMutationGeneration
     const promise = linearListProjectIssues(
-      get().settings,
+      scope.settings,
       projectId,
       effectiveLimit,
       workspaceId,
@@ -1433,7 +1583,8 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
             contextKey,
             requestCacheGeneration,
             requestMutationGeneration,
-            get().settings
+            get().settings,
+            scope.explicitSource
           )
         ) {
           set((s) => ({
@@ -1453,7 +1604,8 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
             contextKey,
             requestCacheGeneration,
             requestMutationGeneration,
-            get().settings
+            get().settings,
+            scope.explicitSource
           )
         ) {
           void get().checkLinearConnection(true)
@@ -1480,7 +1632,8 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
             contextKey,
             requestCacheGeneration,
             requestMutationGeneration,
-            get().settings
+            get().settings,
+            scope.explicitSource
           )
         ) {
           void get().checkLinearConnection(true)
@@ -1498,16 +1651,21 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
     return promise
   },
 
-  getCachedLinearCustomViews: (model, limit = 20, workspaceId) => {
+  getCachedLinearCustomViews: (model, limit = 20, workspaceId, options) => {
+    const scope = getLinearReadScope(get().settings, options?.sourceContext)
     const resolvedWorkspaceId = workspaceId ?? getSelectedWorkspaceId(get().linearStatus)
     const cacheKey = linearCollectionCacheKey(resolvedWorkspaceId, 'custom-views', model, limit)
-    return get().linearCustomViewCache[cacheKey]?.data ?? null
+    return get().linearCustomViewCache[scopedLinearCacheKey(scope, cacheKey)]?.data ?? null
   },
 
   listLinearCustomViews: async (model, limit = 20, workspaceId, options) => {
-    const contextKey = getProviderRuntimeContextKey(get().settings)
+    const scope = getLinearReadScope(get().settings, options?.sourceContext)
+    const { contextKey } = scope
     const resolvedWorkspaceId = workspaceId ?? getSelectedWorkspaceId(get().linearStatus)
-    const cacheKey = linearCollectionCacheKey(resolvedWorkspaceId, 'custom-views', model, limit)
+    const cacheKey = scopedLinearCacheKey(
+      scope,
+      linearCollectionCacheKey(resolvedWorkspaceId, 'custom-views', model, limit)
+    )
     const cached = get().linearCustomViewCache[cacheKey]
     if (!options?.force && isFresh(cached)) {
       return cached.data ?? emptyLinearCollection<LinearCustomViewSummary>()
@@ -1526,7 +1684,7 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
     let entry: InflightLinearCollectionRequest<LinearCustomViewSummary>
     const requestCacheGeneration = linearCacheGeneration
     const requestMutationGeneration = linearMutationGeneration
-    const promise = linearListCustomViews(get().settings, model, limit, resolvedWorkspaceId, {
+    const promise = linearListCustomViews(scope.settings, model, limit, resolvedWorkspaceId, {
       force: options?.force
     })
       .then((result) => {
@@ -1536,7 +1694,8 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
             contextKey,
             requestCacheGeneration,
             requestMutationGeneration,
-            get().settings
+            get().settings,
+            scope.explicitSource
           )
         ) {
           set((s) => ({
@@ -1556,7 +1715,8 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
             contextKey,
             requestCacheGeneration,
             requestMutationGeneration,
-            get().settings
+            get().settings,
+            scope.explicitSource
           )
         ) {
           void get().checkLinearConnection(true)
@@ -1576,7 +1736,8 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
             contextKey,
             requestCacheGeneration,
             requestMutationGeneration,
-            get().settings
+            get().settings,
+            scope.explicitSource
           )
         ) {
           void get().checkLinearConnection(true)
@@ -1595,8 +1756,12 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
   },
 
   fetchLinearCustomView: async (viewId, workspaceId, model, options) => {
-    const contextKey = getProviderRuntimeContextKey(get().settings)
-    const cacheKey = linearCollectionCacheKey(workspaceId, 'custom-view-detail', model, viewId)
+    const scope = getLinearReadScope(get().settings, options?.sourceContext)
+    const { contextKey } = scope
+    const cacheKey = scopedLinearCacheKey(
+      scope,
+      linearCollectionCacheKey(workspaceId, 'custom-view-detail', model, viewId)
+    )
     const cached = get().linearCustomViewDetailCache[cacheKey]
     if (!options?.force && isFresh(cached)) {
       return cached.data
@@ -1615,7 +1780,7 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
     let entry: InflightLinearDetailRequest<LinearCustomViewSummary | null>
     const requestCacheGeneration = linearCacheGeneration
     const requestMutationGeneration = linearMutationGeneration
-    const promise = linearGetCustomView(get().settings, viewId, model, workspaceId, {
+    const promise = linearGetCustomView(scope.settings, viewId, model, workspaceId, {
       force: options?.force
     })
       .then((view) => {
@@ -1625,7 +1790,8 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
             contextKey,
             requestCacheGeneration,
             requestMutationGeneration,
-            get().settings
+            get().settings,
+            scope.explicitSource
           )
         ) {
           set((s) => ({
@@ -1645,7 +1811,8 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
             contextKey,
             requestCacheGeneration,
             requestMutationGeneration,
-            get().settings
+            get().settings,
+            scope.explicitSource
           )
         ) {
           void get().checkLinearConnection(true)
@@ -1669,7 +1836,8 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
             contextKey,
             requestCacheGeneration,
             requestMutationGeneration,
-            get().settings
+            get().settings,
+            scope.explicitSource
           )
         ) {
           void get().checkLinearConnection(true)
@@ -1687,13 +1855,12 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
   },
 
   listLinearCustomViewIssues: async (viewId, workspaceId, limit = 20, options) => {
-    const contextKey = getProviderRuntimeContextKey(get().settings)
+    const scope = getLinearReadScope(get().settings, options?.sourceContext)
+    const { contextKey } = scope
     const effectiveLimit = clampLinearIssueListLimit(limit)
-    const cacheKey = linearCollectionCacheKey(
-      workspaceId,
-      'custom-view-issues',
-      viewId,
-      effectiveLimit
+    const cacheKey = scopedLinearCacheKey(
+      scope,
+      linearCollectionCacheKey(workspaceId, 'custom-view-issues', viewId, effectiveLimit)
     )
     const cached = get().linearCustomViewIssueCache[cacheKey]
     if (!options?.force && isFresh(cached)) {
@@ -1714,7 +1881,7 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
     const requestCacheGeneration = linearCacheGeneration
     const requestMutationGeneration = linearMutationGeneration
     const promise = linearListCustomViewIssues(
-      get().settings,
+      scope.settings,
       viewId,
       effectiveLimit,
       workspaceId,
@@ -1729,7 +1896,8 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
             contextKey,
             requestCacheGeneration,
             requestMutationGeneration,
-            get().settings
+            get().settings,
+            scope.explicitSource
           )
         ) {
           set((s) => ({
@@ -1749,7 +1917,8 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
             contextKey,
             requestCacheGeneration,
             requestMutationGeneration,
-            get().settings
+            get().settings,
+            scope.explicitSource
           )
         ) {
           void get().checkLinearConnection(true)
@@ -1776,7 +1945,8 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
             contextKey,
             requestCacheGeneration,
             requestMutationGeneration,
-            get().settings
+            get().settings,
+            scope.explicitSource
           )
         ) {
           void get().checkLinearConnection(true)
@@ -1795,8 +1965,12 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
   },
 
   listLinearCustomViewProjects: async (viewId, workspaceId, limit = 20, options) => {
-    const contextKey = getProviderRuntimeContextKey(get().settings)
-    const cacheKey = linearCollectionCacheKey(workspaceId, 'custom-view-projects', viewId, limit)
+    const scope = getLinearReadScope(get().settings, options?.sourceContext)
+    const { contextKey } = scope
+    const cacheKey = scopedLinearCacheKey(
+      scope,
+      linearCollectionCacheKey(workspaceId, 'custom-view-projects', viewId, limit)
+    )
     const cached = get().linearCustomViewProjectCache[cacheKey]
     if (!options?.force && isFresh(cached)) {
       return cached.data ?? emptyLinearCollection<LinearProjectSummary>()
@@ -1815,7 +1989,7 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
     let entry: InflightLinearCollectionRequest<LinearProjectSummary>
     const requestCacheGeneration = linearCacheGeneration
     const requestMutationGeneration = linearMutationGeneration
-    const promise = linearListCustomViewProjects(get().settings, viewId, limit, workspaceId, {
+    const promise = linearListCustomViewProjects(scope.settings, viewId, limit, workspaceId, {
       force: options?.force
     })
       .then((result) => {
@@ -1825,7 +1999,8 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
             contextKey,
             requestCacheGeneration,
             requestMutationGeneration,
-            get().settings
+            get().settings,
+            scope.explicitSource
           )
         ) {
           set((s) => ({
@@ -1845,7 +2020,8 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
             contextKey,
             requestCacheGeneration,
             requestMutationGeneration,
-            get().settings
+            get().settings,
+            scope.explicitSource
           )
         ) {
           void get().checkLinearConnection(true)
@@ -1865,7 +2041,8 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
             contextKey,
             requestCacheGeneration,
             requestMutationGeneration,
-            get().settings
+            get().settings,
+            scope.explicitSource
           )
         ) {
           void get().checkLinearConnection(true)
@@ -1883,13 +2060,19 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
     return promise
   },
 
-  patchLinearIssue: (issueId, patch) => {
+  patchLinearIssue: (issueId, patch, options) => {
+    const sourceScope =
+      options?.sourceContext?.provider === 'linear'
+        ? getTaskSourceCacheScope(options.sourceContext)
+        : null
+    const canPatchCacheKey = (key: string): boolean =>
+      sourceScope === null || key.startsWith(`${sourceScope}::`)
     set((s) => {
       let changed = false
 
       const nextIssueCache = { ...s.linearIssueCache }
       for (const [key, issueEntry] of Object.entries(nextIssueCache)) {
-        if (issueEntry?.data?.id !== issueId) {
+        if (!canPatchCacheKey(key) || issueEntry?.data?.id !== issueId) {
           continue
         }
         // Why: set fetchedAt to 0 so the next fetchLinearIssue call
@@ -1905,7 +2088,7 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
       const nextSearchCache = { ...s.linearSearchCache }
       for (const key of Object.keys(nextSearchCache)) {
         const entry = nextSearchCache[key]
-        if (!entry?.data) {
+        if (!canPatchCacheKey(key) || !entry?.data) {
           continue
         }
         const idx = entry.data.findIndex((item) => item.id === issueId)
@@ -1918,7 +2101,12 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
         changed = true
       }
 
-      const nextListCache = patchLinearIssueCollectionCache(s.linearListCache, issueId, patch)
+      const nextListCache = patchLinearIssueCollectionCache(
+        s.linearListCache,
+        issueId,
+        patch,
+        canPatchCacheKey
+      )
       if (nextListCache.changed) {
         changed = true
       }
@@ -1926,7 +2114,8 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
       const nextProjectIssueCache = patchLinearIssueCollectionCache(
         s.linearProjectIssueCache,
         issueId,
-        patch
+        patch,
+        canPatchCacheKey
       )
       if (nextProjectIssueCache.changed) {
         changed = true
@@ -1935,7 +2124,8 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
       const nextCustomViewIssueCache = patchLinearIssueCollectionCache(
         s.linearCustomViewIssueCache,
         issueId,
-        patch
+        patch,
+        canPatchCacheKey
       )
       if (nextCustomViewIssueCache.changed) {
         changed = true

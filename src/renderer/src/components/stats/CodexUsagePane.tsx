@@ -23,8 +23,7 @@ import {
 } from '../ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip'
 import { ClaudeUsageLoadingState } from './ClaudeUsageLoadingState'
-import { CodexUsageDailyChart } from './CodexUsageDailyChart'
-import { CodexUsageRecentSessionsTable } from './CodexUsageRecentSessionsTable'
+import { CodexUsageDetails } from './CodexUsageDetails'
 import { ShareUsageButton } from './ShareUsageButton'
 import { StatCard } from './StatCard'
 import { formatCost, formatTokens, formatUpdatedAt } from './usage-formatters'
@@ -34,18 +33,30 @@ const RANGE_OPTIONS: CodexUsageRange[] = ['7d', '30d', '90d', 'all']
 const SCOPE_OPTIONS: { value: CodexUsageScope; label: string }[] = [
   {
     value: 'orca',
-    label: translate('auto.components.stats.CodexUsagePane.201766b754', 'Orca worktrees only')
+    get label() {
+      return translate('auto.components.stats.CodexUsagePane.201766b754', 'Orca worktrees only')
+    }
   },
   {
     value: 'all',
-    label: translate('auto.components.stats.CodexUsagePane.4fe8820098', 'All local Codex usage')
+    get label() {
+      return translate('auto.components.stats.CodexUsagePane.4fe8820098', 'All local Codex usage')
+    }
   }
 ]
 const RANGE_LABELS: Record<CodexUsageRange, string> = {
-  '7d': 'Last 7 days',
-  '30d': 'Last 30 days',
-  '90d': 'Last 90 days',
-  all: 'All time'
+  get '7d'() {
+    return translate('auto.components.stats.CodexUsagePane.rangeLast7Days', 'Last 7 days')
+  },
+  get '30d'() {
+    return translate('auto.components.stats.CodexUsagePane.rangeLast30Days', 'Last 30 days')
+  },
+  get '90d'() {
+    return translate('auto.components.stats.CodexUsagePane.rangeLast90Days', 'Last 90 days')
+  },
+  get all() {
+    return translate('auto.components.stats.CodexUsagePane.rangeAllTime', 'All time')
+  }
 }
 
 export function CodexUsagePane(): React.JSX.Element {
@@ -292,76 +303,13 @@ export function CodexUsagePane(): React.JSX.Element {
             )}
           </p>
 
-          <CodexUsageDailyChart daily={daily} />
-
-          <div className="grid gap-4 xl:grid-cols-2">
-            <section className="rounded-lg border border-border/60 bg-card/40 p-4">
-              <div className="mb-3">
-                <h4 className="text-sm font-semibold text-foreground">
-                  {translate('auto.components.stats.CodexUsagePane.5a0d1d69cd', 'By model')}
-                </h4>
-                <p className="text-xs text-muted-foreground">
-                  {translate('auto.components.stats.CodexUsagePane.95d2d89285', 'Top model:')}{' '}
-                  {summary?.topModel ??
-                    translate('auto.components.stats.CodexUsagePane.ae255c3dba', 'n/a')}
-                </p>
-              </div>
-              <div className="space-y-3">
-                {modelBreakdown.slice(0, 5).map((row) => (
-                  <div key={row.key} className="space-y-1">
-                    <div className="flex items-center justify-between gap-3 text-sm">
-                      <span className="truncate text-foreground">{row.label}</span>
-                      <span className="shrink-0 text-muted-foreground">
-                        {formatTokens(row.totalTokens)}
-                      </span>
-                    </div>
-                    <div className="text-xs text-muted-foreground">
-                      {row.sessions}{' '}
-                      {translate('auto.components.stats.CodexUsagePane.bf1bf2f674', 'sessions •')}{' '}
-                      {row.events}{' '}
-                      {translate('auto.components.stats.CodexUsagePane.79a69522a5', 'events')}
-                      {row.hasInferredPricing
-                        ? ` ${translate('auto.components.stats.CodexUsagePane.247c93ca92', '• inferred pricing')}`
-                        : ''}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </section>
-
-            <section className="rounded-lg border border-border/60 bg-card/40 p-4">
-              <div className="mb-3">
-                <h4 className="text-sm font-semibold text-foreground">
-                  {translate('auto.components.stats.CodexUsagePane.b98718aaab', 'By project')}
-                </h4>
-                <p className="text-xs text-muted-foreground">
-                  {translate('auto.components.stats.CodexUsagePane.829ee743f2', 'Top project:')}{' '}
-                  {summary?.topProject ??
-                    translate('auto.components.stats.CodexUsagePane.ae255c3dba', 'n/a')}
-                </p>
-              </div>
-              <div className="space-y-3">
-                {projectBreakdown.slice(0, 5).map((row) => (
-                  <div key={row.key} className="space-y-1">
-                    <div className="flex items-center justify-between gap-3 text-sm">
-                      <span className="truncate text-foreground">{row.label}</span>
-                      <span className="shrink-0 text-muted-foreground">
-                        {formatTokens(row.totalTokens)}
-                      </span>
-                    </div>
-                    <div className="text-xs text-muted-foreground">
-                      {row.sessions}{' '}
-                      {translate('auto.components.stats.CodexUsagePane.bf1bf2f674', 'sessions •')}{' '}
-                      {row.events}{' '}
-                      {translate('auto.components.stats.CodexUsagePane.79a69522a5', 'events')}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </section>
-          </div>
-
-          <CodexUsageRecentSessionsTable recentSessions={recentSessions} />
+          <CodexUsageDetails
+            daily={daily}
+            modelBreakdown={modelBreakdown}
+            projectBreakdown={projectBreakdown}
+            recentSessions={recentSessions}
+            summary={summary}
+          />
         </>
       )}
     </div>

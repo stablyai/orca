@@ -3,9 +3,18 @@
  * to a file that was already ~398 code lines on main. The per-type render
  * branches share little beyond drag data, so consolidating them would cost
  * more clarity than the ~5 lines of bloat is worth. */
-import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { SortableContext } from '@dnd-kit/sortable'
-import { FilePlus, FileText, Globe, Plus, Smartphone, TerminalSquare } from 'lucide-react'
+import {
+  ChevronLeft,
+  ChevronRight,
+  FilePlus,
+  FileText,
+  Globe,
+  Plus,
+  Smartphone,
+  TerminalSquare
+} from 'lucide-react'
 import { toast } from 'sonner'
 import type {
   BrowserTab as BrowserTabState,
@@ -31,13 +40,15 @@ import TabBarCreateEntry from './TabBarCreateEntry'
 import { ShellIcon } from './shell-icons'
 import { resolveWindowsShellLaunchTarget } from './windows-shell-launch'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
-import { useDetectedAgents } from '@/hooks/useDetectedAgents'
+import { type AgentDetectionTarget, useDetectedAgents } from '@/hooks/useDetectedAgents'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
+import { normalizeRelativePath } from '@/lib/path'
 import {
   getWindowsTerminalCapabilityOwnerKey,
   useWindowsTerminalCapabilities
 } from '@/lib/windows-terminal-capabilities'
 import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
+import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
 import {
   type BuiltInWindowsTerminalShell,
@@ -52,10 +63,12 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { Button } from '@/components/ui/button'
 import type { TabCreateEntryArgs } from './tab-create-entry-action'
 import { buildTabAgentLaunchOptions, orderTabLaunchAgents } from './tab-agent-launch-options'
 import { buildTabCreateMenuOptions, type TabCreateMenuOption } from './tab-create-menu-options'
 import { translate } from '@/i18n/i18n'
+import { useTabStripOverflowNavigation } from './tab-strip-overflow-navigation'
 
 const isWindows = navigator.userAgent.includes('Windows')
 const isMacOs = navigator.userAgent.includes('Mac')
@@ -65,6 +78,7 @@ type GitStatusEntries = ReturnType<typeof useAppStore.getState>['gitStatusByWork
 const EMPTY_GIT_STATUS_ENTRIES: GitStatusEntries = []
 const EMPTY_AGENT_CMD_OVERRIDES: Partial<Record<TuiAgent, string>> = {}
 const EMPTY_UNIFIED_TABS: readonly Tab[] = []
+const AGENT_DETECTION_LOCAL_TARGET_KEY = 'local'
 
 type TabBarProps = {
   tabs: (TerminalTab & { unifiedTabId?: string })[]
@@ -157,6 +171,31 @@ function getTabDragLabel(item: TabItem, generatedTitlesEnabled: boolean): string
   return getEditorDisplayLabel(item.data)
 }
 
+function getTabLayoutSignature(
+  item: TabItem,
+  {
+    generatedTitlesEnabled,
+    isExpanded,
+    status
+  }: {
+    generatedTitlesEnabled: boolean
+    isExpanded: boolean
+    status?: string | null
+  }
+): string {
+  const label = getTabDragLabel(item, generatedTitlesEnabled)
+  if (item.type === 'terminal') {
+    return `${item.type}:${item.id}:${item.isPinned}:${isExpanded}:${Boolean(item.data.color)}:${label}`
+  }
+  if (item.type === 'browser') {
+    return `${item.type}:${item.id}:${item.isPinned}:${item.data.loading}:${item.data.loadError}:${label}`
+  }
+  if (item.type === 'editor') {
+    return `${item.type}:${item.id}:${item.isPinned}:${item.data.isDirty}:${item.data.isPreview}:${item.data.externalMutation ?? ''}:${status ?? ''}:${label}`
+  }
+  return `${item.type}:${item.id}:${item.isPinned}:${label}`
+}
+
 function createUnifiedTabLookup(tabs: readonly Tab[], groupId: string): Map<string, Tab> {
   const lookup = new Map<string, Tab>()
   for (const tab of tabs) {
@@ -233,8 +272,10 @@ function TabBarInner({
   const defaultWindowsPowerShellImplementation = useAppStore(
     (s) => s.settings?.terminalWindowsPowerShellImplementation ?? 'auto'
   )
+  // Why: probe Windows shell capabilities on the host that owns this worktree, so
+  // the offered shells match the host that actually runs the terminal.
   const activeRuntimeEnvironmentId = useAppStore(
-    (s) => s.settings?.activeRuntimeEnvironmentId?.trim() || null
+    (s) => getRuntimeEnvironmentIdForWorktree(s, worktreeId)?.trim() || null
   )
   const worktreeHasRemoteConnection = useAppStore((s) => {
     const worktree = Object.values(s.worktreesByRepo ?? {})
@@ -247,16 +288,39 @@ function TabBarInner({
   const agentCmdOverrides = useAppStore(
     (s) => s.settings?.agentCmdOverrides ?? EMPTY_AGENT_CMD_OVERRIDES
   )
-  const connectionId = useAppStore((s) => {
+  const agentDetectionTargetKey = useAppStore((s): string | undefined => {
     const allWorktrees = Object.values(s.worktreesByRepo ?? {}).flat()
     const worktree = allWorktrees.find((w) => w.id === worktreeId)
     if (!worktree) {
       return undefined
     }
     const repo = s.repos?.find((r) => r.id === worktree.repoId)
-    return repo?.connectionId ?? null
+    const repoConnectionId = repo?.connectionId?.trim()
+    if (repoConnectionId) {
+      return `ssh:${repoConnectionId}`
+    }
+    const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(s, worktreeId)?.trim()
+    if (runtimeEnvironmentId) {
+      return `runtime:${runtimeEnvironmentId}`
+    }
+    return AGENT_DETECTION_LOCAL_TARGET_KEY
   })
-  const { detectedIds } = useDetectedAgents(connectionId)
+  const agentDetectionTarget = useMemo<AgentDetectionTarget | undefined>(() => {
+    if (agentDetectionTargetKey === undefined) {
+      return undefined
+    }
+    if (agentDetectionTargetKey === AGENT_DETECTION_LOCAL_TARGET_KEY) {
+      return { kind: 'local' }
+    }
+    if (agentDetectionTargetKey.startsWith('ssh:')) {
+      return { kind: 'ssh', connectionId: agentDetectionTargetKey.slice('ssh:'.length) }
+    }
+    if (agentDetectionTargetKey.startsWith('runtime:')) {
+      return { kind: 'runtime', environmentId: agentDetectionTargetKey.slice('runtime:'.length) }
+    }
+    return { kind: 'local' }
+  }, [agentDetectionTargetKey])
+  const { detectedIds } = useDetectedAgents(agentDetectionTarget)
   const agentLaunchOptions = useMemo(
     () =>
       buildTabAgentLaunchOptions(
@@ -769,6 +833,49 @@ function TabBarInner({
     return indicators
   }, [activeIndicator, orderedItems])
 
+  const activeVisibleTabId = useMemo(() => {
+    const activeItem = orderedItems.find((item) => {
+      if (item.type === 'terminal') {
+        return (
+          (activeTabType === 'terminal' || activeTabType === 'simulator') && item.id === activeTabId
+        )
+      }
+      if (item.type === 'browser') {
+        return activeTabType === 'browser' && item.id === activeBrowserTabId
+      }
+      if (item.type === 'simulator') {
+        return activeTabType === 'simulator' && item.id === activeSimulatorTabId
+      }
+      return (
+        (activeTabType === 'editor' || activeTabType === 'simulator') && activeFileId === item.id
+      )
+    })
+    return activeItem?.id ?? null
+  }, [
+    activeBrowserTabId,
+    activeFileId,
+    activeSimulatorTabId,
+    activeTabId,
+    activeTabType,
+    orderedItems
+  ])
+  const tabStripLayoutKey = useMemo(
+    () =>
+      orderedItems
+        .map((item) =>
+          getTabLayoutSignature(item, {
+            generatedTitlesEnabled: generatedTabTitlesEnabled,
+            isExpanded: expandedPaneByTabId[item.id] === true,
+            status:
+              item.type === 'editor'
+                ? (statusByRelativePath.get(normalizeRelativePath(item.data.relativePath)) ?? null)
+                : null
+          })
+        )
+        .join('\u001f'),
+    [expandedPaneByTabId, generatedTabTitlesEnabled, orderedItems, statusByRelativePath]
+  )
+
   const togglePinned = (item: TabItem): void => {
     if (item.isPinned) {
       unpinTab(item.unifiedTabId)
@@ -781,103 +888,12 @@ function TabBarInner({
     pinTab(item.unifiedTabId)
   }
 
-  // Horizontal wheel scrolling for the tab strip
-  const tabStripRef = useRef<HTMLDivElement>(null)
-  const prevStripLenRef = useRef<{ worktreeId: string; len: number } | null>(null)
-  const stickToEndRef = useRef(false)
-
-  useEffect(() => {
-    const el = tabStripRef.current
-    if (!el) {
-      return
-    }
-    const onWheel = (e: WheelEvent): void => {
-      if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
-        e.preventDefault()
-        el.scrollLeft += e.deltaY
-      }
-    }
-    el.addEventListener('wheel', onWheel, { passive: false })
-    return () => el.removeEventListener('wheel', onWheel)
-  }, [])
-
-  useEffect(() => {
-    const el = tabStripRef.current
-    if (!el) {
-      return
-    }
-    const isAtEnd = (): boolean => {
-      const max = Math.max(0, el.scrollWidth - el.clientWidth)
-      return el.scrollLeft >= max - 2
-    }
-    const onScroll = (): void => {
-      // Only keep sticking while the user hasn't intentionally scrolled away.
-      stickToEndRef.current = isAtEnd()
-    }
-    el.addEventListener('scroll', onScroll, { passive: true })
-    // Seed based on initial position.
-    onScroll()
-
-    const ro = new ResizeObserver(() => {
-      // If the user is pinned to the right edge, keep it pinned even as tab
-      // labels (e.g. \"Terminal 5\" → branch name) expand and change scrollWidth.
-      if (!stickToEndRef.current) {
-        return
-      }
-      el.scrollLeft = Math.max(0, el.scrollWidth - el.clientWidth)
-    })
-    ro.observe(el)
-
-    return () => {
-      el.removeEventListener('scroll', onScroll)
-      ro.disconnect()
-    }
-  }, [])
-
-  // Why: new and reopened tabs are appended to the right; without this the strip
-  // keeps its scroll offset and the active tab can sit off-screen until the user
-  // drags the tab bar horizontally.
-  useLayoutEffect(() => {
-    const strip = tabStripRef.current
-    const len = orderedItems.length
-    const prev = prevStripLenRef.current
-    if (!strip) {
-      prevStripLenRef.current = { worktreeId, len }
-      return
-    }
-    if (!prev || prev.worktreeId !== worktreeId) {
-      prevStripLenRef.current = { worktreeId, len }
-      return
-    }
-    // If the user is pinned to the right edge, keep the close button visible
-    // even when tab labels change length (e.g. "Terminal 5" → branch name).
-    // Why: label changes don't necessarily change the strip element's own size,
-    // so ResizeObserver won't fire; this effect runs on rerenders instead.
-    if (stickToEndRef.current) {
-      const scrollToEnd = (): void => {
-        const el = tabStripRef.current
-        if (!el) {
-          return
-        }
-        el.scrollLeft = Math.max(0, el.scrollWidth - el.clientWidth)
-      }
-      scrollToEnd()
-      requestAnimationFrame(scrollToEnd)
-    }
-    if (len > prev.len) {
-      const scrollToEnd = (): void => {
-        const el = tabStripRef.current
-        if (!el) {
-          return
-        }
-        el.scrollLeft = Math.max(0, el.scrollWidth - el.clientWidth)
-        stickToEndRef.current = true
-      }
-      scrollToEnd()
-      requestAnimationFrame(scrollToEnd)
-    }
-    prevStripLenRef.current = { worktreeId, len }
-  }, [orderedItems, worktreeId])
+  const { tabStripRef, tabStripOverflowState, scrollTabStrip } = useTabStripOverflowNavigation({
+    activeVisibleTabId,
+    layoutKey: tabStripLayoutKey,
+    tabCount: orderedItems.length,
+    worktreeId
+  })
 
   return (
     <div
@@ -890,6 +906,29 @@ function TabBarInner({
       // editor drop zone.
       data-native-file-drop-target="editor"
     >
+      {tabStripOverflowState.hasOverflow ? (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              className="mx-0.5 my-auto h-6 w-5 text-muted-foreground hover:bg-accent/50 hover:text-foreground disabled:opacity-35"
+              style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+              aria-label={translate(
+                'auto.components.tab.bar.TabBar.7a9b4af2af',
+                'Scroll tabs left'
+              )}
+              disabled={!tabStripOverflowState.canScrollStart}
+              onClick={() => scrollTabStrip('start')}
+            >
+              <ChevronLeft className="size-3.5" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" sideOffset={6}>
+            {translate('auto.components.tab.bar.TabBar.7a9b4af2af', 'Scroll tabs left')}
+          </TooltipContent>
+        </Tooltip>
+      ) : null}
       {/* Why: no strategy means dnd-kit does not animate siblings aside for
           the active tab. Combined with dropping transform/transition on the
           dragged tab (see SortableTab etc.), this keeps every tab visually
@@ -907,7 +946,7 @@ function TabBarInner({
           // between-tab separator. A strip-level `border-l` would render at
           // a different box than the tab's own `border-t`, producing a
           // heavier-looking L-corner at the leftmost tab when inactive.
-          className="terminal-tab-strip flex items-stretch overflow-x-auto overflow-y-hidden border-r border-border"
+          className="terminal-tab-strip scrollbar-sleek flex min-w-0 max-w-full flex-[0_1_auto] items-stretch overflow-x-auto overflow-y-hidden border-r border-border"
           style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
         >
           {orderedItems.map((item, index) => {
@@ -1046,6 +1085,29 @@ function TabBarInner({
           })}
         </div>
       </SortableContext>
+      {tabStripOverflowState.hasOverflow ? (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              className="mx-0.5 my-auto h-6 w-5 text-muted-foreground hover:bg-accent/50 hover:text-foreground disabled:opacity-35"
+              style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+              aria-label={translate(
+                'auto.components.tab.bar.TabBar.232e075b07',
+                'Scroll tabs right'
+              )}
+              disabled={!tabStripOverflowState.canScrollEnd}
+              onClick={() => scrollTabStrip('end')}
+            >
+              <ChevronRight className="size-3.5" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" sideOffset={6}>
+            {translate('auto.components.tab.bar.TabBar.232e075b07', 'Scroll tabs right')}
+          </TooltipContent>
+        </Tooltip>
+      ) : null}
       <DropdownMenu open={newTabMenuOpen} onOpenChange={setNewTabMenuOpen}>
         <DropdownMenuTrigger asChild>
           <button

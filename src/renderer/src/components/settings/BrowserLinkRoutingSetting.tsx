@@ -42,7 +42,12 @@ export function BrowserLinkRoutingSetting({
       <button
         role="switch"
         aria-checked={settings.openLinksInApp}
-        onClick={() => updateSettings({ openLinksInApp: !settings.openLinksInApp })}
+        onClick={() =>
+          updateSettings({
+            openLinksInApp: !settings.openLinksInApp,
+            openLinksInAppPreferencePrompted: true
+          })
+        }
         className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border border-transparent transition-colors ${
           settings.openLinksInApp ? 'bg-foreground' : 'bg-muted-foreground/30'
         }`}

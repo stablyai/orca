@@ -346,12 +346,12 @@ export function SshPane(_props: SshPaneProps): React.JSX.Element {
       <div className="flex items-center justify-between gap-3">
         <div className="space-y-0.5">
           <p className="text-sm font-medium">
-            {translate('auto.components.settings.SshPane.94c5284560', 'Targets')}
+            {translate('auto.components.settings.SshPane.94c5284560', 'SSH hosts')}
           </p>
           <p className="text-xs text-muted-foreground">
             {translate(
               'auto.components.settings.SshPane.a7d28dff81',
-              'Add a remote host to connect to it in Orca.'
+              'Add an existing machine over SSH so projects and workspaces can run there.'
             )}
           </p>
         </div>

@@ -71,15 +71,14 @@ describe('contextual tour definitions', () => {
     expect(tour?.steps[1]?.secondaryAction).toBeUndefined()
   })
 
-  it('points the workspace board tour at the board center, done lane, and settings', () => {
+  it('points the workspace board tour at the board center and done lane', () => {
     const tour = CONTEXTUAL_TOURS.find((entry) => entry.id === 'workspace-board') as
       | ContextualTour
       | undefined
 
     expect(tour?.steps.map((step) => step.title)).toEqual([
       'Plan work on the board',
-      'Move work through lanes',
-      'Tune density'
+      'Move work through lanes'
     ])
     expect(tour?.steps[0]).toMatchObject({
       targetSelector: '[data-contextual-tour-target="workspace-board-center"]',
@@ -90,11 +89,6 @@ describe('contextual tour definitions', () => {
       body: 'Drag workspaces between lanes as their status changes.',
       targetSelector:
         '[data-contextual-tour-target="workspace-board-done-lane"], [data-contextual-tour-target="workspace-board-lanes"]'
-    })
-    expect(tour?.steps[2]).toMatchObject({
-      body: 'Use board settings to switch between detailed and compact cards.',
-      targetSelector:
-        '[data-contextual-tour-target="workspace-board-settings"], [data-contextual-tour-target="workspace-board-lanes"]'
     })
   })
 

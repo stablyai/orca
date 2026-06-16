@@ -5,6 +5,8 @@ import { installWindowVisibilityInterval } from '@/lib/window-visibility-interva
 import { useAppStore } from '@/store'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import type { GetRateLimitResult, GitHubRateLimitSnapshot } from '../../../../shared/types'
+import { getProviderRateLimitScope } from '@/components/settings/provider-account-scope'
+import { ProviderHostScopeControl } from '@/components/settings/ProviderHostScopeControl'
 import { translate } from '@/i18n/i18n'
 
 const REFRESH_INTERVAL_MS = 60_000
@@ -20,27 +22,30 @@ type BucketMeta = {
 const BUCKETS: BucketMeta[] = [
   {
     key: 'core',
-    label: translate('auto.components.github.github.rate.limit.display.bb227706a6', 'REST'),
-    description: translate(
-      'auto.components.github.github.rate.limit.display.c392c749a6',
-      'REST API'
-    )
+    get label() {
+      return translate('auto.components.github.github.rate.limit.display.bb227706a6', 'REST')
+    },
+    get description() {
+      return translate('auto.components.github.github.rate.limit.display.c392c749a6', 'REST API')
+    }
   },
   {
     key: 'search',
-    label: translate('auto.components.github.github.rate.limit.display.c377a4f06a', 'Search'),
-    description: translate(
-      'auto.components.github.github.rate.limit.display.1f2f28a4de',
-      'Search API'
-    )
+    get label() {
+      return translate('auto.components.github.github.rate.limit.display.c377a4f06a', 'Search')
+    },
+    get description() {
+      return translate('auto.components.github.github.rate.limit.display.1f2f28a4de', 'Search API')
+    }
   },
   {
     key: 'graphql',
-    label: translate('auto.components.github.github.rate.limit.display.1daf0f22a9', 'GraphQL'),
-    description: translate(
-      'auto.components.github.github.rate.limit.display.01f7323e58',
-      'GraphQL API'
-    )
+    get label() {
+      return translate('auto.components.github.github.rate.limit.display.1daf0f22a9', 'GraphQL')
+    },
+    get description() {
+      return translate('auto.components.github.github.rate.limit.display.01f7323e58', 'GraphQL API')
+    }
   }
 ]
 
@@ -166,6 +171,8 @@ function GitHubRateLimitRows({
 
 export function GitHubRateLimitPanel({ className }: { className?: string }): React.JSX.Element {
   const { snapshot, hasError, isFetching, refresh } = useGitHubRateLimitSnapshot()
+  const settings = useAppStore((s) => s.settings)
+  const budgetScope = getProviderRateLimitScope(settings, 'GitHub')
 
   return (
     <div className={cn('space-y-3 rounded-md border border-border/60 p-3', className)}>
@@ -184,6 +191,14 @@ export function GitHubRateLimitPanel({ className }: { className?: string }): Rea
               'Orca uses REST, Search, and GraphQL through the GitHub CLI.'
             )}
           </p>
+          <ProviderHostScopeControl
+            labelPrefix={translate(
+              'auto.components.github.github.rate.limit.display.budget_scope_prefix',
+              'Budget scope'
+            )}
+            scope={budgetScope}
+            className="text-xs"
+          />
         </div>
         <button
           type="button"

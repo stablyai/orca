@@ -27,12 +27,15 @@ import { getPRForBranch } from '../github/client'
 import { listWorktrees, addWorktree, addSparseWorktree } from '../git/worktree'
 import type { AddWorktreeResult } from '../git/worktree'
 import { getGitUsername, getDefaultBaseRef, getBranchConflictKind } from '../git/repo'
+import { getHostedReviewForBranch } from '../source-control/hosted-review'
+import type { ForgeProviderId } from '../source-control/forge-provider'
 import { validateGitPushTarget } from '../git/push-target-validation'
 import { assertGitPushTargetShape } from '../../shared/git-push-target-validation'
 import { gitExecFileAsync } from '../git/runner'
 import { parseGitHubOwnerRepo } from '../github/gh-utils'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type { RemoteFetchResult, RemoteTrackingBase } from '../runtime/orca-runtime'
+import { getProjectHostSetupWorktreeMeta } from '../../shared/project-host-setup-projection'
 import {
   buildPosixRunnerScript,
   buildWindowsRunnerScript,
@@ -68,6 +71,7 @@ import {
   areWorktreePathsEqual
 } from './worktree-logic'
 import { getRepoIdFromWorktreeId } from '../../shared/worktree-id'
+import { parseWorkspaceKey, worktreeWorkspaceKey } from '../../shared/workspace-scope'
 import {
   cleanupUnusedWorktreePushTargetRemoteWithExec,
   sameGitHubRemoteUrl,
@@ -77,7 +81,7 @@ import {
   configureCreatedWorktreePushTargetWithExec,
   prepareWorktreePushTargetWithExec
 } from './worktree-push-target-setup'
-import { invalidateAuthorizedRootsCache, isENOENT } from './filesystem-auth'
+import { isENOENT, registerWorktreeRootsForRepo } from './filesystem-auth'
 import { createWorktreeSymlinks } from './worktree-symlinks'
 import { normalizeSparseDirectories } from './sparse-checkout-directories'
 import { joinWorktreeRelativePath } from '../runtime/runtime-relative-paths'
@@ -128,6 +132,69 @@ type RemoteLocalBaseRefRefreshability =
 
 function appendWorktreeCreateWarning(current: string | undefined, next: string): string {
   return current ? `${current} Also ${next[0]?.toLowerCase() ?? ''}${next.slice(1)}` : next
+}
+
+function validateWorkspaceLineageParentBeforeCreate(
+  store: Store,
+  parentWorkspace: CreateWorktreeArgs['parentWorkspace'],
+  childWorkspaceKey: ReturnType<typeof worktreeWorkspaceKey>
+): void {
+  if (!parentWorkspace) {
+    return
+  }
+  if (parentWorkspace === childWorkspaceKey) {
+    throw new Error('A worktree cannot be attached to itself.')
+  }
+  const parentScope = parseWorkspaceKey(parentWorkspace)
+  if (!parentScope) {
+    throw new Error(`Invalid parent workspace: ${parentWorkspace}`)
+  }
+  if (parentScope.type === 'folder' && !store.getFolderWorkspace(parentScope.folderWorkspaceId)) {
+    throw new Error(`Parent folder workspace not found: ${parentWorkspace}`)
+  }
+  if (parentScope.type === 'worktree' && !store.getWorktreeMeta(parentScope.worktreeId)) {
+    throw new Error(`Parent worktree workspace not found: ${parentWorkspace}`)
+  }
+}
+
+function recordWorkspaceLineageForCreatedWorktree(
+  store: Store,
+  args: CreateWorktreeArgs,
+  worktree: Worktree,
+  createdAt: number
+): CreateWorktreeResult['workspaceLineage'] {
+  if (!args.parentWorkspace || !worktree.instanceId) {
+    return null
+  }
+  const childWorkspaceKey = worktreeWorkspaceKey(worktree.id)
+  if (args.parentWorkspace === childWorkspaceKey) {
+    console.warn(`[worktree-create] refusing to attach ${worktree.id} to itself`)
+    return null
+  }
+  const parentScope = parseWorkspaceKey(args.parentWorkspace)
+  if (!parentScope) {
+    console.warn(`[worktree-create] ignoring invalid parent workspace ${args.parentWorkspace}`)
+    return null
+  }
+  if (parentScope.type === 'folder' && !store.getFolderWorkspace(parentScope.folderWorkspaceId)) {
+    console.warn(`[worktree-create] parent folder workspace disappeared: ${args.parentWorkspace}`)
+    return null
+  }
+  const parentWorktreeMeta =
+    parentScope.type === 'worktree' ? store.getWorktreeMeta(parentScope.worktreeId) : null
+  if (parentScope.type === 'worktree' && !parentWorktreeMeta) {
+    console.warn(`[worktree-create] parent worktree workspace disappeared: ${args.parentWorkspace}`)
+    return null
+  }
+  return store.setWorkspaceLineage({
+    childWorkspaceKey,
+    childInstanceId: worktree.instanceId,
+    parentWorkspaceKey: args.parentWorkspace,
+    parentInstanceId: parentWorktreeMeta?.instanceId ?? null,
+    origin: 'manual',
+    capture: { source: 'active-workspace', confidence: 'explicit' },
+    createdAt
+  })
 }
 
 function countNonEmptyGitOutputLines(output: string): number {
@@ -556,21 +623,58 @@ async function hasSshRemoteBranchConflict(
   }
 }
 
-type SelectedPrBranchInput = Pick<
+type SelectedReviewBranchInput = Pick<
   CreateWorktreeArgs,
-  'branchNameOverride' | 'linkedPR' | 'pushTarget'
+  | 'branchNameOverride'
+  | 'linkedPR'
+  | 'linkedGitLabMR'
+  | 'linkedBitbucketPR'
+  | 'linkedAzureDevOpsPR'
+  | 'linkedGiteaPR'
+  | 'pushTarget'
 >
 
+type SelectedReviewBranch = {
+  provider: ForgeProviderId
+  number: number
+}
+
+function getSelectedReviewBranch(args: SelectedReviewBranchInput): SelectedReviewBranch | null {
+  if (typeof args.linkedPR === 'number') {
+    return { provider: 'github', number: args.linkedPR }
+  }
+  if (typeof args.linkedGitLabMR === 'number') {
+    return { provider: 'gitlab', number: args.linkedGitLabMR }
+  }
+  if (typeof args.linkedBitbucketPR === 'number') {
+    return { provider: 'bitbucket', number: args.linkedBitbucketPR }
+  }
+  if (typeof args.linkedAzureDevOpsPR === 'number') {
+    return { provider: 'azure-devops', number: args.linkedAzureDevOpsPR }
+  }
+  if (typeof args.linkedGiteaPR === 'number') {
+    return { provider: 'gitea', number: args.linkedGiteaPR }
+  }
+  return null
+}
+
 function isSelectedGitHubPrBranchOverride(
-  args: SelectedPrBranchInput,
+  args: SelectedReviewBranchInput,
   branchName: string
 ): boolean {
   return typeof args.linkedPR === 'number' && args.branchNameOverride === branchName
 }
 
+function isSelectedReviewBranchOverride(
+  args: SelectedReviewBranchInput,
+  branchName: string
+): boolean {
+  return getSelectedReviewBranch(args) !== null && args.branchNameOverride === branchName
+}
+
 function isMatchingSelectedGitHubPr(
   existingPR: Awaited<ReturnType<typeof getPRForBranch>>,
-  args: SelectedPrBranchInput,
+  args: SelectedReviewBranchInput,
   branchName: string
 ): boolean {
   return Boolean(
@@ -583,13 +687,54 @@ function isMatchingSelectedGitHubPr(
 function isAllowedPushTargetRemoteConflict(
   conflictKind: 'local' | 'remote' | null,
   branchName: string,
-  args: SelectedPrBranchInput
+  args: SelectedReviewBranchInput
 ): boolean {
   return (
     conflictKind === 'remote' &&
-    isSelectedGitHubPrBranchOverride(args, branchName) &&
+    isSelectedReviewBranchOverride(args, branchName) &&
     args.pushTarget?.branchName === branchName
   )
+}
+
+function getSelectedReviewLookupHints(args: SelectedReviewBranchInput): {
+  linkedGitHubPR?: number | null
+  linkedGitLabMR?: number | null
+  linkedBitbucketPR?: number | null
+  linkedAzureDevOpsPR?: number | null
+  linkedGiteaPR?: number | null
+} {
+  return {
+    linkedGitHubPR: args.linkedPR ?? null,
+    linkedGitLabMR: args.linkedGitLabMR ?? null,
+    linkedBitbucketPR: args.linkedBitbucketPR ?? null,
+    linkedAzureDevOpsPR: args.linkedAzureDevOpsPR ?? null,
+    linkedGiteaPR: args.linkedGiteaPR ?? null
+  }
+}
+
+async function getSelectedHostedReviewForBranch(
+  repo: Pick<Repo, 'path' | 'connectionId'>,
+  branchName: string,
+  args: SelectedReviewBranchInput
+): Promise<{ matchesSelected: boolean; number: number } | null> {
+  const selectedReview = getSelectedReviewBranch(args)
+  if (!selectedReview) {
+    return null
+  }
+  const review = await getHostedReviewForBranch({
+    repoPath: repo.path,
+    connectionId: repo.connectionId ?? null,
+    branch: branchName,
+    ...getSelectedReviewLookupHints(args)
+  })
+  if (!review) {
+    return null
+  }
+  return {
+    matchesSelected:
+      review.provider === selectedReview.provider && review.number === selectedReview.number,
+    number: review.number
+  }
 }
 
 async function remotePathExists(
@@ -1200,9 +1345,14 @@ export async function createRemoteWorktree(
   )
   if (!checkoutExistingBranch) {
     if (await hasSshRemoteBranchConflict(provider, repo.path, branchName, baseBranch)) {
-      throw new Error(
-        `Branch "${branchName}" already exists on a remote. Pick a different worktree name.`
-      )
+      const selectedReview = isAllowedPushTargetRemoteConflict('remote', branchName, args)
+        ? await getSelectedHostedReviewForBranch(repo, branchName, args).catch(() => null)
+        : null
+      if (!selectedReview?.matchesSelected) {
+        throw new Error(
+          `Branch "${branchName}" already exists on a remote. Pick a different worktree name.`
+        )
+      }
     }
   }
 
@@ -1233,6 +1383,12 @@ export async function createRemoteWorktree(
       `Could not find an available remote worktree path for "${sanitizedName}". Pick a different worktree name.`
     )
   }
+
+  validateWorkspaceLineageParentBeforeCreate(
+    store,
+    args.parentWorkspace,
+    worktreeWorkspaceKey(`${repo.id}::${remotePath}`)
+  )
 
   const sparseDirectories = args.sparseCheckout
     ? normalizeSparseDirectories(args.sparseCheckout.directories)
@@ -1419,6 +1575,9 @@ export async function createRemoteWorktree(
     // Fresh creations must rotate instance identity so stale lineage cannot
     // attach to the new occupant of the same path.
     instanceId: randomUUID(),
+    ...(store.getProjectHostSetups
+      ? getProjectHostSetupWorktreeMeta(store.getProjectHostSetups(), repo)
+      : {}),
     lastActivityAt: now,
     // Why: grants the new worktree a short grace window at the top of the
     // Recent sort. During worktree creation (git fetch + add can take several
@@ -1461,12 +1620,18 @@ export async function createRemoteWorktree(
     ...(args.manualOrder !== undefined ? { manualOrder: args.manualOrder } : {}),
     ...(args.linkedGitLabIssue !== undefined ? { linkedGitLabIssue: args.linkedGitLabIssue } : {}),
     ...(args.linkedGitLabMR !== undefined ? { linkedGitLabMR: args.linkedGitLabMR } : {}),
+    ...(args.linkedBitbucketPR !== undefined ? { linkedBitbucketPR: args.linkedBitbucketPR } : {}),
+    ...(args.linkedAzureDevOpsPR !== undefined
+      ? { linkedAzureDevOpsPR: args.linkedAzureDevOpsPR }
+      : {}),
+    ...(args.linkedGiteaPR !== undefined ? { linkedGiteaPR: args.linkedGiteaPR } : {}),
     ...(args.workspaceStatus !== undefined ? { workspaceStatus: args.workspaceStatus } : {})
   }
   const { worktree } = timing.timeSync('persist_metadata', () => {
     const meta = store.setWorktreeMeta(worktreeId, metaUpdates)
     return { worktree: mergeWorktree(repo.id, created, meta) }
   })
+  const workspaceLineage = recordWorkspaceLineageForCreatedWorktree(store, args, worktree, now)
 
   // Why: `experimentalWorktreeSymlinks` is intentionally not wired up for
   // remote (SSH) worktrees. Creating symlinks on the remote host would
@@ -1520,7 +1685,8 @@ export async function createRemoteWorktree(
 
   notifyWorktreesChanged(mainWindow, repo.id)
   return {
-    worktree,
+    worktree: { ...worktree, workspaceLineage },
+    ...(workspaceLineage ? { workspaceLineage } : {}),
     ...(setup ? { setup } : {}),
     ...(defaultTabs ? { defaultTabs } : {}),
     ...(localBaseRefRefresh ? { localBaseRefRefresh } : {}),
@@ -1652,6 +1818,7 @@ export async function createLocalWorktree(
   let selectedExistingLocalBranchName: string | null = null
   let lastBranchConflictKind: 'local' | 'remote' | null = null
   let lastExistingPR: Awaited<ReturnType<typeof getPRForBranch>> | null = null
+  let lastExistingReviewNumber: number | null = null
   for (let suffix = 1; suffix <= MAX_SUFFIX_ATTEMPTS; suffix += 1) {
     effectiveSanitizedName = suffix === 1 ? sanitizedName : `${sanitizedName}-${suffix}`
     effectiveRequestedName =
@@ -1688,15 +1855,32 @@ export async function createLocalWorktree(
       if (allowedPushTargetRemoteConflict) {
         lastExistingPR = null
         let lookupFailed = false
-        try {
-          lastExistingPR = await getPRForBranch(repo.path, branchName)
-        } catch {
-          lookupFailed = true
-        }
-        if (!lookupFailed && isMatchingSelectedGitHubPr(lastExistingPR, args, branchName)) {
-          lastBranchConflictKind = null
-        } else if (lastExistingPR) {
-          break
+        const selectedReview = getSelectedReviewBranch(args)
+        if (selectedReview?.provider === 'github') {
+          try {
+            lastExistingPR = await getPRForBranch(repo.path, branchName)
+          } catch {
+            lookupFailed = true
+          }
+          if (!lookupFailed && isMatchingSelectedGitHubPr(lastExistingPR, args, branchName)) {
+            lastBranchConflictKind = null
+          } else if (lastExistingPR) {
+            lastExistingReviewNumber = lastExistingPR.number
+            break
+          }
+        } else if (selectedReview) {
+          let hostedReview: Awaited<ReturnType<typeof getSelectedHostedReviewForBranch>> = null
+          try {
+            hostedReview = await getSelectedHostedReviewForBranch(repo, branchName, args)
+          } catch {
+            lookupFailed = true
+          }
+          if (!lookupFailed && hostedReview?.matchesSelected) {
+            lastBranchConflictKind = null
+          } else if (hostedReview) {
+            lastExistingReviewNumber = hostedReview.number
+            break
+          }
         }
       }
     }
@@ -1725,6 +1909,7 @@ export async function createLocalWorktree(
       }
       if (lastExistingPR && !isMatchingSelectedGitHubPr(lastExistingPR, args, branchName)) {
         if (args.branchNameOverride) {
+          lastExistingReviewNumber = lastExistingPR.number
           break
         }
         continue
@@ -1747,9 +1932,9 @@ export async function createLocalWorktree(
     // Why: if every suffix in range collides, fall back to the original
     // "reject with a specific reason" behavior so the user sees why creation
     // failed instead of a generic error or (worse) an infinite spinner.
-    if (lastExistingPR) {
+    if (lastExistingReviewNumber !== null) {
       throw new Error(
-        `Branch "${branchName}" already has PR #${lastExistingPR.number}. Pick a different worktree name.`
+        `Branch "${branchName}" already has PR #${lastExistingReviewNumber}. Pick a different worktree name.`
       )
     }
     if (lastBranchConflictKind) {
@@ -1761,6 +1946,12 @@ export async function createLocalWorktree(
       `Could not find an available worktree name for "${sanitizedName}". Pick a different worktree name.`
     )
   }
+
+  validateWorkspaceLineageParentBeforeCreate(
+    store,
+    args.parentWorkspace,
+    worktreeWorkspaceKey(`${repo.id}::${worktreePath}`)
+  )
 
   if (remoteTrackingRefresh) {
     await timing.time('refresh_base_ref', async () => {
@@ -1922,6 +2113,9 @@ export async function createLocalWorktree(
     // Fresh creations must rotate instance identity so stale lineage cannot
     // attach to the new occupant of the same path.
     instanceId: randomUUID(),
+    ...(store.getProjectHostSetups
+      ? getProjectHostSetupWorktreeMeta(store.getProjectHostSetups(), repo)
+      : {}),
     // Stamp activity so the worktree sorts into its final position
     // immediately — prevents scroll-to-reveal racing with a later
     // bumpWorktreeActivity that would re-sort the list.
@@ -1963,18 +2157,25 @@ export async function createLocalWorktree(
     ...(args.manualOrder !== undefined ? { manualOrder: args.manualOrder } : {}),
     ...(args.linkedGitLabIssue !== undefined ? { linkedGitLabIssue: args.linkedGitLabIssue } : {}),
     ...(args.linkedGitLabMR !== undefined ? { linkedGitLabMR: args.linkedGitLabMR } : {}),
+    ...(args.linkedBitbucketPR !== undefined ? { linkedBitbucketPR: args.linkedBitbucketPR } : {}),
+    ...(args.linkedAzureDevOpsPR !== undefined
+      ? { linkedAzureDevOpsPR: args.linkedAzureDevOpsPR }
+      : {}),
+    ...(args.linkedGiteaPR !== undefined ? { linkedGiteaPR: args.linkedGiteaPR } : {}),
     ...(args.workspaceStatus !== undefined ? { workspaceStatus: args.workspaceStatus } : {})
   }
   const { worktree } = timing.timeSync('persist_metadata', () => {
     const meta = store.setWorktreeMeta(worktreeId, metaUpdates)
     return { worktree: mergeWorktree(repo.id, created, meta) }
   })
-  // Why: the authorized-roots cache is consulted lazily on the next filesystem
-  // access (`ensureAuthorizedRootsCache` rebuilds on demand when dirty). We
-  // just invalidate the cache marker instead of blocking worktree creation on
-  // an immediate rebuild, which can spawn `git worktree list` per repo and
-  // adds 100ms+ to every create.
-  invalidateAuthorizedRootsCache()
+  const workspaceLineage = recordWorkspaceLineageForCreatedWorktree(store, args, worktree, now)
+  // Why: creation already paid for `git worktree list`; seed the exact roots
+  // now so the next file/git IPC does not lazily rescan and trip macOS privacy
+  // prompts for the newly-created workspace.
+  registerWorktreeRootsForRepo(store, repo.id, [
+    repo.path,
+    ...gitWorktrees.map((worktree) => worktree.path)
+  ])
 
   // Why: create user-configured symlinks from the primary checkout into the
   // new worktree before any setup script runs, so scripts that reuse shared
@@ -2057,7 +2258,8 @@ export async function createLocalWorktree(
 
   notifyWorktreesChanged(mainWindow, repo.id)
   return {
-    worktree,
+    worktree: { ...worktree, workspaceLineage },
+    ...(workspaceLineage ? { workspaceLineage } : {}),
     ...(setup && !stagedStartup.didSpawnSetup ? { setup } : {}),
     ...(defaultTabs ? { defaultTabs } : {}),
     ...(addResult.localBaseRefRefresh

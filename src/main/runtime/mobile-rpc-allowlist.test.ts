@@ -14,6 +14,18 @@ const MOBILE_DYNAMIC_RPC_METHODS = [
   'gitlab.updateMR'
 ]
 
+const MOBILE_STREAMING_CLEANUP_RPC_METHODS = [
+  // Why: shared-control unsubscribe methods are sent from generated cleanup
+  // paths, so literal mobile source scanning cannot discover every one.
+  'accounts.unsubscribe',
+  'browser.screencast.unsubscribe',
+  'notifications.unsubscribe',
+  'runtime.clientEvents.unsubscribe',
+  'session.tabs.unsubscribe',
+  'session.tabs.unsubscribeAll',
+  'terminal.unsubscribe'
+]
+
 function listSourceFiles(root: string): string[] {
   const entries = readdirSync(root)
   const files: string[] = []
@@ -85,6 +97,13 @@ describe('mobile RPC allowlist', () => {
     // method still fails at runtime if it was never added to ALL_RPC_METHODS.
     const registered = registeredRuntimeMethods()
     const missing = mobileRpcMethods().filter((method) => !registered.has(method))
+
+    expect(missing).toEqual([])
+  })
+
+  it('allows every cleanup RPC for mobile streaming subscriptions', () => {
+    const allowed = mobileRpcAllowlist()
+    const missing = MOBILE_STREAMING_CLEANUP_RPC_METHODS.filter((method) => !allowed.has(method))
 
     expect(missing).toEqual([])
   })

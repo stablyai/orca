@@ -15,6 +15,7 @@ import {
 import type { WorkspacePortGroup } from '@/lib/workspace-port-groups'
 import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import { useAppStore } from '@/store'
+import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import type { WorkspacePort } from '../../../../shared/workspace-ports'
 import { translate } from '@/i18n/i18n'
 
@@ -72,12 +73,22 @@ export function PortRow({
   external?: boolean
 }): React.JSX.Element {
   const settings = useAppStore((s) => s.settings)
+  const runtimeEnvironmentId = useAppStore((s) =>
+    getRuntimeEnvironmentIdForWorktree(
+      s,
+      port.kind === 'workspace' ? port.owner.worktreeId : activeWorktreeId
+    )
+  )
   const createBrowserTab = useAppStore((s) => s.createBrowserTab)
   const setRemoteBrowserPageHandle = useAppStore((s) => s.setRemoteBrowserPageHandle)
   const setWorkspacePortScan = useAppStore((s) => s.setWorkspacePortScan)
+  const setWorkspacePortScanForKey = useAppStore((s) => s.setWorkspacePortScanForKey)
   const setWorkspacePortScanRefreshing = useAppStore((s) => s.setWorkspacePortScanRefreshing)
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
-  const runtimeTarget = useMemo(() => getActiveRuntimeTarget(settings), [settings])
+  const runtimeTarget = useMemo(
+    () => getActiveRuntimeTarget({ ...settings, activeRuntimeEnvironmentId: runtimeEnvironmentId }),
+    [runtimeEnvironmentId, settings]
+  )
   const processLabel = port.processName ?? (port.pid ? `PID ${port.pid}` : 'Unknown process')
   const openInOrcaBrowser = shouldOpenWorkspacePortInOrcaBrowser(settings)
   const canOpen = !openInOrcaBrowser || port.kind === 'workspace' || Boolean(activeWorktreeId)
@@ -161,6 +172,8 @@ export function PortRow({
         const refreshResult = await refreshWorkspacePortScanAfterStop({
           runtimeTarget,
           setWorkspacePortScan,
+          setWorkspacePortScanForKey,
+          getWorkspacePortScansByKey: () => useAppStore.getState().workspacePortScansByKey,
           setWorkspacePortScanRefreshing
         })
         if (!refreshResult.ok) {
@@ -182,6 +195,7 @@ export function PortRow({
       recordFeatureInteraction,
       runtimeTarget,
       setWorkspacePortScan,
+      setWorkspacePortScanForKey,
       setWorkspacePortScanRefreshing
     ]
   )

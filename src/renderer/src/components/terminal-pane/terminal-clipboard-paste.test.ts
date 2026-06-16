@@ -22,7 +22,7 @@ describe('terminal clipboard paste', () => {
 
     expect(pasteText).toHaveBeenCalledWith(
       '/var/folders/3l/b7w02vh17tg5r5s3nhhdf3kh0000gn/T/orca-paste-1760000000000-id.png',
-      { forceBracketedPaste: true }
+      { forceBracketedPaste: true, recoverImagePasteWebglAtlas: true }
     )
   })
 
@@ -31,6 +31,9 @@ describe('terminal clipboard paste', () => {
     const terminal = {
       modes: { bracketedPasteMode: true },
       options: { ignoreBracketedPasteMode: false },
+      input: vi.fn(() => {
+        observedIgnoreBracketedPasteMode.push(terminal.options.ignoreBracketedPasteMode)
+      }),
       paste: vi.fn(() => {
         observedIgnoreBracketedPasteMode.push(terminal.options.ignoreBracketedPasteMode)
       })
@@ -45,10 +48,11 @@ describe('terminal clipboard paste', () => {
       pasteText: (text, options) => pasteTerminalText(terminal, text, options)
     })
 
-    expect(terminal.paste).toHaveBeenCalledWith(
+    expect(terminal.input).toHaveBeenCalledWith(
       '\x1b[200~/tmp/orca-paste-1760000000000-id.png\x1b[201~'
     )
-    expect(observedIgnoreBracketedPasteMode).toEqual([true])
+    expect(terminal.paste).not.toHaveBeenCalled()
+    expect(observedIgnoreBracketedPasteMode).toEqual([false])
     expect(terminal.options.ignoreBracketedPasteMode).toBe(false)
   })
 
@@ -57,6 +61,9 @@ describe('terminal clipboard paste', () => {
     const terminal = {
       modes: { bracketedPasteMode: false },
       options: { ignoreBracketedPasteMode: false },
+      input: vi.fn(() => {
+        observedIgnoreBracketedPasteMode.push(terminal.options.ignoreBracketedPasteMode)
+      }),
       paste: vi.fn(() => {
         observedIgnoreBracketedPasteMode.push(terminal.options.ignoreBracketedPasteMode)
       })
@@ -70,10 +77,11 @@ describe('terminal clipboard paste', () => {
       pasteText: (text, options) => pasteTerminalText(terminal, text, options)
     })
 
-    expect(terminal.paste).toHaveBeenCalledWith(
+    expect(terminal.input).toHaveBeenCalledWith(
       '\x1b[200~/tmp/orca-paste-1760000000000-id.png\x1b[201~'
     )
-    expect(observedIgnoreBracketedPasteMode).toEqual([true])
+    expect(terminal.paste).not.toHaveBeenCalled()
+    expect(observedIgnoreBracketedPasteMode).toEqual([false])
     expect(terminal.options.ignoreBracketedPasteMode).toBe(false)
   })
 
@@ -92,7 +100,8 @@ describe('terminal clipboard paste', () => {
 
     expect(saveClipboardImageAsTempFile).toHaveBeenCalledWith({ connectionId: 'ssh-1' })
     expect(pasteText).toHaveBeenCalledWith('/var/tmp/orca-paste-1760000000000-id.png', {
-      forceBracketedPaste: true
+      forceBracketedPaste: true,
+      recoverImagePasteWebglAtlas: true
     })
   })
 
@@ -108,7 +117,8 @@ describe('terminal clipboard paste', () => {
     })
 
     expect(pasteText).toHaveBeenCalledWith('/tmp/orca-paste-1760000000000-id.png', {
-      forceBracketedPaste: true
+      forceBracketedPaste: true,
+      recoverImagePasteWebglAtlas: true
     })
   })
 
@@ -126,7 +136,8 @@ describe('terminal clipboard paste', () => {
 
     expect(saveClipboardImageAsTempFile).toHaveBeenCalledWith({ connectionId: undefined })
     expect(pasteText).toHaveBeenCalledWith('/tmp/orca-paste-1760000000000-id.png', {
-      forceBracketedPaste: true
+      forceBracketedPaste: true,
+      recoverImagePasteWebglAtlas: true
     })
   })
 
@@ -144,11 +155,65 @@ describe('terminal clipboard paste', () => {
     expect(saveClipboardImageAsTempFile).not.toHaveBeenCalled()
   })
 
+  it('forces Windows multi-line text paste onto the bracketed-paste path', async () => {
+    const saveClipboardImageAsTempFile = vi.fn()
+    const pasteText = vi.fn()
+
+    await pasteTerminalClipboard({
+      readClipboardText: vi.fn().mockResolvedValue('line one\nline two'),
+      saveClipboardImageAsTempFile,
+      pasteText,
+      forceBracketedMultilineTextPaste: true
+    })
+
+    expect(pasteText).toHaveBeenCalledWith('line one\nline two', {
+      forceBracketedPaste: true
+    })
+    expect(saveClipboardImageAsTempFile).not.toHaveBeenCalled()
+  })
+
+  it('sends Windows multi-line text as direct bracketed terminal input when xterm mode is off', async () => {
+    const terminal = {
+      modes: { bracketedPasteMode: false },
+      options: { ignoreBracketedPasteMode: false },
+      input: vi.fn(),
+      paste: vi.fn()
+    }
+
+    await pasteTerminalClipboard({
+      readClipboardText: vi.fn().mockResolvedValue('line one\nline two'),
+      saveClipboardImageAsTempFile: vi.fn(),
+      pasteText: (text, options) => pasteTerminalText(terminal, text, options),
+      forceBracketedMultilineTextPaste: true
+    })
+
+    expect(terminal.input).toHaveBeenCalledWith('\x1b[200~line one\nline two\x1b[201~')
+    expect(terminal.paste).not.toHaveBeenCalled()
+  })
+
+  it('keeps single-line text on the ordinary paste path when Windows multi-line protection is on', async () => {
+    const saveClipboardImageAsTempFile = vi.fn()
+    const pasteText = vi.fn()
+
+    await pasteTerminalClipboard({
+      readClipboardText: vi.fn().mockResolvedValue('hello'),
+      saveClipboardImageAsTempFile,
+      pasteText,
+      forceBracketedMultilineTextPaste: true
+    })
+
+    expect(pasteText).toHaveBeenCalledWith('hello')
+    expect(saveClipboardImageAsTempFile).not.toHaveBeenCalled()
+  })
+
   it('keeps normal single-line text paste on the stale Ctrl+C protection path', async () => {
     const observedIgnoreBracketedPasteMode: boolean[] = []
     const terminal = {
       modes: { bracketedPasteMode: true },
       options: { ignoreBracketedPasteMode: false },
+      input: vi.fn(() => {
+        observedIgnoreBracketedPasteMode.push(terminal.options.ignoreBracketedPasteMode)
+      }),
       paste: vi.fn(() => {
         observedIgnoreBracketedPasteMode.push(terminal.options.ignoreBracketedPasteMode)
       })

@@ -16,6 +16,12 @@ type FirstWindowStartupServicesResult = {
 }
 
 export const FIRST_WINDOW_STARTUP_SERVICE_TIMEOUT_MS = 12_000
+// Why: a slow (but succeeding) daemon start must not flip terminals to the
+// LocalPtyProvider fallback — local PTYs are killed on quit, so panes bound to
+// them lose their daemon sessions permanently (#5232). The PTY gate therefore
+// waits for the daemon attempt itself and only fail-opens at a hard cap that
+// exists solely as a deadlock backstop.
+export const LOCAL_PTY_STARTUP_FAIL_OPEN_TIMEOUT_MS = 60_000
 
 function startService(
   label: string,
@@ -60,33 +66,40 @@ export function startFirstWindowStartupServices({
 }: FirstWindowStartupServices): FirstWindowStartupServicesResult {
   // Why: daemon startup and hook-server binding are independent, but both gate
   // restored terminals; run them together so cold-start latency is max(), not sum().
-  // The first window and local PTY startup both fail open after the timeout.
-  // The timeout also aborts slow services so late daemon swaps cannot strand
-  // any fallback LocalPtyProvider PTYs that spawn after the barrier opens.
+  // The first window fails open quickly so the user sees the app; the local PTY
+  // gate waits for the services themselves (a slow daemon must not flip spawns
+  // to the non-restorable LocalPtyProvider fallback) and only fails open at the
+  // hard cap, which also aborts the services so a late daemon swap cannot
+  // strand any fallback PTYs that spawn after the gate opens.
   const daemon = startService('daemon PTY provider', startDaemonPtyProvider, onDaemonError)
   const hooks = startService('agent hook server', startAgentHookServer, onAgentHookServerError)
   const allServicesReady = Promise.all([daemon.ready, hooks.ready]).then(() => undefined)
-  let timeout: ReturnType<typeof setTimeout> | null = null
-  let resolveTimedOut!: () => void
-  const timedOut = new Promise<void>((resolve) => {
-    resolveTimedOut = resolve
+  let windowTimeout: ReturnType<typeof setTimeout> | null = null
+  let failOpenTimeout: ReturnType<typeof setTimeout> | null = null
+  const servicesSettled = allServicesReady.finally(() => {
+    if (windowTimeout) {
+      clearTimeout(windowTimeout)
+    }
+    if (failOpenTimeout) {
+      clearTimeout(failOpenTimeout)
+    }
   })
   const firstWindowReady = Promise.race([
-    allServicesReady.finally(() => {
-      if (timeout) {
-        clearTimeout(timeout)
-      }
-    }),
+    servicesSettled,
     new Promise<void>((resolve) => {
-      timeout = setTimeout(() => {
-        daemon.reportTimeout()
-        hooks.reportTimeout()
-        resolveTimedOut()
-        resolve()
-      }, FIRST_WINDOW_STARTUP_SERVICE_TIMEOUT_MS)
+      windowTimeout = setTimeout(resolve, FIRST_WINDOW_STARTUP_SERVICE_TIMEOUT_MS)
     })
   ])
-  const localPtyReady = Promise.race([allServicesReady, timedOut])
+  const localPtyReady = Promise.race([
+    servicesSettled,
+    new Promise<void>((resolve) => {
+      failOpenTimeout = setTimeout(() => {
+        daemon.reportTimeout()
+        hooks.reportTimeout()
+        resolve()
+      }, LOCAL_PTY_STARTUP_FAIL_OPEN_TIMEOUT_MS)
+    })
+  ])
 
   return { firstWindowReady, localPtyReady }
 }

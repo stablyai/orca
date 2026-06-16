@@ -11,6 +11,7 @@ import React, {
   useSyncExternalStore
 } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
+import { useShallow } from 'zustand/react/shallow'
 import type { editor as monacoEditor } from 'monaco-editor'
 import {
   ArrowDown,
@@ -50,8 +51,6 @@ import { ButtonGroup } from '@/components/ui/button-group'
 import { Input } from '@/components/ui/input'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { useConfirmationDialog } from '@/components/confirmation-dialog'
-import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet'
-import { VisuallyHidden } from 'radix-ui'
 import {
   Accordion,
   AccordionContent,
@@ -83,7 +82,18 @@ import {
   isIntrinsicHeightImageDiff
 } from '@/components/editor/diff-section-layout'
 import type { DiffSection } from '@/components/editor/diff-section-types'
+import { removeDiffSectionMeasuredHeight } from '@/components/editor/diff-section-height-cache'
+import {
+  MAX_RENDERED_DIFF_COMBINED_CHARACTERS,
+  MAX_RENDERED_DIFF_LINES_PER_SIDE,
+  getLargeDiffRenderLimit,
+  type LargeDiffRenderLimit
+} from '@/components/editor/large-diff-render-limit'
 import type { CombinedDiffFileTreeEntry } from '@/components/editor/combined-diff-file-tree-model'
+import {
+  getStoredTextDiffContent,
+  getStoredTextDiffResult
+} from '@/components/editor/large-diff-section-content'
 import { CHECK_COLOR, CHECK_ICON } from '@/components/right-sidebar/checks-panel-content'
 import {
   createGitHubChecksTabState,
@@ -166,10 +176,13 @@ import type {
   PRCheckDetail,
   PRComment
 } from '../../../shared/types'
+import {
+  getTaskSourceRuntimeSettings,
+  type TaskSourceContext
+} from '../../../shared/task-source-context'
 import { PER_REPO_FETCH_LIMIT } from '../../../shared/work-items'
 import { translate } from '@/i18n/i18n'
-
-const IS_MAC = navigator.userAgent.includes('Mac')
+import { getSettingsForRepoRuntimeOwner } from '@/lib/repo-runtime-owner'
 
 // Why: the GH item dialog can be opened from any work-item list surface and
 // doesn't have the full owner/repo context the list's cache entry carries.
@@ -264,8 +277,8 @@ type GitHubItemDialogProps = {
   workItem: GitHubWorkItem | null
   repoPath: string | null
   repoId?: string | null
+  sourceContext?: TaskSourceContext | null
   initialTab?: ItemDialogTab
-  variant?: 'sheet' | 'page'
   backLabel?: string
   /** Called when the user clicks the primary CTA to start work from this item. */
   onUse: (item: GitHubWorkItem) => void
@@ -428,18 +441,23 @@ function PRReviewersPanel({
   item,
   loading,
   repoPath,
+  sourceContext,
   onReviewersRequested
 }: {
   item: GitHubWorkItem
   loading: boolean
   repoPath: string | null
+  sourceContext?: TaskSourceContext | null
   onReviewersRequested: (reviewRequests: GitHubAssignableUser[]) => void
 }): React.JSX.Element {
   const [open, setOpen] = useState(false)
   const [reviewerInput, setReviewerInput] = useState('')
   const [reviewerPickerSide, setReviewerPickerSide] = useState<'top' | 'bottom'>('bottom')
   const [reviewerPickerMaxHeight, setReviewerPickerMaxHeight] = useState<number | null>(null)
-  const [activeReviewerCursor, setActiveReviewerCursor] = useState({ resetKey: '', index: 0 })
+  const [activeReviewerCursor, setActiveReviewerCursor] = useState({
+    resetKey: '',
+    index: 0
+  })
   const [submitting, setSubmitting] = useState(false)
   const [localReviewRequests, setLocalReviewRequests] = useState<GitHubAssignableUser[]>(
     () => item.reviewRequests ?? []
@@ -450,7 +468,19 @@ function PRReviewersPanel({
     reviewRequests: item.reviewRequests
   }))
   const patchWorkItem = useAppStore((s) => s.patchWorkItem)
-  const settings = useAppStore((s) => s.settings)
+  const repoOwnerSettings = useAppStore(
+    useShallow((s) => getSettingsForRepoRuntimeOwner(s, item.repoId ?? null))
+  )
+  const sourceSettings = useMemo(
+    () =>
+      sourceContext?.provider === 'github'
+        ? ({
+            ...repoOwnerSettings,
+            ...getTaskSourceRuntimeSettings(sourceContext)
+          } as typeof repoOwnerSettings)
+        : repoOwnerSettings,
+    [repoOwnerSettings, sourceContext]
+  )
   const reviewerInputRef = useRef<HTMLInputElement | null>(null)
   const reviewerInputFocusFrameRef = useRef<number | null>(null)
   const reviewerPanelMountedRef = useRef(true)
@@ -525,11 +555,12 @@ function PRReviewersPanel({
     open && reviewSlug ? reviewSlug.owner : null,
     open && reviewSlug ? reviewSlug.repo : null,
     reviewerSeedUsers.map((user) => user.login),
-    settings
+    sourceSettings
   )
   const reviewerMetadataByPath = useRepoAssignees(
     open && !reviewSlug ? repoPath : null,
-    open && !reviewSlug ? item.repoId : null
+    open && !reviewSlug ? item.repoId : null,
+    sourceSettings
   )
   const reviewerMetadata = reviewSlug ? reviewerMetadataBySlug : reviewerMetadataByPath
   const displayItem = { ...item, reviewRequests: localReviewRequests }
@@ -628,7 +659,8 @@ function PRReviewersPanel({
     localReviewRequests.length > 0 ||
     item.reviewRequests !== undefined ||
     item.latestReviews !== undefined
-  const canRequestReview = !!repoPath || getActiveRuntimeTarget(settings).kind === 'environment'
+  const canRequestReview =
+    !!repoPath || getActiveRuntimeTarget(sourceSettings).kind === 'environment'
 
   const measureReviewerPickerPlacement = useCallback(() => {
     const rect = reviewerInputRef.current?.getBoundingClientRect()
@@ -671,7 +703,7 @@ function PRReviewersPanel({
       )
       return
     }
-    const target = getActiveRuntimeTarget(settings)
+    const target = getActiveRuntimeTarget(sourceSettings)
     if (target.kind !== 'environment' && !repoPath) {
       toast.error(
         translate(
@@ -694,6 +726,7 @@ function PRReviewersPanel({
           : await window.api.gh.requestPRReviewers({
               repoPath: repoPath ?? '',
               repoId: item.repoId,
+              sourceContext,
               prNumber: item.number,
               reviewers: logins
             })
@@ -713,7 +746,9 @@ function PRReviewersPanel({
         localReviewRequests
       )
       setLocalReviewRequests(nextReviewRequests)
-      patchWorkItem(item.id, { reviewRequests: nextReviewRequests }, item.repoId)
+      patchWorkItem(item.id, { reviewRequests: nextReviewRequests }, item.repoId, {
+        sourceContext
+      })
       onReviewersRequested(nextReviewRequests)
       setReviewerInput('')
       useAppStore.getState().recordFeatureInteraction('github-tasks')
@@ -746,7 +781,7 @@ function PRReviewersPanel({
     if (logins.length === 0) {
       return
     }
-    const target = getActiveRuntimeTarget(settings)
+    const target = getActiveRuntimeTarget(sourceSettings)
     if (target.kind !== 'environment' && !repoPath) {
       toast.error(
         translate(
@@ -769,6 +804,7 @@ function PRReviewersPanel({
           : await window.api.gh.removePRReviewers({
               repoPath: repoPath ?? '',
               repoId: item.repoId,
+              sourceContext,
               prNumber: item.number,
               reviewers: logins
             })
@@ -787,7 +823,9 @@ function PRReviewersPanel({
         (reviewer) => !removed.has(reviewer.login.toLowerCase())
       )
       setLocalReviewRequests(nextReviewRequests)
-      patchWorkItem(item.id, { reviewRequests: nextReviewRequests }, item.repoId)
+      patchWorkItem(item.id, { reviewRequests: nextReviewRequests }, item.repoId, {
+        sourceContext
+      })
       onReviewersRequested(nextReviewRequests)
       setReviewerInput('')
       useAppStore.getState().recordFeatureInteraction('github-tasks')
@@ -1070,7 +1108,10 @@ function PRReviewersPanel({
                         {translate('auto.components.GitHubItemDialog.c2b21818e1', 'Suggestions')}
                       </div>
                       {suggestedReviewerRows.map((reviewer, index) =>
-                        renderReviewerPickerRow(reviewer, { suggested: true, activeIndex: index })
+                        renderReviewerPickerRow(reviewer, {
+                          suggested: true,
+                          activeIndex: index
+                        })
                       )}
                     </>
                   ) : null}
@@ -1361,21 +1402,89 @@ if (typeof import.meta !== 'undefined' && import.meta.hot) {
 // Why: bounded LRU — opening many PRs with many files during a session
 // would otherwise grow this module-level map without bound until reload.
 const PR_FILE_CONTENT_CACHE_MAX = 64
-const prFileContentCache = new Map<string, Promise<GitHubPRFileContents> | GitHubPRFileContents>()
+// Why: raw-content overflow is only a sentinel; force the reported size past
+// the render budget so downstream checks reliably choose fallback mode.
+const GITHUB_PR_RAW_CONTENT_OVERFLOW_CHARACTER_COUNT = MAX_RENDERED_DIFF_COMBINED_CHARACTERS + 1
+const PR_FILE_CONTENT_CACHE_MAX_BYTES = MAX_RENDERED_DIFF_COMBINED_CHARACTERS * 4
+type PRFileContentCacheEntry = {
+  value: Promise<GitHubPRFileContents> | GitHubPRFileContents
+  byteCount: number
+}
+const prFileContentCache = new Map<string, PRFileContentCacheEntry>()
+let prFileContentCacheBytes = 0
+
+function getUtf8ByteCount(value: string): number {
+  let byteCount = 0
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index)
+    if (code < 0x80) {
+      byteCount += 1
+    } else if (code < 0x800) {
+      byteCount += 2
+    } else if (code >= 0xd800 && code <= 0xdbff && index + 1 < value.length) {
+      const next = value.charCodeAt(index + 1)
+      if (next >= 0xdc00 && next <= 0xdfff) {
+        byteCount += 4
+        index += 1
+      } else {
+        byteCount += 3
+      }
+    } else {
+      byteCount += 3
+    }
+  }
+  return byteCount
+}
+
+function isPRFileContentsTooLargeSentinel(contents: GitHubPRFileContents): boolean {
+  return contents.originalTooLarge === true || contents.modifiedTooLarge === true
+}
+
+function getPRFileContentsCacheByteCount(contents: GitHubPRFileContents): number {
+  if (isPRFileContentsTooLargeSentinel(contents)) {
+    return 0
+  }
+  return getUtf8ByteCount(contents.original) + getUtf8ByteCount(contents.modified)
+}
+
+function getRetainedPRFileContentsByteCount(contents: GitHubPRFileContents): number | null {
+  if (isPRFileContentsTooLargeSentinel(contents)) {
+    return 0
+  }
+  const byteCount = getPRFileContentsCacheByteCount(contents)
+  return byteCount <= PR_FILE_CONTENT_CACHE_MAX_BYTES ? byteCount : null
+}
 
 function touchPRFileContentCache(
   key: string,
   value: Promise<GitHubPRFileContents> | GitHubPRFileContents
 ): void {
+  const retainedByteCount = value instanceof Promise ? 0 : getRetainedPRFileContentsByteCount(value)
+  if (retainedByteCount === null) {
+    const existing = prFileContentCache.get(key)
+    prFileContentCacheBytes -= existing?.byteCount ?? 0
+    prFileContentCache.delete(key)
+    return
+  }
+
+  const existing = prFileContentCache.get(key)
+  prFileContentCacheBytes -= existing?.byteCount ?? 0
   // Why: re-insert to move to the most-recently-used position; Map preserves
   // insertion order so the oldest key is always first when evicting.
   prFileContentCache.delete(key)
-  prFileContentCache.set(key, value)
-  while (prFileContentCache.size > PR_FILE_CONTENT_CACHE_MAX) {
+  const byteCount = retainedByteCount
+  prFileContentCache.set(key, { value, byteCount })
+  prFileContentCacheBytes += byteCount
+  while (
+    prFileContentCache.size > PR_FILE_CONTENT_CACHE_MAX ||
+    prFileContentCacheBytes > PR_FILE_CONTENT_CACHE_MAX_BYTES
+  ) {
     const oldest = prFileContentCache.keys().next().value
     if (oldest === undefined) {
       break
     }
+    const evicted = prFileContentCache.get(oldest)
+    prFileContentCacheBytes -= evicted?.byteCount ?? 0
     prFileContentCache.delete(oldest)
   }
 }
@@ -1388,8 +1497,9 @@ function getPRFileContentCacheKey(args: {
   headSha: string
   baseSha: string
 }): string {
+  const repositoryKey = args.repoId ? `repo:${args.repoId}` : `path:${args.repoPath}`
   return [
-    args.repoId,
+    repositoryKey,
     args.prNumber,
     args.file.path,
     args.file.oldPath ?? '',
@@ -1402,6 +1512,7 @@ function getPRFileContentCacheKey(args: {
 function loadPRFileContents(args: {
   repoPath: string
   repoId: string
+  sourceContext?: TaskSourceContext | null
   prNumber: number
   file: GitHubPRFile
   headSha: string
@@ -1410,13 +1521,15 @@ function loadPRFileContents(args: {
   const cacheKey = getPRFileContentCacheKey(args)
   const cached = prFileContentCache.get(cacheKey)
   if (cached) {
-    touchPRFileContentCache(cacheKey, cached)
-    return Promise.resolve(cached)
+    touchPRFileContentCache(cacheKey, cached.value)
+    return Promise.resolve(cached.value)
   }
-  const request = window.api.gh
+  let request: Promise<GitHubPRFileContents>
+  request = window.api.gh
     .prFileContents({
       repoPath: args.repoPath,
       repoId: args.repoId,
+      sourceContext: args.sourceContext,
       prNumber: args.prNumber,
       path: args.file.path,
       oldPath: args.file.oldPath,
@@ -1425,11 +1538,17 @@ function loadPRFileContents(args: {
       baseSha: args.baseSha
     })
     .then((contents) => {
-      touchPRFileContentCache(cacheKey, contents)
+      if (prFileContentCache.get(cacheKey)?.value === request) {
+        touchPRFileContentCache(cacheKey, contents)
+      }
       return contents
     })
     .catch((err) => {
-      prFileContentCache.delete(cacheKey)
+      const cachedRequest = prFileContentCache.get(cacheKey)
+      if (cachedRequest?.value === request) {
+        prFileContentCacheBytes -= cachedRequest.byteCount
+        prFileContentCache.delete(cacheKey)
+      }
       throw err
     })
   touchPRFileContentCache(cacheKey, request)
@@ -1439,6 +1558,7 @@ function loadPRFileContents(args: {
 function addIssueCommentForRepo(args: {
   repoId?: string
   repoPath: string
+  sourceContext?: TaskSourceContext | null
   number: number
   body: string
   type?: 'issue' | 'pr'
@@ -1446,6 +1566,7 @@ function addIssueCommentForRepo(args: {
   return window.api.gh.addIssueComment({
     repoPath: args.repoPath,
     repoId: args.repoId,
+    sourceContext: args.sourceContext,
     number: args.number,
     body: args.body,
     type: args.type
@@ -1455,6 +1576,7 @@ function addIssueCommentForRepo(args: {
 function addPRReviewCommentForRepo(args: {
   repoId?: string
   repoPath: string
+  sourceContext?: TaskSourceContext | null
   prNumber: number
   commitId: string
   path: string
@@ -1465,6 +1587,7 @@ function addPRReviewCommentForRepo(args: {
   return window.api.gh.addPRReviewComment({
     repoPath: args.repoPath,
     repoId: args.repoId,
+    sourceContext: args.sourceContext,
     prNumber: args.prNumber,
     commitId: args.commitId,
     path: args.path,
@@ -1477,6 +1600,7 @@ function addPRReviewCommentForRepo(args: {
 function addPRReviewCommentReplyForRepo(args: {
   repoId?: string
   repoPath: string
+  sourceContext?: TaskSourceContext | null
   prNumber: number
   commentId: number
   body: string
@@ -1487,6 +1611,7 @@ function addPRReviewCommentReplyForRepo(args: {
   return window.api.gh.addPRReviewCommentReply({
     repoPath: args.repoPath,
     repoId: args.repoId,
+    sourceContext: args.sourceContext,
     prNumber: args.prNumber,
     commentId: args.commentId,
     body: args.body,
@@ -1499,6 +1624,7 @@ function addPRReviewCommentReplyForRepo(args: {
 function setPRFileViewedForRepo(args: {
   repoId?: string
   repoPath: string
+  sourceContext?: TaskSourceContext | null
   prNumber: number
   pullRequestId: string
   path: string
@@ -1507,6 +1633,7 @@ function setPRFileViewedForRepo(args: {
   return window.api.gh.setPRFileViewed({
     repoPath: args.repoPath,
     repoId: args.repoId,
+    sourceContext: args.sourceContext,
     prNumber: args.prNumber,
     pullRequestId: args.pullRequestId,
     path: args.path,
@@ -1517,12 +1644,14 @@ function setPRFileViewedForRepo(args: {
 function getWorkItemDetailsForRepo(args: {
   repoId?: string
   repoPath: string
+  sourceContext?: TaskSourceContext | null
   number: number
   type: 'issue' | 'pr'
 }): Promise<GitHubWorkItemDetails | null> {
   return window.api.gh.workItemDetails({
     repoPath: args.repoPath,
     repoId: args.repoId,
+    sourceContext: args.sourceContext,
     number: args.number,
     type: args.type
   })
@@ -1621,6 +1750,30 @@ function gitHubPRFileToBranchEntry(file: GitHubPRFile): GitBranchChangeEntry {
   }
 }
 
+function getPRFileContentsRenderLimit(contents: GitHubPRFileContents): LargeDiffRenderLimit {
+  if (!contents.originalTooLarge && !contents.modifiedTooLarge) {
+    return getLargeDiffRenderLimit({
+      originalContent: contents.original,
+      modifiedContent: contents.modified
+    })
+  }
+
+  return {
+    limited: true,
+    reason: 'character-count' as const,
+    lineCounts: null,
+    characterCount:
+      contents.original.length +
+      contents.modified.length +
+      (contents.originalTooLarge ? GITHUB_PR_RAW_CONTENT_OVERFLOW_CHARACTER_COUNT : 0) +
+      (contents.modifiedTooLarge ? GITHUB_PR_RAW_CONTENT_OVERFLOW_CHARACTER_COUNT : 0),
+    limits: {
+      maxLinesPerSide: MAX_RENDERED_DIFF_LINES_PER_SIDE,
+      maxCombinedCharacters: MAX_RENDERED_DIFF_COMBINED_CHARACTERS
+    }
+  }
+}
+
 function getPRFileDiffResult(contents: GitHubPRFileContents): GitDiffResult {
   if (contents.originalIsBinary) {
     return {
@@ -1655,6 +1808,7 @@ type PRFilesCombinedDiffViewerProps = {
   comments: PRComment[]
   repoPath: string
   repoId: string
+  sourceContext?: TaskSourceContext | null
   prNumber: number
   prUrl: string
   headSha: string | undefined
@@ -1669,6 +1823,7 @@ function PRFilesCombinedDiffViewer({
   comments,
   repoPath,
   repoId,
+  sourceContext,
   prNumber,
   prUrl,
   headSha,
@@ -1704,7 +1859,10 @@ function PRFilesCombinedDiffViewer({
       return entriesCacheRef.current.entries
     }
     const nextEntries = files.map(gitHubPRFileToBranchEntry)
-    entriesCacheRef.current = { signature: diffEntrySignature, entries: nextEntries }
+    entriesCacheRef.current = {
+      signature: diffEntrySignature,
+      entries: nextEntries
+    }
     return nextEntries
   }, [diffEntrySignature, files])
   const fileByPath = useMemo(() => new Map(files.map((file) => [file.path, file])), [files])
@@ -1784,7 +1942,8 @@ function PRFilesCombinedDiffViewer({
         loading: true,
         error: undefined,
         dirty: false,
-        diffResult: null
+        diffResult: null,
+        largeDiffRenderLimit: null
       }))
     )
   }, [entries, entrySignature])
@@ -1805,7 +1964,11 @@ function PRFilesCombinedDiffViewer({
       const generation = generationRef.current
       loadingIndicesRef.current.add(index)
 
-      const load = async (): Promise<{ result: GitDiffResult; error?: string }> => {
+      const load = async (): Promise<{
+        result: GitDiffResult
+        resultContents?: GitHubPRFileContents
+        error?: string
+      }> => {
         if (file.isBinary) {
           return {
             result: {
@@ -1835,12 +1998,13 @@ function PRFilesCombinedDiffViewer({
         const contents = await loadPRFileContents({
           repoPath,
           repoId,
+          sourceContext,
           prNumber,
           file,
           headSha,
           baseSha
         })
-        return { result: getPRFileDiffResult(contents) }
+        return { result: getPRFileDiffResult(contents), resultContents: contents }
       }
 
       load()
@@ -1852,37 +2016,46 @@ function PRFilesCombinedDiffViewer({
             originalIsBinary: false,
             modifiedIsBinary: false
           } as GitDiffResult,
+          resultContents: undefined,
           error: error instanceof Error ? error.message : 'Failed to load diff.'
         }))
-        .then(({ result, error }) => {
+        .then(({ result, resultContents, error }) => {
           loadingIndicesRef.current.delete(index)
           if (generationRef.current !== generation) {
             return
           }
+          const largeDiffRenderLimit =
+            !error && result.kind === 'text' && resultContents
+              ? getPRFileContentsRenderLimit(resultContents)
+              : null
+          const storedContent = getStoredTextDiffContent(result, largeDiffRenderLimit)
+          const storedResult = getStoredTextDiffResult(result, largeDiffRenderLimit)
           loadedIndicesRef.current.add(index)
           setSections((prev) =>
             prev.map((current, currentIndex) =>
               currentIndex === index
                 ? {
                     ...current,
-                    diffResult: result,
-                    originalContent: result.kind === 'text' ? result.originalContent : '',
-                    modifiedContent: result.kind === 'text' ? result.modifiedContent : '',
+                    diffResult: storedResult,
+                    originalContent: storedContent.originalContent,
+                    modifiedContent: storedContent.modifiedContent,
                     loading: false,
-                    error
+                    error,
+                    largeDiffRenderLimit
                   }
                 : current
             )
           )
         })
     },
-    [baseSha, fileByPath, headSha, prNumber, repoId, repoPath]
+    [baseSha, fileByPath, headSha, prNumber, repoId, repoPath, sourceContext]
   )
 
   const retrySection = useCallback(
     (index: number) => {
       loadedIndicesRef.current.delete(index)
       loadingIndicesRef.current.delete(index)
+      setSectionHeights((prev) => removeDiffSectionMeasuredHeight(prev, index))
       setSections((prev) =>
         prev.map((section, sectionIndex) =>
           sectionIndex === index
@@ -1892,7 +2065,8 @@ function PRFilesCombinedDiffViewer({
                 originalContent: '',
                 modifiedContent: '',
                 loading: true,
-                error: undefined
+                error: undefined,
+                largeDiffRenderLimit: null
               }
             : section
         )
@@ -1953,7 +2127,9 @@ function PRFilesCombinedDiffViewer({
           section.added === undefined && section.removed === undefined
             ? undefined
             : (section.added ?? 0) + (section.removed ?? 0),
-        useIntrinsicImageHeight: isIntrinsicHeightImageDiff(section.diffResult)
+        useIntrinsicImageHeight: isIntrinsicHeightImageDiff(section.diffResult),
+        isLargeDiffLimited: section.largeDiffRenderLimit?.limited === true,
+        lineCounts: section.largeDiffRenderLimit?.lineCounts ?? undefined
       })
     },
     overscan: PR_DIFF_OVERSCAN,
@@ -2015,6 +2191,7 @@ function PRFilesCombinedDiffViewer({
       const result = await addPRReviewCommentForRepo({
         repoPath,
         repoId,
+        sourceContext,
         prNumber,
         commitId: headSha,
         path: section.path,
@@ -2038,7 +2215,7 @@ function PRFilesCombinedDiffViewer({
       )
       return true
     },
-    [headSha, onCommentAdded, prNumber, repoId, repoPath]
+    [headSha, onCommentAdded, prNumber, repoId, repoPath, sourceContext]
   )
 
   const renderViewedCheckbox = useCallback(
@@ -2184,6 +2361,7 @@ function CommentCodeContext({
   comment,
   repoPath,
   repoId,
+  sourceContext,
   prNumber,
   files,
   headSha,
@@ -2192,6 +2370,7 @@ function CommentCodeContext({
   comment: PRComment
   repoPath: string | null
   repoId: string
+  sourceContext?: TaskSourceContext | null
   prNumber: number
   files: GitHubPRFile[]
   headSha: string | undefined
@@ -2216,7 +2395,7 @@ function CommentCodeContext({
       return
     }
     let cancelled = false
-    loadPRFileContents({ repoPath, repoId, prNumber, file, headSha, baseSha })
+    loadPRFileContents({ repoPath, repoId, sourceContext, prNumber, file, headSha, baseSha })
       .then((result) => {
         if (!cancelled) {
           setContents(result)
@@ -2230,7 +2409,7 @@ function CommentCodeContext({
     return () => {
       cancelled = true
     }
-  }, [baseSha, file, headSha, line, prNumber, repoId, repoPath])
+  }, [baseSha, file, headSha, line, prNumber, repoId, repoPath, sourceContext])
 
   const resolvedContextExpansionState = resolveCommentCodeContextExpansionState(
     contextExpansionState,
@@ -2275,6 +2454,10 @@ function CommentCodeContext({
         {translate('auto.components.GitHubItemDialog.db61d76cd5', 'Loading code context…')}
       </div>
     )
+  }
+
+  if (getPRFileContentsRenderLimit(contents).limited) {
+    return null
   }
 
   const source = contents.modified || contents.original
@@ -2484,6 +2667,7 @@ function CommentCodeContext({
 function ConversationTab({
   item,
   repoPath,
+  sourceContext,
   body,
   comments,
   files,
@@ -2504,6 +2688,7 @@ function ConversationTab({
   item: GitHubWorkItem
   repoPath: string | null
   repoId: string | null
+  sourceContext?: TaskSourceContext | null
   body: string
   comments: PRComment[]
   files: GitHubPRFile[]
@@ -2567,6 +2752,7 @@ function ConversationTab({
       await runWorkItemBodyUpdate({
         item,
         repoPath,
+        sourceContext,
         projectOrigin,
         body: resolvedBodyDraft,
         parsedSlug: bodySlug
@@ -2597,7 +2783,8 @@ function ConversationTab({
     item,
     onBodyUpdated,
     projectOrigin,
-    repoPath
+    repoPath,
+    sourceContext
   ])
 
   const handleReply = useCallback(
@@ -2616,6 +2803,7 @@ function ConversationTab({
           ? await addPRReviewCommentReplyForRepo({
               repoPath,
               repoId: item.repoId,
+              sourceContext,
               prNumber: item.number,
               commentId: comment.id,
               body: replyBody,
@@ -2626,6 +2814,7 @@ function ConversationTab({
           : await addIssueCommentForRepo({
               repoPath,
               repoId: item.repoId,
+              sourceContext,
               number: item.number,
               body: `@${comment.author} ${replyBody}`,
               type: item.type
@@ -2643,7 +2832,7 @@ function ConversationTab({
       toast.success(translate('auto.components.GitHubItemDialog.10f4ff5be8', 'Reply posted.'))
       return true
     },
-    [item.number, item.repoId, item.type, onCommentAdded, repoPath]
+    [item.number, item.repoId, item.type, onCommentAdded, repoPath, sourceContext]
   )
 
   const rightPanel =
@@ -2653,6 +2842,7 @@ function ConversationTab({
           item={item}
           repoPath={repoPath}
           repoId={item.repoId}
+          sourceContext={sourceContext}
           projectOrigin={projectOrigin}
           localState={localState}
           onStateChange={onStateChange}
@@ -2662,6 +2852,7 @@ function ConversationTab({
           item={item}
           loading={loading}
           repoPath={repoPath}
+          sourceContext={sourceContext}
           onReviewersRequested={onReviewersRequested}
         />
         <aside className="overflow-hidden rounded-lg border border-border/50 bg-card/50 shadow-xs">
@@ -2669,6 +2860,7 @@ function ConversationTab({
             item={item}
             repoPath={repoPath}
             repoId={item.repoId}
+            sourceContext={sourceContext}
             headSha={headSha}
             checks={checks}
             loading={loading || !detailsLoaded}
@@ -2774,6 +2966,7 @@ function ConversationTab({
           comment={comment}
           repoPath={repoPath}
           repoId={item.repoId}
+          sourceContext={sourceContext}
           prNumber={item.number}
           files={files}
           headSha={headSha}
@@ -3021,6 +3214,7 @@ function ConversationTab({
             className="mt-1"
             repoPath={repoPath}
             repoId={item.repoId}
+            sourceContext={sourceContext}
             issueNumber={item.number}
             itemType={item.type}
             onCommentAdded={onCommentAdded}
@@ -3037,6 +3231,7 @@ function PRActionsPanel({
   item,
   repoPath,
   repoId,
+  sourceContext,
   projectOrigin,
   localState,
   onStateChange,
@@ -3045,6 +3240,7 @@ function PRActionsPanel({
   item: GitHubWorkItem
   repoPath: string | null
   repoId: string | null
+  sourceContext?: TaskSourceContext | null
   projectOrigin: GitHubItemDialogProjectOrigin | undefined
   localState: GitHubWorkItem['state']
   onStateChange: (state: GitHubWorkItem['state']) => void
@@ -3075,10 +3271,10 @@ function PRActionsPanel({
   const applyStatePatch = useCallback(
     (state: GitHubWorkItem['state']) => {
       onStateChange(state)
-      patchWorkItem(item.id, { state }, item.repoId)
+      patchWorkItem(item.id, { state }, item.repoId, { sourceContext })
       patchProjectRowIfNeeded(state)
     },
-    [item.id, item.repoId, onStateChange, patchProjectRowIfNeeded, patchWorkItem]
+    [item.id, item.repoId, onStateChange, patchProjectRowIfNeeded, patchWorkItem, sourceContext]
   )
 
   const handleStateChange = async (): Promise<void> => {
@@ -3115,6 +3311,7 @@ function PRActionsPanel({
       await runPullRequestStateUpdate({
         repoPath,
         repoId,
+        sourceContext,
         projectOrigin,
         number: item.number,
         updates: { state: nextState }
@@ -3165,6 +3362,7 @@ function PRActionsPanel({
       const result = await window.api.gh.mergePR({
         repoPath,
         repoId: repoId ?? undefined,
+        sourceContext,
         prNumber: item.number,
         method,
         prRepo: item.prRepo ?? null
@@ -3196,6 +3394,7 @@ function PRActionsPanel({
       const result = await window.api.gh.setPRAutoMerge({
         repoPath,
         repoId: repoId ?? undefined,
+        sourceContext,
         prNumber: item.number,
         enabled,
         prRepo: item.prRepo ?? null
@@ -3531,6 +3730,7 @@ function ChecksTab({
   item,
   repoPath,
   repoId,
+  sourceContext,
   headSha,
   checks,
   loading,
@@ -3540,6 +3740,7 @@ function ChecksTab({
   item: GitHubWorkItem
   repoPath: string | null
   repoId: string | null
+  sourceContext?: TaskSourceContext | null
   headSha: string | undefined
   checks: GitHubWorkItemDetails['checks']
   loading: boolean
@@ -3601,6 +3802,7 @@ function ChecksTab({
       const nextChecks = (await window.api.gh.prChecks({
         repoPath,
         repoId: repoId ?? undefined,
+        sourceContext,
         prNumber: item.number,
         headSha,
         noCache: true
@@ -3618,7 +3820,7 @@ function ChecksTab({
     } finally {
       setRefreshing(false)
     }
-  }, [headSha, item.number, onChecksUpdated, repoId, repoPath])
+  }, [headSha, item.number, onChecksUpdated, repoId, repoPath, sourceContext])
 
   const handleRerun = useCallback(
     async (failedOnly: boolean): Promise<void> => {
@@ -3630,6 +3832,7 @@ function ChecksTab({
         const result = await window.api.gh.rerunPRChecks({
           repoPath,
           repoId: repoId ?? undefined,
+          sourceContext,
           prNumber: item.number,
           headSha,
           failedOnly
@@ -3654,7 +3857,7 @@ function ChecksTab({
         setRerunning(false)
       }
     },
-    [handleRefresh, headSha, item.number, rerunning, repoId, repoPath]
+    [handleRefresh, headSha, item.number, rerunning, repoId, repoPath, sourceContext]
   )
 
   const handleFixBrokenChecks = useCallback(async (): Promise<void> => {
@@ -3728,7 +3931,11 @@ function ChecksTab({
         return
       }
       setChecksState((current) =>
-        updateGitHubChecksTabDetails(current, key, { loading: true, details: null, error: null })
+        updateGitHubChecksTabDetails(current, key, {
+          loading: true,
+          details: null,
+          error: null
+        })
       )
       void window.api.gh
         .prCheckDetails({
@@ -4268,15 +4475,23 @@ function ChecksTab({
 // repo. The edit IPCs return a structured `{ ok, error }` shape; we adapt
 // to a thrown rejection so the existing `useImmediateMutation` flow
 // (which expects throws on failure) continues to work unchanged.
+function getGitHubMutationSettings(repoId: string | null | undefined) {
+  const state = useAppStore.getState()
+  // Why: project-origin mutations are slug-addressed, but when we know the
+  // backing repo id they must still execute on that repo's owner host.
+  return getSettingsForRepoRuntimeOwner(state, repoId ?? null)
+}
+
 async function runIssueUpdate(args: {
   repoPath: string | null
   repoId?: string | null
+  sourceContext?: TaskSourceContext | null
   projectOrigin: GitHubItemDialogProjectOrigin | undefined
   number: number
   updates: Parameters<typeof window.api.gh.updateIssue>[0]['updates']
 }): Promise<void> {
   if (args.projectOrigin) {
-    const target = getActiveRuntimeTarget(useAppStore.getState().settings)
+    const target = getActiveRuntimeTarget(getGitHubMutationSettings(args.repoId))
     const updateArgs = {
       owner: args.projectOrigin.owner,
       repo: args.projectOrigin.repo,
@@ -4289,7 +4504,9 @@ async function runIssueUpdate(args: {
             target,
             'github.project.updateIssueBySlug',
             updateArgs,
-            { timeoutMs: 30_000 }
+            {
+              timeoutMs: 30_000
+            }
           )
         : await window.api.gh.updateIssueBySlug(updateArgs)
     if (!res.ok) {
@@ -4303,6 +4520,7 @@ async function runIssueUpdate(args: {
   const res = await window.api.gh.updateIssue({
     repoPath: args.repoPath,
     repoId: args.repoId ?? undefined,
+    sourceContext: args.sourceContext,
     number: args.number,
     updates: args.updates
   })
@@ -4314,6 +4532,7 @@ async function runIssueUpdate(args: {
 async function runWorkItemBodyUpdate(args: {
   item: GitHubWorkItem
   repoPath: string | null
+  sourceContext?: TaskSourceContext | null
   projectOrigin: GitHubItemDialogProjectOrigin | undefined
   body: string
   parsedSlug: GitHubOwnerRepo | null
@@ -4325,7 +4544,7 @@ async function runWorkItemBodyUpdate(args: {
     if (!targetSlug) {
       throw new Error('No GitHub repository context available for this pull request.')
     }
-    const target = getActiveRuntimeTarget(useAppStore.getState().settings)
+    const target = getActiveRuntimeTarget(getGitHubMutationSettings(args.item.repoId))
     const updateArgs = {
       owner: targetSlug.owner,
       repo: targetSlug.repo,
@@ -4338,7 +4557,9 @@ async function runWorkItemBodyUpdate(args: {
             target,
             'github.project.updatePullRequestBySlug',
             updateArgs,
-            { timeoutMs: 30_000 }
+            {
+              timeoutMs: 30_000
+            }
           )
         : await window.api.gh.updatePullRequestBySlug(updateArgs)
     if (!res.ok) {
@@ -4350,6 +4571,7 @@ async function runWorkItemBodyUpdate(args: {
   await runIssueUpdate({
     repoPath: args.repoPath,
     repoId: args.item.repoId,
+    sourceContext: args.sourceContext,
     projectOrigin: args.projectOrigin,
     number: args.item.number,
     updates: { body: args.body }
@@ -4359,12 +4581,13 @@ async function runWorkItemBodyUpdate(args: {
 async function runPullRequestStateUpdate(args: {
   repoPath: string | null
   repoId?: string | null
+  sourceContext?: TaskSourceContext | null
   projectOrigin: GitHubItemDialogProjectOrigin | undefined
   number: number
   updates: { state: 'open' | 'closed' }
 }): Promise<void> {
   if (args.projectOrigin) {
-    const target = getActiveRuntimeTarget(useAppStore.getState().settings)
+    const target = getActiveRuntimeTarget(getGitHubMutationSettings(args.repoId))
     const updateArgs = {
       owner: args.projectOrigin.owner,
       repo: args.projectOrigin.repo,
@@ -4377,7 +4600,9 @@ async function runPullRequestStateUpdate(args: {
             target,
             'github.project.updatePullRequestBySlug',
             updateArgs,
-            { timeoutMs: 30_000 }
+            {
+              timeoutMs: 30_000
+            }
           )
         : await window.api.gh.updatePullRequestBySlug(updateArgs)
     if (!res.ok) {
@@ -4391,6 +4616,7 @@ async function runPullRequestStateUpdate(args: {
   const res = await window.api.gh.updatePRState({
     repoPath: args.repoPath,
     repoId: args.repoId ?? undefined,
+    sourceContext: args.sourceContext,
     prNumber: args.number,
     updates: args.updates
   })
@@ -4436,6 +4662,7 @@ function GHEditSection({
   item,
   repoPath,
   repoId,
+  sourceContext,
   projectOrigin,
   localState,
   localLabels,
@@ -4451,6 +4678,7 @@ function GHEditSection({
   item: GitHubWorkItem
   repoPath: string | null
   repoId: string | null
+  sourceContext?: TaskSourceContext | null
   projectOrigin: GitHubItemDialogProjectOrigin | undefined
   localState: GitHubWorkItem['state']
   localLabels: string[]
@@ -4476,6 +4704,19 @@ function GHEditSection({
   const assigneesItemKey = `${item.repoId}\0${item.id}`
   const patchWorkItem = useAppStore((s) => s.patchWorkItem)
   const patchProjectRowContent = useAppStore((s) => s.patchProjectRowContent)
+  const repoOwnerSettings = useAppStore(
+    useShallow((s) => getSettingsForRepoRuntimeOwner(s, item.repoId ?? null))
+  )
+  const sourceSettings = useMemo(
+    () =>
+      sourceContext?.provider === 'github'
+        ? ({
+            ...repoOwnerSettings,
+            ...getTaskSourceRuntimeSettings(sourceContext)
+          } as typeof repoOwnerSettings)
+        : repoOwnerSettings,
+    [repoOwnerSettings, sourceContext]
+  )
   const { isPending, run } = useImmediateMutation()
   // Why: when the dialog opens from a Project view, mutations route through
   // *BySlug IPCs and we must keep `projectViewCache` in sync alongside
@@ -4499,16 +4740,18 @@ function GHEditSection({
   const slugRepo = projectOrigin?.repo ?? null
   const repoLabelsByPath = useRepoLabels(
     projectOrigin ? null : repoPath,
-    projectOrigin ? null : repoId
+    projectOrigin ? null : repoId,
+    sourceSettings
   )
-  const repoLabelsBySlug = useRepoLabelsBySlug(slugOwner, slugRepo)
+  const repoLabelsBySlug = useRepoLabelsBySlug(slugOwner, slugRepo, sourceSettings)
   const repoLabels = projectOrigin ? repoLabelsBySlug : repoLabelsByPath
   const repositoryLabelsUrl = useMemo(() => getGitHubRepositoryLabelsUrl(item.url), [item.url])
   const repoAssigneesByPath = useRepoAssignees(
     projectOrigin ? null : repoPath,
-    projectOrigin ? null : repoId
+    projectOrigin ? null : repoId,
+    sourceSettings
   )
-  const repoAssigneesBySlug = useRepoAssigneesBySlug(slugOwner, slugRepo, assignees)
+  const repoAssigneesBySlug = useRepoAssigneesBySlug(slugOwner, slugRepo, assignees, sourceSettings)
   const repoAssignees = projectOrigin ? repoAssigneesBySlug : repoAssigneesByPath
   const hasAttachedWorkspace =
     attachedWorkspaceLabel !== null && attachedWorkspaceLabel !== undefined
@@ -4541,23 +4784,24 @@ function GHEditSection({
           runIssueUpdate({
             repoId: item.repoId,
             repoPath,
+            sourceContext,
             projectOrigin,
             number: item.number,
             updates: { state: newState }
           }),
         onOptimistic: () => {
           onStateChange(newState)
-          patchWorkItem(item.id, { state: newState }, item.repoId)
+          patchWorkItem(item.id, { state: newState }, item.repoId, { sourceContext })
           patchProjectRowIfNeeded({ state: newState })
         },
         onRevert: () => {
           onStateChange(prevState)
-          patchWorkItem(item.id, { state: prevState }, item.repoId)
+          patchWorkItem(item.id, { state: prevState }, item.repoId, { sourceContext })
           patchProjectRowIfNeeded({ state: prevState })
         },
         onSuccess: () => {
           useAppStore.getState().recordFeatureInteraction('github-tasks')
-          patchWorkItem(item.id, { state: newState }, item.repoId)
+          patchWorkItem(item.id, { state: newState }, item.repoId, { sourceContext })
           patchProjectRowIfNeeded({ state: newState })
           onMutated()
         },
@@ -4570,6 +4814,7 @@ function GHEditSection({
       item.repoId,
       localState,
       repoPath,
+      sourceContext,
       projectOrigin,
       patchWorkItem,
       patchProjectRowIfNeeded,
@@ -4591,13 +4836,14 @@ function GHEditSection({
             runIssueUpdate({
               repoId: item.repoId,
               repoPath,
+              sourceContext,
               projectOrigin,
               number: item.number,
               updates: { addLabels: [label] }
             }),
           onOptimistic: () => {
             onLabelsChange(newLabels)
-            patchWorkItem(item.id, { labels: newLabels }, item.repoId)
+            patchWorkItem(item.id, { labels: newLabels }, item.repoId, { sourceContext })
             patchProjectRowIfNeeded({ labels: newLabels })
           },
           onSuccess: () => {
@@ -4606,7 +4852,7 @@ function GHEditSection({
           },
           onRevert: () => {
             onLabelsChange(prevLabels)
-            patchWorkItem(item.id, { labels: prevLabels }, item.repoId)
+            patchWorkItem(item.id, { labels: prevLabels }, item.repoId, { sourceContext })
             patchProjectRowIfNeeded({ labels: prevLabels })
           },
           onError: (err) => toast.error(err)
@@ -4617,18 +4863,19 @@ function GHEditSection({
             runIssueUpdate({
               repoId: item.repoId,
               repoPath,
+              sourceContext,
               projectOrigin,
               number: item.number,
               updates: { removeLabels: [label] }
             }),
           onOptimistic: () => {
             onLabelsChange(newLabels)
-            patchWorkItem(item.id, { labels: newLabels }, item.repoId)
+            patchWorkItem(item.id, { labels: newLabels }, item.repoId, { sourceContext })
             patchProjectRowIfNeeded({ labels: newLabels })
           },
           onRevert: () => {
             onLabelsChange(prevLabels)
-            patchWorkItem(item.id, { labels: prevLabels }, item.repoId)
+            patchWorkItem(item.id, { labels: prevLabels }, item.repoId, { sourceContext })
             patchProjectRowIfNeeded({ labels: prevLabels })
           },
           onSuccess: () => {
@@ -4645,6 +4892,7 @@ function GHEditSection({
       item.repoId,
       localLabels,
       repoPath,
+      sourceContext,
       projectOrigin,
       patchWorkItem,
       patchProjectRowIfNeeded,
@@ -4671,6 +4919,7 @@ function GHEditSection({
             runIssueUpdate({
               repoId: item.repoId,
               repoPath,
+              sourceContext,
               projectOrigin,
               number: item.number,
               updates: { removeAssignees: [login] }
@@ -4695,6 +4944,7 @@ function GHEditSection({
             runIssueUpdate({
               repoId: item.repoId,
               repoPath,
+              sourceContext,
               projectOrigin,
               number: item.number,
               updates: { addAssignees: [login] }
@@ -4720,6 +4970,7 @@ function GHEditSection({
       item.repoId,
       assigneesItemKey,
       repoPath,
+      sourceContext,
       projectOrigin,
       localAssignees,
       patchProjectRowIfNeeded,
@@ -5280,6 +5531,7 @@ function GHCommentComposer({
   className,
   repoPath,
   repoId,
+  sourceContext,
   issueNumber,
   itemType,
   onCommentAdded
@@ -5287,6 +5539,7 @@ function GHCommentComposer({
   className?: string
   repoPath: string
   repoId?: string | null
+  sourceContext?: TaskSourceContext | null
   issueNumber: number
   itemType: 'issue' | 'pr'
   onCommentAdded: (comment: PRComment) => void
@@ -5305,6 +5558,7 @@ function GHCommentComposer({
       const result = await addIssueCommentForRepo({
         repoPath,
         repoId: repoId ?? undefined,
+        sourceContext,
         number: issueNumber,
         body: trimmed,
         type: itemType
@@ -5336,7 +5590,7 @@ function GHCommentComposer({
         setSubmitting(false)
       }
     }
-  }, [body, mountedRef, repoPath, repoId, issueNumber, itemType, onCommentAdded])
+  }, [body, mountedRef, repoPath, repoId, sourceContext, issueNumber, itemType, onCommentAdded])
 
   return (
     <div className={cn('flex flex-col items-start gap-2', className)}>
@@ -5383,10 +5637,12 @@ function GHCommentComposer({
 // doc §1 rule: hide when either side is unknown rather than guessing.
 function WorkItemIssueSourceIndicator({
   url,
-  repoId
+  repoId,
+  repoPath
 }: {
   url: string
   repoId: string | null
+  repoPath?: string | null
 }): React.JSX.Element | null {
   // Why: subscribe to a single store-side selector that returns the resolved
   // sources for this repo — either the primary `(repoPath, PER_REPO_FETCH_LIMIT, '')`
@@ -5400,7 +5656,7 @@ function WorkItemIssueSourceIndicator({
   // indicator is small and the cache rewrite rate is bounded by user-initiated
   // refresh/search actions.
   const sources = useAppStore((s) =>
-    s.getWorkItemsAnySourcesForRepo(repoId ?? '', PER_REPO_FETCH_LIMIT)
+    s.getWorkItemsAnySourcesForRepo(repoId ?? '', PER_REPO_FETCH_LIMIT, repoPath ?? undefined)
   )
   const issues = useMemo<GitHubOwnerRepo | null>(() => {
     const fromUrl = parseOwnerRepoFromItemUrl(url)
@@ -5432,8 +5688,8 @@ export default function GitHubItemDialog({
   workItem,
   repoPath,
   repoId,
+  sourceContext,
   initialTab,
-  variant = 'sheet',
   backLabel = 'Back',
   projectOrigin,
   onUse,
@@ -5611,7 +5867,10 @@ export default function GitHubItemDialog({
     if (missing.length === 0) {
       return cachedDetails
     }
-    return { ...cachedDetails, comments: [...cachedDetails.comments, ...missing] }
+    return {
+      ...cachedDetails,
+      comments: [...cachedDetails.comments, ...missing]
+    }
     // Why: optimisticTick is the rerender signal for cold-open writes — the
     // memo reads optimisticCommentsRef.current (a ref, no subscription), so
     // bumping the tick is what forces this memo to re-run. The lint flags it
@@ -5668,6 +5927,7 @@ export default function GitHubItemDialog({
       getWorkItemDetailsForRepo({
         repoPath,
         repoId: effectiveRepoId ?? undefined,
+        sourceContext,
         number: workItem.number,
         type: workItem.type
       })
@@ -5728,7 +5988,7 @@ export default function GitHubItemDialog({
           error: message
         })
       })
-  }, [repoPath, effectiveRepoId, workItem, detailsCacheKey, initialTab, refetchTick])
+  }, [repoPath, effectiveRepoId, sourceContext, workItem, detailsCacheKey, initialTab, refetchTick])
 
   const Icon = workItem?.type === 'pr' ? GitPullRequest : CircleDot
   const displayWorkItem = useMemo<GitHubWorkItem | null>(() => {
@@ -5825,7 +6085,10 @@ export default function GitHubItemDialog({
           const ids = new Set(prev.details.comments.map((c) => c.id))
           if (!ids.has(comment.id)) {
             touchWorkItemDetailsCache(detailsCacheKey, {
-              details: { ...prev.details, comments: [...prev.details.comments, comment] },
+              details: {
+                ...prev.details,
+                comments: [...prev.details.comments, comment]
+              },
               fetchedAt: 0,
               error: undefined
             })
@@ -5862,6 +6125,7 @@ export default function GitHubItemDialog({
         const ok = await setPRFileViewedForRepo({
           repoId: workItem.repoId,
           repoPath,
+          sourceContext,
           prNumber: workItem.number,
           pullRequestId: details.pullRequestId,
           path,
@@ -5888,10 +6152,10 @@ export default function GitHubItemDialog({
         })
       }
     },
-    [details?.pullRequestId, detailsCacheKey, repoPath, workItem]
+    [details?.pullRequestId, detailsCacheKey, repoPath, sourceContext, workItem]
   )
 
-  const isIssuePage = variant === 'page' && workItem?.type === 'issue'
+  const isIssuePage = workItem?.type === 'issue'
   const ownerRepo = workItem ? parseOwnerRepoFromItemUrl(workItem.url) : null
   const issueStateBadgeTone =
     localState === 'closed' ? 'bg-rose-600 text-white' : 'bg-emerald-600 text-white'
@@ -6080,7 +6344,11 @@ export default function GitHubItemDialog({
                   {formatRelativeTime(workItem.updatedAt)}
                 </span>
               </span>
-              <WorkItemIssueSourceIndicator url={workItem.url} repoId={effectiveRepoId} />
+              <WorkItemIssueSourceIndicator
+                url={workItem.url}
+                repoId={effectiveRepoId}
+                repoPath={repoPath}
+              />
               {issueAttachedWorkspaceLabel ? (
                 <span className="inline-flex min-w-0 items-center gap-1.5">
                   <FolderKanban className="size-3.5 shrink-0" />
@@ -6093,19 +6361,17 @@ export default function GitHubItemDialog({
       ) : (
         <div className="flex-none border-b border-border/60 bg-card/80 px-4 py-3 shadow-xs backdrop-blur supports-[backdrop-filter]:bg-card/70">
           <div className="flex items-start gap-3">
-            {variant === 'page' ? (
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={onClose}
-                className="-ml-1 mt-0.5 shrink-0 gap-1.5"
-                aria-label={backLabel}
-              >
-                <ChevronLeft className="size-4" />
-                {backLabel}
-              </Button>
-            ) : null}
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={onClose}
+              className="-ml-1 mt-0.5 shrink-0 gap-1.5"
+              aria-label={backLabel}
+            >
+              <ChevronLeft className="size-4" />
+              {backLabel}
+            </Button>
             <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md border border-border/60 bg-muted/40 text-muted-foreground">
               <Icon className="size-4" />
             </div>
@@ -6144,7 +6410,11 @@ export default function GitHubItemDialog({
                 ) : null}
               </div>
               {workItem.type === 'issue' && (
-                <WorkItemIssueSourceIndicator url={workItem.url} repoId={effectiveRepoId} />
+                <WorkItemIssueSourceIndicator
+                  url={workItem.url}
+                  repoId={effectiveRepoId}
+                  repoPath={repoPath}
+                />
               )}
             </div>
             <div className="flex shrink-0 items-center justify-end gap-1">
@@ -6210,26 +6480,6 @@ export default function GitHubItemDialog({
                   {translate('auto.components.GitHubItemDialog.3fdf777817', 'Open on GitHub')}
                 </TooltipContent>
               </Tooltip>
-              {variant === 'sheet' ? (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      onClick={onClose}
-                      aria-label={translate(
-                        'auto.components.GitHubItemDialog.45af57999b',
-                        'Close preview'
-                      )}
-                    >
-                      <X className="size-4" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom" sideOffset={6}>
-                    {translate('auto.components.GitHubItemDialog.474c59b4b3', 'Close · Esc')}
-                  </TooltipContent>
-                </Tooltip>
-              ) : null}
             </div>
           </div>
         </div>
@@ -6240,6 +6490,7 @@ export default function GitHubItemDialog({
           item={workItem}
           repoPath={repoPath}
           repoId={effectiveRepoId}
+          sourceContext={sourceContext}
           projectOrigin={projectOrigin}
           localState={localState}
           localLabels={localLabels}
@@ -6278,6 +6529,7 @@ export default function GitHubItemDialog({
                   item={displayWorkItem ?? workItem}
                   repoPath={repoPath}
                   repoId={effectiveRepoId}
+                  sourceContext={sourceContext}
                   body={body}
                   comments={comments}
                   files={files}
@@ -6328,6 +6580,7 @@ export default function GitHubItemDialog({
                       item={workItem}
                       repoPath={repoPath}
                       repoId={effectiveRepoId}
+                      sourceContext={sourceContext}
                       projectOrigin={projectOrigin}
                       localState={localState}
                       localLabels={localLabels}
@@ -6396,6 +6649,7 @@ export default function GitHubItemDialog({
                   item={displayWorkItem ?? workItem}
                   repoPath={repoPath}
                   repoId={effectiveRepoId}
+                  sourceContext={sourceContext}
                   body={body}
                   comments={comments}
                   files={files}
@@ -6447,6 +6701,7 @@ export default function GitHubItemDialog({
                       item={workItem}
                       repoPath={repoPath}
                       repoId={effectiveRepoId}
+                      sourceContext={sourceContext}
                       headSha={details?.headSha}
                       checks={checks}
                       loading={loading || !detailsLoaded}
@@ -6477,6 +6732,7 @@ export default function GitHubItemDialog({
                         comments={comments}
                         repoPath={repoPath ?? ''}
                         repoId={effectiveRepoId ?? ''}
+                        sourceContext={sourceContext}
                         prNumber={workItem.number}
                         prUrl={workItem.url}
                         headSha={details?.headSha}
@@ -6496,63 +6752,9 @@ export default function GitHubItemDialog({
     </div>
   ) : null
 
-  if (variant === 'page') {
-    return (
-      <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-md border border-border/50 bg-background shadow-sm">
-        {content}
-      </div>
-    )
-  }
-
   return (
-    <Sheet open={workItem !== null} onOpenChange={(open) => !open && onClose()}>
-      <SheetContent
-        side="right"
-        showCloseButton={false}
-        className={cn(
-          'flex w-full flex-col gap-0 overflow-hidden p-0 lg:max-w-[var(--github-item-dialog-max-width)]',
-          // Why: native macOS traffic lights are drawn above web content, so a
-          // nearly full-width right sheet must leave the titlebar's 80px
-          // traffic-light pad uncovered instead of relying on z-index.
-          IS_MAC
-            ? 'max-w-[calc(100vw-(80px/var(--ui-zoom-factor,1)))] sm:max-w-[calc(100vw-(80px/var(--ui-zoom-factor,1)))]'
-            : 'max-w-[calc(100vw-1rem)] sm:max-w-[calc(100vw-1rem)]'
-        )}
-        style={
-          {
-            '--github-item-dialog-max-width': IS_MAC
-              ? 'min(calc(100vw - (80px / var(--ui-zoom-factor, 1))), 1600px)'
-              : 'min(calc(100vw - 2rem), 1600px)'
-          } as React.CSSProperties
-        }
-        onOpenAutoFocus={(event) => {
-          // Why: focusing the first actionable element inside the drawer
-          // causes the "Start workspace" action to receive focus and
-          // get visually highlighted on open. Preventing auto-focus keeps the
-          // drawer feeling like a passive preview until the user acts.
-          event.preventDefault()
-        }}
-      >
-        {/* Why: SheetTitle/Description are required by Radix Dialog for a11y,
-            but the visible header carries the same info. Wrap each with
-            `asChild` so the VisuallyHidden span wraps the element cleanly. */}
-        <VisuallyHidden.Root asChild>
-          <SheetTitle>
-            {workItem?.title ??
-              translate('auto.components.GitHubItemDialog.3853476a97', 'GitHub item')}
-          </SheetTitle>
-        </VisuallyHidden.Root>
-        <VisuallyHidden.Root asChild>
-          <SheetDescription>
-            {translate(
-              'auto.components.GitHubItemDialog.3ab6ac0fc8',
-              'Preview and edit the selected GitHub issue or pull request.'
-            )}
-          </SheetDescription>
-        </VisuallyHidden.Root>
-
-        {content}
-      </SheetContent>
-    </Sheet>
+    <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-md border border-border/50 bg-background shadow-sm">
+      {content}
+    </div>
   )
 }

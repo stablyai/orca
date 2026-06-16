@@ -1,5 +1,5 @@
-import React, { useCallback, useState } from 'react'
-import { AlertTriangle, Cloud, Loader2, MonitorSmartphone, Server, ServerOff } from 'lucide-react'
+import React, { useCallback, useMemo } from 'react'
+import { AlertTriangle, Loader2, MonitorSmartphone, Server, ServerOff } from 'lucide-react'
 import { toast } from 'sonner'
 import {
   DropdownMenu,
@@ -8,23 +8,23 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
-import { useMountedRef } from '@/hooks/useMountedRef'
 import { useAppStore } from '../../store'
-import { STATUS_LABELS, statusColor } from '../settings/SshTargetCard'
 import type { SshConnectionStatus } from '../../../../shared/ssh-types'
-import type { RemoteWorkspaceSyncStatus } from '../../store/slices/ssh'
 import { translate } from '@/i18n/i18n'
+import { getHostDisplayLabelOverrides } from '../../../../shared/host-setting-overrides'
+import { toRuntimeExecutionHostId } from '../../../../shared/execution-host'
+import { RuntimeHostStatusRow, type RuntimeHostConnectionState } from './RuntimeHostStatusRow'
+import { SshTargetStatusRow } from './SshTargetStatusRow'
+import type { RemoteRuntimeSharedConnectionDiagnostics } from '../../../../shared/remote-runtime-shared-control-types'
 
 function isConnecting(status: SshConnectionStatus): boolean {
   return ['connecting', 'deploying-relay', 'reconnecting'].includes(status)
 }
 
-function isReconnectable(status: SshConnectionStatus): boolean {
-  return ['disconnected', 'reconnection-failed', 'error', 'auth-failed'].includes(status)
-}
+type HostStatus = 'connected' | 'disconnected' | 'connecting'
 
 function overallStatus(
-  statuses: SshConnectionStatus[]
+  statuses: HostStatus[]
 ): 'connected' | 'partial' | 'disconnected' | 'connecting' {
   if (statuses.length === 0) {
     return 'disconnected'
@@ -32,7 +32,7 @@ function overallStatus(
   if (statuses.every((s) => s === 'connected')) {
     return 'connected'
   }
-  if (statuses.some((s) => isConnecting(s))) {
+  if (statuses.some((s) => s === 'connecting')) {
     return 'connecting'
   }
   if (statuses.some((s) => s === 'connected')) {
@@ -41,12 +41,15 @@ function overallStatus(
   return 'disconnected'
 }
 
-function overallDotColor(status: 'connected' | 'partial' | 'disconnected' | 'connecting'): string {
+function overallDotColor(
+  status: 'connected' | 'partial' | 'disconnected' | 'connecting',
+  connectedCount: number
+): string {
   switch (status) {
     case 'connected':
       return 'bg-emerald-500'
     case 'partial':
-      return 'bg-yellow-500'
+      return connectedCount > 0 ? 'bg-emerald-500' : 'bg-muted-foreground/40'
     case 'connecting':
       return 'bg-yellow-500'
     case 'disconnected':
@@ -54,149 +57,94 @@ function overallDotColor(status: 'connected' | 'partial' | 'disconnected' | 'con
   }
 }
 
-function overallLabel(status: 'connected' | 'partial' | 'disconnected' | 'connecting'): string {
-  switch (status) {
-    case 'connected':
-      return 'Connected'
-    case 'partial':
-      return 'Partial'
-    case 'connecting':
-      return 'Connecting…'
-    case 'disconnected':
-      return 'Disconnected'
-  }
+function connectedHostCountLabel(count: number): string {
+  return `${count} ${count === 1 ? 'host' : 'hosts'}`
 }
 
-function syncStatusLabel(status: RemoteWorkspaceSyncStatus | undefined): string {
-  switch (status?.phase) {
-    case 'pulling':
-      return 'Sync pulling'
-    case 'pushing':
-      return 'Sync pushing'
-    case 'synced':
-      return status.direction === 'pull' ? 'Sync pulled' : 'Sync uploaded'
-    case 'conflict':
-      return 'Sync conflict'
-    case 'error':
-      return 'Sync error'
-    case 'offline':
-      return 'Sync unavailable'
-    case 'idle':
-    case undefined:
-      return 'Sync idle'
+function sshStatusForOverall(status: SshConnectionStatus): HostStatus {
+  if (status === 'connected') {
+    return 'connected'
   }
+  return isConnecting(status) ? 'connecting' : 'disconnected'
 }
 
-function syncStatusTone(status: RemoteWorkspaceSyncStatus | undefined): string {
-  switch (status?.phase) {
-    case 'conflict':
-    case 'error':
-      return 'text-destructive'
-    case 'offline':
-      return 'text-muted-foreground'
-    case 'pulling':
-    case 'pushing':
-      return 'text-yellow-500'
-    case 'synced':
-      return 'text-emerald-500'
-    case 'idle':
-    case undefined:
-      return 'text-muted-foreground'
-  }
-}
-
-function TargetRow({
-  targetId,
-  label,
-  status,
-  syncStatus
+function runtimeHostConnectionState({
+  hasStatus,
+  online,
+  active,
+  remoteControl
 }: {
-  targetId: string
-  label: string
-  status: SshConnectionStatus
-  syncStatus: RemoteWorkspaceSyncStatus | undefined
-}): React.JSX.Element {
-  const [busy, setBusy] = useState(false)
-  const mountedRef = useMountedRef()
-  const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
+  hasStatus: boolean
+  online: boolean
+  active: boolean
+  remoteControl?: RemoteRuntimeSharedConnectionDiagnostics | null
+}): RuntimeHostConnectionState {
+  if (!hasStatus) {
+    return 'checking'
+  }
+  if (remoteControl?.state === 'reconnecting') {
+    return 'reconnecting'
+  }
+  if (!online) {
+    return 'disconnected'
+  }
+  if (remoteControl?.state === 'closed' && remoteControl.lastError) {
+    return 'disconnected'
+  }
+  return active ? 'connected' : 'available'
+}
 
-  const handleConnect = useCallback(async () => {
-    setBusy(true)
-    try {
-      await window.api.ssh.connect({ targetId })
-      recordFeatureInteraction('ssh')
-    } catch (err) {
-      toast.error(
-        err instanceof Error
-          ? err.message
-          : translate('auto.components.status.bar.SshStatusSegment.2c29e2de68', 'Connection failed')
-      )
-    } finally {
-      if (mountedRef.current) {
-        setBusy(false)
+function runtimeHostConnectionDetail(
+  remoteControl?: RemoteRuntimeSharedConnectionDiagnostics | null
+): string | undefined {
+  if (!remoteControl) {
+    return undefined
+  }
+  if (remoteControl.lastError) {
+    return remoteControl.lastError
+  }
+  if (remoteControl.lastClose?.reason) {
+    return translate(
+      'auto.components.status.bar.SshStatusSegment.runtime_last_close_reason',
+      'Closed: {{value0}}',
+      { value0: remoteControl.lastClose.reason }
+    )
+  }
+  if (remoteControl.state === 'reconnecting') {
+    return translate(
+      'auto.components.status.bar.SshStatusSegment.runtime_reconnect_attempt',
+      'Attempt {{value0}}',
+      { value0: String(remoteControl.reconnectAttempt + 1) }
+    )
+  }
+  if (remoteControl.pendingRequestCount > 0 || remoteControl.subscriptionCount > 0) {
+    return translate(
+      'auto.components.status.bar.SshStatusSegment.runtime_channel_counts',
+      '{{value0}} pending · {{value1}} streams',
+      {
+        value0: String(remoteControl.pendingRequestCount),
+        value1: String(remoteControl.subscriptionCount)
       }
-    }
-  }, [mountedRef, recordFeatureInteraction, targetId])
+    )
+  }
+  return undefined
+}
 
-  const handleDisconnect = useCallback(async () => {
-    setBusy(true)
-    try {
-      await window.api.ssh.disconnect({ targetId })
-      recordFeatureInteraction('ssh')
-    } catch (err) {
-      toast.error(
-        err instanceof Error
-          ? err.message
-          : translate('auto.components.status.bar.SshStatusSegment.bf07aee59e', 'Disconnect failed')
-      )
-    } finally {
-      if (mountedRef.current) {
-        setBusy(false)
-      }
-    }
-  }, [mountedRef, recordFeatureInteraction, targetId])
+export function runtimeStatusForOverall(state: RuntimeHostConnectionState): HostStatus {
+  switch (state) {
+    case 'connected':
+    case 'available':
+      return 'connected'
+    case 'checking':
+    case 'reconnecting':
+      return 'connecting'
+    case 'disconnected':
+      return 'disconnected'
+  }
+}
 
-  return (
-    <div className="flex items-center gap-2.5 px-2 py-1.5">
-      <span className={`size-1.5 shrink-0 rounded-full ${statusColor(status)}`} />
-      <div className="min-w-0 flex-1">
-        <div className="truncate text-[12px] font-medium">{label}</div>
-        <div className="flex min-w-0 items-center gap-1.5 text-[10px] text-muted-foreground">
-          <span>{STATUS_LABELS[status]}</span>
-          <span aria-hidden="true">·</span>
-          <span className={`inline-flex min-w-0 items-center gap-1 ${syncStatusTone(syncStatus)}`}>
-            {syncStatus?.phase === 'pulling' || syncStatus?.phase === 'pushing' ? (
-              <Loader2 className="size-2.5 shrink-0 animate-spin" />
-            ) : syncStatus?.phase === 'conflict' || syncStatus?.phase === 'error' ? (
-              <AlertTriangle className="size-2.5 shrink-0" />
-            ) : (
-              <Cloud className="size-2.5 shrink-0" />
-            )}
-            <span className="truncate">{syncStatusLabel(syncStatus)}</span>
-          </span>
-        </div>
-      </div>
-      {busy ? (
-        <Loader2 className="size-3 shrink-0 animate-spin text-muted-foreground" />
-      ) : isReconnectable(status) ? (
-        <button
-          type="button"
-          onClick={() => void handleConnect()}
-          className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium text-foreground hover:bg-accent/70"
-        >
-          {translate('auto.components.status.bar.SshStatusSegment.63f36455cc', 'Connect')}
-        </button>
-      ) : status === 'connected' ? (
-        <button
-          type="button"
-          onClick={() => void handleDisconnect()}
-          className="shrink-0 rounded px-1.5 py-0.5 text-[10px] text-muted-foreground hover:bg-accent/70 hover:text-foreground"
-        >
-          {translate('auto.components.status.bar.SshStatusSegment.59b553e2aa', 'Disconnect')}
-        </button>
-      ) : null}
-    </div>
-  )
+export function isConnectedRuntimeHostState(state: RuntimeHostConnectionState): boolean {
+  return state === 'connected' || state === 'available'
 }
 
 export function SshStatusSegment({
@@ -208,6 +156,13 @@ export function SshStatusSegment({
 }): React.JSX.Element | null {
   const sshConnectionStates = useAppStore((s) => s.sshConnectionStates)
   const sshTargetLabels = useAppStore((s) => s.sshTargetLabels)
+  const settings = useAppStore((s) => s.settings)
+  const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
+  const runtimeStatusByEnvironmentId = useAppStore((s) => s.runtimeStatusByEnvironmentId)
+  const switchRuntimeEnvironment = useAppStore((s) => s.switchRuntimeEnvironment)
+  const setRuntimeEnvironmentStatus = useAppStore((s) => s.setRuntimeEnvironmentStatus)
+  const hydrateRuntimeEnvironmentStatuses = useAppStore((s) => s.hydrateRuntimeEnvironmentStatuses)
+  const refreshRuntimeEnvironmentStatus = useAppStore((s) => s.refreshRuntimeEnvironmentStatus)
   const remoteWorkspaceSyncStatusByTargetId = useAppStore(
     (s) => s.remoteWorkspaceSyncStatusByTargetId
   )
@@ -215,6 +170,7 @@ export function SshStatusSegment({
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
 
+  const hostLabelOverrides = useMemo(() => getHostDisplayLabelOverrides(settings), [settings])
   const targets = Array.from(sshTargetLabels.entries()).map(([id, label]) => {
     const state = sshConnectionStates.get(id)
     return {
@@ -224,13 +180,87 @@ export function SshStatusSegment({
       syncStatus: remoteWorkspaceSyncStatusByTargetId[id]
     }
   })
+  const runtimeHosts = runtimeEnvironments.map((environment) => {
+    const statusEntry = runtimeStatusByEnvironmentId.get(environment.id)
+    const override = hostLabelOverrides.get(toRuntimeExecutionHostId(environment.id))
+    return {
+      id: environment.id,
+      label: override || environment.name || environment.id,
+      hasStatus: Boolean(statusEntry),
+      online: Boolean(statusEntry?.status),
+      active: settings?.activeRuntimeEnvironmentId === environment.id,
+      remoteControl: statusEntry?.status?.remoteControl ?? null
+    }
+  })
+  const runtimeHostRows = runtimeHosts.map((host) => ({
+    ...host,
+    state: runtimeHostConnectionState(host)
+  }))
+  // Available remote servers are online even when they are not the active runtime.
+  // Keep host health separate from the advanced active-server selection.
+  const connectedRuntimeHosts = runtimeHostRows.filter((host) =>
+    isConnectedRuntimeHostState(host.state)
+  )
+  const inactiveRuntimeHosts = runtimeHostRows.filter(
+    (host) => !isConnectedRuntimeHostState(host.state)
+  )
+  const connectedTargets = targets.filter((target) => target.status === 'connected')
+  const disconnectedTargets = targets.filter((target) => target.status !== 'connected')
+  const connectRuntimeHost = useCallback(
+    async (environmentId: string): Promise<void> => {
+      const reachable = await refreshRuntimeEnvironmentStatus(environmentId, 5_000)
+      if (!reachable) {
+        toast.error(
+          translate(
+            'auto.components.status.bar.SshStatusSegment.runtime_connect_unavailable',
+            'Remote host is not reachable'
+          )
+        )
+        return
+      }
+      const switched = await switchRuntimeEnvironment(environmentId)
+      if (switched) {
+        recordFeatureInteraction('ssh')
+      }
+    },
+    [recordFeatureInteraction, refreshRuntimeEnvironmentStatus, switchRuntimeEnvironment]
+  )
+  const disconnectRuntimeHost = useCallback(
+    async (environmentId: string, isActive: boolean): Promise<void> => {
+      try {
+        if (isActive) {
+          const switched = await switchRuntimeEnvironment(null)
+          if (!switched) {
+            return
+          }
+        }
+        await window.api.runtimeEnvironments.disconnect({ selector: environmentId })
+        setRuntimeEnvironmentStatus(environmentId, { status: null, checkedAt: Date.now() })
+        recordFeatureInteraction('ssh')
+      } catch (err) {
+        toast.error(
+          err instanceof Error
+            ? err.message
+            : translate(
+                'auto.components.status.bar.SshStatusSegment.runtime_disconnect_failed',
+                'Disconnect failed'
+              )
+        )
+      }
+    },
+    [recordFeatureInteraction, setRuntimeEnvironmentStatus, switchRuntimeEnvironment]
+  )
 
-  if (targets.length === 0) {
+  if (targets.length === 0 && runtimeHosts.length === 0) {
     return null
   }
 
-  const statuses = targets.map((t) => t.status)
+  const statuses = [
+    ...targets.map((t) => sshStatusForOverall(t.status)),
+    ...runtimeHostRows.map((host) => runtimeStatusForOverall(host.state))
+  ]
   const overall = overallStatus(statuses)
+  const connectedHostCount = statuses.filter((status) => status === 'connected').length
   const anyConnecting = overall === 'connecting'
   const syncProblem = targets.find(
     (t) => t.syncStatus?.phase === 'conflict' || t.syncStatus?.phase === 'error'
@@ -240,11 +270,11 @@ export function SshStatusSegment({
       ? 'Workspace conflict'
       : 'Workspace sync error'
     : null
-
   return (
     <DropdownMenu
       onOpenChange={(open) => {
         if (open) {
+          void hydrateRuntimeEnvironmentStatuses()
           recordFeatureInteraction('ssh')
         }
       }}
@@ -255,14 +285,14 @@ export function SshStatusSegment({
           className="inline-flex items-center gap-1.5 cursor-pointer rounded px-1 py-0.5 hover:bg-accent/70"
           aria-label={translate(
             'auto.components.status.bar.SshStatusSegment.fdc57e9970',
-            'SSH connection status'
+            'Remote host connection status'
           )}
         >
           {iconOnly ? (
             <span className="inline-flex items-center gap-1">
               <span
                 className={`inline-block size-2 rounded-full ${
-                  syncProblem ? 'bg-destructive' : overallDotColor(overall)
+                  syncProblem ? 'bg-destructive' : overallDotColor(overall, connectedHostCount)
                 }`}
               />
               {syncProblem ? (
@@ -288,15 +318,15 @@ export function SshStatusSegment({
               )}
               {!compact && (
                 <span className="text-[11px]">
-                  {translate('auto.components.status.bar.SshStatusSegment.d09ec41831', 'SSH')}{' '}
                   <span className={syncProblem ? 'text-destructive' : 'text-muted-foreground'}>
-                    {syncProblemLabel ?? overallLabel(overall)}
+                    {syncProblemLabel ??
+                      (anyConnecting ? 'Connecting…' : connectedHostCountLabel(connectedHostCount))}
                   </span>
                 </span>
               )}
               <span
                 className={`inline-block size-1.5 rounded-full ${
-                  syncProblem ? 'bg-destructive' : overallDotColor(overall)
+                  syncProblem ? 'bg-destructive' : overallDotColor(overall, connectedHostCount)
                 }`}
               />
             </span>
@@ -310,10 +340,39 @@ export function SshStatusSegment({
         className="w-[min(20rem,calc(100vw-1rem))]"
       >
         <div className="px-2 pt-1.5 pb-1 text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
-          {translate('auto.components.status.bar.SshStatusSegment.6e8a9a4242', 'SSH Connections')}
+          {translate('auto.components.status.bar.SshStatusSegment.6e8a9a4242', 'Remote Hosts')}
         </div>
-        {targets.map((t) => (
-          <TargetRow
+        {connectedRuntimeHosts.map((host) => (
+          <RuntimeHostStatusRow
+            key={host.id}
+            label={host.label}
+            state={host.state}
+            detail={runtimeHostConnectionDetail(host.remoteControl)}
+            onConnect={() => connectRuntimeHost(host.id)}
+            onDisconnect={() => disconnectRuntimeHost(host.id, host.active)}
+          />
+        ))}
+        {connectedTargets.map((t) => (
+          <SshTargetStatusRow
+            key={t.id}
+            targetId={t.id}
+            label={t.label}
+            status={t.status}
+            syncStatus={t.syncStatus}
+          />
+        ))}
+        {inactiveRuntimeHosts.map((host) => (
+          <RuntimeHostStatusRow
+            key={host.id}
+            label={host.label}
+            state={host.state}
+            detail={runtimeHostConnectionDetail(host.remoteControl)}
+            onConnect={() => connectRuntimeHost(host.id)}
+            onDisconnect={() => disconnectRuntimeHost(host.id, host.active)}
+          />
+        ))}
+        {disconnectedTargets.map((t) => (
+          <SshTargetStatusRow
             key={t.id}
             targetId={t.id}
             label={t.label}
@@ -325,11 +384,14 @@ export function SshStatusSegment({
         <DropdownMenuItem
           onSelect={() => {
             recordFeatureInteraction('ssh')
-            openSettingsTarget({ pane: 'ssh', repoId: null, sectionId: 'ssh' })
+            openSettingsTarget({ pane: 'servers', repoId: null })
             setActiveView('settings')
           }}
         >
-          {translate('auto.components.status.bar.SshStatusSegment.3ad70e0365', 'Manage SSH…')}
+          {translate(
+            'auto.components.status.bar.SshStatusSegment.3ad70e0365',
+            'Manage Remote Hosts…'
+          )}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

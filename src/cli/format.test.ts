@@ -6,6 +6,7 @@ import { quoteCliCommandArgument } from './shell-command-quote'
 import { RuntimeRpcFailureError } from './runtime-client'
 import {
   formatCliError,
+  formatAutomationShow,
   formatComputerAction,
   formatGetAppState,
   formatTerminalRead,
@@ -13,6 +14,7 @@ import {
   printResult
 } from './format'
 import type { ComputerActionResult, RuntimeWorktreeRecord } from '../shared/runtime-types'
+import type { Automation } from '../shared/automations-types'
 
 let testScreenshotDir: string | null = null
 
@@ -137,6 +139,59 @@ describe('formatWorktreeList', () => {
     expect(output).toContain('childWorktreeIds: repo::/tmp/repo/child')
     expect(output).toContain('parentWorktreeId: repo::/tmp/repo/parent')
     expect(output).toContain('childWorktreeIds: []')
+  })
+})
+
+describe('formatAutomationShow', () => {
+  function automation(overrides: Partial<Automation> = {}): Automation {
+    return {
+      id: 'auto-1',
+      name: 'Nightly',
+      prompt: 'Run checks',
+      precheck: null,
+      agentId: 'codex',
+      projectId: 'repo-legacy',
+      executionTargetType: 'local',
+      executionTargetId: 'local',
+      schedulerOwner: 'local_host_service',
+      workspaceMode: 'new_per_run',
+      workspaceId: null,
+      baseBranch: null,
+      reuseSession: false,
+      timezone: 'UTC',
+      rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
+      dtstart: 0,
+      enabled: true,
+      nextRunAt: 0,
+      missedRunPolicy: 'run_once_within_grace',
+      missedRunGraceMinutes: 720,
+      createdAt: 0,
+      updatedAt: 0,
+      ...overrides
+    }
+  }
+
+  it('shows explicit run context before the legacy repo id', () => {
+    const output = formatAutomationShow({
+      automation: automation({
+        runContext: {
+          kind: 'workspace-run',
+          projectId: 'github:stablyai/orca',
+          hostId: 'runtime:gpu',
+          projectHostSetupId: 'setup-gpu',
+          repoId: 'repo-gpu',
+          path: '/srv/orca'
+        }
+      })
+    })
+
+    expect(output).toContain('runProjectId: github:stablyai/orca')
+    expect(output).toContain('runHostId: runtime:gpu')
+    expect(output).toContain('projectHostSetupId: setup-gpu')
+    expect(output).toContain('runRepoId: repo-gpu')
+    expect(output).toContain('runPath: /srv/orca')
+    expect(output).toContain('legacyRepoId: repo-legacy')
+    expect(output).not.toContain('projectId: repo-legacy')
   })
 })
 

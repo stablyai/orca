@@ -26,8 +26,7 @@ import {
 } from '../ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip'
 import { ClaudeUsageLoadingState } from './ClaudeUsageLoadingState'
-import { CodexUsageDailyChart } from './CodexUsageDailyChart'
-import { OpenCodeUsageRecentSessionsTable } from './OpenCodeUsageRecentSessionsTable'
+import { OpenCodeUsageDetails } from './OpenCodeUsageDetails'
 import { StatCard } from './StatCard'
 import { formatCost, formatTokens, formatUpdatedAt } from './usage-formatters'
 import { translate } from '@/i18n/i18n'
@@ -36,21 +35,33 @@ const RANGE_OPTIONS: OpenCodeUsageRange[] = ['7d', '30d', '90d', 'all']
 const SCOPE_OPTIONS: { value: OpenCodeUsageScope; label: string }[] = [
   {
     value: 'orca',
-    label: translate('auto.components.stats.OpenCodeUsagePane.e04c58327c', 'Orca worktrees only')
+    get label() {
+      return translate('auto.components.stats.OpenCodeUsagePane.e04c58327c', 'Orca worktrees only')
+    }
   },
   {
     value: 'all',
-    label: translate(
-      'auto.components.stats.OpenCodeUsagePane.144a6050e9',
-      'All local OpenCode usage'
-    )
+    get label() {
+      return translate(
+        'auto.components.stats.OpenCodeUsagePane.144a6050e9',
+        'All local OpenCode usage'
+      )
+    }
   }
 ]
 const RANGE_LABELS: Record<OpenCodeUsageRange, string> = {
-  '7d': 'Last 7 days',
-  '30d': 'Last 30 days',
-  '90d': 'Last 90 days',
-  all: 'All time'
+  get '7d'() {
+    return translate('auto.components.stats.OpenCodeUsagePane.rangeLast7Days', 'Last 7 days')
+  },
+  get '30d'() {
+    return translate('auto.components.stats.OpenCodeUsagePane.rangeLast30Days', 'Last 30 days')
+  },
+  get '90d'() {
+    return translate('auto.components.stats.OpenCodeUsagePane.rangeLast90Days', 'Last 90 days')
+  },
+  get all() {
+    return translate('auto.components.stats.OpenCodeUsagePane.rangeAllTime', 'All time')
+  }
 }
 
 export function OpenCodeUsagePane(): React.JSX.Element {
@@ -312,82 +323,13 @@ export function OpenCodeUsagePane(): React.JSX.Element {
             )}
           </p>
 
-          <CodexUsageDailyChart daily={daily} />
-
-          <div className="grid gap-4 xl:grid-cols-2">
-            <section className="rounded-lg border border-border/60 bg-card/40 p-4">
-              <div className="mb-3">
-                <h4 className="text-sm font-semibold text-foreground">
-                  {translate('auto.components.stats.OpenCodeUsagePane.040c044d39', 'By model')}
-                </h4>
-                <p className="text-xs text-muted-foreground">
-                  {translate('auto.components.stats.OpenCodeUsagePane.a15206a63a', 'Top model:')}{' '}
-                  {summary?.topModel ??
-                    translate('auto.components.stats.OpenCodeUsagePane.8095a63426', 'n/a')}
-                </p>
-              </div>
-              <div className="space-y-3">
-                {modelBreakdown.slice(0, 5).map((row) => (
-                  <div key={row.key} className="space-y-1">
-                    <div className="flex items-center justify-between gap-3 text-sm">
-                      <span className="truncate text-foreground">{row.label}</span>
-                      <span className="shrink-0 text-muted-foreground">
-                        {formatTokens(row.totalTokens)}
-                      </span>
-                    </div>
-                    <div className="text-xs text-muted-foreground">
-                      {row.sessions}{' '}
-                      {translate(
-                        'auto.components.stats.OpenCodeUsagePane.bc0cb89901',
-                        'sessions •'
-                      )}{' '}
-                      {row.events}{' '}
-                      {translate('auto.components.stats.OpenCodeUsagePane.1e5d410df0', 'events')}
-                      {row.estimatedCostUsd !== null
-                        ? ` • ${formatCost(row.estimatedCostUsd)}`
-                        : ''}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </section>
-
-            <section className="rounded-lg border border-border/60 bg-card/40 p-4">
-              <div className="mb-3">
-                <h4 className="text-sm font-semibold text-foreground">
-                  {translate('auto.components.stats.OpenCodeUsagePane.0f0a1684bb', 'By project')}
-                </h4>
-                <p className="text-xs text-muted-foreground">
-                  {translate('auto.components.stats.OpenCodeUsagePane.048ffe4d65', 'Top project:')}{' '}
-                  {summary?.topProject ??
-                    translate('auto.components.stats.OpenCodeUsagePane.8095a63426', 'n/a')}
-                </p>
-              </div>
-              <div className="space-y-3">
-                {projectBreakdown.slice(0, 5).map((row) => (
-                  <div key={row.key} className="space-y-1">
-                    <div className="flex items-center justify-between gap-3 text-sm">
-                      <span className="truncate text-foreground">{row.label}</span>
-                      <span className="shrink-0 text-muted-foreground">
-                        {formatTokens(row.totalTokens)}
-                      </span>
-                    </div>
-                    <div className="text-xs text-muted-foreground">
-                      {row.sessions}{' '}
-                      {translate(
-                        'auto.components.stats.OpenCodeUsagePane.bc0cb89901',
-                        'sessions •'
-                      )}{' '}
-                      {row.events}{' '}
-                      {translate('auto.components.stats.OpenCodeUsagePane.1e5d410df0', 'events')}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </section>
-          </div>
-
-          <OpenCodeUsageRecentSessionsTable recentSessions={recentSessions} />
+          <OpenCodeUsageDetails
+            daily={daily}
+            modelBreakdown={modelBreakdown}
+            projectBreakdown={projectBreakdown}
+            recentSessions={recentSessions}
+            summary={summary}
+          />
         </>
       )}
     </div>

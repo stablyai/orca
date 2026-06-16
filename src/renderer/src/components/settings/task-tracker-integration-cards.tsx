@@ -7,6 +7,8 @@ import { useMountedRef } from '@/hooks/useMountedRef'
 import { getProviderRuntimeContextKey } from '@/lib/provider-runtime-context'
 import { useAppStore } from '@/store'
 import { IntegrationCardDetails, IntegrationCardShell } from './integration-card-shell'
+import { getProviderAccountScope } from './provider-account-scope'
+import { ProviderHostScopeControl } from './ProviderHostScopeControl'
 import { translate } from '@/i18n/i18n'
 
 type VerificationResult = { state: 'ok' | 'error'; error?: string }
@@ -32,6 +34,7 @@ export function LinearIntegrationCard(): React.JSX.Element {
   const checking = !contextMatches || !linearStatusChecked
   const connected = contextMatches && linearStatus.connected
   const workspaces = linearStatus.workspaces ?? []
+  const accountScope = getProviderAccountScope(settings)
 
   const handleDisconnect = async (workspaceId?: string): Promise<void> => {
     await (workspaceId ? disconnectLinearWorkspace(workspaceId) : disconnectLinear())
@@ -104,6 +107,7 @@ export function LinearIntegrationCard(): React.JSX.Element {
         ) : null
       }
     >
+      <ProviderAccountScopeRow scope={accountScope} />
       {connected ? (
         <div className="mt-3 space-y-2">
           {workspaces.map((workspace) => {
@@ -206,6 +210,19 @@ export function LinearIntegrationCard(): React.JSX.Element {
         contentClassName="z-[120]"
       />
     </IntegrationCardShell>
+  )
+}
+
+function ProviderAccountScopeRow({ scope }: { scope: ReturnType<typeof getProviderAccountScope> }) {
+  return (
+    <ProviderHostScopeControl
+      labelPrefix={translate(
+        'auto.components.settings.task.tracker.integration.cards.account_scope_prefix',
+        'Account scope'
+      )}
+      scope={scope}
+      className="mt-3 rounded-md border border-border/40 bg-background/50 px-3 py-2 text-xs"
+    />
   )
 }
 

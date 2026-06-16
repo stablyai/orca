@@ -25,6 +25,20 @@ const {
 vi.mock('./runner', () => ({
   gitExecFileAsync: gitExecFileAsyncMock,
   gitExecFileAsyncBuffer: gitExecFileAsyncBufferMock,
+  // Why: getStatus now streams status output. The mock pulls the next queued
+  // stdout from gitExecFileAsyncMock and feeds it to onStdout, so existing tests
+  // that seed the status call via `gitExecFileAsyncMock.mockResolvedValueOnce`
+  // keep working unchanged and call ordering (status, then numstat) is preserved.
+  gitStreamStdout: async (
+    args: string[],
+    options: { onStdout: (chunk: string) => boolean | void }
+  ) => {
+    // Forward args so arg-routing mock implementations (e.g. `args.includes`)
+    // still match the status read.
+    const { stdout } = await gitExecFileAsyncMock(args)
+    const stoppedEarly = options.onStdout(stdout ?? '') === true
+    return { stoppedEarly }
+  },
   gitOptionalLocksDisabledEnv: (env: NodeJS.ProcessEnv = process.env) => ({
     ...env,
     GIT_OPTIONAL_LOCKS: '0'
@@ -447,17 +461,14 @@ describe('getStatus', () => {
     // "docs/\346\227\245\346\234\254\350\252\236/sample.md" (octal-escaped,
     // wrapped in double quotes) and the parser would store that literal
     // string as entry.path, breaking sidebar display + downstream blob reads.
-    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
-      [
-        '-c',
-        'core.quotePath=false',
-        'status',
-        '--porcelain=v2',
-        '--branch',
-        '--untracked-files=all'
-      ],
-      { cwd: '/repo', env: expect.objectContaining({ GIT_OPTIONAL_LOCKS: '0' }) }
-    )
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith([
+      '-c',
+      'core.quotePath=false',
+      'status',
+      '--porcelain=v2',
+      '--branch',
+      '--untracked-files=all'
+    ])
     expect(result.entries).toEqual([
       { path: 'docs/日本語/sample.md', status: 'modified', area: 'unstaged' }
     ])
@@ -498,18 +509,15 @@ describe('getStatus', () => {
 
     const result = await getStatus('/repo', { includeIgnored: true })
 
-    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
-      [
-        '-c',
-        'core.quotePath=false',
-        'status',
-        '--porcelain=v2',
-        '--branch',
-        '--untracked-files=all',
-        '--ignored=matching'
-      ],
-      { cwd: '/repo', env: expect.objectContaining({ GIT_OPTIONAL_LOCKS: '0' }) }
-    )
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith([
+      '-c',
+      'core.quotePath=false',
+      'status',
+      '--porcelain=v2',
+      '--branch',
+      '--untracked-files=all',
+      '--ignored=matching'
+    ])
     expect(result.ignoredPaths).toEqual(['dist/', 'generated/file.js'])
   })
 
@@ -595,17 +603,14 @@ describe('getStatus', () => {
 
     const result = await getStatus('/repo')
 
-    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
-      [
-        '-c',
-        'core.quotePath=false',
-        'status',
-        '--porcelain=v2',
-        '--branch',
-        '--untracked-files=all'
-      ],
-      { cwd: '/repo', env: expect.objectContaining({ GIT_OPTIONAL_LOCKS: '0' }) }
-    )
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith([
+      '-c',
+      'core.quotePath=false',
+      'status',
+      '--porcelain=v2',
+      '--branch',
+      '--untracked-files=all'
+    ])
     expect('ignoredPaths' in result).toBe(false)
   })
 
@@ -618,18 +623,15 @@ describe('getStatus', () => {
 
     const result = await getStatus('/repo', { includeIgnored: true })
 
-    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
-      [
-        '-c',
-        'core.quotePath=false',
-        'status',
-        '--porcelain=v2',
-        '--branch',
-        '--untracked-files=all',
-        '--ignored=matching'
-      ],
-      { cwd: '/repo', env: expect.objectContaining({ GIT_OPTIONAL_LOCKS: '0' }) }
-    )
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith([
+      '-c',
+      'core.quotePath=false',
+      'status',
+      '--porcelain=v2',
+      '--branch',
+      '--untracked-files=all',
+      '--ignored=matching'
+    ])
     expect(result.ignoredPaths).toEqual(['dist/', '.env', 'coverage/'])
     expect(result.entries).toEqual([])
   })
@@ -770,6 +772,38 @@ describe('getStatus', () => {
     await getStatus('/repo')
 
     expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('truncates and flags didHitLimit when entries exceed the limit', async () => {
+    readFileMock.mockResolvedValue('gitdir: /repo/.git/worktrees/feature\n')
+    existsSyncMock.mockReturnValue(false)
+    const stdout = `${Array.from({ length: 25 }, (_, i) => `? file${i}.txt`).join('\n')}\n`
+    gitExecFileAsyncMock.mockReset()
+    gitExecFileAsyncMock.mockResolvedValue({ stdout: '' })
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout })
+
+    const result = await getStatus('/repo', { limit: 10 })
+
+    expect(result.didHitLimit).toBe(true)
+    expect(result.statusLength).toBeGreaterThan(10)
+    // First `limit` entries are kept; the rest are dropped.
+    expect(result.entries.length).toBe(10)
+    // attachLineStats (numstat) must be skipped when the limit was hit — only
+    // the single streamed status read should have happened.
+    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not flag didHitLimit for a normal repo under the limit', async () => {
+    readFileMock.mockResolvedValue('gitdir: /repo/.git/worktrees/feature\n')
+    existsSyncMock.mockReturnValue(false)
+    gitExecFileAsyncMock.mockReset()
+    gitExecFileAsyncMock.mockResolvedValue({ stdout: '' })
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '? a.txt\n? b.txt\n' })
+
+    const result = await getStatus('/repo', { limit: 10 })
+
+    expect(result.didHitLimit).toBeUndefined()
+    expect(result.entries.length).toBe(2)
   })
 })
 

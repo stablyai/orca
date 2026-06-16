@@ -209,7 +209,7 @@ describe('AddProjectFromFolderDialog', () => {
       closeModal: mocks.state.closeModal,
       setHideDefaultBranchWorkspace: mocks.state.setHideDefaultBranchWorkspace
     })
-    expect(mocks.toastSuccess).toHaveBeenCalledWith('Remote project added', {
+    expect(mocks.toastSuccess).toHaveBeenCalledWith('Project added on SSH host', {
       description: repo.displayName
     })
   })

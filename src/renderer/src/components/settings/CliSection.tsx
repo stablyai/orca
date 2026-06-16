@@ -19,17 +19,10 @@ import {
 } from '@/hooks/useInstalledAgentSkills'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { Button } from '../ui/button'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle
-} from '../ui/dialog'
 import { Label } from '../ui/label'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip'
 import { AgentSkillSetupPanel } from './AgentSkillSetupPanel'
+import { CliRegistrationDialog } from './CliRegistrationDialog'
 import {
   buildSkillInstallCommandForRuntime,
   CliSkillRuntimeControl,
@@ -408,64 +401,17 @@ export function CliSection({
 
       <WslCliRegistration currentPlatform={currentPlatform} />
 
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>
-              {isEnabled
-                ? translate(
-                    'auto.components.settings.CliSection.14444243ba',
-                    'Remove `{{value0}}` from PATH?',
-                    { value0: commandName }
-                  )
-                : translate(
-                    'auto.components.settings.CliSection.fa87db3d6e',
-                    'Register `{{value0}}` in PATH?',
-                    { value0: commandName }
-                  )}
-            </DialogTitle>
-            <DialogDescription>
-              {isEnabled
-                ? translate(
-                    'auto.components.settings.CliSection.a030816e3e',
-                    'This removes the shell command symlink. Orca itself remains installed.'
-                  )
-                : translate(
-                    'auto.components.settings.CliSection.aa6536977e',
-                    'Orca will register {{value0}} so the command works from your terminal.',
-                    { value0: status?.commandPath ?? commandName }
-                  )}
-            </DialogDescription>
-          </DialogHeader>
-          {status?.commandPath ? (
-            <p className="text-xs text-muted-foreground">
-              {translate('auto.components.settings.CliSection.a4aafe46e3', 'Target path:')}{' '}
-              <code className="rounded bg-muted px-1 py-0.5 text-[11px]">{status.commandPath}</code>
-            </p>
-          ) : null}
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setDialogOpen(false)}
-              disabled={busyAction !== null}
-            >
-              {translate('auto.components.settings.CliSection.8671e406f0', 'Cancel')}
-            </Button>
-            <Button
-              onClick={() => void (isEnabled ? handleRemove() : handleInstall())}
-              disabled={busyAction !== null || !isSupported}
-            >
-              {busyAction === 'remove'
-                ? translate('auto.components.settings.CliSection.068552b191', 'Removing…')
-                : busyAction === 'install'
-                  ? translate('auto.components.settings.CliSection.b0fca411a0', 'Registering…')
-                  : isEnabled
-                    ? translate('auto.components.settings.CliSection.9a5f8a4568', 'Remove')
-                    : translate('auto.components.settings.CliSection.d00df2e397', 'Register')}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <CliRegistrationDialog
+        busyAction={busyAction}
+        commandName={commandName}
+        commandPath={status?.commandPath}
+        isEnabled={isEnabled}
+        isSupported={isSupported}
+        onInstall={handleInstall}
+        onOpenChange={setDialogOpen}
+        onRemove={handleRemove}
+        open={dialogOpen}
+      />
     </section>
   )
 }

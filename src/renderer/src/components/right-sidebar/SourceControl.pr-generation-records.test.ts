@@ -186,7 +186,8 @@ describe('SourceControl pull request generation records', () => {
         connectionId: 'conn-a',
         requestId: 1,
         repoId: 'repo-1',
-        branch: 'feature-a'
+        branch: 'feature-a',
+        runtimeTargetSettings: { activeRuntimeEnvironmentId: 'runtime-a' }
       },
       seed,
       fieldRevisions
@@ -208,10 +209,59 @@ describe('SourceControl pull request generation records', () => {
     )
 
     expect(store.getState().pullRequestGenerationRecords[key!]).toMatchObject({
+      context: { runtimeTargetSettings: { activeRuntimeEnvironmentId: 'runtime-a' } },
       status: 'succeeded',
       result: generated,
       hydrated: false
     })
+  })
+
+  it('prunes PR generation records for removed worktrees', () => {
+    const store = createPullRequestGenerationTestStore()
+    const keyA = getPullRequestGenerationRecordKey({
+      worktreeId: 'wt-a',
+      worktreePath: '/repo/a',
+      repoId: 'repo-1',
+      branch: 'feature-a'
+    })!
+    const keyB = getPullRequestGenerationRecordKey({
+      worktreeId: 'wt-b',
+      worktreePath: '/repo/b',
+      repoId: 'repo-1',
+      branch: 'feature-b'
+    })!
+    store.getState().setPullRequestGenerationRecord(
+      keyA,
+      createRunningPullRequestGenerationRecord(
+        {
+          worktreeId: 'wt-a',
+          worktreePath: '/repo/a',
+          requestId: 1,
+          repoId: 'repo-1',
+          branch: 'feature-a'
+        },
+        seed,
+        fieldRevisions
+      )
+    )
+    store.getState().setPullRequestGenerationRecord(
+      keyB,
+      createRunningPullRequestGenerationRecord(
+        {
+          worktreeId: 'wt-b',
+          worktreePath: '/repo/b',
+          requestId: 2,
+          repoId: 'repo-1',
+          branch: 'feature-b'
+        },
+        seed,
+        fieldRevisions
+      )
+    )
+
+    store.getState().prunePullRequestGenerationRecords(new Set(['wt-a']))
+
+    expect(Object.keys(store.getState().pullRequestGenerationRecords)).toEqual([keyA])
   })
 
   it('does not reuse PR generation request ids across composer remounts', () => {

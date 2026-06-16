@@ -22,12 +22,12 @@ export function ClosedReviewActions({
   onReopenReview: () => void
 }): React.JSX.Element {
   return (
-    <div className="space-y-1.5">
+    <div className="flex flex-col items-start gap-1.5">
       <Button
         type="button"
         variant="outline"
         size="xs"
-        className="w-full cursor-pointer text-[11px] hover:cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+        className="cursor-pointer text-[11px] hover:cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
         onClick={onReopenReview}
         disabled={stateUpdating !== null}
       >
@@ -64,7 +64,7 @@ export function MergedReviewActions({
       type="button"
       variant="secondary"
       size="xs"
-      className="w-full cursor-pointer text-[11px] hover:cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+      className="cursor-pointer text-[11px] hover:cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
       onClick={onDeleteWorktree}
       disabled={isDeletingWorktree}
     >

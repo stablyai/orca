@@ -41,7 +41,7 @@ describe('Cmd+J lifted creation actions', () => {
     delete pairedWebFlag.__ORCA_WEB_CLIENT__
   })
 
-  it('does not fall back to a local browser tab when paired-web creation fails', async () => {
+  it('opens a local browser tab when paired-web browser creation fails', async () => {
     createWebRuntimeSessionBrowserTabMock.mockResolvedValue(false)
     const store = createTestStore()
     seedActiveWorkspace(store)
@@ -54,7 +54,42 @@ describe('Cmd+J lifted creation actions', () => {
       url: 'about:blank',
       targetGroupId: 'group-1'
     })
-    expect(store.getState().browserTabsByWorktree['wt-1'] ?? []).toEqual([])
+    expect(store.getState().browserTabsByWorktree['wt-1'] ?? []).toHaveLength(1)
+  })
+
+  it('creates browser tabs on the explicit owner runtime when another runtime is focused', async () => {
+    createWebRuntimeSessionBrowserTabMock.mockResolvedValue(false)
+    const store = createTestStore()
+    seedActiveWorkspace(store)
+    store.setState({
+      repos: [{ ...TEST_REPO, executionHostId: 'runtime:owner-runtime' }],
+      settings: { activeRuntimeEnvironmentId: 'focused-runtime' } as AppState['settings']
+    })
+
+    await store.getState().openNewBrowserTabInActiveWorkspace('group-1')
+
+    expect(createWebRuntimeSessionBrowserTabMock).toHaveBeenCalledWith({
+      worktreeId: 'wt-1',
+      environmentId: 'owner-runtime',
+      url: 'about:blank',
+      targetGroupId: 'group-1'
+    })
+    expect(store.getState().browserTabsByWorktree['wt-1'] ?? []).toHaveLength(1)
+  })
+
+  it('creates a local browser tab for explicitly local workspaces while a runtime is focused', async () => {
+    createWebRuntimeSessionBrowserTabMock.mockResolvedValue(false)
+    const store = createTestStore()
+    seedActiveWorkspace(store)
+    store.setState({
+      repos: [{ ...TEST_REPO, executionHostId: 'local' }],
+      settings: { activeRuntimeEnvironmentId: 'focused-runtime' } as AppState['settings']
+    })
+
+    await store.getState().openNewBrowserTabInActiveWorkspace('group-1')
+
+    expect(createWebRuntimeSessionBrowserTabMock).not.toHaveBeenCalled()
+    expect(store.getState().browserTabsByWorktree['wt-1'] ?? []).toHaveLength(1)
   })
 
   it('does not fall back to a local terminal tab when paired-web creation fails', async () => {
@@ -67,6 +102,27 @@ describe('Cmd+J lifted creation actions', () => {
     expect(createWebRuntimeSessionTerminalMock).toHaveBeenCalledWith({
       worktreeId: 'wt-1',
       environmentId: 'runtime-1',
+      targetGroupId: 'group-1',
+      activate: true
+    })
+    expect(store.getState().tabsByWorktree['wt-1'] ?? []).toEqual([])
+  })
+
+  it('creates desktop remote-server terminal tabs through the owning runtime', async () => {
+    delete pairedWebFlag.__ORCA_WEB_CLIENT__
+    createWebRuntimeSessionTerminalMock.mockResolvedValue(false)
+    const store = createTestStore()
+    seedActiveWorkspace(store)
+    store.setState({
+      repos: [{ ...TEST_REPO, executionHostId: 'runtime:owner-runtime' }],
+      settings: { activeRuntimeEnvironmentId: null } as AppState['settings']
+    })
+
+    await store.getState().openNewTerminalTabInActiveWorkspace('group-1')
+
+    expect(createWebRuntimeSessionTerminalMock).toHaveBeenCalledWith({
+      worktreeId: 'wt-1',
+      environmentId: 'owner-runtime',
       targetGroupId: 'group-1',
       activate: true
     })

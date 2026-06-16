@@ -19,6 +19,7 @@ import { useAppStore } from '@/store'
 import { useActiveWorktree, useRepoById } from '@/store/selectors'
 import { cn } from '@/lib/utils'
 import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
+import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import {
   killWorkspacePortForTarget,
   openWorkspacePortInBrowser,
@@ -160,9 +161,10 @@ function LocalWorkspacePortsPanel({ isVisible }: { isVisible: boolean }): React.
   const settings = useAppStore((s) => s.settings)
   const createBrowserTab = useAppStore((s) => s.createBrowserTab)
   const setRemoteBrowserPageHandle = useAppStore((s) => s.setRemoteBrowserPageHandle)
-  const scan = useAppStore((s) => s.workspacePortScan)
+  const scansByKey = useAppStore((s) => s.workspacePortScansByKey)
   const refreshing = useAppStore((s) => s.workspacePortScanRefreshing)
   const setWorkspacePortScan = useAppStore((s) => s.setWorkspacePortScan)
+  const setWorkspacePortScanForKey = useAppStore((s) => s.setWorkspacePortScanForKey)
   const setWorkspacePortScanRefreshing = useAppStore((s) => s.setWorkspacePortScanRefreshing)
   const [detailsPort, setDetailsPort] = useState<WorkspacePort | null>(null)
   const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({
@@ -170,7 +172,15 @@ function LocalWorkspacePortsPanel({ isVisible }: { isVisible: boolean }): React.
     external: true
   })
 
-  const runtimeTarget = useMemo(() => getActiveRuntimeTarget(settings), [settings])
+  const runtimeTarget = useMemo(() => {
+    const activeRuntimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(
+      useAppStore.getState(),
+      activeWorktree?.id
+    )
+    // Why: the Ports panel acts on the active workspace; use that workspace's
+    // host owner even if the sidebar is focused elsewhere.
+    return getActiveRuntimeTarget({ ...settings, activeRuntimeEnvironmentId })
+  }, [activeWorktree?.id, settings])
   const scanKey = `${workspacePortRuntimeTargetKey(runtimeTarget)}:all`
 
   const refresh = useCallback(() => {
@@ -180,6 +190,7 @@ function LocalWorkspacePortsPanel({ isVisible }: { isVisible: boolean }): React.
     setWorkspacePortScanRefreshing(true)
     const promise = scanWorkspacePortsForTarget(runtimeTarget)
       .then((nextScan) => {
+        setWorkspacePortScanForKey(scanKey, nextScan)
         setWorkspacePortScan({ key: scanKey, result: nextScan })
       })
       .catch((error) => {
@@ -203,11 +214,18 @@ function LocalWorkspacePortsPanel({ isVisible }: { isVisible: boolean }): React.
         setWorkspacePortScanRefreshing(false)
       })
     return promise
-  }, [activeRepo, runtimeTarget, scanKey, setWorkspacePortScan, setWorkspacePortScanRefreshing])
+  }, [
+    activeRepo,
+    runtimeTarget,
+    scanKey,
+    setWorkspacePortScan,
+    setWorkspacePortScanForKey,
+    setWorkspacePortScanRefreshing
+  ])
 
   // Why: WorkspacePortScanner already owns the 30s all-worktree poll. The
   // panel scopes that shared result instead of starting a second scan loop.
-  const displayScan = scan?.key === scanKey && isVisible ? scan.result : null
+  const displayScan = isVisible ? (scansByKey[scanKey] ?? null) : null
 
   const toggleSection = useCallback((sectionId: string) => {
     setCollapsedSections((current) => ({ ...current, [sectionId]: !current[sectionId] }))
@@ -237,6 +255,8 @@ function LocalWorkspacePortsPanel({ isVisible }: { isVisible: boolean }): React.
       const refreshResult = await refreshWorkspacePortScanAfterStop({
         runtimeTarget,
         setWorkspacePortScan,
+        setWorkspacePortScanForKey,
+        getWorkspacePortScansByKey: () => useAppStore.getState().workspacePortScansByKey,
         setWorkspacePortScanRefreshing
       })
       if (!refreshResult.ok) {
@@ -251,7 +271,13 @@ function LocalWorkspacePortsPanel({ isVisible }: { isVisible: boolean }): React.
         )
       }
     },
-    [activeRepo, runtimeTarget, setWorkspacePortScan, setWorkspacePortScanRefreshing]
+    [
+      activeRepo,
+      runtimeTarget,
+      setWorkspacePortScan,
+      setWorkspacePortScanForKey,
+      setWorkspacePortScanRefreshing
+    ]
   )
 
   const handleOpenPortInBrowser = useCallback(

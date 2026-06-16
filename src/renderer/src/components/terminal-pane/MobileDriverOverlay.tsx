@@ -13,6 +13,7 @@ type Props = {
   driver: DriverState
   hasFitOverride: boolean
   onAction: () => void | Promise<void>
+  onAllAction?: () => void | Promise<void>
   /** Identifier class on the rendered root, used by e2e selectors. */
   rootClassName?: string
 }
@@ -24,6 +25,7 @@ export function MobileDriverOverlay({
   driver,
   hasFitOverride,
   onAction,
+  onAllAction,
   rootClassName
 }: Props): ReactElement | null {
   const isMobileDriving = driver.kind === 'mobile'
@@ -34,14 +36,16 @@ export function MobileDriverOverlay({
     createMobileDriverOverlayCollapseState(driverClientId)
   )
   const [actionPending, setActionPending] = useState(false)
+  const [allActionPending, setAllActionPending] = useState(false)
   const mountedRef = useRef(false)
 
   const setOverlayRootRef = useCallback((node: HTMLDivElement | null): void => {
     mountedRef.current = node !== null
     if (node) {
-      // Why: take-back can resolve after the overlay renders null; a later
-      // mobile session must not inherit the stale disabled state.
+      // Why: take-back/restore can resolve after the overlay renders null; a
+      // later mobile session must not inherit stale disabled state.
       setActionPending(false)
+      setAllActionPending(false)
     }
   }, [])
 
@@ -57,7 +61,7 @@ export function MobileDriverOverlay({
   }
 
   const handleAction = async (): Promise<void> => {
-    if (actionPending) {
+    if (actionPending || allActionPending) {
       return
     }
     setActionPending(true)
@@ -66,6 +70,20 @@ export function MobileDriverOverlay({
     } finally {
       if (mountedRef.current) {
         setActionPending(false)
+      }
+    }
+  }
+
+  const handleAllAction = async (): Promise<void> => {
+    if (!onAllAction || actionPending || allActionPending) {
+      return
+    }
+    setAllActionPending(true)
+    try {
+      await onAllAction()
+    } finally {
+      if (mountedRef.current) {
+        setAllActionPending(false)
       }
     }
   }
@@ -81,7 +99,13 @@ export function MobileDriverOverlay({
         body="The session is still being held at the dimensions your phone last reported. Restore to use it on your desktop."
         actionLabel="Restore desktop size"
         actionPending={actionPending}
+        allActionLabel={translate(
+          'auto.components.terminal.pane.MobileDriverOverlay.54f7d6f69d',
+          'Resize all terminals'
+        )}
+        allActionPending={allActionPending}
         onAction={handleAction}
+        onAllAction={onAllAction ? handleAllAction : undefined}
         tone="held"
         rootRef={setOverlayRootRef}
         rootClassName={rootClassName}
@@ -111,7 +135,13 @@ export function MobileDriverOverlay({
       body="Output below is being typed from your phone. Take back to resume typing on the desktop, or collapse to keep watching."
       actionLabel="Take back"
       actionPending={actionPending}
+      allActionLabel={translate(
+        'auto.components.terminal.pane.MobileDriverOverlay.54f7d6f69d',
+        'Resize all terminals'
+      )}
+      allActionPending={allActionPending}
       onAction={handleAction}
+      onAllAction={onAllAction ? handleAllAction : undefined}
       onCollapse={() => setCollapseState({ driverClientId, collapsed: true })}
       tone="driving"
       rootRef={setOverlayRootRef}
@@ -126,7 +156,10 @@ type LoudOverlayProps = {
   body: string
   actionLabel: string
   actionPending: boolean
+  allActionLabel?: string
+  allActionPending?: boolean
   onAction: () => void | Promise<void>
+  onAllAction?: () => void | Promise<void>
   onCollapse?: () => void
   tone: 'driving' | 'held'
   rootRef?: (node: HTMLDivElement | null) => void
@@ -139,7 +172,10 @@ function LoudOverlay({
   body,
   actionLabel,
   actionPending,
+  allActionLabel,
+  allActionPending = false,
   onAction,
+  onAllAction,
   onCollapse,
   tone,
   rootRef: outerRootRef,
@@ -197,7 +233,7 @@ function LoudOverlay({
         <div id={bodyId} className="text-sm leading-relaxed text-muted-foreground">
           {body}
         </div>
-        <div className="mt-1 flex justify-end gap-2">
+        <div className="mt-1 flex flex-wrap justify-end gap-2">
           {onCollapse && (
             <Button type="button" variant="outline" size="sm" onClick={onCollapse}>
               {translate(
@@ -206,6 +242,17 @@ function LoudOverlay({
               )}
             </Button>
           )}
+          {onAllAction && allActionLabel ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={onAllAction}
+              disabled={actionPending || allActionPending}
+            >
+              {allActionLabel}
+            </Button>
+          ) : null}
           {/* Focus is moved to this button only when no user input is active; see effect above. */}
           <Button
             ref={actionRef}
@@ -213,7 +260,7 @@ function LoudOverlay({
             variant="default"
             size="sm"
             onClick={onAction}
-            disabled={actionPending}
+            disabled={actionPending || allActionPending}
           >
             {actionLabel}
           </Button>

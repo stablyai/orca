@@ -10,7 +10,8 @@ import type {
   FolderWorkspace,
   LocalBaseRefRefreshResult,
   Worktree,
-  WorktreeLineage
+  WorktreeLineage,
+  WorkspaceLineage
 } from '../../../../shared/types'
 import { toast } from 'sonner'
 import {
@@ -90,7 +91,7 @@ import {
   unregisterPersistentWebview
 } from '../../components/browser-pane/webview-registry'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
-import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
+import { folderWorkspaceKey, worktreeWorkspaceKey } from '../../../../shared/workspace-scope'
 
 function resetRemoteRuntimeMocks() {
   clearRuntimeCompatibilityCacheForTests()
@@ -198,6 +199,19 @@ function makeLineage(overrides: Partial<WorktreeLineage> = {}): WorktreeLineage 
     origin: 'manual',
     capture: { source: 'manual-action', confidence: 'explicit' },
     createdAt: 1,
+    ...overrides
+  }
+}
+
+function makeWorkspaceLineage(overrides: Partial<WorkspaceLineage> = {}): WorkspaceLineage {
+  return {
+    childWorkspaceKey: 'worktree:repo1::/path/child',
+    childInstanceId: 'child-instance',
+    parentWorkspaceKey: 'folder:folder-1',
+    parentInstanceId: null,
+    origin: 'cli',
+    capture: { source: 'env-workspace', confidence: 'inferred' },
+    createdAt: 2,
     ...overrides
   }
 }
@@ -685,6 +699,38 @@ describe('fetchWorktrees', () => {
     expect(mockApi.worktrees.listDetected).not.toHaveBeenCalled()
   })
 
+  it('fetches SSH repo worktrees through local IPC even when a runtime is focused', async () => {
+    const store = createTestStore()
+    const sshWorktree = makeWorktree({
+      id: 'repo-ssh::/home/orca/wt1',
+      repoId: 'repo-ssh',
+      path: '/home/orca/wt1',
+      branch: 'refs/heads/ssh'
+    })
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
+      repos: [
+        {
+          id: 'repo-ssh',
+          path: '/home/orca/repo',
+          displayName: 'SSH Repo',
+          badgeColor: '#000',
+          addedAt: 0,
+          connectionId: 'ssh-1'
+        }
+      ]
+    } as Partial<AppState>)
+    mockApi.worktrees.listDetected.mockResolvedValueOnce(
+      makeDetectedResult('repo-ssh', [sshWorktree], { source: 'git' })
+    )
+
+    await store.getState().fetchWorktrees('repo-ssh')
+
+    expect(mockApi.worktrees.listDetected).toHaveBeenCalledWith({ repoId: 'repo-ssh' })
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+    expect(store.getState().worktreesByRepo['repo-ssh']).toEqual([sshWorktree])
+  })
+
   it('falls back to legacy remote worktree.list when detectedList is unavailable', async () => {
     const store = createTestStore()
     const remote = makeWorktree({
@@ -891,6 +937,39 @@ describe('worktree lineage state', () => {
 
     expect(mockApi.worktrees.listLineage).toHaveBeenCalled()
     expect(store.getState().worktreeLineageById).toEqual({ [lineage.worktreeId]: lineage })
+    expect(store.getState().workspaceLineageByChildKey).toEqual({})
+  })
+
+  it('fetches workspace lineage from the expanded local lineage response', async () => {
+    const store = createTestStore()
+    const lineage = makeLineage()
+    const workspaceLineage = makeWorkspaceLineage()
+    mockApi.worktrees.listLineage.mockResolvedValue({
+      lineage: { [lineage.worktreeId]: lineage },
+      workspaceLineage: { [workspaceLineage.childWorkspaceKey]: workspaceLineage }
+    })
+
+    await store.getState().fetchWorktreeLineage()
+
+    expect(store.getState().worktreeLineageById).toEqual({ [lineage.worktreeId]: lineage })
+    expect(store.getState().workspaceLineageByChildKey).toEqual({
+      [workspaceLineage.childWorkspaceKey]: workspaceLineage
+    })
+  })
+
+  it('clears workspace lineage on successful old-shape lineage refresh', async () => {
+    const store = createTestStore()
+    const lineage = makeLineage()
+    const workspaceLineage = makeWorkspaceLineage()
+    store.setState({
+      workspaceLineageByChildKey: { [workspaceLineage.childWorkspaceKey]: workspaceLineage }
+    } as Partial<AppState>)
+    mockApi.worktrees.listLineage.mockResolvedValue({ [lineage.worktreeId]: lineage })
+
+    await store.getState().fetchWorktreeLineage()
+
+    expect(store.getState().worktreeLineageById).toEqual({ [lineage.worktreeId]: lineage })
+    expect(store.getState().workspaceLineageByChildKey).toEqual({})
   })
 
   it('updates a child lineage entry and bumps sortEpoch', async () => {
@@ -911,19 +990,56 @@ describe('worktree lineage state', () => {
     expect(store.getState().sortEpoch).toBe(4)
   })
 
-  it('removes a child lineage entry when the backend clears the parent link', async () => {
+  it('removes child lineage entries when the backend clears the parent link', async () => {
     const store = createTestStore()
     const lineage = makeLineage()
+    const workspaceLineage = makeWorkspaceLineage({
+      childWorkspaceKey: worktreeWorkspaceKey(lineage.worktreeId)
+    })
     mockApi.worktrees.updateLineage.mockResolvedValue(null)
     store.setState({
       worktreeLineageById: { [lineage.worktreeId]: lineage },
+      workspaceLineageByChildKey: { [workspaceLineage.childWorkspaceKey]: workspaceLineage },
       sortEpoch: 3
     } as Partial<AppState>)
 
     await store.getState().updateWorktreeLineage(lineage.worktreeId, { noParent: true })
 
     expect(store.getState().worktreeLineageById).toEqual({})
+    expect(store.getState().workspaceLineageByChildKey).toEqual({})
     expect(store.getState().sortEpoch).toBe(4)
+  })
+
+  it('syncs workspace lineage when a child is manually reparented', async () => {
+    const store = createTestStore()
+    const lineage = makeLineage({
+      origin: 'manual',
+      capture: { source: 'manual-action', confidence: 'explicit' }
+    })
+    const oldWorkspaceLineage = makeWorkspaceLineage({
+      childWorkspaceKey: worktreeWorkspaceKey(lineage.worktreeId),
+      parentWorkspaceKey: folderWorkspaceKey('folder-1')
+    })
+    mockApi.worktrees.updateLineage.mockResolvedValue(lineage)
+    store.setState({
+      workspaceLineageByChildKey: { [oldWorkspaceLineage.childWorkspaceKey]: oldWorkspaceLineage }
+    } as Partial<AppState>)
+
+    await store.getState().updateWorktreeLineage(lineage.worktreeId, {
+      parentWorktreeId: lineage.parentWorktreeId
+    })
+
+    expect(store.getState().workspaceLineageByChildKey).toEqual({
+      [worktreeWorkspaceKey(lineage.worktreeId)]: {
+        childWorkspaceKey: worktreeWorkspaceKey(lineage.worktreeId),
+        childInstanceId: lineage.worktreeInstanceId,
+        parentWorkspaceKey: worktreeWorkspaceKey(lineage.parentWorktreeId),
+        parentInstanceId: lineage.parentWorktreeInstanceId,
+        origin: lineage.origin,
+        capture: lineage.capture,
+        createdAt: lineage.createdAt
+      }
+    })
   })
 
   it('refetches lineage after an update failure', async () => {
@@ -1309,6 +1425,39 @@ describe('createWorktree base status merge', () => {
       linkedLinearIssue: 'ENG-123',
       workspaceStatus: 'in-review',
       pendingFirstAgentMessageRename: true
+    })
+  })
+
+  it('passes the active folder workspace as parent for in-app worktree creates', async () => {
+    const store = createTestStore()
+    const wt = makeWorktree({
+      id: 'repo1::/path/wt1',
+      repoId: 'repo1',
+      path: '/path/wt1',
+      instanceId: 'child-instance'
+    })
+    const workspaceLineage = makeWorkspaceLineage({
+      childWorkspaceKey: worktreeWorkspaceKey(wt.id),
+      childInstanceId: 'child-instance',
+      parentWorkspaceKey: folderWorkspaceKey('folder-1'),
+      capture: { source: 'active-workspace', confidence: 'explicit' }
+    })
+    store.setState({
+      activeWorkspaceKey: folderWorkspaceKey('folder-1')
+    } as Partial<AppState>)
+    mockApi.worktrees.create.mockResolvedValue({ worktree: wt, workspaceLineage })
+
+    await store.getState().createWorktree('repo1', 'feature', 'origin/main')
+
+    expect(mockApi.worktrees.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        repoId: 'repo1',
+        name: 'feature',
+        parentWorkspace: folderWorkspaceKey('folder-1')
+      })
+    )
+    expect(store.getState().workspaceLineageByChildKey).toEqual({
+      [workspaceLineage.childWorkspaceKey]: workspaceLineage
     })
   })
 
@@ -2314,6 +2463,40 @@ describe('worktree remote runtime mutations', () => {
     expect(store.getState().worktreesByRepo.repo1).toEqual([])
   })
 
+  it('removes SSH-owned worktrees through local IPC even when a runtime is focused', async () => {
+    const store = createTestStore()
+    const wt = makeWorktree({
+      id: 'repo-ssh::/home/orca/wt1',
+      repoId: 'repo-ssh',
+      path: '/home/orca/wt1'
+    })
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
+      repos: [
+        {
+          id: 'repo-ssh',
+          path: '/home/orca/repo',
+          displayName: 'SSH Repo',
+          badgeColor: '#000',
+          addedAt: 0,
+          connectionId: 'ssh-1'
+        }
+      ],
+      worktreesByRepo: { 'repo-ssh': [wt] }
+    } as Partial<AppState>)
+
+    const result = await store.getState().removeWorktree(wt.id)
+
+    expect(result).toEqual({ ok: true })
+    expect(mockApi.worktrees.remove).toHaveBeenCalledWith({
+      worktreeId: wt.id,
+      force: undefined,
+      skipArchive: false
+    })
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+    expect(store.getState().worktreesByRepo['repo-ssh']).toEqual([])
+  })
+
   it('persists worktree metadata through the active remote runtime environment', async () => {
     const store = createTestStore()
     const wt = makeWorktree({ id: 'repo1::/path/wt1', repoId: 'repo1', path: '/path/wt1' })
@@ -2338,6 +2521,38 @@ describe('worktree remote runtime mutations', () => {
     })
     expect(mockApi.worktrees.updateMeta).not.toHaveBeenCalled()
     expect(store.getState().worktreesByRepo.repo1[0]?.comment).toBe('remote note')
+  })
+
+  it('persists SSH-owned worktree metadata through local IPC even when a runtime is focused', async () => {
+    const store = createTestStore()
+    const wt = makeWorktree({
+      id: 'repo-ssh::/home/orca/wt1',
+      repoId: 'repo-ssh',
+      path: '/home/orca/wt1'
+    })
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
+      repos: [
+        {
+          id: 'repo-ssh',
+          path: '/home/orca/repo',
+          displayName: 'SSH Repo',
+          badgeColor: '#000',
+          addedAt: 0,
+          connectionId: 'ssh-1'
+        }
+      ],
+      worktreesByRepo: { 'repo-ssh': [wt] }
+    } as Partial<AppState>)
+
+    await store.getState().updateWorktreeMeta(wt.id, { comment: 'ssh note' })
+
+    expect(mockApi.worktrees.updateMeta).toHaveBeenCalledWith({
+      worktreeId: wt.id,
+      updates: expect.objectContaining({ comment: 'ssh note' })
+    })
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+    expect(store.getState().worktreesByRepo['repo-ssh'][0]?.comment).toBe('ssh note')
   })
 
   it('clears pending first-agent rename when the title is updated', async () => {
@@ -2854,6 +3069,9 @@ describe('worktree remote runtime mutations', () => {
       repoId: 'repo1',
       linkedGitHubPR: null,
       linkedGitLabMR: null,
+      linkedBitbucketPR: null,
+      linkedAzureDevOpsPR: null,
+      linkedGiteaPR: null,
       force: true
     })
   })
@@ -2883,6 +3101,9 @@ describe('worktree remote runtime mutations', () => {
       repoId: 'repo1',
       linkedGitHubPR: null,
       linkedGitLabMR: 789,
+      linkedBitbucketPR: null,
+      linkedAzureDevOpsPR: null,
+      linkedGiteaPR: null,
       force: true
     })
   })
@@ -3178,6 +3399,54 @@ describe('fetchAllWorktrees hydration-time purge (design §4.4)', () => {
 
     expect(mockApi.worktrees.list).toHaveBeenCalledTimes(4)
     expect(store.getState().tabsByWorktree['repoA::/a/new-zombie']).toBeDefined()
+  })
+
+  // Why: multi-host regression — once hydration has fired, a mid-session
+  // fetchAllWorktrees (e.g. triggered by switching focus) must NEVER purge
+  // terminal state, even if a host transiently reports zero worktrees. The
+  // hydration-time purge is the only purge path here; it is gated to boot.
+  it('does not purge another host tab state when hasHydratedWorktreePurge is already true and a host reports zero worktrees', async () => {
+    const store = createTestStore()
+    const wtA = makeWorktree({ id: 'repoA::/a/wt1', repoId: 'repoA', path: '/a/wt1' })
+
+    // repoB reports zero worktrees this round (host briefly empty), repoA fine.
+    mockApi.worktrees.list.mockImplementation(async ({ repoId }: { repoId: string }) =>
+      repoId === 'repoA' ? [wtA] : []
+    )
+
+    store.setState({
+      hasHydratedWorktreePurge: true,
+      repos: [repoA, repoB],
+      tabsByWorktree: {
+        'repoB::/b/wt1': [{ id: 'tab-B', worktreeId: 'repoB::/b/wt1' }]
+      },
+      ptyIdsByTabId: { 'tab-B': ['remote:env-b@@terminal-b'] },
+      terminalLayoutsByTabId: {
+        'tab-B': {
+          root: null,
+          activeLeafId: null,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { 'pane:1': 'remote:env-b@@terminal-b' }
+        }
+      }
+    } as unknown as Partial<AppState>)
+
+    await store.getState().fetchAllWorktrees()
+
+    // The zero-worktree host's live tab/terminal state is untouched.
+    expect(store.getState().tabsByWorktree).toEqual({
+      'repoB::/b/wt1': [{ id: 'tab-B', worktreeId: 'repoB::/b/wt1' }]
+    })
+    expect(store.getState().ptyIdsByTabId).toEqual({ 'tab-B': ['remote:env-b@@terminal-b'] })
+    expect(store.getState().terminalLayoutsByTabId).toEqual({
+      'tab-B': {
+        root: null,
+        activeLeafId: null,
+        expandedLeafId: null,
+        ptyIdsByLeafId: { 'pane:1': 'remote:env-b@@terminal-b' }
+      }
+    })
+    expect(store.getState().hasHydratedWorktreePurge).toBe(true)
   })
 
   it('preserves floating workspace state while purging a real stale worktree', async () => {
@@ -3623,7 +3892,7 @@ describe('setRenamingWorktreeId', () => {
     expect(store.getState().renamingWorktreeId).toBeNull()
 
     store.getState().setRenamingWorktreeId('repo1::/feature')
-    expect(store.getState().renamingWorktreeId).toBe('repo1::/feature')
+    expect(store.getState().renamingWorktreeId).toEqual({ worktreeId: 'repo1::/feature' })
 
     store.getState().setRenamingWorktreeId(null)
     expect(store.getState().renamingWorktreeId).toBeNull()
@@ -3774,6 +4043,56 @@ describe('pending worktree creation state', () => {
 
     expect(store.getState().pendingWorktreeCreations.c1).toBeDefined()
     expect(store.getState().activePendingCreationId).toBe('c1')
+  })
+
+  it('keeps source and run context on the retryable request', () => {
+    const store = createTestStore()
+    const entry = makePendingCreation('c1', {
+      request: {
+        repoId: 'repo-ssh',
+        taskSourceContext: {
+          kind: 'task-source',
+          provider: 'github',
+          projectId: 'github:stablyai/orca',
+          hostId: 'local',
+          projectHostSetupId: 'setup-local',
+          repoId: 'repo-local',
+          providerIdentity: { provider: 'github', owner: 'stablyai', repo: 'orca' }
+        },
+        workspaceRunContext: {
+          kind: 'workspace-run',
+          projectId: 'github:stablyai/orca',
+          hostId: 'ssh:ssh-1',
+          projectHostSetupId: 'setup-ssh',
+          repoId: 'repo-ssh',
+          path: '/home/orca/orca'
+        },
+        name: 'feature',
+        setupDecision: 'inherit',
+        agent: null,
+        pendingFirstAgentMessageRename: false,
+        note: '',
+        startupPlan: null,
+        quickPrompt: '',
+        quickTelemetry: null
+      }
+    })
+
+    store.getState().beginPendingWorktreeCreation(entry)
+
+    expect(store.getState().pendingWorktreeCreations.c1.request).toMatchObject({
+      repoId: 'repo-ssh',
+      taskSourceContext: {
+        provider: 'github',
+        hostId: 'local',
+        repoId: 'repo-local'
+      },
+      workspaceRunContext: {
+        hostId: 'ssh:ssh-1',
+        projectHostSetupId: 'setup-ssh',
+        repoId: 'repo-ssh'
+      }
+    })
   })
 
   it('updatePendingWorktreeCreation skips the write when the patch changes nothing', () => {

@@ -13,6 +13,7 @@ function createTerminal(bracketedPasteMode = true) {
     options: {
       ignoreBracketedPasteMode: false as boolean | undefined
     },
+    input: vi.fn(),
     paste: vi.fn()
   }
   return terminal
@@ -51,7 +52,7 @@ describe('terminal bracketed paste policy', () => {
   it('forces bracketed paste behavior when requested after Ctrl+C', () => {
     const terminal = createTerminal(true)
     const observedIgnoreValues: (boolean | undefined)[] = []
-    terminal.paste.mockImplementation(() => {
+    terminal.input.mockImplementation(() => {
       observedIgnoreValues.push(terminal.options.ignoreBracketedPasteMode)
     })
 
@@ -60,17 +61,18 @@ describe('terminal bracketed paste policy', () => {
       forceBracketedPaste: true
     })
 
-    expect(terminal.paste).toHaveBeenCalledWith(
+    expect(terminal.input).toHaveBeenCalledWith(
       '\x1b[200~/tmp/orca-paste-1760000000000-id.png\x1b[201~'
     )
-    expect(observedIgnoreValues).toEqual([true])
+    expect(terminal.paste).not.toHaveBeenCalled()
+    expect(observedIgnoreValues).toEqual([false])
     expect(terminal.options.ignoreBracketedPasteMode).toBe(false)
   })
 
   it('forces bracketed paste behavior even when terminal mode is off', () => {
     const terminal = createTerminal(false)
     const observedIgnoreValues: (boolean | undefined)[] = []
-    terminal.paste.mockImplementation(() => {
+    terminal.input.mockImplementation(() => {
       observedIgnoreValues.push(terminal.options.ignoreBracketedPasteMode)
     })
 
@@ -78,10 +80,11 @@ describe('terminal bracketed paste policy', () => {
       forceBracketedPaste: true
     })
 
-    expect(terminal.paste).toHaveBeenCalledWith(
+    expect(terminal.input).toHaveBeenCalledWith(
       '\x1b[200~/tmp/orca-paste-1760000000000-id.png\x1b[201~'
     )
-    expect(observedIgnoreValues).toEqual([true])
+    expect(terminal.paste).not.toHaveBeenCalled()
+    expect(observedIgnoreValues).toEqual([false])
     expect(terminal.options.ignoreBracketedPasteMode).toBe(false)
   })
 
@@ -92,7 +95,8 @@ describe('terminal bracketed paste policy', () => {
       forceBracketedPaste: true
     })
 
-    expect(terminal.paste).toHaveBeenCalledWith('\x1b[200~/tmp/before\u241b[201~after.png\x1b[201~')
+    expect(terminal.input).toHaveBeenCalledWith('\x1b[200~/tmp/before\u241b[201~after.png\x1b[201~')
+    expect(terminal.paste).not.toHaveBeenCalled()
   })
 
   it('does not change paste behavior when Ctrl+C happened outside bracketed paste mode', () => {

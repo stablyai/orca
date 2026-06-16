@@ -13,6 +13,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { cn } from '@/lib/utils'
 import type { Repo, Worktree } from '../../../../shared/types'
 import { useAppStore } from '@/store'
+import { getRuntimeEnvironmentIdForRepo } from '@/lib/repo-runtime-owner'
 import {
   getRuntimeRepoBaseRefDefault,
   searchRuntimeRepoBaseRefs
@@ -40,8 +41,8 @@ export function CreateFromPicker({
   triggerClassName?: string
   onValueChange: (baseBranch: string) => void
 }): React.JSX.Element {
-  const activeRuntimeEnvironmentId = useAppStore(
-    (state) => state.settings?.activeRuntimeEnvironmentId ?? null
+  const activeRuntimeEnvironmentId = useAppStore((state) =>
+    getRuntimeEnvironmentIdForRepo(state, repoId)
   )
   const repo = repoMap.get(repoId)
   const [open, setOpen] = React.useState(false)
