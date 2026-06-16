@@ -2119,7 +2119,7 @@ export type PreloadApi = {
     syncFork: (args: {
       worktreePath: string
       connectionId?: string
-      expectedUpstream?: GitForkSyncExpectedUpstream | null
+      expectedUpstream: GitForkSyncExpectedUpstream
     }) => Promise<GitForkSyncResult>
     push: (args: {
       worktreePath: string

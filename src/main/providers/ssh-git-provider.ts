@@ -422,7 +422,7 @@ export class SshGitProvider implements IGitProvider {
 
   async syncForkDefaultBranch(
     worktreePath: string,
-    expectedUpstream?: GitForkSyncExpectedUpstream | null
+    expectedUpstream: GitForkSyncExpectedUpstream
   ): Promise<GitForkSyncResult> {
     return (await this.mux.request('git.forkSync', {
       worktreePath,

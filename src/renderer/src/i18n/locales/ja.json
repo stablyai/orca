@@ -7323,7 +7323,9 @@
             "host": "host",
             "ssh": "ssh",
             "remote": "remote",
-            "vm": "vm"
+            "vm": "vm",
+            "keepForkUpToDate": "フォークを最新に保つ",
+            "keepForkUpToDateDescription": "このフォークを upstream から安全に fast-forward します。"
           }
         },
         "runtime": {
@@ -7868,6 +7870,33 @@
           "workspaceDirectory": "The client default is inherited until a host needs its own worktree directory.",
           "providerHost": "Provider host",
           "providerAccounts": "Credentials and account checks belong to the local client or selected remote server that owns the provider integration."
+        },
+        "RepositoryForkSyncSection": {
+          "defaultBranch": "デフォルトブランチ",
+          "synced": "フォークを更新しました",
+          "syncedDescriptionSingular": "{{branch}} を1コミット分 fast-forward しました。",
+          "syncedDescriptionPlural": "{{branch}} を{{count}}コミット分 fast-forward しました。",
+          "upToDate": "フォークはすでに最新です",
+          "upToDateDescription": "{{branch}} はすでに upstream と一致しています。",
+          "missingOrigin": "origin リモートがありません。",
+          "missingUpstream": "upstream リモートがありません。",
+          "upstreamMismatch": "upstream リモートはこのフォークと一致しなくなっています。",
+          "missingUpstreamBranch": "upstream のデフォルトブランチを解決できませんでした。",
+          "missingOriginBranch": "origin に upstream のデフォルトブランチがありません。",
+          "diverged": "origin には upstream にないコミットがあります。",
+          "blocked": "フォークの同期をスキップしました",
+          "blockedFallback": "Orca はこのフォークを安全に fast-forward できませんでした。",
+          "failed": "フォークの同期に失敗しました",
+          "title": "フォークを最新に保つ",
+          "description": "このフォークを upstream から安全に fast-forward します。",
+          "longDescription": "このフォークが upstream より遅れている場合、Orca はデフォルトブランチを安全に fast-forward できます。ブランチにローカルのみのコミットや競合がある場合、Orca は更新をスキップします。",
+          "forkOf": "{{owner}}/{{repo}} のフォーク",
+          "syncing": "同期中",
+          "syncNow": "今すぐ同期",
+          "modeLabel": "フォーク同期モード",
+          "ask": "確認する",
+          "safeAuto": "安全に自動",
+          "off": "オフ"
         }
       },
       "right": {

@@ -225,6 +225,7 @@ type GitExecOptions = {
   maxBuffer?: number
   timeout?: number
   env?: NodeJS.ProcessEnv
+  signal?: AbortSignal
 }
 
 type CommandExecOptions = {
@@ -540,7 +541,8 @@ export async function gitExecFileAsync(
         timeout: options.timeout,
         // Why: never let a git read-path call block on an interactive prompt
         // (issue #5308) — fail fast instead of hanging the runtime.
-        env: nonInteractiveGitEnv(options.env)
+        env: nonInteractiveGitEnv(options.env),
+        signal: options.signal
       })
       return { stdout: stdout as string, stderr: stderr as string }
     }

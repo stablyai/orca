@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
-import { syncForkDefaultBranch, type GitForkSyncRunner } from './git-fork-sync'
+import {
+  syncForkDefaultBranch,
+  validateGitForkSyncExpectedUpstream,
+  type GitForkSyncRunner
+} from './git-fork-sync'
 
 function createRunner(overrides: {
   remotes?: string
@@ -140,6 +144,39 @@ describe('syncForkDefaultBranch', () => {
     })
     expect(flattenedCommands(calls)).not.toContain('fetch')
     expect(flattenedCommands(calls)).not.toContain('push')
+  })
+
+  it('blocks when a non-GitHub upstream remote has the expected owner and repo suffix', async () => {
+    const { runGit, calls } = createRunner({
+      upstreamUrl: 'ssh://evil.example.com/stablyai/orca.git\n'
+    })
+
+    await expect(
+      syncForkDefaultBranch(runGit, {
+        expectedUpstream: { owner: 'stablyai', repo: 'orca' }
+      })
+    ).resolves.toMatchObject({
+      status: 'blocked',
+      reason: 'upstream-mismatch'
+    })
+    expect(flattenedCommands(calls)).not.toContain('fetch')
+    expect(flattenedCommands(calls)).not.toContain('push')
+  })
+
+  it('rejects malformed expected upstream metadata instead of disabling identity validation', async () => {
+    const { runGit } = createRunner({})
+
+    await expect(
+      syncForkDefaultBranch(runGit, {
+        expectedUpstream: { owner: '   ', repo: 'orca' }
+      })
+    ).rejects.toThrow('Invalid expected upstream.')
+  })
+
+  it('rejects missing expected upstream metadata when required by a boundary', () => {
+    expect(() => validateGitForkSyncExpectedUpstream(undefined, { required: true })).toThrow(
+      'Expected upstream is required.'
+    )
   })
 
   it('blocks when origin lacks the upstream default branch', async () => {

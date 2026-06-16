@@ -124,16 +124,18 @@ export function RepositoryPane({
   }
 
   const allEntries = getRepositoryPaneSearchEntries(repo)
-  const identityEntries = allEntries.filter((entry) =>
-    [
-      'Display Name',
-      'Project Icon',
-      'Keep Fork Up to Date',
-      'Default Worktree Base',
-      'Worktree Location',
-      'Remove Project'
-    ].includes(entry.title)
-  )
+  const identityEntryTitles = new Set([
+    translate('auto.components.settings.repository.search.7e1e456a95', 'Display Name'),
+    translate('auto.components.settings.repository.search.b24f00294a', 'Project Icon'),
+    translate(
+      'auto.components.settings.repository.search.keepForkUpToDate',
+      'Keep Fork Up to Date'
+    ),
+    translate('auto.components.settings.repository.search.094adbe930', 'Default Worktree Base'),
+    translate('auto.components.settings.repository.search.443d127b5a', 'Worktree Location'),
+    translate('auto.components.settings.repository.search.c5266c2c9d', 'Remove Project')
+  ])
+  const identityEntries = allEntries.filter((entry) => identityEntryTitles.has(entry.title))
   const sparsePresetEntries = allEntries.filter((entry) =>
     ['Sparse Checkout Presets'].includes(entry.title)
   )

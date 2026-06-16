@@ -197,7 +197,7 @@ export type IGitProvider = {
   fetchRemote(worktreePath: string, pushTarget?: GitPushTarget): Promise<void>
   syncForkDefaultBranch(
     worktreePath: string,
-    expectedUpstream?: GitForkSyncExpectedUpstream | null
+    expectedUpstream: GitForkSyncExpectedUpstream
   ): Promise<GitForkSyncResult>
   getBranchDiff(
     worktreePath: string,

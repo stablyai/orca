@@ -7338,7 +7338,9 @@
             "cd73b976d7": "repository name",
             "92af66c7ce": "project name",
             "883aad2801": "Project-specific display details for the sidebar and tabs.",
-            "7e1e456a95": "Display Name"
+            "7e1e456a95": "Display Name",
+            "keepForkUpToDate": "Keep Fork Up to Date",
+            "keepForkUpToDateDescription": "Safely fast-forward this fork from upstream."
           }
         },
         "runtime": {
@@ -7868,6 +7870,33 @@
           "workspaceDirectory": "The client default is inherited until a host needs its own worktree directory.",
           "providerHost": "Provider host",
           "providerAccounts": "Credentials and account checks belong to the local client or selected remote server that owns the provider integration."
+        },
+        "RepositoryForkSyncSection": {
+          "defaultBranch": "default branch",
+          "synced": "Fork updated",
+          "syncedDescriptionSingular": "Fast-forwarded {{branch}} by 1 commit.",
+          "syncedDescriptionPlural": "Fast-forwarded {{branch}} by {{count}} commits.",
+          "upToDate": "Fork already up to date",
+          "upToDateDescription": "{{branch}} already matches upstream.",
+          "missingOrigin": "origin remote is missing.",
+          "missingUpstream": "upstream remote is missing.",
+          "upstreamMismatch": "upstream remote no longer matches this fork.",
+          "missingUpstreamBranch": "upstream default branch could not be resolved.",
+          "missingOriginBranch": "origin does not have the upstream default branch.",
+          "diverged": "origin has commits that are not in upstream.",
+          "blocked": "Fork sync skipped",
+          "blockedFallback": "Orca could not fast-forward this fork safely.",
+          "failed": "Fork sync failed",
+          "title": "Keep Fork Up to Date",
+          "description": "Safely fast-forward this fork from upstream.",
+          "longDescription": "When this fork is behind upstream, Orca can safely fast-forward its default branch. Orca skips the update if the branch has local-only commits or conflicts.",
+          "forkOf": "Fork of {{owner}}/{{repo}}",
+          "syncing": "Syncing",
+          "syncNow": "Sync Now",
+          "modeLabel": "Fork sync mode",
+          "ask": "Ask",
+          "safeAuto": "Safe Auto",
+          "off": "Off"
         }
       },
       "right": {

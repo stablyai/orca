@@ -335,6 +335,47 @@ describe('git RPC methods', () => {
     })
   })
 
+  it('rejects blank fork sync expected upstream fields before calling the runtime', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      syncRuntimeGitForkDefaultBranch: vi.fn()
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: GIT_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('git.forkSync', {
+        worktree: 'id:wt-1',
+        expectedUpstream: { owner: '   ', repo: 'orca' }
+      })
+    )
+
+    expect(response.ok).toBe(false)
+    expect(response).toMatchObject({
+      error: expect.objectContaining({ code: 'invalid_argument' })
+    })
+    expect(runtime.syncRuntimeGitForkDefaultBranch).not.toHaveBeenCalled()
+  })
+
+  it('rejects missing fork sync expected upstream before calling the runtime', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      syncRuntimeGitForkDefaultBranch: vi.fn()
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: GIT_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('git.forkSync', {
+        worktree: 'id:wt-1'
+      })
+    )
+
+    expect(response.ok).toBe(false)
+    expect(response).toMatchObject({
+      error: expect.objectContaining({ code: 'invalid_argument' })
+    })
+    expect(runtime.syncRuntimeGitForkDefaultBranch).not.toHaveBeenCalled()
+  })
+
   it('forwards fast-forward push target to the runtime', async () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',

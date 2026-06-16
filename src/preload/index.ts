@@ -2531,7 +2531,7 @@ const api = {
     syncFork: (args: {
       worktreePath: string
       connectionId?: string
-      expectedUpstream?: GitForkSyncExpectedUpstream | null
+      expectedUpstream: GitForkSyncExpectedUpstream
     }): Promise<GitForkSyncResult> => ipcRenderer.invoke('git:syncFork', args),
     push: (args: {
       worktreePath: string

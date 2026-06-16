@@ -7301,7 +7301,9 @@
             "host": "host",
             "ssh": "ssh",
             "remote": "remote",
-            "vm": "vm"
+            "vm": "vm",
+            "keepForkUpToDate": "Mantener el fork actualizado",
+            "keepForkUpToDateDescription": "Avanza este fork de forma segura desde upstream con fast-forward."
           }
         },
         "runtime": {
@@ -7868,6 +7870,33 @@
           "workspaceDirectory": "The client default is inherited until a host needs its own worktree directory.",
           "providerHost": "Provider host",
           "providerAccounts": "Credentials and account checks belong to the local client or selected remote server that owns the provider integration."
+        },
+        "RepositoryForkSyncSection": {
+          "defaultBranch": "rama predeterminada",
+          "synced": "Fork actualizado",
+          "syncedDescriptionSingular": "Se adelantó {{branch}} con fast-forward 1 commit.",
+          "syncedDescriptionPlural": "Se adelantó {{branch}} con fast-forward {{count}} commits.",
+          "upToDate": "El fork ya está actualizado",
+          "upToDateDescription": "{{branch}} ya coincide con upstream.",
+          "missingOrigin": "Falta el remoto origin.",
+          "missingUpstream": "Falta el remoto upstream.",
+          "upstreamMismatch": "El remoto upstream ya no coincide con este fork.",
+          "missingUpstreamBranch": "No se pudo resolver la rama predeterminada de upstream.",
+          "missingOriginBranch": "origin no tiene la rama predeterminada de upstream.",
+          "diverged": "origin tiene commits que no están en upstream.",
+          "blocked": "Sincronización del fork omitida",
+          "blockedFallback": "Orca no pudo avanzar este fork de forma segura con fast-forward.",
+          "failed": "Falló la sincronización del fork",
+          "title": "Mantener el fork actualizado",
+          "description": "Avanza este fork de forma segura desde upstream con fast-forward.",
+          "longDescription": "Cuando este fork está detrás de upstream, Orca puede avanzar su rama predeterminada de forma segura con fast-forward. Orca omite la actualización si la rama tiene commits locales o conflictos.",
+          "forkOf": "Fork de {{owner}}/{{repo}}",
+          "syncing": "Sincronizando",
+          "syncNow": "Sincronizar ahora",
+          "modeLabel": "Modo de sincronización del fork",
+          "ask": "Preguntar",
+          "safeAuto": "Seguro automático",
+          "off": "Desactivado"
         }
       },
       "right": {

@@ -70,6 +70,7 @@ import { getPullRequestDraftContext } from '../text-generation/pull-request-cont
 import { getUpstreamStatus } from '../git/upstream'
 import { gitFastForward, gitFetch, gitPull, gitPullRebaseFromBase, gitPush } from '../git/remote'
 import { gitSyncForkDefaultBranch } from '../git/fork-sync'
+import { validateGitForkSyncExpectedUpstream } from '../../shared/git-fork-sync'
 import { checkIgnoredPaths } from '../git/check-ignored-paths'
 import {
   appendFolderToGitignore,
@@ -1334,18 +1335,21 @@ export function registerFilesystemHandlers(
       args: {
         worktreePath: string
         connectionId?: string
-        expectedUpstream?: GitForkSyncExpectedUpstream | null
+        expectedUpstream: GitForkSyncExpectedUpstream
       }
     ): Promise<GitForkSyncResult> => {
+      const expectedUpstream = validateGitForkSyncExpectedUpstream(args.expectedUpstream, {
+        required: true
+      })
       if (args.connectionId) {
         const provider = getSshGitProvider(args.connectionId)
         if (!provider) {
           throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
         }
-        return provider.syncForkDefaultBranch(args.worktreePath, args.expectedUpstream)
+        return provider.syncForkDefaultBranch(args.worktreePath, expectedUpstream)
       }
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
-      return gitSyncForkDefaultBranch(worktreePath, args.expectedUpstream)
+      return gitSyncForkDefaultBranch(worktreePath, expectedUpstream)
     }
   )
 

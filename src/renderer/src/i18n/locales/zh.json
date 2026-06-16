@@ -7286,7 +7286,9 @@
             "host": "host",
             "ssh": "ssh",
             "remote": "remote",
-            "vm": "vm"
+            "vm": "vm",
+            "keepForkUpToDate": "保持 Fork 最新",
+            "keepForkUpToDateDescription": "从 upstream 安全地快进此 Fork。"
           }
         },
         "runtime": {
@@ -7868,6 +7870,33 @@
           "workspaceDirectory": "The client default is inherited until a host needs its own worktree directory.",
           "providerHost": "Provider host",
           "providerAccounts": "Credentials and account checks belong to the local client or selected remote server that owns the provider integration."
+        },
+        "RepositoryForkSyncSection": {
+          "defaultBranch": "默认分支",
+          "synced": "Fork 已更新",
+          "syncedDescriptionSingular": "已将 {{branch}} 快进 1 个提交。",
+          "syncedDescriptionPlural": "已将 {{branch}} 快进 {{count}} 个提交。",
+          "upToDate": "Fork 已是最新",
+          "upToDateDescription": "{{branch}} 已与 upstream 一致。",
+          "missingOrigin": "缺少 origin 远程。",
+          "missingUpstream": "缺少 upstream 远程。",
+          "upstreamMismatch": "upstream 远程不再匹配此 Fork。",
+          "missingUpstreamBranch": "无法解析 upstream 默认分支。",
+          "missingOriginBranch": "origin 没有 upstream 默认分支。",
+          "diverged": "origin 有 upstream 中不存在的提交。",
+          "blocked": "已跳过 Fork 同步",
+          "blockedFallback": "Orca 无法安全地快进此 Fork。",
+          "failed": "Fork 同步失败",
+          "title": "保持 Fork 最新",
+          "description": "从 upstream 安全地快进此 Fork。",
+          "longDescription": "当此 Fork 落后于 upstream 时，Orca 可以安全地快进其默认分支。如果该分支有仅本地提交或冲突，Orca 会跳过更新。",
+          "forkOf": "{{owner}}/{{repo}} 的 Fork",
+          "syncing": "同步中",
+          "syncNow": "立即同步",
+          "modeLabel": "Fork 同步模式",
+          "ask": "询问",
+          "safeAuto": "安全自动",
+          "off": "关闭"
         }
       },
       "right": {

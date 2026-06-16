@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
 import type { ForkSyncMode, GitForkSyncResult, Repo } from '../../../../shared/types'
@@ -7,7 +7,9 @@ import { SearchableSetting } from './SearchableSetting'
 import { SettingsSegmentedControl } from './SettingsFormControls'
 import { syncRuntimeGitForkDefaultBranch } from '../../runtime/runtime-git-client'
 import { useAppStore } from '../../store'
+import { getRepoOwnerRoutedSettings } from '@/lib/repo-runtime-owner'
 import { translate } from '@/i18n/i18n'
+import { searchKeywords } from './settings-search-keywords'
 
 type RepositoryForkSyncSectionProps = {
   repo: Repo
@@ -19,15 +21,21 @@ function formatForkSyncResult(result: GitForkSyncResult): { title: string; descr
   const branch =
     result.branchName ??
     translate('auto.components.settings.RepositoryForkSyncSection.defaultBranch', 'default branch')
-  const commitLabel = result.behind === 1 ? 'commit' : 'commits'
   if (result.status === 'synced') {
     return {
       title: translate('auto.components.settings.RepositoryForkSyncSection.synced', 'Fork updated'),
-      description: translate(
-        'auto.components.settings.RepositoryForkSyncSection.syncedDescription',
-        'Fast-forwarded {{branch}} by {{count}} {{commitLabel}}.',
-        { branch, count: result.behind, commitLabel }
-      )
+      description:
+        result.behind === 1
+          ? translate(
+              'auto.components.settings.RepositoryForkSyncSection.syncedDescriptionSingular',
+              'Fast-forwarded {{branch}} by 1 commit.',
+              { branch }
+            )
+          : translate(
+              'auto.components.settings.RepositoryForkSyncSection.syncedDescriptionPlural',
+              'Fast-forwarded {{branch}} by {{count}} commits.',
+              { branch, count: result.behind }
+            )
     }
   }
   if (result.status === 'up-to-date') {
@@ -92,12 +100,16 @@ export function RepositoryForkSyncSection({
   const settings = useAppStore((state) => state.settings)
   const upstream = repo.upstream
   const [syncing, setSyncing] = useState(false)
+  const syncInFlightRef = useRef(false)
   if (!upstream) {
     return null
   }
 
   const mode = repo.forkSyncMode ?? 'ask'
   const updateMode = (nextMode: ForkSyncMode) => {
+    if (syncing || nextMode === mode) {
+      return
+    }
     updateRepo(repo.id, { forkSyncMode: nextMode })
     if (nextMode === 'safe-auto') {
       // Why: users enabling automation should immediately learn whether the
@@ -106,16 +118,20 @@ export function RepositoryForkSyncSection({
     }
   }
   const syncNow = async () => {
+    if (syncInFlightRef.current) {
+      return
+    }
+    syncInFlightRef.current = true
     setSyncing(true)
     try {
       const result = await syncRuntimeGitForkDefaultBranch(
         {
-          settings,
+          settings: getRepoOwnerRoutedSettings(settings, repo),
           worktreeId: repo.id,
           worktreePath: repo.path,
           connectionId: repo.connectionId ?? undefined
         },
-        repo.upstream
+        upstream
       )
       const message = formatForkSyncResult(result)
       if (result.status === 'blocked') {
@@ -129,6 +145,7 @@ export function RepositoryForkSyncSection({
         { description: error instanceof Error ? error.message : String(error) }
       )
     } finally {
+      syncInFlightRef.current = false
       setSyncing(false)
     }
   }
@@ -143,19 +160,31 @@ export function RepositoryForkSyncSection({
         'auto.components.settings.RepositoryForkSyncSection.description',
         'Safely fast-forward this fork from upstream.'
       )}
-      keywords={[
+      keywords={searchKeywords([
         repo.displayName,
         upstream.owner,
         upstream.repo,
-        'fork',
-        'upstream',
-        'sync fork',
-        'keep fork up to date',
-        'fast-forward',
-        'behind upstream',
-        'origin',
-        'default branch'
-      ]}
+        { key: 'auto.components.settings.repository.search.fork', fallback: 'fork' },
+        { key: 'auto.components.settings.repository.search.upstream', fallback: 'upstream' },
+        { key: 'auto.components.settings.repository.search.syncFork', fallback: 'sync fork' },
+        {
+          key: 'auto.components.settings.repository.search.keepForkUpToDate',
+          fallback: 'keep fork up to date'
+        },
+        {
+          key: 'auto.components.settings.repository.search.fastForward',
+          fallback: 'fast-forward'
+        },
+        {
+          key: 'auto.components.settings.repository.search.behindUpstream',
+          fallback: 'behind upstream'
+        },
+        { key: 'auto.components.settings.repository.search.origin', fallback: 'origin' },
+        {
+          key: 'auto.components.settings.repository.search.defaultBranch',
+          fallback: 'default branch'
+        }
+      ])}
       className="space-y-3"
       forceVisible={forceVisible}
     >
@@ -206,18 +235,21 @@ export function RepositoryForkSyncSection({
         options={[
           {
             value: 'ask',
-            label: translate('auto.components.settings.RepositoryForkSyncSection.ask', 'Ask')
+            label: translate('auto.components.settings.RepositoryForkSyncSection.ask', 'Ask'),
+            disabled: syncing
           },
           {
             value: 'safe-auto',
             label: translate(
               'auto.components.settings.RepositoryForkSyncSection.safeAuto',
               'Safe Auto'
-            )
+            ),
+            disabled: syncing
           },
           {
             value: 'off',
-            label: translate('auto.components.settings.RepositoryForkSyncSection.off', 'Off')
+            label: translate('auto.components.settings.RepositoryForkSyncSection.off', 'Off'),
+            disabled: syncing
           }
         ]}
       />

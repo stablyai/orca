@@ -197,13 +197,10 @@ export const GitTargetedRemote = WorktreeSelector.extend({
 })
 
 export const GitForkSync = WorktreeSelector.extend({
-  expectedUpstream: z
-    .object({
-      owner: z.string().min(1),
-      repo: z.string().min(1)
-    })
-    .nullable()
-    .optional()
+  expectedUpstream: z.object({
+    owner: z.string().trim().min(1),
+    repo: z.string().trim().min(1)
+  })
 })
 
 export const GitRebaseFromBase = WorktreeSelector.extend({

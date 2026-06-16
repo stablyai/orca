@@ -7286,7 +7286,9 @@
             "host": "host",
             "ssh": "ssh",
             "remote": "remote",
-            "vm": "vm"
+            "vm": "vm",
+            "keepForkUpToDate": "포크를 최신 상태로 유지",
+            "keepForkUpToDateDescription": "이 포크를 upstream에서 안전하게 fast-forward합니다."
           }
         },
         "runtime": {
@@ -7868,6 +7870,33 @@
           "workspaceDirectory": "The client default is inherited until a host needs its own worktree directory.",
           "providerHost": "Provider host",
           "providerAccounts": "Credentials and account checks belong to the local client or selected remote server that owns the provider integration."
+        },
+        "RepositoryForkSyncSection": {
+          "defaultBranch": "기본 브랜치",
+          "synced": "포크가 업데이트됨",
+          "syncedDescriptionSingular": "{{branch}} 브랜치를 1개 커밋만큼 fast-forward했습니다.",
+          "syncedDescriptionPlural": "{{branch}} 브랜치를 {{count}}개 커밋만큼 fast-forward했습니다.",
+          "upToDate": "포크가 이미 최신 상태입니다",
+          "upToDateDescription": "{{branch}} 브랜치가 이미 upstream과 일치합니다.",
+          "missingOrigin": "origin 원격이 없습니다.",
+          "missingUpstream": "upstream 원격이 없습니다.",
+          "upstreamMismatch": "upstream 원격이 더 이상 이 포크와 일치하지 않습니다.",
+          "missingUpstreamBranch": "upstream 기본 브랜치를 확인할 수 없습니다.",
+          "missingOriginBranch": "origin에 upstream 기본 브랜치가 없습니다.",
+          "diverged": "origin에 upstream에 없는 커밋이 있습니다.",
+          "blocked": "포크 동기화를 건너뜀",
+          "blockedFallback": "Orca가 이 포크를 안전하게 fast-forward할 수 없습니다.",
+          "failed": "포크 동기화 실패",
+          "title": "포크를 최신 상태로 유지",
+          "description": "이 포크를 upstream에서 안전하게 fast-forward합니다.",
+          "longDescription": "이 포크가 upstream보다 뒤처진 경우 Orca가 기본 브랜치를 안전하게 fast-forward할 수 있습니다. 브랜치에 로컬 전용 커밋이나 충돌이 있으면 Orca가 업데이트를 건너뜁니다.",
+          "forkOf": "{{owner}}/{{repo}}의 포크",
+          "syncing": "동기화 중",
+          "syncNow": "지금 동기화",
+          "modeLabel": "포크 동기화 모드",
+          "ask": "묻기",
+          "safeAuto": "안전 자동",
+          "off": "끄기"
         }
       },
       "right": {

@@ -295,7 +295,7 @@ export class RuntimeGitCommands {
 
   async syncRuntimeGitForkDefaultBranch(
     worktreeSelector: string,
-    expectedUpstream?: GitForkSyncExpectedUpstream | null
+    expectedUpstream: GitForkSyncExpectedUpstream
   ): Promise<GitForkSyncResult> {
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
     const provider = target.connectionId ? getSshGitProvider(target.connectionId) : null

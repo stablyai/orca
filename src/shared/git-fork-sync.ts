@@ -28,6 +28,7 @@ export type GitForkSyncRunner = (args: string[]) => Promise<{ stdout: string; st
 const DEFAULT_ORIGIN_REMOTE = 'origin'
 const DEFAULT_UPSTREAM_REMOTE = 'upstream'
 const DEFAULT_BRANCH_FALLBACKS = ['main', 'master']
+const GITHUB_HOSTS = new Set(['github.com', 'ssh.github.com'])
 
 function parseRemoteHeadBranch(stdout: string): string | null {
   for (const line of stdout.split(/\r?\n/)) {
@@ -55,22 +56,74 @@ async function remoteExists(runGit: GitForkSyncRunner, remote: string): Promise<
     .includes(remote)
 }
 
-function normalizeRemoteUrlForComparison(value: string): string {
-  return value
-    .trim()
-    .toLowerCase()
-    .replace(/\.git(?:[/\\]*)$/, '')
-    .replace(/\\/g, '/')
+function cleanGitHubRemotePath(path: string): string | null {
+  const normalized = path
+    .replace(/^\/+/, '')
+    .replace(/\/+$/, '')
+    .replace(/\.git$/i, '')
+  const parts = normalized.split('/').filter(Boolean)
+  if (parts.length !== 2) {
+    return null
+  }
+  return parts.join('/').toLowerCase()
 }
 
-function normalizeExpectedUpstream(value: unknown): GitForkSyncExpectedUpstream | null {
-  if (!value || typeof value !== 'object') {
+function parseGitHubRemotePath(remoteUrl: string): string | null {
+  const trimmed = remoteUrl.trim().replace(/^git\+/, '')
+  const shorthand = trimmed.match(/^github:([^/].+)$/i)
+  if (shorthand) {
+    return cleanGitHubRemotePath(shorthand[1])
+  }
+
+  if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed)) {
+    const scpLike = trimmed.match(/^(?:[^@/:]+@)?([^:\s/]+):([^\s]+)$/)
+    if (scpLike && GITHUB_HOSTS.has(scpLike[1].toLowerCase())) {
+      return cleanGitHubRemotePath(scpLike[2])
+    }
+  }
+
+  try {
+    const url = new URL(trimmed)
+    if (
+      !['git:', 'http:', 'https:', 'ssh:'].includes(url.protocol.toLowerCase()) ||
+      !GITHUB_HOSTS.has(url.hostname.toLowerCase())
+    ) {
+      return null
+    }
+    return cleanGitHubRemotePath(url.pathname)
+  } catch {
     return null
+  }
+}
+
+export function validateGitForkSyncExpectedUpstream(
+  value: unknown,
+  options: { required: true }
+): GitForkSyncExpectedUpstream
+export function validateGitForkSyncExpectedUpstream(
+  value: unknown,
+  options?: { required?: false }
+): GitForkSyncExpectedUpstream | null
+export function validateGitForkSyncExpectedUpstream(
+  value: unknown,
+  options: { required?: boolean } = {}
+): GitForkSyncExpectedUpstream | null {
+  if (value === undefined || value === null) {
+    if (options.required) {
+      throw new Error('Expected upstream is required.')
+    }
+    return null
+  }
+  if (!value || typeof value !== 'object') {
+    throw new Error('Invalid expected upstream.')
   }
   const candidate = value as { owner?: unknown; repo?: unknown }
   const owner = typeof candidate.owner === 'string' ? candidate.owner.trim() : ''
   const repo = typeof candidate.repo === 'string' ? candidate.repo.trim() : ''
-  return owner && repo ? { owner, repo } : null
+  if (!owner || !repo) {
+    throw new Error('Invalid expected upstream.')
+  }
+  return { owner, repo }
 }
 
 async function remoteMatchesExpectedUpstream(
@@ -85,8 +138,7 @@ async function remoteMatchesExpectedUpstream(
   }
   try {
     const { stdout } = await runGit(['remote', 'get-url', remote])
-    const url = normalizeRemoteUrlForComparison(stdout)
-    return url.endsWith(`/${owner}/${repo}`) || url.endsWith(`:${owner}/${repo}`)
+    return parseGitHubRemotePath(stdout) === `${owner}/${repo}`
   } catch {
     return false
   }
@@ -168,7 +220,7 @@ export async function syncForkDefaultBranch(
 ): Promise<GitForkSyncResult> {
   const originRemote = options.originRemote ?? DEFAULT_ORIGIN_REMOTE
   const upstreamRemote = options.upstreamRemote ?? DEFAULT_UPSTREAM_REMOTE
-  const expectedUpstream = normalizeExpectedUpstream(options.expectedUpstream)
+  const expectedUpstream = validateGitForkSyncExpectedUpstream(options.expectedUpstream)
   const baseResult = { originRemote, upstreamRemote, ahead: 0, behind: 0 }
 
   if (!(await remoteExists(runGit, originRemote))) {

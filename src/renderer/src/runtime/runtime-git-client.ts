@@ -336,14 +336,14 @@ export async function fetchRuntimeGit(
 
 export async function syncRuntimeGitForkDefaultBranch(
   context: RuntimeGitContext,
-  expectedUpstream?: GitForkSyncExpectedUpstream | null
+  expectedUpstream: GitForkSyncExpectedUpstream
 ): Promise<GitForkSyncResult> {
   const target = getActiveRuntimeTarget(context.settings)
   if (target.kind === 'local' || !context.worktreeId) {
     return window.api.git.syncFork({
       worktreePath: context.worktreePath,
       connectionId: context.connectionId,
-      ...(expectedUpstream ? { expectedUpstream } : {})
+      expectedUpstream
     })
   }
   return callRuntimeRpc<GitForkSyncResult>(
@@ -351,7 +351,7 @@ export async function syncRuntimeGitForkDefaultBranch(
     'git.forkSync',
     {
       worktree: toRuntimeWorktreeSelector(context.worktreeId),
-      ...(expectedUpstream ? { expectedUpstream } : {})
+      expectedUpstream
     },
     { timeoutMs: 60_000 }
   )

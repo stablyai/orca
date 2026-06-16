@@ -34,7 +34,6 @@ import { assertGitPushTargetShape } from '../shared/git-push-target-validation'
 import { getPublishTargetStatus, type GitCommandRunner } from '../shared/git-publish-target-status'
 import { resolveGitRemoteRebaseSource } from '../shared/git-rebase-source'
 import type { GitPushTarget } from '../shared/types'
-import type { GitForkSyncExpectedUpstream } from '../shared/git-fork-sync'
 import {
   getEffectiveGitUpstreamStatus,
   resolveEffectiveGitUpstream
@@ -46,7 +45,7 @@ import {
   removeSafeUntrackedDiscardTargets
 } from '../shared/git-discard-path-safety'
 import { getGitCloneFailureMessage } from '../shared/git-clone-failure-message'
-import { syncForkDefaultBranch } from '../shared/git-fork-sync'
+import { syncForkDefaultBranch, validateGitForkSyncExpectedUpstream } from '../shared/git-fork-sync'
 
 const execFileAsync = promisify(execFile)
 const MAX_GIT_BUFFER = 10 * 1024 * 1024
@@ -81,7 +80,7 @@ export class GitHandler {
     this.dispatcher.onRequest('git.commitCompare', (p) => this.commitCompare(p))
     this.dispatcher.onRequest('git.upstreamStatus', (p) => this.upstreamStatus(p))
     this.dispatcher.onRequest('git.fetch', (p) => this.fetch(p))
-    this.dispatcher.onRequest('git.forkSync', (p) => this.forkSync(p))
+    this.dispatcher.onRequest('git.forkSync', (p, context) => this.forkSync(p, context))
     this.dispatcher.onRequest('git.fetchRemoteTrackingRef', (p) => this.fetchRemoteTrackingRef(p))
     this.dispatcher.onRequest('git.push', (p) => this.push(p))
     this.dispatcher.onRequest('git.pull', (p) => this.pull(p))
@@ -458,10 +457,18 @@ export class GitHandler {
     }
   }
 
-  private async forkSync(params: Record<string, unknown>) {
+  private async forkSync(params: Record<string, unknown>, context?: RequestContext) {
     const worktreePath = params.worktreePath as string
-    const expectedUpstream = this.parseForkSyncExpectedUpstream(params.expectedUpstream)
+    const expectedUpstream = validateGitForkSyncExpectedUpstream(params.expectedUpstream, {
+      required: true
+    })
     const controller = new AbortController()
+    const abortFromContext = () => controller.abort()
+    if (context?.signal?.aborted) {
+      controller.abort()
+    } else {
+      context?.signal?.addEventListener('abort', abortFromContext, { once: true })
+    }
     const timeout = setTimeout(() => controller.abort(), 60_000)
     try {
       return await syncForkDefaultBranch(
@@ -476,17 +483,8 @@ export class GitHandler {
       throw new Error(normalizeGitErrorMessage(error, 'push'))
     } finally {
       clearTimeout(timeout)
+      context?.signal?.removeEventListener('abort', abortFromContext)
     }
-  }
-
-  private parseForkSyncExpectedUpstream(value: unknown): GitForkSyncExpectedUpstream | null {
-    if (!value || typeof value !== 'object') {
-      return null
-    }
-    const candidate = value as { owner?: unknown; repo?: unknown }
-    const owner = typeof candidate.owner === 'string' ? candidate.owner.trim() : ''
-    const repo = typeof candidate.repo === 'string' ? candidate.repo.trim() : ''
-    return owner && repo ? { owner, repo } : null
   }
 
   private async fetchRemoteTrackingRef(params: Record<string, unknown>) {
