@@ -35,9 +35,11 @@ export const NEVER_TRANSLATE_VALUES = new Set([
   'Devin',
   'Gemini',
   'GitHub Copilot',
+  'GitLab',
   'Goose',
   'Grok',
   'Hermes',
+  'Jira',
   'Kilocode',
   'Kimi',
   'Kiro',
@@ -47,6 +49,7 @@ export const NEVER_TRANSLATE_VALUES = new Set([
   'OpenClaude',
   'OpenClaw',
   'OpenCode',
+  'OpenCode Go',
   'Orca',
   'Pi',
   'PostHog',
@@ -60,6 +63,7 @@ export const NEVER_TRANSLATE_VALUES = new Set([
   'Terminal',
   'Terminals',
   'VS Code',
+  'Warp',
   'Zed',
   'agent',
   'agents',
@@ -103,6 +107,8 @@ export const NEVER_TRANSLATE_VALUES = new Set([
   'ripgrep',
   'PowerShell',
   'powershell',
+  'TypeScript',
+  'typescript',
   'Mermaid',
   'mermaid',
   'Swift',
@@ -122,6 +128,9 @@ export const NEVER_TRANSLATE_VALUES = new Set([
   'bash',
   'GraphQL',
   'graphql',
+  'iOS',
+  'iPhone',
+  'iPad',
   'ide',
   'IDE',
   'ui',
@@ -132,10 +141,19 @@ export const NEVER_TRANSLATE_VALUES = new Set([
   'ai',
   'AI',
   'ci',
+  'CI',
   'REST',
   'rest',
+  'YAML',
   'yaml',
   'yml',
+  'XML',
+  'SQL',
+  'CSS',
+  'Token',
+  'token',
+  'HTTP/1.1',
+  'HTTP/2',
   'true',
   'false',
   '/home/user',
@@ -209,8 +227,10 @@ export const BRAND_MISTRANSLATIONS = {
     Pi: ['圆周率'],
     Droid: ['机器人'],
     'GitHub Copilot': ['GitHub 副驾驶', '副驾驶'],
+    Bitbucket: ['位桶'],
     Linear: ['线性', '线形'],
     Jira: ['吉拉'],
+    Tailscale: ['尾鳞', '尾鱗'],
     Agent: ['代理', '智能体'],
     Agents: ['代理', '智能体'],
     agent: ['代理', '智能体'],
@@ -228,7 +248,15 @@ export const BRAND_MISTRANSLATIONS = {
     Terminal: ['终端', '端子'],
     Terminals: ['终端', '端子'],
     terminal: ['终端', '端子'],
-    terminals: ['终端', '端子']
+    terminals: ['终端', '端子'],
+    Bash: ['重击'],
+    PowerShell: ['电源外壳'],
+    REST: ['休息'],
+    HEAD: ['头'],
+    Swift: ['迅速'],
+    Rust: ['锈'],
+    'Claude Code': ['Claude·科德'],
+    'Git AI Author': ['Git AI 作者']
   },
   ja: {
     Codex: ['法典', 'コーデックス'],
@@ -324,10 +352,31 @@ const CJK_LATIN_SPACED_TERMS = [
   'commits',
   'commit',
   'Linear',
+  'GitHub',
+  'GitLab',
+  'Jira',
   'Claude',
+  'Claude Code',
   'Codex',
+  'Gemini',
+  'Kimi',
+  'OpenCode',
   'Orca',
-  'Cursor'
+  'Cursor',
+  'Bitbucket',
+  'Tailscale',
+  'Kagi',
+  'SSH',
+  'WSL',
+  'PR',
+  'MR',
+  'REST',
+  'HEAD',
+  'Bash',
+  'PowerShell',
+  'Git AI Author',
+  'Token',
+  'token'
 ]
 
 const CJK_LATIN_SPACED_TERM_PATTERN = CJK_LATIN_SPACED_TERMS.join('|')
@@ -444,11 +493,21 @@ export function repairTranslatedValue({ key, enValue, localeValue, locale }) {
     return result
   }
 
+  const valueOverride = LOCALE_VALUE_OVERRIDES[locale]?.[enValue]
+  if (valueOverride) {
+    let result = applyBrandMistranslationFixes(enValue, valueOverride, locale)
+    result = applyPhraseFixes(enValue, result, locale)
+    if (['zh', 'ja', 'ko'].includes(locale)) {
+      result = applyCjkLatinTermSpacing(result, locale)
+    }
+    return result
+  }
+
   if (shouldPreserveEnglishValue(enValue, key)) {
     return enValue
   }
 
-  let result = LOCALE_VALUE_OVERRIDES[locale]?.[enValue] ?? localeValue
+  let result = localeValue
 
   if (key.includes('.search.')) {
     const searchOverride = SEARCH_KEYWORD_OVERRIDES[locale]?.[enValue]
