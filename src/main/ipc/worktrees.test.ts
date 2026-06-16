@@ -4681,7 +4681,14 @@ describe('registerWorktreeHandlers', () => {
     expect(removeWorktreeMock).toHaveBeenCalledWith(
       '/workspace/repo',
       '/workspace/feature-wt',
-      false
+      false,
+      expect.objectContaining({
+        knownRemovedWorktree: expect.objectContaining({
+          branch: 'feature',
+          head: 'feature',
+          path: '/workspace/feature-wt'
+        })
+      })
     )
   })
 
@@ -4704,7 +4711,14 @@ describe('registerWorktreeHandlers', () => {
     expect(removeWorktreeMock).toHaveBeenCalledWith(
       '/workspace/repo',
       '/workspace/feature-wt',
-      false
+      false,
+      expect.objectContaining({
+        knownRemovedWorktree: expect.objectContaining({
+          branch: 'feature',
+          head: 'feature',
+          path: '/workspace/feature-wt'
+        })
+      })
     )
   })
 
@@ -5153,7 +5167,14 @@ describe('registerWorktreeHandlers', () => {
       '/workspace/repo',
       '/workspace/feature-wt',
       false,
-      { deleteBranch: false }
+      expect.objectContaining({
+        deleteBranch: false,
+        knownRemovedWorktree: expect.objectContaining({
+          branch: 'feature',
+          head: 'feature',
+          path: '/workspace/feature-wt'
+        })
+      })
     )
   })
 
