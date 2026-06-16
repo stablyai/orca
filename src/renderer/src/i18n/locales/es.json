@@ -7913,6 +7913,20 @@
           "workspaceDirectory": "The client default is inherited until a host needs its own worktree directory.",
           "providerHost": "Provider host",
           "providerAccounts": "Credentials and account checks belong to the local client or selected remote server that owns the provider integration."
+        },
+        "WorkItemLaunchSettings": {
+          "submit_title": "Submit work-item prompt on launch",
+          "submit_desc": "When starting work from an issue or PR, send the linked context as the agent’s first turn instead of leaving it pre-filled for you to submit.",
+          "autostart_title": "Auto-start GitLab issues by assignee",
+          "autostart_desc": "Watch your GitLab repos and automatically start work on open issues assigned to a chosen user — the same as selecting the issue and starting it yourself.",
+          "autostart_enable": "Enable auto-start",
+          "autostart_enable_desc": "Requires an assignee handle below. Each matching issue is started once; the prompt is always submitted so it runs unattended.",
+          "autostart_assignee": "Assignee handle",
+          "autostart_assignee_desc": "GitLab username (without @) whose newly-assigned open issues are auto-started.",
+          "autostart_assignee_ph": "orca",
+          "autostart_interval": "Check interval",
+          "autostart_interval_desc": "How often Orca polls GitLab for newly-assigned issues.",
+          "autostart_interval_suffix": "seconds"
         }
       },
       "right": {

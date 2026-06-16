@@ -102,7 +102,15 @@ export async function listIssues(
   try {
     if (projectRef) {
       const stateParam = state === 'all' ? '' : `&state=${state}`
-      const scopeParam = assignee === '@me' ? '&scope=assigned_to_me' : ''
+      // Why: `@me` resolves to the authenticated user via scope; a concrete
+      // username (assignee auto-start watcher) filters server-side via
+      // assignee_username so only matching issues come back.
+      const scopeParam =
+        assignee === '@me'
+          ? '&scope=assigned_to_me'
+          : assignee
+            ? `&assignee_username=${encodeURIComponent(assignee)}`
+            : ''
       const { stdout } = await glabExecFileAsync(
         [
           'api',

@@ -2290,6 +2290,23 @@ export type GlobalSettings = {
   /** One-shot migration guard for the default-on rollout. Existing profiles
    *  without the guard are flipped on once; later explicit opt-outs stick. */
   autoRenameBranchFromWorkDefaultedOn?: boolean
+  /** When enabled (default), starting work from a work item (GitLab/GitHub
+   *  issue, PR) submits the linked context as the agent's first turn instead of
+   *  leaving it pre-filled in the input for the user to send. Off keeps the
+   *  legacy "draft only" behavior (e.g. Claude `--prefill`). Optional so older
+   *  profiles and test fixtures default to the enabled behavior. */
+  submitWorkItemPromptOnLaunch?: boolean
+  /** GitLab assignee auto-start: when enabled and an assignee handle is set,
+   *  Orca watches the configured GitLab repos for open issues assigned to that
+   *  user and runs the normal "start work" launch for each new one (visible
+   *  workspace + agent, prompt submitted). Empty handle disables it. */
+  gitlabAutoStartEnabled?: boolean
+  /** GitLab username (without leading @) whose assigned issues trigger
+   *  auto-start. Empty/undefined means the feature is inert. */
+  gitlabAutoStartAssignee?: string
+  /** Poll interval (seconds) for the GitLab assignee auto-start watcher.
+   *  Clamped to a sane minimum at runtime. */
+  gitlabAutoStartIntervalSeconds?: number
   branchPrefix: 'git-username' | 'custom' | 'none'
   branchPrefixCustom: string
   enableGitHubAttribution: boolean

@@ -21,10 +21,21 @@ export function normalizeGitLabIssueListState(value: unknown): GitLabIssueListSt
   return value === 'closed' || value === 'all' ? value : 'opened'
 }
 
-export function normalizeGitLabIssueAssignee(value: unknown): '@me' | undefined {
-  // Why: the renderer only exposes "Assigned to me"; accepting arbitrary
-  // values would turn preload/RPC boundaries into a generic glab flag surface.
-  return value === '@me' ? '@me' : undefined
+export function normalizeGitLabIssueAssignee(value: unknown): string | undefined {
+  // Why: the issues panel exposes "Assigned to me" (`@me`), and the assignee
+  // auto-start watcher filters by a configured GitLab username. Accept either,
+  // but restrict free usernames to a conservative handle charset so this stays
+  // a scoped filter rather than a generic glab flag surface.
+  if (value === '@me') {
+    return '@me'
+  }
+  if (typeof value === 'string') {
+    const handle = value.trim().replace(/^@/, '')
+    if (handle && /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(handle)) {
+      return handle
+    }
+  }
+  return undefined
 }
 
 export function normalizeGitLabIssueListArgs(args: {
@@ -33,7 +44,7 @@ export function normalizeGitLabIssueListArgs(args: {
   limit?: unknown
 }): {
   state: GitLabIssueListState
-  assignee: '@me' | undefined
+  assignee: string | undefined
   limit: number
 } {
   return {
