@@ -68,7 +68,10 @@ describe('linear-format', () => {
           id: 'project-1',
           name: 'Launch',
           workspaceName: 'Acme',
-          teams: [{ id: 'team-1', name: 'Engineering', key: 'ENG' }]
+          teams: [
+            { id: 'team-1', name: 'Engineering', key: 'ENG' },
+            { id: 'team-2', name: 'Product', key: '' }
+          ]
         }
       ],
       meta: { limit: 20, returned: 1, hasMore: false, partial: false, workspaceErrors: [] }
@@ -79,6 +82,7 @@ describe('linear-format', () => {
     expect(output).toContain('Launch')
     expect(output).toContain('project-1')
     expect(output).toContain('ENG')
+    expect(output).toContain('Product')
     expect(output).toContain('Acme')
   })
 
