@@ -1011,6 +1011,15 @@ export function useIpcEvents(): void {
       })
     )
 
+    // Why: UI view-state (group/sort/filters, collapsed groups, etc.) is shared
+    // with mobile via the ui.set RPC. When mobile changes it, main broadcasts so
+    // the desktop re-hydrates and the sidebar reflects it live — bi-directional.
+    unsubs.push(
+      window.api.ui.onStateChanged((ui) => {
+        useAppStore.getState().hydratePersistedUI(ui)
+      })
+    )
+
     if (window.api.keybindings) {
       unsubs.push(
         window.api.keybindings.onChanged((snapshot) => {
