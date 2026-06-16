@@ -11240,7 +11240,8 @@
           "fb6116f299": "No volumes.",
           "340bf27dfd": "Networks",
           "2fe5d96a6c": "No networks.",
-          "03f84060b4": "Prune"
+          "03f84060b4": "Prune",
+          "71037a0124": "Docker-compose: {{value0}}"
         },
         "DockerConfirmDialog": {
           "cc2263a02e": "Cancel"
