@@ -10,12 +10,13 @@ import {
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
-import { ChevronLeft } from 'lucide-react-native'
+import { ChevronLeft, ChevronRight } from 'lucide-react-native'
 import { colors, radii, spacing, typography } from '../src/theme/mobile-theme'
 import { loadHosts } from '../src/transport/host-store'
 import type { HostProfile } from '../src/transport/types'
 import { useAllHostClients } from '../src/transport/client-context'
 import type { RpcClient } from '../src/transport/rpc-client'
+import { BottomDrawer } from '../src/components/BottomDrawer'
 import { VoiceModelList } from '../src/components/VoiceModelList'
 import {
   downloadDictationModel,
@@ -53,6 +54,7 @@ export default function VoiceSettingsScreen(): React.JSX.Element {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [busyModelId, setBusyModelId] = useState<string | null>(null)
+  const [modelDrawerOpen, setModelDrawerOpen] = useState(false)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   const refresh = useCallback(async () => {
@@ -136,6 +138,7 @@ export default function VoiceSettingsScreen(): React.JSX.Element {
       setError(null)
       try {
         setSetup(await setDictationConfig(client, { enabled: true, modelId: model.id }))
+        setModelDrawerOpen(false)
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Could not select model')
       } finally {
@@ -165,6 +168,8 @@ export default function VoiceSettingsScreen(): React.JSX.Element {
   )
 
   const enabled = setup?.enabled ?? false
+  const selectedModel = setup?.models.find((m) => m.id === setup.selectedModelId)
+  const selectedModelLabel = selectedModel?.label ?? 'None selected'
 
   return (
     <View style={[styles.container, { paddingTop: insets.top + spacing.sm }]}>
@@ -242,18 +247,41 @@ export default function VoiceSettingsScreen(): React.JSX.Element {
 
           <Text style={[styles.groupHeading, styles.inputGroupGap]}>SPEECH MODEL</Text>
           <View style={[styles.section, styles.sectionTopGap]}>
-            <VoiceModelList
-              setup={setup}
+            <Pressable
+              style={({ pressed }) => [
+                styles.row,
+                !enabled && styles.disabled,
+                pressed && styles.rowPressed
+              ]}
               disabled={!enabled}
-              busyModelId={busyModelId}
-              onUseModel={(m) => void handleUseModel(m)}
-              onDownload={(m) => void handleDownload(m)}
-            />
+              onPress={() => setModelDrawerOpen(true)}
+            >
+              <View style={styles.rowContent}>
+                <Text style={styles.rowLabel}>Speech Model</Text>
+                <Text style={styles.rowSublabel} numberOfLines={1}>
+                  {selectedModelLabel}
+                </Text>
+              </View>
+              <ChevronRight size={18} color={colors.textMuted} />
+            </Pressable>
           </View>
 
           {error ? <Text style={styles.error}>{error}</Text> : null}
         </ScrollView>
       )}
+
+      <BottomDrawer visible={modelDrawerOpen} onClose={() => setModelDrawerOpen(false)}>
+        <Text style={styles.drawerTitle}>Speech Model</Text>
+        {setup ? (
+          <VoiceModelList
+            setup={setup}
+            disabled={false}
+            busyModelId={busyModelId}
+            onUseModel={(m) => void handleUseModel(m)}
+            onDownload={(m) => void handleDownload(m)}
+          />
+        ) : null}
+      </BottomDrawer>
     </View>
   )
 }
@@ -320,11 +348,20 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.md + 2
   },
+  rowPressed: { backgroundColor: colors.bgRaised },
   rowContent: { flex: 1 },
   rowLabel: {
     fontSize: typography.bodySize,
     fontWeight: '500',
     color: colors.textPrimary
+  },
+  drawerTitle: {
+    fontSize: typography.bodySize,
+    fontWeight: '700',
+    color: colors.textPrimary,
+    paddingHorizontal: spacing.md + 2,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.xs
   },
   rowSublabel: {
     fontSize: typography.bodySize - 2,

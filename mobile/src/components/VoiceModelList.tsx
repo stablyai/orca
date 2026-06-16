@@ -86,17 +86,15 @@ export function VoiceModelList({
                 <ActivityIndicator size="small" color={colors.textSecondary} />
               ) : (
                 <Pressable
-                  style={({ pressed }) => [styles.actionButton, pressed && styles.actionPressed]}
+                  style={({ pressed }) => [styles.iconButton, pressed && styles.actionPressed]}
                   disabled={rowBusy}
                   onPress={() => onDownload(model)}
+                  accessibilityLabel={'Download ' + model.label}
                 >
                   {rowBusy ? (
                     <ActivityIndicator size="small" color={colors.textSecondary} />
                   ) : (
-                    <>
-                      <Download size={13} color={colors.textSecondary} strokeWidth={2.2} />
-                      <Text style={styles.actionText}>Download</Text>
-                    </>
+                    <Download size={18} color={colors.textSecondary} strokeWidth={2.2} />
                   )}
                 </Pressable>
               )}
@@ -135,6 +133,14 @@ const styles = StyleSheet.create({
   },
   actionPressed: { opacity: 0.7 },
   actionText: { color: colors.textSecondary, fontSize: typography.metaSize, fontWeight: '600' },
+  iconButton: {
+    width: 34,
+    height: 34,
+    borderRadius: radii.button,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.bgRaised
+  },
   selectedTag: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   selectedText: { color: colors.statusGreen, fontSize: typography.metaSize, fontWeight: '600' },
   separator: {
