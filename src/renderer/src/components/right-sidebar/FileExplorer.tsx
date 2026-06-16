@@ -9,7 +9,10 @@ import { folderRelativePathToIncludeGlob } from './file-search-include-pattern'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { cn } from '@/lib/utils'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
-import { shouldResetFileExplorerForVisibleWorktree } from './file-explorer-reset'
+import {
+  getVisibleFileExplorerWorktreePath,
+  shouldResetFileExplorerForVisibleWorktree
+} from './file-explorer-reset'
 import { FileExplorerBackgroundMenu } from './FileExplorerBackgroundMenu'
 import { FileExplorerNameFilter } from './FileExplorerNameFilter'
 import { FileExplorerQueryStrip } from './FileExplorerQueryStrip'
@@ -87,7 +90,12 @@ function FileExplorerFiles(): React.JSX.Element {
   const toggleShowDotfilesForWorktree = useAppStore((s) => s.toggleShowDotfilesForWorktree)
 
   const worktreePath = activeWorktree?.path ?? null
-  const visibleWorktreePath = rightSidebarOpen ? worktreePath : null
+  const isFilesViewActive = explorerView === 'files'
+  const visibleFilesWorktreePath = getVisibleFileExplorerWorktreePath({
+    explorerView,
+    rightSidebarOpen,
+    worktreePath
+  })
   const repoName = activeRepo?.displayName ?? (worktreePath ? basename(worktreePath) : '')
   const activeRepoSupportsGit = activeRepo ? isGitRepoKind(activeRepo) : false
 
@@ -109,7 +117,8 @@ function FileExplorerFiles(): React.JSX.Element {
     refreshDir,
     resetAndLoad
   } = useFileExplorerTree(worktreePath, expanded, activeWorktreeId)
-  const hasNameFilter = nameFilterQuery.trim().length > 0
+  const hasNameFilterQuery = nameFilterQuery.trim().length > 0
+  const hasNameFilter = isFilesViewActive && hasNameFilterQuery
   const nameFilterFiles = useRuntimeFileListForWorktree({
     enabled: hasNameFilter,
     worktreeId: activeWorktreeId
@@ -135,10 +144,10 @@ function FileExplorerFiles(): React.JSX.Element {
     toggleGitIgnoredFiles
   } = useFileExplorerVisibleRowProjection(
     activeWorktreeId,
-    worktreePath,
+    visibleFilesWorktreePath,
     dirCache,
     expanded,
-    activeRepoSupportsGit,
+    activeRepoSupportsGit && isFilesViewActive,
     showDotfiles,
     nameFilterSource
   )
@@ -151,13 +160,13 @@ function FileExplorerFiles(): React.JSX.Element {
   )
   const visibleRowCount = rowProjection.getVisibleCount()
   const manualRefresh = useFileExplorerManualRefresh(refreshTree)
-  const canCollapseAll = !hasNameFilter && expanded.size > 0
+  const canCollapseAll = isFilesViewActive && !hasNameFilter && expanded.size > 0
   const handleCollapseAll = useCallback(() => {
-    if (!activeWorktreeId || hasNameFilter) {
+    if (!activeWorktreeId || !isFilesViewActive || hasNameFilter) {
       return
     }
     collapseAllDirs(activeWorktreeId)
-  }, [activeWorktreeId, collapseAllDirs, hasNameFilter])
+  }, [activeWorktreeId, collapseAllDirs, hasNameFilter, isFilesViewActive])
   const handleToggleDotfiles = useCallback(() => {
     if (activeWorktreeId) {
       toggleShowDotfilesForWorktree(activeWorktreeId)
@@ -230,7 +239,7 @@ function FileExplorerFiles(): React.JSX.Element {
 
   const lastResetWorktreePathRef = useRef<string | null>(null)
   useEffect(() => {
-    if (!visibleWorktreePath) {
+    if (!visibleFilesWorktreePath) {
       return
     }
     // Why: the sidebar remains mounted while closed to preserve caches, but
@@ -238,17 +247,17 @@ function FileExplorerFiles(): React.JSX.Element {
     if (
       !shouldResetFileExplorerForVisibleWorktree(
         lastResetWorktreePathRef.current,
-        visibleWorktreePath
+        visibleFilesWorktreePath
       )
     ) {
       return
     }
-    lastResetWorktreePathRef.current = visibleWorktreePath
+    lastResetWorktreePathRef.current = visibleFilesWorktreePath
     resetSelection()
     setNameFilterQuery('')
     resetAndLoad()
     clearFileExplorerUndoHistory()
-  }, [visibleWorktreePath, resetSelection]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [visibleFilesWorktreePath, resetSelection]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Why: on app startup the file explorer loads before SSH providers are
   // registered, so readDir fails for remote worktrees. When the SSH
@@ -259,23 +268,24 @@ function FileExplorerFiles(): React.JSX.Element {
   useEffect(() => {
     if (sshConnectedGeneration > sshGenRef.current) {
       sshGenRef.current = sshConnectedGeneration
-      if (visibleWorktreePath && rootError) {
+      if (visibleFilesWorktreePath && rootError) {
         resetAndLoad()
       }
     }
-  }, [sshConnectedGeneration, visibleWorktreePath]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [sshConnectedGeneration, visibleFilesWorktreePath]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    if (!visibleWorktreePath) {
+    if (!visibleFilesWorktreePath) {
       return
     }
     for (const dirPath of expanded) {
       if (!dirCache[dirPath]?.children.length && !dirCache[dirPath]?.loading) {
-        const depth = splitPathSegments(dirPath.slice(visibleWorktreePath.length + 1)).length - 1
+        const depth =
+          splitPathSegments(dirPath.slice(visibleFilesWorktreePath.length + 1)).length - 1
         void loadDir(dirPath, depth)
       }
     }
-  }, [expanded, visibleWorktreePath]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [expanded, visibleFilesWorktreePath]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const {
     inlineInput,
@@ -286,7 +296,7 @@ function FileExplorerFiles(): React.JSX.Element {
     handleInlineSubmit
   } = useFileExplorerInlineInput({
     activeWorktreeId,
-    worktreePath,
+    worktreePath: visibleFilesWorktreePath,
     expanded,
     rowProjection,
     scrollRef,
@@ -294,7 +304,7 @@ function FileExplorerFiles(): React.JSX.Element {
   })
 
   useFileExplorerWatch({
-    worktreePath: visibleWorktreePath,
+    worktreePath: visibleFilesWorktreePath,
     activeWorktreeId,
     dirCache,
     setDirCache,
@@ -308,7 +318,7 @@ function FileExplorerFiles(): React.JSX.Element {
   })
 
   useFileExplorerImport({
-    worktreePath,
+    worktreePath: visibleFilesWorktreePath,
     activeWorktreeId,
     refreshDir,
     clearNativeDragState,
@@ -336,7 +346,7 @@ function FileExplorerFiles(): React.JSX.Element {
 
   const cancelRevealTimers = useFileExplorerReveal({
     activeWorktreeId,
-    worktreePath,
+    worktreePath: visibleFilesWorktreePath,
     pendingExplorerReveal,
     clearPendingExplorerReveal,
     expanded,
@@ -365,7 +375,7 @@ function FileExplorerFiles(): React.JSX.Element {
   useFileExplorerAutoReveal({
     activeFileId,
     activeWorktreeId,
-    worktreePath,
+    worktreePath: visibleFilesWorktreePath,
     pendingExplorerReveal,
     openFiles,
     rowProjection,
@@ -488,10 +498,15 @@ function FileExplorerFiles(): React.JSX.Element {
   if (!worktreePath) {
     return (
       <div className="flex h-full items-center justify-center text-[11px] text-muted-foreground px-4 text-center">
-        {translate(
-          'auto.components.right.sidebar.FileExplorer.79b1537dd3',
-          'Select a workspace to browse files'
-        )}
+        {explorerView === 'search'
+          ? translate(
+              'auto.components.right.sidebar.Search.98c8435e36',
+              'Select a workspace to search'
+            )
+          : translate(
+              'auto.components.right.sidebar.FileExplorer.79b1537dd3',
+              'Select a workspace to browse files'
+            )}
       </div>
     )
   }
@@ -530,6 +545,7 @@ function FileExplorerFiles(): React.JSX.Element {
           worktreePath={worktreePath}
           connectionId={activeRepo?.connectionId ?? null}
           refresh={manualRefresh}
+          canRefresh={isFilesViewActive}
           canCollapseAll={canCollapseAll}
           onCollapseAll={handleCollapseAll}
           showGitIgnoredFilesToggle={activeRepoSupportsGit}
@@ -589,8 +605,8 @@ function FileExplorerFiles(): React.JSX.Element {
             viewportRef={scrollRef}
             viewportTabIndex={-1}
             viewportClassName="h-full min-h-0 py-2"
-            data-native-file-drop-target="file-explorer"
-            data-native-file-drop-dir={worktreePath}
+            data-native-file-drop-target={isFilesViewActive ? 'file-explorer' : undefined}
+            data-native-file-drop-dir={visibleFilesWorktreePath ?? undefined}
             onWheelCapture={handleWheelCapture}
             onDragOver={rootDragHandlers.onDragOver}
             onDragEnter={rootDragHandlers.onDragEnter}

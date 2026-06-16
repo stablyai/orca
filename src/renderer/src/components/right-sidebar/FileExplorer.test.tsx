@@ -263,6 +263,7 @@ function makeToolbar(overrides: Partial<Parameters<typeof FileExplorerToolbar>[0
     worktreePath: '/tmp/orca',
     connectionId: null,
     refresh: makeRefreshState(),
+    canRefresh: true,
     canCollapseAll: false,
     onCollapseAll: vi.fn(),
     showGitIgnoredFilesToggle: true,
@@ -290,6 +291,7 @@ describe('FileExplorerToolbar', () => {
 
     expect(onRefresh).toHaveBeenCalledTimes(1)
     expect(button.props.disabled).toBe(false)
+    expect(button.props['aria-disabled']).toBe(false)
     expect(hasIcon(button, RefreshCw)).toBe(true)
     expect(hasIcon(button, Loader2)).toBe(false)
   })
@@ -313,8 +315,26 @@ describe('FileExplorerToolbar', () => {
     const button = findRefreshButton(element)
 
     expect(button.props.disabled).toBe(true)
+    expect(button.props['aria-disabled']).toBe(true)
     expect(hasIcon(button, Loader2)).toBe(true)
     expect(hasIcon(button, RefreshCw)).toBe(false)
+  })
+
+  it('keeps disabled refresh clicks from firing', () => {
+    const onRefresh = vi.fn()
+    const preventDefault = vi.fn()
+    const element = makeToolbar({
+      canRefresh: false,
+      refresh: makeRefreshState({ handleRefresh: onRefresh })
+    })
+
+    const button = findRefreshButton(element)
+    ;(button.props.onClick as (event: { preventDefault: () => void }) => void)({ preventDefault })
+
+    expect(button.props.disabled).toBe(false)
+    expect(button.props['aria-disabled']).toBe(true)
+    expect(preventDefault).toHaveBeenCalledTimes(1)
+    expect(onRefresh).not.toHaveBeenCalled()
   })
 
   it('fires the collapse all action from the icon button', () => {

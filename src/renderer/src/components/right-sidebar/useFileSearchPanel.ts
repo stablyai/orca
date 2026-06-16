@@ -180,7 +180,10 @@ export function useFileSearchPanel(explorerView: 'files' | 'search'): FileSearch
   }, [cancelPendingSearch, clearActiveSearch])
 
   const rerunSearch = useCallback(() => {
-    const q = useAppStore.getState().fileSearchStateByWorktree[activeWorktreeId!]?.query ?? ''
+    if (!activeWorktreeId) {
+      return
+    }
+    const q = useAppStore.getState().fileSearchStateByWorktree[activeWorktreeId]?.query ?? ''
     if (q.trim()) {
       executeSearch(q)
     }

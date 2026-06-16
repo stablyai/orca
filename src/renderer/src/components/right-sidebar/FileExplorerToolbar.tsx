@@ -22,6 +22,7 @@ type FileExplorerToolbarProps = {
     showRefreshSpinner: boolean
     handleRefresh: () => void
   }
+  canRefresh: boolean
   canCollapseAll: boolean
   onCollapseAll: () => void
   showGitIgnoredFilesToggle: boolean
@@ -36,6 +37,7 @@ export function FileExplorerToolbar({
   worktreePath,
   connectionId,
   refresh,
+  canRefresh,
   canCollapseAll,
   onCollapseAll,
   showGitIgnoredFilesToggle,
@@ -92,13 +94,23 @@ export function FileExplorerToolbar({
             type="button"
             variant="ghost"
             size="icon-xs"
-            className="text-muted-foreground hover:text-foreground"
+            className={cn(
+              'text-muted-foreground hover:text-foreground',
+              !canRefresh && 'cursor-not-allowed opacity-50'
+            )}
             aria-label={translate(
               'auto.components.right.sidebar.FileExplorerToolbar.d95e30fe28',
               'Refresh Explorer'
             )}
+            aria-disabled={!canRefresh || refresh.isRefreshing}
             disabled={refresh.isRefreshing}
-            onClick={refresh.handleRefresh}
+            onClick={(event) => {
+              if (!canRefresh) {
+                event.preventDefault()
+                return
+              }
+              refresh.handleRefresh()
+            }}
           >
             {refresh.showRefreshSpinner ? (
               <Loader2 className="size-3 animate-spin" />
