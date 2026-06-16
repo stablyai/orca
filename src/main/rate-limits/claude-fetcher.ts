@@ -146,6 +146,29 @@ async function readCredentialsFromStrictKeychain(
   }
 }
 
+function getManagedAccountIdFromProvenance(provenance?: string): string | null {
+  const match = provenance?.match(/^managed:([^:]+)(?::|$)/)
+  return match?.[1] ?? null
+}
+
+async function readManagedCredentialsFromProvenance(
+  provenance?: string
+): Promise<OAuthCredentialReadResult> {
+  if (process.platform !== 'darwin') {
+    return emptyOAuthCredentialReadResult()
+  }
+  const accountId = getManagedAccountIdFromProvenance(provenance)
+  if (!accountId) {
+    return emptyOAuthCredentialReadResult()
+  }
+  try {
+    const raw = await readManagedClaudeKeychainCredentials(accountId)
+    return raw ? parseOAuthCredentialsJson(raw) : emptyOAuthCredentialReadResult()
+  } catch {
+    return emptyOAuthCredentialReadResult()
+  }
+}
+
 /**
  * Read OAuth token from ~/.claude/.credentials.json (legacy path).
  * Why: older Claude CLI versions store credentials in this plain JSON
@@ -167,8 +190,22 @@ async function readFromCredentialsFile(configDir?: string): Promise<OAuthCredent
  * here — those are API keys which return 401 on the OAuth usage endpoint.
  * API-key users are served by the PTY fallback instead.
  */
-async function readOAuthCredentials(configDir?: string): Promise<OAuthCredentialReadResult> {
-  // 1. macOS Keychain (Claude Max/Pro OAuth)
+async function readOAuthCredentials(
+  configDir?: string,
+  provenance?: string
+): Promise<OAuthCredentialReadResult> {
+  // 1. Orca managed-account storage. The shared Claude runtime Keychain can
+  // drift when live Claude sessions refresh or rewrite auth, but the status bar
+  // must report usage for the account Orca has selected.
+  const fromManagedAccount = await readManagedCredentialsFromProvenance(provenance)
+  if (fromManagedAccount.token) {
+    return fromManagedAccount
+  }
+  if (fromManagedAccount.hasRefreshableCredentials) {
+    return fromManagedAccount
+  }
+
+  // 2. macOS Keychain (Claude Max/Pro OAuth)
   const fromKeychain = await readFromKeychain(configDir)
   if (fromKeychain.token) {
     return fromKeychain
@@ -177,7 +214,7 @@ async function readOAuthCredentials(configDir?: string): Promise<OAuthCredential
     return fromKeychain
   }
 
-  // 2. Legacy credentials file
+  // 3. Legacy credentials file
   const fromFile = await readFromCredentialsFile(configDir)
   if (fromFile.token) {
     return fromFile
@@ -305,7 +342,10 @@ export async function fetchClaudeRateLimits(
   }
 
   // Path A: try OAuth API if we have a genuine OAuth token
-  const oauthCredentials = await readOAuthCredentials(options?.authPreparation?.configDir)
+  const oauthCredentials = await readOAuthCredentials(
+    options?.authPreparation?.configDir,
+    options?.authPreparation?.provenance
+  )
   if (oauthCredentials.token) {
     try {
       return await fetchViaOAuth(oauthCredentials.token)

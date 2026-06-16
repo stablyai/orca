@@ -167,6 +167,50 @@ describe('fetchClaudeRateLimits', () => {
     )
   })
 
+  it('uses selected managed account credentials before stale runtime Keychain credentials', async () => {
+    const configDir = '/Users/test/.claude'
+    const authPreparation: ClaudeRuntimeAuthPreparation = {
+      configDir,
+      envPatch: {},
+      stripAuthEnv: true,
+      provenance: 'managed:account-1'
+    }
+    vi.mocked(readManagedClaudeKeychainCredentials).mockResolvedValue(
+      JSON.stringify({
+        claudeAiOauth: {
+          accessToken: 'managed-oauth-token',
+          expiresAt: Date.now() + 60_000
+        }
+      })
+    )
+    vi.mocked(readActiveClaudeKeychainCredentialsStrict).mockResolvedValue(
+      JSON.stringify({
+        claudeAiOauth: {
+          accessToken: 'stale-runtime-oauth-token',
+          expiresAt: Date.now() + 60_000
+        }
+      })
+    )
+
+    await expect(fetchClaudeRateLimits({ authPreparation })).resolves.toMatchObject({
+      provider: 'claude',
+      status: 'ok',
+      session: { usedPercent: 12 },
+      weekly: { usedPercent: 34 }
+    })
+
+    expect(readManagedClaudeKeychainCredentials).toHaveBeenCalledWith('account-1')
+    expect(readActiveClaudeKeychainCredentialsStrict).not.toHaveBeenCalled()
+    expect(netFetchMock).toHaveBeenCalledWith(
+      'https://api.anthropic.com/api/oauth/usage',
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Authorization: 'Bearer managed-oauth-token'
+        })
+      })
+    )
+  })
+
   it('falls back to the credentials file when Keychain access fails', async () => {
     const configDir = '/Users/test/.claude'
     const authPreparation: ClaudeRuntimeAuthPreparation = {
