@@ -8119,6 +8119,10 @@
             "464ae3974f": "Match Case",
             "693cbeadd0": "Search"
           },
+          "SearchQueryRow": {
+            "queryLabel": "Search files",
+            "clearLabel": "Clear search"
+          },
           "SearchResultItems": {
             "cc06595a3b": "Copy Line Path",
             "3596b9668d": "Copy Path"

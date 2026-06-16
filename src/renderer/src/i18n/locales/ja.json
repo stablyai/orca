@@ -8119,6 +8119,10 @@
             "464ae3974f": "大文字と小文字を区別する",
             "693cbeadd0": "検索"
           },
+          "SearchQueryRow": {
+            "queryLabel": "ファイルを検索",
+            "clearLabel": "検索をクリア"
+          },
           "SearchResultItems": {
             "cc06595a3b": "ラインパスのコピー",
             "3596b9668d": "パスのコピー"

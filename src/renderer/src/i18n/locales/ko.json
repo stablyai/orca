@@ -8119,6 +8119,10 @@
             "464ae3974f": "대소문자 일치",
             "693cbeadd0": "검색"
           },
+          "SearchQueryRow": {
+            "queryLabel": "파일 검색",
+            "clearLabel": "검색 지우기"
+          },
           "SearchResultItems": {
             "cc06595a3b": "라인 경로 복사",
             "3596b9668d": "경로 복사"

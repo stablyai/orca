@@ -8119,6 +8119,10 @@
             "464ae3974f": "Caso de partido",
             "693cbeadd0": "Buscar"
           },
+          "SearchQueryRow": {
+            "queryLabel": "Buscar archivos",
+            "clearLabel": "Borrar búsqueda"
+          },
           "SearchResultItems": {
             "cc06595a3b": "Copiar ruta de línea",
             "3596b9668d": "Copiar ruta"

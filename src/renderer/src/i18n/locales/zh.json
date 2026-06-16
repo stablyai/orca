@@ -8119,6 +8119,10 @@
             "464ae3974f": "火柴盒",
             "693cbeadd0": "搜索"
           },
+          "SearchQueryRow": {
+            "queryLabel": "搜索文件",
+            "clearLabel": "清除搜索"
+          },
           "SearchResultItems": {
             "cc06595a3b": "复制线路径",
             "3596b9668d": "复制路径"

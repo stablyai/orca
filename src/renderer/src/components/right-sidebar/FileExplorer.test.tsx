@@ -437,8 +437,8 @@ describe('FileExplorerViewSwitch', () => {
       onSelectView
     })
 
-    const button = findElementByAriaLabel(element, 'Search file contents')
-    ;(button.props.onClick as () => void)()
+    const switchRoot = findElementByAriaLabel(element, 'Explorer search mode')
+    ;(switchRoot.props.onValueChange as (value: string) => void)('search')
 
     expect(onSelectView).toHaveBeenCalledWith('search')
   })
@@ -451,9 +451,11 @@ describe('FileExplorerViewSwitch', () => {
 
     const contentsTab = findElementByAriaLabel(element, 'Search file contents')
     const namesTab = findElementByAriaLabel(element, 'Filter files by name')
+    const switchRoot = findElementByAriaLabel(element, 'Explorer search mode')
 
-    expect(contentsTab.props['aria-selected']).toBe(true)
-    expect(namesTab.props['aria-selected']).toBe(false)
+    expect(switchRoot.props.value).toBe('search')
+    expect(contentsTab.props.value).toBe('search')
+    expect(namesTab.props.value).toBe('files')
     expect(JSON.stringify(contentsTab.props.children)).toContain('Contents')
     expect(JSON.stringify(namesTab.props.children)).toContain('Names')
   })

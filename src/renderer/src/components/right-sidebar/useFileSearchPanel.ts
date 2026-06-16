@@ -1,3 +1,4 @@
+import type React from 'react'
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef } from 'react'
 import { useAppStore } from '@/store'
 import { useActiveWorktree } from '@/store/selectors'
@@ -200,6 +201,9 @@ export function useFileSearchPanel(explorerView: 'files' | 'search'): FileSearch
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
+      if (e.nativeEvent.isComposing) {
+        return
+      }
       if (e.key === 'Escape') {
         if (fileSearchQuery) {
           handleClearSearch()

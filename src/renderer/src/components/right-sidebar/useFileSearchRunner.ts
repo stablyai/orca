@@ -25,6 +25,8 @@ export function useFileSearchRunner({
   cancelPendingSearch: () => void
 } {
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // Why: runtime searches can finish out of order; ids keep stale results
+  // from overwriting the newest query state.
   const latestSearchIdRef = useRef(0)
 
   const cancelPendingSearch = useCallback(() => {

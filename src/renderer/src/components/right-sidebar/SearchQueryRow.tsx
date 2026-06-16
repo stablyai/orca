@@ -43,6 +43,10 @@ export function SearchQueryRow({
         ref={inputRef}
         type="text"
         className="min-w-0 flex-1 bg-transparent py-1 text-xs text-foreground outline-none placeholder:text-muted-foreground/50"
+        aria-label={translate(
+          'auto.components.right.sidebar.SearchQueryRow.queryLabel',
+          'Search files'
+        )}
         placeholder={translate('auto.components.right.sidebar.SearchHeader.693cbeadd0', 'Search')}
         value={query}
         onChange={onQueryChange}
@@ -56,6 +60,10 @@ export function SearchQueryRow({
           variant="ghost"
           size="icon-xs"
           className="h-auto w-auto rounded-sm p-0.5 text-muted-foreground hover:text-foreground"
+          aria-label={translate(
+            'auto.components.right.sidebar.SearchQueryRow.clearLabel',
+            'Clear search'
+          )}
           onClick={onClearSearch}
         >
           <X className="size-3" />
