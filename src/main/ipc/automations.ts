@@ -5,6 +5,9 @@ import type {
   Automation,
   AutomationCreateInput,
   AutomationDispatchResult,
+  AutomationFolder,
+  AutomationFolderCreateInput,
+  AutomationFolderUpdateInput,
   AutomationPrecheckResult,
   ExternalAutomationCreateInput,
   ExternalAutomationActionInput,
@@ -63,6 +66,27 @@ export function registerAutomationHandlers(store: Store, service: AutomationServ
   ipcMain.handle('automations:delete', (_event, args: { id: string }): void => {
     store.deleteAutomation(args.id)
   })
+  ipcMain.handle('automations:listFolders', (): AutomationFolder[] => store.listAutomationFolders())
+  ipcMain.handle(
+    'automations:createFolder',
+    (_event, input: AutomationFolderCreateInput): AutomationFolder =>
+      store.createAutomationFolder(input)
+  )
+  ipcMain.handle(
+    'automations:updateFolder',
+    (_event, args: { id: string; updates: AutomationFolderUpdateInput }): AutomationFolder =>
+      store.updateAutomationFolder(args.id, args.updates)
+  )
+  ipcMain.handle('automations:deleteFolder', (_event, args: { id: string }): void => {
+    store.deleteAutomationFolder(args.id)
+  })
+  ipcMain.handle(
+    'automations:moveToFolder',
+    // Why: a named channel over updateAutomation keeps the renderer + CLI move
+    // intent legible, mirroring how runNow is a named channel over a store op.
+    (_event, args: { automationId: string; folderId: string | null }): Automation =>
+      store.updateAutomation(args.automationId, { folderId: args.folderId })
+  )
   ipcMain.handle(
     'automations:runNow',
     (_event, args: { id: string }): Promise<AutomationRun> => service.runNow(args.id)

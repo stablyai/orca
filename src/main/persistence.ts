@@ -21,6 +21,9 @@ import type {
   Automation,
   AutomationCreateInput,
   AutomationDispatchResult,
+  AutomationFolder,
+  AutomationFolderCreateInput,
+  AutomationFolderUpdateInput,
   AutomationPrecheckResult,
   AutomationRunOutputSnapshot,
   AutomationRun,
@@ -781,6 +784,23 @@ function backfillLegacyAutomationContexts(
     },
     changed: true
   }
+}
+
+function backfillAutomationFolderIds(automations: readonly Automation[]): {
+  automations: Automation[]
+  changed: boolean
+} {
+  let changed = false
+  const next = automations.map((automation) => {
+    if (Object.hasOwn(automation, 'folderId')) {
+      return automation
+    }
+    // Why: pre-folders automations have no folderId. Materialize it as null
+    // (unfiled) once so the field is explicit on next flush; no data moves.
+    changed = true
+    return { ...automation, folderId: null }
+  })
+  return changed ? { automations: next, changed } : { automations: [...automations], changed }
 }
 
 type LegacySshTarget = SshTarget & {
@@ -2928,6 +2948,18 @@ export class Store {
       automationRuns: automationContextMigration.state.automationRuns
     }
 
+    const automationFolderIdBackfill = backfillAutomationFolderIds(result.automations ?? [])
+    if (automationFolderIdBackfill.changed) {
+      this.loadNeedsSave = true
+    }
+    result = {
+      ...result,
+      automations: automationFolderIdBackfill.automations,
+      // Why: legacy files predate folders; default to an empty list so all
+      // downstream reads can assume the array exists.
+      automationFolders: result.automationFolders ?? []
+    }
+
     const folderScopeConnectionMigration = backfillFolderScopeConnectionIds({
       ...result,
       repos,
@@ -3862,6 +3894,7 @@ export class Store {
       prompt: input.prompt,
       precheck: normalizeAutomationPrecheck(input.precheck),
       agentId: input.agentId,
+      folderId: input.folderId ?? null,
       runContext: input.runContext ?? contexts.runContext,
       sourceContext: input.sourceContext ?? contexts.sourceContext,
       projectId: input.projectId,
@@ -3958,6 +3991,79 @@ export class Store {
     this.state.automations = (this.state.automations ?? []).filter((entry) => entry.id !== id)
     this.state.automationRuns = (this.state.automationRuns ?? []).filter(
       (entry) => entry.automationId !== id
+    )
+    this.flush()
+  }
+
+  listAutomationFolders(): AutomationFolder[] {
+    return [...(this.state.automationFolders ?? [])].sort(
+      (left, right) => left.sortOrder - right.sortOrder || left.name.localeCompare(right.name)
+    )
+  }
+
+  createAutomationFolder(input: AutomationFolderCreateInput): AutomationFolder {
+    const now = Date.now()
+    let maxOrder = -1
+    for (const existing of this.state.automationFolders ?? []) {
+      maxOrder = Math.max(maxOrder, existing.sortOrder)
+    }
+    const folder: AutomationFolder = {
+      id: randomUUID(),
+      name: input.name.trim() || 'Untitled folder',
+      parentFolderId: input.parentFolderId ?? null,
+      isCollapsed: false,
+      color: input.color ?? null,
+      sortOrder: maxOrder + 1,
+      createdAt: now,
+      updatedAt: now
+    }
+    this.state.automationFolders = [...(this.state.automationFolders ?? []), folder]
+    this.flush()
+    return folder
+  }
+
+  updateAutomationFolder(id: string, updates: AutomationFolderUpdateInput): AutomationFolder {
+    const index = (this.state.automationFolders ?? []).findIndex((entry) => entry.id === id)
+    if (index === -1) {
+      throw new Error('Automation folder not found.')
+    }
+    const current = this.state.automationFolders[index]
+    const updated: AutomationFolder = {
+      ...current,
+      name: updates.name !== undefined ? updates.name.trim() || current.name : current.name,
+      color: Object.hasOwn(updates, 'color') ? (updates.color ?? null) : current.color,
+      isCollapsed: updates.isCollapsed ?? current.isCollapsed,
+      sortOrder:
+        updates.sortOrder !== undefined && Number.isFinite(updates.sortOrder)
+          ? updates.sortOrder
+          : current.sortOrder,
+      parentFolderId: Object.hasOwn(updates, 'parentFolderId')
+        ? (updates.parentFolderId ?? null)
+        : current.parentFolderId,
+      updatedAt: Date.now()
+    }
+    this.state.automationFolders[index] = updated
+    this.flush()
+    return updated
+  }
+
+  deleteAutomationFolder(id: string): void {
+    const folder = (this.state.automationFolders ?? []).find((entry) => entry.id === id)
+    if (!folder) {
+      return
+    }
+    this.state.automationFolders = (this.state.automationFolders ?? []).filter(
+      (entry) => entry.id !== id
+    )
+    // Why: folders are organization only. Deleting one must not delete its
+    // automations; they revert to unfiled (folderId null).
+    this.state.automations = (this.state.automations ?? []).map((automation) =>
+      automation.folderId === id ? { ...automation, folderId: null } : automation
+    )
+    // Why: reparent child folders to the deleted folder's parent so a nested
+    // subtree is not orphaned (single-level UI today, nesting-ready storage).
+    this.state.automationFolders = this.state.automationFolders.map((entry) =>
+      entry.parentFolderId === id ? { ...entry, parentFolderId: folder.parentFolderId } : entry
     )
     this.flush()
   }

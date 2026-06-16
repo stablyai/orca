@@ -75,12 +75,38 @@ export type AutomationPrecheckResult = {
   completedAt: number
 }
 
+export type AutomationFolder = {
+  id: string
+  name: string
+  /** Nesting parent; null = top level. v1 keeps the UI single-level but stores
+   *  this so deeper nesting is non-breaking later, mirroring ProjectGroup. */
+  parentFolderId: string | null
+  isCollapsed: boolean
+  color: string | null
+  sortOrder: number
+  createdAt: number
+  updatedAt: number
+}
+
+export type AutomationFolderCreateInput = {
+  name: string
+  color?: string | null
+  parentFolderId?: string | null
+}
+
+export type AutomationFolderUpdateInput = Partial<
+  Pick<AutomationFolder, 'name' | 'color' | 'isCollapsed' | 'sortOrder' | 'parentFolderId'>
+>
+
 export type Automation = {
   id: string
   name: string
   prompt: string
   precheck: AutomationPrecheck | null
   agentId: TuiAgent
+  /** FK to AutomationFolder.id; null = unfiled. Absent on legacy rows, read as
+   *  null by the load normalizer. */
+  folderId: string | null
   /** Why: runContext carries the logical project + host setup identity for
    *  multi-host projects; projectId remains only as the legacy repo-id storage
    *  field for pre-host-context automations.
@@ -156,6 +182,7 @@ export type AutomationCreateInput = {
   dtstart: number
   enabled?: boolean
   missedRunGraceMinutes?: number
+  folderId?: string | null
 }
 
 export type AutomationUpdateInput = Partial<
@@ -177,6 +204,7 @@ export type AutomationUpdateInput = Partial<
     | 'dtstart'
     | 'enabled'
     | 'missedRunGraceMinutes'
+    | 'folderId'
   >
 >
 

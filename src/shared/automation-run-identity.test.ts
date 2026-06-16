@@ -13,6 +13,7 @@ function automation(overrides: Partial<Automation> = {}): Automation {
     prompt: 'Run this',
     precheck: null,
     agentId: 'claude',
+    folderId: null,
     runContext: null,
     sourceContext: null,
     projectId: 'legacy-repo',

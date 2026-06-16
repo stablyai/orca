@@ -365,6 +365,9 @@ import type {
   AutomationCreateInput,
   AutomationDispatchRequest,
   AutomationDispatchResult,
+  AutomationFolder,
+  AutomationFolderCreateInput,
+  AutomationFolderUpdateInput,
   ExternalAutomationCreateInput,
   ExternalAutomationActionInput,
   ExternalAutomationManager,
@@ -2608,6 +2611,14 @@ export type PreloadApi = {
     create: (input: AutomationCreateInput) => Promise<Automation>
     update: (args: { id: string; updates: AutomationUpdateInput }) => Promise<Automation>
     delete: (args: { id: string }) => Promise<void>
+    listFolders: () => Promise<AutomationFolder[]>
+    createFolder: (input: AutomationFolderCreateInput) => Promise<AutomationFolder>
+    updateFolder: (args: {
+      id: string
+      updates: AutomationFolderUpdateInput
+    }) => Promise<AutomationFolder>
+    deleteFolder: (args: { id: string }) => Promise<void>
+    moveToFolder: (args: { automationId: string; folderId: string | null }) => Promise<Automation>
     runNow: (args: { id: string }) => Promise<AutomationRun>
     runPrecheck: (args: {
       automationId: string

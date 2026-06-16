@@ -132,6 +132,9 @@ import type {
   AutomationCreateInput,
   AutomationDispatchRequest,
   AutomationDispatchResult,
+  AutomationFolder,
+  AutomationFolderCreateInput,
+  AutomationFolderUpdateInput,
   ExternalAutomationCreateInput,
   ExternalAutomationActionInput,
   ExternalAutomationManager,
@@ -3625,6 +3628,17 @@ const api = {
     update: (args: { id: string; updates: AutomationUpdateInput }): Promise<Automation> =>
       ipcRenderer.invoke('automations:update', args),
     delete: (args: { id: string }): Promise<void> => ipcRenderer.invoke('automations:delete', args),
+    listFolders: (): Promise<AutomationFolder[]> => ipcRenderer.invoke('automations:listFolders'),
+    createFolder: (input: AutomationFolderCreateInput): Promise<AutomationFolder> =>
+      ipcRenderer.invoke('automations:createFolder', input),
+    updateFolder: (args: {
+      id: string
+      updates: AutomationFolderUpdateInput
+    }): Promise<AutomationFolder> => ipcRenderer.invoke('automations:updateFolder', args),
+    deleteFolder: (args: { id: string }): Promise<void> =>
+      ipcRenderer.invoke('automations:deleteFolder', args),
+    moveToFolder: (args: { automationId: string; folderId: string | null }): Promise<Automation> =>
+      ipcRenderer.invoke('automations:moveToFolder', args),
     runNow: (args: { id: string }): Promise<AutomationRun> =>
       ipcRenderer.invoke('automations:runNow', args),
     runPrecheck: (args: {
