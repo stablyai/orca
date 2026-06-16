@@ -474,6 +474,27 @@ describe('dispatchTerminalNotification', () => {
     expect(mockState.markTerminalPaneUnread).not.toHaveBeenCalled()
   })
 
+  it('drops layout-fallback notifications when all tab PTYs are suppressed', () => {
+    mockState.suppressedPtyExitIds = { 'pty-1': true }
+    mockState.terminalLayoutsByTabId['tab-1'] = {
+      root: { type: 'leaf', leafId: 'leaf-1' },
+      activeLeafId: 'leaf-1',
+      expandedLeafId: null,
+      ptyIdsByLeafId: {}
+    }
+
+    dispatchTerminalNotification('wt-primary', {
+      source: 'terminal-bell',
+      terminalTitle: 'codex',
+      paneKey
+    })
+
+    expect(window.api.notifications.dispatch).not.toHaveBeenCalled()
+    expect(mockState.markWorktreeUnread).not.toHaveBeenCalled()
+    expect(mockState.markTerminalTabUnread).not.toHaveBeenCalled()
+    expect(mockState.markTerminalPaneUnread).not.toHaveBeenCalled()
+  })
+
   it('still drops stale notifications when neither pty liveness nor fresh hook status exists', () => {
     mockState.ptyIdsByTabId = {}
     mockState.agentStatusByPaneKey[paneKey] = {

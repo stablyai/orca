@@ -68,17 +68,20 @@ export function getEffectiveAgentHibernationIdleMs(value: unknown): number {
 function getLivePtyIdsForTab(
   tab: TerminalTab,
   ptyIdsByTabId: Record<string, string[] | undefined>,
-  runtimeLivePtyIdsByWorktreeId: Record<string, string[] | undefined> | undefined
+  runtimeLivePtyIdsByWorktreeId: Record<string, string[] | undefined> | undefined,
+  runtimeLivenessRequired: boolean
 ): string[] {
   const ids = new Set<string>()
-  for (const id of ptyIdsByTabId[tab.id] ?? []) {
+  for (const id of runtimeLivePtyIdsByWorktreeId?.[tab.worktreeId] ?? []) {
     if (typeof id === 'string' && id.length > 0) {
       ids.add(toRuntimePtyId(id))
     }
   }
-  for (const id of runtimeLivePtyIdsByWorktreeId?.[tab.worktreeId] ?? []) {
-    if (typeof id === 'string' && id.length > 0) {
-      ids.add(toRuntimePtyId(id))
+  if (!runtimeLivenessRequired) {
+    for (const id of ptyIdsByTabId[tab.id] ?? []) {
+      if (typeof id === 'string' && id.length > 0) {
+        ids.add(toRuntimePtyId(id))
+      }
     }
   }
   return [...ids]
@@ -233,7 +236,8 @@ export function planAgentHibernationCandidates(
       const tabLivePtyIds = getLivePtyIdsForTab(
         tab,
         snapshot.ptyIdsByTabId,
-        snapshot.runtimeLivePtyIdsByWorktreeId
+        snapshot.runtimeLivePtyIdsByWorktreeId,
+        runtimeLivenessRequiredWorktreeIds.has(worktreeId)
       )
       for (const ptyId of tabLivePtyIds) {
         livePtyIds.add(ptyId)

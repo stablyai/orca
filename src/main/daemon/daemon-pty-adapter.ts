@@ -268,6 +268,8 @@ export class DaemonPtyAdapter implements IPtyProvider {
   }
 
   async shutdown(id: string, opts: { immediate?: boolean; keepHistory?: boolean }): Promise<void> {
+    // Why: sleep/exact-stop must preserve restorable terminal history,
+    // so force a final checkpoint before killing the daemon session.
     if (opts.keepHistory) {
       await this.checkpointSessions([id], { final: true })
     }

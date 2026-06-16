@@ -1992,8 +1992,6 @@ export function registerPtyHandlers(
             err instanceof Error ? err.message : String(err)
           }`
         )
-        finishPtyShutdown(ptyId, connectionId, store)
-        runtime?.onPtyExit(ptyId, -1)
         return false
       }
       finishPtyShutdown(ptyId, connectionId, store)

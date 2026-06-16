@@ -2094,7 +2094,7 @@ describe('registerPtyHandlers', () => {
         expect(runtime.onPtyExit).not.toHaveBeenCalled()
       })
 
-      it('runtime controller stopAndWait marks exit when proof fails after shutdown', async () => {
+      it('runtime controller stopAndWait preserves ownership when proof fails after shutdown', async () => {
         const shutdown = vi.fn(async () => undefined)
         const listProcesses = vi.fn().mockRejectedValue(new Error('legacy unavailable'))
         setLocalPtyProvider({
@@ -2137,7 +2137,7 @@ describe('registerPtyHandlers', () => {
           immediate: true,
           keepHistory: true
         })
-        expect(runtime.onPtyExit).toHaveBeenCalledWith('local-pty', -1)
+        expect(runtime.onPtyExit).not.toHaveBeenCalled()
       })
 
       it('runtime controller kill routes app-scoped SSH ids through the parsed provider when ownership is absent', async () => {

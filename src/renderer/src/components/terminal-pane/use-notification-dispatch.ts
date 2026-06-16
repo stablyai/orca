@@ -81,7 +81,9 @@ function isCurrentLivePaneKey(state: StoreSnapshot, worktreeId: string, paneKey:
     return false
   }
 
-  const livePtyIds = state.ptyIdsByTabId[parsed.tabId] ?? []
+  const livePtyIds = (state.ptyIdsByTabId[parsed.tabId] ?? []).filter(
+    (ptyId) => !isSuppressedPtyHint(state, ptyId)
+  )
   if (livePtyIds.length === 0) {
     return false
   }
@@ -98,10 +100,7 @@ function isCurrentLivePaneKey(state: StoreSnapshot, worktreeId: string, paneKey:
   const leafPtyId = layout.ptyIdsByLeafId?.[parsed.leafId]
   // Why: layout hydration can briefly know the leaf before restoring its PTY
   // binding; the tab-level live PTY list remains the liveness source then.
-  return (
-    leafPtyId === undefined ||
-    (livePtyIds.includes(leafPtyId) && !isSuppressedPtyHint(state, leafPtyId))
-  )
+  return leafPtyId === undefined || livePtyIds.includes(leafPtyId)
 }
 
 function isSuppressedPtyHint(state: StoreSnapshot, ptyId: string | null | undefined): boolean {

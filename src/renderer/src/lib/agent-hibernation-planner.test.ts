@@ -190,6 +190,15 @@ describe('agent hibernation planner', () => {
     expect(
       plannedWorktrees(
         snapshot({
+          ptyIdsByTabId: { 'tab-1': ['pty-1'] },
+          runtimeLivePtyIdsByWorktreeId: { 'wt-bg': [] },
+          runtimeLivenessRequiredWorktreeIds: ['wt-bg']
+        })
+      )
+    ).toEqual([])
+    expect(
+      plannedWorktrees(
+        snapshot({
           ptyIdsByTabId: { 'tab-1': [] },
           runtimeLivenessRequiredWorktreeIds: ['wt-bg']
         })
