@@ -1,11 +1,13 @@
 import React, { useEffect } from 'react'
 import { RefreshCw } from 'lucide-react'
+import { toast } from 'sonner'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
 import { buildDockerConnectionList } from '@/store/slices/docker'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { LOCAL_DOCKER_CONNECTION, LOCAL_DOCKER_CONNECTION_ID } from '../../../../shared/docker-types'
+import type { DockerResourceKind } from '../../../../shared/docker-types'
 import { DockerResourceTree } from './DockerResourceTree'
 import { DockerContainerDetail } from './DockerContainerDetail'
 
@@ -13,6 +15,9 @@ export default function DockerPage(): React.JSX.Element {
   const {
     activeConnectionId,
     containersByConnection,
+    imagesByConnection,
+    volumesByConnection,
+    networksByConnection,
     selectedResource,
     dockerConnectionError,
     settings,
@@ -20,12 +25,17 @@ export default function DockerPage(): React.JSX.Element {
     inspectErrorByContainerId,
     setActiveDockerConnection,
     refreshDockerContainers,
+    refreshDockerResources,
+    pruneDockerResources,
     selectResource,
     inspectDockerContainer
   } = useAppStore(
     useShallow((s) => ({
       activeConnectionId: s.activeConnectionId,
       containersByConnection: s.containersByConnection,
+      imagesByConnection: s.imagesByConnection,
+      volumesByConnection: s.volumesByConnection,
+      networksByConnection: s.networksByConnection,
       selectedResource: s.selectedResource,
       dockerConnectionError: s.dockerConnectionError,
       settings: s.settings,
@@ -33,6 +43,8 @@ export default function DockerPage(): React.JSX.Element {
       inspectErrorByContainerId: s.inspectErrorByContainerId,
       setActiveDockerConnection: s.setActiveDockerConnection,
       refreshDockerContainers: s.refreshDockerContainers,
+      refreshDockerResources: s.refreshDockerResources,
+      pruneDockerResources: s.pruneDockerResources,
       selectResource: s.selectResource,
       inspectDockerContainer: s.inspectDockerContainer
     }))
@@ -42,10 +54,16 @@ export default function DockerPage(): React.JSX.Element {
   const selectedContainerId =
     selectedResource?.kind === 'container' ? selectedResource.id : null
 
-  // Connect to the local daemon on first open.
+  // Connect to the local daemon on first open and fetch all resources.
   useEffect(() => {
     void setActiveDockerConnection(LOCAL_DOCKER_CONNECTION_ID)
-  }, [setActiveDockerConnection])
+    void refreshDockerResources()
+  }, [setActiveDockerConnection, refreshDockerResources])
+
+  // Re-fetch resources whenever the active connection changes.
+  useEffect(() => {
+    void refreshDockerResources()
+  }, [activeConnectionId, refreshDockerResources])
 
   // Trigger inspect whenever the selected container or active connection changes.
   useEffect(() => {
@@ -53,10 +71,21 @@ export default function DockerPage(): React.JSX.Element {
   }, [selectedContainerId, activeConnectionId, inspectDockerContainer])
 
   const containers = containersByConnection[activeConnectionId] ?? []
+  const images = imagesByConnection[activeConnectionId] ?? []
+  const volumes = volumesByConnection[activeConnectionId] ?? []
+  const networks = networksByConnection[activeConnectionId] ?? []
   const selected = containers.find((c) => c.id === selectedContainerId) ?? null
   const connection =
     buildDockerConnectionList(settings?.dockerConnections).find((c) => c.id === activeConnectionId) ??
     LOCAL_DOCKER_CONNECTION
+
+  async function prune(kind: DockerResourceKind): Promise<void> {
+    try {
+      await pruneDockerResources(kind)
+    } catch (error) {
+      toast.error('Prune failed', { description: String(error) })
+    }
+  }
 
   return (
     <div className="flex h-full flex-col">
@@ -66,7 +95,14 @@ export default function DockerPage(): React.JSX.Element {
         <div className="flex-1" />
         <Tooltip>
           <TooltipTrigger asChild>
-            <Button variant="ghost" size="icon-sm" onClick={() => void refreshDockerContainers()}>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              onClick={() => {
+                void refreshDockerContainers()
+                void refreshDockerResources()
+              }}
+            >
               <RefreshCw />
             </Button>
           </TooltipTrigger>
@@ -82,8 +118,12 @@ export default function DockerPage(): React.JSX.Element {
         <div className="w-72 shrink-0 overflow-y-auto border-r border-border scrollbar-sleek">
           <DockerResourceTree
             containers={containers}
-            selectedId={selectedContainerId}
-            onSelect={(id) => selectResource({ kind: 'container', id })}
+            images={images}
+            volumes={volumes}
+            networks={networks}
+            selected={selectedResource}
+            onSelect={selectResource}
+            onPrune={(kind) => void prune(kind)}
           />
         </div>
         <div className="flex min-h-0 min-w-0 flex-1">

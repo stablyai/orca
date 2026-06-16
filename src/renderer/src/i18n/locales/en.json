@@ -11230,6 +11230,17 @@
           "36ac523335": "Restart",
           "03e884a128": "Pause",
           "c0c163323f": "Resume"
+        },
+        "DockerResourceTree": {
+          "467cfca8f2": "Containers",
+          "7964843ebd": "No containers.",
+          "b9b10ffd73": "Images",
+          "ef8715fa3c": "No images.",
+          "12b0eb1a8a": "Volumes",
+          "fb6116f299": "No volumes.",
+          "340bf27dfd": "Networks",
+          "2fe5d96a6c": "No networks.",
+          "03f84060b4": "Prune"
         }
       }
     },
