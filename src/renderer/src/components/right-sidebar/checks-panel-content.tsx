@@ -15,6 +15,7 @@ import {
   Plus,
   ChevronDown,
   ChevronRight,
+  PanelRight,
   SendHorizontal,
   Sparkles,
   RefreshCw,
@@ -469,16 +470,46 @@ export function getFailedChecksForDetails(checks: PRCheckDetail[]): PRCheckDetai
   return checks.filter(isFailedCheck)
 }
 
+type CheckDetailsStickySurface = 'sidebar' | 'background'
+
+function getCheckDetailsStickySurfaceClass(surface: CheckDetailsStickySurface): string {
+  return surface === 'background' ? 'bg-background/95' : 'bg-sidebar/95'
+}
+
+function ViewFullCheckDetailsButton({
+  onClick,
+  label
+}: {
+  onClick: (event: React.MouseEvent<HTMLButtonElement>) => void
+  label: string
+}): React.JSX.Element {
+  return (
+    <Button
+      type="button"
+      variant="outline"
+      size="xs"
+      className="h-6 shrink-0 gap-1 px-1.5 text-[11px] text-muted-foreground hover:text-foreground"
+      onClick={onClick}
+    >
+      <PanelRight className="size-3" />
+      {label}
+    </Button>
+  )
+}
+
 function CheckRunDetails({
   check,
   state,
-  checkDetailsContextKey
+  checkDetailsContextKey,
+  worktreeId,
+  detailsStickySurface = 'sidebar'
 }: {
   check: PRCheckDetail
   state: CheckDetailsLoadState | undefined
   checkDetailsContextKey: string
+  worktreeId: string | null
+  detailsStickySurface?: CheckDetailsStickySurface
 }): React.JSX.Element {
-  const activeWorktree = useActiveWorktree()
   const openCheckRunDetails = useAppStore((s) => s.openCheckRunDetails)
   const details = state?.details
   const startedAt = formatCheckTimestamp(details?.startedAt)
@@ -499,19 +530,46 @@ function CheckRunDetails({
   const hasJobs = jobs.length > 0
   const hasLogTail = jobs.some((job) => Boolean(job.logTail))
 
+  const fullDetailsLabel = hasLogTail
+    ? translate('auto.components.right.sidebar.checks.panel.content.b8c4e2a1f7', 'View full logs')
+    : translate(
+        'auto.components.right.sidebar.checks.panel.content.e4e3af15ee',
+        'View full details'
+      )
+
   const openFullDetailsTab = (): void => {
-    if (!activeWorktree) {
+    if (!worktreeId) {
       return
     }
-    openCheckRunDetails(activeWorktree.id, checkDetailsContextKey, check, {
+    openCheckRunDetails(worktreeId, checkDetailsContextKey, check, {
       details: state?.details ?? null,
       loading: state?.loading ?? false,
       error: state?.error ?? null
     })
   }
 
+  const handleOpenFullDetails = (event: React.MouseEvent<HTMLButtonElement>): void => {
+    event.stopPropagation()
+    openFullDetailsTab()
+  }
+
   return (
     <div className="mb-1 ml-[26px] mr-3 min-w-0 border-l border-border pl-3">
+      {worktreeId && (
+        // Why: inline check details can be long; pinning the affordance keeps it
+        // visible while scrolling through annotations and job output.
+        <div
+          className={cn(
+            'sticky top-0 z-10 -ml-3 flex min-w-0 items-center gap-2 border-b border-border/60 py-1 pl-3 backdrop-blur-sm',
+            getCheckDetailsStickySurfaceClass(detailsStickySurface)
+          )}
+        >
+          <span className="min-w-0 flex-1 truncate text-[11px] font-medium text-foreground">
+            {check.name}
+          </span>
+          <ViewFullCheckDetailsButton label={fullDetailsLabel} onClick={handleOpenFullDetails} />
+        </div>
+      )}
       {state?.loading ? (
         <div className="flex min-w-0 flex-col gap-2 py-1.5">
           <div className="flex items-center gap-2 text-[12px] text-muted-foreground">
@@ -521,25 +579,6 @@ function CheckRunDetails({
               'Loading check details…'
             )}
           </div>
-          {activeWorktree && (
-            <div className="flex justify-start">
-              <Button
-                type="button"
-                variant="ghost"
-                size="xs"
-                className="h-6 gap-1 px-1.5 text-[11px] text-muted-foreground hover:text-foreground"
-                onClick={(event) => {
-                  event.stopPropagation()
-                  openFullDetailsTab()
-                }}
-              >
-                {translate(
-                  'auto.components.right.sidebar.checks.panel.content.e4e3af15ee',
-                  'View full details'
-                )}
-              </Button>
-            </div>
-          )}
         </div>
       ) : (
         <div className="flex min-w-0 flex-col gap-2.5 py-1.5">
@@ -744,26 +783,6 @@ function CheckRunDetails({
               )}
             </div>
           )}
-
-          <div className="flex justify-start pt-1">
-            {activeWorktree && (
-              <Button
-                type="button"
-                variant="ghost"
-                size="xs"
-                className="h-6 gap-1 px-1.5 text-[11px] text-muted-foreground hover:text-foreground"
-                onClick={(event) => {
-                  event.stopPropagation()
-                  openFullDetailsTab()
-                }}
-              >
-                {translate(
-                  'auto.components.right.sidebar.checks.panel.content.e4e3af15ee',
-                  'View full details'
-                )}
-              </Button>
-            )}
-          </div>
         </div>
       )}
     </div>
@@ -777,14 +796,20 @@ export function ChecksList({
   checks,
   checksLoading,
   checkDetailsContextKey,
-  onLoadCheckDetails
+  onLoadCheckDetails,
+  worktreeId: worktreeIdOverride,
+  detailsStickySurface = 'sidebar'
 }: {
   checks: PRCheckDetail[]
   checksLoading: boolean
   checkDetailsContextKey: string
   onLoadCheckDetails?: (check: PRCheckDetail) => Promise<PRCheckRunDetails | null>
+  /** Why: folder-workspace PR checks render rows for attached worktrees, not the active one. */
+  worktreeId?: string
+  detailsStickySurface?: CheckDetailsStickySurface
 }): React.JSX.Element {
   const activeWorktree = useActiveWorktree()
+  const resolvedWorktreeId = worktreeIdOverride ?? activeWorktree?.id ?? null
   const patchOpenCheckRunDetails = useAppStore((s) => s.patchOpenCheckRunDetails)
   const [checksExpanded, setChecksExpanded] = useState(true)
   const [expandedCheckKeys, setExpandedCheckKeys] = useState<Set<string>>(new Set())
@@ -952,7 +977,7 @@ export function ChecksList({
   }, [checksExpanded, detailsByCheckKey, expandedCheckKeys, requestCheckDetails, rows])
 
   useEffect(() => {
-    if (!activeWorktree) {
+    if (!resolvedWorktreeId) {
       return
     }
     for (const row of rows) {
@@ -960,13 +985,19 @@ export function ChecksList({
       if (!detailsState) {
         continue
       }
-      patchOpenCheckRunDetails(activeWorktree.id, checkDetailsContextKey, row.check, {
+      patchOpenCheckRunDetails(resolvedWorktreeId, checkDetailsContextKey, row.check, {
         details: detailsState.details ?? null,
         loading: detailsState.loading ?? false,
         error: detailsState.error ?? null
       })
     }
-  }, [activeWorktree, checkDetailsContextKey, detailsByCheckKey, patchOpenCheckRunDetails, rows])
+  }, [
+    checkDetailsContextKey,
+    detailsByCheckKey,
+    patchOpenCheckRunDetails,
+    resolvedWorktreeId,
+    rows
+  ])
 
   const toggleCheckExpanded = useCallback(
     (row: { check: PRCheckDetail; key: string }) => {
@@ -1124,6 +1155,8 @@ export function ChecksList({
                       check={check}
                       state={detailsByCheckKey[row.key]}
                       checkDetailsContextKey={checkDetailsContextKey}
+                      worktreeId={resolvedWorktreeId}
+                      detailsStickySurface={detailsStickySurface}
                     />
                   )}
                 </div>
