@@ -17,7 +17,8 @@ import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
 import {
   buildDockerConnectionFromDraft,
-  type DockerConnectionDraft
+  type DockerConnectionDraft,
+  type DockerConnectionDraftError
 } from '../docker/docker-connection-draft'
 import { DockerConfirmDialog } from '../docker/DockerConfirmDialog'
 
@@ -31,7 +32,13 @@ const EMPTY_DRAFT: DockerConnectionDraft = {
 
 function draftFromConnection(connection: DockerConnection): DockerConnectionDraft {
   if (connection.kind === 'ssh') {
-    return { label: connection.label, kind: 'ssh', sshTargetId: connection.sshTargetId ?? '', tcpHost: '', tcpPort: '' }
+    return {
+      label: connection.label,
+      kind: 'ssh',
+      sshTargetId: connection.sshTargetId ?? '',
+      tcpHost: '',
+      tcpPort: ''
+    }
   }
   // tcp
   return {
@@ -40,6 +47,22 @@ function draftFromConnection(connection: DockerConnection): DockerConnectionDraf
     sshTargetId: '',
     tcpHost: connection.tcp?.host ?? '',
     tcpPort: connection.tcp?.port != null ? String(connection.tcp.port) : ''
+  }
+}
+
+function localizeDockerDraftError(code: DockerConnectionDraftError): string {
+  switch (code) {
+    case 'label_required':
+      return translate('auto.components.settings.DockerPane.98f7505da3', 'A label is required.')
+    case 'ssh_target_required':
+      return translate('auto.components.settings.DockerPane.fa6dd8e4bb', 'Select an SSH host.')
+    case 'tcp_host_required':
+      return translate('auto.components.settings.DockerPane.443f60f98d', 'A TCP host is required.')
+    case 'tcp_port_required':
+      return translate(
+        'auto.components.settings.DockerPane.b3d4e078cf',
+        'A valid TCP port is required.'
+      )
   }
 }
 
@@ -99,7 +122,7 @@ export function DockerPane(): React.JSX.Element {
   const handleSave = async (): Promise<void> => {
     const result = buildDockerConnectionFromDraft(draft, editingId ?? crypto.randomUUID())
     if (!result.ok) {
-      setFormError(result.error)
+      setFormError(localizeDockerDraftError(result.error))
       return
     }
     setSaving(true)
@@ -117,7 +140,9 @@ export function DockerPane(): React.JSX.Element {
   }
 
   const handleRemoveConfirm = async (): Promise<void> => {
-    if (!removeTarget) return
+    if (!removeTarget) {
+      return
+    }
     const id = removeTarget.id
     // Read fresh from store so a concurrent settings write isn't dropped.
     const fresh = useAppStore.getState().settings?.dockerConnections ?? []
@@ -152,7 +177,10 @@ export function DockerPane(): React.JSX.Element {
       {/* Connection list */}
       {userConnections.length === 0 && !showForm ? (
         <div className="flex items-center justify-center rounded-lg border border-dashed border-border/60 bg-card/30 px-4 py-5 text-sm text-muted-foreground">
-          {translate('auto.components.settings.DockerPane.62a42ba95e', 'No connections configured.')}
+          {translate(
+            'auto.components.settings.DockerPane.62a42ba95e',
+            'No connections configured.'
+          )}
         </div>
       ) : (
         <div className="space-y-2">
@@ -306,17 +334,11 @@ export function DockerPane(): React.JSX.Element {
           ) : null}
 
           {/* Inline error */}
-          {formError ? (
-            <p className={cn('text-xs', 'text-destructive')}>{formError}</p>
-          ) : null}
+          {formError ? <p className={cn('text-xs', 'text-destructive')}>{formError}</p> : null}
 
           {/* Form actions */}
           <div className="flex items-center gap-1.5">
-            <Button
-              size="xs"
-              disabled={saving}
-              onClick={() => void handleSave()}
-            >
+            <Button size="xs" disabled={saving} onClick={() => void handleSave()}>
               {translate('auto.components.settings.DockerPane.64ae773bd2', 'Save')}
             </Button>
             <Button variant="ghost" size="xs" onClick={cancelForm}>
@@ -330,7 +352,9 @@ export function DockerPane(): React.JSX.Element {
       <DockerConfirmDialog
         open={removeTarget !== null}
         onOpenChange={(open) => {
-          if (!open) setRemoveTarget(null)
+          if (!open) {
+            setRemoveTarget(null)
+          }
         }}
         title={translate(
           'auto.components.settings.DockerPane.7b01b87358',

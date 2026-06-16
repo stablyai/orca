@@ -7972,7 +7972,11 @@
           "ab331bd060": "Cancel",
           "7b01b87358": "Remove Docker connection",
           "a09ce2c718": "This will remove the connection \"{{value0}}\".",
-          "78a9fd8cf7": "Remove connection"
+          "78a9fd8cf7": "Remove connection",
+          "98f7505da3": "A label is required.",
+          "fa6dd8e4bb": "Select an SSH host.",
+          "443f60f98d": "A TCP host is required.",
+          "b3d4e078cf": "A valid TCP port is required."
         },
         "docker": {
           "search": {

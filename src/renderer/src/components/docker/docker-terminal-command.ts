@@ -13,17 +13,22 @@ export function buildDockerTerminalCommand(
   conn: DockerConnection,
   kind: DockerTerminalKind,
   containerId: string,
-  dockerBinary = 'docker'
+  dockerBinary = 'docker',
+  clearScreen = true
 ): { command: string; connectionId: string | null } {
+  if (conn.kind === 'tcp' && !conn.tcp) {
+    throw new Error('TCP Docker connection is missing host/port configuration')
+  }
   const base =
     conn.kind === 'tcp' && conn.tcp
       ? `${dockerBinary} -H tcp://${conn.tcp.host}:${conn.tcp.port}`
       : dockerBinary
   const inner =
     kind === 'logs' ? `logs -f --tail 1000 ${containerId}` : `exec -it ${containerId} sh`
-  // clear wipes the host shell's echoed prompt/command line before docker takes over (POSIX/PowerShell; cmd.exe would need cls).
+  // clear is only emitted when the host shell supports it (POSIX/PowerShell); callers pass clearScreen:false on Windows.
+  const prefix = clearScreen ? 'clear && ' : ''
   return {
-    command: `clear && ${base} ${inner}`,
+    command: `${prefix}${base} ${inner}`,
     connectionId: conn.kind === 'ssh' ? (conn.sshTargetId ?? null) : null
   }
 }

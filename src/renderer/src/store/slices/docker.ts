@@ -72,6 +72,10 @@ export const createDockerSlice: StateCreator<AppState, [], [], DockerSlice> = (s
   setActiveDockerConnection: async (connectionId) => {
     set({ activeConnectionId: connectionId, selectedResource: null })
     const ping = await window.api.docker.pingConnection({ connectionId })
+    // Bail if a newer connection switch won while the ping was in flight.
+    if (get().activeConnectionId !== connectionId) {
+      return
+    }
     set({ dockerConnectionStatus: ping.status, dockerConnectionError: ping.error ?? null })
     if (ping.status === 'reachable') {
       await get().refreshDockerContainers()
@@ -82,6 +86,10 @@ export const createDockerSlice: StateCreator<AppState, [], [], DockerSlice> = (s
     const connectionId = get().activeConnectionId
     try {
       const containers = await window.api.docker.listContainers({ connectionId })
+      // Bail if the active connection changed while the list request was in flight.
+      if (get().activeConnectionId !== connectionId) {
+        return
+      }
       set((s) => ({
         containersByConnection: { ...s.containersByConnection, [connectionId]: containers },
         dockerConnectionStatus: 'reachable',
@@ -159,6 +167,10 @@ export const createDockerSlice: StateCreator<AppState, [], [], DockerSlice> = (s
         window.api.docker.listVolumes({ connectionId }),
         window.api.docker.listNetworks({ connectionId })
       ])
+      // Bail if the active connection changed while the resource lists were in flight.
+      if (get().activeConnectionId !== connectionId) {
+        return
+      }
       set((s) => ({
         imagesByConnection: { ...s.imagesByConnection, [connectionId]: images },
         volumesByConnection: { ...s.volumesByConnection, [connectionId]: volumes },
@@ -176,20 +188,21 @@ export const createDockerSlice: StateCreator<AppState, [], [], DockerSlice> = (s
     if (get().selectedResource?.kind === kind && get().selectedResource?.id === id) {
       set({ selectedResource: null })
     }
-    if (kind === 'container') await get().refreshDockerContainers()
-    else await get().refreshDockerResources()
+    await (kind === 'container' ? get().refreshDockerContainers() : get().refreshDockerResources())
   },
 
   pruneDockerResources: async (kind) => {
     const connectionId = get().activeConnectionId
     await window.api.docker.resourcePrune({ connectionId, kind })
-    if (kind === 'container') await get().refreshDockerContainers()
-    else await get().refreshDockerResources()
+    await (kind === 'container' ? get().refreshDockerContainers() : get().refreshDockerResources())
   },
 
   setDockerContainerActiveTab: (containerId, tab) =>
     set((s) => {
-      const prev = s.dockerContainerTabState[containerId] ?? { terminalIds: [], activeTab: 'details' }
+      const prev = s.dockerContainerTabState[containerId] ?? {
+        terminalIds: [],
+        activeTab: 'details'
+      }
       return {
         dockerContainerTabState: {
           ...s.dockerContainerTabState,
@@ -200,7 +213,10 @@ export const createDockerSlice: StateCreator<AppState, [], [], DockerSlice> = (s
 
   addDockerContainerTerminal: (containerId) =>
     set((s) => {
-      const prev = s.dockerContainerTabState[containerId] ?? { terminalIds: [], activeTab: 'details' }
+      const prev = s.dockerContainerTabState[containerId] ?? {
+        terminalIds: [],
+        activeTab: 'details'
+      }
       const nextTerminalId = (prev.terminalIds.length > 0 ? Math.max(...prev.terminalIds) : 0) + 1
       return {
         dockerContainerTabState: {
@@ -216,7 +232,9 @@ export const createDockerSlice: StateCreator<AppState, [], [], DockerSlice> = (s
   closeDockerContainerTerminal: (containerId, terminalId) =>
     set((s) => {
       const prev = s.dockerContainerTabState[containerId]
-      if (!prev) return {}
+      if (!prev) {
+        return {}
+      }
       const remaining = prev.terminalIds.filter((t) => t !== terminalId)
       let activeTab = prev.activeTab
       if (activeTab === `terminal-${terminalId}`) {
@@ -234,5 +252,5 @@ export const createDockerSlice: StateCreator<AppState, [], [], DockerSlice> = (s
           [containerId]: { terminalIds: remaining, activeTab }
         }
       }
-    }),
+    })
 })

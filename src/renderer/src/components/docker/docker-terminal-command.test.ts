@@ -3,7 +3,12 @@ import { buildDockerTerminalCommand } from './docker-terminal-command'
 import type { DockerConnection } from '../../../../shared/docker-types'
 
 const LOCAL: DockerConnection = { id: 'local', label: 'Local', kind: 'local' }
-const TCP: DockerConnection = { id: 't', label: 'CI', kind: 'tcp', tcp: { host: '10.0.0.5', port: 2376 } }
+const TCP: DockerConnection = {
+  id: 't',
+  label: 'CI',
+  kind: 'tcp',
+  tcp: { host: '10.0.0.5', port: 2376 }
+}
 const SSH: DockerConnection = { id: 's', label: 'Box', kind: 'ssh', sshTargetId: 'target-1' }
 
 describe('buildDockerTerminalCommand', () => {
@@ -33,5 +38,22 @@ describe('buildDockerTerminalCommand', () => {
       command: 'clear && docker exec -it abc sh',
       connectionId: 'target-1'
     })
+  })
+
+  it('omits the clear prefix when clearScreen is false', () => {
+    expect(buildDockerTerminalCommand(LOCAL, 'logs', 'abc', 'docker', false)).toEqual({
+      command: 'docker logs -f --tail 1000 abc',
+      connectionId: null
+    })
+  })
+
+  it('throws for a tcp connection missing host/port configuration', () => {
+    expect(() =>
+      buildDockerTerminalCommand(
+        { id: 't', label: 'CI', kind: 'tcp' } as DockerConnection,
+        'logs',
+        'abc'
+      )
+    ).toThrow('TCP Docker connection is missing host/port configuration')
   })
 })
