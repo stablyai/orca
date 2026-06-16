@@ -2190,6 +2190,11 @@ const api = {
     }> => ipcRenderer.invoke('emulator:frameStreamStart', args),
     stopFrameStream: (args: { streamId: string }): Promise<void> =>
       ipcRenderer.invoke('emulator:frameStreamStop', args),
+    saveScreenshot: (args: {
+      bytes: ArrayBuffer
+      deviceName?: string
+    }): Promise<{ canceled: true } | { canceled: false; destinationPath: string }> =>
+      ipcRenderer.invoke('emulator:saveScreenshot', args),
     onFrameStreamFrame: (
       callback: (data: { streamId: string; bytes: ArrayBuffer }) => void
     ): (() => void) => {

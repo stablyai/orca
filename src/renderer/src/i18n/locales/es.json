@@ -9793,7 +9793,11 @@
       "emulator": {
         "pane": {
           "EmulatorPane": {
-            "59b08fa031": "Ningún emulador conectado"
+            "59b08fa031": "Ningún emulador conectado",
+            "5d5fd13391": "No emulator frame is available yet.",
+            "360a8a4e68": "Screenshot saved",
+            "1a3df04ae1": "Open",
+            "bef0bb890f": "Failed to save screenshot."
           },
           "emulator": {
             "device": {
@@ -9810,7 +9814,8 @@
                 "6bd8dff42a": "Girar",
                 "3d836b879c": "Elige emulador",
                 "81b3571a07": "Conectar",
-                "868c0f2938": "Laboral…"
+                "868c0f2938": "Laboral…",
+                "1e5dfdd399": "Save screenshot"
               }
             },
             "screen": {

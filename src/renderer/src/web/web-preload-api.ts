@@ -1616,6 +1616,7 @@ function createEmulatorApi(): NonNullable<Partial<PreloadApi>['emulator']> {
     onAutoAttach: () => noopUnsubscribe,
     startFrameStream: () => Promise.reject(new Error('Mobile emulator is unavailable on web.')),
     stopFrameStream: () => Promise.resolve(),
+    saveScreenshot: () => Promise.reject(new Error('Mobile emulator is unavailable on web.')),
     onFrameStreamFrame: () => noopUnsubscribe,
     onFrameStreamError: () => noopUnsubscribe
   } as unknown as NonNullable<Partial<PreloadApi>['emulator']>

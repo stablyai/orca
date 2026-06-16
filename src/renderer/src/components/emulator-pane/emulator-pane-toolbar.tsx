@@ -1,4 +1,4 @@
-import { Home, Power, RotateCw, Smartphone } from 'lucide-react'
+import { Camera, Home, Power, RotateCw, Smartphone } from 'lucide-react'
 import {
   Select,
   SelectContent,
@@ -20,9 +20,11 @@ type EmulatorPaneToolbarProps = {
   selectedUdid: string | null
   onSelectDevice: (udid: string) => void
   onAttach: () => void
+  onSaveScreenshot: () => void
   onShutdown: () => void
   onHome: () => void
   onRotate: () => void
+  canSaveScreenshot: boolean
 }
 
 export function EmulatorPaneToolbar({
@@ -33,9 +35,11 @@ export function EmulatorPaneToolbar({
   selectedUdid,
   onSelectDevice,
   onAttach,
+  onSaveScreenshot,
   onShutdown,
   onHome,
-  onRotate
+  onRotate,
+  canSaveScreenshot
 }: EmulatorPaneToolbarProps) {
   // Why: the toolbar chip describes Orca's preview/control stream, not the
   // lower-level CoreSimulator boot state.
@@ -80,6 +84,30 @@ export function EmulatorPaneToolbar({
           ))}
         </SelectContent>
       </Select>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            type="button"
+            variant="secondary"
+            size="icon-xs"
+            className="size-7"
+            onClick={onSaveScreenshot}
+            disabled={!canSaveScreenshot || loading}
+            aria-label={translate(
+              'auto.components.emulator.pane.emulator.pane.toolbar.1e5dfdd399',
+              'Save screenshot'
+            )}
+          >
+            <Camera className="size-3.5" />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent side="bottom" sideOffset={4}>
+          {translate(
+            'auto.components.emulator.pane.emulator.pane.toolbar.1e5dfdd399',
+            'Save screenshot'
+          )}
+        </TooltipContent>
+      </Tooltip>
       <Tooltip>
         <TooltipTrigger asChild>
           <Button

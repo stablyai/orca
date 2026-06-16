@@ -44,6 +44,7 @@ import { registerShellHandlers } from './shell'
 import { registerPetHandlers } from './pet'
 import { registerUIHandlers } from './ui'
 import { registerEmulatorFrameStreamHandlers } from './emulator-frame-stream'
+import { registerEmulatorScreenshotHandlers } from './emulator-screenshot'
 import { registerSpeechHandlers } from './speech'
 import { registerCodexAccountHandlers } from './codex-accounts'
 import { registerAgentHookHandlers } from './agent-hooks'
@@ -146,6 +147,7 @@ export function registerCoreHandlers(
   registerSessionHandlers(store)
   registerUIHandlers(store)
   registerEmulatorFrameStreamHandlers()
+  registerEmulatorScreenshotHandlers()
   registerWorkspaceSpaceHandlers(store)
   registerWorkspacePortHandlers(store)
   if (commitMessageAgentEnv) {

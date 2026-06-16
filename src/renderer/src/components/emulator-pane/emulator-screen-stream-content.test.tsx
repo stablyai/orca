@@ -90,11 +90,12 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-async function renderStream(streamKey = 'abc'): Promise<void> {
+async function renderStream(streamKey = 'abc', onFrameBytes = vi.fn()): Promise<void> {
   await act(async () => {
     root.render(
       <EmulatorScreenStreamContent
         loading={false}
+        onFrameBytes={onFrameBytes}
         onStreamError={vi.fn()}
         onStreamSize={vi.fn()}
         previewUrl="http://127.0.0.1:3100/stream.mjpeg"
@@ -108,7 +109,8 @@ async function renderStream(streamKey = 'abc'): Promise<void> {
 
 describe('EmulatorScreenStreamContent', () => {
   it('renders IPC-delivered frames as blob URLs instead of loading the MJPEG URL directly', async () => {
-    await renderStream()
+    const onFrameBytes = vi.fn()
+    await renderStream('abc', onFrameBytes)
 
     expect(startFrameStream).toHaveBeenCalledWith({
       streamUrl: 'http://127.0.0.1:3100/stream.mjpeg',
@@ -116,12 +118,14 @@ describe('EmulatorScreenStreamContent', () => {
     })
     expect(container.querySelector('img')).toBeNull()
 
+    const frameBytes = new Uint8Array([1, 2, 3]).buffer
     await act(async () => {
-      frameListeners[0]?.({ streamId: 'stream-1', bytes: new Uint8Array([1, 2, 3]).buffer })
+      frameListeners[0]?.({ streamId: 'stream-1', bytes: frameBytes })
     })
 
     const img = container.querySelector('img')
     expect(img?.getAttribute('src')).toBe('blob:emulator-frame-1')
+    expect(onFrameBytes).toHaveBeenLastCalledWith(frameBytes)
   })
 
   it('clears the previous frame while a new stream key is connecting', async () => {

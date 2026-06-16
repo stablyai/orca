@@ -5,6 +5,7 @@ const FIRST_FRAME_TIMEOUT_MS = 6_000
 
 type EmulatorFrameStreamState = {
   error: string | null
+  frameBytes: ArrayBuffer | null
   frameUrl: string | null
   streamIdentity: string | null
 }
@@ -29,6 +30,7 @@ export function useEmulatorFrameStream(
   const streamIdentity = getFrameStreamIdentity(streamUrl, streamKey, enabled)
   const [state, setState] = useState<EmulatorFrameStreamState>({
     error: null,
+    frameBytes: null,
     frameUrl: null,
     streamIdentity: null
   })
@@ -37,7 +39,7 @@ export function useEmulatorFrameStream(
   useEffect(() => {
     const emulatorApi = window.api?.emulator
     if (!enabled || !streamUrl || !emulatorApi?.startFrameStream) {
-      setState({ error: null, frameUrl: null, streamIdentity: null })
+      setState({ error: null, frameBytes: null, frameUrl: null, streamIdentity: null })
       return
     }
 
@@ -79,7 +81,7 @@ export function useEmulatorFrameStream(
       const nextFrameUrl = createFrameUrl(bytes)
       const previousFrameUrl = currentFrameUrlRef.current
       currentFrameUrlRef.current = nextFrameUrl
-      setState({ error: null, frameUrl: nextFrameUrl, streamIdentity })
+      setState({ error: null, frameBytes: bytes, frameUrl: nextFrameUrl, streamIdentity })
       if (previousFrameUrl) {
         URL.revokeObjectURL(previousFrameUrl)
       }
@@ -97,7 +99,7 @@ export function useEmulatorFrameStream(
 
     // Why: a device switch gets a fresh stream identity, so stale frames from
     // the previous device are hidden while the new MJPEG stream starts.
-    setState({ error: null, frameUrl: null, streamIdentity })
+    setState({ error: null, frameBytes: null, frameUrl: null, streamIdentity })
     void emulatorApi
       .startFrameStream({ streamUrl, streamKey })
       .then(({ streamId }) => {
@@ -114,6 +116,7 @@ export function useEmulatorFrameStream(
         clearFirstFrameTimer()
         setState({
           error: error instanceof Error ? error.message : 'Stream disconnected',
+          frameBytes: null,
           frameUrl: null,
           streamIdentity
         })
@@ -132,7 +135,7 @@ export function useEmulatorFrameStream(
   }, [enabled, streamIdentity, streamKey, streamUrl])
 
   if (state.streamIdentity !== streamIdentity) {
-    return { error: null, frameUrl: null }
+    return { error: null, frameBytes: null, frameUrl: null }
   }
-  return { error: state.error, frameUrl: state.frameUrl }
+  return { error: state.error, frameBytes: state.frameBytes, frameUrl: state.frameUrl }
 }

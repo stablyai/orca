@@ -39,6 +39,7 @@ type EmulatorDeviceFrameProps = {
   deviceName?: string
   loading: boolean
   isLive: boolean
+  onFrameBytes?: (bytes: ArrayBuffer | null) => void
   onTap: (x: number, y: number) => void
   onGesture: (points: EmulatorGesturePoint[]) => void
 }
@@ -53,11 +54,7 @@ type PendingWheelGesture = {
   timerId: number | null
 }
 
-type ScreenCoordinateEvent = {
-  clientX: number
-  clientY: number
-  currentTarget: HTMLDivElement
-}
+type ScreenCoordinateEvent = PointerEvent<HTMLDivElement>
 
 export function EmulatorDeviceFrame({
   previewUrl,
@@ -66,6 +63,7 @@ export function EmulatorDeviceFrame({
   deviceName,
   loading,
   isLive,
+  onFrameBytes,
   onTap,
   onGesture
 }: EmulatorDeviceFrameProps) {
@@ -404,6 +402,7 @@ export function EmulatorDeviceFrame({
                 chrome doubles up with iOS's real status bar and makes bezels lie. */}
             <EmulatorScreenStreamContent
               loading={loading}
+              onFrameBytes={onFrameBytes}
               onStreamError={handleStreamError}
               onStreamSize={handleStreamSize}
               previewUrl={previewUrl}

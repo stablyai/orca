@@ -9793,7 +9793,11 @@
       "emulator": {
         "pane": {
           "EmulatorPane": {
-            "59b08fa031": "연결된 에뮬레이터가 없습니다."
+            "59b08fa031": "연결된 에뮬레이터가 없습니다.",
+            "5d5fd13391": "No emulator frame is available yet.",
+            "360a8a4e68": "Screenshot saved",
+            "1a3df04ae1": "Open",
+            "bef0bb890f": "Failed to save screenshot."
           },
           "emulator": {
             "device": {
@@ -9810,7 +9814,8 @@
                 "6bd8dff42a": "회전",
                 "3d836b879c": "에뮬레이터 선택",
                 "81b3571a07": "연결",
-                "868c0f2938": "일하고 있는…"
+                "868c0f2938": "일하고 있는…",
+                "1e5dfdd399": "Save screenshot"
               }
             },
             "screen": {

@@ -470,6 +470,10 @@ export type EmulatorApi = {
     streamId: string
   }>
   stopFrameStream: (args: { streamId: string }) => Promise<void>
+  saveScreenshot: (args: {
+    bytes: ArrayBuffer
+    deviceName?: string
+  }) => Promise<{ canceled: true } | { canceled: false; destinationPath: string }>
   onFrameStreamFrame: (
     callback: (data: { streamId: string; bytes: ArrayBuffer }) => void
   ) => () => void

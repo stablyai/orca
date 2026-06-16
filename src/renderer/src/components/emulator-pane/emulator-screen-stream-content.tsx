@@ -10,6 +10,7 @@ type StreamSize = {
 
 type EmulatorScreenStreamContentProps = {
   loading: boolean
+  onFrameBytes?: (bytes: ArrayBuffer | null) => void
   onStreamError: () => void
   onStreamSize: (size: StreamSize) => void
   previewUrl?: string
@@ -20,6 +21,7 @@ type EmulatorScreenStreamContentProps = {
 
 export function EmulatorScreenStreamContent({
   loading,
+  onFrameBytes,
   onStreamError,
   onStreamSize,
   previewUrl,
@@ -38,6 +40,10 @@ export function EmulatorScreenStreamContent({
       onStreamError()
     }
   }, [frameStream.error, onStreamError])
+
+  useEffect(() => {
+    onFrameBytes?.(frameStream.frameBytes)
+  }, [frameStream.frameBytes, onFrameBytes])
 
   if (showStream && frameStream.frameUrl) {
     return (
