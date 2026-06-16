@@ -35,6 +35,7 @@ import { openProjectDefaultCheckout } from '../sidebar/project-added-default-che
 import { translate } from '@/i18n/i18n'
 import { resolveAgentPermissionModeSummary } from '../../../../shared/tui-agent-permissions'
 import { isWindowsUserAgent } from '@/components/terminal-pane/pane-helpers'
+import { buildWindowsTerminalSnapshotPayload } from './windows-terminal-onboarding-telemetry'
 
 export { STEPS } from './use-onboarding-flow-types'
 export type { StepId, StepNumber } from './use-onboarding-flow-types'
@@ -665,12 +666,24 @@ export function useOnboardingFlow(
       if (currentStep.id === 'integrations') {
         trackTaskSourcesSnapshot('continue', durationMs, advancedVia)
       }
+      if (currentStep.id === 'windows_terminal') {
+        track(
+          'onboarding_windows_terminal_snapshot',
+          buildWindowsTerminalSnapshotPayload({
+            settings,
+            exitAction: 'continue',
+            durationMs,
+            advancedVia
+          })
+        )
+      }
     },
     [
       consumeStepDurationMs,
       currentStep.id,
       currentStep.stepNumber,
       currentStep.valueKind,
+      settings,
       trackTaskSourcesSnapshot
     ]
   )
@@ -1163,6 +1176,17 @@ export function useOnboardingFlow(
       })
       if (stepId === 'integrations') {
         trackTaskSourcesSnapshot('skip_to_project_setup', durationMs, 'button')
+      }
+      if (stepId === 'windows_terminal') {
+        track(
+          'onboarding_windows_terminal_snapshot',
+          buildWindowsTerminalSnapshotPayload({
+            settings,
+            exitAction: 'skip_to_project_setup',
+            durationMs,
+            advancedVia: 'button'
+          })
+        )
       }
       openModal('add-repo')
     } finally {

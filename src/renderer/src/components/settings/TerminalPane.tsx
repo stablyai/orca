@@ -36,6 +36,7 @@ import { ManageSessionsSection } from './ManageSessionsSection'
 import { OSC52_CLIPBOARD_SETTING_ID } from '../terminal-pane/osc52-clipboard-setting-anchor'
 import { WINDOWS_GIT_BASH_SHELL } from '../../../../shared/windows-terminal-shell'
 import { translate } from '@/i18n/i18n'
+import { ShellIcon } from '../tab-bar/shell-icons'
 
 const EMPTY_WSL_DISTROS: string[] = []
 
@@ -56,6 +57,15 @@ type TerminalPaneProps = {
   gitBashAvailable?: boolean
   /** Whether the active terminal host is Windows, even if the client is not. */
   isWindowsTerminalHost?: boolean
+}
+
+function windowsShellLabel(shell: string, label: string): React.JSX.Element {
+  return (
+    <span className="inline-flex items-center justify-center gap-1.5">
+      <ShellIcon shell={shell} size={12} />
+      <span>{label}</span>
+    </span>
+  )
 }
 
 export function TerminalPane({
@@ -147,14 +157,25 @@ export function TerminalPane({
                   options={[
                     {
                       value: 'powershell.exe',
-                      label: translate(
+                      label: windowsShellLabel(
+                        'powershell.exe',
+                        translate('auto.components.settings.TerminalPane.eb7fc4d98a', 'PowerShell')
+                      ),
+                      ariaLabel: translate(
                         'auto.components.settings.TerminalPane.eb7fc4d98a',
                         'PowerShell'
                       )
                     },
                     {
                       value: 'cmd.exe',
-                      label: translate(
+                      label: windowsShellLabel(
+                        'cmd.exe',
+                        translate(
+                          'auto.components.settings.TerminalPane.0f1b8669e6',
+                          'Command Prompt'
+                        )
+                      ),
+                      ariaLabel: translate(
                         'auto.components.settings.TerminalPane.0f1b8669e6',
                         'Command Prompt'
                       )
@@ -163,7 +184,14 @@ export function TerminalPane({
                       ? [
                           {
                             value: WINDOWS_GIT_BASH_SHELL,
-                            label: translate(
+                            label: windowsShellLabel(
+                              WINDOWS_GIT_BASH_SHELL,
+                              translate(
+                                'auto.components.settings.TerminalPane.f61ac77f16',
+                                'Git Bash'
+                              )
+                            ),
+                            ariaLabel: translate(
                               'auto.components.settings.TerminalPane.f61ac77f16',
                               'Git Bash'
                             ),
@@ -175,7 +203,11 @@ export function TerminalPane({
                       ? [
                           {
                             value: 'wsl.exe',
-                            label: translate(
+                            label: windowsShellLabel(
+                              'wsl.exe',
+                              translate('auto.components.settings.TerminalPane.b637dd57a7', 'WSL')
+                            ),
+                            ariaLabel: translate(
                               'auto.components.settings.TerminalPane.b637dd57a7',
                               'WSL'
                             )

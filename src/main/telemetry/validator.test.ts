@@ -430,6 +430,26 @@ describe('validate', () => {
     expect(result.ok).toBe(false)
   })
 
+  it('accepts onboarding_windows_terminal_snapshot with bounded choices', () => {
+    const result = validate('onboarding_windows_terminal_snapshot', {
+      default_shell: 'git_bash',
+      right_click_behavior: 'menu',
+      exit_action: 'continue',
+      duration_ms: 1200,
+      advanced_via: 'keyboard'
+    })
+    expect(result.ok).toBe(true)
+  })
+
+  it('rejects onboarding_windows_terminal_snapshot with raw shell values', () => {
+    const result = validate('onboarding_windows_terminal_snapshot', {
+      default_shell: 'C:\\Program Files\\Git\\bin\\bash.exe',
+      right_click_behavior: 'menu',
+      exit_action: 'continue'
+    } as never)
+    expect(result.ok).toBe(false)
+  })
+
   it('accepts onboarding_started with cohort upgrade_backfill', () => {
     const result = validate('onboarding_started', { cohort: 'upgrade_backfill' })
     expect(result.ok).toBe(true)

@@ -212,6 +212,21 @@ function findAnchorByText(node: unknown, text: string): ReactElementLike | null 
   return null
 }
 
+function hasShellIconFor(node: unknown, shell: string): boolean {
+  if (node == null || typeof node === 'string' || typeof node === 'number') {
+    return false
+  }
+  if (Array.isArray(node)) {
+    return node.some((child) => hasShellIconFor(child, shell))
+  }
+  const el = node as ReactElementLike
+  const typeName = typeof el.type === 'function' ? el.type.name : String(el.type)
+  if (typeName === 'ShellIcon' && el.props.shell === shell) {
+    return true
+  }
+  return getPropNodes(el).some((child) => hasShellIconFor(child, shell))
+}
+
 describe('TerminalPane PowerShell version setting', () => {
   beforeEach(() => {
     mockStateValues.length = 0
@@ -346,6 +361,7 @@ describe('TerminalPane PowerShell version setting', () => {
     })
 
     expect(collectText(element)).toContain('Git Bash')
+    expect(hasShellIconFor(element, 'git-bash')).toBe(true)
   })
 
   it('hides Git Bash as a Windows default shell option when not detected', () => {

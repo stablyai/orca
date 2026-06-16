@@ -732,6 +732,15 @@ const onboardingTaskSourcesLinearStatusSchema = z.enum([
   'unknown'
 ])
 const onboardingTaskSourcesExitActionSchema = z.enum(['continue', 'skip_to_project_setup'])
+const onboardingWindowsTerminalShellSchema = z.enum([
+  'powershell',
+  'command_prompt',
+  'git_bash',
+  'wsl',
+  'other'
+])
+const onboardingWindowsTerminalRightClickSchema = z.enum(['paste', 'menu'])
+const onboardingWindowsTerminalExitActionSchema = z.enum(['continue', 'skip_to_project_setup'])
 // `dismissed` from `OnboardingChecklistState` is intentionally excluded —
 // it is a UI panel-visibility flag, not an activation event, so it never
 // fires `activation_checklist_item_completed`. Keep this list in sync with
@@ -1013,9 +1022,17 @@ const onboardingTaskSourcesSnapshotSchema = z
     cohort: cohortSchema
   })
   .strict()
-// Why: no `is_git_repo` here — the signal moved to `repo_added.is_git_repo`.
-// Project selection left onboarding in 1.4.46, so this event now fires before
-// any repo is chosen; the old field was always `false` and meaningless.
+const onboardingWindowsTerminalSnapshotSchema = z
+  .object({
+    default_shell: onboardingWindowsTerminalShellSchema,
+    right_click_behavior: onboardingWindowsTerminalRightClickSchema,
+    exit_action: onboardingWindowsTerminalExitActionSchema,
+    duration_ms: z.number().int().nonnegative().optional(),
+    advanced_via: advancedViaSchema,
+    cohort: cohortSchema
+  })
+  .strict()
+// Why: no `is_git_repo` here; the signal moved to `repo_added.is_git_repo`.
 const onboardingCompletedSchema = z
   .object({
     path: onboardingPathSchema,
@@ -1367,6 +1384,7 @@ export const eventSchemas = {
   onboarding_step4_path_clicked: onboardingStep4PathClickedSchema,
   onboarding_step4_path_failed: onboardingStep4PathFailedSchema,
   onboarding_task_sources_snapshot: onboardingTaskSourcesSnapshotSchema,
+  onboarding_windows_terminal_snapshot: onboardingWindowsTerminalSnapshotSchema,
   onboarding_completed: onboardingCompletedSchema,
   onboarding_dismissed: onboardingDismissedSchema,
   onboarding_agent_picked: onboardingAgentPickedSchema,
@@ -1515,6 +1533,7 @@ type _OnboardingCohortRoster =
   | 'onboarding_step4_path_clicked'
   | 'onboarding_step4_path_failed'
   | 'onboarding_task_sources_snapshot'
+  | 'onboarding_windows_terminal_snapshot'
   | 'onboarding_completed'
   | 'onboarding_dismissed'
   | 'onboarding_agent_picked'
