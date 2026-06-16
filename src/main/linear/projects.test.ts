@@ -80,6 +80,22 @@ function projectIssuesConnectionResponse(
   }
 }
 
+function projectTeamsConnectionResponse(
+  teamIds: string[],
+  pageInfo: { hasNextPage: boolean; endCursor?: string | null } = { hasNextPage: false }
+) {
+  return {
+    data: {
+      project: {
+        teams: {
+          nodes: teamIds.map((teamId) => ({ id: teamId, name: teamId, key: teamId })),
+          pageInfo
+        }
+      }
+    }
+  }
+}
+
 function customViewsResponse(viewId: string) {
   return {
     data: {
@@ -220,6 +236,30 @@ describe('Linear project queries', () => {
       id: 'project-1',
       first: 20,
       after: 'project-cursor-100'
+    })
+  })
+
+  it('loads project teams above Linear connection page size', async () => {
+    rawRequest
+      .mockResolvedValueOnce(
+        projectTeamsConnectionResponse(
+          Array.from({ length: 50 }, (_, index) => `TEAM-${index + 1}`),
+          { hasNextPage: true, endCursor: 'team-cursor-50' }
+        )
+      )
+      .mockResolvedValueOnce(projectTeamsConnectionResponse(['TEAM-51'], { hasNextPage: false }))
+    const { listProjectTeams } = await import('./projects')
+
+    const result = await listProjectTeams('project-1', 'workspace-1', true)
+
+    expect(result).toHaveLength(51)
+    expect(result.at(-1)).toMatchObject({ id: 'TEAM-51', key: 'TEAM-51' })
+    expect(rawRequest.mock.calls[0]?.[1]).toMatchObject({ id: 'project-1', first: 50 })
+    expect(rawRequest.mock.calls[0]?.[1]).not.toHaveProperty('after')
+    expect(rawRequest.mock.calls[1]?.[1]).toMatchObject({
+      id: 'project-1',
+      first: 50,
+      after: 'team-cursor-50'
     })
   })
 

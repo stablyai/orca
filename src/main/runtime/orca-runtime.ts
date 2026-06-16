@@ -388,6 +388,7 @@ import {
   listCustomViewProjects as listLinearCustomViewProjects,
   listCustomViews as listLinearCustomViews,
   listProjectIssues as listLinearProjectIssues,
+  listProjectTeams as listLinearProjectTeams,
   listProjects as listLinearProjects,
   type LinearProjectCreateInput
 } from '../linear/projects'
@@ -15337,20 +15338,28 @@ export class OrcaRuntimeService {
   }): Promise<LinearProjectListResult> {
     const limit = clampLinearSearchLimit(params.limit)
     try {
-      const result = await listLinearProjects(params.query, limit, params.workspaceId, true)
+      const result = await this.linearListProjects(params.query, limit, params.workspaceId, true)
+      const projects = result.items.slice(0, limit).map((project) => ({
+        id: project.id,
+        name: project.name,
+        ...(project.url ? { url: project.url } : {}),
+        ...(project.workspaceId ? { workspaceId: project.workspaceId } : {}),
+        ...(project.workspaceName ? { workspaceName: project.workspaceName } : {}),
+        ...(project.teams ? { teams: project.teams } : {})
+      }))
       const workspaceErrors = (result.errors ?? []).map((error) => ({
         workspace: { id: error.workspaceId, name: error.workspaceName ?? error.workspaceId },
         code: this.linearWorkspaceErrorCode(error.type),
         message: sanitizeLinearErrorMessage(error.message)
       }))
       return {
-        projects: result.items,
+        projects,
         meta: {
           query: params.query,
           workspaceId: params.workspaceId,
           limit,
-          returned: result.items.length,
-          hasMore: result.hasMore === true,
+          returned: projects.length,
+          hasMore: result.hasMore === true || result.items.length > limit,
           partial: workspaceErrors.length > 0,
           workspaceErrors
         }
@@ -16127,21 +16136,21 @@ export class OrcaRuntimeService {
       ? await this.readLinearProjectByIdForCreate(trimmed, team.workspaceId)
       : null
     if (byId) {
-      this.assertLinearProjectIncludesTeam(byId, team.id, trimmed)
+      await this.assertLinearProjectIncludesTeam(byId, team.id, team.workspaceId, trimmed)
       return byId
     }
     const projects = await this.readLinearProjectsForCreate(trimmed, team.workspaceId)
     const normalized = trimmed.toLocaleLowerCase()
     const idMatch = projects.find((project) => project.id.toLocaleLowerCase() === normalized)
     if (idMatch) {
-      this.assertLinearProjectIncludesTeam(idMatch, team.id, trimmed)
+      await this.assertLinearProjectIncludesTeam(idMatch, team.id, team.workspaceId, trimmed)
       return idMatch
     }
     const nameMatches = projects.filter(
       (project) => project.name.trim().toLocaleLowerCase() === normalized
     )
     if (nameMatches.length === 1) {
-      this.assertLinearProjectIncludesTeam(nameMatches[0], team.id, trimmed)
+      await this.assertLinearProjectIncludesTeam(nameMatches[0], team.id, team.workspaceId, trimmed)
       return nameMatches[0]
     }
     throw linearError(
@@ -16182,19 +16191,31 @@ export class OrcaRuntimeService {
     }
   }
 
-  private assertLinearProjectIncludesTeam(
+  private async assertLinearProjectIncludesTeam(
     project: LinearProjectSummary,
     teamId: string,
+    workspaceId: string,
     input: string
-  ): void {
+  ): Promise<void> {
     if (project.teams?.some((team) => team.id === teamId)) {
+      return
+    }
+    let teams: NonNullable<LinearProjectSummary['teams']> = []
+    try {
+      // Why: summary reads cap project teams, so large cross-team projects need
+      // a paged membership check before we reject an otherwise valid create.
+      teams = await listLinearProjectTeams(project.id, workspaceId, true)
+    } catch (error) {
+      throw this.mapLinearReadFailure(error)
+    }
+    if (teams.some((team) => team.id === teamId)) {
       return
     }
     throw linearError(
       'linear_invalid_project',
       `Linear project "${input}" is not available to the target team.`,
       {
-        project: { id: project.id, name: project.name, teams: project.teams ?? [] },
+        project: { id: project.id, name: project.name, teams },
         nextSteps: ['Choose a project that includes the create target team, then retry by id.']
       }
     )

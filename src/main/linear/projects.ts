@@ -150,6 +150,12 @@ type ProjectIssueConnectionResponse = {
   } | null
 }
 
+type ProjectTeamsResponse = {
+  project?: {
+    teams?: LinearConnection<{ id: string; name?: string | null; key?: string | null }> | null
+  } | null
+}
+
 type CustomViewConnectionResponse = {
   customViews?: LinearConnection<LinearCustomViewNode> | null
   customView?:
@@ -358,6 +364,24 @@ const PROJECT_ISSUES_QUERY = `
       issues(first: $first, after: $after, orderBy: $orderBy) {
         nodes {
           ${ORCA_ISSUE_FIELDS}
+        }
+        pageInfo {
+          hasNextPage
+          endCursor
+        }
+      }
+    }
+  }
+`
+
+const PROJECT_TEAMS_QUERY = `
+  query OrcaLinearProjectTeams($id: String!, $first: Int, $after: String) {
+    project(id: $id) {
+      teams(first: $first, after: $after) {
+        nodes {
+          id
+          name
+          key
         }
         pageInfo {
           hasNextPage
@@ -956,6 +980,75 @@ export async function listProjectIssues(
         }
         return project.issues
       })
+    },
+    force
+  )
+}
+
+export async function listProjectTeams(
+  projectId: string,
+  workspaceId: LinearConcreteWorkspaceId,
+  force = false
+): Promise<NonNullable<LinearProjectSummary['teams']>> {
+  const id = projectId.trim()
+  if (!id) {
+    throw new Error('Project ID is required')
+  }
+  const concreteWorkspaceId = normalizeConcreteWorkspaceId(workspaceId)
+  const key = `listProjectTeams:${concreteWorkspaceId}:${id}`
+  return coalesce(
+    key,
+    async () => {
+      const entry = getClients(concreteWorkspaceId)[0]
+      if (!entry) {
+        return []
+      }
+      const teams: NonNullable<LinearProjectSummary['teams']> = []
+      let after: string | undefined
+      await acquire()
+      try {
+        while (true) {
+          const result = await entry.client.client.rawRequest<
+            ProjectTeamsResponse,
+            LinearRawVariables
+          >(PROJECT_TEAMS_QUERY, {
+            id,
+            first: 50,
+            ...(after ? { after } : {})
+          })
+          const project = result.data?.project
+          if (!project) {
+            throw new Error('Project was not found')
+          }
+          const connection = project.teams
+          const nodes = connection?.nodes ?? []
+          teams.push(
+            ...nodes.map((team) => ({
+              id: team.id,
+              name: team.name ?? '',
+              key: team.key ?? undefined
+            }))
+          )
+          const nextCursor = connection?.pageInfo?.endCursor ?? undefined
+          if (
+            !connection?.pageInfo?.hasNextPage ||
+            !nextCursor ||
+            nextCursor === after ||
+            nodes.length === 0
+          ) {
+            break
+          }
+          after = nextCursor
+        }
+        return teams
+      } catch (error) {
+        if (isAuthError(error)) {
+          clearToken(entry.workspace.id)
+        }
+        throw error
+      } finally {
+        release()
+      }
     },
     force
   )

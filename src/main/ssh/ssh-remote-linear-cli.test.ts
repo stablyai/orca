@@ -450,6 +450,23 @@ describe('runRemoteOrcaCli Linear commands', () => {
     })
   })
 
+  it('formats SSH Linear creates with project input in non-json mode', async () => {
+    const runtime = createRuntime()
+
+    const result = await runRemoteOrcaCli(runtime, {
+      argv: ['linear', 'create', '--title', 'Follow-up', '--team', 'ENG', '--project', 'project-1'],
+      cwd: '/home/alice/remote-repo',
+      env: {
+        ORCA_TERMINAL_HANDLE: 'term_ssh',
+        ORCA_WORKTREE_ID: 'repo::remote'
+      }
+    })
+
+    expect(result.exitCode).toBe(0)
+    expect(result.stdout).toBe('Created ENG-456 under ENG-123 in Launch: Follow-up.\n')
+    expect(result.stderr).toBe('')
+  })
+
   it('parses --me as a boolean for SSH Linear assignee writes', async () => {
     const runtime = createRuntime()
 

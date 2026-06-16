@@ -5,7 +5,6 @@ import type {
   LinearIssueListFilter,
   LinearIssueTaskUpdateRequest
 } from './linear-agent-access'
-import type { LinearProjectSummary } from './types'
 
 export type LinearIssueSummary = {
   id: string
@@ -217,8 +216,21 @@ export type LinearIssueListResult = {
   }
 }
 
+export type LinearAgentProjectSummary = {
+  id: string
+  name: string
+  url?: string
+  workspaceId?: string
+  workspaceName?: string
+  teams?: {
+    id: string
+    name: string
+    key?: string
+  }[]
+}
+
 export type LinearProjectListResult = {
-  projects: LinearProjectSummary[]
+  projects: LinearAgentProjectSummary[]
   meta: {
     query?: string
     workspaceId?: string | 'all'
