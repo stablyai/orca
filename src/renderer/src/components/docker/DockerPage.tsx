@@ -7,6 +7,7 @@ import { buildDockerConnectionList } from '@/store/slices/docker'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { cn } from '@/lib/utils'
 import { LOCAL_DOCKER_CONNECTION, LOCAL_DOCKER_CONNECTION_ID } from '../../../../shared/docker-types'
 import type { DockerResourceKind } from '../../../../shared/docker-types'
 import { translate } from '@/i18n/i18n'
@@ -16,6 +17,7 @@ import { DockerImageDetail } from './DockerImageDetail'
 import { DockerVolumeDetail } from './DockerVolumeDetail'
 import { DockerNetworkDetail } from './DockerNetworkDetail'
 import { DockerConfirmDialog } from './DockerConfirmDialog'
+import { useDockerTreeResize } from './use-docker-tree-resize'
 
 function kindLabel(kind: DockerResourceKind): string {
   // Why: literal-key translate calls so the catalog scanner can detect and sync these strings.
@@ -76,6 +78,8 @@ export default function DockerPage(): React.JSX.Element {
   const connections = buildDockerConnectionList(settings?.dockerConnections)
 
   const [pruneKind, setPruneKind] = useState<DockerResourceKind | null>(null)
+
+  const { width: treeWidth, isResizing, onResizeStart } = useDockerTreeResize()
 
   // Derive the selected container id from the unified resource selection.
   const selectedContainerId =
@@ -217,7 +221,10 @@ export default function DockerPage(): React.JSX.Element {
         </div>
       ) : null}
       <div className="flex min-h-0 flex-1">
-        <div className="w-72 shrink-0 overflow-y-auto border-r border-border scrollbar-sleek">
+        <div
+          className="relative shrink-0 overflow-y-auto border-r border-border scrollbar-sleek"
+          style={{ width: treeWidth }}
+        >
           <DockerResourceTree
             containers={containers}
             images={images}
@@ -227,8 +234,18 @@ export default function DockerPage(): React.JSX.Element {
             onSelect={selectResource}
             onPrune={(kind) => setPruneKind(kind)}
           />
+          {/* Why: matches the app's 4px pointer-event target on sidebar/kanban resize handles. */}
+          <div
+            role="separator"
+            aria-orientation="vertical"
+            onPointerDown={onResizeStart}
+            className={cn(
+              'absolute top-0 right-0 z-10 h-full w-1 cursor-col-resize transition-colors hover:bg-ring/20 active:bg-ring/30',
+              isResizing && 'bg-ring/30'
+            )}
+          />
         </div>
-        <div className="flex min-h-0 min-w-0 flex-1">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
           {renderDetail()}
         </div>
       </div>
