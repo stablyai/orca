@@ -9,6 +9,7 @@ import { DaemonClient } from './client'
 import { encodeNdjson } from './ndjson'
 import { PROTOCOL_VERSION, type DaemonRequest } from './types'
 import type { SubprocessHandle } from './session'
+import { getDaemonSocketPath } from './daemon-spawner'
 
 function createTestDir(): string {
   return mkdtempSync(join(tmpdir(), 'daemon-server-test-'))
@@ -66,7 +67,7 @@ describe('DaemonServer', () => {
 
   beforeEach(() => {
     dir = createTestDir()
-    socketPath = join(dir, 'test.sock')
+    socketPath = getDaemonSocketPath(dir)
     tokenPath = join(dir, 'test.token')
   })
 

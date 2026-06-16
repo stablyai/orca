@@ -19,6 +19,7 @@ import type { ClaudeManagedAccount, GlobalSettings } from '../../shared/types'
 import { isOauthTokenExpiring, refreshClaudeOauthCredentials } from './oauth-refresh'
 
 const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
+const hostPlatform = process.platform
 const testState = {
   userDataDir: '',
   fakeHomeDir: '',
@@ -653,7 +654,7 @@ describe('ClaudeRuntimeAuthService', () => {
   })
 
   it('falls back to atomic write when the unchanged check cannot read the target', async () => {
-    if (process.platform === 'win32') {
+    if (hostPlatform === 'win32') {
       return
     }
 
@@ -692,7 +693,7 @@ describe('ClaudeRuntimeAuthService', () => {
   })
 
   it('tightens credential file permissions when unchanged content is already present', async () => {
-    if (process.platform === 'win32') {
+    if (hostPlatform === 'win32') {
       return
     }
 
@@ -3444,6 +3445,77 @@ describe('ClaudeRuntimeAuthService', () => {
     expect(testState.legacyKeychainCredentials).toBe(staleManagedCredentials)
   })
 
+  it('uses account WSL runtime for untargeted Claude preparation instead of stale terminal WSL settings', async () => {
+    setPlatform('win32')
+    vi.doMock('../wsl', () => ({
+      getDefaultWslDistro: () => 'Ubuntu',
+      getWslHome: () => null,
+      toWindowsWslPath: (value: string) => value
+    }))
+    const ubuntuAuthPath = createManagedClaudeAuth(
+      testState.userDataDir,
+      'ubuntu-account',
+      createClaudeCredentialsJson('ubuntu@example.com', 'ubuntu-token')
+    )
+    const settings = createSettings({
+      localAccountRuntime: 'wsl',
+      localAccountWslDistro: 'Ubuntu',
+      terminalWindowsShell: 'wsl.exe',
+      terminalWindowsWslDistro: 'Debian',
+      claudeManagedAccounts: [
+        createClaudeAccount('ubuntu-account', ubuntuAuthPath, {
+          managedAuthRuntime: 'wsl',
+          wslDistro: 'Ubuntu',
+          wslLinuxAuthPath: '/home/alice/.local/share/orca/claude-accounts/ubuntu/auth'
+        })
+      ],
+      activeClaudeManagedAccountId: null,
+      activeClaudeManagedAccountIdsByRuntime: {
+        host: null,
+        wsl: { Ubuntu: 'ubuntu-account' }
+      }
+    })
+    const store = createStore(settings)
+
+    const { ClaudeRuntimeAuthService } = await import('./runtime-auth-service')
+    const service = new ClaudeRuntimeAuthService(store as never)
+    const preparation = await service.prepareForClaudeLaunch()
+
+    expect(preparation).toMatchObject({
+      runtime: 'wsl',
+      wslDistro: 'Ubuntu',
+      wslLinuxConfigDir: '/home/alice/.local/share/orca/claude-accounts/ubuntu/auth',
+      provenance: 'managed:ubuntu-account:wsl:Ubuntu',
+      stripAuthEnv: true
+    })
+  })
+
+  it('keeps untargeted Claude preparation on host when account runtime is host', async () => {
+    setPlatform('win32')
+    vi.doMock('../wsl', () => ({
+      getDefaultWslDistro: () => 'Ubuntu',
+      getWslHome: () => null,
+      toWindowsWslPath: (value: string) => value
+    }))
+    const settings = createSettings({
+      localAccountRuntime: 'host',
+      terminalWindowsShell: 'wsl.exe',
+      terminalWindowsWslDistro: 'Debian'
+    })
+    const store = createStore(settings)
+
+    const { ClaudeRuntimeAuthService } = await import('./runtime-auth-service')
+    const service = new ClaudeRuntimeAuthService(store as never)
+    const preparation = await service.prepareForClaudeLaunch()
+
+    expect(preparation).toMatchObject({
+      runtime: 'host',
+      wslDistro: null,
+      provenance: 'system',
+      stripAuthEnv: false
+    })
+  })
+
   it('clears a selected WSL managed account when its credentials are missing', async () => {
     const managedAuthPath = join(testState.userDataDir, 'claude-accounts', 'account-1', 'auth')
     mkdirSync(managedAuthPath, { recursive: true })
@@ -3482,7 +3554,8 @@ describe('ClaudeRuntimeAuthService', () => {
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
     vi.doMock('../wsl', () => ({
       getDefaultWslDistro: () => 'Ubuntu',
-      getWslHome: () => join(testState.userDataDir, 'wsl-home')
+      getWslHome: () => join(testState.userDataDir, 'wsl-home'),
+      toWindowsWslPath: (value: string) => value
     }))
     const ubuntuAuthPath = createManagedClaudeAuth(
       testState.userDataDir,

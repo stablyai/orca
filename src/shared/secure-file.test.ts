@@ -11,6 +11,8 @@ import {
   writeSecureFile
 } from './secure-file'
 
+const posixModeIt = process.platform === 'win32' ? it.skip : it
+
 vi.mock('child_process', () => ({
   execFileSync: vi.fn(),
   execFile: vi.fn()
@@ -333,7 +335,7 @@ describe('hardenSecurePath', () => {
     expect(getSyncPowerShellCalls()).toHaveLength(0)
   })
 
-  it('re-hardens a POSIX directory when its metadata changes after caching', () => {
+  posixModeIt('re-hardens a POSIX directory when its metadata changes after caching', () => {
     Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-secure-file-'))
     tempDirs.push(userDataPath)

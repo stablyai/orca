@@ -107,6 +107,48 @@ export function getRepositoryPaneSearchEntries(repo: Repo): SettingsSearchEntry[
           }
         ]
       : []),
+    ...(isFolder
+      ? []
+      : [
+          {
+            title: translate(
+              'auto.components.settings.repository.search.projectRuntime',
+              'Project Runtime'
+            ),
+            description: translate(
+              'auto.components.settings.repository.search.projectRuntimeDescription',
+              'Choose whether this project runs on Windows or WSL.'
+            ),
+            keywords: [
+              repo.displayName,
+              ...translateSearchKeyword(
+                'auto.components.settings.repository.search.runtime',
+                'runtime'
+              ),
+              ...translateSearchKeyword(
+                'auto.components.settings.repository.search.execution',
+                'execution'
+              ),
+              ...translateSearchKeyword(
+                'auto.components.settings.repository.search.windowsHost',
+                'windows host'
+              ),
+              ...translateSearchKeyword('auto.components.settings.repository.search.wsl', 'wsl'),
+              ...translateSearchKeyword(
+                'auto.components.settings.repository.search.distro',
+                'distro'
+              ),
+              ...translateSearchKeyword(
+                'auto.components.settings.repository.search.agentRuntime',
+                'agent runtime'
+              ),
+              ...translateSearchKeyword(
+                'auto.components.settings.repository.search.skillRuntime',
+                'skill runtime'
+              )
+            ]
+          }
+        ]),
     ...(isFolder ? [] : getRepositoryGitWorktreeSearchEntries(repo)),
     {
       title: translate('auto.components.settings.repository.search.c5266c2c9d', 'Remove Project'),

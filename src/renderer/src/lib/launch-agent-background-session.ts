@@ -1,9 +1,11 @@
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { buildAgentStartupPlan, type AgentStartupPlan } from '@/lib/tui-agent-startup'
+import { getAgentLaunchPlatformForRepo } from '@/lib/agent-launch-platform'
 import { CLIENT_PLATFORM } from '@/lib/new-workspace'
 import { track, tuiAgentToAgentKind } from '@/lib/telemetry'
 import { pasteDraftWhenAgentReady } from '@/lib/agent-paste-draft'
+import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import {
   resolveTuiAgentLaunchArgs,
   resolveTuiAgentLaunchEnv
@@ -73,6 +75,12 @@ export async function launchAgentBackgroundSession(
   const cmdOverrides = store.settings?.agentCmdOverrides ?? {}
   const agentArgs = resolveTuiAgentLaunchArgs(agent, store.settings?.agentDefaultArgs)
   const agentEnv = resolveTuiAgentLaunchEnv(agent, store.settings?.agentDefaultEnv)
+  const launchPlatform = repo
+    ? getAgentLaunchPlatformForRepo(
+        repo,
+        repo.connectionId ? undefined : getLocalProjectExecutionRuntimeContext(store, worktreeId)
+      )
+    : CLIENT_PLATFORM
   const trimmedPrompt = prompt?.trim() ?? ''
   const hasPrompt = trimmedPrompt.length > 0
   const isFollowupPath = TUI_AGENT_CONFIG[agent].promptInjectionMode === 'stdin-after-start'
@@ -86,7 +94,7 @@ export async function launchAgentBackgroundSession(
       cmdOverrides,
       agentArgs,
       agentEnv,
-      platform: CLIENT_PLATFORM,
+      platform: launchPlatform,
       allowEmptyPromptLaunch: true
     })
     pasteDraftAfterLaunch = trimmedPrompt
@@ -97,7 +105,7 @@ export async function launchAgentBackgroundSession(
       cmdOverrides,
       agentArgs,
       agentEnv,
-      platform: CLIENT_PLATFORM,
+      platform: launchPlatform,
       allowEmptyPromptLaunch: !hasPrompt
     })
   }

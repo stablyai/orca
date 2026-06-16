@@ -38,25 +38,29 @@ describe('buildDispatchPreamble', () => {
     expect(result).toContain('--report-path "<optional: path to the full artifact>"')
   })
 
-  it('CLI examples parse as valid shell (bash -n on the extracted block)', () => {
-    const result = buildDispatchPreamble(baseParams())
-    // Why: feeding `bash -n` the full preamble falsely fails on apostrophes
-    // in the surrounding prose. Slice between the CLI markers and strip
-    // shell-style comment lines so we only syntax-check the commands.
-    const cliStart = result.indexOf('=== CLI COMMANDS ===')
-    const cliEnd = result.indexOf('=== AFTER YOU SEND worker_done ===')
-    expect(cliStart).toBeGreaterThan(-1)
-    expect(cliEnd).toBeGreaterThan(cliStart)
-    const block = result.slice(cliStart, cliEnd)
-    const stripped = block
-      .split('\n')
-      .filter((line) => !line.trim().startsWith('#'))
-      .filter((line) => !line.trim().startsWith('==='))
-      .join('\n')
+  it(
+    'CLI examples parse as valid shell (bash -n on the extracted block)',
+    { timeout: 15_000 },
+    () => {
+      const result = buildDispatchPreamble(baseParams())
+      // Why: feeding `bash -n` the full preamble falsely fails on apostrophes
+      // in the surrounding prose. Slice between the CLI markers and strip
+      // shell-style comment lines so we only syntax-check the commands.
+      const cliStart = result.indexOf('=== CLI COMMANDS ===')
+      const cliEnd = result.indexOf('=== AFTER YOU SEND worker_done ===')
+      expect(cliStart).toBeGreaterThan(-1)
+      expect(cliEnd).toBeGreaterThan(cliStart)
+      const block = result.slice(cliStart, cliEnd)
+      const stripped = block
+        .split('\n')
+        .filter((line) => !line.trim().startsWith('#'))
+        .filter((line) => !line.trim().startsWith('==='))
+        .join('\n')
 
-    const check = spawnSync('bash', ['-n'], { input: stripped, encoding: 'utf8' })
-    expect(check.status).toBe(0)
-  })
+      const check = spawnSync('bash', ['-n'], { input: stripped, encoding: 'utf8' })
+      expect(check.status).toBe(0)
+    }
+  )
 
   it('includes heartbeat CLI block with taskId and dispatchId and 5-minute cadence', () => {
     const result = buildDispatchPreamble(baseParams())

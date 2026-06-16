@@ -117,6 +117,42 @@ describe('createGitHubPullRequest', () => {
     expect(releaseMock).toHaveBeenCalledOnce()
   })
 
+  it('runs local WSL project pull request creation through the selected distro', async () => {
+    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
+    ghExecFileAsyncMock.mockResolvedValueOnce({
+      stdout: JSON.stringify({
+        number: 43,
+        url: 'https://github.com/acme/widgets/pull/43'
+      })
+    })
+
+    await expect(
+      createGitHubPullRequest(
+        '/repo-root',
+        {
+          provider: 'github',
+          base: 'main',
+          head: 'feature/wsl-create-pr',
+          title: 'WSL Create PR'
+        },
+        null,
+        { localGitExecOptions: { wslDistro: 'Ubuntu' } }
+      )
+    ).resolves.toEqual({
+      ok: true,
+      number: 43,
+      url: 'https://github.com/acme/widgets/pull/43'
+    })
+
+    const [, options] = ghExecFileAsyncMock.mock.calls[0]
+    expect(options).toMatchObject({
+      cwd: '/repo-root',
+      wslDistro: 'Ubuntu',
+      timeout: 60_000,
+      idempotent: false
+    })
+  })
+
   it('creates SSH-backed pull requests without using the remote path as a local cwd', async () => {
     getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
     ghExecFileAsyncMock.mockResolvedValueOnce({

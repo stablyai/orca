@@ -173,8 +173,13 @@ describe('GitHub issue source split', () => {
 
     await listWorkItems('/home/jinwoo/orca', 10, undefined, undefined, 'auto', 'openclaw-2')
 
-    expect(resolveIssueSourceMock).toHaveBeenCalledWith('/home/jinwoo/orca', 'auto', 'openclaw-2')
-    expect(getOwnerRepoMock).toHaveBeenCalledWith('/home/jinwoo/orca', 'openclaw-2')
+    expect(resolveIssueSourceMock).toHaveBeenCalledWith(
+      '/home/jinwoo/orca',
+      'auto',
+      'openclaw-2',
+      {}
+    )
+    expect(getOwnerRepoMock).toHaveBeenCalledWith('/home/jinwoo/orca', 'openclaw-2', {})
     expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
       1,
       [
@@ -512,7 +517,7 @@ describe('GitHub issue source split', () => {
 
       const result = await listWorkItems('/repo-root', 10, undefined, undefined, 'auto')
 
-      expect(resolveIssueSourceMock).toHaveBeenCalledWith('/repo-root', 'auto', undefined)
+      expect(resolveIssueSourceMock).toHaveBeenCalledWith('/repo-root', 'auto', undefined, {})
       expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
         1,
         [

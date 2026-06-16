@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import { spawn, type ChildProcess } from 'node:child_process'
 import { afterEach, describe, expect, it } from 'vitest'
 
@@ -96,7 +96,9 @@ function stashWebBuild(): () => void {
     }
   }
 
-  const tempDir = mkdtempSync(join(tmpdir(), 'orca-dev-web-stash-'))
+  // Why: Windows temp can be on a different drive from the workspace, and
+  // renameSync cannot move directories across devices.
+  const tempDir = mkdtempSync(join(dirname(outWebPath), '.orca-dev-web-stash-'))
   const stashedPath = join(tempDir, 'web')
   renameSync(outWebPath, stashedPath)
   return () => {

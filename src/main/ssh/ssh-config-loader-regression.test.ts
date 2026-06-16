@@ -14,6 +14,16 @@ function normalizeWin(value: string): string {
   return win32.normalize(value.replaceAll('/', '\\'))
 }
 
+function platformSshHome(): string {
+  return process.platform === 'win32' ? 'C:\\Users\\testuser' : '/home/testuser'
+}
+
+function platformSshPath(home: string, relativePath: string): string {
+  return process.platform === 'win32'
+    ? normalizeWin(`${home}/${relativePath}`)
+    : `${home}/${relativePath}`
+}
+
 async function mockOs(
   home: string,
   username = 'testuser',
@@ -141,10 +151,10 @@ describe('loadUserSshConfig regressions', () => {
 
   it('skips non-regular include targets without reading them', async () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const home = '/home/testuser'
-    const configPath = `${home}/.ssh/config`
-    const unsafePath = `${home}/.ssh/unsafe.conf`
-    const safePath = `${home}/.ssh/safe.conf`
+    const home = platformSshHome()
+    const configPath = platformSshPath(home, '.ssh/config')
+    const unsafePath = platformSshPath(home, '.ssh/unsafe.conf')
+    const safePath = platformSshPath(home, '.ssh/safe.conf')
     const unsafeReadSpy = vi.fn()
 
     await mockOs(home)
@@ -181,10 +191,10 @@ describe('loadUserSshConfig regressions', () => {
 
   it('caps overly broad include globs and skips the remainder', async () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const home = '/home/testuser'
-    const configPath = `${home}/.ssh/config`
+    const home = platformSshHome()
+    const configPath = platformSshPath(home, '.ssh/config')
     const includePaths = Array.from({ length: 2000 }, (_, index) => {
-      return `${home}/.ssh/conf.d/${String(index).padStart(4, '0')}.conf`
+      return platformSshPath(home, `.ssh/conf.d/${String(index).padStart(4, '0')}.conf`)
     })
     const readPaths = new Set<string>()
 
@@ -226,10 +236,10 @@ describe('loadUserSshConfig regressions', () => {
 
   it('skips oversized include files without reading them', async () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const home = '/home/testuser'
-    const configPath = `${home}/.ssh/config`
-    const oversizedPath = `${home}/.ssh/oversized.conf`
-    const safePath = `${home}/.ssh/safe.conf`
+    const home = platformSshHome()
+    const configPath = platformSshPath(home, '.ssh/config')
+    const oversizedPath = platformSshPath(home, '.ssh/oversized.conf')
+    const safePath = platformSshPath(home, '.ssh/safe.conf')
     const oversizedReadSpy = vi.fn()
 
     await mockOs(home)

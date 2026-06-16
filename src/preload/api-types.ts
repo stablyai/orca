@@ -11,6 +11,7 @@ import type { NativeFileDropPayload } from '../shared/native-file-drop'
 import type { AppIdentity } from '../shared/app-identity'
 import type { TerminalPaneSplitSource } from '../shared/feature-education-telemetry'
 import type { TaskSourceContext } from '../shared/task-source-context'
+import type { ProjectExecutionRuntimeResolution } from '../shared/project-execution-runtime'
 import type {
   FolderWorkspacePathStatus,
   FolderWorkspacePathStatusRequest
@@ -128,6 +129,7 @@ import type {
   PRInfo,
   PRRefreshOutcome,
   Project,
+  ProjectUpdateArgs,
   Repo,
   ProjectGroup,
   ProjectHostSetup,
@@ -528,17 +530,16 @@ export type RefreshAgentsResult = {
   pathFailureReason: ShellHydrationFailureReason
 }
 
+export type PreflightRuntimeContext = {
+  wslDistro?: string | null
+  wslDefault?: boolean
+  projectRuntime?: ProjectExecutionRuntimeResolution
+}
+
 export type PreflightApi = {
-  check: (args?: {
-    force?: boolean
-    wslDistro?: string | null
-    wslDefault?: boolean
-  }) => Promise<PreflightStatus>
-  detectAgents: (args?: { wslDistro?: string | null; wslDefault?: boolean }) => Promise<string[]>
-  refreshAgents: (args?: {
-    wslDistro?: string | null
-    wslDefault?: boolean
-  }) => Promise<RefreshAgentsResult>
+  check: (args?: PreflightRuntimeContext & { force?: boolean }) => Promise<PreflightStatus>
+  detectAgents: (args?: PreflightRuntimeContext) => Promise<string[]>
+  refreshAgents: (args?: PreflightRuntimeContext) => Promise<RefreshAgentsResult>
   detectRemoteAgents: (args: { connectionId: string }) => Promise<string[]>
 }
 
@@ -825,6 +826,7 @@ export type PreloadApi = {
   }
   projects: {
     list: () => Promise<Project[]>
+    update: (args: ProjectUpdateArgs) => Promise<Project | null>
     listHostSetups: () => Promise<ProjectHostSetup[]>
     createHostSetup: (args: ProjectHostSetupCreateArgs) => Promise<ProjectHostSetupCreateResult>
     setupExistingFolder: (
@@ -1007,6 +1009,7 @@ export type PreloadApi = {
       // Preserved from the deleted index.d.ts PtyApi duplicate during the
       // single-source-of-truth collapse (see docs/preload-typecheck-hole.md §1).
       shellOverride?: string
+      projectRuntime?: ProjectExecutionRuntimeResolution
       // Why: closes the SIGKILL race documented in INVESTIGATION.md — main
       // sync-flushes the (worktreeId, tabId, leafId → ptyId) binding before
       // pty:spawn returns. Only the renderer's daemon-host path threads these.

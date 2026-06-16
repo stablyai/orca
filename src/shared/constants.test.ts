@@ -57,6 +57,12 @@ describe('getDefaultSettings', () => {
     expect(getDefaultSettings('/tmp').compactWorktreeCards).toBe(false)
   })
 
+  it('defaults local Windows projects to the host runtime', () => {
+    expect(getDefaultSettings('/tmp').localWindowsRuntimeDefault).toEqual({
+      kind: 'windows-host'
+    })
+  })
+
   it('defaults agent launch args to yolo mode where the CLI supports it', () => {
     const settings = getDefaultSettings('/tmp')
 

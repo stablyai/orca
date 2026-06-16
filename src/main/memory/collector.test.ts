@@ -198,7 +198,27 @@ describe('collectMemorySnapshot', () => {
   })
 
   function mockPsResponse(stdout: string) {
-    execMock.mockImplementation((_cmd, _opts, cb) => cb(null, { stdout, stderr: '' }))
+    const processStdout = process.platform === 'win32' ? psFixtureToWmic(stdout) : stdout
+    execMock.mockImplementation((_cmd, _opts, cb) =>
+      cb(null, { stdout: processStdout, stderr: '' })
+    )
+  }
+
+  function psFixtureToWmic(stdout: string): string {
+    return stdout
+      .split('\n')
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .map((line) => {
+        const [pid, ppid, _cpu, rssKb] = line.split(/\s+/, 4)
+        const memory = Number.parseInt(rssKb ?? '', 10)
+        return [
+          `ParentProcessId=${ppid ?? ''}`,
+          `ProcessId=${pid ?? ''}`,
+          `WorkingSetSize=${Number.isFinite(memory) && memory > 0 ? memory * 1024 : 0}`
+        ].join('\r\n')
+      })
+      .join('\r\n\r\n')
   }
 
   it('coalesces concurrent callers onto a single in-flight sweep', async () => {

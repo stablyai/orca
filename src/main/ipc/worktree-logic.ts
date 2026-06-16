@@ -166,6 +166,17 @@ export function areWorktreePathsEqual(
   rightPath: string,
   platform = process.platform
 ): boolean {
+  if (looksLikePosixAbsolutePath(leftPath) || looksLikePosixAbsolutePath(rightPath)) {
+    // Why: local WSL projects run POSIX paths on a Windows desktop; comparing
+    // them with win32 rules can delete or dedupe the wrong runtime-owned path.
+    if (!looksLikePosixAbsolutePath(leftPath) || !looksLikePosixAbsolutePath(rightPath)) {
+      return false
+    }
+    const left = normalizePosixWorktreePathForComparison(leftPath, platform)
+    const right = normalizePosixWorktreePathForComparison(rightPath, platform)
+    return left === right
+  }
+
   if (platform === 'win32' || looksLikeWindowsPath(leftPath) || looksLikeWindowsPath(rightPath)) {
     const left = win32.normalize(win32.resolve(leftPath))
     const right = win32.normalize(win32.resolve(rightPath))
@@ -184,6 +195,10 @@ function looksLikeWindowsPath(pathValue: string): boolean {
   return (
     /^[A-Za-z]:[\\/]/.test(pathValue) || pathValue.startsWith('\\\\') || pathValue.startsWith('//')
   )
+}
+
+function looksLikePosixAbsolutePath(pathValue: string): boolean {
+  return pathValue.startsWith('/') && !pathValue.startsWith('//')
 }
 
 function normalizePosixWorktreePathForComparison(

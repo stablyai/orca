@@ -8,8 +8,11 @@ import { isWindowsUserAgent, shellEscapePath } from './pane-helpers'
 import type { PtyTransport } from './pty-transport'
 import { importExternalPathsToRuntime } from '@/runtime/runtime-file-client'
 import { isWindowsAbsolutePathLike } from '../../../../shared/cross-platform-path'
+import { parseWslUncPath } from '../../../../shared/wsl-paths'
 import { translate } from '@/i18n/i18n'
 import { recordTerminalUserInputForLeaf } from './terminal-input-activity'
+import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
+import { CLIENT_PLATFORM } from '@/lib/new-workspace'
 
 type Args = {
   manager: PaneManager
@@ -151,6 +154,8 @@ export async function handleTerminalFileDrop(args: Args): Promise<void> {
     worktreePath,
     connectionId
   })
+  const localWslDrop = !isRemote && isWorktreeUsingLocalWslRuntime(state, worktreeId)
+  const localTargetShell = localWslDrop ? 'posix' : targetShell
 
   // Why: local fast path — no IPC round-trip, no toast — preserves today's
   // zero-latency drop behavior. Trailing space separates multiple paths in
@@ -158,7 +163,9 @@ export async function handleTerminalFileDrop(args: Args): Promise<void> {
   if (!isRemote) {
     let sentAnyPath = false
     for (const p of data.paths) {
-      sentAnyPath = transport.sendInput(`${shellEscapePath(p, targetShell)} `) || sentAnyPath
+      const terminalPath = localWslDrop ? toLocalWslDropPath(p) : p
+      sentAnyPath =
+        transport.sendInput(`${shellEscapePath(terminalPath, localTargetShell)} `) || sentAnyPath
     }
     if (sentAnyPath) {
       recordTerminalUserInputForLeaf(tabId, pane.leafId)
@@ -255,4 +262,27 @@ function joinRuntimeDropDir(worktreePath: string): string {
 
 function isWindowsPathLike(path: string): boolean {
   return isWindowsAbsolutePathLike(path) || path.includes('\\')
+}
+
+function isWorktreeUsingLocalWslRuntime(
+  state: ReturnType<typeof useAppStore.getState>,
+  worktreeId: string
+): boolean {
+  const projectRuntime = getLocalProjectExecutionRuntimeContext(state, worktreeId, CLIENT_PLATFORM)
+  if (projectRuntime?.status === 'repair-required') {
+    return projectRuntime.repair.preferredRuntime.kind === 'wsl'
+  }
+  return projectRuntime?.status === 'resolved' && projectRuntime.runtime.kind === 'wsl'
+}
+
+function toLocalWslDropPath(path: string): string {
+  const wslUnc = parseWslUncPath(path)
+  if (wslUnc) {
+    return wslUnc.linuxPath
+  }
+  if (/^[A-Za-z]:[\\/]/.test(path)) {
+    const drive = path[0].toLowerCase()
+    return `/mnt/${drive}/${path.slice(3).replace(/\\/g, '/')}`
+  }
+  return path.replace(/\\/g, '/')
 }

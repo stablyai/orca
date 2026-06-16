@@ -10,6 +10,8 @@ import { slugifyForWorkspaceName } from '../../../../shared/workspace-name'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import type { TuiAgent } from '../../../../shared/types'
 import { isWslUncPath } from '../../../../shared/wsl-paths'
+import type { ProjectExecutionRuntimeResolution } from '../../../../shared/project-execution-runtime'
+import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import { translate } from '@/i18n/i18n'
 
 type ForkAgentSessionFromPaneArgs = {
@@ -86,7 +88,14 @@ async function copyForkContext(prompt: string, pane: ManagedPane): Promise<boole
 function getForkAgentLaunchPlatform(args: {
   repo: { connectionId?: string | null } | null | undefined
   worktreePath?: string | null
+  projectRuntime?: ProjectExecutionRuntimeResolution
 }): NodeJS.Platform | undefined {
+  if (args.projectRuntime?.status === 'repair-required') {
+    return args.projectRuntime.repair.preferredRuntime.kind === 'wsl' ? 'linux' : undefined
+  }
+  if (args.projectRuntime?.status === 'resolved' && args.projectRuntime.runtime.kind === 'wsl') {
+    return 'linux'
+  }
   if (args.repo?.connectionId || (args.worktreePath && isWslUncPath(args.worktreePath))) {
     return 'linux'
   }
@@ -172,6 +181,7 @@ export async function startAgentSessionFork(fork: PreparedAgentSessionFork): Pro
     return false
   }
   const sourceRepo = store.repos.find((repo) => repo.id === sourceWorktree.repoId)
+  const sourceProjectRuntime = getLocalProjectExecutionRuntimeContext(store, fork.worktreeId)
   const sourceBranch = getUsableForkBase(sourceWorktree, sourceRepo, fork.worktreeId)
   if (!sourceBranch) {
     toast.error(
@@ -222,7 +232,8 @@ export async function startAgentSessionFork(fork: PreparedAgentSessionFork): Pro
   })
   const launchPlatform = getForkAgentLaunchPlatform({
     repo: sourceRepo,
-    worktreePath: created.worktree.path
+    worktreePath: created.worktree.path,
+    projectRuntime: sourceProjectRuntime
   })
   const result = launchAgentInNewTab({
     agent: fork.agent,

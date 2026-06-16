@@ -710,6 +710,86 @@ describe('preflight', () => {
     )
   })
 
+  it('lets a resolved host project runtime override stale WSL context flags', async () => {
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: 'win32'
+    })
+    execFileAsyncMock.mockImplementation(async (command, args) => {
+      expect(command).not.toBe('wsl.exe')
+      if (command === 'git' || command === 'gh' || command === 'glab') {
+        return { stdout: `${String(command)} ok\n` }
+      }
+      throw new Error(`unexpected command ${String(command)} ${JSON.stringify(args)}`)
+    })
+
+    const status = await runPreflightCheck(false, {
+      wslDistro: 'Ubuntu',
+      projectRuntime: {
+        status: 'resolved',
+        runtime: {
+          kind: 'windows-host',
+          hostPlatform: 'win32',
+          projectId: 'project-1',
+          reason: 'project-override',
+          cacheKey: 'project-1:windows-host'
+        }
+      }
+    })
+
+    expect(status.git.installed).toBe(true)
+    expect(mergePersistedWindowsPathMock).toHaveBeenCalled()
+  })
+
+  it('does not hydrate the host PATH when refreshing agents for a resolved WSL runtime', async () => {
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: 'win32'
+    })
+    execFileAsyncMock.mockImplementation(async (command, args) => {
+      if (command !== 'wsl.exe') {
+        throw new Error(`unexpected command ${String(command)}`)
+      }
+      const script = String(args[5])
+      if (script.includes("'claude'")) {
+        return { stdout: '__ORCA_AGENT_PATH__claude\t/home/test/.local/bin/claude\n' }
+      }
+      throw new Error('not found')
+    })
+
+    registerPreflightHandlers()
+
+    const result = (await handlers['preflight:refreshAgents'](undefined, {
+      projectRuntime: {
+        status: 'resolved',
+        runtime: {
+          kind: 'wsl',
+          hostPlatform: 'wsl',
+          projectId: 'project-1',
+          distro: 'Ubuntu',
+          reason: 'project-override',
+          cacheKey: 'project-1:wsl:Ubuntu'
+        }
+      }
+    })) as {
+      agents: string[]
+      addedPathSegments: string[]
+      shellHydrationOk: boolean
+      pathSource: string
+      pathFailureReason: string
+    }
+
+    expect(result).toEqual({
+      agents: ['claude'],
+      addedPathSegments: [],
+      shellHydrationOk: true,
+      pathSource: 'sync_seed_only',
+      pathFailureReason: 'none'
+    })
+    expect(hydrateShellPathMock).not.toHaveBeenCalled()
+    expect(mergePathSegmentsMock).not.toHaveBeenCalled()
+  })
+
   it('refreshes via preflight:refreshAgents by re-hydrating PATH before re-detecting', async () => {
     // Why: the Agents settings Refresh button calls this path. It must (1) ask
     // the shell hydrator for a fresh PATH, (2) merge any new segments, then

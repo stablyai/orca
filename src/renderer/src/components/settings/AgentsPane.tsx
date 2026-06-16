@@ -1,6 +1,6 @@
 /* eslint-disable max-lines -- Why: the Agents pane keeps catalog rows, default
-   selection, per-agent controls, and runtime location together so settings
-   reconciliation stays visible in one file. */
+   selection, and per-agent controls together so settings reconciliation stays
+   visible in one file. */
 import { useMemo, useState } from 'react'
 import { Check, ChevronDown, ExternalLink, Info, RefreshCw, Terminal } from 'lucide-react'
 import type { GlobalSettings, TuiAgent } from '../../../../shared/types'
@@ -15,7 +15,6 @@ import {
   getAgentGeneratedTabTitlesDescription,
   getAgentGeneratedTabTitlesTitle
 } from './agent-generated-tab-title-copy'
-import { AgentLocationSetting } from './AgentLocationSetting'
 import { getAgentStatusHooksDescription, getAgentStatusHooksTitle } from './agent-status-hooks-copy'
 import {
   SettingsBadge,
@@ -44,11 +43,10 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
 
 export { getAgentsPaneSearchEntries } from './agents-search'
 
-const EMPTY_WSL_DISTROS: string[] = []
-
 type AgentsPaneProps = {
   settings: GlobalSettings
   updateSettings: (updates: Partial<GlobalSettings>) => void | Promise<void>
+  /** Deprecated: agent detection now follows the resolved project runtime. */
   wslSupportedPlatform?: boolean
   wslAvailable?: boolean
   wslDistros?: string[]
@@ -673,14 +671,7 @@ function DefaultAgentPill({ active, onClick, children }: DefaultAgentPillProps):
   )
 }
 
-export function AgentsPane({
-  settings,
-  updateSettings,
-  wslSupportedPlatform = false,
-  wslAvailable = false,
-  wslDistros = EMPTY_WSL_DISTROS,
-  wslCapabilitiesLoading = false
-}: AgentsPaneProps): React.JSX.Element {
+export function AgentsPane({ settings, updateSettings }: AgentsPaneProps): React.JSX.Element {
   const { detectedIds: detectedList, isRefreshing, refresh } = useDetectedAgents()
   // Why: refresh re-spawns the user's login shell to re-capture PATH
   // (preflight:refreshAgents on the main side). This handles the
@@ -779,16 +770,6 @@ export function AgentsPane({
 
   return (
     <div className="space-y-8">
-      <AgentLocationSetting
-        settings={settings}
-        updateSettings={updateSettings}
-        refresh={refresh}
-        wslSupportedPlatform={wslSupportedPlatform}
-        wslAvailable={wslAvailable}
-        wslDistros={wslDistros}
-        wslCapabilitiesLoading={wslCapabilitiesLoading}
-      />
-
       <section className="space-y-4">
         <SettingsSubsectionHeader
           title={translate('auto.components.settings.AgentsPane.385212c7a1', 'Default Agent')}

@@ -3,7 +3,7 @@
 // cert is generated once on first run and reused across restarts. The mobile
 // app pins the certificate fingerprint received during QR pairing.
 import { createHash } from 'crypto'
-import { execSync } from 'child_process'
+import { execFileSync } from 'child_process'
 import { existsSync, readFileSync, chmodSync } from 'fs'
 import { join } from 'path'
 
@@ -34,12 +34,33 @@ export function loadOrCreateTlsCertificate(userDataPath: string): TlsCertificate
   const keyPath_ = join(userDataPath, TLS_KEY_FILENAME)
   const certPath_ = join(userDataPath, TLS_CERT_FILENAME)
 
-  // Why: openssl is available on macOS, Linux, and Windows (via Git Bash).
-  // Using it avoids hand-rolling ASN.1 DER encoding which is error-prone.
-  execSync(
-    `openssl req -new -x509 -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 ` +
-      `-nodes -days 3650 -subj "/CN=Orca Runtime" ` +
-      `-keyout "${keyPath_}" -out "${certPath_}" 2>/dev/null`
+  // Why: argv-based spawning avoids shell redirection/quoting differences for
+  // Windows temp paths while keeping OpenSSL as the certificate generator.
+  const openSslConfigPath = resolveOpenSslConfigPath()
+  execFileSync(
+    resolveOpenSslExecutable(),
+    [
+      'req',
+      '-new',
+      '-x509',
+      '-newkey',
+      'ec',
+      '-pkeyopt',
+      'ec_paramgen_curve:prime256v1',
+      '-nodes',
+      '-days',
+      '3650',
+      '-subj',
+      '/CN=Orca Runtime',
+      '-keyout',
+      keyPath_,
+      '-out',
+      certPath_
+    ],
+    {
+      env: openSslConfigPath ? { ...process.env, OPENSSL_CONF: openSslConfigPath } : process.env,
+      stdio: 'ignore'
+    }
   )
 
   chmodSync(keyPath_, 0o600)
@@ -48,6 +69,38 @@ export function loadOrCreateTlsCertificate(userDataPath: string): TlsCertificate
   const cert = readFileSync(certPath_, 'utf-8')
   const key = readFileSync(keyPath_, 'utf-8')
   return { cert, key, fingerprint: computeFingerprint(cert)! }
+}
+
+function resolveOpenSslExecutable(): string {
+  if (process.platform !== 'win32') {
+    return 'openssl'
+  }
+
+  const windowsCandidates = [
+    'C:\\Program Files\\Git\\usr\\bin\\openssl.exe',
+    'C:\\Program Files\\Git\\mingw64\\bin\\openssl.exe',
+    'C:\\Program Files (x86)\\Git\\usr\\bin\\openssl.exe',
+    'C:\\Program Files (x86)\\Git\\mingw64\\bin\\openssl.exe'
+  ]
+  return windowsCandidates.find((candidate) => existsSync(candidate)) ?? 'openssl'
+}
+
+function resolveOpenSslConfigPath(): string | null {
+  if (process.env.OPENSSL_CONF && existsSync(process.env.OPENSSL_CONF)) {
+    return null
+  }
+
+  if (process.platform !== 'win32') {
+    return null
+  }
+
+  const windowsConfigCandidates = [
+    'C:\\Program Files\\Git\\mingw64\\etc\\ssl\\openssl.cnf',
+    'C:\\Program Files\\Git\\usr\\ssl\\openssl.cnf',
+    'C:\\Program Files (x86)\\Git\\mingw64\\etc\\ssl\\openssl.cnf',
+    'C:\\Program Files (x86)\\Git\\usr\\ssl\\openssl.cnf'
+  ]
+  return windowsConfigCandidates.find((candidate) => existsSync(candidate)) ?? null
 }
 
 function computeFingerprint(certPem: string): string | null {

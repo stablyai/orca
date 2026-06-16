@@ -6,6 +6,7 @@ import { createProductionLauncher } from './production-launcher'
 import { startDaemon, type DaemonHandle } from './daemon-main'
 import { DaemonClient } from './client'
 import type { SubprocessHandle } from './session'
+import { getDaemonSocketPath } from './daemon-spawner'
 
 const { forkMock } = vi.hoisted(() => ({
   forkMock: vi.fn()
@@ -74,7 +75,7 @@ describe('createProductionLauncher', () => {
       return { shutdown: () => handle.shutdown() }
     }
 
-    const socketPath = join(dir, 'test.sock')
+    const socketPath = getDaemonSocketPath(dir)
     const tokenPath = join(dir, 'test.token')
     const handle = await launcher(socketPath, tokenPath)
 

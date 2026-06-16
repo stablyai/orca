@@ -159,7 +159,9 @@ describe('TerminalHost', () => {
 
       lastSubprocess._onDataCb?.('\r\nuser@host $ ')
       await new Promise((r) => setTimeout(r, 40))
-      expect(lastSubprocess.write).toHaveBeenCalledWith('echo hello\n')
+      expect(lastSubprocess.write).toHaveBeenCalledWith(
+        process.platform === 'win32' ? 'echo hello\r' : 'echo hello\n'
+      )
     })
   })
 

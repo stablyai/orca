@@ -126,7 +126,7 @@ export async function removeWorktreeOp(
     const { stdout } = await git(['rev-parse', '--git-common-dir'], worktreePath)
     const commonDir = stdout.trim()
     if (commonDir && commonDir !== '.git') {
-      repoPath = path.resolve(worktreePath, commonDir, '..')
+      repoPath = resolveRelayRepoPath(worktreePath, commonDir)
     }
   } catch {
     // fall through with worktreePath as repo
@@ -248,10 +248,41 @@ function normalizeLocalBranchRef(branch: string): string {
   return branch.replace(/^refs\/heads\//, '')
 }
 
+function isPosixAbsolutePath(value: string): boolean {
+  return value.startsWith('/')
+}
+
+function isWindowsAbsolutePath(value: string): boolean {
+  return /^[A-Za-z]:[\\/]/.test(value) || value.startsWith('\\\\')
+}
+
+function resolveRelayRepoPath(worktreePath: string, commonDir: string): string {
+  if (isPosixAbsolutePath(worktreePath) || isPosixAbsolutePath(commonDir)) {
+    // Why: tests can run on Windows while the relay operates on SSH/POSIX
+    // paths; the default path API would reinterpret "/repo" as "G:\repo".
+    return path.posix.resolve(worktreePath, commonDir, '..')
+  }
+  if (isWindowsAbsolutePath(worktreePath) || isWindowsAbsolutePath(commonDir)) {
+    return path.win32.resolve(worktreePath, commonDir, '..')
+  }
+  return path.resolve(worktreePath, commonDir, '..')
+}
+
+function normalizeRelayWorktreePathForCompare(value: string): string {
+  if (isPosixAbsolutePath(value)) {
+    return path.posix.normalize(path.posix.resolve(value))
+  }
+  if (isWindowsAbsolutePath(value)) {
+    return path.win32.normalize(path.win32.resolve(value))
+  }
+  return path.normalize(path.resolve(value))
+}
+
 export function areRelayWorktreePathsEqual(leftPath: string, rightPath: string): boolean {
-  const left = path.normalize(path.resolve(leftPath))
-  const right = path.normalize(path.resolve(rightPath))
-  return process.platform === 'win32' ? left.toLowerCase() === right.toLowerCase() : left === right
+  const left = normalizeRelayWorktreePathForCompare(leftPath)
+  const right = normalizeRelayWorktreePathForCompare(rightPath)
+  const compareCaseInsensitive = isWindowsAbsolutePath(leftPath) && isWindowsAbsolutePath(rightPath)
+  return compareCaseInsensitive ? left.toLowerCase() === right.toLowerCase() : left === right
 }
 
 export async function worktreeIsCleanOp(

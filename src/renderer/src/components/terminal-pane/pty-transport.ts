@@ -426,6 +426,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
     tabId,
     leafId,
     shellOverride,
+    projectRuntime,
     telemetry,
     onPtyExit,
     onTitleChange,
@@ -548,6 +549,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
           ...(tabId ? { tabId } : {}),
           ...(leafId ? { leafId } : {}),
           ...(shellOverride ? { shellOverride } : {}),
+          ...(projectRuntime ? { projectRuntime } : {}),
           ...(telemetry ? { telemetry } : {})
         })
         const spawnResult = result as PtyConnectResult & { isReattach?: boolean }

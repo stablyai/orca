@@ -26,7 +26,11 @@ type SparseWorktreeCreateError = Error & {
   cleanupFailed?: boolean
 }
 
-type AddWorktreeOptions = {
+export type GitWorktreeExecOptions = {
+  wslDistro?: string
+}
+
+export type AddWorktreeOptions = GitWorktreeExecOptions & {
   checkoutExistingBranch?: boolean
   suggestLocalBaseRefUpdate?: boolean
   remoteTrackingBase?: {
@@ -34,6 +38,11 @@ type AddWorktreeOptions = {
     branch: string
     ref: string
   }
+}
+
+export type RemoveWorktreeOptions = GitWorktreeExecOptions & {
+  deleteBranch?: boolean
+  forceBranchDelete?: boolean
 }
 
 type LocalBaseRefRefreshability =
@@ -54,6 +63,13 @@ type LocalBaseRefRefreshability =
     }
 
 const SPARSE_CHECKOUT_DETECTION_CONCURRENCY = 8
+
+function gitExecOptions(
+  cwd: string,
+  options: GitWorktreeExecOptions = {}
+): { cwd: string; wslDistro?: string } {
+  return options.wslDistro ? { cwd, wslDistro: options.wslDistro } : { cwd }
+}
 
 function getErrorCode(error: unknown): string | undefined {
   return typeof error === 'object' && error !== null && 'code' in error
@@ -138,7 +154,8 @@ async function evaluateLocalBaseRefRefreshability(
   repoPath: string,
   baseBranch: string,
   remoteTrackingRef: string,
-  remoteTrackingBase?: AddWorktreeOptions['remoteTrackingBase']
+  remoteTrackingBase?: AddWorktreeOptions['remoteTrackingBase'],
+  options: GitWorktreeExecOptions = {}
 ): Promise<LocalBaseRefRefreshability | undefined> {
   const parsed = parseRemoteTrackingLocalBaseRef(baseBranch, remoteTrackingRef, remoteTrackingBase)
   if (!parsed) {
@@ -156,7 +173,7 @@ async function evaluateLocalBaseRefRefreshability(
     // commits, and tells the toast whether it is actually behind.
     const { stdout } = await gitExecFileAsync(
       ['rev-list', '--left-right', '--count', `${parsed.fullRef}...${remoteTrackingRef}`],
-      { cwd: repoPath }
+      gitExecOptions(repoPath, options)
     )
     const parsedDrift = parseRevListDrift(stdout)
     if (!parsedDrift || parsedDrift.ahead !== 0) {
@@ -164,7 +181,7 @@ async function evaluateLocalBaseRefRefreshability(
     }
     const { stdout: localOidOutput } = await gitExecFileAsync(
       ['rev-parse', '--verify', `${parsed.fullRef}^{commit}`],
-      { cwd: repoPath }
+      gitExecOptions(repoPath, options)
     )
     localOid = localOidOutput.trim()
     if (!localOid) {
@@ -172,13 +189,16 @@ async function evaluateLocalBaseRefRefreshability(
     }
     const { stdout: remoteOidOutput } = await gitExecFileAsync(
       ['rev-parse', '--verify', `${remoteTrackingRef}^{commit}`],
-      { cwd: repoPath }
+      gitExecOptions(repoPath, options)
     )
     remoteOid = remoteOidOutput.trim()
     if (!remoteOid) {
       return { refreshable: false, result: { ...resultBase, status: 'skipped_not_fast_forward' } }
     }
-    await gitExecFileAsync(['merge-base', '--is-ancestor', localOid, remoteOid], { cwd: repoPath })
+    await gitExecFileAsync(
+      ['merge-base', '--is-ancestor', localOid, remoteOid],
+      gitExecOptions(repoPath, options)
+    )
     drift = parsedDrift
   } catch {
     return { refreshable: false, result: { ...resultBase, status: 'skipped_not_fast_forward' } }
@@ -189,7 +209,7 @@ async function evaluateLocalBaseRefRefreshability(
     // setting would only update it when that owner worktree is clean.
     const { stdout: worktreeListOutput } = await gitExecFileAsync(
       ['worktree', 'list', '--porcelain'],
-      { cwd: repoPath }
+      gitExecOptions(repoPath, options)
     )
     const worktrees = parseWorktreeList(translateWslOutputPaths(worktreeListOutput, repoPath))
     const ownerWorktree = worktrees.find((wt) => wt.branch === parsed.fullRef)
@@ -197,7 +217,7 @@ async function evaluateLocalBaseRefRefreshability(
     if (ownerWorktree) {
       const { stdout: status } = await gitExecFileAsync(
         ['status', '--porcelain', '--untracked-files=no'],
-        { cwd: ownerWorktree.path }
+        gitExecOptions(ownerWorktree.path, options)
       )
       if (status.trim()) {
         return {
@@ -242,13 +262,15 @@ async function getLocalBaseRefUpdateSuggestionForWorktreeCreate(
   repoPath: string,
   baseBranch: string,
   remoteTrackingRef: string,
-  remoteTrackingBase?: AddWorktreeOptions['remoteTrackingBase']
+  remoteTrackingBase?: AddWorktreeOptions['remoteTrackingBase'],
+  options: GitWorktreeExecOptions = {}
 ): Promise<LocalBaseRefUpdateSuggestion | undefined> {
   const evaluation = await evaluateLocalBaseRefRefreshability(
     repoPath,
     baseBranch,
     remoteTrackingRef,
-    remoteTrackingBase
+    remoteTrackingBase,
+    options
   )
   if (!evaluation?.refreshable || evaluation.behind <= 0) {
     return undefined
@@ -263,12 +285,13 @@ async function getLocalBaseRefUpdateSuggestionForWorktreeCreate(
 async function persistWorktreeCreationBase(
   worktreePath: string,
   branch: string,
-  effectiveBase: string
+  effectiveBase: string,
+  options: GitWorktreeExecOptions = {}
 ): Promise<void> {
   const configKey = `branch.${branch}.base`
   try {
     await gitExecFileAsync(['config', '--local', '--replace-all', configKey, effectiveBase], {
-      cwd: worktreePath
+      ...gitExecOptions(worktreePath, options)
     })
   } catch (error) {
     console.warn(`addWorktree: failed to set ${configKey} for ${worktreePath}`, error)
@@ -276,7 +299,7 @@ async function persistWorktreeCreationBase(
       // Why: reused branch names may carry stale base metadata; if replacement
       // fails, remove the old value so consumers do not trust outdated lineage.
       await gitExecFileAsync(['config', '--local', '--unset-all', configKey], {
-        cwd: worktreePath
+        ...gitExecOptions(worktreePath, options)
       })
     } catch (unsetError) {
       console.warn(
@@ -287,10 +310,14 @@ async function persistWorktreeCreationBase(
   }
 }
 
-async function unsetWorktreeCreationBase(worktreePath: string, branch: string): Promise<void> {
+async function unsetWorktreeCreationBase(
+  worktreePath: string,
+  branch: string,
+  options: GitWorktreeExecOptions = {}
+): Promise<void> {
   try {
     await gitExecFileAsync(['config', '--local', '--unset-all', `branch.${branch}.base`], {
-      cwd: worktreePath
+      ...gitExecOptions(worktreePath, options)
     })
   } catch {
     // Best-effort cleanup; missing keys and locked config both leave the
@@ -400,10 +427,14 @@ function splitNulWorktreeList(output: string): string[][] {
   return blocks
 }
 
-async function readWorktreeList(repoPath: string): Promise<GitWorktreeInfo[]> {
+async function readWorktreeList(
+  repoPath: string,
+  options: GitWorktreeExecOptions = {}
+): Promise<GitWorktreeInfo[]> {
   try {
     const { stdout } = await gitExecFileAsync(['worktree', 'list', '--porcelain', '-z'], {
-      cwd: repoPath
+      cwd: repoPath,
+      ...options
     })
     return parseWorktreeList(stdout, { nulDelimited: true })
   } catch (error) {
@@ -415,7 +446,8 @@ async function readWorktreeList(repoPath: string): Promise<GitWorktreeInfo[]> {
   // Why: `-z` is required to preserve worktree paths containing newlines, but
   // Git <2.36 rejects it. Keep the old parser as a compatibility fallback.
   const { stdout } = await gitExecFileAsync(['worktree', 'list', '--porcelain'], {
-    cwd: repoPath
+    cwd: repoPath,
+    ...options
   })
   return parseWorktreeList(stdout)
 }
@@ -423,9 +455,12 @@ async function readWorktreeList(repoPath: string): Promise<GitWorktreeInfo[]> {
 /**
  * List all worktrees for a git repo at the given path.
  */
-export async function listWorktrees(repoPath: string): Promise<GitWorktreeInfo[]> {
+export async function listWorktrees(
+  repoPath: string,
+  options: GitWorktreeExecOptions = {}
+): Promise<GitWorktreeInfo[]> {
   try {
-    const worktrees = (await readWorktreeList(repoPath)).map((worktree) => {
+    const worktrees = (await readWorktreeList(repoPath, options)).map((worktree) => {
       const translatedPath = translateWorktreePath(worktree.path, repoPath)
       return translatedPath === worktree.path ? worktree : { ...worktree, path: translatedPath }
     })
@@ -484,13 +519,15 @@ async function refreshLocalBaseRefForWorktreeCreate(
   repoPath: string,
   baseBranch: string,
   remoteTrackingRef: string,
-  remoteTrackingBase?: AddWorktreeOptions['remoteTrackingBase']
+  remoteTrackingBase?: AddWorktreeOptions['remoteTrackingBase'],
+  options: GitWorktreeExecOptions = {}
 ): Promise<LocalBaseRefRefreshResult | undefined> {
   const evaluation = await evaluateLocalBaseRefRefreshability(
     repoPath,
     baseBranch,
     remoteTrackingRef,
-    remoteTrackingBase
+    remoteTrackingBase,
+    options
   )
   if (!evaluation) {
     return undefined
@@ -504,7 +541,7 @@ async function refreshLocalBaseRefForWorktreeCreate(
     if (evaluation.ownerWorktreePath) {
       const { stdout: worktreeListOutput } = await gitExecFileAsync(
         ['worktree', 'list', '--porcelain'],
-        { cwd: repoPath }
+        gitExecOptions(repoPath, options)
       )
       const worktrees = parseWorktreeList(translateWslOutputPaths(worktreeListOutput, repoPath))
       const currentOwner = worktrees.find((wt) => wt.branch === evaluation.fullRef)
@@ -513,7 +550,7 @@ async function refreshLocalBaseRefForWorktreeCreate(
       }
       const { stdout: status } = await gitExecFileAsync(
         ['status', '--porcelain', '--untracked-files=no'],
-        { cwd: currentOwner.path }
+        gitExecOptions(currentOwner.path, options)
       )
       if (status.trim()) {
         return {
@@ -522,7 +559,10 @@ async function refreshLocalBaseRefForWorktreeCreate(
           ownerWorktreePath: currentOwner.path
         }
       }
-      await gitExecFileAsync(['reset', '--hard', evaluation.remoteOid], { cwd: currentOwner.path })
+      await gitExecFileAsync(
+        ['reset', '--hard', evaluation.remoteOid],
+        gitExecOptions(currentOwner.path, options)
+      )
       return { ...resultBase, status: 'updated', ownerWorktreePath: currentOwner.path }
     }
 
@@ -531,7 +571,7 @@ async function refreshLocalBaseRefForWorktreeCreate(
     // evaluation snapshot.
     await gitExecFileAsync(
       ['update-ref', evaluation.fullRef, evaluation.remoteOid, evaluation.localOid],
-      { cwd: repoPath }
+      gitExecOptions(repoPath, options)
     )
     return { ...resultBase, status: 'updated' }
   } catch {
@@ -580,7 +620,7 @@ export async function addWorktree(
     args.push('--no-track', '-b', branch, worktreePath)
     if (baseBranch) {
       effectiveBase = await resolveWorktreeAddBaseRef(baseBranch, (qualifiedRef) =>
-        hasWorktreeBaseCommitRef(repoPath, qualifiedRef)
+        hasWorktreeBaseCommitRef(repoPath, qualifiedRef, options)
       )
       // Why: resolving the creation base first distinguishes real
       // remote-tracking refs from slash-containing local branch names.
@@ -591,27 +631,29 @@ export async function addWorktree(
           repoPath,
           baseBranch,
           effectiveBase,
-          options.remoteTrackingBase
+          options.remoteTrackingBase,
+          options
         )
       } else if (options.suggestLocalBaseRefUpdate) {
         localBaseRefUpdateSuggestion = await getLocalBaseRefUpdateSuggestionForWorktreeCreate(
           repoPath,
           baseBranch,
           effectiveBase,
-          options.remoteTrackingBase
+          options.remoteTrackingBase,
+          options
         )
       }
       args.push(effectiveBase)
     }
   }
-  await gitExecFileAsync(args, { cwd: repoPath })
+  await gitExecFileAsync(args, gitExecOptions(repoPath, options))
 
   if (options.checkoutExistingBranch) {
     return localBaseRefRefresh ? { localBaseRefRefresh } : {}
   }
 
   if (effectiveBase) {
-    await persistWorktreeCreationBase(worktreePath, branch, effectiveBase)
+    await persistWorktreeCreationBase(worktreePath, branch, effectiveBase, options)
   }
 
   // SSH parity: src/relay/git-handler-worktree-ops.ts addWorktreeOp mirrors this exact
@@ -649,7 +691,7 @@ export async function addWorktree(
     let alreadySet = false
     try {
       await gitExecFileAsync(['config', '--get', 'push.autoSetupRemote'], {
-        cwd: worktreePath
+        ...gitExecOptions(worktreePath, options)
       })
       alreadySet = true
     } catch (readError) {
@@ -664,7 +706,7 @@ export async function addWorktree(
     }
     if (!alreadySet) {
       await gitExecFileAsync(['config', '--local', 'push.autoSetupRemote', 'true'], {
-        cwd: worktreePath
+        ...gitExecOptions(worktreePath, options)
       })
     }
   } catch (error) {
@@ -698,23 +740,30 @@ export async function addSparseWorktree(
       options
     )
     created = true
-    await gitExecFileAsync(['sparse-checkout', 'init', '--cone'], { cwd: worktreePath })
-    await gitExecFileAsync(['sparse-checkout', 'set', '--', ...directories], { cwd: worktreePath })
-    await gitExecFileAsync(['checkout', branch], { cwd: worktreePath })
+    await gitExecFileAsync(
+      ['sparse-checkout', 'init', '--cone'],
+      gitExecOptions(worktreePath, options)
+    )
+    await gitExecFileAsync(
+      ['sparse-checkout', 'set', '--', ...directories],
+      gitExecOptions(worktreePath, options)
+    )
+    await gitExecFileAsync(['checkout', branch], gitExecOptions(worktreePath, options))
     return addResult
   } catch (error) {
     const wrapped: SparseWorktreeCreateError =
       error instanceof Error ? (error as SparseWorktreeCreateError) : new Error(String(error))
     if (created) {
       if (!options.checkoutExistingBranch) {
-        await unsetWorktreeCreationBase(worktreePath, branch)
+        await unsetWorktreeCreationBase(worktreePath, branch, options)
       }
       try {
         await removeWorktree(repoPath, worktreePath, true, {
           deleteBranch: !options.checkoutExistingBranch,
           // Why: rolling back a failed creation — the just-created branch has no
           // user commits, so force-delete it rather than preserving an orphan.
-          forceBranchDelete: !options.checkoutExistingBranch
+          forceBranchDelete: !options.checkoutExistingBranch,
+          ...(options.wslDistro ? { wslDistro: options.wslDistro } : {})
         })
       } catch {
         wrapped.cleanupFailed = true
@@ -755,9 +804,9 @@ export async function removeWorktree(
   // (e.g. rollback of a failed creation) where the fresh branch has no user work
   // and must be removed outright. User-initiated deletes leave it false so unmerged
   // commits are preserved.
-  options: { deleteBranch?: boolean; forceBranchDelete?: boolean } = {}
+  options: RemoveWorktreeOptions = {}
 ): Promise<RemoveWorktreeResult> {
-  const worktreesBeforeRemoval = await listWorktrees(repoPath)
+  const worktreesBeforeRemoval = await listWorktrees(repoPath, options)
   const removedWorktree = worktreesBeforeRemoval.find((worktree) =>
     areWorktreePathsEqual(worktree.path, worktreePath)
   )
@@ -769,8 +818,8 @@ export async function removeWorktree(
     args.push('--force')
   }
   args.push(worktreePath)
-  await gitExecFileAsync(args, { cwd: repoPath })
-  await gitExecFileAsync(['worktree', 'prune'], { cwd: repoPath })
+  await gitExecFileAsync(args, gitExecOptions(repoPath, options))
+  await gitExecFileAsync(['worktree', 'prune'], gitExecOptions(repoPath, options))
 
   if (!branchName) {
     return {}
@@ -782,7 +831,7 @@ export async function removeWorktree(
   // Why: `git worktree list` can still include stale sibling records until
   // `git worktree prune` runs. Re-list after prune so branch cleanup only skips
   // when a still-live worktree actually keeps that branch checked out.
-  const worktreesAfterPrune = await listWorktrees(repoPath)
+  const worktreesAfterPrune = await listWorktrees(repoPath, options)
   const branchStillInUse = worktreesAfterPrune.some(
     (worktree) => normalizeLocalBranchRef(worktree.branch) === branchName
   )
@@ -799,13 +848,21 @@ export async function removeWorktree(
     // force-deleted. forceBranchDelete opts into `-D` for failed-creation rollback,
     // where the fresh branch has no user work to protect.
     const deleteFlag = options.forceBranchDelete ? '-D' : '-d'
-    await gitExecFileAsync(['branch', deleteFlag, '--', branchName], { cwd: repoPath })
+    await gitExecFileAsync(
+      ['branch', deleteFlag, '--', branchName],
+      gitExecOptions(repoPath, options)
+    )
     return {}
   } catch (error) {
     if (!options.forceBranchDelete && branchHead) {
       try {
         if (
-          await deleteAlreadyMergedBranchAfterSafeDeleteFailure(repoPath, branchName, branchHead)
+          await deleteAlreadyMergedBranchAfterSafeDeleteFailure(
+            repoPath,
+            branchName,
+            branchHead,
+            options
+          )
         ) {
           return {}
         }
@@ -831,9 +888,10 @@ export async function removeWorktree(
 async function deleteAlreadyMergedBranchAfterSafeDeleteFailure(
   repoPath: string,
   branchName: string,
-  branchHead: string
+  branchHead: string,
+  options: GitWorktreeExecOptions = {}
 ): Promise<boolean> {
-  const runGit = (args: string[]) => gitExecFileAsync(args, { cwd: repoPath })
+  const runGit = (args: string[]) => gitExecFileAsync(args, gitExecOptions(repoPath, options))
   const targetRefs = await getBranchCleanupTargetRefs(runGit, branchName)
   await refreshBranchCleanupTargetRefs(runGit, targetRefs)
   // Why: squash merges rewrite commit IDs, so `branch -d` can reject a branch
@@ -842,7 +900,9 @@ async function deleteAlreadyMergedBranchAfterSafeDeleteFailure(
   if (!(await branchHasNoUnmergedChangesOnAnyTarget(runGit, branchName, targetRefs))) {
     return false
   }
-  await forceDeleteLocalBranch(repoPath, branchName, branchHead)
+  await forceDeleteLocalBranch(repoPath, branchName, branchHead, (args, cwd) =>
+    gitExecFileAsync(args, gitExecOptions(cwd, options))
+  )
   return true
 }
 
@@ -910,14 +970,15 @@ async function isLocalBranchCheckedOut(
  */
 export async function assertWorktreeCleanForRemoval(
   worktreePath: string,
-  force = false
+  force = false,
+  options: GitWorktreeExecOptions = {}
 ): Promise<void> {
   if (force) {
     return
   }
 
   const { stdout } = await gitExecFileAsync(['status', '--porcelain', '--untracked-files=all'], {
-    cwd: worktreePath
+    ...gitExecOptions(worktreePath, options)
   })
   if (!stdout.trim()) {
     return

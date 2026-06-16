@@ -171,7 +171,7 @@ function runLocalPrecheck(
     })
     child.on('close', (code) => {
       settle(
-        typeof code === 'number' ? code : null,
+        timedOut || typeof code !== 'number' ? null : code,
         timedOut ? `Precheck timed out after ${precheck.timeoutSeconds}s.` : null
       )
     })

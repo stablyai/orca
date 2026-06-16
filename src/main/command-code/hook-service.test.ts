@@ -50,7 +50,11 @@ describe('CommandCodeHookService', () => {
     expect(config.hooks.Stop[0].matcher).toBeUndefined()
     expect(config.hooks.PreToolUse[0].hooks[0].command).toContain('command-code-hook')
     expect(config.hooks.PreToolUse[0].hooks[0].command).toContain(join(homeDir, '.orca'))
-    expect(config.hooks.PreToolUse[0].hooks[0].command).toMatch(/^if \[ -x /)
+    if (process.platform === 'win32') {
+      expect(config.hooks.PreToolUse[0].hooks[0].command).toContain('command-code-hook.cmd')
+    } else {
+      expect(config.hooks.PreToolUse[0].hooks[0].command).toMatch(/^if \[ -x /)
+    }
   })
 
   it('installs a hook script that can recover the endpoint when Command Code strips token env', () => {

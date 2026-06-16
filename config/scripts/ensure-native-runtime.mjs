@@ -319,7 +319,7 @@ function runPnpm(args) {
   const result = spawnSync(command, args, {
     cwd: projectDir,
     stdio: 'inherit',
-    shell: false
+    shell: process.platform === 'win32'
   })
 
   if (result.error || result.status !== 0) {

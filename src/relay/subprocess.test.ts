@@ -8,6 +8,7 @@ import { execFileSync, spawn as spawnChild } from 'child_process'
 import { build } from 'esbuild'
 import { spawnRelay, type RelayProcess } from './subprocess-test-utils'
 import { getEndpointFileName } from '../shared/agent-hook-listener'
+import { relayTestSocketPath } from './relay-test-socket-path'
 
 const RELAY_TS_ENTRY = path.resolve(__dirname, 'relay.ts')
 let bundleDir: string
@@ -40,7 +41,13 @@ function spawn(args: string[] = [], env?: NodeJS.ProcessEnv): RelayProcess {
   if (!args.includes('--sock-path')) {
     const socketDir = mkdtempSync(path.join(tmpdir(), 'relay-sock-'))
     spawnedSocketDirs.push(socketDir)
-    relayArgs = [...args, '--sock-path', path.join(socketDir, 'relay.sock')]
+    relayArgs = [
+      ...args,
+      '--sock-path',
+      relayTestSocketPath(socketDir),
+      '--endpoint-dir',
+      path.join(socketDir, 'agent-hooks')
+    ]
   }
   return spawnRelay(relayEntry, relayArgs, env ? { env } : undefined)
 }

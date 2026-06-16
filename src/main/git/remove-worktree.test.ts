@@ -796,7 +796,7 @@ describe('listWorktrees', () => {
       await new Promise<void>((resolve) => pendingProbeResolves.push(resolve))
       activeProbes -= 1
 
-      if (filePath.includes(sparseWorktreePath)) {
+      if (filePath.replaceAll('\\', '/').includes(sparseWorktreePath)) {
         return { isFile: () => true, size: 32 }
       }
       throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })

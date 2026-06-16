@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   getCachedWindowsTerminalCapabilities,
+  hasCachedWindowsTerminalCapabilities,
   loadWindowsTerminalCapabilities,
   refreshWindowsTerminalCapabilities,
   resetWindowsTerminalCapabilitiesForTests,
@@ -60,6 +61,7 @@ describe('windows terminal capabilities', () => {
       gitBashAvailable: true
     })
 
+    expect(hasCachedWindowsTerminalCapabilities()).toBe(false)
     expect(getCachedWindowsTerminalCapabilities()).toEqual({
       wslAvailable: false,
       wslDistros: [],
@@ -78,6 +80,7 @@ describe('windows terminal capabilities', () => {
       isLoading: false
     }
     await expect(loadWindowsTerminalCapabilities()).resolves.toEqual(expected)
+    expect(hasCachedWindowsTerminalCapabilities()).toBe(true)
     expect(getCachedWindowsTerminalCapabilities()).toEqual(expected)
 
     await loadWindowsTerminalCapabilities()

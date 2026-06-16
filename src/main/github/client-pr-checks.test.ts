@@ -38,11 +38,19 @@ const {
 vi.mock('./gh-utils', () => ({
   execFileAsync: execFileAsyncMock,
   ghExecFileAsync: ghExecFileAsyncMock,
-  githubRepoContext: (repoPath: string, connectionId?: string | null) => ({
+  githubRepoContext: (
+    repoPath: string,
+    connectionId?: string | null,
+    localGitOptions: { wslDistro?: string } = {}
+  ) => ({
     repoPath,
-    connectionId: connectionId ?? null
+    connectionId: connectionId ?? null,
+    ...localGitOptions
   }),
-  ghRepoExecOptions: (context: { repoPath: string }) => ({ cwd: context.repoPath }),
+  ghRepoExecOptions: (context: { repoPath: string; wslDistro?: string }) => ({
+    cwd: context.repoPath,
+    ...(context.wslDistro ? { wslDistro: context.wslDistro } : {})
+  }),
   getOwnerRepo: getOwnerRepoMock,
   getIssueOwnerRepo: getIssueOwnerRepoMock,
   extractExecError: extractExecErrorMock,
@@ -228,6 +236,51 @@ describe('getPRChecks', () => {
       2,
       ['api', '-X', 'POST', 'repos/acme/widgets/actions/runs/77/rerun-failed-jobs'],
       { cwd: '/repo-root', env: { ...process.env, GH_PROMPT_DISABLED: '1' } }
+    )
+  })
+
+  it('routes local WSL check retrieval and reruns through the selected distro', async () => {
+    const localGitOptions = { wslDistro: 'Ubuntu' }
+    getOwnerRepoMock.mockResolvedValue({ owner: 'acme', repo: 'widgets' })
+    ghExecFileAsyncMock
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify({
+          check_runs: [
+            {
+              name: 'build',
+              status: 'completed',
+              conclusion: 'success',
+              html_url: 'https://github.com/acme/widgets/actions/runs/66',
+              details_url: null
+            }
+          ]
+        })
+      })
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify([
+          {
+            name: 'lint',
+            state: 'FAIL',
+            link: 'https://github.com/acme/widgets/actions/runs/77/job/88'
+          }
+        ])
+      })
+      .mockResolvedValueOnce({ stdout: '' })
+
+    await getPRChecks('/repo-root', 42, 'head-oid', undefined, undefined, null, localGitOptions)
+    await rerunPRChecks('/repo-root', 42, { failedOnly: true }, null, localGitOptions)
+
+    expect(getOwnerRepoMock).toHaveBeenCalledWith('/repo-root', null, localGitOptions)
+    expect(ghExecFileAsyncMock.mock.calls.every((call) => call[1]?.wslDistro === 'Ubuntu')).toBe(
+      true
+    )
+    expect(ghExecFileAsyncMock).toHaveBeenLastCalledWith(
+      ['api', '-X', 'POST', 'repos/acme/widgets/actions/runs/77/rerun-failed-jobs'],
+      expect.objectContaining({
+        cwd: '/repo-root',
+        wslDistro: 'Ubuntu',
+        env: expect.objectContaining({ GH_PROMPT_DISABLED: '1' })
+      })
     )
   })
 

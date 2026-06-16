@@ -4,6 +4,8 @@ import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import { findGithubPrWorkspaceAttachment } from '@/lib/github-work-item-workspace-attachment'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
 import { launchWorkItemDirect } from '@/lib/launch-work-item-direct'
+import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
+import { CLIENT_PLATFORM } from '@/lib/new-workspace'
 import { planAgentCliArgsSuffix } from '@/lib/tui-agent-startup'
 import {
   pickSourceControlLaunchAgent,
@@ -164,7 +166,10 @@ export async function startFixChecksAgent(args: StartFixChecksAgentArgs): Promis
     }
     const launchPlatform = resolveSourceControlLaunchPlatform({
       connectionId: targetConnectionId,
-      worktreePath: targetWorktree.path
+      worktreePath: targetWorktree.path,
+      projectRuntime: targetConnectionId
+        ? undefined
+        : getLocalProjectExecutionRuntimeContext(store, targetWorktreeId, CLIENT_PLATFORM)
     })
     if (!launchPlatform) {
       toast.error(

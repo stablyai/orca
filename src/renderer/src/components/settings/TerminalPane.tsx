@@ -1,10 +1,9 @@
-/* eslint-disable max-lines -- Why: TerminalPane keeps terminal workflow, runtime, and recovery
+/* eslint-disable max-lines -- Why: TerminalPane keeps terminal workflow and recovery
    settings together so search shows one focused terminal behavior surface. */
 import type { GlobalSettings, SetupScriptLaunchMode } from '../../../../shared/types'
 import { Input } from '../ui/input'
 import { Separator } from '../ui/separator'
 import { ToggleGroup, ToggleGroupItem } from '../ui/toggle-group'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
 import { clampNumber } from '@/lib/terminal-theme'
 import {
   SettingsRow,
@@ -37,18 +36,16 @@ import { OSC52_CLIPBOARD_SETTING_ID } from '../terminal-pane/osc52-clipboard-set
 import { WINDOWS_GIT_BASH_SHELL } from '../../../../shared/windows-terminal-shell'
 import { translate } from '@/i18n/i18n'
 
-const EMPTY_WSL_DISTROS: string[] = []
-
 type TerminalPaneProps = {
   settings: GlobalSettings
   updateSettings: (updates: Partial<GlobalSettings>) => void
   scrollbackMode: 'preset' | 'custom'
   setScrollbackMode: (mode: 'preset' | 'custom') => void
-  /** Whether WSL is installed on this Windows machine. */
+  /** Deprecated: WSL selection now belongs to Project Runtime settings. */
   wslAvailable?: boolean
-  /** Installed WSL distro names, used to choose the default WSL terminal target. */
+  /** Deprecated: WSL selection now belongs to Project Runtime settings. */
   wslDistros?: string[]
-  /** Whether WSL capability probing is still in flight. */
+  /** Deprecated: WSL selection now belongs to Project Runtime settings. */
   wslCapabilitiesLoading?: boolean
   /** Whether PowerShell 7+ (pwsh.exe) is installed on this Windows machine. */
   pwshAvailable?: boolean
@@ -63,9 +60,6 @@ export function TerminalPane({
   updateSettings,
   scrollbackMode,
   setScrollbackMode,
-  wslAvailable,
-  wslDistros = EMPTY_WSL_DISTROS,
-  wslCapabilitiesLoading = false,
   pwshAvailable,
   gitBashAvailable = false,
   isWindowsTerminalHost
@@ -87,13 +81,8 @@ export function TerminalPane({
   )
   const scrollbackToggleValue =
     scrollbackMode === 'custom' ? 'custom' : isPreset ? `${scrollbackMb}` : 'custom'
-  const windowsShell = settings.terminalWindowsShell ?? 'powershell.exe'
-  const selectedWslDistroName = settings.terminalWindowsWslDistro?.trim() || null
-  const selectedWslDistro = selectedWslDistroName || '__default__'
-  const wslDistroOptions =
-    selectedWslDistroName && !wslDistros.includes(selectedWslDistroName)
-      ? [selectedWslDistroName, ...wslDistros]
-      : wslDistros
+  const rawWindowsShell = settings.terminalWindowsShell ?? 'powershell.exe'
+  const windowsShell = rawWindowsShell === 'wsl.exe' ? 'powershell.exe' : rawWindowsShell
   const powerShellImplementation = settings.terminalWindowsPowerShellImplementation ?? 'auto'
   const showWindowsPowerShellImplementation =
     showWindowsHostSettings && windowsShell === 'powershell.exe'
@@ -170,94 +159,12 @@ export function TerminalPane({
                             disabled: !gitBashAvailable
                           }
                         ]
-                      : []),
-                    ...(wslAvailable
-                      ? [
-                          {
-                            value: 'wsl.exe',
-                            label: translate(
-                              'auto.components.settings.TerminalPane.b637dd57a7',
-                              'WSL'
-                            )
-                          }
-                        ]
                       : [])
                   ]}
                 />
               }
             />
           </SearchableSetting>
-          {windowsShell === 'wsl.exe' ? (
-            <SearchableSetting
-              title={translate(
-                'auto.components.settings.TerminalPane.219aaa59f4',
-                'WSL Distribution'
-              )}
-              description={translate(
-                'auto.components.settings.TerminalPane.5fe79a5e56',
-                'Choose which WSL distribution new WSL terminals and local agent scans use.'
-              )}
-              keywords={['terminal', 'windows', 'wsl', 'linux', 'distribution', 'distro', 'ubuntu']}
-            >
-              <SettingsRow
-                label={translate(
-                  'auto.components.settings.TerminalPane.219aaa59f4',
-                  'WSL Distribution'
-                )}
-                description={translate(
-                  'auto.components.settings.TerminalPane.2503f1e86b',
-                  'Used for new WSL terminal panes and local agent detection when the active workspace is not already inside WSL.'
-                )}
-                control={
-                  <Select
-                    value={selectedWslDistro}
-                    onValueChange={(value) =>
-                      updateSettings({
-                        terminalWindowsWslDistro: value === '__default__' ? null : value
-                      })
-                    }
-                    disabled={wslCapabilitiesLoading || !wslAvailable}
-                  >
-                    <SelectTrigger
-                      size="sm"
-                      aria-label={translate(
-                        'auto.components.settings.TerminalPane.219aaa59f4',
-                        'WSL Distribution'
-                      )}
-                      className="min-w-44"
-                    >
-                      <SelectValue
-                        placeholder={
-                          wslCapabilitiesLoading
-                            ? translate(
-                                'auto.components.settings.TerminalPane.d78fc4fdef',
-                                'Loading distributions'
-                              )
-                            : translate(
-                                'auto.components.settings.TerminalPane.cc8c5ca224',
-                                'Windows default'
-                              )
-                        }
-                      />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__default__">
-                        {translate(
-                          'auto.components.settings.TerminalPane.cc8c5ca224',
-                          'Windows default'
-                        )}
-                      </SelectItem>
-                      {wslDistroOptions.map((distro) => (
-                        <SelectItem key={distro} value={distro}>
-                          {distro}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                }
-              />
-            </SearchableSetting>
-          ) : null}
         </div>
       </section>
     ) : null,

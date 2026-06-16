@@ -5,6 +5,7 @@ import { mkdtempSync, rmSync } from 'fs'
 import { DaemonPtyProvider } from './daemon-pty-provider'
 import { DaemonServer } from './daemon-server'
 import type { SubprocessHandle } from './session'
+import { getDaemonSocketPath } from './daemon-spawner'
 
 function createTestDir(): string {
   return mkdtempSync(join(tmpdir(), 'daemon-provider-test-'))
@@ -60,7 +61,7 @@ describe('DaemonPtyProvider', () => {
 
   beforeEach(async () => {
     dir = createTestDir()
-    socketPath = join(dir, 'test.sock')
+    socketPath = getDaemonSocketPath(dir)
     tokenPath = join(dir, 'test.token')
 
     server = new DaemonServer({

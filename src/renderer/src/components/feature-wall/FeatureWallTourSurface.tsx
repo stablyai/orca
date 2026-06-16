@@ -19,6 +19,7 @@ import {
   GLOBAL_AGENT_SKILL_SOURCE_KINDS,
   useInstalledAgentSkill
 } from '@/hooks/useInstalledAgentSkills'
+import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRuntime'
 import { usePrefersReducedMotion } from './feature-wall-modal-helpers'
 import { toFeatureWallAssetUrl, useFeatureWallAssetBaseUrl } from './feature-wall-assets'
 import { useFeatureWallTaskSourcePresentation } from './use-feature-wall-task-source-presentation'
@@ -62,6 +63,7 @@ export function FeatureWallTourSurface({
 }: FeatureWallTourSurfaceProps): JSX.Element | null {
   const settings = useAppStore((s) => s.settings)
   const updateSettings = useAppStore((s) => s.updateSettings)
+  const activeSkillRuntime = useActiveProjectSkillRuntime()
   const assetBaseUrl = useFeatureWallAssetBaseUrl(isOpen)
   const prefersReducedMotion = usePrefersReducedMotion()
   const reactId = useId()
@@ -109,10 +111,12 @@ export function FeatureWallTourSurface({
   // from passive Effects.
   const orchestrationSkill = useInstalledAgentSkill(ORCHESTRATION_SKILL_NAME, {
     enabled: isOpen,
+    discoveryTarget: activeSkillRuntime.discoveryTarget,
     sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
   })
   const browserUseSkill = useInstalledAgentSkill(ORCA_CLI_SKILL_NAME, {
     enabled: isOpen,
+    discoveryTarget: activeSkillRuntime.discoveryTarget,
     sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
   })
   const completion = useFeatureWallCompletion(

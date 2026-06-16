@@ -1,13 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
-import { CLIENT_PLATFORM } from '@/lib/new-workspace'
+import { buildAiVaultResumeCommandForWorktree } from '@/lib/ai-vault-resume-command'
 import { launchAiVaultSessionInNewTab } from '@/lib/launch-ai-vault-session'
 import { useAppStore } from '@/store'
 import { useActiveWorktree, useRepoById } from '@/store/selectors'
 import { agentLabel, filterAiVaultSessions, groupAiVaultSessions } from './ai-vault-session-filters'
 import {
   AI_VAULT_AGENTS,
-  buildAiVaultResumeCommand,
   type AiVaultAgent,
   type AiVaultGroup,
   type AiVaultListResult,
@@ -121,15 +120,13 @@ export default function AiVaultPanel(): React.JSX.Element {
 
   const buildResumeCommand = useCallback(
     (session: AiVaultSession): string =>
-      buildAiVaultResumeCommand({
-        agent: session.agent,
-        sessionId: session.sessionId,
-        cwd: session.cwd,
-        platform: CLIENT_PLATFORM,
-        commandOverride: agentCmdOverrides[session.agent],
-        codexHome: session.codexHome
+      buildAiVaultResumeCommandForWorktree({
+        state: useAppStore.getState(),
+        worktreeId: activeWorktree?.id ?? null,
+        session,
+        commandOverride: agentCmdOverrides[session.agent]
       }),
-    [agentCmdOverrides]
+    [activeWorktree?.id, agentCmdOverrides]
   )
 
   const copyResumeCommand = useCallback(

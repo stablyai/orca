@@ -159,12 +159,11 @@ function toCodexStatusRuntimeTarget(
   return { runtime: 'host', wslDistro: null }
 }
 
-function getStatusBarPreferredWslDistro(
+export function getStatusBarPreferredWslDistro(
   settings: GlobalSettings | null | undefined,
   wslDistros: string[]
 ): string | null {
-  const configuredDistro =
-    settings?.localAccountWslDistro?.trim() || settings?.terminalWindowsWslDistro?.trim() || null
+  const configuredDistro = settings?.localAccountWslDistro?.trim() || null
   if (configuredDistro) {
     return configuredDistro
   }

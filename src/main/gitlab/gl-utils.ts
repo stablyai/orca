@@ -1,344 +1,57 @@
 import { execFile } from 'child_process'
 import { promisify } from 'util'
 import { gitExecFileAsync, glabExecFileAsync } from '../git/runner'
-import type { ClassifiedError, IssueSourcePreference } from '../../shared/types'
-import { getSshGitProvider } from '../providers/ssh-git-dispatch'
-import { clearProjectRefInFlight, runProjectRefProbeOnce } from './project-ref-inflight'
-import {
-  DEFAULT_GITLAB_HOSTS,
-  normalizeGitLabHost,
-  parseGitLabProjectRef,
-  parseRemoteProjectRefCandidate,
-  type ProjectRef
-} from './project-ref-parser'
 
-// Why: legacy generic execFile wrapper — only used by callers that don't need
-// WSL-aware routing. Repo-scoped callers should use glabExecFileAsync from
-// the runner instead.
+// Why: legacy generic execFile wrapper - only used by callers that don't need
+// WSL-aware routing. Repo-scoped callers should use the runner exports below.
 export const execFileAsync = promisify(execFile)
 export { glabExecFileAsync, gitExecFileAsync }
+export { classifyGlabError, classifyListIssuesError } from './glab-error-classification'
+export {
+  DEFAULT_GITLAB_HOSTS,
+  _getProjectRefCacheSize,
+  _resetKnownHostsCache,
+  _resetProjectRefCache,
+  getGlabKnownHosts,
+  getIssueProjectRef,
+  getProjectRef,
+  getProjectRefForRemote,
+  glabHostnameArgs,
+  glabRepoExecOptions,
+  parseGlabAuthStatusHosts,
+  parseGitLabProjectRef,
+  resolveIssueSource
+} from './gitlab-project-ref-resolution'
+export type {
+  LocalGitExecOptions,
+  ProjectRef,
+  ResolvedIssueSource
+} from './gitlab-project-ref-resolution'
 
-// ── Concurrency limiter — max 4 parallel glab processes ─────────────
-// Why: parallel to gh-utils' limiter. Separate state from the gh limiter
-// because gh and glab are independent binaries; one provider's spawns
-// shouldn't throttle the other's. Cap matches gh-utils for consistency.
 const MAX_CONCURRENT = 4
 let running = 0
 const queue: (() => void)[] = []
 
 export function acquire(): Promise<void> {
   if (running < MAX_CONCURRENT) {
-    running++
+    running += 1
     return Promise.resolve()
   }
   return new Promise((resolve) =>
     queue.push(() => {
-      running++
+      running += 1
       resolve()
     })
   )
 }
 
 export function release(): void {
-  running--
+  running -= 1
   const next = queue.shift()
   if (next) {
     next()
   }
 }
-
-// ── Error classification ─────────────────────────────────────────────
-// Why: glab CLI surfaces API errors as unstructured stderr — same shape
-// as gh. Map known GitLab patterns to typed errors so callers can show
-// user-friendly messages.
-export function classifyGlabError(stderr: string): ClassifiedError {
-  const s = stderr.toLowerCase()
-  if (s.includes('http 403') || s.includes('forbidden') || s.includes('insufficient_scope')) {
-    return {
-      type: 'permission_denied',
-      message: "You don't have permission to edit this issue. Check your GitLab token scopes."
-    }
-  }
-  if (s.includes('http 404') || s.includes('project not found')) {
-    return { type: 'not_found', message: 'Issue not found — it may have been deleted.' }
-  }
-  if (s.includes('http 422') || s.includes('unprocessable')) {
-    return { type: 'validation_error', message: `Invalid update — ${stderr.trim()}` }
-  }
-  // Why: GitLab returns 429 for rate limit; gh's "rate limit" stderr substring
-  // also fires through the user-mode token bucket. Cover both.
-  if (s.includes('rate limit') || s.includes('http 429')) {
-    return {
-      type: 'rate_limited',
-      message: 'GitLab rate limit hit. Try again in a few minutes.'
-    }
-  }
-  if (
-    s.includes('timeout') ||
-    s.includes('no such host') ||
-    s.includes('network') ||
-    s.includes('could not resolve host')
-  ) {
-    return { type: 'network_error', message: 'Network error — check your connection.' }
-  }
-  return { type: 'unknown', message: `Failed to update issue: ${stderr.trim()}` }
-}
-
-// Why: classifyGlabError's copy is phrased for edit/update operations;
-// listIssues is a read op. Rewrite the message for read contexts while
-// keeping the typed classification intact for callers/telemetry.
-export function classifyListIssuesError(stderr: string): ClassifiedError {
-  const c = classifyGlabError(stderr)
-  const trimmed = stderr.trim()
-  // Exhaustive map so newly added error types surface as a TS error here
-  // rather than silently falling through to edit-phrased copy.
-  const readMessages: Record<ClassifiedError['type'], string> = {
-    permission_denied:
-      "You don't have permission to read issues for this project. Check your GitLab token scopes.",
-    not_found: 'Project not found.',
-    issues_disabled: 'Issues are disabled on this project.',
-    validation_error: `Invalid request — ${trimmed}`,
-    rate_limited: 'GitLab rate limit hit. Try again in a few minutes.',
-    network_error: 'Network error — check your connection.',
-    unknown: `Failed to load issues: ${trimmed}`
-  }
-  return { type: c.type, message: readMessages[c.type] }
-}
-
-export { DEFAULT_GITLAB_HOSTS, parseGitLabProjectRef }
-export type { ProjectRef }
-
-const PROJECT_REF_CACHE_MAX_ENTRIES = 512
-const projectRefCache = new Map<string, ProjectRef | null>()
-
-/** @internal — exposed for tests only */
-export function _resetProjectRefCache(): void {
-  projectRefCache.clear()
-  clearProjectRefInFlight()
-}
-
-/** @internal — exposed for tests only */
-export function _getProjectRefCacheSize(): number {
-  return projectRefCache.size
-}
-
-function rememberProjectRefCacheEntry(cacheKey: string, value: ProjectRef | null): void {
-  projectRefCache.set(cacheKey, value)
-  while (projectRefCache.size > PROJECT_REF_CACHE_MAX_ENTRIES) {
-    const oldestKey = projectRefCache.keys().next().value
-    if (oldestKey === undefined) {
-      return
-    }
-    projectRefCache.delete(oldestKey)
-  }
-}
-
-export async function getProjectRefForRemote(
-  repoPath: string,
-  remoteName: string,
-  knownHosts: readonly string[] = DEFAULT_GITLAB_HOSTS,
-  connectionId?: string | null
-): Promise<ProjectRef | null> {
-  const cacheKey = `${connectionId ?? 'local'}\0${repoPath}\0${remoteName}\0${knownHosts.join(',')}`
-  if (projectRefCache.has(cacheKey)) {
-    return projectRefCache.get(cacheKey)!
-  }
-
-  // Why: issue/PR refresh and repo metadata can ask for the same missing
-  // upstream concurrently. Coalesce the subprocess before caching the result.
-  return runProjectRefProbeOnce(cacheKey, () =>
-    resolveProjectRefForRemote(repoPath, remoteName, knownHosts, connectionId, cacheKey)
-  )
-}
-
-async function resolveProjectRefForRemote(
-  repoPath: string,
-  remoteName: string,
-  knownHosts: readonly string[],
-  connectionId: string | null | undefined,
-  cacheKey: string
-): Promise<ProjectRef | null> {
-  try {
-    const sshGitProvider = connectionId ? getSshGitProvider(connectionId) : null
-    if (connectionId && !sshGitProvider) {
-      // Why: mobile can attempt GitLab loads before the SSH tunnel is ready.
-      // Caching that transient state would poison later loads after connect.
-      return null
-    }
-    const { stdout } = sshGitProvider
-      ? await sshGitProvider.exec(['remote', 'get-url', remoteName], repoPath)
-      : await gitExecFileAsync(['remote', 'get-url', remoteName], { cwd: repoPath })
-    const result = parseGitLabProjectRef(stdout, knownHosts)
-    if (result) {
-      rememberProjectRefCacheEntry(cacheKey, result)
-      return result
-    }
-    const remoteCandidate = parseRemoteProjectRefCandidate(stdout)
-    if (
-      remoteCandidate &&
-      (await isGlabConfiguredForRemoteHost(repoPath, remoteCandidate, connectionId))
-    ) {
-      // Why: `glab auth status` is process-global and can be stale or formatted
-      // differently across versions; the origin host itself is the durable repo context.
-      rememberGlabKnownHost(remoteCandidate.host)
-      rememberProjectRefCacheEntry(cacheKey, remoteCandidate)
-      return remoteCandidate
-    }
-  } catch {
-    if (connectionId) {
-      // Why: remote SSH failures are often transient tunnel/process errors.
-      // Do not cache them as "not a GitLab repo" for the rest of the session.
-      return null
-    }
-    // ignore — non-GitLab remote or no remote configured
-  }
-  rememberProjectRefCacheEntry(cacheKey, null)
-  return null
-}
-
-export async function getProjectRef(
-  repoPath: string,
-  knownHosts?: readonly string[],
-  connectionId?: string | null
-): Promise<ProjectRef | null> {
-  return getProjectRefForRemote(repoPath, 'origin', knownHosts, connectionId)
-}
-
-export async function getIssueProjectRef(
-  repoPath: string,
-  knownHosts?: readonly string[],
-  connectionId?: string | null
-): Promise<ProjectRef | null> {
-  const upstream = await getProjectRefForRemote(repoPath, 'upstream', knownHosts, connectionId)
-  if (upstream) {
-    return upstream
-  }
-  return getProjectRefForRemote(repoPath, 'origin', knownHosts, connectionId)
-}
-
-export type ResolvedIssueSource = {
-  source: ProjectRef | null
-  /** True when the user preferred `upstream` but the upstream remote is no
-   *  longer configured and the resolver fell back to origin. */
-  fellBack: boolean
-}
-
-/**
- * Resolve the issue source for a repo honoring the user's per-repo
- * preference. Mirrors `resolveIssueSource` in gh-utils — the upstream/
- * origin/auto semantics are git-remote concepts, not GitHub-specific.
- */
-export async function resolveIssueSource(
-  repoPath: string,
-  preference: IssueSourcePreference | undefined,
-  knownHosts?: readonly string[],
-  connectionId?: string | null
-): Promise<ResolvedIssueSource> {
-  if (preference === 'upstream') {
-    const upstream = await getProjectRefForRemote(repoPath, 'upstream', knownHosts, connectionId)
-    if (upstream) {
-      return { source: upstream, fellBack: false }
-    }
-    const origin = await getProjectRefForRemote(repoPath, 'origin', knownHosts, connectionId)
-    return { source: origin, fellBack: origin !== null }
-  }
-  if (preference === 'origin') {
-    return {
-      source: await getProjectRefForRemote(repoPath, 'origin', knownHosts, connectionId),
-      fellBack: false
-    }
-  }
-  return { source: await getIssueProjectRef(repoPath, knownHosts, connectionId), fellBack: false }
-}
-
-export function glabRepoExecOptions(
-  repoPath: string,
-  connectionId?: string | null
-): { cwd?: string } {
-  return connectionId ? {} : { cwd: repoPath }
-}
-
-export function glabHostnameArgs(
-  projectRef: Pick<ProjectRef, 'host'> | null | undefined,
-  connectionId?: string | null
-): string[] {
-  // Why: local glab commands can infer host from cwd; SSH-backed calls have
-  // no local cwd, so self-hosted instances need an explicit hostname.
-  return connectionId && projectRef?.host ? ['--hostname', projectRef.host] : []
-}
-
-// ── Known-hosts discovery via `glab auth status` ────────────────────
-// Why: glab supports multiple hosts (gitlab.com plus self-hosted). The
-// authoritative list of "what counts as GitLab" from the user's POV is
-// "what hosts have I authenticated with". Parse hostnames out of
-// `glab auth status` output and cache the result process-wide.
-
-let knownHostsCache: readonly string[] | null = null
-
-function rememberGlabKnownHost(host: string): void {
-  const normalizedHost = normalizeGitLabHost(host)
-  if (!knownHostsCache || knownHostsCache.map(normalizeGitLabHost).includes(normalizedHost)) {
-    return
-  }
-  knownHostsCache = [...knownHostsCache, normalizedHost]
-}
-
-async function isGlabConfiguredForRemoteHost(
-  repoPath: string,
-  projectRef: Pick<ProjectRef, 'host'>,
-  connectionId?: string | null
-): Promise<boolean> {
-  try {
-    const result = await glabExecFileAsync(
-      ['auth', 'status', '--hostname', projectRef.host],
-      glabRepoExecOptions(repoPath, connectionId)
-    )
-    return result !== undefined
-  } catch (error) {
-    const execLike = error as { stdout?: unknown; stderr?: unknown; message?: unknown }
-    const output =
-      [execLike.stdout, execLike.stderr, execLike.message]
-        .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
-        .join('\n') || String(error)
-    const hosts = parseGlabAuthStatusHosts(output).map(normalizeGitLabHost)
-    return hosts.includes(normalizeGitLabHost(projectRef.host))
-  }
-}
-
-/** @internal — exposed for tests only */
-export function _resetKnownHostsCache(): void {
-  knownHostsCache = null
-}
-
-export async function getGlabKnownHosts(): Promise<readonly string[]> {
-  if (knownHostsCache) {
-    return knownHostsCache
-  }
-  try {
-    const { stdout, stderr } = await glabExecFileAsync(['auth', 'status'])
-    // Why: glab writes auth status to stderr in some versions, stdout in
-    // others. Concatenate so the parser sees both.
-    const hosts = parseGlabAuthStatusHosts(`${stdout}\n${stderr}`)
-    // Always include gitlab.com so a fresh-install user with no auth
-    // still recognizes the canonical host.
-    const merged = Array.from(new Set([...DEFAULT_GITLAB_HOSTS, ...hosts]))
-    knownHostsCache = merged
-    return merged
-  } catch {
-    // Auth check failed (glab not installed, no auth, etc.) — fall back
-    // to the canonical default. The caller will hit the auth error on
-    // the first real request anyway.
-    knownHostsCache = [...DEFAULT_GITLAB_HOSTS]
-    return knownHostsCache
-  }
-}
-
-// ── Paginated `glab api -i` helper ──────────────────────────────────
-// Why: GitLab returns total counts via response headers (X-Total,
-// X-Total-Pages) on paginated REST endpoints. `glab api` discards
-// headers by default; passing `-i` includes the raw HTTP response
-// before the JSON body. Parse out the headers + body so callers can
-// surface "Page X of Y" UIs without hand-rolling a second count call.
 
 export type GlabApiResponse = {
   body: string
@@ -353,10 +66,8 @@ export async function glabApiWithHeaders(
   return parseGlabApiResponse(stdout)
 }
 
-/** @internal — exported for tests. */
+/** @internal - exported for tests. */
 export function parseGlabApiResponse(stdout: string): GlabApiResponse {
-  // Why: response is `HTTP/x.y status\nHeader: val\n…\n\n<body>`.
-  // Match the first blank line (CRLF or LF) as the boundary.
   const sepMatch = stdout.match(/\r?\n\r?\n/)
   if (!sepMatch || sepMatch.index === undefined) {
     return { body: stdout, headers: {} }
@@ -364,7 +75,6 @@ export function parseGlabApiResponse(stdout: string): GlabApiResponse {
   const headerBlock = stdout.slice(0, sepMatch.index)
   const body = stdout.slice(sepMatch.index + sepMatch[0].length)
   const headers: Record<string, string> = {}
-  // Skip the status line (HTTP/x.y …) and parse the rest as key: value.
   const lines = headerBlock.split(/\r?\n/)
   for (const line of lines) {
     const m = line.match(/^([A-Za-z][A-Za-z0-9-]*):\s*(.*)$/)
@@ -373,25 +83,4 @@ export function parseGlabApiResponse(stdout: string): GlabApiResponse {
     }
   }
   return { body, headers }
-}
-
-// Why: glab auth status output is human-formatted and varies across versions.
-// Two patterns observed in the wild:
-//   1) "✓ Logged in to gitlab.com as <user>"
-//   2) "gitlab.example.com:" header followed by indented status lines
-// Match both, dedupe, lowercase. Best-effort — anything that looks like a
-// hostname.
-export function parseGlabAuthStatusHosts(output: string): string[] {
-  const hosts = new Set<string>()
-  for (const m of output.matchAll(/logged in to ([a-zA-Z0-9.-]+)/gi)) {
-    hosts.add(m[1].toLowerCase())
-  }
-  for (const line of output.split('\n')) {
-    const bareLine = line.trim()
-    const hostLine = bareLine.endsWith(':') ? bareLine.slice(0, -1) : bareLine
-    if (line === bareLine && /^[a-zA-Z0-9](?:[a-zA-Z0-9.-]*[a-zA-Z0-9])?$/.test(hostLine)) {
-      hosts.add(hostLine.toLowerCase())
-    }
-  }
-  return Array.from(hosts)
 }

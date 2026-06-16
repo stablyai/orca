@@ -5,6 +5,7 @@ import { resolveAuthorizedPath } from './filesystem-auth'
 import { checkRgAvailable } from './rg-availability'
 import { gitSpawn, wslAwareSpawn } from '../git/runner'
 import { parseWslPath, toWindowsWslPath } from '../wsl'
+import { getLocalGitOptionsForRegisteredWorktree } from './local-worktree-runtime-options'
 import {
   buildExcludePathPrefixes,
   buildGitLsFilesArgsForQuickOpen,
@@ -20,6 +21,11 @@ export async function listQuickOpenFiles(
   excludePaths?: string[]
 ): Promise<string[]> {
   const authorizedRootPath = await resolveAuthorizedPath(rootPath, store)
+  const localGitOptions = getLocalGitOptionsForRegisteredWorktree(
+    store,
+    rootPath,
+    authorizedRootPath
+  )
 
   // Why: when the main worktree sits at the repo root, linked worktrees are
   // nested subdirectories. Without excluding them, rg/git lists files from
@@ -31,9 +37,9 @@ export async function listQuickOpenFiles(
   // spawn('rg') emits 'close' before 'error' on some platforms, causing
   // the handler to resolve with empty results before the git fallback
   // can run.
-  const rgAvailable = await checkRgAvailable(authorizedRootPath)
+  const rgAvailable = await checkRgAvailable(authorizedRootPath, localGitOptions.wslDistro)
   if (!rgAvailable) {
-    return listFilesWithGit(authorizedRootPath, excludePathPrefixes)
+    return listFilesWithGit(authorizedRootPath, excludePathPrefixes, localGitOptions)
   }
 
   const files = new Set<string>()
@@ -79,6 +85,7 @@ export async function listQuickOpenFiles(
 
       const child = wslAwareSpawn('rg', args, {
         cwd: authorizedRootPath,
+        ...(localGitOptions.wslDistro ? { wslDistro: localGitOptions.wslDistro } : {}),
         stdio: ['ignore', 'pipe', 'pipe']
       })
       children.push(child)
@@ -188,7 +195,8 @@ export async function listQuickOpenFiles(
  */
 function listFilesWithGit(
   rootPath: string,
-  excludePathPrefixes: readonly string[]
+  excludePathPrefixes: readonly string[],
+  localGitOptions: { wslDistro?: string }
 ): Promise<string[]> {
   const files = new Set<string>()
   const { primary, ignoredPass } = buildGitLsFilesArgsForQuickOpen(excludePathPrefixes)
@@ -217,6 +225,7 @@ function listFilesWithGit(
       // rootPath and use the output directly — no prefix stripping needed.
       const child = gitSpawn(['ls-files', ...args], {
         cwd: rootPath,
+        ...(localGitOptions.wslDistro ? { wslDistro: localGitOptions.wslDistro } : {}),
         stdio: ['ignore', 'pipe', 'pipe']
       })
       let timer: ReturnType<typeof setTimeout>

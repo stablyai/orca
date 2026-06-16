@@ -10,17 +10,15 @@ export function parseFileUriPath(uri: string): string | null {
       return decodedPath
     }
 
-    // Why: Windows OSC-7 cwd updates can describe both drive-letter paths
-    // (`file:///C:/repo`) and UNC shares (`file://server/share/repo`). Use the
-    // hostname when present so live cwd tracking, snapshots, and restore all
-    // round-trip to a native Windows path instead of dropping the server name.
-    if (url.hostname) {
-      return `\\\\${url.hostname}${decodedPath.replace(/\//g, '\\')}`
-    }
     if (/^\/[A-Za-z]:/.test(decodedPath)) {
       return decodedPath.slice(1)
     }
-    return decodedPath.replace(/\//g, '\\')
+    // Why: localhost/empty-host OSC-7 URIs are POSIX paths even when parsed by
+    // a Windows app; only non-local hosts describe Windows UNC shares.
+    if (url.hostname && url.hostname !== 'localhost') {
+      return `\\\\${url.hostname}${decodedPath.replace(/\//g, '\\')}`
+    }
+    return decodedPath
   } catch {
     return null
   }

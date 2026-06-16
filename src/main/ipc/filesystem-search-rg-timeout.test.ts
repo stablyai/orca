@@ -2,13 +2,19 @@ import { EventEmitter } from 'events'
 import type { ChildProcess } from 'child_process'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { handleMock, resolveAuthorizedPathMock, checkRgAvailableMock, wslAwareSpawnMock } =
-  vi.hoisted(() => ({
-    handleMock: vi.fn(),
-    resolveAuthorizedPathMock: vi.fn(),
-    checkRgAvailableMock: vi.fn(),
-    wslAwareSpawnMock: vi.fn()
-  }))
+const {
+  handleMock,
+  resolveAuthorizedPathMock,
+  checkRgAvailableMock,
+  getLocalGitOptionsForRegisteredWorktreeMock,
+  wslAwareSpawnMock
+} = vi.hoisted(() => ({
+  handleMock: vi.fn(),
+  resolveAuthorizedPathMock: vi.fn(),
+  checkRgAvailableMock: vi.fn(),
+  getLocalGitOptionsForRegisteredWorktreeMock: vi.fn(),
+  wslAwareSpawnMock: vi.fn()
+}))
 
 const handlers = new Map<string, (event: unknown, args: unknown) => Promise<unknown> | unknown>()
 
@@ -51,6 +57,10 @@ vi.mock('./filesystem-search-git', () => ({
   searchWithGitGrep: vi.fn()
 }))
 
+vi.mock('./local-worktree-runtime-options', () => ({
+  getLocalGitOptionsForRegisteredWorktree: getLocalGitOptionsForRegisteredWorktreeMock
+}))
+
 vi.mock('./markdown-documents', () => ({
   listMarkdownDocuments: vi.fn(),
   markdownDocumentsFromRelativePaths: vi.fn()
@@ -84,6 +94,7 @@ describe('filesystem rg search timeout', () => {
     })
     resolveAuthorizedPathMock.mockImplementation(async (value: string) => value)
     checkRgAvailableMock.mockResolvedValue(true)
+    getLocalGitOptionsForRegisteredWorktreeMock.mockReturnValue({})
   })
 
   it('settles and detaches when rg ignores the timeout kill', async () => {
@@ -115,5 +126,33 @@ describe('filesystem rg search timeout', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  it('routes rg through the registered WSL project runtime for Windows-path worktrees', async () => {
+    const child = createMockProcess()
+    wslAwareSpawnMock.mockReturnValue(child)
+    getLocalGitOptionsForRegisteredWorktreeMock.mockReturnValue({ wslDistro: 'Ubuntu' })
+    registerFilesystemHandlers({} as never)
+
+    const promise = handlers.get('fs:search')!(
+      { sender: { id: 7 } },
+      { rootPath: 'C:\\repo', query: 'ok' }
+    ) as Promise<unknown>
+
+    setTimeout(() => {
+      child.emit('close')
+    }, 10)
+
+    await promise
+
+    expect(checkRgAvailableMock).toHaveBeenCalledWith('C:\\repo', 'Ubuntu')
+    expect(wslAwareSpawnMock).toHaveBeenCalledWith(
+      'rg',
+      expect.any(Array),
+      expect.objectContaining({
+        cwd: 'C:\\repo',
+        wslDistro: 'Ubuntu'
+      })
+    )
   })
 })

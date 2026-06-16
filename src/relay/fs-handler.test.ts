@@ -433,8 +433,7 @@ describe('FsHandler', () => {
 
     const result = (await dispatcher.callRequest('fs.realpath', { filePath: linkPath })) as string
     // On macOS, /var is a symlink to /private/var, so resolve both to compare
-    const { realpathSync } = await import('fs')
-    expect(result).toBe(realpathSync(realFile))
+    expect(result).toBe(await fs.realpath(realFile))
   })
 
   it('does not let stale pending watch remove newer replacement watch', async () => {

@@ -8,6 +8,7 @@ import { mkdtempSync, writeFileSync, rmSync } from 'fs'
 import { DaemonClient } from './client'
 import { encodeNdjson } from './ndjson'
 import type { HelloMessage, DaemonRequest, DaemonEvent } from './types'
+import { getDaemonSocketPath } from './daemon-spawner'
 
 function createTestDir(): string {
   return mkdtempSync(join(tmpdir(), 'daemon-client-test-'))
@@ -42,7 +43,7 @@ describe('DaemonClient', () => {
 
   beforeEach(() => {
     dir = createTestDir()
-    socketPath = join(dir, 'test.sock')
+    socketPath = getDaemonSocketPath(dir)
     tokenPath = join(dir, 'test.token')
     writeFileSync(tokenPath, 'test-token-123')
   })

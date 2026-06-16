@@ -704,7 +704,7 @@ function openMainWindow(): BrowserWindow {
     automations,
     {
       prepareForCodexLaunch: prepareCodexRuntimeHomeForLaunch,
-      prepareForClaudeLaunch: () => claudeRuntimeAuth!.prepareForClaudeLaunch()
+      prepareForClaudeLaunch: (target) => claudeRuntimeAuth!.prepareForClaudeLaunch(target)
     },
     agentAwakeService ?? undefined,
     crashReports ?? undefined,
@@ -1437,7 +1437,7 @@ app.whenReady().then(async () => {
     // even for the system-default path, so every Orca-launched Codex process
     // must resolve CODEX_HOME through the runtime-home service.
     prepareForCodexLaunch: prepareCodexRuntimeHomeForLaunch,
-    prepareForClaudeLaunch: () => claudeRuntimeAuth!.prepareForClaudeLaunch()
+    prepareForClaudeLaunch: (target) => claudeRuntimeAuth!.prepareForClaudeLaunch(target)
   })
   starNag = new StarNagService(store, stats)
   starNag.start()

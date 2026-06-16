@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   buildWslInteractiveLoginShellCommand,
   buildWslLoginShellCommand,
+  escapeWslShCommandForWindows,
   quotePosixShell
 } from './wsl-login-shell-command'
 
@@ -16,6 +17,15 @@ describe('wsl login shell command helpers', () => {
     expect(command).toContain('getent passwd')
     expect(command).toContain('exec "$_orca_wsl_shell" -ilc')
     expect(command).toContain("printf '\\''hello'\\''")
+  })
+
+  it('preserves command-scoped environment variables through the outer WSL shell', () => {
+    const command = buildWslLoginShellCommand('HISTFILE=/tmp/orca-history printf "$HISTFILE"')
+    const escaped = escapeWslShCommandForWindows(command)
+
+    expect(command).toContain('\'HISTFILE=/tmp/orca-history printf "$HISTFILE"\'')
+    expect(escaped).toContain('\\$HISTFILE')
+    expect(escaped).toContain('\\$_orca_wsl_shell')
   })
 
   it('starts an interactive login shell without assuming bash', () => {

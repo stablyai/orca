@@ -8,6 +8,7 @@ const {
   removeWorktreeMock,
   getGitUsernameMock,
   getDefaultBaseRefMock,
+  resolveDefaultBaseRefViaExecMock,
   getBranchConflictKindMock,
   getPRForBranchMock,
   createGitHubPullRequestMock,
@@ -30,6 +31,7 @@ const {
   removeWorktreeMock: vi.fn(),
   getGitUsernameMock: vi.fn(),
   getDefaultBaseRefMock: vi.fn(),
+  resolveDefaultBaseRefViaExecMock: vi.fn(),
   getBranchConflictKindMock: vi.fn(),
   getPRForBranchMock: vi.fn(),
   createGitHubPullRequestMock: vi.fn(),
@@ -70,6 +72,7 @@ vi.mock('../git/runner', () => ({
 vi.mock('../git/repo', () => ({
   getGitUsername: getGitUsernameMock,
   getDefaultBaseRef: getDefaultBaseRefMock,
+  resolveDefaultBaseRefViaExec: resolveDefaultBaseRefViaExecMock,
   getBranchConflictKind: getBranchConflictKindMock
 }))
 
@@ -114,6 +117,7 @@ describe('registerWorktreeHandlers – Windows path handling', () => {
   const store = {
     getRepos: vi.fn(),
     getRepo: vi.fn(),
+    getProjects: vi.fn(),
     getProjectHostSetups: vi.fn(),
     getSettings: vi.fn(),
     getWorktreeMeta: vi.fn(),
@@ -129,6 +133,7 @@ describe('registerWorktreeHandlers – Windows path handling', () => {
     removeWorktreeMock.mockReset()
     getGitUsernameMock.mockReset()
     getDefaultBaseRefMock.mockReset()
+    resolveDefaultBaseRefViaExecMock.mockReset()
     getBranchConflictKindMock.mockReset()
     getPRForBranchMock.mockReset()
     createGitHubPullRequestMock.mockReset()
@@ -146,6 +151,7 @@ describe('registerWorktreeHandlers – Windows path handling', () => {
     mainWindow.webContents.send.mockReset()
     store.getRepos.mockReset()
     store.getRepo.mockReset()
+    store.getProjects.mockReset()
     store.getProjectHostSetups.mockReset()
     store.getSettings.mockReset()
     store.getWorktreeMeta.mockReset()
@@ -177,6 +183,7 @@ describe('registerWorktreeHandlers – Windows path handling', () => {
       addedAt: 0,
       worktreeBaseRef: null
     })
+    store.getProjects.mockReturnValue([])
     store.getProjectHostSetups.mockReturnValue([])
     store.getSettings.mockReturnValue({
       branchPrefix: 'none',
@@ -188,6 +195,7 @@ describe('registerWorktreeHandlers – Windows path handling', () => {
     store.setWorktreeMeta.mockReturnValue({})
     getGitUsernameMock.mockReturnValue('')
     getDefaultBaseRefMock.mockReturnValue('origin/main')
+    resolveDefaultBaseRefViaExecMock.mockResolvedValue('origin/main')
     getBranchConflictKindMock.mockResolvedValue(null)
     getPRForBranchMock.mockResolvedValue(null)
     getEffectiveHooksMock.mockReturnValue(null)

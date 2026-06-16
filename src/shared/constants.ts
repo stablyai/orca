@@ -233,6 +233,7 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     terminalWindowsWslDistro: null,
     localAccountRuntime: 'host',
     localAccountWslDistro: null,
+    localWindowsRuntimeDefault: { kind: 'windows-host' },
     // Why: Windows users expect "PowerShell" to mean modern PowerShell when it
     // is installed, with a safe fallback to the inbox Windows PowerShell.
     terminalWindowsPowerShellImplementation: 'auto',

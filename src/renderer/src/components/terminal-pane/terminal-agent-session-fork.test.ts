@@ -16,7 +16,21 @@ const mockMarkTrusted = vi.fn(async () => undefined)
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
 
 const store = {
+  activeRepoId: 'repo-1',
+  activeWorktreeId: 'wt-1',
+  projects: [] as {
+    id: string
+    sourceRepoIds: string[]
+    localWindowsRuntimePreference?: { kind: 'windows-host' } | { kind: 'wsl'; distro: string }
+  }[],
   repos: [] as { id: string; kind?: 'git' | 'folder'; connectionId?: string | null }[],
+  settings: {} as {
+    localWindowsRuntimeDefault?: { kind: 'windows-host' } | { kind: 'wsl'; distro: string }
+  },
+  worktreesByRepo: {} as Record<
+    string,
+    { id: string; repoId: string; path?: string; projectId?: string }[]
+  >,
   agentStatusByPaneKey: {} as Record<string, { agentType?: string }>,
   tabsByWorktree: {} as Record<string, { id: string; launchAgent?: string | null }[]>,
   getKnownWorktreeById: vi.fn(),
@@ -56,7 +70,19 @@ function makePane(capturedText: string): ManagedPane {
 describe('forkAgentSessionFromPane', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    store.activeRepoId = 'repo-1'
+    store.activeWorktreeId = 'wt-1'
+    store.projects = [
+      {
+        id: 'repo-1',
+        sourceRepoIds: ['repo-1']
+      }
+    ]
     store.repos = [{ id: 'repo-1', kind: 'git' }]
+    store.settings = { localWindowsRuntimeDefault: { kind: 'windows-host' } }
+    store.worktreesByRepo = {
+      'repo-1': [{ id: 'wt-1', repoId: 'repo-1', path: 'C:\\repo', projectId: 'repo-1' }]
+    }
     store.agentStatusByPaneKey = {}
     store.tabsByWorktree = { 'wt-1': [{ id: 'tab-1' }] }
     store.getKnownWorktreeById.mockReturnValue({
@@ -84,6 +110,9 @@ describe('forkAgentSessionFromPane', () => {
         },
         agentTrust: {
           markTrusted: mockMarkTrusted
+        },
+        platform: {
+          get: () => ({ platform: 'win32' })
         }
       }
     })
@@ -204,6 +233,41 @@ describe('forkAgentSessionFromPane', () => {
       worktree: {
         id: 'wt-fork',
         path: '\\\\wsl.localhost\\Ubuntu\\home\\u\\repo\\auth-feature-fork'
+      }
+    })
+    const { forkAgentSessionFromPane } = await import('./terminal-agent-session-fork')
+
+    await forkAgentSessionFromPane({
+      pane: makePane('User: compare OAuth options'),
+      tabId: 'tab-1',
+      worktreeId: 'wt-1',
+      groupId: null
+    })
+
+    expect(mockLaunchAgentInNewTab).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agent: 'pi',
+        worktreeId: 'wt-fork',
+        launchPlatform: 'linux'
+      })
+    )
+  })
+
+  it('uses Linux startup quoting when a Windows-path project is forced to WSL', async () => {
+    store.projects = [
+      {
+        id: 'repo-1',
+        sourceRepoIds: ['repo-1'],
+        localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' }
+      }
+    ]
+    store.agentStatusByPaneKey = {
+      [`tab-1:${LEAF_ID}`]: { agentType: 'pi' }
+    }
+    mockCreateWorktree.mockResolvedValueOnce({
+      worktree: {
+        id: 'wt-fork',
+        path: 'C:\\repo\\auth-feature-fork'
       }
     })
     const { forkAgentSessionFromPane } = await import('./terminal-agent-session-fork')

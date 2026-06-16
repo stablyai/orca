@@ -15,6 +15,7 @@ import {
   GLOBAL_AGENT_SKILL_SOURCE_KINDS,
   useInstalledAgentSkill
 } from '@/hooks/useInstalledAgentSkills'
+import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRuntime'
 import {
   getFeatureWallSetupProgress,
   type FeatureWallSetupProgress
@@ -51,6 +52,7 @@ export function useSetupGuideProgress(
   const preflightStatusError = useAppStore((s) => s.preflightStatusError)
   const preflightStatusLoading = useAppStore((s) => s.preflightStatusLoading)
   const refreshPreflightStatus = useAppStore((s) => s.refreshPreflightStatus)
+  const activeSkillRuntime = useActiveProjectSkillRuntime()
   const linearStatus = useAppStore((s) => s.linearStatus)
   const linearStatusChecked = useAppStore((s) => s.linearStatusChecked)
   const linearStatusContextKey = useAppStore((s) => s.linearStatusContextKey)
@@ -76,11 +78,13 @@ export function useSetupGuideProgress(
   const { installed: detectedBrowserUseSkillInstalled, loading: detectedBrowserUseSkillLoading } =
     useInstalledAgentSkill(ORCA_CLI_SKILL_NAME, {
       enabled: shouldRefreshCoreState,
+      discoveryTarget: activeSkillRuntime.discoveryTarget,
       sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
     })
   const { installed: computerUseSkillInstalled, loading: computerUseSkillLoading } =
     useInstalledAgentSkill(COMPUTER_USE_SKILL_NAME, {
       enabled: shouldRefreshCoreState,
+      discoveryTarget: activeSkillRuntime.discoveryTarget,
       sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
     })
   const {
@@ -88,6 +92,7 @@ export function useSetupGuideProgress(
     loading: detectedOrchestrationSkillLoading
   } = useInstalledAgentSkill(ORCHESTRATION_SKILL_NAME, {
     enabled: shouldRefreshCoreState,
+    discoveryTarget: activeSkillRuntime.discoveryTarget,
     sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
   })
   const providerRuntimeContextKey = getProviderRuntimeContextKey(settings)

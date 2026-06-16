@@ -148,40 +148,43 @@ describe('createPtySubprocess', () => {
     )
   })
 
-  it('repairs a deleted macOS daemon cwd before spawning node-pty', () => {
-    const proc = mockPtyProcess()
-    spawnMock.mockReturnValue(proc)
-    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
-    const originalCwd = process.cwd()
-    const deletedDaemonCwd = mkdtempSync(join(tmpdir(), 'orca-deleted-daemon-cwd-'))
-    Object.defineProperty(process, 'platform', { value: 'darwin' })
+  it.skipIf(process.platform === 'win32')(
+    'repairs a deleted macOS daemon cwd before spawning node-pty',
+    () => {
+      const proc = mockPtyProcess()
+      spawnMock.mockReturnValue(proc)
+      const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+      const originalCwd = process.cwd()
+      const deletedDaemonCwd = mkdtempSync(join(tmpdir(), 'orca-deleted-daemon-cwd-'))
+      Object.defineProperty(process, 'platform', { value: 'darwin' })
 
-    try {
-      process.chdir(deletedDaemonCwd)
-      rmSync(deletedDaemonCwd, { recursive: true, force: true })
+      try {
+        process.chdir(deletedDaemonCwd)
+        rmSync(deletedDaemonCwd, { recursive: true, force: true })
 
-      createPtySubprocess({
-        sessionId: 'test',
-        cols: 80,
-        rows: 24,
-        cwd: originalCwd,
-        env: { SHELL: '/bin/bash' }
-      })
+        createPtySubprocess({
+          sessionId: 'test',
+          cols: 80,
+          rows: 24,
+          cwd: originalCwd,
+          env: { SHELL: '/bin/bash' }
+        })
 
-      expect(process.cwd()).toBe(realpathSync(userDataPath))
-    } finally {
-      process.chdir(originalCwd)
-      if (platform) {
-        Object.defineProperty(process, 'platform', platform)
+        expect(process.cwd()).toBe(realpathSync(userDataPath))
+      } finally {
+        process.chdir(originalCwd)
+        if (platform) {
+          Object.defineProperty(process, 'platform', platform)
+        }
       }
-    }
 
-    expect(spawnMock).toHaveBeenCalledWith(
-      '/bin/bash',
-      expect.any(Array),
-      expect.objectContaining({ cwd: originalCwd })
-    )
-  })
+      expect(spawnMock).toHaveBeenCalledWith(
+        '/bin/bash',
+        expect.any(Array),
+        expect.objectContaining({ cwd: originalCwd })
+      )
+    }
+  )
 
   it('returns a SubprocessHandle with correct pid', () => {
     const proc = mockPtyProcess(42)

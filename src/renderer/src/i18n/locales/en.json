@@ -495,6 +495,12 @@
             "unavailable": "Orca cannot verify this folder right now. Check the runtime or SSH connection and try again."
           }
         }
+      },
+      "projectSkillRuntime": {
+        "wslUnavailable": "Project runtime needs WSL before this skill can be installed.",
+        "distroRequired": "Select a WSL distro for this project before installing this skill.",
+        "distroMissing": "The selected WSL distro is unavailable. Choose an available distro or switch this project to Windows.",
+        "wslDefault": "WSL default"
       }
     },
     "hooks": {
@@ -4725,7 +4731,9 @@
           "c46cdbbd4e": "Network"
         },
         "GeneralPane": {
-          "d58fccfd84": "Navigation"
+          "d58fccfd84": "Navigation",
+          "projectRuntime": "Project Runtime",
+          "projectRuntimeDescription": "Default runtime for local Windows projects that do not override it."
         },
         "GeneralSupportSection": {
           "af7d9f4396": "Thanks for the support!",
@@ -5460,7 +5468,9 @@
           "addPlannedHostHelp": "Remember this host and finish adding the project later.",
           "existingFolder": "Existing folder",
           "addPlannedHostToHost": "Add {{host}}",
-          "addPlannedHostConfirm": "This only records that the project should be available on this host. You can add the folder or clone later."
+          "addPlannedHostConfirm": "This only records that the project should be available on this host. You can add the folder or clone later.",
+          "projectRuntime": "Project Runtime",
+          "projectRuntimeDescription": "Choose whether this project runs on Windows or WSL."
         },
         "RepositorySourceControlAiActionRows": {
           "548a6e1281": "Command template",
@@ -6920,7 +6930,9 @@
             "7887a2c262": "folder",
             "7baf524b04": "workspace",
             "d0bc793689": "Root directory where workspace folders are created.",
-            "4c95d08fa2": "Workspace Directory"
+            "4c95d08fa2": "Workspace Directory",
+            "defaultProjectRuntime": "Default Project Runtime",
+            "defaultProjectRuntimeDescription": "Choose the runtime inherited by local Windows projects."
           }
         },
         "git": {
@@ -7389,7 +7401,9 @@
             "883aad2801": "Project-specific display details for the sidebar and tabs.",
             "7e1e456a95": "Display Name",
             "keepForkUpToDate": "Keep Fork Up to Date",
-            "keepForkUpToDateDescription": "Safely fast-forward this fork from upstream."
+            "keepForkUpToDateDescription": "Safely fast-forward this fork from upstream.",
+            "projectRuntime": "Project Runtime",
+            "projectRuntimeDescription": "Choose whether this project runs on Windows or WSL."
           }
         },
         "runtime": {
@@ -7946,6 +7960,35 @@
           "ask": "Ask",
           "safeAuto": "Safe Auto",
           "off": "Off"
+        },
+        "DefaultWindowsProjectRuntimeSetting": {
+          "defaultRuntime": "Default project runtime",
+          "windows": "Windows",
+          "wsl": "WSL",
+          "selectDistro": "Select distro",
+          "windowsDescription": "Projects inherit Windows unless a project overrides it.",
+          "wslUnavailable": "WSL is not available. Projects that inherit WSL will need repair.",
+          "distroRequired": "Choose a WSL distro before projects can inherit WSL.",
+          "wslDescription": "Projects inherit {{value0}} via WSL unless a project overrides it."
+        },
+        "ProjectWindowsRuntimeSetting": {
+          "projectRuntime": "Project runtime",
+          "inherit": "Inherit",
+          "windows": "Windows",
+          "wsl": "WSL",
+          "selectDistro": "Select distro",
+          "runtimeChangeHelp": "Runtime changes apply to new terminals, agent checks, and skill discovery for this project. Existing terminals keep their current runtime.",
+          "wslUnavailable": "WSL is not available. Switch this project to Windows or repair WSL.",
+          "distroMissing": "{{value0}} is not installed in WSL. Choose an installed distro or switch this project to Windows.",
+          "distroRequired": "Choose a WSL distro or switch this project to Windows.",
+          "inheritedWsl": "This project runs in {{value0}} via WSL from the global default.",
+          "projectWsl": "This project runs in {{value0}} via WSL.",
+          "inheritedWindows": "This project runs on Windows from the global default.",
+          "projectWindows": "This project runs on Windows.",
+          "runtimeSessionWarning": "{{value0}} will keep running in the current runtime. Let tasks finish or restart terminals before continuing.",
+          "pendingRuntimeChange": "Runtime change pending. New project work will use the selected runtime after you apply.",
+          "cancel": "Cancel",
+          "applyRuntimeChange": "Apply runtime change"
         }
       },
       "right": {

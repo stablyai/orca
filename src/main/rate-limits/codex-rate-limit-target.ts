@@ -4,11 +4,10 @@ import {
   normalizeCodexRuntimeSelection,
   type CodexAccountSelectionTarget
 } from '../codex-accounts/runtime-selection'
-
-function normalizeOptionalDistro(value: string | null | undefined): string | null {
-  const trimmed = value?.trim()
-  return trimmed ? trimmed : null
-}
+import {
+  getProjectRuntimeRateLimitTarget,
+  normalizeOptionalDistro
+} from './project-runtime-rate-limit-target'
 
 function getSingleSelectedWslDistro(settings: GlobalSettings): string | null {
   const selection = normalizeCodexRuntimeSelection(settings)
@@ -34,23 +33,13 @@ export function getInitialCodexRateLimitTarget(
       runtime: 'wsl',
       wslDistro:
         normalizeOptionalDistro(settings.localAccountWslDistro) ??
-        normalizeOptionalDistro(settings.terminalWindowsWslDistro) ??
         getSingleSelectedWslDistro(settings)
     }
   }
 
-  if (
-    settings.localAgentRuntime === 'wsl' ||
-    (settings.localAgentRuntime == null &&
-      platform === 'win32' &&
-      settings.terminalWindowsShell === 'wsl.exe')
-  ) {
-    return {
-      runtime: 'wsl',
-      wslDistro:
-        normalizeOptionalDistro(settings.localAgentWslDistro) ??
-        normalizeOptionalDistro(settings.terminalWindowsWslDistro)
-    }
+  const projectRuntimeTarget = getProjectRuntimeRateLimitTarget(settings, platform)
+  if (projectRuntimeTarget) {
+    return projectRuntimeTarget
   }
 
   const selection = normalizeCodexRuntimeSelection(settings)

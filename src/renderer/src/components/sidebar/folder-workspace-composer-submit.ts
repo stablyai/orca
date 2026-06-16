@@ -9,7 +9,9 @@ import { buildAgentStartupPlan } from '@/lib/tui-agent-startup'
 import { tuiAgentToAgentKind } from '@/lib/telemetry'
 import { activateAndRevealFolderWorkspace } from '@/lib/worktree-activation'
 import { isWorkItemLookupText } from '@/lib/work-item-lookup-text'
+import { isWindowsAbsolutePathLike } from '../../../../shared/cross-platform-path'
 import type { FolderWorkspace, ProjectGroup, TuiAgent } from '../../../../shared/types'
+import { isWslUncPath } from '../../../../shared/wsl-paths'
 import {
   getLinkedItemDisplayName,
   toFolderWorkspaceLinkedTask
@@ -35,6 +37,16 @@ type SubmitFolderWorkspaceCreateParams = {
   isRemote?: boolean
   createFolderWorkspace: (input: FolderWorkspaceCreateInput) => Promise<FolderWorkspace | null>
   onOpenChange: (open: boolean) => void
+}
+
+export function getFolderWorkspaceAgentLaunchPlatform(
+  projectGroup: Pick<ProjectGroup, 'connectionId' | 'parentPath'>
+): NodeJS.Platform {
+  const parentPath = projectGroup.parentPath?.trim() ?? ''
+  if (projectGroup.connectionId) {
+    return isWindowsAbsolutePathLike(parentPath) ? 'win32' : 'linux'
+  }
+  return parentPath && isWslUncPath(parentPath) ? 'linux' : CLIENT_PLATFORM
 }
 
 export async function submitFolderWorkspaceCreate({
@@ -95,7 +107,7 @@ export async function submitFolderWorkspaceCreate({
         agent: quickAgent,
         prompt: startupPrompt,
         cmdOverrides: agentCmdOverrides ?? {},
-        platform: CLIENT_PLATFORM,
+        platform: getFolderWorkspaceAgentLaunchPlatform(projectGroup),
         allowEmptyPromptLaunch: true
       })
     : null

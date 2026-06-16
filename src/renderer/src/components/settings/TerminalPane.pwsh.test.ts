@@ -241,7 +241,7 @@ describe('TerminalPane PowerShell version setting', () => {
     expect(link?.props.href).toBe('https://github.com/PowerShell/PowerShell/releases/latest')
   })
 
-  it('shows WSL as a Windows default shell option when available', () => {
+  it('does not show WSL as a Windows default shell option when available', () => {
     const element = TerminalPane({
       settings: {
         terminalScrollbackBytes: 10_000_000,
@@ -258,7 +258,10 @@ describe('TerminalPane PowerShell version setting', () => {
       gitBashAvailable: false
     })
 
-    expect(collectText(element)).toContain('WSL')
+    const text = collectText(element)
+    expect(text).toContain('PowerShell')
+    expect(text).toContain('Command Prompt')
+    expect(text).not.toContain('WSL')
   })
 
   it('shows Windows shell controls for a remote Windows host on a non-Windows client', () => {
@@ -282,7 +285,7 @@ describe('TerminalPane PowerShell version setting', () => {
     const text = collectText(element)
     expect(text).toContain('Default shell for new terminal panes on Windows')
     expect(text).toContain('Command Prompt')
-    expect(text).toContain('WSL')
+    expect(text).not.toContain('WSL')
   })
 
   it('hides WSL as a Windows default shell option when unavailable', () => {
@@ -304,7 +307,7 @@ describe('TerminalPane PowerShell version setting', () => {
     expect(collectText(element)).not.toContain('WSL')
   })
 
-  it('shows WSL distro choices when WSL is the selected Windows shell', () => {
+  it('does not show WSL distro choices for a persisted legacy WSL shell', () => {
     const element = TerminalPane({
       settings: {
         terminalScrollbackBytes: 10_000_000,
@@ -323,10 +326,12 @@ describe('TerminalPane PowerShell version setting', () => {
     })
 
     const text = collectText(element)
-    expect(text).toContain('Choose which WSL distribution')
-    expect(text).toContain('Windows default')
-    expect(text).toContain('Ubuntu')
-    expect(text).toContain('Debian')
+    expect(text).toContain('PowerShell')
+    expect(text).toContain('Command Prompt')
+    expect(text).not.toContain('Choose which WSL distribution')
+    expect(text).not.toContain('Windows default')
+    expect(text).not.toContain('Ubuntu')
+    expect(text).not.toContain('Debian')
   })
 
   it('shows Git Bash as a Windows default shell option when bash.exe is detected', () => {

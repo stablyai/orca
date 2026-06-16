@@ -88,7 +88,11 @@ describe('DaemonSpawner', () => {
       const s = createSpawner()
       const info = await s.ensureRunning()
 
-      expect(info.socketPath).toContain(dir)
+      if (process.platform === 'win32') {
+        expect(info.socketPath).toContain(`orca-terminal-host-v${PROTOCOL_VERSION}`)
+      } else {
+        expect(info.socketPath).toContain(dir)
+      }
       expect(info.tokenPath).toContain(dir)
     })
 

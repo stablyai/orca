@@ -19,7 +19,8 @@ import { gitSpawn } from '../git/runner'
 export function searchWithGitGrep(
   rootPath: string,
   args: SearchOptions,
-  maxResults: number
+  maxResults: number,
+  localGitOptions: { wslDistro?: string } = {}
 ): Promise<SearchResult> {
   return new Promise((resolve) => {
     const gitArgs = buildGitGrepArgs(args.query, args)
@@ -30,6 +31,7 @@ export function searchWithGitGrep(
 
     const child = gitSpawn(gitArgs, {
       cwd: rootPath,
+      ...(localGitOptions.wslDistro ? { wslDistro: localGitOptions.wslDistro } : {}),
       stdio: ['ignore', 'pipe', 'pipe']
     })
     let killTimeout: ReturnType<typeof setTimeout>

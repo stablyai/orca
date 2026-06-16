@@ -62,15 +62,20 @@ import {
   generateCommitMessageFromContext,
   generatePullRequestFieldsFromContext,
   resolveCommitMessageSettings,
+  type CommitMessageGenerationTarget,
   type DiscoverCommitMessageModelsResult,
   type GenerateCommitMessageResult,
   type GeneratePullRequestFieldsResult
 } from '../text-generation/commit-message-text-generation'
-import type { CommitMessageAgentEnvironmentResolvers } from '../text-generation/commit-message-agent-environment'
+import type {
+  CommitMessageAgentEnvironmentResolvers,
+  CommitMessageAgentRuntimeTarget
+} from '../text-generation/commit-message-agent-environment'
 import { prepareLocalCommitMessageAgentEnv } from '../text-generation/commit-message-agent-environment'
 import { getPullRequestDraftContext } from '../text-generation/pull-request-context'
 import { normalizeRuntimeRelativePath } from './runtime-relative-paths'
 import { gitExecFileAsync } from '../git/runner'
+import type { GitRuntimeOptions } from '../git/git-runtime-options'
 
 export type ResolvedRuntimeGitWorktree = Worktree & { git: GitWorktreeInfo }
 type RuntimeCommitMessageSettingsOverride = Partial<
@@ -115,10 +120,39 @@ function normalizeRuntimeGitRelativePath(filePath: string): string {
   return relativePath
 }
 
+type RuntimeGitTarget = {
+  worktree: ResolvedRuntimeGitWorktree
+  repo?: Repo
+  connectionId?: string
+  localGitOptions?: GitRuntimeOptions
+}
+
+function localGitOptionsForTarget(target: RuntimeGitTarget): GitRuntimeOptions {
+  return target.connectionId ? {} : (target.localGitOptions ?? {})
+}
+
+function localAgentRuntimeTargetForTarget(
+  target: RuntimeGitTarget
+): CommitMessageAgentRuntimeTarget {
+  const wslDistro = localGitOptionsForTarget(target).wslDistro
+  return wslDistro ? { runtime: 'wsl', wslDistro } : { runtime: 'host' }
+}
+
+function localTextGenerationTargetForTarget(
+  target: RuntimeGitTarget,
+  env?: NodeJS.ProcessEnv
+): Extract<CommitMessageGenerationTarget, { kind: 'local' }> {
+  const wslDistro = localGitOptionsForTarget(target).wslDistro
+  return {
+    kind: 'local',
+    cwd: target.worktree.path,
+    ...(wslDistro ? { wslDistro } : {}),
+    ...(env ? { env } : {})
+  }
+}
+
 export type RuntimeGitCommandHost = {
-  resolveRuntimeGitTarget(
-    selector: string
-  ): Promise<{ worktree: ResolvedRuntimeGitWorktree; repo?: Repo; connectionId?: string }>
+  resolveRuntimeGitTarget(selector: string): Promise<RuntimeGitTarget>
   getRuntimeSettings(): GlobalSettings
   getCommitMessageAgentEnvironment?(): CommitMessageAgentEnvironmentResolvers | undefined
 }
@@ -140,9 +174,10 @@ export class RuntimeGitCommands {
         ? provider.getStatus(target.worktree.path, options)
         : provider.getStatus(target.worktree.path)
     }
+    const gitOptions = localGitOptionsForTarget(target)
     return options
-      ? getGitStatus(target.worktree.path, options)
-      : getGitStatus(target.worktree.path)
+      ? getGitStatus(target.worktree.path, { ...options, ...gitOptions })
+      : getGitStatus(target.worktree.path, gitOptions)
   }
 
   async checkRuntimeGitIgnoredPaths(
@@ -157,7 +192,7 @@ export class RuntimeGitCommands {
       }
       return provider.checkIgnoredPaths(target.worktree.path, relativePaths)
     }
-    return checkIgnoredPaths(target.worktree.path, relativePaths)
+    return checkIgnoredPaths(target.worktree.path, relativePaths, localGitOptionsForTarget(target))
   }
 
   async getRuntimeGitHistory(
@@ -172,7 +207,10 @@ export class RuntimeGitCommands {
       }
       return provider.getHistory(target.worktree.path, options)
     }
-    return getGitHistory(target.worktree.path, options)
+    return getGitHistory(target.worktree.path, {
+      ...options,
+      ...localGitOptionsForTarget(target)
+    })
   }
 
   async getRuntimeGitConflictOperation(worktreeSelector: string): Promise<GitConflictOperation> {
@@ -197,7 +235,7 @@ export class RuntimeGitCommands {
       await provider.abortMerge(target.worktree.path)
       return { ok: true }
     }
-    await abortMerge(target.worktree.path)
+    await abortMerge(target.worktree.path, localGitOptionsForTarget(target))
     return { ok: true }
   }
 
@@ -211,7 +249,7 @@ export class RuntimeGitCommands {
       await provider.abortRebase(target.worktree.path)
       return { ok: true }
     }
-    await abortRebase(target.worktree.path)
+    await abortRebase(target.worktree.path, localGitOptionsForTarget(target))
     return { ok: true }
   }
 
@@ -228,7 +266,7 @@ export class RuntimeGitCommands {
       await provider.checkoutBranch(target.worktree.path, branch)
       return { ok: true, branch }
     }
-    await checkoutBranch(target.worktree.path, branch)
+    await checkoutBranch(target.worktree.path, branch, localGitOptionsForTarget(target))
     return { ok: true, branch }
   }
 
@@ -241,7 +279,7 @@ export class RuntimeGitCommands {
       }
       return provider.listLocalBranches(target.worktree.path)
     }
-    return listLocalBranches(target.worktree.path)
+    return listLocalBranches(target.worktree.path, localGitOptionsForTarget(target))
   }
 
   async getRuntimeGitDiff(
@@ -259,7 +297,13 @@ export class RuntimeGitCommands {
       }
       return provider.getDiff(target.worktree.path, relativePath, staged, compareAgainstHead)
     }
-    return getDiff(target.worktree.path, relativePath, staged, compareAgainstHead)
+    return getDiff(
+      target.worktree.path,
+      relativePath,
+      staged,
+      compareAgainstHead,
+      localGitOptionsForTarget(target)
+    )
   }
 
   async getRuntimeGitBranchCompare(
@@ -274,7 +318,7 @@ export class RuntimeGitCommands {
       }
       return provider.getBranchCompare(target.worktree.path, baseRef)
     }
-    return getBranchCompare(target.worktree.path, baseRef)
+    return getBranchCompare(target.worktree.path, baseRef, localGitOptionsForTarget(target))
   }
 
   async getRuntimeGitCommitCompare(
@@ -289,7 +333,7 @@ export class RuntimeGitCommands {
       }
       return provider.getCommitCompare(target.worktree.path, commitId)
     }
-    return getCommitCompare(target.worktree.path, commitId)
+    return getCommitCompare(target.worktree.path, commitId, localGitOptionsForTarget(target))
   }
 
   async getRuntimeGitUpstreamStatus(
@@ -304,7 +348,7 @@ export class RuntimeGitCommands {
       }
       return provider.getUpstreamStatus(target.worktree.path, pushTarget)
     }
-    return getUpstreamStatus(target.worktree.path, pushTarget)
+    return getUpstreamStatus(target.worktree.path, pushTarget, localGitOptionsForTarget(target))
   }
 
   async fetchRuntimeGit(
@@ -320,7 +364,7 @@ export class RuntimeGitCommands {
       await provider.fetchRemote(target.worktree.path, pushTarget)
       return { ok: true }
     }
-    await gitFetch(target.worktree.path, pushTarget)
+    await gitFetch(target.worktree.path, pushTarget, localGitOptionsForTarget(target))
     return { ok: true }
   }
 
@@ -336,7 +380,11 @@ export class RuntimeGitCommands {
       }
       return provider.syncForkDefaultBranch(target.worktree.path, expectedUpstream)
     }
-    return gitSyncForkDefaultBranch(target.worktree.path, expectedUpstream)
+    return gitSyncForkDefaultBranch(
+      target.worktree.path,
+      expectedUpstream,
+      localGitOptionsForTarget(target)
+    )
   }
 
   async pullRuntimeGit(
@@ -352,7 +400,7 @@ export class RuntimeGitCommands {
       await provider.pullBranch(target.worktree.path, pushTarget)
       return { ok: true }
     }
-    await gitPull(target.worktree.path, pushTarget)
+    await gitPull(target.worktree.path, pushTarget, localGitOptionsForTarget(target))
     return { ok: true }
   }
 
@@ -369,7 +417,7 @@ export class RuntimeGitCommands {
       await provider.fastForwardBranch(target.worktree.path, pushTarget)
       return { ok: true }
     }
-    await gitFastForward(target.worktree.path, pushTarget)
+    await gitFastForward(target.worktree.path, pushTarget, localGitOptionsForTarget(target))
     return { ok: true }
   }
 
@@ -383,7 +431,7 @@ export class RuntimeGitCommands {
       await provider.rebaseFromBase(target.worktree.path, baseRef)
       return { ok: true }
     }
-    await gitPullRebaseFromBase(target.worktree.path, baseRef)
+    await gitPullRebaseFromBase(target.worktree.path, baseRef, localGitOptionsForTarget(target))
     return { ok: true }
   }
 
@@ -405,7 +453,8 @@ export class RuntimeGitCommands {
       return { ok: true }
     }
     await gitPush(target.worktree.path, publish === true, pushTarget, {
-      forceWithLease: forceWithLease === true
+      forceWithLease: forceWithLease === true,
+      ...localGitOptionsForTarget(target)
     })
     return { ok: true }
   }
@@ -439,12 +488,16 @@ export class RuntimeGitCommands {
         }
       )
     }
-    return getBranchDiff(target.worktree.path, {
-      mergeBase: compare.mergeBase,
-      headOid: compare.headOid,
-      filePath: relativePath,
-      oldPath: oldRelativePath
-    })
+    return getBranchDiff(
+      target.worktree.path,
+      {
+        mergeBase: compare.mergeBase,
+        headOid: compare.headOid,
+        filePath: relativePath,
+        oldPath: oldRelativePath
+      },
+      localGitOptionsForTarget(target)
+    )
   }
 
   async getRuntimeGitCommitDiff(
@@ -466,12 +519,16 @@ export class RuntimeGitCommands {
         oldPath: oldRelativePath
       })
     }
-    return getCommitDiff(target.worktree.path, {
-      commitOid: args.commitOid,
-      parentOid: args.parentOid,
-      filePath: relativePath,
-      oldPath: oldRelativePath
-    })
+    return getCommitDiff(
+      target.worktree.path,
+      {
+        commitOid: args.commitOid,
+        parentOid: args.parentOid,
+        filePath: relativePath,
+        oldPath: oldRelativePath
+      },
+      localGitOptionsForTarget(target)
+    )
   }
 
   async commitRuntimeGit(
@@ -489,7 +546,7 @@ export class RuntimeGitCommands {
       }
       return provider.commit(target.worktree.path, message)
     }
-    return commitChanges(target.worktree.path, message)
+    return commitChanges(target.worktree.path, message, localGitOptionsForTarget(target))
   }
 
   async generateRuntimeCommitMessage(
@@ -545,7 +602,7 @@ export class RuntimeGitCommands {
 
     let context: CommitMessageDraftContext | null
     try {
-      context = await getStagedCommitContext(target.worktree.path)
+      context = await getStagedCommitContext(target.worktree.path, localGitOptionsForTarget(target))
     } catch (error) {
       console.error('[runtime-git] Failed to read staged commit context:', error)
       return { success: false, error: 'Failed to read staged changes.' }
@@ -555,16 +612,17 @@ export class RuntimeGitCommands {
     }
     const localEnv = await prepareLocalCommitMessageAgentEnv(
       resolvedSettings.params.agentId,
-      this.host.getCommitMessageAgentEnvironment?.()
+      this.host.getCommitMessageAgentEnvironment?.(),
+      localAgentRuntimeTargetForTarget(target)
     )
     if (!localEnv.ok) {
       return { success: false, error: localEnv.error }
     }
-    return generateCommitMessageFromContext(context, resolvedSettings.params, {
-      kind: 'local',
-      cwd: target.worktree.path,
-      ...(localEnv.env ? { env: localEnv.env } : {})
-    })
+    return generateCommitMessageFromContext(
+      context,
+      resolvedSettings.params,
+      localTextGenerationTargetForTarget(target, localEnv.env)
+    )
   }
 
   async cancelRuntimeGenerateCommitMessage(worktreeSelector: string): Promise<{ ok: true }> {
@@ -620,7 +678,12 @@ export class RuntimeGitCommands {
             currentDraft: input.draft
           })
         : await getPullRequestDraftContext(
-            (argv, options) => gitExecFileAsync(argv, { cwd: target.worktree.path, ...options }),
+            (argv, options) =>
+              gitExecFileAsync(argv, {
+                cwd: target.worktree.path,
+                ...localGitOptionsForTarget(target),
+                ...options
+              }),
             {
               base: input.base,
               currentTitle: input.title,
@@ -650,16 +713,17 @@ export class RuntimeGitCommands {
 
     const localEnv = await prepareLocalCommitMessageAgentEnv(
       resolvedSettings.params.agentId,
-      this.host.getCommitMessageAgentEnvironment?.()
+      this.host.getCommitMessageAgentEnvironment?.(),
+      localAgentRuntimeTargetForTarget(target)
     )
     if (!localEnv.ok) {
       return { success: false, error: localEnv.error }
     }
-    return generatePullRequestFieldsFromContext(context, resolvedSettings.params, {
-      kind: 'local',
-      cwd: target.worktree.path,
-      ...(localEnv.env ? { env: localEnv.env } : {})
-    })
+    return generatePullRequestFieldsFromContext(
+      context,
+      resolvedSettings.params,
+      localTextGenerationTargetForTarget(target, localEnv.env)
+    )
   }
 
   async cancelRuntimeGeneratePullRequestFields(worktreeSelector: string): Promise<{ ok: true }> {
@@ -700,12 +764,19 @@ export class RuntimeGitCommands {
     }
     const localEnv = await prepareLocalCommitMessageAgentEnv(
       typedAgentId,
-      this.host.getCommitMessageAgentEnvironment?.()
+      this.host.getCommitMessageAgentEnvironment?.(),
+      localAgentRuntimeTargetForTarget(target)
     )
     if (!localEnv.ok) {
       return { success: false, error: localEnv.error }
     }
-    return discoverCommitMessageModelsLocal(typedAgentId, localEnv.env, agentCommandOverride)
+    const localOptions = localGitOptionsForTarget(target)
+    return localOptions.wslDistro
+      ? discoverCommitMessageModelsLocal(typedAgentId, localEnv.env, agentCommandOverride, {
+          cwd: target.worktree.path,
+          wslDistro: localOptions.wslDistro
+        })
+      : discoverCommitMessageModelsLocal(typedAgentId, localEnv.env, agentCommandOverride)
   }
 
   async stageRuntimeGitPath(worktreeSelector: string, filePath: string): Promise<{ ok: true }> {
@@ -719,7 +790,7 @@ export class RuntimeGitCommands {
       await provider.stageFile(target.worktree.path, relativePath)
       return { ok: true }
     }
-    await stageFile(target.worktree.path, relativePath)
+    await stageFile(target.worktree.path, relativePath, localGitOptionsForTarget(target))
     return { ok: true }
   }
 
@@ -734,7 +805,7 @@ export class RuntimeGitCommands {
       await provider.unstageFile(target.worktree.path, relativePath)
       return { ok: true }
     }
-    await unstageFile(target.worktree.path, relativePath)
+    await unstageFile(target.worktree.path, relativePath, localGitOptionsForTarget(target))
     return { ok: true }
   }
 
@@ -752,7 +823,7 @@ export class RuntimeGitCommands {
       await provider.bulkStageFiles(target.worktree.path, relativePaths)
       return { ok: true }
     }
-    await bulkStageFiles(target.worktree.path, relativePaths)
+    await bulkStageFiles(target.worktree.path, relativePaths, localGitOptionsForTarget(target))
     return { ok: true }
   }
 
@@ -770,7 +841,7 @@ export class RuntimeGitCommands {
       await provider.bulkUnstageFiles(target.worktree.path, relativePaths)
       return { ok: true }
     }
-    await bulkUnstageFiles(target.worktree.path, relativePaths)
+    await bulkUnstageFiles(target.worktree.path, relativePaths, localGitOptionsForTarget(target))
     return { ok: true }
   }
 
@@ -788,7 +859,7 @@ export class RuntimeGitCommands {
       await provider.bulkDiscardChanges(target.worktree.path, relativePaths)
       return { ok: true }
     }
-    await bulkDiscardChanges(target.worktree.path, relativePaths)
+    await bulkDiscardChanges(target.worktree.path, relativePaths, localGitOptionsForTarget(target))
     return { ok: true }
   }
 
@@ -803,7 +874,7 @@ export class RuntimeGitCommands {
       await provider.discardChanges(target.worktree.path, relativePath)
       return { ok: true }
     }
-    await discardChanges(target.worktree.path, relativePath)
+    await discardChanges(target.worktree.path, relativePath, localGitOptionsForTarget(target))
     return { ok: true }
   }
 

@@ -4,6 +4,7 @@ import { join } from 'path'
 import { mkdtempSync, rmSync, existsSync, readFileSync } from 'fs'
 import { startDaemon, type DaemonHandle } from './daemon-main'
 import { DaemonClient } from './client'
+import { getDaemonSocketPath } from './daemon-spawner'
 
 function createTestDir(): string {
   return mkdtempSync(join(tmpdir(), 'daemon-main-test-'))
@@ -17,7 +18,7 @@ describe('startDaemon', () => {
 
   beforeEach(() => {
     dir = createTestDir()
-    socketPath = join(dir, 'test.sock')
+    socketPath = getDaemonSocketPath(dir)
     tokenPath = join(dir, 'test.token')
   })
 

@@ -5,15 +5,18 @@ import { stat } from 'fs/promises'
 // Why: Ghostty honors XDG before native macOS paths; we replicate that precedence.
 function xdgConfigDirs(home: string): string[] {
   if (process.env.XDG_CONFIG_HOME) {
-    return [path.join(process.env.XDG_CONFIG_HOME, 'ghostty')]
+    return [path.posix.join(process.env.XDG_CONFIG_HOME, 'ghostty')]
   }
-  return [path.join(home, '.config', 'ghostty')]
+  return [path.posix.join(home, '.config', 'ghostty')]
 }
 
 // Why: Ghostty loads the modern filename before the legacy `config` fallback,
 // and later files in this order override earlier files.
 function withFilenames(dirs: string[]): string[] {
-  return dirs.flatMap((dir) => [path.join(dir, 'config.ghostty'), path.join(dir, 'config')])
+  return dirs.flatMap((dir) => [
+    path.posix.join(dir, 'config.ghostty'),
+    path.posix.join(dir, 'config')
+  ])
 }
 
 export function getGhosttyConfigPaths(): string[] {
@@ -24,7 +27,7 @@ export function getGhosttyConfigPaths(): string[] {
     case 'darwin': {
       const dirs = xdgConfigDirs(home)
       // Why: Native macOS path is the final fallback after XDG candidates.
-      dirs.push(path.join(home, 'Library', 'Application Support', 'com.mitchellh.ghostty'))
+      dirs.push(path.posix.join(home, 'Library', 'Application Support', 'com.mitchellh.ghostty'))
       return withFilenames(dirs)
     }
     case 'linux': {

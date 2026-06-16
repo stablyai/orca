@@ -15,6 +15,15 @@ Describe the user-visible change.
 - [ ] `pnpm build`
 - [ ] Added or updated high-quality tests that would catch regressions, or explained why tests were not needed
 
+## Windows / WSL / SSH Runtime Checklist
+
+- [ ] Identified affected runtime hosts: local Windows host, local WSL, SSH Linux, SSH Windows, local macOS/Linux, or not applicable
+- [ ] Project-scoped code consumes the resolved project runtime, or explains why the code is app-global
+- [ ] Checked global-default WSL with project host override, and global-default host with project WSL override, when relevant
+- [ ] Checked WSL unavailable or selected distro missing behavior, when relevant
+- [ ] Verified PATH, shell, cwd, command construction, and path comparisons stay correct for the owning runtime
+- [ ] Confirmed Git provider behavior remains provider-neutral unless this PR is explicitly provider-specific
+
 ## AI Review Report
 
 Summarize the code review you ran with your AI coding agent. Include the main risks it checked, what it flagged, and what you changed or verified as a result.

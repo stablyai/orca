@@ -1,13 +1,37 @@
 import type { AppState } from '@/store/types'
 import { parseWslUncPath } from '../../../shared/wsl-paths'
+import {
+  deriveGlobalWindowsRuntimeDefaultFromLegacySettings,
+  resolveProjectExecutionRuntime,
+  type ProjectExecutionRuntimeResolution
+} from '../../../shared/project-execution-runtime'
 import { getProviderRuntimeContextKey } from './provider-runtime-context'
+import {
+  getCachedWindowsTerminalCapabilities,
+  hasCachedWindowsTerminalCapabilities
+} from './windows-terminal-capabilities'
+
+type LocalProjectRuntimeState = Pick<
+  AppState,
+  'activeRepoId' | 'activeWorktreeId' | 'projects' | 'repos' | 'settings' | 'worktreesByRepo'
+>
+
+type LocalProjectRuntimeWslContext = {
+  wslAvailable?: boolean
+  availableWslDistros?: readonly string[] | null
+}
 
 export type LocalPreflightContext =
-  | { wslDistro?: string | null; wslDefault?: boolean; runtimeContextKey?: string }
+  | {
+      wslDistro?: string | null
+      wslDefault?: boolean
+      runtimeContextKey?: string
+      projectRuntime?: ProjectExecutionRuntimeResolution
+    }
   | undefined
 
 const wslPreflightContextsByDistro = new Map<string, NonNullable<LocalPreflightContext>>()
-const wslDefaultPreflightContext = Object.freeze({ wslDefault: true })
+const projectRuntimePreflightContextsByKey = new Map<string, NonNullable<LocalPreflightContext>>()
 
 export function getWslDistroFromPath(path?: string | null): string | null {
   return path ? (parseWslUncPath(path)?.distro ?? null) : null
@@ -26,41 +50,218 @@ function getWslPreflightContext(wslDistro: string): NonNullable<LocalPreflightCo
   return context
 }
 
-export function getLocalPreflightContext(state: AppState): LocalPreflightContext {
+function getProjectRuntimeCacheKey(resolution: ProjectExecutionRuntimeResolution): string {
+  return resolution.status === 'resolved' ? resolution.runtime.cacheKey : resolution.repair.cacheKey
+}
+
+function getProjectRuntimeContextObjectCacheKey(
+  resolution: ProjectExecutionRuntimeResolution
+): string {
+  if (resolution.status === 'resolved') {
+    return `${resolution.runtime.cacheKey}:${resolution.runtime.reason}`
+  }
+  return `${resolution.repair.cacheKey}:${resolution.repair.source}`
+}
+
+function getProjectRuntimePreflightContext(
+  resolution: ProjectExecutionRuntimeResolution
+): NonNullable<LocalPreflightContext> {
+  const cacheKey = getProjectRuntimeContextObjectCacheKey(resolution)
+  const cached = projectRuntimePreflightContextsByKey.get(cacheKey)
+  if (cached) {
+    return cached
+  }
+
+  const wslDistro =
+    resolution.status === 'resolved' && resolution.runtime.kind === 'wsl'
+      ? resolution.runtime.distro
+      : undefined
+  // Why: selectors compare by reference; cache each resolved runtime context so
+  // adding projectRuntime does not reintroduce useSyncExternalStore churn.
+  const context = Object.freeze({
+    ...(wslDistro ? { wslDistro } : {}),
+    projectRuntime: resolution
+  })
+  projectRuntimePreflightContextsByKey.set(cacheKey, context)
+  return context
+}
+
+export function getLocalProjectExecutionRuntimeContext(
+  state: LocalProjectRuntimeState,
+  worktreeId?: string | null,
+  appPlatform: NodeJS.Platform = getRendererAppPlatform(),
+  wslContext: LocalProjectRuntimeWslContext = {}
+): ProjectExecutionRuntimeResolution | undefined {
+  if (appPlatform !== 'win32') {
+    return undefined
+  }
+
+  const worktree = getLocalWorktree(state, worktreeId)
+  const repo = (state.repos ?? []).find((entry) => entry.id === state.activeRepoId)
+  const projectId = getLocalPreflightProjectId(state, worktreeId)
+  const project = state.projects?.find((entry) => entry.id === projectId)
+  const localPath = worktree?.path ?? repo?.path
+  const worktreeWslDistro = getWslDistroFromPath(localPath)
+  const projectRuntimePreference =
+    project?.localWindowsRuntimePreference ??
+    (worktreeWslDistro ? { kind: 'wsl', distro: worktreeWslDistro } : { kind: 'inherit-global' })
+
+  return resolveProjectExecutionRuntime({
+    appPlatform,
+    projectId,
+    projectRuntimePreference,
+    globalWindowsRuntimeDefault:
+      state.settings?.localWindowsRuntimeDefault ??
+      deriveGlobalWindowsRuntimeDefaultFromLegacySettings(state.settings).defaultRuntime,
+    wslAvailable: wslContext.wslAvailable,
+    availableWslDistros: wslContext.availableWslDistros
+  })
+}
+
+export function getLocalRepoProjectExecutionRuntimeContext(
+  state: LocalProjectRuntimeState,
+  repoId: string | null | undefined,
+  appPlatform: NodeJS.Platform = getRendererAppPlatform(),
+  wslContext: LocalProjectRuntimeWslContext = {}
+): ProjectExecutionRuntimeResolution | undefined {
+  if (appPlatform !== 'win32' || !repoId) {
+    return undefined
+  }
+
+  const repo = (state.repos ?? []).find((entry) => entry.id === repoId)
+  const project = state.projects?.find(
+    (entry) => entry.id === repoId || entry.sourceRepoIds.includes(repoId)
+  )
+  const projectId = project?.id ?? repoId
+  const repoWslDistro = getWslDistroFromPath(repo?.path)
+  const projectRuntimePreference =
+    project?.localWindowsRuntimePreference ??
+    (repoWslDistro ? { kind: 'wsl', distro: repoWslDistro } : { kind: 'inherit-global' })
+
+  return resolveProjectExecutionRuntime({
+    appPlatform,
+    projectId,
+    projectRuntimePreference,
+    globalWindowsRuntimeDefault:
+      state.settings?.localWindowsRuntimeDefault ??
+      deriveGlobalWindowsRuntimeDefaultFromLegacySettings(state.settings).defaultRuntime,
+    wslAvailable: wslContext.wslAvailable,
+    availableWslDistros: wslContext.availableWslDistros
+  })
+}
+
+export function getLocalPreflightContext(
+  state: AppState,
+  appPlatform: NodeJS.Platform = getRendererAppPlatform(),
+  wslContext: LocalProjectRuntimeWslContext = getCachedLocalProjectRuntimeWslContext()
+): LocalPreflightContext {
   if (state.settings?.activeRuntimeEnvironmentId?.trim()) {
     return { runtimeContextKey: getProviderRuntimeContextKey(state.settings) }
+  }
+  const projectRuntime = getLocalProjectExecutionRuntimeContext(
+    state,
+    undefined,
+    appPlatform,
+    wslContext
+  )
+  if (projectRuntime) {
+    return getProjectRuntimePreflightContext(projectRuntime)
   }
   const wslDistro = getLocalPreflightWslDistro(state)
   return wslDistro ? getWslPreflightContext(wslDistro) : undefined
 }
 
-export function getLocalAgentPreflightContext(state: AppState): LocalPreflightContext {
+export function getLocalAgentPreflightContext(
+  state: AppState,
+  appPlatform: NodeJS.Platform = getRendererAppPlatform(),
+  wslContext: LocalProjectRuntimeWslContext = getCachedLocalProjectRuntimeWslContext()
+): LocalPreflightContext {
+  const projectRuntime = getLocalProjectExecutionRuntimeContext(
+    state,
+    undefined,
+    appPlatform,
+    wslContext
+  )
+  if (projectRuntime) {
+    return getProjectRuntimePreflightContext(projectRuntime)
+  }
+
   const explicitAgentRuntime = state.settings?.localAgentRuntime
   if (explicitAgentRuntime === 'host') {
-    return undefined
+    return getProjectRuntimePreflightContext(
+      resolveProjectExecutionRuntime({
+        appPlatform: 'win32',
+        projectId: getLocalPreflightProjectId(state),
+        projectRuntimePreference: { kind: 'windows-host' },
+        globalWindowsRuntimeDefault: deriveGlobalWindowsRuntimeDefaultFromLegacySettings(
+          state.settings
+        ).defaultRuntime
+      })
+    )
   }
   if (explicitAgentRuntime === 'wsl') {
-    const explicitDistro =
-      state.settings?.localAgentWslDistro?.trim() ||
-      state.settings?.terminalWindowsWslDistro?.trim()
+    const explicitDistro = state.settings?.localAgentWslDistro?.trim()
     if (explicitDistro) {
-      return getWslPreflightContext(explicitDistro)
+      return getProjectRuntimePreflightContext(
+        resolveProjectExecutionRuntime({
+          appPlatform: 'win32',
+          projectId: getLocalPreflightProjectId(state),
+          projectRuntimePreference: { kind: 'wsl', distro: explicitDistro },
+          globalWindowsRuntimeDefault: deriveGlobalWindowsRuntimeDefaultFromLegacySettings(
+            state.settings
+          ).defaultRuntime
+        })
+      )
     }
-    return wslDefaultPreflightContext
+    return getProjectRuntimePreflightContext(
+      resolveProjectExecutionRuntime({
+        appPlatform: 'win32',
+        projectId: getLocalPreflightProjectId(state),
+        projectRuntimePreference: { kind: 'inherit-global' },
+        globalWindowsRuntimeDefault: deriveGlobalWindowsRuntimeDefaultFromLegacySettings(
+          state.settings
+        ).defaultRuntime
+      })
+    )
   }
 
   const wslDistro = getLocalPreflightWslDistro(state)
   if (wslDistro) {
     return getWslPreflightContext(wslDistro)
   }
-  if (state.settings?.terminalWindowsShell === 'wsl.exe') {
-    const preferredDistro = state.settings.terminalWindowsWslDistro?.trim()
-    if (preferredDistro) {
-      return getWslPreflightContext(preferredDistro)
-    }
-    return wslDefaultPreflightContext
-  }
   return undefined
+}
+
+function getRendererAppPlatform(): NodeJS.Platform {
+  const preloadPlatform =
+    typeof window === 'undefined' ? undefined : window.api?.platform?.get?.()?.platform
+  if (preloadPlatform) {
+    return preloadPlatform
+  }
+  const userAgent = typeof navigator === 'undefined' ? '' : navigator.userAgent
+  if (userAgent.includes('Windows')) {
+    return 'win32'
+  }
+  if (userAgent.includes('Mac')) {
+    return 'darwin'
+  }
+  if (userAgent) {
+    return 'linux'
+  }
+  return 'win32'
+}
+
+function getCachedLocalProjectRuntimeWslContext(): LocalProjectRuntimeWslContext {
+  // Why: preflight selectors are synchronous. Reuse an existing capability
+  // answer when available without spawning WSL probes from store reads.
+  if (!hasCachedWindowsTerminalCapabilities()) {
+    return {}
+  }
+  const capabilities = getCachedWindowsTerminalCapabilities()
+  return {
+    wslAvailable: capabilities.wslAvailable,
+    availableWslDistros: capabilities.wslDistros
+  }
 }
 
 function getLocalPreflightWslDistro(state: AppState): string | null {
@@ -74,7 +275,29 @@ function getLocalPreflightWslDistro(state: AppState): string | null {
   return getWslDistroFromPath(activePath)
 }
 
+function getLocalWorktree(state: LocalProjectRuntimeState, worktreeId?: string | null) {
+  const targetWorktreeId = worktreeId ?? state.activeWorktreeId
+  return targetWorktreeId
+    ? Object.values(state.worktreesByRepo ?? {})
+        .flat()
+        .find((worktree) => worktree.id === targetWorktreeId)
+    : null
+}
+
+function getLocalPreflightProjectId(
+  state: LocalProjectRuntimeState,
+  worktreeId?: string | null
+): string {
+  const activeWorktree = getLocalWorktree(state, worktreeId)
+  return (
+    activeWorktree?.projectId ?? activeWorktree?.repoId ?? state.activeRepoId ?? 'local-project'
+  )
+}
+
 export function localPreflightContextKey(context: LocalPreflightContext): string {
+  if (context?.projectRuntime) {
+    return getProjectRuntimeCacheKey(context.projectRuntime)
+  }
   if (context?.runtimeContextKey) {
     return context.runtimeContextKey
   }

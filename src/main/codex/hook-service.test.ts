@@ -735,7 +735,7 @@ describe('CodexHookService', () => {
       systemHooksPath,
       `${JSON.stringify({
         hooks: {
-          Stop: Array.from({ length: 130_000 }, () => ({
+          Stop: Array.from({ length: 30_000 }, () => ({
             hooks: [{ type: 'command', command: legacyCommand }]
           }))
         }

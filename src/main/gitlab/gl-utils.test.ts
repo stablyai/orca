@@ -93,6 +93,38 @@ describe('gitlab project ref resolution', () => {
     })
   })
 
+  it('keeps local host and local WSL project-ref cache entries separate for the same path', async () => {
+    gitExecFileAsyncMock
+      .mockResolvedValueOnce({ stdout: 'git@gitlab.com:host/orca.git\n' })
+      .mockResolvedValueOnce({ stdout: 'git@gitlab.com:wsl/orca.git\n' })
+
+    await expect(getProjectRef('/repo')).resolves.toEqual({
+      host: 'gitlab.com',
+      path: 'host/orca'
+    })
+    await expect(getProjectRef('/repo', undefined, null, { wslDistro: 'Ubuntu' })).resolves.toEqual(
+      {
+        host: 'gitlab.com',
+        path: 'wsl/orca'
+      }
+    )
+    await expect(getProjectRef('/repo', undefined, null, { wslDistro: 'Ubuntu' })).resolves.toEqual(
+      {
+        host: 'gitlab.com',
+        path: 'wsl/orca'
+      }
+    )
+
+    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(2)
+    expect(gitExecFileAsyncMock).toHaveBeenNthCalledWith(1, ['remote', 'get-url', 'origin'], {
+      cwd: '/repo'
+    })
+    expect(gitExecFileAsyncMock).toHaveBeenNthCalledWith(2, ['remote', 'get-url', 'origin'], {
+      cwd: '/repo',
+      wslDistro: 'Ubuntu'
+    })
+  })
+
   it('coalesces concurrent missing remote probes for the same repo and remote', async () => {
     gitExecFileAsyncMock.mockImplementation(async () => {
       await Promise.resolve()
