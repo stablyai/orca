@@ -76,7 +76,7 @@ import { assertGitPushTargetShape } from '../../shared/git-push-target-validatio
 import { getCommitMessageModelDiscoveryHostKey } from '../../shared/commit-message-host-key'
 import type { ResolvedSourceControlAiGenerationParams } from '../../shared/source-control-ai'
 import { validateGitPushTarget } from '../git/push-target-validation'
-import { getRemoteFileUrl } from '../git/repo'
+import { getRemoteCommitUrl, getRemoteFileUrl } from '../git/repo'
 import {
   resolveAuthorizedPath,
   resolveRegisteredWorktreePath,
@@ -1651,6 +1651,27 @@ export function registerFilesystemHandlers(
       }
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
       return getRemoteFileUrl(worktreePath, args.relativePath, args.line)
+    }
+  )
+
+  ipcMain.handle(
+    'git:remoteCommitUrl',
+    async (
+      _event,
+      args: { worktreePath: string; sha: string; connectionId?: string }
+    ): Promise<string | null> => {
+      const sha = validateFullGitObjectId(args.sha, 'sha')
+      // Why: remote repos can't read relay-side .git/config locally. Delegate
+      // URL construction to the SSH provider, which can fetch remote metadata.
+      if (args.connectionId) {
+        const provider = getSshGitProvider(args.connectionId)
+        if (!provider) {
+          throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
+        }
+        return provider.getRemoteCommitUrl(args.worktreePath, sha)
+      }
+      const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
+      return getRemoteCommitUrl(worktreePath, sha)
     }
   )
 }

@@ -22,6 +22,7 @@ import { restoreScrollStateAfterLayout } from '@/lib/pane-manager/pane-scroll'
 import { useTerminalScrollVisibilityMemory } from './use-terminal-scroll-visibility-memory'
 import { useTerminalContainerFitSync } from './use-terminal-container-fit-sync'
 import { pasteTerminalText } from './terminal-bracketed-paste'
+import { recordTerminalUserInputForLeaf } from './terminal-input-activity'
 
 const VISIBLE_RESUME_FLUSH_CHARS = 256 * 1024
 
@@ -224,6 +225,7 @@ export function useTerminalPaneGlobalEffects({
         return
       }
       pasteTerminalText(pane.terminal, detail.text)
+      recordTerminalUserInputForLeaf(tabId, pane.leafId)
       pane.terminal.focus()
     }
     window.addEventListener(PASTE_TERMINAL_TEXT_EVENT, onPasteText)
@@ -263,8 +265,8 @@ export function useTerminalPaneGlobalEffects({
       if (!transport) {
         return
       }
-      if (text) {
-        transport.sendInput(text)
+      if (text && transport.sendInput(text)) {
+        recordTerminalUserInputForLeaf(tabId, pane.leafId)
       }
     }
     document.addEventListener('dictation:insertText', onDictationInsert)
@@ -301,6 +303,7 @@ export function useTerminalPaneGlobalEffects({
         manager,
         paneTransports: paneTransportsRef.current,
         worktreeId: wtId,
+        tabId,
         cwd: cwdRef.current,
         data
       })

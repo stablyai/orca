@@ -486,17 +486,6 @@
   height: 0;
 }
 
-/* Hide tab-strip scrollbars to prevent drag-time scrollbar flashes */
-.terminal-tab-strip {
-  -ms-overflow-style: none;
-  scrollbar-width: none;
-}
-
-.terminal-tab-strip::-webkit-scrollbar {
-  width: 0;
-  height: 0;
-}
-
 .project-view-tab-strip {
   /* Why: project views load after the table shell; keeping the row stable
      prevents the list below from jumping when the tabs arrive. */
@@ -907,15 +896,26 @@
   background: color-mix(in srgb, var(--sidebar-accent) 40%, transparent);
 }
 
-[data-worktree-card-surface][data-worktree-card-active='true'] {
+[data-worktree-card-surface][data-worktree-card-active='primary'] {
   border-color: color-mix(in srgb, var(--sidebar-border) 40%, transparent);
   background: color-mix(in srgb, var(--sidebar-foreground) 8%, transparent);
   box-shadow: 0 1px 2px color-mix(in srgb, var(--sidebar-foreground) 4%, transparent);
 }
 
-.dark [data-worktree-card-surface][data-worktree-card-active='true'] {
+.dark [data-worktree-card-surface][data-worktree-card-active='primary'] {
   background: color-mix(in srgb, var(--sidebar-foreground) 10%, transparent);
   box-shadow: 0 1px 2px color-mix(in srgb, var(--sidebar-foreground) 3%, transparent);
+}
+
+[data-worktree-card-surface][data-worktree-card-active='secondary'] {
+  border-color: color-mix(in srgb, var(--sidebar-ring) 25%, transparent);
+  background: color-mix(in srgb, var(--sidebar-accent) 45%, transparent);
+  box-shadow: none;
+}
+
+.dark [data-worktree-card-surface][data-worktree-card-active='secondary'] {
+  border-color: color-mix(in srgb, var(--sidebar-ring) 28%, transparent);
+  background: color-mix(in srgb, var(--sidebar-accent) 34%, transparent);
 }
 
 .worktree-agent-row-hover:hover {

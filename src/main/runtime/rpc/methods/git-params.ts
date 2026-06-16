@@ -215,3 +215,10 @@ export const GitRemoteFileUrl = WorktreeSelector.extend({
     .pipe(z.string().min(1, 'Missing relative path')),
   line: z.number().int().min(1)
 })
+
+export const GitRemoteCommitUrl = WorktreeSelector.extend({
+  sha: z
+    .unknown()
+    .transform((v) => (typeof v === 'string' ? v : ''))
+    .pipe(FullGitObjectId)
+})

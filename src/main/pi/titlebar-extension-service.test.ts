@@ -46,7 +46,16 @@ vi.mock('electron', () => ({
 
 import { PiTitlebarExtensionService, isSafeDescendCandidate } from './titlebar-extension-service'
 
-function overlayPath(kind: 'pi' | 'omp', ptyId: string): string {
+function overlayPath(kind: 'pi' | 'omp', sourceAgentDir: string): string {
+  const rootDir = kind === 'pi' ? 'pi-agent-overlays' : 'omp-agent-overlays'
+  const safeName = createHash('sha256')
+    .update(`source:${sourceAgentDir}`)
+    .digest('hex')
+    .slice(0, 32)
+  return join(userDataDir, rootDir, safeName)
+}
+
+function ptyOverlayPath(kind: 'pi' | 'omp', ptyId: string): string {
   const rootDir = kind === 'pi' ? 'pi-agent-overlays' : 'omp-agent-overlays'
   const safeName = createHash('sha256').update(ptyId).digest('hex').slice(0, 32)
   return join(userDataDir, rootDir, safeName)
@@ -118,7 +127,7 @@ describe('PiTitlebarExtensionService', () => {
     const svc = new PiTitlebarExtensionService()
     const env = svc.buildPtyEnv('pty-1', piHome, 'pi')
 
-    expect(env.PI_CODING_AGENT_DIR).toBe(overlayPath('pi', 'pty-1'))
+    expect(env.PI_CODING_AGENT_DIR).toBe(overlayPath('pi', piHome))
     // Orca's titlebar extension is added alongside user extensions, not replacing them.
     const overlayExtensions = readdirSync(join(env.PI_CODING_AGENT_DIR!, 'extensions')).sort()
     expect(overlayExtensions).toEqual([
@@ -151,15 +160,30 @@ describe('PiTitlebarExtensionService', () => {
     expectPiHomeIntact()
   })
 
-  it('clearPty removes the overlay without touching the user Pi dir (issue #1083)', () => {
+  it('clearPty leaves the source overlay alive without touching the user Pi dir', () => {
     const svc = new PiTitlebarExtensionService()
     const env = svc.buildPtyEnv('pty-2', piHome, 'pi')
     svc.clearPty('pty-2')
 
-    expect(existsSync(env.PI_CODING_AGENT_DIR!)).toBe(false)
-    // Critical regression guard: destroying the overlay MUST NOT destroy the
-    // user's Pi home, even though every top-level entry in the overlay is a
-    // symlink/junction pointing back into it.
+    // Why: source-scoped overlays may be shared by other live Pi terminals;
+    // per-PTY teardown must not remove shared state.
+    expect(existsSync(env.PI_CODING_AGENT_DIR!)).toBe(true)
+    expectPiHomeIntact()
+  })
+
+  it('uses one source-scoped overlay for multiple PTYs with the same Pi dir', () => {
+    const svc = new PiTitlebarExtensionService()
+    const firstEnv = svc.buildPtyEnv('pty-shared-1', piHome, 'pi')
+    const secondEnv = svc.buildPtyEnv('pty-shared-2', piHome, 'pi')
+
+    expect(secondEnv.PI_CODING_AGENT_DIR).toBe(firstEnv.PI_CODING_AGENT_DIR)
+    expect(secondEnv.PI_CODING_AGENT_DIR).toBe(overlayPath('pi', piHome))
+    expect(
+      readFileSync(
+        join(secondEnv.PI_CODING_AGENT_DIR!, 'extensions', 'user-ext', 'ext.ts'),
+        'utf-8'
+      )
+    ).toBe('user extension')
     expectPiHomeIntact()
   })
 
@@ -170,6 +194,80 @@ describe('PiTitlebarExtensionService', () => {
     svc.buildPtyEnv('pty-3', piHome, 'pi')
     expectPiHomeIntact()
   })
+
+  it('reconciles mirrored entries while preserving Pi-created shared overlay files', () => {
+    const svc = new PiTitlebarExtensionService()
+    const firstEnv = svc.buildPtyEnv('pty-refresh-1', piHome, 'pi')
+    const overlayDir = firstEnv.PI_CODING_AGENT_DIR!
+
+    mkdirSync(join(overlayDir, 'runtime-cache'), { recursive: true })
+    writeFileSync(join(overlayDir, 'runtime-cache', 'index.json'), '{}')
+
+    rmSync(join(piHome, 'extensions', 'user-ext'), { recursive: true, force: true })
+    mkdirSync(join(piHome, 'extensions', 'new-ext'), { recursive: true })
+    writeFileSync(join(piHome, 'extensions', 'new-ext', 'ext.ts'), 'new user extension')
+    writeFileSync(join(piHome, 'auth.json'), 'rotated token')
+
+    const secondEnv = svc.buildPtyEnv('pty-refresh-2', piHome, 'pi')
+
+    expect(secondEnv.PI_CODING_AGENT_DIR).toBe(overlayDir)
+    expect(readFileSync(join(overlayDir, 'auth.json'), 'utf-8')).toBe('rotated token')
+    expect(existsSync(join(overlayDir, 'extensions', 'user-ext'))).toBe(false)
+    expect(readFileSync(join(overlayDir, 'extensions', 'new-ext', 'ext.ts'), 'utf-8')).toBe(
+      'new user extension'
+    )
+    expect(existsSync(join(overlayDir, 'runtime-cache', 'index.json'))).toBe(true)
+    expect(readFileSync(join(piHome, 'auth.json'), 'utf-8')).toBe('rotated token')
+    expect(readFileSync(join(piHome, 'extensions', 'new-ext', 'ext.ts'), 'utf-8')).toBe(
+      'new user extension'
+    )
+  })
+
+  it("does not overwrite a user's same-named Orca extension file", () => {
+    const userStatusExtension = 'user-owned status extension'
+    writeFileSync(join(piHome, 'extensions', 'orca-agent-status.ts'), userStatusExtension, 'utf-8')
+
+    const svc = new PiTitlebarExtensionService()
+    const env = svc.buildPtyEnv('pty-same-name-extension', piHome, 'pi')
+
+    expect(readFileSync(join(piHome, 'extensions', 'orca-agent-status.ts'), 'utf-8')).toBe(
+      userStatusExtension
+    )
+    expect(
+      readFileSync(join(env.PI_CODING_AGENT_DIR!, 'extensions', 'orca-agent-status.ts'), 'utf-8')
+    ).toContain('/hook/pi')
+    expectPiHomeIntact()
+  })
+
+  it.skipIf(process.platform === 'win32')(
+    'does not write bundled extensions through a symlinked user extensions dir',
+    () => {
+      const realExtensionsDir = mkdtempSync(join(tmpdir(), 'orca-real-pi-extensions-'))
+      try {
+        writeFileSync(join(realExtensionsDir, 'real-user-ext.ts'), 'real user extension')
+        rmSync(join(piHome, 'extensions'), { recursive: true, force: true })
+        symlinkSync(realExtensionsDir, join(piHome, 'extensions'), 'dir')
+
+        const svc = new PiTitlebarExtensionService()
+        const env = svc.buildPtyEnv('pty-symlinked-extensions', piHome, 'pi')
+
+        expect(existsSync(join(realExtensionsDir, 'orca-agent-status.ts'))).toBe(false)
+        expect(existsSync(join(realExtensionsDir, 'orca-prefill.ts'))).toBe(false)
+        expect(existsSync(join(realExtensionsDir, 'orca-titlebar-spinner.ts'))).toBe(false)
+        expect(
+          readFileSync(join(env.PI_CODING_AGENT_DIR!, 'extensions', 'real-user-ext.ts'), 'utf-8')
+        ).toBe('real user extension')
+        expect(
+          readFileSync(
+            join(env.PI_CODING_AGENT_DIR!, 'extensions', 'orca-agent-status.ts'),
+            'utf-8'
+          )
+        ).toContain('/hook/pi')
+      } finally {
+        rmSync(realExtensionsDir, { recursive: true, force: true })
+      }
+    }
+  )
 
   // Why: symlinkSync on Windows requires developer mode or admin — skip on
   // Windows rather than fail for environmental reasons. The isSafeDescendCandidate
@@ -188,7 +286,7 @@ describe('PiTitlebarExtensionService', () => {
       const svc = new PiTitlebarExtensionService()
       const env = svc.buildPtyEnv('pty-4', piHome, 'pi')
 
-      expect(env.PI_CODING_AGENT_DIR).toBe(overlayPath('pi', 'pty-4'))
+      expect(env.PI_CODING_AGENT_DIR).toBe(overlayPath('pi', piHome))
       expect(existsSync(legacyOverlayDir)).toBe(false)
       expect(existsSync(join(env.PI_CODING_AGENT_DIR!, 'skills', 'my-skill', 'SKILL.md'))).toBe(
         true
@@ -221,7 +319,7 @@ describe('PiTitlebarExtensionService', () => {
         const svc = new PiTitlebarExtensionService()
         const env = svc.buildPtyEnv('pty-pi-both', undefined, 'pi')
 
-        expect(env.PI_CODING_AGENT_DIR).toBe(overlayPath('pi', 'pty-pi-both'))
+        expect(env.PI_CODING_AGENT_DIR).toBe(overlayPath('pi', join(fakeHome, '.pi', 'agent')))
         // The Pi auth file must be the one mirrored (not OMP's).
         expect(readFileSync(join(env.PI_CODING_AGENT_DIR!, 'auth.json'), 'utf-8')).toBe(
           'pi secret token'
@@ -232,10 +330,6 @@ describe('PiTitlebarExtensionService', () => {
         expect(overlayExtensions).not.toContain('omp-ext')
       } finally {
         homedirOverride.current = ''
-        rmSync(join(userDataDir, 'pi-agent-overlays', 'pty-pi-both'), {
-          recursive: true,
-          force: true
-        })
         rmSync(fakeHome, { recursive: true, force: true })
       }
     })
@@ -255,7 +349,7 @@ describe('PiTitlebarExtensionService', () => {
         // under userData/pi-agent-overlays. A future refactor that re-shares
         // the Pi overlay root for OMP would re-introduce cross-agent state
         // visibility this PR exists to prevent.
-        expect(env.PI_CODING_AGENT_DIR).toBe(overlayPath('omp', 'pty-omp-both'))
+        expect(env.PI_CODING_AGENT_DIR).toBe(overlayPath('omp', join(fakeHome, '.omp', 'agent')))
         // CRITICAL regression guard: even though ~/.pi/agent exists, the OMP
         // launch MUST resolve OMP's own source dir, not Pi's.
         expect(readFileSync(join(env.PI_CODING_AGENT_DIR!, 'auth.json'), 'utf-8')).toBe(
@@ -271,13 +365,9 @@ describe('PiTitlebarExtensionService', () => {
           )
         ).toContain('/hook/omp')
         // Pi's overlay root MUST NOT have been touched by the OMP launch.
-        expect(existsSync(join(userDataDir, 'pi-agent-overlays', 'pty-omp-both'))).toBe(false)
+        expect(existsSync(ptyOverlayPath('pi', 'pty-omp-both'))).toBe(false)
       } finally {
         homedirOverride.current = ''
-        rmSync(join(userDataDir, 'omp-agent-overlays', 'pty-omp-both'), {
-          recursive: true,
-          force: true
-        })
         rmSync(fakeHome, { recursive: true, force: true })
       }
     })
@@ -295,7 +385,7 @@ describe('PiTitlebarExtensionService', () => {
         const svc = new PiTitlebarExtensionService()
         const env = svc.buildPtyEnv('pty-omp-empty', undefined, 'omp')
 
-        expect(env.PI_CODING_AGENT_DIR).toBe(overlayPath('omp', 'pty-omp-empty'))
+        expect(env.PI_CODING_AGENT_DIR).toBe(overlayPath('omp', join(fakeHome, '.omp', 'agent')))
         // The Pi-only home must NOT leak into the OMP overlay; the auth
         // token from ~/.pi/agent/auth.json must be absent.
         expect(existsSync(join(env.PI_CODING_AGENT_DIR!, 'auth.json'))).toBe(false)
@@ -315,10 +405,6 @@ describe('PiTitlebarExtensionService', () => {
         })
       } finally {
         homedirOverride.current = ''
-        rmSync(join(userDataDir, 'omp-agent-overlays', 'pty-omp-empty'), {
-          recursive: true,
-          force: true
-        })
         rmSync(fakeHome, { recursive: true, force: true })
       }
     })

@@ -18,6 +18,37 @@ function normalizeHostPart(value: string | null | undefined): string | null {
   return trimmed ? trimmed : null
 }
 
+function getCurrentHostPlatform(): string {
+  if (typeof process !== 'undefined' && typeof process.platform === 'string') {
+    return process.platform
+  }
+  if (typeof navigator !== 'undefined') {
+    if (navigator.userAgent.includes('Windows')) {
+      return 'win32'
+    }
+    if (navigator.userAgent.includes('Linux')) {
+      return 'linux'
+    }
+    if (navigator.userAgent.includes('Mac')) {
+      return 'darwin'
+    }
+  }
+  return ''
+}
+
+export function getLocalExecutionHostLabel(platform = getCurrentHostPlatform()): string {
+  switch (platform) {
+    case 'darwin':
+      return 'Local Mac'
+    case 'win32':
+      return 'Local Windows'
+    case 'linux':
+      return 'Local Linux'
+    default:
+      return 'This computer'
+  }
+}
+
 export function toSshExecutionHostId(targetId: string): `ssh:${string}` {
   return `ssh:${encodeURIComponent(targetId)}`
 }
@@ -129,7 +160,7 @@ export function getExecutionHostLabel(id: ExecutionHostScope): string {
   }
   switch (parsed.kind) {
     case 'local':
-      return 'Local Mac'
+      return getLocalExecutionHostLabel()
     case 'ssh':
       return parsed.targetId
     case 'runtime':

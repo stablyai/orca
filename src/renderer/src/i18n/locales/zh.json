@@ -1793,7 +1793,8 @@
             "fd15491034": "在 GitHub 中打开视图",
             "22df63c393": "您的 Token 无法获取子议题数据。",
             "067119985c": "GitHub 搜索，例如负责人：@我是：开放",
-            "1850fceac8": "{{value0}}/{{value1}} 未添加到 Orca。添加它以开始工作，或在 GitHub 中打开。"
+            "1850fceac8": "{{value0}}/{{value1}} 未添加到 Orca。添加它以开始工作，或在 GitHub 中打开。",
+            "1aa7c952b9": "Project view"
           },
           "slug": {
             "dialog": {
@@ -2440,7 +2441,9 @@
             "efb33546ff": "git 重击",
             "1a8af49530": "命令提示符",
             "2148f65e04": "电源外壳",
-            "ab589350e5": "无法为 {{value0}} 构建启动命令。"
+            "ab589350e5": "无法为 {{value0}} 构建启动命令。",
+            "7a9b4af2af": "向左滚动标签页",
+            "232e075b07": "向右滚动标签页"
           },
           "TabBarCreateEntry": {
             "d62d63b807": "创建文件",
@@ -3652,6 +3655,9 @@
         "WorktreeCardAgents": {
           "1b0a156717": "Agents"
         },
+        "WorktreeCardReviewDetailSection": {
+          "reviewHeader": "{{value0}} #{{value1}}"
+        },
         "WorktreeCardMeta": {
           "3e65e11cc6": "工作区元数据",
           "c7fa72ead0": "编辑笔记",
@@ -4259,7 +4265,13 @@
           "cfb3f35775": "Arguments",
           "6f99bf5dd0": "No default arguments",
           "8fbe1f37c1": "Environment",
-          "2d133152fa": "No default environment"
+          "2d133152fa": "No default environment",
+          "agentPermissions": "Agent Permissions",
+          "agentPermissionsInfo": "Agent permissions info",
+          "agentPermissionsTooltip": "Custom agent arguments stay unchanged when switching modes.",
+          "agentPermissionsDescription": "Choose whether Orca launches agents with fewer permission prompts or with manual checks.",
+          "agentPermissionsYolo": "Yolo",
+          "agentPermissionsManual": "Manual"
         },
         "AppIconSelector": {
           "d5a112dc9b": "下一个图标",
@@ -4309,7 +4321,8 @@
             "tintColorDescription": "混入左侧边栏表面的颜色。",
             "tintOpacity": "色调强度",
             "tintOpacityDescription": "控制色调混入边栏的强度。"
-          }
+          },
+          "workspaceCardLayoutGuidance": "使用工作区侧边栏选项菜单 > 卡片布局 > 紧凑。"
         },
         "AutoRenameBranchFromWorkSetting": {
           "1626524572": "Nautilus",
@@ -4595,7 +4608,7 @@
           "e7bb06007c": "本地网络",
           "4a73f5217a": "用于控制其他本地应用程序的脚本的 Apple 事件。",
           "e119f0d66b": "自动化",
-          "7ca17b62c8": "从 terminal 会话持续访问受保护的文件夹。",
+          "7ca17b62c8": "当项目、worktree 或符号链接文件会访问 macOS 受保护文件夹时推荐启用。",
           "c566bca278": "全磁盘访问",
           "9f35980756": "击键注入、窗口控制和 UI 自动化工具。",
           "5b2f22ca2d": "无障碍",
@@ -4619,7 +4632,16 @@
           "f63ea281e3": "用于 Agent 完成和阻塞状态的螺纹左侧边栏提要。",
           "ca2219fe5e": "显示固定在右下角的小动画宠物。从状态栏宠物菜单中选择一个角色（Claudino、OpenCode、Gremlin）或上传您自己的 PNG、APNG、GIF、WebP、JPG 或 SVG。随时从同一菜单隐藏它，而不禁用此设置。",
           "dd6f0a1d45": "宠物",
-          "0e89a574ae": "右下角漂浮的动画宠物。"
+          "0e89a574ae": "右下角漂浮的动画宠物。",
+          "agentHibernation": {
+            "copy": "在配置的空闲时间后停止后台 agent 终端，并在你再次打开时恢复受支持的会话。我们仍在调校安全模型，此功能为实验性功能。",
+            "description": "在配置的空闲时间后停止后台 agent 终端，并在你再次打开时恢复受支持的会话。",
+            "idleMinutesDescription": "已完成的后台 agent 在 Orca 可以将其休眠前需要等待的空闲分钟数。",
+            "idleMinutesLabel": "休眠等待时间",
+            "idleMinutesSuffix": "分钟",
+            "title": "Agent 休眠",
+            "toggleLabel": "切换 agent 休眠"
+          }
         },
         "FloatingWorkspacePane": {
           "aeaf76fda9": "状态栏",
@@ -6283,7 +6305,9 @@
             "5784ae8c43": "重命名",
             "8a17fd6026": "稳定",
             "a79d266f71": "会话",
-            "afbf35be68": "稳定会话"
+            "afbf35be68": "稳定会话",
+            "agentPermissions": "Agent Permissions",
+            "agentPermissionsDescription": "Switch agent permission defaults between Yolo and Manual."
           }
         },
         "appearance": {
@@ -6400,6 +6424,17 @@
             "leftSidebarAppearance": {
               "title": "左侧边栏外观",
               "description": "让左侧边栏匹配终端、保持默认，或使用色调。"
+            },
+            "workspaceCardLayout": {
+              "title": "工作区卡片布局",
+              "description": "从工作区侧边栏选项菜单在紧凑和详细工作区卡片之间切换。",
+              "compact": "紧凑",
+              "compactDisplay": "紧凑显示",
+              "workspaceCards": "工作区卡片",
+              "worktreeCards": "工作树卡片",
+              "cardLayout": "卡片布局",
+              "workspaceOptions": "工作区选项",
+              "detailed": "详细"
             }
           }
         },
@@ -6590,7 +6625,7 @@
               "a0c19119fb": "下载",
               "4438f81bfa": "文件",
               "c10e36cbd1": "全磁盘访问",
-              "05ab708ee5": "打开 macOS 隐私窗格以进行广泛的 terminal 文件访问。",
+              "05ab708ee5": "打开 macOS 隐私窗格，以访问受保护的项目和 worktree 文件。",
               "bbf543a3a1": "全磁盘访问",
               "7f145a3984": "窗户",
               "5610022e1e": "自动化",
@@ -6660,7 +6695,17 @@
             "b54cea709b": "伙伴",
             "051203d37c": "宠物",
             "6b5a56ac35": "右下角漂浮的动画宠物。",
-            "87d99e634b": "宠物"
+            "87d99e634b": "宠物",
+            "agentHibernation": {
+              "agent": "agent",
+              "agents": "agents",
+              "description": "在配置的空闲时间后停止后台 agent 终端，并在再次打开时恢复受支持的会话。",
+              "hibernate": "休眠",
+              "minutes": "分钟",
+              "sleep": "睡眠",
+              "terminal": "终端",
+              "title": "Agent 休眠"
+            }
           }
         },
         "floating": {
@@ -8010,7 +8055,8 @@
             "9a8b85882d": "加载中",
             "62e685d5ec": "idle",
             "111e1d0db4": "错误",
-            "e5e81e59a6": "调整 commits 大小"
+            "e5e81e59a6": "调整 commits 大小",
+            "6d1e0a7c3b": "无法加载提交文件"
           },
           "HostedReviewActions": {
             "4d5fb5a284": "关闭",
@@ -8287,7 +8333,14 @@
             "e2b7a1c0d9f4": "创建 {{value0}} 失败",
             "hugeRepoIgnorePrompt": "此存储库的活动更改过多。是否将 \"{{value0}}\" 添加到 .gitignore？",
             "hugeRepoIgnoreAction": "添加到 .gitignore",
-            "tooManyChanges": "检测到过多更改。仅显示前 {{value0}} 项。"
+            "tooManyChanges": "检测到过多更改。仅显示前 {{value0}} 项。",
+            "bf5082de46": "已复制{{value0}}",
+            "c06193ef57": "无法复制{{value0}}",
+            "d172a4f068": "提交哈希",
+            "e283b50179": "提交信息",
+            "f394c6128a": "没有可用于解释此提交的代理",
+            "04a5d7239b": "此仓库没有受支持的网页远程库",
+            "15b6e834ac": "无法在浏览器中打开提交"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "无法启动选定的 Agent。",
@@ -8481,7 +8534,8 @@
             "6306b48afd": "源代码控制",
             "ef182dcb12": "搜索",
             "fc3095d2ed": "探险家",
-            "aiVaultSessionHistory": "Agents"
+            "aiVaultSessionHistory": "Agents",
+            "folderWorkspaces": "Attached worktrees"
           },
           "right": {
             "panel": {
@@ -8720,6 +8774,21 @@
             "c4e9a2b713": "名称",
             "b3c8f1a902": "按名称筛选文件",
             "f8a2c4d1e0": "资源管理器搜索模式"
+          },
+          "GitHistoryCommitFiles": {
+            "a1b2c3d4e5": "正在加载文件…",
+            "b2c3d4e5f6": "此提交没有文件更改",
+            "c3d4e5f6a7": "一起打开所有更改"
+          },
+          "GitHistoryRow": {
+            "2f9c41ab07": "显示提交{{value0}}中的文件：{{value1}}",
+            "4a8d9e0c1f": "隐藏提交{{value0}}中的文件：{{value1}}"
+          },
+          "GitHistoryCommitContextMenu": {
+            "7b1c4e9a02": "在浏览器中打开提交",
+            "8c2d5fab13": "复制提交哈希",
+            "9d3e60bc24": "复制提交信息",
+            "ae4f71cd35": "解释更改"
           }
         }
       },
@@ -8789,7 +8858,10 @@
           "69af7e9c1c": "尚未加入 PATH。Orca 会将其设为默认，你可随时安装。",
           "1eee1c7bd8": "PATH 中未检测到 agents。可选择一个稍后安装，或使用空白 terminal 继续。",
           "hideAgents": "隐藏 Agent",
-          "showMoreAgents": "显示另外 {{value0}} 个 Agent→"
+          "showMoreAgents": "显示另外 {{value0}} 个 Agent→",
+          "yoloPermissionsLabel": "Yolo / Dangerously skip permissions",
+          "yoloPermissionsInfo": "Agent permission info",
+          "yoloPermissionsTooltip": "Skip permission checks for agents for less interruptions"
         },
         "FeatureSetupChecklist": {
           "77f74946f5": "Agent 可互相通信、领取任务并协调交接。",
@@ -9610,6 +9682,17 @@
                 "close_step": "Close"
               }
             }
+          },
+          "FullDiskAccessSetupPrompt": {
+            "bbb3f1e404": "检查中",
+            "48d87edcd2": "已授予",
+            "6db9a69f4e": "推荐",
+            "fa809e8ada": "已打开 macOS 隐私与安全性",
+            "bfa3402305": "无法请求权限",
+            "c566bca278": "完全磁盘访问权限",
+            "0d6efe9cf4": "当项目或 worktree 位于受保护文件夹时，建议在 macOS 上开启。",
+            "dac08ec03e": "正在打开...",
+            "6e3d62b816": "打开完全磁盘访问权限"
           }
         },
         "tips": {
@@ -9809,7 +9892,9 @@
           "f5cf81cec2": "加载差异...",
           "72f71f52eb": "此文件的文本差异不可用。",
           "7ce8436458": "分支比较中此文件的文本差异不可用。",
-          "bdbf02d5df": "二进制"
+          "bdbf02d5df": "二进制",
+          "b5675b0694": "保存",
+          "593f2193f6": "此草稿已超过安全显示限制，但仍可保存。"
         },
         "DiffSectionHeader": {
           "8915726e93": "复制路径"
@@ -10176,6 +10261,23 @@
         },
         "useRichMarkdownReviewData": {
           "f9d2acd6b0": "所有未发送的笔记"
+        },
+        "LargeDiffFallback": {
+          "a3c74f8a21": "行数超过安全显示限制",
+          "fd92fbde46": "字符数超过安全显示限制",
+          "7d424bb761": "此差异过大，无法安全显示。",
+          "28aa2cc90b": "原始行数",
+          "20857938dd": "修改后行数",
+          "e5f0d2182e": "字符数",
+          "877c25a02f": "原因",
+          "5fca073b72": "限制",
+          "f1d136a163": "每侧行数",
+          "23433fcdea": "合计字符数",
+          "7944ed9fb8": "未计数"
+        },
+        "DiffViewer": {
+          "b5675b0694": "保存",
+          "593f2193f6": "此草稿已超过安全显示限制，但仍可保存。"
         }
       },
       "diff": {
@@ -10842,6 +10944,17 @@
             "d785c42b8b": "Use a Jira Cloud site URL, Atlassian email, and API token to browse issues.",
             "8388bdea2b": "Connect Jira site"
           }
+        }
+      },
+      "rightSidebar": {
+        "FolderWorkspaceWorktreesPanel": {
+          "unavailable": "Workspaces are only shown for folder workspaces.",
+          "label": "Workspaces",
+          "description": "Shows worktrees attached to this folder workspace.",
+          "countOne": "1 attached worktree",
+          "countMany": "{{value0}} attached worktrees",
+          "emptyTitle": "No attached worktrees yet",
+          "emptyCopy": "Worktrees created from this workspace will show up here."
         }
       },
       "link": {

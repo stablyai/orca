@@ -139,7 +139,6 @@ import {
   generateRuntimeCommitMessage,
   generateRuntimePullRequestFields,
   getRuntimeGitBranchCompare,
-  getRuntimeGitCommitCompare,
   getRuntimeGitHistory,
   stageRuntimeGitPath,
   unstageRuntimeGitPath,
@@ -150,7 +149,7 @@ import { getRuntimeRepoBaseRefDefault } from '@/runtime/runtime-repo-client'
 import { PullRequestIcon } from './checks-panel-content'
 import { stripBaseRef, useCreatePullRequestDialogFields } from './useCreatePullRequestDialogFields'
 import { GitHistoryPanel, type GitHistoryPanelState } from './GitHistoryPanel'
-import type { GitHistoryItem } from '../../../../shared/git-history'
+import { useGitHistoryCommitActions } from './useGitHistoryCommitActions'
 import { normalizeHostedReviewHeadRef } from '../../../../shared/hosted-review-refs'
 import { shouldForcePushWithLeaseForUpstream } from '../../../../shared/git-upstream-status'
 import type {
@@ -712,7 +711,6 @@ function SourceControlInner(): React.JSX.Element {
   const activeGroupIdByWorktree = useAppStore((s) => s.activeGroupIdByWorktree)
   const openAllDiffs = useAppStore((s) => s.openAllDiffs)
   const openBranchAllDiffs = useAppStore((s) => s.openBranchAllDiffs)
-  const openCommitAllDiffs = useAppStore((s) => s.openCommitAllDiffs)
   const deleteDiffComment = useAppStore((s) => s.deleteDiffComment)
   const clearDiffComments = useAppStore((s) => s.clearDiffComments)
   const clearDiffCommentsForFile = useAppStore((s) => s.clearDiffCommentsForFile)
@@ -3321,55 +3319,13 @@ function SourceControlInner(): React.JSX.Element {
     [activeWorktreeId, branchSummary, openBranchDiff, resolveSplitTargetGroupId, worktreePath]
   )
 
-  const openHistoryCommitDiff = useCallback(
-    async (item: GitHistoryItem): Promise<void> => {
-      if (!activeWorktreeId || !worktreePath) {
-        return
-      }
-
-      try {
-        const connectionId = getConnectionId(activeWorktreeId) ?? undefined
-        const result = await getRuntimeGitCommitCompare(
-          {
-            // Why: route the commit compare by the repo OWNER host, not the focused runtime.
-            settings: activeRepoSettings,
-            worktreeId: activeWorktreeId,
-            worktreePath,
-            connectionId
-          },
-          item.id
-        )
-        if (result.summary.status !== 'ready') {
-          toast.error(
-            result.summary.errorMessage ??
-              translate(
-                'auto.components.right.sidebar.SourceControl.8a5ba6a988',
-                'Failed to load commit diff'
-              )
-          )
-          return
-        }
-        openCommitAllDiffs(
-          activeWorktreeId,
-          worktreePath,
-          result.summary,
-          result.entries,
-          item.subject,
-          item.message
-        )
-      } catch (error) {
-        toast.error(
-          error instanceof Error
-            ? error.message
-            : translate(
-                'auto.components.right.sidebar.SourceControl.8a5ba6a988',
-                'Failed to load commit diff'
-              )
-        )
-      }
-    },
-    [activeRepoSettings, activeWorktreeId, openCommitAllDiffs, worktreePath]
-  )
+  const { loadCommitFiles, openHistoryCommitDiff, openCommitFile, handleCommitAction } =
+    useGitHistoryCommitActions({
+      activeWorktreeId,
+      worktreePath,
+      activeRepoSettings,
+      resolveSplitTargetGroupId
+    })
 
   // Why: a note's filePath is the same relative path used by GitStatusEntry /
   // GitBranchChangeEntry, so we can route the click to whichever diff surface
@@ -4503,6 +4459,9 @@ function SourceControlInner(): React.JSX.Element {
                 onToggle={() => toggleSection('history')}
                 onRefresh={() => void refreshGitHistory()}
                 onOpenCommit={(item) => void openHistoryCommitDiff(item)}
+                onLoadCommitFiles={loadCommitFiles}
+                onOpenCommitFile={openCommitFile}
+                onCommitAction={handleCommitAction}
               />
             </div>
           )}

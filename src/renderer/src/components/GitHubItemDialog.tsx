@@ -51,8 +51,6 @@ import { ButtonGroup } from '@/components/ui/button-group'
 import { Input } from '@/components/ui/input'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { useConfirmationDialog } from '@/components/confirmation-dialog'
-import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet'
-import { VisuallyHidden } from 'radix-ui'
 import {
   Accordion,
   AccordionContent,
@@ -84,7 +82,18 @@ import {
   isIntrinsicHeightImageDiff
 } from '@/components/editor/diff-section-layout'
 import type { DiffSection } from '@/components/editor/diff-section-types'
+import { removeDiffSectionMeasuredHeight } from '@/components/editor/diff-section-height-cache'
+import {
+  MAX_RENDERED_DIFF_COMBINED_CHARACTERS,
+  MAX_RENDERED_DIFF_LINES_PER_SIDE,
+  getLargeDiffRenderLimit,
+  type LargeDiffRenderLimit
+} from '@/components/editor/large-diff-render-limit'
 import type { CombinedDiffFileTreeEntry } from '@/components/editor/combined-diff-file-tree-model'
+import {
+  getStoredTextDiffContent,
+  getStoredTextDiffResult
+} from '@/components/editor/large-diff-section-content'
 import { CHECK_COLOR, CHECK_ICON } from '@/components/right-sidebar/checks-panel-content'
 import {
   createGitHubChecksTabState,
@@ -174,8 +183,6 @@ import {
 import { PER_REPO_FETCH_LIMIT } from '../../../shared/work-items'
 import { translate } from '@/i18n/i18n'
 import { getSettingsForRepoRuntimeOwner } from '@/lib/repo-runtime-owner'
-
-const IS_MAC = navigator.userAgent.includes('Mac')
 
 // Why: the GH item dialog can be opened from any work-item list surface and
 // doesn't have the full owner/repo context the list's cache entry carries.
@@ -272,7 +279,6 @@ type GitHubItemDialogProps = {
   repoId?: string | null
   sourceContext?: TaskSourceContext | null
   initialTab?: ItemDialogTab
-  variant?: 'sheet' | 'page'
   backLabel?: string
   /** Called when the user clicks the primary CTA to start work from this item. */
   onUse: (item: GitHubWorkItem) => void
@@ -448,7 +454,10 @@ function PRReviewersPanel({
   const [reviewerInput, setReviewerInput] = useState('')
   const [reviewerPickerSide, setReviewerPickerSide] = useState<'top' | 'bottom'>('bottom')
   const [reviewerPickerMaxHeight, setReviewerPickerMaxHeight] = useState<number | null>(null)
-  const [activeReviewerCursor, setActiveReviewerCursor] = useState({ resetKey: '', index: 0 })
+  const [activeReviewerCursor, setActiveReviewerCursor] = useState({
+    resetKey: '',
+    index: 0
+  })
   const [submitting, setSubmitting] = useState(false)
   const [localReviewRequests, setLocalReviewRequests] = useState<GitHubAssignableUser[]>(
     () => item.reviewRequests ?? []
@@ -1099,7 +1108,10 @@ function PRReviewersPanel({
                         {translate('auto.components.GitHubItemDialog.c2b21818e1', 'Suggestions')}
                       </div>
                       {suggestedReviewerRows.map((reviewer, index) =>
-                        renderReviewerPickerRow(reviewer, { suggested: true, activeIndex: index })
+                        renderReviewerPickerRow(reviewer, {
+                          suggested: true,
+                          activeIndex: index
+                        })
                       )}
                     </>
                   ) : null}
@@ -1390,21 +1402,89 @@ if (typeof import.meta !== 'undefined' && import.meta.hot) {
 // Why: bounded LRU — opening many PRs with many files during a session
 // would otherwise grow this module-level map without bound until reload.
 const PR_FILE_CONTENT_CACHE_MAX = 64
-const prFileContentCache = new Map<string, Promise<GitHubPRFileContents> | GitHubPRFileContents>()
+// Why: raw-content overflow is only a sentinel; force the reported size past
+// the render budget so downstream checks reliably choose fallback mode.
+const GITHUB_PR_RAW_CONTENT_OVERFLOW_CHARACTER_COUNT = MAX_RENDERED_DIFF_COMBINED_CHARACTERS + 1
+const PR_FILE_CONTENT_CACHE_MAX_BYTES = MAX_RENDERED_DIFF_COMBINED_CHARACTERS * 4
+type PRFileContentCacheEntry = {
+  value: Promise<GitHubPRFileContents> | GitHubPRFileContents
+  byteCount: number
+}
+const prFileContentCache = new Map<string, PRFileContentCacheEntry>()
+let prFileContentCacheBytes = 0
+
+function getUtf8ByteCount(value: string): number {
+  let byteCount = 0
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index)
+    if (code < 0x80) {
+      byteCount += 1
+    } else if (code < 0x800) {
+      byteCount += 2
+    } else if (code >= 0xd800 && code <= 0xdbff && index + 1 < value.length) {
+      const next = value.charCodeAt(index + 1)
+      if (next >= 0xdc00 && next <= 0xdfff) {
+        byteCount += 4
+        index += 1
+      } else {
+        byteCount += 3
+      }
+    } else {
+      byteCount += 3
+    }
+  }
+  return byteCount
+}
+
+function isPRFileContentsTooLargeSentinel(contents: GitHubPRFileContents): boolean {
+  return contents.originalTooLarge === true || contents.modifiedTooLarge === true
+}
+
+function getPRFileContentsCacheByteCount(contents: GitHubPRFileContents): number {
+  if (isPRFileContentsTooLargeSentinel(contents)) {
+    return 0
+  }
+  return getUtf8ByteCount(contents.original) + getUtf8ByteCount(contents.modified)
+}
+
+function getRetainedPRFileContentsByteCount(contents: GitHubPRFileContents): number | null {
+  if (isPRFileContentsTooLargeSentinel(contents)) {
+    return 0
+  }
+  const byteCount = getPRFileContentsCacheByteCount(contents)
+  return byteCount <= PR_FILE_CONTENT_CACHE_MAX_BYTES ? byteCount : null
+}
 
 function touchPRFileContentCache(
   key: string,
   value: Promise<GitHubPRFileContents> | GitHubPRFileContents
 ): void {
+  const retainedByteCount = value instanceof Promise ? 0 : getRetainedPRFileContentsByteCount(value)
+  if (retainedByteCount === null) {
+    const existing = prFileContentCache.get(key)
+    prFileContentCacheBytes -= existing?.byteCount ?? 0
+    prFileContentCache.delete(key)
+    return
+  }
+
+  const existing = prFileContentCache.get(key)
+  prFileContentCacheBytes -= existing?.byteCount ?? 0
   // Why: re-insert to move to the most-recently-used position; Map preserves
   // insertion order so the oldest key is always first when evicting.
   prFileContentCache.delete(key)
-  prFileContentCache.set(key, value)
-  while (prFileContentCache.size > PR_FILE_CONTENT_CACHE_MAX) {
+  const byteCount = retainedByteCount
+  prFileContentCache.set(key, { value, byteCount })
+  prFileContentCacheBytes += byteCount
+  while (
+    prFileContentCache.size > PR_FILE_CONTENT_CACHE_MAX ||
+    prFileContentCacheBytes > PR_FILE_CONTENT_CACHE_MAX_BYTES
+  ) {
     const oldest = prFileContentCache.keys().next().value
     if (oldest === undefined) {
       break
     }
+    const evicted = prFileContentCache.get(oldest)
+    prFileContentCacheBytes -= evicted?.byteCount ?? 0
     prFileContentCache.delete(oldest)
   }
 }
@@ -1417,8 +1497,9 @@ function getPRFileContentCacheKey(args: {
   headSha: string
   baseSha: string
 }): string {
+  const repositoryKey = args.repoId ? `repo:${args.repoId}` : `path:${args.repoPath}`
   return [
-    args.repoId,
+    repositoryKey,
     args.prNumber,
     args.file.path,
     args.file.oldPath ?? '',
@@ -1440,10 +1521,11 @@ function loadPRFileContents(args: {
   const cacheKey = getPRFileContentCacheKey(args)
   const cached = prFileContentCache.get(cacheKey)
   if (cached) {
-    touchPRFileContentCache(cacheKey, cached)
-    return Promise.resolve(cached)
+    touchPRFileContentCache(cacheKey, cached.value)
+    return Promise.resolve(cached.value)
   }
-  const request = window.api.gh
+  let request: Promise<GitHubPRFileContents>
+  request = window.api.gh
     .prFileContents({
       repoPath: args.repoPath,
       repoId: args.repoId,
@@ -1456,11 +1538,17 @@ function loadPRFileContents(args: {
       baseSha: args.baseSha
     })
     .then((contents) => {
-      touchPRFileContentCache(cacheKey, contents)
+      if (prFileContentCache.get(cacheKey)?.value === request) {
+        touchPRFileContentCache(cacheKey, contents)
+      }
       return contents
     })
     .catch((err) => {
-      prFileContentCache.delete(cacheKey)
+      const cachedRequest = prFileContentCache.get(cacheKey)
+      if (cachedRequest?.value === request) {
+        prFileContentCacheBytes -= cachedRequest.byteCount
+        prFileContentCache.delete(cacheKey)
+      }
       throw err
     })
   touchPRFileContentCache(cacheKey, request)
@@ -1662,6 +1750,30 @@ function gitHubPRFileToBranchEntry(file: GitHubPRFile): GitBranchChangeEntry {
   }
 }
 
+function getPRFileContentsRenderLimit(contents: GitHubPRFileContents): LargeDiffRenderLimit {
+  if (!contents.originalTooLarge && !contents.modifiedTooLarge) {
+    return getLargeDiffRenderLimit({
+      originalContent: contents.original,
+      modifiedContent: contents.modified
+    })
+  }
+
+  return {
+    limited: true,
+    reason: 'character-count' as const,
+    lineCounts: null,
+    characterCount:
+      contents.original.length +
+      contents.modified.length +
+      (contents.originalTooLarge ? GITHUB_PR_RAW_CONTENT_OVERFLOW_CHARACTER_COUNT : 0) +
+      (contents.modifiedTooLarge ? GITHUB_PR_RAW_CONTENT_OVERFLOW_CHARACTER_COUNT : 0),
+    limits: {
+      maxLinesPerSide: MAX_RENDERED_DIFF_LINES_PER_SIDE,
+      maxCombinedCharacters: MAX_RENDERED_DIFF_COMBINED_CHARACTERS
+    }
+  }
+}
+
 function getPRFileDiffResult(contents: GitHubPRFileContents): GitDiffResult {
   if (contents.originalIsBinary) {
     return {
@@ -1747,7 +1859,10 @@ function PRFilesCombinedDiffViewer({
       return entriesCacheRef.current.entries
     }
     const nextEntries = files.map(gitHubPRFileToBranchEntry)
-    entriesCacheRef.current = { signature: diffEntrySignature, entries: nextEntries }
+    entriesCacheRef.current = {
+      signature: diffEntrySignature,
+      entries: nextEntries
+    }
     return nextEntries
   }, [diffEntrySignature, files])
   const fileByPath = useMemo(() => new Map(files.map((file) => [file.path, file])), [files])
@@ -1827,7 +1942,8 @@ function PRFilesCombinedDiffViewer({
         loading: true,
         error: undefined,
         dirty: false,
-        diffResult: null
+        diffResult: null,
+        largeDiffRenderLimit: null
       }))
     )
   }, [entries, entrySignature])
@@ -1848,7 +1964,11 @@ function PRFilesCombinedDiffViewer({
       const generation = generationRef.current
       loadingIndicesRef.current.add(index)
 
-      const load = async (): Promise<{ result: GitDiffResult; error?: string }> => {
+      const load = async (): Promise<{
+        result: GitDiffResult
+        resultContents?: GitHubPRFileContents
+        error?: string
+      }> => {
         if (file.isBinary) {
           return {
             result: {
@@ -1884,7 +2004,7 @@ function PRFilesCombinedDiffViewer({
           headSha,
           baseSha
         })
-        return { result: getPRFileDiffResult(contents) }
+        return { result: getPRFileDiffResult(contents), resultContents: contents }
       }
 
       load()
@@ -1896,24 +2016,32 @@ function PRFilesCombinedDiffViewer({
             originalIsBinary: false,
             modifiedIsBinary: false
           } as GitDiffResult,
+          resultContents: undefined,
           error: error instanceof Error ? error.message : 'Failed to load diff.'
         }))
-        .then(({ result, error }) => {
+        .then(({ result, resultContents, error }) => {
           loadingIndicesRef.current.delete(index)
           if (generationRef.current !== generation) {
             return
           }
+          const largeDiffRenderLimit =
+            !error && result.kind === 'text' && resultContents
+              ? getPRFileContentsRenderLimit(resultContents)
+              : null
+          const storedContent = getStoredTextDiffContent(result, largeDiffRenderLimit)
+          const storedResult = getStoredTextDiffResult(result, largeDiffRenderLimit)
           loadedIndicesRef.current.add(index)
           setSections((prev) =>
             prev.map((current, currentIndex) =>
               currentIndex === index
                 ? {
                     ...current,
-                    diffResult: result,
-                    originalContent: result.kind === 'text' ? result.originalContent : '',
-                    modifiedContent: result.kind === 'text' ? result.modifiedContent : '',
+                    diffResult: storedResult,
+                    originalContent: storedContent.originalContent,
+                    modifiedContent: storedContent.modifiedContent,
                     loading: false,
-                    error
+                    error,
+                    largeDiffRenderLimit
                   }
                 : current
             )
@@ -1927,6 +2055,7 @@ function PRFilesCombinedDiffViewer({
     (index: number) => {
       loadedIndicesRef.current.delete(index)
       loadingIndicesRef.current.delete(index)
+      setSectionHeights((prev) => removeDiffSectionMeasuredHeight(prev, index))
       setSections((prev) =>
         prev.map((section, sectionIndex) =>
           sectionIndex === index
@@ -1936,7 +2065,8 @@ function PRFilesCombinedDiffViewer({
                 originalContent: '',
                 modifiedContent: '',
                 loading: true,
-                error: undefined
+                error: undefined,
+                largeDiffRenderLimit: null
               }
             : section
         )
@@ -1997,7 +2127,9 @@ function PRFilesCombinedDiffViewer({
           section.added === undefined && section.removed === undefined
             ? undefined
             : (section.added ?? 0) + (section.removed ?? 0),
-        useIntrinsicImageHeight: isIntrinsicHeightImageDiff(section.diffResult)
+        useIntrinsicImageHeight: isIntrinsicHeightImageDiff(section.diffResult),
+        isLargeDiffLimited: section.largeDiffRenderLimit?.limited === true,
+        lineCounts: section.largeDiffRenderLimit?.lineCounts ?? undefined
       })
     },
     overscan: PR_DIFF_OVERSCAN,
@@ -2322,6 +2454,10 @@ function CommentCodeContext({
         {translate('auto.components.GitHubItemDialog.db61d76cd5', 'Loading code context…')}
       </div>
     )
+  }
+
+  if (getPRFileContentsRenderLimit(contents).limited) {
+    return null
   }
 
   const source = contents.modified || contents.original
@@ -3795,7 +3931,11 @@ function ChecksTab({
         return
       }
       setChecksState((current) =>
-        updateGitHubChecksTabDetails(current, key, { loading: true, details: null, error: null })
+        updateGitHubChecksTabDetails(current, key, {
+          loading: true,
+          details: null,
+          error: null
+        })
       )
       void window.api.gh
         .prCheckDetails({
@@ -4364,7 +4504,9 @@ async function runIssueUpdate(args: {
             target,
             'github.project.updateIssueBySlug',
             updateArgs,
-            { timeoutMs: 30_000 }
+            {
+              timeoutMs: 30_000
+            }
           )
         : await window.api.gh.updateIssueBySlug(updateArgs)
     if (!res.ok) {
@@ -4415,7 +4557,9 @@ async function runWorkItemBodyUpdate(args: {
             target,
             'github.project.updatePullRequestBySlug',
             updateArgs,
-            { timeoutMs: 30_000 }
+            {
+              timeoutMs: 30_000
+            }
           )
         : await window.api.gh.updatePullRequestBySlug(updateArgs)
     if (!res.ok) {
@@ -4456,7 +4600,9 @@ async function runPullRequestStateUpdate(args: {
             target,
             'github.project.updatePullRequestBySlug',
             updateArgs,
-            { timeoutMs: 30_000 }
+            {
+              timeoutMs: 30_000
+            }
           )
         : await window.api.gh.updatePullRequestBySlug(updateArgs)
     if (!res.ok) {
@@ -5544,7 +5690,6 @@ export default function GitHubItemDialog({
   repoId,
   sourceContext,
   initialTab,
-  variant = 'sheet',
   backLabel = 'Back',
   projectOrigin,
   onUse,
@@ -5722,7 +5867,10 @@ export default function GitHubItemDialog({
     if (missing.length === 0) {
       return cachedDetails
     }
-    return { ...cachedDetails, comments: [...cachedDetails.comments, ...missing] }
+    return {
+      ...cachedDetails,
+      comments: [...cachedDetails.comments, ...missing]
+    }
     // Why: optimisticTick is the rerender signal for cold-open writes — the
     // memo reads optimisticCommentsRef.current (a ref, no subscription), so
     // bumping the tick is what forces this memo to re-run. The lint flags it
@@ -5937,7 +6085,10 @@ export default function GitHubItemDialog({
           const ids = new Set(prev.details.comments.map((c) => c.id))
           if (!ids.has(comment.id)) {
             touchWorkItemDetailsCache(detailsCacheKey, {
-              details: { ...prev.details, comments: [...prev.details.comments, comment] },
+              details: {
+                ...prev.details,
+                comments: [...prev.details.comments, comment]
+              },
               fetchedAt: 0,
               error: undefined
             })
@@ -6004,7 +6155,7 @@ export default function GitHubItemDialog({
     [details?.pullRequestId, detailsCacheKey, repoPath, sourceContext, workItem]
   )
 
-  const isIssuePage = variant === 'page' && workItem?.type === 'issue'
+  const isIssuePage = workItem?.type === 'issue'
   const ownerRepo = workItem ? parseOwnerRepoFromItemUrl(workItem.url) : null
   const issueStateBadgeTone =
     localState === 'closed' ? 'bg-rose-600 text-white' : 'bg-emerald-600 text-white'
@@ -6210,19 +6361,17 @@ export default function GitHubItemDialog({
       ) : (
         <div className="flex-none border-b border-border/60 bg-card/80 px-4 py-3 shadow-xs backdrop-blur supports-[backdrop-filter]:bg-card/70">
           <div className="flex items-start gap-3">
-            {variant === 'page' ? (
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={onClose}
-                className="-ml-1 mt-0.5 shrink-0 gap-1.5"
-                aria-label={backLabel}
-              >
-                <ChevronLeft className="size-4" />
-                {backLabel}
-              </Button>
-            ) : null}
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={onClose}
+              className="-ml-1 mt-0.5 shrink-0 gap-1.5"
+              aria-label={backLabel}
+            >
+              <ChevronLeft className="size-4" />
+              {backLabel}
+            </Button>
             <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md border border-border/60 bg-muted/40 text-muted-foreground">
               <Icon className="size-4" />
             </div>
@@ -6331,26 +6480,6 @@ export default function GitHubItemDialog({
                   {translate('auto.components.GitHubItemDialog.3fdf777817', 'Open on GitHub')}
                 </TooltipContent>
               </Tooltip>
-              {variant === 'sheet' ? (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      onClick={onClose}
-                      aria-label={translate(
-                        'auto.components.GitHubItemDialog.45af57999b',
-                        'Close preview'
-                      )}
-                    >
-                      <X className="size-4" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom" sideOffset={6}>
-                    {translate('auto.components.GitHubItemDialog.474c59b4b3', 'Close · Esc')}
-                  </TooltipContent>
-                </Tooltip>
-              ) : null}
             </div>
           </div>
         </div>
@@ -6623,63 +6752,9 @@ export default function GitHubItemDialog({
     </div>
   ) : null
 
-  if (variant === 'page') {
-    return (
-      <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-md border border-border/50 bg-background shadow-sm">
-        {content}
-      </div>
-    )
-  }
-
   return (
-    <Sheet open={workItem !== null} onOpenChange={(open) => !open && onClose()}>
-      <SheetContent
-        side="right"
-        showCloseButton={false}
-        className={cn(
-          'flex w-full flex-col gap-0 overflow-hidden p-0 lg:max-w-[var(--github-item-dialog-max-width)]',
-          // Why: native macOS traffic lights are drawn above web content, so a
-          // nearly full-width right sheet must leave the titlebar's 80px
-          // traffic-light pad uncovered instead of relying on z-index.
-          IS_MAC
-            ? 'max-w-[calc(100vw-(80px/var(--ui-zoom-factor,1)))] sm:max-w-[calc(100vw-(80px/var(--ui-zoom-factor,1)))]'
-            : 'max-w-[calc(100vw-1rem)] sm:max-w-[calc(100vw-1rem)]'
-        )}
-        style={
-          {
-            '--github-item-dialog-max-width': IS_MAC
-              ? 'min(calc(100vw - (80px / var(--ui-zoom-factor, 1))), 1600px)'
-              : 'min(calc(100vw - 2rem), 1600px)'
-          } as React.CSSProperties
-        }
-        onOpenAutoFocus={(event) => {
-          // Why: focusing the first actionable element inside the drawer
-          // causes the "Start workspace" action to receive focus and
-          // get visually highlighted on open. Preventing auto-focus keeps the
-          // drawer feeling like a passive preview until the user acts.
-          event.preventDefault()
-        }}
-      >
-        {/* Why: SheetTitle/Description are required by Radix Dialog for a11y,
-            but the visible header carries the same info. Wrap each with
-            `asChild` so the VisuallyHidden span wraps the element cleanly. */}
-        <VisuallyHidden.Root asChild>
-          <SheetTitle>
-            {workItem?.title ??
-              translate('auto.components.GitHubItemDialog.3853476a97', 'GitHub item')}
-          </SheetTitle>
-        </VisuallyHidden.Root>
-        <VisuallyHidden.Root asChild>
-          <SheetDescription>
-            {translate(
-              'auto.components.GitHubItemDialog.3ab6ac0fc8',
-              'Preview and edit the selected GitHub issue or pull request.'
-            )}
-          </SheetDescription>
-        </VisuallyHidden.Root>
-
-        {content}
-      </SheetContent>
-    </Sheet>
+    <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-md border border-border/50 bg-background shadow-sm">
+      {content}
+    </div>
   )
 }

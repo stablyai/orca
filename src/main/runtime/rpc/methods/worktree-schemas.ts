@@ -92,6 +92,8 @@ export const WorktreeCreate = z
       .optional(),
     runHooks: OptionalBoolean,
     activate: OptionalBoolean,
+    parentWorkspace: OptionalString,
+    envParentWorkspace: OptionalString,
     parentWorktree: OptionalString,
     cwdParentWorktree: OptionalString,
     noParent: OptionalBoolean,
@@ -128,10 +130,16 @@ export const WorktreeCreate = z
       .optional()
   })
   .superRefine((params, ctx) => {
-    if (params.parentWorktree && params.noParent === true) {
+    if ((params.parentWorkspace || params.parentWorktree) && params.noParent === true) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: 'Choose either --parent-worktree or --no-parent, not both.'
+        message: 'Choose either a parent workspace flag or --no-parent, not both.'
+      })
+    }
+    if (params.parentWorkspace && params.parentWorktree) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Choose either --parent-workspace or --parent-worktree, not both.'
       })
     }
     if (params.startupPrompt !== undefined && params.startupAgent === undefined) {

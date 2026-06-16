@@ -214,6 +214,7 @@ vi.mock('./pty', () => ({
 }))
 
 import { __resetSshWorktreeCreateFetchCacheForTests } from './worktree-remote'
+import { invalidateAuthorizedRootsCache, resolveRegisteredWorktreePath } from './filesystem-auth'
 import { registerWorktreeHandlers } from './worktrees'
 
 type HandlerMap = Record<string, (_event: unknown, args: unknown) => unknown>
@@ -256,6 +257,7 @@ describe('registerWorktreeHandlers', () => {
 
   beforeEach(() => {
     __resetSshWorktreeCreateFetchCacheForTests()
+    invalidateAuthorizedRootsCache()
     for (const m of [
       handleMock,
       removeHandlerMock,
@@ -633,6 +635,36 @@ describe('registerWorktreeHandlers', () => {
         orcaCreationWorkspaceLayout: { path: '../worktrees', nestWorkspaces: false }
       })
     )
+  })
+
+  it('registers local worktree roots immediately after create', async () => {
+    listWorktreesMock.mockResolvedValue([
+      {
+        path: '/workspace/repo',
+        head: 'base',
+        branch: 'refs/heads/main',
+        isBare: false,
+        isMainWorktree: true
+      },
+      {
+        path: '/workspace/improve-dashboard',
+        head: 'abc123',
+        branch: 'refs/heads/improve-dashboard',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+
+    await handlers['worktrees:create'](null, {
+      repoId: 'repo-1',
+      name: 'improve-dashboard'
+    })
+
+    const listWorktreesCallsAfterCreate = listWorktreesMock.mock.calls.length
+    await expect(
+      resolveRegisteredWorktreePath('/workspace/improve-dashboard', store as never)
+    ).resolves.toBe('/workspace/improve-dashboard')
+    expect(listWorktreesMock).toHaveBeenCalledTimes(listWorktreesCallsAfterCreate)
   })
 
   it('uses branchNameOverride for the git branch while keeping the sanitized worktree path', async () => {

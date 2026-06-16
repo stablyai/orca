@@ -21,7 +21,7 @@ import {
   type ResolvedSourceControlAiGenerationParams
 } from '../../shared/source-control-ai'
 import type { SourceControlAiOperation } from '../../shared/source-control-ai-types'
-import { getRemoteFileUrl } from '../git/repo'
+import { getRemoteCommitUrl, getRemoteFileUrl } from '../git/repo'
 import {
   abortMerge,
   abortRebase,
@@ -773,5 +773,20 @@ export class RuntimeGitCommands {
       return provider.getRemoteFileUrl(target.worktree.path, normalizedRelativePath, line)
     }
     return getRemoteFileUrl(target.worktree.path, normalizedRelativePath, line)
+  }
+
+  async getRuntimeGitRemoteCommitUrl(
+    worktreeSelector: string,
+    sha: string
+  ): Promise<string | null> {
+    const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
+    const provider = target.connectionId ? getSshGitProvider(target.connectionId) : null
+    if (target.connectionId) {
+      if (!provider) {
+        throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
+      }
+      return provider.getRemoteCommitUrl(target.worktree.path, sha)
+    }
+    return getRemoteCommitUrl(target.worktree.path, sha)
   }
 }

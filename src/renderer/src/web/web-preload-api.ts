@@ -21,6 +21,7 @@ import type {
   StatsSummary,
   Worktree,
   WorktreeLineage,
+  WorkspaceLineage,
   WorkspaceSessionPatch,
   WorkspaceSessionState
 } from '../../../shared/types'
@@ -1117,6 +1118,7 @@ function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees']> {
         setupDecision: args.setupDecision,
         createdWithAgent: args.createdWithAgent,
         pendingFirstAgentMessageRename: args.pendingFirstAgentMessageRename,
+        parentWorkspace: args.parentWorkspace,
         workspaceStatus: args.workspaceStatus,
         manualOrder: args.manualOrder
       })
@@ -1165,11 +1167,10 @@ function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees']> {
         })
       ).worktree,
     listLineage: async () =>
-      (
-        await callRuntimeResult<{ lineage: Record<string, WorktreeLineage> }>(
-          'worktree.lineageList'
-        )
-      ).lineage,
+      await callRuntimeResult<{
+        lineage: Record<string, WorktreeLineage>
+        workspaceLineage?: Record<string, WorkspaceLineage>
+      }>('worktree.lineageList'),
     updateLineage: async ({ worktreeId, parentWorktreeId, noParent }) => {
       invalidateRuntimeWorktreeCaches()
       const result = await callRuntimeResult<{
@@ -1500,6 +1501,13 @@ function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
         worktree: toRuntimeWorktreeSelector(worktree.id),
         relativePath,
         line
+      })
+    },
+    remoteCommitUrl: async ({ worktreePath, sha }) => {
+      const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
+      return callRuntimeResult('git.remoteCommitUrl', {
+        worktree: toRuntimeWorktreeSelector(worktree.id),
+        sha
       })
     }
   }

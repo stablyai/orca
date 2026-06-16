@@ -22,7 +22,8 @@ const {
   rmMock,
   gitExecFileAsyncMock,
   homedirMock,
-  invalidateAuthorizedRootsCacheMock
+  invalidateAuthorizedRootsCacheMock,
+  prepareLocalWorktreeRootForRepoMock
 } = vi.hoisted(() => ({
   handleMock: vi.fn(),
   removeHandlerMock: vi.fn(),
@@ -39,7 +40,8 @@ const {
   rmMock: vi.fn(),
   gitExecFileAsyncMock: vi.fn(),
   homedirMock: vi.fn(),
-  invalidateAuthorizedRootsCacheMock: vi.fn()
+  invalidateAuthorizedRootsCacheMock: vi.fn(),
+  prepareLocalWorktreeRootForRepoMock: vi.fn()
 }))
 
 vi.mock('electron', () => ({
@@ -76,6 +78,10 @@ vi.mock('../git/repo', () => ({
 
 vi.mock('./filesystem-auth', () => ({
   invalidateAuthorizedRootsCache: invalidateAuthorizedRootsCacheMock
+}))
+
+vi.mock('../worktree-root-preparation', () => ({
+  prepareLocalWorktreeRootForRepo: prepareLocalWorktreeRootForRepoMock
 }))
 
 vi.mock('../providers/ssh-git-dispatch', () => ({
@@ -126,6 +132,7 @@ describe('repos:create', () => {
     mockStore.addRepo.mockReset()
     mockWindow.webContents.send.mockReset()
     invalidateAuthorizedRootsCacheMock.mockReset()
+    prepareLocalWorktreeRootForRepoMock.mockReset().mockResolvedValue(undefined)
 
     // Default baseline: target does NOT exist yet, mkdir succeeds, git OK.
     accessMock.mockReset().mockRejectedValue(new Error('ENOENT'))
@@ -395,6 +402,15 @@ describe('repos:create', () => {
     // roots without scanning every existing repo during creation.
     await callCreate({ parentPath: '/tmp', name: 'rooted', kind: 'folder' })
     expect(invalidateAuthorizedRootsCacheMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('prepares the worktree root after a successful git repo create', async () => {
+    await callCreate({ parentPath: '/tmp', name: 'root-prep', kind: 'git' })
+
+    expect(prepareLocalWorktreeRootForRepoMock).toHaveBeenCalledWith(
+      mockStore,
+      expect.objectContaining({ path: '/tmp/root-prep', kind: 'git' })
+    )
   })
 
   it('does NOT rebuild the authorized-roots cache on a validation failure', async () => {

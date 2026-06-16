@@ -33,7 +33,10 @@ export const WORKTREE_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'worktree.lineageList',
     params: null,
-    handler: async (_params, { runtime }) => ({ lineage: await runtime.listWorktreeLineage() })
+    handler: async (_params, { runtime }) => ({
+      lineage: await runtime.listWorktreeLineage(),
+      workspaceLineage: await runtime.listWorkspaceLineage()
+    })
   }),
   defineMethod({
     name: 'worktree.show',
@@ -92,6 +95,8 @@ export const WORKTREE_METHODS: RpcMethod[] = [
         ...(params.startupPrompt !== undefined ? { startupPrompt: params.startupPrompt } : {}),
         startupDraft: params.startupDraft,
         lineage: {
+          parentWorkspace: params.parentWorkspace,
+          envParentWorkspace: params.envParentWorkspace,
           parentWorktree: params.parentWorktree,
           ...(params.cwdParentWorktree ? { cwdParentWorktree: params.cwdParentWorktree } : {}),
           noParent: params.noParent === true,
