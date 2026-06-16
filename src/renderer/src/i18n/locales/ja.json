@@ -7955,7 +7955,7 @@
             "79b1537dd3": "ファイルを参照するワークスペースを選択",
             "4da4d89845": "エクスプローラーに戻る",
             "6ed5ce817b": "検索",
-            "2f4483d6c4": "No files match this filter"
+            "2f4483d6c4": "このフィルターに一致するファイルはありません"
           },
           "FileExplorerBackgroundMenu": {
             "3b5e2dcb8d": "新規フォルダー",
@@ -7993,7 +7993,7 @@
             "d95e30fe28": "エクスプローラーを更新する",
             "6026b16950": "すべて折りたたむ",
             "693cbeadd0": "検索",
-            "c1f3f3ec70": "Search Text"
+            "c1f3f3ec70": "ファイル内容を検索"
           },
           "FileExplorerTreeStatus": {
             "ce03835e1f": "このワークスペースにはファイルがありません",
@@ -8708,8 +8708,14 @@
             "tokenCount": "{{value0}} tok"
           },
           "FileExplorerNameFilter": {
-            "26fb73c6e3": "Find files",
-            "4d5a6b2a49": "Clear file filter"
+            "26fb73c6e3": "ファイルを検索",
+            "4d5a6b2a49": "ファイルフィルターをクリア",
+            "7a9fb1e6aa": "内容"
+          },
+          "FileExplorerViewSwitch": {
+            "c4e9a2b713": "名前",
+            "b3c8f1a902": "ファイル名で絞り込み",
+            "f8a2c4d1e0": "エクスプローラー検索モード"
           }
         }
       },

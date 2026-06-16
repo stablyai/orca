@@ -7955,7 +7955,7 @@
             "79b1537dd3": "Seleccione un espacio de trabajo para buscar archivos",
             "4da4d89845": "Volver al explorador",
             "6ed5ce817b": "Buscar",
-            "2f4483d6c4": "No files match this filter"
+            "2f4483d6c4": "No hay archivos que coincidan con este filtro"
           },
           "FileExplorerBackgroundMenu": {
             "3b5e2dcb8d": "Nueva carpeta",
@@ -7993,7 +7993,7 @@
             "d95e30fe28": "Actualizar explorador",
             "6026b16950": "Contraer todo",
             "693cbeadd0": "Buscar",
-            "c1f3f3ec70": "Search Text"
+            "c1f3f3ec70": "Buscar en el contenido de los archivos"
           },
           "FileExplorerTreeStatus": {
             "ce03835e1f": "No hay archivos en este espacio de trabajo",
@@ -8708,8 +8708,14 @@
             "tokenCount": "{{value0}} tok"
           },
           "FileExplorerNameFilter": {
-            "26fb73c6e3": "Find files",
-            "4d5a6b2a49": "Clear file filter"
+            "26fb73c6e3": "Buscar archivos",
+            "4d5a6b2a49": "Borrar filtro de archivos",
+            "7a9fb1e6aa": "Contenido"
+          },
+          "FileExplorerViewSwitch": {
+            "c4e9a2b713": "Nombres",
+            "b3c8f1a902": "Filtrar archivos por nombre",
+            "f8a2c4d1e0": "Modo de búsqueda del explorador"
           }
         }
       },

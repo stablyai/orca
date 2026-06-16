@@ -1,7 +1,7 @@
 import React from 'react'
 import { translate } from '@/i18n/i18n'
 
-type SearchFiltersProps = {
+export type SearchFiltersProps = {
   includePattern: string
   excludePattern: string
   onIncludeChange: (value: string) => void

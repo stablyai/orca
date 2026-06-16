@@ -5,6 +5,7 @@ import {
   type FileExplorerRowProjection
 } from './file-explorer-row-projection'
 import { isDotfileRelativePath } from './file-explorer-entries'
+import { splitPathSegments } from './path-tree'
 import { isPathIgnored } from './status-display'
 
 export type FileExplorerNameFilterProjectionSource = {
@@ -80,6 +81,8 @@ export function createNameFilteredFileExplorerProjection({
   const rowsByPath = new Map<string, TreeNode>()
   const nameFilterTokens = getFileExplorerNameFilterTokens(nameFilter.query)
   if (nameFilterTokens.length === 0 || nameFilter.relativePaths === null) {
+    // Why: empty queries use the normal explorer projection, and loading filters must not
+    // fall back to a partial cached path list.
     return createFileExplorerRowProjectionFromParts(visibleFlatRows, rowsByPath)
   }
 
@@ -99,12 +102,12 @@ export function createNameFilteredFileExplorerProjection({
       continue
     }
 
-    const segments = relativePath.split('/').filter(Boolean)
+    const segments = splitPathSegments(relativePath)
     let currentChildren = rootChildren
     let currentRelativePath = ''
     for (let index = 0; index < segments.length; index += 1) {
       const name = segments[index]
-      currentRelativePath = currentRelativePath ? `${currentRelativePath}/${name}` : name
+      currentRelativePath = currentRelativePath ? joinPath(currentRelativePath, name) : name
       const isDirectory = index < segments.length - 1
       let entry = currentChildren.get(name)
       if (!entry) {

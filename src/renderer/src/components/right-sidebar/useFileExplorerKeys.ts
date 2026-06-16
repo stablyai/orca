@@ -19,6 +19,15 @@ import {
 } from './file-explorer-keyboard-navigation'
 import { keybindingMatchesAction } from '../../../../shared/keybindings'
 import { translate } from '@/i18n/i18n'
+import { isEditableTarget } from '@/lib/editable-target'
+
+export function shouldIgnoreFileExplorerKeyTarget(target: EventTarget | null): boolean {
+  return (
+    isEditableTarget(target) ||
+    (target instanceof Element &&
+      target.closest('[data-ignore-file-explorer-keys="true"]') !== null)
+  )
+}
 
 /**
  * Keyboard shortcuts for the file explorer.
@@ -30,6 +39,7 @@ export function useFileExplorerKeys(opts: {
   containerRef: React.RefObject<HTMLDivElement | null>
   rowProjection: FileExplorerRowProjection
   expandedPaths: Set<string>
+  canToggleDirectories: boolean
   inlineInput: InlineInput | null
   selectedPaths: Set<string>
   selectedNode: TreeNode | null
@@ -51,6 +61,8 @@ export function useFileExplorerKeys(opts: {
   rowProjectionRef.current = opts.rowProjection
   const expandedPathsRef = useRef(opts.expandedPaths)
   expandedPathsRef.current = opts.expandedPaths
+  const canToggleDirectoriesRef = useRef(opts.canToggleDirectories)
+  canToggleDirectoriesRef.current = opts.canToggleDirectories
   const inlineInputRef = useRef(opts.inlineInput)
   inlineInputRef.current = opts.inlineInput
   const selectedPathsRef = useRef(opts.selectedPaths)
@@ -136,6 +148,9 @@ export function useFileExplorerKeys(opts: {
       if (inlineInputRef.current) {
         return
       }
+      if (shouldIgnoreFileExplorerKeyTarget(e.target)) {
+        return
+      }
 
       // ── Undo/redo for explorer mutations (only when this panel should own the chord).
       // Why: require focus inside the explorer shell (includes the scrollbar, not just
@@ -173,6 +188,7 @@ export function useFileExplorerKeys(opts: {
               activeWorktreeId: activeWorktreeIdRef.current,
               selectedNode: selectedNodeRef.current,
               isExpanded: isDirExpanded,
+              canToggleDirectories: canToggleDirectoriesRef.current,
               findFocusedIndex,
               handlers: {
                 moveSelection: moveSelectionRef.current,

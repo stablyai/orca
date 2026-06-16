@@ -19,6 +19,7 @@ type FileExplorerVirtualRowsProps = {
   statusByRelativePath: Map<string, GitFileStatus>
   ignoredByRelativePath: Set<string>
   expanded: Set<string>
+  canCollapseFolderSubtree?: boolean
   dirCache: Record<string, DirCache>
   selectedPaths: Set<string>
   activeFileId: string | null
@@ -60,6 +61,7 @@ export function FileExplorerVirtualRows(props: FileExplorerVirtualRowsProps): Re
     statusByRelativePath,
     ignoredByRelativePath,
     expanded,
+    canCollapseFolderSubtree = true,
     dirCache,
     selectedPaths,
     activeFileId,
@@ -166,6 +168,7 @@ export function FileExplorerVirtualRows(props: FileExplorerVirtualRowsProps): Re
               isIgnored={isIgnored}
               deleteShortcutLabel={deleteShortcutLabel}
               connectionId={connectionId}
+              canCollapseFolderSubtree={canCollapseFolderSubtree}
               targetDir={n.isDirectory ? n.path : dirname(n.path)}
               targetDepth={n.isDirectory ? n.depth + 1 : n.depth}
               selectionSize={selectedPaths.has(n.path) ? visibleSelectionCount : 1}

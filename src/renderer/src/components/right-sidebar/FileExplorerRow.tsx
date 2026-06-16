@@ -269,6 +269,7 @@ type FileExplorerRowProps = {
   isIgnored: boolean
   deleteShortcutLabel: string
   connectionId?: string | null
+  canCollapseFolderSubtree: boolean
   targetDir: string
   targetDepth: number
   selectionSize: number
@@ -360,6 +361,7 @@ export function FileExplorerRow({
   isIgnored,
   deleteShortcutLabel,
   connectionId,
+  canCollapseFolderSubtree,
   targetDir,
   targetDepth,
   selectionSize,
@@ -651,7 +653,7 @@ export function FileExplorerRow({
             {translate('auto.components.right.sidebar.FileExplorerRow.c2112579f6', 'Download')}
           </ContextMenuItem>
         )}
-        {shouldShowCollapseFolderAction(node, isExpanded) && (
+        {canCollapseFolderSubtree && shouldShowCollapseFolderAction(node, isExpanded) && (
           <ContextMenuItem onSelect={onCollapseFolderSubtree}>
             <ListCollapse />
             {translate(

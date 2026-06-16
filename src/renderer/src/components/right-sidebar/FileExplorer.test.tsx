@@ -1,11 +1,12 @@
 /* eslint-disable max-lines -- File Explorer toolbar and row tests share element-walking fixtures. */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { Ellipsis, ListCollapse, Loader2, RefreshCw, Search } from 'lucide-react'
+import { Ellipsis, ListCollapse, Loader2, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { DropdownMenuCheckboxItem } from '@/components/ui/dropdown-menu'
 import { WorktreeOpenInMenuItems } from '@/components/sidebar/WorktreeOpenInMenu'
 import { FileExplorerToolbar } from './FileExplorerToolbar'
 import { FileExplorerNameFilter } from './FileExplorerNameFilter'
+import { FileExplorerViewSwitch } from './FileExplorerViewSwitch'
 import {
   downloadRemoteFile,
   FileExplorerRow,
@@ -62,19 +63,6 @@ function findRefreshButton(node: unknown): ReactElementLike {
   return found
 }
 
-function findSearchButton(node: unknown): ReactElementLike {
-  let found: ReactElementLike | null = null
-  visit(node, (entry) => {
-    if (entry.type === Button && entry.props['aria-label'] === 'Search Text') {
-      found = entry
-    }
-  })
-  if (!found) {
-    throw new Error('search button not found')
-  }
-  return found
-}
-
 function findInputByAriaLabel(node: unknown, ariaLabel: string): ReactElementLike {
   let found: ReactElementLike | null = null
   visit(node, (entry) => {
@@ -88,10 +76,26 @@ function findInputByAriaLabel(node: unknown, ariaLabel: string): ReactElementLik
   return found
 }
 
+function findElementByAriaLabel(node: unknown, ariaLabel: string): ReactElementLike {
+  let found: ReactElementLike | null = null
+  visit(node, (entry) => {
+    if (entry.props['aria-label'] === ariaLabel) {
+      found = entry
+    }
+  })
+  if (!found) {
+    throw new Error(`${ariaLabel} element not found`)
+  }
+  return found
+}
+
 function findButtonByAriaLabel(node: unknown, ariaLabel: string): ReactElementLike {
   let found: ReactElementLike | null = null
   visit(node, (entry) => {
-    if (entry.type === Button && entry.props['aria-label'] === ariaLabel) {
+    if (
+      entry.props['aria-label'] === ariaLabel &&
+      (entry.type === Button || entry.type === 'button')
+    ) {
       found = entry
     }
   })
@@ -266,7 +270,6 @@ function makeToolbar(overrides: Partial<Parameters<typeof FileExplorerToolbar>[0
     onToggleGitIgnoredFiles: vi.fn(),
     showDotfiles: true,
     onToggleDotfiles: vi.fn(),
-    onSearch: vi.fn(),
     ...overrides
   })
 }
@@ -300,17 +303,6 @@ describe('FileExplorerToolbar', () => {
     expect(label.props.children).toBe(repoName)
     expect(label.props.className).toContain('truncate')
     expect(label.props.className).toContain('min-w-0')
-  })
-
-  it('fires the search action from the icon button', () => {
-    const onSearch = vi.fn()
-    const element = makeToolbar({ onSearch })
-
-    const button = findSearchButton(element)
-    ;(button.props.onClick as () => void)()
-
-    expect(onSearch).toHaveBeenCalledTimes(1)
-    expect(hasIcon(button, Search)).toBe(true)
   })
 
   it('disables the refresh button and shows a spinner while refreshing', () => {
@@ -402,7 +394,6 @@ describe('FileExplorerToolbar', () => {
     const element = makeToolbar()
 
     expect(getToolbarButtonLabels(element)).toEqual([
-      'Search Text',
       'Collapse All',
       'Refresh Explorer',
       'More Explorer Actions'
@@ -415,6 +406,36 @@ describe('FileExplorerToolbar', () => {
     expect(queryMoreActionsButton(element)).not.toBeNull()
     expect(queryGitIgnoredMenuItem(element)).toBeNull()
     expect(findOpenInMenuItems(element).props.labelPrefix).toBe('Open in ')
+  })
+})
+
+describe('FileExplorerViewSwitch', () => {
+  it('switches between files and search views', () => {
+    const onSelectView = vi.fn()
+    const element = FileExplorerViewSwitch({
+      view: 'files',
+      onSelectView
+    })
+
+    const button = findElementByAriaLabel(element, 'Search file contents')
+    ;(button.props.onClick as () => void)()
+
+    expect(onSelectView).toHaveBeenCalledWith('search')
+  })
+
+  it('renders names and contents labels', () => {
+    const element = FileExplorerViewSwitch({
+      view: 'search',
+      onSelectView: vi.fn()
+    })
+
+    const contentsTab = findElementByAriaLabel(element, 'Search file contents')
+    const namesTab = findElementByAriaLabel(element, 'Filter files by name')
+
+    expect(contentsTab.props['aria-selected']).toBe(true)
+    expect(namesTab.props['aria-selected']).toBe(false)
+    expect(JSON.stringify(contentsTab.props.children)).toContain('Contents')
+    expect(JSON.stringify(namesTab.props.children)).toContain('Names')
   })
 })
 
