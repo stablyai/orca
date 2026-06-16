@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { getLocalExecutionHostLabel } from '../../../../shared/execution-host'
 import {
   buildSidebarHostOptions,
   buildSidebarHostScopeOptions,
@@ -18,7 +19,7 @@ describe('sidebar host options', () => {
     expect(hosts).toEqual([
       {
         id: 'local',
-        label: 'Local Mac',
+        label: getLocalExecutionHostLabel(),
         detail: 'This computer',
         kind: 'local',
         health: 'local',
@@ -173,8 +174,13 @@ describe('sidebar host options', () => {
     })
 
     expect(buildSidebarHostScopeOptions(hosts)).toMatchObject([
-      { id: 'all', label: 'All hosts', detail: 'Local Mac, Builder', health: 'mixed' },
-      { id: 'local', label: 'Local Mac', health: 'local' },
+      {
+        id: 'all',
+        label: 'All hosts',
+        detail: `${getLocalExecutionHostLabel()}, Builder`,
+        health: 'mixed'
+      },
+      { id: 'local', label: getLocalExecutionHostLabel(), health: 'local' },
       { id: 'ssh:ssh-1', label: 'Builder', health: 'disconnected' }
     ])
   })

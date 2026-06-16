@@ -14,6 +14,12 @@ describe('detectLanguage', () => {
     expect(detectLanguage('src/routes/index.astro')).toBe('astro')
   })
 
+  it('maps Nim files to the nim language id', () => {
+    expect(detectLanguage('src/main.nim')).toBe('nim')
+    expect(detectLanguage('tasks/build.nims')).toBe('nim')
+    expect(detectLanguage('packages/app.nimble')).toBe('nim')
+  })
+
   it('maps exact filenames from Windows paths', () => {
     expect(detectLanguage('C:\\Users\\alice\\repo\\Dockerfile')).toBe('dockerfile')
     expect(detectLanguage('C:\\Users\\alice\\repo\\CMakeLists.txt')).toBe('cmake')

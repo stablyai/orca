@@ -1,6 +1,6 @@
 /* eslint-disable max-lines -- Why: Codex discovery, incremental parsing, attribution, and aggregation all depend on the same event-normalization rules. Keeping them together makes the duplicate-snapshot logic easier to audit when usage totals look wrong. */
 import { basename, join, win32, posix } from 'path'
-import { createReadStream } from 'fs'
+import { createReadStream, existsSync } from 'fs'
 import { realpath, readdir, stat } from 'fs/promises'
 import { createInterface } from 'readline'
 import type { Repo } from '../../shared/types'
@@ -55,6 +55,7 @@ type CodexUsageDeltaResolution =
   | { kind: 'baseline'; nextTotals: CodexUsageRawUsage }
 
 const YIELD_EVERY_FILES = 10
+const YIELD_EVERY_DISCOVERY_ENTRIES = 100
 
 function ensureNumber(value: unknown): number {
   return typeof value === 'number' && Number.isFinite(value) ? value : 0
@@ -88,17 +89,24 @@ async function canonicalizePath(pathValue: string): Promise<string> {
 }
 
 async function yieldToEventLoop(): Promise<void> {
-  await new Promise((resolve) => setTimeout(resolve, 0))
+  await new Promise((resolve) => setImmediate(resolve))
 }
 
-async function walkJsonlFiles(dirPath: string): Promise<string[]> {
+async function walkJsonlFiles(
+  dirPath: string,
+  progress: { entriesVisited: number } = { entriesVisited: 0 }
+): Promise<string[]> {
   const entries = await readdir(dirPath, { withFileTypes: true })
   const files: string[] = []
 
   for (const entry of entries) {
+    progress.entriesVisited += 1
+    if (progress.entriesVisited % YIELD_EVERY_DISCOVERY_ENTRIES === 0) {
+      await yieldToEventLoop()
+    }
     const fullPath = join(dirPath, entry.name)
     if (entry.isDirectory()) {
-      appendDiscoveredFiles(files, await walkJsonlFiles(fullPath))
+      appendDiscoveredFiles(files, await walkJsonlFiles(fullPath, progress))
       continue
     }
     if (entry.isFile() && entry.name.endsWith('.jsonl')) {
@@ -132,6 +140,10 @@ export function getCodexSessionDirectories(): string[] {
   )
 }
 
+function hasLegacyCopiedSessionBridgeMarkers(): boolean {
+  return existsSync(join(getOrcaManagedCodexHomePath(), '.orca-session-copies'))
+}
+
 export async function listCodexSessionFiles(): Promise<string[]> {
   const files: string[] = []
   for (const dirPath of getCodexSessionDirectories()) {
@@ -141,29 +153,37 @@ export async function listCodexSessionFiles(): Promise<string[]> {
       // Missing or unreadable history in one home should not hide the other.
     }
   }
-  return dedupeCodexSessionFileAliases(files)
+  return dedupeCodexSessionFileAliases(files, hasLegacyCopiedSessionBridgeMarkers())
 }
 
-async function dedupeCodexSessionFileAliases(files: string[]): Promise<string[]> {
+async function dedupeCodexSessionFileAliases(
+  files: string[],
+  hasLegacyBridgeMarkers: boolean
+): Promise<string[]> {
   const excludedAliases = new Set<string>()
-  for (const filePath of files) {
-    const legacyCopyBridge = getLegacyCopiedCodexSessionBridgeScanPreference(filePath)
-    if (!legacyCopyBridge) {
-      continue
-    }
-    if (legacyCopyBridge.sourceSkipBytes !== null) {
-      continue
-    }
-    excludedAliases.add(
-      await getPhysicalFileAliasKey(
-        legacyCopyBridge.preferManagedCopy ? legacyCopyBridge.sourcePath : filePath
+  if (hasLegacyBridgeMarkers) {
+    for (const [index, filePath] of files.entries()) {
+      const legacyCopyBridge = getLegacyCopiedCodexSessionBridgeScanPreference(filePath)
+      if ((index + 1) % YIELD_EVERY_DISCOVERY_ENTRIES === 0) {
+        await yieldToEventLoop()
+      }
+      if (!legacyCopyBridge) {
+        continue
+      }
+      if (legacyCopyBridge.sourceSkipBytes !== null) {
+        continue
+      }
+      excludedAliases.add(
+        await getPhysicalFileAliasKey(
+          legacyCopyBridge.preferManagedCopy ? legacyCopyBridge.sourcePath : filePath
+        )
       )
-    )
+    }
   }
 
   const seenAliases = new Set<string>()
   const uniqueFiles: string[] = []
-  for (const filePath of [...new Set(files)].sort()) {
+  for (const [index, filePath] of [...new Set(files)].sort().entries()) {
     const aliasKey = await getCodexSessionFileAliasKey(filePath)
     if (excludedAliases.has(aliasKey)) {
       continue
@@ -173,6 +193,9 @@ async function dedupeCodexSessionFileAliases(files: string[]): Promise<string[]>
     }
     seenAliases.add(aliasKey)
     uniqueFiles.push(filePath)
+    if ((index + 1) % YIELD_EVERY_DISCOVERY_ENTRIES === 0) {
+      await yieldToEventLoop()
+    }
   }
   return uniqueFiles
 }
@@ -191,8 +214,14 @@ async function getPhysicalFileAliasKey(filePath: string): Promise<string> {
   return `path:${await canonicalizePath(filePath)}`
 }
 
-function getLegacySourceSkipBytesByPath(files: string[]): Map<string, number> {
+function getLegacySourceSkipBytesByPath(
+  files: string[],
+  hasLegacyBridgeMarkers = hasLegacyCopiedSessionBridgeMarkers()
+): Map<string, number> {
   const sourceSkipBytesByPath = new Map<string, number>()
+  if (!hasLegacyBridgeMarkers) {
+    return sourceSkipBytesByPath
+  }
   for (const filePath of files) {
     const legacyCopyBridge = getLegacyCopiedCodexSessionBridgeScanPreference(filePath)
     if (!legacyCopyBridge || legacyCopyBridge.sourceSkipBytes === null) {
@@ -734,7 +763,7 @@ function mergeSessions(
   for (const session of sessions) {
     const existing = target.get(session.sessionId)
     if (!existing) {
-      target.set(session.sessionId, structuredClone(session))
+      target.set(session.sessionId, cloneSessionForMerge(session))
       continue
     }
 
@@ -806,6 +835,15 @@ function mergeSessions(
         existing.locationModelBreakdown.push({ ...locationModel })
       }
     }
+  }
+}
+
+function cloneSessionForMerge(session: CodexUsageSession): CodexUsageSession {
+  return {
+    ...session,
+    locationBreakdown: session.locationBreakdown.map((entry) => ({ ...entry })),
+    modelBreakdown: session.modelBreakdown.map((entry) => ({ ...entry })),
+    locationModelBreakdown: session.locationModelBreakdown.map((entry) => ({ ...entry }))
   }
 }
 

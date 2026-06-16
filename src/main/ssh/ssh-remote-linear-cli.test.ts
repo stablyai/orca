@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
+import { isLinearProjectListResult } from './ssh-remote-linear-result-guards'
 import { runRemoteOrcaCli } from './ssh-remote-orca-cli'
 
 function createRuntime() {
@@ -71,6 +72,27 @@ function createRuntime() {
       team: { id: 'team-1', key: 'ENG', name: 'Engineering' },
       labels: [{ id: 'label-1', name: 'Bug', color: '#ff0000' }],
       meta: { workspaceId: 'workspace-1', returned: 1 }
+    })),
+    linearProjectListForAgents: vi.fn(async (request: unknown) => ({
+      request,
+      projects: [
+        {
+          id: 'project-1',
+          name: 'Launch',
+          workspaceId: 'workspace-1',
+          workspaceName: 'Acme',
+          teams: [{ id: 'team-1', name: 'Engineering', key: 'ENG' }]
+        }
+      ],
+      meta: {
+        query: 'launch',
+        workspaceId: 'workspace-1',
+        limit: 5,
+        returned: 1,
+        hasMore: false,
+        partial: false,
+        workspaceErrors: []
+      }
     })),
     linearIssueListForAgents: vi.fn(async (request: unknown) => ({
       request,
@@ -158,7 +180,8 @@ function createRuntime() {
         url: 'https://linear.app/acme/issue/ENG-456',
         team: { id: 'team-1', key: 'ENG', name: 'Engineering' },
         state: { id: 'state-triage', name: 'Triage' },
-        parent: { id: 'issue-1', identifier: 'ENG-123' }
+        parent: { id: 'issue-1', identifier: 'ENG-123' },
+        project: { id: 'project-1', name: 'Launch' }
       },
       meta: {
         workspaceId: 'workspace-1',
@@ -274,10 +297,27 @@ describe('runRemoteOrcaCli Linear commands', () => {
       cwd: '/home/alice/remote-repo',
       env: { ORCA_TERMINAL_HANDLE: 'term_ssh' }
     })
+    const projects = await runRemoteOrcaCli(runtime, {
+      argv: [
+        'linear',
+        'project',
+        'list',
+        '--query',
+        'launch',
+        '--limit',
+        '5',
+        '--workspace',
+        'workspace-1',
+        '--json'
+      ],
+      cwd: '/home/alice/remote-repo',
+      env: { ORCA_TERMINAL_HANDLE: 'term_ssh' }
+    })
 
     expect(teamList.exitCode).toBe(0)
     expect(labels.exitCode).toBe(0)
     expect(list.exitCode).toBe(0)
+    expect(projects.exitCode).toBe(0)
     expect(
       (runtime as unknown as { linearTeamListForAgents: ReturnType<typeof vi.fn> })
         .linearTeamListForAgents
@@ -295,6 +335,58 @@ describe('runRemoteOrcaCli Linear commands', () => {
       limit: 5,
       workspaceId: 'workspace-1'
     })
+    expect(
+      (runtime as unknown as { linearProjectListForAgents: ReturnType<typeof vi.fn> })
+        .linearProjectListForAgents
+    ).toHaveBeenCalledWith({
+      query: 'launch',
+      limit: 5,
+      workspaceId: 'workspace-1'
+    })
+  })
+
+  it('formats SSH Linear project list in non-json mode', async () => {
+    const runtime = createRuntime()
+
+    const result = await runRemoteOrcaCli(runtime, {
+      argv: ['linear', 'project', 'list', '--query', 'launch', '--workspace', 'workspace-1'],
+      cwd: '/home/alice/remote-repo',
+      env: { ORCA_TERMINAL_HANDLE: 'term_ssh' }
+    })
+
+    expect(result.exitCode).toBe(0)
+    expect(result.stdout).toContain('Launch')
+    expect(result.stdout).toContain('project-1')
+    expect(result.stdout).toContain('ENG')
+    expect(result.stdout).toContain('Acme')
+    expect(result.stderr).toBe('')
+  })
+
+  it('rejects malformed SSH Linear project list results before formatting', () => {
+    expect(
+      isLinearProjectListResult({
+        projects: [{ id: 'project-1' }],
+        meta: {
+          limit: 5,
+          returned: 1,
+          hasMore: false,
+          partial: false,
+          workspaceErrors: []
+        }
+      })
+    ).toBe(false)
+    expect(
+      isLinearProjectListResult({
+        projects: [{ id: 'project-1', name: 'Launch', teams: [{ id: 'team-1' }] }],
+        meta: {
+          limit: 5,
+          returned: 1,
+          hasMore: false,
+          partial: false,
+          workspaceErrors: []
+        }
+      })
+    ).toBe(false)
   })
 
   it('dispatches Linear status writes through the remote runtime with SSH context hints', async () => {
@@ -349,6 +441,58 @@ describe('runRemoteOrcaCli Linear commands', () => {
       operation: 'priority',
       priority: 2
     })
+  })
+
+  it('dispatches Linear creates with project input through the SSH remote runtime', async () => {
+    const runtime = createRuntime()
+
+    const result = await runRemoteOrcaCli(runtime, {
+      argv: [
+        'linear',
+        'create',
+        '--title',
+        'Follow-up',
+        '--team',
+        'ENG',
+        '--project',
+        'project-1',
+        '--json'
+      ],
+      cwd: '/home/alice/remote-repo',
+      env: {
+        ORCA_TERMINAL_HANDLE: 'term_ssh',
+        ORCA_WORKTREE_ID: 'repo::remote'
+      }
+    })
+
+    expect(result.exitCode).toBe(0)
+    const payload = JSON.parse(result.stdout) as {
+      ok: boolean
+      result: { request: { title: string; teamInput: string; projectInput: string } }
+    }
+    expect(payload.ok).toBe(true)
+    expect(payload.result.request).toMatchObject({
+      title: 'Follow-up',
+      teamInput: 'ENG',
+      projectInput: 'project-1'
+    })
+  })
+
+  it('formats SSH Linear creates with project input in non-json mode', async () => {
+    const runtime = createRuntime()
+
+    const result = await runRemoteOrcaCli(runtime, {
+      argv: ['linear', 'create', '--title', 'Follow-up', '--team', 'ENG', '--project', 'project-1'],
+      cwd: '/home/alice/remote-repo',
+      env: {
+        ORCA_TERMINAL_HANDLE: 'term_ssh',
+        ORCA_WORKTREE_ID: 'repo::remote'
+      }
+    })
+
+    expect(result.exitCode).toBe(0)
+    expect(result.stdout).toBe('Created ENG-456 under ENG-123 in Launch: Follow-up.\n')
+    expect(result.stderr).toBe('')
   })
 
   it('parses --me as a boolean for SSH Linear assignee writes', async () => {

@@ -69,7 +69,9 @@ export const AgentStateDot = React.memo(function AgentStateDot({
       >
         <span
           className={cn(
-            'block rounded-full border-2 border-yellow-500 border-t-transparent animate-spin',
+            // Why: match the sidebar worktree spinner's stepped cadence so
+            // long-running visible agents do not keep a full-frame-rate loop.
+            'block rounded-full border-2 border-yellow-500 border-t-transparent [animation:spin_1s_steps(12,end)_infinite]',
             inner
           )}
         />

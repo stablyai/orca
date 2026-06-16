@@ -13,6 +13,7 @@ import { getAgentAwakeDescription, getAgentAwakeTitle } from './agent-awake-copy
 import { AgentAwakeSetting } from './AgentAwakeSetting'
 import {
   AgentAvailabilityControl,
+  AgentPermissionsSetting,
   AgentGeneratedTabTitlesSetting,
   AgentStatusHooksSetting,
   AgentsPane,
@@ -21,6 +22,7 @@ import {
   createAgentAvailabilityUpdateQueue
 } from './AgentsPane'
 import { matchesSettingsSearch } from './settings-search'
+import { TooltipProvider } from '../ui/tooltip'
 
 const detectedAgentsMock = vi.hoisted(() => ({
   detectedIds: ['claude'] as TuiAgent[] | null,
@@ -64,11 +66,15 @@ function renderPane(
   props: Partial<React.ComponentProps<typeof AgentsPane>> = {}
 ): string {
   return renderToStaticMarkup(
-    React.createElement(AgentsPane, {
-      settings,
-      updateSettings: vi.fn(),
-      ...props
-    })
+    React.createElement(
+      TooltipProvider,
+      null,
+      React.createElement(AgentsPane, {
+        settings,
+        updateSettings: vi.fn(),
+        ...props
+      })
+    )
   )
 }
 
@@ -257,6 +263,30 @@ describe('AgentsPane', () => {
   it('includes enable and hide search metadata for agent visibility', () => {
     expect(matchesSettingsSearch('disable', getAgentsPaneSearchEntries())).toBe(true)
     expect(matchesSettingsSearch('hide', getAgentsPaneSearchEntries())).toBe(true)
+  })
+
+  it('includes agent permission search metadata', () => {
+    expect(matchesSettingsSearch('permission', getAgentsPaneSearchEntries())).toBe(true)
+    expect(matchesSettingsSearch('yolo', getAgentsPaneSearchEntries())).toBe(true)
+    expect(matchesSettingsSearch('manual', getAgentsPaneSearchEntries())).toBe(true)
+  })
+
+  it('applies the selected agent permission mode from settings without a mixed segment', () => {
+    const onChange = vi.fn()
+    const element = AgentPermissionsSetting({ mode: 'mixed', onChange })
+    const props = element.props.children.props.action.props as {
+      value: 'yolo'
+      onChange: (value: 'yolo' | 'manual' | 'mixed') => void
+      options: { value: string }[]
+    }
+
+    expect(props.value).toBe('yolo')
+    expect(props.options.map((option) => option.value)).toEqual(['yolo', 'manual'])
+    props.onChange('mixed')
+    expect(onChange).not.toHaveBeenCalled()
+
+    props.onChange('manual')
+    expect(onChange).toHaveBeenCalledWith('manual')
   })
 
   it('keeps catalog agent ids, labels, and commands discoverable in settings search', () => {

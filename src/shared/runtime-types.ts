@@ -14,6 +14,7 @@ import type {
   TuiAgent,
   Worktree,
   WorktreeLineage,
+  WorkspaceLineage,
   WorktreeLineageWarning
 } from './types'
 import type { TerminalPaneLayoutNode } from './types'
@@ -419,12 +420,14 @@ export type RuntimeWorktreeRecord = Worktree & {
   parentWorktreeId: string | null
   childWorktreeIds: string[]
   lineage: WorktreeLineage | null
+  workspaceLineage?: WorkspaceLineage | null
   git: GitWorktreeInfo
 }
 
 export type RuntimeWorktreeCreateResult = {
   worktree: RuntimeWorktreeRecord
   lineage: WorktreeLineage | null
+  workspaceLineage?: WorkspaceLineage | null
   warnings: WorktreeLineageWarning[]
   warning?: string
 }

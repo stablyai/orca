@@ -282,7 +282,9 @@ export type OptInVia = z.infer<typeof optInViaSchema>
 // Kept as an `as const` tuple so the Zod enum below and any call-site usage
 // share one array — typo-drift is impossible.
 type BooleanGlobalSettingsKey = {
-  [Key in keyof GlobalSettings]-?: GlobalSettings[Key] extends boolean ? Key : never
+  // Why: new persisted toggles may be optional for legacy-settings compatibility
+  // while still being boolean settings once defaults are applied.
+  [Key in keyof GlobalSettings]-?: NonNullable<GlobalSettings[Key]> extends boolean ? Key : never
 }[keyof GlobalSettings]
 export const SETTINGS_CHANGED_WHITELIST = [
   'editorAutoSave',
@@ -291,6 +293,7 @@ export const SETTINGS_CHANGED_WHITELIST = [
   'experimentalPet',
   'experimentalActivity',
   'experimentalTerminalAttention',
+  'experimentalAgentHibernation',
   'experimentalWorktreeSymlinks',
   'geminiCliOAuthEnabled'
 ] as const satisfies readonly BooleanGlobalSettingsKey[]

@@ -5,9 +5,17 @@ import { SearchableSetting } from './SearchableSetting'
 import { matchesSettingsSearch } from './settings-search'
 import { getExperimentalPaneSearchEntries, getExperimentalSearchEntry } from './experimental-search'
 import { HiddenExperimentalGroup } from './HiddenExperimentalGroup'
+import { NumberField, SettingsSwitch } from './SettingsFormControls'
 import { translate } from '@/i18n/i18n'
+import {
+  MAX_AGENT_HIBERNATION_IDLE_MS,
+  MIN_AGENT_HIBERNATION_IDLE_MS,
+  getEffectiveAgentHibernationIdleMs
+} from '@/lib/agent-hibernation-planner'
 
 export { getExperimentalPaneSearchEntries }
+
+const MS_PER_MINUTE = 60 * 1000
 
 type ExperimentalPaneProps = {
   settings: GlobalSettings
@@ -33,6 +41,15 @@ export function ExperimentalPane({
   const showWorktreeSymlinks = matchesSettingsSearch(searchQuery, [
     getExperimentalSearchEntry().symlinksOnWorktrees
   ])
+  const showAgentHibernation = matchesSettingsSearch(searchQuery, [
+    getExperimentalSearchEntry().agentHibernation
+  ])
+  const agentHibernationEnabled = settings.experimentalAgentHibernation === true
+  // Why: the planner owns ms-based bounds/defaults; the UI edits minutes
+  // while displaying the same effective clamped value the planner will use.
+  const agentHibernationIdleMinutes = Math.round(
+    getEffectiveAgentHibernationIdleMs(settings.agentHibernationIdleMs) / MS_PER_MINUTE
+  )
 
   return (
     <div className="space-y-4">
@@ -173,6 +190,77 @@ export function ExperimentalPane({
               />
             </button>
           </div>
+        </SearchableSetting>
+      ) : null}
+
+      {showAgentHibernation ? (
+        <SearchableSetting
+          title={translate(
+            'auto.components.settings.ExperimentalPane.agentHibernation.title',
+            'Agent hibernation'
+          )}
+          description={translate(
+            'auto.components.settings.ExperimentalPane.agentHibernation.description',
+            'Stops idle background agent terminals after the configured idle window and resumes supported sessions when you open them again.'
+          )}
+          keywords={getExperimentalSearchEntry().agentHibernation.keywords}
+          className="space-y-3 py-2"
+          id="experimental-agent-hibernation"
+        >
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0 shrink space-y-0.5">
+              <Label>
+                {translate(
+                  'auto.components.settings.ExperimentalPane.agentHibernation.title',
+                  'Agent hibernation'
+                )}
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                {translate(
+                  'auto.components.settings.ExperimentalPane.agentHibernation.copy',
+                  'Stops idle background agent terminals after the configured idle window and resumes supported sessions when you open them again. Experimental while we tune the safety model.'
+                )}
+              </p>
+            </div>
+            <SettingsSwitch
+              checked={agentHibernationEnabled}
+              ariaLabel={translate(
+                'auto.components.settings.ExperimentalPane.agentHibernation.toggleLabel',
+                'Toggle agent hibernation'
+              )}
+              onChange={() =>
+                updateSettings({
+                  experimentalAgentHibernation: !agentHibernationEnabled
+                })
+              }
+            />
+          </div>
+          {agentHibernationEnabled ? (
+            <NumberField
+              label={translate(
+                'auto.components.settings.ExperimentalPane.agentHibernation.idleMinutesLabel',
+                'Hibernate after'
+              )}
+              description={translate(
+                'auto.components.settings.ExperimentalPane.agentHibernation.idleMinutesDescription',
+                'How many idle minutes a completed background agent must wait before Orca can hibernate it.'
+              )}
+              value={agentHibernationIdleMinutes}
+              min={MIN_AGENT_HIBERNATION_IDLE_MS / MS_PER_MINUTE}
+              max={MAX_AGENT_HIBERNATION_IDLE_MS / MS_PER_MINUTE}
+              step={1}
+              suffix={translate(
+                'auto.components.settings.ExperimentalPane.agentHibernation.idleMinutesSuffix',
+                'minutes'
+              )}
+              onChange={(minutes) =>
+                updateSettings({
+                  // Why: settings persist the planner contract, not the display unit.
+                  agentHibernationIdleMs: minutes * MS_PER_MINUTE
+                })
+              }
+            />
+          ) : null}
         </SearchableSetting>
       ) : null}
 

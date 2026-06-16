@@ -2,7 +2,7 @@
    selection, per-agent controls, and runtime location together so settings
    reconciliation stays visible in one file. */
 import { useMemo, useState } from 'react'
-import { Check, ChevronDown, ExternalLink, RefreshCw, Terminal } from 'lucide-react'
+import { Check, ChevronDown, ExternalLink, Info, RefreshCw, Terminal } from 'lucide-react'
 import type { GlobalSettings, TuiAgent } from '../../../../shared/types'
 import { getAgentCatalog, AgentIcon } from '@/lib/agent-catalog'
 import { useDetectedAgents } from '@/hooks/useDetectedAgents'
@@ -33,8 +33,14 @@ import {
   resolveTuiAgentLaunchArgs,
   resolveTuiAgentLaunchEnv
 } from '../../../../shared/tui-agent-launch-defaults'
+import {
+  applyAgentPermissionMode,
+  resolveAgentPermissionModeSummary,
+  type AgentPermissionMode
+} from '../../../../shared/tui-agent-permissions'
 import { getSettingOwnershipSummary } from './setting-ownership'
 import { translate } from '@/i18n/i18n'
+import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
 
 export { getAgentsPaneSearchEntries } from './agents-search'
 
@@ -101,6 +107,11 @@ type AgentAvailabilityControlProps = {
   label: string
   isEnabled: boolean
   onSetEnabled: (enabled: boolean) => void
+}
+
+type AgentPermissionsSettingProps = {
+  mode: AgentPermissionMode
+  onChange: (mode: Exclude<AgentPermissionMode, 'mixed'>) => void
 }
 
 export function buildAgentAvailabilitySettingsUpdate(
@@ -174,6 +185,76 @@ export function AgentAvailabilityControl({
         }
       ]}
     />
+  )
+}
+
+export function AgentPermissionsSetting({
+  mode,
+  onChange
+}: AgentPermissionsSettingProps): React.JSX.Element {
+  const visibleMode: Exclude<AgentPermissionMode, 'mixed'> = mode === 'manual' ? 'manual' : 'yolo'
+  return (
+    <section className="space-y-3">
+      <SettingsSubsectionHeader
+        title={
+          <span className="flex items-center gap-2">
+            {translate('auto.components.settings.AgentsPane.agentPermissions', 'Agent Permissions')}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  aria-label={translate(
+                    'auto.components.settings.AgentsPane.agentPermissionsInfo',
+                    'Agent permissions info'
+                  )}
+                  className="grid size-5 place-items-center rounded-md text-muted-foreground outline-none transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                >
+                  <Info className="size-3.5" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="top" sideOffset={6}>
+                {translate(
+                  'auto.components.settings.AgentsPane.agentPermissionsTooltip',
+                  "Doesn't apply to agents where you've overridden launch arguments."
+                )}
+              </TooltipContent>
+            </Tooltip>
+          </span>
+        }
+        description={translate(
+          'auto.components.settings.AgentsPane.agentPermissionsDescription',
+          'Choose whether Orca launches agents with fewer permission prompts or with manual checks.'
+        )}
+        action={
+          <SettingsSegmentedControl<AgentPermissionMode>
+            value={visibleMode}
+            onChange={(nextMode) => {
+              if (nextMode !== 'mixed') {
+                onChange(nextMode)
+              }
+            }}
+            ariaLabel={translate(
+              'auto.components.settings.AgentsPane.agentPermissions',
+              'Agent Permissions'
+            )}
+            size="sm"
+            options={[
+              {
+                value: 'yolo',
+                label: translate('auto.components.settings.AgentsPane.agentPermissionsYolo', 'Yolo')
+              },
+              {
+                value: 'manual',
+                label: translate(
+                  'auto.components.settings.AgentsPane.agentPermissionsManual',
+                  'Manual'
+                )
+              }
+            ]}
+          />
+        }
+      />
+    </section>
   )
 }
 
@@ -617,6 +698,10 @@ export function AgentsPane({
   const cmdOverrides = settings.agentCmdOverrides ?? {}
   const agentDefaultArgs = settings.agentDefaultArgs ?? {}
   const agentDefaultEnv = settings.agentDefaultEnv ?? {}
+  const agentPermissionMode = resolveAgentPermissionModeSummary({
+    agentDefaultArgs,
+    agentDefaultEnv
+  })
   const disabledAgents = normalizeDisabledTuiAgents(settings.disabledTuiAgents)
 
   const setDefault = (id: TuiAgent | 'blank' | null): void => {
@@ -659,6 +744,16 @@ export function AgentsPane({
         [id]: value
       }
     })
+  }
+
+  const saveAgentPermissionMode = (mode: Exclude<AgentPermissionMode, 'mixed'>): void => {
+    updateSettings(
+      applyAgentPermissionMode({
+        mode,
+        agentDefaultArgs,
+        agentDefaultEnv
+      })
+    )
   }
 
   // Why: null means detection is in flight, not "all agents are installed".
@@ -741,6 +836,8 @@ export function AgentsPane({
       <AgentGeneratedTabTitlesSetting settings={settings} updateSettings={updateSettings} />
 
       <AgentAwakeSetting settings={settings} updateSettings={updateSettings} />
+
+      <AgentPermissionsSetting mode={agentPermissionMode} onChange={saveAgentPermissionMode} />
 
       {detectedAgents.length > 0 && (
         <section className="space-y-3">

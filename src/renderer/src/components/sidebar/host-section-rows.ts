@@ -1,6 +1,7 @@
 import {
   ALL_EXECUTION_HOSTS_SCOPE,
   LOCAL_EXECUTION_HOST_ID,
+  getLocalExecutionHostLabel,
   getRepoExecutionHostId,
   type ExecutionHostId,
   type ExecutionHostKind,
@@ -10,6 +11,7 @@ import type { ExecutionHostHealth } from '../../../../shared/execution-host-regi
 import type { RuntimeCompatVerdict } from '../../../../shared/protocol-compat'
 import type { SshConnectionStatus } from '../../../../shared/ssh-types'
 import type { FolderWorkspace, ProjectGroup, Repo } from '../../../../shared/types'
+import { PINNED_GROUP_KEY } from './worktree-list-groups'
 import type { Row } from './worktree-list-groups'
 
 export type HostHeaderRow = {
@@ -84,7 +86,7 @@ function getFallbackHost(hostId: ExecutionHostId): HostSectionOption {
   return {
     id: hostId,
     kind: isLocal ? 'local' : hostId.startsWith('ssh:') ? 'ssh' : 'runtime',
-    label: isLocal ? 'Local Mac' : hostId,
+    label: isLocal ? getLocalExecutionHostLabel() : hostId,
     detail: isLocal ? 'This computer' : 'Host',
     health: isLocal ? 'local' : 'available'
   }
@@ -95,6 +97,7 @@ function countWorktreeRows(rows: readonly Row[]): number {
   // fall back to the header's own count so the host badge doesn't read 0
   // while a visibly populated project sits right under it.
   let count = 0
+  const seenWorktreeIds = new Set<string>()
   let pendingHeaderCount: number | null = null
   let pendingHeaderHadItems = false
   const flushHeader = (): void => {
@@ -107,11 +110,14 @@ function countWorktreeRows(rows: readonly Row[]): number {
   for (const row of rows) {
     if (row.type === 'header') {
       flushHeader()
-      pendingHeaderCount = row.count
+      pendingHeaderCount = row.key === PINNED_GROUP_KEY ? null : row.count
       continue
     }
     if (row.type === 'item') {
-      count += 1
+      if (!seenWorktreeIds.has(row.worktree.id)) {
+        count += 1
+        seenWorktreeIds.add(row.worktree.id)
+      }
       pendingHeaderHadItems = pendingHeaderCount !== null
     }
   }
@@ -151,26 +157,37 @@ export function addHostSectionRows(args: {
   const hostOptionsById = new Map(args.hostOptions.map((host) => [host.id, host]))
   const rowsByHostId = new Map<ExecutionHostId, Row[]>()
   const globalRows: Row[] = []
-  let pendingRows: Row[] = []
+  let pendingRows: Extract<Row, { type: 'header' }>[] = []
+  let pendingRowsWereUsed = false
+  const pendingRowsKeyByHostId = new Map<ExecutionHostId, string>()
 
   for (const row of args.rows) {
     const rowHostId = getRowHostId(row, args.defaultHostId)
     if (rowHostId) {
       const hostRows = rowsByHostId.get(rowHostId) ?? []
       if (pendingRows.length > 0) {
-        hostRows.push(...pendingRows)
-        pendingRows = []
+        const pendingRowsKey = pendingRows.map((pendingRow) => pendingRow.key).join('\0')
+        if (pendingRowsKeyByHostId.get(rowHostId) !== pendingRowsKey) {
+          hostRows.push(...pendingRows)
+          pendingRowsKeyByHostId.set(rowHostId, pendingRowsKey)
+        }
+        pendingRowsWereUsed = true
       }
       hostRows.push(row)
       rowsByHostId.set(rowHostId, hostRows)
       continue
     }
     // Why: status/"All" headers describe the rows that follow. Buffer them
-    // until the next host-owned row so host remains above the existing grouping.
-    pendingRows.push(row)
+    // for every host-owned run so host remains above the existing grouping.
+    if (row.type === 'header') {
+      pendingRows = [row]
+      pendingRowsWereUsed = false
+    } else {
+      globalRows.push(row)
+    }
   }
 
-  if (pendingRows.length > 0) {
+  if (pendingRows.length > 0 && !pendingRowsWereUsed) {
     globalRows.push(...pendingRows)
   }
 

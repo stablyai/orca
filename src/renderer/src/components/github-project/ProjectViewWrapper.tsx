@@ -793,6 +793,33 @@ export default function ProjectViewWrapper(_props: Props = {} as Props): React.J
             }
           }}
         />
+      ) : visibleTable && resolvedDialogRepoItem ? (
+        <GitHubItemDialog
+          workItem={resolvedDialogRepoItem.workItem}
+          repoPath={resolvedDialogRepoItem.repoPath}
+          repoId={resolvedDialogRepoItem.repoId}
+          projectOrigin={resolvedDialogRepoItem.origin}
+          backLabel={translate(
+            'auto.components.github.project.ProjectViewWrapper.1aa7c952b9',
+            'Project view'
+          )}
+          onUse={(item) => {
+            const current = resolvedDialogRepoItem
+            setDialogRepoItem(null)
+            void launchWorkItemDirect({
+              item,
+              repoId: current.workItem.repoId,
+              launchSource: 'task_page',
+              telemetrySource: 'sidebar',
+              openModalFallback: () => {
+                if (item.url) {
+                  void window.api.shell.openUrl(item.url)
+                }
+              }
+            })
+          }}
+          onClose={() => setDialogRepoItem(null)}
+        />
       ) : visibleTable ? (
         <ProjectViewList
           table={visibleTable}
@@ -810,36 +837,6 @@ export default function ProjectViewWrapper(_props: Props = {} as Props): React.J
           sourceSettings={settings}
         />
       ) : null}
-
-      {/* Full repo-backed dialog — writes still go through slug-addressed
-          mutation helpers (see design §Dialog editing from Project rows, line
-          707) so a row from another repo cannot accidentally edit the active
-          workspace. */}
-      <GitHubItemDialog
-        workItem={resolvedDialogRepoItem?.workItem ?? null}
-        repoPath={resolvedDialogRepoItem?.repoPath ?? null}
-        repoId={resolvedDialogRepoItem?.repoId ?? null}
-        projectOrigin={resolvedDialogRepoItem?.origin}
-        onUse={(item) => {
-          const current = resolvedDialogRepoItem
-          setDialogRepoItem(null)
-          if (!current) {
-            return
-          }
-          void launchWorkItemDirect({
-            item,
-            repoId: current.workItem.repoId,
-            launchSource: 'task_page',
-            telemetrySource: 'sidebar',
-            openModalFallback: () => {
-              if (item.url) {
-                void window.api.shell.openUrl(item.url)
-              }
-            }
-          })
-        }}
-        onClose={() => setDialogRepoItem(null)}
-      />
 
       {/* Slug-only simplified dialog for rows whose repo isn't added to Orca.
           Why: no Start-work affordance lives inside the slug dialog — the

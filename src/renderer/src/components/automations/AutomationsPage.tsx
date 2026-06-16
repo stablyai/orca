@@ -54,7 +54,11 @@ import type {
   AutomationUpdateInput
 } from '../../../../shared/automations-types'
 import { getAutomationRunRepoId } from '../../../../shared/automation-run-identity'
-import { getRepoExecutionHostId, parseExecutionHostId } from '../../../../shared/execution-host'
+import {
+  getLocalExecutionHostLabel,
+  getRepoExecutionHostId,
+  parseExecutionHostId
+} from '../../../../shared/execution-host'
 import { getHostDisplayLabelOverrides } from '../../../../shared/host-setting-overrides'
 import { TASK_SOURCE_CONTEXT_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
 import type { PreflightStatus } from '../../../../preload/api-types'
@@ -744,13 +748,13 @@ export default function AutomationsPage(): React.JSX.Element {
             ?.name ?? parsed.environmentId
         )
       }
-      return 'Local Mac'
+      return getLocalExecutionHostLabel()
     },
     [runtimeEnvironments, sshTargetLabels]
   )
   const hostLabelOverrides = useMemo(() => getHostDisplayLabelOverrides(settings), [settings])
   const hostLabelById = useMemo(() => {
-    const labels = new Map<string, string>([['local', 'Local Mac']])
+    const labels = new Map<string, string>([['local', getLocalExecutionHostLabel()]])
     for (const [targetId, label] of sshTargetLabels) {
       labels.set(`ssh:${encodeURIComponent(targetId)}`, label)
     }

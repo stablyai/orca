@@ -63,6 +63,17 @@ export const LINEAR_COMMAND_SPECS: CommandSpec[] = [
     examples: ['orca linear team labels --team ENG --json']
   },
   {
+    path: ['linear', 'project', 'list'],
+    summary: 'List connected Linear projects',
+    usage:
+      'orca linear project list [--query <text>] [--limit <n>] [--workspace <id>|all] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'query', 'limit', 'workspace'],
+    examples: [
+      'orca linear project list --query launch --json',
+      'orca linear project list --workspace all --json'
+    ]
+  },
+  {
     path: ['linear', 'list'],
     summary: 'List Linear issues for task triage',
     usage:
@@ -213,13 +224,14 @@ export const LINEAR_COMMAND_SPECS: CommandSpec[] = [
     path: ['linear', 'create'],
     summary: 'Create a Linear issue',
     usage:
-      'orca linear create --title <title> [--body <text> | --body-file <path|->] [--team <key|id>] [--state <stateId|exact-name>] [--assignee me|<userId>] [--priority none|low|medium|high|urgent] [--estimate <number>] [--due-date <yyyy-mm-dd>] [--label <labelId-or-exact-name>]... [--parent <id> | --parent-current] [--write-id <uuid>] [--workspace <id>] [--json]',
+      'orca linear create --title <title> [--body <text> | --body-file <path|->] [--team <key|id>] [--project <projectId-or-exact-name>] [--state <stateId|exact-name>] [--assignee me|<userId>] [--priority none|low|medium|high|urgent] [--estimate <number>] [--due-date <yyyy-mm-dd>] [--label <labelId-or-exact-name>]... [--parent <id> | --parent-current] [--write-id <uuid>] [--workspace <id>] [--json]',
     allowedFlags: [
       ...GLOBAL_FLAGS,
       'title',
       'body',
       'body-file',
       'team',
+      'project',
       'state',
       'assignee',
       'priority',
@@ -232,7 +244,7 @@ export const LINEAR_COMMAND_SPECS: CommandSpec[] = [
       'workspace'
     ],
     examples: [
-      'orca linear create --title "Investigate flaky login" --team ENG',
+      'orca linear create --title "Investigate flaky login" --team ENG --project "Launch"',
       'orca linear create --title "Follow-up bug" --parent-current --body-file - --json'
     ],
     notes: ['Use --body-file - to read multiline issue bodies from stdin.']

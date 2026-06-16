@@ -5,6 +5,7 @@ import type {
   LinearIssueListResult,
   LinearIssueContextResult,
   LinearIssueTaskUpdateResult,
+  LinearProjectListResult,
   LinearSearchIssueSummary,
   LinearSearchResult,
   LinearTeamLabelsResult,
@@ -13,6 +14,10 @@ import type {
   LinearTeamStatesResult,
   LinearStatusSetResult
 } from '../shared/linear-agent-access'
+import {
+  formatLinearProjectListRows,
+  linearProjectListWarningLines
+} from '../shared/linear-project-list-format'
 
 export function formatLinearIssue(result: LinearIssueContextResult): string {
   const issue = result.issue
@@ -103,6 +108,10 @@ export function formatLinearIssueList(result: LinearIssueListResult): string {
   return result.issues.map(formatSearchRow).join('\n')
 }
 
+export function formatLinearProjectList(result: LinearProjectListResult): string {
+  return formatLinearProjectListRows(result)
+}
+
 export function formatLinearStatusSet(result: LinearStatusSetResult): string {
   const suffix = result.meta.alreadyInState ? ' (already set)' : ''
   return `Set ${result.issue.identifier} to ${result.state.name}${suffix}.`
@@ -120,8 +129,9 @@ export function formatLinearAttach(result: LinearAttachResult): string {
 
 export function formatLinearCreate(result: LinearCreateResult): string {
   const parent = result.issue.parent ? ` under ${result.issue.parent.identifier}` : ''
+  const project = result.issue.project?.name ? ` in ${result.issue.project.name}` : ''
   const suffix = result.meta.deduplicated ? ' (already created)' : ''
-  return `Created ${result.issue.identifier}${parent}: ${result.issue.title}${suffix}.`
+  return `Created ${result.issue.identifier}${parent}${project}: ${result.issue.title}${suffix}.`
 }
 
 export function formatLinearTaskUpdate(result: LinearIssueTaskUpdateResult): string {
@@ -163,6 +173,12 @@ export function printLinearListWarnings(
   }
   for (const error of meta.workspaceErrors ?? []) {
     console.error(`warning: ${error.workspace.name} unavailable for Linear: ${error.message}`)
+  }
+}
+
+export function printLinearProjectListWarnings(result: LinearProjectListResult): void {
+  for (const warning of linearProjectListWarningLines(result)) {
+    console.error(warning)
   }
 }
 

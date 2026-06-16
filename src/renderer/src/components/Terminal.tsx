@@ -62,6 +62,7 @@ import {
   anyMountedWorktreeHasLayout as computeAnyMountedWorktreeHasLayout
 } from './terminal/split-group-mount'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
+import { setForegroundTerminalWorktreeIds } from '@/lib/foreground-terminal-worktrees'
 import { appendUniqueOpenFileIds } from './terminal/unsaved-close-queue'
 import { setWindowCloseRequestHandler } from './window-close-request-coordinator'
 import CodexRestartChip from './CodexRestartChip'
@@ -269,6 +270,23 @@ function Terminal(): React.JSX.Element | null {
   const activityTerminalPortals: ActivityTerminalPortalTarget[] = useActivityTerminalPortals(
     activeView === 'activity'
   )
+  const foregroundTerminalWorktreeIds = useMemo(() => {
+    const ids = new Set<string>()
+    if (activeView === 'terminal' && renderedActiveWorktreeId) {
+      ids.add(renderedActiveWorktreeId)
+    }
+    for (const portal of activityTerminalPortals) {
+      ids.add(portal.worktreeId)
+    }
+    return Array.from(ids)
+  }, [activeView, activityTerminalPortals, renderedActiveWorktreeId])
+
+  useEffect(() => {
+    // Why: hibernation must treat terminals portaled into foreground surfaces
+    // as visible even when they are not the singular active worktree.
+    setForegroundTerminalWorktreeIds(foregroundTerminalWorktreeIds)
+    return () => setForegroundTerminalWorktreeIds([])
+  }, [foregroundTerminalWorktreeIds])
 
   const tabs = useMemo(
     () => (renderedActiveWorktreeId ? (tabsByWorktree[renderedActiveWorktreeId] ?? []) : []),
