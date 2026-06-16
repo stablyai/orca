@@ -58,7 +58,7 @@ describe('WindowsTerminalStep', () => {
     )
 
     expect(html).toContain('Git Bash')
-    expect(html).toContain('gwindows_logo')
+    expect(html).toContain('gwindows_logo.svg')
     expect(html).not.toContain('&gt;Git&lt;')
     expect(html).not.toContain('>Git<')
   })

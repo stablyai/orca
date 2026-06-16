@@ -1,7 +1,7 @@
 import React from 'react'
 import { WINDOWS_GIT_BASH_SHELL } from '../../../../shared/windows-terminal-shell'
 import { translate } from '@/i18n/i18n'
-import gitForWindowsLogoUrl from '../../../../../resources/gwindows_logo.png?url'
+import gitForWindowsLogoUrl from '../../../../../resources/gwindows_logo.svg?url'
 
 export type WindowsShell = 'powershell.exe' | 'cmd.exe' | 'wsl.exe' | typeof WINDOWS_GIT_BASH_SHELL
 
