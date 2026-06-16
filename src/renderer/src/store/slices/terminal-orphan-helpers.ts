@@ -66,6 +66,24 @@ export function buildOrphanTerminalCleanupPatch(
   | 'activeTabIdByWorktree'
   | 'activeTabId'
 > {
+  if (orphanTerminalIds.size === 0) {
+    return {
+      tabsByWorktree: state.tabsByWorktree,
+      ptyIdsByTabId: state.ptyIdsByTabId,
+      runtimePaneTitlesByTabId: state.runtimePaneTitlesByTabId,
+      expandedPaneByTabId: state.expandedPaneByTabId,
+      canExpandPaneByTabId: state.canExpandPaneByTabId,
+      terminalLayoutsByTabId: state.terminalLayoutsByTabId,
+      pendingStartupByTabId: state.pendingStartupByTabId,
+      pendingSetupSplitByTabId: state.pendingSetupSplitByTabId,
+      pendingIssueCommandSplitByTabId: state.pendingIssueCommandSplitByTabId,
+      tabBarOrderByWorktree: state.tabBarOrderByWorktree,
+      cacheTimerByKey: state.cacheTimerByKey,
+      activeTabIdByWorktree: state.activeTabIdByWorktree,
+      activeTabId: state.activeTabId
+    }
+  }
+
   const nextTabs = (state.tabsByWorktree[worktreeId] ?? []).filter(
     (tab) => !orphanTerminalIds.has(tab.id)
   )

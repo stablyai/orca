@@ -702,6 +702,34 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         id,
         'terminal'
       )
+      const groupsForWorktree = groupsByWorktree[worktreeId] ?? []
+      const cleanedGroups =
+        orphanTerminalIds.size === 0
+          ? groupsForWorktree
+          : groupsForWorktree.map((entry) => {
+              const tabOrder = dedupeTabOrder(entry.tabOrder).filter(
+                (tabId) => !orphanTerminalIds.has(tabId)
+              )
+              const recentTabIds = sanitizeRecentTabIds(entry.recentTabIds, tabOrder)
+              const replacedActiveTabId = Boolean(
+                entry.activeTabId && orphanTerminalIds.has(entry.activeTabId)
+              )
+              const fallbackActiveTabId = recentTabIds.at(-1) ?? tabOrder[0] ?? null
+              const activeTabId = replacedActiveTabId ? fallbackActiveTabId : entry.activeTabId
+              return {
+                ...entry,
+                activeTabId,
+                tabOrder,
+                recentTabIds:
+                  replacedActiveTabId && activeTabId
+                    ? pushRecentTabId(recentTabIds, activeTabId)
+                    : recentTabIds
+              }
+            })
+      const cleanedTargetGroup = cleanedGroups.find((entry) => entry.id === group.id) ?? group
+      const cleanedGroupOrder = dedupeTabOrder(cleanedTargetGroup.tabOrder).filter(
+        (tabId) => !orphanTerminalIds.has(tabId)
+      )
       const unifiedTab = existingTerminalTab ?? {
         id,
         entityId: id,
@@ -714,16 +742,21 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
           : {}),
         customLabel: tab.customTitle,
         color: tab.color,
-        sortOrder: dedupeTabOrder(group.tabOrder).length,
+        sortOrder: cleanedGroupOrder.length,
         createdAt: tab.createdAt
       }
-      const nextGroupOrder = dedupeTabOrder([...group.tabOrder, unifiedTab.id])
+      const nextGroupOrder = dedupeTabOrder([...cleanedGroupOrder, unifiedTab.id])
       const nextRecent = shouldActivate
         ? pushRecentTabId(sanitizeRecentTabIds(group.recentTabIds, nextGroupOrder), unifiedTab.id)
-        : sanitizeRecentTabIds(group.recentTabIds, nextGroupOrder)
+        : sanitizeRecentTabIds(cleanedTargetGroup.recentTabIds, nextGroupOrder)
+      const cleanedActiveTabIdForWorktree = orphanCleanupPatch.activeTabIdByWorktree[worktreeId]
+      const cleanedGroupActiveTabId =
+        cleanedTargetGroup.activeTabId && !orphanTerminalIds.has(cleanedTargetGroup.activeTabId)
+          ? cleanedTargetGroup.activeTabId
+          : null
       const nextActiveTabIdForWorktree = shouldActivate
         ? tab.id
-        : (s.activeTabIdByWorktree[worktreeId] ?? group.activeTabId ?? tab.id)
+        : (cleanedActiveTabIdForWorktree ?? cleanedGroupActiveTabId ?? tab.id)
       return {
         ...orphanCleanupPatch,
         tabsByWorktree: {
@@ -741,9 +774,11 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         },
         groupsByWorktree: {
           ...groupsByWorktree,
-          [worktreeId]: updateGroup(groupsByWorktree[worktreeId] ?? [], {
-            ...group,
-            activeTabId: shouldActivate ? unifiedTab.id : (group.activeTabId ?? unifiedTab.id),
+          [worktreeId]: updateGroup(cleanedGroups, {
+            ...cleanedTargetGroup,
+            activeTabId: shouldActivate
+              ? unifiedTab.id
+              : (cleanedGroupActiveTabId ?? unifiedTab.id),
             tabOrder: nextGroupOrder,
             recentTabIds: nextRecent
           })
@@ -753,17 +788,17 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
           ...s.layoutByWorktree,
           [worktreeId]: s.layoutByWorktree[worktreeId] ?? { type: 'leaf', groupId: group.id }
         },
-        activeTabId: shouldActivate ? tab.id : s.activeTabId,
+        activeTabId: shouldActivate ? tab.id : orphanCleanupPatch.activeTabId,
         activeTabIdByWorktree: {
-          ...s.activeTabIdByWorktree,
+          ...orphanCleanupPatch.activeTabIdByWorktree,
           [worktreeId]: nextActiveTabIdForWorktree
         },
         ptyIdsByTabId: {
-          ...s.ptyIdsByTabId,
+          ...orphanCleanupPatch.ptyIdsByTabId,
           [tab.id]: options?.initialPtyId ? [options.initialPtyId] : []
         },
         terminalLayoutsByTabId: {
-          ...s.terminalLayoutsByTabId,
+          ...orphanCleanupPatch.terminalLayoutsByTabId,
           [tab.id]: emptyLayoutSnapshot()
         }
       }

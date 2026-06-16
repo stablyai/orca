@@ -119,7 +119,11 @@ import type {
 import { LINEAR_WRITE_BODY_CAP } from '../../shared/linear-agent-access'
 import type { FeatureInteractionId } from '../../shared/feature-interactions'
 import type { TerminalPaneSplitSource } from '../../shared/feature-education-telemetry'
-import { FOLDER_WORKSPACE_INSTANCE_SEPARATOR, splitWorktreeId } from '../../shared/worktree-id'
+import {
+  FOLDER_WORKSPACE_INSTANCE_SEPARATOR,
+  splitWorktreeId,
+  splitWorktreeIdForFilesystem
+} from '../../shared/worktree-id'
 import {
   getProjectHostSetupForRepo,
   getProjectHostSetupWorktreeMeta
@@ -6212,17 +6216,59 @@ export class OrcaRuntimeService {
       throw new Error('invalid_limit')
     }
     const graphEpoch = this.graphStatus === 'ready' ? this.rendererGraphEpoch : null
-    const targetWorktreeId = worktreeSelector
-      ? (getExplicitWorktreeIdSelector(worktreeSelector) ??
-        (await this.resolveWorktreeSelector(worktreeSelector)).id)
+    const explicitTargetWorktreeId = worktreeSelector
+      ? getExplicitWorktreeIdSelector(worktreeSelector)
       : null
-    const worktreesById = await this.getResolvedWorktreeMap()
+    const initialResolvedWorktreeCache = this.resolvedWorktreeCache
+    const cachedResolvedWorktrees =
+      initialResolvedWorktreeCache && initialResolvedWorktreeCache.expiresAt > Date.now()
+        ? initialResolvedWorktreeCache.worktrees
+        : null
+    const cachedExplicitTargetWorktree =
+      explicitTargetWorktreeId && cachedResolvedWorktrees
+        ? (cachedResolvedWorktrees.find((worktree) => worktree.id === explicitTargetWorktreeId) ??
+          null)
+        : null
+    const parsedExplicitTargetWorktree =
+      explicitTargetWorktreeId && !cachedExplicitTargetWorktree
+        ? this.buildResolvedWorktreeFromId(explicitTargetWorktreeId)
+        : null
+    const targetWorktree =
+      worktreeSelector && !explicitTargetWorktreeId
+        ? await this.resolveWorktreeSelector(worktreeSelector)
+        : (cachedExplicitTargetWorktree ?? parsedExplicitTargetWorktree)
+    const targetWorktreeId = explicitTargetWorktreeId ?? targetWorktree?.id ?? null
+    const classificationResolvedWorktreeCache = this.resolvedWorktreeCache
+    const classificationResolvedWorktrees =
+      targetWorktreeId &&
+      classificationResolvedWorktreeCache &&
+      classificationResolvedWorktreeCache.expiresAt > Date.now()
+        ? includeTargetResolvedWorktree(
+            classificationResolvedWorktreeCache.worktrees,
+            targetWorktree
+          )
+        : targetWorktreeId && explicitTargetWorktreeId
+          ? this.listKnownResolvedWorktreesForExplicitTarget(targetWorktreeId, targetWorktree)
+          : null
+    const worktreesById =
+      targetWorktreeId && targetWorktree
+        ? new Map([[targetWorktree.id, targetWorktree]])
+        : targetWorktreeId
+          ? new Map()
+          : await this.getResolvedWorktreeMap()
     if (graphEpoch !== null) {
       this.assertStableReadyGraph(graphEpoch)
     }
 
-    const resolvedWorktrees = [...worktreesById.values()]
-    await this.refreshPtyWorktreeRecordsFromController(resolvedWorktrees)
+    const resolvedWorktrees =
+      targetWorktreeId && classificationResolvedWorktrees
+        ? classificationResolvedWorktrees
+        : targetWorktreeId && targetWorktree
+          ? [targetWorktree]
+          : targetWorktreeId
+            ? []
+            : [...worktreesById.values()]
+    await this.refreshPtyWorktreeRecordsFromController(resolvedWorktrees, targetWorktreeId)
 
     const livePtyWorktreeIds = new Set<string>()
     for (const pty of this.ptysById.values()) {
@@ -13366,6 +13412,65 @@ export class OrcaRuntimeService {
     return this.store as unknown as Store
   }
 
+  private buildResolvedWorktreeFromId(worktreeId: string): ResolvedWorktree | null {
+    const parsed = splitWorktreeIdForFilesystem(worktreeId)
+    if (!parsed?.repoId || !parsed.worktreePath) {
+      return null
+    }
+    const repo = this.store?.getRepos().find((entry) => entry.id === parsed.repoId)
+    const git = {
+      path: parsed.worktreePath,
+      head: '',
+      branch: '',
+      isBare: false,
+      isMainWorktree: repo ? areWorktreePathsEqual(parsed.worktreePath, repo.path) : false
+    }
+    const meta = this.store?.getWorktreeMeta(worktreeId)
+    const merged = mergeWorktree(parsed.repoId, git, meta, repo?.displayName)
+    return {
+      ...merged,
+      id: worktreeId,
+      parentWorktreeId: null,
+      childWorktreeIds: [],
+      lineage: null,
+      git,
+      displayName: merged.displayName,
+      comment: merged.comment
+    }
+  }
+
+  private listKnownResolvedWorktreesForExplicitTarget(
+    targetWorktreeId: string,
+    targetWorktree: ResolvedWorktree | null
+  ): ResolvedWorktree[] {
+    if (!this.store || !targetWorktree) {
+      return []
+    }
+    const target = splitWorktreeIdForFilesystem(targetWorktreeId)
+    if (!target?.repoId) {
+      return []
+    }
+    const worktreeIds = new Set(
+      Object.keys(this.store.getAllWorktreeMeta()).filter((worktreeId) => {
+        const parsed = splitWorktreeIdForFilesystem(worktreeId)
+        return parsed?.repoId === target.repoId && Boolean(parsed.worktreePath)
+      })
+    )
+    worktreeIds.add(targetWorktreeId)
+
+    const resolved: ResolvedWorktree[] = []
+    for (const worktreeId of worktreeIds) {
+      const worktree =
+        worktreeId === targetWorktreeId
+          ? targetWorktree
+          : this.buildResolvedWorktreeFromId(worktreeId)
+      if (worktree) {
+        resolved.push(worktree)
+      }
+    }
+    return resolved
+  }
+
   private async listResolvedWorktrees(): Promise<ResolvedWorktree[]> {
     if (!this.store) {
       return []
@@ -13719,7 +13824,8 @@ export class OrcaRuntimeService {
   }
 
   private async refreshPtyWorktreeRecordsFromController(
-    resolvedWorktrees: ResolvedWorktree[]
+    resolvedWorktrees: ResolvedWorktree[],
+    targetWorktreeId: string | null = null
   ): Promise<void> {
     if (!this.ptyController?.listProcesses) {
       return
@@ -13738,6 +13844,9 @@ export class OrcaRuntimeService {
       const worktreeId =
         inferWorktreeIdFromPtyId(session.id) ??
         findResolvedWorktreeIdForPath(resolvedWorktrees, session.cwd)
+      if (targetWorktreeId && worktreeId !== targetWorktreeId) {
+        continue
+      }
       if (worktreeId) {
         this.recordPtyWorktree(session.id, worktreeId, {
           connected: true
@@ -18557,6 +18666,16 @@ function parseRuntimeWorktreeId(
     return null
   }
   return parsed
+}
+
+function includeTargetResolvedWorktree(
+  resolvedWorktrees: ResolvedWorktree[],
+  targetWorktree: ResolvedWorktree | null
+): ResolvedWorktree[] {
+  if (!targetWorktree || resolvedWorktrees.some((worktree) => worktree.id === targetWorktree.id)) {
+    return resolvedWorktrees
+  }
+  return [...resolvedWorktrees, targetWorktree]
 }
 
 function findResolvedWorktreeIdForPath(

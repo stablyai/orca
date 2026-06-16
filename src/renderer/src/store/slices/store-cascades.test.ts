@@ -71,6 +71,7 @@ import {
   seedStore
 } from './store-test-helpers'
 import { shutdownBufferCaptures } from '@/components/terminal-pane/shutdown-buffer-captures'
+import { buildOrphanTerminalCleanupPatch } from './terminal-orphan-helpers'
 
 // ─── Tests ────────────────────────────────────────────────────────────
 
@@ -1567,6 +1568,446 @@ describe('setActiveWorktree', () => {
 
     const replacement = store.getState().createTab(wt)
     expect(replacement.title).toBe('Terminal 1')
+  })
+
+  it('preserves cleanup-owned references when there are no orphan terminals', () => {
+    const store = createTestStore()
+    const wt = 'repo1::/path/wt1'
+
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+      },
+      tabsByWorktree: {
+        [wt]: [makeTab({ id: 'terminal-1', worktreeId: wt })]
+      },
+      unifiedTabsByWorktree: {
+        [wt]: [
+          makeUnifiedTab({
+            id: 'terminal-1',
+            entityId: 'terminal-1',
+            worktreeId: wt,
+            groupId: 'group-1'
+          })
+        ]
+      },
+      ptyIdsByTabId: {
+        'terminal-1': []
+      },
+      activeTabId: 'terminal-1',
+      activeTabIdByWorktree: {
+        [wt]: 'terminal-1'
+      }
+    })
+
+    const state = store.getState()
+    const patch = buildOrphanTerminalCleanupPatch(state, wt, new Set())
+    const referenceKeys = [
+      'tabsByWorktree',
+      'ptyIdsByTabId',
+      'runtimePaneTitlesByTabId',
+      'expandedPaneByTabId',
+      'canExpandPaneByTabId',
+      'terminalLayoutsByTabId',
+      'pendingStartupByTabId',
+      'pendingSetupSplitByTabId',
+      'pendingIssueCommandSplitByTabId',
+      'tabBarOrderByWorktree',
+      'cacheTimerByKey',
+      'activeTabIdByWorktree'
+    ] as const
+
+    for (const key of referenceKeys) {
+      expect(patch[key]).toBe(state[key])
+    }
+    expect(patch.activeTabId).toBe(state.activeTabId)
+  })
+
+  it('removes orphan terminal caches while creating a replacement tab', () => {
+    const store = createTestStore()
+    const wt = 'repo1::/path/wt1'
+    const orphanId = 'orphan-terminal'
+
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+      },
+      tabsByWorktree: {
+        [wt]: [makeTab({ id: orphanId, worktreeId: wt })]
+      },
+      unifiedTabsByWorktree: {
+        [wt]: []
+      },
+      ptyIdsByTabId: {
+        [orphanId]: []
+      },
+      runtimePaneTitlesByTabId: {
+        [orphanId]: { 1: 'stale' }
+      },
+      terminalLayoutsByTabId: {
+        [orphanId]: makeLayout()
+      },
+      pendingStartupByTabId: {
+        [orphanId]: { command: 'codex' }
+      },
+      tabBarOrderByWorktree: {
+        [wt]: [orphanId]
+      },
+      cacheTimerByKey: {
+        [`${orphanId}:seed`]: 123
+      },
+      activeTabId: orphanId,
+      activeTabIdByWorktree: {
+        [wt]: orphanId
+      }
+    })
+
+    const replacement = store.getState().createTab(wt)
+    const s = store.getState()
+
+    expect(s.tabsByWorktree[wt]?.map((tab) => tab.id)).toEqual([replacement.id])
+    expect(s.ptyIdsByTabId[orphanId]).toBeUndefined()
+    expect(s.runtimePaneTitlesByTabId[orphanId]).toBeUndefined()
+    expect(s.terminalLayoutsByTabId[orphanId]).toBeUndefined()
+    expect(s.pendingStartupByTabId[orphanId]).toBeUndefined()
+    expect(s.cacheTimerByKey[`${orphanId}:seed`]).toBeUndefined()
+    expect(s.terminalLayoutsByTabId[replacement.id]).toEqual(makeLayout())
+  })
+
+  it('clears orphan active terminal state while creating an inactive replacement tab', () => {
+    const store = createTestStore()
+    const wt = 'repo1::/path/wt1'
+    const orphanId = 'orphan-terminal'
+
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+      },
+      tabsByWorktree: {
+        [wt]: [makeTab({ id: orphanId, worktreeId: wt })]
+      },
+      unifiedTabsByWorktree: {
+        [wt]: []
+      },
+      groupsByWorktree: {
+        [wt]: [
+          makeTabGroup({
+            id: 'group-1',
+            worktreeId: wt,
+            activeTabId: orphanId,
+            tabOrder: [orphanId]
+          })
+        ]
+      },
+      ptyIdsByTabId: {
+        [orphanId]: []
+      },
+      activeTabId: orphanId,
+      activeTabIdByWorktree: {
+        [wt]: orphanId
+      }
+    })
+
+    const replacement = store.getState().createTab(wt, undefined, undefined, { activate: false })
+    const s = store.getState()
+
+    expect(s.tabsByWorktree[wt]?.map((tab) => tab.id)).toEqual([replacement.id])
+    expect(s.activeTabId).toBeNull()
+    expect(s.activeTabIdByWorktree[wt]).toBe(replacement.id)
+    expect(s.groupsByWorktree[wt]?.[0]?.activeTabId).toBe(replacement.id)
+    expect(s.groupsByWorktree[wt]?.[0]?.tabOrder).toEqual([replacement.id])
+  })
+
+  it('uses cleanup active fallback when inactive creation removes an orphan active tab', () => {
+    const store = createTestStore()
+    const wt = 'repo1::/path/wt1'
+    const orphanId = 'orphan-terminal'
+    const existingId = 'existing-terminal'
+
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+      },
+      tabsByWorktree: {
+        [wt]: [
+          makeTab({ id: orphanId, worktreeId: wt }),
+          makeTab({ id: existingId, worktreeId: wt })
+        ]
+      },
+      unifiedTabsByWorktree: {
+        [wt]: [
+          makeUnifiedTab({
+            id: existingId,
+            entityId: existingId,
+            worktreeId: wt,
+            groupId: 'group-a'
+          })
+        ]
+      },
+      groupsByWorktree: {
+        [wt]: [
+          makeTabGroup({
+            id: 'group-a',
+            worktreeId: wt,
+            activeTabId: existingId,
+            tabOrder: [existingId]
+          }),
+          makeTabGroup({
+            id: 'group-b',
+            worktreeId: wt,
+            activeTabId: null,
+            tabOrder: []
+          })
+        ]
+      },
+      ptyIdsByTabId: {
+        [orphanId]: [],
+        [existingId]: []
+      },
+      activeTabId: orphanId,
+      activeTabIdByWorktree: {
+        [wt]: orphanId
+      }
+    })
+
+    const created = store.getState().createTab(wt, 'group-b', undefined, { activate: false })
+    const s = store.getState()
+
+    expect(s.activeTabId).toBeNull()
+    expect(s.activeTabIdByWorktree[wt]).toBe(existingId)
+    expect(s.tabsByWorktree[wt]?.map((tab) => tab.id)).toEqual([existingId, created.id])
+    expect(s.groupsByWorktree[wt]?.find((group) => group.id === 'group-b')).toMatchObject({
+      activeTabId: created.id,
+      tabOrder: [created.id]
+    })
+  })
+
+  it('keeps surviving target-group tab active when inactive creation removes an orphan', () => {
+    const store = createTestStore()
+    const wt = 'repo1::/path/wt1'
+    const orphanId = 'orphan-terminal'
+    const existingId = 'existing-terminal'
+
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+      },
+      tabsByWorktree: {
+        [wt]: [
+          makeTab({ id: orphanId, worktreeId: wt }),
+          makeTab({ id: existingId, worktreeId: wt })
+        ]
+      },
+      unifiedTabsByWorktree: {
+        [wt]: [
+          makeUnifiedTab({
+            id: existingId,
+            entityId: existingId,
+            worktreeId: wt,
+            groupId: 'group-1'
+          })
+        ]
+      },
+      groupsByWorktree: {
+        [wt]: [
+          makeTabGroup({
+            id: 'group-1',
+            worktreeId: wt,
+            activeTabId: orphanId,
+            tabOrder: [orphanId, existingId],
+            recentTabIds: [orphanId]
+          })
+        ]
+      },
+      ptyIdsByTabId: {
+        [orphanId]: [],
+        [existingId]: []
+      },
+      activeTabId: orphanId,
+      activeTabIdByWorktree: {
+        [wt]: orphanId
+      }
+    })
+
+    const created = store.getState().createTab(wt, 'group-1', undefined, { activate: false })
+    const s = store.getState()
+
+    expect(s.activeTabIdByWorktree[wt]).toBe(existingId)
+    expect(s.groupsByWorktree[wt]?.[0]).toMatchObject({
+      activeTabId: existingId,
+      tabOrder: [existingId, created.id],
+      recentTabIds: [existingId]
+    })
+  })
+
+  it('keeps inactive terminal creation active state scoped to the target group', () => {
+    const store = createTestStore()
+    const wt = 'repo1::/path/wt1'
+    const existingId = 'existing-terminal'
+
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+      },
+      tabsByWorktree: {
+        [wt]: [makeTab({ id: existingId, worktreeId: wt })]
+      },
+      unifiedTabsByWorktree: {
+        [wt]: [
+          makeUnifiedTab({
+            id: existingId,
+            entityId: existingId,
+            worktreeId: wt,
+            groupId: 'group-a'
+          })
+        ]
+      },
+      groupsByWorktree: {
+        [wt]: [
+          makeTabGroup({
+            id: 'group-a',
+            worktreeId: wt,
+            activeTabId: existingId,
+            tabOrder: [existingId]
+          }),
+          makeTabGroup({
+            id: 'group-b',
+            worktreeId: wt,
+            activeTabId: null,
+            tabOrder: []
+          })
+        ]
+      },
+      ptyIdsByTabId: {
+        [existingId]: []
+      },
+      activeTabId: existingId,
+      activeTabIdByWorktree: {
+        [wt]: existingId
+      }
+    })
+
+    const created = store.getState().createTab(wt, 'group-b', undefined, { activate: false })
+    const groups = store.getState().groupsByWorktree[wt] ?? []
+
+    expect(store.getState().activeTabIdByWorktree[wt]).toBe(existingId)
+    expect(groups.find((group) => group.id === 'group-a')?.activeTabId).toBe(existingId)
+    expect(groups.find((group) => group.id === 'group-b')?.activeTabId).toBe(created.id)
+    expect(groups.find((group) => group.id === 'group-b')?.tabOrder).toEqual([created.id])
+  })
+
+  it('clears orphan terminal state from non-target groups during tab creation', () => {
+    const store = createTestStore()
+    const wt = 'repo1::/path/wt1'
+    const orphanId = 'orphan-terminal'
+
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+      },
+      tabsByWorktree: {
+        [wt]: [makeTab({ id: orphanId, worktreeId: wt })]
+      },
+      unifiedTabsByWorktree: {
+        [wt]: []
+      },
+      groupsByWorktree: {
+        [wt]: [
+          makeTabGroup({
+            id: 'group-a',
+            worktreeId: wt,
+            activeTabId: orphanId,
+            tabOrder: [orphanId],
+            recentTabIds: [orphanId]
+          }),
+          makeTabGroup({
+            id: 'group-b',
+            worktreeId: wt,
+            activeTabId: null,
+            tabOrder: []
+          })
+        ]
+      },
+      ptyIdsByTabId: {
+        [orphanId]: []
+      }
+    })
+
+    const created = store.getState().createTab(wt, 'group-b', undefined, { activate: false })
+    const groups = store.getState().groupsByWorktree[wt] ?? []
+
+    expect(groups.find((group) => group.id === 'group-a')).toMatchObject({
+      activeTabId: null,
+      tabOrder: [],
+      recentTabIds: []
+    })
+    expect(groups.find((group) => group.id === 'group-b')).toMatchObject({
+      activeTabId: created.id,
+      tabOrder: [created.id]
+    })
+  })
+
+  it('keeps surviving non-target group tab active when inactive creation removes an orphan', () => {
+    const store = createTestStore()
+    const wt = 'repo1::/path/wt1'
+    const orphanId = 'orphan-terminal'
+    const existingId = 'existing-terminal'
+
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+      },
+      tabsByWorktree: {
+        [wt]: [
+          makeTab({ id: orphanId, worktreeId: wt }),
+          makeTab({ id: existingId, worktreeId: wt })
+        ]
+      },
+      unifiedTabsByWorktree: {
+        [wt]: [
+          makeUnifiedTab({
+            id: existingId,
+            entityId: existingId,
+            worktreeId: wt,
+            groupId: 'group-a'
+          })
+        ]
+      },
+      groupsByWorktree: {
+        [wt]: [
+          makeTabGroup({
+            id: 'group-a',
+            worktreeId: wt,
+            activeTabId: orphanId,
+            tabOrder: [orphanId, existingId],
+            recentTabIds: [orphanId]
+          }),
+          makeTabGroup({
+            id: 'group-b',
+            worktreeId: wt,
+            activeTabId: null,
+            tabOrder: []
+          })
+        ]
+      },
+      ptyIdsByTabId: {
+        [orphanId]: [],
+        [existingId]: []
+      }
+    })
+
+    const created = store.getState().createTab(wt, 'group-b', undefined, { activate: false })
+    const groups = store.getState().groupsByWorktree[wt] ?? []
+
+    expect(groups.find((group) => group.id === 'group-a')).toMatchObject({
+      activeTabId: existingId,
+      tabOrder: [existingId],
+      recentTabIds: [existingId]
+    })
+    expect(groups.find((group) => group.id === 'group-b')).toMatchObject({
+      activeTabId: created.id,
+      tabOrder: [created.id]
+    })
   })
 
   // Why: unread flags are ephemeral UI state — they must not linger past the

@@ -52,6 +52,7 @@ import { registerSshGitProvider, unregisterSshGitProvider } from '../providers/s
 import { DEFAULT_REPO_BADGE_COLOR, getDefaultWorkspaceSession } from '../../shared/constants'
 import { advertisedUrlWatcher } from '../ports/advertised-url-watcher'
 import { makePaneKey } from '../../shared/stable-pane-id'
+import { FOLDER_WORKSPACE_INSTANCE_SEPARATOR } from '../../shared/worktree-id'
 import { RpcDispatcher } from './rpc/dispatcher'
 import type { RpcRequest } from './rpc/core'
 import { TERMINAL_METHODS } from './rpc/methods/terminal'
@@ -1081,6 +1082,204 @@ describe('OrcaRuntimeService', () => {
     const shown = await runtime.showTerminal(terminals.terminals[0].handle)
     expect(shown.handle).toBe(terminals.terminals[0].handle)
     expect(shown.ptyId).toBe('pty-1')
+  })
+
+  it('keeps targeted terminal lists from adopting controller PTYs for other worktrees', async () => {
+    vi.mocked(listWorktrees).mockResolvedValue([
+      ...MOCK_GIT_WORKTREES,
+      {
+        path: '/tmp/worktree-b',
+        head: 'def',
+        branch: 'feature/bar',
+        isBare: false,
+        isMainWorktree: false
+      },
+      {
+        path: '/tmp/worktree-a/nested',
+        head: 'ghi',
+        branch: 'feature/nested',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+    const runtime = createRuntime()
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null,
+      listProcesses: async () => [
+        { id: 'target-controller-pty', cwd: '/tmp/worktree-a/src', title: 'target' },
+        { id: 'other-controller-pty', cwd: '/tmp/worktree-b/src', title: 'other' },
+        {
+          id: 'repo-1::/tmp/worktree-b@@other-controller-pty',
+          cwd: '/tmp/worktree-a/src',
+          title: 'prefixed other'
+        },
+        { id: 'nested-controller-pty', cwd: '/tmp/worktree-a/nested/src', title: 'nested' }
+      ]
+    })
+    runtime.attachWindow(1)
+    runtime.markGraphReady(1)
+
+    const terminals = await runtime.listTerminals(`path:${TEST_WORKTREE_PATH}`)
+
+    expect(terminals.terminals).toHaveLength(1)
+    expect(terminals.terminals[0]).toMatchObject({
+      worktreeId: TEST_WORKTREE_ID,
+      worktreePath: TEST_WORKTREE_PATH
+    })
+    const internals = runtime as unknown as { ptysById: Map<string, unknown> }
+    expect(internals.ptysById.has('target-controller-pty')).toBe(true)
+    expect(internals.ptysById.has('other-controller-pty')).toBe(false)
+    expect(internals.ptysById.has('repo-1::/tmp/worktree-b@@other-controller-pty')).toBe(false)
+    expect(internals.ptysById.has('nested-controller-pty')).toBe(false)
+  })
+
+  it('keeps explicit-id terminal lists from resolving all worktrees', async () => {
+    vi.mocked(listWorktrees).mockClear()
+    vi.mocked(listWorktrees).mockRejectedValue(
+      new Error('all-worktree resolution should be skipped')
+    )
+    const runtime = createRuntime()
+    const ptyId = `${TEST_WORKTREE_ID}@@daemon-controller-pty`
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null,
+      listProcesses: async () => [
+        { id: ptyId, cwd: '/unresolved/cwd', title: 'daemon shell' },
+        { id: 'cwd-only-pty', cwd: TEST_WORKTREE_PATH, title: 'cwd shell' }
+      ]
+    })
+
+    const terminals = await runtime.listTerminals(`id:${TEST_WORKTREE_ID}`)
+
+    expect(listWorktrees).not.toHaveBeenCalled()
+    expect(terminals.terminals.map((terminal) => terminal.worktreeId)).toEqual([
+      TEST_WORKTREE_ID,
+      TEST_WORKTREE_ID
+    ])
+    const internals = runtime as unknown as { ptysById: Map<string, unknown> }
+    expect(internals.ptysById.has(ptyId)).toBe(true)
+    expect(internals.ptysById.has('cwd-only-pty')).toBe(true)
+  })
+
+  it('matches explicit-id cwd PTYs when the resolved worktree cache is incomplete', async () => {
+    vi.mocked(listWorktrees).mockResolvedValueOnce([
+      {
+        path: '/tmp/worktree-a/nested',
+        head: 'ghi',
+        branch: 'feature/nested',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+    const runtime = createRuntime()
+    await runtime.listTerminals()
+    vi.mocked(listWorktrees).mockClear()
+    vi.mocked(listWorktrees).mockRejectedValue(
+      new Error('explicit-id fallback should not rescan worktrees')
+    )
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null,
+      listProcesses: async () => [
+        { id: 'cwd-only-pty', cwd: `${TEST_WORKTREE_PATH}/src`, title: 'cwd shell' },
+        { id: 'nested-controller-pty', cwd: `${TEST_WORKTREE_PATH}/nested/src`, title: 'nested' }
+      ]
+    })
+
+    const terminals = await runtime.listTerminals(`id:${TEST_WORKTREE_ID}`)
+
+    expect(listWorktrees).not.toHaveBeenCalled()
+    expect(terminals.terminals.map((terminal) => terminal.worktreeId)).toEqual([TEST_WORKTREE_ID])
+    const internals = runtime as unknown as { ptysById: Map<string, unknown> }
+    expect(internals.ptysById.has('cwd-only-pty')).toBe(true)
+    expect(internals.ptysById.has('nested-controller-pty')).toBe(false)
+  })
+
+  it('keeps explicit-id cold-cache terminal lists from adopting nested worktree PTYs', async () => {
+    const nestedWorktreeId = `${TEST_REPO_ID}::${TEST_WORKTREE_PATH}/nested`
+    vi.mocked(listWorktrees).mockClear()
+    vi.mocked(listWorktrees).mockRejectedValue(
+      new Error('explicit-id fallback should not rescan worktrees')
+    )
+    const runtime = new OrcaRuntimeService({
+      ...store,
+      getAllWorktreeMeta: () => ({
+        [TEST_WORKTREE_ID]: store.getAllWorktreeMeta()[TEST_WORKTREE_ID],
+        [nestedWorktreeId]: makeWorktreeMeta()
+      }),
+      getWorktreeMeta: (worktreeId: string) =>
+        ({
+          [TEST_WORKTREE_ID]: store.getAllWorktreeMeta()[TEST_WORKTREE_ID],
+          [nestedWorktreeId]: makeWorktreeMeta()
+        })[worktreeId]
+    })
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null,
+      listProcesses: async () => [
+        { id: 'cwd-only-pty', cwd: `${TEST_WORKTREE_PATH}/src`, title: 'cwd shell' },
+        { id: 'nested-controller-pty', cwd: `${TEST_WORKTREE_PATH}/nested/src`, title: 'nested' }
+      ]
+    })
+
+    const terminals = await runtime.listTerminals(`id:${TEST_WORKTREE_ID}`)
+
+    expect(listWorktrees).not.toHaveBeenCalled()
+    expect(terminals.terminals.map((terminal) => terminal.worktreeId)).toEqual([TEST_WORKTREE_ID])
+    const internals = runtime as unknown as { ptysById: Map<string, unknown> }
+    expect(internals.ptysById.has('cwd-only-pty')).toBe(true)
+    expect(internals.ptysById.has('nested-controller-pty')).toBe(false)
+  })
+
+  it('ignores cwd-only controller PTYs for malformed explicit worktree IDs', async () => {
+    vi.mocked(listWorktrees).mockClear()
+    vi.mocked(listWorktrees).mockRejectedValue(
+      new Error('malformed explicit-id fallback should not rescan worktrees')
+    )
+    const runtime = createRuntime()
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null,
+      listProcesses: async () => [
+        { id: 'cwd-only-pty', cwd: `${TEST_WORKTREE_PATH}/src`, title: 'cwd shell' }
+      ]
+    })
+
+    const terminals = await runtime.listTerminals(`id:${TEST_REPO_ID}::`)
+
+    expect(listWorktrees).not.toHaveBeenCalled()
+    expect(terminals.terminals).toEqual([])
+    const internals = runtime as unknown as { ptysById: Map<string, unknown> }
+    expect(internals.ptysById.has('cwd-only-pty')).toBe(false)
+  })
+
+  it('matches explicit-id cwd PTYs for folder workspace instance IDs', async () => {
+    const folderWorktreeId = `${TEST_REPO_ID}::${TEST_FOLDER_WORKSPACE_PATH}${FOLDER_WORKSPACE_INSTANCE_SEPARATOR}11111111-1111-4111-8111-111111111111`
+    vi.mocked(listWorktrees).mockClear()
+    vi.mocked(listWorktrees).mockRejectedValue(
+      new Error('folder explicit-id fallback should not rescan worktrees')
+    )
+    const runtime = createRuntime()
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null,
+      listProcesses: async () => [
+        { id: 'folder-cwd-pty', cwd: `${TEST_FOLDER_WORKSPACE_PATH}/src`, title: 'folder shell' }
+      ]
+    })
+
+    const terminals = await runtime.listTerminals(`id:${folderWorktreeId}`)
+
+    expect(listWorktrees).not.toHaveBeenCalled()
+    expect(terminals.terminals.map((terminal) => terminal.worktreeId)).toEqual([folderWorktreeId])
+    expect(terminals.terminals[0]?.worktreePath).toBe(TEST_FOLDER_WORKSPACE_PATH)
   })
 
   it('routes PTY output through the PTY leaf index in large terminal graphs', () => {
