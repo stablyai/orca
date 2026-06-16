@@ -108,6 +108,18 @@ describe('resolveAgentForegroundProcess', () => {
     )
   })
 
+  it('recognizes Windows shell-rooted agent launches from descendant command lines', async () => {
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+    execFileMock.mockImplementation(
+      (_cmd: string, _args: string[], _opts: unknown, cb: unknown) => {
+        const callback = cb as (err: unknown, result: { stdout: string; stderr: string }) => void
+        callback(null, { stdout: windowsProcessRows(), stderr: '' })
+      }
+    )
+
+    await expect(resolveAgentForegroundProcess(100, 'powershell.exe')).resolves.toBe('codex')
+  })
+
   it('falls back to WMIC when Windows PowerShell process enumeration fails', async () => {
     Object.defineProperty(process, 'platform', { value: 'win32' })
     execFileMock.mockImplementation((cmd: string, _args: string[], _opts: unknown, cb: unknown) => {
@@ -157,6 +169,39 @@ describe('resolveAgentForegroundProcess', () => {
     )
 
     await expect(resolveAgentForegroundProcess(100, 'node.exe')).resolves.toBe('node.exe')
+  })
+
+  it('fails closed for ambiguous Windows shell-rooted agent descendants', async () => {
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+    execFileMock.mockImplementation(
+      (_cmd: string, _args: string[], _opts: unknown, cb: unknown) => {
+        const callback = cb as (err: unknown, result: { stdout: string; stderr: string }) => void
+        callback(null, {
+          stdout: [
+            'CommandLine=powershell.exe',
+            'Name=powershell.exe',
+            'ParentProcessId=99',
+            'ProcessId=100',
+            '',
+            'CommandLine=node C:\\Users\\dev\\AppData\\Roaming\\npm\\node_modules\\@openai\\codex\\bin\\codex.js',
+            'Name=node.exe',
+            'ParentProcessId=100',
+            'ProcessId=101',
+            '',
+            'CommandLine=node C:\\Users\\dev\\AppData\\Roaming\\npm\\node_modules\\@google\\gemini-cli\\bundle\\gemini.mjs',
+            'Name=node.exe',
+            'ParentProcessId=100',
+            'ProcessId=102',
+            ''
+          ].join('\r\n'),
+          stderr: ''
+        })
+      }
+    )
+
+    await expect(resolveAgentForegroundProcess(100, 'powershell.exe')).resolves.toBe(
+      'powershell.exe'
+    )
   })
 
   it('fails closed when Windows has multiple matching wrapper descendants', async () => {

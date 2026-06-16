@@ -30,12 +30,14 @@ import { WINDOWS_GIT_BASH_SHELL } from '../../shared/windows-terminal-shell'
 import { resolveAgentForegroundProcess } from '../providers/agent-foreground-process'
 import {
   isAgentForegroundWrapperProcess,
-  recognizeAgentProcess
+  recognizeAgentProcess,
+  recognizeAgentProcessFromCommandLine
 } from '../../shared/agent-process-recognition'
 import { isShellProcess } from '../../shared/shell-process-detection'
 
 const PANE_IDENTITY_ENV_KEYS = ['ORCA_PANE_KEY', 'ORCA_TAB_ID', 'ORCA_WORKTREE_ID'] as const
 const FOREGROUND_AGENT_CACHE_TTL_MS = 1000
+const STARTUP_AGENT_FOREGROUND_BOOTSTRAP_MS = 2_000
 const PTY_SPAWN_HEALTH_TIMEOUT_MS = 2_000
 
 export type PtySubprocessOptions = {
@@ -540,19 +542,30 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
   let disposed = false
   let nodePtyKillIssued = false
   let cachedAgentForeground: { processName: string; refreshedAt: number } | null = null
+  const startupAgentRecognition = recognizeAgentProcessFromCommandLine(opts.command)
+  let startupAgentForeground: { processName: string; expiresAt: number } | null =
+    startupAgentRecognition
+      ? {
+          processName: startupAgentRecognition.processName,
+          expiresAt: Date.now() + STARTUP_AGENT_FOREGROUND_BOOTSTRAP_MS
+        }
+      : null
   let foregroundRefreshInFlight = false
   let lastForegroundRefreshStartedAt = 0
   const getFallbackForegroundProcess = (): string | null =>
     normalizeForegroundProcessName(proc.process)
+  const shouldInspectFallbackForegroundProcess = (fallbackProcess: string | null): boolean =>
+    fallbackProcess !== null &&
+    (isShellProcess(fallbackProcess) || isAgentForegroundWrapperProcess(fallbackProcess))
   const scheduleAgentForegroundRefresh = (fallbackProcess: string | null): void => {
     if (dead || !proc.pid) {
       return
     }
+    const fallbackIsShell = fallbackProcess !== null && isShellProcess(fallbackProcess)
     if (
       !fallbackProcess ||
-      isShellProcess(fallbackProcess) ||
       recognizeAgentProcess(fallbackProcess) ||
-      !isAgentForegroundWrapperProcess(fallbackProcess)
+      !shouldInspectFallbackForegroundProcess(fallbackProcess)
     ) {
       return
     }
@@ -565,15 +578,23 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
     }
     foregroundRefreshInFlight = true
     lastForegroundRefreshStartedAt = now
-    // Why: daemon `getForegroundProcess()` is sync and runs on the IPC hot path.
-    // Refresh wrapper-derived identities (node/python → codex/gemini/etc.) in
-    // the background and serve them from a short cache on later reads.
+    // Why: daemon foreground reads are sync and run on the IPC hot path.
+    // Refresh shell/wrapper-derived identities (powershell/node -> codex/etc.)
+    // in the background and serve them from a short cache on later reads.
     void resolveAgentForegroundProcess(proc.pid, fallbackProcess)
       .then((processName) => {
-        if (dead || !processName || !recognizeAgentProcess(processName)) {
+        if (dead) {
+          return
+        }
+        if (!processName || !recognizeAgentProcess(processName)) {
+          if (fallbackIsShell) {
+            cachedAgentForeground = null
+            startupAgentForeground = null
+          }
           return
         }
         cachedAgentForeground = { processName, refreshedAt: Date.now() }
+        startupAgentForeground = null
       })
       .catch(() => {
         // Best-effort only: foreground enrichment must never affect PTY health.
@@ -585,6 +606,7 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
   proc.onExit(() => {
     dead = true
     cachedAgentForeground = null
+    startupAgentForeground = null
     // Why: UnixTerminal.destroy() registers `_socket.once('close', () => this.kill('SIGHUP'))`
     // (unixTerminal.js:219-229). After the child exits, the master socket's
     // 'close' event can fire before our dispose() path gets to neutralize
@@ -611,20 +633,26 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
       }
       try {
         const fallbackProcess = getFallbackForegroundProcess()
-        if (fallbackProcess && isShellProcess(fallbackProcess)) {
-          cachedAgentForeground = null
-          return fallbackProcess
-        }
         if (fallbackProcess && recognizeAgentProcess(fallbackProcess)) {
           cachedAgentForeground = { processName: fallbackProcess, refreshedAt: Date.now() }
+          startupAgentForeground = null
           return fallbackProcess
         }
         scheduleAgentForegroundRefresh(fallbackProcess)
+        const now = Date.now()
         if (
           cachedAgentForeground &&
-          Date.now() - cachedAgentForeground.refreshedAt <= FOREGROUND_AGENT_CACHE_TTL_MS
+          now - cachedAgentForeground.refreshedAt <= FOREGROUND_AGENT_CACHE_TTL_MS
         ) {
           return cachedAgentForeground.processName
+        }
+        if (
+          fallbackProcess &&
+          isShellProcess(fallbackProcess) &&
+          startupAgentForeground &&
+          now <= startupAgentForeground.expiresAt
+        ) {
+          return startupAgentForeground.processName
         }
         return fallbackProcess
       } catch {

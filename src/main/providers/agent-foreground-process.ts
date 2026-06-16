@@ -5,6 +5,7 @@ import {
   isExpectedAgentProcess,
   recognizeAgentProcessFromCommandLine
 } from '../../shared/agent-process-recognition'
+import { isShellProcess } from '../../shared/shell-process-detection'
 
 const execFileAsync = promisify(execFile)
 
@@ -121,7 +122,7 @@ export async function resolveAgentForegroundProcess(
   }
 
   if (process.platform === 'win32') {
-    if (!fallbackProcess || !isAgentForegroundWrapperProcess(fallbackProcess)) {
+    if (!fallbackProcess || !shouldInspectWindowsForeground(fallbackProcess)) {
       return fallbackProcess
     }
     return (
@@ -141,6 +142,10 @@ export async function resolveAgentForegroundProcess(
   }
 
   return fallbackProcess
+}
+
+function shouldInspectWindowsForeground(fallbackProcess: string): boolean {
+  return isAgentForegroundWrapperProcess(fallbackProcess) || isShellProcess(fallbackProcess)
 }
 
 async function resolveAgentForegroundProcessFromWindows(
@@ -203,6 +208,9 @@ function resolveAgentForegroundProcessFromWindowsRows(
   const candidates = collectDescendants(parseWindowsProcessRows(stdout), shellPid).sort(
     (a, b) => b.depth - a.depth
   )
+  if (isShellProcess(fallbackProcess)) {
+    return resolveShellForegroundProcessFromWindowsCandidates(candidates)
+  }
   const wrapperCandidates = candidates.filter((candidate) =>
     windowsCandidateMatchesFallbackWrapper(candidate, fallbackProcess)
   )
@@ -217,6 +225,28 @@ function resolveAgentForegroundProcessFromWindowsRows(
     return recognized.processName
   }
   return null
+}
+
+function resolveShellForegroundProcessFromWindowsCandidates(
+  candidates: readonly (WindowsProcessRow & { depth: number })[]
+): string | null {
+  const recognizedProcessNames = new Set<string>()
+  for (const candidate of candidates) {
+    const recognized = recognizeWindowsProcessCandidate(candidate)
+    if (recognized) {
+      recognizedProcessNames.add(recognized)
+    }
+  }
+  // Why: Windows lacks a cheap PTY foreground marker like POSIX '+'. A single
+  // recognized descendant is strong enough; competing agent descendants are not.
+  return recognizedProcessNames.size === 1 ? [...recognizedProcessNames][0] : null
+}
+
+function recognizeWindowsProcessCandidate(candidate: WindowsProcessRow): string | null {
+  const recognized =
+    recognizeAgentProcessFromCommandLine(candidate.command) ??
+    recognizeAgentProcessFromCommandLine(candidate.name)
+  return recognized?.processName ?? null
 }
 
 function windowsCandidateMatchesFallbackWrapper(
