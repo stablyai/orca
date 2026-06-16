@@ -31,6 +31,9 @@ importers:
       '@parcel/watcher':
         specifier: ^2.5.6
         version: 2.5.6
+      '@vscode/tree-sitter-wasm':
+        specifier: ^0.3.1
+        version: 0.3.1
       '@xterm/addon-serialize':
         specifier: 0.15.0-beta.285
         version: 0.15.0-beta.285(@xterm/xterm@6.1.0-beta.285)
@@ -73,6 +76,9 @@ importers:
       tweetnacl:
         specifier: ^1.0.3
         version: 1.0.3
+      web-tree-sitter:
+        specifier: ^0.26.9
+        version: 0.26.9
       ws:
         specifier: ^8.21.0
         version: 8.21.0
@@ -3122,6 +3128,9 @@ packages:
 
   '@vitest/utils@4.1.5':
     resolution: {integrity: sha512-76wdkrmfXfqGjueGgnb45ITPyUi1ycZ4IHgC2bhPDUfWHklY/q3MdLOAB+TF1e6xfl8NxNY0ZYaPCFNWSsw3Ug==}
+
+  '@vscode/tree-sitter-wasm@0.3.1':
+    resolution: {integrity: sha512-RJFoomET6FajjG511fmQxeBQfU6M24a0aFZPqpid+ttIxanWf1VGytBG0UmsGjt07qmIPJS8U31D+aecuCucsQ==}
 
   '@xmldom/xmldom@0.8.13':
     resolution: {integrity: sha512-KRYzxepc14G/CEpEGc3Yn+JKaAeT63smlDr+vjB8jRfgTBBI9wRj/nkQEO+ucV8p8I9bfKLWp37uHgFrbntPvw==}
@@ -6415,6 +6424,9 @@ packages:
     resolution: {integrity: sha512-d2JWLCivmZYTSIoge9MsgFCZrt571BikcWGYkjC1khllbTeDlGqZ2D8vD8E/lJa8WGWbb7Plm8/XJYV7IJHZZw==}
     engines: {node: '>= 8'}
 
+  web-tree-sitter@0.26.9:
+    resolution: {integrity: sha512-YJwSHANl6XFgeEjB8nitgj0qZYt5gkIesJ4w2srS2wcLB4GUa4xcOkM0YaMsU6WNR53YVIkDSY7Ej4pf3IXtCA==}
+
   whatwg-mimetype@3.0.0:
     resolution: {integrity: sha512-nt+N2dzIutVRxARx1nghPKGv1xHikU7HKdfafKkLNLindmPU/ch3U31NOCGGA/dmPcmb1VlofO0vnKAcsm0o/Q==}
     engines: {node: '>=12'}
@@ -9140,6 +9152,8 @@ snapshots:
       '@vitest/pretty-format': 4.1.5
       convert-source-map: 2.0.0
       tinyrainbow: 3.1.0
+
+  '@vscode/tree-sitter-wasm@0.3.1': {}
 
   '@xmldom/xmldom@0.8.13': {}
 
@@ -12973,6 +12987,8 @@ snapshots:
   web-namespaces@2.0.1: {}
 
   web-streams-polyfill@3.3.3: {}
+
+  web-tree-sitter@0.26.9: {}
 
   whatwg-mimetype@3.0.0: {}
 
