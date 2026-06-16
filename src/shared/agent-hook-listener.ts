@@ -2005,6 +2005,8 @@ function extractToolFields(
     case 'grok':
       return extractGrokToolFields(eventName, hookPayload)
     case 'abacusai':
+      // Why: Abacus AI hook payloads currently do not expose stable tool-name/input
+      // fields across events, so we intentionally skip tool snapshot extraction.
       return {}
     case 'copilot':
       return extractCopilotToolFields(normalizeCopilotEventName(eventName), hookPayload)
