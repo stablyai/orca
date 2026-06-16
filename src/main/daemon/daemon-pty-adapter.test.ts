@@ -150,6 +150,13 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       await adapter.shutdown(id, { immediate: false })
       expect(lastSubprocess.kill).toHaveBeenCalled()
     })
+
+    it('force-kills immediately when requested', async () => {
+      const { id } = await adapter.spawn({ cols: 80, rows: 24 })
+      await adapter.shutdown(id, { immediate: true })
+      expect(lastSubprocess.kill).not.toHaveBeenCalled()
+      expect(lastSubprocess.forceKill).toHaveBeenCalled()
+    })
   })
 
   describe('sendSignal', () => {
@@ -713,6 +720,27 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       await new Promise((r) => setTimeout(r, 50))
 
       expect(existsSync(join(historyDir, getHistorySessionDirName(id)))).toBe(false)
+    })
+
+    it('writes a final checkpoint before keepHistory shutdown', async () => {
+      historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+
+      const { id } = await historyAdapter.spawn({
+        cols: 80,
+        rows: 24,
+        cwd: '/home/user',
+        sessionId: 'sleep-checkpoint'
+      })
+      const checkpointSpy = vi.spyOn(historyAdapter.getHistoryManager()!, 'checkpoint')
+
+      lastSubprocess._simulateData('fresh output before sleep\r\n')
+      await historyAdapter.shutdown(id, { immediate: true, keepHistory: true })
+
+      expect(checkpointSpy).toHaveBeenCalledWith(
+        id,
+        expect.objectContaining({ snapshotAnsi: expect.stringContaining('fresh output') })
+      )
+      expect(existsSync(join(historyDir, getHistorySessionDirName(id)))).toBe(true)
     })
 
     it('returns cold restore data when disk history has unclean shutdown', async () => {

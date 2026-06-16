@@ -5375,6 +5375,83 @@ describe('connectPanePty', () => {
     expect(deps.syncPanePtyLayoutBinding).toHaveBeenCalledWith(2, 'remote:terminal-1')
   })
 
+  it('cold-spawns slept remote runtime PTYs instead of reattaching the preserved handle', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    enableActiveRuntimeEnvironment('env-1')
+    const restoredPtyId = 'remote:env-1@@terminal-1'
+    const freshPtyId = 'remote:env-1@@terminal-2'
+    const transport = createMockTransport(freshPtyId)
+    const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
+    transport.connect.mockImplementation(
+      async ({ callbacks, sessionId }: Record<string, unknown>) => {
+        capturedDataCallback.current = (callbacks as ConnectCallbacks | undefined)?.onData ?? null
+        if (sessionId) {
+          throw new Error('slept remote runtime PTYs must not reattach by sessionId')
+        }
+        const onPtySpawn = createdTransportOptions[0]?.onPtySpawn as
+          | ((ptyId: string) => void)
+          | undefined
+        onPtySpawn?.(freshPtyId)
+        return freshPtyId
+      }
+    )
+    transportFactoryQueue.push(transport)
+    const paneKey = makePaneKey('tab-1', LEAF_1)
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: {
+        'wt-1': [{ id: 'tab-1', ptyId: restoredPtyId }]
+      },
+      ptyIdsByTabId: {
+        'tab-1': []
+      },
+      settings: {
+        ...mockStoreState.settings,
+        activeRuntimeEnvironmentId: 'env-1',
+        agentCmdOverrides: {}
+      },
+      sleepingAgentSessionsByPaneKey: {
+        [paneKey]: {
+          paneKey,
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          agent: 'codex',
+          providerSession: { key: 'session_id', id: 'codex-session-1' },
+          prompt: 'finish the task',
+          state: 'working',
+          capturedAt: 1,
+          updatedAt: 1
+        }
+      }
+    } as StoreState
+
+    const pane = createPane(1)
+    const manager = createManager(1)
+    const deps = createDeps({
+      restoredLeafId: LEAF_1,
+      restoredPtyIdByLeafId: { [LEAF_1]: restoredPtyId }
+    })
+
+    connectPanePty(pane as never, manager as never, deps as never)
+    await flushAsyncTicks(20)
+    capturedDataCallback.current?.('shell ready\r\n')
+    await new Promise((resolve) => setTimeout(resolve, 70))
+
+    expect(transport.attach).not.toHaveBeenCalled()
+    expect(transport.connect).toHaveBeenCalledTimes(1)
+    expect(transport.connect).toHaveBeenCalledWith(
+      expect.not.objectContaining({ sessionId: expect.any(String) })
+    )
+    expect(deps.syncPanePtyLayoutBinding).toHaveBeenCalledWith(1, null)
+    expect(deps.clearTabPtyId).toHaveBeenCalledWith('tab-1', restoredPtyId)
+    expect(deps.syncPanePtyLayoutBinding).toHaveBeenCalledWith(1, freshPtyId)
+    expect(deps.updateTabPtyId).toHaveBeenCalledWith('tab-1', freshPtyId)
+    expect(transport.sendInput).toHaveBeenCalledWith(
+      "codex '--dangerously-bypass-approvals-and-sandbox' 'resume' 'codex-session-1'\r"
+    )
+    expect(mockStoreState.clearSleepingAgentSession).toHaveBeenCalledWith(paneKey)
+  })
+
   it('constructs restored encoded remote PTYs with their owning runtime environment', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')

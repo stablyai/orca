@@ -121,10 +121,8 @@ export class DaemonPtyRouter implements IPtyProvider {
   }
 
   async listProcesses(): Promise<{ id: string; cwd: string; title: string }[]> {
-    const results = await Promise.allSettled(
-      this.allAdapters().map((adapter) => adapter.listProcesses())
-    )
-    return results.flatMap((result) => (result.status === 'fulfilled' ? result.value : []))
+    const results = await Promise.all(this.allAdapters().map((adapter) => adapter.listProcesses()))
+    return results.flat()
   }
 
   async getDefaultShell(): Promise<string> {

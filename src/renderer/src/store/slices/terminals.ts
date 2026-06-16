@@ -50,6 +50,7 @@ import { hasWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'
 import { sanitizeTerminalLayoutPaneTitles } from '@/lib/terminal-pane-title-sanitization'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { collectSleepingAgentSessionRecordsForWorktree } from './agent-status'
 
 function getNextTerminalOrdinal(tabs: TerminalTab[]): number {
   const usedOrdinals = new Set<number>()
@@ -241,6 +242,18 @@ function resolveTerminalStopRuntimeEnvironmentId(
   return getRuntimeEnvironmentIdForWorktree(state, worktreeId)
 }
 
+function sortedUniquePtyIds(ptyIds: readonly string[] | undefined): string[] {
+  return [...new Set((ptyIds ?? []).filter((ptyId) => ptyId.length > 0))].sort()
+}
+
+function equalStringSets(a: readonly string[], b: readonly string[]): boolean {
+  if (a.length !== b.length) {
+    return false
+  }
+  const bSet = new Set(b)
+  return a.every((value) => bSet.has(value))
+}
+
 export type TerminalSlice = {
   tabsByWorktree: Record<string, TerminalTab[]>
   activeTabId: string | null
@@ -401,7 +414,11 @@ export type TerminalSlice = {
   clearTabPtyId: (tabId: string, ptyId?: string) => void
   shutdownWorktreeTerminals: (
     worktreeId: string,
-    opts?: { keepIdentifiers?: boolean; sleepingPaneKeys?: string[] }
+    opts?: {
+      keepIdentifiers?: boolean
+      sleepingPaneKeys?: string[]
+      expectedRuntimePtyIds?: string[]
+    }
   ) => Promise<void>
   suppressPtyExit: (ptyId: string) => void
   consumeSuppressedPtyExit: (ptyId: string) => boolean
@@ -1518,6 +1535,12 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       const isFirstPty = existingPtyIds.length === 0
       const isActiveWorktree = worktreeId != null && s.activeWorktreeId === worktreeId
       const shouldBumpSortEpoch = isFirstPty && isActiveWorktree && !wasActivationSpawn
+      const nextSuppressedPtyExitIds = { ...s.suppressedPtyExitIds }
+      delete nextSuppressedPtyExitIds[ptyId]
+      const remoteRuntimePtyHandle = parseRemoteRuntimePtyId(ptyId)?.handle
+      if (remoteRuntimePtyHandle) {
+        delete nextSuppressedPtyExitIds[remoteRuntimePtyHandle]
+      }
       return {
         ...(nextTabsByWorktree !== s.tabsByWorktree ? { tabsByWorktree: nextTabsByWorktree } : {}),
         ptyIdsByTabId: {
@@ -1528,6 +1551,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
           ...s.lastKnownRelayPtyIdByTabId,
           [tabId]: ptyId
         },
+        suppressedPtyExitIds: nextSuppressedPtyExitIds,
         ...(shouldBumpSortEpoch ? { sortEpoch: s.sortEpoch + 1 } : {})
       }
     })
@@ -1639,6 +1663,11 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
     const keepIdentifiers = opts?.keepIdentifiers ?? false
     const tabs = get().tabsByWorktree[worktreeId] ?? []
     const ptyIds = tabs.flatMap((tab) => get().ptyIdsByTabId[tab.id] ?? [])
+    const expectedRuntimePtyIds = sortedUniquePtyIds(opts?.expectedRuntimePtyIds)
+    const shutdownPtyIds = sortedUniquePtyIds([...ptyIds, ...expectedRuntimePtyIds])
+    const sleepingAgentSessionRecords = keepIdentifiers
+      ? collectSleepingAgentSessionRecordsForWorktree(get(), worktreeId, opts?.sleepingPaneKeys)
+      : {}
 
     // Why: the main process flushes any remaining batched PTY data before
     // sending the exit event (pty.ts onExit handler). Without this, that
@@ -1647,7 +1676,9 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
     // notifications for a worktree that is already being torn down —
     // the "phantom alerts" users see after shutting down worktrees.
     // Removing the data handlers first ensures the final flush is a no-op.
-    unregisterPtyDataHandlers(ptyIds)
+    if (expectedRuntimePtyIds.length === 0) {
+      unregisterPtyDataHandlers(shutdownPtyIds)
+    }
 
     // Why (ordering invariant — DESIGN_DOC §3.3.c): on sleep, capture every
     // pane's serializer buffer into terminalLayoutsByTabId[tab].buffersByLeafId
@@ -1673,6 +1704,76 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       }
     }
 
+    const runtimeEnvironmentId = resolveTerminalStopRuntimeEnvironmentId(get(), worktreeId)
+    if (expectedRuntimePtyIds.length > 0) {
+      if (!runtimeEnvironmentId) {
+        throw new Error('missing_runtime_for_exact_terminal_stop')
+      }
+      set((s) => ({
+        suppressedPtyExitIds: {
+          ...s.suppressedPtyExitIds,
+          ...Object.fromEntries(shutdownPtyIds.map((ptyId) => [ptyId, true] as const))
+        }
+      }))
+      let stopResult: {
+        stoppedPtyIds?: string[]
+        livePtyIds?: string[]
+        postStopVerified?: boolean
+        postStopFailure?: string
+        remainingLivePtyIds?: string[]
+      }
+      try {
+        stopResult = await callRuntimeRpc<{
+          stoppedPtyIds?: string[]
+          livePtyIds?: string[]
+        }>(
+          { kind: 'environment', environmentId: runtimeEnvironmentId },
+          'terminal.stopExact',
+          {
+            worktree: toRuntimeWorktreeSelector(worktreeId),
+            expectedPtyIds: expectedRuntimePtyIds,
+            keepHistory: keepIdentifiers
+          },
+          { timeoutMs: 15_000 }
+        )
+      } catch (err) {
+        set((s) => {
+          const next = { ...s.suppressedPtyExitIds }
+          for (const ptyId of shutdownPtyIds) {
+            delete next[ptyId]
+          }
+          return { suppressedPtyExitIds: next }
+        })
+        throw err
+      }
+      const stoppedPtyIds = sortedUniquePtyIds(stopResult.stoppedPtyIds)
+      const livePtyIds = sortedUniquePtyIds(stopResult.livePtyIds)
+      if (
+        !equalStringSets(stoppedPtyIds, expectedRuntimePtyIds) ||
+        !equalStringSets(livePtyIds, expectedRuntimePtyIds)
+      ) {
+        set((s) => {
+          const next = { ...s.suppressedPtyExitIds }
+          for (const ptyId of shutdownPtyIds) {
+            delete next[ptyId]
+          }
+          return { suppressedPtyExitIds: next }
+        })
+        throw new Error('exact_terminal_stop_mismatch')
+      }
+      if (stopResult.postStopVerified !== true) {
+        set((s) => {
+          const next = { ...s.suppressedPtyExitIds }
+          for (const ptyId of shutdownPtyIds) {
+            delete next[ptyId]
+          }
+          return { suppressedPtyExitIds: next }
+        })
+        throw new Error(stopResult.postStopFailure ?? 'exact_terminal_stop_unverified')
+      }
+      unregisterPtyDataHandlers(shutdownPtyIds)
+    }
+
     set((s) => {
       const nextTabsByWorktree = keepIdentifiers
         ? s.tabsByWorktree
@@ -1691,7 +1792,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         : { ...s.runtimePaneTitlesByTabId }
       const nextSuppressedPtyExitIds = {
         ...s.suppressedPtyExitIds,
-        ...Object.fromEntries(ptyIds.map((ptyId) => [ptyId, true] as const))
+        ...Object.fromEntries(shutdownPtyIds.map((ptyId) => [ptyId, true] as const))
       }
       // Why: pendingCodexPaneRestartIds is keyed by ptyId — under sleep we
       // preserve it so a mid-restart marker survives wake against the same
@@ -1702,7 +1803,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         ? s.pendingCodexPaneRestartIds
         : { ...s.pendingCodexPaneRestartIds }
       const nextCodexRestartNoticeByPtyId = { ...s.codexRestartNoticeByPtyId }
-      for (const ptyId of ptyIds) {
+      for (const ptyId of shutdownPtyIds) {
         if (!keepIdentifiers) {
           delete nextPendingCodexPaneRestartIds[ptyId]
         }
@@ -1827,7 +1928,12 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
     })
 
     if (keepIdentifiers) {
-      get().captureSleepingAgentSessionsByWorktree(worktreeId, opts?.sleepingPaneKeys)
+      set((s) => ({
+        sleepingAgentSessionsByPaneKey: {
+          ...s.sleepingAgentSessionsByPaneKey,
+          ...sleepingAgentSessionRecords
+        }
+      }))
     } else {
       get().clearSleepingAgentSessionsByWorktree(worktreeId)
     }
@@ -1839,12 +1945,11 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
     // their original tab.
     get().dropAgentStatusByWorktree(worktreeId)
 
-    if (ptyIds.length === 0) {
+    if (ptyIds.length === 0 && expectedRuntimePtyIds.length === 0) {
       return
     }
 
-    const runtimeEnvironmentId = resolveTerminalStopRuntimeEnvironmentId(get(), worktreeId)
-    if (runtimeEnvironmentId) {
+    if (runtimeEnvironmentId && expectedRuntimePtyIds.length === 0) {
       await callRuntimeRpc(
         { kind: 'environment', environmentId: runtimeEnvironmentId },
         'terminal.stop',
@@ -1855,6 +1960,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
 
     await Promise.allSettled(
       ptyIds
+        .filter((ptyId) => !expectedRuntimePtyIds.includes(ptyId))
         .filter((ptyId) => !ptyId.startsWith('remote:'))
         .map((ptyId) => window.api.pty.kill(ptyId, { keepHistory: keepIdentifiers }))
     )

@@ -3378,10 +3378,15 @@ export function connectPanePty(
     const existingPtyId = storeSnapshot.tabsByWorktree[deps.worktreeId]?.find(
       (t) => t.id === deps.tabId
     )?.ptyId
+    const hasSleepingAgentSession = Boolean(storeSnapshot.sleepingAgentSessionsByPaneKey[cacheKey])
 
     const restoredSessionId = restoredPtyId ?? null
+    const sleptRemoteRuntimeSessionId =
+      restoredSessionId && isRemoteRuntimePtyId(restoredSessionId) && hasSleepingAgentSession
+        ? restoredSessionId
+        : null
     const detachedLivePtyId =
-      existingPtyId && !hadExistingPaneTransportAtConnect
+      existingPtyId && !hadExistingPaneTransportAtConnect && !sleptRemoteRuntimeSessionId
         ? restoredSessionId
           ? restoredSessionId === existingPtyId
             ? restoredSessionId
@@ -3389,11 +3394,18 @@ export function connectPanePty(
           : existingPtyId
         : null
     const detachedRemoteLeafPtyId =
-      restoredSessionId && isRemoteRuntimePtyId(restoredSessionId) ? restoredSessionId : null
+      restoredSessionId && isRemoteRuntimePtyId(restoredSessionId) && !hasSleepingAgentSession
+        ? restoredSessionId
+        : null
     const candidateReattachSessionId =
       restoredSessionId && restoredSessionId !== detachedLivePtyId
         ? restoredSessionId
         : detachedLivePtyId
+    if (sleptRemoteRuntimeSessionId) {
+      deps.syncPanePtyLayoutBinding(pane.id, null)
+      deps.clearTabPtyId(deps.tabId, sleptRemoteRuntimeSessionId)
+      prepareColdRestoreAgentResumeCommand()
+    }
     const currentTabLivePtyIds = storeSnapshot.ptyIdsByTabId[deps.tabId] ?? []
     const candidateHasEagerBuffer = Boolean(
       candidateReattachSessionId &&

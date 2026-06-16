@@ -91,6 +91,8 @@ const ptySizes = new Map<string, { cols: number; rows: number }>()
 const lastInputAtByPty = new Map<string, number>()
 const interactiveOutputCharsByPty = new Map<string, number>()
 const activeRendererPtys = new Set<string>()
+const KEEP_HISTORY_STOP_SETTLE_MS = 1_000
+const KEEP_HISTORY_STOP_POLL_MS = 100
 // Why: the agent-hooks server caches per-paneKey state (last prompt, last
 // tool) that otherwise grows unbounded as panes come and go. Track the
 // spawn-time paneKey so clearProviderPtyState can clear that cache on PTY
@@ -287,6 +289,40 @@ function normalizeNodePtySpawnError(err: unknown): Error {
 function isPtyAlreadyGoneError(err: unknown): boolean {
   const message = err instanceof Error ? err.message : String(err)
   return isSshPtyNotFoundError(err) || /Session not found/i.test(message)
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(resolve, ms)
+    if (typeof timer.unref === 'function') {
+      timer.unref()
+    }
+  })
+}
+
+async function isProviderPtyLive(provider: IPtyProvider, ptyId: string): Promise<boolean> {
+  return (await provider.listProcesses()).some((session) => session.id === ptyId)
+}
+
+async function verifyPtyStopped(
+  provider: IPtyProvider,
+  ptyId: string,
+  opts: { keepHistory?: boolean } | undefined
+): Promise<boolean> {
+  if (await isProviderPtyLive(provider, ptyId)) {
+    return false
+  }
+  if (!opts?.keepHistory) {
+    return true
+  }
+  const deadline = Date.now() + KEEP_HISTORY_STOP_SETTLE_MS
+  while (Date.now() < deadline) {
+    await delay(KEEP_HISTORY_STOP_POLL_MS)
+    if (await isProviderPtyLive(provider, ptyId)) {
+      return false
+    }
+  }
+  return true
 }
 
 function finishPtyShutdown(
@@ -1916,6 +1952,54 @@ export function registerPtyHandlers(
         })
       return true
     },
+    stopAndWait: async (ptyId, opts) => {
+      let provider: IPtyProvider
+      let connectionId: string | null | undefined = ptyOwnership.get(ptyId)
+      const parsedSshId = connectionId === undefined ? parseAppSshPtyId(ptyId) : null
+      connectionId ??= parsedSshId?.connectionId
+      try {
+        provider = connectionId ? getProvider(connectionId) : getProviderForPty(ptyId)
+      } catch {
+        if (connectionId) {
+          // Why: an absent SSH provider means there is no live target left to
+          // await, but the relay lease must still be tombstoned.
+          finishPtyShutdown(ptyId, connectionId, store)
+          runtime?.onPtyExit(ptyId, -1)
+          return true
+        }
+        return false
+      }
+      try {
+        await provider.shutdown(ptyId, {
+          immediate: true,
+          keepHistory: opts?.keepHistory ?? false
+        })
+      } catch (err) {
+        if (!isPtyAlreadyGoneError(err)) {
+          console.warn(
+            `[pty] Failed to stop PTY ${ptyId}: ${err instanceof Error ? err.message : String(err)}`
+          )
+          return false
+        }
+      }
+      try {
+        if (!(await verifyPtyStopped(provider, ptyId, opts))) {
+          return false
+        }
+      } catch (err) {
+        console.warn(
+          `[pty] Failed to verify PTY ${ptyId} stopped: ${
+            err instanceof Error ? err.message : String(err)
+          }`
+        )
+        finishPtyShutdown(ptyId, connectionId, store)
+        runtime?.onPtyExit(ptyId, -1)
+        return false
+      }
+      finishPtyShutdown(ptyId, connectionId, store)
+      runtime?.onPtyExit(ptyId, -1)
+      return true
+    },
     getForegroundProcess: async (ptyId) => {
       try {
         return await getProviderForPty(ptyId).getForegroundProcess(ptyId)
@@ -1944,7 +2028,7 @@ export function registerPtyHandlers(
     listProcesses: async () => {
       const providerSessions = await Promise.all([
         localProvider.listProcesses(),
-        ...Array.from(sshProviders.values(), (provider) => provider.listProcesses().catch(() => []))
+        ...Array.from(sshProviders.values(), (provider) => provider.listProcesses())
       ])
       return providerSessions.flat()
     },
@@ -2748,6 +2832,7 @@ export function registerPtyHandlers(
       // provider is unregistered; hydrated app-scoped ids can also arrive
       // before ownership is rebuilt. Tombstone instead of falling back local.
       finishPtyShutdown(args.id, connectionId, store)
+      runtime?.onPtyExit(args.id, -1)
       return
     }
     try {
@@ -2768,6 +2853,7 @@ export function registerPtyHandlers(
     // and daemon shutdown paths do not emit onExit through the local provider's
     // listener. Explicit cleanup is idempotent and covers already-dead PTYs.
     finishPtyShutdown(args.id, connectionId, store)
+    runtime?.onPtyExit(args.id, -1)
   })
 
   ipcMain.handle(

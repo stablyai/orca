@@ -345,7 +345,7 @@ export class DaemonServer {
 
       case 'kill':
         this.lastInputAtBySessionId.delete(request.payload.sessionId)
-        this.host.kill(request.payload.sessionId)
+        this.host.kill(request.payload.sessionId, { immediate: request.payload.immediate })
         return {}
 
       case 'signal':

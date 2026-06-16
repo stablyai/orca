@@ -27,7 +27,9 @@ export type TerminalNotificationEvent = {
 
 function hasLivePtyForWorktree(state: StoreSnapshot, candidateWorktreeId: string): boolean {
   const tabs = state.tabsByWorktree[candidateWorktreeId] ?? []
-  return tabs.some((tab) => (state.ptyIdsByTabId[tab.id] ?? []).length > 0)
+  return tabs.some((tab) =>
+    (state.ptyIdsByTabId[tab.id] ?? []).some((ptyId) => !isSuppressedPtyHint(state, ptyId))
+  )
 }
 
 function hasLivePtyForPaneKey(state: StoreSnapshot, paneKey: string | undefined): boolean {
@@ -35,7 +37,10 @@ function hasLivePtyForPaneKey(state: StoreSnapshot, paneKey: string | undefined)
     return false
   }
   const tabId = getPaneKeyTabId(paneKey)
-  return tabId !== null && (state.ptyIdsByTabId[tabId] ?? []).length > 0
+  return (
+    tabId !== null &&
+    (state.ptyIdsByTabId[tabId] ?? []).some((ptyId) => !isSuppressedPtyHint(state, ptyId))
+  )
 }
 
 function hasLivePtyForNotification(
@@ -93,7 +98,10 @@ function isCurrentLivePaneKey(state: StoreSnapshot, worktreeId: string, paneKey:
   const leafPtyId = layout.ptyIdsByLeafId?.[parsed.leafId]
   // Why: layout hydration can briefly know the leaf before restoring its PTY
   // binding; the tab-level live PTY list remains the liveness source then.
-  return leafPtyId === undefined || livePtyIds.includes(leafPtyId)
+  return (
+    leafPtyId === undefined ||
+    (livePtyIds.includes(leafPtyId) && !isSuppressedPtyHint(state, leafPtyId))
+  )
 }
 
 function isSuppressedPtyHint(state: StoreSnapshot, ptyId: string | null | undefined): boolean {

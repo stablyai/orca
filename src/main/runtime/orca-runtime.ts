@@ -895,6 +895,7 @@ type RuntimePtyController = {
   }): Promise<{ id: string }>
   write(ptyId: string, data: string): boolean
   kill(ptyId: string): boolean
+  stopAndWait?(ptyId: string, opts?: { keepHistory?: boolean }): Promise<boolean>
   getForegroundProcess(ptyId: string): Promise<string | null>
   hasChildProcesses?(ptyId: string): Promise<boolean>
   clearBuffer?(ptyId: string): Promise<void>
@@ -6385,7 +6386,8 @@ export class OrcaRuntimeService {
 
   async listTerminals(
     worktreeSelector?: string,
-    limit = DEFAULT_TERMINAL_LIST_LIMIT
+    limit = DEFAULT_TERMINAL_LIST_LIMIT,
+    opts: { requireFreshPtyLiveness?: boolean } = {}
   ): Promise<RuntimeTerminalListResult> {
     if (!Number.isInteger(limit) || limit <= 0) {
       throw new Error('invalid_limit')
@@ -6443,7 +6445,11 @@ export class OrcaRuntimeService {
           : targetWorktreeId
             ? []
             : [...worktreesById.values()]
-    await this.refreshPtyWorktreeRecordsFromController(resolvedWorktrees, targetWorktreeId)
+    const refreshedPtyLiveness =
+      await this.refreshPtyWorktreeRecordsFromController(resolvedWorktrees, targetWorktreeId)
+    if (opts.requireFreshPtyLiveness && !refreshedPtyLiveness) {
+      throw new Error('terminal_liveness_unavailable')
+    }
 
     const livePtyWorktreeIds = new Set<string>()
     for (const pty of this.ptysById.values()) {
@@ -6457,6 +6463,9 @@ export class OrcaRuntimeService {
     if (graphEpoch !== null) {
       for (const leaf of this.leaves.values()) {
         if (targetWorktreeId && leaf.worktreeId !== targetWorktreeId) {
+          continue
+        }
+        if (opts.requireFreshPtyLiveness && leaf.ptyId && !refreshedPtyLiveness?.has(leaf.ptyId)) {
           continue
         }
         if (!leaf.ptyId && livePtyWorktreeIds.has(leaf.worktreeId)) {
@@ -6474,6 +6483,9 @@ export class OrcaRuntimeService {
     // so mobile does not show a false "No terminals" create flow.
     for (const pty of this.ptysById.values()) {
       if (!pty.connected || ptyIdsFromLeaves.has(pty.ptyId)) {
+        continue
+      }
+      if (opts.requireFreshPtyLiveness && !refreshedPtyLiveness?.has(pty.ptyId)) {
         continue
       }
       if (targetWorktreeId && pty.worktreeId !== targetWorktreeId) {
@@ -13033,6 +13045,109 @@ export class OrcaRuntimeService {
     return { stopped }
   }
 
+  async stopExactTerminalsForWorktree(
+    worktreeSelector: string,
+    expectedPtyIds: readonly string[],
+    opts: { keepHistory?: boolean } = {}
+  ): Promise<{
+    stopped: number
+    stoppedPtyIds: string[]
+    livePtyIds: string[]
+    postStopVerified: boolean
+    postStopFailure?: string
+    remainingLivePtyIds?: string[]
+  }> {
+    // Why: hibernation may commit sleeping state only after the runtime proves
+    // the selected PTYs are still the complete live set for this worktree.
+    const graphEpoch = this.captureReadyGraphEpoch()
+    const worktree = await this.resolveWorktreeSelector(worktreeSelector)
+    this.assertStableReadyGraph(graphEpoch)
+    const expected = new Set(expectedPtyIds.filter((ptyId) => ptyId.length > 0))
+    if (expected.size !== 1) {
+      throw new Error('terminal_exact_stop_requires_single_pty')
+    }
+    const resolvedWorktrees = [...(await this.getResolvedWorktreeMap()).values()]
+    const refreshedPtyLiveness =
+      await this.refreshPtyWorktreeRecordsFromController(resolvedWorktrees)
+    if (!refreshedPtyLiveness) {
+      throw new Error('terminal_liveness_unavailable')
+    }
+    const livePtyIds = this.getLivePtyIdsForWorktree(worktree.id, refreshedPtyLiveness)
+    if (!setsEqual(livePtyIds, expected)) {
+      const error = Object.assign(new Error('terminal_stop_pty_set_mismatch'), {
+        livePtyIds: [...livePtyIds].sort(),
+        expectedPtyIds: [...expected].sort()
+      })
+      throw error
+    }
+
+    if (!this.ptyController?.stopAndWait) {
+      throw new Error('terminal_exact_stop_unavailable')
+    }
+
+    const stoppedPtyIds: string[] = []
+    for (const ptyId of [...expected].sort()) {
+      if (!(await this.ptyController.stopAndWait(ptyId, { keepHistory: opts.keepHistory }))) {
+        throw Object.assign(new Error('terminal_exact_stop_failed'), { ptyId })
+      }
+      stoppedPtyIds.push(ptyId)
+    }
+    const postStopLiveness = await this.refreshPtyWorktreeRecordsFromController(resolvedWorktrees)
+    if (!postStopLiveness) {
+      return {
+        stopped: stoppedPtyIds.length,
+        stoppedPtyIds,
+        livePtyIds: [...livePtyIds].sort(),
+        postStopVerified: false,
+        postStopFailure: 'terminal_liveness_unavailable'
+      }
+    }
+    const remainingLivePtyIds = this.getLivePtyIdsForWorktree(worktree.id, postStopLiveness)
+    if (remainingLivePtyIds.size > 0) {
+      return {
+        stopped: stoppedPtyIds.length,
+        stoppedPtyIds,
+        livePtyIds: [...livePtyIds].sort(),
+        postStopVerified: false,
+        postStopFailure: 'terminal_exact_stop_still_live',
+        remainingLivePtyIds: [...remainingLivePtyIds].sort()
+      }
+    }
+    return {
+      stopped: stoppedPtyIds.length,
+      stoppedPtyIds,
+      livePtyIds: [...livePtyIds].sort(),
+      postStopVerified: true
+    }
+  }
+
+  private getLivePtyIdsForWorktree(
+    worktreeId: string,
+    freshPtyIds?: ReadonlySet<string>
+  ): Set<string> {
+    const ptyIds = new Set<string>()
+    for (const leaf of this.leaves.values()) {
+      if (
+        leaf.worktreeId === worktreeId &&
+        leaf.connected &&
+        leaf.ptyId &&
+        (!freshPtyIds || freshPtyIds.has(leaf.ptyId))
+      ) {
+        ptyIds.add(leaf.ptyId)
+      }
+    }
+    for (const pty of this.ptysById.values()) {
+      if (
+        pty.worktreeId === worktreeId &&
+        pty.connected &&
+        (!freshPtyIds || freshPtyIds.has(pty.ptyId))
+      ) {
+        ptyIds.add(pty.ptyId)
+      }
+    }
+    return ptyIds
+  }
+
   async hasTerminalsForWorktree(worktreeSelector: string): Promise<boolean> {
     const graphEpoch = this.captureReadyGraphEpoch()
     const worktree = await this.resolveWorktreeSelector(worktreeSelector)
@@ -14141,9 +14256,9 @@ export class OrcaRuntimeService {
   private async refreshPtyWorktreeRecordsFromController(
     resolvedWorktrees: ResolvedWorktree[],
     targetWorktreeId: string | null = null
-  ): Promise<void> {
+  ): Promise<Set<string> | null> {
     if (!this.ptyController?.listProcesses) {
-      return
+      return null
     }
     const sessionsResult = await withTimeoutResult(
       this.ptyController.listProcesses(),
@@ -14151,7 +14266,7 @@ export class OrcaRuntimeService {
     )
     if (!sessionsResult.ok) {
       // Why: a transient controller failure is not evidence that retained PTYs exited.
-      return
+      return null
     }
     const sessions = sessionsResult.value
     const livePtyIds = new Set(sessions.map((session) => session.id))
@@ -14175,6 +14290,7 @@ export class OrcaRuntimeService {
       }
     }
     this.pruneDisconnectedPtyRecords()
+    return livePtyIds
   }
 
   private pruneDisconnectedPtyTranscript(pty: RuntimePtyWorktreeRecord): void {
@@ -14273,6 +14389,7 @@ export class OrcaRuntimeService {
 
     return {
       handle: this.issueHandle(leaf),
+      ptyId: leaf.ptyId,
       worktreeId: leaf.worktreeId,
       worktreePath: worktree?.path ?? '',
       branch: worktree?.branch ?? '',
@@ -15299,6 +15416,7 @@ export class OrcaRuntimeService {
 
     return {
       handle: this.issuePtyHandle(pty),
+      ptyId: pty.ptyId,
       worktreeId: pty.worktreeId,
       worktreePath: worktree?.path ?? '',
       branch: worktree?.branch ?? '',
@@ -19216,6 +19334,18 @@ function runtimePathsEqual(left: string, right: string): boolean {
 
 function inferWorktreeIdFromPtyId(ptyId: string): string | null {
   return parsePtySessionId(ptyId).worktreeId
+}
+
+function setsEqual<T>(a: ReadonlySet<T>, b: ReadonlySet<T>): boolean {
+  if (a.size !== b.size) {
+    return false
+  }
+  for (const value of a) {
+    if (!b.has(value)) {
+      return false
+    }
+  }
+  return true
 }
 
 function parseRuntimeWorktreeId(

@@ -7,9 +7,15 @@ import { createCompatibleRuntimeStatusResponseIfNeeded } from '../../runtime/run
 import { clearRuntimeCompatibilityCacheForTests } from '../../runtime/runtime-rpc-client'
 import { toast } from 'sonner'
 
+const mockUnregisterPtyDataHandlers = vi.hoisted(() => vi.fn())
+
 // Mock sonner (imported by repos.ts)
 vi.mock('sonner', () => ({
   toast: { info: vi.fn(), success: vi.fn(), error: vi.fn(), warning: vi.fn() }
+}))
+
+vi.mock('@/components/terminal-pane/pty-dispatcher', () => ({
+  unregisterPtyDataHandlers: mockUnregisterPtyDataHandlers
 }))
 
 // Mock agent-status (imported by terminal-helpers)
@@ -2653,6 +2659,483 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
         method: 'terminal.stop'
       })
     )
+  })
+
+  it('commits sleep state after exact runtime stop for runtime-backed PTYs', async () => {
+    const store = createTestStore()
+    const wt = 'repo1::/path/wt1'
+    mockApi.runtimeEnvironments.call.mockImplementation((args: { method: string }) =>
+      Promise.resolve(
+        createCompatibleRuntimeStatusResponseIfNeeded(args) ?? {
+          id: 'rpc-default',
+          ok: true,
+          result:
+            args.method === 'terminal.stopExact'
+              ? { stoppedPtyIds: ['pty-1'], livePtyIds: ['pty-1'], postStopVerified: true }
+              : {},
+          _meta: { runtimeId: 'remote-runtime' }
+        }
+      )
+    )
+
+    seedStore(store, {
+      settings: { ...getDefaultSettings('/tmp'), activeRuntimeEnvironmentId: 'runtime-1' },
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+      },
+      tabsByWorktree: {
+        [wt]: [makeTab({ id: 'tab-1', worktreeId: wt, title: 'Codex' })]
+      },
+      ptyIdsByTabId: { 'tab-1': [] }
+    })
+    store.getState().setAgentStatus(
+      'tab-1:live',
+      {
+        state: 'done',
+        prompt: 'resume live',
+        agentType: 'codex'
+      },
+      'Codex',
+      { updatedAt: 1000, stateStartedAt: 1000 },
+      { tabId: 'tab-1', worktreeId: wt },
+      { providerSession: { key: 'session_id', id: 'live-session' } }
+    )
+
+    await store.getState().shutdownWorktreeTerminals(wt, {
+      keepIdentifiers: true,
+      sleepingPaneKeys: ['tab-1:live'],
+      expectedRuntimePtyIds: ['pty-1']
+    })
+
+    expect(mockApi.runtimeEnvironments.call).toHaveBeenCalledWith(
+      expect.objectContaining({
+        selector: 'runtime-1',
+        method: 'terminal.stopExact',
+        params: expect.objectContaining({ expectedPtyIds: ['pty-1'], keepHistory: true })
+      })
+    )
+    expect(store.getState().sleepingAgentSessionsByPaneKey['tab-1:live']).toMatchObject({
+      providerSession: { key: 'session_id', id: 'live-session' }
+    })
+    expect(store.getState().agentStatusByPaneKey['tab-1:live']).toBeUndefined()
+    expect(mockApi.pty.kill).not.toHaveBeenCalled()
+  })
+
+  it('does not commit sleep state when exact runtime stop post-check is inconclusive', async () => {
+    const store = createTestStore()
+    const wt = 'repo1::/path/wt1'
+    mockApi.runtimeEnvironments.call.mockImplementation((args: { method: string }) =>
+      Promise.resolve(
+        createCompatibleRuntimeStatusResponseIfNeeded(args) ?? {
+          id: 'rpc-default',
+          ok: true,
+          result:
+            args.method === 'terminal.stopExact'
+              ? {
+                  stoppedPtyIds: ['pty-1'],
+                  livePtyIds: ['pty-1'],
+                  postStopVerified: false,
+                  postStopFailure: 'terminal_liveness_unavailable'
+                }
+              : {},
+          _meta: { runtimeId: 'remote-runtime' }
+        }
+      )
+    )
+
+    seedStore(store, {
+      settings: { ...getDefaultSettings('/tmp'), activeRuntimeEnvironmentId: 'runtime-1' },
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+      },
+      tabsByWorktree: {
+        [wt]: [makeTab({ id: 'tab-1', worktreeId: wt, title: 'Codex' })]
+      },
+      ptyIdsByTabId: { 'tab-1': [] }
+    })
+    store.getState().setAgentStatus(
+      'tab-1:live',
+      {
+        state: 'done',
+        prompt: 'resume live',
+        agentType: 'codex'
+      },
+      'Codex',
+      { updatedAt: 1000, stateStartedAt: 1000 },
+      { tabId: 'tab-1', worktreeId: wt },
+      { providerSession: { key: 'session_id', id: 'live-session' } }
+    )
+
+    await expect(
+      store.getState().shutdownWorktreeTerminals(wt, {
+        keepIdentifiers: true,
+        sleepingPaneKeys: ['tab-1:live'],
+        expectedRuntimePtyIds: ['pty-1']
+      })
+    ).rejects.toThrow('terminal_liveness_unavailable')
+
+    expect(store.getState().sleepingAgentSessionsByPaneKey['tab-1:live']).toBeUndefined()
+    expect(store.getState().agentStatusByPaneKey['tab-1:live']).toBeDefined()
+    expect(store.getState().suppressedPtyExitIds['pty-1']).toBeUndefined()
+    expect(mockApi.pty.kill).not.toHaveBeenCalled()
+  })
+
+  it('does not commit sleep state when exact runtime stop omits post-check proof', async () => {
+    const store = createTestStore()
+    const wt = 'repo1::/path/wt1'
+    mockApi.runtimeEnvironments.call.mockImplementation((args: { method: string }) =>
+      Promise.resolve(
+        createCompatibleRuntimeStatusResponseIfNeeded(args) ?? {
+          id: 'rpc-default',
+          ok: true,
+          result:
+            args.method === 'terminal.stopExact'
+              ? { stoppedPtyIds: ['pty-1'], livePtyIds: ['pty-1'] }
+              : {},
+          _meta: { runtimeId: 'remote-runtime' }
+        }
+      )
+    )
+
+    seedStore(store, {
+      settings: { ...getDefaultSettings('/tmp'), activeRuntimeEnvironmentId: 'runtime-1' },
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+      },
+      tabsByWorktree: {
+        [wt]: [makeTab({ id: 'tab-1', worktreeId: wt, title: 'Codex' })]
+      },
+      ptyIdsByTabId: { 'tab-1': [] }
+    })
+    store.getState().setAgentStatus(
+      'tab-1:live',
+      {
+        state: 'done',
+        prompt: 'resume live',
+        agentType: 'codex'
+      },
+      'Codex',
+      { updatedAt: 1000, stateStartedAt: 1000 },
+      { tabId: 'tab-1', worktreeId: wt },
+      { providerSession: { key: 'session_id', id: 'live-session' } }
+    )
+
+    await expect(
+      store.getState().shutdownWorktreeTerminals(wt, {
+        keepIdentifiers: true,
+        sleepingPaneKeys: ['tab-1:live'],
+        expectedRuntimePtyIds: ['pty-1']
+      })
+    ).rejects.toThrow('exact_terminal_stop_unverified')
+
+    expect(store.getState().sleepingAgentSessionsByPaneKey['tab-1:live']).toBeUndefined()
+    expect(store.getState().agentStatusByPaneKey['tab-1:live']).toBeDefined()
+    expect(store.getState().suppressedPtyExitIds['pty-1']).toBeUndefined()
+    expect(mockApi.pty.kill).not.toHaveBeenCalled()
+  })
+
+  it('clears exact-stop exit suppression when a slept PTY ID wakes live again', async () => {
+    const store = createTestStore()
+    const wt = 'repo1::/path/wt1'
+    mockApi.runtimeEnvironments.call.mockImplementation((args: { method: string }) =>
+      Promise.resolve(
+        createCompatibleRuntimeStatusResponseIfNeeded(args) ?? {
+          id: 'rpc-default',
+          ok: true,
+          result:
+            args.method === 'terminal.stopExact'
+              ? { stoppedPtyIds: ['pty-1'], livePtyIds: ['pty-1'], postStopVerified: true }
+              : {},
+          _meta: { runtimeId: 'remote-runtime' }
+        }
+      )
+    )
+
+    seedStore(store, {
+      settings: { ...getDefaultSettings('/tmp'), activeRuntimeEnvironmentId: 'runtime-1' },
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+      },
+      tabsByWorktree: {
+        [wt]: [makeTab({ id: 'tab-1', worktreeId: wt, title: 'Codex' })]
+      },
+      ptyIdsByTabId: { 'tab-1': [] }
+    })
+    store.getState().setAgentStatus(
+      'tab-1:live',
+      {
+        state: 'done',
+        prompt: 'resume live',
+        agentType: 'codex'
+      },
+      'Codex',
+      { updatedAt: 1000, stateStartedAt: 1000 },
+      { tabId: 'tab-1', worktreeId: wt },
+      { providerSession: { key: 'session_id', id: 'live-session' } }
+    )
+
+    await store.getState().shutdownWorktreeTerminals(wt, {
+      keepIdentifiers: true,
+      sleepingPaneKeys: ['tab-1:live'],
+      expectedRuntimePtyIds: ['pty-1']
+    })
+    expect(store.getState().suppressedPtyExitIds['pty-1']).toBe(true)
+
+    store.getState().updateTabPtyId('tab-1', 'pty-1')
+
+    expect(store.getState().suppressedPtyExitIds['pty-1']).toBeUndefined()
+  })
+
+  it('suppresses wrapped remote PTY exits before exact runtime stop resolves', async () => {
+    const store = createTestStore()
+    const wt = 'repo1::/path/wt1'
+    let sawWrappedSuppressedDuringStop = false
+    let sawRawSuppressedDuringStop = false
+    mockApi.runtimeEnvironments.call.mockImplementation((args: { method: string }) => {
+      const compatible = createCompatibleRuntimeStatusResponseIfNeeded(args)
+      if (compatible) {
+        return Promise.resolve(compatible)
+      }
+      if (args.method === 'terminal.stopExact') {
+        sawWrappedSuppressedDuringStop = store
+          .getState()
+          .consumeSuppressedPtyExit('remote:env-1@@terminal-1')
+        sawRawSuppressedDuringStop = store.getState().consumeSuppressedPtyExit('terminal-1')
+        return Promise.resolve({
+          id: 'rpc-default',
+          ok: true,
+          result: {
+            stoppedPtyIds: ['terminal-1'],
+            livePtyIds: ['terminal-1'],
+            postStopVerified: true
+          },
+          _meta: { runtimeId: 'remote-runtime' }
+        })
+      }
+      return Promise.resolve({
+        id: 'rpc-default',
+        ok: true,
+        result: {},
+        _meta: { runtimeId: 'remote-runtime' }
+      })
+    })
+
+    seedStore(store, {
+      settings: { ...getDefaultSettings('/tmp'), activeRuntimeEnvironmentId: 'runtime-1' },
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+      },
+      tabsByWorktree: {
+        [wt]: [makeTab({ id: 'tab-1', worktreeId: wt, title: 'Codex' })]
+      },
+      ptyIdsByTabId: { 'tab-1': ['remote:env-1@@terminal-1'] }
+    })
+    store.getState().setAgentStatus(
+      'tab-1:live',
+      {
+        state: 'done',
+        prompt: 'resume live',
+        agentType: 'codex'
+      },
+      'Codex',
+      { updatedAt: 1000, stateStartedAt: 1000 },
+      { tabId: 'tab-1', worktreeId: wt },
+      { providerSession: { key: 'session_id', id: 'live-session' } }
+    )
+
+    await store.getState().shutdownWorktreeTerminals(wt, {
+      keepIdentifiers: true,
+      sleepingPaneKeys: ['tab-1:live'],
+      expectedRuntimePtyIds: ['terminal-1']
+    })
+
+    expect(sawWrappedSuppressedDuringStop).toBe(true)
+    expect(sawRawSuppressedDuringStop).toBe(true)
+  })
+
+  it('clears raw and wrapped remote exit suppression when a remote PTY wakes live again', () => {
+    const store = createTestStore()
+    const wt = 'repo1::/path/wt1'
+
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+      },
+      tabsByWorktree: {
+        [wt]: [makeTab({ id: 'tab-1', worktreeId: wt, title: 'Codex' })]
+      },
+      ptyIdsByTabId: { 'tab-1': [] }
+    })
+    store.getState().suppressPtyExit('remote:env-1@@terminal-1')
+    store.getState().suppressPtyExit('terminal-1')
+
+    store.getState().updateTabPtyId('tab-1', 'remote:env-1@@terminal-1')
+
+    expect(store.getState().suppressedPtyExitIds['remote:env-1@@terminal-1']).toBeUndefined()
+    expect(store.getState().suppressedPtyExitIds['terminal-1']).toBeUndefined()
+  })
+
+  it('commits the pre-stop sleeping record when exact-stop exit clears live status', async () => {
+    const store = createTestStore()
+    const wt = 'repo1::/path/wt1'
+    mockApi.runtimeEnvironments.call.mockImplementation((args: { method: string }) => {
+      if (args.method === 'terminal.stopExact') {
+        store.getState().removeAgentStatus('tab-1:live')
+        return Promise.resolve({
+          id: 'rpc-default',
+          ok: true,
+          result: { stoppedPtyIds: ['pty-1'], livePtyIds: ['pty-1'], postStopVerified: true },
+          _meta: { runtimeId: 'remote-runtime' }
+        })
+      }
+      return Promise.resolve(
+        createCompatibleRuntimeStatusResponseIfNeeded(args) ?? {
+          id: 'rpc-default',
+          ok: true,
+          result: {},
+          _meta: { runtimeId: 'remote-runtime' }
+        }
+      )
+    })
+
+    seedStore(store, {
+      settings: { ...getDefaultSettings('/tmp'), activeRuntimeEnvironmentId: 'runtime-1' },
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+      },
+      tabsByWorktree: {
+        [wt]: [makeTab({ id: 'tab-1', worktreeId: wt, title: 'Codex' })]
+      },
+      ptyIdsByTabId: { 'tab-1': [] }
+    })
+    store.getState().setAgentStatus(
+      'tab-1:live',
+      {
+        state: 'done',
+        prompt: 'resume live',
+        agentType: 'codex'
+      },
+      'Codex',
+      { updatedAt: 1000, stateStartedAt: 1000 },
+      { tabId: 'tab-1', worktreeId: wt },
+      { providerSession: { key: 'session_id', id: 'live-session' } }
+    )
+
+    await store.getState().shutdownWorktreeTerminals(wt, {
+      keepIdentifiers: true,
+      sleepingPaneKeys: ['tab-1:live'],
+      expectedRuntimePtyIds: ['pty-1']
+    })
+
+    expect(store.getState().sleepingAgentSessionsByPaneKey['tab-1:live']).toMatchObject({
+      providerSession: { key: 'session_id', id: 'live-session' }
+    })
+  })
+
+  it('does not commit sleep state when exact runtime stop fails', async () => {
+    const store = createTestStore()
+    const wt = 'repo1::/path/wt1'
+    mockApi.runtimeEnvironments.call.mockImplementation((args: { method: string }) => {
+      const compatible = createCompatibleRuntimeStatusResponseIfNeeded(args)
+      if (compatible) {
+        return Promise.resolve(compatible)
+      }
+      if (args.method === 'terminal.stopExact') {
+        return Promise.reject(new Error('stop failed'))
+      }
+      return Promise.resolve({
+        id: 'rpc-default',
+        ok: true,
+        result: {},
+        _meta: { runtimeId: 'remote-runtime' }
+      })
+    })
+
+    seedStore(store, {
+      settings: { ...getDefaultSettings('/tmp'), activeRuntimeEnvironmentId: 'runtime-1' },
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+      },
+      tabsByWorktree: {
+        [wt]: [makeTab({ id: 'tab-1', worktreeId: wt, title: 'Codex' })]
+      },
+      ptyIdsByTabId: { 'tab-1': [] }
+    })
+    store.getState().setAgentStatus(
+      'tab-1:live',
+      {
+        state: 'done',
+        prompt: 'resume live',
+        agentType: 'codex'
+      },
+      'Codex',
+      { updatedAt: 1000, stateStartedAt: 1000 },
+      { tabId: 'tab-1', worktreeId: wt },
+      { providerSession: { key: 'session_id', id: 'live-session' } }
+    )
+
+    await expect(
+      store.getState().shutdownWorktreeTerminals(wt, {
+        keepIdentifiers: true,
+        sleepingPaneKeys: ['tab-1:live'],
+        expectedRuntimePtyIds: ['pty-1']
+      })
+    ).rejects.toThrow('stop failed')
+
+    expect(store.getState().sleepingAgentSessionsByPaneKey['tab-1:live']).toBeUndefined()
+    expect(store.getState().agentStatusByPaneKey['tab-1:live']).toBeDefined()
+    expect(mockUnregisterPtyDataHandlers).not.toHaveBeenCalledWith(['pty-1'])
+    expect(mockApi.pty.kill).not.toHaveBeenCalled()
+  })
+
+  it('does not commit sleep state when exact runtime stop returns the wrong set', async () => {
+    const store = createTestStore()
+    const wt = 'repo1::/path/wt1'
+    mockApi.runtimeEnvironments.call.mockImplementation((args: { method: string }) =>
+      Promise.resolve(
+        createCompatibleRuntimeStatusResponseIfNeeded(args) ?? {
+          id: 'rpc-default',
+          ok: true,
+          result:
+            args.method === 'terminal.stopExact'
+              ? {
+                  stoppedPtyIds: ['pty-1'],
+                  livePtyIds: ['pty-1', 'pty-shell'],
+                  postStopVerified: true
+                }
+              : {},
+          _meta: { runtimeId: 'remote-runtime' }
+        }
+      )
+    )
+
+    seedStore(store, {
+      settings: { ...getDefaultSettings('/tmp'), activeRuntimeEnvironmentId: 'runtime-1' },
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+      },
+      tabsByWorktree: {
+        [wt]: [makeTab({ id: 'tab-1', worktreeId: wt, title: 'Codex' })]
+      },
+      ptyIdsByTabId: { 'tab-1': [] }
+    })
+    store.getState().setAgentStatus('tab-1:live', {
+      state: 'done',
+      prompt: 'resume live',
+      agentType: 'codex'
+    })
+
+    await expect(
+      store.getState().shutdownWorktreeTerminals(wt, {
+        keepIdentifiers: true,
+        sleepingPaneKeys: ['tab-1:live'],
+        expectedRuntimePtyIds: ['pty-1']
+      })
+    ).rejects.toThrow('exact_terminal_stop_mismatch')
+
+    expect(store.getState().sleepingAgentSessionsByPaneKey['tab-1:live']).toBeUndefined()
+    expect(store.getState().agentStatusByPaneKey['tab-1:live']).toBeDefined()
+    expect(mockApi.pty.kill).not.toHaveBeenCalled()
   })
 
   it('drops live agentStatusByPaneKey entries on sleep so the working row disappears', async () => {

@@ -318,6 +318,7 @@ export type RuntimeFilePreviewResult = {
 
 export type RuntimeTerminalSummary = {
   handle: string
+  ptyId: string | null
   worktreeId: string
   worktreePath: string
   branch: string

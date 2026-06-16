@@ -1075,6 +1075,7 @@ describe('OrcaRuntimeService', () => {
     expect(terminals.terminals[0]).toMatchObject({
       worktreeId: 'repo-1::/tmp/worktree-a',
       branch: 'feature/foo',
+      ptyId: 'pty-1',
       title: 'Claude',
       preview: 'hello from terminal'
     })
@@ -11544,6 +11545,384 @@ describe('OrcaRuntimeService', () => {
 
     await expect(stopPromise).rejects.toThrow('runtime_unavailable')
     expect(killed).toBe(false)
+  })
+
+  it('stops exactly the expected live PTYs for a worktree', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    const stopped: string[] = []
+    const processLists = [[{ id: 'pty-1', cwd: '/tmp/worktree-a', title: 'Claude' }], []]
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => false,
+      stopAndWait: async (ptyId, opts) => {
+        stopped.push(ptyId)
+        expect(opts).toEqual({ keepHistory: true })
+        runtime.onPtyExit(ptyId, -1)
+        return true
+      },
+      getForegroundProcess: async () => null,
+      listProcesses: async () => processLists.shift() ?? []
+    })
+
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, {
+      tabs: [
+        {
+          tabId: 'tab-1',
+          worktreeId: 'repo-1::/tmp/worktree-a',
+          title: 'Claude',
+          activeLeafId: 'pane:1',
+          layout: null
+        }
+      ],
+      leaves: [
+        {
+          tabId: 'tab-1',
+          worktreeId: 'repo-1::/tmp/worktree-a',
+          leafId: 'pane:1',
+          paneRuntimeId: 1,
+          ptyId: 'pty-1'
+        }
+      ]
+    })
+
+    await expect(
+      runtime.stopExactTerminalsForWorktree('id:repo-1::/tmp/worktree-a', ['pty-1'], {
+        keepHistory: true
+      })
+    ).resolves.toEqual({
+      stopped: 1,
+      stoppedPtyIds: ['pty-1'],
+      livePtyIds: ['pty-1'],
+      postStopVerified: true
+    })
+    expect(stopped).toEqual(['pty-1'])
+  })
+
+  it('reports recoverable post-stop liveness failure after exact terminal stop', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    const stopped: string[] = []
+    const processLists = [
+      [{ id: 'pty-1', cwd: '/tmp/worktree-a', title: 'Claude' }],
+      new Error('daemon unavailable')
+    ]
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => false,
+      stopAndWait: async (ptyId) => {
+        stopped.push(ptyId)
+        runtime.onPtyExit(ptyId, -1)
+        return true
+      },
+      getForegroundProcess: async () => null,
+      listProcesses: async () => {
+        const next = processLists.shift()
+        if (next instanceof Error) {
+          throw next
+        }
+        return next ?? []
+      }
+    })
+
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, {
+      tabs: [
+        {
+          tabId: 'tab-1',
+          worktreeId: 'repo-1::/tmp/worktree-a',
+          title: 'Claude',
+          activeLeafId: 'pane:1',
+          layout: null
+        }
+      ],
+      leaves: [
+        {
+          tabId: 'tab-1',
+          worktreeId: 'repo-1::/tmp/worktree-a',
+          leafId: 'pane:1',
+          paneRuntimeId: 1,
+          ptyId: 'pty-1'
+        }
+      ]
+    })
+
+    await expect(
+      runtime.stopExactTerminalsForWorktree('id:repo-1::/tmp/worktree-a', ['pty-1'])
+    ).resolves.toEqual({
+      stopped: 1,
+      stoppedPtyIds: ['pty-1'],
+      livePtyIds: ['pty-1'],
+      postStopVerified: false,
+      postStopFailure: 'terminal_liveness_unavailable'
+    })
+    expect(stopped).toEqual(['pty-1'])
+  })
+
+  it('rejects exact terminal stop when async PTY stop fails', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    const stopped: string[] = []
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => false,
+      stopAndWait: async (ptyId, opts) => {
+        stopped.push(ptyId)
+        expect(opts).toEqual({ keepHistory: true })
+        return false
+      },
+      getForegroundProcess: async () => null,
+      listProcesses: async () => [{ id: 'pty-1', cwd: '/tmp/worktree-a', title: 'Claude' }]
+    })
+
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, {
+      tabs: [
+        {
+          tabId: 'tab-1',
+          worktreeId: 'repo-1::/tmp/worktree-a',
+          title: 'Claude',
+          activeLeafId: 'pane:1',
+          layout: null
+        }
+      ],
+      leaves: [
+        {
+          tabId: 'tab-1',
+          worktreeId: 'repo-1::/tmp/worktree-a',
+          leafId: 'pane:1',
+          paneRuntimeId: 1,
+          ptyId: 'pty-1'
+        }
+      ]
+    })
+
+    await expect(
+      runtime.stopExactTerminalsForWorktree('id:repo-1::/tmp/worktree-a', ['pty-1'], {
+        keepHistory: true
+      })
+    ).rejects.toThrow('terminal_exact_stop_failed')
+    expect(stopped).toEqual(['pty-1'])
+  })
+
+  it('rejects exact terminal stop when the live PTY set has extras', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    const stopped: string[] = []
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => false,
+      stopAndWait: async (ptyId) => {
+        stopped.push(ptyId)
+        runtime.onPtyExit(ptyId, -1)
+        return true
+      },
+      getForegroundProcess: async () => null,
+      listProcesses: async () => [
+        { id: 'pty-1', cwd: '/tmp/worktree-a', title: 'Claude' },
+        { id: 'pty-shell', cwd: '/tmp/worktree-a', title: 'Shell' }
+      ]
+    })
+
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, {
+      tabs: [
+        {
+          tabId: 'tab-1',
+          worktreeId: 'repo-1::/tmp/worktree-a',
+          title: 'Claude',
+          activeLeafId: 'pane:1',
+          layout: null
+        },
+        {
+          tabId: 'tab-2',
+          worktreeId: 'repo-1::/tmp/worktree-a',
+          title: 'Shell',
+          activeLeafId: 'pane:1',
+          layout: null
+        }
+      ],
+      leaves: [
+        {
+          tabId: 'tab-1',
+          worktreeId: 'repo-1::/tmp/worktree-a',
+          leafId: 'pane:1',
+          paneRuntimeId: 1,
+          ptyId: 'pty-1'
+        },
+        {
+          tabId: 'tab-2',
+          worktreeId: 'repo-1::/tmp/worktree-a',
+          leafId: 'pane:1',
+          paneRuntimeId: 2,
+          ptyId: 'pty-shell'
+        }
+      ]
+    })
+
+    await expect(
+      runtime.stopExactTerminalsForWorktree('id:repo-1::/tmp/worktree-a', ['pty-1'])
+    ).rejects.toThrow('terminal_stop_pty_set_mismatch')
+    expect(stopped).toEqual([])
+  })
+
+  it('rejects exact terminal stop for multiple expected PTYs before stopping anything', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    const stopped: string[] = []
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => false,
+      stopAndWait: async (ptyId) => {
+        stopped.push(ptyId)
+        runtime.onPtyExit(ptyId, -1)
+        return true
+      },
+      getForegroundProcess: async () => null,
+      listProcesses: async () => [
+        { id: 'pty-1', cwd: '/tmp/worktree-a', title: 'Claude' },
+        { id: 'pty-2', cwd: '/tmp/worktree-a', title: 'Codex' }
+      ]
+    })
+
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, {
+      tabs: [
+        {
+          tabId: 'tab-1',
+          worktreeId: 'repo-1::/tmp/worktree-a',
+          title: 'Claude',
+          activeLeafId: 'pane:1',
+          layout: null
+        }
+      ],
+      leaves: [
+        {
+          tabId: 'tab-1',
+          worktreeId: 'repo-1::/tmp/worktree-a',
+          leafId: 'pane:1',
+          paneRuntimeId: 1,
+          ptyId: 'pty-1'
+        },
+        {
+          tabId: 'tab-1',
+          worktreeId: 'repo-1::/tmp/worktree-a',
+          leafId: 'pane:2',
+          paneRuntimeId: 2,
+          ptyId: 'pty-2'
+        }
+      ]
+    })
+
+    await expect(
+      runtime.stopExactTerminalsForWorktree('id:repo-1::/tmp/worktree-a', ['pty-1', 'pty-2'])
+    ).rejects.toThrow('terminal_exact_stop_requires_single_pty')
+    expect(stopped).toEqual([])
+  })
+
+  it('uses fresh post-stop liveness instead of stale renderer leaves', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    const stopped: string[] = []
+    const processLists = [[{ id: 'pty-1', cwd: '/tmp/worktree-a', title: 'Claude' }], []]
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => false,
+      stopAndWait: async (ptyId) => {
+        stopped.push(ptyId)
+        runtime.onPtyExit(ptyId, -1)
+        return true
+      },
+      getForegroundProcess: async () => null,
+      listProcesses: async () => processLists.shift() ?? []
+    })
+
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, {
+      tabs: [
+        {
+          tabId: 'tab-1',
+          worktreeId: 'repo-1::/tmp/worktree-a',
+          title: 'Claude',
+          activeLeafId: 'pane:1',
+          layout: null
+        }
+      ],
+      leaves: [
+        {
+          tabId: 'tab-1',
+          worktreeId: 'repo-1::/tmp/worktree-a',
+          leafId: 'pane:1',
+          paneRuntimeId: 1,
+          ptyId: 'pty-1'
+        },
+        {
+          tabId: 'tab-1',
+          worktreeId: 'repo-1::/tmp/worktree-a',
+          leafId: 'pane:2',
+          paneRuntimeId: 2,
+          ptyId: 'stale-pty'
+        }
+      ]
+    })
+
+    await expect(
+      runtime.stopExactTerminalsForWorktree('id:repo-1::/tmp/worktree-a', ['pty-1'])
+    ).resolves.toMatchObject({
+      stoppedPtyIds: ['pty-1']
+    })
+    expect(stopped).toEqual(['pty-1'])
+  })
+
+  it('omits stale renderer leaves when fresh PTY liveness is required', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null,
+      listProcesses: async () => []
+    })
+
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, {
+      tabs: [
+        {
+          tabId: 'tab-1',
+          worktreeId: 'repo-1::/tmp/worktree-a',
+          title: 'Stale',
+          activeLeafId: 'pane:1',
+          layout: null
+        }
+      ],
+      leaves: [
+        {
+          tabId: 'tab-1',
+          worktreeId: 'repo-1::/tmp/worktree-a',
+          leafId: 'pane:1',
+          paneRuntimeId: 1,
+          ptyId: 'stale-pty'
+        }
+      ]
+    })
+
+    const terminals = await runtime.listTerminals('id:repo-1::/tmp/worktree-a', undefined, {
+      requireFreshPtyLiveness: true
+    })
+
+    expect(terminals.terminals).toEqual([])
+  })
+
+  it('fails terminal listing closed when fresh PTY liveness is required and unavailable', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null,
+      listProcesses: async () => {
+        throw new Error('provider unavailable')
+      }
+    })
+
+    await expect(
+      runtime.listTerminals('id:repo-1::/tmp/worktree-a', undefined, {
+        requireFreshPtyLiveness: true
+      })
+    ).rejects.toThrow('terminal_liveness_unavailable')
   })
 
   it('rejects invalid positive limits for bounded list commands', async () => {

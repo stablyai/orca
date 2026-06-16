@@ -235,6 +235,22 @@ describe('TerminalHost', () => {
       expect(host.isKilled('session-1')).toBe(true)
     })
 
+    it('force-kills immediately when requested', async () => {
+      await host.createOrAttach({
+        sessionId: 'session-1',
+        cols: 80,
+        rows: 24,
+        streamClient: { onData: vi.fn(), onExit: vi.fn() }
+      })
+
+      host.kill('session-1', { immediate: true })
+
+      expect(lastSubprocess.kill).not.toHaveBeenCalled()
+      expect(lastSubprocess.forceKill).toHaveBeenCalled()
+      expect(lastSubprocess.dispose).toHaveBeenCalled()
+      expect(host.isKilled('session-1')).toBe(true)
+    })
+
     it('throws for non-existent session', () => {
       expect(() => host.kill('missing')).toThrow('Session not found')
     })

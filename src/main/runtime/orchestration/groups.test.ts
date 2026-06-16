@@ -8,6 +8,7 @@ function makeSummary(
 ): RuntimeTerminalSummary {
   return {
     handle,
+    ptyId: opts.ptyId ?? handle,
     worktreeId: opts.worktreeId ?? 'wt_default',
     worktreePath: opts.worktreePath ?? '/tmp/wt',
     branch: opts.branch ?? 'main',
