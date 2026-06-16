@@ -81,6 +81,35 @@ export type DockerContainerAction =
   | 'unpause'
   | 'remove'
 
+export type DockerImageSummary = {
+  id: string
+  repository: string
+  tag: string
+  size: string
+  createdSince: string
+}
+
+export type DockerVolumeSummary = {
+  name: string
+  driver: string
+  scope: string
+  mountpoint: string
+}
+
+export type DockerNetworkSummary = {
+  id: string
+  name: string
+  driver: string
+  scope: string
+}
+
+export type DockerResourceKind = 'container' | 'image' | 'volume' | 'network'
+
+export type DockerResourceSelection = {
+  kind: DockerResourceKind
+  id: string
+}
+
 export type DockerConnectionStatus = 'unknown' | 'reachable' | 'unreachable'
 
 /** Just the fields the SSH transport fallback needs from an SshTarget. */
