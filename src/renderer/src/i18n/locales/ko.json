@@ -8682,7 +8682,9 @@
             "noAgentSessionsFound": "No agent sessions found",
             "noSessionsMatchFilters": "No sessions match the current filters",
             "sessionId": "Session ID",
-            "logPath": "Log path"
+            "logPath": "Log path",
+            "agents": "Agents",
+            "sessionsShownCompact": "{{value0}} shown"
           },
           "AiVaultPanelControls": {
             "scanningSessions": "Scanning sessions",
@@ -8745,7 +8747,8 @@
             "hoursAgo": "{{value0}}h ago",
             "daysAgo": "{{value0}}d ago",
             "monthsAgo": "{{value0}}mo ago",
-            "yearsAgo": "{{value0}}y ago"
+            "yearsAgo": "{{value0}}y ago",
+            "sessionId": "Session ID"
           },
           "AiVaultSessionRow": {
             "resumeAgentSession": "Resume {{value0}} session",
@@ -8757,7 +8760,12 @@
             "copySessionId": "Copy Session ID",
             "copyLogPath": "Copy Log Path",
             "messageCount": "{{value0}} msgs",
-            "tokenCount": "{{value0}} tok"
+            "tokenCount": "{{value0}} tok",
+            "toggleSessionDetails": "{{value0}} session details",
+            "hideDetails": "Hide Details",
+            "showDetails": "Show Details",
+            "moreSessionActions": "More Session Actions",
+            "moreActions": "More Actions"
           },
           "GitHistoryCommitFiles": {
             "a1b2c3d4e5": "파일 로드 중…",

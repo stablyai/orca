@@ -1,7 +1,14 @@
 import type React from 'react'
-import { ChevronDown, Copy, FileJson, FolderOpen, Play } from 'lucide-react'
+import { ChevronDown, Copy, FileJson, FolderOpen, MoreHorizontal, Play } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu'
 import {
   ContextMenu,
   ContextMenuContent,
@@ -50,6 +57,9 @@ export function VaultSessionRow({
 }): React.JSX.Element {
   const updatedAt = session.updatedAt ?? session.modifiedAt
   const detailsId = getSessionDetailsId(session.id)
+  const detailsTooltip = detailsExpanded
+    ? translate('auto.components.right.sidebar.AiVaultSessionRow.hideDetails', 'Hide Details')
+    : translate('auto.components.right.sidebar.AiVaultSessionRow.showDetails', 'Show Details')
 
   return (
     <ContextMenu>
@@ -82,7 +92,7 @@ export function VaultSessionRow({
             }
           }}
         >
-          <div className="min-w-0 flex-1 pr-16">
+          <div className="min-w-0 flex-1 pr-24">
             <div className="flex min-w-0 items-start gap-1.5">
               <div className="min-w-0 flex-1 truncate text-[13px] font-medium leading-5 text-foreground">
                 {session.title}
@@ -129,28 +139,75 @@ export function VaultSessionRow({
                 )}
               </TooltipContent>
             </Tooltip>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-xs"
-              aria-label={translate(
-                'auto.components.right.sidebar.AiVaultSessionRow.toggleSessionDetails',
-                '{{value0}} session details',
-                { value0: agentLabel(session.agent) }
-              )}
-              aria-expanded={detailsExpanded}
-              aria-controls={detailsId}
-              draggable={false}
-              onClick={(event) => {
-                event.stopPropagation()
-                onToggleDetails()
-              }}
-              className="pointer-events-auto"
-            >
-              <ChevronDown
-                className={cn('size-3.5 transition-transform', detailsExpanded && 'rotate-180')}
-              />
-            </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-xs"
+                  aria-label={translate(
+                    'auto.components.right.sidebar.AiVaultSessionRow.toggleSessionDetails',
+                    '{{value0}} session details',
+                    { value0: agentLabel(session.agent) }
+                  )}
+                  aria-expanded={detailsExpanded}
+                  aria-controls={detailsId}
+                  draggable={false}
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    onToggleDetails()
+                  }}
+                  className="pointer-events-auto"
+                >
+                  <ChevronDown
+                    className={cn('size-3.5 transition-transform', detailsExpanded && 'rotate-180')}
+                  />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="top" sideOffset={4}>
+                {detailsTooltip}
+              </TooltipContent>
+            </Tooltip>
+            <DropdownMenu>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-xs"
+                      aria-label={translate(
+                        'auto.components.right.sidebar.AiVaultSessionRow.moreSessionActions',
+                        'More Session Actions'
+                      )}
+                      draggable={false}
+                      className="pointer-events-auto"
+                      onClick={(event) => event.stopPropagation()}
+                    >
+                      <MoreHorizontal className="size-3.5" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                </TooltipTrigger>
+                <TooltipContent side="top" sideOffset={4}>
+                  {translate(
+                    'auto.components.right.sidebar.AiVaultSessionRow.moreActions',
+                    'More Actions'
+                  )}
+                </TooltipContent>
+              </Tooltip>
+              <DropdownMenuContent align="end">
+                <SessionActionMenuItems
+                  resumeDisabled={resumeDisabled}
+                  onResume={onResume}
+                  onCopyResume={onCopyResume}
+                  onCopyId={onCopyId}
+                  onCopyPath={onCopyPath}
+                  onOpenLog={onOpenLog}
+                  onRevealLog={onRevealLog}
+                  onOpenCwd={onOpenCwd}
+                />
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
           {detailsExpanded ? (
             <SessionInlineDetails
@@ -164,53 +221,91 @@ export function VaultSessionRow({
         </div>
       </ContextMenuTrigger>
       <ContextMenuContent>
-        <ContextMenuItem disabled={resumeDisabled} onSelect={onResume}>
-          <Play className="size-3.5" />
-          {translate(
-            'auto.components.right.sidebar.AiVaultSessionRow.resumeInNewTab',
-            'Resume in New Tab'
-          )}
-        </ContextMenuItem>
-        <ContextMenuItem onSelect={onCopyResume}>
-          <Copy className="size-3.5" />
-          {translate(
-            'auto.components.right.sidebar.AiVaultSessionRow.copyResumeCommand',
-            'Copy Resume Command'
-          )}
-        </ContextMenuItem>
-        <ContextMenuSeparator />
-        <ContextMenuItem onSelect={onOpenLog}>
-          <FileJson className="size-3.5" />
-          {translate('auto.components.right.sidebar.AiVaultSessionRow.openLog', 'Open Log')}
-        </ContextMenuItem>
-        <ContextMenuItem onSelect={onRevealLog}>
-          <FolderOpen className="size-3.5" />
-          {translate('auto.components.right.sidebar.AiVaultSessionRow.revealLog', 'Reveal Log')}
-        </ContextMenuItem>
-        {onOpenCwd ? (
-          <ContextMenuItem onSelect={onOpenCwd}>
-            <FolderOpen className="size-3.5" />
-            {translate(
-              'auto.components.right.sidebar.AiVaultSessionRow.openWorkingDirectory',
-              'Open Working Directory'
-            )}
-          </ContextMenuItem>
-        ) : null}
-        <ContextMenuSeparator />
-        <ContextMenuItem onSelect={onCopyId}>
-          {translate(
-            'auto.components.right.sidebar.AiVaultSessionRow.copySessionId',
-            'Copy Session ID'
-          )}
-        </ContextMenuItem>
-        <ContextMenuItem onSelect={onCopyPath}>
-          {translate(
-            'auto.components.right.sidebar.AiVaultSessionRow.copyLogPath',
-            'Copy Log Path'
-          )}
-        </ContextMenuItem>
+        <SessionActionMenuItems
+          menuKind="context"
+          resumeDisabled={resumeDisabled}
+          onResume={onResume}
+          onCopyResume={onCopyResume}
+          onCopyId={onCopyId}
+          onCopyPath={onCopyPath}
+          onOpenLog={onOpenLog}
+          onRevealLog={onRevealLog}
+          onOpenCwd={onOpenCwd}
+        />
       </ContextMenuContent>
     </ContextMenu>
+  )
+}
+
+function SessionActionMenuItems({
+  menuKind = 'dropdown',
+  resumeDisabled,
+  onResume,
+  onCopyResume,
+  onCopyId,
+  onCopyPath,
+  onOpenLog,
+  onRevealLog,
+  onOpenCwd
+}: {
+  menuKind?: 'dropdown' | 'context'
+  resumeDisabled: boolean
+  onResume: () => void
+  onCopyResume: () => void
+  onCopyId: () => void
+  onCopyPath: () => void
+  onOpenLog: () => void
+  onRevealLog: () => void
+  onOpenCwd?: () => void
+}): React.JSX.Element {
+  const Item = menuKind === 'context' ? ContextMenuItem : DropdownMenuItem
+  const Separator = menuKind === 'context' ? ContextMenuSeparator : DropdownMenuSeparator
+
+  return (
+    <>
+      <Item disabled={resumeDisabled} onSelect={onResume}>
+        <Play className="size-3.5" />
+        {translate(
+          'auto.components.right.sidebar.AiVaultSessionRow.resumeInNewTab',
+          'Resume in New Tab'
+        )}
+      </Item>
+      <Item onSelect={onCopyResume}>
+        <Copy className="size-3.5" />
+        {translate(
+          'auto.components.right.sidebar.AiVaultSessionRow.copyResumeCommand',
+          'Copy Resume Command'
+        )}
+      </Item>
+      <Separator />
+      <Item onSelect={onOpenLog}>
+        <FileJson className="size-3.5" />
+        {translate('auto.components.right.sidebar.AiVaultSessionRow.openLog', 'Open Log')}
+      </Item>
+      <Item onSelect={onRevealLog}>
+        <FolderOpen className="size-3.5" />
+        {translate('auto.components.right.sidebar.AiVaultSessionRow.revealLog', 'Reveal Log')}
+      </Item>
+      {onOpenCwd ? (
+        <Item onSelect={onOpenCwd}>
+          <FolderOpen className="size-3.5" />
+          {translate(
+            'auto.components.right.sidebar.AiVaultSessionRow.openWorkingDirectory',
+            'Open Working Directory'
+          )}
+        </Item>
+      ) : null}
+      <Separator />
+      <Item onSelect={onCopyId}>
+        {translate(
+          'auto.components.right.sidebar.AiVaultSessionRow.copySessionId',
+          'Copy Session ID'
+        )}
+      </Item>
+      <Item onSelect={onCopyPath}>
+        {translate('auto.components.right.sidebar.AiVaultSessionRow.copyLogPath', 'Copy Log Path')}
+      </Item>
+    </>
   )
 }
 
