@@ -15,39 +15,30 @@ import { useAppStore } from '@/store'
 import type { DockerContainerAction, DockerContainerSummary } from '../../../../shared/docker-types'
 import { availableActionsForState } from './docker-container-actions'
 
-const ACTION_META: Record<
-  DockerContainerAction,
-  { icon: React.ReactNode; labelKey: string; labelFallback: string }
-> = {
-  start: {
-    icon: <Play />,
-    labelKey: 'auto.components.docker.DockerContainerActions.023ec2a235',
-    labelFallback: 'Start'
-  },
-  stop: {
-    icon: <Square />,
-    labelKey: 'auto.components.docker.DockerContainerActions.359f30fd47',
-    labelFallback: 'Stop'
-  },
-  restart: {
-    icon: <RotateCw />,
-    labelKey: 'auto.components.docker.DockerContainerActions.36ac523335',
-    labelFallback: 'Restart'
-  },
-  pause: {
-    icon: <Pause />,
-    labelKey: 'auto.components.docker.DockerContainerActions.03e884a128',
-    labelFallback: 'Pause'
-  },
-  unpause: {
-    icon: <Play />,
-    labelKey: 'auto.components.docker.DockerContainerActions.c0c163323f',
-    labelFallback: 'Resume'
-  },
-  remove: {
-    icon: <Trash2 />,
-    labelKey: 'auto.components.docker.DockerContainerActions.bdbc34eec1',
-    labelFallback: 'Remove'
+const ACTION_META: Record<DockerContainerAction, { icon: React.ReactNode }> = {
+  start: { icon: <Play /> },
+  stop: { icon: <Square /> },
+  restart: { icon: <RotateCw /> },
+  pause: { icon: <Pause /> },
+  unpause: { icon: <Play /> },
+  remove: { icon: <Trash2 /> }
+}
+
+// Why: literal-key translate calls so the catalog scanner can detect and sync these strings.
+function labelForAction(action: DockerContainerAction): string {
+  switch (action) {
+    case 'start':
+      return translate('auto.components.docker.DockerContainerActions.023ec2a235', 'Start')
+    case 'stop':
+      return translate('auto.components.docker.DockerContainerActions.359f30fd47', 'Stop')
+    case 'restart':
+      return translate('auto.components.docker.DockerContainerActions.36ac523335', 'Restart')
+    case 'pause':
+      return translate('auto.components.docker.DockerContainerActions.03e884a128', 'Pause')
+    case 'unpause':
+      return translate('auto.components.docker.DockerContainerActions.c0c163323f', 'Resume')
+    case 'remove':
+      return translate('auto.components.docker.DockerContainerActions.bdbc34eec1', 'Remove')
   }
 }
 
@@ -111,7 +102,7 @@ export function DockerContainerActions({
                 onClick={() => setRemoveDialogOpen(true)}
               >
                 {meta.icon}
-                {translate(meta.labelKey, meta.labelFallback)}
+                {labelForAction(action)}
               </Button>
             )
           }
@@ -124,7 +115,7 @@ export function DockerContainerActions({
               onClick={() => void run(action)}
             >
               {meta.icon}
-              {translate(meta.labelKey, meta.labelFallback)}
+              {labelForAction(action)}
             </Button>
           )
         })}

@@ -11224,7 +11224,12 @@
           "e3f8420199": "Remove container",
           "61b45d53bd": "Permanently remove {{value0}}? This cannot be undone.",
           "b6ca17b955": "Cancel",
-          "bdbc34eec1": "Remove"
+          "bdbc34eec1": "Remove",
+          "023ec2a235": "Start",
+          "359f30fd47": "Stop",
+          "36ac523335": "Restart",
+          "03e884a128": "Pause",
+          "c0c163323f": "Resume"
         }
       }
     },
