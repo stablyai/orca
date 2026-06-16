@@ -97,18 +97,18 @@ export function DockerContainerDetail({
         variant="line"
         className="mx-0 w-full justify-start gap-2 border-b border-border/60 bg-transparent px-4"
       >
-        <TabsTrigger value="details" className="px-3 py-2.5">
+        <TabsTrigger value="details" className="flex-1 px-3 py-2.5">
           {translate('auto.components.docker.DockerContainerDetail.73a03cf4fc', 'Details')}
         </TabsTrigger>
-        <TabsTrigger value="logs" className="px-3 py-2.5">
+        <TabsTrigger value="logs" className="flex-1 px-3 py-2.5">
           {translate('auto.components.docker.DockerContainerDetail.8e913f1e01', 'Logs')}
         </TabsTrigger>
 
         {/* One trigger per open terminal. The close affordance is a sibling span
             (not a nested button) to avoid invalid button-in-button HTML. */}
         {terminalIds.map((id, index) => (
-          <div key={id} className="flex items-center">
-            <TabsTrigger value={`terminal-${id}`} className="px-3 py-2.5 pr-1">
+          <div key={id} className="flex min-w-0 flex-1 items-center">
+            <TabsTrigger value={`terminal-${id}`} className="min-w-0 flex-1 px-3 py-2.5 pr-1">
               {translate(
                 'auto.components.docker.DockerContainerDetail.8b405f5f30',
                 'Terminal ({{value0}})',
