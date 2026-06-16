@@ -903,9 +903,13 @@ export default function SessionScreen() {
   const activeSessionTabTypeRef = useRef<MobileSessionTabType | null>(null)
   const pendingActiveSessionTabIdRef = useRef<string | null>(null)
   const pendingActiveTerminalHandleRef = useRef<string | null>(null)
-  // Why: focus a just-created browser tab as soon as it syncs, keyed by page id
-  // since its session tab id isn't known until the snapshot arrives.
-  const pendingActiveBrowserPageIdRef = useRef<string | null>(null)
+  // Why: a browser tab opened from a terminal-tapped HTML must be focused as an
+  // Orca session tab (bridge auto-activate only flags the live webContents, not
+  // the app-level active tab). We remember the page id and, once its session tab
+  // syncs, activate it through the normal switchSessionTab path (which also makes
+  // switching back to the terminal work). A ref breaks the callback dep cycle.
+  const pendingBrowserFocusPageIdRef = useRef<string | null>(null)
+  const switchSessionTabRef = useRef<((tab: MobileSessionTab) => void) | null>(null)
   const initialEmptySessionAutoCreateRef = useRef<string | null>(null)
   const markdownSaveSeqRef = useRef<Map<string, number>>(new Map())
   const markdownSaveInFlightRef = useRef<Set<string>>(new Set())
@@ -1486,19 +1490,7 @@ export default function SessionScreen() {
       const snapshotActive = nextTabs.find((tab) => tab.isActive) ?? nextTabs[0] ?? null
       const pendingActiveSessionTabId = pendingActiveSessionTabIdRef.current
       const pendingActiveTerminalHandle = pendingActiveTerminalHandleRef.current
-      const pendingActiveBrowserPageId = pendingActiveBrowserPageIdRef.current
       let active = snapshotActive
-      if (pendingActiveBrowserPageId) {
-        const pendingBrowserTab = nextTabs.find(
-          (tab) => tab.type === 'browser' && tab.browserPageId === pendingActiveBrowserPageId
-        )
-        if (pendingBrowserTab) {
-          // Focus the just-opened browser tab as soon as it appears, regardless
-          // of the desktop's active flag (which may lag the tabCreate).
-          active = pendingBrowserTab
-          pendingActiveBrowserPageIdRef.current = null
-        }
-      }
       if (pendingActiveSessionTabId) {
         if (snapshotActive?.id === pendingActiveSessionTabId) {
           pendingActiveSessionTabIdRef.current = null
@@ -2073,6 +2065,18 @@ export default function SessionScreen() {
       }
       const result = (response as RpcSuccess).result as SessionTabsResult
       applySessionTabs(result)
+      // Focus a just-opened browser tab once it appears in the snapshot, via the
+      // normal activate path so it sticks and the user can still switch away.
+      const pendingPageId = pendingBrowserFocusPageIdRef.current
+      if (pendingPageId) {
+        const browserTab = result.tabs.find(
+          (tab) => tab.type === 'browser' && tab.browserPageId === pendingPageId
+        )
+        if (browserTab) {
+          pendingBrowserFocusPageIdRef.current = null
+          switchSessionTabRef.current?.(browserTab)
+        }
+      }
     } catch {
       // Keep the last tab snapshot visible during reconnect/backoff.
     } finally {
@@ -2273,6 +2277,7 @@ export default function SessionScreen() {
     activeSessionTabTypeRef.current = null
     pendingActiveSessionTabIdRef.current = null
     pendingActiveTerminalHandleRef.current = null
+    pendingBrowserFocusPageIdRef.current = null
     initialEmptySessionAutoCreateRef.current = null
     for (const queued of terminalGestureInputQueuesRef.current.values()) {
       if (queued.timer) {
@@ -2560,6 +2565,9 @@ export default function SessionScreen() {
     },
     [client, markdownDocs, readFileTab, readMarkdownTab, switchTab, unsubscribeTerminal, worktreeId]
   )
+  // Keep the ref pointing at the latest switchSessionTab so fetchSessionTabs can
+  // activate a freshly-synced browser tab without a callback dependency cycle.
+  switchSessionTabRef.current = switchSessionTab
 
   // Why: just store the ref. Subscription is deferred to handleTerminalWebReady
   // which fires after the WebView has loaded xterm.js and is ready to process
@@ -2761,6 +2769,8 @@ export default function SessionScreen() {
           if (!resolved.exists || resolved.isDirectory || !resolved.relativePath) {
             return
           }
+          // Confirm the tap landed on something openable before giving feedback.
+          triggerSelection()
           // Why: HTML opens in a browser pane (streamed from the desktop),
           // matching desktop's terminal-click behavior, instead of a file view.
           if (classifyMobileArtifact(resolved.relativePath) === 'html' && resolved.absolutePath) {
@@ -3579,13 +3589,16 @@ export default function SessionScreen() {
       if (!response.ok) {
         throw new Error((response as RpcFailure).error.message)
       }
-      // Focus the new browser tab once it syncs (keyed by page id).
+      // Focus the new browser tab once it syncs (fetchSessionTabs activates it
+      // via the normal path). Refresh a few times since the desktop registers
+      // the tab asynchronously.
       const created = (response as RpcSuccess).result as { browserPageId?: string }
       if (created.browserPageId) {
-        pendingActiveBrowserPageIdRef.current = created.browserPageId
+        pendingBrowserFocusPageIdRef.current = created.browserPageId
       }
-      scheduleDelayedAction(() => void fetchSessionTabs(), 300)
-      scheduleDelayedAction(() => void fetchSessionTabs(), 900)
+      void fetchSessionTabs()
+      scheduleDelayedAction(() => void fetchSessionTabs(), 400)
+      scheduleDelayedAction(() => void fetchSessionTabs(), 1200)
       return true
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to create browser'
