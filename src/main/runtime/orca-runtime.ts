@@ -506,6 +506,7 @@ import {
   getRemoteDrift,
   getRecentDriftSubjects
 } from '../git/repo'
+import { hasLocalCommitObject } from '../git/commit-object-ref'
 import {
   listWorktrees,
   addWorktree,
@@ -6472,8 +6473,10 @@ export class OrcaRuntimeService {
           : targetWorktreeId
             ? []
             : [...worktreesById.values()]
-    const refreshedPtyLiveness =
-      await this.refreshPtyWorktreeRecordsFromController(resolvedWorktrees, targetWorktreeId)
+    const refreshedPtyLiveness = await this.refreshPtyWorktreeRecordsFromController(
+      resolvedWorktrees,
+      targetWorktreeId
+    )
     if (opts.requireFreshPtyLiveness && !refreshedPtyLiveness) {
       throw new Error('terminal_liveness_unavailable')
     }
@@ -10277,11 +10280,10 @@ export class OrcaRuntimeService {
       if (!hadLocalBaseRef && !(await this.hasRemoteTrackingRef(repo.path, remoteTrackingBase))) {
         throw new Error(`Base ref "${baseBranch}" was not found after fetching.`)
       }
-    } else {
+    } else if (!(await hasLocalCommitObject(repo.path, baseBranch))) {
       const remote = baseBranch.includes('/') ? baseBranch.split('/')[0] : 'origin'
-      // Why: local bases keep legacy best-effort fetch behavior. Remote-tracking
-      // bases fail closed above because stale create-from-base is worse than a
-      // clear retryable error.
+      // Why: local bases keep legacy best-effort fetch behavior. Verified PR
+      // SHA bases already have the commit object needed by `git worktree add`.
       try {
         await this.fetchRemoteWithCache(repo.path, remote)
       } catch {

@@ -26,6 +26,7 @@ import type {
 import { getPRForBranch } from '../github/client'
 import { listWorktrees, addWorktree, addSparseWorktree } from '../git/worktree'
 import type { AddWorktreeResult } from '../git/worktree'
+import { hasCommitObjectViaGitExec, hasLocalCommitObject } from '../git/commit-object-ref'
 import { getGitUsername, getDefaultBaseRef, getBranchConflictKind } from '../git/repo'
 import { getHostedReviewForBranch } from '../source-control/hosted-review'
 import type { ForgeProviderId } from '../source-control/forge-provider'
@@ -520,6 +521,14 @@ async function canCheckoutExistingLocalBranch(
   }
   const worktrees = await listWorktrees(repoPath)
   return !worktrees.some((worktree) => normalizeLocalBranchName(worktree.branch) === branchName)
+}
+
+function hasRemoteCommitObject(
+  provider: SshGitProvider,
+  repoPath: string,
+  ref: string
+): Promise<boolean> {
+  return hasCommitObjectViaGitExec((gitArgs) => provider.exec(gitArgs, repoPath), ref)
 }
 
 async function canCheckoutExistingLocalBranchSsh(
@@ -1128,6 +1137,11 @@ export async function prefetchRemoteWorktreeCreateBase(
     await refreshRemoteTrackingBaseForWorktreeCreate(provider, repo, basePlan.remoteTrackingBase)
     return
   }
+  if (await hasRemoteCommitObject(provider, repo.path, basePlan.baseBranch)) {
+    // Why: PR/MR resolvers already fetched verified SHA start points. A broad
+    // remote fetch only updates unrelated refs when the commit object exists.
+    return
+  }
 
   // Why: mirrors createRemoteWorktree's legacy local-base fallback so
   // prefetch and create share one process-local SSH fetch cache.
@@ -1423,10 +1437,10 @@ export async function createRemoteWorktree(
         `Could not refresh base ref "${baseBranch}" from "${remoteTrackingBase.remote}". Check your network and try again.`
       )
     }
-  } else {
+  } else if (!(await hasRemoteCommitObject(provider, repo.path, baseBranch))) {
     // Why: local or otherwise non-remote-tracking bases preserve legacy
-    // best-effort fetch behavior. Only remote-tracking bases must fail closed,
-    // because creating from them after a failed refresh silently makes stale worktrees.
+    // best-effort fetch behavior. Verified PR/MR SHA bases already have the
+    // commit object locally, so a broad remote fetch only updates unrelated refs.
     const fallbackRemote = baseBranch.includes('/') ? baseBranch.split('/')[0] : 'origin'
     try {
       await fetchRemoteForWorktreeCreate(provider, repo, fallbackRemote)
@@ -1746,12 +1760,11 @@ export async function createLocalWorktree(
         hadLocalBaseRef: hasLocalBaseRef,
         promise: runtime.getOrStartRemoteTrackingBaseRefresh(repo.path, remoteTrackingBase)
       }
-    } else {
+    } else if (!(await hasLocalCommitObject(repo.path, baseBranch))) {
       // Why: when the base branch does not match a configured remote prefix
       // (e.g. plain `main`, `master`, or any local branch), the legacy path
-      // still ran a best-effort `git fetch origin` so a local base could be
-      // built against fresher tracking refs. Preserve that behavior here so
-      // local-only bases don't silently skip the pre-create fetch.
+      // still ran a best-effort `git fetch origin`. Verified PR SHA bases
+      // already have the needed commit object, so skip that broad fetch.
       const fallbackRemote = baseBranch.includes('/') ? baseBranch.split('/')[0] : 'origin'
       legacyFetchPromise = runtime
         .fetchRemoteWithCache(repo.path, fallbackRemote)
@@ -1760,11 +1773,13 @@ export async function createLocalWorktree(
       emitCreateWorktreeProgress(mainWindow, 'fetching', args.creationId)
     }
   } else {
-    const remote = baseBranch.includes('/') ? baseBranch.split('/')[0] : 'origin'
-    legacyFetchPromise = gitExecFileAsync(['fetch', remote], { cwd: repo.path })
-      .then(() => undefined)
-      .catch(() => undefined)
-    emitCreateWorktreeProgress(mainWindow, 'fetching', args.creationId)
+    if (!(await hasLocalCommitObject(repo.path, baseBranch))) {
+      const remote = baseBranch.includes('/') ? baseBranch.split('/')[0] : 'origin'
+      legacyFetchPromise = gitExecFileAsync(['fetch', remote], { cwd: repo.path })
+        .then(() => undefined)
+        .catch(() => undefined)
+      emitCreateWorktreeProgress(mainWindow, 'fetching', args.creationId)
+    }
   }
   const workspaceRoot = computeWorkspaceRoot(repo.path, worktreePathSettings)
 

@@ -1973,6 +1973,58 @@ describe('OrcaRuntimeService', () => {
     }
   })
 
+  it('skips broad remote fetch for an existing full-SHA PR base', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    const sha = 'c'.repeat(40)
+    const createdWorktree = {
+      path: '/tmp/workspaces/fix-title',
+      head: sha,
+      branch: 'refs/heads/feature/fix',
+      isBare: false,
+      isMainWorktree: false
+    }
+    computeWorktreePathMock.mockReturnValue(createdWorktree.path)
+    ensurePathWithinWorkspaceMock.mockReturnValue(createdWorktree.path)
+    vi.mocked(getBranchConflictKind).mockResolvedValueOnce(null)
+    vi.mocked(listWorktrees).mockResolvedValueOnce([createdWorktree])
+    const gitSpy = vi.spyOn(gitRunner, 'gitExecFileAsync').mockImplementation(async (args) => {
+      if (args[0] === 'remote') {
+        return { stdout: 'origin\n', stderr: '' }
+      }
+      if (args[0] === 'rev-parse' && args.includes('refs/heads/feature/fix^{commit}')) {
+        throw new Error('branch not found')
+      }
+      if (args[0] === 'rev-parse' && args.includes(`${sha}^{commit}`)) {
+        return { stdout: `${sha}\n`, stderr: '' }
+      }
+      return { stdout: '', stderr: '' }
+    })
+
+    try {
+      const result = await runtime.createManagedWorktree({
+        repoSelector: 'id:repo-1',
+        name: 'fix-title',
+        baseBranch: sha,
+        branchNameOverride: 'feature/fix'
+      })
+
+      expect(gitSpy).not.toHaveBeenCalledWith(['fetch', 'origin'], expect.anything())
+      expect(addWorktree).toHaveBeenCalledWith(
+        TEST_REPO_PATH,
+        createdWorktree.path,
+        'feature/fix',
+        sha,
+        false
+      )
+      expect(result.worktree).toMatchObject({
+        path: createdWorktree.path,
+        branch: 'refs/heads/feature/fix'
+      })
+    } finally {
+      gitSpy.mockRestore()
+    }
+  })
+
   it('creates a selected Bitbucket PR branch override from a matching remote branch', async () => {
     const runtime = new OrcaRuntimeService(store)
     const createdWorktree = {

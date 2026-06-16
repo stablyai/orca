@@ -1,5 +1,6 @@
 import { isFolderRepo } from '../shared/repo-kind'
 import type { Repo } from '../shared/types'
+import { hasLocalCommitObject } from './git/commit-object-ref'
 import { getDefaultBaseRef } from './git/repo'
 import { getSshGitProvider } from './providers/ssh-git-dispatch'
 import { prefetchRemoteWorktreeCreateBase } from './ipc/worktree-remote'
@@ -34,6 +35,11 @@ async function prefetchLocalWorktreeCreateBase(
 ): Promise<void> {
   const resolvedBaseBranch = baseBranch || repo.worktreeBaseRef || getDefaultBaseRef(repo.path)
   if (!resolvedBaseBranch) {
+    return
+  }
+  if (await hasLocalCommitObject(repo.path, resolvedBaseBranch)) {
+    // Why: hosted-review start points can be verified commit SHAs; a broad
+    // remote fetch cannot make an already-local object fresher.
     return
   }
   const remoteTrackingBase = await runtime.resolveRemoteTrackingBase(repo.path, resolvedBaseBranch)
