@@ -5,6 +5,15 @@ import { tmpdir } from 'os'
 import { join, resolve } from 'path'
 import type { CreateWorktreeResult } from '../../shared/types'
 
+const ORIGINAL_PLATFORM = process.platform
+
+function setPlatform(platform: NodeJS.Platform): void {
+  Object.defineProperty(process, 'platform', {
+    configurable: true,
+    value: platform
+  })
+}
+
 const {
   handleMock,
   removeHandlerMock,
@@ -260,6 +269,7 @@ describe('registerWorktreeHandlers', () => {
   }
 
   beforeEach(() => {
+    setPlatform(ORIGINAL_PLATFORM)
     __resetSshWorktreeCreateFetchCacheForTests()
     invalidateAuthorizedRootsCache()
     for (const m of [
@@ -545,6 +555,7 @@ describe('registerWorktreeHandlers', () => {
   }
 
   function mockSelectedWslProjectRuntime(): void {
+    setPlatform('win32')
     store.getProjects.mockReturnValue([
       {
         id: 'project-1',
@@ -1622,7 +1633,103 @@ describe('registerWorktreeHandlers', () => {
     expect(listWorktreesMock).toHaveBeenCalledWith('/workspace/repo', { wslDistro: 'Ubuntu' })
   })
 
+  it('routes fork push target setup through the selected WSL project runtime', async () => {
+    mockSelectedWslProjectRuntime()
+    listWorktreesMock.mockResolvedValue([
+      {
+        path: '/workspace/wsl-fork',
+        head: 'abc123',
+        branch: 'refs/heads/wsl-fork',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+    store.setWorktreeMeta.mockImplementation((_worktreeId, meta) => meta)
+
+    await handlers['worktrees:create'](null, {
+      repoId: 'repo-1',
+      name: 'wsl-fork',
+      pushTarget: {
+        remoteName: 'pr-contributor-orca',
+        branchName: 'contributor/wsl-fork',
+        remoteUrl: 'git@github.com:contributor/orca.git'
+      }
+    })
+
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
+      ['check-ref-format', '--branch', 'contributor/wsl-fork'],
+      { cwd: '/workspace/repo', wslDistro: 'Ubuntu' }
+    )
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
+      ['remote', 'add', 'pr-contributor-orca', 'git@github.com:contributor/orca.git'],
+      { cwd: '/workspace/repo', wslDistro: 'Ubuntu' }
+    )
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
+      [
+        'fetch',
+        'pr-contributor-orca',
+        '+refs/heads/contributor/wsl-fork:refs/remotes/pr-contributor-orca/contributor/wsl-fork'
+      ],
+      { cwd: '/workspace/repo', wslDistro: 'Ubuntu' }
+    )
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
+      ['branch', '--set-upstream-to', 'pr-contributor-orca/contributor/wsl-fork', 'wsl-fork'],
+      { cwd: '/workspace/wsl-fork', wslDistro: 'Ubuntu' }
+    )
+  })
+
+  it('routes selected PR branch conflict lookup through the selected WSL project runtime', async () => {
+    mockSelectedWslProjectRuntime()
+    getBranchConflictKindMock.mockResolvedValueOnce('remote')
+    getPRForBranchMock.mockResolvedValueOnce({
+      number: 42,
+      title: 'Selected PR',
+      state: 'open',
+      url: 'https://example.com/pr/42',
+      checksStatus: 'success',
+      updatedAt: '2026-06-16T00:00:00.000Z',
+      mergeable: 'UNKNOWN'
+    })
+    listWorktreesMock.mockResolvedValue([
+      {
+        path: '/workspace/fix-title',
+        head: 'abc123',
+        branch: 'refs/heads/feature/fix',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+
+    await handlers['worktrees:create'](null, {
+      repoId: 'repo-1',
+      name: 'fix-title',
+      baseBranch: 'abc123',
+      branchNameOverride: 'feature/fix',
+      linkedPR: 42,
+      pushTarget: { remoteName: 'origin', branchName: 'feature/fix' }
+    })
+
+    expect(getPRForBranchMock).toHaveBeenCalledWith(
+      '/workspace/repo',
+      'feature/fix',
+      null,
+      null,
+      null,
+      { localGitExecOptions: { wslDistro: 'Ubuntu' } }
+    )
+    expect(addWorktreeMock).toHaveBeenCalledWith(
+      '/workspace/repo',
+      '/workspace/fix-title',
+      'feature/fix',
+      'abc123',
+      false,
+      false,
+      { wslDistro: 'Ubuntu' }
+    )
+  })
+
   it('routes PR base git calls through the selected WSL project runtime', async () => {
+    setPlatform('win32')
     store.getProjects.mockReturnValue([
       {
         id: 'project-1',
@@ -1660,6 +1767,7 @@ describe('registerWorktreeHandlers', () => {
       ['rev-parse', '--verify', 'origin/feature/add-feature'],
       { cwd: '/workspace/repo', wslDistro: 'Ubuntu' }
     )
+    expect(getDefaultRemoteMock).toHaveBeenCalledWith('/workspace/repo', { wslDistro: 'Ubuntu' })
     expect(result).toMatchObject({
       baseBranch: 'def456',
       headSha: 'def456',
@@ -1669,6 +1777,7 @@ describe('registerWorktreeHandlers', () => {
   })
 
   it('lists detected worktrees through the selected WSL project runtime', async () => {
+    setPlatform('win32')
     store.getProjects.mockReturnValue([
       {
         id: 'project-1',
@@ -4355,6 +4464,55 @@ describe('registerWorktreeHandlers', () => {
       'improve-dashboard',
       'origin/main',
       false
+    )
+  })
+
+  it('routes setup runner generation through the selected WSL project runtime', async () => {
+    setPlatform('win32')
+    store.getProjects.mockReturnValue([
+      {
+        id: 'project-1',
+        displayName: 'repo',
+        badgeColor: '#000',
+        sourceRepoIds: ['repo-1'],
+        localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' },
+        createdAt: 0,
+        updatedAt: 0
+      }
+    ])
+    listWorktreesMock.mockResolvedValue(createdWorktreeList)
+    getEffectiveHooksMock.mockReturnValue({
+      scripts: {
+        setup: 'pnpm worktree:setup'
+      }
+    })
+    getEffectiveHooksFromConfigMock.mockReturnValue({
+      scripts: {
+        setup: 'pnpm worktree:setup'
+      }
+    })
+    shouldRunSetupForCreateMock.mockReturnValue(true)
+
+    await handlers['worktrees:create'](null, {
+      repoId: 'repo-1',
+      name: 'improve-dashboard',
+      setupDecision: 'run'
+    })
+
+    expect(createSetupRunnerScriptMock).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'repo-1' }),
+      '/workspace/improve-dashboard',
+      'pnpm worktree:setup',
+      { wslDistro: 'Ubuntu' }
+    )
+    expect(addWorktreeMock).toHaveBeenCalledWith(
+      '/workspace/repo',
+      '/workspace/improve-dashboard',
+      'improve-dashboard',
+      'origin/main',
+      false,
+      false,
+      { wslDistro: 'Ubuntu' }
     )
   })
 

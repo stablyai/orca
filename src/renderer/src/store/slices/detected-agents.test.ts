@@ -163,17 +163,30 @@ describe('createDetectedAgentsSlice WSL context', () => {
     })
   })
 
-  it('detects local agents in the default WSL distro when the default Windows shell is WSL', async () => {
+  it('clears local agents when the project runtime requires repair before detection', async () => {
+    detectAgents.mockImplementation(async (context) => {
+      if (context?.projectRuntime?.status === 'repair-required') {
+        throw new Error('Project runtime requires repair before agent detection')
+      }
+      return ['claude']
+    })
     const store = createTestStore({
-      settings: {
-        terminalWindowsShell: 'wsl.exe'
-      } as AppState['settings'],
       repos: [makeRepo({ id: 'repo-1', path: 'C:\\repo' })],
       activeRepoId: 'repo-1',
       activeWorktreeId: null
     })
 
     await expect(store.getState().ensureDetectedAgents()).resolves.toEqual(['claude'])
+    expect(store.getState().detectedAgentIds).toEqual(['claude'])
+
+    store.setState({
+      settings: {
+        terminalWindowsShell: 'wsl.exe'
+      } as AppState['settings']
+    } as Partial<AppState>)
+
+    await expect(store.getState().ensureDetectedAgents()).resolves.toEqual([])
+    expect(store.getState().detectedAgentIds).toEqual([])
 
     expect(detectAgents).toHaveBeenCalledWith({
       projectRuntime: {

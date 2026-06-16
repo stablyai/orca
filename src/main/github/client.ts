@@ -326,7 +326,7 @@ export async function getPullRequestPushTarget(
     if (!prStdout) {
       return null
     }
-    const origin = await getOwnerRepoForRemote(repoPath, 'origin', connectionId)
+    const origin = await getOwnerRepoForRemote(repoPath, 'origin', connectionId, localGitOptions)
     const pr = JSON.parse(prStdout) as {
       maintainer_can_modify?: boolean
       head?: {
@@ -364,9 +364,7 @@ export async function getPullRequestPushTarget(
 
     let originUrl: string | null = null
     try {
-      const rawOriginUrl = connectionId
-        ? await getRemoteUrlForRepo(context, 'origin')
-        : (await gitExecFileAsync(['remote', 'get-url', 'origin'], { cwd: repoPath })).stdout
+      const rawOriginUrl = await getRemoteUrlForRepo(context, 'origin')
       originUrl = rawOriginUrl?.trim() || null
     } catch {
       originUrl = null

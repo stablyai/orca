@@ -440,6 +440,30 @@ describe('Store', () => {
     })
   })
 
+  it('migrates legacy WSL agent settings into the global Windows runtime default', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: {
+        localAgentRuntime: 'wsl',
+        localAgentWslDistro: 'Ubuntu'
+      }
+    })
+
+    const store = await createStore()
+
+    expect(store.getSettings().localWindowsRuntimeDefault).toEqual({
+      kind: 'wsl',
+      distro: 'Ubuntu'
+    })
+    store.flush()
+    expect((readDataFile() as PersistedState).settings.localWindowsRuntimeDefault).toEqual({
+      kind: 'wsl',
+      distro: 'Ubuntu'
+    })
+  })
+
   it('returns default settings when no data file exists', async () => {
     const store = await createStore()
     const settings = store.getSettings()

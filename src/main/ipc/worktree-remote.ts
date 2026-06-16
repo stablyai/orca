@@ -532,6 +532,20 @@ async function canCheckoutExistingLocalBranch(
   return !worktrees.some((worktree) => normalizeLocalBranchName(worktree.branch) === branchName)
 }
 
+function hasLocalGitOptions(gitOptions: { wslDistro?: string }): boolean {
+  return Object.keys(gitOptions).length > 0
+}
+
+function getLocalGitHubPrForBranch(
+  repoPath: string,
+  branchName: string,
+  gitOptions: { wslDistro?: string }
+): ReturnType<typeof getPRForBranch> {
+  return hasLocalGitOptions(gitOptions)
+    ? getPRForBranch(repoPath, branchName, null, null, null, { localGitExecOptions: gitOptions })
+    : getPRForBranch(repoPath, branchName)
+}
+
 async function canCheckoutExistingLocalBranchSsh(
   provider: SshGitProvider,
   repoPath: string,
@@ -769,11 +783,12 @@ export async function prepareWorktreePushTarget(
   repoPath: string,
   target: GitPushTarget,
   store?: WorktreePushTargetStore,
-  repoId?: string
+  repoId?: string,
+  gitOptions: { wslDistro?: string } = {}
 ): Promise<GitPushTarget> {
-  await validateGitPushTarget(repoPath, target)
+  await validateGitPushTarget(repoPath, target, gitOptions)
   return prepareWorktreePushTargetWithExec(
-    (args, cwd) => gitExecFileAsync(args, { cwd }),
+    (args, cwd) => gitExecFileAsync(args, { cwd, ...gitOptions }),
     repoPath,
     target,
     (existingRemote) =>
@@ -1720,6 +1735,9 @@ export async function createLocalWorktree(
   const localGitExecOptions = getLocalProjectGitExecOptions(store, repo)
   const localWorktreeGitOptions = getLocalProjectWorktreeGitOptions(store, repo)
   const hasLocalWorktreeGitOptions = Object.keys(localWorktreeGitOptions).length > 0
+  const localWorktreeGitOptionArgs: [] | [{ wslDistro?: string }] = hasLocalWorktreeGitOptions
+    ? [localWorktreeGitOptions]
+    : []
   const addProjectGitOptions = (options?: AddWorktreeOptions): AddWorktreeOptions | undefined => {
     if (!hasLocalWorktreeGitOptions) {
       return options
@@ -1761,14 +1779,26 @@ export async function createLocalWorktree(
   let legacyFetchPromise: Promise<void> | null = null
 
   if (runtime) {
-    remoteTrackingBase = await runtime.resolveRemoteTrackingBase(repo.path, baseBranch)
+    remoteTrackingBase = await runtime.resolveRemoteTrackingBase(
+      repo.path,
+      baseBranch,
+      ...localWorktreeGitOptionArgs
+    )
     if (remoteTrackingBase) {
-      const hasLocalBaseRef = await runtime.hasRemoteTrackingRef(repo.path, remoteTrackingBase)
+      const hasLocalBaseRef = await runtime.hasRemoteTrackingRef(
+        repo.path,
+        remoteTrackingBase,
+        ...localWorktreeGitOptionArgs
+      )
       emitCreateWorktreeProgress(mainWindow, 'fetching', args.creationId)
       remoteTrackingRefresh = {
         base: remoteTrackingBase,
         hadLocalBaseRef: hasLocalBaseRef,
-        promise: runtime.getOrStartRemoteTrackingBaseRefresh(repo.path, remoteTrackingBase)
+        promise: runtime.getOrStartRemoteTrackingBaseRefresh(
+          repo.path,
+          remoteTrackingBase,
+          ...localWorktreeGitOptionArgs
+        )
       }
     } else {
       // Why: when the base branch does not match a configured remote prefix
@@ -1778,7 +1808,7 @@ export async function createLocalWorktree(
       // local-only bases don't silently skip the pre-create fetch.
       const fallbackRemote = baseBranch.includes('/') ? baseBranch.split('/')[0] : 'origin'
       legacyFetchPromise = runtime
-        .fetchRemoteWithCache(repo.path, fallbackRemote)
+        .fetchRemoteWithCache(repo.path, fallbackRemote, ...localWorktreeGitOptionArgs)
         .then(() => undefined)
         .catch(() => undefined)
       emitCreateWorktreeProgress(mainWindow, 'fetching', args.creationId)
@@ -1888,7 +1918,11 @@ export async function createLocalWorktree(
         const selectedReview = getSelectedReviewBranch(args)
         if (selectedReview?.provider === 'github') {
           try {
-            lastExistingPR = await getPRForBranch(repo.path, branchName)
+            lastExistingPR = await getLocalGitHubPrForBranch(
+              repo.path,
+              branchName,
+              localWorktreeGitOptions
+            )
           } catch {
             lookupFailed = true
           }
@@ -1933,7 +1967,11 @@ export async function createLocalWorktree(
     if (suffix > 1 && !checkoutExistingBranch) {
       lastExistingPR = null
       try {
-        lastExistingPR = await getPRForBranch(repo.path, branchName)
+        lastExistingPR = await getLocalGitHubPrForBranch(
+          repo.path,
+          branchName,
+          localWorktreeGitOptions
+        )
       } catch {
         // GitHub API may be unreachable, rate-limited, or token missing
       }
@@ -1993,7 +2031,11 @@ export async function createLocalWorktree(
       }
       if (
         !remoteTrackingRefresh.hadLocalBaseRef &&
-        !(await runtime?.hasRemoteTrackingRef(repo.path, remoteTrackingRefresh.base))
+        !(await runtime?.hasRemoteTrackingRef(
+          repo.path,
+          remoteTrackingRefresh.base,
+          ...localWorktreeGitOptionArgs
+        ))
       ) {
         throw new Error(`Base ref "${baseBranch}" was not found after fetching.`)
       }
@@ -2012,7 +2054,13 @@ export async function createLocalWorktree(
     // Why: validate and fetch the contributor remote before creating the
     // worktree. If this fails, retrying won't hit branch/path conflicts from a
     // half-created worktree.
-    preparedPushTarget = await prepareWorktreePushTarget(repo.path, args.pushTarget, store, repo.id)
+    preparedPushTarget = await prepareWorktreePushTarget(
+      repo.path,
+      args.pushTarget,
+      store,
+      repo.id,
+      localWorktreeGitOptions
+    )
   }
 
   const suggestLocalBaseRefUpdate =
@@ -2272,7 +2320,12 @@ export async function createLocalWorktree(
         // fails, surfacing the error as a hard create failure would lie to the UI
         // about the underlying git state and strand a real worktree on disk.
         // Degrade to "created without setup launch" instead.
-        setup = createSetupRunnerScript(repo, worktreePath, setupScript)
+        setup = createSetupRunnerScript(
+          repo,
+          worktreePath,
+          setupScript,
+          ...localWorktreeGitOptionArgs
+        )
       } catch (error) {
         console.error(`[hooks] Failed to prepare setup runner for ${worktreePath}:`, error)
       }

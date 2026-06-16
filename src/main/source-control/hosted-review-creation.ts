@@ -41,6 +41,13 @@ function stripRefPrefix(ref: string): string {
   return normalizeHostedReviewHeadRef(ref)
 }
 
+function hostedReviewExecutionContext(
+  options: HostedReviewExecutionOptions = {}
+): HostedReviewExecutionOptions {
+  const localGitExecOptions = getHostedReviewLocalGitOptions(options)
+  return Object.keys(localGitExecOptions).length > 0 ? { localGitExecOptions } : {}
+}
+
 async function isGitHubAuthenticated(
   repoPath: string,
   connectionId?: string | null,
@@ -331,7 +338,8 @@ export async function getHostedReviewCreationEligibility(
   const branch = stripRefPrefix(args.branch).trim()
   const provider = await detectHostedReviewProvider({
     repoPath: args.repoPath,
-    connectionId: args.connectionId
+    connectionId: args.connectionId,
+    ...hostedReviewExecutionContext(args)
   })
   const defaultBaseRef =
     args.base?.trim() || (await getDefaultBaseRef(args.repoPath, args.connectionId, args))
@@ -345,7 +353,8 @@ export async function getHostedReviewCreationEligibility(
     linkedBitbucketPR: args.linkedBitbucketPR ?? null,
     linkedAzureDevOpsPR: args.linkedAzureDevOpsPR ?? null,
     linkedGiteaPR: args.linkedGiteaPR ?? null,
-    connectionId: args.connectionId ?? null
+    connectionId: args.connectionId ?? null,
+    ...hostedReviewExecutionContext(args)
   })
 
   const baseResult = {
@@ -420,7 +429,11 @@ export async function createHostedReview(
       error: 'Creating reviews for this provider is not supported yet.'
     }
   }
-  const provider = await getForgeProviderForRepository({ repoPath, connectionId })
+  const provider = await getForgeProviderForRepository({
+    repoPath,
+    connectionId,
+    ...hostedReviewExecutionContext(options)
+  })
   if (provider?.id !== input.provider || !provider.createReview) {
     const copy = reviewCopy(input.provider)
     return {

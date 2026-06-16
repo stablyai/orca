@@ -3,7 +3,7 @@ export function quotePosixShell(value: string): string {
 }
 
 export function escapeWslShCommandForWindows(command: string): string {
-  return command.replace(/\$/g, '\\$')
+  return command
 }
 
 export function buildWslLoginShellCommand(command: string): string {

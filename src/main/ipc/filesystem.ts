@@ -719,12 +719,11 @@ export function registerFilesystemHandlers(
         let child: ChildProcess | null = null
         let killTimeout: ReturnType<typeof setTimeout>
 
-        // Why: when rg runs inside WSL, output paths are Linux-native
-        // (e.g. /home/user/repo/src/file.ts). Translate them back to
-        // Windows UNC paths so path.relative() and Node fs APIs work.
-        const wslInfo = parseWslPath(rootPath)
-        const transformAbsPath = wslInfo
-          ? (p: string): string => toWindowsWslPath(p, wslInfo.distro)
+        // Why: WSL-routed rg emits Linux-native paths. UNC repos carry their
+        // distro in the path; Windows-path repos carry it in project runtime.
+        const wslDistroForOutput = parseWslPath(rootPath)?.distro ?? localGitOptions.wslDistro
+        const transformAbsPath = wslDistroForOutput
+          ? (p: string): string => (p.startsWith('/') ? toWindowsWslPath(p, wslDistroForOutput) : p)
           : undefined
 
         const resolveOnce = (): void => {

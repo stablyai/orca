@@ -75,6 +75,9 @@ export function GeneralPane({
   wslCapabilitiesLoading
 }: GeneralPaneProps): React.JSX.Element {
   const searchQuery = useAppStore((s) => s.settingsSearchQuery)
+  const projectRuntimeSearchEntries = wslSupportedPlatform
+    ? getGeneralProjectRuntimeSearchEntries()
+    : []
 
   const visibleSections = [
     matchesSettingsSearch(searchQuery, getGeneralNavigationSearchEntries()) ? (
@@ -100,7 +103,7 @@ export function GeneralPane({
         updateSettings={updateSettings}
       />
     ) : null,
-    matchesSettingsSearch(searchQuery, getGeneralProjectRuntimeSearchEntries()) ? (
+    matchesSettingsSearch(searchQuery, projectRuntimeSearchEntries) ? (
       <section key="project-runtime" className="space-y-4">
         <SettingsSubsectionHeader
           title={translate(

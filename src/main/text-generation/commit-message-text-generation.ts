@@ -294,7 +294,7 @@ export async function discoverCommitMessageModelsLocal(
       if (process.platform === 'win32' && options.wslDistro) {
         child = wslAwareSpawn(planned.plan.binary, planned.plan.args, {
           cwd: options.cwd,
-          env: spawnEnv,
+          env: buildWslLauncherEnv(env),
           stdio: ['ignore', 'pipe', 'pipe'],
           windowsHide: true,
           wslDistro: options.wslDistro,
@@ -485,6 +485,17 @@ function killProcessTree(child: ChildProcess): void {
 // Keying by operation plus `local:${cwd}` keeps local cancellation independent
 // from SSH worktrees and from other generation features in the same worktree.
 const cancelTokensByLane = new Map<string, () => void>()
+const WSL_LAUNCHER_ENV_KEYS = [
+  'ComSpec',
+  'COMSPEC',
+  'Path',
+  'PATH',
+  'PATHEXT',
+  'SystemRoot',
+  'TEMP',
+  'TMP',
+  'WINDIR'
+] as const
 
 function localLaneKey(operation: TextGenerationOperation, cwd: string): string {
   return `${operation}:local:${cwd}`
@@ -492,6 +503,22 @@ function localLaneKey(operation: TextGenerationOperation, cwd: string): string {
 
 export function cancelGenerateCommitMessageLocal(cwd: string): void {
   cancelTokensByLane.get(localLaneKey('commit-message', cwd))?.()
+}
+
+function buildWslLauncherEnv(explicitEnv: NodeJS.ProcessEnv | undefined): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = {}
+  for (const key of WSL_LAUNCHER_ENV_KEYS) {
+    const value = process.env[key]
+    if (value !== undefined) {
+      env[key] = value
+    }
+  }
+  for (const [key, value] of Object.entries(explicitEnv ?? {})) {
+    if (value !== undefined && value !== process.env[key]) {
+      env[key] = value
+    }
+  }
+  return env
 }
 
 async function runLocalPlan(
@@ -510,7 +537,7 @@ async function runLocalPlan(
       if (process.platform === 'win32' && wslDistro) {
         child = wslAwareSpawn(binary, args, {
           cwd,
-          env: spawnEnv,
+          env: buildWslLauncherEnv(env),
           stdio: ['pipe', 'pipe', 'pipe'],
           windowsHide: true,
           wslDistro,

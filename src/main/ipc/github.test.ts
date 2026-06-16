@@ -2,6 +2,15 @@
 handler harness; keeping the related route wiring together avoids duplicated setup. */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+const ORIGINAL_PLATFORM = process.platform
+
+function setPlatform(platform: NodeJS.Platform): void {
+  Object.defineProperty(process, 'platform', {
+    configurable: true,
+    value: platform
+  })
+}
+
 const {
   handleMock,
   getPRForBranchMock,
@@ -37,7 +46,12 @@ const {
   starOrcaMock,
   trackMock,
   getCohortAtEmitMock,
-  getAllWebContentsMock
+  getAllWebContentsMock,
+  clearVisiblePRRefreshWindowMock,
+  enqueuePRRefreshMock,
+  refreshPRNowMock,
+  reportVisiblePRRefreshCandidatesMock,
+  setPRRefreshOutcomeObserverMock
 } = vi.hoisted(() => ({
   handleMock: vi.fn(),
   getPRForBranchMock: vi.fn(),
@@ -73,7 +87,12 @@ const {
   starOrcaMock: vi.fn(),
   trackMock: vi.fn(),
   getCohortAtEmitMock: vi.fn(),
-  getAllWebContentsMock: vi.fn()
+  getAllWebContentsMock: vi.fn(),
+  clearVisiblePRRefreshWindowMock: vi.fn(),
+  enqueuePRRefreshMock: vi.fn(),
+  refreshPRNowMock: vi.fn(),
+  reportVisiblePRRefreshCandidatesMock: vi.fn(),
+  setPRRefreshOutcomeObserverMock: vi.fn()
 }))
 
 vi.mock('electron', () => ({
@@ -122,6 +141,14 @@ vi.mock('../github/work-item-details', () => ({
   getPRFileContents: getPRFileContentsMock
 }))
 
+vi.mock('../github/pr-refresh-coordinator', () => ({
+  clearVisiblePRRefreshWindow: clearVisiblePRRefreshWindowMock,
+  enqueuePRRefresh: enqueuePRRefreshMock,
+  refreshPRNow: refreshPRNowMock,
+  reportVisiblePRRefreshCandidates: reportVisiblePRRefreshCandidatesMock,
+  setPRRefreshOutcomeObserver: setPRRefreshOutcomeObserverMock
+}))
+
 vi.mock('../telemetry/client', () => ({
   track: trackMock
 }))
@@ -167,6 +194,7 @@ describe('registerGitHubHandlers', () => {
   }
 
   beforeEach(() => {
+    setPlatform(ORIGINAL_PLATFORM)
     handleMock.mockReset()
     getPRForBranchMock.mockReset()
     getIssueMock.mockReset()
@@ -204,6 +232,11 @@ describe('registerGitHubHandlers', () => {
     getCohortAtEmitMock.mockReturnValue({ nth_repo_added: undefined })
     getAllWebContentsMock.mockReset()
     getAllWebContentsMock.mockReturnValue([])
+    clearVisiblePRRefreshWindowMock.mockReset()
+    enqueuePRRefreshMock.mockReset()
+    refreshPRNowMock.mockReset()
+    reportVisiblePRRefreshCandidatesMock.mockReset()
+    setPRRefreshOutcomeObserverMock.mockReset()
     for (const key of Object.keys(handlers)) {
       delete handlers[key]
     }
@@ -400,6 +433,7 @@ describe('registerGitHubHandlers', () => {
   })
 
   it('routes local WSL project GitHub issue and work-item IPC through project git options', async () => {
+    setPlatform('win32')
     projects = [
       {
         id: 'project-1',
@@ -420,9 +454,29 @@ describe('registerGitHubHandlers', () => {
     addIssueCommentMock.mockResolvedValue({ ok: true })
     listLabelsMock.mockResolvedValue([])
     listAssignableUsersMock.mockResolvedValue([])
+    getPRForBranchMock.mockResolvedValue(null)
     registerGitHubHandlers(store as never, stats as never)
     const localGitOptions = { wslDistro: 'Ubuntu' }
 
+    await handlers['gh:prForBranch'](null, {
+      repoPath: '/workspace/repo',
+      branch: 'feature/wsl'
+    })
+    await handlers['gh:reportVisiblePRRefreshCandidates'](
+      { sender: { id: 7, once: vi.fn() } },
+      {
+        generation: 1,
+        candidates: [
+          {
+            cacheKey: '/workspace/repo::feature/wsl',
+            repoPath: '/workspace/repo',
+            branch: 'feature/wsl',
+            repoKind: 'git',
+            repoId: 'repo-1'
+          }
+        ]
+      }
+    )
     await handlers['gh:listWorkItems'](null, {
       repoPath: '/workspace/repo',
       limit: 10,
@@ -461,6 +515,25 @@ describe('registerGitHubHandlers', () => {
     await handlers['gh:listLabels'](null, { repoPath: '/workspace/repo' })
     await handlers['gh:listAssignableUsers'](null, { repoPath: '/workspace/repo' })
 
+    expect(getPRForBranchMock).toHaveBeenCalledWith(
+      '/workspace/repo',
+      'feature/wsl',
+      null,
+      null,
+      null,
+      { localGitExecOptions: localGitOptions }
+    )
+    expect(reportVisiblePRRefreshCandidatesMock).toHaveBeenCalledWith(
+      [
+        expect.objectContaining({
+          repoPath: '/workspace/repo',
+          repoId: 'repo-1',
+          localGitOptions
+        })
+      ],
+      1,
+      7
+    )
     expect(listWorkItemsMock).toHaveBeenCalledWith(
       '/workspace/repo',
       10,
@@ -520,6 +593,7 @@ describe('registerGitHubHandlers', () => {
   })
 
   it('routes local WSL project GitHub PR detail and action IPC through project git options', async () => {
+    setPlatform('win32')
     projects = [
       {
         id: 'project-1',

@@ -211,7 +211,9 @@ async function evaluateLocalBaseRefRefreshability(
       ['worktree', 'list', '--porcelain'],
       gitExecOptions(repoPath, options)
     )
-    const worktrees = parseWorktreeList(translateWslOutputPaths(worktreeListOutput, repoPath))
+    const worktrees = parseWorktreeList(
+      translateWslOutputPaths(worktreeListOutput, repoPath, options)
+    )
     const ownerWorktree = worktrees.find((wt) => wt.branch === parsed.fullRef)
 
     if (ownerWorktree) {
@@ -461,7 +463,7 @@ export async function listWorktrees(
 ): Promise<GitWorktreeInfo[]> {
   try {
     const worktrees = (await readWorktreeList(repoPath, options)).map((worktree) => {
-      const translatedPath = translateWorktreePath(worktree.path, repoPath)
+      const translatedPath = translateWorktreePath(worktree.path, repoPath, options)
       return translatedPath === worktree.path ? worktree : { ...worktree, path: translatedPath }
     })
     return annotateSparseCheckoutStatus(worktrees)
@@ -543,7 +545,9 @@ async function refreshLocalBaseRefForWorktreeCreate(
         ['worktree', 'list', '--porcelain'],
         gitExecOptions(repoPath, options)
       )
-      const worktrees = parseWorktreeList(translateWslOutputPaths(worktreeListOutput, repoPath))
+      const worktrees = parseWorktreeList(
+        translateWslOutputPaths(worktreeListOutput, repoPath, options)
+      )
       const currentOwner = worktrees.find((wt) => wt.branch === evaluation.fullRef)
       if (!currentOwner || currentOwner.path !== evaluation.ownerWorktreePath) {
         return { ...resultBase, status: 'skipped_error' }
@@ -989,9 +993,13 @@ export async function assertWorktreeCleanForRemoval(
   throw error
 }
 
-function translateWorktreePath(worktreePath: string, repoPath: string): string {
+function translateWorktreePath(
+  worktreePath: string,
+  repoPath: string,
+  options: GitWorktreeExecOptions = {}
+): string {
   const prefix = 'worktree '
-  const translated = translateWslOutputPaths(`${prefix}${worktreePath}`, repoPath)
+  const translated = translateWslOutputPaths(`${prefix}${worktreePath}`, repoPath, options)
   return translated.startsWith(prefix) ? translated.slice(prefix.length) : worktreePath
 }
 

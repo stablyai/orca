@@ -65,9 +65,9 @@ describe('ProjectWindowsRuntimeSetting', () => {
     )
 
     expect(markup).toContain('Project runtime')
-    expect(markup).toContain('This project runs in Ubuntu-24.04 via WSL from the global default.')
+    expect(markup).toContain('No project override. General settings select Ubuntu-24.04 via WSL.')
     expect(markup).toContain('Existing terminals keep their current runtime.')
-    expect(markup).toContain('Inherit')
+    expect(markup).toContain('Default (WSL)')
     expect(markup).toContain('Windows')
     expect(markup).toContain('WSL')
   })
@@ -111,7 +111,7 @@ describe('ProjectWindowsRuntimeSetting', () => {
           />
         )
       })
-      clickButton(container, 'Inherit')
+      clickButton(container, 'Default (Windows)')
       expect(updateProject).toHaveBeenCalledWith('project-1', {
         localWindowsRuntimePreference: undefined
       })

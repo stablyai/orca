@@ -51,7 +51,9 @@ import {
 } from '../gitlab/client'
 import { getWorkItemDetails } from '../gitlab/work-item-details'
 import type { ProjectRef } from '../gitlab/gl-utils'
+import type { LocalGitExecOptions } from '../gitlab/gitlab-project-ref-resolution'
 import { getLocalProjectWorktreeGitOptions } from '../project-runtime-git-options'
+import type { HostedReviewExecutionOptions } from '../source-control/hosted-review-git-options'
 
 type GitLabRepoSelectorArgs = {
   repoPath: string
@@ -95,9 +97,16 @@ function repoConnectionId(repo: Repo): string | null {
   return repo.connectionId ?? null
 }
 
-function localGitOptionArgs(store: Store, repo: Repo): [] | [{ wslDistro?: string }] {
+function localGitOptionArgs(store: Store, repo: Repo): [] | [LocalGitExecOptions] {
   const localGitOptions = getLocalProjectWorktreeGitOptions(store, repo)
-  return Object.keys(localGitOptions).length > 0 ? [localGitOptions] : []
+  return localGitOptions.wslDistro ? [{ wslDistro: localGitOptions.wslDistro }] : []
+}
+
+function hostedReviewOptionArgs(store: Store, repo: Repo): [] | [HostedReviewExecutionOptions] {
+  const localGitOptions = getLocalProjectWorktreeGitOptions(store, repo)
+  return localGitOptions.wslDistro
+    ? [{ localGitExecOptions: { wslDistro: localGitOptions.wslDistro } }]
+    : []
 }
 
 export function registerGitLabHandlers(store: Store): void {
@@ -115,7 +124,7 @@ export function registerGitLabHandlers(store: Store): void {
 
   ipcMain.handle('gitlab:projectSlug', async (_event, args: GitLabRepoSelectorArgs) => {
     const repo = assertRegisteredRepo(args, store)
-    return getProjectSlug(repo.path, repoConnectionId(repo))
+    return getProjectSlug(repo.path, repoConnectionId(repo), ...hostedReviewOptionArgs(store, repo))
   })
 
   ipcMain.handle(
@@ -129,14 +138,20 @@ export function registerGitLabHandlers(store: Store): void {
         repo.path,
         args.branch,
         args.linkedMRIid ?? null,
-        repoConnectionId(repo)
+        repoConnectionId(repo),
+        ...hostedReviewOptionArgs(store, repo)
       )
     }
   )
 
   ipcMain.handle('gitlab:mr', async (_event, args: GitLabRepoSelectorArgs & { iid: number }) => {
     const repo = assertRegisteredRepo(args, store)
-    return getMergeRequest(repo.path, args.iid, repoConnectionId(repo))
+    return getMergeRequest(
+      repo.path,
+      args.iid,
+      repoConnectionId(repo),
+      ...hostedReviewOptionArgs(store, repo)
+    )
   })
 
   ipcMain.handle(

@@ -273,14 +273,22 @@ export const getGeneralSupportSearchEntries = createLocalizedCatalog(() => [
   }
 ])
 
-export const getGeneralPaneSearchEntries = createLocalizedCatalog((): SettingsSearchEntry[] => [
-  ...getGeneralWorkspaceSearchEntries(),
-  ...getGeneralNetworkSearchEntries(),
-  ...getGeneralNavigationSearchEntries(),
-  ...getGeneralProjectRuntimeSearchEntries(),
-  ...getGeneralEditorSearchEntries(),
-  ...getGeneralCliSearchEntries(),
-  ...getGeneralCacheTimerSearchEntries(),
-  ...getGeneralUpdateSearchEntries(),
-  ...getGeneralSupportSearchEntries()
-])
+type GeneralPaneSearchOptions = {
+  includeProjectRuntime?: boolean
+}
+
+export function getGeneralPaneSearchEntries(
+  options: GeneralPaneSearchOptions = {}
+): SettingsSearchEntry[] {
+  return [
+    ...getGeneralWorkspaceSearchEntries(),
+    ...getGeneralNetworkSearchEntries(),
+    ...getGeneralNavigationSearchEntries(),
+    ...(options.includeProjectRuntime === false ? [] : getGeneralProjectRuntimeSearchEntries()),
+    ...getGeneralEditorSearchEntries(),
+    ...getGeneralCliSearchEntries(),
+    ...getGeneralCacheTimerSearchEntries(),
+    ...getGeneralUpdateSearchEntries(),
+    ...getGeneralSupportSearchEntries()
+  ]
+}

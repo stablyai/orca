@@ -3,6 +3,15 @@ import type { Store } from '../persistence'
 import type { Repo } from '../../shared/types'
 import { toSshExecutionHostId } from '../../shared/execution-host'
 
+const ORIGINAL_PLATFORM = process.platform
+
+function setPlatform(platform: NodeJS.Platform): void {
+  Object.defineProperty(process, 'platform', {
+    configurable: true,
+    value: platform
+  })
+}
+
 const {
   ipcHandlers,
   listMergeRequestsMock,
@@ -26,7 +35,10 @@ const {
   listTodosMock,
   listWorkItemsMock,
   getWorkItemDetailsMock,
-  getWorkItemByProjectRefMock
+  getWorkItemByProjectRefMock,
+  getMergeRequestMock,
+  getMergeRequestForBranchMock,
+  getProjectSlugMock
 } = vi.hoisted(() => ({
   ipcHandlers: new Map<string, (...args: unknown[]) => unknown>(),
   listMergeRequestsMock: vi.fn(),
@@ -50,7 +62,10 @@ const {
   listTodosMock: vi.fn(),
   listWorkItemsMock: vi.fn(),
   getWorkItemDetailsMock: vi.fn(),
-  getWorkItemByProjectRefMock: vi.fn()
+  getWorkItemByProjectRefMock: vi.fn(),
+  getMergeRequestMock: vi.fn(),
+  getMergeRequestForBranchMock: vi.fn(),
+  getProjectSlugMock: vi.fn()
 }))
 
 vi.mock('electron', () => ({
@@ -71,9 +86,9 @@ vi.mock('../gitlab/client', () => ({
   getAuthenticatedViewer: vi.fn(),
   getJobTrace: getJobTraceMock,
   getIssue: getIssueMock,
-  getMergeRequest: vi.fn(),
-  getMergeRequestForBranch: vi.fn(),
-  getProjectSlug: vi.fn(),
+  getMergeRequest: getMergeRequestMock,
+  getMergeRequestForBranch: getMergeRequestForBranchMock,
+  getProjectSlug: getProjectSlugMock,
   getRateLimit: vi.fn(),
   getWorkItemByProjectRef: getWorkItemByProjectRefMock,
   listAssignableUsers: listAssignableUsersMock,
@@ -129,6 +144,7 @@ function storeWithRepos(
 
 describe('GitLab IPC handlers', () => {
   beforeEach(() => {
+    setPlatform(ORIGINAL_PLATFORM)
     ipcHandlers.clear()
     for (const mock of [
       listMergeRequestsMock,
@@ -152,7 +168,10 @@ describe('GitLab IPC handlers', () => {
       listTodosMock,
       listWorkItemsMock,
       getWorkItemDetailsMock,
-      getWorkItemByProjectRefMock
+      getWorkItemByProjectRefMock,
+      getMergeRequestMock,
+      getMergeRequestForBranchMock,
+      getProjectSlugMock
     ]) {
       mock.mockReset()
     }
@@ -258,6 +277,7 @@ describe('GitLab IPC handlers', () => {
   })
 
   it('routes local WSL project GitLab issue, MR, work-item, and todo IPC through project git options', async () => {
+    setPlatform('win32')
     const projects: ReturnType<Store['getProjects']> = [
       {
         id: 'project-1',
@@ -279,9 +299,18 @@ describe('GitLab IPC handlers', () => {
     listLabelsMock.mockResolvedValue([])
     listAssignableUsersMock.mockResolvedValue([])
     listTodosMock.mockResolvedValue([])
+    getProjectSlugMock.mockResolvedValue({ host: 'gitlab.com', path: 'stablyai/orca' })
+    getMergeRequestForBranchMock.mockResolvedValue(null)
+    getMergeRequestMock.mockResolvedValue(null)
     registerGitLabHandlers(storeWithRepos([repo()], projects) as Store)
     const localGitOptions = { wslDistro: 'Ubuntu' }
 
+    await ipcHandlers.get('gitlab:projectSlug')?.(null, { repoPath: '/local/orca' })
+    await ipcHandlers.get('gitlab:mrForBranch')?.(null, {
+      repoPath: '/local/orca',
+      branch: 'feature/wsl'
+    })
+    await ipcHandlers.get('gitlab:mr')?.(null, { repoPath: '/local/orca', iid: 8 })
     await ipcHandlers.get('gitlab:listMRs')?.(null, {
       repoPath: '/local/orca',
       state: 'opened',
@@ -319,6 +348,16 @@ describe('GitLab IPC handlers', () => {
     await ipcHandlers.get('gitlab:listAssignableUsers')?.(null, { repoPath: '/local/orca' })
     await ipcHandlers.get('gitlab:todos')?.(null, { repoPath: '/local/orca' })
 
+    const hostedReviewOptions = { localGitExecOptions: localGitOptions }
+    expect(getProjectSlugMock).toHaveBeenCalledWith('/local/orca', null, hostedReviewOptions)
+    expect(getMergeRequestForBranchMock).toHaveBeenCalledWith(
+      '/local/orca',
+      'feature/wsl',
+      null,
+      null,
+      hostedReviewOptions
+    )
+    expect(getMergeRequestMock).toHaveBeenCalledWith('/local/orca', 8, null, hostedReviewOptions)
     expect(listMergeRequestsMock).toHaveBeenCalledWith(
       '/local/orca',
       'opened',
@@ -386,6 +425,7 @@ describe('GitLab IPC handlers', () => {
   })
 
   it('routes local WSL project GitLab MR details, review, job, and pasted URL IPC through project git options', async () => {
+    setPlatform('win32')
     const projects: ReturnType<Store['getProjects']> = [
       {
         id: 'project-1',

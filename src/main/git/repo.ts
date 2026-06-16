@@ -335,8 +335,11 @@ export function getDefaultBaseRef(path: string): string | null {
   return null
 }
 
-export async function getBaseRefDefault(path: string): Promise<string | null> {
-  return getDefaultBaseRefAsync(path)
+export async function getBaseRefDefault(
+  path: string,
+  options: LocalGitExecOptions = {}
+): Promise<string | null> {
+  return getDefaultBaseRefAsync(path, options)
 }
 
 /**
@@ -352,12 +355,13 @@ export async function getBaseRefDefault(path: string): Promise<string | null> {
 export function getRemoteDrift(
   repoPath: string,
   localRef: string,
-  remoteRef: string
+  remoteRef: string,
+  options: LocalGitExecOptions = {}
 ): { ahead: number; behind: number } | null {
   try {
     const stdout = gitExecFileSync(
       ['rev-list', '--left-right', '--count', `${localRef}...${remoteRef}`],
-      { cwd: repoPath }
+      gitExecOptions(repoPath, options)
     )
     const [aheadStr, behindStr] = stdout.trim().split(/\s+/)
     const ahead = Number(aheadStr)
@@ -383,12 +387,13 @@ export function getRecentDriftSubjects(
   repoPath: string,
   localRef: string,
   remoteRef: string,
-  limit: number
+  limit: number,
+  options: LocalGitExecOptions = {}
 ): string[] {
   try {
     const stdout = gitExecFileSync(
       ['log', '--format=%s', '-n', String(limit), `${localRef}..${remoteRef}`],
-      { cwd: repoPath }
+      gitExecOptions(repoPath, options)
     )
     return stdout.split('\n').filter((s) => s.trim().length > 0)
   } catch {
@@ -578,8 +583,11 @@ export function isForEachRefExcludeUnsupportedError(error: unknown): boolean {
  * Order: remote configured on the current default branch → origin → the single
  * remote when the repo has exactly one → error.
  */
-export async function getDefaultRemote(path: string): Promise<string> {
-  const defaultRef = await getDefaultBaseRefAsync(path)
+export async function getDefaultRemote(
+  path: string,
+  options: LocalGitExecOptions = {}
+): Promise<string> {
+  const defaultRef = await getDefaultBaseRefAsync(path, options)
   // Why: getDefaultBaseRefAsync returns null when no default branch can be
   // detected (e.g. a brand-new repo with no commits on origin). Guard so we
   // don't crash on .includes(); fall through to the remote-list heuristics.
@@ -593,7 +601,7 @@ export async function getDefaultRemote(path: string): Promise<string> {
     try {
       const { stdout } = await gitExecFileAsync(
         ['config', '--get', `branch.${defaultBranch}.remote`],
-        { cwd: path }
+        gitExecOptions(path, options)
       )
       const value = stdout.trim()
       if (value) {
@@ -605,7 +613,7 @@ export async function getDefaultRemote(path: string): Promise<string> {
   }
 
   try {
-    const { stdout } = await gitExecFileAsync(['remote'], { cwd: path })
+    const { stdout } = await gitExecFileAsync(['remote'], gitExecOptions(path, options))
     const remotes = stdout
       .split('\n')
       .map((line) => line.trim())

@@ -141,4 +141,12 @@ describe('GeneralPane search entries', () => {
     expect(matchesSettingsSearch('windows host', entries)).toBe(true)
     expect(matchesSettingsSearch('wsl', entries)).toBe(true)
   })
+
+  it('omits the default project runtime setting when Windows runtimes are unsupported', () => {
+    const entries = getGeneralPaneSearchEntries({ includeProjectRuntime: false })
+
+    expect(matchesSettingsSearch('default project runtime', entries)).toBe(false)
+    expect(matchesSettingsSearch('windows host', entries)).toBe(false)
+    expect(matchesSettingsSearch('wsl', entries)).toBe(false)
+  })
 })

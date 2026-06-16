@@ -16,6 +16,7 @@ import { applyDocumentTheme } from '@/lib/document-theme'
 import { useConfirmationDialog } from '@/components/confirmation-dialog'
 import { SCROLLBACK_PRESETS_MB, getFallbackTerminalFonts } from './SettingsConstants'
 import { DEFAULT_APP_FONT_FAMILY, getDefaultVoiceSettings } from '../../../../shared/constants'
+import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { GeneralPane } from './GeneralPane'
 import { BrowserPane } from './BrowserPane'
 import { AppearancePane } from './AppearancePane'
@@ -1573,7 +1574,10 @@ function Settings(): React.JSX.Element {
                           updateRepo={updateRepo}
                           removeProject={removeProject}
                           project={project}
-                          isLocalWindowsProject={!repo.connectionId && isWindowsTerminalHost}
+                          isLocalWindowsProject={
+                            getRepoExecutionHostId(repo) === LOCAL_EXECUTION_HOST_ID &&
+                            isWindowsTerminalHost
+                          }
                           wslAvailable={windowsTerminalCapabilities.wslAvailable}
                           wslDistros={windowsTerminalCapabilities.wslDistros}
                           wslCapabilitiesLoading={windowsTerminalCapabilities.isLoading}

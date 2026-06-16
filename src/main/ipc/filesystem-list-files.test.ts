@@ -139,6 +139,30 @@ describe('filesystem-list-files', () => {
     expect(checkRgAvailableMock).toHaveBeenCalledWith('C:\\repo', 'Ubuntu')
   })
 
+  it('normalizes absolute WSL rg output for Windows-path worktrees', async () => {
+    const p1 = createMockProcess()
+    const p2 = createMockProcess()
+    getLocalGitOptionsForRegisteredWorktreeMock.mockReturnValue({ wslDistro: 'Ubuntu' })
+
+    spawnMock.mockImplementation((_cmd, args: string[]) => {
+      if (isIgnoredRgPass(args)) {
+        return p2
+      }
+      return p1
+    })
+
+    const storeMock = {} as unknown as Store
+    const promise = listQuickOpenFiles('C:\\repo', storeMock)
+
+    setTimeout(() => {
+      ;(p1.stdout as unknown as EventEmitter).emit('data', '/mnt/c/repo/src/index.ts\n')
+      p1.emit('close', 0, null)
+      p2.emit('close', 0, null)
+    }, 10)
+
+    await expect(promise).resolves.toEqual(['src/index.ts'])
+  })
+
   it('rejects rg failures instead of resolving a false-empty list', async () => {
     const p1 = createMockProcess()
     const p2 = createMockProcess()

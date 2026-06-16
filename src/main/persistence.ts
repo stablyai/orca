@@ -67,7 +67,10 @@ import type {
   WorkspaceSessionPatch,
   WorkspaceSessionState
 } from '../shared/types'
-import { normalizeProjectRuntimePreference } from '../shared/project-execution-runtime'
+import {
+  deriveGlobalWindowsRuntimeDefaultFromLegacySettings,
+  normalizeProjectRuntimePreference
+} from '../shared/project-execution-runtime'
 import { projectHostSetupProjectionFromRepos } from '../shared/project-host-setup-projection'
 import {
   buildTaskSourceContextFromRepo,
@@ -2578,6 +2581,16 @@ export class Store {
         ) {
           migratedDisabledTuiAgents.push('claude-agent-teams')
         }
+        const migratedWindowsRuntimeDefault =
+          parsed.settings?.localWindowsRuntimeDefault === undefined
+            ? deriveGlobalWindowsRuntimeDefaultFromLegacySettings(parsed.settings).defaultRuntime
+            : parsed.settings.localWindowsRuntimeDefault
+        if (
+          parsed.settings?.localWindowsRuntimeDefault === undefined &&
+          migratedWindowsRuntimeDefault.kind === 'wsl'
+        ) {
+          this.loadNeedsSave = true
+        }
         if (!autoRenameBranchFromWorkDefaultedOn) {
           this.loadNeedsSave = true
         }
@@ -2636,6 +2649,7 @@ export class Store {
             experimentalCompactWorktreeCards: undefined,
             terminalMacOptionAsAlt: migratedOptionAsAlt,
             terminalMacOptionAsAltMigrated: true,
+            localWindowsRuntimeDefault: migratedWindowsRuntimeDefault,
             floatingTerminalEnabled: migratedFloatingTerminalEnabled,
             floatingTerminalDefaultedForAllUsers: true,
             floatingTerminalCwd: migratedFloatingTerminalCwd,

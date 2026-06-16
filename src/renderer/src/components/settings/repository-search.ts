@@ -1,5 +1,6 @@
 import type { Repo } from '../../../../shared/types'
 import { isFolderRepo } from '../../../../shared/repo-kind'
+import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import type { SettingsSearchEntry } from './settings-search'
 import { translate } from '@/i18n/i18n'
 import { translateSearchKeyword } from './settings-search-keywords'
@@ -7,8 +8,20 @@ import { getRepositoryGitAuthorSearchEntries } from './repository-git-author-sea
 import { getRepositoryGitHooksSearchEntries } from './repository-git-hooks-search-entries'
 import { getRepositoryGitWorktreeSearchEntries } from './repository-git-worktree-search-entries'
 
-export function getRepositoryPaneSearchEntries(repo: Repo): SettingsSearchEntry[] {
+type RepositoryPaneSearchOptions = {
+  isLocalWindowsProject?: boolean
+  windowsRuntimeSupported?: boolean
+}
+
+export function getRepositoryPaneSearchEntries(
+  repo: Repo,
+  options: RepositoryPaneSearchOptions = {}
+): SettingsSearchEntry[] {
   const isFolder = isFolderRepo(repo)
+  const isLocalWindowsProject =
+    options.isLocalWindowsProject ??
+    (Boolean(options.windowsRuntimeSupported) &&
+      getRepoExecutionHostId(repo) === LOCAL_EXECUTION_HOST_ID)
   return [
     {
       title: translate('auto.components.settings.repository.search.7e1e456a95', 'Display Name'),
@@ -107,7 +120,7 @@ export function getRepositoryPaneSearchEntries(repo: Repo): SettingsSearchEntry[
           }
         ]
       : []),
-    ...(isFolder
+    ...(isFolder || !isLocalWindowsProject
       ? []
       : [
           {

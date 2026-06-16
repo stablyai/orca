@@ -1,3 +1,4 @@
+import { execFileSync } from 'child_process'
 import { describe, expect, it } from 'vitest'
 import {
   buildWslInteractiveLoginShellCommand,
@@ -24,8 +25,9 @@ describe('wsl login shell command helpers', () => {
     const escaped = escapeWslShCommandForWindows(command)
 
     expect(command).toContain('\'HISTFILE=/tmp/orca-history printf "$HISTFILE"\'')
-    expect(escaped).toContain('\\$HISTFILE')
-    expect(escaped).toContain('\\$_orca_wsl_shell')
+    expect(escaped).toContain('$HISTFILE')
+    expect(escaped).toContain('$_orca_wsl_shell')
+    execFileSync('sh', ['-n'], { input: escaped })
   })
 
   it('starts an interactive login shell without assuming bash', () => {

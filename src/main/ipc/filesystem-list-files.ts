@@ -11,6 +11,7 @@ import {
   buildGitLsFilesArgsForQuickOpen,
   buildRgArgsForQuickOpen,
   normalizeQuickOpenRgLine,
+  type RgOutputMode,
   shouldExcludeQuickOpenRelPath,
   shouldIncludeQuickOpenPath
 } from '../../shared/quick-open-filter'
@@ -44,10 +45,9 @@ export async function listQuickOpenFiles(
 
   const files = new Set<string>()
   const children: ChildProcess[] = []
-  // Why: when rg runs inside WSL, output paths are Linux-native
-  // (e.g. /home/user/repo/src/file.ts). Translate them back to Windows
-  // UNC paths up-front before the shared line normalizer runs.
-  const wslInfo = parseWslPath(authorizedRootPath)
+  // Why: WSL-routed rg can emit Linux-native absolute paths. UNC repos carry
+  // their distro in the path; Windows-path repos carry it in project runtime.
+  const wslDistroForOutput = parseWslPath(authorizedRootPath)?.distro ?? localGitOptions.wslDistro
 
   const { primary, ignoredPass } = buildRgArgsForQuickOpen({
     // Why: rg evaluates root-relative exclude globs against cwd only when the
@@ -68,8 +68,13 @@ export async function listQuickOpenFiles(
 
       const processLine = (rawLine: string): void => {
         const translated =
-          wslInfo && rawLine.startsWith('/') ? toWindowsWslPath(rawLine, wslInfo.distro) : rawLine
-        const relPath = normalizeQuickOpenRgLine(translated, { kind: 'cwd-relative' })
+          wslDistroForOutput && rawLine.startsWith('/')
+            ? toWindowsWslPath(rawLine, wslDistroForOutput)
+            : rawLine
+        const relPath = normalizeQuickOpenRgLine(
+          translated,
+          getQuickOpenRgOutputMode(rawLine, translated, authorizedRootPath)
+        )
         if (relPath === null) {
           return
         }
@@ -184,6 +189,22 @@ export async function listQuickOpenFiles(
     throw err
   }
   return Array.from(files)
+}
+
+function getQuickOpenRgOutputMode(
+  rawLine: string,
+  translatedLine: string,
+  rootPath: string
+): RgOutputMode {
+  if (
+    translatedLine !== rawLine ||
+    rawLine.startsWith('/') ||
+    /^[A-Za-z]:[\\/]/.test(rawLine) ||
+    rawLine.startsWith('\\\\')
+  ) {
+    return { kind: 'absolute', rootPath }
+  }
+  return { kind: 'cwd-relative' }
 }
 
 /**

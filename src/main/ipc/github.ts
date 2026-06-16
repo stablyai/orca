@@ -204,12 +204,16 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
       }
     ) => {
       const repo = assertRegisteredRepo(args, store)
+      const localGitOptions = localGitOptionArgs(store, repo)[0]
+      const hostedReviewOptionArgs: [] | [{ localGitExecOptions: { wslDistro?: string } }] =
+        localGitOptions ? [{ localGitExecOptions: localGitOptions }] : []
       const pr = await getPRForBranch(
         repo.path,
         args.branch,
         args.linkedPRNumber ?? null,
         repoConnectionId(repo),
-        args.linkedPRNumber == null ? (args.fallbackPRNumber ?? null) : null
+        args.linkedPRNumber == null ? (args.fallbackPRNumber ?? null) : null,
+        ...hostedReviewOptionArgs
       )
       // Emit pr_created when a PR is first detected for a branch.
       // Why here: the renderer polls gh:prForBranch to check PR status per worktree.
@@ -230,10 +234,12 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
     'gh:refreshPRNow',
     async (_event, args: { candidate: GitHubPRRefreshCandidate }) => {
       const repo = assertRegisteredRepo(args.candidate.repoPath, store)
+      const localGitOptions = localGitOptionArgs(store, repo)[0]
       const outcome = await refreshPRNow({
         ...args.candidate,
         repoPath: repo.path,
         repoId: repo.id,
+        ...(localGitOptions ? { localGitOptions } : {}),
         connectionId: repo.connectionId ?? args.candidate.connectionId,
         connectionState: repo.connectionId ? 'connected' : args.candidate.connectionState
       })
@@ -253,11 +259,13 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
       }
     ) => {
       const repo = assertRegisteredRepo(args.candidate.repoPath, store)
+      const localGitOptions = localGitOptionArgs(store, repo)[0]
       enqueuePRRefresh(
         {
           ...args.candidate,
           repoPath: repo.path,
           repoId: repo.id,
+          ...(localGitOptions ? { localGitOptions } : {}),
           connectionId: repo.connectionId ?? args.candidate.connectionId,
           connectionState: repo.connectionId ? 'connected' : args.candidate.connectionState
         },
@@ -281,10 +289,12 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
       }
       const candidates = args.candidates.map((candidate) => {
         const repo = assertRegisteredRepo(candidate.repoPath, store)
+        const localGitOptions = localGitOptionArgs(store, repo)[0]
         return {
           ...candidate,
           repoPath: repo.path,
           repoId: repo.id,
+          ...(localGitOptions ? { localGitOptions } : {}),
           connectionId: repo.connectionId ?? candidate.connectionId,
           connectionState: repo.connectionId ? 'connected' : candidate.connectionState
         }

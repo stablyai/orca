@@ -1129,7 +1129,7 @@ export function registerWorktreeHandlers(
                 .find(Boolean) ?? 'origin'
             )
           }
-          return getDefaultRemote(repo.path)
+          return getDefaultRemote(repo.path, getLocalProjectWorktreeGitOptions(store, repo))
         }
       })
     }

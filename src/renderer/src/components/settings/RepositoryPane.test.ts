@@ -81,7 +81,7 @@ afterEach(() => {
 
 describe('RepositoryPane search entries', () => {
   it('keeps renamed hook sections reachable through settings search', () => {
-    const entries = getRepositoryPaneSearchEntries(repo)
+    const entries = getRepositoryPaneSearchEntries(repo, { isLocalWindowsProject: true })
 
     expect(matchesSettingsSearch('setup script', entries)).toBe(true)
     expect(matchesSettingsSearch('archive script', entries)).toBe(true)
@@ -95,6 +95,25 @@ describe('RepositoryPane search entries', () => {
     expect(matchesSettingsSearch('local settings scripts', entries)).toBe(true)
     expect(matchesSettingsSearch('../worktrees', entries)).toBe(true)
     expect(matchesSettingsSearch('worktree path', entries)).toBe(true)
+  })
+
+  it('omits project runtime search for remote or unsupported repos', () => {
+    expect(matchesSettingsSearch('project runtime', getRepositoryPaneSearchEntries(repo))).toBe(
+      false
+    )
+    expect(
+      matchesSettingsSearch(
+        'project runtime',
+        getRepositoryPaneSearchEntries(
+          {
+            ...repo,
+            connectionId: 'builder',
+            executionHostId: 'ssh:builder'
+          },
+          { windowsRuntimeSupported: true }
+        )
+      )
+    ).toBe(false)
   })
 
   it('matches project identity searches on display name and path only', () => {

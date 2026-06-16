@@ -27,7 +27,7 @@ function makeRepo(overrides: Partial<Repo> = {}): Repo {
   return {
     id: 'repo-1',
     displayName: 'Repo',
-    path: 'C:\repo',
+    path: String.raw`C:\repo`,
     badgeColor: '#000000',
     addedAt: 0,
     ...overrides
@@ -67,7 +67,7 @@ describe('project runtime git options', () => {
       getLocalProjectGitExecOptions(makeStore(project), makeRepo())
     )
 
-    expect(options).toEqual({ cwd: 'C:\repo', wslDistro: 'Ubuntu' })
+    expect(options).toEqual({ cwd: String.raw`C:\repo`, wslDistro: 'Ubuntu' })
   })
 
   it('returns repair state for missing cached WSL distro before local git execution', () => {
@@ -116,6 +116,36 @@ describe('project runtime git options', () => {
       getLocalProjectGitExecOptions(makeStore(project), makeRepo())
     )
 
-    expect(options).toEqual({ cwd: 'C:\repo' })
+    expect(options).toEqual({ cwd: String.raw`C:\repo` })
+  })
+
+  it('does not apply local Windows runtime routing to SSH-owned repos', () => {
+    const project = makeProject({
+      localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' }
+    })
+
+    const runtime = withPlatform('win32', () =>
+      resolveLocalProjectRuntimeForRepo(
+        makeStore(project),
+        makeRepo({ connectionId: null, executionHostId: 'ssh:target-1' })
+      )
+    )
+
+    expect(runtime).toBeUndefined()
+  })
+
+  it('does not apply local Windows runtime routing to runtime-owned repos', () => {
+    const project = makeProject({
+      localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' }
+    })
+
+    const runtime = withPlatform('win32', () =>
+      resolveLocalProjectRuntimeForRepo(
+        makeStore(project),
+        makeRepo({ connectionId: null, executionHostId: 'runtime:env-1' })
+      )
+    )
+
+    expect(runtime).toBeUndefined()
   })
 })

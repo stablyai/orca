@@ -11,6 +11,7 @@ import {
   hasCachedWslDistros
 } from './wsl'
 import { getRepoIdFromWorktreeId } from '../shared/worktree-id'
+import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../shared/execution-host'
 
 function canResolveProjectRuntimeForRepo(store: Store): boolean {
   return typeof store.getProjects === 'function' && typeof store.getSettings === 'function'
@@ -24,7 +25,10 @@ export function resolveLocalProjectRuntimeForRepo(
   store: Store,
   repo: Repo
 ): ProjectExecutionRuntimeResolution | undefined {
-  if (repo.connectionId || !canResolveProjectRuntimeForRepo(store)) {
+  if (
+    getRepoExecutionHostId(repo) !== LOCAL_EXECUTION_HOST_ID ||
+    !canResolveProjectRuntimeForRepo(store)
+  ) {
     return undefined
   }
   const project = store.getProjects().find((entry) => entry.sourceRepoIds.includes(repo.id))

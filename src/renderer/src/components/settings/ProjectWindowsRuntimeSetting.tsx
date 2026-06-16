@@ -61,6 +61,7 @@ export function ProjectWindowsRuntimeSetting({
   const runtimeSessionWarning = getRuntimeSessionWarning(runtimeSessionSummary)
   const hasRuntimeSessions = hasActiveRuntimeSessions(runtimeSessionSummary)
   const hasPendingPreference = pendingPreference !== null
+  const defaultRuntimeLabel = getDefaultRuntimeLabel(settings)
   const commitRuntimePreference = (nextPreference: LocalWindowsRuntimePreference): void => {
     setPendingPreference(null)
     if (nextPreference.kind === 'inherit-global') {
@@ -115,7 +116,7 @@ export function ProjectWindowsRuntimeSetting({
         alignTop
         description={getProjectRuntimeDescription(resolution)}
         control={
-          <div className="flex w-52 flex-col items-stretch gap-2">
+          <div className="flex flex-col items-end gap-2">
             <SettingsSegmentedControl<ProjectRuntimeSegment>
               ariaLabel={translate(
                 'auto.components.settings.ProjectWindowsRuntimeSetting.projectRuntime',
@@ -123,14 +124,10 @@ export function ProjectWindowsRuntimeSetting({
               )}
               value={selectedPreference.kind}
               onChange={handleRuntimeChange}
-              equalWidth
               options={[
                 {
                   value: 'inherit-global',
-                  label: translate(
-                    'auto.components.settings.ProjectWindowsRuntimeSetting.inherit',
-                    'Inherit'
-                  )
+                  label: <span className="whitespace-nowrap">{defaultRuntimeLabel}</span>
                 },
                 {
                   value: 'windows-host',
@@ -235,15 +232,35 @@ function sameRuntimePreference(
   return left.kind !== 'wsl' || left.distro === (right.kind === 'wsl' ? right.distro : null)
 }
 
-function pluralize(count: number, singular: string, plural: string): string {
-  return count === 1 ? `${count} ${singular}` : `${count} ${plural}`
-}
-
 function joinRuntimeSessionParts(parts: string[]): string {
   if (parts.length <= 1) {
     return parts[0] ?? ''
   }
-  return `${parts.slice(0, -1).join(', ')} and ${parts.at(-1)}`
+  return translate(
+    'auto.components.settings.ProjectWindowsRuntimeSetting.runtimeSessionJoin',
+    '{{value0}} and {{value1}}',
+    { value0: parts.slice(0, -1).join(', '), value1: parts.at(-1) }
+  )
+}
+
+function getLiveTerminalCountLabel(count: number): string {
+  return translate(
+    count === 1
+      ? 'auto.components.settings.ProjectWindowsRuntimeSetting.liveTerminalSingular'
+      : 'auto.components.settings.ProjectWindowsRuntimeSetting.liveTerminalPlural',
+    count === 1 ? '{{count}} live terminal' : '{{count}} live terminals',
+    { count }
+  )
+}
+
+function getActiveTaskCountLabel(count: number): string {
+  return translate(
+    count === 1
+      ? 'auto.components.settings.ProjectWindowsRuntimeSetting.activeTaskSingular'
+      : 'auto.components.settings.ProjectWindowsRuntimeSetting.activeTaskPlural',
+    count === 1 ? '{{count}} active task' : '{{count}} active tasks',
+    { count }
+  )
 }
 
 function getRuntimeSessionWarning(summary?: ProjectRuntimeSessionSummary): string | null {
@@ -254,8 +271,8 @@ function getRuntimeSessionWarning(summary?: ProjectRuntimeSessionSummary): strin
   }
 
   const parts = [
-    liveTerminalCount > 0 ? pluralize(liveTerminalCount, 'live terminal', 'live terminals') : '',
-    activeTaskCount > 0 ? pluralize(activeTaskCount, 'active task', 'active tasks') : ''
+    liveTerminalCount > 0 ? getLiveTerminalCountLabel(liveTerminalCount) : '',
+    activeTaskCount > 0 ? getActiveTaskCountLabel(activeTaskCount) : ''
   ].filter((part) => part.length > 0)
 
   return translate(
@@ -294,6 +311,21 @@ function getVisibleDistroOptions(
   return options
 }
 
+function getDefaultRuntimeLabel(
+  settings: Pick<GlobalSettings, 'localWindowsRuntimeDefault'>
+): string {
+  const runtimeLabel =
+    settings.localWindowsRuntimeDefault.kind === 'wsl'
+      ? translate('auto.components.settings.ProjectWindowsRuntimeSetting.wsl', 'WSL')
+      : translate('auto.components.settings.ProjectWindowsRuntimeSetting.windows', 'Windows')
+
+  return translate(
+    'auto.components.settings.ProjectWindowsRuntimeSetting.defaultRuntime',
+    'Default ({{value0}})',
+    { value0: runtimeLabel }
+  )
+}
+
 function getProjectRuntimeDescription(
   resolution: ReturnType<typeof resolveProjectExecutionRuntime>
 ): string {
@@ -321,7 +353,7 @@ function getProjectRuntimeDescription(
     return resolution.runtime.reason === 'global-default'
       ? translate(
           'auto.components.settings.ProjectWindowsRuntimeSetting.inheritedWsl',
-          'This project runs in {{value0}} via WSL from the global default.',
+          'No project override. General settings select {{value0}} via WSL.',
           { value0: resolution.runtime.distro }
         )
       : translate(
@@ -334,7 +366,7 @@ function getProjectRuntimeDescription(
   return resolution.runtime.reason === 'global-default'
     ? translate(
         'auto.components.settings.ProjectWindowsRuntimeSetting.inheritedWindows',
-        'This project runs on Windows from the global default.'
+        'No project override. General settings select Windows.'
       )
     : translate(
         'auto.components.settings.ProjectWindowsRuntimeSetting.projectWindows',

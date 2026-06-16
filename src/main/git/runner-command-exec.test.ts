@@ -13,7 +13,14 @@ vi.mock('node:child_process', () => ({
   spawn: spawnMock
 }))
 
-import { commandExecFileAsync, ghExecFileAsync, gitExecFileAsync, gitStreamStdout } from './runner'
+import {
+  commandExecFileAsync,
+  ghExecFileAsync,
+  gitExecFileAsync,
+  gitStreamStdout,
+  translateWslOutputPaths,
+  wslAwareSpawn
+} from './runner'
 
 type MockChildProcess = EventEmitter & {
   stdout: EventEmitter
@@ -302,11 +309,28 @@ describe('runner execFile timeout handling', () => {
       )
       const shellCommand = execFileMock.mock.calls[0]?.[1]?.[5] as string
       expect(shellCommand).toContain('getent passwd')
-      expect(shellCommand).toContain(String.raw`exec "\$_orca_wsl_shell" -ilc`)
+      expect(shellCommand).toContain('exec "$_orca_wsl_shell" -ilc')
       expect(shellCommand).toContain('/mnt/c/repo')
-      expect(shellCommand).toContain('git')
+      expect(shellCommand).toContain("'git'")
       expect(shellCommand).toContain('status')
       expect(shellCommand).toContain('--short')
+    })
+  })
+
+  it('quotes WSL-routed executables before entering the shell', async () => {
+    await withPlatform('win32', async () => {
+      const child = createMockChildProcess(1234)
+      spawnMock.mockReturnValue(child)
+
+      wslAwareSpawn('codex; touch /tmp/pwned', ['--version'], {
+        cwd: String.raw`C:\repo`,
+        stdio: ['pipe', 'pipe', 'pipe'],
+        wslDistro: 'Ubuntu',
+        useWslLoginShell: true
+      })
+
+      const shellCommand = spawnMock.mock.calls[0]?.[1]?.[5] as string
+      expect(shellCommand).toContain(String.raw`'\''codex; touch /tmp/pwned'\'' '\''--version'\''`)
     })
   })
 })
@@ -399,5 +423,15 @@ describe('gitStreamStdout', () => {
 
     await rejection
     expect(child.kill).toHaveBeenCalled()
+  })
+})
+
+describe('translateWslOutputPaths', () => {
+  it('translates WSL output paths with an explicit distro for Windows cwd routing', () => {
+    expect(
+      translateWslOutputPaths('worktree /mnt/c/Users/me/repo-feature\n', 'C:\\Users\\me\\repo', {
+        wslDistro: 'Ubuntu'
+      })
+    ).toBe('worktree C:\\Users\\me\\repo-feature\n')
   })
 })

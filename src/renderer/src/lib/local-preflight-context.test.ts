@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import type { Repo, Worktree } from '../../../shared/types'
 import type { AppState } from '@/store/types'
 import {
   getLocalAgentPreflightContext,
@@ -9,7 +10,12 @@ import {
   localPreflightContextKey
 } from './local-preflight-context'
 
-function makeState(args: { repoPath?: string | null; worktreePath?: string | null }): AppState {
+function makeState(args: {
+  repoPath?: string | null
+  worktreePath?: string | null
+  repo?: Partial<Repo>
+  worktree?: Partial<Worktree>
+}): AppState {
   const repoId = 'repo-1'
   const worktreeId = `${repoId}::worktree-1`
   return {
@@ -21,7 +27,8 @@ function makeState(args: { repoPath?: string | null; worktreePath?: string | nul
         : [
             {
               id: repoId,
-              path: args.repoPath
+              path: args.repoPath,
+              ...args.repo
             }
           ],
     worktreesByRepo:
@@ -32,7 +39,8 @@ function makeState(args: { repoPath?: string | null; worktreePath?: string | nul
               {
                 id: worktreeId,
                 repoId,
-                path: args.worktreePath
+                path: args.worktreePath,
+                ...args.worktree
               }
             ]
           }
@@ -48,11 +56,12 @@ describe('local preflight context', () => {
 
   it('returns a stable snapshot for repeated WSL selector reads', () => {
     const state = makeState({
+      repoPath: '/Users/alice/repo',
       worktreePath: String.raw`\\wsl.localhost\Ubuntu\home\alice\repo`
     })
 
-    const first = getLocalPreflightContext(state)
-    const second = getLocalPreflightContext(state)
+    const first = getLocalPreflightContext(state, 'darwin')
+    const second = getLocalPreflightContext(state, 'darwin')
 
     expect(first).toBe(second)
     expect(first).toEqual({ wslDistro: 'Ubuntu' })
@@ -63,18 +72,22 @@ describe('local preflight context', () => {
     const fromRepo = getLocalPreflightContext(
       makeState({
         repoPath: String.raw`\\wsl.localhost\Ubuntu\home\alice\repo`
-      })
+      }),
+      'darwin'
     )
     const fromWorktree = getLocalPreflightContext(
       makeState({
         repoPath: '/Users/alice/repo',
         worktreePath: String.raw`\\wsl.localhost\Ubuntu\home\alice\repo`
-      })
+      }),
+      'darwin'
     )
     const fromOtherDistro = getLocalPreflightContext(
       makeState({
+        repoPath: '/Users/alice/repo',
         worktreePath: String.raw`\\wsl.localhost\Debian\home\alice\repo`
-      })
+      }),
+      'darwin'
     )
 
     expect(fromRepo).toBe(fromWorktree)
@@ -273,6 +286,18 @@ describe('local preflight context', () => {
     expect(getLocalAgentPreflightContext(state, 'linux')).toBeUndefined()
   })
 
+  it('ignores stale explicit agent runtime settings on non-Windows hosts', () => {
+    const state = {
+      ...makeState({ repoPath: 'C:\\Users\\alice\\repo' }),
+      settings: {
+        localAgentRuntime: 'wsl',
+        localAgentWslDistro: 'Ubuntu'
+      }
+    } as AppState
+
+    expect(getLocalAgentPreflightContext(state, 'darwin')).toBeUndefined()
+  })
+
   it('returns repair context for explicit WSL agent location without a selected distro', () => {
     const state = {
       ...makeState({ repoPath: 'C:\\Users\\alice\\repo' }),
@@ -409,6 +434,60 @@ describe('local preflight context', () => {
         cacheKey: 'repo-1:wsl:Ubuntu'
       }
     })
+  })
+
+  it('does not create a local project runtime for SSH repos', () => {
+    const state = makeState({
+      repoPath: 'C:\\Users\\alice\\repo',
+      repo: { connectionId: 'builder', executionHostId: 'ssh:builder' }
+    })
+
+    expect(getLocalProjectExecutionRuntimeContext(state, undefined, 'win32')).toBeUndefined()
+    expect(getLocalRepoProjectExecutionRuntimeContext(state, 'repo-1', 'win32')).toBeUndefined()
+    expect(getLocalPreflightContext(state, 'win32')).toBeUndefined()
+  })
+
+  it('uses the requested worktree repo owner before resolving a local project runtime', () => {
+    const state = {
+      ...makeState({
+        repoPath: 'C:\\Users\\alice\\repo',
+        worktreePath: 'C:\\Users\\alice\\repo'
+      }),
+      repos: [
+        {
+          id: 'repo-1',
+          path: 'C:\\Users\\alice\\repo',
+          executionHostId: 'local'
+        },
+        {
+          id: 'repo-ssh',
+          path: '/remote/repo',
+          connectionId: 'builder',
+          executionHostId: 'ssh:builder'
+        }
+      ],
+      worktreesByRepo: {
+        'repo-1': [
+          {
+            id: 'repo-1::worktree-1',
+            repoId: 'repo-1',
+            path: 'C:\\Users\\alice\\repo'
+          }
+        ],
+        'repo-ssh': [
+          {
+            id: 'repo-ssh::worktree-1',
+            repoId: 'repo-ssh',
+            path: '/remote/repo',
+            hostId: 'ssh:builder'
+          }
+        ]
+      }
+    } as unknown as AppState
+
+    expect(getLocalProjectExecutionRuntimeContext(state, 'repo-ssh::worktree-1', 'win32')).toBe(
+      undefined
+    )
   })
 
   it('returns repair when the resolved project WSL distro is unavailable', () => {

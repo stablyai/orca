@@ -263,6 +263,19 @@ describe('createHostedReview', () => {
     expect(getUpstreamStatusMock).toHaveBeenCalledWith('/repo', undefined, {
       wslDistro: 'Ubuntu'
     })
+    expect(getProjectSlugMock).toHaveBeenCalledWith('/repo', null, {
+      localGitExecOptions: { wslDistro: 'Ubuntu' }
+    })
+    expect(getRepoSlugMock).toHaveBeenCalledWith('/repo', null, {
+      localGitExecOptions: { wslDistro: 'Ubuntu' }
+    })
+    expect(getHostedReviewForBranchMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        repoPath: '/repo',
+        branch: 'feature',
+        localGitExecOptions: { wslDistro: 'Ubuntu' }
+      })
+    )
     expect(ghExecFileAsyncMock).toHaveBeenCalledWith(
       ['auth', 'status', '--hostname', 'github.com'],
       { cwd: '/repo', wslDistro: 'Ubuntu' }

@@ -5,7 +5,10 @@ import {
   resolveProjectExecutionRuntime,
   type ProjectExecutionRuntimeResolution
 } from '../../../shared/project-execution-runtime'
+import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
+import type { Repo, Worktree } from '../../../shared/types'
 import { getProviderRuntimeContextKey } from './provider-runtime-context'
+import { getRendererAppPlatform } from './renderer-app-platform'
 import {
   getCachedWindowsTerminalCapabilities,
   hasCachedWindowsTerminalCapabilities
@@ -97,9 +100,12 @@ export function getLocalProjectExecutionRuntimeContext(
   }
 
   const worktree = getLocalWorktree(state, worktreeId)
-  const repo = (state.repos ?? []).find((entry) => entry.id === state.activeRepoId)
+  const repo = getLocalRuntimeRepoForWorktree(state, worktree)
+  if (!isLocalRuntimeRepo(repo) || !isLocalRuntimeWorktree(worktree)) {
+    return undefined
+  }
   const projectId = getLocalPreflightProjectId(state, worktreeId)
-  const project = state.projects?.find((entry) => entry.id === projectId)
+  const project = getLocalRuntimeProject(state, projectId, repo.id)
   const localPath = worktree?.path ?? repo?.path
   const worktreeWslDistro = getWslDistroFromPath(localPath)
   const projectRuntimePreference =
@@ -129,9 +135,10 @@ export function getLocalRepoProjectExecutionRuntimeContext(
   }
 
   const repo = (state.repos ?? []).find((entry) => entry.id === repoId)
-  const project = state.projects?.find(
-    (entry) => entry.id === repoId || entry.sourceRepoIds.includes(repoId)
-  )
+  if (!isLocalRuntimeRepo(repo)) {
+    return undefined
+  }
+  const project = getLocalRuntimeProject(state, repoId, repo.id)
   const projectId = project?.id ?? repoId
   const repoWslDistro = getWslDistroFromPath(repo?.path)
   const projectRuntimePreference =
@@ -186,7 +193,7 @@ export function getLocalAgentPreflightContext(
     return getProjectRuntimePreflightContext(projectRuntime)
   }
 
-  const explicitAgentRuntime = state.settings?.localAgentRuntime
+  const explicitAgentRuntime = appPlatform === 'win32' ? state.settings?.localAgentRuntime : null
   if (explicitAgentRuntime === 'host') {
     return getProjectRuntimePreflightContext(
       resolveProjectExecutionRuntime({
@@ -232,25 +239,6 @@ export function getLocalAgentPreflightContext(
   return undefined
 }
 
-function getRendererAppPlatform(): NodeJS.Platform {
-  const preloadPlatform =
-    typeof window === 'undefined' ? undefined : window.api?.platform?.get?.()?.platform
-  if (preloadPlatform) {
-    return preloadPlatform
-  }
-  const userAgent = typeof navigator === 'undefined' ? '' : navigator.userAgent
-  if (userAgent.includes('Windows')) {
-    return 'win32'
-  }
-  if (userAgent.includes('Mac')) {
-    return 'darwin'
-  }
-  if (userAgent) {
-    return 'linux'
-  }
-  return 'win32'
-}
-
 function getCachedLocalProjectRuntimeWslContext(): LocalProjectRuntimeWslContext {
   // Why: preflight selectors are synchronous. Reuse an existing capability
   // answer when available without spawning WSL probes from store reads.
@@ -265,22 +253,56 @@ function getCachedLocalProjectRuntimeWslContext(): LocalProjectRuntimeWslContext
 }
 
 function getLocalPreflightWslDistro(state: AppState): string | null {
-  const activeWorktree = state.activeWorktreeId
-    ? Object.values(state.worktreesByRepo ?? {})
-        .flat()
-        .find((worktree) => worktree.id === state.activeWorktreeId)
-    : null
-  const activePath =
-    activeWorktree?.path ?? (state.repos ?? []).find((repo) => repo.id === state.activeRepoId)?.path
+  const activeWorktree = getLocalWorktree(state)
+  const repo = getLocalRuntimeRepoForWorktree(state, activeWorktree)
+  if (!isLocalRuntimeRepo(repo) || !isLocalRuntimeWorktree(activeWorktree)) {
+    return null
+  }
+  const activePath = activeWorktree?.path ?? repo.path
   return getWslDistroFromPath(activePath)
 }
 
-function getLocalWorktree(state: LocalProjectRuntimeState, worktreeId?: string | null) {
+function getLocalRuntimeRepoForWorktree(
+  state: LocalProjectRuntimeState,
+  worktree?: Pick<Worktree, 'repoId'> | null
+): Pick<Repo, 'id' | 'path' | 'connectionId' | 'executionHostId'> | undefined {
+  const repoId = worktree?.repoId ?? state.activeRepoId
+  return repoId ? (state.repos ?? []).find((repo) => repo.id === repoId) : undefined
+}
+
+function isLocalRuntimeRepo(
+  repo?: Pick<Repo, 'connectionId' | 'executionHostId'> | null
+): repo is Pick<Repo, 'id' | 'path' | 'connectionId' | 'executionHostId'> {
+  if (!repo) {
+    return false
+  }
+  return getRepoExecutionHostId(repo) === LOCAL_EXECUTION_HOST_ID
+}
+
+function isLocalRuntimeWorktree(worktree?: Pick<Worktree, 'hostId'> | null): boolean {
+  return !worktree?.hostId || worktree.hostId === LOCAL_EXECUTION_HOST_ID
+}
+
+function getLocalRuntimeProject(
+  state: LocalProjectRuntimeState,
+  projectId: string,
+  repoId: string
+) {
+  return state.projects?.find(
+    (entry) =>
+      entry.id === projectId || entry.id === repoId || entry.sourceRepoIds?.includes(repoId)
+  )
+}
+
+function getLocalWorktree(
+  state: LocalProjectRuntimeState,
+  worktreeId?: string | null
+): Pick<Worktree, 'id' | 'repoId' | 'projectId' | 'path' | 'hostId'> | null {
   const targetWorktreeId = worktreeId ?? state.activeWorktreeId
   return targetWorktreeId
-    ? Object.values(state.worktreesByRepo ?? {})
+    ? (Object.values(state.worktreesByRepo ?? {})
         .flat()
-        .find((worktree) => worktree.id === targetWorktreeId)
+        .find((worktree) => worktree.id === targetWorktreeId) ?? null)
     : null
 }
 
