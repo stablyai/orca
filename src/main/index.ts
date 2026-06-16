@@ -197,7 +197,7 @@ if (appImageCliRedirect.redirected) {
 // worktree id change via migrateWorktreeIdentity + a rename-aware worktrees:changed
 // handler, so an old->new id change is no longer mistaken for a deletion. Flip off
 // to disable the on-disk move (branch + display rename still happen) if needed.
-const ENABLE_FIRST_WORK_FOLDER_RENAME = true
+const ENABLE_FIRST_WORK_FOLDER_RENAME = false
 
 // Why: the store/runtime singletons live here in index.ts; injecting them keeps
 // the rename orchestrator free of module-level state and unit-testable.
