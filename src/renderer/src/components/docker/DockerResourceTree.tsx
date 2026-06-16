@@ -378,7 +378,6 @@ function ContainerRow({
         )}
       />
       <span className="flex-1 truncate">{c.names[0] ?? c.id.slice(0, 12)}</span>
-      <span className="truncate text-xs text-muted-foreground">{c.image}</span>
     </button>
   )
 }
