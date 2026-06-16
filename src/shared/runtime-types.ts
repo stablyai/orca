@@ -302,6 +302,9 @@ export type RuntimeFileReadResult = {
 export type RuntimeTerminalPathResolution = {
   worktree: string
   relativePath: string | null
+  /** Absolute on-disk path (or remote path), present when relativePath is.
+   *  Used to build a file:// URL for opening HTML in a browser tab. */
+  absolutePath: string | null
   exists: boolean
   isDirectory: boolean
 }

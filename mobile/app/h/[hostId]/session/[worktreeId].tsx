@@ -2742,6 +2742,12 @@ export default function SessionScreen() {
           if (!resolved.exists || resolved.isDirectory || !resolved.relativePath) {
             return
           }
+          // Why: HTML opens in a browser pane (streamed from the desktop),
+          // matching desktop's terminal-click behavior, instead of a file view.
+          if (classifyMobileArtifact(resolved.relativePath) === 'html' && resolved.absolutePath) {
+            void handleCreateBrowser('file://' + resolved.absolutePath)
+            return
+          }
           const openResponse = await client.sendRequest(
             'files.open',
             { worktree, relativePath: resolved.relativePath },
@@ -2750,7 +2756,12 @@ export default function SessionScreen() {
           if (!openResponse.ok) {
             return
           }
+          // Why: the desktop creates the file tab asynchronously; a single poll
+          // can race it, so refresh a few times to reliably pick it up and
+          // switch to it (the file browser gets this for free via router.back).
           scheduleDelayedAction(() => void fetchSessionTabs(), 300)
+          scheduleDelayedAction(() => void fetchSessionTabs(), 900)
+          scheduleDelayedAction(() => void fetchSessionTabs(), 1800)
         } catch {
           // Resolution/open is best-effort; a failed tap silently no-ops.
         }

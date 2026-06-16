@@ -427,6 +427,7 @@ describe('RuntimeFileCommands', () => {
       expect(result).toEqual({
         worktree: 'wt-1',
         relativePath: 'src/index.ts',
+        absolutePath: '/repo/src/index.ts',
         exists: true,
         isDirectory: false
       })
@@ -468,6 +469,7 @@ describe('RuntimeFileCommands', () => {
       expect(result).toEqual({
         worktree: 'wt-1',
         relativePath: null,
+        absolutePath: null,
         exists: false,
         isDirectory: false
       })

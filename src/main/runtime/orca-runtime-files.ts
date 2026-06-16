@@ -271,6 +271,7 @@ export class RuntimeFileCommands {
     const empty: RuntimeTerminalPathResolution = {
       worktree: worktree.id,
       relativePath: null,
+      absolutePath: null,
       exists: false,
       isDirectory: false
     }
@@ -300,6 +301,7 @@ export class RuntimeFileCommands {
       return {
         worktree: worktree.id,
         relativePath,
+        absolutePath,
         exists: true,
         isDirectory: stats.isDirectory()
       }
@@ -311,7 +313,7 @@ export class RuntimeFileCommands {
         isENOENT(error) ||
         (connectionId && RuntimeFileCommands.isRemoteNotFoundErrorMessage(error))
       ) {
-        return { ...empty, relativePath }
+        return { ...empty, relativePath, absolutePath }
       }
       throw error
     }
