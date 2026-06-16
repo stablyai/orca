@@ -204,6 +204,129 @@ describe('resolveAgentForegroundProcess', () => {
     )
   })
 
+  it('recognizes a Windows shell-rooted agent when only one candidate matches the worktree path', async () => {
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+    execFileMock.mockImplementation(
+      (_cmd: string, _args: string[], _opts: unknown, cb: unknown) => {
+        const callback = cb as (err: unknown, result: { stdout: string; stderr: string }) => void
+        callback(null, {
+          stdout: [
+            'CommandLine=powershell.exe',
+            'CreationDate=20260616110000.000000-000',
+            'ExecutablePath=C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe',
+            'Name=powershell.exe',
+            'ParentProcessId=99',
+            'ProcessId=100',
+            '',
+            'CommandLine=node C:\\Users\\dev\\AppData\\Roaming\\npm\\node_modules\\@openai\\codex\\bin\\codex.js --cwd C:\\repo\\orca',
+            'CreationDate=20260616110100.000000-000',
+            'ExecutablePath=C:\\Program Files\\nodejs\\node.exe',
+            'Name=node.exe',
+            'ParentProcessId=100',
+            'ProcessId=101',
+            '',
+            'CommandLine=node C:\\Users\\dev\\AppData\\Roaming\\npm\\node_modules\\@google\\gemini-cli\\bundle\\gemini.mjs --cwd C:\\repo\\other',
+            'CreationDate=20260616110200.000000-000',
+            'ExecutablePath=C:\\Program Files\\nodejs\\node.exe',
+            'Name=node.exe',
+            'ParentProcessId=100',
+            'ProcessId=102',
+            ''
+          ].join('\r\n'),
+          stderr: ''
+        })
+      }
+    )
+
+    await expect(
+      resolveAgentForegroundProcess(100, 'powershell.exe', {
+        contextPaths: ['C:\\repo\\orca']
+      })
+    ).resolves.toBe('codex')
+  })
+
+  it('recognizes the deepest Windows shell-rooted agent when candidates share one lineage', async () => {
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+    execFileMock.mockImplementation(
+      (_cmd: string, _args: string[], _opts: unknown, cb: unknown) => {
+        const callback = cb as (err: unknown, result: { stdout: string; stderr: string }) => void
+        callback(null, {
+          stdout: [
+            'CommandLine=powershell.exe',
+            'CreationDate=20260616110000.000000-000',
+            'ExecutablePath=C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe',
+            'Name=powershell.exe',
+            'ParentProcessId=99',
+            'ProcessId=100',
+            '',
+            'CommandLine=codex --cwd C:\\repo\\orca',
+            'CreationDate=20260616110100.000000-000',
+            'ExecutablePath=C:\\Users\\dev\\AppData\\Roaming\\npm\\codex.cmd',
+            'Name=codex.exe',
+            'ParentProcessId=100',
+            'ProcessId=101',
+            '',
+            'CommandLine=gemini --cwd C:\\repo\\orca',
+            'CreationDate=20260616110200.000000-000',
+            'ExecutablePath=C:\\Users\\dev\\AppData\\Roaming\\npm\\gemini.cmd',
+            'Name=gemini.exe',
+            'ParentProcessId=101',
+            'ProcessId=102',
+            ''
+          ].join('\r\n'),
+          stderr: ''
+        })
+      }
+    )
+
+    await expect(
+      resolveAgentForegroundProcess(100, 'powershell.exe', {
+        contextPaths: ['C:\\repo\\orca']
+      })
+    ).resolves.toBe('gemini')
+  })
+
+  it('fails closed for sibling Windows agents that both match the same worktree path', async () => {
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+    execFileMock.mockImplementation(
+      (_cmd: string, _args: string[], _opts: unknown, cb: unknown) => {
+        const callback = cb as (err: unknown, result: { stdout: string; stderr: string }) => void
+        callback(null, {
+          stdout: [
+            'CommandLine=powershell.exe',
+            'CreationDate=20260616110000.000000-000',
+            'ExecutablePath=C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe',
+            'Name=powershell.exe',
+            'ParentProcessId=99',
+            'ProcessId=100',
+            '',
+            'CommandLine=codex --cwd C:\\repo\\orca',
+            'CreationDate=20260616110100.000000-000',
+            'ExecutablePath=C:\\Users\\dev\\AppData\\Roaming\\npm\\codex.cmd',
+            'Name=codex.exe',
+            'ParentProcessId=100',
+            'ProcessId=101',
+            '',
+            'CommandLine=gemini --cwd C:\\repo\\orca',
+            'CreationDate=20260616110200.000000-000',
+            'ExecutablePath=C:\\Users\\dev\\AppData\\Roaming\\npm\\gemini.cmd',
+            'Name=gemini.exe',
+            'ParentProcessId=100',
+            'ProcessId=102',
+            ''
+          ].join('\r\n'),
+          stderr: ''
+        })
+      }
+    )
+
+    await expect(
+      resolveAgentForegroundProcess(100, 'powershell.exe', {
+        contextPaths: ['C:\\repo\\orca']
+      })
+    ).resolves.toBe('powershell.exe')
+  })
+
   it('fails closed when Windows has multiple matching wrapper descendants', async () => {
     Object.defineProperty(process, 'platform', { value: 'win32' })
     execFileMock.mockImplementation(

@@ -34,10 +34,12 @@ import {
   recognizeAgentProcessFromCommandLine
 } from '../../shared/agent-process-recognition'
 import { isShellProcess } from '../../shared/shell-process-detection'
+import { splitWorktreeIdForFilesystem } from '../../shared/worktree-id'
+import { parsePtySessionId } from './pty-session-id'
 
 const PANE_IDENTITY_ENV_KEYS = ['ORCA_PANE_KEY', 'ORCA_TAB_ID', 'ORCA_WORKTREE_ID'] as const
 const FOREGROUND_AGENT_CACHE_TTL_MS = 1000
-const STARTUP_AGENT_FOREGROUND_BOOTSTRAP_MS = 2_000
+const STARTUP_AGENT_FOREGROUND_BOOTSTRAP_MS = 5_000
 const PTY_SPAWN_HEALTH_TIMEOUT_MS = 2_000
 
 export type PtySubprocessOptions = {
@@ -116,6 +118,14 @@ function getWslContextFromPreferredDistro(
 ): { distro: string } | undefined {
   const trimmed = distro?.trim()
   return trimmed ? { distro: trimmed } : undefined
+}
+
+function getAgentForegroundContextPaths(opts: PtySubprocessOptions): string[] {
+  const worktreeId = parsePtySessionId(opts.sessionId).worktreeId
+  const worktreePath = worktreeId
+    ? splitWorktreeIdForFilesystem(worktreeId)?.worktreePath
+    : undefined
+  return [...new Set([opts.cwd, worktreePath].filter((path): path is string => Boolean(path)))]
 }
 
 function removeInheritedElectronRunAsNode(env: Record<string, string>): void {
@@ -542,6 +552,7 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
   let disposed = false
   let nodePtyKillIssued = false
   let cachedAgentForeground: { processName: string; refreshedAt: number } | null = null
+  const agentForegroundContextPaths = getAgentForegroundContextPaths(opts)
   const startupAgentRecognition = recognizeAgentProcessFromCommandLine(opts.command)
   let startupAgentForeground: { processName: string; expiresAt: number } | null =
     startupAgentRecognition
@@ -581,7 +592,9 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
     // Why: daemon foreground reads are sync and run on the IPC hot path.
     // Refresh shell/wrapper-derived identities (powershell/node -> codex/etc.)
     // in the background and serve them from a short cache on later reads.
-    void resolveAgentForegroundProcess(proc.pid, fallbackProcess)
+    void resolveAgentForegroundProcess(proc.pid, fallbackProcess, {
+      contextPaths: agentForegroundContextPaths
+    })
       .then((processName) => {
         if (dead) {
           return

@@ -10,7 +10,7 @@ import { resolveProcessCwd } from './process-cwd'
 import { existsSync } from 'fs'
 import * as pty from 'node-pty'
 import { parseWslPath, isWslAvailable } from '../wsl'
-import { splitWorktreeId } from '../../shared/worktree-id'
+import { splitWorktreeId, splitWorktreeIdForFilesystem } from '../../shared/worktree-id'
 import {
   injectHistoryEnv,
   updateHistFileForFallback,
@@ -46,6 +46,7 @@ const PANE_IDENTITY_ENV_KEYS = ['ORCA_PANE_KEY', 'ORCA_TAB_ID', 'ORCA_WORKTREE_I
 let ptyCounter = 0
 const ptyProcesses = new Map<string, pty.IPty>()
 const ptyShellName = new Map<string, string>()
+const ptyAgentForegroundContextPaths = new Map<string, string[]>()
 // Why: node-pty's onData/onExit register native NAPI ThreadSafeFunction
 // callbacks. If the PTY is killed without disposing these listeners, the
 // stale callbacks survive into node::FreeEnvironment() where NAPI attempts
@@ -129,10 +130,21 @@ function getWslContextFromPreferredDistro(
   return trimmed ? { distro: trimmed } : undefined
 }
 
+function getAgentForegroundContextPaths(
+  cwd: string | undefined,
+  worktreeId: string | undefined
+): string[] {
+  const worktreePath = worktreeId
+    ? splitWorktreeIdForFilesystem(worktreeId)?.worktreePath
+    : undefined
+  return [...new Set([cwd, worktreePath].filter((path): path is string => Boolean(path)))]
+}
+
 function clearPtyState(id: string): void {
   disposePtyListeners(id)
   ptyProcesses.delete(id)
   ptyShellName.delete(id)
+  ptyAgentForegroundContextPaths.delete(id)
   ptyLoadGeneration.delete(id)
 }
 
@@ -507,6 +519,10 @@ export class LocalPtyProvider implements IPtyProvider {
     const proc = spawnResult.process
     ptyProcesses.set(id, proc)
     ptyShellName.set(id, basename(shellPath))
+    ptyAgentForegroundContextPaths.set(
+      id,
+      getAgentForegroundContextPaths(args.cwd, args.worktreeId)
+    )
     ptyLoadGeneration.set(id, loadGeneration)
     this.opts.onSpawned?.(id)
 
@@ -711,7 +727,9 @@ export class LocalPtyProvider implements IPtyProvider {
       return null
     }
     try {
-      return await resolveAgentForegroundProcess(proc.pid, proc.process || null)
+      return await resolveAgentForegroundProcess(proc.pid, proc.process || null, {
+        contextPaths: ptyAgentForegroundContextPaths.get(id)
+      })
     } catch {
       return null
     }
