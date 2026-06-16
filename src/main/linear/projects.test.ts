@@ -52,6 +52,27 @@ function rawProject(id: string) {
   }
 }
 
+function rawProjectWithName(id: string, name: string) {
+  return {
+    ...rawProject(id),
+    name
+  }
+}
+
+function projectSearchConnectionResponse(
+  projects: ReturnType<typeof rawProject>[],
+  pageInfo: { hasNextPage: boolean; endCursor?: string | null } = { hasNextPage: false }
+) {
+  return {
+    data: {
+      searchProjects: {
+        nodes: projects,
+        pageInfo
+      }
+    }
+  }
+}
+
 function rawCustomView(id: string) {
   return {
     id,
@@ -220,6 +241,43 @@ describe('Linear project queries', () => {
       id: 'project-1',
       first: 20,
       after: 'project-cursor-100'
+    })
+  })
+
+  it('loads exact project name matches beyond the first search page', async () => {
+    rawRequest
+      .mockResolvedValueOnce(
+        projectSearchConnectionResponse(
+          Array.from({ length: 50 }, (_, index) =>
+            rawProjectWithName(`project-${index + 1}`, `Other ${index + 1}`)
+          ),
+          { hasNextPage: true, endCursor: 'project-cursor-50' }
+        )
+      )
+      .mockResolvedValueOnce(
+        projectSearchConnectionResponse([
+          rawProjectWithName('project-launch', 'Launch'),
+          rawProjectWithName('project-launch-lower', 'launch')
+        ])
+      )
+    const { listProjectsByExactName } = await import('./projects')
+
+    const result = await listProjectsByExactName('Launch', 'workspace-1', true)
+
+    expect(result).toMatchObject([
+      { id: 'project-launch', name: 'Launch' },
+      { id: 'project-launch-lower', name: 'launch' }
+    ])
+    expect(rawRequest).toHaveBeenCalledTimes(2)
+    expect(rawRequest.mock.calls[0]?.[1]).toMatchObject({
+      term: 'Launch',
+      first: 50
+    })
+    expect(rawRequest.mock.calls[0]?.[1]).not.toHaveProperty('after')
+    expect(rawRequest.mock.calls[1]?.[1]).toMatchObject({
+      term: 'Launch',
+      first: 50,
+      after: 'project-cursor-50'
     })
   })
 

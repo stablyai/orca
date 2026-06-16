@@ -316,13 +316,14 @@ const PROJECTS_QUERY = `
 `
 
 const SEARCH_PROJECTS_QUERY = `
-  query OrcaLinearProjectSearch($term: String!, $first: Int) {
-    searchProjects(term: $term, first: $first) {
+  query OrcaLinearProjectSearch($term: String!, $first: Int, $after: String) {
+    searchProjects(term: $term, first: $first, after: $after) {
       nodes {
         ${ORCA_PROJECT_FIELDS}
       }
       pageInfo {
         hasNextPage
+        endCursor
       }
     }
   }
@@ -482,9 +483,10 @@ const CUSTOM_VIEW_PROJECTS_QUERY = `
 `
 
 const inFlight = new Map<string, Promise<unknown>>()
+const LINEAR_PROJECT_API_PAGE_SIZE_MAX = 50
 
 function clampLimit(limit = 20): number {
-  return Math.min(Math.max(1, Math.floor(limit)), 50)
+  return Math.min(Math.max(1, Math.floor(limit)), LINEAR_PROJECT_API_PAGE_SIZE_MAX)
 }
 
 function coalesce<T>(key: string, load: () => Promise<T>, force = false): Promise<T> {
@@ -849,6 +851,70 @@ export async function listProjects(
       return {
         items: (connection?.nodes ?? []).map((project) => mapProjectForWorkspace(entry, project)),
         hasMore: !!connection?.pageInfo?.hasNextPage
+      }
+    },
+    force
+  )
+}
+
+export async function listProjectsByExactName(
+  name: string,
+  workspaceId: LinearConcreteWorkspaceId,
+  force = false
+): Promise<LinearProjectSummary[]> {
+  const projectName = name.trim()
+  if (!projectName) {
+    throw new Error('Project name is required')
+  }
+  const normalized = projectName.toLocaleLowerCase()
+  const concreteWorkspaceId = normalizeConcreteWorkspaceId(workspaceId)
+  const key = `listProjectsByExactName:${concreteWorkspaceId}:${normalized}`
+  return coalesce(
+    key,
+    async () => {
+      const entries = getClients(concreteWorkspaceId)
+      const entry = entries[0]
+      if (!entry) {
+        return []
+      }
+      await acquire()
+      try {
+        const matches: LinearProjectSummary[] = []
+        let after: string | undefined
+        while (true) {
+          const result = await entry.client.client.rawRequest<
+            ProjectConnectionResponse,
+            LinearRawVariables
+          >(SEARCH_PROJECTS_QUERY, {
+            term: projectName,
+            first: LINEAR_PROJECT_API_PAGE_SIZE_MAX,
+            ...(after ? { after } : {})
+          })
+          const connection = result.data?.searchProjects
+          for (const project of connection?.nodes ?? []) {
+            if (project.name.trim().toLocaleLowerCase() === normalized) {
+              matches.push(mapProjectForWorkspace(entry, project))
+            }
+          }
+          const nextCursor = connection?.pageInfo?.endCursor ?? undefined
+          if (
+            connection?.pageInfo?.hasNextPage !== true ||
+            !nextCursor ||
+            nextCursor === after ||
+            (connection.nodes ?? []).length === 0
+          ) {
+            break
+          }
+          after = nextCursor
+        }
+        return matches
+      } catch (error) {
+        if (isAuthError(error)) {
+          clearToken(entry.workspace.id)
+        }
+        throw error
+      } finally {
+        release()
       }
     },
     force
