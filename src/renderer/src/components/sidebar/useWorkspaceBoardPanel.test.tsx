@@ -73,12 +73,50 @@ describe('useWorkspaceBoardPanel', () => {
     await updatePanel((state) => state.toggleWorkspaceBoard())
 
     expect(panelState().workspaceBoardOpen).toBe(true)
+    expect(panelState().workspaceBoardRenderedOpen).toBe(true)
+    expect(panelState().workspaceBoardDragPreviewOpen).toBe(false)
     expect(mocks.recordFeatureInteraction).toHaveBeenCalledExactlyOnceWith('workspace-board')
 
     await updatePanel((state) => state.toggleWorkspaceBoard())
 
     expect(panelState().workspaceBoardOpen).toBe(false)
+    expect(panelState().workspaceBoardRenderedOpen).toBe(false)
     expect(mocks.recordFeatureInteraction).toHaveBeenCalledOnce()
+  })
+
+  it('renders a drag preview without recording an open interaction', async () => {
+    await renderHookProbe()
+
+    await updatePanel((state) => state.previewWorkspaceBoardFromDrag())
+
+    expect(panelState().workspaceBoardOpen).toBe(false)
+    expect(panelState().workspaceBoardRenderedOpen).toBe(true)
+    expect(panelState().workspaceBoardDragPreviewOpen).toBe(true)
+    expect(mocks.recordFeatureInteraction).not.toHaveBeenCalled()
+  })
+
+  it('cancels an uncommitted drag preview', async () => {
+    await renderHookProbe()
+
+    await updatePanel((state) => state.previewWorkspaceBoardFromDrag())
+    await updatePanel((state) => state.cancelWorkspaceBoardDragPreview())
+
+    expect(panelState().workspaceBoardOpen).toBe(false)
+    expect(panelState().workspaceBoardRenderedOpen).toBe(false)
+    expect(panelState().workspaceBoardDragPreviewOpen).toBe(false)
+  })
+
+  it('solidifies a drag preview and keeps the board open after drag cleanup', async () => {
+    await renderHookProbe()
+
+    await updatePanel((state) => state.previewWorkspaceBoardFromDrag())
+    await updatePanel((state) => state.solidifyWorkspaceBoardFromDrag())
+    await updatePanel((state) => state.cancelWorkspaceBoardDragPreview())
+
+    expect(panelState().workspaceBoardOpen).toBe(true)
+    expect(panelState().workspaceBoardRenderedOpen).toBe(true)
+    expect(panelState().workspaceBoardDragPreviewOpen).toBe(false)
+    expect(mocks.recordFeatureInteraction).toHaveBeenCalledExactlyOnceWith('workspace-board')
   })
 
   it('keeps the board open on Escape while a nested board menu is open', async () => {

@@ -1384,6 +1384,15 @@
   animation-timing-function: cubic-bezier(0.7, 0, 0.84, 0);
 }
 
+/* Why: a sidebar-card drag should advertise the board as a possible drop
+   surface without fully committing the companion panel until the pointer enters it. */
+.workspace-kanban-sheet-content[data-workspace-board-drag-preview='true'] {
+  opacity: 0.42;
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--sidebar-ring) 58%, transparent),
+    0 10px 24px color-mix(in srgb, var(--foreground) 12%, transparent);
+}
+
 @keyframes workspace-kanban-sheet-in {
   from {
     clip-path: inset(0 100% 0 0);

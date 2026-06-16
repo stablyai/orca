@@ -43,11 +43,16 @@ function Sidebar({
   const { nativeDropTarget, dropHandlers, affordance } = useSidebarProjectDrop()
   const {
     workspaceBoardOpen,
+    workspaceBoardRenderedOpen,
+    workspaceBoardDragPreviewOpen,
     workspaceBoardMenuOpen,
     toggleWorkspaceBoard,
     handleWorkspaceBoardOpenChange,
     setWorkspaceBoardMenuOpen,
-    closeWorkspaceBoard
+    closeWorkspaceBoard,
+    previewWorkspaceBoardFromDrag,
+    solidifyWorkspaceBoardFromDrag,
+    cancelWorkspaceBoardDragPreview
   } = useWorkspaceBoardPanel()
 
   const setLiveSidebarWidth = React.useCallback((width: number) => {
@@ -63,10 +68,10 @@ function Sidebar({
   }, [repoCount, fetchAllWorktrees])
 
   useEffect(() => {
-    if (!sidebarOpen && workspaceBoardOpen) {
+    if (!sidebarOpen && workspaceBoardRenderedOpen) {
       closeWorkspaceBoard()
     }
-  }, [closeWorkspaceBoard, sidebarOpen, workspaceBoardOpen])
+  }, [closeWorkspaceBoard, sidebarOpen, workspaceBoardRenderedOpen])
 
   const { containerRef, onResizeStart } = useSidebarResize<HTMLDivElement>({
     isOpen: sidebarOpen,
@@ -95,6 +100,10 @@ function Sidebar({
             <WorktreeList
               scrollOffsetRef={worktreeScrollOffsetRef}
               scrollAnchorRef={worktreeScrollAnchorRef}
+              workspaceBoardOpen={workspaceBoardOpen}
+              onWorkspaceBoardDragPreviewStart={previewWorkspaceBoardFromDrag}
+              onWorkspaceBoardDragPreviewCommit={solidifyWorkspaceBoardFromDrag}
+              onWorkspaceBoardDragPreviewCancel={cancelWorkspaceBoardDragPreview}
             />
 
             <SetupScriptPromptCard />
@@ -146,7 +155,8 @@ function Sidebar({
       </React.Suspense>
       {sidebarOpen ? (
         <WorkspaceKanbanDrawer
-          open={workspaceBoardOpen}
+          open={workspaceBoardRenderedOpen}
+          dragPreview={workspaceBoardDragPreviewOpen}
           preserveOpenForMenu={workspaceBoardMenuOpen}
           onOpenChange={handleWorkspaceBoardOpenChange}
           onMenuOpenChange={setWorkspaceBoardMenuOpen}

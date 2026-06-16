@@ -37,6 +37,7 @@ import { useContextualTour } from '@/components/contextual-tours/use-contextual-
 type WorkspaceKanbanDrawerProps = {
   leftSidebarStyle?: React.CSSProperties
   open: boolean
+  dragPreview: boolean
   preserveOpenForMenu: boolean
   onOpenChange: (open: boolean) => void
   onMenuOpenChange: (open: boolean) => void
@@ -45,6 +46,7 @@ type WorkspaceKanbanDrawerProps = {
 export default function WorkspaceKanbanDrawer({
   leftSidebarStyle,
   open,
+  dragPreview,
   preserveOpenForMenu,
   onOpenChange,
   onMenuOpenChange
@@ -444,7 +446,7 @@ export default function WorkspaceKanbanDrawer({
 
   useWorkspaceKanbanShiftWheelScroll(boardRef, laneScrollerRef, open, isPointerDragActiveRef)
   useWorkspaceKanbanOutsideDismiss({ open, boardRef, preserveOpenForMenu, onOpenChange })
-  useContextualTour('workspace-board', open, 'workspace_board_visible')
+  useContextualTour('workspace-board', open && !dragPreview, 'workspace_board_visible')
 
   useEffect(() => {
     if (!open || selectedWorktreeIds.size === 0) {
@@ -494,6 +496,7 @@ export default function WorkspaceKanbanDrawer({
         }
         data-contextual-tour-target="workspace-board-surface"
         data-workspace-board-sheet=""
+        data-workspace-board-drag-preview={dragPreview ? 'true' : undefined}
         onOpenAutoFocus={(event) => {
           // Why: Radix focuses the first toolbar button on open, which opens
           // its tooltip without hover and makes the drawer feel noisy.

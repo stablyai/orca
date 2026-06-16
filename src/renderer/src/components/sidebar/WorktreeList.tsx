@@ -143,6 +143,7 @@ import {
   getWorkspaceKanbanSidebarDropGroups,
   getWorkspaceKanbanSidebarDropTarget,
   hasWorkspaceKanbanSidebarDropBoard,
+  isWorkspaceKanbanSidebarDropPointInBoard,
   updateWorkspaceKanbanSidebarDropTargetVisual
 } from './workspace-kanban-sidebar-drop'
 import {
@@ -261,6 +262,7 @@ const EMPTY_AGENT_STATUS_BY_PANE_KEY: AppState['agentStatusByPaneKey'] = {}
 const EMPTY_TABS_BY_WORKTREE: AppState['tabsByWorktree'] = {}
 const EMPTY_TERMINAL_LAYOUTS_BY_TAB_ID: AppState['terminalLayoutsByTabId'] = {}
 const EXPANDING_CARD_MEASUREMENT_ADJUSTMENT_SUPPRESS_MS = 300
+const NOOP_WORKSPACE_BOARD_DRAG_PREVIEW_CALLBACK = (): void => {}
 const WORKTREE_SIDEBAR_SCROLL_STYLE: React.CSSProperties = {
   // Why: TanStack Virtual owns scroll correction. Native browser anchoring can
   // fight virtual row measurement/remounts and produce visible jumps.
@@ -483,6 +485,10 @@ type VirtualizedWorktreeViewportProps = {
     dropIndex: number
     groups: readonly WorktreeDragGroup[]
   }) => void
+  workspaceBoardOpen: boolean
+  onWorkspaceBoardDragPreviewStart: () => void
+  onWorkspaceBoardDragPreviewCommit: () => void
+  onWorkspaceBoardDragPreviewCancel: () => void
   shouldShowWorkspaceBoardDropIndicator: (
     worktreeIds: readonly string[],
     status: WorkspaceStatus
@@ -1081,6 +1087,10 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
   onPinWorktree,
   onPinWorktrees,
   onDropWorktreesOnWorkspaceBoard,
+  workspaceBoardOpen,
+  onWorkspaceBoardDragPreviewStart,
+  onWorkspaceBoardDragPreviewCommit,
+  onWorkspaceBoardDragPreviewCancel,
   shouldShowWorkspaceBoardDropIndicator,
   onReorderWorktrees,
   scrollOffsetRef,
@@ -2076,7 +2086,8 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
     setDragOverStatus(null)
     setPinDragOver(false)
     clearWorkspaceKanbanSidebarDropTargetVisual()
-  }, [cancelWorktreePointerAutoscroll])
+    onWorkspaceBoardDragPreviewCancel()
+  }, [cancelWorktreePointerAutoscroll, onWorkspaceBoardDragPreviewCancel])
 
   const clearWorktreeDrag = useCallback(() => {
     cleanupWorktreePointerDrag()
@@ -2137,6 +2148,9 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
       target: boardTarget,
       x: drag.currentX,
       y: drag.currentY
+    }
+    if (isWorkspaceKanbanSidebarDropPointInBoard(drag.currentX, drag.currentY)) {
+      onWorkspaceBoardDragPreviewCommit()
     }
     if (boardTarget.status || boardTarget.isPinDrop) {
       drag.latestStatusDropTarget = null
@@ -2286,6 +2300,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
     computeWorktreeDrop,
     computeWorktreeStatusDrop,
     refreshWorktreeDragSession,
+    onWorkspaceBoardDragPreviewCommit,
     shouldShowWorkspaceBoardDropIndicator,
     workspaceStatuses
   ])
@@ -2368,6 +2383,9 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
       drag.previewOffsetY = offsetY
       suppressWorktreeClickUntilRef.current = window.performance.now() + 500
       setSidebarPointerDragDocumentStyles(true)
+      if (!workspaceBoardOpen && !hasWorkspaceKanbanSidebarDropBoard()) {
+        onWorkspaceBoardDragPreviewStart()
+      }
       worktreeDragSessionRef.current = {
         draggingWorktreeId: drag.worktreeId,
         sourceGroupKey: drag.sourceGroupKey,
@@ -2387,7 +2405,12 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
       startWorktreePointerAutoscroll()
       scheduleWorktreePointerDragFrame(drag)
     },
-    [scheduleWorktreePointerDragFrame, startWorktreePointerAutoscroll]
+    [
+      onWorkspaceBoardDragPreviewStart,
+      scheduleWorktreePointerDragFrame,
+      startWorktreePointerAutoscroll,
+      workspaceBoardOpen
+    ]
   )
 
   const handleWorktreeRowPointerDown = useCallback(
@@ -2405,7 +2428,14 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
         return
       }
       const rects = getWorktreeSidebarDragRectsForGroup(container, sourceGroupKey)
-      if (rects.length <= 1 && !hasWorkspaceKanbanSidebarDropBoard()) {
+      const canPreviewWorkspaceBoardOnDrag =
+        !workspaceBoardOpen &&
+        onWorkspaceBoardDragPreviewStart !== NOOP_WORKSPACE_BOARD_DRAG_PREVIEW_CALLBACK
+      if (
+        rects.length <= 1 &&
+        !hasWorkspaceKanbanSidebarDropBoard() &&
+        !canPreviewWorkspaceBoardOnDrag
+      ) {
         return
       }
       const draggedIds =
@@ -2440,8 +2470,10 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
       getReorderDraggedIds,
       getReorderUnitDraggedIds,
       groupKeyByRowKey,
+      onWorkspaceBoardDragPreviewStart,
       selectedWorktreeIds,
-      selectedWorktrees
+      selectedWorktrees,
+      workspaceBoardOpen
     ]
   )
 
@@ -2496,6 +2528,9 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
         x: event.clientX,
         y: event.clientY
       })
+      if (isWorkspaceKanbanSidebarDropPointInBoard(event.clientX, event.clientY)) {
+        onWorkspaceBoardDragPreviewCommit()
+      }
       if (boardDropTarget.isPinDrop) {
         onPinWorktrees(drag.draggedIds)
       } else if (boardDropTarget.status) {
@@ -2617,6 +2652,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
     onDropWorktreesOnWorkspaceBoard,
     onPinWorktrees,
     onReorderWorktrees,
+    onWorkspaceBoardDragPreviewCommit,
     refreshWorktreeDragSession,
     scheduleWorktreePointerDragFrame,
     shouldShowWorkspaceBoardDropIndicator,
@@ -4236,6 +4272,10 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
 type WorktreeListProps = {
   scrollOffsetRef: React.MutableRefObject<number>
   scrollAnchorRef: React.MutableRefObject<VirtualizedScrollAnchor>
+  workspaceBoardOpen?: boolean
+  onWorkspaceBoardDragPreviewStart?: () => void
+  onWorkspaceBoardDragPreviewCommit?: () => void
+  onWorkspaceBoardDragPreviewCancel?: () => void
 }
 
 export function installWorktreeVisibleRefreshVisibilityListener(onChange: () => void): () => void {
@@ -4245,7 +4285,11 @@ export function installWorktreeVisibleRefreshVisibilityListener(onChange: () => 
 
 const WorktreeList = React.memo(function WorktreeList({
   scrollOffsetRef,
-  scrollAnchorRef
+  scrollAnchorRef,
+  workspaceBoardOpen = false,
+  onWorkspaceBoardDragPreviewStart = NOOP_WORKSPACE_BOARD_DRAG_PREVIEW_CALLBACK,
+  onWorkspaceBoardDragPreviewCommit = NOOP_WORKSPACE_BOARD_DRAG_PREVIEW_CALLBACK,
+  onWorkspaceBoardDragPreviewCancel = NOOP_WORKSPACE_BOARD_DRAG_PREVIEW_CALLBACK
 }: WorktreeListProps) {
   // ── Granular selectors (each is a primitive or shallow-stable ref) ──
   const allWorktrees = useAllWorktrees()
@@ -5689,6 +5733,10 @@ const WorktreeList = React.memo(function WorktreeList({
         onPinWorktree={pinWorktree}
         onPinWorktrees={pinWorktrees}
         onDropWorktreesOnWorkspaceBoard={dropWorktreesOnWorkspaceBoard}
+        workspaceBoardOpen={workspaceBoardOpen}
+        onWorkspaceBoardDragPreviewStart={onWorkspaceBoardDragPreviewStart}
+        onWorkspaceBoardDragPreviewCommit={onWorkspaceBoardDragPreviewCommit}
+        onWorkspaceBoardDragPreviewCancel={onWorkspaceBoardDragPreviewCancel}
         shouldShowWorkspaceBoardDropIndicator={shouldShowWorkspaceBoardDropIndicator}
         onReorderWorktrees={reorderWorktrees}
         scrollOffsetRef={scrollOffsetRef}
