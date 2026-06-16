@@ -707,6 +707,8 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         orphanTerminalIds.size === 0
           ? groupsForWorktree
           : groupsForWorktree.map((entry) => {
+              // Why: orphan cleanup must repair every group before adding the
+              // new tab, or inactive/background creation can revive stale focus.
               const tabOrder = dedupeTabOrder(entry.tabOrder).filter(
                 (tabId) => !orphanTerminalIds.has(tabId)
               )

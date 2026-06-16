@@ -13447,13 +13447,18 @@ export class OrcaRuntimeService {
       return []
     }
     const target = splitWorktreeIdForFilesystem(targetWorktreeId)
-    if (!target?.repoId) {
+    if (!target?.repoId || !target.worktreePath) {
       return []
     }
     const worktreeIds = new Set(
       Object.keys(this.store.getAllWorktreeMeta()).filter((worktreeId) => {
         const parsed = splitWorktreeIdForFilesystem(worktreeId)
-        return parsed?.repoId === target.repoId && Boolean(parsed.worktreePath)
+        return (
+          parsed?.repoId === target.repoId &&
+          Boolean(parsed.worktreePath) &&
+          (isPathInsideOrEqual(target.worktreePath, parsed.worktreePath) ||
+            isPathInsideOrEqual(parsed.worktreePath, target.worktreePath))
+        )
       })
     )
     worktreeIds.add(targetWorktreeId)
