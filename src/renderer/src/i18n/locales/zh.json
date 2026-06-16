@@ -1553,7 +1553,65 @@
         "ff90d0abc7": "从 {{value0}} 开始工作区",
         "fe28c9821f": "view",
         "8d1e17a3ef": "在 GitHub 中打开 {{value0}}",
-        "4ac8ff2275": "在 Jira 中打开 {{value0}}"
+        "4ac8ff2275": "在 Jira 中打开 {{value0}}",
+        "bc1074f9a4": "Asana",
+        "3f20c094d7": "已分配",
+        "2f85fbe5d5": "全部",
+        "9157504fe2": "完成",
+        "d39615c625": "待批准",
+        "05d6812c6b": "得到正式认可的",
+        "32880242b4": "被拒绝",
+        "f34e409b2a": "要求更改",
+        "9e417e77cb": "已完成",
+        "93d638998c": "Asana任务已创建",
+        "519248264c": "无法创建 Asana 任务。",
+        "e08a96ca69": "无法切换 Asana 工作区。",
+        "05baeac422": "所有 Asana 工作区",
+        "d11b72edd2": "新Asana任务",
+        "1a81f215d9": "刷新Asana任务",
+        "9a2d6b54e1": "按名称搜索 Asana 任务",
+        "c1a9c802a4": "清除搜索",
+        "a253cab9e7": "按项目过滤 Asana 任务",
+        "51ab088494": "所有项目",
+        "b9713333b7": "连接您的 Asana 帐户",
+        "fb57b9a0e6": "直接从此处浏览、编辑、创建 Asana 任务并开始工作。",
+        "07d9af763f": "连接Asana",
+        "0707d121a4": "隐藏Asana",
+        "f58805cf0b": "Asana任务",
+        "87577025bf": "显示",
+        "7bbe7ee232": "任务",
+        "176fccaa02": "状态",
+        "972dd6d868": "项目",
+        "38ee49efd9": "负责人",
+        "0eaa878fe6": "已更新",
+        "10b5bb47de": "未找到Asana任务",
+        "ab69d644a6": "尝试不同的搜索。",
+        "c14cefa172": "没有任务与所选预设匹配。",
+        "6412e9cd97": "启动工作区",
+        "fb1893ef59": "以Asana打开",
+        "f5008427d6": "使用个人访问令牌在您的工作区中浏览和链接 Asana 任务。",
+        "efd0fd5b38": "Asana 个人访问令牌",
+        "6b649a80e6": "创建一个令牌",
+        "de053ddb11": "Asana 开发者设置",
+        "ac11f04198": "您的令牌通过操作系统钥匙串加密并存储在本地。",
+        "fdb5289c56": "取消",
+        "fd91a71a62": "正在验证...",
+        "9d5129e86c": "连接",
+        "6d0f529087": "在选定的工作区或特定项目中创建任务。",
+        "b29ee75052": "标题",
+        "a193d848ad": "简短摘要",
+        "de15170bf3": "说明（可选）",
+        "6cb941999d": "这是怎么回事？",
+        "70f01de9d9": "没有项目",
+        "4708731ed6": "没有项目（工作区任务）",
+        "7e48556cc4": "未分配",
+        "73a6473ca6": "提交。",
+        "f0a040e827": "创造……",
+        "5cab63cece": "创建任务",
+        "85bcd0f0c7": "从 {{title}} 启动工作区",
+        "5d4d1dbbe3": "在Asana中打开 {{title}}",
+        "3b8d9385c3": "归档于 {{workspace}}",
+        "9eb7bf8dbb": "创建任务之前选择 Asana 工作区或项目。"
       },
       "Terminal": {
         "73768427cf": "关闭",
@@ -3498,7 +3556,8 @@
           "196c1b5362": "打开 GitLab 任务",
           "0ccba862b8": "打开 GitHub 任务",
           "fee535205b": "任务",
-          "d599269755": "从侧边栏隐藏"
+          "d599269755": "从侧边栏隐藏",
+          "824f0a2299": "打开Asana任务"
         },
         "SidebarRepositoryFilterSection": {
           "d3a9c4cea1": "清除",
@@ -3656,9 +3715,6 @@
         },
         "WorktreeCardAgents": {
           "1b0a156717": "Agents"
-        },
-        "WorktreeCardReviewDetailSection": {
-          "reviewHeader": "{{value0}} #{{value1}}"
         },
         "WorktreeCardMeta": {
           "3e65e11cc6": "工作区元数据",
@@ -3993,6 +4049,18 @@
             }
           }
         },
+        "FolderWorkspaceComposerDialog": {
+          "connectFailed": "无法连接到项目。",
+          "noRepos": "在此文件夹下添加 Git 项目，以关联 GitHub 或 GitLab 任务。",
+          "title": "创建文件夹工作区",
+          "create": "创建工作区",
+          "sourceProject": "任务来源",
+          "chooseSourceProject": "选择任务来源",
+          "createStart": "Create & Start Agent"
+        },
+        "WorktreeCardReviewDetailSection": {
+          "reviewHeader": "{{value0}} #{{value1}}"
+        },
         "LinearAgentSkillSetupPrompt": {
           "missingCliAndSkill": "缺少 Orca CLI 和 Linear agent 技能。",
           "modalTitle": "启用 Linear ticket 访问",
@@ -4030,15 +4098,6 @@
           "toastInstallSkillDescription": "安装 Linear 技能，让 Agents 可以通过 Orca CLI 读取并编辑 Linear 任务。",
           "toastRemoteDescription": "{{value0}} 远程 Agent 环境可能仍需要自己的设置。",
           "toastWslDescription": "{{value0}} 此设置会在所选 WSL Agent 运行时中执行。"
-        },
-        "FolderWorkspaceComposerDialog": {
-          "connectFailed": "无法连接到项目。",
-          "noRepos": "在此文件夹下添加 Git 项目，以关联 GitHub 或 GitLab 任务。",
-          "title": "创建文件夹工作区",
-          "create": "创建工作区",
-          "sourceProject": "任务来源",
-          "chooseSourceProject": "选择任务来源",
-          "createStart": "Create & Start Agent"
         },
         "ProjectOrderManualDefaultNotice": {
           "a1f4c2d8e0": "手动项目排序现在是默认设置",
@@ -4487,8 +4546,6 @@
           "8671e406f0": "取消",
           "a4aafe46e3": "目标路径：",
           "e8012c03a1": "使 Agent 能够使用 Orca 工作区、terminal 和进度命令。",
-          "cliSkillTerminalTitle": "CLI 技能设置",
-          "cliSkillTerminalAria": "CLI 技能安装 terminal",
           "6053cf736c": "CLI技能",
           "36a6f919ba": "为 Agent 提供 Orca 感知的工作区、terminal 和进度工作流程。",
           "04873eea3e": "Agent 技能",
@@ -4517,7 +4574,9 @@
           "14444243ba": "从路径中删除`{{value0}}`？",
           "5d432fe44d": "已安装",
           "8a9b784c60": "陈旧",
-          "d363e5929b": "正在检查 CLI 注册..."
+          "d363e5929b": "正在检查 CLI 注册...",
+          "cliSkillTerminalTitle": "CLI 技能设置",
+          "cliSkillTerminalAria": "CLI 技能安装 terminal"
         },
         "CliSkillRuntimeSetup": {
           "04325573f8": "WSL",
@@ -5635,13 +5694,13 @@
           "17bdee4ff1": "放弃未保存的 Git AI Author 更改？",
           "084d8fac5b": "隐私与安全",
           "23931df7e8": "Remote Hosts",
-          "mobile_group": "Mobile",
           "8bd117d669": "界面",
           "e1578cd4bc": "工作流程",
           "9abb9be3bc": "初始设置",
           "23c6874fdf": "AI 能力",
           "2309068a6f": "destructive",
-          "65358016ea": "放弃"
+          "65358016ea": "放弃",
+          "mobile_group": "Mobile"
         },
         "SettingsFormControls": {
           "42a4d15a30": "没有匹配的字体。",
@@ -5884,7 +5943,9 @@
           "dd67a1b6e1": "在任务源选择器和侧边栏快捷键中显示 GitLab。",
           "7c5d7fdc20": "GitLab",
           "1db47236cd": "在任务源选择器和侧边栏快捷键中显示 GitHub。",
-          "e14063e727": "GitHub"
+          "e14063e727": "GitHub",
+          "2c43792500": "Asana",
+          "072fa0fbad": "在任务源选择器和侧边栏快捷键中显示 Asana。"
         },
         "TerminalAppearanceSection": {
           "a14a427ae4": "窗格分隔线的厚度。",
@@ -6967,7 +7028,16 @@
             "41ccade05c": "gh",
             "b79c21bd42": "GitHub",
             "7166b9090c": "通过 gh CLI 进行 GitHub 身份验证。",
-            "f16e41cc72": "GitHub 集成"
+            "f16e41cc72": "GitHub 集成",
+            "96833f8187": "体式整合",
+            "e4239b2ace": "将 Asana 与个人访问令牌连接以浏览和链接任务。",
+            "028ab137b0": "体式",
+            "0c0d9a1bb4": "集成",
+            "229ba34329": "个人访问令牌",
+            "a2a1409657": "拍",
+            "953409dded": "API令牌",
+            "4336b898e7": "连接",
+            "144d004576": "断开"
           }
         },
         "jira": {
@@ -7414,7 +7484,8 @@
             "cf0e3e0c2f": "提供者",
             "2ec54bee51": "任务",
             "765f0c544d": "选择要在“任务”页面和侧边栏快捷键中显示的任务提供商。",
-            "5b8e4aace5": "任务提供者"
+            "5b8e4aace5": "任务提供者",
+            "3eddeefe04": "体式"
           }
         },
         "terminal": {
@@ -7756,14 +7827,14 @@
           "colors_only": "Colors only",
           "no_themes_found": "No custom Warp themes found.",
           "builtin_themes_hint": "Warp's preloaded themes are part of the Warp app and can't be read from disk. Orca already includes most of them, like Dracula, Gruvbox, Solarized, and Tokyo Night.",
-          "custom_theme_yaml_hint": "自定义和社区主题必须以 YAML 文件形式存在于 Warp themes 文件夹中，自动导入才能发现它们。如果你克隆了 Warp 的公开主题仓库，请使用 Choose Folder 导入该仓库副本。",
           "choose_manually": "Choose a theme YAML file or folder to import manually.",
           "skipped_files": "Skipped files",
           "more_skipped_files": "{{value0}} more skipped files.",
           "cancel": "Cancel",
           "import_theme_one": "Import 1 Theme",
           "import_theme_other": "Import {{value0}} Themes",
-          "import_themes": "Import Themes"
+          "import_themes": "Import Themes",
+          "custom_theme_yaml_hint": "自定义和社区主题必须以 YAML 文件形式存在于 Warp themes 文件夹中，自动导入才能发现它们。如果你克隆了 Warp 的公开主题仓库，请使用 Choose Folder 导入该仓库副本。"
         },
         "useWarpThemeImport": {
           "unknown_error": "Unknown error",
@@ -7872,6 +7943,28 @@
                   "0fa5629dad": "Pull requests and build statuses"
                 }
               }
+            }
+          }
+        },
+        "asana": {
+          "integration": {
+            "card": {
+              "c85ef21457": "Asana",
+              "5606735ec4": "将 Asana 与个人访问令牌连接以浏览、创建和链接任务。",
+              "b27685f5c1": "重新连接",
+              "92478056f1": "已连接",
+              "ea71ac55e3": "连接Asana",
+              "48d26a9e60": "Asana 个人访问令牌",
+              "c7fb4f4eb6": "创建个人访问令牌",
+              "62dff4dbad": "取消",
+              "47677169c2": "正在验证...",
+              "2e722b4f81": "连接",
+              "d51fefc10b": "已验证",
+              "24e507c8bf": "测试...",
+              "90428fc2cc": "测试",
+              "b9c92b30a6": "Asana 令牌由活动运行时加密并存储在本地。使用新令牌重新连接会替换每个工作区存储的凭据。",
+              "6fcf15da92": "{{count}} 工作区{{suffix}} 已连接",
+              "7fde3c624d": "断开 {{name}}"
             }
           }
         },
@@ -11014,6 +11107,37 @@
             "8388bdea2b": "Connect Jira site"
           }
         }
+      },
+      "AsanaIssueWorkspace": {
+        "3c481bf8d7": "无法更新 Asana 任务。",
+        "c76cc7f483": "添加评论失败。",
+        "9bd2fa9f44": "以Asana打开",
+        "45f81355bc": "复制网址",
+        "47bdb1b01a": "复制建议的分支名称",
+        "fc73c32b3c": "复制提示",
+        "d714b420a0": "预览、编辑所选任务并开始工作。",
+        "80593bc32c": "启动工作区",
+        "c8ea562d51": "关闭 Asana 任务预览",
+        "70508a18ed": "关闭",
+        "64974917e5": "批准",
+        "570fa07349": "请求更改",
+        "c13fceb092": "拒绝",
+        "98229f40ea": "已完成",
+        "dad2b1d01f": "标记完成",
+        "b3b8e19ea8": "到期的",
+        "826e6443f8": "未分配",
+        "073516facf": "标题",
+        "1fd599c26c": "描述",
+        "312fe2188b": "没有提供描述。",
+        "fd28d604ba": "保存描述",
+        "d79323a259": "评论",
+        "e43b2f6250": "重试",
+        "58eb8f7b03": "还没有评论。",
+        "f60c8c4109": "添加Asana评论...",
+        "1bd0e2fc2d": "评论",
+        "43e26f1a9b": "{{label}} 已复制",
+        "c1be5501dd": "复制 {{label}} 失败",
+        "b160e69749": "保存标题"
       },
       "rightSidebar": {
         "FolderWorkspaceWorktreesPanel": {

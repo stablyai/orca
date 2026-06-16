@@ -6,6 +6,7 @@ import {
   GitLabIntegrationCard
 } from './source-control-integration-cards'
 import { JiraIntegrationCard, LinearIntegrationCard } from './task-tracker-integration-cards'
+import { AsanaIntegrationCard } from './asana-integration-card'
 import { useIntegrationProviderStatusRefresh } from './use-integration-provider-status-refresh'
 import { translate } from '@/i18n/i18n'
 export { getIntegrationsPaneSearchEntries } from './integrations-search'
@@ -51,6 +52,7 @@ export function IntegrationsPane(): React.JSX.Element {
         <div className="space-y-3">
           <LinearIntegrationCard />
           <JiraIntegrationCard />
+          <AsanaIntegrationCard />
         </div>
       </section>
     </div>

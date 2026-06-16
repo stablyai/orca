@@ -1,0 +1,1 @@
+- [Tracker error-surfacing contract](tracker-error-contract.md) — how Asana/Jira/Linear providers surface vs swallow errors; the shared fan-out + store-slice pattern

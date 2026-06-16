@@ -1,0 +1,1 @@
+- [Tracker test suites](project_tracker-test-suites.md) — how jira/linear/asana provider tests are structured and where coverage is routinely thin (auth-error branch, safeStorage fallback, multi-workspace fan-out)

@@ -1553,7 +1553,65 @@
         "ff90d0abc7": "Iniciar espacio de trabajo desde {{value0}}",
         "fe28c9821f": "vista",
         "8d1e17a3ef": "Abra {{value0}} en GitHub",
-        "4ac8ff2275": "Abrir {{value0}} en Jira"
+        "4ac8ff2275": "Abrir {{value0}} en Jira",
+        "bc1074f9a4": "Asanas",
+        "3f20c094d7": "Asignado",
+        "2f85fbe5d5": "Todo",
+        "9157504fe2": "Hecho",
+        "d39615c625": "Pendiente de aprobación",
+        "05d6812c6b": "Aprobado",
+        "32880242b4": "Rechazado",
+        "f34e409b2a": "Cambios solicitados",
+        "9e417e77cb": "Terminado",
+        "93d638998c": "Tarea de asana creada",
+        "519248264c": "No se pudo crear la tarea de Asana.",
+        "e08a96ca69": "No se pudo cambiar el espacio de trabajo de Asana.",
+        "05baeac422": "Todos los espacios de trabajo de Asana",
+        "d11b72edd2": "Nueva tarea de Asana",
+        "1a81f215d9": "Actualizar tareas de Asana",
+        "9a2d6b54e1": "Buscar tareas de Asana por nombre",
+        "c1a9c802a4": "Borrar búsqueda",
+        "a253cab9e7": "Filtrar tareas de Asana por proyecto",
+        "51ab088494": "Todos los proyectos",
+        "b9713333b7": "Conecta tu cuenta de Asana",
+        "fb57b9a0e6": "Explora, edita, crea y comienza a trabajar desde tareas de Asana directamente desde aquí.",
+        "07d9af763f": "Conectar asanas",
+        "0707d121a4": "Ocultar asanas",
+        "f58805cf0b": "Tareas de asanas",
+        "87577025bf": "mostrado",
+        "7bbe7ee232": "Tarea",
+        "176fccaa02": "Estado",
+        "972dd6d868": "Proyecto",
+        "38ee49efd9": "Cesionario",
+        "0eaa878fe6": "Actualizado",
+        "10b5bb47de": "No se encontraron tareas de Asana",
+        "ab69d644a6": "Pruebe una búsqueda diferente.",
+        "c14cefa172": "Ninguna tarea coincide con el ajuste preestablecido seleccionado.",
+        "6412e9cd97": "Iniciar espacio de trabajo",
+        "fb1893ef59": "Abierto en Asana",
+        "f5008427d6": "Usa un token de acceso personal para explorar y vincular tareas de Asana en tus espacios de trabajo.",
+        "efd0fd5b38": "Token de acceso personal de Asana",
+        "6b649a80e6": "Crear un token en",
+        "de053ddb11": "Configuración de desarrollador de Asana",
+        "ac11f04198": "Su token se cifra a través del llavero del sistema operativo y se almacena localmente.",
+        "fdb5289c56": "Cancelar",
+        "fd91a71a62": "Verificando…",
+        "9d5129e86c": "Conectar",
+        "6d0f529087": "Cree una tarea en el espacio de trabajo seleccionado o un proyecto específico.",
+        "b29ee75052": "Título",
+        "a193d848ad": "Breve resumen",
+        "de15170bf3": "Descripción (opcional)",
+        "6cb941999d": "¿Qué está sucediendo?",
+        "70f01de9d9": "Ningún proyecto",
+        "4708731ed6": "Sin proyecto (tarea del espacio de trabajo)",
+        "7e48556cc4": "No asignado",
+        "73a6473ca6": "para presentar.",
+        "f0a040e827": "Creando…",
+        "5cab63cece": "Crear tarea",
+        "85bcd0f0c7": "Iniciar espacio de trabajo desde {{title}}",
+        "5d4d1dbbe3": "Abrir {{title}} en Asana",
+        "3b8d9385c3": "Presentación en {{workspace}}",
+        "9eb7bf8dbb": "Selecciona un espacio de trabajo o proyecto de Asana antes de crear una tarea."
       },
       "Terminal": {
         "73768427cf": "Cerca",
@@ -3517,7 +3575,8 @@
           "196c1b5362": "Abrir tareas de GitLab",
           "0ccba862b8": "Abrir tareas de GitHub",
           "fee535205b": "Tareas",
-          "d599269755": "Ocultar de la barra lateral"
+          "d599269755": "Ocultar de la barra lateral",
+          "824f0a2299": "Abrir tareas de Asana"
         },
         "SidebarRepositoryFilterSection": {
           "d3a9c4cea1": "Claro",
@@ -3675,9 +3734,6 @@
         },
         "WorktreeCardAgents": {
           "1b0a156717": "Agents"
-        },
-        "WorktreeCardReviewDetailSection": {
-          "reviewHeader": "{{value0}} #{{value1}}"
         },
         "WorktreeCardMeta": {
           "3e65e11cc6": "Metadatos del espacio de trabajo",
@@ -3993,6 +4049,18 @@
         "index": {
           "b826a98b6f": "ocupado"
         },
+        "FolderWorkspaceComposerDialog": {
+          "connectFailed": "No se pudo conectar al proyecto.",
+          "noRepos": "Agrega un proyecto Git en esta carpeta para adjuntar tareas de GitHub o GitLab.",
+          "title": "Crear espacio de trabajo de carpeta",
+          "create": "Crear espacio de trabajo",
+          "sourceProject": "Origen de tareas",
+          "chooseSourceProject": "Elige el origen de tareas",
+          "createStart": "Create & Start Agent"
+        },
+        "WorktreeCardReviewDetailSection": {
+          "reviewHeader": "{{value0}} #{{value1}}"
+        },
         "LinearAgentSkillSetupPrompt": {
           "missingCliAndSkill": "Faltan la CLI de Orca y la habilidad de Agent de Linear.",
           "modalTitle": "Activar acceso a tickets de Linear",
@@ -4030,15 +4098,6 @@
           "toastInstallSkillDescription": "Instala la habilidad de Linear para permitir que tus Agents lean y editen tareas de Linear a través de la CLI de Orca.",
           "toastRemoteDescription": "{{value0}} Los entornos de Agent remotos pueden necesitar su propia configuración.",
           "toastWslDescription": "{{value0}} Esta configuración se ejecuta en el runtime de Agent WSL seleccionado."
-        },
-        "FolderWorkspaceComposerDialog": {
-          "connectFailed": "No se pudo conectar al proyecto.",
-          "noRepos": "Agrega un proyecto Git en esta carpeta para adjuntar tareas de GitHub o GitLab.",
-          "title": "Crear espacio de trabajo de carpeta",
-          "create": "Crear espacio de trabajo",
-          "sourceProject": "Origen de tareas",
-          "chooseSourceProject": "Elige el origen de tareas",
-          "createStart": "Create & Start Agent"
         },
         "ProjectOrderManualDefaultNotice": {
           "a1f4c2d8e0": "El orden manual de proyectos ahora es el predeterminado",
@@ -4502,8 +4561,6 @@
           "8671e406f0": "Cancelar",
           "a4aafe46e3": "Ruta de destino:",
           "e8012c03a1": "Permite a los agents utilizar el espacio de trabajo, la terminal y los comandos de progreso de Orca.",
-          "cliSkillTerminalTitle": "Configuración de habilidad CLI",
-          "cliSkillTerminalAria": "Terminal de instalación de la habilidad CLI",
           "6053cf736c": "Habilidad CLI",
           "36a6f919ba": "Ofrezca a los agents espacios de trabajo, terminales y flujos de trabajo de progreso compatibles con Orca.",
           "04873eea3e": "Habilidades del Agent",
@@ -4532,7 +4589,9 @@
           "14444243ba": "¿Eliminar `{{value0}}` de RUTA?",
           "5d432fe44d": "instalado",
           "8a9b784c60": "duro",
-          "d363e5929b": "Comprobando el registro CLI..."
+          "d363e5929b": "Comprobando el registro CLI...",
+          "cliSkillTerminalTitle": "Configuración de habilidad CLI",
+          "cliSkillTerminalAria": "Terminal de instalación de la habilidad CLI"
         },
         "CliSkillRuntimeSetup": {
           "04325573f8": "WSL",
@@ -5650,13 +5709,13 @@
           "17bdee4ff1": "¿Descartar los cambios de autor de Git AI no guardados?",
           "084d8fac5b": "Privacidad y seguridad",
           "23931df7e8": "Remote Hosts",
-          "mobile_group": "Mobile",
           "8bd117d669": "Interfaz",
           "e1578cd4bc": "Flujos de trabajo",
           "9abb9be3bc": "Configuración",
           "23c6874fdf": "Capacidades de IA",
           "2309068a6f": "destructivo",
-          "65358016ea": "Desechar"
+          "65358016ea": "Desechar",
+          "mobile_group": "Mobile"
         },
         "SettingsFormControls": {
           "42a4d15a30": "No hay fuentes coincidentes.",
@@ -5899,7 +5958,9 @@
           "dd67a1b6e1": "Muestre GitLab en el selector de fuente de Tareas y en los accesos directos de la barra lateral.",
           "7c5d7fdc20": "GitLab",
           "1db47236cd": "Muestre GitHub en el selector de fuente de Tareas y en los accesos directos de la barra lateral.",
-          "e14063e727": "GitHub"
+          "e14063e727": "GitHub",
+          "2c43792500": "Asanas",
+          "072fa0fbad": "Muestra Asana en el selector de fuente de Tareas y en los accesos directos de la barra lateral."
         },
         "TerminalAppearanceSection": {
           "a14a427ae4": "Grosor de la línea divisoria del panel.",
@@ -6982,7 +7043,16 @@
             "41ccade05c": "gh",
             "b79c21bd42": "github",
             "7166b9090c": "Autenticación de GitHub a través de la CLI de gh.",
-            "f16e41cc72": "Integración de GitHub"
+            "f16e41cc72": "Integración de GitHub",
+            "96833f8187": "Integración de asanas",
+            "e4239b2ace": "Conecta Asana con un token de acceso personal para explorar y vincular tareas.",
+            "028ab137b0": "asana",
+            "0c0d9a1bb4": "integración",
+            "229ba34329": "token de acceso personal",
+            "a2a1409657": "palmadita",
+            "953409dded": "token de API",
+            "4336b898e7": "conectar",
+            "144d004576": "desconectar"
           }
         },
         "jira": {
@@ -7429,7 +7499,8 @@
             "cf0e3e0c2f": "proveedor",
             "2ec54bee51": "tareas",
             "765f0c544d": "Elija qué proveedores de tareas aparecen en la página Tareas y en los accesos directos de la barra lateral.",
-            "5b8e4aace5": "Proveedores de tareas"
+            "5b8e4aace5": "Proveedores de tareas",
+            "3eddeefe04": "asana"
           }
         },
         "terminal": {
@@ -7756,14 +7827,14 @@
           "colors_only": "Colors only",
           "no_themes_found": "No custom Warp themes found.",
           "builtin_themes_hint": "Warp's preloaded themes are part of the Warp app and can't be read from disk. Orca already includes most of them, like Dracula, Gruvbox, Solarized, and Tokyo Night.",
-          "custom_theme_yaml_hint": "Los temas personalizados y de la comunidad deben existir como archivos YAML en una carpeta de temas de Warp para que la importación automática los encuentre. Si clonaste el repositorio público de temas de Warp, usa Choose Folder para importar esa copia.",
           "choose_manually": "Choose a theme YAML file or folder to import manually.",
           "skipped_files": "Skipped files",
           "more_skipped_files": "{{value0}} more skipped files.",
           "cancel": "Cancel",
           "import_theme_one": "Import 1 Theme",
           "import_theme_other": "Import {{value0}} Themes",
-          "import_themes": "Import Themes"
+          "import_themes": "Import Themes",
+          "custom_theme_yaml_hint": "Los temas personalizados y de la comunidad deben existir como archivos YAML en una carpeta de temas de Warp para que la importación automática los encuentre. Si clonaste el repositorio público de temas de Warp, usa Choose Folder para importar esa copia."
         },
         "useWarpThemeImport": {
           "unknown_error": "Unknown error",
@@ -7872,6 +7943,28 @@
                   "0fa5629dad": "Pull requests and build statuses"
                 }
               }
+            }
+          }
+        },
+        "asana": {
+          "integration": {
+            "card": {
+              "c85ef21457": "Asanas",
+              "5606735ec4": "Conecta Asana con un token de acceso personal para explorar, crear y vincular tareas.",
+              "b27685f5c1": "Reconectar",
+              "92478056f1": "Conectado",
+              "ea71ac55e3": "Conectar asanas",
+              "48d26a9e60": "Token de acceso personal de Asana",
+              "c7fb4f4eb6": "Crear un token de acceso personal",
+              "62dff4dbad": "Cancelar",
+              "47677169c2": "Verificando…",
+              "2e722b4f81": "Conectar",
+              "d51fefc10b": "Verificado",
+              "24e507c8bf": "Pruebas…",
+              "90428fc2cc": "Prueba",
+              "b9c92b30a6": "Los tokens de Asana están cifrados por el tiempo de ejecución activo y almacenados localmente. Volver a conectarse con un nuevo token reemplaza las credenciales almacenadas para cada espacio de trabajo.",
+              "6fcf15da92": "{{count}} espacio de trabajo{{suffix}} conectado",
+              "7fde3c624d": "Desconectar {{name}}"
             }
           }
         },
@@ -11014,6 +11107,37 @@
             "8388bdea2b": "Connect Jira site"
           }
         }
+      },
+      "AsanaIssueWorkspace": {
+        "3c481bf8d7": "No se pudo actualizar la tarea de Asana.",
+        "c76cc7f483": "No se pudo agregar el comentario.",
+        "9bd2fa9f44": "Abierto en Asana",
+        "45f81355bc": "Copiar URL",
+        "47bdb1b01a": "Copiar el nombre de la sucursal sugerida",
+        "fc73c32b3c": "Copiar mensaje",
+        "d714b420a0": "Obtenga una vista previa, edite y comience a trabajar desde la tarea seleccionada.",
+        "80593bc32c": "Iniciar espacio de trabajo",
+        "c8ea562d51": "Cerrar vista previa de la tarea de Asana",
+        "70508a18ed": "Cerca",
+        "64974917e5": "Aprobar",
+        "570fa07349": "Solicitar cambios",
+        "c13fceb092": "Rechazar",
+        "98229f40ea": "Terminado",
+        "dad2b1d01f": "Marcar completo",
+        "b3b8e19ea8": "Pendiente",
+        "826e6443f8": "No asignado",
+        "073516facf": "Título",
+        "1fd599c26c": "Descripción",
+        "312fe2188b": "No se proporciona descripción.",
+        "fd28d604ba": "Guardar descripción",
+        "d79323a259": "Comentarios",
+        "e43b2f6250": "Rever",
+        "58eb8f7b03": "Aún no hay comentarios.",
+        "f60c8c4109": "Añade un comentario de Asana...",
+        "1bd0e2fc2d": "Comentario",
+        "43e26f1a9b": "{{label}} copiado",
+        "c1be5501dd": "No se pudo copiar {{label}}",
+        "b160e69749": "Guardar título"
       },
       "rightSidebar": {
         "FolderWorkspaceWorktreesPanel": {

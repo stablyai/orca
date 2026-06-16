@@ -91,6 +91,17 @@ import type {
   JiraTransition,
   JiraUser,
   JiraViewer,
+  AsanaComment,
+  AsanaConnectionStatus,
+  AsanaCreateTaskArgs,
+  AsanaProject,
+  AsanaSection,
+  AsanaTask,
+  AsanaTaskFilter,
+  AsanaTaskUpdate,
+  AsanaUser,
+  AsanaViewer,
+  AsanaWorkspaceSelection,
   LinearViewer,
   LinearCollectionResult,
   LinearConnectionStatus,
@@ -1704,6 +1715,48 @@ export type PreloadApi = {
       siteId?: string
     }) => Promise<JiraUser[]>
     listTransitions: (args: { key: string; siteId?: string }) => Promise<JiraTransition[]>
+  }
+  asana: {
+    connect: (args: {
+      apiToken: string
+    }) => Promise<{ ok: true; viewer: AsanaViewer } | { ok: false; error: string }>
+    disconnect: (args?: { workspaceId?: string }) => Promise<void>
+    selectWorkspace: (args: {
+      workspaceId: AsanaWorkspaceSelection
+    }) => Promise<AsanaConnectionStatus>
+    status: () => Promise<AsanaConnectionStatus>
+    testConnection: (args?: {
+      workspaceId?: string
+    }) => Promise<{ ok: true; viewer: AsanaViewer } | { ok: false; error: string }>
+    searchTasks: (args: {
+      query: string
+      limit?: number
+      workspaceId?: AsanaWorkspaceSelection
+    }) => Promise<AsanaTask[]>
+    listTasks: (args?: {
+      filter?: AsanaTaskFilter
+      limit?: number
+      workspaceId?: AsanaWorkspaceSelection
+      projectId?: string
+    }) => Promise<AsanaTask[]>
+    getTask: (args: { gid: string; workspaceId?: string }) => Promise<AsanaTask | null>
+    createTask: (
+      args: AsanaCreateTaskArgs
+    ) => Promise<{ ok: true; gid: string; url: string } | { ok: false; error: string }>
+    updateTask: (args: {
+      gid: string
+      updates: AsanaTaskUpdate
+      workspaceId?: string
+    }) => Promise<{ ok: true } | { ok: false; error: string }>
+    addTaskComment: (args: {
+      gid: string
+      text: string
+      workspaceId?: string
+    }) => Promise<{ ok: true; id: string } | { ok: false; error: string }>
+    taskComments: (args: { gid: string; workspaceId?: string }) => Promise<AsanaComment[]>
+    listProjects: (args?: { workspaceId?: AsanaWorkspaceSelection }) => Promise<AsanaProject[]>
+    listSections: (args: { projectGid: string; workspaceId?: string }) => Promise<AsanaSection[]>
+    listAssignableUsers: (args?: { workspaceId?: string; query?: string }) => Promise<AsanaUser[]>
   }
   starNag: {
     onShow: (callback: (payload?: { mode?: 'gh' | 'web' }) => void) => () => void

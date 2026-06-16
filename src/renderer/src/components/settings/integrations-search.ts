@@ -205,5 +205,39 @@ export const getIntegrationsPaneSearchEntries = createLocalizedCatalog(() => [
         'disconnect'
       )
     ]
+  },
+  {
+    title: translate(
+      'auto.components.settings.integrations.search.96833f8187',
+      'Asana Integration'
+    ),
+    description: translate(
+      'auto.components.settings.integrations.search.e4239b2ace',
+      'Connect Asana with a Personal Access Token to browse and link tasks.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.integrations.search.028ab137b0', 'asana'),
+      ...translateSearchKeyword(
+        'auto.components.settings.integrations.search.0c0d9a1bb4',
+        'integration'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.integrations.search.229ba34329',
+        'personal access token'
+      ),
+      ...translateSearchKeyword('auto.components.settings.integrations.search.a2a1409657', 'pat'),
+      ...translateSearchKeyword(
+        'auto.components.settings.integrations.search.953409dded',
+        'api token'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.integrations.search.4336b898e7',
+        'connect'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.integrations.search.144d004576',
+        'disconnect'
+      )
+    ]
   }
 ])

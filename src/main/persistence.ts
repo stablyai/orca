@@ -2513,11 +2513,18 @@ export class Store {
         })
         const visibleTaskProvidersDefaultedForJira =
           parsed.settings?.visibleTaskProvidersDefaultedForJira === true
-        const migratedVisibleTaskProviders = visibleTaskProvidersDefaultedForJira
+        const jiraMigratedVisibleTaskProviders = visibleTaskProvidersDefaultedForJira
           ? rawTaskProviderSettings.visibleTaskProviders
           : rawTaskProviderSettings.visibleTaskProviders.includes('jira')
             ? rawTaskProviderSettings.visibleTaskProviders
             : [...rawTaskProviderSettings.visibleTaskProviders, 'jira' as const]
+        const visibleTaskProvidersDefaultedForAsana =
+          parsed.settings?.visibleTaskProvidersDefaultedForAsana === true
+        const migratedVisibleTaskProviders = visibleTaskProvidersDefaultedForAsana
+          ? jiraMigratedVisibleTaskProviders
+          : jiraMigratedVisibleTaskProviders.includes('asana')
+            ? jiraMigratedVisibleTaskProviders
+            : [...jiraMigratedVisibleTaskProviders, 'asana' as const]
         const taskProviderSettings = normalizeTaskProviderSettings({
           visibleTaskProviders: migratedVisibleTaskProviders,
           defaultTaskSource: rawTaskProviderSettings.defaultTaskSource
@@ -2539,6 +2546,9 @@ export class Store {
           this.loadNeedsSave = true
         }
         if (!visibleTaskProvidersDefaultedForJira) {
+          this.loadNeedsSave = true
+        }
+        if (!visibleTaskProvidersDefaultedForAsana) {
           this.loadNeedsSave = true
         }
         const claudeAgentTeamsDefaultDisabledMigrated =
@@ -2637,6 +2647,7 @@ export class Store {
             defaultTaskSource: taskProviderSettings.defaultTaskSource,
             visibleTaskProviders: taskProviderSettings.visibleTaskProviders,
             visibleTaskProvidersDefaultedForJira: true,
+            visibleTaskProvidersDefaultedForAsana: true,
             terminalShortcutPolicy: normalizeTerminalShortcutPolicy(
               parsed.settings?.terminalShortcutPolicy
             ),
@@ -4449,6 +4460,7 @@ export class Store {
       sanitizedUpdates.visibleTaskProviders = taskProviderSettings.visibleTaskProviders
       if ('visibleTaskProviders' in updates) {
         sanitizedUpdates.visibleTaskProvidersDefaultedForJira = true
+        sanitizedUpdates.visibleTaskProvidersDefaultedForAsana = true
       }
     }
     if ('autoRenameBranchFromWork' in updates || 'autoRenameBranchFromWorkDefaultedOn' in updates) {

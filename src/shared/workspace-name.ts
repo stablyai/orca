@@ -41,9 +41,10 @@ export type WorkspaceIntentWorkItem = {
   type: 'issue' | 'pr' | 'mr'
   number: number
   title: string
-  provider?: 'github' | 'gitlab' | 'linear' | 'jira'
+  provider?: 'github' | 'gitlab' | 'linear' | 'jira' | 'asana'
   linearIdentifier?: string
   jiraIdentifier?: string
+  asanaIdentifier?: string
 }
 
 export type WorkspaceIntentName = {
@@ -163,6 +164,11 @@ function workItemIdentity(item: WorkspaceIntentWorkItem): string {
   if (item.jiraIdentifier) {
     return item.jiraIdentifier.toUpperCase()
   }
+  // Why: Asana task gids are long numeric ids unsuitable as a human label, so
+  // let the title drive the workspace name instead of surfacing the gid.
+  if (item.provider === 'asana') {
+    return ''
+  }
   if (item.type === 'pr') {
     return `PR ${item.number}`
   }
@@ -212,7 +218,10 @@ export function getWorkspaceIntentName(args: {
     const action = detectIntentAction(sourceText) ?? defaultActionForWorkItem(item)
     const identity = workItemIdentity(item)
     if (action) {
-      displayName = `${action} ${identity}`
+      // Why: providers without a short identity (e.g. Asana) return an empty
+      // identity, so fall back to the title subject instead of a bare action.
+      const subject = compactWorkItemTitle(item.title, item)
+      displayName = [action, identity || subject].filter(Boolean).join(' ')
     } else {
       const subject = compactWorkItemTitle(item.title, item)
       displayName = [identity, subject].filter(Boolean).join(' ')

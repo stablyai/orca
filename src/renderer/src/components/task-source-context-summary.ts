@@ -45,21 +45,23 @@ export function getTaskSourceContextSummary(args: {
   selectedRepoCount?: number
   linearWorkspaceName?: string | null
   jiraSiteName?: string | null
+  asanaWorkspaceName?: string | null
 }): TaskSourceContextSummary {
   switch (args.provider) {
     case 'github':
     case 'gitlab':
       return getRepoBackedTaskSourceSummary(args)
+    // Account-backed providers (Linear, Jira, Asana) differ only in account label.
     case 'linear':
-      return getAccountBackedTaskSourceSummary(args.providerLabel, {
-        accountLabel: args.linearWorkspaceName,
-        accountHostId: args.accountHostId,
-        hostLabelById: args.hostLabelById,
-        hostAvailability: args.hostAvailability
-      })
     case 'jira':
+    case 'asana':
       return getAccountBackedTaskSourceSummary(args.providerLabel, {
-        accountLabel: args.jiraSiteName,
+        accountLabel:
+          args.provider === 'linear'
+            ? args.linearWorkspaceName
+            : args.provider === 'jira'
+              ? args.jiraSiteName
+              : args.asanaWorkspaceName,
         accountHostId: args.accountHostId,
         hostLabelById: args.hostLabelById,
         hostAvailability: args.hostAvailability

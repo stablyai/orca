@@ -1553,7 +1553,65 @@
         "ff90d0abc7": "{{value0}}에서 워크스페이스 시작",
         "fe28c9821f": "view",
         "8d1e17a3ef": "GitHub에서 {{value0}} 열기",
-        "4ac8ff2275": "Jira에서 {{value0}} 열기"
+        "4ac8ff2275": "Jira에서 {{value0}} 열기",
+        "bc1074f9a4": "Asana",
+        "3f20c094d7": "할당된",
+        "2f85fbe5d5": "모두",
+        "9157504fe2": "완료",
+        "d39615c625": "승인 대기 중",
+        "05d6812c6b": "승인됨",
+        "32880242b4": "거부됨",
+        "f34e409b2a": "변경 요청됨",
+        "9e417e77cb": "완전한",
+        "93d638998c": "Asana 작업이 생성되었습니다.",
+        "519248264c": "Asana 작업을 생성하지 못했습니다.",
+        "e08a96ca69": "Asana 워크스페이스을 전환하지 못했습니다.",
+        "05baeac422": "모든 Asana 워크스페이스",
+        "d11b72edd2": "새로운 Asana 작업",
+        "1a81f215d9": "Asana 작업 새로 고침",
+        "9a2d6b54e1": "이름으로 Asana 작업 검색",
+        "c1a9c802a4": "검색 지우기",
+        "a253cab9e7": "프로젝트별로 Asana 작업 필터링",
+        "51ab088494": "모든 프로젝트",
+        "b9713333b7": "Asana 계정을 연결하세요",
+        "fb57b9a0e6": "여기에서 직접 Asana 작업을 탐색, 편집, 생성 및 시작하세요.",
+        "07d9af763f": "Asana 연결",
+        "0707d121a4": "Asana 숨기기",
+        "f58805cf0b": "Asana 작업",
+        "87577025bf": "표시됨",
+        "7bbe7ee232": "일",
+        "176fccaa02": "상태",
+        "972dd6d868": "프로젝트",
+        "38ee49efd9": "담당자",
+        "0eaa878fe6": "업데이트됨",
+        "10b5bb47de": "Asana 작업을 찾을 수 없습니다.",
+        "ab69d644a6": "다른 검색을 시도해 보세요.",
+        "c14cefa172": "선택한 사전 설정과 일치하는 작업이 없습니다.",
+        "6412e9cd97": "워크스페이스 시작",
+        "fb1893ef59": "Asana에서 열기",
+        "f5008427d6": "개인 액세스 토큰을 사용하여 워크스페이스 전체에서 Asana 작업을 찾아보고 연결하세요.",
+        "efd0fd5b38": "Asana 개인 액세스 토큰",
+        "6b649a80e6": "토큰을 생성하세요",
+        "de053ddb11": "Asana 개발자 설정",
+        "ac11f04198": "귀하의 토큰은 OS 키체인을 통해 암호화되어 로컬에 저장됩니다.",
+        "fdb5289c56": "취소",
+        "fd91a71a62": "확인 중…",
+        "9d5129e86c": "연결",
+        "6d0f529087": "선택한 워크스페이스가나 특정 프로젝트에서 작업을 생성하세요.",
+        "b29ee75052": "제목",
+        "a193d848ad": "간략한 요약",
+        "de15170bf3": "설명(선택사항)",
+        "6cb941999d": "무슨 일이야?",
+        "70f01de9d9": "프로젝트 없음",
+        "4708731ed6": "프로젝트 없음(워크스페이스 작업)",
+        "7e48556cc4": "할당되지 않음",
+        "73a6473ca6": "제출.",
+        "f0a040e827": "만드는 중…",
+        "5cab63cece": "작업 만들기",
+        "85bcd0f0c7": "{{title}}에서 워크스페이스 시작",
+        "5d4d1dbbe3": "Asana에서 {{title}} 열기",
+        "3b8d9385c3": "{{workspace}}에 제출",
+        "9eb7bf8dbb": "작업을 생성하기 전에 Asana 작업 공간이나 프로젝트를 선택하세요."
       },
       "Terminal": {
         "73768427cf": "닫기",
@@ -3498,7 +3556,8 @@
           "196c1b5362": "GitLab 작업 열기",
           "0ccba862b8": "GitHub 작업 열기",
           "fee535205b": "작업",
-          "d599269755": "사이드바에서 숨기기"
+          "d599269755": "사이드바에서 숨기기",
+          "824f0a2299": "Asana 작업 열기"
         },
         "SidebarRepositoryFilterSection": {
           "d3a9c4cea1": "지우기",
@@ -3656,9 +3715,6 @@
         },
         "WorktreeCardAgents": {
           "1b0a156717": "Agents"
-        },
-        "WorktreeCardReviewDetailSection": {
-          "reviewHeader": "{{value0}} #{{value1}}"
         },
         "WorktreeCardMeta": {
           "3e65e11cc6": "워크스페이스 메타데이터",
@@ -3993,6 +4049,18 @@
             }
           }
         },
+        "FolderWorkspaceComposerDialog": {
+          "connectFailed": "프로젝트에 연결하지 못했습니다.",
+          "noRepos": "GitHub 또는 GitLab 작업을 연결하려면 이 폴더 아래에 Git 프로젝트를 추가하세요.",
+          "title": "폴더 워크스페이스 만들기",
+          "create": "워크스페이스 만들기",
+          "sourceProject": "작업 소스",
+          "chooseSourceProject": "작업 소스 선택",
+          "createStart": "Create & Start Agent"
+        },
+        "WorktreeCardReviewDetailSection": {
+          "reviewHeader": "{{value0}} #{{value1}}"
+        },
         "LinearAgentSkillSetupPrompt": {
           "missingCliAndSkill": "Orca CLI와 Linear agent 스킬이 없습니다.",
           "modalTitle": "Linear 티켓 접근 활성화",
@@ -4030,15 +4098,6 @@
           "toastInstallSkillDescription": "Linear 스킬을 설치하여 agents가 Orca CLI를 통해 Linear 작업을 읽고 편집할 수 있게 하세요.",
           "toastRemoteDescription": "{{value0}} 원격 agent 환경에는 자체 설정이 필요할 수 있습니다.",
           "toastWslDescription": "{{value0}} 이 설정은 선택한 WSL agent 런타임에서 실행됩니다."
-        },
-        "FolderWorkspaceComposerDialog": {
-          "connectFailed": "프로젝트에 연결하지 못했습니다.",
-          "noRepos": "GitHub 또는 GitLab 작업을 연결하려면 이 폴더 아래에 Git 프로젝트를 추가하세요.",
-          "title": "폴더 워크스페이스 만들기",
-          "create": "워크스페이스 만들기",
-          "sourceProject": "작업 소스",
-          "chooseSourceProject": "작업 소스 선택",
-          "createStart": "Create & Start Agent"
         },
         "ProjectOrderManualDefaultNotice": {
           "a1f4c2d8e0": "수동 프로젝트 순서가 이제 기본값입니다",
@@ -4487,8 +4546,6 @@
           "8671e406f0": "취소",
           "a4aafe46e3": "대상 경로:",
           "e8012c03a1": "agents가 Orca 워크스페이스, terminal 및 진행 명령을 사용할 수 있도록 합니다.",
-          "cliSkillTerminalTitle": "CLI 스킬 설정",
-          "cliSkillTerminalAria": "CLI 스킬 설치 terminal",
           "6053cf736c": "CLI 스킬",
           "36a6f919ba": "agents에게 Orca 인식 워크스페이스, terminal 및 진행 워크플로를 제공합니다.",
           "04873eea3e": "Agent 스킬",
@@ -4517,7 +4574,9 @@
           "14444243ba": "PATH에서 `{{value0}}`을(를) 제거하시겠습니까?",
           "5d432fe44d": "설치됨",
           "8a9b784c60": "탁한",
-          "d363e5929b": "CLI 등록 확인 중…"
+          "d363e5929b": "CLI 등록 확인 중…",
+          "cliSkillTerminalTitle": "CLI 스킬 설정",
+          "cliSkillTerminalAria": "CLI 스킬 설치 terminal"
         },
         "CliSkillRuntimeSetup": {
           "04325573f8": "WSL",
@@ -5635,13 +5694,13 @@
           "17bdee4ff1": "저장되지 않은 Git AI Author 변경사항을 삭제하시겠습니까?",
           "084d8fac5b": "개인 정보 보호 및 보안",
           "23931df7e8": "Remote Hosts",
-          "mobile_group": "Mobile",
           "8bd117d669": "인터페이스",
           "e1578cd4bc": "워크플로",
           "9abb9be3bc": "설정 시작",
           "23c6874fdf": "AI 기능",
           "2309068a6f": "파괴적인",
-          "65358016ea": "버리기"
+          "65358016ea": "버리기",
+          "mobile_group": "Mobile"
         },
         "SettingsFormControls": {
           "42a4d15a30": "일치하는 글꼴이 없습니다.",
@@ -5884,7 +5943,9 @@
           "dd67a1b6e1": "작업 소스 선택기 및 사이드바 바로가기에 GitLab을 표시합니다.",
           "7c5d7fdc20": "GitLab",
           "1db47236cd": "작업 소스 선택기 및 사이드바 바로가기에 GitHub를 표시합니다.",
-          "e14063e727": "GitHub"
+          "e14063e727": "GitHub",
+          "2c43792500": "Asana",
+          "072fa0fbad": "작업 소스 선택기 및 사이드바 바로가기에 Asana를 표시합니다."
         },
         "TerminalAppearanceSection": {
           "a14a427ae4": "창 구분선의 두께입니다.",
@@ -6967,7 +7028,16 @@
             "41ccade05c": "gh",
             "b79c21bd42": "GitHub",
             "7166b9090c": "gh CLI를 통한 GitHub 인증.",
-            "f16e41cc72": "GitHub 연동"
+            "f16e41cc72": "GitHub 연동",
+            "96833f8187": "아사나 통합",
+            "e4239b2ace": "Asana를 개인 액세스 토큰과 연결하여 작업을 탐색하고 연결하세요.",
+            "028ab137b0": "아사나",
+            "0c0d9a1bb4": "연동",
+            "229ba34329": "개인 액세스 토큰",
+            "a2a1409657": "가볍게 두드리기",
+            "953409dded": "API 토큰",
+            "4336b898e7": "연결",
+            "144d004576": "연결 해제"
           }
         },
         "jira": {
@@ -7414,7 +7484,8 @@
             "cf0e3e0c2f": "공급자",
             "2ec54bee51": "작업",
             "765f0c544d": "작업 페이지와 사이드바 바로가기에 표시할 작업 제공자를 선택합니다.",
-            "5b8e4aace5": "작업 제공자"
+            "5b8e4aace5": "작업 제공자",
+            "3eddeefe04": "아사나"
           }
         },
         "terminal": {
@@ -7756,14 +7827,14 @@
           "colors_only": "Colors only",
           "no_themes_found": "No custom Warp themes found.",
           "builtin_themes_hint": "Warp's preloaded themes are part of the Warp app and can't be read from disk. Orca already includes most of them, like Dracula, Gruvbox, Solarized, and Tokyo Night.",
-          "custom_theme_yaml_hint": "사용자 지정 및 커뮤니티 테마는 자동 가져오기가 찾을 수 있도록 Warp themes 폴더에 YAML 파일로 있어야 합니다. Warp의 공개 테마 저장소를 클론했다면 Choose Folder를 사용해 해당 체크아웃을 가져오세요.",
           "choose_manually": "Choose a theme YAML file or folder to import manually.",
           "skipped_files": "Skipped files",
           "more_skipped_files": "{{value0}} more skipped files.",
           "cancel": "Cancel",
           "import_theme_one": "Import 1 Theme",
           "import_theme_other": "Import {{value0}} Themes",
-          "import_themes": "Import Themes"
+          "import_themes": "Import Themes",
+          "custom_theme_yaml_hint": "사용자 지정 및 커뮤니티 테마는 자동 가져오기가 찾을 수 있도록 Warp themes 폴더에 YAML 파일로 있어야 합니다. Warp의 공개 테마 저장소를 클론했다면 Choose Folder를 사용해 해당 체크아웃을 가져오세요."
         },
         "useWarpThemeImport": {
           "unknown_error": "Unknown error",
@@ -7872,6 +7943,28 @@
                   "0fa5629dad": "Pull requests and build statuses"
                 }
               }
+            }
+          }
+        },
+        "asana": {
+          "integration": {
+            "card": {
+              "c85ef21457": "Asana",
+              "5606735ec4": "Asana를 개인 액세스 토큰과 연결하여 작업을 찾아보고 생성하고 연결하세요.",
+              "b27685f5c1": "다시 연결",
+              "92478056f1": "연결됨",
+              "ea71ac55e3": "Asana 연결",
+              "48d26a9e60": "Asana 개인 액세스 토큰",
+              "c7fb4f4eb6": "개인 액세스 토큰 생성",
+              "62dff4dbad": "취소",
+              "47677169c2": "확인 중…",
+              "2e722b4f81": "연결",
+              "d51fefc10b": "확인됨",
+              "24e507c8bf": "테스트 중…",
+              "90428fc2cc": "시험",
+              "b9c92b30a6": "Asana 토큰은 활성 런타임에 의해 암호화되어 로컬에 저장됩니다. 새 토큰으로 다시 연결하면 모든 워크스페이스에 대해 저장된 자격 증명이 대체됩니다.",
+              "6fcf15da92": "{{count}} 워크스페이스{{suffix}}이 연결됨",
+              "7fde3c624d": "{{name}} 연결 끊기"
             }
           }
         },
@@ -11014,6 +11107,37 @@
             "8388bdea2b": "Connect Jira site"
           }
         }
+      },
+      "AsanaIssueWorkspace": {
+        "3c481bf8d7": "Asana 작업을 업데이트하지 못했습니다.",
+        "c76cc7f483": "댓글을 추가하지 못했습니다.",
+        "9bd2fa9f44": "Asana에서 열기",
+        "45f81355bc": "URL 복사",
+        "47bdb1b01a": "추천 브랜치 이름 복사",
+        "fc73c32b3c": "프롬프트 복사",
+        "d714b420a0": "선택한 작업을 미리보기하고, 편집하고, 작업을 시작하세요.",
+        "80593bc32c": "워크스페이스 시작",
+        "c8ea562d51": "Asana 작업 미리보기 닫기",
+        "70508a18ed": "닫기",
+        "64974917e5": "승인",
+        "570fa07349": "변경 요청",
+        "c13fceb092": "거부하다",
+        "98229f40ea": "완전한",
+        "dad2b1d01f": "완료로 표시",
+        "b3b8e19ea8": "로 인한",
+        "826e6443f8": "할당되지 않음",
+        "073516facf": "제목",
+        "1fd599c26c": "설명",
+        "312fe2188b": "설명이 제공되지 않았습니다.",
+        "fd28d604ba": "설명 저장",
+        "d79323a259": "댓글",
+        "e43b2f6250": "다시 시도",
+        "58eb8f7b03": "아직 댓글이 없습니다.",
+        "f60c8c4109": "Asana 댓글 추가...",
+        "1bd0e2fc2d": "댓글",
+        "43e26f1a9b": "{{label}} 복사됨",
+        "c1be5501dd": "{{label}}을(를) 복사하지 못했습니다.",
+        "b160e69749": "제목 저장"
       },
       "rightSidebar": {
         "FolderWorkspaceWorktreesPanel": {

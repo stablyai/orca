@@ -1,0 +1,1 @@
+- [Task Provider Type Contract](project_task-provider-type-contract.md) — how jira/linear/asana provider types mirror each other across shared/preload/store/IPC

@@ -82,6 +82,11 @@ import type {
   JiraIssueFilter,
   JiraIssueUpdate,
   JiraSiteSelection,
+  AsanaConnectArgs,
+  AsanaCreateTaskArgs,
+  AsanaTaskFilter,
+  AsanaTaskUpdate,
+  AsanaWorkspaceSelection,
   LinearIssueUpdate,
   LinearProjectSummary,
   LinearWorkspaceSelection,
@@ -451,6 +456,25 @@ import {
   searchIssues as searchJiraIssues,
   updateIssue as updateJiraIssue
 } from '../jira/issues'
+import {
+  connect as connectAsana,
+  disconnect as disconnectAsana,
+  getStatus as getAsanaStatus,
+  selectWorkspace as selectAsanaWorkspace,
+  testConnection as testAsanaConnection
+} from '../asana/client'
+import {
+  addTaskComment as addAsanaTaskComment,
+  createTask as createAsanaTask,
+  getTask as getAsanaTask,
+  getTaskComments as getAsanaTaskComments,
+  listAssignableUsers as listAsanaAssignableUsers,
+  listProjects as listAsanaProjects,
+  listSections as listAsanaSections,
+  listTasks as listAsanaTasks,
+  searchTasks as searchAsanaTasks,
+  updateTask as updateAsanaTask
+} from '../asana/issues'
 import {
   clearProjectItemFieldValue,
   getProjectViewTable,
@@ -17966,6 +17990,92 @@ export class OrcaRuntimeService {
 
   jiraListTransitions(key: string, siteId?: string): ReturnType<typeof listJiraTransitions> {
     return listJiraTransitions(key, siteId)
+  }
+
+  // ── Asana integration ──
+
+  asanaConnect(args: AsanaConnectArgs): ReturnType<typeof connectAsana> {
+    return connectAsana(args)
+  }
+
+  asanaDisconnect(workspaceId?: string): { ok: true } {
+    disconnectAsana(workspaceId)
+    return { ok: true }
+  }
+
+  asanaSelectWorkspace(workspaceId: AsanaWorkspaceSelection): ReturnType<typeof getAsanaStatus> {
+    return selectAsanaWorkspace(workspaceId)
+  }
+
+  asanaStatus(): ReturnType<typeof getAsanaStatus> {
+    return getAsanaStatus()
+  }
+
+  asanaTestConnection(workspaceId?: string): ReturnType<typeof testAsanaConnection> {
+    return testAsanaConnection(workspaceId)
+  }
+
+  asanaSearchTasks(
+    query: string,
+    limit = 30,
+    workspaceId?: AsanaWorkspaceSelection
+  ): ReturnType<typeof searchAsanaTasks> {
+    return searchAsanaTasks(query, Math.min(Math.max(1, limit), 100), workspaceId)
+  }
+
+  asanaListTasks(
+    filter?: AsanaTaskFilter,
+    limit = 30,
+    workspaceId?: AsanaWorkspaceSelection,
+    projectId?: string
+  ): ReturnType<typeof listAsanaTasks> {
+    return listAsanaTasks(filter, Math.min(Math.max(1, limit), 100), workspaceId, projectId)
+  }
+
+  asanaGetTask(gid: string, workspaceId?: string): ReturnType<typeof getAsanaTask> {
+    return getAsanaTask(gid, workspaceId)
+  }
+
+  asanaCreateTask(args: AsanaCreateTaskArgs): ReturnType<typeof createAsanaTask> {
+    return createAsanaTask(args)
+  }
+
+  asanaUpdateTask(
+    gid: string,
+    updates: AsanaTaskUpdate,
+    workspaceId?: string
+  ): ReturnType<typeof updateAsanaTask> {
+    return updateAsanaTask(gid, updates, workspaceId)
+  }
+
+  asanaAddTaskComment(
+    gid: string,
+    text: string,
+    workspaceId?: string
+  ): ReturnType<typeof addAsanaTaskComment> {
+    return addAsanaTaskComment(gid, text, workspaceId)
+  }
+
+  asanaTaskComments(gid: string, workspaceId?: string): ReturnType<typeof getAsanaTaskComments> {
+    return getAsanaTaskComments(gid, workspaceId)
+  }
+
+  asanaListProjects(workspaceId?: AsanaWorkspaceSelection): ReturnType<typeof listAsanaProjects> {
+    return listAsanaProjects(workspaceId)
+  }
+
+  asanaListSections(
+    projectGid: string,
+    workspaceId?: string
+  ): ReturnType<typeof listAsanaSections> {
+    return listAsanaSections(projectGid, workspaceId)
+  }
+
+  asanaListAssignableUsers(
+    workspaceId?: string,
+    query?: string
+  ): ReturnType<typeof listAsanaAssignableUsers> {
+    return listAsanaAssignableUsers(workspaceId, query)
   }
 
   // ── Browser automation ──
