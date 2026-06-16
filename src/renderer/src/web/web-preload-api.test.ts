@@ -6,6 +6,8 @@ import type { FeatureInteractionState } from '../../../shared/feature-interactio
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import type { TaskSourceContext } from '../../../shared/task-source-context'
 
+const TEST_COMMIT_OID = '0123456789abcdef0123456789abcdef01234567'
+
 class MemoryStorage implements Storage {
   private readonly values = new Map<string, string>()
 
@@ -1286,7 +1288,7 @@ describe('web git preload API', () => {
             return Promise.resolve({
               id: `call-${runtimeCalls.length}`,
               ok: true,
-              result: 'https://git.example.com/project/commit/abc123',
+              result: `https://git.example.com/project/commit/${TEST_COMMIT_OID}`,
               _meta: { runtimeId: 'runtime-1' }
             })
           }
@@ -1310,13 +1312,13 @@ describe('web git preload API', () => {
     await expect(
       globals.window.api.git.remoteCommitUrl({
         worktreePath: '/workspace/repo',
-        sha: 'abc123'
+        sha: TEST_COMMIT_OID
       })
-    ).resolves.toBe('https://git.example.com/project/commit/abc123')
+    ).resolves.toBe(`https://git.example.com/project/commit/${TEST_COMMIT_OID}`)
     expect(runtimeCalls).toEqual([
       { method: 'repo.list', params: undefined },
       { method: 'worktree.detectedList', params: { repo: 'repo-1' } },
-      { method: 'git.remoteCommitUrl', params: { worktree: 'id:wt-1', sha: 'abc123' } }
+      { method: 'git.remoteCommitUrl', params: { worktree: 'id:wt-1', sha: TEST_COMMIT_OID } }
     ])
   })
 })

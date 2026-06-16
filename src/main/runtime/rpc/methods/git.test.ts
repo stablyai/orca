@@ -200,9 +200,11 @@ describe('git RPC methods', () => {
       abortRuntimeGitMerge: vi.fn().mockResolvedValue({ ok: true }),
       abortRuntimeGitRebase: vi.fn().mockResolvedValue({ ok: true }),
       pushRuntimeGit: vi.fn().mockResolvedValue({ ok: true }),
-      getRuntimeGitRemoteFileUrl: vi.fn().mockResolvedValue('https://example.com/file#L3')
+      getRuntimeGitRemoteFileUrl: vi.fn().mockResolvedValue('https://example.com/file#L3'),
+      getRuntimeGitRemoteCommitUrl: vi.fn().mockResolvedValue('https://example.com/commit/abc')
     } as unknown as OrcaRuntimeService
     const dispatcher = new RpcDispatcher({ runtime, methods: GIT_METHODS })
+    const commitOid = '0123456789abcdef0123456789abcdef01234567'
 
     await dispatcher.dispatch(
       makeRequest('git.commit', { worktree: 'id:wt-1', message: 'feat: test' })
@@ -234,6 +236,12 @@ describe('git RPC methods', () => {
         line: 3
       })
     )
+    const commitUrlResponse = await dispatcher.dispatch(
+      makeRequest('git.remoteCommitUrl', {
+        worktree: 'id:wt-1',
+        sha: commitOid
+      })
+    )
 
     expect(runtime.commitRuntimeGit).toHaveBeenCalledWith('id:wt-1', 'feat: test')
     expect(runtime.generateRuntimeCommitMessage).toHaveBeenCalledWith('id:wt-1')
@@ -250,6 +258,26 @@ describe('git RPC methods', () => {
       undefined
     )
     expect(response).toMatchObject({ ok: true, result: 'https://example.com/file#L3' })
+    expect(runtime.getRuntimeGitRemoteCommitUrl).toHaveBeenCalledWith('id:wt-1', commitOid)
+    expect(commitUrlResponse).toMatchObject({ ok: true, result: 'https://example.com/commit/abc' })
+  })
+
+  it('rejects remote commit URL requests without a full git object id', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      getRuntimeGitRemoteCommitUrl: vi.fn()
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: GIT_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('git.remoteCommitUrl', {
+        worktree: 'id:wt-1',
+        sha: 'abc123'
+      })
+    )
+
+    expect(response.ok).toBe(false)
+    expect(runtime.getRuntimeGitRemoteCommitUrl).not.toHaveBeenCalled()
   })
 
   it('forwards force-with-lease push mode to the runtime', async () => {

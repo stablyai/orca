@@ -1656,6 +1656,41 @@ describe('registerFilesystemHandlers', () => {
     expect(commitChangesMock).not.toHaveBeenCalled()
   })
 
+  it('routes ssh git:remoteCommitUrl through the SSH provider', async () => {
+    const sha = '0123456789abcdef0123456789abcdef01234567'
+    const sshRemoteCommitUrlMock = vi.fn().mockResolvedValue('https://github.com/org/repo/commit/x')
+    getSshGitProviderMock.mockReturnValue({ getRemoteCommitUrl: sshRemoteCommitUrlMock })
+
+    registerFilesystemHandlers(store as never)
+
+    await expect(
+      handlers.get('git:remoteCommitUrl')!(null, {
+        worktreePath: '/remote/repo',
+        sha,
+        connectionId: 'conn-1'
+      })
+    ).resolves.toBe('https://github.com/org/repo/commit/x')
+
+    expect(sshRemoteCommitUrlMock).toHaveBeenCalledWith('/remote/repo', sha)
+  })
+
+  it('rejects git:remoteCommitUrl with a short hash before SSH dispatch', async () => {
+    const sshRemoteCommitUrlMock = vi.fn()
+    getSshGitProviderMock.mockReturnValue({ getRemoteCommitUrl: sshRemoteCommitUrlMock })
+
+    registerFilesystemHandlers(store as never)
+
+    await expect(
+      handlers.get('git:remoteCommitUrl')!(null, {
+        worktreePath: '/remote/repo',
+        sha: 'abc123',
+        connectionId: 'conn-1'
+      })
+    ).rejects.toThrow('sha must be a full git object id')
+
+    expect(sshRemoteCommitUrlMock).not.toHaveBeenCalled()
+  })
+
   it('routes ssh git:bulkDiscard through the SSH provider', async () => {
     const sshBulkDiscardMock = vi.fn().mockResolvedValue(undefined)
     getSshGitProviderMock.mockReturnValue({ bulkDiscardChanges: sshBulkDiscardMock })

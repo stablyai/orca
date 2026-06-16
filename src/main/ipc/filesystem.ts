@@ -1660,6 +1660,7 @@ export function registerFilesystemHandlers(
       _event,
       args: { worktreePath: string; sha: string; connectionId?: string }
     ): Promise<string | null> => {
+      const sha = validateFullGitObjectId(args.sha, 'sha')
       // Why: remote repos can't read relay-side .git/config locally. Delegate
       // URL construction to the SSH provider, which can fetch remote metadata.
       if (args.connectionId) {
@@ -1667,10 +1668,10 @@ export function registerFilesystemHandlers(
         if (!provider) {
           throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
         }
-        return provider.getRemoteCommitUrl(args.worktreePath, args.sha)
+        return provider.getRemoteCommitUrl(args.worktreePath, sha)
       }
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
-      return getRemoteCommitUrl(worktreePath, args.sha)
+      return getRemoteCommitUrl(worktreePath, sha)
     }
   )
 }

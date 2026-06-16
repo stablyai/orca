@@ -352,6 +352,7 @@ export function GitHistoryPanel({
               <GitHistoryRow
                 viewModel={viewModel}
                 expanded={isExpanded}
+                preserveRefIds={result?.baseRef ? [result.baseRef.id] : undefined}
                 onOpenCommit={onOpenCommit}
                 onToggleExpand={canExpand ? handleToggleExpand : undefined}
               />
@@ -360,9 +361,7 @@ export function GitHistoryPanel({
               <React.Fragment key={`${viewModel.kind}:${item.id}`}>
                 {onCommitAction && !isBoundaryNode ? (
                   <ContextMenu>
-                    <ContextMenuTrigger asChild>
-                      <div>{row}</div>
-                    </ContextMenuTrigger>
+                    <ContextMenuTrigger asChild>{row}</ContextMenuTrigger>
                     <GitHistoryCommitContextMenu item={item} onAction={onCommitAction} />
                   </ContextMenu>
                 ) : (

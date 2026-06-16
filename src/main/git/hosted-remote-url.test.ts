@@ -77,19 +77,25 @@ describe('hosted remote URLs', () => {
   })
 
   it('builds commit URLs per provider from ssh and https remotes', () => {
-    expect(buildHostedRemoteCommitUrl('git@github.com:Org/Repo.git', 'abc123')).toBe(
-      'https://github.com/Org/Repo/commit/abc123'
+    const sha = '0123456789abcdef0123456789abcdef01234567'
+    expect(buildHostedRemoteCommitUrl('git@github.com:Org/Repo.git', sha)).toBe(
+      `https://github.com/Org/Repo/commit/${sha}`
     )
-    expect(buildHostedRemoteCommitUrl('https://gitlab.com/group/sub/repo.git', 'abc123')).toBe(
-      'https://gitlab.com/group/sub/repo/-/commit/abc123'
+    expect(buildHostedRemoteCommitUrl('https://gitlab.com/group/sub/repo.git', sha)).toBe(
+      `https://gitlab.com/group/sub/repo/-/commit/${sha}`
     )
-    expect(buildHostedRemoteCommitUrl('git@bitbucket.org:team/repo.git', 'abc123')).toBe(
-      'https://bitbucket.org/team/repo/commits/abc123'
+    expect(buildHostedRemoteCommitUrl('git@bitbucket.org:team/repo.git', sha)).toBe(
+      `https://bitbucket.org/team/repo/commits/${sha}`
     )
   })
 
   it('returns null for unsupported commit remotes or missing sha', () => {
-    expect(buildHostedRemoteCommitUrl('git@example.com:team/repo.git', 'abc123')).toBeNull()
+    expect(
+      buildHostedRemoteCommitUrl(
+        'git@example.com:team/repo.git',
+        '0123456789abcdef0123456789abcdef01234567'
+      )
+    ).toBeNull()
     expect(buildHostedRemoteCommitUrl('git@github.com:Org/Repo.git', '')).toBeNull()
   })
 

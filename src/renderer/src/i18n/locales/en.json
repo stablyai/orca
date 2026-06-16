@@ -8757,7 +8757,8 @@
             "c3d4e5f6a7": "Open all changes together"
           },
           "GitHistoryRow": {
-            "2f9c41ab07": "Show files in commit {{value0}}: {{value1}}"
+            "2f9c41ab07": "Show files in commit {{value0}}: {{value1}}",
+            "4a8d9e0c1f": "Hide files in commit {{value0}}: {{value1}}"
           },
           "GitHistoryCommitContextMenu": {
             "7b1c4e9a02": "Open commit in browser",

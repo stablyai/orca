@@ -26,6 +26,18 @@ describe('dedupeRemoteTrackingRefs', () => {
     expect(dedupeRemoteTrackingRefs(refs)).toEqual(refs)
   })
 
+  it('keeps matching remote refs when multiple remotes point to the same branch name', () => {
+    const refs = [localBranch('main'), remoteBranch('origin/main'), remoteBranch('upstream/main')]
+    expect(dedupeRemoteTrackingRefs(refs)).toEqual(refs)
+  })
+
+  it('keeps a matching remote ref when the caller marks it as preserved context', () => {
+    const refs = [localBranch('main'), remoteBranch('origin/main')]
+    expect(
+      dedupeRemoteTrackingRefs(refs, { preserveRefIds: ['refs/remotes/origin/main'] })
+    ).toEqual(refs)
+  })
+
   it('keeps tags and non-remote refs untouched', () => {
     const refs: GitHistoryItemRef[] = [
       localBranch('main'),

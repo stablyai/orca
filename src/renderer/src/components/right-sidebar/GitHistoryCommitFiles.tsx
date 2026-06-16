@@ -2,6 +2,7 @@ import type React from 'react'
 import { ArrowUpRight, RefreshCw } from 'lucide-react'
 import { STATUS_COLORS, STATUS_LABELS } from './status-display'
 import {
+  toPermanentSourceControlRowOpenEvent,
   toSourceControlRowOpenEvent,
   type SourceControlRowOpenEvent
 } from './source-control-split-open'
@@ -38,6 +39,7 @@ function CommitFileRow({
       title={entry.path}
       data-testid="git-history-commit-file"
       onClick={(event) => onOpen(entry, toSourceControlRowOpenEvent(event))}
+      onDoubleClick={(event) => onOpen(entry, toPermanentSourceControlRowOpenEvent(event))}
     >
       <FileIcon className="size-3.5 shrink-0" style={{ color: STATUS_COLORS[status] }} />
       <span className="min-w-0 flex-1 truncate">

@@ -237,8 +237,11 @@ export function useGitHistoryCommitActions({
         )
         return
       }
-      // Explain: spawn the user's default agent in a new tab seeded with enough
-      // context to fetch and summarize the commit's diff itself.
+      if (action !== 'explain') {
+        return
+      }
+      // Spawn the user's default agent in a new tab seeded with enough context
+      // to fetch and summarize the commit's diff itself.
       if (!activeWorktreeId) {
         return
       }
