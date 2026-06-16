@@ -23,9 +23,9 @@ type SettingsSectionProps = {
   badgeAccessory?: React.ReactNode
   forceVisible?: boolean
   /** When true, this section is the one currently selected in the sidebar.
-   *  Sections render only when active or when a non-empty search matches them
-   *  — that way the Settings page shows one focused pane at a time instead of
-   *  one giant scrolling document. */
+   *  Sections render only when active. During search, the sidebar lists every
+   *  match while the content pane stays focused on the selected match instead
+   *  of mounting every matching settings surface at once. */
   isActive?: boolean
   /** Rendered in the section header's upper-right corner — intended for
    *  section-scoped actions (e.g. "Import from Ghostty") that would otherwise
@@ -54,7 +54,7 @@ export function SettingsSection({
   const matchesQuery = !searchEntries || matchesSettingsSearch(query, searchEntries)
   if (!forceVisible) {
     if (hasQuery) {
-      if (!matchesQuery) {
+      if (!sectionIsActive || !matchesQuery) {
         return null
       }
     } else if (!sectionIsActive) {
