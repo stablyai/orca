@@ -6,6 +6,7 @@ import {
   Check,
   Clock,
   Eye,
+  FolderInput,
   Pause,
   Pencil,
   Play,
@@ -23,6 +24,9 @@ import {
   ContextMenuContent,
   ContextMenuItem,
   ContextMenuSeparator,
+  ContextMenuSub,
+  ContextMenuSubContent,
+  ContextMenuSubTrigger,
   ContextMenuTrigger
 } from '@/components/ui/context-menu'
 import {
@@ -45,6 +49,7 @@ import { useRepoMap, useWorktreeMap } from '@/store/selectors'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import type {
   Automation,
+  AutomationFolder,
   ExternalAutomationAction,
   ExternalAutomationJob,
   ExternalAutomationManager,
@@ -53,6 +58,7 @@ import type {
   AutomationRun,
   AutomationUpdateInput
 } from '../../../../shared/automations-types'
+import { filterAutomations } from '../../../../shared/automations-filter'
 import { getAutomationRunRepoId } from '../../../../shared/automation-run-identity'
 import {
   getLocalExecutionHostLabel,
@@ -80,11 +86,6 @@ import {
   getAutomationRunStatusVariant
 } from './automation-page-parts'
 import {
-  formatAutomationCost,
-  formatAutomationTokens,
-  summarizeAutomationRunUsage
-} from './automation-usage-model'
-import {
   canRerunAutomationRun,
   getAutomationRerunPendingRemainingMs,
   getAutomationRunViewState
@@ -92,6 +93,18 @@ import {
 import { getAutomationRunWorkspaceDisplay } from './automation-run-workspace-display'
 import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
 import { AutomationDetail } from './AutomationDetail'
+import { AutomationFolderTree, type AutomationFolderGroup } from './AutomationFolderTree'
+import { AutomationListFilterToolbar } from './AutomationListFilterToolbar'
+import { AutomationLastRunBadge } from './AutomationLastRunBadge'
+import {
+  AutomationFolderNameDialog,
+  type AutomationFolderNameSubmit
+} from './AutomationFolderNameDialog'
+import { AutomationFolderDeleteDialog } from './AutomationFolderDeleteDialog'
+import {
+  buildAutomationLastRunByAutomationId,
+  toLastRunStatusLookup
+} from './automation-last-run-lookup'
 import { HermesCronOutputView } from './HermesCronOutputView'
 import {
   AutomationEditorDialog,
@@ -353,6 +366,10 @@ export default function AutomationsPage(): React.JSX.Element {
   )
   const selectedId = useAppStore((s) => s.selectedAutomationId)
   const setSelectedId = useAppStore((s) => s.setSelectedAutomationId)
+  const automationListFilter = useAppStore((s) => s.automationListFilter)
+  const setAutomationListFilterSearch = useAppStore((s) => s.setAutomationListFilterSearch)
+  const setAutomationListFilterStatus = useAppStore((s) => s.setAutomationListFilterStatus)
+  const setAutomationListFilterFailedOnly = useAppStore((s) => s.setAutomationListFilterFailedOnly)
   const repoMap = useRepoMap()
   const worktreeMap = useWorktreeMap()
   const enabledAgents = filterEnabledTuiAgents(AGENTS, settings?.disabledTuiAgents)
@@ -364,6 +381,17 @@ export default function AutomationsPage(): React.JSX.Element {
       : (enabledAgents[0] ?? AGENTS[0])
 
   const [automations, setAutomations] = useState<Automation[]>([])
+  const [folders, setFolders] = useState<AutomationFolder[]>([])
+  // Why: collapse of the Unfiled pseudo-folder has no backing entity, so it is
+  // session-local UI state (folder-backed sections persist via isCollapsed).
+  const [unfiledCollapsed, setUnfiledCollapsed] = useState(false)
+  const [folderDialog, setFolderDialog] = useState<
+    | { mode: 'create' }
+    | { mode: 'rename'; folder: AutomationFolder }
+    | { mode: 'recolor'; folder: AutomationFolder }
+    | null
+  >(null)
+  const [folderDeleteTarget, setFolderDeleteTarget] = useState<AutomationFolder | null>(null)
   const [runs, setRuns] = useState<AutomationRun[]>([])
   const [selectedAutomationRuns, setSelectedAutomationRuns] = useState<{
     automationId: string | null
@@ -525,6 +553,70 @@ export default function AutomationsPage(): React.JSX.Element {
     () => worktreesByRepo[draft.projectId] ?? [],
     [draft.projectId, worktreesByRepo]
   )
+
+  const lastRunByAutomationId = useMemo(() => buildAutomationLastRunByAutomationId(runs), [runs])
+  const filteredAutomations = useMemo(() => {
+    const lookup = toLastRunStatusLookup(lastRunByAutomationId)
+    return filterAutomations(
+      automations,
+      {
+        status: automationListFilter.status,
+        search: automationListFilter.search,
+        lastRun: automationListFilter.failedOnly ? 'failed' : 'any'
+      },
+      lookup
+    )
+  }, [automations, automationListFilter, lastRunByAutomationId])
+  const hasActiveFilter =
+    automationListFilter.search.trim().length > 0 ||
+    automationListFilter.status !== 'all' ||
+    automationListFilter.failedOnly
+  // Why: hide empty folder headers while filtering, but always keep every folder
+  // visible when no filter is active so users can still drop work into them.
+  const folderGroups = useMemo<AutomationFolderGroup[]>(() => {
+    const byFolderId = new Map<string, Automation[]>()
+    const unfiled: Automation[] = []
+    for (const automation of filteredAutomations) {
+      const folderId = automation.folderId ?? null
+      if (folderId === null) {
+        unfiled.push(automation)
+        continue
+      }
+      const bucket = byFolderId.get(folderId)
+      if (bucket) {
+        bucket.push(automation)
+      } else {
+        byFolderId.set(folderId, [automation])
+      }
+    }
+    const sortedFolders = [...folders].sort(
+      (left, right) => left.sortOrder - right.sortOrder || left.name.localeCompare(right.name)
+    )
+    const groups: AutomationFolderGroup[] = []
+    for (const folder of sortedFolders) {
+      const folderAutomations = byFolderId.get(folder.id) ?? []
+      if (hasActiveFilter && folderAutomations.length === 0) {
+        continue
+      }
+      groups.push({ folder, automations: folderAutomations })
+    }
+    // Unfiled pseudo-folder always sits at the bottom.
+    if (!hasActiveFilter || unfiled.length > 0) {
+      groups.push({ folder: null, automations: unfiled })
+    }
+    return groups
+  }, [filteredAutomations, folders, hasActiveFilter])
+  const folderCountByFolderId = useMemo(() => {
+    const counts = new Map<string, number>()
+    for (const automation of automations) {
+      const folderId = automation.folderId ?? null
+      if (folderId === null) {
+        continue
+      }
+      counts.set(folderId, (counts.get(folderId) ?? 0) + 1)
+    }
+    return counts
+  }, [automations])
 
   useEffect(() => {
     for (const [workspaceId, worktree] of worktreeMap) {
@@ -792,10 +884,13 @@ export default function AutomationsPage(): React.JSX.Element {
     setIsLoading(true)
     const automationHostTarget = getAutomationListTarget(settings)
     try {
-      const [nextAutomations, nextRuns, nextExternalManagers] = await Promise.all([
+      const [nextAutomations, nextRuns, nextExternalManagers, nextFolders] = await Promise.all([
         listAutomationsForTarget(automationHostTarget),
         listAutomationRunsForTarget(automationHostTarget),
-        window.api.automations.listExternalManagers()
+        window.api.automations.listExternalManagers(),
+        // Why: folders are an organizational client concept (host-agnostic per
+        // v1), so they read from the local store regardless of run target.
+        window.api.automations.listFolders().catch(() => [] as AutomationFolder[])
       ])
       const currentSelectedId = useAppStore.getState().selectedAutomationId
       const hasCurrentSelection = nextAutomations.some(
@@ -808,6 +903,7 @@ export default function AutomationsPage(): React.JSX.Element {
         ? await listAutomationRunsForTarget(automationHostTarget, nextSelectedId)
         : []
       setAutomations(nextAutomations)
+      setFolders(nextFolders)
       setRuns(nextRuns)
       setSelectedAutomationRuns({
         automationId: nextSelectedId,
@@ -1416,6 +1512,100 @@ export default function AutomationsPage(): React.JSX.Element {
     await refresh()
   }
 
+  const toggleFolderGroup = useCallback(
+    (group: AutomationFolderGroup): void => {
+      if (!group.folder) {
+        setUnfiledCollapsed((prev) => !prev)
+        return
+      }
+      const folder = group.folder
+      const nextCollapsed = !folder.isCollapsed
+      // Optimistic flip so the caret animates immediately; persist via folder
+      // entity so collapse survives reload like ProjectGroup.
+      setFolders((current) =>
+        current.map((entry) =>
+          entry.id === folder.id ? { ...entry, isCollapsed: nextCollapsed } : entry
+        )
+      )
+      void window.api.automations
+        .updateFolder({ id: folder.id, updates: { isCollapsed: nextCollapsed } })
+        .catch((error) => {
+          console.error('[automations] failed to persist folder collapse:', error)
+          void refresh()
+        })
+    },
+    [refresh]
+  )
+
+  const submitFolderDialog = useCallback(
+    async (value: AutomationFolderNameSubmit): Promise<void> => {
+      try {
+        await (!folderDialog || folderDialog.mode === 'create'
+          ? window.api.automations.createFolder({ name: value.name, color: value.color })
+          : window.api.automations.updateFolder({
+              id: folderDialog.folder.id,
+              updates: { name: value.name, color: value.color }
+            }))
+        await refresh()
+      } catch (error) {
+        toast.error(
+          error instanceof Error
+            ? error.message
+            : translate(
+                'auto.components.automations.AutomationsPage.folderSaveFailed',
+                'Failed to save folder.'
+              )
+        )
+        throw error
+      }
+    },
+    [folderDialog, refresh]
+  )
+
+  const confirmDeleteFolder = useCallback(async (): Promise<void> => {
+    if (!folderDeleteTarget) {
+      return
+    }
+    const target = folderDeleteTarget
+    setFolderDeleteTarget(null)
+    try {
+      // Deletion unfiles members; it never deletes automations (handled by PR1).
+      await window.api.automations.deleteFolder({ id: target.id })
+      await refresh()
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : translate(
+              'auto.components.automations.AutomationsPage.folderDeleteFailed',
+              'Failed to delete folder.'
+            )
+      )
+    }
+  }, [folderDeleteTarget, refresh])
+
+  const moveAutomationToFolder = useCallback(
+    async (automation: Automation, folderId: string | null): Promise<void> => {
+      if ((automation.folderId ?? null) === folderId) {
+        return
+      }
+      try {
+        await window.api.automations.moveToFolder({ automationId: automation.id, folderId })
+        await refresh()
+      } catch (error) {
+        toast.error(
+          error instanceof Error
+            ? error.message
+            : translate(
+                'auto.components.automations.AutomationsPage.moveFailed',
+                'Failed to move automation.'
+              )
+        )
+      }
+    },
+    [refresh]
+  )
+
   const deleteAutomation = async (automation: Automation): Promise<void> => {
     await deleteAutomationForTarget(automation)
     if (useAppStore.getState().selectedAutomationId === automation.id) {
@@ -1785,6 +1975,156 @@ export default function AutomationsPage(): React.JSX.Element {
     return () => window.removeEventListener('keydown', onKeyDown, { capture: true })
   }, [closeAutomationsPage, createOpen, deleteTarget, externalDeleteTarget])
 
+  const renderAutomationRow = (automation: Automation): React.JSX.Element => {
+    const automationRepo = repoMap.get(getAutomationRunRepoId(automation))
+    const automationWorktree = automation.workspaceId
+      ? worktreeMap.get(automation.workspaceId)
+      : null
+    const automationRunAvailability = getAutomationTargetAvailability({
+      automation,
+      repo: automationRepo,
+      workspace: automationWorktree,
+      projectHostSetups,
+      sshConnectionStates,
+      runtimeStatusByEnvironmentId,
+      sourceHostAvailability: automationSourceHostAvailabilityById.get(automation.id)
+    })
+    const workspaceLabel =
+      automation.workspaceMode === 'new_per_run'
+        ? `Create from ${automation.baseBranch ?? automationRepo?.worktreeBaseRef ?? 'project default'}`
+        : (automationWorktree?.displayName ?? 'Missing workspace')
+    const nextRunLabel = automation.enabled
+      ? formatAutomationDateTimeWithRelative(automation.nextRunAt, relativeNow)
+      : 'Paused'
+    const scheduleLabel = formatAutomationSchedule(automation.rrule)
+    const lastRun = lastRunByAutomationId.get(automation.id) ?? null
+    return (
+      <ContextMenu key={automation.id}>
+        <ContextMenuTrigger asChild>
+          <button
+            type="button"
+            onClick={() => {
+              selectExternalKey(null)
+              selectAutomationId(automation.id)
+            }}
+            className={cn(
+              'mb-1 grid w-full grid-cols-[minmax(0,1fr)_auto] gap-3 rounded-md border px-3 py-2 text-left text-sm transition-colors',
+              selectedExternal === null && selected?.id === automation.id
+                ? 'border-foreground/30 bg-muted/70 text-foreground shadow-sm'
+                : 'border-transparent hover:bg-muted/50'
+            )}
+          >
+            <span className="min-w-0">
+              <span className="flex min-w-0 items-center gap-2">
+                <span
+                  className={cn(
+                    'size-2 rounded-full',
+                    automation.enabled ? 'bg-foreground' : 'bg-muted-foreground/40'
+                  )}
+                />
+                <span className="truncate font-medium">{automation.name}</span>
+              </span>
+              <span className="mt-1 block truncate text-xs font-medium text-foreground/80">
+                {scheduleLabel}
+              </span>
+              <span className="mt-1 flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+                {automationRepo ? (
+                  <RepoBadgeLabel
+                    name={automationRepo.displayName}
+                    color={automationRepo.badgeColor}
+                    badgeClassName="size-1.5"
+                  />
+                ) : (
+                  <span>
+                    {translate(
+                      'auto.components.automations.AutomationsPage.13118faadf',
+                      'Unknown project'
+                    )}
+                  </span>
+                )}
+                <span className="shrink-0">/</span>
+                <span className="truncate">{workspaceLabel}</span>
+                <span className="shrink-0">·</span>
+                <span className="truncate">{getAgentLabel(automation.agentId)}</span>
+              </span>
+              <span className="mt-1.5 flex min-w-0">
+                <AutomationLastRunBadge lastRun={lastRun} now={relativeNow} />
+              </span>
+            </span>
+            <span className="flex max-w-28 flex-col items-end gap-1 text-right text-xs text-muted-foreground">
+              <Clock className="size-3.5" />
+              <span className="line-clamp-2">{nextRunLabel}</span>
+            </span>
+          </button>
+        </ContextMenuTrigger>
+        <ContextMenuContent className="w-48">
+          <ContextMenuItem
+            disabled={!automationRunAvailability.canRunNow}
+            onSelect={(event) => {
+              if (!automationRunAvailability.canRunNow) {
+                event.preventDefault()
+                return
+              }
+              void runNow(automation)
+            }}
+          >
+            <Play className="size-3.5" />
+            <span className="min-w-0 truncate">
+              {automationRunAvailability.canRunNow
+                ? translate('auto.components.automations.AutomationsPage.2faecab10b', 'Run Now')
+                : automationRunAvailability.message}
+            </span>
+          </ContextMenuItem>
+          <ContextMenuItem onSelect={() => void openEditDialog(automation)}>
+            <Pencil className="size-3.5" />
+            {translate('auto.components.automations.AutomationsPage.f4612e3f78', 'Edit')}
+          </ContextMenuItem>
+          <ContextMenuItem onSelect={() => void toggleAutomation(automation)}>
+            {automation.enabled ? <Pause className="size-3.5" /> : <Play className="size-3.5" />}
+            {automation.enabled
+              ? translate('auto.components.automations.AutomationsPage.b457436d6a', 'Pause')
+              : translate('auto.components.automations.AutomationsPage.376631ef2b', 'Resume')}
+          </ContextMenuItem>
+          <ContextMenuSub>
+            <ContextMenuSubTrigger>
+              <FolderInput className="size-3.5" />
+              {translate(
+                'auto.components.automations.AutomationsPage.moveToFolder',
+                'Move to folder'
+              )}
+            </ContextMenuSubTrigger>
+            <ContextMenuSubContent className="w-44">
+              <ContextMenuItem
+                disabled={(automation.folderId ?? null) === null}
+                onSelect={() => void moveAutomationToFolder(automation, null)}
+              >
+                {translate('auto.components.automations.AutomationsPage.unfiled', 'Unfiled')}
+              </ContextMenuItem>
+              {folders.length > 0 ? <ContextMenuSeparator /> : null}
+              {folders.map((folder) => (
+                <ContextMenuItem
+                  key={folder.id}
+                  disabled={automation.folderId === folder.id}
+                  onSelect={() => void moveAutomationToFolder(automation, folder.id)}
+                >
+                  <span className="truncate">{folder.name}</span>
+                </ContextMenuItem>
+              ))}
+            </ContextMenuSubContent>
+          </ContextMenuSub>
+          <ContextMenuSeparator />
+          <ContextMenuItem
+            variant="destructive"
+            onSelect={() => requestDeleteAutomation(automation)}
+          >
+            <Trash2 className="size-3.5" />
+            {translate('auto.components.automations.AutomationsPage.15e0bfb13b', 'Delete')}
+          </ContextMenuItem>
+        </ContextMenuContent>
+      </ContextMenu>
+    )
+  }
+
   return (
     <main className="relative flex h-full min-h-0 flex-col bg-background text-foreground">
       <header className="flex shrink-0 items-center justify-between px-5 pb-3 pt-1.5 md:px-8">
@@ -2043,173 +2383,91 @@ export default function AutomationsPage(): React.JSX.Element {
         </DialogContent>
       </Dialog>
 
+      <AutomationFolderNameDialog
+        open={folderDialog !== null}
+        title={
+          folderDialog?.mode === 'rename'
+            ? translate('auto.components.automations.AutomationsPage.renameFolder', 'Rename folder')
+            : folderDialog?.mode === 'recolor'
+              ? translate('auto.components.automations.AutomationsPage.folderColor', 'Folder color')
+              : translate('auto.components.automations.AutomationsPage.newFolder', 'New folder')
+        }
+        description={
+          folderDialog?.mode === 'create'
+            ? translate(
+                'auto.components.automations.AutomationsPage.newFolderDesc',
+                'Group automations under a named folder.'
+              )
+            : translate(
+                'auto.components.automations.AutomationsPage.editFolderDesc',
+                'Update this folder.'
+              )
+        }
+        initialName={folderDialog && folderDialog.mode !== 'create' ? folderDialog.folder.name : ''}
+        initialColor={
+          folderDialog && folderDialog.mode !== 'create' ? folderDialog.folder.color : null
+        }
+        confirmLabel={
+          folderDialog && folderDialog.mode !== 'create'
+            ? translate('auto.components.automations.AutomationsPage.save', 'Save')
+            : translate('auto.components.automations.AutomationsPage.create', 'Create')
+        }
+        onOpenChange={(open) => {
+          if (!open) {
+            setFolderDialog(null)
+          }
+        }}
+        onSubmit={submitFolderDialog}
+      />
+
+      <AutomationFolderDeleteDialog
+        open={folderDeleteTarget !== null}
+        folderName={folderDeleteTarget?.name ?? null}
+        automationCount={
+          folderDeleteTarget ? (folderCountByFolderId.get(folderDeleteTarget.id) ?? 0) : 0
+        }
+        onOpenChange={(open) => {
+          if (!open) {
+            setFolderDeleteTarget(null)
+          }
+        }}
+        onConfirm={() => void confirmDeleteFolder()}
+      />
+
       <div className="grid min-h-0 flex-1 grid-cols-[minmax(280px,360px)_1fr] overflow-hidden border-t border-border/50">
         <section
           className="flex min-h-0 flex-col border-r border-border/50 bg-muted/20"
           data-contextual-tour-target="automations-list"
         >
           <div className="scrollbar-sleek min-h-0 flex-1 overflow-auto p-2">
-            {automations.length + externalAutomationEntries.length > 0 ? (
-              <div className="grid grid-cols-[1fr_auto] gap-2 px-2 pb-2 text-[11px] font-medium uppercase text-muted-foreground">
-                <span>
-                  {translate(
-                    'auto.components.automations.AutomationsPage.761a35834d',
-                    'Automation'
-                  )}
-                </span>
-                <span>
-                  {translate('auto.components.automations.AutomationsPage.587a4b205c', 'Next')}
-                </span>
-              </div>
+            {automations.length > 0 ? (
+              <>
+                <AutomationListFilterToolbar
+                  filter={automationListFilter}
+                  onSearchChange={setAutomationListFilterSearch}
+                  onStatusChange={setAutomationListFilterStatus}
+                  onFailedOnlyChange={setAutomationListFilterFailedOnly}
+                />
+                <AutomationFolderTree
+                  groups={folderGroups}
+                  collapsedUnfiled={unfiledCollapsed}
+                  onToggleFolder={toggleFolderGroup}
+                  onCreateFolder={() => setFolderDialog({ mode: 'create' })}
+                  onRenameFolder={(folder) => setFolderDialog({ mode: 'rename', folder })}
+                  onRecolorFolder={(folder) => setFolderDialog({ mode: 'recolor', folder })}
+                  onDeleteFolder={(folder) => setFolderDeleteTarget(folder)}
+                  renderRow={renderAutomationRow}
+                />
+                {filteredAutomations.length === 0 ? (
+                  <div className="px-3 py-6 text-center text-sm text-muted-foreground">
+                    {translate(
+                      'auto.components.automations.AutomationsPage.noMatch',
+                      'No automations match'
+                    )}
+                  </div>
+                ) : null}
+              </>
             ) : null}
-            {automations.map((automation) => {
-              const automationRepo = repoMap.get(getAutomationRunRepoId(automation))
-              const automationWorktree = automation.workspaceId
-                ? worktreeMap.get(automation.workspaceId)
-                : null
-              const automationRunAvailability = getAutomationTargetAvailability({
-                automation,
-                repo: automationRepo,
-                workspace: automationWorktree,
-                projectHostSetups,
-                sshConnectionStates,
-                runtimeStatusByEnvironmentId,
-                sourceHostAvailability: automationSourceHostAvailabilityById.get(automation.id)
-              })
-              const workspaceLabel =
-                automation.workspaceMode === 'new_per_run'
-                  ? `Create from ${automation.baseBranch ?? automationRepo?.worktreeBaseRef ?? 'project default'}`
-                  : (automationWorktree?.displayName ?? 'Missing workspace')
-              const usageSummary = summarizeAutomationRunUsage(
-                runs.filter((run) => run.automationId === automation.id)
-              )
-              const usageText =
-                usageSummary.knownRuns > 0
-                  ? `${formatAutomationCost(
-                      usageSummary.estimatedCostUsd
-                    )} est. · ${formatAutomationTokens(usageSummary.totalTokens)} tokens`
-                  : usageSummary.unavailableRuns > 0
-                    ? 'Usage unavailable'
-                    : 'No run usage yet'
-              const nextRunLabel = automation.enabled
-                ? formatAutomationDateTimeWithRelative(automation.nextRunAt, relativeNow)
-                : 'Paused'
-              const scheduleLabel = formatAutomationSchedule(automation.rrule)
-              return (
-                <ContextMenu key={automation.id}>
-                  <ContextMenuTrigger asChild>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        selectExternalKey(null)
-                        selectAutomationId(automation.id)
-                      }}
-                      className={cn(
-                        'mb-1 grid w-full grid-cols-[minmax(0,1fr)_auto] gap-3 rounded-md border px-3 py-2 text-left text-sm transition-colors',
-                        selectedExternal === null && selected?.id === automation.id
-                          ? 'border-foreground/30 bg-muted/70 text-foreground shadow-sm'
-                          : 'border-transparent hover:bg-muted/50'
-                      )}
-                    >
-                      <span className="min-w-0">
-                        <span className="flex min-w-0 items-center gap-2">
-                          <span
-                            className={cn(
-                              'size-2 rounded-full',
-                              automation.enabled ? 'bg-foreground' : 'bg-muted-foreground/40'
-                            )}
-                          />
-                          <span className="truncate font-medium">{automation.name}</span>
-                        </span>
-                        <span className="mt-1 block truncate text-xs font-medium text-foreground/80">
-                          {scheduleLabel}
-                        </span>
-                        <span className="mt-1 flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
-                          {automationRepo ? (
-                            <RepoBadgeLabel
-                              name={automationRepo.displayName}
-                              color={automationRepo.badgeColor}
-                              badgeClassName="size-1.5"
-                            />
-                          ) : (
-                            <span>
-                              {translate(
-                                'auto.components.automations.AutomationsPage.13118faadf',
-                                'Unknown project'
-                              )}
-                            </span>
-                          )}
-                          <span className="shrink-0">/</span>
-                          <span className="truncate">{workspaceLabel}</span>
-                          <span className="shrink-0">·</span>
-                          <span className="truncate">{getAgentLabel(automation.agentId)}</span>
-                        </span>
-                        <span className="mt-1 block truncate text-xs text-muted-foreground">
-                          {usageText}
-                        </span>
-                      </span>
-                      <span className="flex max-w-28 flex-col items-end gap-1 text-right text-xs text-muted-foreground">
-                        <Clock className="size-3.5" />
-                        <span className="line-clamp-2">{nextRunLabel}</span>
-                      </span>
-                    </button>
-                  </ContextMenuTrigger>
-                  <ContextMenuContent className="w-48">
-                    <ContextMenuItem
-                      disabled={!automationRunAvailability.canRunNow}
-                      onSelect={(event) => {
-                        if (!automationRunAvailability.canRunNow) {
-                          event.preventDefault()
-                          return
-                        }
-                        void runNow(automation)
-                      }}
-                    >
-                      <Play className="size-3.5" />
-                      <span className="min-w-0 truncate">
-                        {automationRunAvailability.canRunNow
-                          ? translate(
-                              'auto.components.automations.AutomationsPage.2faecab10b',
-                              'Run Now'
-                            )
-                          : automationRunAvailability.message}
-                      </span>
-                    </ContextMenuItem>
-                    <ContextMenuItem onSelect={() => void openEditDialog(automation)}>
-                      <Pencil className="size-3.5" />
-                      {translate('auto.components.automations.AutomationsPage.f4612e3f78', 'Edit')}
-                    </ContextMenuItem>
-                    <ContextMenuItem onSelect={() => void toggleAutomation(automation)}>
-                      {automation.enabled ? (
-                        <Pause className="size-3.5" />
-                      ) : (
-                        <Play className="size-3.5" />
-                      )}
-                      {automation.enabled
-                        ? translate(
-                            'auto.components.automations.AutomationsPage.b457436d6a',
-                            'Pause'
-                          )
-                        : translate(
-                            'auto.components.automations.AutomationsPage.376631ef2b',
-                            'Resume'
-                          )}
-                    </ContextMenuItem>
-                    <ContextMenuSeparator />
-                    <ContextMenuItem
-                      variant="destructive"
-                      onSelect={() => requestDeleteAutomation(automation)}
-                    >
-                      <Trash2 className="size-3.5" />
-                      {translate(
-                        'auto.components.automations.AutomationsPage.15e0bfb13b',
-                        'Delete'
-                      )}
-                    </ContextMenuItem>
-                  </ContextMenuContent>
-                </ContextMenu>
-              )
-            })}
             {externalAutomationEntries.map((entry) => {
               const providerLabel = getExternalProviderLabel(entry.manager)
               const targetKindLabel = getExternalTargetKindLabel(entry.manager)
@@ -2562,10 +2820,14 @@ export default function AutomationsPage(): React.JSX.Element {
                   hostLabelById={hostLabelById}
                   runNowAvailability={selectedRunNowAvailability}
                   now={relativeNow}
+                  folders={folders}
                   onRunNow={(automation) => void runNow(automation)}
                   onEdit={(automation) => void openEditDialog(automation)}
                   onToggle={(automation) => void toggleAutomation(automation)}
                   onDelete={requestDeleteAutomation}
+                  onMoveToFolder={(automation, folderId) =>
+                    void moveAutomationToFolder(automation, folderId)
+                  }
                 />
               </TabsContent>
 

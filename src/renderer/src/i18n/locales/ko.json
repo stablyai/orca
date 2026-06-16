@@ -10675,7 +10675,8 @@
           "51a470b966": "SSH",
           "b09b2384fd": "일시중지됨",
           "eaa02014f8": "활성화됨",
-          "29baf8f4c2": "Source"
+          "29baf8f4c2": "Source",
+          "unfiled": "Unfiled"
         },
         "AutomationEditorDialog": {
           "fb1896a5e7": "취소",
@@ -10832,7 +10833,20 @@
           "d441032f7e": "정지시키다",
           "5918020edc": "달리다",
           "a21f6c33ad": "Automation source refreshed.",
-          "53f06f0ad5": "Retry source"
+          "53f06f0ad5": "Retry source",
+          "folderSaveFailed": "Failed to save folder.",
+          "folderDeleteFailed": "Failed to delete folder.",
+          "moveFailed": "Failed to move automation.",
+          "moveToFolder": "Move to folder",
+          "unfiled": "Unfiled",
+          "renameFolder": "Rename folder",
+          "folderColor": "Folder color",
+          "newFolder": "New folder",
+          "newFolderDesc": "Group automations under a named folder.",
+          "editFolderDesc": "Update this folder.",
+          "save": "Save",
+          "create": "Create",
+          "noMatch": "No automations match"
         },
         "CreateFromPicker": {
           "f061f49e3f": "repo 브랜치 검색...",
@@ -10940,6 +10954,43 @@
           "chooseHost": "Choose automation host",
           "adding": "Adding project…",
           "addProject": "Add project"
+        },
+        "AutomationFolderDeleteDialog": {
+          "noneAffected": "This folder has no automations.",
+          "oneUnfiled": "1 automation will be moved to Unfiled.",
+          "manyUnfiled": "{{value0}} automations will be moved to Unfiled.",
+          "title": "Delete Folder",
+          "delete": "Delete",
+          "cancel": "Cancel"
+        },
+        "AutomationFolderNameDialog": {
+          "name": "Folder name",
+          "color": "Color",
+          "noColor": "No color",
+          "cancel": "Cancel",
+          "saving": "Saving..."
+        },
+        "AutomationFolderTree": {
+          "folderActions": "Folder actions",
+          "rename": "Rename",
+          "recolor": "Change color",
+          "delete": "Delete",
+          "unfiled": "Unfiled",
+          "empty": "No automations",
+          "folders": "Folders",
+          "newFolder": "New folder"
+        },
+        "AutomationLastRunBadge": {
+          "noRuns": "No runs yet"
+        },
+        "AutomationListFilterToolbar": {
+          "all": "All",
+          "running": "Running",
+          "paused": "Paused",
+          "searchPlaceholder": "Search name or prompt",
+          "searchAria": "Search automations",
+          "clearSearch": "Clear search",
+          "failedLastRun": "Failed last run"
         }
       },
       "agent": {

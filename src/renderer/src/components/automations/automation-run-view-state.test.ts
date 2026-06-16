@@ -14,6 +14,7 @@ function makeAutomation(overrides: Partial<Automation> = {}): Automation {
     prompt: 'Run checks',
     precheck: null,
     agentId: 'codex',
+    folderId: null,
     projectId: 'repo-1',
     executionTargetType: 'local',
     executionTargetId: 'local',

@@ -108,6 +108,14 @@ import { buildAgentNotificationId } from '../../../../shared/agent-notification-
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
 import { translate } from '@/i18n/i18n'
 
+/** Active status chip for the automations list filter toolbar. 'all' is the
+ *  no-op default; 'enabled'/'paused' mirror AutomationStatusFilter. */
+export type AutomationListFilterState = {
+  search: string
+  status: 'all' | 'enabled' | 'paused'
+  failedOnly: boolean
+}
+
 export type PendingSidebarWorktreeReveal = {
   worktreeId: string
   behavior: 'auto' | 'smooth'
@@ -660,6 +668,14 @@ export type UISlice = {
   closeActivityPage: () => void
   selectedAutomationId: string | null
   setSelectedAutomationId: (id: string | null) => void
+  /** Lightweight automations list filter UI state. In-memory only so it
+   *  survives navigation within a session (like selectedAutomationId) without
+   *  persisting filter noise to disk; folder collapse persists via the folder
+   *  entity instead. */
+  automationListFilter: AutomationListFilterState
+  setAutomationListFilterSearch: (search: string) => void
+  setAutomationListFilterStatus: (status: AutomationListFilterState['status']) => void
+  setAutomationListFilterFailedOnly: (failedOnly: boolean) => void
   openAutomationsPage: () => void
   closeAutomationsPage: () => void
   openSpacePage: () => void
@@ -1295,6 +1311,13 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
     })),
   selectedAutomationId: null,
   setSelectedAutomationId: (id) => set({ selectedAutomationId: id }),
+  automationListFilter: { search: '', status: 'all', failedOnly: false },
+  setAutomationListFilterSearch: (search) =>
+    set((s) => ({ automationListFilter: { ...s.automationListFilter, search } })),
+  setAutomationListFilterStatus: (status) =>
+    set((s) => ({ automationListFilter: { ...s.automationListFilter, status } })),
+  setAutomationListFilterFailedOnly: (failedOnly) =>
+    set((s) => ({ automationListFilter: { ...s.automationListFilter, failedOnly } })),
   openAutomationsPage: () => {
     get().recordViewVisit('automations')
     set((state) => ({

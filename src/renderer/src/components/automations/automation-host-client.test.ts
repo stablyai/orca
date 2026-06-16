@@ -33,6 +33,7 @@ function makeAutomation(overrides: Partial<Automation> = {}): Automation {
     prompt: 'Check',
     precheck: null,
     agentId: 'codex',
+    folderId: null,
     projectId: 'repo-1',
     executionTargetType: 'local',
     executionTargetId: 'local',
