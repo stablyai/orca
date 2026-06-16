@@ -93,10 +93,8 @@
 }
 
 .markdown-toc-panel {
+  position: relative;
   display: flex;
-  width: 240px;
-  min-width: 200px;
-  max-width: 30%;
   flex-shrink: 0;
   flex-direction: column;
   border-right: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
@@ -228,13 +226,6 @@
   font-size: 12px;
 }
 
-@media (max-width: 900px) {
-  .markdown-toc-panel {
-    width: 200px;
-    max-width: 42%;
-  }
-}
-
 @container (max-width: 560px) {
   .markdown-toc-panel {
     position: absolute;
@@ -242,9 +233,6 @@
     left: 0;
     bottom: 0;
     z-index: 30;
-    width: min(240px, 72cqw);
-    min-width: 0;
-    max-width: calc(100cqw - 44px);
     box-shadow: 10px 0 24px rgb(0 0 0 / 0.14);
   }
 }

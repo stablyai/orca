@@ -165,7 +165,9 @@
         "editor": {
           "dcb521ed29": "This file is in a conflict state, but no working-tree file is available to edit.",
           "51f15c37d3": "Cannot open directory: {{value0}}",
-          "f2e00db373": "File not found: {{value0}}"
+          "f2e00db373": "File not found: {{value0}}",
+          "checkRunDetailsUnavailable": "No details are available for this check.",
+          "checkRunDetailsLoadFailed": "Failed to load check details."
         },
         "github": {
           "f129c42773": "GitHub did not return the new comment.",
@@ -7453,7 +7455,9 @@
             "host": "host",
             "ssh": "ssh",
             "remote": "remote",
-            "vm": "vm"
+            "vm": "vm",
+            "keepForkUpToDate": "Keep Fork Up to Date",
+            "keepForkUpToDateDescription": "Safely fast-forward this fork from upstream."
           }
         },
         "runtime": {
@@ -8006,6 +8010,33 @@
           "workspaceDirectory": "The client default is inherited until a host needs its own worktree directory.",
           "providerHost": "Provider host",
           "providerAccounts": "Credentials and account checks belong to the local client or selected remote server that owns the provider integration."
+        },
+        "RepositoryForkSyncSection": {
+          "defaultBranch": "default branch",
+          "synced": "Fork updated",
+          "syncedDescriptionSingular": "Fast-forwarded {{branch}} by 1 commit.",
+          "syncedDescriptionPlural": "Fast-forwarded {{branch}} by {{count}} commits.",
+          "upToDate": "Fork already up to date",
+          "upToDateDescription": "{{branch}} already matches upstream.",
+          "missingOrigin": "origin remote is missing.",
+          "missingUpstream": "upstream remote is missing.",
+          "upstreamMismatch": "upstream remote no longer matches this fork.",
+          "missingUpstreamBranch": "upstream default branch could not be resolved.",
+          "missingOriginBranch": "origin does not have the upstream default branch.",
+          "diverged": "origin has commits that are not in upstream.",
+          "blocked": "Fork sync skipped",
+          "blockedFallback": "Orca could not fast-forward this fork safely.",
+          "failed": "Fork sync failed",
+          "title": "Keep Fork Up to Date",
+          "description": "Safely fast-forward this fork from upstream.",
+          "longDescription": "When this fork is behind upstream, Orca can safely fast-forward its default branch. Orca skips the update if the branch has local-only commits or conflicts.",
+          "forkOf": "Fork of {{owner}}/{{repo}}",
+          "syncing": "Syncing",
+          "syncNow": "Sync Now",
+          "modeLabel": "Fork sync mode",
+          "ask": "Ask",
+          "safeAuto": "Safe Auto",
+          "off": "Off"
         }
       },
       "right": {
@@ -8092,7 +8123,8 @@
           "FileExplorer": {
             "79b1537dd3": "Select a workspace to browse files",
             "4da4d89845": "Back to Explorer",
-            "6ed5ce817b": "Search"
+            "6ed5ce817b": "Search",
+            "2f4483d6c4": "No files match this filter"
           },
           "FileExplorerBackgroundMenu": {
             "3b5e2dcb8d": "New Folder",
@@ -8129,7 +8161,8 @@
             "31b4c3195d": "More Explorer Actions",
             "d95e30fe28": "Refresh Explorer",
             "6026b16950": "Collapse All",
-            "693cbeadd0": "Search"
+            "693cbeadd0": "Search",
+            "c1f3f3ec70": "Search file contents"
           },
           "FileExplorerTreeStatus": {
             "ce03835e1f": "No files in this workspace",
@@ -8146,7 +8179,8 @@
             "9a8b85882d": "loading",
             "62e685d5ec": "idle",
             "111e1d0db4": "error",
-            "e5e81e59a6": "Resize commits"
+            "e5e81e59a6": "Resize commits",
+            "6d1e0a7c3b": "Failed to load commit files"
           },
           "HostedReviewActions": {
             "4d5fb5a284": "Close",
@@ -8419,7 +8453,14 @@
             "e2b7a1c0d9f4": "Failed to create {{value0}}",
             "hugeRepoIgnorePrompt": "This repository has too many active changes. Add \"{{value0}}\" to .gitignore?",
             "hugeRepoIgnoreAction": "Add to .gitignore",
-            "tooManyChanges": "Too many changes detected. Only the first {{value0}} are shown."
+            "tooManyChanges": "Too many changes detected. Only the first {{value0}} are shown.",
+            "bf5082de46": "{{value0}} copied",
+            "c06193ef57": "Failed to copy {{value0}}",
+            "d172a4f068": "Commit hash",
+            "e283b50179": "Commit message",
+            "f394c6128a": "No agent available to explain this commit",
+            "04a5d7239b": "This repository has no supported web remote",
+            "15b6e834ac": "Failed to open commit in browser"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "Could not start the selected agent.",
@@ -8767,7 +8808,10 @@
             "noAgentSessionsFound": "No agent sessions found",
             "noSessionsMatchFilters": "No sessions match the current filters",
             "sessionId": "Session ID",
-            "logPath": "Log path"
+            "logPath": "Log path",
+            "valueCopyFailed": "Unable to copy {{value0}}",
+            "agents": "Agents",
+            "sessionsShownCompact": "{{value0}} shown"
           },
           "AiVaultPanelControls": {
             "scanningSessions": "Scanning sessions",
@@ -8830,7 +8874,8 @@
             "hoursAgo": "{{value0}}h ago",
             "daysAgo": "{{value0}}d ago",
             "monthsAgo": "{{value0}}mo ago",
-            "yearsAgo": "{{value0}}y ago"
+            "yearsAgo": "{{value0}}y ago",
+            "sessionId": "Session ID"
           },
           "AiVaultSessionRow": {
             "resumeAgentSession": "Resume {{value0}} session",
@@ -8842,7 +8887,41 @@
             "copySessionId": "Copy Session ID",
             "copyLogPath": "Copy Log Path",
             "messageCount": "{{value0}} msgs",
-            "tokenCount": "{{value0}} tok"
+            "tokenCount": "{{value0}} tok",
+            "toggleSessionDetails": "{{value0}} session details",
+            "hideDetails": "Hide Details",
+            "showDetails": "Show Details",
+            "moreSessionActions": "More Session Actions",
+            "moreActions": "More Actions"
+          },
+          "SearchQueryRow": {
+            "queryLabel": "Search files",
+            "clearLabel": "Clear search"
+          },
+          "FileExplorerNameFilter": {
+            "26fb73c6e3": "Find files",
+            "4d5a6b2a49": "Clear file filter",
+            "7a9fb1e6aa": "Contents"
+          },
+          "FileExplorerViewSwitch": {
+            "c4e9a2b713": "Names",
+            "b3c8f1a902": "Filter files by name",
+            "f8a2c4d1e0": "Explorer search mode"
+          },
+          "GitHistoryCommitFiles": {
+            "a1b2c3d4e5": "Loading files…",
+            "b2c3d4e5f6": "No file changes in this commit",
+            "c3d4e5f6a7": "Open all changes together"
+          },
+          "GitHistoryRow": {
+            "2f9c41ab07": "Show files in commit {{value0}}: {{value1}}",
+            "4a8d9e0c1f": "Hide files in commit {{value0}}: {{value1}}"
+          },
+          "GitHistoryCommitContextMenu": {
+            "7b1c4e9a02": "Open commit in browser",
+            "8c2d5fab13": "Copy commit hash",
+            "9d3e60bc24": "Copy commit message",
+            "ae4f71cd35": "Explain changes"
           }
         }
       },
@@ -9969,7 +10048,8 @@
           "8a0898ae4c": "Text diff is unavailable for this file.",
           "3c6e71df22": "Text diff is unavailable for this file in branch compare.",
           "d07e4b8553": "branch",
-          "d16e037f40": "rich"
+          "d16e037f40": "rich",
+          "6c4f1a8d2e": "Check details are unavailable."
         },
         "EditorPanelHeader": {
           "fb8331694e": "Open Preview to the Side",
@@ -10083,7 +10163,8 @@
           "06357eea60": "Table of Contents",
           "27d0a9c49a": "Table of contents",
           "65b036a6c8": "Expand {{value0}}",
-          "97ad46f11f": "Collapse {{value0}}"
+          "97ad46f11f": "Collapse {{value0}}",
+          "8f4d2c1a9b": "Resize table of contents"
         },
         "MarkdownTemplatePicker": {
           "22cd94426f": "untitled.md",
@@ -10332,6 +10413,30 @@
         "DiffViewer": {
           "b5675b0694": "Save",
           "593f2193f6": "This draft crossed the safe display limit, but it can still be saved."
+        },
+        "CheckRunDetailsPanel": {
+          "8f2d0f5a91": "Passed",
+          "4c8e1b2d73": "Failed",
+          "91a4c7e2b0": "Cancelled",
+          "2f6d8a1c45": "Timed out",
+          "7b3e9d4f12": "Skipped",
+          "5a1c8e3d67": "Neutral",
+          "3d9f2b8e14": "Pending",
+          "b7f5e2c91a": "Refresh",
+          "a54ae21c6f": "Status:",
+          "fd46a70f1a": "Started",
+          "00e1c1658a": "Completed",
+          "aa8494ae3c": "check #",
+          "2dd5ddabc4": "workflow #",
+          "1f2b980522": "Loading check details…",
+          "d098e5529a": "Output",
+          "f2fe8a4e8f": "Annotations",
+          "cdbfda4dec": "Annotation",
+          "066fedd446": "Failed jobs",
+          "49731703ea": "Jobs",
+          "ee07b33924": "unknown",
+          "07eccfa397": "No details are available for this check.",
+          "a916648574": "Open details"
         }
       },
       "diff": {

@@ -220,7 +220,7 @@ export default function AiVaultPanel(): React.JSX.Element {
   }, [])
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-sidebar">
+    <div className="@container/ai-vault flex h-full min-h-0 flex-col bg-sidebar">
       <AiVaultPanelHeader
         query={query}
         loading={loading}

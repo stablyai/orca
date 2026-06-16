@@ -59,6 +59,37 @@ describe('getEditorHeaderCopyState', () => {
     })
   })
 
+  it('shows the check name without a copyable path for check-details tabs', () => {
+    expect(
+      getEditorHeaderCopyState(
+        makeOpenFile({
+          id: 'wt-1::check-details::check-run:99',
+          filePath: 'wt-1::check-details::check-run:99',
+          relativePath: 'verify',
+          mode: 'check-details',
+          checkRunDetails: {
+            contextKey: 'repo:42',
+            check: {
+              name: 'verify',
+              status: 'completed',
+              conclusion: 'failure',
+              url: null,
+              checkRunId: 99
+            },
+            details: null,
+            loading: false,
+            error: null
+          }
+        })
+      )
+    ).toEqual({
+      copyText: null,
+      copyToastLabel: 'Check details copied',
+      pathLabel: 'verify',
+      pathTitle: 'verify'
+    })
+  })
+
   it('shows All Changes while still copying the worktree path', () => {
     expect(
       getEditorHeaderCopyState(

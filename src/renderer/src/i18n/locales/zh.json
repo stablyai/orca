@@ -165,7 +165,9 @@
         "editor": {
           "dcb521ed29": "该文件处于冲突状态，但没有可编辑的工作树文件。",
           "51f15c37d3": "无法打开目录：{{value0}}",
-          "f2e00db373": "未找到文件：{{value0}}"
+          "f2e00db373": "未找到文件：{{value0}}",
+          "checkRunDetailsUnavailable": "No details are available for this check.",
+          "checkRunDetailsLoadFailed": "Failed to load check details."
         },
         "github": {
           "f129c42773": "GitHub 没有回复新评论。",
@@ -7401,7 +7403,9 @@
             "host": "host",
             "ssh": "ssh",
             "remote": "remote",
-            "vm": "vm"
+            "vm": "vm",
+            "keepForkUpToDate": "保持 Fork 最新",
+            "keepForkUpToDateDescription": "从 upstream 安全地快进此 Fork。"
           }
         },
         "runtime": {
@@ -8006,6 +8010,33 @@
           "workspaceDirectory": "The client default is inherited until a host needs its own worktree directory.",
           "providerHost": "Provider host",
           "providerAccounts": "Credentials and account checks belong to the local client or selected remote server that owns the provider integration."
+        },
+        "RepositoryForkSyncSection": {
+          "defaultBranch": "默认分支",
+          "synced": "Fork 已更新",
+          "syncedDescriptionSingular": "已将 {{branch}} 快进 1 个提交。",
+          "syncedDescriptionPlural": "已将 {{branch}} 快进 {{count}} 个提交。",
+          "upToDate": "Fork 已是最新",
+          "upToDateDescription": "{{branch}} 已与 upstream 一致。",
+          "missingOrigin": "缺少 origin 远程。",
+          "missingUpstream": "缺少 upstream 远程。",
+          "upstreamMismatch": "upstream 远程不再匹配此 Fork。",
+          "missingUpstreamBranch": "无法解析 upstream 默认分支。",
+          "missingOriginBranch": "origin 没有 upstream 默认分支。",
+          "diverged": "origin 有 upstream 中不存在的提交。",
+          "blocked": "已跳过 Fork 同步",
+          "blockedFallback": "Orca 无法安全地快进此 Fork。",
+          "failed": "Fork 同步失败",
+          "title": "保持 Fork 最新",
+          "description": "从 upstream 安全地快进此 Fork。",
+          "longDescription": "当此 Fork 落后于 upstream 时，Orca 可以安全地快进其默认分支。如果该分支有仅本地提交或冲突，Orca 会跳过更新。",
+          "forkOf": "{{owner}}/{{repo}} 的 Fork",
+          "syncing": "同步中",
+          "syncNow": "立即同步",
+          "modeLabel": "Fork 同步模式",
+          "ask": "询问",
+          "safeAuto": "安全自动",
+          "off": "关闭"
         }
       },
       "right": {
@@ -8092,7 +8123,8 @@
           "FileExplorer": {
             "79b1537dd3": "选择一个工作区来浏览文件",
             "4da4d89845": "返回资源管理器",
-            "6ed5ce817b": "搜索"
+            "6ed5ce817b": "搜索",
+            "2f4483d6c4": "没有文件匹配此筛选条件"
           },
           "FileExplorerBackgroundMenu": {
             "3b5e2dcb8d": "新建文件夹",
@@ -8129,7 +8161,8 @@
             "31b4c3195d": "更多资源管理器操作",
             "d95e30fe28": "刷新资源管理器",
             "6026b16950": "全部折叠",
-            "693cbeadd0": "搜索"
+            "693cbeadd0": "搜索",
+            "c1f3f3ec70": "搜索文件内容"
           },
           "FileExplorerTreeStatus": {
             "ce03835e1f": "此工作区中没有文件",
@@ -8146,7 +8179,8 @@
             "9a8b85882d": "加载中",
             "62e685d5ec": "idle",
             "111e1d0db4": "错误",
-            "e5e81e59a6": "调整 commits 大小"
+            "e5e81e59a6": "调整 commits 大小",
+            "6d1e0a7c3b": "无法加载提交文件"
           },
           "HostedReviewActions": {
             "4d5fb5a284": "关闭",
@@ -8254,6 +8288,10 @@
             "4567e6e0b6": "匹配整个单词",
             "464ae3974f": "火柴盒",
             "693cbeadd0": "搜索"
+          },
+          "SearchQueryRow": {
+            "queryLabel": "搜索文件",
+            "clearLabel": "清除搜索"
           },
           "SearchResultItems": {
             "cc06595a3b": "复制线路径",
@@ -8419,7 +8457,14 @@
             "e2b7a1c0d9f4": "创建 {{value0}} 失败",
             "hugeRepoIgnorePrompt": "此存储库的活动更改过多。是否将 \"{{value0}}\" 添加到 .gitignore？",
             "hugeRepoIgnoreAction": "添加到 .gitignore",
-            "tooManyChanges": "检测到过多更改。仅显示前 {{value0}} 项。"
+            "tooManyChanges": "检测到过多更改。仅显示前 {{value0}} 项。",
+            "bf5082de46": "已复制{{value0}}",
+            "c06193ef57": "无法复制{{value0}}",
+            "d172a4f068": "提交哈希",
+            "e283b50179": "提交信息",
+            "f394c6128a": "没有可用于解释此提交的代理",
+            "04a5d7239b": "此仓库没有受支持的网页远程库",
+            "15b6e834ac": "无法在浏览器中打开提交"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "无法启动选定的 Agent。",
@@ -8753,6 +8798,7 @@
           "AiVaultPanel": {
             "resumeCommandCopied": "Resume command copied",
             "valueCopied": "{{value0}} copied",
+            "valueCopyFailed": "无法复制 {{value0}}",
             "openWorkspaceBeforeResuming": "Open a workspace before resuming a session.",
             "localWorkspacesOnly": "Resume from history is only available in local workspaces.",
             "agentSessionQueued": "{{value0}} session queued",
@@ -8766,8 +8812,10 @@
             "transcriptsSkipped": "{{count}} transcript skipped",
             "noAgentSessionsFound": "No agent sessions found",
             "noSessionsMatchFilters": "No sessions match the current filters",
-            "sessionId": "Session ID",
-            "logPath": "Log path"
+            "sessionId": "会话 ID",
+            "logPath": "日志路径",
+            "agents": "智能体",
+            "sessionsShownCompact": "已显示 {{value0}} 个"
           },
           "AiVaultPanelControls": {
             "scanningSessions": "Scanning sessions",
@@ -8830,7 +8878,8 @@
             "hoursAgo": "{{value0}}h ago",
             "daysAgo": "{{value0}}d ago",
             "monthsAgo": "{{value0}}mo ago",
-            "yearsAgo": "{{value0}}y ago"
+            "yearsAgo": "{{value0}}y ago",
+            "sessionId": "会话 ID"
           },
           "AiVaultSessionRow": {
             "resumeAgentSession": "Resume {{value0}} session",
@@ -8842,7 +8891,37 @@
             "copySessionId": "Copy Session ID",
             "copyLogPath": "Copy Log Path",
             "messageCount": "{{value0}} msgs",
-            "tokenCount": "{{value0}} tok"
+            "tokenCount": "{{value0}} tok",
+            "toggleSessionDetails": "{{value0}} 会话详情",
+            "hideDetails": "隐藏详情",
+            "showDetails": "显示详情",
+            "moreSessionActions": "更多会话操作",
+            "moreActions": "更多操作"
+          },
+          "FileExplorerNameFilter": {
+            "26fb73c6e3": "查找文件",
+            "4d5a6b2a49": "清除文件筛选器",
+            "7a9fb1e6aa": "内容"
+          },
+          "FileExplorerViewSwitch": {
+            "c4e9a2b713": "名称",
+            "b3c8f1a902": "按名称筛选文件",
+            "f8a2c4d1e0": "资源管理器搜索模式"
+          },
+          "GitHistoryCommitFiles": {
+            "a1b2c3d4e5": "正在加载文件…",
+            "b2c3d4e5f6": "此提交没有文件更改",
+            "c3d4e5f6a7": "一起打开所有更改"
+          },
+          "GitHistoryRow": {
+            "2f9c41ab07": "显示提交{{value0}}中的文件：{{value1}}",
+            "4a8d9e0c1f": "隐藏提交{{value0}}中的文件：{{value1}}"
+          },
+          "GitHistoryCommitContextMenu": {
+            "7b1c4e9a02": "在浏览器中打开提交",
+            "8c2d5fab13": "复制提交哈希",
+            "9d3e60bc24": "复制提交信息",
+            "ae4f71cd35": "解释更改"
           }
         }
       },
@@ -9969,7 +10048,8 @@
           "8a0898ae4c": "此文件的文本差异不可用。",
           "3c6e71df22": "分支比较中此文件的文本差异不可用。",
           "d07e4b8553": "分支",
-          "d16e037f40": "富有的"
+          "d16e037f40": "富有的",
+          "6c4f1a8d2e": "Check details are unavailable."
         },
         "EditorPanelHeader": {
           "fb8331694e": "打开侧面预览",
@@ -10083,7 +10163,8 @@
           "06357eea60": "目录",
           "27d0a9c49a": "目录",
           "65b036a6c8": "展开 {{value0}}",
-          "97ad46f11f": "折叠 {{value0}}"
+          "97ad46f11f": "折叠 {{value0}}",
+          "8f4d2c1a9b": "Resize table of contents"
         },
         "MarkdownTemplatePicker": {
           "22cd94426f": "无标题.md",
@@ -10332,6 +10413,30 @@
         "DiffViewer": {
           "b5675b0694": "保存",
           "593f2193f6": "此草稿已超过安全显示限制，但仍可保存。"
+        },
+        "CheckRunDetailsPanel": {
+          "8f2d0f5a91": "Passed",
+          "4c8e1b2d73": "Failed",
+          "91a4c7e2b0": "Cancelled",
+          "2f6d8a1c45": "Timed out",
+          "7b3e9d4f12": "Skipped",
+          "5a1c8e3d67": "Neutral",
+          "3d9f2b8e14": "Pending",
+          "b7f5e2c91a": "Refresh",
+          "a54ae21c6f": "Status:",
+          "fd46a70f1a": "Started",
+          "00e1c1658a": "Completed",
+          "aa8494ae3c": "check #",
+          "2dd5ddabc4": "workflow #",
+          "1f2b980522": "Loading check details…",
+          "d098e5529a": "Output",
+          "f2fe8a4e8f": "Annotations",
+          "cdbfda4dec": "Annotation",
+          "066fedd446": "Failed jobs",
+          "49731703ea": "Jobs",
+          "ee07b33924": "unknown",
+          "07eccfa397": "No details are available for this check.",
+          "a916648574": "Open details"
         }
       },
       "diff": {

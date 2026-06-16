@@ -35,14 +35,6 @@ import {
   AccordionTrigger
 } from '@/components/ui/accordion'
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger
-} from '@/components/ui/dialog'
-import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -85,6 +77,8 @@ import {
 } from './right-panel-comment-composer'
 import { usePRCommentsListSelection } from './pr-comments-list-selection'
 import { translate } from '@/i18n/i18n'
+import { useActiveWorktree } from '@/store/selectors'
+import { useAppStore } from '@/store'
 
 export const PullRequestIcon = GitPullRequest
 
@@ -477,13 +471,16 @@ export function getFailedChecksForDetails(checks: PRCheckDetail[]): PRCheckDetai
 
 function CheckRunDetails({
   check,
-  state
+  state,
+  checkDetailsContextKey
 }: {
   check: PRCheckDetail
   state: CheckDetailsLoadState | undefined
+  checkDetailsContextKey: string
 }): React.JSX.Element {
+  const activeWorktree = useActiveWorktree()
+  const openCheckRunDetails = useAppStore((s) => s.openCheckRunDetails)
   const details = state?.details
-  const openUrl = details?.detailsUrl ?? details?.url ?? check.url
   const startedAt = formatCheckTimestamp(details?.startedAt)
   const completedAt = formatCheckTimestamp(details?.completedAt)
   const detailsStatusCheck: PRCheckDetail = {
@@ -502,14 +499,46 @@ function CheckRunDetails({
   const hasJobs = jobs.length > 0
   const hasLogTail = jobs.some((job) => Boolean(job.logTail))
 
+  const openFullDetailsTab = (): void => {
+    if (!activeWorktree) {
+      return
+    }
+    openCheckRunDetails(activeWorktree.id, checkDetailsContextKey, check, {
+      details: state?.details ?? null,
+      loading: state?.loading ?? false,
+      error: state?.error ?? null
+    })
+  }
+
   return (
     <div className="mb-1 ml-[26px] mr-3 min-w-0 border-l border-border pl-3">
       {state?.loading ? (
-        <div className="flex items-center gap-2 py-1.5 text-[12px] text-muted-foreground">
-          <LoaderCircle className="size-3.5 animate-spin" />
-          {translate(
-            'auto.components.right.sidebar.checks.panel.content.1f2b980522',
-            'Loading check details…'
+        <div className="flex min-w-0 flex-col gap-2 py-1.5">
+          <div className="flex items-center gap-2 text-[12px] text-muted-foreground">
+            <LoaderCircle className="size-3.5 animate-spin" />
+            {translate(
+              'auto.components.right.sidebar.checks.panel.content.1f2b980522',
+              'Loading check details…'
+            )}
+          </div>
+          {activeWorktree && (
+            <div className="flex justify-end">
+              <Button
+                type="button"
+                variant="outline"
+                size="xs"
+                className="h-7 gap-1 px-2 text-[11px]"
+                onClick={(event) => {
+                  event.stopPropagation()
+                  openFullDetailsTab()
+                }}
+              >
+                {translate(
+                  'auto.components.right.sidebar.checks.panel.content.e4e3af15ee',
+                  'View full details'
+                )}
+              </Button>
+            </div>
           )}
         </div>
       ) : (
@@ -717,30 +746,22 @@ function CheckRunDetails({
           )}
 
           <div className="flex justify-end pt-1">
-            {!state?.loading && (
-              <Dialog>
-                <DialogTrigger asChild>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="xs"
-                    className="h-7 gap-1 px-2 text-[11px]"
-                    onClick={(event) => event.stopPropagation()}
-                  >
-                    {translate(
-                      'auto.components.right.sidebar.checks.panel.content.e4e3af15ee',
-                      'View full details'
-                    )}
-                  </Button>
-                </DialogTrigger>
-                <CheckRunDetailsDialog
-                  check={check}
-                  state={state}
-                  detailsStatusCheck={detailsStatusCheck}
-                  jobs={jobs}
-                  openUrl={openUrl}
-                />
-              </Dialog>
+            {activeWorktree && (
+              <Button
+                type="button"
+                variant="outline"
+                size="xs"
+                className="h-7 gap-1 px-2 text-[11px]"
+                onClick={(event) => {
+                  event.stopPropagation()
+                  openFullDetailsTab()
+                }}
+              >
+                {translate(
+                  'auto.components.right.sidebar.checks.panel.content.e4e3af15ee',
+                  'View full details'
+                )}
+              </Button>
             )}
           </div>
         </div>
@@ -749,253 +770,7 @@ function CheckRunDetails({
   )
 }
 
-export function CheckRunDetailsDialog({
-  check,
-  state,
-  detailsStatusCheck,
-  jobs,
-  openUrl
-}: {
-  check: PRCheckDetail
-  state: CheckDetailsLoadState | undefined
-  detailsStatusCheck: PRCheckDetail
-  jobs: NonNullable<PRCheckRunDetails['jobs']>
-  openUrl: string | null | undefined
-}): React.JSX.Element {
-  const details = state?.details
-  const startedAt = formatCheckTimestamp(details?.startedAt)
-  const completedAt = formatCheckTimestamp(details?.completedAt)
-  const hasOutput = Boolean(details?.title || details?.summary || details?.text)
-  const hasAnnotations = (details?.annotations.length ?? 0) > 0
-  const hasJobs = jobs.length > 0
-
-  return (
-    <DialogContent
-      className="flex max-h-[85vh] w-[min(760px,calc(100vw-2rem))] max-w-none flex-col gap-0 overflow-hidden p-0"
-      onClick={(event) => event.stopPropagation()}
-    >
-      <DialogHeader className="border-b border-border px-5 py-4 pr-12">
-        <DialogTitle className="truncate text-base">{check.name}</DialogTitle>
-        <DialogDescription className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
-          <span>
-            {translate('auto.components.right.sidebar.checks.panel.content.a54ae21c6f', 'Status:')}
-            {details ? getCheckStatusLabel(detailsStatusCheck) : getCheckStatusLabel(check)}
-          </span>
-          {startedAt && (
-            <span>
-              {translate(
-                'auto.components.right.sidebar.checks.panel.content.fd46a70f1a',
-                'Started'
-              )}
-              {startedAt}
-            </span>
-          )}
-          {completedAt && (
-            <span>
-              {translate(
-                'auto.components.right.sidebar.checks.panel.content.00e1c1658a',
-                'Completed'
-              )}
-              {completedAt}
-            </span>
-          )}
-          {check.checkRunId && (
-            <span className="font-mono">
-              {translate(
-                'auto.components.right.sidebar.checks.panel.content.aa8494ae3c',
-                'check #'
-              )}
-              {check.checkRunId}
-            </span>
-          )}
-          {check.workflowRunId && (
-            <span className="font-mono">
-              {translate(
-                'auto.components.right.sidebar.checks.panel.content.2dd5ddabc4',
-                'workflow #'
-              )}
-              {check.workflowRunId}
-            </span>
-          )}
-        </DialogDescription>
-      </DialogHeader>
-      <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4 scrollbar-sleek">
-        <div className="grid gap-4">
-          {state?.error && <div className="text-sm text-muted-foreground">{state.error}</div>}
-
-          {hasOutput && (
-            <section className="rounded-md border border-border bg-background">
-              <div className="border-b border-border px-3 py-2 text-sm font-medium">
-                {translate(
-                  'auto.components.right.sidebar.checks.panel.content.d098e5529a',
-                  'Output'
-                )}
-              </div>
-              <div className="px-3 py-3">
-                {details?.title && (
-                  <div className="mb-2 text-sm font-medium text-foreground">{details.title}</div>
-                )}
-                {details?.summary && (
-                  <CommentMarkdown
-                    content={details.summary}
-                    variant="document"
-                    className="min-w-0 max-w-full overflow-hidden break-words text-sm leading-relaxed [&_a]:break-all [&_code]:break-words [&_pre]:max-w-full"
-                  />
-                )}
-                {details?.text && (
-                  <CommentMarkdown
-                    content={details.text}
-                    variant="document"
-                    className="mt-3 min-w-0 max-w-full overflow-hidden break-words text-sm leading-relaxed [&_a]:break-all [&_code]:break-words [&_pre]:max-w-full"
-                  />
-                )}
-              </div>
-            </section>
-          )}
-
-          {hasAnnotations && (
-            <section className="rounded-md border border-border bg-background">
-              <div className="border-b border-border px-3 py-2 text-sm font-medium">
-                {translate(
-                  'auto.components.right.sidebar.checks.panel.content.f2fe8a4e8f',
-                  'Annotations'
-                )}
-              </div>
-              <div className="divide-y divide-border/50">
-                {details!.annotations.map((annotation, index) => (
-                  <div key={`${annotation.path ?? 'annotation'}-${index}`} className="px-3 py-3">
-                    <div className="flex min-w-0 flex-wrap items-center gap-2">
-                      <span className="min-w-0 break-all font-mono text-xs text-muted-foreground">
-                        {annotation.path ??
-                          translate(
-                            'auto.components.right.sidebar.checks.panel.content.cdbfda4dec',
-                            'Annotation'
-                          )}
-                        {annotation.startLine ? `:${annotation.startLine}` : ''}
-                      </span>
-                      {annotation.annotationLevel && (
-                        <span className="shrink-0 text-xs text-muted-foreground">
-                          {annotation.annotationLevel}
-                        </span>
-                      )}
-                    </div>
-                    {annotation.title && (
-                      <div className="mt-2 text-sm font-medium text-foreground">
-                        {annotation.title}
-                      </div>
-                    )}
-                    <div className="mt-2 break-words text-sm text-foreground">
-                      {annotation.message}
-                    </div>
-                    {annotation.rawDetails && (
-                      <pre className="mt-2 max-h-60 overflow-auto whitespace-pre-wrap rounded bg-muted/40 p-3 font-mono text-xs text-muted-foreground scrollbar-sleek">
-                        {annotation.rawDetails}
-                      </pre>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </section>
-          )}
-
-          {hasJobs && (
-            <section className="rounded-md border border-border bg-background">
-              <div className="border-b border-border px-3 py-2 text-sm font-medium">
-                {translate('auto.components.right.sidebar.checks.panel.content.49731703ea', 'Jobs')}
-              </div>
-              <div className="divide-y divide-border/50">
-                {jobs.map((job, index) => (
-                  <div key={`${job.name}-${index}`} className="px-3 py-3">
-                    <div className="flex min-w-0 items-center gap-2">
-                      <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
-                        {job.name}
-                      </span>
-                      <span className="shrink-0 text-xs text-muted-foreground">
-                        {job.conclusion ??
-                          job.status ??
-                          translate(
-                            'auto.components.right.sidebar.checks.panel.content.ee07b33924',
-                            'unknown'
-                          )}
-                      </span>
-                    </div>
-                    {job.steps.length > 0 && (
-                      <div className="mt-2 grid gap-1">
-                        {job.steps.map((step) => (
-                          <div
-                            key={step.name}
-                            className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground"
-                          >
-                            <span className="min-w-0 flex-1 truncate">{step.name}</span>
-                            <span className="shrink-0">{step.conclusion ?? step.status}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                    {job.logTail && <CheckJobLogTail logTail={job.logTail} />}
-                  </div>
-                ))}
-              </div>
-            </section>
-          )}
-
-          {!state?.error && !hasOutput && !hasAnnotations && !hasJobs && (
-            <div className="text-sm text-muted-foreground">
-              {translate(
-                'auto.components.right.sidebar.checks.panel.content.07eccfa397',
-                'No details are available for this check.'
-              )}
-            </div>
-          )}
-        </div>
-      </div>
-      {openUrl && (
-        <div className="flex justify-end border-t border-border px-5 py-3">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={(event) => {
-              event.stopPropagation()
-              window.api.shell.openUrl(openUrl)
-            }}
-          >
-            {translate(
-              'auto.components.right.sidebar.checks.panel.content.a916648574',
-              'Open details'
-            )}
-            <ExternalLink className="size-3.5" />
-          </Button>
-        </div>
-      )}
-    </DialogContent>
-  )
-}
-
-export function CheckJobLogTail({ logTail }: { logTail: string }): React.JSX.Element {
-  return (
-    <div className="mt-3 min-w-0">
-      <div className="mb-1.5 flex min-w-0 items-center gap-2">
-        <div className="min-w-0 flex-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-          {translate(
-            'auto.components.right.sidebar.checks.panel.content.d713f500b2',
-            'Log tail (last 200 lines)'
-          )}
-        </div>
-        <CopyButton
-          text={logTail}
-          title={translate(
-            'auto.components.right.sidebar.checks.panel.content.679bf2093c',
-            'Copy log tail'
-          )}
-        />
-      </div>
-      <pre className="max-h-72 overflow-auto whitespace-pre-wrap rounded bg-muted/40 p-3 font-mono text-xs text-muted-foreground scrollbar-sleek">
-        {logTail}
-      </pre>
-    </div>
-  )
-}
+export { CheckJobLogTail } from './check-job-log-tail'
 
 /** Renders the checks summary bar + scrollable check list. */
 export function ChecksList({
@@ -1009,6 +784,8 @@ export function ChecksList({
   checkDetailsContextKey: string
   onLoadCheckDetails?: (check: PRCheckDetail) => Promise<PRCheckRunDetails | null>
 }): React.JSX.Element {
+  const activeWorktree = useActiveWorktree()
+  const patchOpenCheckRunDetails = useAppStore((s) => s.patchOpenCheckRunDetails)
   const [checksExpanded, setChecksExpanded] = useState(true)
   const [expandedCheckKeys, setExpandedCheckKeys] = useState<Set<string>>(new Set())
   const [detailsByCheckKey, setDetailsByCheckKey] = useState<Record<string, CheckDetailsLoadState>>(
@@ -1072,6 +849,27 @@ export function ChecksList({
       return next
     })
   }, [checkDetailsContextKey, rows])
+
+  useEffect(() => {
+    setDetailsByCheckKey((current) => {
+      let changed = false
+      const next: Record<string, CheckDetailsLoadState> = { ...current }
+      for (const row of rows) {
+        const cached = next[row.key]
+        if (!cached?.details) {
+          continue
+        }
+        if (
+          cached.details.status !== row.check.status ||
+          cached.details.conclusion !== row.check.conclusion
+        ) {
+          delete next[row.key]
+          changed = true
+        }
+      }
+      return changed ? next : current
+    })
+  }, [rows])
 
   const requestCheckDetails = useCallback(
     (row: { check: PRCheckDetail; key: string }) => {
@@ -1153,6 +951,23 @@ export function ChecksList({
     }
   }, [checksExpanded, detailsByCheckKey, expandedCheckKeys, requestCheckDetails, rows])
 
+  useEffect(() => {
+    if (!activeWorktree) {
+      return
+    }
+    for (const row of rows) {
+      const detailsState = detailsByCheckKey[row.key]
+      if (!detailsState) {
+        continue
+      }
+      patchOpenCheckRunDetails(activeWorktree.id, checkDetailsContextKey, row.check, {
+        details: detailsState.details ?? null,
+        loading: detailsState.loading ?? false,
+        error: detailsState.error ?? null
+      })
+    }
+  }, [activeWorktree, checkDetailsContextKey, detailsByCheckKey, patchOpenCheckRunDetails, rows])
+
   const toggleCheckExpanded = useCallback(
     (row: { check: PRCheckDetail; key: string }) => {
       const willExpand = !expandedCheckKeys.has(row.key)
@@ -1226,7 +1041,7 @@ export function ChecksList({
           <LoaderCircle className="size-5 animate-spin text-muted-foreground" />
         </div>
       ) : checks.length === 0 ? (
-        <div className="flex items-center justify-center py-8 text-[11px] text-muted-foreground">
+        <div className="px-3 py-8 text-[11px] text-muted-foreground">
           {translate(
             'auto.components.right.sidebar.checks.panel.content.991f50c7e4',
             'No checks configured'
@@ -1304,7 +1119,13 @@ export function ChecksList({
                       )}
                     </span>
                   </div>
-                  {expanded && <CheckRunDetails check={check} state={detailsByCheckKey[row.key]} />}
+                  {expanded && (
+                    <CheckRunDetails
+                      check={check}
+                      state={detailsByCheckKey[row.key]}
+                      checkDetailsContextKey={checkDetailsContextKey}
+                    />
+                  )}
                 </div>
               )
             })}

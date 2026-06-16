@@ -7,22 +7,31 @@ export type RecognizedAgentProcess = {
   processName: string
 }
 
-const EXTENSION_RE = /\.(?:exe|cmd|bat|ps1)$/i
+const PROCESS_EXTENSION_RE = /\.(?:exe|cmd|bat|ps1)$/i
+const INTERPRETER_SCRIPT_EXTENSION_RE = /\.(?:js|mjs|cjs)$/i
+const PYTHON_SCRIPT_EXTENSION_RE = /\.(?:py|pyw)$/i
 
-function normalizeProcessName(processName: string | null | undefined): string {
+function normalizeProcessName(
+  processName: string | null | undefined,
+  options: { stripInterpreterScriptExtension?: boolean } = {}
+): string {
   if (!processName) {
     return ''
   }
   const unquoted = processName.trim().replace(/^["']|["']$/g, '')
   const basename = unquoted.split(/[\\/]/).pop() ?? unquoted
-  return basename.toLowerCase().replace(EXTENSION_RE, '')
+  const withoutProcessExtension = basename.toLowerCase().replace(PROCESS_EXTENSION_RE, '')
+  if (options.stripInterpreterScriptExtension === true) {
+    return withoutProcessExtension.replace(INTERPRETER_SCRIPT_EXTENSION_RE, '')
+  }
+  return withoutProcessExtension
 }
 
 function firstCommandToken(command: string): string {
   return command.trim().split(/\s+/)[0] ?? ''
 }
 
-const INTERPRETER_PROCESS_NAMES = new Set([
+const STATIC_INTERPRETER_PROCESS_NAMES = new Set([
   'node',
   'python',
   'python3',
@@ -33,6 +42,22 @@ const INTERPRETER_PROCESS_NAMES = new Set([
   'pwsh',
   'powershell'
 ])
+
+const FOREGROUND_AGENT_WRAPPER_PROCESS_NAMES = new Set(['node', 'python', 'python3'])
+const PYTHON_PROCESS_RE = /^python(?:\d+(?:\.\d+)*)?$/
+const INTERPRETER_OPTIONS_WITH_VALUE = new Set([
+  '-r',
+  '--require',
+  '--import',
+  '--loader',
+  '--experimental-loader'
+])
+const INTERPRETER_OPTIONS_WITH_INLINE_SOURCE = new Set(['-e', '--eval', '-p', '--print', '--check'])
+const NODE_PACKAGE_SCRIPT_ENTRYPOINTS: Record<string, readonly string[]> = {
+  codex: ['node_modules/@openai/codex/'],
+  gemini: ['node_modules/@google/gemini-cli/']
+}
+const PYTHON_SCRIPT_ENTRYPOINT_DIRECTORIES = ['/bin/', '/scripts/', '/site-packages/']
 
 const PROCESS_TO_AGENT = new Map<string, TuiAgent>()
 const AGENT_TYPE_IDS = new Set<TuiAgent>()
@@ -80,15 +105,19 @@ function tokenizeCommandLine(commandLine: string): string[] {
   let current = ''
   let quote: '"' | "'" | null = null
   let escaped = false
-  for (const char of commandLine) {
+  for (let index = 0; index < commandLine.length; index += 1) {
+    const char = commandLine[index]
     if (escaped) {
       current += char
       escaped = false
       continue
     }
     if (char === '\\' && quote !== "'") {
-      escaped = true
-      continue
+      const next = commandLine[index + 1]
+      if (next && (/\s/.test(next) || next === '"' || next === "'" || next === '\\')) {
+        escaped = true
+        continue
+      }
     }
     if ((char === '"' || char === "'") && quote === null) {
       quote = char
@@ -117,14 +146,123 @@ function tokenLooksExecutable(token: string, index: number, firstNormalized: str
   if (index === 0) {
     return true
   }
-  if (!INTERPRETER_PROCESS_NAMES.has(firstNormalized)) {
+  if (!isInterpreterProcessName(firstNormalized)) {
     return false
   }
   // Why: only inspect interpreter script paths. Prompt text can mention other
   // agents ("compare opencode vs orca"), and treating every argv token as an
   // executable would reintroduce the substring-style false identity class that
   // foreground-process detection is meant to avoid.
-  return token.includes('/') || token.includes('\\') || EXTENSION_RE.test(token)
+  return token.includes('/') || token.includes('\\') || PROCESS_EXTENSION_RE.test(token)
+}
+
+function isInterpreterProcessName(normalized: string): boolean {
+  return STATIC_INTERPRETER_PROCESS_NAMES.has(normalized) || PYTHON_PROCESS_RE.test(normalized)
+}
+
+function isPythonProcessName(normalized: string): boolean {
+  return PYTHON_PROCESS_RE.test(normalized)
+}
+
+function optionName(token: string): string {
+  const eq = token.indexOf('=')
+  return eq === -1 ? token : token.slice(0, eq)
+}
+
+function findInterpreterEntrypointToken(tokens: string[], firstNormalized: string): string | null {
+  if (!isInterpreterProcessName(firstNormalized)) {
+    return null
+  }
+  for (let index = 1; index < tokens.length; index += 1) {
+    const token = tokens[index]
+    if (token === '--') {
+      continue
+    }
+    if (isPythonProcessName(firstNormalized) && token === '-m') {
+      return tokens[index + 1] ?? null
+    }
+    if (token.startsWith('-')) {
+      const name = optionName(token)
+      if (INTERPRETER_OPTIONS_WITH_INLINE_SOURCE.has(name)) {
+        return null
+      }
+      if (INTERPRETER_OPTIONS_WITH_VALUE.has(name) && name === token) {
+        index += 1
+      }
+      continue
+    }
+    if (tokenLooksExecutable(token, index, firstNormalized)) {
+      return token
+    }
+  }
+  return null
+}
+
+function comparablePath(token: string): string {
+  return token
+    .trim()
+    .replace(/^["']|["']$/g, '')
+    .replace(/\\/g, '/')
+    .toLowerCase()
+}
+
+function recognizeNodeScriptEntrypoint(token: string): RecognizedAgentProcess | null {
+  const normalized = normalizeProcessName(token, { stripInterpreterScriptExtension: true })
+  const markers = NODE_PACKAGE_SCRIPT_ENTRYPOINTS[normalized]
+  if (!markers) {
+    return null
+  }
+  const path = comparablePath(token)
+  if (!markers.some((marker) => path.includes(marker))) {
+    return null
+  }
+  const agent = agentForNormalizedProcess(normalized)
+  if (!agent) {
+    return null
+  }
+  return { agent, processName: normalized }
+}
+
+function recognizePythonModule(
+  moduleName: string | null | undefined
+): RecognizedAgentProcess | null {
+  if (!moduleName || moduleName.startsWith('-')) {
+    return null
+  }
+  const normalized = moduleName.split('.', 1)[0]?.toLowerCase() ?? ''
+  const agent = agentForNormalizedProcess(normalized)
+  if (!agent) {
+    return null
+  }
+  return { agent, processName: normalized }
+}
+
+function recognizePythonScriptEntrypoint(token: string): RecognizedAgentProcess | null {
+  const path = comparablePath(token)
+  if (!PYTHON_SCRIPT_EXTENSION_RE.test(path)) {
+    return null
+  }
+  if (!PYTHON_SCRIPT_ENTRYPOINT_DIRECTORIES.some((marker) => path.includes(marker))) {
+    return null
+  }
+  const basename = path.split('/').pop() ?? ''
+  const normalized = basename.replace(PYTHON_SCRIPT_EXTENSION_RE, '')
+  const agent = agentForNormalizedProcess(normalized)
+  if (!agent) {
+    return null
+  }
+  return { agent, processName: normalized }
+}
+
+function recognizePythonEntrypoint(
+  tokens: string[],
+  entrypoint: string
+): RecognizedAgentProcess | null {
+  const moduleFlagIndex = tokens.findIndex((token) => token === '-m')
+  if (moduleFlagIndex > 0) {
+    return recognizePythonModule(tokens[moduleFlagIndex + 1])
+  }
+  return recognizeAgentProcess(entrypoint) ?? recognizePythonScriptEntrypoint(entrypoint)
 }
 
 export function isExpectedAgentProcess(
@@ -161,16 +299,25 @@ export function recognizeAgentProcessFromCommandLine(
   }
   const tokens = tokenizeCommandLine(commandLine)
   const firstNormalized = normalizeProcessName(tokens[0])
-  for (const [index, token] of tokens.entries()) {
-    if (!tokenLooksExecutable(token, index, firstNormalized)) {
-      continue
-    }
-    const recognized = recognizeAgentProcess(token)
-    if (recognized) {
-      return recognized
-    }
+  const directRecognition = recognizeAgentProcess(tokens[0])
+  if (directRecognition) {
+    return directRecognition
   }
-  return null
+  const entrypoint = findInterpreterEntrypointToken(tokens, firstNormalized)
+  if (!entrypoint) {
+    return null
+  }
+  if (isPythonProcessName(firstNormalized)) {
+    return recognizePythonEntrypoint(tokens, entrypoint)
+  }
+  return recognizeAgentProcess(entrypoint) ?? recognizeNodeScriptEntrypoint(entrypoint)
+}
+
+export function isAgentForegroundWrapperProcess(processName: string | null | undefined): boolean {
+  const normalized = normalizeProcessName(processName)
+  return (
+    FOREGROUND_AGENT_WRAPPER_PROCESS_NAMES.has(normalized) || PYTHON_PROCESS_RE.test(normalized)
+  )
 }
 
 export function isRecognizedAgentType(agentType: AgentType | null | undefined): boolean {

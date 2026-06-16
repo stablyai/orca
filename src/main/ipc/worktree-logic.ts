@@ -17,6 +17,8 @@ import { getLinkedWorkItemMetadata } from './worktree-linked-work-item-metadata'
 type WorktreePathSettings = Pick<GlobalSettings, 'nestWorkspaces' | 'workspaceDir'>
 type WorktreeBasePathRepo = Pick<Repo, 'path' | 'worktreeBasePath'>
 
+export { computeBranchName, getConfiguredBranchPrefix } from './worktree-branch-name'
+
 /**
  * Sanitize a worktree name for use in branch names and directory paths.
  * Strips unsafe characters and collapses runs of special chars to a single hyphen.
@@ -75,24 +77,6 @@ export function ensurePathWithinWorkspace(targetPath: string, workspaceDir: stri
   }
 
   return resolvedTargetPath
-}
-
-/**
- * Compute the full branch name by applying the configured prefix strategy.
- */
-export function computeBranchName(
-  sanitizedName: string,
-  settings: { branchPrefix: string; branchPrefixCustom?: string },
-  gitUsername: string | null
-): string {
-  if (settings.branchPrefix === 'git-username') {
-    if (gitUsername) {
-      return `${gitUsername}/${sanitizedName}`
-    }
-  } else if (settings.branchPrefix === 'custom' && settings.branchPrefixCustom) {
-    return `${settings.branchPrefixCustom}/${sanitizedName}`
-  }
-  return sanitizedName
 }
 
 /**

@@ -3,13 +3,21 @@ import { ChevronDown, CircleHelp, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
+import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu'
 import type { GitHistoryItem, GitHistoryResult } from '../../../../shared/git-history'
+import type { GitBranchChangeEntry } from '../../../../shared/types'
 import {
   buildDefaultGitHistoryColorMap,
   buildGitHistoryViewModels
 } from '../../../../shared/git-history-graph'
-import { translate } from '@/i18n/i18n'
 import { GitHistoryRow } from './GitHistoryRow'
+import { GitHistoryCommitFiles, type GitHistoryCommitFilesState } from './GitHistoryCommitFiles'
+import {
+  GitHistoryCommitContextMenu,
+  type GitHistoryCommitAction
+} from './GitHistoryCommitContextMenu'
+import type { SourceControlRowOpenEvent } from './source-control-split-open'
+import { translate } from '@/i18n/i18n'
 
 export type GitHistoryPanelState =
   | { status: 'idle' | 'loading'; result?: GitHistoryResult; error?: string }
@@ -37,13 +45,23 @@ export function GitHistoryPanel({
   collapsed,
   onToggle,
   onRefresh,
-  onOpenCommit
+  onOpenCommit,
+  onLoadCommitFiles,
+  onOpenCommitFile,
+  onCommitAction
 }: {
   state: GitHistoryPanelState
   collapsed: boolean
   onToggle: () => void
   onRefresh: () => void
   onOpenCommit?: (item: GitHistoryItem) => void
+  onLoadCommitFiles?: (item: GitHistoryItem) => Promise<GitBranchChangeEntry[]>
+  onOpenCommitFile?: (
+    item: GitHistoryItem,
+    entry: GitBranchChangeEntry,
+    event?: SourceControlRowOpenEvent
+  ) => void
+  onCommitAction?: (action: GitHistoryCommitAction, item: GitHistoryItem) => void
 }): React.JSX.Element | null {
   const result = state.result
   const viewModels = useMemo(() => {
@@ -66,6 +84,62 @@ export function GitHistoryPanel({
   const count = result?.items.length ?? 0
   const [panelHeight, setPanelHeight] = useState(DEFAULT_GIT_HISTORY_PANEL_HEIGHT)
   const resizeSessionRef = useRef<GitHistoryResizeSession | null>(null)
+
+  const [expanded, setExpanded] = useState<Set<string>>(() => new Set())
+  const [filesByCommit, setFilesByCommit] = useState<Record<string, GitHistoryCommitFilesState>>({})
+  // Tracks commits whose files have been loaded (or are in flight) so re-expanding
+  // never refetches; an entry is cleared on error to allow a retry.
+  const loadedCommitsRef = useRef<Set<string>>(new Set())
+
+  // A new history result can reorder or replace commits, so drop any expansion
+  // and cached file lists rather than risk showing stale files under a row.
+  useEffect(() => {
+    setExpanded(new Set())
+    setFilesByCommit({})
+    loadedCommitsRef.current = new Set()
+  }, [result])
+
+  const handleToggleExpand = useCallback(
+    (item: GitHistoryItem): void => {
+      const id = item.id
+      const willExpand = !expanded.has(id)
+      setExpanded((prev) => {
+        const next = new Set(prev)
+        if (willExpand) {
+          next.add(id)
+        } else {
+          next.delete(id)
+        }
+        return next
+      })
+      if (!willExpand || !onLoadCommitFiles || loadedCommitsRef.current.has(id)) {
+        return
+      }
+      loadedCommitsRef.current.add(id)
+      setFilesByCommit((prev) => ({ ...prev, [id]: { status: 'loading' } }))
+      onLoadCommitFiles(item)
+        .then((entries) => {
+          setFilesByCommit((prev) => ({ ...prev, [id]: { status: 'ready', entries } }))
+        })
+        .catch((error: unknown) => {
+          loadedCommitsRef.current.delete(id)
+          setFilesByCommit((prev) => ({
+            ...prev,
+            [id]: {
+              status: 'error',
+              error:
+                error instanceof Error
+                  ? error.message
+                  : translate(
+                      'auto.components.right.sidebar.GitHistoryPanel.6d1e0a7c3b',
+                      'Failed to load commit files'
+                    )
+            }
+          }))
+        })
+    },
+    [expanded, onLoadCommitFiles]
+  )
 
   const stopResize = useCallback((): void => {
     const session = resizeSessionRef.current
@@ -267,13 +341,44 @@ export function GitHistoryPanel({
       )}
       {!collapsed && viewModels.length > 0 && (
         <div className={expandedBodyClassName} style={expandedBodyStyle}>
-          {viewModels.map((viewModel) => (
-            <GitHistoryRow
-              key={`${viewModel.kind}:${viewModel.historyItem.id}`}
-              viewModel={viewModel}
-              onOpenCommit={onOpenCommit}
-            />
-          ))}
+          {viewModels.map((viewModel) => {
+            const item = viewModel.historyItem
+            const isBoundaryNode =
+              viewModel.kind === 'incoming-changes' || viewModel.kind === 'outgoing-changes'
+            const canExpand =
+              !isBoundaryNode && Boolean(onLoadCommitFiles) && Boolean(onOpenCommitFile)
+            const isExpanded = canExpand && expanded.has(item.id)
+            const row = (
+              <GitHistoryRow
+                viewModel={viewModel}
+                expanded={isExpanded}
+                preserveRefIds={result?.baseRef ? [result.baseRef.id] : undefined}
+                onOpenCommit={onOpenCommit}
+                onToggleExpand={canExpand ? handleToggleExpand : undefined}
+              />
+            )
+            return (
+              <React.Fragment key={`${viewModel.kind}:${item.id}`}>
+                {onCommitAction && !isBoundaryNode ? (
+                  <ContextMenu>
+                    <ContextMenuTrigger asChild>{row}</ContextMenuTrigger>
+                    <GitHistoryCommitContextMenu item={item} onAction={onCommitAction} />
+                  </ContextMenu>
+                ) : (
+                  row
+                )}
+                {isExpanded && (
+                  <GitHistoryCommitFiles
+                    state={filesByCommit[item.id] ?? { status: 'loading' }}
+                    author={item.author}
+                    timestamp={item.timestamp}
+                    onOpenFile={(entry, event) => onOpenCommitFile?.(item, entry, event)}
+                    onOpenAll={onOpenCommit ? () => onOpenCommit(item) : undefined}
+                  />
+                )}
+              </React.Fragment>
+            )
+          })}
         </div>
       )}
     </div>

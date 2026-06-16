@@ -6,6 +6,8 @@ import type {
   GitBranchCompareResult,
   GitCommitCompareResult,
   GitConflictOperation,
+  GitForkSyncExpectedUpstream,
+  GitForkSyncResult,
   GitPushTarget,
   GitUpstreamStatus,
   GitWorktreeInfo,
@@ -193,6 +195,10 @@ export type IGitProvider = {
   fastForwardBranch(worktreePath: string, pushTarget?: GitPushTarget): Promise<void>
   rebaseFromBase(worktreePath: string, baseRef: string): Promise<void>
   fetchRemote(worktreePath: string, pushTarget?: GitPushTarget): Promise<void>
+  syncForkDefaultBranch(
+    worktreePath: string,
+    expectedUpstream: GitForkSyncExpectedUpstream
+  ): Promise<GitForkSyncResult>
   getBranchDiff(
     worktreePath: string,
     baseRef: string,
@@ -223,6 +229,7 @@ export type IGitProvider = {
     options?: { signal?: AbortSignal; timeoutMs?: number }
   ): Promise<{ stdout: string; stderr: string }>
   getRemoteFileUrl(worktreePath: string, relativePath: string, line: number): Promise<string | null>
+  getRemoteCommitUrl(worktreePath: string, sha: string): Promise<string | null>
   worktreeIsClean(
     worktreePath: string,
     options?: { includeUntracked?: boolean }

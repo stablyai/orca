@@ -165,7 +165,9 @@
         "editor": {
           "dcb521ed29": "이 파일은 충돌 상태에 있지만 편집할 수 있는 작업 트리 파일이 없습니다.",
           "51f15c37d3": "디렉터리를 열 수 없습니다: {{value0}}",
-          "f2e00db373": "파일을 찾을 수 없습니다: {{value0}}"
+          "f2e00db373": "파일을 찾을 수 없습니다: {{value0}}",
+          "checkRunDetailsUnavailable": "No details are available for this check.",
+          "checkRunDetailsLoadFailed": "Failed to load check details."
         },
         "github": {
           "f129c42773": "GitHub가 새 댓글을 반환하지 않았습니다.",
@@ -7401,7 +7403,9 @@
             "host": "host",
             "ssh": "ssh",
             "remote": "remote",
-            "vm": "vm"
+            "vm": "vm",
+            "keepForkUpToDate": "포크를 최신 상태로 유지",
+            "keepForkUpToDateDescription": "이 포크를 upstream에서 안전하게 fast-forward합니다."
           }
         },
         "runtime": {
@@ -8006,6 +8010,33 @@
           "workspaceDirectory": "The client default is inherited until a host needs its own worktree directory.",
           "providerHost": "Provider host",
           "providerAccounts": "Credentials and account checks belong to the local client or selected remote server that owns the provider integration."
+        },
+        "RepositoryForkSyncSection": {
+          "defaultBranch": "기본 브랜치",
+          "synced": "포크가 업데이트됨",
+          "syncedDescriptionSingular": "{{branch}} 브랜치를 1개 커밋만큼 fast-forward했습니다.",
+          "syncedDescriptionPlural": "{{branch}} 브랜치를 {{count}}개 커밋만큼 fast-forward했습니다.",
+          "upToDate": "포크가 이미 최신 상태입니다",
+          "upToDateDescription": "{{branch}} 브랜치가 이미 upstream과 일치합니다.",
+          "missingOrigin": "origin 원격이 없습니다.",
+          "missingUpstream": "upstream 원격이 없습니다.",
+          "upstreamMismatch": "upstream 원격이 더 이상 이 포크와 일치하지 않습니다.",
+          "missingUpstreamBranch": "upstream 기본 브랜치를 확인할 수 없습니다.",
+          "missingOriginBranch": "origin에 upstream 기본 브랜치가 없습니다.",
+          "diverged": "origin에 upstream에 없는 커밋이 있습니다.",
+          "blocked": "포크 동기화를 건너뜀",
+          "blockedFallback": "Orca가 이 포크를 안전하게 fast-forward할 수 없습니다.",
+          "failed": "포크 동기화 실패",
+          "title": "포크를 최신 상태로 유지",
+          "description": "이 포크를 upstream에서 안전하게 fast-forward합니다.",
+          "longDescription": "이 포크가 upstream보다 뒤처진 경우 Orca가 기본 브랜치를 안전하게 fast-forward할 수 있습니다. 브랜치에 로컬 전용 커밋이나 충돌이 있으면 Orca가 업데이트를 건너뜁니다.",
+          "forkOf": "{{owner}}/{{repo}}의 포크",
+          "syncing": "동기화 중",
+          "syncNow": "지금 동기화",
+          "modeLabel": "포크 동기화 모드",
+          "ask": "묻기",
+          "safeAuto": "안전 자동",
+          "off": "끄기"
         }
       },
       "right": {
@@ -8092,7 +8123,8 @@
           "FileExplorer": {
             "79b1537dd3": "파일을 찾아보려면 워크스페이스를 선택하세요.",
             "4da4d89845": "탐색기로 돌아가기",
-            "6ed5ce817b": "검색"
+            "6ed5ce817b": "검색",
+            "2f4483d6c4": "이 필터와 일치하는 파일이 없습니다"
           },
           "FileExplorerBackgroundMenu": {
             "3b5e2dcb8d": "새 폴더",
@@ -8129,7 +8161,8 @@
             "31b4c3195d": "추가 탐색기 작업",
             "d95e30fe28": "탐색기 새로 고침",
             "6026b16950": "모두 축소",
-            "693cbeadd0": "검색"
+            "693cbeadd0": "검색",
+            "c1f3f3ec70": "파일 내용 검색"
           },
           "FileExplorerTreeStatus": {
             "ce03835e1f": "이 워크스페이스에는 파일이 없습니다.",
@@ -8146,7 +8179,8 @@
             "9a8b85882d": "로드 중",
             "62e685d5ec": "idle",
             "111e1d0db4": "오류",
-            "e5e81e59a6": "commits 크기 조정"
+            "e5e81e59a6": "commits 크기 조정",
+            "6d1e0a7c3b": "커밋 파일을 로드하지 못했습니다"
           },
           "HostedReviewActions": {
             "4d5fb5a284": "닫기",
@@ -8254,6 +8288,10 @@
             "4567e6e0b6": "전체 단어 일치",
             "464ae3974f": "대소문자 일치",
             "693cbeadd0": "검색"
+          },
+          "SearchQueryRow": {
+            "queryLabel": "파일 검색",
+            "clearLabel": "검색 지우기"
           },
           "SearchResultItems": {
             "cc06595a3b": "라인 경로 복사",
@@ -8419,7 +8457,14 @@
             "e2b7a1c0d9f4": "{{value0}} 생성에 실패했습니다",
             "hugeRepoIgnorePrompt": "이 저장소에 활성 변경 사항이 너무 많습니다. \"{{value0}}\"을(를) .gitignore에 추가하시겠습니까?",
             "hugeRepoIgnoreAction": ".gitignore에 추가",
-            "tooManyChanges": "변경 사항이 너무 많이 감지되었습니다. 처음 {{value0}}개만 표시됩니다."
+            "tooManyChanges": "변경 사항이 너무 많이 감지되었습니다. 처음 {{value0}}개만 표시됩니다.",
+            "bf5082de46": "{{value0}}이(가) 복사됨",
+            "c06193ef57": "{{value0}}을(를) 복사하지 못했습니다",
+            "d172a4f068": "커밋 해시",
+            "e283b50179": "커밋 메시지",
+            "f394c6128a": "이 커밋을 설명할 에이전트가 없습니다",
+            "04a5d7239b": "이 저장소에는 지원되는 웹 원격이 없습니다",
+            "15b6e834ac": "브라우저에서 커밋을 열지 못했습니다"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "선택한 agent를 시작할 수 없습니다.",
@@ -8753,6 +8798,7 @@
           "AiVaultPanel": {
             "resumeCommandCopied": "Resume command copied",
             "valueCopied": "{{value0}} copied",
+            "valueCopyFailed": "{{value0}}을(를) 복사할 수 없습니다",
             "openWorkspaceBeforeResuming": "Open a workspace before resuming a session.",
             "localWorkspacesOnly": "Resume from history is only available in local workspaces.",
             "agentSessionQueued": "{{value0}} session queued",
@@ -8766,8 +8812,10 @@
             "transcriptsSkipped": "{{count}} transcript skipped",
             "noAgentSessionsFound": "No agent sessions found",
             "noSessionsMatchFilters": "No sessions match the current filters",
-            "sessionId": "Session ID",
-            "logPath": "Log path"
+            "sessionId": "세션 ID",
+            "logPath": "로그 경로",
+            "agents": "에이전트",
+            "sessionsShownCompact": "{{value0}} 표시됨"
           },
           "AiVaultPanelControls": {
             "scanningSessions": "Scanning sessions",
@@ -8830,7 +8878,8 @@
             "hoursAgo": "{{value0}}h ago",
             "daysAgo": "{{value0}}d ago",
             "monthsAgo": "{{value0}}mo ago",
-            "yearsAgo": "{{value0}}y ago"
+            "yearsAgo": "{{value0}}y ago",
+            "sessionId": "세션 ID"
           },
           "AiVaultSessionRow": {
             "resumeAgentSession": "Resume {{value0}} session",
@@ -8842,7 +8891,37 @@
             "copySessionId": "Copy Session ID",
             "copyLogPath": "Copy Log Path",
             "messageCount": "{{value0}} msgs",
-            "tokenCount": "{{value0}} tok"
+            "tokenCount": "{{value0}} tok",
+            "toggleSessionDetails": "{{value0}} 세션 세부정보",
+            "hideDetails": "세부정보 숨기기",
+            "showDetails": "세부정보 표시",
+            "moreSessionActions": "세션 추가 작업",
+            "moreActions": "추가 작업"
+          },
+          "FileExplorerNameFilter": {
+            "26fb73c6e3": "파일 찾기",
+            "4d5a6b2a49": "파일 필터 지우기",
+            "7a9fb1e6aa": "내용"
+          },
+          "FileExplorerViewSwitch": {
+            "c4e9a2b713": "이름",
+            "b3c8f1a902": "이름으로 파일 필터링",
+            "f8a2c4d1e0": "탐색기 검색 모드"
+          },
+          "GitHistoryCommitFiles": {
+            "a1b2c3d4e5": "파일 로드 중…",
+            "b2c3d4e5f6": "이 커밋에는 파일 변경 사항이 없습니다",
+            "c3d4e5f6a7": "모든 변경 사항을 함께 열기"
+          },
+          "GitHistoryRow": {
+            "2f9c41ab07": "커밋 {{value0}}의 파일 표시: {{value1}}",
+            "4a8d9e0c1f": "커밋 {{value0}}의 파일 숨기기: {{value1}}"
+          },
+          "GitHistoryCommitContextMenu": {
+            "7b1c4e9a02": "브라우저에서 커밋 열기",
+            "8c2d5fab13": "커밋 해시 복사",
+            "9d3e60bc24": "커밋 메시지 복사",
+            "ae4f71cd35": "변경 사항 설명"
           }
         }
       },
@@ -9969,7 +10048,8 @@
           "8a0898ae4c": "이 파일에는 텍스트 비교를 사용할 수 없습니다.",
           "3c6e71df22": "브랜치 비교에서는 이 파일에 대해 텍스트 비교를 사용할 수 없습니다.",
           "d07e4b8553": "브랜치",
-          "d16e037f40": "부자"
+          "d16e037f40": "부자",
+          "6c4f1a8d2e": "Check details are unavailable."
         },
         "EditorPanelHeader": {
           "fb8331694e": "측면으로 미리보기 열기",
@@ -10083,7 +10163,8 @@
           "06357eea60": "목차",
           "27d0a9c49a": "목차",
           "65b036a6c8": "{{value0}} 확장",
-          "97ad46f11f": "{{value0}} 접기"
+          "97ad46f11f": "{{value0}} 접기",
+          "8f4d2c1a9b": "Resize table of contents"
         },
         "MarkdownTemplatePicker": {
           "22cd94426f": "제목없음.md",
@@ -10332,6 +10413,30 @@
         "DiffViewer": {
           "b5675b0694": "저장",
           "593f2193f6": "이 초안은 안전한 표시 한도를 초과했지만 계속 저장할 수 있습니다."
+        },
+        "CheckRunDetailsPanel": {
+          "8f2d0f5a91": "Passed",
+          "4c8e1b2d73": "Failed",
+          "91a4c7e2b0": "Cancelled",
+          "2f6d8a1c45": "Timed out",
+          "7b3e9d4f12": "Skipped",
+          "5a1c8e3d67": "Neutral",
+          "3d9f2b8e14": "Pending",
+          "b7f5e2c91a": "Refresh",
+          "a54ae21c6f": "Status:",
+          "fd46a70f1a": "Started",
+          "00e1c1658a": "Completed",
+          "aa8494ae3c": "check #",
+          "2dd5ddabc4": "workflow #",
+          "1f2b980522": "Loading check details…",
+          "d098e5529a": "Output",
+          "f2fe8a4e8f": "Annotations",
+          "cdbfda4dec": "Annotation",
+          "066fedd446": "Failed jobs",
+          "49731703ea": "Jobs",
+          "ee07b33924": "unknown",
+          "07eccfa397": "No details are available for this check.",
+          "a916648574": "Open details"
         }
       },
       "diff": {

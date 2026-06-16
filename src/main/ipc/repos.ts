@@ -1857,6 +1857,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
             | 'kind'
             | 'symlinkPaths'
             | 'issueSourcePreference'
+            | 'forkSyncMode'
             | 'externalWorktreeVisibility'
             | 'externalWorktreeVisibilityPromptDismissedAt'
             | 'projectGroupId'
@@ -1880,6 +1881,15 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
         updates.issueSourcePreference !== 'auto'
       ) {
         delete updates.issueSourcePreference
+      }
+      if (
+        'forkSyncMode' in updates &&
+        updates.forkSyncMode !== undefined &&
+        updates.forkSyncMode !== 'ask' &&
+        updates.forkSyncMode !== 'safe-auto' &&
+        updates.forkSyncMode !== 'off'
+      ) {
+        delete updates.forkSyncMode
       }
       // Why: `symlinkPaths` is consumed by `createWorktreeSymlinks` which
       // calls `.trim()` on each entry. A renderer bug or preload-version skew

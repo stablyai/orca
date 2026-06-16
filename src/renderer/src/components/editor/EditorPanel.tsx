@@ -290,6 +290,10 @@ function EditorPanelInner({
     )
   }
   const handleOpenContainingFolder = (): void => {
+    // Why: virtual editor tabs use synthetic ids instead of on-disk paths.
+    if (activeFile.mode === 'check-details') {
+      return
+    }
     if (
       isLocalPathOpenBlocked(settingsForRuntimeOwner(settings, activeFile.runtimeEnvironmentId), {
         connectionId: getConnectionId(activeFile.worktreeId)

@@ -4,7 +4,11 @@ import { existsSync, statSync } from 'fs'
 import { basename } from 'path'
 import { gitExecFileSync, gitExecFileAsync } from './runner'
 import type { BaseRefSearchResult } from '../../shared/types'
-import { buildHostedRemoteFileUrl, parseHostedRemote } from './hosted-remote-url'
+import {
+  buildHostedRemoteCommitUrl,
+  buildHostedRemoteFileUrl,
+  parseHostedRemote
+} from './hosted-remote-url'
 import { normalizeGitUsername } from './git-username'
 
 const GH_LOGIN_TIMEOUT_MS = 2500
@@ -824,4 +828,16 @@ export function getRemoteFileUrl(
   const defaultBranch = defaultBaseRef.replace(/^origin\//, '')
 
   return buildHostedRemoteFileUrl(remoteUrl, relativePath, defaultBranch, line)
+}
+
+/**
+ * Build a hosted URL (e.g. GitHub, GitLab, Bitbucket) for a commit. Returns
+ * null when the origin remote isn't a recognized host.
+ */
+export function getRemoteCommitUrl(repoPath: string, sha: string): string | null {
+  const remoteUrl = getRemoteUrl(repoPath)
+  if (!remoteUrl) {
+    return null
+  }
+  return buildHostedRemoteCommitUrl(remoteUrl, sha)
 }

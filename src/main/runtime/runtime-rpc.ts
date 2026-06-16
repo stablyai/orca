@@ -162,6 +162,7 @@ const MOBILE_RPC_METHOD_ALLOWLIST = new Set([
   'git.discard',
   'git.diff',
   'git.fetch',
+  'git.forkSync',
   'git.fastForward',
   'git.pull',
   'git.push',

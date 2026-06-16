@@ -31,6 +31,18 @@ describe('getRuntimeEnvironmentIdForRepo', () => {
     ).toBeNull()
   })
 
+  it('keeps SSH-owned repos on local IPC while a runtime is focused', () => {
+    expect(
+      getRuntimeEnvironmentIdForRepo(
+        {
+          settings: { activeRuntimeEnvironmentId: 'focused-runtime' },
+          repos: [{ id: 'repo-1', connectionId: 'ssh-1', executionHostId: null }]
+        },
+        'repo-1'
+      )
+    ).toBeNull()
+  })
+
   it('falls back to the focused runtime for legacy repos without an owner', () => {
     expect(
       getRuntimeEnvironmentIdForRepo(

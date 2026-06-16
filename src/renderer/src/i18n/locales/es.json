@@ -165,7 +165,9 @@
         "editor": {
           "dcb521ed29": "Este archivo se encuentra en estado de conflicto, pero no hay ningún archivo de árbol de trabajo disponible para editar.",
           "51f15c37d3": "No se puede abrir el directorio: {{value0}}",
-          "f2e00db373": "Archivo no encontrado: {{value0}}"
+          "f2e00db373": "Archivo no encontrado: {{value0}}",
+          "checkRunDetailsUnavailable": "No details are available for this check.",
+          "checkRunDetailsLoadFailed": "Failed to load check details."
         },
         "github": {
           "f129c42773": "GitHub no devolvió el nuevo comentario.",
@@ -7416,7 +7418,9 @@
             "host": "host",
             "ssh": "ssh",
             "remote": "remote",
-            "vm": "vm"
+            "vm": "vm",
+            "keepForkUpToDate": "Mantener el fork actualizado",
+            "keepForkUpToDateDescription": "Avanza este fork de forma segura desde upstream con fast-forward."
           }
         },
         "runtime": {
@@ -8006,6 +8010,33 @@
           "workspaceDirectory": "The client default is inherited until a host needs its own worktree directory.",
           "providerHost": "Provider host",
           "providerAccounts": "Credentials and account checks belong to the local client or selected remote server that owns the provider integration."
+        },
+        "RepositoryForkSyncSection": {
+          "defaultBranch": "rama predeterminada",
+          "synced": "Fork actualizado",
+          "syncedDescriptionSingular": "Se adelantó {{branch}} con fast-forward 1 commit.",
+          "syncedDescriptionPlural": "Se adelantó {{branch}} con fast-forward {{count}} commits.",
+          "upToDate": "El fork ya está actualizado",
+          "upToDateDescription": "{{branch}} ya coincide con upstream.",
+          "missingOrigin": "Falta el remoto origin.",
+          "missingUpstream": "Falta el remoto upstream.",
+          "upstreamMismatch": "El remoto upstream ya no coincide con este fork.",
+          "missingUpstreamBranch": "No se pudo resolver la rama predeterminada de upstream.",
+          "missingOriginBranch": "origin no tiene la rama predeterminada de upstream.",
+          "diverged": "origin tiene commits que no están en upstream.",
+          "blocked": "Sincronización del fork omitida",
+          "blockedFallback": "Orca no pudo avanzar este fork de forma segura con fast-forward.",
+          "failed": "Falló la sincronización del fork",
+          "title": "Mantener el fork actualizado",
+          "description": "Avanza este fork de forma segura desde upstream con fast-forward.",
+          "longDescription": "Cuando este fork está detrás de upstream, Orca puede avanzar su rama predeterminada de forma segura con fast-forward. Orca omite la actualización si la rama tiene commits locales o conflictos.",
+          "forkOf": "Fork de {{owner}}/{{repo}}",
+          "syncing": "Sincronizando",
+          "syncNow": "Sincronizar ahora",
+          "modeLabel": "Modo de sincronización del fork",
+          "ask": "Preguntar",
+          "safeAuto": "Seguro automático",
+          "off": "Desactivado"
         }
       },
       "right": {
@@ -8092,7 +8123,8 @@
           "FileExplorer": {
             "79b1537dd3": "Seleccione un espacio de trabajo para buscar archivos",
             "4da4d89845": "Volver al explorador",
-            "6ed5ce817b": "Buscar"
+            "6ed5ce817b": "Buscar",
+            "2f4483d6c4": "No hay archivos que coincidan con este filtro"
           },
           "FileExplorerBackgroundMenu": {
             "3b5e2dcb8d": "Nueva carpeta",
@@ -8129,7 +8161,8 @@
             "31b4c3195d": "Más acciones del explorador",
             "d95e30fe28": "Actualizar explorador",
             "6026b16950": "Contraer todo",
-            "693cbeadd0": "Buscar"
+            "693cbeadd0": "Buscar",
+            "c1f3f3ec70": "Buscar en el contenido de los archivos"
           },
           "FileExplorerTreeStatus": {
             "ce03835e1f": "No hay archivos en este espacio de trabajo",
@@ -8146,7 +8179,8 @@
             "9a8b85882d": "cargando",
             "62e685d5ec": "idle",
             "111e1d0db4": "error",
-            "e5e81e59a6": "Cambiar el tamaño de las commits"
+            "e5e81e59a6": "Cambiar el tamaño de las commits",
+            "6d1e0a7c3b": "No se pudieron cargar los archivos del commit"
           },
           "HostedReviewActions": {
             "4d5fb5a284": "Cerca",
@@ -8254,6 +8288,10 @@
             "4567e6e0b6": "Coincidir con toda la palabra",
             "464ae3974f": "Caso de partido",
             "693cbeadd0": "Buscar"
+          },
+          "SearchQueryRow": {
+            "queryLabel": "Buscar archivos",
+            "clearLabel": "Borrar búsqueda"
           },
           "SearchResultItems": {
             "cc06595a3b": "Copiar ruta de línea",
@@ -8419,7 +8457,14 @@
             "e2b7a1c0d9f4": "No se pudo crear {{value0}}",
             "hugeRepoIgnorePrompt": "Este repositorio tiene demasiados cambios activos. ¿Agregar \"{{value0}}\" a .gitignore?",
             "hugeRepoIgnoreAction": "Agregar a .gitignore",
-            "tooManyChanges": "Se detectaron demasiados cambios. Solo se muestran los primeros {{value0}}."
+            "tooManyChanges": "Se detectaron demasiados cambios. Solo se muestran los primeros {{value0}}.",
+            "bf5082de46": "{{value0}} copiado",
+            "c06193ef57": "No se pudo copiar {{value0}}",
+            "d172a4f068": "Hash del commit",
+            "e283b50179": "Mensaje del commit",
+            "f394c6128a": "No hay ningún agente disponible para explicar este commit",
+            "04a5d7239b": "Este repositorio no tiene un remoto web compatible",
+            "15b6e834ac": "No se pudo abrir el commit en el navegador"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "No se pudo iniciar el agente seleccionado.",
@@ -8753,6 +8798,7 @@
           "AiVaultPanel": {
             "resumeCommandCopied": "Resume command copied",
             "valueCopied": "{{value0}} copied",
+            "valueCopyFailed": "No se pudo copiar {{value0}}",
             "openWorkspaceBeforeResuming": "Open a workspace before resuming a session.",
             "localWorkspacesOnly": "Resume from history is only available in local workspaces.",
             "agentSessionQueued": "{{value0}} session queued",
@@ -8766,8 +8812,10 @@
             "transcriptsSkipped": "{{count}} transcript skipped",
             "noAgentSessionsFound": "No agent sessions found",
             "noSessionsMatchFilters": "No sessions match the current filters",
-            "sessionId": "Session ID",
-            "logPath": "Log path"
+            "sessionId": "ID de sesión",
+            "logPath": "Ruta del registro",
+            "agents": "Agentes",
+            "sessionsShownCompact": "{{value0}} mostradas"
           },
           "AiVaultPanelControls": {
             "scanningSessions": "Scanning sessions",
@@ -8830,7 +8878,8 @@
             "hoursAgo": "{{value0}}h ago",
             "daysAgo": "{{value0}}d ago",
             "monthsAgo": "{{value0}}mo ago",
-            "yearsAgo": "{{value0}}y ago"
+            "yearsAgo": "{{value0}}y ago",
+            "sessionId": "ID de sesión"
           },
           "AiVaultSessionRow": {
             "resumeAgentSession": "Resume {{value0}} session",
@@ -8842,7 +8891,37 @@
             "copySessionId": "Copy Session ID",
             "copyLogPath": "Copy Log Path",
             "messageCount": "{{value0}} msgs",
-            "tokenCount": "{{value0}} tok"
+            "tokenCount": "{{value0}} tok",
+            "toggleSessionDetails": "Detalles de sesión de {{value0}}",
+            "hideDetails": "Ocultar detalles",
+            "showDetails": "Mostrar detalles",
+            "moreSessionActions": "Más acciones de sesión",
+            "moreActions": "Más acciones"
+          },
+          "FileExplorerNameFilter": {
+            "26fb73c6e3": "Buscar archivos",
+            "4d5a6b2a49": "Borrar filtro de archivos",
+            "7a9fb1e6aa": "Contenido"
+          },
+          "FileExplorerViewSwitch": {
+            "c4e9a2b713": "Nombres",
+            "b3c8f1a902": "Filtrar archivos por nombre",
+            "f8a2c4d1e0": "Modo de búsqueda del explorador"
+          },
+          "GitHistoryCommitFiles": {
+            "a1b2c3d4e5": "Cargando archivos…",
+            "b2c3d4e5f6": "No hay cambios de archivos en este commit",
+            "c3d4e5f6a7": "Abrir todos los cambios juntos"
+          },
+          "GitHistoryRow": {
+            "2f9c41ab07": "Mostrar archivos del commit {{value0}}: {{value1}}",
+            "4a8d9e0c1f": "Ocultar archivos del commit {{value0}}: {{value1}}"
+          },
+          "GitHistoryCommitContextMenu": {
+            "7b1c4e9a02": "Abrir commit en el navegador",
+            "8c2d5fab13": "Copiar hash del commit",
+            "9d3e60bc24": "Copiar mensaje del commit",
+            "ae4f71cd35": "Explicar los cambios"
           }
         }
       },
@@ -9969,7 +10048,8 @@
           "8a0898ae4c": "La diferenciación de texto no está disponible para este archivo.",
           "3c6e71df22": "La diferencia de texto no está disponible para este archivo en la comparación de ramas.",
           "d07e4b8553": "rama",
-          "d16e037f40": "rico"
+          "d16e037f40": "rico",
+          "6c4f1a8d2e": "Check details are unavailable."
         },
         "EditorPanelHeader": {
           "fb8331694e": "Abrir vista previa al lado",
@@ -10083,7 +10163,8 @@
           "06357eea60": "Tabla de contenido",
           "27d0a9c49a": "Tabla de contenido",
           "65b036a6c8": "Expandir {{value0}}",
-          "97ad46f11f": "Contraer {{value0}}"
+          "97ad46f11f": "Contraer {{value0}}",
+          "8f4d2c1a9b": "Resize table of contents"
         },
         "MarkdownTemplatePicker": {
           "22cd94426f": "sin título.md",
@@ -10332,6 +10413,30 @@
         "DiffViewer": {
           "b5675b0694": "Guardar",
           "593f2193f6": "Este borrador superó el límite seguro de visualización, pero aún se puede guardar."
+        },
+        "CheckRunDetailsPanel": {
+          "8f2d0f5a91": "Passed",
+          "4c8e1b2d73": "Failed",
+          "91a4c7e2b0": "Cancelled",
+          "2f6d8a1c45": "Timed out",
+          "7b3e9d4f12": "Skipped",
+          "5a1c8e3d67": "Neutral",
+          "3d9f2b8e14": "Pending",
+          "b7f5e2c91a": "Refresh",
+          "a54ae21c6f": "Status:",
+          "fd46a70f1a": "Started",
+          "00e1c1658a": "Completed",
+          "aa8494ae3c": "check #",
+          "2dd5ddabc4": "workflow #",
+          "1f2b980522": "Loading check details…",
+          "d098e5529a": "Output",
+          "f2fe8a4e8f": "Annotations",
+          "cdbfda4dec": "Annotation",
+          "066fedd446": "Failed jobs",
+          "49731703ea": "Jobs",
+          "ee07b33924": "unknown",
+          "07eccfa397": "No details are available for this check.",
+          "a916648574": "Open details"
         }
       },
       "diff": {

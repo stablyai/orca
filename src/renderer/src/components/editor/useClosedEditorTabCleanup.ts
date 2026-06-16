@@ -66,5 +66,7 @@ function disposeClosedEditorTab(prevId: string, prevFile: OpenFile): void {
       break
     case 'conflict-review':
       break
+    case 'check-details':
+      break
   }
 }

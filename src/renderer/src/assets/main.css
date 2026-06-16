@@ -835,6 +835,15 @@
   color: var(--foreground);
 }
 
+.editor-header-path--static {
+  cursor: default;
+}
+
+.editor-header-path--static:hover,
+.editor-header-path--static:focus-visible {
+  color: var(--muted-foreground);
+}
+
 .editor-header-path-row {
   display: flex;
   align-items: center;

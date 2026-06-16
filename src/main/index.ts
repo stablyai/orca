@@ -92,6 +92,8 @@ import { ClaudeRuntimeAuthService } from './claude-accounts/runtime-auth-service
 import { StarNagService } from './star-nag/service'
 import { agentHookServer } from './agent-hooks/server'
 import { maybeAutoRenameBranchOnFirstWork } from './agent-hooks/first-work-branch-rename'
+import { renameWorktreeFolderOnFirstWork } from './agent-hooks/first-work-folder-rename'
+import { moveWorktree } from './git/worktree'
 import { getRepoIdFromWorktreeId } from '../shared/worktree-id'
 import { parseWorkspaceKey } from '../shared/workspace-scope'
 import { setMigrationUnsupportedPtyListener } from './agent-hooks/migration-unsupported-pty-state'
@@ -191,6 +193,12 @@ if (appImageCliRedirect.redirected) {
   app.exit(appImageCliRedirect.status)
 }
 
+// Kill switch for the first-work on-disk folder rename. The renderer reconciles a
+// worktree id change via migrateWorktreeIdentity + a rename-aware worktrees:changed
+// handler, so an old->new id change is no longer mistaken for a deletion. Flip off
+// to disable the on-disk move (branch + display rename still happen) if needed.
+const ENABLE_FIRST_WORK_FOLDER_RENAME = true
+
 // Why: the store/runtime singletons live here in index.ts; injecting them keeps
 // the rename orchestrator free of module-level state and unit-testable.
 function maybeAutoRenameBranchOnFirstWorkFromHook(event: {
@@ -267,6 +275,19 @@ function maybeAutoRenameBranchOnFirstWorkFromHook(event: {
           firstAgentMessageRenameError: null
         })
       },
+      renameWorktreeFolder: ENABLE_FIRST_WORK_FOLDER_RENAME
+        ? (worktreeId, newLeaf) =>
+            renameWorktreeFolderOnFirstWork(worktreeId, newLeaf, {
+              getRepo: (repoId) => currentStore.getRepo(repoId),
+              getSettings: () => currentStore.getSettings(),
+              migrateWorktreeIdentity: (oldId, newId) =>
+                currentStore.migrateWorktreeIdentity(oldId, newId),
+              notifyWorktreeRenamed: (repoId, oldId, newId) =>
+                currentRuntime.notifyWorktreeFolderRenamed(repoId, oldId, newId),
+              pathExists: async (candidate) => existsSync(candidate),
+              moveWorktree
+            })
+        : undefined,
       setRenameError: (worktreeId, error) => {
         // Skip the write + renderer push when nothing changes — benign skips
         // clear the error on every settled worktree, most of which never had one.

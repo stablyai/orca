@@ -28,6 +28,7 @@ import { useMarkdownDocuments } from './useMarkdownDocuments'
 import { findGitConflictBlocks } from './monaco-conflict-decorations'
 import { getDiffContentSignature } from './diff-content-signature'
 import { translate } from '@/i18n/i18n'
+import { CheckRunDetailsPanel } from './CheckRunDetailsPanel'
 
 const MonacoEditor = lazy(() => import('./MonacoEditor'))
 const DiffViewer = lazy(() => import('./DiffViewer'))
@@ -167,6 +168,7 @@ export function EditorContent({
   const closeFile = useAppStore((s) => s.closeFile)
   const setRightSidebarTab = useAppStore((s) => s.setRightSidebarTab)
   const setPendingEditorReveal = useAppStore((s) => s.setPendingEditorReveal)
+  const reloadOpenCheckRunDetailsTab = useAppStore((s) => s.reloadOpenCheckRunDetailsTab)
   const [conflictNavigationIndexByFile, setConflictNavigationIndexByFile] = React.useState<
     Record<string, number>
   >({})
@@ -611,6 +613,34 @@ export function EditorContent({
       <div className="min-h-0 flex-1 overflow-y-auto bg-editor-surface scrollbar-sleek">
         {unresolvedEntries.map(renderConflictReviewInlineFile)}
       </div>
+    )
+  }
+
+  if (activeFile.mode === 'check-details') {
+    const checkRunDetails = activeFile.checkRunDetails
+    if (!checkRunDetails) {
+      return (
+        <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+          {translate(
+            'auto.components.editor.EditorContent.6c4f1a8d2e',
+            'Check details are unavailable.'
+          )}
+        </div>
+      )
+    }
+    const details = checkRunDetails.details
+    const openUrl = details?.detailsUrl ?? details?.url ?? checkRunDetails.check.url
+    return (
+      <CheckRunDetailsPanel
+        check={checkRunDetails.check}
+        details={checkRunDetails.details}
+        loading={checkRunDetails.loading}
+        error={checkRunDetails.error}
+        openUrl={openUrl}
+        onRefresh={() => {
+          void reloadOpenCheckRunDetailsTab(activeFile.id)
+        }}
+      />
     )
   }
 

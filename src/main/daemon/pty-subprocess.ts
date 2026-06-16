@@ -28,7 +28,10 @@ import { addOrcaWslInteropEnv } from '../pty/wsl-orca-env'
 import { isWindowsGitBashShellPath, resolveWindowsGitBashShellPath } from '../git-bash'
 import { WINDOWS_GIT_BASH_SHELL } from '../../shared/windows-terminal-shell'
 import { resolveAgentForegroundProcess } from '../providers/agent-foreground-process'
-import { recognizeAgentProcess } from '../../shared/agent-process-recognition'
+import {
+  isAgentForegroundWrapperProcess,
+  recognizeAgentProcess
+} from '../../shared/agent-process-recognition'
 import { isShellProcess } from '../../shared/shell-process-detection'
 
 const PANE_IDENTITY_ENV_KEYS = ['ORCA_PANE_KEY', 'ORCA_TAB_ID', 'ORCA_WORKTREE_ID'] as const
@@ -542,13 +545,14 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
   const getFallbackForegroundProcess = (): string | null =>
     normalizeForegroundProcessName(proc.process)
   const scheduleAgentForegroundRefresh = (fallbackProcess: string | null): void => {
-    if (dead || process.platform === 'win32' || !proc.pid) {
+    if (dead || !proc.pid) {
       return
     }
     if (
       !fallbackProcess ||
       isShellProcess(fallbackProcess) ||
-      recognizeAgentProcess(fallbackProcess)
+      recognizeAgentProcess(fallbackProcess) ||
+      !isAgentForegroundWrapperProcess(fallbackProcess)
     ) {
       return
     }
