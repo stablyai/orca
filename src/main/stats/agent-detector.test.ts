@@ -119,6 +119,23 @@ describe('AgentDetector', () => {
     expect(stats.onAgentStop).toHaveBeenCalledWith('pty-1', 120)
   })
 
+  it('does not treat split ST-terminated string controls as meaningful output', () => {
+    const stats = {
+      onAgentStart: vi.fn(),
+      onAgentStop: vi.fn()
+    }
+    const detector = new AgentDetector(stats as never)
+
+    detector.onData('pty-1', oscTitle('Codex working'), 100)
+    detector.onData('pty-1', 'real output', 120)
+    detector.onData('pty-1', '\x1b_Gi=31337,s=1,', 140)
+    detector.onData('pty-1', 'v=1,a=q,t=d,f=24;AAAA\x1b\\', 141)
+    detector.onData('pty-1', oscTitle('Codex done'), 160)
+
+    expect(stats.onAgentStop).toHaveBeenCalledTimes(1)
+    expect(stats.onAgentStop).toHaveBeenCalledWith('pty-1', 120)
+  })
+
   it('keeps capped split OSC title tails from becoming meaningful output', () => {
     const stats = {
       onAgentStart: vi.fn(),

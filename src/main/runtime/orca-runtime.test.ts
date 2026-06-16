@@ -6212,6 +6212,21 @@ describe('OrcaRuntimeService', () => {
     expect(pty?.lastOscTitle).toBe('x'.repeat(4092))
   })
 
+  it('does not retain split ST-terminated string controls as preview text', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    syncSinglePty(runtime)
+
+    const [terminal] = (await runtime.listTerminals()).terminals
+    runtime.onPtyData('pty-1', 'Before \x1b_Gi=31337,s=1,', 100)
+    runtime.onPtyData('pty-1', 'v=1,a=q,t=d,f=24;AAAA\x1b\\After\n', 101)
+
+    const read = await runtime.readTerminal(terminal.handle)
+    const retained = read.tail.join('\n')
+    expect(retained).toContain('BeforeAfter')
+    expect(retained).not.toContain('Gi=31337')
+    expect(retained).not.toContain('AAAA')
+  })
+
   it('detects split OSC titles before retaining terminal previews', async () => {
     const runtime = new OrcaRuntimeService(store)
     syncSinglePty(runtime)

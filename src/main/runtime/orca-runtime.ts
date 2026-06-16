@@ -18660,7 +18660,19 @@ function parseAnsiControlSequence(
     }
     return null
   }
+  if (isStTerminatedStringControlIntroducer(introducer)) {
+    for (let index = escapeIndex + 2; index < value.length; index += 1) {
+      if (value[index] === '\u001b' && value[index + 1] === '\\') {
+        return { kind: 'other', endIndex: index + 1 }
+      }
+    }
+    return null
+  }
   return { kind: 'other', endIndex: escapeIndex + 1 }
+}
+
+function isStTerminatedStringControlIntroducer(introducer: string | undefined): boolean {
+  return introducer === 'P' || introducer === 'X' || introducer === '^' || introducer === '_'
 }
 
 function tailStateMatches(

@@ -21,6 +21,8 @@ type PtyRecord = {
 
 type MeaningfulContentDetector = (chunk: string) => boolean
 
+const MEANINGFUL_CONTENT_SCAN_TAIL_LIMIT = 4096
+
 /**
  * Lightweight normalization to detect whether a PTY data chunk contains
  * meaningful (non-ANSI, non-OSC) output. Mirrors the regex passes in
@@ -46,6 +48,10 @@ function hasMeaningfulContent(chunk: string): boolean {
     .replace(/\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/g, '') // OSC sequences
     // eslint-disable-next-line no-control-regex
     .replace(/\x1b\][^\x07]*(?:\x1b)?$/g, '') // incomplete OSC tail
+    // eslint-disable-next-line no-control-regex
+    .replace(/\x1b[PX^_][\s\S]*?\x1b\\/g, '') // ST-terminated string controls
+    // eslint-disable-next-line no-control-regex
+    .replace(/\x1b[PX^_][\s\S]*(?:\x1b)?$/g, '') // incomplete string-control tail
     // eslint-disable-next-line no-control-regex
     .replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, '') // CSI sequences
     // eslint-disable-next-line no-control-regex
@@ -77,6 +83,7 @@ function hasMeaningfulContent(chunk: string): boolean {
 export class AgentDetector {
   private ptys = new Map<string, PtyRecord>()
   private oscTitleScanTailByPtyId = new Map<string, string>()
+  private meaningfulContentScanTailByPtyId = new Map<string, string>()
   private stats: StatsCollector
   private meaningfulContentDetector: MeaningfulContentDetector
 
@@ -108,10 +115,13 @@ export class AgentDetector {
     }
 
     let hasMeaningfulOutput: boolean | null = null
-    const previousTitleTail = this.oscTitleScanTailByPtyId.get(ptyId)
-    const meaningfulData = previousTitleTail ? `${previousTitleTail}${rawData}` : rawData
+    const previousMeaningfulTail = this.meaningfulContentScanTailByPtyId.get(ptyId)
+    const meaningfulData = previousMeaningfulTail ? `${previousMeaningfulTail}${rawData}` : rawData
     const getHasMeaningfulOutput = (): boolean => {
-      hasMeaningfulOutput ??= this.meaningfulContentDetector(meaningfulData)
+      if (hasMeaningfulOutput === null) {
+        hasMeaningfulOutput = this.meaningfulContentDetector(meaningfulData)
+        this.updateMeaningfulContentScanTail(ptyId, meaningfulData)
+      }
       return hasMeaningfulOutput
     }
 
@@ -180,6 +190,7 @@ export class AgentDetector {
     record.state = 'stopped'
     this.ptys.delete(ptyId)
     this.oscTitleScanTailByPtyId.delete(ptyId)
+    this.meaningfulContentScanTailByPtyId.delete(ptyId)
   }
 
   private extractLastOscTitleForPty(ptyId: string, rawData: string): string | null {
@@ -196,4 +207,71 @@ export class AgentDetector {
     }
     return extractLastOscTitle(input)
   }
+
+  private updateMeaningfulContentScanTail(ptyId: string, rawData: string): void {
+    const tail = extractMeaningfulContentScanTail(rawData)
+    if (tail.length > 0) {
+      this.meaningfulContentScanTailByPtyId.set(ptyId, tail)
+    } else {
+      this.meaningfulContentScanTailByPtyId.delete(ptyId)
+    }
+  }
+}
+
+function extractMeaningfulContentScanTail(value: string): string {
+  const escapeIndex = value.lastIndexOf('\x1b')
+  if (escapeIndex === -1) {
+    return ''
+  }
+  const parsed = parseMeaningfulControlSequence(value, escapeIndex)
+  return parsed === null ? trimMeaningfulContentScanTail(value.slice(escapeIndex)) : ''
+}
+
+function parseMeaningfulControlSequence(value: string, escapeIndex: number): number | null {
+  const introducer = value[escapeIndex + 1]
+  if (!introducer) {
+    return null
+  }
+  if (introducer === '[') {
+    for (let index = escapeIndex + 2; index < value.length; index += 1) {
+      const code = value.charCodeAt(index)
+      if (code >= 0x40 && code <= 0x7e) {
+        return index
+      }
+    }
+    return null
+  }
+  if (introducer === ']') {
+    for (let index = escapeIndex + 2; index < value.length; index += 1) {
+      if (value[index] === '\u0007') {
+        return index
+      }
+      if (value[index] === '\u001b' && value[index + 1] === '\\') {
+        return index + 1
+      }
+    }
+    return null
+  }
+  if (isStTerminatedStringControlIntroducer(introducer)) {
+    for (let index = escapeIndex + 2; index < value.length; index += 1) {
+      if (value[index] === '\u001b' && value[index + 1] === '\\') {
+        return index + 1
+      }
+    }
+    return null
+  }
+  return escapeIndex + 1
+}
+
+function isStTerminatedStringControlIntroducer(introducer: string): boolean {
+  return introducer === 'P' || introducer === 'X' || introducer === '^' || introducer === '_'
+}
+
+function trimMeaningfulContentScanTail(value: string): string {
+  if (value.length <= MEANINGFUL_CONTENT_SCAN_TAIL_LIMIT) {
+    return value
+  }
+  const introducer = value.slice(0, Math.min(2, value.length))
+  const suffixBudget = Math.max(0, MEANINGFUL_CONTENT_SCAN_TAIL_LIMIT - introducer.length)
+  return `${introducer}${value.slice(-suffixBudget)}`
 }
