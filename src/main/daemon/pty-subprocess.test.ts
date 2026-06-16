@@ -54,6 +54,7 @@ const ORCA_SHELL_WRAPPER_ENV = [
 ] as const
 const POWERSHELL_OSC133_COMMAND_ARGS = ['-NoLogo', '-NoExit', '-EncodedCommand', expect.any(String)]
 const ZSH_SHELL_READY_DIR = /shell-ready[\\/]zsh/
+const itOnMacHost = process.platform === 'darwin' ? it : it.skip
 
 function mockPtyProcess(pid = 12345) {
   const onDataListeners: ((data: string) => void)[] = []
@@ -148,7 +149,7 @@ describe('createPtySubprocess', () => {
     )
   })
 
-  it('repairs a deleted macOS daemon cwd before spawning node-pty', () => {
+  itOnMacHost('repairs a deleted macOS daemon cwd before spawning node-pty', () => {
     const proc = mockPtyProcess()
     spawnMock.mockReturnValue(proc)
     const platform = Object.getOwnPropertyDescriptor(process, 'platform')
@@ -500,14 +501,22 @@ describe('createPtySubprocess', () => {
     const proc = mockPtyProcess()
     proc.process = 'xterm-256color'
     spawnMock.mockReturnValue(proc)
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { value: 'linux' })
 
-    const handle = createPtySubprocess({
-      sessionId: 'test',
-      cols: 80,
-      rows: 24
-    })
+    try {
+      const handle = createPtySubprocess({
+        sessionId: 'test',
+        cols: 80,
+        rows: 24
+      })
 
-    expect(handle.getForegroundProcess()).toBeNull()
+      expect(handle.getForegroundProcess()).toBeNull()
+    } finally {
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
   })
 
   it('does not inherit parent Orca pane identity when caller omits pane env', () => {
