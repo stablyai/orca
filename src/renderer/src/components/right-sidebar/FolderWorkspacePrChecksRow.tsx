@@ -115,7 +115,7 @@ export function FolderWorkspacePrChecksRow({
             checkDetailsContextKey={row.refreshIdentity}
             onLoadCheckDetails={onLoadCheckDetails}
             worktreeId={row.worktree.id}
-            detailsStickySurface="background"
+            detailsStickySurface="card"
           />
         </div>
       ) : null}

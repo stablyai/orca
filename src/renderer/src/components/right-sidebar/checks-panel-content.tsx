@@ -470,10 +470,10 @@ export function getFailedChecksForDetails(checks: PRCheckDetail[]): PRCheckDetai
   return checks.filter(isFailedCheck)
 }
 
-type CheckDetailsStickySurface = 'sidebar' | 'background'
+type CheckDetailsStickySurface = 'sidebar' | 'card'
 
 function getCheckDetailsStickySurfaceClass(surface: CheckDetailsStickySurface): string {
-  return surface === 'background' ? 'bg-background/95' : 'bg-sidebar/95'
+  return surface === 'card' ? 'bg-card/95' : 'bg-sidebar/95'
 }
 
 function ViewFullCheckDetailsButton({
@@ -488,7 +488,7 @@ function ViewFullCheckDetailsButton({
       type="button"
       variant="outline"
       size="xs"
-      className="h-6 shrink-0 gap-1 px-1.5 text-[11px] text-muted-foreground hover:text-foreground"
+      className="h-6 min-w-[7.25rem] shrink-0 gap-1 px-1.5 text-[11px] text-muted-foreground hover:text-foreground"
       onClick={onClick}
     >
       <PanelRight className="size-3" />
@@ -530,12 +530,15 @@ function CheckRunDetails({
   const hasJobs = jobs.length > 0
   const hasLogTail = jobs.some((job) => Boolean(job.logTail))
 
-  const fullDetailsLabel = hasLogTail
-    ? translate('auto.components.right.sidebar.checks.panel.content.b8c4e2a1f7', 'View full logs')
-    : translate(
-        'auto.components.right.sidebar.checks.panel.content.e4e3af15ee',
-        'View full details'
-      )
+  // Why: wait until inline details finish loading before switching to the logs label
+  // so the sticky button does not resize mid-fetch.
+  const fullDetailsLabel =
+    !state?.loading && hasLogTail
+      ? translate('auto.components.right.sidebar.checks.panel.content.b8c4e2a1f7', 'View full logs')
+      : translate(
+          'auto.components.right.sidebar.checks.panel.content.e4e3af15ee',
+          'View full details'
+        )
 
   const openFullDetailsTab = (): void => {
     if (!worktreeId) {

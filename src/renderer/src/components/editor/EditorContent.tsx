@@ -637,6 +637,7 @@ export function EditorContent({
         loading={checkRunDetails.loading}
         error={checkRunDetails.error}
         openUrl={openUrl}
+        worktreeId={activeFile.worktreeId}
         onRefresh={() => {
           void reloadOpenCheckRunDetailsTab(activeFile.id)
         }}
