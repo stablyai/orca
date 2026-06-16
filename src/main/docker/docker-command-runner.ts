@@ -1,7 +1,8 @@
 import { execFile } from 'node:child_process'
-import type { DockerConnection, DockerContainerAction, DockerContainerInspect, DockerContainerSummary, DockerSshTargetRef } from '../../shared/docker-types'
+import type { DockerConnection, DockerContainerAction, DockerContainerInspect, DockerContainerSummary, DockerImageSummary, DockerNetworkSummary, DockerSshTargetRef, DockerVolumeSummary } from '../../shared/docker-types'
 import { parseDockerContainers } from './docker-output-parser'
 import { parseDockerInspect } from './docker-inspect-parser'
+import { parseDockerImages, parseDockerNetworks, parseDockerVolumes } from './docker-resource-parsers'
 
 export const DOCKER_COMMAND_TIMEOUT_MS = 15_000
 
@@ -175,4 +176,31 @@ export async function runContainerAction(
   if (result.code !== 0) {
     throw new DockerCommandError(result.code, result.stderr)
   }
+}
+
+async function listResource<T>(
+  conn: DockerConnection,
+  args: string[],
+  parse: (stdout: string) => T,
+  deps: DockerRunnerDeps
+): Promise<T> {
+  const exec = deps.exec ?? localCapturedExec
+  const invocation = buildInvocation(conn, args, { dockerBinary: deps.dockerBinary, sshTarget: deps.sshTarget })
+  const result = await exec(invocation.file, invocation.args, { env: invocation.env, timeout: DOCKER_COMMAND_TIMEOUT_MS })
+  if (result.code !== 0) {
+    throw new DockerCommandError(result.code, result.stderr)
+  }
+  return parse(result.stdout)
+}
+
+export function listImages(conn: DockerConnection, deps: DockerRunnerDeps = {}): Promise<DockerImageSummary[]> {
+  return listResource(conn, ['images', '--format', '{{json .}}'], parseDockerImages, deps)
+}
+
+export function listVolumes(conn: DockerConnection, deps: DockerRunnerDeps = {}): Promise<DockerVolumeSummary[]> {
+  return listResource(conn, ['volume', 'ls', '--format', '{{json .}}'], parseDockerVolumes, deps)
+}
+
+export function listNetworks(conn: DockerConnection, deps: DockerRunnerDeps = {}): Promise<DockerNetworkSummary[]> {
+  return listResource(conn, ['network', 'ls', '--format', '{{json .}}'], parseDockerNetworks, deps)
 }

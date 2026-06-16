@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { DockerConnection, DockerContainerAction } from '../../shared/docker-types'
-import { buildInvocation, defaultDockerBinary, listContainers, DockerCommandError, inspectContainer, runContainerAction } from './docker-command-runner'
+import { buildInvocation, defaultDockerBinary, listContainers, DockerCommandError, inspectContainer, runContainerAction, listImages, listVolumes, listNetworks } from './docker-command-runner'
 
 const ARGS = ['ps', '-a', '--format', '{{json .}}']
 
@@ -165,5 +165,34 @@ describe('runContainerAction', () => {
     await expect(
       runContainerAction({ id: 'local', label: 'Local', kind: 'local' }, 'abc', 'stop', { exec })
     ).rejects.toThrow(DockerCommandError)
+  })
+})
+
+describe('listImages/listVolumes/listNetworks', () => {
+  it('listImages runs `docker images --format` and parses', async () => {
+    const calls: Array<{ file: string; args: string[] }> = []
+    const exec = async (file: string, args: string[]) => {
+      calls.push({ file, args })
+      return { stdout: JSON.stringify({ ID: 'i', Repository: 'r', Tag: 't', Size: '1MB', CreatedSince: 'now' }), stderr: '', code: 0 }
+    }
+    const result = await listImages({ id: 'local', label: 'Local', kind: 'local' }, { exec })
+    expect(calls[0]).toEqual({ file: 'docker', args: ['images', '--format', '{{json .}}'] })
+    expect(result[0]).toMatchObject({ id: 'i', repository: 'r' })
+  })
+  it('listVolumes runs `docker volume ls --format`', async () => {
+    const calls: Array<{ file: string; args: string[] }> = []
+    const exec = async (file: string, args: string[]) => { calls.push({ file, args }); return { stdout: '', stderr: '', code: 0 } }
+    await listVolumes({ id: 'local', label: 'Local', kind: 'local' }, { exec })
+    expect(calls[0]).toEqual({ file: 'docker', args: ['volume', 'ls', '--format', '{{json .}}'] })
+  })
+  it('listNetworks runs `docker network ls --format`', async () => {
+    const calls: Array<{ file: string; args: string[] }> = []
+    const exec = async (file: string, args: string[]) => { calls.push({ file, args }); return { stdout: '', stderr: '', code: 0 } }
+    await listNetworks({ id: 'local', label: 'Local', kind: 'local' }, { exec })
+    expect(calls[0]).toEqual({ file: 'docker', args: ['network', 'ls', '--format', '{{json .}}'] })
+  })
+  it('listImages throws DockerCommandError on non-zero exit', async () => {
+    const exec = async () => ({ stdout: '', stderr: 'boom', code: 1 })
+    await expect(listImages({ id: 'local', label: 'Local', kind: 'local' }, { exec })).rejects.toThrow(DockerCommandError)
   })
 })
