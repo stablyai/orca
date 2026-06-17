@@ -32,7 +32,10 @@ const BASE_DRAFT: AutomationDraft = {
   scheduleWarning: null,
   webhookEnabled: false,
   webhookSecretMode: 'none',
-  webhookSecret: ''
+  webhookSecret: '',
+  agentModel: '',
+  agentLaunchArgs: '',
+  agentEnv: []
 }
 
 describe('AutomationSchedulePicker', () => {

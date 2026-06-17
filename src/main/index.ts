@@ -1373,6 +1373,7 @@ app.whenReady().then(async () => {
               activate: false,
               createdWithAgent: automation.agentId,
               startupAgent: automation.agentId,
+              startupAgentConfig: automation.agentConfig,
               startupPrompt: dispatchPrompt,
               telemetrySource: 'unknown'
             })
@@ -1395,7 +1396,8 @@ app.whenReady().then(async () => {
               {
                 agent: automation.agentId,
                 prompt: dispatchPrompt,
-                title: run.title
+                title: run.title,
+                agentConfig: automation.agentConfig
               }
             )
             terminalHandle = terminal.handle

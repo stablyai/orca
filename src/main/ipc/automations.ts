@@ -13,7 +13,9 @@ import type {
   ExternalAutomationRunsPage,
   ExternalAutomationUpdateInput,
   AutomationRun,
-  AutomationUpdateInput
+  AutomationUpdateInput,
+  UserAutomationTemplate,
+  UserAutomationTemplateInput
 } from '../../shared/automations-types'
 import {
   createExternalAutomation,
@@ -87,5 +89,21 @@ export function registerAutomationHandlers(store: Store, service: AutomationServ
   )
   ipcMain.handle('automations:rendererReady', (): void => {
     service.setRendererReady()
+  })
+  ipcMain.handle('automations:listTemplates', (): UserAutomationTemplate[] =>
+    store.listAutomationTemplates()
+  )
+  ipcMain.handle(
+    'automations:createTemplate',
+    (_event, input: UserAutomationTemplateInput): UserAutomationTemplate =>
+      store.createAutomationTemplate(input)
+  )
+  ipcMain.handle(
+    'automations:updateTemplate',
+    (_event, args: { id: string; input: UserAutomationTemplateInput }): UserAutomationTemplate =>
+      store.updateAutomationTemplate(args.id, args.input)
+  )
+  ipcMain.handle('automations:deleteTemplate', (_event, args: { id: string }): void => {
+    store.deleteAutomationTemplate(args.id)
   })
 }

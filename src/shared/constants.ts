@@ -451,6 +451,7 @@ export function getDefaultPersistedState(homedir: string): PersistedState {
     legacyPaneKeyAliasEntries: [],
     automations: [],
     automationRuns: [],
+    automationTemplates: [],
     onboarding: getDefaultOnboardingState(),
     featureInteractionTelemetryBuckets: {}
   }

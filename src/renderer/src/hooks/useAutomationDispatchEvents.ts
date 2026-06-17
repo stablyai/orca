@@ -392,6 +392,7 @@ export function useAutomationDispatchEvents(): void {
           prompt: dispatchPrompt,
           launchSource: 'unknown',
           title: run.title,
+          agentConfig: automation.agentConfig,
           onData: (chunk) => {
             outputSnapshotBuffer.append(chunk)
           },

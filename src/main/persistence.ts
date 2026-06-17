@@ -27,7 +27,9 @@ import type {
   AutomationSchedulerOwner,
   AutomationRunTrigger,
   AutomationUpdateInput,
-  AutomationWebhookDelivery
+  AutomationWebhookDelivery,
+  UserAutomationTemplate,
+  UserAutomationTemplateInput
 } from '../shared/automations-types'
 import {
   latestAutomationOccurrenceAtOrBefore,
@@ -35,6 +37,11 @@ import {
 } from '../shared/automation-schedules'
 import { getAutomationLegacyRepoId } from '../shared/automation-run-identity'
 import { normalizeAutomationPrecheck } from '../shared/automation-precheck'
+import { normalizeAutomationAgentConfig } from '../shared/automation-agent-config'
+import {
+  buildUserAutomationTemplate,
+  normalizeUserAutomationTemplate
+} from '../shared/automation-user-templates'
 import { normalizeAutomationWebhookConfig } from '../shared/automation-webhook'
 import type {
   PersistedState,
@@ -2877,6 +2884,11 @@ export class Store {
           ),
           automations: Array.isArray(parsed.automations) ? parsed.automations : [],
           automationRuns: Array.isArray(parsed.automationRuns) ? parsed.automationRuns : [],
+          automationTemplates: Array.isArray(parsed.automationTemplates)
+            ? parsed.automationTemplates
+                .map(normalizeUserAutomationTemplate)
+                .filter((template): template is UserAutomationTemplate => template !== null)
+            : [],
           onboarding: normalizedOnboarding
         }
       }
@@ -3871,6 +3883,7 @@ export class Store {
       prompt: input.prompt,
       precheck: normalizeAutomationPrecheck(input.precheck),
       agentId: input.agentId,
+      agentConfig: normalizeAutomationAgentConfig(input.agentConfig),
       runContext: input.runContext ?? contexts.runContext,
       sourceContext: input.sourceContext ?? contexts.sourceContext,
       projectId: input.projectId,
@@ -3921,6 +3934,9 @@ export class Store {
       precheck: Object.hasOwn(updates, 'precheck')
         ? normalizeAutomationPrecheck(updates.precheck)
         : normalizeAutomationPrecheck(current.precheck),
+      agentConfig: Object.hasOwn(updates, 'agentConfig')
+        ? normalizeAutomationAgentConfig(updates.agentConfig)
+        : normalizeAutomationAgentConfig(current.agentConfig),
       webhook: Object.hasOwn(updates, 'webhook')
         ? normalizeAutomationWebhookConfig(updates.webhook)
         : normalizeAutomationWebhookConfig(current.webhook ?? null),
@@ -3971,6 +3987,44 @@ export class Store {
     this.state.automations = (this.state.automations ?? []).filter((entry) => entry.id !== id)
     this.state.automationRuns = (this.state.automationRuns ?? []).filter(
       (entry) => entry.automationId !== id
+    )
+    this.flush()
+  }
+
+  listAutomationTemplates(): UserAutomationTemplate[] {
+    return [...(this.state.automationTemplates ?? [])].sort((left, right) =>
+      left.label.localeCompare(right.label)
+    )
+  }
+
+  createAutomationTemplate(input: UserAutomationTemplateInput): UserAutomationTemplate {
+    const now = Date.now()
+    const template = buildUserAutomationTemplate(input, { id: randomUUID(), createdAt: now, now })
+    this.state.automationTemplates = [...(this.state.automationTemplates ?? []), template]
+    this.flush()
+    return template
+  }
+
+  updateAutomationTemplate(id: string, input: UserAutomationTemplateInput): UserAutomationTemplate {
+    const templates = this.state.automationTemplates ?? []
+    const index = templates.findIndex((entry) => entry.id === id)
+    if (index === -1) {
+      throw new Error('Automation template not found.')
+    }
+    const current = templates[index]
+    const updated = buildUserAutomationTemplate(input, {
+      id: current.id,
+      createdAt: current.createdAt,
+      now: Date.now()
+    })
+    this.state.automationTemplates = templates.map((entry) => (entry.id === id ? updated : entry))
+    this.flush()
+    return updated
+  }
+
+  deleteAutomationTemplate(id: string): void {
+    this.state.automationTemplates = (this.state.automationTemplates ?? []).filter(
+      (entry) => entry.id !== id
     )
     this.flush()
   }

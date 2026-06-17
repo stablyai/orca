@@ -6,6 +6,7 @@ import type {
   AutomationSchedulePreset,
   AutomationWebhookSecretMode,
   AutomationWorkspaceMode,
+  UserAutomationTemplate,
   WebhookServerEndpoint
 } from '../../../../shared/automations-types'
 import type { GlobalSettings, Repo, TuiAgent, Worktree } from '../../../../shared/types'
@@ -19,6 +20,7 @@ import { AutomationEditorDialogHeader } from './AutomationEditorDialogHeader'
 import { AutomationEditorPromptSection } from './AutomationEditorPromptSection'
 import { AutomationSchedulePicker } from './AutomationSchedulePicker'
 import { getAutomationTemplates, type AutomationTemplate } from './automation-templates'
+import type { AgentConfigDraftFields } from './automation-agent-config-draft'
 import { translate } from '@/i18n/i18n'
 
 const PICKER_TRIGGER_CLASS =
@@ -26,7 +28,7 @@ const PICKER_TRIGGER_CLASS =
 const MODE_TOGGLE_ITEM_CLASS =
   'w-full border-input bg-input/30 shadow-xs hover:bg-accent/60 data-[state=on]:border-primary data-[state=on]:bg-primary data-[state=on]:text-primary-foreground data-[state=on]:hover:bg-primary/90 dark:bg-input/30 dark:data-[state=on]:bg-primary dark:data-[state=on]:text-primary-foreground dark:data-[state=on]:hover:bg-primary/90'
 
-export type AutomationDraft = {
+export type AutomationDraft = AgentConfigDraftFields & {
   name: string
   prompt: string
   agentId: TuiAgent
@@ -71,6 +73,12 @@ type AutomationEditorDialogProps = {
   onOpenChange: (open: boolean) => void
   onDraftChange: (updater: (current: AutomationDraft) => AutomationDraft) => void
   onApplyTemplate: (template: AutomationTemplate) => void
+  userTemplates: UserAutomationTemplate[]
+  isEditingTemplate: boolean
+  onApplyUserTemplate: (template: UserAutomationTemplate) => void
+  onEditUserTemplate: (template: UserAutomationTemplate) => void
+  onDeleteUserTemplate: (id: string) => void
+  onSaveAsTemplate: () => void
   onSave: () => void
 }
 
@@ -94,6 +102,12 @@ export function AutomationEditorDialog({
   onOpenChange,
   onDraftChange,
   onApplyTemplate,
+  userTemplates,
+  isEditingTemplate,
+  onApplyUserTemplate,
+  onEditUserTemplate,
+  onDeleteUserTemplate,
+  onSaveAsTemplate,
   onGenerateWebhookSecret,
   onSave
 }: AutomationEditorDialogProps): React.JSX.Element {
@@ -144,6 +158,8 @@ export function AutomationEditorDialog({
           draftName={draft.name}
           templateOpen={templateOpen}
           templates={getAutomationTemplates()}
+          userTemplates={userTemplates}
+          isEditingTemplate={isEditingTemplate}
           modeToggleItemClassName={MODE_TOGGLE_ITEM_CLASS}
           pickerTriggerClassName={PICKER_TRIGGER_CLASS}
           onCreateTargetChange={onCreateTargetChange}
@@ -153,6 +169,16 @@ export function AutomationEditorDialog({
             onApplyTemplate(template)
             setTemplateOpen(false)
           }}
+          onApplyUserTemplate={(template) => {
+            onApplyUserTemplate(template)
+            setTemplateOpen(false)
+          }}
+          onEditUserTemplate={(template) => {
+            onEditUserTemplate(template)
+            setTemplateOpen(false)
+          }}
+          onDeleteUserTemplate={onDeleteUserTemplate}
+          onSaveAsTemplate={onSaveAsTemplate}
         />
 
         <AutomationEditorPromptSection

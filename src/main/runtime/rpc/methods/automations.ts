@@ -56,6 +56,15 @@ const AutomationWebhook = z
   .nullable()
   .optional()
 
+const AutomationAgentConfig = z
+  .object({
+    launchArgs: z.union([z.string(), z.null()]).optional(),
+    env: z.union([z.record(z.string(), z.string()), z.null()]).optional(),
+    model: z.union([z.string(), z.null()]).optional()
+  })
+  .nullable()
+  .optional()
+
 const OptionalNullablePlainString = z
   .unknown()
   .transform((value) => (value === null || typeof value === 'string' ? value : undefined))
@@ -112,6 +121,7 @@ const AutomationCreate = z.object({
   prompt: requiredString('Missing automation prompt'),
   precheck: AutomationPrecheck,
   agentId: TuiAgent,
+  agentConfig: AutomationAgentConfig,
   runContext: WorkspaceRunContext,
   sourceContext: TaskSourceContext,
   repo: OptionalString,
@@ -132,6 +142,7 @@ const AutomationUpdateFields = z.object({
   prompt: OptionalString,
   precheck: AutomationPrecheck,
   agentId: TuiAgent.optional(),
+  agentConfig: AutomationAgentConfig,
   runContext: WorkspaceRunContext,
   sourceContext: TaskSourceContext,
   repo: OptionalString,

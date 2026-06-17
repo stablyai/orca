@@ -1,7 +1,7 @@
 /* eslint-disable max-lines */
 import type { ExecutionHostId } from './execution-host'
 import type { SshRemotePtyLease, SshTarget } from './ssh-types'
-import type { Automation, AutomationRun } from './automations-types'
+import type { Automation, AutomationRun, UserAutomationTemplate } from './automations-types'
 import type { WorkspaceSource } from './workspace-source'
 import type { GitHubProjectSettings } from './github-project-types'
 import type {
@@ -3277,6 +3277,9 @@ export type PersistedState = {
   legacyPaneKeyAliasEntries: LegacyPaneKeyAliasEntry[]
   automations: Automation[]
   automationRuns: AutomationRun[]
+  /** User-created automation templates (issue #7); built-in templates live in
+   *  the renderer catalog and are not persisted here. */
+  automationTemplates?: UserAutomationTemplate[]
   onboarding: OnboardingState
   /** Main-owned telemetry de-dupe marker; never exposed through PersistedUIState. */
   featureInteractionTelemetryBuckets?: FeatureInteractionTelemetryBucketState

@@ -10905,7 +10905,13 @@
           "4133d33862": "オートメーションの作成",
           "0a75e5e2fa": "エルメスオートメーションを作成する",
           "03142e7721": "エルメスオートメーションを編集する",
-          "17086b48ee": "オートメーションの編集"
+          "17086b48ee": "オートメーションの編集",
+          "editTemplate": "Edit template",
+          "deleteTemplate": "Delete template",
+          "updateTemplate": "Update template",
+          "saveAsTemplate": "Save as template",
+          "yourTemplates": "Your templates",
+          "builtInTemplates": "Built-in"
         },
         "AutomationMissedRunGraceField": {
           "0f4459e91d": "48時間",
@@ -11033,7 +11039,10 @@
           "a21f6c33ad": "Automation source refreshed.",
           "53f06f0ad5": "Retry source",
           "c31810054d": "Could not generate a secret.",
-          "42677009ba": "Add a secret for token or HMAC verification, or choose No verification."
+          "42677009ba": "Add a secret for token or HMAC verification, or choose No verification.",
+          "templateDeleteFailed": "Could not delete the template.",
+          "templateSaved": "Template saved.",
+          "templateSaveFailed": "Could not save the template."
         },
         "CreateFromPicker": {
           "f061f49e3f": "repo ブランチを検索...",
@@ -11162,6 +11171,30 @@
           "8bf8cbbbbd": "Could not copy to clipboard.",
           "a3bd440808": "Copied to clipboard.",
           "f9cc4a7f5e": "With no verification, anyone who learns this URL can trigger the automation. The receiver is bound to a non-local address — set a token or HMAC secret."
+        },
+        "AutomationAgentConfigSection": {
+          "configure": "Configure",
+          "model": "Model",
+          "modelDefault": "Agent default",
+          "modelCustom": "Custom…",
+          "modelPlaceholder": "Model name",
+          "cliArgs": "CLI arguments",
+          "cliArgsPlaceholder": "Overrides the global default for this agent",
+          "env": "Environment variables",
+          "envKey": "KEY",
+          "envValue": "value",
+          "envRemove": "Remove variable",
+          "envAdd": "Add variable"
+        },
+        "AutomationTemplateSaveDialog": {
+          "editTitle": "Update template",
+          "createTitle": "Save as template",
+          "label": "Template name",
+          "labelPlaceholder": "Nightly deploy check",
+          "description": "Description (optional)",
+          "descriptionPlaceholder": "What this template is for",
+          "cancel": "Cancel",
+          "save": "Save"
         }
       },
       "agent": {

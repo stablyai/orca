@@ -52,6 +52,7 @@ import type {
   AutomationPrecheck,
   AutomationRun,
   AutomationUpdateInput,
+  UserAutomationTemplate,
   WebhookServerEndpoint
 } from '../../../../shared/automations-types'
 import { getAutomationRunRepoId } from '../../../../shared/automation-run-identity'
@@ -102,6 +103,16 @@ import {
 import { AutomationRunPageFrame } from './AutomationRunPageFrame'
 import { AutomationRunHistory } from './AutomationRunHistory'
 import { getAutomationTemplates, type AutomationTemplate } from './automation-templates'
+import {
+  EMPTY_AGENT_CONFIG_DRAFT_FIELDS,
+  agentConfigToDraftFields,
+  draftToAgentConfig
+} from './automation-agent-config-draft'
+import {
+  applyUserTemplateToDraft,
+  draftToUserTemplateInput
+} from './automation-user-template-draft'
+import { AutomationTemplateSaveDialog } from './AutomationTemplateSaveDialog'
 import { getAutomationTargetAvailability } from './automation-target-availability'
 import { buildAutomationRunContextForRepo } from './automation-run-context'
 import {
@@ -448,8 +459,82 @@ export default function AutomationsPage(): React.JSX.Element {
     scheduleWarning: null,
     webhookEnabled: false,
     webhookSecretMode: 'none',
-    webhookSecret: ''
+    webhookSecret: '',
+    ...EMPTY_AGENT_CONFIG_DRAFT_FIELDS
   })
+  const [userTemplates, setUserTemplates] = useState<UserAutomationTemplate[]>([])
+  const [templateSaveOpen, setTemplateSaveOpen] = useState(false)
+  // Why: when set, the next template save updates this template in place rather
+  // than creating a new one (the "edit template" flow).
+  const [editingTemplate, setEditingTemplate] = useState<UserAutomationTemplate | null>(null)
+
+  const refreshUserTemplates = useCallback(async (): Promise<void> => {
+    try {
+      setUserTemplates(await window.api.automations.listTemplates())
+    } catch {
+      // Non-fatal: templates are an optional convenience; keep the last list.
+    }
+  }, [])
+
+  useEffect(() => {
+    void refreshUserTemplates()
+  }, [refreshUserTemplates])
+
+  const applyUserTemplate = useCallback((template: UserAutomationTemplate): void => {
+    setDraft((current) => applyUserTemplateToDraft(current, template))
+  }, [])
+
+  const editUserTemplate = useCallback((template: UserAutomationTemplate): void => {
+    setDraft((current) => applyUserTemplateToDraft(current, template))
+    setEditingTemplate(template)
+  }, [])
+
+  const deleteUserTemplate = useCallback(
+    async (id: string): Promise<void> => {
+      try {
+        await window.api.automations.deleteTemplate({ id })
+        setEditingTemplate((current) => (current?.id === id ? null : current))
+        await refreshUserTemplates()
+      } catch (err) {
+        toast.error(
+          err instanceof Error
+            ? err.message
+            : translate(
+                'auto.components.automations.AutomationsPage.templateDeleteFailed',
+                'Could not delete the template.'
+              )
+        )
+      }
+    },
+    [refreshUserTemplates]
+  )
+
+  const handleSaveTemplate = useCallback(
+    async (label: string, description: string): Promise<void> => {
+      try {
+        const input = draftToUserTemplateInput(draft, label, description)
+        await (editingTemplate
+          ? window.api.automations.updateTemplate({ id: editingTemplate.id, input })
+          : window.api.automations.createTemplate(input))
+        await refreshUserTemplates()
+        setTemplateSaveOpen(false)
+        setEditingTemplate(null)
+        toast.success(
+          translate('auto.components.automations.AutomationsPage.templateSaved', 'Template saved.')
+        )
+      } catch (err) {
+        toast.error(
+          err instanceof Error
+            ? err.message
+            : translate(
+                'auto.components.automations.AutomationsPage.templateSaveFailed',
+                'Could not save the template.'
+              )
+        )
+      }
+    },
+    [draft, editingTemplate, refreshUserTemplates]
+  )
 
   // Why: refresh the live webhook listener state whenever the editor opens so
   // the dialog can show the reachable URL (or explain why it isn't up yet).
@@ -1035,6 +1120,7 @@ export default function AutomationsPage(): React.JSX.Element {
     const target = getDefaultTarget()
     setEditingAutomationId(null)
     setEditingExternalTarget(null)
+    setEditingTemplate(null)
     setCreateTarget('orca')
     const baseDraft: AutomationDraft = {
       name: '',
@@ -1055,7 +1141,8 @@ export default function AutomationsPage(): React.JSX.Element {
       scheduleWarning: null,
       webhookEnabled: false,
       webhookSecretMode: 'none',
-      webhookSecret: ''
+      webhookSecret: '',
+      ...EMPTY_AGENT_CONFIG_DRAFT_FIELDS
     }
     const nextDraft = template
       ? {
@@ -1078,6 +1165,7 @@ export default function AutomationsPage(): React.JSX.Element {
   const openEditDialog = async (automation: Automation): Promise<void> => {
     const requestId = (editRequestRef.current += 1)
     setEditingExternalTarget(null)
+    setEditingTemplate(null)
     setCreateTarget('orca')
     let latest = automation
     try {
@@ -1115,7 +1203,8 @@ export default function AutomationsPage(): React.JSX.Element {
           : 'This automation has an unsupported saved schedule. Pick a supported schedule before saving changes.',
       webhookEnabled: latest.webhook?.enabled ?? false,
       webhookSecretMode: latest.webhook?.secretMode ?? 'none',
-      webhookSecret: latest.webhook?.secret ?? ''
+      webhookSecret: latest.webhook?.secret ?? '',
+      ...agentConfigToDraftFields(latest.agentConfig)
     }
     setDraft(nextDraft)
     setDraftAtOpen(nextDraft)
@@ -1164,7 +1253,8 @@ export default function AutomationsPage(): React.JSX.Element {
         : 'This Hermes automation has an unsupported saved schedule. Pick a supported schedule before saving changes.',
       webhookEnabled: false,
       webhookSecretMode: 'none',
-      webhookSecret: ''
+      webhookSecret: '',
+      ...EMPTY_AGENT_CONFIG_DRAFT_FIELDS
     }
     setEditingAutomationId(null)
     setEditingExternalTarget({ manager, job })
@@ -1402,11 +1492,13 @@ export default function AutomationsPage(): React.JSX.Element {
         )
         return
       }
+      const agentConfig = draftToAgentConfig(draft)
       const updates: AutomationUpdateInput = {
         name: draft.name,
         prompt: draft.prompt,
         precheck,
         agentId: draft.agentId,
+        agentConfig,
         runContext,
         projectId: draft.projectId,
         workspaceMode: draft.workspaceMode,
@@ -1434,6 +1526,7 @@ export default function AutomationsPage(): React.JSX.Element {
             prompt: draft.prompt,
             precheck,
             agentId: draft.agentId,
+            agentConfig,
             runContext,
             projectId: draft.projectId,
             workspaceMode: draft.workspaceMode,
@@ -1955,11 +2048,31 @@ export default function AutomationsPage(): React.JSX.Element {
         onProjectChange={handleProjectChange}
         getRepoHostLabel={getAutomationRepoHostLabel}
         onCreateTargetChange={handleCreateTargetChange}
-        onOpenChange={setCreateOpen}
+        onOpenChange={(open) => {
+          setCreateOpen(open)
+          if (!open) {
+            setEditingTemplate(null)
+          }
+        }}
         onDraftChange={setDraft}
         onApplyTemplate={applyTemplateToDraft}
+        userTemplates={userTemplates}
+        isEditingTemplate={editingTemplate !== null}
+        onApplyUserTemplate={applyUserTemplate}
+        onEditUserTemplate={editUserTemplate}
+        onDeleteUserTemplate={(id) => void deleteUserTemplate(id)}
+        onSaveAsTemplate={() => setTemplateSaveOpen(true)}
         onGenerateWebhookSecret={() => void generateWebhookSecret()}
         onSave={() => void saveAutomation()}
+      />
+
+      <AutomationTemplateSaveDialog
+        open={templateSaveOpen}
+        isEditing={editingTemplate !== null}
+        initialLabel={editingTemplate?.label ?? draft.name}
+        initialDescription={editingTemplate?.description ?? ''}
+        onOpenChange={setTemplateSaveOpen}
+        onSave={(label, description) => void handleSaveTemplate(label, description)}
       />
 
       <Dialog

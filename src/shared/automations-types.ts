@@ -97,6 +97,20 @@ export type AutomationPrecheck = {
   timeoutSeconds: number
 }
 
+/** Per-automation override of how the selected agent is launched. Lets an
+ *  automation configure the agent it picks (issue #7) instead of only naming
+ *  it. Each field is independent and optional: when unset the run falls back to
+ *  the global per-agent default (settings.agentDefaultArgs/agentDefaultEnv).
+ *  - launchArgs: replaces the global default CLI args when non-empty.
+ *  - env: merged over (and wins against) the global per-agent env at launch.
+ *  - model: injected as the agent's model CLI flag when the agent has a known
+ *    flag (see tui-agent-models); free-text is allowed for unlisted models. */
+export type AutomationAgentConfig = {
+  launchArgs?: string | null
+  env?: Record<string, string> | null
+  model?: string | null
+}
+
 export type AutomationPrecheckResult = {
   command: string
   exitCode: number | null
@@ -117,6 +131,9 @@ export type Automation = {
   prompt: string
   precheck: AutomationPrecheck | null
   agentId: TuiAgent
+  /** Per-automation agent launch override (issue #7). Null/absent → use the
+   *  global per-agent launch defaults. */
+  agentConfig?: AutomationAgentConfig | null
   /** Why: runContext carries the logical project + host setup identity for
    *  multi-host projects; projectId remains only as the legacy repo-id storage
    *  field for pre-host-context automations.
@@ -183,6 +200,7 @@ export type AutomationCreateInput = {
   prompt: string
   precheck?: AutomationPrecheck | null
   agentId: TuiAgent
+  agentConfig?: AutomationAgentConfig | null
   runContext?: WorkspaceRunContext | null
   sourceContext?: TaskSourceContext | null
   /** @deprecated Legacy repo-id compatibility field required for older stored
@@ -207,6 +225,7 @@ export type AutomationUpdateInput = Partial<
     | 'prompt'
     | 'precheck'
     | 'agentId'
+    | 'agentConfig'
     | 'runContext'
     | 'sourceContext'
     | 'projectId'
@@ -222,6 +241,46 @@ export type AutomationUpdateInput = Partial<
     | 'webhook'
   >
 >
+
+/** A user-created, persisted automation template (issue #7). Captures only the
+ *  "soft" fields of an automation — what to run and on what cadence — and never
+ *  the run target (workspace/project), precheck, or webhook, which are set per
+ *  automation when the template is applied. Mirrors the field shape used to
+ *  pre-fill the create dialog so applying a template is a straight draft merge. */
+export type UserAutomationTemplate = {
+  id: string
+  /** Picker label for the template itself. */
+  label: string
+  /** Optional one-line description shown under the label. */
+  description: string
+  /** Default automation name pre-filled when the template is applied. */
+  name: string
+  prompt: string
+  agentId: TuiAgent
+  agentConfig?: AutomationAgentConfig | null
+  preset: AutomationSchedulePreset
+  time?: string | null
+  dayOfWeek?: string | null
+  /** Cron expression used only when preset is 'custom'. */
+  customSchedule?: string | null
+  missedRunGraceMinutes?: string | null
+  createdAt: number
+  updatedAt: number
+}
+
+export type UserAutomationTemplateInput = {
+  label: string
+  description?: string
+  name: string
+  prompt: string
+  agentId: TuiAgent
+  agentConfig?: AutomationAgentConfig | null
+  preset: AutomationSchedulePreset
+  time?: string | null
+  dayOfWeek?: string | null
+  customSchedule?: string | null
+  missedRunGraceMinutes?: string | null
+}
 
 export type AutomationDispatchRequest = {
   automation: Automation
@@ -240,103 +299,20 @@ export type AutomationDispatchResult = {
   error?: string | null
 }
 
-export type ExternalAutomationProvider = 'hermes' | 'openclaw'
-export type ExternalAutomationManagerStatus = 'available' | 'unavailable'
-export type ExternalAutomationAction = 'pause' | 'resume' | 'run' | 'delete'
-export type ExternalAutomationRunStatus = 'completed' | 'failed' | 'unknown'
-
-export type ExternalAutomationTarget =
-  | {
-      type: 'local'
-    }
-  | {
-      type: 'ssh'
-      connectionId: string
-    }
-
-export type ExternalAutomationJob = {
-  id: string
-  managerId: string
-  provider: ExternalAutomationProvider
-  name: string
-  schedule: string
-  rawSchedule: string | null
-  enabled: boolean
-  state: string
-  prompt: string | null
-  promptPreview: string
-  nextRunAt: string | null
-  lastRunAt: string | null
-  lastStatus: string | null
-  lastError: string | null
-  workdir: string | null
-  runCount: number
-  runs: ExternalAutomationRun[]
-}
-
-export type ExternalAutomationRun = {
-  id: string
-  managerId: string
-  provider: ExternalAutomationProvider
-  jobId: string
-  runAt: string | null
-  status: ExternalAutomationRunStatus
-  outputPreview: string | null
-  outputContent: string | null
-  error: string | null
-  outputPath: string | null
-}
-
-export type ExternalAutomationRunsPage = {
-  managerId: string
-  provider: ExternalAutomationProvider
-  target: ExternalAutomationTarget
-  jobId: string
-  page: number
-  pageSize: number
-  total: number
-  runs: ExternalAutomationRun[]
-}
-
-export type ExternalAutomationRunsInput = {
-  managerId: string
-  provider: ExternalAutomationProvider
-  target: ExternalAutomationTarget
-  jobId: string
-  page: number
-  pageSize: number
-}
-
-export type ExternalAutomationCreateInput = {
-  managerId: string
-  provider: ExternalAutomationProvider
-  target: ExternalAutomationTarget
-  name: string
-  prompt: string
-  schedule: string
-  workdir: string | null
-}
-
-export type ExternalAutomationUpdateInput = ExternalAutomationCreateInput & {
-  jobId: string
-}
-
-export type ExternalAutomationManager = {
-  id: string
-  provider: ExternalAutomationProvider
-  label: string
-  targetLabel: string
-  target: ExternalAutomationTarget
-  status: ExternalAutomationManagerStatus
-  error: string | null
-  canManage: boolean
-  jobs: ExternalAutomationJob[]
-}
-
-export type ExternalAutomationActionInput = {
-  managerId: string
-  provider: ExternalAutomationProvider
-  target: ExternalAutomationTarget
-  jobId: string
-  action: ExternalAutomationAction
-}
+// External-automation (Hermes/OpenClaw) types live in their own module; kept
+// re-exported here so existing importers of automations-types are unaffected.
+export type {
+  ExternalAutomationProvider,
+  ExternalAutomationManagerStatus,
+  ExternalAutomationAction,
+  ExternalAutomationRunStatus,
+  ExternalAutomationTarget,
+  ExternalAutomationJob,
+  ExternalAutomationRun,
+  ExternalAutomationRunsPage,
+  ExternalAutomationRunsInput,
+  ExternalAutomationCreateInput,
+  ExternalAutomationUpdateInput,
+  ExternalAutomationManager,
+  ExternalAutomationActionInput
+} from './external-automations-types'
