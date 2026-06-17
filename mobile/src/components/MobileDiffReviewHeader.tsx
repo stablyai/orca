@@ -1,5 +1,5 @@
 import { FlatList, Pressable, Text, View } from 'react-native'
-import { ChevronLeft, GitPullRequestArrow, MoreHorizontal } from 'lucide-react-native'
+import { ChevronLeft, ListChecks, MoreHorizontal } from 'lucide-react-native'
 import { colors } from '../theme/mobile-theme'
 import type { MobileDiffReviewQueueFilter } from '../session/mobile-diff-review-queue'
 import { REVIEW_FILTERS, mobileReviewCountLabel } from '../session/mobile-diff-review-screen-model'
@@ -62,7 +62,7 @@ export function MobileDiffReviewHeader({
             accessibilityRole="button"
             accessibilityLabel="Open pull request sidebar"
           >
-            <GitPullRequestArrow size={19} color={colors.textPrimary} strokeWidth={2.2} />
+            <ListChecks size={19} color={colors.textPrimary} strokeWidth={2.2} />
           </Pressable>
         ) : null}
         <Pressable
