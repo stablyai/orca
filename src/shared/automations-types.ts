@@ -15,7 +15,43 @@ export type AutomationRunStatus =
   | 'skipped_unavailable'
   | 'skipped_needs_interactive_auth'
   | 'dispatch_failed'
-export type AutomationRunTrigger = 'scheduled' | 'manual'
+export type AutomationRunTrigger = 'scheduled' | 'manual' | 'webhook'
+
+/** How an incoming webhook request is authenticated before it may trigger the
+ *  automation. Provider-agnostic on purpose (issue #2): 'token' covers
+ *  GitLab's plain `X-Gitlab-Token` shared-secret header, 'hmac_sha256' covers
+ *  GitHub's `X-Hub-Signature-256` and Gitea's `X-Gitea-Signature` body
+ *  signatures, and 'none' leaves the URL's unguessable id as the only secret. */
+export type AutomationWebhookSecretMode = 'none' | 'token' | 'hmac_sha256'
+
+export type AutomationWebhookConfig = {
+  enabled: boolean
+  secretMode: AutomationWebhookSecretMode
+  /** The shared secret / HMAC key. Null when secretMode is 'none'.
+   *  Stored in plaintext in the local settings JSON (acceptable for a local
+   *  desktop app); encrypting at rest via Electron safeStorage is a future
+   *  improvement. Zero it on rotation/revocation. */
+  secret: string | null
+}
+
+/** Live state of the inbound-webhook listener, surfaced to the renderer so the
+ *  automation editor can show the reachable URL and any bind error. */
+export type WebhookServerEndpoint = {
+  running: boolean
+  bindAddress: string
+  port: number
+  error: string | null
+}
+
+/** The captured request that triggered a webhook run. Stored on the run (size
+ *  capped) so the run stays understandable in history and so the body can be
+ *  appended to the agent prompt as additional context. */
+export type AutomationWebhookDelivery = {
+  body: string
+  contentType: string | null
+  truncated: boolean
+  receivedAt: number
+}
 
 export type AutomationSchedulePreset = 'hourly' | 'daily' | 'weekdays' | 'weekly' | 'custom'
 export type AutomationRunUsageProvider = 'claude' | 'codex'
@@ -108,6 +144,8 @@ export type Automation = {
   lastRunAt?: number
   missedRunPolicy: AutomationMissedRunPolicy
   missedRunGraceMinutes: number
+  /** Webhook trigger config. Null/absent for schedule-only automations. */
+  webhook?: AutomationWebhookConfig | null
   createdAt: number
   updatedAt: number
 }
@@ -131,6 +169,9 @@ export type AutomationRun = {
   outputSnapshot: AutomationRunOutputSnapshot | null
   precheckResult: AutomationPrecheckResult | null
   usage: AutomationRunUsage | null
+  /** Present only for webhook-triggered runs; carries the request body that
+   *  is appended to the agent prompt as additional context. */
+  webhookDelivery?: AutomationWebhookDelivery | null
   error: string | null
   startedAt: number | null
   dispatchedAt: number | null
@@ -156,6 +197,7 @@ export type AutomationCreateInput = {
   dtstart: number
   enabled?: boolean
   missedRunGraceMinutes?: number
+  webhook?: AutomationWebhookConfig | null
 }
 
 export type AutomationUpdateInput = Partial<
@@ -177,6 +219,7 @@ export type AutomationUpdateInput = Partial<
     | 'dtstart'
     | 'enabled'
     | 'missedRunGraceMinutes'
+    | 'webhook'
   >
 >
 

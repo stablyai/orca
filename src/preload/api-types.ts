@@ -374,7 +374,8 @@ import type {
   ExternalAutomationUpdateInput,
   AutomationRun,
   AutomationPrecheckResult,
-  AutomationUpdateInput
+  AutomationUpdateInput,
+  WebhookServerEndpoint
 } from '../shared/automations-types'
 import type {
   WorkspaceCleanupDismissArgs,
@@ -2627,6 +2628,8 @@ export type PreloadApi = {
     markDispatchResult: (result: AutomationDispatchResult) => Promise<AutomationRun>
     snapshotWorkspaceName: (args: { workspaceId: string; displayName: string }) => Promise<number>
     rendererReady: () => Promise<void>
+    getWebhookEndpoint: () => Promise<WebhookServerEndpoint | null>
+    generateWebhookSecret: () => Promise<string>
     onDispatchRequested: (callback: (request: AutomationDispatchRequest) => void) => () => void
   }
   wsl: {

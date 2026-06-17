@@ -6,8 +6,10 @@ import type {
   AutomationDispatchResult,
   AutomationPrecheckResult,
   AutomationRun,
-  AutomationRunStatus
+  AutomationWebhookDelivery
 } from '../../shared/automations-types'
+import { isWebhookTriggerEnabled } from '../../shared/automation-webhook'
+import { isFinalAutomationRunStatus } from '../../shared/automation-run-status'
 import type { ClaudeUsageStore } from '../claude-usage/store'
 import type { CodexUsageStore } from '../codex-usage/store'
 import { runAutomationPrecheck } from './precheck-runner'
@@ -90,6 +92,25 @@ export class AutomationService {
     return await this.requestDispatch(automation, run)
   }
 
+  /** Trigger a run from an inbound webhook. The HTTP receiver has already
+   *  verified the secret; here we re-check the trigger is enabled (config may
+   *  have changed) and attach the captured delivery so its body is appended to
+   *  the agent prompt. */
+  async triggerWebhook(
+    automationId: string,
+    delivery: AutomationWebhookDelivery
+  ): Promise<AutomationRun> {
+    const automation = this.store.listAutomations().find((entry) => entry.id === automationId)
+    if (!automation) {
+      throw new Error('Automation not found.')
+    }
+    if (!isWebhookTriggerEnabled(automation)) {
+      throw new Error('Webhook trigger is not enabled for this automation.')
+    }
+    const run = this.store.createAutomationRun(automation, Date.now(), 'webhook', delivery)
+    return await this.requestDispatch(automation, run)
+  }
+
   async runPrecheck(automationId: string, runId: string): Promise<AutomationPrecheckResult | null> {
     const automation = this.store.listAutomations().find((entry) => entry.id === automationId)
     if (!automation) {
@@ -131,7 +152,7 @@ export class AutomationService {
 
   async markDispatchResult(result: AutomationDispatchResult): Promise<AutomationRun> {
     const run = this.store.updateAutomationRun(result)
-    if (!isFinalRunStatus(run.status)) {
+    if (!isFinalAutomationRunStatus(run.status)) {
       return run
     }
     // Why: the renderer's mark-completed effect can re-fire for the same run
@@ -299,15 +320,4 @@ export class AutomationService {
       })
     }
   }
-}
-
-function isFinalRunStatus(status: AutomationRunStatus): boolean {
-  return (
-    status === 'completed' ||
-    status === 'dispatch_failed' ||
-    status === 'skipped_precheck' ||
-    status === 'skipped_missed' ||
-    status === 'skipped_unavailable' ||
-    status === 'skipped_needs_interactive_auth'
-  )
 }

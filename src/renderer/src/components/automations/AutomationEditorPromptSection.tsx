@@ -1,22 +1,34 @@
 import React from 'react'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
+import type { WebhookServerEndpoint } from '../../../../shared/automations-types'
 import { Field } from './automation-page-parts'
 import { AutomationPrecheckFields } from './AutomationPrecheckFields'
+import { AutomationWebhookSection } from './AutomationWebhookSection'
 import type { AutomationDraft } from './AutomationEditorDialog'
 
 type AutomationEditorPromptSectionProps = {
   draft: AutomationDraft
   isHermesCreate: boolean
+  allowWebhook: boolean
+  automationId: string | null
+  webhookEndpoint: WebhookServerEndpoint | null
   pickerTriggerClassName: string
+  toggleItemClassName: string
   onDraftChange: (updater: (current: AutomationDraft) => AutomationDraft) => void
+  onGenerateWebhookSecret: () => void
 }
 
 export function AutomationEditorPromptSection({
   draft,
   isHermesCreate,
+  allowWebhook,
+  automationId,
+  webhookEndpoint,
   pickerTriggerClassName,
-  onDraftChange
+  toggleItemClassName,
+  onDraftChange,
+  onGenerateWebhookSecret
 }: AutomationEditorPromptSectionProps): React.JSX.Element {
   return (
     <div className="min-h-0 flex-1 overflow-auto px-5 py-4 scrollbar-sleek">
@@ -78,6 +90,17 @@ export function AutomationEditorPromptSection({
           </div>
         </div>
       </div>
+      {allowWebhook ? (
+        <AutomationWebhookSection
+          draft={draft}
+          automationId={automationId}
+          webhookEndpoint={webhookEndpoint}
+          pickerTriggerClassName={pickerTriggerClassName}
+          toggleItemClassName={toggleItemClassName}
+          onDraftChange={onDraftChange}
+          onGenerateSecret={onGenerateWebhookSecret}
+        />
+      ) : null}
     </div>
   )
 }

@@ -125,6 +125,69 @@ describe('AutomationService', () => {
     )
   })
 
+  it('dispatches a webhook-triggered run carrying the delivery body', async () => {
+    vi.setSystemTime(new Date('2026-05-13T08:00:00Z'))
+    const store = await createStore()
+    store.addRepo(makeRepo())
+    const automation = store.createAutomation({
+      name: 'MR review',
+      prompt: 'Review the merge request',
+      agentId: 'claude',
+      projectId: 'r1',
+      workspaceMode: 'existing',
+      workspaceId: 'wt1',
+      timezone: 'UTC',
+      rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
+      dtstart: new Date('2026-05-14T00:00:00Z').getTime(),
+      webhook: { enabled: true, secretMode: 'none', secret: null }
+    })
+    const send = vi.fn()
+    const service = new AutomationService(store, { tickMs: 60_000 })
+    service.setWebContents({ isDestroyed: () => false, send } as never)
+    service.setRendererReady()
+
+    const run = await service.triggerWebhook(automation.id, {
+      body: '{"object_kind":"merge_request"}',
+      contentType: 'application/json',
+      truncated: false,
+      receivedAt: 1
+    })
+
+    expect(run.trigger).toBe('webhook')
+    expect(run.webhookDelivery?.body).toBe('{"object_kind":"merge_request"}')
+    expect(send).toHaveBeenCalledWith(
+      'automations:dispatchRequested',
+      expect.objectContaining({
+        run: expect.objectContaining({ id: run.id })
+      })
+    )
+  })
+
+  it('rejects a webhook trigger when the automation has no webhook enabled', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo())
+    const automation = store.createAutomation({
+      name: 'No webhook',
+      prompt: 'x',
+      agentId: 'claude',
+      projectId: 'r1',
+      workspaceMode: 'existing',
+      workspaceId: 'wt1',
+      timezone: 'UTC',
+      rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
+      dtstart: new Date('2026-05-14T00:00:00Z').getTime()
+    })
+    const service = new AutomationService(store, { tickMs: 60_000 })
+    await expect(
+      service.triggerWebhook(automation.id, {
+        body: '{}',
+        contentType: null,
+        truncated: false,
+        receivedAt: 1
+      })
+    ).rejects.toThrow(/not enabled/i)
+  })
+
   it('skips dispatch when the selected project host setup is gone', async () => {
     vi.setSystemTime(new Date('2026-05-13T08:00:00Z'))
     const store = await createStore()

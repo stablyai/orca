@@ -26,7 +26,8 @@ import type {
   AutomationRun,
   AutomationSchedulerOwner,
   AutomationRunTrigger,
-  AutomationUpdateInput
+  AutomationUpdateInput,
+  AutomationWebhookDelivery
 } from '../shared/automations-types'
 import {
   latestAutomationOccurrenceAtOrBefore,
@@ -34,6 +35,7 @@ import {
 } from '../shared/automation-schedules'
 import { getAutomationLegacyRepoId } from '../shared/automation-run-identity'
 import { normalizeAutomationPrecheck } from '../shared/automation-precheck'
+import { normalizeAutomationWebhookConfig } from '../shared/automation-webhook'
 import type {
   PersistedState,
   Project,
@@ -86,6 +88,7 @@ import {
   getDefaultWorkspaceSession,
   normalizeAgentActivityDisplayMode,
   normalizeWorktreeCardProperties,
+  normalizeWebhookServerSettings,
   ONBOARDING_FLOW_VERSION,
   ONBOARDING_FINAL_STEP
 } from '../shared/constants'
@@ -3885,6 +3888,7 @@ export class Store {
       nextRunAt: nextAutomationOccurrenceAfter(input.rrule, input.dtstart, now),
       missedRunPolicy: 'run_once_within_grace',
       missedRunGraceMinutes: input.missedRunGraceMinutes ?? 720,
+      webhook: normalizeAutomationWebhookConfig(input.webhook ?? null),
       createdAt: now,
       updatedAt: now
     }
@@ -3917,6 +3921,9 @@ export class Store {
       precheck: Object.hasOwn(updates, 'precheck')
         ? normalizeAutomationPrecheck(updates.precheck)
         : normalizeAutomationPrecheck(current.precheck),
+      webhook: Object.hasOwn(updates, 'webhook')
+        ? normalizeAutomationWebhookConfig(updates.webhook)
+        : normalizeAutomationWebhookConfig(current.webhook ?? null),
       projectId: repoId,
       runContext: Object.hasOwn(updates, 'runContext')
         ? (updates.runContext ?? null)
@@ -3971,7 +3978,8 @@ export class Store {
   createAutomationRun(
     automation: Automation,
     scheduledFor: number,
-    trigger: AutomationRunTrigger = 'scheduled'
+    trigger: AutomationRunTrigger = 'scheduled',
+    webhookDelivery: AutomationWebhookDelivery | null = null
   ): AutomationRun {
     const existing = (this.state.automationRuns ?? []).find(
       (run) => run.automationId === automation.id && run.scheduledFor === scheduledFor
@@ -4000,6 +4008,7 @@ export class Store {
       outputSnapshot: null,
       precheckResult: null,
       usage: null,
+      webhookDelivery,
       error: null,
       startedAt: null,
       dispatchedAt: null,
@@ -4470,6 +4479,12 @@ export class Store {
     }
     if ('appIcon' in updates) {
       sanitizedUpdates.appIcon = normalizeAppIconId(updates.appIcon)
+    }
+    if ('webhookServer' in updates) {
+      sanitizedUpdates.webhookServer = normalizeWebhookServerSettings(
+        updates.webhookServer,
+        this.state.settings.webhookServer
+      )
     }
     if ('uiLanguage' in updates) {
       sanitizedUpdates.uiLanguage = normalizeUiLanguage(updates.uiLanguage)
