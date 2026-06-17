@@ -91,6 +91,7 @@ vi.mock('./rate-limit', () => ({
 }))
 
 import {
+  checkOrcaStarred,
   getPRComments,
   getPRForBranch,
   getRepoUpstream,
@@ -105,6 +106,39 @@ import {
   _resetOwnerRepoCache,
   _resetMergeQueueCacheForTests
 } from './client'
+
+describe('checkOrcaStarred', () => {
+  beforeEach(() => {
+    execFileAsyncMock.mockReset()
+    acquireMock.mockReset()
+    releaseMock.mockReset()
+    acquireMock.mockResolvedValue(undefined)
+  })
+
+  it('returns true only for an included successful GitHub response', async () => {
+    execFileAsyncMock.mockResolvedValueOnce({ stdout: 'HTTP/2.0 204 No Content\r\n', stderr: '' })
+
+    await expect(checkOrcaStarred()).resolves.toBe(true)
+
+    expect(execFileAsyncMock).toHaveBeenCalledWith(
+      'gh',
+      ['api', '--include', 'user/starred/stablyai/orca'],
+      { encoding: 'utf-8' }
+    )
+  })
+
+  it('returns false for GitHub 404 not starred responses', async () => {
+    execFileAsyncMock.mockRejectedValueOnce(new Error('HTTP 404: Not Found'))
+
+    await expect(checkOrcaStarred()).resolves.toBe(false)
+  })
+
+  it('returns null when gh exits successfully without response headers', async () => {
+    execFileAsyncMock.mockResolvedValueOnce({ stdout: '', stderr: '' })
+
+    await expect(checkOrcaStarred()).resolves.toBe(null)
+  })
+})
 
 describe('getPRForBranch', () => {
   beforeEach(() => {

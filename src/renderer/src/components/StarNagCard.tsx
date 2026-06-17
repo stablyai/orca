@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { ExternalLink, Star, X } from 'lucide-react'
 import { Card } from './ui/card'
 import { Button } from './ui/button'
@@ -33,19 +33,35 @@ export function StarNagCard(): React.JSX.Element | null {
   const updateCardVisible = updateStatus.state !== 'idle' && updateStatus.state !== 'not-available'
 
   useEffect(() => {
-    return window.api.starNag.onShow((payload) => {
+    const unsubscribeShow = window.api.starNag.onShow((payload) => {
+      if (payload?.surface && payload.surface !== 'card') {
+        setBusy(false)
+        setVisible(false)
+        return
+      }
       setMode(payload?.mode === 'web' ? 'web' : 'gh')
       setVisible(true)
     })
+    const unsubscribeHide = window.api.starNag.onHide(() => {
+      setBusy(false)
+      setVisible(false)
+    })
+    return () => {
+      unsubscribeShow()
+      unsubscribeHide()
+    }
   }, [])
 
-  const handleClose = (): void => {
+  const handleClose = useCallback((): void => {
+    if (busy) {
+      return
+    }
     setVisible(false)
     // Why: fire-and-forget. If persisting the dismissal fails the worst case
     // is we re-fire the same threshold on next launch — not worth blocking
     // the close animation on.
     void window.api.starNag.dismiss()
-  }
+  }, [busy])
 
   const handleLater = (): void => {
     if (busy) {
@@ -66,9 +82,7 @@ export function StarNagCard(): React.JSX.Element | null {
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- handleClose closes
-    // over stable refs; re-binding on each render is unnecessary.
-  }, [visible])
+  }, [handleClose, visible])
 
   if (!visible) {
     return null
@@ -142,6 +156,7 @@ export function StarNagCard(): React.JSX.Element | null {
               size="icon"
               className="size-7 shrink-0"
               onClick={handleClose}
+              disabled={busy}
               aria-label={translate('auto.components.StarNagCard.b5e685e4d9', 'Dismiss')}
             >
               <X className="size-3.5" />

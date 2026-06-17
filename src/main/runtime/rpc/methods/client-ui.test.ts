@@ -278,6 +278,7 @@ describe('client UI RPC methods', () => {
       makeRequest('ui.set', {
         starNagBaselineAgents: 10,
         starNagAppVersion: '1.2.3',
+        starNagAgentValueMomentAppVersion: '1.2.3',
         starNagNextThreshold: 70,
         starNagCompleted: true,
         starNagDeferredUntil: null
@@ -297,6 +298,7 @@ describe('client UI RPC methods', () => {
     const forbiddenPayloads = [
       { starNagBaselineAgents: 10 },
       { starNagAppVersion: '1.2.3' },
+      { starNagAgentValueMomentAppVersion: '1.2.3' },
       { starNagNextThreshold: 70 },
       { starNagCompleted: true },
       { starNagDeferredUntil: null }

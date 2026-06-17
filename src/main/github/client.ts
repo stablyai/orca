@@ -223,8 +223,16 @@ function isNoPullRequestError(err: unknown): boolean {
 export async function checkOrcaStarred(): Promise<boolean | null> {
   await acquire()
   try {
-    await execFileAsync('gh', ['api', `user/starred/${ORCA_REPO}`], { encoding: 'utf-8' })
-    return true
+    const { stdout, stderr } = await execFileAsync(
+      'gh',
+      ['api', '--include', `user/starred/${ORCA_REPO}`],
+      { encoding: 'utf-8' }
+    )
+    const response = `${stdout ?? ''}\n${stderr ?? ''}`
+    if (/HTTP\/\S+\s+(?:200|204)\b/.test(response)) {
+      return true
+    }
+    return null
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
     // 404 means the user hasn't starred — the only expected "no" answer

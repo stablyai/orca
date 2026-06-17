@@ -3111,6 +3111,9 @@ export type PersistedUIState = {
   /** Timestamp until which nonterminal dismissals suppress threshold prompts.
    *  Force-show bypasses this for dev/testing. */
   starNagDeferredUntil?: number | null
+  /** App version that already consumed the first successful-agent value-moment ask.
+   *  Main-owned so remote/web clients cannot spoof the once-per-version cap. */
+  starNagAgentValueMomentAppVersion?: string | null
   trustedOrcaHooks?: PersistedTrustedOrcaHooks
   setupScriptPromptDismissedRepoIds?: string[]
   /** Whether the experimental pet overlay is currently visible. Separate

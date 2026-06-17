@@ -413,13 +413,21 @@ describe('registerGitHubHandlers', () => {
 
     registerGitHubHandlers(store as never, stats as never)
 
-    for (const source of ['star_nag', 'settings', 'landing'] as const) {
+    for (const source of [
+      'star_nag',
+      'agent_value_moment',
+      'onboarding_completed',
+      'settings',
+      'landing'
+    ] as const) {
       await expect(handlers['gh:starOrca'](null, source)).resolves.toBe(true)
     }
 
-    expect(trackMock).toHaveBeenCalledTimes(3)
+    expect(trackMock).toHaveBeenCalledTimes(5)
     expect(trackMock.mock.calls.map(([, props]) => props)).toEqual([
       { source: 'star_nag', nth_repo_added: undefined },
+      { source: 'agent_value_moment', nth_repo_added: undefined },
+      { source: 'onboarding_completed', nth_repo_added: undefined },
       { source: 'settings', nth_repo_added: undefined },
       { source: 'landing', nth_repo_added: undefined }
     ])

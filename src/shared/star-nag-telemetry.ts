@@ -21,6 +21,7 @@ export const STAR_NAG_PROMPT_SOURCES = [
   'threshold',
   'force_show',
   'agent_value_moment',
+  'onboarding_completed',
   'update_flow',
   'settings',
   'legacy_threshold'

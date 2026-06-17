@@ -1714,7 +1714,10 @@ export type PreloadApi = {
     listTransitions: (args: { key: string; siteId?: string }) => Promise<JiraTransition[]>
   }
   starNag: {
-    onShow: (callback: (payload?: { mode?: 'gh' | 'web' }) => void) => () => void
+    onShow: (
+      callback: (payload?: { mode?: 'gh' | 'web'; surface?: 'card' | 'toast' }) => void
+    ) => () => void
+    onHide: (callback: () => void) => () => void
     dismiss: () => Promise<void>
     later: () => Promise<void>
     complete: () => Promise<void>
@@ -1722,6 +1725,9 @@ export type PreloadApi = {
     openWeb: () => Promise<void>
     starOrca: () => Promise<boolean>
     forceShow: () => Promise<void>
+    agentValueMoment: () => Promise<{ status: 'ready'; mode: 'gh' | 'web' } | { status: 'skipped' }>
+    showAgentValueMoment: () => Promise<void>
+    onboardingCompleted: () => Promise<void>
   }
   /** Fire-and-forget track. Loose typing at the IPC boundary on purpose —
    *  the main-side validator is the single enforcement point. Renderer call

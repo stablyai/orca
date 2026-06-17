@@ -116,7 +116,6 @@ function GitHubStarButton({ hasRepos }: { hasRepos: boolean }): React.JSX.Elemen
     }
     if (state === 'web-fallback') {
       await window.api.shell.openUrl(ORCA_STARGAZERS_URL)
-      await window.api.starNag.complete()
       return
     }
     if (state !== 'not-starred') {
