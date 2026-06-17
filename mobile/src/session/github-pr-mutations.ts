@@ -118,6 +118,97 @@ export async function fetchRemovePRReviewers(
   )
 }
 
+// Reply within a review thread. Host returns GitHubCommentResult
+// (`{ ok, comment } | { ok:false, error }`), which sendGithubPrMutation reads via
+// its `ok in result` branch. We refetch afterward, so the returned comment is unused.
+export async function fetchAddPRReviewCommentReply(
+  client: Pick<RpcClient, 'sendRequest'>,
+  worktreeId: string,
+  args: {
+    prNumber: number
+    commentId: number
+    body: string
+    threadId?: string
+    path?: string
+    line?: number
+    prRepo?: GitHubPrRepoSlug | null
+  }
+): Promise<GitHubPrMutationOutcome> {
+  const params: Record<string, unknown> = {
+    prNumber: args.prNumber,
+    commentId: args.commentId,
+    body: args.body
+  }
+  if (args.threadId) {
+    params.threadId = args.threadId
+  }
+  if (args.path) {
+    params.path = args.path
+  }
+  if (typeof args.line === 'number') {
+    params.line = args.line
+  }
+  // addPRReviewCommentReply accepts prRepo for fork PRs, but it is not in the
+  // centralized METHODS_ACCEPTING_PR_REPO allow-list (read-focused) — pass it
+  // explicitly so it reaches the host schema, which declares it optional.
+  if (args.prRepo) {
+    params.prRepo = { owner: args.prRepo.owner, repo: args.prRepo.repo }
+  }
+  return sendGithubPrMutation(
+    client,
+    'github.addPRReviewCommentReply',
+    buildGithubPrParams('github.addPRReviewCommentReply', worktreeId, params)
+  )
+}
+
+// Add a root conversation comment to the PR. Host returns GitHubCommentResult.
+export async function fetchAddIssueComment(
+  client: Pick<RpcClient, 'sendRequest'>,
+  worktreeId: string,
+  args: { prNumber: number; body: string; prRepo?: GitHubPrRepoSlug | null }
+): Promise<GitHubPrMutationOutcome> {
+  const params: Record<string, unknown> = {
+    number: args.prNumber,
+    body: args.body,
+    type: 'pr'
+  }
+  if (args.prRepo) {
+    params.prRepo = { owner: args.prRepo.owner, repo: args.prRepo.repo }
+  }
+  return sendGithubPrMutation(
+    client,
+    'github.addIssueComment',
+    buildGithubPrParams('github.addIssueComment', worktreeId, params)
+  )
+}
+
+// Resolve/unresolve a review thread. `resolve` picks the direction (the host runs
+// the matching GraphQL mutation). Unlike the comment mutations, the host returns a
+// bare boolean, so a falsy result is a failure rather than the "no status" success.
+export async function fetchResolveReviewThread(
+  client: Pick<RpcClient, 'sendRequest'>,
+  worktreeId: string,
+  args: { threadId: string; resolve: boolean }
+): Promise<GitHubPrMutationOutcome> {
+  const response = await client.sendRequest(
+    'github.resolveReviewThread',
+    buildGithubPrParams('github.resolveReviewThread', worktreeId, {
+      threadId: args.threadId,
+      resolve: args.resolve
+    })
+  )
+  if (!response.ok) {
+    return {
+      ok: false,
+      error: response.error?.message || 'Request failed: github.resolveReviewThread'
+    }
+  }
+  if (response.result === false) {
+    return { ok: false, error: 'Failed to update review thread.' }
+  }
+  return { ok: true }
+}
+
 export async function fetchRerunPRChecks(
   client: Pick<RpcClient, 'sendRequest'>,
   worktreeId: string,

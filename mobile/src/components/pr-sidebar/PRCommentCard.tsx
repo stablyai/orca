@@ -1,11 +1,22 @@
-import { memo } from 'react'
+import { memo, useState } from 'react'
 import { Image, Linking, Pressable, Text, View } from 'react-native'
-import { ExternalLink } from 'lucide-react-native'
+import { Check, CornerDownRight, ExternalLink, Undo2 } from 'lucide-react-native'
 import type { GitHubReaction, GitHubReactionContent, PRComment } from '../../../../src/shared/types'
 import { colors } from '../../theme/mobile-theme'
+import { isResolvableComment } from '../../session/pr-comment-actions'
 import { CommentMarkdown } from './CommentMarkdown'
+import { PRCommentComposer } from './PRCommentComposer'
 import { formatPrCommentRelativeTime } from './pr-comment-time'
 import { prCommentsStyles as styles } from './pr-comments-styles'
+
+// Action handlers are passed from the comment actions hook (stable callbacks), so
+// adding them keeps the memo'd card from re-rendering on unrelated timeline changes.
+export type PRCommentCardActions = {
+  reply: (comment: PRComment, body: string) => Promise<boolean>
+  toggleResolve: (comment: PRComment) => Promise<boolean>
+  isReplyBusy: (commentId: number) => boolean
+  isResolveBusy: (threadId: string) => boolean
+}
 
 const REACTION_EMOJI: Record<GitHubReactionContent, string> = {
   '+1': '👍',
@@ -37,17 +48,36 @@ function Reactions({ reactions }: { reactions?: GitHubReaction[] }) {
 
 // One PR comment (or review-thread reply), mirroring the desktop comment card:
 // avatar + author + relative time + inline file:line + resolved chip + open-on-
-// GitHub, then the markdown body and reactions. Read-only (no reply/edit yet).
+// GitHub, then the markdown body and reactions. When `actions` is provided the
+// card grows a Reply composer and (for review threads) a Resolve/Unresolve toggle.
 export const PRCommentCard = memo(function PRCommentCard({
   comment,
-  isReply = false
+  isReply = false,
+  actions
 }: {
   comment: PRComment
   isReply?: boolean
+  actions?: PRCommentCardActions
 }) {
+  const [replyOpen, setReplyOpen] = useState(false)
   const fileLabel = comment.path
     ? `${comment.path.split('/').pop()}${comment.line ? `:L${comment.line}` : ''}`
     : null
+  const canResolve = actions ? isResolvableComment(comment) : false
+  const resolveBusy = canResolve && actions ? actions.isResolveBusy(comment.threadId as string) : false
+  const replyBusy = actions ? actions.isReplyBusy(comment.id) : false
+
+  const submitReply = async (body: string): Promise<boolean> => {
+    if (!actions) {
+      return false
+    }
+    const ok = await actions.reply(comment, body)
+    if (ok) {
+      setReplyOpen(false)
+    }
+    return ok
+  }
+
   return (
     <View style={[styles.card, isReply && styles.reply, comment.isResolved && styles.cardResolved]}>
       <View style={styles.header}>
@@ -91,6 +121,52 @@ export const PRCommentCard = memo(function PRCommentCard({
         <CommentMarkdown content={comment.body} />
         <Reactions reactions={comment.reactions} />
       </View>
+      {actions ? (
+        <View style={styles.actionsRow}>
+          <Pressable
+            style={({ pressed }) => [styles.actionButton, pressed && styles.actionButtonPressed]}
+            onPress={() => setReplyOpen((v) => !v)}
+            disabled={replyBusy}
+            hitSlop={6}
+            accessibilityRole="button"
+            accessibilityLabel="Reply to comment"
+          >
+            <CornerDownRight size={13} color={colors.textSecondary} strokeWidth={2.2} />
+            <Text style={styles.actionButtonText}>Reply</Text>
+          </Pressable>
+          {canResolve ? (
+            <Pressable
+              style={({ pressed }) => [styles.actionButton, pressed && styles.actionButtonPressed]}
+              onPress={() => void actions.toggleResolve(comment)}
+              disabled={resolveBusy}
+              hitSlop={6}
+              accessibilityRole="button"
+              accessibilityLabel={comment.isResolved ? 'Unresolve thread' : 'Resolve thread'}
+            >
+              {comment.isResolved ? (
+                <Undo2 size={13} color={colors.textSecondary} strokeWidth={2.2} />
+              ) : (
+                <Check size={13} color={colors.textSecondary} strokeWidth={2.2} />
+              )}
+              <Text style={styles.actionButtonText}>
+                {resolveBusy ? '…' : comment.isResolved ? 'Unresolve' : 'Resolve'}
+              </Text>
+            </Pressable>
+          ) : null}
+        </View>
+      ) : null}
+      {replyOpen && actions ? (
+        <View style={styles.composer}>
+          <PRCommentComposer
+            placeholder="Write a reply…"
+            submitLabel="Reply"
+            submitting={replyBusy}
+            onSubmit={submitReply}
+            onCancel={() => setReplyOpen(false)}
+            autoFocus
+          />
+        </View>
+      ) : null}
     </View>
   )
 })

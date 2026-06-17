@@ -5,6 +5,10 @@ import type { PrSidebarState } from '../session/mobile-pr-sidebar-state'
 import type { ConnectionState } from '../transport/types'
 import type { RpcClient } from '../transport/rpc-client'
 import { useMobilePrActions, type MobilePrActions } from '../session/use-mobile-pr-actions'
+import {
+  useMobilePrCommentActions,
+  type MobilePrCommentActions
+} from '../session/use-mobile-pr-comment-actions'
 import { prSidebarRenderBranch } from './mobile-pr-sidebar-presentation'
 import { mobilePrSidebarStyles as styles } from './pr-sidebar/mobile-pr-sidebar-styles'
 import { PRSidebarHeader } from './pr-sidebar/PRSidebarHeader'
@@ -63,6 +67,16 @@ export function MobilePRSidebar({
     prRepo,
     refetch
   })
+  // Separate hook for the interactive comment timeline (reply/resolve/add). Like
+  // useMobilePrActions it must run unconditionally; it gates internally on a client.
+  const commentActions = useMobilePrCommentActions({
+    client,
+    connState,
+    worktreeId,
+    prNumber,
+    prRepo,
+    refetch
+  })
 
   return (
     <ScrollView
@@ -79,6 +93,7 @@ export function MobilePRSidebar({
         worktreeId={worktreeId}
         gitBranch={gitBranch}
         actions={actions}
+        commentActions={commentActions}
       />
     </ScrollView>
   )
@@ -92,7 +107,8 @@ function PrSidebarContent({
   client,
   worktreeId,
   gitBranch,
-  actions
+  actions,
+  commentActions
 }: {
   branch: ReturnType<typeof prSidebarRenderBranch>
   state: PrSidebarState
@@ -102,6 +118,7 @@ function PrSidebarContent({
   worktreeId: string
   gitBranch: string | null
   actions: MobilePrActions
+  commentActions: MobilePrCommentActions
 }) {
   if (branch === 'loading') {
     return (
@@ -161,6 +178,7 @@ function PrSidebarContent({
         client={client}
         worktreeId={worktreeId}
         actions={actions}
+        commentActions={commentActions}
         refetch={refetch}
       />
     )
@@ -173,12 +191,14 @@ function PrSidebarSections({
   client,
   worktreeId,
   actions,
+  commentActions,
   refetch
 }: {
   data: Extract<PrSidebarState, { kind: 'ready' }>['data']
   client: RpcClient | null
   worktreeId: string
   actions: MobilePrActions
+  commentActions: MobilePrCommentActions
   refetch: () => void
 }) {
   return (
@@ -204,7 +224,11 @@ function PrSidebarSections({
         prRepo={data.pr.prRepo ?? null}
         actions={actions}
       />
-      <PRCommentsSection details={data.details} />
+      <PRCommentsSection
+        details={data.details}
+        prState={data.pr.state}
+        actions={commentActions}
+      />
     </>
   )
 }

@@ -191,5 +191,45 @@ export const prCommentsStyles = StyleSheet.create({
     paddingVertical: spacing.xl,
     color: colors.textSecondary,
     fontSize: 13
+  },
+  // Reply / Resolve toggle row under a comment body.
+  actionsRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingBottom: spacing.sm,
+    paddingTop: spacing.xs
+  },
+  actionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    minHeight: 28,
+    paddingHorizontal: spacing.sm,
+    borderRadius: radii.button,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.borderSubtle,
+    backgroundColor: colors.bgRaised
+  },
+  actionButtonPressed: {
+    opacity: 0.7
+  },
+  actionButtonText: {
+    color: colors.textSecondary,
+    fontSize: typography.metaSize,
+    fontWeight: '600'
+  },
+  // Inline reply composer mounted inside a comment card.
+  composer: {
+    paddingHorizontal: spacing.md,
+    paddingBottom: spacing.md
+  },
+  // Root-comment composer at the foot of the timeline (open PRs only).
+  rootComposer: {
+    gap: spacing.sm
+  },
+  actionError: {
+    color: colors.statusRed,
+    fontSize: typography.metaSize
   }
 })
