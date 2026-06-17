@@ -199,7 +199,13 @@ export function runBackgroundWorktreeCreation(request: WorktreeCreationRequest):
   // Why: the remote/runtime create path emits no progress events, so the stepped
   // checklist would freeze on step 1. Mark it indeterminate up front so the panel
   // shows a single spinner instead of implying phase progress that never arrives.
-  const indeterminate = getActiveRuntimeTarget(store.settings).kind !== 'local'
+  // An SSH repo (repo.connectionId set) routes to createRemoteWorktree even on a
+  // local runtime, so it is event-less too — derive indeterminate from both.
+  const repoHasConnection = store.repos.some(
+    (repo) => repo.id === request.repoId && Boolean(repo.connectionId)
+  )
+  const indeterminate =
+    getActiveRuntimeTarget(store.settings).kind !== 'local' || repoHasConnection
   store.beginPendingWorktreeCreation({
     creationId,
     phase: 'fetching',
