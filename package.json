@@ -87,12 +87,14 @@
     "@electron-toolkit/utils": "^4.0.0",
     "@floating-ui/dom": "1.7.6",
     "@linear/sdk": "^82.1.0",
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "@parcel/watcher": "^2.5.6",
     "@xterm/addon-serialize": "0.15.0-beta.285",
     "@xterm/headless": "6.1.0-beta.285",
     "agent-browser": "~0.27.0",
     "electron-updater": "^6.8.3",
     "i18next": "^26.3.1",
+    "matrix-bot-sdk": "^0.8.0",
     "node-pty": "^1.1.0",
     "posthog-node": "^5.33.3",
     "qrcode": "^1.5.4",
@@ -233,6 +235,7 @@
       ]
     },
     "onlyBuiltDependencies": [
+      "@matrix-org/matrix-sdk-crypto-nodejs",
       "@parcel/watcher",
       "cpu-features",
       "esbuild",

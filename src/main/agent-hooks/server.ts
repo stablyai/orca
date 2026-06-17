@@ -56,6 +56,13 @@ import {
 import { parseLegacyNumericPaneKey, parsePaneKey } from '../../shared/stable-pane-id'
 import type { LegacyPaneKeyAliasEntry } from '../../shared/types'
 import { normalizeAgentProviderSession } from '../../shared/agent-session-resume'
+import {
+  ASK_TIMEOUT_MAX_MS,
+  MATRIX_ASK_PATH,
+  MATRIX_SEND_PATH,
+  MATRIX_SESSION_INFO_PATH,
+  tryHandleMatrixRoute
+} from './matrix-route'
 
 export type { AgentHookSource }
 
@@ -1131,28 +1138,66 @@ export class AgentHookServer {
       this.hydrateLastStatusFromDisk()
     }
     this.server = createServer(async (req: IncomingMessage, res: ServerResponse) => {
-      if (req.method !== 'POST') {
-        res.writeHead(404)
-        res.end()
-        return
-      }
-
+      // Why: token auth runs before the method gate so the Matrix MCP bridge's
+      // GET /matrix/session-info is authenticated like every other route.
       if (req.headers['x-orca-agent-hook-token'] !== this.token) {
         res.writeHead(403)
         res.end()
         return
       }
 
-      // Why: bound request time so a slow/stalled client cannot hold a socket
-      // open indefinitely (slowloris-style). The hook endpoints are local and
-      // should complete in well under a second.
-      req.setTimeout(HOOK_REQUEST_SLOWLORIS_MS, () => {
-        req.destroy()
-      })
+      const pathname = new URL(req.url ?? '/', 'http://127.0.0.1').pathname
+      const isMatrixAsk = pathname === MATRIX_ASK_PATH
+      const isMatrixRoute =
+        pathname === MATRIX_SEND_PATH || pathname === MATRIX_SESSION_INFO_PATH || isMatrixAsk
+
+      // Why: hook ingest is POST-only; reject other methods early, but let the
+      // Matrix routes (which include a GET) be matched on their own method.
+      if (!isMatrixRoute && req.method !== 'POST') {
+        res.writeHead(404)
+        res.end()
+        return
+      }
+
+      // Why: /matrix/ask is a deliberately long-held request (it blocks until the
+      // operator replies or the ask timeout fires). The short slowloris ceiling
+      // would destroy it mid-wait, so give it a socket timeout safely above the
+      // max ask timeout. All other routes keep the tight slowloris guard.
+      if (isMatrixAsk) {
+        req.setTimeout(ASK_TIMEOUT_MAX_MS + 30_000, () => {
+          req.destroy()
+        })
+      } else {
+        req.setTimeout(HOOK_REQUEST_SLOWLORIS_MS, () => {
+          req.destroy()
+        })
+      }
+
+      if (isMatrixRoute) {
+        try {
+          // Only the POST route carries a body; reading on GET resolves empty.
+          const matrixBody = req.method === 'POST' ? await readRequestBody(req) : undefined
+          const handled = await tryHandleMatrixRoute(req, res, pathname, matrixBody)
+          if (!handled) {
+            res.writeHead(404)
+            res.end()
+          }
+        } catch (error) {
+          // Why: Matrix routes must fail loud (not 204) so the agent's MCP tool
+          // surfaces the failure rather than silently dropping the relay.
+          res.writeHead(500, { 'content-type': 'application/json' })
+          res.end(
+            JSON.stringify({
+              ok: false,
+              error: error instanceof Error ? error.message : 'Matrix route failed.'
+            })
+          )
+        }
+        return
+      }
 
       try {
         const body = await readRequestBody(req)
-        const pathname = new URL(req.url ?? '/', 'http://127.0.0.1').pathname
         const source = resolveHookSource(pathname)
         if (!source) {
           res.writeHead(404)

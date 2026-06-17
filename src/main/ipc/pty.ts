@@ -70,6 +70,11 @@ import {
   getFolderWorkspacePathStatus
 } from '../project-groups/folder-workspace-path-status'
 import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
+import {
+  injectMatrixMcpIntoClaudeLaunch,
+  shouldInjectMatrixMcp
+} from '../matrix/matrix-mcp-launch-injection'
+import type { AgentStartupShell } from '../../shared/tui-agent-startup'
 
 // ─── Provider Registry ──────────────────────────────────────────────
 // Routes PTY operations by connectionId. null = local provider.
@@ -2343,6 +2348,30 @@ export function registerPtyHandlers(
       )
       deleteRequestedEnvKeys(spawnEnv, combinedEnvToDelete)
       promoteAgentTeamsShimPath(spawnEnv, requestedAgentTeamsPath)
+      // Why: register the Orca Matrix MCP server with Claude (via --mcp-config)
+      // and mark the session active, but ONLY when the Matrix adapter is on.
+      // When disabled this branch is skipped, so the launch command and env are
+      // byte-identical to a non-Matrix launch. LOCAL ONLY: an SSH/remote launch
+      // runs Claude on the remote host, which can neither read the local
+      // ~/.orca/...mcp-config nor share the local shell-quoting assumption — so
+      // skip injection there (remote MCP support is a follow-up).
+      let effectiveCommand = args.command
+      const isLocalLaunch = !args.connectionId
+      const matrixMcpGate = {
+        isClaudeLaunch,
+        matrixEnabled: getSettings?.()?.matrixEnabled === true,
+        command: effectiveCommand
+      }
+      if (spawnEnv && isLocalLaunch && shouldInjectMatrixMcp(matrixMcpGate)) {
+        const matrixShell: AgentStartupShell = process.platform === 'win32' ? 'powershell' : 'posix'
+        const injection = injectMatrixMcpIntoClaudeLaunch({
+          command: matrixMcpGate.command,
+          shell: matrixShell,
+          spawnEnv
+        })
+        effectiveCommand = injection.command
+        Object.assign(spawnEnv, injection.env)
+      }
       const spawnOptions: PtySpawnOptions = {
         cols: args.cols,
         rows: args.rows,
@@ -2353,8 +2382,8 @@ export function registerPtyHandlers(
       if (combinedEnvToDelete) {
         spawnOptions.envToDelete = combinedEnvToDelete
       }
-      if (args.command !== undefined) {
-        spawnOptions.command = args.command
+      if (effectiveCommand !== undefined) {
+        spawnOptions.command = effectiveCommand
       }
       if (args.worktreeId !== undefined) {
         spawnOptions.worktreeId = args.worktreeId

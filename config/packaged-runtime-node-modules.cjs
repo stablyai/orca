@@ -1,5 +1,5 @@
 const { existsSync, readFileSync, readdirSync, realpathSync, rmSync } = require('node:fs')
-const { dirname, join, resolve } = require('node:path')
+const { basename, dirname, join, resolve } = require('node:path')
 const { builtinModules, createRequire } = require('node:module')
 
 const projectDir = resolve(__dirname, '..')
@@ -8,9 +8,16 @@ const requireFromProject = createRequire(join(projectDir, 'package.json'))
 const PACKAGED_RUNTIME_PACKAGE_ROOTS = [
   '@electron-toolkit/utils',
   '@linear/sdk',
+  // Matrix adapter: externalized main deps that must ship in the packaged
+  // node_modules. matrix-bot-sdk wraps the rust OlmMachine
+  // (@matrix-org/matrix-sdk-crypto-nodejs, native .node — also asarUnpack'd);
+  // @modelcontextprotocol/sdk backs the `orca matrix-mcp` stdio server.
+  '@matrix-org/matrix-sdk-crypto-nodejs',
+  '@modelcontextprotocol/sdk',
   '@parcel/watcher',
   'electron-updater',
   'i18next',
+  'matrix-bot-sdk',
   'node-pty',
   'posthog-node',
   // serve-sim (for CLI JS entry + closure + state/middleware + to make packaged require('serve-sim') + its internal relatives work; mirrors other runtime JS like ws/yaml/zod. Natives/dylibs still via extraResources + the node_modules/serve-sim copy in resources from builder. Client if added too.
@@ -53,6 +60,10 @@ function isPackagedExternalSpecifier(specifier) {
   return (
     !specifier.startsWith('.') &&
     !specifier.startsWith('/') &&
+    // The `node:` prefix unambiguously denotes a builtin (e.g. node:sqlite),
+    // even experimental ones absent from `builtinModules`, so it is never a
+    // copied node_module.
+    !specifier.startsWith('node:') &&
     specifier !== 'electron' &&
     !NODE_BUILTINS.has(specifier)
   )
@@ -80,13 +91,32 @@ function resolvePackageJsonPath(packageName, fromDir = projectDir) {
     } catch {
       throw new Error(`Could not resolve package ${packageName} from ${fromDir}`)
     }
+    // Why: dual ESM/CJS packages (e.g. mkdirp@3) ship a nested dist/cjs/
+    // package.json that is a FULL copy carrying the same "name". Walking up from
+    // the resolved entry finds that nested copy first, which would point
+    // packageDir at dist/cjs and drop the real package tree. Keep the HIGHEST
+    // matching package.json and stop at the node_modules directly above the
+    // package install dir, so the real root wins.
     let dir = dirname(entryPath)
+    let rootMatch = null
     while (dir !== dirname(dir)) {
       const packageJsonPath = join(dir, 'package.json')
       if (existsSync(packageJsonPath)) {
-        return packageJsonPath
+        try {
+          if (JSON.parse(readFileSync(packageJsonPath, 'utf8')).name === packageName) {
+            rootMatch = packageJsonPath
+          }
+        } catch {
+          // Unparseable package.json — keep walking toward the real root.
+        }
+      }
+      if (basename(dir) === 'node_modules') {
+        break
       }
       dir = dirname(dir)
+    }
+    if (rootMatch) {
+      return rootMatch
     }
     throw new Error(`Could not find package.json for ${packageName}`)
   }

@@ -108,7 +108,10 @@ module.exports = {
     'node_modules/tweetnacl/**',
     'node_modules/zod/**',
     'node_modules/yaml/**',
-    'node_modules/sherpa-onnx*/**'
+    'node_modules/sherpa-onnx*/**',
+    // Matrix rust crypto ships a native .node binary; native modules cannot be
+    // require()'d from inside the asar, so keep it unpacked on disk.
+    'node_modules/@matrix-org/matrix-sdk-crypto-nodejs/**'
   ],
   afterPack: async (context) => {
     const resourcesDir =

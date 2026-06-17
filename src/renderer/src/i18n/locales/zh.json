@@ -11339,5 +11339,41 @@
         }
       }
     }
+  },
+  "matrix": {
+    "settings": {
+      "section_title": "Matrix adapter",
+      "section_desc": "Forward agent and system messages to a Matrix room and route replies back to sessions.",
+      "loading": "Loading settings…",
+      "connect_failed": "Connect failed",
+      "connected_as": "Connected as {{value0}}",
+      "connected": "Connected",
+      "disconnected": "Not connected",
+      "enable_label": "Enable Matrix adapter",
+      "enable_desc": "Connect Orca to a Matrix room to forward messages and route replies back to sessions.",
+      "homeserver_label": "Homeserver",
+      "homeserver_desc": "Base URL of the Matrix homeserver.",
+      "homeserver_ph": "https://matrix.example.org",
+      "user_label": "User ID",
+      "user_desc": "The Matrix account Orca posts as.",
+      "user_ph": "@orca:example.org",
+      "room_label": "Room ID",
+      "room_desc": "The room messages are forwarded to and read from.",
+      "room_ph": "!roomid:example.org",
+      "token_label": "Access token",
+      "token_ph": "syt_…",
+      "connect": "Connect",
+      "disconnect": "Disconnect",
+      "test_label": "Send test message",
+      "test_desc": "Post a test message to the configured room to verify the connection.",
+      "test_button": "Send test",
+      "test_ok": "Test message sent.",
+      "forward_system_label": "Forward system messages",
+      "forward_system_desc": "Send Orca system events (agent status, errors) to the Matrix room.",
+      "forward_agent_status_label": "Forward agent status",
+      "forward_agent_status_desc": "Include working / blocked / waiting / done status changes.",
+      "forward_errors_label": "Forward errors",
+      "forward_errors_desc": "Include agent and session error events."
+    }
   }
 }

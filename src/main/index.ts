@@ -33,6 +33,9 @@ import { initOnboardingCohortClassifier } from './telemetry/onboarding-cohort-cl
 import { resolveConsent } from './telemetry/consent'
 import { triggerStartupNotificationRegistration } from './ipc/notifications'
 import { OrcaRuntimeService } from './runtime/orca-runtime'
+import { startMatrixInboundRouter } from './matrix/inbound-router'
+import { forwardAgentStatusToMatrix } from './matrix/system-message-forwarder'
+import { registerSpeakingHandle } from './matrix/session-label-source'
 import { OrcaRuntimeRpcServer } from './runtime/runtime-rpc'
 import { awaitRuntimeFileWatcherUnsubscribes } from './runtime/orca-runtime-files'
 import { clearRuntimeMetadataIfOwned } from './runtime/runtime-metadata'
@@ -782,6 +785,14 @@ function openMainWindow(): BrowserWindow {
         return
       }
       maybeAutoRenameBranchOnFirstWorkFromHook({ paneKey, tabId, worktreeId, payload, isReplay })
+      // Why here too: Claude/Codex report status via the agent-hooks HTTP path
+      // (this listener), not the OSC terminal path, so the Matrix system-message
+      // forwarder must fire here or it never runs for those agents. Skip replays
+      // (status restored on startup, not a live transition); the forwarder's
+      // per-session dedupe prevents a double-send if an agent also emits OSC status.
+      if (!isReplay && store) {
+        forwardAgentStatusToMatrix(store.getSettings(), { paneKey, payload })
+      }
       const orchestration = runtime?.getAgentStatusOrchestrationContextForPaneKey(paneKey)
       const terminalHandle = runtime?.getAgentStatusTerminalHandleForPaneKey(paneKey)
       mainWindow?.webContents.send('agentStatus:set', {
@@ -1335,12 +1346,30 @@ app.whenReady().then(async () => {
     onPtyStopped: clearProviderPtyState,
     onTerminalAgentStatus: (event) => {
       agentHookServer.ingestTerminalStatus(event)
+      if (store) {
+        const settings = store.getSettings()
+        // Mint the session's speaking Matrix handle from its worktree/repo
+        // display name — regardless of the granular forward flags, so the name is
+        // ready for inbound @handle lookups too — but only when Matrix is enabled
+        // (the handle is unused otherwise), and only once per session (cached), to
+        // keep registry I/O off the hot path for non-Matrix users.
+        if (settings.matrixEnabled) {
+          registerSpeakingHandle(store, event.paneKey, event.worktreeId)
+        }
+        // Opt-in: mirror agent-status transitions into the Matrix room, tagged
+        // with the session handle. The forwarder no-ops unless the user enabled it.
+        forwardAgentStatusToMatrix(settings, event)
+      }
     },
     // Why: hook-reported agent status is the same source the desktop sidebar
     // reads. worktree.ps pulls it at query time so mobile shows the same agents.
     getAgentStatusSnapshot: () => agentHookServer.getStatusSnapshot()
   })
   runtime = runtimeService
+  // Wire the Matrix adapter's inbound router so room messages addressed to a
+  // session (@<handle>) are delivered into that agent's terminal. The matrix
+  // service only emits while connected, so subscribing once here is safe.
+  startMatrixInboundRouter(runtimeService)
   automations = new AutomationService(store, {
     claudeUsage,
     codexUsage,
