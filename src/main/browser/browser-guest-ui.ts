@@ -419,6 +419,15 @@ export function setupGuestShortcutForwarding(args: {
       // guest handle it natively would open Chromium's built-in find UI inside
       // the guest frame, which is invisible behind Orca's chrome.
       renderer.send('ui:findInBrowserPage')
+    } else if (keybindingMatchesAction('browser.back', input, process.platform, keybindings)) {
+      // Why: macOS Logitech side-button remaps arrive as browser history
+      // keystrokes, not mouse/app-command events. Forward out of the guest so
+      // the renderer-owned webview ref can call goBack().
+      renderer.send('ui:browserHistoryNavigate', 'back')
+    } else if (keybindingMatchesAction('browser.forward', input, process.platform, keybindings)) {
+      // Why: same as browser.back; the focused guest cannot call the
+      // renderer-owned parked webview's goForward() path directly.
+      renderer.send('ui:browserHistoryNavigate', 'forward')
     } else if (keybindingMatchesAction('tab.close', input, process.platform, keybindings)) {
       renderer.send('ui:closeActiveTab')
     } else if (keybindingMatchesAction('tab.nextSameType', input, process.platform, keybindings)) {

@@ -2008,6 +2008,7 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     onFocusBrowserAddressBar: () => noopUnsubscribe,
     onFindInBrowserPage: () => noopUnsubscribe,
     onReloadBrowserPage: () => noopUnsubscribe,
+    onBrowserHistoryNavigate: () => noopUnsubscribe,
     onZoomBrowserPage: () => noopUnsubscribe,
     onHardReloadBrowserPage: () => noopUnsubscribe,
     onCloseActiveTab: () => noopUnsubscribe,

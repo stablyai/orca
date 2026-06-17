@@ -2855,6 +2855,12 @@ const api = {
       ipcRenderer.on('ui:reloadBrowserPage', listener)
       return () => ipcRenderer.removeListener('ui:reloadBrowserPage', listener)
     },
+    onBrowserHistoryNavigate: (callback: (direction: 'back' | 'forward') => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, direction: 'back' | 'forward'): void =>
+        callback(direction)
+      ipcRenderer.on('ui:browserHistoryNavigate', listener)
+      return () => ipcRenderer.removeListener('ui:browserHistoryNavigate', listener)
+    },
     onZoomBrowserPage: (callback: (direction: 'in' | 'out' | 'reset') => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent, direction: 'in' | 'out' | 'reset') =>
         callback(direction)

@@ -238,6 +238,43 @@ describe('keybindings', () => {
     ])
   })
 
+  it('defines browser history shortcuts for Logitech side-button remaps', () => {
+    expect(getEffectiveKeybindingsForAction('browser.back', 'darwin')).toEqual(['Mod+BracketLeft'])
+    expect(getEffectiveKeybindingsForAction('browser.forward', 'darwin')).toEqual([
+      'Mod+BracketRight'
+    ])
+    expect(getEffectiveKeybindingsForAction('browser.back', 'linux')).toEqual(['Alt+ArrowLeft'])
+    expect(getEffectiveKeybindingsForAction('browser.forward', 'win32')).toEqual(['Alt+ArrowRight'])
+    expect(
+      keybindingMatchesAction(
+        'browser.back',
+        {
+          key: '[',
+          code: 'BracketLeft',
+          meta: true,
+          control: false,
+          alt: false,
+          shift: false
+        },
+        'darwin'
+      )
+    ).toBe(true)
+    expect(
+      keybindingMatchesAction(
+        'browser.forward',
+        {
+          key: 'ArrowRight',
+          code: 'ArrowRight',
+          meta: false,
+          control: false,
+          alt: true,
+          shift: false
+        },
+        'linux'
+      )
+    ).toBe(true)
+  })
+
   it('binds close-all editor tabs to Mod+Alt+W beside tab.close', () => {
     expect(getEffectiveKeybindingsForAction('tab.closeAll', 'darwin')).toEqual(['Mod+Alt+W'])
     expect(getEffectiveKeybindingsForAction('tab.closeAll', 'linux')).toEqual(['Mod+Alt+W'])
