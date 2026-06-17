@@ -40,7 +40,13 @@ function makeTerminal(line: string) {
           if (text === undefined) {
             return null
           }
-          return { translateToString: () => text, getCell: () => ({ extended: undefined }) }
+          return {
+            // Honor (trimRight, startCol, endCol) like real xterm so the
+            // cell→string-index conversion (cellColToStringIndex) resolves correctly.
+            translateToString: (_trim?: boolean, start?: number, end?: number) =>
+              text.slice(start ?? 0, end ?? text.length),
+            getCell: () => ({ extended: undefined })
+          }
         }
       }
     },
