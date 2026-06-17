@@ -12,6 +12,7 @@ import type {
   Worktree,
   WorkspaceVisibleTabType,
   GitPushTarget,
+  Repo,
   RemoveWorktreeResult,
   WorktreeLineage,
   WorkspaceLineage,
@@ -56,6 +57,19 @@ import {
 } from '../../../../shared/workspace-scope'
 import { folderWorkspaceToWorktree } from '../../../../shared/folder-workspace-worktree'
 export type { WorktreeSlice, WorktreeDeleteState } from './worktree-helpers'
+
+// Why: startup can call fetchAllWorktrees from App hydration and the Sidebar
+// repo-count effect at the same time. Join identical waves without hiding a
+// genuinely different repo set or hydration phase.
+let fetchAllWorktreesInFlight: { key: string; promise: Promise<void> } | null = null
+
+function getFetchAllWorktreesCoalescingKey(args: {
+  repos: readonly Pick<Repo, 'id'>[]
+  hasHydratedWorktreePurge: boolean
+}): string {
+  const phase = args.hasHydratedWorktreePurge ? 'steady' : 'hydration'
+  return `${phase}:${args.repos.map((repo) => repo.id).join('\u0000')}`
+}
 
 // Why: old runtime servers only have `worktree.list`; preserve the large-list
 // UI hydration parity this slice used before `worktree.detectedList` existed.
@@ -1287,87 +1301,107 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
   },
 
   fetchAllWorktrees: async () => {
-    const { repos } = get()
-
-    // Why: once the one-shot hydration-time purge has fired, subsequent
-    // calls just need to refresh each repo's cached list. No need to
-    // double-probe the IPC for the per-repo success signal.
-    if (get().hasHydratedWorktreePurge) {
-      await Promise.all(repos.map((r) => get().fetchWorktrees(r.id)))
-      return
+    const snapshot = get()
+    const key = getFetchAllWorktreesCoalescingKey({
+      repos: snapshot.repos,
+      hasHydratedWorktreePurge: snapshot.hasHydratedWorktreePurge
+    })
+    if (fetchAllWorktreesInFlight?.key === key) {
+      return fetchAllWorktreesInFlight.promise
     }
 
-    // Why: users upgrading from a pre-fix build may have persisted
-    // tabsByWorktree entries for worktrees that were deleted in the previous
-    // session. Without the hydration-time purge below those entries would
-    // keep zombie PTYs misclassified as "bound" in SessionsStatusSegment
-    // (design §2c), which means the user would still need a second restart
-    // post-upgrade to reclaim memory.
-    //
-    // Safety gate: fetchWorktrees swallows IPC errors and short-circuits on
-    // empty-replace when cached data exists. Neither signal bubbles up to the
-    // caller, so we probe the IPC directly to get the per-repo success signal,
-    // then apply that same payload to state instead of listing each repo again.
-    const results = await Promise.all(
-      repos.map(async (r) => {
-        try {
-          const detected = await listDetectedWorktreesForRepo(
-            settingsForRepoOwner(get(), r.id),
-            r.id
-          )
-          const list = toVisibleWorktrees(detected)
-          const current = get().worktreesByRepo[r.id]
-          if (
-            !areWorktreesEqual(current, list) &&
-            !(list.length === 0 && current && current.length > 0 && !detected.authoritative)
-          ) {
-            set((s) => ({
-              worktreesByRepo: { ...s.worktreesByRepo, [r.id]: list },
-              detectedWorktreesByRepo: { ...s.detectedWorktreesByRepo, [r.id]: detected },
-              sortEpoch: s.sortEpoch + 1
-            }))
-          } else {
-            set((s) => ({
-              detectedWorktreesByRepo: { ...s.detectedWorktreesByRepo, [r.id]: detected }
-            }))
+    const promise = (async () => {
+      const { repos } = get()
+
+      // Why: once the one-shot hydration-time purge has fired, subsequent
+      // calls just need to refresh each repo's cached list. No need to
+      // double-probe the IPC for the per-repo success signal.
+      if (get().hasHydratedWorktreePurge) {
+        await Promise.all(repos.map((r) => get().fetchWorktrees(r.id)))
+        return
+      }
+
+      // Why: users upgrading from a pre-fix build may have persisted
+      // tabsByWorktree entries for worktrees that were deleted in the previous
+      // session. Without the hydration-time purge below those entries would
+      // keep zombie PTYs misclassified as "bound" in SessionsStatusSegment
+      // (design §2c), which means the user would still need a second restart
+      // post-upgrade to reclaim memory.
+      //
+      // Safety gate: fetchWorktrees swallows IPC errors and short-circuits on
+      // empty-replace when cached data exists. Neither signal bubbles up to the
+      // caller, so we probe the IPC directly to get the per-repo success signal,
+      // then apply that same payload to state instead of listing each repo again.
+      const results = await Promise.all(
+        repos.map(async (r) => {
+          try {
+            const detected = await listDetectedWorktreesForRepo(
+              settingsForRepoOwner(get(), r.id),
+              r.id
+            )
+            const list = toVisibleWorktrees(detected)
+            const current = get().worktreesByRepo[r.id]
+            if (
+              !areWorktreesEqual(current, list) &&
+              !(list.length === 0 && current && current.length > 0 && !detected.authoritative)
+            ) {
+              set((s) => ({
+                worktreesByRepo: { ...s.worktreesByRepo, [r.id]: list },
+                detectedWorktreesByRepo: { ...s.detectedWorktreesByRepo, [r.id]: detected },
+                sortEpoch: s.sortEpoch + 1
+              }))
+            } else {
+              set((s) => ({
+                detectedWorktreesByRepo: { ...s.detectedWorktreesByRepo, [r.id]: detected }
+              }))
+            }
+            return { repoId: r.id, ok: detected.authoritative, detected }
+          } catch (err) {
+            console.error(`Failed to fetch worktrees for repo ${r.id}:`, err)
+            return { repoId: r.id, ok: false as const }
           }
-          return { repoId: r.id, ok: detected.authoritative, detected }
-        } catch (err) {
-          console.error(`Failed to fetch worktrees for repo ${r.id}:`, err)
-          return { repoId: r.id, ok: false as const }
-        }
-      })
-    )
-
-    const hasAnyDetectedWorktree = results.some(
-      (result) => 'detected' in result && result.ok && result.detected.worktrees.length > 0
-    )
-    const allSucceeded = results.length > 0 && results.every((r) => r.ok) && hasAnyDetectedWorktree
-    if (!allSucceeded) {
-      // Defer; try again on the next fetchAllWorktrees call.
-      return
-    }
-    const validIds = new Set<string>()
-    // Why: floating is persisted renderer state, but not a repo worktree that
-    // authoritative runtime scans can return.
-    validIds.add(FLOATING_TERMINAL_WORKTREE_ID)
-    for (const result of Object.values(get().detectedWorktreesByRepo)) {
-      if (!result.authoritative) {
-        continue
-      }
-      for (const w of result.worktrees) {
-        validIds.add(w.id)
-      }
-    }
-    const stale = Object.keys(get().tabsByWorktree).filter((id) => !validIds.has(id))
-    if (stale.length > 0) {
-      console.warn(
-        `[worktree-purge] hydration-time purge removing stale state for ${stale.length} worktree(s):`,
-        stale
+        })
       )
-      get().purgeWorktreeTerminalState(stale)
+
+      const hasAnyDetectedWorktree = results.some(
+        (result) => 'detected' in result && result.ok && result.detected.worktrees.length > 0
+      )
+      const allSucceeded =
+        results.length > 0 && results.every((r) => r.ok) && hasAnyDetectedWorktree
+      if (!allSucceeded) {
+        // Defer; try again on the next fetchAllWorktrees call.
+        return
+      }
+      const validIds = new Set<string>()
+      // Why: floating is persisted renderer state, but not a repo worktree that
+      // authoritative runtime scans can return.
+      validIds.add(FLOATING_TERMINAL_WORKTREE_ID)
+      for (const result of Object.values(get().detectedWorktreesByRepo)) {
+        if (!result.authoritative) {
+          continue
+        }
+        for (const w of result.worktrees) {
+          validIds.add(w.id)
+        }
+      }
+      const stale = Object.keys(get().tabsByWorktree).filter((id) => !validIds.has(id))
+      if (stale.length > 0) {
+        console.warn(
+          `[worktree-purge] hydration-time purge removing stale state for ${stale.length} worktree(s):`,
+          stale
+        )
+        get().purgeWorktreeTerminalState(stale)
+      }
+      set({ hasHydratedWorktreePurge: true })
+    })()
+    fetchAllWorktreesInFlight = { key, promise }
+    try {
+      await promise
+    } finally {
+      if (fetchAllWorktreesInFlight?.promise === promise) {
+        fetchAllWorktreesInFlight = null
+      }
     }
-    set({ hasHydratedWorktreePurge: true })
   },
 
   fetchWorktreeLineage: async () => {

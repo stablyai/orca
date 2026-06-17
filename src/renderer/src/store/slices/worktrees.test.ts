@@ -3351,6 +3351,68 @@ describe('fetchAllWorktrees hydration-time purge (design §4.4)', () => {
     })
   })
 
+  it('coalesces concurrent fetchAllWorktrees calls for the same repo set', async () => {
+    const store = createTestStore()
+    const wtA = makeWorktree({ id: 'repoA::/a/wt1', repoId: 'repoA', path: '/a/wt1' })
+    const wtB = makeWorktree({ id: 'repoB::/b/wt1', repoId: 'repoB', path: '/b/wt1' })
+    let releaseFetch!: () => void
+    const fetchGate = new Promise<void>((resolve) => {
+      releaseFetch = resolve
+    })
+
+    mockApi.worktrees.list.mockImplementation(async ({ repoId }: { repoId: string }) => {
+      await fetchGate
+      return repoId === 'repoA' ? [wtA] : [wtB]
+    })
+
+    store.setState({ repos: [repoA, repoB] } as unknown as Partial<AppState>)
+
+    const first = store.getState().fetchAllWorktrees()
+    const second = store.getState().fetchAllWorktrees()
+    await Promise.resolve()
+
+    expect(mockApi.worktrees.list).toHaveBeenCalledTimes(2)
+    releaseFetch()
+    await Promise.all([first, second])
+
+    expect(mockApi.worktrees.list).toHaveBeenCalledTimes(2)
+    expect(store.getState().hasHydratedWorktreePurge).toBe(true)
+  })
+
+  it('does not coalesce fetchAllWorktrees when the repo set changes mid-refresh', async () => {
+    const store = createTestStore()
+    const wtA = makeWorktree({ id: 'repoA::/a/wt1', repoId: 'repoA', path: '/a/wt1' })
+    const wtB = makeWorktree({ id: 'repoB::/b/wt1', repoId: 'repoB', path: '/b/wt1' })
+    let releaseFirstRepoA!: () => void
+    let repoACallCount = 0
+
+    mockApi.worktrees.list.mockImplementation(async ({ repoId }: { repoId: string }) => {
+      if (repoId === 'repoA') {
+        repoACallCount += 1
+        if (repoACallCount === 1) {
+          await new Promise<void>((resolve) => {
+            releaseFirstRepoA = resolve
+          })
+        }
+        return [wtA]
+      }
+      return [wtB]
+    })
+
+    store.setState({ repos: [repoA] } as unknown as Partial<AppState>)
+    const first = store.getState().fetchAllWorktrees()
+    await Promise.resolve()
+    expect(mockApi.worktrees.list).toHaveBeenCalledTimes(1)
+
+    store.setState({ repos: [repoA, repoB] } as unknown as Partial<AppState>)
+    await store.getState().fetchAllWorktrees()
+
+    expect(mockApi.worktrees.list).toHaveBeenCalledTimes(3)
+    releaseFirstRepoA()
+    await first
+    expect(store.getState().worktreesByRepo.repoB).toEqual([wtB])
+  })
+
   it('fires the purge once when every repo returns successfully with ≥1 worktree', async () => {
     const store = createTestStore()
     const wtA = makeWorktree({ id: 'repoA::/a/wt1', repoId: 'repoA', path: '/a/wt1' })

@@ -82,6 +82,10 @@ import {
   type WorkspaceSpaceSortKey
 } from './workspace-space-presentation'
 import { translate } from '@/i18n/i18n'
+import {
+  buildWorkspaceSpaceEditorActivityByWorktree,
+  type WorkspaceSpaceEditorActivity
+} from './workspace-space-editor-activity'
 
 const TREEMAP_FILLS = [
   'color-mix(in srgb, var(--chart-2) 34%, var(--card))',
@@ -129,8 +133,7 @@ type WorkspaceDecisionInputs = {
   migrationUnsupportedByPtyId: Record<string, MigrationUnsupportedPtyEntry>
   runtimePaneTitlesByTabId: Record<string, Record<number, string>>
   retainedAgentsByPaneKey: Record<string, { worktreeId: string; entry: AgentStatusEntry }>
-  openFiles: { id: string; worktreeId: string; isDirty: boolean }[]
-  editorDrafts: Record<string, string>
+  editorActivityByWorktreeId: Map<string, WorkspaceSpaceEditorActivity>
   browserTabsByWorktree: Record<string, unknown[]>
   gitStatusByWorktree: Record<string, unknown[]>
   remoteStatusesByWorktree: Record<string, { hasUpstream: boolean; ahead: number; behind: number }>
@@ -188,10 +191,7 @@ function getWorkspaceDecisionDetails(
 ): WorkspaceDecisionDetails {
   const workspaceRecord = inputs.worktreeMap.get(worktree.worktreeId)
   const tabs = inputs.tabsByWorktree[worktree.worktreeId] ?? []
-  const openFiles = inputs.openFiles.filter((file) => file.worktreeId === worktree.worktreeId)
-  const dirtyEditorBufferCount = openFiles.filter(
-    (file) => file.isDirty || inputs.editorDrafts[file.id] !== undefined
-  ).length
+  const editorActivity = inputs.editorActivityByWorktreeId.get(worktree.worktreeId)
   const gitEntries = inputs.gitStatusByWorktree[worktree.worktreeId]
   const branch = workspaceRecord
     ? branchDisplayName(workspaceRecord.branch)
@@ -262,8 +262,8 @@ function getWorkspaceDecisionDetails(
     completedAgentCount: Object.values(inputs.retainedAgentsByPaneKey).filter(
       (entry) => entry.worktreeId === worktree.worktreeId && entry.entry.state === 'done'
     ).length,
-    openEditorFileCount: openFiles.length,
-    dirtyEditorBufferCount,
+    openEditorFileCount: editorActivity?.openFileCount ?? 0,
+    dirtyEditorBufferCount: editorActivity?.dirtyBufferCount ?? 0,
     browserTabCount: inputs.browserTabsByWorktree[worktree.worktreeId]?.length ?? 0,
     changedFileCount: gitEntries ? gitEntries.length : null,
     branchStatus: getBranchStatus(inputs.remoteStatusesByWorktree[worktree.worktreeId]),
@@ -1266,9 +1266,15 @@ export function WorkspaceSpaceManagerPanel(): React.JSX.Element {
   }, [cancelWorkspaceSpaceScan])
 
   const sourceRows = useMemo(() => analysis?.worktrees ?? [], [analysis?.worktrees])
+  const editorActivityByWorktreeId = useMemo(
+    () => buildWorkspaceSpaceEditorActivityByWorktree(openFiles, editorDrafts),
+    [editorDrafts, openFiles]
+  )
   const decisionDetailsByWorktreeId = useMemo(() => {
     // Why: active-agent freshness is time-based. The epoch bumps when fresh
     // hook entries cross the stale boundary so delete readiness recomputes.
+    // Editor activity is pre-indexed so large Resource Manager result sets do
+    // not refilter every open editor tab once per workspace row.
     void agentStatusEpoch
     const details = new Map<string, WorkspaceDecisionDetails>()
     const now = Date.now()
@@ -1284,8 +1290,7 @@ export function WorkspaceSpaceManagerPanel(): React.JSX.Element {
           migrationUnsupportedByPtyId,
           runtimePaneTitlesByTabId,
           retainedAgentsByPaneKey,
-          openFiles,
-          editorDrafts,
+          editorActivityByWorktreeId,
           browserTabsByWorktree,
           gitStatusByWorktree,
           remoteStatusesByWorktree,
@@ -1304,12 +1309,11 @@ export function WorkspaceSpaceManagerPanel(): React.JSX.Element {
     agentStatusEpoch,
     agentStatusByPaneKey,
     browserTabsByWorktree,
-    editorDrafts,
+    editorActivityByWorktreeId,
     gitStatusByWorktree,
     hostedReviewCache,
     issueCache,
     linearIssueCache,
-    openFiles,
     ptyIdsByTabId,
     repoMap,
     remoteStatusesByWorktree,
@@ -2025,8 +2029,7 @@ export function WorkspaceSpaceManagerPanel(): React.JSX.Element {
                         migrationUnsupportedByPtyId,
                         runtimePaneTitlesByTabId,
                         retainedAgentsByPaneKey,
-                        openFiles,
-                        editorDrafts,
+                        editorActivityByWorktreeId,
                         browserTabsByWorktree,
                         gitStatusByWorktree,
                         remoteStatusesByWorktree,
