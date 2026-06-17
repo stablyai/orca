@@ -28,6 +28,27 @@ describe('parseMarkdownBlocks', () => {
     expect(blocks[6]).toEqual({ kind: 'list', ordered: true, items: ['first', 'second'] })
   })
 
+  it('strips HTML comments (single-line and multi-line) before parsing', () => {
+    const md = [
+      '<!-- a template note -->',
+      'Real text.',
+      '<!--',
+      'multi',
+      'line',
+      '-->',
+      'More.'
+    ].join('\n')
+    const blocks = parseMarkdownBlocks(md)
+    expect(blocks).toEqual([
+      { kind: 'paragraph', text: 'Real text.' },
+      { kind: 'paragraph', text: 'More.' }
+    ])
+    // An inline comment inside a line is removed too.
+    expect(parseMarkdownBlocks('before <!-- hide --> after')).toEqual([
+      { kind: 'paragraph', text: 'before  after' }
+    ])
+  })
+
   it('is total — never throws on empty, whitespace, or an unterminated fence', () => {
     expect(parseMarkdownBlocks('')).toEqual([])
     expect(() => parseMarkdownBlocks('   \n\n  ')).not.toThrow()

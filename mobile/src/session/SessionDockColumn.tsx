@@ -1,10 +1,12 @@
-import { View, StyleSheet, type GestureResponderHandlers } from 'react-native'
+import { memo } from 'react'
+import { View, StyleSheet } from 'react-native'
 import type { ConnectionState } from '../transport/types'
 import type { RpcClient } from '../transport/rpc-client'
 import { MobileSourceControlPanel } from '../source-control/MobileSourceControlPanel'
 import { MobileFileExplorerPanel } from '../files/MobileFileExplorerPanel'
 import { MobilePrViewPanel } from '../components/pr-sidebar/MobilePrViewPanel'
 import { mobilePrSidebarStyles } from '../components/pr-sidebar/mobile-pr-sidebar-styles'
+import { useMobileDockResize } from './use-mobile-dock-resize'
 import type { ActivePanel } from './session-panel-host'
 
 type Props = {
@@ -16,15 +18,14 @@ type Props = {
   connState: ConnectionState
   branch: string | null
   headSha: string | null
-  width: number
-  // Spread onto the dedicated left-edge drag handle (see use-mobile-dock-resize).
-  resizeHandlers: GestureResponderHandlers
   onRequestClose: () => void
 }
 
-// The wide-layout right-hand dock beside the session content (KTD2/KTD6). Extracted
-// from the session screen to keep that file under its line budget; renders exactly one
-// embedded panel keyed off activePanel.
+// The wide-layout right-hand dock beside the session content (KTD2/KTD6). Owns its own
+// drag-resize state so dragging only re-renders this subtree (not the whole session
+// screen), and the panel content is memoized so a width change doesn't re-render the
+// embedded panel/comment list — only the container reflows. The terminal re-fit is
+// driven separately off the terminal frame's onLayout, so it doesn't need the width.
 export function SessionDockColumn({
   activePanel,
   hostId,
@@ -34,46 +35,77 @@ export function SessionDockColumn({
   connState,
   branch,
   headSha,
-  width,
-  resizeHandlers,
   onRequestClose
 }: Props) {
+  const { dockWidth, panHandlers } = useMobileDockResize()
   return (
-    <View style={[mobilePrSidebarStyles.dockColumn, { width }]}>
+    <View style={[mobilePrSidebarStyles.dockColumn, { width: dockWidth }]}>
       {/* Dedicated drag handle over the dock's left border — a leaf overlay so the
           inner ScrollView can't intercept the gesture on Android. */}
-      <View style={styles.resizeHandle} {...resizeHandlers} />
-      {activePanel === 'sourceControl' ? (
-        <MobileSourceControlPanel
-          hostId={hostId}
-          worktreeId={worktreeId}
-          name={name}
-          origin="session"
-          embedded
-          onRequestClose={onRequestClose}
-        />
-      ) : activePanel === 'files' ? (
-        <MobileFileExplorerPanel
-          hostId={hostId}
-          worktreeId={worktreeId}
-          name={name}
-          embedded
-          onRequestClose={onRequestClose}
-        />
-      ) : (
-        <MobilePrViewPanel
-          client={client}
-          connState={connState}
-          worktreeId={worktreeId}
-          branch={branch}
-          headSha={headSha}
-          embedded
-          onRequestClose={onRequestClose}
-        />
-      )}
+      <View style={styles.resizeHandle} {...panHandlers} />
+      <DockPanelContent
+        activePanel={activePanel}
+        hostId={hostId}
+        worktreeId={worktreeId}
+        name={name}
+        client={client}
+        connState={connState}
+        branch={branch}
+        headSha={headSha}
+        onRequestClose={onRequestClose}
+      />
     </View>
   )
 }
+
+// Memoized so a resize (width-only change on the parent) does not re-render the
+// embedded panel — its props are width-independent, so React skips it during a drag.
+const DockPanelContent = memo(function DockPanelContent({
+  activePanel,
+  hostId,
+  worktreeId,
+  name,
+  client,
+  connState,
+  branch,
+  headSha,
+  onRequestClose
+}: Props) {
+  if (activePanel === 'sourceControl') {
+    return (
+      <MobileSourceControlPanel
+        hostId={hostId}
+        worktreeId={worktreeId}
+        name={name}
+        origin="session"
+        embedded
+        onRequestClose={onRequestClose}
+      />
+    )
+  }
+  if (activePanel === 'files') {
+    return (
+      <MobileFileExplorerPanel
+        hostId={hostId}
+        worktreeId={worktreeId}
+        name={name}
+        embedded
+        onRequestClose={onRequestClose}
+      />
+    )
+  }
+  return (
+    <MobilePrViewPanel
+      client={client}
+      connState={connState}
+      worktreeId={worktreeId}
+      branch={branch}
+      headSha={headSha}
+      embedded
+      onRequestClose={onRequestClose}
+    />
+  )
+})
 
 const RESIZE_EDGE_WIDTH = 24
 

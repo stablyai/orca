@@ -27,7 +27,13 @@ const UNORDERED = /^\s*[-*+]\s+(.*)$/
 const ORDERED = /^\s*\d+[.)]\s+(.*)$/
 
 export function parseMarkdownBlocks(content: string): MarkdownBlock[] {
-  const lines = content.replace(/\r\n/g, '\n').split('\n')
+  // Drop HTML comments before parsing — GitHub PR/issue templates wrap guidance in
+  // `<!-- ... -->` that should not render (matches how the desktop markdown sanitizer
+  // strips them). Non-greedy + multiline so block comments are removed whole.
+  const lines = content
+    .replace(/<!--[\s\S]*?-->/g, '')
+    .replace(/\r\n/g, '\n')
+    .split('\n')
   const blocks: MarkdownBlock[] = []
   let paragraph: string[] = []
   let i = 0
