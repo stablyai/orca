@@ -5198,34 +5198,28 @@
           "239bf9132b": "Comando de instalación copiado."
         },
         "PrivacyDiagnosticBundleControls": {
-          "dc8404a930": "Crear vista previa",
+          "dc8404a930": "Crear archivo de diagnóstico",
           "a5acaffdb6": "Desechar",
-          "aca2c8a367": "Subir",
-          "798b6f0be5": "Abrir vista previa",
+          "aca2c8a367": "Enviar a soporte",
+          "798b6f0be5": "Abrir archivo para revisar",
           "2ae9a6b63e": "Hecho",
-          "7f14a1733c": "Eliminar paquete",
-          "2801d4ce22": "Copiar billete"
+          "7f14a1733c": "Eliminar archivo enviado",
+          "2801d4ce22": "Copiar ID de referencia",
+          "d8be621237": "Abre primero el archivo para revisar.",
+          "61676df223": "Diagnósticos enviados. Comparte este ID de referencia con soporte: {{value0}}.",
+          "fd7b3891af": "Abriste el archivo para revisar ({{value0}}). Envía ese archivo a soporte o descártalo.",
+          "62340d4439": "Tu archivo para revisar está listo ({{value0}}). Ábrelo para ver qué se enviaría y luego elige si quieres enviarlo a soporte.",
+          "19ec5e29b3": "Recopila actividad reciente y errores de la app en un archivo redactado que puedes revisar antes de enviarlo. Nada se sube hasta que elijas enviarlo."
         },
         "PrivacyDiagnosticsSection": {
-          "acc7c66e6e": "exportación OTLP",
-          "4ff08ff3a7": "Borrar rastros locales",
-          "9ca08a9f8f": "Elimina todos los archivos de seguimiento rotados en esta máquina.",
-          "fe81a52cb2": "Abrir carpeta de seguimiento",
-          "5ff57fc986": "Revela {{value0}} en su administrador de archivos.",
-          "af2fc82cde": "Paquete de diagnóstico",
-          "c18cbe45df": "Paquete de diagnóstico cargado eliminado",
-          "7a4944595b": "No se pudo copiar el ticket de diagnóstico",
-          "13eb2c65a1": "Ticket de diagnóstico copiado",
-          "860bca9ec9": "Vista previa del paquete de diagnóstico descartada",
-          "49fc6c80e8": "Paquete de diagnóstico subido",
-          "db3228e01a": "Vista previa del paquete de diagnóstico abierta",
-          "a2b3505c77": "Vista previa del paquete de diagnóstico creada",
-          "9666a05580": "No se pudieron borrar los archivos de seguimiento",
-          "32d767f84d": "Archivos de seguimiento locales borrados",
-          "b85fe972cd": "No se pudo abrir la carpeta de seguimiento",
-          "1fb00a8995": "Desactivado",
-          "46ea3fb2d0": "Activado",
-          "7c9d9820b6": "Configure ORCA_OTLP_TRACES_URL para que Orca apunte a su propio recopilador OpenTelemetry."
+          "af2fc82cde": "Enviar diagnósticos de la app a soporte",
+          "c18cbe45df": "Diagnósticos enviados eliminados",
+          "7a4944595b": "No se pudo copiar el ID de referencia",
+          "13eb2c65a1": "ID de referencia copiado",
+          "860bca9ec9": "Archivo para revisar descartado",
+          "49fc6c80e8": "Diagnósticos enviados",
+          "db3228e01a": "Archivo para revisar abierto",
+          "a2b3505c77": "Archivo para revisar creado"
         },
         "PrivacyPane": {
           "36e0e2e63b": "variable de entorno. Desconfigúrelo y reinicie para volver a habilitarlo.",
@@ -7211,12 +7205,8 @@
             "f7a2d9f137": "Variables de entorno que deshabilitan la transmisión de telemetría.",
             "e058a3c98d": "Variables de entorno de telemetría",
             "1686c07fee": "apoyo",
-            "4a583f3a2f": "telemetría abierta",
-            "9ea93ce3d6": "otlp",
-            "685c68a81f": "registros",
-            "40de3c2f19": "rastro",
             "c0494ff48a": "diagnóstico",
-            "8b08f32366": "Archivos de seguimiento y controles de exportación OTLP.",
+            "8b08f32366": "Diagnósticos de la aplicación y controles para compartir con soporte.",
             "6d258d2ed6": "Diagnóstico",
             "ead1deded2": "compartir",
             "27a27b2f63": "optar por no participar",
@@ -7963,6 +7953,13 @@
           "ask": "Preguntar",
           "safeAuto": "Seguro automático",
           "off": "Desactivado"
+        },
+        "PrivacyDiagnosticsRows": {
+          "5a7cbe069a": "DO_NOT_TRACK=1 está configurado: crear y enviar archivos de diagnóstico está deshabilitado.",
+          "63d03261d1": "ORCA_TELEMETRY_DISABLED=1 está configurado: crear y enviar archivos de diagnóstico está deshabilitado.",
+          "d37e92a06b": "ORCA_DIAGNOSTICS_DISABLED=1 está configurado: los diagnósticos de la app están desactivados.",
+          "5ebb31e1fb": "Se está ejecutando en CI: los diagnósticos están desactivados.",
+          "e27c8d45bf": "Los diagnósticos están desactivados por una variable de entorno."
         }
       },
       "right": {

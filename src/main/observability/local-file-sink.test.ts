@@ -1,4 +1,4 @@
-// Sink tests: rotation behavior under size pressure, listing, clearing.
+// Sink tests: rotation behavior under size pressure and listing.
 
 import {
   chmodSync,
@@ -12,12 +12,7 @@ import {
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import {
-  clearRotatedFamily,
-  createLocalFileSink,
-  getRotatedFamilySize,
-  listRotatedFiles
-} from './local-file-sink'
+import { createLocalFileSink, getRotatedFamilySize, listRotatedFiles } from './local-file-sink'
 
 let dir: string
 
@@ -244,26 +239,6 @@ describe('local-file-sink — listing + clearing', () => {
     for (let i = 1; i < files.length; i++) {
       expect(files[i]).toBe(`${file}.${i}`)
     }
-  })
-
-  it('clears every rotated file', () => {
-    const file = join(dir, 'test.ndjson')
-    const sink = createLocalFileSink({
-      filePath: file,
-      maxBytes: 200,
-      maxFiles: 5,
-      batchWindowMs: 100_000,
-      flushBufferThreshold: 1
-    })
-    for (let i = 0; i < 20; i++) {
-      sink.push(makeRecord(i))
-    }
-    sink.flush()
-    sink.close()
-
-    expect(listRotatedFiles(file, 5).length).toBeGreaterThan(0)
-    clearRotatedFamily(file, 5)
-    expect(listRotatedFiles(file, 5)).toEqual([])
   })
 })
 

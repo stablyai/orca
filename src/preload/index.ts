@@ -1551,14 +1551,11 @@ const api = {
     ipcRenderer.invoke('telemetry:getConsentState'),
 
   // Why: diagnostics is the renderer-facing surface for the error-tracking
-  // lane (telemetry-error-tracking.md §User controls). All five channels
-  // are gated by main-side handlers that strictly type-narrow their inputs
-  // (renderer is untrusted by design); the bridges here are deliberately
-  // loose for the same reason the telemetry bridges are.
+  // lane (telemetry-error-tracking.md §User controls). Handlers type-narrow
+  // their inputs in main (renderer is untrusted by design); the bridges here
+  // are deliberately loose for the same reason the telemetry bridges are.
   diagnostics: {
     getStatus: (): Promise<unknown> => ipcRenderer.invoke('diagnostics:getStatus'),
-    openTraceFolder: (): Promise<void> => ipcRenderer.invoke('diagnostics:openTraceFolder'),
-    clearTraces: (): Promise<void> => ipcRenderer.invoke('diagnostics:clearTraces'),
     collectBundle: (lookbackMinutes?: number): Promise<unknown> =>
       ipcRenderer.invoke('diagnostics:collectBundle', lookbackMinutes),
     openBundlePreview: (bundleSubmissionId: string): Promise<void> =>

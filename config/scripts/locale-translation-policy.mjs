@@ -135,8 +135,6 @@ export const NEVER_TRANSLATE_VALUES = new Set([
   'IDE',
   'ui',
   'UI',
-  'otlp',
-  'OTLP',
   'calt',
   'ai',
   'AI',

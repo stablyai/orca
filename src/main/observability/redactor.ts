@@ -1,8 +1,7 @@
 // Secrets scrubber for the error-tracking lane. Runs synchronously at three
 // well-defined locations (see telemetry-error-tracking.md §The redactor):
 //
-//   1. Sink-write time — every span is redacted before NDJSON serialization
-//      and before any optional OTLP export.
+//   1. Sink-write time — every span is redacted before NDJSON serialization.
 //   2. Bundle-collection time — a second pass before the user-preview window
 //      renders. Belt-and-suspenders against a sink-write bug.
 //   3. Server-side ingest — a third pass. The client-side redactor runs on

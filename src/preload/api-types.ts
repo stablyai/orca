@@ -589,9 +589,7 @@ export type StatsApi = {
 // renderer's view of the IPC surface.
 export type DiagnosticsStatusPayload = {
   readonly localFileEnabled: boolean
-  readonly otlpEnabled: boolean
   readonly bundleEnabled: boolean
-  readonly otlpStatus: string
   readonly traceFilePath: string
   readonly traceFamilySize: number
   readonly disabledReason?:
@@ -605,9 +603,13 @@ export type DiagnosticsBundlePayload = {
   readonly bytes: number
   readonly spanCount: number
 }
-export type DiagnosticsUploadPayload = {
-  readonly ticketId: string
-}
+export type DiagnosticsUploadPayload =
+  | {
+      readonly ticketId: string
+    }
+  | {
+      readonly canceled: true
+    }
 
 export type MemoryApi = {
   getSnapshot: () => Promise<MemorySnapshot>
@@ -1729,15 +1731,13 @@ export type PreloadApi = {
   /** Flip the persisted opt-in preference. Subject to a per-session
    *  consent-mutation rate limit on the main side (≤5/session). */
   telemetrySetOptIn: (optedIn: boolean) => Promise<void>
-  /** Diagnostic-bundle / trace-folder controls. Surface for
-   *  telemetry-error-tracking.md §User controls. The renderer triggers
-   *  flows; main does the filesystem / network work and returns
-   *  serializable metadata. Main retains collected upload payloads so the
-   *  renderer can confirm without reading or substituting arbitrary bytes. */
+  /** Diagnostic file controls. Surface for telemetry-error-tracking.md
+   *  §User controls. The renderer triggers flows; main does the filesystem /
+   *  network work and returns serializable metadata. Main retains collected
+   *  upload payloads so the renderer can confirm without reading or
+   *  substituting arbitrary bytes. */
   diagnostics: {
     getStatus: () => Promise<DiagnosticsStatusPayload>
-    openTraceFolder: () => Promise<void>
-    clearTraces: () => Promise<void>
     collectBundle: (lookbackMinutes?: number) => Promise<DiagnosticsBundlePayload>
     openBundlePreview: (bundleSubmissionId: string) => Promise<void>
     discardBundlePreview: (bundleSubmissionId: string) => Promise<void>

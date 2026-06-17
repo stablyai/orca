@@ -258,9 +258,9 @@ export const LOCALE_KEY_OVERRIDES = {
     ja: '再試行'
   },
   'auto.components.settings.PrivacyDiagnosticBundleControls.2801d4ce22': {
-    ko: '티켓 복사',
-    zh: '复制工单',
-    ja: 'チケットをコピー'
+    ko: '참조 ID 복사',
+    zh: '复制参考 ID',
+    ja: '参照 ID をコピー'
   },
   'auto.components.settings.ComputerUsePane.4b65070096': {
     ko: 'darwin',
