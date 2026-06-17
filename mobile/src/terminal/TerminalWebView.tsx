@@ -6,6 +6,7 @@ import type { RuntimeMobileTerminalTheme } from '../../../src/shared/runtime-typ
 import { colors } from '../theme/mobile-theme'
 import { XTERM_HTML } from './terminal-webview-html'
 import type { TerminalWebViewCommand } from './terminal-webview-messages'
+import { createTerminalWebViewPendingMessages } from './terminal-webview-pending-messages'
 
 type TerminalMouseTrackingMode = 'none' | 'x10' | 'vt200' | 'drag' | 'any'
 
@@ -72,9 +73,6 @@ type Props = {
   onWebReady?: () => void
 } & TerminalSelectionEvents
 
-const MAX_PENDING_WEB_WRITE_BYTES = 1_000_000
-const MAX_PENDING_WEB_WRITE_MESSAGES = 4096
-
 export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function TerminalWebView(
   {
     style,
@@ -97,9 +95,7 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
 ) {
   const webViewRef = useRef<WebView>(null)
   const isWebReadyRef = useRef(false)
-  const pendingMessagesRef = useRef<TerminalWebViewCommand[]>([])
-  const pendingWriteBytesRef = useRef(0)
-  const pendingWriteCountRef = useRef(0)
+  const pendingMessages = useMemo(() => createTerminalWebViewPendingMessages(), [])
   const messageIdRef = useRef(0)
   const terminalThemeKey = useMemo(() => JSON.stringify(terminalTheme ?? null), [terminalTheme])
   const measureResolveRef = useRef<
@@ -118,60 +114,18 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
   }, [])
 
   const flushPendingMessages = useCallback(() => {
-    const pending = pendingMessagesRef.current
-    pendingMessagesRef.current = []
-    pendingWriteBytesRef.current = 0
-    pendingWriteCountRef.current = 0
-    for (const msg of pending) {
-      sendToWebView(msg)
-    }
-  }, [sendToWebView])
-
-  const clearPendingMessages = useCallback(() => {
-    pendingMessagesRef.current = []
-    pendingWriteBytesRef.current = 0
-    pendingWriteCountRef.current = 0
-  }, [])
-
-  const queuePendingMessage = useCallback((msg: TerminalWebViewCommand) => {
-    const pending = pendingMessagesRef.current
-    pending.push(msg)
-    if (msg.type !== 'write') {
-      return
-    }
-
-    pendingWriteBytesRef.current += msg.data.length
-    pendingWriteCountRef.current += 1
-    while (
-      pendingWriteBytesRef.current > MAX_PENDING_WEB_WRITE_BYTES ||
-      pendingWriteCountRef.current > MAX_PENDING_WEB_WRITE_MESSAGES
-    ) {
-      const dropIndex = pending.findIndex((candidate) => candidate.type === 'write')
-      if (dropIndex === -1) {
-        pendingWriteBytesRef.current = 0
-        pendingWriteCountRef.current = 0
-        return
-      }
-      const [dropped] = pending.splice(dropIndex, 1)
-      if (dropped?.type === 'write') {
-        pendingWriteBytesRef.current = Math.max(
-          0,
-          pendingWriteBytesRef.current - dropped.data.length
-        )
-        pendingWriteCountRef.current = Math.max(0, pendingWriteCountRef.current - 1)
-      }
-    }
-  }, [])
+    pendingMessages.flush(sendToWebView)
+  }, [pendingMessages, sendToWebView])
 
   const postMessage = useCallback(
     (msg: TerminalWebViewCommand) => {
       if (!isWebReadyRef.current) {
-        queuePendingMessage(msg)
+        pendingMessages.queue(msg)
         return
       }
       sendToWebView(msg)
     },
-    [queuePendingMessage, sendToWebView]
+    [pendingMessages, sendToWebView]
   )
 
   const handleMessage = useCallback(
@@ -299,8 +253,8 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
     isWebReadyRef.current = false
     // Why: messages queued for a previous WebView generation are stale after a reload;
     // dropping them avoids replaying terminal chunks before the next init snapshot.
-    clearPendingMessages()
-  }, [clearPendingMessages])
+    pendingMessages.clear()
+  }, [pendingMessages])
 
   useEffect(() => {
     postMessage({ type: 'set-theme', terminalTheme })

@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest'
 // TerminalWebView.tsx. Concatenate both so assertions resolve regardless of file.
 const source =
   readFileSync(new URL('./TerminalWebView.tsx', import.meta.url), 'utf8') +
+  readFileSync(new URL('./terminal-webview-pending-messages.ts', import.meta.url), 'utf8') +
   readFileSync(new URL('./terminal-webview-url-tap.ts', import.meta.url), 'utf8') +
   readFileSync(new URL('./terminal-webview-tap-dispatch-injected.ts', import.meta.url), 'utf8') +
   readFileSync(new URL('./terminal-webview-html.ts', import.meta.url), 'utf8')
@@ -99,12 +100,13 @@ describe('TerminalWebView scroll routing', () => {
   it('bounds native-side pending WebView writes while preserving control messages', () => {
     expect(source).toContain('const MAX_PENDING_WEB_WRITE_BYTES = 1_000_000')
     expect(source).toContain('const MAX_PENDING_WEB_WRITE_MESSAGES = 4096')
-    expect(source).toContain('const pendingWriteBytesRef = useRef(0)')
-    expect(source).toContain('const pendingWriteCountRef = useRef(0)')
-    expect(source).toContain('const queuePendingMessage = useCallback')
-    expect(source).toContain('pendingWriteCountRef.current > MAX_PENDING_WEB_WRITE_MESSAGES')
+    expect(source).toContain('let pendingWriteBytes = 0')
+    expect(source).toContain('let pendingWriteCount = 0')
+    expect(source).toContain('const queue = (msg: TerminalWebViewCommand)')
+    expect(source).toContain('pendingWriteCount > MAX_PENDING_WEB_WRITE_MESSAGES')
     expect(source).toContain("candidate.type === 'write'")
-    expect(source).toContain('clearPendingMessages()')
+    expect(source).toContain('pendingMessages.queue(msg)')
+    expect(source).toContain('pendingMessages.clear()')
   })
 
   it('clears WebView await timers when the real response wins', () => {
