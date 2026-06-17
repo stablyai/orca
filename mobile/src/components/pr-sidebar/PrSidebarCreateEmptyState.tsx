@@ -5,8 +5,9 @@ import { colors } from '../../theme/mobile-theme'
 import type { RpcClient } from '../../transport/rpc-client'
 import { resolveMobilePrPrefill, type MobilePrPrefill } from '../../source-control/mobile-pr-create'
 import { fetchWorktreeLinkedPR, unlinkMobilePr } from '../../source-control/mobile-pr-link'
-import { MobilePrComposeSheet, openMobilePrUrl } from '../MobilePrComposeSheet'
-import { MobileLinkPrSheet } from './MobileLinkPrSheet'
+import { openMobilePrUrl } from '../MobilePrComposeSheet'
+import { MobilePrComposeForm } from './MobilePrComposeForm'
+import { MobileLinkPrForm } from './MobileLinkPrForm'
 import { prActionsStyles as actionStyles } from './pr-actions-styles'
 import { mobilePrSidebarStyles as styles } from './mobile-pr-sidebar-styles'
 
@@ -18,14 +19,16 @@ type Props = {
   onCreated: () => void
 }
 
+type Mode = 'choose' | 'create' | 'link'
+
 // Empty state for a branch with no PR: offers both Create and Link (desktop parity).
 // Create resolves the hosted-review prefill (provider/base/title/body — provider-
-// agnostic) and opens the compose sheet; Link opens a number/URL sheet that persists
-// linkedPR via worktree.set. Both refetch the sidebar on success.
+// agnostic) and renders the compose form inline; Link renders a number/URL form
+// inline. Both forms render inline (not as a nested BottomDrawer, which a
+// ScrollView would clip) and refetch the sidebar on success.
 export function PrSidebarCreateEmptyState({ client, worktreeId, gitBranch, onCreated }: Props) {
   const [prefill, setPrefill] = useState<MobilePrPrefill | null>(null)
-  const [composeVisible, setComposeVisible] = useState(false)
-  const [linkVisible, setLinkVisible] = useState(false)
+  const [mode, setMode] = useState<Mode>('choose')
   const [loading, setLoading] = useState(false)
   // A persisted linkedPR while the branch shows no PR means the linked PR couldn't be
   // resolved (deleted/transferred/cross-repo). Surface Unlink so the user can recover
@@ -83,13 +86,48 @@ export function PrSidebarCreateEmptyState({ client, worktreeId, gitBranch, onCre
         behind: 0
       })
       setPrefill(resolved)
-      setComposeVisible(true)
+      setMode('create')
     } finally {
       setLoading(false)
     }
   }
 
   const canCreate = !!client && !!gitBranch
+
+  if (mode === 'create' && prefill) {
+    return (
+      <View style={styles.stateArea}>
+        <MobilePrComposeForm
+          client={client}
+          worktreeId={worktreeId}
+          prefill={prefill}
+          head={gitBranch}
+          onCancel={() => setMode('choose')}
+          onCreated={(url) => {
+            setMode('choose')
+            openMobilePrUrl(url)
+            onCreated()
+          }}
+        />
+      </View>
+    )
+  }
+
+  if (mode === 'link') {
+    return (
+      <View style={styles.stateArea}>
+        <MobileLinkPrForm
+          client={client}
+          worktreeId={worktreeId}
+          onCancel={() => setMode('choose')}
+          onLinked={() => {
+            setMode('choose')
+            onCreated()
+          }}
+        />
+      </View>
+    )
+  }
 
   return (
     <View style={styles.stateArea}>
@@ -120,7 +158,7 @@ export function PrSidebarCreateEmptyState({ client, worktreeId, gitBranch, onCre
       </Pressable>
       <Pressable
         style={[actionStyles.actionButton, !client && actionStyles.actionButtonDisabled]}
-        onPress={() => setLinkVisible(true)}
+        onPress={() => setMode('link')}
         disabled={!client}
         accessibilityRole="button"
         accessibilityLabel="Link existing pull request"
@@ -149,32 +187,6 @@ export function PrSidebarCreateEmptyState({ client, worktreeId, gitBranch, onCre
           <Text style={actionStyles.actionButtonText}>Unlink</Text>
         </Pressable>
       ) : null}
-
-      {prefill ? (
-        <MobilePrComposeSheet
-          visible={composeVisible}
-          client={client}
-          worktreeId={worktreeId}
-          prefill={prefill}
-          head={gitBranch}
-          onClose={() => setComposeVisible(false)}
-          onCreated={(url) => {
-            setComposeVisible(false)
-            openMobilePrUrl(url)
-            onCreated()
-          }}
-        />
-      ) : null}
-      <MobileLinkPrSheet
-        visible={linkVisible}
-        client={client}
-        worktreeId={worktreeId}
-        onClose={() => setLinkVisible(false)}
-        onLinked={() => {
-          setLinkVisible(false)
-          onCreated()
-        }}
-      />
     </View>
   )
 }

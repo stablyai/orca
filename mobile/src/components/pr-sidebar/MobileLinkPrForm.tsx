@@ -1,34 +1,25 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useState } from 'react'
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
 import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
 import type { RpcClient } from '../../transport/rpc-client'
 import { triggerError, triggerSuccess } from '../../platform/haptics'
 import { parseGitHubPrReference } from '../../source-control/github-pr-link-parse'
 import { linkMobilePr } from '../../source-control/mobile-pr-link'
-import { BottomDrawer } from '../BottomDrawer'
 
 type Props = {
-  visible: boolean
   client: RpcClient | null
   worktreeId: string
-  onClose: () => void
+  onCancel: () => void
   onLinked: () => void
 }
 
-// Link an existing PR to this worktree by number or GitHub URL, mirroring desktop's
-// "Link another PR". The number/URL is parsed with the same rules as desktop; Link
-// is disabled until it parses. On success we persist via worktree.set and refetch.
-export function MobileLinkPrSheet({ visible, client, worktreeId, onClose, onLinked }: Props) {
+// Link-an-existing-PR form body (number or GitHub URL). Renders a plain View so
+// it can sit inline inside the PR sidebar's ScrollView, mirroring the compose
+// form fix — a BottomDrawer overlay nested in a ScrollView gets clipped.
+export function MobileLinkPrForm({ client, worktreeId, onCancel, onLinked }: Props) {
   const [input, setInput] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
-
-  useEffect(() => {
-    if (visible) {
-      setInput('')
-      setError(null)
-    }
-  }, [visible])
 
   const parsed = parseGitHubPrReference(input)
 
@@ -53,49 +44,66 @@ export function MobileLinkPrSheet({ visible, client, worktreeId, onClose, onLink
   }, [client, onLinked, parsed, submitting, worktreeId])
 
   return (
-    <BottomDrawer visible={visible} onClose={onClose}>
-      <View>
+    <View>
+      <View style={styles.headingRow}>
         <Text style={styles.heading}>Link existing pull request</Text>
-        <Text style={styles.label}>PR number or GitHub URL</Text>
-        <TextInput
-          style={styles.input}
-          value={input}
-          onChangeText={setInput}
-          placeholder="#123 or https://github.com/owner/repo/pull/123"
-          placeholderTextColor={colors.textMuted}
-          autoCapitalize="none"
-          autoCorrect={false}
-          editable={!submitting}
-        />
-        {error ? <Text style={styles.error}>{error}</Text> : null}
         <Pressable
-          style={({ pressed }) => [
-            styles.submit,
-            (submitting || parsed === null) && styles.submitDisabled,
-            pressed && styles.submitPressed
-          ]}
-          disabled={submitting || parsed === null}
-          onPress={() => void submit()}
+          onPress={onCancel}
+          disabled={submitting}
+          accessibilityRole="button"
+          accessibilityLabel="Cancel"
+          hitSlop={8}
         >
-          {submitting ? (
-            <ActivityIndicator size="small" color={colors.bgBase} />
-          ) : (
-            <Text style={styles.submitText}>
-              {parsed ? `Link #${parsed}` : 'Link pull request'}
-            </Text>
-          )}
+          <Text style={styles.cancelText}>Cancel</Text>
         </Pressable>
       </View>
-    </BottomDrawer>
+      <Text style={styles.label}>PR number or GitHub URL</Text>
+      <TextInput
+        style={styles.input}
+        value={input}
+        onChangeText={setInput}
+        placeholder="#123 or https://github.com/owner/repo/pull/123"
+        placeholderTextColor={colors.textMuted}
+        autoCapitalize="none"
+        autoCorrect={false}
+        editable={!submitting}
+      />
+      {error ? <Text style={styles.error}>{error}</Text> : null}
+      <Pressable
+        style={({ pressed }) => [
+          styles.submit,
+          (submitting || parsed === null) && styles.submitDisabled,
+          pressed && styles.submitPressed
+        ]}
+        disabled={submitting || parsed === null}
+        onPress={() => void submit()}
+      >
+        {submitting ? (
+          <ActivityIndicator size="small" color={colors.bgBase} />
+        ) : (
+          <Text style={styles.submitText}>{parsed ? `Link #${parsed}` : 'Link pull request'}</Text>
+        )}
+      </Pressable>
+    </View>
   )
 }
 
 const styles = StyleSheet.create({
+  headingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: spacing.sm
+  },
   heading: {
     color: colors.textPrimary,
     fontSize: typography.bodySize,
-    fontWeight: '700',
-    marginBottom: spacing.sm
+    fontWeight: '700'
+  },
+  cancelText: {
+    color: colors.textSecondary,
+    fontSize: typography.metaSize,
+    fontWeight: '600'
   },
   label: {
     color: colors.textSecondary,
