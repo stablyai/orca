@@ -3,7 +3,6 @@ import {
   ActivityIndicator,
   Linking,
   Pressable,
-  ScrollView,
   StyleSheet,
   Switch,
   Text,
@@ -157,7 +156,10 @@ export function MobilePrComposeSheet({
 
   return (
     <BottomDrawer visible={visible} onClose={onClose}>
-      <ScrollView keyboardShouldPersistTaps="handled" style={styles.scroll}>
+      {/* Why: no nested ScrollView here — BottomDrawer already scrolls its children
+          inside a keyboard-aware container. A nested capped ScrollView cut off the
+          base picker, draft toggle, and Create button (unreachable with the keyboard up). */}
+      <View>
         <Text style={styles.heading}>Create {copy.titleLabel}</Text>
         <View style={styles.fieldRow}>
           <Text style={styles.label}>Title</Text>
@@ -222,7 +224,7 @@ export function MobilePrComposeSheet({
             <Text style={styles.submitText}>Create {copy.titleLabel}</Text>
           )}
         </Pressable>
-      </ScrollView>
+      </View>
     </BottomDrawer>
   )
 }
@@ -232,7 +234,6 @@ export function openMobilePrUrl(url: string): void {
 }
 
 const styles = StyleSheet.create({
-  scroll: { maxHeight: 460 },
   heading: {
     color: colors.textPrimary,
     fontSize: typography.bodySize,

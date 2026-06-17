@@ -1,13 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import {
-  ActivityIndicator,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Switch,
-  Text,
-  View
-} from 'react-native'
+import { ActivityIndicator, Pressable, StyleSheet, Switch, Text, View } from 'react-native'
 import { Check, Download } from 'lucide-react-native'
 import { BottomDrawer } from './BottomDrawer'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
@@ -139,7 +131,9 @@ export function MobileDictationSetupSheet({ visible, client, onClose, onReady }:
 
   return (
     <BottomDrawer visible={visible} onClose={onClose}>
-      <ScrollView keyboardShouldPersistTaps="handled" style={styles.scroll}>
+      {/* Why: BottomDrawer already scrolls its children in a keyboard-aware container;
+          a nested capped ScrollView cut off the lower controls. */}
+      <View>
         <Text style={styles.heading}>Set up voice dictation</Text>
         <Text style={styles.subtitle}>
           Download a model and enable dictation on your desktop — all from here.
@@ -227,13 +221,12 @@ export function MobileDictationSetupSheet({ visible, client, onClose, onReady }:
           </>
         )}
         {error ? <Text style={styles.error}>{error}</Text> : null}
-      </ScrollView>
+      </View>
     </BottomDrawer>
   )
 }
 
 const styles = StyleSheet.create({
-  scroll: { maxHeight: 460 },
   heading: {
     color: colors.textPrimary,
     fontSize: typography.bodySize,
