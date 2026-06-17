@@ -14,6 +14,7 @@ import {
   type PrSidebarLoadDeps,
   type PrSidebarState
 } from './mobile-pr-sidebar-state'
+import { fetchWorktreeLinkedPR } from '../source-control/mobile-pr-link'
 
 type PrSidebarControllerInput = {
   client: RpcClient | null
@@ -74,14 +75,17 @@ export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
     const seq = loadSeqRef.current + 1
     loadSeqRef.current = seq
     setState({ kind: 'loading' })
-    // forBranch (inside loadPrSidebarData) supplies the linked-PR hint; prForBranch
-    // is authoritative and a branch with no PR resolves to the `none` empty state.
-    const next = await loadPrSidebarData(deps, { worktreeId, branch, headSha })
+    // The worktree's persisted linkedPR is the fallback resolver so a closed/merged
+    // linked PR still shows when forBranch (open-only) finds nothing.
+    const linkedPR = client ? await fetchWorktreeLinkedPR(client, worktreeId) : null
+    // forBranch (inside loadPrSidebarData) supplies the open-PR hint; prForBranch is
+    // authoritative and a branch with no PR (and no linkedPR) resolves to `none`.
+    const next = await loadPrSidebarData(deps, { worktreeId, branch, headSha, linkedPR })
     // Stale-response guard: a slower earlier load must not clobber a newer one.
     if (shouldApplyResult(seq, loadSeqRef.current)) {
       setState(next)
     }
-  }, [buildDeps, branch, headSha, worktreeId])
+  }, [buildDeps, client, branch, headSha, worktreeId])
 
   const openPRSidebar = useCallback(() => {
     setShowPRSidebar(true)

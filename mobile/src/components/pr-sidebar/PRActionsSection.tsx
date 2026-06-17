@@ -1,16 +1,23 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
-import { GitMerge } from 'lucide-react-native'
+import { GitMerge, Link2Off } from 'lucide-react-native'
 import { colors } from '../../theme/mobile-theme'
 import type { GitHubPRMergeMethod, PRInfo } from '../../../../src/shared/types'
+import type { RpcClient } from '../../transport/rpc-client'
 import type { MobilePrActions } from '../../session/use-mobile-pr-actions'
+import { unlinkMobilePr } from '../../source-control/mobile-pr-link'
 import { ConfirmModal } from '../ConfirmModal'
 import { PRSection } from './PRSection'
+import { resolvePrActionAvailability } from './pr-actions-state'
 import { prActionsStyles as styles } from './pr-actions-styles'
 
 type Props = {
   pr: PRInfo
   actions: MobilePrActions
+  client: RpcClient | null
+  worktreeId: string
+  // Refetch after unlinking so the view returns to the create/link empty state.
+  onUnlinked: () => void
 }
 
 const MERGE_METHODS: { method: GitHubPRMergeMethod; label: string }[] = [
@@ -26,12 +33,13 @@ type Confirm =
 // Merge (with method picker), auto-merge toggle, and close/reopen. Destructive
 // actions route through ConfirmModal first (R5). The firing row shows a spinner
 // in place of its icon and disables; other rows stay interactive (uniform visual).
-export function PRActionsSection({ pr, actions }: Props) {
+export function PRActionsSection({ pr, actions, client, worktreeId, onUnlinked }: Props) {
   // Default merge method from the PR's repo settings, else 'squash' (host default).
   const [method, setMethod] = useState<GitHubPRMergeMethod>(
     pr.mergeMethodSettings?.defaultMethod ?? 'squash'
   )
   const [confirm, setConfirm] = useState<Confirm | null>(null)
+  const [unlinking, setUnlinking] = useState(false)
 
   // Only offer methods the repo allows; selecting a disabled method would make the
   // merge fail. Fall back to all methods when the repo settings are unknown.
@@ -50,10 +58,25 @@ export function PRActionsSection({ pr, actions }: Props) {
 
   const state = actions.resolveState(pr.state)
   const autoMerge = actions.resolveAutoMerge(pr.autoMergeEnabled ?? false)
-  const isOpen = state === 'open' || state === 'draft'
+  const avail = resolvePrActionAvailability(state)
   const mergeBusy = actions.isBusy({ kind: 'merge' })
   const autoMergeBusy = actions.isBusy({ kind: 'autoMerge' })
   const stateBusy = actions.isBusy({ kind: 'state' })
+
+  const unlink = useCallback(async (): Promise<void> => {
+    if (!client || unlinking) {
+      return
+    }
+    setUnlinking(true)
+    try {
+      const outcome = await unlinkMobilePr(client, worktreeId)
+      if (outcome.ok) {
+        onUnlinked()
+      }
+    } finally {
+      setUnlinking(false)
+    }
+  }, [client, onUnlinked, unlinking, worktreeId])
 
   const confirmCopy = (): { title: string; message: string; confirmLabel: string } => {
     if (confirm?.kind === 'merge') {
@@ -92,83 +115,114 @@ export function PRActionsSection({ pr, actions }: Props) {
 
   return (
     <PRSection title="Actions">
-      {/* Merge-method picker: one-step selection, then a single Merge CTA. */}
-      <View style={styles.methodRow}>
-        {availableMethods.map((m) => {
-          const selected = m.method === effectiveMethod
-          return (
-            <Pressable
-              key={m.method}
-              style={[styles.methodButton, selected && styles.methodButtonSelected]}
-              onPress={() => setMethod(m.method)}
-              disabled={mergeBusy}
-              accessibilityRole="button"
-              accessibilityState={{ selected }}
-              accessibilityLabel={`${m.label} merge method`}
-            >
-              <Text style={[styles.methodButtonText, selected && styles.methodButtonTextSelected]}>
-                {m.label}
-              </Text>
-            </Pressable>
-          )
-        })}
-      </View>
+      {/* Merge controls only while the PR can still be merged (open/draft). */}
+      {avail.canMerge ? (
+        <>
+          {/* Merge-method picker: one-step selection, then a single Merge CTA. */}
+          <View style={styles.methodRow}>
+            {availableMethods.map((m) => {
+              const selected = m.method === effectiveMethod
+              return (
+                <Pressable
+                  key={m.method}
+                  style={[styles.methodButton, selected && styles.methodButtonSelected]}
+                  onPress={() => setMethod(m.method)}
+                  disabled={mergeBusy}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected }}
+                  accessibilityLabel={`${m.label} merge method`}
+                >
+                  <Text
+                    style={[styles.methodButtonText, selected && styles.methodButtonTextSelected]}
+                  >
+                    {m.label}
+                  </Text>
+                </Pressable>
+              )
+            })}
+          </View>
 
-      <Pressable
-        style={[
-          styles.actionButton,
-          styles.actionButtonPrimary,
-          (mergeBusy || !isOpen) && styles.actionButtonDisabled
-        ]}
-        onPress={() => setConfirm({ kind: 'merge', method: effectiveMethod })}
-        disabled={mergeBusy || !isOpen}
-        accessibilityRole="button"
-        accessibilityLabel={`${methodLabel(effectiveMethod)} pull request`}
-      >
-        {mergeBusy ? (
-          <ActivityIndicator color={colors.bgBase} />
-        ) : (
-          <GitMerge size={16} color={colors.bgBase} strokeWidth={2.2} />
-        )}
-        <Text style={[styles.actionButtonText, styles.actionButtonTextPrimary]}>
-          {methodLabel(effectiveMethod)}
-        </Text>
-      </Pressable>
+          <Pressable
+            style={[
+              styles.actionButton,
+              styles.actionButtonPrimary,
+              mergeBusy && styles.actionButtonDisabled
+            ]}
+            onPress={() => setConfirm({ kind: 'merge', method: effectiveMethod })}
+            disabled={mergeBusy}
+            accessibilityRole="button"
+            accessibilityLabel={`${methodLabel(effectiveMethod)} pull request`}
+          >
+            {mergeBusy ? (
+              <ActivityIndicator color={colors.bgBase} />
+            ) : (
+              <GitMerge size={16} color={colors.bgBase} strokeWidth={2.2} />
+            )}
+            <Text style={[styles.actionButtonText, styles.actionButtonTextPrimary]}>
+              {methodLabel(effectiveMethod)}
+            </Text>
+          </Pressable>
+        </>
+      ) : null}
 
       {/* Auto-merge toggle — optimistic, reverts on transient failure. */}
-      <View style={styles.toggleRow}>
-        <Text style={styles.toggleLabel}>Auto-merge when ready</Text>
+      {avail.canAutoMerge ? (
+        <View style={styles.toggleRow}>
+          <Text style={styles.toggleLabel}>Auto-merge when ready</Text>
+          <Pressable
+            style={[styles.togglePill, autoMerge && styles.togglePillOn]}
+            onPress={() => actions.setAutoMerge(!autoMerge, effectiveMethod)}
+            disabled={autoMergeBusy}
+            accessibilityRole="switch"
+            accessibilityState={{ checked: autoMerge }}
+            accessibilityLabel="Toggle auto-merge"
+          >
+            {autoMergeBusy ? (
+              <ActivityIndicator color={colors.textSecondary} />
+            ) : (
+              <Text style={[styles.togglePillText, autoMerge && styles.togglePillTextOn]}>
+                {autoMerge ? 'On' : 'Off'}
+              </Text>
+            )}
+          </Pressable>
+        </View>
+      ) : null}
+
+      {/* Close (open PRs) / Reopen (closed PRs) — confirmed before firing (R5). */}
+      {avail.canClose || avail.canReopen ? (
         <Pressable
-          style={[styles.togglePill, autoMerge && styles.togglePillOn]}
-          onPress={() => actions.setAutoMerge(!autoMerge, effectiveMethod)}
-          disabled={autoMergeBusy || !isOpen}
-          accessibilityRole="switch"
-          accessibilityState={{ checked: autoMerge }}
-          accessibilityLabel="Toggle auto-merge"
+          style={[styles.actionButton, stateBusy && styles.actionButtonDisabled]}
+          onPress={() => setConfirm({ kind: 'state', state: avail.canClose ? 'closed' : 'open' })}
+          disabled={stateBusy}
+          accessibilityRole="button"
+          accessibilityLabel={avail.canClose ? 'Close pull request' : 'Reopen pull request'}
         >
-          {autoMergeBusy ? (
+          {stateBusy ? <ActivityIndicator color={colors.textSecondary} /> : null}
+          <Text
+            style={[styles.actionButtonText, avail.canClose && styles.actionButtonDestructiveText]}
+          >
+            {avail.canClose ? 'Close' : 'Reopen'}
+          </Text>
+        </Pressable>
+      ) : null}
+
+      {/* Unlink the PR from this worktree (always available for a linked PR). */}
+      {avail.canUnlink ? (
+        <Pressable
+          style={[styles.actionButton, unlinking && styles.actionButtonDisabled]}
+          onPress={() => void unlink()}
+          disabled={unlinking}
+          accessibilityRole="button"
+          accessibilityLabel="Unlink pull request"
+        >
+          {unlinking ? (
             <ActivityIndicator color={colors.textSecondary} />
           ) : (
-            <Text style={[styles.togglePillText, autoMerge && styles.togglePillTextOn]}>
-              {autoMerge ? 'On' : 'Off'}
-            </Text>
+            <Link2Off size={16} color={colors.textSecondary} strokeWidth={2.2} />
           )}
+          <Text style={styles.actionButtonText}>Unlink</Text>
         </Pressable>
-      </View>
-
-      {/* Close / reopen — confirmed before firing (R5). */}
-      <Pressable
-        style={[styles.actionButton, stateBusy && styles.actionButtonDisabled]}
-        onPress={() => setConfirm({ kind: 'state', state: isOpen ? 'closed' : 'open' })}
-        disabled={stateBusy}
-        accessibilityRole="button"
-        accessibilityLabel={isOpen ? 'Close pull request' : 'Reopen pull request'}
-      >
-        {stateBusy ? <ActivityIndicator color={colors.textSecondary} /> : null}
-        <Text style={[styles.actionButtonText, isOpen && styles.actionButtonDestructiveText]}>
-          {isOpen ? 'Close' : 'Reopen'}
-        </Text>
-      </Pressable>
+      ) : null}
 
       {actions.error ? <Text style={styles.actionError}>{actions.error}</Text> : null}
 

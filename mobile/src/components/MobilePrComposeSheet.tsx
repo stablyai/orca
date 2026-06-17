@@ -18,6 +18,9 @@ import type { RpcClient } from '../transport/rpc-client'
 import type { RpcSuccess } from '../transport/types'
 import { triggerError, triggerSuccess } from '../platform/haptics'
 import { createMobilePr } from '../source-control/mobile-pr-create'
+import { hostedReviewCopy } from '../source-control/hosted-review-copy'
+import { canSubmitPrCompose } from '../source-control/pr-compose-validation'
+import { MobilePrBasePicker } from './MobilePrBasePicker'
 
 type PrPrefill = {
   base: string
@@ -31,6 +34,8 @@ type Props = {
   client: RpcClient | null
   worktreeId: string
   prefill: PrPrefill
+  // Head branch — enables the base≠head guard and the "from <branch>" hint.
+  head?: string | null
   onClose: () => void
   onCreated: (url: string) => void
 }
@@ -43,9 +48,11 @@ export function MobilePrComposeSheet({
   client,
   worktreeId,
   prefill,
+  head,
   onClose,
   onCreated
 }: Props) {
+  const copy = hostedReviewCopy(prefill.provider)
   const [title, setTitle] = useState(prefill.title)
   const [body, setBody] = useState(prefill.body)
   const [base, setBase] = useState(prefill.base)
@@ -103,8 +110,14 @@ export function MobilePrComposeSheet({
     }
   }, [base, body, client, draft, generating, title, worktreeId])
 
+  // base≠head guard only when the head branch is known; otherwise fall back to
+  // requiring a non-empty title + base (the source-control caller omits head).
+  const canSubmit = head
+    ? canSubmitPrCompose(title, base, head)
+    : title.trim().length > 0 && base.trim().length > 0
+
   const submit = useCallback(async () => {
-    if (!client || submitting || title.trim().length === 0) {
+    if (!client || submitting || !canSubmit) {
       return
     }
     setSubmitting(true)
@@ -127,12 +140,23 @@ export function MobilePrComposeSheet({
     } finally {
       setSubmitting(false)
     }
-  }, [base, body, client, draft, onCreated, prefill.provider, submitting, title, worktreeId])
+  }, [
+    base,
+    body,
+    canSubmit,
+    client,
+    draft,
+    onCreated,
+    prefill.provider,
+    submitting,
+    title,
+    worktreeId
+  ])
 
   return (
     <BottomDrawer visible={visible} onClose={onClose}>
       <ScrollView keyboardShouldPersistTaps="handled" style={styles.scroll}>
-        <Text style={styles.heading}>Create Pull Request</Text>
+        <Text style={styles.heading}>Create {copy.titleLabel}</Text>
         <View style={styles.fieldRow}>
           <Text style={styles.label}>Title</Text>
           <Pressable
@@ -152,18 +176,18 @@ export function MobilePrComposeSheet({
           style={styles.titleInput}
           value={title}
           onChangeText={setTitle}
-          placeholder="Pull request title"
+          placeholder={`${copy.titleLabel} title`}
           placeholderTextColor={colors.textMuted}
           editable={!submitting}
         />
-        <Text style={styles.label}>Base branch</Text>
-        <TextInput
-          style={styles.titleInput}
+        <Text style={styles.label}>
+          Base branch{head ? <Text style={styles.headHint}> ← {head}</Text> : null}
+        </Text>
+        <MobilePrBasePicker
+          client={client}
+          worktreeId={worktreeId}
           value={base}
-          onChangeText={setBase}
-          placeholder="main"
-          placeholderTextColor={colors.textMuted}
-          autoCapitalize="none"
+          onChange={setBase}
           editable={!submitting}
         />
         <Text style={styles.label}>Description</Text>
@@ -184,16 +208,16 @@ export function MobilePrComposeSheet({
         <Pressable
           style={({ pressed }) => [
             styles.submit,
-            (submitting || title.trim().length === 0) && styles.submitDisabled,
+            (submitting || !canSubmit) && styles.submitDisabled,
             pressed && styles.submitPressed
           ]}
-          disabled={submitting || title.trim().length === 0}
+          disabled={submitting || !canSubmit}
           onPress={() => void submit()}
         >
           {submitting ? (
             <ActivityIndicator size="small" color={colors.bgBase} />
           ) : (
-            <Text style={styles.submitText}>Create Pull Request</Text>
+            <Text style={styles.submitText}>Create {copy.titleLabel}</Text>
           )}
         </Pressable>
       </ScrollView>
@@ -234,6 +258,7 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm
   },
   genButtonPressed: { opacity: 0.7 },
+  headHint: { color: colors.textMuted, fontFamily: typography.monoFamily },
   titleInput: {
     backgroundColor: colors.bgRaised,
     borderRadius: radii.input,

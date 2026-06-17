@@ -161,6 +161,7 @@ function PrSidebarContent({
         client={client}
         worktreeId={worktreeId}
         actions={actions}
+        refetch={refetch}
       />
     )
   }
@@ -171,17 +172,25 @@ function PrSidebarSections({
   data,
   client,
   worktreeId,
-  actions
+  actions,
+  refetch
 }: {
   data: Extract<PrSidebarState, { kind: 'ready' }>['data']
   client: RpcClient | null
   worktreeId: string
   actions: MobilePrActions
+  refetch: () => void
 }) {
   return (
     <>
       <PRSidebarHeader pr={data.pr} details={data.details} />
-      <PRActionsSection pr={data.pr} actions={actions} />
+      <PRActionsSection
+        pr={data.pr}
+        actions={actions}
+        client={client}
+        worktreeId={worktreeId}
+        onUnlinked={refetch}
+      />
       <PRReviewersSection
         details={data.details}
         actions={actions}

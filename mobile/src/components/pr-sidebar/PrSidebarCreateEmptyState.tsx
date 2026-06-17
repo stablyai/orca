@@ -1,10 +1,11 @@
 import { useState } from 'react'
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
-import { GitPullRequest } from 'lucide-react-native'
+import { GitPullRequest, Link2 } from 'lucide-react-native'
 import { colors } from '../../theme/mobile-theme'
 import type { RpcClient } from '../../transport/rpc-client'
 import { resolveMobilePrPrefill, type MobilePrPrefill } from '../../source-control/mobile-pr-create'
 import { MobilePrComposeSheet, openMobilePrUrl } from '../MobilePrComposeSheet'
+import { MobileLinkPrSheet } from './MobileLinkPrSheet'
 import { prActionsStyles as actionStyles } from './pr-actions-styles'
 import { mobilePrSidebarStyles as styles } from './mobile-pr-sidebar-styles'
 
@@ -16,13 +17,14 @@ type Props = {
   onCreated: () => void
 }
 
-// Empty state for a branch with no PR: a Create-PR affordance mirroring the desktop
-// create flow. Tapping resolves the hosted-review prefill (provider/base/title/body
-// — provider-agnostic, so GitLab etc. work) and opens the compose sheet; the host's
-// create validates branch state (pushing as needed) and surfaces errors in the sheet.
+// Empty state for a branch with no PR: offers both Create and Link (desktop parity).
+// Create resolves the hosted-review prefill (provider/base/title/body — provider-
+// agnostic) and opens the compose sheet; Link opens a number/URL sheet that persists
+// linkedPR via worktree.set. Both refetch the sidebar on success.
 export function PrSidebarCreateEmptyState({ client, worktreeId, gitBranch, onCreated }: Props) {
   const [prefill, setPrefill] = useState<MobilePrPrefill | null>(null)
-  const [sheetVisible, setSheetVisible] = useState(false)
+  const [composeVisible, setComposeVisible] = useState(false)
+  const [linkVisible, setLinkVisible] = useState(false)
   const [loading, setLoading] = useState(false)
 
   const openComposer = async (): Promise<void> => {
@@ -43,7 +45,7 @@ export function PrSidebarCreateEmptyState({ client, worktreeId, gitBranch, onCre
         behind: 0
       })
       setPrefill(resolved)
-      setSheetVisible(true)
+      setComposeVisible(true)
     } finally {
       setLoading(false)
     }
@@ -74,20 +76,42 @@ export function PrSidebarCreateEmptyState({ client, worktreeId, gitBranch, onCre
           Create pull request
         </Text>
       </Pressable>
+      <Pressable
+        style={[actionStyles.actionButton, !client && actionStyles.actionButtonDisabled]}
+        onPress={() => setLinkVisible(true)}
+        disabled={!client}
+        accessibilityRole="button"
+        accessibilityLabel="Link existing pull request"
+      >
+        <Link2 size={16} color={colors.textPrimary} strokeWidth={2.2} />
+        <Text style={actionStyles.actionButtonText}>Link existing pull request</Text>
+      </Pressable>
+
       {prefill ? (
         <MobilePrComposeSheet
-          visible={sheetVisible}
+          visible={composeVisible}
           client={client}
           worktreeId={worktreeId}
           prefill={prefill}
-          onClose={() => setSheetVisible(false)}
+          head={gitBranch}
+          onClose={() => setComposeVisible(false)}
           onCreated={(url) => {
-            setSheetVisible(false)
+            setComposeVisible(false)
             openMobilePrUrl(url)
             onCreated()
           }}
         />
       ) : null}
+      <MobileLinkPrSheet
+        visible={linkVisible}
+        client={client}
+        worktreeId={worktreeId}
+        onClose={() => setLinkVisible(false)}
+        onLinked={() => {
+          setLinkVisible(false)
+          onCreated()
+        }}
+      />
     </View>
   )
 }

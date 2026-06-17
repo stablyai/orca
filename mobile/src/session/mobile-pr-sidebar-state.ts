@@ -1,5 +1,6 @@
 import type { GitHubWorkItemDetails, PRCheckDetail, PRInfo } from '../../../src/shared/types'
 import type { GitHubPrReadOutcome, GitHubPrRepoSlug } from './github-pr-rpc'
+import { resolveLinkedPrNumber } from './mobile-pr-sidebar-resolve'
 
 // Pure state machine for the mobile PR sidebar. Kept free of React/native imports
 // so the transitions are unit-testable under the node Vitest config (KTD5).
@@ -73,10 +74,14 @@ export async function loadPrSidebarData(
     branch: string
     headSha?: string | null
     prRepo?: GitHubPrRepoSlug | null
+    // The worktree's persisted linkedPR — fallback hint so a closed/merged linked
+    // PR is still fetched and shown when the branch lookup finds no open PR.
+    linkedPR?: number | null
   }
 ): Promise<PrSidebarState> {
   const hintOutcome = await deps.fetchForBranch(args.worktreeId, { branch: args.branch })
-  const linkedPRNumber = hintOutcome.ok && hintOutcome.result ? hintOutcome.result.number : null
+  const branchHint = hintOutcome.ok && hintOutcome.result ? hintOutcome.result.number : null
+  const linkedPRNumber = resolveLinkedPrNumber(branchHint, args.linkedPR)
 
   const prOutcome = await deps.fetchPRForBranch(args.worktreeId, {
     branch: args.branch,
