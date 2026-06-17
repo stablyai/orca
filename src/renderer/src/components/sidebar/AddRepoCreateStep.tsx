@@ -60,6 +60,8 @@ export function CreateStep({
   // collapsed defaults makes the create flow look impossible.
   const [advancedOpen, setAdvancedOpen] = useState(manualParentEntry)
 
+  // Why: SSH hosts report "unknown"; only a confirmed Git miss should block
+  // Git-only creation.
   const canSubmit =
     createName.trim().length > 0 &&
     createParent.trim().length > 0 &&

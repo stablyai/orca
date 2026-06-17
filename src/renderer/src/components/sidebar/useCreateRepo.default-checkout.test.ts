@@ -81,6 +81,11 @@ vi.mock('@/runtime/runtime-rpc-client', () => ({
   callRuntimeRpc: mocks.callRuntimeRpc
 }))
 
+const STATE_NAME = 0
+const STATE_PARENT_PATH = 1
+const STATE_ERROR_MESSAGE = 2
+const STATE_IS_CREATING = 3
+
 function makeRepo(overrides: Partial<Repo> = {}): Repo {
   return {
     id: 'repo-created',
@@ -98,7 +103,11 @@ describe('useCreateRepo default-checkout handoff', () => {
     vi.clearAllMocks()
     mocks.stateIndex = 0
     mocks.stateSetters = []
-    mocks.stateValues = ['created', '/projects', null, false]
+    mocks.stateValues = []
+    mocks.stateValues[STATE_NAME] = 'created'
+    mocks.stateValues[STATE_PARENT_PATH] = '/projects'
+    mocks.stateValues[STATE_ERROR_MESSAGE] = null
+    mocks.stateValues[STATE_IS_CREATING] = false
     mocks.storeState.repos = []
     mocks.storeState.projects = []
     mocks.storeState.projectHostSetups = []
@@ -151,7 +160,7 @@ describe('useCreateRepo default-checkout handoff', () => {
     const result = useCreateRepo(mocks.fetchWorktrees, vi.fn(), mocks.onGitRepoReady)
     await expect(result.handlePickParent()).resolves.toBe(pickedDir)
 
-    expect(mocks.stateSetters[1]).toHaveBeenCalledWith(pickedDir)
+    expect(mocks.stateSetters[STATE_PARENT_PATH]).toHaveBeenCalledWith(pickedDir)
   })
 
   it('does not return a parent path when the runtime target blocks the local picker', async () => {
@@ -163,7 +172,7 @@ describe('useCreateRepo default-checkout handoff', () => {
     await expect(result.handlePickParent()).resolves.toBeNull()
 
     expect(window.api.repos.pickDirectory).not.toHaveBeenCalled()
-    expect(mocks.stateSetters[1]).not.toHaveBeenCalled()
+    expect(mocks.stateSetters[STATE_PARENT_PATH]).not.toHaveBeenCalled()
   })
 
   it('continues to completion when refresh is not authoritative after create', async () => {
@@ -179,7 +188,7 @@ describe('useCreateRepo default-checkout handoff', () => {
       requireAuthoritative: true
     })
     expect(mocks.onGitRepoReady).toHaveBeenCalledWith(repo.id)
-    expect(mocks.stateSetters[2]).not.toHaveBeenCalledWith(
+    expect(mocks.stateSetters[STATE_ERROR_MESSAGE]).not.toHaveBeenCalledWith(
       'Could not refresh project worktrees. Try again.'
     )
   })

@@ -53,7 +53,10 @@ describe('CreateStep', () => {
   })
 
   it('shows the Git-required explanation in the collapsed summary', () => {
-    const html = renderCreateStep({ gitAvailability: 'unavailable' })
+    const html = renderCreateStep({
+      createName: 'demo-project',
+      gitAvailability: 'unavailable'
+    })
 
     expect(html).toContain('Git repository in ~/orca/projects')
     expect(html).toContain('Git is required to create a project.')

@@ -98,12 +98,15 @@ export function useCreateRepo(
             ...useAppStore.getState().settings,
             activeRuntimeEnvironmentId: null
           })
+      // Why: Create Project is intentionally Git-only; non-Git folders use the
+      // existing add-folder flows instead of this path.
+      const createKind = 'git' as const
       const result = options.sshTargetId
         ? await window.api.repos.createRemote({
             connectionId: options.sshTargetId,
             parentPath,
             name,
-            kind: 'git'
+            kind: createKind
           })
         : target.kind === 'environment'
           ? await callRuntimeRpc<{ repo: Repo } | { error: string }>(
@@ -112,14 +115,14 @@ export function useCreateRepo(
               {
                 parentPath,
                 name,
-                kind: 'git'
+                kind: createKind
               },
               { timeoutMs: 60_000 }
             )
           : await window.api.repos.create({
               parentPath,
               name,
-              kind: 'git'
+              kind: createKind
             })
       // Why: if the user closed the dialog or clicked Back mid-create,
       // createGenRef was bumped by resetCreateState. Ignore stale results.
