@@ -3978,6 +3978,44 @@ describe('Store', () => {
     })
   })
 
+  it('updateUI skips save and notification when normalized UI is unchanged', async () => {
+    vi.useFakeTimers()
+    try {
+      const store = await createStore()
+      const notifications: PersistedState['ui'][] = []
+      store.updateUI({
+        sidebarWidth: 400,
+        showDotfilesByWorktree: { 'repo-1::/repo': false },
+        featureTipsSeenIds: ['voice-dictation'],
+        contextualToursSeenIds: ['tasks'],
+        featureInteractions: {
+          tasks: { firstInteractedAt: 100, interactionCount: 1 }
+        }
+      })
+      vi.advanceTimersByTime(300)
+      await store.waitForPendingWrite()
+      const persistedBefore = readFileSync(dataFile(), 'utf-8')
+      store.onUIChanged((ui) => notifications.push(ui))
+
+      store.updateUI({
+        sidebarWidth: 400,
+        showDotfilesByWorktree: { 'repo-1::/repo': false },
+        featureTipsSeenIds: ['voice-dictation'],
+        contextualToursSeenIds: ['tasks'],
+        featureInteractions: {
+          tasks: { firstInteractedAt: 100, interactionCount: 1 }
+        }
+      })
+      vi.advanceTimersByTime(300)
+      await store.waitForPendingWrite()
+
+      expect(notifications).toEqual([])
+      expect(readFileSync(dataFile(), 'utf-8')).toBe(persistedBefore)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('migrates missing rightSidebarOpen from the legacy default setting', async () => {
     writeDataFile({
       schemaVersion: 1,
