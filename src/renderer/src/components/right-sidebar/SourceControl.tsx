@@ -197,6 +197,10 @@ import {
   type SourceControlRowOpenEvent
 } from './source-control-split-open'
 import { SourceControlAgentActionDialog } from './SourceControlAgentActionDialog'
+import {
+  isPullPolicyRemoteActionError,
+  PullPolicyRemoteActionNotice
+} from './source-control-pull-policy-error-notice'
 import { SourceControlTextGenerationDialog } from './SourceControlTextGenerationDialog'
 import { CreateHostedReviewComposer } from './CreateHostedReviewComposer'
 import {
@@ -6356,7 +6360,9 @@ export function CommitArea({
           </DialogContent>
         </Dialog>
       )}
-      {remoteActionError && (
+      {remoteActionError && isPullPolicyRemoteActionError(remoteActionError) ? (
+        <PullPolicyRemoteActionNotice id="commit-area-remote-error" />
+      ) : remoteActionError ? (
         <p
           id="commit-area-remote-error"
           role="alert"
@@ -6365,7 +6371,7 @@ export function CommitArea({
         >
           {remoteActionError}
         </p>
-      )}
+      ) : null}
       {createPrIntentNotice && (
         <div
           id="commit-area-create-pr-intent"

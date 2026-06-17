@@ -28,7 +28,7 @@ import {
 import { refreshLocalBaseRefForWorktreeCreateOp } from './git-handler-local-base-ref-refresh'
 import { checkIgnoredPathsOp, detectConflictOperation, getStatusOp } from './git-handler-status-ops'
 import { resolveRelayPushTarget } from './git-handler-push-target'
-import { normalizeGitErrorMessage, isNoUpstreamError } from '../shared/git-remote-error'
+import { isNoUpstreamError, normalizeGitErrorMessage } from '../shared/git-remote-error'
 import { upstreamOnlyCommitsArePatchEquivalent } from '../shared/git-upstream-status'
 import { assertGitPushTargetShape } from '../shared/git-push-target-validation'
 import { getPublishTargetStatus, type GitCommandRunner } from '../shared/git-publish-target-status'
@@ -658,8 +658,8 @@ export class GitHandler {
   }
 
   private async pull(params: Record<string, unknown>) {
-    // Why: plain `git pull` uses the user's configured pull strategy (merge by
-    // default) so diverged branches reconcile instead of erroring out.
+    // Why: plain `git pull` honors the user's configured merge/rebase/ff policy.
+    // If no policy exists, Git's policy error is normalized with setup guidance.
     await this.pullWithArgs(params, [])
   }
 
