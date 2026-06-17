@@ -10,7 +10,6 @@ import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-cl
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import type { Repo } from '../../../../shared/types'
 import { translate } from '@/i18n/i18n'
-import type { RepoKind } from './create-project-defaults'
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
 import { upsertAddedRepoWithProjectHostSetup } from './add-repo-store-upsert'
 
@@ -29,7 +28,6 @@ export function useCreateRepo(
 ) {
   const [createName, setCreateName] = useState('')
   const [createParent, setCreateParent] = useState('')
-  const [createKind, setCreateKind] = useState<RepoKind>('git')
   const [createError, setCreateError] = useState<string | null>(null)
   const [isCreating, setIsCreating] = useState(false)
   const mountedRef = useMountedRef()
@@ -46,7 +44,6 @@ export function useCreateRepo(
     createGenRef.current++
     setCreateName('')
     setCreateParent('')
-    setCreateKind('git')
     setCreateError(null)
     setIsCreating(false)
   }, [])
@@ -106,7 +103,7 @@ export function useCreateRepo(
             connectionId: options.sshTargetId,
             parentPath,
             name,
-            kind: createKind
+            kind: 'git'
           })
         : target.kind === 'environment'
           ? await callRuntimeRpc<{ repo: Repo } | { error: string }>(
@@ -115,14 +112,14 @@ export function useCreateRepo(
               {
                 parentPath,
                 name,
-                kind: createKind
+                kind: 'git'
               },
               { timeoutMs: 60_000 }
             )
           : await window.api.repos.create({
               parentPath,
               name,
-              kind: createKind
+              kind: 'git'
             })
       // Why: if the user closed the dialog or clicked Back mid-create,
       // createGenRef was bumped by resetCreateState. Ignore stale results.
@@ -218,7 +215,6 @@ export function useCreateRepo(
   }, [
     createName,
     createParent,
-    createKind,
     fetchWorktrees,
     mountedRef,
     closeModal,
@@ -230,12 +226,10 @@ export function useCreateRepo(
   return {
     createName,
     createParent,
-    createKind,
     createError,
     isCreating,
     setCreateName,
     setCreateParent,
-    setCreateKind,
     setCreateError,
     resetCreateState,
     handlePickParent,

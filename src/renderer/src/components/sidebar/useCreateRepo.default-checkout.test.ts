@@ -98,7 +98,7 @@ describe('useCreateRepo default-checkout handoff', () => {
     vi.clearAllMocks()
     mocks.stateIndex = 0
     mocks.stateSetters = []
-    mocks.stateValues = ['created', '/projects', 'git', null, false]
+    mocks.stateValues = ['created', '/projects', null, false]
     mocks.storeState.repos = []
     mocks.storeState.projects = []
     mocks.storeState.projectHostSetups = []
@@ -179,16 +179,15 @@ describe('useCreateRepo default-checkout handoff', () => {
       requireAuthoritative: true
     })
     expect(mocks.onGitRepoReady).toHaveBeenCalledWith(repo.id)
-    expect(mocks.stateSetters[3]).not.toHaveBeenCalledWith(
+    expect(mocks.stateSetters[2]).not.toHaveBeenCalledWith(
       'Could not refresh project worktrees. Try again.'
     )
   })
 
-  it('marks onboarding folder progress when a created folder project opens', async () => {
+  it('opens an existing folder project returned by create dedupe', async () => {
     const repo = makeRepo({ kind: 'folder' })
     const worktree = { id: `${repo.id}::/projects/created` }
     const closeModal = vi.fn()
-    mocks.stateValues = ['created', '/projects', 'folder', null, false]
     mocks.createRepo.mockResolvedValue({ repo })
     mocks.fetchWorktrees.mockImplementation(async (repoId: string) => {
       mocks.storeState.worktreesByRepo = { [repoId]: [worktree] }
@@ -202,7 +201,7 @@ describe('useCreateRepo default-checkout handoff', () => {
     expect(mocks.createRepo).toHaveBeenCalledWith({
       parentPath: '/projects',
       name: 'created',
-      kind: 'folder'
+      kind: 'git'
     })
     expect(mocks.fetchWorktrees).toHaveBeenCalledWith(repo.id)
     expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith(worktree.id, {
