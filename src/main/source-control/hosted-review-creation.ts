@@ -12,6 +12,12 @@ import {
   normalizeHostedReviewBaseRef,
   normalizeHostedReviewHeadRef
 } from '../../shared/hosted-review-refs'
+import {
+  supportsHostedReviewCreation,
+  type HostedReviewCreationProvider
+} from '../../shared/hosted-review-creation-providers'
+import { isAzureDevOpsReviewCreationAuthenticated } from '../azure-devops/pull-request-creation'
+import { isGiteaReviewCreationAuthenticated } from '../gitea/pull-request-creation'
 import { acquire, ghExecFileAsync, gitExecFileAsync, release } from '../github/gh-utils'
 import { isNoUpstreamError, normalizeGitErrorMessage } from '../../shared/git-remote-error'
 import type { GitUpstreamStatus } from '../../shared/types'
@@ -185,22 +191,57 @@ async function getHostedReviewUpstreamStatus(
 function reviewCopy(provider: HostedReviewProvider): {
   shortLabel: 'PR' | 'MR'
   reviewLabel: 'pull request' | 'merge request'
-  providerName: 'GitHub' | 'GitLab'
-  authCommand: 'gh auth login' | 'glab auth login'
+  providerName: string
+  authInstruction: string
 } {
-  return provider === 'gitlab'
-    ? {
-        shortLabel: 'MR',
-        reviewLabel: 'merge request',
-        providerName: 'GitLab',
-        authCommand: 'glab auth login'
-      }
-    : {
-        shortLabel: 'PR',
-        reviewLabel: 'pull request',
-        providerName: 'GitHub',
-        authCommand: 'gh auth login'
-      }
+  if (provider === 'gitlab') {
+    return {
+      shortLabel: 'MR',
+      reviewLabel: 'merge request',
+      providerName: 'GitLab',
+      authInstruction: 'Run glab auth login'
+    }
+  }
+  if (provider === 'azure-devops') {
+    return {
+      shortLabel: 'PR',
+      reviewLabel: 'pull request',
+      providerName: 'Azure DevOps',
+      authInstruction: 'Set ORCA_AZURE_DEVOPS_TOKEN'
+    }
+  }
+  if (provider === 'gitea') {
+    return {
+      shortLabel: 'PR',
+      reviewLabel: 'pull request',
+      providerName: 'Gitea',
+      authInstruction: 'Set ORCA_GITEA_TOKEN'
+    }
+  }
+  return {
+    shortLabel: 'PR',
+    reviewLabel: 'pull request',
+    providerName: 'GitHub',
+    authInstruction: 'Run gh auth login'
+  }
+}
+
+async function isProviderAuthenticated(
+  provider: HostedReviewCreationProvider,
+  repoPath: string,
+  connectionId?: string | null,
+  options: HostedReviewExecutionOptions = {}
+): Promise<boolean> {
+  if (provider === 'gitlab') {
+    return isGitLabAuthenticated(repoPath, connectionId, options)
+  }
+  if (provider === 'azure-devops') {
+    return isAzureDevOpsReviewCreationAuthenticated()
+  }
+  if (provider === 'gitea') {
+    return isGiteaReviewCreationAuthenticated()
+  }
+  return isGitHubAuthenticated(repoPath, connectionId, options)
 }
 
 function blockedCreateResultForReason(
@@ -212,7 +253,7 @@ function blockedCreateResultForReason(
     auth_required: {
       ok: false,
       code: 'auth_required',
-      error: `Create ${copy.shortLabel} failed: ${copy.providerName} is not authenticated. Next step: run ${copy.authCommand} in this environment.`
+      error: `Create ${copy.shortLabel} failed: ${copy.providerName} is not authenticated. Next step: ${copy.authInstruction} in this environment.`
     },
     unsupported_provider: {
       ok: false,
@@ -375,7 +416,7 @@ export async function getHostedReviewCreationEligibility(
       nextAction: 'open_existing_review'
     }
   }
-  if (provider !== 'github' && provider !== 'gitlab') {
+  if (!supportsHostedReviewCreation(provider)) {
     return {
       ...baseResult,
       canCreate: false,
@@ -398,10 +439,12 @@ export async function getHostedReviewCreationEligibility(
   if ((args.behind ?? 0) > 0) {
     return { ...baseResult, canCreate: false, blockedReason: 'needs_sync', nextAction: 'sync' }
   }
-  const authenticated =
-    provider === 'gitlab'
-      ? await isGitLabAuthenticated(args.repoPath, args.connectionId, args)
-      : await isGitHubAuthenticated(args.repoPath, args.connectionId, args)
+  const authenticated = await isProviderAuthenticated(
+    provider,
+    args.repoPath,
+    args.connectionId,
+    args
+  )
   if (!authenticated) {
     return {
       ...baseResult,
@@ -422,7 +465,7 @@ export async function createHostedReview(
   connectionId?: string | null,
   options: HostedReviewExecutionOptions = {}
 ): Promise<CreateHostedReviewResult> {
-  if (input.provider !== 'github' && input.provider !== 'gitlab') {
+  if (!supportsHostedReviewCreation(input.provider)) {
     return {
       ok: false,
       code: 'unsupported_provider',

@@ -17,6 +17,12 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* Why: hover-reveal controls (sidebar/row action buttons) hide with `opacity-0`
+   and fade in via `group-hover`. Touch devices have no hover, so those controls
+   stay invisible. Gate the hide behind `can-hover:` so touch (hover: none) keeps
+   them visible while pointer devices preserve the reveal-on-hover behavior. */
+@custom-variant can-hover (@media (hover: hover));
+
 .theme-transition-disabled *,
 .theme-transition-disabled *::before,
 .theme-transition-disabled *::after {
@@ -317,7 +323,11 @@
     margin: 0;
     padding: 0;
     overflow: hidden;
-    height: 100vh;
+    /* Why: dvh tracks the visible viewport so the web app shell isn't taller
+       than the screen when a mobile browser's URL bar is shown (100vh = the
+       large viewport, which forces a ~40-100px scroll). In Electron there is
+       no browser chrome, so dvh resolves identically to the window height. */
+    height: 100dvh;
     font-family: var(
       --app-font-family,
       'Geist',
@@ -506,7 +516,7 @@
 /* ── Layout ──────────────────────────────────────────── */
 
 #root {
-  height: 100vh;
+  height: 100dvh;
   width: 100vw;
   overflow: hidden;
 }
@@ -514,7 +524,7 @@
 .app-layout {
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  height: 100dvh;
   width: 100vw;
   overflow: hidden;
 }
@@ -1020,14 +1030,32 @@
 .mobile-emulator-tab-intro-callout--menu::before {
   content: '';
   position: absolute;
-  top: -5px;
-  left: 0.75rem;
-  width: 10px;
-  height: 10px;
-  transform: rotate(45deg);
-  border-left: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
-  border-top: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
-  background: color-mix(in srgb, var(--card) 80%, var(--background));
+  top: -7px;
+  left: 0.8125rem;
+  border-style: solid;
+  border-width: 0 7px 7px;
+  /* Why: use foreground + border to create a subtle shadow that adapts to theme */
+  border-color: transparent transparent color-mix(in srgb, var(--foreground) 10%, var(--border))
+    transparent;
+}
+
+.mobile-emulator-tab-intro-callout--menu::after {
+  content: '';
+  position: absolute;
+  top: -6px;
+  left: 0.8125rem;
+  border-style: solid;
+  border-width: 0 6px 6px;
+  border-color: transparent transparent var(--muted) transparent;
+}
+
+.dark .mobile-emulator-tab-intro-callout--menu::before {
+  /* Why: use foreground + border to create a subtle shadow that adapts to theme */
+  border-bottom-color: color-mix(in srgb, var(--foreground) 12%, var(--border));
+}
+
+.dark .mobile-emulator-tab-intro-callout--menu::after {
+  border-bottom-color: color-mix(in srgb, var(--accent) 80%, transparent);
 }
 
 /* Why: anchor the optional setup card over the emulator without blurring the
@@ -1378,6 +1406,26 @@
   animation-name: workspace-kanban-sheet-out;
   animation-duration: 200ms;
   animation-timing-function: cubic-bezier(0.7, 0, 0.84, 0);
+}
+
+/* Why: this board is attached to the worktree sidebar, not floating above it;
+   the generic Sheet elevation casts a haze over the sidebar when left open. */
+.workspace-kanban-sheet-content {
+  box-shadow: inset 1px 0 0 color-mix(in srgb, var(--worktree-sidebar-border) 80%, transparent);
+  backdrop-filter: none;
+}
+
+/* Why: a sidebar-card drag should advertise the board as a possible drop
+   surface without fully committing the companion panel until the pointer enters it. */
+.workspace-kanban-sheet-content[data-workspace-board-drag-preview='true'] {
+  background: color-mix(in srgb, var(--worktree-sidebar) 88%, var(--background));
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--sidebar-ring) 58%, transparent),
+    0 10px 24px color-mix(in srgb, var(--foreground) 12%, transparent);
+}
+
+.workspace-kanban-sheet-content[data-workspace-board-drag-preview='true'] > * {
+  opacity: 0.42;
 }
 
 @keyframes workspace-kanban-sheet-in {

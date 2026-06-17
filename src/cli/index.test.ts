@@ -153,6 +153,13 @@ describe('orca root help', () => {
     expect(logSpy.mock.calls[0][0]).toContain(
       'project setup-delete      Remove a project host setup'
     )
+    expect(logSpy.mock.calls[0][0]).toContain('Agent Sessions And Worktrees:')
+    expect(logSpy.mock.calls[0][0]).toContain(
+      '`worktree create --agent` creates a new checkout/workspace with an agent.'
+    )
+    expect(logSpy.mock.calls[0][0]).toContain(
+      'orca terminal create --worktree active --command "codex"'
+    )
     expect(callMock).not.toHaveBeenCalled()
   })
 
@@ -211,6 +218,28 @@ describe('orca root help', () => {
     const setHelp = String(logSpy.mock.calls[0][0])
     expect(setHelp).toContain('--linear-issue <identifier-or-url|null>')
     expect(setHelp).toContain('--linear-issue <id|url|null> Linked Linear issue identifier or URL')
+    expect(callMock).not.toHaveBeenCalled()
+  })
+
+  it('distinguishes new worktrees from fresh agent terminals in command help', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    logSpy.mockClear()
+
+    await main(['worktree', 'create', '--help'], '/tmp/repo')
+
+    expect(String(logSpy.mock.calls[0][0])).toContain('This creates a new checkout/workspace')
+    expect(String(logSpy.mock.calls[0][0])).toContain(
+      'orca terminal create --worktree active --command "codex"'
+    )
+
+    logSpy.mockClear()
+    await main(['terminal', 'create', '--help'], '/tmp/repo')
+
+    const terminalHelp = String(logSpy.mock.calls[0][0])
+    expect(terminalHelp).toContain('Use this, not worktree create')
+    expect(terminalHelp).toContain(
+      'orca terminal create --worktree active --command "codex" --json'
+    )
     expect(callMock).not.toHaveBeenCalled()
   })
 })

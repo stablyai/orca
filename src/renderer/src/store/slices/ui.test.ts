@@ -788,6 +788,19 @@ describe('createUISlice hydratePersistedUI', () => {
     expect(setUI).toHaveBeenCalledWith({ workspaceHostOrder: ['ssh:win%20vm', 'local'] })
   })
 
+  it('persists group changes with collapsed groups cleared', () => {
+    const setUI = vi.fn(() => Promise.resolve())
+    vi.stubGlobal('window', { api: { ui: { set: setUI } } })
+    const store = createUIStore()
+
+    store.setState({ collapsedGroups: new Set(['repo:old']) })
+    store.getState().setGroupBy('none')
+
+    expect(store.getState().groupBy).toBe('none')
+    expect([...store.getState().collapsedGroups]).toEqual([])
+    expect(setUI).toHaveBeenCalledWith({ groupBy: 'none', collapsedGroups: [] })
+  })
+
   it('hydrates persisted per-worktree dotfile visibility', () => {
     const store = createUIStore()
 
@@ -804,6 +817,42 @@ describe('createUISlice hydratePersistedUI', () => {
       'repo-1::/repo': false,
       'repo-2::/repo': true
     })
+  })
+
+  it('does not churn persisted UI references when hydration is identical by value', () => {
+    const store = createUIStore()
+    const persistedUI = makePersistedUI({
+      featureTipsSeenIds: ['voice-dictation'],
+      contextualToursSeenIds: ['tasks'],
+      showDotfilesByWorktree: { 'repo-1::/repo': false },
+      collapsedGroups: ['repo:one'],
+      workspaceHostOrder: ['local'],
+      worktreeCardProperties: ['status', 'unread', 'ports'],
+      acknowledgedAgentsByPaneKey: { 'tab-1::pane-1': Date.now() }
+    })
+
+    store.getState().hydratePersistedUI(persistedUI)
+    const before = store.getState()
+    const references = {
+      acknowledgedAgentsByPaneKey: before.acknowledgedAgentsByPaneKey,
+      featureTipsSeenIds: before.featureTipsSeenIds,
+      contextualToursSeenIds: before.contextualToursSeenIds,
+      workspaceHostOrder: before.workspaceHostOrder,
+      showDotfilesByWorktree: before.showDotfilesByWorktree,
+      collapsedGroups: before.collapsedGroups,
+      worktreeCardProperties: before.worktreeCardProperties
+    }
+
+    store.getState().hydratePersistedUI(makePersistedUI({ ...persistedUI }))
+    const after = store.getState()
+
+    expect(after.acknowledgedAgentsByPaneKey).toBe(references.acknowledgedAgentsByPaneKey)
+    expect(after.featureTipsSeenIds).toBe(references.featureTipsSeenIds)
+    expect(after.contextualToursSeenIds).toBe(references.contextualToursSeenIds)
+    expect(after.workspaceHostOrder).toBe(references.workspaceHostOrder)
+    expect(after.showDotfilesByWorktree).toBe(references.showDotfilesByWorktree)
+    expect(after.collapsedGroups).toBe(references.collapsedGroups)
+    expect(after.worktreeCardProperties).toBe(references.worktreeCardProperties)
   })
 
   it('drops invalid persisted per-worktree dotfile visibility entries', () => {

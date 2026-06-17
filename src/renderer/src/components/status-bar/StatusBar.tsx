@@ -42,7 +42,7 @@ import { formatWindowLabel } from '@/lib/window-label-formatter'
 import { markLiveCodexSessionsForRestart } from '@/lib/codex-session-restart'
 import { UpdateStatusSegment } from './UpdateStatusSegment'
 import { isStatusBarItemAvailable } from './status-bar-agent-gating'
-import { isProviderConfigured } from './status-bar-provider-visibility'
+import { getVisibleUsageProvider, isUsageEmptyState } from './status-bar-provider-visibility'
 import { StatusBarUsageEmptyCta } from './StatusBarUsageEmptyCta'
 import { shouldOpenStatusBarContextMenu } from './status-bar-context-menu-policy'
 import { TOGGLE_FLOATING_TERMINAL_EVENT } from '@/lib/floating-terminal'
@@ -1549,14 +1549,14 @@ const CLOSE_ALL_CONTEXT_MENUS_EVENT = 'orca-close-all-context-menus'
 function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Element | null {
   const floatingTerminalShortcut = useShortcutLabel('floatingTerminal.toggle')
   const rateLimits = useAppStore((s) => s.rateLimits)
+  const settings = useAppStore((s) => s.settings)
   const refreshRateLimits = useAppStore((s) => s.refreshRateLimits)
   const statusBarVisible = useAppStore((s) => s.statusBarVisible)
   const statusBarItems = useAppStore((s) => s.statusBarItems)
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
-  const floatingTerminalEnabled = useAppStore((s) => s.settings?.floatingTerminalEnabled === true)
-  const floatingTerminalTriggerLocation = useAppStore(
-    (s) => s.settings?.floatingTerminalTriggerLocation ?? 'floating-button'
-  )
+  const floatingTerminalEnabled = settings?.floatingTerminalEnabled === true
+  const floatingTerminalTriggerLocation =
+    settings?.floatingTerminalTriggerLocation ?? 'floating-button'
   // Why: usage bars exist to surface CLI rate limits — showing one for an
   // agent that isn't on the user's PATH is just noise (e.g. a fresh Ubuntu
   // install showing "Gemini Usage" with no Gemini CLI installed). We gate
@@ -1642,31 +1642,35 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
 
   const { claude, codex, gemini, opencodeGo, kimi } = rateLimits
 
-  // Why: a provider only earns a bar once it's configured (isProviderConfigured
-  // drops the `unavailable` state — Gemini OAuth off, OpenCode Go cookie unset,
-  // Claude on API-key billing). A configured provider that fails transiently
-  // (`error`) keeps its slot so the bar doesn't flap on refresh hiccups.
+  // Why: a provider earns a bar from either a usable live snapshot or durable
+  // setup in Settings. The durable path keeps account switchers visible while
+  // usage snapshots hydrate, fail, or temporarily report unavailable.
   // Detection-gating (see status-bar-agent-gating) additionally hides per-CLI
   // bars when the agent isn't installed on PATH.
+  const visibleClaude = getVisibleUsageProvider('claude', claude, settings)
+  const visibleCodex = getVisibleUsageProvider('codex', codex, settings)
+  const visibleGemini = getVisibleUsageProvider('gemini', gemini, settings)
+  const visibleKimi = getVisibleUsageProvider('kimi', kimi, settings)
   const showClaude =
-    isProviderConfigured(claude) &&
+    visibleClaude !== null &&
     statusBarItems.includes('claude') &&
     isStatusBarItemAvailable('claude', detectedAgentIds)
   const showCodex =
-    isProviderConfigured(codex) &&
+    visibleCodex !== null &&
     statusBarItems.includes('codex') &&
     isStatusBarItemAvailable('codex', detectedAgentIds)
   const showGemini =
-    isProviderConfigured(gemini) &&
+    visibleGemini !== null &&
     statusBarItems.includes('gemini') &&
     isStatusBarItemAvailable('gemini', detectedAgentIds)
   const showKimi =
-    isProviderConfigured(kimi) &&
+    visibleKimi !== null &&
     statusBarItems.includes('kimi') &&
     isStatusBarItemAvailable('kimi', detectedAgentIds)
   // Why: OpenCode Go is a web/cookie-auth provider, not a CLI on PATH, so
   // detection-gating doesn't apply.
-  const showOpencodeGo = isProviderConfigured(opencodeGo) && statusBarItems.includes('opencode-go')
+  const visibleOpencodeGo = getVisibleUsageProvider('opencode-go', opencodeGo, settings)
+  const showOpencodeGo = visibleOpencodeGo !== null && statusBarItems.includes('opencode-go')
   const showSsh = statusBarItems.includes('ssh')
   const showResourceUsage = statusBarItems.includes('resource-usage')
   const showPorts = statusBarItems.includes('ports')
@@ -1675,16 +1679,10 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
   const anyVisible =
     showClaude || showCodex || showGemini || showOpencodeGo || showKimi || showResourceUsage
   // Why: a brand-new user with no provider configured would otherwise see an
-  // empty left side of the status bar and wonder what's missing. The CTA
-  // names the surface and points to the setup path. Detection is on
-  // configuration (not user toggles) so users who intentionally hid a
-  // provider's bar don't get the teaching prompt back.
-  const isEmptyUsageState =
-    !isProviderConfigured(claude) &&
-    !isProviderConfigured(codex) &&
-    !isProviderConfigured(gemini) &&
-    !isProviderConfigured(opencodeGo) &&
-    !isProviderConfigured(kimi)
+  // empty left side of the status bar and wonder what's missing. Settings are
+  // included because managed accounts are durable even when live usage
+  // snapshots are still hydrating or unavailable after an update.
+  const isEmptyUsageState = isUsageEmptyState({ claude, codex, gemini, opencodeGo, kimi }, settings)
   // Why: the teaching CTA is a one-time nudge — once the user hides it, keep it
   // hidden even after providers are disconnected again.
   const showEmptyUsageCta = isEmptyUsageState && !usageEmptyStateDismissed
@@ -1730,12 +1728,14 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
         ) : (
           <>
             {showClaude && (
-              <ClaudeSwitcherMenu claude={claude} compact={compact} iconOnly={iconOnly} />
+              <ClaudeSwitcherMenu claude={visibleClaude} compact={compact} iconOnly={iconOnly} />
             )}
-            {showCodex && <CodexSwitcherMenu codex={codex} compact={compact} iconOnly={iconOnly} />}
+            {showCodex && (
+              <CodexSwitcherMenu codex={visibleCodex} compact={compact} iconOnly={iconOnly} />
+            )}
             {showGemini && (
               <ProviderDetailsMenu
-                provider={gemini}
+                provider={visibleGemini}
                 compact={compact}
                 iconOnly={iconOnly}
                 ariaLabel={translate(
@@ -1746,7 +1746,7 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
             )}
             {showOpencodeGo && (
               <ProviderDetailsMenu
-                provider={opencodeGo}
+                provider={visibleOpencodeGo}
                 compact={compact}
                 iconOnly={iconOnly}
                 ariaLabel={translate(
@@ -1757,7 +1757,7 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
             )}
             {showKimi && (
               <ProviderDetailsMenu
-                provider={kimi}
+                provider={visibleKimi}
                 compact={compact}
                 iconOnly={iconOnly}
                 ariaLabel={translate(

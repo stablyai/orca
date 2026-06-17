@@ -70,6 +70,7 @@ import type {
   HostedReviewCreationEligibility,
   HostedReviewProvider
 } from '../../../../shared/hosted-review'
+import { resolveHostedReviewCreationProvider } from '../../../../shared/hosted-review-creation-providers'
 import { normalizeHostedReviewHeadRef } from '../../../../shared/hosted-review-refs'
 import { getHostedReviewCacheKey, refreshHostedReviewCard } from '@/store/slices/hosted-review'
 import { toast } from 'sonner'
@@ -698,8 +699,9 @@ export default function ChecksPanel(): React.JSX.Element {
     hostedReviewCreationSnapshot?.requestKey === hostedReviewCreationRequestKey
       ? hostedReviewCreationSnapshot.data
       : null
-  const hostedReviewCreateProvider: HostedReviewProvider =
-    hostedReviewCreation?.provider === 'gitlab' ? 'gitlab' : 'github'
+  const hostedReviewCreateProvider = resolveHostedReviewCreationProvider(
+    hostedReviewCreation?.provider
+  )
   const hostedReviewCreateCopy = localizedHostedReviewCopy(hostedReviewCreateProvider)
   const handleBranchChangedByPullRequestGeneration = useCallback(async (): Promise<void> => {
     if (!activeWorktreeId || !activeWorktree?.path) {
@@ -2673,17 +2675,27 @@ export default function ChecksPanel(): React.JSX.Element {
         if (activeWorktreeId && result.provider === 'gitlab') {
           await updateWorktreeMeta(activeWorktreeId, { linkedGitLabMR: result.number })
         }
+        if (activeWorktreeId && result.provider === 'azure-devops') {
+          await updateWorktreeMeta(activeWorktreeId, { linkedAzureDevOpsPR: result.number })
+        }
+        if (activeWorktreeId && result.provider === 'gitea') {
+          await updateWorktreeMeta(activeWorktreeId, { linkedGiteaPR: result.number })
+        }
+        const linkedReviewNumbers = {
+          linkedGitHubPR: result.provider === 'github' ? result.number : linkedPR,
+          fallbackGitHubPR: fallbackGitHubPRNumber,
+          linkedGitLabMR: result.provider === 'gitlab' ? result.number : linkedGitLabMR,
+          linkedBitbucketPR,
+          linkedAzureDevOpsPR:
+            result.provider === 'azure-devops' ? result.number : linkedAzureDevOpsPR,
+          linkedGiteaPR: result.provider === 'gitea' ? result.number : linkedGiteaPR
+        }
         if (result.provider === 'gitlab') {
           const refreshedReview = await refreshHostedReviewCard(fetchHostedReviewForBranch, {
             repoPath: repo.path,
             repoId: repo.id,
             branch,
-            linkedGitHubPR: linkedPR,
-            fallbackGitHubPR: fallbackGitHubPRNumber,
-            linkedGitLabMR: result.number,
-            linkedBitbucketPR,
-            linkedAzureDevOpsPR,
-            linkedGiteaPR
+            ...linkedReviewNumbers
           })
           const refreshedGitLabReview =
             refreshedReview?.provider === 'gitlab' ? refreshedReview : null
@@ -2691,6 +2703,15 @@ export default function ChecksPanel(): React.JSX.Element {
             mrNumberOverride: result.number,
             headShaOverride: refreshedGitLabReview?.headSha,
             commitAsCurrent: true
+          })
+          return
+        }
+        if (result.provider !== 'github') {
+          await refreshHostedReviewCard(fetchHostedReviewForBranch, {
+            repoPath: repo.path,
+            repoId: repo.id,
+            branch,
+            ...linkedReviewNumbers
           })
           return
         }
@@ -2707,6 +2728,7 @@ export default function ChecksPanel(): React.JSX.Element {
       linkedAzureDevOpsPR,
       linkedBitbucketPR,
       linkedGiteaPR,
+      linkedGitLabMR,
       linkedPR,
       refreshLinkedGitHubPullRequest,
       repo,
@@ -3107,7 +3129,7 @@ export default function ChecksPanel(): React.JSX.Element {
             <span className="text-[12px] text-foreground leading-snug flex-1">
               {activeReview.title}
             </span>
-            <Pencil className="size-3 text-muted-foreground/40 opacity-0 group-hover/title:opacity-100 transition-opacity shrink-0 mt-0.5" />
+            <Pencil className="size-3 text-muted-foreground/40 can-hover:opacity-0 group-hover/title:opacity-100 transition-opacity shrink-0 mt-0.5" />
           </div>
         )}
 

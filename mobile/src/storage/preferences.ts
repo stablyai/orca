@@ -73,6 +73,56 @@ export async function saveTerminalAutocompleteEnabled(enabled: boolean): Promise
   await AsyncStorage.setItem(AUTOCOMPLETE_KEY, String(enabled))
 }
 
+const SIDEBAR_WIDTH_KEY = 'orca:hostSidebarWidth'
+
+// Bounds for the draggable host worktree-list sidebar on tablet/foldable
+// layouts (mirrors the desktop's resizable sidebar). The caller additionally
+// caps the max against the window so the detail pane keeps usable space.
+export const HOST_SIDEBAR_MIN_WIDTH = 280
+export const HOST_SIDEBAR_MAX_WIDTH = 560
+export const HOST_SIDEBAR_DEFAULT_WIDTH = 340
+
+export function clampHostSidebarWidth(width: number): number {
+  if (!Number.isFinite(width)) {
+    return HOST_SIDEBAR_DEFAULT_WIDTH
+  }
+  return Math.min(HOST_SIDEBAR_MAX_WIDTH, Math.max(HOST_SIDEBAR_MIN_WIDTH, Math.round(width)))
+}
+
+export async function loadHostSidebarWidth(): Promise<number> {
+  try {
+    const raw = await AsyncStorage.getItem(SIDEBAR_WIDTH_KEY)
+    if (raw === null) {
+      return HOST_SIDEBAR_DEFAULT_WIDTH
+    }
+    return clampHostSidebarWidth(Number(raw))
+  } catch {
+    return HOST_SIDEBAR_DEFAULT_WIDTH
+  }
+}
+
+export async function saveHostSidebarWidth(width: number): Promise<void> {
+  await AsyncStorage.setItem(SIDEBAR_WIDTH_KEY, String(clampHostSidebarWidth(width)))
+}
+
+export type MobileTerminalLinkOpenMode = 'orca-browser' | 'phone-browser'
+
+const TERMINAL_LINK_OPEN_MODE_KEY = 'orca:terminalLinkOpenMode'
+export const DEFAULT_TERMINAL_LINK_OPEN_MODE: MobileTerminalLinkOpenMode = 'orca-browser'
+
+export async function loadTerminalLinkOpenMode(): Promise<MobileTerminalLinkOpenMode> {
+  try {
+    const raw = await AsyncStorage.getItem(TERMINAL_LINK_OPEN_MODE_KEY)
+    return raw === 'phone-browser' || raw === 'orca-browser' ? raw : DEFAULT_TERMINAL_LINK_OPEN_MODE
+  } catch {
+    return DEFAULT_TERMINAL_LINK_OPEN_MODE
+  }
+}
+
+export async function saveTerminalLinkOpenMode(mode: MobileTerminalLinkOpenMode): Promise<void> {
+  await AsyncStorage.setItem(TERMINAL_LINK_OPEN_MODE_KEY, mode)
+}
+
 function stringArray(value: unknown): string[] {
   return Array.isArray(value)
     ? value.filter((item): item is string => typeof item === 'string')

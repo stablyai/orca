@@ -200,7 +200,7 @@ export function TabBarQuickCommandsMenu({
             : command.command}
         </span>
       </span>
-      <span className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover/qc:opacity-100 group-data-[selected=true]/qc:opacity-100">
+      <span className="flex shrink-0 items-center gap-0.5 can-hover:opacity-0 transition-opacity group-hover/qc:opacity-100 group-data-[selected=true]/qc:opacity-100">
         <button
           type="button"
           onClick={(event) => {
@@ -376,7 +376,7 @@ export function TabBarQuickCommandsMenu({
                 <Plus className="size-3.5" />
                 {translate(
                   'auto.components.tab.bar.TabBarQuickCommandsButton.a2c7a33831',
-                  'Add command'
+                  'Command'
                 )}
               </button>
             </div>

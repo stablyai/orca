@@ -106,12 +106,12 @@ export function EditorPanelShell({
           hasEditorToggle={model.hasEditorToggle}
           availableEditorToggleModes={model.availableEditorToggleModes}
           effectiveToggleValue={model.effectiveToggleValue}
-          mdViewMode={model.mdViewMode}
-          hasViewModeToggle={model.hasViewModeToggle}
           canOpenPreviewToSide={model.canOpenPreviewToSide}
           canShowMarkdownPreview={model.canShowMarkdownPreview}
           canShowMarkdownTableOfContents={model.canShowMarkdownTableOfContents}
           isMarkdownTableOfContentsDisabled={model.isMarkdownTableOfContentsDisabled}
+          shouldShowMarkdownExportAction={model.shouldShowMarkdownExportAction}
+          canExportMarkdownToPdf={model.canExportMarkdownToPdf}
           showMarkdownTableOfContents={showMarkdownTableOfContents}
           canShowMarkdownFrontmatterToggle={canShowMarkdownFrontmatterToggle}
           markdownFrontmatterVisible={markdownFrontmatterVisible}

@@ -103,6 +103,17 @@ describe('maybeAutoRenameBranchOnFirstWork', () => {
     expect(renameWorktreeFolder).toHaveBeenCalledWith(WORKTREE_ID, 'fix-auth')
   })
 
+  it('keeps branch and display rename working when folder rename is disabled', async () => {
+    const { deps, onRenamed, setDisplayName } = makeDeps({ renameWorktreeFolder: undefined })
+    await maybeAutoRenameBranchOnFirstWork(workingEvent(), deps)
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
+      ['branch', '-m', 'you/fix-auth'],
+      expect.objectContaining({ cwd: '/repo/wt' })
+    )
+    expect(setDisplayName).toHaveBeenCalledWith(WORKTREE_ID, 'Fix auth')
+    expect(onRenamed).toHaveBeenCalledWith(REPO_ID)
+  })
+
   it('skips the redundant branch-rename notify when the folder rename succeeded', async () => {
     // The folder rename already pushed a worktrees:changed carrying the id mapping,
     // so onRenamed would only trigger a second, redundant renderer re-list.

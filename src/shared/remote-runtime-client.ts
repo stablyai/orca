@@ -89,7 +89,9 @@ export async function sendRemoteRuntimeRequest<TResult>(
       }
     }
 
-    const timeout = setTimeout(() => {
+    let timeout = setTimeout(onTimeout, timeoutMs)
+
+    function onTimeout(): void {
       finish({
         ok: false,
         error: new RemoteRuntimeClientError(
@@ -97,7 +99,19 @@ export async function sendRemoteRuntimeRequest<TResult>(
           'Timed out waiting for the remote Orca runtime to respond.'
         )
       })
-    }, timeoutMs)
+    }
+
+    function refreshTimeout(): void {
+      const refreshableTimeout = timeout as { refresh?: () => void }
+      if (typeof refreshableTimeout.refresh === 'function') {
+        refreshableTimeout.refresh()
+        return
+      }
+      // Why: mobile typechecks shared code with DOM timer types, where
+      // setTimeout returns a number and Node's Timeout.refresh is absent.
+      clearTimeout(timeout)
+      timeout = setTimeout(onTimeout, timeoutMs)
+    }
 
     const finish = (
       result: { ok: true; response: RuntimeRpcResponse<TResult> } | { ok: false; error: Error }
@@ -305,7 +319,7 @@ export async function sendRemoteRuntimeRequest<TResult>(
         return
       }
       if (isKeepaliveFrame(raw)) {
-        timeout.refresh()
+        refreshTimeout()
         return
       }
       const parsed = RuntimeRpcEnvelopeSchema.safeParse(raw)

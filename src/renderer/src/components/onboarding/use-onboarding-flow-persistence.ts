@@ -22,6 +22,17 @@ function selectedAgentOrBlank(agent: TuiAgent | null): TuiAgent | 'blank' {
   return agent ?? 'blank'
 }
 
+export function buildCompletedOnboardingNotificationSettings(
+  notifications: GlobalSettings['notifications']
+): GlobalSettings['notifications'] {
+  return {
+    ...notifications,
+    enabled: true,
+    agentTaskComplete: true,
+    terminalBell: true
+  }
+}
+
 type CloseWithDeps = {
   onOnboardingChange: (state: OnboardingState) => void
   onboardingChecklist: OnboardingState['checklist']
@@ -188,14 +199,15 @@ export function usePersistCurrentStep({
       }
       if (currentStepId === 'notifications') {
         await updateSettings({
-          notifications: {
-            ...settings.notifications,
-            enabled: true,
-            agentTaskComplete: true,
-            terminalBell: true
-          }
+          notifications: buildCompletedOnboardingNotificationSettings(settings.notifications)
         })
         useAppStore.getState().recordFeatureInteraction('notifications')
+        onOnboardingChange(await persistStep(ONBOARDING_FINAL_STEP))
+        return { ok: true }
+      }
+      if (currentStepId === 'windows_terminal') {
+        // Why: the Windows terminal controls persist on selection. Continuing
+        // only marks the preference page complete for resume/telemetry state.
         onOnboardingChange(await persistStep(4))
         return { ok: true }
       }

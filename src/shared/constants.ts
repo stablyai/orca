@@ -47,8 +47,8 @@ export function normalizeAgentActivityDisplayMode(value: unknown): AgentActivity
 
 // Why: the onboarding wizard's last step index. Centralized so backfill,
 // clamps, and UI step references all agree on the same upper bound.
-export const ONBOARDING_FINAL_STEP = 4
-export const ONBOARDING_FLOW_VERSION = 3
+export const ONBOARDING_FINAL_STEP = 5
+export const ONBOARDING_FLOW_VERSION = 4
 
 export const ORCA_BROWSER_PARTITION = 'persist:orca-browser'
 // Why: blank browser tabs must start from an inert guest URL that does not
@@ -288,6 +288,7 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     disabledTuiAgents: [...DEFAULT_DISABLED_TUI_AGENTS],
     claudeAgentTeamsDefaultDisabledMigrated: true,
     skipDeleteWorktreeConfirm: false,
+    skipCloseTerminalWithRunningProcessConfirm: false,
     skipDeleteAutomationConfirm: false,
     defaultTaskViewPreset: 'all',
     defaultTaskSource: 'github',

@@ -209,6 +209,17 @@ export function WorktreeCardDetailsHover({
                 )}
                 actions={
                   <>
+                    {onEditIssue && (
+                      <MetadataActionIcon
+                        label={translate(
+                          'auto.components.sidebar.WorktreeCardMeta.807b13b9ec',
+                          'Edit issue'
+                        )}
+                        onClick={onEditIssue}
+                      >
+                        <Pencil className="size-3" />
+                      </MetadataActionIcon>
+                    )}
                     {issue.url && onOpenGitHubIssueInOrca && (
                       <MetadataActionIcon
                         label={translate(
@@ -229,17 +240,6 @@ export function WorktreeCardDetailsHover({
                         href={issue.url}
                       >
                         <ExternalLink className="size-3" />
-                      </MetadataActionIcon>
-                    )}
-                    {onEditIssue && (
-                      <MetadataActionIcon
-                        label={translate(
-                          'auto.components.sidebar.WorktreeCardMeta.807b13b9ec',
-                          'Edit issue'
-                        )}
-                        onClick={onEditIssue}
-                      >
-                        <Pencil className="size-3" />
                       </MetadataActionIcon>
                     )}
                   </>

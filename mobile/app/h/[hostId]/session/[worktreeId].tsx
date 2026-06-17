@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
-import { Animated, AppState, type AppStateStatus } from 'react-native'
+import { Animated, AppState, Linking, type AppStateStatus } from 'react-native'
 import * as Clipboard from 'expo-clipboard'
 import {
   BackHandler,
@@ -50,8 +50,10 @@ import type { RuntimeTerminalPathResolution } from '../../../../../src/shared/ru
 import { loadHosts } from '../../../../src/transport/host-store'
 import {
   loadTerminalAutocompleteEnabled,
+  loadTerminalLinkOpenMode,
   loadTerminalTextScale,
-  saveTerminalTextScale
+  saveTerminalTextScale,
+  type MobileTerminalLinkOpenMode
 } from '../../../../src/storage/preferences'
 import {
   useHostClient,
@@ -135,6 +137,10 @@ import {
 } from '../../../../src/session/mobile-clipboard-image'
 import { useMobileImageAttachment } from '../../../../src/session/use-mobile-image-attachment'
 import { classifyMobileArtifact } from '../../../../src/session/mobile-artifact-kind'
+import {
+  buildMarkdownDiskFallbackDoc,
+  shouldReadMarkdownFromDiskAfterReadTabFailure
+} from '../../../../src/session/mobile-markdown-disk-fallback'
 import { MobileHtmlPreview } from '../../../../src/components/MobileHtmlPreview'
 import { MobileDictationSetupSheet } from '../../../../src/components/MobileDictationSetupSheet'
 import {
@@ -795,6 +801,8 @@ export default function SessionScreen() {
   // Why: local opt-in for keyboard autocomplete/autocorrect on the terminal
   // command bar; reloaded on focus so a Settings → Terminal toggle takes effect on return.
   const [autocompleteEnabled, setAutocompleteEnabled] = useState(false)
+  const [terminalLinkOpenMode, setTerminalLinkOpenMode] =
+    useState<MobileTerminalLinkOpenMode>('orca-browser')
   const [liveInputCapture, setLiveInputCapture] = useState('')
   const [liveInputTerminalHandles, setLiveInputTerminalHandles] = useState<Set<string>>(
     () => new Set()
@@ -1643,27 +1651,56 @@ export default function SessionScreen() {
           worktree: `id:${worktreeId}`,
           tabId: tab.id
         })
-        if (!response.ok) {
+        if (response.ok) {
+          const result = (response as RpcSuccess).result as {
+            content: string
+            version: string
+            isDirty: boolean
+            editable?: boolean
+            readOnlyReason?: string
+          }
+          setMarkdownDocs((prev) =>
+            new Map(prev).set(tab.id, {
+              status: 'ready',
+              content: result.content,
+              localContent: result.content,
+              baseVersion: result.version,
+              isDirty: false,
+              editable: result.editable === true,
+              stale: result.isDirty,
+              readOnlyReason: result.readOnlyReason
+            })
+          )
+          return
+        }
+        if (!shouldReadMarkdownFromDiskAfterReadTabFailure(response as RpcFailure)) {
+          throw new Error((response as RpcFailure).error.message)
+        }
+        // Why: a headless host (no desktop renderer) can't serve the live editor
+        // document and fails markdown.readTab with renderer_unavailable. Fall back
+        // to the on-disk file so markdown still renders read-only, matching how
+        // other file types load via files.read.
+        const fallback = await client.sendRequest('files.read', {
+          worktree: `id:${worktreeId}`,
+          relativePath: tab.relativePath
+        })
+        if (!fallback.ok) {
           throw new Error('Unable to read markdown')
         }
-        const result = (response as RpcSuccess).result as {
+        const fileResult = (fallback as RpcSuccess).result as {
           content: string
-          version: string
-          isDirty: boolean
-          editable?: boolean
-          readOnlyReason?: string
+          truncated: boolean
+          byteLength: number
         }
         setMarkdownDocs((prev) =>
-          new Map(prev).set(tab.id, {
-            status: 'ready',
-            content: result.content,
-            localContent: result.content,
-            baseVersion: result.version,
-            isDirty: false,
-            editable: result.editable === true,
-            stale: result.isDirty,
-            readOnlyReason: result.readOnlyReason
-          })
+          new Map(prev).set(
+            tab.id,
+            buildMarkdownDiskFallbackDoc({
+              content: fileResult.content,
+              truncated: fileResult.truncated,
+              tabIsDirty: tab.isDirty
+            })
+          )
         )
       } catch {
         setMarkdownDocs((prev) =>
@@ -2517,6 +2554,21 @@ export default function SessionScreen() {
     }, [])
   )
 
+  // Why: link routing is a phone-local choice; reload after Settings → Browser.
+  useFocusEffect(
+    useCallback(() => {
+      let active = true
+      void loadTerminalLinkOpenMode().then((mode) => {
+        if (active) {
+          setTerminalLinkOpenMode(mode)
+        }
+      })
+      return () => {
+        active = false
+      }
+    }, [])
+  )
+
   // Why: unsubscribe the old terminal so the server restores its desktop dims
   // (clearing the phone-fit banner), then subscribe the new terminal with the
   // measured viewport so the server phone-fits it. Also call terminal.focus
@@ -2859,6 +2911,20 @@ export default function SessionScreen() {
       })()
     },
     [client, worktreeId, scheduleDelayedAction, fetchSessionTabs]
+  )
+
+  const handleTerminalOpenUrl = useCallback(
+    (handle: string, url: string) => {
+      if (handle !== activeHandleRef.current) {
+        return
+      }
+      if (terminalLinkOpenMode === 'phone-browser') {
+        void Linking.openURL(url).catch(() => {})
+        return
+      }
+      void handleCreateBrowser(url)
+    },
+    [terminalLinkOpenMode]
   )
 
   const toggleLiveInput = useCallback(() => {
@@ -4292,6 +4358,7 @@ export default function SessionScreen() {
                 onTerminalInput={handleTerminalInput}
                 onTerminalTap={handleTerminalTap}
                 onFileTap={handleFileTap}
+                onOpenUrl={handleTerminalOpenUrl}
               />
             ))}
             {toastMessage && (

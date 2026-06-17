@@ -835,6 +835,9 @@ jobs:
       # Why ORCA_BUILD_IDENTITY here (not in env at the job level): the
       # value comes from the per-tag classification above and electron-vite
       # reads it from `process.env` during `pnpm build:release` only.
+      # Why ORCA_DIAGNOSTICS_TOKEN_URL here: official builds pin crash
+      # diagnostic uploads to Orca's endpoint at compile time, matching the
+      # telemetry gate's "official binary only" behavior.
       - name: Build app
         run: pnpm build:release
         env:
@@ -842,6 +845,7 @@ jobs:
           # the macOS release runner, leaving v1.4.2-rc.8 as an incomplete draft.
           NODE_OPTIONS: --max-old-space-size=4096
           ORCA_BUILD_IDENTITY: ${{ steps.tag-classify.outputs.identity }}
+          ORCA_DIAGNOSTICS_TOKEN_URL: https://www.onorca.dev/diagnostics/token
           ORCA_POSTHOG_WRITE_KEY: ${{ secrets.ORCA_POSTHOG_WRITE_KEY }}
 
       # Why: macOS signing secrets (CSC_LINK, CSC_KEY_PASSWORD) must NOT be

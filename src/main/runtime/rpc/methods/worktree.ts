@@ -63,6 +63,7 @@ export const WORKTREE_METHODS: RpcMethod[] = [
         repoSelector: params.repo,
         name: params.name ?? '',
         baseBranch: params.baseBranch,
+        compareBaseRef: params.compareBaseRef,
         branchNameOverride: params.branchNameOverride,
         linkedIssue: params.linkedIssue,
         linkedPR: params.linkedPR,
@@ -172,6 +173,7 @@ export const WORKTREE_METHODS: RpcMethod[] = [
         repoSelector: params.repo,
         prNumber: params.prNumber,
         headRefName: params.headRefName,
+        baseRefName: params.baseRefName,
         isCrossRepository: params.isCrossRepository
       })
   }),
@@ -183,6 +185,7 @@ export const WORKTREE_METHODS: RpcMethod[] = [
         repoSelector: params.repo,
         mrIid: params.mrIid,
         sourceBranch: params.sourceBranch,
+        targetBranch: params.targetBranch,
         isCrossRepository: params.isCrossRepository
       })
   }),

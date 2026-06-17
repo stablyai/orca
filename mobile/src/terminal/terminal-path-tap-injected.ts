@@ -49,24 +49,13 @@ export const TERMINAL_PATH_TAP_JS = String.raw`
     return null;
   }
 
-  // Emits terminal-file-tap when the tap lands on a path candidate, else
-  // terminal-tap. The host resolves + existence-checks the candidate, so a
-  // false positive (a non-file word) just opens nothing. Relies on
-  // viewportToCell/getLineText/notify from the host script scope.
-  function notifyTapOrFilePath(originX, originY) {
+  // Returns the path candidate under the tap, or null. Query-only so the tap
+  // handler can try file detection before forwarding a mouse click — which lets
+  // file paths open even inside a mouse-tracking TUI. Relies on viewportToCell/
+  // getLineText from the host script scope.
+  function filePathAtViewportPoint(originX, originY) {
     var tapCell = viewportToCell(originX, originY);
-    var tappedPath = tapCell
-      ? matchFilePathAtColumn(getLineText(tapCell.row), tapCell.col)
-      : null;
-    if (tappedPath) {
-      notify({
-        type: 'terminal-file-tap',
-        pathText: tappedPath.pathText,
-        line: tappedPath.line,
-        column: tappedPath.column
-      });
-    } else {
-      notify({ type: 'terminal-tap' });
-    }
+    if (!tapCell) return null;
+    return matchFilePathAtColumn(getLineText(tapCell.row), tapCell.col);
   }
 `

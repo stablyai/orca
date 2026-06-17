@@ -127,7 +127,12 @@ export function VaultSessionRow({
                     event.stopPropagation()
                     onResume()
                   }}
-                  className="opacity-0 transition-opacity group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100"
+                  // Why: the wrapper is `pointer-events-none`; this control only
+                  // re-enables pointer events on hover/focus. On touch (no hover)
+                  // it is visible via `can-hover:opacity-0`, so it must also be
+                  // tappable — keep base `pointer-events-auto` and only disable it
+                  // on hover-capable devices where the reveal gates interaction.
+                  className="pointer-events-auto can-hover:pointer-events-none can-hover:opacity-0 transition-opacity group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100"
                 >
                   <Play className="size-3.5" />
                 </Button>

@@ -7,11 +7,21 @@ import {
 } from './SettingsFormControls'
 import { SearchableSetting } from './SearchableSetting'
 import { translate } from '@/i18n/i18n'
+import { ShellIcon } from '../tab-bar/shell-icons'
 
 type TerminalWindowsShellSectionProps = {
   updateSettings: (updates: Partial<GlobalSettings>) => void
   windowsShell: string
   gitBashAvailable: boolean
+}
+
+function windowsShellLabel(shell: string, label: string): React.JSX.Element {
+  return (
+    <span className="inline-flex items-center justify-center gap-1.5">
+      <ShellIcon shell={shell} size={12} />
+      <span>{label}</span>
+    </span>
+  )
 }
 
 export function TerminalWindowsShellSection({
@@ -67,14 +77,25 @@ export function TerminalWindowsShellSection({
                 options={[
                   {
                     value: 'powershell.exe',
-                    label: translate(
+                    label: windowsShellLabel(
+                      'powershell.exe',
+                      translate('auto.components.settings.TerminalPane.eb7fc4d98a', 'PowerShell')
+                    ),
+                    ariaLabel: translate(
                       'auto.components.settings.TerminalPane.eb7fc4d98a',
                       'PowerShell'
                     )
                   },
                   {
                     value: 'cmd.exe',
-                    label: translate(
+                    label: windowsShellLabel(
+                      'cmd.exe',
+                      translate(
+                        'auto.components.settings.TerminalPane.0f1b8669e6',
+                        'Command Prompt'
+                      )
+                    ),
+                    ariaLabel: translate(
                       'auto.components.settings.TerminalPane.0f1b8669e6',
                       'Command Prompt'
                     )
@@ -83,7 +104,14 @@ export function TerminalWindowsShellSection({
                     ? [
                         {
                           value: WINDOWS_GIT_BASH_SHELL,
-                          label: translate(
+                          label: windowsShellLabel(
+                            WINDOWS_GIT_BASH_SHELL,
+                            translate(
+                              'auto.components.settings.TerminalPane.f61ac77f16',
+                              'Git Bash'
+                            )
+                          ),
+                          ariaLabel: translate(
                             'auto.components.settings.TerminalPane.f61ac77f16',
                             'Git Bash'
                           ),

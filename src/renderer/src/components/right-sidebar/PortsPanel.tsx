@@ -594,7 +594,7 @@ function LocalPortRow({
           </div>
         </ContextMenuTrigger>
         <TooltipProvider delayDuration={400}>
-          <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
+          <div className="flex items-center gap-0.5 can-hover:opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
@@ -1107,7 +1107,7 @@ function ForwardedPortRow({
           </div>
         )}
       </div>
-      <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
+      <div className="flex items-center gap-0.5 can-hover:opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
         <button
           type="button"
           className="p-1 rounded hover:bg-accent transition-colors text-muted-foreground hover:text-foreground"
@@ -1190,7 +1190,7 @@ function DetectedPortRow({
       </div>
       <button
         type="button"
-        className="text-[11px] px-2 py-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity bg-accent hover:bg-accent/80 text-foreground"
+        className="text-[11px] px-2 py-0.5 rounded can-hover:opacity-0 group-hover:opacity-100 transition-opacity bg-accent hover:bg-accent/80 text-foreground"
         onClick={onForward}
       >
         {translate('auto.components.right.sidebar.PortsPanel.c9d106547a', 'Forward')}

@@ -358,6 +358,7 @@ describe('activateAndRevealWorktree created agent reopen', () => {
     expect(resumedTab?.launchAgent).toBe('codex')
     expect(state.pendingStartupByTabId[resumedTab!.id]).toEqual({
       command: "codex '--dangerously-bypass-approvals-and-sandbox' 'resume' 'codex-session-1'",
+      showSessionRestoredBanner: true,
       telemetry: {
         agent_kind: 'codex',
         launch_source: 'sidebar',

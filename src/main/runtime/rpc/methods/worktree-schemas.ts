@@ -55,6 +55,7 @@ export const WorktreeCreate = z
       .pipe(z.string().min(1, 'Missing repo selector')),
     name: OptionalString,
     baseBranch: OptionalString,
+    compareBaseRef: OptionalString,
     branchNameOverride: OptionalString,
     linkedIssue: TriStateLinkedIssue,
     linkedPR: TriStateLinkedIssue,
@@ -231,6 +232,7 @@ export const WorktreeResolvePrBase = z.object({
     .transform((v) => (typeof v === 'number' && Number.isFinite(v) ? v : 0))
     .pipe(z.number().int().positive('Missing PR number')),
   headRefName: OptionalString,
+  baseRefName: OptionalString,
   isCrossRepository: OptionalBoolean
 })
 
@@ -244,5 +246,6 @@ export const WorktreeResolveMrBase = z.object({
     .transform((v) => (typeof v === 'number' && Number.isFinite(v) ? v : 0))
     .pipe(z.number().int().positive('Missing MR number')),
   sourceBranch: OptionalString,
+  targetBranch: OptionalString,
   isCrossRepository: OptionalBoolean
 })

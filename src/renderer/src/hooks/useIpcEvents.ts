@@ -2758,10 +2758,14 @@ export function useIpcEvents(): void {
         // Why: local Codex/Claude hooks arrive through this main-process IPC
         // path, not the PTY OSC fallback, so task-complete notifications must
         // observe accepted hook state here as well.
+        const notificationPayload =
+          typeof data.stateStartedAt === 'number'
+            ? { ...resolvedPayload, stateStartedAt: data.stateStartedAt }
+            : resolvedPayload
         observeAgentHookCompletionForNotification({
           paneKey: data.paneKey,
           worktreeId: statusWorktreeId,
-          payload: resolvedPayload
+          payload: notificationPayload
         })
       }
       return 'applied'

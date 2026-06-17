@@ -5,6 +5,7 @@ import type { WebViewMessageEvent } from 'react-native-webview'
 import type { RuntimeMobileTerminalTheme } from '../../../src/shared/runtime-types'
 import { colors } from '../theme/mobile-theme'
 import { XTERM_HTML } from './terminal-webview-html'
+import type { TerminalWebViewCommand } from './terminal-webview-messages'
 
 type TerminalMouseTrackingMode = 'none' | 'x10' | 'vt200' | 'drag' | 'any'
 
@@ -35,6 +36,8 @@ export type TerminalSelectionEvents = {
   onTerminalTap?: () => void
   // Tap landed on a detected file path; RN resolves + opens it.
   onFileTap?: (pathText: string, line: number | null, column: number | null) => void
+  // WebView-detected URL tap; RN chooses the mobile routing destination.
+  onOpenUrl?: (url: string) => void
   // Why: pinch-to-zoom in the terminal snaps to a text-size preset and reports it
   // here so the app persists it and keeps Settings + other panes in sync.
   onTextScaleChange?: (scale: number) => void
@@ -65,26 +68,6 @@ type Props = {
   onWebReady?: () => void
 } & TerminalSelectionEvents
 
-type TerminalMessage =
-  | { type: 'write'; id?: number; data: string }
-  | {
-      type: 'init'
-      id?: number
-      cols: number
-      rows: number
-      initialData?: string
-      terminalTheme?: MobileTerminalTheme
-      fontScale?: number
-    }
-  | { type: 'set-font-scale'; id?: number; fontScale: number }
-  | { type: 'resize'; id?: number; cols: number; rows: number }
-  | { type: 'clear'; id?: number }
-  | { type: 'measure'; id?: number; containerHeight?: number }
-  | { type: 'reset-zoom'; id?: number }
-  | { type: 'cancel-select'; id?: number }
-  | { type: 'do-select-all'; id?: number }
-  | { type: 'set-theme'; id?: number; terminalTheme?: MobileTerminalTheme }
-
 const MAX_PENDING_WEB_WRITE_BYTES = 1_000_000
 const MAX_PENDING_WEB_WRITE_MESSAGES = 4096
 
@@ -103,13 +86,14 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
     onTerminalInput,
     onTerminalTap,
     onFileTap,
+    onOpenUrl,
     onTextScaleChange
   },
   ref
 ) {
   const webViewRef = useRef<WebView>(null)
   const isWebReadyRef = useRef(false)
-  const pendingMessagesRef = useRef<TerminalMessage[]>([])
+  const pendingMessagesRef = useRef<TerminalWebViewCommand[]>([])
   const pendingWriteBytesRef = useRef(0)
   const pendingWriteCountRef = useRef(0)
   const messageIdRef = useRef(0)
@@ -124,7 +108,7 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
   const readyPromiseRef = useRef<Promise<void> | null>(null)
   const readyResolveRef = useRef<(() => void) | null>(null)
 
-  const sendToWebView = useCallback((msg: TerminalMessage) => {
+  const sendToWebView = useCallback((msg: TerminalWebViewCommand) => {
     messageIdRef.current += 1
     webViewRef.current?.postMessage(JSON.stringify({ ...msg, id: messageIdRef.current }))
   }, [])
@@ -145,7 +129,7 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
     pendingWriteCountRef.current = 0
   }, [])
 
-  const queuePendingMessage = useCallback((msg: TerminalMessage) => {
+  const queuePendingMessage = useCallback((msg: TerminalWebViewCommand) => {
     const pending = pendingMessagesRef.current
     pending.push(msg)
     if (msg.type !== 'write') {
@@ -176,7 +160,7 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
   }, [])
 
   const postMessage = useCallback(
-    (msg: TerminalMessage) => {
+    (msg: TerminalWebViewCommand) => {
       if (!isWebReadyRef.current) {
         queuePendingMessage(msg)
         return
@@ -257,6 +241,11 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
           const column = typeof msg.column === 'number' ? msg.column : null
           onFileTap?.(pathText, line, column)
         }
+      } else if (msg.type === 'open-url') {
+        const url = typeof msg.url === 'string' ? msg.url : ''
+        if (url.length > 0) {
+          onOpenUrl?.(url)
+        }
       } else if (msg.type === 'keyboard-avoidance-metrics') {
         const cursorY = typeof msg.cursorY === 'number' ? msg.cursorY : 0
         const rows = typeof msg.rows === 'number' ? msg.rows : 0
@@ -297,6 +286,7 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
       onTerminalInput,
       onTerminalTap,
       onFileTap,
+      onOpenUrl,
       onTextScaleChange
     ]
   )

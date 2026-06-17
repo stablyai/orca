@@ -14,6 +14,12 @@ import {
   describePushCount,
   describeSyncCounts
 } from './source-control-primary-action-titles'
+import { resolveLinkedReviewPrimaryAction } from './source-control-linked-review-primary-action'
+import {
+  resolveCreatePrIntentInFlightPrimaryAction,
+  resolveCreatePrIntentPrimaryAction
+} from './source-control-primary-create-pr-intent-action'
+import { resolveUnpublishedPrimaryAction } from './source-control-primary-unpublished-action'
 
 export type {
   PrimaryActionKind,
@@ -34,13 +40,15 @@ export type {
  *   1. In-flight commit locks the primary to a disabled "Commit".
  *   2. In-flight remote operation keeps the current label but disables it.
  *   3. Unresolved conflicts block the commit path entirely.
- *   4. Has partially staged files → "Stage All" to avoid hook-time partial
+ *   4. Create PR intent can own the primary; manual prerequisites are
+ *      exposed as a visible sibling action by CommitArea.
+ *   5. Has partially staged files → "Stage All" to avoid hook-time partial
  *      stash conflicts.
- *   5. Has staged files + message → plain "Commit" (compound flows live in
- *      the dropdown; after the commit lands, step 7 rotates the primary to
- *      the appropriate single remote action).
- *   6. Has staged files + no message → disabled "Commit" with a reason.
- *   7. Clean tree → adaptive remote action (or disabled "Commit" no-op).
+ *   6. Has staged files + message → plain "Commit" (compound flows live in
+ *      the dropdown; after the commit lands, the clean-tree rung rotates
+ *      the primary to the appropriate single remote action).
+ *   7. Has staged files + no message → disabled "Commit" with a reason.
+ *   8. Clean tree → adaptive remote action (or disabled "Commit" no-op).
  *
  * An undefined upstream status means fetchUpstreamStatus has not resolved
  * yet for this worktree. We return a disabled Commit so the button has a
@@ -62,8 +70,14 @@ export function resolvePrimaryAction(inputs: PrimaryActionInputs): PrimaryAction
     isPRStateLoading,
     hostedReviewCreation,
     branchCommitsAhead,
-    hasCurrentBranch = true
+    hasCurrentBranch = true,
+    canPushLinkedReviewWithoutUpstream = false,
+    isPrIntentInFlight = false
   } = inputs
+
+  if (isPrIntentInFlight) {
+    return resolveCreatePrIntentInFlightPrimaryAction(inputs)
+  }
 
   // 1. Commit in flight — lock the primary no matter what else is true.
   if (isCommitting) {
@@ -101,11 +115,16 @@ export function resolvePrimaryAction(inputs: PrimaryActionInputs): PrimaryAction
     }
   }
 
-  const hasStaged = stagedCount > 0
+  const createPrIntent = resolveCreatePrIntentPrimaryAction(inputs)
+  if (createPrIntent) {
+    return createPrIntent
+  }
 
-  // 4. A path with both staged and unstaged edits can make lint-staged's
-  // partial-stash restore fail after formatters rewrite the staged copy. Push
-  // the user through Stage All first so the index matches the worktree.
+  const hasStaged = stagedCount > 0
+  const hasOpenHostedReview = prState === 'open' || prState === 'draft'
+
+  // Why: partial staging can break hook-time restores during the intent flow;
+  // keep Stage All visible as a sibling prerequisite without replacing Create PR.
   if (hasStaged && hasPartiallyStagedChanges) {
     return {
       kind: 'stage',
@@ -194,78 +213,24 @@ export function resolvePrimaryAction(inputs: PrimaryActionInputs): PrimaryAction
   }
 
   if (!upstreamStatus.hasUpstream) {
-    if (!hasCurrentBranch) {
-      return {
-        kind: 'commit',
-        label: translate(
-          'auto.components.right.sidebar.source.control.primary.action.ed93b4f14f',
-          'Commit'
-        ),
-        title: translate(
-          'auto.components.right.sidebar.source.control.primary.action.e61b0d7a3c',
-          'Check out a branch before publishing commits.'
-        ),
-        disabled: true
+    const unpublishedAction = resolveUnpublishedPrimaryAction({
+      hasCurrentBranch,
+      branchCommitsAhead,
+      isPRStateLoading,
+      prState
+    })
+
+    if (unpublishedAction.kind === 'publish') {
+      const linkedReviewAction = resolveLinkedReviewPrimaryAction({
+        hasOpenHostedReview,
+        canPushLinkedReviewWithoutUpstream
+      })
+      if (linkedReviewAction) {
+        return linkedReviewAction
       }
     }
 
-    if (branchCommitsAhead === 0) {
-      return {
-        kind: 'commit',
-        label: translate(
-          'auto.components.right.sidebar.source.control.primary.action.ed93b4f14f',
-          'Commit'
-        ),
-        title: translate(
-          'auto.components.right.sidebar.source.control.primary.action.acce237921',
-          'Nothing to commit. Branch has no changes to publish.'
-        ),
-        disabled: true
-      }
-    }
-
-    if (isPRStateLoading) {
-      return {
-        kind: 'commit',
-        label: translate(
-          'auto.components.right.sidebar.source.control.primary.action.ed93b4f14f',
-          'Commit'
-        ),
-        title: translate(
-          'auto.components.right.sidebar.source.control.primary.action.41d4bcf157',
-          'Checking PR status…'
-        ),
-        disabled: true
-      }
-    }
-
-    if (prState === 'merged') {
-      return {
-        kind: 'commit',
-        label: translate(
-          'auto.components.right.sidebar.source.control.primary.action.ed93b4f14f',
-          'Commit'
-        ),
-        title: translate(
-          'auto.components.right.sidebar.source.control.primary.action.3d5dccef0b',
-          'Nothing to commit. PR is already merged.'
-        ),
-        disabled: true
-      }
-    }
-
-    return {
-      kind: 'publish',
-      label: translate(
-        'auto.components.right.sidebar.source.control.primary.action.7b4d02e6b8',
-        'Publish Branch'
-      ),
-      title: translate(
-        'auto.components.right.sidebar.source.control.primary.action.1884cf34af',
-        'Publish this branch to origin'
-      ),
-      disabled: false
-    }
+    return unpublishedAction
   }
 
   if (upstreamStatus.ahead > 0 && upstreamStatus.behind > 0) {
@@ -346,4 +311,14 @@ export function resolvePrimaryAction(inputs: PrimaryActionInputs): PrimaryAction
       : 'Nothing to commit. Branch is up to date.',
     disabled: true
   }
+}
+
+export function resolveCommitAreaPrimaryAction(inputs: PrimaryActionInputs): PrimaryAction {
+  // Why: review creation is additive chrome. The commit area should keep the
+  // same local/remote primary action it would have without review eligibility.
+  return resolvePrimaryAction({
+    ...inputs,
+    hostedReviewCreation: null,
+    isPrIntentInFlight: false
+  })
 }

@@ -28,7 +28,7 @@ import {
 import { refreshLocalBaseRefForWorktreeCreateOp } from './git-handler-local-base-ref-refresh'
 import { checkIgnoredPathsOp, detectConflictOperation, getStatusOp } from './git-handler-status-ops'
 import { resolveRelayPushTarget } from './git-handler-push-target'
-import { normalizeGitErrorMessage, isNoUpstreamError } from '../shared/git-remote-error'
+import { isNoUpstreamError, normalizeGitErrorMessage } from '../shared/git-remote-error'
 import { upstreamOnlyCommitsArePatchEquivalent } from '../shared/git-upstream-status'
 import { assertGitPushTargetShape } from '../shared/git-push-target-validation'
 import { getPublishTargetStatus, type GitCommandRunner } from '../shared/git-publish-target-status'
@@ -84,6 +84,9 @@ export class GitHandler {
     this.dispatcher.onRequest('git.fetch', (p) => this.fetch(p))
     this.dispatcher.onRequest('git.forkSync', (p, context) => this.forkSync(p, context))
     this.dispatcher.onRequest('git.fetchRemoteTrackingRef', (p) => this.fetchRemoteTrackingRef(p))
+    this.dispatcher.onRequest('git.fetchGitLabMergeRequestHead', (p) =>
+      this.fetchGitLabMergeRequestHead(p)
+    )
     this.dispatcher.onRequest('git.push', (p) => this.push(p))
     this.dispatcher.onRequest('git.pull', (p) => this.pull(p))
     this.dispatcher.onRequest('git.fastForward', (p) => this.fastForward(p))
@@ -563,6 +566,41 @@ export class GitHandler {
     }
   }
 
+  private async fetchGitLabMergeRequestHead(params: Record<string, unknown>) {
+    const worktreePath = params.worktreePath as string
+    const remote = params.remote
+    const mrIid = params.mrIid
+    if (typeof remote !== 'string') {
+      throw new Error('Invalid GitLab merge request fetch request.')
+    }
+    if (typeof mrIid !== 'number' || !Number.isSafeInteger(mrIid) || mrIid <= 0) {
+      throw new Error('Invalid GitLab merge request fetch request.')
+    }
+    const mergeRequestIid = mrIid
+    if (remote.startsWith('-')) {
+      throw new Error('GitLab merge request fetch remote must not start with "-".')
+    }
+
+    try {
+      const { stdout } = await this.git(['remote'], worktreePath)
+      const remotes = stdout
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter(Boolean)
+      if (!remotes.includes(remote)) {
+        throw new Error(`Remote "${remote}" is not configured.`)
+      }
+      // Why: GitLab MR heads are not refs/heads/*, so the remote-tracking
+      // fetch RPC cannot represent fork MRs. Keep this write path MR-only.
+      await this.git(
+        ['fetch', '--no-tags', remote, `refs/merge-requests/${mergeRequestIid}/head`],
+        worktreePath
+      )
+    } catch (error) {
+      throw new Error(normalizeGitErrorMessage(error, 'fetch'))
+    }
+  }
+
   private async push(params: Record<string, unknown>) {
     const worktreePath = params.worktreePath as string
     // Why: mirror src/main/git/remote.ts. Push to a configured upstream when
@@ -620,8 +658,8 @@ export class GitHandler {
   }
 
   private async pull(params: Record<string, unknown>) {
-    // Why: plain `git pull` uses the user's configured pull strategy (merge by
-    // default) so diverged branches reconcile instead of erroring out.
+    // Why: plain `git pull` honors the user's configured merge/rebase/ff policy.
+    // If no policy exists, Git's policy error is normalized with setup guidance.
     await this.pullWithArgs(params, [])
   }
 

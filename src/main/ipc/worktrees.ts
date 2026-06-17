@@ -1077,6 +1077,7 @@ export function registerWorktreeHandlers(
         repoId: string
         prNumber: number
         headRefName?: string
+        baseRefName?: string
         isCrossRepository?: boolean
       }
     ): Promise<GitHubPrStartPoint | { error: string }> => {
@@ -1114,6 +1115,7 @@ export function registerWorktreeHandlers(
         repoPath: repo.path,
         prNumber: args.prNumber,
         headRefName: args.headRefName,
+        baseRefName: args.baseRefName,
         isCrossRepository: args.isCrossRepository,
         connectionId: repo.connectionId ?? null,
         localGitOptions: getLocalProjectWorktreeGitOptions(store, repo),
@@ -1145,13 +1147,18 @@ export function registerWorktreeHandlers(
         repoId: string
         mrIid: number
         sourceBranch?: string
+        targetBranch?: string
         isCrossRepository?: boolean
       }
-    ): Promise<{ baseBranch: string; pushTarget?: GitPushTarget } | { error: string }> => {
+    ): Promise<
+      | { baseBranch: string; compareBaseRef?: string; pushTarget?: GitPushTarget }
+      | { error: string }
+    > => {
       return runtime.resolveManagedMrBase({
         repoSelector: `id:${args.repoId}`,
         mrIid: args.mrIid,
         sourceBranch: args.sourceBranch,
+        targetBranch: args.targetBranch,
         isCrossRepository: args.isCrossRepository
       })
     }
@@ -1441,15 +1448,21 @@ export function registerWorktreeHandlers(
 
         let removalResult: RemoveWorktreeResult | undefined
         try {
-          const removeOptions = hasLocalWorktreeGitOptions
-            ? { ...(!deleteBranch ? { deleteBranch } : {}), ...localWorktreeGitOptions }
-            : !deleteBranch
-              ? { deleteBranch }
-              : undefined
+          const removeOptions = {
+            ...(!deleteBranch ? { deleteBranch } : {}),
+            // Why: this handler already paid for an authoritative worktree
+            // list to validate the target; reuse it instead of rescanning
+            // every sibling worktree during the hot delete path.
+            knownRemovedWorktree: registeredWorktree,
+            ...(hasLocalWorktreeGitOptions ? localWorktreeGitOptions : {})
+          }
           removalResult = preserveBranchHeadFallback(
-            await (removeOptions
-              ? removeWorktree(repo.path, canonicalWorktreePath, args.force ?? false, removeOptions)
-              : removeWorktree(repo.path, canonicalWorktreePath, args.force ?? false)),
+            await removeWorktree(
+              repo.path,
+              canonicalWorktreePath,
+              args.force ?? false,
+              removeOptions
+            ),
             registeredWorktree.head
           )
         } catch (error) {

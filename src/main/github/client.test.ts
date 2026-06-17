@@ -595,6 +595,47 @@ describe('getPRForBranch', () => {
     })
   })
 
+  it('ignores merged PRs discovered only by branch lookup', async () => {
+    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
+    ghExecFileAsyncMock
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify([
+          {
+            number: 5511,
+            title: 'Merged branch PR',
+            state: 'closed',
+            merged_at: '2026-06-16T17:15:33Z',
+            html_url: 'https://github.com/stablyai/orca/pull/5511',
+            updated_at: '2026-06-16T17:15:33Z',
+            draft: false,
+            mergeable_state: 'clean',
+            head: { ref: 'add-guide-for-mobile-emulator-use', sha: 'head-oid' },
+            base: { ref: 'main', sha: 'base-oid' }
+          }
+        ])
+      })
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify({
+          number: 5511,
+          title: 'Merged branch PR',
+          state: 'MERGED',
+          url: 'https://github.com/stablyai/orca/pull/5511',
+          statusCheckRollup: [],
+          updatedAt: '2026-06-16T17:15:33Z',
+          isDraft: false,
+          mergeable: 'MERGEABLE',
+          baseRefName: 'main',
+          headRefName: 'add-guide-for-mobile-emulator-use',
+          baseRefOid: 'base-oid',
+          headRefOid: 'head-oid'
+        })
+      })
+
+    const pr = await getPRForBranch('/repo-root', 'add-guide-for-mobile-emulator-use')
+
+    expect(pr).toBeNull()
+  })
+
   it('prefers branch lookup over a fallback PR number', async () => {
     getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
     ghExecFileAsyncMock
@@ -683,6 +724,165 @@ describe('getPRForBranch', () => {
       { cwd: '/repo-root' }
     )
     expect(pr).toMatchObject({ number: 42, title: 'Fallback PR lookup' })
+  })
+
+  it('treats a merged branch lookup as a miss before using a fallback PR number', async () => {
+    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
+    ghExecFileAsyncMock
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify([
+          {
+            number: 5511,
+            title: 'Merged branch PR',
+            state: 'closed',
+            merged_at: '2026-06-16T17:15:33Z',
+            html_url: 'https://github.com/stablyai/orca/pull/5511',
+            updated_at: '2026-06-16T17:15:33Z',
+            draft: false,
+            mergeable_state: 'clean',
+            head: { ref: 'feature/test', sha: 'merged-head-oid' },
+            base: { ref: 'main', sha: 'base-oid' }
+          }
+        ])
+      })
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify({
+          number: 5511,
+          title: 'Merged branch PR',
+          state: 'MERGED',
+          url: 'https://github.com/stablyai/orca/pull/5511',
+          statusCheckRollup: [],
+          updatedAt: '2026-06-16T17:15:33Z',
+          isDraft: false,
+          mergeable: 'MERGEABLE',
+          baseRefName: 'main',
+          headRefName: 'feature/test',
+          baseRefOid: 'base-oid',
+          headRefOid: 'merged-head-oid'
+        })
+      })
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify({
+          number: 42,
+          title: 'Open fallback PR',
+          state: 'OPEN',
+          url: 'https://github.com/acme/widgets/pull/42',
+          statusCheckRollup: [],
+          updatedAt: '2026-06-17T00:00:00Z',
+          isDraft: false,
+          mergeable: 'MERGEABLE',
+          baseRefName: 'main',
+          headRefName: 'contributor/original',
+          baseRefOid: 'base-oid',
+          headRefOid: 'fallback-head-oid'
+        })
+      })
+
+    const pr = await getPRForBranch('/repo-root', 'feature/test', null, null, 42)
+
+    expect(pr).toMatchObject({ number: 42, title: 'Open fallback PR' })
+  })
+
+  it('does not carry a merged upstream branch head repo into a fallback PR number', async () => {
+    resolvePRRepositoryCandidatesMock.mockResolvedValueOnce({
+      candidates: [{ owner: 'stablyai', repo: 'orca' }],
+      headRepo: { owner: 'origin-owner', repo: 'orca' }
+    })
+    getOwnerRepoForRemoteMock.mockResolvedValueOnce({ owner: 'fork-owner', repo: 'orca' })
+    gitExecFileAsyncMock.mockResolvedValueOnce({
+      stdout: 'fork/contributor/original\n',
+      stderr: ''
+    })
+    ghExecFileAsyncMock
+      .mockResolvedValueOnce({ stdout: JSON.stringify([]) })
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify([
+          {
+            number: 5511,
+            title: 'Merged upstream branch PR',
+            state: 'closed',
+            merged_at: '2026-06-16T17:15:33Z',
+            html_url: 'https://github.com/stablyai/orca/pull/5511',
+            updated_at: '2026-06-16T17:15:33Z',
+            draft: false,
+            mergeable_state: 'clean',
+            head: { ref: 'contributor/original', sha: 'merged-head-oid' },
+            base: { ref: 'main', sha: 'base-oid' }
+          }
+        ])
+      })
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify({
+          number: 5511,
+          title: 'Merged upstream branch PR',
+          state: 'MERGED',
+          url: 'https://github.com/stablyai/orca/pull/5511',
+          statusCheckRollup: [],
+          updatedAt: '2026-06-16T17:15:33Z',
+          isDraft: false,
+          mergeable: 'MERGEABLE',
+          baseRefName: 'main',
+          headRefName: 'contributor/original',
+          baseRefOid: 'base-oid',
+          headRefOid: 'merged-head-oid'
+        })
+      })
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify({
+          number: 42,
+          title: 'Open fallback PR',
+          state: 'OPEN',
+          url: 'https://github.com/stablyai/orca/pull/42',
+          statusCheckRollup: [],
+          updatedAt: '2026-06-17T00:00:00Z',
+          isDraft: false,
+          mergeable: 'MERGEABLE',
+          baseRefName: 'main',
+          headRefName: 'fresh/fallback',
+          baseRefOid: 'base-oid',
+          headRefOid: 'fallback-head-oid'
+        })
+      })
+
+    const pr = await getPRForBranch('/repo-root', 'local-created-from-pr', null, null, 42)
+
+    expect(pr).toMatchObject({
+      number: 42,
+      title: 'Open fallback PR',
+      headRepo: { owner: 'origin-owner', repo: 'orca' }
+    })
+  })
+
+  it('ignores merged PRs discovered only from a fallback PR number', async () => {
+    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
+    ghExecFileAsyncMock
+      .mockResolvedValueOnce({ stdout: JSON.stringify([]) })
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify({
+          number: 5511,
+          title: 'Merged fallback PR',
+          state: 'MERGED',
+          url: 'https://github.com/stablyai/orca/pull/5511',
+          statusCheckRollup: [],
+          updatedAt: '2026-06-16T17:15:33Z',
+          isDraft: false,
+          mergeable: 'MERGEABLE',
+          baseRefName: 'main',
+          headRefName: 'add-guide-for-mobile-emulator-use',
+          baseRefOid: 'base-oid',
+          headRefOid: 'head-oid'
+        })
+      })
+
+    const pr = await getPRForBranch(
+      '/repo-root',
+      'add-guide-for-mobile-emulator-use',
+      null,
+      null,
+      5511
+    )
+
+    expect(pr).toBeNull()
   })
 
   it('falls back to the tracked upstream branch when the local branch name differs', async () => {

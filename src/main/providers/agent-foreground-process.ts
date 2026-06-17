@@ -1,10 +1,13 @@
 import { execFile } from 'child_process'
 import { promisify } from 'util'
+import { recognizeAgentProcessFromCommandLine } from '../../shared/agent-process-recognition'
 import {
-  isAgentForegroundWrapperProcess,
-  isExpectedAgentProcess,
-  recognizeAgentProcessFromCommandLine
-} from '../../shared/agent-process-recognition'
+  resolveWindowsAgentForegroundProcess,
+  shouldInspectWindowsAgentForeground,
+  type AgentForegroundResolutionOptions
+} from './windows-agent-foreground-process'
+
+export type { AgentForegroundResolutionOptions } from './windows-agent-foreground-process'
 
 const execFileAsync = promisify(execFile)
 
@@ -12,13 +15,6 @@ type ProcessRow = {
   pid: number
   ppid: number
   stat: string
-  command: string
-}
-
-type WindowsProcessRow = {
-  pid: number
-  ppid: number
-  name: string
   command: string
 }
 
@@ -36,49 +32,6 @@ function parsePsRows(stdout: string): ProcessRow[] {
       command: match[4]
     })
   }
-  return rows
-}
-
-function parseWindowsProcessRows(stdout: string): WindowsProcessRow[] {
-  const rows: WindowsProcessRow[] = []
-  let command = ''
-  let name = ''
-  let pid = Number.NaN
-  let ppid = Number.NaN
-
-  const flush = (): void => {
-    if (Number.isFinite(pid) && Number.isFinite(ppid)) {
-      rows.push({ pid, ppid, name, command: command || name })
-    }
-    command = ''
-    name = ''
-    pid = Number.NaN
-    ppid = Number.NaN
-  }
-
-  for (const raw of stdout.split(/\r?\n/)) {
-    const line = raw.trim()
-    if (!line) {
-      flush()
-      continue
-    }
-    const eq = line.indexOf('=')
-    if (eq < 0) {
-      continue
-    }
-    const key = line.slice(0, eq)
-    const value = line.slice(eq + 1)
-    if (key === 'CommandLine') {
-      command = value
-    } else if (key === 'Name') {
-      name = value
-    } else if (key === 'ParentProcessId') {
-      ppid = Number.parseInt(value, 10)
-    } else if (key === 'ProcessId') {
-      pid = Number.parseInt(value, 10)
-    }
-  }
-  flush()
   return rows
 }
 
@@ -114,18 +67,20 @@ function candidateScore(row: ProcessRow & { depth: number }): number {
 
 export async function resolveAgentForegroundProcess(
   shellPid: number | null | undefined,
-  fallbackProcess: string | null
+  fallbackProcess: string | null,
+  options: AgentForegroundResolutionOptions = {}
 ): Promise<string | null> {
   if (!shellPid) {
     return fallbackProcess
   }
 
   if (process.platform === 'win32') {
-    if (!fallbackProcess || !isAgentForegroundWrapperProcess(fallbackProcess)) {
+    if (!fallbackProcess || !shouldInspectWindowsAgentForeground(fallbackProcess)) {
       return fallbackProcess
     }
     return (
-      (await resolveAgentForegroundProcessFromWindows(shellPid, fallbackProcess)) ?? fallbackProcess
+      (await resolveWindowsAgentForegroundProcess(shellPid, fallbackProcess, options)) ??
+      fallbackProcess
     )
   }
 
@@ -141,93 +96,6 @@ export async function resolveAgentForegroundProcess(
   }
 
   return fallbackProcess
-}
-
-async function resolveAgentForegroundProcessFromWindows(
-  shellPid: number,
-  fallbackProcess: string
-): Promise<string | null> {
-  const stdout =
-    (await queryWindowsProcessesWithPowerShell()) ?? (await queryWindowsProcessesWithWmic())
-  return stdout
-    ? resolveAgentForegroundProcessFromWindowsRows(stdout, shellPid, fallbackProcess)
-    : null
-}
-
-async function queryWindowsProcessesWithPowerShell(): Promise<string | null> {
-  try {
-    const { stdout } = await execFileAsync(
-      'powershell.exe',
-      [
-        '-NoProfile',
-        '-NonInteractive',
-        '-Command',
-        'Get-CimInstance Win32_Process | ForEach-Object { "CommandLine=$($_.CommandLine)"; "Name=$($_.Name)"; "ParentProcessId=$($_.ParentProcessId)"; "ProcessId=$($_.ProcessId)"; "" }'
-      ],
-      {
-        encoding: 'utf8',
-        timeout: 3000,
-        maxBuffer: 8 * 1024 * 1024
-      }
-    )
-    return stdout
-  } catch {
-    return null
-  }
-}
-
-async function queryWindowsProcessesWithWmic(): Promise<string | null> {
-  try {
-    const { stdout } = await execFileAsync(
-      'wmic',
-      ['process', 'get', 'CommandLine,Name,ParentProcessId,ProcessId', '/format:value'],
-      {
-        encoding: 'utf8',
-        timeout: 3000,
-        maxBuffer: 8 * 1024 * 1024
-      }
-    )
-    return stdout
-  } catch {
-    // Best-effort: Windows process enumeration may be disabled, so callers
-    // still fall back to node-pty's process name when both probes fail.
-    return null
-  }
-}
-
-function resolveAgentForegroundProcessFromWindowsRows(
-  stdout: string,
-  shellPid: number,
-  fallbackProcess: string
-): string | null {
-  const candidates = collectDescendants(parseWindowsProcessRows(stdout), shellPid).sort(
-    (a, b) => b.depth - a.depth
-  )
-  const wrapperCandidates = candidates.filter((candidate) =>
-    windowsCandidateMatchesFallbackWrapper(candidate, fallbackProcess)
-  )
-  if (wrapperCandidates.length !== 1) {
-    return null
-  }
-  const [candidate] = wrapperCandidates
-  const recognized =
-    recognizeAgentProcessFromCommandLine(candidate.command) ??
-    recognizeAgentProcessFromCommandLine(candidate.name)
-  if (recognized) {
-    return recognized.processName
-  }
-  return null
-}
-
-function windowsCandidateMatchesFallbackWrapper(
-  candidate: WindowsProcessRow,
-  fallbackProcess: string
-): boolean {
-  const commandToken = candidate.command.trim().split(/\s+/, 1)[0] ?? ''
-  return (
-    isExpectedAgentProcess(candidate.name, fallbackProcess) ||
-    isExpectedAgentProcess(commandToken, fallbackProcess)
-  )
 }
 
 function resolveAgentForegroundProcessFromPs(stdout: string, shellPid: number): string | null {

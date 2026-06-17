@@ -11,7 +11,7 @@ export type SmartWorkspaceCommandRow = {
   value: string
 }
 
-export type SmartWorkspaceSourceIntent = 'github' | 'linear' | null
+export type SmartWorkspaceSourceIntent = 'github' | 'gitlab' | 'linear' | null
 
 export function resolveSmartWorkspaceCommandValue({
   currentValue,
@@ -37,6 +37,11 @@ export function resolveSmartWorkspaceCommandValue({
     const githubRow = rows.find((row) => row.kind === 'github')
     if (githubRow) {
       return githubRow.value
+    }
+  } else if (sourceIntent === 'gitlab') {
+    const gitlabRow = rows.find((row) => row.kind === 'gitlab')
+    if (gitlabRow) {
+      return gitlabRow.value
     }
   } else if (sourceIntent === 'linear') {
     const linearRow = rows.find((row) => row.kind === 'linear')

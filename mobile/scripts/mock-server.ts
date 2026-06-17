@@ -5,6 +5,11 @@
 import { WebSocketServer, type WebSocket } from 'ws'
 import nacl from 'tweetnacl'
 import type { MobileGitStatusEntry } from '../src/source-control/mobile-git-status'
+import {
+  DESKTOP_PROTOCOL_VERSION,
+  MIN_COMPATIBLE_MOBILE_VERSION
+} from '../../src/shared/protocol-version'
+import { deriveSharedKey, e2eeDecrypt, e2eeEncrypt, type E2EEState } from './mock-server-encryption'
 
 const PORT = Number(process.env.PORT) || 6768
 const AUTH_TOKEN = 'mock-device-token'
@@ -13,40 +18,6 @@ const AUTH_TOKEN = 'mock-device-token'
 // The public key is printed at startup so it can be used in pairing QR data.
 const serverKeyPair = nacl.box.keyPair()
 const serverPublicKeyB64 = Buffer.from(serverKeyPair.publicKey).toString('base64')
-
-type E2EEState = {
-  sharedKey: Uint8Array
-  deviceToken: string | null
-  authenticated: boolean
-}
-
-function deriveSharedKey(ourSecret: Uint8Array, peerPublic: Uint8Array): Uint8Array {
-  return nacl.box.before(peerPublic, ourSecret)
-}
-
-function e2eeEncrypt(plaintext: string, sharedKey: Uint8Array): string {
-  const nonce = nacl.randomBytes(nacl.box.nonceLength)
-  const msg = new TextEncoder().encode(plaintext)
-  const ciphertext = nacl.box.after(msg, nonce, sharedKey)
-  const bundle = new Uint8Array(nonce.length + ciphertext.length)
-  bundle.set(nonce)
-  bundle.set(ciphertext, nonce.length)
-  return Buffer.from(bundle).toString('base64')
-}
-
-function e2eeDecrypt(encrypted: string, sharedKey: Uint8Array): string | null {
-  const bundle = Uint8Array.from(Buffer.from(encrypted, 'base64'))
-  if (bundle.length < nacl.box.nonceLength + nacl.box.overheadLength) {
-    return null
-  }
-  const nonce = bundle.slice(0, nacl.box.nonceLength)
-  const ciphertext = bundle.slice(nacl.box.nonceLength)
-  const plaintext = nacl.box.open.after(ciphertext, nonce, sharedKey)
-  if (!plaintext) {
-    return null
-  }
-  return new TextDecoder().decode(plaintext)
-}
 
 const FAKE_WORKTREES = [
   {
@@ -192,6 +163,8 @@ function handleRequest(
       send(
         success(request.id, {
           runtimeId: 'mock-runtime',
+          protocolVersion: DESKTOP_PROTOCOL_VERSION,
+          minCompatibleMobileVersion: MIN_COMPATIBLE_MOBILE_VERSION,
           graphStatus: 'ready',
           windowCount: 1,
           tabCount: 2,

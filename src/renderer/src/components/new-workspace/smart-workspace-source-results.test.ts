@@ -152,6 +152,50 @@ describe('Branch source results', () => {
     ])
   })
 
+  it('keeps GitHub row values unique for the same item number across repos', () => {
+    const rows = buildSmartWorkspaceSourceRows({
+      mode: 'github',
+      value: '',
+      branches: [],
+      githubItems: [
+        { repoId: 'repo-a', type: 'issue', number: 123, title: 'Repo A issue' } as never,
+        { repoId: 'repo-b', type: 'issue', number: 123, title: 'Repo B issue' } as never
+      ],
+      gitlabItems: [],
+      linearIssues: [],
+      gitlabAvailable: false,
+      linearAvailable: false,
+      resultLimit: 12
+    })
+
+    expect(rows.map((row) => row.value)).toEqual([
+      'github-repo-a-issue-123',
+      'github-repo-b-issue-123'
+    ])
+  })
+
+  it('keeps GitLab row values unique for the same item number across repos', () => {
+    const rows = buildSmartWorkspaceSourceRows({
+      mode: 'gitlab',
+      value: '',
+      branches: [],
+      githubItems: [],
+      gitlabItems: [
+        { repoId: 'repo-a', type: 'issue', number: 123, title: 'Repo A issue' } as never,
+        { repoId: 'repo-b', type: 'issue', number: 123, title: 'Repo B issue' } as never
+      ],
+      linearIssues: [],
+      gitlabAvailable: true,
+      linearAvailable: false,
+      resultLimit: 12
+    })
+
+    expect(rows.map((row) => row.value)).toEqual([
+      'gitlab-repo-a-issue-123',
+      'gitlab-repo-b-issue-123'
+    ])
+  })
+
   it('ignores malformed Linear collection rows instead of throwing during render', () => {
     expect(() =>
       buildSmartWorkspaceSourceRows({

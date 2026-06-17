@@ -160,7 +160,7 @@ export function ShortcutBindingRow({
         {/* Reset/Disable reveal on hover or keyboard focus to keep the row calm;
             they stay reachable via focus-within for keyboard users. */}
         {hasBinding ? (
-          <div className="flex items-center gap-0.5 opacity-0 transition-opacity group-hover/shortcut:opacity-100 group-focus-within/shortcut:opacity-100">
+          <div className="flex items-center gap-0.5 can-hover:opacity-0 transition-opacity group-hover/shortcut:opacity-100 group-focus-within/shortcut:opacity-100">
             {modified ? (
               <Tooltip>
                 <TooltipTrigger asChild>

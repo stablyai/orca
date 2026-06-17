@@ -102,6 +102,7 @@ type WorktreeActivationStore = Partial<WorktreeRuntimeOwnerState> & {
       command: string
       env?: Record<string, string>
       initialAgentStatus?: { agent: TuiAgent; prompt: string }
+      showSessionRestoredBanner?: boolean
       telemetry?: AgentStartedTelemetry
     }
   ) => void
@@ -157,6 +158,7 @@ export function activateAndRevealFolderWorkspace(
   opts?: {
     sidebarRevealBehavior?: PendingSidebarWorktreeReveal['behavior']
     startup?: WorktreeStartupPayload
+    runtimeEnvironmentId?: string | null
   }
 ): ActivateAndRevealResult | false {
   const state = useAppStore.getState()
@@ -166,10 +168,17 @@ export function activateAndRevealFolderWorkspace(
   if (!folderWorkspace) {
     return false
   }
-  const pathStatus = state.getFreshFolderWorkspacePathStatus({
-    scope: 'folder-workspace',
-    folderWorkspaceId
-  })
+  const runtimeEnvironmentId =
+    opts && 'runtimeEnvironmentId' in opts
+      ? (opts.runtimeEnvironmentId ?? null)
+      : getRuntimeEnvironmentIdForWorktree(state, folderWorkspaceKey(folderWorkspaceId))
+  const pathStatus = state.getFreshFolderWorkspacePathStatus(
+    {
+      scope: 'folder-workspace',
+      folderWorkspaceId
+    },
+    { runtimeEnvironmentId }
+  )
   if (folderWorkspaceActivationBlocked(pathStatus)) {
     toast.error(getFolderWorkspacePathStatusTitle(pathStatus) ?? 'Cannot open folder workspace', {
       description: getFolderWorkspacePathStatusDescription(pathStatus) ?? folderWorkspace.folderPath

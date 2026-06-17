@@ -30,6 +30,21 @@ function mockExecFile(
   )
 }
 
+async function withProcessPlatform<T>(
+  platform: NodeJS.Platform,
+  run: () => T | Promise<T>
+): Promise<T> {
+  const descriptor = Object.getOwnPropertyDescriptor(process, 'platform')
+  Object.defineProperty(process, 'platform', { configurable: true, value: platform })
+  try {
+    return await run()
+  } finally {
+    if (descriptor) {
+      Object.defineProperty(process, 'platform', descriptor)
+    }
+  }
+}
+
 beforeEach(() => {
   execFileMock.mockReset()
 })
@@ -115,66 +130,106 @@ describe('getForegroundProcessName', () => {
   })
 
   it('recognizes SSH relay node-wrapped agents from descendant command lines', async () => {
-    mockExecFile((_command, args) => {
-      if (args[0] === '-axo') {
-        return {
-          stdout: ['100 99 Ss   bash -l', '101 100 S+   node /home/dev/.local/bin/codex'].join('\n')
+    await withProcessPlatform('linux', async () => {
+      mockExecFile((_command, args) => {
+        if (args[0] === '-axo') {
+          return {
+            stdout: ['100 99 Ss   bash -l', '101 100 S+   node /home/dev/.local/bin/codex'].join(
+              '\n'
+            )
+          }
         }
-      }
-      return new Error('unexpected command')
-    })
+        return new Error('unexpected command')
+      })
 
-    await expect(getForegroundProcessName(100, 'node')).resolves.toBe('codex')
+      await expect(getForegroundProcessName(100, 'node')).resolves.toBe('codex')
+    })
+  })
+
+  it('recognizes Windows SSH relay shell-rooted agent descendants', async () => {
+    await withProcessPlatform('win32', async () => {
+      mockExecFile((command) => {
+        if (command === 'powershell.exe') {
+          return {
+            stdout: JSON.stringify([
+              {
+                CommandLine: 'powershell.exe',
+                ExecutablePath: 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe',
+                Name: 'powershell.exe',
+                ParentProcessId: 99,
+                ProcessId: 100
+              },
+              {
+                CommandLine: 'node C:\\Users\\dev\\AppData\\Roaming\\npm\\codex.cmd',
+                ExecutablePath: 'C:\\Program Files\\nodejs\\node.exe',
+                Name: 'node.exe',
+                ParentProcessId: 100,
+                ProcessId: 101
+              }
+            ])
+          }
+        }
+        return new Error('unexpected command')
+      })
+
+      await expect(getForegroundProcessName(100, 'powershell.exe')).resolves.toBe('codex')
+    })
   })
 
   it('recognizes SSH relay wrapped agents when no foreground marker is available', async () => {
-    mockExecFile((_command, args) => {
-      if (args[0] === '-axo') {
-        return {
-          stdout: [
-            '100 99 Ss   bash -l',
-            '101 100 S    node /home/dev/.local/bin/node_modules/@google/gemini-cli/bundle/gemini.mjs'
-          ].join('\n')
+    await withProcessPlatform('linux', async () => {
+      mockExecFile((_command, args) => {
+        if (args[0] === '-axo') {
+          return {
+            stdout: [
+              '100 99 Ss   bash -l',
+              '101 100 S    node /home/dev/.local/bin/node_modules/@google/gemini-cli/bundle/gemini.mjs'
+            ].join('\n')
+          }
         }
-      }
-      return new Error('unexpected command')
-    })
+        return new Error('unexpected command')
+      })
 
-    await expect(getForegroundProcessName(100, 'node')).resolves.toBe('gemini')
+      await expect(getForegroundProcessName(100, 'node')).resolves.toBe('gemini')
+    })
   })
 
   it('does not guess when SSH relay wrapper descendants are ambiguous', async () => {
-    mockExecFile((_command, args) => {
-      if (args[0] === '-axo') {
-        return {
-          stdout: [
-            '100 99 Ss   bash -l',
-            '101 100 S    node /home/dev/project/server.js',
-            '102 100 S    node /home/dev/.local/bin/node_modules/@openai/codex/bin/codex.js'
-          ].join('\n')
+    await withProcessPlatform('linux', async () => {
+      mockExecFile((_command, args) => {
+        if (args[0] === '-axo') {
+          return {
+            stdout: [
+              '100 99 Ss   bash -l',
+              '101 100 S    node /home/dev/project/server.js',
+              '102 100 S    node /home/dev/.local/bin/node_modules/@openai/codex/bin/codex.js'
+            ].join('\n')
+          }
         }
-      }
-      return new Error('unexpected command')
-    })
+        return new Error('unexpected command')
+      })
 
-    await expect(getForegroundProcessName(100, 'node')).resolves.toBe('node')
+      await expect(getForegroundProcessName(100, 'node')).resolves.toBe('node')
+    })
   })
 
   it('does not report a stopped SSH relay agent when another process has foreground', async () => {
-    mockExecFile((_command, args) => {
-      if (args[0] === '-axo') {
-        return {
-          stdout: [
-            '100 99 Ss   bash -l',
-            '101 100 T    node /home/dev/.local/bin/codex',
-            '102 100 S+   vim notes.txt'
-          ].join('\n')
+    await withProcessPlatform('linux', async () => {
+      mockExecFile((_command, args) => {
+        if (args[0] === '-axo') {
+          return {
+            stdout: [
+              '100 99 Ss   bash -l',
+              '101 100 T    node /home/dev/.local/bin/codex',
+              '102 100 S+   vim notes.txt'
+            ].join('\n')
+          }
         }
-      }
-      return new Error('unexpected command')
-    })
+        return new Error('unexpected command')
+      })
 
-    await expect(getForegroundProcessName(100, 'node')).resolves.toBe('node')
+      await expect(getForegroundProcessName(100, 'node')).resolves.toBe('node')
+    })
   })
 
   it('falls back to the root process command when descendant inspection fails', async () => {

@@ -307,6 +307,8 @@ export type TerminalSlice = {
       env?: Record<string, string>
       /** Initial prompt-start status for agents that lack native prompt hooks. */
       initialAgentStatus?: { agent: TuiAgent; prompt: string }
+      /** Show the restored-session banner when this startup command mounts. */
+      showSessionRestoredBanner?: boolean
       /** Telemetry metadata for the `agent_started` event. Threaded all the
        *  way to the `pty:spawn` IPC handler in main so the event fires only
        *  after spawn confirms — never on click-intent. */
@@ -444,12 +446,18 @@ export type TerminalSlice = {
       delivery?: 'terminal-paste'
       env?: Record<string, string>
       initialAgentStatus?: { agent: TuiAgent; prompt: string }
+      showSessionRestoredBanner?: boolean
       telemetry?: AgentStartedTelemetry
     }
   ) => void
-  consumeTabStartupCommand: (
-    tabId: string
-  ) => { command: string; env?: Record<string, string>; telemetry?: AgentStartedTelemetry } | null
+  consumeTabStartupCommand: (tabId: string) => {
+    command: string
+    delivery?: 'terminal-paste'
+    env?: Record<string, string>
+    initialAgentStatus?: { agent: TuiAgent; prompt: string }
+    showSessionRestoredBanner?: boolean
+    telemetry?: AgentStartedTelemetry
+  } | null
   queueTabSetupSplit: (
     tabId: string,
     startup: { command: string; env?: Record<string, string>; direction: SetupSplitDirection }

@@ -491,6 +491,7 @@ describe('Store', () => {
     expect(settings.floatingTerminalDefaultedForAllUsers).toBe(true)
     expect(settings.notifications.customSoundPath).toBeNull()
     expect(settings.notifications.customSoundVolume).toBe(100)
+    expect(settings.notifications.suppressWhenFocused).toBe(true)
   })
 
   it('returns default UI state when no data file exists', async () => {
@@ -732,7 +733,34 @@ describe('Store', () => {
     }
   )
 
-  it('keeps current onboarding progress marked as the four-step flow', async () => {
+  it.each([
+    [3, 3],
+    [4, 4],
+    [9, 4]
+  ])(
+    'migrates versioned four-step onboarding progress %i around the inserted Windows step',
+    async (legacyStep, expectedStep) => {
+      writeDataFile({
+        onboarding: {
+          flowVersion: 3,
+          closedAt: null,
+          outcome: null,
+          lastCompletedStep: legacyStep,
+          checklist: {}
+        }
+      })
+
+      const store = await createStore()
+      const onboarding = store.getOnboarding()
+
+      expect(onboarding.flowVersion).toBe(ONBOARDING_FLOW_VERSION)
+      expect(onboarding.lastCompletedStep).toBe(expectedStep)
+      expect(onboarding.closedAt).toBeNull()
+      expect(onboarding.outcome).toBeNull()
+    }
+  )
+
+  it('keeps current onboarding progress marked as the five-step flow', async () => {
     writeDataFile({
       onboarding: {
         flowVersion: ONBOARDING_FLOW_VERSION,
@@ -765,13 +793,17 @@ describe('Store', () => {
 
     expect(onboarding.flowVersion).toBe(ONBOARDING_FLOW_VERSION)
     expect(onboarding.outcome).toBe('completed')
-    expect(onboarding.lastCompletedStep).toBe(4)
+    expect(onboarding.lastCompletedStep).toBe(ONBOARDING_FINAL_STEP)
   })
 
   it.each([
-    [{ outcome: 'completed', lastCompletedStep: 7 }, 'completed', 4],
+    [{ outcome: 'completed', lastCompletedStep: 7 }, 'completed', ONBOARDING_FINAL_STEP],
     [{ closedAt: null, outcome: 'dismissed', lastCompletedStep: 2 }, 'dismissed', 2],
-    [{ closedAt: 'invalid', outcome: 'completed', lastCompletedStep: 7 }, 'completed', 4]
+    [
+      { closedAt: 'invalid', outcome: 'completed', lastCompletedStep: 7 },
+      'completed',
+      ONBOARDING_FINAL_STEP
+    ]
   ] as const)(
     'keeps closed onboarding closed when closedAt is missing or malformed',
     async (onboardingInput, expectedOutcome, expectedStep) => {
@@ -4000,6 +4032,44 @@ describe('Store', () => {
       'repo-1::/repo': false,
       'repo-2::/repo': true
     })
+  })
+
+  it('updateUI skips save and notification when normalized UI is unchanged', async () => {
+    vi.useFakeTimers()
+    try {
+      const store = await createStore()
+      const notifications: PersistedState['ui'][] = []
+      store.updateUI({
+        sidebarWidth: 400,
+        showDotfilesByWorktree: { 'repo-1::/repo': false },
+        featureTipsSeenIds: ['voice-dictation'],
+        contextualToursSeenIds: ['tasks'],
+        featureInteractions: {
+          tasks: { firstInteractedAt: 100, interactionCount: 1 }
+        }
+      })
+      vi.advanceTimersByTime(300)
+      await store.waitForPendingWrite()
+      const persistedBefore = readFileSync(dataFile(), 'utf-8')
+      store.onUIChanged((ui) => notifications.push(ui))
+
+      store.updateUI({
+        sidebarWidth: 400,
+        showDotfilesByWorktree: { 'repo-1::/repo': false },
+        featureTipsSeenIds: ['voice-dictation'],
+        contextualToursSeenIds: ['tasks'],
+        featureInteractions: {
+          tasks: { firstInteractedAt: 100, interactionCount: 1 }
+        }
+      })
+      vi.advanceTimersByTime(300)
+      await store.waitForPendingWrite()
+
+      expect(notifications).toEqual([])
+      expect(readFileSync(dataFile(), 'utf-8')).toBe(persistedBefore)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('migrates missing rightSidebarOpen from the legacy default setting', async () => {

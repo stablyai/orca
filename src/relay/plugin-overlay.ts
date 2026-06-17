@@ -30,6 +30,10 @@ import {
 import { homedir } from 'os'
 import { basename, join } from 'path'
 import { mirrorEntry, safeRemoveOverlay } from '../main/pty/overlay-mirror'
+import {
+  isOmpPersistentSqliteEntry,
+  mirrorOmpPersistentSqliteFiles
+} from '../main/pty/omp-sqlite-overlay'
 import { mergePiOverlayUiSettings } from '../shared/pi-overlay-ui-settings'
 import type { PiAgentKind } from '../shared/pi-agent-kind'
 
@@ -218,8 +222,11 @@ export class PluginOverlayManager {
     return join(this.homeDir, PI_AGENT_HOME_DIR_NAME[kind], PI_AGENT_SUBDIR)
   }
 
-  private mirrorPiAgentDir(sourceAgentDir: string, overlayDir: string): void {
+  private mirrorPiAgentDir(sourceAgentDir: string, overlayDir: string, kind: PiAgentKind): void {
     if (!existsSync(sourceAgentDir)) {
+      if (kind === 'omp') {
+        mirrorOmpPersistentSqliteFiles(sourceAgentDir, overlayDir)
+      }
       return
     }
 
@@ -227,6 +234,10 @@ export class PluginOverlayManager {
       const sourcePath = join(sourceAgentDir, entry.name)
 
       if (entry.name === PI_AGENT_SETTINGS_FILE) {
+        continue
+      }
+
+      if (kind === 'omp' && isOmpPersistentSqliteEntry(entry.name)) {
         continue
       }
 
@@ -259,6 +270,10 @@ export class PluginOverlayManager {
       }
 
       mirrorEntry(sourcePath, join(overlayDir, basename(sourcePath)))
+    }
+
+    if (kind === 'omp') {
+      mirrorOmpPersistentSqliteFiles(sourceAgentDir, overlayDir)
     }
   }
 
@@ -300,17 +315,17 @@ export class PluginOverlayManager {
     const root = this.piRoots[kind]
     const dir = join(root, safeDirName(id))
     try {
+      const sourceAgentDir = existingAgentDir ?? this.getDefaultPiAgentDir(kind)
+      if (existingAgentDir && !existsSync(existingAgentDir)) {
+        return null
+      }
       // Why: PI_CODING_AGENT_DIR is the whole state root for both Pi and OMP
       // (OMP inherits the env-var name from Pi by design). Mirror the remote
       // user's default agent dir so Orca's status extension does not hide auth,
       // sessions, skills, prompts, themes, or user extensions inside SSH panes.
       safeRemoveOverlay(dir, root)
       mkdirSync(dir, { recursive: true })
-      const sourceAgentDir = existingAgentDir ?? this.getDefaultPiAgentDir(kind)
-      if (existingAgentDir && !existsSync(existingAgentDir)) {
-        return null
-      }
-      this.mirrorPiAgentDir(sourceAgentDir, dir)
+      this.mirrorPiAgentDir(sourceAgentDir, dir, kind)
       this.writePiOverlaySettings(sourceAgentDir, dir)
       const extensionsDir = join(dir, 'extensions')
       mkdirSync(extensionsDir, { recursive: true })

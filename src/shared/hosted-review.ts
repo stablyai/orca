@@ -25,6 +25,8 @@ export type HostedReviewInfo = {
   mergeQueueRequired?: boolean | null
   mergeStateStatus?: string | null
   headSha?: string
+  /** Target branch name for review-created worktree compare-base repair. */
+  baseRefName?: string
   conflictSummary?: PRConflictSummary
 }
 

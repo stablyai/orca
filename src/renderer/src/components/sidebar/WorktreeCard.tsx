@@ -14,7 +14,6 @@ import {
   LoaderCircle,
   Server,
   ServerOff,
-  Sparkles,
   Star,
   Trash2,
   Workflow
@@ -64,6 +63,7 @@ import { DetachedHeadBadge } from '@/components/DetachedHeadBadge'
 import { getWorktreeGitIdentityDisplay } from '@/lib/worktree-git-identity-display'
 import { getFlushWorktreeCardPaddingLeft } from './worktree-list-indentation'
 import { translate } from '@/i18n/i18n'
+import { recordRendererCrashBreadcrumb } from '@/lib/crash-diagnostics'
 import { folderWorkspaceKey, parseWorkspaceKey } from '../../../../shared/workspace-scope'
 
 type WorktreeRenameRequest = {
@@ -578,6 +578,12 @@ const WorktreeCard = React.memo(function WorktreeCard({
       // Why: route sidebar clicks through the shared activation path so the
       // back/forward stack stays complete for the primary worktree navigation
       // surface instead of only recording palette-driven switches.
+      recordRendererCrashBreadcrumb('sidebar_worktree_activate', {
+        worktreeId: worktree.id,
+        repoId: worktree.repoId,
+        wasActive: isActive,
+        sshDisconnected: isSshDisconnected
+      })
       onImmediateActivate?.(worktree.id, activationRowKey)
       activateWorktreeFromSidebar(worktree.id)
       if (isSshDisconnected) {
@@ -588,6 +594,8 @@ const WorktreeCard = React.memo(function WorktreeCard({
     [
       affiliateListMode,
       worktree.id,
+      worktree.repoId,
+      isActive,
       isDeleting,
       activationRowKey,
       isSshDisconnected,
@@ -672,13 +680,6 @@ const WorktreeCard = React.memo(function WorktreeCard({
       showDeleteQuickAction,
       worktree.id
     ]
-  )
-  const handlePendingFirstAgentMessageRenameInfo = useCallback(
-    (event: React.MouseEvent<HTMLButtonElement>) => {
-      event.preventDefault()
-      event.stopPropagation()
-    },
-    []
   )
   const handleOpenRenameErrorDialog = useCallback((event: React.MouseEvent<HTMLButtonElement>) => {
     event.preventDefault()
@@ -1143,10 +1144,8 @@ const WorktreeCard = React.memo(function WorktreeCard({
             {typeof worktree.firstAgentMessageRenameError === 'string' &&
             worktree.firstAgentMessageRenameError.length > 0 &&
             !titleRenaming ? (
-              // The auto-rename generation step failed — surface it (red) rather
-              // than the silent "rename pending". The full message is raw agent
-              // CLI output (often many lines), so the badge opens a dialog on
-              // click instead of cramming it into a tooltip.
+              // The full error can be raw agent CLI output, so the title-row
+              // badge opens a dialog instead of squeezing details into a tooltip.
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
@@ -1169,32 +1168,6 @@ const WorktreeCard = React.memo(function WorktreeCard({
                   {translate(
                     'auto.components.sidebar.WorktreeCard.4eba2ea99e',
                     'Auto-name failed. Click to see details.'
-                  )}
-                </TooltipContent>
-              </Tooltip>
-            ) : worktree.pendingFirstAgentMessageRename === true && !titleRenaming ? (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    onPointerDown={stopQuickActionPointerPropagation}
-                    onClick={handlePendingFirstAgentMessageRenameInfo}
-                    onDoubleClick={handlePendingFirstAgentMessageRenameInfo}
-                    className="h-4 shrink-0 gap-0.5 rounded !px-0.5 text-[10px] font-medium leading-none text-muted-foreground border border-worktree-sidebar-border/60 bg-worktree-sidebar-accent/45 hover:bg-worktree-sidebar-accent hover:text-foreground has-[>svg]:!px-0.5"
-                    aria-label={translate(
-                      'auto.components.sidebar.WorktreeCard.c6833b5187',
-                      'This worktree will be renamed from the first agent message'
-                    )}
-                  >
-                    <Sparkles className="size-2.5" />
-                    {translate('auto.components.sidebar.WorktreeCard.f62a3dadbc', 'rename pending')}
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="right" sideOffset={8}>
-                  {translate(
-                    'auto.components.sidebar.WorktreeCard.c6833b5187',
-                    'This worktree will be renamed from the first agent message'
                   )}
                 </TooltipContent>
               </Tooltip>

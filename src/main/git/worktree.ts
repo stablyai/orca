@@ -43,6 +43,7 @@ export type AddWorktreeOptions = GitWorktreeExecOptions & {
 export type RemoveWorktreeOptions = GitWorktreeExecOptions & {
   deleteBranch?: boolean
   forceBranchDelete?: boolean
+  knownRemovedWorktree?: Pick<GitWorktreeInfo, 'branch' | 'head'>
 }
 
 type LocalBaseRefRefreshability =
@@ -97,6 +98,12 @@ function isNotGitRepositoryError(error: unknown): boolean {
 
 function isUnsupportedWorktreeListZError(error: unknown): boolean {
   return /(?:unknown|invalid) (?:switch|option).*`?-z'?|(?:unknown|invalid) (?:switch|option).*`?z'?/i.test(
+    getErrorText(error)
+  )
+}
+
+function isBranchCheckedOutInWorktreeError(error: unknown): boolean {
+  return /cannot delete branch .*(?:used by worktree|checked out)|branch .*is checked out/i.test(
     getErrorText(error)
   )
 }
@@ -810,10 +817,11 @@ export async function removeWorktree(
   // commits are preserved.
   options: RemoveWorktreeOptions = {}
 ): Promise<RemoveWorktreeResult> {
-  const worktreesBeforeRemoval = await listWorktrees(repoPath, options)
-  const removedWorktree = worktreesBeforeRemoval.find((worktree) =>
-    areWorktreePathsEqual(worktree.path, worktreePath)
-  )
+  const removedWorktree =
+    options.knownRemovedWorktree ??
+    (await listWorktrees(repoPath, options)).find((worktree) =>
+      areWorktreePathsEqual(worktree.path, worktreePath)
+    )
   const branchName = normalizeLocalBranchRef(removedWorktree?.branch ?? '')
   const branchHead = removedWorktree?.head ?? ''
 
@@ -823,23 +831,11 @@ export async function removeWorktree(
   }
   args.push(worktreePath)
   await gitExecFileAsync(args, gitExecOptions(repoPath, options))
-  await gitExecFileAsync(['worktree', 'prune'], gitExecOptions(repoPath, options))
 
   if (!branchName) {
     return {}
   }
   if (options.deleteBranch === false) {
-    return {}
-  }
-
-  // Why: `git worktree list` can still include stale sibling records until
-  // `git worktree prune` runs. Re-list after prune so branch cleanup only skips
-  // when a still-live worktree actually keeps that branch checked out.
-  const worktreesAfterPrune = await listWorktrees(repoPath, options)
-  const branchStillInUse = worktreesAfterPrune.some(
-    (worktree) => normalizeLocalBranchRef(worktree.branch) === branchName
-  )
-  if (branchStillInUse) {
     return {}
   }
 
@@ -851,11 +847,15 @@ export async function removeWorktree(
     // into its upstream or HEAD, so unpublished work is preserved instead of
     // force-deleted. forceBranchDelete opts into `-D` for failed-creation rollback,
     // where the fresh branch has no user work to protect.
-    const deleteFlag = options.forceBranchDelete ? '-D' : '-d'
-    await gitExecFileAsync(
-      ['branch', deleteFlag, '--', branchName],
-      gitExecOptions(repoPath, options)
+    const branchDeleteResult = await deleteLocalBranchAfterWorktreeRemoval(
+      repoPath,
+      branchName,
+      options.forceBranchDelete === true,
+      options
     )
+    if (branchDeleteResult === 'checked-out') {
+      return {}
+    }
     return {}
   } catch (error) {
     if (!options.forceBranchDelete && branchHead) {
@@ -886,6 +886,48 @@ export async function removeWorktree(
       error
     )
     return { preservedBranch: { branchName, ...(branchHead ? { head: branchHead } : {}) } }
+  }
+}
+
+async function deleteLocalBranchAfterWorktreeRemoval(
+  repoPath: string,
+  branchName: string,
+  forceBranchDelete: boolean,
+  options: GitWorktreeExecOptions = {}
+): Promise<'deleted' | 'checked-out'> {
+  const deleteFlag = forceBranchDelete ? '-D' : '-d'
+  try {
+    await gitExecFileAsync(
+      ['branch', deleteFlag, '--', branchName],
+      gitExecOptions(repoPath, options)
+    )
+    return 'deleted'
+  } catch (error) {
+    if (!isBranchCheckedOutInWorktreeError(error)) {
+      throw error
+    }
+  }
+
+  try {
+    // Why: `branch -d` is the cheap live-checkout guard. Only pay for
+    // `worktree prune` when a stale admin record may be the thing blocking it.
+    await gitExecFileAsync(['worktree', 'prune'], gitExecOptions(repoPath, options))
+  } catch (error) {
+    console.warn(`[git] Failed to prune worktrees before deleting branch "${branchName}"`, error)
+    return 'checked-out'
+  }
+
+  try {
+    await gitExecFileAsync(
+      ['branch', deleteFlag, '--', branchName],
+      gitExecOptions(repoPath, options)
+    )
+    return 'deleted'
+  } catch (error) {
+    if (isBranchCheckedOutInWorktreeError(error)) {
+      return 'checked-out'
+    }
+    throw error
   }
 }
 

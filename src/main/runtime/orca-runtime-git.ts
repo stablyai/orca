@@ -76,6 +76,8 @@ import { getPullRequestDraftContext } from '../text-generation/pull-request-cont
 import { normalizeRuntimeRelativePath } from './runtime-relative-paths'
 import { gitExecFileAsync } from '../git/runner'
 import type { GitRuntimeOptions } from '../git/git-runtime-options'
+import { resolveHostedReviewBodyForGeneration } from '../source-control/pull-request-template'
+import type { HostedReviewProvider } from '../../shared/hosted-review'
 
 export type ResolvedRuntimeGitWorktree = Worktree & { git: GitWorktreeInfo }
 type RuntimeCommitMessageSettingsOverride = Partial<
@@ -638,7 +640,14 @@ export class RuntimeGitCommands {
 
   async generateRuntimePullRequestFields(
     worktreeSelector: string,
-    input: { base: string; title: string; body: string; draft: boolean },
+    input: {
+      base: string
+      title: string
+      body: string
+      draft: boolean
+      provider?: HostedReviewProvider
+      useTemplate?: boolean
+    },
     settingsOverride?: RuntimeCommitMessageSettingsOverride
   ): Promise<GeneratePullRequestFieldsResult> {
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
@@ -670,11 +679,18 @@ export class RuntimeGitCommands {
     }
     let context: Awaited<ReturnType<typeof getPullRequestDraftContext>>
     try {
+      const currentBody = await resolveHostedReviewBodyForGeneration({
+        body: input.body,
+        repoPath: target.worktree.path,
+        connectionId: target.connectionId,
+        provider: input.provider,
+        useTemplate: input.useTemplate
+      })
       context = target.connectionId
         ? await getPullRequestDraftContext((argv) => provider!.exec(argv, target.worktree.path), {
             base: input.base,
             currentTitle: input.title,
-            currentBody: input.body,
+            currentBody,
             currentDraft: input.draft
           })
         : await getPullRequestDraftContext(
@@ -687,7 +703,7 @@ export class RuntimeGitCommands {
             {
               base: input.base,
               currentTitle: input.title,
-              currentBody: input.body,
+              currentBody,
               currentDraft: input.draft
             }
           )

@@ -71,6 +71,7 @@ describe('resumeSleepingAgentSessionsForWorktree', () => {
     const state = useAppStore.getState()
     const resumedTab = (state.tabsByWorktree['wt-1'] ?? []).find((tab) => tab.id !== 'tab-1')
     expect(resumedTab?.launchAgent).toBe('claude')
+    expect(state.pendingStartupByTabId[resumedTab!.id]?.showSessionRestoredBanner).toBe(true)
     expect(state.sleepingAgentSessionsByPaneKey[record.paneKey]).toBeUndefined()
   })
 
@@ -88,6 +89,7 @@ describe('resumeSleepingAgentSessionsForWorktree', () => {
     const tabs = state.tabsByWorktree['wt-1'] ?? []
     expect(tabs).toHaveLength(1)
     expect(tabs[0]?.launchAgent).toBe('claude')
+    expect(state.pendingStartupByTabId[tabs[0]!.id]?.showSessionRestoredBanner).toBe(true)
     expect(state.sleepingAgentSessionsByPaneKey[record.paneKey]).toBeUndefined()
   })
 

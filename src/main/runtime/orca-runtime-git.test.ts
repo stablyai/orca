@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => ({
   generateCommitMessageFromContext: vi.fn(),
   generatePullRequestFieldsFromContext: vi.fn(),
   resolveCommitMessageSettings: vi.fn(),
+  resolveHostedReviewBodyForGeneration: vi.fn(),
   getSshGitProvider: vi.fn()
 }))
 
@@ -53,6 +54,10 @@ vi.mock('../providers/ssh-git-dispatch', () => ({
   getSshGitProvider: mocks.getSshGitProvider
 }))
 
+vi.mock('../source-control/pull-request-template', () => ({
+  resolveHostedReviewBodyForGeneration: mocks.resolveHostedReviewBodyForGeneration
+}))
+
 const tempDirs: string[] = []
 
 function makeWorktree(path: string): ResolvedRuntimeGitWorktree {
@@ -86,6 +91,8 @@ describe('RuntimeGitCommands', () => {
     mocks.generateCommitMessageFromContext.mockReset()
     mocks.generatePullRequestFieldsFromContext.mockReset()
     mocks.resolveCommitMessageSettings.mockReset()
+    mocks.resolveHostedReviewBodyForGeneration.mockReset()
+    mocks.resolveHostedReviewBodyForGeneration.mockImplementation(async ({ body }) => body)
     mocks.getSshGitProvider.mockReset()
     mocks.checkoutBranch.mockReset()
     mocks.listLocalBranches.mockReset()
@@ -461,6 +468,69 @@ describe('RuntimeGitCommands', () => {
       expect.objectContaining({
         kind: 'local',
         cwd: worktreePath
+      })
+    )
+  })
+
+  it('loads the hosted review template before generating pull-request fields', async () => {
+    const worktreePath = mkdtempSync(join(tmpdir(), 'orca-runtime-git-'))
+    tempDirs.push(worktreePath)
+    const templateBody = '## Summary\n\n## Testing\n\n- [ ] Required checks'
+    const context = {
+      base: 'main',
+      branch: 'feature/template-aware-pr',
+      branchChangedByPreparation: false,
+      commitSummary: 'abc123 feat: test',
+      changeSummary: 'M README.md',
+      patch: '+hello',
+      currentTitle: '',
+      currentBody: templateBody,
+      currentDraft: false
+    }
+    const sourceControlAiResolvedParams = {
+      agentId: 'codex' as const,
+      model: 'gpt-5.5'
+    }
+    mocks.resolveHostedReviewBodyForGeneration.mockResolvedValue(templateBody)
+    mocks.getPullRequestDraftContext.mockResolvedValue(context)
+    mocks.generatePullRequestFieldsFromContext.mockResolvedValue({
+      success: true,
+      fields: {
+        base: 'main',
+        title: 'Use existing template',
+        body: templateBody,
+        draft: false
+      }
+    })
+    const commands = new RuntimeGitCommands({
+      resolveRuntimeGitTarget: async () => ({ worktree: makeWorktree(worktreePath) }),
+      getRuntimeSettings: () => ({}) as GlobalSettings
+    })
+
+    await commands.generateRuntimePullRequestFields(
+      'id:wt-1',
+      {
+        base: 'main',
+        title: '',
+        body: '',
+        draft: false,
+        provider: 'gitlab',
+        useTemplate: true
+      },
+      { sourceControlAiResolvedParams }
+    )
+
+    expect(mocks.resolveHostedReviewBodyForGeneration).toHaveBeenCalledWith({
+      body: '',
+      repoPath: worktreePath,
+      connectionId: undefined,
+      provider: 'gitlab',
+      useTemplate: true
+    })
+    expect(mocks.getPullRequestDraftContext).toHaveBeenCalledWith(
+      expect.any(Function),
+      expect.objectContaining({
+        currentBody: templateBody
       })
     )
   })

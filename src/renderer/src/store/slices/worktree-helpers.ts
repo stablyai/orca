@@ -146,7 +146,8 @@ export type WorktreeSlice = {
     linkedLinearIssueOrganizationUrlKey?: string | null,
     linkedBitbucketPR?: number | null,
     linkedAzureDevOpsPR?: number | null,
-    linkedGiteaPR?: number | null
+    linkedGiteaPR?: number | null,
+    compareBaseRef?: string
   ) => Promise<CreateWorktreeResult>
   /** Register an in-flight background creation and make it the active surface. */
   beginPendingWorktreeCreation: (entry: PendingWorktreeCreation) => void

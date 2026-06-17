@@ -37,7 +37,6 @@
     "exploreOrca": "Orca 둘러보기",
     "gettingStarted": "Orca 시작하기",
     "reportCrash": "크래시 신고...",
-    "exportPdf": "PDF로 내보내기...",
     "file": "파일",
     "exit": "종료",
     "edit": "편집",
@@ -277,7 +276,8 @@
           "a5fc0cb622": "OpenClaude",
           "bf53f09bf8": "Claude Agent Teams",
           "0708ed89f1": "Claude",
-          "fc80296033": "Devin"
+          "fc80296033": "Devin",
+          "da41abbdd4": "Ante"
         },
         "skill": {
           "cli": {
@@ -515,7 +515,10 @@
         "b2ead86962": "PR 기반을 해결하지 못했습니다.",
         "a9ff236145": "일부 첨부파일을 업로드할 수 없습니다.",
         "3db83fc58a": "첨부 파일에 사용할 수 있는 원격 프로젝트 경로가 없습니다.",
-        "ba6cb77082": "프로젝트에 연결하지 못했습니다."
+        "ba6cb77082": "프로젝트에 연결하지 못했습니다.",
+        "chooseOrAddProjectBeforeWorkspace": "작업 영역을 만들기 전에 프로젝트를 선택하거나 추가하세요.",
+        "folderWorkspaceCreateFailedTitle": "폴더 작업 영역을 만들지 못했습니다",
+        "folderWorkspaceCreateFailedMessage": "폴더 작업 영역을 만들 수 없습니다. 위의 오류 세부 정보를 확인한 뒤 다시 시도하세요."
       },
       "useGlobalFileDrop": {
         "38c9f034ff": "드롭한 파일을 업로드하지 못했습니다.",
@@ -1040,6 +1043,9 @@
         "7711ad5122": "로컬 설정 명령",
         "e5db1b0419": "결합된 설정 명령",
         "addProjectBeforeWorkspace": "워크스페이스를 만들기 전에 프로젝트를 추가하세요.",
+        "connectProjectFirst": "먼저 이 프로젝트에 연결하세요",
+        "connectSourceLookup": "연결",
+        "reconnectSourceLookup": "다시 연결",
         "sshNotConnected": "SSH not connected",
         "connectingSsh": "Connecting SSH...",
         "sshAuthenticationFailed": "SSH authentication failed",
@@ -1259,7 +1265,7 @@
         "92b0f9d921": "인증된 후 다시 시도하세요.",
         "cd8c34aac1": "gh",
         "cf82170065": "repo 에 스타를 표시할 수 없습니다. 다음을 확인하세요",
-        "30c36231c1": "Orca를 통해 시간을 절약했다면 GitHub 스타가 큰 도움이 될 것입니다. 이는 다른 개발자가 프로젝트를 발견하는 데 도움이 되고 팀이 개선 사항을 출시하도록 동기를 부여합니다.",
+        "30c36231c1": "Orca는 오픈 소스입니다. 오늘 도움이 되었다면 GitHub 스타가 다른 개발자가 Orca를 찾는 데 도움이 됩니다.",
         "b5e685e4d9": "닫기",
         "5f6df21046": "Orca를 즐기고 있나요?",
         "2d67b6c849": "GitHub에서 별표 주기",
@@ -2230,7 +2236,14 @@
             "ebd2fa844d": "닫기",
             "1d1a7a9c1f": "취소",
             "6b9a6975f8": "terminal 에는 여전히 실행 중인 프로세스가 있습니다. terminal을 닫으면 프로세스가 종료됩니다.",
-            "78b79d854d": "Terminal을 닫으시겠습니까?"
+            "78b79d854d": "Terminal을 닫으시겠습니까?",
+            "stop_agent_title": "Stop this agent?",
+            "stop_command_title": "Stop running command?",
+            "stop_agent_description": "Closing this terminal will stop the agent's current work.",
+            "stop_command_description": "Closing this terminal will stop the command running inside it.",
+            "dont_ask_again": "Don't ask again for running terminals",
+            "stop_agent_confirm": "Stop Agent",
+            "stop_command_confirm": "Stop and Close"
           },
           "MobileDriverOverlay": {
             "c6460cf584": "회수",
@@ -2461,7 +2474,7 @@
             "39676a184c": "모든 파일, URL, agent를 엽니다..."
           },
           "TabBarQuickCommandsButton": {
-            "a2c7a33831": "명령 추가",
+            "a2c7a33831": "명령",
             "20bbd75896": "명령 없음",
             "b82e237a4b": "더 빠른 명령",
             "85482c57bc": "빠른 명령 실행",
@@ -2692,7 +2705,7 @@
             "97957ad3a3": "AI 공급자 계정을 연결하면 실시간으로 사용량을 확인하고 계정 간을 쉽게 전환할 수 있습니다.",
             "9a542f46c7": "상태 표시줄에서 숨기기",
             "84c3b15dca": "Agent 사용량 한도",
-            "d663430cf9": "사용량을 확인하려면 AI 계정을 연결하세요."
+            "d663430cf9": "사용량 추적 설정"
           },
           "UpdateStatusSegment": {
             "5cd13105a3": "업데이트에 실패했습니다. 확장하려면 클릭하세요.",
@@ -3187,9 +3200,7 @@
         "AddRepoCreateStep": {
           "0ae45b8238": "내 프로젝트",
           "a8149a3a5a": "이름",
-          "038729c107": "폴더",
           "11fd2a7db8": "Git 저장소",
-          "180e9b5e48": "프로젝트 종류",
           "5e97f0c4b9": "프로젝트가 생성되었습니다.",
           "2c12db1511": "프로젝트가 이미 추가되었습니다.",
           "875dda0995": "서버 상위 경로를 입력하세요.",
@@ -3199,7 +3210,7 @@
           "b100311784": "이름을 지정하면 Orca가 적절한 기본값으로 실제 프로젝트를 만듭니다.",
           "685b5eefe1": "{{parent}}의 {{kind}}",
           "2a762f3b19": "이 호스트에서 Git 확인 중...",
-          "fe1e616c5b": "Git이 설치되어 있지 않아 일반 폴더가 기본값입니다.",
+          "fe1e616c5b": "프로젝트를 만들려면 Git이 필요합니다.",
           "c234df77f7": "만들기 전에 서버 상위 폴더를 선택하거나 입력하세요.",
           "3a13f6e88b": "위치가 선택되지 않음",
           "6ed14c0281": "서버 폴더가 선택되지 않음",
@@ -3644,8 +3655,6 @@
           "0f33af979b": "부분결제. 이 경로 외부의 파일은 디스크에 없습니다.",
           "4f964d5e8c": "부족한",
           "7d517f82e2": "주요한",
-          "c6833b5187": "첫 번째 agent 메시지에서 이름이 변경됩니다.",
-          "f62a3dadbc": "이름 바꾸기 보류 중",
           "4eba2ea99e": "자동 이름을 지정하지 못했습니다. 자세한 내용을 보려면 클릭하세요.",
           "74522ee457": "이름 바꾸기 실패",
           "02e19349f4": "자동 이름 바꾸기 실패: 보기 오류",
@@ -4044,7 +4053,7 @@
           "create": "워크스페이스 만들기",
           "sourceProject": "작업 소스",
           "chooseSourceProject": "작업 소스 선택",
-          "createStart": "Create & Start Agent"
+          "createFailed": "폴더 작업 영역을 만들지 못했습니다."
         },
         "ProjectOrderManualDefaultNotice": {
           "a1f4c2d8e0": "수동 프로젝트 순서가 이제 기본값입니다",
@@ -5178,34 +5187,28 @@
           "239bf9132b": "설치 명령을 복사했습니다."
         },
         "PrivacyDiagnosticBundleControls": {
-          "dc8404a930": "미리보기 만들기",
+          "dc8404a930": "진단 파일 만들기",
           "a5acaffdb6": "버리기",
-          "aca2c8a367": "업로드",
-          "798b6f0be5": "미리보기 열기",
+          "aca2c8a367": "지원팀에 보내기",
+          "798b6f0be5": "검토 파일 열기",
           "2ae9a6b63e": "완료",
-          "7f14a1733c": "번들 삭제",
-          "2801d4ce22": "티켓 복사"
+          "7f14a1733c": "보낸 파일 삭제",
+          "2801d4ce22": "참조 ID 복사",
+          "d8be621237": "먼저 검토 파일을 여세요.",
+          "61676df223": "진단 정보를 보냈습니다. 이 참조 ID를 지원팀에 공유하세요: {{value0}}.",
+          "fd7b3891af": "검토 파일({{value0}})을 열었습니다. 이 파일을 지원팀에 보내거나 버릴 수 있습니다.",
+          "62340d4439": "검토 파일({{value0}})이 준비되었습니다. 열어서 보낼 내용을 확인한 다음 지원팀에 보낼지 선택하세요.",
+          "19ec5e29b3": "최근 앱 활동과 오류를 보내기 전에 검토할 수 있는 수정된 파일로 모읍니다. 보내기를 선택하기 전에는 아무것도 업로드되지 않습니다."
         },
         "PrivacyDiagnosticsSection": {
-          "acc7c66e6e": "OTLP 내보내기",
-          "4ff08ff3a7": "로컬 흔적 지우기",
-          "9ca08a9f8f": "이 시스템에서 회전된 모든 추적 파일을 삭제합니다.",
-          "fe81a52cb2": "추적 폴더 열기",
-          "5ff57fc986": "파일 관리자에 {{value0}}이 표시됩니다.",
-          "af2fc82cde": "진단 번들",
-          "c18cbe45df": "업로드된 진단 번들이 삭제되었습니다.",
-          "7a4944595b": "진단 티켓을 복사할 수 없습니다.",
-          "13eb2c65a1": "진단 티켓이 복사되었습니다.",
-          "860bca9ec9": "진단 번들 미리보기가 삭제되었습니다.",
-          "49fc6c80e8": "진단 번들이 업로드되었습니다.",
-          "db3228e01a": "진단 번들 미리보기 열림",
-          "a2b3505c77": "진단 번들 미리보기가 생성되었습니다.",
-          "9666a05580": "추적 파일을 지울 수 없습니다.",
-          "32d767f84d": "로컬 추적 파일이 지워졌습니다.",
-          "b85fe972cd": "추적 폴더를 열 수 없습니다.",
-          "1fb00a8995": "비활성",
-          "46ea3fb2d0": "활성화됨",
-          "7c9d9820b6": "Orca가 자체 OpenTelemetry 수집기를 가리키도록 ORCA_OTLP_TRACES_URL을 설정합니다."
+          "af2fc82cde": "앱 진단 정보를 지원팀에 보내기",
+          "c18cbe45df": "보낸 진단 정보가 삭제되었습니다",
+          "7a4944595b": "참조 ID를 복사할 수 없습니다",
+          "13eb2c65a1": "참조 ID가 복사되었습니다",
+          "860bca9ec9": "검토 파일을 버렸습니다",
+          "49fc6c80e8": "진단 정보를 보냈습니다",
+          "db3228e01a": "검토 파일을 열었습니다",
+          "a2b3505c77": "검토 파일을 만들었습니다"
         },
         "PrivacyPane": {
           "36e0e2e63b": "환경 변수. 다시 활성화하려면 설정을 해제하고 다시 시작하세요.",
@@ -6025,7 +6028,9 @@
           "af0c3b6e39": "Windows에서는 마우스 오른쪽 버튼을 클릭하여 클립보드를 terminal 에 붙여넣습니다. 컨텍스트 메뉴를 열려면 Ctrl+오른쪽 클릭을 사용하세요.",
           "29154326bb": "~에",
           "ab20575a8a": "끄다",
-          "ab3a1f9068": "wsl.exe"
+          "ab3a1f9068": "wsl.exe",
+          "ask_before_closing_running_terminals_title": "Ask Before Closing Running Terminals",
+          "ask_before_closing_running_terminals_description": "Show a confirmation before closing a terminal that has a running command or agent."
         },
         "TerminalSettingsPreview": {
           "a63953a48a": "{{value0}} 테마 미리보기",
@@ -7193,12 +7198,8 @@
             "f7a2d9f137": "텔레메트리 전송을 비활성화하는 환경 변수입니다.",
             "e058a3c98d": "텔레메트리 환경 변수",
             "1686c07fee": "지원",
-            "4a583f3a2f": "개방형 텔레메트리",
-            "9ea93ce3d6": "otlp",
-            "685c68a81f": "로그",
-            "40de3c2f19": "추적",
             "c0494ff48a": "진단",
-            "8b08f32366": "추적 파일 및 OTLP 내보내기 제어.",
+            "8b08f32366": "앱 진단 및 지원 공유 제어.",
             "6d258d2ed6": "진단",
             "ead1deded2": "공유",
             "27a27b2f63": "탈퇴",
@@ -7637,7 +7638,9 @@
               "description": "Import theme YAML files as Orca terminal themes.",
               "keyword_yaml": "yaml",
               "keyword_custom": "custom"
-            }
+            },
+            "ask_before_closing_running_terminals_title": "Ask Before Closing Running Terminals",
+            "ask_before_closing_running_terminals_description": "Show a confirmation before closing a terminal that has a running command or agent."
           },
           "windows": {
             "search": {
@@ -7994,6 +7997,13 @@
           "pendingRuntimeChange": "Runtime change pending. New project work will use the selected runtime after you apply.",
           "cancel": "Cancel",
           "applyRuntimeChange": "Apply runtime change"
+        },
+        "PrivacyDiagnosticsRows": {
+          "5a7cbe069a": "DO_NOT_TRACK=1이 설정되어 있어 진단 파일 만들기와 보내기가 비활성화되었습니다.",
+          "63d03261d1": "ORCA_TELEMETRY_DISABLED=1이 설정되어 있어 진단 파일 만들기와 보내기가 비활성화되었습니다.",
+          "d37e92a06b": "ORCA_DIAGNOSTICS_DISABLED=1이 설정되어 있어 앱 진단이 꺼져 있습니다.",
+          "5ebb31e1fb": "CI에서 실행 중입니다. 진단이 꺼져 있습니다.",
+          "e27c8d45bf": "환경 변수로 인해 진단이 비활성화되었습니다."
         }
       },
       "right": {
@@ -8369,6 +8379,7 @@
             "834cb3f23d": "AI로 해결",
             "60bd988f0b": "AI 수정",
             "461575b9bc": "AI로 commit 메시지 생성",
+            "b16b8f0e4b": "AI commit 메시지",
             "ddc1fbd690": "commit 메시지 생성 중지",
             "5acbcedc1a": "{{value0}} 만들기",
             "aaf1451654": "초안 만들기 {{value0}}",
@@ -8421,7 +8432,38 @@
             "e283b50179": "커밋 메시지",
             "f394c6128a": "이 커밋을 설명할 에이전트가 없습니다",
             "04a5d7239b": "이 저장소에는 지원되는 웹 원격이 없습니다",
-            "15b6e834ac": "브라우저에서 커밋을 열지 못했습니다"
+            "15b6e834ac": "브라우저에서 커밋을 열지 못했습니다",
+            "d37e68f61d": "검토를 위해 브랜치를 준비하는 중…",
+            "8d8f5c6c94": "커밋 메시지를 생성하는 중…",
+            "fda060d6ce": "커밋 메시지를 검토한 다음 Create PR을 다시 시도하세요.",
+            "b75cb1fd0c": "변경 사항을 커밋하는 중…",
+            "995c5e67ec": "검토 설정에 확인이 필요합니다.",
+            "d7492cafce": "Source Control을 새로 고칠 수 없습니다. Create PR을 다시 시도하세요.",
+            "473f18758e": "Source Control AI 설정",
+            "createPrIntentConfigureAi": "커밋 메시지를 추가하거나 Source Control AI 설정을 구성하세요.",
+            "createPrIntentGenerateFailed": "커밋 메시지를 생성할 수 없습니다. 메시지를 추가한 다음 다시 시도하세요.",
+            "createPrIntentCommitFailed": "변경 사항을 커밋할 수 없습니다. 문제를 수정한 다음 Create PR을 다시 시도하세요.",
+            "createPrIntentNeedsSync": "리뷰를 만들기 전에 이 브랜치를 동기화하세요.",
+            "createPrIntentBranchNotReady": "브랜치가 아직 리뷰를 만들 준비가 되지 않았습니다.",
+            "createPrIntentPublishing": "브랜치를 게시하는 중…",
+            "createPrIntentForcePushing": "lease로 강제 푸시하는 중…",
+            "createPrIntentPushing": "커밋을 푸시하는 중…",
+            "createPrIntentRemoteFailed": "원격 브랜치를 업데이트할 수 없습니다. Create PR을 다시 시도하세요.",
+            "createPrIntentGeneratingDetails": "리뷰 세부 정보 생성 중…",
+            "createPrIntentBranchChangedDuringDetails": "리뷰 세부 정보를 생성하는 동안 브랜치가 변경되었습니다. Create PR을 다시 시도하세요.",
+            "createPrIntentCreatingReview": "리뷰 생성 중…",
+            "a91f8e2b01": "목록으로 보기",
+            "b82e9f3c12": "트리로 보기",
+            "f71c4a8d90": "더 많은 소스 제어 작업",
+            "c8e4a1f902": "필터: {{value0}}",
+            "b3c8f1a902": "파일 이름으로 필터링",
+            "d4f8c2a901": "필터 지우고 닫기",
+            "e8a1c4b203": "vs",
+            "f9b2441bb6": "{{value0}}보다 1 커밋 앞서 있음",
+            "b715ef615b": "{{value1}}보다 {{value0}} 커밋 앞서 있음",
+            "c1a8f3e204": "{{value0}}보다 1 커밋 뒤처짐",
+            "d2b9g4f315": "{{value1}}보다 {{value0}} 커밋 뒤처짐",
+            "e9c2a5d416": "{{value0}}와 동일한 상태"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "선택한 agent를 시작할 수 없습니다.",
@@ -8553,7 +8595,8 @@
                 "d91f2a6c39": "대기 중인 댓글 {{value0}}개 보내기",
                 "a6de3e5a20": "대기 중인 댓글 지우기",
                 "49ea0937e4": "댓글을 해결 목록에 추가",
-                "9fecebb29d": "추가"
+                "9fecebb29d": "추가",
+                "b8c4e2a1f7": "View full logs"
               },
               "empty": {
                 "state": {
@@ -8707,7 +8750,24 @@
                   "484f45c439": "{{value0}} 진행 중…",
                   "74fc171e99": "강제 푸시 진행 중…",
                   "16aee3a5c1": "Commit 진행 중…",
-                  "e61b0d7a3c": "Check out a branch before publishing commits."
+                  "e61b0d7a3c": "커밋을 게시하기 전에 브랜치를 체크아웃하세요.",
+                  "1d47e850cf": "연결된 검토 브랜치에 업데이트 푸시",
+                  "c39d0c75c3": "연결된 검토 브랜치 대상을 사용할 수 없습니다.",
+                  "8c6d15a07d": "PR 생성",
+                  "d37e68f61d": "검토를 위해 브랜치를 준비하는 중…",
+                  "c72e5e65d1": "이 브랜치를 준비하고 {{value0}} 생성",
+                  "b8e4f2a901": "Wait for the remote operation to finish.",
+                  "c9f3a1b802": "Resolve conflicts before creating a {{value0}}.",
+                  "d2a8c4e703": "No changes on this branch to include in a {{value0}}.",
+                  "e3b9d5f814": "Cannot create a {{value0}} from the default branch.",
+                  "f4c0e6a925": "Commit changes before creating a {{value0}}.",
+                  "a5d1f7b036": "Publish commits before creating a {{value0}}.",
+                  "b6e2a8c147": "Push commits before creating a {{value0}}.",
+                  "c7f3b9d258": "Sync this branch before creating a {{value0}}.",
+                  "d8a4c0e369": "Authenticate before creating a {{value0}}.",
+                  "e9b5d1f470": "Check out a branch before creating a {{value0}}.",
+                  "f0c6e2a581": "This branch is not ready for a {{value0}} yet.",
+                  "h3i4j5k607": "Checking whether this branch can create a {{value0}}…"
                 }
               }
             }
@@ -8727,7 +8787,9 @@
             "74727df633": "'{{value0}}'이(가) 삭제되었습니다.",
             "d979a4fbb5": "'{{value0}}'을(를) 영구적으로 삭제하시겠습니까?",
             "a76c74f105": "파괴적인",
-            "92276aceb7": "삭제"
+            "92276aceb7": "삭제",
+            "7fb9435c86": "This permanently deletes the directory and its contents on the remote host. This cannot be undone.",
+            "23e98f192f": "This permanently deletes the file on the remote host. This cannot be undone."
           },
           "useFileExplorerHandlers": {
             "32cd9fd991": "심볼릭 링크 대상을 열 수 없습니다"
@@ -8880,6 +8942,26 @@
             "8c2d5fab13": "커밋 해시 복사",
             "9d3e60bc24": "커밋 메시지 복사",
             "ae4f71cd35": "변경 사항 설명"
+          },
+          "pull": {
+            "policy": {
+              "error": {
+                "notice": {
+                  "4b90a55d92": "Merge",
+                  "6fb5abf1c4": "Create a merge commit when local and remote both changed.",
+                  "6acbb47d03": "Rebase",
+                  "f01f74a08c": "Replay local commits on top of the remote branch.",
+                  "97c585cf50": "Fast-forward only",
+                  "b65768e783": "Only pull when no merge or rebase is needed.",
+                  "c830a5cc62": "Pull needs a policy",
+                  "88d3757c2e": "Diverged",
+                  "a77529be2d": "This branch has local and remote commits. Run one command in this worktree or on the SSH host, then try Pull or Sync again.",
+                  "e678d238a8": "Copy {{value0}} pull policy command",
+                  "f4ab362a2f": "Copied",
+                  "b3ecff2b02": "Copy command"
+                }
+              }
+            }
           }
         }
       },
@@ -9027,7 +9109,9 @@
           "a5e5da02f7": "연동",
           "35bbaf5ae0": "알림",
           "984338477a": "테마",
-          "c47e1bd149": "agent"
+          "c47e1bd149": "에이전트",
+          "windowsTerminalTitle": "Windows 터미널 기본값 설정",
+          "windowsTerminalSubtitle": "새 창에서 사용할 기본 셸과 터미널에서 오른쪽 클릭의 동작을 선택하세요."
         },
         "OnboardingFooter": {
           "ba58547306": "뒤로",
@@ -9106,6 +9190,32 @@
         },
         "AgentFeatureSetupStep": {
           "97dcdc010f": "CLI 및 스킬 설치"
+        },
+        "WindowsTerminalStep": {
+          "powerShell": "PowerShell",
+          "powerShellPwsh": "사용할 수 있으면 PowerShell 7+를 사용하고, 없으면 Windows PowerShell을 사용합니다.",
+          "powerShellInbox": "지원되는 모든 Windows 설치에 포함된 Windows PowerShell을 사용합니다.",
+          "commandPrompt": "명령 프롬프트",
+          "commandPromptDescription": "기존 cmd.exe 동작으로 새 터미널 창을 엽니다.",
+          "gitBash": "Git Bash",
+          "gitBashDescription": "Unix 스타일 셸 작업에는 Git for Windows의 bash.exe를 사용합니다.",
+          "gitBashUnavailable": "선택되었지만 이 컴퓨터에서 Git Bash를 찾지 못했습니다.",
+          "wsl": "WSL",
+          "wslDescription": "Windows Subsystem for Linux의 기본 환경에서 새 터미널 창을 시작합니다.",
+          "wslUnavailable": "선택되었지만 이 컴퓨터에서 WSL을 찾지 못했습니다.",
+          "rightClickPaste": "오른쪽 클릭으로 붙여넣기",
+          "rightClickPasteDescription": "오른쪽 클릭하면 클립보드가 붙여넣어집니다. Ctrl+오른쪽 클릭은 컨텍스트 메뉴를 엽니다.",
+          "rightClickMenu": "컨텍스트 메뉴 열기",
+          "rightClickMenuDescription": "오른쪽 클릭하면 터미널 메뉴가 열립니다. 메뉴나 키보드로 붙여넣습니다.",
+          "loading": "터미널 설정을 불러오는 중...",
+          "defaultShell": "기본 셸",
+          "defaultShellDescription": "Orca가 Windows 터미널의 새 창에서 열 셸을 선택하세요.",
+          "wslDistribution": "WSL 배포판",
+          "wslDistributionDescription": "Windows 기본 배포판을 사용하거나 설치된 특정 배포판을 선택하세요.",
+          "loadingDistros": "배포판을 불러오는 중",
+          "windowsDefault": "Windows 기본값",
+          "rightClickBehavior": "오른쪽 클릭 동작",
+          "rightClickBehaviorDescription": "Windows에서 익숙한 터미널 마우스 동작을 선택하세요."
         }
       },
       "new": {
@@ -9140,7 +9250,22 @@
             "fda67f0b61": "현재 프로젝트",
             "3e8bb1176a": "이슈를 검색하려면 설정에서 Linear를 연결하세요.",
             "69ce292138": "Linear",
-            "9c004911c3": "gitlab"
+            "9c004911c3": "gitlab",
+            "switchTaskSourceTitle": "작업 소스를 전환할까요?",
+            "differentTaskSource": ", 선택한 작업 소스와 다릅니다.",
+            "currentTaskSource": "현재 작업 소스",
+            "placeholderNameOrLinearUrl": "이름 또는 Linear URL 입력",
+            "placeholderWorkspaceName": "작업 영역 이름 입력",
+            "placeholderSmartWithBranchGitLabLinear": "이름, #1234, 브랜치, GitHub/GitLab 또는 Linear URL 입력",
+            "placeholderSmartGitLabLinear": "이름, #1234, GitHub/GitLab 또는 Linear URL 입력",
+            "placeholderSmartWithBranchGitLab": "이름, #1234, 브랜치, GitHub 또는 GitLab URL 입력",
+            "placeholderSmartGitLab": "이름, #1234, GitHub 또는 GitLab URL 입력",
+            "unavailable": "사용할 수 없음",
+            "searchGitHub": "GitHub PR 및 이슈 검색",
+            "searchGitLab": "GitLab MR 및 이슈 검색",
+            "searchBranches": "브랜치 검색",
+            "searchLinear": "Linear 이슈 검색",
+            "workspaceName": "작업 영역 이름"
           },
           "ProjectHostSetupCombobox": {
             "empty": "No hosts are ready for this project.",
@@ -10458,7 +10583,30 @@
           "49731703ea": "Jobs",
           "ee07b33924": "unknown",
           "07eccfa397": "No details are available for this check.",
-          "a916648574": "Open details"
+          "a916648574": "Open details",
+          "834cb3f23d": "Fix with AI",
+          "c8f1a2d4e7": "Choose the agent and edit the full command input before launch.",
+          "b3e7f9a1c2": "Check fix context unavailable",
+          "d5a8c2f1b9": "Start the default AI agent to fix this check",
+          "e2b4d7c8a1": "Choose an agent for this check",
+          "f1c9e3a6d4": "Choose agent to fix check"
+        },
+        "check": {
+          "run": {
+            "details": {
+              "fix": {
+                "with": {
+                  "ai": {
+                    "1a8c4e2b90": "Select a workspace before launching an AI action.",
+                    "4f2d9a8c17": "Select a repository before launching an AI action.",
+                    "7c3e1b5d42": "Open a PR or MR before launching an AI fix.",
+                    "9b2f6d4a81": "This check is not failing.",
+                    "2ef90c9819": "Started an AI agent for this check."
+                  }
+                }
+              }
+            }
+          }
         }
       },
       "diff": {
@@ -10523,7 +10671,11 @@
             "8e24fe4f75": "크래시 보고서가 전송되었습니다.",
             "8b8473c544": "크래시 보고서가 복사되었습니다.",
             "b175e90213": "크래시 보고서가 없습니다.",
-            "765591798d": "크래시 보고서 확인 중..."
+            "765591798d": "크래시 보고서 확인 중...",
+            "b2e36f53a1": "Failed to send crash report. Diagnostic ticket {{value0}} was uploaded but not linked.",
+            "ead6fc0510": "No automatic crash report was captured. You can still send details and include recent diagnostic logs when available.",
+            "b082f27490": "Attach recent diagnostic logs",
+            "e59f0b9427": "Sends a capped redacted log bundle with the report."
           }
         }
       },
@@ -11226,7 +11378,7 @@
               "hostCount": "{{value0}} hosts",
               "searchProjects": "Search projects...",
               "noMatches": "No projects match your search.",
-              "chooseSource": "Choose task source"
+              "chooseSource": "작업 소스 선택"
             }
           }
         }

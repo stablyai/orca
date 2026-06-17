@@ -40,12 +40,14 @@ import {
 } from '../git-bash'
 import { WINDOWS_GIT_BASH_SHELL } from '../../shared/windows-terminal-shell'
 import { resolveAgentForegroundProcess } from './agent-foreground-process'
+import { getAgentForegroundContextPaths } from './agent-foreground-context-paths'
 
 const PANE_IDENTITY_ENV_KEYS = ['ORCA_PANE_KEY', 'ORCA_TAB_ID', 'ORCA_WORKTREE_ID'] as const
 
 let ptyCounter = 0
 const ptyProcesses = new Map<string, pty.IPty>()
 const ptyShellName = new Map<string, string>()
+const ptyAgentForegroundContextPaths = new Map<string, string[]>()
 // Why: node-pty's onData/onExit register native NAPI ThreadSafeFunction
 // callbacks. If the PTY is killed without disposing these listeners, the
 // stale callbacks survive into node::FreeEnvironment() where NAPI attempts
@@ -133,6 +135,7 @@ function clearPtyState(id: string): void {
   disposePtyListeners(id)
   ptyProcesses.delete(id)
   ptyShellName.delete(id)
+  ptyAgentForegroundContextPaths.delete(id)
   ptyLoadGeneration.delete(id)
 }
 
@@ -154,6 +157,26 @@ function normalizeLocalCallerSessionId(sessionId: string | undefined): string | 
     return null
   }
   return requested
+}
+
+function normalizeForegroundProcessName(processName: string | null | undefined): string | null {
+  const trimmed = processName?.trim().replace(/^["']|["']$/g, '') ?? ''
+  if (!trimmed || trimmed === 'xterm-256color') {
+    return null
+  }
+  return trimmed.split(/[\\/]/).pop() || null
+}
+
+function resolveForegroundFallbackProcess(
+  processName: string | null | undefined,
+  shellName: string | undefined
+): string | null {
+  if (process.platform !== 'win32' || normalizeForegroundProcessName(processName)) {
+    return processName || null
+  }
+  // Why: Windows node-pty can expose only the terminal name (`xterm-256color`).
+  // The spawned shell is the best fallback for agent foreground enrichment.
+  return shellName ?? processName ?? null
 }
 
 function destroyPtyProcess(proc: pty.IPty, options: { alreadyKilled?: boolean } = {}): void {
@@ -512,6 +535,10 @@ export class LocalPtyProvider implements IPtyProvider {
     const proc = spawnResult.process
     ptyProcesses.set(id, proc)
     ptyShellName.set(id, basename(shellPath))
+    ptyAgentForegroundContextPaths.set(
+      id,
+      getAgentForegroundContextPaths({ cwd: args.cwd, worktreeId: args.worktreeId })
+    )
     ptyLoadGeneration.set(id, loadGeneration)
     this.opts.onSpawned?.(id)
 
@@ -649,6 +676,7 @@ export class LocalPtyProvider implements IPtyProvider {
     destroyPtyProcess(proc, { alreadyKilled: true })
     ptyProcesses.delete(id)
     ptyShellName.delete(id)
+    ptyAgentForegroundContextPaths.delete(id)
     ptyLoadGeneration.delete(id)
     this.opts.onExit?.(id, -1)
     for (const cb of exitListeners) {
@@ -716,7 +744,13 @@ export class LocalPtyProvider implements IPtyProvider {
       return null
     }
     try {
-      return await resolveAgentForegroundProcess(proc.pid, proc.process || null)
+      return await resolveAgentForegroundProcess(
+        proc.pid,
+        resolveForegroundFallbackProcess(proc.process || null, ptyShellName.get(id)),
+        {
+          contextPaths: ptyAgentForegroundContextPaths.get(id)
+        }
+      )
     } catch {
       return null
     }

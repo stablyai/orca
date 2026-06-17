@@ -35,7 +35,7 @@
 
 用手机监控并指挥你的智能体 — 智能体完成时收到通知，随时随地发送后续指令。
 
-[iOS App Store](https://apps.apple.com/us/app/orca-ide/id6766130217) · [Android APK](https://github.com/stablyai/orca/releases/download/mobile-v0.0.13/app-release.apk) · [文档 →](https://www.onorca.dev/docs/mobile)
+[iOS App Store](https://apps.apple.com/us/app/orca-ide/id6766130217) · [Android APK](https://github.com/stablyai/orca/releases/download/mobile-android-v0.0.14/app-release.apk) · [文档 →](https://www.onorca.dev/docs/mobile)
 
 </td>
 <td width="50%">
@@ -227,7 +227,7 @@ yay -S stably-orca-bin
 与桌面应用配对，用手机监控并指挥你的智能体。
 
 - **iOS:** [从 App Store 下载](https://apps.apple.com/us/app/orca-ide/id6766130217)
-- **Android:** [下载 APK](https://github.com/stablyai/orca/releases/download/mobile-v0.0.13/app-release.apk)
+- **Android:** [下载 APK](https://github.com/stablyai/orca/releases/download/mobile-android-v0.0.14/app-release.apk)
 
 ---
 

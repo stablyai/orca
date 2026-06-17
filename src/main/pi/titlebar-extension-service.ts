@@ -16,11 +16,21 @@ import {
   getPiAgentStatusExtensionSource
 } from './agent-status-extension-source'
 import {
+  ORCA_PI_PREFILL_EXTENSION_FILE,
+  getPiPrefillExtensionSource
+} from './prefill-extension-source'
+export { ORCA_OMP_PREFILL_ENV_VAR, ORCA_PI_PREFILL_ENV_VAR } from './prefill-extension-source'
+import { ORCA_PI_EXTENSION_FILE, getPiTitlebarExtensionSource } from './titlebar-extension-source'
+import {
   isSafeDescendCandidate as sharedIsSafeDescendCandidate,
   mirrorEntry,
   safeRemoveOverlay,
   safeRemoveTree
 } from '../pty/overlay-mirror'
+import {
+  isOmpPersistentSqliteEntry,
+  mirrorOmpPersistentSqliteFiles
+} from '../pty/omp-sqlite-overlay'
 import { mergePiOverlayUiSettings } from '../../shared/pi-overlay-ui-settings'
 import type { PiAgentKind } from '../../shared/pi-agent-kind'
 
@@ -30,8 +40,6 @@ import type { PiAgentKind } from '../../shared/pi-agent-kind'
 // keeps holding after the helper moved to src/main/pty/overlay-mirror.ts.
 export const isSafeDescendCandidate = sharedIsSafeDescendCandidate
 
-const ORCA_PI_EXTENSION_FILE = 'orca-titlebar-spinner.ts'
-const ORCA_PI_PREFILL_EXTENSION_FILE = 'orca-prefill.ts'
 const PI_AGENT_SUBDIR = 'agent'
 const PI_AGENT_SETTINGS_FILE = 'settings.json'
 const PI_OVERLAY_MANIFEST_FILE = '.orca-pi-overlay-manifest.json'
@@ -57,112 +65,6 @@ const OVERLAY_ROOT_DIR_NAME: Record<PiAgentKind, string> = {
 const AGENT_HOME_DIR_NAME: Record<PiAgentKind, string> = {
   pi: '.pi',
   omp: '.omp'
-}
-
-// Why: prefill-without-submit needs an env-var the bundled `orca-prefill.ts`
-// extension can read on session_start. Each kind owns its own variable so an
-// OMP PTY never honors a Pi draft (or vice versa) - the only state the two
-// share is the binary-mandated `PI_CODING_AGENT_DIR` itself. Pi keeps its
-// original name for back-compat with PTYs already in flight at upgrade time;
-// OMP gets a parallel `ORCA_OMP_PREFILL`.
-const PREFILL_ENV_VAR_BY_KIND: Record<PiAgentKind, string> = {
-  pi: 'ORCA_PI_PREFILL',
-  omp: 'ORCA_OMP_PREFILL'
-}
-
-/** Pi's prefill env var. Exported for callers that need the literal name
- *  (renderer draft-launch plan builder, tests). OMP callers should read
- *  `ORCA_OMP_PREFILL_ENV_VAR` instead. */
-export const ORCA_PI_PREFILL_ENV_VAR = PREFILL_ENV_VAR_BY_KIND.pi
-
-/** OMP's prefill env var. Mirrors `ORCA_PI_PREFILL_ENV_VAR` for OMP launches
- *  so renderer plans and shell-ready restore lines can stay agent-scoped. */
-export const ORCA_OMP_PREFILL_ENV_VAR = PREFILL_ENV_VAR_BY_KIND.omp
-
-// Why: pi/OMP both expose an `ExtensionAPI` to the default-exported factory.
-// The extension reads its kind-specific env var on session_start and types
-// the payload into the editor without submitting. The env var is consumed
-// (deleted from process.env) so `/new` in the same session doesn't re-prefill.
-// The extension API name is identical between pi and OMP because OMP keeps
-// Pi's `@oh-my-pi/*` runtime packages.
-function getPiPrefillExtensionSource(kind: PiAgentKind): string {
-  const envVar = PREFILL_ENV_VAR_BY_KIND[kind]
-  return [
-    'export default function (pi) {',
-    "  pi.on('session_start', async (event, ctx) => {",
-    "    if (event.reason !== 'startup') return",
-    `    const prefill = process.env.${envVar}`,
-    '    if (!prefill) return',
-    `    delete process.env.${envVar}`,
-    '    try {',
-    '      ctx.ui.setEditorText(prefill)',
-    '    } catch {}',
-    '  })',
-    '}',
-    ''
-  ].join('\n')
-}
-
-function getPiTitlebarExtensionSource(): string {
-  return [
-    'const BRAILLE_FRAMES = [',
-    "  '\\u280b',",
-    "  '\\u2819',",
-    "  '\\u2839',",
-    "  '\\u2838',",
-    "  '\\u283c',",
-    "  '\\u2834',",
-    "  '\\u2826',",
-    "  '\\u2827',",
-    "  '\\u2807',",
-    "  '\\u280f'",
-    ']',
-    '',
-    'function getBaseTitle(pi) {',
-    '  const cwd = process.cwd().split(/[\\\\/]/).filter(Boolean).at(-1) || process.cwd()',
-    '  const session = pi.getSessionName()',
-    '  return session ? `\\u03c0 - ${session} - ${cwd}` : `\\u03c0 - ${cwd}`',
-    '}',
-    '',
-    'export default function (pi) {',
-    '  let timer = null',
-    '  let frameIndex = 0',
-    '',
-    '  function stopAnimation(ctx) {',
-    '    if (timer) {',
-    '      clearInterval(timer)',
-    '      timer = null',
-    '    }',
-    '    frameIndex = 0',
-    '    ctx.ui.setTitle(getBaseTitle(pi))',
-    '  }',
-    '',
-    '  function startAnimation(ctx) {',
-    '    stopAnimation(ctx)',
-    '    timer = setInterval(() => {',
-    '      const frame = BRAILLE_FRAMES[frameIndex % BRAILLE_FRAMES.length]',
-    '      const cwd = process.cwd().split(/[\\\\/]/).filter(Boolean).at(-1) || process.cwd()',
-    '      const session = pi.getSessionName()',
-    '      const title = session ? `${frame} \\u03c0 - ${session} - ${cwd}` : `${frame} \\u03c0 - ${cwd}`',
-    '      ctx.ui.setTitle(title)',
-    '      frameIndex++',
-    '    }, 80)',
-    '  }',
-    '',
-    "  pi.on('agent_start', async (_event, ctx) => {",
-    '    startAnimation(ctx)',
-    '  })',
-    '',
-    "  pi.on('agent_end', async (_event, ctx) => {",
-    '    stopAnimation(ctx)',
-    '  })',
-    '',
-    "  pi.on('session_shutdown', async (_event, ctx) => {",
-    '    stopAnimation(ctx)',
-    '  })',
-    '}',
-    ''
-  ].join('\n')
 }
 
 function getDefaultPiAgentDir(kind: PiAgentKind): string {
@@ -234,13 +136,18 @@ export class PiTitlebarExtensionService {
     }
   }
 
-  private mirrorAgentDir(sourceAgentDir: string, overlayDir: string): void {
+  private mirrorAgentDir(sourceAgentDir: string, overlayDir: string, kind: PiAgentKind): void {
     const previousManifest = this.readOverlayManifest(overlayDir)
     this.clearManifestEntries(overlayDir, previousManifest)
 
     const nextManifest: PiOverlayManifest = { topLevelEntries: [], extensionEntries: [] }
 
     if (!existsSync(sourceAgentDir)) {
+      if (kind === 'omp') {
+        nextManifest.topLevelEntries.push(
+          ...mirrorOmpPersistentSqliteFiles(sourceAgentDir, overlayDir)
+        )
+      }
       this.writeOverlayManifest(overlayDir, nextManifest)
       return
     }
@@ -249,6 +156,10 @@ export class PiTitlebarExtensionService {
       const sourcePath = join(sourceAgentDir, entry.name)
 
       if (entry.name === PI_AGENT_SETTINGS_FILE) {
+        continue
+      }
+
+      if (kind === 'omp' && isOmpPersistentSqliteEntry(entry.name)) {
         continue
       }
 
@@ -300,6 +211,12 @@ export class PiTitlebarExtensionService {
       nextManifest.topLevelEntries.push(entry.name)
     }
 
+    if (kind === 'omp') {
+      nextManifest.topLevelEntries.push(
+        ...mirrorOmpPersistentSqliteFiles(sourceAgentDir, overlayDir)
+      )
+    }
+
     this.writeOverlayManifest(overlayDir, nextManifest)
   }
 
@@ -349,7 +266,7 @@ export class PiTitlebarExtensionService {
 
     try {
       mkdirSync(overlayDir, { recursive: true })
-      this.mirrorAgentDir(sourceAgentDir, overlayDir)
+      this.mirrorAgentDir(sourceAgentDir, overlayDir, kind)
       this.writeOverlaySettings(sourceAgentDir, overlayDir)
 
       const extensionsDir = join(overlayDir, 'extensions')

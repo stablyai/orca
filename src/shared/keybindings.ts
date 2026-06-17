@@ -34,7 +34,6 @@ export type KeybindingActionId =
   | 'worktree.navigateDown'
   | 'app.settings'
   | 'app.forceReload'
-  | 'file.exportPdf'
   | 'workspace.create'
   | 'workspace.rename'
   | 'workspace.delete'
@@ -62,6 +61,7 @@ export type KeybindingActionId =
   | 'tab.newMarkdown'
   | 'tab.openMarkdown'
   | 'tab.close'
+  | 'tab.closeAll'
   | 'tab.rename'
   | 'tab.reopenClosed'
   | 'tab.nextSameType'
@@ -72,6 +72,8 @@ export type KeybindingActionId =
   | 'tab.nextTerminal'
   | 'tab.previousTerminal'
   | 'browser.find'
+  | 'browser.back'
+  | 'browser.forward'
   | 'browser.reload'
   | 'browser.hardReload'
   | 'browser.focusAddressBar'
@@ -197,15 +199,6 @@ export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
     scope: 'global',
     searchKeywords: ['shortcut', 'reload', 'refresh', 'force'],
     defaultBindings: platformBindings(['Mod+Shift+R']),
-    conflictGroup: 'menu'
-  },
-  {
-    id: 'file.exportPdf',
-    title: 'Export as PDF',
-    group: 'Global',
-    scope: 'global',
-    searchKeywords: ['shortcut', 'export', 'pdf', 'markdown'],
-    defaultBindings: platformBindings(['Mod+Shift+E']),
     conflictGroup: 'menu'
   },
   {
@@ -483,6 +476,14 @@ export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
     defaultBindings: platformBindings(['Mod+W'])
   },
   {
+    id: 'tab.closeAll',
+    title: 'Close all editor tabs',
+    group: 'Tabs',
+    scope: 'tabs',
+    searchKeywords: ['shortcut', 'close', 'all', 'tabs', 'files', 'editors'],
+    defaultBindings: platformBindings(['Mod+Alt+W'])
+  },
+  {
     id: 'tab.rename',
     title: 'Rename active tab',
     group: 'Tabs',
@@ -572,6 +573,30 @@ export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
     scope: 'browser',
     searchKeywords: ['shortcut', 'browser', 'find', 'search'],
     defaultBindings: platformBindings(['Mod+F'])
+  },
+  {
+    id: 'browser.back',
+    title: 'Go Back in Browser',
+    group: 'Browser',
+    scope: 'browser',
+    searchKeywords: ['shortcut', 'browser', 'history', 'back', 'previous'],
+    defaultBindings: {
+      darwin: ['Mod+BracketLeft'],
+      linux: ['Alt+ArrowLeft'],
+      win32: ['Alt+ArrowLeft']
+    }
+  },
+  {
+    id: 'browser.forward',
+    title: 'Go Forward in Browser',
+    group: 'Browser',
+    scope: 'browser',
+    searchKeywords: ['shortcut', 'browser', 'history', 'forward', 'next'],
+    defaultBindings: {
+      darwin: ['Mod+BracketRight'],
+      linux: ['Alt+ArrowRight'],
+      win32: ['Alt+ArrowRight']
+    }
   },
   {
     id: 'browser.reload',

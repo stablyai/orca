@@ -318,6 +318,7 @@ function createPane(paneId: number) {
       onTitleChange: vi.fn(() => ({ dispose: vi.fn() })),
       hasSelection: vi.fn(() => false),
       parser: {
+        registerCsiHandler: vi.fn(() => ({ dispose: vi.fn() })),
         registerOscHandler: vi.fn(() => ({ dispose: vi.fn() }))
       }
     },
@@ -373,6 +374,7 @@ function createDeps(overrides: Record<string, unknown> = {}) {
     clearTerminalTabUnread: vi.fn(),
     clearTerminalPaneUnread: vi.fn(),
     dispatchNotification: vi.fn(),
+    onShowSessionRestoredBanner: vi.fn(),
     setCacheTimerStartedAt: vi.fn(),
     syncPanePtyLayoutBinding: vi.fn(),
     ...overrides
@@ -3136,6 +3138,10 @@ describe('connectPanePty', () => {
     await new Promise((resolve) => setTimeout(resolve, 70))
 
     expect(pane.terminal.write).toHaveBeenCalledWith('cold-payload', expect.any(Function))
+    expect(pane.terminal.write).not.toHaveBeenCalledWith(
+      expect.stringContaining('--- session restored ---'),
+      expect.any(Function)
+    )
     expect(transport.sendInput).toHaveBeenCalledWith(
       "codex '--dangerously-bypass-approvals-and-sandbox' 'resume' 'codex-session-1'\r"
     )
@@ -3265,12 +3271,130 @@ describe('connectPanePty', () => {
     await new Promise((resolve) => setTimeout(resolve, 70))
 
     expect(pane.terminal.write).toHaveBeenCalledWith('cold-payload', expect.any(Function))
+    expect(pane.terminal.write).not.toHaveBeenCalledWith(
+      expect.stringContaining('--- session restored ---'),
+      expect.any(Function)
+    )
+    const writeCalls = pane.terminal.write.mock.calls.map(([data]) => data)
+    expect(writeCalls.findIndex((data) => data.includes('--- session restored ---'))).toBe(-1)
+    expect(deps.onShowSessionRestoredBanner).toHaveBeenCalledTimes(1)
+    expect(deps.onShowSessionRestoredBanner).toHaveBeenCalledWith(1)
     expect(transport.sendInput).toHaveBeenCalledWith(
       "codex '--dangerously-bypass-approvals-and-sandbox' 'resume' 'codex-session-1'\r"
     )
     // Why: consuming the record prevents a later worktree activation from
     // launching a duplicate resume tab for the same session.
     expect(mockStoreState.clearSleepingAgentSession).toHaveBeenCalledWith(paneKey)
+  })
+
+  it('shows the restored banner when a sleeping resume falls back to a fresh shell', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const staleSessionId = 'wt-1@@stale-session'
+    const transport = createMockTransport()
+    transport.connect.mockImplementation(async (opts: { sessionId?: string }) => {
+      if (opts.sessionId) {
+        return undefined
+      }
+      const onPtySpawn = createdTransportOptions[0]?.onPtySpawn as
+        | ((ptyId: string) => void)
+        | undefined
+      onPtySpawn?.('fresh-pty')
+      return 'fresh-pty'
+    })
+    transportFactoryQueue.push(transport)
+    const paneKey = makePaneKey('tab-1', LEAF_2)
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: {
+        'wt-1': [{ id: 'tab-1', ptyId: staleSessionId }]
+      },
+      ptyIdsByTabId: {
+        'tab-1': [staleSessionId]
+      },
+      terminalLayoutsByTabId: {
+        'tab-1': {
+          root: { type: 'leaf', leafId: LEAF_2 },
+          activeLeafId: LEAF_2,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [LEAF_2]: staleSessionId }
+        }
+      },
+      settings: {
+        ...mockStoreState.settings,
+        agentCmdOverrides: {}
+      },
+      agentStatusByPaneKey: {},
+      sleepingAgentSessionsByPaneKey: {
+        [paneKey]: {
+          paneKey,
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          agent: 'codex',
+          providerSession: { key: 'session_id', id: 'codex-session-1' },
+          prompt: 'finish the task',
+          state: 'working',
+          capturedAt: 1,
+          updatedAt: 1
+        }
+      }
+    } as StoreState
+
+    const pane = createPane(2)
+    const manager = createManager(2)
+    const deps = createDeps({
+      restoredLeafId: LEAF_2,
+      restoredPtyIdByLeafId: { [LEAF_2]: staleSessionId }
+    })
+
+    connectPanePty(pane as never, manager as never, deps as never)
+    await flushAsyncTicks(10)
+
+    expect(transport.connect).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ sessionId: staleSessionId })
+    )
+    expect(transport.connect).toHaveBeenNthCalledWith(
+      2,
+      expect.not.objectContaining({ sessionId: expect.any(String) })
+    )
+    expect(deps.clearTabPtyId).toHaveBeenCalledWith('tab-1', staleSessionId)
+    expect(pane.terminal.write).not.toHaveBeenCalledWith(
+      expect.stringContaining('--- session restored ---'),
+      expect.any(Function)
+    )
+    expect(deps.onShowSessionRestoredBanner).toHaveBeenCalledTimes(1)
+    expect(deps.onShowSessionRestoredBanner).toHaveBeenCalledWith(2)
+    expect(mockStoreState.clearSleepingAgentSession).toHaveBeenCalledWith(paneKey)
+  })
+
+  it('does not write the restored banner through xterm bytes for sidebar-resumed startup commands', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport('pty-1')
+    transportFactoryQueue.push(transport)
+    const pane = createPane(1)
+
+    connectPanePty(
+      pane as never,
+      createManager(1) as never,
+      createDeps({
+        startup: {
+          command: "codex 'resume' 'codex-session-1'",
+          showSessionRestoredBanner: true
+        }
+      }) as never
+    )
+    await flushAsyncTicks(10)
+    const onPtySpawn = createdTransportOptions[0]?.onPtySpawn as
+      | ((ptyId: string) => void)
+      | undefined
+    onPtySpawn?.('pty-1')
+    await new Promise((resolve) => setTimeout(resolve, 70))
+
+    expect(pane.terminal.write).not.toHaveBeenCalledWith(
+      expect.stringContaining('--- session restored ---'),
+      expect.any(Function)
+    )
+    expect(createdTransportOptions[0]?.command).toBe("codex 'resume' 'codex-session-1'")
   })
 
   it('does not consume the sleeping record when daemon reattach returns a live snapshot', async () => {
@@ -3900,6 +4024,38 @@ describe('connectPanePty', () => {
     capturedDataCallback.current?.(coalescedChunk)
 
     expect(pane.terminal.write).toHaveBeenCalledWith('\x1b[c', expect.any(Function))
+    expect(pane.terminal.write).not.toHaveBeenCalledWith(coalescedChunk, expect.any(Function))
+
+    binding.dispose()
+  })
+
+  it('keeps a Yazi-style hidden capability-query burst on the live xterm path', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport('pty-id')
+    const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
+    transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+      capturedDataCallback.current = callbacks.onData ?? null
+      return 'pty-id'
+    })
+    transportFactoryQueue.push(transport)
+
+    const pane = createPane(1)
+    const manager = createManager(1)
+    const binding = connectPanePty(
+      pane as never,
+      manager as never,
+      createDeps({
+        isVisibleRef: { current: false },
+        startup: { command: 'codex' }
+      }) as never
+    )
+    await flushAsyncTicks(6)
+
+    const queryBurst = '\x1b[c\x1b]11;?\x1b\\\x1b[>q\x1b[14t\x1b[16t'
+    const coalescedChunk = `${queryBurst}\x1b[?2026h${'codex redraw '.repeat(8_000)}`
+    capturedDataCallback.current?.(coalescedChunk)
+
+    expect(pane.terminal.write).toHaveBeenCalledWith(queryBurst, expect.any(Function))
     expect(pane.terminal.write).not.toHaveBeenCalledWith(coalescedChunk, expect.any(Function))
 
     binding.dispose()

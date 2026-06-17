@@ -286,6 +286,17 @@ describe('file explorer visible row projection', () => {
     ).toEqual(['out'])
   })
 
+  it('does not read a missing ignored-path result when no worktree is active', () => {
+    expect(
+      getEffectiveFileExplorerIgnoredPaths({
+        activeWorktreeId: null,
+        canLoadIgnoredPaths: true,
+        ignoredPathResult: null,
+        worktreePath: null
+      })
+    ).toEqual([])
+  })
+
   it('does not reuse ignored paths across worktree contexts', () => {
     expect(
       getEffectiveFileExplorerIgnoredPaths({

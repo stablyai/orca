@@ -111,6 +111,7 @@ function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings
     defaultTuiAgent: null,
     disabledTuiAgents: [],
     skipDeleteWorktreeConfirm: false,
+    skipCloseTerminalWithRunningProcessConfirm: false,
     skipDeleteAutomationConfirm: false,
     defaultTaskViewPreset: 'all',
     defaultTaskSource: 'github',

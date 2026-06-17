@@ -61,10 +61,7 @@ import type { ScrollState } from '@/lib/pane-manager/pane-manager-types'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { createTerminalCommandLifecycle } from './terminal-command-lifecycle'
 import { e2eConfig } from '@/lib/e2e-config'
-import type {
-  AgentStatusEntry,
-  ParsedAgentStatusPayload
-} from '../../../../shared/agent-status-types'
+import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import { isWebTerminalSurfaceTabId } from '@/runtime/web-terminal-surface-id'
 import {
   createAgentInterruptInference,
@@ -76,6 +73,7 @@ import {
   type AgentInterruptInputIntent
 } from '../../../../shared/agent-interrupt-intent'
 import { createAgentCompletionCoordinator } from './agent-completion-coordinator'
+import type { AgentCompletionStatusSnapshot } from './agent-completion-coordinator-types'
 import {
   markTerminalBracketedPasteInterrupted,
   observeTerminalBracketedPasteModeOutput,
@@ -85,7 +83,11 @@ import { createCommandCodeOutputStatusDetector } from './command-code-output-sta
 import type { PtyDataMeta } from './pty-dispatcher'
 import { getEagerPtyBufferHandle } from './pty-dispatcher'
 import { createTerminalGitHubPRLinkDetector } from '@/lib/terminal-github-pr-link-detector'
-import { installConptyDeviceAttributesHandler } from './terminal-conpty-device-attributes'
+import {
+  CONPTY_DA1_RESPONSE,
+  createTerminalPixelSizeQueryResponder,
+  installTerminalCapabilityReplyHandlers
+} from './terminal-capability-replies'
 import {
   cancelScheduledHiddenOutputRestore,
   scheduleHiddenOutputRestore
@@ -132,7 +134,6 @@ const INACTIVE_FOREGROUND_IMMEDIATE_BUDGET_CHARS = 32 * 1024
 // terminal state is unavailable, so the user has an explicit loss signal.
 const HIDDEN_OUTPUT_RESTORE_UNAVAILABLE_WARNING =
   '\x18\x1b[0m\r\n[Orca skipped hidden terminal output because main recovery was unavailable.]\r\n'
-
 type E2eTerminalPtyDataInjectionApi = {
   inject: (paneKey: string, data: string, meta?: PtyDataMeta) => boolean
   keys: () => string[]
@@ -466,7 +467,12 @@ function isStatelessRendererReplyCsiQuery(sequence: string): boolean {
   if (sequence.endsWith('c')) {
     return true
   }
-  return sequence === '\x1b[5n'
+  return (
+    sequence === '\x1b[5n' ||
+    sequence === '\x1b[>q' ||
+    sequence === '\x1b[14t' ||
+    sequence === '\x1b[16t'
+  )
 }
 
 function isStatefulRendererReplyCsiQuery(sequence: string): boolean {
@@ -1460,7 +1466,7 @@ export function connectPanePty(
     title: string,
     options: {
       allowDoneDetailAfterGrace?: boolean
-      agentStatusSnapshot?: ParsedAgentStatusPayload
+      agentStatusSnapshot?: AgentCompletionStatusSnapshot
     } = {}
   ): void => {
     if (!syncAgentTaskCompleteTrackingEnabled()) {
@@ -1694,7 +1700,12 @@ export function connectPanePty(
             const title = currentState.runtimePaneTitlesByTabId?.[deps.tabId]?.[pane.id]
             currentState.setAgentStatus(cacheKey, payload, title)
             if (syncAgentTaskCompleteTrackingEnabled()) {
-              agentCompletionCoordinator.observeHookStatus(payload)
+              const storedStatus = useAppStore.getState().agentStatusByPaneKey[cacheKey]
+              const notificationPayload =
+                typeof storedStatus?.stateStartedAt === 'number'
+                  ? { ...payload, stateStartedAt: storedStatus.stateStartedAt }
+                  : payload
+              agentCompletionCoordinator.observeHookStatus(notificationPayload)
             }
             if (payload.state === 'working' && pendingTerminalBellNotification) {
               scheduleTerminalBellNotification()
@@ -1707,13 +1718,17 @@ export function connectPanePty(
     ? createRemoteRuntimePtyTransport(runtimeEnvironmentId, transportOptions)
     : createIpcPtyTransport(transportOptions)
   deps.paneTransportsRef.current.set(pane.id, transport)
-  const conptyDeviceAttributesDisposable = isNativeWindowsConpty
-    ? installConptyDeviceAttributesHandler({
-        parser: pane.terminal.parser,
-        sendInput: (data) => transport.sendInput(data),
-        isReplaying: () => isPaneReplaying(deps.replayingPanesRef, pane.id)
-      })
-    : null
+  const terminalCapabilityRepliesDisposable = installTerminalCapabilityReplyHandlers({
+    terminal: pane.terminal,
+    parser: pane.terminal.parser,
+    sendInput: (data) => transport.sendInput(data),
+    isReplaying: () => isPaneReplaying(deps.replayingPanesRef, pane.id),
+    ...(isNativeWindowsConpty ? { da1Response: CONPTY_DA1_RESPONSE } : {})
+  })
+  const respondToTerminalPixelSizeQueries = createTerminalPixelSizeQueryResponder(
+    pane.terminal,
+    (data) => transport.sendInput(data)
+  )
 
   const onDataDisposable = pane.terminal.onData((data) => {
     // Why: xterm auto-replies to embedded query sequences (DA1, DECRQM,
@@ -1973,6 +1988,14 @@ export function connectPanePty(
     // stay renderer-delivered so xterm can apply bracketed-paste semantics.
     let pendingStartupCommand =
       shouldDeliverStartupViaTerminalPaste || connectionId ? (paneStartup?.command ?? null) : null
+    let sessionRestoredBannerShown = false
+    const showSessionRestoredBanner = (): void => {
+      if (sessionRestoredBannerShown) {
+        return
+      }
+      sessionRestoredBannerShown = true
+      deps.onShowSessionRestoredBanner(pane.id)
+    }
     const getColdRestoreAgentResumePlatform = (): NodeJS.Platform => {
       if (projectRuntime?.status === 'repair-required') {
         return projectRuntime.repair.preferredRuntime.kind === 'wsl' ? 'linux' : CLIENT_PLATFORM
@@ -2017,6 +2040,9 @@ export function connectPanePty(
       // Why: cold restore means the PTY process is gone but the agent provider
       // session is still resumable, so the replacement shell must launch it.
       pendingStartupCommand = startupPlan.launchCommand
+      if (sleepingRecord) {
+        showSessionRestoredBanner()
+      }
       if (!useLiveEntry && sleepingRecord) {
         state.clearSleepingAgentSession(cacheKey)
       }
@@ -2953,6 +2979,7 @@ export function connectPanePty(
         recordAgentHibernationPaneOutput(cacheKey)
       }
       resetHiddenOutputRestoreIfPtyChanged()
+      respondToTerminalPixelSizeQueries(data)
       observeTerminalBracketedPasteModeOutput(pane.terminal, data)
       for (const link of observeTerminalGitHubPRLink(data)) {
         useAppStore.getState().observeTerminalGitHubPullRequestLink(deps.worktreeId, link)
@@ -3116,7 +3143,7 @@ export function connectPanePty(
         // land in the new shell's stdin. See replay-guard.ts.
         writeReplayData('\x1b[2J\x1b[3J\x1b[H')
         writeReplayData(connectResult.coldRestore.scrollback)
-        writeReplayData('\r\n\x1b[2m--- session restored ---\x1b[0m\r\n\r\n')
+        const didPrepareResume = prepareColdRestoreAgentResumeCommand()
         // Cold-restore means the daemon lost the session and spawned a
         // fresh shell — no TUI is consuming the mode-setting bytes that a
         // crashed TUI (e.g. Claude's \e[?1004h) left in the scrollback, so
@@ -3125,7 +3152,7 @@ export function connectPanePty(
         if (!isRemoteRuntimePtyId(ptyId)) {
           window.api.pty.ackColdRestore(ptyId)
         }
-        if (prepareColdRestoreAgentResumeCommand()) {
+        if (didPrepareResume) {
           schedulePendingStartupCommandDelivery()
         }
       }
@@ -3699,7 +3726,7 @@ export function connectPanePty(
         connectFrame = null
       }
       onDataDisposable.dispose()
-      conptyDeviceAttributesDisposable?.dispose()
+      terminalCapabilityRepliesDisposable.dispose()
       onResizeDisposable.dispose()
       pane.container.removeEventListener(PANE_PTY_RESIZE_HOLD_FLUSH_EVENT, onHeldPtyResizeFlush)
       geometryReportObserver?.disconnect()

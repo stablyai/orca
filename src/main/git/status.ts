@@ -302,7 +302,9 @@ function rememberEffectiveUpstreamStatus(
   now: number,
   probedSameNameOriginRef: boolean
 ): void {
-  if (status.hasUpstream) {
+  // Why: hasConfiguredPushTarget gates a write action. Re-probe it each poll
+  // rather than keeping a stale positive target after branch config changes.
+  if (status.hasUpstream || status.hasConfiguredPushTarget) {
     effectiveUpstreamStatusCache.delete(cacheKey)
     return
   }
@@ -1126,6 +1128,8 @@ function buildDiffResult(
     } as GitDiffResult
   }
 
+  // Why: if the diff exceeds safe render limits, avoid sending large text
+  // payloads and return metadata so the renderer can show fallback UI.
   const largeDiffRenderLimit = getLargeDiffRenderLimit({ originalContent, modifiedContent })
   if (largeDiffRenderLimit.limited) {
     return {

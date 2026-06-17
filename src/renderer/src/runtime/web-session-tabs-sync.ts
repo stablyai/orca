@@ -758,7 +758,10 @@ function buildMirroredEditorTabs(
       isDirty: tab.isDirty,
       runtimeEnvironmentId: environmentId,
       mode: tab.type === 'markdown' ? tab.mode : 'edit',
-      markdownPreviewSourceFileId: sourceFileId
+      markdownPreviewSourceFileId: sourceFileId,
+      // Why: marks this tab as host-owned so a later snapshot that omits it can
+      // cull it. Locally opened web tabs lack this flag and survive syncs.
+      mirroredFromRuntimeSession: true
     }
     return {
       file,
@@ -1406,6 +1409,7 @@ function openFileEqual(a: OpenFile, b: OpenFile): boolean {
     a.isUntitled === b.isUntitled &&
     a.deleteUntouchedOnClose === b.deleteUntouchedOnClose &&
     a.externalMutation === b.externalMutation &&
+    a.mirroredFromRuntimeSession === b.mirroredFromRuntimeSession &&
     a.mode === b.mode
   )
 }
@@ -1618,6 +1622,10 @@ export function applyWebSessionTabsSnapshot(
           file.worktreeId === worktreeId &&
           file.runtimeEnvironmentId === environmentId &&
           (file.mode === 'edit' || file.mode === 'markdown-preview') &&
+          // Why: only cull tabs that came from the host mirror. Files the web
+          // user opened locally have no host counterpart, so a snapshot that
+          // omits them is not a signal to close them.
+          file.mirroredFromRuntimeSession === true &&
           !mirroredEditorFileIds.has(file.id)
       )
       .map((file) => file.id)

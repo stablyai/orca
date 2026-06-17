@@ -182,7 +182,7 @@ export default function WorkspaceKanbanStatusLane({
               variant="secondary"
               size="xs"
               className={cn(
-                'mt-2 h-7 w-full opacity-0 transition-opacity',
+                'mt-2 h-7 w-full can-hover:opacity-0 transition-opacity',
                 'group-hover/lane:opacity-100 group-focus-within/lane:opacity-100'
               )}
               aria-label={createTooltip}

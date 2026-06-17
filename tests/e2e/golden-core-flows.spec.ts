@@ -17,7 +17,8 @@ import {
 const tempRoots: string[] = []
 const SORTABLE_TAB = '[data-testid="sortable-tab"]'
 const REPO_STEP_HEADING = /Point Orca at some code/i
-const TASK_SOURCES_HEADING = /Connect your task sources/i
+const TASK_SOURCES_HEADING = /Set up GitHub tasks|Connect your task sources/i
+const WINDOWS_TERMINAL_HEADING = /Set Windows terminal defaults/i
 const ONBOARDING_ADVANCE_LABEL = /^Continue\b|^Add your first project\b/
 test.describe.configure({ mode: 'serial' })
 test.afterAll(() => {
@@ -137,6 +138,26 @@ async function chooseNotificationSound(page: Page): Promise<void> {
   await expect(soundSelect).toContainText(/Ding/i)
 }
 
+async function continueThroughOptionalSetupToNotifications(page: Page): Promise<void> {
+  const taskSourcesVisible = await page
+    .getByRole('heading', { name: TASK_SOURCES_HEADING })
+    .waitFor({ state: 'visible', timeout: 1_000 })
+    .then(() => true)
+    .catch(() => false)
+  if (taskSourcesVisible) {
+    await continueOnboarding(page)
+  }
+  const windowsTerminalVisible = await page
+    .getByRole('heading', { name: WINDOWS_TERMINAL_HEADING })
+    .waitFor({ state: 'visible', timeout: 1_000 })
+    .then(() => true)
+    .catch(() => false)
+  if (windowsTerminalVisible) {
+    await continueOnboarding(page)
+  }
+  await expect(page.getByRole('heading', { name: /Set up notifications/i })).toBeVisible()
+}
+
 async function continueFromNotificationsToRepo(page: Page): Promise<void> {
   await continueOnboarding(page)
   const taskSourcesVisible = await page
@@ -145,6 +166,14 @@ async function continueFromNotificationsToRepo(page: Page): Promise<void> {
     .then(() => true)
     .catch(() => false)
   if (taskSourcesVisible) {
+    await continueOnboarding(page)
+  }
+  const windowsTerminalVisible = await page
+    .getByRole('heading', { name: WINDOWS_TERMINAL_HEADING })
+    .waitFor({ state: 'visible', timeout: 1_000 })
+    .then(() => true)
+    .catch(() => false)
+  if (windowsTerminalVisible) {
     await continueOnboarding(page)
   }
   const repoHeading = page.getByRole('heading', { name: REPO_STEP_HEADING })
@@ -351,8 +380,13 @@ async function requestAgentSessionsTour(page: Page): Promise<void> {
 }
 
 async function completeWorkspaceCreationTour(page: Page, workspaceName: string): Promise<void> {
-  await expect(page.getByRole('dialog', { name: /Pick a project/i })).toBeVisible()
-  await page.getByRole('button', { name: /^Next$/ }).click()
+  const pickProjectStep = page.getByRole('dialog', { name: /Pick a project/i })
+  await expect(pickProjectStep).toBeVisible()
+  // Why: the project picker can leave its command popover open after the tour
+  // starts. Keyboard-activate the step button so the golden verifies the tour
+  // transition instead of pointer geometry around that popover.
+  await pickProjectStep.getByRole('button', { name: /^Next$/ }).focus()
+  await page.keyboard.press('Enter')
   const nameStep = page.getByRole('dialog', { name: /Name it, or start from existing work/i })
   await expect(nameStep).toBeVisible()
   const autoNameSwitch = nameStep.getByRole('switch', {
@@ -417,7 +451,7 @@ test.describe('New-user golden core flow', () => {
     await expect(orcaPage.getByRole('heading', { name: /Make it feel like home/i })).toBeVisible()
     await chooseOppositeTheme(orcaPage)
     await continueOnboarding(orcaPage)
-    await expect(orcaPage.getByRole('heading', { name: /Set up notifications/i })).toBeVisible()
+    await continueThroughOptionalSetupToNotifications(orcaPage)
     await expect(orcaPage.getByRole('button', { name: /Send Test Notification/i })).toBeVisible()
     await chooseNotificationSound(orcaPage)
     await continueFromNotificationsToRepo(orcaPage)

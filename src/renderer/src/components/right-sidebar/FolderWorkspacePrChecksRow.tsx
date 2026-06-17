@@ -114,6 +114,8 @@ export function FolderWorkspacePrChecksRow({
             checksLoading={row.isRefreshing}
             checkDetailsContextKey={row.refreshIdentity}
             onLoadCheckDetails={onLoadCheckDetails}
+            worktreeId={row.worktree.id}
+            detailsStickySurface="card"
           />
         </div>
       ) : null}

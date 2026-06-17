@@ -454,6 +454,62 @@ describe('createEditorSlice openDiff', () => {
     expect(store.getState().openFiles[0]?.diffContentReloadNonce).toBe(2)
   })
 
+  it('bumps fileContentReloadNonce when re-opening an existing clean file with reload requested', () => {
+    const store = createEditorStore()
+
+    const openFileWithReloadRequest = (): void =>
+      store.getState().openFile(
+        {
+          filePath: '/repo/file.ts',
+          relativePath: 'file.ts',
+          worktreeId: 'wt-1',
+          language: 'typescript',
+          mode: 'edit'
+        },
+        { forceContentReload: true }
+      )
+
+    openFileWithReloadRequest()
+    expect(store.getState().openFiles[0]?.fileContentReloadNonce).toBeUndefined()
+
+    openFileWithReloadRequest()
+    expect(store.getState().openFiles[0]?.fileContentReloadNonce).toBe(1)
+
+    openFileWithReloadRequest()
+    expect(store.getState().openFiles[0]?.fileContentReloadNonce).toBe(2)
+  })
+
+  it('does not bump fileContentReloadNonce when a dirty file is re-opened', () => {
+    const store = createEditorStore()
+
+    store.getState().openFile({
+      filePath: '/repo/file.ts',
+      relativePath: 'file.ts',
+      worktreeId: 'wt-1',
+      language: 'typescript',
+      mode: 'edit'
+    })
+    store.getState().markFileDirty('/repo/file.ts', true)
+
+    store.getState().openFile(
+      {
+        filePath: '/repo/file.ts',
+        relativePath: 'file.ts',
+        worktreeId: 'wt-1',
+        language: 'typescript',
+        mode: 'edit'
+      },
+      { forceContentReload: true }
+    )
+
+    expect(store.getState().openFiles[0]).toEqual(
+      expect.objectContaining({
+        isDirty: true,
+        fileContentReloadNonce: undefined
+      })
+    )
+  })
+
   it('opens the visible diff tab in the requested split group', () => {
     const store = createEditorTabsStore()
     const sourceTab = store.getState().createUnifiedTab('wt-1', 'terminal', { id: 'terminal-1' })
@@ -1145,6 +1201,78 @@ describe('createEditorSlice untitled cleanup routing', () => {
       filePath: '/remote/wt/untitled.md',
       deleteUntouchedOnClose: false
     })
+  })
+})
+
+describe('createEditorSlice recently closed editor tabs', () => {
+  function openMirroredEditor(store: StoreApi<AppState>, filePath: string, preview = false): void {
+    store.getState().openFile(
+      {
+        filePath,
+        relativePath: filePath.replace('/repo/', ''),
+        worktreeId: 'wt-1',
+        language: 'markdown',
+        runtimeEnvironmentId: 'env-1',
+        mirroredFromRuntimeSession: true,
+        mode: 'edit'
+      },
+      { preview }
+    )
+  }
+
+  it('reopens a closed mirrored editor tab as a local tab', () => {
+    const store = createEditorStore()
+    openMirroredEditor(store, '/repo/notes.md')
+
+    store.getState().closeFile('/repo/notes.md')
+
+    const recent = store.getState().recentlyClosedEditorTabsByWorktree['wt-1']?.[0]
+    expect(recent).toMatchObject({ filePath: '/repo/notes.md' })
+    expect(recent).not.toHaveProperty('mirroredFromRuntimeSession')
+
+    expect(store.getState().reopenClosedEditorTab('wt-1')).toBe(true)
+    expect(store.getState().openFiles[0]).toMatchObject({ filePath: '/repo/notes.md' })
+    expect(store.getState().openFiles[0]).not.toHaveProperty('mirroredFromRuntimeSession')
+  })
+
+  it('reopens close-all mirrored editor tabs as local tabs', () => {
+    const store = createEditorStore()
+    openMirroredEditor(store, '/repo/notes.md')
+
+    store.getState().closeAllFiles()
+
+    const recent = store.getState().recentlyClosedEditorTabsByWorktree['wt-1']?.[0]
+    expect(recent).toMatchObject({ filePath: '/repo/notes.md' })
+    expect(recent).not.toHaveProperty('mirroredFromRuntimeSession')
+
+    expect(store.getState().reopenClosedEditorTab('wt-1')).toBe(true)
+    expect(store.getState().openFiles[0]).toMatchObject({ filePath: '/repo/notes.md' })
+    expect(store.getState().openFiles[0]).not.toHaveProperty('mirroredFromRuntimeSession')
+  })
+
+  it('reopens replaced mirrored preview tabs as local tabs', () => {
+    const store = createEditorStore()
+    openMirroredEditor(store, '/repo/notes.md', true)
+
+    store.getState().openFile(
+      {
+        filePath: '/repo/guide.md',
+        relativePath: 'guide.md',
+        worktreeId: 'wt-1',
+        language: 'markdown',
+        runtimeEnvironmentId: 'env-1',
+        mode: 'edit'
+      },
+      { preview: true, recordReplacedPreview: true }
+    )
+
+    const recent = store.getState().recentlyClosedEditorTabsByWorktree['wt-1']?.[0]
+    expect(recent).toMatchObject({ filePath: '/repo/notes.md' })
+    expect(recent).not.toHaveProperty('mirroredFromRuntimeSession')
+
+    expect(store.getState().reopenClosedEditorTab('wt-1')).toBe(true)
+    expect(store.getState().openFiles.at(-1)).toMatchObject({ filePath: '/repo/notes.md' })
+    expect(store.getState().openFiles.at(-1)).not.toHaveProperty('mirroredFromRuntimeSession')
   })
 })
 

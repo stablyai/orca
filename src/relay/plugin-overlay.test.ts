@@ -169,6 +169,29 @@ describe('PluginOverlayManager', () => {
     )
   })
 
+  it('source-backs lazy OMP agent.db on the relay', () => {
+    manager.setSources({ piExtensionSource: '// pi extension' })
+    const sourceDir = join(homeDir, '.omp', 'agent')
+    const firstDir = manager.materializePi('tab-relay-omp-sqlite:0', undefined, 'omp')
+
+    expect(firstDir).not.toBeNull()
+    const sourcePath = join(sourceDir, 'agent.db')
+    const overlayPath = join(firstDir!, 'agent.db')
+    const content = 'agent.db relay credentials'
+
+    expect(existsSync(sourcePath)).toBe(true)
+    expect(existsSync(overlayPath)).toBe(true)
+    expect(existsSync(join(sourceDir, 'history.db'))).toBe(false)
+    writeFileSync(overlayPath, content)
+
+    expect(readFileSync(sourcePath, 'utf8')).toBe(content)
+
+    const secondDir = manager.materializePi('tab-relay-omp-sqlite:0', undefined, 'omp')
+
+    expect(secondDir).toBe(firstDir)
+    expect(readFileSync(join(secondDir!, 'agent.db'), 'utf8')).toBe('agent.db relay credentials')
+  })
+
   // Why: per-agent overlay source dir. The renderer picks Pi or OMP per
   // launch, and the relay must mirror the right `~/.<kind>/agent` source —
   // disk-presence guessing (always-Pi or first-exists) shadows the other

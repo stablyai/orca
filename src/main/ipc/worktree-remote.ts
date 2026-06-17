@@ -27,6 +27,7 @@ import { getPRForBranch } from '../github/client'
 import { listWorktrees, addWorktree, addSparseWorktree } from '../git/worktree'
 import type { AddWorktreeOptions, AddWorktreeResult } from '../git/worktree'
 import { getGitUsername, getBranchConflictKind, resolveDefaultBaseRefViaExec } from '../git/repo'
+import { hasCommitObjectViaGitExec } from '../git/commit-object-ref'
 import { getHostedReviewForBranch } from '../source-control/hosted-review'
 import type { ForgeProviderId } from '../source-control/forge-provider'
 import { validateGitPushTarget } from '../git/push-target-validation'
@@ -536,6 +537,17 @@ function hasLocalGitOptions(gitOptions: { wslDistro?: string }): boolean {
   return Object.keys(gitOptions).length > 0
 }
 
+function hasLocalCommitObjectWithOptions(
+  repoPath: string,
+  ref: string,
+  gitOptions: { wslDistro?: string }
+): Promise<boolean> {
+  return hasCommitObjectViaGitExec(
+    (gitArgs) => gitExecFileAsync(gitArgs, { cwd: repoPath, ...gitOptions }),
+    ref
+  )
+}
+
 function getLocalGitHubPrForBranch(
   repoPath: string,
   branchName: string,
@@ -544,6 +556,14 @@ function getLocalGitHubPrForBranch(
   return hasLocalGitOptions(gitOptions)
     ? getPRForBranch(repoPath, branchName, null, null, null, { localGitExecOptions: gitOptions })
     : getPRForBranch(repoPath, branchName)
+}
+
+function hasRemoteCommitObject(
+  provider: SshGitProvider,
+  repoPath: string,
+  ref: string
+): Promise<boolean> {
+  return hasCommitObjectViaGitExec((gitArgs) => provider.exec(gitArgs, repoPath), ref)
 }
 
 async function canCheckoutExistingLocalBranchSsh(
@@ -1155,6 +1175,11 @@ export async function prefetchRemoteWorktreeCreateBase(
     await refreshRemoteTrackingBaseForWorktreeCreate(provider, repo, basePlan.remoteTrackingBase)
     return
   }
+  if (await hasRemoteCommitObject(provider, repo.path, basePlan.baseBranch)) {
+    // Why: PR/MR resolvers already fetched verified SHA start points. A broad
+    // remote fetch only updates unrelated refs when the commit object exists.
+    return
+  }
 
   // Why: mirrors createRemoteWorktree's legacy local-base fallback so
   // prefetch and create share one process-local SSH fetch cache.
@@ -1450,10 +1475,10 @@ export async function createRemoteWorktree(
         `Could not refresh base ref "${baseBranch}" from "${remoteTrackingBase.remote}". Check your network and try again.`
       )
     }
-  } else {
+  } else if (!(await hasRemoteCommitObject(provider, repo.path, baseBranch))) {
     // Why: local or otherwise non-remote-tracking bases preserve legacy
-    // best-effort fetch behavior. Only remote-tracking bases must fail closed,
-    // because creating from them after a failed refresh silently makes stale worktrees.
+    // best-effort fetch behavior. Verified PR/MR SHA bases already have the
+    // commit object locally, so a broad remote fetch only updates unrelated refs.
     const fallbackRemote = baseBranch.includes('/') ? baseBranch.split('/')[0] : 'origin'
     try {
       await fetchRemoteForWorktreeCreate(provider, repo, fallbackRemote)
@@ -1585,9 +1610,9 @@ export async function createRemoteWorktree(
 
   const worktreeId = `${repo.id}::${created.path}`
   const now = Date.now()
-  // Why: persisted compare refs must survive local branches whose names look
-  // like remote labels, e.g. a local branch literally named "origin/main".
-  const metadataBaseRef = remoteTrackingBase?.ref ?? baseBranch
+  // Why: PR/MR-created worktrees can start from a head ref/SHA while Source
+  // Control must compare against the review target branch.
+  const metadataBaseRef = args.compareBaseRef ?? remoteTrackingBase?.ref ?? baseBranch
   let configuredPushTarget: GitPushTarget | undefined
   if (preparedPushTarget) {
     configuredPushTarget = await configureCreatedWorktreePushTargetSsh(
@@ -1800,12 +1825,13 @@ export async function createLocalWorktree(
           ...localWorktreeGitOptionArgs
         )
       }
-    } else {
+    } else if (
+      !(await hasLocalCommitObjectWithOptions(repo.path, baseBranch, localWorktreeGitOptions))
+    ) {
       // Why: when the base branch does not match a configured remote prefix
       // (e.g. plain `main`, `master`, or any local branch), the legacy path
-      // still ran a best-effort `git fetch origin` so a local base could be
-      // built against fresher tracking refs. Preserve that behavior here so
-      // local-only bases don't silently skip the pre-create fetch.
+      // still ran a best-effort `git fetch origin`. Verified PR SHA bases
+      // already have the needed commit object, so skip that broad fetch.
       const fallbackRemote = baseBranch.includes('/') ? baseBranch.split('/')[0] : 'origin'
       legacyFetchPromise = runtime
         .fetchRemoteWithCache(repo.path, fallbackRemote, ...localWorktreeGitOptionArgs)
@@ -1814,11 +1840,13 @@ export async function createLocalWorktree(
       emitCreateWorktreeProgress(mainWindow, 'fetching', args.creationId)
     }
   } else {
-    const remote = baseBranch.includes('/') ? baseBranch.split('/')[0] : 'origin'
-    legacyFetchPromise = gitExecFileAsync(['fetch', remote], localGitExecOptions)
-      .then(() => undefined)
-      .catch(() => undefined)
-    emitCreateWorktreeProgress(mainWindow, 'fetching', args.creationId)
+    if (!(await hasLocalCommitObjectWithOptions(repo.path, baseBranch, localWorktreeGitOptions))) {
+      const remote = baseBranch.includes('/') ? baseBranch.split('/')[0] : 'origin'
+      legacyFetchPromise = gitExecFileAsync(['fetch', remote], localGitExecOptions)
+        .then(() => undefined)
+        .catch(() => undefined)
+      emitCreateWorktreeProgress(mainWindow, 'fetching', args.creationId)
+    }
   }
   const workspaceRoot = computeWorkspaceRoot(repo.path, worktreePathSettings)
 
@@ -2188,9 +2216,9 @@ export async function createLocalWorktree(
 
   const worktreeId = `${repo.id}::${created.path}`
   const now = Date.now()
-  // Why: persisted compare refs must survive local branches whose names look
-  // like remote labels, e.g. a local branch literally named "origin/main".
-  const metadataBaseRef = remoteTrackingBase?.ref ?? baseBranch
+  // Why: PR/MR-created worktrees can start from a head ref/SHA while Source
+  // Control must compare against the review target branch.
+  const metadataBaseRef = args.compareBaseRef ?? remoteTrackingBase?.ref ?? baseBranch
   const metaUpdates: Partial<WorktreeMeta> = {
     // Why: path-derived worktree IDs can be reused after external deletion.
     // Fresh creations must rotate instance identity so stale lineage cannot

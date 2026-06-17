@@ -9,7 +9,7 @@ import {
   TextInput
 } from 'react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
-import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
+import { useFocusEffect, useLocalSearchParams, usePathname, useRouter } from 'expo-router'
 import {
   Search,
   X,
@@ -25,7 +25,8 @@ import {
   Moon,
   Filter,
   Check,
-  UserCircle
+  UserCircle,
+  PanelLeftClose
 } from 'lucide-react-native'
 import type { RpcClient } from '../../../src/transport/rpc-client'
 import { loadHosts, updateLastConnected, removeHost } from '../../../src/transport/host-store'
@@ -54,9 +55,11 @@ import { ConfirmModal } from '../../../src/components/ConfirmModal'
 import { BottomDrawer } from '../../../src/components/BottomDrawer'
 import { ProtocolBlockScreen } from '../../../src/components/ProtocolBlockScreen'
 import { AuthFailedBanner } from '../../../src/components/AuthFailedBanner'
+import { WorkspaceDetailPlaceholder } from '../../../src/components/WorkspaceDetailPlaceholder'
 import { getCachedWorktrees } from '../../../src/cache/worktree-cache'
 import { colors, radii, spacing, typography } from '../../../src/theme/mobile-theme'
 import { useResponsiveLayout } from '../../../src/layout/responsive-layout'
+import { leaveHostRoute } from '../../../src/host-route-exit'
 import { evaluateCompat, type CompatVerdict } from '../../../src/transport/protocol-compat'
 import { loadPinnedIds, savePinnedIds } from '../../../src/storage/preferences'
 import {
@@ -117,12 +120,36 @@ const GROUP_OPTIONS: PickerOption<MobileGroupMode>[] = [
   { value: 'prStatus', label: 'PR Status' }
 ]
 
-export default function HostScreen() {
-  const { hostId, action } = useLocalSearchParams<{ hostId: string; action?: string }>()
+type HostScreenProps = {
+  // Why: when true, this worktree list is rendered as the persistent tablet
+  // sidebar by the host layout rather than as its own routed screen. That
+  // swaps the back button for a hide-sidebar control, drives data fetching
+  // from a plain mount effect (the sidebar is never the "focused" route), and
+  // opens sessions into the detail pane instead of pushing a new full screen.
+  embedded?: boolean
+  // Route params aren't in scope when rendered from the layout, so the caller
+  // passes hostId/action explicitly; falls back to the local route params.
+  hostId?: string
+  action?: string
+  onHideSidebar?: () => void
+}
+
+export function HostScreen({
+  embedded = false,
+  hostId: hostIdProp,
+  action: actionProp,
+  onHideSidebar
+}: HostScreenProps = {}) {
+  const params = useLocalSearchParams<{ hostId: string; action?: string }>()
+  const hostId = hostIdProp ?? params.hostId
+  const action = actionProp ?? params.action
   const router = useRouter()
+  const pathname = usePathname()
   const insets = useSafeAreaInsets()
   // Why: cap and center the worktree list on wide/tablet canvases; on phones
-  // isWideLayout is false so the list stays edge-to-edge as before.
+  // isWideLayout is false so the list stays edge-to-edge as before. When
+  // embedded as the sidebar the list already lives in a narrow pane, so the
+  // cap is skipped (see the SectionList contentContainerStyle below).
   const { isWideLayout, contentMaxWidth } = useResponsiveLayout()
   const [initialCache] = useState(() =>
     hostId ? (getCachedWorktrees(hostId) as Worktree[] | null) : null
@@ -133,6 +160,7 @@ export default function HostScreen() {
   const reconnectAttempts = useReconnectAttempt(hostId)
   const lastConnectedAt = useLastConnectedAt(hostId)
   const clientRef = useRef<RpcClient | null>(null)
+  const fetchWorktreesInFlightRef = useRef(false)
   const closeHostClient = useCloseHost()
   const forceReconnectHost = useForceReconnect()
   const [worktrees, setWorktrees] = useState<Worktree[]>(initialCache ?? [])
@@ -174,6 +202,10 @@ export default function HostScreen() {
     createInitialHostRouteActionState(action)
   )
   const [sleptIds, setSleptIds] = useState<Set<string>>(new Set())
+
+  const leaveHost = useCallback(() => {
+    leaveHostRoute(router)
+  }, [router])
 
   // Persisted pin state
   const [pinnedIds, setPinnedIds] = useState<Set<string>>(new Set())
@@ -346,6 +378,12 @@ export default function HostScreen() {
     if (!client || connState !== 'connected') {
       return
     }
+    // The embedded sidebar polls for the whole split-view session; keep slow
+    // remote hosts from stacking overlapping expensive list requests.
+    if (fetchWorktreesInFlightRef.current) {
+      return
+    }
+    fetchWorktreesInFlightRef.current = true
     const requestClient = client
     const requestHostId = hostId
 
@@ -370,15 +408,9 @@ export default function HostScreen() {
             : pending
         )
 
-        void requestClient
-          .sendRequest('repo.list')
-          .then((repoResponse) => {
-            if (clientRef.current !== requestClient || hostId !== requestHostId) {
-              return
-            }
-            if (!repoResponse.ok) {
-              return
-            }
+        try {
+          const repoResponse = await requestClient.sendRequest('repo.list')
+          if (clientRef.current === requestClient && hostId === requestHostId && repoResponse.ok) {
             const repoResult = (repoResponse as RpcSuccess).result as { repos: RepoSummary[] }
             setRepoColorsByName(
               new Map(
@@ -396,8 +428,10 @@ export default function HostScreen() {
               )
             )
             setRepoIdsByName(new Map(repoResult.repos.map((repo) => [repo.displayName, repo.id])))
-          })
-          .catch(() => null)
+          }
+        } catch {
+          // Repo metadata is decorative; the next serialized poll can retry.
+        }
 
         // Clear optimistic sleep overrides once the server confirms the
         // worktree is actually inactive (liveTerminalCount dropped to 0).
@@ -432,6 +466,8 @@ export default function HostScreen() {
       }
     } catch {
       // Will retry on reconnect
+    } finally {
+      fetchWorktreesInFlightRef.current = false
     }
   }, [client, connState, hostId])
 
@@ -484,7 +520,9 @@ export default function HostScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      if (connState !== 'connected') {
+      // The embedded sidebar drives its own polling below; focus never fires
+      // for it since it isn't a routed screen.
+      if (embedded || connState !== 'connected') {
         return
       }
       void fetchWorktrees()
@@ -497,8 +535,23 @@ export default function HostScreen() {
         void fetchWorktrees()
       }, 3000)
       return () => clearInterval(interval)
-    }, [connState, fetchWorktrees, syncViewSettingsFromDesktop])
+    }, [embedded, connState, fetchWorktrees, syncViewSettingsFromDesktop])
   )
+
+  // Why: as the persistent tablet sidebar this list is never the focused
+  // route, so useFocusEffect won't fetch/poll. Mirror that behavior from a
+  // plain mount effect while connected instead.
+  useEffect(() => {
+    if (!embedded || connState !== 'connected') {
+      return
+    }
+    void fetchWorktrees()
+    void syncViewSettingsFromDesktop()
+    const interval = setInterval(() => {
+      void fetchWorktrees()
+    }, 3000)
+    return () => clearInterval(interval)
+  }, [embedded, connState, fetchWorktrees, syncViewSettingsFromDesktop])
 
   const updateLocalPins = useCallback(
     (worktreeId: string, pinned: boolean) => {
@@ -586,8 +639,27 @@ export default function HostScreen() {
     // socket would still be open, leaking state.
     closeHostClient(hostId)
     await removeHost(hostId)
-    router.back()
-  }, [hostId, router, closeHostClient])
+    leaveHost()
+  }, [hostId, leaveHost, closeHostClient])
+
+  const navigateFromHostList = useCallback(
+    (target: string) => {
+      if (!embedded) {
+        router.push(target)
+        return
+      }
+      const targetPath = target.split('?')[0] ?? target
+      if (pathname === targetPath) {
+        return
+      }
+      if (pathname === `/h/${hostId}`) {
+        router.push(target)
+        return
+      }
+      router.replace(target)
+    },
+    [embedded, hostId, pathname, router]
+  )
 
   const openWorktreeSession = useCallback(
     (item: Worktree) => {
@@ -600,11 +672,10 @@ export default function HostScreen() {
           })
           .catch(() => null)
       }
-      router.push(
-        `/h/${hostId}/session/${encodeURIComponent(item.worktreeId)}?name=${encodeURIComponent(item.displayName || item.repo)}`
-      )
+      const target = `/h/${hostId}/session/${encodeURIComponent(item.worktreeId)}?name=${encodeURIComponent(item.displayName || item.repo)}`
+      navigateFromHostList(target)
     },
-    [client, connState, hostId, router]
+    [client, connState, hostId, navigateFromHostList]
   )
 
   const handleSortChange = useCallback(
@@ -745,7 +816,13 @@ export default function HostScreen() {
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.topChrome}>
         <View style={styles.statusBar}>
-          <Pressable style={styles.backButton} onPress={() => router.back()}>
+          <Pressable
+            style={styles.backButton}
+            onPress={leaveHost}
+            accessibilityRole="button"
+            accessibilityLabel="Back to hosts"
+            hitSlop={8}
+          >
             <ChevronLeft size={22} color={colors.textPrimary} />
           </Pressable>
           {(() => {
@@ -789,88 +866,226 @@ export default function HostScreen() {
               </>
             )
           })()}
+          {embedded && onHideSidebar ? (
+            <Pressable
+              style={styles.sidebarCollapseButton}
+              onPress={onHideSidebar}
+              accessibilityRole="button"
+              accessibilityLabel="Hide sidebar"
+              hitSlop={8}
+            >
+              <PanelLeftClose size={14} color={colors.textSecondary} />
+            </Pressable>
+          ) : null}
         </View>
 
         {/* Filter/sort/group toolbar */}
-        <View style={styles.toolbar}>
-          <Pressable
-            style={[styles.filterChip, activeFilterCount > 0 && styles.filterChipActive]}
-            onPress={() => setShowFilterModal(true)}
-          >
-            <Filter
-              size={12}
-              color={activeFilterCount > 0 ? colors.textPrimary : colors.textSecondary}
-            />
-            <Text
-              style={[styles.filterChipText, activeFilterCount > 0 && styles.filterChipTextActive]}
+        {embedded ? (
+          <View style={styles.embeddedToolbar}>
+            <View style={styles.embeddedToolbarRow}>
+              <Pressable
+                style={[
+                  styles.filterChip,
+                  styles.embeddedFilterChip,
+                  activeFilterCount > 0 && styles.filterChipActive
+                ]}
+                onPress={() => setShowFilterModal(true)}
+                accessibilityRole="button"
+                accessibilityLabel={`Filter workspaces${activeFilterCount > 0 ? `, ${activeFilterCount} active` : ''}`}
+              >
+                <Filter
+                  size={12}
+                  color={activeFilterCount > 0 ? colors.textPrimary : colors.textSecondary}
+                />
+                <Text
+                  style={[
+                    styles.filterChipText,
+                    activeFilterCount > 0 && styles.filterChipTextActive
+                  ]}
+                  numberOfLines={1}
+                >
+                  Filter{activeFilterCount > 0 ? ` ${activeFilterCount}` : ''}
+                </Text>
+              </Pressable>
+
+              <Pressable
+                style={[styles.sortButton, styles.embeddedModeButton]}
+                onPress={() => setShowSortPicker(true)}
+                accessibilityRole="button"
+                accessibilityLabel={`Sort by ${SORT_OPTIONS.find((o) => o.value === sortMode)?.label ?? 'Recent'}`}
+              >
+                <SlidersHorizontal size={14} color={colors.textSecondary} />
+                <Text style={styles.sortLabel} numberOfLines={1}>
+                  {SORT_OPTIONS.find((o) => o.value === sortMode)?.label ?? 'Recent'}
+                </Text>
+              </Pressable>
+
+              <Pressable
+                style={[styles.groupButton, styles.embeddedModeButton]}
+                onPress={() => setShowGroupPicker(true)}
+                accessibilityRole="button"
+                accessibilityLabel="Group workspaces"
+              >
+                <Layers size={14} color={colors.textSecondary} />
+                <Text style={styles.sortLabel} numberOfLines={1}>
+                  {groupMode === 'none'
+                    ? 'Group'
+                    : groupMode === 'workspaceStatus'
+                      ? 'Status'
+                      : groupMode === 'repo'
+                        ? 'Repo'
+                        : 'PR'}
+                </Text>
+              </Pressable>
+            </View>
+
+            <View style={styles.embeddedToolbarRow}>
+              <Pressable
+                style={[
+                  styles.embeddedToolbarIconButton,
+                  connState !== 'connected' && styles.toolbarIconDisabled
+                ]}
+                onPress={() => navigateFromHostList(`/h/${hostId}/accounts`)}
+                disabled={connState !== 'connected'}
+                accessibilityRole="button"
+                accessibilityLabel="Accounts"
+              >
+                <UserCircle
+                  size={16}
+                  color={connState === 'connected' ? colors.textSecondary : colors.textMuted}
+                />
+              </Pressable>
+
+              <Pressable
+                style={[
+                  styles.embeddedToolbarIconButton,
+                  connState !== 'connected' && styles.toolbarIconDisabled
+                ]}
+                onPress={() => navigateFromHostList(`/h/${hostId}/tasks`)}
+                disabled={connState !== 'connected'}
+                accessibilityRole="button"
+                accessibilityLabel="Tasks"
+              >
+                <List
+                  size={16}
+                  color={connState === 'connected' ? colors.textSecondary : colors.textMuted}
+                />
+              </Pressable>
+
+              <Pressable
+                style={[
+                  styles.embeddedToolbarIconButton,
+                  connState !== 'connected' && styles.toolbarIconDisabled
+                ]}
+                onPress={() => setShowNewWorktreeVisible(true)}
+                disabled={connState !== 'connected'}
+                accessibilityRole="button"
+                accessibilityLabel="New workspace"
+              >
+                <Plus
+                  size={16}
+                  color={connState === 'connected' ? colors.textPrimary : colors.textMuted}
+                />
+              </Pressable>
+
+              <Pressable
+                style={styles.embeddedToolbarIconButton}
+                onPress={() => setShowSearch((s) => !s)}
+                accessibilityRole="button"
+                accessibilityLabel={showSearch ? 'Close search' : 'Search workspaces'}
+              >
+                {showSearch ? (
+                  <X size={16} color={colors.textSecondary} />
+                ) : (
+                  <Search size={16} color={colors.textSecondary} />
+                )}
+              </Pressable>
+            </View>
+          </View>
+        ) : (
+          <View style={styles.toolbar}>
+            <Pressable
+              style={[styles.filterChip, activeFilterCount > 0 && styles.filterChipActive]}
+              onPress={() => setShowFilterModal(true)}
             >
-              Filter{activeFilterCount > 0 ? ` (${activeFilterCount})` : ''}
-            </Text>
-          </Pressable>
+              <Filter
+                size={12}
+                color={activeFilterCount > 0 ? colors.textPrimary : colors.textSecondary}
+              />
+              <Text
+                style={[
+                  styles.filterChipText,
+                  activeFilterCount > 0 && styles.filterChipTextActive
+                ]}
+              >
+                Filter{activeFilterCount > 0 ? ` (${activeFilterCount})` : ''}
+              </Text>
+            </Pressable>
 
-          <Pressable style={styles.sortButton} onPress={() => setShowSortPicker(true)}>
-            <SlidersHorizontal size={14} color={colors.textSecondary} />
-            <Text style={styles.sortLabel}>
-              {SORT_OPTIONS.find((o) => o.value === sortMode)?.label ?? 'Recent'}
-            </Text>
-          </Pressable>
+            <Pressable style={styles.sortButton} onPress={() => setShowSortPicker(true)}>
+              <SlidersHorizontal size={14} color={colors.textSecondary} />
+              <Text style={styles.sortLabel}>
+                {SORT_OPTIONS.find((o) => o.value === sortMode)?.label ?? 'Recent'}
+              </Text>
+            </Pressable>
 
-          <Pressable style={styles.groupButton} onPress={() => setShowGroupPicker(true)}>
-            <Layers size={14} color={colors.textSecondary} />
-            <Text style={styles.sortLabel}>
-              {groupMode === 'none'
-                ? 'Group'
-                : groupMode === 'workspaceStatus'
-                  ? 'Status'
-                  : groupMode === 'repo'
-                    ? 'Repo'
-                    : 'PR'}
-            </Text>
-          </Pressable>
+            <Pressable style={styles.groupButton} onPress={() => setShowGroupPicker(true)}>
+              <Layers size={14} color={colors.textSecondary} />
+              <Text style={styles.sortLabel}>
+                {groupMode === 'none'
+                  ? 'Group'
+                  : groupMode === 'workspaceStatus'
+                    ? 'Status'
+                    : groupMode === 'repo'
+                      ? 'Repo'
+                      : 'PR'}
+              </Text>
+            </Pressable>
 
-          <View style={styles.toolbarSpacer} />
+            <View style={styles.toolbarSpacer} />
 
-          <Pressable
-            style={styles.searchToggle}
-            onPress={() => router.push(`/h/${hostId}/accounts`)}
-            disabled={connState !== 'connected'}
-          >
-            <UserCircle
-              size={16}
-              color={connState === 'connected' ? colors.textSecondary : colors.textMuted}
-            />
-          </Pressable>
+            <Pressable
+              style={styles.searchToggle}
+              onPress={() => navigateFromHostList(`/h/${hostId}/accounts`)}
+              disabled={connState !== 'connected'}
+            >
+              <UserCircle
+                size={16}
+                color={connState === 'connected' ? colors.textSecondary : colors.textMuted}
+              />
+            </Pressable>
 
-          <Pressable
-            style={styles.searchToggle}
-            onPress={() => router.push(`/h/${hostId}/tasks`)}
-            disabled={connState !== 'connected'}
-          >
-            <List
-              size={16}
-              color={connState === 'connected' ? colors.textSecondary : colors.textMuted}
-            />
-          </Pressable>
+            <Pressable
+              style={styles.searchToggle}
+              onPress={() => navigateFromHostList(`/h/${hostId}/tasks`)}
+              disabled={connState !== 'connected'}
+            >
+              <List
+                size={16}
+                color={connState === 'connected' ? colors.textSecondary : colors.textMuted}
+              />
+            </Pressable>
 
-          <Pressable
-            style={styles.newButton}
-            onPress={() => setShowNewWorktreeVisible(true)}
-            disabled={connState !== 'connected'}
-          >
-            <Plus
-              size={16}
-              color={connState === 'connected' ? colors.textPrimary : colors.textMuted}
-            />
-          </Pressable>
+            <Pressable
+              style={styles.newButton}
+              onPress={() => setShowNewWorktreeVisible(true)}
+              disabled={connState !== 'connected'}
+            >
+              <Plus
+                size={16}
+                color={connState === 'connected' ? colors.textPrimary : colors.textMuted}
+              />
+            </Pressable>
 
-          <Pressable style={styles.searchToggle} onPress={() => setShowSearch((s) => !s)}>
-            {showSearch ? (
-              <X size={16} color={colors.textSecondary} />
-            ) : (
-              <Search size={16} color={colors.textSecondary} />
-            )}
-          </Pressable>
-        </View>
+            <Pressable style={styles.searchToggle} onPress={() => setShowSearch((s) => !s)}>
+              {showSearch ? (
+                <X size={16} color={colors.textSecondary} />
+              ) : (
+                <Search size={16} color={colors.textSecondary} />
+              )}
+            </Pressable>
+          </View>
+        )}
       </View>
 
       {/* Auth failed banner */}
@@ -941,7 +1156,8 @@ export default function HostScreen() {
           contentContainerStyle={[
             styles.list,
             { paddingBottom: spacing.lg + insets.bottom },
-            isWideLayout && { maxWidth: contentMaxWidth, width: '100%', alignSelf: 'center' }
+            isWideLayout &&
+              !embedded && { maxWidth: contentMaxWidth, width: '100%', alignSelf: 'center' }
           ]}
           renderSectionHeader={({ section }) => {
             if (!section.title) {
@@ -1124,7 +1340,7 @@ export default function HostScreen() {
                           name: actionTarget.displayName || actionTarget.repo,
                           origin: 'host'
                         })
-                        router.push(
+                        navigateFromHostList(
                           `/h/${hostId}/source-control/${encodeURIComponent(actionTarget.worktreeId)}?${params.toString()}`
                         )
                         setActionTarget(null)
@@ -1182,12 +1398,26 @@ export default function HostScreen() {
         onCreated={(worktreeId, worktreeName) => {
           void fetchWorktrees()
           const params = new URLSearchParams({ name: worktreeName, created: '1' })
-          router.push(`/h/${hostId}/session/${encodeURIComponent(worktreeId)}?${params.toString()}`)
+          navigateFromHostList(
+            `/h/${hostId}/session/${encodeURIComponent(worktreeId)}?${params.toString()}`
+          )
         }}
         onClose={() => setShowNewWorktreeVisible(false)}
       />
     </SafeAreaView>
   )
+}
+
+// Default route export. On wide tablet/foldable canvases the worktree list is
+// rendered as a persistent sidebar by the host layout, so the route itself
+// becomes the empty detail pane until a workspace is opened. On phones it is
+// the full-screen worktree list as before.
+export default function HostWorktreeRoute() {
+  const { isWideLayout } = useResponsiveLayout()
+  if (isWideLayout) {
+    return <WorkspaceDetailPlaceholder />
+  }
+  return <HostScreen />
 }
 
 function ListSeparator() {
@@ -1228,6 +1458,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginRight: spacing.xs
   },
+  sidebarCollapseButton: {
+    width: 24,
+    height: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radii.button,
+    marginLeft: spacing.xs
+  },
   hostIdentity: {
     flex: 1,
     flexDirection: 'row',
@@ -1262,6 +1500,34 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     borderBottomWidth: 1,
     borderBottomColor: colors.borderSubtle
+  },
+  embeddedToolbar: {
+    paddingVertical: spacing.xs + 2,
+    paddingHorizontal: spacing.sm,
+    gap: spacing.xs,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.borderSubtle
+  },
+  embeddedToolbarRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm
+  },
+  embeddedFilterChip: {
+    flex: 1,
+    minWidth: 0,
+    height: 30,
+    justifyContent: 'center',
+    paddingHorizontal: spacing.xs,
+    paddingVertical: 0
+  },
+  embeddedModeButton: {
+    flex: 1,
+    minWidth: 0,
+    height: 30,
+    justifyContent: 'center',
+    paddingHorizontal: spacing.xs,
+    paddingVertical: 0
   },
   filterChip: {
     flexDirection: 'row',
@@ -1304,6 +1570,23 @@ const styles = StyleSheet.create({
   },
   toolbarSpacer: {
     flex: 1
+  },
+  toolbarIconButton: {
+    width: 32,
+    height: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radii.button
+  },
+  embeddedToolbarIconButton: {
+    flex: 1,
+    height: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radii.button
+  },
+  toolbarIconDisabled: {
+    opacity: 0.6
   },
   newButton: {
     padding: spacing.xs

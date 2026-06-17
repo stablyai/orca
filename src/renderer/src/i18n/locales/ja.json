@@ -37,7 +37,6 @@
     "exploreOrca": "Orca を探索",
     "gettingStarted": "Orca を使い始める",
     "reportCrash": "クラッシュを報告...",
-    "exportPdf": "PDF としてエクスポート...",
     "file": "ファイル",
     "exit": "終了",
     "edit": "編集",
@@ -277,7 +276,8 @@
           "a5fc0cb622": "OpenClaude",
           "bf53f09bf8": "Claude Agent Teams",
           "0708ed89f1": "Claude",
-          "fc80296033": "Devin"
+          "fc80296033": "Devin",
+          "da41abbdd4": "Ante"
         },
         "skill": {
           "cli": {
@@ -515,7 +515,10 @@
         "b2ead86962": "PR ベースを解決できませんでした。",
         "a9ff236145": "一部の添付ファイルをアップロードできませんでした。",
         "3db83fc58a": "添付ファイルに使用できるリモート プロジェクト パスがありません。",
-        "ba6cb77082": "プロジェクトへの接続に失敗しました。"
+        "ba6cb77082": "プロジェクトへの接続に失敗しました。",
+        "chooseOrAddProjectBeforeWorkspace": "ワークスペースを作成する前に、プロジェクトを選択または追加してください。",
+        "folderWorkspaceCreateFailedTitle": "フォルダーワークスペースを作成できませんでした",
+        "folderWorkspaceCreateFailedMessage": "フォルダーワークスペースを作成できませんでした。上のエラー詳細を確認して、もう一度お試しください。"
       },
       "useGlobalFileDrop": {
         "38c9f034ff": "ドロップされたファイルのアップロードに失敗しました。",
@@ -1040,6 +1043,9 @@
         "7711ad5122": "ローカルセットアップコマンド",
         "e5db1b0419": "組み合わせセットアップコマンド",
         "addProjectBeforeWorkspace": "ワークスペースを作成する前にプロジェクトを追加します。",
+        "connectProjectFirst": "先にこのプロジェクトに接続してください",
+        "connectSourceLookup": "接続",
+        "reconnectSourceLookup": "再接続",
         "sshNotConnected": "SSH not connected",
         "connectingSsh": "Connecting SSH...",
         "sshAuthenticationFailed": "SSH authentication failed",
@@ -1259,7 +1265,7 @@
         "92b0f9d921": "認証されているので、再試行してください。",
         "cd8c34aac1": "gh",
         "cf82170065": "repo にスターを付けることができませんでした。確認する",
-        "30c36231c1": "Orca のおかげで時間を節約できたなら、GitHub のスターは大いに役立ちます。これは、他の開発者がプロ​​ジェクトを発見するのに役立ち、チームの改善を出荷する意欲を維持します。",
+        "30c36231c1": "Orca はオープンソースです。今日役に立ったなら、GitHub のスターが他の開発者の発見につながります。",
         "b5e685e4d9": "閉じる",
         "5f6df21046": "Orcaを楽しんでいますか？",
         "2d67b6c849": "GitHub でスターを付ける",
@@ -1268,7 +1274,7 @@
         "996bf76e46": "ブラウザーでGitHubを開いて完了してください。",
         "d32015fec7": "開いています...",
         "157bb5ecbb": "GitHubを開く",
-        "8c967b4d15": "今はしない",
+        "8c967b4d15": "あとで",
         "73dfd4eb8d": "今後表示しない"
       },
       "TaskPage": {
@@ -2230,7 +2236,14 @@
             "ebd2fa844d": "閉じる",
             "1d1a7a9c1f": "キャンセル",
             "6b9a6975f8": "terminal にはまだ実行中のプロセスがあります。terminal を閉じるとプロセスが強制終了されます。",
-            "78b79d854d": "Terminal を閉じますか?"
+            "78b79d854d": "Terminal を閉じますか?",
+            "stop_agent_title": "このエージェントを停止しますか?",
+            "stop_command_title": "実行中のコマンドを停止しますか?",
+            "stop_agent_description": "この terminal を閉じると、エージェントの現在の作業が停止します。",
+            "stop_command_description": "この terminal を閉じると、その中で実行中のコマンドが停止します。",
+            "dont_ask_again": "実行中の terminal では今後確認しない",
+            "stop_agent_confirm": "エージェントを停止",
+            "stop_command_confirm": "停止して閉じる"
           },
           "MobileDriverOverlay": {
             "c6460cf584": "操作を取り戻す",
@@ -2461,7 +2474,7 @@
             "39676a184c": "任意のファイル、URL、agent などを開きます..."
           },
           "TabBarQuickCommandsButton": {
-            "a2c7a33831": "コマンドの追加",
+            "a2c7a33831": "コマンド",
             "20bbd75896": "コマンドはありません",
             "b82e237a4b": "よりクイックなコマンド",
             "85482c57bc": "クイックコマンドを実行する",
@@ -2692,7 +2705,7 @@
             "97957ad3a3": "AI プロバイダー アカウントに接続すると、その使用状況をリアルタイムで確認し、アカウント間を簡単に切り替えることができます。",
             "9a542f46c7": "ステータスバーから隠す",
             "84c3b15dca": "Agent の使用制限",
-            "d663430cf9": "AI アカウントに接続して使用状況を確認する"
+            "d663430cf9": "使用状況の追跡を設定"
           },
           "UpdateStatusSegment": {
             "5cd13105a3": "アップデートに失敗しました。クリックして展開します。",
@@ -3187,9 +3200,7 @@
         "AddRepoCreateStep": {
           "0ae45b8238": "私のプロジェクト",
           "a8149a3a5a": "名前",
-          "038729c107": "フォルダ",
           "11fd2a7db8": "Gitリポジトリ",
-          "180e9b5e48": "プロジェクトの種類",
           "5e97f0c4b9": "プロジェクトが作成されました",
           "2c12db1511": "プロジェクトはすでに追加されています",
           "875dda0995": "サーバーの親パスを入力します。",
@@ -3199,7 +3210,7 @@
           "b100311784": "名前を付けると、Orca が適切な既定値で実際のプロジェクトを作成します。",
           "685b5eefe1": "{{parent}} の {{kind}}",
           "2a762f3b19": "このホストで Git を確認中...",
-          "fe1e616c5b": "Git がインストールされていないため、通常のフォルダが既定になります。",
+          "fe1e616c5b": "プロジェクトを作成するには Git が必要です。",
           "c234df77f7": "作成する前に、サーバーの親フォルダを選択または入力してください。",
           "3a13f6e88b": "場所が選択されていません",
           "6ed14c0281": "サーバーフォルダが選択されていません",
@@ -3644,8 +3655,6 @@
           "0f33af979b": "部分的なチェックアウト。これらのパスの外にあるファイルはディスク上にありません。",
           "4f964d5e8c": "スパース",
           "7d517f82e2": "主要な",
-          "c6833b5187": "最初の agent メッセージから名前が変更されます",
-          "f62a3dadbc": "名前変更が保留中",
           "4eba2ea99e": "自動名前付けに失敗しました。クリックすると詳細が表示されます。",
           "74522ee457": "名前の変更に失敗しました",
           "02e19349f4": "名前の自動変更に失敗しました: 表示エラー",
@@ -4044,7 +4053,7 @@
           "create": "ワークスペースを作成",
           "sourceProject": "タスクソース",
           "chooseSourceProject": "タスクソースを選択",
-          "createStart": "Create & Start Agent"
+          "createFailed": "フォルダーワークスペースを作成できませんでした。"
         },
         "ProjectOrderManualDefaultNotice": {
           "a1f4c2d8e0": "手動のプロジェクト順序がデフォルトになりました",
@@ -5215,34 +5224,28 @@
           "239bf9132b": "インストールコマンドをコピーしました。"
         },
         "PrivacyDiagnosticBundleControls": {
-          "dc8404a930": "プレビューの作成",
+          "dc8404a930": "診断ファイルを作成",
           "a5acaffdb6": "破棄",
-          "aca2c8a367": "アップロード",
-          "798b6f0be5": "プレビューを開く",
+          "aca2c8a367": "サポートに送信",
+          "798b6f0be5": "確認用ファイルを開く",
           "2ae9a6b63e": "完了",
-          "7f14a1733c": "バンドルの削除",
-          "2801d4ce22": "チケットをコピー"
+          "7f14a1733c": "送信済みファイルを削除",
+          "2801d4ce22": "参照 ID をコピー",
+          "d8be621237": "先に確認用ファイルを開いてください。",
+          "61676df223": "診断情報を送信しました。サポートにこの参照 ID を共有してください: {{value0}}。",
+          "fd7b3891af": "確認用ファイル（{{value0}}）を開きました。このファイルをサポートに送信するか、破棄できます。",
+          "62340d4439": "確認用ファイル（{{value0}}）の準備ができました。開いて送信内容を確認してから、サポートに送信するか選択してください。",
+          "19ec5e29b3": "最近のアプリ操作とエラーを、送信前に確認できる編集済みファイルにまとめます。送信を選ぶまで何もアップロードされません。"
         },
         "PrivacyDiagnosticsSection": {
-          "acc7c66e6e": "OTLP エクスポート",
-          "4ff08ff3a7": "ローカルトレースをクリアする",
-          "9ca08a9f8f": "このマシン上のローテーションされたすべてのトレース ファイルを削除します。",
-          "fe81a52cb2": "トレースフォルダーを開く",
-          "5ff57fc986": "ファイル マネージャーに {{value0}} が表示されます。",
-          "af2fc82cde": "診断バンドル",
-          "c18cbe45df": "アップロードされた診断バンドルが削除されました",
-          "7a4944595b": "診断チケットをコピーできませんでした",
-          "13eb2c65a1": "診断チケットがコピーされました",
-          "860bca9ec9": "診断バンドルのプレビューが破棄されました",
-          "49fc6c80e8": "診断バンドルがアップロードされました",
-          "db3228e01a": "診断バンドルのプレビューが開きました",
-          "a2b3505c77": "診断バンドルのプレビューが作成されました",
-          "9666a05580": "トレースファイルをクリアできませんでした",
-          "32d767f84d": "ローカル トレース ファイルがクリアされました",
-          "b85fe972cd": "トレースフォルダーを開けませんでした",
-          "1fb00a8995": "無効",
-          "46ea3fb2d0": "有効",
-          "7c9d9820b6": "Orca が独自の OpenTelemetry コレクターを指すように ORCA_OTLP_TRACES_URL を設定します。"
+          "af2fc82cde": "アプリ診断情報をサポートに送信",
+          "c18cbe45df": "送信済みの診断情報を削除しました",
+          "7a4944595b": "参照 ID をコピーできませんでした",
+          "13eb2c65a1": "参照 ID をコピーしました",
+          "860bca9ec9": "確認用ファイルを破棄しました",
+          "49fc6c80e8": "診断情報を送信しました",
+          "db3228e01a": "確認用ファイルを開きました",
+          "a2b3505c77": "確認用ファイルを作成しました"
         },
         "PrivacyPane": {
           "36e0e2e63b": "環境変数。設定を解除し、再起動して再度有効にします。",
@@ -6062,7 +6065,9 @@
           "af0c3b6e39": "Windows では、右クリックしてクリップボードを terminal に貼り付けます。 Ctrl キーを押しながら右クリックしてコンテキスト メニューを開きます。",
           "29154326bb": "の上",
           "ab20575a8a": "オフ",
-          "ab3a1f9068": "wsl.exe"
+          "ab3a1f9068": "wsl.exe",
+          "ask_before_closing_running_terminals_title": "Ask Before Closing Running Terminals",
+          "ask_before_closing_running_terminals_description": "Show a confirmation before closing a terminal that has a running command or agent."
         },
         "TerminalSettingsPreview": {
           "a63953a48a": "{{value0}} テーマのプレビュー",
@@ -7230,12 +7235,8 @@
             "f7a2d9f137": "テレメトリ送信を無効にする環境変数。",
             "e058a3c98d": "テレメトリ環境変数",
             "1686c07fee": "サポート",
-            "4a583f3a2f": "オープンテレメトリー",
-            "9ea93ce3d6": "otlp",
-            "685c68a81f": "ログ",
-            "40de3c2f19": "トレース",
             "c0494ff48a": "診断",
-            "8b08f32366": "トレース ファイルと OTLP エクスポート コントロール。",
+            "8b08f32366": "アプリ診断とサポート共有のコントロール。",
             "6d258d2ed6": "診断",
             "ead1deded2": "共有",
             "27a27b2f63": "身を引く",
@@ -7674,7 +7675,9 @@
             "e989914ad6": "フォントファミリー",
             "33031c1465": "文字サイズ",
             "0fe0073f0c": "新規ペインとライブ アップデートのデフォルトの terminal フォント サイズ。",
-            "5930244899": "フォントサイズ"
+            "5930244899": "フォントサイズ",
+            "ask_before_closing_running_terminals_title": "Ask Before Closing Running Terminals",
+            "ask_before_closing_running_terminals_description": "Show a confirmation before closing a terminal that has a running command or agent."
           },
           "windows": {
             "search": {
@@ -7994,6 +7997,13 @@
           "pendingRuntimeChange": "Runtime change pending. New project work will use the selected runtime after you apply.",
           "cancel": "Cancel",
           "applyRuntimeChange": "Apply runtime change"
+        },
+        "PrivacyDiagnosticsRows": {
+          "5a7cbe069a": "DO_NOT_TRACK=1 が設定されています — 診断ファイルの作成と送信は無効です。",
+          "63d03261d1": "ORCA_TELEMETRY_DISABLED=1 が設定されています — 診断ファイルの作成と送信は無効です。",
+          "d37e92a06b": "ORCA_DIAGNOSTICS_DISABLED=1 が設定されています — アプリ診断はオフです。",
+          "5ebb31e1fb": "CI で実行中です — 診断はオフです。",
+          "e27c8d45bf": "環境変数により診断は無効になっています。"
         }
       },
       "right": {
@@ -8369,6 +8379,7 @@
             "834cb3f23d": "AIで修正する",
             "60bd988f0b": "AIの修正",
             "461575b9bc": "AIで commit メッセージを生成",
+            "b16b8f0e4b": "AI commit メッセージ",
             "ddc1fbd690": "commit メッセージの生成を停止する",
             "5acbcedc1a": "{{value0}} を作成する",
             "aaf1451654": "ドラフト {{value0}} を作成する",
@@ -8421,7 +8432,38 @@
             "e283b50179": "コミットメッセージ",
             "f394c6128a": "このコミットを説明できるエージェントがありません",
             "04a5d7239b": "このリポジトリには対応するWebリモートがありません",
-            "15b6e834ac": "コミットをブラウザーで開けませんでした"
+            "15b6e834ac": "コミットをブラウザーで開けませんでした",
+            "d37e68f61d": "レビュー用にブランチを準備中…",
+            "8d8f5c6c94": "コミットメッセージを生成中…",
+            "fda060d6ce": "コミットメッセージを確認してから、Create PR を再試行してください。",
+            "b75cb1fd0c": "変更をコミット中…",
+            "995c5e67ec": "レビュー設定の確認が必要です。",
+            "d7492cafce": "Source Control を更新できませんでした。Create PR を再試行してください。",
+            "473f18758e": "Source Control AI 設定",
+            "createPrIntentConfigureAi": "コミットメッセージを追加するか、Source Control AI 設定を構成してください。",
+            "createPrIntentGenerateFailed": "コミットメッセージを生成できませんでした。追加してから再試行してください。",
+            "createPrIntentCommitFailed": "変更をコミットできませんでした。問題を修正してから Create PR を再試行してください。",
+            "createPrIntentNeedsSync": "レビューを作成する前にこのブランチを同期してください。",
+            "createPrIntentBranchNotReady": "このブランチはまだレビューを作成できる状態ではありません。",
+            "createPrIntentPublishing": "ブランチを公開中…",
+            "createPrIntentForcePushing": "lease 付きで強制プッシュ中…",
+            "createPrIntentPushing": "コミットをプッシュ中…",
+            "createPrIntentRemoteFailed": "リモートブランチを更新できませんでした。Create PR を再試行してください。",
+            "createPrIntentGeneratingDetails": "レビューの詳細を生成中…",
+            "createPrIntentBranchChangedDuringDetails": "レビューの詳細を生成中にブランチが変更されました。Create PR を再試行してください。",
+            "createPrIntentCreatingReview": "レビューを作成中…",
+            "a91f8e2b01": "リスト表示",
+            "b82e9f3c12": "ツリー表示",
+            "f71c4a8d90": "その他のソース管理アクション",
+            "c8e4a1f902": "フィルター: {{value0}}",
+            "b3c8f1a902": "ファイル名でフィルター",
+            "d4f8c2a901": "フィルターをクリアして閉じる",
+            "e8a1c4b203": "vs",
+            "f9b2441bb6": "{{value0}}より1コミット進んでいます",
+            "b715ef615b": "{{value1}}より{{value0}}コミット進んでいます",
+            "c1a8f3e204": "{{value0}}より1コミット遅れています",
+            "d2b9g4f315": "{{value1}}より{{value0}}コミット遅れています",
+            "e9c2a5d416": "{{value0}}と同じ状態"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "選択した agent を開始できませんでした。",
@@ -8553,7 +8595,8 @@
                 "d91f2a6c39": "キュー内の {{value0}} 件のコメントを送信",
                 "a6de3e5a20": "キュー内のコメントをクリア",
                 "49ea0937e4": "コメントを解決リストに追加",
-                "9fecebb29d": "追加"
+                "9fecebb29d": "追加",
+                "b8c4e2a1f7": "View full logs"
               },
               "empty": {
                 "state": {
@@ -8707,7 +8750,24 @@
                   "484f45c439": "{{value0}} が進行中です…",
                   "74fc171e99": "強制プッシュ中です…",
                   "16aee3a5c1": "Commit 中です…",
-                  "e61b0d7a3c": "Check out a branch before publishing commits."
+                  "e61b0d7a3c": "コミットを公開する前にブランチをチェックアウトしてください。",
+                  "1d47e850cf": "リンクされたレビュー ブランチに更新をプッシュ",
+                  "c39d0c75c3": "リンクされたレビュー ブランチのターゲットを利用できません。",
+                  "8c6d15a07d": "PR を作成",
+                  "d37e68f61d": "レビュー用にブランチを準備中…",
+                  "c72e5e65d1": "このブランチを準備して {{value0}} を作成",
+                  "b8e4f2a901": "Wait for the remote operation to finish.",
+                  "c9f3a1b802": "Resolve conflicts before creating a {{value0}}.",
+                  "d2a8c4e703": "No changes on this branch to include in a {{value0}}.",
+                  "e3b9d5f814": "Cannot create a {{value0}} from the default branch.",
+                  "f4c0e6a925": "Commit changes before creating a {{value0}}.",
+                  "a5d1f7b036": "Publish commits before creating a {{value0}}.",
+                  "b6e2a8c147": "Push commits before creating a {{value0}}.",
+                  "c7f3b9d258": "Sync this branch before creating a {{value0}}.",
+                  "d8a4c0e369": "Authenticate before creating a {{value0}}.",
+                  "e9b5d1f470": "Check out a branch before creating a {{value0}}.",
+                  "f0c6e2a581": "This branch is not ready for a {{value0}} yet.",
+                  "h3i4j5k607": "Checking whether this branch can create a {{value0}}…"
                 }
               }
             }
@@ -8727,7 +8787,9 @@
             "74727df633": "「{{value0}}」が削除されました",
             "d979a4fbb5": "「{{value0}}」を完全に削除しますか?",
             "a76c74f105": "破壊的な",
-            "92276aceb7": "削除"
+            "92276aceb7": "削除",
+            "7fb9435c86": "This permanently deletes the directory and its contents on the remote host. This cannot be undone.",
+            "23e98f192f": "This permanently deletes the file on the remote host. This cannot be undone."
           },
           "useFileExplorerHandlers": {
             "32cd9fd991": "シンボリックリンクターゲットを開けません"
@@ -8880,6 +8942,26 @@
             "8c2d5fab13": "コミットハッシュをコピー",
             "9d3e60bc24": "コミットメッセージをコピー",
             "ae4f71cd35": "変更を説明"
+          },
+          "pull": {
+            "policy": {
+              "error": {
+                "notice": {
+                  "4b90a55d92": "Merge",
+                  "6fb5abf1c4": "Create a merge commit when local and remote both changed.",
+                  "6acbb47d03": "Rebase",
+                  "f01f74a08c": "Replay local commits on top of the remote branch.",
+                  "97c585cf50": "Fast-forward only",
+                  "b65768e783": "Only pull when no merge or rebase is needed.",
+                  "c830a5cc62": "Pull needs a policy",
+                  "88d3757c2e": "Diverged",
+                  "a77529be2d": "This branch has local and remote commits. Run one command in this worktree or on the SSH host, then try Pull or Sync again.",
+                  "e678d238a8": "Copy {{value0}} pull policy command",
+                  "f4ab362a2f": "Copied",
+                  "b3ecff2b02": "Copy command"
+                }
+              }
+            }
           }
         }
       },
@@ -9027,7 +9109,9 @@
           "a5e5da02f7": "連携",
           "35bbaf5ae0": "通知",
           "984338477a": "テーマ",
-          "c47e1bd149": "agent"
+          "c47e1bd149": "エージェント",
+          "windowsTerminalTitle": "Windows ターミナルの既定値を設定",
+          "windowsTerminalSubtitle": "新しいペインで使う既定のシェルと、ターミナルでの右クリックの動作を選びます。"
         },
         "OnboardingFooter": {
           "ba58547306": "戻る",
@@ -9106,6 +9190,32 @@
         },
         "AgentFeatureSetupStep": {
           "97dcdc010f": "CLI とスキルをインストール"
+        },
+        "WindowsTerminalStep": {
+          "powerShell": "PowerShell",
+          "powerShellPwsh": "利用可能な場合は PowerShell 7+ を使い、代わりに Windows PowerShell を使用します。",
+          "powerShellInbox": "対応するすべての Windows に搭載されている Windows PowerShell を使います。",
+          "commandPrompt": "コマンドプロンプト",
+          "commandPromptDescription": "従来の cmd.exe の動作で新しいターミナルペインを開きます。",
+          "gitBash": "Git Bash",
+          "gitBashDescription": "Unix スタイルのシェル操作には Git for Windows の bash.exe を使います。",
+          "gitBashUnavailable": "選択されていますが、このマシンでは Git Bash が検出されませんでした。",
+          "wsl": "WSL",
+          "wslDescription": "Windows Subsystem for Linux の既定の環境で新しいターミナルペインを起動します。",
+          "wslUnavailable": "選択されていますが、このマシンでは WSL が検出されませんでした。",
+          "rightClickPaste": "右クリックで貼り付け",
+          "rightClickPasteDescription": "右クリックでクリップボードを貼り付けます。Ctrl+右クリックでコンテキスト メニューを開きます。",
+          "rightClickMenu": "コンテキスト メニューを開く",
+          "rightClickMenuDescription": "右クリックでターミナル メニューを開きます。メニューまたはキーボードから貼り付けます。",
+          "loading": "ターミナル設定を読み込み中...",
+          "defaultShell": "既定のシェル",
+          "defaultShellDescription": "Orca が Windows ターミナルの新しいペインで開くシェルを選びます。",
+          "wslDistribution": "WSL ディストリビューション",
+          "wslDistributionDescription": "Windows の既定のディストリビューションを使うか、インストール済みの特定のディストリを選びます。",
+          "loadingDistros": "ディストリビューションを読み込み中",
+          "windowsDefault": "Windows の既定",
+          "rightClickBehavior": "右クリックの動作",
+          "rightClickBehaviorDescription": "Windows で慣れたターミナルのマウス操作に合うものを選びます。"
         }
       },
       "new": {
@@ -9140,7 +9250,22 @@
             "fda67f0b61": "現在のプロジェクト",
             "3e8bb1176a": "設定で Linear を接続してイシューを検索します。",
             "69ce292138": "Linear",
-            "9c004911c3": "gitlab"
+            "9c004911c3": "gitlab",
+            "switchTaskSourceTitle": "タスクソースを切り替えますか？",
+            "differentTaskSource": "、選択中のタスクソースとは異なります。",
+            "currentTaskSource": "現在のタスクソース",
+            "placeholderNameOrLinearUrl": "名前または Linear URL を入力",
+            "placeholderWorkspaceName": "ワークスペース名を入力",
+            "placeholderSmartWithBranchGitLabLinear": "名前、#1234、ブランチ、GitHub/GitLab または Linear URL を入力",
+            "placeholderSmartGitLabLinear": "名前、#1234、GitHub/GitLab または Linear URL を入力",
+            "placeholderSmartWithBranchGitLab": "名前、#1234、ブランチ、GitHub または GitLab URL を入力",
+            "placeholderSmartGitLab": "名前、#1234、GitHub または GitLab URL を入力",
+            "unavailable": "利用できません",
+            "searchGitHub": "GitHub PR と Issue を検索",
+            "searchGitLab": "GitLab MR と Issue を検索",
+            "searchBranches": "ブランチを検索",
+            "searchLinear": "Linear Issue を検索",
+            "workspaceName": "ワークスペース名"
           },
           "ProjectHostSetupCombobox": {
             "empty": "No hosts are ready for this project.",
@@ -10458,7 +10583,30 @@
           "49731703ea": "Jobs",
           "ee07b33924": "unknown",
           "07eccfa397": "No details are available for this check.",
-          "a916648574": "Open details"
+          "a916648574": "Open details",
+          "834cb3f23d": "Fix with AI",
+          "c8f1a2d4e7": "Choose the agent and edit the full command input before launch.",
+          "b3e7f9a1c2": "Check fix context unavailable",
+          "d5a8c2f1b9": "Start the default AI agent to fix this check",
+          "e2b4d7c8a1": "Choose an agent for this check",
+          "f1c9e3a6d4": "Choose agent to fix check"
+        },
+        "check": {
+          "run": {
+            "details": {
+              "fix": {
+                "with": {
+                  "ai": {
+                    "1a8c4e2b90": "Select a workspace before launching an AI action.",
+                    "4f2d9a8c17": "Select a repository before launching an AI action.",
+                    "7c3e1b5d42": "Open a PR or MR before launching an AI fix.",
+                    "9b2f6d4a81": "This check is not failing.",
+                    "2ef90c9819": "Started an AI agent for this check."
+                  }
+                }
+              }
+            }
+          }
         }
       },
       "diff": {
@@ -10523,7 +10671,11 @@
             "8e24fe4f75": "クラッシュレポートが送信されました。",
             "8b8473c544": "クラッシュレポートがコピーされました。",
             "b175e90213": "クラッシュレポートはありません。",
-            "765591798d": "クラッシュレポートを確認しています..."
+            "765591798d": "クラッシュレポートを確認しています...",
+            "b2e36f53a1": "Failed to send crash report. Diagnostic ticket {{value0}} was uploaded but not linked.",
+            "ead6fc0510": "No automatic crash report was captured. You can still send details and include recent diagnostic logs when available.",
+            "b082f27490": "Attach recent diagnostic logs",
+            "e59f0b9427": "Sends a capped redacted log bundle with the report."
           }
         }
       },
@@ -11226,7 +11378,7 @@
               "hostCount": "{{value0}} hosts",
               "searchProjects": "Search projects...",
               "noMatches": "No projects match your search.",
-              "chooseSource": "Choose task source"
+              "chooseSource": "タスクソースを選択"
             }
           }
         }

@@ -36,6 +36,7 @@ export type WorktreeCreationRequest = {
   name: string
   displayName?: string
   baseBranch?: string
+  compareBaseRef?: string
   setupDecision: SetupDecision
   sparseCheckout?: CreateSparseCheckoutRequest
   telemetrySource?: WorkspaceCreateTelemetrySource

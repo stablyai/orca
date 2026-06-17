@@ -89,6 +89,7 @@ orca worktree create --name task --run-hooks --json
 - `--agent`, `--activate`, and `--run-hooks` reveal the new worktree. Plain create stays in the background.
 - Let Orca choose setup terminal placement from repo settings, including tab vs split behavior. Do not manually create extra setup terminals.
 - If an older installed CLI rejects `--agent`, `--prompt`, or `--setup`, create the worktree normally, then run `orca terminal create --worktree <selector> --command "codex"` and `orca terminal send` if a prompt is needed.
+- `worktree create` creates a new checkout/workspace. For a fresh agent in the current checkout, use `orca terminal create --worktree active --command "codex" --json`.
 
 ## Worktree Comments
 
@@ -133,6 +134,7 @@ Terminal rules:
 - Use `terminal read` before `terminal send` unless the next input is obvious.
 - Use `terminal send` only for direct terminal input or one-off prompts where no task state, inbox, or reply tracking is needed.
 - For structured coordination, invoke the `orchestration` skill; it uses `orca orchestration ...` commands for messages, handoffs, task DAGs, dispatches, inbox/reply flows, and coordinator loops.
+- Use `terminal create --worktree active --command "<agent>"` for a fresh agent in the current worktree. Use `worktree create --agent <agent>` only for a separate checkout.
 - Use `terminal wait --for tui-idle` for agent CLIs such as Claude Code, Gemini, and Codex; always pass `--timeout-ms`.
 - Terminal handles are runtime-scoped. If Orca restarts or returns `terminal_handle_stale`, reacquire with `terminal list`.
 - For long output, use cursor reads. After a limited tail preview, page from `oldestCursor`; after a cursor read, continue with `nextCursor` while `limited` is true and `nextCursor !== latestCursor`.

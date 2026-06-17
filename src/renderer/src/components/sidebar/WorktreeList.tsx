@@ -33,7 +33,6 @@ import {
 } from '@/store/selectors'
 import WorktreeCard, { type ActiveSurfaceVariant } from './WorktreeCard'
 import { folderWorkspaceToWorktree } from '../../../../shared/folder-workspace-worktree'
-import { FolderWorkspaceComposerDialog } from './FolderWorkspaceComposerDialog'
 import { PendingWorktreeRow } from './PendingWorktreeRow'
 import { SUPPRESS_WORKTREE_LIST_SCROLL_ADJUSTMENT_EVENT } from './WorktreeCardAgents'
 import { Button } from '@/components/ui/button'
@@ -143,6 +142,7 @@ import {
   getWorkspaceKanbanSidebarDropGroups,
   getWorkspaceKanbanSidebarDropTarget,
   hasWorkspaceKanbanSidebarDropBoard,
+  isWorkspaceKanbanSidebarDropPointInBoard,
   updateWorkspaceKanbanSidebarDropTargetVisual
 } from './workspace-kanban-sidebar-drop'
 import {
@@ -159,6 +159,7 @@ import {
   setSidebarPointerDragDocumentStyles,
   updateSidebarDragPreviewPosition
 } from './worktree-sidebar-pointer-drag-dom'
+import { shouldStartWorkspaceBoardDragPreview } from './workspace-board-drag-preview-intent'
 import {
   getWorktreeSidebarDragAutoscroll,
   getWorktreeSidebarDragRectsForGroup,
@@ -235,6 +236,11 @@ import {
   getKnownSidebarWorktreeById,
   sidebarWorkspaceStillExists
 } from './worktree-list-folder-reveal'
+import {
+  getFolderPathStatusRouteOptionsForRows,
+  getFolderWorkspaceExecutionHostIdForRows,
+  getProjectGroupExecutionHostIdForRows
+} from './worktree-list-host-filtering'
 
 export {
   getScrollTopToRevealBounds,
@@ -261,6 +267,7 @@ const EMPTY_AGENT_STATUS_BY_PANE_KEY: AppState['agentStatusByPaneKey'] = {}
 const EMPTY_TABS_BY_WORKTREE: AppState['tabsByWorktree'] = {}
 const EMPTY_TERMINAL_LAYOUTS_BY_TAB_ID: AppState['terminalLayoutsByTabId'] = {}
 const EXPANDING_CARD_MEASUREMENT_ADJUSTMENT_SUPPRESS_MS = 300
+const NOOP_WORKSPACE_BOARD_DRAG_PREVIEW_CALLBACK = (): void => {}
 const WORKTREE_SIDEBAR_SCROLL_STYLE: React.CSSProperties = {
   // Why: TanStack Virtual owns scroll correction. Native browser anchoring can
   // fight virtual row measurement/remounts and produce visible jumps.
@@ -483,6 +490,10 @@ type VirtualizedWorktreeViewportProps = {
     dropIndex: number
     groups: readonly WorktreeDragGroup[]
   }) => void
+  workspaceBoardOpen: boolean
+  onWorkspaceBoardDragPreviewStart: () => void
+  onWorkspaceBoardDragPreviewCommit: () => void
+  onWorkspaceBoardDragPreviewCancel: () => void
   shouldShowWorkspaceBoardDropIndicator: (
     worktreeIds: readonly string[],
     status: WorkspaceStatus
@@ -571,8 +582,8 @@ function getHostHeaderDetail(row: HostHeaderRow): { text: string; isWarning: boo
       isWarning: false
     }
   }
-  // Why: the transport suffix only earns space on remote hosts; "This
-  // computer" on Local Mac is noise.
+  // Why: the transport suffix only earns space on remote hosts; repeating
+  // "This computer" under the local host label is noise.
   if (row.kind !== 'local') {
     return { text: row.detail, isWarning: false }
   }
@@ -651,7 +662,7 @@ function HostSectionHeader({
           ) : null}
           <SectionMetricsBadge count={row.count} />
         </div>
-        <div className="flex size-4 shrink-0 items-center justify-center text-muted-foreground/60 opacity-0 transition-opacity group-hover/host-header:opacity-100">
+        <div className="flex size-4 shrink-0 items-center justify-center text-muted-foreground/60 can-hover:opacity-0 transition-opacity group-hover/host-header:opacity-100">
           <ChevronDown
             className={cn('size-3.5 transition-transform', row.collapsed && '-rotate-90')}
           />
@@ -736,6 +747,7 @@ type WorktreePointerDrag = {
   preview: HTMLElement | null
   previewOffsetX: number
   previewOffsetY: number
+  workspaceBoardDragPreviewRequested: boolean
   frameId: number | null
   latestBoardDropTarget: WorkspaceKanbanCardTrackedDropTarget | null
   latestStatusDropTarget: WorktreeSidebarTrackedStatusDropTarget | null
@@ -1081,6 +1093,10 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
   onPinWorktree,
   onPinWorktrees,
   onDropWorktreesOnWorkspaceBoard,
+  workspaceBoardOpen,
+  onWorkspaceBoardDragPreviewStart,
+  onWorkspaceBoardDragPreviewCommit,
+  onWorkspaceBoardDragPreviewCancel,
   shouldShowWorkspaceBoardDropIndicator,
   onReorderWorktrees,
   scrollOffsetRef,
@@ -1434,20 +1450,45 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
   const folderPathStatusCacheExpiryTick = useFolderWorkspacePathStatusCacheExpiryTick(
     folderWorkspacePathStatuses
   )
+  const projectGroupByIdForFolderPathStatus = useMemo(
+    () => new Map(projectGroups.map((group) => [group.id, group])),
+    [projectGroups]
+  )
+  const folderWorkspaceByIdForFolderPathStatus = useMemo(
+    () => new Map(folderWorkspaces.map((workspace) => [workspace.id, workspace])),
+    [folderWorkspaces]
+  )
+  const getFolderPathStatusRouteOptions = useCallback(
+    (request: Parameters<typeof fetchFolderWorkspacePathStatus>[0]) =>
+      getFolderPathStatusRouteOptionsForRows({
+        request,
+        projectGroupsById: projectGroupByIdForFolderPathStatus,
+        folderWorkspacesById: folderWorkspaceByIdForFolderPathStatus
+      }),
+    [folderWorkspaceByIdForFolderPathStatus, projectGroupByIdForFolderPathStatus]
+  )
   useEffect(() => {
-    const requests = new Map<string, Parameters<typeof fetchFolderWorkspacePathStatus>[0]>()
+    const requests = new Map<
+      string,
+      {
+        request: Parameters<typeof fetchFolderWorkspacePathStatus>[0]
+        options?: { runtimeEnvironmentId: string | null }
+      }
+    >()
     for (const group of projectGroups) {
       if (group.parentPath) {
         const request = { scope: 'project-group' as const, projectGroupId: group.id }
-        requests.set(getFolderWorkspacePathStatusCacheKey(request), request)
+        const options = getFolderPathStatusRouteOptions(request)
+        requests.set(getFolderWorkspacePathStatusCacheKey(request, options), { request, options })
       }
     }
     for (const workspace of folderWorkspaces) {
       const request = { scope: 'folder-workspace' as const, folderWorkspaceId: workspace.id }
-      requests.set(getFolderWorkspacePathStatusCacheKey(request), request)
+      const options = getFolderPathStatusRouteOptions(request)
+      requests.set(getFolderWorkspacePathStatusCacheKey(request, options), { request, options })
     }
-    for (const request of requests.values()) {
-      void fetchFolderWorkspacePathStatus(request, { force: true })
+    for (const { request, options } of requests.values()) {
+      void fetchFolderWorkspacePathStatus(request, { force: true, ...options })
     }
   }, [
     activeRuntimeEnvironmentId,
@@ -1455,21 +1496,24 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
     folderPathStatusRepoMembershipKey,
     folderPathStatusSshConnectionKey,
     folderWorkspaces,
+    getFolderPathStatusRouteOptions,
     getFolderWorkspacePathStatusCacheKey,
     projectGroups
   ])
   const getCachedFolderWorkspacePathStatus = useCallback(
     (request: Parameters<typeof fetchFolderWorkspacePathStatus>[0]) => {
-      const cacheKey = getFolderWorkspacePathStatusCacheKey(request)
+      const options = getFolderPathStatusRouteOptions(request)
+      const cacheKey = getFolderWorkspacePathStatusCacheKey(request, options)
       // Why: expired negative statuses should not keep disabling folder
       // workspaces while a fresh status request is in flight.
       void folderWorkspacePathStatuses[cacheKey]
       void folderPathStatusCacheExpiryTick
-      return getFreshFolderWorkspacePathStatus(request)
+      return getFreshFolderWorkspacePathStatus(request, options)
     },
     [
       folderWorkspacePathStatuses,
       folderPathStatusCacheExpiryTick,
+      getFolderPathStatusRouteOptions,
       getFolderWorkspacePathStatusCacheKey,
       getFreshFolderWorkspacePathStatus
     ]
@@ -2076,7 +2120,8 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
     setDragOverStatus(null)
     setPinDragOver(false)
     clearWorkspaceKanbanSidebarDropTargetVisual()
-  }, [cancelWorktreePointerAutoscroll])
+    onWorkspaceBoardDragPreviewCancel()
+  }, [cancelWorktreePointerAutoscroll, onWorkspaceBoardDragPreviewCancel])
 
   const clearWorktreeDrag = useCallback(() => {
     cleanupWorktreePointerDrag()
@@ -2125,6 +2170,25 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
       clearWorktreeDrag()
       return
     }
+    const previewSidebarContainer = scrollRef.current
+    if (
+      !drag.workspaceBoardDragPreviewRequested &&
+      !workspaceBoardOpen &&
+      previewSidebarContainer
+    ) {
+      const sidebarRect = previewSidebarContainer.getBoundingClientRect()
+      if (
+        shouldStartWorkspaceBoardDragPreview({
+          pointerX: drag.currentX,
+          startX: drag.startX,
+          sidebarRight: sidebarRect.right
+        }) &&
+        !hasWorkspaceKanbanSidebarDropBoard()
+      ) {
+        drag.workspaceBoardDragPreviewRequested = true
+        onWorkspaceBoardDragPreviewStart()
+      }
+    }
     const boardTarget = updateWorkspaceKanbanSidebarDropTargetVisual({
       x: drag.currentX,
       y: drag.currentY,
@@ -2137,6 +2201,9 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
       target: boardTarget,
       x: drag.currentX,
       y: drag.currentY
+    }
+    if (isWorkspaceKanbanSidebarDropPointInBoard(drag.currentX, drag.currentY)) {
+      onWorkspaceBoardDragPreviewCommit()
     }
     if (boardTarget.status || boardTarget.isPinDrop) {
       drag.latestStatusDropTarget = null
@@ -2285,8 +2352,11 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
     clearWorktreeDrag,
     computeWorktreeDrop,
     computeWorktreeStatusDrop,
+    onWorkspaceBoardDragPreviewStart,
     refreshWorktreeDragSession,
+    onWorkspaceBoardDragPreviewCommit,
     shouldShowWorkspaceBoardDropIndicator,
+    workspaceBoardOpen,
     workspaceStatuses
   ])
 
@@ -2405,7 +2475,14 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
         return
       }
       const rects = getWorktreeSidebarDragRectsForGroup(container, sourceGroupKey)
-      if (rects.length <= 1 && !hasWorkspaceKanbanSidebarDropBoard()) {
+      const canPreviewWorkspaceBoardOnDrag =
+        !workspaceBoardOpen &&
+        onWorkspaceBoardDragPreviewStart !== NOOP_WORKSPACE_BOARD_DRAG_PREVIEW_CALLBACK
+      if (
+        rects.length <= 1 &&
+        !hasWorkspaceKanbanSidebarDropBoard() &&
+        !canPreviewWorkspaceBoardOnDrag
+      ) {
         return
       }
       const draggedIds =
@@ -2431,6 +2508,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
         preview: null,
         previewOffsetX: 0,
         previewOffsetY: 0,
+        workspaceBoardDragPreviewRequested: false,
         frameId: null,
         latestBoardDropTarget: null,
         latestStatusDropTarget: null
@@ -2440,8 +2518,10 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
       getReorderDraggedIds,
       getReorderUnitDraggedIds,
       groupKeyByRowKey,
+      onWorkspaceBoardDragPreviewStart,
       selectedWorktreeIds,
-      selectedWorktrees
+      selectedWorktrees,
+      workspaceBoardOpen
     ]
   )
 
@@ -2496,6 +2576,9 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
         x: event.clientX,
         y: event.clientY
       })
+      if (isWorkspaceKanbanSidebarDropPointInBoard(event.clientX, event.clientY)) {
+        onWorkspaceBoardDragPreviewCommit()
+      }
       if (boardDropTarget.isPinDrop) {
         onPinWorktrees(drag.draggedIds)
       } else if (boardDropTarget.status) {
@@ -2617,6 +2700,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
     onDropWorktreesOnWorkspaceBoard,
     onPinWorktrees,
     onReorderWorktrees,
+    onWorkspaceBoardDragPreviewCommit,
     refreshWorktreeDragSession,
     scheduleWorktreePointerDragFrame,
     shouldShowWorkspaceBoardDropIndicator,
@@ -3507,7 +3591,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                       </div>
                     </div>
 
-                    <div className="flex size-4 shrink-0 cursor-pointer items-center justify-center text-muted-foreground/60 opacity-0 transition-opacity group-hover:opacity-100">
+                    <div className="flex size-4 shrink-0 cursor-pointer items-center justify-center text-muted-foreground/60 can-hover:opacity-0 transition-opacity group-hover:opacity-100">
                       <ChevronDown
                         className={cn(
                           'size-3.5 cursor-pointer transition-transform [&_path]:cursor-pointer',
@@ -3524,7 +3608,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                             variant="ghost"
                             size="icon-xs"
                             data-repo-header-action=""
-                            className="size-5 shrink-0 rounded-md text-muted-foreground opacity-0 transition-opacity hover:bg-accent/70 hover:text-foreground focus:opacity-100 group-hover:opacity-100 data-[state=open]:opacity-100"
+                            className="size-5 shrink-0 rounded-md text-muted-foreground can-hover:opacity-0 transition-opacity hover:bg-accent/70 hover:text-foreground focus:opacity-100 group-hover:opacity-100 data-[state=open]:opacity-100"
                             aria-label={translate(
                               'auto.components.sidebar.WorktreeList.79465e9034',
                               'Group actions for {{value0}}',
@@ -3593,7 +3677,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                             size="icon-xs"
                             data-repo-header-action=""
                             className={cn(
-                              'size-5 shrink-0 rounded-md text-muted-foreground opacity-0 transition-opacity hover:bg-accent/70 hover:text-foreground focus:opacity-100 group-hover:opacity-100',
+                              'size-5 shrink-0 rounded-md text-muted-foreground can-hover:opacity-0 transition-opacity hover:bg-accent/70 hover:text-foreground focus:opacity-100 group-hover:opacity-100',
                               folderWorkspaceCreateDisabled &&
                                 'cursor-not-allowed text-muted-foreground/60 hover:bg-transparent hover:text-muted-foreground/60'
                             )}
@@ -3645,7 +3729,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                                 variant="ghost"
                                 size="icon-xs"
                                 data-repo-header-action=""
-                                className="size-5 shrink-0 rounded-md text-muted-foreground opacity-0 transition-opacity hover:bg-accent/70 hover:text-foreground focus:opacity-100 group-hover:opacity-100 data-[state=open]:opacity-100"
+                                className="size-5 shrink-0 rounded-md text-muted-foreground can-hover:opacity-0 transition-opacity hover:bg-accent/70 hover:text-foreground focus:opacity-100 group-hover:opacity-100 data-[state=open]:opacity-100"
                                 aria-label={translate(
                                   'auto.components.sidebar.WorktreeList.609633a9e6',
                                   'Project actions for {{value0}}',
@@ -3800,7 +3884,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                           {createState?.disabled ? (
                             <span
                               data-repo-header-action=""
-                              className="inline-flex cursor-not-allowed opacity-0 transition-opacity focus:opacity-100 group-hover:opacity-100"
+                              className="inline-flex cursor-not-allowed can-hover:opacity-0 transition-opacity focus:opacity-100 group-hover:opacity-100"
                               tabIndex={0}
                               aria-label={createState.ariaLabel}
                               onKeyDown={stopRepoHeaderKeyboardToggle}
@@ -3824,7 +3908,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                               variant="ghost"
                               size="icon-xs"
                               data-repo-header-action=""
-                              className="size-5 shrink-0 rounded-md text-muted-foreground opacity-0 transition-opacity hover:bg-accent/70 hover:text-foreground focus:opacity-100 group-hover:opacity-100"
+                              className="size-5 shrink-0 rounded-md text-muted-foreground can-hover:opacity-0 transition-opacity hover:bg-accent/70 hover:text-foreground focus:opacity-100 group-hover:opacity-100"
                               aria-label={
                                 createState?.ariaLabel ??
                                 translate(
@@ -4236,6 +4320,10 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
 type WorktreeListProps = {
   scrollOffsetRef: React.MutableRefObject<number>
   scrollAnchorRef: React.MutableRefObject<VirtualizedScrollAnchor>
+  workspaceBoardOpen?: boolean
+  onWorkspaceBoardDragPreviewStart?: () => void
+  onWorkspaceBoardDragPreviewCommit?: () => void
+  onWorkspaceBoardDragPreviewCancel?: () => void
 }
 
 export function installWorktreeVisibleRefreshVisibilityListener(onChange: () => void): () => void {
@@ -4245,7 +4333,11 @@ export function installWorktreeVisibleRefreshVisibilityListener(onChange: () => 
 
 const WorktreeList = React.memo(function WorktreeList({
   scrollOffsetRef,
-  scrollAnchorRef
+  scrollAnchorRef,
+  workspaceBoardOpen = false,
+  onWorkspaceBoardDragPreviewStart = NOOP_WORKSPACE_BOARD_DRAG_PREVIEW_CALLBACK,
+  onWorkspaceBoardDragPreviewCommit = NOOP_WORKSPACE_BOARD_DRAG_PREVIEW_CALLBACK,
+  onWorkspaceBoardDragPreviewCancel = NOOP_WORKSPACE_BOARD_DRAG_PREVIEW_CALLBACK
 }: WorktreeListProps) {
   // ── Granular selectors (each is a primitive or shallow-stable ref) ──
   const allWorktrees = useAllWorktrees()
@@ -4732,9 +4824,7 @@ const WorktreeList = React.memo(function WorktreeList({
       return projectGroups
     }
     return projectGroups.filter((group) => {
-      const hostId = group.connectionId
-        ? (`ssh:${encodeURIComponent(group.connectionId)}` as ExecutionHostId)
-        : defaultHostId
+      const hostId = getProjectGroupExecutionHostIdForRows(group, defaultHostId)
       return visibleHostIdSet.has(hostId)
     })
   }, [defaultHostId, projectGroups, visibleHostIdSet])
@@ -4744,13 +4834,11 @@ const WorktreeList = React.memo(function WorktreeList({
     }
     const projectGroupById = new Map(projectGroups.map((group) => [group.id, group]))
     return folderWorkspaces.filter((folderWorkspace) => {
-      const connectionId =
-        folderWorkspace.connectionId ??
-        projectGroupById.get(folderWorkspace.projectGroupId)?.connectionId ??
-        null
-      const hostId = connectionId
-        ? (`ssh:${encodeURIComponent(connectionId)}` as ExecutionHostId)
-        : defaultHostId
+      const hostId = getFolderWorkspaceExecutionHostIdForRows({
+        folderWorkspace,
+        projectGroup: projectGroupById.get(folderWorkspace.projectGroupId),
+        defaultHostId
+      })
       return visibleHostIdSet.has(hostId)
     })
   }, [defaultHostId, folderWorkspaces, projectGroups, visibleHostIdSet])
@@ -5140,9 +5228,6 @@ const WorktreeList = React.memo(function WorktreeList({
     useState<ProjectGroupNameDialogState | null>(null)
   const [projectGroupDeleteDialog, setProjectGroupDeleteDialog] =
     useState<ProjectGroupDeleteDialogState | null>(null)
-  const [folderWorkspaceCreateGroup, setFolderWorkspaceCreateGroup] = useState<ProjectGroup | null>(
-    null
-  )
 
   const handleCreateGroupFromRepo = useCallback((repo: Repo) => {
     setProjectGroupNameDialog({ type: 'create-from-repo', repo })
@@ -5267,12 +5352,18 @@ const WorktreeList = React.memo(function WorktreeList({
     projectGroupDeleteDialog
   ])
 
-  const handleCreateFolderWorkspace = useCallback((projectGroup: ProjectGroup) => {
-    if (!projectGroup.parentPath) {
-      return
-    }
-    setFolderWorkspaceCreateGroup(projectGroup)
-  }, [])
+  const handleCreateFolderWorkspace = useCallback(
+    (projectGroup: ProjectGroup) => {
+      if (!projectGroup.parentPath) {
+        return
+      }
+      openModal('new-workspace-composer', {
+        initialProjectGroupId: projectGroup.id,
+        telemetrySource: 'sidebar'
+      })
+    },
+    [openModal]
+  )
 
   const moveWorktreeToStatus = useCallback(
     (worktreeId: string, status: WorkspaceStatus) => {
@@ -5630,15 +5721,6 @@ const WorktreeList = React.memo(function WorktreeList({
         }}
         onConfirm={handleConfirmDeleteProjectGroup}
       />
-      <FolderWorkspaceComposerDialog
-        open={folderWorkspaceCreateGroup !== null}
-        projectGroup={folderWorkspaceCreateGroup}
-        onOpenChange={(open) => {
-          if (!open) {
-            setFolderWorkspaceCreateGroup(null)
-          }
-        }}
-      />
       <VirtualizedWorktreeViewport
         key={viewportResetKey}
         rows={sectionRows}
@@ -5689,6 +5771,10 @@ const WorktreeList = React.memo(function WorktreeList({
         onPinWorktree={pinWorktree}
         onPinWorktrees={pinWorktrees}
         onDropWorktreesOnWorkspaceBoard={dropWorktreesOnWorkspaceBoard}
+        workspaceBoardOpen={workspaceBoardOpen}
+        onWorkspaceBoardDragPreviewStart={onWorkspaceBoardDragPreviewStart}
+        onWorkspaceBoardDragPreviewCommit={onWorkspaceBoardDragPreviewCommit}
+        onWorkspaceBoardDragPreviewCancel={onWorkspaceBoardDragPreviewCancel}
         shouldShowWorkspaceBoardDropIndicator={shouldShowWorkspaceBoardDropIndicator}
         onReorderWorktrees={reorderWorktrees}
         scrollOffsetRef={scrollOffsetRef}

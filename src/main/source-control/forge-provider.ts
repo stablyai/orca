@@ -9,6 +9,7 @@ import {
   getAzureDevOpsPullRequestForBranch,
   getAzureDevOpsRepoSlug
 } from '../azure-devops/client'
+import { createAzureDevOpsPullRequest } from '../azure-devops/pull-request-creation'
 import {
   getBitbucketPullRequest,
   getBitbucketPullRequestForBranch,
@@ -19,6 +20,7 @@ import {
   getGiteaPullRequestForBranch,
   getGiteaRepoSlug
 } from '../gitea/client'
+import { createGiteaPullRequest } from '../gitea/pull-request-creation'
 import { createGitHubPullRequest, getPRForBranch, getRepoSlug } from '../github/client'
 import { getMergeRequest, getMergeRequestForBranch, getProjectSlug } from '../gitlab/client'
 import { createGitLabMergeRequest } from '../gitlab/merge-request-creation'
@@ -187,7 +189,7 @@ const bitbucketForgeProvider = {
 
 const azureDevOpsForgeProvider = {
   id: 'azure-devops',
-  supportsReviewCreation: false,
+  supportsReviewCreation: true,
   resolveRepository: (context) =>
     getAzureDevOpsRepoSlug(
       context.repoPath,
@@ -212,12 +214,13 @@ const azureDevOpsForgeProvider = {
       ...hostedReviewExecutionArgs(input)
     )
     return pr ? mapAzureDevOpsReview(pr) : null
-  }
+  },
+  createReview: createAzureDevOpsPullRequest
 } satisfies ForgeProvider
 
 const giteaForgeProvider = {
   id: 'gitea',
-  supportsReviewCreation: false,
+  supportsReviewCreation: true,
   resolveRepository: (context) =>
     getGiteaRepoSlug(context.repoPath, context.connectionId, ...hostedReviewExecutionArgs(context)),
   async getReviewForBranch(input) {
@@ -238,7 +241,8 @@ const giteaForgeProvider = {
       ...hostedReviewExecutionArgs(input)
     )
     return pr ? mapGiteaReview(pr) : null
-  }
+  },
+  createReview: createGiteaPullRequest
 } satisfies ForgeProvider
 
 // Why: provider order preserves existing branch-status behavior when remotes

@@ -13,40 +13,39 @@ export type ParsedExecutionHost =
   | { kind: 'ssh'; id: `ssh:${string}`; targetId: string }
   | { kind: 'runtime'; id: `runtime:${string}`; environmentId: string }
 
+function getCurrentLocalPlatform(): NodeJS.Platform | null {
+  const globalNavigator = (globalThis as { navigator?: { userAgent?: string; platform?: string } })
+    .navigator
+  const userAgent = globalNavigator?.userAgent || globalNavigator?.platform || ''
+  if (/Windows/i.test(userAgent)) {
+    return 'win32'
+  }
+  if (/Mac/i.test(userAgent)) {
+    return 'darwin'
+  }
+  if (/Linux|X11/i.test(userAgent)) {
+    return 'linux'
+  }
+  return typeof process === 'undefined' ? null : process.platform
+}
+
+export function getLocalExecutionHostLabel(platform: NodeJS.Platform | null = null): string {
+  const localPlatform = platform ?? getCurrentLocalPlatform()
+  if (localPlatform === 'darwin') {
+    return 'Local Mac'
+  }
+  if (localPlatform === 'win32') {
+    return 'Local Windows'
+  }
+  if (localPlatform === 'linux') {
+    return 'Local Linux'
+  }
+  return 'This computer'
+}
+
 function normalizeHostPart(value: string | null | undefined): string | null {
   const trimmed = value?.trim()
   return trimmed ? trimmed : null
-}
-
-function getCurrentHostPlatform(): string {
-  if (typeof process !== 'undefined' && typeof process.platform === 'string') {
-    return process.platform
-  }
-  if (typeof navigator !== 'undefined') {
-    if (navigator.userAgent.includes('Windows')) {
-      return 'win32'
-    }
-    if (navigator.userAgent.includes('Linux')) {
-      return 'linux'
-    }
-    if (navigator.userAgent.includes('Mac')) {
-      return 'darwin'
-    }
-  }
-  return ''
-}
-
-export function getLocalExecutionHostLabel(platform = getCurrentHostPlatform()): string {
-  switch (platform) {
-    case 'darwin':
-      return 'Local Mac'
-    case 'win32':
-      return 'Local Windows'
-    case 'linux':
-      return 'Local Linux'
-    default:
-      return 'This computer'
-  }
 }
 
 export function toSshExecutionHostId(targetId: string): `ssh:${string}` {

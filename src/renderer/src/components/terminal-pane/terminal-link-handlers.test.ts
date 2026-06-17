@@ -288,7 +288,8 @@ describe('handleOscLink', () => {
     await flushDoubleRaf()
 
     expect(openFileMock).toHaveBeenCalledWith(
-      expect.objectContaining({ filePath: '/tmp/src/main.ts' })
+      expect.objectContaining({ filePath: '/tmp/src/main.ts' }),
+      { forceContentReload: true }
     )
     expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(1, null)
     expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(2, {
@@ -344,7 +345,8 @@ describe('handleOscLink', () => {
 
     expect(openFilePathMock).toHaveBeenCalledWith('/tmp/src/main.ts')
     expect(openFileMock).toHaveBeenCalledWith(
-      expect.objectContaining({ filePath: '/tmp/src/main.ts' })
+      expect.objectContaining({ filePath: '/tmp/src/main.ts' }),
+      { forceContentReload: true }
     )
     expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(1, null)
     expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(2, {
@@ -400,7 +402,8 @@ describe('handleOscLink', () => {
 
     expect(authorizeExternalPathMock).toHaveBeenCalledWith({ targetPath: '/tmp/test.txt' })
     expect(openFileMock).toHaveBeenCalledWith(
-      expect.objectContaining({ filePath: '/tmp/test.txt' })
+      expect.objectContaining({ filePath: '/tmp/test.txt' }),
+      { forceContentReload: true }
     )
     expect(openFilePathMock).not.toHaveBeenCalled()
   })
@@ -424,7 +427,8 @@ describe('handleOscLink', () => {
       targetPath: 'C:/repo/src/index.ts'
     })
     expect(openFileMock).toHaveBeenCalledWith(
-      expect.objectContaining({ filePath: 'C:/repo/src/index.ts' })
+      expect.objectContaining({ filePath: 'C:/repo/src/index.ts' }),
+      { forceContentReload: true }
     )
     expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(1, null)
     expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(2, {
@@ -452,7 +456,8 @@ describe('handleOscLink', () => {
       targetPath: '//server/share/repo/test.txt'
     })
     expect(openFileMock).toHaveBeenCalledWith(
-      expect.objectContaining({ filePath: '//server/share/repo/test.txt' })
+      expect.objectContaining({ filePath: '//server/share/repo/test.txt' }),
+      { forceContentReload: true }
     )
   })
 
@@ -483,7 +488,8 @@ describe('handleOscLink', () => {
     expect(authorizeExternalPathMock).toHaveBeenCalledWith({ targetPath: '/tmp/test.txt' })
     expect(openFilePathMock).not.toHaveBeenCalled()
     expect(openFileMock).toHaveBeenCalledWith(
-      expect.objectContaining({ filePath: '/tmp/test.txt' })
+      expect.objectContaining({ filePath: '/tmp/test.txt' }),
+      { forceContentReload: true }
     )
     expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(1, null)
     expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(2, {
@@ -524,7 +530,8 @@ describe('handleOscLink', () => {
 
     expect(authorizeExternalPathMock).toHaveBeenCalledWith({ targetPath: '/tmp/test.txt' })
     expect(openFileMock).toHaveBeenCalledWith(
-      expect.objectContaining({ filePath: '/tmp/test.txt' })
+      expect.objectContaining({ filePath: '/tmp/test.txt' }),
+      { forceContentReload: true }
     )
     expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(1, null)
     expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(2, {
@@ -556,7 +563,8 @@ describe('handleOscLink', () => {
       expect.objectContaining({
         filePath: '//server/Share/Repo/src/app.ts',
         relativePath: 'src/app.ts'
-      })
+      }),
+      { forceContentReload: true }
     )
     expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(1, null)
     expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(2, {
@@ -588,7 +596,8 @@ describe('handleOscLink', () => {
       expect.objectContaining({
         filePath: '/tmp/project/docs/README.md',
         relativePath: 'project/docs/README.md'
-      })
+      }),
+      { forceContentReload: true }
     )
     expect(openFilePathMock).not.toHaveBeenCalled()
   })
@@ -614,7 +623,8 @@ describe('handleOscLink', () => {
     expect(openFileMock).toHaveBeenCalledWith(
       expect.objectContaining({
         filePath: '/home/alice/file.ts'
-      })
+      }),
+      { forceContentReload: true }
     )
     expect(openFilePathMock).not.toHaveBeenCalled()
   })
@@ -646,7 +656,8 @@ describe('handleOscLink', () => {
       expect.objectContaining({
         filePath: '/tmp/src/main.ts',
         relativePath: 'src/main.ts'
-      })
+      }),
+      { forceContentReload: true }
     )
   })
 
@@ -679,7 +690,8 @@ describe('handleOscLink', () => {
         filePath: '/tmp/src/main.ts',
         relativePath: 'src/main.ts',
         runtimeEnvironmentId: 'env-1'
-      })
+      }),
+      { forceContentReload: true }
     )
   })
 
@@ -703,7 +715,8 @@ describe('handleOscLink', () => {
       expect.objectContaining({
         filePath: '/home/me/repo/src/main.ts',
         relativePath: 'src/main.ts'
-      })
+      }),
+      { forceContentReload: true }
     )
   })
 
@@ -723,7 +736,8 @@ describe('handleOscLink', () => {
       expect.objectContaining({
         filePath: '/home/me/repo/report.html',
         relativePath: 'report.html'
-      })
+      }),
+      { forceContentReload: true }
     )
   })
 
@@ -872,7 +886,8 @@ describe('handleOscLink', () => {
     expect(openFilePathMock).not.toHaveBeenCalled()
     expect(openFileMock).toHaveBeenCalledTimes(1)
     expect(openFileMock).toHaveBeenCalledWith(
-      expect.objectContaining({ filePath: '/tmp/src/second.ts' })
+      expect.objectContaining({ filePath: '/tmp/src/second.ts' }),
+      { forceContentReload: true }
     )
     expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(1, null)
     expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(2, {
@@ -1320,7 +1335,8 @@ describe('createFilePathLinkProvider range bounds', () => {
     // existence probe; openDetectedFilePath still stats before routing.
     expect(window.api.shell.pathExists).not.toHaveBeenCalled()
     expect(openFileMock).toHaveBeenCalledWith(
-      expect.objectContaining({ filePath: '/tmp/package.json' })
+      expect.objectContaining({ filePath: '/tmp/package.json' }),
+      { forceContentReload: true }
     )
     expect(openFilePathMock).not.toHaveBeenCalled()
   })
@@ -1393,7 +1409,8 @@ describe('createFilePathLinkProvider range bounds', () => {
 
     expect(opened).toBe(true)
     expect(openFileMock).toHaveBeenCalledWith(
-      expect.objectContaining({ filePath: '/Users/alice/Documents/Path/file_name' })
+      expect.objectContaining({ filePath: '/Users/alice/Documents/Path/file_name' }),
+      { forceContentReload: true }
     )
     expect(openFilePathMock).not.toHaveBeenCalled()
   })
@@ -1417,7 +1434,8 @@ describe('createFilePathLinkProvider range bounds', () => {
 
     expect(opened).toBe(true)
     expect(openFileMock).toHaveBeenCalledWith(
-      expect.objectContaining({ filePath: '/home/alice/Documents/Path/file_name' })
+      expect.objectContaining({ filePath: '/home/alice/Documents/Path/file_name' }),
+      { forceContentReload: true }
     )
     expect(openFilePathMock).not.toHaveBeenCalled()
   })
@@ -1506,7 +1524,8 @@ describe('createFilePathLinkProvider range bounds', () => {
 
     expect(opened).toBe(true)
     expect(openFileMock).toHaveBeenCalledWith(
-      expect.objectContaining({ filePath: '/repo/My Folder' })
+      expect.objectContaining({ filePath: '/repo/My Folder' }),
+      { forceContentReload: true }
     )
     expect(openFilePathMock).not.toHaveBeenCalled()
   })

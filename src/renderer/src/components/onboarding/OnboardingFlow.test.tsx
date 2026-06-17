@@ -53,7 +53,7 @@ describe('OnboardingFlow', () => {
     [5, 'Set up notifications'],
     [9, 'Set up notifications']
   ])(
-    'resumes unversioned seven-step onboarding progress %i at the matching four-step page',
+    'resumes unversioned seven-step onboarding progress %i at the matching current page',
     (legacyStep, title) => {
       const html = renderOnboardingFlow({
         onboarding: {
@@ -76,7 +76,7 @@ describe('OnboardingFlow', () => {
     [5, 'Set up notifications'],
     [9, 'Set up notifications']
   ])(
-    'resumes versioned five-step onboarding progress %i at the matching four-step page',
+    'resumes versioned five-step onboarding progress %i at the matching current page',
     (legacyStep, title) => {
       const html = renderOnboardingFlow({
         onboarding: {
@@ -92,6 +92,65 @@ describe('OnboardingFlow', () => {
       expect(html).not.toContain('Explore Orca')
     }
   )
+
+  it.each([
+    [3, 'Set up notifications'],
+    [4, 'Set up notifications'],
+    [9, 'Set up notifications']
+  ])(
+    'resumes versioned four-step onboarding progress %i without showing Windows setup on Mac',
+    (legacyStep, title) => {
+      const html = renderOnboardingFlow({
+        onboarding: {
+          ...getDefaultOnboardingState(),
+          flowVersion: 3,
+          lastCompletedStep: legacyStep
+        },
+        onOnboardingChange: vi.fn()
+      })
+
+      expect(html).toContain(title)
+      expect(html).not.toContain('Set Windows terminal defaults')
+    }
+  )
+
+  it('shows the Windows terminal defaults page for Windows users after integrations', () => {
+    vi.stubGlobal('navigator', { userAgent: 'Windows' })
+
+    const html = renderOnboardingFlow({
+      onboarding: {
+        ...getDefaultOnboardingState(),
+        lastCompletedStep: 3
+      },
+      onOnboardingChange: vi.fn()
+    })
+
+    expect(html).toContain('Set Windows terminal defaults')
+    expect(html).toContain('4 of 5')
+  })
+
+  it('keeps Windows terminal defaults in the fourth progress slot when integrations are skipped', () => {
+    vi.stubGlobal('navigator', { userAgent: 'Windows' })
+    useAppStore.setState({
+      preflightStatus: {
+        git: { installed: true },
+        gh: { installed: true, authenticated: false }
+      },
+      preflightStatusChecked: true
+    })
+
+    const html = renderOnboardingFlow({
+      onboarding: {
+        ...getDefaultOnboardingState(),
+        lastCompletedStep: 2
+      },
+      onOnboardingChange: vi.fn()
+    })
+
+    expect(html).toContain('Set Windows terminal defaults')
+    expect(html).toContain('4 of 5')
+    expect(html).not.toContain('Set up GitHub tasks')
+  })
 
   it('skips GitHub task setup when the GitHub CLI is already detected', () => {
     useAppStore.setState({
