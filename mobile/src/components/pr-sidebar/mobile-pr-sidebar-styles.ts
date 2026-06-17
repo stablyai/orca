@@ -141,6 +141,54 @@ export const mobilePrSidebarStyles = StyleSheet.create({
     fontSize: typography.metaSize,
     lineHeight: 18
   },
+  // Annotations / jobs sub-section, divided from the summary by a hairline border
+  // (desktop `border-t pt-2`). Muted/monochrome so the detail stays subdued.
+  checkDetailGroup: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.borderSubtle,
+    paddingTop: spacing.sm,
+    gap: spacing.xs
+  },
+  checkDetailGroupLabel: {
+    color: colors.textSecondary,
+    fontSize: typography.metaSize,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5
+  },
+  checkDetailLocator: {
+    color: colors.textSecondary,
+    fontSize: typography.metaSize,
+    fontFamily: typography.monoFamily
+  },
+  checkDetailEmphasis: {
+    color: colors.textPrimary,
+    fontSize: typography.metaSize,
+    lineHeight: 18,
+    fontWeight: '600'
+  },
+  // Step rows are indented under their job to read as children.
+  checkDetailStepRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+    paddingLeft: spacing.sm
+  },
+  // Log tail is preformatted host output; mono + a raised surface, vertically
+  // scrollable so a long tail doesn't push the rest of the sidebar off-screen.
+  checkDetailLogScroll: {
+    maxHeight: 160,
+    backgroundColor: colors.bgRaised,
+    borderRadius: radii.button,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs
+  },
+  checkDetailLogText: {
+    color: colors.textSecondary,
+    fontSize: typography.metaSize,
+    fontFamily: typography.monoFamily,
+    lineHeight: 16
+  },
   stateArea: {
     flex: 1,
     alignItems: 'center',

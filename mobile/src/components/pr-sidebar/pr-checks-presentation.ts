@@ -146,6 +146,18 @@ export function prCheckKey(check: PRCheckDetail): string {
   return `name:${check.name}`
 }
 
+// Key of the first failing check in a list, or null when none fail. Mirrors the
+// desktop ChecksList behavior of auto-expanding the first failed check on load.
+// Pass the sorted list so "first" matches the rendered order (failures lead).
+export function firstFailingCheckKey(checks: readonly PRCheckDetail[]): string | null {
+  for (const check of checks) {
+    if (checkOutcome(check) === 'failure') {
+      return prCheckKey(check)
+    }
+  }
+  return null
+}
+
 export type PRStateBadge = {
   label: string
   token: MobileStatusToken

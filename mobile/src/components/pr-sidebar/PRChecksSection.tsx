@@ -1,20 +1,22 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
 import { ChevronDown, ChevronRight, RotateCw } from 'lucide-react-native'
 import { colors } from '../../theme/mobile-theme'
-import type { PRCheckDetail, PRCheckRunDetails } from '../../../../src/shared/types'
+import type { PRCheckDetail } from '../../../../src/shared/types'
 import type { RpcClient } from '../../transport/rpc-client'
 import { fetchPRCheckDetails, type GitHubPrRepoSlug } from '../../session/github-pr-rpc'
 import type { MobilePrActions } from '../../session/use-mobile-pr-actions'
 import {
   checkOutcome,
   checkOutcomeToken,
+  firstFailingCheckKey,
   prCheckKey,
   sortPRChecks,
   summarizePRChecks
 } from './pr-checks-presentation'
 import { statusColor } from './pr-sidebar-status-color'
 import { PRSection } from './PRSection'
+import { PRCheckDetailView, type DetailEntry } from './PRCheckDetail'
 import { mobilePrSidebarStyles as styles } from './mobile-pr-sidebar-styles'
 
 type Props = {
@@ -25,13 +27,6 @@ type Props = {
   // Optional so display-only usages (e.g. tests/storybook) can omit mutations.
   actions?: MobilePrActions
 }
-
-// Per-check lazily-fetched detail. `loading`/`error` track the in-flight fetch;
-// `details` (once set) is the cache so collapse/re-expand never re-fetches.
-type DetailEntry =
-  | { status: 'loading' }
-  | { status: 'error'; message: string }
-  | { status: 'loaded'; details: PRCheckRunDetails | null }
 
 // Checks summary (counts) + sorted per-check rows. Each row expands to lazily
 // fetch github.prCheckDetails, cached per check key (U5). Display-only; the
@@ -65,6 +60,20 @@ export function PRChecksSection({ checks, client, worktreeId, prRepo, actions }:
     [client, worktreeId, prRepo]
   )
 
+  // Fetch a check's detail the first time it expands; the loaded entry is the cache.
+  const ensureDetail = useCallback(
+    (check: PRCheckDetail, key: string) => {
+      setDetailCache((prev) => {
+        if (prev[key] || !client) {
+          return prev
+        }
+        void loadDetail(check, key)
+        return { ...prev, [key]: { status: 'loading' } }
+      })
+    },
+    [client, loadDetail]
+  )
+
   const toggle = useCallback(
     (check: PRCheckDetail) => {
       const key = prCheckKey(check)
@@ -77,17 +86,32 @@ export function PRChecksSection({ checks, client, worktreeId, prRepo, actions }:
         next.add(key)
         return next
       })
-      // Fetch only the first time a row expands; the loaded entry is the cache.
-      setDetailCache((prev) => {
-        if (prev[key] || !client) {
-          return prev
-        }
-        void loadDetail(check, key)
-        return { ...prev, [key]: { status: 'loading' } }
-      })
+      ensureDetail(check, key)
     },
-    [client, loadDetail]
+    [ensureDetail]
   )
+
+  // Auto-expand the first failing check once per loaded check set (parity with the
+  // desktop ChecksList). Keyed on the sorted check identities so a worktree switch
+  // or fresh load re-runs it, but the user's later manual collapses are not fought.
+  const autoExpandedSignatureRef = useRef<string | null>(null)
+  const sortedSignature = sorted.map(prCheckKey).join('|')
+  useEffect(() => {
+    if (autoExpandedSignatureRef.current === sortedSignature) {
+      return
+    }
+    autoExpandedSignatureRef.current = sortedSignature
+    const key = firstFailingCheckKey(sorted)
+    if (!key) {
+      return
+    }
+    const failing = sorted.find((check) => prCheckKey(check) === key)
+    if (!failing) {
+      return
+    }
+    setExpanded((prev) => (prev.has(key) ? prev : new Set(prev).add(key)))
+    ensureDetail(failing, key)
+  }, [ensureDetail, sorted, sortedSignature])
 
   return (
     <PRSection
@@ -142,51 +166,10 @@ export function PRChecksSection({ checks, client, worktreeId, prRepo, actions }:
                 </Text>
               </View>
             </Pressable>
-            {isOpen ? <CheckDetail entry={detailCache[key]} /> : null}
+            {isOpen ? <PRCheckDetailView entry={detailCache[key]} /> : null}
           </View>
         )
       })}
     </PRSection>
-  )
-}
-
-function CheckDetail({ entry }: { entry: DetailEntry | undefined }) {
-  if (!entry || entry.status === 'loading') {
-    return (
-      <View style={styles.checkDetailArea}>
-        <ActivityIndicator color={colors.textSecondary} />
-      </View>
-    )
-  }
-  if (entry.status === 'error') {
-    return (
-      <View style={styles.checkDetailArea}>
-        <Text style={styles.checkDetailText}>{entry.message}</Text>
-      </View>
-    )
-  }
-  const details = entry.details
-  if (!details) {
-    return (
-      <View style={styles.checkDetailArea}>
-        <Text style={styles.checkDetailText}>No details available.</Text>
-      </View>
-    )
-  }
-  const lines = [details.conclusion ?? details.status, details.title, details.summary].filter(
-    (line): line is string => typeof line === 'string' && line.trim().length > 0
-  )
-  return (
-    <View style={styles.checkDetailArea}>
-      {lines.length === 0 ? (
-        <Text style={styles.checkDetailText}>No details available.</Text>
-      ) : (
-        lines.map((line, index) => (
-          <Text key={index} style={styles.checkDetailText}>
-            {line}
-          </Text>
-        ))
-      )}
-    </View>
   )
 }
