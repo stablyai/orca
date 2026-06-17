@@ -10,17 +10,32 @@ const {
   getDiagnosticsStatusMock,
   recordCrashBreadcrumbMock,
   resolveDiagnosticOrcaChannelMock,
+  spanEndMock,
+  startSpanMock,
   submitFeedbackMock
-} = vi.hoisted(() => ({
-  handlers: new Map<string, (_event: unknown, args?: unknown) => unknown>(),
-  listeners: new Map<string, (_event: unknown, args?: unknown) => void>(),
-  clipboardWriteTextMock: vi.fn(),
-  collectDiagnosticBundleMock: vi.fn(),
-  getDiagnosticsStatusMock: vi.fn(),
-  recordCrashBreadcrumbMock: vi.fn(),
-  resolveDiagnosticOrcaChannelMock: vi.fn(),
-  submitFeedbackMock: vi.fn()
-}))
+} = vi.hoisted(() => {
+  const spanEndMock = vi.fn()
+  return {
+    handlers: new Map<string, (_event: unknown, args?: unknown) => unknown>(),
+    listeners: new Map<string, (_event: unknown, args?: unknown) => void>(),
+    clipboardWriteTextMock: vi.fn(),
+    collectDiagnosticBundleMock: vi.fn(),
+    getDiagnosticsStatusMock: vi.fn(),
+    recordCrashBreadcrumbMock: vi.fn(),
+    resolveDiagnosticOrcaChannelMock: vi.fn(),
+    spanEndMock,
+    startSpanMock: vi.fn(() => ({
+      traceId: 'trace-id',
+      spanId: 'span-id',
+      setAttribute: vi.fn(),
+      addEvent: vi.fn(),
+      fail: vi.fn(),
+      interrupt: vi.fn(),
+      end: spanEndMock
+    })),
+    submitFeedbackMock: vi.fn()
+  }
+})
 
 vi.mock('electron', () => ({
   app: { getVersion: () => '1.2.3-test' },
@@ -53,6 +68,10 @@ vi.mock('../observability', () => ({
 
 vi.mock('../observability/diagnostic-upload-endpoint', () => ({
   resolveDiagnosticOrcaChannel: resolveDiagnosticOrcaChannelMock
+}))
+
+vi.mock('../observability/tracer', () => ({
+  startSpan: startSpanMock
 }))
 
 import {
@@ -110,6 +129,8 @@ describe('registerCrashReportingHandlers', () => {
     })
     resolveDiagnosticOrcaChannelMock.mockReset()
     resolveDiagnosticOrcaChannelMock.mockReturnValue('stable')
+    startSpanMock.mockClear()
+    spanEndMock.mockClear()
     submitFeedbackMock.mockReset()
     recordCrashBreadcrumbMock.mockReset()
     submitFeedbackMock.mockResolvedValue({ ok: true })
@@ -698,6 +719,19 @@ describe('registerCrashReportingHandlers', () => {
       ok: true,
       empty: null
     })
+    expect(startSpanMock).toHaveBeenCalledWith('renderer.breadcrumb', {
+      attributes: {
+        kind: 'crash-breadcrumb',
+        'breadcrumb.name': 'renderer_error',
+        'breadcrumb.data': {
+          message: 'boom',
+          count: 2,
+          ok: true,
+          empty: null
+        }
+      }
+    })
+    expect(spanEndMock).toHaveBeenCalledTimes(1)
   })
 
   it('ignores renderer breadcrumbs without a string name', () => {
@@ -717,5 +751,6 @@ describe('registerCrashReportingHandlers', () => {
     })
 
     expect(recordCrashBreadcrumbMock).not.toHaveBeenCalled()
+    expect(startSpanMock).not.toHaveBeenCalled()
   })
 })

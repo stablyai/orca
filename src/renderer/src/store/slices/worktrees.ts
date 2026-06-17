@@ -63,9 +63,33 @@ const REMOTE_WORKTREE_LIST_PARITY_LIMIT = 10_000
 const ACTIVE_WORKTREE_TERMINAL_PREP_DELAY_MS = 300
 const ACTIVE_WORKTREE_TERMINAL_PREP_INPUT_QUIET_MS = 450
 const ACTIVE_WORKTREE_TERMINAL_PREP_IDLE_TIMEOUT_MS = 180
+const WORKTREE_REFRESH_CONCURRENCY = 5
 const pendingActivationTerminalPrepCancels = new Map<string, () => void>()
 const detachedHeadAutoDerivedDisplayNames = new Map<string, string>()
 const folderWorkspaceWorktreeCache = new WeakMap<FolderWorkspace, Worktree>()
+
+async function mapReposForWorktreeRefresh<T>(
+  repos: readonly { id: string }[],
+  mapper: (repo: { id: string }) => Promise<T>
+): Promise<T[]> {
+  const results = Array<T>(repos.length)
+  let nextIndex = 0
+  const workerCount = Math.min(WORKTREE_REFRESH_CONCURRENCY, repos.length)
+
+  // Why: worktree refresh can be triggered during activation/startup. Keeping
+  // repo scans bounded avoids one UI moment launching every git probe at once.
+  await Promise.all(
+    Array.from({ length: workerCount }, async () => {
+      while (nextIndex < repos.length) {
+        const index = nextIndex
+        nextIndex += 1
+        results[index] = await mapper(repos[index])
+      }
+    })
+  )
+
+  return results
+}
 
 function countTerminalLayoutLeaves(node: TerminalPaneLayoutNode | null | undefined): number {
   if (!node) {
@@ -1293,7 +1317,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     // calls just need to refresh each repo's cached list. No need to
     // double-probe the IPC for the per-repo success signal.
     if (get().hasHydratedWorktreePurge) {
-      await Promise.all(repos.map((r) => get().fetchWorktrees(r.id)))
+      await mapReposForWorktreeRefresh(repos, (r) => get().fetchWorktrees(r.id))
       return
     }
 
@@ -1308,8 +1332,14 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     // empty-replace when cached data exists. Neither signal bubbles up to the
     // caller, so we probe the IPC directly to get the per-repo success signal,
     // then apply that same payload to state instead of listing each repo again.
-    const results = await Promise.all(
-      repos.map(async (r) => {
+    const results = await mapReposForWorktreeRefresh(
+      repos,
+      async (
+        r
+      ): Promise<
+        | { repoId: string; ok: boolean; detected: DetectedWorktreeListResult }
+        | { repoId: string; ok: false }
+      > => {
         try {
           const detected = await listDetectedWorktreesForRepo(
             settingsForRepoOwner(get(), r.id),
@@ -1336,7 +1366,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
           console.error(`Failed to fetch worktrees for repo ${r.id}:`, err)
           return { repoId: r.id, ok: false as const }
         }
-      })
+      }
     )
 
     const hasAnyDetectedWorktree = results.some(

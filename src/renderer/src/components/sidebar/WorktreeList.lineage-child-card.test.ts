@@ -135,7 +135,7 @@ vi.mock('./WorktreeCard', () => ({
       },
       React.createElement('h2', null, worktree.displayName),
       isDeleting ? React.createElement('span', null, 'Deleting') : null,
-      cardProps.includes('unread') && worktree.isUnread
+      cardProps.includes('status') && worktree.isUnread
         ? React.createElement('button', { 'aria-label': 'Mark as read' }, 'Unread')
         : null,
       lineageChildCount
@@ -856,7 +856,7 @@ describe('WorktreeList lineage child card renderer', () => {
 
   it('shows the unread bell action on unread nested lineage child cards', async () => {
     setLineageFixtureState('none', { unreadWorktreeIds: ['child'] })
-    mockStore.state.worktreeCardProperties = ['status', 'unread', 'inline-agents']
+    mockStore.state.worktreeCardProperties = ['status', 'inline-agents']
     const markup = await renderWorktreeListMarkup()
     const childIndex = markup.indexOf('data-worktree-card-id="child"')
     const childMarkup = markup.slice(

@@ -3,23 +3,30 @@ import { useCallback, useEffect, useState } from 'react'
 import { Check, Copy, TriangleAlert } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { translate } from '@/i18n/i18n'
 
 const PULL_POLICY_ERROR_PREFIX = 'Pull needs a Git pull policy for divergent branches.'
 
 const PULL_POLICY_OPTIONS = [
   {
-    label: 'Merge',
-    description: 'Create a merge commit when local and remote both changed.',
+    labelKey: 'auto.components.right.sidebar.pull.policy.notice.merge',
+    labelFallback: 'Merge',
+    descriptionKey: 'auto.components.right.sidebar.pull.policy.notice.mergeDescription',
+    descriptionFallback: 'Create a merge commit when local and remote both changed.',
     command: 'git config pull.rebase false'
   },
   {
-    label: 'Rebase',
-    description: 'Replay local commits on top of the remote branch.',
+    labelKey: 'auto.components.right.sidebar.pull.policy.notice.rebase',
+    labelFallback: 'Rebase',
+    descriptionKey: 'auto.components.right.sidebar.pull.policy.notice.rebaseDescription',
+    descriptionFallback: 'Replay local commits on top of the remote branch.',
     command: 'git config pull.rebase true'
   },
   {
-    label: 'Fast-forward only',
-    description: 'Only pull when no merge or rebase is needed.',
+    labelKey: 'auto.components.right.sidebar.pull.policy.notice.fastForwardOnly',
+    labelFallback: 'Fast-forward only',
+    descriptionKey: 'auto.components.right.sidebar.pull.policy.notice.fastForwardOnlyDescription',
+    descriptionFallback: 'Only pull when no merge or rebase is needed.',
     command: 'git config pull.ff only'
   }
 ] as const
@@ -65,20 +72,29 @@ export function PullPolicyRemoteActionNotice({
           </span>
           <div className="min-w-0 space-y-1">
             <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-              <span className="text-xs font-semibold text-foreground">Pull needs a policy</span>
+              <span className="text-xs font-semibold text-foreground">
+                {translate(
+                  'auto.components.right.sidebar.pull.policy.notice.title',
+                  'Pull needs a policy'
+                )}
+              </span>
               <span className="shrink-0 rounded-full bg-destructive/10 px-1.5 py-px text-[10px] leading-4 font-semibold text-destructive">
-                Diverged
+                {translate('auto.components.right.sidebar.pull.policy.notice.diverged', 'Diverged')}
               </span>
             </div>
             <p className="text-[11px] leading-4 text-muted-foreground">
-              This branch has local and remote commits. Run one command in this worktree or on the
-              SSH host, then try Pull or Sync again.
+              {translate(
+                'auto.components.right.sidebar.pull.policy.notice.body',
+                'This branch has local and remote commits. Run one command in this worktree or on the SSH host, then try Pull or Sync again.'
+              )}
             </p>
           </div>
         </div>
         <div className="space-y-1.5">
           {PULL_POLICY_OPTIONS.map((option) => {
             const copied = copiedCommand === option.command
+            const label = translate(option.labelKey, option.labelFallback)
+            const description = translate(option.descriptionKey, option.descriptionFallback)
             return (
               <div
                 key={option.command}
@@ -87,11 +103,9 @@ export function PullPolicyRemoteActionNotice({
                 <div className="flex min-w-0 items-start justify-between gap-2">
                   <div className="min-w-0">
                     <div className="text-[11px] leading-4 font-semibold text-foreground">
-                      {option.label}
+                      {label}
                     </div>
-                    <p className="text-[11px] leading-4 text-muted-foreground">
-                      {option.description}
-                    </p>
+                    <p className="text-[11px] leading-4 text-muted-foreground">{description}</p>
                   </div>
                   <Tooltip>
                     <TooltipTrigger asChild>
@@ -100,7 +114,11 @@ export function PullPolicyRemoteActionNotice({
                         variant="ghost"
                         size="icon-xs"
                         className="mt-0.5 shrink-0"
-                        aria-label={`Copy ${option.label.toLowerCase()} pull policy command`}
+                        aria-label={translate(
+                          'auto.components.right.sidebar.pull.policy.notice.copyAria',
+                          'Copy {{value0}} pull policy command',
+                          { value0: label.toLowerCase() }
+                        )}
                         onClick={() => handleCopyCommand(option.command)}
                       >
                         {copied ? (
@@ -111,7 +129,15 @@ export function PullPolicyRemoteActionNotice({
                       </Button>
                     </TooltipTrigger>
                     <TooltipContent side="top" sideOffset={4}>
-                      {copied ? 'Copied' : 'Copy command'}
+                      {copied
+                        ? translate(
+                            'auto.components.right.sidebar.pull.policy.notice.copied',
+                            'Copied'
+                          )
+                        : translate(
+                            'auto.components.right.sidebar.pull.policy.notice.copyCommand',
+                            'Copy command'
+                          )}
                     </TooltipContent>
                   </Tooltip>
                 </div>

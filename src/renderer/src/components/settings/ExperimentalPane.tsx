@@ -44,7 +44,11 @@ export function ExperimentalPane({
   const showAgentHibernation = matchesSettingsSearch(searchQuery, [
     getExperimentalSearchEntry().agentHibernation
   ])
+  const showNewWorktreeCardStyle = matchesSettingsSearch(searchQuery, [
+    getExperimentalSearchEntry().newWorktreeCardStyle
+  ])
   const agentHibernationEnabled = settings.experimentalAgentHibernation === true
+  const newWorktreeCardStyleEnabled = settings.experimentalNewWorktreeCardStyle === true
   // Why: the planner owns ms-based bounds/defaults; the UI edits minutes
   // while displaying the same effective clamped value the planner will use.
   const agentHibernationIdleMinutes = Math.round(
@@ -261,6 +265,51 @@ export function ExperimentalPane({
               }
             />
           ) : null}
+        </SearchableSetting>
+      ) : null}
+
+      {showNewWorktreeCardStyle ? (
+        <SearchableSetting
+          title={translate(
+            'auto.components.settings.ExperimentalPane.newWorktreeCardStyle.title',
+            'New card style'
+          )}
+          description={translate(
+            'auto.components.settings.ExperimentalPane.newWorktreeCardStyle.description',
+            'Preview updated worktree-card layout, metadata placement, card-display menu options, and status presentation.'
+          )}
+          keywords={getExperimentalSearchEntry().newWorktreeCardStyle.keywords}
+          className="space-y-3 py-2"
+          id="experimental-new-worktree-card-style"
+        >
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0 shrink space-y-0.5">
+              <Label>
+                {translate(
+                  'auto.components.settings.ExperimentalPane.newWorktreeCardStyle.title',
+                  'New card style'
+                )}
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                {translate(
+                  'auto.components.settings.ExperimentalPane.newWorktreeCardStyle.copy',
+                  'Previews updated worktree-card layout and metadata behavior, including hover/context-menu ownership and status presentation.'
+                )}
+              </p>
+            </div>
+            <SettingsSwitch
+              checked={newWorktreeCardStyleEnabled}
+              ariaLabel={translate(
+                'auto.components.settings.ExperimentalPane.newWorktreeCardStyle.toggleLabel',
+                'Toggle new card style'
+              )}
+              onChange={() =>
+                updateSettings({
+                  experimentalNewWorktreeCardStyle: !newWorktreeCardStyleEnabled
+                })
+              }
+            />
+          </div>
         </SearchableSetting>
       ) : null}
 

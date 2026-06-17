@@ -26,6 +26,10 @@ export function getTerminalUrlOpenHint(): string {
     : 'Ctrl+click to open or Shift+Ctrl+click for system browser'
 }
 
+export function getTerminalUrlSystemBrowserHint(): string {
+  return isMacPlatform() ? '⇧⌘+click for system browser' : 'Shift+Ctrl+click for system browser'
+}
+
 export function getTerminalWorktreePathOpenHint(canOpenWithSystemDefault: boolean): string {
   if (!canOpenWithSystemDefault) {
     return isMacPlatform() ? '⌘+click to switch workspace' : 'Ctrl+click to switch workspace'

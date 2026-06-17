@@ -2673,6 +2673,8 @@ export type GlobalSettings = {
   experimentalAgentHibernation?: boolean
   /** Milliseconds a completed agent must stay idle before hibernation can be considered. */
   agentHibernationIdleMs?: number
+  /** Experimental: opt-in preview of the updated worktree-card layout and metadata behavior. */
+  experimentalNewWorktreeCardStyle?: boolean
   /** Compact worktree cards by hiding a redundant metadata row when the title
    *  and branch already say the same thing. */
   compactWorktreeCards: boolean
@@ -2903,9 +2905,12 @@ export type WorktreeCardProperty =
   | 'unread'
   // Legacy persisted preference. CI status is now represented by linked PR metadata.
   | 'ci'
-  // GitHub issue metadata shown on workspace cards.
+  // Internal migration-only property for legacy detailed cards that showed
+  // branch identity as a visible row.
+  | 'branch'
+  // Task metadata shown on workspace cards. Kept as provider-specific
+  // persisted values so older profiles and provider-specific fetch paths work.
   | 'issue'
-  // Linear issue metadata shown on workspace cards.
   | 'linear-issue'
   | 'pr'
   | 'comment'
@@ -2914,9 +2919,9 @@ export type WorktreeCardProperty =
   // workspace card when the experimental agent-activity feature is on. On by
   // default (see DEFAULT_WORKTREE_CARD_PROPERTIES in shared/constants.ts) —
   // live agent activity is the primary reason users opt into the feature.
-  // Users who prefer a compact sidebar can uncheck it from the Workspaces
-  // view options.
   | 'inline-agents'
+
+export type WorktreeCardMode = 'Default' | 'Compact'
 
 export type AgentActivityDisplayMode = 'compact' | 'full'
 
@@ -3012,6 +3017,9 @@ export type PersistedUIState = {
   uiZoomLevel: number
   editorFontZoomLevel: number
   worktreeCardProperties: WorktreeCardProperty[]
+  /** One-shot migration flag for deriving card properties from the two
+   *  user-facing worktree card modes. */
+  _worktreeCardModeDefaulted?: boolean
   agentActivityDisplayMode?: AgentActivityDisplayMode
   workspaceStatuses?: WorkspaceStatusDefinition[]
   workspaceBoardOpacity?: number

@@ -24,6 +24,112 @@ function makeAgentEntry(overrides: {
 }
 
 describe('captureAllSleepingAgentSessions', () => {
+  it('checkpoints a live resumable provider session before quit-time capture', () => {
+    const store = createTestStore()
+    store.setState({
+      tabsByWorktree: {
+        'wt-1': [makeTab({ id: 'tab-1', worktreeId: 'wt-1' })]
+      }
+    } as Partial<AppState>)
+
+    store.getState().setAgentStatus(
+      'tab-1:leaf-1',
+      {
+        state: 'working',
+        prompt: 'finish the task',
+        agentType: 'codex'
+      },
+      'Codex',
+      { updatedAt: 10, stateStartedAt: 10 },
+      { tabId: 'tab-1', worktreeId: 'wt-1' },
+      { providerSession: { key: 'session_id', id: 'codex-session-1' } }
+    )
+
+    // Why: Windows update/reboot exits can miss beforeunload; the provider
+    // session handle must already be durable for pane-level cold restore.
+    expect(store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']).toMatchObject({
+      agent: 'codex',
+      worktreeId: 'wt-1',
+      tabId: 'tab-1',
+      providerSession: { key: 'session_id', id: 'codex-session-1' },
+      origin: 'live'
+    })
+  })
+
+  it('does not rewrite the live checkpoint for same-session status ticks', () => {
+    const store = createTestStore()
+    store.setState({
+      tabsByWorktree: {
+        'wt-1': [makeTab({ id: 'tab-1', worktreeId: 'wt-1' })]
+      }
+    } as Partial<AppState>)
+
+    store.getState().setAgentStatus(
+      'tab-1:leaf-1',
+      {
+        state: 'working',
+        prompt: 'first prompt',
+        agentType: 'codex'
+      },
+      'Codex',
+      { updatedAt: 10, stateStartedAt: 10 },
+      { tabId: 'tab-1', worktreeId: 'wt-1' },
+      { providerSession: { key: 'session_id', id: 'codex-session-1' } }
+    )
+    const firstRecord = store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']
+
+    store.getState().setAgentStatus(
+      'tab-1:leaf-1',
+      {
+        state: 'working',
+        prompt: 'second prompt',
+        agentType: 'codex'
+      },
+      'Codex',
+      { updatedAt: 20, stateStartedAt: 10 },
+      { tabId: 'tab-1', worktreeId: 'wt-1' },
+      { providerSession: { key: 'session_id', id: 'codex-session-1' } }
+    )
+
+    expect(store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']).toBe(firstRecord)
+  })
+
+  it('clears the live checkpoint when the agent finishes', () => {
+    const store = createTestStore()
+    store.setState({
+      tabsByWorktree: {
+        'wt-1': [makeTab({ id: 'tab-1', worktreeId: 'wt-1' })]
+      }
+    } as Partial<AppState>)
+
+    store.getState().setAgentStatus(
+      'tab-1:leaf-1',
+      {
+        state: 'working',
+        prompt: 'finish the task',
+        agentType: 'codex'
+      },
+      'Codex',
+      { updatedAt: 10, stateStartedAt: 10 },
+      { tabId: 'tab-1', worktreeId: 'wt-1' },
+      { providerSession: { key: 'session_id', id: 'codex-session-1' } }
+    )
+    store.getState().setAgentStatus(
+      'tab-1:leaf-1',
+      {
+        state: 'done',
+        prompt: 'finish the task',
+        agentType: 'codex'
+      },
+      'Codex',
+      { updatedAt: 20, stateStartedAt: 10 },
+      { tabId: 'tab-1', worktreeId: 'wt-1' },
+      { providerSession: { key: 'session_id', id: 'codex-session-1' } }
+    )
+
+    expect(store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']).toBeUndefined()
+  })
+
   it('captures resumable agents across every worktree, not just one', () => {
     const store = createTestStore()
     store.setState({

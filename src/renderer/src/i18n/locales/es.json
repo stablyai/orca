@@ -3575,6 +3575,9 @@
           "3d4b9c4997": "Flotar",
           "ba87080fb7": "Mostrar propiedades",
           "320b675c9a": "Diseño de tarjeta",
+          "newCardDisplay": {
+            "title": "Visualización de tarjeta"
+          },
           "09faabd875": "Orden del proyecto",
           "7bada3b1ab": "Ordenar por",
           "dc0bb670bc": "Agrupar por",
@@ -3597,6 +3600,8 @@
           "b8dcc6f321": "Enlace PR/MR",
           "ca4d3c522e": "Cuestión Linear",
           "91dfc653e8": "billete de GitHub",
+          "bdd23b4e07": "Issues de GitHub",
+          "44713a5d04": "Issues de Linear",
           "cc17bd443b": "Detallado",
           "0f9b959b31": "relaciones públicas",
           "e029a2d775": "Estado",
@@ -3609,7 +3614,14 @@
           "projectSshHost": "Project SSH",
           "activeRuntimeHost": "Active server",
           "projectRuntimeHost": "Project server",
-          "631b97eea9": "Host scope"
+          "631b97eea9": "Host scope",
+          "2d4f0eb933": "Predeterminado",
+          "1a0eec0d35": "Estado",
+          "b5536d5a88": "Tareas",
+          "8d62c68b35": "Notas",
+          "2d74665a56": "Puertos",
+          "65a9820bd1": "Estados del agente",
+          "219ebf1961": "Nombre de rama"
         },
         "SshDisconnectedDialog": {
           "ca4a7892af": "Conectando...",
@@ -3668,8 +3680,6 @@
           "0f33af979b": "Pago parcial. Los archivos fuera de estas rutas no están en el disco.",
           "4f964d5e8c": "escaso",
           "7d517f82e2": "primario",
-          "c6833b5187": "Se cambiará el nombre del mensaje del primer agente.",
-          "f62a3dadbc": "cambiar nombre pendiente",
           "4eba2ea99e": "Falló el nombre automático. Haga clic para ver detalles.",
           "74522ee457": "cambiar el nombre falló",
           "02e19349f4": "Error al cambiar el nombre automáticamente: ver error",
@@ -4671,6 +4681,12 @@
             "idleMinutesSuffix": "minutos",
             "title": "Hibernación de agentes",
             "toggleLabel": "Alternar hibernación de agentes"
+          },
+          "newWorktreeCardStyle": {
+            "copy": "Previsualiza el diseño actualizado de tarjetas de worktree, la ubicación de metadatos, las opciones del menú de visualización de tarjeta y la presentación de estado.",
+            "description": "Previsualiza el diseño actualizado de tarjetas de worktree, la ubicación de metadatos, las opciones del menú de visualización de tarjeta y la presentación de estado.",
+            "title": "Nuevo estilo de tarjeta",
+            "toggleLabel": "Alternar nuevo estilo de tarjeta"
           }
         },
         "FloatingWorkspacePane": {
@@ -6731,6 +6747,17 @@
               "sleep": "suspender",
               "terminal": "terminal",
               "title": "Hibernación de agentes"
+            },
+            "newWorktreeCardStyle": {
+              "card": "tarjeta",
+              "cards": "tarjetas",
+              "description": "Previsualiza el diseño actualizado de tarjetas de worktree, la ubicación de metadatos, las opciones del menú de visualización de tarjeta y la presentación de estado.",
+              "menu": "menú",
+              "metadata": "metadatos",
+              "status": "estado",
+              "title": "Nuevo estilo de tarjeta",
+              "worktree": "worktree",
+              "worktrees": "worktrees"
             }
           }
         },
@@ -8709,7 +8736,19 @@
                   "c39d0c75c3": "El destino de la rama de revisión vinculada no está disponible.",
                   "8c6d15a07d": "Crear PR",
                   "d37e68f61d": "Preparando la rama para revisión…",
-                  "c72e5e65d1": "Prepara esta rama y crea un {{value0}}"
+                  "c72e5e65d1": "Prepara esta rama y crea un {{value0}}",
+                  "b8e4f2a901": "Wait for the remote operation to finish.",
+                  "c9f3a1b802": "Resolve conflicts before creating a {{value0}}.",
+                  "d2a8c4e703": "No changes on this branch to include in a {{value0}}.",
+                  "e3b9d5f814": "Cannot create a {{value0}} from the default branch.",
+                  "f4c0e6a925": "Commit changes before creating a {{value0}}.",
+                  "a5d1f7b036": "Publish commits before creating a {{value0}}.",
+                  "b6e2a8c147": "Push commits before creating a {{value0}}.",
+                  "c7f3b9d258": "Sync this branch before creating a {{value0}}.",
+                  "d8a4c0e369": "Authenticate before creating a {{value0}}.",
+                  "e9b5d1f470": "Check out a branch before creating a {{value0}}.",
+                  "f0c6e2a581": "This branch is not ready for a {{value0}} yet.",
+                  "h3i4j5k607": "Checking whether this branch can create a {{value0}}…"
                 }
               }
             }
@@ -8884,6 +8923,24 @@
             "8c2d5fab13": "Copiar hash del commit",
             "9d3e60bc24": "Copiar mensaje del commit",
             "ae4f71cd35": "Explicar los cambios"
+          },
+          "pull": {
+            "policy": {
+              "notice": {
+                "merge": "Merge",
+                "mergeDescription": "Create a merge commit when local and remote both changed.",
+                "rebase": "Rebase",
+                "rebaseDescription": "Replay local commits on top of the remote branch.",
+                "fastForwardOnly": "Fast-forward only",
+                "fastForwardOnlyDescription": "Only pull when no merge or rebase is needed.",
+                "title": "Pull needs a policy",
+                "diverged": "Diverged",
+                "body": "This branch has local and remote commits. Run one command in this worktree or on the SSH host, then try Pull or Sync again.",
+                "copyAria": "Copy {{value0}} pull policy command",
+                "copied": "Copied",
+                "copyCommand": "Copy command"
+              }
+            }
           }
         }
       },
