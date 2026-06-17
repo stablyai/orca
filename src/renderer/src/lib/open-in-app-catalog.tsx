@@ -4,12 +4,16 @@ import type { OpenInApplication } from '../../../shared/types'
 import { cn } from './utils'
 import { translate } from '@/i18n/i18n'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
+import antigravityIcon from '../../../../resources/antigravity.png?url'
 
 export type OpenInAppPreset = {
   id: string
   label: string
   command: string
-  faviconDomain: string
+  // One of these supplies the icon: a bundled asset URL, or a domain whose
+  // favicon is fetched through Google's service.
+  iconUrl?: string
+  faviconDomain?: string
   iconClassName?: string
 }
 
@@ -33,6 +37,14 @@ export const getOpenInAppPresets = createLocalizedCatalog(() => [
     faviconDomain: 'zed.dev',
     // Why: Zed's favicon is a black transparent mark, which disappears on dark menus.
     iconClassName: 'dark:invert'
+  },
+  {
+    id: 'antigravity',
+    label: translate('auto.lib.open.in.app.catalog.f0fb1adb49', 'Antigravity'),
+    command: 'antigravity',
+    // Why: Google's favicon service is unreliable for antigravity.google
+    // (intermittent 301/empty), so ship the mark as a bundled asset instead.
+    iconUrl: antigravityIcon
   }
 ])
 
@@ -63,7 +75,10 @@ export function OpenInApplicationIcon({
   if (preset) {
     return (
       <img
-        src={`https://www.google.com/s2/favicons?domain=${preset.faviconDomain}&sz=64`}
+        src={
+          preset.iconUrl ??
+          `https://www.google.com/s2/favicons?domain=${preset.faviconDomain}&sz=64`
+        }
         width={size}
         height={size}
         alt=""
