@@ -2539,6 +2539,10 @@ export type GlobalSettings = {
    *  separate from worktree deletion so skipping one destructive confirmation
    *  does not silently skip the other. */
   skipDeleteAutomationConfirm: boolean
+  /** Why: Codex rate-limit resets consume a scarce reset credit and immediately
+   *  affect the signed-in account, so keep the skip preference explicit and
+   *  separate from local destructive-action confirmations. */
+  skipCodexRateLimitResetConfirm: boolean
   /** Default preset in the new-workspace GitHub task view. */
   defaultTaskViewPreset: TaskViewPresetId
   /** Why: persists the user's last-used task source so the Tasks page

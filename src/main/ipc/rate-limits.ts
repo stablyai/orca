@@ -8,6 +8,9 @@ export function registerRateLimitHandlers(rateLimits: RateLimitService): void {
   ipcMain.handle('rateLimits:refreshCodexForTarget', (_event, target: RateLimitRuntimeTarget) =>
     rateLimits.refreshCodexForTarget(target)
   )
+  ipcMain.handle('rateLimits:consumeCodexResetCredit', () =>
+    rateLimits.consumeCodexRateLimitResetCredit()
+  )
   ipcMain.handle('rateLimits:refreshClaudeForTarget', (_event, target: RateLimitRuntimeTarget) =>
     rateLimits.refreshClaudeForTarget(target)
   )

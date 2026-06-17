@@ -2685,7 +2685,15 @@
             "cd9d7b40ff": "{{value0}} セッションを再起動します",
             "6cd6650b4c": "セッションを再開する",
             "1446d0d8a0": "{{value0}} Codex セッションはまだ古いアカウントにあります。",
-            "605901a495": "1 Codex セッションはまだ古いアカウントにあります"
+            "605901a495": "1 Codex セッションはまだ古いアカウントにあります",
+            "5e5f9f5160": "1 rate-limit reset available",
+            "5ecae9197c": "{{value0}} rate-limit resets available",
+            "25d8bbde69": "Using reset…",
+            "e159fc1fd7": "Reset now",
+            "972a1ff497": "Reset Codex limits?",
+            "6d1042aa6f": "This uses one Codex rate-limit reset credit for the active account and resets any eligible usage windows immediately.",
+            "f077f586db": "Don't ask again",
+            "c0e972d726": "Cancel"
           },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "アカウントを接続する",
@@ -2827,7 +2835,9 @@
             "a9a318b7a3": "更新に失敗しました - キャッシュされたデータが表示されています",
             "7ad719c4bf": "制限中",
             "e740f92596": "更新に失敗しました",
-            "8418ec448d": "{{value0}} の使用状況を更新できませんでした。エージェントセッションは引き続きサインイン済みの場合があります。"
+            "8418ec448d": "{{value0}} の使用状況を更新できませんでした。エージェントセッションは引き続きサインイン済みの場合があります。",
+            "45198c7d95": "1 rate-limit reset available",
+            "bce421cba3": "{{value0}} rate-limit resets available"
           },
           "SshTargetStatusRow": {
             "sshHost": "SSH Host"
