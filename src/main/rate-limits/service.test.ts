@@ -82,6 +82,10 @@ function serviceInternals(service: RateLimitService): { fetchAll: () => Promise<
 type RateLimitWindow = Parameters<RateLimitService['attach']>[0]
 
 class FakeRateLimitWindow extends EventEmitter {
+  focused = true
+  minimized = false
+  visible = true
+
   webContents = {
     send: vi.fn()
   }
@@ -91,15 +95,15 @@ class FakeRateLimitWindow extends EventEmitter {
   }
 
   isVisible(): boolean {
-    return true
+    return this.visible
   }
 
   isMinimized(): boolean {
-    return false
+    return this.minimized
   }
 
   isFocused(): boolean {
-    return true
+    return this.focused
   }
 }
 
@@ -195,7 +199,7 @@ describe('RateLimitService', () => {
     }
   })
 
-  it('does not turn the initial window activation into a hidden startup quota fetch', async () => {
+  it('fetches usage on the first active window event after deferred startup', async () => {
     vi.mocked(fetchClaudeRateLimits).mockResolvedValue(okProvider('claude', 12))
     vi.mocked(fetchCodexRateLimits).mockResolvedValue(okProvider('codex', 24))
     const service = new RateLimitService()
@@ -205,20 +209,42 @@ describe('RateLimitService', () => {
     service.start({ fetchImmediately: false })
     await Promise.resolve()
 
-    window.emit('show')
-    window.emit('focus')
-    window.emit('restore')
-    await Promise.resolve()
-
     expect(fetchClaudeRateLimits).not.toHaveBeenCalled()
     expect(fetchCodexRateLimits).not.toHaveBeenCalled()
 
-    await service.refresh()
+    window.emit('focus')
+    await Promise.resolve()
+    await Promise.resolve()
 
     expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(1)
     expect(fetchCodexRateLimits).toHaveBeenCalledTimes(1)
 
     service.stop()
+  })
+
+  it('performs a one-shot active-window fetch when startup focus was missed', async () => {
+    vi.useFakeTimers()
+    try {
+      vi.mocked(fetchClaudeRateLimits).mockResolvedValue(okProvider('claude', 12))
+      vi.mocked(fetchCodexRateLimits).mockResolvedValue(okProvider('codex', 24))
+      const service = new RateLimitService()
+      const window = new FakeRateLimitWindow()
+
+      service.attach(asRateLimitWindow(window))
+      service.start({ fetchImmediately: false })
+
+      expect(fetchClaudeRateLimits).not.toHaveBeenCalled()
+      expect(fetchCodexRateLimits).not.toHaveBeenCalled()
+
+      await vi.advanceTimersByTimeAsync(1000)
+
+      expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(1)
+      expect(fetchCodexRateLimits).toHaveBeenCalledTimes(1)
+
+      service.stop()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('keeps recent stale data across repeated failures', async () => {
