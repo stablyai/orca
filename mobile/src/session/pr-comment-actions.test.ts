@@ -2,9 +2,14 @@ import { describe, expect, it } from 'vitest'
 import type { PRComment } from '../../../src/shared/types'
 import {
   buildAddRootCommentParams,
+  buildDeleteCommentParams,
+  buildEditCommentParams,
   buildReplyParams,
   buildResolveParams,
   canAddRootComment,
+  canDeleteComment,
+  canEditComment,
+  isMutablePRConversationComment,
   isResolvableComment,
   isSubmittableCommentBody
 } from './pr-comment-actions'
@@ -92,5 +97,50 @@ describe('isSubmittableCommentBody', () => {
     expect(isSubmittableCommentBody('hi')).toBe(true)
     expect(isSubmittableCommentBody('')).toBe(false)
     expect(isSubmittableCommentBody('   \n ')).toBe(false)
+  })
+})
+
+describe('isMutablePRConversationComment', () => {
+  it('allows only root conversation comments with a valid id', () => {
+    expect(isMutablePRConversationComment(comment())).toBe(true)
+  })
+
+  it('excludes review/threaded/inline comments', () => {
+    expect(isMutablePRConversationComment(comment({ threadId: 'T_1' }))).toBe(false)
+    expect(isMutablePRConversationComment(comment({ path: 'a.ts' }))).toBe(false)
+    expect(
+      isMutablePRConversationComment(comment({ url: 'https://x/pullrequestreview-1#r2' }))
+    ).toBe(false)
+  })
+
+  it('requires a positive integer id', () => {
+    expect(isMutablePRConversationComment(comment({ id: 0 }))).toBe(false)
+    expect(isMutablePRConversationComment(comment({ id: -1 }))).toBe(false)
+  })
+})
+
+describe('canEditComment / canDeleteComment', () => {
+  const slug = { owner: 'o', repo: 'r' }
+
+  it('require both a repo slug and a mutable comment', () => {
+    expect(canEditComment(comment(), slug)).toBe(true)
+    expect(canDeleteComment(comment(), slug)).toBe(true)
+    expect(canEditComment(comment(), null)).toBe(false)
+    expect(canDeleteComment(comment(), undefined)).toBe(false)
+    expect(canEditComment(comment({ threadId: 'T_1' }), slug)).toBe(false)
+    expect(canDeleteComment(comment({ path: 'a.ts' }), slug)).toBe(false)
+  })
+})
+
+describe('buildEditCommentParams / buildDeleteCommentParams', () => {
+  it('build slug-addressed params', () => {
+    const slug = { owner: 'o', repo: 'r' }
+    expect(buildEditCommentParams(slug, 42, 'new body')).toEqual({
+      owner: 'o',
+      repo: 'r',
+      commentId: 42,
+      body: 'new body'
+    })
+    expect(buildDeleteCommentParams(slug, 42)).toEqual({ owner: 'o', repo: 'r', commentId: 42 })
   })
 })

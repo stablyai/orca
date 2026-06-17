@@ -13,6 +13,11 @@ import {
   useMobilePrTitleAction,
   type MobilePrTitleAction
 } from '../session/use-mobile-pr-title-action'
+import { useMobilePrAiTriage, type MobilePrAiTriage } from '../session/use-mobile-pr-ai-triage'
+import {
+  buildFixChecksPrompt,
+  buildResolveConflictsPrompt
+} from '../session/pr-ai-triage-prompt'
 import { prSidebarRenderBranch } from './mobile-pr-sidebar-presentation'
 import { mobilePrSidebarStyles as styles } from './pr-sidebar/mobile-pr-sidebar-styles'
 import { PRSidebarHeader } from './pr-sidebar/PRSidebarHeader'
@@ -92,6 +97,9 @@ export function MobilePRSidebar({
     prRepo,
     refetch
   })
+  // AI triage (Fix checks / Resolve conflicts). Like the other hooks it must run
+  // unconditionally; it gates internally on a connected client.
+  const triage = useMobilePrAiTriage({ client, connState, worktreeId })
 
   return (
     <ScrollView
@@ -110,6 +118,7 @@ export function MobilePRSidebar({
         actions={actions}
         commentActions={commentActions}
         titleAction={titleAction}
+        triage={triage}
       />
     </ScrollView>
   )
@@ -125,7 +134,8 @@ function PrSidebarContent({
   gitBranch,
   actions,
   commentActions,
-  titleAction
+  titleAction,
+  triage
 }: {
   branch: ReturnType<typeof prSidebarRenderBranch>
   state: PrSidebarState
@@ -137,6 +147,7 @@ function PrSidebarContent({
   actions: MobilePrActions
   commentActions: MobilePrCommentActions
   titleAction: MobilePrTitleAction
+  triage: MobilePrAiTriage
 }) {
   if (branch === 'loading') {
     return (
@@ -198,6 +209,7 @@ function PrSidebarContent({
         actions={actions}
         commentActions={commentActions}
         titleAction={titleAction}
+        triage={triage}
         refetch={refetch}
       />
     )
@@ -212,6 +224,7 @@ function PrSidebarSections({
   actions,
   commentActions,
   titleAction,
+  triage,
   refetch
 }: {
   data: Extract<PrSidebarState, { kind: 'ready' }>['data']
@@ -220,14 +233,43 @@ function PrSidebarSections({
   actions: MobilePrActions
   commentActions: MobilePrCommentActions
   titleAction: MobilePrTitleAction
+  triage: MobilePrAiTriage
   refetch: () => void
 }) {
+  const pr = data.pr
+  // Bind the triage launchers to this PR's data; the prompt builders are pure so
+  // building lazily inside launch() keeps a stale capture from leaking in.
+  const checksTriage = {
+    fixChecks: () =>
+      void triage.launch('fix-checks', () =>
+        buildFixChecksPrompt({
+          prNumber: pr.number,
+          prTitle: pr.title,
+          prUrl: pr.url,
+          checks: data.checks
+        })
+      ),
+    isBusy: triage.isBusy('fix-checks'),
+    error: triage.error
+  }
+  const conflictsTriage = {
+    resolveConflicts: () =>
+      void triage.launch('resolve-conflicts', () =>
+        buildResolveConflictsPrompt({
+          prNumber: pr.number,
+          baseRef: pr.conflictSummary?.baseRef ?? pr.baseRefName ?? null,
+          files: pr.conflictSummary?.files ?? []
+        })
+      ),
+    isBusy: triage.isBusy('resolve-conflicts'),
+    error: triage.error
+  }
   return (
     <>
       <PRSidebarHeader pr={data.pr} details={data.details} titleAction={titleAction} />
       {/* Conflicting-files section mirrors desktop order: directly below the header,
           before actions/checks. Renders only when the PR has merge conflicts. */}
-      <PRConflictingFilesSection pr={data.pr} />
+      <PRConflictingFilesSection pr={data.pr} triage={conflictsTriage} />
       <PRActionsSection
         pr={data.pr}
         actions={actions}
@@ -247,10 +289,12 @@ function PrSidebarSections({
         worktreeId={worktreeId}
         prRepo={data.pr.prRepo ?? null}
         actions={actions}
+        triage={checksTriage}
       />
       <PRCommentsSection
         details={data.details}
         prState={data.pr.state}
+        prRepo={data.pr.prRepo ?? null}
         actions={commentActions}
       />
     </>

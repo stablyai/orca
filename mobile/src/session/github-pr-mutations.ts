@@ -32,6 +32,22 @@ async function sendRaw(
   }
 }
 
+// Host failure `error` is either a bare string (github.* PR mutations) or an
+// object `{ message }` (github.project.* slug mutations). Read whichever is present
+// so the slug edit/delete failures surface a real message, not a generic fallback.
+function extractMutationError(error: unknown, method: string): string {
+  if (typeof error === 'string') {
+    return error
+  }
+  if (error && typeof error === 'object' && 'message' in error) {
+    const message = (error as { message?: unknown }).message
+    if (typeof message === 'string' && message.length > 0) {
+      return message
+    }
+  }
+  return `Request failed: ${method}`
+}
+
 // The host returns the success/failure shape inside `result`; a transport-level
 // `response.ok === false` (timeout/connection) is also a failure. Both collapse
 // into one outcome the action hook classifies via classifyPrSidebarFailure.
@@ -51,10 +67,7 @@ async function sendGithubPrMutation(
       if (r.ok === true) {
         return { ok: true }
       }
-      return {
-        ok: false,
-        error: typeof r.error === 'string' ? r.error : `Request failed: ${method}`
-      }
+      return { ok: false, error: extractMutationError(r.error, method) }
     }
     // No structured status (host returned void/undefined) — treat as success.
     return { ok: true }
@@ -273,6 +286,34 @@ export async function fetchResolveReviewThread(
     return { ok: false, error: 'Failed to update review thread.' }
   }
   return { ok: true }
+}
+
+// Edit a root conversation (issue) comment. The host RPC is slug-addressed
+// (owner/repo/commentId), not worktree-addressed, so the params are passed
+// directly rather than via buildGithubPrParams. Host returns the
+// GitHubProjectMutationResult `{ ok }` envelope sendGithubPrMutation reads.
+export async function fetchUpdateIssueComment(
+  client: Pick<RpcClient, 'sendRequest'>,
+  args: { owner: string; repo: string; commentId: number; body: string }
+): Promise<GitHubPrMutationOutcome> {
+  return sendGithubPrMutation(client, 'github.project.updateIssueCommentBySlug', {
+    owner: args.owner,
+    repo: args.repo,
+    commentId: args.commentId,
+    body: args.body
+  })
+}
+
+// Delete a root conversation (issue) comment. Slug-addressed like the edit wrapper.
+export async function fetchDeleteIssueComment(
+  client: Pick<RpcClient, 'sendRequest'>,
+  args: { owner: string; repo: string; commentId: number }
+): Promise<GitHubPrMutationOutcome> {
+  return sendGithubPrMutation(client, 'github.project.deleteIssueCommentBySlug', {
+    owner: args.owner,
+    repo: args.repo,
+    commentId: args.commentId
+  })
 }
 
 export async function fetchRerunPRChecks(

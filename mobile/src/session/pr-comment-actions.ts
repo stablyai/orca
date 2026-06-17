@@ -65,6 +65,59 @@ export function buildAddRootCommentParams(prNumber: number, body: string): AddRo
   return { prNumber, body }
 }
 
+// Edit/delete are offered only on root conversation (issue) comments — the host
+// only exposes update/deleteIssueComment, and inline review comments / replies
+// (which carry a threadId or path, or live under a pullrequestreview URL) are not
+// editable. Mirrors desktop's isMutablePRConversationComment gating; GitHub itself
+// enforces authorship, so there is no client-side viewer-identity check.
+export function isMutablePRConversationComment(
+  comment: Pick<PRComment, 'id' | 'threadId' | 'path' | 'url'>
+): boolean {
+  if (comment.threadId || comment.path) {
+    return false
+  }
+  if (comment.url && comment.url.includes('pullrequestreview')) {
+    return false
+  }
+  return Number.isSafeInteger(comment.id) && comment.id > 0
+}
+
+// Edit/delete need the repo slug (the host RPCs are slug-addressed, not worktree-
+// addressed) plus a mutable comment. Returns null when either is missing so the UI
+// can hide the affordance rather than firing a doomed request.
+export function canEditComment(
+  comment: Pick<PRComment, 'id' | 'threadId' | 'path' | 'url'>,
+  prRepo: { owner: string; repo: string } | null | undefined
+): boolean {
+  return Boolean(prRepo) && isMutablePRConversationComment(comment)
+}
+
+export function canDeleteComment(
+  comment: Pick<PRComment, 'id' | 'threadId' | 'path' | 'url'>,
+  prRepo: { owner: string; repo: string } | null | undefined
+): boolean {
+  return Boolean(prRepo) && isMutablePRConversationComment(comment)
+}
+
+export type EditCommentParams = { owner: string; repo: string; commentId: number; body: string }
+
+export function buildEditCommentParams(
+  prRepo: { owner: string; repo: string },
+  commentId: number,
+  body: string
+): EditCommentParams {
+  return { owner: prRepo.owner, repo: prRepo.repo, commentId, body }
+}
+
+export type DeleteCommentParams = { owner: string; repo: string; commentId: number }
+
+export function buildDeleteCommentParams(
+  prRepo: { owner: string; repo: string },
+  commentId: number
+): DeleteCommentParams {
+  return { owner: prRepo.owner, repo: prRepo.repo, commentId }
+}
+
 // The composer disables submit on empty/whitespace input (host rejects empty body).
 export function isSubmittableCommentBody(body: string): boolean {
   return body.trim().length > 0

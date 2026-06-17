@@ -5,10 +5,13 @@ import { isSubmittableCommentBody } from '../../session/pr-comment-actions'
 import { prCommentComposerStyles as styles } from './pr-comment-composer-styles'
 
 type Props = {
-  // Plain-text composer shared by the reply affordance and the root-comment box.
+  // Plain-text composer shared by the reply affordance, the root-comment box, and
+  // the inline edit editor.
   placeholder: string
   submitLabel: string
   submitting: boolean
+  // Seeds the field for the edit case; the reply/add cases leave it empty.
+  initialBody?: string
   // Resolves to true on success; the composer clears + collapses (caller-driven via key remount or onSubmitted).
   onSubmit: (body: string) => Promise<boolean>
   onCancel?: () => void
@@ -19,11 +22,12 @@ export function PRCommentComposer({
   placeholder,
   submitLabel,
   submitting,
+  initialBody,
   onSubmit,
   onCancel,
   autoFocus
 }: Props) {
-  const [body, setBody] = useState('')
+  const [body, setBody] = useState(initialBody ?? '')
   // Why: parent `submitting` flips async; a fast double-tap can fire onSubmit
   // twice before it flips, so guard locally in the same synchronous tick.
   const inFlightRef = useRef(false)

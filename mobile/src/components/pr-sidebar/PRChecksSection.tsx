@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
-import { ChevronDown, ChevronRight, RotateCw } from 'lucide-react-native'
+import { ChevronDown, ChevronRight, RotateCw, Sparkles } from 'lucide-react-native'
 import { colors } from '../../theme/mobile-theme'
 import type { PRCheckDetail } from '../../../../src/shared/types'
 import type { RpcClient } from '../../transport/rpc-client'
@@ -18,6 +18,14 @@ import { statusColor } from './pr-sidebar-status-color'
 import { PRSection } from './PRSection'
 import { PRCheckDetailView, type DetailEntry } from './PRCheckDetail'
 import { mobilePrSidebarStyles as styles } from './mobile-pr-sidebar-styles'
+import { prAiTriageStyles as triageStyles } from './pr-ai-triage-styles'
+
+// Launches the "Fix checks with AI" agent. Absent for display-only usages.
+export type PrChecksTriage = {
+  fixChecks: () => void
+  isBusy: boolean
+  error: string | null
+}
 
 type Props = {
   checks: PRCheckDetail[]
@@ -26,12 +34,13 @@ type Props = {
   prRepo?: GitHubPrRepoSlug | null
   // Optional so display-only usages (e.g. tests/storybook) can omit mutations.
   actions?: MobilePrActions
+  triage?: PrChecksTriage
 }
 
 // Checks summary (counts) + sorted per-check rows. Each row expands to lazily
 // fetch github.prCheckDetails, cached per check key (U5). Display-only; the
 // rerun action is U6.
-export function PRChecksSection({ checks, client, worktreeId, prRepo, actions }: Props) {
+export function PRChecksSection({ checks, client, worktreeId, prRepo, actions, triage }: Props) {
   const sorted = sortPRChecks(checks)
   const summary = summarizePRChecks(checks)
   const rerunBusy = actions?.isBusy({ kind: 'rerun' }) ?? false
@@ -178,6 +187,30 @@ export function PRChecksSection({ checks, client, worktreeId, prRepo, actions }:
           </View>
         )
       })}
+      {/* "Fix checks with AI" — offered only when something failed (desktop's
+          PRTriageStrip). Launches an agent in a fresh worktree terminal. */}
+      {triage && summary.failed > 0 ? (
+        <View style={triageStyles.triageArea}>
+          <Pressable
+            style={({ pressed }) => [
+              triageStyles.triageButton,
+              pressed && triageStyles.triageButtonPressed
+            ]}
+            onPress={triage.fixChecks}
+            disabled={triage.isBusy}
+            accessibilityRole="button"
+            accessibilityLabel="Fix failing checks with AI"
+          >
+            {triage.isBusy ? (
+              <ActivityIndicator color={colors.textSecondary} />
+            ) : (
+              <Sparkles size={14} color={colors.textSecondary} strokeWidth={2.2} />
+            )}
+            <Text style={triageStyles.triageButtonText}>Fix checks with AI</Text>
+          </Pressable>
+          {triage.error ? <Text style={triageStyles.triageError}>{triage.error}</Text> : null}
+        </View>
+      ) : null}
     </PRSection>
   )
 }

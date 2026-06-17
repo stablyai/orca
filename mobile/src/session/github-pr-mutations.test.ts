@@ -1,8 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { RpcResponse } from '../transport/types'
 import {
+  fetchDeleteIssueComment,
   fetchMergePR,
   fetchResolveReviewThread,
+  fetchUpdateIssueComment,
   fetchUpdatePRTitle
 } from './github-pr-mutations'
 
@@ -89,5 +91,50 @@ describe('mutation transport rejection normalization', () => {
       prNumber: 1
     })
     expect(out).toEqual({ ok: false, error: 'permission denied' })
+  })
+})
+
+describe('fetchUpdateIssueComment / fetchDeleteIssueComment — slug-addressed envelope', () => {
+  it('sends owner/repo/commentId(+body) and reads the { ok } envelope', async () => {
+    const editClient = clientReturning(okResponse({ ok: true }))
+    const edit = await fetchUpdateIssueComment(editClient, {
+      owner: 'o',
+      repo: 'r',
+      commentId: 5,
+      body: 'edited'
+    })
+    expect(edit).toEqual({ ok: true })
+    expect(editClient.sendRequest).toHaveBeenCalledWith('github.project.updateIssueCommentBySlug', {
+      owner: 'o',
+      repo: 'r',
+      commentId: 5,
+      body: 'edited'
+    })
+
+    const delClient = clientReturning(okResponse({ ok: true }))
+    const del = await fetchDeleteIssueComment(delClient, { owner: 'o', repo: 'r', commentId: 5 })
+    expect(del).toEqual({ ok: true })
+    expect(delClient.sendRequest).toHaveBeenCalledWith('github.project.deleteIssueCommentBySlug', {
+      owner: 'o',
+      repo: 'r',
+      commentId: 5
+    })
+  })
+
+  it('surfaces a host object error { type, message } as failure', async () => {
+    const out = await fetchUpdateIssueComment(
+      clientReturning(okResponse({ ok: false, error: { type: 'permission', message: 'not authorized' } })),
+      { owner: 'o', repo: 'r', commentId: 5, body: 'x' }
+    )
+    expect(out).toEqual({ ok: false, error: 'not authorized' })
+  })
+
+  it('normalizes a transport rejection', async () => {
+    const out = await fetchDeleteIssueComment(clientRejecting('offline'), {
+      owner: 'o',
+      repo: 'r',
+      commentId: 5
+    })
+    expect(out).toEqual({ ok: false, error: 'offline' })
   })
 })

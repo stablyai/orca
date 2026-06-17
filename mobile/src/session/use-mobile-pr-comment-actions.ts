@@ -6,12 +6,16 @@ import type { GitHubPrRepoSlug } from './github-pr-rpc'
 import {
   fetchAddIssueComment,
   fetchAddPRReviewCommentReply,
+  fetchDeleteIssueComment,
   fetchResolveReviewThread,
+  fetchUpdateIssueComment,
   type GitHubPrMutationOutcome
 } from './github-pr-mutations'
 import { triggerError, triggerSuccess } from '../platform/haptics'
 import {
   buildAddRootCommentParams,
+  buildDeleteCommentParams,
+  buildEditCommentParams,
   buildReplyParams,
   buildResolveParams
 } from './pr-comment-actions'
@@ -31,6 +35,17 @@ export type PrCommentMutations = {
     prNumber: number
     body: string
     prRepo?: GitHubPrRepoSlug | null
+  }) => Promise<GitHubPrMutationOutcome>
+  editComment: (args: {
+    owner: string
+    repo: string
+    commentId: number
+    body: string
+  }) => Promise<GitHubPrMutationOutcome>
+  deleteComment: (args: {
+    owner: string
+    repo: string
+    commentId: number
   }) => Promise<GitHubPrMutationOutcome>
 }
 
@@ -55,7 +70,10 @@ function realMutations(
   return {
     reply: (args) => fetchAddPRReviewCommentReply(client, worktreeId, args),
     resolveThread: (args) => fetchResolveReviewThread(client, worktreeId, args),
-    addRootComment: (args) => fetchAddIssueComment(client, worktreeId, args)
+    addRootComment: (args) => fetchAddIssueComment(client, worktreeId, args),
+    // Edit/delete are slug-addressed (owner/repo/commentId), so they take no worktreeId.
+    editComment: (args) => fetchUpdateIssueComment(client, args),
+    deleteComment: (args) => fetchDeleteIssueComment(client, args)
   }
 }
 
@@ -66,6 +84,12 @@ function replyKey(commentId: number): string {
 }
 function resolveKey(threadId: string): string {
   return `resolve:${threadId}`
+}
+function editKey(commentId: number): string {
+  return `edit:${commentId}`
+}
+function deleteKey(commentId: number): string {
+  return `delete:${commentId}`
 }
 const ROOT_KEY = 'root'
 
@@ -161,16 +185,43 @@ export function useMobilePrCommentActions(input: PrCommentActionsInput) {
     [mutations, prNumber, prRepo, run]
   )
 
+  const editComment = useCallback(
+    (commentId: number, body: string) => {
+      // Edit is slug-addressed, so a missing prRepo means we cannot target the comment.
+      if (!mutations || !prRepo) {
+        return Promise.resolve(false)
+      }
+      const params = buildEditCommentParams(prRepo, commentId, body)
+      return run(editKey(commentId), () => mutations.editComment(params))
+    },
+    [mutations, prRepo, run]
+  )
+
+  const deleteComment = useCallback(
+    (commentId: number) => {
+      if (!mutations || !prRepo) {
+        return Promise.resolve(false)
+      }
+      const params = buildDeleteCommentParams(prRepo, commentId)
+      return run(deleteKey(commentId), () => mutations.deleteComment(params))
+    },
+    [mutations, prRepo, run]
+  )
+
   return {
     ready,
     error,
     clearError: useCallback(() => setError(null), []),
     isReplyBusy: useCallback((commentId: number) => busyKeys.has(replyKey(commentId)), [busyKeys]),
     isResolveBusy: useCallback((threadId: string) => busyKeys.has(resolveKey(threadId)), [busyKeys]),
+    isEditBusy: useCallback((commentId: number) => busyKeys.has(editKey(commentId)), [busyKeys]),
+    isDeleteBusy: useCallback((commentId: number) => busyKeys.has(deleteKey(commentId)), [busyKeys]),
     isRootBusy: busyKeys.has(ROOT_KEY),
     reply,
     toggleResolve,
-    addRootComment
+    addRootComment,
+    editComment,
+    deleteComment
   }
 }
 
