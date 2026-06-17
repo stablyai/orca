@@ -621,7 +621,9 @@ function FileExplorerFiles(): React.JSX.Element {
         <div className="relative min-h-0 flex-1 overflow-hidden">
           <ScrollArea
             className={cn(
-              'absolute inset-0 min-h-0',
+              // Why: Radix ScrollArea.Root hard-sets inline `position: relative`,
+              // defeating `absolute`; size by height so the viewport can overflow.
+              'h-full min-h-0',
               explorerView !== 'files' && 'pointer-events-none invisible',
               isRootDragOver &&
                 explorerView === 'files' &&
