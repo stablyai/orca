@@ -8,6 +8,7 @@ import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { buildLinearIssueLinkedWorkItem } from '@/lib/linear-linked-work-item'
 import { runWorktreeDelete } from '@/components/sidebar/delete-worktree-flow'
 import { runSleepWorktree } from '@/components/sidebar/sleep-worktree-flow'
+import { OPEN_WORKSPACE_BOARD_EVENT } from '@/components/sidebar/useWorkspaceBoardPanel'
 import {
   BACKGROUND_MOUNT_TERMINAL_WORKTREE_EVENT,
   SPLIT_TERMINAL_PANE_EVENT,
@@ -1152,6 +1153,19 @@ export function useIpcEvents(): void {
             return
           }
           runWorktreeDelete(store.activeWorktreeId)
+        })
+      )
+    }
+
+    if (window.api.ui.onOpenWorkspaceBoard) {
+      unsubs.push(
+        window.api.ui.onOpenWorkspaceBoard(() => {
+          const store = useAppStore.getState()
+          if (store.activeView === 'settings') {
+            return
+          }
+          store.setSidebarOpen(true)
+          window.dispatchEvent(new CustomEvent(OPEN_WORKSPACE_BOARD_EVENT))
         })
       )
     }

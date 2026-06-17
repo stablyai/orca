@@ -832,6 +832,11 @@ export function createMainWindow(
       return
     }
 
+    if (action.type === 'openWorkspaceBoard') {
+      mainWindow.webContents.send('ui:openWorkspaceBoard')
+      return
+    }
+
     if (action.type === 'openTasks') {
       mainWindow.webContents.send('ui:openTasks')
       return

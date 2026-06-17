@@ -37,6 +37,7 @@ export type KeybindingActionId =
   | 'workspace.create'
   | 'workspace.rename'
   | 'workspace.delete'
+  | 'workspace.openBoard'
   | 'voice.dictation'
   | 'view.tasks'
   | 'sidebar.left.toggle'
@@ -270,6 +271,17 @@ export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
     ],
     // Why: ship the command now without claiming a default chord; user
     // overrides still win automatically when a future default is assigned.
+    defaultBindings: platformBindings([]),
+    allowInTerminal: true
+  },
+  {
+    id: 'workspace.openBoard',
+    title: 'Open Workspace Board',
+    group: 'Global',
+    scope: 'global',
+    searchKeywords: ['shortcut', 'global', 'workspace', 'board', 'kanban', 'worktree'],
+    // Why: make the command configurable without taking a global chord from
+    // terminal/browser/editor users by default.
     defaultBindings: platformBindings([]),
     allowInTerminal: true
   },

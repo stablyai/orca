@@ -381,6 +381,31 @@ describe('keybindings', () => {
     ).toBe(true)
   })
 
+  it('keeps workspace board unassigned until users customize it', () => {
+    const binding = {
+      key: 'k',
+      code: 'KeyK',
+      control: true,
+      meta: false,
+      alt: true,
+      shift: false
+    }
+
+    expect(getEffectiveKeybindingsForAction('workspace.openBoard', 'linux')).toEqual([])
+    expect(keybindingMatchesAction('workspace.openBoard', binding, 'linux')).toBe(false)
+    expect(
+      keybindingMatchesAction('workspace.openBoard', binding, 'linux', {
+        'workspace.openBoard': ['Mod+Alt+K']
+      })
+    ).toBe(true)
+
+    const definition = getKeybindingDefinition('workspace.openBoard')
+    expect(definition?.title).toBe('Open Workspace Board')
+    expect(definition?.searchKeywords).toEqual(
+      expect.arrayContaining(['workspace', 'board', 'kanban'])
+    )
+  })
+
   it('defines a macOS-only default for the new agent tab shortcut', () => {
     expect(getEffectiveKeybindingsForAction('tab.newAgent', 'darwin')).toEqual(['Mod+Alt+T'])
     expect(getEffectiveKeybindingsForAction('tab.newAgent', 'linux')).toEqual([])
