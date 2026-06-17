@@ -117,6 +117,7 @@ import {
   normalizeRuntimePathForComparison
 } from '../shared/cross-platform-path'
 import { normalizeTerminalQuickCommands } from '../shared/terminal-quick-commands'
+import { normalizeDevRules } from '../shared/dev-rules'
 import { normalizeTaskProviderSettings } from '../shared/task-providers'
 import { normalizeAutoRenameBranchFromWorkDefaultOn } from '../shared/auto-rename-branch-from-work-settings'
 import { normalizeOpenInApplications } from '../shared/open-in-applications'
@@ -2635,6 +2636,7 @@ export class Store {
             terminalQuickCommands: normalizeTerminalQuickCommands(
               parsed.settings?.terminalQuickCommands
             ),
+            devRules: normalizeDevRules(parsed.settings?.devRules),
             terminalCustomThemes: normalizeTerminalCustomThemes(
               parsed.settings?.terminalCustomThemes
             ),
@@ -4434,6 +4436,9 @@ export class Store {
       sanitizedUpdates.terminalQuickCommands = normalizeTerminalQuickCommands(
         updates.terminalQuickCommands
       )
+    }
+    if ('devRules' in updates) {
+      sanitizedUpdates.devRules = normalizeDevRules(updates.devRules)
     }
     if ('terminalCustomThemes' in updates) {
       sanitizedUpdates.terminalCustomThemes = normalizeTerminalCustomThemes(

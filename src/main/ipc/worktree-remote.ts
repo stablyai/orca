@@ -51,6 +51,7 @@ import {
 } from '../hooks'
 import { requireSshGitProvider } from '../providers/ssh-git-dispatch'
 import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
+import { writeDevRulesBlockForWorktree } from '../dev-rules/dev-rules-sync'
 import { getActiveMultiplexer } from './ssh'
 import type { SshGitProvider } from '../providers/ssh-git-provider'
 import { TUI_AGENT_CONFIG, isTuiAgent } from '../../shared/tui-agent-config'
@@ -1653,6 +1654,20 @@ export async function createRemoteWorktree(
   // local-only until that protocol work is in scope. Remote repos with
   // `symlinkPaths` configured have them silently ignored here.
 
+  // Why: render enabled dev rules into the remote worktree's AGENTS.md /
+  // CLAUDE.md before agents launch. Gated on fsProvider like remote setup; the
+  // call never throws, so a dropped connection just skips the rules.
+  if (fsProvider) {
+    await timing.time('write_dev_rules', async () => {
+      await writeDevRulesBlockForWorktree({
+        repo,
+        worktreePath: created.path,
+        rules: settings.devRules ?? [],
+        fsProvider
+      })
+    })
+  }
+
   let setup: CreateWorktreeResult['setup']
   let defaultTabs: CreateWorktreeResult['defaultTabs']
   if (fsProvider) {
@@ -2203,6 +2218,17 @@ export async function createLocalWorktree(
       await createWorktreeSymlinks(repo.path, created.path, symlinkPaths)
     })
   }
+
+  // Why: render the user's enabled dev rules into the worktree's AGENTS.md /
+  // CLAUDE.md before any agent launches, so every CLI reads them. Unconditional
+  // on setup hooks; never throws (a written worktree must not fail the create).
+  await timing.time('write_dev_rules', async () => {
+    await writeDevRulesBlockForWorktree({
+      repo,
+      worktreePath,
+      rules: settings.devRules ?? []
+    })
+  })
 
   // Why: the worktree's own `orca.yaml` (at the tip of the base branch) is
   // authoritative for what runs post-creation. The repo-level trust already

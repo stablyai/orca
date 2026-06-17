@@ -1763,6 +1763,9 @@ export type PreloadApi = {
     listFonts: () => Promise<string[]>
     previewGhosttyImport: () => Promise<GhosttyImportPreview>
     previewWarpThemeImport: (source: WarpThemeImportSource) => Promise<WarpThemeImportPreview>
+    /** Re-render the Dev Rules managed block into every existing worktree's
+     *  AGENTS.md / CLAUDE.md. Idempotent; returns how many worktrees were synced. */
+    applyDevRulesToExistingWorktrees: () => Promise<{ applied: number }>
     /** Subscribe to out-of-band settings updates (e.g. the View > Appearance
      *  menu toggles) so the renderer can stay in sync with main's persisted
      *  state without round-tripping through settings:get. */

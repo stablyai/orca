@@ -40,6 +40,7 @@ import { StatsPane } from '../stats/StatsPane'
 import { IntegrationsPane } from './IntegrationsPane'
 import { TasksPane } from './TasksPane'
 import { QuickCommandsPane } from './QuickCommandsPane'
+import { DevRulesPane } from './DevRulesPane'
 import { DeveloperPermissionsPane } from './DeveloperPermissionsPane'
 import { ComputerUsePane } from './ComputerUsePane'
 import { MobileSettingsPane } from './MobileSettingsPane'
@@ -1235,6 +1236,20 @@ function Settings(): React.JSX.Element {
                       updateSettings={updateSettings}
                       addCommandIntentSignal={quickCommandAddIntentSignal}
                     />
+                  ) : null}
+                </SettingsSection>
+
+                <SettingsSection
+                  id="dev-rules"
+                  title={translate('auto.components.settings.Settings.devRulesTitle', 'Dev Rules')}
+                  description={translate(
+                    'auto.components.settings.Settings.devRulesDescription',
+                    'Coding principles and additive system messages written into each worktree’s AGENTS.md and CLAUDE.md.'
+                  )}
+                  searchEntries={getSectionSearchEntries('dev-rules')}
+                >
+                  {isSectionMounted('dev-rules') ? (
+                    <DevRulesPane settings={settings} updateSettings={updateSettings} />
                   ) : null}
                 </SettingsSection>
 

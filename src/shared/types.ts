@@ -2267,6 +2267,30 @@ export type TerminalAgentQuickCommand = TerminalQuickCommandBase & {
 
 export type TerminalQuickCommand = TerminalCommandQuickCommand | TerminalAgentQuickCommand
 
+/** Scope of a dev rule: global rules apply to every worktree; repo rules apply
+ *  only to worktrees of the matching repository. Mirrors
+ *  {@link TerminalQuickCommandScope}. */
+export type DevRuleScope =
+  | {
+      type: 'global'
+    }
+  | {
+      type: 'repo'
+      repoId: string
+    }
+
+/** A user-authored "dev rule" / coding principle / additive system message.
+ *  Enabled rules are rendered into each worktree's native agent-instructions
+ *  files (AGENTS.md / CLAUDE.md) so every spawned CLI agent reads them. */
+export type DevRule = {
+  id: string
+  name: string
+  /** Free-form markdown / plain text pasted by the user. */
+  content: string
+  enabled: boolean
+  scope: DevRuleScope
+}
+
 export type OpenInApplication = {
   id: string
   label: string
@@ -2378,6 +2402,8 @@ export type GlobalSettings = {
   terminalWordSeparator?: string
   terminalCursorOpacity?: number
   terminalQuickCommands?: TerminalQuickCommand[]
+  /** User-authored dev rules rendered into worktree AGENTS.md / CLAUDE.md. */
+  devRules?: DevRule[]
   windowBackgroundBlur?: boolean
   /** Why: Windows terminals conventionally use right-click as a paste gesture.
    *  The setting stays Windows-only so macOS/Linux keep their existing context

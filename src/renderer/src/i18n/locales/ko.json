@@ -594,7 +594,9 @@
         "b1c2f8b0ac": "Claude, Codex, Gemini 및 OpenCode Go에 대한 선택적 계정 전환.",
         "f70ac54d38": "AI 제공업체 계정",
         "4121f7a0a2": "AI agents를 관리하고, 기본값을 설정하고, 명령을 사용자 정의하세요.",
-        "b49abbd2f7": "Agents"
+        "b49abbd2f7": "Agents",
+        "devRulesTitle": "Dev Rules",
+        "devRulesDescription": "Coding principles and additive system messages for agents, scoped globally or per project."
       }
     },
     "components": {
@@ -5648,7 +5650,9 @@
           "9abb9be3bc": "설정 시작",
           "23c6874fdf": "AI 기능",
           "2309068a6f": "파괴적인",
-          "65358016ea": "버리기"
+          "65358016ea": "버리기",
+          "devRulesTitle": "Dev Rules",
+          "devRulesDescription": "Coding principles and additive system messages written into each worktree’s AGENTS.md and CLAUDE.md."
         },
         "SettingsFormControls": {
           "42a4d15a30": "일치하는 글꼴이 없습니다.",
@@ -7926,6 +7930,36 @@
           "workspaceDirectory": "The client default is inherited until a host needs its own worktree directory.",
           "providerHost": "Provider host",
           "providerAccounts": "Credentials and account checks belong to the local client or selected remote server that owns the provider integration."
+        },
+        "DevRulesList": {
+          "scopeGlobal": "Global",
+          "scopeMissing": "Missing project",
+          "untitled": "Untitled rule",
+          "toggleAria": "Enable {{value0}}",
+          "noContent": "No rule text yet",
+          "editAria": "Edit {{value0}}",
+          "removeAria": "Remove {{value0}}",
+          "empty": "No dev rules yet."
+        },
+        "DevRulesPane": {
+          "deleteTitle": "Delete “{{value0}}”?",
+          "deleteDescription": "This dev rule will be removed from your saved list. Existing worktrees update when you create a new one or re-apply rules.",
+          "deleteConfirm": "Delete",
+          "title": "Dev Rules",
+          "description": "Coding principles and additive system messages written into each worktree’s AGENTS.md and CLAUDE.md. Enabled rules apply to new worktrees.",
+          "addRule": "Add Rule",
+          "applied": "Dev rules applied to {{value0}} worktree(s).",
+          "applyFailed": "Could not apply dev rules to existing worktrees.",
+          "applyTooltip": "Re-write enabled rules into every existing worktree’s AGENTS.md and CLAUDE.md.",
+          "applyExisting": "Apply to worktrees"
+        },
+        "dev": {
+          "rules": {
+            "search": {
+              "title": "Dev Rules",
+              "description": "Coding principles and additive system messages written into each worktree’s AGENTS.md and CLAUDE.md, scoped globally or per project."
+            }
+          }
         },
         "RepositoryForkSyncSection": {
           "defaultBranch": "기본 브랜치",
@@ -11323,6 +11357,26 @@
         "sourceUnavailable": "{{value0}} source unavailable: {{value1}}",
         "someSourceHostsUnavailable": "Some {{value0}} source hosts unavailable: {{value1}}",
         "reconnectOrUpdateTitle": "Reconnect or update {{value0}} to load this source."
+      },
+      "dev": {
+        "rules": {
+          "DevRuleDialog": {
+            "edit": "Edit Dev Rule",
+            "add": "Add Dev Rule",
+            "description": "Dev rules are added to each worktree’s AGENTS.md and CLAUDE.md so every agent reads them.",
+            "nameLabel": "Name",
+            "namePlaceholder": "e.g. Immutability, Testing standards",
+            "contentLabel": "Rule",
+            "contentPlaceholder": "Paste your coding principles, conventions, or additive system message…",
+            "scopeLabel": "Scope",
+            "scopeGlobal": "Global",
+            "scopeProject": "Project",
+            "projectMissing": "Project not in list",
+            "projectChoose": "Choose project",
+            "cancel": "Cancel",
+            "save": "Save"
+          }
+        }
       }
     },
     "i18n": {

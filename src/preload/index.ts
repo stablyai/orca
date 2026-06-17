@@ -1582,6 +1582,9 @@ const api = {
     previewWarpThemeImport: (source: WarpThemeImportSource): Promise<WarpThemeImportPreview> =>
       ipcRenderer.invoke('settings:previewWarpThemeImport', source),
 
+    applyDevRulesToExistingWorktrees: (): Promise<{ applied: number }> =>
+      ipcRenderer.invoke('devRules:applyToExistingWorktrees'),
+
     onChanged: (callback: (updates: Record<string, unknown>) => void): (() => void) => {
       const listener = (
         _event: Electron.IpcRendererEvent,

@@ -17,6 +17,7 @@ import { normalizeAppIconId } from '../../shared/app-icon'
 import { normalizeUiLanguage } from '../../shared/ui-language'
 import { applyAppIcon } from '../app-icon'
 import { normalizeTerminalCustomThemes } from '../../shared/terminal-custom-themes'
+import { applyDevRulesToExistingWorktrees } from '../dev-rules/dev-rules-sync'
 import { prepareLocalWorktreeRootsForRepos } from '../worktree-root-preparation'
 
 // Why: the whitelist is the source-of-truth for which keys we emit on. Casting
@@ -170,6 +171,17 @@ export function registerSettingsHandlers(
   ipcMain.handle('settings:previewWarpThemeImport', (event, args?: unknown) => {
     const source = args === undefined ? { kind: 'auto' } : args
     return previewWarpThemeImport(store, source, event.sender)
+  })
+
+  // Why: new worktrees pick up rule changes automatically at create time;
+  // this user-initiated action re-renders the managed block into every existing
+  // worktree so enable/disable/edit changes propagate on demand. Idempotent.
+  ipcMain.handle('devRules:applyToExistingWorktrees', async () => {
+    return applyDevRulesToExistingWorktrees({
+      repos: store.getRepos(),
+      allMeta: store.getAllWorktreeMeta(),
+      rules: store.getSettings().devRules ?? []
+    })
   })
 
   ipcMain.handle('cache:getGitHub', () => {

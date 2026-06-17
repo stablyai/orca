@@ -22,6 +22,7 @@ import {
   Palette,
   PanelsTopLeft,
   Play,
+  ScrollText,
   Server,
   ShieldCheck,
   SlidersHorizontal,
@@ -51,6 +52,7 @@ import { getAppearancePaneSearchEntries } from '@/components/settings/appearance
 import { getInputPaneSearchEntries } from '@/components/settings/input-search'
 import { getTerminalPaneSearchEntries } from '@/components/settings/terminal-search'
 import { getQuickCommandsPaneSearchEntries } from '@/components/settings/quick-commands-search'
+import { getDevRulesPaneSearchEntries } from '@/components/settings/dev-rules-search'
 import { getBrowserPaneCombinedSearchEntries } from '@/components/settings/browser-pane-search'
 import { getNotificationsPaneSearchEntries } from '@/components/settings/notifications-search'
 import { getOrchestrationPaneSearchEntries } from '@/components/settings/orchestration-search'
@@ -278,6 +280,17 @@ export function buildSettingsNavigationMetadata({
       ),
       icon: Play,
       searchEntries: getQuickCommandsPaneSearchEntries(),
+      group: 'workflows'
+    },
+    {
+      id: 'dev-rules',
+      title: translate('auto.hooks.useSettingsNavigationMetadata.devRulesTitle', 'Dev Rules'),
+      description: translate(
+        'auto.hooks.useSettingsNavigationMetadata.devRulesDescription',
+        'Coding principles and additive system messages for agents, scoped globally or per project.'
+      ),
+      icon: ScrollText,
+      searchEntries: getDevRulesPaneSearchEntries(),
       group: 'workflows'
     },
     ...(showDesktopOnlySettings
