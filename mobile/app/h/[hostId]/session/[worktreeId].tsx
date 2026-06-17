@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
-import { Animated, AppState, type AppStateStatus } from 'react-native'
+import { Animated, AppState, Linking, type AppStateStatus } from 'react-native'
 import * as Clipboard from 'expo-clipboard'
 import {
   BackHandler,
@@ -50,8 +50,10 @@ import type { RuntimeTerminalPathResolution } from '../../../../../src/shared/ru
 import { loadHosts } from '../../../../src/transport/host-store'
 import {
   loadTerminalAutocompleteEnabled,
+  loadTerminalLinkOpenMode,
   loadTerminalTextScale,
-  saveTerminalTextScale
+  saveTerminalTextScale,
+  type MobileTerminalLinkOpenMode
 } from '../../../../src/storage/preferences'
 import {
   useHostClient,
@@ -799,6 +801,8 @@ export default function SessionScreen() {
   // Why: local opt-in for keyboard autocomplete/autocorrect on the terminal
   // command bar; reloaded on focus so a Settings → Terminal toggle takes effect on return.
   const [autocompleteEnabled, setAutocompleteEnabled] = useState(false)
+  const [terminalLinkOpenMode, setTerminalLinkOpenMode] =
+    useState<MobileTerminalLinkOpenMode>('orca-browser')
   const [liveInputCapture, setLiveInputCapture] = useState('')
   const [liveInputTerminalHandles, setLiveInputTerminalHandles] = useState<Set<string>>(
     () => new Set()
@@ -2550,6 +2554,21 @@ export default function SessionScreen() {
     }, [])
   )
 
+  // Why: link routing is a phone-local choice; reload after Settings → Browser.
+  useFocusEffect(
+    useCallback(() => {
+      let active = true
+      void loadTerminalLinkOpenMode().then((mode) => {
+        if (active) {
+          setTerminalLinkOpenMode(mode)
+        }
+      })
+      return () => {
+        active = false
+      }
+    }, [])
+  )
+
   // Why: unsubscribe the old terminal so the server restores its desktop dims
   // (clearing the phone-fit banner), then subscribe the new terminal with the
   // measured viewport so the server phone-fits it. Also call terminal.focus
@@ -2892,6 +2911,20 @@ export default function SessionScreen() {
       })()
     },
     [client, worktreeId, scheduleDelayedAction, fetchSessionTabs]
+  )
+
+  const handleTerminalOpenUrl = useCallback(
+    (handle: string, url: string) => {
+      if (handle !== activeHandleRef.current) {
+        return
+      }
+      if (terminalLinkOpenMode === 'phone-browser') {
+        void Linking.openURL(url).catch(() => {})
+        return
+      }
+      void handleCreateBrowser(url)
+    },
+    [terminalLinkOpenMode]
   )
 
   const toggleLiveInput = useCallback(() => {
@@ -4325,6 +4358,7 @@ export default function SessionScreen() {
                 onTerminalInput={handleTerminalInput}
                 onTerminalTap={handleTerminalTap}
                 onFileTap={handleFileTap}
+                onOpenUrl={handleTerminalOpenUrl}
               />
             ))}
             {toastMessage && (

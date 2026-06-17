@@ -105,6 +105,24 @@ export async function saveHostSidebarWidth(width: number): Promise<void> {
   await AsyncStorage.setItem(SIDEBAR_WIDTH_KEY, String(clampHostSidebarWidth(width)))
 }
 
+export type MobileTerminalLinkOpenMode = 'orca-browser' | 'phone-browser'
+
+const TERMINAL_LINK_OPEN_MODE_KEY = 'orca:terminalLinkOpenMode'
+export const DEFAULT_TERMINAL_LINK_OPEN_MODE: MobileTerminalLinkOpenMode = 'orca-browser'
+
+export async function loadTerminalLinkOpenMode(): Promise<MobileTerminalLinkOpenMode> {
+  try {
+    const raw = await AsyncStorage.getItem(TERMINAL_LINK_OPEN_MODE_KEY)
+    return raw === 'phone-browser' || raw === 'orca-browser' ? raw : DEFAULT_TERMINAL_LINK_OPEN_MODE
+  } catch {
+    return DEFAULT_TERMINAL_LINK_OPEN_MODE
+  }
+}
+
+export async function saveTerminalLinkOpenMode(mode: MobileTerminalLinkOpenMode): Promise<void> {
+  await AsyncStorage.setItem(TERMINAL_LINK_OPEN_MODE_KEY, mode)
+}
+
 function stringArray(value: unknown): string[] {
   return Array.isArray(value)
     ? value.filter((item): item is string => typeof item === 'string')

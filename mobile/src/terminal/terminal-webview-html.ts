@@ -4,6 +4,7 @@ import type { RuntimeMobileTerminalTheme } from '../../../src/shared/runtime-typ
 import { colors } from '../theme/mobile-theme'
 import { TERMINAL_TEXT_SCALES } from '../storage/preferences'
 import { TERMINAL_PATH_TAP_JS } from './terminal-path-tap-injected'
+import { URL_TAP_WEBVIEW_JS } from './terminal-webview-url-tap'
 
 const DEFAULT_TERMINAL_THEME: RuntimeMobileTerminalTheme['theme'] = {
   background: colors.terminalBg,
@@ -1319,6 +1320,7 @@ export const XTERM_HTML = `<!DOCTYPE html>
   // File-path-under-tap detection (matchFilePathAtColumn). See
   // terminal-path-tap-injected.ts; mirrors the unit-tested terminal-path-tap.ts.
   ${TERMINAL_PATH_TAP_JS}
+  ${URL_TAP_WEBVIEW_JS}
 
   function seedWordSelection(col, absRow) {
     var line = getLineText(absRow);
@@ -1637,13 +1639,7 @@ export const XTERM_HTML = `<!DOCTYPE html>
     }
     if (dispatch.mode === 'surface') {
       if (e.touches.length === 0 && longPressOrigin && selMode !== 'select') {
-        var clickInput = buildMouseClickInput(longPressOrigin.x, longPressOrigin.y);
-        if (clickInput) {
-          notify({ type: 'terminal-input', bytes: clickInput });
-        } else if (!isClickMouseTrackingMode(getMouseTrackingMode())) {
-          // Tap on a file path → terminal-file-tap (RN opens it); else focus.
-          notifyTapOrFilePath(longPressOrigin.x, longPressOrigin.y);
-        }
+        notifyTerminalSurfaceTap(longPressOrigin.x, longPressOrigin.y);
       }
       clearLongPress();
       if (e.touches.length === 0) {

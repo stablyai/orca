@@ -7,8 +7,10 @@ import {
   clampHostSidebarWidth,
   loadHostSidebarWidth,
   loadTerminalAutocompleteEnabled,
+  loadTerminalLinkOpenMode,
   saveHostSidebarWidth,
-  saveTerminalAutocompleteEnabled
+  saveTerminalAutocompleteEnabled,
+  saveTerminalLinkOpenMode
 } from './preferences'
 
 vi.mock('@react-native-async-storage/async-storage', () => ({
@@ -95,5 +97,39 @@ describe('host sidebar width preference', () => {
       'orca:hostSidebarWidth',
       String(HOST_SIDEBAR_MIN_WIDTH)
     )
+  })
+})
+
+describe('terminal link open mode preference', () => {
+  beforeEach(() => {
+    vi.mocked(AsyncStorage.getItem).mockReset()
+    vi.mocked(AsyncStorage.setItem).mockReset()
+  })
+
+  it('defaults to Orca browser when unset', async () => {
+    vi.mocked(AsyncStorage.getItem).mockResolvedValue(null)
+
+    await expect(loadTerminalLinkOpenMode()).resolves.toBe('orca-browser')
+    expect(AsyncStorage.getItem).toHaveBeenCalledWith('orca:terminalLinkOpenMode')
+  })
+
+  it('loads only known modes', async () => {
+    vi.mocked(AsyncStorage.getItem).mockResolvedValue('phone-browser')
+    await expect(loadTerminalLinkOpenMode()).resolves.toBe('phone-browser')
+
+    vi.mocked(AsyncStorage.getItem).mockResolvedValue('external')
+    await expect(loadTerminalLinkOpenMode()).resolves.toBe('orca-browser')
+  })
+
+  it('falls back to Orca browser when storage cannot be read', async () => {
+    vi.mocked(AsyncStorage.getItem).mockRejectedValue(new Error('storage unavailable'))
+
+    await expect(loadTerminalLinkOpenMode()).resolves.toBe('orca-browser')
+  })
+
+  it('persists the selected mode', async () => {
+    await saveTerminalLinkOpenMode('phone-browser')
+
+    expect(AsyncStorage.setItem).toHaveBeenCalledWith('orca:terminalLinkOpenMode', 'phone-browser')
   })
 })

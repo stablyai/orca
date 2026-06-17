@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest'
 // TerminalWebView.tsx. Concatenate both so assertions resolve regardless of file.
 const source =
   readFileSync(new URL('./TerminalWebView.tsx', import.meta.url), 'utf8') +
+  readFileSync(new URL('./terminal-webview-url-tap.ts', import.meta.url), 'utf8') +
   readFileSync(new URL('./terminal-webview-html.ts', import.meta.url), 'utf8')
 const sessionSource = readFileSync(
   new URL('../../app/h/[hostId]/session/[worktreeId].tsx', import.meta.url),
@@ -167,7 +168,7 @@ describe('TerminalWebView scroll routing', () => {
     expect(dragMoveBlock).toContain('syncSelectionHandleToViewportPoint(handle, clientX, clientY)')
   })
 
-  it('synthesizes bounded mouse clicks from surface taps before focus fallback', () => {
+  it('opens links and paths from surface taps before mouse/focus fallback', () => {
     expect(source).toContain('function buildMouseClickInput(clientX, clientY)')
     expect(source).toContain('function isClickMouseTrackingMode(mode)')
     expect(source).toContain("return mode !== 'none';")
@@ -188,16 +189,26 @@ describe('TerminalWebView scroll routing', () => {
       "document.addEventListener('touchend'",
       '}, { capture: true, passive: true });'
     )
-    // Why: mouse-click synthesis must precede the tap/file-path fallback so a
-    // bound mouse mode wins. The fallback now routes through notifyTapOrFilePath
-    // (which emits terminal-file-tap on a path, else terminal-tap).
-    expect(touchEndBlock.indexOf('var clickInput = buildMouseClickInput')).toBeLessThan(
-      touchEndBlock.indexOf('notifyTapOrFilePath(')
-    )
-    expect(touchEndBlock).toContain("notify({ type: 'terminal-input', bytes: clickInput });")
     expect(touchEndBlock).toContain(
-      '} else if (!isClickMouseTrackingMode(getMouseTrackingMode())) {'
+      'notifyTerminalSurfaceTap(longPressOrigin.x, longPressOrigin.y)'
     )
+
+    const tapHandlerBlock = sliceBetween(
+      'function notifyTerminalSurfaceTap(originX, originY)',
+      "document.addEventListener('touchstart'"
+    )
+    expect(tapHandlerBlock.indexOf('oscLinkAtViewportPoint')).toBeLessThan(
+      tapHandlerBlock.indexOf('urlAtViewportPoint')
+    )
+    expect(tapHandlerBlock.indexOf('urlAtViewportPoint')).toBeLessThan(
+      tapHandlerBlock.indexOf('filePathAtViewportPoint')
+    )
+    expect(tapHandlerBlock.indexOf('filePathAtViewportPoint')).toBeLessThan(
+      tapHandlerBlock.indexOf('var clickInput = buildMouseClickInput')
+    )
+    expect(tapHandlerBlock).toContain("notify({ type: 'open-url', url: tappedUrl });")
+    expect(tapHandlerBlock).toContain("notify({ type: 'terminal-input', bytes: clickInput });")
+    expect(tapHandlerBlock).toContain("notify({ type: 'terminal-tap' });")
   })
 
   it('allows x10 mouse gesture reports through the mobile session gate', () => {
