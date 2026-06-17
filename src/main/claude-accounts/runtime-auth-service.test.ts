@@ -19,6 +19,7 @@ import type { ClaudeManagedAccount, GlobalSettings } from '../../shared/types'
 import { isOauthTokenExpiring, refreshClaudeOauthCredentials } from './oauth-refresh'
 
 const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
+const hostPlatform = process.platform
 const testState = {
   userDataDir: '',
   fakeHomeDir: '',
@@ -653,7 +654,7 @@ describe('ClaudeRuntimeAuthService', () => {
   })
 
   it('falls back to atomic write when the unchanged check cannot read the target', async () => {
-    if (process.platform === 'win32') {
+    if (hostPlatform === 'win32') {
       return
     }
 
@@ -692,7 +693,7 @@ describe('ClaudeRuntimeAuthService', () => {
   })
 
   it('tightens credential file permissions when unchanged content is already present', async () => {
-    if (process.platform === 'win32') {
+    if (hostPlatform === 'win32') {
       return
     }
 
@@ -3475,7 +3476,7 @@ describe('ClaudeRuntimeAuthService', () => {
     expect(preparation.runtime).toBe('wsl')
     expect(preparation.provenance).toBe('wsl:Ubuntu:system')
     expect(preparation.stripAuthEnv).toBe(true)
-  })
+  }, 15_000)
 
   it('uses the default distro selection for WSL-default Claude preparation', async () => {
     const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')

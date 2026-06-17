@@ -3,6 +3,8 @@ import type { Dirent } from 'fs'
 import { homedir, platform } from 'os'
 import path from 'path'
 
+type PathApi = typeof path.posix | typeof path.win32
+
 const WARP_CHANNELS = [
   { macName: '.warp', linuxName: 'warp-terminal', windowsName: 'Warp' },
   { macName: '.warp-preview', linuxName: 'warp-terminal-preview', windowsName: 'WarpPreview' },
@@ -29,9 +31,10 @@ function readDirectoryEntries(directoryPath: string): Dirent[] {
 function addDedupeDirectory(
   directories: string[],
   seenDirectories: Set<string>,
-  directoryPath: string
+  directoryPath: string,
+  pathApi: PathApi
 ): void {
-  const normalizedPath = path.normalize(path.resolve(directoryPath))
+  const normalizedPath = pathApi.normalize(pathApi.resolve(directoryPath))
   if (seenDirectories.has(normalizedPath)) {
     return
   }
@@ -39,22 +42,25 @@ function addDedupeDirectory(
   directories.push(directoryPath)
 }
 
-function warpThemeDirectoriesFromDataHomes(dataHomes: string[]): string[] {
+function warpThemeDirectoriesFromDataHomes(dataHomes: string[], pathApi: PathApi): string[] {
   const directories: string[] = []
   const seenDirectories = new Set<string>()
   for (const dataHome of dataHomes) {
-    addDedupeDirectory(directories, seenDirectories, path.join(dataHome, 'themes'))
+    addDedupeDirectory(directories, seenDirectories, pathApi.join(dataHome, 'themes'), pathApi)
   }
   return directories
 }
 
 function getMacWarpThemeDirectories(home: string): string[] {
-  return warpThemeDirectoriesFromDataHomes([
-    ...WARP_CHANNELS.map((channel) => path.join(home, channel.macName)),
-    ...readDirectoryEntries(home)
-      .filter((entry) => entry.isDirectory() && entry.name.startsWith('.warp'))
-      .map((entry) => path.join(home, entry.name))
-  ])
+  return warpThemeDirectoriesFromDataHomes(
+    [
+      ...WARP_CHANNELS.map((channel) => path.posix.join(home, channel.macName)),
+      ...readDirectoryEntries(home)
+        .filter((entry) => entry.isDirectory() && entry.name.startsWith('.warp'))
+        .map((entry) => path.posix.join(home, entry.name))
+    ],
+    path.posix
+  )
 }
 
 function getLinuxWarpThemeDirectories(home: string): string[] {
@@ -62,16 +68,22 @@ function getLinuxWarpThemeDirectories(home: string): string[] {
   // Why: XDG_DATA_HOME is only valid as an absolute path; relative values would
   // make discovery depend on Orca's launch directory.
   const dataHome =
-    xdgDataHome && path.isAbsolute(xdgDataHome) ? xdgDataHome : path.join(home, '.local', 'share')
-  return warpThemeDirectoriesFromDataHomes([
-    ...WARP_CHANNELS.map((channel) => path.join(dataHome, channel.linuxName)),
-    ...readDirectoryEntries(dataHome)
-      .filter(
-        (entry) =>
-          entry.isDirectory() && (entry.name === 'warp-terminal' || entry.name.startsWith('warp-'))
-      )
-      .map((entry) => path.join(dataHome, entry.name))
-  ])
+    xdgDataHome && path.posix.isAbsolute(xdgDataHome)
+      ? xdgDataHome
+      : path.posix.join(home, '.local', 'share')
+  return warpThemeDirectoriesFromDataHomes(
+    [
+      ...WARP_CHANNELS.map((channel) => path.posix.join(dataHome, channel.linuxName)),
+      ...readDirectoryEntries(dataHome)
+        .filter(
+          (entry) =>
+            entry.isDirectory() &&
+            (entry.name === 'warp-terminal' || entry.name.startsWith('warp-'))
+        )
+        .map((entry) => path.posix.join(dataHome, entry.name))
+    ],
+    path.posix
+  )
 }
 
 function getWindowsWarpThemeDirectories(home: string): string[] {
@@ -83,7 +95,8 @@ function getWindowsWarpThemeDirectories(home: string): string[] {
     addDedupeDirectory(
       directories,
       seenDirectories,
-      path.win32.join(warpAppData, channel.windowsName, 'data', 'themes')
+      path.win32.join(warpAppData, channel.windowsName, 'data', 'themes'),
+      path.win32
     )
   }
   for (const entry of readDirectoryEntries(warpAppData)) {
@@ -93,7 +106,8 @@ function getWindowsWarpThemeDirectories(home: string): string[] {
     addDedupeDirectory(
       directories,
       seenDirectories,
-      path.win32.join(warpAppData, entry.name, 'data', 'themes')
+      path.win32.join(warpAppData, entry.name, 'data', 'themes'),
+      path.win32
     )
   }
   return directories

@@ -2,6 +2,7 @@
 import type { Repo } from '../shared/types'
 
 import { describe, expect, it, vi } from 'vitest'
+import { join } from 'path'
 import { getDefaultTabsLaunch, parseOrcaYaml } from './hooks'
 
 // Mock fs and path used by loadHooks
@@ -26,6 +27,11 @@ vi.mock('child_process', () => ({
   // runner.ts imports spawn from child_process transitively.
   spawn: vi.fn()
 }))
+
+const TEST_REPO_PATH = join('/', 'test', 'repo')
+const TEST_WORKTREE_PATH = join('/', 'test', 'worktree')
+const repoFile = (...segments: string[]): string => join(TEST_REPO_PATH, ...segments)
+const worktreeFile = (...segments: string[]): string => join(TEST_WORKTREE_PATH, ...segments)
 
 describe('parseOrcaYaml', () => {
   it('parses YAML with setup script only', () => {
@@ -250,44 +256,44 @@ describe('readIssueCommand', () => {
   it('prefers the local override over the shared orca.yaml command', async () => {
     const fs = await import('fs')
     vi.mocked(fs.existsSync).mockImplementation(
-      (path) => path === '/test/repo/.orca/issue-command' || path === '/test/repo/orca.yaml'
+      (path) => path === repoFile('.orca', 'issue-command') || path === repoFile('orca.yaml')
     )
     vi.mocked(fs.readFileSync).mockImplementation((path) => {
-      if (path === '/test/repo/.orca/issue-command') {
+      if (path === repoFile('.orca', 'issue-command')) {
         return 'local command\n'
       }
-      if (path === '/test/repo/orca.yaml') {
+      if (path === repoFile('orca.yaml')) {
         return 'issueCommand: |\n  shared command\n'
       }
       return ''
     })
 
     const { readIssueCommand } = await import('./hooks')
-    expect(readIssueCommand('/test/repo')).toEqual({
+    expect(readIssueCommand(TEST_REPO_PATH)).toEqual({
       localContent: 'local command',
       sharedContent: 'shared command',
       effectiveContent: 'local command',
-      localFilePath: '/test/repo/.orca/issue-command',
+      localFilePath: repoFile('.orca', 'issue-command'),
       source: 'local'
     })
   })
 
   it('falls back to the shared orca.yaml command when no local override exists', async () => {
     const fs = await import('fs')
-    vi.mocked(fs.existsSync).mockImplementation((path) => path === '/test/repo/orca.yaml')
+    vi.mocked(fs.existsSync).mockImplementation((path) => path === repoFile('orca.yaml'))
     vi.mocked(fs.readFileSync).mockImplementation((path) => {
-      if (path === '/test/repo/orca.yaml') {
+      if (path === repoFile('orca.yaml')) {
         return 'issueCommand: |\n  shared command\n'
       }
       return ''
     })
 
     const { readIssueCommand } = await import('./hooks')
-    expect(readIssueCommand('/test/repo')).toEqual({
+    expect(readIssueCommand(TEST_REPO_PATH)).toEqual({
       localContent: null,
       sharedContent: 'shared command',
       effectiveContent: 'shared command',
-      localFilePath: '/test/repo/.orca/issue-command',
+      localFilePath: repoFile('.orca', 'issue-command'),
       source: 'shared'
     })
   })
@@ -297,25 +303,25 @@ describe('writeIssueCommand', () => {
   it('writes only the local override file and keeps .orca ignored locally', async () => {
     const fs = await import('fs')
     vi.mocked(fs.existsSync).mockImplementation(
-      (path) => path === '/test/repo/.gitignore' || path === '/test/repo/.orca'
+      (path) => path === repoFile('.gitignore') || path === repoFile('.orca')
     )
     vi.mocked(fs.readFileSync).mockImplementation((path) => {
-      if (path === '/test/repo/.gitignore') {
+      if (path === repoFile('.gitignore')) {
         return 'node_modules/\n'
       }
       return ''
     })
 
     const { writeIssueCommand } = await import('./hooks')
-    writeIssueCommand('/test/repo', 'local command')
+    writeIssueCommand(TEST_REPO_PATH, 'local command')
 
     expect(vi.mocked(fs.writeFileSync)).toHaveBeenCalledWith(
-      '/test/repo/.gitignore',
+      repoFile('.gitignore'),
       'node_modules/\n.orca\n',
       'utf-8'
     )
     expect(vi.mocked(fs.writeFileSync)).toHaveBeenCalledWith(
-      '/test/repo/.orca/issue-command',
+      repoFile('.orca', 'issue-command'),
       'local command\n',
       'utf-8'
     )
@@ -324,9 +330,9 @@ describe('writeIssueCommand', () => {
   it('deletes the local override when the override is cleared', async () => {
     const fs = await import('fs')
     const { writeIssueCommand } = await import('./hooks')
-    writeIssueCommand('/test/repo', '   ')
+    writeIssueCommand(TEST_REPO_PATH, '   ')
 
-    expect(vi.mocked(fs.rmSync)).toHaveBeenCalledWith('/test/repo/.orca/issue-command', {
+    expect(vi.mocked(fs.rmSync)).toHaveBeenCalledWith(repoFile('.orca', 'issue-command'), {
       force: true
     })
   })
@@ -342,7 +348,7 @@ describe('getEffectiveHooks', () => {
   }) =>
     ({
       id: 'test-id',
-      path: '/test/repo',
+      path: TEST_REPO_PATH,
       displayName: 'Test Repo',
       badgeColor: '#000',
       addedAt: Date.now(),
@@ -369,20 +375,20 @@ describe('getEffectiveHooks', () => {
   it("loads setup hooks from the target worktree's orca.yaml when a worktree path is provided", async () => {
     const fs = await import('fs')
     vi.mocked(fs.existsSync).mockImplementation(
-      (path) => path === '/test/repo/orca.yaml' || path === '/test/worktree/orca.yaml'
+      (path) => path === repoFile('orca.yaml') || path === worktreeFile('orca.yaml')
     )
     vi.mocked(fs.readFileSync).mockImplementation((path) => {
-      if (path === '/test/repo/orca.yaml') {
+      if (path === repoFile('orca.yaml')) {
         return 'scripts:\n  setup: |\n    echo old-version\n'
       }
-      if (path === '/test/worktree/orca.yaml') {
+      if (path === worktreeFile('orca.yaml')) {
         return 'scripts:\n  setup: |\n    echo new-version\n'
       }
       return ''
     })
 
     const { getEffectiveHooks } = await import('./hooks')
-    const result = getEffectiveHooks(makeRepo(), '/test/worktree')
+    const result = getEffectiveHooks(makeRepo(), TEST_WORKTREE_PATH)
 
     expect(result).toEqual({
       scripts: {

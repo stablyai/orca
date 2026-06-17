@@ -152,6 +152,12 @@ function createRuntimeSearchChild(): MockRuntimeSearchChild {
 
 describe('RuntimeFileCommands', () => {
   const originalPlatform = process.platform
+  const mockPlatform = (platform: NodeJS.Platform) => {
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: platform
+    })
+  }
 
   beforeEach(() => {
     vi.useFakeTimers()
@@ -363,10 +369,7 @@ describe('RuntimeFileCommands', () => {
   })
 
   it('uses a conservative Node watcher for Windows runtime file watches', async () => {
-    Object.defineProperty(process, 'platform', {
-      configurable: true,
-      value: 'win32'
-    })
+    mockPlatform('win32')
 
     const close = vi.fn()
     const on = vi.fn()
@@ -400,6 +403,7 @@ describe('RuntimeFileCommands', () => {
   })
 
   it('delegates local recursive watching to the worker thread', async () => {
+    mockPlatform('linux')
     resolveAuthorizedPathMock.mockResolvedValue('/repo')
     statMock.mockResolvedValue({ isDirectory: () => true })
     const dispose = vi.fn()

@@ -177,9 +177,36 @@ const TEST_CODEX_HOME =
   process.platform === 'win32'
     ? 'C:\\Users\\test\\AppData\\Roaming\\orca\\codex-runtime-home\\home'
     : '/tmp/orca-codex-home'
+const TEST_PI_OVERLAY_DIR = '/tmp/orca-pi-agent-overlay'
+const TEST_OMP_STATUS_EXTENSION = join(TEST_PI_OVERLAY_DIR, 'extensions', 'orca-agent-status.ts')
+const TEST_ATTRIBUTION_POSIX_SHIM_DIR = join(
+  '/tmp/orca-user-data',
+  'orca-terminal-attribution',
+  'posix'
+)
+const TEST_ATTRIBUTION_WIN32_SHIM_DIR = join(
+  '/tmp/orca-user-data',
+  'orca-terminal-attribution',
+  'win32'
+)
+const TEST_ATTRIBUTION_SHIM_DIR =
+  process.platform === 'win32' ? TEST_ATTRIBUTION_WIN32_SHIM_DIR : TEST_ATTRIBUTION_POSIX_SHIM_DIR
+const TEST_SHELL_READY_ZDOTDIR = '/tmp/orca-user-data/shell-ready/zsh'
 
 function makeDisposable() {
   return { dispose: vi.fn() }
+}
+
+async function withMockedPlatform<T>(platform: NodeJS.Platform, fn: () => Promise<T>): Promise<T> {
+  const descriptor = Object.getOwnPropertyDescriptor(process, 'platform')
+  Object.defineProperty(process, 'platform', { configurable: true, value: platform })
+  try {
+    return await fn()
+  } finally {
+    if (descriptor) {
+      Object.defineProperty(process, 'platform', descriptor)
+    }
+  }
 }
 
 function makeDeferred() {
@@ -734,12 +761,14 @@ describe('registerPtyHandlers', () => {
         return ''
       })
 
-      const env = await spawnAndGetEnv(undefined, {
-        HOME: '/home/pim',
-        SHELL: '/bin/zsh',
-        OPENCODE_CONFIG_DIR: undefined,
-        ORCA_OPENCODE_SOURCE_CONFIG_DIR: undefined
-      })
+      const env = await withMockedPlatform('darwin', () =>
+        spawnAndGetEnv(undefined, {
+          HOME: '/home/pim',
+          SHELL: '/bin/zsh',
+          OPENCODE_CONFIG_DIR: undefined,
+          ORCA_OPENCODE_SOURCE_CONFIG_DIR: undefined
+        })
+      )
 
       expect(openCodeBuildPtyEnvMock).toHaveBeenCalledWith(
         expect.any(String),
@@ -759,9 +788,7 @@ describe('registerPtyHandlers', () => {
       expect(env.ORCA_PI_CODING_AGENT_DIR).toBe('/tmp/orca-pi-agent-overlay')
       expect(env.ORCA_PI_SOURCE_AGENT_DIR).toBe('/tmp/user-pi-agent')
       expect(env.ORCA_OMP_CODING_AGENT_DIR).toBe('/tmp/orca-pi-agent-overlay')
-      expect(env.ORCA_OMP_STATUS_EXTENSION).toBe(
-        '/tmp/orca-pi-agent-overlay/extensions/orca-agent-status.ts'
-      )
+      expect(env.ORCA_OMP_STATUS_EXTENSION).toBe(TEST_OMP_STATUS_EXTENSION)
     })
 
     it('threads command: "omp" through to piBuildPtyEnv and emits ORCA_OMP_* shadow vars', async () => {
@@ -784,9 +811,7 @@ describe('registerPtyHandlers', () => {
       )
       expect(env.PI_CODING_AGENT_DIR).toBe('/tmp/orca-pi-agent-overlay')
       expect(env.ORCA_OMP_CODING_AGENT_DIR).toBe('/tmp/orca-pi-agent-overlay')
-      expect(env.ORCA_OMP_STATUS_EXTENSION).toBe(
-        '/tmp/orca-pi-agent-overlay/extensions/orca-agent-status.ts'
-      )
+      expect(env.ORCA_OMP_STATUS_EXTENSION).toBe(TEST_OMP_STATUS_EXTENSION)
       expect(env.ORCA_OMP_SOURCE_AGENT_DIR).toBe('/tmp/user-omp-agent')
       // CRITICAL: a Pi-named shadow MUST NOT leak into an OMP PTY env.
       expect(env.ORCA_PI_CODING_AGENT_DIR).toBeUndefined()
@@ -868,11 +893,13 @@ describe('registerPtyHandlers', () => {
         path.endsWith('.zshrc') ? 'export PI_CODING_AGENT_DIR="$HOME/.config/pi-agent"\n' : ''
       )
 
-      const env = await spawnAndGetEnv(undefined, {
-        HOME: '/home/tester',
-        SHELL: '/bin/zsh',
-        PI_CODING_AGENT_DIR: undefined
-      })
+      const env = await withMockedPlatform('darwin', () =>
+        spawnAndGetEnv(undefined, {
+          HOME: '/home/tester',
+          SHELL: '/bin/zsh',
+          PI_CODING_AGENT_DIR: undefined
+        })
+      )
 
       expect(piBuildPtyEnvMock).toHaveBeenCalledWith(
         expect.any(String),
@@ -943,7 +970,7 @@ describe('registerPtyHandlers', () => {
       expect(env.ORCA_GIT_COMMIT_TRAILER).toBe('Co-authored-by: Orca <help@stably.ai>')
       expect(env.ORCA_GH_PR_FOOTER).toBe('Made with [Orca](https://github.com/stablyai/orca) 🐋')
       expect(env.ORCA_GH_ISSUE_FOOTER).toBe('Made with [Orca](https://github.com/stablyai/orca) 🐋')
-      expect(env.PATH).toContain('/tmp/orca-user-data/orca-terminal-attribution/posix')
+      expect(env.PATH).toContain(TEST_ATTRIBUTION_SHIM_DIR)
     })
 
     it('skips git/gh attribution shims when attribution is disabled', async () => {
@@ -955,7 +982,7 @@ describe('registerPtyHandlers', () => {
       expect(env.ORCA_GIT_COMMIT_TRAILER).toBeUndefined()
       expect(env.ORCA_GH_PR_FOOTER).toBeUndefined()
       expect(env.ORCA_GH_ISSUE_FOOTER).toBeUndefined()
-      expect(env.PATH ?? '').not.toContain('/tmp/orca-user-data/orca-terminal-attribution/posix')
+      expect(env.PATH ?? '').not.toContain(TEST_ATTRIBUTION_SHIM_DIR)
     })
 
     it('prepends git/gh attribution shims for daemon-backed local PTYs', async () => {
@@ -984,7 +1011,7 @@ describe('registerPtyHandlers', () => {
 
       const env = daemonSpawn.mock.calls.at(-1)![0].env
       expect(env.ORCA_ENABLE_GIT_ATTRIBUTION).toBe('1')
-      expect(env.PATH).toContain('/tmp/orca-user-data/orca-terminal-attribution/posix')
+      expect(env.PATH).toContain(TEST_ATTRIBUTION_SHIM_DIR)
     })
 
     it('overrides ambient CODEX_HOME with the Orca-managed home for system default', async () => {
@@ -1173,9 +1200,7 @@ describe('registerPtyHandlers', () => {
         expect(env.ORCA_PI_CODING_AGENT_DIR).toBe('/tmp/orca-pi-agent-overlay')
         expect(env.ORCA_PI_SOURCE_AGENT_DIR).toBe('/user/.pi/agent')
         expect(env.ORCA_OMP_CODING_AGENT_DIR).toBe('/tmp/orca-pi-agent-overlay')
-        expect(env.ORCA_OMP_STATUS_EXTENSION).toBe(
-          '/tmp/orca-pi-agent-overlay/extensions/orca-agent-status.ts'
-        )
+        expect(env.ORCA_OMP_STATUS_EXTENSION).toBe(TEST_OMP_STATUS_EXTENSION)
       })
 
       it('threads command: "omp" through to piBuildPtyEnv on the daemon path with OMP shadow vars', async () => {
@@ -1196,9 +1221,7 @@ describe('registerPtyHandlers', () => {
         )
         expect(env.PI_CODING_AGENT_DIR).toBe('/tmp/orca-pi-agent-overlay')
         expect(env.ORCA_OMP_CODING_AGENT_DIR).toBe('/tmp/orca-pi-agent-overlay')
-        expect(env.ORCA_OMP_STATUS_EXTENSION).toBe(
-          '/tmp/orca-pi-agent-overlay/extensions/orca-agent-status.ts'
-        )
+        expect(env.ORCA_OMP_STATUS_EXTENSION).toBe(TEST_OMP_STATUS_EXTENSION)
         expect(env.ORCA_OMP_SOURCE_AGENT_DIR).toBe('/user/.omp/agent')
         expect(env.ORCA_PI_CODING_AGENT_DIR).toBeUndefined()
         expect(env.ORCA_PI_SOURCE_AGENT_DIR).toBeUndefined()
@@ -1378,9 +1401,7 @@ describe('registerPtyHandlers', () => {
 
         const spawnOptions = daemonSpawn.mock.calls.at(-1)?.[0] as DaemonSpawnCall
         expect(spawnOptions.env.PATH.split(delimiter)[0]).toBe('/tmp/orca-agent-teams-bin')
-        expect(spawnOptions.env.PATH).toContain(
-          '/tmp/orca-user-data/orca-terminal-attribution/posix'
-        )
+        expect(spawnOptions.env.PATH).toContain(TEST_ATTRIBUTION_SHIM_DIR)
         expect(spawnOptions.env.TERM_PROGRAM).toBeUndefined()
         expect(spawnOptions.env.ORCA_ATTRIBUTION_SHIM_DIR).toBeUndefined()
         expect(spawnOptions.envToDelete).toEqual(
@@ -1410,7 +1431,7 @@ describe('registerPtyHandlers', () => {
           enableGitHubAttribution: true
         }))
         expect(env.ORCA_ENABLE_GIT_ATTRIBUTION).toBe('1')
-        expect(env.PATH).toContain('/tmp/orca-user-data/orca-terminal-attribution/posix')
+        expect(env.PATH).toContain(TEST_ATTRIBUTION_SHIM_DIR)
       })
 
       it('keeps the Agent Teams tmux shim ahead of host PATH shims on daemon pty:spawn', async () => {
@@ -1431,9 +1452,7 @@ describe('registerPtyHandlers', () => {
         )
 
         expect(spawnOptions.env.PATH.split(delimiter)[0]).toBe('/tmp/orca-agent-teams-bin')
-        expect(spawnOptions.env.PATH).toContain(
-          '/tmp/orca-user-data/orca-terminal-attribution/posix'
-        )
+        expect(spawnOptions.env.PATH).toContain(TEST_ATTRIBUTION_SHIM_DIR)
         expect(spawnOptions.env.TERM_PROGRAM).toBeUndefined()
         expect(spawnOptions.env.ORCA_ATTRIBUTION_SHIM_DIR).toBeUndefined()
         expect(spawnOptions.envToDelete).toEqual(
@@ -1467,9 +1486,10 @@ describe('registerPtyHandlers', () => {
             PATH: '/system/bin'
           })
           expect(env.ORCA_USER_DATA_PATH).toBe('/tmp/orca-user-data')
-          expect(env.PATH).toBe(
-            `${join('/tmp/orca-user-data', 'cli', 'bin')}${delimiter}/system/bin`
-          )
+          expect(env.PATH.split(delimiter).slice(0, 2)).toEqual([
+            join('/tmp/orca-user-data', 'cli', 'bin'),
+            '/system/bin'
+          ])
         } finally {
           mockedApp.isPackaged = prev
         }
@@ -1549,7 +1569,7 @@ describe('registerPtyHandlers', () => {
           enableGitHubAttribution: false
         }))
         expect(env.ORCA_ENABLE_GIT_ATTRIBUTION).toBeUndefined()
-        expect(env.PATH ?? '').not.toContain('/tmp/orca-user-data/orca-terminal-attribution/posix')
+        expect(env.PATH ?? '').not.toContain(TEST_ATTRIBUTION_SHIM_DIR)
       })
 
       it('does not mutate the caller-provided args.env on the daemon path', async () => {
@@ -4368,7 +4388,7 @@ describe('registerPtyHandlers', () => {
       })
       expect(shell).toBe('/bin/zsh')
       expect(args).toEqual(['-l'])
-      expect(options.env.ZDOTDIR).toBe('/tmp/orca-user-data/shell-ready/zsh')
+      expect(options.env.ZDOTDIR).toBe(TEST_SHELL_READY_ZDOTDIR)
       expect(options.env.ORCA_ORIG_ZDOTDIR).toBe(process.env.HOME)
     } finally {
       Object.defineProperty(process, 'platform', {
@@ -4404,7 +4424,7 @@ describe('registerPtyHandlers', () => {
       expect(args).toEqual(['-l'])
       expect(options.env.OPENCODE_CONFIG_DIR).toBe('/tmp/orca-opencode-config')
       expect(options.env.ORCA_OPENCODE_CONFIG_DIR).toBe('/tmp/orca-opencode-config')
-      expect(options.env.ZDOTDIR).toBe('/tmp/orca-user-data/shell-ready/zsh')
+      expect(options.env.ZDOTDIR).toBe(TEST_SHELL_READY_ZDOTDIR)
       expect(options.env.ORCA_SHELL_READY_MARKER).toBe('0')
     } finally {
       Object.defineProperty(process, 'platform', {
@@ -4446,7 +4466,7 @@ describe('registerPtyHandlers', () => {
       expect(options.env.PI_CODING_AGENT_DIR).toBe('/tmp/orca-pi-agent-overlay')
       expect(options.env.ORCA_PI_CODING_AGENT_DIR).toBe('/tmp/orca-pi-agent-overlay')
       expect(options.env.ORCA_PI_SOURCE_AGENT_DIR).toBe('/tmp/user-pi-agent')
-      expect(options.env.ZDOTDIR).toBe('/tmp/orca-user-data/shell-ready/zsh')
+      expect(options.env.ZDOTDIR).toBe(TEST_SHELL_READY_ZDOTDIR)
       expect(options.env.ORCA_SHELL_READY_MARKER).toBe('0')
     } finally {
       Object.defineProperty(process, 'platform', {
@@ -4497,12 +4517,14 @@ describe('registerPtyHandlers', () => {
     spawnMock.mockReturnValue(mockProc.proc)
 
     try {
-      registerPtyHandlers(mainWindow as never)
-      await handlers.get('pty:spawn')!(null, {
-        cols: 80,
-        rows: 24,
-        cwd: '/tmp',
-        command: 'claude'
+      await withMockedPlatform('darwin', async () => {
+        registerPtyHandlers(mainWindow as never)
+        await handlers.get('pty:spawn')!(null, {
+          cols: 80,
+          rows: 24,
+          cwd: '/tmp',
+          command: 'claude'
+        })
       })
 
       expect(mockProc.proc.write).not.toHaveBeenCalled()
@@ -4514,7 +4536,9 @@ describe('registerPtyHandlers', () => {
       mockProc.emitData('\x1b]133;A\x07% ')
       await Promise.resolve()
       vi.runAllTimers()
-      expect(mockProc.proc.write).toHaveBeenCalledWith('claude\n')
+      expect(mockProc.proc.write).toHaveBeenCalledWith(
+        process.platform === 'win32' ? 'claude\r' : 'claude\n'
+      )
     } finally {
       vi.useRealTimers()
     }
@@ -4526,18 +4550,22 @@ describe('registerPtyHandlers', () => {
     spawnMock.mockReturnValue(mockProc.proc)
 
     try {
-      registerPtyHandlers(mainWindow as never)
-      await handlers.get('pty:spawn')!(null, {
-        cols: 80,
-        rows: 24,
-        cwd: '/tmp',
-        command: 'codex'
+      await withMockedPlatform('darwin', async () => {
+        registerPtyHandlers(mainWindow as never)
+        await handlers.get('pty:spawn')!(null, {
+          cols: 80,
+          rows: 24,
+          cwd: '/tmp',
+          command: 'codex'
+        })
       })
 
       vi.advanceTimersByTime(1500)
       await Promise.resolve()
       vi.runAllTimers()
-      expect(mockProc.proc.write).toHaveBeenCalledWith('codex\n')
+      expect(mockProc.proc.write).toHaveBeenCalledWith(
+        process.platform === 'win32' ? 'codex\r' : 'codex\n'
+      )
     } finally {
       vi.useRealTimers()
     }
@@ -5220,11 +5248,13 @@ describe('registerPtyHandlers', () => {
     try {
       process.env.SHELL = '/opt/homebrew/bin/bash'
 
-      registerPtyHandlers(mainWindow as never)
-      const result = await handlers.get('pty:spawn')!(null, {
-        cols: 80,
-        rows: 24,
-        cwd: '/tmp'
+      const result = await withMockedPlatform('darwin', () => {
+        registerPtyHandlers(mainWindow as never)
+        return handlers.get('pty:spawn')!(null, {
+          cols: 80,
+          rows: 24,
+          cwd: '/tmp'
+        }) as Promise<unknown>
       })
 
       expect(result).toEqual({ id: expect.any(String), pid: 12345 })
@@ -5260,11 +5290,13 @@ describe('registerPtyHandlers', () => {
     try {
       process.env.SHELL = '/opt/homebrew/bin/bash'
 
-      registerPtyHandlers(mainWindow as never)
-      await handlers.get('pty:spawn')!(null, {
-        cols: 80,
-        rows: 24,
-        cwd: '/tmp'
+      await withMockedPlatform('darwin', async () => {
+        registerPtyHandlers(mainWindow as never)
+        await handlers.get('pty:spawn')!(null, {
+          cols: 80,
+          rows: 24,
+          cwd: '/tmp'
+        })
       })
 
       expect(spawnMock).toHaveBeenCalledTimes(1)
@@ -5276,7 +5308,7 @@ describe('registerPtyHandlers', () => {
           env: expect.objectContaining({
             ORCA_OPENCODE_CONFIG_DIR: '/tmp/orca-opencode-config',
             ORCA_SHELL_READY_MARKER: '0',
-            ZDOTDIR: '/tmp/orca-user-data/shell-ready/zsh'
+            ZDOTDIR: TEST_SHELL_READY_ZDOTDIR
           })
         })
       )
@@ -5476,12 +5508,14 @@ describe('registerPtyHandlers', () => {
     try {
       process.env.SHELL = '/bin/bash'
 
-      registerPtyHandlers(mainWindow as never)
-      await handlers.get('pty:spawn')!(null, {
-        cols: 80,
-        rows: 24,
-        cwd: '/tmp',
-        env: { SHELL: '/opt/homebrew/bin/bash' }
+      await withMockedPlatform('darwin', async () => {
+        registerPtyHandlers(mainWindow as never)
+        await handlers.get('pty:spawn')!(null, {
+          cols: 80,
+          rows: 24,
+          cwd: '/tmp',
+          env: { SHELL: '/opt/homebrew/bin/bash' }
+        })
       })
 
       expect(spawnMock).toHaveBeenCalledTimes(1)
@@ -5494,7 +5528,7 @@ describe('registerPtyHandlers', () => {
             SHELL: '/bin/zsh',
             ORCA_OPENCODE_CONFIG_DIR: '/tmp/orca-opencode-config',
             ORCA_SHELL_READY_MARKER: '0',
-            ZDOTDIR: '/tmp/orca-user-data/shell-ready/zsh'
+            ZDOTDIR: TEST_SHELL_READY_ZDOTDIR
           })
         })
       )

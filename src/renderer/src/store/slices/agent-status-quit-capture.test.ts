@@ -114,7 +114,7 @@ describe('captureAllSleepingAgentSessions', () => {
       paneKey: 'tab-1:leaf-1',
       worktreeId: 'wt-1',
       sessionId: 'sess-1',
-      agentType: 'codex'
+      agentType: 'gemini'
     })
     entry.state = 'done'
     store.setState({

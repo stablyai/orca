@@ -333,21 +333,24 @@ describe('hardenSecurePath', () => {
     expect(getSyncPowerShellCalls()).toHaveLength(0)
   })
 
-  it('re-hardens a POSIX directory when its metadata changes after caching', () => {
-    Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-secure-file-'))
-    tempDirs.push(userDataPath)
-    const targetPath = join(userDataPath, 'secret.json')
-    writeFileSync(targetPath, '{}')
+  it.skipIf(process.platform === 'win32')(
+    're-hardens a POSIX directory when its metadata changes after caching',
+    () => {
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
+      const userDataPath = mkdtempSync(join(tmpdir(), 'orca-secure-file-'))
+      tempDirs.push(userDataPath)
+      const targetPath = join(userDataPath, 'secret.json')
+      writeFileSync(targetPath, '{}')
 
-    hardenExistingSecureFile(targetPath)
-    expect(statMode(userDataPath)).toBe(0o700)
+      hardenExistingSecureFile(targetPath)
+      expect(statMode(userDataPath)).toBe(0o700)
 
-    chmodSync(userDataPath, 0o755)
-    hardenExistingSecureFile(targetPath)
+      chmodSync(userDataPath, 0o755)
+      hardenExistingSecureFile(targetPath)
 
-    expect(statMode(userDataPath)).toBe(0o700)
-  })
+      expect(statMode(userDataPath)).toBe(0o700)
+    }
+  )
 })
 
 const POWERSHELL_SUFFIX = 'WindowsPowerShell\\v1.0\\powershell.exe'

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { resolve } from 'path'
 
 const { handleMock } = vi.hoisted(() => ({
   handleMock: vi.fn()
@@ -98,8 +99,8 @@ describe('local filesystem watcher large batches', () => {
 
     expect(stat).toHaveBeenCalledTimes(1)
     expect(sender.send).toHaveBeenCalledWith('fs:changed', {
-      worktreePath: '/tmp/repo',
-      events: [{ kind: 'overflow', absolutePath: '/tmp/repo' }]
+      worktreePath: resolve('/tmp/repo'),
+      events: [{ kind: 'overflow', absolutePath: resolve('/tmp/repo') }]
     })
     await closeAllWatchers()
     vi.useRealTimers()

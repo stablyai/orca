@@ -17,6 +17,8 @@ vi.mock('os', async () => {
 
 import { AntigravityHookService } from './hook-service'
 
+const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
+
 function withPlatform<T>(platform: NodeJS.Platform, run: () => T): T {
   const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
   Object.defineProperty(process, 'platform', { configurable: true, value: platform })
@@ -33,11 +35,15 @@ describe('AntigravityHookService', () => {
   let homeDir: string
 
   beforeEach(() => {
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
     homeDir = mkdtempSync(join(tmpdir(), 'orca-antigravity-home-'))
     homedirMock.mockReturnValue(homeDir)
   })
 
   afterEach(() => {
+    if (originalPlatform) {
+      Object.defineProperty(process, 'platform', originalPlatform)
+    }
     vi.clearAllMocks()
     rmSync(homeDir, { recursive: true, force: true })
   })

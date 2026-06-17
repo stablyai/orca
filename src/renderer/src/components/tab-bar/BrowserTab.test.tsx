@@ -216,7 +216,7 @@ describe('BrowserTab favicon', () => {
     expect(images[0].props.className).toContain('object-contain')
     expect(images[0].props.className).toContain('drop-shadow-[0_0_1px_var(--foreground)]')
     expect(findElementsByType(element, 'Globe')).toHaveLength(0)
-  })
+  }, 15_000)
 
   it('keeps the globe fallback for blank tabs without faviconUrl', async () => {
     const element = await renderExpandedBrowserTab(

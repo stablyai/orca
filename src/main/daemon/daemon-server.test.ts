@@ -9,6 +9,7 @@ import { DaemonClient } from './client'
 import { encodeNdjson } from './ndjson'
 import { PROTOCOL_VERSION, type DaemonRequest } from './types'
 import type { SubprocessHandle } from './session'
+import { normalizeDaemonSocketPath } from './daemon-socket-path'
 
 function createTestDir(): string {
   return mkdtempSync(join(tmpdir(), 'daemon-server-test-'))
@@ -92,7 +93,7 @@ describe('DaemonServer', () => {
   }
 
   async function connectRawHello(role: 'control' | 'stream', clientId: string): Promise<Socket> {
-    const socket = connect(socketPath)
+    const socket = connect(normalizeDaemonSocketPath(socketPath))
     await new Promise<void>((resolve) => socket.once('connect', resolve))
     socket.write(
       encodeNdjson({
@@ -415,7 +416,7 @@ describe('DaemonServer', () => {
       await startServer()
 
       // Connect with raw socket and send bad token
-      const socket = connect(socketPath)
+      const socket = connect(normalizeDaemonSocketPath(socketPath))
       await new Promise<void>((resolve) => socket.on('connect', resolve))
 
       socket.write(

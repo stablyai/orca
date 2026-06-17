@@ -6,6 +6,7 @@ import { tmpdir } from 'os'
 import { join } from 'path'
 import { mkdtempSync, writeFileSync, rmSync } from 'fs'
 import { DaemonClient } from './client'
+import { normalizeDaemonSocketPath } from './daemon-socket-path'
 import { encodeNdjson } from './ndjson'
 import type { HelloMessage, DaemonRequest, DaemonEvent } from './types'
 
@@ -117,7 +118,7 @@ describe('DaemonClient', () => {
         })
       })
 
-      server.listen(socketPath, () => resolve())
+      server.listen(normalizeDaemonSocketPath(socketPath), () => resolve())
     })
   }
 

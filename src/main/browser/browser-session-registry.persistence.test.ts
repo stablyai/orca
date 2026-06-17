@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { normalize } from 'node:path'
 
 const USER_DATA = '/user-data'
 const META_PATH = `${USER_DATA}/browser-session-meta.json`
@@ -12,10 +13,47 @@ function createFsState(): FsState {
   return { files: new Map(), present: new Set() }
 }
 
+function pathKeys(pathValue: string): string[] {
+  return [...new Set([pathValue, normalize(pathValue), pathValue.replace(/\\/g, '/')])]
+}
+
+function markPresent(fsState: FsState, pathValue: string): void {
+  for (const key of pathKeys(pathValue)) {
+    fsState.present.add(key)
+  }
+}
+
+function setFile(fsState: FsState, pathValue: string, value: string): void {
+  for (const key of pathKeys(pathValue)) {
+    fsState.files.set(key, value)
+  }
+  markPresent(fsState, pathValue)
+}
+
+function getFile(fsState: FsState, pathValue: string): string | undefined {
+  for (const key of pathKeys(pathValue)) {
+    const value = fsState.files.get(key)
+    if (value !== undefined) {
+      return value
+    }
+  }
+  return undefined
+}
+
+function hasPath(fsState: FsState, pathValue: string): boolean {
+  return pathKeys(pathValue).some((key) => fsState.present.has(key))
+}
+
+function deletePath(fsState: FsState, pathValue: string): void {
+  for (const key of pathKeys(pathValue)) {
+    fsState.present.delete(key)
+    fsState.files.delete(key)
+  }
+}
+
 function seedMeta(fsState: FsState, meta: unknown): void {
   const raw = JSON.stringify(meta)
-  fsState.files.set(META_PATH, raw)
-  fsState.present.add(META_PATH)
+  setFile(fsState, META_PATH, raw)
 }
 
 function installModuleMocks(
@@ -60,39 +98,35 @@ function installModuleMocks(
       if (copyFailures.has(src)) {
         throw new Error(`copy fail for ${src}`)
       }
-      fsState.present.add(dst)
-      const value = fsState.files.get(src)
+      markPresent(fsState, dst)
+      const value = getFile(fsState, src)
       if (value !== undefined) {
-        fsState.files.set(dst, value)
+        setFile(fsState, dst, value)
       }
     }),
-    existsSync: vi.fn((p: string) => fsState.present.has(p)),
+    existsSync: vi.fn((p: string) => hasPath(fsState, p)),
     mkdirSync: vi.fn(),
     readFileSync: vi.fn((p: string) => {
-      const v = fsState.files.get(p)
+      const v = getFile(fsState, p)
       if (v === undefined) {
         throw new Error('ENOENT')
       }
       return v
     }),
     renameSync: vi.fn((from: string, to: string) => {
-      const v = fsState.files.get(from)
+      const v = getFile(fsState, from)
       if (v === undefined) {
         throw new Error('ENOENT')
       }
-      fsState.files.set(to, v)
-      fsState.present.add(to)
-      fsState.files.delete(from)
-      fsState.present.delete(from)
+      setFile(fsState, to, v)
+      deletePath(fsState, from)
     }),
     unlinkSync: vi.fn((p: string) => {
-      fsState.present.delete(p)
-      fsState.files.delete(p)
+      deletePath(fsState, p)
     }),
     writeFileSync: vi.fn((p: string, data: string | Uint8Array) => {
       const value = typeof data === 'string' ? data : Buffer.from(data).toString('utf-8')
-      fsState.files.set(p, value)
-      fsState.present.add(p)
+      setFile(fsState, p, value)
     })
   }))
 

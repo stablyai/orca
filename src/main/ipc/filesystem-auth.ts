@@ -561,5 +561,5 @@ export function validateGitRelativeFilePath(worktreePath: string, filePath: stri
     throw new Error('Access denied: invalid git file path')
   }
 
-  return normalizedRelativePath
+  return sep === '/' ? normalizedRelativePath : normalizedRelativePath.split(sep).join('/')
 }

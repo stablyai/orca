@@ -33,6 +33,9 @@ import {
 import { getRemoteHostPlatform } from './ssh-remote-platform'
 import type { SshTarget } from '../../shared/ssh-types'
 
+const mockSystemSshPath =
+  process.platform === 'win32' ? 'C:\\Windows\\System32\\OpenSSH\\ssh.exe' : '/usr/bin/ssh'
+
 function createTarget(overrides?: Partial<SshTarget>): SshTarget {
   return {
     id: 'target-1',
@@ -109,8 +112,8 @@ describe('findSystemSsh', () => {
   })
 
   it('returns the first existing ssh path', () => {
-    existsSyncMock.mockImplementation((p: string) => p === '/usr/bin/ssh')
-    expect(findSystemSsh()).toBe('/usr/bin/ssh')
+    existsSyncMock.mockImplementation((p: string) => p === mockSystemSshPath)
+    expect(findSystemSsh()).toBe(mockSystemSshPath)
   })
 
   it('returns null when no ssh binary is found', () => {
@@ -146,14 +149,14 @@ describe('spawnSystemSsh', () => {
       kill: vi.fn()
     }
     spawnMock.mockReturnValue(mockProc)
-    existsSyncMock.mockImplementation((p: string) => p === '/usr/bin/ssh')
+    existsSyncMock.mockImplementation((p: string) => p === mockSystemSshPath)
   })
 
   it('spawns ssh with correct arguments for basic target', () => {
     spawnSystemSsh(createTarget())
 
     expect(spawnMock).toHaveBeenCalledWith(
-      '/usr/bin/ssh',
+      mockSystemSshPath,
       expect.arrayContaining(['-T', 'deploy@example.com']),
       expect.objectContaining({ stdio: ['pipe', 'pipe', 'pipe'] })
     )
@@ -239,7 +242,7 @@ describe('spawnSystemSsh', () => {
     spawnSystemSshCommand(createTarget({ configHost: 'fdpass-host' }), 'echo hello')
 
     expect(spawnMock).toHaveBeenCalledWith(
-      '/usr/bin/ssh',
+      mockSystemSshPath,
       expect.arrayContaining(['--', 'deploy@fdpass-host', "exec /bin/sh -c 'echo hello'"]),
       expect.objectContaining({ stdio: ['pipe', 'pipe', 'pipe'] })
     )
@@ -251,7 +254,7 @@ describe('spawnSystemSsh', () => {
     })
 
     expect(spawnMock).toHaveBeenCalledWith(
-      '/usr/bin/ssh',
+      mockSystemSshPath,
       expect.arrayContaining(['--', 'deploy@fdpass-host', 'echo hello']),
       expect.objectContaining({ stdio: ['pipe', 'pipe', 'pipe'] })
     )
@@ -379,7 +382,7 @@ describe('system SSH operation aborts', () => {
   beforeEach(() => {
     existsSyncMock.mockReset()
     spawnMock.mockReset()
-    existsSyncMock.mockImplementation((p: string) => p === '/usr/bin/ssh')
+    existsSyncMock.mockImplementation((p: string) => p === mockSystemSshPath)
   })
 
   it('rejects directory uploads when aborted even if child processes do not close', async () => {

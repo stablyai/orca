@@ -24,19 +24,19 @@ describe('packaged CLI assets', () => {
         ...(builderConfig.mac?.extraResources ?? []),
         ...(builderConfig.linux?.extraResources ?? []),
         ...(builderConfig.win?.extraResources ?? [])
-      ].map((resource) => resource.to)
+      ].map((resource) => resource.to?.replace(/\\/g, '/'))
     )
 
     expect([...runtimeResourceTargets]).toEqual(
       expect.arrayContaining([
-        join('node_modules', 'ws'),
-        join('node_modules', 'tweetnacl'),
-        join('node_modules', 'zod'),
-        join('node_modules', 'yaml'),
-        join('node_modules', 'node-pty'),
-        join('node_modules', 'sherpa-onnx-darwin-${arch}'),
-        join('node_modules', 'sherpa-onnx-linux-${arch}'),
-        join('node_modules', 'sherpa-onnx-win-x64')
+        'node_modules/ws',
+        'node_modules/tweetnacl',
+        'node_modules/zod',
+        'node_modules/yaml',
+        'node_modules/node-pty',
+        'node_modules/sherpa-onnx-darwin-${arch}',
+        'node_modules/sherpa-onnx-linux-${arch}',
+        'node_modules/sherpa-onnx-win-x64'
       ])
     )
   })

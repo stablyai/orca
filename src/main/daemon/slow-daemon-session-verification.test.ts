@@ -6,6 +6,7 @@ import { mkdtempSync, rmSync } from 'fs'
 import { DaemonServer } from './daemon-server'
 import { DaemonClient } from './client'
 import { healthCheckDaemon } from './daemon-health'
+import { normalizeDaemonSocketPath } from './daemon-socket-path'
 import type { ListSessionsResult } from './types'
 import type { SubprocessHandle } from './session'
 
@@ -37,8 +38,10 @@ function createMockSubprocess(): SubprocessHandle {
 /** Forwards client bytes to the daemon immediately, but delays every daemon
  *  response so each round-trip looks like a daemon under heavy load. */
 function startDelayProxy(listenPath: string, upstreamPath: string): Server {
+  const listenEndpoint = normalizeDaemonSocketPath(listenPath)
+  const upstreamEndpoint = normalizeDaemonSocketPath(upstreamPath)
   const proxy = createServer((clientSocket: Socket) => {
-    const upstream = connect(upstreamPath)
+    const upstream = connect(upstreamEndpoint)
     clientSocket.on('data', (chunk) => upstream.write(chunk))
     upstream.on('data', (chunk) => {
       setTimeout(() => {
@@ -58,7 +61,7 @@ function startDelayProxy(listenPath: string, upstreamPath: string): Server {
     })
     upstream.on('error', teardown)
   })
-  proxy.listen(listenPath)
+  proxy.listen(listenEndpoint)
   return proxy
 }
 

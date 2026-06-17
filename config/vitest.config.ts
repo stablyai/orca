@@ -5,6 +5,22 @@ export default defineConfig({
   define: {
     ORCA_FEATURE_WALL_ENABLED: 'true'
   },
+  plugins: [
+    {
+      name: 'strip-mjs-hashbang-for-tests',
+      enforce: 'pre',
+      transform(code, id) {
+        const filePath = id.split('?')[0]
+        if (!filePath.endsWith('.mjs') || !code.startsWith('#!')) {
+          return null
+        }
+        return {
+          code: code.replace(/^#!.*(?:\r?\n|$)/, ''),
+          map: null
+        }
+      }
+    }
+  ],
   resolve: {
     alias: {
       '@renderer': resolve('src/renderer/src'),

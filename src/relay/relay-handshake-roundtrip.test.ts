@@ -1,5 +1,6 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import { createServer, connect, type Server, type Socket } from 'net'
+import { createHash } from 'crypto'
 import { mkdtempSync, rmSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
@@ -16,6 +17,14 @@ import {
   type DecodedFrame,
   MessageType
 } from './protocol'
+
+function normalizeTestSocketPath(socketPath: string): string {
+  if (process.platform !== 'win32') {
+    return socketPath
+  }
+  const suffix = createHash('sha256').update(socketPath).digest('hex').slice(0, 16)
+  return `\\\\?\\pipe\\orca-relay-test-${suffix}`
+}
 
 // Why: --connect normally calls process.exit on mismatch / fatal handshake
 // errors. Stub it for tests so the harness sees a thrown sentinel error
@@ -97,14 +106,16 @@ describe('handshake round-trip over a real Socket pair', () => {
           onAccepted: (s, leftover) => acceptedDeferred.resolve({ sock: s, leftover })
         })
       })
-      server.listen(sockPath, () => resolve({ accepted: acceptedDeferred.promise }))
+      server.listen(normalizeTestSocketPath(sockPath), () =>
+        resolve({ accepted: acceptedDeferred.promise })
+      )
     })
   }
 
   it('accepts a matching version and delivers no leftover when the bridge sent only the handshake', async () => {
     const { accepted } = await startDaemon('0.1.0+match')
 
-    const bridgeSock = connect(sockPath)
+    const bridgeSock = connect(normalizeTestSocketPath(sockPath))
     await new Promise<void>((r) => bridgeSock.once('connect', () => r()))
 
     const acceptedCb = vi.fn<(leftover: Buffer) => void>()
@@ -125,7 +136,7 @@ describe('handshake round-trip over a real Socket pair', () => {
     // raw bytes directly so we control the coalescing behaviour.
     const { accepted } = await startDaemon('0.1.0+match')
 
-    const bridgeSock = connect(sockPath)
+    const bridgeSock = connect(normalizeTestSocketPath(sockPath))
     await new Promise<void>((r) => bridgeSock.once('connect', () => r()))
 
     const handshakeFrame = encodeHandshakeFrame({
@@ -168,9 +179,9 @@ describe('handshake round-trip over a real Socket pair', () => {
       })
       sock.on('data', (chunk: Buffer) => decoder.feed(chunk))
     })
-    await new Promise<void>((r) => server.listen(sockPath, () => r()))
+    await new Promise<void>((r) => server.listen(normalizeTestSocketPath(sockPath), () => r()))
 
-    const bridgeSock = connect(sockPath)
+    const bridgeSock = connect(normalizeTestSocketPath(sockPath))
     await new Promise<void>((r) => bridgeSock.once('connect', () => r()))
 
     const acceptedCb = vi.fn<(leftover: Buffer) => void>()
@@ -191,7 +202,7 @@ describe('handshake round-trip over a real Socket pair', () => {
   it('exits with EXIT_CODE_VERSION_MISMATCH when the daemon reports a mismatch', async () => {
     await startDaemon('0.1.0+server-version')
 
-    const bridgeSock = connect(sockPath)
+    const bridgeSock = connect(normalizeTestSocketPath(sockPath))
     await new Promise<void>((r) => bridgeSock.once('connect', () => r()))
 
     const acceptedCb = vi.fn()
@@ -211,9 +222,9 @@ describe('handshake round-trip over a real Socket pair', () => {
       trackServerSocket(sock)
       /* swallow */
     })
-    await new Promise<void>((r) => server.listen(sockPath, () => r()))
+    await new Promise<void>((r) => server.listen(normalizeTestSocketPath(sockPath), () => r()))
 
-    const bridgeSock = connect(sockPath)
+    const bridgeSock = connect(normalizeTestSocketPath(sockPath))
     await new Promise<void>((r) => bridgeSock.once('connect', () => r()))
 
     const acceptedCb = vi.fn()

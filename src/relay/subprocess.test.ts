@@ -14,6 +14,13 @@ let bundleDir: string
 let relayEntry: string
 const spawnedSocketDirs: string[] = []
 
+function testRelaySocketPath(socketDir: string): string {
+  if (process.platform === 'win32') {
+    return `\\\\.\\pipe\\orca-relay-test-${process.pid}-${path.basename(socketDir)}`
+  }
+  return path.join(socketDir, 'relay.sock')
+}
+
 beforeAll(async () => {
   bundleDir = mkdtempSync(path.join(tmpdir(), 'relay-bundle-'))
   relayEntry = path.join(bundleDir, 'relay.js')
@@ -40,7 +47,7 @@ function spawn(args: string[] = [], env?: NodeJS.ProcessEnv): RelayProcess {
   if (!args.includes('--sock-path')) {
     const socketDir = mkdtempSync(path.join(tmpdir(), 'relay-sock-'))
     spawnedSocketDirs.push(socketDir)
-    relayArgs = [...args, '--sock-path', path.join(socketDir, 'relay.sock')]
+    relayArgs = [...args, '--sock-path', testRelaySocketPath(socketDir)]
   }
   return spawnRelay(relayEntry, relayArgs, env ? { env } : undefined)
 }

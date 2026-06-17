@@ -10,6 +10,7 @@
  */
 
 import { describe, expect, it, vi, beforeEach } from 'vitest'
+import { join } from 'path'
 import { DEFAULT_REPO_BADGE_COLOR } from '../../shared/constants'
 
 const {
@@ -151,7 +152,9 @@ describe('repos:create', () => {
 
   it('registers the home-backed create-project default handler', async () => {
     expect(handlers.has('repos:getDefaultCreateProjectParent')).toBe(true)
-    await expect(callDefaultCreateProjectParent()).resolves.toBe('/Users/alice/orca/projects')
+    await expect(callDefaultCreateProjectParent()).resolves.toBe(
+      join('/Users/alice', 'orca', 'projects')
+    )
   })
 
   it('unregisters any previously-registered repos:create handler', () => {
@@ -207,7 +210,7 @@ describe('repos:create', () => {
 
     expect(result).toMatchObject({ error: expect.stringContaining('not empty') })
     expect(mkdirMock).toHaveBeenCalledWith('/tmp', { recursive: true })
-    expect(mkdirMock).not.toHaveBeenCalledWith('/tmp/busy', expect.anything())
+    expect(mkdirMock).not.toHaveBeenCalledWith(join('/tmp', 'busy'), expect.anything())
     expect(mockStore.addRepo).not.toHaveBeenCalled()
   })
 
@@ -218,9 +221,9 @@ describe('repos:create', () => {
     const result = await callCreate({ parentPath: '/tmp', name: 'empty', kind: 'folder' })
 
     expect(mkdirMock).toHaveBeenCalledWith('/tmp', { recursive: true })
-    expect(mkdirMock).not.toHaveBeenCalledWith('/tmp/empty', expect.anything())
+    expect(mkdirMock).not.toHaveBeenCalledWith(join('/tmp', 'empty'), expect.anything())
     expect(mockStore.addRepo).toHaveBeenCalledWith(
-      expect.objectContaining({ path: '/tmp/empty', kind: 'folder' })
+      expect.objectContaining({ path: join('/tmp', 'empty'), kind: 'folder' })
     )
     expect(result).toHaveProperty('repo.kind', 'folder')
   })
@@ -230,7 +233,9 @@ describe('repos:create', () => {
     await callCreate({ parentPath: '/tmp', name: 'brand-new', kind: 'folder' })
 
     expect(mkdirMock).toHaveBeenNthCalledWith(1, '/tmp', { recursive: true })
-    expect(mkdirMock).toHaveBeenNthCalledWith(2, '/tmp/brand-new', { recursive: false })
+    expect(mkdirMock).toHaveBeenNthCalledWith(2, join('/tmp', 'brand-new'), {
+      recursive: false
+    })
   })
 
   it('creates a missing default parent before creating the project directory', async () => {
@@ -243,10 +248,14 @@ describe('repos:create', () => {
     expect(mkdirMock).toHaveBeenNthCalledWith(1, '/Users/alice/orca/projects', {
       recursive: true
     })
-    expect(mkdirMock).toHaveBeenNthCalledWith(2, '/Users/alice/orca/projects/first-project', {
-      recursive: false
-    })
-    expect(result).toHaveProperty('repo.path', '/Users/alice/orca/projects/first-project')
+    expect(mkdirMock).toHaveBeenNthCalledWith(
+      2,
+      join('/Users/alice/orca/projects', 'first-project'),
+      {
+        recursive: false
+      }
+    )
+    expect(result).toHaveProperty('repo.path', join('/Users/alice/orca/projects', 'first-project'))
   })
 
   // ── plain folder happy path ───────────────────────────────────────
@@ -257,7 +266,7 @@ describe('repos:create', () => {
     expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
     expect(mockStore.addRepo).toHaveBeenCalledWith(
       expect.objectContaining({
-        path: '/tmp/plain',
+        path: join('/tmp', 'plain'),
         displayName: 'plain',
         kind: 'folder'
       })
@@ -280,16 +289,18 @@ describe('repos:create', () => {
     const result = await callCreate({ parentPath: '/tmp', name: 'gitproj', kind: 'git' })
 
     expect(mkdirMock).toHaveBeenNthCalledWith(1, '/tmp', { recursive: true })
-    expect(mkdirMock).toHaveBeenNthCalledWith(2, '/tmp/gitproj', { recursive: false })
-    expect(gitExecFileAsyncMock).toHaveBeenNthCalledWith(1, ['init'], { cwd: '/tmp/gitproj' })
+    expect(mkdirMock).toHaveBeenNthCalledWith(2, join('/tmp', 'gitproj'), { recursive: false })
+    expect(gitExecFileAsyncMock).toHaveBeenNthCalledWith(1, ['init'], {
+      cwd: join('/tmp', 'gitproj')
+    })
     expect(gitExecFileAsyncMock).toHaveBeenNthCalledWith(
       2,
       ['commit', '--allow-empty', '-m', 'Initial commit'],
-      { cwd: '/tmp/gitproj' }
+      { cwd: join('/tmp', 'gitproj') }
     )
     expect(mockStore.addRepo).toHaveBeenCalledWith(
       expect.objectContaining({
-        path: '/tmp/gitproj',
+        path: join('/tmp', 'gitproj'),
         displayName: 'gitproj',
         kind: 'git'
       })
@@ -304,7 +315,10 @@ describe('repos:create', () => {
 
     const result = await callCreate({ parentPath: '/tmp', name: 'broken', kind: 'git' })
 
-    expect(rmMock).toHaveBeenCalledWith('/tmp/broken', { recursive: true, force: true })
+    expect(rmMock).toHaveBeenCalledWith(join('/tmp', 'broken'), {
+      recursive: true,
+      force: true
+    })
     expect(mockStore.addRepo).not.toHaveBeenCalled()
     expect(result).toMatchObject({ error: expect.stringContaining('Failed to initialize') })
   })
@@ -328,7 +342,10 @@ describe('repos:create', () => {
 
     const result = await callCreate({ parentPath: '/tmp', name: 'initfail', kind: 'git' })
 
-    expect(rmMock).toHaveBeenCalledWith('/tmp/initfail', { recursive: true, force: true })
+    expect(rmMock).toHaveBeenCalledWith(join('/tmp', 'initfail'), {
+      recursive: true,
+      force: true
+    })
     expect(mockStore.addRepo).not.toHaveBeenCalled()
     // Loose match — handler distinguishes init vs commit failures, and we want
     // to tolerate small wording tweaks as long as it still mentions "initialize".
@@ -345,7 +362,10 @@ describe('repos:create', () => {
 
     const result = await callCreate({ parentPath: '/tmp', name: 'commitfail', kind: 'git' })
 
-    expect(rmMock).toHaveBeenCalledWith('/tmp/commitfail', { recursive: true, force: true })
+    expect(rmMock).toHaveBeenCalledWith(join('/tmp', 'commitfail'), {
+      recursive: true,
+      force: true
+    })
     expect(mockStore.addRepo).not.toHaveBeenCalled()
     expect(result).toMatchObject({ error: expect.stringContaining('commit') })
   })
@@ -363,8 +383,14 @@ describe('repos:create', () => {
 
     const result = await callCreate({ parentPath: '/tmp', name: 'pre-existing', kind: 'git' })
 
-    expect(rmMock).toHaveBeenCalledWith('/tmp/pre-existing/.git', { recursive: true, force: true })
-    expect(rmMock).not.toHaveBeenCalledWith('/tmp/pre-existing', { recursive: true, force: true })
+    expect(rmMock).toHaveBeenCalledWith(join('/tmp', 'pre-existing', '.git'), {
+      recursive: true,
+      force: true
+    })
+    expect(rmMock).not.toHaveBeenCalledWith(join('/tmp', 'pre-existing'), {
+      recursive: true,
+      force: true
+    })
     expect(mockStore.addRepo).not.toHaveBeenCalled()
     expect(result).toMatchObject({ error: expect.stringContaining('commit') })
   })
@@ -381,7 +407,10 @@ describe('repos:create', () => {
 
     const result = await callCreate({ parentPath: '/tmp', name: 'authorless', kind: 'git' })
 
-    expect(rmMock).toHaveBeenCalledWith('/tmp/authorless', { recursive: true, force: true })
+    expect(rmMock).toHaveBeenCalledWith(join('/tmp', 'authorless'), {
+      recursive: true,
+      force: true
+    })
     expect(mockStore.addRepo).not.toHaveBeenCalled()
     expect(result).toMatchObject({
       error: expect.stringContaining('Git author identity is not configured')
@@ -409,7 +438,7 @@ describe('repos:create', () => {
 
     expect(prepareLocalWorktreeRootForRepoMock).toHaveBeenCalledWith(
       mockStore,
-      expect.objectContaining({ path: '/tmp/root-prep', kind: 'git' })
+      expect.objectContaining({ path: join('/tmp', 'root-prep'), kind: 'git' })
     )
   })
 
@@ -420,7 +449,7 @@ describe('repos:create', () => {
   })
 
   it('does NOT rebuild the authorized-roots cache when dedup short-circuits', async () => {
-    const existing = { id: 'abc', path: '/tmp/dupe2', displayName: 'dupe2', kind: 'git' }
+    const existing = { id: 'abc', path: join('/tmp', 'dupe2'), displayName: 'dupe2', kind: 'git' }
     mockStore.getRepos.mockReturnValue([existing])
 
     await callCreate({ parentPath: '/tmp', name: 'dupe2', kind: 'git' })
@@ -431,7 +460,7 @@ describe('repos:create', () => {
   // ── dedup-by-path ─────────────────────────────────────────────────
 
   it('returns the existing repo when one already lives at the target path', async () => {
-    const existing = { id: 'abc', path: '/tmp/dupe', displayName: 'dupe', kind: 'git' }
+    const existing = { id: 'abc', path: join('/tmp', 'dupe'), displayName: 'dupe', kind: 'git' }
     mockStore.getRepos.mockReturnValue([existing])
 
     const result = await callCreate({ parentPath: '/tmp', name: 'dupe', kind: 'git' })
@@ -446,7 +475,7 @@ describe('repos:create', () => {
   it('returns existing badgeColor unchanged on repos:create dedupe', async () => {
     const existing = {
       id: 'abc',
-      path: '/tmp/dupe-color',
+      path: join('/tmp', 'dupe-color'),
       displayName: 'dupe-color',
       kind: 'git',
       badgeColor: '#ef4444'

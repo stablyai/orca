@@ -5,7 +5,32 @@
    across files would duplicate the vi.hoisted boundary mocks with no cleaner
    ownership seam. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { join } from 'path'
 import { PROTOCOL_VERSION } from './types'
+
+const FAKE_USER_DATA_PATH = '/fake/userData'
+const FAKE_RUNTIME_DIR = join(FAKE_USER_DATA_PATH, 'daemon')
+const FAKE_APP_ENTRY_PATH = join('/fake/app', 'out', 'main', 'daemon-entry.js')
+const FAKE_DIRECT_APP_ENTRY_PATH = join('/fake/app/out/main', 'daemon-entry.js')
+
+function createErroringSocketProbe() {
+  const handlers: Record<string, (() => void)[]> = { connect: [], error: [] }
+  return {
+    on(event: string, cb: () => void) {
+      handlers[event]?.push(cb)
+      if (event === 'error') {
+        // Fire after microtask so destroy()/resolve ordering matches real net
+        queueMicrotask(() => cb())
+      }
+      return this
+    },
+    removeListener(event: string, cb: () => void) {
+      handlers[event] = handlers[event]?.filter((handler) => handler !== cb) ?? []
+      return this
+    },
+    destroy() {}
+  }
+}
 
 // Why: the restart flow touches many boundary modules (electron app paths, fs
 // for dir creation, net for socket probe, DaemonClient over that socket, the
@@ -43,18 +68,11 @@ const {
   const writeFileSyncMock = vi.fn()
   const forkMock = vi.fn()
   const netConnectMock = vi.fn(() => {
-    // Why: the real probeSocket() in daemon-init connects to the socket and
-    // resolves true on 'connect', false on 'error'. Our launcher never runs
-    // in these tests (healthCheckDaemon short-circuits), but probeSocket is
-    // also invoked by cleanupDaemonForProtocol — stub the socket object so
-    // the 'error' path fires synchronously and cleanupDaemonForProtocol's
-    // alive=false branch runs without side effects.
     const handlers: Record<string, (() => void)[]> = { connect: [], error: [] }
     return {
       on(event: string, cb: () => void) {
         handlers[event]?.push(cb)
         if (event === 'error') {
-          // Fire after microtask so destroy()/resolve ordering matches real net
           queueMicrotask(() => cb())
         }
         return this
@@ -300,6 +318,9 @@ async function importFresh() {
 describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
   beforeEach(() => {
     probeSocketExistsMock.mockReturnValue(false)
+    // Why: Windows named-pipe probes skip the existsSync guard, so every test
+    // needs the default connection failure restored after connect-path tests.
+    netConnectMock.mockImplementation(createErroringSocketProbe)
   })
 
   afterEach(() => {
@@ -731,10 +752,10 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     })
 
     const call1 = mod.restartDaemon()
-    // Yield microtasks so call1 progresses into runRestartDaemon and is
-    // definitely blocked on the barrier.
-    await Promise.resolve()
-    await Promise.resolve()
+    await vi.waitFor(() => {
+      expect(originalSpawner.resetHandle).toHaveBeenCalledTimes(1)
+      expect(originalSpawner.ensureRunning).toHaveBeenCalledTimes(2)
+    })
     const call2 = mod.restartDaemon()
 
     // Why: `async function restartDaemon` wraps each return in a fresh
@@ -812,18 +833,18 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     await launcher('/fake/socket', '/fake/token')
 
     expect(getDaemonLaunchIdentityMock).toHaveBeenCalledWith(
-      '/fake/userData/daemon',
+      FAKE_RUNTIME_DIR,
       '/fake/socket',
       '/fake/token',
-      '/fake/app/out/main/daemon-entry.js'
+      FAKE_APP_ENTRY_PATH
     )
     expect(killStaleDaemonMock).toHaveBeenCalledWith(
-      '/fake/userData/daemon',
+      FAKE_RUNTIME_DIR,
       '/fake/socket',
       '/fake/token'
     )
     expect(forkMock).toHaveBeenCalledWith(
-      '/fake/app/out/main/daemon-entry.js',
+      FAKE_APP_ENTRY_PATH,
       ['--socket', '/fake/socket', '--token', '/fake/token'],
       expect.objectContaining({ cwd: '/fake/userData', detached: true })
     )
@@ -862,10 +883,10 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     await launcher('/fake/socket', '/fake/token')
 
     expect(getDaemonLaunchIdentityMock).toHaveBeenCalledWith(
-      '/fake/userData/daemon',
+      FAKE_RUNTIME_DIR,
       '/fake/socket',
       '/fake/token',
-      '/fake/app/out/main/daemon-entry.js'
+      FAKE_APP_ENTRY_PATH
     )
     expect(requestMock).toHaveBeenCalledWith('listSessions', undefined)
     expect(disconnectMock).toHaveBeenCalledOnce()
@@ -944,12 +965,12 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     expect(getMacDaemonSystemResolverHealthMock).toHaveBeenCalledWith('/fake/socket', '/fake/token')
     expect(getDaemonLaunchIdentityMock).not.toHaveBeenCalled()
     expect(killStaleDaemonMock).toHaveBeenCalledWith(
-      '/fake/userData/daemon',
+      FAKE_RUNTIME_DIR,
       '/fake/socket',
       '/fake/token'
     )
     expect(forkMock).toHaveBeenCalledWith(
-      '/fake/app/out/main/daemon-entry.js',
+      FAKE_APP_ENTRY_PATH,
       ['--socket', '/fake/socket', '--token', '/fake/token'],
       expect.objectContaining({ cwd: '/fake/userData', detached: true })
     )
@@ -1029,9 +1050,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
   })
 
   it('uses the direct daemon entry when Electron app path is already out/main', async () => {
-    probeSocketExistsMock.mockImplementation(
-      (p?: string) => p === '/fake/app/out/main/daemon-entry.js'
-    )
+    probeSocketExistsMock.mockImplementation((p?: string) => p === FAKE_DIRECT_APP_ENTRY_PATH)
     const mod = await importFresh()
     getAppPathMock.mockReturnValue('/fake/app/out/main')
     healthCheckDaemonMock.mockResolvedValue(false)
@@ -1068,7 +1087,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     await launcher('/fake/socket', '/fake/token')
 
     expect(forkMock).toHaveBeenCalledWith(
-      '/fake/app/out/main/daemon-entry.js',
+      FAKE_DIRECT_APP_ENTRY_PATH,
       ['--socket', '/fake/socket', '--token', '/fake/token'],
       expect.objectContaining({ detached: true })
     )
@@ -1122,7 +1141,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
       JSON.stringify({
         pid: 12345,
         startedAtMs: 1_000_000,
-        entryPath: '/fake/app/out/main/daemon-entry.js',
+        entryPath: FAKE_APP_ENTRY_PATH,
         appVersion: '1.2.3'
       }),
       { mode: 0o600 }
@@ -1246,7 +1265,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     await launcher('/fake/socket', '/fake/token')
 
     expect(killStaleDaemonMock).toHaveBeenCalledWith(
-      '/fake/userData/daemon',
+      FAKE_RUNTIME_DIR,
       '/fake/socket',
       '/fake/token'
     )
@@ -1289,12 +1308,12 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     await launcher('/fake/socket', '/fake/token')
 
     expect(killStaleDaemonMock).toHaveBeenCalledWith(
-      '/fake/userData/daemon',
+      FAKE_RUNTIME_DIR,
       '/fake/socket',
       '/fake/token'
     )
     expect(forkMock).toHaveBeenCalledWith(
-      '/fake/app/out/main/daemon-entry.js',
+      FAKE_APP_ENTRY_PATH,
       ['--socket', '/fake/socket', '--token', '/fake/token'],
       expect.objectContaining({ detached: true })
     )
@@ -1316,13 +1335,13 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     await launcher('/fake/socket', '/fake/token')
 
     expect(getDaemonLaunchIdentityMock).toHaveBeenCalledWith(
-      '/fake/userData/daemon',
+      FAKE_RUNTIME_DIR,
       '/fake/socket',
       '/fake/token',
-      '/fake/app/out/main/daemon-entry.js'
+      FAKE_APP_ENTRY_PATH
     )
     expect(isDaemonStaleForCurrentBundleMock).toHaveBeenCalledWith(
-      '/fake/userData/daemon',
+      FAKE_RUNTIME_DIR,
       '/fake/socket',
       '/fake/token',
       '1.2.3'
@@ -1368,18 +1387,18 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     await launcher('/fake/socket', '/fake/token')
 
     expect(isDaemonStaleForCurrentBundleMock).toHaveBeenCalledWith(
-      '/fake/userData/daemon',
+      FAKE_RUNTIME_DIR,
       '/fake/socket',
       '/fake/token',
       '1.2.3'
     )
     expect(killStaleDaemonMock).toHaveBeenCalledWith(
-      '/fake/userData/daemon',
+      FAKE_RUNTIME_DIR,
       '/fake/socket',
       '/fake/token'
     )
     expect(forkMock).toHaveBeenCalledWith(
-      '/fake/app/out/main/daemon-entry.js',
+      FAKE_APP_ENTRY_PATH,
       ['--socket', '/fake/socket', '--token', '/fake/token'],
       expect.objectContaining({ detached: true })
     )
@@ -1416,7 +1435,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     await launcher('/fake/socket', '/fake/token')
 
     expect(isDaemonStaleForCurrentBundleMock).toHaveBeenCalledWith(
-      '/fake/userData/daemon',
+      FAKE_RUNTIME_DIR,
       '/fake/socket',
       '/fake/token',
       '1.2.3'

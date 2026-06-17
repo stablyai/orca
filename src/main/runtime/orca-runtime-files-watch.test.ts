@@ -60,6 +60,12 @@ function createRuntimeFileCommands(rootPath: string) {
 
 describe('RuntimeFileCommands file watching', () => {
   const originalPlatform = process.platform
+  const mockPlatform = (platform: NodeJS.Platform) => {
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: platform
+    })
+  }
 
   beforeEach(() => {
     vi.useFakeTimers()
@@ -83,10 +89,7 @@ describe('RuntimeFileCommands file watching', () => {
   })
 
   it('uses a conservative Node watcher for Windows runtime file watches', async () => {
-    Object.defineProperty(process, 'platform', {
-      configurable: true,
-      value: 'win32'
-    })
+    mockPlatform('win32')
 
     const close = vi.fn()
     const on = vi.fn()
@@ -124,6 +127,7 @@ describe('RuntimeFileCommands file watching', () => {
   // Issue #5308: the local recursive watch runs in a worker thread so
   // @parcel/watcher's blocking initial crawl can't starve the serve runtime.
   it('delegates local recursive watching to the worker thread', async () => {
+    mockPlatform('linux')
     resolveAuthorizedPathMock.mockResolvedValue('/home5/Brian')
     statMock.mockResolvedValue({ isDirectory: () => true })
 
@@ -154,6 +158,7 @@ describe('RuntimeFileCommands file watching', () => {
   })
 
   it('propagates a worker watch failure to the caller', async () => {
+    mockPlatform('linux')
     resolveAuthorizedPathMock.mockResolvedValue('/repo')
     statMock.mockResolvedValue({ isDirectory: () => true })
     watchInWorkerMock.mockRejectedValue(new Error('worker_failed'))
@@ -163,6 +168,7 @@ describe('RuntimeFileCommands file watching', () => {
   })
 
   it('tracks worker unsubscribe work so shutdown can await it', async () => {
+    mockPlatform('linux')
     resolveAuthorizedPathMock.mockResolvedValue('/repo')
     statMock.mockResolvedValue({ isDirectory: () => true })
 

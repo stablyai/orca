@@ -6,6 +6,8 @@ import { HistoryManager } from './history-manager'
 import type { TerminalSnapshot, TerminalModes } from './types'
 import { getHistorySessionDirName } from './history-paths'
 
+const itHonorsChmod = process.platform === 'win32' ? it.skip : it
+
 function createTestDir(): string {
   return mkdtempSync(join(tmpdir(), 'history-mgr-test-'))
 }
@@ -129,7 +131,7 @@ describe('HistoryManager', () => {
       await mgr.checkpoint('nonexistent', makeSnapshot())
     })
 
-    it('ignores checkpoint for disabled sessions', async () => {
+    itHonorsChmod('ignores checkpoint for disabled sessions', async () => {
       await mgr.openSession('sess-1', { cwd: '/tmp', cols: 80, rows: 24 })
 
       const cpPath = sessionPath(dir, 'sess-1', 'checkpoint.json')
@@ -235,7 +237,7 @@ describe('HistoryManager', () => {
   })
 
   describe('error handling', () => {
-    it('disables writes after fs error and does not throw', async () => {
+    itHonorsChmod('disables writes after fs error and does not throw', async () => {
       await mgr.openSession('disk-full', { cwd: '/tmp', cols: 80, rows: 24 })
 
       const sessionDir = join(dir, getHistorySessionDirName('disk-full'))
@@ -249,7 +251,7 @@ describe('HistoryManager', () => {
       expect(existsSync(sessionPath(dir, 'disk-full', 'checkpoint.json'))).toBe(false)
     })
 
-    it('disables writes after fs error on openSession', async () => {
+    itHonorsChmod('disables writes after fs error on openSession', async () => {
       chmodSync(dir, 0o555)
 
       await mgr.openSession('disk-full-open', { cwd: '/tmp', cols: 80, rows: 24 })
@@ -259,7 +261,7 @@ describe('HistoryManager', () => {
       await mgr.checkpoint('disk-full-open', makeSnapshot())
     })
 
-    it('does not throw on closeSession disk error', async () => {
+    itHonorsChmod('does not throw on closeSession disk error', async () => {
       await mgr.openSession('close-err', { cwd: '/tmp', cols: 80, rows: 24 })
 
       const metaPath = sessionPath(dir, 'close-err', 'meta.json')
@@ -270,7 +272,7 @@ describe('HistoryManager', () => {
       chmodSync(metaPath, 0o644)
     })
 
-    it('reports write errors via onWriteError callback', async () => {
+    itHonorsChmod('reports write errors via onWriteError callback', async () => {
       const errors: { sessionId: string; error: Error }[] = []
       mgr = new HistoryManager(dir, {
         onWriteError: (sessionId, error) => errors.push({ sessionId, error })

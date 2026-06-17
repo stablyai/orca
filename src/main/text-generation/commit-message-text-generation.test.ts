@@ -4,7 +4,7 @@
 import { spawn } from 'child_process'
 import type * as ChildProcess from 'child_process'
 import { EventEmitter } from 'events'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../shared/constants'
 import { sourceControlAiSettingsFromLegacy } from '../../shared/source-control-ai'
 import type { GlobalSettings } from '../../shared/types'
@@ -29,6 +29,7 @@ vi.mock('child_process', async (importOriginal) => {
 })
 
 const spawnMock = vi.mocked(spawn)
+const originalPlatform = process.platform
 
 type MockDiscoveryChild = EventEmitter & {
   pid: number
@@ -63,7 +64,12 @@ function withPlatform<T>(platform: NodeJS.Platform, fn: () => T): T {
 }
 
 beforeEach(() => {
+  Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
   spawnMock.mockClear()
+})
+
+afterEach(() => {
+  Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
 })
 
 describe('resolveCommitMessageSettings', () => {

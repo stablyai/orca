@@ -543,6 +543,9 @@ function includesPathBoundary(commandLine: string, normalizedPath: string): bool
 }
 
 function normalizeComparablePath(input: string): string {
+  if (input.startsWith('/') && !input.startsWith('//')) {
+    return normalizeComparableText(path.posix.normalize(input))
+  }
   return normalizeComparableText(path.resolve(input))
 }
 

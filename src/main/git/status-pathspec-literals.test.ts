@@ -13,12 +13,12 @@ async function createRepoWithGlobNamedFiles(): Promise<string> {
   execFileSync('git', ['init', '-q'], { cwd: repo })
   execFileSync('git', ['config', 'user.email', 'test@example.com'], { cwd: repo })
   execFileSync('git', ['config', 'user.name', 'Test User'], { cwd: repo })
-  await writeFile(path.join(repo, '*.log'), 'selected')
-  await writeFile(path.join(repo, 'keep.log'), 'keep')
-  execFileSync('git', ['add', '*.log', 'keep.log'], { cwd: repo })
+  await writeFile(path.join(repo, '[ab].log'), 'selected')
+  await writeFile(path.join(repo, 'a.log'), 'keep')
+  execFileSync('git', ['add', '[ab].log', 'a.log'], { cwd: repo })
   execFileSync('git', ['commit', '-q', '-m', 'initial'], { cwd: repo })
-  await writeFile(path.join(repo, '*.log'), 'selected modified')
-  await writeFile(path.join(repo, 'keep.log'), 'keep modified')
+  await writeFile(path.join(repo, '[ab].log'), 'selected modified')
+  await writeFile(path.join(repo, 'a.log'), 'keep modified')
   return repo
 }
 
@@ -35,38 +35,38 @@ describe('git status pathspec literals', () => {
   it('stages a tracked path with Git glob characters as one literal path', async () => {
     const repo = await createRepoWithGlobNamedFiles()
 
-    await stageFile(repo, '*.log')
+    await stageFile(repo, '[ab].log')
 
-    expect(gitNames(repo, ['diff', '--cached', '--name-only'])).toEqual(['*.log'])
-    expect(gitNames(repo, ['diff', '--name-only'])).toEqual(['keep.log'])
+    expect(gitNames(repo, ['diff', '--cached', '--name-only'])).toEqual(['[ab].log'])
+    expect(gitNames(repo, ['diff', '--name-only'])).toEqual(['a.log'])
   })
 
   it('bulk stages tracked paths with Git glob characters as literal paths', async () => {
     const repo = await createRepoWithGlobNamedFiles()
 
-    await bulkStageFiles(repo, ['*.log'])
+    await bulkStageFiles(repo, ['[ab].log'])
 
-    expect(gitNames(repo, ['diff', '--cached', '--name-only'])).toEqual(['*.log'])
-    expect(gitNames(repo, ['diff', '--name-only'])).toEqual(['keep.log'])
+    expect(gitNames(repo, ['diff', '--cached', '--name-only'])).toEqual(['[ab].log'])
+    expect(gitNames(repo, ['diff', '--name-only'])).toEqual(['a.log'])
   })
 
   it('unstages a tracked path with Git glob characters as one literal path', async () => {
     const repo = await createRepoWithGlobNamedFiles()
-    execFileSync('git', ['add', '*.log', 'keep.log'], { cwd: repo })
+    execFileSync('git', ['add', '[ab].log', 'a.log'], { cwd: repo })
 
-    await unstageFile(repo, '*.log')
+    await unstageFile(repo, '[ab].log')
 
-    expect(gitNames(repo, ['diff', '--cached', '--name-only'])).toEqual(['keep.log'])
-    expect(gitNames(repo, ['diff', '--name-only'])).toEqual(['*.log'])
+    expect(gitNames(repo, ['diff', '--cached', '--name-only'])).toEqual(['a.log'])
+    expect(gitNames(repo, ['diff', '--name-only'])).toEqual(['[ab].log'])
   })
 
   it('bulk unstages tracked paths with Git glob characters as literal paths', async () => {
     const repo = await createRepoWithGlobNamedFiles()
-    execFileSync('git', ['add', '*.log', 'keep.log'], { cwd: repo })
+    execFileSync('git', ['add', '[ab].log', 'a.log'], { cwd: repo })
 
-    await bulkUnstageFiles(repo, ['*.log'])
+    await bulkUnstageFiles(repo, ['[ab].log'])
 
-    expect(gitNames(repo, ['diff', '--cached', '--name-only'])).toEqual(['keep.log'])
-    expect(gitNames(repo, ['diff', '--name-only'])).toEqual(['*.log'])
+    expect(gitNames(repo, ['diff', '--cached', '--name-only'])).toEqual(['a.log'])
+    expect(gitNames(repo, ['diff', '--name-only'])).toEqual(['[ab].log'])
   })
 })

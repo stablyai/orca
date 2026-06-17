@@ -10,6 +10,18 @@ import {
 
 const roots: string[] = []
 
+async function withPlatform<T>(platform: NodeJS.Platform, run: () => Promise<T>): Promise<T> {
+  const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
+  Object.defineProperty(process, 'platform', { configurable: true, value: platform })
+  try {
+    return await run()
+  } finally {
+    if (originalPlatform) {
+      Object.defineProperty(process, 'platform', originalPlatform)
+    }
+  }
+}
+
 afterEach(async () => {
   await Promise.all(roots.map((root) => rm(root, { recursive: true, force: true })))
   roots.length = 0
@@ -26,45 +38,44 @@ describe('claude agent teams shim env', () => {
   })
 
   it('builds native shim env only for direct Claude commands', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-agent-teams-cli-'))
-    roots.push(root)
-    const cliName = process.platform === 'win32' ? 'orca-dev.cmd' : 'orca-dev'
-    const cliPath = join(root, cliName)
-    await writeFile(cliPath, '#!/usr/bin/env sh\n', 'utf8')
-    if (process.platform !== 'win32') {
+    await withPlatform('linux', async () => {
+      const root = await mkdtemp(join(tmpdir(), 'orca-agent-teams-cli-'))
+      roots.push(root)
+      const cliPath = join(root, 'orca-dev')
+      await writeFile(cliPath, '#!/usr/bin/env sh\n', 'utf8')
       await chmod(cliPath, 0o755)
-    }
 
-    let capturedShimBin = ''
-    const plan = await buildClaudeAgentTeamsLaunchPlan({
-      command: "claude 'hello'",
-      mode: 'native-panes-shim',
-      baseEnv: { PATH: root },
-      createTeamEnv: (shimDir, shimBin) => {
-        capturedShimBin = shimBin
-        return {
-          PATH: `${shimDir}:/usr/bin`,
-          TMUX: '/tmp/orca/fake,0,0',
-          TMUX_PANE: '%1'
-        }
-      }
-    })
-
-    expect(plan).toMatchObject({
-      command: "claude --teammate-mode auto 'hello'",
-      env: expect.objectContaining({ TMUX_PANE: '%1' }),
-      envToDelete: ['TERM_PROGRAM', 'ORCA_ATTRIBUTION_SHIM_DIR']
-    })
-    expect(capturedShimBin).toBe(cliPath)
-
-    await expect(
-      buildClaudeAgentTeamsLaunchPlan({
-        command: "echo ok; claude 'hello'",
+      let capturedShimBin = ''
+      const plan = await buildClaudeAgentTeamsLaunchPlan({
+        command: "claude 'hello'",
         mode: 'native-panes-shim',
-        baseEnv: {},
-        createTeamEnv: () => ({})
+        baseEnv: { PATH: root },
+        createTeamEnv: (shimDir, shimBin) => {
+          capturedShimBin = shimBin
+          return {
+            PATH: `${shimDir}:/usr/bin`,
+            TMUX: '/tmp/orca/fake,0,0',
+            TMUX_PANE: '%1'
+          }
+        }
       })
-    ).resolves.toBeNull()
+
+      expect(plan).toMatchObject({
+        command: "claude --teammate-mode auto 'hello'",
+        env: expect.objectContaining({ TMUX_PANE: '%1' }),
+        envToDelete: ['TERM_PROGRAM', 'ORCA_ATTRIBUTION_SHIM_DIR']
+      })
+      expect(capturedShimBin).toBe(cliPath)
+
+      await expect(
+        buildClaudeAgentTeamsLaunchPlan({
+          command: "echo ok; claude 'hello'",
+          mode: 'native-panes-shim',
+          baseEnv: {},
+          createTeamEnv: () => ({})
+        })
+      ).resolves.toBeNull()
+    })
   })
 
   it('resolves the dev CLI wrapper for the tmux callback binary', async () => {

@@ -2,7 +2,10 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
-const TASK_PAGE_SOURCE = readFileSync(join(__dirname, 'TaskPage.tsx'), 'utf8')
+const TASK_PAGE_SOURCE = readFileSync(join(__dirname, 'TaskPage.tsx'), 'utf8').replace(
+  /\r\n/g,
+  '\n'
+)
 
 function sourceBetween(source: string, startPattern: string, endPattern: string): string {
   const start = source.indexOf(startPattern)

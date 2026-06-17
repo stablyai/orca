@@ -230,12 +230,31 @@ function runRebuildScript(projectDir, extraEnv = {}) {
     cwd: projectDir,
     encoding: 'utf8',
     env: {
-      ...process.env,
+      ...rebuildTestEnv(),
       npm_config_platform: 'linux',
       npm_config_arch: 'x64',
       ...extraEnv
     }
   })
+}
+
+function rebuildTestEnv() {
+  const env = { ...process.env }
+  const isolatedKeys = new Set([
+    'npm_lifecycle_event',
+    'orca_strict_electron_install',
+    'orca_strict_native_rebuild'
+  ])
+
+  // Why: Windows treats environment keys case-insensitively, so inherited pnpm
+  // lifecycle values can override a fixture's simulated postinstall branch.
+  for (const key of Object.keys(env)) {
+    if (isolatedKeys.has(key.toLowerCase())) {
+      delete env[key]
+    }
+  }
+
+  return env
 }
 
 function writeFakeElectronPackage(projectDir) {

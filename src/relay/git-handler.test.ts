@@ -125,7 +125,9 @@ describe('GitHandler', () => {
       await dispatcher.callRequest('git.abortMerge', { worktreePath: tmpDir })
 
       await expect(fs.access(path.join(tmpDir, '.git', 'MERGE_HEAD'))).rejects.toThrow()
-      await expect(fs.readFile(path.join(tmpDir, 'file.txt'), 'utf-8')).resolves.toBe('main\n')
+      await expect(fs.readFile(path.join(tmpDir, 'file.txt'), 'utf-8')).resolves.toMatch(
+        /^main\r?\n$/
+      )
     })
   })
 
@@ -156,7 +158,9 @@ describe('GitHandler', () => {
 
       await expect(fs.access(path.join(tmpDir, '.git', 'rebase-merge'))).rejects.toThrow()
       await expect(fs.access(path.join(tmpDir, '.git', 'rebase-apply'))).rejects.toThrow()
-      await expect(fs.readFile(path.join(tmpDir, 'file.txt'), 'utf-8')).resolves.toBe('feature\n')
+      await expect(fs.readFile(path.join(tmpDir, 'file.txt'), 'utf-8')).resolves.toMatch(
+        /^feature\r?\n$/
+      )
     })
   })
 
@@ -580,31 +584,29 @@ describe('GitHandler', () => {
       gitInit(tmpDir)
       writeFileSync(path.join(tmpDir, '.gitignore'), 'ignored.log\n')
       gitCommit(tmpDir, 'initial')
-      writeFileSync(path.join(tmpDir, '*.log'), 'selected')
-      writeFileSync(path.join(tmpDir, 'keep.log'), 'unrelated')
+      writeFileSync(path.join(tmpDir, '[ab].log'), 'selected')
+      writeFileSync(path.join(tmpDir, 'a.log'), 'unrelated')
       writeFileSync(path.join(tmpDir, 'ignored.log'), 'ignored')
 
-      await dispatcher.callRequest('git.discard', { worktreePath: tmpDir, filePath: '*.log' })
+      await dispatcher.callRequest('git.discard', { worktreePath: tmpDir, filePath: '[ab].log' })
 
-      await expect(fs.access(path.join(tmpDir, '*.log'))).rejects.toThrow()
-      await expect(fs.access(path.join(tmpDir, 'keep.log'))).resolves.toBeUndefined()
+      await expect(fs.access(path.join(tmpDir, '[ab].log'))).rejects.toThrow()
+      await expect(fs.access(path.join(tmpDir, 'a.log'))).resolves.toBeUndefined()
       await expect(fs.access(path.join(tmpDir, 'ignored.log'))).resolves.toBeUndefined()
     })
 
     it('treats tracked discard paths with Git glob characters as literal paths', async () => {
       gitInit(tmpDir)
-      writeFileSync(path.join(tmpDir, '*.log'), 'selected')
-      writeFileSync(path.join(tmpDir, 'keep.log'), 'keep')
+      writeFileSync(path.join(tmpDir, '[ab].log'), 'selected')
+      writeFileSync(path.join(tmpDir, 'a.log'), 'keep')
       gitCommit(tmpDir, 'track log fixtures')
-      writeFileSync(path.join(tmpDir, '*.log'), 'selected modified')
-      writeFileSync(path.join(tmpDir, 'keep.log'), 'keep modified')
+      writeFileSync(path.join(tmpDir, '[ab].log'), 'selected modified')
+      writeFileSync(path.join(tmpDir, 'a.log'), 'keep modified')
 
-      await dispatcher.callRequest('git.discard', { worktreePath: tmpDir, filePath: '*.log' })
+      await dispatcher.callRequest('git.discard', { worktreePath: tmpDir, filePath: '[ab].log' })
 
-      await expect(fs.readFile(path.join(tmpDir, '*.log'), 'utf-8')).resolves.toBe('selected')
-      await expect(fs.readFile(path.join(tmpDir, 'keep.log'), 'utf-8')).resolves.toBe(
-        'keep modified'
-      )
+      await expect(fs.readFile(path.join(tmpDir, '[ab].log'), 'utf-8')).resolves.toBe('selected')
+      await expect(fs.readFile(path.join(tmpDir, 'a.log'), 'utf-8')).resolves.toBe('keep modified')
     })
 
     it('bulk discards tracked and untracked files', async () => {

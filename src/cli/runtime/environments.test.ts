@@ -37,7 +37,9 @@ describe('CLI runtime environments', () => {
     expect(resolveEnvironmentPairingOffer(userDataPath, saved.id)).toMatchObject({
       endpoint: 'ws://127.0.0.1:6768'
     })
-    expect((statSync(getEnvironmentStorePath(userDataPath)).mode & 0o777).toString(8)).toBe('600')
+    if (process.platform !== 'win32') {
+      expect((statSync(getEnvironmentStorePath(userDataPath)).mode & 0o777).toString(8)).toBe('600')
+    }
 
     const removed = removeEnvironment(userDataPath, 'workstation')
     expect(removed.id).toBe(saved.id)

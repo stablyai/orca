@@ -640,8 +640,6 @@ const WIN32_GIT_CMD_WRAPPER = String.raw`@echo off
 setlocal
 if not "%ORCA_ENABLE_GIT_ATTRIBUTION%"=="1" goto run
 if "%ORCA_ATTRIBUTION_BYPASS%"=="1" goto run
-call :orca_is_git_commit %*
-if errorlevel 1 goto run
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0git-wrapper.ps1" %*
 exit /b %ERRORLEVEL%
 :run
@@ -652,30 +650,6 @@ if defined ORCA_REAL_GIT (
   exit /b 127
 )
 exit /b %ERRORLEVEL%
-
-:orca_is_git_commit
-if "%~1"=="" exit /b 1
-if /I "%~1"=="commit" exit /b 0
-set "orca_git_arg=%~1"
-if /I "%orca_git_arg%"=="-c" goto skip_two
-if /I "%orca_git_arg%"=="--config" goto skip_two
-if /I "%orca_git_arg%"=="-C" goto skip_two
-if /I "%orca_git_arg%"=="--git-dir" goto skip_two
-if /I "%orca_git_arg%"=="--work-tree" goto skip_two
-if /I "%orca_git_arg%"=="--namespace" goto skip_two
-if /I "%orca_git_arg:~0,9%"=="--config=" goto skip_one
-if /I "%orca_git_arg:~0,10%"=="--git-dir=" goto skip_one
-if /I "%orca_git_arg:~0,12%"=="--work-tree=" goto skip_one
-if /I "%orca_git_arg:~0,12%"=="--namespace=" goto skip_one
-if "%orca_git_arg:~0,1%"=="-" goto skip_one
-exit /b 1
-:skip_two
-shift
-shift
-goto orca_is_git_commit
-:skip_one
-shift
-goto orca_is_git_commit
 `
 
 const WIN32_GH_CMD_WRAPPER = String.raw`@echo off

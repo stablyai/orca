@@ -17,15 +17,21 @@ vi.mock('os', async () => {
 
 import { GrokHookService } from './hook-service'
 
+const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
+
 describe('GrokHookService', () => {
   let homeDir: string
 
   beforeEach(() => {
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
     homeDir = mkdtempSync(join(tmpdir(), 'orca-grok-home-'))
     homedirMock.mockReturnValue(homeDir)
   })
 
   afterEach(() => {
+    if (originalPlatform) {
+      Object.defineProperty(process, 'platform', originalPlatform)
+    }
     vi.clearAllMocks()
     rmSync(homeDir, { recursive: true, force: true })
   })

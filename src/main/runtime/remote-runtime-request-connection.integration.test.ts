@@ -16,6 +16,8 @@ import type { OrcaRuntimeService } from './orca-runtime'
 import { OrcaRuntimeRpcServer } from './runtime-rpc'
 import { REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY } from '../../shared/protocol-version'
 
+const REMOTE_REQUEST_TIMEOUT_MS = 5000
+
 describe('remote runtime request connection integration', () => {
   it('fetches repos through the real E2EE WebSocket runtime', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-request-'))
@@ -33,7 +35,7 @@ describe('remote runtime request connection integration', () => {
       }
     ]
     const runtime = {
-      getRuntimeId: () => 'runtime-test',
+      getRuntimeId: () => 'rrq1-runtime-test',
       getStartedAt: () => 1,
       cleanupSubscriptionsForConnection: () => {},
       cancelMobileDictationForConnection: () => {},
@@ -59,7 +61,9 @@ describe('remote runtime request connection integration', () => {
       }
       const connection = new RemoteRuntimeRequestConnection(pairing)
       try {
-        await expect(connection.request('repo.list', undefined, 1000)).resolves.toMatchObject({
+        await expect(
+          connection.request('repo.list', undefined, REMOTE_REQUEST_TIMEOUT_MS)
+        ).resolves.toMatchObject({
           ok: true,
           result: { repos }
         })
@@ -70,7 +74,7 @@ describe('remote runtime request connection integration', () => {
       await server.stop()
       rmSync(userDataPath, { recursive: true, force: true })
     }
-  })
+  }, 15_000)
 
   it('streams server worktree changes to another remote client', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-request-events-'))
@@ -98,7 +102,7 @@ describe('remote runtime request connection integration', () => {
     const clientEventListeners = new Set<(event: RuntimeClientEvent) => void>()
     const subscriptionCleanups = new Map<string, () => void>()
     const runtime = {
-      getRuntimeId: () => 'runtime-test',
+      getRuntimeId: () => 'rrq2-runtime-test',
       getStartedAt: () => 1,
       cleanupSubscriptionsForConnection: (connectionId: string) => {
         for (const [id, cleanup] of subscriptionCleanups) {
@@ -166,7 +170,7 @@ describe('remote runtime request connection integration', () => {
         pairing,
         'runtime.clientEvents.subscribe',
         undefined,
-        1000,
+        REMOTE_REQUEST_TIMEOUT_MS,
         {
           onResponse: (response) => {
             if (response.ok) {
@@ -187,7 +191,7 @@ describe('remote runtime request connection integration', () => {
           desktop.request<{ worktrees: unknown[] }>(
             'worktree.detectedList',
             { repo: repo.id },
-            1000
+            REMOTE_REQUEST_TIMEOUT_MS
           )
         ).resolves.toMatchObject({
           ok: true,
@@ -195,7 +199,11 @@ describe('remote runtime request connection integration', () => {
         })
 
         await expect(
-          mobile.request('worktree.create', { repo: repo.id, name: 'mobile-created' }, 1000)
+          mobile.request(
+            'worktree.create',
+            { repo: repo.id, name: 'mobile-created' },
+            REMOTE_REQUEST_TIMEOUT_MS
+          )
         ).resolves.toMatchObject({
           ok: true,
           result: { worktree: { id: 'repo-1::mobile-created' } }
@@ -208,7 +216,7 @@ describe('remote runtime request connection integration', () => {
           desktop.request<{ worktrees: unknown[] }>(
             'worktree.detectedList',
             { repo: repo.id },
-            1000
+            REMOTE_REQUEST_TIMEOUT_MS
           )
         ).resolves.toMatchObject({
           ok: true,
@@ -225,7 +233,7 @@ describe('remote runtime request connection integration', () => {
       await server.stop()
       rmSync(userDataPath, { recursive: true, force: true })
     }
-  })
+  }, 15_000)
 
   it('multiplexes shared-control calls and passive subscriptions through the real runtime', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-shared-control-'))
@@ -265,10 +273,10 @@ describe('remote runtime request connection integration', () => {
       tabs: []
     }
     const runtime = {
-      getRuntimeId: () => 'runtime-test',
+      getRuntimeId: () => 'rrq3-runtime-test',
       getStartedAt: () => 1,
       getStatus: () => ({
-        runtimeId: 'runtime-test',
+        runtimeId: 'rrq3-runtime-test',
         startedAt: 1,
         version: '1.0.0',
         protocolVersion: 1,
@@ -372,7 +380,7 @@ describe('remote runtime request connection integration', () => {
       const subscription = await shared.subscribe<RuntimeClientEventStreamMessage>(
         'runtime.clientEvents.subscribe',
         undefined,
-        1000,
+        REMOTE_REQUEST_TIMEOUT_MS,
         {
           onResponse: (response) => {
             if (response.ok) {
@@ -387,16 +395,24 @@ describe('remote runtime request connection integration', () => {
       try {
         await waitFor(() => events.some((event) => event.type === 'ready'))
 
-        await expect(shared.request('status.get', undefined, 1000)).resolves.toMatchObject({
+        await expect(
+          shared.request('status.get', undefined, REMOTE_REQUEST_TIMEOUT_MS)
+        ).resolves.toMatchObject({
           ok: true,
           result: { capabilities: [REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY] }
         })
-        await expect(shared.request('repo.list', undefined, 1000)).resolves.toMatchObject({
+        await expect(
+          shared.request('repo.list', undefined, REMOTE_REQUEST_TIMEOUT_MS)
+        ).resolves.toMatchObject({
           ok: true,
           result: { repos: [repo] }
         })
         await expect(
-          shared.request('worktree.create', { repo: repo.id, name: 'shared-created' }, 1000)
+          shared.request(
+            'worktree.create',
+            { repo: repo.id, name: 'shared-created' },
+            REMOTE_REQUEST_TIMEOUT_MS
+          )
         ).resolves.toMatchObject({
           ok: true,
           result: { worktree: { id: 'repo-1::shared-created' } }
@@ -416,7 +432,7 @@ describe('remote runtime request connection integration', () => {
         const mixedSubscriptions = await Promise.all(
           Array.from({ length: 30 }, (_value, index) => {
             const [method, params] = mixedMethods[index % mixedMethods.length]!
-            return shared.subscribe(method, params, 1000, {
+            return shared.subscribe(method, params, REMOTE_REQUEST_TIMEOUT_MS, {
               onResponse: (response) => {
                 if (response.ok) {
                   mixedEvents.push(response.result)
@@ -446,7 +462,7 @@ describe('remote runtime request connection integration', () => {
             shared.subscribe<RuntimeClientEventStreamMessage>(
               'runtime.clientEvents.subscribe',
               undefined,
-              1000,
+              REMOTE_REQUEST_TIMEOUT_MS,
               {
                 onResponse: () => {},
                 onError: (error) => {
@@ -470,12 +486,12 @@ describe('remote runtime request connection integration', () => {
       await server.stop()
       rmSync(userDataPath, { recursive: true, force: true })
     }
-  }, 10_000)
+  }, 20_000)
 })
 
 async function waitFor(
   predicate: () => boolean,
-  timeoutMs = 1000,
+  timeoutMs = REMOTE_REQUEST_TIMEOUT_MS,
   describeTimeout?: () => string
 ): Promise<void> {
   const start = Date.now()

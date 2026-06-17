@@ -11,16 +11,15 @@ export function parseFileUriPath(uri: string): string | null {
     }
 
     // Why: Windows OSC-7 cwd updates can describe both drive-letter paths
-    // (`file:///C:/repo`) and UNC shares (`file://server/share/repo`). Use the
-    // hostname when present so live cwd tracking, snapshots, and restore all
-    // round-trip to a native Windows path instead of dropping the server name.
-    if (url.hostname) {
+    // and UNC shares. Convert those native forms only; SSH/WSL-style POSIX
+    // paths must stay slash paths even when Orca itself runs on Windows.
+    if (url.hostname && url.hostname !== 'localhost') {
       return `\\\\${url.hostname}${decodedPath.replace(/\//g, '\\')}`
     }
     if (/^\/[A-Za-z]:/.test(decodedPath)) {
       return decodedPath.slice(1)
     }
-    return decodedPath.replace(/\//g, '\\')
+    return decodedPath
   } catch {
     return null
   }

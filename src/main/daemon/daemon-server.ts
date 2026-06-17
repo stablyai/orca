@@ -19,6 +19,7 @@ import {
   type HelloMessage,
   type DaemonRequest
 } from './types'
+import { normalizeDaemonSocketPath } from './daemon-socket-path'
 
 export type DaemonServerOptions = {
   socketPath: string
@@ -61,7 +62,7 @@ export class DaemonServer {
   private static readonly INTERACTIVE_OUTPUT_MAX_CHARS = 1024
 
   constructor(opts: DaemonServerOptions) {
-    this.socketPath = opts.socketPath
+    this.socketPath = normalizeDaemonSocketPath(opts.socketPath)
     this.tokenPath = opts.tokenPath
     this.token = randomUUID()
     this.host = new TerminalHost({ spawnSubprocess: opts.spawnSubprocess })

@@ -17,6 +17,8 @@ vi.mock('os', async () => {
 
 import { CursorHookService } from './hook-service'
 
+const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
+
 const CURSOR_EVENTS = [
   'beforeSubmitPrompt',
   'stop',
@@ -32,11 +34,15 @@ describe('CursorHookService', () => {
   let homeDir: string
 
   beforeEach(() => {
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
     homeDir = mkdtempSync(join(tmpdir(), 'orca-cursor-home-'))
     homedirMock.mockReturnValue(homeDir)
   })
 
   afterEach(() => {
+    if (originalPlatform) {
+      Object.defineProperty(process, 'platform', originalPlatform)
+    }
     vi.clearAllMocks()
     rmSync(homeDir, { recursive: true, force: true })
   })

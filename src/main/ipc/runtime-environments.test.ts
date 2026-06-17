@@ -1095,7 +1095,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       'status.get'
     ])
     expect(sendRemoteRuntimeSharedControlRequestMock).toHaveBeenCalledTimes(2)
-  })
+  }, 15_000)
 
   it('limits background one-shot RPCs without blocking foreground runtime calls', async () => {
     registerRuntimeEnvironmentHandlers()

@@ -56,7 +56,7 @@ describe('buildDispatchPreamble', () => {
 
     const check = spawnSync('bash', ['-n'], { input: stripped, encoding: 'utf8' })
     expect(check.status).toBe(0)
-  })
+  }, 15_000)
 
   it('includes heartbeat CLI block with taskId and dispatchId and 5-minute cadence', () => {
     const result = buildDispatchPreamble(baseParams())

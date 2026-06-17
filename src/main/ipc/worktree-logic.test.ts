@@ -1,7 +1,7 @@
 /* eslint-disable max-lines -- Why: these worktree path/name tests share a
 single setup-free pure-logic module, and splitting them would make the related
 edge cases harder to audit together. */
-import { join, resolve } from 'path'
+import { posix as pathPosix, resolve } from 'path'
 import { describe, expect, it } from 'vitest'
 import {
   sanitizeWorktreeName,
@@ -185,7 +185,7 @@ describe('computeWorktreePath', () => {
         nestWorkspaces: true,
         workspaceDir: '/workspaces'
       })
-    ).toBe(join('/workspaces', 'my-project', 'feature'))
+    ).toBe(pathPosix.join('/workspaces', 'my-project', 'feature'))
   })
 
   it('uses flat layout when nestWorkspaces is false', () => {
@@ -194,7 +194,7 @@ describe('computeWorktreePath', () => {
         nestWorkspaces: false,
         workspaceDir: '/workspaces'
       })
-    ).toBe(join('/workspaces', 'feature'))
+    ).toBe(pathPosix.join('/workspaces', 'feature'))
   })
 
   it('strips .git suffix from repo path when nesting', () => {
@@ -203,19 +203,19 @@ describe('computeWorktreePath', () => {
         nestWorkspaces: true,
         workspaceDir: '/workspaces'
       })
-    ).toBe(join('/workspaces', 'my-project', 'feature'))
+    ).toBe(pathPosix.join('/workspaces', 'my-project', 'feature'))
   })
 
   it('resolves relative workspace directories from the repo path', () => {
     expect(computeWorkspaceRoot('/projects/app/repo', { workspaceDir: '../worktrees' })).toBe(
-      resolve('/projects/app/worktrees')
+      pathPosix.resolve('/projects/app/worktrees')
     )
     expect(
       computeWorktreePath('feature', '/projects/app/repo', {
         nestWorkspaces: false,
         workspaceDir: '../worktrees'
       })
-    ).toBe(resolve('/projects/app/worktrees/feature'))
+    ).toBe(pathPosix.resolve('/projects/app/worktrees/feature'))
   })
 
   it('scopes the same relative repo override to each repo root', () => {
@@ -225,10 +225,10 @@ describe('computeWorktreePath', () => {
 
     expect(
       computeWorktreePath('feature', repoA.path, getWorktreePathSettings(repoA, settings))
-    ).toBe(resolve('/projects/a/worktrees/feature'))
+    ).toBe(pathPosix.resolve('/projects/a/worktrees/feature'))
     expect(
       computeWorktreePath('feature', repoB.path, getWorktreePathSettings(repoB, settings))
-    ).toBe(resolve('/projects/b/worktrees/feature'))
+    ).toBe(pathPosix.resolve('/projects/b/worktrees/feature'))
     expect(getWorktreeCreationLayout(repoA, settings)).toEqual({
       path: '../worktrees',
       nestWorkspaces: false

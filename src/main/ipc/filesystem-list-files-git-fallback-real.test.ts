@@ -50,12 +50,12 @@ describe('filesystem-list-files real git fallback', () => {
     tempDir = await mkdtemp(join(tmpdir(), 'orca-quick-open-git-fallback-'))
     const repoPath = join(tempDir, 'repo')
     await execFile('git', ['init', '-q', repoPath])
-    const tabbedPath = join(repoPath, 'tab\tfile.txt')
-    await writeFile(tabbedPath, 'content')
+    const quotedPath = join(repoPath, '日本語 file.txt')
+    await writeFile(quotedPath, 'content')
     await execFile('git', ['add', '.'], { cwd: repoPath })
 
     await expect(listQuickOpenFiles(repoPath, makeStore(repoPath))).resolves.toEqual([
-      'tab\tfile.txt'
+      '日本語 file.txt'
     ])
   })
 })

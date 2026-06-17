@@ -15,6 +15,8 @@ vi.mock('node:child_process', () => ({
 
 import { commandExecFileAsync, ghExecFileAsync, gitExecFileAsync, gitStreamStdout } from './runner'
 
+const originalPlatform = process.platform
+
 type MockChildProcess = EventEmitter & {
   stdout: EventEmitter
   stderr: EventEmitter
@@ -171,6 +173,7 @@ describe('commandExecFileAsync Windows command shims', () => {
 
 describe('runner execFile timeout handling', () => {
   beforeEach(() => {
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
     execFileMock.mockReset()
     execFileSyncMock.mockReset()
     spawnMock.mockReset()
@@ -178,6 +181,7 @@ describe('runner execFile timeout handling', () => {
   })
 
   afterEach(() => {
+    Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
     vi.useRealTimers()
   })
 

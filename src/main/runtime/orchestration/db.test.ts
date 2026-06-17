@@ -8,7 +8,7 @@ import { OrchestrationDb } from './db'
 import type { MessageType } from './db'
 
 describe('OrchestrationDb', () => {
-  let db: OrchestrationDb
+  let db: OrchestrationDb | undefined
 
   afterEach(() => {
     db?.close()
@@ -680,6 +680,8 @@ describe('OrchestrationDb', () => {
     let tempDir: string
 
     afterEach(() => {
+      db?.close()
+      db = undefined
       if (tempDir) {
         rmSync(tempDir, { recursive: true, force: true })
       }

@@ -17,7 +17,7 @@ import {
 import { readFile } from 'node:fs/promises'
 import { DatabaseSync } from 'node:sqlite'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, posix as pathPosix, win32 as pathWin32 } from 'node:path'
 
 // Why: writing to userData instead of tmpdir() so the diag log is only
 // readable by the current user, not world-readable in /tmp.
@@ -139,7 +139,7 @@ function browserRootPath(def: ChromiumBrowserDef): string | null {
       return null
     }
     const home = process.env.HOME ?? ''
-    return join(home, 'Library', 'Application Support', def.macRoot)
+    return pathPosix.join(home, 'Library', 'Application Support', def.macRoot)
   }
   if (process.platform === 'win32') {
     if (!def.winRoot) {
@@ -149,24 +149,30 @@ function browserRootPath(def: ChromiumBrowserDef): string | null {
     if (!localAppData) {
       return null
     }
-    return join(localAppData, def.winRoot)
+    return pathWin32.join(localAppData, def.winRoot)
   }
   // Linux
   if (!def.linuxRoot) {
     return null
   }
-  const configHome = process.env.XDG_CONFIG_HOME ?? join(process.env.HOME ?? '', '.config')
-  return join(configHome, def.linuxRoot)
+  const configHome =
+    process.env.XDG_CONFIG_HOME ?? pathPosix.join(process.env.HOME ?? '', '.config')
+  return pathPosix.join(configHome, def.linuxRoot)
+}
+
+function browserPathApiForRoot(root: string): typeof pathPosix | typeof pathWin32 {
+  return /^[a-zA-Z]:[\\/]/.test(root) || root.startsWith('\\\\') ? pathWin32 : pathPosix
 }
 
 // Why: Chromium 96+ moved the cookies DB from <Profile>/Cookies to
 // <Profile>/Network/Cookies. Try the newer path first, fall back to legacy.
 function resolveCookiesPath(profileDir: string): string | null {
-  const networkPath = join(profileDir, 'Network', 'Cookies')
+  const pathApi = browserPathApiForRoot(profileDir)
+  const networkPath = pathApi.join(profileDir, 'Network', 'Cookies')
   if (existsSync(networkPath)) {
     return networkPath
   }
-  const legacyPath = join(profileDir, 'Cookies')
+  const legacyPath = pathApi.join(profileDir, 'Cookies')
   if (existsSync(legacyPath)) {
     return legacyPath
   }
@@ -189,7 +195,7 @@ function isSafeBrowserProfileDirectory(directory: string): boolean {
 // user-visible display name. This lets us show human-readable names in the picker.
 function discoverProfiles(browserRoot: string): BrowserProfile[] {
   try {
-    const localStatePath = join(browserRoot, 'Local State')
+    const localStatePath = browserPathApiForRoot(browserRoot).join(browserRoot, 'Local State')
     if (!existsSync(localStatePath)) {
       return [{ name: 'Default', directory: 'Default' }]
     }
@@ -339,7 +345,7 @@ export function detectInstalledBrowsers(): DetectedBrowser[] {
     // Why: a browser is "detected" if at least one profile has a cookies DB.
     // Use the first profile with a valid cookies path as the default selection.
     for (const profile of profiles) {
-      const profileDir = join(root, profile.directory)
+      const profileDir = browserPathApiForRoot(root).join(root, profile.directory)
       const cookiesPath = resolveCookiesPath(profileDir)
       if (cookiesPath) {
         detected.push({
@@ -400,7 +406,7 @@ export function selectBrowserProfile(
   if (!root) {
     return null
   }
-  const profileDir = join(root, profileDirectory)
+  const profileDir = browserPathApiForRoot(root).join(root, profileDirectory)
   const cookiesPath = resolveCookiesPath(profileDir)
   if (!cookiesPath) {
     return null

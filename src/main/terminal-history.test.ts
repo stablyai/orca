@@ -3,6 +3,7 @@ injection, fallback patching, WSL translation, cleanup, and GC with a TOCTOU age
 guard — covering each path in one test file keeps assertions co-located with the
 shared mock harness rather than splitting across files. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { join } from 'path'
 
 const {
   existsSyncMock,
@@ -137,7 +138,7 @@ describe('terminal-history', () => {
     it('creates directory with mode 0o700', () => {
       ensureHistoryDir('abcdef0123456789')
       expect(mkdirSyncMock).toHaveBeenCalledWith(
-        '/fake/userData/terminal-history/abcdef0123456789',
+        join('/fake/userData', 'terminal-history', 'abcdef0123456789'),
         { recursive: true, mode: 0o700 }
       )
     })
@@ -407,7 +408,7 @@ describe('terminal-history', () => {
         )
 
         expect(mkdirSyncMock).toHaveBeenCalledWith(
-          expect.stringContaining('terminal-history-wsl/Ubuntu'),
+          expect.stringMatching(/terminal-history-wsl[\\/]Ubuntu/),
           expect.any(Object)
         )
       } finally {

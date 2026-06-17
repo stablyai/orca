@@ -135,5 +135,7 @@ function canonicalize(p: string): string {
 function cursorWorkspaceSlug(absPath: string): string {
   const stripped = absPath.replace(/^[\\/]+/, '')
   const slug = stripped.replace(/[\\/]+/g, '-')
-  return slug
+  // Why: Windows drive-letter colons cannot be used as directory names, but
+  // Cursor still derives the trust slug from the absolute workspace path.
+  return process.platform === 'win32' ? slug.replace(/[<>:"|?*]/g, '-') : slug
 }
