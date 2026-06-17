@@ -7,6 +7,7 @@ import {
   Switch,
   Text,
   TextInput,
+  useWindowDimensions,
   View
 } from 'react-native'
 import { Sparkles } from 'lucide-react-native'
@@ -52,6 +53,11 @@ export function MobilePrComposeSheet({
   onCreated
 }: Props) {
   const copy = hostedReviewCopy(prefill.provider)
+  // Why: grow the description to a screen-relative height so the sheet fills a
+  // comfortable portion of the drawer instead of collapsing to a short form with
+  // empty space below — the body is the natural element to absorb the extra room.
+  const { height: windowHeight } = useWindowDimensions()
+  const bodyMinHeight = Math.max(160, Math.round(windowHeight * 0.32))
   const [title, setTitle] = useState(prefill.title)
   const [body, setBody] = useState(prefill.body)
   const [base, setBase] = useState(prefill.base)
@@ -196,7 +202,7 @@ export function MobilePrComposeSheet({
         />
         <Text style={styles.label}>Description</Text>
         <TextInput
-          style={styles.bodyInput}
+          style={[styles.bodyInput, { minHeight: bodyMinHeight }]}
           value={body}
           onChangeText={setBody}
           placeholder="Describe the change…"
